@@ -110,9 +110,8 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 	}
 
 	var updClone *sqlparser.Update
-	var vTbl *vindexes.Table
-
-	op, vTbl, updClone = createUpdateOperator(ctx, updStmt)
+	var targetTbl TargetTable
+	op, targetTbl, updClone = createUpdateOperator(ctx, updStmt)
 
 	op = &LockAndComment{
 		Source:   op,
@@ -120,17 +119,12 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 		Lock:     sqlparser.ShareModeLock,
 	}
 
-	var ts semantics.TableSet
-	for _, ue := range updStmt.Exprs {
-		ts = ts.Merge(ctx.SemTable.DirectDeps(ue.Name))
-	}
-	parentFks = ctx.SemTable.GetParentForeignKeysForTableSet(ts)
-	childFks = ctx.SemTable.GetChildForeignKeysForTableSet(ts)
+	parentFks = ctx.SemTable.GetParentForeignKeysForTableSet(targetTbl.ID)
+	childFks = ctx.SemTable.GetChildForeignKeysForTableSet(targetTbl.ID)
 	if len(childFks) == 0 && len(parentFks) == 0 {
 		return op
 	}
-
-	return buildFkOperator(ctx, op, updClone, parentFks, childFks, vTbl)
+	return buildFkOperator(ctx, op, updClone, parentFks, childFks, targetTbl)
 }
 
 func updateWithInputPlanningRequired(
@@ -280,7 +274,7 @@ func errIfUpdateNotSupported(ctx *plancontext.PlanningContext, stmt *sqlparser.U
 	}
 }
 
-func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update) (Operator, *vindexes.Table, *sqlparser.Update) {
+func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update) (Operator, TargetTable, *sqlparser.Update) {
 	op := crossJoin(ctx, updStmt.TableExprs)
 
 	sqc := &SubQueryBuilder{}
@@ -362,7 +356,7 @@ func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.U
 		}
 	}
 
-	return sqc.getRootOperator(updOp, nil), vTbl, updClone
+	return sqc.getRootOperator(updOp, nil), targetTbl, updClone
 }
 
 func getUpdateVindexInformation(
@@ -380,14 +374,14 @@ func getUpdateVindexInformation(
 	return changedVindexValues, ownedVindexQuery, subQueriesArgOnChangedVindex
 }
 
-func buildFkOperator(ctx *plancontext.PlanningContext, updOp Operator, updClone *sqlparser.Update, parentFks []vindexes.ParentFKInfo, childFks []vindexes.ChildFKInfo, updatedTable *vindexes.Table) Operator {
+func buildFkOperator(ctx *plancontext.PlanningContext, updOp Operator, updClone *sqlparser.Update, parentFks []vindexes.ParentFKInfo, childFks []vindexes.ChildFKInfo, targetTbl TargetTable) Operator {
 	// If there is a subquery container above update operator, we want to do the foreign key planning inside it,
 	// because we want the Inner of the subquery to execute first and its result be used for the entire foreign key update planning.
 	foundSubqc := false
 	TopDown(updOp, TableID, func(in Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult) {
 		if op, isSubqc := in.(*SubQueryContainer); isSubqc {
 			foundSubqc = true
-			op.Outer = buildFkOperator(ctx, op.Outer, updClone, parentFks, childFks, updatedTable)
+			op.Outer = buildFkOperator(ctx, op.Outer, updClone, parentFks, childFks, targetTbl)
 		}
 		return in, NoRewrite
 	}, stopAtUpdateOp)
@@ -397,9 +391,9 @@ func buildFkOperator(ctx *plancontext.PlanningContext, updOp Operator, updClone 
 
 	restrictChildFks, cascadeChildFks := splitChildFks(childFks)
 
-	op := createFKCascadeOp(ctx, updOp, updClone, cascadeChildFks, updatedTable)
+	op := createFKCascadeOp(ctx, updOp, updClone, cascadeChildFks, targetTbl)
 
-	return createFKVerifyOp(ctx, op, updClone, parentFks, restrictChildFks, updatedTable)
+	return createFKVerifyOp(ctx, op, updClone, parentFks, restrictChildFks, targetTbl.VTable)
 }
 
 func stopAtUpdateOp(operator Operator) VisitRule {
@@ -426,7 +420,7 @@ func splitChildFks(fks []vindexes.ChildFKInfo) (restrictChildFks, cascadeChildFk
 	return
 }
 
-func createFKCascadeOp(ctx *plancontext.PlanningContext, parentOp Operator, updStmt *sqlparser.Update, childFks []vindexes.ChildFKInfo, updatedTable *vindexes.Table) Operator {
+func createFKCascadeOp(ctx *plancontext.PlanningContext, parentOp Operator, updStmt *sqlparser.Update, childFks []vindexes.ChildFKInfo, targetTbl TargetTable) Operator {
 	if len(childFks) == 0 {
 		return parentOp
 	}
@@ -442,29 +436,29 @@ func createFKCascadeOp(ctx *plancontext.PlanningContext, parentOp Operator, updS
 
 		// We need to select all the parent columns for the foreign key constraint, to use in the update of the child table.
 		var selectOffsets []int
-		selectOffsets, selectExprs = addColumns(ctx, fk.ParentColumns, selectExprs, updatedTable.GetTableName())
+		selectOffsets, selectExprs = addColumns(ctx, fk.ParentColumns, selectExprs, targetTbl.Name)
 
 		// If we are updating a foreign key column to a non-literal value then, need information about
 		// 1. whether the new value is different from the old value
 		// 2. the new value itself.
 		// 3. the bind variable to assign to this value.
 		var nonLiteralUpdateInfo []engine.NonLiteralUpdateInfo
-		ue := ctx.SemTable.GetUpdateExpressionsForFk(fk.String(updatedTable))
+		ue := ctx.SemTable.GetUpdateExpressionsForFk(fk.String(targetTbl.VTable))
 		// We only need to store these offsets and add these expressions to SELECT when there are non-literal updates present.
 		if hasNonLiteralUpdate(ue) {
 			for _, updExpr := range ue {
 				// We add the expression and a comparison expression to the SELECT exprssion while storing their offsets.
 				var info engine.NonLiteralUpdateInfo
-				info, selectExprs = addNonLiteralUpdExprToSelect(ctx, updatedTable, updExpr, selectExprs)
+				info, selectExprs = addNonLiteralUpdExprToSelect(ctx, targetTbl.VTable, updExpr, selectExprs)
 				nonLiteralUpdateInfo = append(nonLiteralUpdateInfo, info)
 			}
 		}
 
-		fkChild := createFkChildForUpdate(ctx, fk, selectOffsets, nonLiteralUpdateInfo, updatedTable)
+		fkChild := createFkChildForUpdate(ctx, fk, selectOffsets, nonLiteralUpdateInfo, targetTbl.VTable)
 		fkChildren = append(fkChildren, fkChild)
 	}
 
-	selectionOp := createSelectionOp(ctx, selectExprs, updStmt.TableExprs, updStmt.Where, updStmt.OrderBy, nil, getUpdateLock(updatedTable))
+	selectionOp := createSelectionOp(ctx, selectExprs, updStmt.TableExprs, updStmt.Where, updStmt.OrderBy, nil, getUpdateLock(targetTbl.VTable))
 
 	return &FkCascade{
 		Selection: selectionOp,
