@@ -324,6 +324,9 @@ func (c *CreateViewEntity) ViewDiff(other *CreateViewEntity, _ *DiffHints) (*Alt
 
 // Create implements Entity interface
 func (c *CreateViewEntity) Create() EntityDiff {
+	if c == nil {
+		return nil
+	}
 	return &CreateViewEntityDiff{createView: c.CreateView}
 }
 
