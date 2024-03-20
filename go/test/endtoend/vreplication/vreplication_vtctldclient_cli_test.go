@@ -67,9 +67,6 @@ func TestVtctldclientCLI(t *testing.T) {
 	t.Run("MoveTablesCreateFlags2", func(t *testing.T) {
 		testMoveTablesFlags2(t, &mt, sourceKeyspaceName, targetKeyspaceName, workflowName, targetTabs)
 	})
-	t.Run("WorkflowList", func(t *testing.T) {
-		testMoveTablesList(t, sourceKeyspaceName, targetKeyspaceName, workflowName, targetTabs)
-	})
 	t.Run("MoveTablesCompleteFlags3", func(t *testing.T) {
 		testMoveTablesFlags3(t, sourceKeyspaceName, targetKeyspaceName, targetTabs)
 	})
@@ -85,6 +82,9 @@ func TestVtctldclientCLI(t *testing.T) {
 			"40-80": targetKeyspace.Shards["40-80"].Tablets["zone1-500"].Vttablet,
 		}
 		splitShard(t, targetKeyspaceName, reshardWorkflowName, sourceShard, newShards, tablets)
+	})
+	t.Run("WorkflowList", func(t *testing.T) {
+		testWorkflowList(t, sourceKeyspaceName, targetKeyspaceName, workflowName, targetTabs)
 	})
 }
 
@@ -111,27 +111,6 @@ func testMoveTablesFlags1(t *testing.T, mt *iMoveTables, sourceKeyspace, targetK
 	validateMoveTablesWorkflow(t, workflowResponse.Workflows)
 	// Since we used --no-routing-rules, there should be no routing rules.
 	confirmNoRoutingRules(t)
-}
-
-// Tests several create workflows in order to confirm the listing works.
-func testMoveTablesList(t *testing.T, sourceKeyspace, targetKeyspace, workflowName string, targetTabs map[string]*cluster.VttabletProcess) {
-	tables := []string{"customer", "customer2"}
-	createFlags1 := []string{"--auto-start=false", "--tablet-types",
-		"primary,rdonly", "--tablet-types-in-preference-order=true", "--all-cells",
-	}
-	createFlags2 := []string{"--auto-start=false", "--tablet-types",
-		"primary,rdonly", "--tablet-types-in-preference-order=true", "--all-cells",
-	}
-	// Test one set of MoveTable flags.
-	mt1 := createMoveTables(t, sourceKeyspace, targetKeyspace, "list1", tables[0], createFlags1, nil, nil)
-	defer mt1.Cancel()
-	mt2 := createMoveTables(t, sourceKeyspace, targetKeyspace, "list2", tables[1], createFlags2, nil, nil)
-	defer mt2.Cancel()
-
-	workflowNames := workflowList(targetKeyspace)
-	require.Len(t, workflowNames, 2)
-	workflowList := getWorkflows(targetKeyspace)
-	require.Len(t, workflowList.Workflows, 2)
 }
 
 func getMoveTablesShowResponse(mt *iMoveTables) *vtctldatapb.GetWorkflowsResponse {
@@ -199,6 +178,24 @@ func testMoveTablesFlags3(t *testing.T, sourceKeyspace, targetKeyspace string, t
 	// Confirm that the source tables were renamed.
 	require.True(t, checkTablesExist(t, "zone1-100", []string{"_customer2_old"}))
 	require.False(t, checkTablesExist(t, "zone1-100", []string{"customer2"}))
+}
+
+// Create two workflows in order to confirm that listing all workflows works.
+func testWorkflowList(t *testing.T, sourceKeyspace, targetKeyspace, workflowName string, targetTabs map[string]*cluster.VttabletProcess) {
+	createFlags := []string{"--auto-start=false", "--tablet-types",
+		"primary,rdonly", "--tablet-types-in-preference-order=true", "--all-cells",
+	}
+	wfNames := []string{"list1", "list2"}
+	tables := []string{"customer", "customer2"}
+	for i := range wfNames {
+		mt := createMoveTables(t, sourceKeyspace, targetKeyspace, wfNames[i], tables[i], createFlags, nil, nil)
+		defer mt.Cancel()
+	}
+
+	workflowNames := workflowList(targetKeyspace)
+	require.Len(t, workflowNames, len(wfNames))
+	workflows := getWorkflows(targetKeyspace)
+	require.Len(t, workflows.Workflows, len(wfNames))
 }
 
 func createMoveTables(t *testing.T, sourceKeyspace, targetKeyspace, workflowName, tables string,
@@ -349,13 +346,12 @@ func getWorkflow(targetKeyspace, workflow string) *vtctldatapb.GetWorkflowsRespo
 }
 
 func getWorkflows(targetKeyspace string) *vtctldatapb.GetWorkflowsResponse {
-	//workflowsOutput, err := vc.VtctldClient.ExecuteCommandWithOutput("GetWorkflows", targetKeyspace, "--compact", "--include-logs=false")
-	workflowsOutput, err := vc.VtctldClient.ExecuteCommandWithOutput("GetWorkflows", targetKeyspace, "--show-all", "--compact", "--include-logs=false")
+	getWorkflowsOutput, err := vc.VtctldClient.ExecuteCommandWithOutput("GetWorkflows", targetKeyspace, "--show-all", "--compact", "--include-logs=false")
 	require.NoError(vc.t, err)
-	var workflowsResponse vtctldatapb.GetWorkflowsResponse
-	err = protojson.Unmarshal([]byte(workflowsOutput), &workflowsResponse)
+	var getWorkflowsResponse vtctldatapb.GetWorkflowsResponse
+	err = protojson.Unmarshal([]byte(getWorkflowsOutput), &getWorkflowsResponse)
 	require.NoError(vc.t, err)
-	return workflowsResponse.CloneVT()
+	return getWorkflowsResponse.CloneVT()
 }
 
 func workflowList(targetKeyspace string) []string {
