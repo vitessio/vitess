@@ -154,7 +154,7 @@ vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --targe
 	delete = &cobra.Command{
 		Use:   "delete",
 		Short: "Delete VDiffs.",
-		Example: `vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace delete a037a9e2-5628-11ee-8c99-0242ac120002
+		Example: `vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace customer delete a037a9e2-5628-11ee-8c99-0242ac120002
 vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace delete all`,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Delete"},
@@ -179,7 +179,7 @@ vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --targe
 	resume = &cobra.Command{
 		Use:                   "resume",
 		Short:                 "Resume a VDiff.",
-		Example:               `vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace resume a037a9e2-5628-11ee-8c99-0242ac120002`,
+		Example:               `vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace customer resume a037a9e2-5628-11ee-8c99-0242ac120002`,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Resume"},
 		Args:                  cobra.ExactArgs(1),
@@ -198,9 +198,9 @@ vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --targe
 	show = &cobra.Command{
 		Use:   "show",
 		Short: "Show the status of a VDiff.",
-		Example: `vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace show last
-vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace show a037a9e2-5628-11ee-8c99-0242ac120002
-vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace show all`,
+		Example: `vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace customer show last
+vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace customer show a037a9e2-5628-11ee-8c99-0242ac120002
+vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace customer show all`,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Show"},
 		Args:                  cobra.ExactArgs(1),
@@ -224,7 +224,7 @@ vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --targe
 	stop = &cobra.Command{
 		Use:                   "stop",
 		Short:                 "Stop a running VDiff.",
-		Example:               `vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace stop a037a9e2-5628-11ee-8c99-0242ac120002`,
+		Example:               `vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace customer stop a037a9e2-5628-11ee-8c99-0242ac120002`,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Stop"},
 		Args:                  cobra.ExactArgs(1),
