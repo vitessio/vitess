@@ -496,6 +496,8 @@ func TestDurabilityPolicySetLater(t *testing.T) {
 	utils.CheckReplication(t, newCluster, primary, shard0.Vttablets, 10*time.Second)
 }
 
+// TestFullStatusConnectionPooling tests that full status RPC succeeds despite a vttablet restarting with a different
+// IP address and then back to its original. This test has been added in response to a bug seen in production with a similar situation occurring.
 func TestFullStatusConnectionPooling(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
 	defer cluster.PanicHandler(t)
@@ -525,6 +527,8 @@ func TestFullStatusConnectionPooling(t *testing.T) {
 	assert.Equal(t, 200, status)
 	assert.Contains(t, resp, "UnreachablePrimary")
 
+	// We have to wait for some time to ensure the gRPC connections from VTOrc to vttablet
+	// are broken and closed due to keep-alives. Without this timeout the gRPC connections stay open and test passes trivially.
 	time.Sleep(1 * time.Minute)
 
 	// Change the primaries ports and restart it.
@@ -551,8 +555,6 @@ func TestFullStatusConnectionPooling(t *testing.T) {
 	})
 	assert.Equal(t, 200, status)
 	assert.Contains(t, resp, "UnreachablePrimary")
-
-	time.Sleep(1 * time.Minute)
 
 	// Change the primaries ports back to original and restart it.
 	curPrimary.VttabletProcess.Port = curPrimary.HTTPPort
