@@ -196,6 +196,10 @@ func (client *grpcClient) dialPool(ctx context.Context, tablet *topodatapb.Table
 		}
 		client.mu.Lock()
 		defer client.mu.Unlock()
+		channels := client.rpcClientMap[addr]
+		for tm := range channels {
+			tm.cc.Close()
+		}
 		delete(client.rpcClientMap, addr)
 	}
 	return result.client, invalidator, nil
