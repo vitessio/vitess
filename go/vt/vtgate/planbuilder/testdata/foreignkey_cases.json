@@ -3151,8 +3151,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select u_tbl6.col6 from u_tbl6 as u where 1 != 1",
-                "Query": "select u_tbl6.col6 from u_tbl6 as u where u.id in ::dml_vals for update",
+                "FieldQuery": "select u.col6 from u_tbl6 as u where 1 != 1",
+                "Query": "select u.col6 from u_tbl6 as u where u.id in ::dml_vals for update",
                 "Table": "u_tbl6"
               },
               {
@@ -3805,7 +3805,92 @@
   {
     "comment": "multi table delete on foreign key enabled tables",
     "query": "delete u, m from u_tbl6 u join u_tbl5 m on u.col = m.col where u.col2 = 4 and m.col3 = 6",
-    "plan": "VT12001: unsupported: multi table delete with foreign keys"
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete u, m from u_tbl6 u join u_tbl5 m on u.col = m.col where u.col2 = 4 and m.col3 = 6",
+      "Instructions": {
+        "OperatorType": "DMLWithInput",
+        "TargetTabletType": "PRIMARY",
+        "Offset": [
+          "0:[0]",
+          "1:[1]"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "FieldQuery": "select u.id, m.id from u_tbl6 as u, u_tbl5 as m where 1 != 1",
+            "Query": "select u.id, m.id from u_tbl6 as u, u_tbl5 as m where u.col2 = 4 and m.col3 = 6 and u.col = m.col for update",
+            "Table": "u_tbl5, u_tbl6"
+          },
+          {
+            "OperatorType": "FkCascade",
+            "Inputs": [
+              {
+                "InputName": "Selection",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "FieldQuery": "select u.col6 from u_tbl6 as u where 1 != 1",
+                "Query": "select u.col6 from u_tbl6 as u where u.id in ::dml_vals for update",
+                "Table": "u_tbl6"
+              },
+              {
+                "InputName": "CascadeChild-1",
+                "OperatorType": "Delete",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "BvName": "fkc_vals",
+                "Cols": [
+                  0
+                ],
+                "Query": "delete from u_tbl8 where (col8) in ::fkc_vals",
+                "Table": "u_tbl8"
+              },
+              {
+                "InputName": "Parent",
+                "OperatorType": "Delete",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "Query": "delete from u_tbl6 as u where u.id in ::dml_vals",
+                "Table": "u_tbl6"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Delete",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "TargetTabletType": "PRIMARY",
+            "Query": "delete from u_tbl5 as m where m.id in ::dml_vals",
+            "Table": "u_tbl5"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "unsharded_fk_allow.u_tbl5",
+        "unsharded_fk_allow.u_tbl6",
+        "unsharded_fk_allow.u_tbl8"
+      ]
+    }
   },
   {
     "comment": "update with limit with foreign keys",
