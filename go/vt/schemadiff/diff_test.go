@@ -1216,7 +1216,7 @@ func TestEntityDiffByStatement(t *testing.T) {
 		t.Run(tcase.query, func(t *testing.T) {
 			stmt, err := env.Parser().ParseStrictDDL(tcase.query)
 			require.NoError(t, err)
-			entityDiff := EntityDiffByStatement(env, stmt)
+			entityDiff := EntityDiffByStatement(stmt)
 			if !tcase.valid {
 				require.Nil(t, entityDiff)
 				return
