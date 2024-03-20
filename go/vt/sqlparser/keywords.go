@@ -542,6 +542,7 @@ var keywords = map[string]int{
 	"slow":                          SLOW,
 	"smallint":                      SMALLINT,
 	"source":                        SOURCE,
+	"source_auto_position":          SOURCE_AUTO_POSITION,
 	"source_connect_retry":          SOURCE_CONNECT_RETRY,
 	"source_host":                   SOURCE_HOST,
 	"source_password":               SOURCE_PASSWORD,
