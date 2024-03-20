@@ -426,7 +426,6 @@ func (c *Conn) readPacketAsProto(b *queryResultBuilder) ([]byte, error) {
 	// Use the bufPool.
 	if length < MaxPacketSize {
 		buf := b.Packet(length)
-		c.currentEphemeralBuffer = bufPool.Get(length)
 		if _, err := io.ReadFull(r, buf); err != nil {
 			return nil, vterrors.Wrapf(err, "io.ReadFull(packet body of length %v) failed", length)
 		}
