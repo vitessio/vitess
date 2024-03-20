@@ -191,11 +191,19 @@ func testWorkflowList(t *testing.T, sourceKeyspace, targetKeyspace, workflowName
 		mt := createMoveTables(t, sourceKeyspace, targetKeyspace, wfNames[i], tables[i], createFlags, nil, nil)
 		defer mt.Cancel()
 	}
+	slices.Sort(wfNames)
 
 	workflowNames := workflowList(targetKeyspace)
-	require.Len(t, workflowNames, len(wfNames))
+	slices.Sort(workflowNames)
+	require.EqualValues(t, wfNames, workflowNames)
+
 	workflows := getWorkflows(targetKeyspace)
-	require.Len(t, workflows.Workflows, len(wfNames))
+	workflowNames = make([]string, len(workflows.Workflows))
+	for i := range workflows.Workflows {
+		workflowNames[i] = workflows.Workflows[i].Name
+	}
+	slices.Sort(workflowNames)
+	require.EqualValues(t, wfNames, workflowNames)
 }
 
 func createMoveTables(t *testing.T, sourceKeyspace, targetKeyspace, workflowName, tables string,
