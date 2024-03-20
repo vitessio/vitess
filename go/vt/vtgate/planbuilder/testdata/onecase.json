@@ -1,60 +1,9 @@
-{
-  "OperatorType": "Join",
-  "Variant": "Join",
-  "JoinColumnIndexes": "R:0,R:1,L:0",
-  "JoinVars": {
-    "t1_id1": 1
-  },
-  "TableName": "t1_tbl",
-  "Inputs": [
-    {
-      "OperatorType": "Route",
-      "Variant": "Scatter",
-      "Keyspace": {
-        "Name": "ks_misc",
-        "Sharded": true
-      },
-      "FieldQuery": "select t1.id2, t1.id1 from t1 where 1 != 1",
-      "Query": "select t1.id2, t1.id1 from t1",
-      "Table": "t1"
-    },
-    {
-      "OperatorType": "VindexLookup",
-      "Variant": "EqualUnique",
-      "Keyspace": {
-        "Name": "ks_misc",
-        "Sharded": true
-      },
-      "Values": [
-        ":t1_id1"
-      ],
-      "Vindex": "unq_vdx",
-      "Inputs": [
-        {
-          "OperatorType": "Route",
-          "Variant": "IN",
-          "Keyspace": {
-            "Name": "ks_misc",
-            "Sharded": true
-          },
-          "FieldQuery": "select unq_col, keyspace_id from unq_idx where 1 != 1",
-          "Query": "select unq_col, keyspace_id from unq_idx where unq_col in ::__vals",
-          "Table": "unq_idx",
-          "Values": [
-            "::unq_col"
-          ],
-          "Vindex": "hash"
-        },
-        {
-          "OperatorType": "Route",
-          "Variant": "ByDestination",
-          "Keyspace": {
-            "Name": "ks_misc",
-            "Sharded": true
-          },
-          "FieldQuery": "select tbl.unq_col, tbl.nonunq_col from tbl where 1 != 1",
-          "Query": "select tbl.unq_col, tbl.nonunq_col from tbl where tbl.unq_col = :t1_id1",
-          "Table": "tbl"
-        }
-      ]
+[
+  {
+    "comment": "Add your test case here for debugging and run go test -run=One.",
+    "query": "",
+    "plan": {
+
     }
+  }
+]
