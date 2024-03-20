@@ -198,9 +198,13 @@ func (st *SemTable) GetChildForeignKeysForTargets() (fks []vindexes.ChildFKInfo)
 	return fks
 }
 
-// GetChildForeignKeysForTableSet gets the child foreign keys as a list for the specified TableSet.
-func (st *SemTable) GetChildForeignKeysForTableSet(ts TableSet) []vindexes.ChildFKInfo {
-	return st.childForeignKeysInvolved[ts]
+// GetChildForeignKeysForTable gets the child foreign keys as a list for the specified TableName.
+func (st *SemTable) GetChildForeignKeysForTable(tbl sqlparser.TableName) ([]vindexes.ChildFKInfo, error) {
+	ts, err := st.GetTargetTableSetForTableName(tbl)
+	if err != nil {
+		return nil, err
+	}
+	return st.childForeignKeysInvolved[ts], nil
 }
 
 // GetChildForeignKeysList gets the child foreign keys as a list.

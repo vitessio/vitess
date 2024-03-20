@@ -705,6 +705,22 @@ func TestFkScenarios(t *testing.T) {
 				"select * from fk_multicol_t19 order by id",
 			},
 		}, {
+			name: "Multi Target Delete success",
+			dataQueries: []string{
+				"insert into fk_multicol_t15(id, cola, colb) values (1, 7, 1), (2, 9, 1), (3, 11, 1), (4, 13, 1)",
+				"insert into fk_multicol_t16(id, cola, colb) values (1, 7, 1), (2, 9, 1), (3, 11, 1), (4, 13, 1)",
+				"insert into fk_multicol_t17(id, cola, colb) values (1, 7, 1), (2, 9, 1), (3, 11, 1)",
+				"insert into fk_multicol_t18(id, cola, colb) values (1, 7, 1), (3, 11, 1)",
+				"insert into fk_multicol_t19(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
+			},
+			dmlQuery: "delete fk_multicol_t15, fk_multicol_t17 from fk_multicol_t15 join fk_multicol_t17 where fk_multicol_t15.id = fk_multicol_t17.id",
+			assertionQueries: []string{
+				"select * from fk_multicol_t15 order by id",
+				"select * from fk_multicol_t16 order by id",
+				"select * from fk_multicol_t17 order by id",
+				"select * from fk_multicol_t19 order by id",
+			},
+		}, {
 			name: "Delete with limit success",
 			dataQueries: []string{
 				"insert into fk_multicol_t15(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
