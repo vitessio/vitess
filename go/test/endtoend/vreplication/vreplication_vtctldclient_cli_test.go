@@ -61,6 +61,9 @@ func TestVtctldclientCLI(t *testing.T) {
 	workflowName := "wf1"
 	targetTabs := setupMinimalCustomerKeyspace(t)
 
+	t.Run("WorkflowList", func(t *testing.T) {
+		testWorkflowList(t, sourceKeyspaceName, targetKeyspaceName)
+	})
 	t.Run("MoveTablesCreateFlags1", func(t *testing.T) {
 		testMoveTablesFlags1(t, &mt, sourceKeyspaceName, targetKeyspaceName, workflowName, targetTabs)
 	})
@@ -82,9 +85,6 @@ func TestVtctldclientCLI(t *testing.T) {
 			"40-80": targetKeyspace.Shards["40-80"].Tablets["zone1-500"].Vttablet,
 		}
 		splitShard(t, targetKeyspaceName, reshardWorkflowName, sourceShard, newShards, tablets)
-	})
-	t.Run("WorkflowList", func(t *testing.T) {
-		testWorkflowList(t, sourceKeyspaceName, targetKeyspaceName, workflowName, targetTabs)
 	})
 }
 
@@ -181,7 +181,7 @@ func testMoveTablesFlags3(t *testing.T, sourceKeyspace, targetKeyspace string, t
 }
 
 // Create two workflows in order to confirm that listing all workflows works.
-func testWorkflowList(t *testing.T, sourceKeyspace, targetKeyspace, workflowName string, targetTabs map[string]*cluster.VttabletProcess) {
+func testWorkflowList(t *testing.T, sourceKeyspace, targetKeyspace string) {
 	createFlags := []string{"--auto-start=false", "--tablet-types",
 		"primary,rdonly", "--tablet-types-in-preference-order=true", "--all-cells",
 	}
