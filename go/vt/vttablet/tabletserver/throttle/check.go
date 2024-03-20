@@ -148,20 +148,18 @@ func (check *ThrottlerCheck) Check(ctx context.Context, appName string, storeTyp
 	}
 
 	checkResult = check.checkAppMetricResult(ctx, appName, storeType, storeName, metricResultFunc, flags)
-	check.throttler.lastCheckTimeNano.Store(time.Now().UnixNano())
+	check.throttler.markRecentApp(appName, remoteAddr)
+	if !throttlerapp.VitessName.Equals(appName) {
+		go func(statusCode int) {
+			stats.GetOrNewCounter("ThrottlerCheckAnyTotal", "total number of checks").Add(1)
+			stats.GetOrNewCounter(fmt.Sprintf("ThrottlerCheckAny%s%sTotal", textutil.SingleWordCamel(storeType), textutil.SingleWordCamel(storeName)), "").Add(1)
 
-	go func(statusCode int) {
-		stats.GetOrNewCounter("ThrottlerCheckAnyTotal", "total number of checks").Add(1)
-		stats.GetOrNewCounter(fmt.Sprintf("ThrottlerCheckAny%s%sTotal", textutil.SingleWordCamel(storeType), textutil.SingleWordCamel(storeName)), "").Add(1)
-
-		if statusCode != http.StatusOK {
-			stats.GetOrNewCounter("ThrottlerCheckAnyError", "total number of failed checks").Add(1)
-			stats.GetOrNewCounter(fmt.Sprintf("ThrottlerCheckAny%s%sError", textutil.SingleWordCamel(storeType), textutil.SingleWordCamel(storeName)), "").Add(1)
-		}
-
-		check.throttler.markRecentApp(appName, remoteAddr)
-	}(checkResult.StatusCode)
-
+			if statusCode != http.StatusOK {
+				stats.GetOrNewCounter("ThrottlerCheckAnyError", "total number of failed checks").Add(1)
+				stats.GetOrNewCounter(fmt.Sprintf("ThrottlerCheckAny%s%sError", textutil.SingleWordCamel(storeType), textutil.SingleWordCamel(storeName)), "").Add(1)
+			}
+		}(checkResult.StatusCode)
+	}
 	return checkResult
 }
 
@@ -227,6 +225,7 @@ func (check *ThrottlerCheck) SelfChecks(ctx context.Context) {
 				for metricName, metricResult := range check.AggregatedMetrics(ctx) {
 					metricName := metricName
 					metricResult := metricResult
+
 					go check.localCheck(ctx, metricName)
 					go check.reportAggregated(metricName, metricResult)
 				}
