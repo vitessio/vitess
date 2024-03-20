@@ -17,6 +17,7 @@ limitations under the License.
 package vreplication
 
 import (
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -27,6 +28,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -64,6 +66,9 @@ func TestVtctldclientCLI(t *testing.T) {
 	})
 	t.Run("MoveTablesCreateFlags2", func(t *testing.T) {
 		testMoveTablesFlags2(t, &mt, sourceKeyspaceName, targetKeyspaceName, workflowName, targetTabs)
+	})
+	t.Run("WorkflowList", func(t *testing.T) {
+		testMoveTablesList(t, sourceKeyspaceName, targetKeyspaceName, workflowName, targetTabs)
 	})
 	t.Run("MoveTablesCompleteFlags3", func(t *testing.T) {
 		testMoveTablesFlags3(t, sourceKeyspaceName, targetKeyspaceName, targetTabs)
@@ -106,6 +111,27 @@ func testMoveTablesFlags1(t *testing.T, mt *iMoveTables, sourceKeyspace, targetK
 	validateMoveTablesWorkflow(t, workflowResponse.Workflows)
 	// Since we used --no-routing-rules, there should be no routing rules.
 	confirmNoRoutingRules(t)
+}
+
+// Tests several create workflows in order to confirm the listing works.
+func testMoveTablesList(t *testing.T, sourceKeyspace, targetKeyspace, workflowName string, targetTabs map[string]*cluster.VttabletProcess) {
+	tables := []string{"customer", "customer2"}
+	createFlags1 := []string{"--auto-start=false", "--tablet-types",
+		"primary,rdonly", "--tablet-types-in-preference-order=true", "--all-cells",
+	}
+	createFlags2 := []string{"--auto-start=false", "--tablet-types",
+		"primary,rdonly", "--tablet-types-in-preference-order=true", "--all-cells",
+	}
+	// Test one set of MoveTable flags.
+	mt1 := createMoveTables(t, sourceKeyspace, targetKeyspace, "list1", tables[0], createFlags1, nil, nil)
+	defer mt1.Cancel()
+	mt2 := createMoveTables(t, sourceKeyspace, targetKeyspace, "list2", tables[1], createFlags2, nil, nil)
+	defer mt2.Cancel()
+
+	workflowNames := workflowList(targetKeyspace)
+	require.Len(t, workflowNames, 2)
+	workflowList := getWorkflows(targetKeyspace)
+	require.Len(t, workflowList.Workflows, 2)
 }
 
 func getMoveTablesShowResponse(mt *iMoveTables) *vtctldatapb.GetWorkflowsResponse {
@@ -320,6 +346,25 @@ func getWorkflow(targetKeyspace, workflow string) *vtctldatapb.GetWorkflowsRespo
 	workflowResponse.Workflows[0].MaxVReplicationTransactionLag = 0
 	workflowResponse.Workflows[0].MaxVReplicationLag = 0
 	return workflowResponse.CloneVT()
+}
+
+func getWorkflows(targetKeyspace string) *vtctldatapb.GetWorkflowsResponse {
+	//workflowsOutput, err := vc.VtctldClient.ExecuteCommandWithOutput("GetWorkflows", targetKeyspace, "--compact", "--include-logs=false")
+	workflowsOutput, err := vc.VtctldClient.ExecuteCommandWithOutput("GetWorkflows", targetKeyspace, "--show-all", "--compact", "--include-logs=false")
+	require.NoError(vc.t, err)
+	var workflowsResponse vtctldatapb.GetWorkflowsResponse
+	err = protojson.Unmarshal([]byte(workflowsOutput), &workflowsResponse)
+	require.NoError(vc.t, err)
+	return workflowsResponse.CloneVT()
+}
+
+func workflowList(targetKeyspace string) []string {
+	workflowListOutput, err := vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", targetKeyspace, "list")
+	require.NoError(vc.t, err)
+	var workflowList []string
+	err = json.Unmarshal([]byte(workflowListOutput), &workflowList)
+	require.NoError(vc.t, err)
+	return workflowList
 }
 
 func checkTablesExist(t *testing.T, tabletAlias string, tables []string) bool {
