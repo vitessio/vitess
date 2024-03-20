@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"unicode"
@@ -4325,10 +4326,10 @@ type Into struct {
 	Variables Variables
 	Dumpfile  string
 
-	Outfile   string
-	Charset   string
-	Fields    *Fields
-	Lines     *Lines
+	Outfile string
+	Charset string
+	Fields  *Fields
+	Lines   *Lines
 }
 
 func (i *Into) Format(buf *TrackedBuffer) {
@@ -5166,7 +5167,16 @@ func ExprFromValue(value sqltypes.Value) (Expr, error) {
 		return &NullVal{}, nil
 	case value.IsIntegral():
 		return NewIntVal(value.ToBytes()), nil
-	case value.IsFloat() || value.Type() == sqltypes.Decimal:
+	case value.IsFloat():
+		// Ensure that the resulting expression will be parsed back as a float, not a decimal.
+		// We do this by parsing the float, then reserializing it with exponential notation.
+		floatValue, err := strconv.ParseFloat(string(value.ToBytes()), 64)
+		if err != nil {
+			return nil, err
+		}
+		newValue := sqltypes.MakeTrusted(sqltypes.Float64, strconv.AppendFloat(nil, floatValue, 'e', -1, 64))
+		return NewFloatVal(newValue.ToBytes()), nil
+	case value.Type() == sqltypes.Decimal:
 		return NewFloatVal(value.ToBytes()), nil
 	case value.IsQuoted():
 		return NewStrVal(value.ToBytes()), nil
