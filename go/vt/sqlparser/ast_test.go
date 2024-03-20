@@ -633,7 +633,7 @@ func TestExprFromValue(t *testing.T) {
 		out: NewIntVal([]byte("1")),
 	}, {
 		in:  sqltypes.NewFloat64(1.1),
-		out: NewFloatVal([]byte("1.1")),
+		out: NewFloatVal([]byte("1.1e+00")),
 	}, {
 		in:  sqltypes.MakeTrusted(sqltypes.Decimal, []byte("1.1")),
 		out: NewFloatVal([]byte("1.1")),
@@ -887,8 +887,8 @@ func TestSplitStatementToPieces(t *testing.T) {
 
 func TestVarScopeForColName(t *testing.T) {
 	testcases := []struct {
-		colName ColName
-		expectedName ColName
+		colName                ColName
+		expectedName           ColName
 		expectedScope          string
 		expectedSpecifiedScope string
 	}{
