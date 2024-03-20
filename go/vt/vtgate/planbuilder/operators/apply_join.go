@@ -34,6 +34,9 @@ type (
 	ApplyJoin struct {
 		LHS, RHS Operator
 
+		// JoinType is permitted to store only 3 of the possible values
+		// NormalJoinType, StraightJoinType and LeftJoinType.
+		JoinType sqlparser.JoinType
 		// LeftJoin will be true in the case of an outer join
 		LeftJoin bool
 
@@ -82,12 +85,12 @@ type (
 	}
 )
 
-func NewApplyJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, predicate sqlparser.Expr, leftOuterJoin bool) *ApplyJoin {
+func NewApplyJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, predicate sqlparser.Expr, joinType sqlparser.JoinType) *ApplyJoin {
 	aj := &ApplyJoin{
 		LHS:            lhs,
 		RHS:            rhs,
 		Vars:           map[string]int{},
-		LeftJoin:       leftOuterJoin,
+		JoinType:       joinType,
 		JoinColumns:    &applyJoinColumns{},
 		JoinPredicates: &applyJoinColumns{},
 	}
@@ -139,11 +142,14 @@ func (aj *ApplyJoin) SetRHS(operator Operator) {
 }
 
 func (aj *ApplyJoin) MakeInner() {
-	aj.LeftJoin = false
+	if aj.IsInner() {
+		panic(vterrors.VT13001("Convert an already inner join"))
+	}
+	aj.JoinType = sqlparser.NormalJoinType
 }
 
 func (aj *ApplyJoin) IsInner() bool {
-	return !aj.LeftJoin
+	return aj.JoinType.IsInner()
 }
 
 func (aj *ApplyJoin) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) {

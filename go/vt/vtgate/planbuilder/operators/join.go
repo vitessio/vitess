@@ -26,7 +26,9 @@ import (
 type Join struct {
 	LHS, RHS  Operator
 	Predicate sqlparser.Expr
-	LeftJoin  bool
+	// JoinType is permitted to store only 3 of the possible values
+	// NormalJoinType, StraightJoinType and LeftJoinType.
+	JoinType sqlparser.JoinType
 
 	noColumns
 }
@@ -42,7 +44,7 @@ func (j *Join) Clone(inputs []Operator) Operator {
 		LHS:       inputs[0],
 		RHS:       inputs[1],
 		Predicate: j.Predicate,
-		LeftJoin:  j.LeftJoin,
+		JoinType:  j.JoinType,
 	}
 }
 
@@ -61,7 +63,7 @@ func (j *Join) SetInputs(ops []Operator) {
 }
 
 func (j *Join) Compact(ctx *plancontext.PlanningContext) (Operator, *ApplyResult) {
-	if j.LeftJoin {
+	if !j.JoinType.IsCommutative() {
 		// we can't merge outer joins into a single QG
 		return j, NoRewrite
 	}
@@ -83,9 +85,10 @@ func (j *Join) Compact(ctx *plancontext.PlanningContext) (Operator, *ApplyResult
 	return newOp, Rewrote("merge querygraphs into a single one")
 }
 
-func createOuterJoin(tableExpr *sqlparser.JoinTableExpr, lhs, rhs Operator) Operator {
+func createLeftAndStraightJoin(tableExpr *sqlparser.JoinTableExpr, lhs, rhs Operator) Operator {
 	if tableExpr.Join == sqlparser.RightJoinType {
 		lhs, rhs = rhs, lhs
+		tableExpr.Join = sqlparser.LeftJoinType
 	}
 	subq, _ := getSubQuery(tableExpr.Condition.On)
 	if subq != nil {
@@ -93,7 +96,7 @@ func createOuterJoin(tableExpr *sqlparser.JoinTableExpr, lhs, rhs Operator) Oper
 	}
 	predicate := tableExpr.Condition.On
 	sqlparser.RemoveKeyspaceInCol(predicate)
-	return &Join{LHS: lhs, RHS: rhs, LeftJoin: true, Predicate: predicate}
+	return &Join{LHS: lhs, RHS: rhs, JoinType: tableExpr.Join, Predicate: predicate}
 }
 
 func createJoin(ctx *plancontext.PlanningContext, LHS, RHS Operator) Operator {
@@ -150,11 +153,14 @@ func (j *Join) SetRHS(operator Operator) {
 }
 
 func (j *Join) MakeInner() {
-	j.LeftJoin = false
+	if j.IsInner() {
+		panic(vterrors.VT13001("Convert an already inner join"))
+	}
+	j.JoinType = sqlparser.NormalJoinType
 }
 
 func (j *Join) IsInner() bool {
-	return !j.LeftJoin
+	return j.JoinType.IsInner()
 }
 
 func (j *Join) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) {
