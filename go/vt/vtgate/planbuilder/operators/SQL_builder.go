@@ -222,20 +222,18 @@ func (qb *queryBuilder) joinWith(other *queryBuilder, onCondition sqlparser.Expr
 		sel.SelectExprs = append(sel.SelectExprs, otherSel.SelectExprs...)
 	}
 
+	qb.mergeWhereClauses(stmt, otherStmt)
+
 	var newFromClause []sqlparser.TableExpr
 	switch joinType {
 	case sqlparser.NormalJoinType:
 		newFromClause = append(stmt.GetFrom(), otherStmt.GetFrom()...)
+		qb.addPredicate(onCondition)
 	default:
 		newFromClause = []sqlparser.TableExpr{buildJoin(stmt, otherStmt, onCondition, joinType)}
 	}
 
 	stmt.SetFrom(newFromClause)
-	qb.mergeWhereClauses(stmt, otherStmt)
-
-	if joinType == sqlparser.NormalJoinType {
-		qb.addPredicate(onCondition)
-	}
 }
 
 func (qb *queryBuilder) mergeWhereClauses(stmt, otherStmt FromStatement) {
