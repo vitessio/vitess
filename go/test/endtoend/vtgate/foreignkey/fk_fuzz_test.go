@@ -151,8 +151,17 @@ func (fz *fuzzer) generateInsertDMLQuery(insertType string) string {
 	}
 }
 
-// generateUpdateDMLQuery generates an UPDATE query from the parameters for the fuzzer.
+// generateUpdateDMLQuery generates a UPDATE query from the parameters for the fuzzer.
 func (fz *fuzzer) generateUpdateDMLQuery() string {
+	multiTableUpdate := rand.IntN(2) + 1
+	if multiTableUpdate == 1 {
+		return fz.generateSingleUpdateDMLQuery()
+	}
+	return fz.generateMultiUpdateDMLQuery()
+}
+
+// generateSingleUpdateDMLQuery generates an UPDATE query from the parameters for the fuzzer.
+func (fz *fuzzer) generateSingleUpdateDMLQuery() string {
 	tableId := rand.IntN(len(fkTables))
 	idValue := 1 + rand.IntN(fz.maxValForId)
 	tableName := fkTables[tableId]
@@ -193,6 +202,22 @@ func (fz *fuzzer) generateUpdateDMLQuery() string {
 		}
 		return fmt.Sprintf("update %v%v set col = %v order by id limit %v", setVarFkChecksVal, tableName, colValue, limitCount)
 	}
+}
+
+// generateMultiUpdateDMLQuery generates a UPDATE query using 2 tables from the parameters for the fuzzer.
+func (fz *fuzzer) generateMultiUpdateDMLQuery() string {
+	tableId := rand.IntN(len(fkTables))
+	tableId2 := rand.IntN(len(fkTables))
+	idValue := 1 + rand.IntN(fz.maxValForId)
+	colValue := convertIntValueToString(rand.IntN(1 + fz.maxValForCol))
+	col2Value := convertIntValueToString(rand.IntN(1 + fz.maxValForCol))
+	setVarFkChecksVal := fz.getSetVarFkChecksVal()
+	setExprs := fmt.Sprintf("%v.col = %v", fkTables[tableId], colValue)
+	if rand.IntN(2)%2 == 0 {
+		setExprs += ", " + fmt.Sprintf("%v.col = %v", fkTables[tableId2], col2Value)
+	}
+	query := fmt.Sprintf("update %v%v join %v using (id) set %s where %v.id = %v", setVarFkChecksVal, fkTables[tableId], fkTables[tableId2], setExprs, fkTables[tableId], idValue)
+	return query
 }
 
 // generateDeleteDMLQuery generates a DELETE query using 1 table from the parameters for the fuzzer.
