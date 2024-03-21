@@ -85,7 +85,14 @@ func (j *Join) Compact(ctx *plancontext.PlanningContext) (Operator, *ApplyResult
 	return newOp, Rewrote("merge querygraphs into a single one")
 }
 
-func createLeftAndStraightJoin(ctx *plancontext.PlanningContext, join *sqlparser.JoinTableExpr, lhs, rhs Operator) Operator {
+func createStraightJoin(ctx *plancontext.PlanningContext, join *sqlparser.JoinTableExpr, lhs, rhs Operator) Operator {
+	// for inner joins we can treat the predicates as filters on top of the join
+	joinOp := &Join{LHS: lhs, RHS: rhs, JoinType: join.Join}
+
+	return addJoinPredicates(ctx, join.Condition.On, joinOp)
+}
+
+func createLeftOuterJoin(ctx *plancontext.PlanningContext, join *sqlparser.JoinTableExpr, lhs, rhs Operator) Operator {
 	// first we switch sides, so we always deal with left outer joins
 	switch join.Join {
 	case sqlparser.RightJoinType:
@@ -96,13 +103,9 @@ func createLeftAndStraightJoin(ctx *plancontext.PlanningContext, join *sqlparser
 		join.Join = sqlparser.NaturalLeftJoinType
 	}
 
-	// for inner joins we can treat the predicates as filters on top of the join
 	joinOp := &Join{LHS: lhs, RHS: rhs, JoinType: join.Join}
-	if join.Join.IsInner() {
-		return addJoinPredicates(ctx, join.Condition.On, joinOp)
-	}
 
-	// for outer joins we have to be a bit more careful
+	// for outer joins we have to be careful with the predicates we use
 	var op Operator
 	subq, _ := getSubQuery(join.Condition.On)
 	if subq != nil {

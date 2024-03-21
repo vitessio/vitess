@@ -228,8 +228,10 @@ func getOperatorFromJoinTableExpr(ctx *plancontext.PlanningContext, tableExpr *s
 	switch tableExpr.Join {
 	case sqlparser.NormalJoinType:
 		return createInnerJoin(ctx, tableExpr, lhs, rhs)
-	case sqlparser.LeftJoinType, sqlparser.RightJoinType, sqlparser.StraightJoinType:
-		return createLeftAndStraightJoin(ctx, tableExpr, lhs, rhs)
+	case sqlparser.LeftJoinType, sqlparser.RightJoinType:
+		return createLeftOuterJoin(ctx, tableExpr, lhs, rhs)
+	case sqlparser.StraightJoinType:
+		return createStraightJoin(ctx, tableExpr, lhs, rhs)
 	default:
 		panic(vterrors.VT13001("unsupported: %s", tableExpr.Join.ToString()))
 	}
