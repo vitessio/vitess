@@ -60,23 +60,15 @@ func (c *Coerce) GetFields(
 }
 
 func (c *Coerce) setFields(res *sqltypes.Result) {
+	if len(res.Fields) == 0 {
+		return
+	}
 	for i, t := range c.Types {
 		if t == nil {
 			continue
 		}
 
-		typ := t.Type()
-		field := res.Fields[i]
-		_, flags := sqltypes.TypeToMySQL(typ)
-		if t.Nullable() {
-			flags |= int64(querypb.MySqlFlag_NOT_NULL_FLAG)
-		}
-
-		field.Type = typ
-		field.Flags = uint32(flags)
-		field.Charset = uint32(t.Collation())
-		field.ColumnLength = uint32(t.Size())
-		field.Decimals = uint32(t.Scale())
+		t.SetTypeAndFlags(res.Fields[i])
 	}
 }
 
@@ -88,11 +80,11 @@ func (c *Coerce) TryExecute(
 	ctx context.Context,
 	vcursor VCursor,
 	bindVars map[string]*querypb.BindVariable,
-	_ bool,
+	wantfields bool,
 ) (*sqltypes.Result, error) {
 	sqlmode := evalengine.ParseSQLMode(vcursor.SQLMode())
 
-	res, err := vcursor.ExecutePrimitive(ctx, c.Source, bindVars, true)
+	res, err := vcursor.ExecutePrimitive(ctx, c.Source, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
