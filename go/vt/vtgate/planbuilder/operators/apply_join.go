@@ -143,7 +143,7 @@ func (aj *ApplyJoin) SetRHS(operator Operator) {
 
 func (aj *ApplyJoin) MakeInner() {
 	if aj.IsInner() {
-		panic(vterrors.VT13001("Convert an already inner join"))
+		return
 	}
 	aj.JoinType = sqlparser.NormalJoinType
 }
