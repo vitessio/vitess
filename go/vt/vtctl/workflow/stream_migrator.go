@@ -27,6 +27,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/logutil"
@@ -915,8 +916,20 @@ func (sm *StreamMigrator) createTargetStreams(ctx context.Context, tmpl []*VRepl
 	return sm.ts.ForAllTargets(func(target *MigrationTarget) error {
 		ig := vreplication.NewInsertGenerator(binlogdatapb.VReplicationWorkflowState_Stopped, target.GetPrimary().DbName())
 		tabletStreams := VReplicationStreams(tmpl).Copy().ToSlice()
+		var err error
 
 		for _, vrs := range tabletStreams {
+			if vrs.WorkflowType == binlogdatapb.VReplicationWorkflowType_Materialize && vrs.BinlogSource.Keyspace == sm.ts.TargetKeyspaceName() {
+				// We need to update the binlog source as well. We need to go from e.g.
+				// a single - -> - stream to two -80,80- -> -80,80- streams. It's always
+				// 1 to 1 in this scenario so we use the target shard's name and primary
+				// tablet's position for the source.
+				vrs.BinlogSource.Shard = target.GetShard().ShardName()
+				vrs.Position, err = binlogplayer.DecodePosition(target.Position)
+				if err != nil {
+					return err
+				}
+			}
 			for _, rule := range vrs.BinlogSource.Filter.Rules {
 				buf := &strings.Builder{}
 
@@ -932,7 +945,7 @@ func (sm *StreamMigrator) createTargetStreams(ctx context.Context, tmpl []*VRepl
 				vrs.WorkflowType, vrs.WorkflowSubType, vrs.DeferSecondaryKeys)
 		}
 
-		_, err := sm.ts.VReplicationExec(ctx, target.GetPrimary().GetAlias(), ig.String())
+		_, err = sm.ts.VReplicationExec(ctx, target.GetPrimary().GetAlias(), ig.String())
 		return err
 	})
 }
