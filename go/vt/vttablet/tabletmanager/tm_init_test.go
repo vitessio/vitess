@@ -858,8 +858,13 @@ func TestWaitForDBAGrants(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			config, cleanup := tt.setupFunc(t)
 			defer cleanup()
+			var dm mysqlctl.MysqlDaemon
+			if config != nil {
+				dm = mysqlctl.NewMysqld(config.DB)
+			}
 			tm := TabletManager{
 				_waitForGrantsComplete: make(chan struct{}),
+				MysqlDaemon:            dm,
 			}
 			err := tm.waitForDBAGrants(config, tt.waitTime)
 			if tt.errWanted == "" {
