@@ -21,7 +21,10 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"testing"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/test/utils"
@@ -210,4 +213,53 @@ func TestConcatenateTypes(t *testing.T) {
 			assert.Equal(t, test.expected, strings.ToLower(fmt.Sprintf("%v", res.Fields)))
 		})
 	}
+}
+
+func BenchmarkConcatenateTryExecute(b *testing.B) {
+	fakeSrc1, fakeSrc2, prim := createConcatenateForTest()
+	ctx := context.Background()
+	b.ResetTimer()
+	vcursor := &noopVCursor{}
+	count := 0
+	for i := 0; i < b.N; i++ {
+		res, err := prim.TryExecute(ctx, vcursor, map[string]*querypb.BindVariable{}, true)
+		require.NoError(b, err)
+		count += len(res.Rows)
+		fakeSrc1.curResult = 0
+		fakeSrc2.curResult = 0
+	}
+}
+
+func BenchmarkConcatenateTryStreamExecute(b *testing.B) {
+	fakeSrc1, fakeSrc2, prim := createConcatenateForTest()
+	ctx := context.Background()
+	b.ResetTimer()
+	vcursor := &noopVCursor{}
+	var count atomic.Int32
+	for i := 0; i < b.N; i++ {
+		err := prim.TryStreamExecute(ctx, vcursor, map[string]*querypb.BindVariable{}, true, func(result *sqltypes.Result) error {
+			count.Add(int32(len(result.Rows)))
+			return nil
+		})
+		require.NoError(b, err)
+		fakeSrc1.curResult = 0
+		fakeSrc2.curResult = 0
+	}
+}
+
+func createConcatenateForTest() (*fakePrimitive, *fakePrimitive, *Concatenate) {
+	fake := r("id|col1|col2", "int64|varchar|varbinary", "1|a1|b1", "2|a2|b2")
+	var rows []string
+	for x := range 10 {
+		rows = append(rows, fmt.Sprintf("%d|a%d|b%d", x, x, x))
+	}
+	result := sqltypes.MakeTestResult(fake.Fields, rows...)
+	fake.Rows = result.Rows
+	fakeSrc1 := &fakePrimitive{results: []*sqltypes.Result{fake, fake}}
+	fakeSrc2 := &fakePrimitive{results: []*sqltypes.Result{fake, fake}}
+	prim := NewConcatenate([]Primitive{
+		fakeSrc1,
+		fakeSrc2,
+	}, nil)
+	return fakeSrc1, fakeSrc2, prim
 }
