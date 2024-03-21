@@ -77,6 +77,29 @@ func (cached *CheckCol) CachedSize(alloc bool) int64 {
 	size += cached.CollationEnv.CachedSize(true)
 	return size
 }
+func (cached *Coerce) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Source vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Source.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Types []*vitess.io/vitess/go/vt/vtgate/evalengine.Type
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Types)) * int64(8))
+		for _, elem := range cached.Types {
+			if elem != nil {
+				size += hack.RuntimeAllocSize(int64(16))
+			}
+		}
+	}
+	return size
+}
 
 //go:nocheckptr
 func (cached *Concatenate) CachedSize(alloc bool) int64 {
@@ -85,7 +108,7 @@ func (cached *Concatenate) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(32)
+		size += int64(112)
 	}
 	// field Sources []vitess.io/vitess/go/vt/vtgate/engine.Primitive
 	{
@@ -106,6 +129,17 @@ func (cached *Concatenate) CachedSize(alloc bool) int64 {
 		if len(cached.NoNeedToTypeCheck) > 0 || numBuckets > 1 {
 			size += hack.RuntimeAllocSize(int64(numBuckets * 208))
 		}
+	}
+	// field fields []*vitess.io/vitess/go/vt/proto/query.Field
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.fields)) * int64(8))
+		for _, elem := range cached.fields {
+			size += elem.CachedSize(true)
+		}
+	}
+	// field fieldTypes []vitess.io/vitess/go/vt/vtgate/evalengine.Type
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.fieldTypes)) * int64(16))
 	}
 	return size
 }
@@ -1151,6 +1185,25 @@ func (cached *ShowExec) CachedSize(alloc bool) int64 {
 	}
 	// field ShowFilter *vitess.io/vitess/go/vt/sqlparser.ShowFilter
 	size += cached.ShowFilter.CachedSize(true)
+	return size
+}
+func (cached *SimpleConcatenate) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field Sources []vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Sources)) * int64(16))
+		for _, elem := range cached.Sources {
+			if cc, ok := elem.(cachedObject); ok {
+				size += cc.CachedSize(true)
+			}
+		}
+	}
 	return size
 }
 func (cached *SimpleProjection) CachedSize(alloc bool) int64 {
