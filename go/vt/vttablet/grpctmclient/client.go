@@ -482,10 +482,9 @@ func (client *Client) ExecuteQuery(ctx context.Context, tablet *topodatapb.Table
 func (client *Client) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsDbaRequest) (*querypb.QueryResult, error) {
 	var c tabletmanagerservicepb.TabletManagerClient
 	var err error
-	var invalidator func(error)
 	if usePool {
 		if poolDialer, ok := client.dialer.(poolDialer); ok {
-			c, invalidator, err = poolDialer.dialPool(ctx, tablet)
+			c, _, err = poolDialer.dialPool(ctx, tablet)
 			if err != nil {
 				return nil, err
 			}
@@ -510,9 +509,6 @@ func (client *Client) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.
 		DisableForeignKeyChecks: req.DisableForeignKeyChecks,
 	})
 	if err != nil {
-		if invalidator != nil {
-			invalidator(err)
-		}
 		return nil, err
 	}
 	return response.Result, nil
@@ -522,10 +518,9 @@ func (client *Client) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.
 func (client *Client) ExecuteMultiFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest) ([]*querypb.QueryResult, error) {
 	var c tabletmanagerservicepb.TabletManagerClient
 	var err error
-	var invalidator func(error)
 	if usePool {
 		if poolDialer, ok := client.dialer.(poolDialer); ok {
-			c, invalidator, err = poolDialer.dialPool(ctx, tablet)
+			c, _, err = poolDialer.dialPool(ctx, tablet)
 			if err != nil {
 				return nil, err
 			}
@@ -550,9 +545,6 @@ func (client *Client) ExecuteMultiFetchAsDba(ctx context.Context, tablet *topoda
 		DisableForeignKeyChecks: req.DisableForeignKeyChecks,
 	})
 	if err != nil {
-		if invalidator != nil {
-			invalidator(err)
-		}
 		return nil, err
 	}
 	return response.Results, err
@@ -582,10 +574,9 @@ func (client *Client) ExecuteFetchAsAllPrivs(ctx context.Context, tablet *topoda
 func (client *Client) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsAppRequest) (*querypb.QueryResult, error) {
 	var c tabletmanagerservicepb.TabletManagerClient
 	var err error
-	var invalidator func(error)
 	if usePool {
 		if poolDialer, ok := client.dialer.(poolDialer); ok {
-			c, invalidator, err = poolDialer.dialPool(ctx, tablet)
+			c, _, err = poolDialer.dialPool(ctx, tablet)
 			if err != nil {
 				return nil, err
 			}
@@ -603,9 +594,6 @@ func (client *Client) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.
 
 	response, err := c.ExecuteFetchAsApp(ctx, req)
 	if err != nil {
-		if invalidator != nil {
-			invalidator(err)
-		}
 		return nil, err
 	}
 	return response.Result, nil
