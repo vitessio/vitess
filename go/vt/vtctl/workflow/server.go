@@ -3006,8 +3006,15 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 
 	// Consistently handle errors by logging and returning them.
 	handleError := func(message string, err error) (*[]string, error) {
-		ts.Logger().Error(err)
+		ts.Logger().Errorf("%s: %s", message, err)
 		return nil, err
+	}
+
+	// Limit the traffic switch to specific cells if any where provided.
+	// If none are provided then we switch traffic for all cells.
+	cells := req.Cells
+	for i, cell := range cells {
+		cells[i] = strings.TrimSpace(cell)
 	}
 
 	log.Infof("Switching reads: %s.%s tablet types: %s, cells: %s, workflow state: %s", ts.targetKeyspace, ts.workflow, roTypesToSwitchStr, ts.optCells, state.String())
@@ -3021,14 +3028,6 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 		if direction == DirectionBackward && switchRdonly && len(state.RdonlyCellsSwitched) == 0 {
 			return handleError("invalid request", vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "requesting reversal of SwitchReads for RDONLYs but RDONLY reads have not been switched"))
 		}
-	}
-	cells := req.Cells
-	// If no cells were provided in the command then use the value from the workflow.
-	if len(cells) == 0 && ts.optCells != "" {
-		cells = strings.Split(strings.TrimSpace(ts.optCells), ",")
-	}
-	for i, cell := range cells {
-		cells[i] = strings.TrimSpace(cell)
 	}
 
 	// If there are no rdonly tablets in the cells ask to switch rdonly tablets as well so that routing rules

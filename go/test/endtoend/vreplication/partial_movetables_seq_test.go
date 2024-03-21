@@ -27,7 +27,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/wrangler"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
@@ -228,12 +227,12 @@ func (wf *workflow) create() {
 	cell := wf.tc.defaultCellName
 	switch typ {
 	case "movetables":
-		currentWorkflowType = wrangler.MoveTablesWorkflow
+		currentWorkflowType = binlogdatapb.VReplicationWorkflowType_MoveTables
 		sourceShards := strings.Join(wf.options.sourceShards, ",")
 		err = tstWorkflowExec(t, cell, wf.name, wf.fromKeyspace, wf.toKeyspace,
 			strings.Join(wf.options.tables, ","), workflowActionCreate, "", sourceShards, "", defaultWorkflowExecOptions)
 	case "reshard":
-		currentWorkflowType = wrangler.ReshardWorkflow
+		currentWorkflowType = binlogdatapb.VReplicationWorkflowType_Reshard
 		sourceShards := strings.Join(wf.options.sourceShards, ",")
 		targetShards := strings.Join(wf.options.targetShards, ",")
 		if targetShards == "" {
