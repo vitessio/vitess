@@ -214,7 +214,7 @@ func pushProjectionInApplyJoin(
 	src *ApplyJoin,
 ) (Operator, *ApplyResult) {
 	ap, err := p.GetAliasedProjections()
-	if src.LeftJoin || err != nil {
+	if !src.IsInner() || err != nil {
 		// we can't push down expression evaluation to the rhs if we are not sure if it will even be executed
 		return p, NoRewrite
 	}
