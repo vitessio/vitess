@@ -250,7 +250,7 @@ func (sm *StreamMigrator) LegacyStopStreams(ctx context.Context) ([]string, erro
 	return sm.legacyVerifyStreamPositions(ctx, positions)
 }
 
-// StopStreams stops streams
+// StopStreams stops streams.
 func (sm *StreamMigrator) StopStreams(ctx context.Context) ([]string, error) {
 	if sm.streams == nil {
 		return nil, nil
@@ -684,6 +684,26 @@ func (sm *StreamMigrator) stopSourceStreams(ctx context.Context) error {
 			return nil
 		}
 
+		// For materialize workflows where the source and target are both the keyspace
+		// that is being resharded, we need to wait for those to catchup as well.
+		// New writes have already been blocked on the source, but the materialization
+		// workflow(s) may still need to catchup with writes that happend just before
+		// writes were stopped on the source.
+		for _, vrs := range tabletStreams {
+			if vrs.WorkflowType == binlogdatapb.VReplicationWorkflowType_Materialize && vrs.BinlogSource.Keyspace == sm.ts.TargetKeyspaceName() {
+				tablet := source.GetPrimary().Tablet
+				pos, err := sm.ts.TabletManagerClient().PrimaryPosition(ctx, tablet)
+				if err != nil {
+					return err
+				}
+				sm.ts.Logger().Infof("Waiting for Materialization workflow %s on %v/%v to reach position %v, starting from position %s",
+					vrs.Workflow, sm.ts.SourceKeyspaceName(), vrs.BinlogSource.Shard, pos, vrs.Position)
+				if err := sm.ts.TabletManagerClient().VReplicationWaitForPos(ctx, tablet, vrs.ID, pos); err != nil {
+					return err
+				}
+			}
+		}
+
 		query := fmt.Sprintf("update _vt.vreplication set state='Stopped', message='for cutover' where id in %s", VReplicationStreams(tabletStreams).Values())
 		_, err := sm.ts.TabletManagerClient().VReplicationExec(ctx, source.GetPrimary().Tablet, query)
 		if err != nil {
@@ -925,6 +945,9 @@ func (sm *StreamMigrator) createTargetStreams(ctx context.Context, tmpl []*VRepl
 				// 1 to 1 in this scenario so we use the target shard's name and primary
 				// tablet's position for the source.
 				vrs.BinlogSource.Shard = target.GetShard().ShardName()
+				// TODO: the problem is that the materialize stream may still need GTIDs
+				// from the OLD shards at this point... so we could miss writes that
+				// occurred on the source table(s) just before the switch.
 				vrs.Position, err = binlogplayer.DecodePosition(target.Position)
 				if err != nil {
 					return err

@@ -939,7 +939,7 @@ func (ts *trafficSwitcher) waitForCatchup(ctx context.Context, filteredReplicati
 	}); err != nil {
 		return err
 	}
-	// all targets have caught up, record their positions for setting up reverse workflows
+	// All targets have caught up, record their positions for setting up reverse workflows.
 	return ts.ForAllTargets(func(target *MigrationTarget) error {
 		var err error
 		target.Position, err = ts.TabletManagerClient().PrimaryPosition(ctx, target.GetPrimary().Tablet)
