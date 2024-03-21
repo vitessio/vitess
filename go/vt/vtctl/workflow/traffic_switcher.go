@@ -547,12 +547,8 @@ func (ts *trafficSwitcher) dropSourceShards(ctx context.Context) error {
 }
 
 func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection) error {
-	var fromShards, toShards []*topo.ShardInfo
-	if direction == DirectionForward {
-		fromShards, toShards = ts.SourceShards(), ts.TargetShards()
-	} else {
-		fromShards, toShards = ts.TargetShards(), ts.SourceShards()
-	}
+	log.Infof("switchShardReads: cells: %v, servedTypes: %+v, direction %d", cells, servedTypes, direction)
+	fromShards, toShards := ts.SourceShards(), ts.TargetShards()
 	if err := ts.TopoServer().ValidateSrvKeyspace(ctx, ts.TargetKeyspaceName(), strings.Join(cells, ",")); err != nil {
 		err2 := vterrors.Wrapf(err, "Before switching shard reads, found SrvKeyspace for %s is corrupt in cell %s",
 			ts.TargetKeyspaceName(), strings.Join(cells, ","))

@@ -2912,6 +2912,10 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		maxReplicationLagAllowed = defaultDuration
 	}
 	direction := TrafficSwitchDirection(req.Direction)
+	cmd := "SwitchTraffic"
+	if direction == DirectionBackward {
+		cmd = "ReverseTraffic"
+	}
 	if direction == DirectionBackward {
 		ts, startState, err = s.getWorkflowState(ctx, startState.SourceKeyspace, ts.reverseWorkflow)
 		if err != nil {
@@ -2933,7 +2937,7 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		if rdDryRunResults, err = s.switchReads(ctx, req, ts, startState, timeout, false, direction); err != nil {
 			return nil, err
 		}
-		log.Infof("Switch Reads done for workflow %s.%s", req.Keyspace, req.Workflow)
+		log.Infof("Switching reads done for workflow %s.%s", req.Keyspace, req.Workflow)
 	}
 	if rdDryRunResults != nil {
 		dryRunResults = append(dryRunResults, *rdDryRunResults...)
@@ -2942,7 +2946,7 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		if _, wrDryRunResults, err = s.switchWrites(ctx, req, ts, timeout, false); err != nil {
 			return nil, err
 		}
-		log.Infof("Switch Writes done for workflow %s.%s", req.Keyspace, req.Workflow)
+		log.Infof("Switching writes done for workflow %s.%s", req.Keyspace, req.Workflow)
 	}
 
 	if wrDryRunResults != nil {
@@ -2951,20 +2955,15 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 	if req.DryRun && len(dryRunResults) == 0 {
 		dryRunResults = append(dryRunResults, "No changes required")
 	}
-	cmd := "SwitchTraffic"
-	if direction == DirectionBackward {
-		cmd = "ReverseTraffic"
-	}
-	log.Infof("%s done for workflow %s.%s", cmd, req.Keyspace, req.Workflow)
 	resp := &vtctldatapb.WorkflowSwitchTrafficResponse{}
 	if req.DryRun {
 		resp.Summary = fmt.Sprintf("%s dry run results for workflow %s.%s at %v", cmd, req.Keyspace, req.Workflow, time.Now().UTC().Format(time.RFC822))
 		resp.DryRunResults = dryRunResults
 	} else {
-		log.Infof("SwitchTraffic done for workflow %s.%s", req.Keyspace, req.Workflow)
+		log.Infof("%s work completed for workflow %s.%s", cmd, req.Keyspace, req.Workflow)
 		resp.Summary = fmt.Sprintf("%s was successful for workflow %s.%s", cmd, req.Keyspace, req.Workflow)
-		// Reload the state after the SwitchTraffic operation
-		// and return that as a string.
+		// Reload the state after the traffic switching operation and return
+		// that as a string.
 		keyspace := req.Keyspace
 		workflow := req.Workflow
 		if direction == DirectionBackward {
@@ -3018,7 +3017,7 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 		cells[i] = strings.TrimSpace(cell)
 	}
 
-	log.Infof("Switching reads: %s.%s tablet types: %s, cells: %s, workflow state: %s", ts.targetKeyspace, ts.workflow, roTypesToSwitchStr, ts.optCells, state.String())
+	log.Infof("Switching reads to: %s.%s tablet types: %s, cells: %s, workflow state: %s", ts.targetKeyspace, ts.workflow, roTypesToSwitchStr, cells, state.String())
 	if !switchReplica && !switchRdonly {
 		return handleError("invalid tablet types", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "tablet types must be REPLICA or RDONLY: %s", roTypesToSwitchStr))
 	}
@@ -3085,7 +3084,7 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 		return handleError("failed to switch read traffic for the shards", err)
 	}
 
-	ts.Logger().Infof("switchShardReads Completed: %+v, %+s, %+v", cells, roTypesToSwitchStr, direction)
+	ts.Logger().Infof("switchShardReads completed: %+v, %+s, %+v", cells, roTypesToSwitchStr, direction)
 	if err := s.ts.ValidateSrvKeyspace(ctx, ts.targetKeyspace, strings.Join(cells, ",")); err != nil {
 		err2 := vterrors.Wrapf(err, "after switching shard reads, found SrvKeyspace for %s is corrupt in cell %s",
 			ts.targetKeyspace, strings.Join(cells, ","))

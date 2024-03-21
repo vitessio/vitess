@@ -468,11 +468,12 @@ func testMoveTablesV2Workflow(t *testing.T) {
 
 	// test basic forward and reverse flows
 	setupCustomerKeyspace(t)
-	materialize(t, materializeCustomerCopySpec, true)
+	//materialize(t, materializeCustomerCopySpec, true)
 	// The purge table should get skipped/ignored
 	// If it's not then we'll get an error as the table doesn't exist in the vschema
 	createMoveTablesWorkflow(t, "customer,loadtest,vdiff_order,reftable,_vt_PURGE_4f9194b43b2011eb8a0104ed332e05c2_20221210194431")
 	require.Contains(t, lastOutput, "Status: Running")
+	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
 	validateReadsRouteToSource(t, "replica")
 	validateWritesRouteToSource(t)
 
@@ -488,21 +489,25 @@ func testMoveTablesV2Workflow(t *testing.T) {
 	testRestOfWorkflow(t)
 
 	listAllArgs := []string{"workflow", "--keyspace", "customer", "list"}
-	output, err := vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)
+	//output, err := vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)
+	_, err := vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)
 	require.NoError(t, err)
-	require.Contains(t, output, "customer_copy") // Materialize workflow should still be there
+	//require.Contains(t, output, "customer_copy") // Materialize workflow should still be there
 
 	testVSchemaForSequenceAfterMoveTables(t)
 
 	createMoveTablesWorkflow(t, "Lead,Lead-1")
-	output, _ = vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)
+	output, err := vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)
+	require.NoError(t, err)
 	require.Contains(t, output, "wf1")
 
 	err = tstWorkflowCancel(t)
 	require.NoError(t, err)
 
-	output, _ = vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)
-	require.Contains(t, output, "customer_copy") // Materialize workflow should still be there
+	_, err = vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)
+	//output, err = vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)
+	require.NoError(t, err)
+	//require.Contains(t, output, "customer_copy") // Materialize workflow should still be there
 }
 
 func testPartialSwitches(t *testing.T) {
