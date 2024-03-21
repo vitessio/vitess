@@ -53,7 +53,7 @@ func pushDerived(ctx *plancontext.PlanningContext, op *Horizon) (Operator, *Appl
 }
 
 func optimizeJoin(ctx *plancontext.PlanningContext, op *Join) (Operator, *ApplyResult) {
-	return mergeOrJoin(ctx, op.LHS, op.RHS, sqlparser.SplitAndExpression(nil, op.Predicate), !op.LeftJoin)
+	return mergeOrJoin(ctx, op.LHS, op.RHS, sqlparser.SplitAndExpression(nil, op.Predicate), op.JoinType)
 }
 
 func optimizeQueryGraph(ctx *plancontext.PlanningContext, op *QueryGraph) (result Operator, changed *ApplyResult) {
@@ -147,7 +147,7 @@ func leftToRightSolve(ctx *plancontext.PlanningContext, qg *QueryGraph) Operator
 			continue
 		}
 		joinPredicates := qg.GetPredicates(TableID(acc), TableID(plan))
-		acc, _ = mergeOrJoin(ctx, acc, plan, joinPredicates, true)
+		acc, _ = mergeOrJoin(ctx, acc, plan, joinPredicates, sqlparser.NormalJoinType)
 	}
 
 	return acc
@@ -262,7 +262,7 @@ func getJoinFor(ctx *plancontext.PlanningContext, cm opCacheMap, lhs, rhs Operat
 		return cachedPlan
 	}
 
-	join, _ := mergeOrJoin(ctx, lhs, rhs, joinPredicates, true)
+	join, _ := mergeOrJoin(ctx, lhs, rhs, joinPredicates, sqlparser.NormalJoinType)
 	cm[solves] = join
 	return join
 }
@@ -283,16 +283,16 @@ func requiresSwitchingSides(ctx *plancontext.PlanningContext, op Operator) (requ
 	return
 }
 
-func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredicates []sqlparser.Expr, inner bool) (Operator, *ApplyResult) {
-	newPlan := mergeJoinInputs(ctx, lhs, rhs, joinPredicates, newJoinMerge(joinPredicates, inner))
+func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredicates []sqlparser.Expr, joinType sqlparser.JoinType) (Operator, *ApplyResult) {
+	newPlan := mergeJoinInputs(ctx, lhs, rhs, joinPredicates, newJoinMerge(joinPredicates, joinType))
 	if newPlan != nil {
 		return newPlan, Rewrote("merge routes into single operator")
 	}
 
 	if len(joinPredicates) > 0 && requiresSwitchingSides(ctx, rhs) {
-		if !inner || requiresSwitchingSides(ctx, lhs) {
+		if !joinType.IsCommutative() || requiresSwitchingSides(ctx, lhs) {
 			// we can't switch sides, so let's see if we can use a HashJoin to solve it
-			join := NewHashJoin(lhs, rhs, !inner)
+			join := NewHashJoin(lhs, rhs, !joinType.IsInner())
 			for _, pred := range joinPredicates {
 				join.AddJoinPredicate(ctx, pred)
 			}
@@ -300,12 +300,12 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredic
 			return join, Rewrote("use a hash join because we have LIMIT on the LHS")
 		}
 
-		join := NewApplyJoin(ctx, Clone(rhs), Clone(lhs), nil, !inner)
+		join := NewApplyJoin(ctx, Clone(rhs), Clone(lhs), nil, joinType)
 		newOp := pushJoinPredicates(ctx, joinPredicates, join)
 		return newOp, Rewrote("logical join to applyJoin, switching side because LIMIT")
 	}
 
-	join := NewApplyJoin(ctx, Clone(lhs), Clone(rhs), nil, !inner)
+	join := NewApplyJoin(ctx, Clone(lhs), Clone(rhs), nil, joinType)
 	newOp := pushJoinPredicates(ctx, joinPredicates, join)
 	return newOp, Rewrote("logical join to applyJoin ")
 }

@@ -373,7 +373,7 @@ func pushAggregationThroughApplyJoin(ctx *plancontext.PlanningContext, rootAggr 
 	rhs := createJoinPusher(rootAggr, join.RHS)
 
 	columns := &applyJoinColumns{}
-	output, err := splitAggrColumnsToLeftAndRight(ctx, rootAggr, join, join.LeftJoin, columns, lhs, rhs)
+	output, err := splitAggrColumnsToLeftAndRight(ctx, rootAggr, join, !join.JoinType.IsInner(), columns, lhs, rhs)
 	join.JoinColumns = columns
 	if err != nil {
 		// if we get this error, we just abort the splitting and fall back on simpler ways of solving the same query

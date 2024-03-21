@@ -231,7 +231,7 @@ func tryPushSubQueryInJoin(
 		return outer, Rewrote("push subquery into LHS of join")
 	}
 
-	if outer.LeftJoin || len(inner.Predicates) == 0 {
+	if !outer.IsInner() || len(inner.Predicates) == 0 {
 		// we can't push any filters on the RHS of an outer join, and
 		// we don't want to push uncorrelated subqueries to the RHS of a join
 		return nil, NoRewrite
@@ -278,7 +278,7 @@ func extractLHSExpr(
 
 // tryMergeWithRHS attempts to merge a subquery with the RHS of a join
 func tryMergeWithRHS(ctx *plancontext.PlanningContext, inner *SubQuery, outer *ApplyJoin) (Operator, *ApplyResult) {
-	if outer.LeftJoin {
+	if !outer.IsInner() {
 		return nil, nil
 	}
 	// both sides need to be routes

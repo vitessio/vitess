@@ -408,7 +408,7 @@ func canPushLeft(ctx *plancontext.PlanningContext, aj *ApplyJoin, order []OrderB
 
 func isOuterTable(op Operator, ts semantics.TableSet) bool {
 	aj, ok := op.(*ApplyJoin)
-	if ok && aj.LeftJoin && TableID(aj.RHS).IsOverlapping(ts) {
+	if ok && !aj.IsInner() && TableID(aj.RHS).IsOverlapping(ts) {
 		return true
 	}
 
