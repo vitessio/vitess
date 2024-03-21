@@ -27,6 +27,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/status"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/grpcclient"
@@ -192,6 +193,10 @@ func (client *grpcClient) dialPool(ctx context.Context, tablet *topodatapb.Table
 		}
 		if _, ok := status.FromError(err); !ok {
 			// Not a gRPC error
+			return
+		}
+		sqlErr, isSQLErr := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
+		if isSQLErr && sqlErr != nil {
 			return
 		}
 		client.mu.Lock()
