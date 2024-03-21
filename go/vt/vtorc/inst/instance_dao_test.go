@@ -747,7 +747,7 @@ func waitForCacheInitialization() {
 	}
 }
 
-func TestSnapshotDatabaseState(t *testing.T) {
+func TestGetDatabaseState(t *testing.T) {
 	// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
 	defer func() {
 		db.ClearVTOrcDatabase()
@@ -758,7 +758,7 @@ func TestSnapshotDatabaseState(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	snapshot, err := SnapshotDatabaseState()
+	ds, err := GetDatabaseState()
 	require.NoError(t, err)
-	require.Contains(t, snapshot, `alias:{zone1-0000000112 true}`)
+	require.Contains(t, ds, `"alias":"zone1-0000000112"`)
 }

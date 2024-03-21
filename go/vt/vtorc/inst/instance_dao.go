@@ -17,6 +17,7 @@
 package inst
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -1211,19 +1212,31 @@ func ExpireStaleInstanceBinlogCoordinates() error {
 	return ExecDBWriteFunc(writeFunc)
 }
 
-// SnapshotDatabaseState takes the snapshot of the database and returns it.
-func SnapshotDatabaseState() (string, error) {
-	var finalOutput string
+// GetDatabaseState takes the snapshot of the database and returns it.
+func GetDatabaseState() (string, error) {
+	type tableState struct {
+		TableName string
+		Rows      []sqlutils.RowMap
+	}
+
+	var dbState []tableState
 	for _, tableName := range db.TableNames {
-		finalOutput += "Table " + tableName + "\n"
+		ts := tableState{
+			TableName: tableName,
+		}
 		err := db.QueryVTOrc("select * from "+tableName, nil, func(rowMap sqlutils.RowMap) error {
-			finalOutput += fmt.Sprintf("%v\n", rowMap)
+			ts.Rows = append(ts.Rows, rowMap)
 			return nil
 		})
 		if err != nil {
 			return "", err
 		}
-		finalOutput += "\n"
+		dbState = append(dbState, ts)
 	}
-	return finalOutput, nil
+	jsonData, err := json.Marshal(dbState)
+	if err != nil {
+		return "", err
+	}
+
+	return string(jsonData), nil
 }

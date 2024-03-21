@@ -172,12 +172,12 @@ func errantGTIDsAPIHandler(response http.ResponseWriter, request *http.Request) 
 
 // databaseStateAPIHandler is the handler for the databaseStateAPI endpoint
 func databaseStateAPIHandler(response http.ResponseWriter) {
-	snapshot, err := inst.SnapshotDatabaseState()
+	ds, err := inst.GetDatabaseState()
 	if err != nil {
 		http.Error(response, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	writePlainTextResponse(response, snapshot, http.StatusOK)
+	writePlainTextResponse(response, ds, http.StatusOK)
 }
 
 // AggregatedDiscoveryMetricsAPIHandler is the handler for the discovery metrics endpoint
