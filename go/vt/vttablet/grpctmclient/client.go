@@ -25,9 +25,7 @@ import (
 
 	"github.com/spf13/pflag"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/status"
 
-	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/grpcclient"
@@ -191,19 +189,12 @@ func (client *grpcClient) dialPool(ctx context.Context, tablet *topodatapb.Table
 		if err == nil {
 			return
 		}
-		if _, ok := status.FromError(err); !ok {
-			// Not a gRPC error
-			return
-		}
-		sqlErr, isSQLErr := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
-		if isSQLErr && sqlErr != nil {
-			return
-		}
+		// A bit aggressively, we close connections and delete the client from cache
+		// upon any error. This is specifically to solve situation where gRPC communication
+		// is broken, but at this time we don't have a good way to distinguish between
+		// gRPC errors and other, "normal" errors.
 		client.mu.Lock()
 		defer client.mu.Unlock()
-		for tm := range client.rpcClientMap[addr] {
-			tm.cc.Close()
-		}
 		delete(client.rpcClientMap, addr)
 	}
 	return result.client, invalidator, nil
