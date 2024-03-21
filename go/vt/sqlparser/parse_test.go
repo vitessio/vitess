@@ -140,6 +140,10 @@ var (
 			output: "change replication source to source_host = Host",
 		},
 		{
+			input:  "change replication source to SOURCE_HOST = 'Host', SOURCE_AUTO_POSITION=0",
+			output: "change replication source to source_host = Host, source_auto_position = 0",
+		},
+		{
 			input:  "change replication source to SOURCE_HOST = 'host', SOURCE_PASSWORD='PaSSword', SOURCE_PORT=12345, source_user='root', SOURCE_CONNECT_RETRY=60, SOURCE_RETRY_COUNT=3",
 			output: "change replication source to source_host = host, source_password = PaSSword, source_port = 12345, source_user = root, source_connect_retry = 60, source_retry_count = 3",
 		},

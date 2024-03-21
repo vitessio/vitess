@@ -304,7 +304,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 
 // Replication Tokens
 %token <bytes> REPLICA REPLICAS SOURCE STOP RESET FILTER LOG
-%token <bytes> SOURCE_HOST SOURCE_USER SOURCE_PASSWORD SOURCE_PORT SOURCE_CONNECT_RETRY SOURCE_RETRY_COUNT
+%token <bytes> SOURCE_HOST SOURCE_USER SOURCE_PASSWORD SOURCE_PORT SOURCE_CONNECT_RETRY SOURCE_RETRY_COUNT SOURCE_AUTO_POSITION
 %token <bytes> REPLICATE_DO_TABLE REPLICATE_IGNORE_TABLE
 
 // Transaction Tokens
@@ -3798,6 +3798,10 @@ replication_option:
     $$ = &ReplicationOption{Name: string($1), Value: mustAtoi(yylex, string($3))}
   }
 | SOURCE_RETRY_COUNT '=' INTEGRAL
+  {
+    $$ = &ReplicationOption{Name: string($1), Value: mustAtoi(yylex, string($3))}
+  }
+| SOURCE_AUTO_POSITION '=' INTEGRAL
   {
     $$ = &ReplicationOption{Name: string($1), Value: mustAtoi(yylex, string($3))}
   }
@@ -9107,6 +9111,7 @@ non_reserved_keyword:
 | SOURCE_HOST
 | SOURCE_PASSWORD
 | SOURCE_PORT
+| SOURCE_AUTO_POSITION
 | SOURCE_RETRY_COUNT
 | SOURCE_USER
 | SRID
