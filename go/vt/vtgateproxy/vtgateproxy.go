@@ -21,7 +21,9 @@ package vtgateproxy
 import (
 	"context"
 	"flag"
+	"fmt"
 	"io"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -51,17 +53,31 @@ var (
 )
 
 type VTGateProxy struct {
-	targetConns map[string]*vtgateconn.VTGateConn
-	mu          sync.Mutex
+	targetConns    map[string]*vtgateconn.VTGateConn
+	mu             sync.Mutex
+	azID           string
+	gateType       string
+	numConnections string
 }
 
 func (proxy *VTGateProxy) getConnection(ctx context.Context, target string) (*vtgateconn.VTGateConn, error) {
+	targetURL, err := url.Parse(target)
+	if err != nil {
+		return nil, err
+	}
+
+	proxy.azID = targetURL.Query().Get("az_id")
+	proxy.numConnections = targetURL.Query().Get("num_connections")
+	proxy.gateType = targetURL.Host
+
+	fmt.Printf("Getting connection for %v in %v with %v connections\n", target, proxy.azID, proxy.numConnections)
+
 	// If the connection exists, return it
 	proxy.mu.Lock()
-	conn, _ := proxy.targetConns[target]
-	if conn != nil {
+	existingConn, _ := proxy.targetConns[target]
+	if existingConn != nil {
 		proxy.mu.Unlock()
-		return conn, nil
+		return existingConn, nil
 	}
 	proxy.mu.Unlock()
 
@@ -70,12 +86,11 @@ func (proxy *VTGateProxy) getConnection(ctx context.Context, target string) (*vt
 	//	grpcclient.RegisterGRPCDialOptions(func(opts []grpc.DialOption) ([]grpc.DialOption, error) {
 	//		return append(opts, grpc.WithBlock()), nil
 	//	})
-
 	grpcclient.RegisterGRPCDialOptions(func(opts []grpc.DialOption) ([]grpc.DialOption, error) {
-		return append(opts, grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"round_robin":{}}]}`)), nil
+		return append(opts, grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"slack_affinity_balancer":{}}]}`)), nil
 	})
 
-	conn, err := vtgateconn.DialProtocol(ctx, "grpc", target)
+	conn, err := vtgateconn.DialProtocol(WithSlackAZAffinityContext(ctx, proxy.azID, proxy.numConnections), "grpc", target)
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +120,7 @@ func (proxy *VTGateProxy) NewSession(ctx context.Context, options *querypb.Execu
 // same effect as if a "rollback" statement was executed, but does not affect the query
 // statistics.
 func (proxy *VTGateProxy) CloseSession(ctx context.Context, session *vtgateconn.VTGateSession) error {
-	return session.CloseSession(ctx)
+	return session.CloseSession(WithSlackAZAffinityContext(ctx, proxy.azID, proxy.gateType))
 }
 
 // ResolveTransaction resolves the specified 2PC transaction.
@@ -127,11 +142,11 @@ func (proxy *VTGateProxy) Execute(ctx context.Context, session *vtgateconn.VTGat
 		return &sqltypes.Result{}, nil
 	}
 
-	return session.Execute(ctx, sql, bindVariables)
+	return session.Execute(WithSlackAZAffinityContext(ctx, proxy.azID, proxy.gateType), sql, bindVariables)
 }
 
 func (proxy *VTGateProxy) StreamExecute(ctx context.Context, session *vtgateconn.VTGateSession, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
-	stream, err := session.StreamExecute(ctx, sql, bindVariables)
+	stream, err := session.StreamExecute(WithSlackAZAffinityContext(ctx, proxy.azID, proxy.gateType), sql, bindVariables)
 	if err != nil {
 		return err
 	}
