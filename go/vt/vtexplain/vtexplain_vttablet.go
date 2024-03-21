@@ -437,8 +437,8 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options) (*tablet
 			}
 			tEnv.addResult(query, tEnv.getResult(likeQuery))
 
-			likeQuery = fmt.Sprintf(mysqlctl.GetColumnNamesQuery, "database()", sqlescape.UnescapeID(likeTable))
-			query = fmt.Sprintf(mysqlctl.GetColumnNamesQuery, "database()", sqlescape.UnescapeID(table))
+			likeQuery = fmt.Sprintf(mysqlctl.GetColumnNamesQuery, "database()", sqltypes.EncodeStringSQL(likeTable))
+			query = fmt.Sprintf(mysqlctl.GetColumnNamesQuery, "database()", sqltypes.EncodeStringSQL(table))
 			if tEnv.getResult(likeQuery) == nil {
 				return nil, fmt.Errorf("check your schema, table[%s] doesn't exist", likeTable)
 			}
@@ -477,7 +477,7 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options) (*tablet
 		tEnv.addResult("SELECT * FROM "+backtickedTable+" WHERE 1 != 1", &sqltypes.Result{
 			Fields: rowTypes,
 		})
-		query := fmt.Sprintf(mysqlctl.GetColumnNamesQuery, "database()", sqlescape.UnescapeID(table))
+		query := fmt.Sprintf(mysqlctl.GetColumnNamesQuery, "database()", sqltypes.EncodeStringSQL(table))
 		tEnv.addResult(query, &sqltypes.Result{
 			Fields: colTypes,
 			Rows:   colValues,
@@ -558,7 +558,7 @@ func (t *explainTablet) handleSelect(query string) (*sqltypes.Result, error) {
 
 	// Gen4 supports more complex queries so we now need to
 	// handle multiple FROM clauses
-	tables := make([]*sqlparser.AliasedTableExpr, len(selStmt.From))
+	tables := make([]*sqlparser.AliasedTableExpr, 0, len(selStmt.From))
 	for _, from := range selStmt.From {
 		tables = append(tables, getTables(from)...)
 	}
