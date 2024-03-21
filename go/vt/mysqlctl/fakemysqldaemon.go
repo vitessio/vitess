@@ -268,6 +268,10 @@ func (fmd *FakeMysqlDaemon) Wait(ctx context.Context, cnf *Mycnf) error {
 	return nil
 }
 
+func (fmd *FakeMysqlDaemon) WaitForDBAGrants(ctx context.Context, waitTime time.Duration) (err error) {
+	return nil
+}
+
 // GetMysqlPort is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) GetMysqlPort() (int32, error) {
 	if fmd.MysqlPort.Load() == -1 {
