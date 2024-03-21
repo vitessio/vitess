@@ -277,11 +277,16 @@ func (c *Concatenate) parallelStreamExec(
 		// Check if type coercion needed for this source.
 		// We only need to check if fields are not in NoNeedToTypeCheck set.
 		needsCoercion := false
-		for idx, field := range c.fieldTypes {
-			_, skip := c.NoNeedToTypeCheck[idx]
-			if !skip && field.Type() != res.Fields[idx].Type {
-				needsCoercion = true
-				break
+		if len(res.Fields) < len(c.fieldTypes) {
+			// if we didn't get enough fields, we'll always coerce
+			needsCoercion = true
+		} else {
+			for idx, field := range c.fieldTypes {
+				_, skip := c.NoNeedToTypeCheck[idx]
+				if !skip && field.Type() != res.Fields[idx].Type {
+					needsCoercion = true
+					break
+				}
 			}
 		}
 

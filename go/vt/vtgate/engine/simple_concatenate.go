@@ -19,6 +19,7 @@ package engine
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 
 	"golang.org/x/sync/errgroup"
 
@@ -94,31 +95,28 @@ func (c *SimpleConcatenate) parallelExec(
 	defer cancel()
 
 	var (
-		wg       errgroup.Group
-		rows     sync.Mutex
-		fieldsWg sync.WaitGroup
-		fields   []*querypb.Field
-		result   *sqltypes.Result
+		wg   errgroup.Group
+		rows sync.Mutex
 	)
 
-	fieldsWg.Add(1)
-
+	result := &sqltypes.Result{}
 	for i, source := range c.Sources {
-		vars := copyBindVars(bindVars)
 		// the first source will be used to get the fields
-		// the other sources will run in parallel
+		// all sources will run in parallel
 		wg.Go(func() error {
+			vars := copyBindVars(bindVars)
 			chunk, err := vcursor.ExecutePrimitive(ctx, source, vars, true)
 			if err != nil {
 				cancel()
 				return err
 			}
+
 			if i == 0 {
-				fields = chunk.Fields
-				fieldsWg.Done()
-			} else {
-				fieldsWg.Wait()
-				chunk.Fields = fields
+				result.Fields = chunk.Fields
+			}
+
+			if len(chunk.Rows) == 0 {
+				return nil
 			}
 
 			rows.Lock()
@@ -175,6 +173,7 @@ func (c *SimpleConcatenate) parallelStreamExec(
 		wg         errgroup.Group
 		fieldsWg   sync.WaitGroup
 		fields     []*querypb.Field
+		fieldsDone atomic.Bool
 	)
 
 	fieldsWg.Add(1)
@@ -187,8 +186,12 @@ func (c *SimpleConcatenate) parallelStreamExec(
 					return nil
 				}
 				if i == 0 {
-					fields = chunk.Fields
-					fieldsWg.Done()
+					// for results coming from the first source, we don't need to block
+					fieldsAlreadyLoaded := fieldsDone.Swap(true)
+					if !fieldsAlreadyLoaded {
+						fields = chunk.Fields
+						fieldsWg.Done()
+					}
 				} else {
 					fieldsWg.Wait()
 					chunk.Fields = fields
