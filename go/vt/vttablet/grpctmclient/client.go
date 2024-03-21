@@ -195,9 +195,7 @@ func (client *grpcClient) dialPool(ctx context.Context, tablet *topodatapb.Table
 		// gRPC errors and other, "normal" errors.
 		client.mu.Lock()
 		defer client.mu.Unlock()
-		for tm := range client.rpcClientMap[addr] {
-			tm.cc.Close()
-		}
+		result.cc.Close()
 		delete(client.rpcClientMap, addr)
 	}
 	return result.client, invalidator, nil
