@@ -24,6 +24,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
@@ -91,7 +92,6 @@ type ThrottlerInterface interface {
 	UpdateConfiguration(configuration *throttlerdatapb.Configuration, copyZeroValues bool) error
 	ResetConfiguration()
 	MaxLag(tabletType topodatapb.TabletType) uint32
-<<<<<<< HEAD
 }
 
 // TopologyWatcherInterface defines the public interface that is implemented by
@@ -100,8 +100,6 @@ type ThrottlerInterface interface {
 type TopologyWatcherInterface interface {
 	Start()
 	Stop()
-=======
->>>>>>> 2b25639f25 (TxThrottler: dont throttle unless lag (#14789))
 }
 
 // TxThrottlerName is the name the wrapped go/vt/throttler object will be registered with
@@ -182,23 +180,11 @@ type txThrottlerState struct {
 	stopHealthCheck context.CancelFunc
 
 	healthCheck      discovery.HealthCheck
-<<<<<<< HEAD
 	topologyWatchers []TopologyWatcherInterface
-=======
-	healthCheckChan  chan *discovery.TabletHealth
-	healthCheckCells []string
-	cellsFromTopo    bool
-
-	// tabletTypes stores the tablet types for throttling
-	tabletTypes map[topodatapb.TabletType]bool
 
 	maxLag             int64
 	done               chan bool
 	waitForTermination sync.WaitGroup
-<<<<<<< HEAD
->>>>>>> 2b25639f25 (TxThrottler: dont throttle unless lag (#14789))
-=======
->>>>>>> 2b25639f25 (TxThrottler: dont throttle unless lag (#14789))
 }
 
 // NewTxThrottler tries to construct a txThrottler from the
@@ -341,10 +327,10 @@ func newTxThrottlerState(topoServer *topo.Server, config *txThrottlerConfig, tar
 	result := &txThrottlerState{
 		config:    config,
 		throttler: t,
+		done:      make(chan bool, 2),
 	}
 	createTxThrottlerHealthCheck(topoServer, config, result, target.Cell)
 
-<<<<<<< HEAD
 	result.topologyWatchers = make(
 		[]TopologyWatcherInterface, 0, len(config.healthCheckCells))
 	for _, cell := range config.healthCheckCells {
@@ -358,30 +344,12 @@ func newTxThrottlerState(topoServer *topo.Server, config *txThrottlerConfig, tar
 				target.Shard,
 				discovery.DefaultTopologyWatcherRefreshInterval,
 				discovery.DefaultTopoReadConcurrency))
-=======
-	state := &txThrottlerStateImpl{
-		config:           config,
-		healthCheckCells: config.TxThrottlerHealthCheckCells,
-		tabletTypes:      tabletTypes,
-		throttler:        t,
-		txThrottler:      txThrottler,
-		done:             make(chan bool, 1),
-	}
-
-	// get cells from topo if none defined in tabletenv config
-	if len(state.healthCheckCells) == 0 {
-		ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
-		defer cancel()
-		state.healthCheckCells = fetchKnownCells(ctx, txThrottler.topoServer, target)
-		state.cellsFromTopo = true
->>>>>>> 2b25639f25 (TxThrottler: dont throttle unless lag (#14789))
 	}
 	return result, nil
 }
 
 func createTxThrottlerHealthCheck(topoServer *topo.Server, config *txThrottlerConfig, result *txThrottlerState, cell string) {
 	ctx, cancel := context.WithCancel(context.Background())
-<<<<<<< HEAD
 	result.stopHealthCheck = cancel
 	result.healthCheck = healthCheckFactory(topoServer, cell, config.healthCheckCells)
 	ch := result.healthCheck.Subscribe()
@@ -393,59 +361,8 @@ func createTxThrottlerHealthCheck(topoServer *topo.Server, config *txThrottlerCo
 			case th := <-ch:
 				result.StatsUpdate(th)
 			}
-=======
-	state.stopHealthCheck = cancel
-	state.initHealthCheckStream(txThrottler.topoServer, target)
-	go state.healthChecksProcessor(ctx, txThrottler.topoServer, target)
-	state.waitForTermination.Add(1)
-	go state.updateMaxLag()
-
-	return state, nil
-}
-
-func (ts *txThrottlerStateImpl) initHealthCheckStream(topoServer *topo.Server, target *querypb.Target) {
-	ts.healthCheck = healthCheckFactory(topoServer, target.Cell, ts.healthCheckCells)
-	ts.healthCheckChan = ts.healthCheck.Subscribe()
-
-}
-
-func (ts *txThrottlerStateImpl) closeHealthCheckStream() {
-	if ts.healthCheck == nil {
-		return
-	}
-	ts.stopHealthCheck()
-	ts.healthCheck.Close()
-}
-
-func (ts *txThrottlerStateImpl) updateHealthCheckCells(ctx context.Context, topoServer *topo.Server, target *querypb.Target) {
-	fetchCtx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
-	defer cancel()
-
-	knownCells := fetchKnownCells(fetchCtx, topoServer, target)
-	if !reflect.DeepEqual(knownCells, ts.healthCheckCells) {
-		log.Info("txThrottler: restarting healthcheck stream due to topology cells update")
-		ts.healthCheckCells = knownCells
-		ts.closeHealthCheckStream()
-		ts.initHealthCheckStream(topoServer, target)
-	}
-}
-
-func (ts *txThrottlerStateImpl) healthChecksProcessor(ctx context.Context, topoServer *topo.Server, target *querypb.Target) {
-	var cellsUpdateTicks <-chan time.Time
-	if ts.cellsFromTopo {
-		ticker := time.NewTicker(ts.config.TxThrottlerTopoRefreshInterval)
-		cellsUpdateTicks = ticker.C
-		defer ticker.Stop()
-	}
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-cellsUpdateTicks:
-			ts.updateHealthCheckCells(ctx, topoServer, target)
-		case th := <-ts.healthCheckChan:
-			ts.StatsUpdate(th)
->>>>>>> 2b25639f25 (TxThrottler: dont throttle unless lag (#14789))
+			result.waitForTermination.Add(1)
+			go result.updateMaxLag()
 		}
 	}(ctx)
 }
@@ -461,16 +378,14 @@ func (ts *txThrottlerState) throttle() bool {
 
 	maxLag := atomic.LoadInt64(&ts.maxLag)
 
-	return maxLag > ts.config.TxThrottlerConfig.TargetReplicationLagSec &&
+	return maxLag > ts.config.throttlerConfig.TargetReplicationLagSec &&
 		ts.throttler.Throttle(0 /* threadId */) > 0
-<<<<<<< HEAD
-=======
 }
 
-func (ts *txThrottlerStateImpl) updateMaxLag() {
+func (ts *txThrottlerState) updateMaxLag() {
 	defer ts.waitForTermination.Done()
 	// We use half of the target lag to ensure we have enough resolution to see changes in lag below that value
-	ticker := time.NewTicker(time.Duration(ts.config.TxThrottlerConfig.TargetReplicationLagSec/2) * time.Second)
+	ticker := time.NewTicker(time.Duration(ts.config.throttlerConfig.TargetReplicationLagSec/2) * time.Second)
 	defer ticker.Stop()
 outerloop:
 	for {
@@ -478,32 +393,7 @@ outerloop:
 		case <-ticker.C:
 			var maxLag uint32
 
-			for tabletType := range ts.tabletTypes {
-				maxLagPerTabletType := ts.throttler.MaxLag(tabletType)
-				if maxLagPerTabletType > maxLag {
-					maxLag = maxLagPerTabletType
-				}
-			}
-			atomic.StoreInt64(&ts.maxLag, int64(maxLag))
-		case <-ts.done:
-			break outerloop
-		}
-	}
->>>>>>> 2b25639f25 (TxThrottler: dont throttle unless lag (#14789))
-}
-
-func (ts *txThrottlerStateImpl) updateMaxLag() {
-	defer ts.waitForTermination.Done()
-	// We use half of the target lag to ensure we have enough resolution to see changes in lag below that value
-	ticker := time.NewTicker(time.Duration(ts.config.TxThrottlerConfig.TargetReplicationLagSec/2) * time.Second)
-	defer ticker.Stop()
-outerloop:
-	for {
-		select {
-		case <-ticker.C:
-			var maxLag uint32
-
-			for tabletType := range ts.tabletTypes {
+			for _, tabletType := range *ts.config.tabletTypes {
 				maxLagPerTabletType := ts.throttler.MaxLag(tabletType)
 				if maxLagPerTabletType > maxLag {
 					maxLag = maxLagPerTabletType
@@ -528,16 +418,9 @@ func (ts *txThrottlerState) deallocateResources() {
 	ts.healthCheck.Close()
 	ts.healthCheck = nil
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-	// After ts.healthCheck is closed txThrottlerState.StatsUpdate() is guaranteed not
-=======
-=======
->>>>>>> 2b25639f25 (TxThrottler: dont throttle unless lag (#14789))
 	ts.done <- true
 	ts.waitForTermination.Wait()
-	// After ts.healthCheck is closed txThrottlerStateImpl.StatsUpdate() is guaranteed not
->>>>>>> 2b25639f25 (TxThrottler: dont throttle unless lag (#14789))
+	// After ts.healthCheck is closed txThrottlerState.StatsUpdate() is guaranteed not
 	// to be executing, so we can safely close the throttler.
 	ts.throttler.Close()
 	ts.throttler = nil
