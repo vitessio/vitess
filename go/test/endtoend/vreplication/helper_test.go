@@ -410,7 +410,7 @@ func waitForWorkflowState(t *testing.T, vc *VitessCluster, ksWorkflow string, wa
 // as a CSV have secondary keys. This is useful when testing the
 // --defer-secondary-keys flag to confirm that the secondary keys
 // were re-added by the time the workflow hits the running phase.
-// For a Reshard workflow, where no tables are specififed, pass
+// For a Reshard workflow, where no tables are specified, pass
 // an empty string for the tables and all tables in the target
 // keyspace will be checked.
 func confirmTablesHaveSecondaryKeys(t *testing.T, tablets []*cluster.VttabletProcess, ksName string, tables string) {

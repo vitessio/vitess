@@ -92,7 +92,9 @@ type (
 
 	joinMerger struct {
 		predicates []sqlparser.Expr
-		innerJoin  bool
+		// joinType is permitted to store only 3 of the possible values
+		// NormalJoinType, StraightJoinType and LeftJoinType.
+		joinType sqlparser.JoinType
 	}
 
 	routingType int
@@ -176,10 +178,10 @@ func getRoutingType(r Routing) routingType {
 	panic(fmt.Sprintf("switch should be exhaustive, got %T", r))
 }
 
-func newJoinMerge(predicates []sqlparser.Expr, innerJoin bool) merger {
+func newJoinMerge(predicates []sqlparser.Expr, joinType sqlparser.JoinType) merger {
 	return &joinMerger{
 		predicates: predicates,
-		innerJoin:  innerJoin,
+		joinType:   joinType,
 	}
 }
 
@@ -203,7 +205,7 @@ func mergeShardedRouting(r1 *ShardedRouting, r2 *ShardedRouting) *ShardedRouting
 }
 
 func (jm *joinMerger) getApplyJoin(ctx *plancontext.PlanningContext, op1, op2 *Route) *ApplyJoin {
-	return NewApplyJoin(ctx, op1.Source, op2.Source, ctx.SemTable.AndExpressions(jm.predicates...), !jm.innerJoin)
+	return NewApplyJoin(ctx, op1.Source, op2.Source, ctx.SemTable.AndExpressions(jm.predicates...), jm.joinType)
 }
 
 func (jm *joinMerger) merge(ctx *plancontext.PlanningContext, op1, op2 *Route, r Routing) *Route {

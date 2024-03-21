@@ -151,7 +151,7 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 	if options.atomicCopy {
 		args = append(args, "--atomic-copy")
 	}
-	if cells != "" {
+	if (action == workflowActionCreate || action == workflowActionSwitchTraffic || action == workflowActionReverseTraffic) && cells != "" {
 		args = append(args, "--cells", cells)
 	}
 	if tabletTypes != "" {
@@ -444,7 +444,7 @@ func testReshardV2Workflow(t *testing.T) {
 
 	createAdditionalCustomerShards(t, "-40,40-80,80-c0,c0-")
 	createReshardWorkflow(t, "-80,80-", "-40,40-80,80-c0,c0-")
-	if !strings.Contains(lastOutput, "Workflow started successfully") {
+	if !strings.Contains(lastOutput, "Status: Running") {
 		t.Fail()
 	}
 	validateReadsRouteToSource(t, "replica")
@@ -472,7 +472,7 @@ func testMoveTablesV2Workflow(t *testing.T) {
 	// The purge table should get skipped/ignored
 	// If it's not then we'll get an error as the table doesn't exist in the vschema
 	createMoveTablesWorkflow(t, "customer,loadtest,vdiff_order,reftable,_vt_PURGE_4f9194b43b2011eb8a0104ed332e05c2_20221210194431")
-	require.Contains(t, lastOutput, "Workflow started successfully")
+	require.Contains(t, lastOutput, "Status: Running")
 	validateReadsRouteToSource(t, "replica")
 	validateWritesRouteToSource(t)
 
@@ -495,13 +495,13 @@ func testMoveTablesV2Workflow(t *testing.T) {
 	testVSchemaForSequenceAfterMoveTables(t)
 
 	createMoveTablesWorkflow(t, "Lead,Lead-1")
-	output, _ = vc.VtctlClient.ExecuteCommandWithOutput(listAllArgs...)
+	output, _ = vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)
 	require.Contains(t, output, "wf1")
 
 	err = tstWorkflowCancel(t)
 	require.NoError(t, err)
 
-	output, _ = vc.VtctlClient.ExecuteCommandWithOutput(listAllArgs...)
+	output, _ = vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)
 	require.Contains(t, output, "customer_copy") // Materialize workflow should still be there
 }
 
