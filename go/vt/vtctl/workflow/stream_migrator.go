@@ -945,9 +945,6 @@ func (sm *StreamMigrator) createTargetStreams(ctx context.Context, tmpl []*VRepl
 				// 1 to 1 in this scenario so we use the target shard's name and primary
 				// tablet's position for the source.
 				vrs.BinlogSource.Shard = target.GetShard().ShardName()
-				// TODO: the problem is that the materialize stream may still need GTIDs
-				// from the OLD shards at this point... so we could miss writes that
-				// occurred on the source table(s) just before the switch.
 				vrs.Position, err = binlogplayer.DecodePosition(target.Position)
 				if err != nil {
 					return err

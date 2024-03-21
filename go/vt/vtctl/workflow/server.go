@@ -3175,12 +3175,13 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 		}
 
 		// We stop writes on the source before stopping the streams so that the catchup
-		// time is lessened and other workflows that we have to migrate such as
-		// materialize workflows that are within a single keyspace (source and target)
-		// also have a chance to catch up as well as those are internally generated
-		// GTIDs within the shard. For materialization streams that we migrate where
-		// the source and target are the keyspace being resharded, we wait for those
-		// to catchup in the stopStreams path before we actually stop them.
+		// time is lessened and other workflows that we have to migrate during a reshard
+		// such as materialize workflows that are within a single keyspace -- the source
+		// and target are the keyspace being resharded -- have a chance to catch up as
+		// those are internally generated GTIDs within the shard. For materialization
+		// streams that we migrate where the source and target are the keyspace being
+		// resharded, we wait for those to catchup in the stopStreams path before we
+		// actually stop them.
 		ts.Logger().Infof("Stopping source writes")
 		if err := sw.stopSourceWrites(ctx); err != nil {
 			sw.cancelMigration(ctx, sm)
