@@ -24,6 +24,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
 	"google.golang.org/protobuf/encoding/prototext"
