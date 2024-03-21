@@ -1233,7 +1233,7 @@ func GetDatabaseState() (string, error) {
 		}
 		dbState = append(dbState, ts)
 	}
-	jsonData, err := json.Marshal(dbState)
+	jsonData, err := json.MarshalIndent(dbState, "", "\t")
 	if err != nil {
 		return "", err
 	}

@@ -760,5 +760,5 @@ func TestGetDatabaseState(t *testing.T) {
 
 	ds, err := GetDatabaseState()
 	require.NoError(t, err)
-	require.Contains(t, ds, `"alias":"zone1-0000000112"`)
+	require.Contains(t, ds, `"alias": "zone1-0000000112"`)
 }

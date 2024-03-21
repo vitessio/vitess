@@ -98,8 +98,17 @@ func TestAPIEndpoints(t *testing.T) {
 		status, resp, err := utils.MakeAPICall(t, vtorc, "/api/database-state")
 		require.NoError(t, err)
 		assert.Equal(t, 200, status)
-		assert.Contains(t, resp, `"alias":"zone1-0000000101"`)
-		assert.Contains(t, resp, `{"TableName":"vitess_keyspace","Rows":[{"durability_policy":"none","keyspace":"ks","keyspace_type":"0"}]}`)
+		assert.Contains(t, resp, `"alias": "zone1-0000000101"`)
+		assert.Contains(t, resp, `{
+		"TableName": "vitess_keyspace",
+		"Rows": [
+			{
+				"durability_policy": "none",
+				"keyspace": "ks",
+				"keyspace_type": "0"
+			}
+		]
+	},`)
 	})
 
 	t.Run("Disable Recoveries API", func(t *testing.T) {
