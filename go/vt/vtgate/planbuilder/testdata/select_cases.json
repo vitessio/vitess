@@ -2659,6 +2659,30 @@
     }
   },
   {
+    "comment": "Complex join with multiple conditions merged into single route",
+    "query": "select 0 from user as u join user_extra as s on u.id = s.user_id join music as m on m.user_id = u.id and (s.foo or m.bar)",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 0 from user as u join user_extra as s on u.id = s.user_id join music as m on m.user_id = u.id and (s.foo or m.bar)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 0 from `user` as u, user_extra as s, music as m where 1 != 1",
+        "Query": "select 0 from `user` as u, user_extra as s, music as m where u.id = s.user_id and m.user_id = u.id and (s.foo or m.bar)",
+        "Table": "`user`, music, user_extra"
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
     "comment": "union as a derived table",
     "query": "select found from (select id as found from user union all (select id from unsharded)) as t",
     "plan": {
