@@ -13,8 +13,9 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	"vitess.io/vitess/go/vt/proto/vtctldata"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
 // TestOnlineDDLVDiff is to run a vdiff on a table that is part of an OnlineDDL workflow.
@@ -41,24 +42,28 @@ func TestOnlineDDLVDiff(t *testing.T) {
 	execOnlineDDL(t, "direct", keyspace, createQuery)
 	defer execOnlineDDL(t, "direct", keyspace, dropQuery)
 
-	var done = make(chan bool)
-	go populate(ctx, done, insertTemplate, updateTemplate)
-
 	var output string
-	waitForAdditionalRows(t, keyspace, "temp", 100)
-	output = execOnlineDDL(t, "vitess --postpone-completion", keyspace, alterQuery)
-	uuid := strings.TrimSpace(output)
-	waitForAdditionalRows(t, keyspace, "temp", 200)
-	want := &expectedVDiff2Result{
-		state:               "completed",
-		minimumRowsCompared: 200,
-		hasMismatch:         false,
-		shards:              []string{"0"},
-	}
-	doVtctldclientVDiff(t, keyspace, uuid, "zone1", want)
 
-	cancel()
-	<-done
+	t.Run("OnlineDDL VDiff", func(t *testing.T) {
+		var done = make(chan bool)
+		go populate(ctx, done, insertTemplate, updateTemplate)
+
+		waitForAdditionalRows(t, keyspace, "temp", 100)
+		output = execOnlineDDL(t, "vitess --postpone-completion", keyspace, alterQuery)
+		uuid := strings.TrimSpace(output)
+		waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", keyspace, uuid), binlogdatapb.VReplicationWorkflowState_Running.String())
+		waitForAdditionalRows(t, keyspace, "temp", 200)
+		want := &expectedVDiff2Result{
+			state:               "completed",
+			minimumRowsCompared: 200,
+			hasMismatch:         false,
+			shards:              []string{"0"},
+		}
+		doVtctldclientVDiff(t, keyspace, uuid, "zone1", want)
+
+		cancel()
+		<-done
+	})
 }
 
 func execOnlineDDL(t *testing.T, strategy, keyspace, query string) string {
@@ -75,16 +80,17 @@ func execOnlineDDL(t *testing.T, strategy, keyspace, query string) string {
 				log.Errorf("error unmarshalling response: %v", err)
 				return false
 			}
-			if len(response.Migrations) > 0 && response.Migrations[0].Status == vtctldata.SchemaMigration_RUNNING {
+			if len(response.Migrations) > 0 &&
+				(response.Migrations[0].Status == vtctldata.SchemaMigration_RUNNING ||
+					response.Migrations[0].Status == vtctldata.SchemaMigration_COMPLETE) {
 				return true
 			}
 			return false
 		}, 30*time.Second)
 		require.NoError(t, err)
-		uuid := strings.TrimSpace(output)
-		waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", keyspace, uuid), binlogdatapb.VReplicationWorkflowState_Running.String())
+
 	}
-	return output
+	return uuid
 }
 
 func waitForAdditionalRows(t *testing.T, keyspace, table string, count int) {
