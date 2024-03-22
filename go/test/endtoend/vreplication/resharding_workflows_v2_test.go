@@ -118,7 +118,7 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 			if tables != "" {
 				args = append(args, "--tables", tables)
 			} else {
-				args = append(args, "--all")
+				args = append(args, "--all-tables")
 			}
 			if sourceShards != "" {
 				args = append(args, "--source-shards", sourceShards)
@@ -148,7 +148,7 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 		}
 		args = append(args, "--timeout", time.Minute.String())
 	}
-	if options.atomicCopy {
+	if action == workflowActionCreate && options.atomicCopy {
 		args = append(args, "--atomic-copy")
 	}
 	if (action == workflowActionCreate || action == workflowActionSwitchTraffic || action == workflowActionReverseTraffic) && cells != "" {

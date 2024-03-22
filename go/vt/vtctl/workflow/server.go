@@ -383,9 +383,8 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 	span.Annotate("include_logs", req.IncludeLogs)
 	span.Annotate("shards", req.Shards)
 
-	readReq := &tabletmanagerdatapb.ReadVReplicationWorkflowsRequest{}
-	if req.Workflow != "" {
-		readReq.IncludeWorkflows = []string{req.Workflow}
+	readReq := &tabletmanagerdatapb.ReadVReplicationWorkflowsRequest{
+		IncludeWorkflows: []string{req.Workflow},
 	}
 	if req.ActiveOnly {
 		readReq.ExcludeStates = []binlogdatapb.VReplicationWorkflowState{binlogdatapb.VReplicationWorkflowState_Stopped}
@@ -2912,10 +2911,6 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		maxReplicationLagAllowed = defaultDuration
 	}
 	direction := TrafficSwitchDirection(req.Direction)
-	cmd := "SwitchTraffic"
-	if direction == DirectionBackward {
-		cmd = "ReverseTraffic"
-	}
 	if direction == DirectionBackward {
 		ts, startState, err = s.getWorkflowState(ctx, startState.SourceKeyspace, ts.reverseWorkflow)
 		if err != nil {
@@ -2937,7 +2932,7 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		if rdDryRunResults, err = s.switchReads(ctx, req, ts, startState, timeout, false, direction); err != nil {
 			return nil, err
 		}
-		log.Infof("Switching reads done for workflow %s.%s", req.Keyspace, req.Workflow)
+		log.Infof("Switch Reads done for workflow %s.%s", req.Keyspace, req.Workflow)
 	}
 	if rdDryRunResults != nil {
 		dryRunResults = append(dryRunResults, *rdDryRunResults...)
@@ -2946,7 +2941,7 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		if _, wrDryRunResults, err = s.switchWrites(ctx, req, ts, timeout, false); err != nil {
 			return nil, err
 		}
-		log.Infof("Switching writes done for workflow %s.%s", req.Keyspace, req.Workflow)
+		log.Infof("Switch Writes done for workflow %s.%s", req.Keyspace, req.Workflow)
 	}
 
 	if wrDryRunResults != nil {
@@ -2955,15 +2950,20 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 	if req.DryRun && len(dryRunResults) == 0 {
 		dryRunResults = append(dryRunResults, "No changes required")
 	}
+	cmd := "SwitchTraffic"
+	if direction == DirectionBackward {
+		cmd = "ReverseTraffic"
+	}
+	log.Infof("%s done for workflow %s.%s", cmd, req.Keyspace, req.Workflow)
 	resp := &vtctldatapb.WorkflowSwitchTrafficResponse{}
 	if req.DryRun {
 		resp.Summary = fmt.Sprintf("%s dry run results for workflow %s.%s at %v", cmd, req.Keyspace, req.Workflow, time.Now().UTC().Format(time.RFC822))
 		resp.DryRunResults = dryRunResults
 	} else {
-		log.Infof("%s work completed for workflow %s.%s", cmd, req.Keyspace, req.Workflow)
+		log.Infof("SwitchTraffic done for workflow %s.%s", req.Keyspace, req.Workflow)
 		resp.Summary = fmt.Sprintf("%s was successful for workflow %s.%s", cmd, req.Keyspace, req.Workflow)
-		// Reload the state after the traffic switching operation and return
-		// that as a string.
+		// Reload the state after the SwitchTraffic operation
+		// and return that as a string.
 		keyspace := req.Keyspace
 		workflow := req.Workflow
 		if direction == DirectionBackward {
@@ -3006,18 +3006,11 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 
 	// Consistently handle errors by logging and returning them.
 	handleError := func(message string, err error) (*[]string, error) {
-		ts.Logger().Errorf("%s: %s", message, err)
+		ts.Logger().Error(err)
 		return nil, err
 	}
 
-	// Limit the traffic switch to specific cells if any where provided.
-	// If none are provided then we switch traffic for all cells.
-	cells := req.Cells
-	for i, cell := range cells {
-		cells[i] = strings.TrimSpace(cell)
-	}
-
-	log.Infof("Switching reads to: %s.%s tablet types: %s, cells: %s, workflow state: %s", ts.targetKeyspace, ts.workflow, roTypesToSwitchStr, cells, state.String())
+	log.Infof("Switching reads: %s.%s tablet types: %s, cells: %s, workflow state: %s", ts.targetKeyspace, ts.workflow, roTypesToSwitchStr, ts.optCells, state.String())
 	if !switchReplica && !switchRdonly {
 		return handleError("invalid tablet types", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "tablet types must be REPLICA or RDONLY: %s", roTypesToSwitchStr))
 	}
@@ -3028,6 +3021,14 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 		if direction == DirectionBackward && switchRdonly && len(state.RdonlyCellsSwitched) == 0 {
 			return handleError("invalid request", vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "requesting reversal of SwitchReads for RDONLYs but RDONLY reads have not been switched"))
 		}
+	}
+	cells := req.Cells
+	// If no cells were provided in the command then use the value from the workflow.
+	if len(cells) == 0 && ts.optCells != "" {
+		cells = strings.Split(strings.TrimSpace(ts.optCells), ",")
+	}
+	for i, cell := range cells {
+		cells[i] = strings.TrimSpace(cell)
 	}
 
 	// If there are no rdonly tablets in the cells ask to switch rdonly tablets as well so that routing rules
@@ -3084,7 +3085,7 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 		return handleError("failed to switch read traffic for the shards", err)
 	}
 
-	ts.Logger().Infof("switchShardReads completed: %+v, %+s, %+v", cells, roTypesToSwitchStr, direction)
+	ts.Logger().Infof("switchShardReads Completed: %+v, %+s, %+v", cells, roTypesToSwitchStr, direction)
 	if err := s.ts.ValidateSrvKeyspace(ctx, ts.targetKeyspace, strings.Join(cells, ",")); err != nil {
 		err2 := vterrors.Wrapf(err, "after switching shard reads, found SrvKeyspace for %s is corrupt in cell %s",
 			ts.targetKeyspace, strings.Join(cells, ","))
@@ -3173,20 +3174,6 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 			return 0, sw.logs(), nil
 		}
 
-		// We stop writes on the source before stopping the streams so that the catchup
-		// time is lessened and other workflows that we have to migrate during a reshard
-		// such as materialize workflows that are within a single keyspace -- the source
-		// and target are the keyspace being resharded -- have a chance to catch up as
-		// those are internally generated GTIDs within the shard. For materialization
-		// streams that we migrate where the source and target are the keyspace being
-		// resharded, we wait for those to catchup in the stopStreams path before we
-		// actually stop them.
-		ts.Logger().Infof("Stopping source writes")
-		if err := sw.stopSourceWrites(ctx); err != nil {
-			sw.cancelMigration(ctx, sm)
-			return handleError(fmt.Sprintf("failed to stop writes in the %s keyspace", ts.SourceKeyspaceName()), err)
-		}
-
 		ts.Logger().Infof("Stopping streams")
 		sourceWorkflows, err = sw.stopStreams(ctx, sm)
 		if err != nil {
@@ -3197,6 +3184,12 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 			}
 			sw.cancelMigration(ctx, sm)
 			return handleError("failed to stop the workflow streams", err)
+		}
+
+		ts.Logger().Infof("Stopping source writes")
+		if err := sw.stopSourceWrites(ctx); err != nil {
+			sw.cancelMigration(ctx, sm)
+			return handleError(fmt.Sprintf("failed to stop writes in the %s keyspace", ts.SourceKeyspaceName()), err)
 		}
 
 		if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
