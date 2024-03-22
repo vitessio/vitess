@@ -17,13 +17,17 @@ limitations under the License.
 package mysqlctl
 
 import (
+	"fmt"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+
+	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/vt/dbconfigs"
 )
 
 func testRedacted(t *testing.T, source, expected string) {
-	if r := redactPassword(source); r != expected {
-		t.Errorf("redactPassword bad result: %v\nWas expecting:%v", r, expected)
-	}
+	assert.Equal(t, expected, redactPassword(source))
 }
 
 func TestRedactMasterPassword(t *testing.T) {
@@ -79,4 +83,41 @@ func TestRedactPassword(t *testing.T) {
   MASTER_PASSWORD = '****',
   PASSWORD = '****'
 `)
+}
+
+func TestWaitForReplicationStart(t *testing.T) {
+	// TODO: Needs more tests
+	db := fakesqldb.New(t)
+	fakemysqld := NewFakeMysqlDaemon(db)
+
+	defer func() {
+		db.Close()
+		fakemysqld.Close()
+	}()
+
+	err := WaitForReplicationStart(fakemysqld, 2)
+	assert.NoError(t, err)
+}
+
+func TestStartReplication(t *testing.T) {
+	db := fakesqldb.New(t)
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "")
+	// uid := uint32(11111)
+	// cnf := NewMycnf(uid, 6802)
+	// // Assigning ServerID to be different from tablet UID to make sure that there are no
+	// // assumptions in the code that those IDs are the same.
+	// cnf.ServerID = 22222
+
+	// dbconfigs.GlobalDBConfigs.InitWithSocket(cnf.SocketFile, collations.MySQL8())
+	mysqld := NewMysqld(dbc)
+	defer func() {
+		db.Close()
+		mysqld.Close()
+	}()
+	// servenv.OnClose(mysqld.Close)
+
+	err := mysqld.StartReplication(map[string]string{})
+	fmt.Println("Error: ", err)
 }

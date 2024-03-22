@@ -40,27 +40,27 @@ type ResetSuperReadOnlyFunc func() error
 
 // WaitForReplicationStart waits until the deadline for replication to start.
 // This validates the current primary is correct and can be connected to.
-func WaitForReplicationStart(mysqld MysqlDaemon, replicaStartDeadline int) error {
-	var rowMap map[string]string
+func WaitForReplicationStart(mysqld MysqlDaemon, replicaStartDeadline int) (err error) {
+	var replicaStatus replication.ReplicationStatus
 	for replicaWait := 0; replicaWait < replicaStartDeadline; replicaWait++ {
-		status, err := mysqld.ReplicationStatus()
+		replicaStatus, err = mysqld.ReplicationStatus()
 		if err != nil {
 			return err
 		}
 
-		if status.Running() {
+		if replicaStatus.Running() {
 			return nil
 		}
 		time.Sleep(time.Second)
 	}
-
-	errorKeys := []string{"Last_Error", "Last_IO_Error", "Last_SQL_Error"}
-	errs := make([]string, 0, len(errorKeys))
-	for _, key := range errorKeys {
-		if rowMap[key] != "" {
-			errs = append(errs, key+": "+rowMap[key])
-		}
+	errs := make([]string, 0, 2)
+	if replicaStatus.LastSQLError != "" {
+		errs = append(errs, "Last_SQL_Error: "+replicaStatus.LastSQLError)
 	}
+	if replicaStatus.LastIOError != "" {
+		errs = append(errs, "Last_IO_Error: "+replicaStatus.LastIOError)
+	}
+
 	if len(errs) != 0 {
 		return errors.New(strings.Join(errs, ", "))
 	}

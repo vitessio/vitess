@@ -3,15 +3,13 @@ package mysqlctl
 import (
 	"context"
 	"fmt"
-	"os"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/dbconfigs"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
@@ -109,27 +107,58 @@ func TestColumnList(t *testing.T) {
 
 }
 
-func TestGetSchema(t *testing.T) {
-	uid := uint32(11111)
-	cnf := NewMycnf(uid, 6802)
-	// Assigning ServerID to be different from tablet UID to make sure that there are no
-	// assumptions in the code that those IDs are the same.
-	cnf.ServerID = 22222
+// func TestGetSchema(t *testing.T) {
+// 	uid := uint32(11111)
+// 	cnf := NewMycnf(uid, 6802)
+// 	// Assigning ServerID to be different from tablet UID to make sure that there are no
+// 	// assumptions in the code that those IDs are the same.
+// 	cnf.ServerID = 22222
 
-	// expect these in the output my.cnf
-	os.Setenv("KEYSPACE", "test-messagedb")
-	os.Setenv("SHARD", "0")
-	os.Setenv("TABLET_TYPE", "PRIMARY")
-	os.Setenv("TABLET_ID", "11111")
-	os.Setenv("TABLET_DIR", TabletDir(uid))
-	os.Setenv("MYSQL_PORT", "15306")
-	// this is not being passed, so it should be nil
-	os.Setenv("MY_VAR", "myvalue")
+// 	// expect these in the output my.cnf
+// 	os.Setenv("KEYSPACE", "test-messagedb")
+// 	os.Setenv("SHARD", "0")
+// 	os.Setenv("TABLET_TYPE", "PRIMARY")
+// 	os.Setenv("TABLET_ID", "11111")
+// 	os.Setenv("TABLET_DIR", TabletDir(uid))
+// 	os.Setenv("MYSQL_PORT", "15306")
+// 	// this is not being passed, so it should be nil
+// 	os.Setenv("MY_VAR", "myvalue")
 
-	dbconfigs.GlobalDBConfigs.InitWithSocket(cnf.SocketFile, collations.MySQL8())
-	mysqld := NewMysqld(&dbconfigs.GlobalDBConfigs)
-	sc, err := mysqld.GetSchema(context.Background(), mysqld.dbcfgs.DBName, &tabletmanagerdata.GetSchemaRequest{})
+// 	dbconfigs.GlobalDBConfigs.InitWithSocket(cnf.SocketFile, collations.MySQL8())
+// 	mysqld := NewMysqld(&dbconfigs.GlobalDBConfigs)
+// 	sc, err := mysqld.GetSchema(context.Background(), mysqld.dbcfgs.DBName, &tabletmanagerdata.GetSchemaRequest{})
 
-	// TODO: This needs to be fixed
-	fmt.Println(sc, err)
+// 	// TODO: This needs to be fixed
+// 	fmt.Println(sc, err)
+// }
+
+func TestResolveTables(t *testing.T) {
+	db := fakesqldb.New(t)
+	md := NewFakeMysqlDaemon(db)
+
+	defer func() {
+		db.Close()
+		md.Close()
+	}()
+
+	ctx := context.Background()
+	res, err := ResolveTables(ctx, md, db.Name(), []string{})
+	assert.ErrorContains(t, err, "no schema defined")
+	assert.Nil(t, res)
+
+	md.Schema = &tabletmanagerdata.SchemaDefinition{TableDefinitions: tableDefinitions{{
+		Name:   "table1",
+		Schema: "schema1",
+	}, {
+		Name:   "table2",
+		Schema: "schema2",
+	}}}
+
+	res, err = ResolveTables(ctx, md, db.Name(), []string{"table1"})
+	assert.NoError(t, err)
+	assert.Len(t, res, 1)
+
+	res, err = ResolveTables(ctx, md, db.Name(), []string{"table1", "table2"})
+	assert.NoError(t, err)
+	assert.Len(t, res, 2)
 }
