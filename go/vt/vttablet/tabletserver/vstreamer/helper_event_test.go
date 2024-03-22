@@ -41,11 +41,11 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"vitess.io/vitess/go/mysql/collations/colldata"
 
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/query"
@@ -62,10 +62,6 @@ const (
 	lengthText = 262140
 	lengthSet  = 56
 )
-
-func getDefaultCollationID() int64 {
-	return 45 // utf8mb4_general_ci
-}
 
 var (
 	// noEvents is used to indicate that a query is expected to generate no events.
@@ -273,7 +269,6 @@ func (ts *TestSpec) Init() {
 		execStatement(ts.t, ts.ddls[i])
 		fe := ts.getFieldEvent(t)
 		ts.fieldEvents[t.Name()] = fe
-		log.Infof("field event for table %s: %v", t.Name(), fe)
 		var pkColumns []string
 		var hasPK bool
 		for _, index := range t.TableSpec.Indexes {
@@ -331,10 +326,7 @@ func (ts *TestSpec) getBindVarsForInsert(stmt sqlparser.Statement) (string, map[
 func (ts *TestSpec) getBindVarsForUpdate(stmt sqlparser.Statement) (string, map[string]string) {
 	bv := make(map[string]string)
 	upd := stmt.(*sqlparser.Update)
-	// buf := sqlparser.NewTrackedBuffer(nil)
 	table := sqlparser.String(upd.TableExprs[0].(*sqlparser.AliasedTableExpr).Expr)
-	// upd.TableExprs[0].(*sqlparser.AliasedTableExpr).Expr.Format(buf)
-	// table := buf.String()
 	fe, ok := ts.fieldEvents[table]
 	require.True(ts.t, ok, "field event for table %s not found", table)
 	index := int64(0)
@@ -502,12 +494,8 @@ func (ts *TestSpec) getFieldEvent(table *schemadiff.CreateTableEntity) *TestFiel
 				if tc.dataTypeLowered == "char" && collation.IsBinary() {
 					tc.dataType = "BINARY"
 				}
-				if tc.dataTypeLowered == "char" && strings.Contains(tc.collationName, "bin") {
-					tc.dataType = "BINARY"
-				}
 			}
 			tc.colType = fmt.Sprintf("%s(%d)", tc.dataTypeLowered, l)
-			log.Infof(">>>>>>>> collation id is %d", tc.collationID)
 		case "blob":
 			tc.len = lengthBlob
 			tc.collationID = collations.CollationBinaryID
