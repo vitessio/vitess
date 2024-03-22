@@ -80,6 +80,7 @@ func doVtctlclientVDiff(t *testing.T, keyspace, workflow, cells string, want *ex
 		} else {
 			require.Equal(t, "completed", info.State, "vdiff results: %+v", info)
 			require.False(t, info.HasMismatch, "vdiff results: %+v", info)
+			require.NotZero(t, info.RowsCompared)
 		}
 		if strings.Contains(t.Name(), "AcrossDBVersions") {
 			log.Errorf("VDiff resume cannot be guaranteed between major MySQL versions due to implied collation differences, skipping resume test...")
@@ -150,9 +151,10 @@ func waitForVDiff2ToComplete(t *testing.T, useVtctlclient bool, ksWorkflow, cell
 }
 
 type expectedVDiff2Result struct {
-	state       string
-	shards      []string
-	hasMismatch bool
+	state               string
+	shards              []string
+	hasMismatch         bool
+	minimumRowsCompared int64
 }
 
 func doVtctldclientVDiff(t *testing.T, keyspace, workflow, cells string, want *expectedVDiff2Result, extraFlags ...string) {
@@ -175,6 +177,10 @@ func doVtctldclientVDiff(t *testing.T, keyspace, workflow, cells string, want *e
 		} else {
 			require.Equal(t, "completed", info.State, "vdiff results: %+v", info)
 			require.False(t, info.HasMismatch, "vdiff results: %+v", info)
+			if want.minimumRowsCompared > 0 {
+				require.Greater(t, info.RowsCompared, want.minimumRowsCompared,
+					"not enough rows compared: want at least %d, got %d", want.minimumRowsCompared, info.RowsCompared)
+			}
 		}
 		if strings.Contains(t.Name(), "AcrossDBVersions") {
 			log.Errorf("VDiff resume cannot be guaranteed between major MySQL versions due to implied collation differences, skipping resume test...")
