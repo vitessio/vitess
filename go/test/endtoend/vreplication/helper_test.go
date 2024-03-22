@@ -358,7 +358,7 @@ func waitForWorkflowState(t *testing.T, vc *VitessCluster, ksWorkflow string, wa
 	log.Infof("Waiting for workflow %q to fully reach %q state", ksWorkflow, wantState)
 	for {
 		output, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", ksWorkflow, "show")
-		require.NoError(t, err)
+		require.NoError(t, err, output)
 		done = true
 		state := ""
 		result := gjson.Get(output, "ShardStatuses")
@@ -522,7 +522,7 @@ func validateDryRunResults(t *testing.T, output string, want []string) {
 			w = strings.TrimSpace(w[1:])
 			result := strings.HasPrefix(g, w)
 			match = result
-			//t.Logf("Partial match |%v|%v|%v\n", w, g, match)
+			// t.Logf("Partial match |%v|%v|%v\n", w, g, match)
 		} else {
 			match = g == w
 		}

@@ -31,7 +31,6 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtctl/schematools"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -341,9 +340,6 @@ func (wd *workflowDiffer) buildPlan(dbClient binlogplayer.DBClient, filter *binl
 	for _, table := range schm.TableDefinitions {
 		// if user specified tables explicitly only use those, otherwise diff all tables in workflow
 		if len(specifiedTables) != 0 && !stringListContains(specifiedTables, table.Name) {
-			continue
-		}
-		if schema.IsInternalOperationTableName(table.Name) {
 			continue
 		}
 		rule, err := vreplication.MatchTable(table.Name, filter)
