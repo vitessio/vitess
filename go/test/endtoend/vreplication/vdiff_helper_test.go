@@ -174,13 +174,13 @@ func doVtctldclientVDiff(t *testing.T, keyspace, workflow, cells string, want *e
 			require.Equal(t, want.state, info.State)
 			require.Equal(t, strings.Join(want.shards, ","), info.Shards)
 			require.Equal(t, want.hasMismatch, info.HasMismatch)
-		} else {
-			require.Equal(t, "completed", info.State, "vdiff results: %+v", info)
-			require.False(t, info.HasMismatch, "vdiff results: %+v", info)
 			if want.minimumRowsCompared > 0 {
 				require.Greater(t, info.RowsCompared, want.minimumRowsCompared,
 					"not enough rows compared: want at least %d, got %d", want.minimumRowsCompared, info.RowsCompared)
 			}
+		} else {
+			require.Equal(t, "completed", info.State, "vdiff results: %+v", info)
+			require.False(t, info.HasMismatch, "vdiff results: %+v", info)
 		}
 		if strings.Contains(t.Name(), "AcrossDBVersions") {
 			log.Errorf("VDiff resume cannot be guaranteed between major MySQL versions due to implied collation differences, skipping resume test...")
