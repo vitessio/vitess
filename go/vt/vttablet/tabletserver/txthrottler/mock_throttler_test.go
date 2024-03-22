@@ -12,6 +12,7 @@ import (
 
 	discovery "vitess.io/vitess/go/vt/discovery"
 	throttlerdata "vitess.io/vitess/go/vt/proto/throttlerdata"
+	topodata "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // MockThrottlerInterface is a mock of ThrottlerInterface interface.
@@ -61,6 +62,20 @@ func (m *MockThrottlerInterface) GetConfiguration() *throttlerdata.Configuration
 func (mr *MockThrottlerInterfaceMockRecorder) GetConfiguration() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetConfiguration", reflect.TypeOf((*MockThrottlerInterface)(nil).GetConfiguration))
+}
+
+// MaxLag mocks base method.
+func (m *MockThrottlerInterface) MaxLag(tabletType topodata.TabletType) uint32 {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MaxLag", tabletType)
+	ret0, _ := ret[0].(uint32)
+	return ret0
+}
+
+// MaxLag indicates an expected call of LastMaxLagNotIgnoredForTabletType.
+func (mr *MockThrottlerInterfaceMockRecorder) MaxLag(tabletType interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MaxLag", reflect.TypeOf((*MockThrottlerInterface)(nil).MaxLag), tabletType)
 }
 
 // MaxRate mocks base method.

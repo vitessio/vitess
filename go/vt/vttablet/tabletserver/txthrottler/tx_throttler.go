@@ -22,7 +22,10 @@ import (
 	"math/rand"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
@@ -89,6 +92,7 @@ type ThrottlerInterface interface {
 	GetConfiguration() *throttlerdatapb.Configuration
 	UpdateConfiguration(configuration *throttlerdatapb.Configuration, copyZeroValues bool) error
 	ResetConfiguration()
+	MaxLag(tabletType topodatapb.TabletType) uint32
 }
 
 // TopologyWatcherInterface defines the public interface that is implemented by
@@ -178,6 +182,10 @@ type txThrottlerState struct {
 
 	healthCheck      discovery.HealthCheck
 	topologyWatchers []TopologyWatcherInterface
+
+	maxLag             int64
+	done               chan bool
+	waitForTermination sync.WaitGroup
 }
 
 // NewTxThrottler tries to construct a txThrottler from the
@@ -290,7 +298,7 @@ func (t *txThrottler) Throttle(priority int) (result bool) {
 
 	// Throttle according to both what the throttler state says and the priority. Workloads with lower priority value
 	// are less likely to be throttled.
-	result = t.state.throttle() && rand.Intn(sqlparser.MaxPriorityValue) < priority
+	result = rand.Intn(sqlparser.MaxPriorityValue) < priority && t.state.throttle()
 
 	t.requestsTotal.Add(1)
 	if result {
@@ -320,6 +328,7 @@ func newTxThrottlerState(topoServer *topo.Server, config *txThrottlerConfig, tar
 	result := &txThrottlerState{
 		config:    config,
 		throttler: t,
+		done:      make(chan bool, 2),
 	}
 	createTxThrottlerHealthCheck(topoServer, config, result, target.Cell)
 
@@ -353,6 +362,8 @@ func createTxThrottlerHealthCheck(topoServer *topo.Server, config *txThrottlerCo
 			case th := <-ch:
 				result.StatsUpdate(th)
 			}
+			result.waitForTermination.Add(1)
+			go result.updateMaxLag()
 		}
 	}(ctx)
 }
@@ -365,7 +376,35 @@ func (ts *txThrottlerState) throttle() bool {
 	// Serialize calls to ts.throttle.Throttle()
 	ts.throttleMu.Lock()
 	defer ts.throttleMu.Unlock()
-	return ts.throttler.Throttle(0 /* threadId */) > 0
+
+	maxLag := atomic.LoadInt64(&ts.maxLag)
+
+	return maxLag > ts.config.throttlerConfig.TargetReplicationLagSec &&
+		ts.throttler.Throttle(0 /* threadId */) > 0
+}
+
+func (ts *txThrottlerState) updateMaxLag() {
+	defer ts.waitForTermination.Done()
+	// We use half of the target lag to ensure we have enough resolution to see changes in lag below that value
+	ticker := time.NewTicker(time.Duration(ts.config.throttlerConfig.TargetReplicationLagSec/2) * time.Second)
+	defer ticker.Stop()
+outerloop:
+	for {
+		select {
+		case <-ticker.C:
+			var maxLag uint32
+
+			for _, tabletType := range *ts.config.tabletTypes {
+				maxLagPerTabletType := ts.throttler.MaxLag(tabletType)
+				if maxLagPerTabletType > maxLag {
+					maxLag = maxLagPerTabletType
+				}
+			}
+			atomic.StoreInt64(&ts.maxLag, int64(maxLag))
+		case <-ts.done:
+			break outerloop
+		}
+	}
 }
 
 func (ts *txThrottlerState) deallocateResources() {
@@ -380,6 +419,8 @@ func (ts *txThrottlerState) deallocateResources() {
 	ts.healthCheck.Close()
 	ts.healthCheck = nil
 
+	ts.done <- true
+	ts.waitForTermination.Wait()
 	// After ts.healthCheck is closed txThrottlerState.StatsUpdate() is guaranteed not
 	// to be executing, so we can safely close the throttler.
 	ts.throttler.Close()

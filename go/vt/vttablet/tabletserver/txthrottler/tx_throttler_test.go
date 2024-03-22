@@ -22,6 +22,7 @@ package txthrottler
 //go:generate mockgen -destination mock_topology_watcher_test.go -package txthrottler vitess.io/vitess/go/vt/vttablet/tabletserver/txthrottler TopologyWatcherInterface
 
 import (
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -88,27 +89,44 @@ func TestEnabledThrottler(t *testing.T) {
 		return mockThrottler, nil
 	}
 
-	call0 := mockThrottler.EXPECT().UpdateConfiguration(gomock.Any(), true /* copyZeroValues */)
-	call1 := mockThrottler.EXPECT().Throttle(0)
-	call1.Return(0 * time.Second)
+	var calls []*gomock.Call
+
+	call := mockThrottler.EXPECT().UpdateConfiguration(gomock.Any(), true /* copyZeroValues */)
+	calls = append(calls, call)
+
+	// 1
+	call = mockThrottler.EXPECT().Throttle(0)
+	call.Return(0 * time.Second)
+	calls = append(calls, call)
+
 	tabletStats := &discovery.TabletHealth{
 		Target: &querypb.Target{
 			TabletType: topodatapb.TabletType_REPLICA,
 		},
 	}
-	call2 := mockThrottler.EXPECT().RecordReplicationLag(gomock.Any(), tabletStats)
-	call3 := mockThrottler.EXPECT().Throttle(0)
-	call3.Return(1 * time.Second)
 
-	call4 := mockThrottler.EXPECT().Throttle(0)
-	call4.Return(1 * time.Second)
-	calllast := mockThrottler.EXPECT().Close()
+	call = mockThrottler.EXPECT().RecordReplicationLag(gomock.Any(), tabletStats)
+	calls = append(calls, call)
 
-	call1.After(call0)
-	call2.After(call1)
-	call3.After(call2)
-	call4.After(call3)
-	calllast.After(call4)
+	// 2
+	call = mockThrottler.EXPECT().Throttle(0)
+	call.Return(1 * time.Second)
+	calls = append(calls, call)
+
+	// 3
+	// Nothing gets mocked here because the order of evaluation in txThrottler.Throttle() evaluates first
+	// whether the priority allows for throttling or not, so no need to mock calls in mockThrottler.Throttle()
+
+	// 4
+	// Nothing gets mocked here because the order of evaluation in txThrottlerStateImpl.Throttle() evaluates first
+	// whether there is lag or not, so no call to the underlying mockThrottler is issued.
+
+	call = mockThrottler.EXPECT().Close()
+	calls = append(calls, call)
+
+	for i := 1; i < len(calls); i++ {
+		calls[i].After(calls[i-1])
+	}
 
 	config := tabletenv.NewDefaultConfig()
 	config.EnableTxThrottler = true
@@ -116,38 +134,52 @@ func TestEnabledThrottler(t *testing.T) {
 	config.TxThrottlerTabletTypes = &topoproto.TabletTypeListFlag{topodatapb.TabletType_REPLICA}
 
 	env := tabletenv.NewEnv(config, t.Name())
-	throttler, err := tryCreateTxThrottler(env, ts)
+	throttlerImpl, err := tryCreateTxThrottler(env, ts)
 	assert.Nil(t, err)
-	throttler.InitDBConfig(&querypb.Target{
+	throttlerImpl.InitDBConfig(&querypb.Target{
 		Keyspace: "keyspace",
 		Shard:    "shard",
 	})
-	assert.Nil(t, throttler.Open())
-	assert.Equal(t, int64(1), throttler.throttlerRunning.Get())
+	assert.Nil(t, throttlerImpl.Open())
+	assert.Equal(t, int64(1), throttlerImpl.throttlerRunning.Get())
 
-	assert.False(t, throttler.Throttle(100))
-	assert.Equal(t, int64(1), throttler.requestsTotal.Get())
-	assert.Zero(t, throttler.requestsThrottled.Get())
+	// Stop the go routine that keeps updating the cached  shard's max lag to prevent it from changing the value in a
+	// way that will interfere with how we manipulate that value in our tests to evaluate different cases:
+	throttlerImpl.state.done <- true
 
-	throttler.state.StatsUpdate(tabletStats) // This calls replication lag thing
+	// 1 should not throttle due to return value of underlying Throttle(), despite high lag
+	atomic.StoreInt64(&throttlerImpl.state.maxLag, 20)
+	assert.False(t, throttlerImpl.Throttle(100))
+	assert.Equal(t, int64(1), throttlerImpl.requestsTotal.Get())
+	assert.Zero(t, throttlerImpl.requestsThrottled.Get())
+
+	throttlerImpl.state.StatsUpdate(tabletStats) // This calls replication lag thing
 	rdonlyTabletStats := &discovery.TabletHealth{
 		Target: &querypb.Target{
 			TabletType: topodatapb.TabletType_RDONLY,
 		},
 	}
 	// This call should not be forwarded to the go/vt/throttler.Throttler object.
-	throttler.state.StatsUpdate(rdonlyTabletStats)
-	// The second throttle call should reject.
-	assert.True(t, throttler.Throttle(100))
-	assert.Equal(t, int64(2), throttler.requestsTotal.Get())
-	assert.Equal(t, int64(1), throttler.requestsThrottled.Get())
+	throttlerImpl.state.StatsUpdate(rdonlyTabletStats)
 
-	// This call should not throttle due to priority. Check that's the case and counters agree.
-	assert.False(t, throttler.Throttle(0))
-	assert.Equal(t, int64(3), throttler.requestsTotal.Get())
-	assert.Equal(t, int64(1), throttler.requestsThrottled.Get())
-	throttler.Close()
-	assert.Zero(t, throttler.throttlerRunning.Get())
+	// 2 should throttle due to return value of underlying Throttle(), high lag & priority = 100
+	assert.True(t, throttlerImpl.Throttle(100))
+	assert.Equal(t, int64(2), throttlerImpl.requestsTotal.Get())
+	assert.Equal(t, int64(1), throttlerImpl.requestsThrottled.Get())
+
+	// 3 should not throttle despite return value of underlying Throttle() and high lag, due to priority = 0
+	assert.False(t, throttlerImpl.Throttle(0))
+	assert.Equal(t, int64(3), throttlerImpl.requestsTotal.Get())
+	assert.Equal(t, int64(1), throttlerImpl.requestsThrottled.Get())
+
+	// 4 should not throttle despite return value of underlying Throttle() and priority = 100, due to low lag
+	atomic.StoreInt64(&throttlerImpl.state.maxLag, 1)
+	assert.False(t, throttlerImpl.Throttle(100))
+	assert.Equal(t, int64(4), throttlerImpl.requestsTotal.Get())
+	assert.Equal(t, int64(1), throttlerImpl.requestsThrottled.Get())
+
+	throttlerImpl.Close()
+	assert.Zero(t, throttlerImpl.throttlerRunning.Get())
 }
 
 func TestNewTxThrottler(t *testing.T) {
