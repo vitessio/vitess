@@ -28,6 +28,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	vdiff2 "vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
 )
 
@@ -193,7 +194,7 @@ func performVDiff2Action(t *testing.T, useVtctlclient bool, ksWorkflow, cells, a
 	var err error
 	targetKeyspace, workflowName, ok := strings.Cut(ksWorkflow, ".")
 	require.True(t, ok, "invalid keyspace.workflow value: %s", ksWorkflow)
-
+	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
 	if useVtctlclient {
 		// This will always result in us using a PRIMARY tablet, which is all
 		// we start in many e2e tests, but it avoids the tablet picker logic
