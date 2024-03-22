@@ -139,6 +139,20 @@ var _ IR = (*builtinLeftRight)(nil)
 var _ IR = (*builtinPad)(nil)
 var _ IR = (*builtinTrim)(nil)
 
+func fieldSQLType(arg sqltypes.Type, tt sqltypes.Type) sqltypes.Type {
+	if typeIsTextual(arg) && typeIsTextual(tt) {
+		return sqltypes.VarChar
+	} else if sqltypes.IsIntegral(arg) && sqltypes.IsIntegral(tt) {
+		return sqltypes.Int64
+	}
+
+	if (sqltypes.IsIntegral(arg) || sqltypes.IsDecimal(arg)) && (sqltypes.IsIntegral(tt) || sqltypes.IsDecimal(tt)) {
+		return sqltypes.Decimal
+	}
+
+	return sqltypes.Float64
+}
+
 func (call *builtinField) eval(env *ExpressionEnv) (eval, error) {
 	args, err := call.args(env)
 	if err != nil {
@@ -150,17 +164,17 @@ func (call *builtinField) eval(env *ExpressionEnv) (eval, error) {
 
 	// If the arguments contain both integral and string values
 	// MySQL converts all the arguments to DOUBLE
-	containsOnlyInt64, containsOnlyString := true, true
-	for _, arg := range args {
+	tt := args[0].SQLType()
+
+	for _, arg := range args[1:] {
 		if arg == nil {
 			continue
 		}
 
-		containsOnlyInt64 = sqltypes.IsIntegral(arg.SQLType()) && containsOnlyInt64
-		containsOnlyString = !sqltypes.IsNumber(arg.SQLType()) && containsOnlyString
+		tt = fieldSQLType(arg.SQLType(), tt)
 	}
 
-	if containsOnlyInt64 {
+	if tt == sqltypes.Int64 {
 		tar := evalToInt64(args[0])
 
 		for i, arg := range args[1:] {
@@ -173,7 +187,7 @@ func (call *builtinField) eval(env *ExpressionEnv) (eval, error) {
 				return newEvalInt64(int64(i + 1)), nil
 			}
 		}
-	} else if containsOnlyString {
+	} else if tt == sqltypes.VarChar {
 		tar, ok := args[0].(*evalBytes)
 		if !ok {
 			tar, err = evalToVarchar(args[0], call.collate, true)
@@ -198,6 +212,19 @@ func (call *builtinField) eval(env *ExpressionEnv) (eval, error) {
 
 			// Compare target and current string
 			if bytes.Equal(tar.bytes, e.bytes) {
+				return newEvalInt64(int64(i + 1)), nil
+			}
+		}
+	} else if tt == sqltypes.Decimal {
+		tar := evalToDecimal(args[0], 0, 0)
+
+		for i, arg := range args[1:] {
+			if arg == nil {
+				continue
+			}
+
+			e := evalToDecimal(arg, 0, 0)
+			if tar.dec.Equal(e.dec) {
 				return newEvalInt64(int64(i + 1)), nil
 			}
 		}
@@ -232,27 +259,31 @@ func (call *builtinField) compile(c *compiler) (ctype, error) {
 
 	// If the arguments contain both integral and string values
 	// MySQL converts all the arguments to DOUBLE
-	containsOnlyString, containsOnlyInt64 := true, true
+	tt := strs[0].Type
+
 	for _, str := range strs {
 		if sqltypes.IsNull(str.Type) {
 			continue
 		}
 
-		containsOnlyString = !sqltypes.IsNumber(str.Type) && containsOnlyString
-		containsOnlyInt64 = sqltypes.IsIntegral(str.Type) && containsOnlyInt64
+		tt = fieldSQLType(str.Type, tt)
 	}
 
-	if containsOnlyInt64 {
+	if tt == sqltypes.Int64 {
 		for i, str := range strs {
 			offset := len(strs) - i
 			skip := c.compileNullCheckOffset(str, offset)
 
-			_ = c.compileToInt64(str, offset)
+			switch str.Type {
+			case sqltypes.Int64:
+			default:
+				c.asm.Convert_xi(offset)
+			}
 			c.asm.jumpDestination(skip)
 		}
 
 		c.asm.Fn_FIELD_i(len(call.Arguments))
-	} else if containsOnlyString {
+	} else if tt == sqltypes.VarChar {
 		for i, str := range strs {
 			offset := len(strs) - i
 			skip := c.compileNullCheckOffset(str, offset)
@@ -266,6 +297,20 @@ func (call *builtinField) compile(c *compiler) (ctype, error) {
 		}
 
 		c.asm.Fn_FIELD_b(len(call.Arguments))
+	} else if tt == sqltypes.Decimal {
+		for i, str := range strs {
+			offset := len(strs) - i
+			skip := c.compileNullCheckOffset(str, offset)
+
+			switch str.Type {
+			case sqltypes.Decimal:
+			default:
+				c.asm.Convert_xd(offset, 0, 0)
+			}
+			c.asm.jumpDestination(skip)
+		}
+
+		c.asm.Fn_FIELD_d(len(call.Arguments))
 	} else {
 		for i, str := range strs {
 			offset := len(strs) - i

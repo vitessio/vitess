@@ -1334,6 +1334,24 @@ func FnField(yield Query) {
 		}
 	}
 
+	// Contains failing testcases
+	for _, s1 := range inputStrings {
+		for _, s2 := range radianInputs {
+			for _, s3 := range inputStrings {
+				yield(fmt.Sprintf("FIELD(%s, %s, %s)", s1, s2, s3), nil)
+			}
+		}
+	}
+
+	// Contains failing testcases
+	for _, s1 := range inputBitwise {
+		for _, s2 := range inputBitwise {
+			for _, s3 := range inputBitwise {
+				yield(fmt.Sprintf("FIELD(%s, %s, %s)", s1, s2, s3), nil)
+			}
+		}
+	}
+
 	mysqlDocSamples := []string{
 		"FIELD('Bb', 'Aa', 'Bb', 'Cc', 'Dd', 'Ff')",
 		"FIELD('Gg', 'Aa', 'Bb', 'Cc', 'Dd', 'Ff')",

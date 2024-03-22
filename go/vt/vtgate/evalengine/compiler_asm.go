@@ -2408,6 +2408,37 @@ func (asm *assembler) Fn_FIELD_b(args int) {
 	}, "FN FIELD VARCHAR(SP-%d)...VARCHAR(SP-1)", args)
 }
 
+func (asm *assembler) Fn_FIELD_d(args int) {
+	asm.adjustStack(-args + 1)
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-args] == nil {
+			env.vm.stack[env.vm.sp-args] = env.vm.arena.newEvalInt64(0)
+			env.vm.sp -= args - 1
+			return 1
+		}
+
+		tar := env.vm.stack[env.vm.sp-args].(*evalDecimal)
+
+		for i := range args - 1 {
+			if env.vm.stack[env.vm.sp-args+i+1] == nil {
+				continue
+			}
+
+			arg := env.vm.stack[env.vm.sp-args+i+1].(*evalDecimal)
+
+			if tar.dec.Equal(arg.dec) {
+				env.vm.stack[env.vm.sp-args] = env.vm.arena.newEvalInt64(int64(i + 1))
+				env.vm.sp -= args - 1
+				return 1
+			}
+		}
+
+		env.vm.stack[env.vm.sp-args] = env.vm.arena.newEvalInt64(0)
+		env.vm.sp -= args - 1
+		return 1
+	}, "FN FIELD DECIMAL(SP-%d)...DECIMAL(SP-1)", args)
+}
+
 func (asm *assembler) Fn_FIELD_f(args int) {
 	asm.adjustStack(-args + 1)
 	asm.emit(func(env *ExpressionEnv) int {
