@@ -22,7 +22,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"path"
 	"strings"
@@ -1025,6 +1025,9 @@ func testScheduler(t *testing.T) {
 			t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy+" --postpone-completion --retain-artifacts=1s", "vtctl", "", "", true)) // skip wait
 			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
 		})
+		t.Run("wait for ready_to_complete", func(t *testing.T) {
+			waitForReadyToComplete(t, t1uuid, true)
+		})
 		var artifacts []string
 		t.Run("validate artifact exists", func(t *testing.T) {
 			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
@@ -1612,7 +1615,7 @@ func testDeclarative(t *testing.T) {
 	var uuids []string
 
 	generateInsert := func(t *testing.T, conn *mysql.Conn) error {
-		id := rand.Int31n(int32(maxTableRows))
+		id := rand.Int32N(int32(maxTableRows))
 		query := fmt.Sprintf(insertRowStatement, id)
 		qr, err := conn.ExecuteFetch(query, 1000, true)
 
@@ -1636,7 +1639,7 @@ func testDeclarative(t *testing.T) {
 	}
 
 	generateUpdate := func(t *testing.T, conn *mysql.Conn) error {
-		id := rand.Int31n(int32(maxTableRows))
+		id := rand.Int32N(int32(maxTableRows))
 		query := fmt.Sprintf(updateRowStatement, id)
 		qr, err := conn.ExecuteFetch(query, 1000, true)
 
@@ -1660,7 +1663,7 @@ func testDeclarative(t *testing.T) {
 	}
 
 	generateDelete := func(t *testing.T, conn *mysql.Conn) error {
-		id := rand.Int31n(int32(maxTableRows))
+		id := rand.Int32N(int32(maxTableRows))
 		query := fmt.Sprintf(deleteRowStatement, id)
 		qr, err := conn.ExecuteFetch(query, 1000, true)
 
@@ -2211,6 +2214,7 @@ func testForeignKeys(t *testing.T) {
 		sql                       string
 		allowForeignKeys          bool
 		expectHint                string
+		expectCountUUIDs          int
 		onlyIfFKOnlineDDLPossible bool
 	}
 	var testCases = []testCase{
@@ -2283,6 +2287,16 @@ func testForeignKeys(t *testing.T) {
 			expectHint:                "child_hint",
 			onlyIfFKOnlineDDLPossible: true,
 		},
+		{
+			name: "add two tables with cyclic fk relationship",
+			sql: `
+				create table t11 (id int primary key, i int, constraint f11 foreign key (i) references t12 (id));
+				create table t12 (id int primary key, i int, constraint f12 foreign key (i) references t11 (id));
+				`,
+			allowForeignKeys: true,
+			expectCountUUIDs: 2,
+			expectHint:       "t11",
+		},
 	}
 
 	fkOnlineDDLPossible := false
@@ -2325,6 +2339,9 @@ func testForeignKeys(t *testing.T) {
 		return testOnlineDDLStatement(t, createParams(sql, ddlStrategy, "vtctl", expectHint, errorHint, false))
 	}
 	for _, testcase := range testCases {
+		if testcase.expectCountUUIDs == 0 {
+			testcase.expectCountUUIDs = 1
+		}
 		t.Run(testcase.name, func(t *testing.T) {
 			if testcase.onlyIfFKOnlineDDLPossible && !fkOnlineDDLPossible {
 				t.Skipf("skipped because backing database does not support 'rename_table_preserve_foreign_key'")
@@ -2361,7 +2378,10 @@ func testForeignKeys(t *testing.T) {
 			var uuid string
 			t.Run("run migration", func(t *testing.T) {
 				if testcase.allowForeignKeys {
-					uuid = testStatement(t, testcase.sql, ddlStrategyAllowFK, testcase.expectHint, false)
+					output := testStatement(t, testcase.sql, ddlStrategyAllowFK, testcase.expectHint, false)
+					uuids := strings.Split(output, "\n")
+					assert.Equal(t, testcase.expectCountUUIDs, len(uuids))
+					uuid = uuids[0] // in case of multiple statements, we only check the first
 					onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 				} else {
 					uuid = testStatement(t, testcase.sql, ddlStrategy, "", true)
@@ -2381,7 +2401,7 @@ func testForeignKeys(t *testing.T) {
 					artifacts = textutil.SplitDelimitedList(row.AsString("artifacts", ""))
 				}
 
-				artifacts = append(artifacts, "child_table", "child_nofk_table", "parent_table")
+				artifacts = append(artifacts, "child_table", "child_nofk_table", "parent_table", "t11", "t12")
 				// brute force drop all tables. In MySQL 8.0 you can do a single `DROP TABLE ... <list of all tables>`
 				// which auto-resovled order. But in 5.7 you can't.
 				droppedTables := map[string]bool{}
@@ -2391,7 +2411,7 @@ func testForeignKeys(t *testing.T) {
 							continue
 						}
 						statement := fmt.Sprintf("DROP TABLE IF EXISTS %s", artifact)
-						_, err := clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, statement, cluster.ApplySchemaParams{DDLStrategy: "direct"})
+						_, err := clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, statement, cluster.ApplySchemaParams{DDLStrategy: "direct --unsafe-allow-foreign-keys"})
 						if err == nil {
 							droppedTables[artifact] = true
 						}
@@ -2512,7 +2532,7 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName stri
 	query := fmt.Sprintf(`show tables like '%%%s%%';`, showTableName)
 	queryResult, err := tablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
 	require.Nil(t, err)
-	return assert.Equal(t, expectCount, len(queryResult.Rows))
+	return assert.Equalf(t, expectCount, len(queryResult.Rows), "checkTablesCount cannot find table like '%%%s%%'", showTableName)
 }
 
 // checkMigratedTables checks the CREATE STATEMENT of a table after migration

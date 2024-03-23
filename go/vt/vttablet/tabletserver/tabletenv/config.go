@@ -17,6 +17,7 @@ limitations under the License.
 package tabletenv
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -27,9 +28,11 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/flagutil"
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/throttler"
@@ -213,6 +216,7 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&currentConfig.EnableViews, "queryserver-enable-views", false, "Enable views support in vttablet.")
 
 	fs.BoolVar(&currentConfig.EnablePerWorkloadTableMetrics, "enable-per-workload-table-metrics", defaultConfig.EnablePerWorkloadTableMetrics, "If true, query counts and query error metrics include a label that identifies the workload")
+	fs.BoolVar(&currentConfig.Unmanaged, "unmanaged", false, "Indicates an unmanaged tablet, i.e. using an external mysql-compatible database")
 	fs.BoolVar(&currentConfig.Oltp.QueryTimeoutPushdown, "query-timeout-pushdown", false, "Attempt to push-down timing-out of queries to MySQL with a fallback to a MySQL KILL operation.")
 	fs.DurationVar(&currentConfig.Oltp.QueryTimeoutPushdownWait, "query-timeout-pushdown-wait", time.Second, "Max time to wait for MySQL to kill a query before sending a fallback KILL operation. Requires --query-timeout-pushdown")
 }
@@ -299,6 +303,8 @@ func Init() {
 // TabletConfig contains all the configuration for query service
 type TabletConfig struct {
 	DB *dbconfigs.DBConfigs `json:"db,omitempty"`
+
+	Unmanaged bool `json:"unmanaged,omitempty"`
 
 	OltpReadPool ConnPoolConfig `json:"oltpReadPool,omitempty"`
 	OlapReadPool ConnPoolConfig `json:"olapReadPool,omitempty"`
@@ -865,6 +871,9 @@ func (c *TabletConfig) TxTimeoutForWorkload(workload querypb.ExecuteOptions_Work
 
 // Verify checks for contradicting flags.
 func (c *TabletConfig) Verify() error {
+	if err := c.verifyUnmanagedTabletConfig(); err != nil {
+		return err
+	}
 	if err := c.verifyTransactionLimitConfig(); err != nil {
 		return err
 	}
@@ -884,6 +893,50 @@ func (c *TabletConfig) Verify() error {
 		return fmt.Errorf("--hot_row_protection_concurrent_transactions must be > 0 (specified value: %v)", v)
 	}
 	return nil
+}
+
+// verifyUnmanagedTabletConfig checks unmanaged tablet related config for sanity
+func (c *TabletConfig) verifyUnmanagedTabletConfig() error {
+	// Skip checks if tablet is not unmanaged
+	if !c.Unmanaged {
+		return nil
+	}
+
+	// Throw error if both host and socket are null
+	if !c.DB.HasGlobalSettings() {
+		return errors.New("no connection parameters specified but unmanaged mode specified")
+	}
+	if c.DB.App.User == "" {
+		return errors.New("database app user not specified")
+	}
+	if c.DB.App.Password == "" {
+		return errors.New("database app user password not specified")
+	}
+	// Replication fixes should be disabled for Unmanaged tablets.
+	mysqlctl.DisableActiveReparents = true
+
+	return c.checkConnectionForExternalMysql()
+}
+
+// Test connectivity of external mysql
+func (c *TabletConfig) checkConnectionForExternalMysql() error {
+	params := mysql.ConnParams{
+		Host:       c.DB.Host,
+		Port:       c.DB.Port,
+		DbName:     c.DB.DBName,
+		Uname:      c.DB.App.User,
+		Pass:       c.DB.App.Password,
+		UnixSocket: c.DB.Socket,
+	}
+
+	conn, err := mysql.Connect(context.Background(), &params)
+	if err != nil {
+		return err
+	}
+
+	defer conn.Close()
+
+	return conn.Ping()
 }
 
 // verifyTransactionLimitConfig checks TransactionLimitConfig for sanity

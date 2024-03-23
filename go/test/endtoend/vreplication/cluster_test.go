@@ -19,7 +19,7 @@ package vreplication
 import (
 	"fmt"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"net/http"
 	"os"
 	"os/exec"
@@ -156,7 +156,7 @@ type Tablet struct {
 }
 
 func setTempVtDataRoot() string {
-	dirSuffix := 100000 + rand.Intn(999999-100000) // 6 digits
+	dirSuffix := 100000 + rand.IntN(999999-100000) // 6 digits
 	if debugMode {
 		vtdataroot = originalVtdataroot
 	} else {

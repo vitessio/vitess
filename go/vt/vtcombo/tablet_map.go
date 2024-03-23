@@ -841,6 +841,10 @@ func (itmc *internalTabletManagerClient) ExecuteFetchAsDba(context.Context, *top
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
+func (itmc *internalTabletManagerClient) ExecuteMultiFetchAsDba(context.Context, *topodatapb.Tablet, bool, *tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest) ([]*querypb.QueryResult, error) {
+	return nil, fmt.Errorf("not implemented in vtcombo")
+}
+
 func (itmc *internalTabletManagerClient) ExecuteFetchAsAllPrivs(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest) (*querypb.QueryResult, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
@@ -873,6 +877,14 @@ func (itmc *internalTabletManagerClient) DeleteVReplicationWorkflow(context.Cont
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
+func (itmc *internalTabletManagerClient) HasVReplicationWorkflows(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.HasVReplicationWorkflowsRequest) (*tabletmanagerdatapb.HasVReplicationWorkflowsResponse, error) {
+	return nil, fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) ReadVReplicationWorkflows(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.ReadVReplicationWorkflowsRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse, error) {
+	return nil, fmt.Errorf("not implemented in vtcombo")
+}
+
 func (itmc *internalTabletManagerClient) ReadVReplicationWorkflow(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.ReadVReplicationWorkflowRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowResponse, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
@@ -886,6 +898,10 @@ func (itmc *internalTabletManagerClient) VReplicationWaitForPos(context.Context,
 }
 
 func (itmc *internalTabletManagerClient) UpdateVReplicationWorkflow(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.UpdateVReplicationWorkflowRequest) (*tabletmanagerdatapb.UpdateVReplicationWorkflowResponse, error) {
+	return nil, fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) UpdateVReplicationWorkflows(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest) (*tabletmanagerdatapb.UpdateVReplicationWorkflowsResponse, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 

@@ -84,7 +84,7 @@ func testTopoDataAPI(t *testing.T, url string) {
 
 func testListAllTablets(t *testing.T) {
 	// first w/o any filters, aside from cell
-	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ListAllTablets", clusterInstance.Cell)
+	result, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetTablets", "--cell", clusterInstance.Cell)
 	require.NoError(t, err)
 
 	tablets := getAllTablets()
@@ -102,10 +102,12 @@ func testListAllTablets(t *testing.T) {
 
 	// now filtering with the first keyspace and tablet type of primary, in
 	// addition to the cell
-	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
-		"ListAllTablets", "--", "--keyspace", clusterInstance.Keyspaces[0].Name,
-		"--tablet_type", "primary",
-		clusterInstance.Cell)
+	result, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(
+		"GetTablets",
+		"--keyspace", clusterInstance.Keyspaces[0].Name,
+		"--tablet-type", "primary",
+		"--cell", clusterInstance.Cell,
+	)
 	require.NoError(t, err)
 
 	// We should only return a single primary tablet per shard in the first keyspace
@@ -164,7 +166,7 @@ func testExecuteAsDba(t *testing.T) {
 	}
 	for _, tcase := range tcases {
 		t.Run(tcase.query, func(t *testing.T) {
-			result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ExecuteFetchAsDba", clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].Alias, tcase.query)
+			result, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ExecuteFetchAsDBA", clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].Alias, tcase.query)
 			if tcase.expectErr {
 				assert.Error(t, err)
 			} else {
@@ -176,7 +178,7 @@ func testExecuteAsDba(t *testing.T) {
 }
 
 func testExecuteAsApp(t *testing.T) {
-	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ExecuteFetchAsApp", clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].Alias, `SELECT 1 AS a`)
+	result, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ExecuteFetchAsApp", clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].Alias, `SELECT 1 AS a`)
 	require.NoError(t, err)
 	assert.Equal(t, result, oneTableOutput)
 }

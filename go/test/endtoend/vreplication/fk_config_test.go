@@ -16,6 +16,8 @@ limitations under the License.
 
 package vreplication
 
+// The tables in the schema are selected so that we have one parent/child table with names in reverse lexical order
+// (child before parent), t1,t2  are in lexical order, and t11,t12  have valid circular foreign key constraints.
 var (
 	initialFKSchema = `
 create table parent(id int, name varchar(128), primary key(id)) engine=innodb;
@@ -23,12 +25,19 @@ create table child(id int, parent_id int, name varchar(128), primary key(id), fo
 create view vparent as select * from parent;
 create table t1(id int, name varchar(128), primary key(id)) engine=innodb;
 create table t2(id int, t1id int, name varchar(128), primary key(id), foreign key(t1id) references t1(id) on delete cascade) engine=innodb;
+create table t11 (id int primary key, i int);
+create table t12 (id int primary key, i int);
+alter table t11 add constraint f11 foreign key (i) references t12 (id);
+alter table t12 add constraint f12 foreign key (i) references t11 (id);
 `
 	initialFKData = `
 insert into parent values(1, 'parent1'), (2, 'parent2');
 insert into child values(1, 1, 'child11'), (2, 1, 'child21'), (3, 2, 'child32');
 insert into t1 values(1, 't11'), (2, 't12');
 insert into t2 values(1, 1, 't21'), (2, 1, 't22'), (3, 2, 't23');
+insert into t11 values(1, null);
+insert into t12 values(1, 1);
+update t11 set i = 1 where id = 1;
 `
 
 	initialFKSourceVSchema = `
@@ -37,7 +46,9 @@ insert into t2 values(1, 1, 't21'), (2, 1, 't22'), (3, 2, 't23');
 	"parent": {},
 	"child": {},
 	"t1": {},
-	"t2": {}
+	"t2": {},
+	"t11": {},
+	"t12": {}
   }
 }
 `
@@ -79,6 +90,22 @@ insert into t2 values(1, 1, 't21'), (2, 1, 't22'), (3, 2, 't23');
       "column_vindexes": [
         {
           "column": "t1id",
+          "name": "reverse_bits"
+        }
+      ]
+    },
+    "t11": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "reverse_bits"
+        }
+      ]
+    },
+    "t12": {
+      "column_vindexes": [
+        {
+          "column": "id",
           "name": "reverse_bits"
         }
       ]

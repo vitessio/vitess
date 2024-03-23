@@ -33,7 +33,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"net/http"
 	"sync"
 	"testing"
@@ -174,7 +174,7 @@ func updateExecute(c *threadParams, conn *mysql.Conn) error {
 	// Sleep between [0, 1] seconds to prolong the time the transaction is in
 	// flight. This is more realistic because applications are going to keep
 	// their transactions open for longer as well.
-	dur := time.Duration(rand.Int31n(1000)) * time.Millisecond
+	dur := time.Duration(rand.Int32N(1000)) * time.Millisecond
 	if c.slowQueries {
 		dur = dur + 1*time.Second
 	}

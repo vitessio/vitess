@@ -213,7 +213,7 @@ var _ FromStatement = (*sqlparser.Select)(nil)
 var _ FromStatement = (*sqlparser.Update)(nil)
 var _ FromStatement = (*sqlparser.Delete)(nil)
 
-func (qb *queryBuilder) joinInnerWith(other *queryBuilder, onCondition sqlparser.Expr) {
+func (qb *queryBuilder) joinWith(other *queryBuilder, onCondition sqlparser.Expr, joinType sqlparser.JoinType) {
 	stmt := qb.stmt.(FromStatement)
 	otherStmt := other.stmt.(FromStatement)
 
@@ -222,24 +222,18 @@ func (qb *queryBuilder) joinInnerWith(other *queryBuilder, onCondition sqlparser
 		sel.SelectExprs = append(sel.SelectExprs, otherSel.SelectExprs...)
 	}
 
-	newFromClause := append(stmt.GetFrom(), otherStmt.GetFrom()...)
-	stmt.SetFrom(newFromClause)
 	qb.mergeWhereClauses(stmt, otherStmt)
-	qb.addPredicate(onCondition)
-}
 
-func (qb *queryBuilder) joinOuterWith(other *queryBuilder, onCondition sqlparser.Expr) {
-	stmt := qb.stmt.(FromStatement)
-	otherStmt := other.stmt.(FromStatement)
-
-	if sel, isSel := stmt.(*sqlparser.Select); isSel {
-		otherSel := otherStmt.(*sqlparser.Select)
-		sel.SelectExprs = append(sel.SelectExprs, otherSel.SelectExprs...)
+	var newFromClause []sqlparser.TableExpr
+	switch joinType {
+	case sqlparser.NormalJoinType:
+		newFromClause = append(stmt.GetFrom(), otherStmt.GetFrom()...)
+		qb.addPredicate(onCondition)
+	default:
+		newFromClause = []sqlparser.TableExpr{buildJoin(stmt, otherStmt, onCondition, joinType)}
 	}
 
-	newFromClause := []sqlparser.TableExpr{buildOuterJoin(stmt, otherStmt, onCondition)}
 	stmt.SetFrom(newFromClause)
-	qb.mergeWhereClauses(stmt, otherStmt)
 }
 
 func (qb *queryBuilder) mergeWhereClauses(stmt, otherStmt FromStatement) {
@@ -254,7 +248,7 @@ func (qb *queryBuilder) mergeWhereClauses(stmt, otherStmt FromStatement) {
 	}
 }
 
-func buildOuterJoin(stmt FromStatement, otherStmt FromStatement, onCondition sqlparser.Expr) *sqlparser.JoinTableExpr {
+func buildJoin(stmt FromStatement, otherStmt FromStatement, onCondition sqlparser.Expr, joinType sqlparser.JoinType) *sqlparser.JoinTableExpr {
 	var lhs sqlparser.TableExpr
 	fromClause := stmt.GetFrom()
 	if len(fromClause) == 1 {
@@ -273,7 +267,7 @@ func buildOuterJoin(stmt FromStatement, otherStmt FromStatement, onCondition sql
 	return &sqlparser.JoinTableExpr{
 		LeftExpr:  lhs,
 		RightExpr: rhs,
-		Join:      sqlparser.LeftJoinType,
+		Join:      joinType,
 		Condition: &sqlparser.JoinCondition{
 			On: onCondition,
 		},
@@ -539,11 +533,7 @@ func buildApplyJoin(op *ApplyJoin, qb *queryBuilder) {
 
 	qbR := &queryBuilder{ctx: qb.ctx}
 	buildQuery(op.RHS, qbR)
-	if op.LeftJoin {
-		qb.joinOuterWith(qbR, pred)
-	} else {
-		qb.joinInnerWith(qbR, pred)
-	}
+	qb.joinWith(qbR, pred, op.JoinType)
 }
 
 func buildUnion(op *Union, qb *queryBuilder) {
@@ -623,15 +613,8 @@ func buildDerivedSelect(op *Horizon, qb *queryBuilder, sel *sqlparser.Select) {
 
 func buildHorizon(op *Horizon, qb *queryBuilder) {
 	buildQuery(op.Source, qb)
-
 	stripDownQuery(op.Query, qb.asSelectStatement())
-
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		if aliasedExpr, ok := node.(sqlparser.SelectExpr); ok {
-			removeKeyspaceFromSelectExpr(aliasedExpr)
-		}
-		return true, nil
-	}, qb.stmt)
+	sqlparser.RemoveKeyspaceInCol(qb.stmt)
 }
 
 func mergeHaving(h1, h2 *sqlparser.Where) *sqlparser.Where {

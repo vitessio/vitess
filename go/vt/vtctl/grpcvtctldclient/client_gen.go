@@ -236,6 +236,15 @@ func (client *gRPCVtctldClient) ExecuteFetchAsDBA(ctx context.Context, in *vtctl
 	return client.c.ExecuteFetchAsDBA(ctx, in, opts...)
 }
 
+// ExecuteMultiFetchAsDBA is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) ExecuteMultiFetchAsDBA(ctx context.Context, in *vtctldatapb.ExecuteMultiFetchAsDBARequest, opts ...grpc.CallOption) (*vtctldatapb.ExecuteMultiFetchAsDBAResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.ExecuteMultiFetchAsDBA(ctx, in, opts...)
+}
+
 // ExecuteHook is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) ExecuteHook(ctx context.Context, in *vtctldatapb.ExecuteHookRequest, opts ...grpc.CallOption) (*vtctldatapb.ExecuteHookResponse, error) {
 	if client.c == nil {
@@ -369,6 +378,15 @@ func (client *gRPCVtctldClient) GetShard(ctx context.Context, in *vtctldatapb.Ge
 	}
 
 	return client.c.GetShard(ctx, in, opts...)
+}
+
+// GetShardReplication is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) GetShardReplication(ctx context.Context, in *vtctldatapb.GetShardReplicationRequest, opts ...grpc.CallOption) (*vtctldatapb.GetShardReplicationResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.GetShardReplication(ctx, in, opts...)
 }
 
 // GetShardRoutingRules is part of the vtctlservicepb.VtctldClient interface.

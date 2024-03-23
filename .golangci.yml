@@ -27,7 +27,6 @@ linters:
     # Extras
     - gofmt
     - goimports
-    - exportloopref
     - bodyclose
 
     # revive is a replacement for golint, but we do not run it in CI for now.

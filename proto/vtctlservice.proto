@@ -98,6 +98,8 @@ service Vtctld {
   rpc ExecuteFetchAsApp(vtctldata.ExecuteFetchAsAppRequest) returns (vtctldata.ExecuteFetchAsAppResponse) {};
   // ExecuteFetchAsDBA executes a SQL query on the remote tablet as the DBA user.
   rpc ExecuteFetchAsDBA(vtctldata.ExecuteFetchAsDBARequest) returns (vtctldata.ExecuteFetchAsDBAResponse) {};
+  // ExecuteMultiFetchAsDBA executes one or more SQL queries on the remote tablet as the DBA user.
+  rpc ExecuteMultiFetchAsDBA(vtctldata.ExecuteMultiFetchAsDBARequest) returns (vtctldata.ExecuteMultiFetchAsDBAResponse) {};
   // ExecuteHook runs the hook on the tablet.
   rpc ExecuteHook(vtctldata.ExecuteHookRequest) returns (vtctldata.ExecuteHookResponse);
   // FindAllShardsInKeyspace returns a map of shard names to shard references
@@ -134,6 +136,8 @@ service Vtctld {
   // Different fields in the request message result in different filtering
   // behaviors. See the documentation on GetSchemaMigrationsRequest for details.
   rpc GetSchemaMigrations(vtctldata.GetSchemaMigrationsRequest) returns (vtctldata.GetSchemaMigrationsResponse) {};
+  // GetShardReplication returns the replication graph for a shard in a cell.
+  rpc GetShardReplication(vtctldata.GetShardReplicationRequest) returns (vtctldata.GetShardReplicationResponse) {};
   // GetShard returns information about a shard in the topology.
   rpc GetShard(vtctldata.GetShardRequest) returns (vtctldata.GetShardResponse) {};
   // GetShardRoutingRules returns the VSchema shard routing rules.

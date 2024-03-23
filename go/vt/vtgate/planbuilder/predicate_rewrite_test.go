@@ -18,7 +18,7 @@ package planbuilder
 
 import (
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"strconv"
 	"testing"
 	"time"
@@ -53,12 +53,12 @@ const (
 func (tc testCase) createPredicate(lvl int) sqlparser.Expr {
 	if lvl >= tc.depth {
 		// we're at max depth, so we just return one of the nodes
-		n := rand.Intn(tc.nodes)
+		n := rand.IntN(tc.nodes)
 		return sqlparser.NewColName(fmt.Sprintf("n%d", n))
 	}
-	switch nodeType(rand.Intn(int(SIZE))) {
+	switch nodeType(rand.IntN(int(SIZE))) {
 	case NODE:
-		n := rand.Intn(tc.nodes)
+		n := rand.IntN(tc.nodes)
 		return sqlparser.NewColName(fmt.Sprintf("n%d", n))
 	case NOT:
 		return &sqlparser.NotExpr{
@@ -95,8 +95,8 @@ func TestFuzzRewriting(t *testing.T) {
 	start := time.Now()
 	for time.Since(start) < 1*time.Second {
 		tc := testCase{
-			nodes: rand.Intn(4) + 1,
-			depth: rand.Intn(4) + 1,
+			nodes: rand.IntN(4) + 1,
+			depth: rand.IntN(4) + 1,
 		}
 
 		predicate := tc.createPredicate(0)

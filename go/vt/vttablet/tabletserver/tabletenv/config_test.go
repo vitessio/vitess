@@ -24,8 +24,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/throttler"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -443,4 +445,39 @@ func TestVerifyTxThrottlerConfig(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestVerifyUnmanagedTabletConfig(t *testing.T) {
+	oldDisableActiveReparents := mysqlctl.DisableActiveReparents
+	defer func() {
+		mysqlctl.DisableActiveReparents = oldDisableActiveReparents
+	}()
+
+	config := defaultConfig
+
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	params := db.ConnParams()
+	config.DB = dbconfigs.NewTestDBConfigs(*params, *params, "")
+
+	// By default, unmanaged mode should be false
+	err := config.verifyUnmanagedTabletConfig()
+	assert.Nil(t, err)
+
+	config.Unmanaged = true
+	err = config.verifyUnmanagedTabletConfig()
+	assert.EqualError(t, err, "no connection parameters specified but unmanaged mode specified")
+
+	config.DB.Socket = db.ConnParams().UnixSocket
+	err = config.verifyUnmanagedTabletConfig()
+	assert.EqualError(t, err, "database app user not specified")
+
+	config.DB.App.User = "testUser"
+	err = config.verifyUnmanagedTabletConfig()
+	assert.EqualError(t, err, "database app user password not specified")
+
+	config.DB.App.Password = "testPassword"
+	err = config.verifyUnmanagedTabletConfig()
+	assert.Nil(t, err)
 }

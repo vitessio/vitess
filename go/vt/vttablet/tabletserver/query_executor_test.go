@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"strings"
 	"testing"
 	"time"
@@ -796,7 +796,7 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 func TestQueryExecutorMessageStreamACL(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int63())
+	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int64())
 	tableacl.Register(aclName, &simpleacl.Factory{})
 	tableacl.SetDefaultACL(aclName)
 	config := &tableaclpb.Config{
@@ -859,7 +859,7 @@ func TestQueryExecutorMessageStreamACL(t *testing.T) {
 }
 
 func TestQueryExecutorTableAcl(t *testing.T) {
-	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int63())
+	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int64())
 	tableacl.Register(aclName, &simpleacl.Factory{})
 	tableacl.SetDefaultACL(aclName)
 	db := setUpQueryExecutorTest(t)
@@ -903,7 +903,7 @@ func TestQueryExecutorTableAcl(t *testing.T) {
 }
 
 func TestQueryExecutorTableAclNoPermission(t *testing.T) {
-	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int63())
+	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int64())
 	tableacl.Register(aclName, &simpleacl.Factory{})
 	tableacl.SetDefaultACL(aclName)
 	db := setUpQueryExecutorTest(t)
@@ -962,7 +962,7 @@ func TestQueryExecutorTableAclNoPermission(t *testing.T) {
 }
 
 func TestQueryExecutorTableAclDualTableExempt(t *testing.T) {
-	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int63())
+	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int64())
 	tableacl.Register(aclName, &simpleacl.Factory{})
 	tableacl.SetDefaultACL(aclName)
 	db := setUpQueryExecutorTest(t)
@@ -1014,7 +1014,7 @@ func TestQueryExecutorTableAclDualTableExempt(t *testing.T) {
 }
 
 func TestQueryExecutorTableAclExemptACL(t *testing.T) {
-	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int63())
+	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int64())
 	tableacl.Register(aclName, &simpleacl.Factory{})
 	tableacl.SetDefaultACL(aclName)
 	db := setUpQueryExecutorTest(t)
@@ -1079,7 +1079,7 @@ func TestQueryExecutorTableAclExemptACL(t *testing.T) {
 }
 
 func TestQueryExecutorTableAclDryRun(t *testing.T) {
-	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int63())
+	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int64())
 	tableacl.Register(aclName, &simpleacl.Factory{})
 	tableacl.SetDefaultACL(aclName)
 	db := setUpQueryExecutorTest(t)

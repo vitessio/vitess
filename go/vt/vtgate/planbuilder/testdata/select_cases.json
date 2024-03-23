@@ -361,8 +361,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select a.user_id as user_id, a.col1 as col1, a.col2 as col2, b.user_id as user_id, b.col1 as col1, b.col2 as col2 from authoritative as a, authoritative as b where 1 != 1",
-        "Query": "select a.user_id as user_id, a.col1 as col1, a.col2 as col2, b.user_id as user_id, b.col1 as col1, b.col2 as col2 from authoritative as a, authoritative as b where a.user_id = b.user_id",
+        "FieldQuery": "select a.user_id, a.col1, a.col2, b.user_id, b.col1, b.col2 from authoritative as a, authoritative as b where 1 != 1",
+        "Query": "select a.user_id, a.col1, a.col2, b.user_id, b.col1, b.col2 from authoritative as a, authoritative as b where a.user_id = b.user_id",
         "Table": "authoritative"
       },
       "TablesUsed": [
@@ -433,8 +433,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select `user`.id, a.user_id as user_id, a.col1 as col1, a.col2 as col2, `user`.col1 from authoritative as a, `user` where 1 != 1",
-        "Query": "select `user`.id, a.user_id as user_id, a.col1 as col1, a.col2 as col2, `user`.col1 from authoritative as a, `user` where a.user_id = `user`.id",
+        "FieldQuery": "select `user`.id, a.user_id, a.col1, a.col2, `user`.col1 from authoritative as a, `user` where 1 != 1",
+        "Query": "select `user`.id, a.user_id, a.col1, a.col2, `user`.col1 from authoritative as a, `user` where a.user_id = `user`.id",
         "Table": "`user`, authoritative"
       },
       "TablesUsed": [
@@ -2321,6 +2321,74 @@
             "Table": "user_extra"
           }
         ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "Straight Join ensures specific ordering of joins",
+    "query": "select user.id, user_extra.user_id from user straight_join user_extra where user.id = user_extra.foo",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select user.id, user_extra.user_id from user straight_join user_extra where user.id = user_extra.foo",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0,R:0",
+        "JoinVars": {
+          "user_id": 0
+        },
+        "TableName": "`user`_user_extra",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.id from `user` where 1 != 1",
+            "Query": "select `user`.id from `user`",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select user_extra.user_id from user_extra where 1 != 1",
+            "Query": "select user_extra.user_id from user_extra where user_extra.foo = :user_id",
+            "Table": "user_extra"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "Straight Join preserved in MySQL query",
+    "query": "select user.id, user_extra.user_id from user straight_join user_extra where user.id = user_extra.user_id",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select user.id, user_extra.user_id from user straight_join user_extra where user.id = user_extra.user_id",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.id, user_extra.user_id from `user` straight_join user_extra on `user`.id = user_extra.user_id where 1 != 1",
+        "Query": "select `user`.id, user_extra.user_id from `user` straight_join user_extra on `user`.id = user_extra.user_id",
+        "Table": "`user`, user_extra"
       },
       "TablesUsed": [
         "user.user",
@@ -4975,8 +5043,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select table_name from (select table_name from unsharded where 1 != 1) as `tables` where 1 != 1",
-            "Query": "select table_name from (select table_name from unsharded limit 1) as `tables`",
+            "FieldQuery": "select `tables`.table_name from (select table_name from unsharded where 1 != 1) as `tables` where 1 != 1",
+            "Query": "select `tables`.table_name from (select table_name from unsharded limit 1) as `tables`",
             "Table": "unsharded"
           },
           {
@@ -4995,6 +5063,86 @@
       "TablesUsed": [
         "main.unsharded",
         "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "column name aliases in outer join queries",
+    "query": "select name as t0, name as t1 from user left outer join user_extra on user.cola = user_extra.cola",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select name as t0, name as t1 from user left outer join user_extra on user.cola = user_extra.cola",
+      "Instructions": {
+        "OperatorType": "SimpleProjection",
+        "ColumnNames": [
+          "t0",
+          "t1"
+        ],
+        "Columns": [
+          0,
+          0
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "LeftJoin",
+            "JoinColumnIndexes": "L:0",
+            "JoinVars": {
+              "user_cola": 1
+            },
+            "TableName": "`user`_user_extra",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `name`, `user`.cola from `user` where 1 != 1",
+                "Query": "select `name`, `user`.cola from `user`",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from user_extra where 1 != 1",
+                "Query": "select 1 from user_extra where user_extra.cola = :user_cola",
+                "Table": "user_extra"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "Over clause works for unsharded tables",
+    "query": "SELECT val, CUME_DIST() OVER w, ROW_NUMBER() OVER w, DENSE_RANK() OVER w, PERCENT_RANK() OVER w, RANK() OVER w AS 'cd' FROM unsharded_a",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT val, CUME_DIST() OVER w, ROW_NUMBER() OVER w, DENSE_RANK() OVER w, PERCENT_RANK() OVER w, RANK() OVER w AS 'cd' FROM unsharded_a",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select val, cume_dist() over w, row_number() over w, dense_rank() over w, percent_rank() over w, rank() over w as cd from unsharded_a where 1 != 1",
+        "Query": "select val, cume_dist() over w, row_number() over w, dense_rank() over w, percent_rank() over w, rank() over w as cd from unsharded_a",
+        "Table": "unsharded_a"
+      },
+      "TablesUsed": [
+        "main.unsharded_a"
       ]
     }
   }

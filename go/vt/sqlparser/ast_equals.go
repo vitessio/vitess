@@ -1911,7 +1911,8 @@ func (cmp *Comparator) RefOfAvg(a, b *Avg) bool {
 		return false
 	}
 	return a.Distinct == b.Distinct &&
-		cmp.Expr(a.Arg, b.Arg)
+		cmp.Expr(a.Arg, b.Arg) &&
+		cmp.RefOfOverClause(a.OverClause, b.OverClause)
 }
 
 // RefOfBegin does deep equals between the two objects.
@@ -1960,7 +1961,8 @@ func (cmp *Comparator) RefOfBitAnd(a, b *BitAnd) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.Expr(a.Arg, b.Arg)
+	return cmp.Expr(a.Arg, b.Arg) &&
+		cmp.RefOfOverClause(a.OverClause, b.OverClause)
 }
 
 // RefOfBitOr does deep equals between the two objects.
@@ -1971,7 +1973,8 @@ func (cmp *Comparator) RefOfBitOr(a, b *BitOr) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.Expr(a.Arg, b.Arg)
+	return cmp.Expr(a.Arg, b.Arg) &&
+		cmp.RefOfOverClause(a.OverClause, b.OverClause)
 }
 
 // RefOfBitXor does deep equals between the two objects.
@@ -1982,7 +1985,8 @@ func (cmp *Comparator) RefOfBitXor(a, b *BitXor) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.Expr(a.Arg, b.Arg)
+	return cmp.Expr(a.Arg, b.Arg) &&
+		cmp.RefOfOverClause(a.OverClause, b.OverClause)
 }
 
 // RefOfCallProc does deep equals between the two objects.
@@ -2239,7 +2243,8 @@ func (cmp *Comparator) RefOfCount(a, b *Count) bool {
 		return false
 	}
 	return a.Distinct == b.Distinct &&
-		cmp.Exprs(a.Args, b.Args)
+		cmp.Exprs(a.Args, b.Args) &&
+		cmp.RefOfOverClause(a.OverClause, b.OverClause)
 }
 
 // RefOfCountStar does deep equals between the two objects.
@@ -2250,7 +2255,7 @@ func (cmp *Comparator) RefOfCountStar(a, b *CountStar) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return true
+	return cmp.RefOfOverClause(a.OverClause, b.OverClause)
 }
 
 // RefOfCreateDatabase does deep equals between the two objects.
@@ -3441,7 +3446,8 @@ func (cmp *Comparator) RefOfMax(a, b *Max) bool {
 		return false
 	}
 	return a.Distinct == b.Distinct &&
-		cmp.Expr(a.Arg, b.Arg)
+		cmp.Expr(a.Arg, b.Arg) &&
+		cmp.RefOfOverClause(a.OverClause, b.OverClause)
 }
 
 // RefOfMemberOfExpr does deep equals between the two objects.
@@ -3465,7 +3471,8 @@ func (cmp *Comparator) RefOfMin(a, b *Min) bool {
 		return false
 	}
 	return a.Distinct == b.Distinct &&
-		cmp.Expr(a.Arg, b.Arg)
+		cmp.Expr(a.Arg, b.Arg) &&
+		cmp.RefOfOverClause(a.OverClause, b.OverClause)
 }
 
 // RefOfModifyColumn does deep equals between the two objects.
@@ -4317,7 +4324,8 @@ func (cmp *Comparator) RefOfStd(a, b *Std) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.Expr(a.Arg, b.Arg)
+	return cmp.Expr(a.Arg, b.Arg) &&
+		cmp.RefOfOverClause(a.OverClause, b.OverClause)
 }
 
 // RefOfStdDev does deep equals between the two objects.
@@ -4328,7 +4336,8 @@ func (cmp *Comparator) RefOfStdDev(a, b *StdDev) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.Expr(a.Arg, b.Arg)
+	return cmp.Expr(a.Arg, b.Arg) &&
+		cmp.RefOfOverClause(a.OverClause, b.OverClause)
 }
 
 // RefOfStdPop does deep equals between the two objects.
@@ -4339,7 +4348,8 @@ func (cmp *Comparator) RefOfStdPop(a, b *StdPop) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.Expr(a.Arg, b.Arg)
+	return cmp.Expr(a.Arg, b.Arg) &&
+		cmp.RefOfOverClause(a.OverClause, b.OverClause)
 }
 
 // RefOfStdSamp does deep equals between the two objects.
@@ -4350,7 +4360,8 @@ func (cmp *Comparator) RefOfStdSamp(a, b *StdSamp) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.Expr(a.Arg, b.Arg)
+	return cmp.Expr(a.Arg, b.Arg) &&
+		cmp.RefOfOverClause(a.OverClause, b.OverClause)
 }
 
 // RefOfStream does deep equals between the two objects.
@@ -4457,7 +4468,8 @@ func (cmp *Comparator) RefOfSum(a, b *Sum) bool {
 		return false
 	}
 	return a.Distinct == b.Distinct &&
-		cmp.Expr(a.Arg, b.Arg)
+		cmp.Expr(a.Arg, b.Arg) &&
+		cmp.RefOfOverClause(a.OverClause, b.OverClause)
 }
 
 // TableExprs does deep equals between the two objects.
@@ -4761,7 +4773,8 @@ func (cmp *Comparator) RefOfVarPop(a, b *VarPop) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.Expr(a.Arg, b.Arg)
+	return cmp.Expr(a.Arg, b.Arg) &&
+		cmp.RefOfOverClause(a.OverClause, b.OverClause)
 }
 
 // RefOfVarSamp does deep equals between the two objects.
@@ -4772,7 +4785,8 @@ func (cmp *Comparator) RefOfVarSamp(a, b *VarSamp) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.Expr(a.Arg, b.Arg)
+	return cmp.Expr(a.Arg, b.Arg) &&
+		cmp.RefOfOverClause(a.OverClause, b.OverClause)
 }
 
 // RefOfVariable does deep equals between the two objects.
@@ -4795,7 +4809,8 @@ func (cmp *Comparator) RefOfVariance(a, b *Variance) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.Expr(a.Arg, b.Arg)
+	return cmp.Expr(a.Arg, b.Arg) &&
+		cmp.RefOfOverClause(a.OverClause, b.OverClause)
 }
 
 // VindexParam does deep equals between the two objects.

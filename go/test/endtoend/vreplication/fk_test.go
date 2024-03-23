@@ -19,7 +19,7 @@ package vreplication
 import (
 	"context"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"strconv"
 	"testing"
 	"time"
@@ -106,7 +106,9 @@ func TestFKWorkflow(t *testing.T) {
 	require.NotNil(t, targetTab)
 	catchup(t, targetTab, workflowName, "MoveTables")
 	vdiff(t, targetKeyspace, workflowName, cellName, true, false, nil)
-	ls.waitForAdditionalRows(200)
+	if withLoad {
+		ls.waitForAdditionalRows(200)
+	}
 	vdiff(t, targetKeyspace, workflowName, cellName, true, false, nil)
 	if withLoad {
 		cancel()
@@ -121,13 +123,19 @@ func TestFKWorkflow(t *testing.T) {
 		ls = newFKLoadSimulator(t, ctx)
 		defer cancel()
 		go ls.simulateLoad()
-	}
-	ls.waitForAdditionalRows(200)
-	if withLoad {
+		ls.waitForAdditionalRows(200)
 		cancel()
 		<-ch
 	}
 	mt.Complete()
+	vtgateConn, closeConn := getVTGateConn()
+	defer closeConn()
+
+	t11Count := getRowCount(t, vtgateConn, "t11")
+	t12Count := getRowCount(t, vtgateConn, "t12")
+	require.Greater(t, t11Count, 1)
+	require.Greater(t, t12Count, 1)
+	require.Equal(t, t11Count, t12Count)
 }
 
 func insertInitialFKData(t *testing.T) {
@@ -140,11 +148,18 @@ func insertInitialFKData(t *testing.T) {
 		log.Infof("Inserting initial FK data")
 		execMultipleQueries(t, vtgateConn, db, initialFKData)
 		log.Infof("Done inserting initial FK data")
-		waitForRowCount(t, vtgateConn, db, "parent", 2)
-		waitForRowCount(t, vtgateConn, db, "child", 3)
-		waitForRowCount(t, vtgateConn, db, "t1", 2)
-		waitForRowCount(t, vtgateConn, db, "t2", 3)
 
+		type tableCounts struct {
+			name  string
+			count int
+		}
+		for _, table := range []tableCounts{
+			{"parent", 2}, {"child", 3},
+			{"t1", 2}, {"t2", 3},
+			{"t11", 1}, {"t12", 1},
+		} {
+			waitForRowCount(t, vtgateConn, db, table.name, table.count)
+		}
 	})
 }
 
@@ -170,6 +185,7 @@ func newFKLoadSimulator(t *testing.T, ctx context.Context) *fkLoadSimulator {
 	}
 }
 
+var indexCounter int = 100 // used to insert into t11 and t12
 func (ls *fkLoadSimulator) simulateLoad() {
 	t := ls.t
 	var err error
@@ -184,7 +200,7 @@ func (ls *fkLoadSimulator) simulateLoad() {
 		default:
 		}
 		// Decide operation based on random number
-		op := rand.Intn(100)
+		op := rand.IntN(100)
 		switch {
 		case op < 50: // 50% chance to insert
 			ls.insert()
@@ -193,8 +209,13 @@ func (ls *fkLoadSimulator) simulateLoad() {
 		default: // 20% chance to delete
 			ls.delete()
 		}
+		for _, table := range []string{"t11", "t12"} {
+			query := fmt.Sprintf("insert /*+ SET_VAR(foreign_key_checks=0) */ into fksource.%s values(%d, %d)", table, indexCounter, indexCounter)
+			ls.exec(query)
+			indexCounter++
+		}
 		require.NoError(t, err)
-		time.Sleep(1 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 
@@ -235,7 +256,7 @@ func (ls *fkLoadSimulator) insert() {
 	qr := ls.exec(insertQuery)
 	require.NotNil(t, qr)
 	// insert one or more children, some with valid foreign keys, some without.
-	for i := 0; i < rand.Intn(4)+1; i++ {
+	for i := 0; i < rand.IntN(4)+1; i++ {
 		currentChildId++
 		if i == 3 {
 			insertQuery = fmt.Sprintf("INSERT /*+ SET_VAR(foreign_key_checks=0) */ INTO child (id, parent_id) VALUES (%d, %d)", currentChildId, currentParentId+1000000)
@@ -261,7 +282,7 @@ func (ls *fkLoadSimulator) getRandomId() int64 {
 }
 
 func (ls *fkLoadSimulator) update() {
-	updateQuery := fmt.Sprintf("UPDATE parent SET name = 'parent%d' WHERE id = %d", rand.Intn(1000)+1, ls.getRandomId())
+	updateQuery := fmt.Sprintf("UPDATE parent SET name = 'parent%d' WHERE id = %d", rand.IntN(1000)+1, ls.getRandomId())
 	ls.exec(updateQuery)
 }
 

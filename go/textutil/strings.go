@@ -17,6 +17,7 @@ limitations under the License.
 package textutil
 
 import (
+	"fmt"
 	"net/url"
 	"regexp"
 	"strings"
@@ -26,6 +27,13 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+)
+
+type TruncationLocation int
+
+const (
+	TruncationLocationMiddle TruncationLocation = iota
+	TruncationLocationEnd
 )
 
 var (
@@ -132,4 +140,27 @@ func Title(s string) string {
 			return r
 		},
 		s)
+}
+
+// TruncateText truncates the provided text, if needed, to the specified maximum
+// length using the provided truncation indicator in place of the truncated text
+// in the specified location of the original string.
+func TruncateText(text string, limit int, location TruncationLocation, indicator string) (string, error) {
+	ol := len(text)
+	if ol <= limit {
+		return text, nil
+	}
+	if len(indicator)+2 >= limit {
+		return "", fmt.Errorf("the truncation indicator is too long for the provided text")
+	}
+	switch location {
+	case TruncationLocationMiddle:
+		prefix := (limit / 2) - len(indicator)
+		suffix := (ol - (prefix + len(indicator))) + 1
+		return fmt.Sprintf("%s%s%s", text[:prefix], indicator, text[suffix:]), nil
+	case TruncationLocationEnd:
+		return text[:limit-(len(indicator)+1)] + indicator, nil
+	default:
+		return "", fmt.Errorf("invalid truncation location: %d", location)
+	}
 }

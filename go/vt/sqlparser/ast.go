@@ -2882,8 +2882,9 @@ type (
 	}
 
 	Count struct {
-		Args     Exprs
-		Distinct bool
+		Args       Exprs
+		Distinct   bool
+		OverClause *OverClause
 	}
 
 	CountStar struct {
@@ -2914,66 +2915,81 @@ type (
 		// The solution we employed was to add a dummy field `_ bool` to the otherwise empty struct `CountStar`.
 		// This ensures that each instance of `CountStar` is treated as a separate object,
 		// even in the context of out semantic state which uses these objects as map keys.
+		OverClause *OverClause
 	}
 
 	Avg struct {
-		Arg      Expr
-		Distinct bool
+		Arg        Expr
+		Distinct   bool
+		OverClause *OverClause
 	}
 
 	Max struct {
-		Arg      Expr
-		Distinct bool
+		Arg        Expr
+		Distinct   bool
+		OverClause *OverClause
 	}
 
 	Min struct {
-		Arg      Expr
-		Distinct bool
+		Arg        Expr
+		Distinct   bool
+		OverClause *OverClause
 	}
 
 	Sum struct {
-		Arg      Expr
-		Distinct bool
+		Arg        Expr
+		Distinct   bool
+		OverClause *OverClause
 	}
 
 	BitAnd struct {
-		Arg Expr
+		Arg        Expr
+		OverClause *OverClause
 	}
 
 	BitOr struct {
-		Arg Expr
+		Arg        Expr
+		OverClause *OverClause
 	}
 
 	BitXor struct {
-		Arg Expr
+		Arg        Expr
+		OverClause *OverClause
 	}
 
 	Std struct {
-		Arg Expr
+		Arg        Expr
+		OverClause *OverClause
 	}
 
 	StdDev struct {
-		Arg Expr
+		Arg        Expr
+		OverClause *OverClause
 	}
 
 	StdPop struct {
-		Arg Expr
+		Arg        Expr
+		OverClause *OverClause
 	}
 
 	StdSamp struct {
-		Arg Expr
+		Arg        Expr
+		OverClause *OverClause
 	}
 
 	VarPop struct {
-		Arg Expr
+		Arg        Expr
+		OverClause *OverClause
 	}
 
 	VarSamp struct {
-		Arg Expr
+		Arg        Expr
+		OverClause *OverClause
 	}
 
 	Variance struct {
-		Arg Expr
+		Arg        Expr
+		OverClause *OverClause
 	}
 
 	// GroupConcatExpr represents a call to GROUP_CONCAT

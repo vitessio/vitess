@@ -848,6 +848,16 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 		var reader io.Reader = br
 		var writer io.Writer = bw
 
+		defer func() {
+			// Close the backupPipe to finish writing on destination.
+			if err := bw.Close(); err != nil {
+				createAndCopyErr = errors.Join(createAndCopyErr, vterrors.Wrapf(err, "cannot flush destination: %v", name))
+			}
+
+			if err := br.Close(); err != nil {
+				createAndCopyErr = errors.Join(createAndCopyErr, vterrors.Wrap(err, "failed to close the source reader"))
+			}
+		}()
 		// Create the gzip compression pipe, if necessary.
 		if backupStorageCompress {
 			var compressor io.WriteCloser
@@ -891,16 +901,7 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 	}
 
 	if err := createAndCopy(); err != nil {
-		return err
-	}
-
-	// Close the backupPipe to finish writing on destination.
-	if err = bw.Close(); err != nil {
-		return vterrors.Wrapf(err, "cannot flush destination: %v", name)
-	}
-
-	if err := br.Close(); err != nil {
-		return vterrors.Wrap(err, "failed to close the source reader")
+		return errors.Join(finalErr, err)
 	}
 
 	// Save the hash.

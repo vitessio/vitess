@@ -18,7 +18,6 @@ package random
 
 import (
 	"fmt"
-	"math/rand"
 	"strings"
 	"testing"
 	"time"
@@ -258,16 +257,14 @@ func TestRandom(t *testing.T) {
 	var queryCount, queryFailCount int
 	// continue testing after an error if and only if testFailingQueries is true
 	for time.Now().Before(endBy) && (!t.Failed() || !testFailingQueries) {
-		seed := time.Now().UnixNano()
 		genConfig := sqlparser.NewExprGeneratorConfig(sqlparser.CannotAggregate, "", 0, false)
-		qg := newQueryGenerator(rand.New(rand.NewSource(seed)), genConfig, 2, 2, 2, schemaTables)
+		qg := newQueryGenerator(genConfig, 2, 2, 2, schemaTables)
 		qg.randomQuery()
 		query := sqlparser.String(qg.stmt)
 		_, vtErr := mcmp.ExecAllowAndCompareError(query)
 
 		// this assumes all queries are valid mysql queries
 		if vtErr != nil {
-			fmt.Printf("seed: %d\n", seed)
 			fmt.Println(query)
 			fmt.Println(vtErr)
 

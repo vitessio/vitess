@@ -25,7 +25,8 @@ create table order_tbl
     oid       bigint,
     region_id bigint,
     cust_no   bigint unique key,
-    primary key (oid, region_id)
+    primary key (oid, region_id),
+    unique key (oid)
 ) Engine = InnoDB;
 
 create table oid_vdx_tbl

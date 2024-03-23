@@ -318,6 +318,10 @@ func ShouldRestore(ctx context.Context, params RestoreParams) (bool, error) {
 	if err := params.Mysqld.Wait(ctx, params.Cnf); err != nil {
 		return false, err
 	}
+	if err := params.Mysqld.WaitForDBAGrants(ctx, DbaGrantWaitTime); err != nil {
+		params.Logger.Errorf("error waiting for the grants: %v", err)
+		return false, err
+	}
 	return checkNoDB(ctx, params.Mysqld, params.DbName)
 }
 
@@ -401,6 +405,10 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		// Wait for mysqld to be ready, in case it was launched in parallel with us.
 		if err = params.Mysqld.Wait(ctx, params.Cnf); err != nil {
 			params.Logger.Errorf("mysqld is not running: %v", err)
+			return nil, err
+		}
+		if err = params.Mysqld.WaitForDBAGrants(ctx, DbaGrantWaitTime); err != nil {
+			params.Logger.Errorf("error waiting for the grants: %v", err)
 			return nil, err
 		}
 		// Since this is an empty database make sure we start replication at the beginning

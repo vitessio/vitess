@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -152,7 +153,7 @@ func (ins *InsertCommon) executeUnshardedTableQuery(ctx context.Context, vcursor
 		return nil, err
 	}
 	if len(rss) != 1 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace does not have exactly one shard: %v", rss)
+		return nil, vterrors.VT09022(rss)
 	}
 	err = allowOnlyPrimary(rss...)
 	if err != nil {
@@ -208,12 +209,11 @@ func (ic *InsertCommon) processPrimary(ctx context.Context, vcursor VCursor, vin
 			// This is a single keyspace id, we're good.
 			keyspaceIDs[i] = d
 		case key.DestinationNone:
-			// No valid keyspace id, we may return an error.
-			if !ic.Ignore {
-				return nil, fmt.Errorf("could not map %v to a keyspace id", vindexColumnsKeys[i])
-			}
+			// Not a valid keyspace id, so we cannot determine which shard this row belongs to.
+			// We have to return an error.
+			return nil, vterrors.VT09023(vindexColumnsKeys[i])
 		default:
-			return nil, fmt.Errorf("could not map %v to a unique keyspace id: %v", vindexColumnsKeys[i], destination)
+			return nil, vterrors.VT09024(vindexColumnsKeys[i], destination)
 		}
 	}
 
@@ -468,7 +468,7 @@ func shouldGenerate(v sqltypes.Value, sqlmode evalengine.SQLMode) bool {
 
 	// Unless the NO_AUTO_VALUE_ON_ZERO sql mode is active in mysql, it also
 	// treats 0 as a value that should generate a new sequence.
-	value, err := evalengine.CoerceTo(v, sqltypes.Uint64, sqlmode)
+	value, err := evalengine.CoerceTo(v, evalengine.NewType(sqltypes.Uint64, collations.CollationBinaryID), sqlmode)
 	if err != nil {
 		return false
 	}

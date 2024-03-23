@@ -203,6 +203,8 @@ type VtctldClient interface {
 	ExecuteFetchAsApp(ctx context.Context, in *vtctldata.ExecuteFetchAsAppRequest, opts ...grpc.CallOption) (*vtctldata.ExecuteFetchAsAppResponse, error)
 	// ExecuteFetchAsDBA executes a SQL query on the remote tablet as the DBA user.
 	ExecuteFetchAsDBA(ctx context.Context, in *vtctldata.ExecuteFetchAsDBARequest, opts ...grpc.CallOption) (*vtctldata.ExecuteFetchAsDBAResponse, error)
+	// ExecuteMultiFetchAsDBA executes one or more SQL queries on the remote tablet as the DBA user.
+	ExecuteMultiFetchAsDBA(ctx context.Context, in *vtctldata.ExecuteMultiFetchAsDBARequest, opts ...grpc.CallOption) (*vtctldata.ExecuteMultiFetchAsDBAResponse, error)
 	// ExecuteHook runs the hook on the tablet.
 	ExecuteHook(ctx context.Context, in *vtctldata.ExecuteHookRequest, opts ...grpc.CallOption) (*vtctldata.ExecuteHookResponse, error)
 	// FindAllShardsInKeyspace returns a map of shard names to shard references
@@ -239,6 +241,8 @@ type VtctldClient interface {
 	// Different fields in the request message result in different filtering
 	// behaviors. See the documentation on GetSchemaMigrationsRequest for details.
 	GetSchemaMigrations(ctx context.Context, in *vtctldata.GetSchemaMigrationsRequest, opts ...grpc.CallOption) (*vtctldata.GetSchemaMigrationsResponse, error)
+	// GetShardReplication returns the replication graph for a shard in a cell.
+	GetShardReplication(ctx context.Context, in *vtctldata.GetShardReplicationRequest, opts ...grpc.CallOption) (*vtctldata.GetShardReplicationResponse, error)
 	// GetShard returns information about a shard in the topology.
 	GetShard(ctx context.Context, in *vtctldata.GetShardRequest, opts ...grpc.CallOption) (*vtctldata.GetShardResponse, error)
 	// GetShardRoutingRules returns the VSchema shard routing rules.
@@ -715,6 +719,15 @@ func (c *vtctldClient) ExecuteFetchAsDBA(ctx context.Context, in *vtctldata.Exec
 	return out, nil
 }
 
+func (c *vtctldClient) ExecuteMultiFetchAsDBA(ctx context.Context, in *vtctldata.ExecuteMultiFetchAsDBARequest, opts ...grpc.CallOption) (*vtctldata.ExecuteMultiFetchAsDBAResponse, error) {
+	out := new(vtctldata.ExecuteMultiFetchAsDBAResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ExecuteMultiFetchAsDBA", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) ExecuteHook(ctx context.Context, in *vtctldata.ExecuteHookRequest, opts ...grpc.CallOption) (*vtctldata.ExecuteHookResponse, error) {
 	out := new(vtctldata.ExecuteHookResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ExecuteHook", in, out, opts...)
@@ -835,6 +848,15 @@ func (c *vtctldClient) GetSchema(ctx context.Context, in *vtctldata.GetSchemaReq
 func (c *vtctldClient) GetSchemaMigrations(ctx context.Context, in *vtctldata.GetSchemaMigrationsRequest, opts ...grpc.CallOption) (*vtctldata.GetSchemaMigrationsResponse, error) {
 	out := new(vtctldata.GetSchemaMigrationsResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetSchemaMigrations", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) GetShardReplication(ctx context.Context, in *vtctldata.GetShardReplicationRequest, opts ...grpc.CallOption) (*vtctldata.GetShardReplicationResponse, error) {
+	out := new(vtctldata.GetShardReplicationResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetShardReplication", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1601,6 +1623,8 @@ type VtctldServer interface {
 	ExecuteFetchAsApp(context.Context, *vtctldata.ExecuteFetchAsAppRequest) (*vtctldata.ExecuteFetchAsAppResponse, error)
 	// ExecuteFetchAsDBA executes a SQL query on the remote tablet as the DBA user.
 	ExecuteFetchAsDBA(context.Context, *vtctldata.ExecuteFetchAsDBARequest) (*vtctldata.ExecuteFetchAsDBAResponse, error)
+	// ExecuteMultiFetchAsDBA executes one or more SQL queries on the remote tablet as the DBA user.
+	ExecuteMultiFetchAsDBA(context.Context, *vtctldata.ExecuteMultiFetchAsDBARequest) (*vtctldata.ExecuteMultiFetchAsDBAResponse, error)
 	// ExecuteHook runs the hook on the tablet.
 	ExecuteHook(context.Context, *vtctldata.ExecuteHookRequest) (*vtctldata.ExecuteHookResponse, error)
 	// FindAllShardsInKeyspace returns a map of shard names to shard references
@@ -1637,6 +1661,8 @@ type VtctldServer interface {
 	// Different fields in the request message result in different filtering
 	// behaviors. See the documentation on GetSchemaMigrationsRequest for details.
 	GetSchemaMigrations(context.Context, *vtctldata.GetSchemaMigrationsRequest) (*vtctldata.GetSchemaMigrationsResponse, error)
+	// GetShardReplication returns the replication graph for a shard in a cell.
+	GetShardReplication(context.Context, *vtctldata.GetShardReplicationRequest) (*vtctldata.GetShardReplicationResponse, error)
 	// GetShard returns information about a shard in the topology.
 	GetShard(context.Context, *vtctldata.GetShardRequest) (*vtctldata.GetShardResponse, error)
 	// GetShardRoutingRules returns the VSchema shard routing rules.
@@ -1926,6 +1952,9 @@ func (UnimplementedVtctldServer) ExecuteFetchAsApp(context.Context, *vtctldata.E
 func (UnimplementedVtctldServer) ExecuteFetchAsDBA(context.Context, *vtctldata.ExecuteFetchAsDBARequest) (*vtctldata.ExecuteFetchAsDBAResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ExecuteFetchAsDBA not implemented")
 }
+func (UnimplementedVtctldServer) ExecuteMultiFetchAsDBA(context.Context, *vtctldata.ExecuteMultiFetchAsDBARequest) (*vtctldata.ExecuteMultiFetchAsDBAResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ExecuteMultiFetchAsDBA not implemented")
+}
 func (UnimplementedVtctldServer) ExecuteHook(context.Context, *vtctldata.ExecuteHookRequest) (*vtctldata.ExecuteHookResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ExecuteHook not implemented")
 }
@@ -1967,6 +1996,9 @@ func (UnimplementedVtctldServer) GetSchema(context.Context, *vtctldata.GetSchema
 }
 func (UnimplementedVtctldServer) GetSchemaMigrations(context.Context, *vtctldata.GetSchemaMigrationsRequest) (*vtctldata.GetSchemaMigrationsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetSchemaMigrations not implemented")
+}
+func (UnimplementedVtctldServer) GetShardReplication(context.Context, *vtctldata.GetShardReplicationRequest) (*vtctldata.GetShardReplicationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetShardReplication not implemented")
 }
 func (UnimplementedVtctldServer) GetShard(context.Context, *vtctldata.GetShardRequest) (*vtctldata.GetShardResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetShard not implemented")
@@ -2623,6 +2655,24 @@ func _Vtctld_ExecuteFetchAsDBA_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_ExecuteMultiFetchAsDBA_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.ExecuteMultiFetchAsDBARequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).ExecuteMultiFetchAsDBA(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/ExecuteMultiFetchAsDBA",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).ExecuteMultiFetchAsDBA(ctx, req.(*vtctldata.ExecuteMultiFetchAsDBARequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_ExecuteHook_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.ExecuteHookRequest)
 	if err := dec(in); err != nil {
@@ -2871,6 +2921,24 @@ func _Vtctld_GetSchemaMigrations_Handler(srv interface{}, ctx context.Context, d
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).GetSchemaMigrations(ctx, req.(*vtctldata.GetSchemaMigrationsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_GetShardReplication_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.GetShardReplicationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).GetShardReplication(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/GetShardReplication",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).GetShardReplication(ctx, req.(*vtctldata.GetShardReplicationRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -4302,6 +4370,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Vtctld_ExecuteFetchAsDBA_Handler,
 		},
 		{
+			MethodName: "ExecuteMultiFetchAsDBA",
+			Handler:    _Vtctld_ExecuteMultiFetchAsDBA_Handler,
+		},
+		{
 			MethodName: "ExecuteHook",
 			Handler:    _Vtctld_ExecuteHook_Handler,
 		},
@@ -4356,6 +4428,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetSchemaMigrations",
 			Handler:    _Vtctld_GetSchemaMigrations_Handler,
+		},
+		{
+			MethodName: "GetShardReplication",
+			Handler:    _Vtctld_GetShardReplication_Handler,
 		},
 		{
 			MethodName: "GetShard",

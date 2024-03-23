@@ -108,6 +108,7 @@ func TestSchemaChange(t *testing.T) {
 	testWithDropCreateSchema(t)
 	testDropNonExistentTables(t)
 	testApplySchemaBatch(t)
+	testUnsafeAllowForeignKeys(t)
 	testCreateInvalidView(t)
 	testCopySchemaShards(t, clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].VttabletProcess.TabletPath, 2)
 	testCopySchemaShards(t, fmt.Sprintf("%s/0", keyspaceName), 3)
@@ -247,6 +248,28 @@ func testApplySchemaBatch(t *testing.T) {
 	{
 		sqls := "drop table batch1; drop table batch2; drop table batch3; drop table batch4; drop table batch5"
 		_, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ApplySchema", "--sql", sqls, keyspaceName)
+		require.NoError(t, err)
+		checkTables(t, totalTableCount)
+	}
+}
+
+func testUnsafeAllowForeignKeys(t *testing.T) {
+	sqls := `
+		create table t11 (id int primary key, i int, constraint f1101 foreign key (i) references t12 (id) on delete restrict);
+		create table t12 (id int primary key, i int, constraint f1201 foreign key (i) references t11 (id) on delete set null);
+	`
+	{
+		_, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ApplySchema", "--ddl-strategy", "direct --allow-zero-in-date", "--sql", sqls, keyspaceName)
+		assert.Error(t, err)
+		checkTables(t, totalTableCount)
+	}
+	{
+		_, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ApplySchema", "--ddl-strategy", "direct --unsafe-allow-foreign-keys --allow-zero-in-date", "--sql", sqls, keyspaceName)
+		require.NoError(t, err)
+		checkTables(t, totalTableCount+2)
+	}
+	{
+		_, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ApplySchema", "--sql", "drop table t11, t12", keyspaceName)
 		require.NoError(t, err)
 		checkTables(t, totalTableCount)
 	}
