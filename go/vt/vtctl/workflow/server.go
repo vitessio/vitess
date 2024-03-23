@@ -383,8 +383,9 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 	span.Annotate("include_logs", req.IncludeLogs)
 	span.Annotate("shards", req.Shards)
 
-	readReq := &tabletmanagerdatapb.ReadVReplicationWorkflowsRequest{
-		IncludeWorkflows: []string{req.Workflow},
+	readReq := &tabletmanagerdatapb.ReadVReplicationWorkflowsRequest{}
+	if req.Workflow != "" {
+		readReq.IncludeWorkflows = []string{req.Workflow}
 	}
 	if req.ActiveOnly {
 		readReq.ExcludeStates = []binlogdatapb.VReplicationWorkflowState{binlogdatapb.VReplicationWorkflowState_Stopped}
