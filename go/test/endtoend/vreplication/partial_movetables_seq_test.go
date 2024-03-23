@@ -179,9 +179,11 @@ func (tc *vrepTestCase) setupCluster() {
 }
 
 func (tc *vrepTestCase) initData() {
-	_, err := tc.vtgateConn.ExecuteFetch("insert into customer_seq(id, next_id, cache) values(0, 1000, 1000)", 1000, false)
+	_, err := tc.vtgateConn.ExecuteFetch("insert into customer(cid, name) values(1, 'customer1'), (2, 'customer2'),(3, 'customer3')", 1000, false)
 	require.NoError(tc.t, err)
-	_, err = tc.vtgateConn.ExecuteFetch("insert into customer(cid, name) values(1, 'customer1'), (2, 'customer2'),(3, 'customer3')", 1000, false)
+	// We use a high first value so that we're always generating new IDs via the
+	// sequence table that are higher than those we inserted before using it.
+	_, err = tc.vtgateConn.ExecuteFetch("insert into customer_seq(id, next_id, cache) values(0, 4, 1000)", 1000, false)
 	require.NoError(tc.t, err)
 }
 
@@ -271,7 +273,6 @@ func (wf *workflow) complete() {
 // TestPartialMoveTablesWithSequences enhances TestPartialMoveTables by adding an unsharded keyspace which has a
 // sequence. This tests that the sequence is migrated correctly and that we can reverse traffic back to the source
 func TestPartialMoveTablesWithSequences(t *testing.T) {
-
 	origExtraVTGateArgs := extraVTGateArgs
 
 	extraVTGateArgs = append(extraVTGateArgs, []string{
@@ -388,7 +389,7 @@ func TestPartialMoveTablesWithSequences(t *testing.T) {
 
 		// Switch all traffic for the shard
 		wf80Dash.switchTraffic()
-		expectedSwitchOutput := fmt.Sprintf("SwitchTraffic was successful for workflow %s.%s\nStart State: Reads Not Switched. Writes Not Switched\nCurrent State: Reads partially switched, for shards: %s. Writes partially switched, for shards: %s\n\n",
+		expectedSwitchOutput := fmt.Sprintf("SwitchTraffic was successful for workflow %s.%s\n\nStart State: Reads Not Switched. Writes Not Switched\nCurrent State: Reads partially switched, for shards: %s. Writes partially switched, for shards: %s\n\n",
 			targetKs, wfName, shard, shard)
 		require.Equal(t, expectedSwitchOutput, lastOutput)
 		currentCustomerCount = getCustomerCount(t, "")
@@ -448,7 +449,7 @@ func TestPartialMoveTablesWithSequences(t *testing.T) {
 		wfDash80.create()
 		wfDash80.switchTraffic()
 
-		expectedSwitchOutput := fmt.Sprintf("SwitchTraffic was successful for workflow %s.%s\nStart State: Reads partially switched, for shards: 80-. Writes partially switched, for shards: 80-\nCurrent State: All Reads Switched. All Writes Switched\n\n",
+		expectedSwitchOutput := fmt.Sprintf("SwitchTraffic was successful for workflow %s.%s\n\nStart State: Reads partially switched, for shards: 80-. Writes partially switched, for shards: 80-\nCurrent State: All Reads Switched. All Writes Switched\n\n",
 			targetKs, wfName)
 		require.Equal(t, expectedSwitchOutput, lastOutput)
 
@@ -466,19 +467,22 @@ func TestPartialMoveTablesWithSequences(t *testing.T) {
 	_, err = vtgateConn.ExecuteFetch("use `customer`", 0, false) // switch vtgate default db back to customer
 	require.NoError(t, err)
 	currentCustomerCount = getCustomerCount(t, "")
+	log.Errorf("Customer count after move tables: %d", currentCustomerCount)
 	t.Run("Switch sequence traffic forward and reverse and validate workflows still exist and sequence routing works", func(t *testing.T) {
 		wfSeq.switchTraffic()
-		log.Infof("SwitchTraffic was successful for workflow seqTgt.seq, with output %s", lastOutput)
+		log.Errorf("SwitchTraffic was successful for workflow seqTgt.seq, with output %s", lastOutput)
 
+		log.Errorf("Customer count after switch traffic: %d", currentCustomerCount)
 		insertCustomers(t)
 
 		wfSeq.reverseTraffic()
-		log.Infof("ReverseTraffic was successful for workflow seqTgt.seq, with output %s", lastOutput)
+		log.Errorf("ReverseTraffic was successful for workflow seqTgt.seq, with output %s", lastOutput)
 
+		log.Errorf("Customer count after reverse traffic: %d", currentCustomerCount)
 		insertCustomers(t)
 
 		wfSeq.switchTraffic()
-		log.Infof("SwitchTraffic was successful for workflow seqTgt.seq, with output %s", lastOutput)
+		log.Errorf("SwitchTraffic was successful for workflow seqTgt.seq, with output %s", lastOutput)
 
 		insertCustomers(t)
 
@@ -515,7 +519,7 @@ func TestPartialMoveTablesWithSequences(t *testing.T) {
 		}
 
 		// Confirm that the global routing rules are now gone.
-		output, err = tc.vc.VtctlClient.ExecuteCommandWithOutput("GetRoutingRules")
+		output, err = tc.vc.VtctldClient.ExecuteCommandWithOutput("GetRoutingRules")
 		require.NoError(t, err)
 		require.Equal(t, emptyGlobalRoutingRules, output)
 
@@ -535,6 +539,7 @@ func getCustomerCount(t *testing.T, msg string) int64 {
 	qr := execVtgateQuery(t, vtgateConn, "", "select count(*) from customer")
 	require.NotNil(t, qr)
 	count, err := qr.Rows[0][0].ToInt64()
+	log.Errorf("Customer count %s: %d", msg, count)
 	require.NoError(t, err)
 	return count
 }
@@ -542,8 +547,9 @@ func getCustomerCount(t *testing.T, msg string) int64 {
 func confirmLastCustomerIdHasIncreased(t *testing.T) {
 	vtgateConn, closeConn := getVTGateConn()
 	defer closeConn()
-	qr := execVtgateQuery(t, vtgateConn, "", "select cid from customer order by cid desc limit 1")
+	qr := execVtgateQuery(t, vtgateConn, "", "select max(cid) from customer")
 	require.NotNil(t, qr)
+	require.Len(t, qr.Rows, 1)
 	currentCustomerId, err := qr.Rows[0][0].ToInt64()
 	require.NoError(t, err)
 	require.Greater(t, currentCustomerId, lastCustomerId)
@@ -553,18 +559,28 @@ func confirmLastCustomerIdHasIncreased(t *testing.T) {
 func insertCustomers(t *testing.T) {
 	vtgateConn, closeConn := getVTGateConn()
 	defer closeConn()
+
+	log.Errorf("Customer count before insert: %d", currentCustomerCount)
+	qr := execVtgateQuery(t, vtgateConn, "", "select max(cid) from customer")
+	require.NotNil(t, qr)
+	require.Len(t, qr.Rows, 1)
+	val, err := qr.Rows[0][0].ToInt64()
+	require.NoError(t, err)
+	log.Errorf("Max customer ID before insert: %d", val)
+
 	for i := int64(1); i < newCustomerCount+1; i++ {
 		execVtgateQuery(t, vtgateConn, "customer@primary", fmt.Sprintf("insert into customer(name) values ('name-%d')", currentCustomerCount+i))
 	}
 	customerCount = getCustomerCount(t, "")
 	require.Equal(t, currentCustomerCount+newCustomerCount, customerCount)
 	currentCustomerCount = customerCount
+	log.Errorf("Customer count after insert: %d", currentCustomerCount)
 
 	confirmLastCustomerIdHasIncreased(t)
 }
 
 func confirmGlobalRoutingToSource(t *testing.T) {
-	output, err := vc.VtctlClient.ExecuteCommandWithOutput("GetRoutingRules")
+	output, err := vc.VtctldClient.ExecuteCommandWithOutput("GetRoutingRules")
 	require.NoError(t, err)
 	result := gjson.Get(output, "rules")
 	result.ForEach(func(attributeKey, attributeValue gjson.Result) bool {

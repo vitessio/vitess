@@ -109,7 +109,7 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 		args = append(args, "Reshard")
 	}
 
-	args = append(args, "--workflow", workflow, "--target-keyspace", targetKs, strings.ToLower(action))
+	args = append(args, "--workflow", workflow, "--target-keyspace", targetKs, action)
 
 	switch action {
 	case workflowActionCreate:
@@ -132,15 +132,14 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 			if !options.atomicCopy && options.deferSecondaryKeys {
 				args = append(args, "--defer-secondary-keys")
 			}
-			if currentWorkflowType == binlogdatapb.VReplicationWorkflowType_MoveTables &&
-				(action == workflowActionSwitchTraffic || action == workflowActionReverseTraffic) {
-				args = append(args, "--initialize-target-sequences")
-			}
 		}
 	default:
 		if options.shardSubset != "" {
 			args = append(args, "--shards", options.shardSubset)
 		}
+	}
+	if currentWorkflowType == binlogdatapb.VReplicationWorkflowType_MoveTables && action == workflowActionSwitchTraffic {
+		args = append(args, "--initialize-target-sequences")
 	}
 	if action == workflowActionSwitchTraffic || action == workflowActionReverseTraffic {
 		if BypassLagCheck {

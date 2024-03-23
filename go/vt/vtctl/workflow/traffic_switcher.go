@@ -1266,6 +1266,8 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 	// If all of the sequence tables were defined using qualified table
 	// names then we don't need to search for them in other keyspaces.
 	if len(sequencesByBackingTable) == 0 || backingTablesFound {
+		log.Errorf("DEBUG: no sequence backing tables found in other keyspaces:: sequencesByBackingTable: %+v, backingTablesFound: %t",
+			sequencesByBackingTable, backingTablesFound)
 		return sequencesByBackingTable, nil
 	}
 
@@ -1364,8 +1366,10 @@ func (ts *trafficSwitcher) findSequenceUsageInKeyspace(vschema *vschemapb.Keyspa
 	sequencesByBackingTable := make(map[string]*sequenceMetadata)
 
 	for _, table := range ts.Tables() {
+		log.Errorf("DEBUG: table %s", table)
 		vs, ok := vschema.Tables[table]
-		if !ok || vs == nil || vs.AutoIncrement == nil || vs.AutoIncrement.Sequence == "" {
+		if !ok || vs.GetAutoIncrement() == nil || vs.GetAutoIncrement().GetSequence() == "" {
+			log.Errorf("DEBUG: skipping table %s", table)
 			continue
 		}
 		sm := &sequenceMetadata{
@@ -1407,7 +1411,7 @@ func (ts *trafficSwitcher) findSequenceUsageInKeyspace(vschema *vschemapb.Keyspa
 // the primary tablet serving the sequence to refresh/reset its cache to
 // be sure that it does not provide a value that is less than the current max.
 func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequencesByBackingTable map[string]*sequenceMetadata) error {
-	initSequenceTable := func(ictx context.Context, sequenceTableName string, sequenceMetadata *sequenceMetadata) error {
+	initSequenceTable := func(ictx context.Context, sequenceMetadata *sequenceMetadata) error {
 		// Now we need to run this query on the target shards in order
 		// to get the max value and set the next id for the sequence to
 		// a higher value.
@@ -1454,6 +1458,10 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 			return ictx.Err()
 		default:
 		}
+		if len(shardResults) == 0 { // This should never happen
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "did not get any results for the max used sequence value for target table %s.%s in order to initialize the backing sequence table",
+				ts.targetKeyspace, sequenceMetadata.usingTableName)
+		}
 		// Sort the values to find the max value across all shards.
 		sort.Slice(shardResults, func(i, j int) bool {
 			return shardResults[i] < shardResults[j]
@@ -1488,12 +1496,7 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 		)
 		// Now execute this on the primary tablet of the unsharded keyspace
 		// housing the backing table.
-		primaryTablet, ierr := ts.TopoServer().GetTablet(ictx, sequenceShard.PrimaryAlias)
-		if ierr != nil {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the primary tablet for %s.%s using alias %s: %v",
-				sequenceShard.Keyspace(), sequenceShard.ShardName(), sequenceShard.PrimaryAlias, ierr)
-		}
-		qr, ierr := ts.ws.tmc.ExecuteFetchAsApp(ictx, primaryTablet.Tablet, true, &tabletmanagerdatapb.ExecuteFetchAsAppRequest{
+		qr, ierr := ts.ws.tmc.ExecuteFetchAsApp(ictx, sequenceTablet.Tablet, true, &tabletmanagerdatapb.ExecuteFetchAsAppRequest{
 			Query:   []byte(query.Query),
 			MaxRows: 1,
 		})
@@ -1528,10 +1531,9 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 	}
 
 	initGroup, gctx := errgroup.WithContext(ctx)
-	for sequenceTableName, sequenceMetadata := range sequencesByBackingTable {
-		sequenceTableName, sequenceMetadata := sequenceTableName, sequenceMetadata // https://golang.org/doc/faq#closures_and_goroutines
+	for _, sequenceMetadata := range sequencesByBackingTable {
 		initGroup.Go(func() error {
-			return initSequenceTable(gctx, sequenceTableName, sequenceMetadata)
+			return initSequenceTable(gctx, sequenceMetadata)
 		})
 	}
 	return initGroup.Wait()

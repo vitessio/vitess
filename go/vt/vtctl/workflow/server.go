@@ -3153,6 +3153,7 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 		ts.SourceKeyspaceSchema() != nil && ts.SourceKeyspaceSchema().Keyspace != nil &&
 		!ts.SourceKeyspaceSchema().Keyspace.Sharded {
 		sequenceMetadata, err = ts.getTargetSequenceMetadata(ctx)
+		log.Errorf("DEBUG: sequenceMetadata: %+v", sequenceMetadata)
 		if err != nil {
 			return handleError(fmt.Sprintf("failed to get the sequence information in the %s keyspace", ts.TargetKeyspaceName()), err)
 		}
@@ -3233,6 +3234,7 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 
 		// Initialize any target sequences, if there are any, before allowing new writes.
 		if req.InitializeTargetSequences && len(sequenceMetadata) > 0 {
+			log.Errorf("DEBUG: initializing target sequences: %+v", sequenceMetadata)
 			ts.Logger().Infof("Initializing target sequences")
 			// Writes are blocked so we can safely initialize the sequence tables but
 			// we also want to use a shorter timeout than the parent context.
