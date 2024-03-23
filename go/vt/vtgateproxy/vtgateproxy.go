@@ -1,5 +1,5 @@
 /*
-Copyright 2023 The Vitess Authors.
+Copyright 2024 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -21,81 +21,68 @@ package vtgateproxy
 import (
 	"context"
 	"flag"
-	"fmt"
 	"io"
 	"net/url"
 	"strings"
 	"sync"
-	"time"
 
 	"google.golang.org/grpc"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/grpcclient"
+	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/vterrors"
 	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 )
 
 var (
-	dialTimeout = flag.Duration("dial_timeout", 5*time.Second, "dialer timeout for the GRPC connection")
-
-	defaultDDLStrategy = flag.String("ddl_strategy", string(schema.DDLStrategyDirect), "Set default strategy for DDL statements. Override with @@ddl_strategy session variable")
-	sysVarSetEnabled   = flag.Bool("enable_system_settings", true, "This will enable the system settings to be changed per session at the database connection level")
+	poolTypeAttr = flag.String("pool_type_attr", "", "Attribute (both mysql connection and JSON file) used to specify the target vtgate type and filter the hosts, e.g. 'type'")
+	affinityAttr = flag.String("affinity_attr", "", "Attribute (both mysql protocol connection and JSON file) used to specify the routing affinity , e.g. 'az_id'")
 
 	vtGateProxy *VTGateProxy = &VTGateProxy{
 		targetConns: map[string]*vtgateconn.VTGateConn{},
-		mu:          sync.Mutex{},
+		mu:          sync.RWMutex{},
 	}
 )
 
 type VTGateProxy struct {
-	targetConns    map[string]*vtgateconn.VTGateConn
-	mu             sync.Mutex
-	azID           string
-	gateType       string
-	numConnections string
+	targetConns map[string]*vtgateconn.VTGateConn
+	mu          sync.RWMutex
 }
 
 func (proxy *VTGateProxy) getConnection(ctx context.Context, target string) (*vtgateconn.VTGateConn, error) {
-	targetURL, err := url.Parse(target)
-	if err != nil {
-		return nil, err
-	}
-
-	proxy.azID = targetURL.Query().Get("az_id")
-	proxy.numConnections = targetURL.Query().Get("num_connections")
-	proxy.gateType = targetURL.Host
-
-	fmt.Printf("Getting connection for %v in %v with %v connections\n", target, proxy.azID, proxy.numConnections)
+	log.V(100).Infof("Getting connection for %v\n", target)
 
 	// If the connection exists, return it
-	proxy.mu.Lock()
-	existingConn, _ := proxy.targetConns[target]
+	proxy.mu.RLock()
+	existingConn := proxy.targetConns[target]
 	if existingConn != nil {
-		proxy.mu.Unlock()
+		proxy.mu.RUnlock()
+		log.V(100).Infof("Reused connection for %v\n", target)
 		return existingConn, nil
 	}
-	proxy.mu.Unlock()
+
+	// No luck, need to create a new one. Serialize new additions so we don't create multiple
+	// for a given target.
+	log.V(100).Infof("Need to create connection for %v\n", target)
+	proxy.mu.RUnlock()
+	proxy.mu.Lock()
 
 	// Otherwise create a new connection after dropping the lock, allowing multiple requests to
 	// race to create the conn for now.
-	//	grpcclient.RegisterGRPCDialOptions(func(opts []grpc.DialOption) ([]grpc.DialOption, error) {
-	//		return append(opts, grpc.WithBlock()), nil
-	//	})
 	grpcclient.RegisterGRPCDialOptions(func(opts []grpc.DialOption) ([]grpc.DialOption, error) {
-		return append(opts, grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"slack_affinity_balancer":{}}]}`)), nil
+		return append(opts, grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"round_robin":{}}]}`)), nil
 	})
 
-	conn, err := vtgateconn.DialProtocol(WithSlackAZAffinityContext(ctx, proxy.azID, proxy.numConnections), "grpc", target)
+	conn, err := vtgateconn.DialProtocol(ctx, "grpc", target)
 	if err != nil {
 		return nil, err
 	}
 
-	proxy.mu.Lock()
+	log.V(100).Infof("Created new connection for %v\n", target)
 	proxy.targetConns[target] = conn
 	proxy.mu.Unlock()
 
@@ -103,12 +90,33 @@ func (proxy *VTGateProxy) getConnection(ctx context.Context, target string) (*vt
 }
 
 func (proxy *VTGateProxy) NewSession(ctx context.Context, options *querypb.ExecuteOptions, connectionAttributes map[string]string) (*vtgateconn.VTGateSession, error) {
-	target, ok := connectionAttributes["target"]
-	if !ok {
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "no target string supplied by client")
+
+	targetUrl := url.URL{
+		Scheme: "vtgate",
+		Host:   "pool",
 	}
 
-	conn, err := proxy.getConnection(ctx, target)
+	values := url.Values{}
+
+	if *poolTypeAttr != "" {
+		poolType, ok := connectionAttributes[*poolTypeAttr]
+		if ok {
+			values.Set(*poolTypeAttr, poolType)
+		} else {
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "pool type attribute %s not supplied by client", *poolTypeAttr)
+		}
+	}
+
+	if *affinityAttr != "" {
+		affinity, ok := connectionAttributes[*affinityAttr]
+		if ok {
+			values.Set(*affinityAttr, affinity)
+		}
+	}
+
+	targetUrl.RawQuery = values.Encode()
+
+	conn, err := proxy.getConnection(ctx, targetUrl.String())
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +128,7 @@ func (proxy *VTGateProxy) NewSession(ctx context.Context, options *querypb.Execu
 // same effect as if a "rollback" statement was executed, but does not affect the query
 // statistics.
 func (proxy *VTGateProxy) CloseSession(ctx context.Context, session *vtgateconn.VTGateSession) error {
-	return session.CloseSession(WithSlackAZAffinityContext(ctx, proxy.azID, proxy.gateType))
+	return session.CloseSession(ctx)
 }
 
 // ResolveTransaction resolves the specified 2PC transaction.
@@ -142,11 +150,11 @@ func (proxy *VTGateProxy) Execute(ctx context.Context, session *vtgateconn.VTGat
 		return &sqltypes.Result{}, nil
 	}
 
-	return session.Execute(WithSlackAZAffinityContext(ctx, proxy.azID, proxy.gateType), sql, bindVariables)
+	return session.Execute(ctx, sql, bindVariables)
 }
 
 func (proxy *VTGateProxy) StreamExecute(ctx context.Context, session *vtgateconn.VTGateSession, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
-	stream, err := session.StreamExecute(WithSlackAZAffinityContext(ctx, proxy.azID, proxy.gateType), sql, bindVariables)
+	stream, err := session.StreamExecute(ctx, sql, bindVariables)
 	if err != nil {
 		return err
 	}
