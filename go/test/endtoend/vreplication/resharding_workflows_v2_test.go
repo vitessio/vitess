@@ -153,7 +153,7 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 	if (action == workflowActionCreate || action == workflowActionSwitchTraffic || action == workflowActionReverseTraffic) && cells != "" {
 		args = append(args, "--cells", cells)
 	}
-	if tabletTypes != "" {
+	if action != workflowActionComplete && tabletTypes != "" {
 		args = append(args, "--tablet-types", tabletTypes)
 	}
 	t.Logf("Executing workflow command: vtctldclient %v", args)
@@ -465,6 +465,14 @@ func testMoveTablesV2Workflow(t *testing.T) {
 	defer closeConn()
 	currentWorkflowType = binlogdatapb.VReplicationWorkflowType_MoveTables
 
+	/*
+		materializeShow := func() {
+			output, err := vc.VtctldClient.ExecuteCommandWithOutput("materialize", "--target-keyspace=customer", "show", "--workflow=customer_copy", "--compact", "--include-logs=false")
+			require.NoError(t, err)
+			log.Error("Materialize show output: ", output)
+		}
+	*/
+
 	// test basic forward and reverse flows
 	setupCustomerKeyspace(t)
 	//materialize(t, materializeCustomerCopySpec, true)
@@ -507,6 +515,7 @@ func testMoveTablesV2Workflow(t *testing.T) {
 	//output, err = vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)
 	require.NoError(t, err)
 	//require.Contains(t, output, "customer_copy") // Materialize workflow should still be there
+	//materializeShow()
 }
 
 func testPartialSwitches(t *testing.T) {

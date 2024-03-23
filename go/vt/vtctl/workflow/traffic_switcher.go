@@ -547,11 +547,12 @@ func (ts *trafficSwitcher) dropSourceShards(ctx context.Context) error {
 }
 
 func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection) error {
-	log.Infof("switchShardReads: cells: %v, servedTypes: %+v, direction %d", cells, servedTypes, direction)
+	cellsStr := strings.Join(cells, ",")
+	log.Infof("switchShardReads: cells: %s, tablet types: %+v, direction %d", cellsStr, servedTypes, direction)
 	fromShards, toShards := ts.SourceShards(), ts.TargetShards()
-	if err := ts.TopoServer().ValidateSrvKeyspace(ctx, ts.TargetKeyspaceName(), strings.Join(cells, ",")); err != nil {
+	if err := ts.TopoServer().ValidateSrvKeyspace(ctx, ts.TargetKeyspaceName(), cellsStr); err != nil {
 		err2 := vterrors.Wrapf(err, "Before switching shard reads, found SrvKeyspace for %s is corrupt in cell %s",
-			ts.TargetKeyspaceName(), strings.Join(cells, ","))
+			ts.TargetKeyspaceName(), cellsStr)
 		log.Errorf("%w", err2)
 		return err2
 	}
@@ -567,9 +568,9 @@ func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string,
 			return err
 		}
 	}
-	if err := ts.TopoServer().ValidateSrvKeyspace(ctx, ts.TargetKeyspaceName(), strings.Join(cells, ",")); err != nil {
+	if err := ts.TopoServer().ValidateSrvKeyspace(ctx, ts.TargetKeyspaceName(), cellsStr); err != nil {
 		err2 := vterrors.Wrapf(err, "after switching shard reads, found SrvKeyspace for %s is corrupt in cell %s",
-			ts.TargetKeyspaceName(), strings.Join(cells, ","))
+			ts.TargetKeyspaceName(), cellsStr)
 		log.Errorf("%w", err2)
 		return err2
 	}
@@ -577,7 +578,7 @@ func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string,
 }
 
 func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection) error {
-	log.Infof("switchTableReads: servedTypes: %+v, direction %t", servedTypes, direction)
+	log.Infof("switchTableReads: cells: %s, tablet types: %+v, direction %d", strings.Join(cells, ","), servedTypes, direction)
 	rules, err := topotools.GetRoutingRules(ctx, ts.TopoServer())
 	if err != nil {
 		return err

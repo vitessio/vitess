@@ -429,6 +429,8 @@ func confirmTablesHaveSecondaryKeys(t *testing.T, tablets []*cluster.VttabletPro
 			tableArr = append(tableArr, row[0].ToString())
 		}
 	}
+	// Give a moment for the schemas to be refreshed everywhere.
+	time.Sleep(1 * time.Second)
 	for _, tablet := range tablets {
 		for _, table := range tableArr {
 			if schema.IsInternalOperationTableName(table) {
