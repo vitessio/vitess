@@ -84,6 +84,15 @@ func (dbc *DBConnection) ExecuteFetch(query string, maxrows int, wantfields bool
 	return mqr, nil
 }
 
+func (dbc *DBConnection) ExecuteFetchOpt(query string, opt mysql.ExecuteOptions) (*sqltypes.Result, error) {
+	mqr, err := dbc.Conn.ExecuteFetchOpt(query, opt)
+	if err != nil {
+		dbc.handleError(err)
+		return nil, err
+	}
+	return mqr, nil
+}
+
 // ExecuteStreamFetch overwrites mysql.Conn.ExecuteStreamFetch.
 func (dbc *DBConnection) ExecuteStreamFetch(query string, callback func(*sqltypes.Result) error, alloc func() *sqltypes.Result, streamBufferSize int) error {
 

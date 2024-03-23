@@ -353,6 +353,8 @@ message ExecuteOptions {
   // priority specifies the priority of the query, between 0 and 100. This is leveraged by the transaction
   // throttler to determine whether, under resource contention, a query should or should not be throttled.
   string priority = 16;
+
+  bool raw_mysql_packets = 17;
 }
 
 // Field describes a single column returned by a query
@@ -417,6 +419,8 @@ message QueryResult {
   repeated Row rows = 4;
   string info = 6;
   string session_state_changes = 7;
+
+  repeated bytes raw_packets = 8;
 }
 
 // QueryWarning is used to convey out of band query execution warnings

@@ -30,6 +30,7 @@ import (
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache/theine"
+	"vitess.io/vitess/go/mathstats"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/stats"
@@ -69,6 +70,7 @@ type TabletPlan struct {
 	RowsAffected uint64
 	RowsReturned uint64
 	ErrorCount   uint64
+	PacketSize   mathstats.SimpleEWMA
 }
 
 // AddStats updates the stats for the current TabletPlan.

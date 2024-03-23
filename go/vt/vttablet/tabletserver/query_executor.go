@@ -104,6 +104,11 @@ func allocStreamResult() *sqltypes.Result {
 }
 
 func (qre *QueryExecutor) shouldConsolidate() bool {
+	// TODO
+	if !qre.options.RawMysqlPackets {
+		return false
+	}
+
 	co := qre.options.GetConsolidator()
 	switch co {
 	case querypb.ExecuteOptions_CONSOLIDATOR_DISABLED:
@@ -146,6 +151,9 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 
 		qre.tsv.qe.AddStats(qre.plan.PlanID, tableName, qre.options.GetWorkloadName(), qre.targetTabletType, 1, duration, mysqlTime, int64(reply.RowsAffected), int64(len(reply.Rows)), 0, errCode)
 		qre.plan.AddStats(1, duration, mysqlTime, reply.RowsAffected, uint64(len(reply.Rows)), 0)
+		if reply.CachedProto != nil {
+			qre.plan.PacketSize.Add(uint64(len(reply.CachedProto)))
+		}
 		qre.logStats.RowsAffected = int(reply.RowsAffected)
 		qre.logStats.Rows = reply.Rows
 		qre.tsv.Stats().ResultHistogram.Add(int64(len(reply.Rows)))
@@ -1088,7 +1096,13 @@ func (qre *QueryExecutor) execDBConn(conn *connpool.Conn, sql string, wantfields
 	qre.tsv.statelessql.Add(qd)
 	defer qre.tsv.statelessql.Remove(qd)
 
-	return conn.Exec(ctx, sql, int(qre.tsv.qe.maxResultSize.Load()), wantfields)
+	opt := mysql.ExecuteOptions{
+		MaxRows:    int(qre.tsv.qe.maxResultSize.Load()),
+		WantFields: wantfields,
+		RawPackets: qre.options.RawMysqlPackets,
+		SizeHint:   qre.plan.PacketSize.Value(),
+	}
+	return conn.ExecOpt(ctx, sql, opt)
 }
 
 func (qre *QueryExecutor) execStatefulConn(conn *StatefulConnection, sql string, wantfields bool) (*sqltypes.Result, error) {
@@ -1101,7 +1115,13 @@ func (qre *QueryExecutor) execStatefulConn(conn *StatefulConnection, sql string,
 	qre.tsv.statefulql.Add(qd)
 	defer qre.tsv.statefulql.Remove(qd)
 
-	return conn.Exec(ctx, sql, int(qre.tsv.qe.maxResultSize.Load()), wantfields)
+	opt := mysql.ExecuteOptions{
+		MaxRows:    int(qre.tsv.qe.maxResultSize.Load()),
+		WantFields: wantfields,
+		RawPackets: qre.options.RawMysqlPackets,
+		SizeHint:   qre.plan.PacketSize.Value(),
+	}
+	return conn.ExecOpt(ctx, sql, opt)
 }
 
 func (qre *QueryExecutor) execStreamSQL(conn *connpool.PooledConn, isTransaction bool, sql string, callback func(*sqltypes.Result) error) error {
