@@ -181,4 +181,4 @@ jobs:
         fi
 
         # print test output
-        cat output.txt | grep -ivE '(PASS|RUN).*(Collation|Test.*Valid|TestRemoteWildcardMatches|Fuzz|tpcc|TestParse|PITR|cases|TestPlan|Super.*long)|DBClient'
+        cat output.txt
