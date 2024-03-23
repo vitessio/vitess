@@ -1266,8 +1266,6 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 	// If all of the sequence tables were defined using qualified table
 	// names then we don't need to search for them in other keyspaces.
 	if len(sequencesByBackingTable) == 0 || backingTablesFound {
-		log.Errorf("DEBUG: no sequence backing tables found in other keyspaces:: sequencesByBackingTable: %+v, backingTablesFound: %t",
-			sequencesByBackingTable, backingTablesFound)
 		return sequencesByBackingTable, nil
 	}
 
@@ -1366,10 +1364,8 @@ func (ts *trafficSwitcher) findSequenceUsageInKeyspace(vschema *vschemapb.Keyspa
 	sequencesByBackingTable := make(map[string]*sequenceMetadata)
 
 	for _, table := range ts.Tables() {
-		log.Errorf("DEBUG: table %s", table)
 		vs, ok := vschema.Tables[table]
 		if !ok || vs.GetAutoIncrement() == nil || vs.GetAutoIncrement().GetSequence() == "" {
-			log.Errorf("DEBUG: skipping table %s", table)
 			continue
 		}
 		sm := &sequenceMetadata{
