@@ -440,7 +440,7 @@ func (ts *trafficSwitcher) deleteShardRoutingRules(ctx context.Context) error {
 }
 
 func (ts *trafficSwitcher) deleteKeyspaceRoutingRules(ctx context.Context) error {
-	log.Infof("deleteKeyspaceRoutingRules: %s", ts.TargetKeyspaceName())
+	log.Infof("deleteKeyspaceRoutingRules: workflow %s.%s", ts.targetKeyspace, ts.workflow)
 	if !ts.IsMultiTenantMigration() {
 		return nil
 	}
@@ -735,7 +735,7 @@ func (ts *trafficSwitcher) changeRouting(ctx context.Context) error {
 
 func (ts *trafficSwitcher) changeWriteRoute(ctx context.Context) error {
 	if ts.IsMultiTenantMigration() {
-		ts.Logger().Infof("Pointing keyspace routing rules to %s", ts.TargetKeyspaceName())
+		ts.Logger().Infof("Pointing keyspace routing rules to %s for workflow %s", ts.TargetKeyspaceName(), ts.workflow)
 		var keyspaces []string
 		keyspaces = append(keyspaces, ts.SourceKeyspaceName())
 		if ts.options.SourceKeyspaceAlias != "" {

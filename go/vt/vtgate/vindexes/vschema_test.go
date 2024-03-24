@@ -2789,8 +2789,6 @@ func TestVSchemaJSON(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := string(out)
-	//write got into a local file
-	// ioutil.WriteFile("vschema.json", out, 0644)
 	want := `{
   "sharded": {
     "sharded": true,

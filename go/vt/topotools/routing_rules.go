@@ -139,11 +139,11 @@ func GetKeyspaceRoutingRulesMap(rules *vschemapb.KeyspaceRoutingRules) map[strin
 }
 
 func GetKeyspaceRoutingRules(ctx context.Context, ts *topo.Server) (map[string]string, error) {
-	rrs, err := ts.GetKeyspaceRoutingRules(ctx)
+	keyspaceRoutingRules, err := ts.GetKeyspaceRoutingRules(ctx)
 	if err != nil {
 		return nil, err
 	}
-	rules := GetKeyspaceRoutingRulesMap(rrs)
+	rules := GetKeyspaceRoutingRulesMap(keyspaceRoutingRules)
 	return rules, nil
 }
 
