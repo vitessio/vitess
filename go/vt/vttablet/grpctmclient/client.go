@@ -188,6 +188,8 @@ func (client *grpcClient) dialPool(ctx context.Context, dialPoolGroup DialPoolGr
 		if err == nil {
 			return
 		}
+		client.mu.Lock()
+		defer client.mu.Unlock()
 		m[addr].cc.Close()
 		delete(m, addr)
 	}
