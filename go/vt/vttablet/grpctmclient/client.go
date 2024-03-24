@@ -45,6 +45,17 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
+type DialPoolGroup int
+
+const (
+	// DialPoolGroupDefault is the default group for dialing.
+	DialPoolGroupDefault DialPoolGroup = iota
+	DialPoolGroupThrottler
+	DialPoolGroupVTOrc
+)
+
+type invalidatorFunc func(error)
+
 var (
 	concurrency = 8
 	cert        string
@@ -92,14 +103,17 @@ type tmc struct {
 	client tabletmanagerservicepb.TabletManagerClient
 }
 
+// rpcClientMap maps an address to a tmc
+type rpcClientMap map[string]*tmc
+
 // grpcClient implements both dialer and poolDialer.
 type grpcClient struct {
 	// This cache of connections is to maximize QPS for ExecuteFetchAs{Dba,App},
 	// CheckThrottler and FullStatus. Note we'll keep the clients open and close them upon Close() only.
 	// But that's OK because usually the tasks that use them are one-purpose only.
 	// The map is protected by the mutex.
-	mu           sync.Mutex
-	rpcClientMap map[string]chan *tmc
+	mu            sync.Mutex
+	rpcClientMaps map[DialPoolGroup]rpcClientMap
 }
 
 type dialer interface {
@@ -108,7 +122,7 @@ type dialer interface {
 }
 
 type poolDialer interface {
-	dialPool(ctx context.Context, tablet *topodatapb.Tablet) (tabletmanagerservicepb.TabletManagerClient, error)
+	dialPool(ctx context.Context, dialPoolGroup DialPoolGroup, tablet *topodatapb.Tablet) (tabletmanagerservicepb.TabletManagerClient, invalidatorFunc, error)
 }
 
 // Client implements tmclient.TabletManagerClient.
@@ -152,53 +166,59 @@ func (client *grpcClient) dial(ctx context.Context, tablet *topodatapb.Tablet) (
 	return tabletmanagerservicepb.NewTabletManagerClient(cc), cc, nil
 }
 
-func (client *grpcClient) dialPool(ctx context.Context, tablet *topodatapb.Tablet) (tabletmanagerservicepb.TabletManagerClient, error) {
+func (client *grpcClient) dialPool(ctx context.Context, dialPoolGroup DialPoolGroup, tablet *topodatapb.Tablet) (tabletmanagerservicepb.TabletManagerClient, invalidatorFunc, error) {
 	addr := netutil.JoinHostPort(tablet.Hostname, int32(tablet.PortMap["grpc"]))
 	opt, err := grpcclient.SecureDialOption(cert, key, ca, crl, name)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	client.mu.Lock()
-	if client.rpcClientMap == nil {
-		client.rpcClientMap = make(map[string]chan *tmc)
+	defer client.mu.Unlock()
+
+	if client.rpcClientMaps == nil {
+		client.rpcClientMaps = make(map[DialPoolGroup]rpcClientMap)
 	}
-	c, ok := client.rpcClientMap[addr]
+	m, ok := client.rpcClientMaps[dialPoolGroup]
 	if !ok {
-		c = make(chan *tmc, concurrency)
-		client.rpcClientMap[addr] = c
-		client.mu.Unlock()
-
-		for i := 0; i < cap(c); i++ {
-			cc, err := grpcclient.Dial(addr, grpcclient.FailFast(false), opt)
-			if err != nil {
-				return nil, err
-			}
-			c <- &tmc{
-				cc:     cc,
-				client: tabletmanagerservicepb.NewTabletManagerClient(cc),
-			}
+		m = make(rpcClientMap)
+		client.rpcClientMaps[dialPoolGroup] = m
+	}
+	invalidator := func(error) {
+		if err == nil {
+			return
 		}
-	} else {
-		client.mu.Unlock()
+		m[addr].cc.Close()
+		delete(m, addr)
 	}
 
-	result := <-c
-	c <- result
-	return result.client, nil
+	if tm, ok := m[addr]; ok {
+		return tm.client, invalidator, nil
+	}
+
+	cc, err := grpcclient.Dial(addr, grpcclient.FailFast(false), opt)
+	if err != nil {
+		return nil, nil, err
+	}
+	tm := &tmc{
+		cc:     cc,
+		client: tabletmanagerservicepb.NewTabletManagerClient(cc),
+	}
+	m[addr] = tm
+
+	return tm.client, invalidator, nil
 }
 
 // Close is part of the tmclient.TabletManagerClient interface.
 func (client *grpcClient) Close() {
 	client.mu.Lock()
 	defer client.mu.Unlock()
-	for _, c := range client.rpcClientMap {
-		close(c)
-		for ch := range c {
-			ch.cc.Close()
+	for _, m := range client.rpcClientMaps {
+		for _, tm := range m {
+			tm.cc.Close()
 		}
 	}
-	client.rpcClientMap = nil
+	client.rpcClientMaps = nil
 }
 
 //
@@ -472,7 +492,7 @@ func (client *Client) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.
 	var err error
 	if usePool {
 		if poolDialer, ok := client.dialer.(poolDialer); ok {
-			c, err = poolDialer.dialPool(ctx, tablet)
+			c, _, err = poolDialer.dialPool(ctx, DialPoolGroupDefault, tablet)
 			if err != nil {
 				return nil, err
 			}
@@ -528,7 +548,7 @@ func (client *Client) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.
 	var err error
 	if usePool {
 		if poolDialer, ok := client.dialer.(poolDialer); ok {
-			c, err = poolDialer.dialPool(ctx, tablet)
+			c, _, err = poolDialer.dialPool(ctx, DialPoolGroupDefault, tablet)
 			if err != nil {
 				return nil, err
 			}
@@ -575,9 +595,10 @@ func (client *Client) ReplicationStatus(ctx context.Context, tablet *topodatapb.
 // and dialing the other tablet every time is not practical.
 func (client *Client) FullStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.FullStatus, error) {
 	var c tabletmanagerservicepb.TabletManagerClient
+	var invalidator invalidatorFunc
 	var err error
 	if poolDialer, ok := client.dialer.(poolDialer); ok {
-		c, err = poolDialer.dialPool(ctx, tablet)
+		c, invalidator, err = poolDialer.dialPool(ctx, DialPoolGroupVTOrc, tablet)
 		if err != nil {
 			return nil, err
 		}
@@ -593,6 +614,9 @@ func (client *Client) FullStatus(ctx context.Context, tablet *topodatapb.Tablet)
 	}
 
 	response, err := c.FullStatus(ctx, &tabletmanagerdatapb.FullStatusRequest{})
+	if invalidator != nil {
+		invalidator(err)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -1065,9 +1089,10 @@ func (client *Client) Backup(ctx context.Context, tablet *topodatapb.Tablet, req
 // and dialing the other tablet every time is not practical.
 func (client *Client) CheckThrottler(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.CheckThrottlerRequest) (*tabletmanagerdatapb.CheckThrottlerResponse, error) {
 	var c tabletmanagerservicepb.TabletManagerClient
+	var invalidator invalidatorFunc
 	var err error
 	if poolDialer, ok := client.dialer.(poolDialer); ok {
-		c, err = poolDialer.dialPool(ctx, tablet)
+		c, invalidator, err = poolDialer.dialPool(ctx, DialPoolGroupThrottler, tablet)
 		if err != nil {
 			return nil, err
 		}
@@ -1083,6 +1108,9 @@ func (client *Client) CheckThrottler(ctx context.Context, tablet *topodatapb.Tab
 	}
 
 	response, err := c.CheckThrottler(ctx, req)
+	if invalidator != nil {
+		invalidator(err)
+	}
 	if err != nil {
 		return nil, err
 	}
