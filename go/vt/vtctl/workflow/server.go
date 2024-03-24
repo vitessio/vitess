@@ -1563,9 +1563,7 @@ func (s *Server) setupInitialRoutingRules(ctx context.Context, req *vtctldatapb.
 		}
 	}
 
-	// This needs to be protected with a mutex or a lock. FIXME: confirm this.
-	// Otherwise the map could be overwritten if multiple movetables are run at the same time.
-	if mz.ms.WorkflowOptions != nil && req.WorkflowOptions.TenantId != "" {
+	if mz.IsMultiTenantMigration() {
 		log.Infof("Setting up keyspace routing rules for workflow %s.%s", targetKeyspace, req.Workflow)
 		var keyspaces []string
 		// Note that you can never point the target keyspace to the source keyspace in a multi-tenant migration
