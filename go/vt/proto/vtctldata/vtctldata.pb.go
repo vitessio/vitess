@@ -1305,8 +1305,10 @@ type Workflow struct {
 	// have been no writes to replicate from the source).
 	MaxVReplicationTransactionLag int64 `protobuf:"varint,8,opt,name=max_v_replication_transaction_lag,json=maxVReplicationTransactionLag,proto3" json:"max_v_replication_transaction_lag,omitempty"`
 	// This specifies whether to defer the creation of secondary keys.
-	DeferSecondaryKeys bool             `protobuf:"varint,9,opt,name=defer_secondary_keys,json=deferSecondaryKeys,proto3" json:"defer_secondary_keys,omitempty"`
-	Options            *WorkflowOptions `protobuf:"bytes,10,opt,name=options,proto3" json:"options,omitempty"`
+	DeferSecondaryKeys bool `protobuf:"varint,9,opt,name=defer_secondary_keys,json=deferSecondaryKeys,proto3" json:"defer_secondary_keys,omitempty"`
+	// These are additional (optional) settings for vreplication workflows. Previously we used to add it to the
+	// binlogdata.BinlogSource proto object. More details in go/vt/sidecardb/schema/vreplication.sql.
+	Options *WorkflowOptions `protobuf:"bytes,10,opt,name=options,proto3" json:"options,omitempty"`
 }
 
 func (x *Workflow) Reset() {
