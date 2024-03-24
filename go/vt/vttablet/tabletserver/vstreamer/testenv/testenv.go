@@ -46,6 +46,7 @@ import (
 const (
 	DBName               = "vttest"
 	DefaultCollationName = "utf8mb4_0900_ai_ci"
+	DefaultShard         = "0"
 )
 
 var (

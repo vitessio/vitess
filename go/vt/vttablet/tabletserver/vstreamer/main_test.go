@@ -156,7 +156,7 @@ func expectLog(ctx context.Context, t *testing.T, input any, ch <-chan []*binlog
 			select {
 			case allevs, ok := <-ch:
 				if !ok {
-					t.Fatal("expectLog: not ok, stream ended early")
+					require.FailNow(t, "expectLog: not ok, stream ended early")
 				}
 				for _, ev := range allevs {
 					// Ignore spurious heartbeats that can happen on slow machines.

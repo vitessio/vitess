@@ -116,7 +116,7 @@ func (tfe *TestFieldEvent) String() string {
 	}
 	if !ignoreKeyspaceShardInFieldAndRowEvents {
 		fe.Keyspace = testenv.DBName
-		fe.Shard = "0" // this is the default shard
+		fe.Shard = testenv.DefaultShard
 	}
 	ev := &binlogdatapb.VEvent{
 		Type:       binlogdatapb.VEventType_FIELD,
