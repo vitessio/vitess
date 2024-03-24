@@ -20,7 +20,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"path"
 	"runtime"
@@ -1005,8 +1005,8 @@ func isFKError(err error) bool {
 }
 
 func generateInsert(t *testing.T, tableName string, conn *mysql.Conn) error {
-	id := rand.Int31n(int32(maxTableRows))
-	parentId := rand.Int31n(int32(maxTableRows))
+	id := rand.Int32N(int32(maxTableRows))
+	parentId := rand.Int32N(int32(maxTableRows))
 	query := fmt.Sprintf(insertRowStatement, tableName, id, parentId)
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 
@@ -1036,11 +1036,11 @@ func generateInsert(t *testing.T, tableName string, conn *mysql.Conn) error {
 func generateUpdate(t *testing.T, tableName string, conn *mysql.Conn) error {
 	// Most of the UPDATEs we run are "normal" updates, but the minority will actually change the
 	// `id` column itself, which is the FOREIGN KEY parent column for some of the tables.
-	id := rand.Int31n(int32(maxTableRows))
+	id := rand.Int32N(int32(maxTableRows))
 	query := fmt.Sprintf(updateRowStatement, tableName, id)
 	if tableName == parentTableName || tableName == childTableName {
-		if rand.Intn(4) == 0 {
-			updatedId := rand.Int31n(int32(maxTableRows))
+		if rand.IntN(4) == 0 {
+			updatedId := rand.Int32N(int32(maxTableRows))
 			query = fmt.Sprintf(updateRowIdStatement, tableName, updatedId, id)
 		}
 	}
@@ -1070,7 +1070,7 @@ func generateUpdate(t *testing.T, tableName string, conn *mysql.Conn) error {
 }
 
 func generateDelete(t *testing.T, tableName string, conn *mysql.Conn) error {
-	id := rand.Int31n(int32(maxTableRows))
+	id := rand.Int32N(int32(maxTableRows))
 	query := fmt.Sprintf(deleteRowStatement, tableName, id)
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 
@@ -1109,7 +1109,7 @@ func runSingleConnection(ctx context.Context, t *testing.T, tableName string, sl
 	require.Nil(t, err)
 
 	for {
-		switch rand.Int31n(3) {
+		switch rand.Int32N(3) {
 		case 0:
 			_ = generateInsert(t, tableName, conn)
 		case 1:

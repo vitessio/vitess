@@ -6249,8 +6249,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select table_name from (select table_name from `user` where 1 != 1 group by table_name) as `tables` where 1 != 1",
-            "Query": "select table_name from (select table_name from `user` where id = 143 group by table_name) as `tables`",
+            "FieldQuery": "select `tables`.table_name from (select table_name from `user` where 1 != 1 group by table_name) as `tables` where 1 != 1",
+            "Query": "select `tables`.table_name from (select table_name from `user` where id = 143 group by table_name) as `tables`",
             "Table": "`user`",
             "Values": [
               "143"

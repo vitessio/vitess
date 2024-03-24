@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"os/exec"
 	"path"
 	"strings"
@@ -426,7 +426,7 @@ func resetConfig(conf vttest.Config) {
 }
 
 func randomPort() int {
-	v := rand.Int31n(20000)
+	v := rand.Int32N(20000)
 	return int(v + 10000)
 }
 

@@ -18,7 +18,7 @@ package vttest
 
 import (
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"strings"
 )
 
@@ -28,7 +28,7 @@ import (
 // being used, as to ensure reproducible generation between runs.
 // A FieldGenerator must return the raw SQL data for the field, ready to be
 // placed into a SQL statement. The returned value will _NOT_ be escaped.
-type FieldGenerator func(name, t string, rng *rand.Rand) (string, error)
+type FieldGenerator func(name, t string) (string, error)
 
 // SeedConfig are the settings to enable the initialization of the
 // local cluster with random data. This struct must be set in Config
@@ -54,16 +54,6 @@ type SeedConfig struct {
 	RandomField FieldGenerator
 }
 
-// SeedConfigDefaults returns the default values for SeedConfig
-func SeedConfigDefaults() *SeedConfig {
-	return &SeedConfig{
-		RngSeed:         rand.Int(),
-		MinSize:         1000,
-		MaxSize:         10000,
-		NullProbability: 0.1,
-	}
-}
-
 const batchInsertSize = 1000
 
 func (db *LocalCluster) batchInsert(dbname, table string, fields []string, rows [][]string) error {
@@ -84,14 +74,14 @@ func (db *LocalCluster) batchInsert(dbname, table string, fields []string, rows 
 	return db.Execute([]string{sql}, dbname)
 }
 
-func (db *LocalCluster) randomField(name, t string, allowNull bool, rng *rand.Rand) (string, error) {
-	if allowNull && rng.Float64() < db.Seed.NullProbability {
+func (db *LocalCluster) randomField(name, t string, allowNull bool) (string, error) {
+	if allowNull && rand.Float64() < db.Seed.NullProbability {
 		return "NULL", nil
 	}
-	return db.Seed.RandomField(name, t, rng)
+	return db.Seed.RandomField(name, t)
 }
 
-func (db *LocalCluster) populateTable(dbname, table string, rng *rand.Rand) error {
+func (db *LocalCluster) populateTable(dbname, table string) error {
 	fieldInfo, err := db.Query(fmt.Sprintf("DESCRIBE %s", table), dbname, 1024)
 	if err != nil {
 		return err
@@ -100,7 +90,7 @@ func (db *LocalCluster) populateTable(dbname, table string, rng *rand.Rand) erro
 	var (
 		minRows    = db.Seed.MinSize
 		maxRows    = db.Seed.MaxSize
-		numRows    = rng.Intn(maxRows-minRows) + minRows
+		numRows    = rand.IntN(maxRows-minRows) + minRows
 		rows       [][]string
 		fieldNames []string
 	)
@@ -112,7 +102,7 @@ func (db *LocalCluster) populateTable(dbname, table string, rng *rand.Rand) erro
 			fieldType := row[1].ToString()
 			allowNull := row[2].ToString() == "YES"
 
-			f, err := db.randomField(fieldName, fieldType, allowNull, rng)
+			f, err := db.randomField(fieldName, fieldType, allowNull)
 			if err != nil {
 				return err
 			}
@@ -134,14 +124,14 @@ func (db *LocalCluster) populateTable(dbname, table string, rng *rand.Rand) erro
 	return nil
 }
 
-func (db *LocalCluster) populateShard(dbname string, rng *rand.Rand) error {
+func (db *LocalCluster) populateShard(dbname string) error {
 	q, err := db.Query("SHOW TABLES", dbname, 1024)
 	if err != nil {
 		return err
 	}
 
 	for _, row := range q.Rows {
-		if err := db.populateTable(dbname, row[0].ToString(), rng); err != nil {
+		if err := db.populateTable(dbname, row[0].ToString()); err != nil {
 			return err
 		}
 	}
@@ -149,10 +139,9 @@ func (db *LocalCluster) populateShard(dbname string, rng *rand.Rand) error {
 }
 
 func (db *LocalCluster) populateWithRandomData() error {
-	rng := rand.New(rand.NewSource(int64(db.Seed.RngSeed)))
 	for _, kpb := range db.Topology.Keyspaces {
 		for _, dbname := range db.shardNames(kpb) {
-			if err := db.populateShard(dbname, rng); err != nil {
+			if err := db.populateShard(dbname); err != nil {
 				return err
 			}
 		}

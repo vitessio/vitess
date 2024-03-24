@@ -281,8 +281,8 @@ func testSingle(t *testing.T, testName string) {
 // 	hints := &schemadiff.DiffHints{AutoIncrementStrategy: schemadiff.AutoIncrementIgnore}
 // 	// count := 20
 // 	// for i := 0; i < count; i++ {
-// 	// 	fromTestTableSchema := fromTestTableSchemas[rand.Intn(len(fromTestTableSchemas))]
-// 	// 	toTestTableSchema := toTestTableSchemas[rand.Intn(len(toTestTableSchemas))]
+// 	// 	fromTestTableSchema := fromTestTableSchemas[rand.IntN(len(fromTestTableSchemas))]
+// 	// 	toTestTableSchema := toTestTableSchemas[rand.IntN(len(toTestTableSchemas))]
 // 	// 	testName := fmt.Sprintf("%s/%s", fromTestTableSchema.testName, toTestTableSchema.testName)
 // 	// 	t.Run(testName, func(t *testing.T) {
 // 	// 		validateDiff(t, fromTestTableSchema.tableSchema, toTestTableSchema.tableSchema, hints)

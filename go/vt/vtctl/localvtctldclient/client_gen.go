@@ -236,6 +236,11 @@ func (client *localVtctldClient) ExecuteFetchAsDBA(ctx context.Context, in *vtct
 	return client.s.ExecuteFetchAsDBA(ctx, in)
 }
 
+// ExecuteMultiFetchAsDBA is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ExecuteMultiFetchAsDBA(ctx context.Context, in *vtctldatapb.ExecuteMultiFetchAsDBARequest, opts ...grpc.CallOption) (*vtctldatapb.ExecuteMultiFetchAsDBAResponse, error) {
+	return client.s.ExecuteMultiFetchAsDBA(ctx, in)
+}
+
 // ExecuteHook is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) ExecuteHook(ctx context.Context, in *vtctldatapb.ExecuteHookRequest, opts ...grpc.CallOption) (*vtctldatapb.ExecuteHookResponse, error) {
 	return client.s.ExecuteHook(ctx, in)

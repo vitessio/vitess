@@ -1798,6 +1798,9 @@ func (c *CreateTableEntity) primaryKeyColumns() []*sqlparser.IndexColumn {
 
 // Create implements Entity interface
 func (c *CreateTableEntity) Create() EntityDiff {
+	if c == nil {
+		return nil
+	}
 	return &CreateTableEntityDiff{to: c, createTable: c.CreateTable}
 }
 

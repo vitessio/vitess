@@ -17,6 +17,7 @@ limitations under the License.
 package timer
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -74,4 +75,19 @@ func TestRateLimiterStop(t *testing.T) {
 		assert.NoError(t, err)
 	}
 	assert.Equal(t, valSnapshot, val)
+}
+
+func TestRateLimiterDiff(t *testing.T) {
+	d := 2 * time.Second
+	r := NewRateLimiter(d)
+	require.NotNil(t, r)
+	defer r.Stop()
+
+	// This assumes the last couple lines of code run faster than 2 seconds, which should be the case.
+	// But if you see flakiness due to slow runners, we can revisit the logic.
+	assert.Greater(t, r.Diff(), int64(math.MaxInt32))
+	time.Sleep(d + time.Second)
+	assert.Greater(t, r.Diff(), int64(math.MaxInt32))
+	r.DoEmpty()
+	assert.LessOrEqual(t, r.Diff(), int64(1))
 }

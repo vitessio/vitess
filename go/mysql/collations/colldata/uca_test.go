@@ -19,7 +19,7 @@ package colldata
 import (
 	"bytes"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"slices"
 	"sort"
 	"strings"
@@ -1002,7 +1002,7 @@ func TestUCACollationOrder(t *testing.T) {
 
 		ary := slices.Clone(sorted)
 		for i := range ary {
-			j := rand.Intn(i + 1)
+			j := rand.IntN(i + 1)
 			ary[i], ary[j] = ary[j], ary[i]
 		}
 		slices.SortFunc(ary, func(a, b string) int {

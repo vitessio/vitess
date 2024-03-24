@@ -212,7 +212,7 @@ func StartReplication(ctx context.Context, r Request, api *API) *JSONResponse {
 	return NewJSONResponse(result, err)
 }
 
-// StartReplication stops replication on the specified tablet.
+// StopReplication stops replication on the specified tablet.
 func StopReplication(ctx context.Context, r Request, api *API) *JSONResponse {
 	vars := r.Vars()
 

@@ -17,7 +17,7 @@ limitations under the License.
 package timer
 
 import (
-	"math/rand"
+	"math/rand/v2"
 	"time"
 )
 
@@ -35,9 +35,8 @@ func NewRandTicker(d, variance time.Duration) *RandTicker {
 	c := make(chan time.Time, 1)
 	done := make(chan struct{})
 	go func() {
-		rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
 		for {
-			vr := time.Duration(rnd.Int63n(int64(2*variance)) - int64(variance))
+			vr := time.Duration(rand.Int64N(int64(2*variance)) - int64(variance))
 			tmr := time.NewTimer(d + vr)
 			select {
 			case <-tmr.C:

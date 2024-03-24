@@ -1881,6 +1881,26 @@ func (node DatabaseOptionType) ToString() string {
 	}
 }
 
+// IsCommutative returns whether the join type supports rearranging or not.
+func (joinType JoinType) IsCommutative() bool {
+	switch joinType {
+	case StraightJoinType, LeftJoinType, RightJoinType, NaturalLeftJoinType, NaturalRightJoinType:
+		return false
+	default:
+		return true
+	}
+}
+
+// IsInner returns whether the join type is an inner join or not.
+func (joinType JoinType) IsInner() bool {
+	switch joinType {
+	case StraightJoinType, NaturalJoinType, NormalJoinType:
+		return true
+	default:
+		return false
+	}
+}
+
 // ToString returns the type as a string
 func (ty LockType) ToString() string {
 	switch ty {

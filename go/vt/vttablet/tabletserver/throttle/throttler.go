@@ -46,7 +46,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"math/rand"
+	"math/rand/v2"
 	"net/http"
 	"strconv"
 	"strings"
@@ -82,19 +82,20 @@ import (
 )
 
 const (
-	leaderCheckInterval           = 5 * time.Second
-	mysqlCollectInterval          = 250 * time.Millisecond
-	mysqlDormantCollectInterval   = 5 * time.Second
-	mysqlRefreshInterval          = 10 * time.Second
-	mysqlAggregateInterval        = 125 * time.Millisecond
-	throttledAppsSnapshotInterval = 5 * time.Second
+	leaderCheckInterval            = 5 * time.Second
+	mysqlCollectInterval           = 250 * time.Millisecond // PRIMARY polls replicas
+	mysqlDormantCollectInterval    = 5 * time.Second        // PRIMARY polls replicas when dormant (no recent checks)
+	mysqlRefreshInterval           = 10 * time.Second       // Refreshing tablet inventory
+	mysqlAggregateInterval         = 125 * time.Millisecond
+	throttledAppsSnapshotInterval  = 5 * time.Second
+	recentCheckRateLimiterInterval = 1 * time.Second // Ticker assisting in determining when the throttler was last checked
 
 	aggregatedMetricsExpiration = 5 * time.Second
 	recentAppsExpiration        = time.Hour * 24
 
 	nonDeprioritizedAppMapExpiration = time.Second
 
-	dormantPeriod              = time.Minute
+	dormantPeriod              = time.Minute // How long since last check to be considered dormant
 	DefaultAppThrottleDuration = time.Hour
 	DefaultThrottleRatio       = 1.0
 
@@ -159,6 +160,7 @@ type Throttler struct {
 	mysqlRefreshInterval          time.Duration
 	mysqlAggregateInterval        time.Duration
 	throttledAppsSnapshotInterval time.Duration
+	dormantPeriod                 time.Duration
 
 	configSettings   *config.ConfigurationSettings
 	env              tabletenv.Env
@@ -169,11 +171,8 @@ type Throttler struct {
 	heartbeatWriter  heartbeat.HeartbeatWriter
 	overrideTmClient tmclient.TabletManagerClient
 
-	// recentCheckTickerValue is an ever increasing number, incrementing once per second.
-	recentCheckTickerValue atomic.Int64
-	// recentCheckValue is set to match or exceed recentCheckTickerValue whenever a "check" was made (other than by the throttler itself).
-	// when recentCheckValue < recentCheckTickerValue that means there hasn't been a recent check.
-	recentCheckValue atomic.Int64
+	recentCheckRateLimiter *timer.RateLimiter
+	recentCheckDormantDiff int64
 
 	throttleTabletTypesMap map[topodatapb.TabletType]bool
 
@@ -193,8 +192,6 @@ type Throttler struct {
 	throttledApps          *cache.Cache
 	recentApps             *cache.Cache
 	metricsHealth          *cache.Cache
-
-	lastCheckTimeNano atomic.Int64
 
 	initMutex           sync.Mutex
 	enableMutex         sync.Mutex
@@ -263,6 +260,8 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 	throttler.mysqlRefreshInterval = mysqlRefreshInterval
 	throttler.mysqlAggregateInterval = mysqlAggregateInterval
 	throttler.throttledAppsSnapshotInterval = throttledAppsSnapshotInterval
+	throttler.dormantPeriod = dormantPeriod
+	throttler.recentCheckDormantDiff = int64(throttler.dormantPeriod / recentCheckRateLimiterInterval)
 
 	throttler.StoreMetricsThreshold(defaultThrottleLagThreshold.Seconds()) //default
 	throttler.readSelfThrottleMetric = func(ctx context.Context, p *mysql.Probe) *mysql.MySQLThrottleMetric {
@@ -574,8 +573,40 @@ func (throttler *Throttler) Close() {
 // requestHeartbeats sends a heartbeat lease request to the heartbeat writer.
 // This action is recorded in stats.
 func (throttler *Throttler) requestHeartbeats() {
+	if !throttler.isLeader.Load() {
+		return
+	}
 	go throttler.heartbeatWriter.RequestHeartbeats()
 	go stats.GetOrNewCounter("ThrottlerHeartbeatRequests", "heartbeat requests").Add(1)
+}
+
+// stimulatePrimaryThrottler sends a check request to the primary tablet in the shard, to stimulate
+// it to request for heartbeats.
+func (throttler *Throttler) stimulatePrimaryThrottler(ctx context.Context, tmClient tmclient.TabletManagerClient) error {
+	// Some reasonable timeout, to ensure we release connections even if they're hanging (otherwise grpc-go keeps polling those connections forever)
+	ctx, cancel := context.WithTimeout(ctx, throttler.dormantPeriod)
+	defer cancel()
+
+	tabletAliases, err := throttler.ts.FindAllTabletAliasesInShard(ctx, throttler.keyspace, throttler.shard)
+	if err != nil {
+		return err
+	}
+	for _, tabletAlias := range tabletAliases {
+		tablet, err := throttler.ts.GetTablet(ctx, tabletAlias)
+		if err != nil {
+			return err
+		}
+		if tablet.Type != topodatapb.TabletType_PRIMARY {
+			continue
+		}
+		req := &tabletmanagerdatapb.CheckThrottlerRequest{AppName: throttlerapp.ThrottlerStimulatorName.String()}
+		_, err = tmClient.CheckThrottler(ctx, tablet.Tablet, req)
+		if err != nil {
+			log.Errorf("stimulatePrimaryThrottler: %+v", err)
+		}
+		return err
+	}
+	return nil
 }
 
 func (throttler *Throttler) generateSelfMySQLThrottleMetricFunc(ctx context.Context, probe *mysql.Probe) func() *mysql.MySQLThrottleMetric {
@@ -642,10 +673,11 @@ func (throttler *Throttler) ThrottledApps() (result []base.AppThrottle) {
 	return result
 }
 
-// isDormant returns true when the last check was more than dormantPeriod ago
+// isDormant returns true when the last check was more than dormantPeriod ago.
+// Instead of measuring actual time, we use the fact recentCheckRateLimiter ticks every second, and take
+// a logical diff, counting the number of ticks since the last check. This is a good enough approximation.
 func (throttler *Throttler) isDormant() bool {
-	lastCheckTime := time.Unix(0, throttler.lastCheckTimeNano.Load())
-	return time.Since(lastCheckTime) > dormantPeriod
+	return throttler.recentCheckRateLimiter.Diff() > throttler.recentCheckDormantDiff
 }
 
 // Operate is the main entry point for the throttler operation and logic. It will
@@ -663,11 +695,14 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 	mysqlRefreshTicker := addTicker(throttler.mysqlRefreshInterval)
 	mysqlAggregateTicker := addTicker(throttler.mysqlAggregateInterval)
 	throttledAppsTicker := addTicker(throttler.throttledAppsSnapshotInterval)
-	recentCheckTicker := addTicker(time.Second)
+	primaryStimulatorRateLimiter := timer.NewRateLimiter(throttler.dormantPeriod)
+	throttler.recentCheckRateLimiter = timer.NewRateLimiter(recentCheckRateLimiterInterval)
 
 	wg.Add(1)
 	go func() {
 		defer func() {
+			throttler.recentCheckRateLimiter.Stop()
+			primaryStimulatorRateLimiter.Stop()
 			throttler.aggregatedMetrics.Flush()
 			throttler.recentApps.Flush()
 			throttler.nonLowPriorityAppRequestsThrottled.Flush()
@@ -724,15 +759,42 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 			case <-mysqlCollectTicker.C:
 				if throttler.IsOpen() {
 					// frequent
+					// Always collect self metrics:
+					throttler.collectMySQLMetrics(ctx, tmClient, func(clusterName string) bool {
+						return clusterName == selfStoreName
+					})
 					if !throttler.isDormant() {
-						throttler.collectMySQLMetrics(ctx, tmClient)
+						throttler.collectMySQLMetrics(ctx, tmClient, func(clusterName string) bool {
+							return clusterName != selfStoreName
+						})
 					}
+					//
+					if throttler.recentCheckRateLimiter.Diff() <= 1 { // recently checked
+						if !throttler.isLeader.Load() {
+							// This is a replica, and has just recently been checked.
+							// We want to proactively "stimulate" the primary throttler to renew the heartbeat lease.
+							// The intent is to "wake up" an on-demand heartbeat lease. We don't need to poke the
+							// primary for every single time this replica was checked, so we rate limit. The idea is that
+							// once heartbeats update, more checks will be successful, this replica will be "recently checked"
+							// more than not, and the primary throttler will pick that up, extending the on-demand lease
+							// even further.
+							// Another outcome is that the primary will go out of "dormant" mode, and start collecting
+							// replica metrics more frequently.
+							primaryStimulatorRateLimiter.Do(
+								func() error {
+									return throttler.stimulatePrimaryThrottler(ctx, tmClient)
+								})
+						}
+					}
+
 				}
 			case <-mysqlDormantCollectTicker.C:
 				if throttler.IsOpen() {
 					// infrequent
 					if throttler.isDormant() {
-						throttler.collectMySQLMetrics(ctx, tmClient)
+						throttler.collectMySQLMetrics(ctx, tmClient, func(clusterName string) bool {
+							return clusterName != selfStoreName
+						})
 					}
 				}
 			case metric := <-throttler.mysqlThrottleMetricChan:
@@ -756,9 +818,6 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 				}
 			case throttlerConfig := <-throttler.throttlerConfigChan:
 				throttler.applyThrottlerConfig(ctx, throttlerConfig)
-			case <-recentCheckTicker.C:
-				// Increment recentCheckTickerValue by one.
-				throttler.recentCheckTickerValue.Add(1)
 			}
 		}
 	}()
@@ -799,9 +858,12 @@ func (throttler *Throttler) generateTabletProbeFunction(ctx context.Context, clu
 	}
 }
 
-func (throttler *Throttler) collectMySQLMetrics(ctx context.Context, tmClient tmclient.TabletManagerClient) error {
+func (throttler *Throttler) collectMySQLMetrics(ctx context.Context, tmClient tmclient.TabletManagerClient, includeCluster func(clusterName string) bool) error {
 	// synchronously, get lists of probes
 	for clusterName, probes := range throttler.mysqlInventory.ClustersProbes {
+		if !includeCluster(clusterName) {
+			continue
+		}
 		clusterName := clusterName
 		// probes is known not to change. It can be *replaced*, but not changed.
 		// so it's safe to iterate it
@@ -1174,20 +1236,25 @@ func (throttler *Throttler) checkStore(ctx context.Context, appName string, stor
 		// continuous and do not generate a substantial load.
 		return okMetricCheckResult
 	}
-	if !flags.SkipRequestHeartbeats && !throttlerapp.VitessName.Equals(appName) {
+
+	checkResult = throttler.check.Check(ctx, appName, "mysql", storeName, remoteAddr, flags)
+
+	shouldRequestHeartbeats := !flags.SkipRequestHeartbeats
+	if throttlerapp.VitessName.Equals(appName) {
+		// Override: "vitess" app never requests heartbeats.
+		shouldRequestHeartbeats = false
+	}
+	if throttlerapp.ThrottlerStimulatorName.Equals(appName) {
+		// Ovreride: "throttler-stimulator" app always requests heartbeats.
+		shouldRequestHeartbeats = true
+	}
+
+	if shouldRequestHeartbeats {
 		throttler.requestHeartbeats()
+		throttler.recentCheckRateLimiter.DoEmpty()
 		// This check was made by someone other than the throttler itself, i.e. this came from online-ddl or vreplication or other.
 		// We mark the fact that someone just made a check. If this is a REPLICA or RDONLY tables, this will be reported back
 		// to the PRIMARY so that it knows it must renew the heartbeat lease.
-		throttler.recentCheckValue.Store(1 + throttler.recentCheckTickerValue.Load())
-	}
-	checkResult = throttler.check.Check(ctx, appName, "mysql", storeName, remoteAddr, flags)
-
-	if throttler.recentCheckValue.Load() >= throttler.recentCheckTickerValue.Load() {
-		// This indicates someone, who is not "vitess" ie not internal to the throttling logic, did a _recent_ `check`.
-		// This could be online-ddl, or vreplication or whoever else.
-		// If this tablet is a REPLICA or RDONLY, we want to advertise to the PRIMARY that someone did a recent check,
-		// so that the PRIMARY knows it must renew the heartbeat lease.
 		checkResult.RecentlyChecked = true
 		go stats.GetOrNewCounter("ThrottlerRecentlyChecked", "recently checked").Add(1)
 	}

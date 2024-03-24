@@ -47,6 +47,7 @@ type TabletManagerClient interface {
 	UnlockTables(ctx context.Context, in *tabletmanagerdata.UnlockTablesRequest, opts ...grpc.CallOption) (*tabletmanagerdata.UnlockTablesResponse, error)
 	ExecuteQuery(ctx context.Context, in *tabletmanagerdata.ExecuteQueryRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ExecuteQueryResponse, error)
 	ExecuteFetchAsDba(ctx context.Context, in *tabletmanagerdata.ExecuteFetchAsDbaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ExecuteFetchAsDbaResponse, error)
+	ExecuteMultiFetchAsDba(ctx context.Context, in *tabletmanagerdata.ExecuteMultiFetchAsDbaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ExecuteMultiFetchAsDbaResponse, error)
 	ExecuteFetchAsAllPrivs(ctx context.Context, in *tabletmanagerdata.ExecuteFetchAsAllPrivsRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ExecuteFetchAsAllPrivsResponse, error)
 	ExecuteFetchAsApp(ctx context.Context, in *tabletmanagerdata.ExecuteFetchAsAppRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ExecuteFetchAsAppResponse, error)
 	// ReplicationStatus returns the current replication status.
@@ -280,6 +281,15 @@ func (c *tabletManagerClient) ExecuteQuery(ctx context.Context, in *tabletmanage
 func (c *tabletManagerClient) ExecuteFetchAsDba(ctx context.Context, in *tabletmanagerdata.ExecuteFetchAsDbaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ExecuteFetchAsDbaResponse, error) {
 	out := new(tabletmanagerdata.ExecuteFetchAsDbaResponse)
 	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/ExecuteFetchAsDba", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) ExecuteMultiFetchAsDba(ctx context.Context, in *tabletmanagerdata.ExecuteMultiFetchAsDbaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ExecuteMultiFetchAsDbaResponse, error) {
+	out := new(tabletmanagerdata.ExecuteMultiFetchAsDbaResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/ExecuteMultiFetchAsDba", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -693,6 +703,7 @@ type TabletManagerServer interface {
 	UnlockTables(context.Context, *tabletmanagerdata.UnlockTablesRequest) (*tabletmanagerdata.UnlockTablesResponse, error)
 	ExecuteQuery(context.Context, *tabletmanagerdata.ExecuteQueryRequest) (*tabletmanagerdata.ExecuteQueryResponse, error)
 	ExecuteFetchAsDba(context.Context, *tabletmanagerdata.ExecuteFetchAsDbaRequest) (*tabletmanagerdata.ExecuteFetchAsDbaResponse, error)
+	ExecuteMultiFetchAsDba(context.Context, *tabletmanagerdata.ExecuteMultiFetchAsDbaRequest) (*tabletmanagerdata.ExecuteMultiFetchAsDbaResponse, error)
 	ExecuteFetchAsAllPrivs(context.Context, *tabletmanagerdata.ExecuteFetchAsAllPrivsRequest) (*tabletmanagerdata.ExecuteFetchAsAllPrivsResponse, error)
 	ExecuteFetchAsApp(context.Context, *tabletmanagerdata.ExecuteFetchAsAppRequest) (*tabletmanagerdata.ExecuteFetchAsAppResponse, error)
 	// ReplicationStatus returns the current replication status.
@@ -820,6 +831,9 @@ func (UnimplementedTabletManagerServer) ExecuteQuery(context.Context, *tabletman
 }
 func (UnimplementedTabletManagerServer) ExecuteFetchAsDba(context.Context, *tabletmanagerdata.ExecuteFetchAsDbaRequest) (*tabletmanagerdata.ExecuteFetchAsDbaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ExecuteFetchAsDba not implemented")
+}
+func (UnimplementedTabletManagerServer) ExecuteMultiFetchAsDba(context.Context, *tabletmanagerdata.ExecuteMultiFetchAsDbaRequest) (*tabletmanagerdata.ExecuteMultiFetchAsDbaResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ExecuteMultiFetchAsDba not implemented")
 }
 func (UnimplementedTabletManagerServer) ExecuteFetchAsAllPrivs(context.Context, *tabletmanagerdata.ExecuteFetchAsAllPrivsRequest) (*tabletmanagerdata.ExecuteFetchAsAllPrivsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ExecuteFetchAsAllPrivs not implemented")
@@ -1265,6 +1279,24 @@ func _TabletManager_ExecuteFetchAsDba_Handler(srv interface{}, ctx context.Conte
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(TabletManagerServer).ExecuteFetchAsDba(ctx, req.(*tabletmanagerdata.ExecuteFetchAsDbaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TabletManager_ExecuteMultiFetchAsDba_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.ExecuteMultiFetchAsDbaRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TabletManagerServer).ExecuteMultiFetchAsDba(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/ExecuteMultiFetchAsDba",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).ExecuteMultiFetchAsDba(ctx, req.(*tabletmanagerdata.ExecuteMultiFetchAsDbaRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2019,6 +2051,10 @@ var TabletManager_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ExecuteFetchAsDba",
 			Handler:    _TabletManager_ExecuteFetchAsDba_Handler,
+		},
+		{
+			MethodName: "ExecuteMultiFetchAsDba",
+			Handler:    _TabletManager_ExecuteMultiFetchAsDba_Handler,
 		},
 		{
 			MethodName: "ExecuteFetchAsAllPrivs",

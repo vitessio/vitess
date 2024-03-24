@@ -22,7 +22,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"os"
 	"os/exec"
@@ -776,7 +776,6 @@ func NewBareCluster(cell string, hostname string) *LocalProcessCluster {
 	_ = os.Setenv("VTDATAROOT", cluster.CurrentVTDATAROOT)
 	log.Infof("Created cluster on %s. ReusingVTDATAROOT=%v", cluster.CurrentVTDATAROOT, cluster.ReusingVTDATAROOT)
 
-	rand.Seed(time.Now().UTC().UnixNano())
 	return cluster
 }
 
@@ -1223,7 +1222,7 @@ func (cluster *LocalProcessCluster) GetAndReserveTabletUID() int {
 }
 
 func getRandomNumber(maxNumber int32, baseNumber int) int {
-	return int(rand.Int31n(maxNumber)) + baseNumber
+	return int(rand.Int32N(maxNumber)) + baseNumber
 }
 
 func getVtStartPort() int {
