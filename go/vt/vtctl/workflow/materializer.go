@@ -99,7 +99,7 @@ func (mz *materializer) getWorkflowSubType() (binlogdatapb.VReplicationWorkflowS
 
 func (mz *materializer) getOptionsJSON() (string, error) {
 	vrOptions := &vtctldatapb.WorkflowOptions{}
-	if mz.ms.WorkflowOptions != nil && mz.ms.WorkflowOptions.TenantId != "" {
+	if mz.IsMultiTenantMigration() {
 		vrOptions.TenantId = mz.ms.WorkflowOptions.TenantId
 		if mz.ms.WorkflowOptions.SourceKeyspaceAlias != "" {
 			vrOptions.SourceKeyspaceAlias = mz.ms.WorkflowOptions.SourceKeyspaceAlias

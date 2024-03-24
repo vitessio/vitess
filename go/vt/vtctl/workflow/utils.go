@@ -124,14 +124,6 @@ func validateNewWorkflow(ctx context.Context, ts *topo.Server, tmc tmclient.Tabl
 					allErrors.RecordError(fmt.Errorf("workflow %s already exists in keyspace %s on tablet %v", workflow, keyspace, primary.Alias))
 					return
 				}
-				/* FIXME: for now we are not checking for frozen workflows. See if that causes any issues.
-				for _, stream := range wf.Streams {
-					if stream.Message == Frozen && wf.WorkflowSubType != binlogdatapb.VReplicationWorkflowSubType_Partial {
-						allErrors.RecordError(fmt.Errorf("found previous frozen workflow on tablet %v, please review and delete it first before creating a new workflow", primary.Alias))
-						return
-					}
-				}
-				*/
 			}
 		}(si)
 	}
