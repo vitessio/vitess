@@ -50833,6 +50833,206 @@ export namespace vtctldata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of an ExecuteHookRequest. */
+    interface IExecuteHookRequest {
+
+        /** ExecuteHookRequest tablet_alias */
+        tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** ExecuteHookRequest tablet_hook_request */
+        tablet_hook_request?: (tabletmanagerdata.IExecuteHookRequest|null);
+    }
+
+    /** Represents an ExecuteHookRequest. */
+    class ExecuteHookRequest implements IExecuteHookRequest {
+
+        /**
+         * Constructs a new ExecuteHookRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IExecuteHookRequest);
+
+        /** ExecuteHookRequest tablet_alias. */
+        public tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** ExecuteHookRequest tablet_hook_request. */
+        public tablet_hook_request?: (tabletmanagerdata.IExecuteHookRequest|null);
+
+        /**
+         * Creates a new ExecuteHookRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ExecuteHookRequest instance
+         */
+        public static create(properties?: vtctldata.IExecuteHookRequest): vtctldata.ExecuteHookRequest;
+
+        /**
+         * Encodes the specified ExecuteHookRequest message. Does not implicitly {@link vtctldata.ExecuteHookRequest.verify|verify} messages.
+         * @param message ExecuteHookRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IExecuteHookRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ExecuteHookRequest message, length delimited. Does not implicitly {@link vtctldata.ExecuteHookRequest.verify|verify} messages.
+         * @param message ExecuteHookRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IExecuteHookRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an ExecuteHookRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ExecuteHookRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ExecuteHookRequest;
+
+        /**
+         * Decodes an ExecuteHookRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ExecuteHookRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ExecuteHookRequest;
+
+        /**
+         * Verifies an ExecuteHookRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an ExecuteHookRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ExecuteHookRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ExecuteHookRequest;
+
+        /**
+         * Creates a plain object from an ExecuteHookRequest message. Also converts values to other types if specified.
+         * @param message ExecuteHookRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ExecuteHookRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ExecuteHookRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ExecuteHookRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of an ExecuteHookResponse. */
+    interface IExecuteHookResponse {
+
+        /** ExecuteHookResponse hook_result */
+        hook_result?: (tabletmanagerdata.IExecuteHookResponse|null);
+    }
+
+    /** Represents an ExecuteHookResponse. */
+    class ExecuteHookResponse implements IExecuteHookResponse {
+
+        /**
+         * Constructs a new ExecuteHookResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IExecuteHookResponse);
+
+        /** ExecuteHookResponse hook_result. */
+        public hook_result?: (tabletmanagerdata.IExecuteHookResponse|null);
+
+        /**
+         * Creates a new ExecuteHookResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ExecuteHookResponse instance
+         */
+        public static create(properties?: vtctldata.IExecuteHookResponse): vtctldata.ExecuteHookResponse;
+
+        /**
+         * Encodes the specified ExecuteHookResponse message. Does not implicitly {@link vtctldata.ExecuteHookResponse.verify|verify} messages.
+         * @param message ExecuteHookResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IExecuteHookResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ExecuteHookResponse message, length delimited. Does not implicitly {@link vtctldata.ExecuteHookResponse.verify|verify} messages.
+         * @param message ExecuteHookResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IExecuteHookResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an ExecuteHookResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ExecuteHookResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ExecuteHookResponse;
+
+        /**
+         * Decodes an ExecuteHookResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ExecuteHookResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ExecuteHookResponse;
+
+        /**
+         * Verifies an ExecuteHookResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an ExecuteHookResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ExecuteHookResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ExecuteHookResponse;
+
+        /**
+         * Creates a plain object from an ExecuteHookResponse message. Also converts values to other types if specified.
+         * @param message ExecuteHookResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ExecuteHookResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ExecuteHookResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ExecuteHookResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Properties of an ExecuteMultiFetchAsDBARequest. */
     interface IExecuteMultiFetchAsDBARequest {
 
@@ -51045,206 +51245,6 @@ export namespace vtctldata {
 
         /**
          * Gets the default type url for ExecuteMultiFetchAsDBAResponse
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of an ExecuteHookRequest. */
-    interface IExecuteHookRequest {
-
-        /** ExecuteHookRequest tablet_alias */
-        tablet_alias?: (topodata.ITabletAlias|null);
-
-        /** ExecuteHookRequest tablet_hook_request */
-        tablet_hook_request?: (tabletmanagerdata.IExecuteHookRequest|null);
-    }
-
-    /** Represents an ExecuteHookRequest. */
-    class ExecuteHookRequest implements IExecuteHookRequest {
-
-        /**
-         * Constructs a new ExecuteHookRequest.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: vtctldata.IExecuteHookRequest);
-
-        /** ExecuteHookRequest tablet_alias. */
-        public tablet_alias?: (topodata.ITabletAlias|null);
-
-        /** ExecuteHookRequest tablet_hook_request. */
-        public tablet_hook_request?: (tabletmanagerdata.IExecuteHookRequest|null);
-
-        /**
-         * Creates a new ExecuteHookRequest instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns ExecuteHookRequest instance
-         */
-        public static create(properties?: vtctldata.IExecuteHookRequest): vtctldata.ExecuteHookRequest;
-
-        /**
-         * Encodes the specified ExecuteHookRequest message. Does not implicitly {@link vtctldata.ExecuteHookRequest.verify|verify} messages.
-         * @param message ExecuteHookRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: vtctldata.IExecuteHookRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified ExecuteHookRequest message, length delimited. Does not implicitly {@link vtctldata.ExecuteHookRequest.verify|verify} messages.
-         * @param message ExecuteHookRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: vtctldata.IExecuteHookRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes an ExecuteHookRequest message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns ExecuteHookRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ExecuteHookRequest;
-
-        /**
-         * Decodes an ExecuteHookRequest message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns ExecuteHookRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ExecuteHookRequest;
-
-        /**
-         * Verifies an ExecuteHookRequest message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates an ExecuteHookRequest message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns ExecuteHookRequest
-         */
-        public static fromObject(object: { [k: string]: any }): vtctldata.ExecuteHookRequest;
-
-        /**
-         * Creates a plain object from an ExecuteHookRequest message. Also converts values to other types if specified.
-         * @param message ExecuteHookRequest
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: vtctldata.ExecuteHookRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this ExecuteHookRequest to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for ExecuteHookRequest
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of an ExecuteHookResponse. */
-    interface IExecuteHookResponse {
-
-        /** ExecuteHookResponse hook_result */
-        hook_result?: (tabletmanagerdata.IExecuteHookResponse|null);
-    }
-
-    /** Represents an ExecuteHookResponse. */
-    class ExecuteHookResponse implements IExecuteHookResponse {
-
-        /**
-         * Constructs a new ExecuteHookResponse.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: vtctldata.IExecuteHookResponse);
-
-        /** ExecuteHookResponse hook_result. */
-        public hook_result?: (tabletmanagerdata.IExecuteHookResponse|null);
-
-        /**
-         * Creates a new ExecuteHookResponse instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns ExecuteHookResponse instance
-         */
-        public static create(properties?: vtctldata.IExecuteHookResponse): vtctldata.ExecuteHookResponse;
-
-        /**
-         * Encodes the specified ExecuteHookResponse message. Does not implicitly {@link vtctldata.ExecuteHookResponse.verify|verify} messages.
-         * @param message ExecuteHookResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: vtctldata.IExecuteHookResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified ExecuteHookResponse message, length delimited. Does not implicitly {@link vtctldata.ExecuteHookResponse.verify|verify} messages.
-         * @param message ExecuteHookResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: vtctldata.IExecuteHookResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes an ExecuteHookResponse message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns ExecuteHookResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ExecuteHookResponse;
-
-        /**
-         * Decodes an ExecuteHookResponse message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns ExecuteHookResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ExecuteHookResponse;
-
-        /**
-         * Verifies an ExecuteHookResponse message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates an ExecuteHookResponse message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns ExecuteHookResponse
-         */
-        public static fromObject(object: { [k: string]: any }): vtctldata.ExecuteHookResponse;
-
-        /**
-         * Creates a plain object from an ExecuteHookResponse message. Also converts values to other types if specified.
-         * @param message ExecuteHookResponse
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: vtctldata.ExecuteHookResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this ExecuteHookResponse to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for ExecuteHookResponse
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
