@@ -38,6 +38,7 @@ var (
 		Short:                 "Applies the provided keyspace routing rules.",
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.NoArgs,
+		PreRunE:               validateApplyKeyspaceRoutingRulesOptions,
 		RunE:                  commandApplyKeyspaceRoutingRules,
 	}
 	// GetKeyspaceRoutingRules makes a GetKeyspaceRoutingRules gRPC call to a vtctld.
@@ -50,6 +51,17 @@ var (
 	}
 )
 
+func validateApplyKeyspaceRoutingRulesOptions(cmd *cobra.Command, args []string) error {
+	if applyKeyspaceRoutingRulesOptions.Rules != "" && applyKeyspaceRoutingRulesOptions.RulesFilePath != "" {
+		return fmt.Errorf("cannot pass both --rules (=%s) and --rules-file (=%s)", applyKeyspaceRoutingRulesOptions.Rules, applyKeyspaceRoutingRulesOptions.RulesFilePath)
+	}
+
+	if applyKeyspaceRoutingRulesOptions.Rules == "" && applyKeyspaceRoutingRulesOptions.RulesFilePath == "" {
+		return errors.New("must pass exactly one of --rules or --rules-file")
+	}
+	return nil
+}
+
 var applyKeyspaceRoutingRulesOptions = struct {
 	Rules         string
 	RulesFilePath string
@@ -59,13 +71,6 @@ var applyKeyspaceRoutingRulesOptions = struct {
 }{}
 
 func commandApplyKeyspaceRoutingRules(cmd *cobra.Command, args []string) error {
-	if applyKeyspaceRoutingRulesOptions.Rules != "" && applyKeyspaceRoutingRulesOptions.RulesFilePath != "" {
-		return fmt.Errorf("cannot pass both --rules (=%s) and --rules-file (=%s)", applyKeyspaceRoutingRulesOptions.Rules, applyKeyspaceRoutingRulesOptions.RulesFilePath)
-	}
-
-	if applyKeyspaceRoutingRulesOptions.Rules == "" && applyKeyspaceRoutingRulesOptions.RulesFilePath == "" {
-		return errors.New("must pass exactly one of --rules or --rules-file")
-	}
 
 	cli.FinishedParsing(cmd)
 

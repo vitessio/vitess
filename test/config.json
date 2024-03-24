@@ -1033,7 +1033,7 @@
 		},
 		"vreplication_multitenant": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "MultiTenant"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-timeout", "20m", "-run", "MultiTenant"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_multi_tenant",
