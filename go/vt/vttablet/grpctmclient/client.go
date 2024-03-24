@@ -104,7 +104,7 @@ type tmc struct {
 }
 
 // rpcClientMap maps an address to a tmc
-type rpcClientMap map[string]*tmc
+type rpcClientMap map[string](chan *tmc)
 
 // grpcClient implements both dialer and poolDialer.
 type grpcClient struct {
@@ -190,24 +190,31 @@ func (client *grpcClient) dialPool(ctx context.Context, dialPoolGroup DialPoolGr
 		}
 		client.mu.Lock()
 		defer client.mu.Unlock()
-		m[addr].cc.Close()
+		for tm := range m[addr] {
+			tm.cc.Close()
+		}
+		close(m[addr])
 		delete(m, addr)
 	}
 
-	if tm, ok := m[addr]; ok {
-		return tm.client, invalidator, nil
+	if _, ok := m[addr]; !ok {
+		c := make(chan *tmc, concurrency)
+		for range cap(m[addr]) {
+			cc, err := grpcclient.Dial(addr, grpcclient.FailFast(false), opt)
+			if err != nil {
+				return nil, nil, err
+			}
+			tm := &tmc{
+				cc:     cc,
+				client: tabletmanagerservicepb.NewTabletManagerClient(cc),
+			}
+			c <- tm
+		}
+		m[addr] = c
 	}
-
-	cc, err := grpcclient.Dial(addr, grpcclient.FailFast(false), opt)
-	if err != nil {
-		return nil, nil, err
-	}
-	tm := &tmc{
-		cc:     cc,
-		client: tabletmanagerservicepb.NewTabletManagerClient(cc),
-	}
-	m[addr] = tm
-
+	c := m[addr]
+	tm := <-c
+	c <- tm
 	return tm.client, invalidator, nil
 }
 
@@ -216,8 +223,11 @@ func (client *grpcClient) Close() {
 	client.mu.Lock()
 	defer client.mu.Unlock()
 	for _, m := range client.rpcClientMaps {
-		for _, tm := range m {
-			tm.cc.Close()
+		for _, c := range m {
+			for tm := range c {
+				tm.cc.Close()
+			}
+			close(c)
 		}
 	}
 	client.rpcClientMaps = nil
