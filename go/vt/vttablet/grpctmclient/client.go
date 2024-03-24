@@ -528,7 +528,7 @@ func (client *Client) ExecuteMultiFetchAsDba(ctx context.Context, tablet *topoda
 	var err error
 	if usePool {
 		if poolDialer, ok := client.dialer.(poolDialer); ok {
-			c, err = poolDialer.dialPool(ctx, tablet)
+			c, _, err = poolDialer.dialPool(ctx, DialPoolGroupDefault, tablet)
 			if err != nil {
 				return nil, err
 			}
