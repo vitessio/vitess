@@ -198,7 +198,12 @@ func (client *grpcClient) dialPool(ctx context.Context, dialPoolGroup DialPoolGr
 	}
 
 	if _, ok := m[addr]; !ok {
-		c := make(chan *tmc, concurrency)
+		tmcCount := concurrency
+		if dialPoolGroup != DialPoolGroupDefault {
+			// Specialized pools do not need "concurrency" and can use a single client
+			tmcCount = 1
+		}
+		c := make(chan *tmc, tmcCount)
 		for range cap(c) {
 			cc, err := grpcclient.Dial(addr, grpcclient.FailFast(false), opt)
 			if err != nil {
