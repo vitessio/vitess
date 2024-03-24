@@ -236,15 +236,6 @@ func (client *gRPCVtctldClient) ExecuteFetchAsDBA(ctx context.Context, in *vtctl
 	return client.c.ExecuteFetchAsDBA(ctx, in, opts...)
 }
 
-// ExecuteMultiFetchAsDBA is part of the vtctlservicepb.VtctldClient interface.
-func (client *gRPCVtctldClient) ExecuteMultiFetchAsDBA(ctx context.Context, in *vtctldatapb.ExecuteMultiFetchAsDBARequest, opts ...grpc.CallOption) (*vtctldatapb.ExecuteMultiFetchAsDBAResponse, error) {
-	if client.c == nil {
-		return nil, status.Error(codes.Unavailable, connClosedMsg)
-	}
-
-	return client.c.ExecuteMultiFetchAsDBA(ctx, in, opts...)
-}
-
 // ExecuteHook is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) ExecuteHook(ctx context.Context, in *vtctldatapb.ExecuteHookRequest, opts ...grpc.CallOption) (*vtctldatapb.ExecuteHookResponse, error) {
 	if client.c == nil {
@@ -252,6 +243,15 @@ func (client *gRPCVtctldClient) ExecuteHook(ctx context.Context, in *vtctldatapb
 	}
 
 	return client.c.ExecuteHook(ctx, in, opts...)
+}
+
+// ExecuteMultiFetchAsDBA is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) ExecuteMultiFetchAsDBA(ctx context.Context, in *vtctldatapb.ExecuteMultiFetchAsDBARequest, opts ...grpc.CallOption) (*vtctldatapb.ExecuteMultiFetchAsDBAResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.ExecuteMultiFetchAsDBA(ctx, in, opts...)
 }
 
 // FindAllShardsInKeyspace is part of the vtctlservicepb.VtctldClient interface.

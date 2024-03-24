@@ -98,10 +98,10 @@ service Vtctld {
   rpc ExecuteFetchAsApp(vtctldata.ExecuteFetchAsAppRequest) returns (vtctldata.ExecuteFetchAsAppResponse) {};
   // ExecuteFetchAsDBA executes a SQL query on the remote tablet as the DBA user.
   rpc ExecuteFetchAsDBA(vtctldata.ExecuteFetchAsDBARequest) returns (vtctldata.ExecuteFetchAsDBAResponse) {};
-  // ExecuteMultiFetchAsDBA executes one or more SQL queries on the remote tablet as the DBA user.
-  rpc ExecuteMultiFetchAsDBA(vtctldata.ExecuteMultiFetchAsDBARequest) returns (vtctldata.ExecuteMultiFetchAsDBAResponse) {};
   // ExecuteHook runs the hook on the tablet.
   rpc ExecuteHook(vtctldata.ExecuteHookRequest) returns (vtctldata.ExecuteHookResponse);
+  // ExecuteMultiFetchAsDBA executes one or more SQL queries on the remote tablet as the DBA user.
+  rpc ExecuteMultiFetchAsDBA(vtctldata.ExecuteMultiFetchAsDBARequest) returns (vtctldata.ExecuteMultiFetchAsDBAResponse) {};
   // FindAllShardsInKeyspace returns a map of shard names to shard references
   // for a given keyspace.
   rpc FindAllShardsInKeyspace(vtctldata.FindAllShardsInKeyspaceRequest) returns (vtctldata.FindAllShardsInKeyspaceResponse) {};
