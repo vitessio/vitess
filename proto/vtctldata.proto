@@ -228,6 +228,8 @@ message Workflow {
   int64 max_v_replication_transaction_lag = 8;
   // This specifies whether to defer the creation of secondary keys.
   bool defer_secondary_keys = 9;
+  // These are additional (optional) settings for vreplication workflows. Previously we used to add it to the
+  // binlogdata.BinlogSource proto object. More details in go/vt/sidecardb/schema/vreplication.sql.
   WorkflowOptions options = 10;
 
   message ReplicationLocation {
