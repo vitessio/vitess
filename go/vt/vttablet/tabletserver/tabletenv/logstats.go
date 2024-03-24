@@ -18,6 +18,7 @@ package tabletenv
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/url"
@@ -43,13 +44,13 @@ const (
 
 // LogStats records the stats for a single query
 type LogStats struct {
-	Ctx                  context.Context
+	Ctx                  context.Context `json:"-"`
 	Method               string
-	Target               *querypb.Target
+	Target               *querypb.Target `json:"-"`
 	PlanType             string
 	OriginalSQL          string
-	BindVariables        map[string]*querypb.BindVariable
-	rewrittenSqls        []string
+	BindVariables        map[string]streamlog.BindVariable `json:",omitempty"`
+	rewrittenSqls        []string                          `json:"-"`
 	RowsAffected         int
 	NumberOfQueries      int
 	StartTime            time.Time
@@ -57,11 +58,22 @@ type LogStats struct {
 	MysqlResponseTime    time.Duration
 	WaitingForConnection time.Duration
 	QuerySources         byte
-	Rows                 [][]sqltypes.Value
+	Rows                 [][]sqltypes.Value `json:"-"`
 	TransactionID        int64
 	ReservedID           int64
-	Error                error
+	Error                error `json:",omitempty"`
 	CachedPlan           bool
+}
+
+type LogStatsJSON struct {
+	CallInfo        string
+	Username        string
+	ImmediateCaller string
+	EffectiveCaller string
+	RewrittenSQL    string
+	TotalTime       time.Duration
+	ResponseSize    int
+	LogStats
 }
 
 // NewLogStats constructs a new LogStats with supplied Method and ctx
@@ -111,6 +123,9 @@ func (stats *LogStats) TotalTime() time.Duration {
 // RewrittenSQL returns a semicolon separated list of SQL statements
 // that were executed.
 func (stats *LogStats) RewrittenSQL() string {
+	if streamlog.GetRedactDebugUIQueries() {
+		return "[REDACTED]"
+	}
 	return strings.Join(stats.rewrittenSqls, "; ")
 }
 
@@ -181,15 +196,15 @@ func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
 		return nil
 	}
 
-	rewrittenSQL := "[REDACTED]"
 	formattedBindVars := "\"[REDACTED]\""
-
-	if !streamlog.GetRedactDebugUIQueries() {
-		rewrittenSQL = stats.RewrittenSQL()
-
+	if !streamlog.GetRedactDebugUIQueries() && !streamlog.UseQueryLogJSONV2() {
 		_, fullBindParams := params["full"]
+		bindVarsProto, err := streamlog.BindVariablesToProto(stats.BindVariables)
+		if err != nil {
+			return err
+		}
 		formattedBindVars = sqltypes.FormatBindVariables(
-			stats.BindVariables,
+			bindVarsProto,
 			fullBindParams,
 			streamlog.GetQueryLogFormat() == streamlog.QueryLogFormatJSON,
 		)
@@ -204,6 +219,19 @@ func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
 	case streamlog.QueryLogFormatText:
 		fmtString = "%v\t%v\t%v\t'%v'\t'%v'\t%v\t%v\t%.6f\t%v\t%q\t%v\t%v\t%q\t%v\t%.6f\t%.6f\t%v\t%v\t%v\t%q\t\n"
 	case streamlog.QueryLogFormatJSON:
+		if streamlog.UseQueryLogJSONV2() {
+			// flag --querylog-json-v2
+			return json.NewEncoder(w).Encode(LogStatsJSON{
+				EffectiveCaller: stats.EffectiveCaller(),
+				ImmediateCaller: stats.ImmediateCaller(),
+				LogStats:        *stats,
+				Username:        username,
+				CallInfo:        callInfo,
+				RewrittenSQL:    stats.RewrittenSQL(),
+				ResponseSize:    stats.SizeOfResponse(),
+				TotalTime:       stats.TotalTime(),
+			})
+		}
 		fmtString = "{\"Method\": %q, \"CallInfo\": %q, \"Username\": %q, \"ImmediateCaller\": %q, \"Effective Caller\": %q, \"Start\": \"%v\", \"End\": \"%v\", \"TotalTime\": %.6f, \"PlanType\": %q, \"OriginalSQL\": %q, \"BindVars\": %v, \"Queries\": %v, \"RewrittenSQL\": %q, \"QuerySources\": %q, \"MysqlTime\": %.6f, \"ConnWaitTime\": %.6f, \"RowsAffected\": %v,\"TransactionID\": %v,\"ResponseSize\": %v, \"Error\": %q}\n"
 	}
 
@@ -222,7 +250,7 @@ func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
 		stats.OriginalSQL,
 		formattedBindVars,
 		stats.NumberOfQueries,
-		rewrittenSQL,
+		stats.RewrittenSQL(),
 		stats.FmtQuerySources(),
 		stats.MysqlResponseTime.Seconds(),
 		stats.WaitingForConnection.Seconds(),

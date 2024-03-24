@@ -270,6 +270,7 @@ Flags:
       --querylog-buffer-size int                                         Maximum number of buffered query logs before throttling log output (default 10)
       --querylog-filter-tag string                                       string that must be present in the query for it to be logged; if using a value as the tag, you need to disable query normalization
       --querylog-format string                                           format for query logs ("text" or "json") (default "text")
+      --querylog-json-v2                                                 use v2 format for querylog-format=json
       --querylog-row-threshold uint                                      Number of rows a query has to return or affect before being logged; not useful for streaming queries. 0 means all queries will be logged.
       --queryserver-config-acl-exempt-acl string                         an acl that exempt from table acl checking (this acl is free to access any vitess tables).
       --queryserver-config-annotate-queries                              prefix queries to MySQL backend with comment indicating vtgate principal (user) and target tablet type
