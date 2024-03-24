@@ -683,6 +683,15 @@ message ExecuteFetchAsDBAResponse {
   query.QueryResult result = 1;
 }
 
+message ExecuteHookRequest {
+  topodata.TabletAlias tablet_alias = 1;
+  tabletmanagerdata.ExecuteHookRequest tablet_hook_request = 2;
+}
+
+message ExecuteHookResponse {
+  tabletmanagerdata.ExecuteHookResponse hook_result = 1;
+}
+
 message ExecuteMultiFetchAsDBARequest {
   topodata.TabletAlias tablet_alias = 1;
   // SQL could have potentially multiple queries separated by semicolons.
@@ -704,15 +713,6 @@ message ExecuteMultiFetchAsDBARequest {
 
 message ExecuteMultiFetchAsDBAResponse {
   repeated query.QueryResult results = 1;
-}
-
-message ExecuteHookRequest {
-  topodata.TabletAlias tablet_alias = 1;
-  tabletmanagerdata.ExecuteHookRequest tablet_hook_request = 2;
-}
-
-message ExecuteHookResponse {
-  tabletmanagerdata.ExecuteHookResponse hook_result = 1;
 }
 
 message FindAllShardsInKeyspaceRequest {
