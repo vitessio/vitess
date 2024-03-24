@@ -254,13 +254,6 @@ func getKeyspaceRoutingRules(t *testing.T, vc *VitessCluster) *vschemapb.Keyspac
 	return rules
 }
 
-// printKeyspaceRoutingRules is used for debugging purposes.
-func printKeyspaceRoutingRules(t *testing.T, vc *VitessCluster, msg string) {
-	output, err := vc.VtctldClient.ExecuteCommandWithOutput("GetKeyspaceRoutingRules")
-	require.NoError(t, err)
-	log.Infof("%s: Keyspace routing rules are: %s", msg, output)
-}
-
 // TestMultiTenant tests a multi-tenant migration scenario where each tenant is in a separate database.
 // It uses MoveTables to migrate all tenants to the same target keyspace. The test creates a separate source keyspace
 // for each tenant. It then steps through the migration process for each tenant, and verifies that the data is migrated
@@ -426,7 +419,7 @@ func randomWait() {
 	time.Sleep(time.Duration(rand.IntN(maxRandomDelaySeconds)) * time.Second)
 }
 
-func (mtm *multiTenantMigration) doStuff(name string, chIn, chOut chan int64, counter *atomic.Int64, f func(int64)) {
+func (mtm *multiTenantMigration) doThis(name string, chIn, chOut chan int64, counter *atomic.Int64, f func(int64)) {
 	timer := time.NewTimer(waitTimeout)
 	for counter.Load() < numTenants {
 		select {
@@ -444,7 +437,7 @@ func (mtm *multiTenantMigration) doStuff(name string, chIn, chOut chan int64, co
 
 // run starts the migration process for all tenants. It starts concurrent
 func (mtm *multiTenantMigration) run() {
-	go mtm.doStuff("Setup tenant keyspace/schemas", chNotSetup, chNotCreated, &numSetup, mtm.setup)
+	go mtm.doThis("Setup tenant keyspace/schemas", chNotSetup, chNotCreated, &numSetup, mtm.setup)
 	for i := int64(1); i <= numTenants; i++ {
 		chNotSetup <- i
 	}
@@ -455,7 +448,7 @@ func (mtm *multiTenantMigration) run() {
 			return numSetup.Load() == numTenants
 		}, perTenantLoadTimeout*numTenants))
 
-	go mtm.doStuff("Start Migrations", chNotCreated, chInProgress, &numInProgress, mtm.start)
-	go mtm.doStuff("Switch Traffic", chInProgress, chSwitched, &numSwitched, mtm.switchTraffic)
-	go mtm.doStuff("Mark Migrations Complete", chSwitched, chCompleted, &numCompleted, mtm.complete)
+	go mtm.doThis("Start Migrations", chNotCreated, chInProgress, &numInProgress, mtm.start)
+	go mtm.doThis("Switch Traffic", chInProgress, chSwitched, &numSwitched, mtm.switchTraffic)
+	go mtm.doThis("Mark Migrations Complete", chSwitched, chCompleted, &numCompleted, mtm.complete)
 }
