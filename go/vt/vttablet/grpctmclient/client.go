@@ -199,16 +199,15 @@ func (client *grpcClient) dialPool(ctx context.Context, dialPoolGroup DialPoolGr
 
 	if _, ok := m[addr]; !ok {
 		c := make(chan *tmc, concurrency)
-		for range cap(m[addr]) {
+		for range cap(c) {
 			cc, err := grpcclient.Dial(addr, grpcclient.FailFast(false), opt)
 			if err != nil {
 				return nil, nil, err
 			}
-			tm := &tmc{
+			c <- &tmc{
 				cc:     cc,
 				client: tabletmanagerservicepb.NewTabletManagerClient(cc),
 			}
-			c <- tm
 		}
 		m[addr] = c
 	}
