@@ -18,7 +18,7 @@ package schemadiff
 
 import (
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"sort"
 	"strings"
 	"testing"

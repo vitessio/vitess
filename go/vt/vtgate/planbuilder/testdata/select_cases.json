@@ -2329,6 +2329,74 @@
     }
   },
   {
+    "comment": "Straight Join ensures specific ordering of joins",
+    "query": "select user.id, user_extra.user_id from user straight_join user_extra where user.id = user_extra.foo",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select user.id, user_extra.user_id from user straight_join user_extra where user.id = user_extra.foo",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0,R:0",
+        "JoinVars": {
+          "user_id": 0
+        },
+        "TableName": "`user`_user_extra",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.id from `user` where 1 != 1",
+            "Query": "select `user`.id from `user`",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select user_extra.user_id from user_extra where 1 != 1",
+            "Query": "select user_extra.user_id from user_extra where user_extra.foo = :user_id",
+            "Table": "user_extra"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "Straight Join preserved in MySQL query",
+    "query": "select user.id, user_extra.user_id from user straight_join user_extra where user.id = user_extra.user_id",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select user.id, user_extra.user_id from user straight_join user_extra where user.id = user_extra.user_id",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.id, user_extra.user_id from `user` straight_join user_extra on `user`.id = user_extra.user_id where 1 != 1",
+        "Query": "select `user`.id, user_extra.user_id from `user` straight_join user_extra on `user`.id = user_extra.user_id",
+        "Table": "`user`, user_extra"
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
     "comment": "correlated subquery in exists clause",
     "query": "select col from user where exists(select user_id from user_extra where user_id = 3 and user_id < user.id)",
     "plan": {
@@ -2587,6 +2655,30 @@
       "TablesUsed": [
         "user.music",
         "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Complex join with multiple conditions merged into single route",
+    "query": "select 0 from user as u join user_extra as s on u.id = s.user_id join music as m on m.user_id = u.id and (s.foo or m.bar)",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 0 from user as u join user_extra as s on u.id = s.user_id join music as m on m.user_id = u.id and (s.foo or m.bar)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 0 from `user` as u, user_extra as s, music as m where 1 != 1",
+        "Query": "select 0 from `user` as u, user_extra as s, music as m where u.id = s.user_id and m.user_id = u.id and (s.foo or m.bar)",
+        "Table": "`user`, music, user_extra"
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
       ]
     }
   },
@@ -4975,8 +5067,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select table_name from (select table_name from unsharded where 1 != 1) as `tables` where 1 != 1",
-            "Query": "select table_name from (select table_name from unsharded limit 1) as `tables`",
+            "FieldQuery": "select `tables`.table_name from (select table_name from unsharded where 1 != 1) as `tables` where 1 != 1",
+            "Query": "select `tables`.table_name from (select table_name from unsharded limit 1) as `tables`",
             "Table": "unsharded"
           },
           {

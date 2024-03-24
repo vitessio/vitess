@@ -17,7 +17,7 @@ limitations under the License.
 package pools
 
 import (
-	"math/rand"
+	"math/rand/v2"
 	"strings"
 	"testing"
 
@@ -99,7 +99,7 @@ func BenchmarkRegisterUnregisterParallel(b *testing.B) {
 	b.SetParallelism(200)
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			id := rand.Int63()
+			id := rand.Int64()
 			p.Register(id, val)
 			p.Unregister(id, "some reason")
 		}

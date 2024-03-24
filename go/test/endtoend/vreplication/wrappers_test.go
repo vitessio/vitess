@@ -17,7 +17,7 @@ limitations under the License.
 package vreplication
 
 import (
-	"math/rand"
+	"math/rand/v2"
 	"strconv"
 
 	"github.com/stretchr/testify/require"
@@ -90,7 +90,7 @@ func newMoveTables(vc *VitessCluster, mt *moveTablesWorkflow, flavor workflowFla
 	mt.vc = vc
 	var mt2 iMoveTables
 	if flavor == workflowFlavorRandom {
-		flavor = workflowFlavors[rand.Intn(len(workflowFlavors))]
+		flavor = workflowFlavors[rand.IntN(len(workflowFlavors))]
 	}
 	switch flavor {
 	case workflowFlavorVtctl:
@@ -287,7 +287,7 @@ func newReshard(vc *VitessCluster, rs *reshardWorkflow, flavor workflowFlavor) i
 	rs.vc = vc
 	var rs2 iReshard
 	if flavor == workflowFlavorRandom {
-		flavor = workflowFlavors[rand.Intn(len(workflowFlavors))]
+		flavor = workflowFlavors[rand.IntN(len(workflowFlavors))]
 	}
 	switch flavor {
 	case workflowFlavorVtctl:

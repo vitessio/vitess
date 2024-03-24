@@ -692,6 +692,29 @@ message ExecuteHookResponse {
   tabletmanagerdata.ExecuteHookResponse hook_result = 1;
 }
 
+message ExecuteMultiFetchAsDBARequest {
+  topodata.TabletAlias tablet_alias = 1;
+  // SQL could have potentially multiple queries separated by semicolons.
+  string sql = 2;
+  // MaxRows is an optional parameter to limit the number of rows read into the
+  // QueryResult. Note that this does not apply a LIMIT to a query, just how
+  // many rows are read from the MySQL server on the tablet side.
+  //
+  // This field is optional. Specifying a non-positive value will use whatever
+  // default is configured in the VtctldService.
+  int64 max_rows = 3;
+  // DisableBinlogs instructs the tablet not to use binary logging when
+  // executing the query.
+  bool disable_binlogs = 4;
+  // ReloadSchema instructs the tablet to reload its schema after executing the
+  // query.
+  bool reload_schema = 5;
+}
+
+message ExecuteMultiFetchAsDBAResponse {
+  repeated query.QueryResult results = 1;
+}
+
 message FindAllShardsInKeyspaceRequest {
   string keyspace = 1;
 }

@@ -371,7 +371,7 @@ func TestDiffTables(t *testing.T) {
 				assert.NoError(t, err)
 				require.NotNil(t, d)
 				require.False(t, d.IsEmpty())
-				{
+				t.Run("statement", func(t *testing.T) {
 					diff := d.StatementString()
 					assert.Equal(t, ts.diff, diff)
 					action, err := DDLActionStr(d)
@@ -389,8 +389,8 @@ func TestDiffTables(t *testing.T) {
 					if ts.toName != "" {
 						assert.Equal(t, ts.toName, eTo.Name())
 					}
-				}
-				{
+				})
+				t.Run("canonical", func(t *testing.T) {
 					canonicalDiff := d.CanonicalStatementString()
 					assert.Equal(t, ts.cdiff, canonicalDiff)
 					action, err := DDLActionStr(d)
@@ -400,13 +400,18 @@ func TestDiffTables(t *testing.T) {
 					// validate we can parse back the statement
 					_, err = env.Parser().ParseStrictDDL(canonicalDiff)
 					assert.NoError(t, err)
-				}
-				if ts.annotated != nil {
-					// Optional test for assorted scenarios.
-					_, _, unified := d.Annotated()
-					unifiedExport := unified.Export()
-					assert.Equal(t, ts.annotated, strings.Split(unifiedExport, "\n"))
-				}
+				})
+				t.Run("annotations", func(t *testing.T) {
+					from, to, unified := d.Annotated()
+					require.NotNil(t, from)
+					require.NotNil(t, to)
+					require.NotNil(t, unified)
+					if ts.annotated != nil {
+						// Optional test for assorted scenarios.
+						unifiedExport := unified.Export()
+						assert.Equal(t, ts.annotated, strings.Split(unifiedExport, "\n"))
+					}
+				})
 				// let's also check dq, and also validate that dq's statement is identical to d's
 				assert.NoError(t, dqerr)
 				require.NotNil(t, dq)
@@ -1154,6 +1159,83 @@ func TestSchemaApplyError(t *testing.T) {
 				require.NoError(t, err)
 				_, err = schema1.Apply(diffs)
 				require.Error(t, err, "applying diffs to schema1: %v", schema1.ToSQL())
+			}
+		})
+	}
+}
+
+func TestEntityDiffByStatement(t *testing.T) {
+	env := NewTestEnv()
+
+	tcases := []struct {
+		query          string
+		valid          bool
+		expectAnotated bool
+	}{
+		{
+			query:          "create table t1(id int primary key)",
+			valid:          true,
+			expectAnotated: true,
+		},
+		{
+			query: "alter table t1 add column i int",
+			valid: true,
+		},
+		{
+			query: "rename table t1 to t2",
+			valid: true,
+		},
+		{
+			query: "drop table t1",
+			valid: true,
+		},
+		{
+			query:          "create view v1 as select * from t1",
+			valid:          true,
+			expectAnotated: true,
+		},
+		{
+			query: "alter view v1 as select * from t2",
+			valid: true,
+		},
+		{
+			query: "drop view v1",
+			valid: true,
+		},
+		{
+			query: "drop database d1",
+			valid: false,
+		},
+		{
+			query: "optimize table t1",
+			valid: false,
+		},
+	}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.query, func(t *testing.T) {
+			stmt, err := env.Parser().ParseStrictDDL(tcase.query)
+			require.NoError(t, err)
+			entityDiff := EntityDiffByStatement(stmt)
+			if !tcase.valid {
+				require.Nil(t, entityDiff)
+				return
+			}
+			require.NotNil(t, entityDiff)
+			require.NotNil(t, entityDiff.Statement())
+			require.Equal(t, stmt, entityDiff.Statement())
+
+			annotatedFrom, annotatedTo, annotatedUnified := entityDiff.Annotated()
+			// EntityDiffByStatement doesn't have real entities behind it, just a wrapper around a statement.
+			// Therefore, there are no annotations.
+			if tcase.expectAnotated {
+				assert.NotNil(t, annotatedFrom)
+				assert.NotNil(t, annotatedTo)
+				assert.NotNil(t, annotatedUnified)
+			} else {
+				assert.Nil(t, annotatedFrom)
+				assert.Nil(t, annotatedTo)
+				assert.Nil(t, annotatedUnified)
 			}
 		})
 	}

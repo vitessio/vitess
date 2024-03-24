@@ -18,7 +18,7 @@ package vstreamer
 
 import (
 	"math"
-	"math/rand"
+	"math/rand/v2"
 	"testing"
 	"time"
 
@@ -35,7 +35,7 @@ func (p polynomial) fit(x float64) float64 {
 	return y
 }
 
-func simulate(t *testing.T, rand *rand.Rand, ps PacketSizer, base, mustSend int, interpolate func(float64) float64) (time.Duration, int) {
+func simulate(t *testing.T, ps PacketSizer, base, mustSend int, interpolate func(float64) float64) (time.Duration, int) {
 	t.Helper()
 
 	var elapsed time.Duration
@@ -45,7 +45,7 @@ func simulate(t *testing.T, rand *rand.Rand, ps PacketSizer, base, mustSend int,
 
 	packetSize := 0
 	for sent < mustSend {
-		packetSize += rand.Intn(base / 100)
+		packetSize += rand.IntN(base / 100)
 
 		if ps.ShouldSend(packetSize) {
 			x := float64(packetSize) / packetRange
@@ -91,16 +91,13 @@ func TestPacketSizeSimulation(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			seed := time.Now().UnixNano()
-			rand := rand.New(rand.NewSource(seed))
-
 			// Simulate a replication using the given polynomial and the dynamic packet sizer
 			ps1 := newDynamicPacketSizer(tc.baseSize)
-			elapsed1, sent1 := simulate(t, rand, ps1, tc.baseSize, tc.baseSize*1000, tc.p.fit)
+			elapsed1, sent1 := simulate(t, ps1, tc.baseSize, tc.baseSize*1000, tc.p.fit)
 
 			// Simulate the same polynomial using a fixed packet size
 			ps2 := newFixedPacketSize(tc.baseSize)
-			elapsed2, sent2 := simulate(t, rand, ps2, tc.baseSize, tc.baseSize*1000, tc.p.fit)
+			elapsed2, sent2 := simulate(t, ps2, tc.baseSize, tc.baseSize*1000, tc.p.fit)
 
 			// the simulation for dynamic packet sizing should always be faster then the fixed packet,
 			// and should also send fewer packets in total

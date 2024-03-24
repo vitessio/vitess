@@ -21,7 +21,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"os"
 	"strings"
@@ -74,11 +74,6 @@ func registerFlags(fs *pflag.FlagSet) {
 // Time returns a time.Time from a ZK int64 milliseconds since Epoch time.
 func Time(i int64) time.Time {
 	return time.Unix(i/1000, i%1000*1000000)
-}
-
-// ZkTime returns a ZK time (int64) from a time.Time
-func ZkTime(t time.Time) int64 {
-	return t.Unix()*1000 + int64(t.Nanosecond()/1000000)
 }
 
 // ZkConn is a wrapper class on top of a zk.Conn.
@@ -251,7 +246,7 @@ func (c *ZkConn) withRetry(ctx context.Context, action func(conn *zk.Conn) error
 		if i > 0 {
 			// Add a bit of backoff time before retrying:
 			// 1 second base + up to 5 seconds.
-			time.Sleep(1*time.Second + time.Duration(rand.Int63n(5e9)))
+			time.Sleep(1*time.Second + time.Duration(rand.Int64N(5e9)))
 		}
 
 		// Get the current connection, or connect.

@@ -23,7 +23,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"reflect"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -211,7 +211,7 @@ func newSession(
 				Shard:      shard,
 				TabletType: tabletType,
 			},
-			TransactionId: rand.Int63(),
+			TransactionId: rand.Int64(),
 		})
 	}
 	return &vtgatepb.Session{

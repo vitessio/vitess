@@ -69,53 +69,6 @@ func (oracleGTIDSet *OracleGtidSet) RemoveUUID(uuid string) (removed bool) {
 	return removed
 }
 
-// RetainUUID retains only entries that belong to given UUID.
-func (oracleGTIDSet *OracleGtidSet) RetainUUID(uuid string) (anythingRemoved bool) {
-	return oracleGTIDSet.RetainUUIDs([]string{uuid})
-}
-
-// RetainUUIDs retains only entries that belong to given UUIDs.
-func (oracleGTIDSet *OracleGtidSet) RetainUUIDs(uuids []string) (anythingRemoved bool) {
-	retainUUIDs := map[string]bool{}
-	for _, uuid := range uuids {
-		retainUUIDs[uuid] = true
-	}
-	var filteredEntries []*OracleGtidSetEntry
-	for _, entry := range oracleGTIDSet.GtidEntries {
-		if retainUUIDs[entry.UUID] {
-			filteredEntries = append(filteredEntries, entry)
-		} else {
-			anythingRemoved = true
-		}
-	}
-	if anythingRemoved {
-		oracleGTIDSet.GtidEntries = filteredEntries
-	}
-	return anythingRemoved
-}
-
-// SharedUUIDs returns UUIDs (range-less) that are shared between the two sets
-func (oracleGTIDSet *OracleGtidSet) SharedUUIDs(other *OracleGtidSet) (shared []string) {
-	thisUUIDs := map[string]bool{}
-	for _, entry := range oracleGTIDSet.GtidEntries {
-		thisUUIDs[entry.UUID] = true
-	}
-	for _, entry := range other.GtidEntries {
-		if thisUUIDs[entry.UUID] {
-			shared = append(shared, entry.UUID)
-		}
-	}
-	return shared
-}
-
-// Explode returns a user-friendly string representation of this entry
-func (oracleGTIDSet *OracleGtidSet) Explode() (result []*OracleGtidSetEntry) {
-	for _, entries := range oracleGTIDSet.GtidEntries {
-		result = append(result, entries.Explode()...)
-	}
-	return result
-}
-
 func (oracleGTIDSet *OracleGtidSet) String() string {
 	var tokens []string
 	for _, entry := range oracleGTIDSet.GtidEntries {

@@ -19,7 +19,7 @@ package discovery
 import (
 	"context"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"strings"
 	"text/template"
 	"time"
@@ -205,7 +205,7 @@ func (c *ConsulDiscovery) discoverVTGate(ctx context.Context, tags []string, exe
 		return nil, ErrNoVTGates
 	}
 
-	return vtgates[rand.Intn(len(vtgates))], nil
+	return vtgates[rand.IntN(len(vtgates))], nil
 }
 
 // DiscoverVTGateAddr is part of the Discovery interface.
@@ -350,7 +350,7 @@ func (c *ConsulDiscovery) discoverVtctld(ctx context.Context, tags []string, exe
 		return nil, ErrNoVtctlds
 	}
 
-	return vtctlds[rand.Intn(len(vtctlds))], nil
+	return vtctlds[rand.IntN(len(vtctlds))], nil
 }
 
 // DiscoverVtctldAddr is part of the Discovery interface.

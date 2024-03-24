@@ -165,7 +165,7 @@ func (ta *typeAggregation) add(tt sqltypes.Type, f typeFlag) {
 		ta.timestamp++
 	case sqltypes.Geometry:
 		ta.geometry++
-	case sqltypes.Blob:
+	case sqltypes.Blob, sqltypes.Text:
 		ta.blob++
 	default:
 		return
@@ -209,7 +209,7 @@ func (ta *typeAggregation) result() sqltypes.Type {
 			If all temporal types are DATE, TIME, or TIMESTAMP, the result is DATE, TIME, or TIMESTAMP, respectively.
 			Otherwise, for a mix of temporal types, the result is DATETIME.
 		If all types are GEOMETRY, the result is GEOMETRY.
-		If any type is BLOB, the result is BLOB.
+		If any type is BLOB, the result is BLOB. This also applies to TEXT.
 		For all other type combinations, the result is VARCHAR.
 		Literal NULL operands are ignored for type aggregation.
 	*/

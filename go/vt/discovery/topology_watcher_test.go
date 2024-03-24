@@ -18,7 +18,7 @@ package discovery
 
 import (
 	"context"
-	"math/rand"
+	"math/rand/v2"
 	"testing"
 	"time"
 
@@ -399,7 +399,7 @@ func TestFilterByKeyspace(t *testing.T) {
 
 	for _, test := range testFilterByKeyspace {
 		// Add a new tablet to the topology.
-		port := rand.Int31n(1000)
+		port := rand.Int32N(1000)
 		tablet := &topodatapb.Tablet{
 			Alias: &topodatapb.TabletAlias{
 				Cell: testCell,

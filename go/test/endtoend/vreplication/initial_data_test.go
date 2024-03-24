@@ -18,7 +18,7 @@ package vreplication
 
 import (
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"testing"
 
@@ -65,8 +65,8 @@ func insertJSONValues(t *testing.T) {
 	numJsonValues := len(jsonValues)
 	for id <= NumJSONRows {
 		id++
-		j1 := rand.Intn(numJsonValues)
-		j2 := rand.Intn(numJsonValues)
+		j1 := rand.IntN(numJsonValues)
+		j2 := rand.IntN(numJsonValues)
 		query := fmt.Sprintf(q, id, jsonValues[j1], jsonValues[j2])
 		execVtgateQuery(t, vtgateConn, "product:0", query)
 	}

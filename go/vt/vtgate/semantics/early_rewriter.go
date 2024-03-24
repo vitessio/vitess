@@ -47,8 +47,6 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
 	case sqlparser.SelectExprs:
 		return r.handleSelectExprs(cursor, node)
-	case *sqlparser.JoinTableExpr:
-		r.handleJoinTableExprDown(node)
 	case *sqlparser.OrExpr:
 		rewriteOrExpr(r.env, cursor, node)
 	case *sqlparser.AndExpr:
@@ -221,15 +219,6 @@ func (r *earlyRewriter) handleSelectExprs(cursor *sqlparser.Cursor, node sqlpars
 		return nil
 	}
 	return r.expandStar(cursor, node)
-}
-
-// handleJoinTableExprDown processes JOIN table expressions and handles the Straight Join type.
-func (r *earlyRewriter) handleJoinTableExprDown(node *sqlparser.JoinTableExpr) {
-	if node.Join != sqlparser.StraightJoinType {
-		return
-	}
-	node.Join = sqlparser.NormalJoinType
-	r.warning = "straight join is converted to normal join"
 }
 
 type orderByIterator struct {

@@ -21,13 +21,12 @@ import (
 	"encoding/json"
 	"math"
 	"math/big"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"path"
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 )
 
 func TestDecimalAdd(t *testing.T) {
@@ -366,10 +365,8 @@ func TestRoundtripStress(t *testing.T) {
 		count = 100
 	}
 
-	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-
 	for n := 0; n < count; n++ {
-		fb := strconv.AppendFloat(nil, rng.NormFloat64(), 'f', -1, 64)
+		fb := strconv.AppendFloat(nil, rand.NormFloat64(), 'f', -1, 64)
 		d, err := NewFromMySQL(fb)
 		if err != nil {
 			t.Fatalf("failed to parse %q: %v", fb, err)
@@ -383,10 +380,9 @@ func TestRoundtripStress(t *testing.T) {
 
 func BenchmarkFormatting(b *testing.B) {
 	const Count = 10000
-	var rng = rand.New(rand.NewSource(time.Now().UnixNano()))
 	var parsed = make([]Decimal, 0, Count)
 	for i := 0; i < Count; i++ {
-		parsed = append(parsed, NewFromFloat(rng.NormFloat64()))
+		parsed = append(parsed, NewFromFloat(rand.NormFloat64()))
 	}
 
 	b.Run("StringFixed(8)", func(b *testing.B) {

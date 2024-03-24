@@ -31,7 +31,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"path"
 	"strings"
@@ -515,7 +515,7 @@ func TestSchemaChange(t *testing.T) {
 			t.Run("migrate", func(t *testing.T) {
 				require.NotEmpty(t, testcase.alterStatement)
 
-				hintText := fmt.Sprintf("hint-after-alter-%d", rand.Int31n(int32(maxTableRows)))
+				hintText := fmt.Sprintf("hint-after-alter-%d", rand.Int32N(int32(maxTableRows)))
 				hintStatement := fmt.Sprintf(alterHintStatement, hintText)
 				fullStatement := fmt.Sprintf("%s, %s", hintStatement, testcase.alterStatement)
 
@@ -644,10 +644,10 @@ func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName s
 }
 
 func generateInsert(t *testing.T, conn *mysql.Conn, autoIncInsert bool) error {
-	id := rand.Int31n(int32(maxTableRows))
+	id := rand.Int32N(int32(maxTableRows))
 	query := fmt.Sprintf(insertRowStatement, id, -id, id, id, nextOpOrder())
 	if autoIncInsert {
-		id = rand.Int31()
+		id = rand.Int32()
 		query = fmt.Sprintf(insertRowAutoIncStatement, -id, id, id, nextOpOrder())
 	}
 	qr, err := conn.ExecuteFetch(query, 1000, true)
@@ -658,7 +658,7 @@ func generateInsert(t *testing.T, conn *mysql.Conn, autoIncInsert bool) error {
 }
 
 func generateUpdate(t *testing.T, conn *mysql.Conn) error {
-	id := rand.Int31n(int32(maxTableRows))
+	id := rand.Int32N(int32(maxTableRows))
 	query := fmt.Sprintf(updateRowStatement, nextOpOrder(), id)
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 	if err == nil && qr != nil {
@@ -668,7 +668,7 @@ func generateUpdate(t *testing.T, conn *mysql.Conn) error {
 }
 
 func generateDelete(t *testing.T, conn *mysql.Conn) error {
-	id := rand.Int31n(int32(maxTableRows))
+	id := rand.Int32N(int32(maxTableRows))
 	query := fmt.Sprintf(deleteRowStatement, id)
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 	if err == nil && qr != nil {
@@ -697,7 +697,7 @@ func runSingleConnection(ctx context.Context, t *testing.T, autoIncInsert bool, 
 			log.Infof("Terminating single connection")
 			return
 		}
-		switch rand.Int31n(3) {
+		switch rand.Int32N(3) {
 		case 0:
 			err = generateInsert(t, conn, autoIncInsert)
 		case 1:

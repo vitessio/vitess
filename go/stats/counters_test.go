@@ -18,7 +18,7 @@ package stats
 
 import (
 	"expvar"
-	"math/rand"
+	"math/rand/v2"
 	"reflect"
 	"sort"
 	"strings"
@@ -189,13 +189,11 @@ func BenchmarkCountersTailLatency(b *testing.B) {
 	b.ResetTimer()
 	b.SetParallelism(100) // The actual number of goroutines is 100*GOMAXPROCS
 	b.RunParallel(func(pb *testing.PB) {
-		r := rand.New(rand.NewSource(time.Now().UnixNano()))
-
 		var start time.Time
 
 		for pb.Next() {
 			// sleep between 0~200ms to simulate 10 QPS per goroutine.
-			time.Sleep(time.Duration(r.Int63n(200)) * time.Millisecond)
+			time.Sleep(time.Duration(rand.Int64N(200)) * time.Millisecond)
 			start = time.Now()
 			benchCounter.Add("c1", 1)
 			c <- time.Since(start)

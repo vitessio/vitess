@@ -18,7 +18,7 @@ package main
 
 import (
 	"context"
-	"math/rand"
+	"math/rand/v2"
 	"net/http"
 	"sync"
 	"testing"
@@ -189,7 +189,7 @@ func (r *replica) processReplicationStream() {
 			actualRate = 0
 		}
 		if !r.nextDegration.IsZero() && time.Now().After(r.nextDegration) && r.currentDegrationEnd.IsZero() {
-			degradedRate := rand.Int63n(rate)
+			degradedRate := rand.Int64N(rate)
 			log.Infof("degrading the replica for %.f seconds from %v TPS to %v", r.degrationDuration.Seconds(), rate, degradedRate)
 			r.throttler.SetMaxRate(degradedRate)
 			r.currentDegrationEnd = time.Now().Add(r.degrationDuration)

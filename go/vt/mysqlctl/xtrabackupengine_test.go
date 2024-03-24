@@ -18,8 +18,8 @@ package mysqlctl
 
 import (
 	"bytes"
+	"crypto/rand"
 	"io"
-	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -77,11 +77,10 @@ func TestFindReplicationPositionEmptyMatch(t *testing.T) {
 }
 
 func TestStripeRoundTrip(t *testing.T) {
-	// Generate some deterministic input data.
+	// Generate some random input data.
 	dataSize := int64(1000000)
 	input := make([]byte, dataSize)
-	rng := rand.New(rand.NewSource(1))
-	rng.Read(input)
+	rand.Read(input)
 
 	test := func(blockSize int64, stripes int) {
 		// Write it out striped across some buffers.

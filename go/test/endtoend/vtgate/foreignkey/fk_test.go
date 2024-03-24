@@ -705,6 +705,22 @@ func TestFkScenarios(t *testing.T) {
 				"select * from fk_multicol_t19 order by id",
 			},
 		}, {
+			name: "Multi Target Delete success",
+			dataQueries: []string{
+				"insert into fk_multicol_t15(id, cola, colb) values (1, 7, 1), (2, 9, 1), (3, 11, 1), (4, 13, 1)",
+				"insert into fk_multicol_t16(id, cola, colb) values (1, 7, 1), (2, 9, 1), (3, 11, 1), (4, 13, 1)",
+				"insert into fk_multicol_t17(id, cola, colb) values (1, 7, 1), (2, 9, 1), (3, 11, 1)",
+				"insert into fk_multicol_t18(id, cola, colb) values (1, 7, 1), (3, 11, 1)",
+				"insert into fk_multicol_t19(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
+			},
+			dmlQuery: "delete fk_multicol_t15, fk_multicol_t17 from fk_multicol_t15 join fk_multicol_t17 where fk_multicol_t15.id = fk_multicol_t17.id",
+			assertionQueries: []string{
+				"select * from fk_multicol_t15 order by id",
+				"select * from fk_multicol_t16 order by id",
+				"select * from fk_multicol_t17 order by id",
+				"select * from fk_multicol_t19 order by id",
+			},
+		}, {
 			name: "Delete with limit success",
 			dataQueries: []string{
 				"insert into fk_multicol_t15(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
@@ -803,6 +819,36 @@ func TestFkScenarios(t *testing.T) {
 				"insert into fk_multicol_t19(id, cola, colb) values (1, 7, 1)",
 			},
 			dmlQuery: "update fk_multicol_t15 set cola = id + 8 where id < 3 order by id desc limit 2",
+			assertionQueries: []string{
+				"select * from fk_multicol_t15 order by id",
+				"select * from fk_multicol_t16 order by id",
+				"select * from fk_multicol_t17 order by id",
+				"select * from fk_multicol_t19 order by id",
+			},
+		}, {
+			name: "Multi Table Update with non-literal update",
+			dataQueries: []string{
+				"insert into fk_multicol_t15(id, cola, colb) values (1, 7, 1), (2, 9, 1), (3, 12, 1)",
+				"insert into fk_multicol_t16(id, cola, colb) values (1, 7, 1), (2, 9, 1), (3, 12, 1)",
+				"insert into fk_multicol_t17(id, cola, colb) values (1, 7, 1)",
+				"insert into fk_multicol_t19(id, cola, colb) values (1, 7, 1)",
+			},
+			dmlQuery: "update fk_multicol_t15 m1 join fk_multicol_t17 on m1.id = fk_multicol_t17.id set m1.cola = m1.id + 8 where m1.id < 3",
+			assertionQueries: []string{
+				"select * from fk_multicol_t15 order by id",
+				"select * from fk_multicol_t16 order by id",
+				"select * from fk_multicol_t17 order by id",
+				"select * from fk_multicol_t19 order by id",
+			},
+		}, {
+			name: "Multi Target Update with non-literal update",
+			dataQueries: []string{
+				"insert into fk_multicol_t15(id, cola, colb) values (1, 7, 1), (2, 9, 1), (3, 12, 1)",
+				"insert into fk_multicol_t16(id, cola, colb) values (1, 7, 1), (2, 9, 1), (3, 12, 1)",
+				"insert into fk_multicol_t17(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
+				"insert into fk_multicol_t19(id, cola, colb) values (1, 7, 1)",
+			},
+			dmlQuery: "update fk_multicol_t15 m1 join fk_multicol_t17 on m1.id = fk_multicol_t17.id set m1.cola = m1.id + 8, fk_multicol_t17.colb = 32 where m1.id < 3",
 			assertionQueries: []string{
 				"select * from fk_multicol_t15 order by id",
 				"select * from fk_multicol_t16 order by id",

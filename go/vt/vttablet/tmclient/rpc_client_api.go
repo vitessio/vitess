@@ -127,6 +127,12 @@ type TabletManagerClient interface {
 	// query faster. Close() should close the pool in that case.
 	ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsDbaRequest) (*querypb.QueryResult, error)
 
+	// ExecuteFetchAsDba executes multiple queries remotely using the DBA pool.
+	// req.DbName is ignored in favor of using the tablet's DbName field.
+	// If usePool is set, a connection pool may be used to make the
+	// query faster. Close() should close the pool in that case.
+	ExecuteMultiFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest) ([]*querypb.QueryResult, error)
+
 	// ExecuteFetchAsAllPrivs executes a query remotely using the allprivs user.
 	// req.DbName is ignored in favor of using the tablet's DbName field.
 	ExecuteFetchAsAllPrivs(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest) (*querypb.QueryResult, error)

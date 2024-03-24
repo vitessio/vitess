@@ -21,8 +21,8 @@ package highway
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/hex"
-	"math/rand"
 	"runtime"
 	"sync/atomic"
 	"testing"
@@ -203,11 +203,10 @@ func benchmarkParallel(b *testing.B, size int) {
 
 	var key [32]byte
 
-	rng := rand.New(rand.NewSource(0xabadc0cac01a))
 	data := make([][]byte, c)
 	for i := range data {
 		data[i] = make([]byte, size)
-		rng.Read(data[i])
+		_, _ = rand.Read(data[i])
 	}
 
 	b.SetBytes(int64(size))
