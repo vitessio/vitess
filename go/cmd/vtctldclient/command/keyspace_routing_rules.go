@@ -86,12 +86,12 @@ func commandApplyKeyspaceRoutingRules(cmd *cobra.Command, args []string) error {
 		rulesBytes = []byte(applyKeyspaceRoutingRulesOptions.Rules)
 	}
 
-	srr := &vschemapb.KeyspaceRoutingRules{}
-	if err := json2.Unmarshal(rulesBytes, &srr); err != nil {
+	krr := &vschemapb.KeyspaceRoutingRules{}
+	if err := json2.Unmarshal(rulesBytes, &krr); err != nil {
 		return err
 	}
 	// Round-trip so when we display the result it's readable.
-	data, err := cli.MarshalJSON(srr)
+	data, err := cli.MarshalJSON(krr)
 	if err != nil {
 		return err
 	}
@@ -114,7 +114,7 @@ func commandApplyKeyspaceRoutingRules(cmd *cobra.Command, args []string) error {
 	}
 
 	_, err = client.ApplyKeyspaceRoutingRules(commandCtx, &vtctldatapb.ApplyKeyspaceRoutingRulesRequest{
-		KeyspaceRoutingRules: srr,
+		KeyspaceRoutingRules: krr,
 		SkipRebuild:          applyKeyspaceRoutingRulesOptions.SkipRebuild,
 		RebuildCells:         applyKeyspaceRoutingRulesOptions.Cells,
 	})

@@ -5181,7 +5181,6 @@ func (s *VtctldServer) ApplyKeyspaceRoutingRules(ctx context.Context, req *vtctl
 	resp := &vtctldatapb.ApplyKeyspaceRoutingRulesResponse{}
 
 	if req.SkipRebuild {
-		log.Warningf("Skipping rebuild of SrvVSchema as requested, you will need to run RebuildVSchemaGraph for changes to take effect")
 		return resp, nil
 	}
 
