@@ -3128,7 +3128,7 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 	// replica/rdonly traffic can be switched first and then primary traffic can be switched later.
 	trafficSwitchingIsAllOrNothing := false
 	switch {
-	case !ts.isPartialMigration:
+	case ts.isPartialMigration:
 		// shard level traffic switching is all or nothing
 		trafficSwitchingIsAllOrNothing = true
 	case ts.MigrationType() == binlogdatapb.MigrationType_TABLES && ts.IsMultiTenantMigration():
