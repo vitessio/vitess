@@ -266,6 +266,25 @@ func (c *Conn) startWriterBuffering() {
 	c.bufferedWriter.Reset(c.Conn)
 }
 
+// FlushBuffer flushes the buffered writer used by this connection, if one is currently in use. If no
+// buffering is currently in use, this method is a no-op. Our fork of Vitess typically handles flushing
+// buffers in a defer function, so callers generally don't need to manually flush the connection's
+// buffer. The exception is for the COM_DUMP_BINLOG_GTID command – this command leaves the connection
+// for the server to continue pushing events over, and the defer function set by the connection handling
+// code won't get called until the stream is closed, which could be hours or days later.
+//
+// TODO: The latest Vitess code uses a flush timer that periodically flushes the buffer. We should
+// switch over to that since it's a cleaner solution and could potentially benefit other commands
+// as well, but it's a more invasive change, so we're starting with simply allowing the caller to
+// explicitly flush the buffer.
+func (c *Conn) FlushBuffer() error {
+	if c.bufferedWriter == nil {
+		return nil
+	}
+
+	return c.bufferedWriter.Flush()
+}
+
 // flush flushes the written data to the socket.
 // This must be called to terminate startBuffering.
 func (c *Conn) flush() error {
