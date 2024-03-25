@@ -103,7 +103,7 @@ func TestStartReplication(t *testing.T) {
 	db := fakesqldb.New(t)
 	params := db.ConnParams()
 	cp := *params
-	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "")
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "test_db_name")
 	// uid := uint32(11111)
 	// cnf := NewMycnf(uid, 6802)
 	// // Assigning ServerID to be different from tablet UID to make sure that there are no

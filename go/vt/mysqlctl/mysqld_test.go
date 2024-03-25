@@ -17,6 +17,7 @@ limitations under the License.
 package mysqlctl
 
 import (
+	"context"
 	"os"
 	"strconv"
 	"testing"
@@ -24,6 +25,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/dbconfigs"
 )
 
 type testcase struct {
@@ -204,3 +207,28 @@ func TestCleanupLockfile(t *testing.T) {
 	assert.Error(t, cleanupLockfile("mysql.sock", ts))
 	assert.FileExists(t, "mysql.sock.lock")
 }
+
+func TestRunMysqlUpgrade(t *testing.T) {
+	testMysqld := NewMysqld(&dbconfigs.GlobalDBConfigs)
+	defer testMysqld.Close()
+
+	ctx := context.Background()
+	err := testMysqld.RunMysqlUpgrade(ctx)
+	assert.NoError(t, err)
+
+	// TODO: Look for more tests
+}
+
+// func TestMysqldInit(t *testing.T) {
+// 	os.Remove(MycnfPath)
+// 	testMysqld := NewMysqld(&dbconfigs.GlobalDBConfigs)
+// 	defer testMysqld.Close()
+
+// 	ctx := context.Background()
+// 	uid := uint32(11111)
+// 	mycnf := NewMycnf(uid, 0)
+// 	mycnf.Path = MycnfPath
+// 	err := testMysqld.Init(ctx, mycnf, "")
+
+// 	assert.NoError(t, err)
+// }

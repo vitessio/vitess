@@ -32,6 +32,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 
 	"vitess.io/vitess/go/mysql/replication"
@@ -709,6 +710,19 @@ func TestShouldRestore(t *testing.T) {
 	b, err = ShouldRestore(env.ctx, env.restoreParams)
 	assert.True(t, b)
 	assert.NoError(t, err)
+	env.restoreParams.DeleteBeforeRestore = false
 
-	// TODO: Add more tests for checkNoDb
+	env.mysqld.FetchSuperQueryMap = map[string]*sqltypes.Result{
+		"SHOW DATABASES": {Rows: [][]sqltypes.Value{{sqltypes.NewVarBinary("any_db")}}},
+	}
+	b, err = ShouldRestore(env.ctx, env.restoreParams)
+	assert.NoError(t, err)
+	assert.True(t, b)
+
+	env.mysqld.FetchSuperQueryMap = map[string]*sqltypes.Result{
+		"SHOW DATABASES": {Rows: [][]sqltypes.Value{{sqltypes.NewVarBinary("test")}}},
+	}
+	b, err = ShouldRestore(env.ctx, env.restoreParams)
+	assert.False(t, b)
+	assert.NoError(t, err)
 }
