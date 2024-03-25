@@ -201,12 +201,13 @@ func (client *grpcClient) dialPool(ctx context.Context, dialPoolGroup DialPoolGr
 			}
 			m[addr] = tm
 		}
-		return m[addr].client, func(err error) {
+		invalidator := func(err error) {
 			client.mu.Lock()
 			defer client.mu.Unlock()
 			m[addr].cc.Close()
 			delete(m, addr)
-		}, nil
+		}
+		return m[addr].client, invalidator, nil
 	}
 
 	client.mu.Lock()
