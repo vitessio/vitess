@@ -202,6 +202,12 @@ type TableMap struct {
 	Metadata []uint16
 }
 
+// String implements the Stringer interface
+func (t *TableMap) String() string {
+	return fmt.Sprintf("{Flags: %v, Database: %q, Name: %q, Types: %v, CanBeNull: %v, Metadata: %v}",
+		t.Flags, t.Database, t.Name, t.Types, t.CanBeNull, t.Metadata)
+}
+
 // Rows contains data from a {WRITE,UPDATE,DELETE}_ROWS_EVENT.
 type Rows struct {
 	// Flags has the flags from the event.
@@ -222,6 +228,21 @@ type Rows struct {
 	Rows []Row
 }
 
+// String implements the Stringer interface
+func (r *Rows) String() string {
+	rows := "[]"
+	if r.Rows != nil {
+		rows = "["
+		for _, row := range r.Rows {
+			rows += row.String() + ", "
+		}
+		rows += "]"
+	}
+
+	return fmt.Sprintf("{Flags: %v, IdentifyColumns: %v, DataColumns: %v, Rows: %s}",
+		r.Flags, r.IdentifyColumns, r.DataColumns, rows)
+}
+
 // Row contains data for a single Row in a Rows event.
 type Row struct {
 	// NullIdentifyColumns describes which of the identify columns are NULL.
@@ -239,6 +260,12 @@ type Row struct {
 	// Data is the raw data.
 	// It is only set for WRITE and UPDATE events.
 	Data []byte
+}
+
+// String implements the Stringer interface
+func (r *Row) String() string {
+	return fmt.Sprintf("{NullIdentifyColumns: %v, NullColumns: %v, Identify: %v, Data: %v}",
+		r.NullIdentifyColumns, r.NullColumns, r.Identify, r.Data)
 }
 
 // Bitmap is used by the previous structures.

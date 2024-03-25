@@ -78,11 +78,19 @@ func (c *Conn) parseComBinlogDumpGTID(data []byte) (logFile string, logPos uint6
 		if !ok {
 			return logFile, logPos, position, readPacketErr
 		}
-		if gtid := string(data[pos : pos+int(dataSize)]); gtid != "" {
-			position, err = DecodePosition(gtid)
-			if err != nil {
-				return logFile, logPos, position, err
-			}
+
+		gtidBytes := data[pos : pos+int(dataSize)]
+
+		// NOTE: A MySQL 8.0 replica sends the GTID set as binary data, not as a human-readable string.
+		//       The main Vitess codebase was parsing a human-readable string and then using DecodePosition
+		//       to parse it, but that doesn't seem to actually work with real MySQL replicas, so we
+		//       diverge here from their implementation.
+		gtidSet, err := NewMysql56GTIDSetFromSIDBlock(gtidBytes)
+		if err != nil {
+			return logFile, logPos, position, err
+		}
+		position = Position{
+			GTIDSet: gtidSet,
 		}
 	}
 

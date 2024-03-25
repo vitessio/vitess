@@ -266,6 +266,25 @@ func (c *Conn) startWriterBuffering() {
 	c.bufferedWriter.Reset(c.Conn)
 }
 
+// FlushBuffer flushes the buffered writer used by this connection, if one is currently in use. If no
+// buffering is currently in use, this method is a no-op. Our fork of Vitess typically handles flushing
+// buffers in a defer function, so callers generally don't need to manually flush the connection's
+// buffer. The exception is for the COM_DUMP_BINLOG_GTID command – this command leaves the connection
+// for the server to continue pushing events over, and the defer function set by the connection handling
+// code won't get called until the stream is closed, which could be hours or days later.
+//
+// TODO: The latest Vitess code uses a flush timer that periodically flushes the buffer. We should
+// switch over to that since it's a cleaner solution and could potentially benefit other commands
+// as well, but it's a more invasive change, so we're starting with simply allowing the caller to
+// explicitly flush the buffer.
+func (c *Conn) FlushBuffer() error {
+	if c.bufferedWriter == nil {
+		return nil
+	}
+
+	return c.bufferedWriter.Flush()
+}
+
 // flush flushes the written data to the socket.
 // This must be called to terminate startBuffering.
 func (c *Conn) flush() error {
@@ -1367,10 +1386,11 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		return nil
 
 	case ComRegisterReplica:
-		// TODO: Seems like we probably need this command implemented, too, but it hasn't been needed
-		//       yet in a simple Vitess <-> Vitess replication test, so skipping for now.
-		//return c.handleComRegisterReplica(handler, data)
-		return fmt.Errorf("ComRegisterReplica not implemented")
+		ok := c.handleComRegisterReplica(handler, data)
+		if !ok {
+			return fmt.Errorf("error handling ComRegisterReplica packet: %v", data)
+		}
+		return nil
 
 	default:
 		log.Errorf("Got unhandled packet (default) from %s, returning error: %v", c, data)
@@ -1382,6 +1402,31 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 	}
 
 	return nil
+}
+
+func (c *Conn) handleComRegisterReplica(handler Handler, data []byte) (kontinue bool) {
+	binlogReplicaHandler, ok := handler.(BinlogReplicaHandler)
+	if !ok {
+		log.Warningf("received COM_REGISTER_REPLICA command, but handler does not implement BinlogReplicaHandler")
+		return true
+	}
+
+	c.recycleReadPacket()
+
+	replicaHost, replicaPort, replicaUser, replicaPassword, err := c.parseComRegisterReplica(data)
+	if err != nil {
+		log.Errorf("conn %v: parseComRegisterReplica failed: %v", c.ID(), err)
+		return false
+	}
+	if err := binlogReplicaHandler.ComRegisterReplica(c, replicaHost, replicaPort, replicaUser, replicaPassword); err != nil {
+		c.writeErrorPacketFromError(err)
+		return false
+	}
+
+	if err := c.writeOKPacket(0, 0, c.StatusFlags, 0); err != nil {
+		c.writeErrorPacketFromError(err)
+	}
+	return true
 }
 
 func (c *Conn) handleComBinlogDumpGTID(handler Handler, data []byte) (kontinue bool) {

@@ -322,6 +322,36 @@ func NewMariaDBGTIDEvent(f BinlogFormat, s *FakeBinlogStream, gtid MariadbGTID, 
 	return NewMariadbBinlogEvent(ev)
 }
 
+// NewMySQLGTIDEvent returns a MySQL specific GTID event.
+func NewMySQLGTIDEvent(f BinlogFormat, s *FakeBinlogStream, gtid Mysql56GTID, hasBegin bool) BinlogEvent {
+	length := 1 + // flags
+		16 + // SID (server UUID)
+		8 // GNO (sequence number, signed int)
+	data := make([]byte, length)
+
+	// flags
+	data[0] = 0
+
+	// SID (server UUID)
+	sid := gtid.Server
+	copy(data[1:17], sid[:])
+
+	// GNO (sequence number, signed int)
+	sequence := gtid.Sequence
+	binary.LittleEndian.PutUint64(data[17:25], uint64(sequence))
+
+	const FLStandalone = 1
+	var flags2 byte
+	if !hasBegin {
+		flags2 |= FLStandalone
+	}
+	data[0] = flags2
+
+	ev := s.Packetize(f, eGTIDEvent, 0, data)
+	return NewMysql56BinlogEvent(ev)
+}
+
+
 // NewTableMapEvent returns a TableMap event.
 // Only works with post_header_length=8.
 func NewTableMapEvent(f BinlogFormat, s *FakeBinlogStream, tableID uint64, tm *TableMap) BinlogEvent {
