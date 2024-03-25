@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"unicode"
@@ -2502,7 +2503,10 @@ type TableSpec struct {
 	Columns     []*ColumnDefinition
 	Indexes     []*IndexDefinition
 	Constraints []*ConstraintDefinition
-	Options     string
+	TableOpts   []*TableOption
+
+	// TODO: should be some sort of struct
+	PartitionOpts string
 }
 
 // Format formats the node.
@@ -2521,8 +2525,15 @@ func (ts *TableSpec) Format(buf *TrackedBuffer) {
 	for _, c := range ts.Constraints {
 		buf.Myprintf(",\n\t%v", c)
 	}
+	buf.Myprintf("\n)")
+	for _, tblOpt := range ts.TableOpts {
+		buf.Myprintf(" %s %s", tblOpt.Name, tblOpt.Value)
+	}
+	if len(ts.PartitionOpts) > 0 {
+		buf.Myprintf(" %s", ts.PartitionOpts)
+	}
 
-	buf.Myprintf("\n)%s", strings.Replace(ts.Options, ", ", ",\n  ", -1))
+	//buf.Myprintf("\n)%s", strings.Replace(ts.TableOpts, ", ", ",\n  ", -1))
 }
 
 // AddColumn appends the given column to the list in the spec
@@ -2543,6 +2554,11 @@ func (ts *TableSpec) AddIndex(id *IndexDefinition) {
 // AddConstraint appends the given index to the list in the spec
 func (ts *TableSpec) AddConstraint(cd *ConstraintDefinition) {
 	ts.Constraints = append(ts.Constraints, cd)
+}
+
+// AddOption appends the given option to the list in the spec
+func (ts *TableSpec) AddTableOption(to *TableOption) {
+	ts.TableOpts = append(ts.TableOpts, to)
 }
 
 func (ts *TableSpec) walkSubtree(visit Visit) error {
@@ -2674,7 +2690,7 @@ func (ct *ColumnType) merge(other ColumnType) error {
 
 	if other.KeyOpt != colKeyNone {
 		keyOptions := []ColumnKeyOption{ct.KeyOpt, other.KeyOpt}
-		sort.Slice(keyOptions, func(i, j int) bool {return keyOptions[i] < keyOptions[j]})
+		sort.Slice(keyOptions, func(i, j int) bool { return keyOptions[i] < keyOptions[j] })
 		if other.KeyOpt == ct.KeyOpt {
 			// MySQL will deduplicate key options when they are repeated.
 		} else if keyOptions[0] == colKeyPrimary && (keyOptions[1] == colKeyUnique || keyOptions[1] == colKeyUniqueKey) {
@@ -3299,6 +3315,12 @@ type IndexOption struct {
 	Name  string
 	Value *SQLVal
 	Using string
+}
+
+// TableOption describes a table option in a CREATE TABLE statement
+type TableOption struct {
+	Name  string
+	Value string
 }
 
 // ColumnKeyOption indicates whether or not the given column is defined as an
@@ -4304,10 +4326,10 @@ type Into struct {
 	Variables Variables
 	Dumpfile  string
 
-	Outfile   string
-	Charset   string
-	Fields    *Fields
-	Lines     *Lines
+	Outfile string
+	Charset string
+	Fields  *Fields
+	Lines   *Lines
 }
 
 func (i *Into) Format(buf *TrackedBuffer) {
@@ -4789,7 +4811,7 @@ func (*ConvertExpr) iExpr()       {}
 func (*SubstrExpr) iExpr()        {}
 func (*TrimExpr) iExpr()          {}
 func (*ConvertUsingExpr) iExpr()  {}
-func (*CharExpr) iExpr()  {}
+func (*CharExpr) iExpr()          {}
 func (*MatchExpr) iExpr()         {}
 func (*GroupConcatExpr) iExpr()   {}
 func (*Default) iExpr()           {}
@@ -5145,7 +5167,16 @@ func ExprFromValue(value sqltypes.Value) (Expr, error) {
 		return &NullVal{}, nil
 	case value.IsIntegral():
 		return NewIntVal(value.ToBytes()), nil
-	case value.IsFloat() || value.Type() == sqltypes.Decimal:
+	case value.IsFloat():
+		// Ensure that the resulting expression will be parsed back as a float, not a decimal.
+		// We do this by parsing the float, then reserializing it with exponential notation.
+		floatValue, err := strconv.ParseFloat(string(value.ToBytes()), 64)
+		if err != nil {
+			return nil, err
+		}
+		newValue := sqltypes.MakeTrusted(sqltypes.Float64, strconv.AppendFloat(nil, floatValue, 'e', -1, 64))
+		return NewFloatVal(newValue.ToBytes()), nil
+	case value.Type() == sqltypes.Decimal:
 		return NewFloatVal(value.ToBytes()), nil
 	case value.IsQuoted():
 		return NewStrVal(value.ToBytes()), nil
@@ -5623,13 +5654,13 @@ func (node *TimestampFuncExpr) replace(from, to Expr) bool {
 
 // CollateExpr represents dynamic collate operator.
 type CollateExpr struct {
-	Expr    Expr
-	Charset string
+	Expr      Expr
+	Collation string
 }
 
 // Format formats the node.
 func (node *CollateExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%v collate %s", node.Expr, node.Charset)
+	buf.Myprintf("%v collate %s", node.Expr, node.Collation)
 }
 
 func (node *CollateExpr) walkSubtree(visit Visit) error {
@@ -6893,6 +6924,15 @@ func (node *TableFuncExpr) UnmarshalJSON(b []byte) error {
 	}
 	node.Name = result
 	return nil
+}
+
+func (node *TableFuncExpr) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		node.Exprs)
 }
 
 // TableIdent is a case sensitive SQL identifier. It will be escaped with
