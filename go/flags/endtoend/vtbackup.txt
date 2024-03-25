@@ -58,6 +58,7 @@ Flags:
       --bind-address string                                         Bind address for the server. If empty, the server will listen on all available unicast and anycast IP addresses of the local system.
       --builtinbackup-file-read-buffer-size uint                    read files using an IO buffer of this many bytes. Golang defaults are used when set to 0.
       --builtinbackup-file-write-buffer-size uint                   write files using an IO buffer of this many bytes. Golang defaults are used when set to 0. (default 2097152)
+      --builtinbackup-incremental-restore-path string               the directory where incremental restore files, namely binlog files, are extracted to. In k8s environments, this should be set to a directory that is shared between the vttablet and mysqld pods. The path should exist. When empty, the default OS temp dir is assumed.
       --builtinbackup_mysqld_timeout duration                       how long to wait for mysqld to shutdown at the start of the backup. (default 10m0s)
       --builtinbackup_progress duration                             how often to send progress updates when backing up large files. (default 5s)
       --ceph_backup_storage_config string                           Path to JSON config file for ceph backup storage. (default "ceph_backup_config.json")
