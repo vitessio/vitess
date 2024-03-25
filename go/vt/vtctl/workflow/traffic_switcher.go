@@ -1002,7 +1002,7 @@ func (ts *trafficSwitcher) cancelMigration(ctx context.Context, sm *StreamMigrat
 		err = ts.changeShardsAccess(ctx, ts.SourceKeyspaceName(), ts.SourceShards(), allowWrites)
 	}
 	if err != nil {
-		ts.Logger().Errorf("Cancel migration failed:", err)
+		ts.Logger().Errorf("Cancel migration failed: %v", err)
 	}
 
 	sm.CancelStreamMigrations(ctx)

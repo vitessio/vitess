@@ -156,6 +156,7 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 	if action != workflowActionComplete && tabletTypes != "" {
 		args = append(args, "--tablet-types", tabletTypes)
 	}
+	args = append(args, "--action_timeout=2m")
 	t.Logf("Executing workflow command: vtctldclient %v", args)
 	output, err := vc.VtctldClient.ExecuteCommandWithOutput(args...)
 	lastOutput = output
@@ -465,17 +466,16 @@ func testMoveTablesV2Workflow(t *testing.T) {
 	defer closeConn()
 	currentWorkflowType = binlogdatapb.VReplicationWorkflowType_MoveTables
 
-	/*
-		materializeShow := func() {
-			output, err := vc.VtctldClient.ExecuteCommandWithOutput("materialize", "--target-keyspace=customer", "show", "--workflow=customer_copy", "--compact", "--include-logs=false")
-			require.NoError(t, err)
-			log.Error("Materialize show output: ", output)
-		}
-	*/
+	materializeShow := func() {
+		output, err := vc.VtctldClient.ExecuteCommandWithOutput("materialize", "--target-keyspace=customer", "show", "--workflow=customer_copy", "--compact", "--include-logs=false")
+		require.NoError(t, err)
+		log.Error("Materialize show output: ", output)
+	}
 
 	// test basic forward and reverse flows
 	setupCustomerKeyspace(t)
-	//materialize(t, materializeCustomerCopySpec, true)
+	materializeShow()
+	materialize(t, materializeCustomerCopySpec, true)
 	// The purge table should get skipped/ignored
 	// If it's not then we'll get an error as the table doesn't exist in the vschema
 	createMoveTablesWorkflow(t, "customer,loadtest,vdiff_order,reftable,_vt_PURGE_4f9194b43b2011eb8a0104ed332e05c2_20221210194431")
@@ -483,6 +483,7 @@ func testMoveTablesV2Workflow(t *testing.T) {
 	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
 	validateReadsRouteToSource(t, "replica")
 	validateWritesRouteToSource(t)
+	materializeShow()
 
 	// Verify that we've properly ignored any internal operational tables
 	// and that they were not copied to the new target keyspace
@@ -494,28 +495,27 @@ func testMoveTablesV2Workflow(t *testing.T) {
 	testWorkflowUpdate(t)
 
 	testRestOfWorkflow(t)
+	materializeShow()
 
 	listAllArgs := []string{"workflow", "--keyspace", "customer", "list"}
-	//output, err := vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)
-	_, err := vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)
+	output, err := vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)
 	require.NoError(t, err)
-	//require.Contains(t, output, "customer_copy") // Materialize workflow should still be there
+	require.Contains(t, output, "customer_copy") // Materialize workflow should still be there
 
 	testVSchemaForSequenceAfterMoveTables(t)
 
 	createMoveTablesWorkflow(t, "Lead,Lead-1")
-	output, err := vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)
+	output, err = vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)
 	require.NoError(t, err)
 	require.Contains(t, output, "wf1")
 
 	err = tstWorkflowCancel(t)
 	require.NoError(t, err)
 
-	_, err = vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)
-	//output, err = vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)
+	output, err = vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)
 	require.NoError(t, err)
-	//require.Contains(t, output, "customer_copy") // Materialize workflow should still be there
-	//materializeShow()
+	require.Contains(t, output, "customer_copy") // Materialize workflow should still be there
+	materializeShow()
 }
 
 func testPartialSwitches(t *testing.T) {

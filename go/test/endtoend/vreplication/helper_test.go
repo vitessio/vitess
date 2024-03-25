@@ -46,9 +46,11 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	"vitess.io/vitess/go/vt/proto/topodata"
 )
 
 const (
@@ -429,9 +431,13 @@ func confirmTablesHaveSecondaryKeys(t *testing.T, tablets []*cluster.VttabletPro
 			tableArr = append(tableArr, row[0].ToString())
 		}
 	}
-	// Give a moment for the schemas to be refreshed everywhere.
-	time.Sleep(1 * time.Second)
 	for _, tablet := range tablets {
+		// Be sure that the schema is up to date.
+		err := vc.VtctldClient.ExecuteCommand("ReloadSchema", topoproto.TabletAliasString(&topodata.TabletAlias{
+			Cell: tablet.Cell,
+			Uid:  uint32(tablet.TabletUID),
+		}))
+		require.NoError(t, err)
 		for _, table := range tableArr {
 			if schema.IsInternalOperationTableName(table) {
 				continue

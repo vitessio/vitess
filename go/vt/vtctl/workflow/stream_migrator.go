@@ -18,11 +18,13 @@ package workflow
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
 	"text/template"
 
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/mysql/replication"
@@ -34,12 +36,15 @@ import (
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 /*
@@ -613,6 +618,10 @@ func (sm *StreamMigrator) readSourceStreams(ctx context.Context, cancelMigrate b
 						tabletStreams = append(tabletStreams[:i], tabletStreams[i+1:]...)
 						return nil
 					}
+					if refStream.WorkflowType == binlogdatapb.VReplicationWorkflowType_Materialize && refStream.BinlogSource.Keyspace == sm.ts.TargetKeyspaceName() {
+						tabletStreams = append(tabletStreams[:i], tabletStreams[i+1:]...)
+						return nil
+					}
 				}
 
 				return fmt.Errorf("streams are mismatched across source shards: %s vs %s", refshard, shard)
@@ -679,7 +688,8 @@ func (sm *StreamMigrator) stopSourceStreams(ctx context.Context) error {
 	)
 
 	err := sm.ts.ForAllSources(func(source *MigrationSource) error {
-		tabletStreams := sm.streams[source.GetShard().ShardName()]
+		shard := source.GetShard().ShardName()
+		tabletStreams := sm.streams[shard]
 		if len(tabletStreams) == 0 {
 			return nil
 		}
@@ -689,19 +699,48 @@ func (sm *StreamMigrator) stopSourceStreams(ctx context.Context) error {
 		// New writes have already been blocked on the source, but the materialization
 		// workflow(s) may still need to catchup with writes that happend just before
 		// writes were stopped on the source.
+		eg, egCtx := errgroup.WithContext(ctx)
 		for _, vrs := range tabletStreams {
 			if vrs.WorkflowType == binlogdatapb.VReplicationWorkflowType_Materialize && vrs.BinlogSource.Keyspace == sm.ts.TargetKeyspaceName() {
-				tablet := source.GetPrimary().Tablet
-				pos, err := sm.ts.TabletManagerClient().PrimaryPosition(ctx, tablet)
-				if err != nil {
-					return err
+				if vrs.BinlogSource == nil { // Should never happen
+					return fmt.Errorf("no binlog source is defined for materialization workflow %s", vrs.Workflow)
 				}
-				sm.ts.Logger().Infof("Waiting for Materialization workflow %s on %v/%v to reach position %v, starting from position %s",
-					vrs.Workflow, sm.ts.SourceKeyspaceName(), vrs.BinlogSource.Shard, pos, vrs.Position)
-				if err := sm.ts.TabletManagerClient().VReplicationWaitForPos(ctx, tablet, vrs.ID, pos); err != nil {
-					return err
-				}
+				eg.Go(func() error {
+					si, err := sm.ts.TopoServer().GetTabletMapForShard(egCtx, vrs.BinlogSource.GetKeyspace(), vrs.BinlogSource.GetShard())
+					if err != nil {
+						return err
+					}
+					var primary *topo.TabletInfo
+					for _, tablet := range si {
+						if tablet.GetType() == topodatapb.TabletType_PRIMARY {
+							primary = tablet
+							break
+						}
+					}
+					if primary == nil {
+						return fmt.Errorf("no primary tablet found for materialization workflow %s and its stream from the binary log source %s/%s",
+							vrs.Workflow, vrs.BinlogSource.GetKeyspace(), vrs.BinlogSource.GetShard())
+					}
+					pos, err := sm.ts.TabletManagerClient().PrimaryPosition(egCtx, primary.Tablet)
+					if err != nil {
+						return err
+					}
+					sm.ts.Logger().Infof("Waiting for Materialization workflow %s on %v/%v to reach position %v, starting from position %s on tablet %s",
+						vrs.Workflow, vrs.BinlogSource.GetKeyspace(), vrs.BinlogSource.GetShard(), pos, vrs.Position, topoproto.TabletAliasString(primary.GetAlias()))
+					if err := sm.ts.TabletManagerClient().VReplicationWaitForPos(egCtx, primary.Tablet, vrs.ID, pos); err != nil {
+						return err
+					}
+					return nil
+				})
 			}
+		}
+		if err := eg.Wait(); err != nil {
+			var xtra string
+			if errors.Is(err, context.DeadlineExceeded) {
+				xtra = " (increase the --timeout value if needed)"
+			}
+			return vterrors.Errorf(vtrpcpb.Code_CANCELED, "error waiting for intra keyspace materialization workflow %s to catch up%s: %v",
+				tabletStreams[0].Workflow, xtra, err)
 		}
 
 		query := fmt.Sprintf("update _vt.vreplication set state='Stopped', message='for cutover' where id in %s", VReplicationStreams(tabletStreams).Values())
