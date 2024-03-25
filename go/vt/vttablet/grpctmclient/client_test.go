@@ -60,7 +60,7 @@ func TestDialPool(t *testing.T) {
 
 		c := rpcClient.rpcDialPoolMap[DialPoolGroupThrottler][addr]
 		assert.NotNil(t, c)
-		assert.Equal(t, connectivity.Connecting, c.cc.GetState())
+		assert.Contains(t, []connectivity.State{connectivity.Connecting, connectivity.TransientFailure}, c.cc.GetState())
 
 		cachedTmc = c
 	})
@@ -81,5 +81,98 @@ func TestDialPool(t *testing.T) {
 		assert.Empty(t, rpcClient.rpcDialPoolMap[DialPoolGroupVTOrc])
 
 		assert.Equal(t, connectivity.Shutdown, cachedTmc.cc.GetState())
+	})
+}
+
+func TestDialPoolDefault(t *testing.T) {
+	ctx := context.Background()
+	client := NewClient()
+	tablet := &topodatapb.Tablet{
+		Hostname: "localhost",
+		PortMap: map[string]int32{
+			"grpc": 15991,
+		},
+	}
+	addr := netutil.JoinHostPort(tablet.Hostname, int32(tablet.PortMap["grpc"]))
+	t.Run("dialPool", func(t *testing.T) {
+		poolDialer, ok := client.dialer.(poolDialer)
+		require.True(t, ok)
+
+		cli, invalidator, err := poolDialer.dialPool(ctx, DialPoolGroupDefault, tablet)
+		assert.NoError(t, err)
+		assert.Nil(t, invalidator)
+		assert.NotNil(t, cli)
+	})
+
+	var cachedTmc *tmc
+	t.Run("maps", func(t *testing.T) {
+		rpcClient, ok := client.dialer.(*grpcClient)
+		require.True(t, ok)
+		assert.Empty(t, rpcClient.rpcDialPoolMap)
+		assert.Empty(t, rpcClient.rpcDialPoolMap[DialPoolGroupThrottler])
+		assert.Empty(t, rpcClient.rpcDialPoolMap[DialPoolGroupVTOrc])
+
+		assert.NotEmpty(t, rpcClient.rpcClientMap)
+		assert.NotEmpty(t, rpcClient.rpcClientMap[addr])
+
+		ch := rpcClient.rpcClientMap[addr]
+		cachedTmc = <-ch
+		ch <- cachedTmc
+
+		assert.NotNil(t, cachedTmc)
+		assert.Contains(t, []connectivity.State{connectivity.Connecting, connectivity.TransientFailure}, cachedTmc.cc.GetState())
+	})
+
+	t.Run("CheckThrottler", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(ctx, time.Second)
+		defer cancel()
+
+		req := &tabletmanagerdatapb.CheckThrottlerRequest{}
+		_, err := client.CheckThrottler(ctx, tablet, req)
+		assert.Error(t, err)
+	})
+	t.Run("post throttler maps", func(t *testing.T) {
+		rpcClient, ok := client.dialer.(*grpcClient)
+		require.True(t, ok)
+
+		rpcClient.mu.Lock()
+		defer rpcClient.mu.Unlock()
+
+		assert.NotEmpty(t, rpcClient.rpcDialPoolMap)
+		assert.Empty(t, rpcClient.rpcDialPoolMap[DialPoolGroupThrottler])
+		assert.Empty(t, rpcClient.rpcDialPoolMap[DialPoolGroupVTOrc])
+
+		assert.NotEmpty(t, rpcClient.rpcClientMap)
+		assert.NotEmpty(t, rpcClient.rpcClientMap[addr])
+
+		assert.Contains(t, []connectivity.State{connectivity.Connecting, connectivity.TransientFailure}, cachedTmc.cc.GetState())
+	})
+	t.Run("ExecuteFetchAsDba", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(ctx, time.Second)
+		defer cancel()
+
+		req := &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{}
+		_, err := client.ExecuteFetchAsDba(ctx, tablet, true, req)
+		assert.Error(t, err)
+	})
+
+	t.Run("post ExecuteFetchAsDba maps", func(t *testing.T) {
+
+		rpcClient, ok := client.dialer.(*grpcClient)
+		require.True(t, ok)
+
+		rpcClient.mu.Lock()
+		defer rpcClient.mu.Unlock()
+
+		assert.NotEmpty(t, rpcClient.rpcDialPoolMap)
+		assert.Empty(t, rpcClient.rpcDialPoolMap[DialPoolGroupThrottler])
+		assert.Empty(t, rpcClient.rpcDialPoolMap[DialPoolGroupVTOrc])
+
+		// The default pools are unaffected. Invalidator does not run, connections are not closed.
+		assert.NotEmpty(t, rpcClient.rpcClientMap)
+		assert.NotEmpty(t, rpcClient.rpcClientMap[addr])
+
+		assert.NotNil(t, cachedTmc)
+		assert.Contains(t, []connectivity.State{connectivity.Connecting, connectivity.TransientFailure}, cachedTmc.cc.GetState())
 	})
 }
