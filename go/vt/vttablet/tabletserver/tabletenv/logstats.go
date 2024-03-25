@@ -18,7 +18,6 @@ package tabletenv
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"net/url"
 	"strings"
@@ -26,6 +25,7 @@ import (
 
 	"github.com/google/safehtml"
 
+	"vitess.io/vitess/go/logstats"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/callerid"
@@ -181,55 +181,65 @@ func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
 		return nil
 	}
 
-	rewrittenSQL := "[REDACTED]"
-	formattedBindVars := "\"[REDACTED]\""
-
-	if !streamlog.GetRedactDebugUIQueries() {
-		rewrittenSQL = stats.RewrittenSQL()
-
-		_, fullBindParams := params["full"]
-		formattedBindVars = sqltypes.FormatBindVariables(
-			stats.BindVariables,
-			fullBindParams,
-			streamlog.GetQueryLogFormat() == streamlog.QueryLogFormatJSON,
-		)
-	}
-
+	redacted := streamlog.GetRedactDebugUIQueries()
+	_, fullBindParams := params["full"]
 	// TODO: remove username here we fully enforce immediate caller id
 	callInfo, username := stats.CallInfo()
 
-	// Valid options for the QueryLogFormat are text or json
-	var fmtString string
-	switch streamlog.GetQueryLogFormat() {
-	case streamlog.QueryLogFormatText:
-		fmtString = "%v\t%v\t%v\t'%v'\t'%v'\t%v\t%v\t%.6f\t%v\t%q\t%v\t%v\t%q\t%v\t%.6f\t%.6f\t%v\t%v\t%v\t%q\t\n"
-	case streamlog.QueryLogFormatJSON:
-		fmtString = "{\"Method\": %q, \"CallInfo\": %q, \"Username\": %q, \"ImmediateCaller\": %q, \"Effective Caller\": %q, \"Start\": \"%v\", \"End\": \"%v\", \"TotalTime\": %.6f, \"PlanType\": %q, \"OriginalSQL\": %q, \"BindVars\": %v, \"Queries\": %v, \"RewrittenSQL\": %q, \"QuerySources\": %q, \"MysqlTime\": %.6f, \"ConnWaitTime\": %.6f, \"RowsAffected\": %v,\"TransactionID\": %v,\"ResponseSize\": %v, \"Error\": %q}\n"
+	log := logstats.NewLogger()
+	log.Init(streamlog.GetQueryLogFormat() == streamlog.QueryLogFormatJSON)
+	log.Key("Method")
+	log.StringUnquoted(stats.Method)
+	log.Key("CallInfo")
+	log.StringUnquoted(callInfo)
+	log.Key("Username")
+	log.StringUnquoted(username)
+	log.Key("ImmediateCaller")
+	log.StringSingleQuoted(stats.ImmediateCaller())
+	log.Key("Effective Caller")
+	log.StringSingleQuoted(stats.EffectiveCaller())
+	log.Key("Start")
+	log.Time(stats.StartTime)
+	log.Key("End")
+	log.Time(stats.EndTime)
+	log.Key("TotalTime")
+	log.Duration(stats.TotalTime())
+	log.Key("PlanType")
+	log.StringUnquoted(stats.PlanType)
+	log.Key("OriginalSQL")
+	log.String(stats.OriginalSQL)
+	log.Key("BindVars")
+	if redacted {
+		log.Redacted()
+	} else {
+		log.BindVariables(stats.BindVariables, fullBindParams)
 	}
+	log.Key("Queries")
+	log.Int(int64(stats.NumberOfQueries))
+	log.Key("RewrittenSQL")
+	if redacted {
+		log.Redacted()
+	} else {
+		log.String(stats.RewrittenSQL())
+	}
+	log.Key("QuerySources")
+	log.StringUnquoted(stats.FmtQuerySources())
+	log.Key("MysqlTime")
+	log.Duration(stats.MysqlResponseTime)
+	log.Key("ConnWaitTime")
+	log.Duration(stats.WaitingForConnection)
+	log.Key("RowsAffected")
+	log.Uint(uint64(stats.RowsAffected))
+	log.Key("TransactionID")
+	log.Int(stats.TransactionID)
+	log.Key("ResponseSize")
+	log.Int(int64(stats.SizeOfResponse()))
+	log.Key("Error")
+	log.String(stats.ErrorStr())
 
-	_, err := fmt.Fprintf(
-		w,
-		fmtString,
-		stats.Method,
-		callInfo,
-		username,
-		stats.ImmediateCaller(),
-		stats.EffectiveCaller(),
-		stats.StartTime.Format("2006-01-02 15:04:05.000000"),
-		stats.EndTime.Format("2006-01-02 15:04:05.000000"),
-		stats.TotalTime().Seconds(),
-		stats.PlanType,
-		stats.OriginalSQL,
-		formattedBindVars,
-		stats.NumberOfQueries,
-		rewrittenSQL,
-		stats.FmtQuerySources(),
-		stats.MysqlResponseTime.Seconds(),
-		stats.WaitingForConnection.Seconds(),
-		stats.RowsAffected,
-		stats.TransactionID,
-		stats.SizeOfResponse(),
-		stats.ErrorStr(),
-	)
-	return err
+	// logstats from the vttablet are always tab-terminated; keep this for backwards
+	// compatibility for existing parsers
+	log.TabTerminated()
+
+	return log.Flush(w)
 }
