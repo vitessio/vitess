@@ -13,6 +13,7 @@ Flags:
       --backup_storage_number_blocks int                                 if backup_storage_compress is true, backup_storage_number_blocks sets the number of blocks that can be processed, in parallel, before the writer blocks, during compression (default is 2). It should be equal to the number of CPUs available for compression. (default 2)
       --builtinbackup-file-read-buffer-size uint                         read files using an IO buffer of this many bytes. Golang defaults are used when set to 0.
       --builtinbackup-file-write-buffer-size uint                        write files using an IO buffer of this many bytes. Golang defaults are used when set to 0. (default 2097152)
+      --builtinbackup-incremental-restore-path string                    the directory where incremental restore files, namely binlog files, are extracted to. In k8s environments, this should be set to a directory that is shared between the vttablet and mysqld pods. The path should exist. When empty, the default OS temp dir is assumed.
       --builtinbackup_mysqld_timeout duration                            how long to wait for mysqld to shutdown at the start of the backup. (default 10m0s)
       --builtinbackup_progress duration                                  how often to send progress updates when backing up large files. (default 5s)
       --catch-sigpipe                                                    catch and ignore SIGPIPE on stdout and stderr if specified
