@@ -859,17 +859,15 @@ func TestFkScenarios(t *testing.T) {
 	}
 
 	for _, tt := range testcases {
-		for _, testSharded := range []bool{false, true} {
-			t.Run(getTestName(tt.name, testSharded), func(t *testing.T) {
+		for _, keyspace := range []string{unshardedKs, shardedKs, shardScopedKs} {
+			t.Run(getTestName(tt.name, keyspace), func(t *testing.T) {
 				mcmp, closer := start(t)
 				defer closer()
-				// Set the correct keyspace to use from VtGates.
-				if testSharded {
+				if keyspace == shardedKs {
 					t.Skip("Skip test since we don't have sharded foreign key support yet")
-					_ = utils.Exec(t, mcmp.VtConn, "use `ks`")
-				} else {
-					_ = utils.Exec(t, mcmp.VtConn, "use `uks`")
 				}
+				// Set the correct keyspace to use from VtGates.
+				_ = utils.Exec(t, mcmp.VtConn, fmt.Sprintf("use `%v`", keyspace))
 
 				// Insert all the data required for running the test.
 				for _, query := range tt.dataQueries {
@@ -892,17 +890,15 @@ func TestFkScenarios(t *testing.T) {
 		}
 	}
 
-	for _, testSharded := range []bool{false, true} {
-		t.Run(getTestName("Transactions with intermediate failure", testSharded), func(t *testing.T) {
+	for _, keyspace := range []string{unshardedKs, shardedKs, shardScopedKs} {
+		t.Run(getTestName("Transactions with intermediate failure", keyspace), func(t *testing.T) {
 			mcmp, closer := start(t)
 			defer closer()
-			// Set the correct keyspace to use from VtGates.
-			if testSharded {
+			if keyspace == shardedKs {
 				t.Skip("Skip test since we don't have sharded foreign key support yet")
-				_ = utils.Exec(t, mcmp.VtConn, "use `ks`")
-			} else {
-				_ = utils.Exec(t, mcmp.VtConn, "use `uks`")
 			}
+			// Set the correct keyspace to use from VtGates.
+			_ = utils.Exec(t, mcmp.VtConn, fmt.Sprintf("use `%v`", keyspace))
 
 			// Insert some rows
 			mcmp.Exec("INSERT INTO fk_t10(id, col) VALUES (1, 7), (2, 9), (3, 5)")
@@ -1114,28 +1110,34 @@ func TestFkQueries(t *testing.T) {
 		},
 	}
 
-	for _, testcase := range testcases {
-		t.Run(testcase.name, func(t *testing.T) {
-			mcmp, closer := start(t)
-			defer closer()
-			_ = utils.Exec(t, mcmp.VtConn, "use `uks`")
-
-			// Ensure that the Vitess database is originally empty
-			ensureDatabaseState(t, mcmp.VtConn, true)
-			ensureDatabaseState(t, mcmp.MySQLConn, true)
-
-			for _, query := range testcase.queries {
-				_, _ = mcmp.ExecAllowAndCompareError(query)
-				if t.Failed() {
-					break
+	for _, tt := range testcases {
+		for _, keyspace := range []string{unshardedKs, shardedKs, shardScopedKs} {
+			t.Run(getTestName(tt.name, keyspace), func(t *testing.T) {
+				mcmp, closer := start(t)
+				defer closer()
+				if keyspace == shardedKs {
+					t.Skip("Skip test since we don't have sharded foreign key support yet")
 				}
-			}
+				// Set the correct keyspace to use from VtGates.
+				_ = utils.Exec(t, mcmp.VtConn, fmt.Sprintf("use `%v`", keyspace))
 
-			// ensure Vitess database has some data. This ensures not all the commands failed.
-			ensureDatabaseState(t, mcmp.VtConn, false)
-			// Verify the consistency of the data.
-			verifyDataIsCorrect(t, mcmp, 1)
-		})
+				// Ensure that the Vitess database is originally empty
+				ensureDatabaseState(t, mcmp.VtConn, true)
+				ensureDatabaseState(t, mcmp.MySQLConn, true)
+
+				for _, query := range tt.queries {
+					_, _ = mcmp.ExecAllowAndCompareError(query)
+					if t.Failed() {
+						break
+					}
+				}
+
+				// ensure Vitess database has some data. This ensures not all the commands failed.
+				ensureDatabaseState(t, mcmp.VtConn, false)
+				// Verify the consistency of the data.
+				verifyDataIsCorrect(t, mcmp, 1)
+			})
+		}
 	}
 }
 
