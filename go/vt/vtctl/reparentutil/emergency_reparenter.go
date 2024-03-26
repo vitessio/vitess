@@ -449,9 +449,16 @@ func (erp *EmergencyReparenter) promoteIntermediateSource(
 	validCandidateTablets []*topodatapb.Tablet,
 	opts EmergencyReparentOptions,
 ) ([]*topodatapb.Tablet, error) {
-	// we reparent all the other tablets to start replication from our new source
+	// Create a tablet map from all the valid replicas
+	validTabletMap := map[string]*topo.TabletInfo{}
+	for _, candidate := range validCandidateTablets {
+		alias := topoproto.TabletAliasString(candidate.Alias)
+		validTabletMap[alias] = tabletMap[alias]
+	}
+
+	// we reparent all the other valid tablets to start replication from our new source
 	// we wait for all the replicas so that we can choose a better candidate from the ones that started replication later
-	reachableTablets, err := erp.reparentReplicas(ctx, ev, source, tabletMap, statusMap, opts, true /* waitForAllReplicas */, false /* populateReparentJournal */)
+	reachableTablets, err := erp.reparentReplicas(ctx, ev, source, validTabletMap, statusMap, opts, true /* waitForAllReplicas */, false /* populateReparentJournal */)
 	if err != nil {
 		return nil, err
 	}
