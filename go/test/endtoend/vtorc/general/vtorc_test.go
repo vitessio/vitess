@@ -495,3 +495,76 @@ func TestDurabilityPolicySetLater(t *testing.T) {
 	assert.NotNil(t, primary, "should have elected a primary")
 	utils.CheckReplication(t, newCluster, primary, shard0.Vttablets, 10*time.Second)
 }
+
+func TestFullStatusConnectionPooling(t *testing.T) {
+	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
+	defer cluster.PanicHandler(t)
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 4, 0, []string{
+		"--tablet_manager_grpc_concurrency=1",
+	}, cluster.VTOrcConfiguration{
+		PreventCrossDataCenterPrimaryFailover: true,
+	}, 1, "")
+	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
+	shard0 := &keyspace.Shards[0]
+	vtorc := clusterInfo.ClusterInstance.VTOrcProcesses[0]
+
+	// find primary from topo
+	curPrimary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
+	assert.NotNil(t, curPrimary, "should have elected a primary")
+	vtOrcProcess := clusterInfo.ClusterInstance.VTOrcProcesses[0]
+	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.ElectNewPrimaryRecoveryName, 1)
+	utils.WaitForSuccessfulPRSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 1)
+
+	// Kill the current primary.
+	_ = curPrimary.VttabletProcess.Kill()
+
+	// Wait until VTOrc notices some problems
+	status, resp := utils.MakeAPICallRetry(t, vtorc, "/api/replication-analysis", func(_ int, response string) bool {
+		return response == "null"
+	})
+	assert.Equal(t, 200, status)
+	assert.Contains(t, resp, "UnreachablePrimary")
+
+	time.Sleep(1 * time.Minute)
+
+	// Change the primaries ports and restart it.
+	curPrimary.VttabletProcess.Port = clusterInfo.ClusterInstance.GetAndReservePort()
+	curPrimary.VttabletProcess.GrpcPort = clusterInfo.ClusterInstance.GetAndReservePort()
+	err := curPrimary.VttabletProcess.Setup()
+	require.NoError(t, err)
+
+	// See that VTOrc eventually reports no errors.
+	// Wait until there are no problems and the api endpoint returns null
+	status, resp = utils.MakeAPICallRetry(t, vtorc, "/api/replication-analysis", func(_ int, response string) bool {
+		return response != "null"
+	})
+	assert.Equal(t, 200, status)
+	assert.Equal(t, "null", resp)
+
+	// REPEATED
+	// Kill the current primary.
+	_ = curPrimary.VttabletProcess.Kill()
+
+	// Wait until VTOrc notices some problems
+	status, resp = utils.MakeAPICallRetry(t, vtorc, "/api/replication-analysis", func(_ int, response string) bool {
+		return response == "null"
+	})
+	assert.Equal(t, 200, status)
+	assert.Contains(t, resp, "UnreachablePrimary")
+
+	time.Sleep(1 * time.Minute)
+
+	// Change the primaries ports back to original and restart it.
+	curPrimary.VttabletProcess.Port = curPrimary.HTTPPort
+	curPrimary.VttabletProcess.GrpcPort = curPrimary.GrpcPort
+	err = curPrimary.VttabletProcess.Setup()
+	require.NoError(t, err)
+
+	// See that VTOrc eventually reports no errors.
+	// Wait until there are no problems and the api endpoint returns null
+	status, resp = utils.MakeAPICallRetry(t, vtorc, "/api/replication-analysis", func(_ int, response string) bool {
+		return response != "null"
+	})
+	assert.Equal(t, 200, status)
+	assert.Equal(t, "null", resp)
+}
