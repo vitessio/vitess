@@ -21,6 +21,7 @@ import (
 	"io"
 	"runtime/debug"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
@@ -667,7 +668,7 @@ func (stc *ScatterConn) multiGoTransaction(
 			oneShard(rs, i)
 		}
 	} else {
-		var panicRecord *panicData
+		var panicRecord atomic.Value
 		var wg sync.WaitGroup
 		for i, rs := range rss {
 			wg.Add(1)
@@ -675,19 +676,19 @@ func (stc *ScatterConn) multiGoTransaction(
 				defer wg.Done()
 				defer func() {
 					if r := recover(); r != nil {
-						panicRecord = &panicData{
+						panicRecord.Store(&panicData{
 							p:     r,
 							trace: debug.Stack(),
-						}
+						})
 					}
 				}()
 				oneShard(rs, i)
 			}(rs, i)
 		}
 		wg.Wait()
-		if panicRecord != nil {
-			log.Errorf("caught a panic during parallel execution:\n%s", string(panicRecord.trace))
-			panic(panicRecord.p) // rethrow the captured panic in the main thread
+		if pr, ok := panicRecord.Load().(*panicData); ok {
+			log.Errorf("caught a panic during parallel execution:\n%s", string(pr.trace))
+			panic(pr.p) // rethrow the captured panic in the main thread
 		}
 	}
 
