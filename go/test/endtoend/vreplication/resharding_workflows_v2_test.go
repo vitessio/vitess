@@ -157,7 +157,9 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 		args = append(args, "--tablet-types", tabletTypes)
 	}
 	args = append(args, "--action_timeout=2m")
-	t.Logf("Executing workflow command: vtctldclient %v", args)
+	if debugMode {
+		t.Logf("Executing workflow command: vtctldclient %v", strings.Join(args, " "))
+	}
 	output, err := vc.VtctldClient.ExecuteCommandWithOutput(args...)
 	lastOutput = output
 	if err != nil {
