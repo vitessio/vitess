@@ -604,6 +604,12 @@ func (stc *ScatterConn) multiGo(
 	return allErrors
 }
 
+// panicData is used to capture panics during parallel execution.
+type panicData struct {
+	p     any
+	trace []byte
+}
+
 // multiGoTransaction performs the requested 'action' on the specified
 // ResolvedShards in parallel. For each shard, if the requested
 // session is in a transaction, it opens a new transactions on the connection,
@@ -661,38 +667,27 @@ func (stc *ScatterConn) multiGoTransaction(
 			oneShard(rs, i)
 		}
 	} else {
-		type panicData struct {
-			p     any
-			trace []byte
-		}
+		var panicRecord *panicData
 		var wg sync.WaitGroup
-		panicChan := make(chan panicData, 1) // buffer 1 to avoid blocking
-
 		for i, rs := range rss {
 			wg.Add(1)
 			go func(rs *srvtopo.ResolvedShard, i int) {
 				defer wg.Done()
 				defer func() {
 					if r := recover(); r != nil {
-						select {
-						case panicChan <- panicData{
+						panicRecord = &panicData{
 							p:     r,
 							trace: debug.Stack(),
-						}:
-						default: // in case multiple goroutines panic, we only catch the first
 						}
 					}
 				}()
 				oneShard(rs, i)
 			}(rs, i)
 		}
-
 		wg.Wait()
-		close(panicChan) // Close channel after all goroutines are done
-
-		if r, ok := <-panicChan; ok {
-			log.Errorf("caught an panic during parallel execution:\n%s", string(r.trace))
-			panic(r) // rethrow the captured panic in the main thread
+		if panicRecord != nil {
+			log.Errorf("caught a panic during parallel execution:\n%s", string(panicRecord.trace))
+			panic(panicRecord.p) // rethrow the captured panic in the main thread
 		}
 	}
 
