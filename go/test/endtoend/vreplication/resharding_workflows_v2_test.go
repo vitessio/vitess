@@ -17,6 +17,7 @@ limitations under the License.
 package vreplication
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"strconv"
@@ -358,13 +359,13 @@ func testVSchemaForSequenceAfterMoveTables(t *testing.T) {
 	vtgateConn, closeConn := getVTGateConn()
 	defer closeConn()
 	// sanity check
-	output, err := vc.VtctlClient.ExecuteCommandWithOutput("GetVSchema", "product")
+	output, err := vc.VtctldClient.ExecuteCommandWithOutput("GetVSchema", "product")
 	require.NoError(t, err)
 	assert.NotContains(t, output, "customer2\"", "customer2 still found in keyspace product")
 	waitForRowCount(t, vtgateConn, "customer", "customer2", 3)
 
 	// check that customer2 has the sequence tag
-	output, err = vc.VtctlClient.ExecuteCommandWithOutput("GetVSchema", "customer")
+	output, err = vc.VtctldClient.ExecuteCommandWithOutput("GetVSchema", "customer")
 	require.NoError(t, err)
 	assert.Contains(t, output, "\"sequence\": \"customer_seq2\"", "customer2 sequence missing in keyspace customer")
 
@@ -392,12 +393,12 @@ func testVSchemaForSequenceAfterMoveTables(t *testing.T) {
 	require.NoError(t, err)
 
 	// sanity check
-	output, err = vc.VtctlClient.ExecuteCommandWithOutput("GetVSchema", "product")
+	output, err = vc.VtctldClient.ExecuteCommandWithOutput("GetVSchema", "product")
 	require.NoError(t, err)
 	assert.Contains(t, output, "customer2\"", "customer2 not found in keyspace product ")
 
 	// check that customer2 still has the sequence tag
-	output, err = vc.VtctlClient.ExecuteCommandWithOutput("GetVSchema", "product")
+	output, err = vc.VtctldClient.ExecuteCommandWithOutput("GetVSchema", "product")
 	require.NoError(t, err)
 	assert.Contains(t, output, "\"sequence\": \"customer_seq2\"", "customer2 still found in keyspace product")
 
@@ -489,24 +490,42 @@ func testMoveTablesV2Workflow(t *testing.T) {
 
 	testRestOfWorkflow(t)
 
+	listOutputContainsWorkflow := func(output string, workflow string) bool {
+		workflows := []string{}
+		err := json.Unmarshal([]byte(output), &workflows)
+		require.NoError(t, err)
+		for _, w := range workflows {
+			if w == workflow {
+				return true
+			}
+		}
+		return false
+	}
+	listOutputIsEmpty := func(output string) bool {
+		workflows := []string{}
+		err := json.Unmarshal([]byte(output), &workflows)
+		require.NoError(t, err)
+		return len(workflows) == 0
+	}
+
 	listAllArgs := []string{"workflow", "--keyspace", "customer", "list"}
 	output, err := vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)
 	require.NoError(t, err)
-	require.Equal(t, output, "[]")
+	require.True(t, listOutputIsEmpty(output))
 
 	testVSchemaForSequenceAfterMoveTables(t)
 
 	createMoveTablesWorkflow(t, "Lead,Lead-1")
 	output, err = vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)
 	require.NoError(t, err)
-	require.Contains(t, output, "wf1")
+	require.True(t, listOutputContainsWorkflow(output, "wf1"))
 
 	err = tstWorkflowCancel(t)
 	require.NoError(t, err)
 
 	output, err = vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)
 	require.NoError(t, err)
-	require.Equal(t, output, "[]")
+	require.True(t, listOutputIsEmpty(output))
 }
 
 func testPartialSwitches(t *testing.T) {
@@ -714,8 +733,11 @@ func switchReadsNew(t *testing.T, workflowType, cells, ksWorkflow string, revers
 	if reverse {
 		command = "ReverseTraffic"
 	}
-	output, err := vc.VtctlClient.ExecuteCommandWithOutput(workflowType, "--", "--cells="+cells,
-		"--tablet_types=rdonly,replica", command, ksWorkflow)
+	parts := strings.Split(ksWorkflow, ".")
+	require.Len(t, parts, 2)
+	ks, wf := parts[0], parts[1]
+	output, err := vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--workflow", wf, "--target-keyspace", ks, command,
+		"--cells", cells, "--tablet-types=rdonly,replica")
 	require.NoError(t, err, fmt.Sprintf("SwitchReads Error: %s: %s", err, output))
 	if output != "" {
 		fmt.Printf("SwitchReads output: %s\n", output)
@@ -831,7 +853,7 @@ func createAdditionalCustomerShards(t *testing.T, shards string) {
 }
 
 func tstApplySchemaOnlineDDL(t *testing.T, sql string, keyspace string) {
-	err := vc.VtctlClient.ExecuteCommand("ApplySchema", "--", "--ddl_strategy=online",
+	err := vc.VtctldClient.ExecuteCommand("ApplySchema", "--ddl-strategy=online",
 		"--sql", sql, keyspace)
 	require.NoError(t, err, fmt.Sprintf("ApplySchema Error: %s", err))
 }
