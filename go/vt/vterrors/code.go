@@ -89,6 +89,9 @@ var (
 	VT09017 = errorWithoutState("VT09017", vtrpcpb.Code_FAILED_PRECONDITION, "%s", "Invalid syntax for the statement type.")
 	VT09018 = errorWithoutState("VT09018", vtrpcpb.Code_FAILED_PRECONDITION, "%s", "Invalid syntax for the vindex function statement.")
 	VT09019 = errorWithoutState("VT09019", vtrpcpb.Code_FAILED_PRECONDITION, "keyspace '%s' has cyclic foreign keys", "Vitess doesn't support cyclic foreign keys.")
+	VT09022 = errorWithoutState("VT09022", vtrpcpb.Code_FAILED_PRECONDITION, "Destination does not have exactly one shard: %v", "Cannot send query to multiple shards.")
+	VT09023 = errorWithoutState("VT09023", vtrpcpb.Code_FAILED_PRECONDITION, "could not map %v to a keyspace id", "Unable to determine the shard for the given row.")
+	VT09024 = errorWithoutState("VT09024", vtrpcpb.Code_FAILED_PRECONDITION, "could not map %v to a unique keyspace id: %v", "Unable to determine the shard for the given row.")
 
 	VT10001 = errorWithoutState("VT10001", vtrpcpb.Code_ABORTED, "foreign key constraints are not allowed", "Foreign key constraints are not allowed, see https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/.")
 	VT10002 = errorWithoutState("VT10002", vtrpcpb.Code_ABORTED, "'replace into' with foreign key constraints are not allowed", "Foreign key constraints sometimes are not written in binary logs and will cause issue with vreplication workflows like online-ddl.")
@@ -168,6 +171,9 @@ var (
 		VT09017,
 		VT09018,
 		VT09019,
+		VT09022,
+		VT09023,
+		VT09024,
 		VT10001,
 		VT10002,
 		VT12001,
