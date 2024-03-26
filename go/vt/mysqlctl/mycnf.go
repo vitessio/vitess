@@ -31,6 +31,8 @@ import (
 	"time"
 )
 
+const DefaultShutdownTimeout = 5 * time.Minute
+
 // Mycnf is a memory structure that contains a bunch of interesting
 // parameters to start mysqld. It can be used to generate standard
 // my.cnf files from a server id and mysql port. It can also be
