@@ -144,7 +144,7 @@ func pushProjectionToOuter(ctx *plancontext.PlanningContext, p *Projection, sq *
 
 	outer := TableID(sq.Outer)
 	for _, pe := range ap {
-		_, isOffset := pe.Info.(*Offset)
+		_, isOffset := pe.Info.(Offset)
 		if isOffset {
 			continue
 		}
@@ -186,7 +186,7 @@ func pushProjectionToOuterContainer(ctx *plancontext.PlanningContext, p *Project
 
 	outer := TableID(src.Outer)
 	for _, pe := range ap {
-		_, isOffset := pe.Info.(*Offset)
+		_, isOffset := pe.Info.(Offset)
 		if isOffset {
 			continue
 		}

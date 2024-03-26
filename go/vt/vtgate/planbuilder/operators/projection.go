@@ -553,7 +553,10 @@ func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) Operator {
 
 	for _, pe := range ap {
 		switch pe.Info.(type) {
-		case *Offset, *EvalEngine:
+		case Offset:
+			pe.EvalExpr = useOffsets(ctx, pe.EvalExpr, p)
+			continue
+		case *EvalEngine:
 			continue
 		}
 
