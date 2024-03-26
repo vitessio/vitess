@@ -54,7 +54,7 @@ const (
 	DialPoolGroupVTOrc
 )
 
-type invalidatorFunc func(error)
+type invalidatorFunc func()
 
 var (
 	concurrency = 8
@@ -201,10 +201,7 @@ func (client *grpcClient) dialPool(ctx context.Context, dialPoolGroup DialPoolGr
 			}
 			m[addr] = tm
 		}
-		invalidator := func(err error) {
-			if err == nil {
-				return
-			}
+		invalidator := func() {
 			client.mu.Lock()
 			defer client.mu.Unlock()
 			m[addr].cc.Close()
@@ -681,10 +678,10 @@ func (client *Client) FullStatus(ctx context.Context, tablet *topodatapb.Tablet)
 	}
 
 	response, err := c.FullStatus(ctx, &tabletmanagerdatapb.FullStatusRequest{})
-	if invalidator != nil {
-		invalidator(err)
-	}
 	if err != nil {
+		if invalidator != nil {
+			invalidator()
+		}
 		return nil, err
 	}
 	return response.Status, nil
@@ -1175,10 +1172,10 @@ func (client *Client) CheckThrottler(ctx context.Context, tablet *topodatapb.Tab
 	}
 
 	response, err := c.CheckThrottler(ctx, req)
-	if invalidator != nil {
-		invalidator(err)
-	}
 	if err != nil {
+		if invalidator != nil {
+			invalidator()
+		}
 		return nil, err
 	}
 	return response, nil
