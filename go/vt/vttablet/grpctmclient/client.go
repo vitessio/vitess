@@ -48,10 +48,8 @@ import (
 type DialPoolGroup int
 
 const (
-	// DialPoolGroupDefault is the default group for dialing.
-	DialPoolGroupDefault DialPoolGroup = iota
-	DialPoolGroupThrottler
-	DialPoolGroupVTOrc
+	dialPoolGroupThrottler DialPoolGroup = iota
+	dialPoolGroupVTOrc
 )
 
 type invalidatorFunc func()
@@ -122,7 +120,8 @@ type dialer interface {
 }
 
 type poolDialer interface {
-	dialPool(ctx context.Context, dialPoolGroup DialPoolGroup, tablet *topodatapb.Tablet) (tabletmanagerservicepb.TabletManagerClient, invalidatorFunc, error)
+	dialPool(ctx context.Context, tablet *topodatapb.Tablet) (tabletmanagerservicepb.TabletManagerClient, error)
+	dialDedicatedPool(ctx context.Context, dialPoolGroup DialPoolGroup, tablet *topodatapb.Tablet) (tabletmanagerservicepb.TabletManagerClient, invalidatorFunc, error)
 }
 
 // Client implements tmclient.TabletManagerClient.
@@ -166,48 +165,22 @@ func (client *grpcClient) dial(ctx context.Context, tablet *topodatapb.Tablet) (
 	return tabletmanagerservicepb.NewTabletManagerClient(cc), cc, nil
 }
 
-func (client *grpcClient) dialPool(ctx context.Context, dialPoolGroup DialPoolGroup, tablet *topodatapb.Tablet) (tabletmanagerservicepb.TabletManagerClient, invalidatorFunc, error) {
+func (client *grpcClient) createTmc(addr string, opt grpc.DialOption) (*tmc, error) {
+	cc, err := grpcclient.Dial(addr, grpcclient.FailFast(false), opt)
+	if err != nil {
+		return nil, err
+	}
+	return &tmc{
+		cc:     cc,
+		client: tabletmanagerservicepb.NewTabletManagerClient(cc),
+	}, nil
+}
+
+func (client *grpcClient) dialPool(ctx context.Context, tablet *topodatapb.Tablet) (tabletmanagerservicepb.TabletManagerClient, error) {
 	addr := netutil.JoinHostPort(tablet.Hostname, int32(tablet.PortMap["grpc"]))
 	opt, err := grpcclient.SecureDialOption(cert, key, ca, crl, name)
 	if err != nil {
-		return nil, nil, err
-	}
-
-	createTmc := func() (*tmc, error) {
-		cc, err := grpcclient.Dial(addr, grpcclient.FailFast(false), opt)
-		if err != nil {
-			return nil, err
-		}
-		return &tmc{
-			cc:     cc,
-			client: tabletmanagerservicepb.NewTabletManagerClient(cc),
-		}, nil
-	}
-
-	if dialPoolGroup != DialPoolGroupDefault {
-		client.mu.Lock()
-		defer client.mu.Unlock()
-		if client.rpcDialPoolMap == nil {
-			client.rpcDialPoolMap = make(map[DialPoolGroup]addrTmcMap)
-		}
-		if _, ok := client.rpcDialPoolMap[dialPoolGroup]; !ok {
-			client.rpcDialPoolMap[dialPoolGroup] = make(addrTmcMap)
-		}
-		m := client.rpcDialPoolMap[dialPoolGroup]
-		if _, ok := m[addr]; !ok {
-			tm, err := createTmc()
-			if err != nil {
-				return nil, nil, err
-			}
-			m[addr] = tm
-		}
-		invalidator := func() {
-			client.mu.Lock()
-			defer client.mu.Unlock()
-			m[addr].cc.Close()
-			delete(m, addr)
-		}
-		return m[addr].client, invalidator, nil
+		return nil, err
 	}
 
 	client.mu.Lock()
@@ -221,9 +194,9 @@ func (client *grpcClient) dialPool(ctx context.Context, dialPoolGroup DialPoolGr
 		client.mu.Unlock()
 
 		for i := 0; i < cap(c); i++ {
-			tm, err := createTmc()
+			tm, err := client.createTmc(addr, opt)
 			if err != nil {
-				return nil, nil, err
+				return nil, err
 			}
 			c <- tm
 		}
@@ -233,7 +206,39 @@ func (client *grpcClient) dialPool(ctx context.Context, dialPoolGroup DialPoolGr
 
 	result := <-c
 	c <- result
-	return result.client, nil, nil
+	return result.client, nil
+}
+
+func (client *grpcClient) dialDedicatedPool(ctx context.Context, dialPoolGroup DialPoolGroup, tablet *topodatapb.Tablet) (tabletmanagerservicepb.TabletManagerClient, invalidatorFunc, error) {
+	addr := netutil.JoinHostPort(tablet.Hostname, int32(tablet.PortMap["grpc"]))
+	opt, err := grpcclient.SecureDialOption(cert, key, ca, crl, name)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	client.mu.Lock()
+	defer client.mu.Unlock()
+	if client.rpcDialPoolMap == nil {
+		client.rpcDialPoolMap = make(map[DialPoolGroup]addrTmcMap)
+	}
+	if _, ok := client.rpcDialPoolMap[dialPoolGroup]; !ok {
+		client.rpcDialPoolMap[dialPoolGroup] = make(addrTmcMap)
+	}
+	m := client.rpcDialPoolMap[dialPoolGroup]
+	if _, ok := m[addr]; !ok {
+		tm, err := client.createTmc(addr, opt)
+		if err != nil {
+			return nil, nil, err
+		}
+		m[addr] = tm
+	}
+	invalidator := func() {
+		client.mu.Lock()
+		defer client.mu.Unlock()
+		m[addr].cc.Close()
+		delete(m, addr)
+	}
+	return m[addr].client, invalidator, nil
 }
 
 // Close is part of the tmclient.TabletManagerClient interface.
@@ -520,7 +525,7 @@ func (client *Client) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.
 	var err error
 	if usePool {
 		if poolDialer, ok := client.dialer.(poolDialer); ok {
-			c, _, err = poolDialer.dialPool(ctx, DialPoolGroupDefault, tablet)
+			c, err = poolDialer.dialPool(ctx, tablet)
 			if err != nil {
 				return nil, err
 			}
@@ -556,7 +561,7 @@ func (client *Client) ExecuteMultiFetchAsDba(ctx context.Context, tablet *topoda
 	var err error
 	if usePool {
 		if poolDialer, ok := client.dialer.(poolDialer); ok {
-			c, _, err = poolDialer.dialPool(ctx, DialPoolGroupDefault, tablet)
+			c, err = poolDialer.dialPool(ctx, tablet)
 			if err != nil {
 				return nil, err
 			}
@@ -612,7 +617,7 @@ func (client *Client) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.
 	var err error
 	if usePool {
 		if poolDialer, ok := client.dialer.(poolDialer); ok {
-			c, _, err = poolDialer.dialPool(ctx, DialPoolGroupDefault, tablet)
+			c, err = poolDialer.dialPool(ctx, tablet)
 			if err != nil {
 				return nil, err
 			}
@@ -662,7 +667,7 @@ func (client *Client) FullStatus(ctx context.Context, tablet *topodatapb.Tablet)
 	var invalidator invalidatorFunc
 	var err error
 	if poolDialer, ok := client.dialer.(poolDialer); ok {
-		c, invalidator, err = poolDialer.dialPool(ctx, DialPoolGroupVTOrc, tablet)
+		c, invalidator, err = poolDialer.dialDedicatedPool(ctx, dialPoolGroupVTOrc, tablet)
 		if err != nil {
 			return nil, err
 		}
@@ -1156,7 +1161,7 @@ func (client *Client) CheckThrottler(ctx context.Context, tablet *topodatapb.Tab
 	var invalidator invalidatorFunc
 	var err error
 	if poolDialer, ok := client.dialer.(poolDialer); ok {
-		c, invalidator, err = poolDialer.dialPool(ctx, DialPoolGroupThrottler, tablet)
+		c, invalidator, err = poolDialer.dialDedicatedPool(ctx, dialPoolGroupThrottler, tablet)
 		if err != nil {
 			return nil, err
 		}

@@ -30,7 +30,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-func TestDialPool(t *testing.T) {
+func TestDialDedicatedPool(t *testing.T) {
 	ctx := context.Background()
 	client := NewClient()
 	tablet := &topodatapb.Tablet{
@@ -44,7 +44,7 @@ func TestDialPool(t *testing.T) {
 		poolDialer, ok := client.dialer.(poolDialer)
 		require.True(t, ok)
 
-		cli, invalidator, err := poolDialer.dialPool(ctx, DialPoolGroupThrottler, tablet)
+		cli, invalidator, err := poolDialer.dialDedicatedPool(ctx, dialPoolGroupThrottler, tablet)
 		assert.NoError(t, err)
 		assert.NotNil(t, invalidator)
 		assert.NotNil(t, cli)
@@ -55,10 +55,10 @@ func TestDialPool(t *testing.T) {
 		rpcClient, ok := client.dialer.(*grpcClient)
 		require.True(t, ok)
 		assert.NotEmpty(t, rpcClient.rpcDialPoolMap)
-		assert.NotEmpty(t, rpcClient.rpcDialPoolMap[DialPoolGroupThrottler])
-		assert.Empty(t, rpcClient.rpcDialPoolMap[DialPoolGroupVTOrc])
+		assert.NotEmpty(t, rpcClient.rpcDialPoolMap[dialPoolGroupThrottler])
+		assert.Empty(t, rpcClient.rpcDialPoolMap[dialPoolGroupVTOrc])
 
-		c := rpcClient.rpcDialPoolMap[DialPoolGroupThrottler][addr]
+		c := rpcClient.rpcDialPoolMap[dialPoolGroupThrottler][addr]
 		assert.NotNil(t, c)
 		assert.Contains(t, []connectivity.State{connectivity.Connecting, connectivity.TransientFailure}, c.cc.GetState())
 
@@ -77,14 +77,14 @@ func TestDialPool(t *testing.T) {
 		rpcClient, ok := client.dialer.(*grpcClient)
 		require.True(t, ok)
 		assert.NotEmpty(t, rpcClient.rpcDialPoolMap)
-		assert.Empty(t, rpcClient.rpcDialPoolMap[DialPoolGroupThrottler])
-		assert.Empty(t, rpcClient.rpcDialPoolMap[DialPoolGroupVTOrc])
+		assert.Empty(t, rpcClient.rpcDialPoolMap[dialPoolGroupThrottler])
+		assert.Empty(t, rpcClient.rpcDialPoolMap[dialPoolGroupVTOrc])
 
 		assert.Equal(t, connectivity.Shutdown, cachedTmc.cc.GetState())
 	})
 }
 
-func TestDialPoolDefault(t *testing.T) {
+func TestDialPool(t *testing.T) {
 	ctx := context.Background()
 	client := NewClient()
 	tablet := &topodatapb.Tablet{
@@ -98,9 +98,8 @@ func TestDialPoolDefault(t *testing.T) {
 		poolDialer, ok := client.dialer.(poolDialer)
 		require.True(t, ok)
 
-		cli, invalidator, err := poolDialer.dialPool(ctx, DialPoolGroupDefault, tablet)
+		cli, err := poolDialer.dialPool(ctx, tablet)
 		assert.NoError(t, err)
-		assert.Nil(t, invalidator)
 		assert.NotNil(t, cli)
 	})
 
@@ -109,8 +108,8 @@ func TestDialPoolDefault(t *testing.T) {
 		rpcClient, ok := client.dialer.(*grpcClient)
 		require.True(t, ok)
 		assert.Empty(t, rpcClient.rpcDialPoolMap)
-		assert.Empty(t, rpcClient.rpcDialPoolMap[DialPoolGroupThrottler])
-		assert.Empty(t, rpcClient.rpcDialPoolMap[DialPoolGroupVTOrc])
+		assert.Empty(t, rpcClient.rpcDialPoolMap[dialPoolGroupThrottler])
+		assert.Empty(t, rpcClient.rpcDialPoolMap[dialPoolGroupVTOrc])
 
 		assert.NotEmpty(t, rpcClient.rpcClientMap)
 		assert.NotEmpty(t, rpcClient.rpcClientMap[addr])
@@ -139,8 +138,8 @@ func TestDialPoolDefault(t *testing.T) {
 		defer rpcClient.mu.Unlock()
 
 		assert.NotEmpty(t, rpcClient.rpcDialPoolMap)
-		assert.Empty(t, rpcClient.rpcDialPoolMap[DialPoolGroupThrottler])
-		assert.Empty(t, rpcClient.rpcDialPoolMap[DialPoolGroupVTOrc])
+		assert.Empty(t, rpcClient.rpcDialPoolMap[dialPoolGroupThrottler])
+		assert.Empty(t, rpcClient.rpcDialPoolMap[dialPoolGroupVTOrc])
 
 		assert.NotEmpty(t, rpcClient.rpcClientMap)
 		assert.NotEmpty(t, rpcClient.rpcClientMap[addr])
@@ -165,8 +164,8 @@ func TestDialPoolDefault(t *testing.T) {
 		defer rpcClient.mu.Unlock()
 
 		assert.NotEmpty(t, rpcClient.rpcDialPoolMap)
-		assert.Empty(t, rpcClient.rpcDialPoolMap[DialPoolGroupThrottler])
-		assert.Empty(t, rpcClient.rpcDialPoolMap[DialPoolGroupVTOrc])
+		assert.Empty(t, rpcClient.rpcDialPoolMap[dialPoolGroupThrottler])
+		assert.Empty(t, rpcClient.rpcDialPoolMap[dialPoolGroupVTOrc])
 
 		// The default pools are unaffected. Invalidator does not run, connections are not closed.
 		assert.NotEmpty(t, rpcClient.rpcClientMap)
