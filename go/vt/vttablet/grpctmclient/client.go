@@ -623,11 +623,6 @@ func (client *Client) ReplicationStatus(ctx context.Context, tablet *topodatapb.
 
 // FullStatus is part of the tmclient.TabletManagerClient interface.
 func (client *Client) FullStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.FullStatus, error) {
-<<<<<<< HEAD
-	c, closer, err := client.dialer.dial(ctx, tablet)
-	if err != nil {
-		return nil, err
-=======
 	var c tabletmanagerservicepb.TabletManagerClient
 	var invalidator invalidatorFunc
 	var err error
@@ -636,9 +631,17 @@ func (client *Client) FullStatus(ctx context.Context, tablet *topodatapb.Tablet)
 		if err != nil {
 			return nil, err
 		}
->>>>>>> 90c0057753 (Dedicated poolDialer logic for VTOrc, throttler (#15562))
 	}
-	defer closer.Close()
+
+	if c == nil {
+		var closer io.Closer
+		c, closer, err = client.dialer.dial(ctx, tablet)
+		if err != nil {
+			return nil, err
+		}
+		defer closer.Close()
+	}
+
 	response, err := c.FullStatus(ctx, &tabletmanagerdatapb.FullStatusRequest{})
 	if err != nil {
 		if invalidator != nil {
