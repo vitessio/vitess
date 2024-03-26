@@ -202,6 +202,9 @@ func (client *grpcClient) dialPool(ctx context.Context, dialPoolGroup DialPoolGr
 			m[addr] = tm
 		}
 		invalidator := func(err error) {
+			if err == nil {
+				return
+			}
 			client.mu.Lock()
 			defer client.mu.Unlock()
 			m[addr].cc.Close()
