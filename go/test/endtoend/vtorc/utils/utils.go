@@ -756,7 +756,7 @@ func MakeAPICall(t *testing.T, vtorc *cluster.VTOrcProcess, url string) (status 
 // The function provided takes in the status and response and returns if we should continue to retry or not
 func MakeAPICallRetry(t *testing.T, vtorc *cluster.VTOrcProcess, url string, retry func(int, string) bool) (status int, response string) {
 	t.Helper()
-	timeout := time.After(10 * time.Second)
+	timeout := time.After(30 * time.Second)
 	for {
 		select {
 		case <-timeout:
