@@ -71,12 +71,18 @@ var (
 		PreRunE: servenv.CobraPreRunE,
 		RunE:    run,
 	}
+
+	timeouts = &servenv.TimeoutFlags{
+		LameduckPeriod: 50 * time.Millisecond,
+		OnTermTimeout:  shutdownWaitTime + 10*time.Second,
+		OnCloseTimeout: 10 * time.Second,
+	}
 )
 
 func init() {
 	servenv.RegisterDefaultFlags()
 	servenv.RegisterDefaultSocketFileFlags()
-	servenv.RegisterFlags()
+	servenv.RegisterFlagsWithTimeouts(timeouts)
 	servenv.RegisterGRPCServerFlags()
 	servenv.RegisterGRPCServerAuthFlags()
 	servenv.RegisterServiceMapFlag()
