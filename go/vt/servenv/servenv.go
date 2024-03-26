@@ -80,6 +80,7 @@ var (
 	onTermTimeout  = 10 * time.Second
 	onCloseTimeout = 10 * time.Second
 	catchSigpipe   bool
+	usePSLogger    bool
 )
 
 // RegisterFlags installs the flags used by Init, Run, and RunDefault.
@@ -95,6 +96,8 @@ func RegisterFlags() {
 
 		// pid_file.go
 		fs.StringVar(&pidFile, "pid_file", pidFile, "If set, the process will write its pid to the named file, and delete it on graceful shutdown.")
+		// Logging
+		fs.BoolVar(&usePSLogger, "structured-logging", usePSLogger, "whether to use structured logging (PlanetScale Log) logger or the original (glog) logger")
 	})
 }
 
@@ -312,6 +315,14 @@ func ParseFlags(cmd string) {
 	if version {
 		AppVersion.Print()
 		os.Exit(0)
+	}
+
+	if usePSLogger {
+		// Replace glog logger with PlanetScale logger
+		_, err := logutil.SetPlanetScaleLogger(nil)
+		if err != nil {
+			log.Exitf("error while setting the PlanetScale logger: %s", err)
+		}
 	}
 
 	args := fs.Args()
