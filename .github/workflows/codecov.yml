@@ -16,7 +16,7 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Check for changes in files relevant to code coverage
-      uses: dorny/paths-filter@v3.0.1
+      uses: dorny/paths-filter@latest
       id: changes
       with:
         token: ''

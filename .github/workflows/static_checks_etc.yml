@@ -42,7 +42,7 @@ jobs:
 
       - name: Check for changes in Go files
         if: steps.skip-workflow.outputs.skip-workflow == 'false'
-        uses: dorny/paths-filter@v3.0.1
+        uses: dorny/paths-filter@latest
         id: changes
         with:
           token: ''
