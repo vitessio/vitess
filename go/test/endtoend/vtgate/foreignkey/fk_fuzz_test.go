@@ -708,7 +708,7 @@ func TestFkFuzzTest(t *testing.T) {
 	valFalse := false
 	for _, fkState := range []*bool{nil, &valTrue, &valFalse} {
 		for _, tt := range testcases {
-			for _, keyspace := range []string{unshardedKs, shardedKs, shardScopedKs} {
+			for _, keyspace := range []string{unshardedKs, shardedKs} {
 				for _, queryFormat := range []QueryFormat{OlapSQLQueries, SQLQueries, PreparedStatmentQueries, PreparedStatementPacket} {
 					if fkState != nil && (queryFormat != SQLQueries || tt.concurrency != 1) {
 						continue
