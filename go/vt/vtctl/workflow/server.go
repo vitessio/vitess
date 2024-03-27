@@ -3285,14 +3285,10 @@ func (s *Server) canSwitch(ctx context.Context, ts *trafficSwitcher, state *Stat
 		log.Infof("writes already switched no need to check lag")
 		return "", nil
 	}
-	ts.Logger().Infof("Checking if we can switch traffic for workflow %s.%s with starting state: %s",
-		state.TargetKeyspace, state.Workflow, state.String())
 	wf, err := s.GetWorkflow(ctx, state.TargetKeyspace, state.Workflow, false, shards)
 	if err != nil {
 		return "", err
 	}
-	ts.Logger().Infof("Checking if we can switch traffic for workflow %s.%s with GetWorkflow result: %+v",
-		state.TargetKeyspace, state.Workflow, wf)
 	for _, stream := range wf.ShardStreams {
 		for _, st := range stream.GetStreams() {
 			if st.Message == Frozen {

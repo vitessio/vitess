@@ -145,7 +145,7 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 		if BypassLagCheck {
 			args = append(args, "--max-replication-lag-allowed=2542087h")
 		}
-		args = append(args, "--timeout=1m")
+		args = append(args, "--timeout=90s")
 	}
 	if action == workflowActionCreate && options.atomicCopy {
 		args = append(args, "--atomic-copy")

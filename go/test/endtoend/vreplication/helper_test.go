@@ -368,7 +368,6 @@ func waitForWorkflowState(t *testing.T, vc *VitessCluster, ksWorkflow string, wa
 					streamInfos.ForEach(func(attributeKey, attributeValue gjson.Result) bool { // for each attribute in the stream
 						// we need to wait for all streams to have the desired state
 						state = attributeValue.Get("State").String()
-						t.Logf("Workflow %s, on %s, state: %s", ksWorkflow, tabletId.String(), state)
 						if state == wantState {
 							for i := 0; i < len(fieldEqualityChecks); i++ {
 								if kvparts := strings.Split(fieldEqualityChecks[i], "=="); len(kvparts) == 2 {
