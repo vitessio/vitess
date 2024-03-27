@@ -23,7 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/wrangler"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
 type iWorkflow interface {
@@ -117,7 +117,7 @@ func newVtctlMoveTables(mt *moveTablesWorkflow) *VtctlMoveTables {
 }
 
 func (vmt *VtctlMoveTables) Create() {
-	currentWorkflowType = wrangler.MoveTablesWorkflow
+	currentWorkflowType = binlogdatapb.VReplicationWorkflowType_MoveTables
 	vmt.exec(workflowActionCreate)
 }
 
@@ -314,7 +314,7 @@ func newVtctlReshard(rs *reshardWorkflow) *VtctlReshard {
 }
 
 func (vrs *VtctlReshard) Create() {
-	currentWorkflowType = wrangler.ReshardWorkflow
+	currentWorkflowType = binlogdatapb.VReplicationWorkflowType_Reshard
 	vrs.exec(workflowActionCreate)
 }
 
