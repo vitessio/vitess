@@ -19,9 +19,7 @@ package logic
 import (
 	"context"
 	"testing"
-	"time"
 
-	"github.com/patrickmn/go-cache"
 	"github.com/stretchr/testify/require"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -88,7 +86,6 @@ func TestAnalysisEntriesHaveSameRecovery(t *testing.T) {
 			shouldBeEqual:    true,
 		},
 	}
-	emergencyOperationGracefulPeriodMap = cache.New(time.Second*5, time.Millisecond*500)
 	t.Parallel()
 	for _, tt := range tests {
 		t.Run(string(tt.prevAnalysisCode)+","+string(tt.newAnalysisCode), func(t *testing.T) {
@@ -256,12 +253,6 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 		},
 	}
 
-	// Needed for the test to work
-	oldMap := emergencyOperationGracefulPeriodMap
-	emergencyOperationGracefulPeriodMap = cache.New(time.Second*5, time.Millisecond*500)
-	defer func() {
-		emergencyOperationGracefulPeriodMap = oldMap
-	}()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			prevVal := config.ERSEnabled()
