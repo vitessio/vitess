@@ -1520,6 +1520,7 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 
 	initGroup, gctx := errgroup.WithContext(ctx)
 	for _, sequenceMetadata := range sequencesByBackingTable {
+		sequenceMetadata := sequenceMetadata // https://golang.org/doc/faq#closures_and_goroutines
 		initGroup.Go(func() error {
 			return initSequenceTable(gctx, sequenceMetadata)
 		})

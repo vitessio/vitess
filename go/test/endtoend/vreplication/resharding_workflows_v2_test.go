@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -101,15 +102,6 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 
 	args = append(args, "--workflow", workflow, "--target-keyspace", targetKs, action)
 
-<<<<<<< HEAD
-	if BypassLagCheck {
-		args = append(args, "--max_replication_lag_allowed=2542087h")
-	}
-	if atomicCopy {
-		args = append(args, "--atomic-copy")
-	}
-=======
->>>>>>> df1285ca4c (VReplication: Move the Reshard v2 workflow to vtctldclient (#15579))
 	switch action {
 	case workflowActionCreate:
 		if currentWorkflowType == binlogdatapb.VReplicationWorkflowType_MoveTables {
@@ -127,15 +119,8 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 		}
 		// Test new experimental --defer-secondary-keys flag
 		switch currentWorkflowType {
-<<<<<<< HEAD
-		case wrangler.MoveTablesWorkflow, wrangler.MigrateWorkflow, wrangler.ReshardWorkflow:
-			if !atomicCopy {
-=======
 		case binlogdatapb.VReplicationWorkflowType_MoveTables, binlogdatapb.VReplicationWorkflowType_Migrate, binlogdatapb.VReplicationWorkflowType_Reshard:
-			if !options.atomicCopy && options.deferSecondaryKeys {
->>>>>>> df1285ca4c (VReplication: Move the Reshard v2 workflow to vtctldclient (#15579))
-				args = append(args, "--defer-secondary-keys")
-			}
+			args = append(args, "--defer-secondary-keys")
 		}
 	}
 	if currentWorkflowType == binlogdatapb.VReplicationWorkflowType_MoveTables && action == workflowActionSwitchTraffic {
@@ -146,9 +131,6 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 			args = append(args, "--max-replication-lag-allowed=2542087h")
 		}
 		args = append(args, "--timeout=90s")
-	}
-	if action == workflowActionCreate && options.atomicCopy {
-		args = append(args, "--atomic-copy")
 	}
 	if (action == workflowActionCreate || action == workflowActionSwitchTraffic || action == workflowActionReverseTraffic) && cells != "" {
 		args = append(args, "--cells", cells)
@@ -426,13 +408,7 @@ func testReplicatingWithPKEnumCols(t *testing.T) {
 }
 
 func testReshardV2Workflow(t *testing.T) {
-<<<<<<< HEAD
-	currentWorkflowType = wrangler.ReshardWorkflow
-=======
-	vtgateConn, closeConn := getVTGateConn()
-	defer closeConn()
 	currentWorkflowType = binlogdatapb.VReplicationWorkflowType_Reshard
->>>>>>> df1285ca4c (VReplication: Move the Reshard v2 workflow to vtctldclient (#15579))
 
 	// create internal tables on the original customer shards that should be
 	// ignored and not show up on the new shards
@@ -456,13 +432,7 @@ func testReshardV2Workflow(t *testing.T) {
 }
 
 func testMoveTablesV2Workflow(t *testing.T) {
-<<<<<<< HEAD
-	currentWorkflowType = wrangler.MoveTablesWorkflow
-=======
-	vtgateConn, closeConn := getVTGateConn()
-	defer closeConn()
 	currentWorkflowType = binlogdatapb.VReplicationWorkflowType_MoveTables
->>>>>>> df1285ca4c (VReplication: Move the Reshard v2 workflow to vtctldclient (#15579))
 
 	// test basic forward and reverse flows
 	setupCustomerKeyspace(t)

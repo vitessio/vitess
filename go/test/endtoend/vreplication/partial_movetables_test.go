@@ -27,7 +27,6 @@ import (
 	"github.com/tidwall/gjson"
 
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/wrangler"
 )
 
 // testCancel() starts and cancels a partial MoveTables for one of the shards which will be actually moved later on.
@@ -132,7 +131,7 @@ func TestPartialMoveTablesBasic(t *testing.T) {
 
 	testCancel(t)
 
-	currentWorkflowType = wrangler.MoveTablesWorkflow
+	currentWorkflowType = binlogdatapb.VReplicationWorkflowType_MoveTables
 	wfName := "partial80Dash"
 	sourceKs := "customer"
 	targetKs := "customer2"

@@ -2987,14 +2987,6 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 			return handleError("invalid request", vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "requesting reversal of SwitchReads for RDONLYs but RDONLY reads have not been switched"))
 		}
 	}
-<<<<<<< HEAD
-	var cells = req.Cells
-	// If no cells were provided in the command then use the value from the workflow.
-	if len(cells) == 0 && ts.optCells != "" {
-		cells = strings.Split(strings.TrimSpace(ts.optCells), ",")
-	}
-=======
->>>>>>> df1285ca4c (VReplication: Move the Reshard v2 workflow to vtctldclient (#15579))
 
 	// If there are no rdonly tablets in the cells ask to switch rdonly tablets as well so that routing rules
 	// are updated for rdonly as well. Otherwise vitess will not know that the workflow has completed and will
