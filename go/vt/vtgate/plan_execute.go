@@ -120,7 +120,14 @@ func (e *Executor) newExecute(ctx context.Context, safeSession *SafeSession, sql
 			e.executePlan(ctx, plan, vcursor, bindVars, execStart))
 	}
 
-	return e.executePlan(ctx, plan, vcursor, bindVars, execStart)(logStats, safeSession)
+	// Check if boosted and hit Redis
+	// plan.BoostPlanConfig.IsBoosted == true
+
+	statementTypeResult, sqlResult, err := e.executePlan(ctx, plan, vcursor, bindVars, execStart)(logStats, safeSession)
+
+	// Maybe store in Redis here if boosted, but cache miss
+
+	return statementTypeResult, sqlResult, err
 }
 
 func (e *Executor) startTxIfNecessary(ctx context.Context, safeSession *SafeSession) error {

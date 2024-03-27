@@ -18,6 +18,7 @@ package sqlparser
 
 import (
 	"strconv"
+	"vitess.io/vitess/go/vt/vtgate/boost"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -31,7 +32,8 @@ import (
 // RewriteASTResult contains the rewritten ast and meta information about it
 type RewriteASTResult struct {
 	*BindVarNeeds
-	AST Statement // The rewritten AST
+	AST     Statement // The rewritten AST
+	Columns boost.Columns
 }
 
 // ReservedVars keeps track of the bind variable names that have already been used
@@ -145,17 +147,21 @@ func NewReservedVars(prefix string, known BindVars) *ReservedVars {
 
 // PrepareAST will normalize the query
 func PrepareAST(in Statement, reservedVars *ReservedVars, bindVars map[string]*querypb.BindVariable, parameterize bool, keyspace string) (*RewriteASTResult, error) {
+	var boostColumns boost.Columns
+	var err error
+
 	if parameterize {
-		err := Normalize(in, reservedVars, bindVars)
+		boostColumns, err = Normalize(in, reservedVars, bindVars)
 		if err != nil {
 			return nil, err
 		}
 	}
-	return RewriteAST(in, keyspace)
+
+	return RewriteAST(in, keyspace, boostColumns)
 }
 
 // RewriteAST rewrites the whole AST, replacing function calls and adding column aliases to queries
-func RewriteAST(in Statement, keyspace string) (*RewriteASTResult, error) {
+func RewriteAST(in Statement, keyspace string, columns map[string]string) (*RewriteASTResult, error) {
 	er := newExpressionRewriter(keyspace)
 	er.shouldRewriteDatabaseFunc = shouldRewriteDatabaseFunc(in)
 	setRewriter := &setNormalizer{}
@@ -172,6 +178,7 @@ func RewriteAST(in Statement, keyspace string) (*RewriteASTResult, error) {
 	r := &RewriteASTResult{
 		AST:          out,
 		BindVarNeeds: er.bindVars,
+		Columns:      columns,
 	}
 	return r, nil
 }

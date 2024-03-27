@@ -19,6 +19,7 @@ package planbuilder
 import (
 	"errors"
 	"sort"
+	"vitess.io/vitess/go/vt/vtgate/boost"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -93,29 +94,30 @@ func TestBuilder(query string, vschema ContextVSchema) (*engine.Plan, error) {
 	if err != nil {
 		return nil, err
 	}
-	result, err := sqlparser.RewriteAST(stmt, "")
+	result, err := sqlparser.RewriteAST(stmt, "", make(map[string]string))
 	if err != nil {
 		return nil, err
 	}
 
 	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
-	return BuildFromStmt(query, result.AST, reservedVars, vschema, result.BindVarNeeds, true, true)
+	return BuildFromStmt(query, result.AST, reservedVars, vschema, result.BindVarNeeds, true, true, nil)
 }
 
 // ErrPlanNotSupported is an error for plan building not supported
 var ErrPlanNotSupported = errors.New("plan building not supported")
 
 // BuildFromStmt builds a plan based on the AST provided.
-func BuildFromStmt(query string, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema, bindVarNeeds *sqlparser.BindVarNeeds, enableOnlineDDL, enableDirectDDL bool) (*engine.Plan, error) {
+func BuildFromStmt(query string, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema, bindVarNeeds *sqlparser.BindVarNeeds, enableOnlineDDL, enableDirectDDL bool, config *boost.PlanConfig) (*engine.Plan, error) {
 	instruction, err := createInstructionFor(query, stmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	if err != nil {
 		return nil, err
 	}
 	plan := &engine.Plan{
-		Type:         sqlparser.ASTToStatementType(stmt),
-		Original:     query,
-		Instructions: instruction,
-		BindVarNeeds: bindVarNeeds,
+		Type:            sqlparser.ASTToStatementType(stmt),
+		Original:        query,
+		Instructions:    instruction,
+		BindVarNeeds:    bindVarNeeds,
+		BoostPlanConfig: config,
 	}
 	return plan, nil
 }

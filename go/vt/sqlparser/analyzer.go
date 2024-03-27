@@ -65,7 +65,7 @@ const (
 	StmtShowMigrationLogs
 )
 
-//ASTToStatementType returns a StatementType from an AST stmt
+// ASTToStatementType returns a StatementType from an AST stmt
 func ASTToStatementType(stmt Statement) StatementType {
 	switch stmt.(type) {
 	case *Select, *Union:
@@ -121,7 +121,7 @@ func ASTToStatementType(stmt Statement) StatementType {
 	}
 }
 
-//CanNormalize takes Statement and returns if the statement can be normalized.
+// CanNormalize takes Statement and returns if the statement can be normalized.
 func CanNormalize(stmt Statement) bool {
 	switch stmt.(type) {
 	case *Select, *Union, *Insert, *Update, *Delete, *Set, *CallProc, *Stream: // TODO: we could merge this logic into ASTrewriter
@@ -140,7 +140,7 @@ func CachePlan(stmt Statement) bool {
 	return false
 }
 
-//MustRewriteAST takes Statement and returns true if RewriteAST must run on it for correct execution irrespective of user flags.
+// MustRewriteAST takes Statement and returns true if RewriteAST must run on it for correct execution irrespective of user flags.
 func MustRewriteAST(stmt Statement) bool {
 	switch node := stmt.(type) {
 	case *Set:
@@ -301,7 +301,7 @@ func IsDML(sql string) bool {
 	return false
 }
 
-//IsDMLStatement returns true if the query is an INSERT, UPDATE or DELETE statement.
+// IsDMLStatement returns true if the query is an INSERT, UPDATE or DELETE statement.
 func IsDMLStatement(stmt Statement) bool {
 	switch stmt.(type) {
 	case *Insert, *Update, *Delete:
@@ -490,7 +490,7 @@ func NewPlanValue(node Expr) (sqltypes.PlanValue, error) {
 	return sqltypes.PlanValue{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "expression is too complex '%v'", String(node))
 }
 
-//IsLockingFunc returns true for all functions that are used to work with mysql advisory locks
+// IsLockingFunc returns true for all functions that are used to work with mysql advisory locks
 func IsLockingFunc(node Expr) bool {
 	switch p := node.(type) {
 	case *FuncExpr:

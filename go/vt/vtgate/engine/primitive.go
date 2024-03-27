@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"sync/atomic"
 	"time"
+	"vitess.io/vitess/go/vt/vtgate/boost"
 
 	"golang.org/x/sync/errgroup"
 
@@ -161,11 +162,12 @@ type (
 	// each node does its part by combining the results of the
 	// sub-nodes.
 	Plan struct {
-		Type         sqlparser.StatementType // The type of query we have
-		Original     string                  // Original is the original query.
-		Instructions Primitive               // Instructions contains the instructions needed to fulfil the query.
-		BindVarNeeds *sqlparser.BindVarNeeds // Stores BindVars needed to be provided as part of expression rewriting
-		Warnings     []*querypb.QueryWarning // Warnings that need to be yielded every time this query runs
+		Type            sqlparser.StatementType // The type of query we have
+		Original        string                  // Original is the original query.
+		Instructions    Primitive               // Instructions contains the instructions needed to fulfil the query.
+		BindVarNeeds    *sqlparser.BindVarNeeds // Stores BindVars needed to be provided as part of expression rewriting
+		Warnings        []*querypb.QueryWarning // Warnings that need to be yielded every time this query runs
+		BoostPlanConfig *boost.PlanConfig
 
 		ExecCount    uint64 // Count of times this plan was executed
 		ExecTime     uint64 // Total execution time
@@ -249,7 +251,7 @@ func Exists(m Match, p Primitive) bool {
 	return Find(m, p) != nil
 }
 
-//MarshalJSON serializes the plan into a JSON representation.
+// MarshalJSON serializes the plan into a JSON representation.
 func (p *Plan) MarshalJSON() ([]byte, error) {
 	var instructions *PrimitiveDescription
 	if p.Instructions != nil {

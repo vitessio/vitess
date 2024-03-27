@@ -28,7 +28,7 @@ func RedactSQLQuery(sql string) (string, error) {
 		return "", err
 	}
 
-	err = Normalize(stmt, NewReservedVars("redacted", reservedVars), bv)
+	_, err = Normalize(stmt, NewReservedVars("redacted", reservedVars), bv)
 	if err != nil {
 		return "", err
 	}
