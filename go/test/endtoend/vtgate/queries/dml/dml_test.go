@@ -369,7 +369,7 @@ func TestMultiTargetUpdate(t *testing.T) {
 // TestDMLInUnique for update/delete statement using an IN clause with the Vindexes,
 // the query is correctly split according to the corresponding values in the IN list.
 func TestDMLInUnique(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 18, "vtgate")
+	utils.SkipIfBinaryIsBelowVersion(t, 20, "vtgate")
 
 	mcmp, closer := start(t)
 	defer closer()
