@@ -3005,13 +3005,15 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 		}
 	}
 
+	cellsStr := strings.Join(req.Cells, ",")
+
 	// Consistently handle errors by logging and returning them.
 	handleError := func(message string, err error) (*[]string, error) {
-		ts.Logger().Error(err)
+		ts.Logger().Errorf("%s: %v", message, err)
 		return nil, err
 	}
 
-	log.Infof("Switching reads: %s.%s tablet types: %s, cells: %s, workflow state: %s", ts.targetKeyspace, ts.workflow, roTypesToSwitchStr, ts.optCells, state.String())
+	log.Infof("Switching reads: %s.%s tablet types: %s, cells: %s, workflow state: %s", ts.targetKeyspace, ts.workflow, roTypesToSwitchStr, cellsStr, state.String())
 	if !switchReplica && !switchRdonly {
 		return handleError("invalid tablet types", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "tablet types must be REPLICA or RDONLY: %s", roTypesToSwitchStr))
 	}
@@ -3023,14 +3025,6 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 			return handleError("invalid request", vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "requesting reversal of SwitchReads for RDONLYs but RDONLY reads have not been switched"))
 		}
 	}
-	cells := req.Cells
-	// If no cells were provided in the command then use the value from the workflow.
-	if len(cells) == 0 && ts.optCells != "" {
-		cells = strings.Split(strings.TrimSpace(ts.optCells), ",")
-	}
-	for i, cell := range cells {
-		cells[i] = strings.TrimSpace(cell)
-	}
 
 	// If there are no rdonly tablets in the cells ask to switch rdonly tablets as well so that routing rules
 	// are updated for rdonly as well. Otherwise vitess will not know that the workflow has completed and will
@@ -3038,7 +3032,7 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 	// rdonly tablets.
 	if switchReplica && !switchRdonly {
 		var err error
-		rdonlyTabletsExist, err := topotools.DoCellsHaveRdonlyTablets(ctx, s.ts, cells)
+		rdonlyTabletsExist, err := topotools.DoCellsHaveRdonlyTablets(ctx, s.ts, req.Cells)
 		if err != nil {
 			return nil, err
 		}
@@ -3076,20 +3070,20 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
 		if ts.isPartialMigration {
 			ts.Logger().Infof("Partial migration, skipping switchTableReads as traffic is all or nothing per shard and overridden for reads AND writes in the ShardRoutingRule created when switching writes.")
-		} else if err := sw.switchTableReads(ctx, cells, roTabletTypes, direction); err != nil {
+		} else if err := sw.switchTableReads(ctx, req.Cells, roTabletTypes, direction); err != nil {
 			return handleError("failed to switch read traffic for the tables", err)
 		}
 		return sw.logs(), nil
 	}
-	ts.Logger().Infof("About to switchShardReads: %+v, %+s, %+v", cells, roTypesToSwitchStr, direction)
-	if err := sw.switchShardReads(ctx, cells, roTabletTypes, direction); err != nil {
+	ts.Logger().Infof("About to switchShardReads: cells: %s, tablet types: %s, direction: %d", cellsStr, roTypesToSwitchStr, direction)
+	if err := sw.switchShardReads(ctx, req.Cells, roTabletTypes, direction); err != nil {
 		return handleError("failed to switch read traffic for the shards", err)
 	}
 
-	ts.Logger().Infof("switchShardReads Completed: %+v, %+s, %+v", cells, roTypesToSwitchStr, direction)
-	if err := s.ts.ValidateSrvKeyspace(ctx, ts.targetKeyspace, strings.Join(cells, ",")); err != nil {
+	ts.Logger().Infof("switchShardReads Completed: cells: %s, tablet types: %s, direction: %d", cellsStr, roTypesToSwitchStr, direction)
+	if err := s.ts.ValidateSrvKeyspace(ctx, ts.targetKeyspace, cellsStr); err != nil {
 		err2 := vterrors.Wrapf(err, "after switching shard reads, found SrvKeyspace for %s is corrupt in cell %s",
-			ts.targetKeyspace, strings.Join(cells, ","))
+			ts.targetKeyspace, cellsStr)
 		return handleError("failed to validate SrvKeyspace record", err2)
 	}
 	return sw.logs(), nil
@@ -3108,7 +3102,7 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 
 	// Consistently handle errors by logging and returning them.
 	handleError := func(message string, err error) (int64, *[]string, error) {
-		werr := vterrors.Errorf(vtrpcpb.Code_INTERNAL, fmt.Sprintf("%s: %v", message, err))
+		werr := vterrors.Wrapf(err, message)
 		ts.Logger().Error(werr)
 		return 0, nil, werr
 	}
@@ -3175,8 +3169,27 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 			return 0, sw.logs(), nil
 		}
 
+		// We stop writes on the source before stopping the streams so that the catchup
+		// time is lessened and other workflows that we have to migrate such as
+		// materialize workflows that are within a single keyspace (source and target)
+		// also have a chance to catch up as well as those are internally generated
+		// GTIDs within the shard. For materialization streams that we migrate where
+		// the source and target are the keyspace being resharded, we wait for those
+		// to catchup in the stopStreams path before we actually stop them.
+		ts.Logger().Infof("Stopping source writes")
+		if err := sw.stopSourceWrites(ctx); err != nil {
+			sw.cancelMigration(ctx, sm)
+			return handleError(fmt.Sprintf("failed to stop writes in the %s keyspace", ts.SourceKeyspaceName()), err)
+		}
+
 		ts.Logger().Infof("Stopping streams")
-		sourceWorkflows, err = sw.stopStreams(ctx, sm)
+		// Use a shorter context for this since since when doing a Reshard, if there are intra keyspace
+		// materializations then we have to wait for them to catchup before switching traffic for the
+		// Reshard workflow. We use the timeout where which is used to limit the amount of time that we
+		// wait for VReplication to catch up.
+		stopCtx, stopCancel := context.WithTimeout(ctx, timeout)
+		defer stopCancel()
+		sourceWorkflows, err = sw.stopStreams(stopCtx, sm)
 		if err != nil {
 			for key, streams := range sm.Streams() {
 				for _, stream := range streams {
@@ -3185,12 +3198,6 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 			}
 			sw.cancelMigration(ctx, sm)
 			return handleError("failed to stop the workflow streams", err)
-		}
-
-		ts.Logger().Infof("Stopping source writes")
-		if err := sw.stopSourceWrites(ctx); err != nil {
-			sw.cancelMigration(ctx, sm)
-			return handleError(fmt.Sprintf("failed to stop writes in the %s keyspace", ts.SourceKeyspaceName()), err)
 		}
 
 		if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {

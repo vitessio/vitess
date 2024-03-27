@@ -91,6 +91,7 @@ func commandSwitchTraffic(cmd *cobra.Command, args []string) error {
 	req := &vtctldatapb.WorkflowSwitchTrafficRequest{
 		Keyspace:                  BaseOptions.TargetKeyspace,
 		Workflow:                  BaseOptions.Workflow,
+		Cells:                     SwitchTrafficOptions.Cells,
 		TabletTypes:               SwitchTrafficOptions.TabletTypes,
 		MaxReplicationLagAllowed:  protoutil.DurationToProto(SwitchTrafficOptions.MaxReplicationLagAllowed),
 		Timeout:                   protoutil.DurationToProto(SwitchTrafficOptions.Timeout),

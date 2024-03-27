@@ -18,27 +18,33 @@ package workflow
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
 	"text/template"
 
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 /*
@@ -249,7 +255,7 @@ func (sm *StreamMigrator) LegacyStopStreams(ctx context.Context) ([]string, erro
 	return sm.legacyVerifyStreamPositions(ctx, positions)
 }
 
-// StopStreams stops streams
+// StopStreams stops streams.
 func (sm *StreamMigrator) StopStreams(ctx context.Context) ([]string, error) {
 	if sm.streams == nil {
 		return nil, nil
@@ -612,6 +618,10 @@ func (sm *StreamMigrator) readSourceStreams(ctx context.Context, cancelMigrate b
 						tabletStreams = append(tabletStreams[:i], tabletStreams[i+1:]...)
 						return nil
 					}
+					if refStream.WorkflowType == binlogdatapb.VReplicationWorkflowType_Materialize && refStream.BinlogSource.Keyspace == sm.ts.TargetKeyspaceName() {
+						tabletStreams = append(tabletStreams[:i], tabletStreams[i+1:]...)
+						return nil
+					}
 				}
 
 				return fmt.Errorf("streams are mismatched across source shards: %s vs %s", refshard, shard)
@@ -678,9 +688,59 @@ func (sm *StreamMigrator) stopSourceStreams(ctx context.Context) error {
 	)
 
 	err := sm.ts.ForAllSources(func(source *MigrationSource) error {
-		tabletStreams := sm.streams[source.GetShard().ShardName()]
+		shard := source.GetShard().ShardName()
+		tabletStreams := sm.streams[shard]
 		if len(tabletStreams) == 0 {
 			return nil
+		}
+
+		// For materialize workflows where the source and target are both the keyspace
+		// that is being resharded, we need to wait for those to catchup as well.
+		// New writes have already been blocked on the source, but the materialization
+		// workflow(s) may still need to catchup with writes that happend just before
+		// writes were stopped on the source.
+		eg, egCtx := errgroup.WithContext(ctx)
+		for _, vrs := range tabletStreams {
+			if vrs.WorkflowType == binlogdatapb.VReplicationWorkflowType_Materialize && vrs.BinlogSource.Keyspace == sm.ts.TargetKeyspaceName() {
+				if vrs.BinlogSource == nil { // Should never happen
+					return fmt.Errorf("no binlog source is defined for materialization workflow %s", vrs.Workflow)
+				}
+				eg.Go(func() error {
+					si, err := sm.ts.TopoServer().GetTabletMapForShard(egCtx, vrs.BinlogSource.GetKeyspace(), vrs.BinlogSource.GetShard())
+					if err != nil {
+						return err
+					}
+					var primary *topo.TabletInfo
+					for _, tablet := range si {
+						if tablet.GetType() == topodatapb.TabletType_PRIMARY {
+							primary = tablet
+							break
+						}
+					}
+					if primary == nil {
+						return fmt.Errorf("no primary tablet found for materialization workflow %s and its stream from the binary log source %s/%s",
+							vrs.Workflow, vrs.BinlogSource.GetKeyspace(), vrs.BinlogSource.GetShard())
+					}
+					pos, err := sm.ts.TabletManagerClient().PrimaryPosition(egCtx, primary.Tablet)
+					if err != nil {
+						return err
+					}
+					sm.ts.Logger().Infof("Waiting for Materialization workflow %s on %v/%v to reach position %v, starting from position %s on tablet %s",
+						vrs.Workflow, vrs.BinlogSource.GetKeyspace(), vrs.BinlogSource.GetShard(), pos, vrs.Position, topoproto.TabletAliasString(primary.GetAlias()))
+					if err := sm.ts.TabletManagerClient().VReplicationWaitForPos(egCtx, primary.Tablet, vrs.ID, pos); err != nil {
+						return err
+					}
+					return nil
+				})
+			}
+		}
+		if err := eg.Wait(); err != nil {
+			var xtra string
+			if errors.Is(err, context.DeadlineExceeded) {
+				xtra = " (increase the --timeout value if needed)"
+			}
+			return vterrors.Errorf(vtrpcpb.Code_CANCELED, "error waiting for intra keyspace materialization workflow %s to catch up%s: %v",
+				tabletStreams[0].Workflow, xtra, err)
 		}
 
 		query := fmt.Sprintf("update _vt.vreplication set state='Stopped', message='for cutover' where id in %s", VReplicationStreams(tabletStreams).Values())
@@ -915,8 +975,20 @@ func (sm *StreamMigrator) createTargetStreams(ctx context.Context, tmpl []*VRepl
 	return sm.ts.ForAllTargets(func(target *MigrationTarget) error {
 		ig := vreplication.NewInsertGenerator(binlogdatapb.VReplicationWorkflowState_Stopped, target.GetPrimary().DbName())
 		tabletStreams := VReplicationStreams(tmpl).Copy().ToSlice()
+		var err error
 
 		for _, vrs := range tabletStreams {
+			if vrs.WorkflowType == binlogdatapb.VReplicationWorkflowType_Materialize && vrs.BinlogSource.Keyspace == sm.ts.TargetKeyspaceName() {
+				// We need to update the binlog source as well. We need to go from e.g.
+				// a single - -> - stream to two -80,80- -> -80,80- streams. It's always
+				// 1 to 1 in this scenario so we use the target shard's name and primary
+				// tablet's position for the source.
+				vrs.BinlogSource.Shard = target.GetShard().ShardName()
+				vrs.Position, err = binlogplayer.DecodePosition(target.Position)
+				if err != nil {
+					return err
+				}
+			}
 			for _, rule := range vrs.BinlogSource.Filter.Rules {
 				buf := &strings.Builder{}
 
@@ -932,7 +1004,7 @@ func (sm *StreamMigrator) createTargetStreams(ctx context.Context, tmpl []*VRepl
 				vrs.WorkflowType, vrs.WorkflowSubType, vrs.DeferSecondaryKeys)
 		}
 
-		_, err := sm.ts.VReplicationExec(ctx, target.GetPrimary().GetAlias(), ig.String())
+		_, err = sm.ts.VReplicationExec(ctx, target.GetPrimary().GetAlias(), ig.String())
 		return err
 	})
 }

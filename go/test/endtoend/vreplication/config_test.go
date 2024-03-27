@@ -142,6 +142,14 @@ create table nopk (name varchar(128), age int unsigned);
         "sequence": "customer_seq"
       }
     },
+    "customer_copy": {
+      "column_vindexes": [
+        {
+          "column": "cid",
+          "name": "reverse_bits"
+        }
+      ]
+    },
     "customer2": {
       "column_vindexes": [
         {
@@ -398,6 +406,19 @@ create table nopk (name varchar(128), age int unsigned);
 		"source_expression": "select * from product",
 		"create_ddl": "create table cproduct(pid bigint, description varchar(128), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key(pid)) CHARSET=utf8mb4"
 	}]
+}
+`
+
+	materializeCustomerCopySpec = `
+{
+  "workflow": "customer_copy",
+  "source_keyspace": "customer",
+  "target_keyspace": "customer",
+  "table_settings": [{
+    "target_table": "customer_copy",
+    "source_expression": "select * from customer",
+    "create_ddl": "create table customer_copy (cid int, name varchar(128) collate utf8mb4_bin, meta json default null, typ enum('individual','soho','enterprise'), sport set('football','cricket','baseball'), ts timestamp not null default current_timestamp, bits bit(2) default b'11', date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', dec80 decimal(8,0), blb blob, primary key(cid,typ), key(name)) CHARSET=utf8mb4"
+  }]
 }
 `
 
