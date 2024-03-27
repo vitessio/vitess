@@ -543,15 +543,12 @@ func (ts *trafficSwitcher) dropSourceShards(ctx context.Context) error {
 }
 
 func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection) error {
-	var fromShards, toShards []*topo.ShardInfo
-	if direction == DirectionForward {
-		fromShards, toShards = ts.SourceShards(), ts.TargetShards()
-	} else {
-		fromShards, toShards = ts.TargetShards(), ts.SourceShards()
-	}
-	if err := ts.TopoServer().ValidateSrvKeyspace(ctx, ts.TargetKeyspaceName(), strings.Join(cells, ",")); err != nil {
+	cellsStr := strings.Join(cells, ",")
+	log.Infof("switchShardReads: cells: %s, tablet types: %+v, direction %d", cellsStr, servedTypes, direction)
+	fromShards, toShards := ts.SourceShards(), ts.TargetShards()
+	if err := ts.TopoServer().ValidateSrvKeyspace(ctx, ts.TargetKeyspaceName(), cellsStr); err != nil {
 		err2 := vterrors.Wrapf(err, "Before switching shard reads, found SrvKeyspace for %s is corrupt in cell %s",
-			ts.TargetKeyspaceName(), strings.Join(cells, ","))
+			ts.TargetKeyspaceName(), cellsStr)
 		log.Errorf("%w", err2)
 		return err2
 	}
@@ -567,9 +564,9 @@ func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string,
 			return err
 		}
 	}
-	if err := ts.TopoServer().ValidateSrvKeyspace(ctx, ts.TargetKeyspaceName(), strings.Join(cells, ",")); err != nil {
+	if err := ts.TopoServer().ValidateSrvKeyspace(ctx, ts.TargetKeyspaceName(), cellsStr); err != nil {
 		err2 := vterrors.Wrapf(err, "after switching shard reads, found SrvKeyspace for %s is corrupt in cell %s",
-			ts.TargetKeyspaceName(), strings.Join(cells, ","))
+			ts.TargetKeyspaceName(), cellsStr)
 		log.Errorf("%w", err2)
 		return err2
 	}
@@ -577,7 +574,7 @@ func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string,
 }
 
 func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection) error {
-	log.Infof("switchTableReads: servedTypes: %+v, direction %t", servedTypes, direction)
+	log.Infof("switchTableReads: cells: %s, tablet types: %+v, direction %d", strings.Join(cells, ","), servedTypes, direction)
 	rules, err := topotools.GetRoutingRules(ctx, ts.TopoServer())
 	if err != nil {
 		return err
@@ -935,7 +932,7 @@ func (ts *trafficSwitcher) waitForCatchup(ctx context.Context, filteredReplicati
 	}); err != nil {
 		return err
 	}
-	// all targets have caught up, record their positions for setting up reverse workflows
+	// All targets have caught up, record their positions for setting up reverse workflows.
 	return ts.ForAllTargets(func(target *MigrationTarget) error {
 		var err error
 		target.Position, err = ts.TabletManagerClient().PrimaryPosition(ctx, target.GetPrimary().Tablet)
@@ -1001,7 +998,7 @@ func (ts *trafficSwitcher) cancelMigration(ctx context.Context, sm *StreamMigrat
 		err = ts.changeShardsAccess(ctx, ts.SourceKeyspaceName(), ts.SourceShards(), allowWrites)
 	}
 	if err != nil {
-		ts.Logger().Errorf("Cancel migration failed:", err)
+		ts.Logger().Errorf("Cancel migration failed: %v", err)
 	}
 
 	sm.CancelMigration(ctx)
@@ -1360,7 +1357,7 @@ func (ts *trafficSwitcher) findSequenceUsageInKeyspace(vschema *vschemapb.Keyspa
 
 	for _, table := range ts.Tables() {
 		vs, ok := vschema.Tables[table]
-		if !ok || vs == nil || vs.AutoIncrement == nil || vs.AutoIncrement.Sequence == "" {
+		if !ok || vs.GetAutoIncrement().GetSequence() == "" {
 			continue
 		}
 		sm := &sequenceMetadata{
@@ -1402,7 +1399,7 @@ func (ts *trafficSwitcher) findSequenceUsageInKeyspace(vschema *vschemapb.Keyspa
 // the primary tablet serving the sequence to refresh/reset its cache to
 // be sure that it does not provide a value that is less than the current max.
 func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequencesByBackingTable map[string]*sequenceMetadata) error {
-	initSequenceTable := func(ictx context.Context, sequenceTableName string, sequenceMetadata *sequenceMetadata) error {
+	initSequenceTable := func(ictx context.Context, sequenceMetadata *sequenceMetadata) error {
 		// Now we need to run this query on the target shards in order
 		// to get the max value and set the next id for the sequence to
 		// a higher value.
@@ -1449,6 +1446,10 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 			return ictx.Err()
 		default:
 		}
+		if len(shardResults) == 0 { // This should never happen
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "did not get any results for the max used sequence value for target table %s.%s in order to initialize the backing sequence table",
+				ts.targetKeyspace, sequenceMetadata.usingTableName)
+		}
 		// Sort the values to find the max value across all shards.
 		sort.Slice(shardResults, func(i, j int) bool {
 			return shardResults[i] < shardResults[j]
@@ -1483,12 +1484,7 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 		)
 		// Now execute this on the primary tablet of the unsharded keyspace
 		// housing the backing table.
-		primaryTablet, ierr := ts.TopoServer().GetTablet(ictx, sequenceShard.PrimaryAlias)
-		if ierr != nil {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the primary tablet for %s.%s using alias %s: %v",
-				sequenceShard.Keyspace(), sequenceShard.ShardName(), sequenceShard.PrimaryAlias, ierr)
-		}
-		qr, ierr := ts.ws.tmc.ExecuteFetchAsApp(ictx, primaryTablet.Tablet, true, &tabletmanagerdatapb.ExecuteFetchAsAppRequest{
+		qr, ierr := ts.ws.tmc.ExecuteFetchAsApp(ictx, sequenceTablet.Tablet, true, &tabletmanagerdatapb.ExecuteFetchAsAppRequest{
 			Query:   []byte(query.Query),
 			MaxRows: 1,
 		})
@@ -1523,10 +1519,9 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 	}
 
 	initGroup, gctx := errgroup.WithContext(ctx)
-	for sequenceTableName, sequenceMetadata := range sequencesByBackingTable {
-		sequenceTableName, sequenceMetadata := sequenceTableName, sequenceMetadata // https://golang.org/doc/faq#closures_and_goroutines
+	for _, sequenceMetadata := range sequencesByBackingTable {
 		initGroup.Go(func() error {
-			return initSequenceTable(gctx, sequenceTableName, sequenceMetadata)
+			return initSequenceTable(gctx, sequenceMetadata)
 		})
 	}
 	return initGroup.Wait()

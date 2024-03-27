@@ -23,6 +23,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/log"
+<<<<<<< HEAD
+=======
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+>>>>>>> df1285ca4c (VReplication: Move the Reshard v2 workflow to vtctldclient (#15579))
 )
 
 type moveTablesFlavor int
@@ -91,10 +95,15 @@ func newVtctlMoveTables(mt *moveTables) *VtctlMoveTables {
 }
 
 func (vmt *VtctlMoveTables) Create() {
+<<<<<<< HEAD
 	log.Infof("vmt is %+v", vmt.vc, vmt.tables)
 	err := tstWorkflowExec(vmt.vc.t, "", vmt.workflowName, vmt.sourceKeyspace, vmt.targetKeyspace,
 		vmt.tables, workflowActionCreate, "", vmt.sourceShards, "", vmt.atomicCopy)
 	require.NoError(vmt.vc.t, err)
+=======
+	currentWorkflowType = binlogdatapb.VReplicationWorkflowType_MoveTables
+	vmt.exec(workflowActionCreate)
+>>>>>>> df1285ca4c (VReplication: Move the Reshard v2 workflow to vtctldclient (#15579))
 }
 
 func (vmt *VtctlMoveTables) SwitchReadsAndWrites() {
@@ -201,6 +210,90 @@ func (v VtctldMoveTables) Cancel() {
 }
 
 func (v VtctldMoveTables) Complete() {
+<<<<<<< HEAD
+=======
+	args := []string{"Complete"}
+	args = append(args, v.completeFlags...)
+	v.exec(args...)
+}
+
+func (v VtctldMoveTables) GetLastOutput() string {
+	return v.lastOutput
+}
+
+func (v VtctldMoveTables) Start() {
+	v.exec("Start")
+}
+
+func (v VtctldMoveTables) Stop() {
+	v.exec("Stop")
+}
+
+// Reshard wrappers
+
+type reshardWorkflow struct {
+	*workflowInfo
+	sourceShards   string
+	targetShards   string
+	skipSchemaCopy bool
+
+	// currently only used by vtctld
+	lastOutput    string
+	createFlags   []string
+	completeFlags []string
+	cancelFlags   []string
+	switchFlags   []string
+}
+
+type iReshard interface {
+	iWorkflow
+}
+
+func newReshard(vc *VitessCluster, rs *reshardWorkflow, flavor workflowFlavor) iReshard {
+	rs.vc = vc
+	var rs2 iReshard
+	if flavor == workflowFlavorRandom {
+		flavor = workflowFlavors[rand.IntN(len(workflowFlavors))]
+	}
+	switch flavor {
+	case workflowFlavorVtctl:
+		rs2 = newVtctlReshard(rs)
+	case workflowFlavorVtctld:
+		rs2 = newVtctldReshard(rs)
+	default:
+		panic("unreachable")
+	}
+	log.Infof("Using reshard flavor: %s", rs2.Flavor())
+	return rs2
+}
+
+type VtctlReshard struct {
+	*reshardWorkflow
+}
+
+func (vrs *VtctlReshard) Flavor() string {
+	return "vtctl"
+}
+
+func newVtctlReshard(rs *reshardWorkflow) *VtctlReshard {
+	return &VtctlReshard{rs}
+}
+
+func (vrs *VtctlReshard) Create() {
+	currentWorkflowType = binlogdatapb.VReplicationWorkflowType_Reshard
+	vrs.exec(workflowActionCreate)
+}
+
+func (vrs *VtctlReshard) SwitchReadsAndWrites() {
+	vrs.exec(workflowActionSwitchTraffic)
+}
+
+func (vrs *VtctlReshard) ReverseReadsAndWrites() {
+	vrs.exec(workflowActionReverseTraffic)
+}
+
+func (vrs *VtctlReshard) Show() {
+>>>>>>> df1285ca4c (VReplication: Move the Reshard v2 workflow to vtctldclient (#15579))
 	//TODO implement me
 	panic("implement me")
 }

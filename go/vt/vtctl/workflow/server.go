@@ -2966,13 +2966,16 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 		}
 	}
 
+	cellsStr := strings.Join(req.Cells, ",")
+
 	// Consistently handle errors by logging and returning them.
 	handleError := func(message string, err error) (*[]string, error) {
-		ts.Logger().Error(err)
-		return nil, err
+		werr := vterrors.Wrapf(err, message)
+		ts.Logger().Error(werr)
+		return nil, werr
 	}
 
-	log.Infof("Switching reads: %s.%s tablet types: %s, cells: %s, workflow state: %s", ts.targetKeyspace, ts.workflow, roTypesToSwitchStr, ts.optCells, state.String())
+	log.Infof("Switching reads: %s.%s tablet types: %s, cells: %s, workflow state: %s", ts.targetKeyspace, ts.workflow, roTypesToSwitchStr, cellsStr, state.String())
 	if !switchReplica && !switchRdonly {
 		return handleError("invalid tablet types", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "tablet types must be REPLICA or RDONLY: %s", roTypesToSwitchStr))
 	}
@@ -2984,11 +2987,14 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 			return handleError("invalid request", vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "requesting reversal of SwitchReads for RDONLYs but RDONLY reads have not been switched"))
 		}
 	}
+<<<<<<< HEAD
 	var cells = req.Cells
 	// If no cells were provided in the command then use the value from the workflow.
 	if len(cells) == 0 && ts.optCells != "" {
 		cells = strings.Split(strings.TrimSpace(ts.optCells), ",")
 	}
+=======
+>>>>>>> df1285ca4c (VReplication: Move the Reshard v2 workflow to vtctldclient (#15579))
 
 	// If there are no rdonly tablets in the cells ask to switch rdonly tablets as well so that routing rules
 	// are updated for rdonly as well. Otherwise vitess will not know that the workflow has completed and will
@@ -2996,7 +3002,7 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 	// rdonly tablets.
 	if switchReplica && !switchRdonly {
 		var err error
-		rdonlyTabletsExist, err := topotools.DoCellsHaveRdonlyTablets(ctx, s.ts, cells)
+		rdonlyTabletsExist, err := topotools.DoCellsHaveRdonlyTablets(ctx, s.ts, req.Cells)
 		if err != nil {
 			return nil, err
 		}
@@ -3034,20 +3040,20 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
 		if ts.isPartialMigration {
 			ts.Logger().Infof("Partial migration, skipping switchTableReads as traffic is all or nothing per shard and overridden for reads AND writes in the ShardRoutingRule created when switching writes.")
-		} else if err := sw.switchTableReads(ctx, cells, roTabletTypes, direction); err != nil {
+		} else if err := sw.switchTableReads(ctx, req.Cells, roTabletTypes, direction); err != nil {
 			return handleError("failed to switch read traffic for the tables", err)
 		}
 		return sw.logs(), nil
 	}
-	ts.Logger().Infof("About to switchShardReads: %+v, %+s, %+v", cells, roTypesToSwitchStr, direction)
-	if err := sw.switchShardReads(ctx, cells, roTabletTypes, direction); err != nil {
+	ts.Logger().Infof("About to switchShardReads: cells: %s, tablet types: %s, direction: %d", cellsStr, roTypesToSwitchStr, direction)
+	if err := sw.switchShardReads(ctx, req.Cells, roTabletTypes, direction); err != nil {
 		return handleError("failed to switch read traffic for the shards", err)
 	}
 
-	ts.Logger().Infof("switchShardReads Completed: %+v, %+s, %+v", cells, roTypesToSwitchStr, direction)
-	if err := s.ts.ValidateSrvKeyspace(ctx, ts.targetKeyspace, strings.Join(cells, ",")); err != nil {
+	ts.Logger().Infof("switchShardReads Completed: cells: %s, tablet types: %s, direction: %d", cellsStr, roTypesToSwitchStr, direction)
+	if err := s.ts.ValidateSrvKeyspace(ctx, ts.targetKeyspace, cellsStr); err != nil {
 		err2 := vterrors.Wrapf(err, "after switching shard reads, found SrvKeyspace for %s is corrupt in cell %s",
-			ts.targetKeyspace, strings.Join(cells, ","))
+			ts.targetKeyspace, cellsStr)
 		return handleError("failed to validate SrvKeyspace record", err2)
 	}
 	return sw.logs(), nil
@@ -3066,7 +3072,7 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 
 	// Consistently handle errors by logging and returning them.
 	handleError := func(message string, err error) (int64, *[]string, error) {
-		werr := vterrors.Errorf(vtrpcpb.Code_INTERNAL, fmt.Sprintf("%s: %v", message, err))
+		werr := vterrors.Wrapf(err, message)
 		ts.Logger().Error(werr)
 		return 0, nil, werr
 	}
