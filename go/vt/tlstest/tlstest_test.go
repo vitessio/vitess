@@ -182,7 +182,7 @@ func testClientServer(t *testing.T, combineCerts bool) {
 	if err == nil {
 		t.Fatalf("Dial or first Read was expected to fail")
 	}
-	if !strings.Contains(err.Error(), "bad certificate") {
+	if !strings.Contains(err.Error(), "tls: certificate required") {
 		t.Errorf("Wrong error returned: %v", err)
 	}
 }
