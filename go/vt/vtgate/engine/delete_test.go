@@ -627,7 +627,7 @@ func TestDeleteInUnique(t *testing.T) {
 					evalengine.NewLiteralInt(2),
 					evalengine.NewLiteralInt(4),
 				}}},
-			Query: "delete t where id in ::vals",
+			Query: "delete t where id in ::__vals",
 		},
 	}
 
@@ -641,6 +641,6 @@ func TestDeleteInUnique(t *testing.T) {
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations sharded [type:INT64 value:"1" type:INT64 value:"2" type:INT64 value:"4"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(d2fd8867d50d2dfe)`,
-		`ExecuteMultiShard sharded.-20: delete t where id in ::vals {__vals: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"4"}} sharded.20-: delete t where id in ::vals {__vals: type:TUPLE values:{type:INT64 value:"2"}} true false`,
+		`ExecuteMultiShard sharded.-20: delete t where id in ::__vals {__vals: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"4"}} sharded.20-: delete t where id in ::__vals {__vals: type:TUPLE values:{type:INT64 value:"2"}} true false`,
 	})
 }
