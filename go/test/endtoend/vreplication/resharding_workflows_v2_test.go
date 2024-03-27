@@ -23,7 +23,6 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -146,7 +145,7 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 		if BypassLagCheck {
 			args = append(args, "--max-replication-lag-allowed=2542087h")
 		}
-		args = append(args, "--timeout", time.Minute.String())
+		args = append(args, "--timeout=1m")
 	}
 	if action == workflowActionCreate && options.atomicCopy {
 		args = append(args, "--atomic-copy")
@@ -157,7 +156,7 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 	if action != workflowActionComplete && tabletTypes != "" {
 		args = append(args, "--tablet-types", tabletTypes)
 	}
-	args = append(args, "--action_timeout=2m")
+	args = append(args, "--action_timeout=10m") // At this point something is up so fail the test
 	if debugMode {
 		t.Logf("Executing workflow command: vtctldclient %v", strings.Join(args, " "))
 	}
