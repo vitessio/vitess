@@ -63,7 +63,7 @@ func (tm *TabletManager) CreateVReplicationWorkflow(ctx context.Context, req *ta
 		}
 		// Use the local cell if none are specified.
 		if len(req.Cells) == 0 || strings.TrimSpace(req.Cells[0]) == "" {
-			req.Cells = append(req.Cells, tm.Tablet().Alias.Cell)
+			req.Cells = []string{tm.Tablet().Alias.Cell}
 		}
 		wfState := binlogdatapb.VReplicationWorkflowState_Stopped.String()
 		tabletTypesStr := topoproto.MakeStringTypeCSV(req.TabletTypes)
