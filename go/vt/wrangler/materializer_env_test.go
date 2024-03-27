@@ -19,11 +19,14 @@ package wrangler
 import (
 	"context"
 	"fmt"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
+
+	_flag "vitess.io/vitess/go/internal/flag"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
@@ -298,4 +301,9 @@ func (tmc *testMaterializerTMClient) ApplySchema(ctx context.Context, tablet *to
 	}
 
 	return nil, nil
+}
+
+func TestMain(m *testing.M) {
+	_flag.ParseFlagsForTest()
+	os.Exit(m.Run())
 }

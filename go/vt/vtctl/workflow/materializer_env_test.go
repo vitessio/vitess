@@ -52,13 +52,11 @@ type queryResult struct {
 }
 
 type testMaterializerEnv struct {
-	ws      *Server
-	ms      *vtctldatapb.MaterializeSettings
-	sources []string
-	targets []string
-	tablets map[int]*topodatapb.Tablet
-	// Importing the tabletmanager package causes a circular dependency. :-(
-	//tms      map[int]*tabletmanager.TabletManager
+	ws       *Server
+	ms       *vtctldatapb.MaterializeSettings
+	sources  []string
+	targets  []string
+	tablets  map[int]*topodatapb.Tablet
 	topoServ *topo.Server
 	cell     string
 	tmc      *testMaterializerTMClient

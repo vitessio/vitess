@@ -18,6 +18,7 @@ package workflow
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -96,6 +97,24 @@ func (mz *materializer) getWorkflowSubType() (binlogdatapb.VReplicationWorkflowS
 	}
 }
 
+func (mz *materializer) getOptionsJSON() (string, error) {
+	vrOptions := &vtctldatapb.WorkflowOptions{}
+	if mz.IsMultiTenantMigration() {
+		vrOptions.TenantId = mz.ms.WorkflowOptions.TenantId
+		if mz.ms.WorkflowOptions.SourceKeyspaceAlias != "" {
+			vrOptions.SourceKeyspaceAlias = mz.ms.WorkflowOptions.SourceKeyspaceAlias
+		}
+	}
+	optionsJSON, err := json.Marshal(vrOptions)
+	if err != nil {
+		return "", err
+	}
+	if optionsJSON == nil {
+		optionsJSON = []byte("{}")
+	}
+	return string(optionsJSON), nil
+}
+
 func (mz *materializer) createWorkflowStreams(req *tabletmanagerdatapb.CreateVReplicationWorkflowRequest) error {
 	if err := validateNewWorkflow(mz.ctx, mz.ts, mz.tmc, mz.ms.TargetKeyspace, mz.ms.Workflow); err != nil {
 		return err
@@ -114,6 +133,11 @@ func (mz *materializer) createWorkflowStreams(req *tabletmanagerdatapb.CreateVRe
 		return err
 	}
 	req.WorkflowSubType = workflowSubType
+	optionsJSON, err := mz.getOptionsJSON()
+	if err != nil {
+		return err
+	}
+	req.Options = optionsJSON
 
 	return mz.forAllTargets(func(target *topo.ShardInfo) error {
 		targetPrimary, err := mz.ts.GetTablet(mz.ctx, target.PrimaryAlias)
@@ -132,6 +156,7 @@ func (mz *materializer) createWorkflowStreams(req *tabletmanagerdatapb.CreateVRe
 		if len(sourceShards) == 1 && key.KeyRangeEqual(sourceShards[0].KeyRange, target.KeyRange) {
 			streamKeyRangesEqual = true
 		}
+
 		// Each tablet needs its own copy of the request as it will have a unique
 		// BinlogSource.
 		tabletReq := req.CloneVT()
@@ -143,6 +168,10 @@ func (mz *materializer) createWorkflowStreams(req *tabletmanagerdatapb.CreateVRe
 		_, err = mz.tmc.CreateVReplicationWorkflow(mz.ctx, targetPrimary.Tablet, tabletReq)
 		return err
 	})
+}
+
+func (mz *materializer) getTenantClause() (*sqlparser.Expr, error) {
+	return getTenantClause(mz.ms.WorkflowOptions, mz.targetVSchema, mz.env.Parser())
 }
 
 func (mz *materializer) generateBinlogSources(ctx context.Context, targetShard *topo.ShardInfo, sourceShards []*topo.ShardInfo, keyRangesEqual bool) ([]*binlogdatapb.BinlogSource, error) {
@@ -158,6 +187,16 @@ func (mz *materializer) generateBinlogSources(ctx context.Context, targetShard *
 			TargetTimeZone:  mz.ms.TargetTimeZone,
 			OnDdl:           binlogdatapb.OnDDLAction(binlogdatapb.OnDDLAction_value[mz.ms.OnDdl]),
 		}
+
+		var tenantClause *sqlparser.Expr
+		var err error
+		if mz.IsMultiTenantMigration() {
+			tenantClause, err = mz.getTenantClause()
+			if err != nil {
+				return nil, err
+			}
+		}
+
 		for _, ts := range mz.ms.TableSettings {
 			rule := &binlogdatapb.Rule{
 				Match: ts.TargetTable,
@@ -177,7 +216,6 @@ func (mz *materializer) generateBinlogSources(ctx context.Context, targetShard *
 			if !ok {
 				return nil, fmt.Errorf("unrecognized statement: %s", ts.SourceExpression)
 			}
-			filter := ts.SourceExpression
 			if !keyRangesEqual && mz.targetVSchema.Keyspace.Sharded && mz.targetVSchema.Tables[ts.TargetTable].Type != vindexes.TypeReference {
 				cv, err := vindexes.FindBestColVindex(mz.targetVSchema.Tables[ts.TargetTable])
 				if err != nil {
@@ -202,25 +240,12 @@ func (mz *materializer) generateBinlogSources(ctx context.Context, targetShard *
 					Name:  sqlparser.NewIdentifierCI("in_keyrange"),
 					Exprs: subExprs,
 				}
-				if sel.Where != nil {
-					sel.Where = &sqlparser.Where{
-						Type: sqlparser.WhereClause,
-						Expr: &sqlparser.AndExpr{
-							Left:  inKeyRange,
-							Right: sel.Where.Expr,
-						},
-					}
-				} else {
-					sel.Where = &sqlparser.Where{
-						Type: sqlparser.WhereClause,
-						Expr: inKeyRange,
-					}
-				}
-
-				filter = sqlparser.String(sel)
+				addFilter(sel, inKeyRange)
 			}
-
-			rule.Filter = filter
+			if tenantClause != nil {
+				addFilter(sel, *tenantClause)
+			}
+			rule.Filter = sqlparser.String(sel)
 			bls.Filter.Rules = append(bls.Filter.Rules, rule)
 		}
 		blses = append(blses, bls)
@@ -613,6 +638,13 @@ func primaryVindexesDiffer(ms *vtctldatapb.MaterializeSettings, source, target *
 		if !strings.EqualFold(spv.Type, tpv.Type) {
 			return true
 		}
+	}
+	return false
+}
+
+func (mz *materializer) IsMultiTenantMigration() bool {
+	if mz.ms.WorkflowOptions != nil && mz.ms.WorkflowOptions.TenantId != "" {
+		return true
 	}
 	return false
 }
