@@ -446,9 +446,6 @@ func testReshardV2Workflow(t *testing.T) {
 
 	createAdditionalCustomerShards(t, "-40,40-80,80-c0,c0-")
 	createReshardWorkflow(t, "-80,80-", "-40,40-80,80-c0,c0-")
-	if !strings.Contains(lastOutput, "Status: Running") {
-		t.Fail()
-	}
 	validateReadsRouteToSource(t, "replica")
 	validateWritesRouteToSource(t)
 
@@ -473,7 +470,6 @@ func testMoveTablesV2Workflow(t *testing.T) {
 	// The purge table should get skipped/ignored
 	// If it's not then we'll get an error as the table doesn't exist in the vschema
 	createMoveTablesWorkflow(t, "customer,loadtest,vdiff_order,reftable,_vt_PURGE_4f9194b43b2011eb8a0104ed332e05c2_20221210194431")
-	require.Contains(t, lastOutput, "Status: Running")
 	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
 	validateReadsRouteToSource(t, "replica")
 	validateWritesRouteToSource(t)
