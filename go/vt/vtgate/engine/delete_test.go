@@ -611,3 +611,36 @@ func TestDeleteMultiEqual(t *testing.T) {
 		`ExecuteMultiShard sharded.-20: dummy_delete {} sharded.20-: dummy_delete {} true false`,
 	})
 }
+
+// TestDeleteInUnique is a test function for delete statement using an IN clause with the Vindexes,
+// the query is correctly split according to the corresponding values in the IN list.
+func TestDeleteInUnique(t *testing.T) {
+	ks := buildTestVSchema().Keyspaces["sharded"]
+	upd := &Delete{
+		DML: &DML{
+			RoutingParameters: &RoutingParameters{
+				Opcode:   IN,
+				Keyspace: ks.Keyspace,
+				Vindex:   ks.Vindexes["hash"],
+				Values: []evalengine.Expr{evalengine.TupleExpr{
+					evalengine.NewLiteralInt(1),
+					evalengine.NewLiteralInt(2),
+					evalengine.NewLiteralInt(4),
+				}}},
+			Query: "delete t where id in ::vals",
+		},
+	}
+
+	tupleBV := &querypb.BindVariable{
+		Type:   querypb.Type_TUPLE,
+		Values: append([]*querypb.Value{sqltypes.ValueToProto(sqltypes.NewInt64(1))}, sqltypes.ValueToProto(sqltypes.NewInt64(2)), sqltypes.ValueToProto(sqltypes.NewInt64(4))),
+	}
+	vc := newDMLTestVCursor("-20", "20-")
+	vc.shardForKsid = []string{"-20", "20-"}
+	_, err := upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{"__vals": tupleBV}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations sharded [type:INT64 value:"1" type:INT64 value:"2" type:INT64 value:"4"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(d2fd8867d50d2dfe)`,
+		`ExecuteMultiShard sharded.-20: delete t where id in ::vals {__vals: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"4"}} sharded.20-: delete t where id in ::vals {__vals: type:TUPLE values:{type:INT64 value:"2"}} true false`,
+	})
+}

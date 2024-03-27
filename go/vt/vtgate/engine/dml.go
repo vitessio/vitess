@@ -78,7 +78,8 @@ func (dml *DML) execUnsharded(ctx context.Context, primitive Primitive, vcursor 
 	return execShard(ctx, primitive, vcursor, dml.Query, bindVars, rss[0], true /* rollbackOnError */, !dml.PreventAutoCommit /* canAutocommit */)
 }
 
-func (dml *DML) execMultiDestination(ctx context.Context, primitive Primitive, vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard, dmlSpecialFunc func(context.Context, VCursor, map[string]*querypb.BindVariable, []*srvtopo.ResolvedShard) error, bvs []map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (dml *DML) execMultiDestination(ctx context.Context, primitive Primitive, vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard, dmlSpecialFunc func(context.Context, VCursor,
+	map[string]*querypb.BindVariable, []*srvtopo.ResolvedShard) error, bvs []map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	if len(rss) == 0 {
 		return &sqltypes.Result{}, nil
 	}

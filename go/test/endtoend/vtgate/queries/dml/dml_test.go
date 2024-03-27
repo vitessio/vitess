@@ -18,6 +18,8 @@ package dml
 
 import (
 	"testing"
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -362,4 +364,49 @@ func TestMultiTargetUpdate(t *testing.T) {
 		`[[INT64(1) INT64(1) INT64(4)] [INT64(2) INT64(3) INT64(5)] [INT64(2) INT64(4) INT64(1)] [INT64(1) INT64(40) INT64(2)]]`)
 	mcmp.AssertMatches(`select oid, ename from oevent_tbl order by oid`,
 		`[[INT64(1) VARCHAR("a")] [INT64(2) VARCHAR("xyz")] [INT64(3) VARCHAR("a")] [INT64(4) VARCHAR("a")]]`)
+}
+
+// TestDMLInUnique for update/delete statement using an IN clause with the Vindexes,
+// the query is correctly split according to the corresponding values in the IN list.
+func TestDMLInUnique(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 18, "vtgate")
+
+	mcmp, closer := start(t)
+	defer closer()
+
+	// initial rows
+	mcmp.Exec("insert into user_tbl(id, region_id, `name`) values (1,1,'a'),(2,2,'a'),(3,3,'a'),(4,4,'a'),(5,5,'a'),(6,6,'a')")
+
+	qr := mcmp.Exec("update user_tbl set `name` = 'b' where region_id in (1,2,3,4,5,6)")
+	assert.EqualValues(t, 6, qr.RowsAffected)
+	qr = mcmp.Exec("delete from user_tbl where region_id in (1,2,3,4,5,6)")
+	assert.EqualValues(t, 6, qr.RowsAffected)
+	mcmp.Exec("insert into user_tbl(id, region_id, `name`) values (1,1,'a'),(2,2,'a'),(3,3,'a'),(4,4,'a'),(5,5,'a'),(6,6,'a')")
+
+	assertVExplainEquals := func(t *testing.T, conn *mysql.Conn, query, expected string) {
+		t.Helper()
+		qr := utils.Exec(t, conn, query)
+		// strip the first column from each row as it is not deterministic in a VExplain query
+		for i := range qr.Rows {
+			qr.Rows[i] = qr.Rows[i][1:]
+		}
+		if err := sqltypes.RowsEqualsStr(expected, qr.Rows); err != nil {
+			t.Error(err)
+		}
+	}
+	expected := `[
+		[VARCHAR("sks") VARCHAR("-80") VARCHAR("begin")] 
+		[VARCHAR("sks") VARCHAR("-80") VARCHAR("update user_tbl set ` + "`name`" + ` = 'b' where region_id in (1, 2, 3, 5)")] 
+		[VARCHAR("sks") VARCHAR("80-") VARCHAR("begin")] 
+		[VARCHAR("sks") VARCHAR("80-") VARCHAR("update user_tbl set ` + "`name`" + ` = 'b' where region_id in (4, 6)")]
+    ]`
+	assertVExplainEquals(t, mcmp.VtConn, "vexplain /*vt+ EXECUTE_DML_QUERIES */ queries update user_tbl set `name` = 'b' where region_id in (1,2,3,4,5,6)", expected)
+
+	expected = `[
+		[VARCHAR("sks") VARCHAR("-80") VARCHAR("begin")] 
+		[VARCHAR("sks") VARCHAR("-80") VARCHAR("delete from user_tbl where region_id in (1, 2, 3, 5)")] 
+		[VARCHAR("sks") VARCHAR("80-") VARCHAR("begin")] 
+		[VARCHAR("sks") VARCHAR("80-") VARCHAR("delete from user_tbl where region_id in (4, 6)")]
+    ]`
+	assertVExplainEquals(t, mcmp.VtConn, "vexplain /*vt+ EXECUTE_DML_QUERIES */ queries delete from user_tbl where region_id in (1,2,3,4,5,6)", expected)
 }
