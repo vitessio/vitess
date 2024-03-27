@@ -59,6 +59,8 @@ var (
 
 	mysqlPort = flag.Int("mysql_port", 3306, "mysql port")
 
+	configPath = flag.String("boost_configs_path", "./boost_query_configs.yaml", "path to the boost query configurations file")
+
 	ts              *topo.Server
 	resilientServer *srvtopo.ResilientServer
 )
@@ -214,7 +216,7 @@ func main() {
 	vtgate.QueryLogHandler = "/debug/vtgate/querylog"
 	vtgate.QueryLogzHandler = "/debug/vtgate/querylogz"
 	vtgate.QueryzHandler = "/debug/vtgate/queryz"
-	vtg := vtgate.Init(context.Background(), resilientServer, tpb.Cells[0], tabletTypesToWait)
+	vtg := vtgate.Init(context.Background(), resilientServer, tpb.Cells[0], tabletTypesToWait, configPath)
 
 	// vtctld configuration and init
 	vtctld.InitVtctld(ts)

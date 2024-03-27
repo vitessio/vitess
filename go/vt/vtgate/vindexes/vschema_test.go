@@ -223,7 +223,7 @@ func TestUnshardedVSchema(t *testing.T) {
 	}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
-		uniqueTables: map[string]*Table{
+		UniqueTables: map[string]*Table{
 			"t1":   t1,
 			"dual": dual,
 		},
@@ -285,7 +285,7 @@ func TestVSchemaColumns(t *testing.T) {
 	}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
-		uniqueTables: map[string]*Table{
+		UniqueTables: map[string]*Table{
 			"t1":   t1,
 			"dual": dual,
 		},
@@ -349,7 +349,7 @@ func TestVSchemaColumnListAuthoritative(t *testing.T) {
 	}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
-		uniqueTables: map[string]*Table{
+		UniqueTables: map[string]*Table{
 			"t1":   t1,
 			"dual": dual,
 		},
@@ -428,7 +428,7 @@ func TestVSchemaPinned(t *testing.T) {
 	}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
-		uniqueTables: map[string]*Table{
+		UniqueTables: map[string]*Table{
 			"t1":   t1,
 			"dual": dual,
 		},
@@ -530,7 +530,7 @@ func TestShardedVSchemaOwned(t *testing.T) {
 	}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
-		uniqueTables: map[string]*Table{
+		UniqueTables: map[string]*Table{
 			"t1":   t1,
 			"dual": dual,
 		},
@@ -778,7 +778,7 @@ func TestVSchemaRoutingRules(t *testing.T) {
 				Error: errors.New("table t2 not found"),
 			},
 		},
-		uniqueTables: map[string]*Table{
+		UniqueTables: map[string]*Table{
 			"t1":   t1,
 			"t2":   t2,
 			"dual": dual1,
@@ -1195,7 +1195,7 @@ func TestShardedVSchemaMultiColumnVindex(t *testing.T) {
 	}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
-		uniqueTables: map[string]*Table{
+		UniqueTables: map[string]*Table{
 			"t1":   t1,
 			"dual": dual,
 		},
@@ -1293,7 +1293,7 @@ func TestShardedVSchemaNotOwned(t *testing.T) {
 	}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
-		uniqueTables: map[string]*Table{
+		UniqueTables: map[string]*Table{
 			"t1":   t1,
 			"dual": dual,
 		},
@@ -1425,7 +1425,7 @@ func TestBuildVSchemaDupSeq(t *testing.T) {
 	}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
-		uniqueTables: map[string]*Table{
+		UniqueTables: map[string]*Table{
 			"t1":   nil,
 			"dual": duala,
 		},
@@ -1498,7 +1498,7 @@ func TestBuildVSchemaDupTable(t *testing.T) {
 	}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
-		uniqueTables: map[string]*Table{
+		UniqueTables: map[string]*Table{
 			"t1":   nil,
 			"dual": duala,
 		},
@@ -1632,7 +1632,7 @@ func TestBuildVSchemaDupVindex(t *testing.T) {
 	}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
-		uniqueTables: map[string]*Table{
+		UniqueTables: map[string]*Table{
 			"t1":   nil,
 			"dual": duala,
 		},
@@ -1949,7 +1949,7 @@ func TestSequence(t *testing.T) {
 	}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
-		uniqueTables: map[string]*Table{
+		UniqueTables: map[string]*Table{
 			"seq":  seq,
 			"t1":   t1,
 			"t2":   t2,

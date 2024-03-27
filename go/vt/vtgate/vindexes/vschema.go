@@ -58,7 +58,7 @@ const (
 // used for building routing plans.
 type VSchema struct {
 	RoutingRules   map[string]*RoutingRule `json:"routing_rules"`
-	uniqueTables   map[string]*Table
+	UniqueTables   map[string]*Table
 	uniqueVindexes map[string]Vindex
 	Keyspaces      map[string]*KeyspaceSchema `json:"keyspaces"`
 }
@@ -165,7 +165,7 @@ type AutoIncrement struct {
 func BuildVSchema(source *vschemapb.SrvVSchema) (vschema *VSchema) {
 	vschema = &VSchema{
 		RoutingRules:   make(map[string]*RoutingRule),
-		uniqueTables:   make(map[string]*Table),
+		UniqueTables:   make(map[string]*Table),
 		uniqueVindexes: make(map[string]Vindex),
 		Keyspaces:      make(map[string]*KeyspaceSchema),
 	}
@@ -189,7 +189,7 @@ func BuildKeyspaceSchema(input *vschemapb.Keyspace, keyspace string) (*KeyspaceS
 		},
 	}
 	vschema := &VSchema{
-		uniqueTables:   make(map[string]*Table),
+		UniqueTables:   make(map[string]*Table),
 		uniqueVindexes: make(map[string]Vindex),
 		Keyspaces:      make(map[string]*KeyspaceSchema),
 	}
@@ -335,10 +335,10 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 		// Add the table to the map entries.
 		// If the keyspace requires explicit routing, don't include it in global routing
 		if !ks.RequireExplicitRouting {
-			if _, ok := vschema.uniqueTables[tname]; ok {
-				vschema.uniqueTables[tname] = nil
+			if _, ok := vschema.UniqueTables[tname]; ok {
+				vschema.UniqueTables[tname] = nil
 			} else {
-				vschema.uniqueTables[tname] = t
+				vschema.UniqueTables[tname] = t
 			}
 		}
 		ksvschema.Tables[tname] = t
@@ -362,7 +362,7 @@ func resolveAutoIncrement(source *vschemapb.SrvVSchema, vschema *VSchema) {
 			if err != nil {
 				// Better to remove the table than to leave it partially initialized.
 				delete(ksvschema.Tables, tname)
-				delete(vschema.uniqueTables, tname)
+				delete(vschema.UniqueTables, tname)
 				ksvschema.Error = fmt.Errorf("cannot resolve sequence %s: %v", table.AutoIncrement.Sequence, err)
 				continue
 			}
@@ -391,7 +391,7 @@ func addDual(vschema *VSchema) {
 			// the keyspaces. For consistency, we'll always use the
 			// first keyspace by lexical ordering.
 			first = ksname
-			vschema.uniqueTables["dual"] = t
+			vschema.UniqueTables["dual"] = t
 		}
 	}
 }
@@ -464,7 +464,7 @@ func (vschema *VSchema) FindTable(keyspace, tablename string) (*Table, error) {
 // findTable is like FindTable, but does not return an error if a table is not found.
 func (vschema *VSchema) findTable(keyspace, tablename string) (*Table, error) {
 	if keyspace == "" {
-		table, ok := vschema.uniqueTables[tablename]
+		table, ok := vschema.UniqueTables[tablename]
 		if table == nil {
 			if ok {
 				return nil, fmt.Errorf("ambiguous table reference: %s", tablename)

@@ -44,6 +44,8 @@ var (
 	tabletTypesToWait = flag.String("tablet_types_to_wait", "", "wait till connected for specified tablet types during Gateway initialization")
 )
 
+var configPath = flag.String("boost_configs_path", "./boost_query_configs.yaml", "path to the boost query configurations file")
+
 var resilientServer *srvtopo.ResilientServer
 var legacyHealthCheck discovery.LegacyHealthCheck
 
@@ -153,7 +155,7 @@ func main() {
 		vtg = vtgate.LegacyInit(context.Background(), legacyHealthCheck, resilientServer, *cell, *vtgate.RetryCount, tabletTypes)
 	} else {
 		// use new Init otherwise
-		vtg = vtgate.Init(context.Background(), resilientServer, *cell, tabletTypes)
+		vtg = vtgate.Init(context.Background(), resilientServer, *cell, tabletTypes, configPath)
 	}
 
 	servenv.OnRun(func() {

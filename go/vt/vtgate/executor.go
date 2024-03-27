@@ -101,6 +101,8 @@ type Executor struct {
 
 	vm            *VSchemaManager
 	schemaTracker SchemaInfo
+
+	queryFilterConfigs *boost.QueryFilterConfigs
 }
 
 var executorOnce sync.Once
@@ -119,18 +121,20 @@ func NewExecutor(
 	streamSize int,
 	cacheCfg *cache.Config,
 	schemaTracker SchemaInfo,
+	queryFilterConfigs *boost.QueryFilterConfigs,
 ) *Executor {
 	e := &Executor{
-		serv:            serv,
-		cell:            cell,
-		resolver:        resolver,
-		scatterConn:     resolver.scatterConn,
-		txConn:          resolver.scatterConn.txConn,
-		plans:           cache.NewDefaultCacheImpl(cacheCfg),
-		normalize:       normalize,
-		warnShardedOnly: warnOnShardedOnly,
-		streamSize:      streamSize,
-		schemaTracker:   schemaTracker,
+		serv:               serv,
+		cell:               cell,
+		resolver:           resolver,
+		scatterConn:        resolver.scatterConn,
+		txConn:             resolver.scatterConn.txConn,
+		plans:              cache.NewDefaultCacheImpl(cacheCfg),
+		normalize:          normalize,
+		warnShardedOnly:    warnOnShardedOnly,
+		streamSize:         streamSize,
+		schemaTracker:      schemaTracker,
+		queryFilterConfigs: queryFilterConfigs,
 	}
 
 	vschemaacl.Init()
@@ -1202,7 +1206,7 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	}
 	ignoreMaxMemoryRows := sqlparser.IgnoreMaxMaxMemoryRowsDirective(stmt)
 	vcursor.SetIgnoreMaxMemoryRows(ignoreMaxMemoryRows)
-	var boostPlanConfig *boost.PlanConfig
+	var boostPlanConfig = boost.NonBoostedPlanConfig()
 
 	// Normalize if possible and retry.
 	if (e.normalize && sqlparser.CanNormalize(stmt)) || sqlparser.MustRewriteAST(stmt) {
@@ -1214,7 +1218,7 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 		statement = result.AST
 		bindVarNeeds = result.BindVarNeeds
 		query = sqlparser.String(statement)
-		boostPlanConfig = configForBoost(result.Columns, "<TODO>")
+		boostPlanConfig = configForBoost(e.queryFilterConfigs, result.Columns, vcursor.vschema.UniqueTables)
 	}
 
 	if logStats != nil {
@@ -1242,30 +1246,31 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	return plan, nil
 }
 
-// TODO
-func configForBoost(columns boost.Columns, table string) *boost.PlanConfig {
-	configColumns := map[string]string{
-		"user_id": "1337",
+func configForBoost(configs *boost.QueryFilterConfigs, columns boost.Columns, inputMap map[string]*vindexes.Table) *boost.PlanConfig {
+	if configs == nil || columns == nil {
+		return boost.NonBoostedPlanConfig()
 	}
 
-	//todo compare sets for ordering
-	if !keysMatch(columns, configColumns) {
-		return &boost.PlanConfig{}
+	for tableName, _ := range inputMap {
+		for _, filterConfig := range configs.BoostConfigs {
+			if tableName == filterConfig.TableName {
+
+				if keysMatch(columns, filterConfig.Columns) {
+					return &boost.PlanConfig{
+						IsBoosted:    true,
+						BoostColumns: columns,
+					}
+				}
+			}
+		}
 	}
 
-	return &boost.PlanConfig{
-		IsBoosted:    true,
-		BoostColumns: columns,
-	}
+	return boost.NonBoostedPlanConfig()
 }
 
-func keysMatch(map1, map2 map[string]string) bool {
-	if len(map1) != len(map2) {
-		return false
-	}
-
-	for k := range map1 {
-		if _, exists := map2[k]; !exists {
+func keysMatch(columns map[string]string, keys []string) bool {
+	for _, k := range keys {
+		if _, exists := columns[k]; !exists {
 			return false
 		}
 	}
