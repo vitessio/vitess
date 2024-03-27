@@ -477,7 +477,7 @@ func TestFlushBinaryLogs(t *testing.T) {
 	defer testMysqld.Close()
 
 	// We expect this query to be executed
-	err := testMysqld.SetSemiSyncEnabled(true, true)
+	err := testMysqld.FlushBinaryLogs(context.Background())
 	assert.ErrorContains(t, err, "FLUSH BINARY LOGS")
 }
 
