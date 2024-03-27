@@ -129,12 +129,35 @@ func addColumnsToInput(ctx *plancontext.PlanningContext, root Operator) Operator
 	return TopDown(root, TableID, visitor, stopAtRoute)
 }
 
-// addColumnsToInput adds columns needed by an operator to its input.
-// This happens only when the filter expression can be retrieved as an offset from the underlying mysql.
-func pullDistinctFromUNION(_ *plancontext.PlanningContext, root Operator) Operator {
+func expandUNION(ctx *plancontext.PlanningContext, root Operator) Operator {
 	visitor := func(in Operator, _ semantics.TableSet, isRoot bool) (Operator, *ApplyResult) {
 		union, ok := in.(*Union)
-		if !ok || !union.distinct {
+		if !ok {
+			return in, NoRewrite
+		}
+
+		var missingType bool
+		var newSources []Operator
+		for _, source := range union.Sources {
+			var typeNeeded []int
+			cols := source.GetColumns(ctx)
+			for colOffset, col := range cols {
+				if _, found := ctx.SemTable.TypeForExpr(col.Expr); !found {
+					typeNeeded = append(typeNeeded, colOffset)
+				}
+			}
+			if len(typeNeeded) > 0 {
+				//
+				missingType = true
+			} else {
+				newSources = append(newSources, source)
+			}
+		}
+		if missingType {
+			//
+		}
+
+		if !union.distinct {
 			return in, NoRewrite
 		}
 
