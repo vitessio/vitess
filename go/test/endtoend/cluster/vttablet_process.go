@@ -660,6 +660,7 @@ func VttabletProcessInstance(port, grpcPort, tabletUID int, cell, shard, keyspac
 		Binary:                      "vttablet",
 		FileToLogQueries:            path.Join(tmpDirectory, fmt.Sprintf("/vt_%010d_querylog.txt", tabletUID)),
 		Directory:                   path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", tabletUID)),
+		Cell:                        cell,
 		TabletPath:                  fmt.Sprintf("%s-%010d", cell, tabletUID),
 		ServiceMap:                  "grpc-queryservice,grpc-tabletmanager,grpc-updatestream,grpc-throttler",
 		LogDir:                      tmpDirectory,

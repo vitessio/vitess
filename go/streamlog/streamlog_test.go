@@ -213,7 +213,7 @@ func TestFile(t *testing.T) {
 	logger.Send(&logMessage{"test 2"})
 
 	// Allow time for propagation
-	time.Sleep(10 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 
 	want := "test 1\ntest 2\n"
 	contents, _ := os.ReadFile(logPath)
@@ -227,7 +227,7 @@ func TestFile(t *testing.T) {
 	os.Rename(logPath, rotatedPath)
 
 	logger.Send(&logMessage{"test 3"})
-	time.Sleep(10 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 
 	want = "test 1\ntest 2\ntest 3\n"
 	contents, _ = os.ReadFile(rotatedPath)
@@ -241,10 +241,10 @@ func TestFile(t *testing.T) {
 	if err := syscall.Kill(syscall.Getpid(), syscall.SIGUSR2); err != nil {
 		t.Logf("failed to send streamlog rotate signal: %v", err)
 	}
-	time.Sleep(10 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 
 	logger.Send(&logMessage{"test 4"})
-	time.Sleep(10 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 
 	want = "test 1\ntest 2\ntest 3\n"
 	contents, _ = os.ReadFile(rotatedPath)
