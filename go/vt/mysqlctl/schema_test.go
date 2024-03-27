@@ -1,3 +1,19 @@
+/*
+Copyright 2024 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package mysqlctl
 
 import (
@@ -10,6 +26,8 @@ import (
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
@@ -107,46 +125,88 @@ func TestColumnList(t *testing.T) {
 
 }
 
-// func TestGetSchema(t *testing.T) {
-// 	uid := uint32(11111)
-// 	cnf := NewMycnf(uid, 6802)
-// 	// Assigning ServerID to be different from tablet UID to make sure that there are no
-// 	// assumptions in the code that those IDs are the same.
-// 	cnf.ServerID = 22222
+func TestGetSchemaAndPreflightSchemaChange(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
 
-// 	// expect these in the output my.cnf
-// 	os.Setenv("KEYSPACE", "test-messagedb")
-// 	os.Setenv("SHARD", "0")
-// 	os.Setenv("TABLET_TYPE", "PRIMARY")
-// 	os.Setenv("TABLET_ID", "11111")
-// 	os.Setenv("TABLET_DIR", TabletDir(uid))
-// 	os.Setenv("MYSQL_PORT", "15306")
-// 	// this is not being passed, so it should be nil
-// 	os.Setenv("MY_VAR", "myvalue")
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
 
-// 	dbconfigs.GlobalDBConfigs.InitWithSocket(cnf.SocketFile, collations.MySQL8())
-// 	mysqld := NewMysqld(&dbconfigs.GlobalDBConfigs)
-// 	sc, err := mysqld.GetSchema(context.Background(), mysqld.dbcfgs.DBName, &tabletmanagerdata.GetSchemaRequest{})
+	testMysqld := NewMysqld(dbc)
+	defer testMysqld.Close()
 
-// 	// TODO: This needs to be fixed
-// 	fmt.Println(sc, err)
-// }
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+	db.AddQuery("SET sql_log_bin = 0", &sqltypes.Result{})
+	db.AddQuery("DROP DATABASE IF EXISTS _vt_preflight", &sqltypes.Result{})
+
+	db.AddQuery("SHOW CREATE DATABASE IF NOT EXISTS `fakesqldb`", sqltypes.MakeTestResult(sqltypes.MakeTestFields("test_field|cmd", "varchar|varchar"), "create_db|create_db_cmd"))
+	db.AddQuery("SHOW CREATE TABLE `fakesqldb`.`test_table`", sqltypes.MakeTestResult(sqltypes.MakeTestFields("test_field|cmd", "varchar|varchar"), "create_table|create_table_cmd"))
+
+	db.AddQuery("SELECT table_name, table_type, data_length, table_rows FROM information_schema.tables WHERE table_schema = 'fakesqldb' AND table_type = 'BASE TABLE'", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("table_name|table_type|data_length|table_rows", "varchar|varchar|uint64|uint64"), "test_table|test_type|NULL|2"))
+
+	db.AddQuery("SELECT table_name, table_type, data_length, table_rows FROM information_schema.tables WHERE table_schema = 'fakesqldb'", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("table_name|table_type|data_length|table_rows", "varchar|varchar|uint64|uint64"), "test_table|test_type|NULL|2"))
+
+	query := fmt.Sprintf(GetColumnNamesQuery, sqltypes.EncodeStringSQL(db.Name()), sqltypes.EncodeStringSQL("test_table"))
+	db.AddQuery(query, &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "column_name",
+			Type: sqltypes.VarChar,
+		}},
+		Rows: [][]sqltypes.Value{
+			{sqltypes.NewVarChar("col1")},
+			{sqltypes.NewVarChar("col2")},
+		},
+	})
+
+	db.AddQuery("SELECT `col1`, `col2` FROM `fakesqldb`.`test_table` WHERE 1 != 1", &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{
+				Name: "col1",
+				Type: sqltypes.VarChar,
+			},
+			{
+				Name: "col2",
+				Type: sqltypes.VarChar,
+			},
+		},
+		Rows: [][]sqltypes.Value{},
+	})
+
+	tableList, err := tableListSQL([]string{"test_table"})
+	require.NoError(t, err)
+
+	query = `
+            SELECT TABLE_NAME as table_name, COLUMN_NAME as column_name
+            FROM information_schema.STATISTICS
+            WHERE TABLE_SCHEMA = %s AND TABLE_NAME IN %s AND LOWER(INDEX_NAME) = 'primary'
+            ORDER BY table_name, SEQ_IN_INDEX`
+	query = fmt.Sprintf(query, sqltypes.EncodeStringSQL("fakesqldb"), tableList)
+	db.AddQuery(query, sqltypes.MakeTestResult(sqltypes.MakeTestFields("TABLE_NAME|COLUMN_NAME", "varchar|varchar"), "test_table|col1", "test_table|col2"))
+
+	ctx := context.Background()
+	res, err := testMysqld.GetSchema(ctx, db.Name(), &tabletmanagerdata.GetSchemaRequest{})
+	assert.NoError(t, err)
+	assert.Equal(t, res.String(), `database_schema:"create_db_cmd" table_definitions:{name:"test_table" schema:"create_table_cmd" columns:"col1" columns:"col2" type:"test_type" row_count:2 fields:{name:"col1" type:VARCHAR} fields:{name:"col2" type:VARCHAR}}`)
+}
 
 func TestResolveTables(t *testing.T) {
 	db := fakesqldb.New(t)
-	md := NewFakeMysqlDaemon(db)
+	testMysqld := NewFakeMysqlDaemon(db)
 
 	defer func() {
 		db.Close()
-		md.Close()
+		testMysqld.Close()
 	}()
 
 	ctx := context.Background()
-	res, err := ResolveTables(ctx, md, db.Name(), []string{})
+	res, err := ResolveTables(ctx, testMysqld, db.Name(), []string{})
 	assert.ErrorContains(t, err, "no schema defined")
 	assert.Nil(t, res)
 
-	md.Schema = &tabletmanagerdata.SchemaDefinition{TableDefinitions: tableDefinitions{{
+	testMysqld.Schema = &tabletmanagerdata.SchemaDefinition{TableDefinitions: tableDefinitions{{
 		Name:   "table1",
 		Schema: "schema1",
 	}, {
@@ -154,11 +214,137 @@ func TestResolveTables(t *testing.T) {
 		Schema: "schema2",
 	}}}
 
-	res, err = ResolveTables(ctx, md, db.Name(), []string{"table1"})
+	res, err = ResolveTables(ctx, testMysqld, db.Name(), []string{"table1"})
 	assert.NoError(t, err)
 	assert.Len(t, res, 1)
 
-	res, err = ResolveTables(ctx, md, db.Name(), []string{"table1", "table2"})
+	res, err = ResolveTables(ctx, testMysqld, db.Name(), []string{"table1", "table2"})
 	assert.NoError(t, err)
 	assert.Len(t, res, 2)
 }
+
+func TestGetColumns(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, db.Name())
+
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+
+	tableName := "test_table"
+	query := fmt.Sprintf(GetColumnNamesQuery, sqltypes.EncodeStringSQL(db.Name()), sqltypes.EncodeStringSQL(tableName))
+	db.AddQuery(query, &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "column_name",
+			Type: sqltypes.VarChar,
+		}},
+		Rows: [][]sqltypes.Value{
+			{sqltypes.NewVarChar("col1")},
+			{sqltypes.NewVarChar("col2")},
+		},
+	})
+	db.AddQuery("SELECT `col1`, `col2` FROM `fakesqldb`.`test_table` WHERE 1 != 1", &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{
+				Name: "col1",
+				Type: sqltypes.VarChar,
+			},
+			{
+				Name: "col2",
+				Type: sqltypes.VarChar,
+			},
+		},
+		Rows: [][]sqltypes.Value{},
+	})
+
+	testMysqld := NewMysqld(dbc)
+	defer testMysqld.Close()
+
+	ctx := context.Background()
+
+	want := sqltypes.MakeTestFields("col1|col2", "varchar|varchar")
+
+	field, cols, err := testMysqld.GetColumns(ctx, db.Name(), tableName)
+	assert.Equal(t, want, field)
+	assert.Equal(t, []string{"col1", "col2"}, cols)
+	assert.NoError(t, err)
+}
+
+// TODO: Fix this test
+// func TestGetPrimaryKeyColumns(t *testing.T) {
+// 	db := fakesqldb.New(t)
+// 	defer db.Close()
+
+// 	params := db.ConnParams()
+// 	cp := *params
+// 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, db.Name())
+
+// 	db.AddQuery("SELECT 1", &sqltypes.Result{})
+
+// 	testMysqld := NewMysqld(dbc)
+// 	defer testMysqld.Close()
+
+// 	tableList, err := tableListSQL([]string{"test_table"})
+// 	require.NoError(t, err)
+
+// 	query := `SELECT TABLE_NAME as table_name, COLUMN_NAME as column_name
+// 	FROM information_schema.STATISTICS
+// 	WHERE TABLE_SCHEMA = %s AND TABLE_NAME IN %s AND LOWER(INDEX_NAME) = 'primary'
+// 	ORDER BY table_name, SEQ_IN_INDEX`
+// 	query = fmt.Sprintf(query, sqltypes.EncodeStringSQL(db.Name()), tableList)
+// 	db.AddQuery(query, sqltypes.MakeTestResult(sqltypes.MakeTestFields("TABLE_NAME|COLUMN_NAME", "varchar|varchar"), "test_table|col1", "test_table|col2"))
+
+// 	ctx := context.Background()
+// 	res, err := testMysqld.GetPrimaryKeyColumns(ctx, db.Name(), "test_table")
+// 	fmt.Println(res, err)
+// }
+
+func TestApplySchemaChange(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, db.Name())
+
+	tableList, err := tableListSQL([]string{"test_table"})
+	require.NoError(t, err)
+
+	query := `
+            SELECT TABLE_NAME as table_name, COLUMN_NAME as column_name
+            FROM information_schema.STATISTICS
+            WHERE TABLE_SCHEMA = %s AND TABLE_NAME IN %s AND LOWER(INDEX_NAME) = 'primary'
+            ORDER BY table_name, SEQ_IN_INDEX`
+	query = fmt.Sprintf(query, sqltypes.EncodeStringSQL("fakesqldb"), tableList)
+	db.AddQuery(query, sqltypes.MakeTestResult(sqltypes.MakeTestFields("TABLE_NAME|COLUMN_NAME", "varchar|varchar"), "test_table|col1", "test_table|col2"))
+
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+	db.AddQuery("SHOW CREATE DATABASE IF NOT EXISTS `fakesqldb`", sqltypes.MakeTestResult(sqltypes.MakeTestFields("test_field|cmd", "varchar|varchar"), "create_db|create_db_cmd"))
+	db.AddQuery("SHOW CREATE TABLE `fakesqldb`.`test_table`", sqltypes.MakeTestResult(sqltypes.MakeTestFields("test_field|cmd", "varchar|varchar"), "create_table|create_table_cmd"))
+
+	query = fmt.Sprintf(GetColumnNamesQuery, sqltypes.EncodeStringSQL(db.Name()), sqltypes.EncodeStringSQL("test_table"))
+	db.AddQuery(query, &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "column_name",
+			Type: sqltypes.VarChar,
+		}},
+		Rows: [][]sqltypes.Value{
+			{sqltypes.NewVarChar("col1")},
+			{sqltypes.NewVarChar("col2")},
+		},
+	})
+
+	db.AddQuery("SELECT table_name, table_type, data_length, table_rows FROM information_schema.tables WHERE table_schema = 'fakesqldb'", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("table_name|table_type|data_length|table_rows", "varchar|varchar|uint64|uint64"), "test_table|test_type|NULL|2"))
+
+	testMysqld := NewMysqld(dbc)
+	defer testMysqld.Close()
+
+	ctx := context.Background()
+	res, err := testMysqld.ApplySchemaChange(ctx, db.Name(), &tmutils.SchemaChange{})
+	fmt.Println(res, err)
+}
+
+// TODO: Add tests for ApplySchema And PreflightSchemaChange

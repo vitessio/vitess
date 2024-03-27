@@ -47,7 +47,6 @@ func TestFindReplicationPosition(t *testing.T) {
 
 	pos, err := findReplicationPosition(input, "MySQL56", logutil.NewConsoleLogger())
 	assert.NoError(t, err)
-
 	assert.Equal(t, want, pos.String())
 }
 
@@ -113,5 +112,3 @@ func TestShouldDrainForBackupXtrabackup(t *testing.T) {
 	assert.False(t, be.ShouldDrainForBackup(nil))
 	assert.False(t, be.ShouldDrainForBackup(&tabletmanagerdatapb.BackupRequest{}))
 }
-
-// TODO: Write the missing tests

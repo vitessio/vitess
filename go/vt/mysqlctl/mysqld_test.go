@@ -26,6 +26,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 )
 
@@ -216,19 +218,75 @@ func TestRunMysqlUpgrade(t *testing.T) {
 	err := testMysqld.RunMysqlUpgrade(ctx)
 	assert.NoError(t, err)
 
-	// TODO: Look for more tests
+	// TODO: Add more tests
 }
 
-// func TestMysqldInit(t *testing.T) {
-// 	os.Remove(MycnfPath)
-// 	testMysqld := NewMysqld(&dbconfigs.GlobalDBConfigs)
-// 	defer testMysqld.Close()
+func TestGetDbaConnection(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
 
-// 	ctx := context.Background()
-// 	uid := uint32(11111)
-// 	mycnf := NewMycnf(uid, 0)
-// 	mycnf.Path = MycnfPath
-// 	err := testMysqld.Init(ctx, mycnf, "")
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
 
-// 	assert.NoError(t, err)
-// }
+	testMysqld := NewMysqld(dbc)
+	defer testMysqld.Close()
+
+	ctx := context.Background()
+
+	conn, err := testMysqld.GetDbaConnection(ctx)
+	assert.NoError(t, err)
+	assert.NoError(t, conn.Ping())
+	defer conn.Close()
+}
+
+func TestGetVersionString(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+
+	testMysqld := NewMysqld(dbc)
+	defer testMysqld.Close()
+
+	ctx := context.Background()
+	str, err := testMysqld.GetVersionString(ctx)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, str)
+
+	ver := "test_version"
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+	db.AddQuery(versionSQLQuery, sqltypes.MakeTestResult(sqltypes.MakeTestFields("test_field", "varchar"), ver))
+
+	str, err = testMysqld.GetVersionString(ctx)
+	assert.Equal(t, ver, str)
+	assert.NoError(t, err)
+}
+
+func TestGetVersionComment(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+	db.AddQuery("select @@global.version_comment", sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global.version_comment", "varchar"), "test_version1", "test_version2"))
+
+	testMysqld := NewMysqld(dbc)
+	defer testMysqld.Close()
+
+	ctx := context.Background()
+	_, err := testMysqld.GetVersionComment(ctx)
+	assert.ErrorContains(t, err, "unexpected result length")
+
+	ver := "test_version"
+	db.AddQuery("select @@global.version_comment", sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global.version_comment", "varchar"), ver))
+
+	str, err := testMysqld.GetVersionComment(ctx)
+	assert.NoError(t, err)
+	assert.Equal(t, ver, str)
+}
