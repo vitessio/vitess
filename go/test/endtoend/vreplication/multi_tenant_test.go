@@ -100,6 +100,14 @@ const (
   }
 }
 `
+	stSchema  = mtSchema
+	stVSchema = `
+{
+  "tables": {
+    "t1": {}
+  }
+}
+`
 )
 
 // TestMultiTenantSimple tests a single tenant migration. The aim here is to test all the steps of the migration process
@@ -123,7 +131,7 @@ func TestMultiTenantSimple(t *testing.T) {
 	tenantId := int64(1)
 	sourceKeyspace := getSourceKeyspace(tenantId)
 	sourceAliasKeyspace := getSourceAliasKeyspace(tenantId)
-	_, err = vc.AddKeyspace(t, []*Cell{vc.Cells["zone1"]}, sourceKeyspace, "0", mtVSchema, mtSchema, 1, 0, getInitialTabletIdForTenant(tenantId), nil)
+	_, err = vc.AddKeyspace(t, []*Cell{vc.Cells["zone1"]}, sourceKeyspace, "0", stVSchema, stSchema, 1, 0, getInitialTabletIdForTenant(tenantId), nil)
 	require.NoError(t, err)
 
 	targetPrimary := vc.getPrimaryTablet(t, targetKeyspace, "0")
@@ -291,6 +299,7 @@ func TestMultiTenantComplex(t *testing.T) {
 		totalRowsInserted := totalRowsInsertedPerTenant * numTenants
 		totalActualRowsInserted := getRowCount(t, vtgateConn, fmt.Sprintf("%s.%s", mtm.targetKeyspace, "t1"))
 		require.Equal(t, totalRowsInserted, totalActualRowsInserted)
+		log.Infof("Migration completed, total rows inserted in target: %d", totalActualRowsInserted)
 	})
 }
 
@@ -365,7 +374,7 @@ func (mtm *multiTenantMigration) setup(tenantId int64) {
 	mtm.setLastID(tenantId, 0)
 	sourceKeyspace := getSourceKeyspace(tenantId)
 	sourceAliasKeyspace := getSourceAliasKeyspace(tenantId)
-	_, err := vc.AddKeyspace(mtm.t, []*Cell{vc.Cells["zone1"]}, sourceKeyspace, "0", mtVSchema, mtSchema,
+	_, err := vc.AddKeyspace(mtm.t, []*Cell{vc.Cells["zone1"]}, sourceKeyspace, "0", stVSchema, stSchema,
 		1, 0, getInitialTabletIdForTenant(tenantId), nil)
 	require.NoError(mtm.t, err)
 	mtm.initTenantData(mtm.t, tenantId, sourceAliasKeyspace)
