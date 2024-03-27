@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -169,18 +168,18 @@ func prepareMySQLWithSchema(params mysql.ConnParams, sql string) error {
 	return nil
 }
 
-func compareVitessAndMySQLResults(t *testing.T, query string, vtConn *mysql.Conn, vtQr, mysqlQr *sqltypes.Result, compareColumnNames bool) error {
+func compareVitessAndMySQLResults(t TestingT, query string, vtConn *mysql.Conn, vtQr, mysqlQr *sqltypes.Result, compareColumnNames bool) error {
 	t.Helper()
 
 	if vtQr == nil && mysqlQr == nil {
 		return nil
 	}
 	if vtQr == nil {
-		t.Error("Vitess result is 'nil' while MySQL's is not.")
+		t.Errorf("Vitess result is 'nil' while MySQL's is not.")
 		return errors.New("Vitess result is 'nil' while MySQL's is not.\n")
 	}
 	if mysqlQr == nil {
-		t.Error("MySQL result is 'nil' while Vitess' is not.")
+		t.Errorf("MySQL result is 'nil' while Vitess' is not.")
 		return errors.New("MySQL result is 'nil' while Vitess' is not.\n")
 	}
 
@@ -209,7 +208,7 @@ func compareVitessAndMySQLResults(t *testing.T, query string, vtConn *mysql.Conn
 
 	stmt, err := sqlparser.NewTestParser().Parse(query)
 	if err != nil {
-		t.Error(err)
+		t.Errorf(err.Error())
 		return err
 	}
 	orderBy := false
@@ -237,11 +236,11 @@ func compareVitessAndMySQLResults(t *testing.T, query string, vtConn *mysql.Conn
 			errStr += fmt.Sprintf("query plan: \n%s\n", qr.Rows[0][0].ToString())
 		}
 	}
-	t.Error(errStr)
+	t.Errorf(errStr)
 	return errors.New(errStr)
 }
 
-func checkFields(t *testing.T, columnName string, vtField, myField *querypb.Field) {
+func checkFields(t TestingT, columnName string, vtField, myField *querypb.Field) {
 	t.Helper()
 	if vtField.Type != myField.Type {
 		t.Errorf("for column %s field types do not match\nNot equal: \nMySQL: %v\nVitess: %v\n", columnName, myField.Type.String(), vtField.Type.String())
@@ -255,10 +254,9 @@ func checkFields(t *testing.T, columnName string, vtField, myField *querypb.Fiel
 	}
 }
 
-func compareVitessAndMySQLErrors(t *testing.T, vtErr, mysqlErr error) {
+func compareVitessAndMySQLErrors(t TestingT, vtErr, mysqlErr error) {
 	if vtErr != nil && mysqlErr != nil || vtErr == nil && mysqlErr == nil {
 		return
 	}
-	out := fmt.Sprintf("Vitess and MySQL are not erroring the same way.\nVitess error: %v\nMySQL error: %v", vtErr, mysqlErr)
-	t.Error(out)
+	t.Errorf("Vitess and MySQL are not erroring the same way.\nVitess error: %v\nMySQL error: %v", vtErr, mysqlErr)
 }
