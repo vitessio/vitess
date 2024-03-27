@@ -101,7 +101,6 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
-	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
@@ -170,24 +169,10 @@ var commands = []commandGroup{
 	{
 		"Tablets", []command{
 			{
-				name:       "InitTablet",
-				method:     commandInitTablet,
-				params:     "[--allow_update] [--allow_different_shard] [--allow_master_override] [--parent] [--db_name_override=<db name>] [--hostname=<hostname>] [--mysql_port=<port>] [--port=<port>] [--grpc_port=<port>] [--tags=tag1:value1,tag2:value2] --keyspace=<keyspace> --shard=<shard> <tablet alias> <tablet type>",
-				help:       "Initializes a tablet in the topology.",
-				deprecated: true,
-			},
-			{
 				name:   "GetTablet",
 				method: commandGetTablet,
 				params: "<tablet alias>",
 				help:   "Outputs a JSON structure that contains information about the Tablet.",
-			},
-			{
-				name:       "UpdateTabletAddrs",
-				method:     commandUpdateTabletAddrs,
-				params:     "[--hostname <hostname>] [--ip-addr <ip addr>] [--mysql-port <mysql port>] [--vt-port <vt port>] [--grpc-port <grpc port>] <tablet alias> ",
-				help:       "Updates the IP address and port numbers of a tablet.",
-				deprecated: true,
 			},
 			{
 				name:   "DeleteTablet",
@@ -275,14 +260,6 @@ var commands = []commandGroup{
 				method: commandExecuteFetchAsDba,
 				params: "[--max_rows=10000] [--disable_binlogs] [--json] <tablet alias> <sql command>",
 				help:   "Runs the given SQL command as a DBA on the remote tablet.",
-			},
-			{
-				name:         "VReplicationExec",
-				method:       commandVReplicationExec,
-				params:       "[--json] <tablet alias> <sql command>",
-				help:         "Runs the given VReplication command on the remote tablet.",
-				deprecated:   true,
-				deprecatedBy: "Workflow -- <keyspace.workflow> <action>",
 			},
 		},
 	},
@@ -909,62 +886,6 @@ func parseTabletType(param string, types []topodatapb.TabletType) (topodatapb.Ta
 	return tabletType, nil
 }
 
-func commandInitTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
-	dbNameOverride := subFlags.String("db_name_override", "", "Overrides the name of the database that the vttablet uses")
-	allowUpdate := subFlags.Bool("allow_update", false, "Use this flag to force initialization if a tablet with the same name already exists. Use with caution.")
-	allowPrimaryOverride := subFlags.Bool("allow_master_override", false, "Use this flag to force initialization if a tablet is created as primary, and a primary for the keyspace/shard already exists. Use with caution.")
-	createShardAndKeyspace := subFlags.Bool("parent", false, "Creates the parent shard and keyspace if they don't yet exist")
-	hostname := subFlags.String("hostname", "", "The server on which the tablet is running")
-	mysqlHost := subFlags.String("mysql_host", "", "The mysql host for the mysql server")
-	mysqlPort := subFlags.Int("mysql_port", 0, "The mysql port for the mysql server")
-	port := subFlags.Int("port", 0, "The main port for the vttablet process")
-	grpcPort := subFlags.Int("grpc_port", 0, "The gRPC port for the vttablet process")
-	keyspace := subFlags.String("keyspace", "", "The keyspace to which this tablet belongs")
-	shard := subFlags.String("shard", "", "The shard to which this tablet belongs")
-
-	var tags flagutil.StringMapValue
-	subFlags.Var(&tags, "tags", "A comma-separated list of key:value pairs that are used to tag the tablet")
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-
-	if subFlags.NArg() != 2 {
-		return fmt.Errorf("the <tablet alias> and <tablet type> arguments are both required for the InitTablet command")
-	}
-	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	tabletType, err := parseTabletType(subFlags.Arg(1), topoproto.AllTabletTypes)
-	if err != nil {
-		return err
-	}
-
-	// create tablet record
-	tablet := &topodatapb.Tablet{
-		Alias:          tabletAlias,
-		Hostname:       *hostname,
-		MysqlHostname:  *mysqlHost,
-		PortMap:        make(map[string]int32),
-		Keyspace:       *keyspace,
-		Shard:          *shard,
-		Type:           tabletType,
-		DbNameOverride: *dbNameOverride,
-		Tags:           tags,
-	}
-	if *port != 0 {
-		tablet.PortMap["vt"] = int32(*port)
-	}
-	if *mysqlPort != 0 {
-		tablet.MysqlPort = int32(*mysqlPort)
-	}
-	if *grpcPort != 0 {
-		tablet.PortMap["grpc"] = int32(*grpcPort)
-	}
-
-	return wr.TopoServer().InitTablet(ctx, tablet, *allowPrimaryOverride, *createShardAndKeyspace, *allowUpdate)
-}
-
 func commandGetTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -983,51 +904,6 @@ func commandGetTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfla
 	}
 	// Pass the embedded proto directly or jsonpb will panic.
 	return printJSON(wr.Logger(), tabletInfo.Tablet)
-}
-
-func commandUpdateTabletAddrs(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
-	hostname := subFlags.String("hostname", "", "The fully qualified host name of the server on which the tablet is running.")
-	mysqlHost := subFlags.String("mysql_host", "", "The mysql host for the mysql server")
-	mysqlPort := subFlags.Int("mysql-port", 0, "The mysql port for the mysql daemon")
-	vtPort := subFlags.Int("vt-port", 0, "The main port for the vttablet process")
-	grpcPort := subFlags.Int("grpc-port", 0, "The gRPC port for the vttablet process")
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-
-	if subFlags.NArg() != 1 {
-		return fmt.Errorf("the <tablet alias> argument is required for the UpdateTabletAddrs command")
-	}
-
-	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-
-	_, err = wr.TopoServer().UpdateTabletFields(ctx, tabletAlias, func(tablet *topodatapb.Tablet) error {
-		if *hostname != "" {
-			tablet.Hostname = *hostname
-		}
-		if *mysqlHost != "" {
-			tablet.MysqlHostname = *mysqlHost
-		}
-		if *vtPort != 0 || *grpcPort != 0 || *mysqlPort != 0 {
-			if tablet.PortMap == nil {
-				tablet.PortMap = make(map[string]int32)
-			}
-			if *vtPort != 0 {
-				tablet.PortMap["vt"] = int32(*vtPort)
-			}
-			if *grpcPort != 0 {
-				tablet.PortMap["grpc"] = int32(*grpcPort)
-			}
-			if *mysqlPort != 0 {
-				tablet.MysqlPort = int32(*mysqlPort)
-			}
-		}
-		return nil
-	})
-	return err
 }
 
 func commandDeleteTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
@@ -1317,35 +1193,6 @@ func commandExecuteFetchAsDba(ctx context.Context, wr *wrangler.Wrangler, subFla
 	}
 	query := subFlags.Arg(1)
 	qrproto, err := wr.ExecuteFetchAsDba(ctx, alias, query, *maxRows, *disableBinlogs, *reloadSchema)
-	if err != nil {
-		return err
-	}
-	qr := sqltypes.Proto3ToResult(qrproto)
-	if *json {
-		return printJSON(wr.Logger(), qr)
-	}
-	printQueryResult(loggerWriter{wr.Logger()}, qr)
-	return nil
-}
-
-func commandVReplicationExec(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
-	wr.Logger().Printf("\nWARNING: VReplicationExec is deprecated and will be removed in a future release. Please use 'Workflow -- <keyspace.workflow> <action>' instead.\n\n")
-
-	json := subFlags.Bool("json", false, "Output JSON instead of human-readable table")
-
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() != 2 {
-		return fmt.Errorf("the <tablet alias> and <sql command> arguments are required for the VReplicationExec command")
-	}
-
-	alias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	query := subFlags.Arg(1)
-	qrproto, err := wr.VReplicationExec(ctx, alias, query)
 	if err != nil {
 		return err
 	}
