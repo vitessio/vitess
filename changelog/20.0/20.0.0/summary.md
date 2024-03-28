@@ -16,7 +16,7 @@
   - **[Flag changes](#flag-changes)**
     - [`pprof-http` default change](#pprof-http-default)
     - [New `healthcheck-dial-concurrency` flag](#healthcheck-dial-concurrency-flag)
-  - **[`Durabler` interface method renaming](#durabler-interface-method-renaming)
+  - **[Method renaming in `Durabler` interface](#method-renaming-in-durabler-interface)
 - **[Minor Changes](#minor-changes)**
   - **[New Stats](#new-stats)**
     - [VTTablet Query Cache Hits and Misses](#vttablet-query-cache-hits-and-misses)
@@ -103,7 +103,7 @@ To continue enabling these endpoints, explicitly set `--pprof-http` when startin
 
 The new `--healthcheck-dial-concurrency` flag defines the maximum number of healthcheck connections that can open concurrently. This limit is to avoid hitting Go runtime panics on deployments watching enough tablets [to hit the runtime's maximum thread limit of `10000`](https://pkg.go.dev/runtime/debug#SetMaxThreads) due to blocking network syscalls. This flag applies to `vtcombo`, `vtctld` and `vtgate` only and a value less than the runtime max thread limit _(`10000`)_ is recommended.
 
-### <a id="durabler-interface-method-renaming"/>`Durabler` interface method renaming
+### <a id="method-renaming-in-durabler-interface"/>Method renaming in `Durabler` interface
 
 The methods of the `Durabler` interface were renamed to public _(capitalized)_ names to make it easier to integrate custom Durability Policies from external packages. See [RFC for details](https://github.com/vitessio/vitess/issues/15544).
 
