@@ -48,6 +48,33 @@ func (tq *testQuery) getInsertQuery(rows int) string {
 	return fmt.Sprintf("insert into %s(%s) values %s", tq.tableName, strings.Join(tq.cols, ","), strings.Join(allRows, ","))
 }
 
+func (tq *testQuery) getUpdateQuery(rows int) string {
+	var allRows []string
+	var row []string
+	for i, isInt := range tq.intTyp {
+		if isInt {
+			row = append(row, strconv.Itoa(i))
+			continue
+		}
+		row = append(row, tq.cols[i]+" = '"+getRandomString(50)+"'")
+	}
+	allRows = append(allRows, strings.Join(row, ","))
+
+	var ids []string
+	for i := 0; i <= rows; i++ {
+		ids = append(ids, strconv.Itoa(i))
+	}
+	return fmt.Sprintf("update %s set %s where id in (%s)", tq.tableName, strings.Join(allRows, ","), strings.Join(ids, ","))
+}
+
+func (tq *testQuery) getDeleteQuery(rows int) string {
+	var ids []string
+	for i := 0; i <= rows; i++ {
+		ids = append(ids, strconv.Itoa(i))
+	}
+	return fmt.Sprintf("delete from %s where id in (%s)", tq.tableName, strings.Join(ids, ","))
+}
+
 func getRandomString(size int) string {
 	var str strings.Builder
 
@@ -74,6 +101,47 @@ func BenchmarkShardedTblNoLookup(b *testing.B) {
 		b.Run(fmt.Sprintf("16-shards-%d-rows", rows), func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				_ = utils.Exec(b, conn, insStmt)
+			}
+		})
+	}
+}
+
+func BenchmarkShardedTblUpdateIn(b *testing.B) {
+	conn, closer := start(b)
+	defer closer()
+
+	cols := []string{"c1", "c2", "c3", "c4", "c5", "c6", "c7", "c8", "c9", "c10", "c11", "c12"}
+	intType := make([]bool, len(cols))
+	tq := &testQuery{
+		tableName: "tbl_no_lkp_vdx",
+		cols:      cols,
+		intTyp:    intType,
+	}
+	insStmt := tq.getInsertQuery(10000)
+	_ = utils.Exec(b, conn, insStmt)
+	for _, rows := range []int{1, 10, 100, 500, 1000, 5000, 10000} {
+		updStmt := tq.getUpdateQuery(rows)
+		b.Run(fmt.Sprintf("16-shards-%d-rows", rows), func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				_ = utils.Exec(b, conn, updStmt)
+			}
+		})
+	}
+}
+
+func BenchmarkShardedTblDeleteIn(b *testing.B) {
+	conn, closer := start(b)
+	defer closer()
+	tq := &testQuery{
+		tableName: "tbl_no_lkp_vdx",
+	}
+	for _, rows := range []int{1, 10, 100, 500, 1000, 5000, 10000} {
+		insStmt := tq.getInsertQuery(rows)
+		_ = utils.Exec(b, conn, insStmt)
+		delStmt := tq.getDeleteQuery(rows)
+		b.Run(fmt.Sprintf("16-shards-%d-rows", rows), func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				_ = utils.Exec(b, conn, delStmt)
 			}
 		})
 	}
