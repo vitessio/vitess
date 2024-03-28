@@ -181,12 +181,12 @@ func TestDifferentAnalysescHaveDifferentCooldowns(t *testing.T) {
 	defer cancel()
 
 	ts = memorytopo.NewServer(ctx, "zone1")
-	_, err = AttemptRecoveryRegistration(&replicaAnalysisEntry, false, true)
+	_, err = AttemptRecoveryRegistration(&replicaAnalysisEntry)
 	require.Nil(t, err)
 
 	// even though this is another recovery on the same cluster, allow it to go through
 	// because the analysis is different (ReplicationStopped vs DeadPrimary)
-	_, err = AttemptRecoveryRegistration(&primaryAnalysisEntry, true, true)
+	_, err = AttemptRecoveryRegistration(&primaryAnalysisEntry)
 	require.Nil(t, err)
 }
 

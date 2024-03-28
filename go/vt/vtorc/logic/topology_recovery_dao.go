@@ -72,9 +72,7 @@ func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecover
 					recovery_id,
 					uid,
 					alias,
-					in_active_period,
-					start_active_period,
-					end_active_period_unixtime,
+					start_recovery,
 					processing_node_hostname,
 					processcing_node_token,
 					analysis,
@@ -86,9 +84,7 @@ func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecover
 					?,
 					?,
 					?,
-					1,
 					NOW(),
-					0,
 					?,
 					?,
 					?,
@@ -128,71 +124,27 @@ func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecover
 }
 
 // AttemptRecoveryRegistration tries to add a recovery entry; if this fails that means recovery is already in place.
-func AttemptRecoveryRegistration(analysisEntry *inst.ReplicationAnalysis, failIfFailedInstanceInActiveRecovery bool, failIfClusterInActiveRecovery bool) (*TopologyRecovery, error) {
-	if failIfFailedInstanceInActiveRecovery {
-		// Let's check if this instance has just been promoted recently and is still in active period.
-		// If so, we reject recovery registration to avoid flapping.
-		recoveries, err := ReadInActivePeriodSuccessorInstanceRecovery(analysisEntry.AnalyzedInstanceAlias)
-		if err != nil {
-			log.Error(err)
-			return nil, err
-		}
-		if len(recoveries) > 0 {
-			_ = RegisterBlockedRecoveries(analysisEntry, recoveries)
-			errMsg := fmt.Sprintf("AttemptRecoveryRegistration: tablet %+v has recently been promoted (by failover of %+v) and is in active period. It will not be failed over. You may acknowledge the failure on %+v (-c ack-instance-recoveries) to remove this blockage", analysisEntry.AnalyzedInstanceAlias, recoveries[0].AnalysisEntry.AnalyzedInstanceAlias, recoveries[0].AnalysisEntry.AnalyzedInstanceAlias)
-			log.Errorf(errMsg)
-			return nil, fmt.Errorf(errMsg)
-		}
+func AttemptRecoveryRegistration(analysisEntry *inst.ReplicationAnalysis) (*TopologyRecovery, error) {
+	// Check if there is an active recovery in progress for the cluster of the given instance.
+	recoveries, err := ReadActiveClusterRecoveries(analysisEntry.ClusterDetails.Keyspace, analysisEntry.ClusterDetails.Shard)
+	if err != nil {
+		log.Error(err)
+		return nil, err
 	}
-	if failIfClusterInActiveRecovery {
-		// Let's check if this cluster has just experienced a failover of the same analysis and is still in active period.
-		// If so, we reject recovery registration to avoid flapping.
-		recoveries, err := ReadInActivePeriodClusterRecovery(analysisEntry.ClusterDetails.Keyspace, analysisEntry.ClusterDetails.Shard, string(analysisEntry.Analysis))
-		if err != nil {
-			log.Error(err)
-			return nil, err
-		}
-		if len(recoveries) > 0 {
-			_ = RegisterBlockedRecoveries(analysisEntry, recoveries)
-			errMsg := fmt.Sprintf("AttemptRecoveryRegistration: keyspace %+v shard %+v has recently experienced a failover (of %+v) and is in active period. It will not be failed over again. You may acknowledge the failure on this cluster (-c ack-cluster-recoveries) or on %+v (-c ack-instance-recoveries) to remove this blockage", analysisEntry.ClusterDetails.Keyspace, analysisEntry.ClusterDetails.Shard, recoveries[0].AnalysisEntry.AnalyzedInstanceAlias, recoveries[0].AnalysisEntry.AnalyzedInstanceAlias)
-			log.Errorf(errMsg)
-			return nil, fmt.Errorf(errMsg)
-		}
-	}
-	if !failIfFailedInstanceInActiveRecovery {
-		// Implicitly acknowledge this instance's possibly existing active recovery, provided they are completed.
-		_, _ = AcknowledgeInstanceCompletedRecoveries(analysisEntry.AnalyzedInstanceAlias, "vtorc", fmt.Sprintf("implicit acknowledge due to user invocation of recovery on same instance: %+v", analysisEntry.AnalyzedInstanceAlias))
-		// The fact we only acknowledge a completed recovery solves the possible case of two DBAs simultaneously
-		// trying to recover the same instance at the same time
+	if len(recoveries) > 0 {
+		errMsg := fmt.Sprintf("AttemptRecoveryRegistration: Active recovery (id:%v) in the cluster %s:%s for %s", recoveries[0].ID, analysisEntry.ClusterDetails.Keyspace, analysisEntry.ClusterDetails.Shard, recoveries[0].AnalysisEntry.Analysis)
+		log.Errorf(errMsg)
+		return nil, fmt.Errorf(errMsg)
 	}
 
 	topologyRecovery := NewTopologyRecovery(*analysisEntry)
 
-	topologyRecovery, err := writeTopologyRecovery(topologyRecovery)
+	topologyRecovery, err = writeTopologyRecovery(topologyRecovery)
 	if err != nil {
 		log.Error(err)
 		return nil, err
 	}
 	return topologyRecovery, nil
-}
-
-// ClearActiveRecoveries clears the "in_active_period" flag for old-enough recoveries, thereby allowing for
-// further recoveries on cleared instances.
-func ClearActiveRecoveries() error {
-	_, err := db.ExecVTOrc(`
-			update topology_recovery set
-				in_active_period = 0,
-				end_active_period_unixtime = UNIX_TIMESTAMP()
-			where
-				in_active_period = 1
-				AND start_active_period < NOW() - INTERVAL ? SECOND
-			`,
-		config.Config.RecoveryPeriodBlockSeconds,
-	)
-	if err != nil {
-		log.Error(err)
-	}
-	return err
 }
 
 // RegisterBlockedRecoveries writes down currently blocked recoveries, and indicates what recovery they are blocked on.
@@ -291,63 +243,6 @@ func ExpireBlockedRecoveries() error {
 	return err
 }
 
-// acknowledgeRecoveries sets acknowledged* details and clears the in_active_period flags from a set of entries
-func acknowledgeRecoveries(owner string, comment string, markEndRecovery bool, whereClause string, args []any) (countAcknowledgedEntries int64, err error) {
-	additionalSet := ``
-	if markEndRecovery {
-		additionalSet = `
-				end_recovery=IFNULL(end_recovery, NOW()),
-			`
-	}
-	query := fmt.Sprintf(`
-			update topology_recovery set
-				in_active_period = 0,
-				end_active_period_unixtime = case when end_active_period_unixtime = 0 then UNIX_TIMESTAMP() else end_active_period_unixtime end,
-				%s
-				acknowledged = 1,
-				acknowledged_at = NOW(),
-				acknowledged_by = ?,
-				acknowledge_comment = ?
-			where
-				acknowledged = 0
-				and
-				%s
-		`, additionalSet, whereClause)
-	args = append(sqlutils.Args(owner, comment), args...)
-	sqlResult, err := db.ExecVTOrc(query, args...)
-	if err != nil {
-		log.Error(err)
-		return 0, err
-	}
-	rows, err := sqlResult.RowsAffected()
-	if err != nil {
-		log.Error(err)
-	}
-	return rows, err
-}
-
-// AcknowledgeInstanceCompletedRecoveries marks active and COMPLETED recoveries for given instance as acknowledged.
-// This also implied clearing their active period, which in turn enables further recoveries on those topologies
-func AcknowledgeInstanceCompletedRecoveries(tabletAlias string, owner string, comment string) (countAcknowledgedEntries int64, err error) {
-	whereClause := `
-			alias = ?
-			and end_recovery is not null
-		`
-	return acknowledgeRecoveries(owner, comment, false, whereClause, sqlutils.Args(tabletAlias))
-}
-
-// AcknowledgeCrashedRecoveries marks recoveries whose processing nodes has crashed as acknowledged.
-func AcknowledgeCrashedRecoveries() (countAcknowledgedEntries int64, err error) {
-	whereClause := `
-			in_active_period = 1
-			and end_recovery is null
-			and concat(processing_node_hostname, ':', processcing_node_token) not in (
-				select concat(hostname, ':', token) from node_health
-			)
-		`
-	return acknowledgeRecoveries("vtorc", "detected crashed recovery", true, whereClause, sqlutils.Args())
-}
-
 // ResolveRecovery is called on completion of a recovery process and updates the recovery status.
 // It does not clear the "active period" as this still takes place in order to avoid flapping.
 func writeResolveRecovery(topologyRecovery *TopologyRecovery) error {
@@ -378,9 +273,7 @@ func readRecoveries(whereCondition string, limit string, args []any) ([]*Topolog
 		recovery_id,
 		uid,
 		alias,
-		(IFNULL(end_active_period_unixtime, 0) = 0) as is_active,
-		start_active_period,
-		IFNULL(end_active_period_unixtime, 0) as end_active_period_unixtime,
+		start_recovery,
 		IFNULL(end_recovery, '') AS end_recovery,
 		is_successful,
 		processing_node_hostname,
@@ -408,8 +301,7 @@ func readRecoveries(whereCondition string, limit string, args []any) ([]*Topolog
 		topologyRecovery.ID = m.GetInt64("recovery_id")
 		topologyRecovery.UID = m.GetString("uid")
 
-		topologyRecovery.IsActive = m.GetBool("is_active")
-		topologyRecovery.RecoveryStartTimestamp = m.GetString("start_active_period")
+		topologyRecovery.RecoveryStartTimestamp = m.GetString("start_recovery")
 		topologyRecovery.RecoveryEndTimestamp = m.GetString("end_recovery")
 		topologyRecovery.IsSuccessful = m.GetBool("is_successful")
 		topologyRecovery.ProcessingNodeHostname = m.GetString("processing_node_hostname")
@@ -444,27 +336,14 @@ func readRecoveries(whereCondition string, limit string, args []any) ([]*Topolog
 	return res, err
 }
 
-// ReadInActivePeriodClusterRecovery reads recoveries (possibly complete!) that are in active period for the analysis.
-// (may be used to block further recoveries of the same analysis on this cluster)
-func ReadInActivePeriodClusterRecovery(keyspace string, shard, analysis string) ([]*TopologyRecovery, error) {
+// ReadActiveClusterRecoveries reads recoveries that are ongoing for the given cluster.
+func ReadActiveClusterRecoveries(keyspace string, shard string) ([]*TopologyRecovery, error) {
 	whereClause := `
 		where
-			in_active_period=1
+			end_recovery IS NULL
 			and keyspace=?
-			and shard=?
-			and analysis=?`
-	return readRecoveries(whereClause, ``, sqlutils.Args(keyspace, shard, analysis))
-}
-
-// ReadInActivePeriodSuccessorInstanceRecovery reads completed recoveries for a given instance, where said instance
-// was promoted as result, still in active period (may be used to block further recoveries should this instance die)
-func ReadInActivePeriodSuccessorInstanceRecovery(tabletAlias string) ([]*TopologyRecovery, error) {
-	whereClause := `
-		where
-			in_active_period=1
-			and
-				successor_alias=?`
-	return readRecoveries(whereClause, ``, sqlutils.Args(tabletAlias))
+			and shard=?`
+	return readRecoveries(whereClause, ``, sqlutils.Args(keyspace, shard))
 }
 
 // ReadRecentRecoveries reads latest recovery entries from topology_recovery
@@ -512,7 +391,7 @@ func ExpireRecoveryDetectionHistory() error {
 
 // ExpireTopologyRecoveryHistory removes old rows from the topology_recovery table
 func ExpireTopologyRecoveryHistory() error {
-	return inst.ExpireTableData("topology_recovery", "start_active_period")
+	return inst.ExpireTableData("topology_recovery", "start_recovery")
 }
 
 // ExpireTopologyRecoveryStepsHistory removes old rows from the topology_recovery_steps table

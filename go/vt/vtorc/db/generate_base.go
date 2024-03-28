@@ -172,9 +172,7 @@ DROP TABLE IF EXISTS topology_recovery
 CREATE TABLE topology_recovery (
 	recovery_id integer,
 	alias varchar(256) NOT NULL,
-	in_active_period tinyint NOT NULL DEFAULT 0,
-	start_active_period timestamp not null default (''),
-	end_active_period_unixtime int,
+	start_recovery timestamp NOT NULL DEFAULT (''),
 	end_recovery timestamp NULL DEFAULT NULL,
 	processing_node_hostname varchar(128) NOT NULL,
 	processcing_node_token varchar(128) NOT NULL,
@@ -194,13 +192,7 @@ CREATE TABLE topology_recovery (
 	PRIMARY KEY (recovery_id)
 )`,
 	`
-CREATE INDEX in_active_start_period_idx_topology_recovery ON topology_recovery (in_active_period, start_active_period)
-	`,
-	`
-CREATE INDEX start_active_period_idx_topology_recovery ON topology_recovery (start_active_period)
-	`,
-	`
-CREATE UNIQUE INDEX alias_active_period_uidx_topology_recovery ON topology_recovery (alias, in_active_period, end_active_period_unixtime)
+CREATE INDEX start_recovery_idx_topology_recovery ON topology_recovery (start_recovery)
 	`,
 	`
 DROP TABLE IF EXISTS database_instance_topology_history
@@ -400,7 +392,7 @@ CREATE TABLE vitess_shard (
 CREATE INDEX source_host_port_idx_database_instance_database_instance on database_instance (source_host, source_port)
 	`,
 	`
-CREATE INDEX keyspace_shard_in_active_idx_topology_recovery on topology_recovery (keyspace, shard, in_active_period)
+CREATE INDEX keyspace_shard_idx_topology_recovery on topology_recovery (keyspace, shard)
 	`,
 	`
 CREATE INDEX end_recovery_idx_topology_recovery on topology_recovery (end_recovery)

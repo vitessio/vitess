@@ -107,7 +107,6 @@ type TopologyRecovery struct {
 	SuccessorHostname      string
 	SuccessorPort          int
 	SuccessorAlias         string
-	IsActive               bool
 	IsSuccessful           bool
 	AllErrors              []string
 	RecoveryStartTimestamp string
@@ -187,7 +186,7 @@ func resolveRecovery(topologyRecovery *TopologyRecovery, successorInstance *inst
 
 // recoverPrimaryHasPrimary resets the replication on the primary instance
 func recoverPrimaryHasPrimary(ctx context.Context, analysisEntry *inst.ReplicationAnalysis) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
-	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry, false, true)
+	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry)
 	if topologyRecovery == nil {
 		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another fixPrimaryHasPrimary.", analysisEntry.AnalyzedInstanceAlias))
 		return false, nil, err
@@ -223,7 +222,7 @@ func runEmergencyReparentOp(ctx context.Context, analysisEntry *inst.Replication
 		return false, nil, err
 	}
 
-	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry, true, true)
+	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry)
 	if topologyRecovery == nil {
 		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another %v.", analysisEntry.AnalyzedInstanceAlias, recoveryName))
 		return false, nil, err
@@ -687,7 +686,7 @@ func postPrsCompletion(topologyRecovery *TopologyRecovery, analysisEntry *inst.R
 
 // electNewPrimary elects a new primary while none were present before.
 func electNewPrimary(ctx context.Context, analysisEntry *inst.ReplicationAnalysis) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
-	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry, false /*failIfFailedInstanceInActiveRecovery*/, true /*failIfClusterInActiveRecovery*/)
+	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry)
 	if topologyRecovery == nil || err != nil {
 		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another electNewPrimary.", analysisEntry.AnalyzedInstanceAlias))
 		return false, nil, err
@@ -736,7 +735,7 @@ func electNewPrimary(ctx context.Context, analysisEntry *inst.ReplicationAnalysi
 
 // fixPrimary sets the primary as read-write.
 func fixPrimary(ctx context.Context, analysisEntry *inst.ReplicationAnalysis) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
-	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry, false, true)
+	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry)
 	if topologyRecovery == nil {
 		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another fixPrimary.", analysisEntry.AnalyzedInstanceAlias))
 		return false, nil, err
@@ -767,7 +766,7 @@ func fixPrimary(ctx context.Context, analysisEntry *inst.ReplicationAnalysis) (r
 
 // fixReplica sets the replica as read-only and points it at the current primary.
 func fixReplica(ctx context.Context, analysisEntry *inst.ReplicationAnalysis) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
-	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry, false, true)
+	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry)
 	if topologyRecovery == nil {
 		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another fixReplica.", analysisEntry.AnalyzedInstanceAlias))
 		return false, nil, err
@@ -808,7 +807,7 @@ func fixReplica(ctx context.Context, analysisEntry *inst.ReplicationAnalysis) (r
 
 // recoverErrantGTIDDetected changes the tablet type of a replica tablet that has errant GTIDs.
 func recoverErrantGTIDDetected(ctx context.Context, analysisEntry *inst.ReplicationAnalysis) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
-	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry, false, true)
+	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry)
 	if topologyRecovery == nil {
 		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another recoverErrantGTIDDetected.", analysisEntry.AnalyzedInstanceAlias))
 		return false, nil, err
