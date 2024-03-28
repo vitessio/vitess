@@ -2022,10 +2022,9 @@ func FnToSeconds(yield Query) {
 	}
 
 	mysqlDocSamples := []string{
-		`SELECT TO_SECONDS(950501)`,
-		`SELECT TO_SECONDS('2009-11-29')`,
-		`SELECT TO_SECONDS('2009-11-29 13:43:32')`,
-		`SELECT TO_SECONDS( NOW() )`,
+		`TO_SECONDS(950501)`,
+		`TO_SECONDS('2009-11-29')`,
+		`TO_SECONDS('2009-11-29 13:43:32')`,
 	}
 
 	for _, q := range mysqlDocSamples {
