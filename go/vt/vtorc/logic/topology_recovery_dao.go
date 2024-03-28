@@ -73,7 +73,7 @@ func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecover
 					analysis,
 					keyspace,
 					shard,
-					last_detection_id
+					detection_id
 				) values (
 					?,
 					?,
@@ -171,7 +171,7 @@ func readRecoveries(whereCondition string, limit string, args []any) ([]*Topolog
 		keyspace,
 		shard,
 		all_errors,
-		last_detection_id
+		detection_id
 		from
 			topology_recovery
 		%s
@@ -198,7 +198,7 @@ func readRecoveries(whereCondition string, limit string, args []any) ([]*Topolog
 
 		topologyRecovery.AllErrors = strings.Split(m.GetString("all_errors"), "\n")
 
-		topologyRecovery.LastDetectionID = m.GetInt64("last_detection_id")
+		topologyRecovery.DetectionID = m.GetInt64("detection_id")
 
 		res = append(res, &topologyRecovery)
 		return nil

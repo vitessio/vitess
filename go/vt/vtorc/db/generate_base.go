@@ -179,7 +179,7 @@ CREATE TABLE topology_recovery (
 	shard varchar(128) NOT NULL,
 	is_successful TINYint NOT NULL DEFAULT 0,
 	all_errors text not null default '',
-	last_detection_id bigint not null default 0,
+	detection_id bigint not null default 0,
 	PRIMARY KEY (recovery_id)
 )`,
 	`
@@ -376,7 +376,7 @@ CREATE INDEX end_recovery_idx_topology_recovery on topology_recovery (end_recove
 CREATE INDEX instance_timestamp_idx_database_instance_analysis_changelog on database_instance_analysis_changelog (alias, analysis_timestamp)
 	`,
 	`
-CREATE INDEX last_detection_idx_topology_recovery on topology_recovery (last_detection_id)
+CREATE INDEX detection_idx_topology_recovery on topology_recovery (detection_id)
 	`,
 	`
 CREATE INDEX last_seen_active_idx_node_health on node_health (last_seen_active)

@@ -110,7 +110,7 @@ type TopologyRecovery struct {
 	AllErrors              []string
 	RecoveryStartTimestamp string
 	RecoveryEndTimestamp   string
-	LastDetectionID        int64
+	DetectionID            int64
 	RelatedRecoveryID      int64
 	Type                   RecoveryType
 }
