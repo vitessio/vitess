@@ -47,14 +47,19 @@ type (
 
 func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	columns := d.GetColumns(ctx)
+	wsOp, supportsOffsets := supportsWSByOffset(d.Source)
 	for idx, col := range columns {
 		e := col.Expr
 		var wsCol *int
 		typ, _ := ctx.SemTable.TypeForExpr(e)
-
 		if ctx.SemTable.NeedsWeightString(e) {
-			offset := d.Source.AddColumn(ctx, true, false, aeWrap(weightStringFor(e)))
-			wsCol = &offset
+			if supportsOffsets {
+				offset := wsOp.AddWSColumn(ctx, idx, false)
+				wsCol = &offset
+			} else {
+				offset := d.Source.AddColumn(ctx, true, false, aeWrap(weightStringFor(e)))
+				wsCol = &offset
+			}
 		}
 
 		d.Columns = append(d.Columns, engine.CheckCol{

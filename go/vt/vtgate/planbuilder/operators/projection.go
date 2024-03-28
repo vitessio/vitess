@@ -293,6 +293,10 @@ func (p *Projection) addColumnsWithoutPushing(ctx *plancontext.PlanningContext, 
 	return offsets
 }
 
+func (p *Projection) CanTakeColumnsByOffset() bool {
+	return true
+}
+
 func (p *Projection) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
 	cols := p.Columns.GetColumns()
 	if offset >= len(cols) || offset < 0 {
