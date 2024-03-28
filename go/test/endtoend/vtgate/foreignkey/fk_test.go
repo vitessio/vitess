@@ -891,7 +891,7 @@ func TestFkScenarios(t *testing.T) {
 					t.Skip("Skip test since we don't have sharded foreign key support yet")
 				}
 				if keyspace == shardScopedKs && tt.skipShardScoped {
-					t.Skip("Skip test since we don't support updates in vindex columns")
+					t.Skip("Skip test since we don't support updates in primary vindex columns")
 				}
 				// Set the correct keyspace to use from VtGates.
 				_ = utils.Exec(t, mcmp.VtConn, fmt.Sprintf("use `%v`", keyspace))
