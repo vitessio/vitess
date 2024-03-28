@@ -3927,6 +3927,17 @@ func (asm *assembler) Fn_TIME_TO_SEC() {
 	}, "FN TIME_TO_SEC TIME(SP-1)")
 }
 
+func (asm *assembler) Fn_TO_SECONDS() {
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-1] == nil {
+			return 1
+		}
+		arg := env.vm.stack[env.vm.sp-1].(*evalTemporal)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(arg.dt.ToSeconds())
+		return 1
+	}, "FN TO_SECONDS DATETIME(SP-1)")
+}
+
 func (asm *assembler) Fn_QUARTER() {
 	asm.emit(func(env *ExpressionEnv) int {
 		if env.vm.stack[env.vm.sp-1] == nil {

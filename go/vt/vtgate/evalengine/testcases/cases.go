@@ -142,6 +142,7 @@ var Cases = []TestCase{
 	{Run: FnToDays},
 	{Run: FnFromDays},
 	{Run: FnTimeToSec},
+	{Run: FnToSeconds},
 	{Run: FnQuarter},
 	{Run: FnSecond},
 	{Run: FnTime},
@@ -1994,6 +1995,41 @@ func FnTimeToSec(yield Query) {
 
 	for _, t := range time {
 		yield(fmt.Sprintf("TIME_TO_SEC(%s)", t), nil)
+	}
+}
+
+func FnToSeconds(yield Query) {
+	for _, t := range inputConversions {
+		yield(fmt.Sprintf("TO_SECONDS(%s)", t), nil)
+	}
+
+	timeInputs := []string{
+		`DATE'0000-00-00'`,
+		`0`,
+		`'0000-00-00'`,
+		`'00:00:00'`,
+		`DATE'2023-09-03 00:00:00'`,
+		`DATE'0000-00-00 00:00:00'`,
+		`950501`,
+		`'2007-10-07'`,
+		`'0000-01-01'`,
+		`TIME'00:00:00'`,
+		`TIME'120:01:12'`,
+	}
+
+	for _, t := range timeInputs {
+		yield(fmt.Sprintf("TO_SECONDS(%s)", t), nil)
+	}
+
+	mysqlDocSamples := []string{
+		`SELECT TO_SECONDS(950501)`,
+		`SELECT TO_SECONDS('2009-11-29')`,
+		`SELECT TO_SECONDS('2009-11-29 13:43:32')`,
+		`SELECT TO_SECONDS( NOW() )`,
+	}
+
+	for _, q := range mysqlDocSamples {
+		yield(q, nil)
 	}
 }
 
