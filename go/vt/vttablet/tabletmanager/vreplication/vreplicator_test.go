@@ -187,10 +187,7 @@ func TestPrimaryKeyEquivalentColumns(t *testing.T) {
 			require.NoError(t, err, "could not connect to mysqld: %v", err)
 			defer conn.Close()
 			cols, indexName, err := mysqlctl.GetPrimaryKeyEquivalentColumns(ctx, conn.ExecuteFetch, env.Dbcfgs.DBName, tt.table)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Mysqld.GetPrimaryKeyEquivalentColumns() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
+			assert.NoError(t, err)
 			require.Equalf(t, cols, tt.wantCols, "Mysqld.GetPrimaryKeyEquivalentColumns() columns = %v, want %v", cols, tt.wantCols)
 			require.Equalf(t, indexName, tt.wantIndex, "Mysqld.GetPrimaryKeyEquivalentColumns() index = %v, want %v", indexName, tt.wantIndex)
 		})
