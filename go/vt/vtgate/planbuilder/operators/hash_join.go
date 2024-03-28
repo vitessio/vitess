@@ -127,6 +127,13 @@ func (hj *HashJoin) AddWSColumn(ctx *plancontext.PlanningContext, offset int, un
 	if len(hj.ColumnOffsets) <= offset {
 		panic(vterrors.VT13001("offset out of range"))
 	}
+
+	// check if it already exists
+	wsExpr := weightStringFor(hj.columns.columns[offset].expr)
+	if index := hj.FindCol(ctx, wsExpr, false); index != -1 {
+		return index
+	}
+
 	i := hj.ColumnOffsets[offset]
 	out := 0
 	if i < 0 {
