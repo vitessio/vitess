@@ -21,7 +21,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 )
@@ -65,37 +64,4 @@ func TestTopologyRecovery(t *testing.T) {
 		// Assert that the ID field matches the one that we just wrote
 		require.EqualValues(t, topologyRecovery.ID, recoveries[0].ID)
 	})
-}
-
-// TestBlockedRecoveryInsertion tests that we are able to insert into the blocked_recovery table.
-func TestBlockedRecoveryInsertion(t *testing.T) {
-	orcDb, err := db.OpenVTOrc()
-	require.NoError(t, err)
-	defer func() {
-		_, err = orcDb.Exec("delete from blocked_topology_recovery")
-		require.NoError(t, err)
-	}()
-
-	analysisEntry := &inst.ReplicationAnalysis{
-		AnalyzedInstanceAlias: "zone1-0000000100",
-		ClusterDetails: inst.ClusterInfo{
-			Keyspace: "ks",
-			Shard:    "0",
-		},
-		Analysis: inst.DeadPrimaryAndSomeReplicas,
-	}
-	blockedRecovery := &TopologyRecovery{
-		ID: 1,
-	}
-	err = RegisterBlockedRecoveries(analysisEntry, []*TopologyRecovery{blockedRecovery})
-	require.NoError(t, err)
-
-	totalBlockedRecoveries := 0
-	err = db.QueryVTOrc("select count(*) as blocked_recoveries from blocked_topology_recovery", nil, func(rowMap sqlutils.RowMap) error {
-		totalBlockedRecoveries = rowMap.GetInt("blocked_recoveries")
-		return nil
-	})
-	require.NoError(t, err)
-	// There should be 1 blocked recovery after insertion
-	require.Equal(t, 1, totalBlockedRecoveries)
 }

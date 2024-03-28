@@ -382,7 +382,6 @@ func ContinuousDiscovery() {
 		case <-recoveryTick:
 			go func() {
 				if IsLeaderOrActive() {
-					go ExpireBlockedRecoveries()
 					go inst.ExpireInstanceAnalysisChangelog()
 
 					go func() {

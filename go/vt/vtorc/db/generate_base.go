@@ -25,7 +25,6 @@ var TableNames = []string{
 	"database_instance_topology_history",
 	"candidate_database_instance",
 	"recovery_detection",
-	"blocked_topology_recovery",
 	"database_instance_last_analysis",
 	"database_instance_analysis_changelog",
 	"node_health_history",
@@ -241,22 +240,6 @@ CREATE TABLE recovery_detection (
 	PRIMARY KEY (detection_id)
 )`,
 	`
-DROP TABLE IF EXISTS blocked_topology_recovery
-`,
-	`
-CREATE TABLE blocked_topology_recovery (
-	alias varchar(256) NOT NULL,
-	keyspace varchar(128) NOT NULL,
-	shard varchar(128) NOT NULL,
-	analysis varchar(128) NOT NULL,
-	last_blocked_timestamp timestamp not null default (''),
-	blocking_recovery_id bigint,
-	PRIMARY KEY (alias)
-)`,
-	`
-CREATE INDEX keyspace_shard_blocked_idx_blocked_topology_recovery ON blocked_topology_recovery (keyspace, shard, last_blocked_timestamp)
-	`,
-	`
 DROP TABLE IF EXISTS database_instance_last_analysis
 `,
 	`
@@ -399,9 +382,6 @@ CREATE INDEX end_recovery_idx_topology_recovery on topology_recovery (end_recove
 	`,
 	`
 CREATE INDEX acknowledged_idx_topology_recovery on topology_recovery (acknowledged, acknowledged_at)
-	`,
-	`
-CREATE INDEX last_blocked_idx_blocked_topology_recovery on blocked_topology_recovery (last_blocked_timestamp)
 	`,
 	`
 CREATE INDEX instance_timestamp_idx_database_instance_analysis_changelog on database_instance_analysis_changelog (alias, analysis_timestamp)
