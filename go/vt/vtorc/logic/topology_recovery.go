@@ -111,12 +111,6 @@ type TopologyRecovery struct {
 	AllErrors              []string
 	RecoveryStartTimestamp string
 	RecoveryEndTimestamp   string
-	ProcessingNodeHostname string
-	ProcessingNodeToken    string
-	Acknowledged           bool
-	AcknowledgedAt         string
-	AcknowledgedBy         string
-	AcknowledgedComment    string
 	LastDetectionID        int64
 	RelatedRecoveryID      int64
 	Type                   RecoveryType

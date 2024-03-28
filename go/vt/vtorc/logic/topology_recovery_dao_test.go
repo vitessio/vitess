@@ -58,7 +58,7 @@ func TestTopologyRecovery(t *testing.T) {
 	})
 
 	t.Run("read recoveries", func(t *testing.T) {
-		recoveries, err := ReadRecentRecoveries(false, 0)
+		recoveries, err := ReadRecentRecoveries(0)
 		require.NoError(t, err)
 		require.Len(t, recoveries, 1)
 		// Assert that the ID field matches the one that we just wrote

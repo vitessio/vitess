@@ -25,8 +25,6 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/inst"
-	"vitess.io/vitess/go/vt/vtorc/process"
-	"vitess.io/vitess/go/vt/vtorc/util"
 )
 
 // InsertRecoveryDetection inserts the recovery analysis that has been detected.
@@ -73,12 +71,9 @@ func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecover
 					uid,
 					alias,
 					start_recovery,
-					processing_node_hostname,
-					processcing_node_token,
 					analysis,
 					keyspace,
 					shard,
-					count_affected_replicas,
 					last_detection_id
 				) values (
 					?,
@@ -88,20 +83,15 @@ func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecover
 					?,
 					?,
 					?,
-					?,
-					?,
-					?,
 					?
 				)
 			`,
 		sqlutils.NilIfZero(topologyRecovery.ID),
 		topologyRecovery.UID,
 		analysisEntry.AnalyzedInstanceAlias,
-		process.ThisHostname, util.ProcessToken.Hash,
 		string(analysisEntry.Analysis),
 		analysisEntry.ClusterDetails.Keyspace,
 		analysisEntry.ClusterDetails.Shard,
-		analysisEntry.CountReplicas,
 		analysisEntry.AnalyzedInstanceAlias,
 		analysisEntry.RecoveryId,
 	)
@@ -180,18 +170,11 @@ func readRecoveries(whereCondition string, limit string, args []any) ([]*Topolog
 		start_recovery,
 		IFNULL(end_recovery, '') AS end_recovery,
 		is_successful,
-		processing_node_hostname,
-		processcing_node_token,
 		ifnull(successor_alias, '') as successor_alias,
 		analysis,
 		keyspace,
 		shard,
-		count_affected_replicas,
 		all_errors,
-		acknowledged,
-		acknowledged_at,
-		acknowledged_by,
-		acknowledge_comment,
 		last_detection_id
 		from
 			topology_recovery
@@ -208,25 +191,17 @@ func readRecoveries(whereCondition string, limit string, args []any) ([]*Topolog
 		topologyRecovery.RecoveryStartTimestamp = m.GetString("start_recovery")
 		topologyRecovery.RecoveryEndTimestamp = m.GetString("end_recovery")
 		topologyRecovery.IsSuccessful = m.GetBool("is_successful")
-		topologyRecovery.ProcessingNodeHostname = m.GetString("processing_node_hostname")
-		topologyRecovery.ProcessingNodeToken = m.GetString("processcing_node_token")
 
 		topologyRecovery.AnalysisEntry.AnalyzedInstanceAlias = m.GetString("alias")
 		topologyRecovery.AnalysisEntry.Analysis = inst.AnalysisCode(m.GetString("analysis"))
 		topologyRecovery.AnalysisEntry.ClusterDetails.Keyspace = m.GetString("keyspace")
 		topologyRecovery.AnalysisEntry.ClusterDetails.Shard = m.GetString("shard")
-		topologyRecovery.AnalysisEntry.CountReplicas = m.GetUint("count_affected_replicas")
 
 		topologyRecovery.SuccessorAlias = m.GetString("successor_alias")
 
 		topologyRecovery.AnalysisEntry.ClusterDetails.ReadRecoveryInfo()
 
 		topologyRecovery.AllErrors = strings.Split(m.GetString("all_errors"), "\n")
-
-		topologyRecovery.Acknowledged = m.GetBool("acknowledged")
-		topologyRecovery.AcknowledgedAt = m.GetString("acknowledged_at")
-		topologyRecovery.AcknowledgedBy = m.GetString("acknowledged_by")
-		topologyRecovery.AcknowledgedComment = m.GetString("acknowledge_comment")
 
 		topologyRecovery.LastDetectionID = m.GetInt64("last_detection_id")
 
@@ -251,13 +226,10 @@ func ReadActiveClusterRecoveries(keyspace string, shard string) ([]*TopologyReco
 }
 
 // ReadRecentRecoveries reads latest recovery entries from topology_recovery
-func ReadRecentRecoveries(unacknowledgedOnly bool, page int) ([]*TopologyRecovery, error) {
+func ReadRecentRecoveries(page int) ([]*TopologyRecovery, error) {
 	whereConditions := []string{}
 	whereClause := ""
 	var args []any
-	if unacknowledgedOnly {
-		whereConditions = append(whereConditions, `acknowledged=0`)
-	}
 	if len(whereConditions) > 0 {
 		whereClause = fmt.Sprintf("where %s", strings.Join(whereConditions, " and "))
 	}

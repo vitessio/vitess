@@ -173,19 +173,12 @@ CREATE TABLE topology_recovery (
 	alias varchar(256) NOT NULL,
 	start_recovery timestamp NOT NULL DEFAULT (''),
 	end_recovery timestamp NULL DEFAULT NULL,
-	processing_node_hostname varchar(128) NOT NULL,
-	processcing_node_token varchar(128) NOT NULL,
 	successor_alias varchar(256) DEFAULT NULL,
 	analysis varchar(128) not null default '',
 	keyspace varchar(128) NOT NULL,
 	shard varchar(128) NOT NULL,
-	count_affected_replicas int not null default 0,
 	is_successful TINYint NOT NULL DEFAULT 0,
-	acknowledged TINYint NOT NULL DEFAULT 0,
-	acknowledged_by varchar(128) not null default '',
-	acknowledge_comment text not null default '',
 	all_errors text not null default '',
-	acknowledged_at TIMESTAMP NULL,
 	last_detection_id bigint not null default 0,
 	uid varchar(128) not null default '',
 	PRIMARY KEY (recovery_id)
@@ -379,9 +372,6 @@ CREATE INDEX keyspace_shard_idx_topology_recovery on topology_recovery (keyspace
 	`,
 	`
 CREATE INDEX end_recovery_idx_topology_recovery on topology_recovery (end_recovery)
-	`,
-	`
-CREATE INDEX acknowledged_idx_topology_recovery on topology_recovery (acknowledged, acknowledged_at)
 	`,
 	`
 CREATE INDEX instance_timestamp_idx_database_instance_analysis_changelog on database_instance_analysis_changelog (alias, analysis_timestamp)
