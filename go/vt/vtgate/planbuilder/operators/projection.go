@@ -293,6 +293,33 @@ func (p *Projection) addColumnsWithoutPushing(ctx *plancontext.PlanningContext, 
 	return offsets
 }
 
+func (p *Projection) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
+	cols := p.Columns.GetColumns()
+	if offset >= len(cols) || offset < 0 {
+		panic(vterrors.VT13001(fmt.Sprintf("offset [%d] out of range [%d]", offset, len(cols))))
+	}
+
+	ws := weightStringFor(cols[offset].Expr)
+	aeWs := aeWrap(ws)
+
+	pe := newProjExprWithInner(aeWs, ws)
+	if underRoute {
+		return p.addProjExpr(pe)
+	}
+
+	// we need to push down this column to our input
+	var inputOffset int
+	wsOp, ok := supportsWSByOffset(p.Source)
+	if ok {
+		inputOffset = wsOp.AddWSColumn(ctx, offset, false)
+	} else {
+		inputOffset = p.Source.AddColumn(ctx, true, true, aeWs)
+	}
+
+	pe.Info = Offset(inputOffset) // since we already know the offset, let's save the information
+	return p.addProjExpr(pe)
+}
+
 func (p *Projection) AddColumn(ctx *plancontext.PlanningContext, reuse bool, addToGroupBy bool, ae *sqlparser.AliasedExpr) int {
 	return p.addColumn(ctx, reuse, addToGroupBy, ae, true)
 }
