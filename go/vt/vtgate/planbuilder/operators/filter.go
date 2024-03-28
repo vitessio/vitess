@@ -95,6 +95,19 @@ func (f *Filter) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, 
 	return f.Source.FindCol(ctx, expr, underRoute)
 }
 
+func (f *Filter) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
+	wsop, ok := supportsWSByOffset(f.Source)
+	if !ok || !wsop.CanTakeColumnsByOffset() {
+		panic("AddWSColumn not supported")
+	}
+	return wsop.AddWSColumn(ctx, offset, underRoute)
+}
+
+func (f *Filter) CanTakeColumnsByOffset() bool {
+	_, ok := supportsWSByOffset(f.Source)
+	return ok
+}
+
 func (f *Filter) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
 	return f.Source.GetColumns(ctx)
 }
