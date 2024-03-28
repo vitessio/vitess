@@ -342,6 +342,7 @@ type (
 		Columns    Columns
 		Rows       InsertRows
 		OnDup      OnDup
+		RowAlias   *RowAlias
 	}
 
 	// Ignore represents whether ignore was specified or not
@@ -3491,6 +3492,11 @@ type SetExpr struct {
 
 // OnDup represents an ON DUPLICATE KEY clause.
 type OnDup UpdateExprs
+
+type RowAlias struct {
+	TableName IdentifierCS
+	Columns   Columns
+}
 
 // IdentifierCI is a case insensitive SQL identifier. It will be escaped with
 // backquotes if necessary.

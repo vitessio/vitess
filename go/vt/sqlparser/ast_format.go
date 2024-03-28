@@ -117,20 +117,20 @@ func (node *Stream) Format(buf *TrackedBuffer) {
 func (node *Insert) Format(buf *TrackedBuffer) {
 	switch node.Action {
 	case InsertAct:
-		buf.astPrintf(node, "%s %v%sinto %v%v%v %v%v",
+		buf.astPrintf(node, "%s %v%sinto %v%v%v %v%v%v",
 			InsertStr,
 			node.Comments, node.Ignore.ToString(),
-			node.Table.Expr, node.Partitions, node.Columns, node.Rows, node.OnDup)
+			node.Table.Expr, node.Partitions, node.Columns, node.Rows, node.RowAlias, node.OnDup)
 	case ReplaceAct:
-		buf.astPrintf(node, "%s %v%sinto %v%v%v %v%v",
+		buf.astPrintf(node, "%s %v%sinto %v%v%v %v%v%v",
 			ReplaceStr,
 			node.Comments, node.Ignore.ToString(),
-			node.Table.Expr, node.Partitions, node.Columns, node.Rows, node.OnDup)
+			node.Table.Expr, node.Partitions, node.Columns, node.Rows, node.RowAlias, node.OnDup)
 	default:
-		buf.astPrintf(node, "%s %v%sinto %v%v%v %v%v",
+		buf.astPrintf(node, "%s %v%sinto %v%v%v %v%v%v",
 			"Unkown Insert Action",
 			node.Comments, node.Ignore.ToString(),
-			node.Table.Expr, node.Partitions, node.Columns, node.Rows, node.OnDup)
+			node.Table.Expr, node.Partitions, node.Columns, node.Rows, node.RowAlias, node.OnDup)
 	}
 
 }
@@ -2008,6 +2008,18 @@ func (node OnDup) Format(buf *TrackedBuffer) {
 		return
 	}
 	buf.astPrintf(node, " on duplicate key update %v", UpdateExprs(node))
+}
+
+func (node *RowAlias) Format(buf *TrackedBuffer) {
+	if node == nil {
+		return
+	}
+
+	buf.astPrintf(node, " as %v", node.TableName)
+
+	if node.Columns != nil {
+		buf.astPrintf(node, " %v", node.Columns)
+	}
 }
 
 // Format formats the node.

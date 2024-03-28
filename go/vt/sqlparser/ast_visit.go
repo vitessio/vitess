@@ -422,6 +422,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfRollback(in, f)
 	case RootNode:
 		return VisitRootNode(in, f)
+	case *RowAlias:
+		return VisitRefOfRowAlias(in, f)
 	case *SRollback:
 		return VisitRefOfSRollback(in, f)
 	case *Savepoint:
@@ -2004,6 +2006,9 @@ func VisitRefOfInsert(in *Insert, f Visit) error {
 	if err := VisitOnDup(in.OnDup, f); err != nil {
 		return err
 	}
+	if err := VisitRefOfRowAlias(in.RowAlias, f); err != nil {
+		return err
+	}
 	return nil
 }
 func VisitRefOfInsertExpr(in *InsertExpr, f Visit) error {
@@ -3425,6 +3430,21 @@ func VisitRootNode(in RootNode, f Visit) error {
 		return err
 	}
 	if err := VisitSQLNode(in.SQLNode, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfRowAlias(in *RowAlias, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitIdentifierCS(in.TableName, f); err != nil {
+		return err
+	}
+	if err := VisitColumns(in.Columns, f); err != nil {
 		return err
 	}
 	return nil

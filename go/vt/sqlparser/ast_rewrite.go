@@ -422,6 +422,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfRollback(parent, node, replacer)
 	case RootNode:
 		return a.rewriteRootNode(parent, node, replacer)
+	case *RowAlias:
+		return a.rewriteRefOfRowAlias(parent, node, replacer)
 	case *SRollback:
 		return a.rewriteRefOfSRollback(parent, node, replacer)
 	case *Savepoint:
@@ -3908,6 +3910,11 @@ func (a *application) rewriteRefOfInsert(parent SQLNode, node *Insert, replacer 
 	}) {
 		return false
 	}
+	if !a.rewriteRefOfRowAlias(node, node.RowAlias, func(newNode, parent SQLNode) {
+		parent.(*Insert).RowAlias = newNode.(*RowAlias)
+	}) {
+		return false
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -7291,6 +7298,38 @@ func (a *application) rewriteRootNode(parent SQLNode, node RootNode, replacer re
 	}
 	if !a.rewriteSQLNode(node, node.SQLNode, func(newNode, parent SQLNode) {
 		panic("[BUG] tried to replace 'SQLNode' on 'RootNode'")
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfRowAlias(parent SQLNode, node *RowAlias, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteIdentifierCS(node, node.TableName, func(newNode, parent SQLNode) {
+		parent.(*RowAlias).TableName = newNode.(IdentifierCS)
+	}) {
+		return false
+	}
+	if !a.rewriteColumns(node, node.Columns, func(newNode, parent SQLNode) {
+		parent.(*RowAlias).Columns = newNode.(Columns)
 	}) {
 		return false
 	}

@@ -1226,6 +1226,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RootNode(a, b)
+	case *RowAlias:
+		b, ok := inB.(*RowAlias)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfRowAlias(a, b)
 	case *SRollback:
 		b, ok := inB.(*SRollback)
 		if !ok {
@@ -2890,7 +2896,8 @@ func (cmp *Comparator) RefOfInsert(a, b *Insert) bool {
 		cmp.Partitions(a.Partitions, b.Partitions) &&
 		cmp.Columns(a.Columns, b.Columns) &&
 		cmp.InsertRows(a.Rows, b.Rows) &&
-		cmp.OnDup(a.OnDup, b.OnDup)
+		cmp.OnDup(a.OnDup, b.OnDup) &&
+		cmp.RefOfRowAlias(a.RowAlias, b.RowAlias)
 }
 
 // RefOfInsertExpr does deep equals between the two objects.
@@ -4093,6 +4100,18 @@ func (cmp *Comparator) RefOfRollback(a, b *Rollback) bool {
 // RootNode does deep equals between the two objects.
 func (cmp *Comparator) RootNode(a, b RootNode) bool {
 	return cmp.SQLNode(a.SQLNode, b.SQLNode)
+}
+
+// RefOfRowAlias does deep equals between the two objects.
+func (cmp *Comparator) RefOfRowAlias(a, b *RowAlias) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.IdentifierCS(a.TableName, b.TableName) &&
+		cmp.Columns(a.Columns, b.Columns)
 }
 
 // RefOfSRollback does deep equals between the two objects.
