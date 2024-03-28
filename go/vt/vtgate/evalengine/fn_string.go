@@ -200,30 +200,22 @@ func (call *builtinField) eval(env *ExpressionEnv) (eval, error) {
 			}
 		}
 	} else if tt == sqltypes.VarChar {
-		tar, ok := args[0].(*evalBytes)
-		if !ok {
-			tar, err = evalToVarchar(args[0], call.collate, true)
-			if err != nil {
-				return nil, err
-			}
-		}
+		col := evalCollation(args[0])
+		collation := colldata.Lookup(col.Collation)
+		tar := args[0].(*evalBytes)
 
 		for i, arg := range args[1:] {
 			if arg == nil {
 				continue
 			}
 
-			var ok bool
-			e, ok := arg.(*evalBytes)
-			if !ok {
-				e, err = evalToVarchar(arg, call.collate, true)
-				if err != nil {
-					return nil, err
-				}
+			e, err := evalToVarchar(arg, col.Collation, true)
+			if err != nil {
+				return nil, err
 			}
 
 			// Compare target and current string
-			if bytes.Equal(tar.bytes, e.bytes) {
+			if collation.Collate(tar.bytes, e.bytes, false) == 0 {
 				return newEvalInt64(int64(i + 1)), nil
 			}
 		}
@@ -272,6 +264,7 @@ func (call *builtinField) compile(c *compiler) (ctype, error) {
 	// If the arguments contain both integral and string values
 	// MySQL converts all the arguments to DOUBLE
 	tt := strs[0].Type
+	col := strs[0].Col
 
 	for _, str := range strs {
 		tt = fieldSQLType(str.Type, tt)
@@ -292,19 +285,8 @@ func (call *builtinField) compile(c *compiler) (ctype, error) {
 
 		c.asm.Fn_FIELD_i(len(call.Arguments))
 	} else if tt == sqltypes.VarChar {
-		for i, str := range strs {
-			offset := len(strs) - i
-			skip := c.compileNullCheckOffset(str, offset)
-
-			switch {
-			case str.isTextual():
-			default:
-				c.asm.Convert_xce(offset, sqltypes.VarChar, call.collate)
-			}
-			c.asm.jumpDestination(skip)
-		}
-
-		c.asm.Fn_FIELD_b(len(call.Arguments))
+		collation := colldata.Lookup(col.Collation)
+		c.asm.Fn_FIELD_b(len(call.Arguments), collation)
 	} else if tt == sqltypes.Decimal {
 		for i, str := range strs {
 			offset := len(strs) - i

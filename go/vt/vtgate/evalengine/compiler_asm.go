@@ -2376,7 +2376,7 @@ func (asm *assembler) Fn_FIELD_i(args int) {
 	}, "FN FIELD INT64(SP-%d)...INT64(SP-1)", args)
 }
 
-func (asm *assembler) Fn_FIELD_b(args int) {
+func (asm *assembler) Fn_FIELD_b(args int, col colldata.Collation) {
 	asm.adjustStack(-args + 1)
 	asm.emit(func(env *ExpressionEnv) int {
 		if env.vm.stack[env.vm.sp-args] == nil {
@@ -2394,8 +2394,27 @@ func (asm *assembler) Fn_FIELD_b(args int) {
 
 			str := env.vm.stack[env.vm.sp-args+i+1].(*evalBytes)
 
+			// We cannot do these comparison earlier in the compilation,
+			// because if we convert everything first, we error on cases
+			// where there is a match. MySQL will do an element for element
+			// comparison where if there's a match already, it doesn't matter
+			// if there was an invalid conversion later on.
+			//
+			// This means we also must convert here in this compiler function
+			// and can't eagerly do the conversion.
+			toCharset := col.Charset()
+			fromCharset := colldata.Lookup(str.col.Collation).Charset()
+			if fromCharset != toCharset && !toCharset.IsSuperset(fromCharset) {
+				str, env.vm.err = evalToVarchar(str, col.ID(), true)
+				if env.vm.err != nil {
+					env.vm.stack[env.vm.sp-args] = nil
+					env.vm.sp -= args - 1
+					return 1
+				}
+			}
+
 			// Compare target and current string
-			if bytes.Equal(tar.bytes, str.bytes) {
+			if col.Collate(tar.bytes, str.bytes, false) == 0 {
 				env.vm.stack[env.vm.sp-args] = env.vm.arena.newEvalInt64(int64(i + 1))
 				env.vm.sp -= args - 1
 				return 1
