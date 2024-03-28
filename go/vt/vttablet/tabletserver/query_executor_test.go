@@ -40,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/callinfo"
 	"vitess.io/vitess/go/vt/callinfo/fakecallinfo"
 	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/tableacl/simpleacl"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -1835,6 +1836,23 @@ func TestQueryExecSchemaReloadCount(t *testing.T) {
 			assert.EqualValues(t, tcase.schemaReloadCount, qre.tsv.se.SchemaReloadTimings.Counts()["TabletServerTest.SchemaReload"], "got: %v", qre.tsv.se.SchemaReloadTimings.Counts())
 		})
 	}
+}
+
+func TestGenerateFinalSQL(t *testing.T) {
+	// generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, bindVars map[string]*querypb.BindVariable)
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	tsv := newTestTabletServer(context.Background(), noFlags, db)
+	defer tsv.StopService()
+
+	qre := newTestQueryExecutor(context.Background(), tsv, `select * from something`, 0)
+	query, noComments, err := qre.generateFinalSQL(
+		&sqlparser.ParsedQuery{Query: `select * from something`},
+		map[string]*querypb.BindVariable{},
+	)
+	assert.Nil(t, err)
+	assert.Equal(t, `select * from something`, query)
+	t.Logf("noComments: %s", noComments)
 }
 
 type mockTxThrottler struct {

@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -63,7 +64,12 @@ const (
 	// between zero and MaxPriorityValue.
 	MaxPriorityValue = 100
 
+	// OptimizerHintMaxExecutionTime is the optimizer hint used in MySQL to set the max execution time for a query.
+	// https://dev.mysql.com/doc/refman/8.0/en/optimizer-hints.html#optimizer-hints-execution-time
+	OptimizerHintMaxExecutionTime = "MAX_EXECUTION_TIME"
+
 	// OptimizerHintSetVar is the optimizer hint used in MySQL to set the value of a specific session variable for a query.
+	// https://dev.mysql.com/doc/refman/8.0/en/optimizer-hints.html#optimizer-hints-set-var
 	OptimizerHintSetVar = "SET_VAR"
 )
 
@@ -318,15 +324,29 @@ func (c *ParsedComments) GetMySQLSetVarValue(key string) string {
 	return ""
 }
 
+// SetMySQLMaxExecutionTimeValue sets the maximum execution time for a query using a /*+ MAX_EXECUTION_TIME() */ MySQL optimizer hint.
+func (c *ParsedComments) SetMySQLMaxExecutionTimeValue(maxExecutionTime time.Duration) (newComments Comments) {
+	return setMySQLOptimizerHint(c.comments, OptimizerHintMaxExecutionTime, "" /* no key */, maxExecutionTime.Milliseconds())
+}
+
 // SetMySQLSetVarValue updates or sets the value of the given variable as part of a /*+ SET_VAR() */ MySQL optimizer hint.
 func (c *ParsedComments) SetMySQLSetVarValue(key string, value string) (newComments Comments) {
-	if c == nil {
+	return setMySQLOptimizerHint(c.comments, OptimizerHintSetVar, key, value)
+}
+
+// setMySQLOptimizerHint updates or sets the value of a MySQL optimizer hint.
+func setMySQLOptimizerHint(comments Comments, hint, key string, value interface{}) (newComments Comments) {
+	keyAndValue := value
+	if key != "" {
+		keyAndValue = fmt.Sprintf("%v=%v", key, value)
+	}
+	if len(comments) == 0 {
 		// If we have no parsed comments, then we create a new one with the required optimizer hint and return it.
-		newComments = append(newComments, fmt.Sprintf("/*+ %v(%v=%v) */", OptimizerHintSetVar, key, value))
+		newComments = append(newComments, fmt.Sprintf("/*+ %v(%v) */", hint, keyAndValue))
 		return
 	}
 	seenFirstOhComment := false
-	for _, commentStr := range c.comments {
+	for _, commentStr := range comments {
 		// Skip all the comments that don't start with the query optimizer prefix.
 		// Also, since MySQL only parses the first comment that has the optimizer hint prefix and ignores the following ones,
 		// we skip over all the comments that come after we have seen the first comment with the optimizer hint.
@@ -372,10 +392,10 @@ func (c *ParsedComments) SetMySQLSetVarValue(key string, value string) (newComme
 				finalComment += fmt.Sprintf(" %v(%v)", ohName, ohContent)
 			}
 		}
-		// If we haven't found any SET_VAR optimizer hint with the matching variable,
+		// If we haven't found any optimizer hint with the matching variable,
 		// then we add a new optimizer hint to introduce this variable.
 		if !keyPresent {
-			finalComment += fmt.Sprintf(" %v(%v=%v)", OptimizerHintSetVar, key, value)
+			finalComment += fmt.Sprintf(" %v(%v)", hint, keyAndValue)
 		}
 
 		finalComment += " */"
@@ -384,7 +404,7 @@ func (c *ParsedComments) SetMySQLSetVarValue(key string, value string) (newComme
 	// If we have not seen even a single comment that has the optimizer hint prefix,
 	// then we add a new optimizer hint to introduce this variable.
 	if !seenFirstOhComment {
-		newComments = append(newComments, fmt.Sprintf("/*+ %v(%v=%v) */", OptimizerHintSetVar, key, value))
+		newComments = append(newComments, fmt.Sprintf("/*+ %v(%v) */", hint, keyAndValue))
 	}
 	return newComments
 }
