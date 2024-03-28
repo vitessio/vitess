@@ -180,7 +180,6 @@ CREATE TABLE topology_recovery (
 	is_successful TINYint NOT NULL DEFAULT 0,
 	all_errors text not null default '',
 	last_detection_id bigint not null default 0,
-	uid varchar(128) not null default '',
 	PRIMARY KEY (recovery_id)
 )`,
 	`
@@ -302,7 +301,7 @@ DROP TABLE IF EXISTS topology_recovery_steps
 	`
 CREATE TABLE topology_recovery_steps (
 	recovery_step_id integer,
-	recovery_uid varchar(128) NOT NULL,
+	recovery_id integer NOT NULL,
 	audit_at timestamp not null default (''),
 	message text NOT NULL,
 	PRIMARY KEY (recovery_step_id)
@@ -383,9 +382,6 @@ CREATE INDEX last_detection_idx_topology_recovery on topology_recovery (last_det
 CREATE INDEX last_seen_active_idx_node_health on node_health (last_seen_active)
 	`,
 	`
-CREATE INDEX uid_idx_topology_recovery ON topology_recovery(uid)
-	`,
-	`
-CREATE INDEX recovery_uid_idx_topology_recovery_steps ON topology_recovery_steps(recovery_uid)
+CREATE INDEX recovery_id_idx_topology_recovery_steps ON topology_recovery_steps(recovery_id)
 	`,
 }

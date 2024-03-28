@@ -68,7 +68,6 @@ func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecover
 			insert ignore
 				into topology_recovery (
 					recovery_id,
-					uid,
 					alias,
 					start_recovery,
 					analysis,
@@ -76,7 +75,6 @@ func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecover
 					shard,
 					last_detection_id
 				) values (
-					?,
 					?,
 					?,
 					NOW(),
@@ -87,7 +85,6 @@ func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecover
 				)
 			`,
 		sqlutils.NilIfZero(topologyRecovery.ID),
-		topologyRecovery.UID,
 		analysisEntry.AnalyzedInstanceAlias,
 		string(analysisEntry.Analysis),
 		analysisEntry.ClusterDetails.Keyspace,
@@ -147,11 +144,11 @@ func writeResolveRecovery(topologyRecovery *TopologyRecovery) error {
 				all_errors = ?,
 				end_recovery = NOW()
 			where
-				uid = ?
+				recovery_id = ?
 			`, topologyRecovery.IsSuccessful,
 		topologyRecovery.SuccessorAlias,
 		strings.Join(topologyRecovery.AllErrors, "\n"),
-		topologyRecovery.UID,
+		topologyRecovery.ID,
 	)
 	if err != nil {
 		log.Error(err)
@@ -165,7 +162,6 @@ func readRecoveries(whereCondition string, limit string, args []any) ([]*Topolog
 	query := fmt.Sprintf(`
 		select
 		recovery_id,
-		uid,
 		alias,
 		start_recovery,
 		IFNULL(end_recovery, '') AS end_recovery,
@@ -186,7 +182,6 @@ func readRecoveries(whereCondition string, limit string, args []any) ([]*Topolog
 	err := db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
 		topologyRecovery := *NewTopologyRecovery(inst.ReplicationAnalysis{})
 		topologyRecovery.ID = m.GetInt64("recovery_id")
-		topologyRecovery.UID = m.GetString("uid")
 
 		topologyRecovery.RecoveryStartTimestamp = m.GetString("start_recovery")
 		topologyRecovery.RecoveryEndTimestamp = m.GetString("end_recovery")
@@ -245,9 +240,9 @@ func writeTopologyRecoveryStep(topologyRecoveryStep *TopologyRecoveryStep) error
 	sqlResult, err := db.ExecVTOrc(`
 			insert ignore
 				into topology_recovery_steps (
-					recovery_step_id, recovery_uid, audit_at, message
+					recovery_step_id, recovery_id, audit_at, message
 				) values (?, ?, now(), ?)
-			`, sqlutils.NilIfZero(topologyRecoveryStep.ID), topologyRecoveryStep.RecoveryUID, topologyRecoveryStep.Message,
+			`, sqlutils.NilIfZero(topologyRecoveryStep.ID), topologyRecoveryStep.RecoveryID, topologyRecoveryStep.Message,
 	)
 	if err != nil {
 		log.Error(err)

@@ -102,7 +102,6 @@ const (
 // TopologyRecovery represents an entry in the topology_recovery table
 type TopologyRecovery struct {
 	ID                     int64
-	UID                    string
 	AnalysisEntry          inst.ReplicationAnalysis
 	SuccessorHostname      string
 	SuccessorPort          int
@@ -118,7 +117,6 @@ type TopologyRecovery struct {
 
 func NewTopologyRecovery(replicationAnalysis inst.ReplicationAnalysis) *TopologyRecovery {
 	topologyRecovery := &TopologyRecovery{}
-	topologyRecovery.UID = util.PrettyUniqueToken()
 	topologyRecovery.AnalysisEntry = replicationAnalysis
 	topologyRecovery.AllErrors = []string{}
 	return topologyRecovery
@@ -138,16 +136,16 @@ func (topologyRecovery *TopologyRecovery) AddErrors(errs []error) {
 }
 
 type TopologyRecoveryStep struct {
-	ID          int64
-	RecoveryUID string
-	AuditAt     string
-	Message     string
+	ID         int64
+	RecoveryID int64
+	AuditAt    string
+	Message    string
 }
 
-func NewTopologyRecoveryStep(uid string, message string) *TopologyRecoveryStep {
+func NewTopologyRecoveryStep(id int64, message string) *TopologyRecoveryStep {
 	return &TopologyRecoveryStep{
-		RecoveryUID: uid,
-		Message:     message,
+		RecoveryID: id,
+		Message:    message,
 	}
 }
 
@@ -166,7 +164,7 @@ func AuditTopologyRecovery(topologyRecovery *TopologyRecovery, message string) e
 		return nil
 	}
 
-	recoveryStep := NewTopologyRecoveryStep(topologyRecovery.UID, message)
+	recoveryStep := NewTopologyRecoveryStep(topologyRecovery.ID, message)
 	return writeTopologyRecoveryStep(recoveryStep)
 }
 
