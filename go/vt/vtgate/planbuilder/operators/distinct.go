@@ -51,7 +51,6 @@ func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	for idx, col := range columns {
 		e := col.Expr
 		var wsCol *int
-		typ, _ := ctx.SemTable.TypeForExpr(e)
 		if ctx.SemTable.NeedsWeightString(e) {
 			if supportsOffsets {
 				offset := wsOp.AddWSColumn(ctx, idx, false)
@@ -61,7 +60,7 @@ func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) Operator {
 				wsCol = &offset
 			}
 		}
-
+		typ, _ := ctx.SemTable.TypeForExpr(e)
 		d.Columns = append(d.Columns, engine.CheckCol{
 			Col:          idx,
 			WsCol:        wsCol,

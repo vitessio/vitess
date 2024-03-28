@@ -237,22 +237,65 @@ func (aj *ApplyJoin) AddColumn(
 	return offset
 }
 
+func (*ApplyJoin) CanTakeColumnsByOffset() bool {
+	return true
+}
+
+func (aj *ApplyJoin) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
+	if len(aj.Columns) == 0 {
+		aj.planOffsets(ctx)
+	}
+
+	if len(aj.Columns) <= offset {
+		panic(vterrors.VT13001("offset out of range"))
+	}
+
+	wsExpr := weightStringFor(aj.JoinColumns.columns[offset].Original)
+	if index := aj.FindCol(ctx, wsExpr, false); index != -1 {
+		return index
+	}
+
+	i := aj.Columns[offset]
+	out := 0
+	if i < 0 {
+		wsOp, ok := supportsWSByOffset(aj.LHS)
+		if ok {
+			out = wsOp.AddWSColumn(ctx, FromLeftOffset(i), underRoute)
+			out = ToLeftOffset(out)
+			aj.JoinColumns.addLeft(wsExpr)
+		} else {
+			out = -1
+		}
+	} else {
+		wsOp, ok := supportsWSByOffset(aj.RHS)
+		if ok {
+			out = wsOp.AddWSColumn(ctx, FromRightOffset(i), underRoute)
+			out = ToRightOffset(out)
+			aj.JoinColumns.addRight(wsExpr)
+		} else {
+			out = -1
+		}
+	}
+
+	if out >= 0 {
+		aj.addOffset(out)
+	} else {
+		col := aj.getJoinColumnFor(ctx, aeWrap(wsExpr), wsExpr, true)
+		aj.JoinColumns.add(col)
+		aj.planOffsetFor(ctx, col)
+	}
+
+	return len(aj.Columns) - 1
+}
+
 func (aj *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) Operator {
+	if len(aj.Columns) > 0 {
+		// we've already done offset planning
+		return aj
+	}
 	for _, col := range aj.JoinColumns.columns {
 		// Read the type description for applyJoinColumn to understand the following code
-		for _, lhsExpr := range col.LHSExprs {
-			offset := aj.LHS.AddColumn(ctx, true, col.GroupBy, aeWrap(lhsExpr.Expr))
-			if col.RHSExpr == nil {
-				// if we don't have an RHS expr, it means that this is a pure LHS expression
-				aj.addOffset(-offset - 1)
-			} else {
-				aj.Vars[lhsExpr.Name] = offset
-			}
-		}
-		if col.RHSExpr != nil {
-			offset := aj.RHS.AddColumn(ctx, true, col.GroupBy, aeWrap(col.RHSExpr))
-			aj.addOffset(offset + 1)
-		}
+		aj.planOffsetFor(ctx, col)
 	}
 
 	for _, col := range aj.JoinPredicates.columns {
@@ -268,6 +311,22 @@ func (aj *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	}
 
 	return nil
+}
+
+func (aj *ApplyJoin) planOffsetFor(ctx *plancontext.PlanningContext, col applyJoinColumn) {
+	for _, lhsExpr := range col.LHSExprs {
+		offset := aj.LHS.AddColumn(ctx, true, col.GroupBy, aeWrap(lhsExpr.Expr))
+		if col.RHSExpr == nil {
+			// if we don't have an RHS expr, it means that this is a pure LHS expression
+			aj.addOffset(ToLeftOffset(offset))
+		} else {
+			aj.Vars[lhsExpr.Name] = offset
+		}
+	}
+	if col.RHSExpr != nil {
+		offset := aj.RHS.AddColumn(ctx, true, col.GroupBy, aeWrap(col.RHSExpr))
+		aj.addOffset(ToRightOffset(offset))
+	}
 }
 
 func (aj *ApplyJoin) addOffset(offset int) {
