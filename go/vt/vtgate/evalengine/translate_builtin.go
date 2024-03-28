@@ -457,6 +457,11 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (IR, error) {
 			return nil, argError(method)
 		}
 		return &builtinTimeToSec{CallExpr: call}, nil
+	case "to_seconds":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinToSeconds{CallExpr: call}, nil
 	case "quarter":
 		if len(args) != 1 {
 			return nil, argError(method)
