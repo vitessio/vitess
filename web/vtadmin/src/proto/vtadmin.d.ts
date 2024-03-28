@@ -20880,6 +20880,9 @@ export namespace tabletmanagerdata {
 
         /** ApplySchemaRequest batch_size */
         batch_size?: (number|Long|null);
+
+        /** ApplySchemaRequest disable_foreign_key_checks */
+        disable_foreign_key_checks?: (boolean|null);
     }
 
     /** Represents an ApplySchemaRequest. */
@@ -20911,6 +20914,9 @@ export namespace tabletmanagerdata {
 
         /** ApplySchemaRequest batch_size. */
         public batch_size: (number|Long);
+
+        /** ApplySchemaRequest disable_foreign_key_checks. */
+        public disable_foreign_key_checks: boolean;
 
         /**
          * Creates a new ApplySchemaRequest instance using the specified properties.
@@ -21887,6 +21893,230 @@ export namespace tabletmanagerdata {
 
         /**
          * Gets the default type url for ExecuteFetchAsDbaResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of an ExecuteMultiFetchAsDbaRequest. */
+    interface IExecuteMultiFetchAsDbaRequest {
+
+        /** ExecuteMultiFetchAsDbaRequest sql */
+        sql?: (Uint8Array|null);
+
+        /** ExecuteMultiFetchAsDbaRequest db_name */
+        db_name?: (string|null);
+
+        /** ExecuteMultiFetchAsDbaRequest max_rows */
+        max_rows?: (number|Long|null);
+
+        /** ExecuteMultiFetchAsDbaRequest disable_binlogs */
+        disable_binlogs?: (boolean|null);
+
+        /** ExecuteMultiFetchAsDbaRequest reload_schema */
+        reload_schema?: (boolean|null);
+
+        /** ExecuteMultiFetchAsDbaRequest disable_foreign_key_checks */
+        disable_foreign_key_checks?: (boolean|null);
+    }
+
+    /** Represents an ExecuteMultiFetchAsDbaRequest. */
+    class ExecuteMultiFetchAsDbaRequest implements IExecuteMultiFetchAsDbaRequest {
+
+        /**
+         * Constructs a new ExecuteMultiFetchAsDbaRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IExecuteMultiFetchAsDbaRequest);
+
+        /** ExecuteMultiFetchAsDbaRequest sql. */
+        public sql: Uint8Array;
+
+        /** ExecuteMultiFetchAsDbaRequest db_name. */
+        public db_name: string;
+
+        /** ExecuteMultiFetchAsDbaRequest max_rows. */
+        public max_rows: (number|Long);
+
+        /** ExecuteMultiFetchAsDbaRequest disable_binlogs. */
+        public disable_binlogs: boolean;
+
+        /** ExecuteMultiFetchAsDbaRequest reload_schema. */
+        public reload_schema: boolean;
+
+        /** ExecuteMultiFetchAsDbaRequest disable_foreign_key_checks. */
+        public disable_foreign_key_checks: boolean;
+
+        /**
+         * Creates a new ExecuteMultiFetchAsDbaRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ExecuteMultiFetchAsDbaRequest instance
+         */
+        public static create(properties?: tabletmanagerdata.IExecuteMultiFetchAsDbaRequest): tabletmanagerdata.ExecuteMultiFetchAsDbaRequest;
+
+        /**
+         * Encodes the specified ExecuteMultiFetchAsDbaRequest message. Does not implicitly {@link tabletmanagerdata.ExecuteMultiFetchAsDbaRequest.verify|verify} messages.
+         * @param message ExecuteMultiFetchAsDbaRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IExecuteMultiFetchAsDbaRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ExecuteMultiFetchAsDbaRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.ExecuteMultiFetchAsDbaRequest.verify|verify} messages.
+         * @param message ExecuteMultiFetchAsDbaRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IExecuteMultiFetchAsDbaRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an ExecuteMultiFetchAsDbaRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ExecuteMultiFetchAsDbaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.ExecuteMultiFetchAsDbaRequest;
+
+        /**
+         * Decodes an ExecuteMultiFetchAsDbaRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ExecuteMultiFetchAsDbaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.ExecuteMultiFetchAsDbaRequest;
+
+        /**
+         * Verifies an ExecuteMultiFetchAsDbaRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an ExecuteMultiFetchAsDbaRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ExecuteMultiFetchAsDbaRequest
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.ExecuteMultiFetchAsDbaRequest;
+
+        /**
+         * Creates a plain object from an ExecuteMultiFetchAsDbaRequest message. Also converts values to other types if specified.
+         * @param message ExecuteMultiFetchAsDbaRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.ExecuteMultiFetchAsDbaRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ExecuteMultiFetchAsDbaRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ExecuteMultiFetchAsDbaRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of an ExecuteMultiFetchAsDbaResponse. */
+    interface IExecuteMultiFetchAsDbaResponse {
+
+        /** ExecuteMultiFetchAsDbaResponse results */
+        results?: (query.IQueryResult[]|null);
+    }
+
+    /** Represents an ExecuteMultiFetchAsDbaResponse. */
+    class ExecuteMultiFetchAsDbaResponse implements IExecuteMultiFetchAsDbaResponse {
+
+        /**
+         * Constructs a new ExecuteMultiFetchAsDbaResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IExecuteMultiFetchAsDbaResponse);
+
+        /** ExecuteMultiFetchAsDbaResponse results. */
+        public results: query.IQueryResult[];
+
+        /**
+         * Creates a new ExecuteMultiFetchAsDbaResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ExecuteMultiFetchAsDbaResponse instance
+         */
+        public static create(properties?: tabletmanagerdata.IExecuteMultiFetchAsDbaResponse): tabletmanagerdata.ExecuteMultiFetchAsDbaResponse;
+
+        /**
+         * Encodes the specified ExecuteMultiFetchAsDbaResponse message. Does not implicitly {@link tabletmanagerdata.ExecuteMultiFetchAsDbaResponse.verify|verify} messages.
+         * @param message ExecuteMultiFetchAsDbaResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IExecuteMultiFetchAsDbaResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ExecuteMultiFetchAsDbaResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.ExecuteMultiFetchAsDbaResponse.verify|verify} messages.
+         * @param message ExecuteMultiFetchAsDbaResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IExecuteMultiFetchAsDbaResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an ExecuteMultiFetchAsDbaResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ExecuteMultiFetchAsDbaResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.ExecuteMultiFetchAsDbaResponse;
+
+        /**
+         * Decodes an ExecuteMultiFetchAsDbaResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ExecuteMultiFetchAsDbaResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.ExecuteMultiFetchAsDbaResponse;
+
+        /**
+         * Verifies an ExecuteMultiFetchAsDbaResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an ExecuteMultiFetchAsDbaResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ExecuteMultiFetchAsDbaResponse
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.ExecuteMultiFetchAsDbaResponse;
+
+        /**
+         * Creates a plain object from an ExecuteMultiFetchAsDbaResponse message. Also converts values to other types if specified.
+         * @param message ExecuteMultiFetchAsDbaResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.ExecuteMultiFetchAsDbaResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ExecuteMultiFetchAsDbaResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ExecuteMultiFetchAsDbaResponse
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
@@ -27767,6 +27997,418 @@ export namespace tabletmanagerdata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of a HasVReplicationWorkflowsRequest. */
+    interface IHasVReplicationWorkflowsRequest {
+    }
+
+    /** Represents a HasVReplicationWorkflowsRequest. */
+    class HasVReplicationWorkflowsRequest implements IHasVReplicationWorkflowsRequest {
+
+        /**
+         * Constructs a new HasVReplicationWorkflowsRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IHasVReplicationWorkflowsRequest);
+
+        /**
+         * Creates a new HasVReplicationWorkflowsRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns HasVReplicationWorkflowsRequest instance
+         */
+        public static create(properties?: tabletmanagerdata.IHasVReplicationWorkflowsRequest): tabletmanagerdata.HasVReplicationWorkflowsRequest;
+
+        /**
+         * Encodes the specified HasVReplicationWorkflowsRequest message. Does not implicitly {@link tabletmanagerdata.HasVReplicationWorkflowsRequest.verify|verify} messages.
+         * @param message HasVReplicationWorkflowsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IHasVReplicationWorkflowsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified HasVReplicationWorkflowsRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.HasVReplicationWorkflowsRequest.verify|verify} messages.
+         * @param message HasVReplicationWorkflowsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IHasVReplicationWorkflowsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a HasVReplicationWorkflowsRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns HasVReplicationWorkflowsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.HasVReplicationWorkflowsRequest;
+
+        /**
+         * Decodes a HasVReplicationWorkflowsRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns HasVReplicationWorkflowsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.HasVReplicationWorkflowsRequest;
+
+        /**
+         * Verifies a HasVReplicationWorkflowsRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a HasVReplicationWorkflowsRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns HasVReplicationWorkflowsRequest
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.HasVReplicationWorkflowsRequest;
+
+        /**
+         * Creates a plain object from a HasVReplicationWorkflowsRequest message. Also converts values to other types if specified.
+         * @param message HasVReplicationWorkflowsRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.HasVReplicationWorkflowsRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this HasVReplicationWorkflowsRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for HasVReplicationWorkflowsRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a HasVReplicationWorkflowsResponse. */
+    interface IHasVReplicationWorkflowsResponse {
+
+        /** HasVReplicationWorkflowsResponse has */
+        has?: (boolean|null);
+    }
+
+    /** Represents a HasVReplicationWorkflowsResponse. */
+    class HasVReplicationWorkflowsResponse implements IHasVReplicationWorkflowsResponse {
+
+        /**
+         * Constructs a new HasVReplicationWorkflowsResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IHasVReplicationWorkflowsResponse);
+
+        /** HasVReplicationWorkflowsResponse has. */
+        public has: boolean;
+
+        /**
+         * Creates a new HasVReplicationWorkflowsResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns HasVReplicationWorkflowsResponse instance
+         */
+        public static create(properties?: tabletmanagerdata.IHasVReplicationWorkflowsResponse): tabletmanagerdata.HasVReplicationWorkflowsResponse;
+
+        /**
+         * Encodes the specified HasVReplicationWorkflowsResponse message. Does not implicitly {@link tabletmanagerdata.HasVReplicationWorkflowsResponse.verify|verify} messages.
+         * @param message HasVReplicationWorkflowsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IHasVReplicationWorkflowsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified HasVReplicationWorkflowsResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.HasVReplicationWorkflowsResponse.verify|verify} messages.
+         * @param message HasVReplicationWorkflowsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IHasVReplicationWorkflowsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a HasVReplicationWorkflowsResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns HasVReplicationWorkflowsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.HasVReplicationWorkflowsResponse;
+
+        /**
+         * Decodes a HasVReplicationWorkflowsResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns HasVReplicationWorkflowsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.HasVReplicationWorkflowsResponse;
+
+        /**
+         * Verifies a HasVReplicationWorkflowsResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a HasVReplicationWorkflowsResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns HasVReplicationWorkflowsResponse
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.HasVReplicationWorkflowsResponse;
+
+        /**
+         * Creates a plain object from a HasVReplicationWorkflowsResponse message. Also converts values to other types if specified.
+         * @param message HasVReplicationWorkflowsResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.HasVReplicationWorkflowsResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this HasVReplicationWorkflowsResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for HasVReplicationWorkflowsResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ReadVReplicationWorkflowsRequest. */
+    interface IReadVReplicationWorkflowsRequest {
+
+        /** ReadVReplicationWorkflowsRequest include_ids */
+        include_ids?: (number[]|null);
+
+        /** ReadVReplicationWorkflowsRequest include_workflows */
+        include_workflows?: (string[]|null);
+
+        /** ReadVReplicationWorkflowsRequest include_states */
+        include_states?: (binlogdata.VReplicationWorkflowState[]|null);
+
+        /** ReadVReplicationWorkflowsRequest exclude_workflows */
+        exclude_workflows?: (string[]|null);
+
+        /** ReadVReplicationWorkflowsRequest exclude_states */
+        exclude_states?: (binlogdata.VReplicationWorkflowState[]|null);
+
+        /** ReadVReplicationWorkflowsRequest exclude_frozen */
+        exclude_frozen?: (boolean|null);
+    }
+
+    /** Represents a ReadVReplicationWorkflowsRequest. */
+    class ReadVReplicationWorkflowsRequest implements IReadVReplicationWorkflowsRequest {
+
+        /**
+         * Constructs a new ReadVReplicationWorkflowsRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IReadVReplicationWorkflowsRequest);
+
+        /** ReadVReplicationWorkflowsRequest include_ids. */
+        public include_ids: number[];
+
+        /** ReadVReplicationWorkflowsRequest include_workflows. */
+        public include_workflows: string[];
+
+        /** ReadVReplicationWorkflowsRequest include_states. */
+        public include_states: binlogdata.VReplicationWorkflowState[];
+
+        /** ReadVReplicationWorkflowsRequest exclude_workflows. */
+        public exclude_workflows: string[];
+
+        /** ReadVReplicationWorkflowsRequest exclude_states. */
+        public exclude_states: binlogdata.VReplicationWorkflowState[];
+
+        /** ReadVReplicationWorkflowsRequest exclude_frozen. */
+        public exclude_frozen: boolean;
+
+        /**
+         * Creates a new ReadVReplicationWorkflowsRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ReadVReplicationWorkflowsRequest instance
+         */
+        public static create(properties?: tabletmanagerdata.IReadVReplicationWorkflowsRequest): tabletmanagerdata.ReadVReplicationWorkflowsRequest;
+
+        /**
+         * Encodes the specified ReadVReplicationWorkflowsRequest message. Does not implicitly {@link tabletmanagerdata.ReadVReplicationWorkflowsRequest.verify|verify} messages.
+         * @param message ReadVReplicationWorkflowsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IReadVReplicationWorkflowsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ReadVReplicationWorkflowsRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.ReadVReplicationWorkflowsRequest.verify|verify} messages.
+         * @param message ReadVReplicationWorkflowsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IReadVReplicationWorkflowsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ReadVReplicationWorkflowsRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ReadVReplicationWorkflowsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.ReadVReplicationWorkflowsRequest;
+
+        /**
+         * Decodes a ReadVReplicationWorkflowsRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ReadVReplicationWorkflowsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.ReadVReplicationWorkflowsRequest;
+
+        /**
+         * Verifies a ReadVReplicationWorkflowsRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ReadVReplicationWorkflowsRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ReadVReplicationWorkflowsRequest
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.ReadVReplicationWorkflowsRequest;
+
+        /**
+         * Creates a plain object from a ReadVReplicationWorkflowsRequest message. Also converts values to other types if specified.
+         * @param message ReadVReplicationWorkflowsRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.ReadVReplicationWorkflowsRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ReadVReplicationWorkflowsRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReadVReplicationWorkflowsRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ReadVReplicationWorkflowsResponse. */
+    interface IReadVReplicationWorkflowsResponse {
+
+        /** ReadVReplicationWorkflowsResponse workflows */
+        workflows?: (tabletmanagerdata.IReadVReplicationWorkflowResponse[]|null);
+    }
+
+    /** Represents a ReadVReplicationWorkflowsResponse. */
+    class ReadVReplicationWorkflowsResponse implements IReadVReplicationWorkflowsResponse {
+
+        /**
+         * Constructs a new ReadVReplicationWorkflowsResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IReadVReplicationWorkflowsResponse);
+
+        /** ReadVReplicationWorkflowsResponse workflows. */
+        public workflows: tabletmanagerdata.IReadVReplicationWorkflowResponse[];
+
+        /**
+         * Creates a new ReadVReplicationWorkflowsResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ReadVReplicationWorkflowsResponse instance
+         */
+        public static create(properties?: tabletmanagerdata.IReadVReplicationWorkflowsResponse): tabletmanagerdata.ReadVReplicationWorkflowsResponse;
+
+        /**
+         * Encodes the specified ReadVReplicationWorkflowsResponse message. Does not implicitly {@link tabletmanagerdata.ReadVReplicationWorkflowsResponse.verify|verify} messages.
+         * @param message ReadVReplicationWorkflowsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IReadVReplicationWorkflowsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ReadVReplicationWorkflowsResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.ReadVReplicationWorkflowsResponse.verify|verify} messages.
+         * @param message ReadVReplicationWorkflowsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IReadVReplicationWorkflowsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ReadVReplicationWorkflowsResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ReadVReplicationWorkflowsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.ReadVReplicationWorkflowsResponse;
+
+        /**
+         * Decodes a ReadVReplicationWorkflowsResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ReadVReplicationWorkflowsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.ReadVReplicationWorkflowsResponse;
+
+        /**
+         * Verifies a ReadVReplicationWorkflowsResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ReadVReplicationWorkflowsResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ReadVReplicationWorkflowsResponse
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.ReadVReplicationWorkflowsResponse;
+
+        /**
+         * Creates a plain object from a ReadVReplicationWorkflowsResponse message. Also converts values to other types if specified.
+         * @param message ReadVReplicationWorkflowsResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.ReadVReplicationWorkflowsResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ReadVReplicationWorkflowsResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReadVReplicationWorkflowsResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Properties of a ReadVReplicationWorkflowRequest. */
     interface IReadVReplicationWorkflowRequest {
 
@@ -29131,6 +29773,230 @@ export namespace tabletmanagerdata {
 
         /**
          * Gets the default type url for UpdateVReplicationWorkflowResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of an UpdateVReplicationWorkflowsRequest. */
+    interface IUpdateVReplicationWorkflowsRequest {
+
+        /** UpdateVReplicationWorkflowsRequest all_workflows */
+        all_workflows?: (boolean|null);
+
+        /** UpdateVReplicationWorkflowsRequest include_workflows */
+        include_workflows?: (string[]|null);
+
+        /** UpdateVReplicationWorkflowsRequest exclude_workflows */
+        exclude_workflows?: (string[]|null);
+
+        /** UpdateVReplicationWorkflowsRequest state */
+        state?: (binlogdata.VReplicationWorkflowState|null);
+
+        /** UpdateVReplicationWorkflowsRequest message */
+        message?: (string|null);
+
+        /** UpdateVReplicationWorkflowsRequest stop_position */
+        stop_position?: (string|null);
+    }
+
+    /** Represents an UpdateVReplicationWorkflowsRequest. */
+    class UpdateVReplicationWorkflowsRequest implements IUpdateVReplicationWorkflowsRequest {
+
+        /**
+         * Constructs a new UpdateVReplicationWorkflowsRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IUpdateVReplicationWorkflowsRequest);
+
+        /** UpdateVReplicationWorkflowsRequest all_workflows. */
+        public all_workflows: boolean;
+
+        /** UpdateVReplicationWorkflowsRequest include_workflows. */
+        public include_workflows: string[];
+
+        /** UpdateVReplicationWorkflowsRequest exclude_workflows. */
+        public exclude_workflows: string[];
+
+        /** UpdateVReplicationWorkflowsRequest state. */
+        public state: binlogdata.VReplicationWorkflowState;
+
+        /** UpdateVReplicationWorkflowsRequest message. */
+        public message: string;
+
+        /** UpdateVReplicationWorkflowsRequest stop_position. */
+        public stop_position: string;
+
+        /**
+         * Creates a new UpdateVReplicationWorkflowsRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns UpdateVReplicationWorkflowsRequest instance
+         */
+        public static create(properties?: tabletmanagerdata.IUpdateVReplicationWorkflowsRequest): tabletmanagerdata.UpdateVReplicationWorkflowsRequest;
+
+        /**
+         * Encodes the specified UpdateVReplicationWorkflowsRequest message. Does not implicitly {@link tabletmanagerdata.UpdateVReplicationWorkflowsRequest.verify|verify} messages.
+         * @param message UpdateVReplicationWorkflowsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IUpdateVReplicationWorkflowsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified UpdateVReplicationWorkflowsRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.UpdateVReplicationWorkflowsRequest.verify|verify} messages.
+         * @param message UpdateVReplicationWorkflowsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IUpdateVReplicationWorkflowsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an UpdateVReplicationWorkflowsRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns UpdateVReplicationWorkflowsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.UpdateVReplicationWorkflowsRequest;
+
+        /**
+         * Decodes an UpdateVReplicationWorkflowsRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns UpdateVReplicationWorkflowsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.UpdateVReplicationWorkflowsRequest;
+
+        /**
+         * Verifies an UpdateVReplicationWorkflowsRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an UpdateVReplicationWorkflowsRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns UpdateVReplicationWorkflowsRequest
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.UpdateVReplicationWorkflowsRequest;
+
+        /**
+         * Creates a plain object from an UpdateVReplicationWorkflowsRequest message. Also converts values to other types if specified.
+         * @param message UpdateVReplicationWorkflowsRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.UpdateVReplicationWorkflowsRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this UpdateVReplicationWorkflowsRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for UpdateVReplicationWorkflowsRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of an UpdateVReplicationWorkflowsResponse. */
+    interface IUpdateVReplicationWorkflowsResponse {
+
+        /** UpdateVReplicationWorkflowsResponse result */
+        result?: (query.IQueryResult|null);
+    }
+
+    /** Represents an UpdateVReplicationWorkflowsResponse. */
+    class UpdateVReplicationWorkflowsResponse implements IUpdateVReplicationWorkflowsResponse {
+
+        /**
+         * Constructs a new UpdateVReplicationWorkflowsResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IUpdateVReplicationWorkflowsResponse);
+
+        /** UpdateVReplicationWorkflowsResponse result. */
+        public result?: (query.IQueryResult|null);
+
+        /**
+         * Creates a new UpdateVReplicationWorkflowsResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns UpdateVReplicationWorkflowsResponse instance
+         */
+        public static create(properties?: tabletmanagerdata.IUpdateVReplicationWorkflowsResponse): tabletmanagerdata.UpdateVReplicationWorkflowsResponse;
+
+        /**
+         * Encodes the specified UpdateVReplicationWorkflowsResponse message. Does not implicitly {@link tabletmanagerdata.UpdateVReplicationWorkflowsResponse.verify|verify} messages.
+         * @param message UpdateVReplicationWorkflowsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IUpdateVReplicationWorkflowsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified UpdateVReplicationWorkflowsResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.UpdateVReplicationWorkflowsResponse.verify|verify} messages.
+         * @param message UpdateVReplicationWorkflowsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IUpdateVReplicationWorkflowsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an UpdateVReplicationWorkflowsResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns UpdateVReplicationWorkflowsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.UpdateVReplicationWorkflowsResponse;
+
+        /**
+         * Decodes an UpdateVReplicationWorkflowsResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns UpdateVReplicationWorkflowsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.UpdateVReplicationWorkflowsResponse;
+
+        /**
+         * Verifies an UpdateVReplicationWorkflowsResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an UpdateVReplicationWorkflowsResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns UpdateVReplicationWorkflowsResponse
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.UpdateVReplicationWorkflowsResponse;
+
+        /**
+         * Creates a plain object from an UpdateVReplicationWorkflowsResponse message. Also converts values to other types if specified.
+         * @param message UpdateVReplicationWorkflowsResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.UpdateVReplicationWorkflowsResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this UpdateVReplicationWorkflowsResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for UpdateVReplicationWorkflowsResponse
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
@@ -50167,6 +51033,224 @@ export namespace vtctldata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of an ExecuteMultiFetchAsDBARequest. */
+    interface IExecuteMultiFetchAsDBARequest {
+
+        /** ExecuteMultiFetchAsDBARequest tablet_alias */
+        tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** ExecuteMultiFetchAsDBARequest sql */
+        sql?: (string|null);
+
+        /** ExecuteMultiFetchAsDBARequest max_rows */
+        max_rows?: (number|Long|null);
+
+        /** ExecuteMultiFetchAsDBARequest disable_binlogs */
+        disable_binlogs?: (boolean|null);
+
+        /** ExecuteMultiFetchAsDBARequest reload_schema */
+        reload_schema?: (boolean|null);
+    }
+
+    /** Represents an ExecuteMultiFetchAsDBARequest. */
+    class ExecuteMultiFetchAsDBARequest implements IExecuteMultiFetchAsDBARequest {
+
+        /**
+         * Constructs a new ExecuteMultiFetchAsDBARequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IExecuteMultiFetchAsDBARequest);
+
+        /** ExecuteMultiFetchAsDBARequest tablet_alias. */
+        public tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** ExecuteMultiFetchAsDBARequest sql. */
+        public sql: string;
+
+        /** ExecuteMultiFetchAsDBARequest max_rows. */
+        public max_rows: (number|Long);
+
+        /** ExecuteMultiFetchAsDBARequest disable_binlogs. */
+        public disable_binlogs: boolean;
+
+        /** ExecuteMultiFetchAsDBARequest reload_schema. */
+        public reload_schema: boolean;
+
+        /**
+         * Creates a new ExecuteMultiFetchAsDBARequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ExecuteMultiFetchAsDBARequest instance
+         */
+        public static create(properties?: vtctldata.IExecuteMultiFetchAsDBARequest): vtctldata.ExecuteMultiFetchAsDBARequest;
+
+        /**
+         * Encodes the specified ExecuteMultiFetchAsDBARequest message. Does not implicitly {@link vtctldata.ExecuteMultiFetchAsDBARequest.verify|verify} messages.
+         * @param message ExecuteMultiFetchAsDBARequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IExecuteMultiFetchAsDBARequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ExecuteMultiFetchAsDBARequest message, length delimited. Does not implicitly {@link vtctldata.ExecuteMultiFetchAsDBARequest.verify|verify} messages.
+         * @param message ExecuteMultiFetchAsDBARequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IExecuteMultiFetchAsDBARequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an ExecuteMultiFetchAsDBARequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ExecuteMultiFetchAsDBARequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ExecuteMultiFetchAsDBARequest;
+
+        /**
+         * Decodes an ExecuteMultiFetchAsDBARequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ExecuteMultiFetchAsDBARequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ExecuteMultiFetchAsDBARequest;
+
+        /**
+         * Verifies an ExecuteMultiFetchAsDBARequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an ExecuteMultiFetchAsDBARequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ExecuteMultiFetchAsDBARequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ExecuteMultiFetchAsDBARequest;
+
+        /**
+         * Creates a plain object from an ExecuteMultiFetchAsDBARequest message. Also converts values to other types if specified.
+         * @param message ExecuteMultiFetchAsDBARequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ExecuteMultiFetchAsDBARequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ExecuteMultiFetchAsDBARequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ExecuteMultiFetchAsDBARequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of an ExecuteMultiFetchAsDBAResponse. */
+    interface IExecuteMultiFetchAsDBAResponse {
+
+        /** ExecuteMultiFetchAsDBAResponse results */
+        results?: (query.IQueryResult[]|null);
+    }
+
+    /** Represents an ExecuteMultiFetchAsDBAResponse. */
+    class ExecuteMultiFetchAsDBAResponse implements IExecuteMultiFetchAsDBAResponse {
+
+        /**
+         * Constructs a new ExecuteMultiFetchAsDBAResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IExecuteMultiFetchAsDBAResponse);
+
+        /** ExecuteMultiFetchAsDBAResponse results. */
+        public results: query.IQueryResult[];
+
+        /**
+         * Creates a new ExecuteMultiFetchAsDBAResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ExecuteMultiFetchAsDBAResponse instance
+         */
+        public static create(properties?: vtctldata.IExecuteMultiFetchAsDBAResponse): vtctldata.ExecuteMultiFetchAsDBAResponse;
+
+        /**
+         * Encodes the specified ExecuteMultiFetchAsDBAResponse message. Does not implicitly {@link vtctldata.ExecuteMultiFetchAsDBAResponse.verify|verify} messages.
+         * @param message ExecuteMultiFetchAsDBAResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IExecuteMultiFetchAsDBAResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ExecuteMultiFetchAsDBAResponse message, length delimited. Does not implicitly {@link vtctldata.ExecuteMultiFetchAsDBAResponse.verify|verify} messages.
+         * @param message ExecuteMultiFetchAsDBAResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IExecuteMultiFetchAsDBAResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an ExecuteMultiFetchAsDBAResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ExecuteMultiFetchAsDBAResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ExecuteMultiFetchAsDBAResponse;
+
+        /**
+         * Decodes an ExecuteMultiFetchAsDBAResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ExecuteMultiFetchAsDBAResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ExecuteMultiFetchAsDBAResponse;
+
+        /**
+         * Verifies an ExecuteMultiFetchAsDBAResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an ExecuteMultiFetchAsDBAResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ExecuteMultiFetchAsDBAResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ExecuteMultiFetchAsDBAResponse;
+
+        /**
+         * Creates a plain object from an ExecuteMultiFetchAsDBAResponse message. Also converts values to other types if specified.
+         * @param message ExecuteMultiFetchAsDBAResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ExecuteMultiFetchAsDBAResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ExecuteMultiFetchAsDBAResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ExecuteMultiFetchAsDBAResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Properties of a FindAllShardsInKeyspaceRequest. */
     interface IFindAllShardsInKeyspaceRequest {
 
@@ -52767,6 +53851,212 @@ export namespace vtctldata {
 
         /**
          * Gets the default type url for GetSchemaMigrationsResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a GetShardReplicationRequest. */
+    interface IGetShardReplicationRequest {
+
+        /** GetShardReplicationRequest keyspace */
+        keyspace?: (string|null);
+
+        /** GetShardReplicationRequest shard */
+        shard?: (string|null);
+
+        /** GetShardReplicationRequest cells */
+        cells?: (string[]|null);
+    }
+
+    /** Represents a GetShardReplicationRequest. */
+    class GetShardReplicationRequest implements IGetShardReplicationRequest {
+
+        /**
+         * Constructs a new GetShardReplicationRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IGetShardReplicationRequest);
+
+        /** GetShardReplicationRequest keyspace. */
+        public keyspace: string;
+
+        /** GetShardReplicationRequest shard. */
+        public shard: string;
+
+        /** GetShardReplicationRequest cells. */
+        public cells: string[];
+
+        /**
+         * Creates a new GetShardReplicationRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetShardReplicationRequest instance
+         */
+        public static create(properties?: vtctldata.IGetShardReplicationRequest): vtctldata.GetShardReplicationRequest;
+
+        /**
+         * Encodes the specified GetShardReplicationRequest message. Does not implicitly {@link vtctldata.GetShardReplicationRequest.verify|verify} messages.
+         * @param message GetShardReplicationRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IGetShardReplicationRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetShardReplicationRequest message, length delimited. Does not implicitly {@link vtctldata.GetShardReplicationRequest.verify|verify} messages.
+         * @param message GetShardReplicationRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IGetShardReplicationRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetShardReplicationRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetShardReplicationRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.GetShardReplicationRequest;
+
+        /**
+         * Decodes a GetShardReplicationRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetShardReplicationRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.GetShardReplicationRequest;
+
+        /**
+         * Verifies a GetShardReplicationRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetShardReplicationRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetShardReplicationRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.GetShardReplicationRequest;
+
+        /**
+         * Creates a plain object from a GetShardReplicationRequest message. Also converts values to other types if specified.
+         * @param message GetShardReplicationRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.GetShardReplicationRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetShardReplicationRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetShardReplicationRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a GetShardReplicationResponse. */
+    interface IGetShardReplicationResponse {
+
+        /** GetShardReplicationResponse shard_replication_by_cell */
+        shard_replication_by_cell?: ({ [k: string]: topodata.IShardReplication }|null);
+    }
+
+    /** Represents a GetShardReplicationResponse. */
+    class GetShardReplicationResponse implements IGetShardReplicationResponse {
+
+        /**
+         * Constructs a new GetShardReplicationResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IGetShardReplicationResponse);
+
+        /** GetShardReplicationResponse shard_replication_by_cell. */
+        public shard_replication_by_cell: { [k: string]: topodata.IShardReplication };
+
+        /**
+         * Creates a new GetShardReplicationResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetShardReplicationResponse instance
+         */
+        public static create(properties?: vtctldata.IGetShardReplicationResponse): vtctldata.GetShardReplicationResponse;
+
+        /**
+         * Encodes the specified GetShardReplicationResponse message. Does not implicitly {@link vtctldata.GetShardReplicationResponse.verify|verify} messages.
+         * @param message GetShardReplicationResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IGetShardReplicationResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetShardReplicationResponse message, length delimited. Does not implicitly {@link vtctldata.GetShardReplicationResponse.verify|verify} messages.
+         * @param message GetShardReplicationResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IGetShardReplicationResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetShardReplicationResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetShardReplicationResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.GetShardReplicationResponse;
+
+        /**
+         * Decodes a GetShardReplicationResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetShardReplicationResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.GetShardReplicationResponse;
+
+        /**
+         * Verifies a GetShardReplicationResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetShardReplicationResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetShardReplicationResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.GetShardReplicationResponse;
+
+        /**
+         * Creates a plain object from a GetShardReplicationResponse message. Also converts values to other types if specified.
+         * @param message GetShardReplicationResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.GetShardReplicationResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetShardReplicationResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetShardReplicationResponse
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */

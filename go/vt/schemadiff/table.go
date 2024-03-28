@@ -35,9 +35,10 @@ type charsetCollate struct {
 }
 
 type AlterTableEntityDiff struct {
-	from       *CreateTableEntity
-	to         *CreateTableEntity
-	alterTable *sqlparser.AlterTable
+	from        *CreateTableEntity
+	to          *CreateTableEntity
+	alterTable  *sqlparser.AlterTable
+	annotations *TextualAnnotations
 
 	canonicalStatementString string
 	subsequentDiff           *AlterTableEntityDiff
@@ -57,6 +58,10 @@ func (d *AlterTableEntityDiff) EntityName() string {
 // Entities implements EntityDiff
 func (d *AlterTableEntityDiff) Entities() (from Entity, to Entity) {
 	return d.from, d.to
+}
+
+func (d *AlterTableEntityDiff) Annotated() (from *TextualAnnotations, to *TextualAnnotations, unified *TextualAnnotations) {
+	return annotatedDiff(d, d.annotations)
 }
 
 // Statement implements EntityDiff
@@ -155,6 +160,10 @@ func (d *CreateTableEntityDiff) Entities() (from Entity, to Entity) {
 	return nil, &CreateTableEntity{CreateTable: d.createTable}
 }
 
+func (d *CreateTableEntityDiff) Annotated() (from *TextualAnnotations, to *TextualAnnotations, unified *TextualAnnotations) {
+	return annotatedDiff(d, nil)
+}
+
 // Statement implements EntityDiff
 func (d *CreateTableEntityDiff) Statement() sqlparser.Statement {
 	if d == nil {
@@ -226,6 +235,10 @@ func (d *DropTableEntityDiff) EntityName() string {
 // Entities implements EntityDiff
 func (d *DropTableEntityDiff) Entities() (from Entity, to Entity) {
 	return d.from, nil
+}
+
+func (d *DropTableEntityDiff) Annotated() (from *TextualAnnotations, to *TextualAnnotations, unified *TextualAnnotations) {
+	return annotatedDiff(d, nil)
 }
 
 // Statement implements EntityDiff
@@ -300,6 +313,10 @@ func (d *RenameTableEntityDiff) EntityName() string {
 // Entities implements EntityDiff
 func (d *RenameTableEntityDiff) Entities() (from Entity, to Entity) {
 	return d.from, d.to
+}
+
+func (d *RenameTableEntityDiff) Annotated() (from *TextualAnnotations, to *TextualAnnotations, unified *TextualAnnotations) {
+	return annotatedDiff(d, nil)
 }
 
 // Statement implements EntityDiff
@@ -837,13 +854,14 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 	var parentAlterTableEntityDiff *AlterTableEntityDiff
 	var partitionSpecs []*sqlparser.PartitionSpec
 	var superfluousFulltextKeys []*sqlparser.AddIndexDefinition
+	annotations := NewTextualAnnotations()
 	{
 		// diff columns
 		// ordered columns for both tables:
 
 		t1Columns := c.CreateTable.TableSpec.Columns
 		t2Columns := other.CreateTable.TableSpec.Columns
-		if err := c.diffColumns(alterTable, t1Columns, t2Columns, hints, t1cc, t2cc); err != nil {
+		if err := c.diffColumns(alterTable, annotations, t1Columns, t2Columns, hints, t1cc, t2cc); err != nil {
 			return nil, err
 		}
 	}
@@ -852,14 +870,14 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 		// ordered keys for both tables:
 		t1Keys := c.CreateTable.TableSpec.Indexes
 		t2Keys := other.CreateTable.TableSpec.Indexes
-		superfluousFulltextKeys = c.diffKeys(alterTable, t1Keys, t2Keys, hints)
+		superfluousFulltextKeys = c.diffKeys(alterTable, annotations, t1Keys, t2Keys, hints)
 	}
 	{
 		// diff constraints
 		// ordered constraints for both tables:
 		t1Constraints := c.CreateTable.TableSpec.Constraints
 		t2Constraints := other.CreateTable.TableSpec.Constraints
-		c.diffConstraints(alterTable, c.Name(), t1Constraints, other.Name(), t2Constraints, hints)
+		c.diffConstraints(alterTable, annotations, c.Name(), t1Constraints, other.Name(), t2Constraints, hints)
 	}
 	{
 		// diff partitions
@@ -867,7 +885,7 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 		t1Partitions := c.CreateTable.TableSpec.PartitionOption
 		t2Partitions := other.CreateTable.TableSpec.PartitionOption
 		var err error
-		partitionSpecs, err = c.diffPartitions(alterTable, t1Partitions, t2Partitions, hints)
+		partitionSpecs, err = c.diffPartitions(alterTable, annotations, t1Partitions, t2Partitions, hints)
 		if err != nil {
 			return nil, err
 		}
@@ -877,14 +895,14 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 		// ordered keys for both tables:
 		t1Options := c.CreateTable.TableSpec.Options
 		t2Options := other.CreateTable.TableSpec.Options
-		if err := c.diffOptions(alterTable, t1Options, t2Options, hints); err != nil {
+		if err := c.diffOptions(alterTable, annotations, t1Options, t2Options, hints); err != nil {
 			return nil, err
 		}
 	}
 	tableSpecHasChanged := len(alterTable.AlterOptions) > 0 || alterTable.PartitionOption != nil || alterTable.PartitionSpec != nil
 
 	newAlterTableEntityDiff := func(alterTable *sqlparser.AlterTable) *AlterTableEntityDiff {
-		d := &AlterTableEntityDiff{alterTable: alterTable, from: c, to: other}
+		d := &AlterTableEntityDiff{alterTable: alterTable, from: c, to: other, annotations: annotations}
 
 		var algorithmValue sqlparser.AlgorithmValue
 
@@ -986,6 +1004,7 @@ func isDefaultTableOptionValue(option *sqlparser.TableOption) bool {
 }
 
 func (c *CreateTableEntity) diffOptions(alterTable *sqlparser.AlterTable,
+	annotations *TextualAnnotations,
 	t1Options sqlparser.TableOptions,
 	t2Options sqlparser.TableOptions,
 	hints *DiffHints,
@@ -1071,11 +1090,16 @@ func (c *CreateTableEntity) diffOptions(alterTable *sqlparser.AlterTable,
 			if tableOption != nil {
 				tableOption.Name = t1Option.Name
 				alterTableOptions = append(alterTableOptions, tableOption)
+				annotations.MarkRemoved(sqlparser.CanonicalString(sqlparser.TableOptions{t1Option}))
 			}
 		}
-
 	}
 	// changed options
+	modifyTableOption := func(option1, option2 *sqlparser.TableOption) {
+		alterTableOptions = append(alterTableOptions, option2)
+		annotations.MarkRemoved(sqlparser.CanonicalString(sqlparser.TableOptions{option1}))
+		annotations.MarkAdded(sqlparser.CanonicalString(sqlparser.TableOptions{option2}))
+	}
 	for _, t2Option := range t2Options {
 		if t1Option, ok := t1OptionsMap[t2Option.Name]; ok {
 			options1 := sqlparser.TableOptions{t1Option}
@@ -1087,10 +1111,10 @@ func (c *CreateTableEntity) diffOptions(alterTable *sqlparser.AlterTable,
 				case "CHARSET", "COLLATE":
 					switch hints.TableCharsetCollateStrategy {
 					case TableCharsetCollateStrict:
-						alterTableOptions = append(alterTableOptions, t2Option)
+						modifyTableOption(t1Option, t2Option)
 					case TableCharsetCollateIgnoreEmpty:
 						if t1Option.String != "" && t2Option.String != "" {
-							alterTableOptions = append(alterTableOptions, t2Option)
+							modifyTableOption(t1Option, t2Option)
 						}
 						// if one is empty, we ignore
 					case TableCharsetCollateIgnoreAlways:
@@ -1099,7 +1123,7 @@ func (c *CreateTableEntity) diffOptions(alterTable *sqlparser.AlterTable,
 				case "AUTO_INCREMENT":
 					switch hints.AutoIncrementStrategy {
 					case AutoIncrementApplyAlways:
-						alterTableOptions = append(alterTableOptions, t2Option)
+						modifyTableOption(t1Option, t2Option)
 					case AutoIncrementApplyHigher:
 						option1AutoIncrement, err := strconv.ParseInt(t1Option.Value.Val, 10, 64)
 						if err != nil {
@@ -1111,17 +1135,21 @@ func (c *CreateTableEntity) diffOptions(alterTable *sqlparser.AlterTable,
 						}
 						if option2AutoIncrement > option1AutoIncrement {
 							// never decrease AUTO_INCREMENT. Only increase
-							alterTableOptions = append(alterTableOptions, t2Option)
+							modifyTableOption(t1Option, t2Option)
 						}
 					case AutoIncrementIgnore:
 						// do not apply
 					}
 				default:
 					// Apply the new options
-					alterTableOptions = append(alterTableOptions, t2Option)
+					modifyTableOption(t1Option, t2Option)
 				}
 			}
 		}
+	}
+	addTableOption := func(option *sqlparser.TableOption) {
+		alterTableOptions = append(alterTableOptions, option)
+		annotations.MarkAdded(sqlparser.CanonicalString(sqlparser.TableOptions{option}))
 	}
 	// added options
 	for _, t2Option := range t2Options {
@@ -1130,18 +1158,18 @@ func (c *CreateTableEntity) diffOptions(alterTable *sqlparser.AlterTable,
 			case "CHARSET", "COLLATE":
 				switch hints.TableCharsetCollateStrategy {
 				case TableCharsetCollateStrict:
-					alterTableOptions = append(alterTableOptions, t2Option)
+					addTableOption(t2Option)
 					// in all other strategies we ignore the charset
 				}
 			case "AUTO_INCREMENT":
 				switch hints.AutoIncrementStrategy {
 				case AutoIncrementApplyAlways, AutoIncrementApplyHigher:
-					alterTableOptions = append(alterTableOptions, t2Option)
+					addTableOption(t2Option)
 				case AutoIncrementIgnore:
 					// do not apply
 				}
 			default:
-				alterTableOptions = append(alterTableOptions, t2Option)
+				addTableOption(t2Option)
 			}
 		}
 	}
@@ -1158,6 +1186,7 @@ func (c *CreateTableEntity) diffOptions(alterTable *sqlparser.AlterTable,
 // - table1 may have non-empty list of partitions _preceding_ this sequence, and table2 may not
 // - table2 may have non-empty list of partitions _following_ this sequence, and table1 may not
 func (c *CreateTableEntity) isRangePartitionsRotation(
+	annotations *TextualAnnotations,
 	t1Partitions *sqlparser.PartitionOption,
 	t2Partitions *sqlparser.PartitionOption,
 ) (bool, []*sqlparser.PartitionSpec, error) {
@@ -1212,6 +1241,7 @@ func (c *CreateTableEntity) isRangePartitionsRotation(
 			Names:  []sqlparser.IdentifierCI{p.Name},
 		}
 		partitionSpecs = append(partitionSpecs, partitionSpec)
+		annotations.MarkRemoved(sqlparser.CanonicalString(p))
 	}
 	for _, p := range addedPartitions2 {
 		partitionSpec := &sqlparser.PartitionSpec{
@@ -1219,11 +1249,13 @@ func (c *CreateTableEntity) isRangePartitionsRotation(
 			Definitions: []*sqlparser.PartitionDefinition{p},
 		}
 		partitionSpecs = append(partitionSpecs, partitionSpec)
+		annotations.MarkAdded(sqlparser.CanonicalString(p))
 	}
 	return true, partitionSpecs, nil
 }
 
 func (c *CreateTableEntity) diffPartitions(alterTable *sqlparser.AlterTable,
+	annotations *TextualAnnotations,
 	t1Partitions *sqlparser.PartitionOption,
 	t2Partitions *sqlparser.PartitionOption,
 	hints *DiffHints,
@@ -1234,6 +1266,7 @@ func (c *CreateTableEntity) diffPartitions(alterTable *sqlparser.AlterTable,
 	case t1Partitions == nil:
 		// add partitioning
 		alterTable.PartitionOption = t2Partitions
+		annotations.MarkAdded(sqlparser.CanonicalString(t2Partitions))
 	case t2Partitions == nil:
 		// remove partitioning
 		partitionSpec := &sqlparser.PartitionSpec{
@@ -1241,6 +1274,7 @@ func (c *CreateTableEntity) diffPartitions(alterTable *sqlparser.AlterTable,
 			IsAll:  true,
 		}
 		alterTable.PartitionSpec = partitionSpec
+		annotations.MarkRemoved(sqlparser.CanonicalString(t1Partitions))
 	case sqlparser.Equals.RefOfPartitionOption(t1Partitions, t2Partitions):
 		// identical partitioning
 		return nil, nil
@@ -1256,7 +1290,7 @@ func (c *CreateTableEntity) diffPartitions(alterTable *sqlparser.AlterTable,
 		// Having said that, we _do_ analyze the scenario of a RANGE partitioning rotation of partitions:
 		// where zero or more partitions may have been dropped from the earlier range, and zero or more
 		// partitions have been added with a later range:
-		isRotation, partitionSpecs, err := c.isRangePartitionsRotation(t1Partitions, t2Partitions)
+		isRotation, partitionSpecs, err := c.isRangePartitionsRotation(annotations, t1Partitions, t2Partitions)
 		if err != nil {
 			return nil, err
 		}
@@ -1271,11 +1305,14 @@ func (c *CreateTableEntity) diffPartitions(alterTable *sqlparser.AlterTable,
 			}
 		}
 		alterTable.PartitionOption = t2Partitions
+		annotations.MarkRemoved(sqlparser.CanonicalString(t1Partitions))
+		annotations.MarkAdded(sqlparser.CanonicalString(t2Partitions))
 	}
 	return nil, nil
 }
 
 func (c *CreateTableEntity) diffConstraints(alterTable *sqlparser.AlterTable,
+	annotations *TextualAnnotations,
 	t1Name string,
 	t1Constraints []*sqlparser.ConstraintDefinition,
 	t2Name string,
@@ -1328,6 +1365,7 @@ func (c *CreateTableEntity) diffConstraints(alterTable *sqlparser.AlterTable,
 			// constraint exists in t1 but not in t2, hence it is dropped
 			dropConstraint := dropConstraintStatement(t1Constraint)
 			alterTable.AlterOptions = append(alterTable.AlterOptions, dropConstraint)
+			annotations.MarkRemoved(sqlparser.CanonicalString(t1Constraint))
 		} else {
 			t2ConstraintsCountMap[constraintName]--
 		}
@@ -1354,6 +1392,8 @@ func (c *CreateTableEntity) diffConstraints(alterTable *sqlparser.AlterTable,
 						Enforced: check2Details.Enforced,
 					}
 					alterTable.AlterOptions = append(alterTable.AlterOptions, alterConstraint)
+					annotations.MarkRemoved(sqlparser.CanonicalString(t1Constraint))
+					annotations.MarkAdded(sqlparser.CanonicalString(t2Constraint))
 					continue
 				}
 
@@ -1364,6 +1404,8 @@ func (c *CreateTableEntity) diffConstraints(alterTable *sqlparser.AlterTable,
 				}
 				alterTable.AlterOptions = append(alterTable.AlterOptions, dropConstraint)
 				alterTable.AlterOptions = append(alterTable.AlterOptions, addConstraint)
+				annotations.MarkRemoved(sqlparser.CanonicalString(t1Constraint))
+				annotations.MarkAdded(sqlparser.CanonicalString(t2Constraint))
 			}
 		} else {
 			// constraint exists in t2 but not in t1, hence it is added
@@ -1371,11 +1413,13 @@ func (c *CreateTableEntity) diffConstraints(alterTable *sqlparser.AlterTable,
 				ConstraintDefinition: t2Constraint,
 			}
 			alterTable.AlterOptions = append(alterTable.AlterOptions, addConstraint)
+			annotations.MarkAdded(sqlparser.CanonicalString(t2Constraint))
 		}
 	}
 }
 
 func (c *CreateTableEntity) diffKeys(alterTable *sqlparser.AlterTable,
+	annotations *TextualAnnotations,
 	t1Keys []*sqlparser.IndexDefinition,
 	t2Keys []*sqlparser.IndexDefinition,
 	hints *DiffHints,
@@ -1407,6 +1451,7 @@ func (c *CreateTableEntity) diffKeys(alterTable *sqlparser.AlterTable,
 			// column exists in t1 but not in t2, hence it is dropped
 			dropKey := dropKeyStatement(t1Key.Info)
 			alterTable.AlterOptions = append(alterTable.AlterOptions, dropKey)
+			annotations.MarkRemoved(sqlparser.CanonicalString(t1Key))
 		}
 	}
 
@@ -1425,6 +1470,8 @@ func (c *CreateTableEntity) diffKeys(alterTable *sqlparser.AlterTable,
 						Name:      t2Key.Info.Name,
 						Invisible: newVisibility,
 					})
+					annotations.MarkRemoved(sqlparser.CanonicalString(t1Key))
+					annotations.MarkAdded(sqlparser.CanonicalString(t2Key))
 					continue
 				}
 
@@ -1435,6 +1482,8 @@ func (c *CreateTableEntity) diffKeys(alterTable *sqlparser.AlterTable,
 				}
 				alterTable.AlterOptions = append(alterTable.AlterOptions, dropKey)
 				alterTable.AlterOptions = append(alterTable.AlterOptions, addKey)
+				annotations.MarkRemoved(sqlparser.CanonicalString(t1Key))
+				annotations.MarkAdded(sqlparser.CanonicalString(t2Key))
 			}
 		} else {
 			// key exists in t2 but not in t1, hence it is added
@@ -1447,11 +1496,13 @@ func (c *CreateTableEntity) diffKeys(alterTable *sqlparser.AlterTable,
 					// Special case: MySQL does not support multiple ADD FULLTEXT KEY statements in a single ALTER
 					superfluousFulltextKeys = append(superfluousFulltextKeys, addKey)
 					addedAsSuperfluousStatement = true
+					annotations.MarkAdded(sqlparser.CanonicalString(t2Key))
 				}
 				addedFulltextKeys++
 			}
 			if !addedAsSuperfluousStatement {
 				alterTable.AlterOptions = append(alterTable.AlterOptions, addKey)
+				annotations.MarkAdded(sqlparser.CanonicalString(t2Key))
 			}
 		}
 	}
@@ -1528,6 +1579,7 @@ func evaluateColumnReordering(t1SharedColumns, t2SharedColumns []*sqlparser.Colu
 // It returns an AlterTable statement if changes are found, or nil if not.
 // the other table may be of different name; its name is ignored.
 func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
+	annotations *TextualAnnotations,
 	t1Columns []*sqlparser.ColumnDefinition,
 	t2Columns []*sqlparser.ColumnDefinition,
 	hints *DiffHints,
@@ -1570,6 +1622,7 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 				Name: getColName(&t1Col.Name),
 			}
 			dropColumns = append(dropColumns, dropColumn)
+			annotations.MarkRemoved(sqlparser.CanonicalString(t1Col))
 		}
 	}
 
@@ -1625,6 +1678,8 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 		if modifyColumnDiff != nil {
 			// column definition or ordering has changed
 			modifyColumns = append(modifyColumns, modifyColumnDiff.modifyColumn)
+			annotations.MarkRemoved(sqlparser.CanonicalString(t1Col.col))
+			annotations.MarkAdded(sqlparser.CanonicalString(t2Col))
 		}
 	}
 	// Evaluate added columns
@@ -1650,6 +1705,7 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 			}
 			expectAppendIndex++
 			addColumns = append(addColumns, addColumn)
+			annotations.MarkAdded(sqlparser.CanonicalString(t2Col))
 		}
 	}
 	dropColumns, addColumns, renameColumns := heuristicallyDetectColumnRenames(dropColumns, addColumns, t1ColumnsMap, t2ColumnsMap, hints)
@@ -1742,6 +1798,9 @@ func (c *CreateTableEntity) primaryKeyColumns() []*sqlparser.IndexColumn {
 
 // Create implements Entity interface
 func (c *CreateTableEntity) Create() EntityDiff {
+	if c == nil {
+		return nil
+	}
 	return &CreateTableEntityDiff{to: c, createTable: c.CreateTable}
 }
 

@@ -28,11 +28,16 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
+)
+
+var (
+	testMySQLVersion = "8.0.34"
 )
 
 func TestGetConstraintType(t *testing.T) {
@@ -167,7 +172,7 @@ func TestValidateAndEditCreateTableStatement(t *testing.T) {
 			require.True(t, ok)
 
 			onlineDDL := &schema.OnlineDDL{UUID: "a5a563da_dc1a_11ec_a416_0a43f95f28a3", Table: "onlineddl_test", Options: tc.strategyOptions}
-			constraintMap, err := e.validateAndEditCreateTableStatement(context.Background(), onlineDDL, createTable)
+			constraintMap, err := e.validateAndEditCreateTableStatement(onlineDDL, createTable)
 			if tc.expectError != "" {
 				assert.ErrorContains(t, err, tc.expectError)
 				return
@@ -195,72 +200,80 @@ func TestValidateAndEditAlterTableStatement(t *testing.T) {
 		env: tabletenv.NewEnv(vtenv.NewTestEnv(), nil, "TestValidateAndEditAlterTableStatementTest"),
 	}
 	tt := []struct {
-		alter  string
-		m      map[string]string
-		expect []string
+		alter        string
+		mySQLVersion string
+		m            map[string]string
+		expect       []string
 	}{
 		{
-			alter:  "alter table t add column i int",
-			expect: []string{"alter table t add column i int, algorithm = copy"},
+			alter:        "alter table t add column i int",
+			mySQLVersion: "8.0.29",
+			expect:       []string{"alter table t add column i int, algorithm = copy"},
+		},
+		{
+			alter:        "alter table t add column i int",
+			mySQLVersion: "8.0.32",
+			expect:       []string{"alter table t add column i int"},
 		},
 		{
 			alter:  "alter table t add column i int, add fulltext key name1_ft (name1)",
-			expect: []string{"alter table t add column i int, add fulltext key name1_ft (name1), algorithm = copy"},
+			expect: []string{"alter table t add column i int, add fulltext key name1_ft (name1)"},
 		},
 		{
 			alter:  "alter table t add column i int, add fulltext key name1_ft (name1), add fulltext key name2_ft (name2)",
-			expect: []string{"alter table t add column i int, add fulltext key name1_ft (name1), algorithm = copy", "alter table t add fulltext key name2_ft (name2), algorithm = copy"},
+			expect: []string{"alter table t add column i int, add fulltext key name1_ft (name1)", "alter table t add fulltext key name2_ft (name2)"},
 		},
 		{
 			alter:  "alter table t add fulltext key name0_ft (name0), add column i int, add fulltext key name1_ft (name1), add fulltext key name2_ft (name2)",
-			expect: []string{"alter table t add fulltext key name0_ft (name0), add column i int, algorithm = copy", "alter table t add fulltext key name1_ft (name1), algorithm = copy", "alter table t add fulltext key name2_ft (name2), algorithm = copy"},
+			expect: []string{"alter table t add fulltext key name0_ft (name0), add column i int", "alter table t add fulltext key name1_ft (name1)", "alter table t add fulltext key name2_ft (name2)"},
 		},
 		{
 			alter:  "alter table t add constraint check (id != 1)",
-			expect: []string{"alter table t add constraint chk_aulpn7bjeortljhguy86phdn9 check (id != 1), algorithm = copy"},
+			expect: []string{"alter table t add constraint chk_aulpn7bjeortljhguy86phdn9 check (id != 1)"},
 		},
 		{
 			alter:  "alter table t add constraint t_chk_1 check (id != 1)",
-			expect: []string{"alter table t add constraint chk_1_aulpn7bjeortljhguy86phdn9 check (id != 1), algorithm = copy"},
+			expect: []string{"alter table t add constraint chk_1_aulpn7bjeortljhguy86phdn9 check (id != 1)"},
 		},
 		{
 			alter:  "alter table t add constraint some_check check (id != 1)",
-			expect: []string{"alter table t add constraint some_check_aulpn7bjeortljhguy86phdn9 check (id != 1), algorithm = copy"},
+			expect: []string{"alter table t add constraint some_check_aulpn7bjeortljhguy86phdn9 check (id != 1)"},
 		},
 		{
 			alter:  "alter table t add constraint some_check check (id != 1), add constraint another_check check (id != 2)",
-			expect: []string{"alter table t add constraint some_check_aulpn7bjeortljhguy86phdn9 check (id != 1), add constraint another_check_4fa197273p3w96267pzm3gfi3 check (id != 2), algorithm = copy"},
+			expect: []string{"alter table t add constraint some_check_aulpn7bjeortljhguy86phdn9 check (id != 1), add constraint another_check_4fa197273p3w96267pzm3gfi3 check (id != 2)"},
 		},
 		{
 			alter:  "alter table t add foreign key (parent_id) references onlineddl_test_parent (id) on delete no action",
-			expect: []string{"alter table t add constraint fk_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references onlineddl_test_parent (id) on delete no action, algorithm = copy"},
+			expect: []string{"alter table t add constraint fk_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references onlineddl_test_parent (id) on delete no action"},
 		},
 		{
 			alter:  "alter table t add constraint myfk foreign key (parent_id) references onlineddl_test_parent (id) on delete no action",
-			expect: []string{"alter table t add constraint myfk_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references onlineddl_test_parent (id) on delete no action, algorithm = copy"},
+			expect: []string{"alter table t add constraint myfk_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references onlineddl_test_parent (id) on delete no action"},
 		},
 		{
 			// strip out table name
 			alter:  "alter table t add constraint t_ibfk_1 foreign key (parent_id) references onlineddl_test_parent (id) on delete no action",
-			expect: []string{"alter table t add constraint ibfk_1_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references onlineddl_test_parent (id) on delete no action, algorithm = copy"},
+			expect: []string{"alter table t add constraint ibfk_1_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references onlineddl_test_parent (id) on delete no action"},
 		},
 		{
 			// stript out table name
 			alter:  "alter table t add constraint t_ibfk_1 foreign key (parent_id) references onlineddl_test_parent (id) on delete no action",
-			expect: []string{"alter table t add constraint ibfk_1_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references onlineddl_test_parent (id) on delete no action, algorithm = copy"},
+			expect: []string{"alter table t add constraint ibfk_1_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references onlineddl_test_parent (id) on delete no action"},
 		},
 		{
 			alter:  "alter table t add constraint t_ibfk_1 foreign key (parent_id) references onlineddl_test_parent (id) on delete no action, add constraint some_check check (id != 1)",
-			expect: []string{"alter table t add constraint ibfk_1_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references onlineddl_test_parent (id) on delete no action, add constraint some_check_aulpn7bjeortljhguy86phdn9 check (id != 1), algorithm = copy"},
+			expect: []string{"alter table t add constraint ibfk_1_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references onlineddl_test_parent (id) on delete no action, add constraint some_check_aulpn7bjeortljhguy86phdn9 check (id != 1)"},
 		},
 		{
 			alter: "alter table t drop foreign key t_ibfk_1",
 			m: map[string]string{
 				"t_ibfk_1": "ibfk_1_aaaaaaaaaaaaaa",
 			},
-			expect: []string{"alter table t drop foreign key ibfk_1_aaaaaaaaaaaaaa, algorithm = copy"},
+			expect: []string{"alter table t drop foreign key ibfk_1_aaaaaaaaaaaaaa"},
 		},
 	}
+
 	for _, tc := range tt {
 		t.Run(tc.alter, func(t *testing.T) {
 			stmt, err := e.env.Environment().Parser().ParseStrictDDL(tc.alter)
@@ -272,8 +285,12 @@ func TestValidateAndEditAlterTableStatement(t *testing.T) {
 			for k, v := range tc.m {
 				m[k] = v
 			}
+			if tc.mySQLVersion == "" {
+				tc.mySQLVersion = testMySQLVersion
+			}
+			capableOf := mysql.ServerVersionCapableOf(tc.mySQLVersion)
 			onlineDDL := &schema.OnlineDDL{UUID: "a5a563da_dc1a_11ec_a416_0a43f95f28a3", Table: "t", Options: "--unsafe-allow-foreign-keys"}
-			alters, err := e.validateAndEditAlterTableStatement(context.Background(), onlineDDL, alterTable, m)
+			alters, err := e.validateAndEditAlterTableStatement(capableOf, onlineDDL, alterTable, m)
 			assert.NoError(t, err)
 			var altersStrings []string
 			for _, alter := range alters {

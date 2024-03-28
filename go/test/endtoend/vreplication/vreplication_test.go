@@ -338,10 +338,13 @@ func testVreplicationWorkflows(t *testing.T, limited bool, binlogRowImage string
 
 	insertMoreCustomers(t, 16)
 	reshardCustomer2to4Split(t, nil, "")
+	confirmAllStreamsRunning(t, vtgateConn, "customer:-40")
 	expectNumberOfStreams(t, vtgateConn, "Customer2to4", "sales", "product:0", 4)
 	reshardCustomer3to2SplitMerge(t)
+	confirmAllStreamsRunning(t, vtgateConn, "customer:-60")
 	expectNumberOfStreams(t, vtgateConn, "Customer3to2", "sales", "product:0", 3)
 	reshardCustomer3to1Merge(t)
+	confirmAllStreamsRunning(t, vtgateConn, "customer:0")
 	expectNumberOfStreams(t, vtgateConn, "Customer3to1", "sales", "product:0", 1)
 
 	t.Run("Verify CopyState Is Optimized Afterwards", func(t *testing.T) {
@@ -1453,7 +1456,7 @@ func reshardAction(t *testing.T, action, workflow, keyspaceName, sourceShards, t
 			action, workflow, output)
 	}
 	if err != nil {
-		t.Fatalf("Reshard %s command failed with %+v\n", action, err)
+		t.Fatalf("Reshard %s command failed with %+v\nOutput: %s", action, err, output)
 	}
 }
 

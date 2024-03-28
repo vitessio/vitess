@@ -241,6 +241,11 @@ func (client *localVtctldClient) ExecuteHook(ctx context.Context, in *vtctldatap
 	return client.s.ExecuteHook(ctx, in)
 }
 
+// ExecuteMultiFetchAsDBA is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ExecuteMultiFetchAsDBA(ctx context.Context, in *vtctldatapb.ExecuteMultiFetchAsDBARequest, opts ...grpc.CallOption) (*vtctldatapb.ExecuteMultiFetchAsDBAResponse, error) {
+	return client.s.ExecuteMultiFetchAsDBA(ctx, in)
+}
+
 // FindAllShardsInKeyspace is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) FindAllShardsInKeyspace(ctx context.Context, in *vtctldatapb.FindAllShardsInKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.FindAllShardsInKeyspaceResponse, error) {
 	return client.s.FindAllShardsInKeyspace(ctx, in)
@@ -309,6 +314,11 @@ func (client *localVtctldClient) GetSchemaMigrations(ctx context.Context, in *vt
 // GetShard is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) GetShard(ctx context.Context, in *vtctldatapb.GetShardRequest, opts ...grpc.CallOption) (*vtctldatapb.GetShardResponse, error) {
 	return client.s.GetShard(ctx, in)
+}
+
+// GetShardReplication is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) GetShardReplication(ctx context.Context, in *vtctldatapb.GetShardReplicationRequest, opts ...grpc.CallOption) (*vtctldatapb.GetShardReplicationResponse, error) {
+	return client.s.GetShardReplication(ctx, in)
 }
 
 // GetShardRoutingRules is part of the vtctlservicepb.VtctldClient interface.

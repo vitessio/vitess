@@ -19,7 +19,7 @@ package vtgate
 import (
 	"context"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"runtime/debug"
 	"sort"
 	"sync"
@@ -403,13 +403,13 @@ func (gw *TabletGateway) shuffleTablets(cell string, tablets []*discovery.Tablet
 
 	// shuffle in same cell tablets
 	for i := sameCellMax; i > 0; i-- {
-		swap := rand.Intn(i + 1)
+		swap := rand.IntN(i + 1)
 		tablets[i], tablets[swap] = tablets[swap], tablets[i]
 	}
 
 	// shuffle in diff cell tablets
 	for i, diffCellMin := length-1, sameCellMax+1; i > diffCellMin; i-- {
-		swap := rand.Intn(i-sameCellMax) + diffCellMin
+		swap := rand.IntN(i-sameCellMax) + diffCellMin
 		tablets[i], tablets[swap] = tablets[swap], tablets[i]
 	}
 }

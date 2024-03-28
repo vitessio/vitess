@@ -18,7 +18,7 @@ package endtoend
 
 import (
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -1775,7 +1775,7 @@ func BenchmarkTabletQueries(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		tcase := TestQueryCases[rand.Intn(len(TestQueryCases))]
+		tcase := TestQueryCases[rand.IntN(len(TestQueryCases))]
 		if err := tcase.Benchmark(client); err != nil {
 			b.Error(err)
 		}

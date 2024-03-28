@@ -17,7 +17,7 @@ limitations under the License.
 package bucketpool
 
 import (
-	"math/rand"
+	"math/rand/v2"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -118,13 +118,13 @@ func TestPoolWeirdMaxSize(t *testing.T) {
 func TestFuzz(t *testing.T) {
 	maxTestSize := 16384
 	for range 20000 {
-		minSize := rand.Intn(maxTestSize)
+		minSize := rand.IntN(maxTestSize)
 		if minSize == 0 {
 			minSize = 1
 		}
-		maxSize := rand.Intn(maxTestSize-minSize) + minSize
+		maxSize := rand.IntN(maxTestSize-minSize) + minSize
 		p := New(minSize, maxSize)
-		bufSize := rand.Intn(maxTestSize)
+		bufSize := rand.IntN(maxTestSize)
 		buf := p.Get(bufSize)
 		require.Len(t, *buf, bufSize, "unexpected buf length")
 		sPool := p.findPool(bufSize)
@@ -143,7 +143,7 @@ func BenchmarkPool(b *testing.B) {
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			randomSize := rand.Intn(pool.maxSize)
+			randomSize := rand.IntN(pool.maxSize)
 			data := pool.Get(randomSize)
 			pool.Put(data)
 		}
@@ -156,7 +156,7 @@ func BenchmarkPoolGet(b *testing.B) {
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			randomSize := rand.Intn(pool.maxSize)
+			randomSize := rand.IntN(pool.maxSize)
 			data := pool.Get(randomSize)
 			_ = data
 		}

@@ -30,7 +30,7 @@ jobs:
 
       - name: Check out code
         if: steps.skip-workflow.outputs.skip-workflow == 'false'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Check for changes in relevant files
         if: steps.skip-workflow.outputs.skip-workflow == 'false'

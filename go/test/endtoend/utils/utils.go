@@ -88,7 +88,13 @@ func AssertMatchesAny(t testing.TB, conn *mysql.Conn, query string, expected ...
 			return
 		}
 	}
-	t.Errorf("Query: %s (-want +got):\n%v\nGot:%s", query, expected, got)
+
+	var err strings.Builder
+	_, _ = fmt.Fprintf(&err, "Query did not match:\n%s\n", query)
+	for i, e := range expected {
+		_, _ = fmt.Fprintf(&err, "Expected query %d does not match.\nwant: %v\ngot:  %v\n\n", i, e, got)
+	}
+	t.Error(err.String())
 }
 
 // AssertMatchesCompareMySQL executes the given query on both Vitess and MySQL and make sure
@@ -181,7 +187,7 @@ func ExecCompareMySQL(t *testing.T, vtConn, mysqlConn *mysql.Conn, query string)
 
 // ExecAllowError executes the given query without failing the test if it produces
 // an error. The error is returned to the client, along with the result set.
-func ExecAllowError(t testing.TB, conn *mysql.Conn, query string) (*sqltypes.Result, error) {
+func ExecAllowError(t TestingT, conn *mysql.Conn, query string) (*sqltypes.Result, error) {
 	t.Helper()
 	return conn.ExecuteFetch(query, 1000, true)
 }
@@ -274,17 +280,23 @@ func WaitForKsError(t *testing.T, vtgateProcess cluster.VtgateProcess, ks string
 		var ok bool
 		errString, ok = ksErr.(string)
 		return ok
-	})
+	}, "Waiting for error")
 	return errString
 }
 
 // WaitForVschemaCondition waits for the condition to be true
-func WaitForVschemaCondition(t *testing.T, vtgateProcess cluster.VtgateProcess, ks string, conditionMet func(t *testing.T, keyspace map[string]interface{}) bool) {
+func WaitForVschemaCondition(
+	t *testing.T,
+	vtgateProcess cluster.VtgateProcess,
+	ks string,
+	conditionMet func(t *testing.T, keyspace map[string]interface{}) bool,
+	message string,
+) {
 	timeout := time.After(60 * time.Second)
 	for {
 		select {
 		case <-timeout:
-			t.Fatalf("schema tracking did not met the condition within the time for keyspace: %s", ks)
+			t.Fatalf("schema tracking did not met the condition within the time for keyspace: %s\n%s", ks, message)
 		default:
 			res, err := vtgateProcess.ReadVSchema()
 			require.NoError(t, err, res)
@@ -299,12 +311,12 @@ func WaitForVschemaCondition(t *testing.T, vtgateProcess cluster.VtgateProcess, 
 }
 
 // WaitForTableDeletions waits for a table to be deleted
-func WaitForTableDeletions(ctx context.Context, t *testing.T, vtgateProcess cluster.VtgateProcess, ks, tbl string) {
+func WaitForTableDeletions(t *testing.T, vtgateProcess cluster.VtgateProcess, ks, tbl string) {
 	WaitForVschemaCondition(t, vtgateProcess, ks, func(t *testing.T, keyspace map[string]interface{}) bool {
 		tablesMap := keyspace["tables"]
 		_, isPresent := convertToMap(tablesMap)[tbl]
 		return !isPresent
-	})
+	}, "Waiting for table to be deleted")
 }
 
 // WaitForColumn waits for a table's column to be present

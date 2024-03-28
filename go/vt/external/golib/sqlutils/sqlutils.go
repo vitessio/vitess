@@ -28,6 +28,8 @@ import (
 	"sync"
 	"time"
 
+	_ "modernc.org/sqlite"
+
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -40,7 +42,7 @@ type RowMap map[string]CellData
 // CellData is the result of a single (atomic) column in a single row
 type CellData sql.NullString
 
-func (this *CellData) MarshalJSON() ([]byte, error) {
+func (this CellData) MarshalJSON() ([]byte, error) {
 	if this.Valid {
 		return json.Marshal(this.String)
 	} else {
@@ -135,9 +137,9 @@ func (this *RowMap) GetTime(key string) time.Time {
 var knownDBs = make(map[string]*sql.DB)
 var knownDBsMutex = &sync.Mutex{}
 
-// GetGenericDB returns a DB instance based on uri.
+// GetSQLiteDB returns a SQLite DB instance based on DB file name.
 // bool result indicates whether the DB was returned from cache; err
-func GetGenericDB(driverName, dataSourceName string) (*sql.DB, bool, error) {
+func GetSQLiteDB(dataSourceName string) (*sql.DB, bool, error) {
 	knownDBsMutex.Lock()
 	defer func() {
 		knownDBsMutex.Unlock()
@@ -145,19 +147,13 @@ func GetGenericDB(driverName, dataSourceName string) (*sql.DB, bool, error) {
 
 	var exists bool
 	if _, exists = knownDBs[dataSourceName]; !exists {
-		if db, err := sql.Open(driverName, dataSourceName); err == nil {
+		if db, err := sql.Open("sqlite", dataSourceName); err == nil {
 			knownDBs[dataSourceName] = db
 		} else {
 			return db, exists, err
 		}
 	}
 	return knownDBs[dataSourceName], exists, nil
-}
-
-// GetSQLiteDB returns a SQLite DB instance based on DB file name.
-// bool result indicates whether the DB was returned from cache; err
-func GetSQLiteDB(dbFile string) (*sql.DB, bool, error) {
-	return GetGenericDB("sqlite", dbFile)
 }
 
 // RowToArray is a convenience function, typically not called directly, which maps a

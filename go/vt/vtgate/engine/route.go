@@ -19,7 +19,7 @@ package engine
 import (
 	"context"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"sort"
 	"strings"
 	"time"
@@ -542,7 +542,7 @@ func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCurs
 		return
 	}
 
-	if vcursor.GetWarmingReadsPercent() == 0 || rand.Intn(100) > vcursor.GetWarmingReadsPercent() {
+	if vcursor.GetWarmingReadsPercent() == 0 || rand.IntN(100) > vcursor.GetWarmingReadsPercent() {
 		return
 	}
 

@@ -17,7 +17,6 @@ limitations under the License.
 package grpcclient
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"reflect"
@@ -26,39 +25,80 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 )
 
+func init() {
+	clientCredsSigChan = make(chan os.Signal, 1)
+}
+
 func TestAppendStaticAuth(t *testing.T) {
-	{
-		clientCreds = nil
-		clientCredsErr = nil
-		opts, err := AppendStaticAuth([]grpc.DialOption{})
-		assert.Nil(t, err)
-		assert.Len(t, opts, 0)
+	oldCredsFile := credsFile
+	opts := []grpc.DialOption{
+		grpc.EmptyDialOption{},
 	}
-	{
-		clientCreds = nil
-		clientCredsErr = errors.New("test err")
-		opts, err := AppendStaticAuth([]grpc.DialOption{})
-		assert.NotNil(t, err)
-		assert.Len(t, opts, 0)
+
+	tests := []struct {
+		name        string
+		cFile       string
+		expectedLen int
+		expectedErr string
+	}{
+		{
+			name:        "creds file not set",
+			expectedLen: 1,
+		},
+		{
+			name:        "non-existent creds file",
+			cFile:       "./testdata/unknown.json",
+			expectedErr: "open ./testdata/unknown.json: no such file or directory",
+		},
+		{
+			name:        "valid creds file",
+			cFile:       "./testdata/credsFile.json",
+			expectedLen: 2,
+		},
+		{
+			name:        "invalid creds file",
+			cFile:       "./testdata/invalid.json",
+			expectedErr: "unexpected end of JSON input",
+		},
 	}
-	{
-		clientCreds = &StaticAuthClientCreds{Username: "test", Password: "123456"}
-		clientCredsErr = nil
-		opts, err := AppendStaticAuth([]grpc.DialOption{})
-		assert.Nil(t, err)
-		assert.Len(t, opts, 1)
+
+	for _, tt := range tests {
+		t.Run(tt.cFile, func(t *testing.T) {
+			defer func() {
+				credsFile = oldCredsFile
+			}()
+
+			if tt.cFile != "" {
+				credsFile = tt.cFile
+			}
+			dialOpts, err := AppendStaticAuth(opts)
+			if tt.expectedErr == "" {
+				require.NoError(t, err)
+				require.Equal(t, tt.expectedLen, len(dialOpts))
+			} else {
+				require.ErrorContains(t, err, tt.expectedErr)
+			}
+			ResetStaticAuth()
+			require.Nil(t, clientCredsCancel)
+		})
 	}
 }
 
 func TestGetStaticAuthCreds(t *testing.T) {
+	oldCredsFile := credsFile
+	defer func() {
+		ResetStaticAuth()
+		credsFile = oldCredsFile
+	}()
 	tmp, err := os.CreateTemp("", t.Name())
 	assert.Nil(t, err)
 	defer os.Remove(tmp.Name())
 	credsFile = tmp.Name()
-	clientCredsSigChan = make(chan os.Signal, 1)
+	ResetStaticAuth()
 
 	// load old creds
 	fmt.Fprint(tmp, `{"Username": "old", "Password": "123456"}`)

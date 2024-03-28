@@ -333,11 +333,11 @@ func TestGetExpandedColumnNames(t *testing.T) {
 			"expand enum",
 			Column{
 				Type:       EnumColumnType,
-				EnumValues: "'a', 'b'",
+				EnumValues: "'a','b'",
 			},
 			Column{
 				Type:       EnumColumnType,
-				EnumValues: "'a', 'x'",
+				EnumValues: "'a','x'",
 			},
 			true,
 		},
@@ -345,11 +345,11 @@ func TestGetExpandedColumnNames(t *testing.T) {
 			"expand enum",
 			Column{
 				Type:       EnumColumnType,
-				EnumValues: "'a', 'b'",
+				EnumValues: "'a','b'",
 			},
 			Column{
 				Type:       EnumColumnType,
-				EnumValues: "'a', 'b', 'c'",
+				EnumValues: "'a','b','c'",
 			},
 			true,
 		},
@@ -357,11 +357,11 @@ func TestGetExpandedColumnNames(t *testing.T) {
 			"reduce enum",
 			Column{
 				Type:       EnumColumnType,
-				EnumValues: "'a', 'b', 'c'",
+				EnumValues: "'a','b','c'",
 			},
 			Column{
 				Type:       EnumColumnType,
-				EnumValues: "'a', 'b'",
+				EnumValues: "'a','b'",
 			},
 			false,
 		},

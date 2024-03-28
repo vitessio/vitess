@@ -81,10 +81,14 @@ func newEvalFloat(f float64) *evalFloat {
 }
 
 func newEvalDecimal(dec decimal.Decimal, m, d int32) *evalDecimal {
-	if m == 0 && d == 0 {
+	switch {
+	case m == 0 && d == 0:
 		return newEvalDecimalWithPrec(dec, -dec.Exponent())
+	case m == 0:
+		return newEvalDecimalWithPrec(dec, d)
+	default:
+		return newEvalDecimalWithPrec(dec.Clamp(m-d, d), d)
 	}
-	return newEvalDecimalWithPrec(dec.Clamp(m-d, d), d)
 }
 
 func newEvalDecimalWithPrec(dec decimal.Decimal, prec int32) *evalDecimal {

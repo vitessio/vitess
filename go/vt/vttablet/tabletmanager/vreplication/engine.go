@@ -433,9 +433,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 				return nil, err
 			}
 			vre.controllers[id] = ct
-			if err := insertLogWithParams(vdbc, LogStreamCreate, id, params); err != nil {
-				return nil, err
-			}
+			insertLogWithParams(vdbc, LogStreamCreate, id, params)
 		}
 		return qr, nil
 	case updateQuery:
@@ -475,9 +473,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 				return nil, err
 			}
 			vre.controllers[id] = ct
-			if err := insertLog(vdbc, LogStateChange, id, params["state"], ""); err != nil {
-				return nil, err
-			}
+			insertLog(vdbc, LogStateChange, id, params["state"], "")
 		}
 		return qr, nil
 	case deleteQuery:
@@ -495,9 +491,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 				ct.Stop()
 				delete(vre.controllers, id)
 			}
-			if err := insertLogWithParams(vdbc, LogStreamDelete, id, nil); err != nil {
-				return nil, err
-			}
+			insertLogWithParams(vdbc, LogStreamDelete, id, nil)
 		}
 		if err := dbClient.Begin(); err != nil {
 			return nil, err

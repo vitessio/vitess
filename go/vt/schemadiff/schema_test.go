@@ -17,9 +17,8 @@ limitations under the License.
 package schemadiff
 
 import (
-	"errors"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"sort"
 	"strings"
 	"testing"
@@ -310,9 +309,8 @@ func TestTableForeignKeyOrdering(t *testing.T) {
 
 func TestInvalidSchema(t *testing.T) {
 	tt := []struct {
-		schema           string
-		expectErr        error
-		expectLoopTables int
+		schema    string
+		expectErr error
 	}{
 		{
 			schema: "create table t11 (id int primary key, i int, key ix(i), constraint f11 foreign key (i) references t11(id) on delete restrict)",
@@ -346,55 +344,64 @@ func TestInvalidSchema(t *testing.T) {
 		},
 		{
 			// t12<->t11
-			schema: "create table t11 (id int primary key, i int, constraint f11 foreign key (i) references t12 (id) on delete restrict); create table t12 (id int primary key, i int, constraint f12 foreign key (i) references t11 (id) on delete restrict)",
-			expectErr: errors.Join(
-				&ForeignKeyLoopError{Table: "t11", Loop: []string{"t11", "t12", "t11"}},
-				&ForeignKeyLoopError{Table: "t12", Loop: []string{"t11", "t12", "t11"}},
-			),
-			expectLoopTables: 2,
+			schema: `
+				create table t11 (id int primary key, i int, constraint f1103 foreign key (i) references t12 (id) on delete restrict);
+				create table t12 (id int primary key, i int, constraint f1203 foreign key (i) references t11 (id) on delete restrict)
+			`,
+		},
+		{
+			// t12<->t11
+			schema: `
+				create table t11 (id int primary key, i int, constraint f1101 foreign key (i) references t12 (i) on delete restrict);
+				create table t12 (id int primary key, i int, constraint f1201 foreign key (i) references t11 (i) on delete set null)
+			`,
 		},
 		{
 			// t10, t12<->t11
-			schema: "create table t10(id int primary key); create table t11 (id int primary key, i int, constraint f11 foreign key (i) references t12 (id) on delete restrict); create table t12 (id int primary key, i int, constraint f12 foreign key (i) references t11 (id) on delete restrict)",
-			expectErr: errors.Join(
-				&ForeignKeyLoopError{Table: "t11", Loop: []string{"t11", "t12", "t11"}},
-				&ForeignKeyLoopError{Table: "t12", Loop: []string{"t11", "t12", "t11"}},
-			),
-			expectLoopTables: 2,
+			schema: `
+				create table t10(id int primary key);
+				create table t11 (id int primary key, i int, constraint f1102 foreign key (i) references t12 (id) on delete restrict);
+				create table t12 (id int primary key, i int, constraint f1202 foreign key (i) references t11 (id) on delete restrict)
+			`,
 		},
 		{
 			// t10, t12<->t11<-t13
-			schema: "create table t10(id int primary key); create table t11 (id int primary key, i int, constraint f11 foreign key (i) references t12 (id) on delete restrict); create table t12 (id int primary key, i int, constraint f12 foreign key (i) references t11 (id) on delete restrict); create table t13 (id int primary key, i int, constraint f13 foreign key (i) references t11 (id) on delete restrict)",
-			expectErr: errors.Join(
-				&ForeignKeyLoopError{Table: "t11", Loop: []string{"t11", "t12", "t11"}},
-				&ForeignKeyLoopError{Table: "t12", Loop: []string{"t11", "t12", "t11"}},
-				&ForeignKeyLoopError{Table: "t13", Loop: []string{"t11", "t12", "t11"}},
-			),
-			expectLoopTables: 3,
+			schema: `
+				create table t10(id int primary key);
+				create table t11 (id int primary key, i int, constraint f1104 foreign key (i) references t12 (id) on delete restrict);
+				create table t12 (id int primary key, i int, constraint f1204 foreign key (i) references t11 (id) on delete restrict);
+				create table t13 (id int primary key, i int, constraint f13 foreign key (i) references t11 (id) on delete restrict)`,
 		},
 		{
 			//      t10
 			//       ^
 			//       |
 			//t12<->t11<-t13
-			schema: "create table t10(id int primary key); create table t11 (id int primary key, i int, i10 int, constraint f11 foreign key (i) references t12 (id) on delete restrict, constraint f1110 foreign key (i10) references t10 (id) on delete restrict); create table t12 (id int primary key, i int, constraint f12 foreign key (i) references t11 (id) on delete restrict); create table t13 (id int primary key, i int, constraint f13 foreign key (i) references t11 (id) on delete restrict)",
-			expectErr: errors.Join(
-				&ForeignKeyLoopError{Table: "t11", Loop: []string{"t11", "t12", "t11"}},
-				&ForeignKeyLoopError{Table: "t12", Loop: []string{"t11", "t12", "t11"}},
-				&ForeignKeyLoopError{Table: "t13", Loop: []string{"t11", "t12", "t11"}},
-			),
-			expectLoopTables: 3,
+			schema: `
+				create table t10(id int primary key);
+				create table t11 (id int primary key, i int, i10 int, constraint f111205 foreign key (i) references t12 (id) on delete restrict, constraint f111005 foreign key (i10) references t10 (id) on delete restrict);
+				create table t12 (id int primary key, i int, constraint f1205 foreign key (id) references t11 (i) on delete restrict);
+				create table t13 (id int primary key, i int, constraint f1305 foreign key (i) references t11 (id) on delete restrict)
+			`,
 		},
 		{
 			// t10, t12<->t11<-t13<-t14
-			schema: "create table t10(id int primary key); create table t11 (id int primary key, i int, i10 int, constraint f11 foreign key (i) references t12 (id) on delete restrict, constraint f1110 foreign key (i10) references t10 (id) on delete restrict); create table t12 (id int primary key, i int, constraint f12 foreign key (i) references t11 (id) on delete restrict); create table t13 (id int primary key, i int, constraint f13 foreign key (i) references t11 (id) on delete restrict); create table t14 (id int primary key, i int, constraint f14 foreign key (i) references t13 (id) on delete restrict)",
-			expectErr: errors.Join(
-				&ForeignKeyLoopError{Table: "t11", Loop: []string{"t11", "t12", "t11"}},
-				&ForeignKeyLoopError{Table: "t12", Loop: []string{"t11", "t12", "t11"}},
-				&ForeignKeyLoopError{Table: "t13", Loop: []string{"t11", "t12", "t11"}},
-				&ForeignKeyLoopError{Table: "t14", Loop: []string{"t11", "t12", "t11"}},
-			),
-			expectLoopTables: 4,
+			schema: `
+				create table t10(id int primary key);
+				create table t11 (id int primary key, i int, i10 int, constraint f1106 foreign key (i) references t12 (id) on delete restrict, constraint f111006 foreign key (i10) references t10 (id) on delete restrict);
+				create table t12 (id int primary key, i int, constraint f1206 foreign key (i) references t11 (id) on delete restrict);
+				create table t13 (id int primary key, i int, constraint f1306 foreign key (i) references t11 (id) on delete restrict);
+				create table t14 (id int primary key, i int, constraint f1406 foreign key (i) references t13 (id) on delete restrict)
+			`,
+		},
+		{
+			// t10, t12<-t11<-t13<-t12
+			schema: `
+				create table t10(id int primary key);
+				create table t11 (id int primary key, i int, key i_idx (i), i10 int, constraint f1107 foreign key (i) references t12 (id), constraint f111007 foreign key (i10) references t10 (id));
+				create table t12 (id int primary key, i int, key i_idx (i), constraint f1207 foreign key (id) references t13 (i));
+				create table t13 (id int primary key, i int, key i_idx (i), constraint f1307 foreign key (i) references t11 (i));
+			`,
 		},
 		{
 			schema:    "create table t11 (id int primary key, i int, key ix(i), constraint f11 foreign key (i) references t11(id2) on delete restrict)",
@@ -423,6 +430,18 @@ func TestInvalidSchema(t *testing.T) {
 		{
 			schema:    "create table t10(id bigint primary key); create table t11 (id int primary key, i varchar(100), key ix(i), constraint f10 foreign key (i) references t10(id) on delete restrict)",
 			expectErr: &ForeignKeyColumnTypeMismatchError{Table: "t11", Constraint: "f10", Column: "i", ReferencedTable: "t10", ReferencedColumn: "id"},
+		},
+		{
+			schema:    "create table t10(id int primary key, pid int null, key (pid)); create table t11 (id int primary key, pid int unsigned, key ix(pid), constraint f10 foreign key (pid) references t10(pid))",
+			expectErr: &ForeignKeyColumnTypeMismatchError{Table: "t11", Constraint: "f10", Column: "pid", ReferencedTable: "t10", ReferencedColumn: "pid"},
+		},
+		{
+			// NULL vs NOT NULL should be fine
+			schema: "create table t10(id int primary key, pid int null, key (pid)); create table t11 (id int primary key, pid int not null, key ix(pid), constraint f10 foreign key (pid) references t10(pid))",
+		},
+		{
+			// NOT NULL vs NULL should be fine
+			schema: "create table t10(id int primary key, pid int not null, key (pid)); create table t11 (id int primary key, pid int null, key ix(pid), constraint f10 foreign key (pid) references t10(pid))",
 		},
 		{
 			// InnoDB allows different string length
@@ -456,14 +475,13 @@ func TestInvalidSchema(t *testing.T) {
 	for _, ts := range tt {
 		t.Run(ts.schema, func(t *testing.T) {
 
-			s, err := NewSchemaFromSQL(NewTestEnv(), ts.schema)
+			_, err := NewSchemaFromSQL(NewTestEnv(), ts.schema)
 			if ts.expectErr == nil {
 				assert.NoError(t, err)
 			} else {
 				assert.Error(t, err)
 				assert.EqualError(t, err, ts.expectErr.Error())
 			}
-			assert.Equal(t, ts.expectLoopTables, len(s.foreignKeyLoopMap))
 		})
 	}
 }
@@ -480,7 +498,7 @@ func TestInvalidTableForeignKeyReference(t *testing.T) {
 		// Even though there's errors, we still expect the schema to have been created.
 		assert.NotNil(t, s)
 		// Even though t11 caused an error, we still expect the schema to have parsed all tables.
-		assert.Equal(t, 3, len(s.Entities()))
+		assert.Equalf(t, 3, len(s.Entities()), "found: %+v", s.EntityNames())
 		t11 := s.Table("t11")
 		assert.NotNil(t, t11)
 		// validate t11 table definition is complete, even though it was invalid.
@@ -494,10 +512,16 @@ func TestInvalidTableForeignKeyReference(t *testing.T) {
 			"create table t12 (id int primary key, i int, constraint f13 foreign key (i) references t13(id) on delete restrict)",
 		}
 		_, err := NewSchemaFromQueries(NewTestEnv(), fkQueries)
-		assert.Error(t, err)
-		assert.ErrorContains(t, err, (&ForeignKeyLoopError{Table: "t11", Loop: []string{"t11", "t12", "t13", "t11"}}).Error())
-		assert.ErrorContains(t, err, (&ForeignKeyLoopError{Table: "t12", Loop: []string{"t11", "t12", "t13", "t11"}}).Error())
-		assert.ErrorContains(t, err, (&ForeignKeyLoopError{Table: "t13", Loop: []string{"t11", "t12", "t13", "t11"}}).Error())
+		assert.NoError(t, err)
+	}
+	{
+		fkQueries := []string{
+			"create table t13 (id int primary key, i int, constraint f11 foreign key (i) references t11(i) on delete restrict)",
+			"create table t11 (id int primary key, i int, constraint f12 foreign key (i) references t12(i) on delete restrict)",
+			"create table t12 (id int primary key, i int, constraint f13 foreign key (i) references t13(i) on delete restrict)",
+		}
+		_, err := NewSchemaFromQueries(NewTestEnv(), fkQueries)
+		assert.NoError(t, err)
 	}
 	{
 		fkQueries := []string{
@@ -508,8 +532,6 @@ func TestInvalidTableForeignKeyReference(t *testing.T) {
 		_, err := NewSchemaFromQueries(NewTestEnv(), fkQueries)
 		assert.Error(t, err)
 		assert.ErrorContains(t, err, (&ForeignKeyNonexistentReferencedTableError{Table: "t11", ReferencedTable: "t0"}).Error())
-		assert.ErrorContains(t, err, (&ForeignKeyDependencyUnresolvedError{Table: "t12"}).Error())
-		assert.ErrorContains(t, err, (&ForeignKeyDependencyUnresolvedError{Table: "t13"}).Error())
 	}
 	{
 		fkQueries := []string{
@@ -520,8 +542,6 @@ func TestInvalidTableForeignKeyReference(t *testing.T) {
 		_, err := NewSchemaFromQueries(NewTestEnv(), fkQueries)
 		assert.Error(t, err)
 		assert.ErrorContains(t, err, (&ForeignKeyNonexistentReferencedTableError{Table: "t11", ReferencedTable: "t0"}).Error())
-		assert.ErrorContains(t, err, (&ForeignKeyLoopError{Table: "t12", Loop: []string{"t12", "t13", "t12"}}).Error())
-		assert.ErrorContains(t, err, (&ForeignKeyLoopError{Table: "t13", Loop: []string{"t12", "t13", "t12"}}).Error())
 	}
 }
 
@@ -931,7 +951,7 @@ func TestMassiveSchema(t *testing.T) {
 	})
 
 	t.Run("evaluating diff", func(t *testing.T) {
-		schemaDiff, err := schema0.SchemaDiff(schema1, &DiffHints{})
+		schemaDiff, err := schema0.SchemaDiff(schema1, EmptyDiffHints())
 		require.NoError(t, err)
 		diffs := schemaDiff.UnorderedDiffs()
 		require.NotEmpty(t, diffs)

@@ -449,7 +449,7 @@ func TestMarkErrorIfCyclesInFk(t *testing.T) {
 		errWanted  string
 	}{
 		{
-			name: "Has a cycle",
+			name: "Has a direct cycle",
 			getVschema: func() *vindexes.VSchema {
 				vschema := &vindexes.VSchema{
 					Keyspaces: map[string]*vindexes.KeyspaceSchema{
@@ -472,12 +472,43 @@ func TestMarkErrorIfCyclesInFk(t *testing.T) {
 						},
 					},
 				}
-				_ = vschema.AddForeignKey("ks", "t2", createFkDefinition([]string{"col"}, "t1", []string{"col"}, sqlparser.Cascade, sqlparser.Cascade))
-				_ = vschema.AddForeignKey("ks", "t3", createFkDefinition([]string{"col"}, "t2", []string{"col"}, sqlparser.Cascade, sqlparser.Cascade))
-				_ = vschema.AddForeignKey("ks", "t1", createFkDefinition([]string{"col"}, "t3", []string{"col"}, sqlparser.Cascade, sqlparser.Cascade))
+				_ = vschema.AddForeignKey("ks", "t2", createFkDefinition([]string{"col"}, "t1", []string{"col"}, sqlparser.SetNull, sqlparser.SetNull))
+				_ = vschema.AddForeignKey("ks", "t3", createFkDefinition([]string{"col"}, "t2", []string{"col"}, sqlparser.SetNull, sqlparser.SetNull))
+				_ = vschema.AddForeignKey("ks", "t1", createFkDefinition([]string{"col"}, "t3", []string{"col"}, sqlparser.SetNull, sqlparser.SetNull))
 				return vschema
 			},
 			errWanted: "VT09019: keyspace 'ks' has cyclic foreign keys",
+		},
+		{
+			name: "Has a direct cycle but there is a restrict constraint in between",
+			getVschema: func() *vindexes.VSchema {
+				vschema := &vindexes.VSchema{
+					Keyspaces: map[string]*vindexes.KeyspaceSchema{
+						ksName: {
+							ForeignKeyMode: vschemapb.Keyspace_managed,
+							Tables: map[string]*vindexes.Table{
+								"t1": {
+									Name:     sqlparser.NewIdentifierCS("t1"),
+									Keyspace: keyspace,
+								},
+								"t2": {
+									Name:     sqlparser.NewIdentifierCS("t2"),
+									Keyspace: keyspace,
+								},
+								"t3": {
+									Name:     sqlparser.NewIdentifierCS("t3"),
+									Keyspace: keyspace,
+								},
+							},
+						},
+					},
+				}
+				_ = vschema.AddForeignKey("ks", "t2", createFkDefinition([]string{"col"}, "t1", []string{"col"}, sqlparser.SetNull, sqlparser.SetNull))
+				_ = vschema.AddForeignKey("ks", "t3", createFkDefinition([]string{"col"}, "t2", []string{"col"}, sqlparser.Restrict, sqlparser.Restrict))
+				_ = vschema.AddForeignKey("ks", "t1", createFkDefinition([]string{"col"}, "t3", []string{"col"}, sqlparser.SetNull, sqlparser.SetNull))
+				return vschema
+			},
+			errWanted: "",
 		},
 		{
 			name: "No cycle",
@@ -508,6 +539,134 @@ func TestMarkErrorIfCyclesInFk(t *testing.T) {
 				return vschema
 			},
 			errWanted: "",
+		}, {
+			name: "Self-referencing foreign key with delete cascade",
+			getVschema: func() *vindexes.VSchema {
+				vschema := &vindexes.VSchema{
+					Keyspaces: map[string]*vindexes.KeyspaceSchema{
+						ksName: {
+							ForeignKeyMode: vschemapb.Keyspace_managed,
+							Tables: map[string]*vindexes.Table{
+								"t1": {
+									Name:     sqlparser.NewIdentifierCS("t1"),
+									Keyspace: keyspace,
+									Columns: []vindexes.Column{
+										{
+											Name: sqlparser.NewIdentifierCI("id"),
+										},
+										{
+											Name: sqlparser.NewIdentifierCI("manager_id"),
+										},
+									},
+								},
+							},
+						},
+					},
+				}
+				_ = vschema.AddForeignKey("ks", "t1", createFkDefinition([]string{"manager_id"}, "t1", []string{"id"}, sqlparser.SetNull, sqlparser.Cascade))
+				return vschema
+			},
+			errWanted: "VT09019: keyspace 'ks' has cyclic foreign keys. Cycle exists between [ks.t1.id ks.t1.id]",
+		}, {
+			name: "Self-referencing foreign key without delete cascade",
+			getVschema: func() *vindexes.VSchema {
+				vschema := &vindexes.VSchema{
+					Keyspaces: map[string]*vindexes.KeyspaceSchema{
+						ksName: {
+							ForeignKeyMode: vschemapb.Keyspace_managed,
+							Tables: map[string]*vindexes.Table{
+								"t1": {
+									Name:     sqlparser.NewIdentifierCS("t1"),
+									Keyspace: keyspace,
+									Columns: []vindexes.Column{
+										{
+											Name: sqlparser.NewIdentifierCI("id"),
+										},
+										{
+											Name: sqlparser.NewIdentifierCI("manager_id"),
+										},
+									},
+								},
+							},
+						},
+					},
+				}
+				_ = vschema.AddForeignKey("ks", "t1", createFkDefinition([]string{"manager_id"}, "t1", []string{"id"}, sqlparser.SetNull, sqlparser.SetNull))
+				return vschema
+			},
+			errWanted: "",
+		}, {
+			name: "Has an indirect cycle because of cascades",
+			getVschema: func() *vindexes.VSchema {
+				vschema := &vindexes.VSchema{
+					Keyspaces: map[string]*vindexes.KeyspaceSchema{
+						ksName: {
+							ForeignKeyMode: vschemapb.Keyspace_managed,
+							Tables: map[string]*vindexes.Table{
+								"t1": {
+									Name:     sqlparser.NewIdentifierCS("t1"),
+									Keyspace: keyspace,
+									Columns: []vindexes.Column{
+										{
+											Name: sqlparser.NewIdentifierCI("a"),
+										},
+										{
+											Name: sqlparser.NewIdentifierCI("b"),
+										},
+										{
+											Name: sqlparser.NewIdentifierCI("c"),
+										},
+									},
+								},
+								"t2": {
+									Name:     sqlparser.NewIdentifierCS("t2"),
+									Keyspace: keyspace,
+									Columns: []vindexes.Column{
+										{
+											Name: sqlparser.NewIdentifierCI("d"),
+										},
+										{
+											Name: sqlparser.NewIdentifierCI("e"),
+										},
+										{
+											Name: sqlparser.NewIdentifierCI("f"),
+										},
+									},
+								},
+							},
+						},
+					},
+				}
+				_ = vschema.AddForeignKey("ks", "t2", createFkDefinition([]string{"f"}, "t1", []string{"a"}, sqlparser.SetNull, sqlparser.Cascade))
+				_ = vschema.AddForeignKey("ks", "t1", createFkDefinition([]string{"b"}, "t2", []string{"e"}, sqlparser.SetNull, sqlparser.Cascade))
+				return vschema
+			},
+			errWanted: "VT09019: keyspace 'ks' has cyclic foreign keys",
+		}, {
+			name: "Cycle part of a multi-column foreign key",
+			getVschema: func() *vindexes.VSchema {
+				vschema := &vindexes.VSchema{
+					Keyspaces: map[string]*vindexes.KeyspaceSchema{
+						ksName: {
+							ForeignKeyMode: vschemapb.Keyspace_managed,
+							Tables: map[string]*vindexes.Table{
+								"t1": {
+									Name:     sqlparser.NewIdentifierCS("t1"),
+									Keyspace: keyspace,
+								},
+								"t2": {
+									Name:     sqlparser.NewIdentifierCS("t2"),
+									Keyspace: keyspace,
+								},
+							},
+						},
+					},
+				}
+				_ = vschema.AddForeignKey("ks", "t2", createFkDefinition([]string{"e", "f"}, "t1", []string{"a", "b"}, sqlparser.SetNull, sqlparser.SetNull))
+				_ = vschema.AddForeignKey("ks", "t1", createFkDefinition([]string{"b"}, "t2", []string{"e"}, sqlparser.SetNull, sqlparser.SetNull))
+				return vschema
+			},
+			errWanted: "VT09019: keyspace 'ks' has cyclic foreign keys",
 		},
 	}
 	for _, tt := range tests {
@@ -515,7 +674,7 @@ func TestMarkErrorIfCyclesInFk(t *testing.T) {
 			vschema := tt.getVschema()
 			markErrorIfCyclesInFk(vschema)
 			if tt.errWanted != "" {
-				require.EqualError(t, vschema.Keyspaces[ksName].Error, tt.errWanted)
+				require.ErrorContains(t, vschema.Keyspaces[ksName].Error, tt.errWanted)
 				return
 			}
 			require.NoError(t, vschema.Keyspaces[ksName].Error)

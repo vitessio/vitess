@@ -18,7 +18,7 @@ package dml
 
 import (
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"strconv"
 	"strings"
 	"testing"
@@ -52,7 +52,7 @@ func getRandomString(size int) string {
 	var str strings.Builder
 
 	for i := 0; i < size; i++ {
-		str.WriteByte(byte(rand.Intn(27) + 97))
+		str.WriteByte(byte(rand.IntN(27) + 97))
 	}
 	return str.String()
 }

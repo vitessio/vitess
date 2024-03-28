@@ -144,7 +144,7 @@ func pushProjectionToOuter(ctx *plancontext.PlanningContext, p *Projection, sq *
 
 	outer := TableID(sq.Outer)
 	for _, pe := range ap {
-		_, isOffset := pe.Info.(*Offset)
+		_, isOffset := pe.Info.(Offset)
 		if isOffset {
 			continue
 		}
@@ -186,7 +186,7 @@ func pushProjectionToOuterContainer(ctx *plancontext.PlanningContext, p *Project
 
 	outer := TableID(src.Outer)
 	for _, pe := range ap {
-		_, isOffset := pe.Info.(*Offset)
+		_, isOffset := pe.Info.(Offset)
 		if isOffset {
 			continue
 		}
@@ -214,7 +214,7 @@ func pushProjectionInApplyJoin(
 	src *ApplyJoin,
 ) (Operator, *ApplyResult) {
 	ap, err := p.GetAliasedProjections()
-	if src.LeftJoin || err != nil {
+	if !src.IsInner() || err != nil {
 		// we can't push down expression evaluation to the rhs if we are not sure if it will even be executed
 		return p, NoRewrite
 	}

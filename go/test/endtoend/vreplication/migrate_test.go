@@ -128,7 +128,7 @@ func TestVtctlMigrate(t *testing.T) {
 			"--source=ext1.rating", "create", ksWorkflow); err != nil {
 			t.Fatalf("Migrate command failed with %+v : %s\n", err, output)
 		}
-		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", "product:0", 1)
+		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", "product:0", 1, binlogdatapb.VReplicationWorkflowState_Stopped.String())
 		waitForRowCount(t, vtgateConn, "product:0", "rating", 0)
 		waitForRowCount(t, vtgateConn, "product:0", "review", 0)
 		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("Migrate", "cancel", ksWorkflow); err != nil {
@@ -267,7 +267,7 @@ func TestVtctldMigrate(t *testing.T) {
 			"--mount-name", "ext1", "--all-tables", "--auto-start=false", "--cells=extcell1")
 		require.NoError(t, err, "Migrate command failed with %s", output)
 
-		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", "product:0", 1)
+		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", "product:0", 1, binlogdatapb.VReplicationWorkflowState_Stopped.String())
 		waitForRowCount(t, vtgateConn, "product:0", "rating", 0)
 		waitForRowCount(t, vtgateConn, "product:0", "review", 0)
 		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Migrate",

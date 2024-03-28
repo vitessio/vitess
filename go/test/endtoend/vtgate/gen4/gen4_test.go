@@ -187,26 +187,6 @@ func TestSubQueriesOnOuterJoinOnCondition(t *testing.T) {
 	}
 }
 
-func TestPlannerWarning(t *testing.T) {
-	mcmp, closer := start(t)
-	defer closer()
-
-	// straight_join query
-	_ = utils.Exec(t, mcmp.VtConn, `select 1 from t1 straight_join t2 on t1.id = t2.id`)
-	utils.AssertMatches(t, mcmp.VtConn, `show warnings`, `[[VARCHAR("Warning") UINT16(1235) VARCHAR("straight join is converted to normal join")]]`)
-
-	// execute same query again.
-	_ = utils.Exec(t, mcmp.VtConn, `select 1 from t1 straight_join t2 on t1.id = t2.id`)
-	utils.AssertMatches(t, mcmp.VtConn, `show warnings`, `[[VARCHAR("Warning") UINT16(1235) VARCHAR("straight join is converted to normal join")]]`)
-
-	// random query to reset the warning.
-	_ = utils.Exec(t, mcmp.VtConn, `select 1 from t1`)
-
-	// execute same query again.
-	_ = utils.Exec(t, mcmp.VtConn, `select 1 from t1 straight_join t2 on t1.id = t2.id`)
-	utils.AssertMatches(t, mcmp.VtConn, `show warnings`, `[[VARCHAR("Warning") UINT16(1235) VARCHAR("straight join is converted to normal join")]]`)
-}
-
 func TestHashJoin(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()

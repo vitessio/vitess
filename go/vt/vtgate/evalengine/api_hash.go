@@ -199,7 +199,7 @@ func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collat
 	case sqltypes.IsText(coerceTo):
 		coll := colldata.Lookup(collation)
 		if coll == nil {
-			panic("cannot hash unsupported collation")
+			return UnsupportedCollationHashError
 		}
 		hash.Write16(hashPrefixBytes)
 		coll.Hash(hash, v.Raw(), 0)

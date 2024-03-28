@@ -555,7 +555,7 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 	}
 	if !journalsExist {
 		ts.Logger().Infof("No previous journals were found. Proceeding normally.")
-		sm, err := workflow.BuildStreamMigrator(ctx, ts, cancel, wr.env.Parser())
+		sm, err := workflow.BuildLegacyStreamMigrator(ctx, ts, cancel, wr.env.Parser())
 		if err != nil {
 			return handleError("failed to migrate the workflow streams", err)
 		}

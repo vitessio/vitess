@@ -137,7 +137,7 @@ func pushLockAndComment(l *LockAndComment) (Operator, *ApplyResult) {
 		return l, NoRewrite
 	case *Route:
 		src.Comments = l.Comments
-		src.Lock = l.Lock
+		src.Lock = l.Lock.GetHighestOrderLock(src.Lock)
 		return src, Rewrote("put lock and comment into route")
 	case *SubQueryContainer:
 		src.Outer = &LockAndComment{
@@ -408,7 +408,7 @@ func canPushLeft(ctx *plancontext.PlanningContext, aj *ApplyJoin, order []OrderB
 
 func isOuterTable(op Operator, ts semantics.TableSet) bool {
 	aj, ok := op.(*ApplyJoin)
-	if ok && aj.LeftJoin && TableID(aj.RHS).IsOverlapping(ts) {
+	if ok && !aj.IsInner() && TableID(aj.RHS).IsOverlapping(ts) {
 		return true
 	}
 

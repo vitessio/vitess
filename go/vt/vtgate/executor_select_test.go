@@ -3343,18 +3343,12 @@ func TestGen4SelectStraightJoin(t *testing.T) {
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{
 		{
-			Sql:           "select u.id from `user` as u, user2 as u2 where u.id = u2.id",
+			Sql:           "select u.id from `user` as u straight_join user2 as u2 on u.id = u2.id",
 			BindVariables: map[string]*querypb.BindVariable{},
 		},
 	}
-	wantWarnings := []*querypb.QueryWarning{
-		{
-			Code:    1235,
-			Message: "straight join is converted to normal join",
-		},
-	}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
-	utils.MustMatch(t, wantWarnings, session.Warnings)
+	require.Empty(t, session.Warnings)
 }
 
 func TestGen4MultiColumnVindexEqual(t *testing.T) {

@@ -20,7 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 
 	"vitess.io/vitess/go/trace"
 
@@ -130,7 +130,7 @@ func (d *JSONDiscovery) discoverVTGate(ctx context.Context, tags []string) (*vta
 		return nil, ErrNoVTGates
 	}
 
-	gate := gates[rand.Intn(len(gates))]
+	gate := gates[rand.IntN(len(gates))]
 	return gate, nil
 }
 
@@ -230,7 +230,7 @@ func (d *JSONDiscovery) discoverVtctld(ctx context.Context, tags []string) (*vta
 		return nil, ErrNoVtctlds
 	}
 
-	vtctld := vtctlds[rand.Intn(len(vtctlds))]
+	vtctld := vtctlds[rand.IntN(len(vtctlds))]
 	return vtctld, nil
 }
 

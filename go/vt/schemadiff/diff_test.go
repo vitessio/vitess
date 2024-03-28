@@ -18,6 +18,7 @@ package schemadiff
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -43,6 +44,7 @@ func TestDiffTables(t *testing.T) {
 		expectError string
 		hints       *DiffHints
 		env         *Environment
+		annotated   []string
 	}{
 		{
 			name: "identical",
@@ -58,6 +60,9 @@ func TestDiffTables(t *testing.T) {
 			action:   "alter",
 			fromName: "t",
 			toName:   "t",
+			annotated: []string{
+				" CREATE TABLE `t` (", " \t`id` int,", "+\t`i` int,", " \tPRIMARY KEY (`id`)", " )",
+			},
 		},
 		{
 			name:     "change of columns, boolean type",
@@ -106,6 +111,9 @@ func TestDiffTables(t *testing.T) {
 			cdiff:  "CREATE TABLE `t` (\n\t`id` int,\n\tPRIMARY KEY (`id`)\n)",
 			action: "create",
 			toName: "t",
+			annotated: []string{
+				"+CREATE TABLE `t` (", "+\t`id` int,", "+\tPRIMARY KEY (`id`)", "+)",
+			},
 		},
 		{
 			name:     "drop",
@@ -114,6 +122,9 @@ func TestDiffTables(t *testing.T) {
 			cdiff:    "DROP TABLE `t`",
 			action:   "drop",
 			fromName: "t",
+			annotated: []string{
+				"-CREATE TABLE `t` (", "-\t`id` int,", "-\tPRIMARY KEY (`id`)", "-)",
+			},
 		},
 		{
 			name: "none",
@@ -313,7 +324,7 @@ func TestDiffTables(t *testing.T) {
 	for _, ts := range tt {
 		t.Run(ts.name, func(t *testing.T) {
 			var fromCreateTable *sqlparser.CreateTable
-			hints := &DiffHints{}
+			hints := EmptyDiffHints()
 			if ts.hints != nil {
 				hints = ts.hints
 			}
@@ -360,7 +371,7 @@ func TestDiffTables(t *testing.T) {
 				assert.NoError(t, err)
 				require.NotNil(t, d)
 				require.False(t, d.IsEmpty())
-				{
+				t.Run("statement", func(t *testing.T) {
 					diff := d.StatementString()
 					assert.Equal(t, ts.diff, diff)
 					action, err := DDLActionStr(d)
@@ -378,8 +389,8 @@ func TestDiffTables(t *testing.T) {
 					if ts.toName != "" {
 						assert.Equal(t, ts.toName, eTo.Name())
 					}
-				}
-				{
+				})
+				t.Run("canonical", func(t *testing.T) {
 					canonicalDiff := d.CanonicalStatementString()
 					assert.Equal(t, ts.cdiff, canonicalDiff)
 					action, err := DDLActionStr(d)
@@ -389,7 +400,18 @@ func TestDiffTables(t *testing.T) {
 					// validate we can parse back the statement
 					_, err = env.Parser().ParseStrictDDL(canonicalDiff)
 					assert.NoError(t, err)
-				}
+				})
+				t.Run("annotations", func(t *testing.T) {
+					from, to, unified := d.Annotated()
+					require.NotNil(t, from)
+					require.NotNil(t, to)
+					require.NotNil(t, unified)
+					if ts.annotated != nil {
+						// Optional test for assorted scenarios.
+						unifiedExport := unified.Export()
+						assert.Equal(t, ts.annotated, strings.Split(unifiedExport, "\n"))
+					}
+				})
 				// let's also check dq, and also validate that dq's statement is identical to d's
 				assert.NoError(t, dqerr)
 				require.NotNil(t, dq)
@@ -403,15 +425,16 @@ func TestDiffTables(t *testing.T) {
 
 func TestDiffViews(t *testing.T) {
 	tt := []struct {
-		name     string
-		from     string
-		to       string
-		diff     string
-		cdiff    string
-		fromName string
-		toName   string
-		action   string
-		isError  bool
+		name      string
+		from      string
+		to        string
+		diff      string
+		cdiff     string
+		fromName  string
+		toName    string
+		action    string
+		isError   bool
+		annotated []string
 	}{
 		{
 			name: "identical",
@@ -427,6 +450,10 @@ func TestDiffViews(t *testing.T) {
 			action:   "alter",
 			fromName: "v1",
 			toName:   "v1",
+			annotated: []string{
+				"-CREATE VIEW `v1`(`col1`, `col2`, `col3`) AS SELECT `a`, `b`, `c` FROM `t`",
+				"+CREATE VIEW `v1`(`col1`, `col2`, `colother`) AS SELECT `a`, `b`, `c` FROM `t`",
+			},
 		},
 		{
 			name:   "create",
@@ -435,6 +462,9 @@ func TestDiffViews(t *testing.T) {
 			cdiff:  "CREATE VIEW `v1` AS SELECT `a`, `b`, `c` FROM `t`",
 			action: "create",
 			toName: "v1",
+			annotated: []string{
+				"+CREATE VIEW `v1` AS SELECT `a`, `b`, `c` FROM `t`",
+			},
 		},
 		{
 			name:     "drop",
@@ -443,12 +473,15 @@ func TestDiffViews(t *testing.T) {
 			cdiff:    "DROP VIEW `v1`",
 			action:   "drop",
 			fromName: "v1",
+			annotated: []string{
+				"-CREATE VIEW `v1` AS SELECT `a`, `b`, `c` FROM `t`",
+			},
 		},
 		{
 			name: "none",
 		},
 	}
-	hints := &DiffHints{}
+	hints := EmptyDiffHints()
 	env := NewTestEnv()
 	for _, ts := range tt {
 		t.Run(ts.name, func(t *testing.T) {
@@ -523,7 +556,12 @@ func TestDiffViews(t *testing.T) {
 					_, err = env.Parser().ParseStrictDDL(canonicalDiff)
 					assert.NoError(t, err)
 				}
-
+				if ts.annotated != nil {
+					// Optional test for assorted scenarios.
+					_, _, unified := d.Annotated()
+					unifiedExport := unified.Export()
+					assert.Equal(t, ts.annotated, strings.Split(unifiedExport, "\n"))
+				}
 				// let's also check dq, and also validate that dq's statement is identical to d's
 				assert.NoError(t, dqerr)
 				require.NotNil(t, dq)
@@ -545,6 +583,8 @@ func TestDiffSchemas(t *testing.T) {
 		cdiffs      []string
 		expectError string
 		tableRename int
+		annotated   []string
+		fkStrategy  int
 	}{
 		{
 			name: "identical tables",
@@ -681,6 +721,9 @@ func TestDiffSchemas(t *testing.T) {
 			cdiffs: []string{
 				"CREATE TABLE `t` (\n\t`id` int,\n\tPRIMARY KEY (`id`)\n)",
 			},
+			annotated: []string{
+				"+CREATE TABLE `t` (\n+\t`id` int,\n+\tPRIMARY KEY (`id`)\n+)",
+			},
 		},
 		{
 			name: "drop table",
@@ -690,6 +733,9 @@ func TestDiffSchemas(t *testing.T) {
 			},
 			cdiffs: []string{
 				"DROP TABLE `t`",
+			},
+			annotated: []string{
+				"-CREATE TABLE `t` (\n-\t`id` int,\n-\tPRIMARY KEY (`id`)\n-)",
 			},
 		},
 		{
@@ -705,6 +751,11 @@ func TestDiffSchemas(t *testing.T) {
 				"DROP TABLE `t1`",
 				"ALTER TABLE `t2` MODIFY COLUMN `id` bigint",
 				"CREATE TABLE `t4` (\n\t`id` int,\n\tPRIMARY KEY (`id`)\n)",
+			},
+			annotated: []string{
+				"-CREATE TABLE `t1` (\n-\t`id` int,\n-\tPRIMARY KEY (`id`)\n-)",
+				" CREATE TABLE `t2` (\n-\t`id` int,\n+\t`id` bigint,\n \tPRIMARY KEY (`id`)\n )",
+				"+CREATE TABLE `t4` (\n+\t`id` int,\n+\tPRIMARY KEY (`id`)\n+)",
 			},
 		},
 		{
@@ -731,6 +782,9 @@ func TestDiffSchemas(t *testing.T) {
 				"RENAME TABLE `t2a` TO `t2b`",
 			},
 			tableRename: TableRenameHeuristicStatement,
+			annotated: []string{
+				"-CREATE TABLE `t2a` (\n-\t`id` int unsigned,\n-\tPRIMARY KEY (`id`)\n-)\n+CREATE TABLE `t2b` (\n+\t`id` int unsigned,\n+\tPRIMARY KEY (`id`)\n+)",
+			},
 		},
 		{
 			name: "drop and create all",
@@ -798,6 +852,45 @@ func TestDiffSchemas(t *testing.T) {
 				"CREATE TABLE `t4` (\n\t`id` int,\n\t`i` int,\n\tPRIMARY KEY (`id`),\n\tKEY `f4` (`i`),\n\tCONSTRAINT `f4` FOREIGN KEY (`i`) REFERENCES `t7` (`id`)\n)",
 				"CREATE TABLE `t5` (\n\t`id` int,\n\t`i` int,\n\tPRIMARY KEY (`id`),\n\tKEY `f5` (`i`),\n\tCONSTRAINT `f5` FOREIGN KEY (`i`) REFERENCES `t7` (`id`)\n)",
 			},
+		},
+		{
+			name: "create tables with foreign keys, with invalid fk reference",
+			from: "create table t (id int primary key)",
+			to: `
+				create table t (id int primary key);
+				create table t11 (id int primary key, i int, constraint f1101a foreign key (i) references t12 (id) on delete restrict);
+				create table t12 (id int primary key, i int, constraint f1201a foreign key (i) references t9 (id) on delete set null);
+			`,
+			expectError: "table `t12` foreign key references nonexistent table `t9`",
+		},
+		{
+			name: "create tables with foreign keys, with invalid fk reference",
+			from: "create table t (id int primary key)",
+			to: `
+				create table t (id int primary key);
+				create table t11 (id int primary key, i int, constraint f1101b foreign key (i) references t12 (id) on delete restrict);
+				create table t12 (id int primary key, i int, constraint f1201b foreign key (i) references t9 (id) on delete set null);
+			`,
+			expectError: "table `t12` foreign key references nonexistent table `t9`",
+			fkStrategy:  ForeignKeyCheckStrategyIgnore,
+		},
+		{
+			name: "create tables with foreign keys, with valid cycle",
+			from: "create table t (id int primary key)",
+			to: `
+				create table t (id int primary key);
+				create table t11 (id int primary key, i int, constraint f1101c foreign key (i) references t12 (id) on delete restrict);
+				create table t12 (id int primary key, i int, constraint f1201c foreign key (i) references t11 (id) on delete set null);
+			`,
+			diffs: []string{
+				"create table t11 (\n\tid int,\n\ti int,\n\tprimary key (id),\n\tkey f1101c (i),\n\tconstraint f1101c foreign key (i) references t12 (id) on delete restrict\n)",
+				"create table t12 (\n\tid int,\n\ti int,\n\tprimary key (id),\n\tkey f1201c (i),\n\tconstraint f1201c foreign key (i) references t11 (id) on delete set null\n)",
+			},
+			cdiffs: []string{
+				"CREATE TABLE `t11` (\n\t`id` int,\n\t`i` int,\n\tPRIMARY KEY (`id`),\n\tKEY `f1101c` (`i`),\n\tCONSTRAINT `f1101c` FOREIGN KEY (`i`) REFERENCES `t12` (`id`) ON DELETE RESTRICT\n)",
+				"CREATE TABLE `t12` (\n\t`id` int,\n\t`i` int,\n\tPRIMARY KEY (`id`),\n\tKEY `f1201c` (`i`),\n\tCONSTRAINT `f1201c` FOREIGN KEY (`i`) REFERENCES `t11` (`id`) ON DELETE SET NULL\n)",
+			},
+			fkStrategy: ForeignKeyCheckStrategyIgnore,
 		},
 		{
 			name: "drop tables with foreign keys, expect specific order",
@@ -932,14 +1025,15 @@ func TestDiffSchemas(t *testing.T) {
 	for _, ts := range tt {
 		t.Run(ts.name, func(t *testing.T) {
 			hints := &DiffHints{
-				TableRenameStrategy: ts.tableRename,
+				TableRenameStrategy:     ts.tableRename,
+				ForeignKeyCheckStrategy: ts.fkStrategy,
 			}
 			diff, err := DiffSchemasSQL(env, ts.from, ts.to, hints)
 			if ts.expectError != "" {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), ts.expectError)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				diffs, err := diff.OrderedDiffs(ctx)
 				assert.NoError(t, err)
@@ -966,6 +1060,16 @@ func TestDiffSchemas(t *testing.T) {
 				for _, s := range cstatements {
 					_, err := env.Parser().ParseStrictDDL(s)
 					assert.NoError(t, err)
+				}
+
+				if ts.annotated != nil {
+					// Optional test for assorted scenarios.
+					if assert.Equalf(t, len(diffs), len(ts.annotated), "%+v", cstatements) {
+						for i, d := range diffs {
+							_, _, unified := d.Annotated()
+							assert.Equal(t, ts.annotated[i], unified.Export())
+						}
+					}
 				}
 
 				{
@@ -1024,7 +1128,7 @@ func TestSchemaApplyError(t *testing.T) {
 			to:   "create table t(id int); create view v1 as select * from t; create view v2 as select * from t",
 		},
 	}
-	hints := &DiffHints{}
+	hints := EmptyDiffHints()
 	env := NewTestEnv()
 	for _, ts := range tt {
 		t.Run(ts.name, func(t *testing.T) {
@@ -1055,6 +1159,83 @@ func TestSchemaApplyError(t *testing.T) {
 				require.NoError(t, err)
 				_, err = schema1.Apply(diffs)
 				require.Error(t, err, "applying diffs to schema1: %v", schema1.ToSQL())
+			}
+		})
+	}
+}
+
+func TestEntityDiffByStatement(t *testing.T) {
+	env := NewTestEnv()
+
+	tcases := []struct {
+		query          string
+		valid          bool
+		expectAnotated bool
+	}{
+		{
+			query:          "create table t1(id int primary key)",
+			valid:          true,
+			expectAnotated: true,
+		},
+		{
+			query: "alter table t1 add column i int",
+			valid: true,
+		},
+		{
+			query: "rename table t1 to t2",
+			valid: true,
+		},
+		{
+			query: "drop table t1",
+			valid: true,
+		},
+		{
+			query:          "create view v1 as select * from t1",
+			valid:          true,
+			expectAnotated: true,
+		},
+		{
+			query: "alter view v1 as select * from t2",
+			valid: true,
+		},
+		{
+			query: "drop view v1",
+			valid: true,
+		},
+		{
+			query: "drop database d1",
+			valid: false,
+		},
+		{
+			query: "optimize table t1",
+			valid: false,
+		},
+	}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.query, func(t *testing.T) {
+			stmt, err := env.Parser().ParseStrictDDL(tcase.query)
+			require.NoError(t, err)
+			entityDiff := EntityDiffByStatement(stmt)
+			if !tcase.valid {
+				require.Nil(t, entityDiff)
+				return
+			}
+			require.NotNil(t, entityDiff)
+			require.NotNil(t, entityDiff.Statement())
+			require.Equal(t, stmt, entityDiff.Statement())
+
+			annotatedFrom, annotatedTo, annotatedUnified := entityDiff.Annotated()
+			// EntityDiffByStatement doesn't have real entities behind it, just a wrapper around a statement.
+			// Therefore, there are no annotations.
+			if tcase.expectAnotated {
+				assert.NotNil(t, annotatedFrom)
+				assert.NotNil(t, annotatedTo)
+				assert.NotNil(t, annotatedUnified)
+			} else {
+				assert.Nil(t, annotatedFrom)
+				assert.Nil(t, annotatedTo)
+				assert.Nil(t, annotatedUnified)
 			}
 		})
 	}

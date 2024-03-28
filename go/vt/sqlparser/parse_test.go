@@ -21,7 +21,7 @@ import (
 	"compress/gzip"
 	"fmt"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"path"
 	"strings"
@@ -3712,6 +3712,54 @@ var (
 		input:  "select _ascii 'b' 'a' 'c'",
 		output: "select _ascii 'bac' from dual",
 	}, {
+		input:  "SELECT time, subject, AVG(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
+		output: "select `time`, subject, avg(val) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
+	}, {
+		input:  "SELECT time, subject, BIT_AND(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
+		output: "select `time`, subject, bit_and(val) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
+	}, {
+		input:  "SELECT time, subject, BIT_OR(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
+		output: "select `time`, subject, bit_or(val) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
+	}, {
+		input:  "SELECT time, subject, BIT_XOR(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
+		output: "select `time`, subject, bit_xor(val) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
+	}, {
+		input:  "SELECT time, subject, COUNT(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
+		output: "select `time`, subject, count(val) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
+	}, {
+		input:  "SELECT time, subject, COUNT(*) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
+		output: "select `time`, subject, count(*) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
+	}, {
+		input:  "SELECT time, subject, MAX(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
+		output: "select `time`, subject, max(val) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
+	}, {
+		input:  "SELECT time, subject, MIN(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
+		output: "select `time`, subject, min(val) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
+	}, {
+		input:  "SELECT time, subject, STD(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
+		output: "select `time`, subject, std(val) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
+	}, {
+		input:  "SELECT time, subject, STDDEV(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
+		output: "select `time`, subject, stddev(val) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
+	}, {
+		input:  "SELECT time, subject, STDDEV_POP(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
+		output: "select `time`, subject, stddev_pop(val) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
+	}, {
+		input:  "SELECT time, subject, STDDEV_SAMP(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
+		output: "select `time`, subject, stddev_samp(val) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
+	}, {
+		input:  "SELECT time, subject, SUM(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
+		output: "select `time`, subject, sum(val) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
+	}, {
+		input:  "SELECT time, subject, VAR_POP(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
+		output: "select `time`, subject, var_pop(val) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
+	}, {
+		input:  "SELECT time, subject, VAR_SAMP(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
+		output: "select `time`, subject, var_samp(val) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
+	}, {
+		input:  "SELECT time, subject, VARIANCE(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
+		output: "select `time`, subject, variance(val) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
+	}, {
 		input: `kill connection 18446744073709551615`,
 	}, {
 		input: `kill query 18446744073709551615`,
@@ -3813,7 +3861,7 @@ func TestParallelValid(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < numIters; j++ {
-				tcase := validSQL[rand.Intn(len(validSQL))]
+				tcase := validSQL[rand.IntN(len(validSQL))]
 				if tcase.output == "" {
 					tcase.output = tcase.input
 				}

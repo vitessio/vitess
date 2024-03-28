@@ -1159,11 +1159,18 @@ func (cached *SimpleProjection) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(64)
 	}
 	// field Cols []int
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.Cols)) * int64(8))
+	}
+	// field ColNames []string
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.ColNames)) * int64(16))
+		for _, elem := range cached.ColNames {
+			size += hack.RuntimeAllocSize(int64(len(elem)))
+		}
 	}
 	// field Input vitess.io/vitess/go/vt/vtgate/engine.Primitive
 	if cc, ok := cached.Input.(cachedObject); ok {

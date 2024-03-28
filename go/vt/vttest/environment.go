@@ -18,7 +18,7 @@ package vttest
 
 import (
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"path"
 	"strings"
@@ -232,7 +232,7 @@ func tmpdir(dataroot string) (dir string, err error) {
 }
 
 func randomPort() int {
-	v := rand.Int31n(20000)
+	v := rand.Int32N(20000)
 	return int(v + 10000)
 }
 

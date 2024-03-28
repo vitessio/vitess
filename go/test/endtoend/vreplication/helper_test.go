@@ -46,9 +46,11 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 const (
@@ -377,6 +379,9 @@ func waitForWorkflowState(t *testing.T, vc *VitessCluster, ksWorkflow string, wa
 									}
 								}
 							}
+							if wantState == binlogdatapb.VReplicationWorkflowState_Running.String() && attributeValue.Get("Pos").String() == "" {
+								done = false
+							}
 						} else {
 							done = false
 						}
@@ -410,7 +415,7 @@ func waitForWorkflowState(t *testing.T, vc *VitessCluster, ksWorkflow string, wa
 // as a CSV have secondary keys. This is useful when testing the
 // --defer-secondary-keys flag to confirm that the secondary keys
 // were re-added by the time the workflow hits the running phase.
-// For a Reshard workflow, where no tables are specififed, pass
+// For a Reshard workflow, where no tables are specified, pass
 // an empty string for the tables and all tables in the target
 // keyspace will be checked.
 func confirmTablesHaveSecondaryKeys(t *testing.T, tablets []*cluster.VttabletProcess, ksName string, tables string) {
@@ -430,6 +435,12 @@ func confirmTablesHaveSecondaryKeys(t *testing.T, tablets []*cluster.VttabletPro
 		}
 	}
 	for _, tablet := range tablets {
+		// Be sure that the schema is up to date.
+		err := vc.VtctldClient.ExecuteCommand("ReloadSchema", topoproto.TabletAliasString(&topodatapb.TabletAlias{
+			Cell: tablet.Cell,
+			Uid:  uint32(tablet.TabletUID),
+		}))
+		require.NoError(t, err)
 		for _, table := range tableArr {
 			if schema.IsInternalOperationTableName(table) {
 				continue
@@ -568,9 +579,25 @@ func isTableInDenyList(t *testing.T, vc *VitessCluster, ksShard string, table st
 	return found, nil
 }
 
-func expectNumberOfStreams(t *testing.T, vtgateConn *mysql.Conn, name string, workflow string, database string, want int) {
-	query := sqlparser.BuildParsedQuery("select count(*) from %s.vreplication where workflow='%s'", sidecarDBIdentifier, workflow).Query
+// expectNumberOfStreams waits for the given number of streams to be present and
+// by default RUNNING. If you want to wait for different states, then you can
+// pass in the state(s) you want to wait for.
+func expectNumberOfStreams(t *testing.T, vtgateConn *mysql.Conn, name string, workflow string, database string, want int, states ...string) {
+	var query string
+	if len(states) == 0 {
+		states = append(states, binlogdatapb.VReplicationWorkflowState_Running.String())
+	}
+	query = sqlparser.BuildParsedQuery("select count(*) from %s.vreplication where workflow='%s' and state in ('%s')",
+		sidecarDBIdentifier, workflow, strings.Join(states, "','")).Query
 	waitForQueryResult(t, vtgateConn, database, query, fmt.Sprintf(`[[INT64(%d)]]`, want))
+}
+
+// confirmAllStreamsRunning confirms that all of the migrated streams are running
+// after a Reshard.
+func confirmAllStreamsRunning(t *testing.T, vtgateConn *mysql.Conn, database string) {
+	query := sqlparser.BuildParsedQuery("select count(*) from %s.vreplication where state != '%s'",
+		sidecarDBIdentifier, binlogdatapb.VReplicationWorkflowState_Running.String()).Query
+	waitForQueryResult(t, vtgateConn, database, query, `[[INT64(0)]]`)
 }
 
 func printShardPositions(vc *VitessCluster, ksShards []string) {

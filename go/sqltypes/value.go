@@ -51,6 +51,8 @@ var (
 
 	// ErrIncompatibleTypeCast indicates a casting problem
 	ErrIncompatibleTypeCast = errors.New("Cannot convert value to desired type")
+
+	ErrInvalidEncodedString = errors.New("invalid SQL encoded string")
 )
 
 const (
@@ -859,6 +861,56 @@ var encodeRef = map[byte]byte{
 	'\t':   't',
 	26:     'Z', // ctl-Z
 	'\\':   '\\',
+}
+
+// BufDecodeStringSQL decodes the string into a strings.Builder
+func BufDecodeStringSQL(buf *strings.Builder, val string) error {
+	if len(val) < 2 || val[0] != '\'' || val[len(val)-1] != '\'' {
+		return fmt.Errorf("%s: %w", val, ErrInvalidEncodedString)
+	}
+	in := hack.StringBytes(val[1 : len(val)-1])
+	idx := 0
+	for {
+		if idx >= len(in) {
+			return nil
+		}
+		ch := in[idx]
+		if ch == '\'' {
+			idx++
+			if idx >= len(in) {
+				return fmt.Errorf("%s: %w", val, ErrInvalidEncodedString)
+			}
+			if in[idx] != '\'' {
+				return fmt.Errorf("%s: %w", val, ErrInvalidEncodedString)
+			}
+			buf.WriteByte(ch)
+			idx++
+			continue
+		}
+		if ch == '\\' {
+			idx++
+			if idx >= len(in) {
+				return fmt.Errorf("%s: %w", val, ErrInvalidEncodedString)
+			}
+			decoded := SQLDecodeMap[in[idx]]
+			if decoded == DontEscape {
+				return fmt.Errorf("%s: %w", val, ErrInvalidEncodedString)
+			}
+			buf.WriteByte(decoded)
+			idx++
+			continue
+		}
+
+		buf.WriteByte(ch)
+		idx++
+	}
+}
+
+// DecodeStringSQL encodes the string as a SQL string.
+func DecodeStringSQL(val string) (string, error) {
+	var buf strings.Builder
+	err := BufDecodeStringSQL(&buf, val)
+	return buf.String(), err
 }
 
 func init() {

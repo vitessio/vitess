@@ -328,7 +328,7 @@ func (c *compiler) compile(pat []rune) error {
 	// Main loop for the regex pattern parsing state machine.
 	//   Runs once per state transition.
 	//   Each time through optionally performs, depending on the state table,
-	//      - an advance to the the next pattern char
+	//      - an advance to the next pattern char
 	//      - an action to be performed.
 	//      - pushing or popping a state to/from the local state return stack.
 	//   file regexcst.txt is the source for the state table.  The logic behind

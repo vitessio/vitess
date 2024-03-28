@@ -149,10 +149,10 @@
           "0: utf8mb3_general_ci",
           "1: utf8mb3_general_ci",
           "2: utf8mb3_general_ci",
-          "3",
+          "3: binary",
           "4: utf8mb3_general_ci",
           "5",
-          "6",
+          "6: binary",
           "7",
           "8",
           "9",
@@ -166,7 +166,7 @@
           "17: utf8mb3_general_ci",
           "18",
           "19: utf8mb3_general_ci",
-          "20: utf8mb3_general_ci"
+          "20"
         ],
         "Inputs": [
           {
@@ -815,8 +815,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select a.CONSTRAINT_CATALOG as CONSTRAINT_CATALOG, a.CONSTRAINT_SCHEMA as CONSTRAINT_SCHEMA, a.CONSTRAINT_NAME as CONSTRAINT_NAME, a.CHECK_CLAUSE as CHECK_CLAUSE, b.CHARACTER_SET_NAME as CHARACTER_SET_NAME, b.DEFAULT_COLLATE_NAME as DEFAULT_COLLATE_NAME, b.DESCRIPTION as DESCRIPTION, b.MAXLEN as MAXLEN from information_schema.CHECK_CONSTRAINTS as a, information_schema.CHARACTER_SETS as b where 1 != 1",
-        "Query": "select a.CONSTRAINT_CATALOG as CONSTRAINT_CATALOG, a.CONSTRAINT_SCHEMA as CONSTRAINT_SCHEMA, a.CONSTRAINT_NAME as CONSTRAINT_NAME, a.CHECK_CLAUSE as CHECK_CLAUSE, b.CHARACTER_SET_NAME as CHARACTER_SET_NAME, b.DEFAULT_COLLATE_NAME as DEFAULT_COLLATE_NAME, b.DESCRIPTION as DESCRIPTION, b.MAXLEN as MAXLEN from information_schema.CHECK_CONSTRAINTS as a, information_schema.CHARACTER_SETS as b",
+        "FieldQuery": "select a.CONSTRAINT_CATALOG, a.CONSTRAINT_SCHEMA, a.CONSTRAINT_NAME, a.CHECK_CLAUSE, b.CHARACTER_SET_NAME, b.DEFAULT_COLLATE_NAME, b.DESCRIPTION, b.MAXLEN from information_schema.CHECK_CONSTRAINTS as a, information_schema.CHARACTER_SETS as b where 1 != 1",
+        "Query": "select a.CONSTRAINT_CATALOG, a.CONSTRAINT_SCHEMA, a.CONSTRAINT_NAME, a.CHECK_CLAUSE, b.CHARACTER_SET_NAME, b.DEFAULT_COLLATE_NAME, b.DESCRIPTION, b.MAXLEN from information_schema.CHECK_CONSTRAINTS as a, information_schema.CHARACTER_SETS as b",
         "Table": "information_schema.CHARACTER_SETS, information_schema.CHECK_CONSTRAINTS"
       }
     }
@@ -1284,8 +1284,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select table_name from (select table_name from information_schema.`tables` where 1 != 1) as `tables` where 1 != 1",
-            "Query": "select table_name from (select table_name from information_schema.`tables` where table_schema != 'information_schema' limit 1) as `tables`",
+            "FieldQuery": "select `tables`.table_name from (select table_name from information_schema.`tables` where 1 != 1) as `tables` where 1 != 1",
+            "Query": "select `tables`.table_name from (select table_name from information_schema.`tables` where table_schema != 'information_schema' limit 1) as `tables`",
             "Table": "information_schema.`tables`"
           },
           {

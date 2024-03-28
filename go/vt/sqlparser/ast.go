@@ -2916,6 +2916,7 @@ type (
 		// The solution we employed was to add a dummy field `_ bool` to the otherwise empty struct `CountStar`.
 		// This ensures that each instance of `CountStar` is treated as a separate object,
 		// even in the context of out semantic state which uses these objects as map keys.
+		OverClause *OverClause
 	}
 
 	Avg struct {

@@ -1881,6 +1881,26 @@ func (node DatabaseOptionType) ToString() string {
 	}
 }
 
+// IsCommutative returns whether the join type supports rearranging or not.
+func (joinType JoinType) IsCommutative() bool {
+	switch joinType {
+	case StraightJoinType, LeftJoinType, RightJoinType, NaturalLeftJoinType, NaturalRightJoinType:
+		return false
+	default:
+		return true
+	}
+}
+
+// IsInner returns whether the join type is an inner join or not.
+func (joinType JoinType) IsInner() bool {
+	switch joinType {
+	case StraightJoinType, NaturalJoinType, NormalJoinType:
+		return true
+	default:
+		return false
+	}
+}
+
 // ToString returns the type as a string
 func (ty LockType) ToString() string {
 	switch ty {
@@ -2556,6 +2576,16 @@ func (ra ReferenceAction) IsRestrict() bool {
 	}
 }
 
+// IsCascade returns true if the reference action is of cascade type.
+func (ra ReferenceAction) IsCascade() bool {
+	switch ra {
+	case Cascade:
+		return true
+	default:
+		return false
+	}
+}
+
 // IsLiteral returns true if the expression is of a literal type.
 func IsLiteral(expr Expr) bool {
 	switch expr.(type) {
@@ -2685,4 +2715,12 @@ func (node *Update) SetWherePredicate(expr Expr) {
 		Type: WhereClause,
 		Expr: expr,
 	}
+}
+
+// GetHighestOrderLock returns the higher level lock between the current lock and the new lock
+func (lock Lock) GetHighestOrderLock(newLock Lock) Lock {
+	if newLock > lock {
+		return newLock
+	}
+	return lock
 }

@@ -286,29 +286,6 @@ func (e *ForeignKeyDependencyUnresolvedError) Error() string {
 		sqlescape.EscapeID(e.Table))
 }
 
-type ForeignKeyLoopError struct {
-	Table string
-	Loop  []string
-}
-
-func (e *ForeignKeyLoopError) Error() string {
-	tableIsInsideLoop := false
-
-	escaped := make([]string, len(e.Loop))
-	for i, t := range e.Loop {
-		escaped[i] = sqlescape.EscapeID(t)
-		if t == e.Table {
-			tableIsInsideLoop = true
-		}
-	}
-	if tableIsInsideLoop {
-		return fmt.Sprintf("table %s participates in a circular foreign key reference: %s",
-			sqlescape.EscapeID(e.Table), strings.Join(escaped, ", "))
-	}
-	return fmt.Sprintf("table %s references a circular foreign key reference: %s",
-		sqlescape.EscapeID(e.Table), strings.Join(escaped, ", "))
-}
-
 type ForeignKeyNonexistentReferencedTableError struct {
 	Table           string
 	ReferencedTable string

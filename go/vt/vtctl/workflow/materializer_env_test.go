@@ -21,13 +21,14 @@ import (
 	"fmt"
 	"os"
 	"regexp"
-	"strconv"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo"
@@ -116,20 +117,7 @@ func newTestMaterializerEnv(t *testing.T, ctx context.Context, ms *vtctldatapb.M
 			}},
 		}
 	}
-	if ms.Workflow != "" {
-		env.expectValidation()
-	}
 	return env
-}
-
-func (env *testMaterializerEnv) expectValidation() {
-	for _, tablet := range env.tablets {
-		tabletID := int(tablet.Alias.Uid)
-		if tabletID < 200 {
-			continue
-		}
-		env.tmc.expectVRQuery(tabletID, fmt.Sprintf("select 1 from _vt.vreplication where db_name='vt_%s' and workflow='%s'", env.ms.TargetKeyspace, env.ms.Workflow), &sqltypes.Result{})
-	}
 }
 
 func (env *testMaterializerEnv) close() {
@@ -184,8 +172,6 @@ type testMaterializerTMClient struct {
 	mu                                 sync.Mutex
 	vrQueries                          map[int][]*queryResult
 	createVReplicationWorkflowRequests map[uint32]*tabletmanagerdatapb.CreateVReplicationWorkflowRequest
-	getSchemaCounts                    map[string]int
-	muSchemaCount                      sync.Mutex
 
 	// Used to confirm the number of times WorkflowDelete was called.
 	workflowDeleteCalls int
@@ -196,19 +182,6 @@ func newTestMaterializerTMClient() *testMaterializerTMClient {
 		schema:                             make(map[string]*tabletmanagerdatapb.SchemaDefinition),
 		vrQueries:                          make(map[int][]*queryResult),
 		createVReplicationWorkflowRequests: make(map[uint32]*tabletmanagerdatapb.CreateVReplicationWorkflowRequest),
-		getSchemaCounts:                    make(map[string]int),
-	}
-}
-
-func (tmc *testMaterializerTMClient) schemaRequested(uid uint32) {
-	tmc.muSchemaCount.Lock()
-	defer tmc.muSchemaCount.Unlock()
-	key := strconv.Itoa(int(uid))
-	n, ok := tmc.getSchemaCounts[key]
-	if !ok {
-		tmc.getSchemaCounts[key] = 1
-	} else {
-		tmc.getSchemaCounts[key] = n + 1
 	}
 }
 
@@ -260,15 +233,7 @@ func (tmc *testMaterializerTMClient) DeleteVReplicationWorkflow(ctx context.Cont
 	}, nil
 }
 
-func (tmc *testMaterializerTMClient) getSchemaRequestCount(uid uint32) int {
-	tmc.muSchemaCount.Lock()
-	defer tmc.muSchemaCount.Unlock()
-	key := strconv.Itoa(int(uid))
-	return tmc.getSchemaCounts[key]
-}
-
 func (tmc *testMaterializerTMClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error) {
-	tmc.schemaRequested(tablet.Alias.Uid)
 	schemaDefn := &tabletmanagerdatapb.SchemaDefinition{}
 	for _, table := range request.Tables {
 		if table == "/.*/" {
@@ -377,6 +342,61 @@ func (tmc *testMaterializerTMClient) VDiff(ctx context.Context, tablet *topodata
 		Id:        1,
 		VdiffUuid: req.VdiffUuid,
 		Output: &querypb.QueryResult{
+			RowsAffected: 1,
+		},
+	}, nil
+}
+
+func (tmc *testMaterializerTMClient) HasVReplicationWorkflows(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.HasVReplicationWorkflowsRequest) (*tabletmanagerdatapb.HasVReplicationWorkflowsResponse, error) {
+	return &tabletmanagerdatapb.HasVReplicationWorkflowsResponse{
+		Has: false,
+	}, nil
+}
+
+func (tmc *testMaterializerTMClient) ReadVReplicationWorkflows(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ReadVReplicationWorkflowsRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse, error) {
+	workflowType := binlogdatapb.VReplicationWorkflowType_MoveTables
+	if len(req.IncludeWorkflows) > 0 {
+		for _, wf := range req.IncludeWorkflows {
+			if strings.Contains(wf, "lookup") {
+				workflowType = binlogdatapb.VReplicationWorkflowType_CreateLookupIndex
+			}
+		}
+		return &tabletmanagerdatapb.ReadVReplicationWorkflowsResponse{
+			Workflows: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse{
+				{
+					Workflow:     req.IncludeWorkflows[0],
+					WorkflowType: workflowType,
+					Streams: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{
+						{
+							Id:    1,
+							State: binlogdatapb.VReplicationWorkflowState_Running,
+							Bls: &binlogdatapb.BinlogSource{
+								Keyspace: "sourceks",
+								Shard:    "0",
+								Filter: &binlogdatapb.Filter{
+									Rules: []*binlogdatapb.Rule{
+										{
+											Match: ".*",
+										},
+									},
+								},
+							},
+							Pos:           "MySQL56/" + position,
+							TimeUpdated:   protoutil.TimeToProto(time.Now()),
+							TimeHeartbeat: protoutil.TimeToProto(time.Now()),
+						},
+					},
+				},
+			},
+		}, nil
+	} else {
+		return &tabletmanagerdatapb.ReadVReplicationWorkflowsResponse{}, nil
+	}
+}
+
+func (tmc *testMaterializerTMClient) UpdateVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.UpdateVReplicationWorkflowRequest) (*tabletmanagerdatapb.UpdateVReplicationWorkflowResponse, error) {
+	return &tabletmanagerdatapb.UpdateVReplicationWorkflowResponse{
+		Result: &querypb.QueryResult{
 			RowsAffected: 1,
 		},
 	}, nil

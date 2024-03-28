@@ -228,13 +228,13 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 	replica2 = shard.Vttablets[2]
 	replica3 = shard.Vttablets[3]
 
-	if err := localCluster.VtctlclientProcess.InitTablet(primary, cell, keyspaceName, hostname, shard.Name); err != nil {
+	if err := localCluster.InitTablet(primary, keyspaceName, shard.Name); err != nil {
 		return 1, err
 	}
-	if err := localCluster.VtctlclientProcess.InitTablet(replica1, cell, keyspaceName, hostname, shard.Name); err != nil {
+	if err := localCluster.InitTablet(replica1, keyspaceName, shard.Name); err != nil {
 		return 1, err
 	}
-	if err := localCluster.VtctlclientProcess.InitTablet(replica2, cell, keyspaceName, hostname, shard.Name); err != nil {
+	if err := localCluster.InitTablet(replica2, keyspaceName, shard.Name); err != nil {
 		return 1, err
 	}
 	vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", localCluster.VtctldProcess.GrpcPort, localCluster.TmpDirectory)
@@ -449,7 +449,7 @@ func primaryBackup(t *testing.T) {
 	}()
 	verifyInitialReplication(t)
 
-	output, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput("Backup", primary.Alias)
+	output, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("Backup", primary.Alias)
 	require.Error(t, err)
 	assert.Contains(t, output, "type PRIMARY cannot take backup. if you really need to do this, rerun the backup command with --allow_primary")
 
@@ -746,7 +746,7 @@ func restartPrimaryAndReplica(t *testing.T) {
 		proc.Wait()
 	}
 	for _, tablet := range []*cluster.Vttablet{primary, replica1} {
-		err := localCluster.VtctlclientProcess.InitTablet(tablet, cell, keyspaceName, hostname, shardName)
+		err := localCluster.InitTablet(tablet, keyspaceName, shardName)
 		require.Nil(t, err)
 		err = tablet.VttabletProcess.Setup()
 		require.Nil(t, err)

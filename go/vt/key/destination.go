@@ -18,7 +18,7 @@ package key
 
 import (
 	"encoding/hex"
-	"math/rand"
+	"math/rand/v2"
 	"sort"
 	"strings"
 
@@ -274,7 +274,7 @@ type DestinationAnyShardPickerRandomShard struct{}
 
 // PickShard is DestinationAnyShardPickerRandomShard's implementation.
 func (dp DestinationAnyShardPickerRandomShard) PickShard(shardCount int) int {
-	return rand.Intn(shardCount)
+	return rand.IntN(shardCount)
 }
 
 //

@@ -19,7 +19,7 @@ package vtctlbackup
 import (
 	"context"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"testing"
 	"time"
 
@@ -209,7 +209,7 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 				// Also, we give the replica a chance to catch up.
 				time.Sleep(postWriteSleepDuration)
 				// randomly flush binary logs 0, 1 or 2 times
-				FlushBinaryLogsOnReplica(t, 0, rand.Intn(3))
+				FlushBinaryLogsOnReplica(t, 0, rand.IntN(3))
 				waitForReplica(t, 0)
 				recordRowsPerPosition(t)
 				// configure --incremental-from-pos to either:
