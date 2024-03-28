@@ -190,6 +190,80 @@ func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gro
 	return offset
 }
 
+func (*Aggregator) CanTakeColumnsByOffset() bool {
+	return true
+}
+
+func (a *Aggregator) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
+	if len(a.Columns) <= offset {
+		panic(vterrors.VT13001("offset out of range1"))
+	}
+
+	var expr sqlparser.Expr
+	for i, by := range a.Grouping {
+		if by.ColOffset != offset {
+			continue
+		}
+		if by.WSOffset >= 0 {
+			// ah, we already have a weigh_string for this column. let's return it as is
+			return by.WSOffset
+		}
+
+		// we need to add a WS column
+		a.Grouping[i].WSOffset = len(a.Columns)
+		expr = a.Columns[offset].Expr
+		break
+	}
+
+	if expr == nil {
+		for i, aggr := range a.Aggregations {
+			if aggr.ColOffset != offset {
+				continue
+			}
+			if aggr.WSOffset >= 0 {
+				// ah, we already have a weigh_string for this column. let's return it as is
+				return aggr.WSOffset
+			}
+
+			// we need to add a WS column
+			offset := len(a.Columns)
+			a.Aggregations[i].WSOffset = offset
+			expr = aggr.getPushColumn()
+			a.Grouping = append(a.Grouping, GroupBy{
+				Inner:     weightStringFor(expr),
+				ColOffset: offset,
+				WSOffset:  -1,
+			})
+			break
+		}
+	}
+
+	if expr == nil {
+		panic(vterrors.VT13001("could not find group by"))
+	}
+
+	wsExpr := weightStringFor(expr)
+	wsAe := aeWrap(wsExpr)
+
+	wsOffset := len(a.Columns)
+	a.Columns = append(a.Columns, wsAe)
+	if underRoute {
+		return wsOffset
+	}
+	wsop, ok := supportsWSByOffset(a.Source)
+	var incomingOffset int
+	if ok {
+		incomingOffset = wsop.AddWSColumn(ctx, offset, false)
+	} else {
+		incomingOffset = a.Source.AddColumn(ctx, true, true, wsAe)
+	}
+
+	if wsOffset != incomingOffset {
+		panic(errFailedToPlan(wsAe))
+	}
+	return wsOffset
+}
+
 func (a *Aggregator) findColInternal(ctx *plancontext.PlanningContext, ae *sqlparser.AliasedExpr, addToGroupBy bool) int {
 	expr := ae.Expr
 	offset := a.FindCol(ctx, expr, false)
