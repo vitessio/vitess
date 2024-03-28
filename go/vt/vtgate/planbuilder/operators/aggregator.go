@@ -200,6 +200,7 @@ func (a *Aggregator) AddWSColumn(ctx *plancontext.PlanningContext, offset int, u
 	}
 
 	var expr sqlparser.Expr
+	// first search for the offset among the groupings
 	for i, by := range a.Grouping {
 		if by.ColOffset != offset {
 			continue
@@ -234,7 +235,8 @@ func (a *Aggregator) AddWSColumn(ctx *plancontext.PlanningContext, offset int, u
 				ColOffset: offset,
 				WSOffset:  -1,
 			})
-			break
+			panic("not sure this is correct")
+			// break
 		}
 	}
 

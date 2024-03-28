@@ -98,6 +98,18 @@ func (d *Distinct) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser
 func (d *Distinct) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) int {
 	return d.Source.AddColumn(ctx, reuse, gb, expr)
 }
+func (d *Distinct) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
+	wsop, ok := supportsWSByOffset(d.Source)
+	if !ok || !wsop.CanTakeColumnsByOffset() {
+		panic("AddWSColumn not supported")
+	}
+	return wsop.AddWSColumn(ctx, offset, underRoute)
+}
+
+func (d *Distinct) CanTakeColumnsByOffset() bool {
+	_, ok := supportsWSByOffset(d.Source)
+	return ok
+}
 
 func (d *Distinct) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
 	return d.Source.FindCol(ctx, expr, underRoute)

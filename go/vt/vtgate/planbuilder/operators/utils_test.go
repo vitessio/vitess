@@ -58,6 +58,14 @@ func (f *fakeOp) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool,
 	return len(f.cols) - 1
 }
 
+func (*fakeOp) AddWSColumn(*plancontext.PlanningContext, int, bool) int {
+	panic("implement me")
+}
+
+func (*fakeOp) CanTakeColumnsByOffset() bool {
+	return true
+}
+
 func (f *fakeOp) FindCol(ctx *plancontext.PlanningContext, a sqlparser.Expr, underRoute bool) int {
 	return slices.IndexFunc(f.cols, func(b *sqlparser.AliasedExpr) bool {
 		return a == b.Expr
