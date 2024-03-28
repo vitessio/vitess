@@ -31,7 +31,6 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
-	"vitess.io/vitess/go/vt/vtorc/process"
 	"vitess.io/vitess/go/vt/vtorc/util"
 
 	"github.com/patrickmn/go-cache"
@@ -302,9 +301,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 	clusters := make(map[string]*clusterAnalysis)
 	err := db.Db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
 		a := &ReplicationAnalysis{
-			Analysis:               NoProblem,
-			ProcessingNodeHostname: process.ThisHostname,
-			ProcessingNodeToken:    util.ProcessToken.Hash,
+			Analysis: NoProblem,
 		}
 
 		tablet := &topodatapb.Tablet{}
