@@ -119,9 +119,11 @@ func ExecDBWriteFunc(f func() error) error {
 }
 
 func ExpireTableData(tableName string, timestampColumn string) error {
-	query := fmt.Sprintf("delete from %s where %s < NOW() - INTERVAL ? DAY", tableName, timestampColumn)
 	writeFunc := func() error {
-		_, err := db.ExecVTOrc(query, config.Config.AuditPurgeDays)
+		_, err := db.ExecVTOrc(
+			fmt.Sprintf("delete from %s where %s < NOW() - INTERVAL ? DAY", tableName, timestampColumn),
+			config.Config.AuditPurgeDays,
+		)
 		return err
 	}
 	return ExecDBWriteFunc(writeFunc)

@@ -374,7 +374,7 @@ func ContinuousDiscovery() {
 					go inst.ExpireStaleInstanceBinlogCoordinates()
 					go process.ExpireNodesHistory()
 					go process.ExpireAvailableNodes()
-					go ExpireFailureDetectionHistory()
+					go ExpireRecoveryDetectionHistory()
 					go ExpireTopologyRecoveryHistory()
 					go ExpireTopologyRecoveryStepsHistory()
 				}
@@ -382,7 +382,6 @@ func ContinuousDiscovery() {
 		case <-recoveryTick:
 			go func() {
 				if IsLeaderOrActive() {
-					go ClearActiveFailureDetections()
 					go ClearActiveRecoveries()
 					go ExpireBlockedRecoveries()
 					go AcknowledgeCrashedRecoveries()

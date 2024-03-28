@@ -29,83 +29,39 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/util"
 )
 
-// AttemptFailureDetectionRegistration tries to add a failure-detection entry; if this fails that means the problem has already been detected
-func AttemptFailureDetectionRegistration(analysisEntry *inst.ReplicationAnalysis) (registrationSuccessful bool, err error) {
-	args := sqlutils.Args(
-		analysisEntry.AnalyzedInstanceAlias,
-		process.ThisHostname,
-		util.ProcessToken.Hash,
-		string(analysisEntry.Analysis),
-		analysisEntry.ClusterDetails.Keyspace,
-		analysisEntry.ClusterDetails.Shard,
-		analysisEntry.CountReplicas,
-		analysisEntry.IsActionableRecovery,
-	)
-	startActivePeriodHint := "now()"
-	if analysisEntry.StartActivePeriod != "" {
-		startActivePeriodHint = "?"
-		args = append(args, analysisEntry.StartActivePeriod)
-	}
-
-	query := fmt.Sprintf(`
+// InsertRecoveryDetection inserts the recovery analysis that has been detected.
+func InsertRecoveryDetection(analysisEntry *inst.ReplicationAnalysis) error {
+	sqlResult, err := db.ExecVTOrc(`
 			insert ignore
-				into topology_failure_detection (
+				into recovery_detection (
 					alias,
-					in_active_period,
-					end_active_period_unixtime,
-					processing_node_hostname,
-					processcing_node_token,
 					analysis,
 					keyspace,
 					shard,
-					count_affected_replicas,
-					is_actionable,
-					start_active_period
+					detection_timestamp
 				) values (
 					?,
-					1,
-					0,
 					?,
 					?,
 					?,
-					?,
-					?,
-					?,
-					?,
-					%s
-				)
-			`, startActivePeriodHint)
-
-	sqlResult, err := db.ExecVTOrc(query, args...)
-	if err != nil {
-		log.Error(err)
-		return false, err
-	}
-	rows, err := sqlResult.RowsAffected()
-	if err != nil {
-		log.Error(err)
-		return false, err
-	}
-	return (rows > 0), nil
-}
-
-// ClearActiveFailureDetections clears the "in_active_period" flag for old-enough detections, thereby allowing for
-// further detections on cleared instances.
-func ClearActiveFailureDetections() error {
-	_, err := db.ExecVTOrc(`
-			update topology_failure_detection set
-				in_active_period = 0,
-				end_active_period_unixtime = UNIX_TIMESTAMP()
-			where
-				in_active_period = 1
-				AND start_active_period < NOW() - INTERVAL ? MINUTE
-			`,
-		config.FailureDetectionPeriodBlockMinutes,
+					now()
+				)`,
+		analysisEntry.AnalyzedInstanceAlias,
+		string(analysisEntry.Analysis),
+		analysisEntry.ClusterDetails.Keyspace,
+		analysisEntry.ClusterDetails.Shard,
 	)
 	if err != nil {
 		log.Error(err)
+		return err
 	}
-	return err
+	id, err := sqlResult.LastInsertId()
+	if err != nil {
+		log.Error(err)
+		return err
+	}
+	analysisEntry.RecoveryId = id
+	return nil
 }
 
 func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecovery, error) {
@@ -139,7 +95,7 @@ func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecover
 					?,
 					?,
 					?,
-					(select ifnull(max(detection_id), 0) from topology_failure_detection where alias = ?)
+					?
 				)
 			`,
 		sqlutils.NilIfZero(topologyRecovery.ID),
@@ -151,6 +107,7 @@ func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecover
 		analysisEntry.ClusterDetails.Shard,
 		analysisEntry.CountReplicas,
 		analysisEntry.AnalyzedInstanceAlias,
+		analysisEntry.RecoveryId,
 	)
 	if err != nil {
 		return nil, err
@@ -548,17 +505,17 @@ func writeTopologyRecoveryStep(topologyRecoveryStep *TopologyRecoveryStep) error
 	return err
 }
 
-// ExpireFailureDetectionHistory removes old rows from the topology_failure_detection table
-func ExpireFailureDetectionHistory() error {
-	return inst.ExpireTableData("topology_failure_detection", "start_active_period")
+// ExpireRecoveryDetectionHistory removes old rows from the recovery_detection table
+func ExpireRecoveryDetectionHistory() error {
+	return inst.ExpireTableData("recovery_detection", "detection_timestamp")
 }
 
-// ExpireTopologyRecoveryHistory removes old rows from the topology_failure_detection table
+// ExpireTopologyRecoveryHistory removes old rows from the topology_recovery table
 func ExpireTopologyRecoveryHistory() error {
 	return inst.ExpireTableData("topology_recovery", "start_active_period")
 }
 
-// ExpireTopologyRecoveryStepsHistory removes old rows from the topology_failure_detection table
+// ExpireTopologyRecoveryStepsHistory removes old rows from the topology_recovery_steps table
 func ExpireTopologyRecoveryStepsHistory() error {
 	return inst.ExpireTableData("topology_recovery_steps", "audit_at")
 }

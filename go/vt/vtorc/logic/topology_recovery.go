@@ -300,19 +300,6 @@ func checkAndRecoverGenericProblem(ctx context.Context, analysisEntry *inst.Repl
 	return false, nil, nil
 }
 
-// checkAndExecuteFailureDetectionProcesses tries to register for failure detection and potentially executes
-// failure-detection processes.
-func checkAndExecuteFailureDetectionProcesses(analysisEntry *inst.ReplicationAnalysis) (detectionRegistrationSuccess bool, processesExecutionAttempted bool, err error) {
-	if ok, _ := AttemptFailureDetectionRegistration(analysisEntry); !ok {
-		if util.ClearToLog("checkAndExecuteFailureDetectionProcesses", analysisEntry.AnalyzedInstanceAlias) {
-			log.Infof("checkAndExecuteFailureDetectionProcesses: could not register %+v detection on %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceAlias)
-		}
-		return false, false, nil
-	}
-	log.Infof("topology_recovery: detected %+v failure on %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceAlias)
-	return true, false, nil
-}
-
 // getCheckAndRecoverFunctionCode gets the recovery function code to use for the given analysis.
 func getCheckAndRecoverFunctionCode(analysisCode inst.AnalysisCode, tabletAlias string) recoveryFunction {
 	switch analysisCode {
@@ -500,17 +487,12 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 	}
 
 	// At this point we have validated there's a failure scenario for which we have a recovery path.
-
-	// Initiate detection:
-	_, _, err = checkAndExecuteFailureDetectionProcesses(analysisEntry)
+	// Record the failure detected in the logs.
+	err = InsertRecoveryDetection(analysisEntry)
 	if err != nil {
-		log.Errorf("executeCheckAndRecoverFunction: error on failure detection: %+v", err)
+		log.Errorf("executeCheckAndRecoverFunction: error on inserting recovery detection record: %+v", err)
 		return err
 	}
-	// We don't mind whether detection really executed the processes or not
-	// (it may have been silenced due to previous detection). We only care there's no error.
-
-	// We're about to embark on recovery shortly...
 
 	// Check for recovery being disabled globally
 	if recoveryDisabledGlobally, err := IsRecoveryDisabled(); err != nil {
