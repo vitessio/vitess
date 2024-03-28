@@ -75,6 +75,10 @@ type (
 		GetOrdering(ctx *plancontext.PlanningContext) []OrderBy
 	}
 
+	WSOffsetable interface {
+		AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int
+	}
+
 	// OrderBy contains the expression to used in order by and also if ordering is needed at VTGate level then what the weight_string function expression to be sent down for evaluation.
 	OrderBy struct {
 		Inner *sqlparser.Order
@@ -83,6 +87,11 @@ type (
 		SimplifiedExpr sqlparser.Expr
 	}
 )
+
+func supportsWSByOffset(op Operator) (WSOffsetable, bool) {
+	wsop, ok := op.(WSOffsetable)
+	return wsop, ok
+}
 
 // Map takes in a mapping function and applies it to both the expression in OrderBy.
 func (ob OrderBy) Map(mappingFunc func(sqlparser.Expr) sqlparser.Expr) OrderBy {
