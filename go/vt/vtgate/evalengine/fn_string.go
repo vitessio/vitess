@@ -140,6 +140,15 @@ var _ IR = (*builtinPad)(nil)
 var _ IR = (*builtinTrim)(nil)
 
 func fieldSQLType(arg sqltypes.Type, tt sqltypes.Type) sqltypes.Type {
+	if sqltypes.IsNull(arg) {
+		// If we have a NULL combined with only so far numerical types,
+		// we have to convert it all to DOUBLE.
+		if sqltypes.IsIntegral(tt) || sqltypes.IsDecimal(tt) {
+			return sqltypes.Float64
+		}
+		return tt
+	}
+
 	if typeIsTextual(arg) && typeIsTextual(tt) {
 		return sqltypes.VarChar
 	} else if sqltypes.IsIntegral(arg) && sqltypes.IsIntegral(tt) {
@@ -167,11 +176,14 @@ func (call *builtinField) eval(env *ExpressionEnv) (eval, error) {
 	tt := args[0].SQLType()
 
 	for _, arg := range args[1:] {
+		var at sqltypes.Type
 		if arg == nil {
-			continue
+			at = sqltypes.Null
+		} else {
+			at = arg.SQLType()
 		}
 
-		tt = fieldSQLType(arg.SQLType(), tt)
+		tt = fieldSQLType(at, tt)
 	}
 
 	if tt == sqltypes.Int64 {
@@ -262,10 +274,6 @@ func (call *builtinField) compile(c *compiler) (ctype, error) {
 	tt := strs[0].Type
 
 	for _, str := range strs {
-		if sqltypes.IsNull(str.Type) {
-			continue
-		}
-
 		tt = fieldSQLType(str.Type, tt)
 	}
 
