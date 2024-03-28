@@ -197,8 +197,6 @@ func TestWaitSourcePos(t *testing.T) {
 	db.AddQuery("SELECT @@global.gtid_executed", sqltypes.MakeTestResult(sqltypes.MakeTestFields("test_field", "varchar"), "invalid_id"))
 	err = testMysqld.WaitSourcePos(ctx, replication.Position{GTIDSet: replication.Mysql56GTIDSet{}})
 	assert.ErrorContains(t, err, "invalid MySQL 5.6 GTID set")
-
-	// TODO: Look for more cases
 }
 
 func TestReplicationStatus(t *testing.T) {

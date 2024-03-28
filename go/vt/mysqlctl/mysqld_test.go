@@ -217,8 +217,6 @@ func TestRunMysqlUpgrade(t *testing.T) {
 	ctx := context.Background()
 	err := testMysqld.RunMysqlUpgrade(ctx)
 	assert.NoError(t, err)
-
-	// TODO: Add more tests
 }
 
 func TestGetDbaConnection(t *testing.T) {
