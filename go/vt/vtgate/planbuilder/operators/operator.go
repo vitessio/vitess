@@ -89,7 +89,7 @@ type (
 	}
 )
 
-func supportsWSByOffset(op Operator) (WSOffsetable, bool) {
+func supportsWSByOffset(op Operator) (res WSOffsetable, supported bool) {
 	wsop, ok := op.(WSOffsetable)
 	if !ok {
 		return nil, false

@@ -122,6 +122,13 @@ func (h *Horizon) AddColumn(ctx *plancontext.PlanningContext, reuse bool, _ bool
 	return offset
 }
 
+func (h *Horizon) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
+	panic(errNoNewColumns)
+}
+func (*Horizon) CanTakeColumnsByOffset() bool {
+	return true
+}
+
 var errNoNewColumns = vterrors.VT13001("can't add new columns to Horizon")
 
 // canReuseColumn is generic, so it can be used with slices of different types.
