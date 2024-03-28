@@ -92,7 +92,7 @@ func NewTypeFromField(f *querypb.Field) Type {
 	}
 }
 
-func (t *Type) ToField(name string) *querypb.Field {
+func (t *Type) SetTypeAndFlags(field *querypb.Field) {
 	// need to get the proper flags for the type; usually leaving flags
 	// to 0 is OK, because Vitess' MySQL client will generate the right
 	// ones for the column's type, but here we're also setting the NotNull
@@ -101,15 +101,16 @@ func (t *Type) ToField(name string) *querypb.Field {
 	if !t.nullable {
 		flags |= int64(querypb.MySqlFlag_NOT_NULL_FLAG)
 	}
+	field.Type = t.typ
+	field.Charset = uint32(t.collation)
+	field.ColumnLength = uint32(t.size)
+	field.Decimals = uint32(t.scale)
+	field.Flags = uint32(flags)
+}
 
-	f := &querypb.Field{
-		Name:         name,
-		Type:         t.typ,
-		Charset:      uint32(t.collation),
-		ColumnLength: uint32(t.size),
-		Decimals:     uint32(t.scale),
-		Flags:        uint32(flags),
-	}
+func (t *Type) ToField(name string) *querypb.Field {
+	f := &querypb.Field{Name: name}
+	t.SetTypeAndFlags(f)
 	return f
 }
 

@@ -107,7 +107,7 @@
         ],
         "Inputs": [
           {
-            "OperatorType": "Concatenate",
+            "OperatorType": "SimpleConcatenate",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -170,7 +170,7 @@
         ],
         "Inputs": [
           {
-            "OperatorType": "Concatenate",
+            "OperatorType": "SimpleConcatenate",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -788,7 +788,7 @@
         "Aggregates": "sum(0) AS sum(found)",
         "Inputs": [
           {
-            "OperatorType": "Concatenate",
+            "OperatorType": "SimpleConcatenate",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -827,7 +827,7 @@
       "QueryType": "SELECT",
       "Original": "select found from (select 1 as found from information_schema.`tables` where table_schema = 'music' union all (select 1 as found from information_schema.views where table_schema = 'music' limit 1)) as t",
       "Instructions": {
-        "OperatorType": "Concatenate",
+        "OperatorType": "SimpleConcatenate",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -864,7 +864,7 @@
       "QueryType": "SELECT",
       "Original": "select 1 as found from information_schema.`tables` where table_schema = 'music' and table_schema = 'Music' union all (select 1 as found from information_schema.views where table_schema = 'music' and table_schema = 'user' limit 1)",
       "Instructions": {
-        "OperatorType": "Concatenate",
+        "OperatorType": "SimpleConcatenate",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -901,7 +901,7 @@
       "QueryType": "SELECT",
       "Original": "select 1 as found from information_schema.`tables` where table_schema = 'music' and table_schema = 'Music' union all (select 1 as found from information_schema.views where table_schema = 'music' and table_schema = 'user' limit 1)",
       "Instructions": {
-        "OperatorType": "Concatenate",
+        "OperatorType": "SimpleConcatenate",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -946,7 +946,7 @@
         "Inputs": [
           {
             "InputName": "SubQuery",
-            "OperatorType": "Concatenate",
+            "OperatorType": "SimpleConcatenate",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -1004,7 +1004,7 @@
         ],
         "Inputs": [
           {
-            "OperatorType": "Concatenate",
+            "OperatorType": "SimpleConcatenate",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -1057,7 +1057,7 @@
             ],
             "Inputs": [
               {
-                "OperatorType": "Concatenate",
+                "OperatorType": "SimpleConcatenate",
                 "Inputs": [
                   {
                     "OperatorType": "Route",

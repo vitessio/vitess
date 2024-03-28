@@ -22,6 +22,7 @@ import (
 
 type concatenate struct {
 	sources []logicalPlan
+	coerced bool
 
 	// These column offsets do not need to be typed checked - they usually contain weight_string()
 	// columns that are not going to be returned to the user
@@ -35,6 +36,13 @@ func (c *concatenate) Primitive() engine.Primitive {
 	var sources []engine.Primitive
 	for _, source := range c.sources {
 		sources = append(sources, source.Primitive())
+	}
+
+	if c.coerced {
+		// types are already handled, let's use the fast concatenate
+		return &engine.SimpleConcatenate{
+			Sources: sources,
+		}
 	}
 
 	return engine.NewConcatenate(sources, c.noNeedToTypeCheck)
