@@ -105,6 +105,10 @@ type VtctldClient struct {
 		Response *vtctldatapb.GetSrvVSchemaResponse
 		Error    error
 	}
+	GetTabletsResults *struct {
+		Tablets []*topodatapb.Tablet
+		Error   error
+	}
 	GetVSchemaResults map[string]struct {
 		Response *vtctldatapb.GetVSchemaResponse
 		Error    error
@@ -502,6 +506,21 @@ func (fake *VtctldClient) GetSrvVSchemas(ctx context.Context, req *vtctldatapb.G
 	}
 
 	return resp, nil
+}
+
+// GetTablets is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) GetTablets(ctx context.Context, req *vtctldatapb.GetTabletsRequest, opts ...grpc.CallOption) (*vtctldatapb.GetTabletsResponse, error) {
+	if fake.GetTabletsResults == nil {
+		return nil, fmt.Errorf("%w: GetTabletsResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	if fake.GetTabletsResults.Error != nil {
+		return nil, fake.GetTabletsResults.Error
+	}
+
+	return &vtctldatapb.GetTabletsResponse{
+		Tablets: fake.GetTabletsResults.Tablets,
+	}, nil
 }
 
 // GetVSchema is part of the vtctldclient.VtctldClient interface.
