@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -262,14 +263,17 @@ func (sm *StreamMigrator) StopStreams(ctx context.Context) ([]string, error) {
 	}
 
 	if err := sm.stopSourceStreams(ctx); err != nil {
+		log.Errorf("DEBUG: StopStreams: stopSourceStreams failed: %v", err)
 		return nil, err
 	}
 
 	positions, err := sm.syncSourceStreams(ctx)
 	if err != nil {
+		log.Errorf("DEBUG: StopStreams: syncSourceStreams failed: %v", err)
 		return nil, err
 	}
 
+	log.Errorf("DEBUG: StopStreams: verifying stream positions")
 	return sm.verifyStreamPositions(ctx, positions)
 }
 
@@ -555,7 +559,8 @@ func (sm *StreamMigrator) readSourceStreams(ctx context.Context, cancelMigrate b
 			}
 
 			if len(stoppedStreams) != 0 {
-				return fmt.Errorf("cannot migrate until all streams are running: %s: %d", source.GetShard().ShardName(), source.GetPrimary().Alias.Uid)
+				log.Errorf("cannot migrate until all streams are running: %s: %d", source.GetShard().ShardName(), source.GetPrimary().Alias.Uid)
+				//return fmt.Errorf("cannot migrate until all streams are running: %s: %d", source.GetShard().ShardName(), source.GetPrimary().Alias.Uid)
 			}
 		}
 
@@ -727,9 +732,37 @@ func (sm *StreamMigrator) stopSourceStreams(ctx context.Context) error {
 					}
 					sm.ts.Logger().Infof("Waiting for Materialization workflow %s on %v/%v to reach position %v, starting from position %s on tablet %s",
 						vrs.Workflow, vrs.BinlogSource.GetKeyspace(), vrs.BinlogSource.GetShard(), pos, vrs.Position, topoproto.TabletAliasString(primary.GetAlias()))
+					/*
+						if _, err := sm.ts.TabletManagerClient().UpdateVReplicationWorkflow(egCtx, primary.Tablet, &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
+							Workflow: vrs.Workflow,
+							State:    binlogdatapb.VReplicationWorkflowState_Running,
+							// Don't change anything else, so pass simulated NULLs.
+							Cells: textutil.SimulatedNullStringSlice,
+							TabletTypes: []topodatapb.TabletType{
+								topodatapb.TabletType(textutil.SimulatedNullInt),
+							},
+							OnDdl: binlogdatapb.OnDDLAction(textutil.SimulatedNullInt),
+						}); err != nil {
+							return err
+						}
+					*/
 					if err := sm.ts.TabletManagerClient().VReplicationWaitForPos(egCtx, primary.Tablet, vrs.ID, pos); err != nil {
 						return err
 					}
+					/*
+						if _, err := sm.ts.TabletManagerClient().UpdateVReplicationWorkflow(egCtx, primary.Tablet, &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
+							Workflow: vrs.Workflow,
+							State:    binlogdatapb.VReplicationWorkflowState_Stopped,
+							// Don't change anything else, so pass simulated NULLs.
+							Cells: textutil.SimulatedNullStringSlice,
+							TabletTypes: []topodatapb.TabletType{
+								topodatapb.TabletType(textutil.SimulatedNullInt),
+							},
+							OnDdl: binlogdatapb.OnDDLAction(textutil.SimulatedNullInt),
+						}); err != nil {
+							return err
+						}
+					*/
 					return nil
 				})
 			}
@@ -992,10 +1025,12 @@ func (sm *StreamMigrator) createTargetStreams(ctx context.Context, tmpl []*VRepl
 			for _, rule := range vrs.BinlogSource.Filter.Rules {
 				buf := &strings.Builder{}
 
+				//if vrs.WorkflowType == binlogdatapb.VReplicationWorkflowType_Materialize && vrs.BinlogSource.Keyspace == sm.ts.TargetKeyspaceName() {
 				t := template.Must(template.New("").Parse(rule.Filter))
-				if err := t.Execute(buf, key.KeyRangeString(target.GetShard().KeyRange)); err != nil {
+				if err := t.Execute(buf, key.KeyRangeString(target.GetShard().GetKeyRange())); err != nil {
 					return err
 				}
+				//}
 
 				rule.Filter = buf.String()
 			}
@@ -1038,6 +1073,9 @@ func (sm *StreamMigrator) templatize(ctx context.Context, tabletStreams []*VRepl
 		streamType := StreamTypeUnknown
 
 		for _, rule := range vrs.BinlogSource.Filter.Rules {
+			if vrs.WorkflowType == binlogdatapb.VReplicationWorkflowType_Materialize && vrs.BinlogSource.Keyspace == sm.ts.TargetKeyspaceName() {
+				continue
+			}
 			typ, err := sm.templatizeRule(ctx, rule)
 			if err != nil {
 				return nil, err

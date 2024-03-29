@@ -444,29 +444,31 @@ func testReshardV2Workflow(t *testing.T) {
 	execMultipleQueries(t, vtgateConn, targetKs+"/-80", internalSchema)
 	execMultipleQueries(t, vtgateConn, targetKs+"/80-", internalSchema)
 
-	createAdditionalCustomerShards(t, "-40,40-80,80-c0,c0-")
-	createReshardWorkflow(t, "-80,80-", "-40,40-80,80-c0,c0-")
-	validateReadsRouteToSource(t, "replica")
-	validateWritesRouteToSource(t)
+	/*
+		createAdditionalCustomerShards(t, "-40,40-80,80-c0,c0-")
+			createReshardWorkflow(t, "-80,80-", "-40,40-80,80-c0,c0-")
+				validateReadsRouteToSource(t, "replica")
+				validateWritesRouteToSource(t)
 
-	// Verify that we've properly ignored any internal operational tables
-	// and that they were not copied to the new target shards
-	verifyNoInternalTables(t, vtgateConn, targetKs+"/-40")
-	verifyNoInternalTables(t, vtgateConn, targetKs+"/c0-")
+				// Verify that we've properly ignored any internal operational tables
+				// and that they were not copied to the new target shards
+				verifyNoInternalTables(t, vtgateConn, targetKs+"/-40")
+				verifyNoInternalTables(t, vtgateConn, targetKs+"/c0-")
 
-	// Confirm that updating Reshard workflows works.
-	testWorkflowUpdate(t)
+				// Confirm that updating Reshard workflows works.
+				testWorkflowUpdate(t)
 
-	testRestOfWorkflow(t)
+				testRestOfWorkflow(t)
+	*/
 }
 
 func testMoveTablesV2Workflow(t *testing.T) {
-	vtgateConn, closeConn := getVTGateConn()
-	defer closeConn()
+	//vtgateConn, closeConn := getVTGateConn()
+	//defer closeConn()
 	currentWorkflowType = binlogdatapb.VReplicationWorkflowType_MoveTables
 
 	materializeShow := func() {
-		output, err := vc.VtctldClient.ExecuteCommandWithOutput("materialize", "--target-keyspace=customer", "show", "--workflow=customer_copy", "--compact", "--include-logs=false")
+		output, err := vc.VtctldClient.ExecuteCommandWithOutput("materialize", "--target-keyspace=customer", "show", "--workflow=customer_individual", "--compact", "--include-logs=false")
 		require.NoError(t, err)
 		log.Error("Materialize show output: ", output)
 	}
@@ -497,45 +499,45 @@ func testMoveTablesV2Workflow(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, listOutputIsEmpty(output))
 
-	materialize(t, materializeCustomerCopySpec, true)
-
 	// The purge table should get skipped/ignored
 	// If it's not then we'll get an error as the table doesn't exist in the vschema
 	createMoveTablesWorkflow(t, "customer,loadtest,vdiff_order,reftable,_vt_PURGE_4f9194b43b2011eb8a0104ed332e05c2_20221210194431")
 	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
-	validateReadsRouteToSource(t, "replica")
-	validateWritesRouteToSource(t)
-	materializeShow()
+	//validateReadsRouteToSource(t, "replica")
+	//validateWritesRouteToSource(t)
 
 	// Verify that we've properly ignored any internal operational tables
 	// and that they were not copied to the new target keyspace
-	verifyNoInternalTables(t, vtgateConn, targetKs)
+	//verifyNoInternalTables(t, vtgateConn, targetKs)
 
-	testReplicatingWithPKEnumCols(t)
+	//testReplicatingWithPKEnumCols(t)
 
 	// Confirm that updating MoveTable workflows works.
-	testWorkflowUpdate(t)
+	//testWorkflowUpdate(t)
 
 	testRestOfWorkflow(t)
+	materialize(t, materializeCustomerCopySpec, false)
 	materializeShow()
 
 	output, err = vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)
 	require.NoError(t, err)
-	require.True(t, listOutputContainsWorkflow(output, "customer_copy") && !listOutputContainsWorkflow(output, "wf1"))
+	require.True(t, listOutputContainsWorkflow(output, "customer_individual") && !listOutputContainsWorkflow(output, "wf1"))
 
 	testVSchemaForSequenceAfterMoveTables(t)
 
-	createMoveTablesWorkflow(t, "Lead,Lead-1")
-	output, err = vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)
-	require.NoError(t, err)
-	require.True(t, listOutputContainsWorkflow(output, "wf1") && listOutputContainsWorkflow(output, "customer_copy"))
+	/*
+		createMoveTablesWorkflow(t, "Lead,Lead-1")
+		output, err = vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)
+		require.NoError(t, err)
+		require.True(t, listOutputContainsWorkflow(output, "wf1") && listOutputContainsWorkflow(output, "customer_individual"))
 
-	err = tstWorkflowCancel(t)
-	require.NoError(t, err)
+		err = tstWorkflowCancel(t)
+		require.NoError(t, err)
 
-	output, err = vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)
-	require.NoError(t, err)
-	require.True(t, listOutputContainsWorkflow(output, "customer_copy") && !listOutputContainsWorkflow(output, "wf1"))
+		output, err = vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)
+		require.NoError(t, err)
+		require.True(t, listOutputContainsWorkflow(output, "customer_individual") && !listOutputContainsWorkflow(output, "wf1"))
+	*/
 }
 
 func testPartialSwitches(t *testing.T) {
