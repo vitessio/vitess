@@ -257,7 +257,7 @@ PROTO_SRCS = $(wildcard proto/*.proto)
 PROTO_SRC_NAMES = $(basename $(notdir $(PROTO_SRCS)))
 PROTO_GO_OUTS = $(foreach name, $(PROTO_SRC_NAMES), go/vt/proto/$(name)/$(name).pb.go)
 # This rule rebuilds all the go files from the proto definitions for gRPC.
-proto: $(PROTO_GO_OUTS) vtadmin_web_proto_types
+proto: $(PROTO_GO_OUTS) vtadmin_web_proto_types vtctldclient
 
 ifndef NOBANNER
 	echo $$(date): Compiling proto definitions

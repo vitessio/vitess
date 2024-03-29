@@ -119,3 +119,80 @@ func (ri *rows) ColumnTypeScanType(index int) reflect.Type {
 		return typeUnknown
 	}
 }
+
+func (ri *rows) ColumnTypeDatabaseTypeName(index int) string {
+	field := ri.qr.Fields[index]
+	switch field.GetType() {
+	case query.Type_INT8:
+		return "TINYINT"
+	case query.Type_UINT8:
+		return "UNSIGNED TINYINT"
+	case query.Type_INT16:
+		return "SMALLINT"
+	case query.Type_UINT16:
+		return "UNSIGNED SMALLINT"
+	case query.Type_YEAR:
+		return "YEAR"
+	case query.Type_INT24:
+		return "MEDIUMINT"
+	case query.Type_UINT24:
+		return "UNSIGNED MEDIUMINT"
+	case query.Type_INT32:
+		return "INT"
+	case query.Type_UINT32:
+		return "UNSIGNED INT"
+	case query.Type_INT64:
+		return "BIGINT"
+	case query.Type_UINT64:
+		return "UNSIGNED BIGINT"
+	case query.Type_FLOAT32:
+		return "FLOAT"
+	case query.Type_FLOAT64:
+		return "DOUBLE"
+	case query.Type_DECIMAL:
+		return "DECIMAL"
+	case query.Type_VARCHAR:
+		return "VARCHAR"
+	case query.Type_TEXT:
+		return "TEXT"
+	case query.Type_BLOB:
+		return "BLOB"
+	case query.Type_VARBINARY:
+		return "VARBINARY"
+	case query.Type_CHAR:
+		return "CHAR"
+	case query.Type_BINARY:
+		return "BINARY"
+	case query.Type_BIT:
+		return "BIT"
+	case query.Type_ENUM:
+		return "ENUM"
+	case query.Type_SET:
+		return "SET"
+	case query.Type_HEXVAL:
+		return "VARBINARY"
+	case query.Type_HEXNUM:
+		return "VARBINARY"
+	case query.Type_BITNUM:
+		return "VARBINARY"
+	case query.Type_GEOMETRY:
+		return "GEOMETRY"
+	case query.Type_JSON:
+		return "JSON"
+	case query.Type_TIMESTAMP:
+		return "TIMESTAMP"
+	case query.Type_DATE:
+		return "DATE"
+	case query.Type_TIME:
+		return "TIME"
+	case query.Type_DATETIME:
+		return "DATETIME"
+	default:
+		return ""
+	}
+}
+
+func (ri *rows) ColumnTypeNullable(index int) (nullable, ok bool) {
+	field := ri.qr.Fields[index]
+	return field.GetFlags()&uint32(query.MySqlFlag_NOT_NULL_FLAG) == 0, true
+}

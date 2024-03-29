@@ -111,6 +111,12 @@ var (
 	throttleTabletTypes         = "replica"
 )
 
+var (
+	statsThrottlerHeartbeatRequests    = stats.NewCounter("ThrottlerHeartbeatRequests", "heartbeat requests")
+	statsThrottlerRecentlyChecked      = stats.NewCounter("ThrottlerRecentlyChecked", "recently checked")
+	statsThrottlerProbeRecentlyChecked = stats.NewCounter("ThrottlerProbeRecentlyChecked", "probe recently checked")
+)
+
 func init() {
 	servenv.OnParseFor("vtcombo", registerThrottlerFlags)
 	servenv.OnParseFor("vttablet", registerThrottlerFlags)
@@ -577,7 +583,7 @@ func (throttler *Throttler) requestHeartbeats() {
 		return
 	}
 	go throttler.heartbeatWriter.RequestHeartbeats()
-	go stats.GetOrNewCounter("ThrottlerHeartbeatRequests", "heartbeat requests").Add(1)
+	statsThrottlerHeartbeatRequests.Add(1)
 }
 
 // stimulatePrimaryThrottler sends a check request to the primary tablet in the shard, to stimulate
@@ -852,7 +858,7 @@ func (throttler *Throttler) generateTabletProbeFunction(ctx context.Context, clu
 			// We have just probed a tablet, and it reported back that someone just recently "check"ed it.
 			// We therefore renew the heartbeats lease.
 			throttler.requestHeartbeats()
-			go stats.GetOrNewCounter("ThrottlerProbeRecentlyChecked", "probe recently checked").Add(1)
+			statsThrottlerProbeRecentlyChecked.Add(1)
 		}
 		return mySQLThrottleMetric
 	}
@@ -1256,7 +1262,7 @@ func (throttler *Throttler) checkStore(ctx context.Context, appName string, stor
 		// We mark the fact that someone just made a check. If this is a REPLICA or RDONLY tables, this will be reported back
 		// to the PRIMARY so that it knows it must renew the heartbeat lease.
 		checkResult.RecentlyChecked = true
-		go stats.GetOrNewCounter("ThrottlerRecentlyChecked", "recently checked").Add(1)
+		statsThrottlerRecentlyChecked.Add(1)
 	}
 
 	return checkResult

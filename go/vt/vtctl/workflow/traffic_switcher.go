@@ -1366,7 +1366,7 @@ func (ts *trafficSwitcher) findSequenceUsageInKeyspace(vschema *vschemapb.Keyspa
 
 	for _, table := range ts.Tables() {
 		vs, ok := vschema.Tables[table]
-		if !ok || vs.GetAutoIncrement() == nil || vs.GetAutoIncrement().GetSequence() == "" {
+		if !ok || vs.GetAutoIncrement().GetSequence() == "" {
 			continue
 		}
 		sm := &sequenceMetadata{

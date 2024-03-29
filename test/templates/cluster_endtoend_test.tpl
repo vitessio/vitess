@@ -34,7 +34,7 @@ jobs:
         echo Skip ${skip}
         echo "skip-workflow=${skip}" >> $GITHUB_OUTPUT
 
-        PR_DATA=$(curl \
+        PR_DATA=$(curl -s\
           -H "{{"Authorization: token ${{ secrets.GITHUB_TOKEN }}"}}" \
           -H "Accept: application/vnd.github.v3+json" \
           "{{"https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}"}}")
@@ -109,15 +109,15 @@ jobs:
         {{if .InstallXtraBackup}}
 
         # Setup Percona Server for MySQL 8.0
-        sudo apt-get update
-        sudo apt-get install -y lsb-release gnupg2 curl
+        sudo apt-get -qq update
+        sudo apt-get -qq install -y lsb-release gnupg2 curl
         wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
         sudo percona-release setup ps80
-        sudo apt-get update
+        sudo apt-get -qq update
 
         # Install everything else we need, and configure
-        sudo apt-get install -y percona-server-server percona-server-client make unzip g++ etcd git wget eatmydata xz-utils libncurses5
+        sudo apt-get -qq install -y percona-server-server percona-server-client make unzip g++ etcd git wget eatmydata xz-utils libncurses5
 
         {{else}}
 
@@ -127,9 +127,9 @@ jobs:
         wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.29-1_all.deb
         echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
-        sudo apt-get update
+        sudo apt-get -qq update
         # Install everything else we need, and configure
-        sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget eatmydata xz-utils libncurses5
+        sudo apt-get -qq install -y mysql-server mysql-client make unzip g++ etcd curl git wget eatmydata xz-utils libncurses5
 
         {{end}}
 
@@ -144,7 +144,7 @@ jobs:
 
         {{if .InstallXtraBackup}}
 
-        sudo apt-get install -y percona-xtrabackup-80 lz4
+        sudo apt-get -qq install -y percona-xtrabackup-80 lz4
 
         {{end}}
 

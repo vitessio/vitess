@@ -3009,8 +3009,9 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 
 	// Consistently handle errors by logging and returning them.
 	handleError := func(message string, err error) (*[]string, error) {
-		ts.Logger().Errorf("%s: %v", message, err)
-		return nil, err
+		werr := vterrors.Wrapf(err, message)
+		ts.Logger().Error(werr)
+		return nil, werr
 	}
 
 	log.Infof("Switching reads: %s.%s tablet types: %s, cells: %s, workflow state: %s", ts.targetKeyspace, ts.workflow, roTypesToSwitchStr, cellsStr, state.String())

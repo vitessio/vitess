@@ -17,7 +17,10 @@ limitations under the License.
 package vtgate
 
 import (
+	"fmt"
 	"testing"
+
+	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -103,6 +106,85 @@ func TestExecuteFailOnAutocommit(t *testing.T) {
 	require.Contains(t, err.Error(), "in autocommit mode, transactionID should be zero but was: 123")
 	utils.MustMatch(t, 0, len(sbc0.Queries), "")
 	utils.MustMatch(t, []*querypb.BoundQuery{queries[1]}, sbc1.Queries, "")
+}
+
+func TestExecutePanic(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
+	createSandbox("TestExecutePanic")
+	hc := discovery.NewFakeHealthCheck(nil)
+	sc := newTestScatterConn(ctx, hc, newSandboxForCells(ctx, []string{"aa"}), "aa")
+	sbc0 := hc.AddTestTablet("aa", "0", 1, "TestExecutePanic", "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	sbc1 := hc.AddTestTablet("aa", "1", 1, "TestExecutePanic", "1", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	sbc0.SetPanic(42)
+	sbc1.SetPanic(42)
+	rss := []*srvtopo.ResolvedShard{
+		{
+			Target: &querypb.Target{
+				Keyspace:   "TestExecutePanic",
+				Shard:      "0",
+				TabletType: topodatapb.TabletType_PRIMARY,
+			},
+			Gateway: sbc0,
+		},
+		{
+			Target: &querypb.Target{
+				Keyspace:   "TestExecutePanic",
+				Shard:      "1",
+				TabletType: topodatapb.TabletType_PRIMARY,
+			},
+			Gateway: sbc1,
+		},
+	}
+	queries := []*querypb.BoundQuery{
+		{
+			// This will fail to go to shard. It will be rejected at vtgate.
+			Sql: "query1",
+			BindVariables: map[string]*querypb.BindVariable{
+				"bv0": sqltypes.Int64BindVariable(0),
+			},
+		},
+		{
+			// This will go to shard.
+			Sql: "query2",
+			BindVariables: map[string]*querypb.BindVariable{
+				"bv1": sqltypes.Int64BindVariable(1),
+			},
+		},
+	}
+	// shard 0 - has transaction
+	// shard 1 - does not have transaction.
+	session := &vtgatepb.Session{
+		InTransaction: true,
+		ShardSessions: []*vtgatepb.Session_ShardSession{
+			{
+				Target:        &querypb.Target{Keyspace: "TestExecutePanic", Shard: "0", TabletType: topodatapb.TabletType_PRIMARY, Cell: "aa"},
+				TransactionId: 123,
+				TabletAlias:   nil,
+			},
+		},
+		Autocommit: false,
+	}
+
+	original := log.Errorf
+	defer func() {
+		log.Errorf = original
+	}()
+
+	var logMessage string
+	log.Errorf = func(format string, args ...any) {
+		logMessage = fmt.Sprintf(format, args...)
+	}
+
+	defer func() {
+		r := recover()
+		require.NotNil(t, r, "The code did not panic")
+		// assert we are seeing the stack trace
+		require.Contains(t, logMessage, "(*ScatterConn).multiGoTransaction")
+	}()
+
+	_, _ = sc.ExecuteMultiShard(ctx, nil, rss, queries, NewSafeSession(session), true /*autocommit*/, false)
+
 }
 
 func TestReservedOnMultiReplica(t *testing.T) {
