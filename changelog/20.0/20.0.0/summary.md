@@ -6,6 +6,7 @@
   - **[Breaking changes](#breaking-changes)**
     - [`shutdown_grace_period` Default Change](#shutdown-grace-period-default)
     - [New `unmanaged` Flag and `disable_active_reparents` deprecation](#unmanaged-flag)
+    - [`Durabler` interface method renaming](#durabler-interface-method-renaming)
   - **[Query Compatibility](#query-compatibility)**
     - [Vindex Hints](#vindex-hints)
     - [Update with Limit Support](#update-limit)
@@ -16,7 +17,6 @@
   - **[Flag changes](#flag-changes)**
     - [`pprof-http` default change](#pprof-http-default)
     - [New `healthcheck-dial-concurrency` flag](#healthcheck-dial-concurrency-flag)
-  - **[`Durabler` interface method renaming](#durabler-interface-method-renaming)**
 - **[Minor Changes](#minor-changes)**
   - **[New Stats](#new-stats)**
     - [VTTablet Query Cache Hits and Misses](#vttablet-query-cache-hits-and-misses)
@@ -38,6 +38,17 @@ In order to preserve the old behaviour, the users can set the flag back to `0 se
 New flag `--unmanaged` has been introduced in this release to make it easier to flag unmanaged tablets. It also runs validations to make sure the unmanaged tablets are configured properly. `--disable_active_reparents` flag has been deprecated for `vttablet`, `vtcombo` and `vttestserver` binaries and will be removed in future releases. Specifying the `--unmanaged` flag will also block replication commands and replication repairs.
 
 Starting this release, all unmanaged tablets should specify this flag.
+
+#### <a id="durabler-interface-method-renaming"/>`Durabler` interface method renaming
+
+The methods of [the `Durabler` interface](https://github.com/timvaillancourt/vitess/blob/main/go/vt/vtctl/reparentutil/durability.go#L70-L79) in `go/vt/vtctl/reparentutil` were renamed to be public _(capitalized)_ methods to make it easier to integrate custom Durability Policies from external packages. See [RFC for details](https://github.com/vitessio/vitess/issues/15544).
+
+Users of custom Durability Policies must rename private `Durabler` methods.
+
+Changes:
+- The `promotionRule` method was renamed to `PromotionRule`
+- The `semiSyncAckers` method was renamed to `SemiSyncAckers`
+- The `isReplicaSemiSync` method was renamed to `IsReplicaSemiSync`
 
 ### <a id="query-compatibility"/>Query Compatibility
 
@@ -102,17 +113,6 @@ To continue enabling these endpoints, explicitly set `--pprof-http` when startin
 #### <a id="healthcheck-dial-concurrency-flag"/>New `--healthcheck-dial-concurrency` flag
 
 The new `--healthcheck-dial-concurrency` flag defines the maximum number of healthcheck connections that can open concurrently. This limit is to avoid hitting Go runtime panics on deployments watching enough tablets [to hit the runtime's maximum thread limit of `10000`](https://pkg.go.dev/runtime/debug#SetMaxThreads) due to blocking network syscalls. This flag applies to `vtcombo`, `vtctld` and `vtgate` only and a value less than the runtime max thread limit _(`10000`)_ is recommended.
-
-### <a id="durabler-interface-method-renaming"/>`Durabler` interface method renaming
-
-The methods of [the `Durabler` interface](https://github.com/timvaillancourt/vitess/blob/main/go/vt/vtctl/reparentutil/durability.go#L70-L79) in `go/vt/vtctl/reparentutil` were renamed to be public _(capitalized)_ methods to make it easier to integrate custom Durability Policies from external packages. See [RFC for details](https://github.com/vitessio/vitess/issues/15544).
-
-Users of custom Durability Policies must rename private `Durabler` methods.
-
-Changes:
-- The `promotionRule` method was renamed to `PromotionRule`
-- The `semiSyncAckers` method was renamed to `SemiSyncAckers`
-- The `isReplicaSemiSync` method was renamed to `IsReplicaSemiSync`
 
 ## <a id="minor-changes"/>Minor Changes
 
