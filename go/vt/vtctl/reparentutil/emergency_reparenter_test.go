@@ -3715,6 +3715,184 @@ func TestEmergencyReparenter_promoteIntermediateSource(t *testing.T) {
 					},
 					Hostname: "requires force start",
 				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  404,
+					},
+				},
+			},
+		},
+		{
+			name:                 "success - filter with valid tablets before",
+			emergencyReparentOps: EmergencyReparentOptions{},
+			tmc: &testutil.TabletManagerClient{
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Error: nil,
+					},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000101": nil,
+				},
+			},
+			newSourceTabletAlias: "zone1-0000000100",
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Hostname: "primary-elect",
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+				"zone1-0000000102": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+						Hostname: "requires force start",
+					},
+				},
+				"zone1-0000000404": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  404,
+						},
+						Hostname: "ignored tablet",
+					},
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"zone1-0000000101": { // forceStart = false
+					Before: &replicationdatapb.Status{
+						IoState:  int32(replication.ReplicationStateStopped),
+						SqlState: int32(replication.ReplicationStateStopped),
+					},
+				},
+			},
+			keyspace:  "testkeyspace",
+			shard:     "-",
+			shouldErr: false,
+			result: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Hostname: "primary-elect",
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+				},
+			},
+			validCandidateTablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Hostname: "primary-elect",
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+				},
+			},
+		}, {
+			name:                 "success - only 2 tablets and they error",
+			emergencyReparentOps: EmergencyReparentOptions{},
+			tmc: &testutil.TabletManagerClient{
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Error: nil,
+					},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000101": fmt.Errorf("An error"),
+				},
+			},
+			newSourceTabletAlias: "zone1-0000000100",
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Hostname: "primary-elect",
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+				"zone1-0000000102": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+						Hostname: "requires force start",
+					},
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{},
+			keyspace:  "testkeyspace",
+			shard:     "-",
+			shouldErr: false,
+			result: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Hostname: "primary-elect",
+				},
+			},
+			validCandidateTablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Hostname: "primary-elect",
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+				},
 			},
 		},
 		{
@@ -3757,7 +3935,7 @@ func TestEmergencyReparenter_promoteIntermediateSource(t *testing.T) {
 						},
 					},
 				},
-				"zone1-00000000102": {
+				"zone1-0000000102": {
 					Tablet: &topodatapb.Tablet{
 						Alias: &topodatapb.TabletAlias{
 							Cell: "zone1",

@@ -29,12 +29,17 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 )
 
+type TestingT interface {
+	require.TestingT
+	Helper()
+}
+
 type MySQLCompare struct {
-	t                 *testing.T
+	t                 TestingT
 	MySQLConn, VtConn *mysql.Conn
 }
 
-func NewMySQLCompare(t *testing.T, vtParams, mysqlParams mysql.ConnParams) (MySQLCompare, error) {
+func NewMySQLCompare(t TestingT, vtParams, mysqlParams mysql.ConnParams) (MySQLCompare, error) {
 	ctx := context.Background()
 	vtConn, err := mysql.Connect(ctx, &vtParams)
 	if err != nil {
@@ -51,6 +56,10 @@ func NewMySQLCompare(t *testing.T, vtParams, mysqlParams mysql.ConnParams) (MySQ
 		MySQLConn: mysqlConn,
 		VtConn:    vtConn,
 	}, nil
+}
+
+func (mcmp *MySQLCompare) AsT() *testing.T {
+	return mcmp.t.(*testing.T)
 }
 
 func (mcmp *MySQLCompare) Close() {
@@ -73,7 +82,7 @@ func (mcmp *MySQLCompare) AssertMatches(query, expected string) {
 // SkipIfBinaryIsBelowVersion should be used instead of using utils.SkipIfBinaryIsBelowVersion(t,
 // This is because we might be inside a Run block that has a different `t` variable
 func (mcmp *MySQLCompare) SkipIfBinaryIsBelowVersion(majorVersion int, binary string) {
-	SkipIfBinaryIsBelowVersion(mcmp.t, majorVersion, binary)
+	SkipIfBinaryIsBelowVersion(mcmp.t.(*testing.T), majorVersion, binary)
 }
 
 // AssertMatchesAny ensures the given query produces any one of the expected results.
@@ -264,7 +273,7 @@ func (mcmp *MySQLCompare) ExecAndIgnore(query string) (*sqltypes.Result, error) 
 }
 
 func (mcmp *MySQLCompare) Run(query string, f func(mcmp *MySQLCompare)) {
-	mcmp.t.Run(query, func(t *testing.T) {
+	mcmp.AsT().Run(query, func(t *testing.T) {
 		inner := &MySQLCompare{
 			t:         t,
 			MySQLConn: mcmp.MySQLConn,

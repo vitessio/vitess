@@ -656,6 +656,11 @@ func addMultipleColumnsToInput(
 		}
 		return derivedName, op, added, offset
 
+	case *Horizon:
+		// if the horizon has an alias, then it is a derived table,
+		// we have to add a new projection and can't build on this one
+		return op.Alias, op, false, nil
+
 	case selectExpressions:
 		name := op.derivedName()
 		if name != "" {

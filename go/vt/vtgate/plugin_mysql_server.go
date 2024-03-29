@@ -487,7 +487,7 @@ func initTLSConfig(ctx context.Context, srv *mysqlServer, mysqlSslCert, mysqlSsl
 	return nil
 }
 
-// initiMySQLProtocol starts the mysql protocol.
+// initMySQLProtocol starts the mysql protocol.
 // It should be called only once in a process.
 func initMySQLProtocol(vtgate *VTGate) *mysqlServer {
 	// Flag is not set, just return.

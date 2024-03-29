@@ -58,6 +58,11 @@ const (
 	selfCheckInterval = 250 * time.Millisecond
 )
 
+var (
+	statsThrottlerCheckAnyTotal = stats.NewCounter("ThrottlerCheckAnyTotal", "total number of checks")
+	statsThrottlerCheckAnyError = stats.GetOrNewCounter("ThrottlerCheckAnyError", "total number of failed checks")
+)
+
 // CheckFlags provide hints for a check
 type CheckFlags struct {
 	ReadCheck             bool
@@ -151,11 +156,11 @@ func (check *ThrottlerCheck) Check(ctx context.Context, appName string, storeTyp
 	check.throttler.markRecentApp(appName, remoteAddr)
 	if !throttlerapp.VitessName.Equals(appName) {
 		go func(statusCode int) {
-			stats.GetOrNewCounter("ThrottlerCheckAnyTotal", "total number of checks").Add(1)
+			statsThrottlerCheckAnyTotal.Add(1)
 			stats.GetOrNewCounter(fmt.Sprintf("ThrottlerCheckAny%s%sTotal", textutil.SingleWordCamel(storeType), textutil.SingleWordCamel(storeName)), "").Add(1)
 
 			if statusCode != http.StatusOK {
-				stats.GetOrNewCounter("ThrottlerCheckAnyError", "total number of failed checks").Add(1)
+				statsThrottlerCheckAnyError.Add(1)
 				stats.GetOrNewCounter(fmt.Sprintf("ThrottlerCheckAny%s%sError", textutil.SingleWordCamel(storeType), textutil.SingleWordCamel(storeName)), "").Add(1)
 			}
 		}(checkResult.StatusCode)

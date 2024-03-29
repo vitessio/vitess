@@ -226,3 +226,123 @@ func TestColumnTypeScanType(t *testing.T) {
 		assert.Equal(t, ri.ColumnTypeScanType(i), wantTypes[i], fmt.Sprintf("unexpected type %v, wanted %v", ri.ColumnTypeScanType(i), wantTypes[i]))
 	}
 }
+
+// Test that the ColumnTypeScanType function returns the correct reflection type for each
+// sql type. The sql type in turn comes from a table column's type.
+func TestColumnTypeDatabaseTypeName(t *testing.T) {
+	var r = sqltypes.Result{
+		Fields: []*querypb.Field{
+			{
+				Name: "field1",
+				Type: sqltypes.Int8,
+			},
+			{
+				Name: "field2",
+				Type: sqltypes.Uint8,
+			},
+			{
+				Name: "field3",
+				Type: sqltypes.Int16,
+			},
+			{
+				Name: "field4",
+				Type: sqltypes.Uint16,
+			},
+			{
+				Name: "field5",
+				Type: sqltypes.Int24,
+			},
+			{
+				Name: "field6",
+				Type: sqltypes.Uint24,
+			},
+			{
+				Name: "field7",
+				Type: sqltypes.Int32,
+			},
+			{
+				Name: "field8",
+				Type: sqltypes.Uint32,
+			},
+			{
+				Name: "field9",
+				Type: sqltypes.Int64,
+			},
+			{
+				Name: "field10",
+				Type: sqltypes.Uint64,
+			},
+			{
+				Name: "field11",
+				Type: sqltypes.Float32,
+			},
+			{
+				Name: "field12",
+				Type: sqltypes.Float64,
+			},
+			{
+				Name: "field13",
+				Type: sqltypes.VarBinary,
+			},
+			{
+				Name: "field14",
+				Type: sqltypes.Datetime,
+			},
+		},
+	}
+
+	ri := newRows(&r, &converter{}).(driver.RowsColumnTypeDatabaseTypeName)
+	defer ri.Close()
+
+	wantTypes := []string{
+		"TINYINT",
+		"UNSIGNED TINYINT",
+		"SMALLINT",
+		"UNSIGNED SMALLINT",
+		"MEDIUMINT",
+		"UNSIGNED MEDIUMINT",
+		"INT",
+		"UNSIGNED INT",
+		"BIGINT",
+		"UNSIGNED BIGINT",
+		"FLOAT",
+		"DOUBLE",
+		"VARBINARY",
+		"DATETIME",
+	}
+
+	for i := 0; i < len(wantTypes); i++ {
+		assert.Equal(t, ri.ColumnTypeDatabaseTypeName(i), wantTypes[i], fmt.Sprintf("unexpected type %v, wanted %v", ri.ColumnTypeDatabaseTypeName(i), wantTypes[i]))
+	}
+}
+
+// Test that the ColumnTypeScanType function returns the correct reflection type for each
+// sql type. The sql type in turn comes from a table column's type.
+func TestColumnTypeNullable(t *testing.T) {
+	var r = sqltypes.Result{
+		Fields: []*querypb.Field{
+			{
+				Name:  "field1",
+				Type:  sqltypes.Int64,
+				Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
+			},
+			{
+				Name: "field2",
+				Type: sqltypes.Int64,
+			},
+		},
+	}
+
+	ri := newRows(&r, &converter{}).(driver.RowsColumnTypeNullable)
+	defer ri.Close()
+
+	nullable := []bool{
+		false,
+		true,
+	}
+
+	for i := 0; i < len(nullable); i++ {
+		null, _ := ri.ColumnTypeNullable(i)
+		assert.Equal(t, null, nullable[i], fmt.Sprintf("unexpected type %v, wanted %v", null, nullable[i]))
+	}
+}

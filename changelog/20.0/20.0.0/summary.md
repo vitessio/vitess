@@ -6,6 +6,7 @@
   - **[Breaking changes](#breaking-changes)**
     - [`shutdown_grace_period` Default Change](#shutdown-grace-period-default)
     - [New `unmanaged` Flag and `disable_active_reparents` deprecation](#unmanaged-flag)
+    - [`mysqlctld` `onterm-timeout` Default Change](#mysqlctld-onterm-timeout)
     - [`Durabler` interface method renaming](#durabler-interface-method-renaming)
   - **[Query Compatibility](#query-compatibility)**
     - [Vindex Hints](#vindex-hints)
@@ -38,6 +39,12 @@ In order to preserve the old behaviour, the users can set the flag back to `0 se
 New flag `--unmanaged` has been introduced in this release to make it easier to flag unmanaged tablets. It also runs validations to make sure the unmanaged tablets are configured properly. `--disable_active_reparents` flag has been deprecated for `vttablet`, `vtcombo` and `vttestserver` binaries and will be removed in future releases. Specifying the `--unmanaged` flag will also block replication commands and replication repairs.
 
 Starting this release, all unmanaged tablets should specify this flag.
+
+#### <a id="mysqlctld-onterm-timeout"/>`mysqlctld` `onterm_timeout` Default Change
+
+The `--onterm_timeout` flag default value has changed for `mysqlctld`. It now is by default long enough to be able to wait for the default `--shutdown-wait-time` when shutting down on a `TERM` signal. 
+
+This is necessary since otherwise MySQL would never shut down cleanly with the old defaults, since `mysqlctld` would shut down already after 10 seconds by default.
 
 #### <a id="durabler-interface-method-renaming"/>`Durabler` interface method renaming
 
