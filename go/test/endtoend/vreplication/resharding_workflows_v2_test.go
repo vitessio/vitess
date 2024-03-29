@@ -471,10 +471,34 @@ func testMoveTablesV2Workflow(t *testing.T) {
 		log.Error("Materialize show output: ", output)
 	}
 
-	// test basic forward and reverse flows
+	// Test basic forward and reverse flows.
 	setupCustomerKeyspace(t)
-	materializeShow()
+
+	listOutputContainsWorkflow := func(output string, workflow string) bool {
+		workflows := []string{}
+		err := json.Unmarshal([]byte(output), &workflows)
+		require.NoError(t, err)
+		for _, w := range workflows {
+			if w == workflow {
+				return true
+			}
+		}
+		return false
+	}
+	listOutputIsEmpty := func(output string) bool {
+		workflows := []string{}
+		err := json.Unmarshal([]byte(output), &workflows)
+		require.NoError(t, err)
+		return len(workflows) == 0
+	}
+	listAllArgs := []string{"workflow", "--keyspace", "customer", "list"}
+
+	output, err := vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)
+	require.NoError(t, err)
+	require.True(t, listOutputIsEmpty(output))
+
 	materialize(t, materializeCustomerCopySpec, true)
+
 	// The purge table should get skipped/ignored
 	// If it's not then we'll get an error as the table doesn't exist in the vschema
 	createMoveTablesWorkflow(t, "customer,loadtest,vdiff_order,reftable,_vt_PURGE_4f9194b43b2011eb8a0104ed332e05c2_20221210194431")
@@ -495,42 +519,23 @@ func testMoveTablesV2Workflow(t *testing.T) {
 	testRestOfWorkflow(t)
 	materializeShow()
 
-	listOutputContainsWorkflow := func(output string, workflow string) bool {
-		workflows := []string{}
-		err := json.Unmarshal([]byte(output), &workflows)
-		require.NoError(t, err)
-		for _, w := range workflows {
-			if w == workflow {
-				return true
-			}
-		}
-		return false
-	}
-	listOutputIsEmpty := func(output string) bool {
-		workflows := []string{}
-		err := json.Unmarshal([]byte(output), &workflows)
-		require.NoError(t, err)
-		return len(workflows) == 0
-	}
-
-	listAllArgs := []string{"workflow", "--keyspace", "customer", "list"}
-	output, err := vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)
+	output, err = vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)
 	require.NoError(t, err)
-	require.True(t, listOutputIsEmpty(output))
+	require.True(t, listOutputContainsWorkflow(output, "customer_copy") && !listOutputContainsWorkflow(output, "wf1"))
 
 	testVSchemaForSequenceAfterMoveTables(t)
 
 	createMoveTablesWorkflow(t, "Lead,Lead-1")
 	output, err = vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)
 	require.NoError(t, err)
-	require.True(t, listOutputContainsWorkflow(output, "wf1"))
+	require.True(t, listOutputContainsWorkflow(output, "wf1") && listOutputContainsWorkflow(output, "customer_copy"))
 
 	err = tstWorkflowCancel(t)
 	require.NoError(t, err)
 
 	output, err = vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)
 	require.NoError(t, err)
-	require.True(t, listOutputIsEmpty(output))
+	require.True(t, listOutputContainsWorkflow(output, "customer_copy") && !listOutputContainsWorkflow(output, "wf1"))
 }
 
 func testPartialSwitches(t *testing.T) {
