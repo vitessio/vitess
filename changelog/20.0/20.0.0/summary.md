@@ -7,6 +7,7 @@
     - [`shutdown_grace_period` Default Change](#shutdown-grace-period-default)
     - [New `unmanaged` Flag and `disable_active_reparents` deprecation](#unmanaged-flag)
     - [`mysqlctld` `onterm-timeout` Default Change](#mysqlctld-onterm-timeout)
+    - [`Durabler` interface method renaming](#durabler-interface-method-renaming)
   - **[Query Compatibility](#query-compatibility)**
     - [Vindex Hints](#vindex-hints)
     - [Update with Limit Support](#update-limit)
@@ -44,6 +45,17 @@ Starting this release, all unmanaged tablets should specify this flag.
 The `--onterm_timeout` flag default value has changed for `mysqlctld`. It now is by default long enough to be able to wait for the default `--shutdown-wait-time` when shutting down on a `TERM` signal. 
 
 This is necessary since otherwise MySQL would never shut down cleanly with the old defaults, since `mysqlctld` would shut down already after 10 seconds by default.
+
+#### <a id="durabler-interface-method-renaming"/>`Durabler` interface method renaming
+
+The methods of [the `Durabler` interface](https://github.com/vitessio/vitess/blob/main/go/vt/vtctl/reparentutil/durability.go#L70-L79) in `go/vt/vtctl/reparentutil` were renamed to be public _(capitalized)_ methods to make it easier to integrate custom Durability Policies from external packages. See [RFC for details](https://github.com/vitessio/vitess/issues/15544).
+
+Users of custom Durability Policies must rename private `Durabler` methods.
+
+Changes:
+- The `promotionRule` method was renamed to `PromotionRule`
+- The `semiSyncAckers` method was renamed to `SemiSyncAckers`
+- The `isReplicaSemiSync` method was renamed to `IsReplicaSemiSync`
 
 ### <a id="query-compatibility"/>Query Compatibility
 
