@@ -1546,6 +1546,44 @@ func Test_reloadTabletSchemas(t *testing.T) {
 				ID:   "test",
 				Name: "test",
 				Vtctld: &fakevtctldclient.VtctldClient{
+					GetTabletsResults: &struct {
+						Tablets []*topodatapb.Tablet
+						Error   error
+					}{
+						Tablets: []*topodatapb.Tablet{
+							{
+								Alias: &topodatapb.TabletAlias{
+									Cell: "zone1",
+									Uid:  100,
+								},
+							},
+							{
+								Alias: &topodatapb.TabletAlias{
+									Cell: "zone1",
+									Uid:  101,
+								},
+							},
+							{
+								Alias: &topodatapb.TabletAlias{
+									Cell: "zone2",
+									Uid:  200,
+								},
+							},
+							{
+								Alias: &topodatapb.TabletAlias{
+									Cell: "zone5",
+									Uid:  500,
+								},
+							},
+						},
+						Error: nil,
+					},
+					RunHealthCheckResults: map[string]error{
+						"zone1-0000000100": nil,
+						"zone1-0000000101": nil,
+						"zone2-0000000200": nil,
+						"zone5-0000000500": nil,
+					},
 					ReloadSchemaResults: map[string]struct {
 						Response *vtctldatapb.ReloadSchemaResponse
 						Error    error
