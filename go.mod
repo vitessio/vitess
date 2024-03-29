@@ -3,6 +3,7 @@ module github.com/dolthub/vitess
 go 1.22
 
 require (
+	github.com/shopspring/decimal v1.3.1
 	github.com/stretchr/testify v1.4.0
 	golang.org/x/tools v0.1.9
 	google.golang.org/grpc v1.24.0
