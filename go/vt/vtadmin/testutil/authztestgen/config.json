@@ -261,6 +261,11 @@
                     "field": "ReloadSchemaKeyspaceResults",
                     "type": "map[string]struct{\nResponse *vtctldatapb.ReloadSchemaKeyspaceResponse\nError error\n}",
                     "value": "\"otherks\": {\nResponse: &vtctldatapb.ReloadSchemaKeyspaceResponse{\nEvents: []*logutilpb.Event{{}}},\n},"
+                },
+                {
+                    "field": "RunHealthCheckResults",
+                    "type": "map[string]error",
+                    "value": "\"other1-0000000100\": nil,"
                 }
             ],
             "db_tablet_list": [

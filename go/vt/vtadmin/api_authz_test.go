@@ -3954,6 +3954,9 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 							Events: []*logutilpb.Event{{}}},
 					},
 				},
+				RunHealthCheckResults: map[string]error{
+					"other1-0000000100": nil,
+				},
 			},
 			Tablets: []*vtadminpb.Tablet{
 				{
