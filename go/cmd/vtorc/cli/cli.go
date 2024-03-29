@@ -39,7 +39,6 @@ var (
 	--topo_global_root /vitess/global \
 	--log_dir $VTDATAROOT/tmp \
 	--port 15000 \
-	--recovery-period-block-duration "10m" \
 	--instance-poll-time "1s" \
 	--topo-information-refresh-duration "30s" \
 	--alsologtostderr`,
