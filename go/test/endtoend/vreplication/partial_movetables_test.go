@@ -102,6 +102,7 @@ func TestPartialMoveTablesBasic(t *testing.T) {
 	defer vtgateConn.Close()
 	defer vc.TearDown(t)
 	setupMinimalCustomerKeyspace(t)
+	currentWorkflowType = binlogdatapb.VReplicationWorkflowType_MoveTables
 
 	// Move customer table from unsharded product keyspace to
 	// sharded customer keyspace.
@@ -214,7 +215,7 @@ func TestPartialMoveTablesBasic(t *testing.T) {
 
 	// Switch all traffic for the shard
 	require.NoError(t, tstWorkflowExec(t, "", wfName, "", targetKs, "", workflowActionSwitchTraffic, "", "", "", false))
-	expectedSwitchOutput := fmt.Sprintf("SwitchTraffic was successful for workflow %s.%s\nStart State: Reads Not Switched. Writes Not Switched\nCurrent State: Reads partially switched, for shards: %s. Writes partially switched, for shards: %s\n\n",
+	expectedSwitchOutput := fmt.Sprintf("SwitchTraffic was successful for workflow %s.%s\n\nStart State: Reads Not Switched. Writes Not Switched\nCurrent State: Reads partially switched, for shards: %s. Writes partially switched, for shards: %s\n\n",
 		targetKs, wfName, shard, shard)
 	require.Equal(t, expectedSwitchOutput, lastOutput)
 
@@ -292,7 +293,7 @@ func TestPartialMoveTablesBasic(t *testing.T) {
 
 	// Switch all traffic for the shard
 	require.NoError(t, tstWorkflowExec(t, "", wfName, "", targetKs, "", workflowActionSwitchTraffic, "", "", "", false))
-	expectedSwitchOutput = fmt.Sprintf("SwitchTraffic was successful for workflow %s.%s\nStart State: Reads partially switched, for shards: 80-. Writes partially switched, for shards: 80-\nCurrent State: All Reads Switched. All Writes Switched\n\n",
+	expectedSwitchOutput = fmt.Sprintf("SwitchTraffic was successful for workflow %s.%s\n\nStart State: Reads partially switched, for shards: 80-. Writes partially switched, for shards: 80-\nCurrent State: All Reads Switched. All Writes Switched\n\n",
 		targetKs, wfName)
 	require.Equal(t, expectedSwitchOutput, lastOutput)
 
