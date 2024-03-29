@@ -17,13 +17,13 @@ limitations under the License.
 package binlog
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
-	"context"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
@@ -47,13 +47,13 @@ type keyspaceIDResolverFactory func(*schema.Table) (int, keyspaceIDResolver, err
 
 // newKeyspaceIDResolverFactory creates a new
 // keyspaceIDResolverFactory for the provided keyspace and cell.
-func newKeyspaceIDResolverFactory(ctx context.Context, ts *topo.Server, keyspace string, cell string) (keyspaceIDResolverFactory, error) {
-	return newKeyspaceIDResolverFactoryV3(ctx, ts, keyspace, cell)
+func newKeyspaceIDResolverFactory(ctx context.Context, ts *topo.Server, keyspace string, cell string, parser *sqlparser.Parser) (keyspaceIDResolverFactory, error) {
+	return newKeyspaceIDResolverFactoryV3(ctx, ts, keyspace, cell, parser)
 }
 
 // newKeyspaceIDResolverFactoryV3 finds the SrvVSchema in the cell,
 // gets the keyspace part, and uses it to find the column name.
-func newKeyspaceIDResolverFactoryV3(ctx context.Context, ts *topo.Server, keyspace string, cell string) (keyspaceIDResolverFactory, error) {
+func newKeyspaceIDResolverFactoryV3(ctx context.Context, ts *topo.Server, keyspace string, cell string, parser *sqlparser.Parser) (keyspaceIDResolverFactory, error) {
 	srvVSchema, err := ts.GetSrvVSchema(ctx, cell)
 	if err != nil {
 		return nil, err
@@ -62,7 +62,7 @@ func newKeyspaceIDResolverFactoryV3(ctx context.Context, ts *topo.Server, keyspa
 	if !ok {
 		return nil, fmt.Errorf("SrvVSchema has no entry for keyspace %v", keyspace)
 	}
-	keyspaceSchema, err := vindexes.BuildKeyspaceSchema(kschema, keyspace)
+	keyspaceSchema, err := vindexes.BuildKeyspaceSchema(kschema, keyspace, parser)
 	if err != nil {
 		return nil, fmt.Errorf("cannot build vschema for keyspace %v: %v", keyspace, err)
 	}

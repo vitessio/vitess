@@ -62,7 +62,7 @@ func (c *counters) set(name string, value int64) {
 func (c *counters) reset() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.counts = make(map[string]int64)
+	clear(c.counts)
 }
 
 // ZeroAll zeroes out all values
@@ -70,7 +70,9 @@ func (c *counters) ZeroAll() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	clear(c.counts)
+	for k := range c.counts {
+		c.counts[k] = 0
+	}
 }
 
 // Counts returns a copy of the Counters' map.

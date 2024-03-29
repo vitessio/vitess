@@ -17,10 +17,12 @@ limitations under the License.
 package operators
 
 import (
+	"io"
+
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -36,6 +38,7 @@ const (
 	delegateAggregation
 	addAggrOrdering
 	cleanOutPerfDistinct
+	dmlWithInput
 	subquerySettling
 	DONE
 )
@@ -56,9 +59,11 @@ func (p Phase) String() string {
 		return "optimize Distinct operations"
 	case subquerySettling:
 		return "settle subqueries"
+	case dmlWithInput:
+		return "expand update/delete to dml with input"
+	default:
+		panic(vterrors.VT13001("unhandled default case"))
 	}
-
-	return "unknown"
 }
 
 func (p Phase) shouldRun(s semantics.QuerySignature) bool {
@@ -73,134 +78,222 @@ func (p Phase) shouldRun(s semantics.QuerySignature) bool {
 		return s.Distinct
 	case subquerySettling:
 		return s.SubQueries
+	case dmlWithInput:
+		return s.DML
+	default:
+		return true
 	}
-	return true
 }
 
-func (p Phase) act(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
+func (p Phase) act(ctx *plancontext.PlanningContext, op Operator) Operator {
 	switch p {
 	case pullDistinctFromUnion:
 		return pullDistinctFromUNION(ctx, op)
 	case delegateAggregation:
 		return enableDelegateAggregation(ctx, op)
 	case addAggrOrdering:
-		return addOrderBysForAggregations(ctx, op)
+		return addOrderingForAllAggregations(ctx, op)
 	case cleanOutPerfDistinct:
 		return removePerformanceDistinctAboveRoute(ctx, op)
 	case subquerySettling:
-		return settleSubqueries(ctx, op), nil
+		return settleSubqueries(ctx, op)
+	case dmlWithInput:
+		return findDMLAboveRoute(ctx, op)
+	default:
+		return op
 	}
-
-	return op, nil
 }
 
-// getPhases returns the ordered phases that the planner will undergo.
-// These phases ensure the appropriate collaboration between rewriters.
-func getPhases(ctx *plancontext.PlanningContext) (phases []Phase) {
-	for p := Phase(0); p < DONE; p++ {
-		if p.shouldRun(ctx.SemTable.QuerySignature) {
-			phases = append(phases, p)
+type phaser struct {
+	current Phase
+}
+
+func (p *phaser) next(ctx *plancontext.PlanningContext) Phase {
+	for {
+		curr := p.current
+		if curr == DONE {
+			return DONE
+		}
+
+		p.current++
+
+		if curr.shouldRun(ctx.SemTable.QuerySignature) {
+			return curr
 		}
 	}
-	return
 }
 
-func removePerformanceDistinctAboveRoute(_ *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
-	return rewrite.BottomUp(op, TableID, func(innerOp ops.Operator, _ semantics.TableSet, _ bool) (ops.Operator, *rewrite.ApplyResult, error) {
+func findDMLAboveRoute(ctx *plancontext.PlanningContext, root Operator) Operator {
+	visitor := func(in Operator, _ semantics.TableSet, isRoot bool) (Operator, *ApplyResult) {
+		switch op := in.(type) {
+		case *Delete:
+			return createDMLWithInput(ctx, op, op.Source, op.DMLCommon)
+		case *Update:
+			return createDMLWithInput(ctx, op, op.Source, op.DMLCommon)
+		}
+		return in, NoRewrite
+	}
+
+	return BottomUp(root, TableID, visitor, stopAtRoute)
+}
+
+func createDMLWithInput(ctx *plancontext.PlanningContext, op, src Operator, in *DMLCommon) (Operator, *ApplyResult) {
+	if len(in.Target.VTable.PrimaryKey) == 0 {
+		panic(vterrors.VT09015())
+	}
+	dm := &DMLWithInput{}
+	var leftComp sqlparser.ValTuple
+	proj := newAliasedProjection(src)
+	dm.cols = make([][]*sqlparser.ColName, 1)
+	for _, col := range in.Target.VTable.PrimaryKey {
+		colName := sqlparser.NewColNameWithQualifier(col.String(), in.Target.Name)
+		proj.AddColumn(ctx, true, false, aeWrap(colName))
+		dm.cols[0] = append(dm.cols[0], colName)
+		leftComp = append(leftComp, colName)
+		ctx.SemTable.Recursive[colName] = in.Target.ID
+	}
+
+	dm.Source = proj
+
+	var targetTable *Table
+	_ = Visit(src, func(operator Operator) error {
+		if tbl, ok := operator.(*Table); ok && tbl.QTable.ID == in.Target.ID {
+			targetTable = tbl
+			return io.EOF
+		}
+		return nil
+	})
+	if targetTable == nil {
+		panic(vterrors.VT13001("target DELETE table not found"))
+	}
+
+	// optimize for case when there is only single column on left hand side.
+	var lhs sqlparser.Expr = leftComp
+	if len(leftComp) == 1 {
+		lhs = leftComp[0]
+	}
+	compExpr := sqlparser.NewComparisonExpr(sqlparser.InOp, lhs, sqlparser.ListArg(engine.DmlVals), nil)
+	targetQT := targetTable.QTable
+	qt := &QueryTable{
+		ID:         targetQT.ID,
+		Alias:      sqlparser.CloneRefOfAliasedTableExpr(targetQT.Alias),
+		Table:      sqlparser.CloneTableName(targetQT.Table),
+		Predicates: []sqlparser.Expr{compExpr},
+	}
+
+	qg := &QueryGraph{Tables: []*QueryTable{qt}}
+	in.Source = qg
+
+	if in.OwnedVindexQuery != nil {
+		in.OwnedVindexQuery.From = sqlparser.TableExprs{targetQT.Alias}
+		in.OwnedVindexQuery.Where = sqlparser.NewWhere(sqlparser.WhereClause, compExpr)
+		in.OwnedVindexQuery.OrderBy = nil
+		in.OwnedVindexQuery.Limit = nil
+	}
+	dm.DML = append(dm.DML, op)
+
+	return dm, Rewrote("changed Delete to DMLWithInput")
+}
+
+func removePerformanceDistinctAboveRoute(_ *plancontext.PlanningContext, op Operator) Operator {
+	return BottomUp(op, TableID, func(innerOp Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult) {
 		d, ok := innerOp.(*Distinct)
 		if !ok || d.Required {
-			return innerOp, rewrite.SameTree, nil
+			return innerOp, NoRewrite
 		}
 
-		return d.Source, rewrite.NewTree("removed distinct not required that was not pushed under route", d), nil
+		return d.Source, Rewrote("removed distinct not required that was not pushed under route")
 	}, stopAtRoute)
 }
 
-func enableDelegateAggregation(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
+func enableDelegateAggregation(ctx *plancontext.PlanningContext, op Operator) Operator {
 	return addColumnsToInput(ctx, op)
 }
 
-func addOrderBysForAggregations(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
-	visitor := func(in ops.Operator, _ semantics.TableSet, isRoot bool) (ops.Operator, *rewrite.ApplyResult, error) {
+// addOrderingForAllAggregations is run we have pushed down Aggregators as far down as possible.
+func addOrderingForAllAggregations(ctx *plancontext.PlanningContext, root Operator) Operator {
+	visitor := func(in Operator, _ semantics.TableSet, isRoot bool) (Operator, *ApplyResult) {
 		aggrOp, ok := in.(*Aggregator)
 		if !ok {
-			return in, rewrite.SameTree, nil
+			return in, NoRewrite
 		}
 
-		requireOrdering, err := needsOrdering(ctx, aggrOp)
-		if err != nil {
-			return nil, nil, err
+		requireOrdering := needsOrdering(ctx, aggrOp)
+		var res *ApplyResult
+		if requireOrdering {
+			addOrderingFor(aggrOp)
+			res = Rewrote("added ordering before aggregation")
 		}
-		if !requireOrdering {
-			return in, rewrite.SameTree, nil
-		}
-		orderBys := slice.Map(aggrOp.Grouping, func(from GroupBy) ops.OrderBy {
-			return from.AsOrderBy()
-		})
-		if aggrOp.DistinctExpr != nil {
-			orderBys = append(orderBys, ops.OrderBy{
-				Inner: &sqlparser.Order{
-					Expr: aggrOp.DistinctExpr,
-				},
-				SimplifiedExpr: aggrOp.DistinctExpr,
-			})
-		}
-		aggrOp.Source = &Ordering{
-			Source: aggrOp.Source,
-			Order:  orderBys,
-		}
-		return in, rewrite.NewTree("added ordering before aggregation", in), nil
+		return in, res
 	}
 
-	return rewrite.BottomUp(root, TableID, visitor, stopAtRoute)
+	return BottomUp(root, TableID, visitor, stopAtRoute)
 }
 
-func needsOrdering(ctx *plancontext.PlanningContext, in *Aggregator) (bool, error) {
+func addOrderingFor(aggrOp *Aggregator) {
+	orderBys := slice.Map(aggrOp.Grouping, func(from GroupBy) OrderBy {
+		return from.AsOrderBy()
+	})
+	if aggrOp.DistinctExpr != nil {
+		orderBys = append(orderBys, OrderBy{
+			Inner: &sqlparser.Order{
+				Expr: aggrOp.DistinctExpr,
+			},
+			SimplifiedExpr: aggrOp.DistinctExpr,
+		})
+	}
+	aggrOp.Source = &Ordering{
+		Source: aggrOp.Source,
+		Order:  orderBys,
+	}
+}
+
+func needsOrdering(ctx *plancontext.PlanningContext, in *Aggregator) bool {
 	requiredOrder := slice.Map(in.Grouping, func(from GroupBy) sqlparser.Expr {
-		return from.SimplifiedExpr
+		return from.Inner
 	})
 	if in.DistinctExpr != nil {
 		requiredOrder = append(requiredOrder, in.DistinctExpr)
 	}
 	if len(requiredOrder) == 0 {
-		return false, nil
+		return false
 	}
 	srcOrdering := in.Source.GetOrdering(ctx)
 	if len(srcOrdering) < len(requiredOrder) {
-		return true, nil
+		return true
 	}
 	for idx, gb := range requiredOrder {
 		if !ctx.SemTable.EqualsExprWithDeps(srcOrdering[idx].SimplifiedExpr, gb) {
-			return true, nil
+			return true
 		}
 	}
-	return false, nil
+	return false
 }
 
-func addGroupByOnRHSOfJoin(root ops.Operator) (ops.Operator, error) {
-	visitor := func(in ops.Operator, _ semantics.TableSet, isRoot bool) (ops.Operator, *rewrite.ApplyResult, error) {
+func addGroupByOnRHSOfJoin(root Operator) Operator {
+	visitor := func(in Operator, _ semantics.TableSet, isRoot bool) (Operator, *ApplyResult) {
 		join, ok := in.(*ApplyJoin)
 		if !ok {
-			return in, rewrite.SameTree, nil
+			return in, NoRewrite
 		}
 
 		return addLiteralGroupingToRHS(join)
 	}
 
-	return rewrite.TopDown(root, TableID, visitor, stopAtRoute)
+	return TopDown(root, TableID, visitor, stopAtRoute)
 }
 
-func addLiteralGroupingToRHS(in *ApplyJoin) (ops.Operator, *rewrite.ApplyResult, error) {
-	_ = rewrite.Visit(in.RHS, func(op ops.Operator) error {
+func addLiteralGroupingToRHS(in *ApplyJoin) (Operator, *ApplyResult) {
+	_ = Visit(in.RHS, func(op Operator) error {
 		aggr, isAggr := op.(*Aggregator)
 		if !isAggr {
 			return nil
 		}
 		if len(aggr.Grouping) == 0 {
 			gb := sqlparser.NewIntLiteral(".0")
-			aggr.Grouping = append(aggr.Grouping, NewGroupBy(gb, gb, aeWrap(gb)))
+			aggr.Grouping = append(aggr.Grouping, NewGroupBy(gb))
 		}
 		return nil
 	})
-	return in, rewrite.SameTree, nil
+	return in, NoRewrite
 }

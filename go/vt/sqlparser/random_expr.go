@@ -18,7 +18,7 @@ package sqlparser
 
 import (
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 )
 
 // This file is used to generate random expressions to be used for testing
@@ -32,7 +32,7 @@ const (
 
 type (
 	ExprGenerator interface {
-		Generate(r *rand.Rand, config ExprGeneratorConfig) Expr
+		Generate(config ExprGeneratorConfig) Expr
 	}
 
 	QueryGenerator interface {
@@ -53,7 +53,6 @@ type (
 	}
 
 	Generator struct {
-		r              *rand.Rand
 		depth          int
 		maxDepth       int
 		isAggregate    bool
@@ -120,9 +119,8 @@ func (egc ExprGeneratorConfig) IsAggregateConfig() ExprGeneratorConfig {
 	return egc
 }
 
-func NewGenerator(r *rand.Rand, maxDepth int, exprGenerators ...ExprGenerator) *Generator {
+func NewGenerator(maxDepth int, exprGenerators ...ExprGenerator) *Generator {
 	g := Generator{
-		r:              r,
 		maxDepth:       maxDepth,
 		exprGenerators: exprGenerators,
 	}
@@ -190,7 +188,7 @@ func (g *Generator) Expression(genConfig ExprGeneratorConfig) Expr {
 		// don't create expressions from the expression exprGenerators if we haven't created an aggregation yet
 		if _, ok := generator.(QueryGenerator); ok || genConfig.AggrRule != IsAggregate {
 			options = append(options, func() Expr {
-				expr := generator.Generate(g.r, genConfig)
+				expr := generator.Generate(genConfig)
 				if expr == nil {
 					return g.randomLiteral()
 				}
@@ -208,7 +206,7 @@ func (g *Generator) Expression(genConfig ExprGeneratorConfig) Expr {
 
 	// if an arbitrary number of columns may be generated, randomly choose 1-3 columns
 	if numCols == 0 {
-		numCols = g.r.Intn(3) + 1
+		numCols = rand.IntN(3) + 1
 	}
 
 	if numCols == 1 {
@@ -244,7 +242,7 @@ func (g *Generator) makeAggregateIfNecessary(genConfig ExprGeneratorConfig, expr
 }
 
 func (g *Generator) randomAggregate(genConfig ExprGeneratorConfig) Expr {
-	isDistinct := g.r.Intn(10) < 1
+	isDistinct := rand.IntN(10) < 1
 
 	options := []exprF{
 		func() Expr { return &CountStar{} },
@@ -324,7 +322,7 @@ func (g *Generator) subqueryExpr(genConfig ExprGeneratorConfig) Expr {
 	for _, generator := range g.exprGenerators {
 		if qg, ok := generator.(QueryGenerator); ok {
 			options = append(options, func() Expr {
-				expr := qg.Generate(g.r, genConfig)
+				expr := qg.Generate(genConfig)
 				if expr == nil {
 					return g.randomTupleLiteral(genConfig)
 				}
@@ -342,7 +340,7 @@ func (g *Generator) subqueryExpr(genConfig ExprGeneratorConfig) Expr {
 
 func (g *Generator) randomTupleLiteral(genConfig ExprGeneratorConfig) Expr {
 	if genConfig.NumCols == 0 {
-		genConfig.NumCols = g.r.Intn(3) + 1
+		genConfig.NumCols = rand.IntN(3) + 1
 	}
 
 	tuple := ValTuple{}
@@ -372,11 +370,11 @@ func (g *Generator) randomBool(prob float32) bool {
 	if prob < 0 || prob > 1 {
 		prob = 0.5
 	}
-	return g.r.Float32() < prob
+	return rand.Float32() < prob
 }
 
 func (g *Generator) intLiteral() Expr {
-	t := fmt.Sprintf("%d", g.r.Intn(100)-g.r.Intn(100))
+	t := fmt.Sprintf("%d", rand.IntN(100)-rand.IntN(100)) //nolint SA4000
 
 	return NewIntLiteral(t)
 }
@@ -404,10 +402,10 @@ func (g *Generator) comparison(genConfig ExprGeneratorConfig) Expr {
 	defer g.exit()
 
 	// specifc 1-3 columns
-	numCols := g.r.Intn(3) + 1
+	numCols := rand.IntN(3) + 1
 
 	cmp := &ComparisonExpr{
-		Operator: comparisonOps[g.r.Intn(len(comparisonOps))],
+		Operator: comparisonOps[rand.IntN(len(comparisonOps))],
 		Left:     g.Expression(genConfig.SetNumCols(numCols)),
 		Right:    g.Expression(genConfig.SetNumCols(numCols)),
 	}
@@ -427,7 +425,7 @@ func (g *Generator) caseExpr(genConfig ExprGeneratorConfig) Expr {
 		elseExpr = g.Expression(genConfig)
 	}
 
-	size := g.r.Intn(2) + 1
+	size := rand.IntN(2) + 1
 	var whens []*When
 	for i := 0; i < size; i++ {
 		var cond Expr
@@ -457,7 +455,7 @@ func (g *Generator) arithmetic(genConfig ExprGeneratorConfig) Expr {
 	g.enter()
 	defer g.exit()
 
-	op := arithmeticOps[g.r.Intn(len(arithmeticOps))]
+	op := arithmeticOps[rand.IntN(len(arithmeticOps))]
 
 	return &BinaryExpr{
 		Operator: op,
@@ -469,11 +467,11 @@ func (g *Generator) arithmetic(genConfig ExprGeneratorConfig) Expr {
 type exprF func() Expr
 
 func (g *Generator) randomOf(options []exprF) Expr {
-	return options[g.r.Intn(len(options))]()
+	return options[rand.IntN(len(options))]()
 }
 
 func (g *Generator) randomOfS(options []string) string {
-	return options[g.r.Intn(len(options))]
+	return options[rand.IntN(len(options))]
 }
 
 func (g *Generator) andExpr(genConfig ExprGeneratorConfig) Expr {
@@ -513,7 +511,7 @@ func (g *Generator) inExpr(genConfig ExprGeneratorConfig) Expr {
 	g.enter()
 	defer g.exit()
 
-	size := g.r.Intn(3) + 2
+	size := rand.IntN(3) + 2
 	inExprGenConfig := NewExprGeneratorConfig(genConfig.AggrRule, "", size, true)
 	tuple1 := g.Expression(inExprGenConfig)
 	tuple2 := ValTuple{g.Expression(inExprGenConfig)}
@@ -556,7 +554,7 @@ func (g *Generator) isExpr(genConfig ExprGeneratorConfig) Expr {
 	ops := []IsExprOperator{IsNullOp, IsNotNullOp, IsTrueOp, IsNotTrueOp, IsFalseOp, IsNotFalseOp}
 
 	return &IsExpr{
-		Right: ops[g.r.Intn(len(ops))],
+		Right: ops[rand.IntN(len(ops))],
 		Left:  g.Expression(genConfig),
 	}
 }

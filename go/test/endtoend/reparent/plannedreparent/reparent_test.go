@@ -44,7 +44,7 @@ func TestPrimaryToSpareStateChangeImpossible(t *testing.T) {
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
 	// We cannot change a primary to spare
-	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ChangeTabletType", tablets[0].Alias, "spare")
+	out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ChangeTabletType", tablets[0].Alias, "spare")
 	require.Error(t, err, out)
 	require.Contains(t, out, "type change PRIMARY -> SPARE is not an allowed transition for ChangeTabletType")
 }
@@ -92,19 +92,19 @@ func TestPRSWithDrainedLaggingTablet(t *testing.T) {
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", tablets[1].Alias, "drained")
+	err := clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", tablets[1].Alias, "drained")
 	require.NoError(t, err)
 
 	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
 
 	// make tablets[1 lag from the other tablets by setting the delay to a large number
-	utils.RunSQL(context.Background(), t, `stop slave;CHANGE MASTER TO MASTER_DELAY = 1999;start slave;`, tablets[1])
+	utils.RunSQLs(context.Background(), t, []string{`stop slave`, `CHANGE MASTER TO MASTER_DELAY = 1999`, `start slave;`}, tablets[1])
 
 	// insert another row in tablets[1
 	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[2], tablets[3]})
 
 	// assert that there is indeed only 1 row in tablets[1
-	res := utils.RunSQL(context.Background(), t, `select msg from vt_insert_test;`, tablets[1])
+	res := utils.RunSQL(context.Background(), t, `select msg from vt_insert_test`, tablets[1])
 	assert.Equal(t, 1, len(res.Rows))
 
 	// Perform a graceful reparent operation
@@ -217,8 +217,8 @@ func reparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProcessClus
 
 	if !downPrimary {
 		// commands to stop the current primary
-		demoteCommands := "SET GLOBAL read_only = ON; FLUSH TABLES WITH READ LOCK; UNLOCK TABLES"
-		utils.RunSQL(ctx, t, demoteCommands, tablets[0])
+		demoteCommands := []string{"SET GLOBAL read_only = ON", "FLUSH TABLES WITH READ LOCK", "UNLOCK TABLES"}
+		utils.RunSQLs(ctx, t, demoteCommands, tablets[0])
 
 		//Get the position of the old primary and wait for the new one to catch up.
 		err := utils.WaitForReplicationPosition(t, tablets[0], tablets[1])
@@ -226,38 +226,45 @@ func reparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProcessClus
 	}
 
 	// commands to convert a replica to be writable
-	promoteReplicaCommands := "STOP SLAVE; RESET SLAVE ALL; SET GLOBAL read_only = OFF;"
-	utils.RunSQL(ctx, t, promoteReplicaCommands, tablets[1])
+	promoteReplicaCommands := []string{"STOP SLAVE", "RESET SLAVE ALL", "SET GLOBAL read_only = OFF"}
+	utils.RunSQLs(ctx, t, promoteReplicaCommands, tablets[1])
 
 	// Get primary position
 	_, gtID := cluster.GetPrimaryPosition(t, *tablets[1], utils.Hostname)
 
 	// tablets[0] will now be a replica of tablets[1
-	changeReplicationSourceCommands := fmt.Sprintf("RESET MASTER; RESET SLAVE; SET GLOBAL gtid_purged = '%s';"+
-		"CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='vt_repl', MASTER_AUTO_POSITION = 1;"+
-		"START SLAVE;", gtID, utils.Hostname, tablets[1].MySQLPort)
-	utils.RunSQL(ctx, t, changeReplicationSourceCommands, tablets[0])
+	changeReplicationSourceCommands := []string{
+		"RESET MASTER",
+		"RESET SLAVE",
+		fmt.Sprintf("SET GLOBAL gtid_purged = '%s'", gtID),
+		fmt.Sprintf("CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='vt_repl', MASTER_AUTO_POSITION = 1", utils.Hostname, tablets[1].MySQLPort),
+	}
+	utils.RunSQLs(ctx, t, changeReplicationSourceCommands, tablets[0])
 
 	// Capture time when we made tablets[1 writable
 	baseTime := time.Now().UnixNano() / 1000000000
 
 	// tablets[2 will be a replica of tablets[1
-	changeReplicationSourceCommands = fmt.Sprintf("STOP SLAVE; RESET MASTER; SET GLOBAL gtid_purged = '%s';"+
-		"CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='vt_repl', MASTER_AUTO_POSITION = 1;"+
-		"START SLAVE;", gtID, utils.Hostname, tablets[1].MySQLPort)
-	utils.RunSQL(ctx, t, changeReplicationSourceCommands, tablets[2])
+	changeReplicationSourceCommands = []string{
+		"STOP SLAVE",
+		"RESET MASTER",
+		fmt.Sprintf("SET GLOBAL gtid_purged = '%s'", gtID),
+		fmt.Sprintf("CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='vt_repl', MASTER_AUTO_POSITION = 1", utils.Hostname, tablets[1].MySQLPort),
+		"START SLAVE",
+	}
+	utils.RunSQLs(ctx, t, changeReplicationSourceCommands, tablets[2])
 
 	// To test the downPrimary, we kill the old primary first and delete its tablet record
 	if downPrimary {
 		err := tablets[0].VttabletProcess.TearDownWithTimeout(30 * time.Second)
 		require.NoError(t, err)
-		err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", "--",
-			"--allow_primary", tablets[0].Alias)
+		err = clusterInstance.VtctldClientProcess.ExecuteCommand("DeleteTablets",
+			"--allow-primary", tablets[0].Alias)
 		require.NoError(t, err)
 	}
 
 	// update topology with the new server
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("TabletExternallyReparented",
+	err := clusterInstance.VtctldClientProcess.ExecuteCommand("TabletExternallyReparented",
 		tablets[1].Alias)
 	require.NoError(t, err)
 
@@ -295,7 +302,7 @@ func TestReparentWithDownReplica(t *testing.T) {
 		// insert data into the new primary, check the connected replica work
 		insertVal = utils.ConfirmReplication(t, tablets[1], []*cluster.Vttablet{tablets[0], tablets[3]})
 	} else {
-		assert.Contains(t, out, fmt.Sprintf("TabletManager.PrimaryStatus on %s error", tablets[2].Alias))
+		assert.Contains(t, out, fmt.Sprintf("TabletManager.PrimaryStatus on %s", tablets[2].Alias))
 		// insert data into the old primary, check the connected replica works. The primary tablet shouldn't have changed.
 		insertVal = utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[3]})
 	}
@@ -311,7 +318,7 @@ func TestReparentWithDownReplica(t *testing.T) {
 
 	// We have to StartReplication on tablets[2] since the MySQL instance is restarted and does not have replication running
 	// We earlier used to rely on replicationManager to fix this but we have disabled it in our testing environment for latest versions of vttablet and vtctl.
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StartReplication", tablets[2].Alias)
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("StartReplication", tablets[2].Alias)
 	require.NoError(t, err)
 
 	// wait until it gets the data
@@ -331,9 +338,9 @@ func TestChangeTypeSemiSync(t *testing.T) {
 	primary, replica, rdonly1, rdonly2 := tablets[0], tablets[1], tablets[2], tablets[3]
 
 	// Updated rdonly tablet and set tablet type to rdonly
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", rdonly1.Alias, "rdonly")
+	err := clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", rdonly1.Alias, "rdonly")
 	require.NoError(t, err)
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", rdonly2.Alias, "rdonly")
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", rdonly2.Alias, "rdonly")
 	require.NoError(t, err)
 
 	utils.ValidateTopology(t, clusterInstance, true)
@@ -342,7 +349,7 @@ func TestChangeTypeSemiSync(t *testing.T) {
 
 	// Stop replication on rdonly1, to make sure when we make it replica it doesn't start again.
 	// Note we do a similar test for replica -> rdonly below.
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StopReplication", rdonly1.Alias)
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("StopReplication", rdonly1.Alias)
 	require.NoError(t, err)
 
 	// Check semi-sync on replicas.
@@ -357,27 +364,27 @@ func TestChangeTypeSemiSync(t *testing.T) {
 	utils.CheckDBstatus(ctx, t, rdonly2, "Rpl_semi_sync_slave_status", "OFF")
 
 	// Change replica to rdonly while replicating, should turn off semi-sync, and restart replication.
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", replica.Alias, "rdonly")
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", replica.Alias, "rdonly")
 	require.NoError(t, err)
 	utils.CheckDBvar(ctx, t, replica, "rpl_semi_sync_slave_enabled", "OFF")
 	utils.CheckDBstatus(ctx, t, replica, "Rpl_semi_sync_slave_status", "OFF")
 
 	// Change rdonly1 to replica, should turn on semi-sync, and not start replication.
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", rdonly1.Alias, "replica")
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", rdonly1.Alias, "replica")
 	require.NoError(t, err)
 	utils.CheckDBvar(ctx, t, rdonly1, "rpl_semi_sync_slave_enabled", "ON")
 	utils.CheckDBstatus(ctx, t, rdonly1, "Rpl_semi_sync_slave_status", "OFF")
 	utils.CheckReplicaStatus(ctx, t, rdonly1)
 
 	// Now change from replica back to rdonly, make sure replication is still not enabled.
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", rdonly1.Alias, "rdonly")
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", rdonly1.Alias, "rdonly")
 	require.NoError(t, err)
 	utils.CheckDBvar(ctx, t, rdonly1, "rpl_semi_sync_slave_enabled", "OFF")
 	utils.CheckDBstatus(ctx, t, rdonly1, "Rpl_semi_sync_slave_status", "OFF")
 	utils.CheckReplicaStatus(ctx, t, rdonly1)
 
 	// Change rdonly2 to replica, should turn on semi-sync, and restart replication.
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", rdonly2.Alias, "replica")
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", rdonly2.Alias, "replica")
 	require.NoError(t, err)
 	utils.CheckDBvar(ctx, t, rdonly2, "rpl_semi_sync_slave_enabled", "ON")
 	utils.CheckDBstatus(ctx, t, rdonly2, "Rpl_semi_sync_slave_status", "ON")

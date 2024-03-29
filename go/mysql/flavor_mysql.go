@@ -22,14 +22,18 @@ import (
 	"io"
 	"time"
 
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // mysqlFlavor implements the Flavor interface for Mysql.
-type mysqlFlavor struct{}
+type mysqlFlavor struct {
+	serverVersion string
+}
 type mysqlFlavor56 struct {
 	mysqlFlavor
 }
@@ -52,7 +56,7 @@ func (mysqlFlavor) primaryGTIDSet(c *Conn) (replication.GTIDSet, error) {
 		return nil, err
 	}
 	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
-		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected result format for gtid_executed: %#v", qr)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result format for gtid_executed: %#v", qr)
 	}
 	return replication.ParseMysql56GTIDSet(qr.Rows[0][0].ToString())
 }
@@ -65,7 +69,7 @@ func (mysqlFlavor) purgedGTIDSet(c *Conn) (replication.GTIDSet, error) {
 		return nil, err
 	}
 	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
-		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected result format for gtid_purged: %#v", qr)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result format for gtid_purged: %#v", qr)
 	}
 	return replication.ParseMysql56GTIDSet(qr.Rows[0][0].ToString())
 }
@@ -78,7 +82,7 @@ func (mysqlFlavor) serverUUID(c *Conn) (string, error) {
 		return "", err
 	}
 	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
-		return "", vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected result format for server_uuid: %#v", qr)
+		return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result format for server_uuid: %#v", qr)
 	}
 	return qr.Rows[0][0].ToString(), nil
 }
@@ -90,7 +94,7 @@ func (mysqlFlavor) gtidMode(c *Conn) (string, error) {
 		return "", err
 	}
 	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
-		return "", vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected result format for gtid_mode: %#v", qr)
+		return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result format for gtid_mode: %#v", qr)
 	}
 	return qr.Rows[0][0].ToString(), nil
 }
@@ -135,7 +139,7 @@ func (mysqlFlavor) startSQLThreadCommand() string {
 func (mysqlFlavor) sendBinlogDumpCommand(c *Conn, serverID uint32, binlogFilename string, startPos replication.Position) error {
 	gtidSet, ok := startPos.GTIDSet.(replication.Mysql56GTIDSet)
 	if !ok {
-		return vterrors.Errorf(vtrpc.Code_INTERNAL, "startPos.GTIDSet is wrong type - expected Mysql56GTIDSet, got: %#v", startPos.GTIDSet)
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "startPos.GTIDSet is wrong type - expected Mysql56GTIDSet, got: %#v", startPos.GTIDSet)
 	}
 
 	// Build the command.
@@ -216,14 +220,14 @@ func (mysqlFlavor) primaryStatus(c *Conn) (replication.PrimaryStatus, error) {
 	return replication.ParseMysqlPrimaryStatus(resultMap)
 }
 
-// waitUntilPositionCommand is part of the Flavor interface.
-func (mysqlFlavor) waitUntilPositionCommand(ctx context.Context, pos replication.Position) (string, error) {
+// waitUntilPosition is part of the Flavor interface.
+func (mysqlFlavor) waitUntilPosition(ctx context.Context, c *Conn, pos replication.Position) error {
 	// A timeout of 0 means wait indefinitely.
 	timeoutSeconds := 0
 	if deadline, ok := ctx.Deadline(); ok {
 		timeout := time.Until(deadline)
 		if timeout <= 0 {
-			return "", vterrors.Errorf(vtrpc.Code_DEADLINE_EXCEEDED, "timed out waiting for position %v", pos)
+			return vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "timed out waiting for position %v", pos)
 		}
 
 		// Only whole numbers of seconds are supported.
@@ -234,7 +238,30 @@ func (mysqlFlavor) waitUntilPositionCommand(ctx context.Context, pos replication
 		}
 	}
 
-	return fmt.Sprintf("SELECT WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS('%s', %v)", pos, timeoutSeconds), nil
+	query := fmt.Sprintf("SELECT WAIT_FOR_EXECUTED_GTID_SET('%s', %v)", pos, timeoutSeconds)
+	result, err := c.ExecuteFetch(query, 1, false)
+	if err != nil {
+		return err
+	}
+
+	// For WAIT_FOR_EXECUTED_GTID_SET(), the return value is the state of the query, where
+	// 0 represents success, and 1 represents timeout. Any other failures generate an error.
+	if len(result.Rows) != 1 || len(result.Rows[0]) != 1 {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid results: %#v", result)
+	}
+	val := result.Rows[0][0]
+	state, err := val.ToInt64()
+	if err != nil {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid result of %#v", val)
+	}
+	switch state {
+	case 0:
+		return nil
+	case 1:
+		return vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "timed out waiting for position %v", pos)
+	default:
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid result of %d", state)
+	}
 }
 
 // readBinlogEvent is part of the Flavor interface.
@@ -347,11 +374,10 @@ func (mysqlFlavor56) baseShowTablesWithSizes() string {
 }
 
 // supportsCapability is part of the Flavor interface.
-func (mysqlFlavor56) supportsCapability(serverVersion string, capability FlavorCapability) (bool, error) {
-	switch capability {
-	default:
-		return false, nil
-	}
+func (f mysqlFlavor56) supportsCapability(capability capabilities.FlavorCapability) (bool, error) {
+	// We do not support MySQL 5.6. Also, for consistency, and seeing that MySQL56 is the default
+	// flavor if no version specified, we return false for all capabilities.
+	return false, nil
 }
 
 // baseShowTablesWithSizes is part of the Flavor interface.
@@ -360,13 +386,8 @@ func (mysqlFlavor57) baseShowTablesWithSizes() string {
 }
 
 // supportsCapability is part of the Flavor interface.
-func (mysqlFlavor57) supportsCapability(serverVersion string, capability FlavorCapability) (bool, error) {
-	switch capability {
-	case MySQLJSONFlavorCapability:
-		return true, nil
-	default:
-		return false, nil
-	}
+func (f mysqlFlavor57) supportsCapability(capability capabilities.FlavorCapability) (bool, error) {
+	return capabilities.MySQLVersionHasCapability(f.serverVersion, capability)
 }
 
 // baseShowTablesWithSizes is part of the Flavor interface.
@@ -375,29 +396,6 @@ func (mysqlFlavor80) baseShowTablesWithSizes() string {
 }
 
 // supportsCapability is part of the Flavor interface.
-func (mysqlFlavor80) supportsCapability(serverVersion string, capability FlavorCapability) (bool, error) {
-	switch capability {
-	case InstantDDLFlavorCapability,
-		InstantExpandEnumCapability,
-		InstantAddLastColumnFlavorCapability,
-		InstantAddDropVirtualColumnFlavorCapability,
-		InstantChangeColumnDefaultFlavorCapability:
-		return true, nil
-	case InstantAddDropColumnFlavorCapability:
-		return ServerVersionAtLeast(serverVersion, 8, 0, 29)
-	case TransactionalGtidExecutedFlavorCapability:
-		return ServerVersionAtLeast(serverVersion, 8, 0, 17)
-	case FastDropTableFlavorCapability:
-		return ServerVersionAtLeast(serverVersion, 8, 0, 23)
-	case MySQLJSONFlavorCapability:
-		return true, nil
-	case MySQLUpgradeInServerFlavorCapability:
-		return ServerVersionAtLeast(serverVersion, 8, 0, 16)
-	case DynamicRedoLogCapacityFlavorCapability:
-		return ServerVersionAtLeast(serverVersion, 8, 0, 30)
-	case DisableRedoLogFlavorCapability:
-		return ServerVersionAtLeast(serverVersion, 8, 0, 21)
-	default:
-		return false, nil
-	}
+func (f mysqlFlavor80) supportsCapability(capability capabilities.FlavorCapability) (bool, error) {
+	return capabilities.MySQLVersionHasCapability(f.serverVersion, capability)
 }

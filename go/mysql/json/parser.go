@@ -678,7 +678,7 @@ func (v *Value) MarshalDate() string {
 
 func (v *Value) MarshalDateTime() string {
 	if dt, ok := v.DateTime(); ok {
-		return dt.ToStdTime(time.Local).Format("2006-01-02 15:04:05.000000")
+		return dt.ToStdTime(time.Now()).Format("2006-01-02 15:04:05.000000")
 	}
 	return ""
 }
@@ -941,8 +941,8 @@ func (v *Value) Time() (datetime.Time, bool) {
 	if v.t != TypeTime {
 		return datetime.Time{}, false
 	}
-	t, _, ok := datetime.ParseTime(v.s, datetime.DefaultPrecision)
-	return t, ok
+	t, _, state := datetime.ParseTime(v.s, datetime.DefaultPrecision)
+	return t, state == datetime.TimeOK
 }
 
 // Object returns the underlying JSON object for the v.

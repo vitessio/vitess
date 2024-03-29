@@ -243,7 +243,7 @@ func TestVStreamerWaitForMySQL(t *testing.T) {
 	testDB.AddQuery(replicaLagQuery, sbmres)
 
 	for _, tt := range tests {
-		tt.fields.cp = testDB.ConnParams()
+		tt.fields.cp = dbconfigs.New(testDB.ConnParams())
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		t.Run(tt.name, func(t *testing.T) {

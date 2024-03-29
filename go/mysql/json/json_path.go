@@ -27,9 +27,8 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"golang.org/x/text/unicode/rangetable"
-
 	"vitess.io/vitess/go/hack"
+	"vitess.io/vitess/go/unicode2"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -316,9 +315,9 @@ func MatchPath(rawJSON, rawPath []byte, match func(value *Value)) error {
 }
 
 var (
-	unicodeRangeIDNeg      = rangetable.Merge(unicode.Pattern_Syntax, unicode.Pattern_White_Space)
-	unicodeRangeIDStartPos = rangetable.Merge(unicode.Letter, unicode.Nl, unicode.Other_ID_Start)
-	unicodeRangeIDContPos  = rangetable.Merge(unicodeRangeIDStartPos, unicode.Mn, unicode.Mc, unicode.Nd, unicode.Pc, unicode.Other_ID_Continue)
+	unicodeRangeIDNeg      = unicode2.Merge(unicode.Pattern_Syntax, unicode.Pattern_White_Space)
+	unicodeRangeIDStartPos = unicode2.Merge(unicode.Letter, unicode.Nl, unicode.Other_ID_Start)
+	unicodeRangeIDContPos  = unicode2.Merge(unicodeRangeIDStartPos, unicode.Mn, unicode.Mc, unicode.Nd, unicode.Pc, unicode.Other_ID_Continue)
 )
 
 func isIDStartUnicode(r rune) bool {

@@ -26,7 +26,6 @@ import (
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -84,18 +83,18 @@ type (
 	}
 )
 
-var _ Expr = (*builtinInetAton)(nil)
-var _ Expr = (*builtinInetNtoa)(nil)
-var _ Expr = (*builtinInet6Aton)(nil)
-var _ Expr = (*builtinInet6Ntoa)(nil)
-var _ Expr = (*builtinIsIPV4)(nil)
-var _ Expr = (*builtinIsIPV4Compat)(nil)
-var _ Expr = (*builtinIsIPV4Mapped)(nil)
-var _ Expr = (*builtinIsIPV6)(nil)
-var _ Expr = (*builtinBinToUUID)(nil)
-var _ Expr = (*builtinIsUUID)(nil)
-var _ Expr = (*builtinUUID)(nil)
-var _ Expr = (*builtinUUIDToBin)(nil)
+var _ IR = (*builtinInetAton)(nil)
+var _ IR = (*builtinInetNtoa)(nil)
+var _ IR = (*builtinInet6Aton)(nil)
+var _ IR = (*builtinInet6Ntoa)(nil)
+var _ IR = (*builtinIsIPV4)(nil)
+var _ IR = (*builtinIsIPV4Compat)(nil)
+var _ IR = (*builtinIsIPV4Mapped)(nil)
+var _ IR = (*builtinIsIPV6)(nil)
+var _ IR = (*builtinBinToUUID)(nil)
+var _ IR = (*builtinIsUUID)(nil)
+var _ IR = (*builtinUUID)(nil)
+var _ IR = (*builtinUUIDToBin)(nil)
 
 func (call *builtinInetAton) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
@@ -110,10 +109,6 @@ func (call *builtinInetAton) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalUint64(uint64(binary.BigEndian.Uint32(ip.AsSlice()))), nil
 }
 
-func (call *builtinInetAton) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	return sqltypes.Uint64, flagNullable
-}
-
 func (call *builtinInetAton) compile(c *compiler) (ctype, error) {
 	str, err := call.Arguments[0].compile(c)
 	if err != nil {
@@ -125,7 +120,7 @@ func (call *builtinInetAton) compile(c *compiler) (ctype, error) {
 	switch {
 	case str.isTextual():
 	default:
-		c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)
+		c.asm.Convert_xb(1, sqltypes.VarBinary, nil)
 	}
 
 	c.asm.Fn_INET_ATON()
@@ -146,12 +141,7 @@ func (call *builtinInetNtoa) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	b := binary.BigEndian.AppendUint32(nil, uint32(rawIp))
-	return newEvalText(hack.StringBytes(netip.AddrFrom4([4]byte(b)).String()), defaultCoercionCollation(call.collate)), nil
-}
-
-func (call *builtinInetNtoa) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, t := call.Arguments[0].typeof(env, fields)
-	return sqltypes.VarChar, t | flagNullable
+	return newEvalText(hack.StringBytes(netip.AddrFrom4([4]byte(b)).String()), typedCoercionCollation(sqltypes.VarChar, call.collate)), nil
 }
 
 func (call *builtinInetNtoa) compile(c *compiler) (ctype, error) {
@@ -163,11 +153,11 @@ func (call *builtinInetNtoa) compile(c *compiler) (ctype, error) {
 	skip := c.compileNullCheck1(arg)
 
 	c.compileToUint64(arg, 1)
-	col := defaultCoercionCollation(call.collate)
+	col := typedCoercionCollation(sqltypes.VarChar, call.collate)
 	c.asm.Fn_INET_NTOA(col)
 	c.asm.jumpDestination(skip)
 
-	return ctype{Type: sqltypes.VarChar, Flag: flagNullable, Col: defaultCoercionCollation(call.collate)}, nil
+	return ctype{Type: sqltypes.VarChar, Flag: flagNullable, Col: col}, nil
 }
 
 func (call *builtinInet6Aton) eval(env *ExpressionEnv) (eval, error) {
@@ -184,10 +174,6 @@ func (call *builtinInet6Aton) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalBinary(b), nil
 }
 
-func (call *builtinInet6Aton) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	return sqltypes.VarBinary, flagNullable
-}
-
 func (call *builtinInet6Aton) compile(c *compiler) (ctype, error) {
 	str, err := call.Arguments[0].compile(c)
 	if err != nil {
@@ -199,7 +185,7 @@ func (call *builtinInet6Aton) compile(c *compiler) (ctype, error) {
 	switch {
 	case str.isTextual():
 	default:
-		c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)
+		c.asm.Convert_xb(1, sqltypes.VarBinary, nil)
 	}
 
 	c.asm.Fn_INET6_ATON()
@@ -255,15 +241,12 @@ func (call *builtinInet6Ntoa) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 	}
 
+	col := typedCoercionCollation(sqltypes.VarChar, call.collate)
 	if ip, ok := printIPv6AsIPv4(ip); ok {
-		return newEvalText(hack.StringBytes("::"+ip.String()), defaultCoercionCollation(call.collate)), nil
+		return newEvalText(hack.StringBytes("::"+ip.String()), col), nil
 	}
 
-	return newEvalText(hack.StringBytes(ip.String()), defaultCoercionCollation(call.collate)), nil
-}
-
-func (call *builtinInet6Ntoa) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	return sqltypes.VarChar, flagNullable
+	return newEvalText(hack.StringBytes(ip.String()), col), nil
 }
 
 func (call *builtinInet6Ntoa) compile(c *compiler) (ctype, error) {
@@ -273,16 +256,16 @@ func (call *builtinInet6Ntoa) compile(c *compiler) (ctype, error) {
 	}
 
 	skip := c.compileNullCheck1(arg)
+	col := typedCoercionCollation(sqltypes.VarChar, call.collate)
 
 	switch arg.Type {
 	case sqltypes.VarBinary, sqltypes.Blob, sqltypes.Binary:
-		col := defaultCoercionCollation(call.collate)
 		c.asm.Fn_INET6_NTOA(col)
 	default:
 		c.asm.SetNull(1)
 	}
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.VarChar, Flag: flagNullable, Col: defaultCoercionCollation(call.collate)}, nil
+	return ctype{Type: sqltypes.VarChar, Flag: flagNullable, Col: col}, nil
 }
 
 func (call *builtinIsIPV4) eval(env *ExpressionEnv) (eval, error) {
@@ -298,11 +281,6 @@ func (call *builtinIsIPV4) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalBool(ip.Is4()), nil
 }
 
-func (call *builtinIsIPV4) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, t := call.Arguments[0].typeof(env, fields)
-	return sqltypes.Int64, t
-}
-
 func (call *builtinIsIPV4) compile(c *compiler) (ctype, error) {
 	arg, err := call.Arguments[0].compile(c)
 	if err != nil {
@@ -313,13 +291,13 @@ func (call *builtinIsIPV4) compile(c *compiler) (ctype, error) {
 	switch {
 	case arg.isTextual():
 	default:
-		c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)
+		c.asm.Convert_xb(1, sqltypes.VarBinary, nil)
 	}
 
 	c.asm.Fn_IS_IPV4()
 	c.asm.jumpDestination(skip)
 
-	return ctype{Type: sqltypes.Int64, Flag: arg.Flag | flagIsBoolean, Col: collationNumeric}, nil
+	return ctype{Type: sqltypes.Int64, Flag: nullableFlags(arg.Flag) | flagIsBoolean, Col: collationNumeric}, nil
 }
 
 func (call *builtinIsIPV4Compat) eval(env *ExpressionEnv) (eval, error) {
@@ -336,10 +314,6 @@ func (call *builtinIsIPV4Compat) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalBool(ok && isIPv4Compat(ip)), nil
 }
 
-func (call *builtinIsIPV4Compat) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	return sqltypes.Int64, flagIsBoolean
-}
-
 func (call *builtinIsIPV4Compat) compile(c *compiler) (ctype, error) {
 	arg, err := call.Arguments[0].compile(c)
 	if err != nil {
@@ -354,7 +328,7 @@ func (call *builtinIsIPV4Compat) compile(c *compiler) (ctype, error) {
 		c.asm.SetBool(1, false)
 	}
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Int64, Flag: arg.Flag | flagIsBoolean, Col: collationNumeric}, nil
+	return ctype{Type: sqltypes.Int64, Flag: nullableFlags(arg.Flag) | flagIsBoolean, Col: collationNumeric}, nil
 }
 
 func (call *builtinIsIPV4Mapped) eval(env *ExpressionEnv) (eval, error) {
@@ -371,10 +345,6 @@ func (call *builtinIsIPV4Mapped) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalBool(ok && ip.Is4In6()), nil
 }
 
-func (call *builtinIsIPV4Mapped) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	return sqltypes.Int64, flagIsBoolean
-}
-
 func (call *builtinIsIPV4Mapped) compile(c *compiler) (ctype, error) {
 	arg, err := call.Arguments[0].compile(c)
 	if err != nil {
@@ -389,7 +359,7 @@ func (call *builtinIsIPV4Mapped) compile(c *compiler) (ctype, error) {
 		c.asm.SetBool(1, false)
 	}
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Int64, Flag: arg.Flag | flagIsBoolean, Col: collationNumeric}, nil
+	return ctype{Type: sqltypes.Int64, Flag: nullableFlags(arg.Flag) | flagIsBoolean, Col: collationNumeric}, nil
 }
 
 func (call *builtinIsIPV6) eval(env *ExpressionEnv) (eval, error) {
@@ -405,10 +375,6 @@ func (call *builtinIsIPV6) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalBool(ip.Is6()), nil
 }
 
-func (call *builtinIsIPV6) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	return sqltypes.Int64, flagIsBoolean
-}
-
 func (call *builtinIsIPV6) compile(c *compiler) (ctype, error) {
 	arg, err := call.Arguments[0].compile(c)
 	if err != nil {
@@ -419,13 +385,13 @@ func (call *builtinIsIPV6) compile(c *compiler) (ctype, error) {
 	switch {
 	case arg.isTextual():
 	default:
-		c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)
+		c.asm.Convert_xb(1, sqltypes.VarBinary, nil)
 	}
 
 	c.asm.Fn_IS_IPV6()
 	c.asm.jumpDestination(skip)
 
-	return ctype{Type: sqltypes.Int64, Flag: arg.Flag | flagIsBoolean, Col: collationNumeric}, nil
+	return ctype{Type: sqltypes.Int64, Flag: nullableFlags(arg.Flag) | flagIsBoolean, Col: collationNumeric}, nil
 }
 
 func errIncorrectUUID(in []byte, f string) error {
@@ -480,12 +446,7 @@ func (call *builtinBinToUUID) eval(env *ExpressionEnv) (eval, error) {
 	if err != nil {
 		return nil, errIncorrectUUID(raw, "bin_to_uuid")
 	}
-	return newEvalText(hack.StringBytes(parsed.String()), defaultCoercionCollation(call.collate)), nil
-}
-
-func (call *builtinBinToUUID) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env, fields)
-	return sqltypes.VarChar, f
+	return newEvalText(hack.StringBytes(parsed.String()), typedCoercionCollation(sqltypes.VarChar, call.collate)), nil
 }
 
 func (call *builtinBinToUUID) compile(c *compiler) (ctype, error) {
@@ -498,11 +459,11 @@ func (call *builtinBinToUUID) compile(c *compiler) (ctype, error) {
 	switch {
 	case arg.isTextual():
 	default:
-		c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)
+		c.asm.Convert_xb(1, sqltypes.VarBinary, nil)
 	}
 
-	col := defaultCoercionCollation(call.collate)
-	ct := ctype{Type: sqltypes.VarChar, Flag: arg.Flag, Col: col}
+	col := typedCoercionCollation(sqltypes.VarChar, call.collate)
+	ct := ctype{Type: sqltypes.VarChar, Flag: nullableFlags(arg.Flag), Col: col}
 
 	if len(call.Arguments) == 1 {
 		c.asm.Fn_BIN_TO_UUID0(col)
@@ -541,11 +502,6 @@ func (call *builtinIsUUID) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalBool(err == nil), nil
 }
 
-func (call *builtinIsUUID) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env, fields)
-	return sqltypes.Int64, f | flagIsBoolean
-}
-
 func (call *builtinIsUUID) compile(c *compiler) (ctype, error) {
 	arg, err := call.Arguments[0].compile(c)
 	if err != nil {
@@ -556,12 +512,12 @@ func (call *builtinIsUUID) compile(c *compiler) (ctype, error) {
 	switch {
 	case arg.isTextual():
 	default:
-		c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)
+		c.asm.Convert_xb(1, sqltypes.VarBinary, nil)
 	}
 	c.asm.Fn_IS_UUID()
 
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Int64, Flag: arg.Flag | flagIsBoolean, Col: collationNumeric}, nil
+	return ctype{Type: sqltypes.Int64, Flag: nullableFlags(arg.Flag) | flagIsBoolean, Col: collationNumeric}, nil
 }
 
 func (call *builtinUUID) eval(env *ExpressionEnv) (eval, error) {
@@ -575,10 +531,6 @@ func (call *builtinUUID) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	return newEvalText(m, collationUtf8mb3), nil
-}
-
-func (call *builtinUUID) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	return sqltypes.VarChar, 0
 }
 
 func (call *builtinUUID) compile(c *compiler) (ctype, error) {
@@ -618,11 +570,6 @@ func (call *builtinUUIDToBin) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalBinary(out), nil
 }
 
-func (call *builtinUUIDToBin) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env, fields)
-	return sqltypes.VarBinary, f
-}
-
 func (call *builtinUUIDToBin) compile(c *compiler) (ctype, error) {
 	arg, err := call.Arguments[0].compile(c)
 	if err != nil {
@@ -633,10 +580,10 @@ func (call *builtinUUIDToBin) compile(c *compiler) (ctype, error) {
 	switch {
 	case arg.isTextual():
 	default:
-		c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)
+		c.asm.Convert_xb(1, sqltypes.VarBinary, nil)
 	}
 
-	ct := ctype{Type: sqltypes.VarBinary, Flag: arg.Flag, Col: collationBinary}
+	ct := ctype{Type: sqltypes.VarBinary, Flag: nullableFlags(arg.Flag), Col: collationBinary}
 
 	if len(call.Arguments) == 1 {
 		c.asm.Fn_UUID_TO_BIN0()

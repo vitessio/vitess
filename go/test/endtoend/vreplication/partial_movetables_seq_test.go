@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
@@ -75,7 +74,7 @@ type vrepTestCase struct {
 	vtgate *cluster.VtgateProcess
 }
 
-func initPartialMoveTablesComplexTestCase(t *testing.T, name string) *vrepTestCase {
+func initPartialMoveTablesComplexTestCase(t *testing.T) *vrepTestCase {
 	const (
 		seqVSchema = `{
 			"sharded": false,
@@ -122,7 +121,7 @@ func initPartialMoveTablesComplexTestCase(t *testing.T, name string) *vrepTestCa
 	)
 	tc := &vrepTestCase{
 		t:               t,
-		testName:        name,
+		testName:        t.Name(),
 		keyspaces:       make(map[string]*keyspace),
 		defaultCellName: "zone1",
 		workflows:       make(map[string]*workflow),
@@ -169,18 +168,15 @@ func initPartialMoveTablesComplexTestCase(t *testing.T, name string) *vrepTestCa
 
 func (tc *vrepTestCase) teardown() {
 	tc.vtgateConn.Close()
-	vc.TearDown(tc.t)
+	vc.TearDown()
 }
 
 func (tc *vrepTestCase) setupCluster() {
-	cells := []string{"zone1"}
-
-	tc.vc = NewVitessCluster(tc.t, tc.testName, cells, mainClusterConfig)
+	tc.vc = NewVitessCluster(tc.t, nil)
 	vc = tc.vc // for backward compatibility since vc is used globally in this package
 	require.NotNil(tc.t, tc.vc)
 	tc.setupKeyspaces([]string{"commerce", "seqSrc"})
 	tc.vtgateConn = getConnection(tc.t, tc.vc.ClusterConfig.hostname, tc.vc.ClusterConfig.vtgateMySQLPort)
-	vtgateConn = tc.vtgateConn // for backward compatibility since vtgateConn is used globally in this package
 }
 
 func (tc *vrepTestCase) initData() {
@@ -211,10 +207,6 @@ func (tc *vrepTestCase) setupKeyspace(ks *keyspace) {
 		tc.vtgate = defaultCell.Vtgates[0]
 
 	}
-	for _, shard := range ks.shards {
-		require.NoError(t, cluster.WaitForHealthyShard(tc.vc.VtctldClient, ks.name, shard))
-		require.NoError(t, tc.vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", ks.name, shard), 1, 30*time.Second))
-	}
 }
 
 func (tc *vrepTestCase) newWorkflow(typ, workflowName, fromKeyspace, toKeyspace string, options *workflowOptions) *workflow {
@@ -239,7 +231,7 @@ func (wf *workflow) create() {
 		currentWorkflowType = wrangler.MoveTablesWorkflow
 		sourceShards := strings.Join(wf.options.sourceShards, ",")
 		err = tstWorkflowExec(t, cell, wf.name, wf.fromKeyspace, wf.toKeyspace,
-			strings.Join(wf.options.tables, ","), workflowActionCreate, "", sourceShards, "", false)
+			strings.Join(wf.options.tables, ","), workflowActionCreate, "", sourceShards, "", defaultWorkflowExecOptions)
 	case "reshard":
 		currentWorkflowType = wrangler.ReshardWorkflow
 		sourceShards := strings.Join(wf.options.sourceShards, ",")
@@ -248,7 +240,7 @@ func (wf *workflow) create() {
 			targetShards = sourceShards
 		}
 		err = tstWorkflowExec(t, cell, wf.name, wf.fromKeyspace, wf.toKeyspace,
-			strings.Join(wf.options.tables, ","), workflowActionCreate, "", sourceShards, targetShards, false)
+			strings.Join(wf.options.tables, ","), workflowActionCreate, "", sourceShards, targetShards, defaultWorkflowExecOptions)
 	default:
 		panic(fmt.Sprintf("unknown workflow type: %s", wf.typ))
 	}
@@ -266,15 +258,15 @@ func (wf *workflow) create() {
 }
 
 func (wf *workflow) switchTraffic() {
-	require.NoError(wf.tc.t, tstWorkflowExec(wf.tc.t, wf.tc.defaultCellName, wf.name, wf.fromKeyspace, wf.toKeyspace, "", workflowActionSwitchTraffic, "", "", "", false))
+	require.NoError(wf.tc.t, tstWorkflowExec(wf.tc.t, wf.tc.defaultCellName, wf.name, wf.fromKeyspace, wf.toKeyspace, "", workflowActionSwitchTraffic, "", "", "", defaultWorkflowExecOptions))
 }
 
 func (wf *workflow) reverseTraffic() {
-	require.NoError(wf.tc.t, tstWorkflowExec(wf.tc.t, wf.tc.defaultCellName, wf.name, wf.fromKeyspace, wf.toKeyspace, "", workflowActionReverseTraffic, "", "", "", false))
+	require.NoError(wf.tc.t, tstWorkflowExec(wf.tc.t, wf.tc.defaultCellName, wf.name, wf.fromKeyspace, wf.toKeyspace, "", workflowActionReverseTraffic, "", "", "", defaultWorkflowExecOptions))
 }
 
 func (wf *workflow) complete() {
-	require.NoError(wf.tc.t, tstWorkflowExec(wf.tc.t, wf.tc.defaultCellName, wf.name, wf.fromKeyspace, wf.toKeyspace, "", workflowActionComplete, "", "", "", false))
+	require.NoError(wf.tc.t, tstWorkflowExec(wf.tc.t, wf.tc.defaultCellName, wf.name, wf.fromKeyspace, wf.toKeyspace, "", workflowActionComplete, "", "", "", defaultWorkflowExecOptions))
 }
 
 // TestPartialMoveTablesWithSequences enhances TestPartialMoveTables by adding an unsharded keyspace which has a
@@ -291,7 +283,7 @@ func TestPartialMoveTablesWithSequences(t *testing.T) {
 		extraVTGateArgs = origExtraVTGateArgs
 	}()
 
-	tc := initPartialMoveTablesComplexTestCase(t, "TestPartialMoveTablesComplex")
+	tc := initPartialMoveTablesComplexTestCase(t)
 	defer tc.teardown()
 	var err error
 
@@ -336,6 +328,7 @@ func TestPartialMoveTablesWithSequences(t *testing.T) {
 	shard := "80-"
 	var wf80Dash, wfDash80 *workflow
 	currentCustomerCount = getCustomerCount(t, "before customer2.80-")
+	vtgateConn, closeConn := getVTGateConn()
 	t.Run("Start MoveTables on customer2.80-", func(t *testing.T) {
 		// Now setup the customer2 keyspace so we can do a partial move tables for one of the two shards: 80-.
 		defaultRdonly = 0
@@ -353,16 +346,17 @@ func TestPartialMoveTablesWithSequences(t *testing.T) {
 	})
 
 	currentCustomerCount = getCustomerCount(t, "after customer2.80-/2")
-	log.Flush()
 
 	// This query uses an ID that should always get routed to shard 80-
-	shard80MinusRoutedQuery := "select name from customer where cid = 1 and noexistcol = 'foo'"
+	shard80DashRoutedQuery := "select name from customer where cid = 1 and noexistcol = 'foo'"
 	// This query uses an ID that should always get routed to shard -80
-	shardMinus80RoutedQuery := "select name from customer where cid = 2 and noexistcol = 'foo'"
+	shardDash80RoutedQuery := "select name from customer where cid = 2 and noexistcol = 'foo'"
 
 	// Reset any existing vtgate connection state.
-	vtgateConn.Close()
-	vtgateConn = getConnection(t, tc.vc.ClusterConfig.hostname, tc.vc.ClusterConfig.vtgateMySQLPort)
+	closeConn()
+
+	vtgateConn, closeConn = getVTGateConn()
+	defer closeConn()
 	t.Run("Confirm routing rules", func(t *testing.T) {
 
 		// Global routing rules should be in place with everything going to the source keyspace (customer).
@@ -378,14 +372,14 @@ func TestPartialMoveTablesWithSequences(t *testing.T) {
 		log.Infof("Testing reverse route (target->source) for shard being switched")
 		_, err = vtgateConn.ExecuteFetch("use `customer2:80-`", 0, false)
 		require.NoError(t, err)
-		_, err = vtgateConn.ExecuteFetch(shard80MinusRoutedQuery, 0, false)
+		_, err = vtgateConn.ExecuteFetch(shard80DashRoutedQuery, 0, false)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "target: customer.80-.primary", "Query was routed to the target before any SwitchTraffic")
 
 		log.Infof("Testing reverse route (target->source) for shard NOT being switched")
 		_, err = vtgateConn.ExecuteFetch("use `customer2:-80`", 0, false)
 		require.NoError(t, err)
-		_, err = vtgateConn.ExecuteFetch(shardMinus80RoutedQuery, 0, false)
+		_, err = vtgateConn.ExecuteFetch(shardDash80RoutedQuery, 0, false)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "target: customer.-80.primary", "Query was routed to the target before any SwitchTraffic")
 
@@ -419,22 +413,22 @@ func TestPartialMoveTablesWithSequences(t *testing.T) {
 	t.Run("Validate shard and tablet type routing", func(t *testing.T) {
 
 		// No shard targeting
-		_, err = vtgateConn.ExecuteFetch(shard80MinusRoutedQuery, 0, false)
+		_, err = vtgateConn.ExecuteFetch(shard80DashRoutedQuery, 0, false)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "target: customer2.80-.primary", "Query was routed to the source after partial SwitchTraffic")
-		_, err = vtgateConn.ExecuteFetch(shardMinus80RoutedQuery, 0, false)
+		_, err = vtgateConn.ExecuteFetch(shardDash80RoutedQuery, 0, false)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "target: customer.-80.primary", "Query was routed to the target before partial SwitchTraffic")
 
 		// Shard targeting
 		_, err = vtgateConn.ExecuteFetch("use `customer2:80-`", 0, false)
 		require.NoError(t, err)
-		_, err = vtgateConn.ExecuteFetch(shard80MinusRoutedQuery, 0, false)
+		_, err = vtgateConn.ExecuteFetch(shard80DashRoutedQuery, 0, false)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "target: customer2.80-.primary", "Query was routed to the source after partial SwitchTraffic")
 		_, err = vtgateConn.ExecuteFetch("use `customer:80-`", 0, false)
 		require.NoError(t, err)
-		_, err = vtgateConn.ExecuteFetch(shard80MinusRoutedQuery, 0, false)
+		_, err = vtgateConn.ExecuteFetch(shard80DashRoutedQuery, 0, false)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "target: customer2.80-.primary", "Query was routed to the source after partial SwitchTraffic")
 
@@ -505,7 +499,7 @@ func TestPartialMoveTablesWithSequences(t *testing.T) {
 			// We switched traffic, so it's the reverse workflow we want to cancel.
 			reverseWf := wf + "_reverse"
 			reverseKs := sourceKs // customer
-			err = tstWorkflowExec(t, "", reverseWf, "", reverseKs, "", workflowActionCancel, "", "", "", false)
+			err = tstWorkflowExec(t, "", reverseWf, "", reverseKs, "", workflowActionCancel, "", "", "", defaultWorkflowExecOptions)
 			require.NoError(t, err)
 
 			output, err := tc.vc.VtctlClient.ExecuteCommandWithOutput("Workflow", fmt.Sprintf("%s.%s", reverseKs, reverseWf), "show")
@@ -537,6 +531,8 @@ var newCustomerCount = int64(201)
 var lastCustomerId int64
 
 func getCustomerCount(t *testing.T, msg string) int64 {
+	vtgateConn, closeConn := getVTGateConn()
+	defer closeConn()
 	qr := execVtgateQuery(t, vtgateConn, "", "select count(*) from customer")
 	require.NotNil(t, qr)
 	count, err := qr.Rows[0][0].ToInt64()
@@ -545,6 +541,8 @@ func getCustomerCount(t *testing.T, msg string) int64 {
 }
 
 func confirmLastCustomerIdHasIncreased(t *testing.T) {
+	vtgateConn, closeConn := getVTGateConn()
+	defer closeConn()
 	qr := execVtgateQuery(t, vtgateConn, "", "select cid from customer order by cid desc limit 1")
 	require.NotNil(t, qr)
 	currentCustomerId, err := qr.Rows[0][0].ToInt64()
@@ -554,6 +552,8 @@ func confirmLastCustomerIdHasIncreased(t *testing.T) {
 }
 
 func insertCustomers(t *testing.T) {
+	vtgateConn, closeConn := getVTGateConn()
+	defer closeConn()
 	for i := int64(1); i < newCustomerCount+1; i++ {
 		execVtgateQuery(t, vtgateConn, "customer@primary", fmt.Sprintf("insert into customer(name) values ('name-%d')", currentCustomerCount+i))
 	}

@@ -20,11 +20,9 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -33,7 +31,9 @@ type RealTable struct {
 	dbName, tableName string
 	ASTNode           *sqlparser.AliasedTableExpr
 	Table             *vindexes.Table
+	VindexHint        *sqlparser.IndexHint
 	isInfSchema       bool
+	collationEnv      *collations.Environment
 }
 
 var _ TableInfo = (*RealTable)(nil)
@@ -70,17 +70,42 @@ func (r *RealTable) IsInfSchema() bool {
 
 // GetColumns implements the TableInfo interface
 func (r *RealTable) getColumns() []ColumnInfo {
-	return vindexTableToColumnInfo(r.Table)
+	return vindexTableToColumnInfo(r.Table, r.collationEnv)
 }
 
 // GetExpr implements the TableInfo interface
-func (r *RealTable) GetExpr() *sqlparser.AliasedTableExpr {
+func (r *RealTable) GetAliasedTableExpr() *sqlparser.AliasedTableExpr {
 	return r.ASTNode
+}
+
+func (r *RealTable) canShortCut() shortCut {
+	if r.Table == nil {
+		return cannotShortCut
+	}
+	if r.Table.Type != "" {
+		// A reference table is not an issue when seeing if a query is going to an unsharded keyspace
+		if r.Table.Type == vindexes.TypeReference {
+			return canShortCut
+		}
+		return cannotShortCut
+	}
+
+	name, ok := r.ASTNode.Expr.(sqlparser.TableName)
+	if !ok || name.Name.String() != r.Table.Name.String() {
+		return cannotShortCut
+	}
+
+	return dependsOnKeyspace
 }
 
 // GetVindexTable implements the TableInfo interface
 func (r *RealTable) GetVindexTable() *vindexes.Table {
 	return r.Table
+}
+
+// GetVindexHint implements the TableInfo interface
+func (r *RealTable) GetVindexHint() *sqlparser.IndexHint {
+	return r.VindexHint
 }
 
 // Name implements the TableInfo interface
@@ -98,27 +123,17 @@ func (r *RealTable) matches(name sqlparser.TableName) bool {
 	return (name.Qualifier.IsEmpty() || name.Qualifier.String() == r.dbName) && r.tableName == name.Name.String()
 }
 
-func vindexTableToColumnInfo(tbl *vindexes.Table) []ColumnInfo {
+func vindexTableToColumnInfo(tbl *vindexes.Table, collationEnv *collations.Environment) []ColumnInfo {
 	if tbl == nil {
 		return nil
 	}
 	nameMap := map[string]any{}
 	cols := make([]ColumnInfo, 0, len(tbl.Columns))
 	for _, col := range tbl.Columns {
-		collation := collations.DefaultCollationForType(col.Type)
-		if sqltypes.IsText(col.Type) {
-			coll, found := collations.Local().LookupID(col.CollationName)
-			if found {
-				collation = coll
-			}
-		}
-
 		cols = append(cols, ColumnInfo{
-			Name: col.Name.String(),
-			Type: evalengine.Type{
-				Type: col.Type,
-				Coll: collation,
-			},
+			Name:      col.Name.String(),
+			Type:      col.ToEvalengineType(collationEnv),
+			Invisible: col.Invisible,
 		})
 		nameMap[col.Name.String()] = nil
 	}

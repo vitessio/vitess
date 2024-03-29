@@ -181,7 +181,7 @@ func TestMain(m *testing.M) {
 		// This is supposed to change the primary tablet in the shards, meaning that a different tablet
 		// will be responsible for sending schema tracking updates.
 		for _, shard := range clusterInstance.Keyspaces[0].Shards {
-			err := clusterInstance.VtctlclientProcess.InitializeShard(KeyspaceName, shard.Name, Cell, shard.Vttablets[1].TabletUID)
+			err := clusterInstance.VtctldClientProcess.InitializeShard(KeyspaceName, shard.Name, Cell, shard.Vttablets[1].TabletUID)
 			if err != nil {
 				fmt.Println(err)
 				return 1
@@ -209,7 +209,6 @@ func TestMain(m *testing.M) {
 
 func TestAddColumn(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	utils.SkipIfBinaryIsBelowVersion(t, 14, "vtgate")
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)

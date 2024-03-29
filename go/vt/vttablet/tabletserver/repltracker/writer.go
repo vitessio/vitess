@@ -59,6 +59,7 @@ type heartbeatWriter struct {
 	appPool      *dbconnpool.ConnectionPool
 	allPrivsPool *dbconnpool.ConnectionPool
 	ticks        *timer.Timer
+	writeConnID  atomic.Int64
 
 	onDemandDuration            time.Duration
 	onDemandMu                  sync.Mutex
@@ -72,17 +73,17 @@ func newHeartbeatWriter(env tabletenv.Env, alias *topodatapb.TabletAlias) *heart
 	config := env.Config()
 
 	// config.EnableLagThrottler is a feature flag for the throttler; if throttler runs, then heartbeat must also run
-	if config.ReplicationTracker.Mode != tabletenv.Heartbeat && config.ReplicationTracker.HeartbeatOnDemandSeconds.Get() == 0 {
+	if config.ReplicationTracker.Mode != tabletenv.Heartbeat && config.ReplicationTracker.HeartbeatOnDemand == 0 {
 		return &heartbeatWriter{}
 	}
-	heartbeatInterval := config.ReplicationTracker.HeartbeatIntervalSeconds.Get()
+	heartbeatInterval := config.ReplicationTracker.HeartbeatInterval
 	w := &heartbeatWriter{
 		env:              env,
 		enabled:          true,
 		tabletAlias:      alias.CloneVT(),
 		now:              time.Now,
 		interval:         heartbeatInterval,
-		onDemandDuration: config.ReplicationTracker.HeartbeatOnDemandSeconds.Get(),
+		onDemandDuration: config.ReplicationTracker.HeartbeatOnDemand,
 		ticks:            timer.NewTimer(heartbeatInterval),
 		errorLog:         logutil.NewThrottledLogger("HeartbeatWriter", 60*time.Second),
 		// We make this pool size 2; to prevent pool exhausted
@@ -90,9 +91,10 @@ func newHeartbeatWriter(env tabletenv.Env, alias *topodatapb.TabletAlias) *heart
 		appPool:      dbconnpool.NewConnectionPool("HeartbeatWriteAppPool", env.Exporter(), 2, mysqlctl.DbaIdleTimeout, 0, mysqlctl.PoolDynamicHostnameResolution),
 		allPrivsPool: dbconnpool.NewConnectionPool("HeartbeatWriteAllPrivsPool", env.Exporter(), 2, mysqlctl.DbaIdleTimeout, 0, mysqlctl.PoolDynamicHostnameResolution),
 	}
+	w.writeConnID.Store(-1)
 	if w.onDemandDuration > 0 {
 		// see RequestHeartbeats() for use of onDemandRequestTicks
-		// it's basically a mechnism to rate limit operation RequestHeartbeats().
+		// it's basically a mechanism to rate limit operation RequestHeartbeats().
 		// and selectively drop excessive requests.
 		w.allowNextHeartbeatRequest()
 		go func() {
@@ -123,7 +125,7 @@ func (w *heartbeatWriter) Open() {
 	if w.isOpen {
 		return
 	}
-	log.Info("Hearbeat Writer: opening")
+	log.Info("Heartbeat Writer: opening")
 
 	// We cannot create the database and tables in this Open function
 	// since, this is run when a tablet changes to Primary type. The other replicas
@@ -159,7 +161,7 @@ func (w *heartbeatWriter) Close() {
 	w.appPool.Close()
 	w.allPrivsPool.Close()
 	w.isOpen = false
-	log.Info("Hearbeat Writer: closed")
+	log.Info("Heartbeat Writer: closed")
 }
 
 // bindHeartbeatVars takes a heartbeat write (insert or update) and
@@ -192,11 +194,6 @@ func (w *heartbeatWriter) write() error {
 	defer w.env.LogError()
 	ctx, cancel := context.WithDeadline(context.Background(), w.now().Add(w.interval))
 	defer cancel()
-	allPrivsConn, err := w.allPrivsPool.Get(ctx)
-	if err != nil {
-		return err
-	}
-	defer allPrivsConn.Recycle()
 
 	upsert, err := w.bindHeartbeatVars(sqlUpsertHeartbeat)
 	if err != nil {
@@ -207,6 +204,8 @@ func (w *heartbeatWriter) write() error {
 		return err
 	}
 	defer appConn.Recycle()
+	w.writeConnID.Store(appConn.Conn.ID())
+	defer w.writeConnID.Store(-1)
 	_, err = appConn.Conn.ExecuteFetch(upsert, 1, false)
 	if err != nil {
 		return err
@@ -215,11 +214,14 @@ func (w *heartbeatWriter) write() error {
 }
 
 func (w *heartbeatWriter) recordError(err error) {
+	if err == nil {
+		return
+	}
 	w.errorLog.Errorf("%v", err)
 	writeErrors.Add(1)
 }
 
-// enableWrites actives or deactives heartbeat writes
+// enableWrites activates or deactivates heartbeat writes
 func (w *heartbeatWriter) enableWrites(enable bool) {
 	if w.ticks == nil {
 		return
@@ -238,12 +240,61 @@ func (w *heartbeatWriter) enableWrites(enable bool) {
 			w.ticks.Start(w.writeHeartbeat)
 		}()
 	case false:
-		w.ticks.Stop()
+		// We stop the ticks in a separate go routine because it can block if the write is stuck on semi-sync ACKs.
+		// At the same time we try and kill the write that is in progress. We use the context and its cancellation
+		// for coordination between the two go-routines. In the end we will have guaranteed that the ticks have stopped
+		// and no write is in progress.
+		ctx, cancel := context.WithCancel(context.Background())
+		go func() {
+			w.ticks.Stop()
+			cancel()
+		}()
+		w.killWritesUntilStopped(ctx)
+
 		if w.onDemandDuration > 0 {
 			// Let the next RequestHeartbeats() go through
 			w.allowNextHeartbeatRequest()
 		}
 	}
+}
+
+// killWritesUntilStopped tries to kill the write in progress until the ticks have stopped.
+func (w *heartbeatWriter) killWritesUntilStopped(ctx context.Context) {
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		// Actually try to kill the query.
+		err := w.killWrite()
+		w.recordError(err)
+		select {
+		case <-ctx.Done():
+			// If the context has been cancelled, then we know that the ticks have stopped.
+			// This guarantees that there are no writes in progress, so there is nothing to kill.
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
+// killWrite kills the write in progress (if any).
+func (w *heartbeatWriter) killWrite() error {
+	defer w.env.LogError()
+	writeId := w.writeConnID.Load()
+	if writeId == -1 {
+		return nil
+	}
+
+	ctx, cancel := context.WithDeadline(context.Background(), w.now().Add(w.interval))
+	defer cancel()
+	killConn, err := w.allPrivsPool.Get(ctx)
+	if err != nil {
+		log.Errorf("Kill conn didn't get connection :(")
+		return err
+	}
+	defer killConn.Recycle()
+
+	_, err = killConn.Conn.ExecuteFetch(fmt.Sprintf("kill %d", writeId), 1, false)
+	return err
 }
 
 // allowNextHeartbeatRequest ensures that the next call to RequestHeartbeats() passes through and

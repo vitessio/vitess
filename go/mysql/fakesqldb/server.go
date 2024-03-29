@@ -29,16 +29,13 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/mysql/replication"
-	"vitess.io/vitess/go/vt/sqlparser"
-
-	"vitess.io/vitess/go/vt/log"
-
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
-
-	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 )
 
 const appendEntry = -1
@@ -129,6 +126,8 @@ type DB struct {
 	// lastError stores the last error in returning a query result.
 	lastErrorMu sync.Mutex
 	lastError   error
+
+	env *vtenv.Environment
 }
 
 // QueryHandler is the interface used by the DB to simulate executed queries
@@ -182,6 +181,7 @@ func New(t testing.TB) *DB {
 		queryPatternUserCallback: make(map[*regexp.Regexp]func(string)),
 		patternData:              make(map[string]exprResult),
 		lastErrorMu:              sync.Mutex{},
+		env:                      vtenv.NewTestEnv(),
 	}
 
 	db.Handler = db
@@ -189,7 +189,7 @@ func New(t testing.TB) *DB {
 	authServer := mysql.NewAuthServerNone()
 
 	// Start listening.
-	db.listener, err = mysql.NewListener("unix", socketFile, authServer, db, 0, 0, false, false, 0)
+	db.listener, err = mysql.NewListener("unix", socketFile, authServer, db, 0, 0, false, false, 0, 0)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
@@ -291,23 +291,23 @@ func (db *DB) WaitForClose(timeout time.Duration) error {
 }
 
 // ConnParams returns the ConnParams to connect to the DB.
-func (db *DB) ConnParams() dbconfigs.Connector {
-	return dbconfigs.New(&mysql.ConnParams{
+func (db *DB) ConnParams() *mysql.ConnParams {
+	return &mysql.ConnParams{
 		UnixSocket: db.socketFile,
 		Uname:      "user1",
 		Pass:       "password1",
 		DbName:     "fakesqldb",
-	})
+	}
 }
 
 // ConnParamsWithUname returns  ConnParams to connect to the DB with the Uname set to the provided value.
-func (db *DB) ConnParamsWithUname(uname string) dbconfigs.Connector {
-	return dbconfigs.New(&mysql.ConnParams{
+func (db *DB) ConnParamsWithUname(uname string) *mysql.ConnParams {
+	return &mysql.ConnParams{
 		UnixSocket: db.socketFile,
 		Uname:      uname,
 		Pass:       "password1",
 		DbName:     "fakesqldb",
-	})
+	}
 }
 
 //
@@ -376,11 +376,11 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 	}
 	key := strings.ToLower(query)
 	db.mu.Lock()
-	defer db.mu.Unlock()
 	db.queryCalled[key]++
 	db.querylog = append(db.querylog, key)
 	// Check if we should close the connection and provoke errno 2013.
 	if db.shouldClose.Load() {
+		defer db.mu.Unlock()
 		c.Close()
 
 		// log error
@@ -394,6 +394,8 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 	// The driver may send this at connection time, and we don't want it to
 	// interfere.
 	if key == "set names utf8" || strings.HasPrefix(key, "set collation_connection = ") {
+		defer db.mu.Unlock()
+
 		// log error
 		if err := callback(&sqltypes.Result{}); err != nil {
 			log.Errorf("callback failed : %v", err)
@@ -403,12 +405,14 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 
 	// check if we should reject it.
 	if err, ok := db.rejectedData[key]; ok {
+		db.mu.Unlock()
 		return err
 	}
 
 	// Check explicit queries from AddQuery().
 	result, ok := db.data[key]
 	if ok {
+		db.mu.Unlock()
 		if f := result.BeforeFunc; f != nil {
 			f()
 		}
@@ -419,6 +423,7 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 	for _, pat := range db.patternData {
 		if pat.expr.MatchString(query) {
 			userCallback, ok := db.queryPatternUserCallback[pat.expr]
+			db.mu.Unlock()
 			if ok {
 				userCallback(query)
 			}
@@ -429,13 +434,16 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 		}
 	}
 
+	defer db.mu.Unlock()
+
 	if db.neverFail.Load() {
 		return callback(&sqltypes.Result{})
 	}
 	// Nothing matched.
+	parser := sqlparser.NewTestParser()
 	err = fmt.Errorf("fakesqldb:: query: '%s' is not supported on %v",
-		sqlparser.TruncateForUI(query), db.name)
-	log.Errorf("Query not found: %s", sqlparser.TruncateForUI(query))
+		parser.TruncateForUI(query), db.name)
+	log.Errorf("Query not found: %s", parser.TruncateForUI(query))
 
 	return err
 }
@@ -838,4 +846,8 @@ func (db *DB) GetQueryPatternResult(key string) (func(string), ExpectedResult, b
 	}
 
 	return nil, ExpectedResult{nil, nil}, false, nil
+}
+
+func (db *DB) Env() *vtenv.Environment {
+	return db.env
 }

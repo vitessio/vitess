@@ -29,13 +29,14 @@ import (
 	vjson "vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // ReplicatorPlan is the execution plan for the replicator. It contains
@@ -58,6 +59,7 @@ type ReplicatorPlan struct {
 	ColInfoMap    map[string][]*ColumnInfo
 	stats         *binlogplayer.Stats
 	Source        *binlogdatapb.BinlogSource
+	collationEnv  *collations.Environment
 }
 
 // buildExecution plan uses the field info as input and the partially built
@@ -97,11 +99,12 @@ func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent
 // requires us to wait for the field info sent by the source.
 func (rp *ReplicatorPlan) buildFromFields(tableName string, lastpk *sqltypes.Result, fields []*querypb.Field) (*TablePlan, error) {
 	tpb := &tablePlanBuilder{
-		name:     sqlparser.NewIdentifierCS(tableName),
-		lastpk:   lastpk,
-		colInfos: rp.ColInfoMap[tableName],
-		stats:    rp.stats,
-		source:   rp.Source,
+		name:         sqlparser.NewIdentifierCS(tableName),
+		lastpk:       lastpk,
+		colInfos:     rp.ColInfoMap[tableName],
+		stats:        rp.stats,
+		source:       rp.Source,
+		collationEnv: rp.collationEnv,
 	}
 	for _, field := range fields {
 		colName := sqlparser.NewIdentifierCI(field.Name)
@@ -195,6 +198,7 @@ type TablePlan struct {
 	Insert           *sqlparser.ParsedQuery
 	Update           *sqlparser.ParsedQuery
 	Delete           *sqlparser.ParsedQuery
+	MultiDelete      *sqlparser.ParsedQuery
 	Fields           []*querypb.Field
 	EnumValuesMap    map[string](map[string]string)
 	ConvertIntToEnum map[string]bool
@@ -215,6 +219,8 @@ type TablePlan struct {
 	PartialInserts map[string]*sqlparser.ParsedQuery
 	// PartialUpdates are same as PartialInserts, but for update statements
 	PartialUpdates map[string]*sqlparser.ParsedQuery
+
+	CollationEnv *collations.Environment
 }
 
 // MarshalJSON performs a custom JSON Marshalling.
@@ -252,7 +258,7 @@ func (tp *TablePlan) applyBulkInsert(sqlbuffer *bytes2.Buffer, rows []*querypb.R
 		if i > 0 {
 			sqlbuffer.WriteString(", ")
 		}
-		if err := tp.BulkInsertValues.AppendFromRow(sqlbuffer, tp.Fields, row, tp.FieldsToSkip); err != nil {
+		if err := appendFromRow(tp.BulkInsertValues, sqlbuffer, tp.Fields, row, tp.FieldsToSkip); err != nil {
 			return nil, err
 		}
 	}
@@ -297,7 +303,7 @@ func (tp *TablePlan) isOutsidePKRange(bindvars map[string]*querypb.BindVariable,
 
 		rowVal, _ := sqltypes.BindVariableToValue(bindvar)
 		// TODO(king-11) make collation aware
-		result, err := evalengine.NullsafeCompare(rowVal, tp.Lastpk.Rows[0][0], collations.Unknown)
+		result, err := evalengine.NullsafeCompare(rowVal, tp.Lastpk.Rows[0][0], tp.CollationEnv, collations.Unknown)
 		// If rowVal is > last pk, transaction will be a noop, so don't apply this statement
 		if err == nil && result > 0 {
 			tp.Stats.NoopQueryCount.Add(stmtType, 1)
@@ -315,7 +321,7 @@ func (tp *TablePlan) isOutsidePKRange(bindvars map[string]*querypb.BindVariable,
 func (tp *TablePlan) bindFieldVal(field *querypb.Field, val *sqltypes.Value) (*querypb.BindVariable, error) {
 	if conversion, ok := tp.ConvertCharset[field.Name]; ok && !val.IsNull() {
 		// Non-null string value, for which we have a charset conversion instruction
-		fromCollation := collations.Local().DefaultCollationForCharset(conversion.FromCharset)
+		fromCollation := tp.CollationEnv.DefaultCollationForCharset(conversion.FromCharset)
 		if fromCollation == collations.Unknown {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", conversion.FromCharset, field.Name)
 		}
@@ -332,8 +338,13 @@ func (tp *TablePlan) bindFieldVal(field *querypb.Field, val *sqltypes.Value) (*q
 	if enumValues, ok := tp.EnumValuesMap[field.Name]; ok && !val.IsNull() {
 		// The fact that this field has a EnumValuesMap entry, means we must
 		// use the enum's text value as opposed to the enum's numerical value.
-		// Once known use case is with Online DDL, when a column is converted from
-		// ENUM to a VARCHAR/TEXT.
+		// This may be needed in Online DDL, when the enum column could be modified:
+		// - Either from ENUM to a text type (VARCHAR/TEXT)
+		// - Or from ENUM to another ENUM with different value ordering,
+		//   e.g. from `('red', 'green', 'blue')` to `('red', 'blue')`.
+		// By applying the textual value of an enum we eliminate the ordering concern.
+		// In non-Online DDL this shouldn't be a concern because the schema is static,
+		// and so passing the enum's numerical value is sufficient.
 		enumValue, enumValueOK := enumValues[val.ToString()]
 		if !enumValueOK {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Invalid enum value: %v for field %s", val, field.Name)
@@ -444,6 +455,126 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 	return nil, nil
 }
 
+// applyBulkDeleteChanges applies a bulk DELETE statement from the row changes
+// to the target table -- which resulted from a DELETE statement executed on the
+// source that deleted N rows -- using an IN clause with the primary key values
+// of the rows to be deleted. This currently only supports tables with single
+// column primary keys. This limitation is in place for now as we know that case
+// will still be efficient. When using large multi-column IN or OR group clauses
+// in DELETES we could end up doing large (table) scans that actually make things
+// slower.
+// TODO: Add support for multi-column primary keys.
+func (tp *TablePlan) applyBulkDeleteChanges(rowDeletes []*binlogdatapb.RowChange, executor func(string) (*sqltypes.Result, error), maxQuerySize int64) (*sqltypes.Result, error) {
+	if len(rowDeletes) == 0 {
+		return &sqltypes.Result{}, nil
+	}
+	if (len(tp.TablePlanBuilder.pkCols) + len(tp.TablePlanBuilder.extraSourcePkCols)) != 1 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "bulk delete is only supported for tables with a single primary key column")
+	}
+	if tp.MultiDelete == nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "plan has no bulk delete query")
+	}
+
+	baseQuerySize := int64(len(tp.MultiDelete.Query))
+	querySize := baseQuerySize
+
+	execQuery := func(pkVals *[]sqltypes.Value) (*sqltypes.Result, error) {
+		pksBV, err := sqltypes.BuildBindVariable(*pkVals)
+		if err != nil {
+			return nil, err
+		}
+		query, err := tp.MultiDelete.GenerateQuery(map[string]*querypb.BindVariable{"bulk_pks": pksBV}, nil)
+		if err != nil {
+			return nil, err
+		}
+		tp.TablePlanBuilder.stats.BulkQueryCount.Add("delete", 1)
+		return executor(query)
+	}
+
+	pkIndex := -1
+	pkVals := make([]sqltypes.Value, 0, len(rowDeletes))
+	for _, rowDelete := range rowDeletes {
+		vals := sqltypes.MakeRowTrusted(tp.Fields, rowDelete.Before)
+		if pkIndex == -1 {
+			for i := range vals {
+				if tp.PKIndices[i] {
+					pkIndex = i
+					break
+				}
+			}
+		}
+		addedSize := int64(len(vals[pkIndex].Raw()) + 2) // Plus 2 for the comma and space
+		if querySize+addedSize > maxQuerySize {
+			if _, err := execQuery(&pkVals); err != nil {
+				return nil, err
+			}
+			pkVals = nil
+			querySize = baseQuerySize
+		}
+		pkVals = append(pkVals, vals[pkIndex])
+		querySize += addedSize
+	}
+
+	return execQuery(&pkVals)
+}
+
+// applyBulkInsertChanges generates a multi-row INSERT statement from the row
+// changes generated from a multi-row INSERT statement executed on the source.
+func (tp *TablePlan) applyBulkInsertChanges(rowInserts []*binlogdatapb.RowChange, executor func(string) (*sqltypes.Result, error), maxQuerySize int64) (*sqltypes.Result, error) {
+	if len(rowInserts) == 0 {
+		return &sqltypes.Result{}, nil
+	}
+	if tp.BulkInsertFront == nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "plan has no bulk insert query")
+	}
+
+	prefix := &strings.Builder{}
+	prefix.WriteString(tp.BulkInsertFront.Query)
+	prefix.WriteString(" values ")
+	insertPrefix := prefix.String()
+	maxQuerySize -= int64(len(insertPrefix))
+	values := &strings.Builder{}
+
+	execQuery := func(vals *strings.Builder) (*sqltypes.Result, error) {
+		if tp.BulkInsertOnDup != nil {
+			vals.WriteString(tp.BulkInsertOnDup.Query)
+		}
+		tp.TablePlanBuilder.stats.BulkQueryCount.Add("insert", 1)
+		return executor(insertPrefix + vals.String())
+	}
+
+	newStmt := true
+	for _, rowInsert := range rowInserts {
+		rowValues := &strings.Builder{}
+		bindvars := make(map[string]*querypb.BindVariable, len(tp.Fields))
+		vals := sqltypes.MakeRowTrusted(tp.Fields, rowInsert.After)
+		for n, field := range tp.Fields {
+			bindVar, err := tp.bindFieldVal(field, &vals[n])
+			if err != nil {
+				return nil, err
+			}
+			bindvars["a_"+field.Name] = bindVar
+		}
+		if err := tp.BulkInsertValues.Append(rowValues, bindvars, nil); err != nil {
+			return nil, err
+		}
+		if int64(values.Len()+2+rowValues.Len()) > maxQuerySize { // Plus 2 for the comma and space
+			if _, err := execQuery(values); err != nil {
+				return nil, err
+			}
+			values.Reset()
+			newStmt = true
+		}
+		if !newStmt {
+			values.WriteString(", ")
+		}
+		values.WriteString(rowValues.String())
+		newStmt = false
+	}
+
+	return execQuery(values)
+}
+
 func getQuery(pq *sqlparser.ParsedQuery, bindvars map[string]*querypb.BindVariable) (string, error) {
 	sql, err := pq.GenerateQuery(bindvars, nil)
 	if err != nil {
@@ -480,4 +611,75 @@ func valsEqual(v1, v2 sqltypes.Value) bool {
 	}
 	// Compare content only if none are null.
 	return v1.ToString() == v2.ToString()
+}
+
+// AppendFromRow behaves like Append but takes a querypb.Row directly, assuming that
+// the fields in the row are in the same order as the placeholders in this query. The fields might include generated
+// columns which are dropped, by checking against skipFields, before binding the variables
+// note: there can be more fields than bind locations since extra columns might be requested from the source if not all
+// primary keys columns are present in the target table, for example. Also some values in the row may not correspond for
+// values from the database on the source: sum/count for aggregation queries, for example
+func appendFromRow(pq *sqlparser.ParsedQuery, buf *bytes2.Buffer, fields []*querypb.Field, row *querypb.Row, skipFields map[string]bool) error {
+	bindLocations := pq.BindLocations()
+	if len(fields) < len(bindLocations) {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "wrong number of fields: got %d fields for %d bind locations ",
+			len(fields), len(bindLocations))
+	}
+
+	type colInfo struct {
+		typ    querypb.Type
+		length int64
+		offset int64
+	}
+	rowInfo := make([]*colInfo, 0)
+
+	offset := int64(0)
+	for i, field := range fields { // collect info required for fields to be bound
+		length := row.Lengths[i]
+		if !skipFields[strings.ToLower(field.Name)] {
+			rowInfo = append(rowInfo, &colInfo{
+				typ:    field.Type,
+				length: length,
+				offset: offset,
+			})
+		}
+		if length > 0 {
+			offset += row.Lengths[i]
+		}
+	}
+
+	// bind field values to locations
+	var offsetQuery int
+	for i, loc := range bindLocations {
+		col := rowInfo[i]
+		buf.WriteString(pq.Query[offsetQuery:loc.Offset])
+		typ := col.typ
+
+		switch typ {
+		case querypb.Type_TUPLE:
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected Type_TUPLE for value %d", i)
+		case querypb.Type_JSON:
+			if col.length < 0 { // An SQL NULL and not an actual JSON value
+				buf.WriteString(sqltypes.NullStr)
+			} else { // A JSON value (which may be a JSON null literal value)
+				buf2 := row.Values[col.offset : col.offset+col.length]
+				vv, err := vjson.MarshalSQLValue(buf2)
+				if err != nil {
+					return err
+				}
+				buf.WriteString(vv.RawStr())
+			}
+		default:
+			if col.length < 0 {
+				// -1 means a null variable; serialize it directly
+				buf.WriteString(sqltypes.NullStr)
+			} else {
+				vv := sqltypes.MakeTrusted(typ, row.Values[col.offset:col.offset+col.length])
+				vv.EncodeSQLBytes2(buf)
+			}
+		}
+		offsetQuery = loc.Offset + loc.Length
+	}
+	buf.WriteString(pq.Query[offsetQuery:])
+	return nil
 }

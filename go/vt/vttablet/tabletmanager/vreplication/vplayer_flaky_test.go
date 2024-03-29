@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -185,7 +186,6 @@ func TestPlayerInvisibleColumns(t *testing.T) {
 		output := qh.Expect(tcases.output)
 		expectNontxQueries(t, output)
 		time.Sleep(1 * time.Second)
-		log.Flush()
 		if tcases.table != "" {
 			expectData(t, tcases.table, tcases.data)
 		}
@@ -691,8 +691,8 @@ func TestPlayerFilters(t *testing.T) {
 		fmt.Sprintf("create table %s.dst4(id1 int, val varbinary(128), primary key(id1))", vrepldb),
 		"create table src5(id1 int, id2 int, val varbinary(128), primary key(id1))",
 		fmt.Sprintf("create table %s.dst5(id1 int, val varbinary(128), primary key(id1))", vrepldb),
-		"create table srcCharset(id1 int, val varchar(128) character set utf8mb4 collate utf8mb4_bin, primary key(id1))",
-		fmt.Sprintf("create table %s.dstCharset(id1 int, val varchar(128) character set utf8mb4 collate utf8mb4_bin, val2 varchar(128) character set utf8mb4 collate utf8mb4_bin, primary key(id1))", vrepldb),
+		"create table src_charset(id1 int, val varchar(128) character set utf8mb4 collate utf8mb4_bin, primary key(id1))",
+		fmt.Sprintf("create table %s.dst_charset(id1 int, val varchar(128) character set utf8mb4 collate utf8mb4_bin, val2 varchar(128) character set utf8mb4 collate utf8mb4_bin, primary key(id1))", vrepldb),
 	})
 	defer execStatements(t, []string{
 		"drop table src1",
@@ -710,8 +710,8 @@ func TestPlayerFilters(t *testing.T) {
 		fmt.Sprintf("drop table %s.dst4", vrepldb),
 		"drop table src5",
 		fmt.Sprintf("drop table %s.dst5", vrepldb),
-		"drop table srcCharset",
-		fmt.Sprintf("drop table %s.dstCharset", vrepldb),
+		"drop table src_charset",
+		fmt.Sprintf("drop table %s.dst_charset", vrepldb),
 	})
 	env.SchemaEngine.Reload(context.Background())
 
@@ -736,8 +736,8 @@ func TestPlayerFilters(t *testing.T) {
 			Match:  "dst5",
 			Filter: "select id1, val from src5 where val = 'abc'",
 		}, {
-			Match:  "dstCharset",
-			Filter: "select id1, concat(substr(_utf8mb4 val collate utf8mb4_bin,1,1),'abcxyz') val, concat(substr(_utf8mb4 val collate utf8mb4_bin,1,1),'abcxyz') val2 from srcCharset",
+			Match:  "dst_charset",
+			Filter: "select id1, concat(substr(_utf8mb4 val collate utf8mb4_bin,1,1),'abcxyz') val, concat(substr(_utf8mb4 val collate utf8mb4_bin,1,1),'abcxyz') val2 from src_charset",
 		}},
 	}
 	bls := &binlogdatapb.BinlogSource{
@@ -985,14 +985,14 @@ func TestPlayerFilters(t *testing.T) {
 		data:  [][]string{{"1", "abc"}, {"4", "abc"}},
 	}, {
 		// test collation + filter
-		input: "insert into srcCharset values (1,'木元')",
+		input: "insert into src_charset values (1,'木元')",
 		output: qh.Expect(
 			"begin",
-			"insert into dstCharset(id1,val,val2) values (1,concat(substr(_utf8mb4 '木元' collate utf8mb4_bin, 1, 1), 'abcxyz'),concat(substr(_utf8mb4 '木元' collate utf8mb4_bin, 1, 1), 'abcxyz'))",
+			"insert into dst_charset(id1,val,val2) values (1,concat(substr(_utf8mb4 '木元' collate utf8mb4_bin, 1, 1), 'abcxyz'),concat(substr(_utf8mb4 '木元' collate utf8mb4_bin, 1, 1), 'abcxyz'))",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
-		table: "dstCharset",
+		table: "dst_charset",
 		data:  [][]string{{"1", "木abcxyz", "木abcxyz"}},
 	}}
 
@@ -2335,7 +2335,7 @@ func TestPlayerCancelOnLock(t *testing.T) {
 	}
 }
 
-func TestPlayerBatching(t *testing.T) {
+func TestPlayerTransactions(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
@@ -2799,8 +2799,7 @@ func TestVReplicationLogs(t *testing.T) {
 
 	for _, want := range expected {
 		t.Run("", func(t *testing.T) {
-			err = insertLog(vdbc, LogMessage, 1, binlogdatapb.VReplicationWorkflowState_Running.String(), "message1")
-			require.NoError(t, err)
+			insertLog(vdbc, LogMessage, 1, binlogdatapb.VReplicationWorkflowState_Running.String(), "message1")
 			qr, err := env.Mysqld.FetchSuperQuery(context.Background(), query)
 			require.NoError(t, err)
 			require.Equal(t, want, fmt.Sprintf("%v", qr.Rows))
@@ -2900,7 +2899,7 @@ func TestPlayerInvalidDates(t *testing.T) {
 		fmt.Sprintf("drop table %s.dst1", vrepldb),
 	})
 	pos := primaryPosition(t)
-	execStatements(t, []string{"set sql_mode='';insert into src1 values(1, '0000-00-00');set sql_mode='STRICT_TRANS_TABLES';"})
+	execStatements(t, []string{"set sql_mode=''", "insert into src1 values(1, '0000-00-00')", "set sql_mode='STRICT_TRANS_TABLES'"})
 	env.SchemaEngine.Reload(context.Background())
 
 	// default mysql flavor allows invalid dates: so disallow explicitly for this test
@@ -3093,7 +3092,6 @@ func TestPlayerNoBlob(t *testing.T) {
 		output := qh.Expect(tcases.output)
 		expectNontxQueries(t, output)
 		time.Sleep(1 * time.Second)
-		log.Flush()
 		if tcases.table != "" {
 			expectData(t, tcases.table, tcases.data)
 		}
@@ -3105,6 +3103,255 @@ func TestPlayerNoBlob(t *testing.T) {
 	require.Equal(t, int64(3), stats.PartialQueryCount.Counts()["insert"])
 	require.Equal(t, int64(2), stats.PartialQueryCacheSize.Counts()["update"])
 	require.Equal(t, int64(4), stats.PartialQueryCount.Counts()["update"])
+}
+
+func TestPlayerBatchMode(t *testing.T) {
+	// To test trx batch splitting at 1024-64 bytes.
+	maxAllowedPacket := 1024
+	oldVreplicationExperimentalFlags := vttablet.VReplicationExperimentalFlags
+	vttablet.VReplicationExperimentalFlags = vttablet.VReplicationExperimentalFlagVPlayerBatching
+	defer func() {
+		vttablet.VReplicationExperimentalFlags = oldVreplicationExperimentalFlags
+	}()
+
+	defer deleteTablet(addTablet(100))
+	execStatements(t, []string{
+		fmt.Sprintf("set @@global.max_allowed_packet=%d", maxAllowedPacket),
+		"create table t1(id bigint, val1 varchar(1000), primary key(id))",
+		fmt.Sprintf("create table %s.t1(id bigint, val1 varchar(1000), primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+		fmt.Sprintf("drop table %s.t1", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t1",
+			Filter: "select * from t1",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, vrID := startVReplication(t, bls, "")
+	defer cancel()
+
+	maxBatchSize := maxAllowedPacket - 64 // VPlayer leaves 64 bytes of room
+	// When the trx will be in a single batch.
+	trxFullBatchExpectRE := `^begin;(set @@session\.foreign_key_checks=.*;)?%s;update _vt\.vreplication set pos=.*;commit$`
+	// If the trx batch is split, then we only expect the end part.
+	trxLastBatchExpectRE := `%s;update _vt\.vreplication set pos=.*;commit$`
+	// The vreplication position update statement will look like this:
+	// update _vt.vreplication set pos='MySQL56/b213e4de-937a-11ee-b184-668979c675f4:1-38', time_updated=1701786574, transaction_timestamp=1701786574, rows_copied=0, message='' where id=1;
+	// So it will use 182 bytes in the batch.
+	// This long value can be used to test the handling of bulk statements
+	// which bump up against the max batch size, as well as testing the trx
+	// batch splitting into multiple wire messages when hitting the max size.
+	longStr := strings.Repeat("a", maxBatchSize-70)
+
+	testcases := []struct {
+		input                    string
+		output                   []string
+		expectedNonCommitBatches int64
+		expectedInLastBatch      string // Should only be set if we expect 1+ non-commit batches
+		expectedBulkInserts      int64
+		expectedBulkDeletes      int64
+		table                    string
+		data                     [][]string
+	}{
+		{
+			input:               "insert into t1(id, val1) values (1, 'aaa'), (2, 'bbb'), (3, 'ccc'), (4, 'ddd'), (5, 'eee')",
+			output:              []string{"insert into t1(id,val1) values (1,'aaa'), (2,'bbb'), (3,'ccc'), (4,'ddd'), (5,'eee')"},
+			expectedBulkInserts: 1,
+			table:               "t1",
+			data: [][]string{
+				{"1", "aaa"},
+				{"2", "bbb"},
+				{"3", "ccc"},
+				{"4", "ddd"},
+				{"5", "eee"},
+			},
+		},
+		{
+			input:  "delete from t1 where id = 1",
+			output: []string{"delete from t1 where id=1"},
+			table:  "t1",
+			data: [][]string{
+				{"2", "bbb"},
+				{"3", "ccc"},
+				{"4", "ddd"},
+				{"5", "eee"},
+			},
+		},
+		{
+			input:               "delete from t1 where id > 3",
+			output:              []string{"delete from t1 where id in (4, 5)"},
+			expectedBulkDeletes: 1,
+			table:               "t1",
+			data: [][]string{
+				{"2", "bbb"},
+				{"3", "ccc"},
+			},
+		},
+		{
+			input: fmt.Sprintf("insert into t1(id, val1) values (1, '%s'), (2, 'bbb'), (3, 'ccc') on duplicate key update id = id+100", longStr),
+			output: []string{
+				fmt.Sprintf("insert into t1(id,val1) values (1,'%s')", longStr),
+				"delete from t1 where id=2",
+				"insert into t1(id,val1) values (102,'bbb')",
+				"delete from t1 where id=3",
+				// This will be in the second/last batch, along with the vrepl pos update.
+				"insert into t1(id,val1) values (103,'ccc')",
+			},
+			expectedInLastBatch:      "insert into t1(id,val1) values (103,'ccc')",
+			expectedNonCommitBatches: 1,
+			table:                    "t1",
+			data: [][]string{
+				{"1", longStr},
+				{"102", "bbb"},
+				{"103", "ccc"},
+			},
+		},
+		{
+			input: "insert into t1(id, val1) values (1, 'aaa'), (2, 'bbb'), (3, 'ccc') on duplicate key update id = id+500, val1 = values(val1)",
+			output: []string{
+				"delete from t1 where id=1",
+				"insert into t1(id,val1) values (501,'aaa')",
+				"insert into t1(id,val1) values (2,'bbb'), (3,'ccc')",
+			},
+			expectedBulkInserts: 1,
+			table:               "t1",
+			data: [][]string{
+				{"2", "bbb"},
+				{"3", "ccc"},
+				{"102", "bbb"},
+				{"103", "ccc"},
+				{"501", "aaa"},
+			},
+		},
+		{
+			input:               "delete from t1",
+			output:              []string{"delete from t1 where id in (2, 3, 102, 103, 501)"},
+			expectedBulkDeletes: 1,
+			table:               "t1",
+		},
+		{
+			input: fmt.Sprintf("insert into t1(id, val1) values (1, '%s'), (2, 'bbb'), (3, 'ccc'), (4, 'ddd'), (5, 'eee')", longStr),
+			output: []string{
+				// This bulk insert is long enough that the BEGIN gets sent down by itself.
+				// The bulk query then gets split into two queries. It also causes the trx
+				// to get split into three batches (BEGIN, INSERT, INSERT).
+				fmt.Sprintf("insert into t1(id,val1) values (1,'%s'), (2,'bbb'), (3,'ccc'), (4,'ddd')", longStr),
+				// This will be in the second/last batch, along with the vrepl pos update.
+				"insert into t1(id,val1) values (5,'eee')",
+			},
+			expectedBulkInserts: 2,
+			// The BEGIN, then the INSERT.
+			expectedNonCommitBatches: 2, // The last one includes the commit
+			expectedInLastBatch:      "insert into t1(id,val1) values (5,'eee')",
+			table:                    "t1",
+			data: [][]string{
+				{"1", longStr},
+				{"2", "bbb"},
+				{"3", "ccc"},
+				{"4", "ddd"},
+				{"5", "eee"},
+			},
+		},
+		{
+			input: "insert into t1(id, val1) values (1000000000000, 'x'), (1000000000001, 'x'), (1000000000002, 'x'), (1000000000003, 'x'), (1000000000004, 'x'), (1000000000005, 'x'), (1000000000006, 'x'), (1000000000007, 'x'), (1000000000008, 'x'), (1000000000009, 'x'), (1000000000010, 'x'), (1000000000011, 'x'), (1000000000012, 'x'), (1000000000013, 'x'), (1000000000014, 'x'), (1000000000015, 'x'), (1000000000016, 'x'), (1000000000017, 'x'), (1000000000018, 'x'), (1000000000019, 'x'), (1000000000020, 'x'), (1000000000021, 'x'), (1000000000022, 'x'), (1000000000023, 'x'), (1000000000024, 'x'), (1000000000025, 'x'), (1000000000026, 'x'), (1000000000027, 'x'), (1000000000028, 'x'), (1000000000029, 'x'), (1000000000030, 'x'), (1000000000031, 'x'), (1000000000032, 'x'), (1000000000033, 'x'), (1000000000034, 'x'), (1000000000035, 'x'), (1000000000036, 'x'), (1000000000037, 'x'), (1000000000038, 'x'), (1000000000039, 'x'), (1000000000040, 'x'), (1000000000041, 'x'), (1000000000042, 'x'), (1000000000043, 'x'), (1000000000044, 'x'), (1000000000045, 'x'), (1000000000046, 'x'), (1000000000047, 'x'), (1000000000048, 'x'), (1000000000049, 'x'), (1000000000050, 'x'), (1000000000051, 'x'), (1000000000052, 'x'), (1000000000053, 'x'), (1000000000054, 'x'), (1000000000055, 'x'), (1000000000056, 'x'), (1000000000057, 'x'), (1000000000058, 'x'), (1000000000059, 'x'), (1000000000060, 'x'), (1000000000061, 'x'), (1000000000062, 'x'), (1000000000063, 'x'), (1000000000064, 'x'), (1000000000065, 'x'), (1000000000066, 'x'), (1000000000067, 'x'), (1000000000068, 'x'), (1000000000069, 'x'), (1000000000070, 'x'), (1000000000071, 'x'), (1000000000072, 'x'), (1000000000073, 'x'), (1000000000074, 'x'), (1000000000075, 'x'), (1000000000076, 'x'), (1000000000077, 'x'), (1000000000078, 'x'), (1000000000079, 'x'), (1000000000080, 'x'), (1000000000081, 'x'), (1000000000082, 'x'), (1000000000083, 'x'), (1000000000084, 'x'), (1000000000085, 'x'), (1000000000086, 'x'), (1000000000087, 'x'), (1000000000088, 'x'), (1000000000089, 'x'), (1000000000090, 'x'), (1000000000091, 'x'), (1000000000092, 'x'), (1000000000093, 'x'), (1000000000094, 'x'), (1000000000095, 'x'), (1000000000096, 'x'), (1000000000097, 'x'), (1000000000098, 'x'), (1000000000099, 'x'), (1000000000100, 'x'), (1000000000101, 'x'), (1000000000102, 'x'), (1000000000103, 'x'), (1000000000104, 'x'), (1000000000105, 'x'), (1000000000106, 'x'), (1000000000107, 'x'), (1000000000108, 'x'), (1000000000109, 'x'), (1000000000110, 'x'), (1000000000111, 'x'), (1000000000112, 'x'), (1000000000113, 'x'), (1000000000114, 'x'), (1000000000115, 'x'), (1000000000116, 'x'), (1000000000117, 'x'), (1000000000118, 'x'), (1000000000119, 'x'), (1000000000120, 'x'), (1000000000121, 'x'), (1000000000122, 'x'), (1000000000123, 'x'), (1000000000124, 'x'), (1000000000125, 'x'), (1000000000126, 'x'), (1000000000127, 'x'), (1000000000128, 'x'), (1000000000129, 'x'), (1000000000130, 'x'), (1000000000131, 'x'), (1000000000132, 'x'), (1000000000133, 'x'), (1000000000134, 'x'), (1000000000135, 'x'), (1000000000136, 'x'), (1000000000137, 'x'), (1000000000138, 'x'), (1000000000139, 'x'), (1000000000140, 'x'), (1000000000141, 'x'), (1000000000142, 'x'), (1000000000143, 'x'), (1000000000144, 'x'), (1000000000145, 'x'), (1000000000146, 'x'), (1000000000147, 'x'), (1000000000148, 'x'), (1000000000149, 'x'), (1000000000150, 'x')",
+			output: []string{
+				"insert into t1(id,val1) values (1000000000000,'x'), (1000000000001,'x'), (1000000000002,'x'), (1000000000003,'x'), (1000000000004,'x'), (1000000000005,'x'), (1000000000006,'x'), (1000000000007,'x'), (1000000000008,'x'), (1000000000009,'x'), (1000000000010,'x'), (1000000000011,'x'), (1000000000012,'x'), (1000000000013,'x'), (1000000000014,'x'), (1000000000015,'x'), (1000000000016,'x'), (1000000000017,'x'), (1000000000018,'x'), (1000000000019,'x'), (1000000000020,'x'), (1000000000021,'x'), (1000000000022,'x'), (1000000000023,'x'), (1000000000024,'x'), (1000000000025,'x'), (1000000000026,'x'), (1000000000027,'x'), (1000000000028,'x'), (1000000000029,'x'), (1000000000030,'x'), (1000000000031,'x'), (1000000000032,'x'), (1000000000033,'x'), (1000000000034,'x'), (1000000000035,'x'), (1000000000036,'x'), (1000000000037,'x'), (1000000000038,'x'), (1000000000039,'x'), (1000000000040,'x'), (1000000000041,'x'), (1000000000042,'x'), (1000000000043,'x')",
+				"insert into t1(id,val1) values (1000000000044,'x'), (1000000000045,'x'), (1000000000046,'x'), (1000000000047,'x'), (1000000000048,'x'), (1000000000049,'x'), (1000000000050,'x'), (1000000000051,'x'), (1000000000052,'x'), (1000000000053,'x'), (1000000000054,'x'), (1000000000055,'x'), (1000000000056,'x'), (1000000000057,'x'), (1000000000058,'x'), (1000000000059,'x'), (1000000000060,'x'), (1000000000061,'x'), (1000000000062,'x'), (1000000000063,'x'), (1000000000064,'x'), (1000000000065,'x'), (1000000000066,'x'), (1000000000067,'x'), (1000000000068,'x'), (1000000000069,'x'), (1000000000070,'x'), (1000000000071,'x'), (1000000000072,'x'), (1000000000073,'x'), (1000000000074,'x'), (1000000000075,'x'), (1000000000076,'x'), (1000000000077,'x'), (1000000000078,'x'), (1000000000079,'x'), (1000000000080,'x'), (1000000000081,'x'), (1000000000082,'x'), (1000000000083,'x'), (1000000000084,'x'), (1000000000085,'x'), (1000000000086,'x'), (1000000000087,'x')",
+				"insert into t1(id,val1) values (1000000000088,'x'), (1000000000089,'x'), (1000000000090,'x'), (1000000000091,'x'), (1000000000092,'x'), (1000000000093,'x'), (1000000000094,'x'), (1000000000095,'x'), (1000000000096,'x'), (1000000000097,'x'), (1000000000098,'x'), (1000000000099,'x'), (1000000000100,'x'), (1000000000101,'x'), (1000000000102,'x'), (1000000000103,'x'), (1000000000104,'x'), (1000000000105,'x'), (1000000000106,'x'), (1000000000107,'x'), (1000000000108,'x'), (1000000000109,'x'), (1000000000110,'x'), (1000000000111,'x'), (1000000000112,'x'), (1000000000113,'x'), (1000000000114,'x'), (1000000000115,'x'), (1000000000116,'x'), (1000000000117,'x'), (1000000000118,'x'), (1000000000119,'x'), (1000000000120,'x'), (1000000000121,'x'), (1000000000122,'x'), (1000000000123,'x'), (1000000000124,'x'), (1000000000125,'x'), (1000000000126,'x'), (1000000000127,'x'), (1000000000128,'x'), (1000000000129,'x'), (1000000000130,'x'), (1000000000131,'x')",
+				// This will be in the last batch, along with the vrepl pos update.
+				"insert into t1(id,val1) values (1000000000132,'x'), (1000000000133,'x'), (1000000000134,'x'), (1000000000135,'x'), (1000000000136,'x'), (1000000000137,'x'), (1000000000138,'x'), (1000000000139,'x'), (1000000000140,'x'), (1000000000141,'x'), (1000000000142,'x'), (1000000000143,'x'), (1000000000144,'x'), (1000000000145,'x'), (1000000000146,'x'), (1000000000147,'x'), (1000000000148,'x'), (1000000000149,'x'), (1000000000150,'x')",
+			},
+			expectedBulkInserts:      4,
+			expectedNonCommitBatches: 3, // The last one includes the commit
+			expectedInLastBatch:      "insert into t1(id,val1) values (1000000000132,'x'), (1000000000133,'x'), (1000000000134,'x'), (1000000000135,'x'), (1000000000136,'x'), (1000000000137,'x'), (1000000000138,'x'), (1000000000139,'x'), (1000000000140,'x'), (1000000000141,'x'), (1000000000142,'x'), (1000000000143,'x'), (1000000000144,'x'), (1000000000145,'x'), (1000000000146,'x'), (1000000000147,'x'), (1000000000148,'x'), (1000000000149,'x'), (1000000000150,'x')",
+			table:                    "t1",
+			data: [][]string{
+				{"1", longStr},
+				{"2", "bbb"},
+				{"3", "ccc"},
+				{"4", "ddd"},
+				{"5", "eee"},
+				{"1000000000000", "x"}, {"1000000000001", "x"}, {"1000000000002", "x"}, {"1000000000003", "x"}, {"1000000000004", "x"}, {"1000000000005", "x"}, {"1000000000006", "x"}, {"1000000000007", "x"}, {"1000000000008", "x"}, {"1000000000009", "x"}, {"1000000000010", "x"}, {"1000000000011", "x"}, {"1000000000012", "x"}, {"1000000000013", "x"}, {"1000000000014", "x"}, {"1000000000015", "x"}, {"1000000000016", "x"}, {"1000000000017", "x"}, {"1000000000018", "x"}, {"1000000000019", "x"}, {"1000000000020", "x"}, {"1000000000021", "x"}, {"1000000000022", "x"}, {"1000000000023", "x"}, {"1000000000024", "x"}, {"1000000000025", "x"}, {"1000000000026", "x"}, {"1000000000027", "x"}, {"1000000000028", "x"}, {"1000000000029", "x"}, {"1000000000030", "x"}, {"1000000000031", "x"}, {"1000000000032", "x"}, {"1000000000033", "x"}, {"1000000000034", "x"}, {"1000000000035", "x"}, {"1000000000036", "x"}, {"1000000000037", "x"}, {"1000000000038", "x"}, {"1000000000039", "x"}, {"1000000000040", "x"}, {"1000000000041", "x"}, {"1000000000042", "x"}, {"1000000000043", "x"}, {"1000000000044", "x"}, {"1000000000045", "x"}, {"1000000000046", "x"}, {"1000000000047", "x"}, {"1000000000048", "x"}, {"1000000000049", "x"}, {"1000000000050", "x"}, {"1000000000051", "x"}, {"1000000000052", "x"}, {"1000000000053", "x"}, {"1000000000054", "x"}, {"1000000000055", "x"}, {"1000000000056", "x"}, {"1000000000057", "x"}, {"1000000000058", "x"}, {"1000000000059", "x"}, {"1000000000060", "x"}, {"1000000000061", "x"}, {"1000000000062", "x"}, {"1000000000063", "x"}, {"1000000000064", "x"}, {"1000000000065", "x"}, {"1000000000066", "x"}, {"1000000000067", "x"}, {"1000000000068", "x"}, {"1000000000069", "x"}, {"1000000000070", "x"}, {"1000000000071", "x"}, {"1000000000072", "x"}, {"1000000000073", "x"}, {"1000000000074", "x"}, {"1000000000075", "x"}, {"1000000000076", "x"}, {"1000000000077", "x"}, {"1000000000078", "x"}, {"1000000000079", "x"}, {"1000000000080", "x"}, {"1000000000081", "x"}, {"1000000000082", "x"}, {"1000000000083", "x"}, {"1000000000084", "x"}, {"1000000000085", "x"}, {"1000000000086", "x"}, {"1000000000087", "x"}, {"1000000000088", "x"}, {"1000000000089", "x"}, {"1000000000090", "x"}, {"1000000000091", "x"}, {"1000000000092", "x"}, {"1000000000093", "x"}, {"1000000000094", "x"}, {"1000000000095", "x"}, {"1000000000096", "x"}, {"1000000000097", "x"}, {"1000000000098", "x"}, {"1000000000099", "x"}, {"1000000000100", "x"}, {"1000000000101", "x"}, {"1000000000102", "x"}, {"1000000000103", "x"}, {"1000000000104", "x"}, {"1000000000105", "x"}, {"1000000000106", "x"}, {"1000000000107", "x"}, {"1000000000108", "x"}, {"1000000000109", "x"}, {"1000000000110", "x"}, {"1000000000111", "x"}, {"1000000000112", "x"}, {"1000000000113", "x"}, {"1000000000114", "x"}, {"1000000000115", "x"}, {"1000000000116", "x"}, {"1000000000117", "x"}, {"1000000000118", "x"}, {"1000000000119", "x"}, {"1000000000120", "x"}, {"1000000000121", "x"}, {"1000000000122", "x"}, {"1000000000123", "x"}, {"1000000000124", "x"}, {"1000000000125", "x"}, {"1000000000126", "x"}, {"1000000000127", "x"}, {"1000000000128", "x"}, {"1000000000129", "x"}, {"1000000000130", "x"}, {"1000000000131", "x"}, {"1000000000132", "x"}, {"1000000000133", "x"}, {"1000000000134", "x"}, {"1000000000135", "x"}, {"1000000000136", "x"}, {"1000000000137", "x"}, {"1000000000138", "x"}, {"1000000000139", "x"}, {"1000000000140", "x"}, {"1000000000141", "x"}, {"1000000000142", "x"}, {"1000000000143", "x"}, {"1000000000144", "x"}, {"1000000000145", "x"}, {"1000000000146", "x"}, {"1000000000147", "x"}, {"1000000000148", "x"}, {"1000000000149", "x"}, {"1000000000150", "x"},
+			},
+		},
+		{ // Now we have enough long IDs to cause the bulk delete to also be split along with the trx batch.
+			input: "delete from t1 where id > 1 and id <= 1000000000149",
+			output: []string{
+				"delete from t1 where id in (2, 3, 4, 5, 1000000000000, 1000000000001, 1000000000002, 1000000000003, 1000000000004, 1000000000005, 1000000000006, 1000000000007, 1000000000008, 1000000000009, 1000000000010, 1000000000011, 1000000000012, 1000000000013, 1000000000014, 1000000000015, 1000000000016, 1000000000017, 1000000000018, 1000000000019, 1000000000020, 1000000000021, 1000000000022, 1000000000023, 1000000000024, 1000000000025, 1000000000026, 1000000000027, 1000000000028, 1000000000029, 1000000000030, 1000000000031, 1000000000032, 1000000000033, 1000000000034, 1000000000035, 1000000000036, 1000000000037, 1000000000038, 1000000000039, 1000000000040, 1000000000041, 1000000000042, 1000000000043, 1000000000044, 1000000000045, 1000000000046, 1000000000047, 1000000000048, 1000000000049, 1000000000050, 1000000000051, 1000000000052, 1000000000053, 1000000000054, 1000000000055, 1000000000056, 1000000000057, 1000000000058, 1000000000059)",
+				"delete from t1 where id in (1000000000060, 1000000000061, 1000000000062, 1000000000063, 1000000000064, 1000000000065, 1000000000066, 1000000000067, 1000000000068, 1000000000069, 1000000000070, 1000000000071, 1000000000072, 1000000000073, 1000000000074, 1000000000075, 1000000000076, 1000000000077, 1000000000078, 1000000000079, 1000000000080, 1000000000081, 1000000000082, 1000000000083, 1000000000084, 1000000000085, 1000000000086, 1000000000087, 1000000000088, 1000000000089, 1000000000090, 1000000000091, 1000000000092, 1000000000093, 1000000000094, 1000000000095, 1000000000096, 1000000000097, 1000000000098, 1000000000099, 1000000000100, 1000000000101, 1000000000102, 1000000000103, 1000000000104, 1000000000105, 1000000000106, 1000000000107, 1000000000108, 1000000000109, 1000000000110, 1000000000111, 1000000000112, 1000000000113, 1000000000114, 1000000000115, 1000000000116, 1000000000117, 1000000000118, 1000000000119, 1000000000120)",
+				// This will be in the last batch, along with the vrepl pos update.
+				"delete from t1 where id in (1000000000121, 1000000000122, 1000000000123, 1000000000124, 1000000000125, 1000000000126, 1000000000127, 1000000000128, 1000000000129, 1000000000130, 1000000000131, 1000000000132, 1000000000133, 1000000000134, 1000000000135, 1000000000136, 1000000000137, 1000000000138, 1000000000139, 1000000000140, 1000000000141, 1000000000142, 1000000000143, 1000000000144, 1000000000145, 1000000000146, 1000000000147, 1000000000148, 1000000000149)",
+			},
+			expectedBulkDeletes:      3,
+			expectedNonCommitBatches: 2, // The last one includes the commit
+			expectedInLastBatch:      "delete from t1 where id in (1000000000121, 1000000000122, 1000000000123, 1000000000124, 1000000000125, 1000000000126, 1000000000127, 1000000000128, 1000000000129, 1000000000130, 1000000000131, 1000000000132, 1000000000133, 1000000000134, 1000000000135, 1000000000136, 1000000000137, 1000000000138, 1000000000139, 1000000000140, 1000000000141, 1000000000142, 1000000000143, 1000000000144, 1000000000145, 1000000000146, 1000000000147, 1000000000148, 1000000000149)",
+			table:                    "t1",
+			data: [][]string{
+				{"1", longStr},
+				{"1000000000150", "x"},
+			},
+		},
+		{
+			input:               "delete from t1 where id = 1 or id > 1000000000149",
+			output:              []string{"delete from t1 where id in (1, 1000000000150)"},
+			expectedBulkDeletes: 1,
+			table:               "t1",
+		},
+	}
+
+	expectedBulkInserts, expectedBulkDeletes, expectedTrxBatchExecs, expectedTrxBatchCommits := int64(0), int64(0), int64(0), int64(0)
+	stats := globalStats.controllers[int32(vrID)].blpStats
+
+	for _, tcase := range testcases {
+		t.Run(fmt.Sprintf("%.50s", tcase.input), func(t *testing.T) {
+			execStatements(t, []string{tcase.input})
+			var output qh.ExpectationSequencer
+			switch len(tcase.output) {
+			case 0:
+				require.FailNow(t, "no expected output provided for test case")
+			case 1:
+				output = qh.Expect(tcase.output[0])
+			default:
+				output = qh.Expect(tcase.output[0], tcase.output[1:]...)
+			}
+			for _, stmt := range tcase.output {
+				require.LessOrEqual(t, len(stmt), maxBatchSize, "expected output statement is longer than the max batch size (%d): %s", maxBatchSize, stmt)
+			}
+			expectNontxQueries(t, output)
+			time.Sleep(1 * time.Second)
+			if tcase.table != "" {
+				expectData(t, tcase.table, tcase.data)
+			}
+
+			// Confirm that the row events generated the expected multi-row
+			// statements and the statements were sent in multi-statement
+			// protocol message(s) as expected.
+			expectedBulkDeletes += tcase.expectedBulkDeletes
+			expectedBulkInserts += tcase.expectedBulkInserts
+			expectedTrxBatchCommits++ // Should only ever be 1 per test case
+			expectedTrxBatchExecs += tcase.expectedNonCommitBatches
+			if tcase.expectedInLastBatch != "" { // We expect the trx to be split
+				require.Regexpf(t, regexp.MustCompile(fmt.Sprintf(trxLastBatchExpectRE, regexp.QuoteMeta(tcase.expectedInLastBatch))), lastMultiExecQuery, "Unexpected batch statement: %s", lastMultiExecQuery)
+			} else {
+				require.Regexpf(t, regexp.MustCompile(fmt.Sprintf(trxFullBatchExpectRE, regexp.QuoteMeta(strings.Join(tcase.output, ";")))), lastMultiExecQuery, "Unexpected batch statement: %s", lastMultiExecQuery)
+			}
+			require.Equal(t, expectedBulkInserts, stats.BulkQueryCount.Counts()["insert"], "expected %d bulk inserts but got %d", expectedBulkInserts, stats.BulkQueryCount.Counts()["insert"])
+			require.Equal(t, expectedBulkDeletes, stats.BulkQueryCount.Counts()["delete"], "expected %d bulk deletes but got %d", expectedBulkDeletes, stats.BulkQueryCount.Counts()["delete"])
+			require.Equal(t, expectedTrxBatchExecs, stats.TrxQueryBatchCount.Counts()["without_commit"], "expected %d trx batch execs but got %d", expectedTrxBatchExecs, stats.TrxQueryBatchCount.Counts()["without_commit"])
+			require.Equal(t, expectedTrxBatchCommits, stats.TrxQueryBatchCount.Counts()["with_commit"], "expected %d trx batch commits but got %d", expectedTrxBatchCommits, stats.TrxQueryBatchCount.Counts()["with_commit"])
+		})
+	}
 }
 
 func expectJSON(t *testing.T, table string, values [][]string, id int, exec func(ctx context.Context, query string) (*sqltypes.Result, error)) {

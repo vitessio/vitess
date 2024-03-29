@@ -42,17 +42,6 @@ func (m *vtorcDB) QueryVTOrc(query string, argsArray []any, onRow func(sqlutils.
 	return QueryVTOrc(query, argsArray, onRow)
 }
 
-type DummySQLResult struct {
-}
-
-func (dummyRes DummySQLResult) LastInsertId() (int64, error) {
-	return 0, nil
-}
-
-func (dummyRes DummySQLResult) RowsAffected() (int64, error) {
-	return 1, nil
-}
-
 // OpenTopology returns the DB instance for the vtorc backed database
 func OpenVTOrc() (db *sql.DB, err error) {
 	var fromCache bool
@@ -88,7 +77,7 @@ func registerVTOrcDeployment(db *sql.DB) error {
 }
 
 // deployStatements will issue given sql queries that are not already known to be deployed.
-// This iterates both lists (to-run and already-deployed) and also verifies no contraditions.
+// This iterates both lists (to-run and already-deployed) and also verifies no contradictions.
 func deployStatements(db *sql.DB, queries []string) error {
 	tx, err := db.Begin()
 	if err != nil {

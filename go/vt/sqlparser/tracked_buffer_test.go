@@ -86,7 +86,7 @@ func TestCanonicalOutput(t *testing.T) {
 		},
 		{
 			"create table a (id int not null auto_increment, v varchar(32) default null, v2 varchar(62) charset utf8mb4 collate utf8mb4_0900_ai_ci, key v_idx(v(16)))",
-			"CREATE TABLE `a` (\n\t`id` int NOT NULL AUTO_INCREMENT,\n\t`v` varchar(32) DEFAULT NULL,\n\t`v2` varchar(62) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,\n\tINDEX `v_idx` (`v`(16))\n)",
+			"CREATE TABLE `a` (\n\t`id` int NOT NULL AUTO_INCREMENT,\n\t`v` varchar(32) DEFAULT NULL,\n\t`v2` varchar(62) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,\n\tKEY `v_idx` (`v`(16))\n)",
 		},
 		{
 			"create table a (id int not null primary key, dt datetime default current_timestamp)",
@@ -178,7 +178,7 @@ func TestCanonicalOutput(t *testing.T) {
 		},
 		{
 			"create table entries (uid varchar(53) not null, namespace varchar(254) not null, spec json default null, primary key (namespace, uid), key entries_spec_updatedAt ((json_value(spec, _utf8mb4 '$.updatedAt'))))",
-			"CREATE TABLE `entries` (\n\t`uid` varchar(53) NOT NULL,\n\t`namespace` varchar(254) NOT NULL,\n\t`spec` json DEFAULT NULL,\n\tPRIMARY KEY (`namespace`, `uid`),\n\tINDEX `entries_spec_updatedAt` ((JSON_VALUE(`spec`, _utf8mb4 '$.updatedAt')))\n)",
+			"CREATE TABLE `entries` (\n\t`uid` varchar(53) NOT NULL,\n\t`namespace` varchar(254) NOT NULL,\n\t`spec` json DEFAULT NULL,\n\tPRIMARY KEY (`namespace`, `uid`),\n\tKEY `entries_spec_updatedAt` ((JSON_VALUE(`spec`, _utf8mb4 '$.updatedAt')))\n)",
 		},
 		{
 			"create table identifiers (id binary(16) not null default (uuid_to_bin(uuid(),true)))",
@@ -234,7 +234,7 @@ func TestCanonicalOutput(t *testing.T) {
 		},
 		{
 			"create table t1 (id int primary key, name tinytext not null, fulltext key name_ft(name) with parser ngram)",
-			"CREATE TABLE `t1` (\n\t`id` int PRIMARY KEY,\n\t`name` tinytext NOT NULL,\n\tFULLTEXT INDEX `name_ft` (`name`) WITH PARSER ngram\n)",
+			"CREATE TABLE `t1` (\n\t`id` int PRIMARY KEY,\n\t`name` tinytext NOT NULL,\n\tFULLTEXT KEY `name_ft` (`name`) WITH PARSER ngram\n)",
 		},
 		{
 			"select convert('abc' using utf8mb4)",
@@ -270,7 +270,7 @@ func TestCanonicalOutput(t *testing.T) {
 		},
 		{
 			"create table t (id int, info JSON, INDEX zips((CAST(info->'$.field' AS unsigned array))))",
-			"CREATE TABLE `t` (\n\t`id` int,\n\t`info` JSON,\n\tINDEX `zips` ((CAST(`info` -> '$.field' AS unsigned array)))\n)",
+			"CREATE TABLE `t` (\n\t`id` int,\n\t`info` JSON,\n\tKEY `zips` ((CAST(`info` -> '$.field' AS unsigned array)))\n)",
 		},
 		{
 			"select 1 from t1 into outfile 'test/t1.txt'",
@@ -278,16 +278,17 @@ func TestCanonicalOutput(t *testing.T) {
 		},
 	}
 
+	parser := NewTestParser()
 	for _, tc := range testcases {
 		t.Run(tc.input, func(t *testing.T) {
-			tree, err := Parse(tc.input)
+			tree, err := parser.Parse(tc.input)
 			require.NoError(t, err, tc.input)
 
 			out := CanonicalString(tree)
 			require.Equal(t, tc.canonical, out, "bad serialization")
 
 			// Make sure we've generated a valid query!
-			rereadStmt, err := Parse(out)
+			rereadStmt, err := parser.Parse(out)
 			require.NoError(t, err, out)
 			out = CanonicalString(rereadStmt)
 			require.Equal(t, tc.canonical, out, "bad serialization")

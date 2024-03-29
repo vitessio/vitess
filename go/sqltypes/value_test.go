@@ -463,13 +463,13 @@ func TestEncode(t *testing.T) {
 		outASCII: "'YQ=='",
 	}}
 	for _, tcase := range testcases {
-		buf := &bytes.Buffer{}
-		tcase.in.EncodeSQL(buf)
+		var buf strings.Builder
+		tcase.in.EncodeSQL(&buf)
 		if tcase.outSQL != buf.String() {
 			t.Errorf("%v.EncodeSQL = %q, want %q", tcase.in, buf.String(), tcase.outSQL)
 		}
-		buf = &bytes.Buffer{}
-		tcase.in.EncodeASCII(buf)
+		buf.Reset()
+		tcase.in.EncodeASCII(&buf)
 		if tcase.outASCII != buf.String() {
 			t.Errorf("%v.EncodeASCII = %q, want %q", tcase.in, buf.String(), tcase.outASCII)
 		}
@@ -510,5 +510,62 @@ func TestHexAndBitToBytes(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, tcase.out, out)
 		})
+	}
+}
+
+func TestEncodeStringSQL(t *testing.T) {
+	testcases := []struct {
+		in  string
+		out string
+	}{
+		{
+			in:  "",
+			out: "''",
+		},
+		{
+			in:  "\x00'\"\b\n\r\t\x1A\\",
+			out: "'\\0\\'\\\"\\b\\n\\r\\t\\Z\\\\'",
+		},
+	}
+	for _, tcase := range testcases {
+		out := EncodeStringSQL(tcase.in)
+		assert.Equal(t, tcase.out, out)
+	}
+}
+
+func TestDecodeStringSQL(t *testing.T) {
+	testcases := []struct {
+		in  string
+		out string
+		err string
+	}{
+		{
+			in:  "",
+			err: ": invalid SQL encoded string",
+		}, {
+			in:  "''",
+			err: "",
+		},
+		{
+			in:  "'\\0\\'\\\"\\b\\n\\r\\t\\Z\\\\'",
+			out: "\x00'\"\b\n\r\t\x1A\\",
+		},
+		{
+			in:  "'light ''green\\r\\n, \\nfoo'",
+			out: "light 'green\r\n, \nfoo",
+		},
+		{
+			in:  "'foo \\\\ % _bar'",
+			out: "foo \\ % _bar",
+		},
+	}
+	for _, tcase := range testcases {
+		out, err := DecodeStringSQL(tcase.in)
+		if tcase.err != "" {
+			assert.EqualError(t, err, tcase.err)
+		} else {
+			require.NoError(t, err)
+			assert.Equal(t, tcase.out, out)
+		}
 	}
 }

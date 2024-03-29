@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -58,8 +59,7 @@ var (
 )
 
 const (
-	testDataPath   = "testdata"
-	defaultSQLMode = "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION"
+	testDataPath = "testdata"
 )
 
 func TestMain(m *testing.M) {
@@ -134,6 +134,27 @@ func TestSchemaChange(t *testing.T) {
 
 	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance, time.Second)
 
+	fkOnlineDDLPossible := false
+	t.Run("check 'rename_table_preserve_foreign_key' variable", func(t *testing.T) {
+		// Online DDL is not possible on vanilla MySQL 8.0 for reasons described in https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/.
+		// However, Online DDL is made possible in via these changes:
+		// - https://github.com/planetscale/mysql-server/commit/bb777e3e86387571c044fb4a2beb4f8c60462ced
+		// - https://github.com/planetscale/mysql-server/commit/c2f1344a6863518d749f2eb01a4c74ca08a5b889
+		// as part of https://github.com/planetscale/mysql-server/releases/tag/8.0.34-ps3.
+		// Said changes introduce a new global/session boolean variable named 'rename_table_preserve_foreign_key'. It defaults 'false'/0 for backwards compatibility.
+		// When enabled, a `RENAME TABLE` to a FK parent "pins" the children's foreign keys to the table name rather than the table pointer. Which means after the RENAME,
+		// the children will point to the newly instated table rather than the original, renamed table.
+		// (Note: this applies to a particular type of RENAME where we swap tables, see the above blog post).
+		// For FK children, the MySQL changes simply ignore any Vitess-internal table.
+		//
+		// In this stress test, we enable Online DDL if the variable 'rename_table_preserve_foreign_key' is present. The Online DDL mechanism will in turn
+		// query for this variable, and manipulate it, when starting the migration and when cutting over.
+		rs, err := shards[0].Vttablets[0].VttabletProcess.QueryTablet("show global variables like 'rename_table_preserve_foreign_key'", keyspaceName, false)
+		require.NoError(t, err)
+		fkOnlineDDLPossible = len(rs.Rows) > 0
+		t.Logf("MySQL support for 'rename_table_preserve_foreign_key': %v", fkOnlineDDLPossible)
+	})
+
 	files, err := os.ReadDir(testDataPath)
 	require.NoError(t, err)
 	for _, f := range files {
@@ -142,7 +163,7 @@ func TestSchemaChange(t *testing.T) {
 		}
 		// this is a test!
 		t.Run(f.Name(), func(t *testing.T) {
-			testSingle(t, f.Name())
+			testSingle(t, f.Name(), fkOnlineDDLPossible)
 		})
 	}
 }
@@ -161,7 +182,14 @@ func readTestFile(t *testing.T, testName string, fileName string) (content strin
 
 // testSingle is the main testing function for a single test in the suite.
 // It prepares the grounds, creates the test data, runs a migration, expects results/error, cleans up.
-func testSingle(t *testing.T, testName string) {
+func testSingle(t *testing.T, testName string, fkOnlineDDLPossible bool) {
+	if _, exists := readTestFile(t, testName, "require_rename_table_preserve_foreign_key"); exists {
+		if !fkOnlineDDLPossible {
+			t.Skipf("Skipping test due to require_rename_table_preserve_foreign_key")
+			return
+		}
+	}
+
 	if ignoreVersions, exists := readTestFile(t, testName, "ignore_versions"); exists {
 		// ignoreVersions is a regexp
 		re, err := regexp.Compile(ignoreVersions)
@@ -178,7 +206,7 @@ func testSingle(t *testing.T, testName string) {
 		}
 	}
 
-	sqlMode := defaultSQLMode
+	sqlMode := config.DefaultSQLMode
 	if overrideSQLMode, exists := readTestFile(t, testName, "sql_mode"); exists {
 		sqlMode = overrideSQLMode
 	}

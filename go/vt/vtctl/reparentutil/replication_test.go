@@ -54,7 +54,7 @@ func TestFindValidEmergencyReparentCandidates(t *testing.T) {
 		statusMap        map[string]*replicationdatapb.StopReplicationStatus
 		primaryStatusMap map[string]*replicationdatapb.PrimaryStatus
 		// Note: for these tests, it's simpler to compare keys than actual
-		// mysql.Postion structs, which are just thin wrappers around the
+		// mysql.Position structs, which are just thin wrappers around the
 		// mysql.GTIDSet interface. If a tablet alias makes it into the map, we
 		// know it was chosen by the method, and that either
 		// mysql.DecodePosition was successful (in the primary case) or
@@ -205,8 +205,6 @@ func TestFindValidEmergencyReparentCandidates(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -1280,8 +1278,6 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			durability, err := GetDurabilityPolicy(tt.durability)
 			require.NoError(t, err)
@@ -1377,8 +1373,6 @@ func TestReplicaWasRunning(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -1465,8 +1459,6 @@ func TestSQLThreadWasRunning(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -1563,8 +1555,6 @@ func TestWaitForRelayLogsToApply(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 

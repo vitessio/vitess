@@ -25,8 +25,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/sqlerror"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -532,7 +532,7 @@ func TestUpdateMultiOwned(t *testing.T) {
 	}
 }
 `
-	executor, sbc1, sbc2, sbclookup, ctx := createCustomExecutor(t, vschema)
+	executor, sbc1, sbc2, sbclookup, ctx := createCustomExecutor(t, vschema, config.DefaultMySQLVersion)
 
 	sbc1.SetResults([]*sqltypes.Result{
 		sqltypes.MakeTestResult(
@@ -1406,7 +1406,7 @@ func TestInsertShardedKeyrange(t *testing.T) {
 		TargetString: "@primary",
 	}
 	_, err := executorExec(ctx, executor, session, "insert into keyrange_table(krcol_unique, krcol) values(1, 1)", nil)
-	require.EqualError(t, err, "could not map [INT64(1)] to a unique keyspace id: DestinationKeyRange(-10)")
+	require.EqualError(t, err, "VT09024: could not map [INT64(1)] to a unique keyspace id: DestinationKeyRange(-10)")
 }
 
 func TestInsertShardedAutocommitLookup(t *testing.T) {
@@ -1469,7 +1469,7 @@ func TestInsertShardedAutocommitLookup(t *testing.T) {
 	}
 }
 `
-	executor, sbc1, sbc2, sbclookup, ctx := createCustomExecutor(t, vschema)
+	executor, sbc1, sbc2, sbclookup, ctx := createCustomExecutor(t, vschema, config.DefaultMySQLVersion)
 
 	_, err := executorExecSession(ctx, executor, "insert into user(id, v, name, music) values (1, 2, 'myname', 'star')", nil, &vtgatepb.Session{})
 	require.NoError(t, err)
@@ -1503,145 +1503,210 @@ func TestInsertShardedAutocommitLookup(t *testing.T) {
 func TestInsertShardedIgnore(t *testing.T) {
 	executor, sbc1, sbc2, sbclookup, ctx := createExecutorEnv(t)
 
-	// Build the sequence of responses for sbclookup. This should
-	// match the sequence of queries we validate below.
+	int1 := sqltypes.Int64BindVariable(1)
+	int2 := sqltypes.Int64BindVariable(2)
+	int3 := sqltypes.Int64BindVariable(3)
+	int4 := sqltypes.Int64BindVariable(4)
+	int5 := sqltypes.Int64BindVariable(5)
+	int6 := sqltypes.Int64BindVariable(6)
+	uint1 := sqltypes.Uint64BindVariable(1)
+	uint3 := sqltypes.Uint64BindVariable(3)
+
+	var1 := &querypb.BindVariable{Type: querypb.Type_TUPLE,
+		Values: []*querypb.Value{{Type: int1.Type, Value: int1.Value}},
+	}
+	var2 := &querypb.BindVariable{Type: querypb.Type_TUPLE,
+		Values: []*querypb.Value{{Type: int2.Type, Value: int2.Value}},
+	}
+	var3 := &querypb.BindVariable{Type: querypb.Type_TUPLE,
+		Values: []*querypb.Value{{Type: int3.Type, Value: int3.Value}},
+	}
+	var4 := &querypb.BindVariable{Type: querypb.Type_TUPLE,
+		Values: []*querypb.Value{{Type: int4.Type, Value: int4.Value}},
+	}
+	var5 := &querypb.BindVariable{Type: querypb.Type_TUPLE,
+		Values: []*querypb.Value{{Type: int5.Type, Value: int5.Value}},
+	}
+	var6 := &querypb.BindVariable{Type: querypb.Type_TUPLE,
+		Values: []*querypb.Value{{Type: int6.Type, Value: int6.Value}},
+	}
 	fields := sqltypes.MakeTestFields("b|a", "int64|int64")
 	field := sqltypes.MakeTestFields("a", "int64")
-	sbclookup.SetResults([]*sqltypes.Result{
-		// select music_id
-		sqltypes.MakeTestResult(fields, "1|1", "3|1", "4|1", "5|1", "6|3"),
-		// insert ins_lookup
-		{},
-		// select ins_lookup 1
-		sqltypes.MakeTestResult(field, "1"),
-		// select ins_lookup 3
-		{},
-		// select ins_lookup 4
-		sqltypes.MakeTestResult(field, "4"),
-		// select ins_lookup 5
-		sqltypes.MakeTestResult(field, "5"),
-		// select ins_lookup 6
-		sqltypes.MakeTestResult(field, "6"),
-	})
-	// First row: first shard.
-	// Second row: will fail because primary vindex will fail to map.
-	// Third row: will fail because verification will fail on owned vindex after Create.
-	// Fourth row: will fail because verification will fail on unowned hash vindex.
-	// Fifth row: first shard.
-	// Sixth row: second shard (because 3 hash maps to 40-60).
-	query := "insert ignore into insert_ignore_test(pv, owned, verify) values (1, 1, 1), (2, 2, 2), (3, 3, 1), (4, 4, 4), (5, 5, 1), (6, 6, 3)"
-	session := &vtgatepb.Session{
-		TargetString: "@primary",
-	}
-	_, err := executorExec(ctx, executor, session, query, nil)
-	require.NoError(t, err)
-	wantQueries := []*querypb.BoundQuery{{
-		Sql: "insert ignore into insert_ignore_test(pv, owned, verify) values (:_pv_0, :_owned_0, :_verify_0),(:_pv_4, :_owned_4, :_verify_4)",
-		BindVariables: map[string]*querypb.BindVariable{
-			"_pv_0":     sqltypes.Int64BindVariable(1),
-			"_pv_4":     sqltypes.Int64BindVariable(5),
-			"_owned_0":  sqltypes.Int64BindVariable(1),
-			"_owned_4":  sqltypes.Int64BindVariable(5),
-			"_verify_0": sqltypes.Int64BindVariable(1),
-			"_verify_4": sqltypes.Int64BindVariable(1),
-		},
-	}}
-	assertQueries(t, sbc1, wantQueries)
-	wantQueries = []*querypb.BoundQuery{{
-		Sql: "insert ignore into insert_ignore_test(pv, owned, verify) values (:_pv_5, :_owned_5, :_verify_5)",
-		BindVariables: map[string]*querypb.BindVariable{
-			"_pv_5":     sqltypes.Int64BindVariable(6),
-			"_owned_5":  sqltypes.Int64BindVariable(6),
-			"_verify_5": sqltypes.Int64BindVariable(3),
-		},
-	}}
-	assertQueries(t, sbc2, wantQueries)
+	tcases := []struct {
+		query string
+		input []*sqltypes.Result
 
-	vars, err := sqltypes.BuildBindVariable([]any{
-		sqltypes.NewInt64(1),
-		sqltypes.NewInt64(2),
-		sqltypes.NewInt64(3),
-		sqltypes.NewInt64(4),
-		sqltypes.NewInt64(5),
-		sqltypes.NewInt64(6),
-	})
-	require.NoError(t, err)
-	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select music_id, user_id from music_user_map where music_id in ::music_id for update",
-		BindVariables: map[string]*querypb.BindVariable{
-			"music_id": vars,
+		expectedQueries [3][]*querypb.BoundQuery
+		errString       string
+	}{{
+		// First row: first shard.
+		query: "insert ignore into insert_ignore_test(pv, owned, verify) values (1, 1, 1)",
+		input: []*sqltypes.Result{
+			// select music_id
+			sqltypes.MakeTestResult(fields, "1|1"),
+			// insert ins_lookup 1
+			sqltypes.MakeTestResult(nil),
+			// select ins_lookup 1
+			sqltypes.MakeTestResult(field, "1"),
+		},
+		expectedQueries: [3][]*querypb.BoundQuery{
+			{{
+				Sql:           "insert ignore into insert_ignore_test(pv, owned, verify) values (:_pv_0, :_owned_0, :_verify_0)",
+				BindVariables: map[string]*querypb.BindVariable{"_pv_0": int1, "_owned_0": int1, "_verify_0": int1},
+			}},
+			nil,
+			{{
+				Sql:           "select music_id, user_id from music_user_map where music_id in ::music_id for update",
+				BindVariables: map[string]*querypb.BindVariable{"music_id": var1},
+			}, {
+				Sql:           "insert ignore into ins_lookup(fromcol, tocol) values (:fromcol_0, :tocol_0)",
+				BindVariables: map[string]*querypb.BindVariable{"fromcol_0": int1, "tocol_0": uint1},
+			}, {
+				Sql:           "select fromcol from ins_lookup where fromcol = :fromcol and tocol = :tocol",
+				BindVariables: map[string]*querypb.BindVariable{"fromcol": int1, "tocol": uint1},
+			}},
 		},
 	}, {
-		Sql: "insert ignore into ins_lookup(fromcol, tocol) values (:fromcol_0, :tocol_0), (:fromcol_1, :tocol_1), (:fromcol_2, :tocol_2), (:fromcol_3, :tocol_3), (:fromcol_4, :tocol_4)",
-		BindVariables: map[string]*querypb.BindVariable{
-			"fromcol_0": sqltypes.Int64BindVariable(1),
-			"tocol_0":   sqltypes.Uint64BindVariable(1),
-			"fromcol_1": sqltypes.Int64BindVariable(3),
-			"tocol_1":   sqltypes.Uint64BindVariable(1),
-			"fromcol_2": sqltypes.Int64BindVariable(4),
-			"tocol_2":   sqltypes.Uint64BindVariable(1),
-			"fromcol_3": sqltypes.Int64BindVariable(5),
-			"tocol_3":   sqltypes.Uint64BindVariable(1),
-			"fromcol_4": sqltypes.Int64BindVariable(6),
-			"tocol_4":   sqltypes.Uint64BindVariable(3),
+		// Second row: will fail because primary vindex will fail to map.
+		query: "insert ignore into insert_ignore_test(pv, owned, verify) values (2, 2, 2)",
+		input: []*sqltypes.Result{
+			// select music_id
+			sqltypes.MakeTestResult(fields),
+		},
+		expectedQueries: [3][]*querypb.BoundQuery{
+			nil,
+			nil,
+			{{
+				Sql:           "select music_id, user_id from music_user_map where music_id in ::music_id for update",
+				BindVariables: map[string]*querypb.BindVariable{"music_id": var2},
+			}},
+		},
+		errString: "could not map [INT64(2)] to a keyspace id",
+	}, {
+		// Third row: will fail because verification will fail on owned vindex after Create.
+		query: "insert ignore into insert_ignore_test(pv, owned, verify) values (3, 3, 1)",
+		input: []*sqltypes.Result{
+			// select music_id
+			sqltypes.MakeTestResult(fields, "3|1"),
+			// insert ins_lookup 3
+			sqltypes.MakeTestResult(nil),
+			// select ins_lookup 3
+			sqltypes.MakeTestResult(field),
+		},
+		expectedQueries: [3][]*querypb.BoundQuery{
+			nil,
+			nil,
+			{{
+				Sql:           "select music_id, user_id from music_user_map where music_id in ::music_id for update",
+				BindVariables: map[string]*querypb.BindVariable{"music_id": var3},
+			}, {
+				Sql:           "insert ignore into ins_lookup(fromcol, tocol) values (:fromcol_0, :tocol_0)",
+				BindVariables: map[string]*querypb.BindVariable{"fromcol_0": int3, "tocol_0": uint1},
+			}, {
+				Sql:           "select fromcol from ins_lookup where fromcol = :fromcol and tocol = :tocol",
+				BindVariables: map[string]*querypb.BindVariable{"fromcol": int3, "tocol": uint1},
+			}},
 		},
 	}, {
-		Sql: "select fromcol from ins_lookup where fromcol = :fromcol and tocol = :tocol",
-		BindVariables: map[string]*querypb.BindVariable{
-			"fromcol": sqltypes.Int64BindVariable(1),
-			"tocol":   sqltypes.Uint64BindVariable(1),
+		// Fourth row: will fail because verification will fail on unowned hash vindex.
+		query: "insert ignore into insert_ignore_test(pv, owned, verify) values (4, 4, 4)",
+		input: []*sqltypes.Result{
+			// select music_id
+			sqltypes.MakeTestResult(fields, "4|1"),
+			// insert ins_lookup 4
+			sqltypes.MakeTestResult(nil),
+			// select ins_lookup 4
+			sqltypes.MakeTestResult(field, "4"),
+			sqltypes.MakeTestResult(nil),
+		},
+		expectedQueries: [3][]*querypb.BoundQuery{
+			nil,
+			nil,
+			{{
+				Sql:           "select music_id, user_id from music_user_map where music_id in ::music_id for update",
+				BindVariables: map[string]*querypb.BindVariable{"music_id": var4},
+			}, {
+				Sql:           "insert ignore into ins_lookup(fromcol, tocol) values (:fromcol_0, :tocol_0)",
+				BindVariables: map[string]*querypb.BindVariable{"fromcol_0": int4, "tocol_0": uint1},
+			}, {
+				Sql:           "select fromcol from ins_lookup where fromcol = :fromcol and tocol = :tocol",
+				BindVariables: map[string]*querypb.BindVariable{"fromcol": int4, "tocol": uint1},
+			}},
 		},
 	}, {
-		Sql: "select fromcol from ins_lookup where fromcol = :fromcol and tocol = :tocol",
-		BindVariables: map[string]*querypb.BindVariable{
-			"fromcol": sqltypes.Int64BindVariable(3),
-			"tocol":   sqltypes.Uint64BindVariable(1),
+		// Fifth row: first shard.
+		query: "insert ignore into insert_ignore_test(pv, owned, verify) values (5, 5, 1)",
+		input: []*sqltypes.Result{
+			// select music_id
+			sqltypes.MakeTestResult(fields, "5|1"),
+			// select ins_lookup 5
+			sqltypes.MakeTestResult(field, "5"),
+		},
+		expectedQueries: [3][]*querypb.BoundQuery{
+			{{
+				Sql:           "insert ignore into insert_ignore_test(pv, owned, verify) values (:_pv_0, :_owned_0, :_verify_0)",
+				BindVariables: map[string]*querypb.BindVariable{"_pv_0": int5, "_owned_0": int5, "_verify_0": int1},
+			}},
+			nil,
+			{{
+				Sql:           "select music_id, user_id from music_user_map where music_id in ::music_id for update",
+				BindVariables: map[string]*querypb.BindVariable{"music_id": var5},
+			}, {
+				Sql:           "insert ignore into ins_lookup(fromcol, tocol) values (:fromcol_0, :tocol_0)",
+				BindVariables: map[string]*querypb.BindVariable{"fromcol_0": int5, "tocol_0": uint1},
+			}, {
+				Sql:           "select fromcol from ins_lookup where fromcol = :fromcol and tocol = :tocol",
+				BindVariables: map[string]*querypb.BindVariable{"fromcol": int5, "tocol": uint1},
+			}},
 		},
 	}, {
-		Sql: "select fromcol from ins_lookup where fromcol = :fromcol and tocol = :tocol",
-		BindVariables: map[string]*querypb.BindVariable{
-			"fromcol": sqltypes.Int64BindVariable(4),
-			"tocol":   sqltypes.Uint64BindVariable(1),
+		// Sixth row: second shard (because 3 hash maps to 40-60).
+		query: "insert ignore into insert_ignore_test(pv, owned, verify) values (6, 6, 3)",
+		input: []*sqltypes.Result{
+			// select music_id
+			sqltypes.MakeTestResult(fields, "6|3"),
+			// select ins_lookup 6
+			sqltypes.MakeTestResult(field, "6"),
 		},
-	}, {
-		Sql: "select fromcol from ins_lookup where fromcol = :fromcol and tocol = :tocol",
-		BindVariables: map[string]*querypb.BindVariable{
-			"fromcol": sqltypes.Int64BindVariable(5),
-			"tocol":   sqltypes.Uint64BindVariable(1),
-		},
-	}, {
-		Sql: "select fromcol from ins_lookup where fromcol = :fromcol and tocol = :tocol",
-		BindVariables: map[string]*querypb.BindVariable{
-			"fromcol": sqltypes.Int64BindVariable(6),
-			"tocol":   sqltypes.Uint64BindVariable(3),
+		expectedQueries: [3][]*querypb.BoundQuery{
+			nil,
+			{{
+				Sql:           "insert ignore into insert_ignore_test(pv, owned, verify) values (:_pv_0, :_owned_0, :_verify_0)",
+				BindVariables: map[string]*querypb.BindVariable{"_pv_0": int6, "_owned_0": int6, "_verify_0": int3},
+			}},
+			{{
+				Sql:           "select music_id, user_id from music_user_map where music_id in ::music_id for update",
+				BindVariables: map[string]*querypb.BindVariable{"music_id": var6},
+			}, {
+				Sql:           "insert ignore into ins_lookup(fromcol, tocol) values (:fromcol_0, :tocol_0)",
+				BindVariables: map[string]*querypb.BindVariable{"fromcol_0": int6, "tocol_0": uint3},
+			}, {
+				Sql:           "select fromcol from ins_lookup where fromcol = :fromcol and tocol = :tocol",
+				BindVariables: map[string]*querypb.BindVariable{"fromcol": int6, "tocol": uint3},
+			}},
 		},
 	}}
-	assertQueries(t, sbclookup, wantQueries)
 
-	// Test the 0 rows case,
-	sbc1.Queries = nil
-	sbc2.Queries = nil
-	sbclookup.Queries = nil
-	sbclookup.SetResults([]*sqltypes.Result{
-		{},
-	})
-	query = "insert ignore into insert_ignore_test(pv, owned, verify) values (1, 1, 1)"
-	qr, err := executorExec(ctx, executor, session, query, nil)
-	require.NoError(t, err)
-	if !qr.Equal(&sqltypes.Result{}) {
-		t.Errorf("qr: %v, want empty result", qr)
+	session := &vtgatepb.Session{Autocommit: true}
+	for _, tcase := range tcases {
+		t.Run(tcase.query, func(t *testing.T) {
+			// reset
+			sbc1.Queries = nil
+			sbc2.Queries = nil
+			sbclookup.Queries = nil
+
+			// Build the sequence of responses for sbclookup. This should
+			// match the sequence of queries we validate below.
+			sbclookup.SetResults(tcase.input)
+			_, err := executorExec(ctx, executor, session, tcase.query, nil)
+			if tcase.errString != "" {
+				require.ErrorContains(t, err, tcase.errString)
+			}
+			utils.MustMatch(t, tcase.expectedQueries[0], sbc1.Queries, "sbc1 queries do not match")
+			utils.MustMatch(t, tcase.expectedQueries[1], sbc2.Queries, "sbc2 queries do not match")
+			utils.MustMatch(t, tcase.expectedQueries[2], sbclookup.Queries, "sbclookup queries do not match")
+		})
 	}
-	assertQueries(t, sbc1, nil)
-	assertQueries(t, sbc2, nil)
-	vars, err = sqltypes.BuildBindVariable([]any{sqltypes.NewInt64(1)})
-	require.NoError(t, err)
-	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select music_id, user_id from music_user_map where music_id in ::music_id for update",
-		BindVariables: map[string]*querypb.BindVariable{
-			"music_id": vars,
-		},
-	}}
-	assertQueries(t, sbclookup, wantQueries)
 }
 
 func TestInsertOnDupKey(t *testing.T) {
@@ -2268,7 +2333,7 @@ func TestInsertBadAutoInc(t *testing.T) {
 	}
 }
 `
-	executor, _, _, _, ctx := createCustomExecutor(t, vschema)
+	executor, _, _, _, ctx := createCustomExecutor(t, vschema, config.DefaultMySQLVersion)
 
 	// If auto inc table cannot be found, the table should not be added to vschema.
 	session := &vtgatepb.Session{
@@ -3016,4 +3081,58 @@ func TestInsertReference(t *testing.T) {
 
 	_, err = executorExec(ctx, executor, session, "insert into TestExecutor.zip_detail(id, status) values (1, 'CLOSED')", nil)
 	require.NoError(t, err) // Gen4 planner can redirect the query to correct source for update when reference table is involved.
+}
+
+func TestDeleteMultiTable(t *testing.T) {
+	executor, sbc1, sbc2, sbclookup, ctx := createExecutorEnv(t)
+	executor.vschema.Keyspaces["TestExecutor"].Tables["user"].PrimaryKey = sqlparser.Columns{sqlparser.NewIdentifierCI("id")}
+
+	logChan := executor.queryLogger.Subscribe("TestDeleteMultiTable")
+	defer executor.queryLogger.Unsubscribe(logChan)
+
+	session := &vtgatepb.Session{TargetString: "@primary"}
+	_, err := executorExec(ctx, executor, session, "delete user from user join music on user.col = music.col where music.user_id = 1", nil)
+	require.NoError(t, err)
+
+	var dmlVals []*querypb.Value
+	for i := 0; i < 8; i++ {
+		dmlVals = append(dmlVals, sqltypes.ValueToProto(sqltypes.NewInt32(1)))
+	}
+
+	bq := &querypb.BoundQuery{
+		Sql:           "select 1 from music where music.user_id = 1 and music.col = :user_col",
+		BindVariables: map[string]*querypb.BindVariable{"user_col": sqltypes.StringBindVariable("foo")},
+	}
+	wantQueries := []*querypb.BoundQuery{
+		{Sql: "select `user`.id, `user`.col from `user`", BindVariables: map[string]*querypb.BindVariable{}},
+		bq, bq, bq, bq, bq, bq, bq, bq,
+		{Sql: "select `user`.Id, `user`.`name` from `user` where `user`.id in ::dml_vals for update", BindVariables: map[string]*querypb.BindVariable{"dml_vals": {Type: querypb.Type_TUPLE, Values: dmlVals}}},
+		{Sql: "delete from `user` where `user`.id in ::dml_vals", BindVariables: map[string]*querypb.BindVariable{"dml_vals": {Type: querypb.Type_TUPLE, Values: dmlVals}}}}
+	assertQueries(t, sbc1, wantQueries)
+
+	wantQueries = []*querypb.BoundQuery{
+		{Sql: "select `user`.id, `user`.col from `user`", BindVariables: map[string]*querypb.BindVariable{}},
+		{Sql: "select `user`.Id, `user`.`name` from `user` where `user`.id in ::dml_vals for update", BindVariables: map[string]*querypb.BindVariable{"dml_vals": {Type: querypb.Type_TUPLE, Values: dmlVals}}},
+		{Sql: "delete from `user` where `user`.id in ::dml_vals", BindVariables: map[string]*querypb.BindVariable{"dml_vals": {Type: querypb.Type_TUPLE, Values: dmlVals}}},
+	}
+	assertQueries(t, sbc2, wantQueries)
+
+	bq = &querypb.BoundQuery{
+		Sql: "delete from name_user_map where `name` = :name and user_id = :user_id",
+		BindVariables: map[string]*querypb.BindVariable{
+			"name":    sqltypes.StringBindVariable("foo"),
+			"user_id": sqltypes.Uint64BindVariable(1),
+		}}
+	wantQueries = []*querypb.BoundQuery{
+		bq, bq, bq, bq, bq, bq, bq, bq,
+	}
+	assertQueries(t, sbclookup, wantQueries)
+
+	testQueryLog(t, executor, logChan, "MarkSavepoint", "SAVEPOINT", "savepoint s1", 8)
+	testQueryLog(t, executor, logChan, "VindexDelete", "DELETE", "delete from name_user_map where `name` = :name and user_id = :user_id", 1)
+	// select `user`.id, `user`.col from `user` - 8 shard
+	// select 1 from music where music.user_id = 1 and music.col = :user_col - 8 shards
+	// select Id, `name` from `user` where (`user`.id) in ::dml_vals for update - 1 shard
+	// delete from `user` where (`user`.id) in ::dml_vals - 1 shard
+	testQueryLog(t, executor, logChan, "TestExecute", "DELETE", "delete `user` from `user` join music on `user`.col = music.col where music.user_id = 1", 18)
 }

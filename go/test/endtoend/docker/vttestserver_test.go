@@ -22,6 +22,7 @@ import (
 	"os"
 	"testing"
 
+	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"vitess.io/vitess/go/mysql"
@@ -44,7 +45,7 @@ func TestUnsharded(t *testing.T) {
 	dockerImages := []string{vttestserverMysql57image, vttestserverMysql80image}
 	for _, image := range dockerImages {
 		t.Run(image, func(t *testing.T) {
-			vtest := newVttestserver(image, []string{"unsharded_ks"}, []int{1}, 1000, 33577)
+			vtest := newVttestserver(image, []string{"unsharded_ks"}, []int{1}, 1000, 33574)
 			err := vtest.startDockerImage()
 			require.NoError(t, err)
 			defer vtest.teardown()
@@ -56,7 +57,7 @@ func TestUnsharded(t *testing.T) {
 			ctx := context.Background()
 			vttestParams := mysql.ConnParams{
 				Host: "localhost",
-				Port: vtest.port,
+				Port: vtest.basePort + 3,
 			}
 			conn, err := mysql.Connect(ctx, &vttestParams)
 			require.NoError(t, err)
@@ -73,7 +74,7 @@ func TestSharded(t *testing.T) {
 	dockerImages := []string{vttestserverMysql57image, vttestserverMysql80image}
 	for _, image := range dockerImages {
 		t.Run(image, func(t *testing.T) {
-			vtest := newVttestserver(image, []string{"ks"}, []int{2}, 1000, 33577)
+			vtest := newVttestserver(image, []string{"ks"}, []int{2}, 1000, 33574)
 			err := vtest.startDockerImage()
 			require.NoError(t, err)
 			defer vtest.teardown()
@@ -85,7 +86,7 @@ func TestSharded(t *testing.T) {
 			ctx := context.Background()
 			vttestParams := mysql.ConnParams{
 				Host: "localhost",
-				Port: vtest.port,
+				Port: vtest.basePort + 3,
 			}
 			conn, err := mysql.Connect(ctx, &vttestParams)
 			require.NoError(t, err)
@@ -103,7 +104,7 @@ func TestMysqlMaxCons(t *testing.T) {
 	dockerImages := []string{vttestserverMysql57image, vttestserverMysql80image}
 	for _, image := range dockerImages {
 		t.Run(image, func(t *testing.T) {
-			vtest := newVttestserver(image, []string{"ks"}, []int{2}, 100000, 33577)
+			vtest := newVttestserver(image, []string{"ks"}, []int{2}, 100000, 33574)
 			err := vtest.startDockerImage()
 			require.NoError(t, err)
 			defer vtest.teardown()
@@ -115,12 +116,35 @@ func TestMysqlMaxCons(t *testing.T) {
 			ctx := context.Background()
 			vttestParams := mysql.ConnParams{
 				Host: "localhost",
-				Port: vtest.port,
+				Port: vtest.basePort + 3,
 			}
 			conn, err := mysql.Connect(ctx, &vttestParams)
 			require.NoError(t, err)
 			defer conn.Close()
 			utils.AssertMatches(t, conn, "select @@max_connections", `[[UINT64(100000)]]`)
+		})
+	}
+}
+
+// TestVtctldCommands tests that vtctld commands can be run with the docker image.
+func TestVtctldCommands(t *testing.T) {
+	dockerImages := []string{vttestserverMysql57image, vttestserverMysql80image}
+	for _, image := range dockerImages {
+		t.Run(image, func(t *testing.T) {
+			vtest := newVttestserver(image, []string{"long_ks_name"}, []int{2}, 100, 33574)
+			err := vtest.startDockerImage()
+			require.NoError(t, err)
+			defer vtest.teardown()
+
+			// wait for the docker to be setup
+			err = vtest.waitUntilDockerHealthy(10)
+			require.NoError(t, err)
+
+			vtctldClient := cluster.VtctldClientProcessInstance("localhost", vtest.basePort+1, os.TempDir())
+			res, err := vtctldClient.ExecuteCommandWithOutput("GetKeyspaces")
+			require.NoError(t, err)
+			// We verify that the command succeeds, and the keyspace name is present in the output.
+			require.Contains(t, res, "long_ks_name")
 		})
 	}
 }
@@ -136,7 +160,7 @@ func TestLargeNumberOfKeyspaces(t *testing.T) {
 				numShards = append(numShards, 1)
 			}
 
-			vtest := newVttestserver(image, keyspaces, numShards, 100000, 33577)
+			vtest := newVttestserver(image, keyspaces, numShards, 100000, 33574)
 			err := vtest.startDockerImage()
 			require.NoError(t, err)
 			defer vtest.teardown()
@@ -148,7 +172,7 @@ func TestLargeNumberOfKeyspaces(t *testing.T) {
 			ctx := context.Background()
 			vttestParams := mysql.ConnParams{
 				Host: "localhost",
-				Port: vtest.port,
+				Port: vtest.basePort + 3,
 			}
 			conn, err := mysql.Connect(ctx, &vttestParams)
 			require.NoError(t, err)

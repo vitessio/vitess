@@ -32,7 +32,7 @@ func (ast *astCompiler) binaryCollationForCollation(collation collations.ID) col
 	if binary == nil {
 		return collations.Unknown
 	}
-	return collations.Local().BinaryCollationForCharset(binary.Charset().Name())
+	return ast.cfg.Environment.CollationEnv().BinaryCollationForCharset(binary.Charset().Name())
 }
 
 func (ast *astCompiler) translateConvertCharset(charset string, binary bool) (collations.ID, error) {
@@ -47,7 +47,7 @@ func (ast *astCompiler) translateConvertCharset(charset string, binary bool) (co
 		return collation, nil
 	}
 	charset = strings.ToLower(charset)
-	collationID := collations.Local().DefaultCollationForCharset(charset)
+	collationID := ast.cfg.Environment.CollationEnv().DefaultCollationForCharset(charset)
 	if collationID == collations.Unknown {
 		return collations.Unknown, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unknown character set: '%s'", charset)
 	}
@@ -60,45 +60,42 @@ func (ast *astCompiler) translateConvertCharset(charset string, binary bool) (co
 	return collationID, nil
 }
 
-func (ast *astCompiler) translateConvertExpr(expr sqlparser.Expr, convertType *sqlparser.ConvertType) (Expr, error) {
+func (ast *astCompiler) translateConvertExpr(expr sqlparser.Expr, convertType *sqlparser.ConvertType) (IR, error) {
 	var (
 		convert ConvertExpr
 		err     error
 	)
 
+	convert.CollationEnv = ast.cfg.Environment.CollationEnv()
 	convert.Inner, err = ast.translateExpr(expr)
 	if err != nil {
 		return nil, err
 	}
 
-	convert.Length, convert.HasLength, err = ast.translateIntegral(convertType.Length)
-	if err != nil {
-		return nil, err
-	}
-
-	convert.Scale, convert.HasScale, err = ast.translateIntegral(convertType.Scale)
-	if err != nil {
-		return nil, err
-	}
-
+	convert.Length = convertType.Length
+	convert.Scale = convertType.Scale
 	convert.Type = strings.ToUpper(convertType.Type)
 	switch convert.Type {
 	case "DECIMAL":
-		if convert.Length < convert.Scale {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
-				"For float(M,D), double(M,D) or decimal(M,D), M must be >= D (column '%s').",
-				"", // TODO: column name
-			)
-		}
-		if convert.Length > decimal.MyMaxPrecision {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
-				"Too-big precision %d specified for '%s'. Maximum is %d.",
-				convert.Length, sqlparser.String(expr), decimal.MyMaxPrecision)
-		}
-		if convert.Scale > decimal.MyMaxScale {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
-				"Too big scale %d specified for column '%s'. Maximum is %d.",
-				convert.Scale, sqlparser.String(expr), decimal.MyMaxScale)
+		if convert.Length != nil {
+			if *convert.Length > decimal.MyMaxPrecision {
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+					"Too-big precision %d specified for '%s'. Maximum is %d.",
+					*convert.Length, sqlparser.String(expr), decimal.MyMaxPrecision)
+			}
+			if convert.Scale != nil {
+				if *convert.Scale > decimal.MyMaxScale {
+					return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+						"Too big scale %d specified for column '%s'. Maximum is %d.",
+						*convert.Scale, sqlparser.String(expr), decimal.MyMaxScale)
+				}
+				if *convert.Length < *convert.Scale {
+					return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+						"For float(M,D), double(M,D) or decimal(M,D), M must be >= D (column '%s').",
+						"", // TODO: column name
+					)
+				}
+			}
 		}
 	case "NCHAR":
 		convert.Collation = collations.CollationUtf8mb3ID
@@ -117,12 +114,13 @@ func (ast *astCompiler) translateConvertExpr(expr sqlparser.Expr, convertType *s
 	return &convert, nil
 }
 
-func (ast *astCompiler) translateConvertUsingExpr(expr *sqlparser.ConvertUsingExpr) (Expr, error) {
+func (ast *astCompiler) translateConvertUsingExpr(expr *sqlparser.ConvertUsingExpr) (IR, error) {
 	var (
 		using ConvertUsingExpr
 		err   error
 	)
 
+	using.CollationEnv = ast.cfg.Environment.CollationEnv()
 	using.Inner, err = ast.translateExpr(expr.Expr)
 	if err != nil {
 		return nil, err

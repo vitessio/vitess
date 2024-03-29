@@ -65,12 +65,27 @@ func (fra *fakeRPCTM) DeleteVReplicationWorkflow(ctx context.Context, req *table
 	panic("implement me")
 }
 
+func (fra *fakeRPCTM) HasVReplicationWorkflows(ctx context.Context, req *tabletmanagerdatapb.HasVReplicationWorkflowsRequest) (*tabletmanagerdatapb.HasVReplicationWorkflowsResponse, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (fra *fakeRPCTM) ReadVReplicationWorkflows(ctx context.Context, req *tabletmanagerdatapb.ReadVReplicationWorkflowsRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (fra *fakeRPCTM) ReadVReplicationWorkflow(ctx context.Context, req *tabletmanagerdatapb.ReadVReplicationWorkflowRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowResponse, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
 func (fra *fakeRPCTM) UpdateVReplicationWorkflow(ctx context.Context, req *tabletmanagerdatapb.UpdateVReplicationWorkflowRequest) (*tabletmanagerdatapb.UpdateVReplicationWorkflowResponse, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (fra *fakeRPCTM) UpdateVReplicationWorkflows(ctx context.Context, req *tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest) (*tabletmanagerdatapb.UpdateVReplicationWorkflowsResponse, error) {
 	//TODO implement me
 	panic("implement me")
 }
@@ -657,6 +672,18 @@ func (fra *fakeRPCTM) ExecuteFetchAsDba(ctx context.Context, req *tabletmanagerd
 	return testExecuteFetchResult, nil
 }
 
+func (fra *fakeRPCTM) ExecuteMultiFetchAsDba(ctx context.Context, req *tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest) ([]*querypb.QueryResult, error) {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	compare(fra.t, "ExecuteMultiFetchAsDba query", req.Sql, testExecuteFetchQuery)
+	compare(fra.t, "ExecuteMultiFetchAsDba maxrows", req.MaxRows, testExecuteFetchMaxRows)
+	compareBool(fra.t, "ExecuteMultiFetchAsDba disableBinlogs", req.DisableBinlogs)
+	compareBool(fra.t, "ExecuteMultiFetchAsDba reloadSchema", req.ReloadSchema)
+
+	return []*querypb.QueryResult{testExecuteFetchResult}, nil
+}
+
 func (fra *fakeRPCTM) ExecuteFetchAsAllPrivs(ctx context.Context, req *tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest) (*querypb.QueryResult, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
@@ -1039,7 +1066,12 @@ func tmRPCTestPopulateReparentJournal(ctx context.Context, t *testing.T, client 
 
 func tmRPCTestPopulateReparentJournalPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.PopulateReparentJournal(ctx, tablet, testTimeCreatedNS, testActionName, testPrimaryAlias, testReplicationPosition)
-	expectHandleRPCPanic(t, "PopulateReparentJournal", false /*verbose*/, err)
+	expectHandleRPCPanic(t, "PopulateReparentJournal", true /*verbose*/, err)
+}
+
+func tmRPCTestWaitForPositionPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	err := client.WaitForPosition(ctx, tablet, testReplicationPosition)
+	expectHandleRPCPanic(t, "WaitForPosition", true /*verbose*/, err)
 }
 
 var testInitReplicaCalled = false
@@ -1239,7 +1271,7 @@ func tmRPCTestPromoteReplicaPanic(ctx context.Context, t *testing.T, client tmcl
 // Backup / restore related methods
 //
 
-var testBackupConcurrency = int64(24)
+var testBackupConcurrency = int32(24)
 var testBackupAllowPrimary = false
 var testBackupCalled = false
 var testRestoreFromBackupCalled = false
@@ -1256,7 +1288,7 @@ func (fra *fakeRPCTM) Backup(ctx context.Context, logger logutil.Logger, request
 }
 
 func tmRPCTestBackup(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	req := &tabletmanagerdatapb.BackupRequest{Concurrency: int64(testBackupConcurrency), AllowPrimary: testBackupAllowPrimary}
+	req := &tabletmanagerdatapb.BackupRequest{Concurrency: testBackupConcurrency, AllowPrimary: testBackupAllowPrimary}
 	stream, err := client.Backup(ctx, tablet, req)
 	if err != nil {
 		t.Fatalf("Backup failed: %v", err)
@@ -1266,7 +1298,7 @@ func tmRPCTestBackup(ctx context.Context, t *testing.T, client tmclient.TabletMa
 }
 
 func tmRPCTestBackupPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	req := &tabletmanagerdatapb.BackupRequest{Concurrency: int64(testBackupConcurrency), AllowPrimary: testBackupAllowPrimary}
+	req := &tabletmanagerdatapb.BackupRequest{Concurrency: testBackupConcurrency, AllowPrimary: testBackupAllowPrimary}
 	stream, err := client.Backup(ctx, tablet, req)
 	if err != nil {
 		t.Fatalf("Backup failed: %v", err)
@@ -1447,6 +1479,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	tmRPCTestResetReplicationPanic(ctx, t, client, tablet)
 	tmRPCTestInitPrimaryPanic(ctx, t, client, tablet)
 	tmRPCTestPopulateReparentJournalPanic(ctx, t, client, tablet)
+	tmRPCTestWaitForPositionPanic(ctx, t, client, tablet)
 	tmRPCTestDemotePrimaryPanic(ctx, t, client, tablet)
 	tmRPCTestUndoDemotePrimaryPanic(ctx, t, client, tablet)
 	tmRPCTestSetReplicationSourcePanic(ctx, t, client, tablet)

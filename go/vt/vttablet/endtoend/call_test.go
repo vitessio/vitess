@@ -75,12 +75,16 @@ func TestCallProcedure(t *testing.T) {
 		wantErr bool
 	}
 	tcases := []testcases{{
+		query: "call proc_dml()",
+	}, {
 		query:   "call proc_select1()",
 		wantErr: true,
 	}, {
 		query:   "call proc_select4()",
 		wantErr: true,
 	}, {
+		// Again, make sure the connection isn't dirty and does not contain leftover
+		// result sets from previous tests.
 		query: "call proc_dml()",
 	}}
 
@@ -92,7 +96,6 @@ func TestCallProcedure(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-
 		})
 	}
 }
@@ -149,7 +152,7 @@ func TestCallProcedureChangedTx(t *testing.T) {
 		})
 	}
 
-	// This passes as this starts a new transaction by commiting the old transaction implicitly.
+	// This passes as this starts a new transaction by committing the old transaction implicitly.
 	_, err = client.BeginExecute(`call proc_tx_begin()`, nil, nil)
 	require.NoError(t, err)
 }

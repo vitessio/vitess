@@ -33,6 +33,7 @@ export type TabletDebugVars = Partial<{
     BuildNumber: string;
     BuildTimestamp: string;
     BuildUser: string;
+    BuildVersion: string;
 
     QPS: { [k: string]: number[] };
 

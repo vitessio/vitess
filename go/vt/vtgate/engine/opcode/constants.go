@@ -19,8 +19,10 @@ package opcode
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 // PulloutOpcode is a number representing the opcode
@@ -74,6 +76,7 @@ const (
 	AggregateAnyValue
 	AggregateCountStar
 	AggregateGroupConcat
+	AggregateAvg
 	_NumOfOpCodes // This line must be last of the opcodes!
 )
 
@@ -85,6 +88,7 @@ var (
 		AggregateCountStar:     sqltypes.Int64,
 		AggregateSumDistinct:   sqltypes.Decimal,
 		AggregateSum:           sqltypes.Decimal,
+		AggregateAvg:           sqltypes.Decimal,
 		AggregateGtid:          sqltypes.VarChar,
 	}
 )
@@ -96,6 +100,7 @@ var SupportedAggregates = map[string]AggregateOpcode{
 	"sum":   AggregateSum,
 	"min":   AggregateMin,
 	"max":   AggregateMax,
+	"avg":   AggregateAvg,
 	// These functions don't exist in mysql, but are used
 	// to display the plan.
 	"count_distinct": AggregateCountDistinct,
@@ -117,6 +122,7 @@ var AggregateName = map[AggregateOpcode]string{
 	AggregateCountStar:     "count_star",
 	AggregateGroupConcat:   "group_concat",
 	AggregateAnyValue:      "any_value",
+	AggregateAvg:           "avg",
 }
 
 func (code AggregateOpcode) String() string {
@@ -134,18 +140,24 @@ func (code AggregateOpcode) MarshalJSON() ([]byte, error) {
 }
 
 // Type returns the opcode return sql type, and a bool telling is we are sure about this type or not
-func (code AggregateOpcode) Type(typ querypb.Type) querypb.Type {
+func (code AggregateOpcode) SQLType(typ querypb.Type) querypb.Type {
 	switch code {
 	case AggregateUnassigned:
 		return sqltypes.Null
 	case AggregateGroupConcat:
+		if typ == sqltypes.Unknown {
+			return sqltypes.Unknown
+		}
 		if sqltypes.IsBinary(typ) {
 			return sqltypes.Blob
 		}
 		return sqltypes.Text
 	case AggregateMax, AggregateMin, AggregateAnyValue:
 		return typ
-	case AggregateSumDistinct, AggregateSum:
+	case AggregateSumDistinct, AggregateSum, AggregateAvg:
+		if typ == sqltypes.Unknown {
+			return sqltypes.Unknown
+		}
 		if sqltypes.IsIntegral(typ) || sqltypes.IsDecimal(typ) {
 			return sqltypes.Decimal
 		}
@@ -157,6 +169,28 @@ func (code AggregateOpcode) Type(typ querypb.Type) querypb.Type {
 	default:
 		panic(code.String()) // we have a unit test checking we never reach here
 	}
+}
+
+func (code AggregateOpcode) Nullable() bool {
+	switch code {
+	case AggregateCount, AggregateCountStar:
+		return false
+	default:
+		return true
+	}
+}
+
+func (code AggregateOpcode) ResolveType(t evalengine.Type, env *collations.Environment) evalengine.Type {
+	sqltype := code.SQLType(t.Type())
+	collation := collations.CollationForType(sqltype, env.DefaultConnectionCharset())
+	nullable := code.Nullable()
+	size := t.Size()
+
+	scale := t.Scale()
+	if code == AggregateAvg {
+		scale += 4
+	}
+	return evalengine.NewTypeEx(sqltype, collation, nullable, size, scale)
 }
 
 func (code AggregateOpcode) NeedsComparableValues() bool {

@@ -21,46 +21,44 @@ import (
 	"sort"
 
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 // compact will optimise the operator tree into a smaller but equivalent version
-func compact(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
+func compact(ctx *plancontext.PlanningContext, op Operator) Operator {
 	type compactable interface {
 		// Compact implement this interface for operators that have easy to see optimisations
-		Compact(ctx *plancontext.PlanningContext) (ops.Operator, *rewrite.ApplyResult, error)
+		Compact(ctx *plancontext.PlanningContext) (Operator, *ApplyResult)
 	}
 
-	newOp, err := rewrite.BottomUp(op, TableID, func(op ops.Operator, _ semantics.TableSet, _ bool) (ops.Operator, *rewrite.ApplyResult, error) {
+	newOp := BottomUp(op, TableID, func(op Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult) {
 		newOp, ok := op.(compactable)
 		if !ok {
-			return op, rewrite.SameTree, nil
+			return op, NoRewrite
 		}
 		return newOp.Compact(ctx)
 	}, stopAtRoute)
-	return newOp, err
+	return newOp
 }
 
-func checkValid(op ops.Operator) error {
+func checkValid(op Operator) {
 	type checkable interface {
-		CheckValid() error
+		CheckValid()
 	}
 
-	return rewrite.Visit(op, func(this ops.Operator) error {
+	_ = Visit(op, func(this Operator) error {
 		if chk, ok := this.(checkable); ok {
-			return chk.CheckValid()
+			chk.CheckValid()
 		}
 		return nil
 	})
 }
 
-func Clone(op ops.Operator) ops.Operator {
+func Clone(op Operator) Operator {
 	inputs := op.Inputs()
-	clones := make([]ops.Operator, len(inputs))
+	clones := make([]Operator, len(inputs))
 	for i, input := range inputs {
 		clones[i] = Clone(input)
 	}
@@ -72,8 +70,8 @@ type tableIDIntroducer interface {
 	introducesTableID() semantics.TableSet
 }
 
-func TableID(op ops.Operator) (result semantics.TableSet) {
-	_ = rewrite.Visit(op, func(this ops.Operator) error {
+func TableID(op Operator) (result semantics.TableSet) {
+	_ = Visit(op, func(this Operator) error {
 		if tbl, ok := this.(tableIDIntroducer); ok {
 			result = result.Merge(tbl.introducesTableID())
 		}
@@ -87,9 +85,9 @@ type TableUser interface {
 	TablesUsed() []string
 }
 
-func TablesUsed(op ops.Operator) []string {
+func TablesUsed(op Operator) []string {
 	addString, collect := collectSortedUniqueStrings()
-	_ = rewrite.Visit(op, func(this ops.Operator) error {
+	_ = Visit(op, func(this Operator) error {
 		if tbl, ok := this.(TableUser); ok {
 			for _, u := range tbl.TablesUsed() {
 				addString(u)
@@ -100,29 +98,7 @@ func TablesUsed(op ops.Operator) []string {
 	return collect()
 }
 
-func UnresolvedPredicates(op ops.Operator, st *semantics.SemTable) (result []sqlparser.Expr) {
-	type unresolved interface {
-		// UnsolvedPredicates returns any predicates that have dependencies on the given Operator and
-		// on the outside of it (a parent Select expression, any other table not used by Operator, etc.).
-		// This is used for sub-queries. An example query could be:
-		// SELECT * FROM tbl WHERE EXISTS (SELECT 1 FROM otherTbl WHERE tbl.col = otherTbl.col)
-		// The subquery would have one unsolved predicate: `tbl.col = otherTbl.col`
-		// It's a predicate that belongs to the inner query, but it needs data from the outer query
-		// These predicates dictate which data we have to send from the outer side to the inner
-		UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr
-	}
-
-	_ = rewrite.Visit(op, func(this ops.Operator) error {
-		if tbl, ok := this.(unresolved); ok {
-			result = append(result, tbl.UnsolvedPredicates(st)...)
-		}
-
-		return nil
-	})
-	return
-}
-
-func CostOf(op ops.Operator) (cost int) {
+func CostOf(op Operator) (cost int) {
 	type costly interface {
 		// Cost returns the cost for this operator. All the costly operators in the tree are summed together to get the
 		// total cost of the operator tree.
@@ -131,7 +107,7 @@ func CostOf(op ops.Operator) (cost int) {
 		Cost() int
 	}
 
-	_ = rewrite.Visit(op, func(op ops.Operator) error {
+	_ = Visit(op, func(op Operator) error {
 		if costlyOp, ok := op.(costly); ok {
 			cost += costlyOp.Cost()
 		}

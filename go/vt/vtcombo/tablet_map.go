@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/hook"
@@ -34,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
@@ -75,6 +77,7 @@ var tabletMap map[uint32]*comboTablet
 // it to the map. If it's a primary tablet, it also issues a TER.
 func CreateTablet(
 	ctx context.Context,
+	env *vtenv.Environment,
 	ts *topo.Server,
 	cell string,
 	uid uint32,
@@ -82,6 +85,7 @@ func CreateTablet(
 	tabletType topodatapb.TabletType,
 	mysqld mysqlctl.MysqlDaemon,
 	dbcfgs *dbconfigs.DBConfigs,
+	srvTopoCounts *stats.CountersWithSingleLabel,
 ) error {
 	alias := &topodatapb.TabletAlias{
 		Cell: cell,
@@ -89,7 +93,7 @@ func CreateTablet(
 	}
 	log.Infof("Creating %v tablet %v for %v/%v", tabletType, topoproto.TabletAliasString(alias), keyspace, shard)
 
-	controller := tabletserver.NewServer(ctx, topoproto.TabletAliasString(alias), ts, alias)
+	controller := tabletserver.NewServer(ctx, env, topoproto.TabletAliasString(alias), ts, alias, srvTopoCounts)
 	initTabletType := tabletType
 	if tabletType == topodatapb.TabletType_PRIMARY {
 		initTabletType = topodatapb.TabletType_REPLICA
@@ -100,6 +104,7 @@ func CreateTablet(
 	}
 	tm := &tabletmanager.TabletManager{
 		BatchCtx:            context.Background(),
+		Env:                 env,
 		TopoServer:          ts,
 		MysqlDaemon:         mysqld,
 		DBConfigs:           dbcfgs,
@@ -117,7 +122,7 @@ func CreateTablet(
 		Type:           initTabletType,
 		DbNameOverride: dbname,
 	}
-	if err := tm.Start(tablet, 0); err != nil {
+	if err := tm.Start(tablet, nil); err != nil {
 		return err
 	}
 
@@ -163,12 +168,14 @@ func InitRoutingRules(
 // InitTabletMap creates the action tms and associated data structures
 // for all tablets, based on the vttest proto parameter.
 func InitTabletMap(
+	env *vtenv.Environment,
 	ts *topo.Server,
 	tpb *vttestpb.VTTestTopology,
 	mysqld mysqlctl.MysqlDaemon,
 	dbcfgs *dbconfigs.DBConfigs,
 	schemaDir string,
 	ensureDatabase bool,
+	srvTopoCounts *stats.CountersWithSingleLabel,
 ) (uint32, error) {
 	tabletMap = make(map[uint32]*comboTablet)
 
@@ -184,11 +191,11 @@ func InitTabletMap(
 	})
 
 	// iterate through the keyspaces
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, nil)
+	wr := wrangler.New(env, logutil.NewConsoleLogger(), ts, nil)
 	var uid uint32 = 1
 	for _, kpb := range tpb.Keyspaces {
 		var err error
-		uid, err = CreateKs(ctx, ts, tpb, mysqld, dbcfgs, schemaDir, kpb, ensureDatabase, uid, wr)
+		uid, err = CreateKs(ctx, env, ts, tpb, mysqld, dbcfgs, schemaDir, kpb, ensureDatabase, uid, wr, srvTopoCounts)
 		if err != nil {
 			return 0, err
 		}
@@ -279,6 +286,7 @@ func DeleteKs(
 // CreateKs creates keyspace, shards and tablets with mysql database
 func CreateKs(
 	ctx context.Context,
+	env *vtenv.Environment,
 	ts *topo.Server,
 	tpb *vttestpb.VTTestTopology,
 	mysqld mysqlctl.MysqlDaemon,
@@ -288,98 +296,76 @@ func CreateKs(
 	ensureDatabase bool,
 	uid uint32,
 	wr *wrangler.Wrangler,
+	srvTopoCounts *stats.CountersWithSingleLabel,
 ) (uint32, error) {
 	keyspace := kpb.Name
 
-	if kpb.ServedFrom != "" {
-		// if we have a redirect, create a completely redirected
-		// keyspace and no tablet
-		if err := ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{
-			ServedFroms: []*topodatapb.Keyspace_ServedFrom{
-				{
-					TabletType: topodatapb.TabletType_PRIMARY,
-					Keyspace:   kpb.ServedFrom,
-				},
-				{
-					TabletType: topodatapb.TabletType_REPLICA,
-					Keyspace:   kpb.ServedFrom,
-				},
-				{
-					TabletType: topodatapb.TabletType_RDONLY,
-					Keyspace:   kpb.ServedFrom,
-				},
-			},
-		}); err != nil {
-			return 0, fmt.Errorf("CreateKeyspace(%v) failed: %v", keyspace, err)
-		}
-	} else {
-		// create a regular keyspace
-		if err := ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}); err != nil {
-			return 0, fmt.Errorf("CreateKeyspace(%v) failed: %v", keyspace, err)
+	// create a regular keyspace
+	if err := ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}); err != nil {
+		return 0, fmt.Errorf("CreateKeyspace(%v) failed: %v", keyspace, err)
+	}
+
+	// iterate through the shards
+	for _, spb := range kpb.Shards {
+		shard := spb.Name
+		if err := ts.CreateShard(ctx, keyspace, shard); err != nil {
+			return 0, fmt.Errorf("CreateShard(%v:%v) failed: %v", keyspace, shard, err)
 		}
 
-		// iterate through the shards
-		for _, spb := range kpb.Shards {
-			shard := spb.Name
-			if err := ts.CreateShard(ctx, keyspace, shard); err != nil {
-				return 0, fmt.Errorf("CreateShard(%v:%v) failed: %v", keyspace, shard, err)
+		for _, cell := range tpb.Cells {
+			dbname := spb.DbNameOverride
+			if dbname == "" {
+				dbname = fmt.Sprintf("vt_%v_%v", keyspace, shard)
 			}
 
-			for _, cell := range tpb.Cells {
-				dbname := spb.DbNameOverride
-				if dbname == "" {
-					dbname = fmt.Sprintf("vt_%v_%v", keyspace, shard)
+			replicas := int(kpb.ReplicaCount)
+			if replicas == 0 {
+				// 2 replicas in order to ensure the primary cell has a primary and a replica
+				replicas = 2
+			}
+			rdonlys := int(kpb.RdonlyCount)
+			if rdonlys == 0 {
+				rdonlys = 1
+			}
+
+			if ensureDatabase {
+				// Create Database if not exist
+				conn, err := mysqld.GetDbaConnection(context.TODO())
+				if err != nil {
+					return 0, fmt.Errorf("GetConnection failed: %v", err)
+				}
+				defer conn.Close()
+
+				_, err = conn.ExecuteFetch("CREATE DATABASE IF NOT EXISTS `"+dbname+"`", 1, false)
+				if err != nil {
+					return 0, fmt.Errorf("error ensuring database exists: %v", err)
 				}
 
-				replicas := int(kpb.ReplicaCount)
-				if replicas == 0 {
-					// 2 replicas in order to ensure the primary cell has a primary and a replica
-					replicas = 2
-				}
-				rdonlys := int(kpb.RdonlyCount)
-				if rdonlys == 0 {
-					rdonlys = 1
-				}
+			}
+			if cell == tpb.Cells[0] {
+				replicas--
 
-				if ensureDatabase {
-					// Create Database if not exist
-					conn, err := mysqld.GetDbaConnection(context.TODO())
-					if err != nil {
-						return 0, fmt.Errorf("GetConnection failed: %v", err)
-					}
-					defer conn.Close()
-
-					_, err = conn.ExecuteFetch("CREATE DATABASE IF NOT EXISTS `"+dbname+"`", 1, false)
-					if err != nil {
-						return 0, fmt.Errorf("error ensuring database exists: %v", err)
-					}
-
+				// create the primary
+				if err := CreateTablet(ctx, env, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_PRIMARY, mysqld, dbcfgs.Clone(), srvTopoCounts); err != nil {
+					return 0, err
 				}
-				if cell == tpb.Cells[0] {
-					replicas--
+				uid++
+			}
 
-					// create the primary
-					if err := CreateTablet(ctx, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_PRIMARY, mysqld, dbcfgs.Clone()); err != nil {
-						return 0, err
-					}
-					uid++
+			for i := 0; i < replicas; i++ {
+				// create a replica tablet
+				if err := CreateTablet(ctx, env, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_REPLICA, mysqld, dbcfgs.Clone(), srvTopoCounts); err != nil {
+					return 0, err
 				}
+				uid++
+			}
 
-				for i := 0; i < replicas; i++ {
-					// create a replica tablet
-					if err := CreateTablet(ctx, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_REPLICA, mysqld, dbcfgs.Clone()); err != nil {
-						return 0, err
-					}
-					uid++
+			for i := 0; i < rdonlys; i++ {
+				// create a rdonly tablet
+				if err := CreateTablet(ctx, env, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_RDONLY, mysqld, dbcfgs.Clone(), srvTopoCounts); err != nil {
+					return 0, err
 				}
-
-				for i := 0; i < rdonlys; i++ {
-					// create a rdonly tablet
-					if err := CreateTablet(ctx, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_RDONLY, mysqld, dbcfgs.Clone()); err != nil {
-						return 0, err
-					}
-					uid++
-				}
+				uid++
 			}
 		}
 	}
@@ -394,7 +380,7 @@ func CreateKs(
 				return 0, fmt.Errorf("cannot load vschema file %v for keyspace %v: %v", f, keyspace, err)
 			}
 
-			_, err = vindexes.BuildKeyspace(formal)
+			_, err = vindexes.BuildKeyspace(formal, wr.SQLParser())
 			if err != nil {
 				return 0, fmt.Errorf("BuildKeyspace(%v) failed: %v", keyspace, err)
 			}
@@ -855,6 +841,10 @@ func (itmc *internalTabletManagerClient) ExecuteFetchAsDba(context.Context, *top
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
+func (itmc *internalTabletManagerClient) ExecuteMultiFetchAsDba(context.Context, *topodatapb.Tablet, bool, *tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest) ([]*querypb.QueryResult, error) {
+	return nil, fmt.Errorf("not implemented in vtcombo")
+}
+
 func (itmc *internalTabletManagerClient) ExecuteFetchAsAllPrivs(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest) (*querypb.QueryResult, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
@@ -887,6 +877,14 @@ func (itmc *internalTabletManagerClient) DeleteVReplicationWorkflow(context.Cont
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
+func (itmc *internalTabletManagerClient) HasVReplicationWorkflows(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.HasVReplicationWorkflowsRequest) (*tabletmanagerdatapb.HasVReplicationWorkflowsResponse, error) {
+	return nil, fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) ReadVReplicationWorkflows(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.ReadVReplicationWorkflowsRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse, error) {
+	return nil, fmt.Errorf("not implemented in vtcombo")
+}
+
 func (itmc *internalTabletManagerClient) ReadVReplicationWorkflow(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.ReadVReplicationWorkflowRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowResponse, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
@@ -900,6 +898,10 @@ func (itmc *internalTabletManagerClient) VReplicationWaitForPos(context.Context,
 }
 
 func (itmc *internalTabletManagerClient) UpdateVReplicationWorkflow(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.UpdateVReplicationWorkflowRequest) (*tabletmanagerdatapb.UpdateVReplicationWorkflowResponse, error) {
+	return nil, fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) UpdateVReplicationWorkflows(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest) (*tabletmanagerdatapb.UpdateVReplicationWorkflowsResponse, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 

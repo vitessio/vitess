@@ -62,23 +62,18 @@ func Run(bindAddress string, port int) {
 	l.Close()
 
 	startTime := time.Now()
-	log.Infof("Entering lameduck mode for at least %v", lameduckPeriod)
+	log.Infof("Entering lameduck mode for at least %v", timeouts.LameduckPeriod)
 	log.Infof("Firing asynchronous OnTerm hooks")
 	go onTermHooks.Fire()
 
-	fireOnTermSyncHooks(onTermTimeout)
-	if remain := lameduckPeriod - time.Since(startTime); remain > 0 {
+	fireOnTermSyncHooks(timeouts.OnTermTimeout)
+	if remain := timeouts.LameduckPeriod - time.Since(startTime); remain > 0 {
 		log.Infof("Sleeping an extra %v after OnTermSync to finish lameduck period", remain)
 		time.Sleep(remain)
 	}
 
 	log.Info("Shutting down gracefully")
-	fireOnCloseHooks(onCloseTimeout)
-}
-
-// Close runs any registered exit hooks in parallel.
-func Close() {
-	onCloseHooks.Fire()
+	fireOnCloseHooks(timeouts.OnCloseTimeout)
 	ListeningURL = url.URL{}
 }
 

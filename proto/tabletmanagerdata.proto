@@ -219,8 +219,10 @@ message ApplySchemaRequest {
   SchemaDefinition before_schema = 4;
   SchemaDefinition after_schema = 5;
   string sql_mode = 6;
-  // BatchSize indicates how many queries to apply together
+  // BatchSize indicates how many queries to apply together.
   int64 batch_size = 7;
+  // DisableForeignKeyChecks will result in setting foreign_key_checks to off before applying the schema.
+  bool disable_foreign_key_checks = 8;
 }
 
 message ApplySchemaResponse {
@@ -259,10 +261,24 @@ message ExecuteFetchAsDbaRequest {
   uint64 max_rows = 3;
   bool disable_binlogs = 4;
   bool reload_schema = 5;
+  bool disable_foreign_key_checks = 6;
 }
 
 message ExecuteFetchAsDbaResponse {
   query.QueryResult result = 1;
+}
+
+message ExecuteMultiFetchAsDbaRequest {
+  bytes sql = 1;
+  string db_name = 2;
+  uint64 max_rows = 3;
+  bool disable_binlogs = 4;
+  bool reload_schema = 5;
+  bool disable_foreign_key_checks = 6;
+}
+
+message ExecuteMultiFetchAsDbaResponse {
+  repeated query.QueryResult results = 1;
 }
 
 message ExecuteFetchAsAllPrivsRequest {
@@ -483,7 +499,7 @@ message PromoteReplicaResponse {
 // Backup / Restore related messages
 
 message BackupRequest {
-  int64 concurrency = 1;
+  int32 concurrency = 1;
   bool allow_primary = 2;
   // IncrementalFromPos indicates a position of a previous backup. When this value is non-empty
   // then the backup becomes incremental and applies as of given position.
@@ -549,6 +565,26 @@ message DeleteVReplicationWorkflowResponse {
   query.QueryResult result = 1;
 }
 
+message HasVReplicationWorkflowsRequest {
+}
+
+message HasVReplicationWorkflowsResponse {
+  bool has = 1;
+}
+
+message ReadVReplicationWorkflowsRequest {
+  repeated int32 include_ids = 1;
+  repeated string include_workflows = 2;
+  repeated binlogdata.VReplicationWorkflowState include_states = 3;
+  repeated string exclude_workflows = 4;
+  repeated binlogdata.VReplicationWorkflowState exclude_states = 5;
+  bool exclude_frozen = 6;
+}
+
+message ReadVReplicationWorkflowsResponse {
+  repeated ReadVReplicationWorkflowResponse workflows = 1;
+}
+
 message ReadVReplicationWorkflowRequest {
   string workflow = 1;
 }
@@ -609,17 +645,19 @@ message VDiffReportOptions {
   bool only_pks = 1;
   bool debug_query = 2;
   string format = 3;
+  int64 max_sample_rows = 4;
 }
 
 message VDiffCoreOptions {
   string tables = 1;
   bool auto_retry = 2;
-  int64  max_rows = 3;
+  int64 max_rows = 3;
   bool checksum = 4;
   int64 sample_pct = 5;
   int64 timeout_seconds = 6;
   int64 max_extra_rows_to_compare = 7;
   bool update_table_stats = 8;
+  int64 max_diff_seconds = 9;
 }
 
 message VDiffOptions {
@@ -635,9 +673,23 @@ message UpdateVReplicationWorkflowRequest {
   TabletSelectionPreference tablet_selection_preference = 4;
   binlogdata.OnDDLAction on_ddl = 5;
   binlogdata.VReplicationWorkflowState state = 6;
+  repeated string shards = 7;
 }
 
 message UpdateVReplicationWorkflowResponse {
+  query.QueryResult result = 1;
+}
+
+message UpdateVReplicationWorkflowsRequest {
+  bool all_workflows = 1;
+  repeated string include_workflows = 2;
+  repeated string exclude_workflows = 3;
+  binlogdata.VReplicationWorkflowState state = 4;
+  string message = 5;
+  string stop_position = 6;
+}
+
+message UpdateVReplicationWorkflowsResponse {
   query.QueryResult result = 1;
 }
 

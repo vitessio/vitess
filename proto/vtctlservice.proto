@@ -54,7 +54,7 @@ service Vtctld {
   rpc Backup(vtctldata.BackupRequest) returns (stream vtctldata.BackupResponse) {};
   // BackupShard chooses a tablet in the shard and uses it to create a backup.
   rpc BackupShard(vtctldata.BackupShardRequest) returns (stream vtctldata.BackupResponse) {};
-  // CancelSchemaMigration cancels one or all migrations, terminating any runnign ones as needed.
+  // CancelSchemaMigration cancels one or all migrations, terminating any running ones as needed.
   rpc CancelSchemaMigration(vtctldata.CancelSchemaMigrationRequest) returns (vtctldata.CancelSchemaMigrationResponse) {};
   // ChangeTabletType changes the db type for the specified tablet, if possible.
   // This is used primarily to arrange replicas, and it will not convert a
@@ -100,9 +100,13 @@ service Vtctld {
   rpc ExecuteFetchAsDBA(vtctldata.ExecuteFetchAsDBARequest) returns (vtctldata.ExecuteFetchAsDBAResponse) {};
   // ExecuteHook runs the hook on the tablet.
   rpc ExecuteHook(vtctldata.ExecuteHookRequest) returns (vtctldata.ExecuteHookResponse);
+  // ExecuteMultiFetchAsDBA executes one or more SQL queries on the remote tablet as the DBA user.
+  rpc ExecuteMultiFetchAsDBA(vtctldata.ExecuteMultiFetchAsDBARequest) returns (vtctldata.ExecuteMultiFetchAsDBAResponse) {};
   // FindAllShardsInKeyspace returns a map of shard names to shard references
   // for a given keyspace.
   rpc FindAllShardsInKeyspace(vtctldata.FindAllShardsInKeyspaceRequest) returns (vtctldata.FindAllShardsInKeyspaceResponse) {};
+  // ForceCutOverSchemaMigration marks a schema migration for forced cut-over.
+  rpc ForceCutOverSchemaMigration(vtctldata.ForceCutOverSchemaMigrationRequest) returns (vtctldata.ForceCutOverSchemaMigrationResponse) {};
   // GetBackups returns all the backups for a shard.
   rpc GetBackups(vtctldata.GetBackupsRequest) returns (vtctldata.GetBackupsResponse) {};
   // GetCellInfo returns the information for a cell.
@@ -132,6 +136,8 @@ service Vtctld {
   // Different fields in the request message result in different filtering
   // behaviors. See the documentation on GetSchemaMigrationsRequest for details.
   rpc GetSchemaMigrations(vtctldata.GetSchemaMigrationsRequest) returns (vtctldata.GetSchemaMigrationsResponse) {};
+  // GetShardReplication returns the replication graph for a shard in a cell.
+  rpc GetShardReplication(vtctldata.GetShardReplicationRequest) returns (vtctldata.GetShardReplicationResponse) {};
   // GetShard returns information about a shard in the topology.
   rpc GetShard(vtctldata.GetShardRequest) returns (vtctldata.GetShardResponse) {};
   // GetShardRoutingRules returns the VSchema shard routing rules.

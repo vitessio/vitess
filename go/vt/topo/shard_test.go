@@ -77,24 +77,6 @@ func TestRemoveCellsFromList(t *testing.T) {
 	}
 }
 
-func TestRemoveCells(t *testing.T) {
-	var cells []string
-	allCells := []string{"first", "second", "third"}
-
-	// remove from empty list should return allCells - what we remove
-	var emptyResult bool
-	cells, emptyResult = removeCells(cells, []string{"second"}, allCells)
-	if emptyResult || !reflect.DeepEqual(cells, []string{"first", "third"}) {
-		t.Fatalf("removeCells(full)-second failed: got %v", cells)
-	}
-
-	// removethe next two cells, should return empty list
-	cells, emptyResult = removeCells(cells, []string{"first", "third"}, allCells)
-	if !emptyResult {
-		t.Fatalf("removeCells(full)-first-third is not empty: %v", cells)
-	}
-}
-
 func lockedKeyspaceContext(keyspace string) context.Context {
 	ctx := context.Background()
 	return context.WithValue(ctx, locksKey, &locksInfo{

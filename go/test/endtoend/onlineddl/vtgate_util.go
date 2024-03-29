@@ -19,7 +19,6 @@ package onlineddl
 import (
 	"context"
 	"fmt"
-	"math"
 	"os"
 	"testing"
 	"time"
@@ -57,7 +56,7 @@ func VtgateExecQuery(t *testing.T, vtParams *mysql.ConnParams, query string, exp
 	require.Nil(t, err)
 	defer conn.Close()
 
-	qr, err := conn.ExecuteFetch(query, math.MaxInt64, true)
+	qr, err := conn.ExecuteFetch(query, -1, true)
 	if expectError == "" {
 		require.NoError(t, err)
 	} else {
@@ -206,6 +205,21 @@ func CheckLaunchAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expectCo
 	}
 }
 
+// CheckForceMigrationCutOver marks a migration for forced cut-over, and expects success by counting affected rows.
+func CheckForceMigrationCutOver(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, expectPossible bool) {
+	query, err := sqlparser.ParseAndBind("alter vitess_migration %a force_cutover",
+		sqltypes.StringBindVariable(uuid),
+	)
+	require.NoError(t, err)
+	r := VtgateExecQuery(t, vtParams, query, "")
+
+	if expectPossible {
+		assert.Equal(t, len(shards), int(r.RowsAffected))
+	} else {
+		assert.Equal(t, int(0), int(r.RowsAffected))
+	}
+}
+
 // CheckMigrationStatus verifies that the migration indicated by given UUID has the given expected status
 func CheckMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, expectStatuses ...schema.OnlineDDLStatus) bool {
 	query, err := sqlparser.ParseAndBind("show vitess_migrations like %a",
@@ -247,9 +261,13 @@ func WaitForMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []c
 	for _, status := range expectStatuses {
 		statusesMap[string(status)] = true
 	}
-	startTime := time.Now()
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
 	lastKnownStatus := ""
-	for time.Since(startTime) < timeout {
+	for {
 		countMatchedShards := 0
 		r := VtgateExecQuery(t, vtParams, query, "")
 		for _, row := range r.Named().Rows {
@@ -266,9 +284,12 @@ func WaitForMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []c
 		if countMatchedShards == len(shards) {
 			return schema.OnlineDDLStatus(lastKnownStatus)
 		}
-		time.Sleep(1 * time.Second)
+		select {
+		case <-ctx.Done():
+			return schema.OnlineDDLStatus(lastKnownStatus)
+		case <-ticker.C:
+		}
 	}
-	return schema.OnlineDDLStatus(lastKnownStatus)
 }
 
 // CheckMigrationArtifacts verifies given migration exists, and checks if it has artifacts

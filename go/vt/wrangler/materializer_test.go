@@ -19,19 +19,24 @@ package wrangler
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -60,10 +65,7 @@ func TestMoveTablesNoRoutingRules(t *testing.T) {
 			SourceExpression: "select * from t1",
 		}},
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
-	defer env.close()
+	env, ctx := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
 
 	env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
@@ -88,11 +90,7 @@ func TestMigrateTables(t *testing.T) {
 			SourceExpression: "select * from t1",
 		}},
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
-	defer env.close()
-
+	env, ctx := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
 	env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, insertPrefix, &sqltypes.Result{})
@@ -130,12 +128,8 @@ func TestMissingTables(t *testing.T) {
 			SourceExpression: "select * from t3",
 		}},
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
-	defer env.close()
-
+	env, ctx := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
 	env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, insertPrefix, &sqltypes.Result{})
@@ -194,11 +188,7 @@ func TestMoveTablesAllAndExclude(t *testing.T) {
 	}
 	for _, tcase := range testCases {
 		t.Run("", func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-
-			env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
-			defer env.close()
+			env, ctx := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
 			env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
 			env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
 			env.tmc.expectVRQuery(200, insertPrefix, &sqltypes.Result{})
@@ -226,11 +216,7 @@ func TestMoveTablesStopFlags(t *testing.T) {
 
 	var err error
 	t.Run("StopStartedAndStopAfterCopyFlags", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-
-		env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
-		defer env.close()
+		env, ctx := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
 		env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
 		env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
 		// insert expects flag stop_after_copy to be true
@@ -256,12 +242,7 @@ func TestMigrateVSchema(t *testing.T) {
 			SourceExpression: "select * from t1",
 		}},
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
-	defer env.close()
-
+	env, ctx := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
 	env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, insertPrefix, &sqltypes.Result{})
@@ -289,11 +270,8 @@ func TestCreateLookupVindexFull(t *testing.T) {
 		SourceKeyspace: "sourceks",
 		TargetKeyspace: "targetks",
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
-	defer env.close()
+	env, ctx := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
 
 	specs := &vschemapb.Keyspace{
 		Vindexes: map[string]*vschemapb.Vindex{
@@ -415,11 +393,9 @@ func TestCreateLookupVindexCreateDDL(t *testing.T) {
 		SourceKeyspace: "sourceks",
 		TargetKeyspace: "targetks",
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
-	defer env.close()
+	env, _ := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
+
 	vs := &vschemapb.Keyspace{
 		Sharded: true,
 		Vindexes: map[string]*vschemapb.Vindex{
@@ -635,11 +611,8 @@ func TestCreateLookupVindexSourceVSchema(t *testing.T) {
 		SourceKeyspace: "sourceks",
 		TargetKeyspace: "targetks",
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
-	defer env.close()
+	env, _ := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
 
 	specs := &vschemapb.Keyspace{
 		Vindexes: map[string]*vschemapb.Vindex{
@@ -874,11 +847,9 @@ func TestCreateLookupVindexTargetVSchema(t *testing.T) {
 		SourceKeyspace: "sourceks",
 		TargetKeyspace: "targetks",
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
-	defer env.close()
+	env, _ := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
+
 	sourcevs := &vschemapb.Keyspace{
 		Sharded: true,
 		Vindexes: map[string]*vschemapb.Vindex{
@@ -1113,11 +1084,8 @@ func TestCreateLookupVindexSameKeyspace(t *testing.T) {
 		SourceKeyspace: "ks",
 		TargetKeyspace: "ks",
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
-	defer env.close()
+	env, _ := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
 
 	specs := &vschemapb.Keyspace{
 		Vindexes: map[string]*vschemapb.Vindex{
@@ -1225,11 +1193,8 @@ func TestCreateCustomizedVindex(t *testing.T) {
 		SourceKeyspace: "ks",
 		TargetKeyspace: "ks",
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
-	defer env.close()
+	env, _ := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
 
 	specs := &vschemapb.Keyspace{
 		Vindexes: map[string]*vschemapb.Vindex{
@@ -1338,11 +1303,8 @@ func TestCreateLookupVindexIgnoreNulls(t *testing.T) {
 		SourceKeyspace: "ks",
 		TargetKeyspace: "ks",
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
-	defer env.close()
+	env, _ := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
 
 	specs := &vschemapb.Keyspace{
 		Vindexes: map[string]*vschemapb.Vindex{
@@ -1459,11 +1421,9 @@ func TestStopAfterCopyFlag(t *testing.T) {
 		SourceKeyspace: "ks",
 		TargetKeyspace: "ks",
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
-	defer env.close()
+	env, _ := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
+
 	specs := &vschemapb.Keyspace{
 		Vindexes: map[string]*vschemapb.Vindex{
 			"v": {
@@ -1538,7 +1498,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 	defer cancel()
 
 	topoServ := memorytopo.NewServer(ctx, "cell")
-	wr := New(logutil.NewConsoleLogger(), topoServ, nil)
+	wr := New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), topoServ, nil)
 
 	unique := map[string]*vschemapb.Vindex{
 		"v": {
@@ -1812,11 +1772,8 @@ func TestExternalizeVindex(t *testing.T) {
 		SourceKeyspace: "sourceks",
 		TargetKeyspace: "targetks",
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"-80", "80-"})
-	defer env.close()
+	env, _ := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"-80", "80-"})
 
 	sourceVSchema := &vschemapb.Keyspace{
 		Sharded: true,
@@ -1963,11 +1920,8 @@ func TestMaterializerOneToOne(t *testing.T) {
 			topodatapb.TabletType_RDONLY,
 		}),
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
-	defer env.close()
+	env, ctx := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
 
 	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(
@@ -2007,11 +1961,8 @@ func TestMaterializerManyToOne(t *testing.T) {
 			CreateDdl:        "t2ddl",
 		}},
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"-80", "80-"}, []string{"0"})
-	defer env.close()
+	env, ctx := newTestMaterializerEnv(t, ms, []string{"-80", "80-"}, []string{"0"})
 
 	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(
@@ -2041,11 +1992,8 @@ func TestMaterializerOneToMany(t *testing.T) {
 			CreateDdl:        "t1ddl",
 		}},
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"-80", "80-"})
-	defer env.close()
+	env, ctx := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"-80", "80-"})
 
 	vs := &vschemapb.Keyspace{
 		Sharded: true,
@@ -2101,11 +2049,8 @@ func TestMaterializerManyToMany(t *testing.T) {
 			CreateDdl:        "t1ddl",
 		}},
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"-40", "40-"}, []string{"-80", "80-"})
-	defer env.close()
+	env, ctx := newTestMaterializerEnv(t, ms, []string{"-40", "40-"}, []string{"-80", "80-"})
 
 	vs := &vschemapb.Keyspace{
 		Sharded: true,
@@ -2162,11 +2107,8 @@ func TestMaterializerMulticolumnVindex(t *testing.T) {
 			CreateDdl:        "t1ddl",
 		}},
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"-80", "80-"})
-	defer env.close()
+	env, ctx := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"-80", "80-"})
 
 	vs := &vschemapb.Keyspace{
 		Sharded: true,
@@ -2229,11 +2171,8 @@ func TestMaterializerDeploySchema(t *testing.T) {
 			CreateDdl:        "t2ddl",
 		}},
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
-	defer env.close()
+	env, ctx := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
 
 	delete(env.tmc.schema, "targetks.t2")
 
@@ -2270,11 +2209,8 @@ func TestMaterializerCopySchema(t *testing.T) {
 			CreateDdl:        "t2ddl",
 		}},
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
-	defer env.close()
+	env, ctx := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
 
 	delete(env.tmc.schema, "targetks.t1")
 
@@ -2308,11 +2244,8 @@ func TestMaterializerExplicitColumns(t *testing.T) {
 			CreateDdl:        "t1ddl",
 		}},
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"-80", "80-"})
-	defer env.close()
+	env, ctx := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"-80", "80-"})
 
 	vs := &vschemapb.Keyspace{
 		Sharded: true,
@@ -2371,11 +2304,8 @@ func TestMaterializerRenamedColumns(t *testing.T) {
 			CreateDdl:        "t1ddl",
 		}},
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"-80", "80-"})
-	defer env.close()
+	env, ctx := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"-80", "80-"})
 
 	vs := &vschemapb.Keyspace{
 		Sharded: true,
@@ -2439,11 +2369,8 @@ func TestMaterializerStopAfterCopy(t *testing.T) {
 			CreateDdl:        "t2ddl",
 		}},
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
-	defer env.close()
+	env, ctx := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
 
 	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, insertPrefix+`.*stop_after_copy:true`, &sqltypes.Result{})
@@ -2465,11 +2392,8 @@ func TestMaterializerNoTargetVSchema(t *testing.T) {
 			CreateDdl:        "t1ddl",
 		}},
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"-80", "80-"})
-	defer env.close()
+	env, ctx := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"-80", "80-"})
 
 	vs := &vschemapb.Keyspace{
 		Sharded: true,
@@ -2495,11 +2419,8 @@ func TestMaterializerNoDDL(t *testing.T) {
 			CreateDdl:        "",
 		}},
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
-	defer env.close()
+	env, ctx := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
 
 	delete(env.tmc.schema, "targetks.t1")
 
@@ -2538,8 +2459,7 @@ func TestMaterializerNoSourcePrimary(t *testing.T) {
 		cell:     "cell",
 		tmc:      newTestMaterializerTMClient(),
 	}
-	env.wr = New(logutil.NewConsoleLogger(), env.topoServ, env.tmc)
-	defer env.close()
+	env.wr = New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), env.topoServ, env.tmc)
 
 	tabletID := 100
 	for _, shard := range sources {
@@ -2572,11 +2492,8 @@ func TestMaterializerTableMismatchNonCopy(t *testing.T) {
 			CreateDdl:        "",
 		}},
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
-	defer env.close()
+	env, ctx := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
 
 	delete(env.tmc.schema, "targetks.t1")
 
@@ -2596,11 +2513,8 @@ func TestMaterializerTableMismatchCopy(t *testing.T) {
 			CreateDdl:        "copy",
 		}},
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
-	defer env.close()
+	env, ctx := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
 
 	delete(env.tmc.schema, "targetks.t1")
 
@@ -2620,11 +2534,8 @@ func TestMaterializerNoSourceTable(t *testing.T) {
 			CreateDdl:        "copy",
 		}},
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
-	defer env.close()
+	env, ctx := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
 
 	delete(env.tmc.schema, "targetks.t1")
 	delete(env.tmc.schema, "sourceks.t1")
@@ -2645,11 +2556,8 @@ func TestMaterializerSyntaxError(t *testing.T) {
 			CreateDdl:        "t1ddl",
 		}},
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
-	defer env.close()
+	env, ctx := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
 
 	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
 	err := env.wr.Materialize(ctx, ms)
@@ -2667,11 +2575,8 @@ func TestMaterializerNotASelect(t *testing.T) {
 			CreateDdl:        "t1ddl",
 		}},
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
-	defer env.close()
+	env, ctx := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
 
 	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
 	err := env.wr.Materialize(ctx, ms)
@@ -2689,11 +2594,8 @@ func TestMaterializerNoGoodVindex(t *testing.T) {
 			CreateDdl:        "t1ddl",
 		}},
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"-80", "80-"})
-	defer env.close()
+	env, ctx := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"-80", "80-"})
 
 	vs := &vschemapb.Keyspace{
 		Sharded: true,
@@ -2738,10 +2640,8 @@ func TestMaterializerComplexVindexExpression(t *testing.T) {
 			CreateDdl:        "t1ddl",
 		}},
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"-80", "80-"})
-	defer env.close()
+
+	env, ctx := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"-80", "80-"})
 
 	vs := &vschemapb.Keyspace{
 		Sharded: true,
@@ -2781,10 +2681,8 @@ func TestMaterializerNoVindexInExpression(t *testing.T) {
 			CreateDdl:        "t1ddl",
 		}},
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"-80", "80-"})
-	defer env.close()
+
+	env, ctx := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"-80", "80-"})
 
 	vs := &vschemapb.Keyspace{
 		Sharded: true,
@@ -2835,7 +2733,7 @@ func TestStripForeignKeys(t *testing.T) {
 				"\tid int(11) not null auto_increment,\n" +
 				"\tforeign_id int(11),\n" +
 				"\tprimary key (id),\n" +
-				"\tindex fk_table1_ref_foreign_id (foreign_id),\n" +
+				"\tkey fk_table1_ref_foreign_id (foreign_id),\n" +
 				"\tcheck (foreign_id > 10)\n" +
 				") ENGINE InnoDB,\n" +
 				"  CHARSET latin1",
@@ -2858,8 +2756,8 @@ func TestStripForeignKeys(t *testing.T) {
 				"\tforeign_id int(11) not null,\n" +
 				"\tuser_id int(11) not null,\n" +
 				"\tprimary key (id),\n" +
-				"\tindex fk_table1_ref_foreign_id (foreign_id),\n" +
-				"\tindex fk_table1_ref_user_id (user_id),\n" +
+				"\tkey fk_table1_ref_foreign_id (foreign_id),\n" +
+				"\tkey fk_table1_ref_user_id (user_id),\n" +
 				"\tcheck (foreign_id > 10)\n" +
 				") ENGINE InnoDB,\n" +
 				"  CHARSET latin1",
@@ -2867,7 +2765,7 @@ func TestStripForeignKeys(t *testing.T) {
 	}
 
 	for _, tc := range tcs {
-		newDDL, err := stripTableForeignKeys(tc.ddl)
+		newDDL, err := stripTableForeignKeys(tc.ddl, sqlparser.NewTestParser())
 		if tc.hasErr != (err != nil) {
 			t.Fatalf("hasErr does not match: err: %v, tc: %+v", err, tc)
 		}
@@ -2904,8 +2802,8 @@ func TestStripConstraints(t *testing.T) {
 				"\tforeign_id int(11) not null,\n" +
 				"\tuser_id int(11) not null,\n" +
 				"\tprimary key (id),\n" +
-				"\tindex fk_table1_ref_foreign_id (foreign_id),\n" +
-				"\tindex fk_table1_ref_user_id (user_id)\n" +
+				"\tkey fk_table1_ref_foreign_id (foreign_id),\n" +
+				"\tkey fk_table1_ref_user_id (user_id)\n" +
 				") ENGINE InnoDB,\n" +
 				"  CHARSET latin1",
 
@@ -2927,8 +2825,8 @@ func TestStripConstraints(t *testing.T) {
 				"\tforeign_id int(11) not null,\n" +
 				"\tuser_id int(11) not null,\n" +
 				"\tprimary key (id),\n" +
-				"\tindex fk_table1_ref_foreign_id (foreign_id),\n" +
-				"\tindex fk_table1_ref_user_id (user_id)\n" +
+				"\tkey fk_table1_ref_foreign_id (foreign_id),\n" +
+				"\tkey fk_table1_ref_user_id (user_id)\n" +
 				") ENGINE InnoDB,\n" +
 				"  CHARSET latin1",
 		},
@@ -2941,7 +2839,7 @@ func TestStripConstraints(t *testing.T) {
 	}
 
 	for _, tc := range tcs {
-		newDDL, err := stripTableConstraints(tc.ddl)
+		newDDL, err := stripTableConstraints(tc.ddl, sqlparser.NewTestParser())
 		if tc.hasErr != (err != nil) {
 			t.Fatalf("hasErr does not match: err: %v, tc: %+v", err, tc)
 		}
@@ -3239,9 +3137,7 @@ func TestMaterializerSourceShardSelection(t *testing.T) {
 
 	for _, tcase := range testcases {
 		t.Run(tcase.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-			env := newTestMaterializerEnv(t, ctx, ms, tcase.sourceShards, tcase.targetShards)
+			env, ctx := newTestMaterializerEnv(t, ms, tcase.sourceShards, tcase.targetShards)
 			if err := env.topoServ.SaveVSchema(ctx, "targetks", tcase.targetVSchema); err != nil {
 				t.Fatal(err)
 			}
@@ -3250,7 +3146,7 @@ func TestMaterializerSourceShardSelection(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			defer env.close()
+
 			for i, targetShard := range tcase.targetShards {
 				tabletID := 200 + i*10
 				env.tmc.expectVRQuery(tabletID, mzSelectFrozenQuery, &sqltypes.Result{})
@@ -3288,16 +3184,12 @@ func TestMoveTablesDDLFlag(t *testing.T) {
 			SourceExpression: "select * from t1",
 		}},
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
 
 	for onDDLAction := range binlogdatapb.OnDDLAction_value {
 		t.Run(fmt.Sprintf("OnDDL Flag:%v", onDDLAction), func(t *testing.T) {
-			ctx, cancel := context.WithCancel(ctx)
+			env, ctx := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
+			ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 			defer cancel()
-			env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
-			defer env.close()
-
 			env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
 			env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
 			if onDDLAction == binlogdatapb.OnDDLAction_IGNORE.String() {
@@ -3507,6 +3399,231 @@ func TestAddTablesToVSchema(t *testing.T) {
 			err := wr.addTablesToVSchema(ctx, srcks, tt.inTargetVSchema, tt.tables, tt.copyVSchema)
 			require.NoError(t, err)
 			require.Equal(t, tt.wantTargetVSchema, tt.inTargetVSchema)
+		})
+	}
+}
+
+// TestKeyRangesEqualOptimization tests that we optimize the source
+// filtering when there's only one source shard for the stream and
+// its keyrange is equal to the target shard for the stream. This
+// means that even if the target keyspace is sharded, the source
+// does not need to perform the in_keyrange filtering.
+func TestKeyRangesEqualOptimization(t *testing.T) {
+	workflow := "testwf"
+	sourceKs := "sourceks"
+	targetKs := "targetks"
+	table := "t1"
+	mzi := vtctldatapb.MaterializationIntent_MOVETABLES
+	tableMaterializeSettings := []*vtctldatapb.TableMaterializeSettings{
+		{
+			TargetTable:      table,
+			SourceExpression: fmt.Sprintf("select * from %s", table),
+		},
+	}
+	targetVSchema := &vschemapb.Keyspace{
+		Sharded: true,
+		Vindexes: map[string]*vschemapb.Vindex{
+			"xxhash": {
+				Type: "xxhash",
+			},
+		},
+		Tables: map[string]*vschemapb.Table{
+			table: {
+				ColumnVindexes: []*vschemapb.ColumnVindex{
+					{
+						Column: "id",
+						Name:   "xxhash",
+					},
+				},
+			},
+		},
+	}
+
+	testCases := []struct {
+		name         string
+		ms           *vtctldatapb.MaterializeSettings
+		sourceShards []string
+		targetShards []string
+		wantBls      map[string]*binlogdatapb.BinlogSource
+	}{
+		{
+			name: "no in_keyrange filter -- partial, one equal shard",
+			ms: &vtctldatapb.MaterializeSettings{
+				MaterializationIntent: mzi,
+				Workflow:              workflow,
+				TargetKeyspace:        targetKs,
+				SourceKeyspace:        sourceKs,
+				Cell:                  "cell",
+				SourceShards:          []string{"-80"}, // Partial MoveTables just for this shard
+				TableSettings:         tableMaterializeSettings,
+			},
+			sourceShards: []string{"-80", "80-"},
+			targetShards: []string{"-80", "80-"},
+			wantBls: map[string]*binlogdatapb.BinlogSource{
+				"-80": {
+					Keyspace: sourceKs,
+					Shard:    "-80", // Keyranges are equal between the source and target
+					Filter: &binlogdatapb.Filter{
+						Rules: []*binlogdatapb.Rule{
+							{
+								Match:  table,
+								Filter: fmt.Sprintf("select * from %s", table),
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "in_keyrange filter -- unequal shards",
+			ms: &vtctldatapb.MaterializeSettings{
+				MaterializationIntent: mzi,
+				Workflow:              workflow,
+				TargetKeyspace:        targetKs,
+				SourceKeyspace:        sourceKs,
+				Cell:                  "cell",
+				TableSettings:         tableMaterializeSettings,
+			},
+			sourceShards: []string{"-"},
+			targetShards: []string{"-80", "80-"},
+			wantBls: map[string]*binlogdatapb.BinlogSource{
+				"-80": {
+					Keyspace: sourceKs,
+					Shard:    "-",
+					Filter: &binlogdatapb.Filter{
+						Rules: []*binlogdatapb.Rule{
+							{
+								Match:  table,
+								Filter: fmt.Sprintf("select * from %s where in_keyrange(id, '%s.xxhash', '-80')", table, targetKs),
+							},
+						},
+					},
+				},
+				"80-": {
+					Keyspace: sourceKs,
+					Shard:    "-",
+					Filter: &binlogdatapb.Filter{
+						Rules: []*binlogdatapb.Rule{
+							{
+								Match:  table,
+								Filter: fmt.Sprintf("select * from %s where in_keyrange(id, '%s.xxhash', '80-')", table, targetKs),
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "in_keyrange filter -- unequal shards on merge",
+			ms: &vtctldatapb.MaterializeSettings{
+				MaterializationIntent: mzi,
+				Workflow:              workflow,
+				TargetKeyspace:        targetKs,
+				SourceKeyspace:        sourceKs,
+				Cell:                  "cell",
+				TableSettings:         tableMaterializeSettings,
+			},
+			sourceShards: []string{"-80", "80-"},
+			targetShards: []string{"-"},
+			wantBls: map[string]*binlogdatapb.BinlogSource{
+				"-": {
+					Keyspace: sourceKs,
+					Shard:    "-80",
+					Filter: &binlogdatapb.Filter{
+						Rules: []*binlogdatapb.Rule{
+							{
+								Match:  table,
+								Filter: fmt.Sprintf("select * from %s where in_keyrange(id, '%s.xxhash', '-')", table, targetKs),
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "no in_keyrange filter -- all equal shards",
+			ms: &vtctldatapb.MaterializeSettings{
+				MaterializationIntent: mzi,
+				Workflow:              workflow,
+				TargetKeyspace:        targetKs,
+				SourceKeyspace:        sourceKs,
+				Cell:                  "cell",
+				TableSettings:         tableMaterializeSettings,
+			},
+			sourceShards: []string{"-80", "80-"},
+			targetShards: []string{"-80", "80-"},
+			wantBls: map[string]*binlogdatapb.BinlogSource{
+				"-80": {
+					Keyspace: sourceKs,
+					Shard:    "-80",
+					Filter: &binlogdatapb.Filter{
+						Rules: []*binlogdatapb.Rule{
+							{
+								Match:  table,
+								Filter: fmt.Sprintf("select * from %s", table),
+							},
+						},
+					},
+				},
+				"80-": {
+					Keyspace: sourceKs,
+					Shard:    "80-",
+					Filter: &binlogdatapb.Filter{
+						Rules: []*binlogdatapb.Rule{
+							{
+								Match:  table,
+								Filter: fmt.Sprintf("select * from %s", table),
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			env, ctx := newTestMaterializerEnv(t, tc.ms, tc.sourceShards, tc.targetShards)
+			ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+			defer cancel()
+			// Target is always sharded.
+			err := env.wr.ts.SaveVSchema(ctx, targetKs, targetVSchema)
+			require.NoError(t, err, "SaveVSchema failed: %v", err)
+
+			for _, tablet := range env.tablets {
+				// Queries will only be executed on primary tablets in the target keyspace.
+				if tablet.Keyspace != targetKs || tablet.Type != topodatapb.TabletType_PRIMARY {
+					continue
+				}
+				env.tmc.expectVRQuery(int(tablet.Alias.Uid), mzSelectFrozenQuery, &sqltypes.Result{})
+				// If we are doing a partial MoveTables, we will only perform the workflow
+				// stream creation / INSERT statment on the shard(s) we're migrating.
+				if len(tc.ms.SourceShards) > 0 && !slices.Contains(tc.ms.SourceShards, tablet.Shard) {
+					continue
+				}
+				bls := tc.wantBls[tablet.Shard]
+				require.NotNil(t, bls, "no binlog source defined for tablet %+v", tablet)
+				if bls.Filter != nil {
+					for i, rule := range bls.Filter.Rules {
+						// It's escaped in the SQL statement.
+						bls.Filter.Rules[i].Filter = strings.ReplaceAll(rule.Filter, `'`, `\'`)
+					}
+				}
+				blsBytes, err := prototext.Marshal(bls)
+				require.NoError(t, err, "failed to marshal binlog source: %v", err)
+				// This is also escaped in the SQL statement.
+				blsStr := strings.ReplaceAll(string(blsBytes), `"`, `\"`)
+				// Escape the string for the regexp comparison.
+				blsStr = regexp.QuoteMeta(blsStr)
+				// For some reason we end up with an extra slash added by QuoteMeta for the
+				// escaped single quotes in the filter.
+				blsStr = strings.ReplaceAll(blsStr, `\\\\`, `\\\`)
+				expectedQuery := fmt.Sprintf(`/insert into _vt.vreplication.* values \('%s', '%s'`, workflow, blsStr)
+				env.tmc.expectVRQuery(int(tablet.Alias.Uid), expectedQuery, &sqltypes.Result{})
+			}
+
+			_, err = env.wr.prepareMaterializerStreams(ctx, tc.ms)
+			require.NoError(t, err, "prepareMaterializerStreams failed: %v", err)
 		})
 	}
 }

@@ -129,7 +129,7 @@ func isExpandedColumn(sourceColumn *Column, targetColumn *Column) (bool, string)
 			return true, "source is unsigned, target is signed"
 		}
 		if sourceColumn.NumericPrecision <= targetColumn.NumericPrecision && !sourceColumn.IsUnsigned && targetColumn.IsUnsigned {
-			// e.g. INT SIGNED => INT UNSIGNED, INT SIGNED = BIGINT UNSIGNED
+			// e.g. INT SIGNED => INT UNSIGNED, INT SIGNED => BIGINT UNSIGNED
 			return true, "target unsigned value exceeds source unsigned value"
 		}
 		if targetColumn.IsFloatingPoint() && !sourceColumn.IsFloatingPoint() {

@@ -125,7 +125,7 @@ func debugEnvHandler(tsv *TabletServer, w http.ResponseWriter, r *http.Request) 
 		case "RowStreamerMaxMySQLReplLagSecs":
 			setInt64Val(func(val int64) { tsv.Config().RowStreamer.MaxMySQLReplLagSecs = val })
 		case "UnhealthyThreshold":
-			setDurationVal(func(d time.Duration) { _ = tsv.Config().Healthcheck.UnhealthyThresholdSeconds.Set(d.String()) })
+			setDurationVal(func(d time.Duration) { tsv.Config().Healthcheck.UnhealthyThreshold = d })
 			setDurationVal(tsv.hs.SetUnhealthyThreshold)
 			setDurationVal(tsv.sm.SetUnhealthyThreshold)
 		case "ThrottleMetricThreshold":
@@ -145,7 +145,7 @@ func debugEnvHandler(tsv *TabletServer, w http.ResponseWriter, r *http.Request) 
 	vars = addVar(vars, "WarnResultSize", tsv.WarnResultSize)
 	vars = addVar(vars, "RowStreamerMaxInnoDBTrxHistLen", func() int64 { return tsv.Config().RowStreamer.MaxInnoDBTrxHistLen })
 	vars = addVar(vars, "RowStreamerMaxMySQLReplLagSecs", func() int64 { return tsv.Config().RowStreamer.MaxMySQLReplLagSecs })
-	vars = addVar(vars, "UnhealthyThreshold", tsv.Config().Healthcheck.UnhealthyThresholdSeconds.Get)
+	vars = addVar(vars, "UnhealthyThreshold", func() time.Duration { return tsv.Config().Healthcheck.UnhealthyThreshold })
 	vars = addVar(vars, "ThrottleMetricThreshold", tsv.ThrottleMetricThreshold)
 	vars = append(vars, envValue{
 		Name:  "Consolidator",

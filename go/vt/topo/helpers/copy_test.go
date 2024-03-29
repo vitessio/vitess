@@ -22,6 +22,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 
@@ -104,7 +106,7 @@ func TestBasic(t *testing.T) {
 	fromTS, toTS := createSetup(ctx, t)
 
 	// check keyspace copy
-	CopyKeyspaces(ctx, fromTS, toTS)
+	CopyKeyspaces(ctx, fromTS, toTS, sqlparser.NewTestParser())
 	keyspaces, err := toTS.GetKeyspaces(ctx)
 	if err != nil {
 		t.Fatalf("toTS.GetKeyspaces failed: %v", err)
@@ -112,7 +114,7 @@ func TestBasic(t *testing.T) {
 	if len(keyspaces) != 1 || keyspaces[0] != "test_keyspace" {
 		t.Fatalf("unexpected keyspaces: %v", keyspaces)
 	}
-	CopyKeyspaces(ctx, fromTS, toTS)
+	CopyKeyspaces(ctx, fromTS, toTS, sqlparser.NewTestParser())
 
 	// check shard copy
 	CopyShards(ctx, fromTS, toTS)

@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
@@ -27,7 +28,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-func analyzeSelect(sel *sqlparser.Select, tables map[string]*schema.Table) (plan *Plan, err error) {
+func analyzeSelect(env *vtenv.Environment, sel *sqlparser.Select, tables map[string]*schema.Table) (plan *Plan, err error) {
 	plan = &Plan{
 		PlanID:    PlanSelect,
 		FullQuery: GenerateLimitQuery(sel),
@@ -48,7 +49,10 @@ func analyzeSelect(sel *sqlparser.Select, tables map[string]*schema.Table) (plan
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s is not a sequence", sqlparser.ToString(sel.From))
 		}
 		plan.PlanID = PlanNextval
-		v, err := evalengine.Translate(nextVal.Expr, nil)
+		v, err := evalengine.Translate(nextVal.Expr, &evalengine.Config{
+			Environment: env,
+			Collation:   env.CollationEnv().DefaultConnectionCharset(),
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -218,4 +222,22 @@ func analyzeDDL(stmt sqlparser.DDLStatement) (*Plan, error) {
 		fullQuery = GenerateFullQuery(stmt)
 	}
 	return &Plan{PlanID: PlanDDL, FullQuery: fullQuery, FullStmt: stmt, NeedsReservedConn: stmt.IsTemporary()}, nil
+}
+
+func analyzeFlush(stmt *sqlparser.Flush, tables map[string]*schema.Table) (*Plan, error) {
+	plan := &Plan{PlanID: PlanFlush, FullQuery: GenerateFullQuery(stmt)}
+
+	for _, tbl := range stmt.TableNames {
+		if schemaTbl, ok := tables[tbl.Name.String()]; ok {
+			plan.AllTables = append(plan.AllTables, schemaTbl)
+		}
+	}
+	if len(plan.AllTables) == 1 {
+		plan.Table = plan.AllTables[0]
+	}
+
+	if stmt.WithLock {
+		plan.NeedsReservedConn = true
+	}
+	return plan, nil
 }

@@ -112,7 +112,7 @@ func (sa *ScalarAggregate) TryStreamExecute(ctx context.Context, vcursor VCursor
 	var mu sync.Mutex
 	var agg aggregationState
 	var fields []*querypb.Field
-	var fieldsSent bool
+	fieldsSent := !wantfields
 
 	err := vcursor.StreamExecutePrimitive(ctx, sa.Input, bindVars, wantfields, func(result *sqltypes.Result) error {
 		// as the underlying primitive call is not sync
@@ -121,7 +121,7 @@ func (sa *ScalarAggregate) TryStreamExecute(ctx context.Context, vcursor VCursor
 		mu.Lock()
 		defer mu.Unlock()
 
-		if agg == nil {
+		if agg == nil && len(result.Fields) != 0 {
 			var err error
 			agg, fields, err = newAggregation(result.Fields, sa.Aggregates)
 			if err != nil {

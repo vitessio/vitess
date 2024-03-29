@@ -1,3 +1,5 @@
+# README
+
 This directory contains all the Go code for Vitess.
 
 Most of the packages at the top level are general-purpose and are suitable
@@ -16,4 +18,3 @@ import (
     topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 ```
-

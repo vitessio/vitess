@@ -40,7 +40,7 @@ var InitConfig = &cobra.Command{
 
 func commandInitConfig(cmd *cobra.Command, args []string) error {
 	// Generate my.cnf from scratch and use it to find mysqld.
-	mysqld, cnf, err := mysqlctl.CreateMysqldAndMycnf(tabletUID, mysqlSocket, mysqlPort)
+	mysqld, cnf, err := mysqlctl.CreateMysqldAndMycnf(tabletUID, mysqlSocket, mysqlPort, collationEnv)
 	if err != nil {
 		return fmt.Errorf("failed to initialize mysql config: %v", err)
 	}

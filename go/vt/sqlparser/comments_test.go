@@ -18,12 +18,12 @@ package sqlparser
 
 import (
 	"fmt"
-	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/stretchr/testify/assert"
+	"vitess.io/vitess/go/vt/sysvars"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -142,15 +142,9 @@ func TestSplitComments(t *testing.T) {
 			gotSQL, gotComments := SplitMarginComments(testCase.input)
 			gotLeadingComments, gotTrailingComments := gotComments.Leading, gotComments.Trailing
 
-			if gotSQL != testCase.outSQL {
-				t.Errorf("test input: '%s', got SQL\n%+v, want\n%+v", testCase.input, gotSQL, testCase.outSQL)
-			}
-			if gotLeadingComments != testCase.outLeadingComments {
-				t.Errorf("test input: '%s', got LeadingComments\n%+v, want\n%+v", testCase.input, gotLeadingComments, testCase.outLeadingComments)
-			}
-			if gotTrailingComments != testCase.outTrailingComments {
-				t.Errorf("test input: '%s', got TrailingComments\n%+v, want\n%+v", testCase.input, gotTrailingComments, testCase.outTrailingComments)
-			}
+			assert.Equal(t, testCase.outSQL, gotSQL, "SQL mismatch")
+			assert.Equal(t, testCase.outLeadingComments, gotLeadingComments, "LeadingComments mismatch")
+			assert.Equal(t, testCase.outTrailingComments, gotTrailingComments, "TrailingCommints mismatch")
 		})
 	}
 }
@@ -224,10 +218,7 @@ a`,
 	}}
 	for _, testCase := range testCases {
 		gotSQL := StripLeadingComments(testCase.input)
-
-		if gotSQL != testCase.outSQL {
-			t.Errorf("test input: '%s', got SQL\n%+v, want\n%+v", testCase.input, gotSQL, testCase.outSQL)
-		}
+		assert.Equal(t, testCase.outSQL, gotSQL)
 	}
 }
 
@@ -253,10 +244,8 @@ func TestExtractMysqlComment(t *testing.T) {
 	}}
 	for _, testCase := range testCases {
 		gotVersion, gotSQL := ExtractMysqlComment(testCase.input)
+		assert.Equal(t, testCase.outVersion, gotVersion, "version mismatch")
 
-		if gotVersion != testCase.outVersion {
-			t.Errorf("test input: '%s', got version\n%+v, want\n%+v", testCase.input, gotVersion, testCase.outVersion)
-		}
 		if gotSQL != testCase.outSQL {
 			t.Errorf("test input: '%s', got SQL\n%+v, want\n%+v", testCase.input, gotSQL, testCase.outSQL)
 		}
@@ -321,6 +310,7 @@ func TestExtractCommentDirectives(t *testing.T) {
 		},
 	}}
 
+	parser := NewTestParser()
 	for _, testCase := range testCases {
 		t.Run(testCase.input, func(t *testing.T) {
 			sqls := []string{
@@ -338,7 +328,7 @@ func TestExtractCommentDirectives(t *testing.T) {
 			for _, sql := range sqls {
 				t.Run(sql, func(t *testing.T) {
 					var comments *ParsedComments
-					stmt, _ := Parse(sql)
+					stmt, _ := parser.Parse(sql)
 					switch s := stmt.(type) {
 					case *Select:
 						comments = s.Comments
@@ -367,9 +357,8 @@ func TestExtractCommentDirectives(t *testing.T) {
 						require.Nil(t, vals)
 						return
 					}
-					if !reflect.DeepEqual(vals.m, testCase.vals) {
-						t.Errorf("test input: '%v', got vals %T:\n%+v, want %T\n%+v", testCase.input, vals, vals, testCase.vals, testCase.vals)
-					}
+
+					assert.Equal(t, testCase.vals, vals.m)
 				})
 			}
 		})
@@ -393,19 +382,20 @@ func TestExtractCommentDirectives(t *testing.T) {
 }
 
 func TestSkipQueryPlanCacheDirective(t *testing.T) {
-	stmt, _ := Parse("insert /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ into user(id) values (1), (2)")
+	parser := NewTestParser()
+	stmt, _ := parser.Parse("insert /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ into user(id) values (1), (2)")
 	assert.False(t, CachePlan(stmt))
 
-	stmt, _ = Parse("insert into user(id) values (1), (2)")
+	stmt, _ = parser.Parse("insert into user(id) values (1), (2)")
 	assert.True(t, CachePlan(stmt))
 
-	stmt, _ = Parse("update /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ users set name=1")
+	stmt, _ = parser.Parse("update /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ users set name=1")
 	assert.False(t, CachePlan(stmt))
 
-	stmt, _ = Parse("select /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ * from users")
+	stmt, _ = parser.Parse("select /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ * from users")
 	assert.False(t, CachePlan(stmt))
 
-	stmt, _ = Parse("delete /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ from users")
+	stmt, _ = parser.Parse("delete /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ from users")
 	assert.False(t, CachePlan(stmt))
 }
 
@@ -426,9 +416,10 @@ func TestIgnoreMaxPayloadSizeDirective(t *testing.T) {
 		{"show create table users", false},
 	}
 
+	parser := NewTestParser()
 	for _, test := range testCases {
 		t.Run(test.query, func(t *testing.T) {
-			stmt, _ := Parse(test.query)
+			stmt, _ := parser.Parse(test.query)
 			got := IgnoreMaxPayloadSizeDirective(stmt)
 			assert.Equalf(t, test.expected, got, fmt.Sprintf("IgnoreMaxPayloadSizeDirective(stmt) returned %v but expected %v", got, test.expected))
 		})
@@ -452,9 +443,10 @@ func TestIgnoreMaxMaxMemoryRowsDirective(t *testing.T) {
 		{"show create table users", false},
 	}
 
+	parser := NewTestParser()
 	for _, test := range testCases {
 		t.Run(test.query, func(t *testing.T) {
-			stmt, _ := Parse(test.query)
+			stmt, _ := parser.Parse(test.query)
 			got := IgnoreMaxMaxMemoryRowsDirective(stmt)
 			assert.Equalf(t, test.expected, got, fmt.Sprintf("IgnoreMaxPayloadSizeDirective(stmt) returned %v but expected %v", got, test.expected))
 		})
@@ -478,9 +470,10 @@ func TestConsolidator(t *testing.T) {
 		{"select /*vt+ CONSOLIDATOR=enabled_replicas */ * from users", querypb.ExecuteOptions_CONSOLIDATOR_ENABLED_REPLICAS},
 	}
 
+	parser := NewTestParser()
 	for _, test := range testCases {
 		t.Run(test.query, func(t *testing.T) {
-			stmt, _ := Parse(test.query)
+			stmt, _ := parser.Parse(test.query)
 			got := Consolidator(stmt)
 			assert.Equalf(t, test.expected, got, fmt.Sprintf("Consolidator(stmt) returned %v but expected %v", got, test.expected))
 		})
@@ -535,19 +528,136 @@ func TestGetPriorityFromStatement(t *testing.T) {
 		},
 	}
 
+	parser := NewTestParser()
 	for _, testCase := range testCases {
-		theThestCase := testCase
-		t.Run(theThestCase.query, func(t *testing.T) {
+		t.Run(testCase.query, func(t *testing.T) {
 			t.Parallel()
-			stmt, err := Parse(theThestCase.query)
+			stmt, err := parser.Parse(testCase.query)
 			assert.NoError(t, err)
 			actualPriority, actualError := GetPriorityFromStatement(stmt)
-			if theThestCase.expectedError != nil {
-				assert.ErrorIs(t, actualError, theThestCase.expectedError)
+			if testCase.expectedError != nil {
+				assert.ErrorIs(t, actualError, testCase.expectedError)
 			} else {
 				assert.NoError(t, err)
-				assert.Equal(t, theThestCase.expectedPriority, actualPriority)
+				assert.Equal(t, testCase.expectedPriority, actualPriority)
 			}
+		})
+	}
+}
+
+// TestGetMySQLSetVarValue tests the functionality of GetMySQLSetVarValue
+func TestGetMySQLSetVarValue(t *testing.T) {
+	tests := []struct {
+		name      string
+		comments  []string
+		valToFind string
+		want      string
+	}{
+		{
+			name:      "SET_VAR clause in the middle",
+			comments:  []string{"/*+ NO_RANGE_OPTIMIZATION(t3 PRIMARY, f2_idx) SET_VAR(foreign_key_checks=OFF) NO_ICP(t1, t2) */"},
+			valToFind: sysvars.ForeignKeyChecks,
+			want:      "OFF",
+		},
+		{
+			name:      "Single SET_VAR clause",
+			comments:  []string{"/*+ SET_VAR(sort_buffer_size = 16M) */"},
+			valToFind: "sort_buffer_size",
+			want:      "16M",
+		},
+		{
+			name:      "No comments",
+			comments:  nil,
+			valToFind: "sort_buffer_size",
+			want:      "",
+		},
+		{
+			name:      "Multiple SET_VAR clauses",
+			comments:  []string{"/*+ SET_VAR(sort_buffer_size = 16M) */", "/*+ SET_VAR(optimizer_switch = 'mrr_cost_b(ased=of\"f') */", "/*+ SET_VAR( foReiGn_key_checks = On) */"},
+			valToFind: sysvars.ForeignKeyChecks,
+			want:      "",
+		},
+		{
+			name:      "Verify casing",
+			comments:  []string{"/*+ SET_VAR(optimizer_switch = 'mrr_cost_b(ased=of\"f') SET_VAR( foReiGn_key_checks = On) */"},
+			valToFind: sysvars.ForeignKeyChecks,
+			want:      "On",
+		},
+		{
+			name:      "Leading comment is a normal comment",
+			comments:  []string{"/* This is a normal comment */", "/*+ MAX_EXECUTION_TIME(1000) SET_VAR( foreign_key_checks = 1) */"},
+			valToFind: sysvars.ForeignKeyChecks,
+			want:      "1",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := &ParsedComments{
+				comments: tt.comments,
+			}
+			assert.Equal(t, tt.want, c.GetMySQLSetVarValue(tt.valToFind))
+		})
+	}
+}
+
+func TestSetMySQLSetVarValue(t *testing.T) {
+	tests := []struct {
+		name           string
+		comments       []string
+		key            string
+		value          string
+		commentsWanted Comments
+	}{
+		{
+			name:           "SET_VAR clause in the middle",
+			comments:       []string{"/*+ NO_RANGE_OPTIMIZATION(t3 PRIMARY, f2_idx) SET_VAR(foreign_key_checks=OFF) NO_ICP(t1, t2) */"},
+			key:            sysvars.ForeignKeyChecks,
+			value:          "On",
+			commentsWanted: []string{"/*+ NO_RANGE_OPTIMIZATION(t3 PRIMARY, f2_idx) SET_VAR(foreign_key_checks=On) NO_ICP(t1, t2) */"},
+		},
+		{
+			name:           "Single SET_VAR clause",
+			comments:       []string{"/*+ SET_VAR(sort_buffer_size = 16M) */"},
+			key:            "sort_buffer_size",
+			value:          "1Mb",
+			commentsWanted: []string{"/*+ SET_VAR(sort_buffer_size=1Mb) */"},
+		},
+		{
+			name:           "No comments",
+			comments:       nil,
+			key:            "sort_buffer_size",
+			value:          "13M",
+			commentsWanted: []string{"/*+ SET_VAR(sort_buffer_size=13M) */"},
+		},
+		{
+			name:           "Multiple SET_VAR clauses",
+			comments:       []string{"/*+ SET_VAR(sort_buffer_size = 16M) */", "/*+ SET_VAR(optimizer_switch = 'mrr_cost_b(ased=of\"f') */", "/*+ SET_VAR( foReiGn_key_checks = On) */"},
+			key:            sysvars.ForeignKeyChecks,
+			value:          "1",
+			commentsWanted: []string{"/*+ SET_VAR(sort_buffer_size = 16M) SET_VAR(foreign_key_checks=1) */", "/*+ SET_VAR(optimizer_switch = 'mrr_cost_b(ased=of\"f') */", "/*+ SET_VAR( foReiGn_key_checks = On) */"},
+		},
+		{
+			name:           "Verify casing",
+			comments:       []string{"/*+ SET_VAR(optimizer_switch = 'mrr_cost_b(ased=of\"f') SET_VAR( foReiGn_key_checks = On) */"},
+			key:            sysvars.ForeignKeyChecks,
+			value:          "off",
+			commentsWanted: []string{"/*+ SET_VAR(optimizer_switch = 'mrr_cost_b(ased=of\"f') SET_VAR(foReiGn_key_checks=off) */"},
+		},
+		{
+			name:           "Leading comment is a normal comment",
+			comments:       []string{"/* This is a normal comment */", "/*+ MAX_EXECUTION_TIME(1000) SET_VAR( foreign_key_checks = 1) */"},
+			key:            sysvars.ForeignKeyChecks,
+			value:          "Off",
+			commentsWanted: []string{"/* This is a normal comment */", "/*+ MAX_EXECUTION_TIME(1000) SET_VAR(foreign_key_checks=Off) */"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := &ParsedComments{
+				comments: tt.comments,
+			}
+			newComments := c.SetMySQLSetVarValue(tt.key, tt.value)
+			require.EqualValues(t, tt.commentsWanted, newComments)
 		})
 	}
 }

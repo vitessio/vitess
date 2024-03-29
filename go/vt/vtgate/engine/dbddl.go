@@ -58,12 +58,12 @@ type DBDDLPlugin interface {
 // DBDDL is just a container around custom database provisioning plugins
 // The default behaviour is to just return an error
 type DBDDL struct {
+	noInputs
+	noTxNeeded
+
 	name         string
 	create       bool
 	queryTimeout int
-
-	noInputs
-	noTxNeeded
 }
 
 // NewDBDDL creates the engine primitive

@@ -19,7 +19,7 @@ package sync_test
 import (
 	"context"
 	"encoding/json"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"sync"
 	"testing"
@@ -53,7 +53,7 @@ func TestWatchConfig(t *testing.T) {
 		return atomicWrite(tmp.Name(), data)
 	}
 	writeRandomConfig := func(tmp *os.File) error {
-		a, b := rand.Intn(100), rand.Intn(100)
+		a, b := rand.IntN(100), rand.IntN(100)
 		return writeConfig(tmp, a, b)
 	}
 
@@ -93,7 +93,10 @@ func TestWatchConfig(t *testing.T) {
 
 	sv := vipersync.New()
 	A := viperutil.Configure("a", viperutil.Options[int]{Dynamic: true})
-	B := viperutil.Configure("b", viperutil.Options[int]{Dynamic: true})
+	B := viperutil.Configure("b", viperutil.Options[int]{FlagName: "b", Dynamic: true, Default: 5})
+
+	// Check that default values are actually used
+	require.Equal(t, B.Get(), B.Default())
 
 	A.(*value.Dynamic[int]).Base.BoundGetFunc = vipersync.AdaptGetter("a", func(v *viper.Viper) func(key string) int {
 		return v.GetInt
@@ -152,5 +155,5 @@ func TestWatchConfig(t *testing.T) {
 }
 
 func jitter(min, max int) int {
-	return min + rand.Intn(max-min+1)
+	return min + rand.IntN(max-min+1)
 }

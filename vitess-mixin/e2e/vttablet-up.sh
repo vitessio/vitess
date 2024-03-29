@@ -133,7 +133,6 @@ if [ $tablet_role = "externalprimary" ]; then
                       --enable_replication_reporter=false \
                       --enforce_strict_trans_tables=false \
                       --track_schema_versions=true \
-                      --vreplication_tablet_type=primary \
                       --watch_replication_stream=true"
 else
     external_db_args="--init_db_name_override $DB_NAME \

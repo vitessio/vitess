@@ -21,14 +21,13 @@ import (
 	"reflect"
 
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 // mergeJoinInputs checks whether two operators can be merged into a single one.
 // If they can be merged, a new operator with the merged routing is returned
 // If they cannot be merged, nil is returned.
-func mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPredicates []sqlparser.Expr, m merger) *Route {
+func mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredicates []sqlparser.Expr, m merger) *Route {
 	lhsRoute, rhsRoute, routingA, routingB, a, b, sameKeyspace := prepareInputRoutes(lhs, rhs)
 	if lhsRoute == nil {
 		return nil
@@ -66,7 +65,7 @@ func mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, jo
 	}
 }
 
-func prepareInputRoutes(lhs ops.Operator, rhs ops.Operator) (*Route, *Route, Routing, Routing, routingType, routingType, bool) {
+func prepareInputRoutes(lhs Operator, rhs Operator) (*Route, *Route, Routing, Routing, routingType, routingType, bool) {
 	lhsRoute, rhsRoute := operatorsToRoutes(lhs, rhs)
 	if lhsRoute == nil || rhsRoute == nil {
 		return nil, nil, nil, nil, 0, 0, false
@@ -93,7 +92,9 @@ type (
 
 	joinMerger struct {
 		predicates []sqlparser.Expr
-		innerJoin  bool
+		// joinType is permitted to store only 3 of the possible values
+		// NormalJoinType, StraightJoinType and LeftJoinType.
+		joinType sqlparser.JoinType
 	}
 
 	routingType int
@@ -177,10 +178,10 @@ func getRoutingType(r Routing) routingType {
 	panic(fmt.Sprintf("switch should be exhaustive, got %T", r))
 }
 
-func newJoinMerge(predicates []sqlparser.Expr, innerJoin bool) merger {
+func newJoinMerge(predicates []sqlparser.Expr, joinType sqlparser.JoinType) merger {
 	return &joinMerger{
 		predicates: predicates,
-		innerJoin:  innerJoin,
+		joinType:   joinType,
 	}
 }
 
@@ -204,7 +205,7 @@ func mergeShardedRouting(r1 *ShardedRouting, r2 *ShardedRouting) *ShardedRouting
 }
 
 func (jm *joinMerger) getApplyJoin(ctx *plancontext.PlanningContext, op1, op2 *Route) *ApplyJoin {
-	return NewApplyJoin(op1.Source, op2.Source, ctx.SemTable.AndExpressions(jm.predicates...), !jm.innerJoin)
+	return NewApplyJoin(ctx, op1.Source, op2.Source, ctx.SemTable.AndExpressions(jm.predicates...), jm.joinType)
 }
 
 func (jm *joinMerger) merge(ctx *plancontext.PlanningContext, op1, op2 *Route, r Routing) *Route {

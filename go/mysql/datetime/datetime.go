@@ -94,8 +94,8 @@ func (t Time) FormatDecimal() decimal.Decimal {
 	return dec
 }
 
-func (t Time) ToDateTime() (out DateTime) {
-	return NewDateTimeFromStd(t.ToStdTime(time.Local))
+func (t Time) ToDateTime(now time.Time) (out DateTime) {
+	return NewDateTimeFromStd(t.ToStdTime(now))
 }
 
 func (t Time) IsZero() bool {
@@ -244,12 +244,19 @@ func (d Date) Hash(h *vthash.Hasher) {
 	h.Write8(d.day)
 }
 
-func (dt Date) Weekday() time.Weekday {
-	return dt.ToStdTime(time.Local).Weekday()
+func (d Date) Weekday() time.Weekday {
+	// Go considers 0000-01-01 day as Saturday, while
+	// MySQL considers it to be Sunday, now 0000-02-29 exists in
+	// Go but not in MySQL so it balances out after that
+	wd := d.ToStdTime(time.Local).Weekday()
+	if d.Year() == 0 && d.Month() <= 2 {
+		wd = (wd + 1) % 7
+	}
+	return wd
 }
 
-func (dt Date) Yearday() int {
-	return dt.ToStdTime(time.Local).YearDay()
+func (d Date) Yearday() int {
+	return d.ToStdTime(time.Local).YearDay()
 }
 
 func (d Date) ISOWeek() (int, int) {
@@ -315,12 +322,16 @@ func (d Date) Week(mode int) int {
 		year, week := d.SundayWeek()
 		if year < d.Year() {
 			return 0
+		} else if year > d.Year() {
+			return 53
 		}
 		return week
 	case 1:
 		year, week := d.ISOWeek()
 		if year < d.Year() {
 			return 0
+		} else if year > d.Year() {
+			return 53
 		}
 		return week
 	case 2:
@@ -333,12 +344,16 @@ func (d Date) Week(mode int) int {
 		year, week := d.Sunday4DayWeek()
 		if year < d.Year() {
 			return 0
+		} else if year > d.Year() {
+			return 53
 		}
 		return week
 	case 5:
 		year, week := d.MondayWeek()
 		if year < d.Year() {
 			return 0
+		} else if year > d.Year() {
+			return 53
 		}
 		return week
 	case 6:
@@ -360,9 +375,12 @@ func (d Date) YearWeek(mode int) int {
 	case 1, 3:
 		year, week := d.ISOWeek()
 		return year*100 + week
-	case 4, 5, 6, 7:
-		// TODO
-		return 0
+	case 4, 6:
+		year, week := d.Sunday4DayWeek()
+		return year*100 + week
+	case 5, 7:
+		year, week := d.MondayWeek()
+		return year*100 + week
 	default:
 		return d.YearWeek(DefaultWeekMode)
 	}
@@ -406,12 +424,24 @@ func (t Time) ToDuration() time.Duration {
 }
 
 func (t Time) toStdTime(year int, month time.Month, day int, loc *time.Location) (out time.Time) {
-	return time.Date(year, month, day, 0, 0, 0, 0, loc).Add(t.ToDuration())
+	hours := t.Hour()
+	minutes := t.Minute()
+	secs := t.Second()
+	nsecs := t.Nanosecond()
+
+	if t.Neg() {
+		hours = -hours
+		minutes = -minutes
+		secs = -secs
+		nsecs = -nsecs
+	}
+
+	return time.Date(year, month, day, hours, minutes, secs, nsecs, loc)
 }
 
-func (t Time) ToStdTime(loc *time.Location) (out time.Time) {
-	year, month, day := time.Now().Date()
-	return t.toStdTime(year, month, day, loc)
+func (t Time) ToStdTime(now time.Time) (out time.Time) {
+	year, month, day := now.Date()
+	return t.toStdTime(year, month, day, now.Location())
 }
 
 func (t Time) AddInterval(itv *Interval, stradd bool) (Time, uint8, bool) {
@@ -420,19 +450,23 @@ func (t Time) AddInterval(itv *Interval, stradd bool) (Time, uint8, bool) {
 	return dt.Time, itv.precision(stradd), ok
 }
 
-func (t Time) toSeconds() int {
-	tsecs := t.Hour()*secondsPerHour + t.Minute()*secondsPerMinute + t.Second()
+func (t Time) toDuration() time.Duration {
+	dur := time.Duration(t.hour)*time.Hour + time.Duration(t.minute)*time.Minute + time.Duration(t.second)*time.Second + time.Duration(t.nanosecond)*time.Nanosecond
 	if t.Neg() {
-		return -tsecs
+		return -dur
 	}
-	return tsecs
+	return dur
+}
+
+func (t Time) ToSeconds() int64 {
+	return int64(t.ToDuration().Seconds())
 }
 
 func (d Date) ToStdTime(loc *time.Location) (out time.Time) {
 	return time.Date(d.Year(), time.Month(d.Month()), d.Day(), 0, 0, 0, 0, loc)
 }
 
-func (dt DateTime) ToStdTime(loc *time.Location) time.Time {
+func (dt DateTime) ToStdTime(now time.Time) time.Time {
 	zerodate := dt.Date.IsZero()
 	zerotime := dt.Time.IsZero()
 
@@ -440,12 +474,12 @@ func (dt DateTime) ToStdTime(loc *time.Location) time.Time {
 	case zerodate && zerotime:
 		return time.Time{}
 	case zerodate:
-		return dt.Time.ToStdTime(loc)
+		return dt.Time.ToStdTime(now)
 	case zerotime:
-		return dt.Date.ToStdTime(loc)
+		return dt.Date.ToStdTime(now.Location())
 	default:
 		year, month, day := dt.Date.Year(), time.Month(dt.Date.Month()), dt.Date.Day()
-		return dt.Time.toStdTime(year, month, day, loc)
+		return dt.Time.toStdTime(year, month, day, now.Location())
 	}
 }
 
@@ -515,7 +549,10 @@ func (dt DateTime) Compare(dt2 DateTime) int {
 		// if we're comparing a time to a datetime, we need to normalize them
 		// both into datetimes; this normalization is not trivial because negative
 		// times result in a date change, so let the standard library handle this
-		return dt.ToStdTime(time.Local).Compare(dt2.ToStdTime(time.Local))
+
+		// Using the current time is OK here since the comparison is relative
+		now := time.Now()
+		return dt.ToStdTime(now).Compare(dt2.ToStdTime(now))
 	}
 	if cmp := dt.Date.Compare(dt2.Date); cmp != 0 {
 		return cmp
@@ -523,9 +560,9 @@ func (dt DateTime) Compare(dt2 DateTime) int {
 	return dt.Time.Compare(dt2.Time)
 }
 
-func (dt DateTime) AddInterval(itv *Interval, stradd bool) (DateTime, uint8, bool) {
+func (dt DateTime) AddInterval(itv *Interval, prec uint8, stradd bool) (DateTime, uint8, bool) {
 	ok := dt.addInterval(itv)
-	return dt, itv.precision(stradd), ok
+	return dt, max(prec, itv.precision(stradd)), ok
 }
 
 func (dt DateTime) Round(p int) (r DateTime) {
@@ -547,14 +584,19 @@ func (dt DateTime) Round(p int) (r DateTime) {
 	r = dt
 	if n == 1e9 {
 		r.Time.nanosecond = 0
-		return NewDateTimeFromStd(r.ToStdTime(time.Local).Add(time.Second))
+		r.addInterval(&Interval{timeparts: timeparts{sec: 1}, unit: IntervalSecond})
+	} else {
+		r.Time.nanosecond = uint32(n)
 	}
-	r.Time.nanosecond = uint32(n)
 	return r
 }
 
-func (dt DateTime) toSeconds() int {
-	return (dt.Date.Day()-1)*secondsPerDay + dt.Time.toSeconds()
+func (dt DateTime) toDuration() time.Duration {
+	dur := dt.Time.toDuration()
+	if !dt.Date.IsZero() {
+		dur += time.Duration(dt.Date.Day()-1) * durationPerDay
+	}
+	return dur
 }
 
 func (dt *DateTime) addInterval(itv *Interval) bool {
@@ -564,29 +606,25 @@ func (dt *DateTime) addInterval(itv *Interval) bool {
 			return false
 		}
 
-		nsec := dt.Time.Nanosecond() + itv.nsec
-		sec := dt.toSeconds() + itv.toSeconds() + (nsec / int(time.Second))
-		nsec = nsec % int(time.Second)
+		dur := dt.toDuration()
+		dur += itv.toDuration()
+		days := time.Duration(0)
+		if !dt.Date.IsZero() {
+			days = dur / durationPerDay
+			dur -= days * durationPerDay
 
-		if nsec < 0 {
-			nsec += int(time.Second)
-			sec--
+			if dur < 0 {
+				dur += durationPerDay
+				days--
+			}
 		}
 
-		days := sec / secondsPerDay
-		sec -= days * secondsPerDay
+		dt.Time.nanosecond = uint32((dur % time.Second) / time.Nanosecond)
+		dt.Time.second = uint8((dur % time.Minute) / time.Second)
+		dt.Time.minute = uint8((dur % time.Hour) / time.Minute)
+		dt.Time.hour = uint16(dur / time.Hour)
 
-		if sec < 0 {
-			sec += secondsPerDay
-			days--
-		}
-
-		dt.Time.nanosecond = uint32(nsec)
-		dt.Time.second = uint8(sec % secondsPerMinute)
-		dt.Time.minute = uint8((sec / secondsPerMinute) % secondsPerMinute)
-		dt.Time.hour = uint16(sec / secondsPerHour)
-
-		daynum := mysqlDayNumber(dt.Date.Year(), dt.Date.Month(), 1) + days
+		daynum := MysqlDayNumber(dt.Date.Year(), dt.Date.Month(), 1) + int(days)
 		if daynum < 0 || daynum > maxDay {
 			return false
 		}
@@ -595,7 +633,7 @@ func (dt *DateTime) addInterval(itv *Interval) bool {
 		return true
 
 	case itv.unit.HasDayParts():
-		daynum := mysqlDayNumber(dt.Date.Year(), dt.Date.Month(), dt.Date.Day())
+		daynum := MysqlDayNumber(dt.Date.Year(), dt.Date.Month(), dt.Date.Day())
 		daynum += itv.day
 		dt.Date.year, dt.Date.month, dt.Date.day = mysqlDateFromDayNumber(daynum)
 		return true

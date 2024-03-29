@@ -33,7 +33,7 @@ import (
 
 var point12 = "\x00\x00\x00\x00\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\x00@"
 
-func TestCharaterSet(t *testing.T) {
+func TestCharacterSet(t *testing.T) {
 	qr, err := framework.NewClient().Execute("select * from vitess_test where intval=1", nil)
 	if err != nil {
 		t.Fatal(err)

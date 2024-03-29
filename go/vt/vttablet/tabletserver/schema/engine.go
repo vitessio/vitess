@@ -26,10 +26,12 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/exp/maps"
+
 	"vitess.io/vitess/go/constants/sidecar"
-	"vitess.io/vitess/go/maps2"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/vt/vtenv"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/mysql"
@@ -99,14 +101,14 @@ type Engine struct {
 
 // NewEngine creates a new Engine.
 func NewEngine(env tabletenv.Env) *Engine {
-	reloadTime := env.Config().SchemaReloadIntervalSeconds.Get()
+	reloadTime := env.Config().SchemaReloadInterval
 	se := &Engine{
 		env: env,
 		// We need three connections: one for the reloader, one for
 		// the historian, and one for the tracker.
 		conns: connpool.NewPool(env, "", tabletenv.ConnPoolConfig{
-			Size:               3,
-			IdleTimeoutSeconds: env.Config().OltpReadPool.IdleTimeoutSeconds,
+			Size:        3,
+			IdleTimeout: env.Config().OltpReadPool.IdleTimeout,
 		}),
 		ticks: timer.NewTimer(reloadTime),
 	}
@@ -160,7 +162,7 @@ func (se *Engine) syncSidecarDB(ctx context.Context, conn *dbconnpool.DBConnecti
 		}
 		return conn.ExecuteFetch(query, maxRows, true)
 	}
-	if err := sidecardb.Init(ctx, exec); err != nil {
+	if err := sidecardb.Init(ctx, se.env.Environment(), exec); err != nil {
 		log.Errorf("Error in sidecardb.Init: %+v", err)
 		if se.env.Config().DB.HasGlobalSettings() {
 			log.Warning("Ignoring sidecardb.Init error for unmanaged tablets")
@@ -497,7 +499,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 
 		log.V(2).Infof("Reading schema for table: %s", tableName)
 		tableType := row[1].String()
-		table, err := LoadTable(conn, se.cp.DBName(), tableName, tableType, row[3].ToString())
+		table, err := LoadTable(conn, se.cp.DBName(), tableName, tableType, row[3].ToString(), se.env.Environment().CollationEnv())
 		if err != nil {
 			if isView := strings.Contains(tableType, tmutils.TableView); isView {
 				log.Warningf("Failed reading schema for the view: %s, error: %v", tableName, err)
@@ -534,7 +536,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 	if shouldUseDatabase {
 		// If reloadDataInDB succeeds, then we don't want to prevent sending the broadcast notification.
 		// So, we do this step in the end when we can receive no more errors that fail the reload operation.
-		err = reloadDataInDB(ctx, conn.Conn, altered, created, dropped)
+		err = reloadDataInDB(ctx, conn.Conn, altered, created, dropped, se.env.Environment().Parser())
 		if err != nil {
 			log.Errorf("error in updating schema information in Engine.reload() - %v", err)
 		}
@@ -586,7 +588,7 @@ func (se *Engine) getDroppedTables(curTables map[string]bool, changedViews map[s
 		}
 	}
 
-	return maps2.Values(dropped)
+	return maps.Values(dropped)
 }
 
 func getTableData(ctx context.Context, conn *connpool.Conn, includeStats bool) (*sqltypes.Result, error) {
@@ -706,7 +708,8 @@ func (se *Engine) RegisterNotifier(name string, f notifier, runNotifier bool) {
 		created = append(created, table)
 	}
 	if runNotifier {
-		f(se.tables, created, nil, nil)
+		s := maps.Clone(se.tables)
+		f(s, created, nil, nil)
 	}
 }
 
@@ -734,10 +737,7 @@ func (se *Engine) broadcast(created, altered, dropped []*Table) {
 
 	se.notifierMu.Lock()
 	defer se.notifierMu.Unlock()
-	s := make(map[string]*Table, len(se.tables))
-	for k, v := range se.tables {
-		s[k] = v
-	}
+	s := maps.Clone(se.tables)
 	for _, f := range se.notifiers {
 		f(s, created, altered, dropped)
 	}
@@ -755,10 +755,7 @@ func (se *Engine) GetTable(tableName sqlparser.IdentifierCS) *Table {
 func (se *Engine) GetSchema() map[string]*Table {
 	se.mu.Lock()
 	defer se.mu.Unlock()
-	tables := make(map[string]*Table, len(se.tables))
-	for k, v := range se.tables {
-		tables[k] = v
-	}
+	tables := maps.Clone(se.tables)
 	return tables
 }
 
@@ -831,6 +828,7 @@ func NewEngineForTests() *Engine {
 		isOpen:    true,
 		tables:    make(map[string]*Table),
 		historian: newHistorian(false, 0, nil),
+		env:       tabletenv.NewEnv(vtenv.NewTestEnv(), tabletenv.NewDefaultConfig(), "SchemaEngineForTests"),
 	}
 	return se
 }
@@ -844,6 +842,10 @@ func (se *Engine) SetTableForTests(table *Table) {
 
 func (se *Engine) GetDBConnector() dbconfigs.Connector {
 	return se.cp
+}
+
+func (se *Engine) Environment() *vtenv.Environment {
+	return se.env.Environment()
 }
 
 func extractNamesFromTablesList(tables []*Table) []string {

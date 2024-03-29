@@ -54,7 +54,7 @@ func newCopyAllState(vc *vcopier) (*copyAllState, error) {
 	state := &copyAllState{
 		vc: vc,
 	}
-	plan, err := buildReplicatorPlan(vc.vr.source, vc.vr.colInfoMap, nil, vc.vr.stats)
+	plan, err := buildReplicatorPlan(vc.vr.source, vc.vr.colInfoMap, nil, vc.vr.stats, vc.vr.vre.env.CollationEnv(), vc.vr.vre.env.Parser())
 	if err != nil {
 		return nil, err
 	}
@@ -303,7 +303,6 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 // deleteCopyState deletes the copy state entry for a table, signifying that the copy phase is complete for that table.
 func (vc *vcopier) deleteCopyState(tableName string) error {
 	log.Infof("Deleting copy state for table %s", tableName)
-	//FIXME get sidecar db name
 	delQuery := fmt.Sprintf("delete from _vt.copy_state where table_name=%s and vrepl_id = %d", encodeString(tableName), vc.vr.id)
 	if _, err := vc.vr.dbClient.Execute(delQuery); err != nil {
 		return err

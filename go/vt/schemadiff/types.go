@@ -17,7 +17,19 @@ limitations under the License.
 package schemadiff
 
 import (
+	"strings"
+
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/vt/sqlparser"
+)
+
+type InstantDDLCapability int
+
+const (
+	InstantDDLCapabilityUnknown InstantDDLCapability = iota
+	InstantDDLCapabilityIrrelevant
+	InstantDDLCapabilityImpossible
+	InstantDDLCapabilityPossible
 )
 
 // Entity stands for a database object we can diff:
@@ -55,6 +67,10 @@ type EntityDiff interface {
 	SubsequentDiff() EntityDiff
 	// SetSubsequentDiff updates the existing subsequent diff to the given one
 	SetSubsequentDiff(EntityDiff)
+	// InstantDDLCapability returns the ability of this diff to run with ALGORITHM=INSTANT
+	InstantDDLCapability() InstantDDLCapability
+
+	Annotated() (from *TextualAnnotations, to *TextualAnnotations, unified *TextualAnnotations)
 }
 
 const (
@@ -108,6 +124,16 @@ const (
 	AlterTableAlgorithmStrategyCopy
 )
 
+const (
+	EnumReorderStrategyAllow int = iota
+	EnumReorderStrategyReject
+)
+
+const (
+	ForeignKeyCheckStrategyStrict int = iota
+	ForeignKeyCheckStrategyIgnore
+)
+
 // DiffHints is an assortment of rules for diffing entities
 type DiffHints struct {
 	StrictIndexOrdering         bool
@@ -120,6 +146,12 @@ type DiffHints struct {
 	TableCharsetCollateStrategy int
 	TableQualifierHint          int
 	AlterTableAlgorithmStrategy int
+	EnumReorderStrategy         int
+	ForeignKeyCheckStrategy     int
+}
+
+func EmptyDiffHints() *DiffHints {
+	return &DiffHints{}
 }
 
 const (
@@ -127,3 +159,21 @@ const (
 	ApplyDiffsInOrder      = "ApplyDiffsInOrder"
 	ApplyDiffsSequential   = "ApplyDiffsSequential"
 )
+
+type ForeignKeyTableColumns struct {
+	Table   string
+	Columns []string
+}
+
+func (f ForeignKeyTableColumns) Escaped() string {
+	var b strings.Builder
+	b.WriteString(sqlescape.EscapeID(f.Table))
+	b.WriteString(" (")
+	escapedColumns := make([]string, len(f.Columns))
+	for i, column := range f.Columns {
+		escapedColumns[i] = sqlescape.EscapeID(column)
+	}
+	b.WriteString(strings.Join(escapedColumns, ", "))
+	b.WriteString(")")
+	return b.String()
+}

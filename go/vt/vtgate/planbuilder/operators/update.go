@@ -20,12 +20,15 @@ import (
 	"fmt"
 	"maps"
 	"slices"
-	"strings"
 
+	"vitess.io/vitess/go/slice"
+	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -33,21 +36,18 @@ import (
 
 type (
 	Update struct {
-		QTable              *QueryTable
-		VTable              *vindexes.Table
+		*DMLCommon
+
 		Assignments         []SetExpr
 		ChangedVindexValues map[string]*engine.VindexValues
-		OwnedVindexQuery    string
-		Ignore              sqlparser.Ignore
-		OrderBy             sqlparser.OrderBy
-		Limit               *sqlparser.Limit
 
 		// these subqueries cannot be merged as they are part of the changed vindex values
 		// these values are needed to be sent over to lookup vindex for update.
 		// On merging this information will be lost, so subquery merge is blocked.
 		SubQueriesArgOnChangedVindex []string
 
-		noInputs
+		VerifyAll bool
+
 		noColumns
 		noPredicates
 	}
@@ -58,86 +58,245 @@ type (
 	}
 )
 
+func (u *Update) Inputs() []Operator {
+	if u.Source == nil {
+		return nil
+	}
+	return []Operator{u.Source}
+}
+
+func (u *Update) SetInputs(inputs []Operator) {
+	if len(inputs) != 1 {
+		panic(vterrors.VT13001("unexpected number of inputs for Update operator"))
+	}
+	u.Source = inputs[0]
+}
+
 func (se SetExpr) String() string {
 	return fmt.Sprintf("%s = %s", sqlparser.String(se.Name), sqlparser.String(se.Expr.EvalExpr))
 }
 
-// Introduces implements the PhysicalOperator interface
-func (u *Update) introducesTableID() semantics.TableSet {
-	return u.QTable.ID
-}
-
 // Clone implements the Operator interface
-func (u *Update) Clone([]ops.Operator) ops.Operator {
+func (u *Update) Clone(inputs []Operator) Operator {
 	upd := *u
 	upd.Assignments = slices.Clone(u.Assignments)
 	upd.ChangedVindexValues = maps.Clone(u.ChangedVindexValues)
+	upd.SetInputs(inputs)
 	return &upd
 }
 
-func (u *Update) GetOrdering(*plancontext.PlanningContext) []ops.OrderBy {
+func (u *Update) GetOrdering(*plancontext.PlanningContext) []OrderBy {
 	return nil
 }
 
 func (u *Update) TablesUsed() []string {
-	if u.VTable != nil {
-		return SingleQualifiedIdentifier(u.VTable.Keyspace, u.VTable.Name)
-	}
-	return nil
+	return SingleQualifiedIdentifier(u.Target.VTable.Keyspace, u.Target.VTable.Name)
 }
 
 func (u *Update) ShortDescription() string {
-	s := []string{u.VTable.String()}
-	if u.Limit != nil {
-		s = append(s, sqlparser.String(u.Limit))
-	}
-	if len(u.OrderBy) > 0 {
-		s = append(s, sqlparser.String(u.OrderBy))
-	}
-	return strings.Join(s, " ")
+	return shortDesc(u.Target, u.OwnedVindexQuery)
 }
 
-func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update) (ops.Operator, error) {
-	tableInfo, qt, err := createQueryTableForDML(ctx, updStmt.TableExprs[0], updStmt.Where)
-	if err != nil {
-		return nil, err
+func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update) (op Operator) {
+	errIfUpdateNotSupported(ctx, updStmt)
+	parentFks := ctx.SemTable.GetParentForeignKeysForTargets()
+	childFks := ctx.SemTable.GetChildForeignKeysForTargets()
+
+	// We check if dml with input plan is required. DML with input planning is generally
+	// slower, because it does a selection and then creates an update statement wherein we have to
+	// list all the primary key values.
+	if updateWithInputPlanningRequired(ctx, childFks, parentFks, updStmt) {
+		return createUpdateWithInputOp(ctx, updStmt)
 	}
 
-	vindexTable, routing, err := buildVindexTableForDML(ctx, tableInfo, qt, "update")
-	if err != nil {
-		return nil, err
+	var updClone *sqlparser.Update
+	var targetTbl TargetTable
+	op, targetTbl, updClone = createUpdateOperator(ctx, updStmt)
+
+	op = &LockAndComment{
+		Source:   op,
+		Comments: updStmt.Comments,
+		Lock:     sqlparser.ShareModeLock,
 	}
 
-	updClone := sqlparser.CloneRefOfUpdate(updStmt)
-	updOp, err := createUpdateOperator(ctx, updStmt, vindexTable, qt, routing)
-	if err != nil {
-		return nil, err
-	}
-
-	parentFks := ctx.SemTable.GetParentForeignKeysList()
-	childFks := ctx.SemTable.GetChildForeignKeysList()
+	parentFks = ctx.SemTable.GetParentForeignKeysForTableSet(targetTbl.ID)
+	childFks = ctx.SemTable.GetChildForeignKeysForTableSet(targetTbl.ID)
 	if len(childFks) == 0 && len(parentFks) == 0 {
-		return updOp, nil
+		return op
 	}
-
-	// If the delete statement has a limit, we don't support it yet.
-	if updStmt.Limit != nil {
-		return nil, vterrors.VT12001("update with limit with foreign key constraints")
-	}
-
-	return buildFkOperator(ctx, updOp, updClone, parentFks, childFks, vindexTable)
+	return buildFkOperator(ctx, op, updClone, parentFks, childFks, targetTbl)
 }
 
-func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update, vindexTable *vindexes.Table, qt *QueryTable, routing Routing) (ops.Operator, error) {
-	sqc := &SubQueryBuilder{}
-	assignments := make([]SetExpr, len(updStmt.Exprs))
-	for idx, updExpr := range updStmt.Exprs {
-		expr, subqs, err := sqc.pullOutValueSubqueries(ctx, updExpr.Expr, qt.ID, true)
-		if err != nil {
-			return nil, err
+func updateWithInputPlanningRequired(
+	ctx *plancontext.PlanningContext,
+	childFks []vindexes.ChildFKInfo,
+	parentFks []vindexes.ParentFKInfo,
+	updateStmt *sqlparser.Update,
+) bool {
+	if isMultiTargetUpdate(ctx, updateStmt) {
+		return true
+	}
+	// If there are no foreign keys, we don't need to use delete with input.
+	if len(childFks) == 0 && len(parentFks) == 0 {
+		return false
+	}
+	// Limit requires dml with input.
+	if updateStmt.Limit != nil {
+		return true
+	}
+	return false
+}
+
+func isMultiTargetUpdate(ctx *plancontext.PlanningContext, updateStmt *sqlparser.Update) bool {
+	var targetTS semantics.TableSet
+	for _, ue := range updateStmt.Exprs {
+		targetTS = targetTS.Merge(ctx.SemTable.DirectDeps(ue.Name))
+	}
+	return targetTS.NumberOfTables() > 1
+}
+
+func createUpdateWithInputOp(ctx *plancontext.PlanningContext, upd *sqlparser.Update) (op Operator) {
+	updClone := ctx.SemTable.Clone(upd).(*sqlparser.Update)
+	upd.Limit = nil
+
+	var updOps []dmlOp
+	for _, target := range ctx.SemTable.Targets.Constituents() {
+		op := createUpdateOpWithTarget(ctx, target, upd)
+		updOps = append(updOps, op)
+	}
+
+	updOps = sortDmlOps(updOps)
+
+	selectStmt := &sqlparser.Select{
+		From:    updClone.TableExprs,
+		Where:   updClone.Where,
+		OrderBy: updClone.OrderBy,
+		Limit:   updClone.Limit,
+		Lock:    sqlparser.ForUpdateLock,
+	}
+
+	// now map the operator and column list.
+	var colsList [][]*sqlparser.ColName
+	dmls := slice.Map(updOps, func(from dmlOp) Operator {
+		colsList = append(colsList, from.cols)
+		for _, col := range from.cols {
+			selectStmt.SelectExprs = append(selectStmt.SelectExprs, aeWrap(col))
 		}
+		return from.op
+	})
+
+	op = &DMLWithInput{
+		DML:    dmls,
+		Source: createOperatorFromSelect(ctx, selectStmt),
+		cols:   colsList,
+	}
+
+	if upd.Comments != nil {
+		op = &LockAndComment{
+			Source:   op,
+			Comments: upd.Comments,
+		}
+	}
+	return op
+}
+
+func createUpdateOpWithTarget(ctx *plancontext.PlanningContext, target semantics.TableSet, updStmt *sqlparser.Update) dmlOp {
+	var updExprs sqlparser.UpdateExprs
+	for _, ue := range updStmt.Exprs {
+		if ctx.SemTable.DirectDeps(ue.Name) == target {
+			updExprs = append(updExprs, ue)
+		}
+	}
+
+	if len(updExprs) == 0 {
+		panic(vterrors.VT13001("no update expression for the target"))
+	}
+
+	ti, err := ctx.SemTable.TableInfoFor(target)
+	if err != nil {
+		panic(vterrors.VT13001(err.Error()))
+	}
+	vTbl := ti.GetVindexTable()
+	tblName, err := ti.Name()
+	if err != nil {
+		panic(err)
+	}
+
+	var leftComp sqlparser.ValTuple
+	cols := make([]*sqlparser.ColName, 0, len(vTbl.PrimaryKey))
+	for _, col := range vTbl.PrimaryKey {
+		colName := sqlparser.NewColNameWithQualifier(col.String(), tblName)
+		cols = append(cols, colName)
+		leftComp = append(leftComp, colName)
+		ctx.SemTable.Recursive[colName] = target
+	}
+	// optimize for case when there is only single column on left hand side.
+	var lhs sqlparser.Expr = leftComp
+	if len(leftComp) == 1 {
+		lhs = leftComp[0]
+	}
+	compExpr := sqlparser.NewComparisonExpr(sqlparser.InOp, lhs, sqlparser.ListArg(engine.DmlVals), nil)
+
+	upd := &sqlparser.Update{
+		Ignore:     updStmt.Ignore,
+		TableExprs: sqlparser.TableExprs{ti.GetAliasedTableExpr()},
+		Exprs:      updExprs,
+		Where:      sqlparser.NewWhere(sqlparser.WhereClause, compExpr),
+		OrderBy:    updStmt.OrderBy,
+	}
+	return dmlOp{
+		createOperatorFromUpdate(ctx, upd),
+		vTbl,
+		cols,
+	}
+}
+
+func errIfUpdateNotSupported(ctx *plancontext.PlanningContext, stmt *sqlparser.Update) {
+	for _, ue := range stmt.Exprs {
+		tblInfo, err := ctx.SemTable.TableInfoForExpr(ue.Name)
+		if err != nil {
+			panic(err)
+		}
+		if _, isATable := tblInfo.(*semantics.RealTable); !isATable {
+			var tblName string
+			ate := tblInfo.GetAliasedTableExpr()
+			if ate != nil {
+				tblName = sqlparser.String(ate)
+			}
+			panic(vterrors.VT03032(tblName))
+		}
+	}
+
+	// Now we check if any of the foreign key columns that are being udpated have dependencies on other updated columns.
+	// This is unsafe, and we currently don't support this in Vitess.
+	if err := ctx.SemTable.ErrIfFkDependentColumnUpdated(stmt.Exprs); err != nil {
+		panic(err)
+	}
+}
+
+func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update) (Operator, TargetTable, *sqlparser.Update) {
+	op := crossJoin(ctx, updStmt.TableExprs)
+
+	sqc := &SubQueryBuilder{}
+	if updStmt.Where != nil {
+		op = addWherePredsToSubQueryBuilder(ctx, updStmt.Where.Expr, op, sqc)
+	}
+
+	outerID := TableID(op)
+	assignments := make([]SetExpr, len(updStmt.Exprs))
+	// updClone is used in foreign key planning to create the selection statements to be used for verification and selection.
+	// If we encounter subqueries, we want to fix the updClone to use the replaced expression, so that the pulled out subquery's
+	// result is used everywhere instead of running the subquery multiple times, which is wasteful.
+	updClone := sqlparser.CloneRefOfUpdate(updStmt)
+	var tblInfo semantics.TableInfo
+	var err error
+	for idx, updExpr := range updStmt.Exprs {
+		expr, subqs := sqc.pullOutValueSubqueries(ctx, updExpr.Expr, outerID, true)
 		if len(subqs) == 0 {
 			expr = updExpr.Expr
+		} else {
+			updClone.Exprs[idx].Expr = sqlparser.CloneExpr(expr)
+			ctx.SemTable.UpdateChildFKExpr(updExpr, expr)
 		}
 		proj := newProjExpr(aeWrap(expr))
 		if len(subqs) != 0 {
@@ -147,94 +306,99 @@ func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.U
 			Name: updExpr.Name,
 			Expr: proj,
 		}
-	}
-
-	vp, cvv, ovq, subQueriesArgOnChangedVindex, err := getUpdateVindexInformation(updStmt, vindexTable, qt.ID, assignments)
-	if err != nil {
-		return nil, err
-	}
-
-	tr, ok := routing.(*ShardedRouting)
-	if ok {
-		tr.VindexPreds = vp
-	}
-
-	for _, predicate := range qt.Predicates {
-		if subq, err := sqc.handleSubquery(ctx, predicate, qt.ID); err != nil {
-			return nil, err
-		} else if subq != nil {
-			continue
-		}
-		routing, err = UpdateRoutingLogic(ctx, predicate, routing)
+		tblInfo, err = ctx.SemTable.TableInfoForExpr(updExpr.Name)
 		if err != nil {
-			return nil, err
+			panic(err)
 		}
 	}
 
-	if routing.OpCode() == engine.Scatter && updStmt.Limit != nil {
-		// TODO systay: we should probably check for other op code types - IN could also hit multiple shards (2022-04-07)
-		return nil, vterrors.VT12001("multi shard UPDATE with LIMIT")
+	tblID := ctx.SemTable.TableSetFor(tblInfo.GetAliasedTableExpr())
+	vTbl := tblInfo.GetVindexTable()
+	// Reference table should update the source table.
+	if vTbl.Type == vindexes.TypeReference && vTbl.Source != nil {
+		vTbl = updateQueryGraphWithSource(ctx, op, tblID, vTbl)
 	}
 
-	route := &Route{
-		Source: &Update{
-			QTable:                       qt,
-			VTable:                       vindexTable,
-			Assignments:                  assignments,
-			ChangedVindexValues:          cvv,
-			OwnedVindexQuery:             ovq,
-			Ignore:                       updStmt.Ignore,
-			Limit:                        updStmt.Limit,
-			OrderBy:                      updStmt.OrderBy,
-			SubQueriesArgOnChangedVindex: subQueriesArgOnChangedVindex,
+	name, err := tblInfo.Name()
+	if err != nil {
+		panic(err)
+	}
+
+	targetTbl := TargetTable{
+		ID:     tblID,
+		VTable: vTbl,
+		Name:   name,
+	}
+
+	cvv, ovq, subQueriesArgOnChangedVindex := getUpdateVindexInformation(ctx, updStmt, targetTbl, assignments)
+
+	updOp := &Update{
+		DMLCommon: &DMLCommon{
+			Ignore:           updStmt.Ignore,
+			Target:           targetTbl,
+			OwnedVindexQuery: ovq,
+			Source:           op,
 		},
-		Routing:  routing,
-		Comments: updStmt.Comments,
+		Assignments:                  assignments,
+		ChangedVindexValues:          cvv,
+		SubQueriesArgOnChangedVindex: subQueriesArgOnChangedVindex,
+		VerifyAll:                    ctx.VerifyAllFKs,
 	}
 
-	decorator := func(op ops.Operator) ops.Operator {
-		return &LockAndComment{
-			Source: op,
-			Lock:   sqlparser.ShareModeLock,
+	if len(updStmt.OrderBy) > 0 {
+		addOrdering(ctx, updStmt.OrderBy, updOp)
+	}
+
+	if updStmt.Limit != nil {
+		updOp.Source = &Limit{
+			Source: updOp.Source,
+			AST:    updStmt.Limit,
 		}
 	}
 
-	return sqc.getRootOperator(route, decorator), nil
+	return sqc.getRootOperator(updOp, nil), targetTbl, updClone
 }
 
-func buildFkOperator(ctx *plancontext.PlanningContext, updOp ops.Operator, updClone *sqlparser.Update, parentFks []vindexes.ParentFKInfo, childFks []vindexes.ChildFKInfo, updatedTable *vindexes.Table) (ops.Operator, error) {
-	// We only support simple expressions in update queries for foreign key handling.
-	if isNonLiteral(updClone.Exprs, parentFks, childFks) {
-		return nil, vterrors.VT12001("update expression with non-literal values with foreign key constraints")
+func getUpdateVindexInformation(
+	ctx *plancontext.PlanningContext,
+	updStmt *sqlparser.Update,
+	table TargetTable,
+	assignments []SetExpr,
+) (map[string]*engine.VindexValues, *sqlparser.Select, []string) {
+	if !table.VTable.Keyspace.Sharded {
+		return nil, nil, nil
+	}
+
+	primaryVindex := getVindexInformation(table.ID, table.VTable)
+	changedVindexValues, ownedVindexQuery, subQueriesArgOnChangedVindex := buildChangedVindexesValues(ctx, updStmt, table.VTable, primaryVindex.Columns, assignments)
+	return changedVindexValues, ownedVindexQuery, subQueriesArgOnChangedVindex
+}
+
+func buildFkOperator(ctx *plancontext.PlanningContext, updOp Operator, updClone *sqlparser.Update, parentFks []vindexes.ParentFKInfo, childFks []vindexes.ChildFKInfo, targetTbl TargetTable) Operator {
+	// If there is a subquery container above update operator, we want to do the foreign key planning inside it,
+	// because we want the Inner of the subquery to execute first and its result be used for the entire foreign key update planning.
+	foundSubqc := false
+	TopDown(updOp, TableID, func(in Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult) {
+		if op, isSubqc := in.(*SubQueryContainer); isSubqc {
+			foundSubqc = true
+			op.Outer = buildFkOperator(ctx, op.Outer, updClone, parentFks, childFks, targetTbl)
+		}
+		return in, NoRewrite
+	}, stopAtUpdateOp)
+	if foundSubqc {
+		return updOp
 	}
 
 	restrictChildFks, cascadeChildFks := splitChildFks(childFks)
 
-	op, err := createFKCascadeOp(ctx, updOp, updClone, cascadeChildFks, updatedTable)
-	if err != nil {
-		return nil, err
-	}
+	op := createFKCascadeOp(ctx, updOp, updClone, cascadeChildFks, targetTbl)
 
-	return createFKVerifyOp(ctx, op, updClone, parentFks, restrictChildFks)
+	return createFKVerifyOp(ctx, op, updClone, parentFks, restrictChildFks, targetTbl.VTable)
 }
 
-func isNonLiteral(updExprs sqlparser.UpdateExprs, parentFks []vindexes.ParentFKInfo, childFks []vindexes.ChildFKInfo) bool {
-	for _, updateExpr := range updExprs {
-		if sqlparser.IsLiteral(updateExpr.Expr) {
-			continue
-		}
-		for _, parentFk := range parentFks {
-			if parentFk.ChildColumns.FindColumn(updateExpr.Name.Name) >= 0 {
-				return true
-			}
-		}
-		for _, childFk := range childFks {
-			if childFk.ParentColumns.FindColumn(updateExpr.Name.Name) >= 0 {
-				return true
-			}
-		}
-	}
-	return false
+func stopAtUpdateOp(operator Operator) VisitRule {
+	_, isUpdate := operator.(*Update)
+	return VisitRule(!isUpdate)
 }
 
 // splitChildFks splits the child foreign keys into restrict and cascade list as restrict is handled through Verify operator and cascade is handled through Cascade operator.
@@ -256,9 +420,9 @@ func splitChildFks(fks []vindexes.ChildFKInfo) (restrictChildFks, cascadeChildFk
 	return
 }
 
-func createFKCascadeOp(ctx *plancontext.PlanningContext, parentOp ops.Operator, updStmt *sqlparser.Update, childFks []vindexes.ChildFKInfo, updatedTable *vindexes.Table) (ops.Operator, error) {
+func createFKCascadeOp(ctx *plancontext.PlanningContext, parentOp Operator, updStmt *sqlparser.Update, childFks []vindexes.ChildFKInfo, targetTbl TargetTable) Operator {
 	if len(childFks) == 0 {
-		return parentOp, nil
+		return parentOp
 	}
 
 	var fkChildren []*FkChild
@@ -267,34 +431,153 @@ func createFKCascadeOp(ctx *plancontext.PlanningContext, parentOp ops.Operator, 
 	for _, fk := range childFks {
 		// We should have already filtered out update restrict foreign keys.
 		if fk.OnUpdate.IsRestrict() {
-			return nil, vterrors.VT13001("ON UPDATE RESTRICT foreign keys should already be filtered")
+			panic(vterrors.VT13001("ON UPDATE RESTRICT foreign keys should already be filtered"))
 		}
 
 		// We need to select all the parent columns for the foreign key constraint, to use in the update of the child table.
-		cols, exprs := selectParentColumns(fk, len(selectExprs))
-		selectExprs = append(selectExprs, exprs...)
+		var selectOffsets []int
+		selectOffsets, selectExprs = addColumns(ctx, fk.ParentColumns, selectExprs, targetTbl.Name)
 
-		fkChild, err := createFkChildForUpdate(ctx, fk, updStmt, cols, updatedTable)
-		if err != nil {
-			return nil, err
+		// If we are updating a foreign key column to a non-literal value then, need information about
+		// 1. whether the new value is different from the old value
+		// 2. the new value itself.
+		// 3. the bind variable to assign to this value.
+		var nonLiteralUpdateInfo []engine.NonLiteralUpdateInfo
+		ue := ctx.SemTable.GetUpdateExpressionsForFk(fk.String(targetTbl.VTable))
+		// We only need to store these offsets and add these expressions to SELECT when there are non-literal updates present.
+		if hasNonLiteralUpdate(ue) {
+			for _, updExpr := range ue {
+				// We add the expression and a comparison expression to the SELECT exprssion while storing their offsets.
+				var info engine.NonLiteralUpdateInfo
+				info, selectExprs = addNonLiteralUpdExprToSelect(ctx, targetTbl.VTable, updExpr, selectExprs)
+				nonLiteralUpdateInfo = append(nonLiteralUpdateInfo, info)
+			}
 		}
+
+		fkChild := createFkChildForUpdate(ctx, fk, selectOffsets, nonLiteralUpdateInfo, targetTbl.VTable)
 		fkChildren = append(fkChildren, fkChild)
 	}
 
-	selectionOp, err := createSelectionOp(ctx, selectExprs, updStmt.TableExprs, updStmt.Where, nil, sqlparser.ForUpdateLock)
-	if err != nil {
-		return nil, err
-	}
+	selectionOp := createSelectionOp(ctx, selectExprs, updStmt.TableExprs, updStmt.Where, updStmt.OrderBy, nil, getUpdateLock(targetTbl.VTable))
 
 	return &FkCascade{
 		Selection: selectionOp,
 		Children:  fkChildren,
 		Parent:    parentOp,
-	}, nil
+	}
+}
+
+// hasNonLiteralUpdate checks if any of the update expressions have a non-literal update.
+func hasNonLiteralUpdate(exprs sqlparser.UpdateExprs) bool {
+	for _, expr := range exprs {
+		if !sqlparser.IsLiteral(expr.Expr) {
+			return true
+		}
+	}
+	return false
+}
+
+// addColumns adds the given set of columns to the select expressions provided. It tries to reuse the columns if already present in it.
+// It returns the list of offsets for the columns and the updated select expressions.
+func addColumns(ctx *plancontext.PlanningContext, columns sqlparser.Columns, exprs []sqlparser.SelectExpr, tableName sqlparser.TableName) ([]int, []sqlparser.SelectExpr) {
+	var offsets []int
+	selectExprs := exprs
+	for _, column := range columns {
+		ae := aeWrap(sqlparser.NewColNameWithQualifier(column.String(), tableName))
+		exists := false
+		for idx, expr := range exprs {
+			if ctx.SemTable.EqualsExpr(expr.(*sqlparser.AliasedExpr).Expr, ae.Expr) {
+				offsets = append(offsets, idx)
+				exists = true
+				break
+			}
+		}
+		if !exists {
+			offsets = append(offsets, len(selectExprs))
+			selectExprs = append(selectExprs, ae)
+
+		}
+	}
+	return offsets, selectExprs
+}
+
+// For an update query having non-literal updates, we add the updated expression and a comparison expression to the select query.
+// For example, for a query like `update fk_table set col = id * 100 + 1`
+// We would add the expression `id * 100 + 1` and the comparison expression `col <=> id * 100 + 1` to the select query.
+func addNonLiteralUpdExprToSelect(ctx *plancontext.PlanningContext, updatedTable *vindexes.Table, updExpr *sqlparser.UpdateExpr, exprs []sqlparser.SelectExpr) (engine.NonLiteralUpdateInfo, []sqlparser.SelectExpr) {
+	// Create the comparison expression.
+	castedExpr := getCastedUpdateExpression(updatedTable, updExpr)
+	compExpr := sqlparser.NewComparisonExpr(sqlparser.NullSafeEqualOp, updExpr.Name, castedExpr, nil)
+	info := engine.NonLiteralUpdateInfo{
+		CompExprCol:   -1,
+		UpdateExprCol: -1,
+	}
+	// Add the expressions to the select expressions. We make sure to reuse the offset if it has already been added once.
+	for idx, selectExpr := range exprs {
+		if ctx.SemTable.EqualsExpr(selectExpr.(*sqlparser.AliasedExpr).Expr, compExpr) {
+			info.CompExprCol = idx
+		}
+		if ctx.SemTable.EqualsExpr(selectExpr.(*sqlparser.AliasedExpr).Expr, castedExpr) {
+			info.UpdateExprCol = idx
+		}
+	}
+	// If the expression doesn't exist, then we add the expression and store the offset.
+	if info.CompExprCol == -1 {
+		info.CompExprCol = len(exprs)
+		exprs = append(exprs, aeWrap(compExpr))
+	}
+	if info.UpdateExprCol == -1 {
+		info.UpdateExprCol = len(exprs)
+		exprs = append(exprs, aeWrap(castedExpr))
+	}
+	return info, exprs
+}
+
+func getCastedUpdateExpression(updatedTable *vindexes.Table, updExpr *sqlparser.UpdateExpr) sqlparser.Expr {
+	castTypeStr := getCastTypeForColumn(updatedTable, updExpr)
+	if castTypeStr == "" {
+		return updExpr.Expr
+	}
+	return &sqlparser.CastExpr{
+		Expr: updExpr.Expr,
+		Type: &sqlparser.ConvertType{
+			Type: castTypeStr,
+		},
+	}
+}
+
+func getCastTypeForColumn(updatedTable *vindexes.Table, updExpr *sqlparser.UpdateExpr) string {
+	var ty querypb.Type
+	for _, column := range updatedTable.Columns {
+		if updExpr.Name.Name.Equal(column.Name) {
+			ty = column.Type
+			break
+		}
+	}
+	switch {
+	case sqltypes.IsNull(ty):
+		return ""
+	case sqltypes.IsSigned(ty):
+		return "SIGNED"
+	case sqltypes.IsUnsigned(ty):
+		return "UNSIGNED"
+	case sqltypes.IsFloat(ty):
+		return "FLOAT"
+	case sqltypes.IsDecimal(ty):
+		return "DECIMAL"
+	case sqltypes.IsDateOrTime(ty):
+		return "DATETIME"
+	case sqltypes.IsBinary(ty):
+		return "BINARY"
+	case sqltypes.IsText(ty):
+		return "CHAR"
+	default:
+		return ""
+	}
 }
 
 // createFkChildForUpdate creates the update query operator for the child table based on the foreign key constraints.
-func createFkChildForUpdate(ctx *plancontext.PlanningContext, fk vindexes.ChildFKInfo, updStmt *sqlparser.Update, cols []int, updatedTable *vindexes.Table) (*FkChild, error) {
+func createFkChildForUpdate(ctx *plancontext.PlanningContext, fk vindexes.ChildFKInfo, selectOffsets []int, nonLiteralUpdateInfo []engine.NonLiteralUpdateInfo, updatedTable *vindexes.Table) *FkChild {
 	// Create a ValTuple of child column names
 	var valTuple sqlparser.ValTuple
 	for _, column := range fk.ChildColumns {
@@ -307,36 +590,42 @@ func createFkChildForUpdate(ctx *plancontext.PlanningContext, fk vindexes.ChildF
 	compExpr := sqlparser.NewComparisonExpr(sqlparser.InOp, valTuple, sqlparser.NewListArg(bvName), nil)
 	var childWhereExpr sqlparser.Expr = compExpr
 
-	var childOp ops.Operator
-	var err error
+	// In the case of non-literal updates, we need to assign bindvariables for storing the updated value of the columns
+	// coming from the SELECT query.
+	if len(nonLiteralUpdateInfo) > 0 {
+		for idx, info := range nonLiteralUpdateInfo {
+			info.UpdateExprBvName = ctx.ReservedVars.ReserveVariable(foreignKeyUpdateExpr)
+			nonLiteralUpdateInfo[idx] = info
+		}
+	}
+
+	var childOp Operator
 	switch fk.OnUpdate {
 	case sqlparser.Cascade:
-		childOp, err = buildChildUpdOpForCascade(ctx, fk, updStmt, childWhereExpr, updatedTable)
+		childOp = buildChildUpdOpForCascade(ctx, fk, childWhereExpr, nonLiteralUpdateInfo, updatedTable)
 	case sqlparser.SetNull:
-		childOp, err = buildChildUpdOpForSetNull(ctx, fk, updStmt, childWhereExpr)
+		childOp = buildChildUpdOpForSetNull(ctx, fk, childWhereExpr, nonLiteralUpdateInfo, updatedTable)
 	case sqlparser.SetDefault:
-		return nil, vterrors.VT09016()
-	}
-	if err != nil {
-		return nil, err
+		panic(vterrors.VT09016())
 	}
 
 	return &FkChild{
-		BVName: bvName,
-		Cols:   cols,
-		Op:     childOp,
-	}, nil
+		BVName:         bvName,
+		Cols:           selectOffsets,
+		Op:             childOp,
+		NonLiteralInfo: nonLiteralUpdateInfo,
+	}
 }
 
 // buildChildUpdOpForCascade builds the child update statement operator for the CASCADE type foreign key constraint.
 // The query looks like this -
 //
 //	`UPDATE <child_table> SET <child_column_updated_using_update_exprs_from_parent_update_query> WHERE <child_columns_in_fk> IN (<bind variable for the output from SELECT>)`
-func buildChildUpdOpForCascade(ctx *plancontext.PlanningContext, fk vindexes.ChildFKInfo, updStmt *sqlparser.Update, childWhereExpr sqlparser.Expr, updatedTable *vindexes.Table) (ops.Operator, error) {
+func buildChildUpdOpForCascade(ctx *plancontext.PlanningContext, fk vindexes.ChildFKInfo, childWhereExpr sqlparser.Expr, nonLiteralUpdateInfo []engine.NonLiteralUpdateInfo, updatedTable *vindexes.Table) Operator {
 	// The update expressions are the same as the update expressions in the parent update query
 	// with the column names replaced with the child column names.
 	var childUpdateExprs sqlparser.UpdateExprs
-	for _, updateExpr := range updStmt.Exprs {
+	for idx, updateExpr := range ctx.SemTable.GetUpdateExpressionsForFk(fk.String(updatedTable)) {
 		colIdx := fk.ParentColumns.FindColumn(updateExpr.Name.Name)
 		if colIdx == -1 {
 			continue
@@ -344,17 +633,19 @@ func buildChildUpdOpForCascade(ctx *plancontext.PlanningContext, fk vindexes.Chi
 
 		// The where condition is the same as the comparison expression above
 		// with the column names replaced with the child column names.
+		childUpdateExpr := updateExpr.Expr
+		if len(nonLiteralUpdateInfo) > 0 && nonLiteralUpdateInfo[idx].UpdateExprBvName != "" {
+			childUpdateExpr = sqlparser.NewArgument(nonLiteralUpdateInfo[idx].UpdateExprBvName)
+		}
 		childUpdateExprs = append(childUpdateExprs, &sqlparser.UpdateExpr{
 			Name: sqlparser.NewColName(fk.ChildColumns[colIdx].String()),
-			Expr: updateExpr.Expr,
+			Expr: childUpdateExpr,
 		})
 	}
 	// Because we could be updating the child to a non-null value,
 	// We have to run with foreign key checks OFF because the parent isn't guaranteed to have
 	// the data being updated to.
-	parsedComments := sqlparser.Comments{
-		"/*+ SET_VAR(foreign_key_checks=OFF) */",
-	}.Parsed()
+	parsedComments := (&sqlparser.ParsedComments{}).SetMySQLSetVarValue(sysvars.ForeignKeyChecks, "OFF").Parsed()
 	childUpdStmt := &sqlparser.Update{
 		Comments:   parsedComments,
 		Exprs:      childUpdateExprs,
@@ -373,7 +664,13 @@ func buildChildUpdOpForCascade(ctx *plancontext.PlanningContext, fk vindexes.Chi
 //	`UPDATE <child_table> SET <child_column_updated_using_update_exprs_from_parent_update_query>
 //	WHERE <child_columns_in_fk> IN (<bind variable for the output from SELECT>)
 //	[AND ({<bind variables in the SET clause of the original update> IS NULL OR}... <child_columns_in_fk> NOT IN (<bind variables in the SET clause of the original update>))]`
-func buildChildUpdOpForSetNull(ctx *plancontext.PlanningContext, fk vindexes.ChildFKInfo, updStmt *sqlparser.Update, childWhereExpr sqlparser.Expr) (ops.Operator, error) {
+func buildChildUpdOpForSetNull(
+	ctx *plancontext.PlanningContext,
+	fk vindexes.ChildFKInfo,
+	childWhereExpr sqlparser.Expr,
+	nonLiteralUpdateInfo []engine.NonLiteralUpdateInfo,
+	updatedTable *vindexes.Table,
+) Operator {
 	// For the SET NULL type constraint, we need to set all the child columns to NULL.
 	var childUpdateExprs sqlparser.UpdateExprs
 	for _, column := range fk.ChildColumns {
@@ -392,34 +689,57 @@ func buildChildUpdOpForSetNull(ctx *plancontext.PlanningContext, fk vindexes.Chi
 	// For example, if we are setting `update parent cola = :v1 and colb = :v2`, then on the child, the where condition would look something like this -
 	// `:v1 IS NULL OR :v2 IS NULL OR (child_cola, child_colb) NOT IN ((:v1,:v2))`
 	// So, if either of :v1 or :v2 is NULL, then the entire condition is true (which is the same as not having the condition when :v1 or :v2 is NULL).
-	compExpr := nullSafeNotInComparison(updStmt.Exprs, fk)
+	updateExprs := ctx.SemTable.GetUpdateExpressionsForFk(fk.String(updatedTable))
+	compExpr := nullSafeNotInComparison(ctx,
+		updatedTable,
+		updateExprs, fk, updatedTable.GetTableName(), nonLiteralUpdateInfo, false /* appendQualifier */)
 	if compExpr != nil {
 		childWhereExpr = &sqlparser.AndExpr{
 			Left:  childWhereExpr,
 			Right: compExpr,
 		}
 	}
+	parsedComments := getParsedCommentsForFkChecks(ctx)
 	childUpdStmt := &sqlparser.Update{
 		Exprs:      childUpdateExprs,
+		Comments:   parsedComments,
 		TableExprs: []sqlparser.TableExpr{sqlparser.NewAliasedTableExpr(fk.Table.GetTableName(), "")},
 		Where:      &sqlparser.Where{Type: sqlparser.WhereClause, Expr: childWhereExpr},
 	}
 	return createOpFromStmt(ctx, childUpdStmt, false, "")
 }
 
+// getParsedCommentsForFkChecks gets the parsed comments to be set on a child query related to foreign_key_checks session variable.
+// We only use this function if foreign key checks are either unspecified or on.
+// If foreign key checks are explicity turned on, then we should add the set_var parsed comment too
+// since underlying MySQL might have foreign_key_checks as off.
+// We run with foreign key checks on because the DML might still fail on MySQL due to a child table
+// with RESTRICT constraints.
+func getParsedCommentsForFkChecks(ctx *plancontext.PlanningContext) (parsedComments *sqlparser.ParsedComments) {
+	fkState := ctx.VSchema.GetForeignKeyChecksState()
+	if fkState != nil && *fkState {
+		parsedComments = parsedComments.SetMySQLSetVarValue(sysvars.ForeignKeyChecks, "ON").Parsed()
+	}
+	return parsedComments
+}
+
 // createFKVerifyOp creates the verify operator for the parent foreign key constraints.
-func createFKVerifyOp(ctx *plancontext.PlanningContext, childOp ops.Operator, updStmt *sqlparser.Update, parentFks []vindexes.ParentFKInfo, restrictChildFks []vindexes.ChildFKInfo) (ops.Operator, error) {
+func createFKVerifyOp(
+	ctx *plancontext.PlanningContext,
+	childOp Operator,
+	updStmt *sqlparser.Update,
+	parentFks []vindexes.ParentFKInfo,
+	restrictChildFks []vindexes.ChildFKInfo,
+	updatedTable *vindexes.Table,
+) Operator {
 	if len(parentFks) == 0 && len(restrictChildFks) == 0 {
-		return childOp, nil
+		return childOp
 	}
 
 	var Verify []*VerifyOp
 	// This validates that new values exists on the parent table.
 	for _, fk := range parentFks {
-		op, err := createFkVerifyOpForParentFKForUpdate(ctx, updStmt, fk)
-		if err != nil {
-			return nil, err
-		}
+		op := createFkVerifyOpForParentFKForUpdate(ctx, updatedTable, updStmt, fk)
 		Verify = append(Verify, &VerifyOp{
 			Op:  op,
 			Typ: engine.ParentVerify,
@@ -427,10 +747,8 @@ func createFKVerifyOp(ctx *plancontext.PlanningContext, childOp ops.Operator, up
 	}
 	// This validates that the old values don't exist on the child table.
 	for _, fk := range restrictChildFks {
-		op, err := createFkVerifyOpForChildFKForUpdate(ctx, updStmt, fk)
-		if err != nil {
-			return nil, err
-		}
+		op := createFkVerifyOpForChildFKForUpdate(ctx, updatedTable, updStmt, fk)
+
 		Verify = append(Verify, &VerifyOp{
 			Op:  op,
 			Typ: engine.ChildVerify,
@@ -440,29 +758,31 @@ func createFKVerifyOp(ctx *plancontext.PlanningContext, childOp ops.Operator, up
 	return &FkVerify{
 		Verify: Verify,
 		Input:  childOp,
-	}, nil
+	}
 }
 
 // Each parent foreign key constraint is verified by an anti join query of the form:
 // select 1 from child_tbl left join parent_tbl on <parent_child_columns with new value expressions, remaining fk columns join>
-// where <parent columns are null> and <unchanged child columns not null> and <clause same as original update> limit 1
+// where <parent columns are null> and <unchanged child columns not null> and <updated expressions not null> and <clause same as original update> and <comparison of updated expression with original values> limit 1
 // E.g:
 // Child (c1, c2) references Parent (p1, p2)
-// update Child set c1 = 1 where id = 1
+// update Child set c1 = c2 + 1 where id = 1
 // verify query:
-// select 1 from Child left join Parent on Parent.p1 = 1 and Parent.p2 = Child.c2
-// where Parent.p1 is null and Parent.p2 is null and Child.id = 1
-// and Child.c2 is not null
+// select 1 from Child left join Parent on Parent.p1 = Child.c2 + 1 and Parent.p2 = Child.c2
+// where Parent.p1 is null and Parent.p2 is null and Child.id = 1 and Child.c2 + 1 is not null
+// and Child.c2 is not null and not ((Child.c1) <=> (Child.c2 + 1))
 // limit 1
-func createFkVerifyOpForParentFKForUpdate(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update, pFK vindexes.ParentFKInfo) (ops.Operator, error) {
+func createFkVerifyOpForParentFKForUpdate(ctx *plancontext.PlanningContext, updatedTable *vindexes.Table, updStmt *sqlparser.Update, pFK vindexes.ParentFKInfo) Operator {
 	childTblExpr := updStmt.TableExprs[0].(*sqlparser.AliasedTableExpr)
 	childTbl, err := childTblExpr.TableName()
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 	parentTbl := pFK.Table.GetTableName()
 	var whereCond sqlparser.Expr
 	var joinCond sqlparser.Expr
+	var notEqualColNames sqlparser.ValTuple
+	var notEqualExprs sqlparser.ValTuple
 	for idx, column := range pFK.ChildColumns {
 		var matchedExpr *sqlparser.UpdateExpr
 		for _, updateExpr := range updStmt.Exprs {
@@ -479,7 +799,7 @@ func createFkVerifyOpForParentFKForUpdate(ctx *plancontext.PlanningContext, updS
 		var joinExpr sqlparser.Expr
 		if matchedExpr == nil {
 			predicate = &sqlparser.AndExpr{
-				Left: parentIsNullExpr,
+				Left: predicate,
 				Right: &sqlparser.IsExpr{
 					Left:  sqlparser.NewColNameWithQualifier(pFK.ChildColumns[idx].String(), childTbl),
 					Right: sqlparser.IsNotNullOp,
@@ -491,10 +811,20 @@ func createFkVerifyOpForParentFKForUpdate(ctx *plancontext.PlanningContext, updS
 				Right:    sqlparser.NewColNameWithQualifier(pFK.ChildColumns[idx].String(), childTbl),
 			}
 		} else {
+			notEqualColNames = append(notEqualColNames, prefixColNames(ctx, childTbl, matchedExpr.Name))
+			prefixedMatchExpr := prefixColNames(ctx, childTbl, getCastedUpdateExpression(updatedTable, matchedExpr))
+			notEqualExprs = append(notEqualExprs, prefixedMatchExpr)
 			joinExpr = &sqlparser.ComparisonExpr{
 				Operator: sqlparser.EqualOp,
 				Left:     sqlparser.NewColNameWithQualifier(pFK.ParentColumns[idx].String(), parentTbl),
-				Right:    prefixColNames(childTbl, matchedExpr.Expr),
+				Right:    prefixedMatchExpr,
+			}
+			predicate = &sqlparser.AndExpr{
+				Left: predicate,
+				Right: &sqlparser.IsExpr{
+					Left:  prefixedMatchExpr,
+					Right: sqlparser.IsNotNullOp,
+				},
 			}
 		}
 
@@ -505,9 +835,19 @@ func createFkVerifyOpForParentFKForUpdate(ctx *plancontext.PlanningContext, updS
 		joinCond = &sqlparser.AndExpr{Left: joinCond, Right: joinExpr}
 		whereCond = &sqlparser.AndExpr{Left: whereCond, Right: predicate}
 	}
+	whereCond = &sqlparser.AndExpr{
+		Left: whereCond,
+		Right: &sqlparser.NotExpr{
+			Expr: &sqlparser.ComparisonExpr{
+				Operator: sqlparser.NullSafeEqualOp,
+				Left:     notEqualColNames,
+				Right:    notEqualExprs,
+			},
+		},
+	}
 	// add existing where condition on the update statement
 	if updStmt.Where != nil {
-		whereCond = &sqlparser.AndExpr{Left: whereCond, Right: prefixColNames(childTbl, updStmt.Where.Expr)}
+		whereCond = &sqlparser.AndExpr{Left: whereCond, Right: prefixColNames(ctx, childTbl, updStmt.Where.Expr)}
 	}
 	return createSelectionOp(ctx,
 		sqlparser.SelectExprs{sqlparser.NewAliasedExpr(sqlparser.NewIntLiteral("1"), "")},
@@ -519,28 +859,43 @@ func createFkVerifyOpForParentFKForUpdate(ctx *plancontext.PlanningContext, updS
 				sqlparser.NewJoinCondition(joinCond, nil)),
 		},
 		sqlparser.NewWhere(sqlparser.WhereClause, whereCond),
+		nil,
 		sqlparser.NewLimitWithoutOffset(1),
-		sqlparser.ShareModeLock)
+		getVerifyLock(updatedTable))
+}
+
+func getVerifyLock(vTbl *vindexes.Table) sqlparser.Lock {
+	if len(vTbl.UniqueKeys) > 0 {
+		return sqlparser.ForShareLockNoWait
+	}
+	return sqlparser.ForShareLock
+}
+
+func getUpdateLock(vTbl *vindexes.Table) sqlparser.Lock {
+	if len(vTbl.UniqueKeys) > 0 {
+		return sqlparser.ForUpdateLockNoWait
+	}
+	return sqlparser.ForUpdateLock
 }
 
 // Each child foreign key constraint is verified by a join query of the form:
 // select 1 from child_tbl join parent_tbl on <columns in fk> where <clause same as original update> [AND ({<bind variables in the SET clause of the original update> IS NULL OR}... <child_columns_in_fk> NOT IN (<bind variables in the SET clause of the original update>))] limit 1
 // E.g:
 // Child (c1, c2) references Parent (p1, p2)
-// update Parent set p1 = 1 where id = 1
+// update Parent set p1 = col + 1 where id = 1
 // verify query:
 // select 1 from Child join Parent on Parent.p1 = Child.c1 and Parent.p2 = Child.c2
-// where Parent.id = 1 and (1 IS NULL OR (child.c1) NOT IN ((1))) limit 1
-func createFkVerifyOpForChildFKForUpdate(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update, cFk vindexes.ChildFKInfo) (ops.Operator, error) {
+// where Parent.id = 1 and ((Parent.col + 1) IS NULL OR (child.c1) NOT IN ((Parent.col + 1))) limit 1
+func createFkVerifyOpForChildFKForUpdate(ctx *plancontext.PlanningContext, updatedTable *vindexes.Table, updStmt *sqlparser.Update, cFk vindexes.ChildFKInfo) Operator {
 	// ON UPDATE RESTRICT foreign keys that require validation, should only be allowed in the case where we
 	// are verifying all the FKs on vtgate level.
 	if !ctx.VerifyAllFKs {
-		return nil, vterrors.VT12002()
+		panic(vterrors.VT12002())
 	}
 	parentTblExpr := updStmt.TableExprs[0].(*sqlparser.AliasedTableExpr)
 	parentTbl, err := parentTblExpr.TableName()
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 	childTbl := cFk.Table.GetTableName()
 	var joinCond sqlparser.Expr
@@ -561,7 +916,7 @@ func createFkVerifyOpForChildFKForUpdate(ctx *plancontext.PlanningContext, updSt
 	var whereCond sqlparser.Expr
 	// add existing where condition on the update statement
 	if updStmt.Where != nil {
-		whereCond = prefixColNames(parentTbl, updStmt.Where.Expr)
+		whereCond = prefixColNames(ctx, parentTbl, updStmt.Where.Expr)
 	}
 
 	// We don't want to fail the RESTRICT for the case where the parent columns remains unchanged on the update.
@@ -573,7 +928,7 @@ func createFkVerifyOpForChildFKForUpdate(ctx *plancontext.PlanningContext, updSt
 	// For example, if we are setting `update child cola = :v1 and colb = :v2`, then on the parent, the where condition would look something like this -
 	// `:v1 IS NULL OR :v2 IS NULL OR (cola, colb) NOT IN ((:v1,:v2))`
 	// So, if either of :v1 or :v2 is NULL, then the entire condition is true (which is the same as not having the condition when :v1 or :v2 is NULL).
-	compExpr := nullSafeNotInComparison(updStmt.Exprs, cFk)
+	compExpr := nullSafeNotInComparison(ctx, updatedTable, updStmt.Exprs, cFk, parentTbl, nil /* nonLiteralUpdateInfo */, true /* appendQualifier */)
 	if compExpr != nil {
 		whereCond = sqlparser.AndExpressions(whereCond, compExpr)
 	}
@@ -588,31 +943,38 @@ func createFkVerifyOpForChildFKForUpdate(ctx *plancontext.PlanningContext, updSt
 				sqlparser.NewJoinCondition(joinCond, nil)),
 		},
 		sqlparser.NewWhere(sqlparser.WhereClause, whereCond),
+		nil,
 		sqlparser.NewLimitWithoutOffset(1),
-		sqlparser.ShareModeLock)
+		getVerifyLock(updatedTable))
 }
 
 // nullSafeNotInComparison is used to compare the child columns in the foreign key constraint aren't the same as the updateExpressions exactly.
-// This comparison has to be null safe so we create an expression which looks like the following for a query like `update child cola = :v1 and colb = :v2` -
+// This comparison has to be null safe, so we create an expression which looks like the following for a query like `update child cola = :v1 and colb = :v2` -
 // `:v1 IS NULL OR :v2 IS NULL OR (cola, colb) NOT IN ((:v1,:v2))`
 // So, if either of :v1 or :v2 is NULL, then the entire condition is true (which is the same as not having the condition when :v1 or :v2 is NULL)
 // This expression is used in cascading SET NULLs and in verifying whether an update should be restricted.
-func nullSafeNotInComparison(updateExprs sqlparser.UpdateExprs, cFk vindexes.ChildFKInfo) sqlparser.Expr {
+func nullSafeNotInComparison(ctx *plancontext.PlanningContext, updatedTable *vindexes.Table, updateExprs sqlparser.UpdateExprs, cFk vindexes.ChildFKInfo, parentTbl sqlparser.TableName, nonLiteralUpdateInfo []engine.NonLiteralUpdateInfo, appendQualifier bool) sqlparser.Expr {
+	var valTuple sqlparser.ValTuple
 	var updateValues sqlparser.ValTuple
-	for _, updateExpr := range updateExprs {
+	for idx, updateExpr := range updateExprs {
 		colIdx := cFk.ParentColumns.FindColumn(updateExpr.Name.Name)
 		if colIdx >= 0 {
 			if sqlparser.IsNull(updateExpr.Expr) {
 				return nil
 			}
-			updateValues = append(updateValues, updateExpr.Expr)
+			childUpdateExpr := prefixColNames(ctx, parentTbl, getCastedUpdateExpression(updatedTable, updateExpr))
+			if len(nonLiteralUpdateInfo) > 0 && nonLiteralUpdateInfo[idx].UpdateExprBvName != "" {
+				childUpdateExpr = sqlparser.NewArgument(nonLiteralUpdateInfo[idx].UpdateExprBvName)
+			}
+			updateValues = append(updateValues, childUpdateExpr)
+			if appendQualifier {
+				valTuple = append(valTuple, sqlparser.NewColNameWithQualifier(cFk.ChildColumns[colIdx].String(), cFk.Table.GetTableName()))
+			} else {
+				valTuple = append(valTuple, sqlparser.NewColName(cFk.ChildColumns[colIdx].String()))
+			}
 		}
 	}
-	// Create a ValTuple of child column names
-	var valTuple sqlparser.ValTuple
-	for _, column := range cFk.ChildColumns {
-		valTuple = append(valTuple, sqlparser.NewColNameWithQualifier(column.String(), cFk.Table.GetTableName()))
-	}
+
 	var finalExpr sqlparser.Expr = sqlparser.NewComparisonExpr(sqlparser.NotInOp, valTuple, sqlparser.ValTuple{updateValues}, nil)
 	for _, value := range updateValues {
 		finalExpr = &sqlparser.OrExpr{
@@ -625,4 +987,114 @@ func nullSafeNotInComparison(updateExprs sqlparser.UpdateExprs, cFk vindexes.Chi
 	}
 
 	return finalExpr
+}
+
+func buildChangedVindexesValues(
+	ctx *plancontext.PlanningContext,
+	update *sqlparser.Update,
+	table *vindexes.Table,
+	ksidCols []sqlparser.IdentifierCI,
+	assignments []SetExpr,
+) (changedVindexes map[string]*engine.VindexValues, ovq *sqlparser.Select, subQueriesArgOnChangedVindex []string) {
+	changedVindexes = make(map[string]*engine.VindexValues)
+	selExprs, offset := initialQuery(ksidCols, table)
+	for i, vindex := range table.ColumnVindexes {
+		vindexValueMap := make(map[string]evalengine.Expr)
+		var compExprs []sqlparser.Expr
+		for _, vcol := range vindex.Columns {
+			subQueriesArgOnChangedVindex, compExprs =
+				createAssignmentExpressions(ctx, assignments, vcol, subQueriesArgOnChangedVindex, vindexValueMap, compExprs)
+		}
+		if len(vindexValueMap) == 0 {
+			// Vindex not changing, continue
+			continue
+		}
+		if i == 0 {
+			panic(vterrors.VT12001(fmt.Sprintf("you cannot UPDATE primary vindex columns; invalid update on vindex: %v", vindex.Name)))
+		}
+		if _, ok := vindex.Vindex.(vindexes.Lookup); !ok {
+			panic(vterrors.VT12001(fmt.Sprintf("you can only UPDATE lookup vindexes; invalid update on vindex: %v", vindex.Name)))
+		}
+
+		// Checks done, let's actually add the expressions and the vindex map
+		selExprs = append(selExprs, aeWrap(sqlparser.AndExpressions(compExprs...)))
+		changedVindexes[vindex.Name] = &engine.VindexValues{
+			EvalExprMap: vindexValueMap,
+			Offset:      offset,
+		}
+		offset++
+	}
+	if len(changedVindexes) == 0 {
+		return nil, nil, nil
+	}
+	// generate rest of the owned vindex query.
+	ovq = &sqlparser.Select{
+		SelectExprs: selExprs,
+		OrderBy:     update.OrderBy,
+		Limit:       update.Limit,
+		Lock:        sqlparser.ForUpdateLock,
+	}
+	return changedVindexes, ovq, subQueriesArgOnChangedVindex
+}
+
+func initialQuery(ksidCols []sqlparser.IdentifierCI, table *vindexes.Table) (sqlparser.SelectExprs, int) {
+	var selExprs sqlparser.SelectExprs
+	offset := 0
+	for _, col := range ksidCols {
+		selExprs = append(selExprs, aeWrap(sqlparser.NewColName(col.String())))
+		offset++
+	}
+	for _, cv := range table.Owned {
+		for _, column := range cv.Columns {
+			selExprs = append(selExprs, aeWrap(sqlparser.NewColName(column.String())))
+			offset++
+		}
+	}
+	return selExprs, offset
+}
+
+func createAssignmentExpressions(
+	ctx *plancontext.PlanningContext,
+	assignments []SetExpr,
+	vcol sqlparser.IdentifierCI,
+	subQueriesArgOnChangedVindex []string,
+	vindexValueMap map[string]evalengine.Expr,
+	compExprs []sqlparser.Expr,
+) ([]string, []sqlparser.Expr) {
+	// Searching in order of columns in colvindex.
+	found := false
+	for _, assignment := range assignments {
+		if !vcol.Equal(assignment.Name.Name) {
+			continue
+		}
+		if found {
+			panic(vterrors.VT03015(assignment.Name.Name))
+		}
+		found = true
+		pv, err := evalengine.Translate(assignment.Expr.EvalExpr, &evalengine.Config{
+			ResolveType: ctx.SemTable.TypeForExpr,
+			Collation:   ctx.SemTable.Collation,
+			Environment: ctx.VSchema.Environment(),
+		})
+		if err != nil {
+			panic(invalidUpdateExpr(assignment.Name.Name.String(), assignment.Expr.EvalExpr))
+		}
+
+		if assignment.Expr.Info != nil {
+			sqe, ok := assignment.Expr.Info.(SubQueryExpression)
+			if ok {
+				for _, sq := range sqe {
+					subQueriesArgOnChangedVindex = append(subQueriesArgOnChangedVindex, sq.ArgName)
+				}
+			}
+		}
+
+		vindexValueMap[vcol.String()] = pv
+		compExprs = append(compExprs, sqlparser.NewComparisonExpr(sqlparser.EqualOp, assignment.Name, assignment.Expr.EvalExpr, nil))
+	}
+	return subQueriesArgOnChangedVindex, compExprs
+}
+
+func invalidUpdateExpr(upd string, expr sqlparser.Expr) error {
+	return vterrors.VT12001(fmt.Sprintf("only values are supported; invalid update on column: `%s` with expr: [%s]", upd, sqlparser.String(expr)))
 }

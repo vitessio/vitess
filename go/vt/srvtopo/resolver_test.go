@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -33,10 +34,11 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-func initResolver(t *testing.T, ctx context.Context, name string) *Resolver {
+func initResolver(t *testing.T, ctx context.Context) *Resolver {
 	cell := "cell1"
 	ts := memorytopo.NewServer(ctx, cell)
-	rs := NewResilientServer(ctx, ts, name)
+	counts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+	rs := NewResilientServer(ctx, ts, counts)
 
 	// Create sharded keyspace and shards.
 	if err := ts.CreateKeyspace(ctx, "sks", &topodatapb.Keyspace{}); err != nil {
@@ -97,7 +99,7 @@ func initResolver(t *testing.T, ctx context.Context, name string) *Resolver {
 func TestResolveDestinations(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	resolver := initResolver(t, ctx, "TestResolveDestinations")
+	resolver := initResolver(t, ctx)
 
 	id1 := &querypb.Value{
 		Type:  sqltypes.VarChar,

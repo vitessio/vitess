@@ -120,12 +120,7 @@ func TestNewUnshardedTable(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	vtgateVersion, err := cluster.GetMajorVersion("vtgate")
-	require.NoError(t, err)
-	expected := `[[VARCHAR("dual")] [VARCHAR("main")]]`
-	if vtgateVersion >= 17 {
-		expected = `[[VARCHAR("main")]]`
-	}
+	expected := `[[VARCHAR("main")]]`
 
 	// ensuring our initial table "main" is in the schema
 	utils.AssertMatchesWithTimeout(t, conn,
@@ -138,10 +133,7 @@ func TestNewUnshardedTable(t *testing.T) {
 	// create a new table which is not part of the VSchema
 	utils.Exec(t, conn, `create table new_table_tracked(id bigint, name varchar(100), primary key(id)) Engine=InnoDB`)
 
-	expected = `[[VARCHAR("dual")] [VARCHAR("main")] [VARCHAR("new_table_tracked")]]`
-	if vtgateVersion >= 17 {
-		expected = `[[VARCHAR("main")] [VARCHAR("new_table_tracked")]]`
-	}
+	expected = `[[VARCHAR("main")] [VARCHAR("new_table_tracked")]]`
 
 	// waiting for the vttablet's schema_reload interval to kick in
 	utils.AssertMatchesWithTimeout(t, conn,
@@ -176,14 +168,63 @@ func TestNewUnshardedTable(t *testing.T) {
 	utils.Exec(t, conn, `drop table new_table_tracked`)
 
 	// waiting for the vttablet's schema_reload interval to kick in
-	expected = `[[VARCHAR("dual")] [VARCHAR("main")]]`
-	if vtgateVersion >= 17 {
-		expected = `[[VARCHAR("main")]]`
-	}
+	expected = `[[VARCHAR("main")]]`
 	utils.AssertMatchesWithTimeout(t, conn,
 		"SHOW VSCHEMA TABLES",
 		expected,
 		100*time.Millisecond,
 		30*time.Second,
 		"new_table_tracked not in vschema tables")
+}
+
+// TestCaseSensitiveSchemaTracking tests that schema tracking is case-sensitive.
+// This test only works on Linux (and not on Windows and Mac) since it has a case-sensitive file system, so it allows
+// creating two tables having the same name differing only in casing, but other operating systems don't.
+// More information at https://dev.mysql.com/doc/refman/8.0/en/identifier-case-sensitivity.html#:~:text=Table%20names%20are%20stored%20in,lowercase%20on%20storage%20and%20lookup.
+func TestCaseSensitiveSchemaTracking(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 19, "vttablet")
+	defer cluster.PanicHandler(t)
+
+	// create a sql connection
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	// ensuring our initial table "main" is in the schema
+	utils.AssertMatchesWithTimeout(t, conn,
+		"SHOW VSCHEMA TABLES",
+		`[[VARCHAR("main")]]`,
+		100*time.Millisecond,
+		30*time.Second,
+		"initial tables not found in vschema")
+
+	// Now we create two tables with the same name differing only in casing t1 and T1.
+	// For both of them we'll have different schema's and verify that we can read the data after schema tracking kicks in.
+	utils.Exec(t, conn, `create table t1(id bigint, primary key(id)) Engine=InnoDB`)
+	utils.Exec(t, conn, `create table T1(col bigint, col2 bigint, primary key(col)) Engine=InnoDB`)
+
+	// Wait for schema tracking to be caught up
+	utils.AssertMatchesWithTimeout(t, conn,
+		"SHOW VSCHEMA TABLES",
+		`[[VARCHAR("T1")] [VARCHAR("main")] [VARCHAR("t1")]]`,
+		100*time.Millisecond,
+		30*time.Second,
+		"schema tracking didn't track both the tables")
+
+	// Run DMLs
+	utils.Exec(t, conn, `insert into t1(id) values(0),(1)`)
+	utils.Exec(t, conn, `insert into T1(col, col2) values(0,0),(1,1)`)
+
+	// Verify the tables are queryable
+	utils.AssertMatchesWithTimeout(t, conn,
+		`select * from t1`, `[[INT64(0)] [INT64(1)]]`,
+		100*time.Millisecond,
+		30*time.Second,
+		"could not query expected rows in t1 through vtgate")
+	utils.AssertMatchesWithTimeout(t, conn,
+		`select * from T1`, `[[INT64(0) INT64(0)] [INT64(1) INT64(1)]]`,
+		100*time.Millisecond,
+		30*time.Second,
+		"could not query expected rows in T1 through vtgate")
 }

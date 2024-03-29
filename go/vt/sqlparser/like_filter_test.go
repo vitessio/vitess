@@ -30,7 +30,8 @@ func TestEmptyLike(t *testing.T) {
 }
 
 func TestLikePrefixRegexp(t *testing.T) {
-	show, e := Parse("show vitess_metadata variables like 'key%'")
+	parser := NewTestParser()
+	show, e := parser.Parse("show vitess_metadata variables like 'key%'")
 	if e != nil {
 		t.Error(e)
 	}
@@ -42,7 +43,8 @@ func TestLikePrefixRegexp(t *testing.T) {
 }
 
 func TestLikeAnyCharsRegexp(t *testing.T) {
-	show, e := Parse("show vitess_metadata variables like '%val1%val2%'")
+	parser := NewTestParser()
+	show, e := parser.Parse("show vitess_metadata variables like '%val1%val2%'")
 	if e != nil {
 		t.Error(e)
 	}
@@ -54,7 +56,8 @@ func TestLikeAnyCharsRegexp(t *testing.T) {
 }
 
 func TestSingleAndMultipleCharsRegexp(t *testing.T) {
-	show, e := Parse("show vitess_metadata variables like '_val1_val2%'")
+	parser := NewTestParser()
+	show, e := parser.Parse("show vitess_metadata variables like '_val1_val2%'")
 	if e != nil {
 		t.Error(e)
 	}
@@ -66,7 +69,8 @@ func TestSingleAndMultipleCharsRegexp(t *testing.T) {
 }
 
 func TestSpecialCharactersRegexp(t *testing.T) {
-	show, e := Parse("show vitess_metadata variables like '?.*?'")
+	parser := NewTestParser()
+	show, e := parser.Parse("show vitess_metadata variables like '?.*?'")
 	if e != nil {
 		t.Error(e)
 	}
@@ -78,7 +82,8 @@ func TestSpecialCharactersRegexp(t *testing.T) {
 }
 
 func TestQuoteLikeSpecialCharacters(t *testing.T) {
-	show, e := Parse(`show vitess_metadata variables like 'part1_part2\\%part3_part4\\_part5%'`)
+	parser := NewTestParser()
+	show, e := parser.Parse(`show vitess_metadata variables like 'part1_part2\\%part3_part4\\_part5%'`)
 	if e != nil {
 		t.Error(e)
 	}

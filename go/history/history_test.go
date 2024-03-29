@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -18,6 +18,8 @@ package history
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestHistory(t *testing.T) {
@@ -33,9 +35,8 @@ func TestHistory(t *testing.T) {
 		t.Errorf("len(records): want %v, got %v. records: %+v", want, got, q)
 	}
 	for i, record := range records {
-		if record != want[i] {
-			t.Errorf("record doesn't match: want %v, got %v", want[i], record)
-		}
+		assert.Equal(t, want[i], record)
+
 	}
 
 	for ; i < 6; i++ {
@@ -48,9 +49,8 @@ func TestHistory(t *testing.T) {
 		t.Errorf("len(records): want %v, got %v. records: %+v", want, got, q)
 	}
 	for i, record := range records {
-		if record != want[i] {
-			t.Errorf("record doesn't match: want %v, got %v", want[i], record)
-		}
+		assert.Equal(t, want[i], record)
+
 	}
 }
 

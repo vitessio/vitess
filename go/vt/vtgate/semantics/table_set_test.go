@@ -17,7 +17,7 @@ limitations under the License.
 package semantics
 
 import (
-	"math/rand"
+	"math/rand/v2"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -69,7 +69,7 @@ func TestTableSet_LargeTablesConstituents(t *testing.T) {
 	var table int
 
 	for t := 0; t < 256; t++ {
-		table += rand.Intn(GapSize) + 1
+		table += rand.IntN(GapSize) + 1
 		expected = append(expected, SingleTableSet(table))
 		ts = ts.WithTable(table)
 	}

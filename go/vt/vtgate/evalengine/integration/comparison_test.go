@@ -28,9 +28,11 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/format"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
@@ -38,17 +40,15 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine/testcases"
 )
 
 var (
-	collationEnv *collations.Environment
-
 	debugGolden          = false
 	debugNormalize       = true
 	debugSimplify        = time.Now().UnixNano()&1 != 0
-	debugCheckTypes      = true
 	debugCheckCollations = true
 )
 
@@ -56,7 +56,6 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&debugGolden, "golden", debugGolden, "print golden test files")
 	fs.BoolVar(&debugNormalize, "normalize", debugNormalize, "normalize comparisons against MySQL values")
 	fs.BoolVar(&debugSimplify, "simplify", debugSimplify, "simplify expressions before evaluating them")
-	fs.BoolVar(&debugCheckTypes, "check-types", debugCheckTypes, "check the TypeOf operator for all queries")
 	fs.BoolVar(&debugCheckCollations, "check-collations", debugCheckCollations, "check the returned collations for all queries")
 }
 
@@ -83,7 +82,7 @@ func normalizeValue(v sqltypes.Value, coll collations.ID) sqltypes.Value {
 	return v
 }
 
-func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mysql.Conn, expr string, fields []*querypb.Field, cmp *testcases.Comparison) {
+func compareRemoteExprEnv(t *testing.T, collationEnv *collations.Environment, env *evalengine.ExpressionEnv, conn *mysql.Conn, expr string, fields []*querypb.Field, cmp *testcases.Comparison) {
 	t.Helper()
 
 	localQuery := "SELECT " + expr
@@ -140,13 +139,13 @@ func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mys
 		cmp = &testcases.Comparison{}
 	}
 
-	local, localType, localErr := evaluateLocalEvalengine(env, localQuery, fields)
+	local, localErr := evaluateLocalEvalengine(env, localQuery, fields)
 	remote, remoteErr := conn.ExecuteFetch(remoteQuery, 1, true)
 
 	var localVal, remoteVal sqltypes.Value
 	var localCollation, remoteCollation collations.ID
 	if localErr == nil {
-		v := local.Value(collations.Default())
+		v := local.Value(collations.MySQL8().DefaultConnectionCharset())
 		if debugCheckCollations {
 			if v.IsNull() {
 				localCollation = collations.CollationBinaryID
@@ -158,13 +157,6 @@ func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mys
 			localVal = normalizeValue(v, local.Collation())
 		} else {
 			localVal = v
-		}
-		if debugCheckTypes && localType != -1 {
-			tt := v.Type()
-			if tt != sqltypes.Null && tt != localType {
-				t.Errorf("evaluation type mismatch: eval=%v vs typeof=%v\nlocal: %s\nquery: %s (SIMPLIFY=%v)",
-					tt, localType, localVal, localQuery, debugSimplify)
-			}
 		}
 	}
 	if remoteErr == nil {
@@ -214,6 +206,7 @@ func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mys
 var seenGoldenTests []GoldenTest
 
 type vcursor struct {
+	env *vtenv.Environment
 }
 
 func (vc *vcursor) GetKeyspace() string {
@@ -222,6 +215,14 @@ func (vc *vcursor) GetKeyspace() string {
 
 func (vc *vcursor) TimeZone() *time.Location {
 	return time.Local
+}
+
+func (vc *vcursor) SQLMode() string {
+	return config.DefaultSQLMode
+}
+
+func (vc *vcursor) Environment() *vtenv.Environment {
+	return vc.env
 }
 
 func initTimezoneData(t *testing.T, conn *mysql.Conn) {
@@ -256,20 +257,23 @@ func TestMySQL(t *testing.T) {
 
 	// We require MySQL 8.0 collations for the comparisons in the tests
 
-	servenv.SetMySQLServerVersionForTest(conn.ServerVersion)
-	collationEnv = collations.NewEnvironment(conn.ServerVersion)
+	collationEnv := collations.NewEnvironment(conn.ServerVersion)
 	servenv.OnParse(registerFlags)
 	initTimezoneData(t, conn)
 
+	venv, err := vtenv.New(vtenv.Options{
+		MySQLServerVersion: conn.ServerVersion,
+	})
+	require.NoError(t, err)
 	for _, tc := range testcases.Cases {
 		t.Run(tc.Name(), func(t *testing.T) {
 			ctx := callerid.NewContext(context.Background(), &vtrpc.CallerID{Principal: "testuser"}, &querypb.VTGateCallerID{
 				Username: "vt_dba",
 			})
-			env := evalengine.NewExpressionEnv(ctx, nil, &vcursor{})
+			env := evalengine.NewExpressionEnv(ctx, nil, &vcursor{env: venv})
 			tc.Run(func(query string, row []sqltypes.Value) {
 				env.Row = row
-				compareRemoteExprEnv(t, env, conn, query, tc.Schema, tc.Compare)
+				compareRemoteExprEnv(t, collationEnv, env, conn, query, tc.Schema, tc.Compare)
 			})
 		})
 	}

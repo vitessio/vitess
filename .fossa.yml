@@ -1,0 +1,11 @@
+version: 3
+
+project:
+  id: vitess
+  name: vitess
+
+# Exclude the maven based scanning of our java client until we can get it working again.
+targets:
+  exclude:
+    - type: maven
+      path: java

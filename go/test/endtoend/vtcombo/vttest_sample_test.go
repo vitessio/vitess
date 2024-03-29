@@ -48,7 +48,6 @@ var (
 	vtctldAddr   string
 	mysqlAddress string
 	ks1          = "test_keyspace"
-	redirected   = "redirected"
 	jsonTopo     = `
 {
 	"keyspaces": [
@@ -57,10 +56,6 @@ var (
 			"shards": [{"name": "-80"}, {"name": "80-"}],
 			"rdonlyCount": 1,
 			"replicaCount": 2
-		},
-		{
-			"name": "redirected",
-			"servedFrom": "test_keyspace"
 		},
 		{
 			"name": "routed",
@@ -174,15 +169,6 @@ func assertInsertedRowsExist(ctx context.Context, t *testing.T, conn *vtgateconn
 	require.NoError(t, err)
 
 	assert.Equal(t, rowCount, len(res.Rows))
-
-	cur = conn.Session(redirected+":-80@replica", nil)
-	bindVariables = map[string]*querypb.BindVariable{
-		"id_start": {Type: querypb.Type_UINT64, Value: []byte(strconv.FormatInt(int64(idStart), 10))},
-	}
-	res, err = cur.Execute(ctx, "select * from test_table where id = :id_start", bindVariables)
-	require.NoError(t, err)
-	require.Equal(t, 1, len(res.Rows))
-	assert.Equal(t, "VARCHAR(\"test1000\")", res.Rows[0][1].String())
 }
 
 func assertRouting(ctx context.Context, t *testing.T, db *sql.DB) {

@@ -21,24 +21,24 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"sync"
 	"time"
 
 	"golang.org/x/sync/semaphore"
 
 	"vitess.io/vitess/go/mysql/replication"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 var (
@@ -227,7 +227,7 @@ type messageManager struct {
 
 	// wg is for ensuring all running goroutines have returned
 	// before we can close the manager. You need to Add before
-	// launching any gorooutine while holding a lock on mu.
+	// launching any goroutine while holding a lock on mu.
 	// The goroutine must in turn defer on Done.
 	wg sync.WaitGroup
 
@@ -272,7 +272,7 @@ func newMessageManager(tsv TabletService, vs VStreamer, table *schema.Table, pos
 	}
 	mm.readByPriorityAndTimeNext = sqlparser.BuildParsedQuery(
 		// There should be a poller_idx defined on (time_acked, priority, time_next desc)
-		// for this to be as effecient as possible
+		// for this to be as efficient as possible
 		"select priority, time_next, epoch, time_acked, %s from %v where time_acked is null and time_next < %a order by priority, time_next desc limit %a",
 		columnList, mm.name, ":time_next", ":max")
 	mm.ackQuery = sqlparser.BuildParsedQuery(

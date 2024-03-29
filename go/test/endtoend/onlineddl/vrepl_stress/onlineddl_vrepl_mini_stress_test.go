@@ -20,24 +20,25 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"path"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/schema"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/onlineddl"
 	"vitess.io/vitess/go/test/endtoend/throttler"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/vttablet"
 )
 
 type WriteMetrics struct {
@@ -135,13 +136,14 @@ var (
 	writeMetrics WriteMetrics
 )
 
+var (
+	countIterations = 5
+)
+
 const (
-	maxTableRows                  = 4096
-	workloadDuration              = 5 * time.Second
-	maxConcurrency                = 20
-	singleConnectionSleepInterval = 2 * time.Millisecond
-	countIterations               = 5
-	migrationWaitTimeout          = 60 * time.Second
+	maxTableRows         = 4096
+	workloadDuration     = 5 * time.Second
+	migrationWaitTimeout = 60 * time.Second
 )
 
 func resetOpOrder() {
@@ -182,6 +184,9 @@ func TestMain(m *testing.M) {
 			"--heartbeat_on_demand_duration", "5s",
 			"--migration_check_interval", "5s",
 			"--watch_replication_stream",
+			// Test VPlayer batching mode.
+			fmt.Sprintf("--vreplication_experimental_flags=%d",
+				vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage|vttablet.VReplicationExperimentalFlagOptimizeInserts|vttablet.VReplicationExperimentalFlagVPlayerBatching),
 		}
 		clusterInstance.VtGateExtraArgs = []string{
 			"--ddl_strategy", "online",
@@ -324,11 +329,11 @@ func TestSchemaChange(t *testing.T) {
 
 func testWithInitialSchema(t *testing.T) {
 	for _, statement := range cleanupStatements {
-		err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, statement)
+		err := clusterInstance.VtctldClientProcess.ApplySchema(keyspaceName, statement)
 		require.Nil(t, err)
 	}
 	// Create the stress table
-	err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, createStatement)
+	err := clusterInstance.VtctldClientProcess.ApplySchema(keyspaceName, createStatement)
 	require.Nil(t, err)
 
 	// Check if table is created
@@ -344,7 +349,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 		}
 	} else {
 		var err error
-		uuid, err = clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, alterStatement, cluster.VtctlClientParams{DDLStrategy: ddlStrategy})
+		uuid, err = clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, alterStatement, cluster.ApplySchemaParams{DDLStrategy: ddlStrategy})
 		assert.NoError(t, err)
 	}
 	uuid = strings.TrimSpace(uuid)
@@ -377,6 +382,9 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName stri
 	query := fmt.Sprintf(`show tables like '%%%s%%';`, showTableName)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
 	rowcount := 0
 
 	for {
@@ -388,7 +396,7 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName stri
 		}
 
 		select {
-		case <-time.After(time.Second):
+		case <-ticker.C:
 			continue // Keep looping
 		case <-ctx.Done():
 			// Break below to the assertion
@@ -420,7 +428,7 @@ func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName s
 }
 
 func generateInsert(t *testing.T, conn *mysql.Conn) error {
-	id := rand.Int31n(int32(maxTableRows))
+	id := rand.Int32N(int32(maxTableRows))
 	query := fmt.Sprintf(insertRowStatement, id, nextOpOrder())
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 
@@ -444,7 +452,7 @@ func generateInsert(t *testing.T, conn *mysql.Conn) error {
 }
 
 func generateUpdate(t *testing.T, conn *mysql.Conn) error {
-	id := rand.Int31n(int32(maxTableRows))
+	id := rand.Int32N(int32(maxTableRows))
 	query := fmt.Sprintf(updateRowStatement, nextOpOrder(), id)
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 
@@ -468,7 +476,7 @@ func generateUpdate(t *testing.T, conn *mysql.Conn) error {
 }
 
 func generateDelete(t *testing.T, conn *mysql.Conn) error {
-	id := rand.Int31n(int32(maxTableRows))
+	id := rand.Int32N(int32(maxTableRows))
 	query := fmt.Sprintf(deleteRowStatement, id)
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 
@@ -491,7 +499,7 @@ func generateDelete(t *testing.T, conn *mysql.Conn) error {
 	return err
 }
 
-func runSingleConnection(ctx context.Context, t *testing.T) {
+func runSingleConnection(ctx context.Context, t *testing.T, sleepInterval time.Duration) {
 	log.Infof("Running single connection")
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
@@ -502,8 +510,11 @@ func runSingleConnection(ctx context.Context, t *testing.T) {
 	_, err = conn.ExecuteFetch("set transaction isolation level read committed", 1000, true)
 	require.Nil(t, err)
 
+	ticker := time.NewTicker(sleepInterval)
+	defer ticker.Stop()
+
 	for {
-		switch rand.Int31n(3) {
+		switch rand.Int32N(3) {
 		case 0:
 			err = generateInsert(t, conn)
 		case 1:
@@ -515,20 +526,31 @@ func runSingleConnection(ctx context.Context, t *testing.T) {
 		case <-ctx.Done():
 			log.Infof("Terminating single connection")
 			return
-		case <-time.After(singleConnectionSleepInterval):
+		case <-ticker.C:
 		}
 		assert.Nil(t, err)
 	}
 }
 
 func runMultipleConnections(ctx context.Context, t *testing.T) {
-	log.Infof("Running multiple connections")
+	// The workload for a 16 vCPU machine is:
+	// - Concurrency of 16
+	// - 2ms interval between queries for each connection
+	// As the number of vCPUs decreases, so do we decrease concurrency, and increase intervals. For example, on a 8 vCPU machine
+	// we run concurrency of 8 and interval of 4ms. On a 4 vCPU machine we run concurrency of 4 and interval of 8ms.
+	maxConcurrency := runtime.NumCPU()
+	sleepModifier := 16.0 / float64(maxConcurrency)
+	baseSleepInterval := 2 * time.Millisecond
+	singleConnectionSleepIntervalNanoseconds := float64(baseSleepInterval.Nanoseconds()) * sleepModifier
+	sleepInterval := time.Duration(int64(singleConnectionSleepIntervalNanoseconds))
+
+	log.Infof("Running multiple connections: maxConcurrency=%v, sleep interval=%v", maxConcurrency, sleepInterval)
 	var wg sync.WaitGroup
 	for i := 0; i < maxConcurrency; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			runSingleConnection(ctx, t)
+			runSingleConnection(ctx, t, sleepInterval)
 		}()
 	}
 	wg.Wait()

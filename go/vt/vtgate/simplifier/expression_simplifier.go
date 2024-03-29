@@ -21,7 +21,6 @@ import (
 	"strconv"
 
 	"vitess.io/vitess/go/vt/log"
-
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -44,10 +43,10 @@ func SimplifyExpr(in sqlparser.Expr, test CheckF) sqlparser.Expr {
 			cursor.Replace(expr)
 
 			valid := test(smallestKnown[0])
-			log.Errorf("test: %t: simplified %s to %s, full expr: %s", valid, sqlparser.String(node), sqlparser.String(expr), sqlparser.String(smallestKnown))
 			if valid {
 				break // we will still continue trying to simplify other expressions at this level
 			} else {
+				log.Errorf("failed attempt: tried changing {%s} to {%s} in {%s}", sqlparser.String(node), sqlparser.String(expr), sqlparser.String(in))
 				// undo the change
 				cursor.Replace(node)
 			}
@@ -105,6 +104,8 @@ func (s *shrinker) fillQueue() bool {
 		s.queue = append(s.queue, e.Left, e.Right)
 	case *sqlparser.BinaryExpr:
 		s.queue = append(s.queue, e.Left, e.Right)
+	case *sqlparser.BetweenExpr:
+		s.queue = append(s.queue, e.Left, e.From, e.To)
 	case *sqlparser.Literal:
 		switch e.Type {
 		case sqlparser.StrVal:
@@ -176,12 +177,8 @@ func (s *shrinker) fillQueue() bool {
 			s.queue = append(s.queue, append(e[:i], e[i+1:]...))
 		}
 	case *sqlparser.FuncExpr:
-		for _, ae := range e.Exprs {
-			expr, ok := ae.(*sqlparser.AliasedExpr)
-			if !ok {
-				continue
-			}
-			s.queue = append(s.queue, expr.Expr)
+		for _, expr := range e.Exprs {
+			s.queue = append(s.queue, expr)
 		}
 	case sqlparser.AggrFunc:
 		for _, ae := range e.GetArgs() {

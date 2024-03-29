@@ -26,6 +26,12 @@
         ]
       },
       {
+        "from_table": "second_user.bar",
+        "to_tables": [
+          "user.music"
+        ]
+      },
+      {
         "from_table": "primary_redirect@primary",
         "to_tables": [
           "user.user"
@@ -166,6 +172,16 @@
               "to": "keyspace_id",
               "cost": "300"
             }
+        },
+        "lkp_bf_vdx": {
+          "type": "name_lkp_test",
+          "owner": "customer",
+          "params": {
+            "table": "lkp_shard_vdx",
+            "from": " ",
+            "to": "keyspace_id",
+            "write_only": "true"
+          }
         }
       },
       "tables": {
@@ -209,7 +225,8 @@
             },
             {
               "name": "textcol2",
-              "type": "VARCHAR"
+              "type": "VARCHAR",
+              "collation_name": "big5_bin"
             }
           ]
         },
@@ -302,6 +319,10 @@
           "columns": [
             {
               "name": "col"
+            },
+            {
+              "name": "secret",
+              "invisible": true
             }
           ],
           "column_list_authoritative": true
@@ -472,6 +493,10 @@
             {
               "column": "phone",
               "name": "unq_lkp_bf_vdx"
+            },
+            {
+              "column": "name",
+              "name": "lkp_bf_vdx"
             }
           ]
         },
@@ -489,8 +514,7 @@
       "sharded": true,
       "vindexes": {
         "hash_dup": {
-          "type": "hash_test",
-          "owner": "user"
+          "type": "hash_test"
         }
       },
       "tables": {
@@ -719,6 +743,20 @@
             }
           ]
         },
+        "tbl_auth": {
+          "columns": [
+            {
+              "name": "id"
+            }
+          ],
+          "column_vindexes": [
+            {
+              "column": "id",
+              "name": "hash_vin"
+            }
+          ],
+          "column_list_authoritative": true
+        },
         "tblrefDef": {
           "column_vindexes": [
             {
@@ -748,19 +786,161 @@
     "unsharded_fk_allow": {
       "foreignKeyMode": "managed",
       "tables": {
-        "u_tbl1": {},
-        "u_tbl2": {},
-        "u_tbl3": {},
-        "u_tbl4": {},
-        "u_tbl5": {},
-        "u_tbl6": {},
-        "u_tbl7": {},
-        "u_tbl8": {},
-        "u_tbl9": {},
+        "u_tbl1": {
+          "columns": [
+            {
+              "name": "col1",
+              "type": "VARCHAR"
+            },
+            {
+              "name": "col14",
+              "type": "INT16"
+            }
+          ]
+        },
+        "u_tbl2": {
+          "columns": [
+            {
+              "name": "col2",
+              "type": "VARCHAR"
+            }
+          ]
+        },
+        "u_tbl3": {
+          "columns": [
+            {
+              "name": "col3",
+              "type": "VARCHAR"
+            }
+          ]
+        },
+        "u_tbl4": {
+          "columns": [
+            {
+              "name": "col41",
+              "type": "INT16"
+            },
+            {
+              "name": "col4",
+              "type": "VARCHAR"
+            }
+          ]
+        },
+        "u_tbl5": {
+          "columns": [
+            {
+              "name": "col5",
+              "type": "VARCHAR"
+            }
+          ]
+        },
+        "u_tbl6": {
+          "columns": [
+            {
+              "name": "col6",
+              "type": "VARCHAR"
+            }
+          ]
+        },
+        "u_tbl7": {
+          "columns": [
+            {
+              "name": "col7",
+              "type": "VARCHAR"
+            }
+          ]
+        },
+        "u_tbl8": {
+          "columns": [
+            {
+              "name": "col8",
+              "type": "VARCHAR"
+            }
+          ]
+        },
+        "u_tbl9": {
+          "columns": [
+            {
+              "name": "col9",
+              "type": "VARCHAR"
+            },
+            {"name": "foo"},
+            {"name": "bar", "default": "1"}
+          ]
+        },
+        "u_tbl10": {
+          "columns": [
+            {
+              "name": "col10",
+              "type": "VARCHAR"
+            },
+            {"name": "col"},
+            {"name": "id"}
+          ],
+          "column_list_authoritative": true
+        },
+        "u_tbl11": {
+          "columns": [
+            {
+              "name": "col11",
+              "type": "VARCHAR"
+            },
+            {"name": "col"},
+            {"name": "id"}
+          ],
+          "column_list_authoritative": true
+        },
         "u_tbl": {},
         "u_multicol_tbl1": {},
         "u_multicol_tbl2": {},
         "u_multicol_tbl3": {}
+      }
+    },
+    "ordering": {
+      "sharded": true,
+      "vindexes": {
+        "xxhash": {
+          "type": "xxhash"
+        },
+        "oid_vdx": {
+          "type": "consistent_lookup_unique",
+          "params": {
+            "table": "oid_idx",
+            "from": "oid",
+            "to": "keyspace_id"
+          },
+          "owner": "order"
+        }
+      },
+      "tables": {
+        "order": {
+          "column_vindexes": [
+            {
+              "column": "region_id",
+              "name": "xxhash"
+            },
+            {
+              "column": "oid",
+              "name": "oid_vdx"
+            }
+          ]
+        },
+        "oid_idx": {
+          "column_vindexes": [
+            {
+              "column": "oid",
+              "name": "xxhash"
+            }
+          ]
+        },
+        "order_event": {
+          "column_vindexes": [
+            {
+              "column": "oid",
+              "name": "oid_vdx"
+            }
+          ]
+        }
       }
     }
   }

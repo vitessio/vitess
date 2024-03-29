@@ -17,6 +17,8 @@ package fastparse
 
 import (
 	"math"
+	"math/big"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -190,6 +192,48 @@ func TestParseInt64(t *testing.T) {
 			expected: 42,
 			err:      `unparsed tail left after parsing int64 from "\t 42 \n": "\n"`,
 		},
+		{
+			input:    "",
+			base:     10,
+			expected: 0,
+			err:      `cannot parse int64 from empty string`,
+		},
+		{
+			input:    "256",
+			base:     1,
+			expected: 0,
+			err:      `invalid base 1; must be in [2, 36]`,
+		},
+		{
+			input:    "256",
+			base:     37,
+			expected: 0,
+			err:      `invalid base 37; must be in [2, 36]`,
+		},
+		{
+			input:    "  -",
+			base:     10,
+			expected: 0,
+			err:      `cannot parse int64 from "  -"`,
+		},
+		{
+			input:    "-18446744073709551615",
+			base:     10,
+			expected: -9223372036854775808,
+			err:      `cannot parse int64 from "-18446744073709551615": overflow`,
+		},
+		{
+			input:    "  ",
+			base:     10,
+			expected: 0,
+			err:      `cannot parse int64 from "  "`,
+		},
+		{
+			input:    "  :",
+			base:     10,
+			expected: 0,
+			err:      `cannot parse int64 from "  :"`,
+		},
 	}
 	for _, tc := range testcases {
 		t.Run(tc.input, func(t *testing.T) {
@@ -202,6 +246,69 @@ func TestParseInt64(t *testing.T) {
 				require.EqualError(t, err, tc.err)
 			}
 		})
+	}
+}
+
+func TestParseEdgeInt64(t *testing.T) {
+	for i := int64(math.MinInt64); i < math.MinInt64+1000; i++ {
+		for base := 2; base <= 36; base++ {
+			val, err := ParseInt64(strconv.FormatInt(i, base), base)
+			require.NoError(t, err, "base %d", base)
+			require.Equal(t, int64(i), val)
+		}
+	}
+	for i := int64(math.MaxInt64 - 1000); i < math.MaxInt64; i++ {
+		for base := 2; base <= 36; base++ {
+			val, err := ParseInt64(strconv.FormatInt(i, base), base)
+			require.NoError(t, err)
+			require.NoError(t, err, "base %d", base)
+			require.Equal(t, int64(i), val)
+		}
+	}
+}
+
+func TestParseOverflowInt64(t *testing.T) {
+	for i := int64(1); i <= 1000; i++ {
+		b := big.NewInt(math.MinInt64)
+		b.Sub(b, big.NewInt(i))
+		for base := 2; base <= 36; base++ {
+			val, err := ParseInt64(b.Text(base), base)
+			require.Error(t, err)
+			require.Equal(t, int64(math.MinInt64), val)
+		}
+	}
+
+	for i := int64(1); i <= 1000; i++ {
+		b := big.NewInt(math.MaxInt64)
+		b.Add(b, big.NewInt(i))
+		for base := 2; base <= 36; base++ {
+			val, err := ParseInt64(b.Text(base), base)
+			require.Error(t, err)
+			require.Equal(t, int64(math.MaxInt64), val)
+		}
+	}
+}
+
+func TestParseEdgeUint64(t *testing.T) {
+	for i := uint64(math.MaxUint64 - 1000); i < math.MaxUint64; i++ {
+		for base := 2; base <= 36; base++ {
+			val, err := ParseUint64(strconv.FormatUint(i, base), base)
+			require.NoError(t, err, "base %d", base)
+			require.Equal(t, uint64(i), val)
+		}
+	}
+}
+
+func TestParseOverflowUint64(t *testing.T) {
+	var b big.Int
+	for i := int64(1); i <= 1000; i++ {
+		b.SetUint64(math.MaxUint64)
+		b.Add(&b, big.NewInt(i))
+		for base := 2; base <= 36; base++ {
+			val, err := ParseUint64(b.Text(base), base)
+			require.Error(t, err)
+			require.Equal(t, uint64(math.MaxUint64), val)
+		}
 	}
 }
 
@@ -226,6 +333,17 @@ func TestParseUint64(t *testing.T) {
 			input:    "1",
 			base:     2,
 			expected: 1,
+		},
+		{
+			input:    "-",
+			base:     10,
+			expected: 0,
+			err:      `cannot parse uint64 from "-"`,
+		},
+		{
+			input: "-1",
+			base:  10,
+			err:   `cannot parse uint64 from "-1"`,
 		},
 		{
 			input:    "10",
@@ -326,10 +444,95 @@ func TestParseUint64(t *testing.T) {
 			expected: 42,
 			err:      `unparsed tail left after parsing uint64 from "\t 42 \n": "\n"`,
 		},
+		{
+			input:    "",
+			base:     10,
+			expected: 0,
+			err:      `cannot parse uint64 from empty string`,
+		},
+		{
+			input:    "256",
+			base:     1,
+			expected: 0,
+			err:      `invalid base 1; must be in [2, 36]`,
+		},
+		{
+			input:    "256",
+			base:     37,
+			expected: 0,
+			err:      `invalid base 37; must be in [2, 36]`,
+		},
+		{
+			input:    "  ",
+			base:     10,
+			expected: 0,
+			err:      `cannot parse uint64 from "  "`,
+		},
+		{
+			input:    "  :",
+			base:     10,
+			expected: 0,
+			err:      `cannot parse uint64 from "  :"`,
+		},
 	}
 	for _, tc := range testcases {
 		t.Run(tc.input, func(t *testing.T) {
 			val, err := ParseUint64(tc.input, tc.base)
+			if tc.err == "" {
+				require.NoError(t, err)
+				require.Equal(t, tc.expected, val)
+			} else {
+				require.Equal(t, tc.expected, val)
+				require.EqualError(t, err, tc.err)
+			}
+		})
+	}
+}
+
+func TestParseUint64WithNeg(t *testing.T) {
+	testcases := []struct {
+		input    string
+		base     int
+		expected uint64
+		err      string
+	}{
+		{
+			input:    "-",
+			base:     10,
+			expected: 0,
+			err:      `cannot parse uint64 from "-"`,
+		},
+		{
+			input:    "-1",
+			base:     10,
+			expected: 18446744073709551615,
+		},
+		{
+			input:    "-9223372036854775808",
+			base:     10,
+			expected: 9223372036854775808,
+		},
+		{
+			input:    "-9223372036854775809",
+			base:     10,
+			expected: 9223372036854775807,
+		},
+		{
+			input:    "-18446744073709551616",
+			base:     10,
+			expected: 0,
+			err:      `cannot parse uint64 from "-18446744073709551616": overflow`,
+		},
+		{
+			input:    "-31415926535897932384",
+			base:     10,
+			expected: 0,
+			err:      `cannot parse uint64 from "-31415926535897932384": overflow`,
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.input, func(t *testing.T) {
+			val, err := ParseUint64WithNeg(tc.input, tc.base)
 			if tc.err == "" {
 				require.NoError(t, err)
 				require.Equal(t, tc.expected, val)

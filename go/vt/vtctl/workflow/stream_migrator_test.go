@@ -24,6 +24,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 
@@ -304,7 +306,7 @@ func TestTemplatize(t *testing.T) {
 			},
 		},
 	}
-	ksschema, err := vindexes.BuildKeyspaceSchema(vs, "ks")
+	ksschema, err := vindexes.BuildKeyspaceSchema(vs, "ks", sqlparser.NewTestParser())
 	require.NoError(t, err, "could not create test keyspace %+v", vs)
 
 	ts := &testTrafficSwitcher{

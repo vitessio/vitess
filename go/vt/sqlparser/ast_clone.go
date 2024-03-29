@@ -799,6 +799,7 @@ func CloneRefOfAvg(n *Avg) *Avg {
 	}
 	out := *n
 	out.Arg = CloneExpr(n.Arg)
+	out.OverClause = CloneRefOfOverClause(n.OverClause)
 	return &out
 }
 
@@ -842,6 +843,7 @@ func CloneRefOfBitAnd(n *BitAnd) *BitAnd {
 	}
 	out := *n
 	out.Arg = CloneExpr(n.Arg)
+	out.OverClause = CloneRefOfOverClause(n.OverClause)
 	return &out
 }
 
@@ -852,6 +854,7 @@ func CloneRefOfBitOr(n *BitOr) *BitOr {
 	}
 	out := *n
 	out.Arg = CloneExpr(n.Arg)
+	out.OverClause = CloneRefOfOverClause(n.OverClause)
 	return &out
 }
 
@@ -862,6 +865,7 @@ func CloneRefOfBitXor(n *BitXor) *BitXor {
 	}
 	out := *n
 	out.Arg = CloneExpr(n.Arg)
+	out.OverClause = CloneRefOfOverClause(n.OverClause)
 	return &out
 }
 
@@ -964,8 +968,8 @@ func CloneRefOfColumnType(n *ColumnType) *ColumnType {
 	}
 	out := *n
 	out.Options = CloneRefOfColumnTypeOptions(n.Options)
-	out.Length = CloneRefOfLiteral(n.Length)
-	out.Scale = CloneRefOfLiteral(n.Scale)
+	out.Length = CloneRefOfInt(n.Length)
+	out.Scale = CloneRefOfInt(n.Scale)
 	out.Charset = CloneColumnCharset(n.Charset)
 	out.EnumValues = CloneSliceOfString(n.EnumValues)
 	return &out
@@ -1054,8 +1058,8 @@ func CloneRefOfConvertType(n *ConvertType) *ConvertType {
 		return nil
 	}
 	out := *n
-	out.Length = CloneRefOfLiteral(n.Length)
-	out.Scale = CloneRefOfLiteral(n.Scale)
+	out.Length = CloneRefOfInt(n.Length)
+	out.Scale = CloneRefOfInt(n.Scale)
 	out.Charset = CloneColumnCharset(n.Charset)
 	return &out
 }
@@ -1077,6 +1081,7 @@ func CloneRefOfCount(n *Count) *Count {
 	}
 	out := *n
 	out.Args = CloneExprs(n.Args)
+	out.OverClause = CloneRefOfOverClause(n.OverClause)
 	return &out
 }
 
@@ -1086,6 +1091,7 @@ func CloneRefOfCountStar(n *CountStar) *CountStar {
 		return nil
 	}
 	out := *n
+	out.OverClause = CloneRefOfOverClause(n.OverClause)
 	return &out
 }
 
@@ -1175,8 +1181,8 @@ func CloneRefOfDelete(n *Delete) *Delete {
 	out := *n
 	out.With = CloneRefOfWith(n.With)
 	out.Comments = CloneRefOfParsedComments(n.Comments)
+	out.TableExprs = CloneSliceOfTableExpr(n.TableExprs)
 	out.Targets = CloneTableNames(n.Targets)
-	out.TableExprs = CloneTableExprs(n.TableExprs)
 	out.Partitions = ClonePartitions(n.Partitions)
 	out.Where = CloneRefOfWhere(n.Where)
 	out.OrderBy = CloneOrderBy(n.OrderBy)
@@ -1405,7 +1411,7 @@ func CloneRefOfFuncExpr(n *FuncExpr) *FuncExpr {
 	out := *n
 	out.Qualifier = CloneIdentifierCS(n.Qualifier)
 	out.Name = CloneIdentifierCI(n.Name)
-	out.Exprs = CloneSelectExprs(n.Exprs)
+	out.Exprs = CloneExprs(n.Exprs)
 	return &out
 }
 
@@ -2117,6 +2123,7 @@ func CloneRefOfMax(n *Max) *Max {
 	}
 	out := *n
 	out.Arg = CloneExpr(n.Arg)
+	out.OverClause = CloneRefOfOverClause(n.OverClause)
 	return &out
 }
 
@@ -2138,6 +2145,7 @@ func CloneRefOfMin(n *Min) *Min {
 	}
 	out := *n
 	out.Arg = CloneExpr(n.Arg)
+	out.OverClause = CloneRefOfOverClause(n.OverClause)
 	return &out
 }
 
@@ -2711,11 +2719,11 @@ func CloneRefOfSelect(n *Select) *Select {
 	}
 	out := *n
 	out.Cache = CloneRefOfBool(n.Cache)
+	out.With = CloneRefOfWith(n.With)
 	out.From = CloneSliceOfTableExpr(n.From)
 	out.Comments = CloneRefOfParsedComments(n.Comments)
 	out.SelectExprs = CloneSelectExprs(n.SelectExprs)
 	out.Where = CloneRefOfWhere(n.Where)
-	out.With = CloneRefOfWith(n.With)
 	out.GroupBy = CloneGroupBy(n.GroupBy)
 	out.Having = CloneRefOfWhere(n.Having)
 	out.Windows = CloneNamedWindows(n.Windows)
@@ -2879,6 +2887,7 @@ func CloneRefOfStd(n *Std) *Std {
 	}
 	out := *n
 	out.Arg = CloneExpr(n.Arg)
+	out.OverClause = CloneRefOfOverClause(n.OverClause)
 	return &out
 }
 
@@ -2889,6 +2898,7 @@ func CloneRefOfStdDev(n *StdDev) *StdDev {
 	}
 	out := *n
 	out.Arg = CloneExpr(n.Arg)
+	out.OverClause = CloneRefOfOverClause(n.OverClause)
 	return &out
 }
 
@@ -2899,6 +2909,7 @@ func CloneRefOfStdPop(n *StdPop) *StdPop {
 	}
 	out := *n
 	out.Arg = CloneExpr(n.Arg)
+	out.OverClause = CloneRefOfOverClause(n.OverClause)
 	return &out
 }
 
@@ -2909,6 +2920,7 @@ func CloneRefOfStdSamp(n *StdSamp) *StdSamp {
 	}
 	out := *n
 	out.Arg = CloneExpr(n.Arg)
+	out.OverClause = CloneRefOfOverClause(n.OverClause)
 	return &out
 }
 
@@ -3002,6 +3014,7 @@ func CloneRefOfSum(n *Sum) *Sum {
 	}
 	out := *n
 	out.Arg = CloneExpr(n.Arg)
+	out.OverClause = CloneRefOfOverClause(n.OverClause)
 	return &out
 }
 
@@ -3117,10 +3130,10 @@ func CloneRefOfUnion(n *Union) *Union {
 		return nil
 	}
 	out := *n
+	out.With = CloneRefOfWith(n.With)
 	out.Left = CloneSelectStatement(n.Left)
 	out.Right = CloneSelectStatement(n.Right)
 	out.OrderBy = CloneOrderBy(n.OrderBy)
-	out.With = CloneRefOfWith(n.With)
 	out.Limit = CloneRefOfLimit(n.Limit)
 	out.Into = CloneRefOfSelectInto(n.Into)
 	return &out
@@ -3143,7 +3156,7 @@ func CloneRefOfUpdate(n *Update) *Update {
 	out := *n
 	out.With = CloneRefOfWith(n.With)
 	out.Comments = CloneRefOfParsedComments(n.Comments)
-	out.TableExprs = CloneTableExprs(n.TableExprs)
+	out.TableExprs = CloneSliceOfTableExpr(n.TableExprs)
 	out.Exprs = CloneUpdateExprs(n.Exprs)
 	out.Where = CloneRefOfWhere(n.Where)
 	out.OrderBy = CloneOrderBy(n.OrderBy)
@@ -3271,6 +3284,7 @@ func CloneRefOfVarPop(n *VarPop) *VarPop {
 	}
 	out := *n
 	out.Arg = CloneExpr(n.Arg)
+	out.OverClause = CloneRefOfOverClause(n.OverClause)
 	return &out
 }
 
@@ -3281,6 +3295,7 @@ func CloneRefOfVarSamp(n *VarSamp) *VarSamp {
 	}
 	out := *n
 	out.Arg = CloneExpr(n.Arg)
+	out.OverClause = CloneRefOfOverClause(n.OverClause)
 	return &out
 }
 
@@ -3301,6 +3316,7 @@ func CloneRefOfVariance(n *Variance) *Variance {
 	}
 	out := *n
 	out.Arg = CloneExpr(n.Arg)
+	out.OverClause = CloneRefOfOverClause(n.OverClause)
 	return &out
 }
 
@@ -3395,7 +3411,7 @@ func CloneRefOfWith(n *With) *With {
 		return nil
 	}
 	out := *n
-	out.ctes = CloneSliceOfRefOfCommonTableExpr(n.ctes)
+	out.CTEs = CloneSliceOfRefOfCommonTableExpr(n.CTEs)
 	return &out
 }
 
@@ -4334,6 +4350,15 @@ func CloneRefOfColumnTypeOptions(n *ColumnTypeOptions) *ColumnTypeOptions {
 	return &out
 }
 
+// CloneRefOfInt creates a deep clone of the input.
+func CloneRefOfInt(n *int) *int {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	return &out
+}
+
 // CloneColumnCharset creates a deep clone of the input.
 func CloneColumnCharset(n ColumnCharset) ColumnCharset {
 	return *CloneRefOfColumnCharset(&n)
@@ -4346,6 +4371,18 @@ func CloneSliceOfString(n []string) []string {
 	}
 	res := make([]string, len(n))
 	copy(res, n)
+	return res
+}
+
+// CloneSliceOfTableExpr creates a deep clone of the input.
+func CloneSliceOfTableExpr(n []TableExpr) []TableExpr {
+	if n == nil {
+		return nil
+	}
+	res := make([]TableExpr, len(n))
+	for i, x := range n {
+		res[i] = CloneTableExpr(x)
+	}
 	return res
 }
 
@@ -4510,15 +4547,6 @@ func CloneComments(n Comments) Comments {
 	return res
 }
 
-// CloneRefOfInt creates a deep clone of the input.
-func CloneRefOfInt(n *int) *int {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	return &out
-}
-
 // CloneSliceOfRefOfPartitionDefinition creates a deep clone of the input.
 func CloneSliceOfRefOfPartitionDefinition(n []*PartitionDefinition) []*PartitionDefinition {
 	if n == nil {
@@ -4551,18 +4579,6 @@ func CloneRefOfRootNode(n *RootNode) *RootNode {
 	out := *n
 	out.SQLNode = CloneSQLNode(n.SQLNode)
 	return &out
-}
-
-// CloneSliceOfTableExpr creates a deep clone of the input.
-func CloneSliceOfTableExpr(n []TableExpr) []TableExpr {
-	if n == nil {
-		return nil
-	}
-	res := make([]TableExpr, len(n))
-	for i, x := range n {
-		res[i] = CloneTableExpr(x)
-	}
-	return res
 }
 
 // CloneRefOfTableName creates a deep clone of the input.
@@ -4666,7 +4682,7 @@ func CloneRefOfIndexColumn(n *IndexColumn) *IndexColumn {
 	}
 	out := *n
 	out.Column = CloneIdentifierCI(n.Column)
-	out.Length = CloneRefOfLiteral(n.Length)
+	out.Length = CloneRefOfInt(n.Length)
 	out.Expression = CloneExpr(n.Expression)
 	return &out
 }

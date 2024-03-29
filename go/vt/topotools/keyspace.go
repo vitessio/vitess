@@ -141,27 +141,21 @@ func UpdateShardRecords(
 	return nil
 }
 
-// KeyspaceEquality returns true iff two KeyspaceInformations are identical for testing purposes
+// KeyspaceEquality returns true iff two Keyspace fields are identical for testing purposes.
 func KeyspaceEquality(left, right *topodatapb.Keyspace) bool {
 	if left.KeyspaceType != right.KeyspaceType {
 		return false
 	}
-	if len(left.ServedFroms) != len(right.ServedFroms) {
-		return false
-	}
-	for i := range left.ServedFroms {
-		if left.ServedFroms[i] != right.ServedFroms[i] {
-			return false
-		}
-	}
-	if left.KeyspaceType != right.KeyspaceType {
-		return false
-	}
+
 	if left.BaseKeyspace != right.BaseKeyspace {
 		return false
 	}
 
 	if left.SnapshotTime != right.SnapshotTime {
+		return false
+	}
+
+	if left.SidecarDbName != right.SidecarDbName {
 		return false
 	}
 

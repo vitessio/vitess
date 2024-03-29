@@ -28,6 +28,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -40,13 +41,15 @@ var (
 	mysqld *mysqlctl.Mysqld
 	cnf    *mysqlctl.Mycnf
 
-	mysqlPort   = 3306
-	tabletUID   = uint32(41983)
-	mysqlSocket string
+	mysqlPort    = 3306
+	tabletUID    = uint32(41983)
+	mysqlSocket  string
+	collationEnv *collations.Environment
 
 	// mysqlctl init flags
-	waitTime      = 5 * time.Minute
-	initDBSQLFile string
+	waitTime         = 5 * time.Minute
+	shutdownWaitTime = 5 * time.Minute
+	initDBSQLFile    string
 
 	Main = &cobra.Command{
 		Use:   "mysqlctld",
@@ -54,7 +57,6 @@ var (
 		Long: "`mysqlctld` is a gRPC server that can be used instead of the `mysqlctl` client tool.\n" +
 			"If the target directories are empty when it is invoked, it automatically performs initialization operations to bootstrap the `mysqld` instance before starting it.\n" +
 			"The `mysqlctld` process can subsequently receive gRPC commands from a `vttablet` to perform housekeeping operations like shutting down and restarting the `mysqld` instance as needed.\n\n" +
-
 			"{{< warning >}}\n" +
 			"`mysqld_safe` is not used so the `mysqld` process will not be automatically restarted in case of a failure.\n" +
 			"{{</ warning>}}\n\n" +
@@ -65,15 +67,22 @@ var (
 	--mysql_port=17100 \
 	--socket_file=/path/to/socket_file`,
 		Args:    cobra.NoArgs,
+		Version: servenv.AppVersion.String(),
 		PreRunE: servenv.CobraPreRunE,
 		RunE:    run,
+	}
+
+	timeouts = &servenv.TimeoutFlags{
+		LameduckPeriod: 50 * time.Millisecond,
+		OnTermTimeout:  shutdownWaitTime + 10*time.Second,
+		OnCloseTimeout: 10 * time.Second,
 	}
 )
 
 func init() {
 	servenv.RegisterDefaultFlags()
 	servenv.RegisterDefaultSocketFileFlags()
-	servenv.RegisterFlags()
+	servenv.RegisterFlagsWithTimeouts(timeouts)
 	servenv.RegisterGRPCServerFlags()
 	servenv.RegisterGRPCServerAuthFlags()
 	servenv.RegisterServiceMapFlag()
@@ -85,10 +94,13 @@ func init() {
 	Main.Flags().IntVar(&mysqlPort, "mysql_port", mysqlPort, "MySQL port")
 	Main.Flags().Uint32Var(&tabletUID, "tablet_uid", tabletUID, "Tablet UID")
 	Main.Flags().StringVar(&mysqlSocket, "mysql_socket", mysqlSocket, "Path to the mysqld socket file")
-	Main.Flags().DurationVar(&waitTime, "wait_time", waitTime, "How long to wait for mysqld startup or shutdown")
+	Main.Flags().DurationVar(&waitTime, "wait_time", waitTime, "How long to wait for mysqld startup")
 	Main.Flags().StringVar(&initDBSQLFile, "init_db_sql_file", initDBSQLFile, "Path to .sql file to run after mysqld initialization")
+	Main.Flags().DurationVar(&shutdownWaitTime, "shutdown-wait-time", shutdownWaitTime, "How long to wait for mysqld shutdown")
 
 	acl.RegisterFlags(Main.Flags())
+
+	collationEnv = collations.NewEnvironment(servenv.MySQLServerVersion())
 }
 
 func run(cmd *cobra.Command, args []string) error {
@@ -109,7 +121,7 @@ func run(cmd *cobra.Command, args []string) error {
 		log.Infof("mycnf file (%s) doesn't exist, initializing", mycnfFile)
 
 		var err error
-		mysqld, cnf, err = mysqlctl.CreateMysqldAndMycnf(tabletUID, mysqlSocket, mysqlPort)
+		mysqld, cnf, err = mysqlctl.CreateMysqldAndMycnf(tabletUID, mysqlSocket, mysqlPort, collationEnv)
 		if err != nil {
 			cancel()
 			return fmt.Errorf("failed to initialize mysql config: %w", err)
@@ -125,7 +137,7 @@ func run(cmd *cobra.Command, args []string) error {
 		log.Infof("mycnf file (%s) already exists, starting without init", mycnfFile)
 
 		var err error
-		mysqld, cnf, err = mysqlctl.OpenMysqldAndMycnf(tabletUID)
+		mysqld, cnf, err = mysqlctl.OpenMysqldAndMycnf(tabletUID, collationEnv)
 		if err != nil {
 			cancel()
 			return fmt.Errorf("failed to find mysql config: %w", err)
@@ -151,13 +163,13 @@ func run(cmd *cobra.Command, args []string) error {
 	cancel()
 
 	servenv.Init()
-	defer servenv.Close()
 
 	// Take mysqld down with us on SIGTERM before entering lame duck.
 	servenv.OnTermSync(func() {
 		log.Infof("mysqlctl received SIGTERM, shutting down mysqld first")
-		ctx := context.Background()
-		if err := mysqld.Shutdown(ctx, cnf, true); err != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), shutdownWaitTime+10*time.Second)
+		defer cancel()
+		if err := mysqld.Shutdown(ctx, cnf, true, shutdownWaitTime); err != nil {
 			log.Errorf("failed to shutdown mysqld: %v", err)
 		}
 	})

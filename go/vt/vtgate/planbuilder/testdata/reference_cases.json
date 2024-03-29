@@ -106,7 +106,7 @@
         "Query": "select ambiguous_ref_with_source.col from (select aa from `user` where `user`.id = 1) as `user`, ambiguous_ref_with_source",
         "Table": "`user`, ambiguous_ref_with_source",
         "Values": [
-          "INT64(1)"
+          "1"
         ],
         "Vindex": "user_index"
       },
@@ -158,6 +158,50 @@
       },
       "TablesUsed": [
         "main.ambiguous_ref_with_source"
+      ]
+    }
+  },
+  {
+    "comment": "Reference tables using left join with a derived table having a limit clause",
+    "query": "SELECT u.id FROM ( SELECT a.id, a.u_id FROM user.ref_with_source AS a WHERE a.id IN (3) ORDER BY a.d_at LIMIT 1) as u LEFT JOIN user.ref_with_source AS u0 ON u.u_id = u0.u_uid ORDER BY u.id",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT u.id FROM ( SELECT a.id, a.u_id FROM user.ref_with_source AS a WHERE a.id IN (3) ORDER BY a.d_at LIMIT 1) as u LEFT JOIN user.ref_with_source AS u0 ON u.u_id = u0.u_uid ORDER BY u.id",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "LeftJoin",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "u_u_id": 1
+        },
+        "TableName": "ref_with_source_ref_with_source",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select u.id, u.u_id from (select a.id, a.u_id from ref_with_source as a where 1 != 1) as u where 1 != 1",
+            "Query": "select u.id, u.u_id from (select a.id, a.u_id from ref_with_source as a where a.id in (3) order by a.d_at asc limit 1) as u order by u.id asc",
+            "Table": "ref_with_source"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from ref_with_source as u0 where 1 != 1",
+            "Query": "select 1 from ref_with_source as u0 where u0.u_uid = :u_u_id",
+            "Table": "ref_with_source"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.ref_with_source"
       ]
     }
   },

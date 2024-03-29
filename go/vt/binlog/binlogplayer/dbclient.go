@@ -19,11 +19,13 @@ package binlogplayer
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -38,12 +40,14 @@ type DBClient interface {
 	Rollback() error
 	Close()
 	ExecuteFetch(query string, maxrows int) (qr *sqltypes.Result, err error)
+	ExecuteFetchMulti(query string, maxrows int) (qrs []*sqltypes.Result, err error)
 }
 
 // dbClientImpl is a real DBClient backed by a mysql connection.
 type dbClientImpl struct {
 	dbConfig dbconfigs.Connector
 	dbConn   *mysql.Conn
+	parser   *sqlparser.Parser
 }
 
 // dbClientImplWithSidecarDBReplacement is a DBClient implementation
@@ -55,14 +59,15 @@ type dbClientImplWithSidecarDBReplacement struct {
 }
 
 // NewDBClient creates a DBClient instance
-func NewDBClient(params dbconfigs.Connector) DBClient {
+func NewDBClient(params dbconfigs.Connector, parser *sqlparser.Parser) DBClient {
 	if sidecar.GetName() != sidecar.DefaultName {
 		return &dbClientImplWithSidecarDBReplacement{
-			dbClientImpl{dbConfig: params},
+			dbClientImpl{dbConfig: params, parser: parser},
 		}
 	}
 	return &dbClientImpl{
 		dbConfig: params,
+		parser:   parser,
 	}
 }
 
@@ -125,10 +130,14 @@ func LogError(msg string, err error) {
 
 // LimitString truncates string to specified size
 func LimitString(s string, limit int) string {
-	if len(s) > limit {
+	ts, err := textutil.TruncateText(s, limit, TruncationLocation, TruncationIndicator)
+	if err != nil { // Fallback to simple truncation
+		if len(s) <= limit {
+			return s
+		}
 		return s[:limit]
 	}
-	return s
+	return ts
 }
 
 func (dc *dbClientImpl) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {
@@ -140,11 +149,47 @@ func (dc *dbClientImpl) ExecuteFetch(query string, maxrows int) (*sqltypes.Resul
 	return mqr, nil
 }
 
+func (dc *dbClientImpl) ExecuteFetchMulti(query string, maxrows int) ([]*sqltypes.Result, error) {
+	results := make([]*sqltypes.Result, 0)
+	mqr, more, err := dc.dbConn.ExecuteFetchMulti(query, maxrows, true)
+	if err != nil {
+		dc.handleError(err)
+		return nil, err
+	}
+	results = append(results, mqr)
+	for more {
+		mqr, more, _, err = dc.dbConn.ReadQueryResult(maxrows, false)
+		if err != nil {
+			dc.handleError(err)
+			return nil, err
+		}
+		results = append(results, mqr)
+	}
+	return results, nil
+}
+
 func (dcr *dbClientImplWithSidecarDBReplacement) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {
 	// Replace any provided sidecar database qualifiers with the correct one.
-	uq, err := sqlparser.ReplaceTableQualifiers(query, sidecar.DefaultName, sidecar.GetName())
+	uq, err := dcr.parser.ReplaceTableQualifiers(query, sidecar.DefaultName, sidecar.GetName())
 	if err != nil {
 		return nil, err
 	}
 	return dcr.dbClientImpl.ExecuteFetch(uq, maxrows)
+}
+
+func (dcr *dbClientImplWithSidecarDBReplacement) ExecuteFetchMulti(query string, maxrows int) ([]*sqltypes.Result, error) {
+	// Replace any provided sidecar database qualifiers with the correct one.
+	qps, err := dcr.parser.SplitStatementToPieces(query)
+	if err != nil {
+		return nil, err
+	}
+	for i, qp := range qps {
+		uq, err := dcr.parser.ReplaceTableQualifiers(qp, sidecar.DefaultName, sidecar.GetName())
+		if err != nil {
+			return nil, err
+		}
+		qps[i] = uq
+	}
+
+	return dcr.dbClientImpl.ExecuteFetchMulti(strings.Join(qps, ";"), maxrows)
 }

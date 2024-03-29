@@ -44,18 +44,18 @@ type Tokenizer struct {
 	multi          bool
 	specialComment *Tokenizer
 
-	Pos int
-	buf string
+	Pos    int
+	buf    string
+	parser *Parser
 }
 
 // NewStringTokenizer creates a new Tokenizer for the
 // sql string.
-func NewStringTokenizer(sql string) *Tokenizer {
-	checkParserVersionFlag()
-
+func (p *Parser) NewStringTokenizer(sql string) *Tokenizer {
 	return &Tokenizer{
 		buf:      sql,
 		BindVars: make(map[string]struct{}),
+		parser:   p,
 	}
 }
 
@@ -680,9 +680,9 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, string) {
 
 	commentVersion, sql := ExtractMysqlComment(tkn.buf[start:tkn.Pos])
 
-	if mySQLParserVersion >= commentVersion {
+	if tkn.parser.version >= commentVersion {
 		// Only add the special comment to the tokenizer if the version of MySQL is higher or equal to the comment version
-		tkn.specialComment = NewStringTokenizer(sql)
+		tkn.specialComment = tkn.parser.NewStringTokenizer(sql)
 	}
 
 	return tkn.Scan()

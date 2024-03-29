@@ -1,5 +1,5 @@
 /*
-Copyright 2021 The Vitess Authors.
+Copyright 2022 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ The operators go through a few phases while planning:
 	All the post-processing - aggregations, sorting, limit etc. are at this stage
 	contained in Horizon structs. We try to push these down under routes, and expand
 	the ones that can't be pushed down into individual operators such as Projection,
-	Agreggation, Limit, etc.
+	Aggregation, Limit, etc.
 2.	Planning
 	Once the initial plan has been fully built, we go through a number of phases.
 	recursively running rewriters on the tree in a fixed point fashion, until we've gone
@@ -36,138 +36,61 @@ The operators go through a few phases while planning:
 package operators
 
 import (
-	"fmt"
-
-	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 type (
-	// helper type that implements Inputs() returning nil
-	noInputs struct{}
+	// Operator forms the tree of operators, representing the declarative query provided.
+	// The operator tree is no actually runnable, it's an intermediate representation used
+	// while query planning
+	// The mental model are operators that pull data from each other, the root being the
+	// full query output, and the leaves are most often `Route`s, representing communication
+	// with one or more shards. We want to push down as much work as possible under these Routes
+	Operator interface {
+		// Clone will return a copy of this operator, protected so changed to the original will not impact the clone
+		Clone(inputs []Operator) Operator
 
-	// helper type that implements AddColumn() returning an error
-	noColumns struct{}
+		// Inputs returns the inputs for this operator
+		Inputs() []Operator
 
-	// helper type that implements AddPredicate() returning an error
-	noPredicates struct{}
+		// SetInputs changes the inputs for this op
+		SetInputs([]Operator)
+
+		// AddPredicate is used to push predicates. It pushed it as far down as is possible in the tree.
+		// If we encounter a join and the predicate depends on both sides of the join, the predicate will be split into two parts,
+		// where data is fetched from the LHS of the join to be used in the evaluation on the RHS
+		// TODO: we should remove this and replace it with rewriters
+		AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator
+
+		AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, expr *sqlparser.AliasedExpr) int
+
+		FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int
+
+		GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr
+		GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs
+
+		ShortDescription() string
+
+		GetOrdering(ctx *plancontext.PlanningContext) []OrderBy
+	}
+
+	// OrderBy contains the expression to used in order by and also if ordering is needed at VTGate level then what the weight_string function expression to be sent down for evaluation.
+	OrderBy struct {
+		Inner *sqlparser.Order
+
+		// See GroupBy#SimplifiedExpr for more details about this
+		SimplifiedExpr sqlparser.Expr
+	}
 )
 
-// PlanQuery creates a query plan for a given SQL statement
-func PlanQuery(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (result ops.Operator, err error) {
-	defer PanicHandler(&err)
-
-	op, err := translateQueryToOp(ctx, stmt)
-	if err != nil {
-		return nil, err
+// Map takes in a mapping function and applies it to both the expression in OrderBy.
+func (ob OrderBy) Map(mappingFunc func(sqlparser.Expr) sqlparser.Expr) OrderBy {
+	return OrderBy{
+		Inner: &sqlparser.Order{
+			Expr:      mappingFunc(ob.Inner.Expr),
+			Direction: ob.Inner.Direction,
+		},
+		SimplifiedExpr: mappingFunc(ob.SimplifiedExpr),
 	}
-
-	if rewrite.DebugOperatorTree {
-		fmt.Println("Initial tree:")
-		fmt.Println(ops.ToTree(op))
-	}
-
-	if op, err = compact(ctx, op); err != nil {
-		return nil, err
-	}
-
-	if err = checkValid(op); err != nil {
-		return nil, err
-	}
-
-	if op, err = planQuery(ctx, op); err != nil {
-		return nil, err
-	}
-
-	_, isRoute := op.(*Route)
-	if !isRoute && ctx.SemTable.NotSingleRouteErr != nil {
-		// If we got here, we don't have a single shard plan
-		return nil, ctx.SemTable.NotSingleRouteErr
-	}
-
-	return op, err
-}
-
-func PanicHandler(err *error) {
-	if r := recover(); r != nil {
-		badness, ok := r.(error)
-		if !ok {
-			panic(r)
-		}
-
-		*err = badness
-	}
-}
-
-// Inputs implements the Operator interface
-func (noInputs) Inputs() []ops.Operator {
-	return nil
-}
-
-// SetInputs implements the Operator interface
-func (noInputs) SetInputs(ops []ops.Operator) {
-	if len(ops) > 0 {
-		panic("the noInputs operator does not have inputs")
-	}
-}
-
-// AddColumn implements the Operator interface
-func (noColumns) AddColumn(*plancontext.PlanningContext, bool, bool, *sqlparser.AliasedExpr) int {
-	panic(vterrors.VT13001("noColumns operators have no column"))
-}
-
-func (noColumns) GetColumns(*plancontext.PlanningContext) []*sqlparser.AliasedExpr {
-	panic(vterrors.VT13001("noColumns operators have no column"))
-}
-
-func (noColumns) FindCol(*plancontext.PlanningContext, sqlparser.Expr, bool) int {
-	panic(vterrors.VT13001("noColumns operators have no column"))
-}
-
-func (noColumns) GetSelectExprs(*plancontext.PlanningContext) sqlparser.SelectExprs {
-	panic(vterrors.VT13001("noColumns operators have no column"))
-}
-
-// AddPredicate implements the Operator interface
-func (noPredicates) AddPredicate(*plancontext.PlanningContext, sqlparser.Expr) ops.Operator {
-	panic(vterrors.VT13001("the noColumns operator cannot accept predicates"))
-}
-
-// tryTruncateColumnsAt will see if we can truncate the columns by just asking the operator to do it for us
-func tryTruncateColumnsAt(op ops.Operator, truncateAt int) bool {
-	type columnTruncator interface {
-		setTruncateColumnCount(offset int)
-	}
-
-	truncator, ok := op.(columnTruncator)
-	if ok {
-		truncator.setTruncateColumnCount(truncateAt)
-		return true
-	}
-
-	switch op := op.(type) {
-	case *Limit:
-		return tryTruncateColumnsAt(op.Source, truncateAt)
-	case *SubQuery:
-		for _, offset := range op.Vars {
-			if offset >= truncateAt {
-				return false
-			}
-		}
-		return tryTruncateColumnsAt(op.Outer, truncateAt)
-	default:
-		return false
-	}
-}
-
-func transformColumnsToSelectExprs(ctx *plancontext.PlanningContext, op ops.Operator) sqlparser.SelectExprs {
-	columns := op.GetColumns(ctx)
-	selExprs := slice.Map(columns, func(from *sqlparser.AliasedExpr) sqlparser.SelectExpr {
-		return from
-	})
-	return selExprs
 }

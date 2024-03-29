@@ -234,7 +234,7 @@ func deleteTablet(t *testing.T, tablet *cluster.Vttablet) {
 	}(tablet)
 	wg.Wait()
 
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", tablet.Alias)
+	err := clusterInstance.VtctldClientProcess.ExecuteCommand("DeleteTablets", tablet.Alias)
 	require.Nil(t, err)
 
 	t.Logf("Deleted tablet: %s", tablet.Alias)

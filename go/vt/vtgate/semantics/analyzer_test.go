@@ -24,12 +24,11 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-var T0 TableSet
+var NoTables TableSet
 
 var (
 	// Just here to make outputs more readable
@@ -121,7 +120,7 @@ func TestBindingSingleTableNegative(t *testing.T) {
 	}
 	for _, query := range queries {
 		t.Run(query, func(t *testing.T) {
-			parse, err := sqlparser.Parse(query)
+			parse, err := sqlparser.NewTestParser().Parse(query)
 			require.NoError(t, err)
 			st, err := Analyze(parse, "d", &FakeSI{})
 			require.NoError(t, err)
@@ -141,7 +140,7 @@ func TestBindingSingleAliasedTableNegative(t *testing.T) {
 	}
 	for _, query := range queries {
 		t.Run(query, func(t *testing.T) {
-			parse, err := sqlparser.Parse(query)
+			parse, err := sqlparser.NewTestParser().Parse(query)
 			require.NoError(t, err)
 			st, err := Analyze(parse, "", &FakeSI{
 				Tables: map[string]*vindexes.Table{
@@ -180,14 +179,6 @@ func TestBindingMultiTablePositive(t *testing.T) {
 		query:          "select case t.col when s.col then r.col else u.col end from t, s, r, w, u",
 		deps:           MergeTableSets(TS0, TS1, TS2, TS4),
 		numberOfTables: 4,
-		// }, {
-		// TODO: move to subquery
-		// make sure that we don't let sub-query dependencies leak out by mistake
-		// query: "select t.col + (select 42 from s) from t",
-		// deps:  TS0,
-		// }, {
-		// 	query: "select (select 42 from s where r.id = s.id) from r",
-		// 	deps:  TS0 | TS1,
 	}, {
 		query:          "select u1.a + u2.a from u1, u2",
 		deps:           MergeTableSets(TS0, TS1),
@@ -247,7 +238,7 @@ func TestBindingMultiTableNegative(t *testing.T) {
 	}
 	for _, query := range queries {
 		t.Run(query, func(t *testing.T) {
-			parse, err := sqlparser.Parse(query)
+			parse, err := sqlparser.NewTestParser().Parse(query)
 			require.NoError(t, err)
 			_, err = Analyze(parse, "d", &FakeSI{
 				Tables: map[string]*vindexes.Table{
@@ -271,7 +262,7 @@ func TestBindingMultiAliasedTableNegative(t *testing.T) {
 	}
 	for _, query := range queries {
 		t.Run(query, func(t *testing.T) {
-			parse, err := sqlparser.Parse(query)
+			parse, err := sqlparser.NewTestParser().Parse(query)
 			require.NoError(t, err)
 			_, err = Analyze(parse, "d", &FakeSI{
 				Tables: map[string]*vindexes.Table{
@@ -280,6 +271,27 @@ func TestBindingMultiAliasedTableNegative(t *testing.T) {
 				},
 			})
 			require.Error(t, err)
+		})
+	}
+}
+
+func TestBindingDelete(t *testing.T) {
+	queries := []string{
+		"delete tbl from tbl",
+		"delete from tbl",
+		"delete t1 from t1, t2",
+	}
+	for _, query := range queries {
+		t.Run(query, func(t *testing.T) {
+			stmt, semTable := parseAndAnalyze(t, query, "d")
+			del := stmt.(*sqlparser.Delete)
+			t1 := del.TableExprs[0].(*sqlparser.AliasedTableExpr)
+			ts := semTable.TableSetFor(t1)
+			assert.Equal(t, SingleTableSet(0), ts)
+
+			actualTs, err := semTable.GetTargetTableSetForTableName(del.Targets[0])
+			require.NoError(t, err)
+			assert.Equal(t, ts, actualTs)
 		})
 	}
 }
@@ -294,7 +306,7 @@ func TestNotUniqueTableName(t *testing.T) {
 
 	for _, query := range queries {
 		t.Run(query, func(t *testing.T) {
-			parse, _ := sqlparser.Parse(query)
+			parse, _ := sqlparser.NewTestParser().Parse(query)
 			_, err := Analyze(parse, "test", &FakeSI{})
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "VT03013: not unique table/alias")
@@ -309,7 +321,7 @@ func TestMissingTable(t *testing.T) {
 
 	for _, query := range queries {
 		t.Run(query, func(t *testing.T) {
-			parse, _ := sqlparser.Parse(query)
+			parse, _ := sqlparser.NewTestParser().Parse(query)
 			st, err := Analyze(parse, "", &FakeSI{})
 			require.NoError(t, err)
 			require.ErrorContains(t, st.NotUnshardedErr, "column 't.col' not found")
@@ -397,7 +409,7 @@ func TestUnknownColumnMap2(t *testing.T) {
 	queries := []string{"select col from a, b", "select col from a as user, b as extra"}
 	for _, query := range queries {
 		t.Run(query, func(t *testing.T) {
-			parse, _ := sqlparser.Parse(query)
+			parse, _ := sqlparser.NewTestParser().Parse(query)
 			expr := extract(parse.(*sqlparser.Select), 0)
 
 			for _, test := range tests {
@@ -411,7 +423,7 @@ func TestUnknownColumnMap2(t *testing.T) {
 						require.NoError(t, tbl.NotSingleRouteErr)
 						typ, found := tbl.TypeForExpr(expr)
 						assert.True(t, found)
-						assert.Equal(t, test.typ, typ.Type)
+						assert.Equal(t, test.typ, typ.Type())
 					}
 				})
 			}
@@ -428,7 +440,7 @@ func TestUnknownPredicate(t *testing.T) {
 		Name: sqlparser.NewIdentifierCS("b"),
 	}
 
-	parse, _ := sqlparser.Parse(query)
+	parse, _ := sqlparser.NewTestParser().Parse(query)
 
 	tests := []struct {
 		name   string
@@ -466,7 +478,7 @@ func TestScoping(t *testing.T) {
 	}
 	for _, query := range queries {
 		t.Run(query.query, func(t *testing.T) {
-			parse, err := sqlparser.Parse(query.query)
+			parse, err := sqlparser.NewTestParser().Parse(query.query)
 			require.NoError(t, err)
 			st, err := Analyze(parse, "user", &FakeSI{
 				Tables: map[string]*vindexes.Table{
@@ -546,7 +558,7 @@ func TestSubqueryOrderByBinding(t *testing.T) {
 
 	for _, tc := range queries {
 		t.Run(tc.query, func(t *testing.T) {
-			ast, err := sqlparser.Parse(tc.query)
+			ast, err := sqlparser.NewTestParser().Parse(tc.query)
 			require.NoError(t, err)
 
 			sel := ast.(*sqlparser.Select)
@@ -587,7 +599,7 @@ func TestOrderByBindingTable(t *testing.T) {
 		TS0,
 	}, {
 		"select 1 as c from tabl order by c",
-		T0,
+		NoTables,
 	}, {
 		"select name, name from t1, t2 order by name",
 		TS1,
@@ -612,6 +624,9 @@ func TestOrderByBindingTable(t *testing.T) {
 	}, {
 		"select a.id from t1 as a union (select uid from t2, t union (select name from t) order by 1) order by id",
 		MergeTableSets(TS0, TS1, TS3),
+	}, {
+		"select * from (SELECT c1, c2 FROM a UNION SELECT c1, c2 FROM b) AS u ORDER BY u.c1",
+		MergeTableSets(TS0, TS1),
 	}}
 	for _, tc := range tcases {
 		t.Run(tc.sql, func(t *testing.T) {
@@ -628,6 +643,37 @@ func TestOrderByBindingTable(t *testing.T) {
 			}
 			d := semTable.RecursiveDeps(order)
 			require.Equal(t, tc.deps, d, tc.sql)
+		})
+	}
+}
+
+func TestVindexHints(t *testing.T) {
+	// tests that vindex hints point to existing vindexes, or an error should be returned
+	tcases := []struct {
+		sql         string
+		expectedErr string
+	}{{
+		sql:         "select col from t1 use vindex (does_not_exist)",
+		expectedErr: "Vindex 'does_not_exist' does not exist in table 'ks2.t1'",
+	}, {
+		sql:         "select col from t1 ignore vindex (does_not_exist)",
+		expectedErr: "Vindex 'does_not_exist' does not exist in table 'ks2.t1'",
+	}, {
+		sql: "select id from t1 use vindex (id_vindex)",
+	}, {
+		sql: "select id from t1 ignore vindex (id_vindex)",
+	}}
+	for _, tc := range tcases {
+		t.Run(tc.sql, func(t *testing.T) {
+			parse, err := sqlparser.NewTestParser().Parse(tc.sql)
+			require.NoError(t, err)
+
+			_, err = AnalyzeStrict(parse, "d", fakeSchemaInfo())
+			if tc.expectedErr == "" {
+				require.NoError(t, err)
+			} else {
+				require.ErrorContains(t, err, tc.expectedErr)
+			}
 		})
 	}
 }
@@ -665,7 +711,7 @@ func TestGroupByBinding(t *testing.T) {
 		TS0,
 	}, {
 		"select 1 as c from tabl group by c",
-		T0,
+		NoTables,
 	}, {
 		"select t1.id from t1, t2 group by id",
 		TS0,
@@ -677,7 +723,10 @@ func TestGroupByBinding(t *testing.T) {
 		TS1,
 	}, {
 		"select a.id from t as a, t1 group by id",
-		TS0,
+		// since we have authoritative info on t1, we know that it does have an `id` column,
+		// and we are missing column info for `t`, we just assume this is coming from t1.
+		// we really need schema tracking here
+		TS1,
 	}, {
 		"select a.id from t, t1 as a group by id",
 		TS1,
@@ -695,44 +744,47 @@ func TestGroupByBinding(t *testing.T) {
 
 func TestHavingBinding(t *testing.T) {
 	tcases := []struct {
-		sql  string
-		deps TableSet
+		sql, err string
+		deps     TableSet
 	}{{
-		"select col from tabl having col = 1",
-		TS0,
+		sql:  "select col from tabl having col = 1",
+		deps: TS0,
 	}, {
-		"select col from tabl having tabl.col = 1",
-		TS0,
+		sql:  "select col from tabl having tabl.col = 1",
+		deps: TS0,
 	}, {
-		"select col from tabl having d.tabl.col = 1",
-		TS0,
+		sql:  "select col from tabl having d.tabl.col = 1",
+		deps: TS0,
 	}, {
-		"select tabl.col as x from tabl having x = 1",
-		TS0,
+		sql:  "select tabl.col as x from tabl having col = 1",
+		deps: TS0,
 	}, {
-		"select tabl.col as x from tabl having col",
-		TS0,
+		sql:  "select tabl.col as x from tabl having x = 1",
+		deps: TS0,
 	}, {
-		"select col from tabl having 1 = 1",
-		T0,
+		sql:  "select tabl.col as x from tabl having col",
+		deps: TS0,
 	}, {
-		"select col as c from tabl having c = 1",
-		TS0,
+		sql:  "select col from tabl having 1 = 1",
+		deps: NoTables,
 	}, {
-		"select 1 as c from tabl having c = 1",
-		T0,
+		sql:  "select col as c from tabl having c = 1",
+		deps: TS0,
 	}, {
-		"select t1.id from t1, t2 having id = 1",
-		TS0,
+		sql:  "select 1 as c from tabl having c = 1",
+		deps: NoTables,
 	}, {
-		"select t.id from t, t1 having id = 1",
-		TS0,
+		sql:  "select t1.id from t1, t2 having id = 1",
+		deps: TS0,
 	}, {
-		"select t.id, count(*) as a from t, t1 group by t.id having a = 1",
-		MergeTableSets(TS0, TS1),
+		sql:  "select t.id from t, t1 having id = 1",
+		deps: TS0,
 	}, {
-		"select t.id, sum(t2.name) as a from t, t2 group by t.id having a = 1",
-		TS1,
+		sql:  "select t.id, count(*) as a from t, t1 group by t.id having a = 1",
+		deps: MergeTableSets(TS0, TS1),
+	}, {
+		sql:  "select t.id, sum(t2.name) as a from t, t2 group by t.id having a = 1",
+		deps: TS1,
 	}, {
 		sql:  "select u2.a, u1.a from u1, u2 having u2.a = 2",
 		deps: TS1,
@@ -835,11 +887,20 @@ func TestInvalidQueries(t *testing.T) {
 	}, {
 		sql:  "select 1 from t1 where (id, id) in (select 1, 2, 3)",
 		serr: "Operand should contain 2 column(s)",
+	}, {
+		sql:  "WITH RECURSIVE cte (n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM cte WHERE n < 5) SELECT * FROM cte",
+		serr: "VT12001: unsupported: recursive common table expression",
+	}, {
+		sql:  "with x as (select 1), x as (select 1) select * from x",
+		serr: "VT03013: not unique table/alias: 'x'",
+	}, {
+		// should not fail, same name is valid as long as it's not in the same scope
+		sql: "with x as (with x as (select 1) select * from x) select * from x",
 	}}
 
 	for _, tc := range tcases {
 		t.Run(tc.sql, func(t *testing.T) {
-			parse, err := sqlparser.Parse(tc.sql)
+			parse, err := sqlparser.NewTestParser().Parse(tc.sql)
 			require.NoError(t, err)
 
 			st, err := Analyze(parse, "dbName", fakeSchemaInfo())
@@ -878,87 +939,86 @@ func TestUnionWithOrderBy(t *testing.T) {
 	assert.Equal(t, TS1, d2)
 }
 
-func TestScopingWDerivedTables(t *testing.T) {
+func TestScopingWithWITH(t *testing.T) {
 	queries := []struct {
-		query                string
-		errorMessage         string
-		recursiveExpectation TableSet
-		expectation          TableSet
+		query             string
+		errorMessage      string
+		recursive, direct TableSet
 	}{
 		{
-			query:                "select id from (select x as id from user) as t",
-			recursiveExpectation: TS0,
-			expectation:          TS1,
+			query:     "with t as (select x as id from user) select id from t",
+			recursive: TS0,
+			direct:    TS1,
 		}, {
-			query:                "select id from (select foo as id from user) as t",
-			recursiveExpectation: TS0,
-			expectation:          TS1,
+			query:     "with t as (select foo as id from user) select id from t",
+			recursive: TS0,
+			direct:    TS1,
 		}, {
-			query:                "select id from (select foo as id from (select x as foo from user) as c) as t",
-			recursiveExpectation: TS0,
-			expectation:          TS2,
+			query:     "with c as (select x as foo from user), t as (select foo as id from c) select id from t",
+			recursive: TS0,
+			direct:    TS3,
 		}, {
-			query:                "select t.id from (select foo as id from user) as t",
-			recursiveExpectation: TS0,
-			expectation:          TS1,
+			query:     "with t as (select foo as id from user) select t.id from t",
+			recursive: TS0,
+			direct:    TS1,
 		}, {
 			query:        "select t.id2 from (select foo as id from user) as t",
 			errorMessage: "column 't.id2' not found",
 		}, {
-			query:                "select id from (select 42 as id) as t",
-			recursiveExpectation: T0,
-			expectation:          TS1,
+			query:     "with t as (select 42 as id) select id from t",
+			recursive: NoTables,
+			direct:    TS1,
 		}, {
-			query:                "select t.id from (select 42 as id) as t",
-			recursiveExpectation: T0,
-			expectation:          TS1,
+			query:     "with t as (select 42 as id) select t.id from t",
+			recursive: NoTables,
+			direct:    TS1,
 		}, {
-			query:        "select ks.t.id from (select 42 as id) as t",
+			query:        "with t as (select 42 as id) select ks.t.id from t",
 			errorMessage: "column 'ks.t.id' not found",
 		}, {
-			query:        "select * from (select id, id from user) as t",
+			query:        "with t as (select id, id from user)  select * from t",
 			errorMessage: "Duplicate column name 'id'",
 		}, {
-			query:                "select t.baz = 1 from (select id as baz from user) as t",
-			expectation:          TS1,
-			recursiveExpectation: TS0,
+			query:     "with t as (select id as baz from user) select t.baz = 1 from t",
+			direct:    TS1,
+			recursive: TS0,
 		}, {
-			query:                "select t.id from (select * from user, music) as t",
-			expectation:          TS2,
-			recursiveExpectation: MergeTableSets(TS0, TS1),
+			query:     "with t as (select * from user, music) select t.id from  t",
+			direct:    TS2,
+			recursive: MergeTableSets(TS0, TS1),
 		}, {
-			query:                "select t.id from (select * from user, music) as t order by t.id",
-			expectation:          TS2,
-			recursiveExpectation: MergeTableSets(TS0, TS1),
+			query:     "with t as (select * from user, music) select t.id from t order by t.id",
+			direct:    TS2,
+			recursive: MergeTableSets(TS0, TS1),
 		}, {
-			query:                "select t.id from (select * from user) as t join user as u on t.id = u.id",
-			expectation:          TS1,
-			recursiveExpectation: TS0,
+			query:     "with t as (select * from user) select t.id from t join user as u on t.id = u.id",
+			direct:    TS2,
+			recursive: TS0,
 		}, {
-			query:                "select t.col1 from t3 ua join (select t1.id, t1.col1 from t1 join t2) as t",
-			expectation:          TS3,
-			recursiveExpectation: TS1,
+			query:     "with t as (select t1.id, t1.col1 from t1 join t2) select t.col1 from t3 ua join t",
+			direct:    TS3,
+			recursive: TS0,
 		}, {
-			query:        "select uu.test from (select id from t1) uu",
+			query:        "with uu as (select id from t1) select uu.test from uu",
 			errorMessage: "column 'uu.test' not found",
 		}, {
-			query:        "select uu.id from (select id as col from t1) uu",
+			query:        "with uu as (select id as col from t1) select uu.id from uu",
 			errorMessage: "column 'uu.id' not found",
 		}, {
 			query:        "select uu.id from (select id as col from t1) uu",
 			errorMessage: "column 'uu.id' not found",
 		}, {
-			query:                "select uu.id from (select id from t1) as uu where exists (select * from t2 as uu where uu.id = uu.uid)",
-			expectation:          TS1,
-			recursiveExpectation: TS0,
+			query:     "select uu.id from (select id from t1) as uu where exists (select * from t2 as uu where uu.id = uu.uid)",
+			direct:    TS2,
+			recursive: TS0,
 		}, {
-			query:                "select 1 from user uu where exists (select 1 from user where exists (select 1 from (select 1 from t1) uu where uu.user_id = uu.id))",
-			expectation:          T0,
-			recursiveExpectation: T0,
+			query:     "select 1 from user uu where exists (select 1 from user where exists (select 1 from (select 1 from t1) uu where uu.user_id = uu.id))",
+			direct:    NoTables,
+			recursive: NoTables,
 		}}
 	for _, query := range queries {
 		t.Run(query.query, func(t *testing.T) {
-			parse, err := sqlparser.Parse(query.query)
+			parse, err := sqlparser.NewTestParser().Parse(query.query)
 			require.NoError(t, err)
 			st, err := Analyze(parse, "user", &FakeSI{
 				Tables: map[string]*vindexes.Table{
@@ -974,8 +1034,8 @@ func TestScopingWDerivedTables(t *testing.T) {
 			default:
 				require.NoError(t, err)
 				sel := parse.(*sqlparser.Select)
-				assert.Equal(t, query.recursiveExpectation, st.RecursiveDeps(extract(sel, 0)), "RecursiveDeps")
-				assert.Equal(t, query.expectation, st.DirectDeps(extract(sel, 0)), "DirectDeps")
+				assert.Equal(t, query.recursive, st.RecursiveDeps(extract(sel, 0)), "RecursiveDeps")
+				assert.Equal(t, query.direct, st.DirectDeps(extract(sel, 0)), "DirectDeps")
 			}
 		})
 	}
@@ -996,20 +1056,20 @@ func TestJoinPredicateDependencies(t *testing.T) {
 		directExpect:    MergeTableSets(TS0, TS1),
 	}, {
 		query:           "select 1 from (select * from t1) x join t2 on x.id = t2.uid",
-		recursiveExpect: MergeTableSets(TS0, TS2),
+		recursiveExpect: MergeTableSets(TS0, TS1),
 		directExpect:    MergeTableSets(TS1, TS2),
 	}, {
 		query:           "select 1 from (select id from t1) x join t2 on x.id = t2.uid",
-		recursiveExpect: MergeTableSets(TS0, TS2),
+		recursiveExpect: MergeTableSets(TS0, TS1),
 		directExpect:    MergeTableSets(TS1, TS2),
 	}, {
 		query:           "select 1 from (select id from t1 union select id from t) x join t2 on x.id = t2.uid",
-		recursiveExpect: MergeTableSets(TS0, TS1, TS3),
+		recursiveExpect: MergeTableSets(TS0, TS1, TS2),
 		directExpect:    MergeTableSets(TS2, TS3),
 	}}
 	for _, query := range queries {
 		t.Run(query.query, func(t *testing.T) {
-			parse, err := sqlparser.Parse(query.query)
+			parse, err := sqlparser.NewTestParser().Parse(query.query)
 			require.NoError(t, err)
 
 			st, err := Analyze(parse, "user", fakeSchemaInfo())
@@ -1019,107 +1079,6 @@ func TestJoinPredicateDependencies(t *testing.T) {
 			expr := sel.From[0].(*sqlparser.JoinTableExpr).Condition.On
 			assert.Equal(t, query.recursiveExpect, st.RecursiveDeps(expr), "RecursiveDeps")
 			assert.Equal(t, query.directExpect, st.DirectDeps(expr), "DirectDeps")
-		})
-	}
-}
-
-func TestDerivedTablesOrderClause(t *testing.T) {
-	queries := []struct {
-		query                string
-		recursiveExpectation TableSet
-		expectation          TableSet
-	}{{
-		query:                "select 1 from (select id from user) as t order by id",
-		recursiveExpectation: TS0,
-		expectation:          TS1,
-	}, {
-		query:                "select id from (select id from user) as t order by id",
-		recursiveExpectation: TS0,
-		expectation:          TS1,
-	}, {
-		query:                "select id from (select id from user) as t order by t.id",
-		recursiveExpectation: TS0,
-		expectation:          TS1,
-	}, {
-		query:                "select id as foo from (select id from user) as t order by foo",
-		recursiveExpectation: TS0,
-		expectation:          TS1,
-	}, {
-		query:                "select bar from (select id as bar from user) as t order by bar",
-		recursiveExpectation: TS0,
-		expectation:          TS1,
-	}, {
-		query:                "select bar as foo from (select id as bar from user) as t order by bar",
-		recursiveExpectation: TS0,
-		expectation:          TS1,
-	}, {
-		query:                "select bar as foo from (select id as bar from user) as t order by foo",
-		recursiveExpectation: TS0,
-		expectation:          TS1,
-	}, {
-		query:                "select bar as foo from (select id as bar, oo from user) as t order by oo",
-		recursiveExpectation: TS0,
-		expectation:          TS1,
-	}, {
-		query:                "select bar as foo from (select id, oo from user) as t(bar,oo) order by bar",
-		recursiveExpectation: TS0,
-		expectation:          TS1,
-	}}
-	si := &FakeSI{Tables: map[string]*vindexes.Table{"t": {Name: sqlparser.NewIdentifierCS("t")}}}
-	for _, query := range queries {
-		t.Run(query.query, func(t *testing.T) {
-			parse, err := sqlparser.Parse(query.query)
-			require.NoError(t, err)
-
-			st, err := Analyze(parse, "user", si)
-			require.NoError(t, err)
-
-			sel := parse.(*sqlparser.Select)
-			assert.Equal(t, query.recursiveExpectation, st.RecursiveDeps(sel.OrderBy[0].Expr), "RecursiveDeps")
-			assert.Equal(t, query.expectation, st.DirectDeps(sel.OrderBy[0].Expr), "DirectDeps")
-
-		})
-	}
-}
-
-func TestScopingWComplexDerivedTables(t *testing.T) {
-	queries := []struct {
-		query            string
-		errorMessage     string
-		rightExpectation TableSet
-		leftExpectation  TableSet
-	}{
-		{
-			query:            "select 1 from user uu where exists (select 1 from user where exists (select 1 from (select 1 from t1) uu where uu.user_id = uu.id))",
-			rightExpectation: TS0,
-			leftExpectation:  TS0,
-		},
-		{
-			query:            "select 1 from user.user uu where exists (select 1 from user.user as uu where exists (select 1 from (select 1 from user.t1) uu where uu.user_id = uu.id))",
-			rightExpectation: TS1,
-			leftExpectation:  TS1,
-		},
-	}
-	for _, query := range queries {
-		t.Run(query.query, func(t *testing.T) {
-			parse, err := sqlparser.Parse(query.query)
-			require.NoError(t, err)
-			st, err := Analyze(parse, "user", &FakeSI{
-				Tables: map[string]*vindexes.Table{
-					"t": {Name: sqlparser.NewIdentifierCS("t")},
-				},
-			})
-			if query.errorMessage != "" {
-				require.EqualError(t, err, query.errorMessage)
-			} else {
-				require.NoError(t, err)
-				sel := parse.(*sqlparser.Select)
-				comparisonExpr := sel.Where.Expr.(*sqlparser.ExistsExpr).Subquery.Select.(*sqlparser.Select).Where.Expr.(*sqlparser.ExistsExpr).Subquery.Select.(*sqlparser.Select).Where.Expr.(*sqlparser.ComparisonExpr)
-				left := comparisonExpr.Left
-				right := comparisonExpr.Right
-				assert.Equal(t, query.leftExpectation, st.RecursiveDeps(left), "Left RecursiveDeps")
-				assert.Equal(t, query.rightExpectation, st.RecursiveDeps(right), "Right RecursiveDeps")
-			}
 		})
 	}
 }
@@ -1143,7 +1102,7 @@ func TestScopingWVindexTables(t *testing.T) {
 	}
 	for _, query := range queries {
 		t.Run(query.query, func(t *testing.T) {
-			parse, err := sqlparser.Parse(query.query)
+			parse, err := sqlparser.NewTestParser().Parse(query.query)
 			require.NoError(t, err)
 			hash, _ := vindexes.CreateVindex("hash", "user_index", nil)
 			st, err := Analyze(parse, "user", &FakeSI{
@@ -1185,7 +1144,7 @@ func BenchmarkAnalyzeMultipleDifferentQueries(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		for _, query := range queries {
-			parse, err := sqlparser.Parse(query)
+			parse, err := sqlparser.NewTestParser().Parse(query)
 			require.NoError(b, err)
 
 			_, _ = Analyze(parse, "d", fakeSchemaInfo())
@@ -1209,7 +1168,7 @@ func BenchmarkAnalyzeUnionQueries(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		for _, query := range queries {
-			parse, err := sqlparser.Parse(query)
+			parse, err := sqlparser.NewTestParser().Parse(query)
 			require.NoError(b, err)
 
 			_, _ = Analyze(parse, "d", fakeSchemaInfo())
@@ -1235,37 +1194,7 @@ func BenchmarkAnalyzeSubQueries(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		for _, query := range queries {
-			parse, err := sqlparser.Parse(query)
-			require.NoError(b, err)
-
-			_, _ = Analyze(parse, "d", fakeSchemaInfo())
-		}
-	}
-}
-
-func BenchmarkAnalyzeDerivedTableQueries(b *testing.B) {
-	queries := []string{
-		"select id from (select x as id from user) as t",
-		"select id from (select foo as id from user) as t",
-		"select id from (select foo as id from (select x as foo from user) as c) as t",
-		"select t.id from (select foo as id from user) as t",
-		"select t.id2 from (select foo as id from user) as t",
-		"select id from (select 42 as id) as t",
-		"select t.id from (select 42 as id) as t",
-		"select ks.t.id from (select 42 as id) as t",
-		"select * from (select id, id from user) as t",
-		"select t.baz = 1 from (select id as baz from user) as t",
-		"select t.id from (select * from user, music) as t",
-		"select t.id from (select * from user, music) as t order by t.id",
-		"select t.id from (select * from user) as t join user as u on t.id = u.id",
-		"select t.col1 from t3 ua join (select t1.id, t1.col1 from t1 join t2) as t",
-		"select uu.id from (select id from t1) as uu where exists (select * from t2 as uu where uu.id = uu.uid)",
-		"select 1 from user uu where exists (select 1 from user where exists (select 1 from (select 1 from t1) uu where uu.user_id = uu.id))",
-	}
-
-	for i := 0; i < b.N; i++ {
-		for _, query := range queries {
-			parse, err := sqlparser.Parse(query)
+			parse, err := sqlparser.NewTestParser().Parse(query)
 			require.NoError(b, err)
 
 			_, _ = Analyze(parse, "d", fakeSchemaInfo())
@@ -1291,7 +1220,7 @@ func BenchmarkAnalyzeHavingQueries(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		for _, query := range queries {
-			parse, err := sqlparser.Parse(query)
+			parse, err := sqlparser.NewTestParser().Parse(query)
 			require.NoError(b, err)
 
 			_, _ = Analyze(parse, "d", fakeSchemaInfo())
@@ -1320,7 +1249,7 @@ func BenchmarkAnalyzeGroupByQueries(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		for _, query := range queries {
-			parse, err := sqlparser.Parse(query)
+			parse, err := sqlparser.NewTestParser().Parse(query)
 			require.NoError(b, err)
 
 			_, _ = Analyze(parse, "d", fakeSchemaInfo())
@@ -1343,7 +1272,7 @@ func BenchmarkAnalyzeOrderByQueries(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		for _, query := range queries {
-			parse, err := sqlparser.Parse(query)
+			parse, err := sqlparser.NewTestParser().Parse(query)
 			require.NoError(b, err)
 
 			_, _ = Analyze(parse, "d", fakeSchemaInfo())
@@ -1353,7 +1282,7 @@ func BenchmarkAnalyzeOrderByQueries(b *testing.B) {
 
 func parseAndAnalyze(t *testing.T, query, dbName string) (sqlparser.Statement, *SemTable) {
 	t.Helper()
-	parse, err := sqlparser.Parse(query)
+	parse, err := sqlparser.NewTestParser().Parse(query)
 	require.NoError(t, err)
 
 	semTable, err := Analyze(parse, dbName, fakeSchemaInfo())
@@ -1365,43 +1294,30 @@ func TestSingleUnshardedKeyspace(t *testing.T) {
 	tests := []struct {
 		query     string
 		unsharded *vindexes.Keyspace
-		tables    []*vindexes.Table
 	}{
 		{
 			query:     "select 1 from t, t1",
 			unsharded: nil, // both tables are unsharded, but from different keyspaces
-			tables:    nil,
 		}, {
 			query:     "select 1 from t2",
 			unsharded: nil,
-			tables:    nil,
 		}, {
 			query:     "select 1 from t, t2",
 			unsharded: nil,
-			tables:    nil,
 		}, {
 			query:     "select 1 from t as A, t as B",
-			unsharded: ks1,
-			tables: []*vindexes.Table{
-				{Keyspace: ks1, Name: sqlparser.NewIdentifierCS("t")},
-				{Keyspace: ks1, Name: sqlparser.NewIdentifierCS("t")},
-			},
+			unsharded: unsharded,
 		}, {
 			query:     "insert into t select * from t",
-			unsharded: ks1,
-			tables: []*vindexes.Table{
-				{Keyspace: ks1, Name: sqlparser.NewIdentifierCS("t")},
-				{Keyspace: ks1, Name: sqlparser.NewIdentifierCS("t")},
-			},
+			unsharded: unsharded,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
 			_, semTable := parseAndAnalyze(t, test.query, "d")
-			queryIsUnsharded, tables := semTable.SingleUnshardedKeyspace()
+			queryIsUnsharded, _ := semTable.SingleUnshardedKeyspace()
 			assert.Equal(t, test.unsharded, queryIsUnsharded)
-			assert.Equal(t, test.tables, tables)
 		})
 	}
 }
@@ -1424,37 +1340,10 @@ func TestNextErrors(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
-			parse, err := sqlparser.Parse(test.query)
+			parse, err := sqlparser.NewTestParser().Parse(test.query)
 			require.NoError(t, err)
 
 			_, err = Analyze(parse, "d", fakeSchemaInfo())
-			assert.EqualError(t, err, test.expectedError)
-		})
-	}
-}
-
-func TestUpdateErrors(t *testing.T) {
-	tests := []struct {
-		query, expectedError string
-	}{
-		{
-			query:         "update t1, t2 set id = 12",
-			expectedError: "VT12001: unsupported: multiple (2) tables in update",
-		}, {
-			query:         "update (select 1 from dual) dt set id = 1",
-			expectedError: "The target table dt of the UPDATE is not updatable",
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.query, func(t *testing.T) {
-			parse, err := sqlparser.Parse(test.query)
-			require.NoError(t, err)
-
-			st, err := Analyze(parse, "d", fakeSchemaInfo())
-			if err == nil {
-				err = st.NotUnshardedErr
-			}
 			assert.EqualError(t, err, test.expectedError)
 		})
 	}
@@ -1466,7 +1355,7 @@ func TestUpdateErrors(t *testing.T) {
 func TestScopingSubQueryJoinClause(t *testing.T) {
 	query := "select (select 1 from u1 join u2 on u1.id = u2.id and u2.id = u3.id) x from u3"
 
-	parse, err := sqlparser.Parse(query)
+	parse, err := sqlparser.NewTestParser().Parse(query)
 	require.NoError(t, err)
 
 	st, err := Analyze(parse, "user", &FakeSI{
@@ -1482,13 +1371,13 @@ func TestScopingSubQueryJoinClause(t *testing.T) {
 
 }
 
-var ks1 = &vindexes.Keyspace{
-	Name:    "ks1",
+var unsharded = &vindexes.Keyspace{
+	Name:    "unsharded",
 	Sharded: false,
 }
 var ks2 = &vindexes.Keyspace{
 	Name:    "ks2",
-	Sharded: false,
+	Sharded: true,
 }
 var ks3 = &vindexes.Keyspace{
 	Name:    "ks3",
@@ -1499,555 +1388,52 @@ var ks3 = &vindexes.Keyspace{
 // create table t1(id bigint)
 // create table t2(uid bigint, name varchar(255))
 func fakeSchemaInfo() *FakeSI {
-	cols1 := []vindexes.Column{{
-		Name: sqlparser.NewIdentifierCI("id"),
-		Type: querypb.Type_INT64,
-	}}
-	cols2 := []vindexes.Column{{
-		Name: sqlparser.NewIdentifierCI("uid"),
-		Type: querypb.Type_INT64,
-	}, {
-		Name: sqlparser.NewIdentifierCI("name"),
-		Type: querypb.Type_VARCHAR,
-	}}
-
 	si := &FakeSI{
 		Tables: map[string]*vindexes.Table{
-			"t":  {Name: sqlparser.NewIdentifierCS("t"), Keyspace: ks1},
-			"t1": {Name: sqlparser.NewIdentifierCS("t1"), Columns: cols1, ColumnListAuthoritative: true, Keyspace: ks2},
-			"t2": {Name: sqlparser.NewIdentifierCS("t2"), Columns: cols2, ColumnListAuthoritative: true, Keyspace: ks3},
+			"t":  tableT(),
+			"t1": tableT1(),
+			"t2": tableT2(),
 		},
 	}
 	return si
 }
 
-var tbl = map[string]TableInfo{
-	"t0": &RealTable{
-		Table: &vindexes.Table{
-			Keyspace: &vindexes.Keyspace{Name: "ks"},
-			ChildForeignKeys: []vindexes.ChildFKInfo{
-				ckInfo(nil, []string{"col"}, []string{"col"}, sqlparser.Restrict),
-				ckInfo(nil, []string{"col1", "col2"}, []string{"ccol1", "ccol2"}, sqlparser.SetNull),
-			},
-			ParentForeignKeys: []vindexes.ParentFKInfo{
-				pkInfo(nil, []string{"colb"}, []string{"colb"}),
-				pkInfo(nil, []string{"colb1", "colb2"}, []string{"ccolb1", "ccolb2"}),
-			},
-		},
-	},
-	"t1": &RealTable{
-		Table: &vindexes.Table{
-			Keyspace: &vindexes.Keyspace{Name: "ks_unmanaged", Sharded: true},
-			ChildForeignKeys: []vindexes.ChildFKInfo{
-				ckInfo(nil, []string{"cola"}, []string{"cola"}, sqlparser.Restrict),
-				ckInfo(nil, []string{"cola1", "cola2"}, []string{"ccola1", "ccola2"}, sqlparser.SetNull),
-			},
-		},
-	},
-	"t2": &RealTable{
-		Table: &vindexes.Table{
-			Keyspace: &vindexes.Keyspace{Name: "ks"},
-		},
-	},
-	"t3": &RealTable{
-		Table: &vindexes.Table{
-			Keyspace: &vindexes.Keyspace{Name: "undefined_ks", Sharded: true},
-		},
-	},
-}
-
-// TestGetAllManagedForeignKeys tests the functionality of getAllManagedForeignKeys.
-func TestGetAllManagedForeignKeys(t *testing.T) {
-	tests := []struct {
-		name           string
-		analyzer       *analyzer
-		childFkWanted  map[TableSet][]vindexes.ChildFKInfo
-		parentFkWanted map[TableSet][]vindexes.ParentFKInfo
-		expectedErr    string
-	}{
-		{
-			name: "Collect all foreign key constraints",
-			analyzer: &analyzer{
-				tables: &tableCollector{
-					Tables: []TableInfo{tbl["t0"], tbl["t1"],
-						&DerivedTable{},
-					},
-					si: &FakeSI{
-						KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
-							"ks":           vschemapb.Keyspace_managed,
-							"ks_unmanaged": vschemapb.Keyspace_unmanaged,
-						},
-					},
-				},
-			},
-			childFkWanted: map[TableSet][]vindexes.ChildFKInfo{
-				SingleTableSet(0): {
-					ckInfo(nil, []string{"col"}, []string{"col"}, sqlparser.Restrict),
-					ckInfo(nil, []string{"col1", "col2"}, []string{"ccol1", "ccol2"}, sqlparser.SetNull),
-				},
-			},
-			parentFkWanted: map[TableSet][]vindexes.ParentFKInfo{
-				SingleTableSet(0): {
-					pkInfo(nil, []string{"colb"}, []string{"colb"}),
-					pkInfo(nil, []string{"colb1", "colb2"}, []string{"ccolb1", "ccolb2"}),
-				},
-			},
-		},
-		{
-			name: "keyspace not found in schema information",
-			analyzer: &analyzer{
-				tables: &tableCollector{
-					Tables: []TableInfo{
-						tbl["t2"],
-						tbl["t3"],
-					},
-					si: &FakeSI{
-						KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
-							"ks": vschemapb.Keyspace_managed,
-						},
-					},
-				},
-			},
-			expectedErr: "undefined_ks keyspace not found",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			childFk, parentFk, err := tt.analyzer.getAllManagedForeignKeys()
-			if tt.expectedErr != "" {
-				require.EqualError(t, err, tt.expectedErr)
-				return
-			}
-			require.EqualValues(t, tt.childFkWanted, childFk)
-			require.EqualValues(t, tt.parentFkWanted, parentFk)
-		})
+func tableT() *vindexes.Table {
+	return &vindexes.Table{
+		Name:     sqlparser.NewIdentifierCS("t"),
+		Keyspace: unsharded,
 	}
 }
-
-// TestFilterForeignKeysUsingUpdateExpressions tests the functionality of filterForeignKeysUsingUpdateExpressions.
-func TestFilterForeignKeysUsingUpdateExpressions(t *testing.T) {
-	cola := sqlparser.NewColName("cola")
-	colb := sqlparser.NewColName("colb")
-	colc := sqlparser.NewColName("colc")
-	cold := sqlparser.NewColName("cold")
-	a := &analyzer{
-		binder: &binder{
-			direct: map[sqlparser.Expr]TableSet{
-				cola: SingleTableSet(0),
-				colb: SingleTableSet(0),
-				colc: SingleTableSet(1),
-				cold: SingleTableSet(1),
-			},
+func tableT1() *vindexes.Table {
+	return &vindexes.Table{
+		Name: sqlparser.NewIdentifierCS("t1"),
+		Columns: []vindexes.Column{{
+			Name: sqlparser.NewIdentifierCI("id"),
+			Type: querypb.Type_INT64,
+		}},
+		ColumnListAuthoritative: true,
+		ColumnVindexes: []*vindexes.ColumnVindex{
+			{Name: "id_vindex"},
 		},
+		Keyspace: ks2,
 	}
-	updateExprs := sqlparser.UpdateExprs{
-		&sqlparser.UpdateExpr{Name: cola, Expr: sqlparser.NewIntLiteral("1")},
-		&sqlparser.UpdateExpr{Name: colb, Expr: &sqlparser.NullVal{}},
-		&sqlparser.UpdateExpr{Name: colc, Expr: sqlparser.NewIntLiteral("1")},
-		&sqlparser.UpdateExpr{Name: cold, Expr: &sqlparser.NullVal{}},
-	}
-	tests := []struct {
-		name            string
-		analyzer        *analyzer
-		allChildFks     map[TableSet][]vindexes.ChildFKInfo
-		allParentFks    map[TableSet][]vindexes.ParentFKInfo
-		updExprs        sqlparser.UpdateExprs
-		childFksWanted  map[TableSet][]vindexes.ChildFKInfo
-		parentFksWanted map[TableSet][]vindexes.ParentFKInfo
-	}{
-		{
-			name:         "Child Foreign Keys Filtering",
-			analyzer:     a,
-			allParentFks: nil,
-			allChildFks: map[TableSet][]vindexes.ChildFKInfo{
-				SingleTableSet(0): {
-					ckInfo(nil, []string{"colb"}, []string{"child_colb"}, sqlparser.Restrict),
-					ckInfo(nil, []string{"cola", "colx"}, []string{"child_cola", "child_colx"}, sqlparser.SetNull),
-					ckInfo(nil, []string{"colx", "coly"}, []string{"child_colx", "child_coly"}, sqlparser.Cascade),
-					ckInfo(nil, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict),
-				},
-				SingleTableSet(1): {
-					ckInfo(nil, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict),
-					ckInfo(nil, []string{"colc", "colx"}, []string{"child_colc", "child_colx"}, sqlparser.SetNull),
-					ckInfo(nil, []string{"colx", "coly"}, []string{"child_colx", "child_coly"}, sqlparser.Cascade),
-				},
-			},
-			updExprs: updateExprs,
-			childFksWanted: map[TableSet][]vindexes.ChildFKInfo{
-				SingleTableSet(0): {
-					ckInfo(nil, []string{"colb"}, []string{"child_colb"}, sqlparser.Restrict),
-					ckInfo(nil, []string{"cola", "colx"}, []string{"child_cola", "child_colx"}, sqlparser.SetNull),
-				},
-				SingleTableSet(1): {
-					ckInfo(nil, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict),
-					ckInfo(nil, []string{"colc", "colx"}, []string{"child_colc", "child_colx"}, sqlparser.SetNull),
-				},
-			},
-			parentFksWanted: map[TableSet][]vindexes.ParentFKInfo{},
+}
+func tableT2() *vindexes.Table {
+	return &vindexes.Table{
+		Name: sqlparser.NewIdentifierCS("t2"),
+		Columns: []vindexes.Column{{
+			Name: sqlparser.NewIdentifierCI("uid"),
+			Type: querypb.Type_INT64,
 		}, {
-			name:     "Parent Foreign Keys Filtering",
-			analyzer: a,
-			allParentFks: map[TableSet][]vindexes.ParentFKInfo{
-				SingleTableSet(0): {
-					pkInfo(nil, []string{"pcola", "pcolx"}, []string{"cola", "colx"}),
-					pkInfo(nil, []string{"pcolc"}, []string{"colc"}),
-					pkInfo(nil, []string{"pcolb", "pcola"}, []string{"colb", "cola"}),
-					pkInfo(nil, []string{"pcolb"}, []string{"colb"}),
-					pkInfo(nil, []string{"pcola"}, []string{"cola"}),
-					pkInfo(nil, []string{"pcolb", "pcolx"}, []string{"colb", "colx"}),
-				},
-				SingleTableSet(1): {
-					pkInfo(nil, []string{"pcolc", "pcolx"}, []string{"colc", "colx"}),
-					pkInfo(nil, []string{"pcola"}, []string{"cola"}),
-					pkInfo(nil, []string{"pcold", "pcolc"}, []string{"cold", "colc"}),
-					pkInfo(nil, []string{"pcold"}, []string{"cold"}),
-					pkInfo(nil, []string{"pcold", "pcolx"}, []string{"cold", "colx"}),
-				},
-			},
-			allChildFks:    nil,
-			updExprs:       updateExprs,
-			childFksWanted: map[TableSet][]vindexes.ChildFKInfo{},
-			parentFksWanted: map[TableSet][]vindexes.ParentFKInfo{
-				SingleTableSet(0): {
-					pkInfo(nil, []string{"pcola", "pcolx"}, []string{"cola", "colx"}),
-					pkInfo(nil, []string{"pcola"}, []string{"cola"}),
-				},
-				SingleTableSet(1): {
-					pkInfo(nil, []string{"pcolc", "pcolx"}, []string{"colc", "colx"}),
-				},
-			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			childFks, parentFks := tt.analyzer.filterForeignKeysUsingUpdateExpressions(tt.allChildFks, tt.allParentFks, tt.updExprs)
-			require.EqualValues(t, tt.childFksWanted, childFks)
-			require.EqualValues(t, tt.parentFksWanted, parentFks)
-		})
-	}
-}
-
-// TestGetInvolvedForeignKeys tests the functionality of getInvolvedForeignKeys.
-func TestGetInvolvedForeignKeys(t *testing.T) {
-	cola := sqlparser.NewColName("cola")
-	colb := sqlparser.NewColName("colb")
-	colc := sqlparser.NewColName("colc")
-	cold := sqlparser.NewColName("cold")
-	tests := []struct {
-		name            string
-		stmt            sqlparser.Statement
-		analyzer        *analyzer
-		childFksWanted  map[TableSet][]vindexes.ChildFKInfo
-		parentFksWanted map[TableSet][]vindexes.ParentFKInfo
-		expectedErr     string
-	}{
-		{
-			name: "Delete Query",
-			stmt: &sqlparser.Delete{},
-			analyzer: &analyzer{
-				tables: &tableCollector{
-					Tables: []TableInfo{
-						tbl["t0"],
-						tbl["t1"],
-					},
-					si: &FakeSI{
-						KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
-							"ks":           vschemapb.Keyspace_managed,
-							"ks_unmanaged": vschemapb.Keyspace_unmanaged,
-						},
-					},
-				},
-			},
-			childFksWanted: map[TableSet][]vindexes.ChildFKInfo{
-				SingleTableSet(0): {
-					ckInfo(nil, []string{"col"}, []string{"col"}, sqlparser.Restrict),
-					ckInfo(nil, []string{"col1", "col2"}, []string{"ccol1", "ccol2"}, sqlparser.SetNull),
-				},
-			},
-		},
-		{
-			name: "Update statement",
-			stmt: &sqlparser.Update{
-				Exprs: sqlparser.UpdateExprs{
-					&sqlparser.UpdateExpr{
-						Name: cola,
-						Expr: sqlparser.NewIntLiteral("1"),
-					},
-					&sqlparser.UpdateExpr{
-						Name: colb,
-						Expr: &sqlparser.NullVal{},
-					},
-					&sqlparser.UpdateExpr{
-						Name: colc,
-						Expr: sqlparser.NewIntLiteral("1"),
-					},
-					&sqlparser.UpdateExpr{
-						Name: cold,
-						Expr: &sqlparser.NullVal{},
-					},
-				},
-			},
-			analyzer: &analyzer{
-				binder: &binder{
-					direct: map[sqlparser.Expr]TableSet{
-						cola: SingleTableSet(0),
-						colb: SingleTableSet(0),
-						colc: SingleTableSet(1),
-						cold: SingleTableSet(1),
-					},
-				},
-				tables: &tableCollector{
-					Tables: []TableInfo{
-						&RealTable{
-							Table: &vindexes.Table{
-								Keyspace: &vindexes.Keyspace{Name: "ks"},
-								ChildForeignKeys: []vindexes.ChildFKInfo{
-									ckInfo(nil, []string{"colb"}, []string{"child_colb"}, sqlparser.Restrict),
-									ckInfo(nil, []string{"cola", "colx"}, []string{"child_cola", "child_colx"}, sqlparser.SetNull),
-									ckInfo(nil, []string{"colx", "coly"}, []string{"child_colx", "child_coly"}, sqlparser.Cascade),
-									ckInfo(nil, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict),
-								},
-								ParentForeignKeys: []vindexes.ParentFKInfo{
-									pkInfo(nil, []string{"pcola", "pcolx"}, []string{"cola", "colx"}),
-									pkInfo(nil, []string{"pcolc"}, []string{"colc"}),
-									pkInfo(nil, []string{"pcolb", "pcola"}, []string{"colb", "cola"}),
-									pkInfo(nil, []string{"pcolb"}, []string{"colb"}),
-									pkInfo(nil, []string{"pcola"}, []string{"cola"}),
-									pkInfo(nil, []string{"pcolb", "pcolx"}, []string{"colb", "colx"}),
-								},
-							},
-						},
-						&RealTable{
-							Table: &vindexes.Table{
-								Keyspace: &vindexes.Keyspace{Name: "ks"},
-								ChildForeignKeys: []vindexes.ChildFKInfo{
-									ckInfo(nil, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict),
-									ckInfo(nil, []string{"colc", "colx"}, []string{"child_colc", "child_colx"}, sqlparser.SetNull),
-									ckInfo(nil, []string{"colx", "coly"}, []string{"child_colx", "child_coly"}, sqlparser.Cascade),
-								},
-								ParentForeignKeys: []vindexes.ParentFKInfo{
-									pkInfo(nil, []string{"pcolc", "pcolx"}, []string{"colc", "colx"}),
-									pkInfo(nil, []string{"pcola"}, []string{"cola"}),
-									pkInfo(nil, []string{"pcold", "pcolc"}, []string{"cold", "colc"}),
-									pkInfo(nil, []string{"pcold"}, []string{"cold"}),
-									pkInfo(nil, []string{"pcold", "pcolx"}, []string{"cold", "colx"}),
-								},
-							},
-						},
-					},
-					si: &FakeSI{
-						KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
-							"ks": vschemapb.Keyspace_managed,
-						},
-					},
-				},
-			},
-			childFksWanted: map[TableSet][]vindexes.ChildFKInfo{
-				SingleTableSet(0): {
-					ckInfo(nil, []string{"colb"}, []string{"child_colb"}, sqlparser.Restrict),
-					ckInfo(nil, []string{"cola", "colx"}, []string{"child_cola", "child_colx"}, sqlparser.SetNull),
-				},
-				SingleTableSet(1): {
-					ckInfo(nil, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict),
-					ckInfo(nil, []string{"colc", "colx"}, []string{"child_colc", "child_colx"}, sqlparser.SetNull),
-				},
-			},
-			parentFksWanted: map[TableSet][]vindexes.ParentFKInfo{
-				SingleTableSet(0): {
-					pkInfo(nil, []string{"pcola", "pcolx"}, []string{"cola", "colx"}),
-					pkInfo(nil, []string{"pcola"}, []string{"cola"}),
-				},
-				SingleTableSet(1): {
-					pkInfo(nil, []string{"pcolc", "pcolx"}, []string{"colc", "colx"}),
-				},
-			},
-		},
-		{
-			name: "Replace Query",
-			stmt: &sqlparser.Insert{
-				Action: sqlparser.ReplaceAct,
-			},
-			analyzer: &analyzer{
-				tables: &tableCollector{
-					Tables: []TableInfo{
-						tbl["t0"],
-						tbl["t1"],
-					},
-					si: &FakeSI{
-						KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
-							"ks":           vschemapb.Keyspace_managed,
-							"ks_unmanaged": vschemapb.Keyspace_unmanaged,
-						},
-					},
-				},
-			},
-			childFksWanted: map[TableSet][]vindexes.ChildFKInfo{
-				SingleTableSet(0): {
-					ckInfo(nil, []string{"col"}, []string{"col"}, sqlparser.Restrict),
-					ckInfo(nil, []string{"col1", "col2"}, []string{"ccol1", "ccol2"}, sqlparser.SetNull),
-				},
-			},
-			parentFksWanted: map[TableSet][]vindexes.ParentFKInfo{
-				SingleTableSet(0): {
-					pkInfo(nil, []string{"colb"}, []string{"colb"}),
-					pkInfo(nil, []string{"colb1", "colb2"}, []string{"ccolb1", "ccolb2"}),
-				},
-			},
-		},
-		{
-			name: "Insert Query",
-			stmt: &sqlparser.Insert{
-				Action: sqlparser.InsertAct,
-			},
-			analyzer: &analyzer{
-				tables: &tableCollector{
-					Tables: []TableInfo{
-						tbl["t0"],
-						tbl["t1"],
-					},
-					si: &FakeSI{
-						KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
-							"ks":           vschemapb.Keyspace_managed,
-							"ks_unmanaged": vschemapb.Keyspace_unmanaged,
-						},
-					},
-				},
-			},
-			childFksWanted: nil,
-			parentFksWanted: map[TableSet][]vindexes.ParentFKInfo{
-				SingleTableSet(0): {
-					pkInfo(nil, []string{"colb"}, []string{"colb"}),
-					pkInfo(nil, []string{"colb1", "colb2"}, []string{"ccolb1", "ccolb2"}),
-				},
-			},
-		},
-		{
-			name: "Insert Query with On Duplicate",
-			stmt: &sqlparser.Insert{
-				Action: sqlparser.InsertAct,
-				OnDup: sqlparser.OnDup{
-					&sqlparser.UpdateExpr{
-						Name: cola,
-						Expr: sqlparser.NewIntLiteral("1"),
-					},
-					&sqlparser.UpdateExpr{
-						Name: colb,
-						Expr: &sqlparser.NullVal{},
-					},
-				},
-			},
-			analyzer: &analyzer{
-				binder: &binder{
-					direct: map[sqlparser.Expr]TableSet{
-						cola: SingleTableSet(0),
-						colb: SingleTableSet(0),
-					},
-				},
-				tables: &tableCollector{
-					Tables: []TableInfo{
-						&RealTable{
-							Table: &vindexes.Table{
-								Keyspace: &vindexes.Keyspace{Name: "ks"},
-								ChildForeignKeys: []vindexes.ChildFKInfo{
-									ckInfo(nil, []string{"col"}, []string{"col"}, sqlparser.Restrict),
-									ckInfo(nil, []string{"col1", "col2"}, []string{"ccol1", "ccol2"}, sqlparser.SetNull),
-									ckInfo(nil, []string{"colb"}, []string{"child_colb"}, sqlparser.Restrict),
-									ckInfo(nil, []string{"cola", "colx"}, []string{"child_cola", "child_colx"}, sqlparser.SetNull),
-									ckInfo(nil, []string{"colx", "coly"}, []string{"child_colx", "child_coly"}, sqlparser.Cascade),
-									ckInfo(nil, []string{"cold"}, []string{"child_cold"}, sqlparser.Restrict),
-								},
-								ParentForeignKeys: []vindexes.ParentFKInfo{
-									pkInfo(nil, []string{"colb"}, []string{"colb"}),
-									pkInfo(nil, []string{"colb1", "colb2"}, []string{"ccolb1", "ccolb2"}),
-								},
-							},
-						},
-						tbl["t1"],
-					},
-					si: &FakeSI{
-						KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
-							"ks":           vschemapb.Keyspace_managed,
-							"ks_unmanaged": vschemapb.Keyspace_unmanaged,
-						},
-					},
-				},
-			},
-			childFksWanted: map[TableSet][]vindexes.ChildFKInfo{
-				SingleTableSet(0): {
-					ckInfo(nil, []string{"colb"}, []string{"child_colb"}, sqlparser.Restrict),
-					ckInfo(nil, []string{"cola", "colx"}, []string{"child_cola", "child_colx"}, sqlparser.SetNull),
-				},
-			},
-			parentFksWanted: map[TableSet][]vindexes.ParentFKInfo{
-				SingleTableSet(0): {
-					pkInfo(nil, []string{"colb"}, []string{"colb"}),
-					pkInfo(nil, []string{"colb1", "colb2"}, []string{"ccolb1", "ccolb2"}),
-				},
-			},
-		},
-		{
-			name: "Insert error",
-			stmt: &sqlparser.Insert{},
-			analyzer: &analyzer{
-				tables: &tableCollector{
-					Tables: []TableInfo{
-						tbl["t2"],
-						tbl["t3"],
-					},
-					si: &FakeSI{
-						KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
-							"ks": vschemapb.Keyspace_managed,
-						},
-					},
-				},
-			},
-			expectedErr: "undefined_ks keyspace not found",
-		},
-		{
-			name: "Update error",
-			stmt: &sqlparser.Update{},
-			analyzer: &analyzer{
-				tables: &tableCollector{
-					Tables: []TableInfo{
-						tbl["t2"],
-						tbl["t3"],
-					},
-					si: &FakeSI{
-						KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
-							"ks": vschemapb.Keyspace_managed,
-						},
-					},
-				},
-			},
-			expectedErr: "undefined_ks keyspace not found",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			childFks, parentFks, err := tt.analyzer.getInvolvedForeignKeys(tt.stmt)
-			if tt.expectedErr != "" {
-				require.EqualError(t, err, tt.expectedErr)
-				return
-			}
-			require.EqualValues(t, tt.childFksWanted, childFks)
-			require.EqualValues(t, tt.parentFksWanted, parentFks)
-		})
-	}
-}
-
-func ckInfo(cTable *vindexes.Table, pCols []string, cCols []string, refAction sqlparser.ReferenceAction) vindexes.ChildFKInfo {
-	return vindexes.ChildFKInfo{
-		Table:         cTable,
-		ParentColumns: sqlparser.MakeColumns(pCols...),
-		ChildColumns:  sqlparser.MakeColumns(cCols...),
-		OnDelete:      refAction,
-	}
-}
-
-func pkInfo(parentTable *vindexes.Table, pCols []string, cCols []string) vindexes.ParentFKInfo {
-	return vindexes.ParentFKInfo{
-		Table:         parentTable,
-		ParentColumns: sqlparser.MakeColumns(pCols...),
-		ChildColumns:  sqlparser.MakeColumns(cCols...),
+			Name:          sqlparser.NewIdentifierCI("name"),
+			Type:          querypb.Type_VARCHAR,
+			CollationName: "utf8_bin",
+		}, {
+			Name:          sqlparser.NewIdentifierCI("textcol"),
+			Type:          querypb.Type_VARCHAR,
+			CollationName: "big5_bin",
+		}},
+		ColumnListAuthoritative: true,
+		Keyspace:                ks3,
 	}
 }

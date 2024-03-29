@@ -22,7 +22,6 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/sqltypes"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vthash"
@@ -53,7 +52,7 @@ type (
 
 	ComparisonOp interface {
 		String() string
-		compare(left, right eval) (boolean, error)
+		compare(collationEnv *collations.Environment, left, right eval) (boolean, error)
 	}
 
 	compareEQ         struct{}
@@ -65,57 +64,57 @@ type (
 	compareNullSafeEQ struct{}
 )
 
-var _ Expr = (*ComparisonExpr)(nil)
-var _ Expr = (*InExpr)(nil)
-var _ Expr = (*LikeExpr)(nil)
+var _ IR = (*ComparisonExpr)(nil)
+var _ IR = (*InExpr)(nil)
+var _ IR = (*LikeExpr)(nil)
 
 func (*ComparisonExpr) filterExpr() {}
 func (*InExpr) filterExpr()         {}
 
 func (compareEQ) String() string { return "=" }
-func (compareEQ) compare(left, right eval) (boolean, error) {
-	cmp, isNull, err := evalCompareAll(left, right, true)
+func (compareEQ) compare(collationEnv *collations.Environment, left, right eval) (boolean, error) {
+	cmp, isNull, err := evalCompareAll(left, right, true, collationEnv)
 	return makeboolean2(cmp == 0, isNull), err
 }
 
 func (compareNE) String() string { return "!=" }
-func (compareNE) compare(left, right eval) (boolean, error) {
-	cmp, isNull, err := evalCompareAll(left, right, true)
+func (compareNE) compare(collationEnv *collations.Environment, left, right eval) (boolean, error) {
+	cmp, isNull, err := evalCompareAll(left, right, true, collationEnv)
 	return makeboolean2(cmp != 0, isNull), err
 }
 
 func (compareLT) String() string { return "<" }
-func (compareLT) compare(left, right eval) (boolean, error) {
-	cmp, isNull, err := evalCompareAll(left, right, false)
+func (compareLT) compare(collationEnv *collations.Environment, left, right eval) (boolean, error) {
+	cmp, isNull, err := evalCompareAll(left, right, false, collationEnv)
 	return makeboolean2(cmp < 0, isNull), err
 }
 
 func (compareLE) String() string { return "<=" }
-func (compareLE) compare(left, right eval) (boolean, error) {
-	cmp, isNull, err := evalCompareAll(left, right, false)
+func (compareLE) compare(collationEnv *collations.Environment, left, right eval) (boolean, error) {
+	cmp, isNull, err := evalCompareAll(left, right, false, collationEnv)
 	return makeboolean2(cmp <= 0, isNull), err
 }
 
 func (compareGT) String() string { return ">" }
-func (compareGT) compare(left, right eval) (boolean, error) {
-	cmp, isNull, err := evalCompareAll(left, right, false)
+func (compareGT) compare(collationEnv *collations.Environment, left, right eval) (boolean, error) {
+	cmp, isNull, err := evalCompareAll(left, right, false, collationEnv)
 	return makeboolean2(cmp > 0, isNull), err
 }
 
 func (compareGE) String() string { return ">=" }
-func (compareGE) compare(left, right eval) (boolean, error) {
-	cmp, isNull, err := evalCompareAll(left, right, false)
+func (compareGE) compare(collationEnv *collations.Environment, left, right eval) (boolean, error) {
+	cmp, isNull, err := evalCompareAll(left, right, false, collationEnv)
 	return makeboolean2(cmp >= 0, isNull), err
 }
 
 func (compareNullSafeEQ) String() string { return "<=>" }
-func (compareNullSafeEQ) compare(left, right eval) (boolean, error) {
-	cmp, err := evalCompareNullSafe(left, right)
+func (compareNullSafeEQ) compare(collationEnv *collations.Environment, left, right eval) (boolean, error) {
+	cmp, err := evalCompareNullSafe(left, right, collationEnv)
 	return makeboolean(cmp == 0), err
 }
 
 func typeIsTextual(tt sqltypes.Type) bool {
-	return sqltypes.IsText(tt) || sqltypes.IsBinary(tt) || tt == sqltypes.Time
+	return sqltypes.IsTextOrBinary(tt) || tt == sqltypes.Time
 }
 
 func compareAsStrings(l, r sqltypes.Type) bool {
@@ -165,7 +164,7 @@ func compareAsJSON(l, r sqltypes.Type) bool {
 	return l == sqltypes.TypeJSON || r == sqltypes.TypeJSON
 }
 
-func evalCompareNullSafe(lVal, rVal eval) (int, error) {
+func evalCompareNullSafe(lVal, rVal eval, collationEnv *collations.Environment) (int, error) {
 	if lVal == nil {
 		if rVal == nil {
 			return 0, nil
@@ -176,18 +175,18 @@ func evalCompareNullSafe(lVal, rVal eval) (int, error) {
 		return 1, nil
 	}
 	if left, right, ok := compareAsTuples(lVal, rVal); ok {
-		return evalCompareTuplesNullSafe(left.t, right.t)
+		return evalCompareTuplesNullSafe(left.t, right.t, collationEnv)
 	}
-	n, err := evalCompare(lVal, rVal)
+	n, err := evalCompare(lVal, rVal, collationEnv)
 	return n, err
 }
 
-func evalCompareMany(left, right []eval, fulleq bool) (int, bool, error) {
+func evalCompareMany(left, right []eval, fulleq bool, collationEnv *collations.Environment) (int, bool, error) {
 	// For row comparisons, (a, b) = (x, y) is equivalent to: (a = x) AND (b = y)
 	var seenNull bool
 	for idx, lResult := range left {
 		rResult := right[idx]
-		n, isNull, err := evalCompareAll(lResult, rResult, fulleq)
+		n, isNull, err := evalCompareAll(lResult, rResult, fulleq, collationEnv)
 		if err != nil {
 			return 0, false, err
 		}
@@ -204,20 +203,20 @@ func evalCompareMany(left, right []eval, fulleq bool) (int, bool, error) {
 	return 0, seenNull, nil
 }
 
-func evalCompareAll(lVal, rVal eval, fulleq bool) (int, bool, error) {
+func evalCompareAll(lVal, rVal eval, fulleq bool, collationEnv *collations.Environment) (int, bool, error) {
 	if lVal == nil || rVal == nil {
 		return 0, true, nil
 	}
 	if left, right, ok := compareAsTuples(lVal, rVal); ok {
-		return evalCompareMany(left.t, right.t, fulleq)
+		return evalCompareMany(left.t, right.t, fulleq, collationEnv)
 	}
-	n, err := evalCompare(lVal, rVal)
+	n, err := evalCompare(lVal, rVal, collationEnv)
 	return n, false, err
 }
 
 // For more details on comparison expression evaluation and type conversion:
 //   - https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html
-func evalCompare(left, right eval) (comp int, err error) {
+func evalCompare(left, right eval, collationEnv *collations.Environment) (comp int, err error) {
 	lt := left.SQLType()
 	rt := right.SQLType()
 
@@ -225,7 +224,7 @@ func evalCompare(left, right eval) (comp int, err error) {
 	case compareAsDates(lt, rt):
 		return compareDates(left.(*evalTemporal), right.(*evalTemporal)), nil
 	case compareAsStrings(lt, rt):
-		return compareStrings(left, right)
+		return compareStrings(left, right, collationEnv)
 	case compareAsSameNumericType(lt, rt) || compareAsDecimal(lt, rt):
 		return compareNumeric(left, right)
 	case compareAsDateAndString(lt, rt):
@@ -270,12 +269,12 @@ func fallbackBinary(t sqltypes.Type) bool {
 	return false
 }
 
-func evalCompareTuplesNullSafe(left, right []eval) (int, error) {
+func evalCompareTuplesNullSafe(left, right []eval, collationEnv *collations.Environment) (int, error) {
 	if len(left) != len(right) {
 		panic("did not typecheck cardinality")
 	}
 	for idx, lResult := range left {
-		res, err := evalCompareNullSafe(lResult, right[idx])
+		res, err := evalCompareNullSafe(lResult, right[idx], collationEnv)
 		if err != nil {
 			return 0, err
 		}
@@ -286,7 +285,7 @@ func evalCompareTuplesNullSafe(left, right []eval) (int, error) {
 	return 0, nil
 }
 
-// eval implements the Expr interface
+// eval implements the expression interface
 func (c *ComparisonExpr) eval(env *ExpressionEnv) (eval, error) {
 	left, err := c.Left.eval(env)
 	if err != nil {
@@ -303,42 +302,35 @@ func (c *ComparisonExpr) eval(env *ExpressionEnv) (eval, error) {
 	if _, ok := c.Op.(compareNullSafeEQ); !ok && right == nil {
 		return nil, nil
 	}
-	cmp, err := c.Op.compare(left, right)
+	cmp, err := c.Op.compare(env.collationEnv, left, right)
 	if err != nil {
 		return nil, err
 	}
 	return cmp.eval(), nil
 }
 
-// typeof implements the Expr interface
-func (c *ComparisonExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f1 := c.Left.typeof(env, fields)
-	_, f2 := c.Right.typeof(env, fields)
-	return sqltypes.Int64, f1 | f2
-}
-
 func (expr *ComparisonExpr) compileAsTuple(c *compiler) (ctype, error) {
 	switch expr.Op.(type) {
 	case compareNullSafeEQ:
-		c.asm.CmpTupleNullsafe()
+		c.asm.CmpTupleNullsafe(c.env.CollationEnv())
 		return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagIsBoolean}, nil
 	case compareEQ:
-		c.asm.CmpTuple(true)
+		c.asm.CmpTuple(c.env.CollationEnv(), true)
 		c.asm.Cmp_eq_n()
 	case compareNE:
-		c.asm.CmpTuple(true)
+		c.asm.CmpTuple(c.env.CollationEnv(), true)
 		c.asm.Cmp_ne_n()
 	case compareLT:
-		c.asm.CmpTuple(false)
+		c.asm.CmpTuple(c.env.CollationEnv(), false)
 		c.asm.Cmp_lt_n()
 	case compareLE:
-		c.asm.CmpTuple(false)
+		c.asm.CmpTuple(c.env.CollationEnv(), false)
 		c.asm.Cmp_le_n()
 	case compareGT:
-		c.asm.CmpTuple(false)
+		c.asm.CmpTuple(c.env.CollationEnv(), false)
 		c.asm.Cmp_gt_n()
 	case compareGE:
-		c.asm.CmpTuple(false)
+		c.asm.CmpTuple(c.env.CollationEnv(), false)
 		c.asm.Cmp_ge_n()
 	default:
 		panic("invalid comparison operator")
@@ -373,11 +365,13 @@ func (expr *ComparisonExpr) compile(c *compiler) (ctype, error) {
 
 	swapped := false
 	var skip2 *jump
+	nullable := true
 
 	switch expr.Op.(type) {
 	case compareNullSafeEQ:
 		skip2 = c.asm.jumpFrom()
 		c.asm.Cmp_nullsafe(skip2)
+		nullable = false
 	default:
 		skip2 = c.compileNullCheck1r(rt)
 	}
@@ -395,12 +389,22 @@ func (expr *ComparisonExpr) compile(c *compiler) (ctype, error) {
 		c.asm.CmpDateString()
 	case compareAsDateAndNumeric(lt.Type, rt.Type):
 		if sqltypes.IsDateOrTime(lt.Type) {
-			c.asm.Convert_Ti(2)
-			lt.Type = sqltypes.Int64
+			if lt.Size == 0 {
+				c.asm.Convert_Ti(2)
+				lt.Type = sqltypes.Int64
+			} else {
+				c.asm.Convert_Tf(2)
+				lt.Type = sqltypes.Float64
+			}
 		}
 		if sqltypes.IsDateOrTime(rt.Type) {
-			c.asm.Convert_Ti(1)
-			rt.Type = sqltypes.Int64
+			if rt.Size == 0 {
+				c.asm.Convert_Ti(1)
+				rt.Type = sqltypes.Int64
+			} else {
+				c.asm.Convert_Tf(1)
+				rt.Type = sqltypes.Float64
+			}
 		}
 		swapped = c.compareNumericTypes(lt, rt)
 	case compareAsJSON(lt.Type, rt.Type):
@@ -415,6 +419,9 @@ func (expr *ComparisonExpr) compile(c *compiler) (ctype, error) {
 	}
 
 	cmptype := ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagIsBoolean}
+	if nullable {
+		cmptype.Flag |= nullableFlags(lt.Flag | rt.Flag)
+	}
 
 	switch expr.Op.(type) {
 	case compareEQ:
@@ -458,14 +465,14 @@ func (expr *ComparisonExpr) compile(c *compiler) (ctype, error) {
 	return cmptype, nil
 }
 
-func evalInExpr(lhs eval, rhs *evalTuple) (boolean, error) {
+func evalInExpr(collationEnv *collations.Environment, lhs eval, rhs *evalTuple) (boolean, error) {
 	if lhs == nil {
 		return boolNULL, nil
 	}
 
 	var foundNull, found bool
 	for _, rtuple := range rhs.t {
-		numeric, isNull, err := evalCompareAll(lhs, rtuple, true)
+		numeric, isNull, err := evalCompareAll(lhs, rtuple, true, collationEnv)
 		if err != nil {
 			return boolNULL, err
 		}
@@ -499,7 +506,7 @@ func (i *InExpr) eval(env *ExpressionEnv) (eval, error) {
 	if !ok {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "rhs of an In operation should be a tuple")
 	}
-	in, err := evalInExpr(left, rtuple)
+	in, err := evalInExpr(env.collationEnv, left, rtuple)
 	if err != nil {
 		return nil, err
 	}
@@ -507,12 +514,6 @@ func (i *InExpr) eval(env *ExpressionEnv) (eval, error) {
 		in = in.not()
 	}
 	return in.eval(), nil
-}
-
-func (i *InExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f1 := i.Left.typeof(env, fields)
-	_, f2 := i.Right.typeof(env, fields)
-	return sqltypes.Int64, f1 | f2
 }
 
 func (i *InExpr) compileTable(lhs ctype, rhs TupleExpr) map[vthash.Hash]struct{} {
@@ -552,18 +553,25 @@ func (expr *InExpr) compile(c *compiler) (ctype, error) {
 		return ctype{}, nil
 	}
 
-	rhs := expr.Right.(TupleExpr)
-
-	if table := expr.compileTable(lhs, rhs); table != nil {
-		c.asm.In_table(expr.Negate, table)
-	} else {
-		_, err := rhs.compile(c)
-		if err != nil {
-			return ctype{}, err
+	switch rhs := expr.Right.(type) {
+	case TupleExpr:
+		var rt ctype
+		if table := expr.compileTable(lhs, rhs); table != nil {
+			c.asm.In_table(expr.Negate, table)
+		} else {
+			rt, err = rhs.compile(c)
+			if err != nil {
+				return ctype{}, err
+			}
+			c.asm.In_slow(c.env.CollationEnv(), expr.Negate)
 		}
-		c.asm.In_slow(expr.Negate)
+
+		return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagIsBoolean | (nullableFlags(lhs.Flag) | (rt.Flag & flagNullable))}, nil
+	case *BindVariable:
+		return ctype{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "rhs of an In operation should be a tuple")
+	default:
+		panic("unreachable")
 	}
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagIsBoolean}, nil
 }
 
 func (l *LikeExpr) matchWildcard(left, right []byte, coll collations.ID) bool {
@@ -582,7 +590,7 @@ func (l *LikeExpr) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	var col collations.TypedCollation
-	left, right, col, err = mergeAndCoerceCollations(left, right)
+	left, right, col, err = mergeAndCoerceCollations(left, right, env.collationEnv)
 	if err != nil {
 		return nil, err
 	}
@@ -601,13 +609,6 @@ func (l *LikeExpr) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalBool(matched == !l.Negate), nil
 }
 
-// typeof implements the ComparisonOp interface
-func (l *LikeExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f1 := l.Left.typeof(env, fields)
-	_, f2 := l.Right.typeof(env, fields)
-	return sqltypes.Int64, f1 | f2
-}
-
 func (expr *LikeExpr) compile(c *compiler) (ctype, error) {
 	lt, err := expr.Left.compile(c)
 	if err != nil {
@@ -622,18 +623,18 @@ func (expr *LikeExpr) compile(c *compiler) (ctype, error) {
 	skip := c.compileNullCheck2(lt, rt)
 
 	if !lt.isTextual() {
-		c.asm.Convert_xc(2, sqltypes.VarChar, c.cfg.Collation, 0, false)
+		c.asm.Convert_xc(2, sqltypes.VarChar, c.collation, nil)
 		lt.Col = collations.TypedCollation{
-			Collation:    c.cfg.Collation,
+			Collation:    c.collation,
 			Coercibility: collations.CoerceCoercible,
 			Repertoire:   collations.RepertoireASCII,
 		}
 	}
 
 	if !rt.isTextual() {
-		c.asm.Convert_xc(1, sqltypes.VarChar, c.cfg.Collation, 0, false)
+		c.asm.Convert_xc(1, sqltypes.VarChar, c.collation, nil)
 		rt.Col = collations.TypedCollation{
-			Collation:    c.cfg.Collation,
+			Collation:    c.collation,
 			Coercibility: collations.CoerceCoercible,
 			Repertoire:   collations.RepertoireASCII,
 		}
@@ -642,10 +643,9 @@ func (expr *LikeExpr) compile(c *compiler) (ctype, error) {
 	var merged collations.TypedCollation
 	var coerceLeft colldata.Coercion
 	var coerceRight colldata.Coercion
-	var env = collations.Local()
 
 	if lt.Col.Collation != rt.Col.Collation {
-		merged, coerceLeft, coerceRight, err = colldata.Merge(env, lt.Col, rt.Col, colldata.CoercionOptions{
+		merged, coerceLeft, coerceRight, err = colldata.Merge(c.env.CollationEnv(), lt.Col, rt.Col, colldata.CoercionOptions{
 			ConvertToSuperset:   true,
 			ConvertWithCoercion: true,
 		})

@@ -17,9 +17,6 @@
 package main
 
 import (
-	_ "github.com/go-sql-driver/mysql"
-	_ "modernc.org/sqlite"
-
 	"vitess.io/vitess/go/cmd/vtorc/cli"
 	"vitess.io/vitess/go/vt/log"
 )

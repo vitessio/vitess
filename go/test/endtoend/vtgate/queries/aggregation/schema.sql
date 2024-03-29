@@ -97,3 +97,11 @@ CREATE TABLE dept (
     PRIMARY KEY (deptno)
 ) Engine = InnoDB
   COLLATE = utf8mb4_general_ci;
+
+CREATE TABLE bet_logs (
+    id bigint unsigned NOT NULL,
+    merchant_game_id bigint unsigned NOT NULL,
+    bet_amount DECIMAL(20, 8),
+    game_id bigint,
+    PRIMARY KEY (id)
+) ENGINE InnoDB;

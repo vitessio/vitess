@@ -21,32 +21,31 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 // LockAndComment contains any comments or locking directives we want on all queries down from this operator
 type LockAndComment struct {
-	Source   ops.Operator
+	Source   Operator
 	Comments *sqlparser.ParsedComments
 	Lock     sqlparser.Lock
 }
 
-func (l *LockAndComment) Clone(inputs []ops.Operator) ops.Operator {
+func (l *LockAndComment) Clone(inputs []Operator) Operator {
 	klon := *l
 	klon.Source = inputs[0]
 	return &klon
 }
 
-func (l *LockAndComment) Inputs() []ops.Operator {
-	return []ops.Operator{l.Source}
+func (l *LockAndComment) Inputs() []Operator {
+	return []Operator{l.Source}
 }
 
-func (l *LockAndComment) SetInputs(operators []ops.Operator) {
+func (l *LockAndComment) SetInputs(operators []Operator) {
 	l.Source = operators[0]
 }
 
-func (l *LockAndComment) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
+func (l *LockAndComment) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
 	l.Source = l.Source.AddPredicate(ctx, expr)
 	return l
 }
@@ -76,6 +75,6 @@ func (l *LockAndComment) ShortDescription() string {
 	return strings.Join(s, " ")
 }
 
-func (l *LockAndComment) GetOrdering(ctx *plancontext.PlanningContext) []ops.OrderBy {
+func (l *LockAndComment) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
 	return l.Source.GetOrdering(ctx)
 }

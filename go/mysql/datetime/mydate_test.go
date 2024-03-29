@@ -35,7 +35,7 @@ func TestDayNumber(t *testing.T) {
 	require.NoError(t, err)
 
 	for year, daynr := range expected {
-		assert.Equal(t, daynr, mysqlDayNumber(year, 1, 1))
+		assert.Equal(t, daynr, MysqlDayNumber(year, 1, 1))
 	}
 }
 
@@ -54,6 +54,14 @@ func TestDayNumberFields(t *testing.T) {
 		assert.Equal(t, tc[2], int(m))
 		assert.Equal(t, tc[3], int(d))
 
-		assert.Equalf(t, tc[0], mysqlDayNumber(tc[1], tc[2], tc[3]), "date %d-%d-%d", tc[1], tc[2], tc[3])
+		assert.Equalf(t, tc[0], MysqlDayNumber(tc[1], tc[2], tc[3]), "date %d-%d-%d", tc[1], tc[2], tc[3])
+
+		wantDate := Date{
+			year:  uint16(tc[1]),
+			month: uint8(tc[2]),
+			day:   uint8(tc[3]),
+		}
+		got := DateFromDayNumber(tc[0])
+		assert.Equal(t, wantDate, got)
 	}
 }

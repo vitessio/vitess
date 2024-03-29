@@ -65,7 +65,8 @@ func BuildPermissions(stmt sqlparser.Statement) []Permission {
 	case *sqlparser.Analyze:
 		permissions = buildTableNamePermissions(node.Table, tableacl.WRITER, permissions)
 	case *sqlparser.OtherAdmin, *sqlparser.CallProc, *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback,
-		*sqlparser.Load, *sqlparser.Savepoint, *sqlparser.Release, *sqlparser.SRollback, *sqlparser.Set, *sqlparser.Show, sqlparser.Explain:
+		*sqlparser.Load, *sqlparser.Savepoint, *sqlparser.Release, *sqlparser.SRollback, *sqlparser.Set, *sqlparser.Show, sqlparser.Explain,
+		*sqlparser.UnlockTables:
 		// no op
 	default:
 		panic(fmt.Errorf("BUG: unexpected statement type: %T", node))
@@ -75,18 +76,15 @@ func BuildPermissions(stmt sqlparser.Statement) []Permission {
 
 func buildSubqueryPermissions(stmt sqlparser.Statement, role tableacl.Role, permissions []Permission) []Permission {
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
-		switch node := node.(type) {
-		case *sqlparser.Select:
-			permissions = buildTableExprsPermissions(node.From, role, permissions)
-		case sqlparser.TableExprs:
-			return false, nil
+		if sel, ok := node.(*sqlparser.Select); ok {
+			permissions = buildTableExprsPermissions(sel.From, role, permissions)
 		}
 		return true, nil
 	}, stmt)
 	return permissions
 }
 
-func buildTableExprsPermissions(node sqlparser.TableExprs, role tableacl.Role, permissions []Permission) []Permission {
+func buildTableExprsPermissions(node []sqlparser.TableExpr, role tableacl.Role, permissions []Permission) []Permission {
 	for _, node := range node {
 		permissions = buildTableExprPermissions(node, role, permissions)
 	}
@@ -96,14 +94,11 @@ func buildTableExprsPermissions(node sqlparser.TableExprs, role tableacl.Role, p
 func buildTableExprPermissions(node sqlparser.TableExpr, role tableacl.Role, permissions []Permission) []Permission {
 	switch node := node.(type) {
 	case *sqlparser.AliasedTableExpr:
-		// An AliasedTableExpr can also be a subquery, but we should skip them here
+		// An AliasedTableExpr can also be a derived table, but we should skip them here
 		// because the buildSubQueryPermissions walker will catch them and extract
 		// the corresponding table names.
-		switch node := node.Expr.(type) {
-		case sqlparser.TableName:
-			permissions = buildTableNamePermissions(node, role, permissions)
-		case *sqlparser.DerivedTable:
-			permissions = buildSubqueryPermissions(node.Select, role, permissions)
+		if tblName, ok := node.Expr.(sqlparser.TableName); ok {
+			permissions = buildTableNamePermissions(tblName, role, permissions)
 		}
 	case *sqlparser.ParenTableExpr:
 		permissions = buildTableExprsPermissions(node.Exprs, role, permissions)

@@ -311,17 +311,12 @@ func pow(x big.Word, n int) (p big.Word) {
 }
 
 func parseLargeDecimal(integral, fractional []byte) (*big.Int, error) {
-	const (
-		b1 = big.Word(10)
-		bn = big.Word(1e19)
-		n  = 19
-	)
 	var (
 		di = big.Word(0) // 0 <= di < b1**i < bn
 		i  = 0           // 0 <= i < n
-		// 5 is the largest possible size for a MySQL decimal; anything
-		// that doesn't fit in 5 words won't make it to this func
-		z = make([]big.Word, 0, 5)
+		// s is the largest possible size for a MySQL decimal; anything
+		// that doesn't fit in s words won't make it to this func
+		z = make([]big.Word, 0, s)
 	)
 
 	parseChunk := func(partial []byte) error {

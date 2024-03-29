@@ -17,9 +17,10 @@ limitations under the License.
 package helpers
 
 import (
+	"context"
 	"testing"
 
-	"context"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 func TestBasicCompare(t *testing.T) {
@@ -32,7 +33,7 @@ func TestBasicCompare(t *testing.T) {
 		t.Fatalf("Compare keyspaces is not failing when topos are not in sync")
 	}
 
-	CopyKeyspaces(ctx, fromTS, toTS)
+	CopyKeyspaces(ctx, fromTS, toTS, sqlparser.NewTestParser())
 
 	err = CompareKeyspaces(ctx, fromTS, toTS)
 	if err != nil {

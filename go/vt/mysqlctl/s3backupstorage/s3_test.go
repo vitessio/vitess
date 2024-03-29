@@ -276,3 +276,23 @@ func TestSSECustomerFileBase64Key(t *testing.T) {
 	assert.Nil(t, sseData.customerKey, "customerKey expected to be nil")
 	assert.Nil(t, sseData.customerMd5, "customerMd5 expected to be nil")
 }
+
+func TestNewS3Transport(t *testing.T) {
+	s3 := newS3BackupStorage()
+
+	// checking some of the values are present in the returned transport and match the http.DefaultTransport.
+	assert.Equal(t, http.DefaultTransport.(*http.Transport).IdleConnTimeout, s3.transport.IdleConnTimeout)
+	assert.Equal(t, http.DefaultTransport.(*http.Transport).MaxIdleConns, s3.transport.MaxIdleConns)
+	assert.NotNil(t, s3.transport.DialContext)
+	assert.NotNil(t, s3.transport.Proxy)
+}
+
+func TestWithParams(t *testing.T) {
+	bases3 := newS3BackupStorage()
+	s3 := bases3.WithParams(backupstorage.Params{}).(*S3BackupStorage)
+	// checking some of the values are present in the returned transport and match the http.DefaultTransport.
+	assert.Equal(t, http.DefaultTransport.(*http.Transport).IdleConnTimeout, s3.transport.IdleConnTimeout)
+	assert.Equal(t, http.DefaultTransport.(*http.Transport).MaxIdleConns, s3.transport.MaxIdleConns)
+	assert.NotNil(t, s3.transport.DialContext)
+	assert.NotNil(t, s3.transport.Proxy)
+}

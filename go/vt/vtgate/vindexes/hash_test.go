@@ -27,7 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/key"
 )
 
-var hash SingleColumn
+var hashTest SingleColumn
 
 func init() {
 	hv, err := CreateVindex("hash", "nn", map[string]string{})
@@ -38,7 +38,7 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
-	hash = hv.(SingleColumn)
+	hashTest = hv.(SingleColumn)
 }
 
 func hashCreateVindexTestCase(
@@ -89,7 +89,7 @@ func TestHashCreateVindex(t *testing.T) {
 }
 
 func TestHashMap(t *testing.T) {
-	got, err := hash.Map(context.Background(), nil, []sqltypes.Value{
+	got, err := hashTest.Map(context.Background(), nil, []sqltypes.Value{
 		sqltypes.NewInt64(1),
 		sqltypes.NewInt64(2),
 		sqltypes.NewInt64(3),
@@ -132,7 +132,7 @@ func TestHashMap(t *testing.T) {
 func TestHashVerify(t *testing.T) {
 	ids := []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}
 	ksids := [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6"), []byte("\x16k@\xb4J\xbaK\xd6")}
-	got, err := hash.Verify(context.Background(), nil, ids, ksids)
+	got, err := hashTest.Verify(context.Background(), nil, ids, ksids)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,12 +142,12 @@ func TestHashVerify(t *testing.T) {
 	}
 
 	// Failure test
-	_, err = hash.Verify(context.Background(), nil, []sqltypes.Value{sqltypes.NewVarBinary("aa")}, [][]byte{nil})
+	_, err = hashTest.Verify(context.Background(), nil, []sqltypes.Value{sqltypes.NewVarBinary("aa")}, [][]byte{nil})
 	require.EqualError(t, err, "cannot parse uint64 from \"aa\"")
 }
 
 func TestHashReverseMap(t *testing.T) {
-	got, err := hash.(Reversible).ReverseMap(nil, [][]byte{
+	got, err := hashTest.(Reversible).ReverseMap(nil, [][]byte{
 		[]byte("\x16k@\xb4J\xbaK\xd6"),
 		[]byte("\x06\xe7\xea\"Βp\x8f"),
 		[]byte("N\xb1\x90ɢ\xfa\x16\x9c"),
@@ -184,7 +184,7 @@ func TestHashReverseMap(t *testing.T) {
 }
 
 func TestHashReverseMapNeg(t *testing.T) {
-	_, err := hash.(Reversible).ReverseMap(nil, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6\x16k@\xb4J\xbaK\xd6")})
+	_, err := hashTest.(Reversible).ReverseMap(nil, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6\x16k@\xb4J\xbaK\xd6")})
 	want := "invalid keyspace id: 166b40b44aba4bd6166b40b44aba4bd6"
 	if err.Error() != want {
 		t.Error(err)

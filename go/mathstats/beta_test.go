@@ -5,7 +5,10 @@
 package mathstats
 
 import (
+	"math"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestBetaInc(t *testing.T) {
@@ -25,4 +28,28 @@ func TestBetaInc(t *testing.T) {
 			9:  0.03271484375000,
 			10: 0.01928710937500,
 		})
+}
+
+func TestBetaincPanic(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			assert.Contains(t, r, "betainc: a or b too big; failed to converge")
+		} else {
+			t.Error("Expected panic, but no panic occurred")
+		}
+	}()
+
+	a := 1e30
+	b := 1e30
+	x := 0.5
+
+	_ = mathBetaInc(x, a, b)
+}
+
+func TestMathBetaIncNaN(t *testing.T) {
+	x := -0.1
+
+	result := mathBetaInc(x, 2.0, 3.0)
+
+	assert.True(t, math.IsNaN(result), "Expected NaN for x < 0, got %v", result)
 }

@@ -109,7 +109,7 @@ func (r *switcher) stopSourceWrites(ctx context.Context) error {
 }
 
 func (r *switcher) stopStreams(ctx context.Context, sm *workflow.StreamMigrator) ([]string, error) {
-	return sm.StopStreams(ctx)
+	return sm.LegacyStopStreams(ctx)
 }
 
 func (r *switcher) cancelMigration(ctx context.Context, sm *workflow.StreamMigrator) {

@@ -30,6 +30,9 @@ var _ Primitive = (*MStream)(nil)
 
 // MStream is an operator for message streaming from specific keyspace, destination
 type MStream struct {
+	noTxNeeded
+	noInputs
+
 	// Keyspace specifies the keyspace to stream messages from
 	Keyspace *vindexes.Keyspace
 
@@ -38,10 +41,6 @@ type MStream struct {
 
 	// TableName specifies the table on which stream will be executed.
 	TableName string
-
-	noTxNeeded
-
-	noInputs
 }
 
 // RouteType implements the Primitive interface

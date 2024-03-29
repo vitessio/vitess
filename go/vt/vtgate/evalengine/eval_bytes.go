@@ -29,11 +29,10 @@ import (
 )
 
 type evalBytes struct {
-	tt           int16
-	isHexLiteral bool
-	isBitLiteral bool
-	col          collations.TypedCollation
-	bytes        []byte
+	tt    int16
+	flag  typeFlag
+	col   collations.TypedCollation
+	bytes []byte
 }
 
 var _ eval = (*evalBytes)(nil)
@@ -44,14 +43,14 @@ func newEvalRaw(typ sqltypes.Type, raw []byte, col collations.TypedCollation) *e
 }
 
 func newEvalBytesHex(raw []byte) eval {
-	return &evalBytes{tt: int16(sqltypes.VarBinary), isHexLiteral: true, col: collationBinary, bytes: raw}
+	return &evalBytes{tt: int16(sqltypes.VarBinary), flag: flagHex, col: collationBinary, bytes: raw}
 }
 
 // newEvalBytesBit creates a new evalBytes for a bit literal.
 // Turns out that a bit literal is not actually typed with
 // sqltypes.Bit, but with sqltypes.VarBinary.
 func newEvalBytesBit(raw []byte) eval {
-	return &evalBytes{tt: int16(sqltypes.VarBinary), isBitLiteral: true, col: collationBinary, bytes: raw}
+	return &evalBytes{tt: int16(sqltypes.VarBinary), flag: flagBit, col: collationBinary, bytes: raw}
 }
 
 func newEvalBinary(raw []byte) *evalBytes {
@@ -119,8 +118,16 @@ func (e *evalBytes) isBinary() bool {
 	return e.SQLType() == sqltypes.VarBinary || e.SQLType() == sqltypes.Binary || e.SQLType() == sqltypes.Blob
 }
 
+func (e *evalBytes) isHexLiteral() bool {
+	return e.flag&flagHex != 0
+}
+
+func (e *evalBytes) isBitLiteral() bool {
+	return e.flag&flagBit != 0
+}
+
 func (e *evalBytes) isHexOrBitLiteral() bool {
-	return e.isHexLiteral || e.isBitLiteral
+	return e.isHexLiteral() || e.isBitLiteral()
 }
 
 func (e *evalBytes) isVarChar() bool {
@@ -171,22 +178,39 @@ func (e *evalBytes) toDateBestEffort() datetime.DateTime {
 	return datetime.DateTime{}
 }
 
-func (e *evalBytes) toNumericHex() (*evalUint64, bool) {
+func (e *evalBytes) parseNumericBytes(number *[8]byte) bool {
 	raw := e.bytes
 	if l := len(raw); l > 8 {
 		for _, b := range raw[:l-8] {
 			if b != 0 {
-				return nil, false // overflow
+				return false // overflow
 			}
 		}
 		raw = raw[l-8:]
 	}
-
-	var number [8]byte
 	for i, b := range raw {
 		number[8-len(raw)+i] = b
 	}
+	return true
+}
+
+func (e *evalBytes) toNumericHex() (*evalUint64, bool) {
+	var number [8]byte
+	if !e.parseNumericBytes(&number) {
+		return nil, false
+	}
+
 	hex := newEvalUint64(binary.BigEndian.Uint64(number[:]))
 	hex.hexLiteral = true
 	return hex, true
+}
+
+func (e *evalBytes) toNumericBit() (*evalInt64, bool) {
+	var number [8]byte
+	if !e.parseNumericBytes(&number) {
+		return nil, false
+	}
+	bit := newEvalInt64(int64(binary.BigEndian.Uint64(number[:])))
+	bit.bitLiteral = true
+	return bit, true
 }

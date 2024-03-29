@@ -62,7 +62,7 @@ type Table struct {
 	AllocatedSize uint64
 }
 
-// SequenceInfo contains info specific to sequence tabels.
+// SequenceInfo contains info specific to sequence tables.
 // It must be locked before accessing the values inside.
 // If CurVal==LastVal, we have to cache new values.
 // When the schema is first loaded, the values are all 0,

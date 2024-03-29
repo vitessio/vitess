@@ -28,6 +28,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -123,10 +124,12 @@ func (ct *consolidationTest) run(workers int, generateCallback func(int) (string
 
 		go func(worker int) {
 			defer wg.Done()
+			exporter := servenv.NewExporter("ConsolidatorTest", "")
+			timings := exporter.NewTimings("ConsolidatorWaits", "", "StreamConsolidations")
 			logStats := tabletenv.NewLogStats(context.Background(), "StreamConsolidation")
 			query, callback := generateCallback(worker)
 			start := time.Now()
-			err := ct.cc.Consolidate(logStats, query, func(result *sqltypes.Result) error {
+			err := ct.cc.Consolidate(timings, logStats, query, func(result *sqltypes.Result) error {
 				cr := ct.results[worker]
 				cr.items = append(cr.items, result)
 				atomic.AddInt64(&cr.count, 1)

@@ -49,15 +49,17 @@ type AggregateParams struct {
 	// This is based on the function passed in the select expression and
 	// not what we use to aggregate at the engine primitive level.
 	OrigOpcode AggregateOpcode
+
+	CollationEnv *collations.Environment
 }
 
-func NewAggregateParam(opcode AggregateOpcode, col int, alias string) *AggregateParams {
+func NewAggregateParam(opcode AggregateOpcode, col int, alias string, collationEnv *collations.Environment) *AggregateParams {
 	out := &AggregateParams{
-		Opcode: opcode,
-		Col:    col,
-		Alias:  alias,
-		WCol:   -1,
-		Type:   evalengine.UnknownType(),
+		Opcode:       opcode,
+		Col:          col,
+		Alias:        alias,
+		WCol:         -1,
+		CollationEnv: collationEnv,
 	}
 	if opcode.NeedsComparableValues() {
 		out.KeyCol = col
@@ -74,8 +76,8 @@ func (ap *AggregateParams) String() string {
 	if ap.WAssigned() {
 		keyCol = fmt.Sprintf("%s|%d", keyCol, ap.WCol)
 	}
-	if sqltypes.IsText(ap.Type.Type) && ap.Type.Coll != collations.Unknown {
-		keyCol += " COLLATE " + collations.Local().LookupName(ap.Type.Coll)
+	if sqltypes.IsText(ap.Type.Type()) && ap.CollationEnv.IsSupported(ap.Type.Collation()) {
+		keyCol += " COLLATE " + ap.CollationEnv.LookupName(ap.Type.Collation())
 	}
 	dispOrigOp := ""
 	if ap.OrigOpcode != AggregateUnassigned && ap.OrigOpcode != ap.Opcode {
@@ -89,9 +91,9 @@ func (ap *AggregateParams) String() string {
 
 func (ap *AggregateParams) typ(inputType querypb.Type) querypb.Type {
 	if ap.OrigOpcode != AggregateUnassigned {
-		return ap.OrigOpcode.Type(inputType)
+		return ap.OrigOpcode.SQLType(inputType)
 	}
-	return ap.Opcode.Type(inputType)
+	return ap.Opcode.SQLType(inputType)
 }
 
 type aggregator interface {
@@ -101,23 +103,28 @@ type aggregator interface {
 }
 
 type aggregatorDistinct struct {
-	column int
-	last   sqltypes.Value
-	coll   collations.ID
+	column       int
+	last         sqltypes.Value
+	coll         collations.ID
+	collationEnv *collations.Environment
 }
 
 func (a *aggregatorDistinct) shouldReturn(row []sqltypes.Value) (bool, error) {
 	if a.column >= 0 {
-		if !a.last.IsNull() {
-			cmp, err := evalengine.NullsafeCompare(a.last, row[a.column], a.coll)
-			if err != nil {
-				return true, err
-			}
-			if cmp == 0 {
-				return true, nil
+		last := a.last
+		next := row[a.column]
+		if !last.IsNull() {
+			if last.TinyWeightCmp(next) == 0 {
+				cmp, err := evalengine.NullsafeCompare(last, next, a.collationEnv, a.coll)
+				if err != nil {
+					return true, err
+				}
+				if cmp == 0 {
+					return true, nil
+				}
 			}
 		}
-		a.last = row[a.column]
+		a.last = next
 	}
 	return false, nil
 }
@@ -376,8 +383,9 @@ func newAggregation(fields []*querypb.Field, aggregates []*AggregateParams) (agg
 			ag = &aggregatorCount{
 				from: aggr.Col,
 				distinct: aggregatorDistinct{
-					column: distinct,
-					coll:   aggr.Type.Coll,
+					column:       distinct,
+					coll:         aggr.Type.Collation(),
+					collationEnv: aggr.CollationEnv,
 				},
 			}
 
@@ -394,8 +402,9 @@ func newAggregation(fields []*querypb.Field, aggregates []*AggregateParams) (agg
 				from: aggr.Col,
 				sum:  sum,
 				distinct: aggregatorDistinct{
-					column: distinct,
-					coll:   aggr.Type.Coll,
+					column:       distinct,
+					coll:         aggr.Type.Collation(),
+					collationEnv: aggr.CollationEnv,
 				},
 			}
 
@@ -403,7 +412,7 @@ func newAggregation(fields []*querypb.Field, aggregates []*AggregateParams) (agg
 			ag = &aggregatorMin{
 				aggregatorMinMax{
 					from:   aggr.Col,
-					minmax: evalengine.NewAggregationMinMax(sourceType, aggr.Type.Coll),
+					minmax: evalengine.NewAggregationMinMax(sourceType, aggr.CollationEnv, aggr.Type.Collation()),
 				},
 			}
 
@@ -411,7 +420,7 @@ func newAggregation(fields []*querypb.Field, aggregates []*AggregateParams) (agg
 			ag = &aggregatorMax{
 				aggregatorMinMax{
 					from:   aggr.Col,
-					minmax: evalengine.NewAggregationMinMax(sourceType, aggr.Type.Coll),
+					minmax: evalengine.NewAggregationMinMax(sourceType, aggr.CollationEnv, aggr.Type.Collation()),
 				},
 			}
 

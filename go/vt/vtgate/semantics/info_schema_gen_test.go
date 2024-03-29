@@ -20,12 +20,15 @@ import (
 	"database/sql"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -37,11 +40,16 @@ func TestGenerateInfoSchemaMap(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
+	collationName := collations.MySQL8().LookupName(collations.SystemCollation.Collation)
+
 	for _, tbl := range informationSchemaTables80 {
-		b.WriteString("cols = []vindexes.Column{}\n")
 		result, err := db.Query(fmt.Sprintf("show columns from information_schema.`%s`", tbl))
-		require.NoError(t, err)
+		if err != nil {
+			t.Logf("error querying table %s: %v", tbl, err)
+			continue
+		}
 		defer result.Close()
+		b.WriteString("cols = []vindexes.Column{}\n")
 		for result.Next() {
 			var r row
 			result.Scan(&r.Field, &r.Type, &r.Null, &r.Key, &r.Default, &r.Extra)
@@ -61,7 +69,24 @@ func TestGenerateInfoSchemaMap(t *testing.T) {
 			if int(i2) == 0 {
 				t.Fatalf("%s %s", tbl, r.Field)
 			}
-			b.WriteString(fmt.Sprintf("cols = append(cols, createCol(\"%s\", %d))\n", r.Field, int(i2)))
+			var size, scale int64
+			var values string
+			switch i2 {
+			case sqltypes.Enum, sqltypes.Set:
+				values = allString[2]
+			default:
+				if len(allString) > 1 && allString[2] != "" {
+					parts := strings.Split(allString[2], ",")
+					size, err = strconv.ParseInt(parts[0], 10, 32)
+					require.NoError(t, err)
+					if len(parts) > 1 {
+						scale, err = strconv.ParseInt(parts[1], 10, 32)
+						require.NoError(t, err)
+					}
+				}
+			}
+			//  createCol(name string, typ int, collation string, def string, invisible bool, size, scale int32, notNullable bool)
+			b.WriteString(fmt.Sprintf("cols = append(cols, createCol(\"%s\", %d, \"%s\", \"%s\", %d, %d, %t, \"%s\"))\n", r.Field, int(i2), collationName, r.Default, size, scale, r.Null == "NO", values))
 		}
 		b.WriteString(fmt.Sprintf("infSchema[\"%s\"] = cols\n", tbl))
 	}
@@ -85,6 +110,8 @@ var (
 		"ENGINES",
 		"EVENTS",
 		"FILES",
+		"GLOBAL_STATUS",
+		"GLOBAL_VARIABLES",
 		"INNODB_BUFFER_PAGE",
 		"INNODB_BUFFER_PAGE_LRU",
 		"INNODB_BUFFER_POOL_STATS",
@@ -158,7 +185,7 @@ type row struct {
 	Type    string
 	Null    string
 	Key     any
-	Default any
+	Default string
 	Extra   any
 }
 

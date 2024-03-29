@@ -28,7 +28,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"time"
 
 	"vitess.io/vitess/go/bucketpool"
@@ -44,6 +43,8 @@ import (
 )
 
 const (
+	DefaultFlushDelay = 100 * time.Millisecond
+
 	// connBufferSize is how much we buffer for reading and
 	// writing. It is also how much we allocate for ephemeral buffers.
 	connBufferSize = 16 * 1024
@@ -129,6 +130,7 @@ type Conn struct {
 
 	bufferedReader *bufio.Reader
 	flushTimer     *time.Timer
+	flushDelay     time.Duration
 	header         [packetHeaderSize]byte
 
 	// Keep track of how and of the buffer we allocated for an
@@ -213,10 +215,9 @@ type Conn struct {
 	// this is used to mark the connection to be closed so that the command phase for the connection can be stopped and
 	// the connection gets closed.
 	closing bool
-}
 
-// splitStatementFunciton is the function that is used to split the statement in case of a multi-statement query.
-var splitStatementFunction = sqlparser.SplitStatementToPieces
+	truncateErrLen int
+}
 
 // PrepareData is a buffer used for store prepare statement meta data
 type PrepareData struct {
@@ -247,10 +248,15 @@ var readersPool = sync.Pool{New: func() any { return bufio.NewReaderSize(nil, co
 
 // newConn is an internal method to create a Conn. Used by client and server
 // side for common creation code.
-func newConn(conn net.Conn) *Conn {
+func newConn(conn net.Conn, flushDelay time.Duration, truncateErrLen int) *Conn {
+	if flushDelay == 0 {
+		flushDelay = DefaultFlushDelay
+	}
 	return &Conn{
 		conn:           conn,
 		bufferedReader: bufio.NewReaderSize(conn, connBufferSize),
+		flushDelay:     flushDelay,
+		truncateErrLen: truncateErrLen,
 	}
 }
 
@@ -271,10 +277,12 @@ func newServerConn(conn net.Conn, listener *Listener) *Conn {
 	}
 
 	c := &Conn{
-		conn:        conn,
-		listener:    listener,
-		PrepareData: make(map[uint32]*PrepareData),
-		keepAliveOn: enabledKeepAlive,
+		conn:           conn,
+		listener:       listener,
+		PrepareData:    make(map[uint32]*PrepareData),
+		keepAliveOn:    enabledKeepAlive,
+		flushDelay:     listener.flushDelay,
+		truncateErrLen: listener.truncateErrLen,
 	}
 
 	if listener.connReadBufferSize > 0 {
@@ -333,7 +341,7 @@ func (c *Conn) endWriterBuffering() error {
 		c.bufferedWriter = nil
 	}()
 
-	c.stopFlushTimer()
+	c.flushTimer.Stop()
 	return c.bufferedWriter.Flush()
 }
 
@@ -345,43 +353,20 @@ func (c *Conn) returnReader() {
 	readersPool.Put(c.bufferedReader)
 }
 
-// getWriter returns the current writer. It may be either
-// the original connection or a wrapper. The returned unget
-// function must be invoked after the writing is finished.
-// In buffered mode, the unget starts a timer to flush any
-// buffered data.
-func (c *Conn) getWriter() (w io.Writer, unget func()) {
-	c.bufMu.Lock()
-	if c.bufferedWriter != nil {
-		return c.bufferedWriter, func() {
-			c.startFlushTimer()
-			c.bufMu.Unlock()
-		}
-	}
-	c.bufMu.Unlock()
-	return c.conn, func() {}
-}
-
 // startFlushTimer must be called while holding lock on bufMu.
 func (c *Conn) startFlushTimer() {
-	c.stopFlushTimer()
-	c.flushTimer = time.AfterFunc(mysqlServerFlushDelay, func() {
-		c.bufMu.Lock()
-		defer c.bufMu.Unlock()
+	if c.flushTimer == nil {
+		c.flushTimer = time.AfterFunc(c.flushDelay, func() {
+			c.bufMu.Lock()
+			defer c.bufMu.Unlock()
 
-		if c.bufferedWriter == nil {
-			return
-		}
-		c.stopFlushTimer()
-		c.bufferedWriter.Flush()
-	})
-}
-
-// stopFlushTimer must be called while holding lock on bufMu.
-func (c *Conn) stopFlushTimer() {
-	if c.flushTimer != nil {
-		c.flushTimer.Stop()
-		c.flushTimer = nil
+			if c.bufferedWriter == nil {
+				return
+			}
+			c.bufferedWriter.Flush()
+		})
+	} else {
+		c.flushTimer.Reset(c.flushDelay)
 	}
 }
 
@@ -615,8 +600,19 @@ func (c *Conn) writePacket(data []byte) error {
 	index := 0
 	dataLength := len(data) - packetHeaderSize
 
-	w, unget := c.getWriter()
-	defer unget()
+	var w io.Writer
+
+	c.bufMu.Lock()
+	if c.bufferedWriter != nil {
+		w = c.bufferedWriter
+		defer func() {
+			c.startFlushTimer()
+			c.bufMu.Unlock()
+		}()
+	} else {
+		c.bufMu.Unlock()
+		w = c.conn
+	}
 
 	var header [packetHeaderSize]byte
 	for {
@@ -1240,7 +1236,7 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 	var queries []string
 	if c.Capabilities&CapabilityClientMultiStatements != 0 {
 		var err error
-		queries, err = splitStatementFunction(query)
+		queries, err = handler.Env().Parser().SplitStatementToPieces(query)
 		if err != nil {
 			log.Errorf("Conn %v: Error splitting query: %v", c, err)
 			return c.writeErrorPacketFromErrorAndLog(err)
@@ -1253,14 +1249,14 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 		queries = []string{query}
 	}
 
-	// Popoulate PrepareData
+	// Populate PrepareData
 	c.StatementID++
 	prepare := &PrepareData{
 		StatementID: c.StatementID,
 		PrepareStmt: queries[0],
 	}
 
-	statement, err := sqlparser.ParseStrictDDL(query)
+	statement, err := handler.Env().Parser().ParseStrictDDL(query)
 	if err != nil {
 		log.Errorf("Conn %v: Error parsing prepared statement: %v", c, err)
 		if !c.writeErrorPacketFromErrorAndLog(err) {
@@ -1368,7 +1364,7 @@ func (c *Conn) handleComQuery(handler Handler, data []byte) (kontinue bool) {
 	var queries []string
 	var err error
 	if c.Capabilities&CapabilityClientMultiStatements != 0 {
-		queries, err = splitStatementFunction(query)
+		queries, err = handler.Env().Parser().SplitStatementToPieces(query)
 		if err != nil {
 			log.Errorf("Conn %v: Error splitting query: %v", c, err)
 			return c.writeErrorPacketFromErrorAndLog(err)
@@ -1529,35 +1525,30 @@ type PacketOK struct {
 	sessionStateData string
 }
 
-func (c *Conn) parseOKPacket(in []byte) (*PacketOK, error) {
+func (c *Conn) parseOKPacket(packetOK *PacketOK, in []byte) error {
 	data := &coder{
 		data: in,
 		pos:  1, // We already read the type.
-	}
-	packetOK := &PacketOK{}
-
-	fail := func(format string, args ...any) (*PacketOK, error) {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, format, args...)
 	}
 
 	// Affected rows.
 	affectedRows, ok := data.readLenEncInt()
 	if !ok {
-		return fail("invalid OK packet affectedRows: %v", data)
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid OK packet affectedRows: %v", data.data)
 	}
 	packetOK.affectedRows = affectedRows
 
 	// Last Insert ID.
 	lastInsertID, ok := data.readLenEncInt()
 	if !ok {
-		return fail("invalid OK packet lastInsertID: %v", data)
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid OK packet lastInsertID: %v", data.data)
 	}
 	packetOK.lastInsertID = lastInsertID
 
 	// Status flags.
 	statusFlags, ok := data.readUint16()
 	if !ok {
-		return fail("invalid OK packet statusFlags: %v", data)
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid OK packet statusFlags: %v", data.data)
 	}
 	packetOK.statusFlags = statusFlags
 
@@ -1565,7 +1556,7 @@ func (c *Conn) parseOKPacket(in []byte) (*PacketOK, error) {
 	// Warnings.
 	warnings, ok := data.readUint16()
 	if !ok {
-		return fail("invalid OK packet warnings: %v", data)
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid OK packet warnings: %v", data.data)
 	}
 	packetOK.warnings = warnings
 
@@ -1582,7 +1573,7 @@ func (c *Conn) parseOKPacket(in []byte) (*PacketOK, error) {
 			if !ok || length == 0 {
 				// In case we have no more data or a zero length string, there's no additional information so
 				// we can return the packet.
-				return packetOK, nil
+				return nil
 			}
 
 			// Alright, now we need to read each sub packet from the session state change.
@@ -1594,7 +1585,7 @@ func (c *Conn) parseOKPacket(in []byte) (*PacketOK, error) {
 				}
 				sessionLen, ok := data.readLenEncInt()
 				if !ok {
-					return fail("invalid OK packet session state change length for type %v", sscType)
+					return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid OK packet session state change length for type %v", sscType)
 				}
 
 				if sscType != SessionTrackGtids {
@@ -1607,19 +1598,19 @@ func (c *Conn) parseOKPacket(in []byte) (*PacketOK, error) {
 				// read (and ignore for now) the GTIDS encoding specification code: 1 byte
 				_, ok = data.readByte()
 				if !ok {
-					return fail("invalid OK packet gtids type: %v", data)
+					return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid OK packet gtids type: %v", data.data)
 				}
 
 				gtids, ok := data.readLenEncString()
 				if !ok {
-					return fail("invalid OK packet gtids: %v", data)
+					return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid OK packet gtids: %v", data.data)
 				}
 				packetOK.sessionStateData = gtids
 			}
 		}
 	}
 
-	return packetOK, nil
+	return nil
 }
 
 // isErrorPacket determines whether or not the packet is an error packet. Mostly here for
@@ -1708,45 +1699,6 @@ func (c *Conn) IsMarkedForClose() bool {
 	return c.closing
 }
 
-// ConnCheck ensures that this connection to the MySQL server hasn't been broken.
-// This is a fast, non-blocking check. For details on its implementation, please read
-// "Three Bugs in the Go MySQL Driver" (Vicent Marti, GitHub, 2020)
-// https://github.blog/2020-05-20-three-bugs-in-the-go-mysql-driver/
-func (c *Conn) ConnCheck() error {
-	conn := c.conn
-	if tlsconn, ok := conn.(*tls.Conn); ok {
-		conn = tlsconn.NetConn()
-	}
-	if conn, ok := conn.(syscall.Conn); ok {
-		rc, err := conn.SyscallConn()
-		if err != nil {
-			return err
-		}
-
-		var n int
-		var buff [1]byte
-		rerr := rc.Read(func(fd uintptr) bool {
-			n, err = syscall.Read(int(fd), buff[:])
-			return true
-		})
-
-		switch {
-		case rerr != nil:
-			return rerr
-		case n == 0 && err == nil:
-			return io.EOF
-		case n > 0:
-			return sqlerror.NewSQLError(sqlerror.CRUnknownError, sqlerror.SSUnknownSQLState, "unexpected read from conn")
-		case err == syscall.EAGAIN || err == syscall.EWOULDBLOCK:
-			return nil
-		default:
-			return err
-		}
-	}
-	return nil
-}
-
-// GetTestConn returns a conn for testing purpose only.
-func GetTestConn() *Conn {
-	return newConn(testConn{})
+func (c *Conn) IsShuttingDown() bool {
+	return c.listener.shutdown.Load()
 }

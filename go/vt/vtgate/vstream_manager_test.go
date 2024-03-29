@@ -25,12 +25,12 @@ import (
 	"testing"
 	"time"
 
-	"google.golang.org/protobuf/proto"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
@@ -41,8 +41,6 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-
-	"vitess.io/vitess/go/test/utils"
 )
 
 var mu sync.Mutex
@@ -386,46 +384,133 @@ func TestVStreamsCreatedAndLagMetrics(t *testing.T) {
 	assert.Equal(t, wantVStreamsLag, vsm.vstreamsLag.Counts(), "vstreamsLag matches")
 }
 
-func TestVStreamRetry(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+func TestVStreamRetriableErrors(t *testing.T) {
+	type testCase struct {
+		name         string
+		code         vtrpcpb.Code
+		msg          string
+		shouldRetry  bool
+		ignoreTablet bool
+	}
 
-	cell := "aa"
-	ks := "TestVStream"
-	_ = createSandbox(ks)
-	hc := discovery.NewFakeHealthCheck(nil)
+	tcases := []testCase{
+		{
+			name:         "failed precondition",
+			code:         vtrpcpb.Code_FAILED_PRECONDITION,
+			msg:          "",
+			shouldRetry:  true,
+			ignoreTablet: false,
+		},
+		{
+			name:         "gtid mismatch",
+			code:         vtrpcpb.Code_INVALID_ARGUMENT,
+			msg:          "GTIDSet Mismatch aa",
+			shouldRetry:  true,
+			ignoreTablet: true,
+		},
+		{
+			name:         "unavailable",
+			code:         vtrpcpb.Code_UNAVAILABLE,
+			msg:          "",
+			shouldRetry:  true,
+			ignoreTablet: false,
+		},
+		{
+			name:         "should not retry",
+			code:         vtrpcpb.Code_INVALID_ARGUMENT,
+			msg:          "final error",
+			shouldRetry:  false,
+			ignoreTablet: false,
+		},
+	}
 
-	st := getSandboxTopo(ctx, cell, ks, []string{"-20"})
-	vsm := newTestVStreamManager(ctx, hc, st, "aa")
-	sbc0 := hc.AddTestTablet(cell, "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
-	addTabletToSandboxTopo(t, ctx, st, ks, "-20", sbc0.Tablet())
 	commit := []*binlogdatapb.VEvent{
 		{Type: binlogdatapb.VEventType_COMMIT},
 	}
-	sbc0.AddVStreamEvents(commit, nil)
-	sbc0.AddVStreamEvents(nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "aa"))
-	sbc0.AddVStreamEvents(commit, nil)
-	sbc0.AddVStreamEvents(nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "bb"))
-	sbc0.AddVStreamEvents(nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cc"))
-	sbc0.AddVStreamEvents(nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "final error"))
-	var count atomic.Int32
-	vgtid := &binlogdatapb.VGtid{
-		ShardGtids: []*binlogdatapb.ShardGtid{{
-			Keyspace: ks,
-			Shard:    "-20",
-			Gtid:     "pos",
-		}},
+
+	want := &binlogdatapb.VStreamResponse{Events: commit}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			// aa will be the local cell for this test, but that tablet will have a vstream error.
+			cells := []string{"aa", "ab"}
+
+			ks := "TestVStream"
+			_ = createSandbox(ks)
+			hc := discovery.NewFakeHealthCheck(nil)
+
+			st := getSandboxTopoMultiCell(ctx, cells, ks, []string{"-20"})
+
+			sbc0 := hc.AddTestTablet(cells[0], "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_REPLICA, true, 1, nil)
+			sbc1 := hc.AddTestTablet(cells[1], "1.1.1.1", 1002, ks, "-20", topodatapb.TabletType_REPLICA, true, 1, nil)
+
+			addTabletToSandboxTopo(t, ctx, st, ks, "-20", sbc0.Tablet())
+			addTabletToSandboxTopo(t, ctx, st, ks, "-20", sbc1.Tablet())
+
+			vsm := newTestVStreamManager(ctx, hc, st, cells[0])
+
+			// Always have the local cell tablet error so it's ignored on retry and we pick the other one
+			// if the error requires ignoring the tablet on retry.
+			sbc0.AddVStreamEvents(nil, vterrors.Errorf(tcase.code, tcase.msg))
+
+			if tcase.ignoreTablet {
+				sbc1.AddVStreamEvents(commit, nil)
+			} else {
+				sbc0.AddVStreamEvents(commit, nil)
+			}
+
+			vgtid := &binlogdatapb.VGtid{
+				ShardGtids: []*binlogdatapb.ShardGtid{{
+					Keyspace: ks,
+					Shard:    "-20",
+					Gtid:     "pos",
+				}},
+			}
+
+			ch := make(chan *binlogdatapb.VStreamResponse)
+			done := make(chan struct{})
+			go func() {
+				err := vsm.VStream(ctx, topodatapb.TabletType_REPLICA, vgtid, nil, &vtgatepb.VStreamFlags{Cells: strings.Join(cells, ",")}, func(events []*binlogdatapb.VEvent) error {
+					ch <- &binlogdatapb.VStreamResponse{Events: events}
+					return nil
+				})
+				wantErr := "context canceled"
+
+				if !tcase.shouldRetry {
+					wantErr = tcase.msg
+				}
+
+				if err == nil || !strings.Contains(err.Error(), wantErr) {
+					t.Errorf("vstream end: %v, must contain %v", err.Error(), wantErr)
+				}
+				close(done)
+			}()
+
+		Loop:
+			for {
+				if tcase.shouldRetry {
+					select {
+					case event := <-ch:
+						got := event.CloneVT()
+						if !proto.Equal(got, want) {
+							t.Errorf("got different vstream event than expected")
+						}
+						cancel()
+					case <-done:
+						// The goroutine has completed, so break out of the loop
+						break Loop
+					}
+				} else {
+					<-done
+					break Loop
+				}
+			}
+		})
 	}
-	err := vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
-		count.Add(1)
-		return nil
-	})
-	wantErr := "final error"
-	if err == nil || !strings.Contains(err.Error(), wantErr) {
-		t.Errorf("vstream end: %v, must contain %v", err.Error(), wantErr)
-	}
-	time.Sleep(100 * time.Millisecond) // wait for goroutine within VStream to finish
-	assert.Equal(t, int32(2), count.Load())
+
 }
 
 func TestVStreamShouldNotSendSourceHeartbeats(t *testing.T) {
@@ -1192,6 +1277,288 @@ func TestVStreamIdleHeartbeat(t *testing.T) {
 	}
 }
 
+func TestKeyspaceHasBeenSharded(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
+	cell := "zone1"
+	ks := "testks"
+
+	type testcase struct {
+		name            string
+		oldshards       []string
+		newshards       []string
+		vgtid           *binlogdatapb.VGtid
+		trafficSwitched bool
+		want            bool
+		wantErr         string
+	}
+	testcases := []testcase{
+		{
+			name: "2 to 4, split both, traffic not switched",
+			oldshards: []string{
+				"-80",
+				"80-",
+			},
+			newshards: []string{
+				"-40",
+				"40-80",
+				"80-c0",
+				"c0-",
+			},
+			vgtid: &binlogdatapb.VGtid{
+				ShardGtids: []*binlogdatapb.ShardGtid{
+					{
+						Keyspace: ks,
+						Shard:    "-80",
+					},
+					{
+						Keyspace: ks,
+						Shard:    "80-",
+					},
+				},
+			},
+			trafficSwitched: false,
+			want:            false,
+		},
+		{
+			name: "2 to 4, split both, traffic not switched",
+			oldshards: []string{
+				"-80",
+				"80-",
+			},
+			newshards: []string{
+				"-40",
+				"40-80",
+				"80-c0",
+				"c0-",
+			},
+			vgtid: &binlogdatapb.VGtid{
+				ShardGtids: []*binlogdatapb.ShardGtid{
+					{
+						Keyspace: ks,
+						Shard:    "-80",
+					},
+					{
+						Keyspace: ks,
+						Shard:    "80-",
+					},
+				},
+			},
+			trafficSwitched: false,
+			want:            false,
+		},
+		{
+			name: "2 to 8, split both, traffic switched",
+			oldshards: []string{
+				"-80",
+				"80-",
+			},
+			newshards: []string{
+				"-20",
+				"20-40",
+				"40-60",
+				"60-80",
+				"80-a0",
+				"a0-c0",
+				"c0-e0",
+				"e0-",
+			},
+			vgtid: &binlogdatapb.VGtid{
+				ShardGtids: []*binlogdatapb.ShardGtid{
+					{
+						Keyspace: ks,
+						Shard:    "-80",
+					},
+					{
+						Keyspace: ks,
+						Shard:    "80-",
+					},
+				},
+			},
+			trafficSwitched: true,
+			want:            true,
+		},
+		{
+			name: "2 to 4, split only first shard, traffic switched",
+			oldshards: []string{
+				"-80",
+				"80-",
+			},
+			newshards: []string{
+				"-20",
+				"20-40",
+				"40-60",
+				"60-80",
+				// 80- is not being resharded.
+			},
+			vgtid: &binlogdatapb.VGtid{
+				ShardGtids: []*binlogdatapb.ShardGtid{
+					{
+						Keyspace: ks,
+						Shard:    "-80",
+					},
+					{
+						Keyspace: ks,
+						Shard:    "80-",
+					},
+				},
+			},
+			trafficSwitched: true,
+			want:            true,
+		},
+		{
+			name: "4 to 2, merge both shards, traffic switched",
+			oldshards: []string{
+				"-40",
+				"40-80",
+				"80-c0",
+				"c0-",
+			},
+			newshards: []string{
+				"-80",
+				"80-",
+			},
+			vgtid: &binlogdatapb.VGtid{
+				ShardGtids: []*binlogdatapb.ShardGtid{
+					{
+						Keyspace: ks,
+						Shard:    "-40",
+					},
+					{
+						Keyspace: ks,
+						Shard:    "40-80",
+					},
+					{
+						Keyspace: ks,
+						Shard:    "80-c0",
+					},
+					{
+						Keyspace: ks,
+						Shard:    "c0-",
+					},
+				},
+			},
+			trafficSwitched: true,
+			want:            true,
+		},
+		{
+			name: "4 to 3, merge second half, traffic not switched",
+			oldshards: []string{
+				"-40",
+				"40-80",
+				"80-c0",
+				"c0-",
+			},
+			newshards: []string{
+				// -40 and 40-80 are not being resharded.
+				"80-", // Merge of 80-c0 and c0-
+			},
+			vgtid: &binlogdatapb.VGtid{
+				ShardGtids: []*binlogdatapb.ShardGtid{
+					{
+						Keyspace: ks,
+						Shard:    "-40",
+					},
+					{
+						Keyspace: ks,
+						Shard:    "40-80",
+					},
+					{
+						Keyspace: ks,
+						Shard:    "80-c0",
+					},
+					{
+						Keyspace: ks,
+						Shard:    "c0-",
+					},
+				},
+			},
+			trafficSwitched: false,
+			want:            false,
+		},
+		{
+			name: "4 to 3, merge second half, traffic switched",
+			oldshards: []string{
+				"-40",
+				"40-80",
+				"80-c0",
+				"c0-",
+			},
+			newshards: []string{
+				// -40 and 40-80 are not being resharded.
+				"80-", // Merge of 80-c0 and c0-
+			},
+			vgtid: &binlogdatapb.VGtid{
+				ShardGtids: []*binlogdatapb.ShardGtid{
+					{
+						Keyspace: ks,
+						Shard:    "-40",
+					},
+					{
+						Keyspace: ks,
+						Shard:    "40-80",
+					},
+					{
+						Keyspace: ks,
+						Shard:    "80-c0",
+					},
+					{
+						Keyspace: ks,
+						Shard:    "c0-",
+					},
+				},
+			},
+			trafficSwitched: true,
+			want:            true,
+		},
+	}
+
+	addTablet := func(t *testing.T, ctx context.Context, host string, port int32, cell, ks, shard string, ts *topo.Server, hc *discovery.FakeHealthCheck, serving bool) {
+		tabletconn := hc.AddTestTablet(cell, host, port, ks, shard, topodatapb.TabletType_PRIMARY, serving, 0, nil)
+		err := ts.CreateTablet(ctx, tabletconn.Tablet())
+		require.NoError(t, err)
+		var alias *topodatapb.TabletAlias
+		if serving {
+			alias = tabletconn.Tablet().Alias
+		}
+		_, err = ts.UpdateShardFields(ctx, ks, shard, func(si *topo.ShardInfo) error {
+			si.PrimaryAlias = alias
+			si.IsPrimaryServing = serving
+			return nil
+		})
+		require.NoError(t, err)
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			hc := discovery.NewFakeHealthCheck(nil)
+			_ = createSandbox(ks)
+			st := getSandboxTopo(ctx, cell, ks, append(tc.oldshards, tc.newshards...))
+			vsm := newTestVStreamManager(ctx, hc, st, cell)
+			vs := vstream{
+				vgtid:      tc.vgtid,
+				tabletType: topodatapb.TabletType_PRIMARY,
+				optCells:   cell,
+				vsm:        vsm,
+				ts:         st.topoServer,
+			}
+			for i, shard := range tc.oldshards {
+				addTablet(t, ctx, fmt.Sprintf("1.1.0.%d", i), int32(1000+i), cell, ks, shard, st.topoServer, hc, !tc.trafficSwitched)
+			}
+			for i, shard := range tc.newshards {
+				addTablet(t, ctx, fmt.Sprintf("1.1.1.%d", i), int32(2000+i), cell, ks, shard, st.topoServer, hc, tc.trafficSwitched)
+			}
+			got, err := vs.keyspaceHasBeenResharded(ctx, ks)
+			if tc.wantErr != "" {
+				require.EqualError(t, err, tc.wantErr)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, tc.want, got)
+		})
+	}
+}
+
 func newTestVStreamManager(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, cell string) *vstreamManager {
 	gw := NewTabletGateway(ctx, hc, serv, cell)
 	srvResolver := srvtopo.NewResolver(serv, gw, cell)
@@ -1260,6 +1627,22 @@ func getSandboxTopo(ctx context.Context, cell string, keyspace string, shards []
 	ts := st.topoServer
 	ts.CreateCellInfo(ctx, cell, &topodatapb.CellInfo{})
 	ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{})
+	for _, shard := range shards {
+		ts.CreateShard(ctx, keyspace, shard)
+	}
+	return st
+}
+
+func getSandboxTopoMultiCell(ctx context.Context, cells []string, keyspace string, shards []string) *sandboxTopo {
+	st := newSandboxForCells(ctx, cells)
+	ts := st.topoServer
+
+	for _, cell := range cells {
+		ts.CreateCellInfo(ctx, cell, &topodatapb.CellInfo{})
+	}
+
+	ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{})
+
 	for _, shard := range shards {
 		ts.CreateShard(ctx, keyspace, shard)
 	}

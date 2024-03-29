@@ -49,14 +49,7 @@ func TestSrvKeyspaceWithNilNewKeyspace(t *testing.T) {
 		keyspace: keyspace,
 		shards:   make(map[string]*shardState),
 	}
-	kss.lastKeyspace = &topodatapb.SrvKeyspace{
-		ServedFrom: []*topodatapb.SrvKeyspace_ServedFrom{
-			{
-				TabletType: topodatapb.TabletType_PRIMARY,
-				Keyspace:   keyspace,
-			},
-		},
-	}
+	kss.lastKeyspace = &topodatapb.SrvKeyspace{}
 	require.True(t, kss.onSrvKeyspace(nil, nil))
 }
 

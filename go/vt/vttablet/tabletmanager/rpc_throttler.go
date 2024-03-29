@@ -19,6 +19,7 @@ package tabletmanager
 import (
 	"context"
 
+	"vitess.io/vitess/go/stats"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -28,6 +29,7 @@ import (
 
 // CheckThrottler executes a throttler check
 func (tm *TabletManager) CheckThrottler(ctx context.Context, req *tabletmanagerdatapb.CheckThrottlerRequest) (*tabletmanagerdatapb.CheckThrottlerResponse, error) {
+	go stats.GetOrNewCounter("ThrottlerCheckRequest", "CheckThrottler requests").Add(1)
 	if req.AppName == "" {
 		req.AppName = throttlerapp.VitessName.String()
 	}

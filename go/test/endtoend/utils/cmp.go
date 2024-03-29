@@ -70,6 +70,12 @@ func (mcmp *MySQLCompare) AssertMatches(query, expected string) {
 	}
 }
 
+// SkipIfBinaryIsBelowVersion should be used instead of using utils.SkipIfBinaryIsBelowVersion(t,
+// This is because we might be inside a Run block that has a different `t` variable
+func (mcmp *MySQLCompare) SkipIfBinaryIsBelowVersion(majorVersion int, binary string) {
+	SkipIfBinaryIsBelowVersion(mcmp.t, majorVersion, binary)
+}
+
 // AssertMatchesAny ensures the given query produces any one of the expected results.
 func (mcmp *MySQLCompare) AssertMatchesAny(query string, expected ...string) {
 	mcmp.t.Helper()

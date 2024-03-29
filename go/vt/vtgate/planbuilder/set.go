@@ -55,12 +55,15 @@ func buildSetPlan(stmt *sqlparser.Set, vschema plancontext.VSchema) (*planResult
 	var setOps []engine.SetOp
 	var err error
 
-	ec := new(expressionConverter)
+	ec := &expressionConverter{
+		env:       vschema.Environment(),
+		collation: vschema.ConnCollation(),
+	}
 
 	for _, expr := range stmt.Exprs {
 		// AST struct has been prepared before getting here, so no scope here means that
 		// we have a UDV. If the original query didn't explicitly specify the scope, it
-		// would have been explictly set to sqlparser.SessionStr before reaching this
+		// would have been explicitly set to sqlparser.SessionStr before reaching this
 		// phase of planning
 		switch expr.Var.Scope {
 		case sqlparser.GlobalScope:
@@ -80,7 +83,7 @@ func buildSetPlan(stmt *sqlparser.Set, vschema plancontext.VSchema) (*planResult
 			}
 			setOps = append(setOps, setOp)
 		case sqlparser.NextTxScope, sqlparser.SessionScope:
-			planFunc, err := sysvarPlanningFuncs.Get(expr)
+			planFunc, err := sysvarPlanningFuncs.Get(vschema.Environment(), expr)
 			if err != nil {
 				return nil, err
 			}

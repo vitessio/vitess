@@ -25,10 +25,10 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/json2"
-	"vitess.io/vitess/go/maps2"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -38,6 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -380,9 +381,6 @@ func (ts *trafficSwitcher) addParticipatingTablesToKeyspace(ctx context.Context,
 		if err := json2.Unmarshal([]byte(wrap), ks); err != nil {
 			return err
 		}
-		if err != nil {
-			return err
-		}
 		for table, vtab := range ks.Tables {
 			vschema.Tables[table] = vtab
 		}
@@ -490,26 +488,33 @@ func (ts *trafficSwitcher) dropParticipatingTablesFromKeyspace(ctx context.Conte
 func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType TableRemovalType) error {
 	err := ts.ForAllSources(func(source *MigrationSource) error {
 		for _, tableName := range ts.Tables() {
-			query := fmt.Sprintf("drop table %s.%s",
-				sqlescape.EscapeID(sqlescape.UnescapeID(source.GetPrimary().DbName())),
-				sqlescape.EscapeID(sqlescape.UnescapeID(tableName)))
+			primaryDbName, err := sqlescape.EnsureEscaped(source.GetPrimary().DbName())
+			if err != nil {
+				return err
+			}
+			tableNameEscaped, err := sqlescape.EnsureEscaped(tableName)
+			if err != nil {
+				return err
+			}
+
+			query := fmt.Sprintf("drop table %s.%s", primaryDbName, tableNameEscaped)
 			if removalType == DropTable {
 				ts.Logger().Infof("%s: Dropping table %s.%s\n",
 					source.GetPrimary().String(), source.GetPrimary().DbName(), tableName)
 			} else {
-				renameName := getRenameFileName(tableName)
+				renameName, err := sqlescape.EnsureEscaped(getRenameFileName(tableName))
+				if err != nil {
+					return err
+				}
 				ts.Logger().Infof("%s: Renaming table %s.%s to %s.%s\n",
 					source.GetPrimary().String(), source.GetPrimary().DbName(), tableName, source.GetPrimary().DbName(), renameName)
-				query = fmt.Sprintf("rename table %s.%s TO %s.%s",
-					sqlescape.EscapeID(sqlescape.UnescapeID(source.GetPrimary().DbName())),
-					sqlescape.EscapeID(sqlescape.UnescapeID(tableName)),
-					sqlescape.EscapeID(sqlescape.UnescapeID(source.GetPrimary().DbName())),
-					sqlescape.EscapeID(sqlescape.UnescapeID(renameName)))
+				query = fmt.Sprintf("rename table %s.%s TO %s.%s", primaryDbName, tableNameEscaped, primaryDbName, renameName)
 			}
-			_, err := ts.ws.tmc.ExecuteFetchAsDba(ctx, source.GetPrimary().Tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
-				Query:        []byte(query),
-				MaxRows:      1,
-				ReloadSchema: true,
+			_, err = ts.ws.tmc.ExecuteFetchAsDba(ctx, source.GetPrimary().Tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+				Query:                   []byte(query),
+				MaxRows:                 1,
+				ReloadSchema:            true,
+				DisableForeignKeyChecks: true,
 			})
 			if err != nil {
 				ts.Logger().Errorf("%s: Error removing table %s: %v", source.GetPrimary().String(), tableName, err)
@@ -587,6 +592,10 @@ func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string,
 	// For forward migration, we add tablet type specific rules to redirect traffic to the target.
 	// For backward, we redirect to source.
 	for _, servedType := range servedTypes {
+		if servedType != topodatapb.TabletType_REPLICA && servedType != topodatapb.TabletType_RDONLY {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid tablet type specified when switching reads: %v", servedType)
+		}
+
 		tt := strings.ToLower(servedType.String())
 		for _, table := range ts.Tables() {
 			if direction == DirectionForward {
@@ -608,7 +617,8 @@ func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string,
 
 func (ts *trafficSwitcher) startReverseVReplication(ctx context.Context) error {
 	return ts.ForAllSources(func(source *MigrationSource) error {
-		query := fmt.Sprintf("update _vt.vreplication set state='Running', message='' where db_name=%s", encodeString(source.GetPrimary().DbName()))
+		query := fmt.Sprintf("update _vt.vreplication set state='Running', message='' where db_name=%s and workflow=%s",
+			encodeString(source.GetPrimary().DbName()), encodeString(ts.ReverseWorkflowName()))
 		_, err := ts.VReplicationExec(ctx, source.GetPrimary().Alias, query)
 		return err
 	})
@@ -998,7 +1008,7 @@ func (ts *trafficSwitcher) cancelMigration(ctx context.Context, sm *StreamMigrat
 		ts.Logger().Errorf("Cancel migration failed:", err)
 	}
 
-	sm.CancelMigration(ctx)
+	sm.CancelStreamMigrations(ctx)
 
 	err = ts.ForAllTargets(func(target *MigrationTarget) error {
 		query := fmt.Sprintf("update _vt.vreplication set state='Running', message='' where db_name=%s and workflow=%s",
@@ -1059,22 +1069,27 @@ func (ts *trafficSwitcher) dropSourceReverseVReplicationStreams(ctx context.Cont
 }
 
 func (ts *trafficSwitcher) removeTargetTables(ctx context.Context) error {
-	log.Flush()
 	err := ts.ForAllTargets(func(target *MigrationTarget) error {
 		log.Infof("ForAllTargets: %+v", target)
 		for _, tableName := range ts.Tables() {
-			query := fmt.Sprintf("drop table %s.%s",
-				sqlescape.EscapeID(sqlescape.UnescapeID(target.GetPrimary().DbName())),
-				sqlescape.EscapeID(sqlescape.UnescapeID(tableName)))
+			primaryDbName, err := sqlescape.EnsureEscaped(target.GetPrimary().DbName())
+			if err != nil {
+				return err
+			}
+			tableName, err := sqlescape.EnsureEscaped(tableName)
+			if err != nil {
+				return err
+			}
+			query := fmt.Sprintf("drop table %s.%s", primaryDbName, tableName)
 			ts.Logger().Infof("%s: Dropping table %s.%s\n",
 				target.GetPrimary().String(), target.GetPrimary().DbName(), tableName)
 			res, err := ts.ws.tmc.ExecuteFetchAsDba(ctx, target.GetPrimary().Tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
-				Query:        []byte(query),
-				MaxRows:      1,
-				ReloadSchema: true,
+				Query:                   []byte(query),
+				MaxRows:                 1,
+				ReloadSchema:            true,
+				DisableForeignKeyChecks: true,
 			})
 			log.Infof("Removed target table with result: %+v", res)
-			log.Flush()
 			if err != nil {
 				ts.Logger().Errorf("%s: Error removing table %s: %v",
 					target.GetPrimary().String(), tableName, err)
@@ -1345,7 +1360,7 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 // error if any is seen.
 func (ts *trafficSwitcher) findSequenceUsageInKeyspace(vschema *vschemapb.Keyspace) (map[string]*sequenceMetadata, bool, error) {
 	allFullyQualified := true
-	targets := maps2.Values(ts.Targets())
+	targets := maps.Values(ts.Targets())
 	if len(targets) == 0 || targets[0].GetPrimary() == nil { // This should never happen
 		return nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "no primary tablet found for target keyspace %s", ts.targetKeyspace)
 	}
@@ -1418,13 +1433,17 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 				MaxRows: 1,
 			})
 			if terr != nil || len(qr.Rows) != 1 {
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the max used sequence value for target table %s.%s in order to initialize the backing sequence table: %v",
-					ts.targetKeyspace, sequenceMetadata.usingTableName, terr)
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the max used sequence value for target table %s.%s on tablet %s in order to initialize the backing sequence table: %v",
+					ts.targetKeyspace, sequenceMetadata.usingTableName, topoproto.TabletAliasString(primary.Alias), terr)
 			}
-			maxID, terr := sqltypes.Proto3ToResult(qr).Rows[0][0].ToInt64()
-			if terr != nil {
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the max used sequence value for target table %s.%s in order to initialize the backing sequence table: %v",
-					ts.targetKeyspace, sequenceMetadata.usingTableName, terr)
+			rawVal := sqltypes.Proto3ToResult(qr).Rows[0][0]
+			maxID := int64(0)
+			if !rawVal.IsNull() { // If it's NULL then there are no rows and 0 remains the max
+				maxID, terr = rawVal.ToInt64()
+				if terr != nil {
+					return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the max used sequence value for target table %s.%s on tablet %s in order to initialize the backing sequence table: %v",
+						ts.targetKeyspace, sequenceMetadata.usingTableName, topoproto.TabletAliasString(primary.Alias), terr)
+				}
 			}
 			srMu.Lock()
 			defer srMu.Unlock()

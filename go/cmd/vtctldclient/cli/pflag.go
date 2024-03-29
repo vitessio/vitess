@@ -19,22 +19,10 @@ package cli
 import (
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
-
-// StringMapValue augments flagutil.StringMapValue so it can be used as a
-// pflag.Value.
-type StringMapValue struct {
-	flagutil.StringMapValue
-}
-
-// Type is part of the pflag.Value interface.
-func (v *StringMapValue) Type() string {
-	return "cli.StringMapValue"
-}
 
 // KeyspaceTypeFlag adds the pflag.Value interface to a topodatapb.KeyspaceType.
 type KeyspaceTypeFlag topodatapb.KeyspaceType

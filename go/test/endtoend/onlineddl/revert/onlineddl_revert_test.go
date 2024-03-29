@@ -20,7 +20,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"path"
 	"strings"
@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
 
@@ -125,9 +126,11 @@ type revertibleTestCase struct {
 	fromSchema string
 	toSchema   string
 	// expectProblems              bool
+	removedForeignKeyNames      string
 	removedUniqueKeyNames       string
 	droppedNoDefaultColumnNames string
 	expandedColumnNames         string
+	onlyIfFKOnlineDDLPossible   bool
 }
 
 func TestMain(m *testing.M) {
@@ -155,14 +158,6 @@ func TestMain(m *testing.M) {
 			"--heartbeat_on_demand_duration", "5s",
 			"--migration_check_interval", "5s",
 			"--watch_replication_stream",
-			// The next flags are deprecated, and we incldue them to verify that they are nonetheless still allowed.
-			// The values are irrelevant. Just the fact that the flags are allowed in what's important.
-			// These should be included in v18, and removed in v19.
-			"--throttle_threshold", "1m",
-			"--throttle_metrics_query", "select 1 from dual",
-			"--throttle_metrics_threshold", "1.5",
-			"--throttle_check_as_check_self=false",
-			"--throttler-config-via-topo=true",
 		}
 		clusterInstance.VtGateExtraArgs = []string{
 			"--ddl_strategy", "online",
@@ -218,6 +213,27 @@ func TestSchemaChange(t *testing.T) {
 
 func testRevertible(t *testing.T) {
 
+	fkOnlineDDLPossible := false
+	t.Run("check 'rename_table_preserve_foreign_key' variable", func(t *testing.T) {
+		// Online DDL is not possible on vanilla MySQL 8.0 for reasons described in https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/.
+		// However, Online DDL is made possible in via these changes:
+		// - https://github.com/planetscale/mysql-server/commit/bb777e3e86387571c044fb4a2beb4f8c60462ced
+		// - https://github.com/planetscale/mysql-server/commit/c2f1344a6863518d749f2eb01a4c74ca08a5b889
+		// as part of https://github.com/planetscale/mysql-server/releases/tag/8.0.34-ps3.
+		// Said changes introduce a new global/session boolean variable named 'rename_table_preserve_foreign_key'. It defaults 'false'/0 for backwards compatibility.
+		// When enabled, a `RENAME TABLE` to a FK parent "pins" the children's foreign keys to the table name rather than the table pointer. Which means after the RENAME,
+		// the children will point to the newly instated table rather than the original, renamed table.
+		// (Note: this applies to a particular type of RENAME where we swap tables, see the above blog post).
+		// For FK children, the MySQL changes simply ignore any Vitess-internal table.
+		//
+		// In this stress test, we enable Online DDL if the variable 'rename_table_preserve_foreign_key' is present. The Online DDL mechanism will in turn
+		// query for this variable, and manipulate it, when starting the migration and when cutting over.
+		rs, err := shards[0].Vttablets[0].VttabletProcess.QueryTablet("show global variables like 'rename_table_preserve_foreign_key'", keyspaceName, false)
+		require.NoError(t, err)
+		fkOnlineDDLPossible = len(rs.Rows) > 0
+		t.Logf("MySQL support for 'rename_table_preserve_foreign_key': %v", fkOnlineDDLPossible)
+	})
+
 	var testCases = []revertibleTestCase{
 		{
 			name:       "identical schemas",
@@ -252,6 +268,20 @@ func testRevertible(t *testing.T) {
 			fromSchema:            `id int primary key, i1 int default null, unique key i1_uidx(i1, id)`,
 			toSchema:              `id int primary key, i1 int default null, unique key i1_uidx(i1)`,
 			removedUniqueKeyNames: ``,
+		},
+		{
+			name:                      "removed foreign key",
+			fromSchema:                "id int primary key, i int, constraint some_fk_1 foreign key (i) references parent (id) on delete cascade",
+			toSchema:                  "id int primary key, i int",
+			removedForeignKeyNames:    "some_fk_1",
+			onlyIfFKOnlineDDLPossible: true,
+		},
+
+		{
+			name:                      "renamed foreign key",
+			fromSchema:                "id int primary key, i int, constraint f1 foreign key (i) references parent (id) on delete cascade",
+			toSchema:                  "id int primary key, i int, constraint f2 foreign key (i) references parent (id) on delete cascade",
+			onlyIfFKOnlineDDLPossible: true,
 		},
 		{
 			name:                        "remove column without default",
@@ -327,8 +357,8 @@ func testRevertible(t *testing.T) {
 		},
 		{
 			name:                "expanded: enum",
-			fromSchema:          `id int primary key, e1 enum('a', 'b'), e2 enum('a', 'b'), e3 enum('a', 'b'), e4 enum('a', 'b'), e5 enum('a', 'b'), e6 enum('a', 'b'), e7 enum('a', 'b'), e8 enum('a', 'b')`,
-			toSchema:            `id int primary key, e1 enum('a', 'b'), e2 enum('a'), e3 enum('a', 'b', 'c'), e4 enum('a', 'x'), e5 enum('a', 'x', 'b'), e6 enum('b'), e7 varchar(1), e8 tinyint`,
+			fromSchema:          `id int primary key, e1 enum('a', 'b'), e2 enum('a', 'b'), e3 enum('a', 'b'),      e4 enum('a', 'b'), e5 enum('a', 'b'),      e6 enum('a', 'b'), e7 enum('a', 'b'), e8 enum('a', 'b')`,
+			toSchema:            `id int primary key, e1 enum('a', 'b'), e2 enum('a'),      e3 enum('a', 'b', 'c'), e4 enum('a', 'x'), e5 enum('a', 'x', 'b'), e6 enum('b'),      e7 varchar(1), e8 tinyint`,
 			expandedColumnNames: `e3,e4,e5,e6,e7,e8`,
 		},
 		{
@@ -344,9 +374,12 @@ func testRevertible(t *testing.T) {
 		dropTableStatement = `
 			DROP TABLE onlineddl_test
 		`
-		tableName   = "onlineddl_test"
-		ddlStrategy = "online --declarative --allow-zero-in-date"
+		tableName         = "onlineddl_test"
+		ddlStrategy       = "online --declarative --allow-zero-in-date --unsafe-allow-foreign-keys"
+		createParentTable = "create table parent (id int primary key)"
 	)
+
+	onlineddl.VtgateExecQuery(t, &vtParams, createParentTable, "")
 
 	removeBackticks := func(s string) string {
 		return strings.Replace(s, "`", "", -1)
@@ -354,6 +387,10 @@ func testRevertible(t *testing.T) {
 
 	for _, testcase := range testCases {
 		t.Run(testcase.name, func(t *testing.T) {
+			if testcase.onlyIfFKOnlineDDLPossible && !fkOnlineDDLPossible {
+				t.Skipf("skipped because backing database does not support 'rename_table_preserve_foreign_key'")
+				return
+			}
 
 			t.Run("ensure table dropped", func(t *testing.T) {
 				// A preparation step, to clean up anything from the previous test case
@@ -361,7 +398,6 @@ func testRevertible(t *testing.T) {
 				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 				checkTable(t, tableName, false)
 			})
-
 			t.Run("create from-table", func(t *testing.T) {
 				// A preparation step, to re-create the base table
 				fromStatement := fmt.Sprintf(createTableWrapper, testcase.fromSchema)
@@ -382,10 +418,25 @@ func testRevertible(t *testing.T) {
 				rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
 				require.NotNil(t, rs)
 				for _, row := range rs.Named().Rows {
+					removedForeignKeyNames := row.AsString("removed_foreign_key_names", "")
 					removedUniqueKeyNames := row.AsString("removed_unique_key_names", "")
 					droppedNoDefaultColumnNames := row.AsString("dropped_no_default_column_names", "")
 					expandedColumnNames := row.AsString("expanded_column_names", "")
 
+					// Online DDL renames constraint names, and keeps the original name as a prefix.
+					// The name of e.g. "some_fk_2_" might turn into "some_fk_2_518ubnm034rel35l1m0u1dc7m"
+					expectRemovedForeignKeyNames := strings.Split(testcase.removedForeignKeyNames, ",")
+					actualRemovedForeignKeyNames := strings.Split(removeBackticks(removedForeignKeyNames), ",")
+					assert.Equal(t, len(expectRemovedForeignKeyNames), len(actualRemovedForeignKeyNames))
+					for _, actualRemovedForeignKeyName := range actualRemovedForeignKeyNames {
+						found := false
+						for _, expectRemovedForeignKeyName := range expectRemovedForeignKeyNames {
+							if strings.HasPrefix(actualRemovedForeignKeyName, expectRemovedForeignKeyName) {
+								found = true
+							}
+						}
+						assert.Truef(t, found, "unexpected FK name", "%s", actualRemovedForeignKeyName)
+					}
 					assert.Equal(t, testcase.removedUniqueKeyNames, removeBackticks(removedUniqueKeyNames))
 					assert.Equal(t, testcase.droppedNoDefaultColumnNames, removeBackticks(droppedNoDefaultColumnNames))
 					assert.Equal(t, testcase.expandedColumnNames, removeBackticks(expandedColumnNames))
@@ -393,6 +444,44 @@ func testRevertible(t *testing.T) {
 			})
 		})
 	}
+
+	t.Run("drop fk child table", func(t *testing.T) {
+		t.Run("ensure table dropped", func(t *testing.T) {
+			// A preparation step, to clean up anything from the previous test case
+			uuid := testOnlineDDLStatement(t, dropTableStatement, ddlStrategy, "vtgate", tableName, "")
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+			checkTable(t, tableName, false)
+		})
+		t.Run("create child table", func(t *testing.T) {
+			fromStatement := fmt.Sprintf(createTableWrapper, "id int primary key, i int, constraint some_fk_2 foreign key (i) references parent (id) on delete cascade")
+			uuid := testOnlineDDLStatement(t, fromStatement, ddlStrategy, "vtgate", tableName, "")
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+			checkTable(t, tableName, true)
+		})
+		var uuid string
+		t.Run("drop", func(t *testing.T) {
+			uuid = testOnlineDDLStatement(t, dropTableStatement, ddlStrategy, "vtgate", tableName, "")
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+			checkTable(t, tableName, false)
+		})
+		t.Run("check migration", func(t *testing.T) {
+			// All right, the actual test
+			rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+			require.NotNil(t, rs)
+			for _, row := range rs.Named().Rows {
+				removedForeignKeyNames := row.AsString("removed_foreign_key_names", "")
+				removedUniqueKeyNames := row.AsString("removed_unique_key_names", "")
+				droppedNoDefaultColumnNames := row.AsString("dropped_no_default_column_names", "")
+				expandedColumnNames := row.AsString("expanded_column_names", "")
+
+				// Online DDL renames constraint names, and keeps the original name as a prefix. The name will be e.g. some_fk_2_518ubnm034rel35l1m0u1dc7m
+				assert.Contains(t, removeBackticks(removedForeignKeyNames), "some_fk_2")
+				assert.Equal(t, "", removeBackticks(removedUniqueKeyNames))
+				assert.Equal(t, "", removeBackticks(droppedNoDefaultColumnNames))
+				assert.Equal(t, "", removeBackticks(expandedColumnNames))
+			}
+		})
+	})
 }
 
 func testRevert(t *testing.T) {
@@ -471,7 +560,7 @@ func testRevert(t *testing.T) {
 	mysqlVersion = onlineddl.GetMySQLVersion(t, clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet())
 	require.NotEmpty(t, mysqlVersion)
 
-	_, capableOf, _ := mysql.GetFlavor(mysqlVersion, nil)
+	capableOf := mysql.ServerVersionCapableOf(mysqlVersion)
 
 	var uuids []string
 	ddlStrategy := "online"
@@ -953,7 +1042,7 @@ func testRevert(t *testing.T) {
 		require.NotNil(t, row)
 		specialPlan := row.AsString("special_plan", "")
 		artifacts := row.AsString("artifacts", "")
-		instantDDLCapable, err := capableOf(mysql.InstantDDLFlavorCapability)
+		instantDDLCapable, err := capableOf(capabilities.InstantDDLFlavorCapability)
 		assert.NoError(t, err)
 		if instantDDLCapable {
 			// instant DDL expected to apply in 8.0
@@ -964,11 +1053,13 @@ func testRevert(t *testing.T) {
 			assert.Empty(t, specialPlan)
 			assert.NotEmpty(t, artifacts)
 		}
+		removedForeignKeyNames := row.AsString("removed_foreign_key_names", "")
+		assert.Empty(t, removedForeignKeyNames)
 	})
 	t.Run("INSTANT DDL: fail revert", func(t *testing.T) {
 		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
 		uuids = append(uuids, uuid)
-		instantDDLCapable, err := capableOf(mysql.InstantDDLFlavorCapability)
+		instantDDLCapable, err := capableOf(capabilities.InstantDDLFlavorCapability)
 		assert.NoError(t, err)
 		if instantDDLCapable {
 			// instant DDL expected to apply in 8.0, therefore revert is impossible
@@ -1103,7 +1194,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 		}
 	} else {
 		var err error
-		uuid, err = clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, alterStatement, cluster.VtctlClientParams{DDLStrategy: ddlStrategy})
+		uuid, err = clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, alterStatement, cluster.ApplySchemaParams{DDLStrategy: ddlStrategy})
 		assert.NoError(t, err)
 	}
 	uuid = strings.TrimSpace(uuid)
@@ -1191,7 +1282,7 @@ func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName s
 }
 
 func generateInsert(t *testing.T, conn *mysql.Conn) error {
-	id := rand.Int31n(int32(maxTableRows))
+	id := rand.Int32N(int32(maxTableRows))
 	query := fmt.Sprintf(insertRowStatement, id)
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 
@@ -1215,7 +1306,7 @@ func generateInsert(t *testing.T, conn *mysql.Conn) error {
 }
 
 func generateUpdate(t *testing.T, conn *mysql.Conn) error {
-	id := rand.Int31n(int32(maxTableRows))
+	id := rand.Int32N(int32(maxTableRows))
 	query := fmt.Sprintf(updateRowStatement, id)
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 
@@ -1239,7 +1330,7 @@ func generateUpdate(t *testing.T, conn *mysql.Conn) error {
 }
 
 func generateDelete(t *testing.T, conn *mysql.Conn) error {
-	id := rand.Int31n(int32(maxTableRows))
+	id := rand.Int32N(int32(maxTableRows))
 	query := fmt.Sprintf(deleteRowStatement, id)
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 
@@ -1278,7 +1369,7 @@ func runSingleConnection(ctx context.Context, t *testing.T, done *int64) {
 			log.Infof("Terminating single connection")
 			return
 		}
-		switch rand.Int31n(3) {
+		switch rand.Int32N(3) {
 		case 0:
 			err = generateInsert(t, conn)
 		case 1:

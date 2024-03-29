@@ -18,7 +18,7 @@ package mysql
 
 import (
 	"context"
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"strings"
 	"testing"
@@ -98,7 +98,7 @@ func benchmarkQuery(b *testing.B, threads int, query string, mkCfg mkListenerCfg
 			execQuery := query
 			if execQuery == "" {
 				// generate random query
-				n := rand.Intn(maxPacketSize-len(benchmarkQueryPrefix)) + 1
+				n := rand.IntN(maxPacketSize-len(benchmarkQueryPrefix)) + 1
 				execQuery = benchmarkQueryPrefix + strings.Repeat("x", n)
 
 			}

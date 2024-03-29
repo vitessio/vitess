@@ -34,18 +34,19 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
-
-	"vitess.io/vitess/go/mysql/replication"
-	"vitess.io/vitess/go/mysql/sqlerror"
-
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/history"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/throttler"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -60,9 +61,19 @@ var (
 
 	// BlplQuery is the key for the stats map.
 	BlplQuery = "Query"
+	// BlplMultiQuery is the key for the stats map.
+	BlplMultiQuery = "MultiQuery"
 	// BlplTransaction is the key for the stats map.
 	BlplTransaction = "Transaction"
+	// BlplBatchTransaction is the key for the stats map.
+	BlplBatchTransaction = "BatchTransaction"
+
+	// Truncate values in the middle to preserve the end of the message which
+	// typically contains the error text.
+	TruncationLocation = textutil.TruncationLocationMiddle
 )
+
+var TruncationIndicator = fmt.Sprintf(" ... %s ... ", sqlparser.TruncationText)
 
 // Stats is the internal stats of a player. It is a different
 // structure that is passed in so stats can be collected over the life
@@ -84,13 +95,15 @@ type Stats struct {
 
 	State atomic.Value
 
-	PhaseTimings   *stats.Timings
-	QueryTimings   *stats.Timings
-	QueryCount     *stats.CountersWithSingleLabel
-	CopyRowCount   *stats.Counter
-	CopyLoopCount  *stats.Counter
-	ErrorCounts    *stats.CountersWithMultiLabels
-	NoopQueryCount *stats.CountersWithSingleLabel
+	PhaseTimings       *stats.Timings
+	QueryTimings       *stats.Timings
+	QueryCount         *stats.CountersWithSingleLabel
+	BulkQueryCount     *stats.CountersWithSingleLabel
+	TrxQueryBatchCount *stats.CountersWithSingleLabel
+	CopyRowCount       *stats.Counter
+	CopyLoopCount      *stats.Counter
+	ErrorCounts        *stats.CountersWithMultiLabels
+	NoopQueryCount     *stats.CountersWithSingleLabel
 
 	VReplicationLags     *stats.Timings
 	VReplicationLagRates *stats.Rates
@@ -100,6 +113,8 @@ type Stats struct {
 
 	PartialQueryCount     *stats.CountersWithMultiLabels
 	PartialQueryCacheSize *stats.CountersWithMultiLabels
+
+	ThrottledCounts *stats.CountersWithMultiLabels // By throttler and component
 }
 
 // RecordHeartbeat updates the time the last heartbeat from vstreamer was seen
@@ -157,6 +172,8 @@ func NewStats() *Stats {
 	bps.PhaseTimings = stats.NewTimings("", "", "Phase")
 	bps.QueryTimings = stats.NewTimings("", "", "Phase")
 	bps.QueryCount = stats.NewCountersWithSingleLabel("", "", "Phase", "")
+	bps.BulkQueryCount = stats.NewCountersWithSingleLabel("", "", "Statement", "")
+	bps.TrxQueryBatchCount = stats.NewCountersWithSingleLabel("", "", "Statement", "")
 	bps.CopyRowCount = stats.NewCounter("", "")
 	bps.CopyLoopCount = stats.NewCounter("", "")
 	bps.ErrorCounts = stats.NewCountersWithMultiLabels("", "", []string{"type"})
@@ -167,6 +184,7 @@ func NewStats() *Stats {
 	bps.TableCopyTimings = stats.NewTimings("", "", "Table")
 	bps.PartialQueryCacheSize = stats.NewCountersWithMultiLabels("", "", []string{"type"})
 	bps.PartialQueryCount = stats.NewCountersWithMultiLabels("", "", []string{"type"})
+	bps.ThrottledCounts = stats.NewCountersWithMultiLabels("", "", []string{"throttler", "component"})
 	return bps
 }
 
@@ -362,13 +380,14 @@ func (blp *BinlogPlayer) applyEvents(ctx context.Context) error {
 			if backoff == throttler.NotThrottled {
 				break
 			}
+			blp.blplStats.ThrottledCounts.Add([]string{"trx", "binlogplayer"}, 1)
 			// We don't bother checking for context cancellation here because the
 			// sleep will block only up to 1 second. (Usually, backoff is 1s / rate
 			// e.g. a rate of 1000 TPS results into a backoff of 1 ms.)
 			time.Sleep(backoff)
 		}
 
-		// get the response
+		// Get the response.
 		response, err := stream.Recv()
 		// Check context before checking error, because canceled
 		// contexts could be wrapped as regular errors.
@@ -539,8 +558,7 @@ type VRSettings struct {
 	DeferSecondaryKeys bool
 }
 
-// ReadVRSettings retrieves the throttler settings for
-// vreplication from the checkpoint table.
+// ReadVRSettings retrieves the settings for a vreplication stream.
 func ReadVRSettings(dbClient DBClient, uid int32) (VRSettings, error) {
 	query := fmt.Sprintf("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys from _vt.vreplication where id=%v", uid)
 	qr, err := dbClient.ExecuteFetch(query, 1)
@@ -598,6 +616,7 @@ func ReadVRSettings(dbClient DBClient, uid int32) (VRSettings, error) {
 // the _vt.vreplication table.
 func CreateVReplication(workflow string, source *binlogdatapb.BinlogSource, position string, maxTPS, maxReplicationLag, timeUpdated int64, dbName string,
 	workflowType binlogdatapb.VReplicationWorkflowType, workflowSubType binlogdatapb.VReplicationWorkflowSubType, deferSecondaryKeys bool) string {
+	protoutil.SortBinlogSourceTables(source)
 	return fmt.Sprintf("insert into _vt.vreplication "+
 		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys) "+
 		"values (%v, %v, %v, %v, %v, %v, 0, '%v', %v, %d, %d, %v)",
@@ -608,6 +627,7 @@ func CreateVReplication(workflow string, source *binlogdatapb.BinlogSource, posi
 // CreateVReplicationState returns a statement to create a stopped vreplication.
 func CreateVReplicationState(workflow string, source *binlogdatapb.BinlogSource, position string, state binlogdatapb.VReplicationWorkflowState, dbName string,
 	workflowType binlogdatapb.VReplicationWorkflowType, workflowSubType binlogdatapb.VReplicationWorkflowSubType) string {
+	protoutil.SortBinlogSourceTables(source)
 	return fmt.Sprintf("insert into _vt.vreplication "+
 		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type) "+
 		"values (%v, %v, %v, %v, %v, %v, 0, '%v', %v, %d, %d)",
@@ -650,13 +670,6 @@ func GenerateUpdateTimeThrottled(uid int32, timeThrottledUnix int64, componentTh
 		return "", fmt.Errorf("timeUpdated cannot be zero")
 	}
 	return fmt.Sprintf("update _vt.vreplication set time_updated=%v, time_throttled=%v, component_throttled='%v' where id=%v", timeThrottledUnix, timeThrottledUnix, componentThrottled, uid), nil
-}
-
-// StartVReplication returns a statement to start the replication.
-func StartVReplication(uid int32) string {
-	return fmt.Sprintf(
-		"update _vt.vreplication set state='%v', stop_pos=NULL where id=%v",
-		binlogdatapb.VReplicationWorkflowState_Running.String(), uid)
 }
 
 // StartVReplicationUntil returns a statement to start the replication with a stop position.

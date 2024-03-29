@@ -22,7 +22,7 @@ type Factory func(addr string) (VtctldClient, error)
 var registry = map[string]Factory{}
 
 // Register adds a VtctldClient factory for the given name (protocol).
-// Attempting to register mulitple factories for the same protocol is a fatal
+// Attempting to register multiple factories for the same protocol is a fatal
 // error.
 func Register(name string, factory Factory) {
 	if _, ok := registry[name]; ok {

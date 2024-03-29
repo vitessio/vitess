@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 const mockClientUNameFiltered = "Filtered"
@@ -41,6 +42,7 @@ type MockDBClient struct {
 	done          chan struct{}
 	invariants    map[string]*sqltypes.Result
 	Tag           string
+	parser        *sqlparser.Parser
 }
 
 type mockExpect struct {
@@ -83,15 +85,17 @@ func NewMockDBClient(t *testing.T) *MockDBClient {
 			"set @@session.sql_mode": {},
 			"set sql_mode":           {},
 		},
+		parser: sqlparser.NewTestParser(),
 	}
 }
 
 // NewMockDbaClient returns a new DBClientMock with the default "Dba" UName.
 func NewMockDbaClient(t *testing.T) *MockDBClient {
 	return &MockDBClient{
-		t:     t,
-		UName: mockClientUNameDba,
-		done:  make(chan struct{}),
+		t:      t,
+		UName:  mockClientUNameDba,
+		done:   make(chan struct{}),
+		parser: sqlparser.NewTestParser(),
 	}
 }
 
@@ -178,6 +182,10 @@ func (dc *MockDBClient) Close() {
 
 // ExecuteFetch is part of the DBClient interface
 func (dc *MockDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Result, err error) {
+	// Serialize ExecuteFetch to enforce a strict order on shared dbClients.
+	dc.expectMu.Lock()
+	defer dc.expectMu.Unlock()
+
 	dc.t.Helper()
 	msg := "DBClient query: %v"
 	if dc.Tag != "" {
@@ -191,8 +199,6 @@ func (dc *MockDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Re
 		}
 	}
 
-	dc.expectMu.Lock()
-	defer dc.expectMu.Unlock()
 	if dc.currentResult >= len(dc.expect) {
 		msg := "DBClientMock: query: %s, no more requests are expected"
 		if dc.Tag != "" {
@@ -223,4 +229,34 @@ func (dc *MockDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Re
 		close(dc.done)
 	}
 	return result.result, result.err
+}
+
+func (dc *MockDBClient) ExecuteFetchMulti(query string, maxrows int) ([]*sqltypes.Result, error) {
+	queries, err := dc.parser.SplitStatementToPieces(query)
+	if err != nil {
+		return nil, err
+	}
+	results := make([]*sqltypes.Result, 0, len(queries))
+	for _, query := range queries {
+		qr, err := dc.ExecuteFetch(query, maxrows)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, qr)
+	}
+	return results, nil
+}
+
+// AddInvariant can be used to customize the behavior of the mock client.
+func (dc *MockDBClient) AddInvariant(query string, result *sqltypes.Result) {
+	dc.expectMu.Lock()
+	defer dc.expectMu.Unlock()
+	dc.invariants[query] = result
+}
+
+// RemoveInvariant can be used to customize the behavior of the mock client.
+func (dc *MockDBClient) RemoveInvariant(query string) {
+	dc.expectMu.Lock()
+	defer dc.expectMu.Unlock()
+	delete(dc.invariants, query)
 }

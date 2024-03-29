@@ -21,10 +21,10 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/stats"
-
 	"vitess.io/vitess/go/vt/mysqlctl"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var replicationLagSeconds = stats.NewGauge("replicationLagSec", "replication lag in seconds")

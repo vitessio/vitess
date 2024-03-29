@@ -31,17 +31,19 @@ jobs:
 
       - name: Check out code
         if: steps.skip-workflow.outputs.skip-workflow == 'false'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Check for changes in relevant files
         if: steps.skip-workflow.outputs.skip-workflow == 'false'
-        uses: frouioui/paths-filter@main
+        uses: dorny/paths-filter@v3.0.1
         id: changes
         with:
           token: ''
           filters: |
             end_to_end:
               - 'go/**/*.go'
+              - 'go/vt/sidecardb/**/*.sql'
+              - 'go/test/endtoend/onlineddl/vrepl_suite/**'
               - 'test.go'
               - 'Makefile'
               - 'build.env'

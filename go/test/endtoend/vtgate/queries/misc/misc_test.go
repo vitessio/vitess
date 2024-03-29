@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/assert"
@@ -36,7 +37,7 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 	require.NoError(t, err)
 
 	deleteAll := func() {
-		tables := []string{"t1", "uks.unsharded"}
+		tables := []string{"t1", "tbl", "unq_idx", "nonunq_idx", "uks.unsharded"}
 		for _, table := range tables {
 			_, _ = mcmp.ExecAndIgnore("delete from " + table)
 		}
@@ -59,8 +60,25 @@ func TestBitVals(t *testing.T) {
 
 	mcmp.AssertMatches(`select b'1001', 0x9, B'010011011010'`, `[[VARBINARY("\t") VARBINARY("\t") VARBINARY("\x04\xda")]]`)
 	mcmp.AssertMatches(`select b'1001', 0x9, B'010011011010' from t1`, `[[VARBINARY("\t") VARBINARY("\t") VARBINARY("\x04\xda")]]`)
-	mcmp.AssertMatchesNoCompare(`select 1 + b'1001', 2 + 0x9, 3 + B'010011011010'`, `[[INT64(10) UINT64(11) INT64(1245)]]`, `[[UINT64(10) UINT64(11) UINT64(1245)]]`)
-	mcmp.AssertMatchesNoCompare(`select 1 + b'1001', 2 + 0x9, 3 + B'010011011010' from t1`, `[[INT64(10) UINT64(11) INT64(1245)]]`, `[[UINT64(10) UINT64(11) UINT64(1245)]]`)
+	vtgateVersion, err := cluster.GetMajorVersion("vtgate")
+	require.NoError(t, err)
+	if vtgateVersion >= 19 {
+		mcmp.AssertMatchesNoCompare(`select 1 + b'1001', 2 + 0x9, 3 + B'010011011010'`, `[[INT64(10) UINT64(11) INT64(1245)]]`, `[[INT64(10) UINT64(11) INT64(1245)]]`)
+		mcmp.AssertMatchesNoCompare(`select 1 + b'1001', 2 + 0x9, 3 + B'010011011010' from t1`, `[[INT64(10) UINT64(11) INT64(1245)]]`, `[[INT64(10) UINT64(11) INT64(1245)]]`)
+	} else {
+		mcmp.AssertMatchesNoCompare(`select 1 + b'1001', 2 + 0x9, 3 + B'010011011010'`, `[[INT64(10) UINT64(11) INT64(1245)]]`, `[[UINT64(10) UINT64(11) UINT64(1245)]]`)
+		mcmp.AssertMatchesNoCompare(`select 1 + b'1001', 2 + 0x9, 3 + B'010011011010' from t1`, `[[INT64(10) UINT64(11) INT64(1245)]]`, `[[UINT64(10) UINT64(11) UINT64(1245)]]`)
+	}
+}
+
+// TestTimeFunctionWithPrecision tests that inserting data with NOW(1) works as intended.
+func TestTimeFunctionWithPrecision(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into t1(id1, id2) values (1, NOW(1))")
+	mcmp.Exec("insert into t1(id1, id2) values (2, NOW(2))")
+	mcmp.Exec("insert into t1(id1, id2) values (3, NOW())")
 }
 
 func TestHexVals(t *testing.T) {
@@ -118,6 +136,41 @@ func TestCast(t *testing.T) {
 	mcmp.AssertMatches("select cast('3.2' as float)", `[[FLOAT32(3.2)]]`)
 	mcmp.AssertMatches("select cast('3.2' as double)", `[[FLOAT64(3.2)]]`)
 	mcmp.AssertMatches("select cast('3.2' as unsigned)", `[[UINT64(3)]]`)
+}
+
+// TestVindexHints tests that vindex hints work as intended.
+func TestVindexHints(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 20, "vtgate")
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into tbl(id, unq_col, nonunq_col) values (1,0,10), (2,10,10), (3,4,20), (4,30,20), (5,40,10)")
+	mcmp.AssertMatches("select id, unq_col, nonunq_col from tbl where unq_col = 10 and id = 2 and nonunq_col in (10, 20)", "[[INT64(2) INT64(10) INT64(10)]]")
+
+	// Verify that without any vindex hints, the query plan uses a hash vindex.
+	res, err := mcmp.VtConn.ExecuteFetch("vexplain plan select id, unq_col, nonunq_col from tbl where unq_col = 10 and id = 2 and nonunq_col in (10, 20)", 100, false)
+	require.NoError(t, err)
+	require.Contains(t, fmt.Sprintf("%v", res.Rows), "hash")
+
+	// Now we make the query explicitly use the unique lookup vindex.
+	// We make sure the query still works.
+	res, err = mcmp.VtConn.ExecuteFetch("select id, unq_col, nonunq_col from tbl USE VINDEX (unq_vdx) where unq_col = 10 and id = 2 and nonunq_col in (10, 20)", 100, false)
+	require.NoError(t, err)
+	require.EqualValues(t, fmt.Sprintf("%v", res.Rows), "[[INT64(2) INT64(10) INT64(10)]]")
+	// Verify that we are using the unq_vdx, that we requested explicitly.
+	res, err = mcmp.VtConn.ExecuteFetch("vexplain plan select id, unq_col, nonunq_col from tbl USE VINDEX (unq_vdx) where unq_col = 10 and id = 2 and nonunq_col in (10, 20)", 100, false)
+	require.NoError(t, err)
+	require.Contains(t, fmt.Sprintf("%v", res.Rows), "unq_vdx")
+
+	// Now we make the query explicitly refuse two of the three vindexes.
+	// We make sure the query still works.
+	res, err = mcmp.VtConn.ExecuteFetch("select id, unq_col, nonunq_col from tbl IGNORE VINDEX (hash, unq_vdx) where unq_col = 10 and id = 2 and nonunq_col in (10, 20)", 100, false)
+	require.NoError(t, err)
+	require.EqualValues(t, fmt.Sprintf("%v", res.Rows), "[[INT64(2) INT64(10) INT64(10)]]")
+	// Verify that we are using the nonunq_vdx, which is the only one left to be used.
+	res, err = mcmp.VtConn.ExecuteFetch("vexplain plan select id, unq_col, nonunq_col from tbl IGNORE VINDEX (hash, unq_vdx) where unq_col = 10 and id = 2 and nonunq_col in (10, 20)", 100, false)
+	require.NoError(t, err)
+	require.Contains(t, fmt.Sprintf("%v", res.Rows), "nonunq_vdx")
 }
 
 func TestOuterJoinWithPredicate(t *testing.T) {
@@ -259,11 +312,143 @@ func TestAnalyze(t *testing.T) {
 	defer closer()
 
 	for _, workload := range []string{"olap", "oltp"} {
-		t.Run(workload, func(t *testing.T) {
+		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
 			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = %s", workload))
 			utils.Exec(t, mcmp.VtConn, "analyze table t1")
 			utils.Exec(t, mcmp.VtConn, "analyze table uks.unsharded")
 			utils.Exec(t, mcmp.VtConn, "analyze table mysql.user")
 		})
 	}
+}
+
+// TestTransactionModeVar executes SELECT on `transaction_mode` variable
+func TestTransactionModeVar(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
+
+	mcmp, closer := start(t)
+	defer closer()
+
+	tcases := []struct {
+		setStmt string
+		expRes  string
+	}{{
+		expRes: `[[VARCHAR("MULTI")]]`,
+	}, {
+		setStmt: `set transaction_mode = single`,
+		expRes:  `[[VARCHAR("SINGLE")]]`,
+	}, {
+		setStmt: `set transaction_mode = multi`,
+		expRes:  `[[VARCHAR("MULTI")]]`,
+	}, {
+		setStmt: `set transaction_mode = twopc`,
+		expRes:  `[[VARCHAR("TWOPC")]]`,
+	}}
+
+	for _, tcase := range tcases {
+		mcmp.Run(tcase.setStmt, func(mcmp *utils.MySQLCompare) {
+			if tcase.setStmt != "" {
+				utils.Exec(t, mcmp.VtConn, tcase.setStmt)
+			}
+			utils.AssertMatches(t, mcmp.VtConn, "select @@transaction_mode", tcase.expRes)
+		})
+	}
+}
+
+// TestAliasesInOuterJoinQueries tests that aliases work in queries that have outer join clauses.
+func TestAliasesInOuterJoinQueries(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 20, "vtgate")
+
+	mcmp, closer := start(t)
+	defer closer()
+
+	// Insert data into the 2 tables
+	mcmp.Exec("insert into t1(id1, id2) values (1,2), (42,5), (5, 42)")
+	mcmp.Exec("insert into tbl(id, unq_col, nonunq_col) values (1,2,3), (2,5,3), (3, 42, 2)")
+
+	// Check that the select query works as intended and then run it again verifying the column names as well.
+	mcmp.AssertMatches("select t1.id1 as t0, t1.id1 as t1, tbl.unq_col as col from t1 left outer join tbl on t1.id2 = tbl.nonunq_col", `[[INT64(1) INT64(1) INT64(42)] [INT64(5) INT64(5) NULL] [INT64(42) INT64(42) NULL]]`)
+	mcmp.ExecWithColumnCompare("select t1.id1 as t0, t1.id1 as t1, tbl.unq_col as col from t1 left outer join tbl on t1.id2 = tbl.nonunq_col")
+
+	mcmp.AssertMatches("select t1.id1 as t0, t1.id1 as t1, tbl.unq_col as col from t1 left outer join tbl on t1.id2 = tbl.nonunq_col order by t1.id2 limit 2", `[[INT64(1) INT64(1) INT64(42)] [INT64(42) INT64(42) NULL]]`)
+	mcmp.ExecWithColumnCompare("select t1.id1 as t0, t1.id1 as t1, tbl.unq_col as col from t1 left outer join tbl on t1.id2 = tbl.nonunq_col order by t1.id2 limit 2")
+}
+
+func TestAlterTableWithView(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 20, "vtgate")
+	mcmp, closer := start(t)
+	defer closer()
+
+	// Test that create/alter view works and the output is as expected
+	mcmp.Exec(`use ks_misc`)
+	mcmp.Exec(`create view v1 as select * from t1`)
+	var viewDef string
+	utils.WaitForVschemaCondition(t, clusterInstance.VtgateProcess, keyspaceName, func(t *testing.T, ksMap map[string]any) bool {
+		views, ok := ksMap["views"]
+		if !ok {
+			return false
+		}
+		viewsMap := views.(map[string]any)
+		view, ok := viewsMap["v1"]
+		if ok {
+			viewDef = view.(string)
+		}
+		return ok
+	}, "Waiting for view creation")
+	mcmp.Exec(`insert into t1(id1, id2) values (1, 1)`)
+	mcmp.AssertMatches("select * from v1", `[[INT64(1) INT64(1)]]`)
+
+	// alter table add column
+	mcmp.Exec(`alter table t1 add column test bigint`)
+	time.Sleep(10 * time.Second)
+	mcmp.Exec(`alter view v1 as select * from t1`)
+
+	waitForChange := func(t *testing.T, ksMap map[string]any) bool {
+		// wait for the view definition to change
+		views := ksMap["views"]
+		viewsMap := views.(map[string]any)
+		newView := viewsMap["v1"]
+		if newView.(string) == viewDef {
+			return false
+		}
+		viewDef = newView.(string)
+		return true
+	}
+	utils.WaitForVschemaCondition(t, clusterInstance.VtgateProcess, keyspaceName, waitForChange, "Waiting for alter view")
+
+	mcmp.AssertMatches("select * from v1", `[[INT64(1) INT64(1) NULL]]`)
+
+	// alter table remove column
+	mcmp.Exec(`alter table t1 drop column test`)
+	mcmp.Exec(`alter view v1 as select * from t1`)
+
+	utils.WaitForVschemaCondition(t, clusterInstance.VtgateProcess, keyspaceName, waitForChange, "Waiting for alter view")
+
+	mcmp.AssertMatches("select * from v1", `[[INT64(1) INT64(1)]]`)
+}
+
+// TestStraightJoin tests that Vitess respects the ordering of join in a STRAIGHT JOIN query.
+func TestStraightJoin(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 20, "vtgate")
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into tbl(id, unq_col, nonunq_col) values (1,0,10), (2,10,10), (3,4,20), (4,30,20), (5,40,10)")
+	mcmp.Exec(`insert into t1(id1, id2) values (10, 11), (20, 13)`)
+
+	mcmp.AssertMatchesNoOrder("select tbl.unq_col, tbl.nonunq_col, t1.id2 from t1 join tbl where t1.id1 = tbl.nonunq_col",
+		`[[INT64(0) INT64(10) INT64(11)] [INT64(10) INT64(10) INT64(11)] [INT64(4) INT64(20) INT64(13)] [INT64(40) INT64(10) INT64(11)] [INT64(30) INT64(20) INT64(13)]]`,
+	)
+	// Verify that in a normal join query, vitess joins tbl with t1.
+	res, err := mcmp.VtConn.ExecuteFetch("vexplain plan select tbl.unq_col, tbl.nonunq_col, t1.id2 from t1 join tbl where t1.id1 = tbl.nonunq_col", 100, false)
+	require.NoError(t, err)
+	require.Contains(t, fmt.Sprintf("%v", res.Rows), "tbl_t1")
+
+	// Test the same query with a straight join
+	mcmp.AssertMatchesNoOrder("select tbl.unq_col, tbl.nonunq_col, t1.id2 from t1 straight_join tbl where t1.id1 = tbl.nonunq_col",
+		`[[INT64(0) INT64(10) INT64(11)] [INT64(10) INT64(10) INT64(11)] [INT64(4) INT64(20) INT64(13)] [INT64(40) INT64(10) INT64(11)] [INT64(30) INT64(20) INT64(13)]]`,
+	)
+	// Verify that in a straight join query, vitess joins t1 with tbl.
+	res, err = mcmp.VtConn.ExecuteFetch("vexplain plan select tbl.unq_col, tbl.nonunq_col, t1.id2 from t1 straight_join tbl where t1.id1 = tbl.nonunq_col", 100, false)
+	require.NoError(t, err)
+	require.Contains(t, fmt.Sprintf("%v", res.Rows), "t1_tbl")
 }

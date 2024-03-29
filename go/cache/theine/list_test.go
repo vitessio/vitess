@@ -28,7 +28,7 @@ func TestList(t *testing.T) {
 	l := NewList[StringKey, string](5, LIST_PROBATION)
 	require.Equal(t, uint(5), l.capacity)
 	require.Equal(t, LIST_PROBATION, l.listType)
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		evicted := l.PushFront(NewEntry(StringKey(fmt.Sprintf("%d", i)), "", 1))
 		require.Nil(t, evicted)
 	}
@@ -42,7 +42,7 @@ func TestList(t *testing.T) {
 	require.Equal(t, "5/4/3/2/1", l.display())
 	require.Equal(t, "1/2/3/4/5", l.displayReverse())
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		entry := l.PopTail()
 		require.Equal(t, StringKey(fmt.Sprintf("%d", i+1)), entry.key)
 	}
@@ -50,7 +50,7 @@ func TestList(t *testing.T) {
 	require.Nil(t, entry)
 
 	var entries []*Entry[StringKey, string]
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		new := NewEntry(StringKey(fmt.Sprintf("%d", i)), "", 1)
 		evicted := l.PushFront(new)
 		entries = append(entries, new)
@@ -76,13 +76,13 @@ func TestListCountCost(t *testing.T) {
 	l := NewList[StringKey, string](100, LIST_PROBATION)
 	require.Equal(t, uint(100), l.capacity)
 	require.Equal(t, LIST_PROBATION, l.listType)
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		evicted := l.PushFront(NewEntry(StringKey(fmt.Sprintf("%d", i)), "", 20))
 		require.Nil(t, evicted)
 	}
 	require.Equal(t, 100, l.len)
 	require.Equal(t, 5, l.count)
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		entry := l.PopTail()
 		require.NotNil(t, entry)
 	}

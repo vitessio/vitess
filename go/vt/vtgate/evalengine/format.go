@@ -18,201 +18,317 @@ package evalengine
 
 import (
 	"fmt"
-	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-func FormatExpr(expr Expr) string {
-	var f formatter
-	expr.format(&f, 0)
-	return f.String()
+func precedenceFor(in IR) sqlparser.Precendence {
+	switch node := in.(type) {
+	case *LogicalExpr:
+		switch node.op.(type) {
+		case opLogicalOr:
+			return sqlparser.P16
+		case opLogicalXor:
+			return sqlparser.P15
+		case opLogicalAnd:
+			return sqlparser.P14
+		}
+	case *NotExpr:
+		return sqlparser.P13
+	case *ComparisonExpr:
+		return sqlparser.P11
+	case *IsExpr:
+		return sqlparser.P11
+	case *BitwiseExpr:
+		switch node.Op.(type) {
+		case opBitOr:
+			return sqlparser.P10
+		case opBitAnd:
+			return sqlparser.P9
+		case opBitShift:
+			return sqlparser.P8
+		case opBitXor:
+			return sqlparser.P5
+		}
+	case *ArithmeticExpr:
+		switch node.Op.(type) {
+		case *opArithAdd, *opArithSub:
+			return sqlparser.P7
+		case *opArithDiv, *opArithIntDiv, *opArithMul, *opArithMod:
+			return sqlparser.P6
+		}
+	case *NegateExpr:
+		return sqlparser.P4
+	}
+	return sqlparser.Syntactic
 }
 
-type formatter struct {
-	strings.Builder
-}
-
-func (f *formatter) formatBinary(left Expr, op string, right Expr, depth int) {
-	if depth > 0 {
-		f.WriteByte('(')
+func needParens(op, val IR, left bool) bool {
+	// Values are atomic and never need parens
+	switch val.(type) {
+	case *Literal:
+		return false
+	case *IsExpr:
+		if _, ok := op.(*IsExpr); ok {
+			return true
+		}
 	}
 
-	left.format(f, depth+1)
-	f.WriteString(" ")
-	f.WriteString(op)
-	f.WriteString(" ")
-	right.format(f, depth+1)
+	opBinding := precedenceFor(op)
+	valBinding := precedenceFor(val)
 
-	if depth > 0 {
-		f.WriteByte(')')
+	if opBinding == sqlparser.Syntactic || valBinding == sqlparser.Syntactic {
+		return false
+	}
+
+	if left {
+		// for left associative operators, if the value is to the left of the operator,
+		// we only need parens if the order is higher for the value expression
+		return valBinding > opBinding
+	}
+
+	return valBinding >= opBinding
+}
+
+func formatExpr(buf *sqlparser.TrackedBuffer, currentExpr, expr IR, left bool) {
+	needp := needParens(currentExpr, expr, left)
+	if needp {
+		buf.WriteByte('(')
+	}
+	expr.format(buf)
+	if needp {
+		buf.WriteByte(')')
 	}
 }
 
-func (l *Literal) format(w *formatter, depth int) {
+func formatBinary(buf *sqlparser.TrackedBuffer, self, left IR, op string, right IR) {
+	formatExpr(buf, self, left, true)
+	buf.WriteString(" ")
+	buf.WriteLiteral(op)
+	buf.WriteString(" ")
+	formatExpr(buf, self, right, false)
+}
+
+func (l *Literal) Format(buf *sqlparser.TrackedBuffer) {
+	l.format(buf)
+}
+
+func (l *Literal) FormatFast(buf *sqlparser.TrackedBuffer) {
+	l.format(buf)
+}
+
+func (l *Literal) format(buf *sqlparser.TrackedBuffer) {
 	switch inner := l.inner.(type) {
 	case *evalTuple:
-		w.WriteByte('(')
+		buf.WriteByte('(')
 		for i, val := range inner.t {
 			if i > 0 {
-				w.WriteString(", ")
+				buf.WriteString(", ")
 			}
-			w.WriteString(evalToSQLValue(val).String())
+			evalToSQLValue(val).EncodeSQLStringBuilder(buf.Builder)
 		}
-		w.WriteByte(')')
+		buf.WriteByte(')')
 
 	default:
-		w.WriteString(evalToSQLValue(l.inner).String())
+		evalToSQLValue(l.inner).EncodeSQLStringBuilder(buf.Builder)
 	}
 }
 
-func (bv *BindVariable) format(w *formatter, depth int) {
-	w.WriteByte(':')
+func (bv *BindVariable) Format(buf *sqlparser.TrackedBuffer) {
+	bv.format(buf)
+}
+
+func (bv *BindVariable) FormatFast(buf *sqlparser.TrackedBuffer) {
+	bv.format(buf)
+}
+
+func (bv *BindVariable) format(buf *sqlparser.TrackedBuffer) {
 	if bv.Type == sqltypes.Tuple {
-		w.WriteByte(':')
+		buf.WriteArg("::", bv.Key)
+	} else {
+		buf.WriteArg(":", bv.Key)
 	}
-	w.WriteString(bv.Key)
 }
 
-func (c *Column) format(w *formatter, depth int) {
-	fmt.Fprintf(w, "[COLUMN %d]", c.Offset)
+func (bv *TupleBindVariable) Format(buf *sqlparser.TrackedBuffer) {
+	bv.format(buf)
 }
 
-func (b *ArithmeticExpr) format(w *formatter, depth int) {
-	w.formatBinary(b.Left, b.Op.String(), b.Right, depth)
+func (bv *TupleBindVariable) FormatFast(buf *sqlparser.TrackedBuffer) {
+	bv.format(buf)
 }
 
-func (c *ComparisonExpr) format(w *formatter, depth int) {
-	w.formatBinary(c.Left, c.Op.String(), c.Right, depth)
+func (bv *TupleBindVariable) format(buf *sqlparser.TrackedBuffer) {
+	buf.WriteString(fmt.Sprintf("%s:%d", bv.Key, bv.Index))
 }
 
-func (c *LikeExpr) format(w *formatter, depth int) {
-	op := "LIKE"
+func (c *Column) Format(buf *sqlparser.TrackedBuffer) {
+	c.format(buf)
+}
+
+func (c *Column) FormatFast(buf *sqlparser.TrackedBuffer) {
+	c.format(buf)
+}
+
+func (c *Column) format(buf *sqlparser.TrackedBuffer) {
+	if c.Original != nil {
+		c.Original.FormatFast(buf)
+	} else {
+		_, _ = fmt.Fprintf(buf, "_vt_column_%d", c.Offset)
+	}
+}
+
+func (b *ArithmeticExpr) format(buf *sqlparser.TrackedBuffer) {
+	formatBinary(buf, b, b.Left, b.Op.String(), b.Right)
+}
+
+func (c *ComparisonExpr) format(buf *sqlparser.TrackedBuffer) {
+	formatBinary(buf, c, c.Left, c.Op.String(), c.Right)
+}
+
+func (c *LikeExpr) format(buf *sqlparser.TrackedBuffer) {
+	op := "like"
 	if c.Negate {
-		op = "NOT LIKE"
+		op = "not like"
 	}
-	w.formatBinary(c.Left, op, c.Right, depth)
+	formatBinary(buf, c, c.Left, op, c.Right)
 }
 
-func (c *InExpr) format(w *formatter, depth int) {
-	op := "IN"
+func (c *InExpr) format(buf *sqlparser.TrackedBuffer) {
+	op := "in"
 	if c.Negate {
-		op = "NOT IN"
+		op = "not in"
 	}
-	w.formatBinary(c.Left, op, c.Right, depth)
+	formatBinary(buf, c, c.Left, op, c.Right)
 }
 
-func (t TupleExpr) format(w *formatter, depth int) {
-	w.WriteByte('(')
-	for i, expr := range t {
+func (tuple TupleExpr) format(buf *sqlparser.TrackedBuffer) {
+	buf.WriteByte('(')
+	for i, expr := range tuple {
 		if i > 0 {
-			w.WriteString(", ")
+			buf.WriteString(", ")
 		}
-		expr.format(w, depth+1)
+		formatExpr(buf, tuple, expr, true)
 	}
-	w.WriteByte(')')
+	buf.WriteByte(')')
 }
 
-func (c *CollateExpr) format(w *formatter, depth int) {
-	c.Inner.format(w, depth)
-	w.WriteString(" COLLATE ")
-	w.WriteString(collations.Local().LookupName(c.TypedCollation.Collation))
+func (c *CollateExpr) format(buf *sqlparser.TrackedBuffer) {
+	formatExpr(buf, c, c.Inner, true)
+	buf.WriteLiteral(" COLLATE ")
+	buf.WriteString(c.CollationEnv.LookupName(c.TypedCollation.Collation))
 }
 
-func (i *IntroducerExpr) format(w *formatter, depth int) {
-	w.WriteString("_")
-	w.WriteString(collations.Local().LookupName(i.TypedCollation.Collation))
-	i.Inner.format(w, depth)
+func (i *IntroducerExpr) format(buf *sqlparser.TrackedBuffer) {
+	buf.WriteString("_")
+	buf.WriteString(i.CollationEnv.LookupName(i.TypedCollation.Collation))
+	formatExpr(buf, i, i.Inner, true)
 }
 
-func (n *NotExpr) format(w *formatter, depth int) {
-	w.WriteString("NOT ")
-	n.Inner.format(w, depth)
+func (n *NotExpr) format(buf *sqlparser.TrackedBuffer) {
+	buf.WriteLiteral("not ")
+	formatExpr(buf, n, n.Inner, true)
 }
 
-func (b *LogicalExpr) format(w *formatter, depth int) {
-	w.formatBinary(b.Left, b.opname, b.Right, depth)
+func (b *LogicalExpr) format(buf *sqlparser.TrackedBuffer) {
+	formatBinary(buf, b, b.Left, b.op.String(), b.Right)
 }
 
-func (i *IsExpr) format(w *formatter, depth int) {
-	i.Inner.format(w, depth)
+func (i *IsExpr) format(buf *sqlparser.TrackedBuffer) {
+	formatExpr(buf, i, i.Inner, true)
 	switch i.Op {
 	case sqlparser.IsNullOp:
-		w.WriteString(" IS NULL")
+		buf.WriteLiteral(" is null")
 	case sqlparser.IsNotNullOp:
-		w.WriteString(" IS NOT NULL")
+		buf.WriteLiteral(" is not null")
 	case sqlparser.IsTrueOp:
-		w.WriteString(" IS TRUE")
+		buf.WriteLiteral(" is true")
 	case sqlparser.IsNotTrueOp:
-		w.WriteString(" IS NOT TRUE")
+		buf.WriteLiteral(" is not true")
 	case sqlparser.IsFalseOp:
-		w.WriteString(" IS FALSE")
+		buf.WriteLiteral(" is false")
 	case sqlparser.IsNotFalseOp:
-		w.WriteString(" IS NOT FALSE")
+		buf.WriteLiteral(" is not false")
 	}
 }
 
-func (c *CallExpr) format(w *formatter, depth int) {
-	w.WriteString(strings.ToUpper(c.Method))
-	w.WriteByte('(')
+func (c *CallExpr) format(buf *sqlparser.TrackedBuffer) {
+	buf.WriteLiteral(c.Method)
+	buf.WriteByte('(')
 	for i, expr := range c.Arguments {
 		if i > 0 {
-			w.WriteString(", ")
+			buf.WriteString(", ")
 		}
-		expr.format(w, depth+1)
+		formatExpr(buf, c, expr, true)
 	}
-	w.WriteByte(')')
+	buf.WriteByte(')')
 }
 
-func (c *builtinWeightString) format(w *formatter, depth int) {
-	w.WriteString("WEIGHT_STRING(")
-	c.Expr.format(w, depth)
+func (c *builtinWeightString) format(buf *sqlparser.TrackedBuffer) {
+	buf.WriteLiteral("weight_string(")
+	formatExpr(buf, c, c.Arguments[0], true)
 
 	if c.Cast != "" {
-		fmt.Fprintf(w, " AS %s(%d)", strings.ToUpper(c.Cast), c.Len)
+		buf.WriteLiteral(" as ")
+		buf.WriteLiteral(c.Cast)
+		_, _ = fmt.Fprintf(buf, "(%d)", *c.Len)
 	}
-	w.WriteByte(')')
+	buf.WriteByte(')')
 }
 
-func (n *NegateExpr) format(w *formatter, depth int) {
-	w.WriteByte('-')
-	n.Inner.format(w, depth)
+func (n *NegateExpr) format(buf *sqlparser.TrackedBuffer) {
+	buf.WriteByte('-')
+	formatExpr(buf, n, n.Inner, true)
 }
 
-func (bit *BitwiseExpr) format(buf *formatter, depth int) {
-	buf.formatBinary(bit.Left, bit.Op.BitwiseOp(), bit.Right, depth)
+func (bit *BitwiseExpr) format(buf *sqlparser.TrackedBuffer) {
+	formatBinary(buf, bit, bit.Left, bit.Op.BitwiseOp(), bit.Right)
 }
 
-func (b *BitwiseNotExpr) format(buf *formatter, depth int) {
+func (b *BitwiseNotExpr) format(buf *sqlparser.TrackedBuffer) {
 	buf.WriteByte('~')
-	b.Inner.format(buf, depth)
+	formatExpr(buf, b, b.Inner, true)
 }
 
-func (c *ConvertExpr) format(buf *formatter, depth int) {
-	buf.WriteString("CONVERT(")
-	c.Inner.format(buf, depth)
+func (c *ConvertExpr) format(buf *sqlparser.TrackedBuffer) {
+	buf.WriteLiteral("convert(")
+	formatExpr(buf, c, c.Inner, true)
 
 	switch {
-	case c.HasLength && c.HasScale:
-		fmt.Fprintf(buf, ", %s(%d,%d)", c.Type, c.Length, c.Scale)
-	case c.HasLength:
-		fmt.Fprintf(buf, ", %s(%d)", c.Type, c.Length)
+	case c.Length != nil && c.Scale != nil:
+		_, _ = fmt.Fprintf(buf, ", %s(%d,%d)", c.Type, *c.Length, *c.Scale)
+	case c.Length != nil:
+		_, _ = fmt.Fprintf(buf, ", %s(%d)", c.Type, *c.Length)
 	default:
-		fmt.Fprintf(buf, ", %s", c.Type)
+		_, _ = fmt.Fprintf(buf, ", %s", c.Type)
 	}
 	if c.Collation != collations.Unknown {
-		buf.WriteString(" CHARACTER SET ")
-		buf.WriteString(collations.Local().LookupName(c.Collation))
+		buf.WriteLiteral(" character set ")
+		buf.WriteString(c.CollationEnv.LookupName(c.Collation))
 	}
 	buf.WriteByte(')')
 }
 
-func (c *ConvertUsingExpr) format(buf *formatter, depth int) {
-	buf.WriteString("CONVERT(")
-	c.Inner.format(buf, depth)
-	buf.WriteString(" USING ")
-	buf.WriteString(collations.Local().LookupName(c.Collation))
+func (c *ConvertUsingExpr) format(buf *sqlparser.TrackedBuffer) {
+	buf.WriteLiteral("convert(")
+	formatExpr(buf, c, c.Inner, true)
+	buf.WriteLiteral(" using ")
+	buf.WriteString(c.CollationEnv.LookupName(c.Collation))
 	buf.WriteByte(')')
+}
+
+func (c *CaseExpr) format(buf *sqlparser.TrackedBuffer) {
+	buf.WriteLiteral("case")
+	for _, cs := range c.cases {
+		buf.WriteLiteral(" when ")
+		formatExpr(buf, c, cs.when, true)
+		buf.WriteLiteral(" then ")
+		formatExpr(buf, c, cs.then, true)
+	}
+	if c.Else != nil {
+		buf.WriteLiteral(" else ")
+		formatExpr(buf, c, c.Else, true)
+	}
 }

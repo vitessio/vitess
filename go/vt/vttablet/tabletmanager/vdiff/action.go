@@ -47,6 +47,8 @@ const (
 	DeleteAction  VDiffAction = "delete"
 	AllActionArg              = "all"
 	LastActionArg             = "last"
+
+	maxVDiffsToReport = 100
 )
 
 var (
@@ -61,7 +63,15 @@ var (
 	}
 )
 
-func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdatapb.VDiffRequest) (*tabletmanagerdatapb.VDiffResponse, error) {
+func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdatapb.VDiffRequest) (resp *tabletmanagerdatapb.VDiffResponse, err error) {
+	defer func() {
+		if err != nil {
+			globalStats.ErrorCount.Add(1)
+		}
+	}()
+	if req == nil {
+		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "nil vdiff request")
+	}
 	if !vde.isOpen {
 		return nil, vterrors.New(vtrpcpb.Code_UNAVAILABLE, "vdiff engine is closed")
 	}
@@ -69,7 +79,7 @@ func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdat
 		return nil, vterrors.New(vtrpcpb.Code_UNAVAILABLE, "vdiff engine is still trying to open")
 	}
 
-	resp := &tabletmanagerdatapb.VDiffResponse{
+	resp = &tabletmanagerdatapb.VDiffResponse{
 		Id:     0,
 		Output: nil,
 	}
@@ -230,9 +240,6 @@ func (vde *Engine) handleCreateResumeAction(ctx context.Context, dbClient binlog
 		if qr.RowsAffected == 0 {
 			msg := fmt.Sprintf("no completed or stopped vdiff found for UUID %s on tablet %v",
 				req.VdiffUuid, vde.thisTablet.Alias)
-			if err != nil {
-				msg = fmt.Sprintf("%s (%v)", msg, err)
-			}
 			return fmt.Errorf(msg)
 		}
 	}
@@ -267,13 +274,13 @@ func (vde *Engine) handleCreateResumeAction(ctx context.Context, dbClient binlog
 
 func (vde *Engine) handleShowAction(ctx context.Context, dbClient binlogplayer.DBClient, action VDiffAction, req *tabletmanagerdatapb.VDiffRequest, resp *tabletmanagerdatapb.VDiffResponse) error {
 	var qr *sqltypes.Result
-	var err error
 	vdiffUUID := ""
 
 	if req.ActionArg == LastActionArg {
-		query, err := sqlparser.ParseAndBind(sqlGetMostRecentVDiff,
+		query, err := sqlparser.ParseAndBind(sqlGetMostRecentVDiffByKeyspaceWorkflow,
 			sqltypes.StringBindVariable(req.Keyspace),
 			sqltypes.StringBindVariable(req.Workflow),
+			sqltypes.Int64BindVariable(1),
 		)
 		if err != nil {
 			return err
@@ -322,7 +329,15 @@ func (vde *Engine) handleShowAction(ctx context.Context, dbClient binlogplayer.D
 	}
 	switch req.ActionArg {
 	case AllActionArg:
-		if qr, err = dbClient.ExecuteFetch(sqlGetAllVDiffs, -1); err != nil {
+		query, err := sqlparser.ParseAndBind(sqlGetMostRecentVDiffByKeyspaceWorkflow,
+			sqltypes.StringBindVariable(req.Keyspace),
+			sqltypes.StringBindVariable(req.Workflow),
+			sqltypes.Int64BindVariable(maxVDiffsToReport),
+		)
+		if err != nil {
+			return err
+		}
+		if qr, err = dbClient.ExecuteFetch(query, -1); err != nil {
 			return err
 		}
 		resp.Output = sqltypes.ResultToProto3(qr)
@@ -361,6 +376,9 @@ func (vde *Engine) handleDeleteAction(ctx context.Context, dbClient binlogplayer
 		}
 		controller.Stop()
 		delete(vde.controllers, controller.id)
+		globalStats.mu.Lock()
+		defer globalStats.mu.Unlock()
+		delete(globalStats.controllers, controller.id)
 	}
 
 	switch req.ActionArg {

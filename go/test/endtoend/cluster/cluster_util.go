@@ -29,13 +29,13 @@ import (
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/vt/grpcclient"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
 
 	"github.com/buger/jsonparser"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 
@@ -137,7 +137,7 @@ func PanicHandler(t testing.TB) {
 
 // ListBackups Lists back preset in shard
 func (cluster LocalProcessCluster) ListBackups(shardKsName string) ([]string, error) {
-	output, err := cluster.VtctlclientProcess.ExecuteCommandWithOutput("ListBackups", shardKsName)
+	output, err := cluster.VtctldClientProcess.ExecuteCommandWithOutput("GetBackups", shardKsName)
 	if err != nil {
 		return nil, err
 	}
@@ -164,7 +164,7 @@ func (cluster LocalProcessCluster) RemoveAllBackups(t *testing.T, shardKsName st
 	backups, err := cluster.ListBackups(shardKsName)
 	require.Nil(t, err)
 	for _, backup := range backups {
-		cluster.VtctlclientProcess.ExecuteCommand("RemoveBackup", shardKsName, backup)
+		cluster.VtctldClientProcess.ExecuteCommand("RemoveBackup", shardKsName, backup)
 	}
 }
 
@@ -359,7 +359,11 @@ func GetPasswordUpdateSQL(localCluster *LocalProcessCluster) string {
 // CheckSrvKeyspace confirms that the cell and keyspace contain the expected
 // shard mappings.
 func CheckSrvKeyspace(t *testing.T, cell string, ksname string, expectedPartition map[topodatapb.TabletType][]string, ci LocalProcessCluster) {
-	srvKeyspace := GetSrvKeyspace(t, cell, ksname, ci)
+	srvKeyspaces, err := ci.VtctldClientProcess.GetSrvKeyspaces(ksname, cell)
+	require.NoError(t, err)
+
+	srvKeyspace := srvKeyspaces[cell]
+	require.NotNil(t, srvKeyspace, "srvKeyspace is nil for %s", cell)
 
 	currentPartition := map[topodatapb.TabletType][]string{}
 
@@ -371,17 +375,6 @@ func CheckSrvKeyspace(t *testing.T, cell string, ksname string, expectedPartitio
 	}
 
 	assert.True(t, reflect.DeepEqual(currentPartition, expectedPartition))
-}
-
-// GetSrvKeyspace returns the SrvKeyspace structure for the cell and keyspace.
-func GetSrvKeyspace(t *testing.T, cell string, ksname string, ci LocalProcessCluster) *topodatapb.SrvKeyspace {
-	output, err := ci.VtctlclientProcess.ExecuteCommandWithOutput("GetSrvKeyspace", cell, ksname)
-	require.Nil(t, err)
-	var srvKeyspace topodatapb.SrvKeyspace
-
-	err = json2.Unmarshal([]byte(output), &srvKeyspace)
-	require.Nil(t, err)
-	return &srvKeyspace
 }
 
 // ExecuteOnTablet executes a query on the specified vttablet.
@@ -497,4 +490,48 @@ func DialVTGate(ctx context.Context, name, addr, username, password string) (*vt
 	dialerName := name
 	vtgateconn.RegisterDialer(dialerName, dialerFunc)
 	return vtgateconn.DialProtocol(ctx, dialerName, addr)
+}
+
+// PrintFiles prints the files that are asked for. If no file is specified, all the files are printed.
+func PrintFiles(t *testing.T, dir string, files ...string) {
+	var directories []string
+	directories = append(directories, dir)
+
+	// Go over the remaining directories to check
+	for len(directories) > 0 {
+		// Get one of the directories, and read its contents.
+		dir = directories[0]
+		directories = directories[1:]
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			log.Errorf("Couldn't read directory - %v", dir)
+			continue
+		}
+		for _, entry := range entries {
+			name := path.Join(dir, entry.Name())
+			// For a directory, we add it to our list of directories to check.
+			if entry.IsDir() {
+				directories = append(directories, name)
+				continue
+			}
+			// Check if this file should be printed or not.
+			if len(files) != 0 {
+				fileFound := false
+				for _, file := range files {
+					if strings.EqualFold(entry.Name(), file) {
+						fileFound = true
+						break
+					}
+				}
+				if !fileFound {
+					continue
+				}
+			}
+			// Read and print the file.
+			res, err := os.ReadFile(name)
+			require.NoError(t, err)
+			log.Errorf("READING FILE - %v", name)
+			log.Errorf("%v", string(res))
+		}
+	}
 }

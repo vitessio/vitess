@@ -34,26 +34,41 @@ jobs:
         echo Skip ${skip}
         echo "skip-workflow=${skip}" >> $GITHUB_OUTPUT
 
-        PR_DATA=$(curl \
+        PR_DATA=$(curl -s\
           -H "{{"Authorization: token ${{ secrets.GITHUB_TOKEN }}"}}" \
           -H "Accept: application/vnd.github.v3+json" \
           "{{"https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}"}}")
         draft=$(echo "$PR_DATA" | jq .draft -r)
         echo "is_draft=${draft}" >> $GITHUB_OUTPUT
 
+    {{if .MemoryCheck}}
+
+    - name: Check Memory
+      run: |
+        totalMem=$(free -g | awk 'NR==2 {print $2}')
+        echo "total memory $totalMem GB"
+        if [[ "$totalMem" -lt 15 ]]; then 
+          echo "Less memory than required"
+          exit 1
+        fi
+
+    {{end}}
+
     - name: Check out code
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Check for changes in relevant files
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
-      uses: frouioui/paths-filter@main
+      uses: dorny/paths-filter@v3.0.1
       id: changes
       with:
         token: ''
         filters: |
           end_to_end:
             - 'go/**/*.go'
+            - 'go/vt/sidecardb/**/*.sql'
+            - 'go/test/endtoend/onlineddl/vrepl_suite/**'
             - 'test.go'
             - 'Makefile'
             - 'build.env'
@@ -70,13 +85,13 @@ jobs:
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v5
       with:
-        go-version: 1.21.3
+        go-version: 1.22.1
 
     - name: Set up python
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
 
     - name: Tune the OS
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -94,27 +109,27 @@ jobs:
         {{if .InstallXtraBackup}}
 
         # Setup Percona Server for MySQL 8.0
-        sudo apt-get update
-        sudo apt-get install -y lsb-release gnupg2 curl
+        sudo apt-get -qq update
+        sudo apt-get -qq install -y lsb-release gnupg2 curl
         wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
         sudo percona-release setup ps80
-        sudo apt-get update
+        sudo apt-get -qq update
 
         # Install everything else we need, and configure
-        sudo apt-get install -y percona-server-server percona-server-client make unzip g++ etcd git wget eatmydata xz-utils libncurses5
+        sudo apt-get -qq install -y percona-server-server percona-server-client make unzip g++ etcd git wget eatmydata xz-utils libncurses5
 
         {{else}}
 
         # Get key to latest MySQL repo
-        sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 467B942D3A79BD29
+        sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A8D3785C
         # Setup MySQL 8.0
-        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.24-1_all.deb
+        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.29-1_all.deb
         echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
-        sudo apt-get update
+        sudo apt-get -qq update
         # Install everything else we need, and configure
-        sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget eatmydata xz-utils libncurses5
+        sudo apt-get -qq install -y mysql-server mysql-client make unzip g++ etcd curl git wget eatmydata xz-utils libncurses5
 
         {{end}}
 
@@ -129,7 +144,7 @@ jobs:
 
         {{if .InstallXtraBackup}}
 
-        sudo apt-get install -y percona-xtrabackup-80 lz4
+        sudo apt-get -qq install -y percona-xtrabackup-80 lz4
 
         {{end}}
 

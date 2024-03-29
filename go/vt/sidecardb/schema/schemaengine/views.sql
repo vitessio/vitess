@@ -16,8 +16,8 @@ limitations under the License.
 
 CREATE TABLE IF NOT EXISTS views
 (
-    TABLE_SCHEMA varchar(64) NOT NULL,
-    TABLE_NAME varchar(64) NOT NULL,
+    TABLE_SCHEMA varchar(64) CHARACTER SET `utf8mb3` COLLATE `utf8mb3_bin` NOT NULL,
+    TABLE_NAME varchar(64) CHARACTER SET `utf8mb3` COLLATE `utf8mb3_bin` NOT NULL,
     CREATE_STATEMENT longtext,
     VIEW_DEFINITION longtext NOT NULL,
     PRIMARY KEY (TABLE_SCHEMA, TABLE_NAME)

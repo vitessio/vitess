@@ -89,7 +89,7 @@ func TestJoinExecute(t *testing.T) {
 		`Execute a: type:INT64 value:"10" bv: type:VARCHAR value:"b" false`,
 		`Execute a: type:INT64 value:"10" bv: type:VARCHAR value:"c" false`,
 	})
-	expectResult(t, "jn.Execute", r, sqltypes.MakeTestResult(
+	expectResult(t, r, sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"col1|col2|col4|col5",
 			"int64|varchar|int64|varchar",
@@ -116,7 +116,7 @@ func TestJoinExecute(t *testing.T) {
 		`Execute a: type:INT64 value:"10" bv: type:VARCHAR value:"b" false`,
 		`Execute a: type:INT64 value:"10" bv: type:VARCHAR value:"c" false`,
 	})
-	expectResult(t, "jn.Execute", r, sqltypes.MakeTestResult(
+	expectResult(t, r, sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"col1|col2|col4|col5",
 			"int64|varchar|int64|varchar",
@@ -251,7 +251,7 @@ func TestJoinExecuteNoResult(t *testing.T) {
 			"int64|varchar|int64|varchar",
 		),
 	)
-	expectResult(t, "jn.Execute", r, wantResult)
+	expectResult(t, r, wantResult)
 }
 
 func TestJoinExecuteErrors(t *testing.T) {
@@ -389,7 +389,7 @@ func TestJoinStreamExecute(t *testing.T) {
 		`StreamExecute bv: type:VARCHAR value:"b" false`,
 		`StreamExecute bv: type:VARCHAR value:"c" false`,
 	})
-	expectResult(t, "jn.Execute", r, sqltypes.MakeTestResult(
+	expectResult(t, r, sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"col1|col2|col4|col5",
 			"int64|varchar|int64|varchar",
@@ -418,7 +418,7 @@ func TestJoinStreamExecute(t *testing.T) {
 		`StreamExecute bv: type:VARCHAR value:"b" false`,
 		`StreamExecute bv: type:VARCHAR value:"c" false`,
 	})
-	expectResult(t, "jn.Execute", r, sqltypes.MakeTestResult(
+	expectResult(t, r, sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"col1|col2|col4|col5",
 			"int64|varchar|int64|varchar",
@@ -475,7 +475,7 @@ func TestGetFields(t *testing.T) {
 		`GetFields bv: `,
 		`Execute bv:  true`,
 	})
-	expectResult(t, "jn.Execute", r, sqltypes.MakeTestResult(
+	expectResult(t, r, sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"col1|col2|col4|col5",
 			"int64|varchar|int64|varchar",

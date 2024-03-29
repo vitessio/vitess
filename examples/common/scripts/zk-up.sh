@@ -19,7 +19,6 @@
 source "$(dirname "${BASH_SOURCE[0]:-$0}")/../env.sh"
 
 cell=${CELL:-'test'}
-
 # Start ZooKeeper servers.
 # The "zkctl init" command won't return until the server is able to contact its
 # peers, so we need to start them all in the background and then wait for them.
@@ -32,7 +31,7 @@ for zkid in $zkids; do
     echo "    $VTDATAROOT/$zkdir"
     action='start'
   fi
-  zkctl -zk.myid $zkid -zk.cfg $zkcfg -log_dir $VTDATAROOT/tmp $action \
+  zkctl --zk.myid $zkid --zk.cfg $zkcfg --log_dir $VTDATAROOT/tmp $action \
     > $VTDATAROOT/tmp/zkctl_$zkid.out 2>&1 &
   pids[$zkid]=$!
 done
@@ -53,10 +52,10 @@ echo "Started zk servers."
 # If the node already exists, it's fine, means we used existing data.
 set +e
 # shellcheck disable=SC2086
-vtctl $TOPOLOGY_FLAGS VtctldCommand AddCellInfo \
-  --root /vitess/$cell \
-  --server-address $ZK_SERVER \
-  $cell
+command vtctldclient --server internal --topo-implementation zk2 --topo-global-server "${ZK_SERVER}"  AddCellInfo \
+  --root "/vitess/${cell}" \
+  --server-address "${ZK_SERVER}" \
+  "${cell}"
 set -e
 
 echo "Configured zk servers."

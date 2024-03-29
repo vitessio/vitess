@@ -1,4 +1,4 @@
-ARG bootstrap_version=24
+ARG bootstrap_version=29
 ARG image="vitess/bootstrap:${bootstrap_version}-common"
 
 FROM "${image}"
@@ -37,6 +37,7 @@ COPY examples/local /vt/local
 # Copy the vtadmin web app to the correct location and npm install
 COPY --chown=vitess:vitess web /web
 RUN npm install /web/vtadmin
+RUN /web/vtadmin/build.sh
 
 RUN mkdir /vt/common
 COPY examples/common /vt/common

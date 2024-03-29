@@ -17,13 +17,17 @@ limitations under the License.
 package servenv
 
 import (
+	"fmt"
+
 	"github.com/spf13/pflag"
+
+	"vitess.io/vitess/go/mysql/config"
 )
 
 // mySQLServerVersion is what Vitess will present as it's version during the connection handshake,
 // and as the value to the @@version system variable. If nothing is provided, Vitess will report itself as
 // a specific MySQL version with the vitess version appended to it
-var mySQLServerVersion = "8.0.30-Vitess"
+var mySQLServerVersion = fmt.Sprintf("%s-Vitess", config.DefaultMySQLVersion)
 
 // RegisterMySQLServerFlags installs the flags needed to specify or expose a
 // particular MySQL server version from Vitess.
@@ -36,14 +40,6 @@ func MySQLServerVersion() string {
 	return mySQLServerVersion
 }
 
-// SetMySQLServerVersionForTest sets the value of the `--mysql_server_version`
-// flag. It is intended for use in tests that require a specific MySQL server
-// version (for example, collations) that cannot specify that via the command
-// line.
-func SetMySQLServerVersionForTest(version string) {
-	mySQLServerVersion = version
-}
-
 func init() {
 	for _, cmd := range []string{
 		"mysqlctl",
@@ -51,6 +47,7 @@ func init() {
 		"vtbackup",
 		"vtcombo",
 		"vtctl",
+		"vtctld",
 		"vtctldclient",
 		"vtexplain",
 		"vtgate",

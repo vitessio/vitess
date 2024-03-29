@@ -17,14 +17,23 @@ limitations under the License.
 package textutil
 
 import (
+	"fmt"
 	"net/url"
 	"regexp"
 	"strings"
+	"unicode"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/proto/binlogdata"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+)
+
+type TruncationLocation int
+
+const (
+	TruncationLocationMiddle TruncationLocation = iota
+	TruncationLocationEnd
 )
 
 var (
@@ -93,7 +102,7 @@ func ValueIsSimulatedNull(val any) bool {
 		return cval == SimulatedNullString
 	case []string:
 		return len(cval) == 1 && cval[0] == sqltypes.NULL.String()
-	case binlogdata.OnDDLAction:
+	case binlogdatapb.OnDDLAction:
 		return int32(cval) == int32(SimulatedNullInt)
 	case int:
 		return cval == SimulatedNullInt
@@ -103,7 +112,55 @@ func ValueIsSimulatedNull(val any) bool {
 		return int64(cval) == int64(SimulatedNullInt)
 	case []topodatapb.TabletType:
 		return len(cval) == 1 && cval[0] == topodatapb.TabletType(SimulatedNullInt)
+	case binlogdatapb.VReplicationWorkflowState:
+		return int32(cval) == int32(SimulatedNullInt)
 	default:
 		return false
+	}
+}
+
+// Title returns a copy of the string s with all Unicode letters that begin words
+// mapped to their Unicode title case.
+//
+// This is a simplified version of `strings.ToTitle` which is deprecated as it doesn't
+// handle all Unicode characters correctly. But we don't care about those, so we can
+// use this. This avoids having all of `x/text` as a dependency.
+func Title(s string) string {
+	// Use a closure here to remember state.
+	// Hackish but effective. Depends on Map scanning in order and calling
+	// the closure once per rune.
+	prev := ' '
+	return strings.Map(
+		func(r rune) rune {
+			if unicode.IsSpace(prev) {
+				prev = r
+				return unicode.ToTitle(r)
+			}
+			prev = r
+			return r
+		},
+		s)
+}
+
+// TruncateText truncates the provided text, if needed, to the specified maximum
+// length using the provided truncation indicator in place of the truncated text
+// in the specified location of the original string.
+func TruncateText(text string, limit int, location TruncationLocation, indicator string) (string, error) {
+	ol := len(text)
+	if ol <= limit {
+		return text, nil
+	}
+	if len(indicator)+2 >= limit {
+		return "", fmt.Errorf("the truncation indicator is too long for the provided text")
+	}
+	switch location {
+	case TruncationLocationMiddle:
+		prefix := (limit / 2) - len(indicator)
+		suffix := (ol - (prefix + len(indicator))) + 1
+		return fmt.Sprintf("%s%s%s", text[:prefix], indicator, text[suffix:]), nil
+	case TruncationLocationEnd:
+		return text[:limit-(len(indicator)+1)] + indicator, nil
+	default:
+		return "", fmt.Errorf("invalid truncation location: %d", location)
 	}
 }

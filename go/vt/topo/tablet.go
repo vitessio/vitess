@@ -24,6 +24,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/sync/semaphore"
+
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/key"
 
@@ -75,29 +77,6 @@ func IsRunningQueryService(tt topodatapb.TabletType) bool {
 	return false
 }
 
-// IsSubjectToLameduck returns if a tablet is subject to being
-// lameduck.  Lameduck is a transition period where we are still
-// allowed to serve, but we tell the clients we are going away
-// soon. Typically, a vttablet will still serve, but broadcast a
-// non-serving state through its health check. then vtgate will catch
-// that non-serving state, and stop sending queries.
-//
-// Primaries are not subject to lameduck, as we usually want to transition
-// them as fast as possible.
-//
-// Replica and rdonly will use lameduck when going from healthy to
-// unhealthy (either because health check fails, or they're shutting down).
-//
-// Other types are probably not serving user visible traffic, so they
-// need to transition as fast as possible too.
-func IsSubjectToLameduck(tt topodatapb.TabletType) bool {
-	switch tt {
-	case topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY:
-		return true
-	}
-	return false
-}
-
 // IsRunningUpdateStream returns if a tablet is running the update stream
 // RPC service.
 func IsRunningUpdateStream(tt topodatapb.TabletType) bool {
@@ -130,36 +109,6 @@ func NewTablet(uid uint32, cell, host string) *topodatapb.Tablet {
 		Hostname: host,
 		PortMap:  make(map[string]int32),
 	}
-}
-
-// TabletEquality returns true iff two Tablet are representing the same tablet
-// process: same uid/cell, running on the same host / ports.
-func TabletEquality(left, right *topodatapb.Tablet) bool {
-	if !topoproto.TabletAliasEqual(left.Alias, right.Alias) {
-		return false
-	}
-	if left.Hostname != right.Hostname {
-		return false
-	}
-	if left.MysqlHostname != right.MysqlHostname {
-		return false
-	}
-	if left.MysqlPort != right.MysqlPort {
-		return false
-	}
-	if len(left.PortMap) != len(right.PortMap) {
-		return false
-	}
-	for key, lvalue := range left.PortMap {
-		rvalue, ok := right.PortMap[key]
-		if !ok {
-			return false
-		}
-		if lvalue != rvalue {
-			return false
-		}
-	}
-	return true
 }
 
 // TabletInfo is the container for a Tablet, read from the topology server.
@@ -227,7 +176,7 @@ func NewTabletInfo(tablet *topodatapb.Tablet, version Version) *TabletInfo {
 func (ts *Server) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) (*TabletInfo, error) {
 	conn, err := ts.ConnForCell(ctx, alias.Cell)
 	if err != nil {
-		log.Errorf("Unable to get connection for cell %s", alias.Cell)
+		log.Errorf("unable to get connection for cell %q: %v", alias.Cell, err)
 		return nil, err
 	}
 
@@ -238,7 +187,7 @@ func (ts *Server) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) 
 	tabletPath := path.Join(TabletsPath, topoproto.TabletAliasString(alias), TabletFile)
 	data, version, err := conn.Get(ctx, tabletPath)
 	if err != nil {
-		log.Errorf("unable to connect to tablet %s: %s", alias, err)
+		log.Errorf("unable to connect to tablet %q: %v", alias, err)
 		return nil, err
 	}
 	tablet := &topodatapb.Tablet{}
@@ -282,10 +231,17 @@ func (ts *Server) GetTabletAliasesByCell(ctx context.Context, cell string) ([]*t
 	return result, nil
 }
 
+// GetTabletsByCellOptions controls the behavior of
+// Server.FindAllShardsInKeyspace.
+type GetTabletsByCellOptions struct {
+	// Concurrency controls the maximum number of concurrent calls to GetTablet.
+	Concurrency int
+}
+
 // GetTabletsByCell returns all the tablets in the cell.
 // It returns ErrNoNode if the cell doesn't exist.
 // It returns (nil, nil) if the cell exists, but there are no tablets in it.
-func (ts *Server) GetTabletsByCell(ctx context.Context, cellAlias string) ([]*TabletInfo, error) {
+func (ts *Server) GetTabletsByCell(ctx context.Context, cellAlias string, opt *GetTabletsByCellOptions) ([]*TabletInfo, error) {
 	// If the cell doesn't exist, this will return ErrNoNode.
 	cellConn, err := ts.ConnForCell(ctx, cellAlias)
 	if err != nil {
@@ -293,10 +249,12 @@ func (ts *Server) GetTabletsByCell(ctx context.Context, cellAlias string) ([]*Ta
 	}
 	listResults, err := cellConn.List(ctx, TabletsPath)
 	if err != nil || len(listResults) == 0 {
-		// Currently the ZooKeeper and Memory topo implementations do not support scans
+		// Currently the ZooKeeper implementation does not support scans
 		// so we fall back to the more costly method of fetching the tablets one by one.
-		if IsErrType(err, NoImplementation) {
-			return ts.GetTabletsIndividuallyByCell(ctx, cellAlias)
+		// In the etcd case, it is possible that the response is too large. We also fall
+		// back to fetching the tablets one by one in that case.
+		if IsErrType(err, NoImplementation) || IsErrType(err, ResourceExhausted) {
+			return ts.GetTabletsIndividuallyByCell(ctx, cellAlias, opt)
 		}
 		if IsErrType(err, NoNode) {
 			return nil, nil
@@ -320,7 +278,7 @@ func (ts *Server) GetTabletsByCell(ctx context.Context, cellAlias string) ([]*Ta
 // directly support the topoConn.List() functionality.
 // It returns ErrNoNode if the cell doesn't exist.
 // It returns (nil, nil) if the cell exists, but there are no tablets in it.
-func (ts *Server) GetTabletsIndividuallyByCell(ctx context.Context, cell string) ([]*TabletInfo, error) {
+func (ts *Server) GetTabletsIndividuallyByCell(ctx context.Context, cell string, opt *GetTabletsByCellOptions) ([]*TabletInfo, error) {
 	// If the cell doesn't exist, this will return ErrNoNode.
 	aliases, err := ts.GetTabletAliasesByCell(ctx, cell)
 	if err != nil {
@@ -328,7 +286,7 @@ func (ts *Server) GetTabletsIndividuallyByCell(ctx context.Context, cell string)
 	}
 	sort.Sort(topoproto.TabletAliasList(aliases))
 
-	tabletMap, err := ts.GetTabletMap(ctx, aliases)
+	tabletMap, err := ts.GetTabletMap(ctx, aliases, opt)
 	if err != nil {
 		// we got another error than topo.ErrNoNode
 		return nil, err
@@ -443,21 +401,20 @@ func (ts *Server) CreateTablet(ctx context.Context, tablet *topodatapb.Tablet) e
 		return err
 	}
 	tabletPath := path.Join(TabletsPath, topoproto.TabletAliasString(tablet.Alias), TabletFile)
-	if _, err = conn.Create(ctx, tabletPath, data); err != nil {
+	if _, err := conn.Create(ctx, tabletPath, data); err != nil {
 		return err
 	}
 
-	if updateErr := UpdateTabletReplicationData(ctx, ts, tablet); updateErr != nil {
-		return updateErr
+	if err := UpdateTabletReplicationData(ctx, ts, tablet); err != nil {
+		return err
 	}
 
-	if err == nil {
-		event.Dispatch(&events.TabletChange{
-			Tablet: tablet,
-			Status: "created",
-		})
-	}
-	return err
+	event.Dispatch(&events.TabletChange{
+		Tablet: tablet,
+		Status: "created",
+	})
+
+	return nil
 }
 
 // DeleteTablet wraps the underlying conn.Delete
@@ -503,41 +460,61 @@ func DeleteTabletReplicationData(ctx context.Context, ts *Server, tablet *topoda
 }
 
 // GetTabletMap tries to read all the tablets in the provided list,
-// and returns them all in a map.
-// If error is ErrPartialResult, the results in the dictionary are
+// and returns them in a map.
+// If error is ErrPartialResult, the results in the map are
 // incomplete, meaning some tablets couldn't be read.
 // The map is indexed by topoproto.TabletAliasString(tablet alias).
-func (ts *Server) GetTabletMap(ctx context.Context, tabletAliases []*topodatapb.TabletAlias) (map[string]*TabletInfo, error) {
+func (ts *Server) GetTabletMap(ctx context.Context, tabletAliases []*topodatapb.TabletAlias, opt *GetTabletsByCellOptions) (map[string]*TabletInfo, error) {
 	span, ctx := trace.NewSpan(ctx, "topo.GetTabletMap")
 	span.Annotate("num_tablets", len(tabletAliases))
 	defer span.Finish()
 
-	wg := sync.WaitGroup{}
-	mutex := sync.Mutex{}
+	var (
+		mu        sync.Mutex
+		wg        sync.WaitGroup
+		tabletMap = make(map[string]*TabletInfo)
+		returnErr error
+	)
 
-	tabletMap := make(map[string]*TabletInfo)
-	var someError error
+	concurrency := DefaultConcurrency
+	if opt != nil && opt.Concurrency > 0 {
+		concurrency = opt.Concurrency
+	}
+	var sem = semaphore.NewWeighted(int64(concurrency))
 
 	for _, tabletAlias := range tabletAliases {
 		wg.Add(1)
 		go func(tabletAlias *topodatapb.TabletAlias) {
 			defer wg.Done()
+			if err := sem.Acquire(ctx, 1); err != nil {
+				// Only happens if context is cancelled.
+				mu.Lock()
+				defer mu.Unlock()
+				log.Warningf("%v: %v", tabletAlias, err)
+				// We only need to set this on the first error.
+				if returnErr == nil {
+					returnErr = NewError(PartialResult, tabletAlias.GetCell())
+				}
+				return
+			}
 			tabletInfo, err := ts.GetTablet(ctx, tabletAlias)
-			mutex.Lock()
+			sem.Release(1)
+			mu.Lock()
+			defer mu.Unlock()
 			if err != nil {
 				log.Warningf("%v: %v", tabletAlias, err)
 				// There can be data races removing nodes - ignore them for now.
-				if !IsErrType(err, NoNode) {
-					someError = NewError(PartialResult, "")
+				// We only need to set this on first error.
+				if returnErr == nil && !IsErrType(err, NoNode) {
+					returnErr = NewError(PartialResult, tabletAlias.GetCell())
 				}
 			} else {
 				tabletMap[topoproto.TabletAliasString(tabletAlias)] = tabletInfo
 			}
-			mutex.Unlock()
 		}(tabletAlias)
 	}
 	wg.Wait()
-	return tabletMap, someError
+	return tabletMap, returnErr
 }
 
 // InitTablet creates or updates a tablet. If no parent is specified

@@ -3,6 +3,26 @@
   "vindexes": {
     "hash": {
       "type": "hash"
+    },
+    "unq_vdx": {
+      "type": "consistent_lookup_unique",
+      "params": {
+        "table": "unq_idx",
+        "from": "unq_col",
+        "to": "keyspace_id",
+        "ignore_nulls": "true"
+      },
+      "owner": "tbl"
+    },
+    "nonunq_vdx": {
+      "type": "consistent_lookup",
+      "params": {
+        "table": "nonunq_idx",
+        "from": "nonunq_col,id",
+        "to": "keyspace_id",
+        "ignore_nulls": "true"
+      },
+      "owner": "tbl"
     }
   },
   "tables": {
@@ -10,6 +30,41 @@
       "column_vindexes": [
         {
           "column": "id1",
+          "name": "hash"
+        }
+      ]
+    },
+    "tbl": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "hash"
+        },
+        {
+          "column": "unq_col",
+          "name": "unq_vdx"
+        },
+        {
+          "columns": [
+            "nonunq_col",
+            "id"
+          ],
+          "name": "nonunq_vdx"
+        }
+      ]
+    },
+    "unq_idx": {
+      "column_vindexes": [
+        {
+          "column": "unq_col",
+          "name": "hash"
+        }
+      ]
+    },
+    "nonunq_idx": {
+      "column_vindexes": [
+        {
+          "column": "nonunq_col",
           "name": "hash"
         }
       ]

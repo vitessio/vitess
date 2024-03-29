@@ -41,10 +41,9 @@ import (
 // sandbox_test.go provides a sandbox for unit testing VTGate.
 
 const (
-	KsTestSharded             = "TestExecutor"
-	KsTestUnsharded           = "TestUnsharded"
-	KsTestUnshardedServedFrom = "TestUnshardedServedFrom"
-	KsTestBadVSchema          = "TestXBadVSchema"
+	KsTestSharded    = "TestExecutor"
+	KsTestUnsharded  = "TestUnsharded"
+	KsTestBadVSchema = "TestXBadVSchema"
 )
 
 func init() {
@@ -172,18 +171,6 @@ func createShardedSrvKeyspace(shardSpec, servedFromKeyspace string) (*topodatapb
 			},
 		},
 	}
-	if servedFromKeyspace != "" {
-		shardedSrvKeyspace.ServedFrom = []*topodatapb.SrvKeyspace_ServedFrom{
-			{
-				TabletType: topodatapb.TabletType_RDONLY,
-				Keyspace:   servedFromKeyspace,
-			},
-			{
-				TabletType: topodatapb.TabletType_PRIMARY,
-				Keyspace:   servedFromKeyspace,
-			},
-		}
-	}
 	return shardedSrvKeyspace, nil
 }
 
@@ -259,27 +246,11 @@ func (sct *sandboxTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace strin
 		return nil, fmt.Errorf("topo error GetSrvKeyspace")
 	}
 	switch keyspace {
-	case KsTestUnshardedServedFrom:
-		servedFromKeyspace, err := createUnshardedKeyspace()
-		if err != nil {
-			return nil, err
-		}
-		servedFromKeyspace.ServedFrom = []*topodatapb.SrvKeyspace_ServedFrom{
-			{
-				TabletType: topodatapb.TabletType_RDONLY,
-				Keyspace:   KsTestUnsharded,
-			},
-			{
-				TabletType: topodatapb.TabletType_PRIMARY,
-				Keyspace:   KsTestUnsharded,
-			},
-		}
-		return servedFromKeyspace, nil
 	case KsTestUnsharded:
 		return createUnshardedKeyspace()
+	default:
+		return createShardedSrvKeyspace(sand.ShardSpec, sand.KeyspaceServedFrom)
 	}
-
-	return createShardedSrvKeyspace(sand.ShardSpec, sand.KeyspaceServedFrom)
 }
 
 func (sct *sandboxTopo) WatchSrvKeyspace(ctx context.Context, cell, keyspace string, callback func(*topodatapb.SrvKeyspace, error) bool) {
@@ -310,7 +281,10 @@ func (sct *sandboxTopo) WatchSrvVSchema(ctx context.Context, cell string, callba
 	}
 
 	sct.topoServer.UpdateSrvVSchema(ctx, cell, srvVSchema)
-	current, updateChan, _ := sct.topoServer.WatchSrvVSchema(ctx, cell)
+	current, updateChan, err := sct.topoServer.WatchSrvVSchema(ctx, cell)
+	if err != nil {
+		panic(fmt.Sprintf("sandboxTopo WatchSrvVSchema returned an error: %v", err))
+	}
 	if !callback(current.Value, nil) {
 		panic("sandboxTopo callback returned false")
 	}

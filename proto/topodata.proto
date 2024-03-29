@@ -267,22 +267,8 @@ message Keyspace {
   // OBSOLETE int32 split_shard_count = 3;
   reserved 3;
 
-  // ServedFrom indicates a relationship between a TabletType and the
-  // keyspace name that's serving it.
-  message ServedFrom {
-    // the tablet type (key for the map)
-    TabletType tablet_type = 1;
-
-    // the cells to limit this to
-    repeated string cells = 2;
-
-    // the keyspace name that's serving it
-    string keyspace = 3;
-  }
-
-  // ServedFrom will redirect the appropriate traffic to
-  // another keyspace.
-  repeated ServedFrom served_froms = 4;
+  // OBSOLETE ServedFrom served_froms = 4;
+  reserved 4;
 
   // keyspace_type will determine how this keyspace is treated by
   // vtgate / vschema. Normal keyspaces are routable by
@@ -417,16 +403,6 @@ message SrvKeyspace {
   // The partitions this keyspace is serving, per tablet type.
   repeated KeyspacePartition partitions = 1;
 
-  // ServedFrom indicates a relationship between a TabletType and the
-  // keyspace name that's serving it.
-  message ServedFrom {
-    // the tablet type
-    TabletType tablet_type = 1;
-
-    // the keyspace name that's serving it
-    string keyspace = 2;
-  }
-
   // copied from Keyspace
   // OBSOLETE string sharding_column_name = 2;
   reserved 2;
@@ -434,7 +410,8 @@ message SrvKeyspace {
   // OBSOLETE KeyspaceIdType sharding_column_type = 3;
   reserved 3;
 
-  repeated ServedFrom served_from = 4;
+  // OBSOLETE repeated ServedFrom served_from = 4;
+  reserved 4;
 
   // OBSOLETE int32 split_shard_count = 5;
   reserved 5;

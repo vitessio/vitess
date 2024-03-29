@@ -224,20 +224,6 @@ func (tg *TableGenerator) entryForCodepoint(codepoint rune) (*page, *entry) {
 	return page, entry
 }
 
-func (tg *TableGenerator) Add900(codepoint rune, rhs [][3]uint16) {
-	page, entry := tg.entryForCodepoint(codepoint)
-	page.entryCount++
-
-	for i, weights := range rhs {
-		if i >= uca.MaxCollationElementsPerCodepoint {
-			break
-		}
-		for _, we := range weights {
-			entry.weights = append(entry.weights, we)
-		}
-	}
-}
-
 func (tg *TableGenerator) Add(codepoint rune, weights []uint16) {
 	page, entry := tg.entryForCodepoint(codepoint)
 	page.entryCount++
@@ -246,22 +232,6 @@ func (tg *TableGenerator) Add(codepoint rune, weights []uint16) {
 		panic("duplicate codepoint inserted")
 	}
 	entry.weights = append(entry.weights, weights...)
-}
-
-func (tg *TableGenerator) AddFromAllkeys(lhs []rune, rhs [][]int, vars []int) {
-	if len(lhs) > 1 || lhs[0] > tg.maxChar {
-		// TODO: support contractions
-		return
-	}
-
-	var weights [][3]uint16
-	for _, we := range rhs {
-		if len(we) != 3 {
-			panic("non-triplet weight in allkeys.txt")
-		}
-		weights = append(weights, [3]uint16{uint16(we[0]), uint16(we[1]), uint16(we[2])})
-	}
-	tg.Add900(lhs[0], weights)
 }
 
 func (tg *TableGenerator) writePage(g *Generator, p *page, layout uca.Layout) string {

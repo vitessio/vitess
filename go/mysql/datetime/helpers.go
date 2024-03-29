@@ -245,7 +245,7 @@ func daysIn(m time.Month, year int) int {
 }
 
 func isLeap(year int) bool {
-	return year%4 == 0 && (year%100 != 0 || year%400 == 0)
+	return year%4 == 0 && (year%100 != 0 || year%400 == 0) && (year != 0)
 }
 
 func daysInYear(year int) int {
@@ -285,7 +285,5 @@ func parseNanoseconds[bytes []byte | string](value bytes, nbytes int) (ns int, l
 }
 
 const (
-	secondsPerMinute = 60
-	secondsPerHour   = 60 * secondsPerMinute
-	secondsPerDay    = 24 * secondsPerHour
+	durationPerDay = 24 * time.Hour
 )

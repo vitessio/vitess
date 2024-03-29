@@ -1,0 +1,497 @@
+[
+  {
+    "comment": "Insertion in a table with cross-shard foreign keys works with foreign_key_checks off",
+    "query": "insert into tbl3 (col3, coly) values (1, 3)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into tbl3 (col3, coly) values (1, 3)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Sharded",
+        "Keyspace": {
+          "Name": "sharded_fk_allow",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "insert /*+ SET_VAR(foreign_key_checks=Off) */ into tbl3(col3, coly) values (:_col3_0, 3)",
+        "TableName": "tbl3",
+        "VindexValues": {
+          "hash_vin": "1"
+        }
+      },
+      "TablesUsed": [
+        "sharded_fk_allow.tbl3"
+      ]
+    }
+  },
+  {
+    "comment": "Insertion in a table with shard-scoped multiple column foreign key is allowed",
+    "query": "insert into multicol_tbl2 (cola, colb, colc) values (1, 2, 3)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into multicol_tbl2 (cola, colb, colc) values (1, 2, 3)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Sharded",
+        "Keyspace": {
+          "Name": "sharded_fk_allow",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "insert /*+ SET_VAR(foreign_key_checks=Off) */ into multicol_tbl2(cola, colb, colc) values (:_cola_0, :_colb_0, :_colc_0)",
+        "TableName": "multicol_tbl2",
+        "VindexValues": {
+          "multicolIdx": "1, 2, 3"
+        }
+      },
+      "TablesUsed": [
+        "sharded_fk_allow.multicol_tbl2"
+      ]
+    }
+  },
+  {
+    "comment": "Delete in a table with cross-shard foreign key works with foreign_key_checks off ",
+    "query": "delete from tbl1",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from tbl1",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "sharded_fk_allow",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "delete /*+ SET_VAR(foreign_key_checks=Off) */ from tbl1",
+        "Table": "tbl1"
+      },
+      "TablesUsed": [
+        "sharded_fk_allow.tbl1"
+      ]
+    }
+  },
+  {
+    "comment": "Delete in a table with not all column shard-scoped foreign keys works with foreign_key_checks off",
+    "query": "delete from tbl7",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from tbl7",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "sharded_fk_allow",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "delete /*+ SET_VAR(foreign_key_checks=Off) */ from tbl7",
+        "Table": "tbl7"
+      },
+      "TablesUsed": [
+        "sharded_fk_allow.tbl7"
+      ]
+    }
+  },
+  {
+    "comment": "Delete in a table with shard-scoped multiple column foreign key with cascade with foreign key checks on",
+    "query": "delete /*+ SET_VAR(foreign_key_checks=1) */ from multicol_tbl1 where cola = 1 and  colb = 2 and colc = 3",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete /*+ SET_VAR(foreign_key_checks=1) */ from multicol_tbl1 where cola = 1 and  colb = 2 and colc = 3",
+      "Instructions": {
+        "OperatorType": "FkCascade",
+        "Inputs": [
+          {
+            "InputName": "Selection",
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "sharded_fk_allow",
+              "Sharded": true
+            },
+            "FieldQuery": "select multicol_tbl1.colb, multicol_tbl1.cola, multicol_tbl1.y, multicol_tbl1.colc, multicol_tbl1.x from multicol_tbl1 where 1 != 1",
+            "Query": "select multicol_tbl1.colb, multicol_tbl1.cola, multicol_tbl1.y, multicol_tbl1.colc, multicol_tbl1.x from multicol_tbl1 where cola = 1 and colb = 2 and colc = 3 for update",
+            "Table": "multicol_tbl1",
+            "Values": [
+              "1",
+              "2",
+              "3"
+            ],
+            "Vindex": "multicolIdx"
+          },
+          {
+            "InputName": "CascadeChild-1",
+            "OperatorType": "Delete",
+            "Variant": "MultiEqual",
+            "Keyspace": {
+              "Name": "sharded_fk_allow",
+              "Sharded": true
+            },
+            "TargetTabletType": "PRIMARY",
+            "BvName": "fkc_vals",
+            "Cols": [
+              0,
+              1,
+              2,
+              3,
+              4
+            ],
+            "Query": "delete /*+ SET_VAR(foreign_key_checks=ON) */ from multicol_tbl2 where (colb, cola, x, colc, y) in ::fkc_vals",
+            "Table": "multicol_tbl2",
+            "Values": [
+              "fkc_vals:1",
+              "fkc_vals:0",
+              "fkc_vals:3"
+            ],
+            "Vindex": "multicolIdx"
+          },
+          {
+            "InputName": "Parent",
+            "OperatorType": "Delete",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "sharded_fk_allow",
+              "Sharded": true
+            },
+            "TargetTabletType": "PRIMARY",
+            "Query": "delete /*+ SET_VAR(foreign_key_checks=On) */ from multicol_tbl1 where cola = 1 and colb = 2 and colc = 3",
+            "Table": "multicol_tbl1",
+            "Values": [
+              "1",
+              "2",
+              "3"
+            ],
+            "Vindex": "multicolIdx"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "sharded_fk_allow.multicol_tbl1",
+        "sharded_fk_allow.multicol_tbl2"
+      ]
+    }
+  },
+  {
+    "comment": "Delete in a table with shard-scoped foreign keys with SET NULL",
+    "query": "delete from tbl8 where col8 = 1",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from tbl8 where col8 = 1",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "sharded_fk_allow",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "delete /*+ SET_VAR(foreign_key_checks=Off) */ from tbl8 where col8 = 1",
+        "Table": "tbl8",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "hash_vin"
+      },
+      "TablesUsed": [
+        "sharded_fk_allow.tbl8"
+      ]
+    }
+  },
+  {
+    "comment": "Update in a table with cross-shard foreign keys works with foreign_key_checks off",
+    "query": "update tbl1 set t1col1 = 'foo' where col1 = 1",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update tbl1 set t1col1 = 'foo' where col1 = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "sharded_fk_allow",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "update /*+ SET_VAR(foreign_key_checks=Off) */ tbl1 set t1col1 = 'foo' where col1 = 1",
+        "Table": "tbl1",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "hash_vin"
+      },
+      "TablesUsed": [
+        "sharded_fk_allow.tbl1"
+      ]
+    }
+  },
+  {
+    "comment": "Update in a table with column modified not shard-scoped foreign key whereas other column referencing same table is works with foreign_key_checks off",
+    "query": "update tbl7 set t7col7 = 'foo', t7col72 = 42",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update tbl7 set t7col7 = 'foo', t7col72 = 42",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "sharded_fk_allow",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "update /*+ SET_VAR(foreign_key_checks=Off) */ tbl7 set t7col7 = 'foo', t7col72 = 42",
+        "Table": "tbl7"
+      },
+      "TablesUsed": [
+        "sharded_fk_allow.tbl7"
+      ]
+    }
+  },
+  {
+    "comment": "Update in a table with shard-scoped foreign keys with cascade",
+    "query": "update /*+ SET_VAR(foreign_key_checks=On) */ tbl5 set t5col5 = 'foo'",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update /*+ SET_VAR(foreign_key_checks=On) */ tbl5 set t5col5 = 'foo'",
+      "Instructions": {
+        "OperatorType": "FkCascade",
+        "Inputs": [
+          {
+            "InputName": "Selection",
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "sharded_fk_allow",
+              "Sharded": true
+            },
+            "FieldQuery": "select tbl5.t5col5 from tbl5 where 1 != 1",
+            "Query": "select tbl5.t5col5 from tbl5 for update",
+            "Table": "tbl5"
+          },
+          {
+            "InputName": "CascadeChild-1",
+            "OperatorType": "Update",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "sharded_fk_allow",
+              "Sharded": true
+            },
+            "TargetTabletType": "PRIMARY",
+            "BvName": "fkc_vals",
+            "Cols": [
+              0
+            ],
+            "Query": "update /*+ SET_VAR(foreign_key_checks=ON) */ tbl4 set t4col4 = null where (t4col4) in ::fkc_vals and (t4col4) not in (('foo'))",
+            "Table": "tbl4"
+          },
+          {
+            "InputName": "Parent",
+            "OperatorType": "Update",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "sharded_fk_allow",
+              "Sharded": true
+            },
+            "TargetTabletType": "PRIMARY",
+            "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ tbl5 set t5col5 = 'foo'",
+            "Table": "tbl5"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "sharded_fk_allow.tbl4",
+        "sharded_fk_allow.tbl5"
+      ]
+    }
+  },
+  {
+    "comment": "Insertion in a table with 2 foreign keys constraint with same table on different columns - both are not shard scoped - works with foreign_key_checks off",
+    "query": "insert into tbl6 (col6, t6col6) values (100, 'foo')",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into tbl6 (col6, t6col6) values (100, 'foo')",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Sharded",
+        "Keyspace": {
+          "Name": "sharded_fk_allow",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "insert /*+ SET_VAR(foreign_key_checks=Off) */ into tbl6(col6, t6col6) values (:_col6_0, 'foo')",
+        "TableName": "tbl6",
+        "VindexValues": {
+          "hash_vin": "100"
+        }
+      },
+      "TablesUsed": [
+        "sharded_fk_allow.tbl6"
+      ]
+    }
+  },
+  {
+    "comment": "delete table with shard scoped foreign key set default works with foreign_key_checks off",
+    "query": "delete from tbl20 where col = 'bar'",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from tbl20 where col = 'bar'",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "sharded_fk_allow",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "delete /*+ SET_VAR(foreign_key_checks=Off) */ from tbl20 where col = 'bar'",
+        "Table": "tbl20",
+        "Values": [
+          "'bar'"
+        ],
+        "Vindex": "hash_vin"
+      },
+      "TablesUsed": [
+        "sharded_fk_allow.tbl20"
+      ]
+    }
+  },
+  {
+    "comment": "Delete table with cross-shard foreign key with set null - should be eventually allowed",
+    "query": "delete /*+ SET_VAR(foreign_key_checks=On) */ from tbl9 where col9 = 34",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete /*+ SET_VAR(foreign_key_checks=On) */ from tbl9 where col9 = 34",
+      "Instructions": {
+        "OperatorType": "FkCascade",
+        "Inputs": [
+          {
+            "InputName": "Selection",
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "sharded_fk_allow",
+              "Sharded": true
+            },
+            "FieldQuery": "select tbl9.col9 from tbl9 where 1 != 1",
+            "Query": "select tbl9.col9 from tbl9 where col9 = 34 for update",
+            "Table": "tbl9",
+            "Values": [
+              "34"
+            ],
+            "Vindex": "hash_vin"
+          },
+          {
+            "InputName": "CascadeChild-1",
+            "OperatorType": "Update",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "sharded_fk_allow",
+              "Sharded": true
+            },
+            "TargetTabletType": "PRIMARY",
+            "BvName": "fkc_vals",
+            "Cols": [
+              0
+            ],
+            "Query": "update /*+ SET_VAR(foreign_key_checks=ON) */ tbl4 set col_ref = null where (col_ref) in ::fkc_vals",
+            "Table": "tbl4"
+          },
+          {
+            "InputName": "Parent",
+            "OperatorType": "Delete",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "sharded_fk_allow",
+              "Sharded": true
+            },
+            "TargetTabletType": "PRIMARY",
+            "Query": "delete /*+ SET_VAR(foreign_key_checks=On) */ from tbl9 where col9 = 34",
+            "Table": "tbl9",
+            "Values": [
+              "34"
+            ],
+            "Vindex": "hash_vin"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "sharded_fk_allow.tbl4",
+        "sharded_fk_allow.tbl9"
+      ]
+    }
+  },
+  {
+    "comment": "Delete with foreign key checks off",
+    "query": "delete /*+ SET_VAR(foreign_key_checks=off) */ from multicol_tbl1 where cola = 1 and  colb = 2 and colc = 3",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete /*+ SET_VAR(foreign_key_checks=off) */ from multicol_tbl1 where cola = 1 and  colb = 2 and colc = 3",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "sharded_fk_allow",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "delete /*+ SET_VAR(foreign_key_checks=Off) */ from multicol_tbl1 where cola = 1 and colb = 2 and colc = 3",
+        "Table": "multicol_tbl1",
+        "Values": [
+          "1",
+          "2",
+          "3"
+        ],
+        "Vindex": "multicolIdx"
+      },
+      "TablesUsed": [
+        "sharded_fk_allow.multicol_tbl1"
+      ]
+    }
+  },
+  {
+    "comment": "Update with foreign key checks off",
+    "query": "update /*+ SET_VAR(foreign_key_checks=0) */ u_multicol_tbl1 set cola = 1, colb = 2 where id = 3",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update /*+ SET_VAR(foreign_key_checks=0) */ u_multicol_tbl1 set cola = 1, colb = 2 where id = 3",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "unsharded_fk_allow",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "update /*+ SET_VAR(foreign_key_checks=Off) */ u_multicol_tbl1 set cola = 1, colb = 2 where id = 3",
+        "Table": "u_multicol_tbl1"
+      },
+      "TablesUsed": [
+        "unsharded_fk_allow.u_multicol_tbl1"
+      ]
+    }
+  },
+  {
+    "comment": "Insert with cross shard foreign keys and foreign key checks off",
+    "query": "insert /*+ SET_VAR(foreign_key_checks=0) */ into tbl3 (col3, coly) values (1, 3)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert /*+ SET_VAR(foreign_key_checks=0) */ into tbl3 (col3, coly) values (1, 3)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Sharded",
+        "Keyspace": {
+          "Name": "sharded_fk_allow",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "insert /*+ SET_VAR(foreign_key_checks=Off) */ into tbl3(col3, coly) values (:_col3_0, 3)",
+        "TableName": "tbl3",
+        "VindexValues": {
+          "hash_vin": "1"
+        }
+      },
+      "TablesUsed": [
+        "sharded_fk_allow.tbl3"
+      ]
+    }
+  }
+]

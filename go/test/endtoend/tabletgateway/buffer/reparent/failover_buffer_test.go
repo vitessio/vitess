@@ -29,9 +29,9 @@ import (
 	"vitess.io/vitess/go/vt/log"
 )
 
-const (
-	demoteQuery  = "SET GLOBAL read_only = ON;FLUSH TABLES WITH READ LOCK;UNLOCK TABLES;"
-	promoteQuery = "STOP SLAVE;RESET SLAVE ALL;SET GLOBAL read_only = OFF;"
+var (
+	demoteQueries  = []string{"SET GLOBAL read_only = ON", "FLUSH TABLES WITH READ LOCK", "UNLOCK TABLES"}
+	promoteQueries = []string{"STOP SLAVE", "RESET SLAVE ALL", "SET GLOBAL read_only = OFF"}
 
 	hostname = "localhost"
 )
@@ -48,7 +48,8 @@ func failoverExternalReparenting(t *testing.T, clusterInstance *cluster.LocalPro
 	replica := clusterInstance.Keyspaces[0].Shards[0].Vttablets[1]
 	oldPrimary := primary
 	newPrimary := replica
-	primary.VttabletProcess.QueryTablet(demoteQuery, keyspaceUnshardedName, true)
+	err := primary.VttabletProcess.QueryTabletMultiple(demoteQueries, keyspaceUnshardedName, true)
+	require.NoError(t, err)
 
 	// Wait for replica to catch up to primary.
 	cluster.WaitForReplicationPos(t, primary, replica, false, time.Minute)
@@ -62,7 +63,8 @@ func failoverExternalReparenting(t *testing.T, clusterInstance *cluster.LocalPro
 	}
 
 	// Promote replica to new primary.
-	replica.VttabletProcess.QueryTablet(promoteQuery, keyspaceUnshardedName, true)
+	err = replica.VttabletProcess.QueryTabletMultiple(promoteQueries, keyspaceUnshardedName, true)
+	require.NoError(t, err)
 
 	// Configure old primary to replicate from new primary.
 
@@ -70,11 +72,18 @@ func failoverExternalReparenting(t *testing.T, clusterInstance *cluster.LocalPro
 
 	// Use 'localhost' as hostname because Travis CI worker hostnames
 	// are too long for MySQL replication.
-	changeSourceCommands := fmt.Sprintf("RESET SLAVE;SET GLOBAL gtid_slave_pos = '%s';CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d ,MASTER_USER='vt_repl', MASTER_USE_GTID = slave_pos;START SLAVE;", gtID, "localhost", newPrimary.MySQLPort)
-	oldPrimary.VttabletProcess.QueryTablet(changeSourceCommands, keyspaceUnshardedName, true)
+	changeSourceCommands := []string{
+		"STOP SLAVE",
+		"RESET MASTER",
+		fmt.Sprintf("SET GLOBAL gtid_purged = '%s'", gtID),
+		fmt.Sprintf("CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='vt_repl', MASTER_AUTO_POSITION = 1", "localhost", newPrimary.MySQLPort),
+		"START SLAVE",
+	}
+	err = oldPrimary.VttabletProcess.QueryTabletMultiple(changeSourceCommands, keyspaceUnshardedName, true)
+	require.NoError(t, err)
 
 	// Notify the new vttablet primary about the reparent.
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("TabletExternallyReparented", newPrimary.Alias)
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("TabletExternallyReparented", newPrimary.Alias)
 	require.NoError(t, err)
 }
 
@@ -83,9 +92,9 @@ func failoverPlannedReparenting(t *testing.T, clusterInstance *cluster.LocalProc
 	reads.ExpectQueries(10)
 	writes.ExpectQueries(10)
 
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "--", "--keyspace_shard",
+	err := clusterInstance.VtctldClientProcess.ExecuteCommand("PlannedReparentShard",
 		fmt.Sprintf("%s/%s", keyspaceUnshardedName, "0"),
-		"--new_primary", clusterInstance.Keyspaces[0].Shards[0].Vttablets[1].Alias)
+		"--new-primary", clusterInstance.Keyspaces[0].Shards[0].Vttablets[1].Alias)
 	require.NoError(t, err)
 }
 

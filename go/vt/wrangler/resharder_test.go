@@ -22,15 +22,15 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/stretchr/testify/assert"
-
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 const rsSelectFrozenQuery = "select 1 from _vt.vreplication where db_name='vt_ks' and message='FROZEN' and workflow_sub_type != 1"
@@ -104,8 +104,8 @@ func TestResharderOneToMany(t *testing.T) {
 					tc.cells+`', '`+tc.tabletTypes+`', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0, false\)`+eol,
 				&sqltypes.Result{},
 			)
-			env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
-			env.tmc.expectVRQuery(210, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
+			env.tmc.expectVRQuery(200, "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
+			env.tmc.expectVRQuery(210, "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 
 			err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, tc.cells, tc.tabletTypes, defaultOnDDL, true, false, false)
 			require.NoError(t, err)
@@ -143,7 +143,7 @@ func TestResharderManyToOne(t *testing.T) {
 		&sqltypes.Result{},
 	)
 
-	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 
 	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", defaultOnDDL, true, false, false)
 	assert.NoError(t, err)
@@ -185,8 +185,8 @@ func TestResharderManyToMany(t *testing.T) {
 		&sqltypes.Result{},
 	)
 
-	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
-	env.tmc.expectVRQuery(210, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
+	env.tmc.expectVRQuery(210, "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 
 	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", defaultOnDDL, true, false, false)
 	assert.NoError(t, err)
@@ -240,8 +240,8 @@ func TestResharderOneRefTable(t *testing.T) {
 		&sqltypes.Result{},
 	)
 
-	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
-	env.tmc.expectVRQuery(210, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
+	env.tmc.expectVRQuery(210, "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 
 	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", defaultOnDDL, true, false, false)
 	assert.NoError(t, err)
@@ -363,8 +363,8 @@ func TestResharderOneRefStream(t *testing.T) {
 		&sqltypes.Result{},
 	)
 
-	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
-	env.tmc.expectVRQuery(210, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
+	env.tmc.expectVRQuery(210, "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 
 	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", defaultOnDDL, true, false, false)
 	assert.NoError(t, err)
@@ -442,8 +442,8 @@ func TestResharderNoRefStream(t *testing.T) {
 		&sqltypes.Result{},
 	)
 
-	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
-	env.tmc.expectVRQuery(210, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
+	env.tmc.expectVRQuery(210, "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 
 	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", defaultOnDDL, true, false, false)
 	assert.NoError(t, err)
@@ -484,8 +484,8 @@ func TestResharderCopySchema(t *testing.T) {
 		&sqltypes.Result{},
 	)
 
-	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
-	env.tmc.expectVRQuery(210, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
+	env.tmc.expectVRQuery(210, "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 
 	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, false, "", "", defaultOnDDL, true, false, false)
 	assert.NoError(t, err)

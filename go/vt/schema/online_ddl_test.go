@@ -52,13 +52,14 @@ func TestIsOnlineDDLUUID(t *testing.T) {
 }
 
 func TestGetGCUUID(t *testing.T) {
+	parser := sqlparser.NewTestParser()
 	uuids := map[string]bool{}
 	count := 20
 	for i := 0; i < count; i++ {
-		onlineDDL, err := NewOnlineDDL("ks", "tbl", "alter table t drop column c", NewDDLStrategySetting(DDLStrategyDirect, ""), "", "")
+		onlineDDL, err := NewOnlineDDL("ks", "tbl", "alter table t drop column c", NewDDLStrategySetting(DDLStrategyDirect, ""), "", "", parser)
 		assert.NoError(t, err)
 		gcUUID := onlineDDL.GetGCUUID()
-		assert.True(t, IsGCUUID(gcUUID))
+		assert.True(t, isCondensedUUID(gcUUID))
 		uuids[gcUUID] = true
 	}
 	assert.Equal(t, count, len(uuids))
@@ -86,10 +87,11 @@ func TestGetActionStr(t *testing.T) {
 			isError:   true,
 		},
 	}
+	parser := sqlparser.NewTestParser()
 	for _, ts := range tt {
 		t.Run(ts.statement, func(t *testing.T) {
 			onlineDDL := &OnlineDDL{SQL: ts.statement}
-			_, actionStr, err := onlineDDL.GetActionStr()
+			_, actionStr, err := onlineDDL.GetActionStr(parser)
 			if ts.isError {
 				assert.Error(t, err)
 			} else {
@@ -101,31 +103,50 @@ func TestGetActionStr(t *testing.T) {
 }
 
 func TestIsOnlineDDLTableName(t *testing.T) {
-	names := []string{
-		"_4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114014_gho",
-		"_4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114014_ghc",
-		"_4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114014_del",
-		"_4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114013_new",
-		"_84371a37_6153_11eb_9917_f875a4d24e90_20210128122816_vrepl",
-		"_table_old",
-		"__table_old",
-	}
-	for _, tableName := range names {
-		assert.True(t, IsOnlineDDLTableName(tableName))
-	}
-	irrelevantNames := []string{
-		"t",
-		"_table_new",
-		"__table_new",
-		"_table_gho",
-		"_table_ghc",
-		"_table_del",
-		"_table_vrepl",
-		"table_old",
-	}
-	for _, tableName := range irrelevantNames {
-		assert.False(t, IsOnlineDDLTableName(tableName))
-	}
+	t.Run("accept", func(t *testing.T) {
+		names := []string{
+			"_vt_vrp_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+			"_vt_gho_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+			"_vt_ghc_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+			"_vt_del_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+			"_vt_new_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+			"_4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114014_gho",
+			"_4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114014_ghc",
+			"_4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114014_del",
+			"_4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114013_new",
+			"_84371a37_6153_11eb_9917_f875a4d24e90_20210128122816_vrepl",
+			"_table_old",
+			"__table_old",
+		}
+		for _, tableName := range names {
+			t.Run(tableName, func(t *testing.T) {
+				assert.True(t, IsOnlineDDLTableName(tableName))
+			})
+		}
+	})
+	t.Run("reject", func(t *testing.T) {
+		irrelevantNames := []string{
+			"_vt_vrp_6ace8bcef73211ea87e9f875a4d24e90_20200915999999_", // time error
+			"_vt_xyz_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_", // unrecognized hint
+			"_vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_", // GC table
+			"_vt_prg_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_", // GC table
+			"_vt_evc_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_", // GC table
+			"_vt_drp_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_", // GC table
+			"t",
+			"_table_new",
+			"__table_new",
+			"_table_gho",
+			"_table_ghc",
+			"_table_del",
+			"_table_vrepl",
+			"table_old",
+		}
+		for _, tableName := range irrelevantNames {
+			t.Run(tableName, func(t *testing.T) {
+				assert.False(t, IsOnlineDDLTableName(tableName))
+			})
+		}
+	})
 }
 
 func TestGetRevertUUID(t *testing.T) {
@@ -147,10 +168,11 @@ func TestGetRevertUUID(t *testing.T) {
 			isError:   true,
 		},
 	}
+	parser := sqlparser.NewTestParser()
 	for _, ts := range tt {
 		t.Run(ts.statement, func(t *testing.T) {
 			onlineDDL := &OnlineDDL{SQL: ts.statement}
-			uuid, err := onlineDDL.GetRevertUUID()
+			uuid, err := onlineDDL.GetRevertUUID(parser)
 			if ts.isError {
 				assert.Error(t, err)
 				return
@@ -162,10 +184,10 @@ func TestGetRevertUUID(t *testing.T) {
 	migrationContext := "354b-11eb-82cd-f875a4d24e90"
 	for _, ts := range tt {
 		t.Run(ts.statement, func(t *testing.T) {
-			onlineDDL, err := NewOnlineDDL("test_ks", "t", ts.statement, NewDDLStrategySetting(DDLStrategyOnline, ""), migrationContext, "")
+			onlineDDL, err := NewOnlineDDL("test_ks", "t", ts.statement, NewDDLStrategySetting(DDLStrategyOnline, ""), migrationContext, "", parser)
 			assert.NoError(t, err)
 			require.NotNil(t, onlineDDL)
-			uuid, err := onlineDDL.GetRevertUUID()
+			uuid, err := onlineDDL.GetRevertUUID(parser)
 			if ts.isError {
 				assert.Error(t, err)
 				return
@@ -209,11 +231,12 @@ func TestNewOnlineDDL(t *testing.T) {
 		NewDDLStrategySetting(DDLStrategyOnline, "-singleton"),
 	}
 
+	parser := sqlparser.NewTestParser()
 	for _, ts := range tt {
 		t.Run(ts.sql, func(t *testing.T) {
 			for _, stgy := range strategies {
 				t.Run(stgy.ToString(), func(t *testing.T) {
-					onlineDDL, err := NewOnlineDDL("test_ks", "t", ts.sql, stgy, migrationContext, "")
+					onlineDDL, err := NewOnlineDDL("test_ks", "t", ts.sql, stgy, migrationContext, "", parser)
 					if ts.isError {
 						assert.Error(t, err)
 						return
@@ -231,19 +254,20 @@ func TestNewOnlineDDL(t *testing.T) {
 	t.Run("explicit UUID", func(t *testing.T) {
 		var err error
 		var onlineDDL *OnlineDDL
+		parser := sqlparser.NewTestParser()
 
-		onlineDDL, err = NewOnlineDDL("test_ks", "t", "alter table t engine=innodb", NewDDLStrategySetting(DDLStrategyVitess, ""), migrationContext, "")
+		onlineDDL, err = NewOnlineDDL("test_ks", "t", "alter table t engine=innodb", NewDDLStrategySetting(DDLStrategyVitess, ""), migrationContext, "", parser)
 		assert.NoError(t, err)
 		assert.True(t, IsOnlineDDLUUID(onlineDDL.UUID))
 
-		_, err = NewOnlineDDL("test_ks", "t", "alter table t engine=innodb", NewDDLStrategySetting(DDLStrategyOnline, ""), migrationContext, "abc")
+		_, err = NewOnlineDDL("test_ks", "t", "alter table t engine=innodb", NewDDLStrategySetting(DDLStrategyOnline, ""), migrationContext, "abc", parser)
 		assert.Error(t, err)
 
-		onlineDDL, err = NewOnlineDDL("test_ks", "t", "alter table t engine=innodb", NewDDLStrategySetting(DDLStrategyVitess, ""), migrationContext, "4e5dcf80_354b_11eb_82cd_f875a4d24e90")
+		onlineDDL, err = NewOnlineDDL("test_ks", "t", "alter table t engine=innodb", NewDDLStrategySetting(DDLStrategyVitess, ""), migrationContext, "4e5dcf80_354b_11eb_82cd_f875a4d24e90", parser)
 		assert.NoError(t, err)
 		assert.Equal(t, "4e5dcf80_354b_11eb_82cd_f875a4d24e90", onlineDDL.UUID)
 
-		_, err = NewOnlineDDL("test_ks", "t", "alter table t engine=innodb", NewDDLStrategySetting(DDLStrategyVitess, ""), migrationContext, " 4e5dcf80_354b_11eb_82cd_f875a4d24e90")
+		_, err = NewOnlineDDL("test_ks", "t", "alter table t engine=innodb", NewDDLStrategySetting(DDLStrategyVitess, ""), migrationContext, " 4e5dcf80_354b_11eb_82cd_f875a4d24e90", parser)
 		assert.Error(t, err)
 	})
 }
@@ -264,11 +288,11 @@ func TestNewOnlineDDLs(t *testing.T) {
 		"drop table if exists t":                        {sqls: []string{"drop table if exists t"}},
 		"drop table t1, t2, t3":                         {sqls: []string{"drop table t1", "drop table t2", "drop table t3"}},
 		"drop table if exists t1, t2, t3":               {sqls: []string{"drop table if exists t1", "drop table if exists t2", "drop table if exists t3"}},
-		"create index i_idx on t(id)":                   {sqls: []string{"alter table t add index i_idx (id)"}},
-		"create index i_idx on t(name(12))":             {sqls: []string{"alter table t add index i_idx (`name`(12))"}},
-		"create index i_idx on t(id, `ts`, name(12))":   {sqls: []string{"alter table t add index i_idx (id, ts, `name`(12))"}},
-		"create unique index i_idx on t(id)":            {sqls: []string{"alter table t add unique index i_idx (id)"}},
-		"create index i_idx using btree on t(id)":       {sqls: []string{"alter table t add index i_idx (id) using btree"}},
+		"create index i_idx on t(id)":                   {sqls: []string{"alter table t add key i_idx (id)"}},
+		"create index i_idx on t(name(12))":             {sqls: []string{"alter table t add key i_idx (`name`(12))"}},
+		"create index i_idx on t(id, `ts`, name(12))":   {sqls: []string{"alter table t add key i_idx (id, ts, `name`(12))"}},
+		"create unique index i_idx on t(id)":            {sqls: []string{"alter table t add unique key i_idx (id)"}},
+		"create index i_idx using btree on t(id)":       {sqls: []string{"alter table t add key i_idx (id) using btree"}},
 		"create view v as select * from t":              {sqls: []string{"create view v as select * from t"}, isView: true},
 		"alter view v as select * from t":               {sqls: []string{"alter view v as select * from t"}, isView: true},
 		"drop view v":                                   {sqls: []string{"drop view v"}, isView: true},
@@ -284,9 +308,10 @@ func TestNewOnlineDDLs(t *testing.T) {
 		"CREATE TABLE if not exists t (id bigint unsigned NOT NULL AUTO_INCREMENT, ts datetime(6) DEFAULT NULL, error_column NO_SUCH_TYPE NOT NULL, PRIMARY KEY (id)) ENGINE=InnoDB": {isError: true, expectErrorText: "near"},
 	}
 	migrationContext := "354b-11eb-82cd-f875a4d24e90"
+	parser := sqlparser.NewTestParser()
 	for query, expect := range tests {
 		t.Run(query, func(t *testing.T) {
-			stmt, err := sqlparser.Parse(query)
+			stmt, err := parser.Parse(query)
 			if expect.parseError {
 				assert.Error(t, err)
 				return
@@ -299,7 +324,7 @@ func TestNewOnlineDDLs(t *testing.T) {
 			}
 			assert.True(t, ok)
 
-			onlineDDLs, err := NewOnlineDDLs("test_ks", query, ddlStmt, NewDDLStrategySetting(DDLStrategyVitess, ""), migrationContext, "")
+			onlineDDLs, err := NewOnlineDDLs("test_ks", query, ddlStmt, NewDDLStrategySetting(DDLStrategyVitess, ""), migrationContext, "", parser)
 			if expect.isError {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), expect.expectErrorText)
@@ -309,12 +334,12 @@ func TestNewOnlineDDLs(t *testing.T) {
 
 			sqls := []string{}
 			for _, onlineDDL := range onlineDDLs {
-				sql, err := onlineDDL.sqlWithoutComments()
+				sql, err := onlineDDL.sqlWithoutComments(parser)
 				assert.NoError(t, err)
 				sql = strings.ReplaceAll(sql, "\n", "")
 				sql = strings.ReplaceAll(sql, "\t", "")
 				sqls = append(sqls, sql)
-				assert.Equal(t, expect.isView, onlineDDL.IsView())
+				assert.Equal(t, expect.isView, onlineDDL.IsView(parser))
 			}
 			assert.Equal(t, expect.sqls, sqls)
 		})
@@ -328,12 +353,13 @@ func TestNewOnlineDDLsForeignKeys(t *testing.T) {
 	}
 
 	migrationContext := "354b-11eb-82cd-f875a4d24e90"
+	parser := sqlparser.NewTestParser()
 	for _, query := range queries {
 		t.Run(query, func(t *testing.T) {
 			for _, allowForeignKeys := range []bool{false, true} {
 				testName := fmt.Sprintf("%t", allowForeignKeys)
 				t.Run(testName, func(t *testing.T) {
-					stmt, err := sqlparser.Parse(query)
+					stmt, err := parser.Parse(query)
 					require.NoError(t, err)
 					ddlStmt, ok := stmt.(sqlparser.DDLStatement)
 					require.True(t, ok)
@@ -342,7 +368,7 @@ func TestNewOnlineDDLsForeignKeys(t *testing.T) {
 					if allowForeignKeys {
 						flags = "--unsafe-allow-foreign-keys"
 					}
-					onlineDDLs, err := NewOnlineDDLs("test_ks", query, ddlStmt, NewDDLStrategySetting(DDLStrategyVitess, flags), migrationContext, "")
+					onlineDDLs, err := NewOnlineDDLs("test_ks", query, ddlStmt, NewDDLStrategySetting(DDLStrategyVitess, flags), migrationContext, "", parser)
 					if allowForeignKeys {
 						assert.NoError(t, err)
 					} else {
@@ -351,7 +377,7 @@ func TestNewOnlineDDLsForeignKeys(t *testing.T) {
 					}
 
 					for _, onlineDDL := range onlineDDLs {
-						sql, err := onlineDDL.sqlWithoutComments()
+						sql, err := onlineDDL.sqlWithoutComments(parser)
 						assert.NoError(t, err)
 						assert.NotEmpty(t, sql)
 					}
@@ -373,12 +399,13 @@ func TestOnlineDDLFromCommentedStatement(t *testing.T) {
 	}
 	strategySetting := NewDDLStrategySetting(DDLStrategyGhost, `-singleton -declarative --max-load="Threads_running=5"`)
 	migrationContext := "354b-11eb-82cd-f875a4d24e90"
+	parser := sqlparser.NewTestParser()
 	for _, query := range queries {
 		t.Run(query, func(t *testing.T) {
-			o1, err := NewOnlineDDL("ks", "t", query, strategySetting, migrationContext, "")
+			o1, err := NewOnlineDDL("ks", "t", query, strategySetting, migrationContext, "", parser)
 			require.NoError(t, err)
 
-			stmt, err := sqlparser.Parse(o1.SQL)
+			stmt, err := parser.Parse(o1.SQL)
 			require.NoError(t, err)
 
 			o2, err := OnlineDDLFromCommentedStatement(stmt)

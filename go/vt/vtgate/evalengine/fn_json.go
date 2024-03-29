@@ -21,7 +21,6 @@ import (
 	"vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/sqltypes"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -60,14 +59,14 @@ type (
 	}
 )
 
-var _ Expr = (*builtinJSONExtract)(nil)
-var _ Expr = (*builtinJSONUnquote)(nil)
-var _ Expr = (*builtinJSONObject)(nil)
-var _ Expr = (*builtinJSONArray)(nil)
-var _ Expr = (*builtinJSONDepth)(nil)
-var _ Expr = (*builtinJSONLength)(nil)
-var _ Expr = (*builtinJSONContainsPath)(nil)
-var _ Expr = (*builtinJSONKeys)(nil)
+var _ IR = (*builtinJSONExtract)(nil)
+var _ IR = (*builtinJSONUnquote)(nil)
+var _ IR = (*builtinJSONObject)(nil)
+var _ IR = (*builtinJSONArray)(nil)
+var _ IR = (*builtinJSONDepth)(nil)
+var _ IR = (*builtinJSONLength)(nil)
+var _ IR = (*builtinJSONContainsPath)(nil)
+var _ IR = (*builtinJSONKeys)(nil)
 
 var errInvalidPathForTransform = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "In this situation, path expressions may not contain the * and ** tokens or an array range.")
 
@@ -120,18 +119,13 @@ func builtin_JSON_EXTRACT(doc *json.Value, paths []eval) (eval, error) {
 	return json.NewArray(matches), nil
 }
 
-func (call *builtinJSONExtract) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env, fields)
-	return sqltypes.TypeJSON, f
-}
-
 func (call *builtinJSONExtract) compile(c *compiler) (ctype, error) {
 	doct, err := call.Arguments[0].compile(c)
 	if err != nil {
 		return ctype{}, err
 	}
 
-	if slice.All(call.Arguments[1:], func(expr Expr) bool { return expr.constant() }) {
+	if slice.All(call.Arguments[1:], func(expr IR) bool { return expr.constant() }) {
 		paths := make([]*json.Path, 0, len(call.Arguments[1:]))
 
 		for _, arg := range call.Arguments[1:] {
@@ -170,11 +164,6 @@ func (call *builtinJSONUnquote) eval(env *ExpressionEnv) (eval, error) {
 		return newEvalRaw(sqltypes.Blob, b, collationJSON), nil
 	}
 	return newEvalRaw(sqltypes.Blob, j.MarshalTo(nil), collationJSON), nil
-}
-
-func (call *builtinJSONUnquote) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env, fields)
-	return sqltypes.Blob, f
 }
 
 func (call *builtinJSONUnquote) compile(c *compiler) (ctype, error) {
@@ -225,10 +214,6 @@ func (call *builtinJSONObject) eval(env *ExpressionEnv) (eval, error) {
 	return json.NewObject(obj), nil
 }
 
-func (call *builtinJSONObject) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	return sqltypes.TypeJSON, 0
-}
-
 func (call *builtinJSONObject) compile(c *compiler) (ctype, error) {
 	for i := 0; i < len(call.Arguments); i += 2 {
 		key, err := call.Arguments[i].compile(c)
@@ -267,10 +252,6 @@ func (call *builtinJSONArray) eval(env *ExpressionEnv) (eval, error) {
 	return json.NewArray(ary), nil
 }
 
-func (call *builtinJSONArray) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	return sqltypes.TypeJSON, 0
-}
-
 func (call *builtinJSONArray) compile(c *compiler) (ctype, error) {
 	for _, arg := range call.Arguments {
 		tt, err := arg.compile(c)
@@ -300,11 +281,6 @@ func (call *builtinJSONDepth) eval(env *ExpressionEnv) (eval, error) {
 		return nil, err
 	}
 	return newEvalInt64(int64(j.Depth())), nil
-}
-
-func (call *builtinJSONDepth) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env, fields)
-	return sqltypes.Int64, f
 }
 
 func (call *builtinJSONDepth) compile(c *compiler) (ctype, error) {
@@ -347,11 +323,6 @@ func (call *builtinJSONLength) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	return newEvalInt64(int64(length)), nil
-}
-
-func (call *builtinJSONLength) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env, fields)
-	return sqltypes.Int64, f
 }
 
 func (call *builtinJSONLength) compile(c *compiler) (ctype, error) {
@@ -406,7 +377,7 @@ func (call *builtinJSONContainsPath) compile(c *compiler) (ctype, error) {
 		return ctype{}, c.unsupported(call)
 	}
 
-	if !slice.All(call.Arguments[2:], func(expr Expr) bool { return expr.constant() }) {
+	if !slice.All(call.Arguments[2:], func(expr IR) bool { return expr.constant() }) {
 		return ctype{}, c.unsupported(call)
 	}
 
@@ -431,7 +402,7 @@ func (call *builtinJSONContainsPath) compile(c *compiler) (ctype, error) {
 	}
 
 	c.asm.Fn_JSON_CONTAINS_PATH(match, paths)
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagIsBoolean}, nil
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagIsBoolean | flagNullable}, nil
 }
 
 type jsonMatch int8
@@ -466,11 +437,6 @@ func intoOneOrAll(fname, value string) (jsonMatch, error) {
 
 func errOneOrAll(fname string) error {
 	return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "The oneOrAll argument to %s may take these values: 'one' or 'all'.", fname)
-}
-
-func (call *builtinJSONContainsPath) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env, fields)
-	return sqltypes.Int64, f
 }
 
 func (call *builtinJSONKeys) eval(env *ExpressionEnv) (eval, error) {
@@ -518,11 +484,6 @@ func (call *builtinJSONKeys) eval(env *ExpressionEnv) (eval, error) {
 		keys = append(keys, json.NewString(key))
 	})
 	return json.NewArray(keys), nil
-}
-
-func (call *builtinJSONKeys) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env, fields)
-	return sqltypes.TypeJSON, f | flagNullable
 }
 
 func (call *builtinJSONKeys) compile(c *compiler) (ctype, error) {

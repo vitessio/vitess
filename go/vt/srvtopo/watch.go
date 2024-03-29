@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 )
@@ -204,8 +205,11 @@ func (entry *watchEntry) onErrorLocked(ctx context.Context, err error, init bool
 			entry.value = nil
 		}
 	} else {
-		entry.lastError = fmt.Errorf("ResilientWatch stream failed for %v: %w", entry.key, err)
-		log.Errorf("%v", entry.lastError)
+		if !topo.IsErrType(err, topo.Interrupted) {
+			// No need to log if we're explicitly interrupted.
+			entry.lastError = fmt.Errorf("ResilientWatch stream failed for %v: %w", entry.key, err)
+			log.Errorf("%v", entry.lastError)
+		}
 
 		// Even though we didn't get a new value, update the lastValueTime
 		// here since the watch was successfully running before and we want
@@ -224,8 +228,7 @@ func (entry *watchEntry) onErrorLocked(ctx context.Context, err error, init bool
 
 	if len(entry.listeners) > 0 && !topo.IsErrType(err, topo.Interrupted) {
 		go func() {
-			time.Sleep(entry.rw.cacheRefreshInterval)
-
+			_ = timer.SleepContext(ctx, entry.rw.cacheRefreshInterval)
 			entry.mutex.Lock()
 			entry.ensureWatchingLocked(ctx)
 			entry.mutex.Unlock()

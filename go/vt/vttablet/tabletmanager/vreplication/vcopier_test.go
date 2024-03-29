@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -102,12 +103,12 @@ func testPlayerCopyCharPK(t *testing.T) {
 	defer func() { vttablet.CopyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
-	// waitRetry time should be very low to cause the wait loop to execute multipel times.
+	// waitRetry time should be very low to cause the wait loop to execute multiple times.
 	waitRetryTime = 10 * time.Millisecond
 	defer func() { waitRetryTime = savedWaitRetryTime }()
 
 	execStatements(t, []string{
-		"create table src(idc binary(2) , val int, primary key(idc))",
+		"create table src(idc binary(2), val int, primary key(idc))",
 		"insert into src values('a', 1), ('c', 2)",
 		fmt.Sprintf("create table %s.dst(idc binary(2), val int, primary key(idc))", vrepldb),
 	})
@@ -214,7 +215,7 @@ func testPlayerCopyVarcharPKCaseInsensitive(t *testing.T) {
 	defer func() { waitRetryTime = savedWaitRetryTime }()
 
 	execStatements(t, []string{
-		"create table src(idc varchar(20), val int, primary key(idc))",
+		"create table src(idc varchar(20), val int, primary key(idc)) character set utf8mb3", // Use utf8mb3 to get a consistent default collation across MySQL versions
 		"insert into src values('a', 1), ('c', 2)",
 		fmt.Sprintf("create table %s.dst(idc varchar(20), val int, primary key(idc))", vrepldb),
 	})
@@ -284,7 +285,7 @@ func testPlayerCopyVarcharPKCaseInsensitive(t *testing.T) {
 		"/update _vt.vreplication set state='Copying'",
 		// Copy mode.
 		"insert into dst(idc,val) values ('a',1)",
-		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"idc\\" type:VARCHAR charset:45 flags:20483} rows:{lengths:1 values:\\"a\\"}'.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"idc\\" type:VARCHAR charset:33 flags:20483} rows:{lengths:1 values:\\"a\\"}'.*`,
 		// Copy-catchup mode.
 		`/insert into dst\(idc,val\) select 'B', 3 from dual where \( .* 'B' COLLATE .* \) <= \( .* 'a' COLLATE .* \)`,
 	).Then(func(expect qh.ExpectationSequencer) qh.ExpectationSequencer {
@@ -294,11 +295,11 @@ func testPlayerCopyVarcharPKCaseInsensitive(t *testing.T) {
 		//upd1 := expect.
 		upd1 := expect.Then(qh.Eventually(
 			"insert into dst(idc,val) values ('B',3)",
-			`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"idc\\" type:VARCHAR charset:45 flags:20483} rows:{lengths:1 values:\\"B\\"}'.*`,
+			`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"idc\\" type:VARCHAR charset:33 flags:20483} rows:{lengths:1 values:\\"B\\"}'.*`,
 		))
 		upd2 := expect.Then(qh.Eventually(
 			"insert into dst(idc,val) values ('c',2)",
-			`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"idc\\" type:VARCHAR charset:45 flags:20483} rows:{lengths:1 values:\\"c\\"}'.*`,
+			`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"idc\\" type:VARCHAR charset:33 flags:20483} rows:{lengths:1 values:\\"c\\"}'.*`,
 		))
 		upd1.Then(upd2.Eventually())
 		return upd2
@@ -332,7 +333,7 @@ func testPlayerCopyVarcharCompositePKCaseSensitiveCollation(t *testing.T) {
 	defer func() { vttablet.CopyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
-	// waitRetry time should be very low to cause the wait loop to execute multipel times.
+	// waitRetry time should be very low to cause the wait loop to execute multiple times.
 	waitRetryTime = 10 * time.Millisecond
 	defer func() { waitRetryTime = savedWaitRetryTime }()
 
@@ -562,15 +563,19 @@ func testPlayerCopyTables(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
+		"create table ast1(id int, primary key(id))",
 		"create table src1(id int, val varbinary(128), d decimal(8,0), j json, primary key(id))",
 		"insert into src1 values(2, 'bbb', 1, '{\"foo\": \"bar\"}'), (1, 'aaa', 0, JSON_ARRAY(123456789012345678901234567890, \"abcd\")), (3, 'ccc', 2, 'null'), (4, 'ddd', 3, '{\"name\": \"matt\", \"size\": null}'), (5, 'eee', 4, null)",
+		fmt.Sprintf("create table %s.ast1(id int, primary key(id))", vrepldb),
 		fmt.Sprintf("create table %s.dst1(id int, val varbinary(128), val2 varbinary(128), d decimal(8,0), j json, primary key(id))", vrepldb),
 		"create table yes(id int, val varbinary(128), primary key(id))",
 		fmt.Sprintf("create table %s.yes(id int, val varbinary(128), primary key(id))", vrepldb),
 		"create table no(id int, val varbinary(128), primary key(id))",
 	})
 	defer execStatements(t, []string{
+		"drop table ast1",
 		"drop table src1",
+		fmt.Sprintf("drop table %s.ast1", vrepldb),
 		fmt.Sprintf("drop table %s.dst1", vrepldb),
 		"drop table yes",
 		fmt.Sprintf("drop table %s.yes", vrepldb),
@@ -582,6 +587,9 @@ func testPlayerCopyTables(t *testing.T) {
 		Rules: []*binlogdatapb.Rule{{
 			Match:  "dst1",
 			Filter: "select id, val, val as val2, d, j from src1",
+		}, {
+			Match:  "ast1",
+			Filter: "select * from ast1",
 		}, {
 			Match: "/yes",
 		}},
@@ -595,9 +603,7 @@ func testPlayerCopyTables(t *testing.T) {
 	}
 	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogdatapb.VReplicationWorkflowState_Init, playerEngine.dbName, 0, 0)
 	qr, err := playerEngine.Exec(query)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer func() {
 		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
 		if _, err := playerEngine.Exec(query); err != nil {
@@ -607,15 +613,24 @@ func testPlayerCopyTables(t *testing.T) {
 	}()
 
 	expectDBClientQueries(t, qh.Expect(
-		"/insert into _vt.vreplication",
+		// Filters should be lexicographically ordered by name.
+		regexp.QuoteMeta("/insert into _vt.vreplication (workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type) values ('test', 'keyspace:\\\"vttest\\\" shard:\\\"0\\\" filter:{rules:{match:\\\"ast1\\\" filter:\\\"select * from ast1\\\"} rules:{match:\\\"dst1\\\" filter:\\\"select id, val, val as val2, d, j from src1\\\"} rules:{match:\\\"/yes\\\"}}'"),
 		"/update _vt.vreplication set message='Picked source tablet.*",
 		// Create the list of tables to copy and transition to Copying state.
 		"begin",
-		"/insert into _vt.copy_state",
+		// The table names should be lexicographically ordered by name.
+		fmt.Sprintf("insert into _vt.copy_state(vrepl_id, table_name) values (%d, 'ast1'), (%d, 'dst1'), (%d, 'yes')", qr.InsertID, qr.InsertID, qr.InsertID),
 		"/update _vt.vreplication set state='Copying'",
 		"commit",
 		// The first fast-forward has no starting point. So, it just saves the current position.
 		"/update _vt.vreplication set pos=",
+		// Now the tables should be copied in lexicographical order: ast1, dst1, yes.
+		// Nothing to copy from ast1. Delete from copy_state.
+		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*ast1",
+		// The next FF executes and updates the position before copying.
+		"begin",
+		"/update _vt.vreplication set pos=",
+		"commit",
 		"begin",
 		"insert into dst1(id,val,val2,d,j) values (1,'aaa','aaa',0,JSON_ARRAY(123456789012345678901234567890, _utf8mb4'abcd')), (2,'bbb','bbb',1,JSON_OBJECT(_utf8mb4'foo', _utf8mb4'bar')), (3,'ccc','ccc',2,CAST(_utf8mb4'null' as JSON)), (4,'ddd','ddd',3,JSON_OBJECT(_utf8mb4'name', _utf8mb4'matt', _utf8mb4'size', null)), (5,'eee','eee',4,null)",
 		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32 charset:63 flags:53251} rows:{lengths:1 values:\\"5\\"}'.*`,
@@ -811,7 +826,7 @@ func testPlayerCopyWildcardRule(t *testing.T) {
 	defer func() { vttablet.CopyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
-	// waitRetry time should be very low to cause the wait loop to execute multipel times.
+	// waitRetry time should be very low to cause the wait loop to execute multiple times.
 	waitRetryTime = 10 * time.Millisecond
 	defer func() { waitRetryTime = savedWaitRetryTime }()
 
@@ -979,7 +994,7 @@ func testPlayerCopyTableContinuation(t *testing.T) {
 		"update src1 set id2=10 where id1=5",
 		// move row from within to outside range.
 		"update src1 set id1=12 where id1=6",
-		// move row from outside to witihn range.
+		// move row from outside to within range.
 		"update src1 set id1=4 where id1=11",
 		// modify the copied table.
 		"update copied set val='bbb' where id=1",
@@ -1676,22 +1691,26 @@ func TestCopyTablesWithInvalidDates(t *testing.T) {
 func testCopyTablesWithInvalidDates(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
-	execStatements(t, []string{
+	conn, err := env.Mysqld.GetDbaConnection(context.Background())
+	require.NoError(t, err)
+
+	// default mysql flavor allows invalid dates: so disallow explicitly for this test
+	if _, err := conn.ExecuteFetch("SET @@session.sql_mode=REPLACE(REPLACE(@@session.sql_mode, 'NO_ZERO_DATE', ''), 'NO_ZERO_IN_DATE', '')", 0, false); err != nil {
+		fmt.Fprintf(os.Stderr, "%v", err)
+	}
+	defer func() {
+		if _, err := conn.ExecuteFetch("SET @@session.sql_mode=REPLACE(@@session.sql_mode, ',NO_ZERO_DATE,NO_ZERO_IN_DATE','')", 0, false); err != nil {
+			fmt.Fprintf(os.Stderr, "%v", err)
+		}
+	}()
+
+	execConnStatements(t, conn, []string{
 		"create table src1(id int, dt date, primary key(id))",
 		fmt.Sprintf("create table %s.dst1(id int, dt date, primary key(id))", vrepldb),
 		"insert into src1 values(1, '2020-01-12'), (2, '0000-00-00');",
 	})
 
-	// default mysql flavor allows invalid dates: so disallow explicitly for this test
-	if err := env.Mysqld.ExecuteSuperQuery(context.Background(), "SET @@global.sql_mode=REPLACE(REPLACE(@@session.sql_mode, 'NO_ZERO_DATE', ''), 'NO_ZERO_IN_DATE', '')"); err != nil {
-		fmt.Fprintf(os.Stderr, "%v", err)
-	}
-	defer func() {
-		if err := env.Mysqld.ExecuteSuperQuery(context.Background(), "SET @@global.sql_mode=REPLACE(@@global.sql_mode, ',NO_ZERO_DATE,NO_ZERO_IN_DATE','')"); err != nil {
-			fmt.Fprintf(os.Stderr, "%v", err)
-		}
-	}()
-	defer execStatements(t, []string{
+	defer execConnStatements(t, conn, []string{
 		"drop table src1",
 		fmt.Sprintf("drop table %s.dst1", vrepldb),
 	})

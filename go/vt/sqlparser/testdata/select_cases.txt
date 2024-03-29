@@ -710,7 +710,7 @@ INPUT
 select substr(null,null,null),mid(null,null,null);
 END
 OUTPUT
-select substr(null, null, null), mid(null, null, null) from dual
+select substr(null, null, null), substr(null, null, null) from dual
 END
 INPUT
 select * from t1 where a=if(b<10,_ucs2 0x00C0,_ucs2 0x0062);
@@ -1040,7 +1040,7 @@ INPUT
 select t1.a, group_concat(c order by (select mid(group_concat(c order by a),1,5) from t2 where t2.a=t1.a) desc) as grp from t1 group by 1;
 END
 OUTPUT
-select t1.a, group_concat(c order by (select mid(group_concat(c order by a asc), 1, 5) from t2 where t2.a = t1.a) desc) as grp from t1 group by 1
+select t1.a, group_concat(c order by (select substr(group_concat(c order by a asc), 1, 5) from t2 where t2.a = t1.a) desc) as grp from t1 group by 1
 END
 INPUT
 select a as like_lll from t1 where a like 'lll%';
@@ -1166,7 +1166,7 @@ INPUT
 select a from t1 where mid(a+0,6,3) in ( mid(20040106123400,6,3) );
 END
 OUTPUT
-select a from t1 where mid(a + 0, 6, 3) in (mid(20040106123400, 6, 3))
+select a from t1 where substr(a + 0, 6, 3) in (substr(20040106123400, 6, 3))
 END
 INPUT
 select word, word=binary 0xdf as t from t1 having t > 0;
@@ -2996,7 +2996,7 @@ INPUT
 select concat(a, if(b>10, 'x' 'æ', 'y' 'ß')) from t1;
 END
 OUTPUT
-select concat(a, if(b > 10, 'x' as `æ`, 'y' as `ß`)) from t1
+select concat(a, if(b > 10, 'xæ', 'yß')) from t1
 END
 INPUT
 select * from (t1 natural join t2) natural join (t3 join (t4 natural join t5) on (b < z));
@@ -3596,7 +3596,7 @@ INPUT
 select mid(@my_uuid,15,1);
 END
 OUTPUT
-select mid(@my_uuid, 15, 1) from dual
+select substr(@my_uuid, 15, 1) from dual
 END
 INPUT
 select collation(concat_ws(_latin2'a',_latin2'b')), coercibility(concat_ws(_latin2'a',_latin2'b'));
@@ -3806,7 +3806,7 @@ INPUT
 select format('f','')<=replace(1,1,mid(0xd9,2,1));
 END
 OUTPUT
-select format('f', '') <= replace(1, 1, mid(0xd9, 2, 1)) from dual
+select format('f', '') <= replace(1, 1, substr(0xd9, 2, 1)) from dual
 END
 INPUT
 select substring('hello', 4294967295, 4294967295);
@@ -3866,7 +3866,7 @@ INPUT
 select group_concat(c order by (select mid(group_concat(c order by a),1,5) from t2 where t2.a=t1.a)) as grp from t1;
 END
 OUTPUT
-select group_concat(c order by (select mid(group_concat(c order by a asc), 1, 5) from t2 where t2.a = t1.a) asc) as grp from t1
+select group_concat(c order by (select substr(group_concat(c order by a asc), 1, 5) from t2 where t2.a = t1.a) asc) as grp from t1
 END
 INPUT
 select a1,a2,b,min(c) from t1 where ((a1 > 'a') or (a1 < '9')) and ((a2 >= 'b') and (a2 < 'z')) and (b = 'a') and ((c < 'h112') or (c = 'j121') or (c > 'k121' and c < 'm122') or (c > 'o122')) group by a1,a2,b;
@@ -8384,7 +8384,7 @@ INPUT
 select quote(concat('abc'', 'cba'));
 END
 ERROR
-syntax error at position 37 near '));'
+syntax error at position 33 near 'cba'
 END
 INPUT
 select max(t1.a1), max(t2.a1) from t1, t2 where t2.a2=9;
@@ -10376,7 +10376,7 @@ INPUT
 select concat(a, if(b>10, 'x' 'x', 'y' 'y')) from t1;
 END
 OUTPUT
-select concat(a, if(b > 10, 'x' as x, 'y' as y)) from t1
+select concat(a, if(b > 10, 'xx', 'yy')) from t1
 END
 INPUT
 select * from `information_schema`.`COLUMNS` where `TABLE_NAME` = NULL;
@@ -12014,7 +12014,7 @@ INPUT
 select mid('hello',1,null),mid('hello',null,1),mid(null,1,1);
 END
 OUTPUT
-select mid('hello', 1, null), mid('hello', null, 1), mid(null, 1, 1) from dual
+select substr('hello', 1, null), substr('hello', null, 1), substr(null, 1, 1) from dual
 END
 INPUT
 select locate(_ujis 0xa2a1,_ujis 0xa1a2a1a3);
@@ -12380,7 +12380,7 @@ INPUT
 select group_concat(c order by (select mid(group_concat(c order by a),1,5) from t2 where t2.a=t1.a) desc) as grp from t1;
 END
 OUTPUT
-select group_concat(c order by (select mid(group_concat(c order by a asc), 1, 5) from t2 where t2.a = t1.a) desc) as grp from t1
+select group_concat(c order by (select substr(group_concat(c order by a asc), 1, 5) from t2 where t2.a = t1.a) desc) as grp from t1
 END
 INPUT
 select a.text, b.id, b.betreff from t2 a inner join t3 b on a.id = b.forum inner join t1 c on b.id = c.thread where match(b.betreff) against ('+abc' in boolean mode) union select a.text, b.id, b.betreff from t2 a inner join t3 b on a.id = b.forum inner join t1 c on b.id = c.thread where match(c.beitrag) against ('+abc' in boolean mode) order by match(betreff) against ('+abc' in boolean mode) desc;
@@ -12656,7 +12656,7 @@ INPUT
 select a from t1 where mid(a+0,6,3) = ( mid(20040106123400,6,3) );
 END
 OUTPUT
-select a from t1 where mid(a + 0, 6, 3) = mid(20040106123400, 6, 3)
+select a from t1 where substr(a + 0, 6, 3) = substr(20040106123400, 6, 3)
 END
 INPUT
 select concat('',str_to_date('8:11:2.123456 03-01-02','%H:%i:%S.%f %y-%m-%d'));
@@ -14654,7 +14654,7 @@ INPUT
 select hex(_utf8mb4 B'001111111111');
 END
 OUTPUT
-select hex(_utf8mb4 B'001111111111') from dual
+select hex(_utf8mb4 0b001111111111) from dual
 END
 INPUT
 select NULLIF(1,NULL), NULLIF(1.0, NULL), NULLIF("test", NULL);
@@ -16772,7 +16772,7 @@ INPUT
 select 'The cost of accessing t1 (dont care if it changes' '^';
 END
 OUTPUT
-select 'The cost of accessing t1 (dont care if it changes' as `^` from dual
+select 'The cost of accessing t1 (dont care if it changes^' from dual
 END
 INPUT
 select * from t1 natural left join t2 where (i is not null)=0;
@@ -18872,7 +18872,7 @@ INPUT
 select 'hello' 'monty';
 END
 OUTPUT
-select 'hello' as monty from dual
+select 'hellomonty' from dual
 END
 INPUT
 select collation(bin(130)), coercibility(bin(130));
@@ -18968,7 +18968,7 @@ INPUT
 select hex(_utf8 B'001111111111');
 END
 OUTPUT
-select hex(_utf8mb3 B'001111111111') from dual
+select hex(_utf8mb3 0b001111111111) from dual
 END
 INPUT
 select right('hello', -18446744073709551615);
@@ -21266,7 +21266,7 @@ INPUT
 select t1.a, group_concat(c order by (select mid(group_concat(c order by a),1,5) from t2 where t2.a=t1.a)) as grp from t1 group by 1;
 END
 OUTPUT
-select t1.a, group_concat(c order by (select mid(group_concat(c order by a asc), 1, 5) from t2 where t2.a = t1.a) asc) as grp from t1 group by 1
+select t1.a, group_concat(c order by (select substr(group_concat(c order by a asc), 1, 5) from t2 where t2.a = t1.a) asc) as grp from t1 group by 1
 END
 INPUT
 select hex(inet_aton('127'));
@@ -21296,7 +21296,7 @@ INPUT
 select left('hello',2),right('hello',2),substring('hello',2,2),mid('hello',1,5);
 END
 OUTPUT
-select left('hello', 2), right('hello', 2), substr('hello', 2, 2), mid('hello', 1, 5) from dual
+select left('hello', 2), right('hello', 2), substr('hello', 2, 2), substr('hello', 1, 5) from dual
 END
 INPUT
 select date_add("1997-12-31",INTERVAL "1 1" YEAR_MONTH);

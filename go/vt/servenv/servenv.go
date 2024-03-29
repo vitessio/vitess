@@ -33,11 +33,8 @@ import (
 	"fmt"
 	"net/url"
 	"os"
-	"os/signal"
-	"runtime/debug"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -78,14 +75,23 @@ var (
 
 // Flags specific to Init, Run, and RunDefault functions.
 var (
-	lameduckPeriod       = 50 * time.Millisecond
-	onTermTimeout        = 10 * time.Second
-	onCloseTimeout       = 10 * time.Second
 	catchSigpipe         bool
 	maxStackSize         = 64 * 1024 * 1024
 	initStartTime        time.Time // time when tablet init started: for debug purposes to time how long a tablet init takes
 	tableRefreshInterval int
 )
+
+type TimeoutFlags struct {
+	LameduckPeriod time.Duration
+	OnTermTimeout  time.Duration
+	OnCloseTimeout time.Duration
+}
+
+var timeouts = &TimeoutFlags{
+	LameduckPeriod: 50 * time.Millisecond,
+	OnTermTimeout:  10 * time.Second,
+	OnCloseTimeout: 10 * time.Second,
+}
 
 // RegisterFlags installs the flags used by Init, Run, and RunDefault.
 //
@@ -93,9 +99,9 @@ var (
 // functions.
 func RegisterFlags() {
 	OnParse(func(fs *pflag.FlagSet) {
-		fs.DurationVar(&lameduckPeriod, "lameduck-period", lameduckPeriod, "keep running at least this long after SIGTERM before stopping")
-		fs.DurationVar(&onTermTimeout, "onterm_timeout", onTermTimeout, "wait no more than this for OnTermSync handlers before stopping")
-		fs.DurationVar(&onCloseTimeout, "onclose_timeout", onCloseTimeout, "wait no more than this for OnClose handlers before stopping")
+		fs.DurationVar(&timeouts.LameduckPeriod, "lameduck-period", timeouts.LameduckPeriod, "keep running at least this long after SIGTERM before stopping")
+		fs.DurationVar(&timeouts.OnTermTimeout, "onterm_timeout", timeouts.OnTermTimeout, "wait no more than this for OnTermSync handlers before stopping")
+		fs.DurationVar(&timeouts.OnCloseTimeout, "onclose_timeout", timeouts.OnCloseTimeout, "wait no more than this for OnClose handlers before stopping")
 		fs.BoolVar(&catchSigpipe, "catch-sigpipe", catchSigpipe, "catch and ignore SIGPIPE on stdout and stderr if specified")
 		fs.IntVar(&maxStackSize, "max-stack-size", maxStackSize, "configure the maximum stack size in bytes")
 		fs.IntVar(&tableRefreshInterval, "table-refresh-interval", tableRefreshInterval, "interval in milliseconds to refresh tables in status page with refreshRequired class")
@@ -105,67 +111,26 @@ func RegisterFlags() {
 	})
 }
 
+func RegisterFlagsWithTimeouts(tf *TimeoutFlags) {
+	OnParse(func(fs *pflag.FlagSet) {
+		fs.DurationVar(&tf.LameduckPeriod, "lameduck-period", tf.LameduckPeriod, "keep running at least this long after SIGTERM before stopping")
+		fs.DurationVar(&tf.OnTermTimeout, "onterm_timeout", tf.OnTermTimeout, "wait no more than this for OnTermSync handlers before stopping")
+		fs.DurationVar(&tf.OnCloseTimeout, "onclose_timeout", tf.OnCloseTimeout, "wait no more than this for OnClose handlers before stopping")
+		fs.BoolVar(&catchSigpipe, "catch-sigpipe", catchSigpipe, "catch and ignore SIGPIPE on stdout and stderr if specified")
+		fs.IntVar(&maxStackSize, "max-stack-size", maxStackSize, "configure the maximum stack size in bytes")
+		fs.IntVar(&tableRefreshInterval, "table-refresh-interval", tableRefreshInterval, "interval in milliseconds to refresh tables in status page with refreshRequired class")
+
+		// pid_file.go
+		fs.StringVar(&pidFile, "pid_file", pidFile, "If set, the process will write its pid to the named file, and delete it on graceful shutdown.")
+
+		timeouts = tf
+	})
+}
+
 func GetInitStartTime() time.Time {
 	mu.Lock()
 	defer mu.Unlock()
 	return initStartTime
-}
-
-// Init is the first phase of the server startup.
-func Init() {
-	mu.Lock()
-	defer mu.Unlock()
-	initStartTime = time.Now()
-
-	// Uptime metric
-	_ = stats.NewGaugeFunc("Uptime", "Uptime in nanoseconds", func() int64 {
-		return int64(time.Since(serverStart).Nanoseconds())
-	})
-
-	// Ignore SIGPIPE if specified
-	// The Go runtime catches SIGPIPE for us on all fds except stdout/stderr
-	// See https://golang.org/pkg/os/signal/#hdr-SIGPIPE
-	if catchSigpipe {
-		sigChan := make(chan os.Signal, 1)
-		signal.Notify(sigChan, syscall.SIGPIPE)
-		go func() {
-			<-sigChan
-			log.Warning("Caught SIGPIPE (ignoring all future SIGPIPEs)")
-			signal.Ignore(syscall.SIGPIPE)
-		}()
-	}
-
-	// Add version tag to every info log
-	log.Infof(AppVersion.String())
-	if inited {
-		log.Fatal("servenv.Init called second time")
-	}
-	inited = true
-
-	// Once you run as root, you pretty much destroy the chances of a
-	// non-privileged user starting the program correctly.
-	if uid := os.Getuid(); uid == 0 {
-		log.Exitf("servenv.Init: running this as root makes no sense")
-	}
-
-	// We used to set this limit directly, but you pretty much have to
-	// use a root account to allow increasing a limit reliably. Dropping
-	// privileges is also tricky. The best strategy is to make a shell
-	// script set up the limits as root and switch users before starting
-	// the server.
-	fdLimit := &syscall.Rlimit{}
-	if err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, fdLimit); err != nil {
-		log.Errorf("max-open-fds failed: %v", err)
-	}
-	fdl := stats.NewGauge("MaxFds", "File descriptor limit")
-	fdl.Set(int64(fdLimit.Cur))
-
-	// Limit the stack size. We don't need huge stacks and smaller limits mean
-	// any infinite recursion fires earlier and on low memory systems avoids
-	// out of memory issues in favor of a stack overflow error.
-	debug.SetMaxStack(maxStackSize)
-
-	onInitHooks.Fire()
 }
 
 func populateListeningURL(port int32) {

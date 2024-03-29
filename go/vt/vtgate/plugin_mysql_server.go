@@ -45,6 +45,7 @@ import (
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttls"
 )
@@ -74,6 +75,8 @@ var (
 
 	mysqlDefaultWorkloadName = "OLTP"
 	mysqlDefaultWorkload     int32
+
+	mysqlServerFlushDelay = 100 * time.Millisecond
 )
 
 func registerPluginFlags(fs *pflag.FlagSet) {
@@ -97,6 +100,7 @@ func registerPluginFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&mysqlQueryTimeout, "mysql_server_query_timeout", mysqlQueryTimeout, "mysql query timeout")
 	fs.BoolVar(&mysqlConnBufferPooling, "mysql-server-pool-conn-read-buffers", mysqlConnBufferPooling, "If set, the server will pool incoming connection read buffers")
 	fs.DurationVar(&mysqlKeepAlivePeriod, "mysql-server-keepalive-period", mysqlKeepAlivePeriod, "TCP period between keep-alives")
+	fs.DurationVar(&mysqlServerFlushDelay, "mysql_server_flush_delay", mysqlServerFlushDelay, "Delay after which buffered response will be flushed to the client.")
 	fs.StringVar(&mysqlDefaultWorkloadName, "mysql_default_workload", mysqlDefaultWorkloadName, "Default session workload (OLTP, OLAP, DBA)")
 }
 
@@ -201,6 +205,12 @@ func startSpan(ctx context.Context, query, label string) (trace.Span, context.Co
 }
 
 func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
+	session := vh.session(c)
+	if c.IsShuttingDown() && !session.InTransaction {
+		c.MarkForClose()
+		return sqlerror.NewSQLError(sqlerror.ERServerShutdown, sqlerror.SSNetError, "Server shutdown in progress")
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	c.UpdateCancelCtx(cancel)
 
@@ -229,7 +239,6 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 		"VTGate MySQL Connector" /* subcomponent: part of the client */)
 	ctx = callerid.NewContext(ctx, ef, im)
 
-	session := vh.session(c)
 	if !session.InTransaction {
 		vh.busyConnections.Add(1)
 	}
@@ -412,6 +421,10 @@ func (vh *vtgateHandler) KillQuery(connectionID uint32) error {
 	return nil
 }
 
+func (vh *vtgateHandler) Env() *vtenv.Environment {
+	return vh.vtg.executor.env
+}
+
 func (vh *vtgateHandler) session(c *mysql.Conn) *vtgatepb.Session {
 	session, _ := c.ClientData.(*vtgatepb.Session)
 	if session == nil {
@@ -474,7 +487,7 @@ func initTLSConfig(ctx context.Context, srv *mysqlServer, mysqlSslCert, mysqlSsl
 	return nil
 }
 
-// initiMySQLProtocol starts the mysql protocol.
+// initMySQLProtocol starts the mysql protocol.
 // It should be called only once in a process.
 func initMySQLProtocol(vtgate *VTGate) *mysqlServer {
 	// Flag is not set, just return.
@@ -521,11 +534,11 @@ func initMySQLProtocol(vtgate *VTGate) *mysqlServer {
 			mysqlProxyProtocol,
 			mysqlConnBufferPooling,
 			mysqlKeepAlivePeriod,
+			mysqlServerFlushDelay,
 		)
 		if err != nil {
 			log.Exitf("mysql.NewListener failed: %v", err)
 		}
-		srv.tcpListener.ServerVersion = servenv.MySQLServerVersion()
 		if mysqlSslCert != "" && mysqlSslKey != "" {
 			tlsVersion, err := vttls.TLSVersionToNumber(mysqlTLSMinVersion)
 			if err != nil {
@@ -545,17 +558,10 @@ func initMySQLProtocol(vtgate *VTGate) *mysqlServer {
 	}
 
 	if mysqlServerSocketPath != "" {
-		// Let's create this unix socket with permissions to all users. In this way,
-		// clients can connect to vtgate mysql server without being vtgate user
-		oldMask := syscall.Umask(000)
-		srv.unixListener, err = newMysqlUnixSocket(mysqlServerSocketPath, authServer, srv.vtgateHandle)
-		_ = syscall.Umask(oldMask)
+		err = setupUnixSocket(srv, authServer, mysqlServerSocketPath)
 		if err != nil {
 			log.Exitf("mysql.NewListener failed: %v", err)
-			return nil
 		}
-		// Listen for unix socket
-		go srv.unixListener.Accept()
 	}
 	return srv
 }
@@ -573,6 +579,7 @@ func newMysqlUnixSocket(address string, authServer mysql.AuthServer, handler mys
 		false,
 		mysqlConnBufferPooling,
 		mysqlKeepAlivePeriod,
+		mysqlServerFlushDelay,
 	)
 
 	switch err := err.(type) {
@@ -605,6 +612,7 @@ func newMysqlUnixSocket(address string, authServer mysql.AuthServer, handler mys
 			false,
 			mysqlConnBufferPooling,
 			mysqlKeepAlivePeriod,
+			mysqlServerFlushDelay,
 		)
 		return listener, listenerErr
 	default:
@@ -614,11 +622,11 @@ func newMysqlUnixSocket(address string, authServer mysql.AuthServer, handler mys
 
 func (srv *mysqlServer) shutdownMysqlProtocolAndDrain() {
 	if srv.tcpListener != nil {
-		srv.tcpListener.Close()
+		srv.tcpListener.Shutdown()
 		srv.tcpListener = nil
 	}
 	if srv.unixListener != nil {
-		srv.unixListener.Close()
+		srv.unixListener.Shutdown()
 		srv.unixListener = nil
 	}
 	if srv.sigChan != nil {

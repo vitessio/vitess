@@ -74,9 +74,10 @@ func TestLiteralID(t *testing.T) {
 		out: "@x @y",
 	}}
 
+	parser := NewTestParser()
 	for _, tcase := range testcases {
 		t.Run(tcase.in, func(t *testing.T) {
-			tkn := NewStringTokenizer(tcase.in)
+			tkn := parser.NewStringTokenizer(tcase.in)
 			id, out := tkn.Scan()
 			require.Equal(t, tcase.id, id)
 			require.Equal(t, tcase.out, string(out))
@@ -148,9 +149,10 @@ func TestString(t *testing.T) {
 		want: "hello",
 	}}
 
+	parser := NewTestParser()
 	for _, tcase := range testcases {
 		t.Run(tcase.in, func(t *testing.T) {
-			id, got := NewStringTokenizer(tcase.in).Scan()
+			id, got := parser.NewStringTokenizer(tcase.in).Scan()
 			require.Equal(t, tcase.id, id, "Scan(%q) = (%s), want (%s)", tcase.in, tokenName(id), tokenName(tcase.id))
 			require.Equal(t, tcase.want, string(got))
 		})
@@ -193,9 +195,10 @@ func TestSplitStatement(t *testing.T) {
 		sql: "",
 	}}
 
+	parser := NewTestParser()
 	for _, tcase := range testcases {
 		t.Run(tcase.in, func(t *testing.T) {
-			sql, rem, err := SplitStatement(tcase.in)
+			sql, rem, err := parser.SplitStatement(tcase.in)
 			if err != nil {
 				t.Errorf("EndOfStatementPosition(%s): ERROR: %v", tcase.in, err)
 				return
@@ -218,27 +221,28 @@ func TestVersion(t *testing.T) {
 		in      string
 		id      []int
 	}{{
-		version: "50709",
+		version: "5.7.9",
 		in:      "/*!80102 SELECT*/ FROM IN EXISTS",
 		id:      []int{FROM, IN, EXISTS, 0},
 	}, {
-		version: "80101",
+		version: "8.1.1",
 		in:      "/*!80102 SELECT*/ FROM IN EXISTS",
 		id:      []int{FROM, IN, EXISTS, 0},
 	}, {
-		version: "80201",
+		version: "8.2.1",
 		in:      "/*!80102 SELECT*/ FROM IN EXISTS",
 		id:      []int{SELECT, FROM, IN, EXISTS, 0},
 	}, {
-		version: "80102",
+		version: "8.1.2",
 		in:      "/*!80102 SELECT*/ FROM IN EXISTS",
 		id:      []int{SELECT, FROM, IN, EXISTS, 0},
 	}}
 
 	for _, tcase := range testcases {
 		t.Run(tcase.version+"_"+tcase.in, func(t *testing.T) {
-			mySQLParserVersion = tcase.version
-			tok := NewStringTokenizer(tcase.in)
+			parser, err := New(Options{MySQLServerVersion: tcase.version})
+			require.NoError(t, err)
+			tok := parser.NewStringTokenizer(tcase.in)
 			for _, expectedID := range tcase.id {
 				id, _ := tok.Scan()
 				require.Equal(t, expectedID, id)
@@ -306,9 +310,10 @@ func TestIntegerAndID(t *testing.T) {
 		out: "3.2",
 	}}
 
+	parser := NewTestParser()
 	for _, tcase := range testcases {
 		t.Run(tcase.in, func(t *testing.T) {
-			tkn := NewStringTokenizer(tcase.in)
+			tkn := parser.NewStringTokenizer(tcase.in)
 			id, out := tkn.Scan()
 			require.Equal(t, tcase.id, id)
 			expectedOut := tcase.out

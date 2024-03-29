@@ -74,7 +74,7 @@ func TestTopoCustomRule(t *testing.T) {
 	err = clusterInstance.StartVttablet(rTablet, false, "SERVING", false, cell, keyspaceName, hostname, shardName)
 	require.Nil(t, err, "error should be Nil")
 
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Validate")
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("Validate")
 	require.Nil(t, err, "error should be Nil")
 
 	// And wait until the query is working.

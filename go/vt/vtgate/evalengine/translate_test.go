@@ -20,10 +20,12 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -52,69 +54,70 @@ func TestTranslateSimplification(t *testing.T) {
 		converted  ast
 		simplified ast
 	}{
-		{"42", ok("INT64(42)"), ok("INT64(42)")},
-		{"1 + (1 + 1) * 8", ok("INT64(1) + ((INT64(1) + INT64(1)) * INT64(8))"), ok("INT64(17)")},
-		{"1.0e0 + (1 + 1) * 8.0e0", ok("FLOAT64(1) + ((INT64(1) + INT64(1)) * FLOAT64(8))"), ok("FLOAT64(17)")},
-		{"'pokemon' LIKE 'poke%'", ok("VARCHAR(\"pokemon\") LIKE VARCHAR(\"poke%\")"), ok("INT64(1)")},
+		{"42", ok("42"), ok("42")},
+		{"1 + (1 + 1) * 8", ok("1 + (1 + 1) * 8"), ok("17")},
+		{"1.0e0 + (1 + 1) * 8.0e0", ok("1 + (1 + 1) * 8"), ok("17")},
+		{"'pokemon' LIKE 'poke%'", ok("'pokemon' like 'poke%'"), ok("1")},
 		{
 			"'foo' COLLATE utf8mb4_general_ci IN ('bar' COLLATE latin1_swedish_ci, 'baz')",
-			ok(`VARCHAR("foo") COLLATE utf8mb4_general_ci IN (VARCHAR("bar") COLLATE latin1_swedish_ci, VARCHAR("baz"))`),
+			ok(`'foo' COLLATE utf8mb4_general_ci in ('bar' COLLATE latin1_swedish_ci, 'baz')`),
 			err("COLLATION 'latin1_swedish_ci' is not valid for CHARACTER SET 'utf8mb4'"),
 		},
 		{`"pokemon" in ("bulbasaur", "venusaur", "charizard")`,
-			ok(`VARCHAR("pokemon") IN (VARCHAR("bulbasaur"), VARCHAR("venusaur"), VARCHAR("charizard"))`),
-			ok("INT64(0)"),
+			ok(`'pokemon' in ('bulbasaur', 'venusaur', 'charizard')`),
+			ok("0"),
 		},
 		{`"pokemon" in ("bulbasaur", "venusaur", "pokemon")`,
-			ok(`VARCHAR("pokemon") IN (VARCHAR("bulbasaur"), VARCHAR("venusaur"), VARCHAR("pokemon"))`),
-			ok("INT64(1)"),
+			ok(`'pokemon' in ('bulbasaur', 'venusaur', 'pokemon')`),
+			ok("1"),
 		},
 		{`"pokemon" in ("bulbasaur", "venusaur", "pokemon", NULL)`,
-			ok(`VARCHAR("pokemon") IN (VARCHAR("bulbasaur"), VARCHAR("venusaur"), VARCHAR("pokemon"), NULL)`),
-			ok(`INT64(1)`),
+			ok(`'pokemon' in ('bulbasaur', 'venusaur', 'pokemon', null)`),
+			ok(`1`),
 		},
 		{`"pokemon" in ("bulbasaur", "venusaur", NULL)`,
-			ok(`VARCHAR("pokemon") IN (VARCHAR("bulbasaur"), VARCHAR("venusaur"), NULL)`),
-			ok(`NULL`),
+			ok(`'pokemon' in ('bulbasaur', 'venusaur', null)`),
+			ok(`null`),
 		},
-		{"0 + NULL", ok("INT64(0) + NULL"), ok("NULL")},
-		{"1.00000 + 2.000", ok("DECIMAL(1.00000) + DECIMAL(2.000)"), ok("DECIMAL(3.00000)")},
-		{"1 + 0.05", ok("INT64(1) + DECIMAL(0.05)"), ok("DECIMAL(1.05)")},
-		{"1 + 0.05e0", ok("INT64(1) + FLOAT64(0.05)"), ok("FLOAT64(1.05)")},
-		{"1 / 1", ok("INT64(1) / INT64(1)"), ok("DECIMAL(1.0000)")},
-		{"(14620 / 9432456) / (24250 / 9432456)", ok("(INT64(14620) / INT64(9432456)) / (INT64(24250) / INT64(9432456))"), ok("DECIMAL(0.60288653)")},
-		{"COALESCE(NULL, 2, NULL, 4)", ok("COALESCE(NULL, INT64(2), NULL, INT64(4))"), ok("INT64(2)")},
-		{"coalesce(NULL, 2, NULL, 4)", ok("COALESCE(NULL, INT64(2), NULL, INT64(4))"), ok("INT64(2)")},
-		{"coalesce(NULL, NULL)", ok("COALESCE(NULL, NULL)"), ok("NULL")},
-		{"coalesce(NULL)", ok("COALESCE(NULL)"), ok("NULL")},
-		{"weight_string('foobar')", ok(`WEIGHT_STRING(VARCHAR("foobar"))`), ok("VARBINARY(\"\\x1c\\xe5\\x1d\\xdd\\x1d\\xdd\\x1c`\\x1cG\\x1e3\")")},
-		{"weight_string('foobar' as char(12))", ok(`WEIGHT_STRING(VARCHAR("foobar") AS CHAR(12))`), ok("VARBINARY(\"\\x1c\\xe5\\x1d\\xdd\\x1d\\xdd\\x1c`\\x1cG\\x1e3\")")},
-		{"case when 1 = 1 then 2 else 3 end", ok("CASE WHEN INT64(1) = INT64(1) THEN INT64(2) ELSE INT64(3)"), ok("INT64(2)")},
-		{"case when null then 2 when 12 = 4 then 'ohnoes' else 42 end", ok(`CASE WHEN NULL THEN INT64(2) WHEN INT64(12) = INT64(4) THEN VARCHAR("ohnoes") ELSE INT64(42)`), ok(`VARCHAR("42")`)},
-		{"convert('a', char(2) character set utf8mb4)", ok(`CONVERT(VARCHAR("a"), CHAR(2) CHARACTER SET utf8mb4_0900_ai_ci)`), ok(`VARCHAR("a")`)},
-		{"convert('a', char(2) character set latin1 binary)", ok(`CONVERT(VARCHAR("a"), CHAR(2) CHARACTER SET latin1_bin)`), ok(`VARCHAR("a")`)},
-		{"cast('a' as char(2) character set utf8mb4)", ok(`CONVERT(VARCHAR("a"), CHAR(2) CHARACTER SET utf8mb4_0900_ai_ci)`), ok(`VARCHAR("a")`)},
-		{"cast('a' as char(2) character set latin1 binary)", ok(`CONVERT(VARCHAR("a"), CHAR(2) CHARACTER SET latin1_bin)`), ok(`VARCHAR("a")`)},
-		{"date'2022-10-03'", ok(`DATE("2022-10-03")`), ok(`DATE("2022-10-03")`)},
-		{"time'12:34:45'", ok(`TIME("12:34:45")`), ok(`TIME("12:34:45")`)},
-		{"timestamp'2022-10-03 12:34:45'", ok(`DATETIME("2022-10-03 12:34:45")`), ok(`DATETIME("2022-10-03 12:34:45")`)},
+		{"0 + NULL", ok("0 + null"), ok("null")},
+		{"1.00000 + 2.000", ok("1.00000 + 2.000"), ok("3.00000")},
+		{"1 + 0.05", ok("1 + 0.05"), ok("1.05")},
+		{"1 + 0.05e0", ok("1 + 0.05"), ok("1.05")},
+		{"1 / 1", ok("1 / 1"), ok("1.0000")},
+		{"(14620 / 9432456) / (24250 / 9432456)", ok("14620 / 9432456 / (24250 / 9432456)"), ok("0.60288653")},
+		{"COALESCE(NULL, 2, NULL, 4)", ok("coalesce(null, 2, null, 4)"), ok("2")},
+		{"coalesce(NULL, 2, NULL, 4)", ok("coalesce(null, 2, null, 4)"), ok("2")},
+		{"coalesce(NULL, NULL)", ok("coalesce(null, null)"), ok("null")},
+		{"coalesce(NULL)", ok("coalesce(null)"), ok("null")},
+		{"weight_string('foobar')", ok(`weight_string('foobar')`), ok("'\x1c\xe5\x1d\xdd\x1d\xdd\x1c`\x1cG\x1e3'")},
+		{"weight_string('foobar' as char(12))", ok(`weight_string('foobar' as char(12))`), ok("'\x1c\xe5\x1d\xdd\x1d\xdd\x1c`\x1cG\x1e3'")},
+		{"case when 1 = 1 then 2 else 3 end", ok("case when 1 = 1 then 2 else 3"), ok("2")},
+		{"case when null then 2 when 12 = 4 then 'ohnoes' else 42 end", ok(`case when null then 2 when 12 = 4 then 'ohnoes' else 42`), ok(`'42'`)},
+		{"convert('a', char(2) character set utf8mb4)", ok(`convert('a', CHAR(2) character set utf8mb4_0900_ai_ci)`), ok(`'a'`)},
+		{"convert('a', char(2) character set latin1 binary)", ok(`convert('a', CHAR(2) character set latin1_bin)`), ok(`'a'`)},
+		{"cast('a' as char(2) character set utf8mb4)", ok(`convert('a', CHAR(2) character set utf8mb4_0900_ai_ci)`), ok(`'a'`)},
+		{"cast('a' as char(2) character set latin1 binary)", ok(`convert('a', CHAR(2) character set latin1_bin)`), ok(`'a'`)},
+		{"date'2022-10-03'", ok(`'2022-10-03'`), ok(`'2022-10-03'`)},
+		{"time'12:34:45'", ok(`'12:34:45'`), ok(`'12:34:45'`)},
+		{"timestamp'2022-10-03 12:34:45'", ok(`'2022-10-03 12:34:45'`), ok(`'2022-10-03 12:34:45'`)},
 		{"date'2022'", err(`Incorrect DATE value: '2022'`), err(`Incorrect DATE value: '2022'`)},
 		{"time'2022-10-03'", err(`Incorrect TIME value: '2022-10-03'`), err(`Incorrect TIME value: '2022-10-03'`)},
 		{"timestamp'2022-10-03'", err(`Incorrect DATETIME value: '2022-10-03'`), err(`Incorrect DATETIME value: '2022-10-03'`)},
-		{"ifnull(12, 23)", ok(`CASE WHEN INT64(12) IS NULL THEN INT64(23) ELSE INT64(12)`), ok(`INT64(12)`)},
-		{"ifnull(null, 23)", ok(`CASE WHEN NULL IS NULL THEN INT64(23) ELSE NULL`), ok(`INT64(23)`)},
-		{"nullif(1, 1)", ok(`CASE WHEN INT64(1) = INT64(1) THEN NULL ELSE INT64(1)`), ok(`NULL`)},
-		{"nullif(1, 2)", ok(`CASE WHEN INT64(1) = INT64(2) THEN NULL ELSE INT64(1)`), ok(`INT64(1)`)},
-		{"12 between 5 and 20", ok("(INT64(12) >= INT64(5)) AND (INT64(12) <= INT64(20))"), ok(`INT64(1)`)},
-		{"12 not between 5 and 20", ok("(INT64(12) < INT64(5)) OR (INT64(12) > INT64(20))"), ok(`INT64(0)`)},
-		{"2 not between 5 and 20", ok("(INT64(2) < INT64(5)) OR (INT64(2) > INT64(20))"), ok(`INT64(1)`)},
-		{"json->\"$.c\"", ok("JSON_EXTRACT([COLUMN 0], VARCHAR(\"$.c\"))"), ok("JSON_EXTRACT([COLUMN 0], VARCHAR(\"$.c\"))")},
-		{"json->>\"$.c\"", ok("JSON_UNQUOTE(JSON_EXTRACT([COLUMN 0], VARCHAR(\"$.c\")))"), ok("JSON_UNQUOTE(JSON_EXTRACT([COLUMN 0], VARCHAR(\"$.c\")))")},
+		{"ifnull(12, 23)", ok(`case when 12 is null then 23 else 12`), ok(`12`)},
+		{"ifnull(null, 23)", ok(`case when null is null then 23 else null`), ok(`23`)},
+		{"nullif(1, 1)", ok(`case when 1 = 1 then null else 1`), ok(`null`)},
+		{"nullif(1, 2)", ok(`case when 1 = 2 then null else 1`), ok(`1`)},
+		{"12 between 5 and 20", ok("12 >= 5 and 12 <= 20"), ok(`1`)},
+		{"12 not between 5 and 20", ok("12 < 5 or 12 > 20"), ok(`0`)},
+		{"2 not between 5 and 20", ok("2 < 5 or 2 > 20"), ok(`1`)},
+		{"json->\"$.c\"", ok("JSON_EXTRACT(`json`, '$.c')"), ok("JSON_EXTRACT(`json`, '$.c')")},
+		{"json->>\"$.c\"", ok("JSON_UNQUOTE(JSON_EXTRACT(`json`, '$.c'))"), ok("JSON_UNQUOTE(JSON_EXTRACT(`json`, '$.c'))")},
 	}
 
+	venv := vtenv.NewTestEnv()
 	for _, tc := range testCases {
 		t.Run(tc.expression, func(t *testing.T) {
-			stmt, err := sqlparser.Parse("select " + tc.expression)
+			stmt, err := venv.Parser().Parse("select " + tc.expression)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -124,9 +127,11 @@ func TestTranslateSimplification(t *testing.T) {
 			})
 
 			cfg := &Config{
-				ResolveColumn: fields.Column,
-				Collation:     collations.Default(),
-				Optimization:  OptimizationLevelNone,
+				ResolveColumn:     fields.Column,
+				Collation:         venv.CollationEnv().DefaultConnectionCharset(),
+				Environment:       venv,
+				NoConstantFolding: true,
+				NoCompilation:     true,
 			}
 
 			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
@@ -140,9 +145,9 @@ func TestTranslateSimplification(t *testing.T) {
 				}
 				return
 			}
-			assert.Equal(t, tc.converted.literal, FormatExpr(converted))
+			assert.Equal(t, tc.converted.literal, sqlparser.String(converted))
 
-			cfg.Optimization = OptimizationLevelSimplify
+			cfg.NoConstantFolding = false
 			simplified, err := Translate(astExpr, cfg)
 			if err != nil {
 				if tc.simplified.err == "" {
@@ -153,7 +158,7 @@ func TestTranslateSimplification(t *testing.T) {
 				}
 				return
 			}
-			assert.Equal(t, tc.simplified.literal, FormatExpr(simplified))
+			assert.Equal(t, tc.simplified.literal, sqlparser.String(simplified))
 		})
 	}
 }
@@ -294,13 +299,17 @@ func TestEvaluate(t *testing.T) {
 		expected:   False,
 	}}
 
+	venv := vtenv.NewTestEnv()
 	for _, test := range tests {
 		t.Run(test.expression, func(t *testing.T) {
 			// Given
-			stmt, err := sqlparser.Parse("select " + test.expression)
+			stmt, err := sqlparser.NewTestParser().Parse("select " + test.expression)
 			require.NoError(t, err)
 			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-			sqltypesExpr, err := Translate(astExpr, &Config{Collation: collations.Default()})
+			sqltypesExpr, err := Translate(astExpr, &Config{
+				Collation:   venv.CollationEnv().DefaultConnectionCharset(),
+				Environment: venv,
+			})
 			require.Nil(t, err)
 			require.NotNil(t, sqltypesExpr)
 			env := NewExpressionEnv(context.Background(), map[string]*querypb.BindVariable{
@@ -310,14 +319,14 @@ func TestEvaluate(t *testing.T) {
 				"uint32_bind_variable": sqltypes.Uint32BindVariable(21),
 				"uint64_bind_variable": sqltypes.Uint64BindVariable(22),
 				"float_bind_variable":  sqltypes.Float64BindVariable(2.2),
-			}, nil)
+			}, NewEmptyVCursor(venv, time.Local))
 
 			// When
 			r, err := env.Evaluate(sqltypesExpr)
 
 			// Then
 			require.NoError(t, err)
-			assert.Equal(t, test.expected, r.Value(collations.Default()), "expected %s", test.expected.String())
+			assert.Equal(t, test.expected, r.Value(collations.MySQL8().DefaultConnectionCharset()), "expected %s", test.expected.String())
 		})
 	}
 }
@@ -339,18 +348,22 @@ func TestEvaluateTuple(t *testing.T) {
 		expected:   []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewVarChar("2"), sqltypes.NewDecimal("4.0")},
 	}}
 
+	venv := vtenv.NewTestEnv()
 	for _, test := range tests {
 		t.Run(test.expression, func(t *testing.T) {
 			// Given
-			stmt, err := sqlparser.Parse("select " + test.expression)
+			stmt, err := sqlparser.NewTestParser().Parse("select " + test.expression)
 			require.NoError(t, err)
 			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-			sqltypesExpr, err := Translate(astExpr, &Config{Collation: collations.Default()})
+			sqltypesExpr, err := Translate(astExpr, &Config{
+				Collation:   venv.CollationEnv().DefaultConnectionCharset(),
+				Environment: venv,
+			})
 			require.Nil(t, err)
 			require.NotNil(t, sqltypesExpr)
 
 			// When
-			r, err := EmptyExpressionEnv().Evaluate(sqltypesExpr)
+			r, err := EmptyExpressionEnv(venv).Evaluate(sqltypesExpr)
 
 			// Then
 			require.NoError(t, err)
@@ -376,13 +389,17 @@ func TestTranslationFailures(t *testing.T) {
 		},
 	}
 
+	venv := vtenv.NewTestEnv()
 	for _, testcase := range testcases {
 		t.Run(testcase.expression, func(t *testing.T) {
 			// Given
-			stmt, err := sqlparser.Parse("select " + testcase.expression)
+			stmt, err := sqlparser.NewTestParser().Parse("select " + testcase.expression)
 			require.NoError(t, err)
 			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-			_, err = Translate(astExpr, &Config{Collation: collations.Default()})
+			_, err = Translate(astExpr, &Config{
+				Collation:   venv.CollationEnv().DefaultConnectionCharset(),
+				Environment: venv,
+			})
 			require.EqualError(t, err, testcase.expectedErr)
 		})
 	}
@@ -409,16 +426,21 @@ func TestCardinalityWithBindVariables(t *testing.T) {
 		{expr: `1 IN ::bar`},
 	}
 
+	venv := vtenv.NewTestEnv()
 	for _, testcase := range testcases {
 		t.Run(testcase.expr, func(t *testing.T) {
 			err := func() error {
-				stmt, err := sqlparser.Parse("select " + testcase.expr)
+				stmt, err := sqlparser.NewTestParser().Parse("select " + testcase.expr)
 				if err != nil {
 					return err
 				}
 
 				astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-				_, err = Translate(astExpr, &Config{Collation: collations.Default()})
+				_, err = Translate(astExpr, &Config{
+					Collation:     venv.CollationEnv().DefaultConnectionCharset(),
+					Environment:   venv,
+					NoCompilation: true,
+				})
 				return err
 			}()
 

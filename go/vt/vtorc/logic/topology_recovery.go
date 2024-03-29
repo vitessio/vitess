@@ -20,7 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"time"
 
 	"github.com/patrickmn/go-cache"
@@ -35,7 +35,6 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 	"vitess.io/vitess/go/vt/vtorc/util"
-	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
 type RecoveryType string
@@ -210,12 +209,15 @@ func recoverPrimaryHasPrimary(ctx context.Context, analysisEntry *inst.Replicati
 		_ = resolveRecovery(topologyRecovery, nil)
 	}()
 
-	// Reset replication on current primary.
-	err = inst.ResetReplicationParameters(analysisEntry.AnalyzedInstanceAlias)
+	// Read the tablet information from the database to find the shard and keyspace of the tablet
+	analyzedTablet, err := inst.ReadTablet(analysisEntry.AnalyzedInstanceAlias)
 	if err != nil {
-		return false, topologyRecovery, err
+		return false, nil, err
 	}
-	return true, topologyRecovery, nil
+
+	// Reset replication on current primary.
+	err = resetReplicationParameters(ctx, analyzedTablet)
+	return true, topologyRecovery, err
 }
 
 // runEmergencyReparentOp runs a recovery for which we have to run ERS. Here waitForAllTablets is a boolean telling ERS whether it should wait for all the tablets
@@ -244,7 +246,7 @@ func runEmergencyReparentOp(ctx context.Context, analysisEntry *inst.Replication
 		_ = resolveRecovery(topologyRecovery, promotedReplica)
 	}()
 
-	ev, err := reparentutil.NewEmergencyReparenter(ts, tmclient.NewTabletManagerClient(), logutil.NewCallbackLogger(func(event *logutilpb.Event) {
+	ev, err := reparentutil.NewEmergencyReparenter(ts, tmc, logutil.NewCallbackLogger(func(event *logutilpb.Event) {
 		level := event.GetLevel()
 		value := event.GetValue()
 		// we only log the warnings and errors explicitly, everything gets logged as an information message anyways in auditing topology recovery
@@ -584,7 +586,7 @@ func runEmergentOperations(analysisEntry *inst.ReplicationAnalysis) {
 }
 
 // executeCheckAndRecoverFunction will choose the correct check & recovery function based on analysis.
-// It executes the function synchronuously
+// It executes the function synchronously
 func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (err error) {
 	countPendingRecoveries.Add(1)
 	defer countPendingRecoveries.Add(-1)
@@ -836,7 +838,7 @@ func electNewPrimary(ctx context.Context, analysisEntry *inst.ReplicationAnalysi
 	}
 	_ = AuditTopologyRecovery(topologyRecovery, "starting PlannedReparentShard for electing new primary.")
 
-	ev, err := reparentutil.NewPlannedReparenter(ts, tmclient.NewTabletManagerClient(), logutil.NewCallbackLogger(func(event *logutilpb.Event) {
+	ev, err := reparentutil.NewPlannedReparenter(ts, tmc, logutil.NewCallbackLogger(func(event *logutilpb.Event) {
 		level := event.GetLevel()
 		value := event.GetValue()
 		// we only log the warnings and errors explicitly, everything gets logged as an information message anyways in auditing topology recovery
@@ -852,6 +854,7 @@ func electNewPrimary(ctx context.Context, analysisEntry *inst.ReplicationAnalysi
 		analyzedTablet.Shard,
 		reparentutil.PlannedReparentOptions{
 			WaitReplicasTimeout: time.Duration(config.Config.WaitReplicasTimeoutSeconds) * time.Second,
+			TolerableReplLag:    time.Duration(config.Config.TolerableReplicationLagSeconds) * time.Second,
 		},
 	)
 

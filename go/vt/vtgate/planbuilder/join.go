@@ -55,3 +55,16 @@ func (j *join) Primitive() engine.Primitive {
 		Opcode: j.Opcode,
 	}
 }
+
+type hashJoin struct {
+	lhs, rhs logicalPlan
+	inner    *engine.HashJoin
+}
+
+func (hj *hashJoin) Primitive() engine.Primitive {
+	lhs := hj.lhs.Primitive()
+	rhs := hj.rhs.Primitive()
+	hj.inner.Left = lhs
+	hj.inner.Right = rhs
+	return hj.inner
+}

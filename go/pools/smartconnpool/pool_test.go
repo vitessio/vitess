@@ -149,7 +149,7 @@ func TestOpen(t *testing.T) {
 	}
 
 	// Test that Get waits
-	ch := make(chan bool)
+	done := make(chan struct{})
 	go func() {
 		for i := 0; i < 5; i++ {
 			if i%2 == 0 {
@@ -163,14 +163,16 @@ func TestOpen(t *testing.T) {
 		for i := 0; i < 5; i++ {
 			p.put(resources[i])
 		}
-		ch <- true
+		close(done)
 	}()
 	for i := 0; i < 5; i++ {
-		// Sleep to ensure the goroutine waits
-		time.Sleep(10 * time.Millisecond)
+		// block until we have a client wait for a connection, then offer it
+		for p.wait.waiting() == 0 {
+			time.Sleep(time.Millisecond)
+		}
 		p.put(resources[i])
 	}
-	<-ch
+	<-done
 	assert.EqualValues(t, 5, p.Metrics.WaitCount())
 	assert.Equal(t, 5, len(state.waits))
 	// verify start times are monotonic increasing

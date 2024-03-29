@@ -26,9 +26,8 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
 
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
@@ -88,7 +87,7 @@ var (
 	// once before the writer blocks
 	backupCompressBlocks = 2
 
-	titleCase = cases.Title(language.English).String
+	EmptyBackupMessage = "no new data to backup, skipping it"
 )
 
 func init() {
@@ -138,7 +137,7 @@ func Backup(ctx context.Context, params BackupParams) error {
 	bsStats := params.Stats.Scope(
 		backupstats.Component(backupstats.BackupStorage),
 		backupstats.Implementation(
-			titleCase(backupstorage.BackupStorageImplementation),
+			textutil.Title(backupstorage.BackupStorageImplementation),
 		),
 	)
 	bs = bs.WithParams(backupstorage.Params{
@@ -156,7 +155,7 @@ func Backup(ctx context.Context, params BackupParams) error {
 	beParams := params.Copy()
 	beParams.Stats = params.Stats.Scope(
 		backupstats.Component(backupstats.BackupEngine),
-		backupstats.Implementation(titleCase(backupEngineImplementation)),
+		backupstats.Implementation(textutil.Title(backupEngineImplementation)),
 	)
 	var be BackupEngine
 	if isIncrementalBackup(beParams) {
@@ -171,14 +170,20 @@ func Backup(ctx context.Context, params BackupParams) error {
 	}
 
 	// Take the backup, and either AbortBackup or EndBackup.
-	usable, err := be.ExecuteBackup(ctx, beParams, bh)
+	backupResult, err := be.ExecuteBackup(ctx, beParams, bh)
 	logger := params.Logger
 	var finishErr error
-	if usable {
-		finishErr = bh.EndBackup(ctx)
-	} else {
+	switch backupResult {
+	case BackupUnusable:
 		logger.Errorf2(err, "backup is not usable, aborting it")
 		finishErr = bh.AbortBackup(ctx)
+	case BackupEmpty:
+		logger.Infof(EmptyBackupMessage)
+		// While an empty backup is considered "successful", it should leave no trace.
+		// We therefore ensire to clean up an backup files/directories/entries.
+		finishErr = bh.AbortBackup(ctx)
+	case BackupUsable:
+		finishErr = bh.EndBackup(ctx)
 	}
 	if err != nil {
 		if finishErr != nil {
@@ -313,6 +318,10 @@ func ShouldRestore(ctx context.Context, params RestoreParams) (bool, error) {
 	if err := params.Mysqld.Wait(ctx, params.Cnf); err != nil {
 		return false, err
 	}
+	if err := params.Mysqld.WaitForDBAGrants(ctx, DbaGrantWaitTime); err != nil {
+		params.Logger.Errorf("error waiting for the grants: %v", err)
+		return false, err
+	}
 	return checkNoDB(ctx, params.Mysqld, params.DbName)
 }
 
@@ -374,7 +383,7 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 	bsStats := params.Stats.Scope(
 		backupstats.Component(backupstats.BackupStorage),
 		backupstats.Implementation(
-			titleCase(backupstorage.BackupStorageImplementation),
+			textutil.Title(backupstorage.BackupStorageImplementation),
 		),
 	)
 	bs = bs.WithParams(backupstorage.Params{
@@ -396,6 +405,10 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		// Wait for mysqld to be ready, in case it was launched in parallel with us.
 		if err = params.Mysqld.Wait(ctx, params.Cnf); err != nil {
 			params.Logger.Errorf("mysqld is not running: %v", err)
+			return nil, err
+		}
+		if err = params.Mysqld.WaitForDBAGrants(ctx, DbaGrantWaitTime); err != nil {
+			params.Logger.Errorf("error waiting for the grants: %v", err)
 			return nil, err
 		}
 		// Since this is an empty database make sure we start replication at the beginning
@@ -428,7 +441,7 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 	reParams := params.Copy()
 	reParams.Stats = params.Stats.Scope(
 		backupstats.Component(backupstats.BackupEngine),
-		backupstats.Implementation(titleCase(backupEngineImplementation)),
+		backupstats.Implementation(textutil.Title(backupEngineImplementation)),
 	)
 	manifest, err := re.ExecuteRestore(ctx, reParams, bh)
 	if err != nil {
@@ -456,7 +469,7 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 	// The MySQL manual recommends restarting mysqld after running mysql_upgrade,
 	// so that any changes made to system tables take effect.
 	params.Logger.Infof("Restore: restarting mysqld after mysql_upgrade")
-	if err := params.Mysqld.Shutdown(context.Background(), params.Cnf, true); err != nil {
+	if err := params.Mysqld.Shutdown(context.Background(), params.Cnf, true, params.MysqlShutdownTimeout); err != nil {
 		return nil, err
 	}
 	if err := params.Mysqld.Start(context.Background(), params.Cnf); err != nil {

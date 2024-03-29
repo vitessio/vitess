@@ -82,7 +82,7 @@
         "Query": "select id from `user` where `user`.id = 5",
         "Table": "`user`",
         "Values": [
-          "INT64(5)"
+          "5"
         ],
         "Vindex": "user_index"
       },
@@ -108,7 +108,7 @@
         "Query": "select id from `user` where `user`.id = 5 + 5",
         "Table": "`user`",
         "Values": [
-          "INT64(10)"
+          "10"
         ],
         "Vindex": "user_index"
       },
@@ -134,7 +134,7 @@
         "Query": "select id from music where id = 5 and user_id = 4",
         "Table": "music",
         "Values": [
-          "INT64(4)"
+          "4"
         ],
         "Vindex": "user_index"
       },
@@ -157,7 +157,7 @@
           "Sharded": true
         },
         "Values": [
-          "VARCHAR(\"bb\")"
+          "'bb'"
         ],
         "Vindex": "name_user_map",
         "Inputs": [
@@ -208,7 +208,7 @@
           "Sharded": true
         },
         "Values": [
-          "(VARCHAR(\"aa\"), VARCHAR(\"bb\"))"
+          "('aa', 'bb')"
         ],
         "Vindex": "name_user_map",
         "Inputs": [
@@ -259,7 +259,7 @@
           "Sharded": true
         },
         "Values": [
-          "(VARCHAR(\"aa\"), VARCHAR(\"cc\"))"
+          "('aa', 'cc')"
         ],
         "Vindex": "name_user_map",
         "Inputs": [
@@ -310,7 +310,7 @@
           "Sharded": true
         },
         "Values": [
-          "(VARCHAR(\"bb\"), VARCHAR(\"dd\"))"
+          "('bb', 'dd')"
         ],
         "Vindex": "name_user_map",
         "Inputs": [
@@ -361,7 +361,7 @@
           "Sharded": true
         },
         "Values": [
-          "(VARCHAR(\"bb\"), VARCHAR(\"dd\"))"
+          "('bb', 'dd')"
         ],
         "Vindex": "name_user_map",
         "Inputs": [
@@ -412,7 +412,7 @@
           "Sharded": true
         },
         "Values": [
-          "(VARCHAR(\"aa\"), VARCHAR(\"cc\"))"
+          "('aa', 'cc')"
         ],
         "Vindex": "name_user_map",
         "Inputs": [
@@ -463,7 +463,7 @@
           "Sharded": true
         },
         "Values": [
-          "(VARCHAR(\"dd\"))"
+          "('dd')"
         ],
         "Vindex": "name_user_map",
         "Inputs": [
@@ -517,7 +517,7 @@
         "Query": "select id from `user` where (col, `name`) in (('aa', 'bb')) and id = 5",
         "Table": "`user`",
         "Values": [
-          "INT64(5)"
+          "5"
         ],
         "Vindex": "user_index"
       },
@@ -540,7 +540,7 @@
           "Sharded": true
         },
         "Values": [
-          "(VARCHAR(\"bb\"), VARCHAR(\"dd\"))"
+          "('bb', 'dd')"
         ],
         "Vindex": "name_user_map",
         "Inputs": [
@@ -591,7 +591,7 @@
           "Sharded": true
         },
         "Values": [
-          "(VARCHAR(\"bb\"), VARCHAR(\"ee\"))"
+          "('bb', 'ee')"
         ],
         "Vindex": "name_user_map",
         "Inputs": [
@@ -642,7 +642,7 @@
           "Sharded": true
         },
         "Values": [
-          "(VARCHAR(\"aa\"), VARCHAR(\"dd\"))"
+          "('aa', 'dd')"
         ],
         "Vindex": "name_user_map",
         "Inputs": [
@@ -738,7 +738,7 @@
           "Sharded": true
         },
         "Values": [
-          "(INT64(2))"
+          "(2)"
         ],
         "Vindex": "name_user_map",
         "Inputs": [
@@ -884,7 +884,7 @@
           "Sharded": true
         },
         "Values": [
-          "UINT64(18446744073709551615)"
+          "18446744073709551615"
         ],
         "Vindex": "name_user_map",
         "Inputs": [
@@ -989,7 +989,7 @@
         "Query": "select user_extra.id from `user`, user_extra where `user`.id = 5 and `user`.id = user_extra.user_id",
         "Table": "`user`, user_extra",
         "Values": [
-          "INT64(5)"
+          "5"
         ],
         "Vindex": "user_index"
       },
@@ -1016,7 +1016,7 @@
         "Query": "select user_extra.id from `user`, user_extra where user_extra.user_id = 5 and `user`.id = user_extra.user_id",
         "Table": "`user`, user_extra",
         "Values": [
-          "INT64(5)"
+          "5"
         ],
         "Vindex": "user_index"
       },
@@ -1043,7 +1043,7 @@
         "Query": "select user_extra.id from `user` left join user_extra on `user`.id = user_extra.user_id where `user`.id = 5",
         "Table": "`user`, user_extra",
         "Values": [
-          "INT64(5)"
+          "5"
         ],
         "Vindex": "user_index"
       },
@@ -1070,7 +1070,7 @@
         "Query": "select user_extra.id from `user`, user_extra where user_extra.user_id = 5 and `user`.id = user_extra.user_id",
         "Table": "`user`, user_extra",
         "Values": [
-          "INT64(5)"
+          "5"
         ],
         "Vindex": "user_index"
       },
@@ -1106,7 +1106,7 @@
             "Query": "select `user`.col from `user` where `user`.id = 5",
             "Table": "`user`",
             "Values": [
-              "INT64(5)"
+              "5"
             ],
             "Vindex": "user_index"
           },
@@ -1146,7 +1146,7 @@
         "Query": "select user_extra.id from `user`, user_extra where `user`.id = 5 and user_extra.user_id = 5 and `user`.col = user_extra.col",
         "Table": "`user`, user_extra",
         "Values": [
-          "INT64(5)"
+          "5"
         ],
         "Vindex": "user_index"
       },
@@ -1267,7 +1267,7 @@
         "Query": "select id from `user` where `user`.col = 5 and `user`.id in ::__vals",
         "Table": "`user`",
         "Values": [
-          "(INT64(1), INT64(2))"
+          "(1, 2)"
         ],
         "Vindex": "user_index"
       },
@@ -1293,7 +1293,7 @@
         "Query": "select id from `user` where `user`.col = case `user`.col when 'foo' then true else false end and `user`.id in ::__vals",
         "Table": "`user`",
         "Values": [
-          "(INT64(1), INT64(2))"
+          "(1, 2)"
         ],
         "Vindex": "user_index"
       },
@@ -1316,7 +1316,7 @@
           "Sharded": true
         },
         "Values": [
-          "VARCHAR(\"aa\")"
+          "'aa'"
         ],
         "Vindex": "name_user_map",
         "Inputs": [
@@ -1367,7 +1367,7 @@
           "Sharded": true
         },
         "Values": [
-          "VARCHAR(\"aa\")"
+          "'aa'"
         ],
         "Vindex": "name_user_map",
         "Inputs": [
@@ -1421,7 +1421,7 @@
         "Query": "select id from `user` where `user`.col = 5 and `user`.id in (1, 2) and `user`.`name` = 'aa' and `user`.id = 1",
         "Table": "`user`",
         "Values": [
-          "INT64(1)"
+          "1"
         ],
         "Vindex": "user_index"
       },
@@ -1447,7 +1447,7 @@
         "Query": "select id from `user` where `user`.id = 1 and `user`.`name` = 'aa' and `user`.id in (1, 2) and `user`.col = 5",
         "Table": "`user`",
         "Values": [
-          "INT64(1)"
+          "1"
         ],
         "Vindex": "user_index"
       },
@@ -1473,7 +1473,7 @@
         "Query": "select id from `user` where (`user`.id = 1 or `user`.`name` = 'aa') and `user`.id in ::__vals",
         "Table": "`user`",
         "Values": [
-          "(INT64(1), INT64(2))"
+          "(1, 2)"
         ],
         "Vindex": "user_index"
       },
@@ -1548,7 +1548,7 @@
         "Query": "select col from `user` as route1 where id = 1",
         "Table": "`user`",
         "Values": [
-          "INT64(1)"
+          "1"
         ],
         "Vindex": "user_index"
       },
@@ -1594,7 +1594,7 @@
             "Query": "select u.m from `user` as u where u.id in ::__vals and u.id in (select m2 from `user` where `user`.id = u.id and `user`.col = :user_extra_col)",
             "Table": "`user`",
             "Values": [
-              "(:user_extra_col, INT64(1))"
+              "(:user_extra_col, 1)"
             ],
             "Vindex": "user_index"
           }
@@ -1643,7 +1643,7 @@
             "Query": "select u.m from `user` as u where u.id in ::__vals and u.id in (select m2 from `user` where `user`.id = u.id)",
             "Table": "`user`",
             "Values": [
-              "(:user_extra_col, INT64(1))"
+              "(:user_extra_col, 1)"
             ],
             "Vindex": "user_index"
           }
@@ -1689,7 +1689,7 @@
             "Query": "select u.m from `user` as u where u.id = 5 and u.id in (select m2 from `user` where `user`.id = 5)",
             "Table": "`user`",
             "Values": [
-              "INT64(5)"
+              "5"
             ],
             "Vindex": "user_index"
           }
@@ -1738,7 +1738,7 @@
             "Query": "select u.m from `user` as u where u.id in ::__vals and u.id in (select m2 from `user` where `user`.id = u.id and `user`.col = :user_extra_col and `user`.id in (select m3 from user_extra where user_extra.user_id = `user`.id))",
             "Table": "`user`",
             "Values": [
-              "(:user_extra_col, INT64(1))"
+              "(:user_extra_col, 1)"
             ],
             "Vindex": "user_index"
           }
@@ -1790,7 +1790,7 @@
         "Query": "select id from `user` where id = 5 and `user`.col in (select user_extra.col from user_extra where user_extra.user_id = 5)",
         "Table": "`user`",
         "Values": [
-          "INT64(5)"
+          "5"
         ],
         "Vindex": "user_index"
       },
@@ -1817,7 +1817,7 @@
         "Query": "select id from `user` where id = 'aa' and `user`.col in (select user_extra.col from user_extra where user_extra.user_id = 'aa')",
         "Table": "`user`",
         "Values": [
-          "VARCHAR(\"aa\")"
+          "'aa'"
         ],
         "Vindex": "user_index"
       },
@@ -1966,7 +1966,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where not :__sq_has_values and id not in ::__sq1",
+            "Query": "select id from `user` where not :__sq_has_values or id not in ::__sq1",
             "Table": "`user`"
           }
         ]
@@ -2227,7 +2227,7 @@
         "Query": "select user_extra.Id from `user`, user_extra where `user`.Id = 5 and `user`.iD = user_extra.User_Id",
         "Table": "`user`, user_extra",
         "Values": [
-          "INT64(5)"
+          "5"
         ],
         "Vindex": "user_index"
       },
@@ -2386,7 +2386,7 @@
         "Query": "select id from music where user_id = 4 and id in (null, 1, 2)",
         "Table": "music",
         "Values": [
-          "INT64(4)"
+          "4"
         ],
         "Vindex": "user_index"
       },
@@ -2465,7 +2465,7 @@
             "Query": "select user_extra.col from user_extra where user_extra.user_id = 411",
             "Table": "user_extra",
             "Values": [
-              "INT64(411)"
+              "411"
             ],
             "Vindex": "user_index"
           },
@@ -2490,7 +2490,7 @@
                 "Query": "select user_extra.col from user_extra where user_extra.user_id = 42",
                 "Table": "user_extra",
                 "Values": [
-                  "INT64(42)"
+                  "42"
                 ],
                 "Vindex": "user_index"
               },
@@ -2503,7 +2503,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select id from `user` where 1 != 1",
-                "Query": "select id from `user` where not :__sq_has_values and id not in ::__sq1 and :__sq_has_values1 and id in ::__vals",
+                "Query": "select id from `user` where (not :__sq_has_values or id not in ::__sq1) and :__sq_has_values1 and id in ::__vals",
                 "Table": "`user`",
                 "Values": [
                   "::__sq2"
@@ -2537,7 +2537,7 @@
         "Query": "select c2 from cfc_vindex_col where c1 like 'A%'",
         "Table": "cfc_vindex_col",
         "Values": [
-          "VARCHAR(\"A%\")"
+          "'A%'"
         ],
         "Vindex": "cfc"
       },
@@ -2748,7 +2748,7 @@
         "Query": "select u1.col from `user` as u1 where u1.id = 5 and u1.`name` in (select u2.`name` from `user` as u2 where u2.id = 5)",
         "Table": "`user`",
         "Values": [
-          "INT64(5)"
+          "5"
         ],
         "Vindex": "user_index"
       },
@@ -2774,7 +2774,7 @@
         "Query": "select u1.col from `user` as u1 where u1.id = 5 and exists (select 1 from `user` as u2 where u2.id = 5)",
         "Table": "`user`",
         "Values": [
-          "INT64(5)"
+          "5"
         ],
         "Vindex": "user_index"
       },
@@ -2800,7 +2800,7 @@
         "Query": "select u1.col from `user` as u1 where u1.id = 5 and not exists (select 1 from `user` as u2 where u2.id = 5)",
         "Table": "`user`",
         "Values": [
-          "INT64(5)"
+          "5"
         ],
         "Vindex": "user_index"
       },
@@ -2834,7 +2834,7 @@
             "Query": "select 1 from `user` as u2 where u2.id = 5",
             "Table": "`user`",
             "Values": [
-              "INT64(5)"
+              "5"
             ],
             "Vindex": "user_index"
           },
@@ -2883,7 +2883,7 @@
             "Query": "select user_extra.col from user_extra where user_extra.user_id = 4",
             "Table": "user_extra",
             "Values": [
-              "INT64(4)"
+              "4"
             ],
             "Vindex": "user_index"
           },
@@ -2899,7 +2899,7 @@
             "Query": "select id from `user` where id = 5 and id not in (select user_extra.col from user_extra where user_extra.user_id = 5) and :__sq_has_values and id in ::__sq2",
             "Table": "`user`",
             "Values": [
-              "INT64(5)"
+              "5"
             ],
             "Vindex": "user_index"
           }
@@ -2937,7 +2937,7 @@
             "Query": "select user_extra.col from user_extra where user_extra.user_id = 4",
             "Table": "user_extra",
             "Values": [
-              "INT64(4)"
+              "4"
             ],
             "Vindex": "user_index"
           },
@@ -2950,10 +2950,10 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where id = 5 and id in (select user_extra.col from user_extra where user_extra.user_id = 5) and not :__sq_has_values and id not in ::__sq1",
+            "Query": "select id from `user` where id = 5 and id in (select user_extra.col from user_extra where user_extra.user_id = 5) and (not :__sq_has_values or id not in ::__sq1)",
             "Table": "`user`",
             "Values": [
-              "INT64(5)"
+              "5"
             ],
             "Vindex": "user_index"
           }
@@ -3005,7 +3005,7 @@
         "Query": "select id from `user` where `user`.id = `user`.col and `user`.col = 5",
         "Table": "`user`",
         "Values": [
-          "INT64(5)"
+          "5"
         ],
         "Vindex": "user_index"
       },
@@ -3283,7 +3283,7 @@
         "Query": "select * from multicolvin where column_b = 1",
         "Table": "multicolvin",
         "Values": [
-          "INT64(1)"
+          "1"
         ],
         "Vindex": "colb_colc_map"
       },
@@ -3309,7 +3309,7 @@
         "Query": "select * from multicolvin where column_b = 1 and column_c = 2",
         "Table": "multicolvin",
         "Values": [
-          "INT64(1)"
+          "1"
         ],
         "Vindex": "colb_colc_map"
       },
@@ -3335,7 +3335,7 @@
         "Query": "select * from multicolvin where column_b = 1 and column_c = 2 and column_a = 3",
         "Table": "multicolvin",
         "Values": [
-          "INT64(1)"
+          "1"
         ],
         "Vindex": "colb_colc_map"
       },
@@ -3361,7 +3361,7 @@
         "Query": "select * from multicolvin where column_a = 3 and column_b = 1",
         "Table": "multicolvin",
         "Values": [
-          "INT64(1)"
+          "1"
         ],
         "Vindex": "colb_colc_map"
       },
@@ -3387,8 +3387,8 @@
         "Query": "select * from multicol_tbl where cola = 1 and colb = 2",
         "Table": "multicol_tbl",
         "Values": [
-          "INT64(1)",
-          "INT64(2)"
+          "1",
+          "2"
         ],
         "Vindex": "multicolIdx"
       },
@@ -3414,8 +3414,8 @@
         "Query": "select * from multicol_tbl where colb = 2 and cola = 1",
         "Table": "multicol_tbl",
         "Values": [
-          "INT64(1)",
-          "INT64(2)"
+          "1",
+          "2"
         ],
         "Vindex": "multicolIdx"
       },
@@ -3441,8 +3441,8 @@
         "Query": "select * from multicol_tbl where cola in ::__vals0 and colb in ::__vals1",
         "Table": "multicol_tbl",
         "Values": [
-          "(INT64(1), INT64(2))",
-          "(INT64(3), INT64(4))"
+          "(1, 2)",
+          "(3, 4)"
         ],
         "Vindex": "multicolIdx"
       },
@@ -3468,8 +3468,8 @@
         "Query": "select * from multicol_tbl where colb in ::__vals1 and cola in ::__vals0",
         "Table": "multicol_tbl",
         "Values": [
-          "(INT64(1), INT64(2))",
-          "(INT64(3), INT64(4))"
+          "(1, 2)",
+          "(3, 4)"
         ],
         "Vindex": "multicolIdx"
       },
@@ -3495,8 +3495,8 @@
         "Query": "select * from multicol_tbl where colb = 1 and cola in ::__vals0",
         "Table": "multicol_tbl",
         "Values": [
-          "(INT64(3), INT64(4))",
-          "INT64(1)"
+          "(3, 4)",
+          "1"
         ],
         "Vindex": "multicolIdx"
       },
@@ -3522,7 +3522,7 @@
         "Query": "select id from `user` where id = 34 and `name` = 'apa'",
         "Table": "`user`",
         "Values": [
-          "INT64(34)"
+          "34"
         ],
         "Vindex": "user_index"
       },
@@ -3548,8 +3548,8 @@
         "Query": "select * from multicol_tbl where cola in (1, 10) and cola = 4 and colb in (5, 6) and colb = 7",
         "Table": "multicol_tbl",
         "Values": [
-          "INT64(4)",
-          "INT64(7)"
+          "4",
+          "7"
         ],
         "Vindex": "multicolIdx"
       },
@@ -3575,8 +3575,8 @@
         "Query": "select * from multicol_tbl where colb = 4 and colb in ::__vals1 and cola in ::__vals0",
         "Table": "multicol_tbl",
         "Values": [
-          "(INT64(5), INT64(6))",
-          "(INT64(1), INT64(10))"
+          "(5, 6)",
+          "(1, 10)"
         ],
         "Vindex": "multicolIdx"
       },
@@ -3602,8 +3602,8 @@
         "Query": "select * from multicol_tbl where colb in (1, 10) and colb = 4 and cola in ::__vals0",
         "Table": "multicol_tbl",
         "Values": [
-          "(INT64(5), INT64(6))",
-          "INT64(4)"
+          "(5, 6)",
+          "4"
         ],
         "Vindex": "multicolIdx"
       },
@@ -3629,8 +3629,8 @@
         "Query": "select * from multicol_tbl where colb in (1, 2) and cola in (3, 4) and cola = 5 and colb = 6",
         "Table": "multicol_tbl",
         "Values": [
-          "INT64(5)",
-          "INT64(6)"
+          "5",
+          "6"
         ],
         "Vindex": "multicolIdx"
       },
@@ -3656,8 +3656,8 @@
         "Query": "select * from multicol_tbl where (cola, colb) in ((1, 2), (3, 4))",
         "Table": "multicol_tbl",
         "Values": [
-          "(INT64(1), INT64(3))",
-          "(INT64(2), INT64(4))"
+          "(1, 3)",
+          "(2, 4)"
         ],
         "Vindex": "multicolIdx"
       },
@@ -3683,7 +3683,7 @@
         "Query": "select * from multicol_tbl where cola = 1",
         "Table": "multicol_tbl",
         "Values": [
-          "INT64(1)"
+          "1"
         ],
         "Vindex": "multicolIdx"
       },
@@ -3709,8 +3709,8 @@
         "Query": "select * from multicol_tbl where cola = 1 and colb in ::__vals1",
         "Table": "multicol_tbl",
         "Values": [
-          "INT64(1)",
-          "(INT64(2), INT64(3))"
+          "1",
+          "(2, 3)"
         ],
         "Vindex": "multicolIdx"
       },
@@ -3782,7 +3782,7 @@
         "Query": "select music.id from music left join `user` on music.user_id = `user`.id where music.user_id = 10 and `user`.id <=> null",
         "Table": "`user`, music",
         "Values": [
-          "INT64(10)"
+          "10"
         ],
         "Vindex": "user_index"
       },
@@ -3809,7 +3809,7 @@
         "Query": "select music.id from music left join `user` on music.user_id = `user`.id where music.user_id = 5 and (`user`.`name` = 'Trent Reznor' or music.genre = 'pop')",
         "Table": "`user`, music",
         "Values": [
-          "INT64(5)"
+          "5"
         ],
         "Vindex": "user_index"
       },
@@ -3836,7 +3836,7 @@
         "Query": "select music.id from music left join `user` on music.user_id = `user`.id where music.user_id = 5 and (`user`.`name` = 'Trent Reznor' or music.genre = 'pop')",
         "Table": "`user`, music",
         "Values": [
-          "INT64(5)"
+          "5"
         ],
         "Vindex": "user_index"
       },
@@ -3863,7 +3863,7 @@
         "Query": "select music.id from music, `user` where music.user_id = 5 and music.user_id = `user`.id and music.componist = `user`.`name`",
         "Table": "`user`, music",
         "Values": [
-          "INT64(5)"
+          "5"
         ],
         "Vindex": "user_index"
       },
@@ -3890,7 +3890,7 @@
         "Query": "select music.id from music, `user` where music.user_id = 5 and `user`.id is not null and `user`.id = music.user_id",
         "Table": "`user`, music",
         "Values": [
-          "INT64(5)"
+          "5"
         ],
         "Vindex": "user_index"
       },
@@ -3917,7 +3917,7 @@
         "Query": "select col from `user` where id in ::__vals",
         "Table": "`user`",
         "Values": [
-          "(INT64(1), INT64(2))"
+          "(1, 2)"
         ],
         "Vindex": "user_index"
       },
@@ -3943,7 +3943,7 @@
         "Query": "select col from `user` where id in ::__vals",
         "Table": "`user`",
         "Values": [
-          "(INT64(1), INT64(2), INT64(3))"
+          "(1, 2, 3)"
         ],
         "Vindex": "user_index"
       },
@@ -3969,7 +3969,7 @@
         "Query": "select col from `user` where id in ::__vals",
         "Table": "`user`",
         "Values": [
-          "(INT64(1), INT64(2), INT64(3), INT64(4))"
+          "(1, 2, 3, 4)"
         ],
         "Vindex": "user_index"
       },
@@ -3995,7 +3995,7 @@
         "Query": "select id from music where id is null and user_id in ::__vals",
         "Table": "music",
         "Values": [
-          "(INT64(1), INT64(2))"
+          "(1, 2)"
         ],
         "Vindex": "user_index"
       },
@@ -4018,7 +4018,31 @@
           "Sharded": true
         },
         "FieldQuery": "select a + 2 as a from `user` where 1 != 1",
-        "Query": "select a + 2 as a from `user` where a + 2 = 42",
+        "Query": "select a + 2 as a from `user` where `user`.a + 2 = 42",
+        "Table": "`user`"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Order by aliases are expanded",
+    "query": "select a+2 as a from user order by a",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select a+2 as a from user order by a",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select a + 2 as a, weight_string(a + 2) from `user` where 1 != 1",
+        "OrderBy": "(0|1) ASC",
+        "Query": "select a + 2 as a, weight_string(a + 2) from `user` order by `user`.a + 2 asc",
+        "ResultColumns": 1,
         "Table": "`user`"
       },
       "TablesUsed": [
@@ -4087,7 +4111,7 @@
         "Query": "select id from `user` where id = 5 and (`name` = 'apa' or foo = 'bar')",
         "Table": "`user`",
         "Values": [
-          "INT64(5)"
+          "5"
         ],
         "Vindex": "user_index"
       },
@@ -4110,10 +4134,10 @@
           "Sharded": true
         },
         "FieldQuery": "select id from `user` where 1 != 1",
-        "Query": "select id from `user` where id = 5 and `name` = 'foo' or id = 12 and `name` = 'bar'",
+        "Query": "select id from `user` where id in ::__vals and (id = 5 or `name` = 'bar') and (`name` = 'foo' or id = 12) and `name` in ('foo', 'bar')",
         "Table": "`user`",
         "Values": [
-          "(INT64(5), INT64(12))"
+          "(5, 12)"
         ],
         "Vindex": "user_index"
       },
@@ -4142,8 +4166,8 @@
               {
                 "OperatorType": "Projection",
                 "Expressions": [
-                  "[COLUMN 2] as textcol1",
-                  "[COLUMN 0] * [COLUMN 1] as sum(a.id)"
+                  ":2 as textcol1",
+                  "sum(a.id) * count(*) as sum(a.id)"
                 ],
                 "Inputs": [
                   {
@@ -4292,8 +4316,8 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 0] * COALESCE([COLUMN 1], INT64(1)) as count(*)",
-              "[COLUMN 2] as collections_status"
+              "count(*) * coalesce(count(*), 1) as count(*)",
+              ":2 as collections_status"
             ],
             "Inputs": [
               {
@@ -4353,7 +4377,7 @@
       "Original": "select 1 from user where shard_key = 1 and is_removed = 1 and cmd in ('A','B','C') and not (user_id = 1 and user_id is not null and ts >= 1 and ts <= 2) and not (user_id = 1 and user_id is not null and ts >= 12 and ts <= 13) and not (user_id = 1 and user_id is not null and ts >= 14 and ts <= 15) and not (user_id = 1 and user_id is not null and ts >= 16 and ts <= 17) and not (user_id = 1 and user_id is not null and ts >= 18 and ts <= 19) and not (user_id = 1 and user_id is not null and ts >= 110 and ts <= 111) and not (user_id = 1 and user_id is not null and ts >= 112 and ts <= 113) and not (user_id = 1 and user_id is not null and ts >= 114 and ts <= 115) and not (user_id = 1 and user_id is not null and ts >= 116 and ts <= 117) and not (user_id = 1 and user_id is not null and ts >= 118 and ts <= 119) and not (user_id = 1 and user_id is not null and ts >= 120 and ts <= 121) and not (user_id = 1 and user_id is not null and ts >= 122 and ts <= 123) and not (user_id = 1 and user_id is not null and ts >= 124 and ts <= 125) and not (user_id = 1 and user_id is not null and ts >= 126 and ts <= 127) and not (user_id = 1 and user_id is not null and ts >= 128 and ts <= 129) and not (user_id = 1 and user_id is not null and ts >= 130 and ts <= 131) and not (user_id = 1 and user_id is not null and ts >= 132 and ts <= 133) and not (user_id = 1 and user_id is not null and ts >= 134 and ts <= 135) and not (user_id = 1 and user_id is not null and ts >= 136 and ts <= 137) and not (user_id = 1 and user_id is not null and ts >= 138 and ts <= 139) and not (user_id = 1 and user_id is not null and ts >= 140 and ts <= 141) and not (user_id = 1 and user_id is not null and ts >= 142 and ts <= 143) and not (user_id = 1 and user_id is not null and ts >= 144 and ts <= 145) and not (user_id = 1 and user_id is not null and ts >= 146 and ts <= 147) and not (user_id = 1 and user_id is not null and ts >= 148 and ts <= 149) and not (user_id = 1 and user_id is not null and ts >= 150 and ts <= 151) and not (user_id = 1 and user_id is not null and ts >= 152 and ts <= 153) and not (user_id = 1 and user_id is not null and ts >= 154 and ts <= 155) and not (user_id = 1 and user_id is not null and ts >= 156 and ts <= 157) and not (user_id = 1 and user_id is not null and ts >= 158 and ts <= 159) and not (user_id = 1 and user_id is not null and ts >= 160 and ts <= 161) and not (user_id = 1 and user_id is not null and ts >= 162 and ts <= 163) and not (user_id = 1 and user_id is not null and ts >= 164 and ts <= 165) and not (user_id = 1 and user_id is not null and ts >= 166 and ts <= 167) and not (user_id = 1 and user_id is not null and ts >= 168 and ts <= 169) and not (user_id = 1 and user_id is not null and ts >= 170 and ts <= 171) and not (user_id = 1 and user_id is not null and ts >= 172 and ts <= 173) and not (user_id = 1 and user_id is not null and ts >= 174 and ts <= 175) and not (user_id = 1 and user_id is not null and ts >= 176 and ts <= 177) and not (user_id = 1 and user_id is not null and ts >= 178 and ts <= 179) and not (user_id = 1 and user_id is not null and ts >= 180 and ts <= 181) and not (user_id = 1 and user_id is not null and ts >= 182 and ts <= 183) and not (user_id = 1 and user_id is not null and ts >= 184 and ts <= 185) and not (user_id = 1 and user_id is not null and ts >= 186 and ts <= 187) and not (user_id = 1 and user_id is not null and ts >= 188 and ts <= 189) and not (user_id = 1 and user_id is not null and ts >= 190 and ts <= 191) and not (user_id = 1 and user_id is not null and ts >= 192 and ts <= 193) and not (user_id = 1 and user_id is not null and ts >= 194 and ts <= 195) and not (user_id = 1 and user_id is not null and ts >= 196 and ts <= 197) and not (user_id = 1 and user_id is not null and ts >= 198 and ts <= 199) and not (user_id = 1 and user_id is not null and ts >= 1100 and ts <= 1101) and not (user_id = 1 and user_id is not null and ts >= 1102 and ts <= 1103) and not (user_id = 1 and user_id is not null and ts >= 1104 and ts <= 1105) and not (user_id = 1 and user_id is not null and ts >= 1106 and ts <= 1107) and not (user_id = 1 and user_id is not null and ts >= 1108 and ts <= 1109) and not (user_id = 1 and user_id is not null and ts >= 1110 and ts <= 1111) and not (user_id = 1 and user_id is not null and ts >= 1112 and ts <= 1113) and not (user_id = 1 and user_id is not null and ts >= 1114 and ts <= 1115) and not (user_id = 1 and user_id is not null and ts >= 1116 and ts <= 1117) and not (user_id = 1 and user_id is not null and ts >= 1118 and ts <= 1119) and not (user_id = 1 and user_id is not null and ts >= 1120 and ts <= 1121) and not (user_id = 1 and user_id is not null and ts >= 1122 and ts <= 1123) and not (user_id = 1 and user_id is not null and ts >= 1124 and ts <= 1125) and not (user_id = 1 and user_id is not null and ts >= 1126 and ts <= 1127) and not (user_id = 1 and user_id is not null and ts >= 1128 and ts <= 1129) and not (user_id = 1 and user_id is not null and ts >= 1130 and ts <= 1131) and not (user_id = 1 and user_id is not null and ts >= 1132 and ts <= 1133) and not (user_id = 1 and user_id is not null and ts >= 1134 and ts <= 1135) and not (user_id = 1 and user_id is not null and ts >= 1136 and ts <= 1137) and not (user_id = 1 and user_id is not null and ts >= 1138 and ts <= 1139) and not (user_id = 1 and user_id is not null and ts >= 1140 and ts <= 1141) and not (user_id = 1 and user_id is not null and ts >= 1142 and ts <= 1143) and not (user_id = 1 and user_id is not null and ts >= 1144 and ts <= 1145) and not (user_id = 1 and user_id is not null and ts >= 1146 and ts <= 1147) and not (user_id = 1 and user_id is not null and ts >= 1148 and ts <= 1149) and not (user_id = 1 and user_id is not null and ts >= 1150 and ts <= 1151) and not (user_id = 1 and user_id is not null and ts >= 1152 and ts <= 1153) and not (user_id = 1 and user_id is not null and ts >= 1154 and ts <= 1155) and not (user_id = 1 and user_id is not null and ts >= 1156 and ts <= 1157) and not (user_id = 1 and user_id is not null and ts >= 1158 and ts <= 1159) and not (user_id = 1 and user_id is not null and ts >= 1160 and ts <= 1161) and not (user_id = 1 and user_id is not null and ts >= 1162 and ts <= 1163) and not (user_id = 1 and user_id is not null and ts >= 1164 and ts <= 1165) and not (user_id = 1 and user_id is not null and ts >= 1166 and ts <= 1167) and not (user_id = 1 and user_id is not null and ts >= 1168 and ts <= 1169) and not (user_id = 1 and user_id is not null and ts >= 1170 and ts <= 1171) and not (user_id = 1 and user_id is not null and ts >= 1172 and ts <= 1173) and not (user_id = 1 and user_id is not null and ts >= 1174 and ts <= 1175) and not (user_id = 1 and user_id is not null and ts >= 1176 and ts <= 1177) and not (user_id = 1 and user_id is not null and ts >= 1178 and ts <= 1179) and not (user_id = 1 and user_id is not null and ts >= 1180 and ts <= 1181) and not (user_id = 1 and user_id is not null and ts >= 1182 and ts <= 1183) and not (user_id = 1 and user_id is not null and ts >= 1184 and ts <= 1185) and not (user_id = 1 and user_id is not null and ts >= 1186 and ts <= 1187) and not (user_id = 1 and user_id is not null and ts >= 1188 and ts <= 1189) and not (user_id = 1 and user_id is not null and ts >= 1190 and ts <= 1191) and not (user_id = 1 and user_id is not null and ts >= 1192 and ts <= 1193) and not (user_id = 1 and user_id is not null and ts >= 1194 and ts <= 1195) and not (user_id = 1 and user_id is not null and ts >= 1196 and ts <= 1197) and not (user_id = 1 and user_id is not null and ts >= 1198 and ts <= 1199) and not (user_id = 1 and user_id is not null and ts >= 1200 and ts <= 1201) and not (user_id = 1 and user_id is not null and ts >= 1202 and ts <= 1203) and not (user_id = 1 and user_id is not null and ts >= 1204 and ts <= 1205) and not (user_id = 1 and user_id is not null and ts >= 1206 and ts <= 1207) and not (user_id = 1 and user_id is not null and ts >= 1208 and ts <= 1209) and not (user_id = 1 and user_id is not null and ts >= 1210 and ts <= 1211) and not (user_id = 1 and user_id is not null and ts >= 1212 and ts <= 1213) and not (user_id = 1 and user_id is not null and ts >= 1214 and ts <= 1215) and not (user_id = 1 and user_id is not null and ts >= 1216 and ts <= 1217) and not (user_id = 1 and user_id is not null and ts >= 1218 and ts <= 1219) and not (user_id = 1 and user_id is not null and ts >= 1220 and ts <= 1221) and not (user_id = 1 and user_id is not null and ts >= 1222 and ts <= 1223) and not (user_id = 1 and user_id is not null and ts >= 1224 and ts <= 1225) and not (user_id = 1 and user_id is not null and ts >= 1226 and ts <= 1227) and not (user_id = 1 and user_id is not null and ts >= 1228 and ts <= 1229) and not (user_id = 1 and user_id is not null and ts >= 1230 and ts <= 1231) and not (user_id = 1 and user_id is not null and ts >= 1232 and ts <= 1233) and not (user_id = 1 and user_id is not null and ts >= 1234 and ts <= 1235) and not (user_id = 1 and user_id is not null and ts >= 1236 and ts <= 1237) and not (user_id = 1 and user_id is not null and ts >= 1238 and ts <= 1239) and not (user_id = 1 and user_id is not null and ts >= 1240 and ts <= 1241) and not (user_id = 1 and user_id is not null and ts >= 1242 and ts <= 1243) and not (user_id = 1 and user_id is not null and ts >= 1244 and ts <= 1245) and not (user_id = 1 and user_id is not null and ts >= 1246 and ts <= 1247) and not (user_id = 1 and user_id is not null and ts >= 1248 and ts <= 1249) and not (user_id = 1 and user_id is not null and ts >= 1250 and ts <= 1251) and not (user_id = 1 and user_id is not null and ts >= 1252 and ts <= 1253) and not (user_id = 1 and user_id is not null and ts >= 1254 and ts <= 1255) and not (user_id = 1 and user_id is not null and ts >= 1256 and ts <= 1257) and not (user_id = 1 and user_id is not null and ts >= 1258 and ts <= 1259) and not (user_id = 1 and user_id is not null and ts >= 1260 and ts <= 1261) and not (user_id = 1 and user_id is not null and ts >= 1262 and ts <= 1263) and not (user_id = 1 and user_id is not null and ts >= 1264 and ts <= 1265) and not (user_id = 1 and user_id is not null and ts >= 1266 and ts <= 1267) and not (user_id = 1 and user_id is not null and ts >= 1268 and ts <= 1269) and not (user_id = 1 and user_id is not null and ts >= 1270 and ts <= 1271) and not (user_id = 1 and user_id is not null and ts >= 1272 and ts <= 1273) and not (user_id = 1 and user_id is not null and ts >= 1274 and ts <= 1275) and not (user_id = 1 and user_id is not null and ts >= 1276 and ts <= 1277) and not (user_id = 1 and user_id is not null and ts >= 1278 and ts <= 1279) and not (user_id = 1 and user_id is not null and ts >= 1280 and ts <= 1281) and not (user_id = 1 and user_id is not null and ts >= 1282 and ts <= 1283) and not (user_id = 1 and user_id is not null and ts >= 1284 and ts <= 1285) and not (user_id = 1 and user_id is not null and ts >= 1286 and ts <= 1287) and not (user_id = 1 and user_id is not null and ts >= 1288 and ts <= 1289) and not (user_id = 1 and user_id is not null and ts >= 1290 and ts <= 1291) and not (user_id = 1 and user_id is not null and ts >= 1292 and ts <= 1293) and not (user_id = 1 and user_id is not null and ts >= 1294 and ts <= 1295) and not (user_id = 1 and user_id is not null and ts >= 1296 and ts <= 1297) and not (user_id = 1 and user_id is not null and ts >= 1298 and ts <= 1299) and not (user_id = 1 and user_id is not null and ts >= 1300 and ts <= 1301) and not (user_id = 1 and user_id is not null and ts >= 1302 and ts <= 1303) and not (user_id = 1 and user_id is not null and ts >= 1304 and ts <= 1305) and not (user_id = 1 and user_id is not null and ts >= 1306 and ts <= 1307) and not (user_id = 1 and user_id is not null and ts >= 1308 and ts <= 1309) and not (user_id = 1 and user_id is not null and ts >= 1310 and ts <= 1311) and not (user_id = 1 and user_id is not null and ts >= 1312 and ts <= 1313) and not (user_id = 1 and user_id is not null and ts >= 1314 and ts <= 1315) and not (user_id = 1 and user_id is not null and ts >= 1316 and ts <= 1317) and not (user_id = 1 and user_id is not null and ts >= 1318 and ts <= 1319) and not (user_id = 1 and user_id is not null and ts >= 1320 and ts <= 1321) and not (user_id = 1 and user_id is not null and ts >= 1322 and ts <= 1323) and not (user_id = 1 and user_id is not null and ts >= 1324 and ts <= 1325) and not (user_id = 1 and user_id is not null and ts >= 1326 and ts <= 1327) and not (user_id = 1 and user_id is not null and ts >= 1328 and ts <= 1329) and not (user_id = 1 and user_id is not null and ts >= 1330 and ts <= 1331) and not (user_id = 1 and user_id is not null and ts >= 1332 and ts <= 1333) and not (user_id = 1 and user_id is not null and ts >= 1334 and ts <= 1335) and not (user_id = 1 and user_id is not null and ts >= 1336 and ts <= 1337) and not (user_id = 1 and user_id is not null and ts >= 1338 and ts <= 1339) and not (user_id = 1 and user_id is not null and ts >= 1340 and ts <= 1341) and not (user_id = 1 and user_id is not null and ts >= 1342 and ts <= 1343) and not (user_id = 1 and user_id is not null and ts >= 1344 and ts <= 1345) and not (user_id = 1 and user_id is not null and ts >= 1346 and ts <= 1347) and not (user_id = 1 and user_id is not null and ts >= 1348 and ts <= 1349) and not (user_id = 1 and user_id is not null and ts >= 1350 and ts <= 1351) and not (user_id = 1 and user_id is not null and ts >= 1352 and ts <= 1353) and not (user_id = 1 and user_id is not null and ts >= 1354 and ts <= 1355) and not (user_id = 1 and user_id is not null and ts >= 1356 and ts <= 1357) and not (user_id = 1 and user_id is not null and ts >= 1358 and ts <= 1359) and not (user_id = 1 and user_id is not null and ts >= 1360 and ts <= 1361) and not (user_id = 1 and user_id is not null and ts >= 1362 and ts <= 1363) and not (user_id = 1 and user_id is not null and ts >= 1364 and ts <= 1365) and not (user_id = 1 and user_id is not null and ts >= 1366 and ts <= 1367) and not (user_id = 1 and user_id is not null and ts >= 1368 and ts <= 1369) and not (user_id = 1 and user_id is not null and ts >= 1370 and ts <= 1371) and not (user_id = 1 and user_id is not null and ts >= 1372 and ts <= 1373) and not (user_id = 1 and user_id is not null and ts >= 1374 and ts <= 1375) and not (user_id = 1 and user_id is not null and ts >= 1376 and ts <= 1377) and not (user_id = 1 and user_id is not null and ts >= 1378 and ts <= 1379) and not (user_id = 1 and user_id is not null and ts >= 1380 and ts <= 1381) and not (user_id = 1 and user_id is not null and ts >= 1382 and ts <= 1383) and not (user_id = 1 and user_id is not null and ts >= 1384 and ts <= 1385) and not (user_id = 1 and user_id is not null and ts >= 1386 and ts <= 1387) and not (user_id = 1 and user_id is not null and ts >= 1388 and ts <= 1389) and not (user_id = 1 and user_id is not null and ts >= 1390 and ts <= 1391) and not (user_id = 1 and user_id is not null and ts >= 1392 and ts <= 1393) and not (user_id = 1 and user_id is not null and ts >= 1394 and ts <= 1395) and not (user_id = 1 and user_id is not null and ts >= 1396 and ts <= 1397) and not (user_id = 1 and user_id is not null and ts >= 1398 and ts <= 1399) and not (user_id = 1 and user_id is not null and ts >= 1400 and ts <= 1401) and not (user_id = 1 and user_id is not null and ts >= 1402 and ts <= 1403) and not (user_id = 1 and user_id is not null and ts >= 1404 and ts <= 1405) and not (user_id = 1 and user_id is not null and ts >= 1406 and ts <= 1407) and not (user_id = 1 and user_id is not null and ts >= 1408 and ts <= 1409) and not (user_id = 1 and user_id is not null and ts >= 1410 and ts <= 1411) and not (user_id = 1 and user_id is not null and ts >= 1412 and ts <= 1413) and not (user_id = 1 and user_id is not null and ts >= 1414 and ts <= 1415) and not (user_id = 1 and user_id is not null and ts >= 1416 and ts <= 1417) and not (user_id = 1 and user_id is not null and ts >= 1418 and ts <= 1419) and not (user_id = 1 and user_id is not null and ts >= 1420 and ts <= 1421) and not (user_id = 1 and user_id is not null and ts >= 1422 and ts <= 1423) and not (user_id = 1 and user_id is not null and ts >= 1424 and ts <= 1425) and not (user_id = 1 and user_id is not null and ts >= 1426 and ts <= 1427) and not (user_id = 1 and user_id is not null and ts >= 1428 and ts <= 1429) and not (user_id = 1 and user_id is not null and ts >= 1430 and ts <= 1431) and not (user_id = 1 and user_id is not null and ts >= 1432 and ts <= 1433) and not (user_id = 1 and user_id is not null and ts >= 1434 and ts <= 1435) and not (user_id = 1 and user_id is not null and ts >= 1436 and ts <= 1437) and not (user_id = 1 and user_id is not null and ts >= 1438 and ts <= 1439) and not (user_id = 1 and user_id is not null and ts >= 1440 and ts <= 1441) and not (user_id = 1 and user_id is not null and ts >= 1442 and ts <= 1443) and not (user_id = 1 and user_id is not null and ts >= 1444 and ts <= 1445) and not (user_id = 1 and user_id is not null and ts >= 1446 and ts <= 1447) and not (user_id = 1 and user_id is not null and ts >= 1448 and ts <= 1449) and not (user_id = 1 and user_id is not null and ts >= 1450 and ts <= 1451) and not (user_id = 1 and user_id is not null and ts >= 1452 and ts <= 1453) and not (user_id = 1 and user_id is not null and ts >= 1454 and ts <= 1455) and not (user_id = 1 and user_id is not null and ts >= 1456 and ts <= 1457) and not (user_id = 1 and user_id is not null and ts >= 1458 and ts <= 1459) and not (user_id = 1 and user_id is not null and ts >= 1460 and ts <= 1461) and not (user_id = 1 and user_id is not null and ts >= 1462 and ts <= 1463) and not (user_id = 1 and user_id is not null and ts >= 1464 and ts <= 1465) and not (user_id = 1 and user_id is not null and ts >= 1466 and ts <= 1467) and not (user_id = 1 and user_id is not null and ts >= 1468 and ts <= 1469) and not (user_id = 1 and user_id is not null and ts >= 1470 and ts <= 1471) and not (user_id = 1 and user_id is not null and ts >= 1472 and ts <= 1473) and not (user_id = 1 and user_id is not null and ts >= 1474 and ts <= 1475) and not (user_id = 1 and user_id is not null and ts >= 1476 and ts <= 1477) and not (user_id = 1 and user_id is not null and ts >= 1478 and ts <= 1479) and not (user_id = 1 and user_id is not null and ts >= 1480 and ts <= 1481) and not (user_id = 1 and user_id is not null and ts >= 1482 and ts <= 1483) and not (user_id = 1 and user_id is not null and ts >= 1484 and ts <= 1485) and not (user_id = 1 and user_id is not null and ts >= 1486 and ts <= 1487) and not (user_id = 1 and user_id is not null and ts >= 1488 and ts <= 1489) and not (user_id = 1 and user_id is not null and ts >= 1490 and ts <= 1491) and not (user_id = 1 and user_id is not null and ts >= 1492 and ts <= 1493) and not (user_id = 1 and user_id is not null and ts >= 1494 and ts <= 1495) and not (user_id = 1 and user_id is not null and ts >= 1496 and ts <= 1497) and not (user_id = 1 and user_id is not null and ts >= 1498 and ts <= 1499) and not (user_id = 1 and user_id is not null and ts >= 1500 and ts <= 1501) and not (user_id = 1 and user_id is not null and ts >= 1502 and ts <= 1503) and not (user_id = 1 and user_id is not null and ts >= 1504 and ts <= 1505) and not (user_id = 1 and user_id is not null and ts >= 1506 and ts <= 1507) and not (user_id = 1 and user_id is not null and ts >= 1508 and ts <= 1509) and not (user_id = 1 and user_id is not null and ts >= 1510 and ts <= 1511) and not (user_id = 1 and user_id is not null and ts >= 1512 and ts <= 1513) and not (user_id = 1 and user_id is not null and ts >= 1514 and ts <= 1515) and not (user_id = 1 and user_id is not null and ts >= 1516 and ts <= 1517) and not (user_id = 1 and user_id is not null and ts >= 1518 and ts <= 1519) and not (user_id = 1 and user_id is not null and ts >= 1520 and ts <= 1521) and not (user_id = 1 and user_id is not null and ts >= 1522 and ts <= 1523) and not (user_id = 1 and user_id is not null and ts >= 1524 and ts <= 1525) and not (user_id = 1 and user_id is not null and ts >= 1526 and ts <= 1527) and not (user_id = 1 and user_id is not null and ts >= 1528 and ts <= 1529) and not (user_id = 1 and user_id is not null and ts >= 1530 and ts <= 1531) and not (user_id = 1 and user_id is not null and ts >= 1532 and ts <= 1533) and not (user_id = 1 and user_id is not null and ts >= 1534 and ts <= 1535) and not (user_id = 1 and user_id is not null and ts >= 1536 and ts <= 1537) and not (user_id = 1 and user_id is not null and ts >= 1538 and ts <= 1539) and not (user_id = 1 and user_id is not null and ts >= 1540 and ts <= 1541) and not (user_id = 1 and user_id is not null and ts >= 1542 and ts <= 1543) and not (user_id = 1 and user_id is not null and ts >= 1544 and ts <= 1545) and not (user_id = 1 and user_id is not null and ts >= 1546 and ts <= 1547) and not (user_id = 1 and user_id is not null and ts >= 1548 and ts <= 1549) and not (user_id = 1 and user_id is not null and ts >= 1550 and ts <= 1551) and not (user_id = 1 and user_id is not null and ts >= 1552 and ts <= 1553) and not (user_id = 1 and user_id is not null and ts >= 1554 and ts <= 1555) and not (user_id = 1 and user_id is not null and ts >= 1556 and ts <= 1557) and not (user_id = 1 and user_id is not null and ts >= 1558 and ts <= 1559) and not (user_id = 1 and user_id is not null and ts >= 1560 and ts <= 1561) and not (user_id = 1 and user_id is not null and ts >= 1562 and ts <= 1563) and not (user_id = 1 and user_id is not null and ts >= 1564 and ts <= 1565) and not (user_id = 1 and user_id is not null and ts >= 1566 and ts <= 1567) and not (user_id = 1 and user_id is not null and ts >= 1568 and ts <= 1569) and not (user_id = 1 and user_id is not null and ts >= 1570 and ts <= 1571) and not (user_id = 1 and user_id is not null and ts >= 1572 and ts <= 1573) and not (user_id = 1 and user_id is not null and ts >= 1574 and ts <= 1575) and not (user_id = 1 and user_id is not null and ts >= 1576 and ts <= 1577) and not (user_id = 1 and user_id is not null and ts >= 1578 and ts <= 1579) and not (user_id = 1 and user_id is not null and ts >= 1580 and ts <= 1581) and not (user_id = 1 and user_id is not null and ts >= 1582 and ts <= 1583) and not (user_id = 1 and user_id is not null and ts >= 1584 and ts <= 1585) and not (user_id = 1 and user_id is not null and ts >= 1586 and ts <= 1587) and not (user_id = 1 and user_id is not null and ts >= 1588 and ts <= 1589) and not (user_id = 1 and user_id is not null and ts >= 1590 and ts <= 1591) and not (user_id = 1 and user_id is not null and ts >= 1592 and ts <= 1593) and not (user_id = 1 and user_id is not null and ts >= 1594 and ts <= 1595) and not (user_id = 1 and user_id is not null and ts >= 1596 and ts <= 1597) and not (user_id = 1 and user_id is not null and ts >= 1598 and ts <= 1599) and not (user_id = 1 and user_id is not null and ts >= 1600 and ts <= 1601) and not (user_id = 1 and user_id is not null and ts >= 1602 and ts <= 1603) and not (user_id = 1 and user_id is not null and ts >= 1604 and ts <= 1605) and not (user_id = 1 and user_id is not null and ts >= 1606 and ts <= 1607) and not (user_id = 1 and user_id is not null and ts >= 1608 and ts <= 1609) and not (user_id = 1 and user_id is not null and ts >= 1610 and ts <= 1611) and not (user_id = 1 and user_id is not null and ts >= 1612 and ts <= 1613) and not (user_id = 1 and user_id is not null and ts >= 1614 and ts <= 1615) and not (user_id = 1 and user_id is not null and ts >= 1616 and ts <= 1617) and not (user_id = 1 and user_id is not null and ts >= 1618 and ts <= 1619) and not (user_id = 1 and user_id is not null and ts >= 1620 and ts <= 1621) and not (user_id = 1 and user_id is not null and ts >= 1622 and ts <= 1623) and not (user_id = 1 and user_id is not null and ts >= 1624 and ts <= 1625) and not (user_id = 1 and user_id is not null and ts >= 1626 and ts <= 1627) and not (user_id = 1 and user_id is not null and ts >= 1628 and ts <= 1629) and not (user_id = 1 and user_id is not null and ts >= 1630 and ts <= 1631) and not (user_id = 1 and user_id is not null and ts >= 1632 and ts <= 1633) and not (user_id = 1 and user_id is not null and ts >= 1634 and ts <= 1635) and not (user_id = 1 and user_id is not null and ts >= 1636 and ts <= 1637) and not (user_id = 1 and user_id is not null and ts >= 1638 and ts <= 1639) and not (user_id = 1 and user_id is not null and ts >= 1640 and ts <= 1641) and not (user_id = 1 and user_id is not null and ts >= 1642 and ts <= 1643) and not (user_id = 1 and user_id is not null and ts >= 1644 and ts <= 1645) and not (user_id = 1 and user_id is not null and ts >= 1646 and ts <= 1647) and not (user_id = 1 and user_id is not null and ts >= 1648 and ts <= 1649) and not (user_id = 1 and user_id is not null and ts >= 1650 and ts <= 1651) and not (user_id = 1 and user_id is not null and ts >= 1652 and ts <= 1653) and not (user_id = 1 and user_id is not null and ts >= 1654 and ts <= 1655) and not (user_id = 1 and user_id is not null and ts >= 1656 and ts <= 1657) and not (user_id = 1 and user_id is not null and ts >= 1658 and ts <= 1659) and not (user_id = 1 and user_id is not null and ts >= 1660 and ts <= 1661) and not (user_id = 1 and user_id is not null and ts >= 1662 and ts <= 1663) and not (user_id = 1 and user_id is not null and ts >= 1664 and ts <= 1665) and not (user_id = 1 and user_id is not null and ts >= 1666 and ts <= 1667) and not (user_id = 1 and user_id is not null and ts >= 1668 and ts <= 1669) and not (user_id = 1 and user_id is not null and ts >= 1670 and ts <= 1671) and not (user_id = 1 and user_id is not null and ts >= 1672 and ts <= 1673) and not (user_id = 1 and user_id is not null and ts >= 1674 and ts <= 1675) and not (user_id = 1 and user_id is not null and ts >= 1676 and ts <= 1677) and not (user_id = 1 and user_id is not null and ts >= 1678 and ts <= 1679) and not (user_id = 1 and user_id is not null and ts >= 1680 and ts <= 1681) and not (user_id = 1 and user_id is not null and ts >= 1682 and ts <= 1683) and not (user_id = 1 and user_id is not null and ts >= 1684 and ts <= 1685) and not (user_id = 1 and user_id is not null and ts >= 1686 and ts <= 1687) and not (user_id = 1 and user_id is not null and ts >= 1688 and ts <= 1689) and not (user_id = 1 and user_id is not null and ts >= 1690 and ts <= 1691) and not (user_id = 1 and user_id is not null and ts >= 1692 and ts <= 1693) and not (user_id = 1 and user_id is not null and ts >= 1694 and ts <= 1695) and not (user_id = 1 and user_id is not null and ts >= 1696 and ts <= 1697) and not (user_id = 1 and user_id is not null and ts >= 1698 and ts <= 1699) and not (user_id = 1 and user_id is not null and ts >= 1700 and ts <= 1701) and not (user_id = 1 and user_id is not null and ts >= 1702 and ts <= 1703) and not (user_id = 1 and user_id is not null and ts >= 1704 and ts <= 1705) and not (user_id = 1 and user_id is not null and ts >= 1706 and ts <= 1707) and not (user_id = 1 and user_id is not null and ts >= 1708 and ts <= 1709) and not (user_id = 1 and user_id is not null and ts >= 1710 and ts <= 1711) and not (user_id = 1 and user_id is not null and ts >= 1712 and ts <= 1713) and not (user_id = 1 and user_id is not null and ts >= 1714 and ts <= 1715) and not (user_id = 1 and user_id is not null and ts >= 1716 and ts <= 1717) and not (user_id = 1 and user_id is not null and ts >= 1718 and ts <= 1719) and not (user_id = 1 and user_id is not null and ts >= 1720 and ts <= 1721) and not (user_id = 1 and user_id is not null and ts >= 1722 and ts <= 1723) and not (user_id = 1 and user_id is not null and ts >= 1724 and ts <= 1725) and not (user_id = 1 and user_id is not null and ts >= 1726 and ts <= 1727) and not (user_id = 1 and user_id is not null and ts >= 1728 and ts <= 1729) and not (user_id = 1 and user_id is not null and ts >= 1730 and ts <= 1731) and not (user_id = 1 and user_id is not null and ts >= 1732 and ts <= 1733) and not (user_id = 1 and user_id is not null and ts >= 1734 and ts <= 1735) and not (user_id = 1 and user_id is not null and ts >= 1736 and ts <= 1737) and not (user_id = 1 and user_id is not null and ts >= 1738 and ts <= 1739) and not (user_id = 1 and user_id is not null and ts >= 1740 and ts <= 1741) and not (user_id = 1 and user_id is not null and ts >= 1742 and ts <= 1743) and not (user_id = 1 and user_id is not null and ts >= 1744 and ts <= 1745) and not (user_id = 1 and user_id is not null and ts >= 1746 and ts <= 1747) and not (user_id = 1 and user_id is not null and ts >= 1748 and ts <= 1749) and not (user_id = 1 and user_id is not null and ts >= 1750 and ts <= 1751) and not (user_id = 1 and user_id is not null and ts >= 1752 and ts <= 1753) and not (user_id = 1 and user_id is not null and ts >= 1754 and ts <= 1755) and not (user_id = 1 and user_id is not null and ts >= 1756 and ts <= 1757) and not (user_id = 1 and user_id is not null and ts >= 1758 and ts <= 1759) and not (user_id = 1 and user_id is not null and ts >= 1760 and ts <= 1761) and not (user_id = 1 and user_id is not null and ts >= 1762 and ts <= 1763) and not (user_id = 1 and user_id is not null and ts >= 1764 and ts <= 1765) and not (user_id = 1 and user_id is not null and ts >= 1766 and ts <= 1767) and not (user_id = 1 and user_id is not null and ts >= 1768 and ts <= 1769) and not (user_id = 1 and user_id is not null and ts >= 1770 and ts <= 1771) and not (user_id = 1 and user_id is not null and ts >= 1772 and ts <= 1773) and not (user_id = 1 and user_id is not null and ts >= 1774 and ts <= 1775) and not (user_id = 1 and user_id is not null and ts >= 1776 and ts <= 1777) and not (user_id = 1 and user_id is not null and ts >= 1778 and ts <= 1779) and not (user_id = 1 and user_id is not null and ts >= 1780 and ts <= 1781) and not (user_id = 1 and user_id is not null and ts >= 1782 and ts <= 1783) and not (user_id = 1 and user_id is not null and ts >= 1784 and ts <= 1785) and not (user_id = 1 and user_id is not null and ts >= 1786 and ts <= 1787) and not (user_id = 1 and user_id is not null and ts >= 1788 and ts <= 1789) and not (user_id = 1 and user_id is not null and ts >= 1790 and ts <= 1791) and not (user_id = 1 and user_id is not null and ts >= 1792 and ts <= 1793) and not (user_id = 1 and user_id is not null and ts >= 1794 and ts <= 1795) and not (user_id = 1 and user_id is not null and ts >= 1796 and ts <= 1797) and not (user_id = 1 and user_id is not null and ts >= 1798 and ts <= 1799) and not (user_id = 1 and user_id is not null and ts >= 1800 and ts <= 1801) and not (user_id = 1 and user_id is not null and ts >= 1802 and ts <= 1803) and not (user_id = 1 and user_id is not null and ts >= 1804 and ts <= 1805) and not (user_id = 1 and user_id is not null and ts >= 1806 and ts <= 1807) and not (user_id = 1 and user_id is not null and ts >= 1808 and ts <= 1809) and not (user_id = 1 and user_id is not null and ts >= 1810 and ts <= 1811) and not (user_id = 1 and user_id is not null and ts >= 1812 and ts <= 1813) and not (user_id = 1 and user_id is not null and ts >= 1814 and ts <= 1815) and not (user_id = 1 and user_id is not null and ts >= 1816 and ts <= 1817) and not (user_id = 1 and user_id is not null and ts >= 1818 and ts <= 1819) and not (user_id = 1 and user_id is not null and ts >= 1820 and ts <= 1821) and not (user_id = 1 and user_id is not null and ts >= 1822 and ts <= 1823) and not (user_id = 1 and user_id is not null and ts >= 1824 and ts <= 1825) and not (user_id = 1 and user_id is not null and ts >= 1826 and ts <= 1827) and not (user_id = 1 and user_id is not null and ts >= 1828 and ts <= 1829) and not (user_id = 1 and user_id is not null and ts >= 1830 and ts <= 1831) and not (user_id = 1 and user_id is not null and ts >= 1832 and ts <= 1833) and not (user_id = 1 and user_id is not null and ts >= 1834 and ts <= 1835) and not (user_id = 1 and user_id is not null and ts >= 1836 and ts <= 1837) and not (user_id = 1 and user_id is not null and ts >= 1838 and ts <= 1839) and not (user_id = 1 and user_id is not null and ts >= 1840 and ts <= 1841) and not (user_id = 1 and user_id is not null and ts >= 1842 and ts <= 1843) and not (user_id = 1 and user_id is not null and ts >= 1844 and ts <= 1845) and not (user_id = 1 and user_id is not null and ts >= 1846 and ts <= 1847) and not (user_id = 1 and user_id is not null and ts >= 1848 and ts <= 1849) and not (user_id = 1 and user_id is not null and ts >= 1850 and ts <= 1851) and not (user_id = 1 and user_id is not null and ts >= 1852 and ts <= 1853) and not (user_id = 1 and user_id is not null and ts >= 1854 and ts <= 1855) and not (user_id = 1 and user_id is not null and ts >= 1856 and ts <= 1857) and not (user_id = 1 and user_id is not null and ts >= 1858 and ts <= 1859) and not (user_id = 1 and user_id is not null and ts >= 1860 and ts <= 1861) and not (user_id = 1 and user_id is not null and ts >= 1862 and ts <= 1863) and not (user_id = 1 and user_id is not null and ts >= 1864 and ts <= 1865) and not (user_id = 1 and user_id is not null and ts >= 1866 and ts <= 1867) and not (user_id = 1 and user_id is not null and ts >= 1868 and ts <= 1869) and not (user_id = 1 and user_id is not null and ts >= 1870 and ts <= 1871) and not (user_id = 1 and user_id is not null and ts >= 1872 and ts <= 1873) and not (user_id = 1 and user_id is not null and ts >= 1874 and ts <= 1875) and not (user_id = 1 and user_id is not null and ts >= 1876 and ts <= 1877) and not (user_id = 1 and user_id is not null and ts >= 1878 and ts <= 1879) and not (user_id = 1 and user_id is not null and ts >= 1880 and ts <= 1881) and not (user_id = 1 and user_id is not null and ts >= 1882 and ts <= 1883) and not (user_id = 1 and user_id is not null and ts >= 1884 and ts <= 1885) and not (user_id = 1 and user_id is not null and ts >= 1886 and ts <= 1887) and not (user_id = 1 and user_id is not null and ts >= 1888 and ts <= 1889) and not (user_id = 1 and user_id is not null and ts >= 1890 and ts <= 1891) and not (user_id = 1 and user_id is not null and ts >= 1892 and ts <= 1893) and not (user_id = 1 and user_id is not null and ts >= 1894 and ts <= 1895) and not (user_id = 1 and user_id is not null and ts >= 1896 and ts <= 1897) and not (user_id = 1 and user_id is not null and ts >= 1898 and ts <= 1899) and not (user_id = 1 and user_id is not null and ts >= 1900 and ts <= 1901) and not (user_id = 1 and user_id is not null and ts >= 1902 and ts <= 1903) and not (user_id = 1 and user_id is not null and ts >= 1904 and ts <= 1905) and not (user_id = 1 and user_id is not null and ts >= 1906 and ts <= 1907) and not (user_id = 1 and user_id is not null and ts >= 1908 and ts <= 1909) and not (user_id = 1 and user_id is not null and ts >= 1910 and ts <= 1911) and not (user_id = 1 and user_id is not null and ts >= 1912 and ts <= 1913) and not (user_id = 1 and user_id is not null and ts >= 1914 and ts <= 1915) and not (user_id = 1 and user_id is not null and ts >= 1916 and ts <= 1917) and not (user_id = 1 and user_id is not null and ts >= 1918 and ts <= 1919) and not (user_id = 1 and user_id is not null and ts >= 1920 and ts <= 1921) and not (user_id = 1 and user_id is not null and ts >= 1922 and ts <= 1923) and not (user_id = 1 and user_id is not null and ts >= 1924 and ts <= 1925) and not (user_id = 1 and user_id is not null and ts >= 1926 and ts <= 1927) and not (user_id = 1 and user_id is not null and ts >= 1928 and ts <= 1929) and not (user_id = 1 and user_id is not null and ts >= 1930 and ts <= 1931) and not (user_id = 1 and user_id is not null and ts >= 1932 and ts <= 1933) and not (user_id = 1 and user_id is not null and ts >= 1934 and ts <= 1935) and not (user_id = 1 and user_id is not null and ts >= 1936 and ts <= 1937) and not (user_id = 1 and user_id is not null and ts >= 1938 and ts <= 1939) and not (user_id = 1 and user_id is not null and ts >= 1940 and ts <= 1941) and not (user_id = 1 and user_id is not null and ts >= 1942 and ts <= 1943) and not (user_id = 1 and user_id is not null and ts >= 1944 and ts <= 1945) and not (user_id = 1 and user_id is not null and ts >= 1946 and ts <= 1947) and not (user_id = 1 and user_id is not null and ts >= 1948 and ts <= 1949) and not (user_id = 1 and user_id is not null and ts >= 1950 and ts <= 1951) and not (user_id = 1 and user_id is not null and ts >= 1952 and ts <= 1953) and not (user_id = 1 and user_id is not null and ts >= 1954 and ts <= 1955) and not (user_id = 1 and user_id is not null and ts >= 1956 and ts <= 1957) and not (user_id = 1 and user_id is not null and ts >= 1958 and ts <= 1959) and not (user_id = 1 and user_id is not null and ts >= 1960 and ts <= 1961) and not (user_id = 1 and user_id is not null and ts >= 1962 and ts <= 1963) and not (user_id = 1 and user_id is not null and ts >= 1964 and ts <= 1965) and not (user_id = 1 and user_id is not null and ts >= 1966 and ts <= 1967) and not (user_id = 1 and user_id is not null and ts >= 1968 and ts <= 1969) and not (user_id = 1 and user_id is not null and ts >= 1970 and ts <= 1971) and not (user_id = 1 and user_id is not null and ts >= 1972 and ts <= 1973) and not (user_id = 1 and user_id is not null and ts >= 1974 and ts <= 1975) and not (user_id = 1 and user_id is not null and ts >= 1976 and ts <= 1977) and not (user_id = 1 and user_id is not null and ts >= 1978 and ts <= 1979) and not (user_id = 1 and user_id is not null and ts >= 1980 and ts <= 1981) and not (user_id = 1 and user_id is not null and ts >= 1982 and ts <= 1983) and not (user_id = 1 and user_id is not null and ts >= 1984 and ts <= 1985) and not (user_id = 1 and user_id is not null and ts >= 1986 and ts <= 1987) and not (user_id = 1 and user_id is not null and ts >= 1988 and ts <= 1989) and not (user_id = 1 and user_id is not null and ts >= 1990 and ts <= 1991) and not (user_id = 1 and user_id is not null and ts >= 1992 and ts <= 1993) and not (user_id = 1 and user_id is not null and ts >= 1994 and ts <= 1995) and not (user_id = 1 and user_id is not null and ts >= 1996 and ts <= 1997) and not (user_id = 1 and user_id is not null and ts >= 1998 and ts <= 1999) and not (user_id = 1 and user_id is not null and ts >= 11000 and ts <= 11001) and not (user_id = 1 and user_id is not null and ts >= 11002 and ts <= 11003) and not (user_id = 1 and user_id is not null and ts >= 11004 and ts <= 11005) and not (user_id = 1 and user_id is not null and ts >= 11006 and ts <= 11007) and not (user_id = 1 and user_id is not null and ts >= 11008 and ts <= 11009) and not (user_id = 1 and user_id is not null and ts >= 11010 and ts <= 11011) and not (user_id = 1 and user_id is not null and ts >= 11012 and ts <= 11013) and not (user_id = 1 and user_id is not null and ts >= 11014 and ts <= 11015) and not (user_id = 1 and user_id is not null and ts >= 11016 and ts <= 11017) and not (user_id = 1 and user_id is not null and ts >= 11018 and ts <= 11019) and not (user_id = 1 and user_id is not null and ts >= 11020 and ts <= 11021) and not (user_id = 1 and user_id is not null and ts >= 11022 and ts <= 11023) and not (user_id = 1 and user_id is not null and ts >= 11024 and ts <= 11025) and not (user_id = 1 and user_id is not null and ts >= 11026 and ts <= 11027) and not (user_id = 1 and user_id is not null and ts >= 11028 and ts <= 11029) and not (user_id = 1 and user_id is not null and ts >= 11030 and ts <= 11031) and not (user_id = 1 and user_id is not null and ts >= 11032 and ts <= 11033) and not (user_id = 1 and user_id is not null and ts >= 11034 and ts <= 11035) and not (user_id = 1 and user_id is not null and ts >= 11036 and ts <= 11037) and not (user_id = 1 and user_id is not null and ts >= 11038 and ts <= 11039) and not (user_id = 1 and user_id is not null and ts >= 11040 and ts <= 11041) and not (user_id = 1 and user_id is not null and ts >= 11042 and ts <= 11043) and not (user_id = 1 and user_id is not null and ts >= 11044 and ts <= 11045) and not (user_id = 1 and user_id is not null and ts >= 11046 and ts <= 11047) and not (user_id = 1 and user_id is not null and ts >= 11048 and ts <= 11049) and not (user_id = 1 and user_id is not null and ts >= 11050 and ts <= 11051) and not (user_id = 1 and user_id is not null and ts >= 11052 and ts <= 11053) and not (user_id = 1 and user_id is not null and ts >= 11054 and ts <= 11055) and not (user_id = 1 and user_id is not null and ts >= 11056 and ts <= 11057) and not (user_id = 1 and user_id is not null and ts >= 11058 and ts <= 11059) and not (user_id = 1 and user_id is not null and ts >= 11060 and ts <= 11061) and not (user_id = 1 and user_id is not null and ts >= 11062 and ts <= 11063) and not (user_id = 1 and user_id is not null and ts >= 11064 and ts <= 11065) and not (user_id = 1 and user_id is not null and ts >= 11066 and ts <= 11067) and not (user_id = 1 and user_id is not null and ts >= 11068 and ts <= 11069) and not (user_id = 1 and user_id is not null and ts >= 11070 and ts <= 11071) and not (user_id = 1 and user_id is not null and ts >= 11072 and ts <= 11073) and not (user_id = 1 and user_id is not null and ts >= 11074 and ts <= 11075) and not (user_id = 1 and user_id is not null and ts >= 11076 and ts <= 11077) and not (user_id = 1 and user_id is not null and ts >= 11078 and ts <= 11079) and not (user_id = 1 and user_id is not null and ts >= 11080 and ts <= 11081) and not (user_id = 1 and user_id is not null and ts >= 11082 and ts <= 11083) and not (user_id = 1 and user_id is not null and ts >= 11084 and ts <= 11085) and not (user_id = 1 and user_id is not null and ts >= 11086 and ts <= 11087) and not (user_id = 1 and user_id is not null and ts >= 11088 and ts <= 11089) and not (user_id = 1 and user_id is not null and ts >= 11090 and ts <= 11091) and not (user_id = 1 and user_id is not null and ts >= 11092 and ts <= 11093) and not (user_id = 1 and user_id is not null and ts >= 11094 and ts <= 11095) and not (user_id = 1 and user_id is not null and ts >= 11096 and ts <= 11097) and not (user_id = 1 and user_id is not null and ts >= 11098 and ts <= 11099) and not (user_id = 1 and user_id is not null and ts >= 11100 and ts <= 11101) and not (user_id = 1 and user_id is not null and ts >= 11102 and ts <= 11103) and not (user_id = 1 and user_id is not null and ts >= 11104 and ts <= 11105) and not (user_id = 1 and user_id is not null and ts >= 11106 and ts <= 11107) and not (user_id = 1 and user_id is not null and ts >= 11108 and ts <= 11109) and not (user_id = 1 and user_id is not null and ts >= 11110 and ts <= 11111) and not (user_id = 1 and user_id is not null and ts >= 11112 and ts <= 11113) and not (user_id = 1 and user_id is not null and ts >= 11114 and ts <= 11115) and not (user_id = 1 and user_id is not null and ts >= 11116 and ts <= 11117) and not (user_id = 1 and user_id is not null and ts >= 11118 and ts <= 11119) and not (user_id = 1 and user_id is not null and ts >= 11120 and ts <= 11121) and not (user_id = 1 and user_id is not null and ts >= 11122 and ts <= 11123) and not (user_id = 1 and user_id is not null and ts >= 11124 and ts <= 11125) and not (user_id = 1 and user_id is not null and ts >= 11126 and ts <= 11127) and not (user_id = 1 and user_id is not null and ts >= 11128 and ts <= 11129) and not (user_id = 1 and user_id is not null and ts >= 11130 and ts <= 11131) and not (user_id = 1 and user_id is not null and ts >= 11132 and ts <= 11133) and not (user_id = 1 and user_id is not null and ts >= 11134 and ts <= 11135) and not (user_id = 1 and user_id is not null and ts >= 11136 and ts <= 11137) and not (user_id = 1 and user_id is not null and ts >= 11138 and ts <= 11139) and not (user_id = 1 and user_id is not null and ts >= 11140 and ts <= 11141) and not (user_id = 1 and user_id is not null and ts >= 11142 and ts <= 11143) and not (user_id = 1 and user_id is not null and ts >= 11144 and ts <= 11145) and not (user_id = 1 and user_id is not null and ts >= 11146 and ts <= 11147) and not (user_id = 1 and user_id is not null and ts >= 11148 and ts <= 11149) and not (user_id = 1 and user_id is not null and ts >= 11150 and ts <= 11151) and not (user_id = 1 and user_id is not null and ts >= 11152 and ts <= 11153) and not (user_id = 1 and user_id is not null and ts >= 11154 and ts <= 11155) and not (user_id = 1 and user_id is not null and ts >= 11156 and ts <= 11157) and not (user_id = 1 and user_id is not null and ts >= 11158 and ts <= 11159) and not (user_id = 1 and user_id is not null and ts >= 11160 and ts <= 11161) and not (user_id = 1 and user_id is not null and ts >= 11162 and ts <= 11163) and not (user_id = 1 and user_id is not null and ts >= 11164 and ts <= 11165) and not (user_id = 1 and user_id is not null and ts >= 11166 and ts <= 11167) and not (user_id = 1 and user_id is not null and ts >= 11168 and ts <= 11169) and not (user_id = 1 and user_id is not null and ts >= 11170 and ts <= 11171) and not (user_id = 1 and user_id is not null and ts >= 11172 and ts <= 11173) and not (user_id = 1 and user_id is not null and ts >= 11174 and ts <= 11175) and not (user_id = 1 and user_id is not null and ts >= 11176 and ts <= 11177) and not (user_id = 1 and user_id is not null and ts >= 11178 and ts <= 11179) and not (user_id = 1 and user_id is not null and ts >= 11180 and ts <= 11181) and not (user_id = 1 and user_id is not null and ts >= 11182 and ts <= 11183) and not (user_id = 1 and user_id is not null and ts >= 11184 and ts <= 11185) and not (user_id = 1 and user_id is not null and ts >= 11186 and ts <= 11187) and not (user_id = 1 and user_id is not null and ts >= 11188 and ts <= 11189) and not (user_id = 1 and user_id is not null and ts >= 11190 and ts <= 11191) and not (user_id = 1 and user_id is not null and ts >= 11192 and ts <= 11193) and not (user_id = 1 and user_id is not null and ts >= 11194 and ts <= 11195) and not (user_id = 1 and user_id is not null and ts >= 11196 and ts <= 11197) and not (user_id = 1 and user_id is not null and ts >= 11198 and ts <= 11199) and not (user_id = 1 and user_id is not null and ts >= 11200 and ts <= 11201) and not (user_id = 1 and user_id is not null and ts >= 11202 and ts <= 11203) and not (user_id = 1 and user_id is not null and ts >= 11204 and ts <= 11205) and not (user_id = 1 and user_id is not null and ts >= 11206 and ts <= 11207) and not (user_id = 1 and user_id is not null and ts >= 11208 and ts <= 11209) and not (user_id = 1 and user_id is not null and ts >= 11210 and ts <= 11211) and not (user_id = 1 and user_id is not null and ts >= 11212 and ts <= 11213) and not (user_id = 1 and user_id is not null and ts >= 11214 and ts <= 11215) and not (user_id = 1 and user_id is not null and ts >= 11216 and ts <= 11217) and not (user_id = 1 and user_id is not null and ts >= 11218 and ts <= 11219) and not (user_id = 1 and user_id is not null and ts >= 11220 and ts <= 11221) and not (user_id = 1 and user_id is not null and ts >= 11222 and ts <= 11223) and not (user_id = 1 and user_id is not null and ts >= 11224 and ts <= 11225) and not (user_id = 1 and user_id is not null and ts >= 11226 and ts <= 11227) and not (user_id = 1 and user_id is not null and ts >= 11228 and ts <= 11229) and not (user_id = 1 and user_id is not null and ts >= 11230 and ts <= 11231) and not (user_id = 1 and user_id is not null and ts >= 11232 and ts <= 11233) and not (user_id = 1 and user_id is not null and ts >= 11234 and ts <= 11235) and not (user_id = 1 and user_id is not null and ts >= 11236 and ts <= 11237) and not (user_id = 1 and user_id is not null and ts >= 11238 and ts <= 11239) and not (user_id = 1 and user_id is not null and ts >= 11240 and ts <= 11241) and not (user_id = 1 and user_id is not null and ts >= 11242 and ts <= 11243) and not (user_id = 1 and user_id is not null and ts >= 11244 and ts <= 11245) and not (user_id = 1 and user_id is not null and ts >= 11246 and ts <= 11247) and not (user_id = 1 and user_id is not null and ts >= 11248 and ts <= 11249) and not (user_id = 1 and user_id is not null and ts >= 11250 and ts <= 11251) and not (user_id = 1 and user_id is not null and ts >= 11252 and ts <= 11253) and not (user_id = 1 and user_id is not null and ts >= 11254 and ts <= 11255) and not (user_id = 1 and user_id is not null and ts >= 11256 and ts <= 11257) and not (user_id = 1 and user_id is not null and ts >= 11258 and ts <= 11259) and not (user_id = 1 and user_id is not null and ts >= 11260 and ts <= 11261) and not (user_id = 1 and user_id is not null and ts >= 11262 and ts <= 11263) and not (user_id = 1 and user_id is not null and ts >= 11264 and ts <= 11265) and not (user_id = 1 and user_id is not null and ts >= 11266 and ts <= 11267) and not (user_id = 1 and user_id is not null and ts >= 11268 and ts <= 11269) and not (user_id = 1 and user_id is not null and ts >= 11270 and ts <= 11271) and not (user_id = 1 and user_id is not null and ts >= 11272 and ts <= 11273) and not (user_id = 1 and user_id is not null and ts >= 11274 and ts <= 11275) and not (user_id = 1 and user_id is not null and ts >= 11276 and ts <= 11277) and not (user_id = 1 and user_id is not null and ts >= 11278 and ts <= 11279) and not (user_id = 1 and user_id is not null and ts >= 11280 and ts <= 11281) and not (user_id = 1 and user_id is not null and ts >= 11282 and ts <= 11283) and not (user_id = 1 and user_id is not null and ts >= 11284 and ts <= 11285) and not (user_id = 1 and user_id is not null and ts >= 11286 and ts <= 11287) and not (user_id = 1 and user_id is not null and ts >= 11288 and ts <= 11289) and not (user_id = 1 and user_id is not null and ts >= 11290 and ts <= 11291) and not (user_id = 1 and user_id is not null and ts >= 11292 and ts <= 11293) and not (user_id = 1 and user_id is not null and ts >= 11294 and ts <= 11295) and not (user_id = 1 and user_id is not null and ts >= 11296 and ts <= 11297) and not (user_id = 1 and user_id is not null and ts >= 11298 and ts <= 11299) and not (user_id = 1 and user_id is not null and ts >= 11300 and ts <= 11301) and not (user_id = 1 and user_id is not null and ts >= 11302 and ts <= 11303) and not (user_id = 1 and user_id is not null and ts >= 11304 and ts <= 11305) and not (user_id = 1 and user_id is not null and ts >= 11306 and ts <= 11307) and not (user_id = 1 and user_id is not null and ts >= 11308 and ts <= 11309) and not (user_id = 1 and user_id is not null and ts >= 11310 and ts <= 11311) and not (user_id = 1 and user_id is not null and ts >= 11312 and ts <= 11313) and not (user_id = 1 and user_id is not null and ts >= 11314 and ts <= 11315) and not (user_id = 1 and user_id is not null and ts >= 11316 and ts <= 11317) and not (user_id = 1 and user_id is not null and ts >= 11318 and ts <= 11319) and not (user_id = 1 and user_id is not null and ts >= 11320 and ts <= 11321) and not (user_id = 1 and user_id is not null and ts >= 11322 and ts <= 11323) and not (user_id = 1 and user_id is not null and ts >= 11324 and ts <= 11325) and not (user_id = 1 and user_id is not null and ts >= 11326 and ts <= 11327) and not (user_id = 1 and user_id is not null and ts >= 11328 and ts <= 11329) and not (user_id = 1 and user_id is not null and ts >= 11330 and ts <= 11331) and not (user_id = 1 and user_id is not null and ts >= 11332 and ts <= 11333) and not (user_id = 1 and user_id is not null and ts >= 11334 and ts <= 11335) and not (user_id = 1 and user_id is not null and ts >= 11336 and ts <= 11337) and not (user_id = 1 and user_id is not null and ts >= 11338 and ts <= 11339) and not (user_id = 1 and user_id is not null and ts >= 11340 and ts <= 11341) and not (user_id = 1 and user_id is not null and ts >= 11342 and ts <= 11343) and not (user_id = 1 and user_id is not null and ts >= 11344 and ts <= 11345) and not (user_id = 1 and user_id is not null and ts >= 11346 and ts <= 11347) and not (user_id = 1 and user_id is not null and ts >= 11348 and ts <= 11349) and not (user_id = 1 and user_id is not null and ts >= 11350 and ts <= 11351) and not (user_id = 1 and user_id is not null and ts >= 11352 and ts <= 11353) and not (user_id = 1 and user_id is not null and ts >= 11354 and ts <= 11355) and not (user_id = 1 and user_id is not null and ts >= 11356 and ts <= 11357) and not (user_id = 1 and user_id is not null and ts >= 11358 and ts <= 11359) and not (user_id = 1 and user_id is not null and ts >= 11360 and ts <= 11361) and not (user_id = 1 and user_id is not null and ts >= 11362 and ts <= 11363) and not (user_id = 1 and user_id is not null and ts >= 11364 and ts <= 11365) and not (user_id = 1 and user_id is not null and ts >= 11366 and ts <= 11367) and not (user_id = 1 and user_id is not null and ts >= 11368 and ts <= 11369) and not (user_id = 1 and user_id is not null and ts >= 11370 and ts <= 11371) and not (user_id = 1 and user_id is not null and ts >= 11372 and ts <= 11373) and not (user_id = 1 and user_id is not null and ts >= 11374 and ts <= 11375) and not (user_id = 1 and user_id is not null and ts >= 11376 and ts <= 11377) and not (user_id = 1 and user_id is not null and ts >= 11378 and ts <= 11379) and not (user_id = 1 and user_id is not null and ts >= 11380 and ts <= 11381) and not (user_id = 1 and user_id is not null and ts >= 11382 and ts <= 11383) and not (user_id = 1 and user_id is not null and ts >= 11384 and ts <= 11385) and not (user_id = 1 and user_id is not null and ts >= 11386 and ts <= 11387) and not (user_id = 1 and user_id is not null and ts >= 11388 and ts <= 11389) and not (user_id = 1 and user_id is not null and ts >= 11390 and ts <= 11391) and not (user_id = 1 and user_id is not null and ts >= 11392 and ts <= 11393) and not (user_id = 1 and user_id is not null and ts >= 11394 and ts <= 11395) and not (user_id = 1 and user_id is not null and ts >= 11396 and ts <= 11397) and not (user_id = 1 and user_id is not null and ts >= 11398 and ts <= 11399) and not (user_id = 1 and user_id is not null and ts >= 11400 and ts <= 11401) and not (user_id = 1 and user_id is not null and ts >= 11402 and ts <= 11403) and not (user_id = 1 and user_id is not null and ts >= 11404 and ts <= 11405) and not (user_id = 1 and user_id is not null and ts >= 11406 and ts <= 11407) and not (user_id = 1 and user_id is not null and ts >= 11408 and ts <= 11409) and not (user_id = 1 and user_id is not null and ts >= 11410 and ts <= 11411) and not (user_id = 1 and user_id is not null and ts >= 11412 and ts <= 11413) and not (user_id = 1 and user_id is not null and ts >= 11414 and ts <= 11415) and not (user_id = 1 and user_id is not null and ts >= 11416 and ts <= 11417) and not (user_id = 1 and user_id is not null and ts >= 11418 and ts <= 11419) and not (user_id = 1 and user_id is not null and ts >= 11420 and ts <= 11421) and not (user_id = 1 and user_id is not null and ts >= 11422 and ts <= 11423) and not (user_id = 1 and user_id is not null and ts >= 11424 and ts <= 11425) and not (user_id = 1 and user_id is not null and ts >= 11426 and ts <= 11427) and not (user_id = 1 and user_id is not null and ts >= 11428 and ts <= 11429) and not (user_id = 1 and user_id is not null and ts >= 11430 and ts <= 11431) and not (user_id = 1 and user_id is not null and ts >= 11432 and ts <= 11433) and not (user_id = 1 and user_id is not null and ts >= 11434 and ts <= 11435) and not (user_id = 1 and user_id is not null and ts >= 11436 and ts <= 11437) and not (user_id = 1 and user_id is not null and ts >= 11438 and ts <= 11439) and not (user_id = 1 and user_id is not null and ts >= 11440 and ts <= 11441) and not (user_id = 1 and user_id is not null and ts >= 11442 and ts <= 11443) and not (user_id = 1 and user_id is not null and ts >= 11444 and ts <= 11445) and not (user_id = 1 and user_id is not null and ts >= 11446 and ts <= 11447) and not (user_id = 1 and user_id is not null and ts >= 11448 and ts <= 11449) and not (user_id = 1 and user_id is not null and ts >= 11450 and ts <= 11451) and not (user_id = 1 and user_id is not null and ts >= 11452 and ts <= 11453) and not (user_id = 1 and user_id is not null and ts >= 11454 and ts <= 11455) and not (user_id = 1 and user_id is not null and ts >= 11456 and ts <= 11457) and not (user_id = 1 and user_id is not null and ts >= 11458 and ts <= 11459) and not (user_id = 1 and user_id is not null and ts >= 11460 and ts <= 11461) and not (user_id = 1 and user_id is not null and ts >= 11462 and ts <= 11463) and not (user_id = 1 and user_id is not null and ts >= 11464 and ts <= 11465) and not (user_id = 1 and user_id is not null and ts >= 11466 and ts <= 11467) and not (user_id = 1 and user_id is not null and ts >= 11468 and ts <= 11469) and not (user_id = 1 and user_id is not null and ts >= 11470 and ts <= 11471) and not (user_id = 1 and user_id is not null and ts >= 11472 and ts <= 11473) and not (user_id = 1 and user_id is not null and ts >= 11474 and ts <= 11475) and not (user_id = 1 and user_id is not null and ts >= 11476 and ts <= 11477) and not (user_id = 1 and user_id is not null and ts >= 11478 and ts <= 11479) and not (user_id = 1 and user_id is not null and ts >= 11480 and ts <= 11481) and not (user_id = 1 and user_id is not null and ts >= 11482 and ts <= 11483) and not (user_id = 1 and user_id is not null and ts >= 11484 and ts <= 11485) and not (user_id = 1 and user_id is not null and ts >= 11486 and ts <= 11487) and not (user_id = 1 and user_id is not null and ts >= 11488 and ts <= 11489) and not (user_id = 1 and user_id is not null and ts >= 11490 and ts <= 11491) and not (user_id = 1 and user_id is not null and ts >= 11492 and ts <= 11493) and not (user_id = 1 and user_id is not null and ts >= 11494 and ts <= 11495) and not (user_id = 1 and user_id is not null and ts >= 11496 and ts <= 11497) and not (user_id = 1 and user_id is not null and ts >= 11498 and ts <= 11499) and not (user_id = 1 and user_id is not null and ts >= 11500 and ts <= 11501) and not (user_id = 1 and user_id is not null and ts >= 11502 and ts <= 11503) and not (user_id = 1 and user_id is not null and ts >= 11504 and ts <= 11505) and not (user_id = 1 and user_id is not null and ts >= 11506 and ts <= 11507) and not (user_id = 1 and user_id is not null and ts >= 11508 and ts <= 11509) and not (user_id = 1 and user_id is not null and ts >= 11510 and ts <= 11511) and not (user_id = 1 and user_id is not null and ts >= 11512 and ts <= 11513) and not (user_id = 1 and user_id is not null and ts >= 11514 and ts <= 11515) and not (user_id = 1 and user_id is not null and ts >= 11516 and ts <= 11517) and not (user_id = 1 and user_id is not null and ts >= 11518 and ts <= 11519) and not (user_id = 1 and user_id is not null and ts >= 11520 and ts <= 11521) and not (user_id = 1 and user_id is not null and ts >= 11522 and ts <= 11523) and not (user_id = 1 and user_id is not null and ts >= 11524 and ts <= 11525) and not (user_id = 1 and user_id is not null and ts >= 11526 and ts <= 11527) and not (user_id = 1 and user_id is not null and ts >= 11528 and ts <= 11529) and not (user_id = 1 and user_id is not null and ts >= 11530 and ts <= 11531) and not (user_id = 1 and user_id is not null and ts >= 11532 and ts <= 11533) and not (user_id = 1 and user_id is not null and ts >= 11534 and ts <= 11535) and not (user_id = 1 and user_id is not null and ts >= 11536 and ts <= 11537) and not (user_id = 1 and user_id is not null and ts >= 11538 and ts <= 11539) and not (user_id = 1 and user_id is not null and ts >= 11540 and ts <= 11541) and not (user_id = 1 and user_id is not null and ts >= 11542 and ts <= 11543) and not (user_id = 1 and user_id is not null and ts >= 11544 and ts <= 11545) and not (user_id = 1 and user_id is not null and ts >= 11546 and ts <= 11547) and not (user_id = 1 and user_id is not null and ts >= 11548 and ts <= 11549) and not (user_id = 1 and user_id is not null and ts >= 11550 and ts <= 11551) and not (user_id = 1 and user_id is not null and ts >= 11552 and ts <= 11553) and not (user_id = 1 and user_id is not null and ts >= 11554 and ts <= 11555) and not (user_id = 1 and user_id is not null and ts >= 11556 and ts <= 11557) and not (user_id = 1 and user_id is not null and ts >= 11558 and ts <= 11559) and not (user_id = 1 and user_id is not null and ts >= 11560 and ts <= 11561) and not (user_id = 1 and user_id is not null and ts >= 11562 and ts <= 11563) and not (user_id = 1 and user_id is not null and ts >= 11564 and ts <= 11565) and not (user_id = 1 and user_id is not null and ts >= 11566 and ts <= 11567) and not (user_id = 1 and user_id is not null and ts >= 11568 and ts <= 11569) and not (user_id = 1 and user_id is not null and ts >= 11570 and ts <= 11571) and not (user_id = 1 and user_id is not null and ts >= 11572 and ts <= 11573) and not (user_id = 1 and user_id is not null and ts >= 11574 and ts <= 11575) and not (user_id = 1 and user_id is not null and ts >= 11576 and ts <= 11577) and not (user_id = 1 and user_id is not null and ts >= 11578 and ts <= 11579) and not (user_id = 1 and user_id is not null and ts >= 11580 and ts <= 11581) and not (user_id = 1 and user_id is not null and ts >= 11582 and ts <= 11583) and not (user_id = 1 and user_id is not null and ts >= 11584 and ts <= 11585) and not (user_id = 1 and user_id is not null and ts >= 11586 and ts <= 11587) and not (user_id = 1 and user_id is not null and ts >= 11588 and ts <= 11589) and not (user_id = 1 and user_id is not null and ts >= 11590 and ts <= 11591) and not (user_id = 1 and user_id is not null and ts >= 11592 and ts <= 11593) and not (user_id = 1 and user_id is not null and ts >= 11594 and ts <= 11595) and not (user_id = 1 and user_id is not null and ts >= 11596 and ts <= 11597) and not (user_id = 1 and user_id is not null and ts >= 11598 and ts <= 11599) and not (user_id = 1 and user_id is not null and ts >= 11600 and ts <= 11601) and not (user_id = 1 and user_id is not null and ts >= 11602 and ts <= 11603) and not (user_id = 1 and user_id is not null and ts >= 11604 and ts <= 11605) and not (user_id = 1 and user_id is not null and ts >= 11606 and ts <= 11607) and not (user_id = 1 and user_id is not null and ts >= 11608 and ts <= 11609) and not (user_id = 1 and user_id is not null and ts >= 11610 and ts <= 11611) and not (user_id = 1 and user_id is not null and ts >= 11612 and ts <= 11613) and not (user_id = 1 and user_id is not null and ts >= 11614 and ts <= 11615) and not (user_id = 1 and user_id is not null and ts >= 11616 and ts <= 11617) and not (user_id = 1 and user_id is not null and ts >= 11618 and ts <= 11619) and not (user_id = 1 and user_id is not null and ts >= 11620 and ts <= 11621) and not (user_id = 1 and user_id is not null and ts >= 11622 and ts <= 11623) and not (user_id = 1 and user_id is not null and ts >= 11624 and ts <= 11625) and not (user_id = 1 and user_id is not null and ts >= 11626 and ts <= 11627) and not (user_id = 1 and user_id is not null and ts >= 11628 and ts <= 11629) and not (user_id = 1 and user_id is not null and ts >= 11630 and ts <= 11631) and not (user_id = 1 and user_id is not null and ts >= 11632 and ts <= 11633) and not (user_id = 1 and user_id is not null and ts >= 11634 and ts <= 11635) and not (user_id = 1 and user_id is not null and ts >= 11636 and ts <= 11637) and not (user_id = 1 and user_id is not null and ts >= 11638 and ts <= 11639) and not (user_id = 1 and user_id is not null and ts >= 11640 and ts <= 11641) and not (user_id = 1 and user_id is not null and ts >= 11642 and ts <= 11643) and not (user_id = 1 and user_id is not null and ts >= 11644 and ts <= 11645) and not (user_id = 1 and user_id is not null and ts >= 11646 and ts <= 11647) and not (user_id = 1 and user_id is not null and ts >= 11648 and ts <= 11649) and not (user_id = 1 and user_id is not null and ts >= 11650 and ts <= 11651) and not (user_id = 1 and user_id is not null and ts >= 11652 and ts <= 11653) and not (user_id = 1 and user_id is not null and ts >= 11654 and ts <= 11655) and not (user_id = 1 and user_id is not null and ts >= 11656 and ts <= 11657) and not (user_id = 1 and user_id is not null and ts >= 11658 and ts <= 11659) and not (user_id = 1 and user_id is not null and ts >= 11660 and ts <= 11661) and not (user_id = 1 and user_id is not null and ts >= 11662 and ts <= 11663) and not (user_id = 1 and user_id is not null and ts >= 11664 and ts <= 11665) and not (user_id = 1 and user_id is not null and ts >= 11666 and ts <= 11667) and not (user_id = 1 and user_id is not null and ts >= 11668 and ts <= 11669) and not (user_id = 1 and user_id is not null and ts >= 11670 and ts <= 11671) and not (user_id = 1 and user_id is not null and ts >= 11672 and ts <= 11673) and not (user_id = 1 and user_id is not null and ts >= 11674 and ts <= 11675) and not (user_id = 1 and user_id is not null and ts >= 11676 and ts <= 11677) and not (user_id = 1 and user_id is not null and ts >= 11678 and ts <= 11679) and not (user_id = 1 and user_id is not null and ts >= 11680 and ts <= 11681) and not (user_id = 1 and user_id is not null and ts >= 11682 and ts <= 11683) and not (user_id = 1 and user_id is not null and ts >= 11684 and ts <= 11685) and not (user_id = 1 and user_id is not null and ts >= 11686 and ts <= 11687) and not (user_id = 1 and user_id is not null and ts >= 11688 and ts <= 11689) and not (user_id = 1 and user_id is not null and ts >= 11690 and ts <= 11691) and not (user_id = 1 and user_id is not null and ts >= 11692 and ts <= 11693) and not (user_id = 1 and user_id is not null and ts >= 11694 and ts <= 11695) and not (user_id = 1 and user_id is not null and ts >= 11696 and ts <= 11697) and not (user_id = 1 and user_id is not null and ts >= 11698 and ts <= 11699) and not (user_id = 1 and user_id is not null and ts >= 11700 and ts <= 11701) and not (user_id = 1 and user_id is not null and ts >= 11702 and ts <= 11703) and not (user_id = 1 and user_id is not null and ts >= 11704 and ts <= 11705) and not (user_id = 1 and user_id is not null and ts >= 11706 and ts <= 11707) and not (user_id = 1 and user_id is not null and ts >= 11708 and ts <= 11709) and not (user_id = 1 and user_id is not null and ts >= 11710 and ts <= 11711) and not (user_id = 1 and user_id is not null and ts >= 11712 and ts <= 11713) and not (user_id = 1 and user_id is not null and ts >= 11714 and ts <= 11715) and not (user_id = 1 and user_id is not null and ts >= 11716 and ts <= 11717) and not (user_id = 1 and user_id is not null and ts >= 11718 and ts <= 11719) and not (user_id = 1 and user_id is not null and ts >= 11720 and ts <= 11721) and not (user_id = 1 and user_id is not null and ts >= 11722 and ts <= 11723) and not (user_id = 1 and user_id is not null and ts >= 11724 and ts <= 11725) and not (user_id = 1 and user_id is not null and ts >= 11726 and ts <= 11727) and not (user_id = 1 and user_id is not null and ts >= 11728 and ts <= 11729) and not (user_id = 1 and user_id is not null and ts >= 11730 and ts <= 11731) and not (user_id = 1 and user_id is not null and ts >= 11732 and ts <= 11733) and not (user_id = 1 and user_id is not null and ts >= 11734 and ts <= 11735) and not (user_id = 1 and user_id is not null and ts >= 11736 and ts <= 11737) and not (user_id = 1 and user_id is not null and ts >= 11738 and ts <= 11739) and not (user_id = 1 and user_id is not null and ts >= 11740 and ts <= 11741) and not (user_id = 1 and user_id is not null and ts >= 11742 and ts <= 11743) and not (user_id = 1 and user_id is not null and ts >= 11744 and ts <= 11745) and not (user_id = 1 and user_id is not null and ts >= 11746 and ts <= 11747) and not (user_id = 1 and user_id is not null and ts >= 11748 and ts <= 11749) and not (user_id = 1 and user_id is not null and ts >= 11750 and ts <= 11751) and not (user_id = 1 and user_id is not null and ts >= 11752 and ts <= 11753) and not (user_id = 1 and user_id is not null and ts >= 11754 and ts <= 11755) and not (user_id = 1 and user_id is not null and ts >= 11756 and ts <= 11757) and not (user_id = 1 and user_id is not null and ts >= 11758 and ts <= 11759) and not (user_id = 1 and user_id is not null and ts >= 11760 and ts <= 11761) and not (user_id = 1 and user_id is not null and ts >= 11762 and ts <= 11763) and not (user_id = 1 and user_id is not null and ts >= 11764 and ts <= 11765) and not (user_id = 1 and user_id is not null and ts >= 11766 and ts <= 11767) and not (user_id = 1 and user_id is not null and ts >= 11768 and ts <= 11769) and not (user_id = 1 and user_id is not null and ts >= 11770 and ts <= 11771) and not (user_id = 1 and user_id is not null and ts >= 11772 and ts <= 11773) and not (user_id = 1 and user_id is not null and ts >= 11774 and ts <= 11775) and not (user_id = 1 and user_id is not null and ts >= 11776 and ts <= 11777) and not (user_id = 1 and user_id is not null and ts >= 11778 and ts <= 11779) and not (user_id = 1 and user_id is not null and ts >= 11780 and ts <= 11781) and not (user_id = 1 and user_id is not null and ts >= 11782 and ts <= 11783) and not (user_id = 1 and user_id is not null and ts >= 11784 and ts <= 11785) and not (user_id = 1 and user_id is not null and ts >= 11786 and ts <= 11787) and not (user_id = 1 and user_id is not null and ts >= 11788 and ts <= 11789) and not (user_id = 1 and user_id is not null and ts >= 11790 and ts <= 11791) and not (user_id = 1 and user_id is not null and ts >= 11792 and ts <= 11793) and not (user_id = 1 and user_id is not null and ts >= 11794 and ts <= 11795) and not (user_id = 1 and user_id is not null and ts >= 11796 and ts <= 11797) and not (user_id = 1 and user_id is not null and ts >= 11798 and ts <= 11799) and not (user_id = 1 and user_id is not null and ts >= 11800 and ts <= 11801) and not (user_id = 1 and user_id is not null and ts >= 11802 and ts <= 11803) and not (user_id = 1 and user_id is not null and ts >= 11804 and ts <= 11805) and not (user_id = 1 and user_id is not null and ts >= 11806 and ts <= 11807) and not (user_id = 1 and user_id is not null and ts >= 11808 and ts <= 11809) and not (user_id = 1 and user_id is not null and ts >= 11810 and ts <= 11811) and not (user_id = 1 and user_id is not null and ts >= 11812 and ts <= 11813) and not (user_id = 1 and user_id is not null and ts >= 11814 and ts <= 11815) and not (user_id = 1 and user_id is not null and ts >= 11816 and ts <= 11817) and not (user_id = 1 and user_id is not null and ts >= 11818 and ts <= 11819) and not (user_id = 1 and user_id is not null and ts >= 11820 and ts <= 11821) and not (user_id = 1 and user_id is not null and ts >= 11822 and ts <= 11823) and not (user_id = 1 and user_id is not null and ts >= 11824 and ts <= 11825) and not (user_id = 1 and user_id is not null and ts >= 11826 and ts <= 11827) and not (user_id = 1 and user_id is not null and ts >= 11828 and ts <= 11829) and not (user_id = 1 and user_id is not null and ts >= 11830 and ts <= 11831) and not (user_id = 1 and user_id is not null and ts >= 11832 and ts <= 11833) and not (user_id = 1 and user_id is not null and ts >= 11834 and ts <= 11835) and not (user_id = 1 and user_id is not null and ts >= 11836 and ts <= 11837) and not (user_id = 1 and user_id is not null and ts >= 11838 and ts <= 11839) and not (user_id = 1 and user_id is not null and ts >= 11840 and ts <= 11841) and not (user_id = 1 and user_id is not null and ts >= 11842 and ts <= 11843) and not (user_id = 1 and user_id is not null and ts >= 11844 and ts <= 11845) and not (user_id = 1 and user_id is not null and ts >= 11846 and ts <= 11847) and not (user_id = 1 and user_id is not null and ts >= 11848 and ts <= 11849) and not (user_id = 1 and user_id is not null and ts >= 11850 and ts <= 11851) and not (user_id = 1 and user_id is not null and ts >= 11852 and ts <= 11853) and not (user_id = 1 and user_id is not null and ts >= 11854 and ts <= 11855) and not (user_id = 1 and user_id is not null and ts >= 11856 and ts <= 11857) and not (user_id = 1 and user_id is not null and ts >= 11858 and ts <= 11859) and not (user_id = 1 and user_id is not null and ts >= 11860 and ts <= 11861) and not (user_id = 1 and user_id is not null and ts >= 11862 and ts <= 11863) and not (user_id = 1 and user_id is not null and ts >= 11864 and ts <= 11865) and not (user_id = 1 and user_id is not null and ts >= 11866 and ts <= 11867) and not (user_id = 1 and user_id is not null and ts >= 11868 and ts <= 11869) and not (user_id = 1 and user_id is not null and ts >= 11870 and ts <= 11871) and not (user_id = 1 and user_id is not null and ts >= 11872 and ts <= 11873) and not (user_id = 1 and user_id is not null and ts >= 11874 and ts <= 11875) and not (user_id = 1 and user_id is not null and ts >= 11876 and ts <= 11877) and not (user_id = 1 and user_id is not null and ts >= 11878 and ts <= 11879) and not (user_id = 1 and user_id is not null and ts >= 11880 and ts <= 11881) and not (user_id = 1 and user_id is not null and ts >= 11882 and ts <= 11883) and not (user_id = 1 and user_id is not null and ts >= 11884 and ts <= 11885) and not (user_id = 1 and user_id is not null and ts >= 11886 and ts <= 11887) and not (user_id = 1 and user_id is not null and ts >= 11888 and ts <= 11889) and not (user_id = 1 and user_id is not null and ts >= 11890 and ts <= 11891) and not (user_id = 1 and user_id is not null and ts >= 11892 and ts <= 11893) and not (user_id = 1 and user_id is not null and ts >= 11894 and ts <= 11895) and not (user_id = 1 and user_id is not null and ts >= 11896 and ts <= 11897) and not (user_id = 1 and user_id is not null and ts >= 11898 and ts <= 11899) and not (user_id = 1 and user_id is not null and ts >= 11900 and ts <= 11901) and not (user_id = 1 and user_id is not null and ts >= 11902 and ts <= 11903) and not (user_id = 1 and user_id is not null and ts >= 11904 and ts <= 11905) and not (user_id = 1 and user_id is not null and ts >= 11906 and ts <= 11907) and not (user_id = 1 and user_id is not null and ts >= 11908 and ts <= 11909) and not (user_id = 1 and user_id is not null and ts >= 11910 and ts <= 11911) and not (user_id = 1 and user_id is not null and ts >= 11912 and ts <= 11913) and not (user_id = 1 and user_id is not null and ts >= 11914 and ts <= 11915) and not (user_id = 1 and user_id is not null and ts >= 11916 and ts <= 11917) and not (user_id = 1 and user_id is not null and ts >= 11918 and ts <= 11919) and not (user_id = 1 and user_id is not null and ts >= 11920 and ts <= 11921) and not (user_id = 1 and user_id is not null and ts >= 11922 and ts <= 11923) and not (user_id = 1 and user_id is not null and ts >= 11924 and ts <= 11925) and not (user_id = 1 and user_id is not null and ts >= 11926 and ts <= 11927) and not (user_id = 1 and user_id is not null and ts >= 11928 and ts <= 11929) and not (user_id = 1 and user_id is not null and ts >= 11930 and ts <= 11931) and not (user_id = 1 and user_id is not null and ts >= 11932 and ts <= 11933) and not (user_id = 1 and user_id is not null and ts >= 11934 and ts <= 11935) and not (user_id = 1 and user_id is not null and ts >= 11936 and ts <= 11937) and not (user_id = 1 and user_id is not null and ts >= 11938 and ts <= 11939) and not (user_id = 1 and user_id is not null and ts >= 11940 and ts <= 11941) and not (user_id = 1 and user_id is not null and ts >= 11942 and ts <= 11943) and not (user_id = 1 and user_id is not null and ts >= 11944 and ts <= 11945) and not (user_id = 1 and user_id is not null and ts >= 11946 and ts <= 11947) and not (user_id = 1 and user_id is not null and ts >= 11948 and ts <= 11949) and not (user_id = 1 and user_id is not null and ts >= 11950 and ts <= 11951) and not (user_id = 1 and user_id is not null and ts >= 11952 and ts <= 11953) and not (user_id = 1 and user_id is not null and ts >= 11954 and ts <= 11955) and not (user_id = 1 and user_id is not null and ts >= 11956 and ts <= 11957) and not (user_id = 1 and user_id is not null and ts >= 11958 and ts <= 11959) and not (user_id = 1 and user_id is not null and ts >= 11960 and ts <= 11961) and not (user_id = 1 and user_id is not null and ts >= 11962 and ts <= 11963) and not (user_id = 1 and user_id is not null and ts >= 11964 and ts <= 11965) and not (user_id = 1 and user_id is not null and ts >= 11966 and ts <= 11967) and not (user_id = 1 and user_id is not null and ts >= 11968 and ts <= 11969) and not (user_id = 1 and user_id is not null and ts >= 11970 and ts <= 11971) and not (user_id = 1 and user_id is not null and ts >= 11972 and ts <= 11973) and not (user_id = 1 and user_id is not null and ts >= 11974 and ts <= 11975) and not (user_id = 1 and user_id is not null and ts >= 11976 and ts <= 11977) and not (user_id = 1 and user_id is not null and ts >= 11978 and ts <= 11979) and not (user_id = 1 and user_id is not null and ts >= 11980 and ts <= 11981) and not (user_id = 1 and user_id is not null and ts >= 11982 and ts <= 11983) and not (user_id = 1 and user_id is not null and ts >= 11984 and ts <= 11985) and not (user_id = 1 and user_id is not null and ts >= 11986 and ts <= 11987) and not (user_id = 1 and user_id is not null and ts >= 11988 and ts <= 11989) and not (user_id = 1 and user_id is not null and ts >= 11990 and ts <= 11991) and not (user_id = 1 and user_id is not null and ts >= 11992 and ts <= 11993) and ts >= 113898 and parent_id = 1 order by ts asc limit 100",
       "Instructions": {
         "OperatorType": "Limit",
-        "Count": "INT64(100)",
+        "Count": "100",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -4392,7 +4416,7 @@
         "Query": "select 1 from `user` where id = 12 and exists (select 1 from music where user_id = 12 union select 1 from user_extra where user_id = 12)",
         "Table": "`user`",
         "Values": [
-          "INT64(12)"
+          "12"
         ],
         "Vindex": "user_index"
       },
@@ -4400,6 +4424,269 @@
         "user.music",
         "user.user",
         "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "list args: single column vindex",
+    "query": "select 1 from user where (id, col) in ::vals",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 1 from user where (id, col) in ::vals",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "MultiEqual",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from `user` where 1 != 1",
+        "Query": "select 1 from `user` where (id, col) in ::vals",
+        "Table": "`user`",
+        "Values": [
+          "vals:0"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "list args: single column vindex on non-zero offset",
+    "query": "select 1 from user where (col, id) in ::vals",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 1 from user where (col, id) in ::vals",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "MultiEqual",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from `user` where 1 != 1",
+        "Query": "select 1 from `user` where (col, id) in ::vals",
+        "Table": "`user`",
+        "Values": [
+          "vals:1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "list args: multi column vindex",
+    "query": "select 1 from multicol_tbl where (cola, colb) in ::vals",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 1 from multicol_tbl where (cola, colb) in ::vals",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "MultiEqual",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from multicol_tbl where 1 != 1",
+        "Query": "select 1 from multicol_tbl where (cola, colb) in ::vals",
+        "Table": "multicol_tbl",
+        "Values": [
+          "vals:0",
+          "vals:1"
+        ],
+        "Vindex": "multicolIdx"
+      },
+      "TablesUsed": [
+        "user.multicol_tbl"
+      ]
+    }
+  },
+  {
+    "comment": "list args: multi column vindex - subshard",
+    "query": "select 1 from multicol_tbl where (cola) in ::vals",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 1 from multicol_tbl where (cola) in ::vals",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from multicol_tbl where 1 != 1",
+        "Query": "select 1 from multicol_tbl where cola in ::__vals0",
+        "Table": "multicol_tbl",
+        "Values": [
+          "::vals"
+        ],
+        "Vindex": "multicolIdx"
+      },
+      "TablesUsed": [
+        "user.multicol_tbl"
+      ]
+    }
+  },
+  {
+    "comment": "list args: multi column vindex - more columns",
+    "query": "select 1 from multicol_tbl where (cola, colx, colb) in ::vals",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 1 from multicol_tbl where (cola, colx, colb) in ::vals",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "MultiEqual",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from multicol_tbl where 1 != 1",
+        "Query": "select 1 from multicol_tbl where (cola, colx, colb) in ::vals",
+        "Table": "multicol_tbl",
+        "Values": [
+          "vals:0",
+          "vals:2"
+        ],
+        "Vindex": "multicolIdx"
+      },
+      "TablesUsed": [
+        "user.multicol_tbl"
+      ]
+    }
+  },
+  {
+    "comment": "list args: multi column vindex - columns rearranged",
+    "query": "select 1 from multicol_tbl where (colb, colx, cola) in ::vals",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 1 from multicol_tbl where (colb, colx, cola) in ::vals",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "MultiEqual",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from multicol_tbl where 1 != 1",
+        "Query": "select 1 from multicol_tbl where (colb, colx, cola) in ::vals",
+        "Table": "multicol_tbl",
+        "Values": [
+          "vals:2",
+          "vals:0"
+        ],
+        "Vindex": "multicolIdx"
+      },
+      "TablesUsed": [
+        "user.multicol_tbl"
+      ]
+    }
+  },
+  {
+    "comment": "order by with filter removing the keyspace from order by",
+    "query": "select col from user.user where id = 1 order by user.user.user_id",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select col from user.user where id = 1 order by user.user.user_id",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col from `user` where 1 != 1",
+        "Query": "select col from `user` where id = 1 order by `user`.user_id asc",
+        "Table": "`user`",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "group by with filter removing the keyspace from order by",
+    "query": "select col from user.user where id = 1 group by user.user.user_id",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select col from user.user where id = 1 group by user.user.user_id",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col from `user` where 1 != 1 group by `user`.user_id",
+        "Query": "select col from `user` where id = 1 group by `user`.user_id",
+        "Table": "`user`",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "order with authoritative table - removing keyspace from group by",
+    "query": "select * from user.authoritative where user_id = 5 order by user_id",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select * from user.authoritative where user_id = 5 order by user_id",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_id, col1, col2 from authoritative where 1 != 1",
+        "Query": "select user_id, col1, col2 from authoritative where user_id = 5 order by authoritative.user_id asc",
+        "Table": "authoritative",
+        "Values": [
+          "5"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.authoritative"
+      ]
+    }
+  },
+  {
+    "comment": "group by and having with authoritative table - removing keyspace from having",
+    "query": "select * from user.authoritative where user_id = 5 group by user_id having count(user_id) = 6 order by user_id",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select * from user.authoritative where user_id = 5 group by user_id having count(user_id) = 6 order by user_id",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_id, col1, col2 from authoritative where 1 != 1 group by user_id",
+        "Query": "select user_id, col1, col2 from authoritative where user_id = 5 group by user_id having count(user_id) = 6 order by authoritative.user_id asc",
+        "Table": "authoritative",
+        "Values": [
+          "5"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.authoritative"
       ]
     }
   }

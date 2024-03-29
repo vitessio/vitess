@@ -18,7 +18,6 @@ package evalengine
 
 import (
 	"vitess.io/vitess/go/sqltypes"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -56,8 +55,8 @@ type (
 	opBitShr struct{}
 )
 
-var _ Expr = (*BitwiseExpr)(nil)
-var _ Expr = (*BitwiseNotExpr)(nil)
+var _ IR = (*BitwiseExpr)(nil)
+var _ IR = (*BitwiseNotExpr)(nil)
 
 func (b *BitwiseNotExpr) eval(env *ExpressionEnv) (eval, error) {
 	e, err := b.Inner.eval(env)
@@ -78,14 +77,6 @@ func (b *BitwiseNotExpr) eval(env *ExpressionEnv) (eval, error) {
 
 	eu := evalToInt64(e)
 	return newEvalUint64(^uint64(eu.i)), nil
-}
-
-func (b *BitwiseNotExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	tt, f := b.Inner.typeof(env, fields)
-	if tt == sqltypes.VarBinary && f&(flagHex|flagBit) == 0 {
-		return sqltypes.VarBinary, f
-	}
-	return sqltypes.Uint64, f
 }
 
 func (expr *BitwiseNotExpr) compile(c *compiler) (ctype, error) {
@@ -113,9 +104,9 @@ func (o opBitShr) numeric(num, shift uint64) uint64 { return num >> shift }
 
 func (o opBitShr) binary(num []byte, shift uint64) []byte {
 	var (
-		bits   = int(shift % 8)
-		bytes  = int(shift / 8)
-		length = len(num)
+		bits   = int64(shift % 8)
+		bytes  = int64(shift / 8)
+		length = int64(len(num))
 		out    = make([]byte, length)
 	)
 
@@ -136,13 +127,13 @@ func (o opBitShl) numeric(num, shift uint64) uint64 { return num << shift }
 
 func (o opBitShl) binary(num []byte, shift uint64) []byte {
 	var (
-		bits   = int(shift % 8)
-		bytes  = int(shift / 8)
-		length = len(num)
+		bits   = int64(shift % 8)
+		bytes  = int64(shift / 8)
+		length = int64(len(num))
 		out    = make([]byte, length)
 	)
 
-	for i := 0; i < length; i++ {
+	for i := int64(0); i < length; i++ {
 		pos := i + bytes + 1
 		switch {
 		case pos < length:
@@ -251,25 +242,6 @@ func (bit *BitwiseExpr) eval(env *ExpressionEnv) (eval, error) {
 	}
 }
 
-func (bit *BitwiseExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	t1, f1 := bit.Left.typeof(env, fields)
-	t2, f2 := bit.Right.typeof(env, fields)
-
-	switch bit.Op.(type) {
-	case opBitBinary:
-		if t1 == sqltypes.VarBinary && t2 == sqltypes.VarBinary &&
-			(f1&(flagHex|flagBit) == 0 || f2&(flagHex|flagBit) == 0) {
-			return sqltypes.VarBinary, f1 | f2
-		}
-	case opBitShift:
-		if t1 == sqltypes.VarBinary && (f1&(flagHex|flagBit)) == 0 {
-			return sqltypes.VarBinary, f1 | f2
-		}
-	}
-
-	return sqltypes.Uint64, f1 | f2
-}
-
 func (expr *BitwiseExpr) compileBinary(c *compiler, asm_ins_bb, asm_ins_uu func()) (ctype, error) {
 	lt, err := expr.Left.compile(c)
 	if err != nil {
@@ -298,7 +270,7 @@ func (expr *BitwiseExpr) compileBinary(c *compiler, asm_ins_bb, asm_ins_uu func(
 
 	asm_ins_uu()
 	c.asm.jumpDestination(skip1, skip2)
-	return ctype{Type: sqltypes.Uint64, Col: collationNumeric}, nil
+	return ctype{Type: sqltypes.Uint64, Flag: nullableFlags(lt.Flag | rt.Flag), Col: collationNumeric}, nil
 }
 
 func (expr *BitwiseExpr) compileShift(c *compiler, i int) (ctype, error) {
@@ -327,8 +299,8 @@ func (expr *BitwiseExpr) compileShift(c *compiler, i int) (ctype, error) {
 		return ctype{Type: sqltypes.VarBinary, Col: collationBinary}, nil
 	}
 
-	_ = c.compileToBitwiseUint64(lt, 2)
-	_ = c.compileToUint64(rt, 1)
+	lt = c.compileToBitwiseUint64(lt, 2)
+	rt = c.compileToUint64(rt, 1)
 
 	if i < 0 {
 		c.asm.BitShiftLeft_uu()
@@ -337,7 +309,7 @@ func (expr *BitwiseExpr) compileShift(c *compiler, i int) (ctype, error) {
 	}
 
 	c.asm.jumpDestination(skip1, skip2)
-	return ctype{Type: sqltypes.Uint64, Col: collationNumeric}, nil
+	return ctype{Type: sqltypes.Uint64, Flag: nullableFlags(lt.Flag | rt.Flag), Col: collationNumeric}, nil
 }
 
 func (expr *BitwiseExpr) compile(c *compiler) (ctype, error) {

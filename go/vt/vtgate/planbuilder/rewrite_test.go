@@ -82,7 +82,7 @@ func TestHavingRewrite(t *testing.T) {
 }
 
 func prepTest(t *testing.T, sql string) (*semantics.SemTable, *sqlparser.ReservedVars, *sqlparser.Select) {
-	ast, vars, err := sqlparser.Parse2(sql)
+	ast, vars, err := sqlparser.NewTestParser().Parse2(sql)
 	require.NoError(t, err)
 
 	sel, isSelectStatement := ast.(*sqlparser.Select)

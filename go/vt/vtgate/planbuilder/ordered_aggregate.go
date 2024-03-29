@@ -17,6 +17,7 @@ limitations under the License.
 package planbuilder
 
 import (
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
@@ -60,6 +61,8 @@ type orderedAggregate struct {
 	groupByKeys []*engine.GroupByParams
 
 	truncateColumnCount int
+
+	collationEnv *collations.Environment
 }
 
 // Primitive implements the logicalPlan interface
@@ -78,6 +81,7 @@ func (oa *orderedAggregate) Primitive() engine.Primitive {
 		GroupByKeys:         oa.groupByKeys,
 		TruncateColumnCount: oa.truncateColumnCount,
 		Input:               input,
+		CollationEnv:        oa.collationEnv,
 	}
 }
 

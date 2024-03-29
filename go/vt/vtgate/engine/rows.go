@@ -27,14 +27,14 @@ var _ Primitive = (*Rows)(nil)
 
 // Rows simply returns a number or rows
 type Rows struct {
-	rows   [][]sqltypes.Value
-	fields []*querypb.Field
-
 	noInputs
 	noTxNeeded
+
+	rows   [][]sqltypes.Value
+	fields []*querypb.Field
 }
 
-// NewRowsPrimitive returns a new Rows primitie
+// NewRowsPrimitive returns a new Rows primitive
 func NewRowsPrimitive(rows [][]sqltypes.Value, fields []*querypb.Field) Primitive {
 	return &Rows{rows: rows, fields: fields}
 }

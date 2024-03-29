@@ -39,6 +39,7 @@ var (
 	baseOptions = struct {
 		Keyspace string
 		Workflow string
+		Shards   []string
 	}{}
 
 	workflowShowOptions = struct {
@@ -59,21 +60,26 @@ func registerCommands(root *cobra.Command) {
 	delete.MarkFlagRequired("workflow")
 	delete.Flags().BoolVar(&deleteOptions.KeepData, "keep-data", false, "Keep the partially copied table data from the workflow in the target keyspace.")
 	delete.Flags().BoolVar(&deleteOptions.KeepRoutingRules, "keep-routing-rules", false, "Keep the routing rules created for the workflow.")
+	common.AddShardSubsetFlag(delete, &baseOptions.Shards)
 	base.AddCommand(delete)
 
+	common.AddShardSubsetFlag(workflowList, &baseOptions.Shards)
 	base.AddCommand(workflowList)
 
 	show.Flags().StringVarP(&baseOptions.Workflow, "workflow", "w", "", "The workflow you want the details for.")
 	show.MarkFlagRequired("workflow")
 	show.Flags().BoolVar(&workflowShowOptions.IncludeLogs, "include-logs", true, "Include recent logs for the workflow.")
+	common.AddShardSubsetFlag(show, &baseOptions.Shards)
 	base.AddCommand(show)
 
 	start.Flags().StringVarP(&baseOptions.Workflow, "workflow", "w", "", "The workflow you want to start.")
 	start.MarkFlagRequired("workflow")
+	common.AddShardSubsetFlag(start, &baseOptions.Shards)
 	base.AddCommand(start)
 
 	stop.Flags().StringVarP(&baseOptions.Workflow, "workflow", "w", "", "The workflow you want to stop.")
 	stop.MarkFlagRequired("workflow")
+	common.AddShardSubsetFlag(stop, &baseOptions.Shards)
 	base.AddCommand(stop)
 
 	update.Flags().StringVarP(&baseOptions.Workflow, "workflow", "w", "", "The workflow you want to update.")
@@ -82,6 +88,7 @@ func registerCommands(root *cobra.Command) {
 	update.Flags().VarP((*topoproto.TabletTypeListFlag)(&updateOptions.TabletTypes), "tablet-types", "t", "New source tablet types to replicate from (e.g. PRIMARY,REPLICA,RDONLY).")
 	update.Flags().BoolVar(&updateOptions.TabletTypesInPreferenceOrder, "tablet-types-in-order", true, "When performing source tablet selection, look for candidates in the type order as they are listed in the tablet-types flag.")
 	update.Flags().StringVar(&updateOptions.OnDDL, "on-ddl", "", "New instruction on what to do when DDL is encountered in the VReplication stream. Possible values are IGNORE, STOP, EXEC, and EXEC_IGNORE.")
+	common.AddShardSubsetFlag(update, &baseOptions.Shards)
 	base.AddCommand(update)
 }
 

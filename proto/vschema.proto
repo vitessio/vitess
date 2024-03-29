@@ -126,6 +126,14 @@ message AutoIncrement {
 message Column {
   string name = 1;
   query.Type type = 2;
+  bool invisible = 3;
+  string default = 4;
+  string collation_name = 5;
+  int32 size = 6;
+  int32 scale = 7;
+  optional bool nullable = 8;
+  // values contains the list of values for an enum or set column.
+  repeated string values = 9;
 }
 
 // SrvVSchema is the roll-up of all the Keyspace schema for a cell.

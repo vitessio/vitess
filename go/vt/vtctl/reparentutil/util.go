@@ -19,9 +19,11 @@ package reparentutil
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
+	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/mysql/replication"
@@ -32,7 +34,6 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
@@ -48,7 +49,7 @@ var (
 	successResult          = "success"
 )
 
-// ChooseNewPrimary finds a tablet that should become a primary after reparent.
+// ElectNewPrimary finds a tablet that should become a primary after reparent.
 // The criteria for the new primary-elect are (preferably) to be in the same
 // cell as the current primary, and to be different from avoidPrimaryAlias. The
 // tablet with the most advanced replication position is chosen to minimize the
@@ -58,13 +59,15 @@ var (
 // with transactions being executed on the current primary, so when all tablets
 // are at roughly the same position, then the choice of new primary-elect will
 // be somewhat unpredictable.
-func ChooseNewPrimary(
+func ElectNewPrimary(
 	ctx context.Context,
 	tmc tmclient.TabletManagerClient,
 	shardInfo *topo.ShardInfo,
 	tabletMap map[string]*topo.TabletInfo,
+	newPrimaryAlias *topodatapb.TabletAlias,
 	avoidPrimaryAlias *topodatapb.TabletAlias,
 	waitReplicasTimeout time.Duration,
+	tolerableReplLag time.Duration,
 	durability Durabler,
 	// (TODO:@ajm188) it's a little gross we need to pass this, maybe embed in the context?
 	logger logutil.Logger,
@@ -84,25 +87,51 @@ func ChooseNewPrimary(
 		errorGroup, groupCtx = errgroup.WithContext(ctx)
 	)
 
+	// candidates are the list of tablets that can be potentially promoted after filtering out based on preliminary checks.
+	candidates := []*topodatapb.Tablet{}
+	reasonsToInvalidate := strings.Builder{}
 	for _, tablet := range tabletMap {
 		switch {
+		case newPrimaryAlias != nil:
+			// If newPrimaryAlias is provided, then that is the only valid tablet, even if it is not of type replica or in a different cell.
+			if !topoproto.TabletAliasEqual(tablet.Alias, newPrimaryAlias) {
+				reasonsToInvalidate.WriteString(fmt.Sprintf("\n%v does not match the new primary alias provided", topoproto.TabletAliasString(tablet.Alias)))
+				continue
+			}
 		case primaryCell != "" && tablet.Alias.Cell != primaryCell:
+			reasonsToInvalidate.WriteString(fmt.Sprintf("\n%v is not in the same cell as the previous primary", topoproto.TabletAliasString(tablet.Alias)))
 			continue
 		case avoidPrimaryAlias != nil && topoproto.TabletAliasEqual(tablet.Alias, avoidPrimaryAlias):
+			reasonsToInvalidate.WriteString(fmt.Sprintf("\n%v matches the primary alias to avoid", topoproto.TabletAliasString(tablet.Alias)))
 			continue
 		case tablet.Tablet.Type != topodatapb.TabletType_REPLICA:
+			reasonsToInvalidate.WriteString(fmt.Sprintf("\n%v is not a replica", topoproto.TabletAliasString(tablet.Alias)))
 			continue
 		}
 
-		tb := tablet.Tablet
+		candidates = append(candidates, tablet.Tablet)
+	}
+
+	// There is only one tablet and tolerable replication lag is unspecified,
+	// then we don't need to find the position of the said tablet for sorting.
+	// We can just return the tablet quickly.
+	// This check isn't required, but it saves us an RPC call that is otherwise unnecessary.
+	if len(candidates) == 1 && tolerableReplLag == 0 {
+		return candidates[0].Alias, nil
+	}
+
+	for _, tablet := range candidates {
+		tb := tablet
 		errorGroup.Go(func() error {
 			// find and store the positions for the tablet
-			pos, err := findPositionForTablet(groupCtx, tb, logger, tmc, waitReplicasTimeout)
+			pos, replLag, err := findPositionAndLagForTablet(groupCtx, tb, logger, tmc, waitReplicasTimeout)
 			mu.Lock()
 			defer mu.Unlock()
-			if err == nil {
+			if err == nil && (tolerableReplLag == 0 || tolerableReplLag >= replLag) {
 				validTablets = append(validTablets, tb)
 				tabletPositions = append(tabletPositions, pos)
+			} else {
+				reasonsToInvalidate.WriteString(fmt.Sprintf("\n%v has %v replication lag which is more than the tolerable amount", topoproto.TabletAliasString(tablet.Alias), replLag))
 			}
 			return err
 		})
@@ -113,9 +142,9 @@ func ChooseNewPrimary(
 		return nil, err
 	}
 
-	// return nothing if there are no valid tablets available
+	// return an error if there are no valid tablets available
 	if len(validTablets) == 0 {
-		return nil, nil
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "cannot find a tablet to reparent to%v", reasonsToInvalidate.String())
 	}
 
 	// sort the tablets for finding the best primary
@@ -127,9 +156,9 @@ func ChooseNewPrimary(
 	return validTablets[0].Alias, nil
 }
 
-// findPositionForTablet processes the replication position for a single tablet and
+// findPositionAndLagForTablet processes the replication position and lag for a single tablet and
 // returns it. It is safe to call from multiple goroutines.
-func findPositionForTablet(ctx context.Context, tablet *topodatapb.Tablet, logger logutil.Logger, tmc tmclient.TabletManagerClient, waitTimeout time.Duration) (replication.Position, error) {
+func findPositionAndLagForTablet(ctx context.Context, tablet *topodatapb.Tablet, logger logutil.Logger, tmc tmclient.TabletManagerClient, waitTimeout time.Duration) (replication.Position, time.Duration, error) {
 	logger.Infof("getting replication position from %v", topoproto.TabletAliasString(tablet.Alias))
 
 	ctx, cancel := context.WithTimeout(ctx, waitTimeout)
@@ -140,10 +169,10 @@ func findPositionForTablet(ctx context.Context, tablet *topodatapb.Tablet, logge
 		sqlErr, isSQLErr := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
 		if isSQLErr && sqlErr != nil && sqlErr.Number() == sqlerror.ERNotReplica {
 			logger.Warningf("no replication statue from %v, using empty gtid set", topoproto.TabletAliasString(tablet.Alias))
-			return replication.Position{}, nil
+			return replication.Position{}, 0, nil
 		}
 		logger.Warningf("failed to get replication status from %v, ignoring tablet: %v", topoproto.TabletAliasString(tablet.Alias), err)
-		return replication.Position{}, err
+		return replication.Position{}, 0, err
 	}
 
 	// Use the relay log position if available, otherwise use the executed GTID set (binary log position).
@@ -154,10 +183,10 @@ func findPositionForTablet(ctx context.Context, tablet *topodatapb.Tablet, logge
 	pos, err := replication.DecodePosition(positionString)
 	if err != nil {
 		logger.Warningf("cannot decode replica position %v for tablet %v, ignoring tablet: %v", positionString, topoproto.TabletAliasString(tablet.Alias), err)
-		return replication.Position{}, err
+		return replication.Position{}, 0, err
 	}
 
-	return pos, nil
+	return pos, time.Second * time.Duration(status.ReplicationLagSeconds), nil
 }
 
 // FindCurrentPrimary returns the current primary tablet of a shard, if any. The
@@ -218,7 +247,7 @@ func ShardReplicationStatuses(ctx context.Context, ts *topo.Server, tmc tmclient
 	if err != nil {
 		return nil, nil, err
 	}
-	tablets := topotools.CopyMapValues(tabletMap, []*topo.TabletInfo{}).([]*topo.TabletInfo)
+	tablets := maps.Values(tabletMap)
 
 	log.Infof("Gathering tablet replication status for: %v", tablets)
 	wg := sync.WaitGroup{}
@@ -342,4 +371,16 @@ func waitForCatchUp(
 		return err
 	}
 	return nil
+}
+
+// GetBackupCandidates is used to get a list of healthy tablets for backup
+func GetBackupCandidates(tablets []*topo.TabletInfo, stats []*replicationdatapb.Status) (res []*topo.TabletInfo) {
+	for i, stat := range stats {
+		// shardTablets[i] and stats[i] is 1:1 mapping
+		// Always include TabletType_PRIMARY. Healthy shardTablets[i] will be added to tablets
+		if tablets[i].Type == topodatapb.TabletType_PRIMARY || stat != nil {
+			res = append(res, tablets[i])
+		}
+	}
+	return res
 }

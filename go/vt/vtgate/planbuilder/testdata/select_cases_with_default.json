@@ -16,7 +16,7 @@
         "Query": "select exists (select 1 from `user` where id = 5) from dual",
         "Table": "dual",
         "Values": [
-          "INT64(5)"
+          "5"
         ],
         "Vindex": "user_index"
       },

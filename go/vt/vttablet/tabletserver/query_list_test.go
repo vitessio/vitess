@@ -22,6 +22,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 type testConn struct {
@@ -44,7 +46,7 @@ func (tc *testConn) IsKilled() bool {
 }
 
 func TestQueryList(t *testing.T) {
-	ql := NewQueryList("test")
+	ql := NewQueryList("test", sqlparser.NewTestParser())
 	connID := int64(1)
 	qd := NewQueryDetail(context.Background(), &testConn{id: connID})
 	ql.Add(qd)
@@ -69,7 +71,7 @@ func TestQueryList(t *testing.T) {
 }
 
 func TestQueryListChangeConnIDInMiddle(t *testing.T) {
-	ql := NewQueryList("test")
+	ql := NewQueryList("test", sqlparser.NewTestParser())
 	connID := int64(1)
 	qd1 := NewQueryDetail(context.Background(), &testConn{id: connID})
 	ql.Add(qd1)

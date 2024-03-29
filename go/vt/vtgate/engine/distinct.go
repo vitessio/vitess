@@ -19,12 +19,14 @@ package engine
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vthash"
 )
 
 // Distinct Primitive is used to uniqueify results
@@ -38,131 +40,63 @@ type (
 		Truncate  int
 	}
 	CheckCol struct {
-		Col   int
-		WsCol *int
-		Type  evalengine.Type
+		Col          int
+		WsCol        *int
+		Type         evalengine.Type
+		CollationEnv *collations.Environment
 	}
 	probeTable struct {
-		seenRows  map[evalengine.HashCode][]sqltypes.Row
-		checkCols []CheckCol
+		seenRows     map[vthash.Hash]struct{}
+		checkCols    []CheckCol
+		sqlmode      evalengine.SQLMode
+		collationEnv *collations.Environment
 	}
 )
 
-func (pt *probeTable) exists(inputRow sqltypes.Row) (bool, error) {
-	// the two prime numbers used here (17 and 31) are used to
-	// calculate hashcode from all column values in the input sqltypes.Row
+func (pt *probeTable) exists(inputRow sqltypes.Row) (sqltypes.Row, error) {
 	code, err := pt.hashCodeForRow(inputRow)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 
-	existingRows, found := pt.seenRows[code]
-	if !found {
-		// nothing with this hash code found, we can be sure it's a not seen sqltypes.Row
-		pt.seenRows[code] = []sqltypes.Row{inputRow}
-		return false, nil
+	if _, found := pt.seenRows[code]; found {
+		return nil, nil
 	}
 
-	// we found something in the map - still need to check all individual values
-	// so we don't just fall for a hash collision
-	for _, existingRow := range existingRows {
-		exists, err := pt.equal(existingRow, inputRow)
-		if err != nil {
-			return false, err
-		}
-		if exists {
-			return true, nil
-		}
-	}
-
-	pt.seenRows[code] = append(existingRows, inputRow)
-
-	return false, nil
+	pt.seenRows[code] = struct{}{}
+	return inputRow, nil
 }
 
-func (pt *probeTable) hashCodeForRow(inputRow sqltypes.Row) (evalengine.HashCode, error) {
-	// Why use 17 and 31 in this method?
-	// Copied from an old usenet discussion on the topic:
-	// https://groups.google.com/g/comp.programming/c/HSurZEyrZ1E?pli=1#d887b5bdb2dac99d
-	// > It's a mixture of superstition and good sense.
-	// > Suppose the multiplier were 26, and consider
-	// > hashing a hundred-character string. How much influence does
-	// > the string's first character have on the final value of `h',
-	// > just before the mod operation? The first character's value
-	// > will have been multiplied by MULT 99 times, so if the arithmetic
-	// > were done in infinite precision the value would consist of some
-	// > jumble of bits followed by 99 low-order zero bits -- each time
-	// > you multiply by MULT you introduce another low-order zero, right?
-	// > The computer's finite arithmetic just chops away all the excess
-	// > high-order bits, so the first character's actual contribution to
-	// > `h' is ... precisely zero! The `h' value depends only on the
-	// > rightmost 32 string characters (assuming a 32-bit int), and even
-	// > then things are not wonderful: the first of those final 32 bytes
-	// > influences only the leftmost bit of `h' and has no effect on
-	// > the remaining 31. Clearly, an even-valued MULT is a poor idea.
-	// >
-	// > Need MULT be prime? Not as far as I know (I don't know
-	// > everything); any odd value ought to suffice. 31 may be attractive
-	// > because it is close to a power of two, and it may be easier for
-	// > the compiler to replace a possibly slow multiply instruction with
-	// > a shift and subtract (31*x == (x << 5) - x) on machines where it
-	// > makes a difference. Setting MULT one greater than a power of two
-	// > (e.g., 33) would also be easy to optimize, but might produce too
-	// > "simple" an arrangement: mostly a juxtaposition of two copies
-	// > of the original set of bits, with a little mixing in the middle.
-	// > So you want an odd MULT that has plenty of one-bits.
-
-	code := evalengine.HashCode(17)
+func (pt *probeTable) hashCodeForRow(inputRow sqltypes.Row) (vthash.Hash, error) {
+	hasher := vthash.New()
 	for i, checkCol := range pt.checkCols {
 		if i >= len(inputRow) {
-			return 0, vterrors.VT13001("index out of range in row when creating the DISTINCT hash code")
+			return vthash.Hash{}, vterrors.VT13001("index out of range in row when creating the DISTINCT hash code")
 		}
 		col := inputRow[checkCol.Col]
-		hashcode, err := evalengine.NullsafeHashcode(col, checkCol.Type.Coll, col.Type())
+		err := evalengine.NullsafeHashcode128(&hasher, col, checkCol.Type.Collation(), checkCol.Type.Type(), pt.sqlmode)
 		if err != nil {
 			if err != evalengine.UnsupportedCollationHashError || checkCol.WsCol == nil {
-				return 0, err
+				return vthash.Hash{}, err
 			}
 			checkCol = checkCol.SwitchToWeightString()
 			pt.checkCols[i] = checkCol
-			hashcode, err = evalengine.NullsafeHashcode(inputRow[checkCol.Col], checkCol.Type.Coll, col.Type())
+			err = evalengine.NullsafeHashcode128(&hasher, inputRow[checkCol.Col], checkCol.Type.Collation(), checkCol.Type.Type(), pt.sqlmode)
 			if err != nil {
-				return 0, err
+				return vthash.Hash{}, err
 			}
-		}
-		code = code*31 + hashcode
-	}
-	return code, nil
-}
-
-func (pt *probeTable) equal(a, b sqltypes.Row) (bool, error) {
-	for i, checkCol := range pt.checkCols {
-		cmp, err := evalengine.NullsafeCompare(a[i], b[i], checkCol.Type.Coll)
-		if err != nil {
-			_, isComparisonErr := err.(evalengine.UnsupportedComparisonError)
-			if !isComparisonErr || checkCol.WsCol == nil {
-				return false, err
-			}
-			checkCol = checkCol.SwitchToWeightString()
-			pt.checkCols[i] = checkCol
-			cmp, err = evalengine.NullsafeCompare(a[i], b[i], checkCol.Type.Coll)
-			if err != nil {
-				return false, err
-			}
-		}
-		if cmp != 0 {
-			return false, nil
 		}
 	}
-	return true, nil
+	return hasher.Sum128(), nil
 }
 
-func newProbeTable(checkCols []CheckCol) *probeTable {
+func newProbeTable(checkCols []CheckCol, collationEnv *collations.Environment) *probeTable {
 	cols := make([]CheckCol, len(checkCols))
 	copy(cols, checkCols)
 	return &probeTable{
-		seenRows:  map[evalengine.HashCode][]sqltypes.Row{},
-		checkCols: cols,
+		seenRows:     make(map[vthash.Hash]struct{}),
+		checkCols:    cols,
+		collationEnv: collationEnv,
 	}
 }
 
@@ -178,15 +112,15 @@ func (d *Distinct) TryExecute(ctx context.Context, vcursor VCursor, bindVars map
 		InsertID: input.InsertID,
 	}
 
-	pt := newProbeTable(d.CheckCols)
+	pt := newProbeTable(d.CheckCols, vcursor.Environment().CollationEnv())
 
 	for _, row := range input.Rows {
-		exists, err := pt.exists(row)
+		appendRow, err := pt.exists(row)
 		if err != nil {
 			return nil, err
 		}
-		if !exists {
-			result.Rows = append(result.Rows, row)
+		if appendRow != nil {
+			result.Rows = append(result.Rows, appendRow)
 		}
 	}
 	if d.Truncate > 0 {
@@ -197,20 +131,23 @@ func (d *Distinct) TryExecute(ctx context.Context, vcursor VCursor, bindVars map
 
 // TryStreamExecute implements the Primitive interface
 func (d *Distinct) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	pt := newProbeTable(d.CheckCols)
+	var mu sync.Mutex
 
+	pt := newProbeTable(d.CheckCols, vcursor.Environment().CollationEnv())
 	err := vcursor.StreamExecutePrimitive(ctx, d.Source, bindVars, wantfields, func(input *sqltypes.Result) error {
 		result := &sqltypes.Result{
 			Fields:   input.Fields,
 			InsertID: input.InsertID,
 		}
+		mu.Lock()
+		defer mu.Unlock()
 		for _, row := range input.Rows {
-			exists, err := pt.exists(row)
+			appendRow, err := pt.exists(row)
 			if err != nil {
 				return err
 			}
-			if !exists {
-				result.Rows = append(result.Rows, row)
+			if appendRow != nil {
+				result.Rows = append(result.Rows, appendRow)
 			}
 		}
 		return callback(result.Truncate(len(d.CheckCols)))
@@ -272,16 +209,17 @@ func (d *Distinct) description() PrimitiveDescription {
 // SwitchToWeightString returns a new CheckCol that works on the weight string column instead
 func (cc CheckCol) SwitchToWeightString() CheckCol {
 	return CheckCol{
-		Col:   *cc.WsCol,
-		WsCol: nil,
-		Type:  evalengine.Type{Type: sqltypes.VarBinary, Coll: collations.CollationBinaryID},
+		Col:          *cc.WsCol,
+		WsCol:        nil,
+		Type:         evalengine.NewType(sqltypes.VarBinary, collations.CollationBinaryID),
+		CollationEnv: cc.CollationEnv,
 	}
 }
 
 func (cc CheckCol) String() string {
 	var collation string
-	if sqltypes.IsText(cc.Type.Type) && cc.Type.Coll != collations.Unknown {
-		collation = ": " + collations.Local().LookupName(cc.Type.Coll)
+	if cc.Type.Valid() && sqltypes.IsText(cc.Type.Type()) && cc.Type.Collation() != collations.Unknown {
+		collation = ": " + cc.CollationEnv.LookupName(cc.Type.Collation())
 	}
 
 	var column string

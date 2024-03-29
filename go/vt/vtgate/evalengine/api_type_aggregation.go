@@ -16,7 +16,11 @@ limitations under the License.
 
 package evalengine
 
-import "vitess.io/vitess/go/sqltypes"
+import (
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/proto/query"
+)
 
 type typeAggregation struct {
 	double   uint16
@@ -42,22 +46,84 @@ type typeAggregation struct {
 	geometry uint16
 	blob     uint16
 	total    uint16
+
+	nullable bool
 }
 
-func AggregateTypes(types []sqltypes.Type) sqltypes.Type {
-	var typeAgg typeAggregation
-	for _, typ := range types {
-		var flag typeFlag
-		if typ == sqltypes.HexVal || typ == sqltypes.HexNum {
-			typ = sqltypes.Binary
-			flag = flagHex
-		}
-		typeAgg.add(typ, flag)
+type TypeAggregator struct {
+	types       typeAggregation
+	collations  collationAggregation
+	size, scale int32
+	invalid     int32
+}
+
+func (ta *TypeAggregator) Add(typ Type, env *collations.Environment) error {
+	if !typ.Valid() {
+		ta.invalid++
+		return nil
 	}
-	return typeAgg.result()
+
+	ta.types.addNullable(typ.typ, typ.nullable)
+	if err := ta.collations.add(typedCoercionCollation(typ.typ, typ.collation), env); err != nil {
+		return err
+	}
+	ta.size = max(typ.size, ta.size)
+	ta.scale = max(typ.scale, ta.scale)
+	return nil
+}
+
+func (ta *TypeAggregator) AddField(f *query.Field, env *collations.Environment) error {
+	return ta.Add(NewTypeFromField(f), env)
+}
+
+func (ta *TypeAggregator) Type() Type {
+	if ta.invalid > 0 || ta.types.empty() {
+		return Type{}
+	}
+	return NewTypeEx(ta.types.result(), ta.collations.result().Collation, ta.types.nullable, ta.size, ta.scale)
+}
+
+func (ta *TypeAggregator) Field(name string) *query.Field {
+	typ := ta.Type()
+	return typ.ToField(name)
+}
+
+func (ta *typeAggregation) empty() bool {
+	return ta.total == 0
+}
+
+func (ta *typeAggregation) addEval(e eval) {
+	var t sqltypes.Type
+	var f typeFlag
+	switch e := e.(type) {
+	case nil:
+		t = sqltypes.Null
+		ta.nullable = true
+	case *evalBytes:
+		t = sqltypes.Type(e.tt)
+		f = e.flag
+	default:
+		t = e.SQLType()
+	}
+	ta.add(t, f)
+}
+
+func (ta *typeAggregation) addNullable(typ sqltypes.Type, nullable bool) {
+	var flag typeFlag
+	if typ == sqltypes.HexVal || typ == sqltypes.HexNum {
+		typ = sqltypes.Binary
+		flag |= flagHex
+	}
+	if nullable {
+		flag |= flagNullable
+	}
+	ta.add(typ, flag)
 }
 
 func (ta *typeAggregation) add(tt sqltypes.Type, f typeFlag) {
+	if f&flagNullable != 0 {
+		ta.nullable = true
+	}
 	switch tt {
 	case sqltypes.Float32, sqltypes.Float64:
 		ta.double++
@@ -99,12 +165,29 @@ func (ta *typeAggregation) add(tt sqltypes.Type, f typeFlag) {
 		ta.timestamp++
 	case sqltypes.Geometry:
 		ta.geometry++
-	case sqltypes.Blob:
+	case sqltypes.Blob, sqltypes.Text:
 		ta.blob++
 	default:
 		return
 	}
 	ta.total++
+}
+
+func nextSignedTypeForUnsigned(t sqltypes.Type) sqltypes.Type {
+	switch t {
+	case sqltypes.Uint8:
+		return sqltypes.Int16
+	case sqltypes.Uint16:
+		return sqltypes.Int24
+	case sqltypes.Uint24:
+		return sqltypes.Int32
+	case sqltypes.Uint32:
+		return sqltypes.Int64
+	case sqltypes.Uint64:
+		return sqltypes.Decimal
+	default:
+		panic("bad unsigned integer type")
+	}
 }
 
 func (ta *typeAggregation) result() sqltypes.Type {
@@ -126,7 +209,7 @@ func (ta *typeAggregation) result() sqltypes.Type {
 			If all temporal types are DATE, TIME, or TIMESTAMP, the result is DATE, TIME, or TIMESTAMP, respectively.
 			Otherwise, for a mix of temporal types, the result is DATETIME.
 		If all types are GEOMETRY, the result is GEOMETRY.
-		If any type is BLOB, the result is BLOB.
+		If any type is BLOB, the result is BLOB. This also applies to TEXT.
 		For all other type combinations, the result is VARCHAR.
 		Literal NULL operands are ignored for type aggregation.
 	*/
@@ -160,11 +243,14 @@ func (ta *typeAggregation) result() sqltypes.Type {
 		if ta.unsigned == ta.total {
 			return ta.unsignedMax
 		}
-		if ta.unsignedMax == sqltypes.Uint64 && ta.signed > 0 {
-			return sqltypes.Decimal
+		if ta.signed == 0 {
+			panic("bad type aggregation for signed/unsigned types")
 		}
-		// TODO
-		return sqltypes.Uint64
+		agtype := nextSignedTypeForUnsigned(ta.unsignedMax)
+		if sqltypes.IsSigned(agtype) {
+			return max(agtype, ta.signedMax)
+		}
+		return agtype
 	}
 
 	if ta.char == ta.total {

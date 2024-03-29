@@ -328,7 +328,7 @@ func (c *compiler) compile(pat []rune) error {
 	// Main loop for the regex pattern parsing state machine.
 	//   Runs once per state transition.
 	//   Each time through optionally performs, depending on the state table,
-	//      - an advance to the the next pattern char
+	//      - an advance to the next pattern char
 	//      - an action to be performed.
 	//      - pushing or popping a state to/from the local state return stack.
 	//   file regexcst.txt is the source for the state table.  The logic behind
@@ -2698,7 +2698,7 @@ func (c *compiler) compileInterval(init opcode, loop opcode) {
 	//   Goes at end of the block being looped over, so just append to the code so far.
 	c.appendOp(loop, topOfBlock)
 
-	if (c.intervalLow&0xff000000) != 0 || (c.intervalUpper > 0 && (c.intervalUpper&0xff000000) != 0) {
+	if c.intervalLow > 0x00ffffff || (c.intervalUpper > 0 && c.intervalUpper > 0x00ffffff) {
 		c.error(NumberTooBig)
 	}
 
@@ -3195,7 +3195,7 @@ func (c *compiler) maxMatchLength(start, end int) int32 {
 			}
 
 			blockLen := c.maxMatchLength(loc+4, loopEndLoc-1) // Recursive call.
-			updatedLen := int(currentLen) + int(blockLen)*maxLoopCount
+			updatedLen := int64(currentLen) + int64(blockLen)*int64(maxLoopCount)
 			if updatedLen >= math.MaxInt32 {
 				currentLen = math.MaxInt32
 				break

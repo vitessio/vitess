@@ -18,7 +18,6 @@ package vttest
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -36,14 +35,15 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/vt/vtenv"
+
 	"vitess.io/vitess/go/constants/sidecar"
-
-	"vitess.io/vitess/go/vt/sidecardb"
-
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/logutil"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/vtctl/vtctlclient"
 
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -110,6 +110,10 @@ type Config struct {
 	// cluster startup if the data directory does not already exist.
 	PersistentMode bool
 
+	// VtCombo bind address.
+	// vtcombo will bind to this address when running the servenv.
+	VtComboBindAddress string
+
 	// MySQL protocol bind address.
 	// vtcombo will bind to this address when exposing the mysql protocol socket
 	MySQLBindHost string
@@ -173,12 +177,12 @@ func (cfg *Config) InitSchemas(keyspace, schema string, vschema *vschemapb.Keysp
 	// Write the schema if set.
 	if schema != "" {
 		ksDir := path.Join(schemaDir, keyspace)
-		err := os.Mkdir(ksDir, os.ModeDir|0775)
+		err := os.Mkdir(ksDir, os.ModeDir|0o775)
 		if err != nil {
 			return err
 		}
 		fileName := path.Join(ksDir, "schema.sql")
-		err = os.WriteFile(fileName, []byte(schema), 0666)
+		err = os.WriteFile(fileName, []byte(schema), 0o666)
 		if err != nil {
 			return err
 		}
@@ -191,7 +195,7 @@ func (cfg *Config) InitSchemas(keyspace, schema string, vschema *vschemapb.Keysp
 		if err != nil {
 			return err
 		}
-		if err := os.WriteFile(vschemaFilePath, vschemaJSON, 0644); err != nil {
+		if err := os.WriteFile(vschemaFilePath, vschemaJSON, 0o644); err != nil {
 			return err
 		}
 	}
@@ -277,7 +281,11 @@ type LocalCluster struct {
 // cluster access should be performed through the vtgate port.
 func (db *LocalCluster) MySQLConnParams() mysql.ConnParams {
 	connParams := db.mysql.Params(db.DbName())
-	connParams.Charset = db.Config.Charset
+	ch, err := collations.MySQL8().ParseConnectionCharset(db.Config.Charset)
+	if err != nil {
+		panic(err)
+	}
+	connParams.Charset = ch
 	return connParams
 }
 
@@ -298,7 +306,11 @@ func (db *LocalCluster) MySQLCleanConnParams() mysql.ConnParams {
 		mysqlctl = toxiproxy.mysqlctl
 	}
 	connParams := mysqlctl.Params(db.DbName())
-	connParams.Charset = db.Config.Charset
+	ch, err := collations.MySQL8().ParseConnectionCharset(db.Config.Charset)
+	if err != nil {
+		panic(err)
+	}
+	connParams.Charset = ch
 	return connParams
 }
 
@@ -489,11 +501,6 @@ func (db *LocalCluster) loadSchema(shouldRunDatabaseMigrations bool) error {
 	}
 
 	for _, kpb := range db.Topology.Keyspaces {
-		if kpb.ServedFrom != "" {
-			// redirected keyspaces have no underlying database
-			continue
-		}
-
 		keyspace := kpb.Name
 		keyspaceDir := path.Join(db.SchemaDir, keyspace)
 
@@ -549,11 +556,12 @@ func (db *LocalCluster) createVTSchema() error {
 		return db.ExecuteFetch(query, "")
 	}
 
-	if err := sidecardb.Init(context.Background(), sidecardbExec); err != nil {
+	if err := sidecardb.Init(context.Background(), vtenv.NewTestEnv(), sidecardbExec); err != nil {
 		return err
 	}
 	return nil
 }
+
 func (db *LocalCluster) createDatabases() error {
 	log.Info("Creating databases in cluster...")
 
@@ -565,9 +573,6 @@ func (db *LocalCluster) createDatabases() error {
 
 	var sql []string
 	for _, kpb := range db.Topology.Keyspaces {
-		if kpb.ServedFrom != "" {
-			continue
-		}
 		for _, dbname := range db.shardNames(kpb) {
 			sql = append(sql, fmt.Sprintf("create database `%s`", dbname))
 		}
@@ -641,6 +646,7 @@ func (db *LocalCluster) JSONConfig() any {
 	}
 
 	config := map[string]any{
+		"bind_address":       db.vt.BindAddress,
 		"port":               db.vt.Port,
 		"socket":             db.mysql.UnixSocket(),
 		"vtcombo_mysql_port": db.Env.PortForProtocol("vtcombo_mysql_port", ""),
@@ -673,7 +679,7 @@ func (db *LocalCluster) applyVschema(keyspace string, migration string) error {
 func (db *LocalCluster) reloadSchemaKeyspace(keyspace string) error {
 	server := fmt.Sprintf("localhost:%v", db.vt.PortGrpc)
 	args := []string{"ReloadSchemaKeyspace", "--include_primary=true", keyspace}
-	fmt.Printf("Reloading keyspace schema %v", args)
+	log.Infof("Reloading keyspace schema %v", args)
 
 	err := vtctlclient.RunCommandAndWait(context.Background(), server, args, func(e *logutil.Event) {
 		log.Info(e)
@@ -697,7 +703,7 @@ func dirExist(dir string) bool {
 // statements in the SQL file.
 func LoadSQLFile(filename, sourceroot string) ([]string, error) {
 	var (
-		cmd  bytes.Buffer
+		cmd  strings.Builder
 		sql  []string
 		inSQ bool
 		inDQ bool
@@ -783,7 +789,7 @@ func (db *LocalCluster) VTProcess() *VtProcess {
 // a pointer to the interface. To read this vschema, the caller must convert it to a map
 func (vt *VtProcess) ReadVSchema() (*interface{}, error) {
 	httpClient := &http.Client{Timeout: 5 * time.Second}
-	resp, err := httpClient.Get(fmt.Sprintf("http://%s:%d/debug/vschema", "127.0.0.1", vt.Port))
+	resp, err := httpClient.Get(fmt.Sprintf("http://%s:%d/debug/vschema", vt.BindAddress, vt.Port))
 	if err != nil {
 		return nil, err
 	}

@@ -58,10 +58,6 @@ func New() *UnicodeSet {
 	return &UnicodeSet{list: buf}
 }
 
-func FromRunes(list []rune) *UnicodeSet {
-	return &UnicodeSet{list: list}
-}
-
 func (u *UnicodeSet) ensureBufferCapacity(c int) {
 	if cap(u.buffer) < c {
 		u.buffer = make([]rune, c)

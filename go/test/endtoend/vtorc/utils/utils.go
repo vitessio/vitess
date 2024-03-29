@@ -33,7 +33,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -206,7 +205,7 @@ func shutdownVttablets(clusterInfo *VTOrcClusterInfo) error {
 			// Remove the tablet record for this tablet
 		}
 		// Ignoring error here because some tests delete tablets themselves.
-		_ = clusterInfo.ClusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", vttablet.Alias)
+		_ = clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommand("DeleteTablets", vttablet.Alias)
 	}
 	clusterInfo.ClusterInstance.Keyspaces[0].Shards[0].Vttablets = nil
 	return nil
@@ -352,19 +351,16 @@ func ShardPrimaryTablet(t *testing.T, clusterInfo *VTOrcClusterInfo, keyspace *c
 		if now.Sub(start) > time.Second*60 {
 			assert.FailNow(t, "failed to elect primary before timeout")
 		}
-		result, err := clusterInfo.ClusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetShard", fmt.Sprintf("%s/%s", keyspace.Name, shard.Name))
-		assert.Nil(t, err)
+		si, err := clusterInfo.ClusterInstance.VtctldClientProcess.GetShard(keyspace.Name, shard.Name)
+		require.NoError(t, err)
 
-		var shardInfo topodatapb.Shard
-		err = json2.Unmarshal([]byte(result), &shardInfo)
-		assert.Nil(t, err)
-		if shardInfo.PrimaryAlias == nil {
+		if si.Shard.PrimaryAlias == nil {
 			log.Warningf("Shard %v/%v has no primary yet, sleep for 1 second\n", keyspace.Name, shard.Name)
 			time.Sleep(time.Second)
 			continue
 		}
 		for _, tablet := range shard.Vttablets {
-			if tablet.Alias == topoproto.TabletAliasString(shardInfo.PrimaryAlias) {
+			if tablet.Alias == topoproto.TabletAliasString(si.Shard.PrimaryAlias) {
 				return tablet
 			}
 		}
@@ -381,12 +377,8 @@ func CheckPrimaryTablet(t *testing.T, clusterInfo *VTOrcClusterInfo, tablet *clu
 			//log.Exitf("error")
 			assert.FailNow(t, "failed to elect primary before timeout")
 		}
-		result, err := clusterInfo.ClusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetTablet", tablet.Alias)
+		tabletInfo, err := clusterInfo.ClusterInstance.VtctldClientProcess.GetTablet(tablet.Alias)
 		require.NoError(t, err)
-		var tabletInfo topodatapb.Tablet
-		err = json2.Unmarshal([]byte(result), &tabletInfo)
-		require.NoError(t, err)
-
 		if topodatapb.TabletType_PRIMARY != tabletInfo.GetType() {
 			log.Warningf("Tablet %v is not primary yet, sleep for 1 second\n", tablet.Alias)
 			time.Sleep(time.Second)
@@ -535,9 +527,9 @@ func validateTopology(t *testing.T, clusterInfo *VTOrcClusterInfo, pingTablets b
 				var err error
 				var output string
 				if pingTablets {
-					output, err = clusterInfo.ClusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("Validate", "--", "--ping-tablets=true")
+					output, err = clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("Validate", "--ping-tablets")
 				} else {
-					output, err = clusterInfo.ClusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("Validate")
+					output, err = clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("Validate")
 				}
 				if err != nil {
 					log.Warningf("Validate failed, retrying, output - %s", output)
@@ -683,21 +675,6 @@ func PermanentlyRemoveVttablet(clusterInfo *VTOrcClusterInfo, tablet *cluster.Vt
 	}
 }
 
-// ChangePrivileges is used to change the privileges of the given user. These commands are executed such that they are not replicated
-func ChangePrivileges(t *testing.T, sql string, tablet *cluster.Vttablet, user string) {
-	_, err := RunSQL(t, "SET sql_log_bin = OFF;"+sql+";SET sql_log_bin = ON;", tablet, "")
-	require.NoError(t, err)
-
-	res, err := RunSQL(t, fmt.Sprintf("SELECT id FROM INFORMATION_SCHEMA.PROCESSLIST WHERE user = '%s'", user), tablet, "")
-	require.NoError(t, err)
-	for _, row := range res.Rows {
-		id, err := row[0].ToInt64()
-		require.NoError(t, err)
-		_, err = RunSQL(t, fmt.Sprintf("kill %d", id), tablet, "")
-		require.NoError(t, err)
-	}
-}
-
 // ResetPrimaryLogs is used reset the binary logs
 func ResetPrimaryLogs(t *testing.T, curPrimary *cluster.Vttablet) {
 	_, err := RunSQL(t, "FLUSH BINARY LOGS", curPrimary, "")
@@ -756,7 +733,7 @@ func MakeAPICall(t *testing.T, vtorc *cluster.VTOrcProcess, url string) (status 
 // The function provided takes in the status and response and returns if we should continue to retry or not
 func MakeAPICallRetry(t *testing.T, vtorc *cluster.VTOrcProcess, url string, retry func(int, string) bool) (status int, response string) {
 	t.Helper()
-	timeout := time.After(10 * time.Second)
+	timeout := time.After(30 * time.Second)
 	for {
 		select {
 		case <-timeout:
@@ -1120,4 +1097,20 @@ func PrintVTOrcLogsOnFailure(t *testing.T, clusterInstance *cluster.LocalProcess
 		}
 		log.Errorf("%s", string(content))
 	}
+}
+
+// EnableGlobalRecoveries enables global recoveries for the given VTOrc.
+func EnableGlobalRecoveries(t *testing.T, vtorc *cluster.VTOrcProcess) {
+	status, resp, err := MakeAPICall(t, vtorc, "/api/enable-global-recoveries")
+	require.NoError(t, err)
+	assert.Equal(t, 200, status)
+	assert.Equal(t, "Global recoveries enabled\n", resp)
+}
+
+// DisableGlobalRecoveries disables global recoveries for the given VTOrc.
+func DisableGlobalRecoveries(t *testing.T, vtorc *cluster.VTOrcProcess) {
+	status, resp, err := MakeAPICall(t, vtorc, "/api/disable-global-recoveries")
+	require.NoError(t, err)
+	assert.Equal(t, 200, status)
+	assert.Equal(t, "Global recoveries disabled\n", resp)
 }

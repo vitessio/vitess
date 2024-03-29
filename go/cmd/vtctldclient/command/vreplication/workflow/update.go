@@ -111,6 +111,7 @@ func commandUpdate(cmd *cobra.Command, args []string) error {
 			TabletTypes:               updateOptions.TabletTypes,
 			TabletSelectionPreference: tsp,
 			OnDdl:                     binlogdatapb.OnDDLAction(onddl),
+			Shards:                    baseOptions.Shards,
 		},
 	}
 

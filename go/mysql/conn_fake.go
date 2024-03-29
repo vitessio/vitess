@@ -81,3 +81,14 @@ func (m mockAddress) String() string {
 }
 
 var _ net.Addr = (*mockAddress)(nil)
+
+// GetTestConn returns a conn for testing purpose only.
+func GetTestConn() *Conn {
+	return newConn(testConn{}, DefaultFlushDelay, 0)
+}
+
+// GetTestServerConn is only meant to be used for testing.
+// It creates a server connection using a testConn and the provided listener.
+func GetTestServerConn(listener *Listener) *Conn {
+	return newServerConn(testConn{}, listener)
+}

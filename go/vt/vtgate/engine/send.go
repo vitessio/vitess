@@ -33,6 +33,8 @@ var _ Primitive = (*Send)(nil)
 
 // Send is an operator to send query to the specific keyspace, tabletType and destination
 type Send struct {
+	noInputs
+
 	// Keyspace specifies the keyspace to send the query to.
 	Keyspace *vindexes.Keyspace
 
@@ -54,7 +56,7 @@ type Send struct {
 	// MultishardAutocommit specifies that a multishard transaction query can autocommit
 	MultishardAutocommit bool
 
-	noInputs
+	ReservedConnectionNeeded bool
 }
 
 // ShardName as key for setting shard name in bind variables map
@@ -88,17 +90,10 @@ func (s *Send) GetTableName() string {
 func (s *Send) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	ctx, cancelFunc := addQueryTimeout(ctx, vcursor, 0)
 	defer cancelFunc()
-	rss, _, err := vcursor.ResolveDestinations(ctx, s.Keyspace.Name, nil, []key.Destination{s.TargetDestination})
+
+	rss, err := s.checkAndReturnShards(ctx, vcursor)
 	if err != nil {
 		return nil, err
-	}
-
-	if !s.Keyspace.Sharded && len(rss) != 1 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace does not have exactly one shard: %v", rss)
-	}
-
-	if s.SingleShardOnly && len(rss) != 1 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unexpected error, DestinationKeyspaceID mapping to multiple shards: %s, got: %v", s.Query, s.TargetDestination)
 	}
 
 	queries := make([]*querypb.BoundQuery, len(rss))
@@ -123,6 +118,26 @@ func (s *Send) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[str
 	return result, nil
 }
 
+func (s *Send) checkAndReturnShards(ctx context.Context, vcursor VCursor) ([]*srvtopo.ResolvedShard, error) {
+	rss, _, err := vcursor.ResolveDestinations(ctx, s.Keyspace.Name, nil, []key.Destination{s.TargetDestination})
+	if err != nil {
+		return nil, err
+	}
+
+	if !s.Keyspace.Sharded && len(rss) != 1 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace does not have exactly one shard: %v", rss)
+	}
+
+	if s.SingleShardOnly && len(rss) != 1 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unexpected error, DestinationKeyspaceID mapping to multiple shards: %s, got: %v", s.Query, s.TargetDestination)
+	}
+
+	if s.ReservedConnectionNeeded {
+		vcursor.Session().NeedsReservedConn()
+	}
+	return rss, nil
+}
+
 func (s *Send) canAutoCommit(vcursor VCursor, rss []*srvtopo.ResolvedShard) bool {
 	if s.IsDML {
 		return (len(rss) == 1 || s.MultishardAutocommit) && vcursor.AutocommitApproval()
@@ -140,17 +155,9 @@ func copyBindVars(in map[string]*querypb.BindVariable) map[string]*querypb.BindV
 
 // TryStreamExecute implements Primitive interface
 func (s *Send) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	rss, _, err := vcursor.ResolveDestinations(ctx, s.Keyspace.Name, nil, []key.Destination{s.TargetDestination})
+	rss, err := s.checkAndReturnShards(ctx, vcursor)
 	if err != nil {
 		return err
-	}
-
-	if !s.Keyspace.Sharded && len(rss) != 1 {
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace does not have exactly one shard: %v", rss)
-	}
-
-	if s.SingleShardOnly && len(rss) != 1 {
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unexpected error, DestinationKeyspaceID mapping to multiple shards: %s, got: %v", s.Query, s.TargetDestination)
 	}
 
 	multiBindVars := make([]map[string]*querypb.BindVariable, len(rss))
@@ -178,20 +185,13 @@ func (s *Send) GetFields(ctx context.Context, vcursor VCursor, bindVars map[stri
 
 func (s *Send) description() PrimitiveDescription {
 	other := map[string]any{
-		"Query": s.Query,
-		"Table": s.GetTableName(),
-	}
-	if s.IsDML {
-		other["IsDML"] = true
-	}
-	if s.SingleShardOnly {
-		other["SingleShardOnly"] = true
-	}
-	if s.ShardNameNeeded {
-		other["ShardNameNeeded"] = true
-	}
-	if s.MultishardAutocommit {
-		other["MultishardAutocommit"] = true
+		"Query":                    s.Query,
+		"Table":                    s.GetTableName(),
+		"IsDML":                    s.IsDML,
+		"SingleShardOnly":          s.SingleShardOnly,
+		"ShardNameNeeded":          s.ShardNameNeeded,
+		"MultishardAutocommit":     s.MultishardAutocommit,
+		"ReservedConnectionNeeded": s.ReservedConnectionNeeded,
 	}
 	return PrimitiveDescription{
 		OperatorType:      "Send",

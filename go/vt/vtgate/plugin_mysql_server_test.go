@@ -30,15 +30,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/utils"
-
-	"vitess.io/vitess/go/mysql/replication"
-
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/trace"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/tlstest"
+	"vitess.io/vitess/go/vt/vtenv"
 )
 
 type testHandler struct {
@@ -81,6 +80,10 @@ func (th *testHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos u
 
 func (th *testHandler) WarningCount(c *mysql.Conn) uint16 {
 	return 0
+}
+
+func (th *testHandler) Env() *vtenv.Environment {
+	return vtenv.NewTestEnv()
 }
 
 func TestConnectionUnixSocket(t *testing.T) {
@@ -340,5 +343,82 @@ func TestKillMethods(t *testing.T) {
 	err = vh.KillConnection(context.Background(), 1)
 	assert.NoError(t, err)
 	require.EqualError(t, cancelCtx.Err(), "context canceled")
+	require.True(t, mysqlConn.IsMarkedForClose())
+}
+
+func TestGracefulShutdown(t *testing.T) {
+	executor, _, _, _, _ := createExecutorEnv(t)
+
+	vh := newVtgateHandler(&VTGate{executor: executor, timings: timings, rowsReturned: rowsReturned, rowsAffected: rowsAffected})
+	th := &testHandler{}
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, false, 0, 0)
+	require.NoError(t, err)
+	defer listener.Close()
+
+	// add a connection
+	mysqlConn := mysql.GetTestServerConn(listener)
+	mysqlConn.ConnectionID = 1
+	mysqlConn.UserData = &mysql.StaticUserData{}
+	vh.connections[1] = mysqlConn
+
+	err = vh.ComQuery(mysqlConn, "select 1", func(result *sqltypes.Result) error {
+		return nil
+	})
+	assert.NoError(t, err)
+
+	listener.Shutdown()
+
+	err = vh.ComQuery(mysqlConn, "select 1", func(result *sqltypes.Result) error {
+		return nil
+	})
+	require.EqualError(t, err, "Server shutdown in progress (errno 1053) (sqlstate 08S01)")
+
+	require.True(t, mysqlConn.IsMarkedForClose())
+}
+
+func TestGracefulShutdownWithTransaction(t *testing.T) {
+	executor, _, _, _, _ := createExecutorEnv(t)
+
+	vh := newVtgateHandler(&VTGate{executor: executor, timings: timings, rowsReturned: rowsReturned, rowsAffected: rowsAffected})
+	th := &testHandler{}
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, false, 0, 0)
+	require.NoError(t, err)
+	defer listener.Close()
+
+	// add a connection
+	mysqlConn := mysql.GetTestServerConn(listener)
+	mysqlConn.ConnectionID = 1
+	mysqlConn.UserData = &mysql.StaticUserData{}
+	vh.connections[1] = mysqlConn
+
+	err = vh.ComQuery(mysqlConn, "BEGIN", func(result *sqltypes.Result) error {
+		return nil
+	})
+	assert.NoError(t, err)
+
+	err = vh.ComQuery(mysqlConn, "select 1", func(result *sqltypes.Result) error {
+		return nil
+	})
+	assert.NoError(t, err)
+
+	listener.Shutdown()
+
+	err = vh.ComQuery(mysqlConn, "select 1", func(result *sqltypes.Result) error {
+		return nil
+	})
+	assert.NoError(t, err)
+
+	err = vh.ComQuery(mysqlConn, "COMMIT", func(result *sqltypes.Result) error {
+		return nil
+	})
+	assert.NoError(t, err)
+
+	require.False(t, mysqlConn.IsMarkedForClose())
+
+	err = vh.ComQuery(mysqlConn, "select 1", func(result *sqltypes.Result) error {
+		return nil
+	})
+	require.EqualError(t, err, "Server shutdown in progress (errno 1053) (sqlstate 08S01)")
+
 	require.True(t, mysqlConn.IsMarkedForClose())
 }

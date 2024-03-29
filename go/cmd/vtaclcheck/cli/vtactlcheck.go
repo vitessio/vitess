@@ -44,7 +44,6 @@ var (
 
 func run(cmd *cobra.Command, args []string) error {
 	servenv.Init()
-	defer servenv.Close()
 
 	opts := &vtaclcheck.Options{
 		ACLFile:        aclFile,

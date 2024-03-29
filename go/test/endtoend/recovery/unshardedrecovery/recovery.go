@@ -51,8 +51,6 @@ var (
 	dbCredentialFile string
 	shardName        = "0"
 	commonTabletArg  = []string{
-		"--vreplication_healthcheck_topology_refresh", "1s",
-		"--vreplication_healthcheck_retry_delay", "1s",
 		"--vreplication_retry_delay", "1s",
 		"--degraded_threshold", "5s",
 		"--lock_tables_timeout", "5s",
@@ -166,7 +164,7 @@ func TestMainImpl(m *testing.M) {
 		if err != nil {
 			return 1, err
 		}
-		if err := localCluster.VtctlclientProcess.InitializeShard(keyspaceName, shard.Name, cell, primary.TabletUID); err != nil {
+		if err := localCluster.VtctldClientProcess.InitializeShard(keyspaceName, shard.Name, cell, primary.TabletUID); err != nil {
 			return 1, err
 		}
 		if err := localCluster.StartVTOrc(keyspaceName); err != nil {
@@ -208,17 +206,17 @@ func TestRecoveryImpl(t *testing.T) {
 	verifyInitialReplication(t)
 
 	// take first backup of value = test1
-	err := localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
+	err := localCluster.VtctldClientProcess.ExecuteCommand("Backup", replica1.Alias)
 	assert.NoError(t, err)
 
 	backups := listBackups(t)
 	require.Equal(t, len(backups), 1)
 	assert.Contains(t, backups[0], replica1.Alias)
 
-	err = localCluster.VtctlclientProcess.ApplyVSchema(keyspaceName, vSchema)
+	err = localCluster.VtctldClientProcess.ApplyVSchema(keyspaceName, vSchema)
 	assert.NoError(t, err)
 
-	output, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput("GetVSchema", keyspaceName)
+	output, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("GetVSchema", keyspaceName)
 	assert.NoError(t, err)
 	assert.Contains(t, output, "vt_insert_test")
 
@@ -226,12 +224,12 @@ func TestRecoveryImpl(t *testing.T) {
 	restoreTime := time.Now().UTC()
 	recovery.RestoreTablet(t, localCluster, replica2, recoveryKS1, "0", keyspaceName, commonTabletArg, restoreTime)
 
-	output, err = localCluster.VtctlclientProcess.ExecuteCommandWithOutput("GetSrvVSchema", cell)
+	output, err = localCluster.VtctldClientProcess.ExecuteCommandWithOutput("GetSrvVSchema", cell)
 	assert.NoError(t, err)
 	assert.Contains(t, output, keyspaceName)
 	assert.Contains(t, output, recoveryKS1)
 
-	output, err = localCluster.VtctlclientProcess.ExecuteCommandWithOutput("GetVSchema", recoveryKS1)
+	output, err = localCluster.VtctldClientProcess.ExecuteCommandWithOutput("GetVSchema", recoveryKS1)
 	assert.NoError(t, err)
 	assert.Contains(t, output, "vt_insert_test")
 
@@ -279,13 +277,13 @@ func TestRecoveryImpl(t *testing.T) {
 	}
 
 	// take second backup of value = msgx1
-	err = localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
+	err = localCluster.VtctldClientProcess.ExecuteCommand("Backup", replica1.Alias)
 	assert.NoError(t, err)
 
 	// restore to first backup
 	recovery.RestoreTablet(t, localCluster, replica3, recoveryKS2, "0", keyspaceName, commonTabletArg, restoreTime)
 
-	output, err = localCluster.VtctlclientProcess.ExecuteCommandWithOutput("GetVSchema", recoveryKS2)
+	output, err = localCluster.VtctldClientProcess.ExecuteCommandWithOutput("GetVSchema", recoveryKS2)
 	assert.NoError(t, err)
 	assert.Contains(t, output, "vt_insert_test")
 

@@ -66,12 +66,6 @@ func (mysqld *Mysqld) executeSchemaCommands(ctx context.Context, sql string) err
 	return mysqld.executeMysqlScript(ctx, params, sql)
 }
 
-func encodeEntityName(name string) string {
-	var buf strings.Builder
-	sqltypes.NewVarChar(name).EncodeSQL(&buf)
-	return buf.String()
-}
-
 // tableListSQL returns an IN clause "('t1', 't2'...) for a list of tables."
 func tableListSQL(tables []string) (string, error) {
 	if len(tables) == 0 {
@@ -80,7 +74,7 @@ func tableListSQL(tables []string) (string, error) {
 
 	encodedTables := make([]string, len(tables))
 	for i, tableName := range tables {
-		encodedTables[i] = encodeEntityName(tableName)
+		encodedTables[i] = sqltypes.EncodeStringSQL(tableName)
 	}
 
 	return "(" + strings.Join(encodedTables, ", ") + ")", nil
@@ -307,9 +301,13 @@ func GetColumnsList(dbName, tableName string, exec func(string, int, bool) (*sql
 	if dbName == "" {
 		dbName2 = "database()"
 	} else {
-		dbName2 = encodeEntityName(dbName)
+		dbName2 = sqltypes.EncodeStringSQL(dbName)
 	}
-	query := fmt.Sprintf(GetColumnNamesQuery, dbName2, encodeEntityName(sqlescape.UnescapeID(tableName)))
+	sanitizedTableName, err := sqlescape.UnescapeID(tableName)
+	if err != nil {
+		return "", err
+	}
+	query := fmt.Sprintf(GetColumnNamesQuery, dbName2, sqltypes.EncodeStringSQL(sanitizedTableName))
 	qr, err := exec(query, -1, true)
 	if err != nil {
 		return "", err
@@ -342,9 +340,16 @@ func GetColumns(dbName, table string, exec func(string, int, bool) (*sqltypes.Re
 	if selectColumns == "" {
 		selectColumns = "*"
 	}
-	tableSpec := sqlescape.EscapeID(sqlescape.UnescapeID(table))
+	tableSpec, err := sqlescape.EnsureEscaped(table)
+	if err != nil {
+		return nil, nil, err
+	}
 	if dbName != "" {
-		tableSpec = fmt.Sprintf("%s.%s", sqlescape.EscapeID(sqlescape.UnescapeID(dbName)), tableSpec)
+		dbName, err := sqlescape.EnsureEscaped(dbName)
+		if err != nil {
+			return nil, nil, err
+		}
+		tableSpec = fmt.Sprintf("%s.%s", dbName, tableSpec)
 	}
 	query := fmt.Sprintf(GetFieldsQuery, selectColumns, tableSpec)
 	qr, err := exec(query, 0, true)
@@ -396,7 +401,7 @@ func (mysqld *Mysqld) getPrimaryKeyColumns(ctx context.Context, dbName string, t
             FROM information_schema.STATISTICS
             WHERE TABLE_SCHEMA = %s AND TABLE_NAME IN %s AND LOWER(INDEX_NAME) = 'primary'
             ORDER BY table_name, SEQ_IN_INDEX`
-	sql = fmt.Sprintf(sql, encodeEntityName(dbName), tableList)
+	sql = fmt.Sprintf(sql, sqltypes.EncodeStringSQL(dbName), tableList)
 	qr, err := conn.Conn.ExecuteFetch(sql, len(tables)*100, true)
 	if err != nil {
 		return nil, err
@@ -531,6 +536,10 @@ func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, chan
 		sql = "SET sql_log_bin = 0;\n" + sql
 	}
 
+	if change.DisableForeignKeyChecks {
+		sql = "SET foreign_key_checks = 0;\n" + sql
+	}
+
 	// add a 'use XXX' in front of the SQL
 	sql = fmt.Sprintf("USE %s;\n%s", sqlescape.EscapeID(dbName), sql)
 
@@ -579,13 +588,7 @@ func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, chan
 // defined PRIMARY KEY then it may return the columns for
 // that index if it is likely the most efficient one amongst
 // the available PKE indexes on the table.
-func (mysqld *Mysqld) GetPrimaryKeyEquivalentColumns(ctx context.Context, dbName, table string) ([]string, string, error) {
-	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
-	if err != nil {
-		return nil, "", err
-	}
-	defer conn.Recycle()
-
+func GetPrimaryKeyEquivalentColumns(ctx context.Context, exec func(string, int, bool) (*sqltypes.Result, error), dbName, table string) ([]string, string, error) {
 	// We use column name aliases to guarantee lower case for our named results.
 	sql := `
             SELECT index_cols.COLUMN_NAME AS column_name, index_cols.INDEX_NAME as index_name FROM information_schema.STATISTICS AS index_cols INNER JOIN
@@ -626,10 +629,10 @@ func (mysqld *Mysqld) GetPrimaryKeyEquivalentColumns(ctx context.Context, dbName
             ) AS pke ON index_cols.INDEX_NAME = pke.INDEX_NAME
             WHERE index_cols.TABLE_SCHEMA = %s AND index_cols.TABLE_NAME = %s AND NON_UNIQUE = 0 AND NULLABLE != 'YES'
             ORDER BY SEQ_IN_INDEX ASC`
-	encodedDbName := encodeEntityName(dbName)
-	encodedTable := encodeEntityName(table)
+	encodedDbName := sqltypes.EncodeStringSQL(dbName)
+	encodedTable := sqltypes.EncodeStringSQL(table)
 	sql = fmt.Sprintf(sql, encodedDbName, encodedTable, encodedDbName, encodedTable, encodedDbName, encodedTable)
-	qr, err := conn.Conn.ExecuteFetch(sql, 1000, true)
+	qr, err := exec(sql, 1000, true)
 	if err != nil {
 		return nil, "", err
 	}

@@ -147,6 +147,7 @@ func (v *Viper) Watch(ctx context.Context, static *viper.Viper, minWaitInterval 
 
 	v.disk.SetConfigFile(cfg)
 	if err := v.disk.ReadInConfig(); err != nil {
+		cancel()
 		return nil, err
 	}
 
@@ -289,10 +290,29 @@ func (v *Viper) loadFromDisk() {
 
 // begin implementation of registry.Bindable for sync.Viper
 
-func (v *Viper) BindEnv(vars ...string) error                 { return v.disk.BindEnv(vars...) }
-func (v *Viper) BindPFlag(key string, flag *pflag.Flag) error { return v.disk.BindPFlag(key, flag) }
-func (v *Viper) RegisterAlias(alias string, key string)       { v.disk.RegisterAlias(alias, key) }
-func (v *Viper) SetDefault(key string, value any)             { v.disk.SetDefault(key, value) }
+func (v *Viper) BindEnv(vars ...string) error {
+	if err := v.disk.BindEnv(vars...); err != nil {
+		return err
+	}
+	return v.live.BindEnv(vars...)
+}
+
+func (v *Viper) BindPFlag(key string, flag *pflag.Flag) error {
+	if err := v.disk.BindPFlag(key, flag); err != nil {
+		return err
+	}
+	return v.live.BindPFlag(key, flag)
+}
+
+func (v *Viper) RegisterAlias(alias string, key string) {
+	v.disk.RegisterAlias(alias, key)
+	v.live.RegisterAlias(alias, key)
+}
+
+func (v *Viper) SetDefault(key string, value any) {
+	v.disk.SetDefault(key, value)
+	v.live.SetDefault(key, value)
+}
 
 // end implementation of registry.Bindable for sync.Viper
 

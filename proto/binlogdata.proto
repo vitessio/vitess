@@ -176,6 +176,9 @@ message Rule {
   // such columns need to have special transofrmation of the data, from an integral format into a
   // string format. e.g. the value 0 needs to be converted to '0'.
   map<string, bool> convert_int_to_enum = 8;
+
+   // ForceUniqueKey gives vtreamer a hint for `FORCE INDEX (...)` usage.
+   string force_unique_key = 9;
 }
 
 // Filter represents a list of ordered rules. The first

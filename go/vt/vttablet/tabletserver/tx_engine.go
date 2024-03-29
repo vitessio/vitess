@@ -97,7 +97,7 @@ func NewTxEngine(env tabletenv.Env) *TxEngine {
 	config := env.Config()
 	te := &TxEngine{
 		env:                 env,
-		shutdownGracePeriod: config.GracePeriods.ShutdownSeconds.Get(),
+		shutdownGracePeriod: config.GracePeriods.Shutdown,
 		reservedConnStats:   env.Exporter().NewTimings("ReservedConnections", "Reserved connections stats", "operation"),
 	}
 	limiter := txlimiter.New(env)
@@ -124,8 +124,8 @@ func NewTxEngine(env tabletenv.Env) *TxEngine {
 	// the TxPreparedPool.
 	te.preparedPool = NewTxPreparedPool(config.TxPool.Size - 2)
 	readPool := connpool.NewPool(env, "TxReadPool", tabletenv.ConnPoolConfig{
-		Size:               3,
-		IdleTimeoutSeconds: env.Config().TxPool.IdleTimeoutSeconds,
+		Size:        3,
+		IdleTimeout: env.Config().TxPool.IdleTimeout,
 	})
 	te.twoPC = NewTwoPC(readPool)
 	te.state = NotServing

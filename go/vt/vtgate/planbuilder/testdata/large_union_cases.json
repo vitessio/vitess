@@ -23,11 +23,11 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select content, user_id, weight_string(content), weight_string(user_id) from ((select content, user_id from music where 1 != 1) union (select content, user_id from music where 1 != 1)) as dt where 1 != 1",
-                "Query": "select content, user_id, weight_string(content), weight_string(user_id) from ((select content, user_id from music where user_id = 1270698330 order by created_at asc, id asc limit 11) union (select content, user_id from music where user_id = 1270698330 order by created_at asc, id asc limit 11)) as dt",
+                "FieldQuery": "select dt.content, dt.user_id, weight_string(content), weight_string(user_id) from ((select content, user_id from music where 1 != 1) union (select content, user_id from music where 1 != 1)) as dt where 1 != 1",
+                "Query": "select dt.content, dt.user_id, weight_string(content), weight_string(user_id) from ((select content, user_id from music where user_id = 1270698330 order by created_at asc, id asc limit 11) union (select content, user_id from music where user_id = 1270698330 order by created_at asc, id asc limit 11)) as dt",
                 "Table": "music",
                 "Values": [
-                  "INT64(1270698330)"
+                  "1270698330"
                 ],
                 "Vindex": "user_index"
               },
@@ -38,11 +38,11 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select content, user_id, weight_string(content), weight_string(user_id) from ((select content, user_id from music where 1 != 1) union (select content, user_id from music where 1 != 1)) as dt where 1 != 1",
-                "Query": "select content, user_id, weight_string(content), weight_string(user_id) from ((select content, user_id from music where user_id = 1270699497 order by created_at asc, id asc limit 11) union (select content, user_id from music where user_id = 1270699497 order by created_at asc, id asc limit 11)) as dt",
+                "FieldQuery": "select dt.content, dt.user_id, weight_string(content), weight_string(user_id) from ((select content, user_id from music where 1 != 1) union (select content, user_id from music where 1 != 1)) as dt where 1 != 1",
+                "Query": "select dt.content, dt.user_id, weight_string(content), weight_string(user_id) from ((select content, user_id from music where user_id = 1270699497 order by created_at asc, id asc limit 11) union (select content, user_id from music where user_id = 1270699497 order by created_at asc, id asc limit 11)) as dt",
                 "Table": "music",
                 "Values": [
-                  "INT64(1270699497)"
+                  "1270699497"
                 ],
                 "Vindex": "user_index"
               },
@@ -57,7 +57,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1270703806 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1270703806)"
+                  "1270703806"
                 ],
                 "Vindex": "user_index"
               },
@@ -72,7 +72,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1270707364 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1270707364)"
+                  "1270707364"
                 ],
                 "Vindex": "user_index"
               },
@@ -87,7 +87,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1270714657 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1270714657)"
+                  "1270714657"
                 ],
                 "Vindex": "user_index"
               },
@@ -102,7 +102,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1270721330 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1270721330)"
+                  "1270721330"
                 ],
                 "Vindex": "user_index"
               },
@@ -117,7 +117,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1270812079 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1270812079)"
+                  "1270812079"
                 ],
                 "Vindex": "user_index"
               },
@@ -132,7 +132,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1271011532 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1271011532)"
+                  "1271011532"
                 ],
                 "Vindex": "user_index"
               },
@@ -147,7 +147,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1271034164 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1271034164)"
+                  "1271034164"
                 ],
                 "Vindex": "user_index"
               },
@@ -162,7 +162,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1271034177 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1271034177)"
+                  "1271034177"
                 ],
                 "Vindex": "user_index"
               },
@@ -177,7 +177,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1271066849 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1271066849)"
+                  "1271066849"
                 ],
                 "Vindex": "user_index"
               },
@@ -192,7 +192,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1271098740 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1271098740)"
+                  "1271098740"
                 ],
                 "Vindex": "user_index"
               },
@@ -207,7 +207,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1271355000 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1271355000)"
+                  "1271355000"
                 ],
                 "Vindex": "user_index"
               },
@@ -222,7 +222,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1271639345 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1271639345)"
+                  "1271639345"
                 ],
                 "Vindex": "user_index"
               },
@@ -237,7 +237,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1271914117 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1271914117)"
+                  "1271914117"
                 ],
                 "Vindex": "user_index"
               },
@@ -252,7 +252,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1271924504 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1271924504)"
+                  "1271924504"
                 ],
                 "Vindex": "user_index"
               },
@@ -267,7 +267,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1272086055 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1272086055)"
+                  "1272086055"
                 ],
                 "Vindex": "user_index"
               },
@@ -282,7 +282,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1272127855 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1272127855)"
+                  "1272127855"
                 ],
                 "Vindex": "user_index"
               },
@@ -297,7 +297,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1272191137 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1272191137)"
+                  "1272191137"
                 ],
                 "Vindex": "user_index"
               },
@@ -312,7 +312,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1272468271 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1272468271)"
+                  "1272468271"
                 ],
                 "Vindex": "user_index"
               },
@@ -327,7 +327,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1270637436 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1270637436)"
+                  "1270637436"
                 ],
                 "Vindex": "user_index"
               },
@@ -342,7 +342,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1270644941 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1270644941)"
+                  "1270644941"
                 ],
                 "Vindex": "user_index"
               },
@@ -357,7 +357,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1270650576 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1270650576)"
+                  "1270650576"
                 ],
                 "Vindex": "user_index"
               },
@@ -372,7 +372,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1270652906 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1270652906)"
+                  "1270652906"
                 ],
                 "Vindex": "user_index"
               },
@@ -387,7 +387,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1270660650 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1270660650)"
+                  "1270660650"
                 ],
                 "Vindex": "user_index"
               },
@@ -402,7 +402,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1270670201 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1270670201)"
+                  "1270670201"
                 ],
                 "Vindex": "user_index"
               },
@@ -417,7 +417,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1270707364 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1270707364)"
+                  "1270707364"
                 ],
                 "Vindex": "user_index"
               },
@@ -432,7 +432,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1271365691 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1271365691)"
+                  "1271365691"
                 ],
                 "Vindex": "user_index"
               },
@@ -447,7 +447,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1271799956 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1271799956)"
+                  "1271799956"
                 ],
                 "Vindex": "user_index"
               },
@@ -462,7 +462,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1271914117 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1271914117)"
+                  "1271914117"
                 ],
                 "Vindex": "user_index"
               },
@@ -477,7 +477,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1270637436 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1270637436)"
+                  "1270637436"
                 ],
                 "Vindex": "user_index"
               },
@@ -492,7 +492,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1271799956 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1271799956)"
+                  "1271799956"
                 ],
                 "Vindex": "user_index"
               },
@@ -507,7 +507,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1270637436 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1270637436)"
+                  "1270637436"
                 ],
                 "Vindex": "user_index"
               },
@@ -522,7 +522,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1271639345 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1271639345)"
+                  "1271639345"
                 ],
                 "Vindex": "user_index"
               },
@@ -537,7 +537,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1270644941 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1270644941)"
+                  "1270644941"
                 ],
                 "Vindex": "user_index"
               },
@@ -552,7 +552,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1270649256 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1270649256)"
+                  "1270649256"
                 ],
                 "Vindex": "user_index"
               },
@@ -567,7 +567,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1270653671 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1270653671)"
+                  "1270653671"
                 ],
                 "Vindex": "user_index"
               },
@@ -582,7 +582,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1270670201 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1270670201)"
+                  "1270670201"
                 ],
                 "Vindex": "user_index"
               },
@@ -597,7 +597,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1270717223 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1270717223)"
+                  "1270717223"
                 ],
                 "Vindex": "user_index"
               },
@@ -612,7 +612,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1270720898 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1270720898)"
+                  "1270720898"
                 ],
                 "Vindex": "user_index"
               },
@@ -627,7 +627,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1270982590 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1270982590)"
+                  "1270982590"
                 ],
                 "Vindex": "user_index"
               },
@@ -642,7 +642,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1271346411 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1271346411)"
+                  "1271346411"
                 ],
                 "Vindex": "user_index"
               },
@@ -657,7 +657,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1271352121 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1271352121)"
+                  "1271352121"
                 ],
                 "Vindex": "user_index"
               },
@@ -672,7 +672,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1271354908 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1271354908)"
+                  "1271354908"
                 ],
                 "Vindex": "user_index"
               },
@@ -687,7 +687,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1271365691 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1271365691)"
+                  "1271365691"
                 ],
                 "Vindex": "user_index"
               },
@@ -702,7 +702,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1271367516 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1271367516)"
+                  "1271367516"
                 ],
                 "Vindex": "user_index"
               },
@@ -717,7 +717,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1271472522 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1271472522)"
+                  "1271472522"
                 ],
                 "Vindex": "user_index"
               },
@@ -732,7 +732,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1271607757 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1271607757)"
+                  "1271607757"
                 ],
                 "Vindex": "user_index"
               },
@@ -747,7 +747,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1271639345 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1271639345)"
+                  "1271639345"
                 ],
                 "Vindex": "user_index"
               },
@@ -762,7 +762,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1271821733 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1271821733)"
+                  "1271821733"
                 ],
                 "Vindex": "user_index"
               },
@@ -777,7 +777,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1271914117 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1271914117)"
+                  "1271914117"
                 ],
                 "Vindex": "user_index"
               },
@@ -792,7 +792,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1272068709 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1272068709)"
+                  "1272068709"
                 ],
                 "Vindex": "user_index"
               },
@@ -807,7 +807,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1272127855 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1272127855)"
+                  "1272127855"
                 ],
                 "Vindex": "user_index"
               },
@@ -822,7 +822,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1272191137 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1272191137)"
+                  "1272191137"
                 ],
                 "Vindex": "user_index"
               },
@@ -837,7 +837,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1272244005 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1272244005)"
+                  "1272244005"
                 ],
                 "Vindex": "user_index"
               },
@@ -852,7 +852,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1272468271 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1272468271)"
+                  "1272468271"
                 ],
                 "Vindex": "user_index"
               },
@@ -867,7 +867,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1270982590 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1270982590)"
+                  "1270982590"
                 ],
                 "Vindex": "user_index"
               },
@@ -882,7 +882,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1271365691 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1271365691)"
+                  "1271365691"
                 ],
                 "Vindex": "user_index"
               },
@@ -897,7 +897,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1271607757 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1271607757)"
+                  "1271607757"
                 ],
                 "Vindex": "user_index"
               },
@@ -912,7 +912,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1270982590 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1270982590)"
+                  "1270982590"
                 ],
                 "Vindex": "user_index"
               },
@@ -927,7 +927,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1271365691 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1271365691)"
+                  "1271365691"
                 ],
                 "Vindex": "user_index"
               },
@@ -942,7 +942,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1271607757 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1271607757)"
+                  "1271607757"
                 ],
                 "Vindex": "user_index"
               },
@@ -957,7 +957,7 @@
                 "Query": "select distinct content, user_id, weight_string(content), weight_string(user_id) from music where user_id = 1272244005 order by created_at asc, id asc limit 11",
                 "Table": "music",
                 "Values": [
-                  "INT64(1272244005)"
+                  "1272244005"
                 ],
                 "Vindex": "user_index"
               }

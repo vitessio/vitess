@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -266,22 +267,54 @@ func (flv *filePosFlavor) primaryStatus(c *Conn) (replication.PrimaryStatus, err
 	return replication.ParseFilePosPrimaryStatus(resultMap)
 }
 
-// waitUntilPositionCommand is part of the Flavor interface.
-func (flv *filePosFlavor) waitUntilPositionCommand(ctx context.Context, pos replication.Position) (string, error) {
+// waitUntilPosition is part of the Flavor interface.
+func (flv *filePosFlavor) waitUntilPosition(ctx context.Context, c *Conn, pos replication.Position) error {
 	filePosPos, ok := pos.GTIDSet.(replication.FilePosGTID)
 	if !ok {
-		return "", fmt.Errorf("Position is not filePos compatible: %#v", pos.GTIDSet)
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "position is not filePos compatible: %#v", pos.GTIDSet)
 	}
 
+	query := fmt.Sprintf("SELECT MASTER_POS_WAIT('%s', %d)", filePosPos.File, filePosPos.Pos)
 	if deadline, ok := ctx.Deadline(); ok {
 		timeout := time.Until(deadline)
 		if timeout <= 0 {
-			return "", fmt.Errorf("timed out waiting for position %v", pos)
+			return vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "timed out waiting for position %v", pos)
 		}
-		return fmt.Sprintf("SELECT MASTER_POS_WAIT('%s', %d, %.6f)", filePosPos.File, filePosPos.Pos, timeout.Seconds()), nil
+		query = fmt.Sprintf("SELECT MASTER_POS_WAIT('%s', %d, %.6f)", filePosPos.File, filePosPos.Pos, timeout.Seconds())
 	}
 
-	return fmt.Sprintf("SELECT MASTER_POS_WAIT('%s', %d)", filePosPos.File, filePosPos.Pos), nil
+	result, err := c.ExecuteFetch(query, 1, false)
+	if err != nil {
+		return err
+	}
+
+	// For MASTER_POS_WAIT(), the return value is the number of log events
+	// the replica had to wait for to advance to the specified position.
+	// The function returns NULL if the replica SQL thread is not started,
+	// the replica's source information is not initialized, the arguments
+	// are incorrect, or an error occurs. It returns -1 if the timeout has
+	// been exceeded. If the replica SQL thread stops while MASTER_POS_WAIT()
+	// is waiting, the function returns NULL. If the replica is past the
+	// specified position, the function returns immediately.
+	if len(result.Rows) != 1 || len(result.Rows[0]) != 1 {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid results: %#v", result)
+	}
+	val := result.Rows[0][0]
+	if val.IsNull() {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "replication is not running")
+	}
+	state, err := val.ToInt64()
+	if err != nil {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid result of %#v", val)
+	}
+	switch {
+	case state == -1:
+		return vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "timed out waiting for position %v", pos)
+	case state >= 0:
+		return nil
+	default:
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid result of %d", state)
+	}
 }
 
 func (*filePosFlavor) startReplicationUntilAfter(pos replication.Position) string {
@@ -303,7 +336,7 @@ func (*filePosFlavor) baseShowTablesWithSizes() string {
 }
 
 // supportsCapability is part of the Flavor interface.
-func (*filePosFlavor) supportsCapability(serverVersion string, capability FlavorCapability) (bool, error) {
+func (*filePosFlavor) supportsCapability(capability capabilities.FlavorCapability) (bool, error) {
 	switch capability {
 	default:
 		return false, nil

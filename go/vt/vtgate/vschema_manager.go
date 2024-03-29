@@ -20,11 +20,14 @@ import (
 	"context"
 	"sync"
 
+	"vitess.io/vitess/go/vt/graph"
 	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -42,6 +45,7 @@ type VSchemaManager struct {
 	cell              string
 	subscriber        func(vschema *vindexes.VSchema, stats *VSchemaStats)
 	schema            SchemaInfo
+	parser            *sqlparser.Parser
 }
 
 // SchemaInfo is an interface to schema tracker.
@@ -69,7 +73,7 @@ func (vm *VSchemaManager) UpdateVSchema(ctx context.Context, ksName string, vsch
 
 	ks := vschema.Keyspaces[ksName]
 
-	_, err = vindexes.BuildKeyspace(ks)
+	_, err = vindexes.BuildKeyspace(ks, vm.parser)
 	if err != nil {
 		return err
 	}
@@ -130,7 +134,7 @@ func (vm *VSchemaManager) VSchemaUpdate(v *vschemapb.SrvVSchema, err error) bool
 	if v == nil {
 		// We encountered an error, build an empty vschema.
 		if vm.currentVschema == nil {
-			vschema = vindexes.BuildVSchema(&vschemapb.SrvVSchema{})
+			vschema = vindexes.BuildVSchema(&vschemapb.SrvVSchema{}, vm.parser)
 		}
 	} else {
 		vschema = vm.buildAndEnhanceVSchema(v)
@@ -185,9 +189,12 @@ func (vm *VSchemaManager) Rebuild() {
 
 // buildAndEnhanceVSchema builds a new VSchema and uses information from the schema tracker to update it
 func (vm *VSchemaManager) buildAndEnhanceVSchema(v *vschemapb.SrvVSchema) *vindexes.VSchema {
-	vschema := vindexes.BuildVSchema(v)
+	vschema := vindexes.BuildVSchema(v, vm.parser)
 	if vm.schema != nil {
 		vm.updateFromSchema(vschema)
+		// We mark the keyspaces that have foreign key management in Vitess and have cyclic foreign keys
+		// to have an error. This makes all queries against them to fail.
+		markErrorIfCyclesInFk(vschema)
 	}
 	return vschema
 }
@@ -205,19 +212,41 @@ func (vm *VSchemaManager) updateFromSchema(vschema *vindexes.VSchema) {
 		// Now that we have ensured that all the tables are created, we can start populating the foreign keys
 		// in the tables.
 		for tblName, tblInfo := range m {
+			rTbl, err := vschema.FindRoutedTable(ksName, tblName, topodatapb.TabletType_PRIMARY)
+			if err != nil {
+				log.Errorf("error finding routed table %s: %v", tblName, err)
+				continue
+			}
 			for _, fkDef := range tblInfo.ForeignKeys {
+				// Ignore internal tables as part of foreign key references.
+				if schema.IsInternalOperationTableName(fkDef.ReferenceDefinition.ReferencedTable.Name.String()) {
+					continue
+				}
 				parentTbl, err := vschema.FindRoutedTable(ksName, fkDef.ReferenceDefinition.ReferencedTable.Name.String(), topodatapb.TabletType_PRIMARY)
 				if err != nil {
 					log.Errorf("error finding parent table %s: %v", fkDef.ReferenceDefinition.ReferencedTable.Name.String(), err)
 					continue
 				}
-				childTbl, err := vschema.FindRoutedTable(ksName, tblName, topodatapb.TabletType_PRIMARY)
-				if err != nil {
-					log.Errorf("error finding child table %s: %v", tblName, err)
-					continue
+				rTbl.ParentForeignKeys = append(rTbl.ParentForeignKeys, vindexes.NewParentFkInfo(parentTbl, fkDef))
+				parentTbl.ChildForeignKeys = append(parentTbl.ChildForeignKeys, vindexes.NewChildFkInfo(rTbl, fkDef))
+			}
+			for _, idxDef := range tblInfo.Indexes {
+				switch idxDef.Info.Type {
+				case sqlparser.IndexTypePrimary:
+					for _, idxCol := range idxDef.Columns {
+						rTbl.PrimaryKey = append(rTbl.PrimaryKey, idxCol.Column)
+					}
+				case sqlparser.IndexTypeUnique:
+					var uniqueKey sqlparser.Exprs
+					for _, idxCol := range idxDef.Columns {
+						if idxCol.Expression == nil {
+							uniqueKey = append(uniqueKey, sqlparser.NewColName(idxCol.Column.String()))
+						} else {
+							uniqueKey = append(uniqueKey, idxCol.Expression)
+						}
+					}
+					rTbl.UniqueKeys = append(rTbl.UniqueKeys, uniqueKey)
 				}
-				childTbl.ParentForeignKeys = append(childTbl.ParentForeignKeys, vindexes.NewParentFkInfo(parentTbl, fkDef))
-				parentTbl.ChildForeignKeys = append(parentTbl.ChildForeignKeys, vindexes.NewChildFkInfo(childTbl, fkDef))
 			}
 		}
 
@@ -227,6 +256,64 @@ func (vm *VSchemaManager) updateFromSchema(vschema *vindexes.VSchema) {
 			for name, def := range views {
 				ks.Views[name] = sqlparser.CloneSelectStatement(def)
 			}
+		}
+	}
+}
+
+func markErrorIfCyclesInFk(vschema *vindexes.VSchema) {
+	for ksName, ks := range vschema.Keyspaces {
+		// Only check cyclic foreign keys for keyspaces that have
+		// foreign keys managed in Vitess.
+		if ks.ForeignKeyMode != vschemapb.Keyspace_managed {
+			continue
+		}
+		/*
+			3 cases for creating the graph for cycle detection:
+			1. ON DELETE RESTRICT ON UPDATE RESTRICT: This is the simplest case where no update/delete is required on the child table, we only need to verify whether a value exists or not. So we don't need to add any edge for this case.
+			2. ON DELETE SET NULL, ON UPDATE SET NULL, ON UPDATE CASCADE: In this case having any update/delete on any of the columns in the parent side of the foreign key will make a corresponding delete/update on all the column in the child side of the foreign key. So we will add an edge from all the columns in the parent side to all the columns in the child side.
+			3. ON DELETE CASCADE: This is a special case wherein a deletion on the parent table will affect all the columns in the child table irrespective of the columns involved in the foreign key! So, we'll add an edge from all the columns in the parent side of the foreign key to all the columns of the child table.
+		*/
+		g := graph.NewGraph[string]()
+		for _, table := range ks.Tables {
+			for _, cfk := range table.ChildForeignKeys {
+				// Check for case 1.
+				if cfk.OnUpdate.IsRestrict() && cfk.OnDelete.IsRestrict() {
+					continue
+				}
+
+				childTable := cfk.Table
+				var parentVertices []string
+				var childVertices []string
+				for _, column := range cfk.ParentColumns {
+					parentVertices = append(parentVertices, sqlparser.String(sqlparser.NewColNameWithQualifier(column.String(), table.GetTableName())))
+				}
+
+				// Check for case 3.
+				if cfk.OnDelete.IsCascade() {
+					for _, column := range childTable.Columns {
+						childVertices = append(childVertices, sqlparser.String(sqlparser.NewColNameWithQualifier(column.Name.String(), childTable.GetTableName())))
+					}
+				} else {
+					// Case 2.
+					for _, column := range cfk.ChildColumns {
+						childVertices = append(childVertices, sqlparser.String(sqlparser.NewColNameWithQualifier(column.String(), childTable.GetTableName())))
+					}
+				}
+				addCrossEdges(g, parentVertices, childVertices)
+			}
+		}
+		hasCycle, cycle := g.HasCycles()
+		if hasCycle {
+			ks.Error = vterrors.VT09019(ksName, cycle)
+		}
+	}
+}
+
+// addCrossEdges adds the edges from all the vertices in the first list to all the vertices in the second list.
+func addCrossEdges(g *graph.Graph[string], from []string, to []string) {
+	for _, fromStr := range from {
+		for _, toStr := range to {
+			g.AddEdge(fromStr, toStr)
 		}
 	}
 }

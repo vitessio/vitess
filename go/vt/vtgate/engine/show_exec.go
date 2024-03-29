@@ -28,11 +28,11 @@ var _ Primitive = (*ShowExec)(nil)
 
 // ShowExec is a primitive to call into executor via vcursor.
 type ShowExec struct {
-	Command    sqlparser.ShowCommandType
-	ShowFilter *sqlparser.ShowFilter
-
 	noInputs
 	noTxNeeded
+
+	Command    sqlparser.ShowCommandType
+	ShowFilter *sqlparser.ShowFilter
 }
 
 func (s *ShowExec) RouteType() string {

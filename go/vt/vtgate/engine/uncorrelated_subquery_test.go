@@ -65,7 +65,7 @@ func TestPulloutSubqueryValueGood(t *testing.T) {
 	require.NoError(t, err)
 	sfp.ExpectLog(t, []string{`Execute aa: type:INT64 value:"1" false`})
 	ufp.ExpectLog(t, []string{`Execute aa: type:INT64 value:"1" sq: type:INT64 value:"1" false`})
-	expectResult(t, "ps.Execute", result, underlyingResult)
+	expectResult(t, result, underlyingResult)
 }
 
 func TestPulloutSubqueryValueNone(t *testing.T) {
@@ -279,7 +279,7 @@ func TestPulloutSubqueryStream(t *testing.T) {
 	require.NoError(t, err)
 	sfp.ExpectLog(t, []string{`Execute aa: type:INT64 value:"1" false`})
 	ufp.ExpectLog(t, []string{`StreamExecute aa: type:INT64 value:"1" sq: type:INT64 value:"1" true`})
-	expectResult(t, "ps.StreamExecute", result, underlyingResult)
+	expectResult(t, result, underlyingResult)
 }
 
 func TestPulloutSubqueryGetFields(t *testing.T) {

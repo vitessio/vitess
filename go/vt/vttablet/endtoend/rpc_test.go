@@ -169,6 +169,25 @@ func TestGetSchemaRPC(t *testing.T) {
 			},
 			getSchemaQueryType: querypb.SchemaTableType_ALL,
 			getSchemaTables:    []string{"vitess_temp1", "vitess_temp3", "unknown_table", "vitess_view3", "vitess_view1", "unknown_view"},
+		}, {
+			name: "Create some internal tables",
+			queries: []string{
+				"create table if not exists _vt_HOLD_6ace8bcef73211ea87e9f875a4d24e90_20200915120410(id bigint primary key);",
+				"create table vitess_temp1 (eid int);",
+				"create view vitess_view1 as select eid from vitess_a",
+			},
+			deferQueries: []string{
+				"drop table _vt_HOLD_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
+				"drop table vitess_temp1",
+				"drop view vitess_view1",
+			},
+			mapToExpect: map[string]string{
+				"vitess_view1": "CREATE ALGORITHM=UNDEFINED DEFINER=`vt_dba`@`localhost` SQL SECURITY DEFINER VIEW `vitess_view1` AS select `vitess_a`.`eid` AS `eid` from `vitess_a`",
+				"vitess_temp1": "CREATE TABLE `vitess_temp1` (\n  `eid` int DEFAULT NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci",
+				// These shouldn't be part of the result, so we verify it is empty.
+				"_vt_HOLD_6ace8bcef73211ea87e9f875a4d24e90_20200915120410": "",
+			},
+			getSchemaQueryType: querypb.SchemaTableType_ALL,
 		},
 	}
 

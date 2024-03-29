@@ -30,8 +30,6 @@ import (
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/vt/topo"
-
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/proto/vttime"
@@ -135,8 +133,6 @@ var createKeyspaceOptions = struct {
 	Force             bool
 	AllowEmptyVSchema bool
 
-	ServedFromsMap cli.StringMapValue
-
 	KeyspaceType      cli.KeyspaceTypeFlag
 	BaseKeyspace      string
 	SnapshotTimestamp string
@@ -201,18 +197,6 @@ func commandCreateKeyspace(cmd *cobra.Command, args []string) error {
 		SnapshotTime:      snapshotTime,
 		DurabilityPolicy:  createKeyspaceOptions.DurabilityPolicy,
 		SidecarDbName:     createKeyspaceOptions.SidecarDBName,
-	}
-
-	for n, v := range createKeyspaceOptions.ServedFromsMap.StringMapValue {
-		tt, err := topo.ParseServingTabletType(n)
-		if err != nil {
-			return err
-		}
-
-		req.ServedFroms = append(req.ServedFroms, &topodatapb.Keyspace_ServedFrom{
-			TabletType: tt,
-			Keyspace:   v,
-		})
 	}
 
 	resp, err := client.CreateKeyspace(commandCtx, req)
@@ -422,7 +406,6 @@ func commandValidateVersionKeyspace(cmd *cobra.Command, args []string) error {
 func init() {
 	CreateKeyspace.Flags().BoolVarP(&createKeyspaceOptions.Force, "force", "f", false, "Proceeds even if the keyspace already exists. Does not overwrite the existing keyspace record.")
 	CreateKeyspace.Flags().BoolVarP(&createKeyspaceOptions.AllowEmptyVSchema, "allow-empty-vschema", "e", false, "Allows a new keyspace to have no vschema.")
-	CreateKeyspace.Flags().Var(&createKeyspaceOptions.ServedFromsMap, "served-from", "Specifies a set of db_type:keyspace pairs used to serve traffic for the keyspace.")
 	CreateKeyspace.Flags().Var(&createKeyspaceOptions.KeyspaceType, "type", "The type of the keyspace.")
 	CreateKeyspace.Flags().StringVar(&createKeyspaceOptions.BaseKeyspace, "base-keyspace", "", "The base keyspace for a snapshot keyspace.")
 	CreateKeyspace.Flags().StringVar(&createKeyspaceOptions.SnapshotTimestamp, "snapshot-timestamp", "", "The snapshot time for a snapshot keyspace, as a timestamp in RFC3339 format.")

@@ -14,6 +14,7 @@ limitations under the License.
 package sqlescape
 
 import (
+	"fmt"
 	"strings"
 )
 
@@ -52,11 +53,65 @@ func EscapeIDs(identifiers []string) []string {
 	return result
 }
 
-// UnescapeID reverses any backticking in the input string.
-func UnescapeID(in string) string {
+// UnescapeID reverses any backticking in the input string by EscapeID.
+func UnescapeID(in string) (string, error) {
 	l := len(in)
-	if l >= 2 && in[0] == '`' && in[l-1] == '`' {
-		return in[1 : l-1]
+
+	if l == 0 || in == "``" {
+		return "", fmt.Errorf("UnescapeID err: invalid input identifier '%s'", in)
+
 	}
-	return in
+
+	if l == 1 {
+		if in[0] == '`' {
+			return "", fmt.Errorf("UnescapeID err: invalid input identifier '`'")
+		}
+		return in, nil
+	}
+
+	first, last := in[0], in[l-1]
+
+	if first == '`' && last != '`' {
+		return "", fmt.Errorf("UnescapeID err: unexpected single backtick at position %d in '%s'", 0, in)
+	}
+	if first != '`' && last == '`' {
+		return "", fmt.Errorf("UnescapeID err: unexpected single backtick at position %d in '%s'", l, in)
+	}
+	if first != '`' && last != '`' {
+		if idx := strings.IndexByte(in, '`'); idx != -1 {
+			return "", fmt.Errorf("UnescapeID err: no outer backticks found in the identifier '%s'", in)
+		}
+		return in, nil
+	}
+
+	in = in[1 : l-1]
+
+	if idx := strings.IndexByte(in, '`'); idx == -1 {
+		return in, nil
+	}
+
+	var buf strings.Builder
+	buf.Grow(len(in))
+
+	for i := 0; i < len(in); i++ {
+		buf.WriteByte(in[i])
+
+		if i < len(in)-1 && in[i] == '`' {
+			if in[i+1] == '`' {
+				i++ // halves the number of backticks
+			} else {
+				return "", fmt.Errorf("UnescapeID err: unexpected single backtick at position %d in '%s'", i, in)
+			}
+		}
+	}
+
+	return buf.String(), nil
+}
+
+func EnsureEscaped(in string) (string, error) {
+	out, err := UnescapeID(in)
+	if err != nil {
+		return "", err
+	}
+	return EscapeID(out), nil
 }

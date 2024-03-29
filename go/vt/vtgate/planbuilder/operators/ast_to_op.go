@@ -21,48 +21,37 @@ import (
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 const foreignKeyConstraintValues = "fkc_vals"
+const foreignKeyUpdateExpr = "fkc_upd"
 
 // translateQueryToOp creates an operator tree that represents the input SELECT or UNION query
-func translateQueryToOp(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (op ops.Operator, err error) {
+func translateQueryToOp(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) Operator {
 	switch node := selStmt.(type) {
 	case *sqlparser.Select:
-		op, err = createOperatorFromSelect(ctx, node)
+		return createOperatorFromSelect(ctx, node)
 	case *sqlparser.Union:
-		op, err = createOperatorFromUnion(ctx, node)
+		return createOperatorFromUnion(ctx, node)
 	case *sqlparser.Update:
-		op, err = createOperatorFromUpdate(ctx, node)
+		return createOperatorFromUpdate(ctx, node)
 	case *sqlparser.Delete:
-		op, err = createOperatorFromDelete(ctx, node)
+		return createOperatorFromDelete(ctx, node)
 	case *sqlparser.Insert:
-		op, err = createOperatorFromInsert(ctx, node)
+		return createOperatorFromInsert(ctx, node)
 	default:
-		err = vterrors.VT12001(fmt.Sprintf("operator: %T", selStmt))
+		panic(vterrors.VT12001(fmt.Sprintf("operator: %T", selStmt)))
 	}
-	if err != nil {
-		return nil, err
-	}
-
-	return op, nil
 }
 
-func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select) (ops.Operator, error) {
-	op, err := crossJoin(ctx, sel.From)
-	if err != nil {
-		return nil, err
-	}
+func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select) Operator {
+	op := crossJoin(ctx, sel.From)
 
 	if sel.Where != nil {
-		op, err = addWherePredicates(ctx, sel.Where.Expr, op)
-		if err != nil {
-			return nil, err
-		}
+		op = addWherePredicates(ctx, sel.Where.Expr, op)
 	}
 
 	if sel.Comments != nil || sel.Lock != sqlparser.NoLock {
@@ -75,26 +64,28 @@ func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.S
 
 	op = newHorizon(op, sel)
 
-	return op, nil
+	return op
 }
 
-func addWherePredicates(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op ops.Operator) (ops.Operator, error) {
+func addWherePredicates(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op Operator) Operator {
 	sqc := &SubQueryBuilder{}
+	op = addWherePredsToSubQueryBuilder(ctx, expr, op, sqc)
+	return sqc.getRootOperator(op, nil)
+}
+
+func addWherePredsToSubQueryBuilder(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op Operator, sqc *SubQueryBuilder) Operator {
 	outerID := TableID(op)
 	exprs := sqlparser.SplitAndExpression(nil, expr)
 	for _, expr := range exprs {
-		sqlparser.RemoveKeyspaceFromColName(expr)
-		subq, err := sqc.handleSubquery(ctx, expr, outerID)
-		if err != nil {
-			return nil, err
-		}
+		sqlparser.RemoveKeyspaceInCol(expr)
+		subq := sqc.handleSubquery(ctx, expr, outerID)
 		if subq != nil {
 			continue
 		}
 		op = op.AddPredicate(ctx, expr)
 		addColumnEquality(ctx, expr)
 	}
-	return sqc.getRootOperator(op, nil), nil
+	return op
 }
 
 // cloneASTAndSemState clones the AST and the semantic state of the input node.
@@ -110,7 +101,7 @@ func cloneASTAndSemState[T sqlparser.SQLNode](ctx *plancontext.PlanningContext, 
 
 // findTablesContained returns the TableSet of all the contained
 func findTablesContained(ctx *plancontext.PlanningContext, node sqlparser.SQLNode) (result semantics.TableSet) {
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
 		t, ok := node.(*sqlparser.AliasedTableExpr)
 		if !ok {
 			return true, nil
@@ -122,32 +113,13 @@ func findTablesContained(ctx *plancontext.PlanningContext, node sqlparser.SQLNod
 	return
 }
 
-func rewriteRemainingColumns(
-	ctx *plancontext.PlanningContext,
-	stmt sqlparser.SelectStatement,
-	subqID semantics.TableSet,
-) sqlparser.SelectStatement {
-	return sqlparser.CopyOnRewrite(stmt, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
-		colname, isColname := cursor.Node().(*sqlparser.ColName)
-		if !isColname {
-			return
-		}
-		deps := ctx.SemTable.RecursiveDeps(colname)
-		if deps.IsSolvedBy(subqID) {
-			return
-		}
-		rsv := ctx.GetReservedArgumentFor(colname)
-		cursor.Replace(sqlparser.NewArgument(rsv))
-	}, nil).(sqlparser.SelectStatement)
-}
-
 // joinPredicateCollector is used to inspect the predicates inside the subquery, looking for any
 // comparisons between the inner and the outer side.
 // They can be used for merging the two parts of the query together
 type joinPredicateCollector struct {
 	predicates          sqlparser.Exprs
 	remainingPredicates sqlparser.Exprs
-	joinColumns         []JoinColumn
+	joinColumns         []applyJoinColumn
 
 	totalID,
 	subqID,
@@ -157,73 +129,63 @@ type joinPredicateCollector struct {
 func (jpc *joinPredicateCollector) inspectPredicate(
 	ctx *plancontext.PlanningContext,
 	predicate sqlparser.Expr,
-) error {
+) {
 	pred := predicate
 	deps := ctx.SemTable.RecursiveDeps(predicate)
 	// if the subquery is not enough, but together we have all we need,
 	// then we can use this predicate to connect the subquery to the outer query
 	if !deps.IsSolvedBy(jpc.subqID) && deps.IsSolvedBy(jpc.totalID) {
 		jpc.predicates = append(jpc.predicates, predicate)
-		jc, err := BreakExpressionInLHSandRHS(ctx, predicate, jpc.outerID)
-		if err != nil {
-			return err
-		}
+		jc := breakExpressionInLHSandRHSForApplyJoin(ctx, predicate, jpc.outerID)
 		jpc.joinColumns = append(jpc.joinColumns, jc)
 		pred = jc.RHSExpr
 	}
 	jpc.remainingPredicates = append(jpc.remainingPredicates, pred)
-	return nil
 }
 
-func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.Union) (ops.Operator, error) {
-	opLHS, err := translateQueryToOp(ctx, node.Left)
-	if err != nil {
-		return nil, err
-	}
-
+func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.Union) Operator {
 	_, isRHSUnion := node.Right.(*sqlparser.Union)
 	if isRHSUnion {
-		return nil, vterrors.VT12001("nesting of UNIONs on the right-hand side")
+		panic(vterrors.VT12001("nesting of UNIONs on the right-hand side"))
 	}
-	opRHS, err := translateQueryToOp(ctx, node.Right)
-	if err != nil {
-		return nil, err
-	}
-
+	opLHS := translateQueryToOp(ctx, node.Left)
+	opRHS := translateQueryToOp(ctx, node.Right)
 	lexprs := ctx.SemTable.SelectExprs(node.Left)
 	rexprs := ctx.SemTable.SelectExprs(node.Right)
 
 	unionCols := ctx.SemTable.SelectExprs(node)
-	union := newUnion([]ops.Operator{opLHS, opRHS}, []sqlparser.SelectExprs{lexprs, rexprs}, unionCols, node.Distinct)
-	return newHorizon(union, node), nil
+	union := newUnion([]Operator{opLHS, opRHS}, []sqlparser.SelectExprs{lexprs, rexprs}, unionCols, node.Distinct)
+	return newHorizon(union, node)
 }
 
 // createOpFromStmt creates an operator from the given statement. It takes in two additional arguments—
 //  1. verifyAllFKs: For this given statement, do we need to verify validity of all the foreign keys on the vtgate level.
 //  2. fkToIgnore: The foreign key constraint to specifically ignore while planning the statement. This field is used in UPDATE CASCADE planning, wherein while planning the child update
 //     query, we need to ignore the parent foreign key constraint that caused the cascade in question.
-func createOpFromStmt(ctx *plancontext.PlanningContext, stmt sqlparser.Statement, verifyAllFKs bool, fkToIgnore string) (ops.Operator, error) {
-	var err error
-	ctx, err = plancontext.CreatePlanningContext(stmt, ctx.ReservedVars, ctx.VSchema, ctx.PlannerVersion)
+func createOpFromStmt(inCtx *plancontext.PlanningContext, stmt sqlparser.Statement, verifyAllFKs bool, fkToIgnore string) Operator {
+	ctx, err := plancontext.CreatePlanningContext(stmt, inCtx.ReservedVars, inCtx.VSchema, inCtx.PlannerVersion)
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 
 	// TODO (@GuptaManan100, @harshit-gangal): When we add cross-shard foreign keys support,
 	// we should augment the semantic analysis to also tell us whether the given query has any cross shard parent foreign keys to validate.
 	// If there are, then we have to run the query with FOREIGN_KEY_CHECKS off because we can't be sure if the DML will succeed on MySQL with the checks on.
 	// So, we should set VerifyAllFKs to true. i.e. we should add `|| ctx.SemTable.RequireForeignKeyChecksOff()` to the below condition.
-	ctx.VerifyAllFKs = verifyAllFKs
+	if verifyAllFKs {
+		// If ctx.VerifyAllFKs is already true we don't want to turn it off.
+		ctx.VerifyAllFKs = verifyAllFKs
+	}
 
 	// From all the parent foreign keys involved, we should remove the one that we need to ignore.
 	err = ctx.SemTable.RemoveParentForeignKey(fkToIgnore)
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 
 	// Now, we can filter the foreign keys further based on the planning context, specifically whether we are running
 	// this query with FOREIGN_KEY_CHECKS off or not. If the foreign key checks are enabled, then we don't need to verify
-	// the validity of shard-scoped RESTRICT foreign keys, since MySQL will do that for us. Similarily, we don't need to verify
+	// the validity of shard-scoped RESTRICT foreign keys, since MySQL will do that for us. Similarly, we don't need to verify
 	// if the shard-scoped parent foreign key constraints are valid.
 	switch stmt.(type) {
 	case *sqlparser.Update, *sqlparser.Insert:
@@ -232,13 +194,21 @@ func createOpFromStmt(ctx *plancontext.PlanningContext, stmt sqlparser.Statement
 		err = ctx.SemTable.RemoveNonRequiredForeignKeys(ctx.VerifyAllFKs, vindexes.DeleteAction)
 	}
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 
-	return PlanQuery(ctx, stmt)
+	op, err := PlanQuery(ctx, stmt)
+	if err != nil {
+		panic(err)
+	}
+
+	// need to remember which predicates have been broken up during join planning
+	inCtx.KeepPredicateInfo(ctx)
+
+	return op
 }
 
-func getOperatorFromTableExpr(ctx *plancontext.PlanningContext, tableExpr sqlparser.TableExpr, onlyTable bool) (ops.Operator, error) {
+func getOperatorFromTableExpr(ctx *plancontext.PlanningContext, tableExpr sqlparser.TableExpr, onlyTable bool) Operator {
 	switch tableExpr := tableExpr.(type) {
 	case *sqlparser.AliasedTableExpr:
 		return getOperatorFromAliasedTableExpr(ctx, tableExpr, onlyTable)
@@ -247,37 +217,33 @@ func getOperatorFromTableExpr(ctx *plancontext.PlanningContext, tableExpr sqlpar
 	case *sqlparser.ParenTableExpr:
 		return crossJoin(ctx, tableExpr.Exprs)
 	default:
-		return nil, vterrors.VT13001(fmt.Sprintf("unable to use: %T table type", tableExpr))
+		panic(vterrors.VT13001(fmt.Sprintf("unable to use: %T table type", tableExpr)))
 	}
 }
 
-func getOperatorFromJoinTableExpr(ctx *plancontext.PlanningContext, tableExpr *sqlparser.JoinTableExpr) (ops.Operator, error) {
-	lhs, err := getOperatorFromTableExpr(ctx, tableExpr.LeftExpr, false)
-	if err != nil {
-		return nil, err
-	}
-	rhs, err := getOperatorFromTableExpr(ctx, tableExpr.RightExpr, false)
-	if err != nil {
-		return nil, err
-	}
+func getOperatorFromJoinTableExpr(ctx *plancontext.PlanningContext, tableExpr *sqlparser.JoinTableExpr) Operator {
+	lhs := getOperatorFromTableExpr(ctx, tableExpr.LeftExpr, false)
+	rhs := getOperatorFromTableExpr(ctx, tableExpr.RightExpr, false)
 
 	switch tableExpr.Join {
 	case sqlparser.NormalJoinType:
 		return createInnerJoin(ctx, tableExpr, lhs, rhs)
 	case sqlparser.LeftJoinType, sqlparser.RightJoinType:
-		return createOuterJoin(tableExpr, lhs, rhs)
+		return createLeftOuterJoin(ctx, tableExpr, lhs, rhs)
+	case sqlparser.StraightJoinType:
+		return createStraightJoin(ctx, tableExpr, lhs, rhs)
 	default:
-		return nil, vterrors.VT13001("unsupported: %s", tableExpr.Join.ToString())
+		panic(vterrors.VT13001("unsupported: %s", tableExpr.Join.ToString()))
 	}
 }
 
-func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr *sqlparser.AliasedTableExpr, onlyTable bool) (ops.Operator, error) {
+func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr *sqlparser.AliasedTableExpr, onlyTable bool) Operator {
 	tableID := ctx.SemTable.TableSetFor(tableExpr)
 	switch tbl := tableExpr.Expr.(type) {
 	case sqlparser.TableName:
 		tableInfo, err := ctx.SemTable.TableInfoFor(tableID)
 		if err != nil {
-			return nil, err
+			panic(err)
 		}
 
 		if vt, isVindex := tableInfo.(*semantics.VindexTable); isVindex {
@@ -291,73 +257,68 @@ func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr
 				},
 				Vindex: vt.Vindex,
 				Solved: solves,
-			}, nil
+			}
 		}
 		qg := newQueryGraph()
 		isInfSchema := tableInfo.IsInfSchema()
 		qt := &QueryTable{Alias: tableExpr, Table: tbl, ID: tableID, IsInfSchema: isInfSchema}
 		qg.Tables = append(qg.Tables, qt)
-		return qg, nil
+		return qg
 	case *sqlparser.DerivedTable:
 		if onlyTable && tbl.Select.GetLimit() == nil {
 			tbl.Select.SetOrderBy(nil)
 		}
 
-		inner, err := translateQueryToOp(ctx, tbl.Select)
-		if err != nil {
-			return nil, err
-		}
+		inner := translateQueryToOp(ctx, tbl.Select)
 		if horizon, ok := inner.(*Horizon); ok {
 			horizon.TableId = &tableID
 			horizon.Alias = tableExpr.As.String()
 			horizon.ColumnAliases = tableExpr.Columns
-			qp, err := CreateQPFromSelectStatement(ctx, tbl.Select)
-			if err != nil {
-				return nil, err
-			}
+			qp := CreateQPFromSelectStatement(ctx, tbl.Select)
 			horizon.QP = qp
 		}
 
-		return inner, nil
+		return inner
 	default:
-		return nil, vterrors.VT13001(fmt.Sprintf("unable to use: %T", tbl))
+		panic(vterrors.VT13001(fmt.Sprintf("unable to use: %T", tbl)))
 	}
 }
 
-func crossJoin(ctx *plancontext.PlanningContext, exprs sqlparser.TableExprs) (ops.Operator, error) {
-	var output ops.Operator
+func crossJoin(ctx *plancontext.PlanningContext, exprs sqlparser.TableExprs) Operator {
+	var output Operator
 	for _, tableExpr := range exprs {
-		op, err := getOperatorFromTableExpr(ctx, tableExpr, len(exprs) == 1)
-		if err != nil {
-			return nil, err
-		}
+		op := getOperatorFromTableExpr(ctx, tableExpr, len(exprs) == 1)
 		if output == nil {
 			output = op
 		} else {
 			output = createJoin(ctx, output, op)
 		}
 	}
-	return output, nil
+	return output
 }
 
-func createQueryTableForDML(ctx *plancontext.PlanningContext, tableExpr sqlparser.TableExpr, whereClause *sqlparser.Where) (semantics.TableInfo, *QueryTable, error) {
+func createQueryTableForDML(
+	ctx *plancontext.PlanningContext,
+	tableExpr sqlparser.TableExpr,
+	whereClause *sqlparser.Where,
+) (semantics.TableInfo, *QueryTable) {
 	alTbl, ok := tableExpr.(*sqlparser.AliasedTableExpr)
 	if !ok {
-		return nil, nil, vterrors.VT13001("expected AliasedTableExpr")
+		panic(vterrors.VT13001("expected AliasedTableExpr"))
 	}
 	tblName, ok := alTbl.Expr.(sqlparser.TableName)
 	if !ok {
-		return nil, nil, vterrors.VT13001("expected TableName")
+		panic(vterrors.VT13001("expected TableName"))
 	}
 
 	tableID := ctx.SemTable.TableSetFor(alTbl)
 	tableInfo, err := ctx.SemTable.TableInfoFor(tableID)
 	if err != nil {
-		return nil, nil, err
+		panic(err)
 	}
 
 	if tableInfo.IsInfSchema() {
-		return nil, nil, vterrors.VT12001("update information schema tables")
+		panic(vterrors.VT12001("update information schema tables"))
 	}
 
 	var predicates []sqlparser.Expr
@@ -370,7 +331,7 @@ func createQueryTableForDML(ctx *plancontext.PlanningContext, tableExpr sqlparse
 		Table:      tblName,
 		Predicates: predicates,
 	}
-	return tableInfo, qt, nil
+	return tableInfo, qt
 }
 
 func addColumnEquality(ctx *plancontext.PlanningContext, expr sqlparser.Expr) {
@@ -397,27 +358,18 @@ func createSelectionOp(
 	selectExprs []sqlparser.SelectExpr,
 	tableExprs sqlparser.TableExprs,
 	where *sqlparser.Where,
+	orderBy sqlparser.OrderBy,
 	limit *sqlparser.Limit,
 	lock sqlparser.Lock,
-) (ops.Operator, error) {
+) Operator {
 	selectionStmt := &sqlparser.Select{
 		SelectExprs: selectExprs,
 		From:        tableExprs,
 		Where:       where,
+		OrderBy:     orderBy,
 		Limit:       limit,
 		Lock:        lock,
 	}
 	// There are no foreign keys to check for a select query, so we can pass anything for verifyAllFKs and fkToIgnore.
 	return createOpFromStmt(ctx, selectionStmt, false /* verifyAllFKs */, "" /* fkToIgnore */)
-}
-
-func selectParentColumns(fk vindexes.ChildFKInfo, lastOffset int) ([]int, []sqlparser.SelectExpr) {
-	var cols []int
-	var exprs []sqlparser.SelectExpr
-	for _, column := range fk.ParentColumns {
-		cols = append(cols, lastOffset)
-		exprs = append(exprs, aeWrap(sqlparser.NewColName(column.String())))
-		lastOffset++
-	}
-	return cols, exprs
 }

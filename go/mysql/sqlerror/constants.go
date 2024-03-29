@@ -34,7 +34,8 @@ func (e ErrorCode) ToString() string {
 // See above reference for more information on each code.
 const (
 	// Vitess specific errors, (100-999)
-	ERNotReplica = ErrorCode(100)
+	ERNotReplica      = ErrorCode(100)
+	ERNonAtomicCommit = ErrorCode(301)
 
 	// unknown
 	ERUnknownError = ErrorCode(1105)
@@ -250,6 +251,7 @@ const (
 	ERJSONValueTooBig              = ErrorCode(3150)
 	ERJSONDocumentTooDeep          = ErrorCode(3157)
 
+	ERLockNowait                = ErrorCode(3572)
 	ERRegexpStringNotTerminated = ErrorCode(3684)
 	ERRegexpBufferOverflow      = ErrorCode(3684)
 	ERRegexpIllegalArgument     = ErrorCode(3685)

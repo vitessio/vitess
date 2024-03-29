@@ -63,12 +63,15 @@ var Cases = []TestCase{
 	{Run: TupleComparisons},
 	{Run: Comparisons},
 	{Run: InStatement},
+	{Run: FnInsert},
 	{Run: FnLower},
 	{Run: FnUpper},
 	{Run: FnCharLength},
 	{Run: FnLength},
 	{Run: FnBitLength},
 	{Run: FnAscii},
+	{Run: FnReverse},
+	{Run: FnSpace},
 	{Run: FnOrd},
 	{Run: FnRepeat},
 	{Run: FnLeft},
@@ -78,8 +81,12 @@ var Cases = []TestCase{
 	{Run: FnLTrim},
 	{Run: FnRTrim},
 	{Run: FnTrim},
+	{Run: FnSubstr},
+	{Run: FnLocate},
+	{Run: FnReplace},
 	{Run: FnConcat},
 	{Run: FnConcatWs},
+	{Run: FnChar},
 	{Run: FnHex},
 	{Run: FnUnhex},
 	{Run: FnCeil},
@@ -111,6 +118,8 @@ var Cases = []TestCase{
 	{Run: FnTruncate},
 	{Run: FnCrc32},
 	{Run: FnConv},
+	{Run: FnBin},
+	{Run: FnOct},
 	{Run: FnMD5},
 	{Run: FnSHA1},
 	{Run: FnSHA2},
@@ -129,6 +138,10 @@ var Cases = []TestCase{
 	{Run: FnMinute},
 	{Run: FnMonth},
 	{Run: FnMonthName},
+	{Run: FnLastDay},
+	{Run: FnToDays},
+	{Run: FnFromDays},
+	{Run: FnTimeToSec},
 	{Run: FnQuarter},
 	{Run: FnSecond},
 	{Run: FnTime},
@@ -652,6 +665,24 @@ func FnConv(yield Query) {
 				yield(fmt.Sprintf("CONV(%s, %s, %s)", num1, num2, num3), nil)
 			}
 		}
+	}
+}
+
+func FnBin(yield Query) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("BIN(%s)", num), nil)
+	}
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("BIN(%s)", num), nil)
+	}
+}
+
+func FnOct(yield Query) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("OCT(%s)", num), nil)
+	}
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("OCT(%s)", num), nil)
 	}
 }
 
@@ -1307,6 +1338,28 @@ var JSONExtract_Schema = []*querypb.Field{
 	},
 }
 
+func FnInsert(yield Query) {
+	for _, s := range insertStrings {
+		for _, ns := range insertStrings {
+			for _, l := range inputBitwise {
+				for _, p := range inputBitwise {
+					yield(fmt.Sprintf("INSERT(%s, %s, %s, %s)", s, p, l, ns), nil)
+				}
+			}
+		}
+	}
+
+	mysqlDocSamples := []string{
+		"INSERT('Quadratic', 3, 4, 'What')",
+		"INSERT('Quadratic', -1, 4, 'What')",
+		"INSERT('Quadratic', 3, 100, 'What')",
+	}
+
+	for _, q := range mysqlDocSamples {
+		yield(q, nil)
+	}
+}
+
 func FnLower(yield Query) {
 	for _, str := range inputStrings {
 		yield(fmt.Sprintf("LOWER(%s)", str), nil)
@@ -1344,6 +1397,34 @@ func FnBitLength(yield Query) {
 func FnAscii(yield Query) {
 	for _, str := range inputStrings {
 		yield(fmt.Sprintf("ASCII(%s)", str), nil)
+	}
+}
+
+func FnReverse(yield Query) {
+	for _, str := range inputStrings {
+		yield(fmt.Sprintf("REVERSE(%s)", str), nil)
+	}
+}
+
+func FnSpace(yield Query) {
+	counts := []string{
+		"0",
+		"12",
+		"23",
+		"-1",
+		"-12393128120",
+		"-432766734237843674326423876243876234786",
+		"'-432766734237843674326423876243876234786'",
+		"432766734237843674326423876243876234786",
+		"1073741825",
+		"1.5",
+		"-3.2",
+		"'jhgjhg'",
+		"6",
+	}
+
+	for _, c := range counts {
+		yield(fmt.Sprintf("SPACE(%s)", c), nil)
 	}
 }
 
@@ -1436,6 +1517,94 @@ func FnTrim(yield Query) {
 	}
 }
 
+func FnSubstr(yield Query) {
+	mysqlDocSamples := []string{
+		`SUBSTRING('Quadratically',5)`,
+		`SUBSTRING('foobarbar' FROM 4)`,
+		`SUBSTRING('Quadratically',5,6)`,
+		`SUBSTRING('Sakila', -3)`,
+		`SUBSTRING('Sakila', -5, 3)`,
+		`SUBSTRING('Sakila' FROM -4 FOR 2)`,
+		`SUBSTR('Quadratically',5)`,
+		`SUBSTR('foobarbar' FROM 4)`,
+		`SUBSTR('Quadratically',5,6)`,
+		`SUBSTR('Sakila', -3)`,
+		`SUBSTR('Sakila', -5, 3)`,
+		`SUBSTR('Sakila' FROM -4 FOR 2)`,
+		`MID('Quadratically',5,6)`,
+		`MID('Sakila', -5, 3)`,
+	}
+
+	for _, q := range mysqlDocSamples {
+		yield(q, nil)
+	}
+
+	for _, str := range inputStrings {
+		for _, i := range radianInputs {
+			yield(fmt.Sprintf("SUBSTRING(%s, %s)", str, i), nil)
+
+			for _, j := range radianInputs {
+				yield(fmt.Sprintf("SUBSTRING(%s, %s, %s)", str, i, j), nil)
+			}
+		}
+	}
+}
+
+func FnLocate(yield Query) {
+	mysqlDocSamples := []string{
+		`LOCATE('bar', 'foobarbar')`,
+		`LOCATE('xbar', 'foobar')`,
+		`LOCATE('bar', 'foobarbar', 5)`,
+		`INSTR('foobarbar', 'bar')`,
+		`INSTR('xbar', 'foobar')`,
+		`POSITION('bar' IN 'foobarbar')`,
+		`POSITION('xbar' IN 'foobar')`,
+	}
+
+	for _, q := range mysqlDocSamples {
+		yield(q, nil)
+	}
+
+	for _, substr := range locateStrings {
+		for _, str := range locateStrings {
+			yield(fmt.Sprintf("LOCATE(%s, %s)", substr, str), nil)
+			yield(fmt.Sprintf("INSTR(%s, %s)", str, substr), nil)
+			yield(fmt.Sprintf("POSITION(%s IN %s)", str, substr), nil)
+
+			for _, i := range radianInputs {
+				yield(fmt.Sprintf("LOCATE(%s, %s, %s)", substr, str, i), nil)
+			}
+		}
+	}
+}
+
+func FnReplace(yield Query) {
+	cases := []string{
+		`REPLACE('www.mysql.com', 'w', 'Ww')`,
+		// MySQL doesn't do collation matching for replace, only
+		// byte equivalence, but make sure to check.
+		`REPLACE('straße', 'ss', 'b')`,
+		`REPLACE('straße', 'ß', 'b')`,
+		// From / to strings are converted into the collation of
+		// the input string.
+		`REPLACE('fooÿbar', _latin1 0xFF, _latin1 0xFE)`,
+		// First occurence is replaced
+		`replace('fff', 'ff', 'gg')`,
+	}
+
+	for _, q := range cases {
+		yield(q, nil)
+	}
+
+	for _, substr := range inputStrings {
+		for _, str := range inputStrings {
+			for _, i := range inputStrings {
+				yield(fmt.Sprintf("REPLACE(%s, %s, %s)", substr, str, i), nil)
+			}
+		}
+	}
+}
+
 func FnConcat(yield Query) {
 	for _, str := range inputStrings {
 		yield(fmt.Sprintf("CONCAT(%s)", str), nil)
@@ -1481,6 +1650,31 @@ func FnConcatWs(yield Query) {
 		for _, str2 := range inputStrings {
 			for _, str3 := range inputConversions {
 				yield(fmt.Sprintf("CONCAT_WS(%s, %s, %s)", str1, str2, str3), nil)
+			}
+		}
+	}
+}
+
+func FnChar(yield Query) {
+	mysqlDocSamples := []string{
+		`CHAR(77,121,83,81,'76')`,
+		`CHAR(77,77.3,'77.3')`,
+		`CHAR(77,121,83,81,'76' USING utf8mb4)`,
+		`CHAR(77,77.3,'77.3' USING utf8mb4)`,
+		`HEX(CHAR(1,0))`,
+		`HEX(CHAR(256))`,
+		`HEX(CHAR(1,0,0))`,
+		`HEX(CHAR(256*256)`,
+	}
+
+	for _, q := range mysqlDocSamples {
+		yield(q, nil)
+	}
+
+	for _, i1 := range radianInputs {
+		for _, i2 := range inputBitwise {
+			for _, i3 := range inputConversions {
+				yield(fmt.Sprintf("CHAR(%s, %s, %s)", i1, i2, i3), nil)
 			}
 		}
 	}
@@ -1710,6 +1904,99 @@ func FnMonthName(yield Query) {
 	}
 }
 
+func FnLastDay(yield Query) {
+	for _, d := range inputConversions {
+		yield(fmt.Sprintf("LAST_DAY(%s)", d), nil)
+	}
+
+	dates := []string{
+		`DATE'2024-02-18'`,
+		`DATE'2023-02-01'`,
+		`DATE'2100-02-01'`,
+		`TIMESTAMP'2020-12-31 23:59:59'`,
+		`TIMESTAMP'2025-01-01 00:00:00'`,
+		`'2000-02-01'`,
+		`'2020-12-31 23:59:59'`,
+		`'2025-01-01 00:00:00'`,
+		`20250101`,
+		`'20250101'`,
+	}
+
+	for _, d := range dates {
+		yield(fmt.Sprintf("LAST_DAY(%s)", d), nil)
+	}
+}
+
+func FnToDays(yield Query) {
+	for _, d := range inputConversions {
+		yield(fmt.Sprintf("TO_DAYS(%s)", d), nil)
+	}
+
+	dates := []string{
+		`DATE'0000-00-00'`,
+		`0`,
+		`'0000-00-00'`,
+		`DATE'2023-09-03 00:00:00'`,
+		`DATE'2023-09-03 07:00:00'`,
+		`DATE'0000-00-00 00:00:00'`,
+		`950501`,
+		`'2007-10-07'`,
+		`'2008-10-07'`,
+		`'08-10-07'`,
+		`'0000-01-01'`,
+	}
+
+	for _, d := range dates {
+		yield(fmt.Sprintf("TO_DAYS(%s)", d), nil)
+	}
+}
+
+func FnFromDays(yield Query) {
+	for _, d := range inputConversions {
+		yield(fmt.Sprintf("FROM_DAYS(%s)", d), nil)
+	}
+
+	days := []string{
+		"0",
+		"1",
+		"366",
+		"365242",
+		"3652424",
+		"3652425",
+		"3652500",
+		"3652499",
+		"730669",
+	}
+
+	for _, d := range days {
+		yield(fmt.Sprintf("FROM_DAYS(%s)", d), nil)
+	}
+}
+
+func FnTimeToSec(yield Query) {
+	for _, d := range inputConversions {
+		yield(fmt.Sprintf("TIME_TO_SEC(%s)", d), nil)
+	}
+
+	time := []string{
+		`0`,
+		`'00:00:00'`,
+		`'22:23:00'`,
+		`'00:39:38'`,
+		`TIME'00:39:38'`,
+		`TIME'102:39:38'`,
+		`TIME'838:59:59'`,
+		`TIME'-838:59:59'`,
+		`'000220`,
+		`'2003-09-03 00:39:38'`,
+		`'2003-09-03'`,
+	}
+
+	for _, t := range time {
+		yield(fmt.Sprintf("TIME_TO_SEC(%s)", t), nil)
+	}
+}
+
 func FnQuarter(yield Query) {
 	for _, d := range inputConversions {
 		yield(fmt.Sprintf("QUARTER(%s)", d), nil)
@@ -1724,6 +2011,25 @@ func FnSecond(yield Query) {
 
 func FnTime(yield Query) {
 	for _, d := range inputConversions {
+		yield(fmt.Sprintf("TIME(%s)", d), nil)
+	}
+	times := []string{
+		"'00:00:00'",
+		"'asdadsasd'",
+		"'312sadd'",
+		"'11-12-23'",
+		"'0000-11-23'",
+		"'0-0-0'",
+		"00:00",
+		"00:00-00",
+		"00:00:0:0:0:0",
+		"00::00",
+		"12::00",
+		"'00000001'",
+		"'11116656'",
+	}
+
+	for _, d := range times {
 		yield(fmt.Sprintf("TIME(%s)", d), nil)
 	}
 }
@@ -1767,7 +2073,7 @@ func FnYear(yield Query) {
 }
 
 func FnYearWeek(yield Query) {
-	for i := 0; i < 4; i++ {
+	for i := 0; i < 8; i++ {
 		for _, d := range inputConversions {
 			yield(fmt.Sprintf("YEARWEEK(%s, %d)", d, i), nil)
 		}

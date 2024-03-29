@@ -164,8 +164,8 @@ func shutdown(t *testing.T, ksName string) {
 	}
 
 	require.NoError(t,
-		clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteKeyspace", "--", "--recursive", ksName))
+		clusterInstance.VtctldClientProcess.ExecuteCommand("DeleteKeyspace", "--recursive", ksName))
 
 	require.NoError(t,
-		clusterInstance.VtctlclientProcess.ExecuteCommand("RebuildVSchemaGraph"))
+		clusterInstance.VtctldClientProcess.ExecuteCommand("RebuildVSchemaGraph"))
 }

@@ -80,16 +80,12 @@ var (
 		"21",
 		"22",
 		"mysql_server_vault",
-		"vstream_failover",
-		"vstream_stoponreshard_true",
-		"vstream_stoponreshard_false",
-		"vstream_with_keyspaces_to_watch",
+		"vstream",
 		"onlineddl_ghost",
 		"onlineddl_vrepl",
 		"onlineddl_vrepl_stress",
 		"onlineddl_vrepl_stress_suite",
 		"onlineddl_vrepl_suite",
-		"vreplication_migrate_vdiff2_convert_tz",
 		"onlineddl_revert",
 		"onlineddl_scheduler",
 		"tabletmanager_throttler_topo",
@@ -116,12 +112,12 @@ var (
 		"xb_recovery",
 		"mysql80",
 		"vreplication_across_db_versions",
-		"vreplication_multicell",
-		"vreplication_cellalias",
 		"vreplication_basic",
+		"vreplication_cellalias",
 		"vreplication_v2",
-		"vreplication_partial_movetables_basic",
-		"vreplication_partial_movetables_sequences",
+		"vreplication_partial_movetables_and_materialize",
+		"vreplication_foreign_key_stress",
+		"vreplication_migrate_vdiff2_convert_tz",
 		"schemadiff_vrepl",
 		"topo_connection_cache",
 		"vtgate_partial_keyspace",
@@ -141,6 +137,9 @@ var (
 		"vtgate_topo_consul",
 		"tabletmanager_consul",
 	}
+	clustersRequiringMemoryCheck = []string{
+		"vtorc",
+	}
 	clusterRequiring16CoresMachines = []string{
 		"onlineddl_vrepl",
 		"onlineddl_vrepl_stress",
@@ -158,6 +157,7 @@ type unitTest struct {
 type clusterTest struct {
 	Name, Shard, Platform              string
 	FileName                           string
+	MemoryCheck                        bool
 	MakeTools, InstallXtraBackup       bool
 	Docker                             bool
 	LimitResourceUsage                 bool
@@ -352,6 +352,13 @@ func generateClusterWorkflows(list []string, tpl string) {
 			for _, makeToolCluster := range makeToolClusters {
 				if makeToolCluster == cluster {
 					test.MakeTools = true
+					break
+				}
+			}
+			memoryCheckClusters := canonnizeList(clustersRequiringMemoryCheck)
+			for _, memCheckCluster := range memoryCheckClusters {
+				if memCheckCluster == cluster {
+					test.MemoryCheck = true
 					break
 				}
 			}

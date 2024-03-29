@@ -126,7 +126,7 @@
       "Original": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from user limit 10",
       "Instructions": {
         "OperatorType": "Limit",
-        "Count": "INT64(10)",
+        "Count": "10",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -261,7 +261,7 @@
       "Original": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from user limit 10",
       "Instructions": {
         "OperatorType": "Limit",
-        "Count": "INT64(10)",
+        "Count": "10",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -361,8 +361,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select a.user_id as user_id, a.col1 as col1, a.col2 as col2, b.user_id as user_id, b.col1 as col1, b.col2 as col2 from authoritative as a, authoritative as b where 1 != 1",
-        "Query": "select a.user_id as user_id, a.col1 as col1, a.col2 as col2, b.user_id as user_id, b.col1 as col1, b.col2 as col2 from authoritative as a, authoritative as b where a.user_id = b.user_id",
+        "FieldQuery": "select a.user_id, a.col1, a.col2, b.user_id, b.col1, b.col2 from authoritative as a, authoritative as b where 1 != 1",
+        "Query": "select a.user_id, a.col1, a.col2, b.user_id, b.col1, b.col2 from authoritative as a, authoritative as b where a.user_id = b.user_id",
         "Table": "authoritative"
       },
       "TablesUsed": [
@@ -388,8 +388,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select a.user_id, a.col1, a.col2 from authoritative as a where 1 != 1",
-        "Query": "select a.user_id, a.col1, a.col2 from authoritative as a",
+        "FieldQuery": "select user_id, col1, col2 from authoritative as a where 1 != 1",
+        "Query": "select user_id, col1, col2 from authoritative as a",
         "Table": "authoritative"
       },
       "TablesUsed": [
@@ -433,8 +433,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select `user`.id, a.user_id as user_id, a.col1 as col1, a.col2 as col2, `user`.col1 from authoritative as a, `user` where 1 != 1",
-        "Query": "select `user`.id, a.user_id as user_id, a.col1 as col1, a.col2 as col2, `user`.col1 from authoritative as a, `user` where a.user_id = `user`.id",
+        "FieldQuery": "select `user`.id, a.user_id, a.col1, a.col2, `user`.col1 from authoritative as a, `user` where 1 != 1",
+        "Query": "select `user`.id, a.user_id, a.col1, a.col2, `user`.col1 from authoritative as a, `user` where a.user_id = `user`.id",
         "Table": "`user`, authoritative"
       },
       "TablesUsed": [
@@ -596,7 +596,7 @@
         "Query": "select * from pin_test",
         "Table": "pin_test",
         "Values": [
-          "VARCHAR(\"\\x80\")"
+          "'\ufffd'"
         ],
         "Vindex": "binary"
       },
@@ -971,7 +971,7 @@
         "Query": "select * from `user` where id = 0x04",
         "Table": "`user`",
         "Values": [
-          "VARBINARY(\"\\x04\")"
+          "'\u0004'"
         ],
         "Vindex": "user_index"
       },
@@ -981,6 +981,84 @@
     }
   },
   {
+    "comment": "Selection but explicitly ignore a vindex",
+    "query": "select * from user ignore vindex (user_index) where id = 1",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select * from user ignore vindex (user_index) where id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select * from `user` where 1 != 1",
+        "Query": "select * from `user` where id = 1",
+        "Table": "`user`"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Selection but make the planner explicitly use a vindex",
+    "query": "select intcol, id from user use vindex (name_user_map) where costly = 'aa' and name = 'bb' and id = 3",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select intcol, id from user use vindex (name_user_map) where costly = 'aa' and name = 'bb' and id = 3",
+      "Instructions": {
+        "OperatorType": "VindexLookup",
+        "Variant": "Equal",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Values": [
+          "'bb'"
+        ],
+        "Vindex": "name_user_map",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "IN",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+            "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+            "Table": "name_user_vdx",
+            "Values": [
+              "::name"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "ByDestination",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select intcol, id from `user` where 1 != 1",
+            "Query": "select intcol, id from `user` where costly = 'aa' and `name` = 'bb' and id = 3",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Vindex hint on a non-existing vindex",
+    "query": "select * from user use vindex (does_not_exist) where id = 1",
+    "plan": "VT09021: Vindex 'does_not_exist' does not exist in table 'user.user'"
+  },
+  {
     "comment": "sharded limit offset",
     "query": "select user_id from music order by user_id limit 10, 20",
     "plan": {
@@ -988,8 +1066,8 @@
       "Original": "select user_id from music order by user_id limit 10, 20",
       "Instructions": {
         "OperatorType": "Limit",
-        "Count": "INT64(20)",
-        "Offset": "INT64(10)",
+        "Count": "20",
+        "Offset": "10",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1000,7 +1078,7 @@
             },
             "FieldQuery": "select user_id, weight_string(user_id) from music where 1 != 1",
             "OrderBy": "(0|1) ASC",
-            "Query": "select user_id, weight_string(user_id) from music order by user_id asc limit :__upper_limit",
+            "Query": "select user_id, weight_string(user_id) from music order by music.user_id asc limit :__upper_limit",
             "ResultColumns": 1,
             "Table": "music"
           }
@@ -1028,7 +1106,7 @@
         "Query": "select * from `user` where `name` = 'abc' and id = 4 limit 5",
         "Table": "`user`",
         "Values": [
-          "INT64(4)"
+          "4"
         ],
         "Vindex": "user_index"
       },
@@ -1054,7 +1132,7 @@
         "Query": "select * from `user` where id = 4 and `name` = 'abc' limit 5",
         "Table": "`user`",
         "Values": [
-          "INT64(4)"
+          "4"
         ],
         "Vindex": "user_index"
       },
@@ -1080,7 +1158,7 @@
         "Query": "select * from `user` where id = 4 and `name` = 'abc' limit 5",
         "Table": "`user`",
         "Values": [
-          "INT64(4)"
+          "4"
         ],
         "Vindex": "user_index"
       },
@@ -1106,7 +1184,7 @@
         "Query": "select user0_.col as col0_ from `user` as user0_ where id = 1 order by user0_.col desc limit 2",
         "Table": "`user`",
         "Values": [
-          "INT64(1)"
+          "1"
         ],
         "Vindex": "user_index"
       },
@@ -1129,10 +1207,10 @@
           "Sharded": true
         },
         "FieldQuery": "select user0_.col as col0_ from `user` as user0_ where 1 != 1",
-        "Query": "select user0_.col as col0_ from `user` as user0_ where id = 1 order by col0_ desc limit 3",
+        "Query": "select user0_.col as col0_ from `user` as user0_ where id = 1 order by user0_.col desc limit 3",
         "Table": "`user`",
         "Values": [
-          "INT64(1)"
+          "1"
         ],
         "Vindex": "user_index"
       },
@@ -1158,7 +1236,7 @@
         "Query": "select * from `user` where id = 1 and `name` = true limit 5",
         "Table": "`user`",
         "Values": [
-          "INT64(1)"
+          "1"
         ],
         "Vindex": "user_index"
       },
@@ -1184,7 +1262,7 @@
         "Query": "select * from `user` where id = 1 and `name` limit 5",
         "Table": "`user`",
         "Values": [
-          "INT64(1)"
+          "1"
         ],
         "Vindex": "user_index"
       },
@@ -1210,7 +1288,7 @@
         "Query": "select * from `user` where id = 5 and `name` = true limit 5",
         "Table": "`user`",
         "Values": [
-          "INT64(5)"
+          "5"
         ],
         "Vindex": "user_index"
       },
@@ -1328,8 +1406,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select t.id1 from (select `user`.id as id1 from `user` where 1 != 1) as t where 1 != 1",
-            "Query": "select t.id1 from (select `user`.id as id1 from `user`) as t",
+            "FieldQuery": "select id1 from (select `user`.id as id1 from `user` where 1 != 1) as t where 1 != 1",
+            "Query": "select id1 from (select `user`.id as id1 from `user`) as t",
             "Table": "`user`"
           },
           {
@@ -1339,8 +1417,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select t.id2 from (select user_extra.id as id2 from user_extra where 1 != 1) as t where 1 != 1",
-            "Query": "select t.id2 from (select user_extra.id as id2 from user_extra) as t",
+            "FieldQuery": "select id2 from (select user_extra.id as id2 from user_extra where 1 != 1) as t where 1 != 1",
+            "Query": "select id2 from (select user_extra.id as id2 from user_extra) as t",
             "Table": "user_extra"
           }
         ]
@@ -1378,7 +1456,7 @@
         "Query": "select * from music where user_id = 1 union select * from `user` where id = 1",
         "Table": "`user`, music",
         "Values": [
-          "INT64(1)"
+          "1"
         ],
         "Vindex": "user_index"
       },
@@ -1405,7 +1483,7 @@
         "Query": "select *, :__lastInsertId as `last_insert_id()` from music where user_id = 1 union select * from `user` where id = 1",
         "Table": "`user`, music",
         "Values": [
-          "INT64(1)"
+          "1"
         ],
         "Vindex": "user_index"
       },
@@ -1428,8 +1506,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select a.col1, a.col2 from (select col1, col2 from unsharded where 1 != 1 union select col1, col2 from unsharded where 1 != 1) as a where 1 != 1",
-        "Query": "select a.col1, a.col2 from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) as a",
+        "FieldQuery": "select * from (select col1, col2 from unsharded where 1 != 1 union select col1, col2 from unsharded where 1 != 1) as a where 1 != 1",
+        "Query": "select * from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) as a",
         "Table": "unsharded"
       },
       "TablesUsed": [
@@ -1574,6 +1652,28 @@
     }
   },
   {
+    "comment": "routing table on music",
+    "query": "select * from second_user.bar where id > 2",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select * from second_user.bar where id > 2",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select * from music as bar where 1 != 1",
+        "Query": "select * from music as bar where id > 2",
+        "Table": "music"
+      },
+      "TablesUsed": [
+        "user.music"
+      ]
+    }
+  },
+  {
     "comment": "testing SingleRow Projection",
     "query": "select 42",
     "plan": {
@@ -1582,7 +1682,7 @@
       "Instructions": {
         "OperatorType": "Projection",
         "Expressions": [
-          "INT64(42) as 42"
+          "42 as 42"
         ],
         "Inputs": [
           {
@@ -1626,7 +1726,7 @@
       "Instructions": {
         "OperatorType": "Projection",
         "Expressions": [
-          "INT64(44) as 42 + 2"
+          "44 as 42 + 2"
         ],
         "Inputs": [
           {
@@ -1656,7 +1756,7 @@
         "Query": "select * from music where user_id = 1",
         "Table": "music",
         "Values": [
-          "INT64(1)"
+          "1"
         ],
         "Vindex": "user_index"
       },
@@ -1676,7 +1776,7 @@
         "Inputs": [
           {
             "OperatorType": "Limit",
-            "Count": "INT64(100)",
+            "Count": "100",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -1736,7 +1836,7 @@
             "Query": "select * from music where user_id = 1 limit 2",
             "Table": "music",
             "Values": [
-              "INT64(1)"
+              "1"
             ],
             "Vindex": "user_index"
           },
@@ -1751,7 +1851,7 @@
             "Query": "select count(*) from music where user_id = 1",
             "Table": "music",
             "Values": [
-              "INT64(1)"
+              "1"
             ],
             "Vindex": "user_index"
           }
@@ -1773,7 +1873,7 @@
         "Inputs": [
           {
             "OperatorType": "Limit",
-            "Count": "INT64(2)",
+            "Count": "2",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -1784,7 +1884,7 @@
                 },
                 "FieldQuery": "select user_id, count(id), weight_string(user_id) from music where 1 != 1 group by user_id",
                 "OrderBy": "(0|2) ASC",
-                "Query": "select user_id, count(id), weight_string(user_id) from music group by user_id having count(user_id) = 1 order by user_id asc limit :__upper_limit",
+                "Query": "select user_id, count(id), weight_string(user_id) from music group by user_id having count(user_id) = 1 order by music.user_id asc limit :__upper_limit",
                 "ResultColumns": 2,
                 "Table": "music"
               }
@@ -1923,7 +2023,7 @@
         "Query": "select (select u.id from `user` as u where u.id = 1), a.id from `user` as a where a.id = 1",
         "Table": "`user`",
         "Values": [
-          "INT64(1)"
+          "1"
         ],
         "Vindex": "user_index"
       },
@@ -1984,7 +2084,7 @@
       "Instructions": {
         "OperatorType": "Projection",
         "Expressions": [
-          "INT64(1) as 1"
+          "1 as 1"
         ],
         "Inputs": [
           {
@@ -2021,78 +2121,7 @@
     }
   },
   {
-    "comment": "select (select col from user limit 1) as a from user join user_extra order by a",
-    "query": "select (select col from user limit 1) as a from user join user_extra order by a",
-    "plan": {
-      "QueryType": "SELECT",
-      "Original": "select (select col from user limit 1) as a from user join user_extra order by a",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "L:0",
-        "TableName": "`user`_user_extra",
-        "Inputs": [
-          {
-            "OperatorType": "UncorrelatedSubquery",
-            "Variant": "PulloutValue",
-            "PulloutVars": [
-              "__sq1"
-            ],
-            "Inputs": [
-              {
-                "InputName": "SubQuery",
-                "OperatorType": "Limit",
-                "Count": "INT64(1)",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select col from `user` where 1 != 1",
-                    "Query": "select col from `user` limit :__upper_limit",
-                    "Table": "`user`"
-                  }
-                ]
-              },
-              {
-                "InputName": "Outer",
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select :__sq1 as a, weight_string(:__sq1) from `user` where 1 != 1",
-                "OrderBy": "(0|1) ASC",
-                "Query": "select :__sq1 as a, weight_string(:__sq1) from `user` order by a asc",
-                "Table": "`user`"
-              }
-            ]
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from user_extra where 1 != 1",
-            "Query": "select 1 from user_extra",
-            "Table": "user_extra"
-          }
-        ]
-      },
-      "TablesUsed": [
-        "user.user",
-        "user.user_extra"
-      ]
-    }
-  },
-  {
-    "comment": "select t.a from (select (select col from user limit 1) as a from user join user_extra) t",
+    "comment": "subquery in select expression of derived table",
     "query": "select t.a from (select (select col from user limit 1) as a from user join user_extra) t",
     "plan": {
       "QueryType": "SELECT",
@@ -2113,7 +2142,7 @@
               {
                 "InputName": "SubQuery",
                 "OperatorType": "Limit",
-                "Count": "INT64(1)",
+                "Count": "1",
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -2162,6 +2191,77 @@
     }
   },
   {
+    "comment": "select (select col from user limit 1) as a from user join user_extra order by a",
+    "query": "select (select col from user limit 1) as a from user join user_extra order by a",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select (select col from user limit 1) as a from user join user_extra order by a",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
+        "TableName": "`user`_user_extra",
+        "Inputs": [
+          {
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutValue",
+            "PulloutVars": [
+              "__sq1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Limit",
+                "Count": "1",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select col from `user` where 1 != 1",
+                    "Query": "select col from `user` limit :__upper_limit",
+                    "Table": "`user`"
+                  }
+                ]
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select :__sq1 as __sq1, weight_string(:__sq1) from `user` where 1 != 1",
+                "OrderBy": "(0|1) ASC",
+                "Query": "select :__sq1 as __sq1, weight_string(:__sq1) from `user` order by __sq1 asc",
+                "Table": "`user`"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "Query": "select 1 from user_extra",
+            "Table": "user_extra"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
     "comment": "plan test for a natural character set string",
     "query": "select N'string' from dual",
     "plan": {
@@ -2170,7 +2270,7 @@
       "Instructions": {
         "OperatorType": "Projection",
         "Expressions": [
-          "VARCHAR(\"string\") as N'string'"
+          "'string' as N'string'"
         ],
         "Inputs": [
           {
@@ -2229,6 +2329,74 @@
     }
   },
   {
+    "comment": "Straight Join ensures specific ordering of joins",
+    "query": "select user.id, user_extra.user_id from user straight_join user_extra where user.id = user_extra.foo",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select user.id, user_extra.user_id from user straight_join user_extra where user.id = user_extra.foo",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0,R:0",
+        "JoinVars": {
+          "user_id": 0
+        },
+        "TableName": "`user`_user_extra",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.id from `user` where 1 != 1",
+            "Query": "select `user`.id from `user`",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select user_extra.user_id from user_extra where 1 != 1",
+            "Query": "select user_extra.user_id from user_extra where user_extra.foo = :user_id",
+            "Table": "user_extra"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "Straight Join preserved in MySQL query",
+    "query": "select user.id, user_extra.user_id from user straight_join user_extra where user.id = user_extra.user_id",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select user.id, user_extra.user_id from user straight_join user_extra where user.id = user_extra.user_id",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.id, user_extra.user_id from `user` straight_join user_extra on `user`.id = user_extra.user_id where 1 != 1",
+        "Query": "select `user`.id, user_extra.user_id from `user` straight_join user_extra on `user`.id = user_extra.user_id",
+        "Table": "`user`, user_extra"
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
     "comment": "correlated subquery in exists clause",
     "query": "select col from user where exists(select user_id from user_extra where user_id = 3 and user_id < user.id)",
     "plan": {
@@ -2271,7 +2439,7 @@
                 "Query": "select 1 from user_extra where user_id = 3 and user_id < :user_id",
                 "Table": "user_extra",
                 "Values": [
-                  "INT64(3)"
+                  "3"
                 ],
                 "Vindex": "user_index"
               }
@@ -2314,7 +2482,7 @@
                 },
                 "FieldQuery": "select col, `user`.id from `user` where 1 != 1",
                 "OrderBy": "0 ASC",
-                "Query": "select col, `user`.id from `user` order by col asc",
+                "Query": "select col, `user`.id from `user` order by `user`.col asc",
                 "Table": "`user`"
               },
               {
@@ -2329,7 +2497,7 @@
                 "Query": "select 1 from user_extra where user_id = 3 and user_id < :user_id",
                 "Table": "user_extra",
                 "Values": [
-                  "INT64(3)"
+                  "3"
                 ],
                 "Vindex": "user_index"
               }
@@ -2480,13 +2648,37 @@
         "Query": "select music.id from music, `user` where music.user_id = 5 and music.user_id = `user`.id and music.id = (select max(m2.id) from music as m2 where m2.user_id = `user`.id)",
         "Table": "`user`, music",
         "Values": [
-          "INT64(5)"
+          "5"
         ],
         "Vindex": "user_index"
       },
       "TablesUsed": [
         "user.music",
         "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Complex join with multiple conditions merged into single route",
+    "query": "select 0 from user as u join user_extra as s on u.id = s.user_id join music as m on m.user_id = u.id and (s.foo or m.bar)",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 0 from user as u join user_extra as s on u.id = s.user_id join music as m on m.user_id = u.id and (s.foo or m.bar)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 0 from `user` as u, user_extra as s, music as m where 1 != 1",
+        "Query": "select 0 from `user` as u, user_extra as s, music as m where u.id = s.user_id and m.user_id = u.id and (s.foo or m.bar)",
+        "Table": "`user`, music, user_extra"
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
       ]
     }
   },
@@ -2615,7 +2807,7 @@
           "Sharded": false
         },
         "FieldQuery": "select 1 from (select col, count(*) as a from unsharded where 1 != 1 group by col) as f left join unsharded as u on f.col = u.id where 1 != 1",
-        "Query": "select 1 from (select col, count(*) as a from unsharded group by col having count(*) > 0 limit 0, 12) as f left join unsharded as u on f.col = u.id",
+        "Query": "select 1 from (select col, count(*) as a from unsharded group by col having a > 0 limit 0, 12) as f left join unsharded as u on f.col = u.id",
         "Table": "unsharded"
       },
       "TablesUsed": [
@@ -2682,8 +2874,8 @@
         },
         "FieldQuery": "select 1 from dual where 1 != 1",
         "Query": "select 1 from dual where exists (select 1 from information_schema.`TABLES` where `TABLES`.TABLE_NAME = :TABLES_TABLE_NAME /* VARCHAR */ and `TABLES`.TABLE_SCHEMA = :__vtschemaname /* VARCHAR */)",
-        "SysTableTableName": "[TABLES_TABLE_NAME:VARCHAR(\"proc\")]",
-        "SysTableTableSchema": "[VARCHAR(\"mysql\")]",
+        "SysTableTableName": "[TABLES_TABLE_NAME:'proc']",
+        "SysTableTableSchema": "['mysql']",
         "Table": "dual"
       },
       "TablesUsed": [
@@ -2729,7 +2921,7 @@
           {
             "InputName": "SubQuery",
             "OperatorType": "Limit",
-            "Count": "INT64(1)",
+            "Count": "1",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -2740,7 +2932,7 @@
                 },
                 "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
                 "OrderBy": "(0|1) ASC",
-                "Query": "select id, weight_string(id) from `user` order by id asc limit :__upper_limit",
+                "Query": "select id, weight_string(id) from `user` order by `user`.id asc limit :__upper_limit",
                 "Table": "`user`"
               }
             ]
@@ -2753,8 +2945,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select :__sq1 as `(select id from ``user`` order by id asc limit 1)` from user_extra where 1 != 1",
-            "Query": "select :__sq1 as `(select id from ``user`` order by id asc limit 1)` from user_extra",
+            "FieldQuery": "select :__sq1 as `(select id from ``user`` order by ``user``.id asc limit 1)` from user_extra where 1 != 1",
+            "Query": "select :__sq1 as `(select id from ``user`` order by ``user``.id asc limit 1)` from user_extra",
             "Table": "user_extra"
           }
         ]
@@ -2782,7 +2974,7 @@
         "Query": "select exists (select 1 from dual) from `user` where id = 5",
         "Table": "`user`",
         "Values": [
-          "INT64(5)"
+          "5"
         ],
         "Vindex": "user_index"
       },
@@ -2985,7 +3177,7 @@
         "Query": "select exists (select 1 from `user` where id = 4) from dual",
         "Table": "dual",
         "Values": [
-          "INT64(4)"
+          "4"
         ],
         "Vindex": "user_index"
       },
@@ -3048,15 +3240,15 @@
       "QueryType": "SELECT",
       "Original": "select insert('Quadratic', 3, 4, 'What')",
       "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Reference",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select insert('Quadratic', 3, 4, 'What') from dual where 1 != 1",
-        "Query": "select insert('Quadratic', 3, 4, 'What') from dual",
-        "Table": "dual"
+        "OperatorType": "Projection",
+        "Expressions": [
+          "'QuWhattic' as insert('Quadratic', 3, 4, 'What')"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
       },
       "TablesUsed": [
         "main.dual"
@@ -3170,7 +3362,7 @@
         "Query": "select `user`.id from `user`, music_extra, music where music.id = 456 and `user`.id = 123 and `user`.id = music_extra.user_id and music_extra.user_id = music.user_id",
         "Table": "`user`, music, music_extra",
         "Values": [
-          "INT64(123)"
+          "123"
         ],
         "Vindex": "user_index"
       },
@@ -3192,7 +3384,7 @@
         "Inputs": [
           {
             "OperatorType": "Limit",
-            "Count": "INT64(2)",
+            "Count": "2",
             "Inputs": [
               {
                 "OperatorType": "VindexLookup",
@@ -3202,7 +3394,7 @@
                   "Sharded": true
                 },
                 "Values": [
-                  "VARCHAR(\"aa\")"
+                  "'aa'"
                 ],
                 "Vindex": "name_user_map",
                 "Inputs": [
@@ -3230,7 +3422,7 @@
                     },
                     "FieldQuery": "select id, `name`, weight_string(id) from `user` where 1 != 1",
                     "OrderBy": "(0|2) ASC",
-                    "Query": "select id, `name`, weight_string(id) from `user` where `name` = 'aa' order by id asc limit :__upper_limit",
+                    "Query": "select id, `name`, weight_string(id) from `user` where `name` = 'aa' order by `user`.id asc limit :__upper_limit",
                     "ResultColumns": 2,
                     "Table": "`user`"
                   }
@@ -3251,7 +3443,7 @@
                   "Sharded": true
                 },
                 "Values": [
-                  "VARCHAR(\"aa\")"
+                  "'aa'"
                 ],
                 "Vindex": "name_user_map",
                 "Inputs": [
@@ -3332,7 +3524,7 @@
         "Query": "select music.id from music where music.user_id = 5 and music.id in (select music.id from music where music.user_id in (5))",
         "Table": "music",
         "Values": [
-          "INT64(5)"
+          "5"
         ],
         "Vindex": "user_index"
       },
@@ -3358,7 +3550,7 @@
         "Query": "select music.id from music where music.id in (select music.id from music where music.user_id in (1, 2, 3))",
         "Table": "music",
         "Values": [
-          "(INT64(1), INT64(2), INT64(3))"
+          "(1, 2, 3)"
         ],
         "Vindex": "user_index"
       },
@@ -3381,10 +3573,10 @@
           "Sharded": true
         },
         "FieldQuery": "select music.id from music where 1 != 1",
-        "Query": "select music.id from music where music.id in (select _inner.id from (select music.id from music where music.user_id in (1, 2, 3)) as _inner)",
+        "Query": "select music.id from music where music.id in (select id from (select music.id from music where music.user_id in (1, 2, 3)) as _inner)",
         "Table": "music",
         "Values": [
-          "(INT64(1), INT64(2), INT64(3))"
+          "(1, 2, 3)"
         ],
         "Vindex": "user_index"
       },
@@ -3410,7 +3602,7 @@
         "Query": "select music.id from music where music.user_id in ::__vals and music.id in (select music.id from music where music.foo = 'bar')",
         "Table": "music",
         "Values": [
-          "(INT64(3), INT64(4), INT64(5))"
+          "(3, 4, 5)"
         ],
         "Vindex": "user_index"
       },
@@ -3436,7 +3628,7 @@
         "Query": "select music.id from music where music.user_id = 5 and music.id in (select music.id from music where music.user_id in (1, 2, 3))",
         "Table": "music",
         "Values": [
-          "INT64(5)"
+          "5"
         ],
         "Vindex": "user_index"
       },
@@ -3630,7 +3822,7 @@
           {
             "InputName": "SubQuery",
             "OperatorType": "Limit",
-            "Count": "INT64(10)",
+            "Count": "10",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -3694,7 +3886,7 @@
             "Query": "select max(music.id) from music where music.user_id in ::__vals group by music.user_id",
             "Table": "music",
             "Values": [
-              "(INT64(5), INT64(6))"
+              "(5, 6)"
             ],
             "Vindex": "user_index"
           },
@@ -3752,7 +3944,7 @@
                 "Query": "select max(music.id), weight_string(music.id) from music where music.user_id in ::__vals group by weight_string(music.id)",
                 "Table": "music",
                 "Values": [
-                  "(INT64(5), INT64(6))"
+                  "(5, 6)"
                 ],
                 "Vindex": "user_index"
               }
@@ -3807,7 +3999,7 @@
             "Query": "select max(music.id) from music where music.user_id = 5",
             "Table": "music",
             "Values": [
-              "INT64(5)"
+              "5"
             ],
             "Vindex": "user_index"
           },
@@ -3860,7 +4052,7 @@
             "Query": "select max(music.id) from music where music.user_id = 5 limit 10",
             "Table": "music",
             "Values": [
-              "INT64(5)"
+              "5"
             ],
             "Vindex": "user_index"
           },
@@ -3901,10 +4093,10 @@
           "Sharded": true
         },
         "FieldQuery": "select music.id from music where 1 != 1",
-        "Query": "select music.id from music where music.id in (select subquery_for_limit.id from (select subquery_for_limit.id from (select music.id from music where music.user_id = 5 limit 10) as subquery_for_limit) as subquery_for_limit)",
+        "Query": "select music.id from music where music.id in (select id from (select id from (select music.id from music where music.user_id = 5 limit 10) as subquery_for_limit) as subquery_for_limit)",
         "Table": "music",
         "Values": [
-          "INT64(5)"
+          "5"
         ],
         "Vindex": "user_index"
       },
@@ -3927,10 +4119,10 @@
           "Sharded": true
         },
         "FieldQuery": "select music.id from music where 1 != 1",
-        "Query": "select music.id from music where music.id in (select subquery_for_limit.id from (select subquery_for_limit.id from (select music.id from music where music.user_id in (5) limit 10) as subquery_for_limit) as subquery_for_limit)",
+        "Query": "select music.id from music where music.id in (select id from (select id from (select music.id from music where music.user_id in (5) limit 10) as subquery_for_limit) as subquery_for_limit)",
         "Table": "music",
         "Values": [
-          "INT64(5)"
+          "5"
         ],
         "Vindex": "user_index"
       },
@@ -3956,7 +4148,7 @@
           {
             "InputName": "SubQuery",
             "OperatorType": "Limit",
-            "Count": "INT64(10)",
+            "Count": "10",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -3965,11 +4157,11 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select subquery_for_limit.id from (select subquery_for_limit.id from (select music.id from music where 1 != 1) as subquery_for_limit where 1 != 1) as subquery_for_limit where 1 != 1",
-                "Query": "select subquery_for_limit.id from (select subquery_for_limit.id from (select music.id from music where music.user_id in ::__vals) as subquery_for_limit limit :__upper_limit) as subquery_for_limit limit :__upper_limit",
+                "FieldQuery": "select id from (select id from (select music.id from music where 1 != 1) as subquery_for_limit where 1 != 1) as subquery_for_limit where 1 != 1",
+                "Query": "select id from (select id from (select music.id from music where music.user_id in ::__vals) as subquery_for_limit limit :__upper_limit) as subquery_for_limit",
                 "Table": "music",
                 "Values": [
-                  "(INT64(5), INT64(6))"
+                  "(5, 6)"
                 ],
                 "Vindex": "user_index"
               }
@@ -4015,7 +4207,7 @@
           {
             "InputName": "SubQuery",
             "OperatorType": "Limit",
-            "Count": "INT64(10)",
+            "Count": "10",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -4024,8 +4216,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select subquery_for_limit.id from (select subquery_for_limit.id from (select music.id from music where 1 != 1) as subquery_for_limit where 1 != 1) as subquery_for_limit where 1 != 1",
-                "Query": "select subquery_for_limit.id from (select subquery_for_limit.id from (select music.id from music) as subquery_for_limit limit :__upper_limit) as subquery_for_limit limit :__upper_limit",
+                "FieldQuery": "select id from (select id from (select music.id from music where 1 != 1) as subquery_for_limit where 1 != 1) as subquery_for_limit where 1 != 1",
+                "Query": "select id from (select id from (select music.id from music) as subquery_for_limit limit :__upper_limit) as subquery_for_limit",
                 "Table": "music"
               }
             ]
@@ -4136,7 +4328,7 @@
         "Query": "select music.id from (select max(id) as maxt from music where music.user_id = 5) as other, music where other.maxt = music.id",
         "Table": "music",
         "Values": [
-          "INT64(5)"
+          "5"
         ],
         "Vindex": "user_index"
       },
@@ -4162,7 +4354,7 @@
         "Query": "select music.id from (select id from music where music.user_id = 5) as other, music where other.id = music.id",
         "Table": "music",
         "Values": [
-          "INT64(5)"
+          "5"
         ],
         "Vindex": "user_index"
       },
@@ -4188,7 +4380,7 @@
         "Query": "select music.id from (select id from music where music.user_id in ::__vals) as other, music where other.id = music.id",
         "Table": "music",
         "Values": [
-          "(INT64(5), INT64(6), INT64(7))"
+          "(5, 6, 7)"
         ],
         "Vindex": "user_index"
       },
@@ -4214,7 +4406,7 @@
         "Inputs": [
           {
             "OperatorType": "Limit",
-            "Count": "INT64(10)",
+            "Count": "10",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -4223,8 +4415,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select user_id from (select user_id from user_extra where 1 != 1) as ue where 1 != 1",
-                "Query": "select user_id from (select user_id from user_extra) as ue limit :__upper_limit",
+                "FieldQuery": "select ue.user_id from (select user_id from user_extra where 1 != 1) as ue where 1 != 1",
+                "Query": "select ue.user_id from (select user_id from user_extra) as ue limit :__upper_limit",
                 "Table": "user_extra"
               }
             ]
@@ -4336,7 +4528,7 @@
         "Query": "select music.id from (select max(id) as maxt from music where music.user_id = 5) as other, music where other.maxt = music.id",
         "Table": "music",
         "Values": [
-          "INT64(5)"
+          "5"
         ],
         "Vindex": "user_index"
       },
@@ -4384,7 +4576,7 @@
         "Query": "select * from `user` where id = 1",
         "Table": "`user`",
         "Values": [
-          "INT64(1)"
+          "1"
         ],
         "Vindex": "user_index"
       },
@@ -4410,7 +4602,7 @@
         "Query": "select * from `user` where id = 1",
         "Table": "`user`",
         "Values": [
-          "INT64(1)"
+          "1"
         ],
         "Vindex": "user_index"
       },
@@ -4459,7 +4651,7 @@
         "Query": "select (select 1 from `user` as u1 join `user` as u2 on u1.id = u2.id and u1.id = u3.id) as subquery from `user` as u3 where u3.id = 1",
         "Table": "`user`",
         "Values": [
-          "INT64(1)"
+          "1"
         ],
         "Vindex": "user_index"
       },
@@ -4530,7 +4722,7 @@
         "Query": "select * from user_metadata where user_metadata.non_planable = 'foo'",
         "Table": "user_metadata",
         "Values": [
-          "VARCHAR(\"foo\")"
+          "'foo'"
         ],
         "Vindex": "non_planable_user_map"
       },
@@ -4553,7 +4745,7 @@
           "Sharded": true
         },
         "Values": [
-          "VARCHAR(\"foo\")"
+          "'foo'"
         ],
         "Vindex": "name_user_map",
         "Inputs": [
@@ -4605,7 +4797,7 @@
           "Sharded": true
         },
         "Values": [
-          "VARCHAR(\"a@mail.com\")"
+          "'a@mail.com'"
         ],
         "Vindex": "unq_lkp_vdx",
         "Inputs": [
@@ -4665,6 +4857,28 @@
     }
   },
   {
+    "comment": "name is in backfill vindex - not selected for vindex lookup",
+    "query": "select * from customer where name = 'x'",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select * from customer where name = 'x'",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select * from customer where 1 != 1",
+        "Query": "select * from customer where `name` = 'x'",
+        "Table": "customer"
+      },
+      "TablesUsed": [
+        "user.customer"
+      ]
+    }
+  },
+  {
     "comment": "email vindex is costly than phone vindex - but phone vindex is backfiling hence ignored",
     "query": "select * from customer where email = 'a@mail.com' and phone = 123456",
     "plan": {
@@ -4678,7 +4892,7 @@
           "Sharded": true
         },
         "Values": [
-          "VARCHAR(\"a@mail.com\")"
+          "'a@mail.com'"
         ],
         "Vindex": "unq_lkp_vdx",
         "Inputs": [
@@ -4729,7 +4943,7 @@
           "Sharded": true
         },
         "Values": [
-          "VARCHAR(\"a@mail.com\")"
+          "'a@mail.com'"
         ],
         "Vindex": "unq_lkp_vdx",
         "Inputs": [
@@ -4763,6 +4977,196 @@
       },
       "TablesUsed": [
         "user.customer"
+      ]
+    }
+  },
+  {
+    "comment": "invisible column is not expanded, but valid in predicate",
+    "query": "select * from samecolvin where secret = 12",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select * from samecolvin where secret = 12",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col from samecolvin where 1 != 1",
+        "Query": "select col from samecolvin where secret = 12",
+        "Table": "samecolvin"
+      },
+      "TablesUsed": [
+        "user.samecolvin"
+      ]
+    }
+  },
+  {
+    "comment": "column with qualifier is correctly used",
+    "query": "select u.foo, ue.foo as apa from user u, user_extra ue order by foo ",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select u.foo, ue.foo as apa from user u, user_extra ue order by foo ",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0,R:0",
+        "TableName": "`user`_user_extra",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select u.foo, weight_string(u.foo) from `user` as u where 1 != 1",
+            "OrderBy": "(0|1) ASC",
+            "Query": "select u.foo, weight_string(u.foo) from `user` as u order by u.foo asc",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select ue.foo as apa from user_extra as ue where 1 != 1",
+            "Query": "select ue.foo as apa from user_extra as ue",
+            "Table": "user_extra"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "Derived tables going to a single shard still need to expand derived table columns",
+    "query": "SELECT c.column_name FROM user c JOIN (SELECT table_name FROM unsharded LIMIT 1) AS tables ON tables.table_name = c.table_name",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT c.column_name FROM user c JOIN (SELECT table_name FROM unsharded LIMIT 1) AS tables ON tables.table_name = c.table_name",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "R:0",
+        "JoinVars": {
+          "tables_table_name": 0
+        },
+        "TableName": "unsharded_`user`",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select `tables`.table_name from (select table_name from unsharded where 1 != 1) as `tables` where 1 != 1",
+            "Query": "select `tables`.table_name from (select table_name from unsharded limit 1) as `tables`",
+            "Table": "unsharded"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select c.column_name from `user` as c where 1 != 1",
+            "Query": "select c.column_name from `user` as c where c.table_name = :tables_table_name",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "column name aliases in outer join queries",
+    "query": "select name as t0, name as t1 from user left outer join user_extra on user.cola = user_extra.cola",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select name as t0, name as t1 from user left outer join user_extra on user.cola = user_extra.cola",
+      "Instructions": {
+        "OperatorType": "SimpleProjection",
+        "ColumnNames": [
+          "t0",
+          "t1"
+        ],
+        "Columns": [
+          0,
+          0
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "LeftJoin",
+            "JoinColumnIndexes": "L:0",
+            "JoinVars": {
+              "user_cola": 1
+            },
+            "TableName": "`user`_user_extra",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `name`, `user`.cola from `user` where 1 != 1",
+                "Query": "select `name`, `user`.cola from `user`",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from user_extra where 1 != 1",
+                "Query": "select 1 from user_extra where user_extra.cola = :user_cola",
+                "Table": "user_extra"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "Over clause works for unsharded tables",
+    "query": "SELECT val, CUME_DIST() OVER w, ROW_NUMBER() OVER w, DENSE_RANK() OVER w, PERCENT_RANK() OVER w, RANK() OVER w AS 'cd' FROM unsharded_a",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT val, CUME_DIST() OVER w, ROW_NUMBER() OVER w, DENSE_RANK() OVER w, PERCENT_RANK() OVER w, RANK() OVER w AS 'cd' FROM unsharded_a",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select val, cume_dist() over w, row_number() over w, dense_rank() over w, percent_rank() over w, rank() over w as cd from unsharded_a where 1 != 1",
+        "Query": "select val, cume_dist() over w, row_number() over w, dense_rank() over w, percent_rank() over w, rank() over w as cd from unsharded_a",
+        "Table": "unsharded_a"
+      },
+      "TablesUsed": [
+        "main.unsharded_a"
       ]
     }
   }

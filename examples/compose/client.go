@@ -27,7 +27,7 @@ package main
 
 import (
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"time"
 
@@ -53,13 +53,13 @@ func main() {
 
 	// Insert some messages on random pages.
 	fmt.Println("Inserting into primary...")
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		tx, err := db.Begin()
 		if err != nil {
 			fmt.Printf("begin failed: %v\n", err)
 			os.Exit(1)
 		}
-		page := rand.Intn(100) + 1
+		page := rand.IntN(100) + 1
 		timeCreated := time.Now().UnixNano()
 		if _, err := tx.Exec("INSERT INTO messages (page,time_created_ns,message) VALUES (?,?,?)",
 			page, timeCreated, "V is for speed"); err != nil {

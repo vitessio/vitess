@@ -41,7 +41,8 @@ type (
 	}
 
 	evalInt64 struct {
-		i int64
+		i          int64
+		bitLiteral bool
 	}
 
 	evalUint64 struct {
@@ -64,8 +65,8 @@ var _ evalNumeric = (*evalUint64)(nil)
 var _ evalNumeric = (*evalFloat)(nil)
 var _ evalNumeric = (*evalDecimal)(nil)
 
-var evalBoolTrue = &evalInt64{1}
-var evalBoolFalse = &evalInt64{0}
+var evalBoolTrue = &evalInt64{i: 1}
+var evalBoolFalse = &evalInt64{i: 0}
 
 func newEvalUint64(u uint64) *evalUint64 {
 	return &evalUint64{u: u}
@@ -80,10 +81,14 @@ func newEvalFloat(f float64) *evalFloat {
 }
 
 func newEvalDecimal(dec decimal.Decimal, m, d int32) *evalDecimal {
-	if m == 0 && d == 0 {
+	switch {
+	case m == 0 && d == 0:
 		return newEvalDecimalWithPrec(dec, -dec.Exponent())
+	case m == 0:
+		return newEvalDecimalWithPrec(dec, d)
+	default:
+		return newEvalDecimalWithPrec(dec.Clamp(m-d, d), d)
 	}
-	return newEvalDecimalWithPrec(dec.Clamp(m-d, d), d)
 }
 
 func newEvalDecimalWithPrec(dec decimal.Decimal, prec int32) *evalDecimal {
@@ -102,13 +107,21 @@ func evalToNumeric(e eval, preciseDatetime bool) evalNumeric {
 	case evalNumeric:
 		return e
 	case *evalBytes:
-		if e.isHexLiteral {
+		if e.isHexLiteral() {
 			hex, ok := e.toNumericHex()
 			if !ok {
 				// overflow
 				return newEvalFloat(0)
 			}
 			return hex
+		}
+		if e.isBitLiteral() {
+			bit, ok := e.toNumericBit()
+			if !ok {
+				// overflow
+				return newEvalFloat(0)
+			}
+			return bit
 		}
 		f, _ := fastparse.ParseFloat64(e.string())
 		return &evalFloat{f: f}
@@ -148,13 +161,25 @@ func evalToFloat(e eval) (*evalFloat, bool) {
 	case evalNumeric:
 		return e.toFloat()
 	case *evalBytes:
-		if e.isHexLiteral {
+		if e.isHexLiteral() {
 			hex, ok := e.toNumericHex()
 			if !ok {
 				// overflow
 				return newEvalFloat(0), false
 			}
 			f, ok := hex.toFloat()
+			if !ok {
+				return newEvalFloat(0), false
+			}
+			return f, true
+		}
+		if e.isBitLiteral() {
+			bit, ok := e.toNumericBit()
+			if !ok {
+				// overflow
+				return newEvalFloat(0), false
+			}
+			f, ok := bit.toFloat()
 			if !ok {
 				return newEvalFloat(0), false
 			}
@@ -190,13 +215,21 @@ func evalToDecimal(e eval, m, d int32) *evalDecimal {
 	case evalNumeric:
 		return e.toDecimal(m, d)
 	case *evalBytes:
-		if e.isHexLiteral {
+		if e.isHexLiteral() {
 			hex, ok := e.toNumericHex()
 			if !ok {
 				// overflow
 				return newEvalDecimal(decimal.Zero, m, d)
 			}
 			return hex.toDecimal(m, d)
+		}
+		if e.isBitLiteral() {
+			bit, ok := e.toNumericBit()
+			if !ok {
+				// overflow
+				return newEvalDecimal(decimal.Zero, m, d)
+			}
+			return bit.toDecimal(m, d)
 		}
 		dec, _ := decimal.NewFromString(e.string())
 		return newEvalDecimal(dec, m, d)
@@ -248,13 +281,21 @@ func evalToInt64(e eval) *evalInt64 {
 	case evalNumeric:
 		return e.toInt64()
 	case *evalBytes:
-		if e.isHexLiteral {
+		if e.isHexLiteral() {
 			hex, ok := e.toNumericHex()
 			if !ok {
 				// overflow
 				return newEvalInt64(0)
 			}
 			return hex.toInt64()
+		}
+		if e.isBitLiteral() {
+			bit, ok := e.toNumericBit()
+			if !ok {
+				// overflow
+				return newEvalInt64(0)
+			}
+			return bit
 		}
 		i, _ := fastparse.ParseInt64(e.string(), 10)
 		return newEvalInt64(i)
@@ -314,6 +355,9 @@ func (e *evalInt64) ToRawBytes() []byte {
 }
 
 func (e *evalInt64) negate() evalNumeric {
+	if e.bitLiteral {
+		return newEvalFloat(-float64(e.i))
+	}
 	if e.i == math.MinInt64 {
 		return newEvalDecimalWithPrec(decimal.NewFromInt(e.i).NegInPlace(), 0)
 	}

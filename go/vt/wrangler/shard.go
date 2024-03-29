@@ -113,7 +113,7 @@ func (wr *Wrangler) DeleteShard(ctx context.Context, keyspace, shard string, rec
 		// GetTabletMap ignores ErrNoNode, and it's good for
 		// our purpose, it means a tablet was deleted but is
 		// still referenced.
-		tabletMap, err := wr.ts.GetTabletMap(ctx, aliases)
+		tabletMap, err := wr.ts.GetTabletMap(ctx, aliases, nil)
 		if err != nil {
 			return fmt.Errorf("GetTabletMap() failed: %v", err)
 		}

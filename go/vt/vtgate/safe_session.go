@@ -73,6 +73,7 @@ type (
 		mu      sync.Mutex
 		entries []engine.ExecuteEntry
 		lastID  int
+		parser  *sqlparser.Parser
 	}
 
 	// autocommitState keeps track of whether a single round-trip
@@ -435,7 +436,7 @@ func (session *SafeSession) AppendOrUpdate(shardSession *vtgatepb.Session_ShardS
 		if session.queryFromVindex {
 			break
 		}
-		// isSingle is enforced only for normmal commit order operations.
+		// isSingle is enforced only for normal commit order operations.
 		if session.isSingleDB(txMode) && len(session.ShardSessions) > 1 {
 			count := actualNoOfShardSession(session.ShardSessions)
 			if count <= 1 {
@@ -570,6 +571,26 @@ func (session *SafeSession) TimeZone() *time.Location {
 	}
 	loc, _ := datetime.ParseTimeZone(tz)
 	return loc
+}
+
+// ForeignKeyChecks returns the foreign_key_checks stored in system_variables map in the session.
+func (session *SafeSession) ForeignKeyChecks() *bool {
+	session.mu.Lock()
+	fkVal, ok := session.SystemVariables[sysvars.ForeignKeyChecks]
+	session.mu.Unlock()
+
+	if !ok {
+		return nil
+	}
+	switch strings.ToLower(fkVal) {
+	case "off", "0":
+		fkCheckBool := false
+		return &fkCheckBool
+	case "on", "1":
+		fkCheckBool := true
+		return &fkCheckBool
+	}
+	return nil
 }
 
 // SetOptions sets the options
@@ -921,11 +942,13 @@ func (session *SafeSession) ClearAdvisoryLock() {
 	session.AdvisoryLock = nil
 }
 
-func (session *SafeSession) EnableLogging() {
+func (session *SafeSession) EnableLogging(parser *sqlparser.Parser) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 
-	session.logging = &executeLogger{}
+	session.logging = &executeLogger{
+		parser: parser,
+	}
 }
 
 // GetUDV returns the bind variable value for the user defined variable.
@@ -978,7 +1001,7 @@ func (l *executeLogger) log(primitive engine.Primitive, target *querypb.Target, 
 			FiredFrom: primitive,
 		})
 	}
-	ast, err := sqlparser.Parse(query)
+	ast, err := l.parser.Parse(query)
 	if err != nil {
 		panic("query not able to parse. this should not happen")
 	}

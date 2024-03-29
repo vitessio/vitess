@@ -41,7 +41,7 @@ func ParsedQueryFromString(t *testing.T, query string) *sqlparser.ParsedQuery {
 func StatementFromString(t *testing.T, query string) sqlparser.Statement {
 	t.Helper()
 
-	stmt, err := sqlparser.Parse(query)
+	stmt, err := sqlparser.NewTestParser().Parse(query)
 	require.NoError(t, err, "could not parse query %v", query)
 
 	return stmt

@@ -30,6 +30,8 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/vt/vtenv"
+
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
@@ -151,16 +153,8 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&warmingReadsPercent, "warming-reads-percent", 0, "Percentage of reads on the primary to forward to replicas. Useful for keeping buffer pools warm")
 	fs.IntVar(&warmingReadsConcurrency, "warming-reads-concurrency", 500, "Number of concurrent warming reads allowed")
 	fs.DurationVar(&warmingReadsQueryTimeout, "warming-reads-query-timeout", 5*time.Second, "Timeout of warming read queries")
-
-	_ = fs.String("schema_change_signal_user", "", "User to be used to send down query to vttablet to retrieve schema changes")
-	_ = fs.MarkDeprecated("schema_change_signal_user", "schema tracking uses an internal api and does not require a user to be specified")
-
-	fs.Int64("gate_query_cache_size", 0, "gate server query cache size, maximum number of queries to be cached. vtgate analyzes every incoming query and generate a query plan, these plans are being cached in a cache. This config controls the expected amount of unique entries in the cache.")
-	_ = fs.MarkDeprecated("gate_query_cache_size", "`--gate_query_cache_size` is deprecated and will be removed in `v19.0`. This option only applied to LRU caches, which are now unsupported.")
-
-	fs.Bool("gate_query_cache_lfu", false, "gate server cache algorithm. when set to true, a new cache algorithm based on a TinyLFU admission policy will be used to improve cache behavior and prevent pollution from sparse queries")
-	_ = fs.MarkDeprecated("gate_query_cache_lfu", "`--gate_query_cache_lfu` is deprecated and will be removed in `v19.0`. The query cache always uses a LFU implementation now.")
 }
+
 func init() {
 	servenv.OnParseFor("vtgate", registerFlags)
 	servenv.OnParseFor("vtcombo", registerFlags)
@@ -193,12 +187,12 @@ var (
 	// Error counters should be global so they can be set from anywhere
 	errorCounts = stats.NewCountersWithMultiLabels("VtgateApiErrorCounts", "Vtgate API error counts per error type", []string{"Operation", "Keyspace", "DbType", "Code"})
 
-	warnings = stats.NewCountersWithSingleLabel("VtGateWarnings", "Vtgate warnings", "type", "IgnoredSet", "ResultsExceeded", "WarnPayloadSizeExceeded")
+	warnings = stats.NewCountersWithSingleLabel("VtGateWarnings", "Vtgate warnings", "type", "IgnoredSet", "NonAtomicCommit", "ResultsExceeded", "WarnPayloadSizeExceeded", "WarnUnshardedOnly")
 
 	vstreamSkewDelayCount = stats.NewCounter("VStreamEventsDelayedBySkewAlignment",
 		"Number of events that had to wait because the skew across shards was too high")
 
-	vindexUnknownParams = stats.NewGauge("VindexUnknownParameters", "Number of parameterss unrecognized by Vindexes")
+	vindexUnknownParams = stats.NewGauge("VindexUnknownParameters", "Number of parameters unrecognized by Vindexes")
 
 	timings = stats.NewMultiTimings(
 		"VtgateApi",
@@ -249,6 +243,7 @@ var RegisterVTGates []RegisterVTGate
 // Init initializes VTGate server.
 func Init(
 	ctx context.Context,
+	env *vtenv.Environment,
 	hc discovery.HealthCheck,
 	serv srvtopo.Server,
 	cell string,
@@ -307,7 +302,7 @@ func Init(
 	var si SchemaInfo // default nil
 	var st *vtschema.Tracker
 	if enableSchemaChangeSignal {
-		st = vtschema.NewTracker(gw.hc.Subscribe(), enableViews)
+		st = vtschema.NewTracker(gw.hc.Subscribe(), enableViews, env.Parser())
 		addKeyspacesToTracker(ctx, srvResolver, st, gw)
 		si = st
 	}
@@ -316,6 +311,7 @@ func Init(
 
 	executor := NewExecutor(
 		ctx,
+		env,
 		serv,
 		cell,
 		resolver,
@@ -358,8 +354,10 @@ func Init(
 			st.Start()
 		}
 		srv := initMySQLProtocol(vtgateInst)
-		servenv.OnTermSync(srv.shutdownMysqlProtocolAndDrain)
-		servenv.OnClose(srv.rollbackAtShutdown)
+		if srv != nil {
+			servenv.OnTermSync(srv.shutdownMysqlProtocolAndDrain)
+			servenv.OnClose(srv.rollbackAtShutdown)
+		}
 	})
 	servenv.OnTerm(func() {
 		if st != nil && enableSchemaChangeSignal {
@@ -468,7 +466,7 @@ func (vtg *VTGate) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConn
 		"BindVariables": bindVariables,
 		"Session":       session,
 	}
-	err = recordAndAnnotateError(err, statsKey, query, vtg.logExecute)
+	err = recordAndAnnotateError(err, statsKey, query, vtg.logExecute, vtg.executor.vm.parser)
 	return session, nil, err
 }
 
@@ -534,7 +532,7 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MyS
 			"BindVariables": bindVariables,
 			"Session":       session,
 		}
-		return safeSession.Session, recordAndAnnotateError(err, statsKey, query, vtg.logStreamExecute)
+		return safeSession.Session, recordAndAnnotateError(err, statsKey, query, vtg.logStreamExecute, vtg.executor.vm.parser)
 	}
 	return safeSession.Session, nil
 }
@@ -574,7 +572,7 @@ handleError:
 		"BindVariables": bindVariables,
 		"Session":       session,
 	}
-	err = recordAndAnnotateError(err, statsKey, query, vtg.logPrepare)
+	err = recordAndAnnotateError(err, statsKey, query, vtg.logPrepare, vtg.executor.vm.parser)
 	return session, nil, err
 }
 
@@ -593,7 +591,7 @@ func (vtg *VTGate) VSchemaStats() *VSchemaStats {
 	return vtg.executor.VSchemaStats()
 }
 
-func truncateErrorStrings(data map[string]any) map[string]any {
+func truncateErrorStrings(data map[string]any, parser *sqlparser.Parser) map[string]any {
 	ret := map[string]any{}
 	if terseErrors {
 		// request might have PII information. Return an empty map
@@ -602,16 +600,16 @@ func truncateErrorStrings(data map[string]any) map[string]any {
 	for key, val := range data {
 		mapVal, ok := val.(map[string]any)
 		if ok {
-			ret[key] = truncateErrorStrings(mapVal)
+			ret[key] = truncateErrorStrings(mapVal, parser)
 		} else {
 			strVal := fmt.Sprintf("%v", val)
-			ret[key] = sqlparser.TruncateForLog(strVal)
+			ret[key] = parser.TruncateForLog(strVal)
 		}
 	}
 	return ret
 }
 
-func recordAndAnnotateError(err error, statsKey []string, request map[string]any, logger *logutil.ThrottledLogger) error {
+func recordAndAnnotateError(err error, statsKey []string, request map[string]any, logger *logutil.ThrottledLogger, parser *sqlparser.Parser) error {
 	ec := vterrors.Code(err)
 	fullKey := []string{
 		statsKey[0],
@@ -627,7 +625,7 @@ func recordAndAnnotateError(err error, statsKey []string, request map[string]any
 	}
 
 	// Traverse the request structure and truncate any long values
-	request = truncateErrorStrings(request)
+	request = truncateErrorStrings(request, parser)
 
 	errorCounts.Add(fullKey, 1)
 
@@ -642,7 +640,7 @@ func recordAndAnnotateError(err error, statsKey []string, request map[string]any
 		if !exists {
 			return err
 		}
-		piiSafeSQL, err2 := sqlparser.RedactSQLQuery(sql.(string))
+		piiSafeSQL, err2 := parser.RedactSQLQuery(sql.(string))
 		if err2 != nil {
 			return err
 		}

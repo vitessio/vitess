@@ -83,24 +83,6 @@ type ResolvedShard struct {
 	Gateway Gateway
 }
 
-// ResolvedShardEqual is an equality check on *ResolvedShard.
-func ResolvedShardEqual(rs1, rs2 *ResolvedShard) bool {
-	return proto.Equal(rs1.Target, rs2.Target)
-}
-
-// ResolvedShardsEqual is an equality check on []*ResolvedShard.
-func ResolvedShardsEqual(rss1, rss2 []*ResolvedShard) bool {
-	if len(rss1) != len(rss2) {
-		return false
-	}
-	for i, rs1 := range rss1 {
-		if !ResolvedShardEqual(rs1, rss2[i]) {
-			return false
-		}
-	}
-	return true
-}
-
 // WithKeyspace returns a ResolvedShard with a new keyspace keeping other parameters the same
 func (rs *ResolvedShard) WithKeyspace(newKeyspace string) *ResolvedShard {
 	return &ResolvedShard{
@@ -114,24 +96,12 @@ func (rs *ResolvedShard) WithKeyspace(newKeyspace string) *ResolvedShard {
 	}
 }
 
-// GetKeyspaceShards return all the shards in a keyspace. It follows
-// redirection if ServedFrom is set. It is only valid for the local cell.
+// GetKeyspaceShards return all the shards in a keyspace. It is only valid for the local cell.
 // Do not use it to further resolve shards, instead use the Resolve* methods.
 func (r *Resolver) GetKeyspaceShards(ctx context.Context, keyspace string, tabletType topodatapb.TabletType) (string, *topodatapb.SrvKeyspace, []*topodatapb.ShardReference, error) {
 	srvKeyspace, err := r.topoServ.GetSrvKeyspace(ctx, r.localCell, keyspace)
 	if err != nil {
 		return "", nil, nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "keyspace %v fetch error: %v", keyspace, err)
-	}
-
-	// check if the keyspace has been redirected for this tabletType.
-	for _, sf := range srvKeyspace.ServedFrom {
-		if sf.TabletType == tabletType {
-			keyspace = sf.Keyspace
-			srvKeyspace, err = r.topoServ.GetSrvKeyspace(ctx, r.localCell, keyspace)
-			if err != nil {
-				return "", nil, nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "keyspace %v fetch error: %v", keyspace, err)
-			}
-		}
 	}
 
 	partition := topoproto.SrvKeyspaceGetPartition(srvKeyspace, tabletType)

@@ -24,14 +24,12 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type Filter struct {
-	Source     ops.Operator
+	Source     Operator
 	Predicates []sqlparser.Expr
 
 	// PredicateWithOffsets is the evalengine expression that will finally be used.
@@ -41,14 +39,18 @@ type Filter struct {
 	Truncate int
 }
 
-func newFilter(op ops.Operator, expr sqlparser.Expr) ops.Operator {
+func newFilterSinglePredicate(op Operator, expr sqlparser.Expr) Operator {
+	return newFilter(op, expr)
+}
+
+func newFilter(op Operator, expr ...sqlparser.Expr) Operator {
 	return &Filter{
-		Source: op, Predicates: []sqlparser.Expr{expr},
+		Source: op, Predicates: expr,
 	}
 }
 
 // Clone implements the Operator interface
-func (f *Filter) Clone(inputs []ops.Operator) ops.Operator {
+func (f *Filter) Clone(inputs []Operator) Operator {
 	return &Filter{
 		Source:               inputs[0],
 		Predicates:           slices.Clone(f.Predicates),
@@ -58,12 +60,12 @@ func (f *Filter) Clone(inputs []ops.Operator) ops.Operator {
 }
 
 // Inputs implements the Operator interface
-func (f *Filter) Inputs() []ops.Operator {
-	return []ops.Operator{f.Source}
+func (f *Filter) Inputs() []Operator {
+	return []Operator{f.Source}
 }
 
 // SetInputs implements the Operator interface
-func (f *Filter) SetInputs(ops []ops.Operator) {
+func (f *Filter) SetInputs(ops []Operator) {
 	f.Source = ops[0]
 }
 
@@ -80,7 +82,7 @@ func (f *Filter) UnsolvedPredicates(st *semantics.SemTable) []sqlparser.Expr {
 	return result
 }
 
-func (f *Filter) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
+func (f *Filter) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
 	f.Source = f.Source.AddPredicate(ctx, expr)
 	return f
 }
@@ -101,28 +103,29 @@ func (f *Filter) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.Sele
 	return f.Source.GetSelectExprs(ctx)
 }
 
-func (f *Filter) GetOrdering(ctx *plancontext.PlanningContext) []ops.OrderBy {
+func (f *Filter) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
 	return f.Source.GetOrdering(ctx)
 }
 
-func (f *Filter) Compact(*plancontext.PlanningContext) (ops.Operator, *rewrite.ApplyResult, error) {
+func (f *Filter) Compact(*plancontext.PlanningContext) (Operator, *ApplyResult) {
 	if len(f.Predicates) == 0 {
-		return f.Source, rewrite.NewTree("filter with no predicates removed", f), nil
+		return f.Source, Rewrote("filter with no predicates removed")
 	}
 
 	other, isFilter := f.Source.(*Filter)
 	if !isFilter {
-		return f, rewrite.SameTree, nil
+		return f, NoRewrite
 	}
 	f.Source = other.Source
 	f.Predicates = append(f.Predicates, other.Predicates...)
-	return f, rewrite.NewTree("two filters merged into one", f), nil
+	return f, Rewrote("two filters merged into one")
 }
 
-func (f *Filter) planOffsets(ctx *plancontext.PlanningContext) {
+func (f *Filter) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	cfg := &evalengine.Config{
 		ResolveType: ctx.SemTable.TypeForExpr,
 		Collation:   ctx.SemTable.Collation,
+		Environment: ctx.VSchema.Environment(),
 	}
 
 	predicate := sqlparser.AndExpressions(f.Predicates...)
@@ -136,6 +139,7 @@ func (f *Filter) planOffsets(ctx *plancontext.PlanningContext) {
 	}
 
 	f.PredicateWithOffsets = eexpr
+	return nil
 }
 
 func (f *Filter) ShortDescription() string {

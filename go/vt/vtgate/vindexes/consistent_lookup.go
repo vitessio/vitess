@@ -21,11 +21,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -170,7 +172,7 @@ func (lu *ConsistentLookup) UnknownParams() []string {
 	return lu.unknownParams
 }
 
-//====================================================================
+// ====================================================================
 
 // ConsistentLookupUnique defines a vindex that uses a lookup table.
 // The table is expected to define the id column as unique. It's
@@ -270,7 +272,7 @@ func (lu *ConsistentLookupUnique) AutoCommitEnabled() bool {
 	return lu.lkp.Autocommit
 }
 
-//====================================================================
+// ====================================================================
 
 // clCommon defines a vindex that uses a lookup table.
 // The table is expected to define the id column as unique. It's
@@ -308,7 +310,7 @@ func (lu *clCommon) SetOwnerInfo(keyspace, table string, cols []sqlparser.Identi
 	lu.keyspace = keyspace
 	lu.ownerTable = sqlparser.String(sqlparser.NewIdentifierCS(table))
 	if len(cols) != len(lu.lkp.FromColumns) {
-		return fmt.Errorf("owner table column count does not match vindex %s", lu.name)
+		return vterrors.VT03029(lu.name)
 	}
 	lu.ownerColumns = make([]string, len(cols))
 	for i, col := range cols {
@@ -382,8 +384,7 @@ func (lu *clCommon) handleDup(ctx context.Context, vcursor VCursor, values []sql
 			return err
 		}
 		// Lock the target row using normal transaction priority.
-		// TODO: context needs to be passed on.
-		qr, err = vcursor.ExecuteKeyspaceID(context.Background(), lu.keyspace, existingksid, lu.lockOwnerQuery, bindVars, false /* rollbackOnError */, false /* autocommit */)
+		qr, err = vcursor.ExecuteKeyspaceID(ctx, lu.keyspace, existingksid, lu.lockOwnerQuery, bindVars, false /* rollbackOnError */, false /* autocommit */)
 		if err != nil {
 			return err
 		}
@@ -411,7 +412,7 @@ func (lu *clCommon) Delete(ctx context.Context, vcursor VCursor, rowsColValues [
 func (lu *clCommon) Update(ctx context.Context, vcursor VCursor, oldValues []sqltypes.Value, ksid []byte, newValues []sqltypes.Value) error {
 	equal := true
 	for i := range oldValues {
-		result, err := evalengine.NullsafeCompare(oldValues[i], newValues[i], vcursor.ConnCollation())
+		result, err := evalengine.NullsafeCompare(oldValues[i], newValues[i], vcursor.Environment().CollationEnv(), vcursor.ConnCollation())
 		// errors from NullsafeCompare can be ignored. if they are real problems, we'll see them in the Create/Update
 		if err != nil || result != 0 {
 			equal = false
@@ -433,7 +434,7 @@ func (lu *clCommon) MarshalJSON() ([]byte, error) {
 }
 
 func (lu *clCommon) generateLockLookup() string {
-	var buf bytes.Buffer
+	var buf strings.Builder
 	fmt.Fprintf(&buf, "select %s from %s", lu.lkp.To, lu.lkp.Table)
 	lu.addWhere(&buf, lu.lkp.FromColumns)
 	fmt.Fprintf(&buf, " for update")
@@ -441,7 +442,7 @@ func (lu *clCommon) generateLockLookup() string {
 }
 
 func (lu *clCommon) generateLockOwner() string {
-	var buf bytes.Buffer
+	var buf strings.Builder
 	fmt.Fprintf(&buf, "select %s from %s", lu.ownerColumns[0], lu.ownerTable)
 	lu.addWhere(&buf, lu.ownerColumns)
 	// We can lock in share mode because we only want to check
@@ -452,7 +453,7 @@ func (lu *clCommon) generateLockOwner() string {
 }
 
 func (lu *clCommon) generateInsertLookup() string {
-	var buf bytes.Buffer
+	var buf strings.Builder
 	fmt.Fprintf(&buf, "insert into %s(", lu.lkp.Table)
 	for _, col := range lu.lkp.FromColumns {
 		fmt.Fprintf(&buf, "%s, ", col)
@@ -466,13 +467,13 @@ func (lu *clCommon) generateInsertLookup() string {
 }
 
 func (lu *clCommon) generateUpdateLookup() string {
-	var buf bytes.Buffer
+	var buf strings.Builder
 	fmt.Fprintf(&buf, "update %s set %s=:%s", lu.lkp.Table, lu.lkp.To, lu.lkp.To)
 	lu.addWhere(&buf, lu.lkp.FromColumns)
 	return buf.String()
 }
 
-func (lu *clCommon) addWhere(buf *bytes.Buffer, cols []string) {
+func (lu *clCommon) addWhere(buf *strings.Builder, cols []string) {
 	buf.WriteString(" where ")
 	for colIdx, column := range cols {
 		if colIdx != 0 {
@@ -488,7 +489,7 @@ func (lu *clCommon) GetCommitOrder() vtgatepb.CommitOrder {
 }
 
 // IsBackfilling implements the LookupBackfill interface
-func (lu *ConsistentLookupUnique) IsBackfilling() bool {
+func (lu *clCommon) IsBackfilling() bool {
 	return lu.writeOnly
 }
 

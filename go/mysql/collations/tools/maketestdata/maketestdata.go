@@ -31,11 +31,11 @@ import (
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/mysql/collations/colldata"
+	"vitess.io/vitess/go/mysql/collations/testutil"
 
 	"vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
-	"vitess.io/vitess/go/mysql/collations/internal/testutil"
 )
 
 func wikiRequest(lang testutil.Lang, args map[string]string, output any) error {
@@ -167,7 +167,7 @@ func main() {
 	fs := pflag.NewFlagSet("maketestdata", pflag.ExitOnError)
 	flag.Parse(fs)
 
-	var defaults = collations.Local()
+	var defaults = collations.MySQL8()
 	var collationsForLanguage = make(map[testutil.Lang][]collations.ID)
 	var allcollations = colldata.All(defaults)
 	for lang := range testutil.KnownLanguages {

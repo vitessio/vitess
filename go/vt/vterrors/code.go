@@ -22,13 +22,16 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
+// Errors added to the list of variables below must be added to the Errors slice a little below in this same file.
+// This will enable the auto-documentation of error code in the website repository.
+
 var (
 	VT03001 = errorWithState("VT03001", vtrpcpb.Code_INVALID_ARGUMENT, SyntaxError, "aggregate functions take a single argument '%s'", "This aggregation function only takes a single argument.")
 	VT03002 = errorWithState("VT03002", vtrpcpb.Code_INVALID_ARGUMENT, ForbidSchemaChange, "changing schema from '%s' to '%s' is not allowed", "This schema change is not allowed. You cannot change the keyspace of a table.")
 	VT03003 = errorWithState("VT03003", vtrpcpb.Code_INVALID_ARGUMENT, UnknownTable, "unknown table '%s' in MULTI DELETE", "The specified table in this DELETE statement is unknown.")
 	VT03004 = errorWithState("VT03004", vtrpcpb.Code_INVALID_ARGUMENT, NonUpdateableTable, "the target table %s of the DELETE is not updatable", "You cannot delete something that is not a real MySQL table.")
 	VT03005 = errorWithState("VT03005", vtrpcpb.Code_INVALID_ARGUMENT, WrongGroupField, "cannot group on '%s'", "The planner does not allow grouping on certain field. For instance, aggregation function.")
-	VT03006 = errorWithState("VT03006", vtrpcpb.Code_INVALID_ARGUMENT, WrongValueCountOnRow, "column count does not match value count at row 1", "The number of columns you want to insert do not match the number of columns of your SELECT query.")
+	VT03006 = errorWithState("VT03006", vtrpcpb.Code_INVALID_ARGUMENT, WrongValueCountOnRow, "column count does not match value count with the row", "The number of columns you want to insert do not match the number of columns of your SELECT query.")
 	VT03007 = errorWithoutState("VT03007", vtrpcpb.Code_INVALID_ARGUMENT, "keyspace not specified", "You need to add a keyspace qualifier.")
 	VT03008 = errorWithState("VT03008", vtrpcpb.Code_INVALID_ARGUMENT, CantUseOptionHere, "incorrect usage/placement of '%s'", "The given token is not usable in this situation. Please refer to the MySQL documentation to learn more about your token's syntax.")
 	VT03009 = errorWithState("VT03009", vtrpcpb.Code_INVALID_ARGUMENT, WrongValueForVar, "unexpected value type for '%s': %v", "You cannot assign this type to the given variable.")
@@ -36,7 +39,7 @@ var (
 	VT03011 = errorWithoutState("VT03011", vtrpcpb.Code_INVALID_ARGUMENT, "invalid value type: %v", "The given value type is not accepted.")
 	VT03012 = errorWithoutState("VT03012", vtrpcpb.Code_INVALID_ARGUMENT, "invalid syntax: %s", "The syntax is invalid. Please refer to the MySQL documentation for the proper syntax.")
 	VT03013 = errorWithState("VT03013", vtrpcpb.Code_INVALID_ARGUMENT, NonUniqTable, "not unique table/alias: '%s'", "This table or alias name is already use. Please use another one that is unique.")
-	VT03014 = errorWithState("VT03014", vtrpcpb.Code_INVALID_ARGUMENT, BadFieldError, "unknown column '%d' in '%s'", "The given column is unknown.")
+	VT03014 = errorWithState("VT03014", vtrpcpb.Code_INVALID_ARGUMENT, BadFieldError, "unknown column '%s' in '%s'", "The given column is unknown.")
 	VT03015 = errorWithoutState("VT03015", vtrpcpb.Code_INVALID_ARGUMENT, "column has duplicate set values: '%v'", "Cannot assign multiple values to a column in an update statement.")
 	VT03016 = errorWithoutState("VT03016", vtrpcpb.Code_INVALID_ARGUMENT, "unknown vindex column: '%s'", "The given column is unknown in the vindex table.")
 	VT03017 = errorWithState("VT03017", vtrpcpb.Code_INVALID_ARGUMENT, SyntaxError, "where clause can only be of the type 'pos > <value>'", "This vstream where clause can only be a greater than filter.")
@@ -49,6 +52,12 @@ var (
 	VT03024 = errorWithoutState("VT03024", vtrpcpb.Code_INVALID_ARGUMENT, "'%s' user defined variable does not exists", "The query cannot be prepared using the user defined variable as it does not exists for this session.")
 	VT03025 = errorWithState("VT03025", vtrpcpb.Code_INVALID_ARGUMENT, WrongArguments, "Incorrect arguments to %s", "The execute statement have wrong number of arguments")
 	VT03026 = errorWithoutState("VT03024", vtrpcpb.Code_INVALID_ARGUMENT, "'%s' bind variable does not exists", "The query cannot be executed as missing the bind variable.")
+	VT03027 = errorWithState("VT03027", vtrpcpb.Code_INVALID_ARGUMENT, BadNullError, "Column '%s' cannot be null", "The column cannot have null value.")
+	VT03028 = errorWithState("VT03028", vtrpcpb.Code_INVALID_ARGUMENT, BadNullError, "Column '%s' cannot be null on row %d, col %d", "The column cannot have null value.")
+	VT03029 = errorWithState("VT03029", vtrpcpb.Code_INVALID_ARGUMENT, WrongValueCountOnRow, "column count does not match value count with the row for vindex '%s'", "The number of columns you want to insert do not match the number of columns of your SELECT query.")
+	VT03030 = errorWithState("VT03030", vtrpcpb.Code_INVALID_ARGUMENT, WrongValueCountOnRow, "lookup column count does not match value count with the row (columns, count): (%v, %d)", "The number of columns you want to insert do not match the number of columns of your SELECT query.")
+	VT03031 = errorWithoutState("VT03031", vtrpcpb.Code_INVALID_ARGUMENT, "EXPLAIN is only supported for single keyspace", "EXPLAIN has to be sent down as a single query to the underlying MySQL, and this is not possible if it uses tables from multiple keyspaces")
+	VT03032 = errorWithState("VT03031", vtrpcpb.Code_INVALID_ARGUMENT, NonUpdateableTable, "the target table %s of the UPDATE is not updatable", "You cannot update a table that is not a real MySQL table.")
 
 	VT05001 = errorWithState("VT05001", vtrpcpb.Code_NOT_FOUND, DbDropExists, "cannot drop database '%s'; database does not exists", "The given database does not exist; Vitess cannot drop it.")
 	VT05002 = errorWithState("VT05002", vtrpcpb.Code_NOT_FOUND, BadDb, "cannot alter database '%s'; unknown database", "The given database does not exist; Vitess cannot alter it.")
@@ -79,7 +88,13 @@ var (
 	VT09015 = errorWithoutState("VT09015", vtrpcpb.Code_FAILED_PRECONDITION, "schema tracking required", "This query cannot be planned without more information on the SQL schema. Please turn on schema tracking or add authoritative columns information to your VSchema.")
 	VT09016 = errorWithState("VT09016", vtrpcpb.Code_FAILED_PRECONDITION, RowIsReferenced2, "Cannot delete or update a parent row: a foreign key constraint fails", "SET DEFAULT is not supported by InnoDB")
 	VT09017 = errorWithoutState("VT09017", vtrpcpb.Code_FAILED_PRECONDITION, "%s", "Invalid syntax for the statement type.")
-	VT09018 = errorWithoutState("VT09017", vtrpcpb.Code_FAILED_PRECONDITION, "%s", "Invalid syntax for the vindex function statement.")
+	VT09018 = errorWithoutState("VT09018", vtrpcpb.Code_FAILED_PRECONDITION, "%s", "Invalid syntax for the vindex function statement.")
+	VT09019 = errorWithoutState("VT09019", vtrpcpb.Code_FAILED_PRECONDITION, "keyspace '%s' has cyclic foreign keys. Cycle exists between %v", "Vitess doesn't support cyclic foreign keys.")
+	VT09020 = errorWithoutState("VT09020", vtrpcpb.Code_FAILED_PRECONDITION, "can not use multiple vindex hints for table %s", "Vitess does not allow using multiple vindex hints on the same table.")
+	VT09021 = errorWithState("VT09021", vtrpcpb.Code_FAILED_PRECONDITION, KeyDoesNotExist, "Vindex '%s' does not exist in table '%s'", "Vindex hints have to reference an existing vindex, and no such vindex could be found for the given table.")
+	VT09022 = errorWithoutState("VT09022", vtrpcpb.Code_FAILED_PRECONDITION, "Destination does not have exactly one shard: %v", "Cannot send query to multiple shards.")
+	VT09023 = errorWithoutState("VT09023", vtrpcpb.Code_FAILED_PRECONDITION, "could not map %v to a keyspace id", "Unable to determine the shard for the given row.")
+	VT09024 = errorWithoutState("VT09024", vtrpcpb.Code_FAILED_PRECONDITION, "could not map %v to a unique keyspace id: %v", "Unable to determine the shard for the given row.")
 
 	VT10001 = errorWithoutState("VT10001", vtrpcpb.Code_ABORTED, "foreign key constraints are not allowed", "Foreign key constraints are not allowed, see https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/.")
 
@@ -96,6 +111,8 @@ var (
 	VT14004 = errorWithoutState("VT14004", vtrpcpb.Code_UNAVAILABLE, "cannot find keyspace for: %s", "The specified keyspace could not be found.")
 	VT14005 = errorWithoutState("VT14005", vtrpcpb.Code_UNAVAILABLE, "cannot lookup sidecar database for keyspace: %s", "Failed to read sidecar database identifier.")
 
+	// Errors is a list of errors that must match all the variables
+	// defined above to enable auto-documentation of error codes.
 	Errors = []func(args ...any) *VitessError{
 		VT03001,
 		VT03002,
@@ -123,6 +140,12 @@ var (
 		VT03024,
 		VT03025,
 		VT03026,
+		VT03027,
+		VT03028,
+		VT03029,
+		VT03030,
+		VT03031,
+		VT03032,
 		VT05001,
 		VT05002,
 		VT05003,
@@ -150,6 +173,12 @@ var (
 		VT09016,
 		VT09017,
 		VT09018,
+		VT09019,
+		VT09020,
+		VT09021,
+		VT09022,
+		VT09023,
+		VT09024,
 		VT10001,
 		VT12001,
 		VT12002,

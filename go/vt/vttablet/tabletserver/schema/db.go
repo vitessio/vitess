@@ -89,7 +89,7 @@ where table_schema = database() and table_name in ::viewNames`
 )
 
 // reloadTablesDataInDB reloads teh tables information we have stored in our database we use for schema-tracking.
-func reloadTablesDataInDB(ctx context.Context, conn *connpool.Conn, tables []*Table, droppedTables []string) error {
+func reloadTablesDataInDB(ctx context.Context, conn *connpool.Conn, tables []*Table, droppedTables []string, parser *sqlparser.Parser) error {
 	// No need to do anything if we have no tables to refresh or drop.
 	if len(tables) == 0 && len(droppedTables) == 0 {
 		return nil
@@ -117,7 +117,7 @@ func reloadTablesDataInDB(ctx context.Context, conn *connpool.Conn, tables []*Ta
 	}
 
 	// Generate the queries to delete and insert table data.
-	clearTableParsedQuery, err := generateFullQuery(deleteFromSchemaEngineTablesTable)
+	clearTableParsedQuery, err := generateFullQuery(deleteFromSchemaEngineTablesTable, parser)
 	if err != nil {
 		return err
 	}
@@ -126,7 +126,7 @@ func reloadTablesDataInDB(ctx context.Context, conn *connpool.Conn, tables []*Ta
 		return err
 	}
 
-	insertTablesParsedQuery, err := generateFullQuery(insertTableIntoSchemaEngineTables)
+	insertTablesParsedQuery, err := generateFullQuery(insertTableIntoSchemaEngineTables, parser)
 	if err != nil {
 		return err
 	}
@@ -162,8 +162,8 @@ func reloadTablesDataInDB(ctx context.Context, conn *connpool.Conn, tables []*Ta
 }
 
 // generateFullQuery generates the full query from the query as a string.
-func generateFullQuery(query string) (*sqlparser.ParsedQuery, error) {
-	stmt, err := sqlparser.Parse(
+func generateFullQuery(query string, parser *sqlparser.Parser) (*sqlparser.ParsedQuery, error) {
+	stmt, err := parser.Parse(
 		sqlparser.BuildParsedQuery(query, sidecar.GetIdentifier(), sidecar.GetIdentifier()).Query)
 	if err != nil {
 		return nil, err
@@ -174,7 +174,7 @@ func generateFullQuery(query string) (*sqlparser.ParsedQuery, error) {
 }
 
 // reloadViewsDataInDB reloads teh views information we have stored in our database we use for schema-tracking.
-func reloadViewsDataInDB(ctx context.Context, conn *connpool.Conn, views []*Table, droppedViews []string) error {
+func reloadViewsDataInDB(ctx context.Context, conn *connpool.Conn, views []*Table, droppedViews []string, parser *sqlparser.Parser) error {
 	// No need to do anything if we have no views to refresh or drop.
 	if len(views) == 0 && len(droppedViews) == 0 {
 		return nil
@@ -213,7 +213,7 @@ func reloadViewsDataInDB(ctx context.Context, conn *connpool.Conn, views []*Tabl
 				return nil
 			},
 			func() *sqltypes.Result { return &sqltypes.Result{} },
-			1000,
+			1000, parser,
 		)
 		if err != nil {
 			return err
@@ -221,7 +221,7 @@ func reloadViewsDataInDB(ctx context.Context, conn *connpool.Conn, views []*Tabl
 	}
 
 	// Generate the queries to delete and insert view data.
-	clearViewParsedQuery, err := generateFullQuery(deleteFromSchemaEngineViewsTable)
+	clearViewParsedQuery, err := generateFullQuery(deleteFromSchemaEngineViewsTable, parser)
 	if err != nil {
 		return err
 	}
@@ -230,7 +230,7 @@ func reloadViewsDataInDB(ctx context.Context, conn *connpool.Conn, views []*Tabl
 		return err
 	}
 
-	insertViewsParsedQuery, err := generateFullQuery(insertViewIntoSchemaEngineViews)
+	insertViewsParsedQuery, err := generateFullQuery(insertViewIntoSchemaEngineViews, parser)
 	if err != nil {
 		return err
 	}
@@ -266,8 +266,8 @@ func reloadViewsDataInDB(ctx context.Context, conn *connpool.Conn, views []*Tabl
 }
 
 // getViewDefinition gets the viewDefinition for the given views.
-func getViewDefinition(ctx context.Context, conn *connpool.Conn, bv map[string]*querypb.BindVariable, callback func(qr *sqltypes.Result) error, alloc func() *sqltypes.Result, bufferSize int) error {
-	viewsDefParsedQuery, err := generateFullQuery(fetchViewDefinitions)
+func getViewDefinition(ctx context.Context, conn *connpool.Conn, bv map[string]*querypb.BindVariable, callback func(qr *sqltypes.Result) error, alloc func() *sqltypes.Result, bufferSize int, parser *sqlparser.Parser) error {
+	viewsDefParsedQuery, err := generateFullQuery(fetchViewDefinitions, parser)
 	if err != nil {
 		return err
 	}
@@ -358,7 +358,7 @@ func (se *Engine) getMismatchedTableNames(ctx context.Context, conn *connpool.Co
 }
 
 // reloadDataInDB reloads the schema tracking data in the database
-func reloadDataInDB(ctx context.Context, conn *connpool.Conn, altered []*Table, created []*Table, dropped []*Table) error {
+func reloadDataInDB(ctx context.Context, conn *connpool.Conn, altered []*Table, created []*Table, dropped []*Table, parser *sqlparser.Parser) error {
 	// tablesToReload and viewsToReload stores the tables and views that need reloading and storing in our MySQL database.
 	var tablesToReload, viewsToReload []*Table
 	// droppedTables, droppedViews stores the list of tables and views we need to delete, respectively.
@@ -382,19 +382,19 @@ func reloadDataInDB(ctx context.Context, conn *connpool.Conn, altered []*Table, 
 		}
 	}
 
-	if err := reloadTablesDataInDB(ctx, conn, tablesToReload, droppedTables); err != nil {
+	if err := reloadTablesDataInDB(ctx, conn, tablesToReload, droppedTables, parser); err != nil {
 		return err
 	}
-	if err := reloadViewsDataInDB(ctx, conn, viewsToReload, droppedViews); err != nil {
+	if err := reloadViewsDataInDB(ctx, conn, viewsToReload, droppedViews, parser); err != nil {
 		return err
 	}
 	return nil
 }
 
 // GetFetchViewQuery gets the fetch query to run for getting the listed views. If no views are provided, then all the views are fetched.
-func GetFetchViewQuery(viewNames []string) (string, error) {
+func GetFetchViewQuery(viewNames []string, parser *sqlparser.Parser) (string, error) {
 	if len(viewNames) == 0 {
-		parsedQuery, err := generateFullQuery(fetchViews)
+		parsedQuery, err := generateFullQuery(fetchViews, parser)
 		if err != nil {
 			return "", err
 		}
@@ -407,7 +407,7 @@ func GetFetchViewQuery(viewNames []string) (string, error) {
 	}
 	bv := map[string]*querypb.BindVariable{"viewNames": viewsBV}
 
-	parsedQuery, err := generateFullQuery(fetchUpdatedViews)
+	parsedQuery, err := generateFullQuery(fetchUpdatedViews, parser)
 	if err != nil {
 		return "", err
 	}
@@ -415,9 +415,9 @@ func GetFetchViewQuery(viewNames []string) (string, error) {
 }
 
 // GetFetchTableQuery gets the fetch query to run for getting the listed tables. If no tables are provided, then all the tables are fetched.
-func GetFetchTableQuery(tableNames []string) (string, error) {
+func GetFetchTableQuery(tableNames []string, parser *sqlparser.Parser) (string, error) {
 	if len(tableNames) == 0 {
-		parsedQuery, err := generateFullQuery(fetchTables)
+		parsedQuery, err := generateFullQuery(fetchTables, parser)
 		if err != nil {
 			return "", err
 		}
@@ -430,7 +430,7 @@ func GetFetchTableQuery(tableNames []string) (string, error) {
 	}
 	bv := map[string]*querypb.BindVariable{"tableNames": tablesBV}
 
-	parsedQuery, err := generateFullQuery(fetchUpdatedTables)
+	parsedQuery, err := generateFullQuery(fetchUpdatedTables, parser)
 	if err != nil {
 		return "", err
 	}
@@ -438,9 +438,9 @@ func GetFetchTableQuery(tableNames []string) (string, error) {
 }
 
 // GetFetchTableAndViewsQuery gets the fetch query to run for getting the listed tables and views. If no table names are provided, then all the tables and views are fetched.
-func GetFetchTableAndViewsQuery(tableNames []string) (string, error) {
+func GetFetchTableAndViewsQuery(tableNames []string, parser *sqlparser.Parser) (string, error) {
 	if len(tableNames) == 0 {
-		parsedQuery, err := generateFullQuery(fetchTablesAndViews)
+		parsedQuery, err := generateFullQuery(fetchTablesAndViews, parser)
 		if err != nil {
 			return "", err
 		}
@@ -453,7 +453,7 @@ func GetFetchTableAndViewsQuery(tableNames []string) (string, error) {
 	}
 	bv := map[string]*querypb.BindVariable{"tableNames": tablesBV}
 
-	parsedQuery, err := generateFullQuery(fetchUpdatedTablesAndViews)
+	parsedQuery, err := generateFullQuery(fetchUpdatedTablesAndViews, parser)
 	if err != nil {
 		return "", err
 	}

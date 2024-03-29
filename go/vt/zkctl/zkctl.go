@@ -33,6 +33,7 @@ import (
 
 	zookeeper "github.com/z-division/go-zookeeper/zk"
 
+	"vitess.io/vitess/go/syscallutil"
 	"vitess.io/vitess/go/vt/env"
 	"vitess.io/vitess/go/vt/log"
 )
@@ -137,13 +138,13 @@ func (zkd *Zkd) Shutdown() error {
 	if err != nil {
 		return err
 	}
-	err = syscall.Kill(pid, syscall.SIGKILL)
+	err = syscallutil.Kill(pid, syscall.SIGKILL)
 	if err != nil && err != syscall.ESRCH {
 		return err
 	}
 	timeout := time.Now().Add(shutdownWaitTime)
 	for time.Now().Before(timeout) {
-		if syscall.Kill(pid, syscall.SIGKILL) == syscall.ESRCH {
+		if syscallutil.Kill(pid, syscall.SIGKILL) == syscall.ESRCH {
 			return nil
 		}
 		time.Sleep(time.Second)

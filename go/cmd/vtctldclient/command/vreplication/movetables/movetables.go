@@ -53,18 +53,25 @@ func registerCommands(root *cobra.Command) {
 		SubCommand: "MoveTables",
 		Workflow:   "commerce2customer",
 	}
-	base.AddCommand(common.GetShowCommand(opts))
-	base.AddCommand(common.GetStatusCommand(opts))
+	showCommand := common.GetShowCommand(opts)
+	common.AddShardSubsetFlag(showCommand, &common.ShowOptions.Shards)
+	base.AddCommand(showCommand)
+
+	statusCommand := common.GetStatusCommand(opts)
+	common.AddShardSubsetFlag(statusCommand, &common.StatusOptions.Shards)
+	base.AddCommand(statusCommand)
 
 	base.AddCommand(common.GetStartCommand(opts))
 	base.AddCommand(common.GetStopCommand(opts))
 
 	switchTrafficCommand := common.GetSwitchTrafficCommand(opts)
 	common.AddCommonSwitchTrafficFlags(switchTrafficCommand, true)
+	common.AddShardSubsetFlag(switchTrafficCommand, &common.SwitchTrafficOptions.Shards)
 	base.AddCommand(switchTrafficCommand)
 
 	reverseTrafficCommand := common.GetReverseTrafficCommand(opts)
 	common.AddCommonSwitchTrafficFlags(reverseTrafficCommand, false)
+	common.AddShardSubsetFlag(reverseTrafficCommand, &common.SwitchTrafficOptions.Shards)
 	base.AddCommand(reverseTrafficCommand)
 
 	complete := common.GetCompleteCommand(opts)
@@ -72,11 +79,13 @@ func registerCommands(root *cobra.Command) {
 	complete.Flags().BoolVar(&common.CompleteOptions.KeepRoutingRules, "keep-routing-rules", false, "Keep the routing rules in place that direct table traffic from the source keyspace to the target keyspace of the MoveTables workflow.")
 	complete.Flags().BoolVar(&common.CompleteOptions.RenameTables, "rename-tables", false, "Keep the original source table data that was copied by the MoveTables workflow, but rename each table to '_<tablename>_old'.")
 	complete.Flags().BoolVar(&common.CompleteOptions.DryRun, "dry-run", false, "Print the actions that would be taken and report any known errors that would have occurred.")
+	common.AddShardSubsetFlag(complete, &common.CompleteOptions.Shards)
 	base.AddCommand(complete)
 
 	cancel := common.GetCancelCommand(opts)
 	cancel.Flags().BoolVar(&common.CancelOptions.KeepData, "keep-data", false, "Keep the partially copied table data from the MoveTables workflow in the target keyspace.")
 	cancel.Flags().BoolVar(&common.CancelOptions.KeepRoutingRules, "keep-routing-rules", false, "Keep the routing rules created for the MoveTables workflow.")
+	common.AddShardSubsetFlag(cancel, &common.CancelOptions.Shards)
 	base.AddCommand(cancel)
 }
 

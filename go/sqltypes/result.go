@@ -19,7 +19,7 @@ package sqltypes
 import (
 	"crypto/sha256"
 	"fmt"
-	"reflect"
+	"slices"
 
 	"google.golang.org/protobuf/proto"
 
@@ -69,8 +69,8 @@ func (result *Result) Repair(fields []*querypb.Field) {
 	// Usage of j is intentional.
 	for j, f := range fields {
 		for _, r := range result.Rows {
-			if r[j].typ != Null {
-				r[j].typ = f.Type
+			if r[j].Type() != Null {
+				r[j].typ = uint16(f.Type)
 			}
 		}
 	}
@@ -198,7 +198,9 @@ func (result *Result) Equal(other *Result) bool {
 	return FieldsEqual(result.Fields, other.Fields) &&
 		result.RowsAffected == other.RowsAffected &&
 		result.InsertID == other.InsertID &&
-		reflect.DeepEqual(result.Rows, other.Rows)
+		slices.EqualFunc(result.Rows, other.Rows, func(a, b Row) bool {
+			return RowEqual(a, b)
+		})
 }
 
 // ResultsEqual compares two arrays of Result.

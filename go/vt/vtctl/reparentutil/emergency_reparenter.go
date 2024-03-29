@@ -449,9 +449,16 @@ func (erp *EmergencyReparenter) promoteIntermediateSource(
 	validCandidateTablets []*topodatapb.Tablet,
 	opts EmergencyReparentOptions,
 ) ([]*topodatapb.Tablet, error) {
-	// we reparent all the other tablets to start replication from our new source
+	// Create a tablet map from all the valid replicas
+	validTabletMap := map[string]*topo.TabletInfo{}
+	for _, candidate := range validCandidateTablets {
+		alias := topoproto.TabletAliasString(candidate.Alias)
+		validTabletMap[alias] = tabletMap[alias]
+	}
+
+	// we reparent all the other valid tablets to start replication from our new source
 	// we wait for all the replicas so that we can choose a better candidate from the ones that started replication later
-	reachableTablets, err := erp.reparentReplicas(ctx, ev, source, tabletMap, statusMap, opts, true /* waitForAllReplicas */, false /* populateReparentJournal */)
+	reachableTablets, err := erp.reparentReplicas(ctx, ev, source, validTabletMap, statusMap, opts, true /* waitForAllReplicas */, false /* populateReparentJournal */)
 	if err != nil {
 		return nil, err
 	}
@@ -697,7 +704,7 @@ func (erp *EmergencyReparenter) identifyPrimaryCandidate(
 		}
 	}
 	// Unreachable code.
-	// We should have found atleast 1 tablet in the valid list.
+	// We should have found at least 1 tablet in the valid list.
 	// If the list is empty, then we should have errored out much sooner.
 	return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unreachable - did not find a valid primary candidate even though the valid candidate list was non-empty")
 }

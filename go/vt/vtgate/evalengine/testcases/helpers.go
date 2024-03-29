@@ -164,7 +164,7 @@ func (cmp *Comparison) closeFloat(a, b float64) bool {
 	return math.Abs((a-b)/b) < tolerance
 }
 
-func (cmp *Comparison) Equals(local, remote sqltypes.Value) (bool, error) {
+func (cmp *Comparison) Equals(local, remote sqltypes.Value, now time.Time) (bool, error) {
 	switch {
 	case local.IsFloat() && remote.IsFloat():
 		localFloat, err := local.ToFloat64()
@@ -185,17 +185,17 @@ func (cmp *Comparison) Equals(local, remote sqltypes.Value) (bool, error) {
 		if !ok {
 			return false, fmt.Errorf("error converting remote value '%s' to datetime", remote)
 		}
-		return cmp.closeDatetime(localDatetime.ToStdTime(time.Local), remoteDatetime.ToStdTime(time.Local), 1*time.Second), nil
+		return cmp.closeDatetime(localDatetime.ToStdTime(now), remoteDatetime.ToStdTime(now), 1*time.Second), nil
 	case cmp.LooseTime && local.IsTime() && remote.IsTime():
-		localTime, _, ok := datetime.ParseTime(local.ToString(), -1)
-		if !ok {
+		localTime, _, state := datetime.ParseTime(local.ToString(), -1)
+		if state != datetime.TimeOK {
 			return false, fmt.Errorf("error converting local value '%s' to time", local)
 		}
-		remoteTime, _, ok := datetime.ParseTime(remote.ToString(), -1)
-		if !ok {
+		remoteTime, _, state := datetime.ParseTime(remote.ToString(), -1)
+		if state != datetime.TimeOK {
 			return false, fmt.Errorf("error converting remote value '%s' to time", remote)
 		}
-		return cmp.closeDatetime(localTime.ToStdTime(time.Local), remoteTime.ToStdTime(time.Local), 1*time.Second), nil
+		return cmp.closeDatetime(localTime.ToStdTime(now), remoteTime.ToStdTime(now), 1*time.Second), nil
 	default:
 		return local.String() == remote.String(), nil
 	}

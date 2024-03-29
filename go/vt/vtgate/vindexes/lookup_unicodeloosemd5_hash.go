@@ -56,7 +56,7 @@ func init() {
 // LookupUnicodeLooseMD5Hash defines a vindex that uses a lookup table.
 // The table is expected to define the id column as unique. It's
 // NonUnique and a Lookup and stores the from value in a hashed form.
-// Warning: This Vindex is being depcreated in favor of Lookup
+// Warning: This Vindex is being deprecated in favor of Lookup
 type LookupUnicodeLooseMD5Hash struct {
 	name          string
 	writeOnly     bool
@@ -246,7 +246,7 @@ func (lh *LookupUnicodeLooseMD5Hash) UnknownParams() []string {
 // LookupUnicodeLooseMD5HashUnique defines a vindex that uses a lookup table.
 // The table is expected to define the id column as unique. It's
 // Unique and a Lookup and will store the from value in a hashed format.
-// Warning: This Vindex is being depcreated in favor of LookupUnique
+// Warning: This Vindex is being deprecated in favor of LookupUnique
 type LookupUnicodeLooseMD5HashUnique struct {
 	name          string
 	writeOnly     bool
@@ -427,7 +427,7 @@ func (lhu *LookupUnicodeLooseMD5HashUnique) UnknownParams() []string {
 }
 
 func unicodeHashValue(value sqltypes.Value) (sqltypes.Value, error) {
-	hash, err := unicodeHash(vMD5Hash, value)
+	hash, err := unicodeHash(&collateMD5, value)
 	if err != nil {
 		return sqltypes.NULL, err
 	}

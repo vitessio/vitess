@@ -153,6 +153,19 @@ var (
 					Name:   "hash",
 				}},
 			},
+			"oltp_test": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "id",
+					Name:   "hash",
+				}},
+				Columns: []*vschemapb.Column{{
+					Name: "c",
+					Type: sqltypes.Char,
+				}, {
+					Name: "pad",
+					Type: sqltypes.Char,
+				}},
+			},
 		},
 	}
 

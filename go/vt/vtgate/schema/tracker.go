@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -50,6 +51,8 @@ type (
 		// map of keyspace currently tracked
 		tracked      map[keyspaceStr]*updateController
 		consumeDelay time.Duration
+
+		parser *sqlparser.Parser
 	}
 )
 
@@ -57,17 +60,18 @@ type (
 const defaultConsumeDelay = 1 * time.Second
 
 // NewTracker creates the tracker object.
-func NewTracker(ch chan *discovery.TabletHealth, enableViews bool) *Tracker {
+func NewTracker(ch chan *discovery.TabletHealth, enableViews bool, parser *sqlparser.Parser) *Tracker {
 	t := &Tracker{
 		ctx:          context.Background(),
 		ch:           ch,
 		tables:       &tableMap{m: make(map[keyspaceStr]map[tableNameStr]*vindexes.TableInfo)},
 		tracked:      map[keyspaceStr]*updateController{},
 		consumeDelay: defaultConsumeDelay,
+		parser:       parser,
 	}
 
 	if enableViews {
-		t.views = &viewMap{m: map[keyspaceStr]map[viewNameStr]sqlparser.SelectStatement{}}
+		t.views = &viewMap{m: map[keyspaceStr]map[viewNameStr]sqlparser.SelectStatement{}, parser: parser}
 	}
 	return t
 }
@@ -216,6 +220,15 @@ func (t *Tracker) GetForeignKeys(ks string, tbl string) []*sqlparser.ForeignKeyD
 	return tblInfo.ForeignKeys
 }
 
+// GetIndexes returns the indexes for table in the given keyspace.
+func (t *Tracker) GetIndexes(ks string, tbl string) []*sqlparser.IndexDefinition {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	tblInfo := t.tables.get(ks, tbl)
+	return tblInfo.Indexes
+}
+
 // Tables returns a map with the columns for all known tables in the keyspace
 func (t *Tracker) Tables(ks string) map[string]*vindexes.TableInfo {
 	t.mu.Lock()
@@ -280,7 +293,7 @@ func (t *Tracker) updatedTableSchema(th *discovery.TabletHealth) bool {
 
 func (t *Tracker) updateTables(keyspace string, res map[string]string) {
 	for tableName, tableDef := range res {
-		stmt, err := sqlparser.Parse(tableDef)
+		stmt, err := t.parser.Parse(tableDef)
 		if err != nil {
 			log.Warningf("error parsing table definition for %s: %v", tableName, err)
 			continue
@@ -293,7 +306,7 @@ func (t *Tracker) updateTables(keyspace string, res map[string]string) {
 
 		cols := getColumns(ddl.TableSpec)
 		fks := getForeignKeys(ddl.TableSpec)
-		t.tables.set(keyspace, tableName, cols, fks)
+		t.tables.set(keyspace, tableName, cols, fks, ddl.TableSpec.Indexes)
 	}
 }
 
@@ -302,11 +315,20 @@ func getColumns(tblSpec *sqlparser.TableSpec) []vindexes.Column {
 	cols := make([]vindexes.Column, 0, len(tblSpec.Columns))
 	for _, column := range tblSpec.Columns {
 		colCollation := getColumnCollation(tblCollation, column)
+		size := ptr.Unwrap(column.Type.Length, 0)
+		scale := ptr.Unwrap(column.Type.Scale, 0)
+		nullable := ptr.Unwrap(column.Type.Options.Null, true)
 		cols = append(cols,
 			vindexes.Column{
 				Name:          column.Name,
 				Type:          column.Type.SQLType(),
 				CollationName: colCollation,
+				Default:       column.Type.Options.Default,
+				Invisible:     column.Type.Invisible(),
+				Size:          int32(size),
+				Scale:         int32(scale),
+				Nullable:      nullable,
+				Values:        column.Type.EnumValues,
 			})
 	}
 	return cols
@@ -342,7 +364,13 @@ func getTableCollation(tblSpec *sqlparser.TableSpec) string {
 
 func getColumnCollation(defaultCollation string, column *sqlparser.ColumnDefinition) string {
 	if column.Type.Options == nil || column.Type.Options.Collate == "" {
-		return defaultCollation
+		switch strings.ToLower(column.Type.Type) {
+		case "enum", "set", "text", "tinytext", "mediumtext", "longtext", "varchar", "char":
+			return defaultCollation
+		case "json":
+			return "utf8mb4_bin"
+		}
+		return "binary"
 	}
 	return column.Type.Options.Collate
 }
@@ -402,13 +430,13 @@ type tableMap struct {
 	m map[keyspaceStr]map[tableNameStr]*vindexes.TableInfo
 }
 
-func (tm *tableMap) set(ks, tbl string, cols []vindexes.Column, fks []*sqlparser.ForeignKeyDefinition) {
+func (tm *tableMap) set(ks, tbl string, cols []vindexes.Column, fks []*sqlparser.ForeignKeyDefinition, indexes []*sqlparser.IndexDefinition) {
 	m := tm.m[ks]
 	if m == nil {
 		m = make(map[tableNameStr]*vindexes.TableInfo)
 		tm.m[ks] = m
 	}
-	m[tbl] = &vindexes.TableInfo{Columns: cols, ForeignKeys: fks}
+	m[tbl] = &vindexes.TableInfo{Columns: cols, ForeignKeys: fks, Indexes: indexes}
 }
 
 func (tm *tableMap) get(ks, tbl string) *vindexes.TableInfo {
@@ -437,7 +465,8 @@ func (t *Tracker) clearKeyspaceTables(ks string) {
 }
 
 type viewMap struct {
-	m map[keyspaceStr]map[viewNameStr]sqlparser.SelectStatement
+	m      map[keyspaceStr]map[viewNameStr]sqlparser.SelectStatement
+	parser *sqlparser.Parser
 }
 
 func (vm *viewMap) set(ks, tbl, sql string) {
@@ -446,7 +475,7 @@ func (vm *viewMap) set(ks, tbl, sql string) {
 		m = make(map[tableNameStr]sqlparser.SelectStatement)
 		vm.m[ks] = m
 	}
-	stmt, err := sqlparser.Parse(sql)
+	stmt, err := vm.parser.Parse(sql)
 	if err != nil {
 		log.Warningf("ignoring view '%s', parsing error in view definition: '%s'", tbl, sql)
 		return

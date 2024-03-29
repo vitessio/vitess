@@ -721,6 +721,24 @@
     }
   },
   {
+    "comment": "show vschema keyspaces",
+    "query": "show vschema keyspaces",
+    "plan": {
+      "QueryType": "SHOW",
+      "Original": "show vschema keyspaces",
+      "Instructions": {
+        "OperatorType": "Rows",
+        "Fields": {
+          "Comment": "VARCHAR",
+          "Foreign Key": "VARCHAR",
+          "Keyspace": "VARCHAR",
+          "Sharded": "VARCHAR"
+        },
+        "RowCount": 8
+      }
+    }
+  },
+  {
     "comment": "show vschema vindexes",
     "query": "show vschema vindexes",
     "plan": {

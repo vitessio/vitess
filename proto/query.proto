@@ -221,8 +221,6 @@ enum Type {
 message Value {
   Type type = 1;
   bytes value = 2;
-  // values are set if type is TUPLE.
-  repeated Value values = 3;
 }
 
 // BindVariable represents a single bind variable in a Query.

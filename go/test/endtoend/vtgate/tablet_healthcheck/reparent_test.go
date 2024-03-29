@@ -145,11 +145,11 @@ func TestHealthCheckExternallyReparentNewTablet(t *testing.T) {
 	tablet := addTablet(t, reparentTabletUID, reparentTabletType)
 
 	// promote the new tablet to the primary
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("TabletExternallyReparented", tablet.Alias)
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("TabletExternallyReparented", tablet.Alias)
 	require.NoError(t, err)
 
 	// update the new primary tablet to be read-write
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SetReadWrite", tablet.Alias)
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("SetWritable", tablet.Alias, "true")
 	require.NoError(t, err)
 
 	// wait for the vtgate to finish updating the new primary tablet
@@ -236,7 +236,7 @@ func deleteTablet(t *testing.T, tablet *cluster.Vttablet) {
 	}(tablet)
 	wg.Wait()
 
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", tablet.Alias)
+	err := clusterInstance.VtctldClientProcess.ExecuteCommand("DeleteTablets", tablet.Alias)
 	require.NoError(t, err)
 
 	t.Logf("Deleted tablet: %s", tablet.Alias)

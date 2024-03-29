@@ -26,6 +26,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
@@ -56,12 +57,16 @@ var (
 
 	CreateOptions = struct {
 		Cells                        []string
+		AllCells                     bool
 		TabletTypes                  []topodatapb.TabletType
 		TabletTypesInPreferenceOrder bool
 		OnDDL                        string
 		DeferSecondaryKeys           bool
 		AutoStart                    bool
 		StopAfterCopy                bool
+		MySQLServerVersion           string
+		TruncateUILen                int
+		TruncateErrLen               int
 	}{}
 )
 
@@ -98,12 +103,28 @@ func GetCommandCtx() context.Context {
 	return commandCtx
 }
 
-func ParseCells(cmd *cobra.Command) {
-	if cmd.Flags().Lookup("cells").Changed { // Validate the provided value(s)
+func ParseCells(cmd *cobra.Command) error {
+	cf := cmd.Flags().Lookup("cells")
+	af := cmd.Flags().Lookup("all-cells")
+	if cf != nil && cf.Changed && af != nil && af.Changed {
+		return fmt.Errorf("cannot specify both --cells and --all-cells")
+	}
+	if cf.Changed { // Validate the provided value(s)
 		for i, cell := range CreateOptions.Cells { // Which only means trimming whitespace
 			CreateOptions.Cells[i] = strings.TrimSpace(cell)
 		}
 	}
+	if CreateOptions.AllCells { // Use all current cells
+		ctx, cancel := context.WithTimeout(commandCtx, topo.RemoteOperationTimeout)
+		defer cancel()
+		resp, err := client.GetCellInfoNames(ctx, &vtctldatapb.GetCellInfoNamesRequest{})
+		if err != nil {
+			return fmt.Errorf("failed to get current cells: %v", err)
+		}
+		CreateOptions.Cells = make([]string, len(resp.Names))
+		copy(CreateOptions.Cells, resp.Names)
+	}
+	return nil
 }
 
 func ParseTabletTypes(cmd *cobra.Command) error {
@@ -130,7 +151,9 @@ func ParseAndValidateCreateOptions(cmd *cobra.Command) error {
 	if err := validateOnDDL(cmd); err != nil {
 		return err
 	}
-	ParseCells(cmd)
+	if err := ParseCells(cmd); err != nil {
+		return err
+	}
 	if err := ParseTabletTypes(cmd); err != nil {
 		return err
 	}
@@ -192,6 +215,7 @@ func AddCommonFlags(cmd *cobra.Command) {
 
 func AddCommonCreateFlags(cmd *cobra.Command) {
 	cmd.Flags().StringSliceVarP(&CreateOptions.Cells, "cells", "c", nil, "Cells and/or CellAliases to copy table data from.")
+	cmd.Flags().BoolVarP(&CreateOptions.AllCells, "all-cells", "a", false, "Copy table data from any existing cell.")
 	cmd.Flags().Var((*topoproto.TabletTypeListFlag)(&CreateOptions.TabletTypes), "tablet-types", "Source tablet types to replicate table data from (e.g. PRIMARY,REPLICA,RDONLY).")
 	cmd.Flags().BoolVar(&CreateOptions.TabletTypesInPreferenceOrder, "tablet-types-in-preference-order", true, "When performing source tablet selection, look for candidates in the type order as they are listed in the tablet-types flag.")
 	cmd.Flags().StringVar(&CreateOptions.OnDDL, "on-ddl", onDDLDefault, "What to do when DDL is encountered in the VReplication stream. Possible values are IGNORE, STOP, EXEC, and EXEC_IGNORE.")
@@ -209,6 +233,7 @@ var SwitchTrafficOptions = struct {
 	DryRun                    bool
 	Direction                 workflow.TrafficSwitchDirection
 	InitializeTargetSequences bool
+	Shards                    []string
 }{}
 
 func AddCommonSwitchTrafficFlags(cmd *cobra.Command, initializeTargetSequences bool) {
@@ -221,4 +246,8 @@ func AddCommonSwitchTrafficFlags(cmd *cobra.Command, initializeTargetSequences b
 	if initializeTargetSequences {
 		cmd.Flags().BoolVar(&SwitchTrafficOptions.InitializeTargetSequences, "initialize-target-sequences", false, "When moving tables from an unsharded keyspace to a sharded keyspace, initialize any sequences that are being used on the target when switching writes.")
 	}
+}
+
+func AddShardSubsetFlag(cmd *cobra.Command, shardsOption *[]string) {
+	cmd.Flags().StringSliceVar(shardsOption, "shards", nil, "(Optional) Specifies a comma-separated list of shards to operate on.")
 }

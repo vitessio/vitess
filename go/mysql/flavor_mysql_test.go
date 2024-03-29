@@ -73,5 +73,4 @@ func TestMysql56SetReplicationSourceCommandSSL(t *testing.T) {
 	conn := &Conn{flavor: mysqlFlavor57{}}
 	got := conn.SetReplicationSourceCommand(params, host, port, connectRetry)
 	assert.Equal(t, want, got, "mysqlFlavor.SetReplicationSourceCommand(%#v, %#v, %#v, %#v) = %#v, want %#v", params, host, port, connectRetry, got, want)
-
 }

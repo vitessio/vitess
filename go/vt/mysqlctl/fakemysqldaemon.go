@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 
@@ -196,7 +197,7 @@ func NewFakeMysqlDaemon(db *fakesqldb.DB) *FakeMysqlDaemon {
 	}
 	if db != nil {
 		result.appPool = dbconnpool.NewConnectionPool("AppConnPool", nil, 5, time.Minute, 0, 0)
-		result.appPool.Open(db.ConnParams())
+		result.appPool.Open(dbconfigs.New(db.ConnParams()))
 	}
 	return result
 }
@@ -220,7 +221,7 @@ func (fmd *FakeMysqlDaemon) Start(ctx context.Context, cnf *Mycnf, mysqldArgs ..
 }
 
 // Shutdown is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bool) error {
+func (fmd *FakeMysqlDaemon) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bool, mysqlShutdownTimeout time.Duration) error {
 	if !fmd.Running {
 		return fmt.Errorf("fake mysql daemon not running")
 	}
@@ -264,6 +265,10 @@ func (fmd *FakeMysqlDaemon) RefreshConfig(ctx context.Context, cnf *Mycnf) error
 
 // Wait is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) Wait(ctx context.Context, cnf *Mycnf) error {
+	return nil
+}
+
+func (fmd *FakeMysqlDaemon) WaitForDBAGrants(ctx context.Context, waitTime time.Duration) (err error) {
 	return nil
 }
 
@@ -653,12 +658,12 @@ func (fmd *FakeMysqlDaemon) GetAppConnection(ctx context.Context) (*dbconnpool.P
 
 // GetDbaConnection is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) GetDbaConnection(ctx context.Context) (*dbconnpool.DBConnection, error) {
-	return dbconnpool.NewDBConnection(ctx, fmd.db.ConnParams())
+	return dbconnpool.NewDBConnection(ctx, dbconfigs.New(fmd.db.ConnParams()))
 }
 
 // GetAllPrivsConnection is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) GetAllPrivsConnection(ctx context.Context) (*dbconnpool.DBConnection, error) {
-	return dbconnpool.NewDBConnection(ctx, fmd.db.ConnParams())
+	return dbconnpool.NewDBConnection(ctx, dbconfigs.New(fmd.db.ConnParams()))
 }
 
 // SetSemiSyncEnabled is part of the MysqlDaemon interface.

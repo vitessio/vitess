@@ -19,8 +19,7 @@ package evalengine
 import (
 	"errors"
 
-	"vitess.io/vitess/go/sqltypes"
-	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vthash"
 )
 
@@ -40,45 +39,33 @@ type vmstate struct {
 	}
 }
 
-func Deoptimize(expr Expr) Expr {
-	switch expr := expr.(type) {
-	case *CompiledExpr:
-		return expr.original
-	default:
-		return expr
-	}
+type CompiledExpr struct {
+	code  []frame
+	typed ctype
+	stack int
+	ir    IR
 }
 
-type CompiledExpr struct {
-	code     []frame
-	typed    sqltypes.Type
-	stack    int
-	original Expr
+func (c *CompiledExpr) IR() IR {
+	return c.ir
+}
+
+func (c *CompiledExpr) IsExpr() {}
+
+func (p *CompiledExpr) typeof(*ExpressionEnv) (ctype, error) {
+	return p.typed, nil
 }
 
 func (p *CompiledExpr) eval(env *ExpressionEnv) (eval, error) {
-	return p.original.eval(env)
+	return p.ir.eval(env)
 }
 
-func (p *CompiledExpr) typeof(*ExpressionEnv, []*querypb.Field) (sqltypes.Type, typeFlag) {
-	return p.typed, 0
+func (p *CompiledExpr) Format(buf *sqlparser.TrackedBuffer) {
+	p.ir.format(buf)
 }
 
-func (p *CompiledExpr) format(buf *formatter, depth int) {
-	p.original.format(buf, depth)
-}
-
-func (p *CompiledExpr) constant() bool {
-	return p.original.constant()
-}
-
-func (p *CompiledExpr) simplify(env *ExpressionEnv) error {
-	// No-op
-	return nil
-}
-
-func (p *CompiledExpr) compile(c *compiler) (ctype, error) {
-	panic("called compile() on already compiled Expr")
+func (p *CompiledExpr) FormatFast(buf *sqlparser.TrackedBuffer) {
+	p.ir.format(buf)
 }
 
 var _ Expr = (*CompiledExpr)(nil)
@@ -100,12 +87,12 @@ func (env *ExpressionEnv) EvaluateVM(p *CompiledExpr) (EvalResult, error) {
 			goto err
 		}
 	}
-	return EvalResult{env.vm.stack[env.vm.sp-1]}, nil
+	return EvalResult{v: env.vm.stack[env.vm.sp-1], collationEnv: env.collationEnv}, nil
 
 err:
 	if env.vm.err == errDeoptimize {
-		e, err := p.original.eval(env)
-		return EvalResult{e}, err
+		e, err := p.ir.eval(env)
+		return EvalResult{v: e, collationEnv: env.collationEnv}, err
 	}
-	return EvalResult{}, env.vm.err
+	return EvalResult{collationEnv: env.collationEnv}, env.vm.err
 }

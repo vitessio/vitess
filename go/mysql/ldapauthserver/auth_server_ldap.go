@@ -24,31 +24,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/spf13/pflag"
-	ldap "gopkg.in/ldap.v2"
+	"gopkg.in/ldap.v2"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vttls"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
-
-var (
-	ldapAuthConfigFile   string
-	ldapAuthConfigString string
-	ldapAuthMethod       string
-)
-
-func init() {
-	servenv.OnParseFor("vtgate", func(fs *pflag.FlagSet) {
-		fs.StringVar(&ldapAuthConfigFile, "mysql_ldap_auth_config_file", "", "JSON File from which to read LDAP server config.")
-		fs.StringVar(&ldapAuthConfigString, "mysql_ldap_auth_config_string", "", "JSON representation of LDAP server config.")
-		fs.StringVar(&ldapAuthMethod, "mysql_ldap_auth_method", string(mysql.MysqlClearPassword), "client-side authentication method to use. Supported values: mysql_clear_password, dialog.")
-	})
-}
 
 // AuthServerLdap implements AuthServer with an LDAP backend
 type AuthServerLdap struct {
@@ -63,7 +47,7 @@ type AuthServerLdap struct {
 }
 
 // Init is public so it can be called from plugin_auth_ldap.go (go/cmd/vtgate)
-func Init() {
+func Init(ldapAuthConfigFile, ldapAuthConfigString, ldapAuthMethod string) {
 	if ldapAuthConfigFile == "" && ldapAuthConfigString == "" {
 		log.Infof("Not configuring AuthServerLdap because mysql_ldap_auth_config_file and mysql_ldap_auth_config_string are empty")
 		return

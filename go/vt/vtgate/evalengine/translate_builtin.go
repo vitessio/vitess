@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/collations"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -31,7 +32,7 @@ func (err argError) Error() string {
 	return fmt.Sprintf("Incorrect parameter count in the call to native function '%s'", string(err))
 }
 
-func (ast *astCompiler) translateFuncArgs(fnargs []sqlparser.Expr) ([]Expr, error) {
+func (ast *astCompiler) translateFuncArgs(fnargs []sqlparser.Expr) ([]IR, error) {
 	var args TupleExpr
 	for _, expr := range fnargs {
 		convertedExpr, err := ast.translateExpr(expr)
@@ -43,14 +44,10 @@ func (ast *astCompiler) translateFuncArgs(fnargs []sqlparser.Expr) ([]Expr, erro
 	return args, nil
 }
 
-func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) {
+func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (IR, error) {
 	var args TupleExpr
 	for _, expr := range fn.Exprs {
-		aliased, ok := expr.(*sqlparser.AliasedExpr)
-		if !ok {
-			return nil, translateExprNotSupported(fn)
-		}
-		convertedExpr, err := ast.translateExpr(aliased.Expr)
+		convertedExpr, err := ast.translateExpr(expr)
 		if err != nil {
 			return nil, err
 		}
@@ -255,6 +252,22 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 			return nil, argError(method)
 		}
 		return &builtinConv{CallExpr: call, collate: ast.cfg.Collation}, nil
+	case "bin":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		args = append(args, NewLiteralInt(10))
+		args = append(args, NewLiteralInt(2))
+		var cexpr = CallExpr{Arguments: args, Method: "BIN"}
+		return &builtinConv{CallExpr: cexpr, collate: ast.cfg.Collation}, nil
+	case "oct":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		args = append(args, NewLiteralInt(10))
+		args = append(args, NewLiteralInt(8))
+		var cexpr = CallExpr{Arguments: args, Method: "OCT"}
+		return &builtinConv{CallExpr: cexpr, collate: ast.cfg.Collation}, nil
 	case "left", "right":
 		if len(args) != 2 {
 			return nil, argError(method)
@@ -295,6 +308,16 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 			return nil, argError(method)
 		}
 		return &builtinASCII{CallExpr: call}, nil
+	case "reverse":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinReverse{CallExpr: call, collate: ast.cfg.Collation}, nil
+	case "space":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinSpace{CallExpr: call, collate: ast.cfg.Collation}, nil
 	case "ord":
 		if len(args) != 1 {
 			return nil, argError(method)
@@ -414,6 +437,26 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 			return nil, argError(method)
 		}
 		return &builtinMonthName{CallExpr: call, collate: ast.cfg.Collation}, nil
+	case "last_day":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinLastDay{CallExpr: call}, nil
+	case "to_days":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinToDays{CallExpr: call}, nil
+	case "from_days":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinFromDays{CallExpr: call}, nil
+	case "time_to_sec":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinTimeToSec{CallExpr: call}, nil
 	case "quarter":
 		if len(args) != 1 {
 			return nil, argError(method)
@@ -574,12 +617,23 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 			return nil, argError(method)
 		}
 		return &builtinStrcmp{CallExpr: call, collate: ast.cfg.Collation}, nil
+	case "instr":
+		if len(args) != 2 {
+			return nil, argError(method)
+		}
+		call = CallExpr{Arguments: []IR{call.Arguments[1], call.Arguments[0]}, Method: method}
+		return &builtinLocate{CallExpr: call, collate: ast.cfg.Collation}, nil
+	case "replace":
+		if len(args) != 3 {
+			return nil, argError(method)
+		}
+		return &builtinReplace{CallExpr: call, collate: ast.cfg.Collation}, nil
 	default:
 		return nil, translateExprNotSupported(fn)
 	}
 }
 
-func (ast *astCompiler) translateCallable(call sqlparser.Callable) (Expr, error) {
+func (ast *astCompiler) translateCallable(call sqlparser.Callable) (IR, error) {
 	switch call := call.(type) {
 	case *sqlparser.FuncExpr:
 		return ast.translateFuncExpr(call)
@@ -591,21 +645,21 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (Expr, error)
 		return ast.translateConvertUsingExpr(call)
 
 	case *sqlparser.WeightStringFuncExpr:
-		var ws builtinWeightString
-		var err error
+		ws := &builtinWeightString{}
 
-		ws.Expr, err = ast.translateExpr(call.Expr)
+		expr, err := ast.translateExpr(call.Expr)
 		if err != nil {
 			return nil, err
 		}
+		ws.CallExpr = CallExpr{
+			Arguments: []IR{expr},
+			Method:    "WEIGHT_STRING",
+		}
 		if call.As != nil {
 			ws.Cast = strings.ToLower(call.As.Type)
-			ws.Len, ws.HasLen, err = ast.translateIntegral(call.As.Length)
-			if err != nil {
-				return nil, err
-			}
+			ws.Len = call.As.Length
 		}
-		return &ws, nil
+		return ws, nil
 
 	case *sqlparser.JSONExtractExpr:
 		args, err := ast.translateFuncArgs(append([]sqlparser.Expr{call.JSONDoc}, call.PathList...))
@@ -626,13 +680,13 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (Expr, error)
 		}
 		return &builtinJSONUnquote{
 			CallExpr: CallExpr{
-				Arguments: []Expr{arg},
+				Arguments: []IR{arg},
 				Method:    "JSON_UNQUOTE",
 			},
 		}, nil
 
 	case *sqlparser.JSONObjectExpr:
-		var args []Expr
+		var args []IR
 		for _, param := range call.Params {
 			key, err := ast.translateExpr(param.Key)
 			if err != nil {
@@ -674,7 +728,7 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (Expr, error)
 		}}, nil
 
 	case *sqlparser.JSONKeysExpr:
-		var args []Expr
+		var args []IR
 		doc, err := ast.translateExpr(call.JSONDoc)
 		if err != nil {
 			return nil, err
@@ -696,7 +750,7 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (Expr, error)
 
 	case *sqlparser.CurTimeFuncExpr:
 		if call.Fsp > 6 {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Too-big precision 12 specified for '%s'. Maximum is 6.", call.Name.String())
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Too-big precision %d specified for '%s'. Maximum is 6.", call.Fsp, call.Name.String())
 		}
 
 		var cexpr = CallExpr{Arguments: nil, Method: call.Name.String()}
@@ -723,7 +777,7 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (Expr, error)
 		}, nil
 
 	case *sqlparser.TrimFuncExpr:
-		var args []Expr
+		var args []IR
 		str, err := ast.translateExpr(call.StringArg)
 		if err != nil {
 			return nil, err
@@ -744,9 +798,59 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (Expr, error)
 			trim:     call.Type,
 		}, nil
 
+	case *sqlparser.SubstrExpr:
+		var args []IR
+		str, err := ast.translateExpr(call.Name)
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, str)
+		pos, err := ast.translateExpr(call.From)
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, pos)
+
+		if call.To != nil {
+			to, err := ast.translateExpr(call.To)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, to)
+		}
+		var cexpr = CallExpr{Arguments: args, Method: "SUBSTRING"}
+		return &builtinSubstring{
+			CallExpr: cexpr,
+			collate:  ast.cfg.Collation,
+		}, nil
+	case *sqlparser.LocateExpr:
+		var args []IR
+		substr, err := ast.translateExpr(call.SubStr)
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, substr)
+		str, err := ast.translateExpr(call.Str)
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, str)
+
+		if call.Pos != nil {
+			to, err := ast.translateExpr(call.Pos)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, to)
+		}
+		var cexpr = CallExpr{Arguments: args, Method: "LOCATE"}
+		return &builtinLocate{
+			CallExpr: cexpr,
+			collate:  ast.cfg.Collation,
+		}, nil
 	case *sqlparser.IntervalDateExpr:
 		var err error
-		args := make([]Expr, 2)
+		args := make([]IR, 2)
 
 		args[0], err = ast.translateExpr(call.Date)
 		if err != nil {
@@ -776,7 +880,7 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (Expr, error)
 			return nil, err
 		}
 
-		args := []Expr{input, pattern}
+		args := []IR{input, pattern}
 
 		if call.MatchType != nil {
 			matchType, err := ast.translateExpr(call.MatchType)
@@ -802,7 +906,7 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (Expr, error)
 			return nil, err
 		}
 
-		args := []Expr{input, pattern}
+		args := []IR{input, pattern}
 
 		if call.Position != nil {
 			position, err := ast.translateExpr(call.Position)
@@ -851,7 +955,7 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (Expr, error)
 			return nil, err
 		}
 
-		args := []Expr{input, pattern}
+		args := []IR{input, pattern}
 
 		if call.Position != nil {
 			position, err := ast.translateExpr(call.Position)
@@ -897,7 +1001,7 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (Expr, error)
 			return nil, err
 		}
 
-		args := []Expr{input, pattern, repl}
+		args := []IR{input, pattern, repl}
 
 		if call.Position != nil {
 			position, err := ast.translateExpr(call.Position)
@@ -926,37 +1030,92 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (Expr, error)
 		return &builtinRegexpReplace{
 			CallExpr: CallExpr{Arguments: args, Method: "REGEXP_REPLACE"},
 		}, nil
+
+	case *sqlparser.InsertExpr:
+		str, err := ast.translateExpr(call.Str)
+		if err != nil {
+			return nil, err
+		}
+
+		pos, err := ast.translateExpr(call.Pos)
+		if err != nil {
+			return nil, err
+		}
+
+		len, err := ast.translateExpr(call.Len)
+		if err != nil {
+			return nil, err
+		}
+
+		newstr, err := ast.translateExpr(call.NewStr)
+		if err != nil {
+			return nil, err
+		}
+
+		args := []IR{str, pos, len, newstr}
+
+		var cexpr = CallExpr{Arguments: args, Method: "INSERT"}
+		return &builtinInsert{
+			CallExpr: cexpr,
+			collate:  ast.cfg.Collation,
+		}, nil
+	case *sqlparser.CharExpr:
+		args := make([]IR, 0, len(call.Exprs))
+		for _, expr := range call.Exprs {
+			arg, err := ast.translateExpr(expr)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, arg)
+		}
+
+		var cexpr = CallExpr{Arguments: args, Method: "CHAR"}
+		var coll collations.ID
+		if call.Charset == "" {
+			coll = collations.CollationBinaryID
+		} else {
+			var err error
+			coll, err = ast.translateConvertCharset(call.Charset, false)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		return &builtinChar{
+			CallExpr: cexpr,
+			collate:  coll,
+		}, nil
 	default:
 		return nil, translateExprNotSupported(call)
 	}
 }
 
-func builtinJSONExtractUnquoteRewrite(left Expr, right Expr) (Expr, error) {
+func builtinJSONExtractUnquoteRewrite(left IR, right IR) (IR, error) {
 	extract, err := builtinJSONExtractRewrite(left, right)
 	if err != nil {
 		return nil, err
 	}
 	return &builtinJSONUnquote{
 		CallExpr: CallExpr{
-			Arguments: []Expr{extract},
+			Arguments: []IR{extract},
 			Method:    "JSON_UNQUOTE",
 		},
 	}, nil
 }
 
-func builtinJSONExtractRewrite(left Expr, right Expr) (Expr, error) {
+func builtinJSONExtractRewrite(left IR, right IR) (IR, error) {
 	if _, ok := left.(*Column); !ok {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "lhs of a JSON extract operator must be a column")
 	}
 	return &builtinJSONExtract{
 		CallExpr: CallExpr{
-			Arguments: []Expr{left, right},
+			Arguments: []IR{left, right},
 			Method:    "JSON_EXTRACT",
 		},
 	}, nil
 }
 
-func builtinIsNullRewrite(args []Expr) (Expr, error) {
+func builtinIsNullRewrite(args []IR) (IR, error) {
 	if len(args) != 1 {
 		return nil, argError("ISNULL")
 	}
@@ -967,7 +1126,7 @@ func builtinIsNullRewrite(args []Expr) (Expr, error) {
 	}, nil
 }
 
-func builtinIfNullRewrite(args []Expr) (Expr, error) {
+func builtinIfNullRewrite(args []IR) (IR, error) {
 	if len(args) != 2 {
 		return nil, argError("IFNULL")
 	}
@@ -986,7 +1145,7 @@ func builtinIfNullRewrite(args []Expr) (Expr, error) {
 	}, nil
 }
 
-func builtinNullIfRewrite(args []Expr) (Expr, error) {
+func builtinNullIfRewrite(args []IR) (IR, error) {
 	if len(args) != 2 {
 		return nil, argError("NULLIF")
 	}
@@ -1005,7 +1164,7 @@ func builtinNullIfRewrite(args []Expr) (Expr, error) {
 	}, nil
 }
 
-func builtinIfRewrite(args []Expr) (Expr, error) {
+func builtinIfRewrite(args []IR) (IR, error) {
 	if len(args) != 3 {
 		return nil, argError("IF")
 	}

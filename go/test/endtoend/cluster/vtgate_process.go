@@ -130,7 +130,11 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 
 	vtgate.proc.Args = append(vtgate.proc.Args, vtgate.ExtraArgs...)
 
-	errFile, _ := os.Create(path.Join(vtgate.LogDir, "vtgate-stderr.txt"))
+	errFile, err := os.Create(path.Join(vtgate.LogDir, "vtgate-stderr.txt"))
+	if err != nil {
+		log.Errorf("cannot create error log file for vtgate: %v", err)
+		return err
+	}
 	vtgate.proc.Stderr = errFile
 
 	vtgate.proc.Env = append(vtgate.proc.Env, os.Environ()...)

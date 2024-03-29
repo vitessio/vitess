@@ -25,6 +25,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vtenv"
 )
 
 // TestInitTabletShardConversion makes sure InitTablet converts the
@@ -36,7 +37,7 @@ func TestInitTabletShardConversion(t *testing.T) {
 
 	cell := "cell1"
 	ts := memorytopo.NewServer(ctx, cell)
-	wr := New(logutil.NewConsoleLogger(), ts, nil)
+	wr := New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, nil)
 
 	tablet := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
@@ -70,7 +71,7 @@ func TestDeleteTabletBasic(t *testing.T) {
 
 	cell := "cell1"
 	ts := memorytopo.NewServer(ctx, cell)
-	wr := New(logutil.NewConsoleLogger(), ts, nil)
+	wr := New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, nil)
 
 	tablet := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
@@ -102,7 +103,7 @@ func TestDeleteTabletTruePrimary(t *testing.T) {
 
 	cell := "cell1"
 	ts := memorytopo.NewServer(ctx, cell)
-	wr := New(logutil.NewConsoleLogger(), ts, nil)
+	wr := New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, nil)
 
 	tablet := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
@@ -149,7 +150,7 @@ func TestDeleteTabletFalsePrimary(t *testing.T) {
 
 	cell := "cell1"
 	ts := memorytopo.NewServer(ctx, cell)
-	wr := New(logutil.NewConsoleLogger(), ts, nil)
+	wr := New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, nil)
 
 	tablet1 := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
@@ -201,7 +202,7 @@ func TestDeleteTabletShardNonExisting(t *testing.T) {
 
 	cell := "cell1"
 	ts := memorytopo.NewServer(ctx, cell)
-	wr := New(logutil.NewConsoleLogger(), ts, nil)
+	wr := New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, nil)
 
 	tablet := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{

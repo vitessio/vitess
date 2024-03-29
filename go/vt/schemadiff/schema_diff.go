@@ -92,7 +92,7 @@ func permutateDiffs(ctx context.Context, diffs []EntityDiff, callback func([]Ent
 	if len(diffs) == 0 {
 		return false, nil
 	}
-	// Sort by a heristic (DROPs first, ALTERs next, CREATEs last). This ordering is then used first in the permutation
+	// Sort by a heuristic (DROPs first, ALTERs next, CREATEs last). This ordering is then used first in the permutation
 	// search and serves as seed for the rest of permutations.
 
 	return permDiff(ctx, diffs, callback, 0)
@@ -165,6 +165,7 @@ func permDiff(ctx context.Context, a []EntityDiff, callback func([]EntityDiff) (
 // Operations on SchemaDiff are not concurrency-safe.
 type SchemaDiff struct {
 	schema *Schema
+	hints  *DiffHints
 	diffs  []EntityDiff
 
 	diffMap      map[string]EntityDiff // key is diff's CanonicalStatementString()
@@ -173,9 +174,10 @@ type SchemaDiff struct {
 	r *mathutil.EquivalenceRelation // internal structure to help determine diffs
 }
 
-func NewSchemaDiff(schema *Schema) *SchemaDiff {
+func NewSchemaDiff(schema *Schema, hints *DiffHints) *SchemaDiff {
 	return &SchemaDiff{
 		schema:       schema,
+		hints:        hints,
 		dependencies: make(map[string]*DiffDependency),
 		diffMap:      make(map[string]EntityDiff),
 		r:            mathutil.NewEquivalenceRelation(),
@@ -296,7 +298,7 @@ func (d *SchemaDiff) OrderedDiffs(ctx context.Context) ([]EntityDiff, error) {
 	for i, diff := range d.UnorderedDiffs() {
 		unorderedDiffsMap[diff.CanonicalStatementString()] = i
 	}
-	// The order of classes in the quivalence relation is, generally speaking, loyal to the order of original diffs.
+	// The order of classes in the equivalence relation is, generally speaking, loyal to the order of original diffs.
 	for _, class := range d.r.OrderedClasses() {
 		classDiffs := []EntityDiff{}
 		// Which diffs are in this equivalence class?
@@ -318,7 +320,7 @@ func (d *SchemaDiff) OrderedDiffs(ctx context.Context) ([]EntityDiff, error) {
 			// We want to apply the changes one by one, and validate the schema after each change
 			for i := range permutatedDiffs {
 				// apply inline
-				if err := permutationSchema.apply(permutatedDiffs[i : i+1]); err != nil {
+				if err := permutationSchema.apply(permutatedDiffs[i:i+1], d.hints); err != nil {
 					// permutation is invalid
 					return false // continue searching
 				}
@@ -341,5 +343,39 @@ func (d *SchemaDiff) OrderedDiffs(ctx context.Context) ([]EntityDiff, error) {
 
 		// Done taking care of this equivalence class.
 	}
+	if d.hints.ForeignKeyCheckStrategy != ForeignKeyCheckStrategyStrict {
+		// We may have allowed invalid foreign key dependencies along the way. But we must then validate the final schema
+		// to ensure that all foreign keys are valid.
+		hints := *d.hints
+		hints.ForeignKeyCheckStrategy = ForeignKeyCheckStrategyStrict
+		if err := lastGoodSchema.normalize(&hints); err != nil {
+			return nil, &ImpossibleApplyDiffOrderError{
+				UnorderedDiffs:   d.UnorderedDiffs(),
+				ConflictingDiffs: d.UnorderedDiffs(),
+			}
+		}
+	}
 	return orderedDiffs, nil
+}
+
+// InstantDDLCapability returns an overall summary of the ability of the diffs to run with ALGORITHM=INSTANT.
+// It is a convenience method, whose logic anyone can reimplement.
+func (d *SchemaDiff) InstantDDLCapability() InstantDDLCapability {
+	// The general logic: we return "InstantDDLCapabilityPossible" if there is one or more diffs that is capable of
+	// ALGORITHM=INSTANT, and zero or more diffs that are irrelevant, and no diffs that are impossible to run with
+	// ALGORITHM=INSTANT.
+	capability := InstantDDLCapabilityIrrelevant
+	for _, diff := range d.UnorderedDiffs() {
+		switch diff.InstantDDLCapability() {
+		case InstantDDLCapabilityUnknown:
+			return InstantDDLCapabilityUnknown // Early break
+		case InstantDDLCapabilityImpossible:
+			return InstantDDLCapabilityImpossible // Early break
+		case InstantDDLCapabilityPossible:
+			capability = InstantDDLCapabilityPossible
+		case InstantDDLCapabilityIrrelevant:
+			// do nothing
+		}
+	}
+	return capability
 }

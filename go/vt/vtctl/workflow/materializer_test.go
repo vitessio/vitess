@@ -19,16 +19,20 @@ package workflow
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/maps"
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
-	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -39,42 +43,19 @@ import (
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
-const getWorkflowQuery = "select id from _vt.vreplication where db_name='vt_targetks' and workflow='workflow'"
-const mzUpdateQuery = "update _vt.vreplication set state='Running' where db_name='vt_targetks' and workflow='workflow'"
-const mzSelectFrozenQuery = "select 1 from _vt.vreplication where db_name='vt_targetks' and message='FROZEN' and workflow_sub_type != 1"
-const mzCheckJournal = "/select val from _vt.resharding_journal where id="
-const mzGetWorkflowStatusQuery = "select id, workflow, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, transaction_timestamp, message, tags, workflow_type, workflow_sub_type, time_heartbeat, defer_secondary_keys, component_throttled, time_throttled, rows_copied from _vt.vreplication where workflow = 'workflow' and db_name = 'vt_targetks'"
-const mzGetCopyState = "select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = 1"
-const mzGetLatestCopyState = "select table_name, lastpk from _vt.copy_state where vrepl_id = 1 and id in (select max(id) from _vt.copy_state where vrepl_id = 1 group by vrepl_id, table_name)"
-const insertPrefix = `/insert into _vt.vreplication\(workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys\) values `
-const eol = "$"
+const (
+	position             = "9d10e6ec-07a0-11ee-ae73-8e53f4cf3083:1-97"
+	mzUpdateQuery        = "update _vt.vreplication set state='Running' where db_name='vt_targetks' and workflow='workflow'"
+	mzSelectFrozenQuery  = "select 1 from _vt.vreplication where db_name='vt_targetks' and message='FROZEN' and workflow_sub_type != 1"
+	mzCheckJournal       = "/select val from _vt.resharding_journal where id="
+	mzGetCopyState       = "select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = 1"
+	mzGetLatestCopyState = "select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (1) and id in (select max(id) from _vt.copy_state where vrepl_id in (1) group by vrepl_id, table_name)"
+	insertPrefix         = `/insert into _vt.vreplication\(workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys\) values `
+	eol                  = "$"
+)
 
 var (
 	defaultOnDDL = binlogdatapb.OnDDLAction_IGNORE.String()
-	binlogSource = &binlogdatapb.BinlogSource{
-		Keyspace: "sourceks",
-		Shard:    "0",
-		Filter: &binlogdatapb.Filter{
-			Rules: []*binlogdatapb.Rule{{
-				Match:  "t1",
-				Filter: "select * from t1",
-			}},
-		},
-	}
-	getWorkflowRes = sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields(
-			"id|source|message|cell|tablet_types|workflow_type|workflow_sub_type|defer_secondary_keys",
-			"int64|blob|varchar|varchar|varchar|int64|int64|int64",
-		),
-		fmt.Sprintf("1|%s||zone1|replica|1|0|1", binlogSource),
-	)
-	getWorkflowStatusRes = sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields(
-			"id|workflow|source|pos|stop_pos|max_replication_log|state|db_name|time_updated|transaction_timestamp|message|tags|workflow_type|workflow_sub_type|time_heartbeat|defer_secondary_keys|component_throttled|time_throttled|rows_copied",
-			"int64|varchar|blob|varchar|varchar|int64|varchar|varchar|int64|int64|varchar|varchar|int64|int64|int64|int64|varchar|int64|int64",
-		),
-		fmt.Sprintf("1|wf1|%s|MySQL56/9d10e6ec-07a0-11ee-ae73-8e53f4cf3083:1-97|NULL|0|running|vt_ks|1686577659|0|||1|0|0|0||0|10", binlogSource),
-	)
 )
 
 func TestStripForeignKeys(t *testing.T) {
@@ -99,7 +80,7 @@ func TestStripForeignKeys(t *testing.T) {
 				"\tid int(11) not null auto_increment,\n" +
 				"\tforeign_id int(11),\n" +
 				"\tprimary key (id),\n" +
-				"\tindex fk_table1_ref_foreign_id (foreign_id),\n" +
+				"\tkey fk_table1_ref_foreign_id (foreign_id),\n" +
 				"\tcheck (foreign_id > 10)\n" +
 				") ENGINE InnoDB,\n" +
 				"  CHARSET latin1",
@@ -122,8 +103,8 @@ func TestStripForeignKeys(t *testing.T) {
 				"\tforeign_id int(11) not null,\n" +
 				"\tuser_id int(11) not null,\n" +
 				"\tprimary key (id),\n" +
-				"\tindex fk_table1_ref_foreign_id (foreign_id),\n" +
-				"\tindex fk_table1_ref_user_id (user_id),\n" +
+				"\tkey fk_table1_ref_foreign_id (foreign_id),\n" +
+				"\tkey fk_table1_ref_user_id (user_id),\n" +
 				"\tcheck (foreign_id > 10)\n" +
 				") ENGINE InnoDB,\n" +
 				"  CHARSET latin1",
@@ -131,7 +112,7 @@ func TestStripForeignKeys(t *testing.T) {
 	}
 
 	for _, tc := range tcs {
-		newDDL, err := stripTableForeignKeys(tc.ddl)
+		newDDL, err := stripTableForeignKeys(tc.ddl, sqlparser.NewTestParser())
 		if tc.hasErr != (err != nil) {
 			t.Fatalf("hasErr does not match: err: %v, tc: %+v", err, tc)
 		}
@@ -168,8 +149,8 @@ func TestStripConstraints(t *testing.T) {
 				"\tforeign_id int(11) not null,\n" +
 				"\tuser_id int(11) not null,\n" +
 				"\tprimary key (id),\n" +
-				"\tindex fk_table1_ref_foreign_id (foreign_id),\n" +
-				"\tindex fk_table1_ref_user_id (user_id)\n" +
+				"\tkey fk_table1_ref_foreign_id (foreign_id),\n" +
+				"\tkey fk_table1_ref_user_id (user_id)\n" +
 				") ENGINE InnoDB,\n" +
 				"  CHARSET latin1",
 
@@ -191,8 +172,8 @@ func TestStripConstraints(t *testing.T) {
 				"\tforeign_id int(11) not null,\n" +
 				"\tuser_id int(11) not null,\n" +
 				"\tprimary key (id),\n" +
-				"\tindex fk_table1_ref_foreign_id (foreign_id),\n" +
-				"\tindex fk_table1_ref_user_id (user_id)\n" +
+				"\tkey fk_table1_ref_foreign_id (foreign_id),\n" +
+				"\tkey fk_table1_ref_user_id (user_id)\n" +
 				") ENGINE InnoDB,\n" +
 				"  CHARSET latin1",
 		},
@@ -205,7 +186,7 @@ func TestStripConstraints(t *testing.T) {
 	}
 
 	for _, tc := range tcs {
-		newDDL, err := stripTableConstraints(tc.ddl)
+		newDDL, err := stripTableConstraints(tc.ddl, sqlparser.NewTestParser())
 		if tc.hasErr != (err != nil) {
 			t.Fatalf("hasErr does not match: err: %v, tc: %+v", err, tc)
 		}
@@ -444,11 +425,7 @@ func TestMigrateVSchema(t *testing.T) {
 	defer env.close()
 
 	env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
-	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
-	env.tmc.expectVRQuery(200, getWorkflowQuery, getWorkflowRes)
-	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, mzGetCopyState, &sqltypes.Result{})
-	env.tmc.expectVRQuery(200, mzGetWorkflowStatusQuery, getWorkflowStatusRes)
 	env.tmc.expectVRQuery(200, mzGetLatestCopyState, &sqltypes.Result{})
 
 	_, err := env.ws.MoveTablesCreate(ctx, &vtctldatapb.MoveTablesCreateRequest{
@@ -506,18 +483,15 @@ func TestMoveTablesDDLFlag(t *testing.T) {
 			// a circular dependency.
 			// The TabletManager portion is tested in rpc_vreplication_test.go.
 			env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
-			env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
-			env.tmc.expectVRQuery(200, getWorkflowQuery, getWorkflowRes)
 			env.tmc.expectVRQuery(200, mzGetCopyState, &sqltypes.Result{})
-			env.tmc.expectVRQuery(200, mzGetWorkflowStatusQuery, getWorkflowStatusRes)
 			env.tmc.expectVRQuery(200, mzGetLatestCopyState, &sqltypes.Result{})
 
 			targetShard, err := env.topoServ.GetShardNames(ctx, ms.TargetKeyspace)
 			require.NoError(t, err)
 			sourceShard, err := env.topoServ.GetShardNames(ctx, ms.SourceKeyspace)
 			require.NoError(t, err)
-			want := fmt.Sprintf("shard_streams:{key:\"%s/%s\" value:{streams:{id:1 tablet:{cell:\"%s\" uid:200} source_shard:\"%s/%s\" position:\"9d10e6ec-07a0-11ee-ae73-8e53f4cf3083:1-97\" status:\"running\" info:\"VStream Lag: 0s\"}}} traffic_state:\"Reads Not Switched. Writes Not Switched\"",
-				ms.TargetKeyspace, targetShard[0], env.cell, ms.SourceKeyspace, sourceShard[0])
+			want := fmt.Sprintf("shard_streams:{key:\"%s/%s\" value:{streams:{id:1 tablet:{cell:\"%s\" uid:200} source_shard:\"%s/%s\" position:\"%s\" status:\"Running\" info:\"VStream Lag: 0s\"}}} traffic_state:\"Reads Not Switched. Writes Not Switched\"",
+				ms.TargetKeyspace, targetShard[0], env.cell, ms.SourceKeyspace, sourceShard[0], position)
 
 			res, err := env.ws.MoveTablesCreate(ctx, &vtctldatapb.MoveTablesCreateRequest{
 				Workflow:       ms.Workflow,
@@ -558,18 +532,33 @@ func TestMoveTablesNoRoutingRules(t *testing.T) {
 	// a circular dependency.
 	// The TabletManager portion is tested in rpc_vreplication_test.go.
 	env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
-	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
-	env.tmc.expectVRQuery(200, getWorkflowQuery, getWorkflowRes)
 	env.tmc.expectVRQuery(200, mzGetCopyState, &sqltypes.Result{})
-	env.tmc.expectVRQuery(200, mzGetWorkflowStatusQuery, getWorkflowStatusRes)
 	env.tmc.expectVRQuery(200, mzGetLatestCopyState, &sqltypes.Result{})
 
 	targetShard, err := env.topoServ.GetShardNames(ctx, ms.TargetKeyspace)
 	require.NoError(t, err)
 	sourceShard, err := env.topoServ.GetShardNames(ctx, ms.SourceKeyspace)
 	require.NoError(t, err)
-	want := fmt.Sprintf("shard_streams:{key:\"%s/%s\" value:{streams:{id:1 tablet:{cell:\"%s\" uid:200} source_shard:\"%s/%s\" position:\"9d10e6ec-07a0-11ee-ae73-8e53f4cf3083:1-97\" status:\"running\" info:\"VStream Lag: 0s\"}}} traffic_state:\"Reads Not Switched. Writes Not Switched\"",
-		ms.TargetKeyspace, targetShard[0], env.cell, ms.SourceKeyspace, sourceShard[0])
+	want := &vtctldatapb.WorkflowStatusResponse{
+		ShardStreams: map[string]*vtctldatapb.WorkflowStatusResponse_ShardStreams{
+			fmt.Sprintf("%s/%s", ms.TargetKeyspace, targetShard[0]): {
+				Streams: []*vtctldatapb.WorkflowStatusResponse_ShardStreamState{
+					{
+						Id: 1,
+						Tablet: &topodatapb.TabletAlias{
+							Cell: env.cell,
+							Uid:  200,
+						},
+						SourceShard: fmt.Sprintf("%s/%s", ms.SourceKeyspace, sourceShard[0]),
+						Position:    position,
+						Status:      binlogdatapb.VReplicationWorkflowState_Running.String(),
+						Info:        "VStream Lag: 0s",
+					},
+				},
+			},
+		},
+		TrafficState: "Reads Not Switched. Writes Not Switched",
+	}
 
 	res, err := env.ws.MoveTablesCreate(ctx, &vtctldatapb.MoveTablesCreateRequest{
 		Workflow:       ms.Workflow,
@@ -579,7 +568,7 @@ func TestMoveTablesNoRoutingRules(t *testing.T) {
 		NoRoutingRules: true,
 	})
 	require.NoError(t, err)
-	require.Equal(t, want, fmt.Sprintf("%+v", res))
+	require.EqualValues(t, want, res, "got: %+v, want: %+v", res, want)
 	rr, err := env.ws.ts.GetRoutingRules(ctx)
 	require.NoError(t, err)
 	require.Zerof(t, len(rr.Rules), "routing rules should be empty, found %+v", rr.Rules)
@@ -661,8 +650,9 @@ func TestCreateLookupVindexFull(t *testing.T) {
 	}
 
 	env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
-	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, "/CREATE TABLE `lookup`", &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, mzGetCopyState, &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, mzGetLatestCopyState, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, insertPrefix, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_targetks' and workflow='lookup'", &sqltypes.Result{})
 
@@ -2178,1109 +2168,294 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 	}
 }
 
-func TestExternalizeLookupVindex(t *testing.T) {
-	ms := &vtctldatapb.MaterializeSettings{
-		// Keyspace where the vindex is created.
-		SourceKeyspace: "sourceks",
-		// Keyspace where the lookup table and VReplication workflow is created.
-		TargetKeyspace: "targetks",
-	}
-	ctx, cancel := context.WithCancel(context.Background())
+// TestKeyRangesEqualOptimization tests that we optimize the source
+// filtering when there's only one source shard for the stream and
+// its keyrange is equal to the target shard for the stream. This
+// means that even if the target keyspace is sharded, the source
+// does not need to perform the in_keyrange filtering.
+func TestKeyRangesEqualOptimization(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"-80", "80-"})
-	defer env.close()
-
-	sourceVschema := &vschemapb.Keyspace{
-		Sharded: false,
+	workflow := "testwf"
+	cells := []string{"cell"}
+	sourceKs := "sourceks"
+	targetKs := "targetks"
+	table := "t1"
+	tableSettings := []*vtctldatapb.TableMaterializeSettings{{
+		TargetTable:      table,
+		SourceExpression: fmt.Sprintf("select * from %s", table),
+	}}
+	targetVSchema := &vschemapb.Keyspace{
+		Sharded: true,
 		Vindexes: map[string]*vschemapb.Vindex{
 			"xxhash": {
 				Type: "xxhash",
 			},
-			"owned_lookup": {
-				Type: "lookup_unique",
-				Params: map[string]string{
-					"table":      "targetks.owned_lookup",
-					"from":       "c1",
-					"to":         "c2",
-					"write_only": "true",
-				},
-				Owner: "t1",
-			},
-			"unowned_lookup": {
-				Type: "lookup_unique",
-				Params: map[string]string{
-					"table":      "targetks.unowned_lookup",
-					"from":       "c1",
-					"to":         "c2",
-					"write_only": "true",
-				},
-			},
-			"unqualified_lookup": {
-				Type: "lookup_unique",
-				Params: map[string]string{
-					"table": "unqualified",
-					"from":  "c1",
-					"to":    "c2",
-				},
-			},
 		},
 		Tables: map[string]*vschemapb.Table{
-			"t1": {
-				ColumnVindexes: []*vschemapb.ColumnVindex{{
-					Name:   "xxhash",
-					Column: "col1",
-				}, {
-					Name:   "owned_lookup",
-					Column: "col2",
-				}},
+			table: {
+				ColumnVindexes: []*vschemapb.ColumnVindex{
+					{
+						Column: "id",
+						Name:   "xxhash",
+					},
+				},
 			},
 		},
 	}
-	fields := sqltypes.MakeTestFields(
-		"id|state|message|source",
-		"int64|varbinary|varbinary|blob",
-	)
-	ownedSourceStopAfterCopy := fmt.Sprintf(`keyspace:"%s",shard:"0",filter:{rules:{match:"owned_lookup" filter:"select * from t1 where in_keyrange(col1, '%s.xxhash', '-80')"}} stop_after_copy:true`,
-		ms.SourceKeyspace, ms.SourceKeyspace)
-	ownedSourceKeepRunningAfterCopy := fmt.Sprintf(`keyspace:"%s",shard:"0",filter:{rules:{match:"owned_lookup" filter:"select * from t1 where in_keyrange(col1, '%s.xxhash', '-80')"}}`,
-		ms.SourceKeyspace, ms.SourceKeyspace)
-	ownedRunning := sqltypes.MakeTestResult(fields, "1|Running|msg|"+ownedSourceKeepRunningAfterCopy)
-	ownedStopped := sqltypes.MakeTestResult(fields, "1|Stopped|Stopped after copy|"+ownedSourceStopAfterCopy)
-	unownedSourceStopAfterCopy := fmt.Sprintf(`keyspace:"%s",shard:"0",filter:{rules:{match:"unowned_lookup" filter:"select * from t1 where in_keyrange(col1, '%s.xxhash', '-80')"}} stop_after_copy:true`,
-		ms.SourceKeyspace, ms.SourceKeyspace)
-	unownedSourceKeepRunningAfterCopy := fmt.Sprintf(`keyspace:"%s",shard:"0",filter:{rules:{match:"unowned_lookup" filter:"select * from t1 where in_keyrange(col1, '%s.xxhash', '-80')"}}`,
-		ms.SourceKeyspace, ms.SourceKeyspace)
-	unownedRunning := sqltypes.MakeTestResult(fields, "2|Running|msg|"+unownedSourceKeepRunningAfterCopy)
-	unownedStopped := sqltypes.MakeTestResult(fields, "2|Stopped|Stopped after copy|"+unownedSourceStopAfterCopy)
 
-	testcases := []struct {
-		request         *vtctldatapb.LookupVindexExternalizeRequest
-		vrResponse      *sqltypes.Result
-		err             string
-		expectedVschema *vschemapb.Keyspace
-		expectDelete    bool
+	testCases := []struct {
+		name          string
+		sourceShards  []string
+		targetShards  []string
+		moveTablesReq *vtctldatapb.MoveTablesCreateRequest
+		// Target Shards are in the order specifed in the targetShards slice
+		// with the UIDs starting at 200 and increasing by 10 for each tablet
+		// and shard since there's only a primary tablet per shard.
+		wantReqs map[uint32]*tabletmanagerdatapb.CreateVReplicationWorkflowRequest
 	}{
 		{
-			request: &vtctldatapb.LookupVindexExternalizeRequest{
-				Name:          "owned_lookup",
-				Keyspace:      ms.SourceKeyspace,
-				TableKeyspace: ms.TargetKeyspace,
+			name: "no in_keyrange filter -- partial, one equal shard",
+			moveTablesReq: &vtctldatapb.MoveTablesCreateRequest{
+				Workflow:       workflow,
+				TargetKeyspace: targetKs,
+				SourceKeyspace: sourceKs,
+				Cells:          []string{"cell"},
+				SourceShards:   []string{"-80"}, // Partial MoveTables just for this shard
+				IncludeTables:  []string{table},
 			},
-			vrResponse: ownedStopped,
-			expectedVschema: &vschemapb.Keyspace{
-				Vindexes: map[string]*vschemapb.Vindex{
-					"owned_lookup": {
-						Type: "lookup_unique",
-						Params: map[string]string{
-							"table": "targetks.owned_lookup",
-							"from":  "c1",
-							"to":    "c2",
-						},
-						Owner: "t1",
-					},
-				},
-			},
-			expectDelete: true,
-		},
-		{
-			request: &vtctldatapb.LookupVindexExternalizeRequest{
-				Name:          "unowned_lookup",
-				Keyspace:      ms.SourceKeyspace,
-				TableKeyspace: ms.TargetKeyspace,
-			},
-			vrResponse: unownedStopped,
-			expectedVschema: &vschemapb.Keyspace{
-				Vindexes: map[string]*vschemapb.Vindex{
-					"unowned_lookup": {
-						Type: "lookup_unique",
-						Params: map[string]string{
-							"table": "targetks.unowned_lookup",
-							"from":  "c1",
-							"to":    "c2",
-						},
-					},
-				},
-			},
-			err: "is not in Running state",
-		},
-		{
-			request: &vtctldatapb.LookupVindexExternalizeRequest{
-				Name:          "owned_lookup",
-				Keyspace:      ms.SourceKeyspace,
-				TableKeyspace: ms.TargetKeyspace,
-			},
-			vrResponse: ownedRunning,
-			expectedVschema: &vschemapb.Keyspace{
-				Vindexes: map[string]*vschemapb.Vindex{
-					"owned_lookup": {
-						Type: "lookup_unique",
-						Params: map[string]string{
-							"table": "targetks.owned_lookup",
-							"from":  "c1",
-							"to":    "c2",
-						},
-						Owner: "t1",
-					},
-				},
-			},
-			expectDelete: true,
-		},
-		{
-			request: &vtctldatapb.LookupVindexExternalizeRequest{
-				Name:          "unowned_lookup",
-				Keyspace:      ms.SourceKeyspace,
-				TableKeyspace: ms.TargetKeyspace,
-			},
-			vrResponse: unownedRunning,
-			expectedVschema: &vschemapb.Keyspace{
-				Vindexes: map[string]*vschemapb.Vindex{
-					"unowned_lookup": {
-						Type: "lookup_unique",
-						Params: map[string]string{
-							"table": "targetks.unowned_lookup",
-							"from":  "c1",
-							"to":    "c2",
+			sourceShards: []string{"-80", "80-"},
+			targetShards: []string{"-80", "80-"},
+			wantReqs: map[uint32]*tabletmanagerdatapb.CreateVReplicationWorkflowRequest{
+				200: {
+					Workflow:        workflow,
+					WorkflowType:    binlogdatapb.VReplicationWorkflowType_MoveTables,
+					WorkflowSubType: binlogdatapb.VReplicationWorkflowSubType_Partial,
+					Cells:           cells,
+					BinlogSource: []*binlogdatapb.BinlogSource{
+						{
+							Keyspace: sourceKs,
+							Shard:    "-80", // Keyranges are equal between the source and target
+							Filter: &binlogdatapb.Filter{
+								Rules: []*binlogdatapb.Rule{
+									{
+										Match:  table,
+										Filter: fmt.Sprintf("select * from %s", table),
+									},
+								},
+							},
 						},
 					},
 				},
 			},
 		},
 		{
-			request: &vtctldatapb.LookupVindexExternalizeRequest{
-				Name:          "absent_lookup",
-				Keyspace:      ms.SourceKeyspace,
-				TableKeyspace: ms.TargetKeyspace,
+			name: "in_keyrange filter -- unequal shards",
+			moveTablesReq: &vtctldatapb.MoveTablesCreateRequest{
+				Workflow:       workflow,
+				TargetKeyspace: targetKs,
+				SourceKeyspace: sourceKs,
+				Cells:          []string{"cell"},
+				IncludeTables:  []string{table},
 			},
-			expectedVschema: &vschemapb.Keyspace{
-				Vindexes: map[string]*vschemapb.Vindex{
-					"absent_lookup": {
-						Type: "lookup_unique",
-						Params: map[string]string{
-							"table": "targetks.absent_lookup",
-							"from":  "c1",
-							"to":    "c2",
+			sourceShards: []string{"-"},
+			targetShards: []string{"-80", "80-"},
+			wantReqs: map[uint32]*tabletmanagerdatapb.CreateVReplicationWorkflowRequest{
+				200: {
+					Workflow:     workflow,
+					WorkflowType: binlogdatapb.VReplicationWorkflowType_MoveTables,
+					Cells:        cells,
+					BinlogSource: []*binlogdatapb.BinlogSource{
+						{
+							Keyspace: sourceKs,
+							Shard:    "-",
+							Filter: &binlogdatapb.Filter{
+								Rules: []*binlogdatapb.Rule{
+									{
+										Match:  table,
+										Filter: fmt.Sprintf("select * from %s where in_keyrange(id, '%s.xxhash', '-80')", table, targetKs),
+									},
+								},
+							},
+						},
+					},
+				},
+				210: {
+					Workflow:     workflow,
+					WorkflowType: binlogdatapb.VReplicationWorkflowType_MoveTables,
+					Cells:        cells,
+					BinlogSource: []*binlogdatapb.BinlogSource{
+						{
+							Keyspace: sourceKs,
+							Shard:    "-",
+							Filter: &binlogdatapb.Filter{
+								Rules: []*binlogdatapb.Rule{
+									{
+										Match:  table,
+										Filter: fmt.Sprintf("select * from %s where in_keyrange(id, '%s.xxhash', '80-')", table, targetKs),
+									},
+								},
+							},
 						},
 					},
 				},
 			},
-			err: "vindex absent_lookup not found in the sourceks keyspace",
+		},
+		{
+			name: "in_keyrange filter -- unequal shards on merge",
+			moveTablesReq: &vtctldatapb.MoveTablesCreateRequest{
+				Workflow:       workflow,
+				TargetKeyspace: targetKs,
+				SourceKeyspace: sourceKs,
+				Cells:          []string{"cell"},
+				IncludeTables:  []string{table},
+			},
+			sourceShards: []string{"-80", "80-"},
+			targetShards: []string{"-"},
+			wantReqs: map[uint32]*tabletmanagerdatapb.CreateVReplicationWorkflowRequest{
+				200: {
+					Workflow:     workflow,
+					WorkflowType: binlogdatapb.VReplicationWorkflowType_MoveTables,
+					Cells:        cells,
+					BinlogSource: []*binlogdatapb.BinlogSource{
+						{
+							Keyspace: sourceKs,
+							Shard:    "-80",
+							Filter: &binlogdatapb.Filter{
+								Rules: []*binlogdatapb.Rule{
+									{
+										Match:  table,
+										Filter: fmt.Sprintf("select * from %s where in_keyrange(id, '%s.xxhash', '-')", table, targetKs),
+									},
+								},
+							},
+						},
+						{
+							Keyspace: sourceKs,
+							Shard:    "80-",
+							Filter: &binlogdatapb.Filter{
+								Rules: []*binlogdatapb.Rule{
+									{
+										Match:  table,
+										Filter: fmt.Sprintf("select * from %s where in_keyrange(id, '%s.xxhash', '-')", table, targetKs),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "no in_keyrange filter -- all equal shards",
+			moveTablesReq: &vtctldatapb.MoveTablesCreateRequest{
+				Workflow:       workflow,
+				TargetKeyspace: targetKs,
+				SourceKeyspace: sourceKs,
+				Cells:          []string{"cell"},
+				IncludeTables:  []string{table},
+			},
+			sourceShards: []string{"-80", "80-"},
+			targetShards: []string{"-80", "80-"},
+			wantReqs: map[uint32]*tabletmanagerdatapb.CreateVReplicationWorkflowRequest{
+				200: {
+					Workflow:     workflow,
+					WorkflowType: binlogdatapb.VReplicationWorkflowType_MoveTables,
+					Cells:        cells,
+					BinlogSource: []*binlogdatapb.BinlogSource{
+						{
+							Keyspace: sourceKs,
+							Shard:    "-80",
+							Filter: &binlogdatapb.Filter{
+								Rules: []*binlogdatapb.Rule{
+									{
+										Match:  table,
+										Filter: fmt.Sprintf("select * from %s", table),
+									},
+								},
+							},
+						},
+					},
+				},
+				210: {
+					Workflow:     workflow,
+					WorkflowType: binlogdatapb.VReplicationWorkflowType_MoveTables,
+					Cells:        cells,
+					BinlogSource: []*binlogdatapb.BinlogSource{
+						{
+							Keyspace: sourceKs,
+							Shard:    "80-",
+							Filter: &binlogdatapb.Filter{
+								Rules: []*binlogdatapb.Rule{
+									{
+										Match:  table,
+										Filter: fmt.Sprintf("select * from %s", table),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 	}
-	for _, tcase := range testcases {
-		t.Run(tcase.request.Name, func(t *testing.T) {
-			// Resave the source schema for every iteration.
-			err := env.topoServ.SaveVSchema(ctx, tcase.request.Keyspace, sourceVschema)
-			require.NoError(t, err)
-			err = env.topoServ.RebuildSrvVSchema(ctx, []string{env.cell})
-			require.NoError(t, err)
 
-			validationQuery := fmt.Sprintf("select id, state, message, source from _vt.vreplication where workflow='%s' and db_name='vt_%s'",
-				tcase.request.Name, ms.TargetKeyspace)
-			env.tmc.expectVRQuery(200, validationQuery, tcase.vrResponse)
-			env.tmc.expectVRQuery(210, validationQuery, tcase.vrResponse)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if len(tc.wantReqs) == 0 {
+				require.FailNow(t, "invalid test case", "no wanted requests specified")
+			}
+			workflowType := maps.Values(tc.wantReqs)[0].WorkflowType
+			ms := &vtctldatapb.MaterializeSettings{
+				Workflow:              tc.moveTablesReq.Workflow,
+				MaterializationIntent: vtctldatapb.MaterializationIntent_MOVETABLES,
+				SourceKeyspace:        sourceKs,
+				TargetKeyspace:        targetKs,
+				Cell:                  strings.Join(tc.moveTablesReq.Cells, ","),
+				SourceShards:          tc.moveTablesReq.SourceShards,
+				TableSettings:         tableSettings,
+			}
+			env := newTestMaterializerEnv(t, ctx, ms, tc.sourceShards, tc.targetShards)
+			defer env.close()
 
-			preWorkflowDeleteCalls := env.tmc.workflowDeleteCalls
-			_, err = env.ws.LookupVindexExternalize(ctx, tcase.request)
-			if tcase.err != "" {
-				if err == nil || !strings.Contains(err.Error(), tcase.err) {
-					require.FailNow(t, "LookupVindexExternalize error", "ExternalizeVindex(%v) err: %v, must contain %v", tcase.request, err, tcase.err)
+			// Target is always sharded.
+			err := env.ws.ts.SaveVSchema(ctx, targetKs, targetVSchema)
+			require.NoError(t, err, "SaveVSchema failed: %v", err)
+
+			for _, tablet := range env.tablets {
+				// Queries will only be executed on primary tablets in the target keyspace.
+				if tablet.Keyspace != targetKs || tablet.Type != topodatapb.TabletType_PRIMARY {
+					continue
 				}
-				return
+				env.tmc.expectVRQuery(int(tablet.Alias.Uid), mzSelectFrozenQuery, &sqltypes.Result{})
+				// If we are doing a partial MoveTables, we will only perform the workflow
+				// stream creation / INSERT statment on the shard(s) we're migrating.
+				if len(tc.moveTablesReq.SourceShards) > 0 && !slices.Contains(tc.moveTablesReq.SourceShards, tablet.Shard) {
+					continue
+				}
+				env.tmc.expectCreateVReplicationWorkflowRequest(tablet.Alias.Uid, tc.wantReqs[tablet.Alias.Uid])
 			}
-			require.NoError(t, err)
-			expectedWorkflowDeleteCalls := preWorkflowDeleteCalls
-			if tcase.expectDelete {
-				// We expect the RPC to be called on each target shard.
-				expectedWorkflowDeleteCalls = preWorkflowDeleteCalls + (len(env.targets))
-			}
-			require.Equal(t, expectedWorkflowDeleteCalls, env.tmc.workflowDeleteCalls)
 
-			aftervschema, err := env.topoServ.GetVSchema(ctx, ms.SourceKeyspace)
-			require.NoError(t, err)
-			vindex := aftervschema.Vindexes[tcase.request.Name]
-			expectedVindex := tcase.expectedVschema.Vindexes[tcase.request.Name]
-			require.NotNil(t, vindex, "vindex %s not found in vschema", tcase.request.Name)
-			require.NotContains(t, vindex.Params, "write_only", tcase.request)
-			require.Equal(t, expectedVindex, vindex, "vindex mismatch. expected: %+v, got: %+v", expectedVindex, vindex)
+			mz := &materializer{
+				ctx:          ctx,
+				ts:           env.ws.ts,
+				sourceTs:     env.ws.ts,
+				tmc:          env.tmc,
+				ms:           ms,
+				workflowType: workflowType,
+				env:          vtenv.NewTestEnv(),
+			}
+			err = mz.createWorkflowStreams(&tabletmanagerdatapb.CreateVReplicationWorkflowRequest{
+				Workflow:                  tc.moveTablesReq.Workflow,
+				Cells:                     tc.moveTablesReq.Cells,
+				TabletTypes:               tc.moveTablesReq.TabletTypes,
+				TabletSelectionPreference: tc.moveTablesReq.TabletSelectionPreference,
+				WorkflowType:              workflowType,
+				DeferSecondaryKeys:        tc.moveTablesReq.DeferSecondaryKeys,
+				AutoStart:                 tc.moveTablesReq.AutoStart,
+				StopAfterCopy:             tc.moveTablesReq.StopAfterCopy,
+			})
+			require.NoError(t, err, "createWorkflowStreams failed: %v", err)
 		})
 	}
-}
-
-func TestMaterializerOneToOne(t *testing.T) {
-	ms := &vtctldatapb.MaterializeSettings{
-		Workflow:       "workflow",
-		SourceKeyspace: "sourceks",
-		TargetKeyspace: "targetks",
-		TableSettings: []*vtctldatapb.TableMaterializeSettings{
-			{
-				TargetTable:      "t1",
-				SourceExpression: "select * from t1",
-				CreateDdl:        "t1ddl",
-			},
-			{
-				TargetTable:      "t2",
-				SourceExpression: "select * from t3",
-				CreateDdl:        "t2ddl",
-			},
-			{
-				TargetTable:      "t4",
-				SourceExpression: "", // empty
-				CreateDdl:        "t4ddl",
-			},
-		},
-		Cell: "zone1",
-		TabletTypes: topoproto.MakeStringTypeCSV([]topodatapb.TabletType{
-			topodatapb.TabletType_PRIMARY,
-			topodatapb.TabletType_RDONLY,
-		}),
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
-	defer env.close()
-
-	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
-	env.tmc.expectVRQuery(
-		200,
-		insertPrefix+
-			`\(`+
-			`'workflow', `+
-			(`'keyspace:\\"sourceks\\" shard:\\"0\\" `+
-				`filter:{`+
-				`rules:{match:\\"t1\\" filter:\\"select.*t1\\"} `+
-				`rules:{match:\\"t2\\" filter:\\"select.*t3\\"} `+
-				`rules:{match:\\"t4\\"}`+
-				`}', `)+
-			`'', [0-9]*, [0-9]*, 'zone1', 'primary,rdonly', [0-9]*, 0, 'Stopped', 'vt_targetks', 0, 0, false`+
-			`\)`+eol,
-		&sqltypes.Result{},
-	)
-	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
-
-	err := env.ws.Materialize(ctx, ms)
-	require.NoError(t, err)
-	env.tmc.verifyQueries(t)
-}
-
-func TestMaterializerManyToOne(t *testing.T) {
-	ms := &vtctldatapb.MaterializeSettings{
-		Workflow:       "workflow",
-		SourceKeyspace: "sourceks",
-		TargetKeyspace: "targetks",
-		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
-			TargetTable:      "t1",
-			SourceExpression: "select * from t1",
-			CreateDdl:        "t1ddl",
-		}, {
-			TargetTable:      "t2",
-			SourceExpression: "select * from t3",
-			CreateDdl:        "t2ddl",
-		}},
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"-80", "80-"}, []string{"0"})
-	defer env.close()
-
-	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
-	env.tmc.expectVRQuery(
-		200,
-		insertPrefix+
-			`\('workflow', 'keyspace:\\"sourceks\\" shard:\\"-80\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1\\"} rules:{match:\\"t2\\" filter:\\"select.*t3\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_targetks', 0, 0, false\)`+
-			`, `+
-			`\('workflow', 'keyspace:\\"sourceks\\" shard:\\"80-\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1\\"} rules:{match:\\"t2\\" filter:\\"select.*t3\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_targetks', 0, 0, false\)`+
-			eol,
-		&sqltypes.Result{},
-	)
-	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
-
-	err := env.ws.Materialize(ctx, ms)
-	require.NoError(t, err)
-	env.tmc.verifyQueries(t)
-}
-
-func TestMaterializerOneToMany(t *testing.T) {
-	ms := &vtctldatapb.MaterializeSettings{
-		Workflow:       "workflow",
-		SourceKeyspace: "sourceks",
-		TargetKeyspace: "targetks",
-		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
-			TargetTable:      "t1",
-			SourceExpression: "select * from t1",
-			CreateDdl:        "t1ddl",
-		}},
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"-80", "80-"})
-	defer env.close()
-
-	vs := &vschemapb.Keyspace{
-		Sharded: true,
-		Vindexes: map[string]*vschemapb.Vindex{
-			"xxhash": {
-				Type: "xxhash",
-			},
-		},
-		Tables: map[string]*vschemapb.Table{
-			"t1": {
-				ColumnVindexes: []*vschemapb.ColumnVindex{{
-					Column: "c1",
-					Name:   "xxhash",
-				}},
-			},
-		},
-	}
-
-	if err := env.topoServ.SaveVSchema(context.Background(), "targetks", vs); err != nil {
-		t.Fatal(err)
-	}
-
-	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
-	env.tmc.expectVRQuery(210, mzSelectFrozenQuery, &sqltypes.Result{})
-	env.tmc.expectVRQuery(
-		200,
-		insertPrefix+
-			`.*shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1.*targetks\.xxhash.*-80.*`,
-		&sqltypes.Result{},
-	)
-	env.tmc.expectVRQuery(
-		210,
-		insertPrefix+
-			`.*shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1.*targetks\.xxhash.*80-.*`,
-		&sqltypes.Result{},
-	)
-	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
-	env.tmc.expectVRQuery(210, mzUpdateQuery, &sqltypes.Result{})
-
-	err := env.ws.Materialize(ctx, ms)
-	require.NoError(t, err)
-	env.tmc.verifyQueries(t)
-}
-
-func TestMaterializerManyToMany(t *testing.T) {
-	ms := &vtctldatapb.MaterializeSettings{
-		Workflow:       "workflow",
-		SourceKeyspace: "sourceks",
-		TargetKeyspace: "targetks",
-		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
-			TargetTable:      "t1",
-			SourceExpression: "select * from t1",
-			CreateDdl:        "t1ddl",
-		}},
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"-40", "40-"}, []string{"-80", "80-"})
-	defer env.close()
-
-	vs := &vschemapb.Keyspace{
-		Sharded: true,
-		Vindexes: map[string]*vschemapb.Vindex{
-			"xxhash": {
-				Type: "xxhash",
-			},
-		},
-		Tables: map[string]*vschemapb.Table{
-			"t1": {
-				ColumnVindexes: []*vschemapb.ColumnVindex{{
-					Column: "c1",
-					Name:   "xxhash",
-				}},
-			},
-		},
-	}
-
-	if err := env.topoServ.SaveVSchema(context.Background(), "targetks", vs); err != nil {
-		t.Fatal(err)
-	}
-
-	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
-	env.tmc.expectVRQuery(210, mzSelectFrozenQuery, &sqltypes.Result{})
-	env.tmc.expectVRQuery(
-		200,
-		insertPrefix+
-			`.*shard:\\"-40\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1.*targetks\.xxhash.*-80.*`+
-			`.*shard:\\"40-\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1.*targetks\.xxhash.*-80.*`,
-		&sqltypes.Result{},
-	)
-	env.tmc.expectVRQuery(
-		210,
-		insertPrefix+
-			`.*shard:\\"-40\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1.*targetks\.xxhash.*80-.*`+
-			`.*shard:\\"40-\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1.*targetks\.xxhash.*80-.*`,
-		&sqltypes.Result{},
-	)
-	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
-	env.tmc.expectVRQuery(210, mzUpdateQuery, &sqltypes.Result{})
-	err := env.ws.Materialize(ctx, ms)
-	require.NoError(t, err)
-	env.tmc.verifyQueries(t)
-}
-
-func TestMaterializerMulticolumnVindex(t *testing.T) {
-	ms := &vtctldatapb.MaterializeSettings{
-		Workflow:       "workflow",
-		SourceKeyspace: "sourceks",
-		TargetKeyspace: "targetks",
-		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
-			TargetTable:      "t1",
-			SourceExpression: "select * from t1",
-			CreateDdl:        "t1ddl",
-		}},
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"-80", "80-"})
-	defer env.close()
-
-	vs := &vschemapb.Keyspace{
-		Sharded: true,
-		Vindexes: map[string]*vschemapb.Vindex{
-			"region": {
-				Type: "region_experimental",
-				Params: map[string]string{
-					"region_bytes": "1",
-				},
-			},
-		},
-		Tables: map[string]*vschemapb.Table{
-			"t1": {
-				ColumnVindexes: []*vschemapb.ColumnVindex{{
-					Columns: []string{"c1", "c2"},
-					Name:    "region",
-				}},
-			},
-		},
-	}
-
-	if err := env.topoServ.SaveVSchema(context.Background(), "targetks", vs); err != nil {
-		t.Fatal(err)
-	}
-
-	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
-	env.tmc.expectVRQuery(210, mzSelectFrozenQuery, &sqltypes.Result{})
-	env.tmc.expectVRQuery(
-		200,
-		insertPrefix+
-			`.*shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1, c2.*targetks\.region.*-80.*`,
-		&sqltypes.Result{},
-	)
-	env.tmc.expectVRQuery(
-		210,
-		insertPrefix+
-			`.*shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1, c2.*targetks\.region.*80-.*`,
-		&sqltypes.Result{},
-	)
-	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
-	env.tmc.expectVRQuery(210, mzUpdateQuery, &sqltypes.Result{})
-
-	err := env.ws.Materialize(ctx, ms)
-	require.NoError(t, err)
-	env.tmc.verifyQueries(t)
-}
-
-func TestMaterializerDeploySchema(t *testing.T) {
-	ms := &vtctldatapb.MaterializeSettings{
-		Workflow:       "workflow",
-		SourceKeyspace: "sourceks",
-		TargetKeyspace: "targetks",
-		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
-			TargetTable:      "t1",
-			SourceExpression: "select * from t1",
-			CreateDdl:        "t1ddl",
-		}, {
-			TargetTable:      "t2",
-			SourceExpression: "select * from t3",
-			CreateDdl:        "t2ddl",
-		}},
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
-	defer env.close()
-
-	delete(env.tmc.schema, "targetks.t2")
-
-	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
-	env.tmc.expectVRQuery(200, `t2ddl`, &sqltypes.Result{})
-	env.tmc.expectVRQuery(
-		200,
-		insertPrefix+
-			`\('workflow', 'keyspace:\\"sourceks\\" shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1\\"} rules:{match:\\"t2\\" filter:\\"select.*t3\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_targetks', 0, 0, false\)`+
-			eol,
-		&sqltypes.Result{},
-	)
-	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
-
-	err := env.ws.Materialize(ctx, ms)
-	require.NoError(t, err)
-	env.tmc.verifyQueries(t)
-	require.Equal(t, env.tmc.getSchemaRequestCount(100), 1)
-	require.Equal(t, env.tmc.getSchemaRequestCount(200), 1)
-}
-
-func TestMaterializerCopySchema(t *testing.T) {
-	ms := &vtctldatapb.MaterializeSettings{
-		Workflow:       "workflow",
-		SourceKeyspace: "sourceks",
-		TargetKeyspace: "targetks",
-		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
-			TargetTable:      "t1",
-			SourceExpression: "select * from t1",
-			CreateDdl:        "copy",
-		}, {
-			TargetTable:      "t2",
-			SourceExpression: "select * from t3",
-			CreateDdl:        "t2ddl",
-		}},
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
-	defer env.close()
-
-	delete(env.tmc.schema, "targetks.t1")
-
-	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
-	env.tmc.expectVRQuery(200, `t1_schema`, &sqltypes.Result{})
-	env.tmc.expectVRQuery(
-		200,
-		insertPrefix+
-			`\('workflow', 'keyspace:\\"sourceks\\" shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1\\"} rules:{match:\\"t2\\" filter:\\"select.*t3\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_targetks', 0, 0, false\)`+
-			eol,
-		&sqltypes.Result{},
-	)
-	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
-
-	err := env.ws.Materialize(ctx, ms)
-	require.NoError(t, err)
-	env.tmc.verifyQueries(t)
-	require.Equal(t, env.tmc.getSchemaRequestCount(100), 1)
-	require.Equal(t, env.tmc.getSchemaRequestCount(200), 1)
-
-}
-
-func TestMaterializerExplicitColumns(t *testing.T) {
-	ms := &vtctldatapb.MaterializeSettings{
-		Workflow:       "workflow",
-		SourceKeyspace: "sourceks",
-		TargetKeyspace: "targetks",
-		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
-			TargetTable:      "t1",
-			SourceExpression: "select c1, c1+c2, c2 from t1",
-			CreateDdl:        "t1ddl",
-		}},
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"-80", "80-"})
-	defer env.close()
-
-	vs := &vschemapb.Keyspace{
-		Sharded: true,
-		Vindexes: map[string]*vschemapb.Vindex{
-			"region": {
-				Type: "region_experimental",
-				Params: map[string]string{
-					"region_bytes": "1",
-				},
-			},
-		},
-		Tables: map[string]*vschemapb.Table{
-			"t1": {
-				ColumnVindexes: []*vschemapb.ColumnVindex{{
-					Columns: []string{"c1", "c2"},
-					Name:    "region",
-				}},
-			},
-		},
-	}
-
-	if err := env.topoServ.SaveVSchema(context.Background(), "targetks", vs); err != nil {
-		t.Fatal(err)
-	}
-
-	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
-	env.tmc.expectVRQuery(210, mzSelectFrozenQuery, &sqltypes.Result{})
-	env.tmc.expectVRQuery(
-		200,
-		insertPrefix+
-			`.*shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1, c2.*targetks\.region.*-80.*`,
-		&sqltypes.Result{},
-	)
-	env.tmc.expectVRQuery(
-		210,
-		insertPrefix+
-			`.*shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1, c2.*targetks\.region.*80-.*`,
-		&sqltypes.Result{},
-	)
-	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
-	env.tmc.expectVRQuery(210, mzUpdateQuery, &sqltypes.Result{})
-
-	err := env.ws.Materialize(ctx, ms)
-	require.NoError(t, err)
-	env.tmc.verifyQueries(t)
-}
-
-func TestMaterializerRenamedColumns(t *testing.T) {
-	ms := &vtctldatapb.MaterializeSettings{
-		Workflow:       "workflow",
-		SourceKeyspace: "sourceks",
-		TargetKeyspace: "targetks",
-		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
-			TargetTable:      "t1",
-			SourceExpression: "select c3 as c1, c1+c2, c4 as c2 from t1",
-			CreateDdl:        "t1ddl",
-		}},
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"-80", "80-"})
-	defer env.close()
-
-	vs := &vschemapb.Keyspace{
-		Sharded: true,
-		Vindexes: map[string]*vschemapb.Vindex{
-			"region": {
-				Type: "region_experimental",
-				Params: map[string]string{
-					"region_bytes": "1",
-				},
-			},
-		},
-		Tables: map[string]*vschemapb.Table{
-			"t1": {
-				ColumnVindexes: []*vschemapb.ColumnVindex{{
-					Columns: []string{"c1", "c2"},
-					Name:    "region",
-				}},
-			},
-		},
-	}
-
-	if err := env.topoServ.SaveVSchema(context.Background(), "targetks", vs); err != nil {
-		t.Fatal(err)
-	}
-
-	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
-	env.tmc.expectVRQuery(210, mzSelectFrozenQuery, &sqltypes.Result{})
-	env.tmc.expectVRQuery(
-		200,
-		insertPrefix+
-			`.*shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c3, c4.*targetks\.region.*-80.*`,
-		&sqltypes.Result{},
-	)
-	env.tmc.expectVRQuery(
-		210,
-		insertPrefix+
-			`.*shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c3, c4.*targetks\.region.*80-.*`,
-		&sqltypes.Result{},
-	)
-	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
-	env.tmc.expectVRQuery(210, mzUpdateQuery, &sqltypes.Result{})
-
-	err := env.ws.Materialize(ctx, ms)
-	require.NoError(t, err)
-	env.tmc.verifyQueries(t)
-}
-
-func TestMaterializerStopAfterCopy(t *testing.T) {
-	ms := &vtctldatapb.MaterializeSettings{
-		Workflow:       "workflow",
-		SourceKeyspace: "sourceks",
-		TargetKeyspace: "targetks",
-		StopAfterCopy:  true,
-		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
-			TargetTable:      "t1",
-			SourceExpression: "select * from t1",
-			CreateDdl:        "t1ddl",
-		}, {
-			TargetTable:      "t2",
-			SourceExpression: "select * from t3",
-			CreateDdl:        "t2ddl",
-		}},
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
-	defer env.close()
-
-	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
-	env.tmc.expectVRQuery(200, insertPrefix+`.*stop_after_copy:true`, &sqltypes.Result{})
-	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
-
-	err := env.ws.Materialize(ctx, ms)
-	require.NoError(t, err)
-	env.tmc.verifyQueries(t)
-}
-
-func TestMaterializerNoTargetVSchema(t *testing.T) {
-	ms := &vtctldatapb.MaterializeSettings{
-		Workflow:       "workflow",
-		SourceKeyspace: "sourceks",
-		TargetKeyspace: "targetks",
-		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
-			TargetTable:      "t1",
-			SourceExpression: "select * from t1",
-			CreateDdl:        "t1ddl",
-		}},
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"-80", "80-"})
-	defer env.close()
-
-	vs := &vschemapb.Keyspace{
-		Sharded: true,
-	}
-
-	if err := env.topoServ.SaveVSchema(context.Background(), "targetks", vs); err != nil {
-		t.Fatal(err)
-	}
-	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
-	env.tmc.expectVRQuery(210, mzSelectFrozenQuery, &sqltypes.Result{})
-	err := env.ws.Materialize(ctx, ms)
-	require.EqualError(t, err, "table t1 not found in vschema for keyspace targetks")
-}
-
-func TestMaterializerNoDDL(t *testing.T) {
-	ms := &vtctldatapb.MaterializeSettings{
-		Workflow:       "workflow",
-		SourceKeyspace: "sourceks",
-		TargetKeyspace: "targetks",
-		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
-			TargetTable:      "t1",
-			SourceExpression: "select * from t1",
-			CreateDdl:        "",
-		}},
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
-	defer env.close()
-
-	delete(env.tmc.schema, "targetks.t1")
-
-	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
-	err := env.ws.Materialize(ctx, ms)
-	require.EqualError(t, err, "target table t1 does not exist and there is no create ddl defined")
-	require.Equal(t, env.tmc.getSchemaRequestCount(100), 0)
-	require.Equal(t, env.tmc.getSchemaRequestCount(200), 1)
-
-}
-
-func TestMaterializerNoSourcePrimary(t *testing.T) {
-	ms := &vtctldatapb.MaterializeSettings{
-		Workflow:       "workflow",
-		SourceKeyspace: "sourceks",
-		TargetKeyspace: "targetks",
-		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
-			TargetTable:      "t1",
-			SourceExpression: "select * from t1",
-			CreateDdl:        "copy",
-		}},
-	}
-	sources := []string{"0"}
-	targets := []string{"0"}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	// Copied from newTestMaterializerEnv
-	env := &testMaterializerEnv{
-		ms:       ms,
-		sources:  sources,
-		targets:  targets,
-		tablets:  make(map[int]*topodatapb.Tablet),
-		topoServ: memorytopo.NewServer(ctx, "cell"),
-		cell:     "cell",
-		tmc:      newTestMaterializerTMClient(),
-	}
-	env.ws = NewServer(env.topoServ, env.tmc)
-	defer env.close()
-
-	tabletID := 100
-	for _, shard := range sources {
-		_ = env.addTablet(tabletID, env.ms.SourceKeyspace, shard, topodatapb.TabletType_REPLICA)
-		tabletID += 10
-	}
-	tabletID = 200
-	for _, shard := range targets {
-		_ = env.addTablet(tabletID, env.ms.TargetKeyspace, shard, topodatapb.TabletType_PRIMARY)
-		tabletID += 10
-	}
-
-	// Skip the schema creation part.
-
-	env.expectValidation()
-
-	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
-	err := env.ws.Materialize(ctx, ms)
-	require.EqualError(t, err, "shard must have a primary for copying schema: 0")
-}
-
-func TestMaterializerTableMismatchNonCopy(t *testing.T) {
-	ms := &vtctldatapb.MaterializeSettings{
-		Workflow:       "workflow",
-		SourceKeyspace: "sourceks",
-		TargetKeyspace: "targetks",
-		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
-			TargetTable:      "t1",
-			SourceExpression: "select * from t2",
-			CreateDdl:        "",
-		}},
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
-	defer env.close()
-
-	delete(env.tmc.schema, "targetks.t1")
-
-	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
-	err := env.ws.Materialize(ctx, ms)
-	require.EqualError(t, err, "target table t1 does not exist and there is no create ddl defined")
-}
-
-func TestMaterializerTableMismatchCopy(t *testing.T) {
-	ms := &vtctldatapb.MaterializeSettings{
-		Workflow:       "workflow",
-		SourceKeyspace: "sourceks",
-		TargetKeyspace: "targetks",
-		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
-			TargetTable:      "t1",
-			SourceExpression: "select * from t2",
-			CreateDdl:        "copy",
-		}},
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
-	defer env.close()
-
-	delete(env.tmc.schema, "targetks.t1")
-
-	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
-	err := env.ws.Materialize(ctx, ms)
-	require.EqualError(t, err, "source and target table names must match for copying schema: t2 vs t1")
-}
-
-func TestMaterializerNoSourceTable(t *testing.T) {
-	ms := &vtctldatapb.MaterializeSettings{
-		Workflow:       "workflow",
-		SourceKeyspace: "sourceks",
-		TargetKeyspace: "targetks",
-		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
-			TargetTable:      "t1",
-			SourceExpression: "select * from t1",
-			CreateDdl:        "copy",
-		}},
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
-	defer env.close()
-
-	delete(env.tmc.schema, "targetks.t1")
-	delete(env.tmc.schema, "sourceks.t1")
-
-	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
-	err := env.ws.Materialize(ctx, ms)
-	require.EqualError(t, err, "source table t1 does not exist")
-}
-
-func TestMaterializerSyntaxError(t *testing.T) {
-	ms := &vtctldatapb.MaterializeSettings{
-		Workflow:       "workflow",
-		SourceKeyspace: "sourceks",
-		TargetKeyspace: "targetks",
-		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
-			TargetTable:      "t1",
-			SourceExpression: "bad query",
-			CreateDdl:        "t1ddl",
-		}},
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
-	defer env.close()
-
-	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
-	err := env.ws.Materialize(ctx, ms)
-	require.EqualError(t, err, "syntax error at position 4 near 'bad'")
-}
-
-func TestMaterializerNotASelect(t *testing.T) {
-	ms := &vtctldatapb.MaterializeSettings{
-		Workflow:       "workflow",
-		SourceKeyspace: "sourceks",
-		TargetKeyspace: "targetks",
-		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
-			TargetTable:      "t1",
-			SourceExpression: "update t1 set val=1",
-			CreateDdl:        "t1ddl",
-		}},
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
-	defer env.close()
-
-	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
-	err := env.ws.Materialize(ctx, ms)
-	require.EqualError(t, err, "unrecognized statement: update t1 set val=1")
-}
-
-func TestMaterializerNoGoodVindex(t *testing.T) {
-	ms := &vtctldatapb.MaterializeSettings{
-		Workflow:       "workflow",
-		SourceKeyspace: "sourceks",
-		TargetKeyspace: "targetks",
-		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
-			TargetTable:      "t1",
-			SourceExpression: "select * from t1",
-			CreateDdl:        "t1ddl",
-		}},
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"-80", "80-"})
-	defer env.close()
-
-	vs := &vschemapb.Keyspace{
-		Sharded: true,
-		Vindexes: map[string]*vschemapb.Vindex{
-			"lookup_unique": {
-				Type: "lookup_unique",
-				Params: map[string]string{
-					"table": "t1",
-					"from":  "c1",
-					"to":    "c2",
-				},
-			},
-		},
-		Tables: map[string]*vschemapb.Table{
-			"t1": {
-				ColumnVindexes: []*vschemapb.ColumnVindex{{
-					Column: "c1",
-					Name:   "lookup_unique",
-				}},
-			},
-		},
-	}
-
-	if err := env.topoServ.SaveVSchema(context.Background(), "targetks", vs); err != nil {
-		t.Fatal(err)
-	}
-
-	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
-	env.tmc.expectVRQuery(210, mzSelectFrozenQuery, &sqltypes.Result{})
-	err := env.ws.Materialize(ctx, ms)
-	require.EqualError(t, err, "could not find a vindex to compute keyspace id for table t1")
-}
-
-func TestMaterializerComplexVindexExpression(t *testing.T) {
-	ms := &vtctldatapb.MaterializeSettings{
-		Workflow:       "workflow",
-		SourceKeyspace: "sourceks",
-		TargetKeyspace: "targetks",
-		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
-			TargetTable:      "t1",
-			SourceExpression: "select a+b as c1 from t1",
-			CreateDdl:        "t1ddl",
-		}},
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"-80", "80-"})
-	defer env.close()
-
-	vs := &vschemapb.Keyspace{
-		Sharded: true,
-		Vindexes: map[string]*vschemapb.Vindex{
-			"xxhash": {
-				Type: "xxhash",
-			},
-		},
-		Tables: map[string]*vschemapb.Table{
-			"t1": {
-				ColumnVindexes: []*vschemapb.ColumnVindex{{
-					Column: "c1",
-					Name:   "xxhash",
-				}},
-			},
-		},
-	}
-
-	if err := env.topoServ.SaveVSchema(context.Background(), "targetks", vs); err != nil {
-		t.Fatal(err)
-	}
-
-	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
-	env.tmc.expectVRQuery(210, mzSelectFrozenQuery, &sqltypes.Result{})
-	err := env.ws.Materialize(ctx, ms)
-	require.EqualError(t, err, "vindex column cannot be a complex expression: a + b as c1")
-}
-
-func TestMaterializerNoVindexInExpression(t *testing.T) {
-	ms := &vtctldatapb.MaterializeSettings{
-		Workflow:       "workflow",
-		SourceKeyspace: "sourceks",
-		TargetKeyspace: "targetks",
-		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
-			TargetTable:      "t1",
-			SourceExpression: "select c2 from t1",
-			CreateDdl:        "t1ddl",
-		}},
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"-80", "80-"})
-	defer env.close()
-
-	vs := &vschemapb.Keyspace{
-		Sharded: true,
-		Vindexes: map[string]*vschemapb.Vindex{
-			"xxhash": {
-				Type: "xxhash",
-			},
-		},
-		Tables: map[string]*vschemapb.Table{
-			"t1": {
-				ColumnVindexes: []*vschemapb.ColumnVindex{{
-					Column: "c1",
-					Name:   "xxhash",
-				}},
-			},
-		},
-	}
-
-	if err := env.topoServ.SaveVSchema(context.Background(), "targetks", vs); err != nil {
-		t.Fatal(err)
-	}
-
-	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
-	env.tmc.expectVRQuery(210, mzSelectFrozenQuery, &sqltypes.Result{})
-	err := env.ws.Materialize(ctx, ms)
-	require.EqualError(t, err, "could not find vindex column c1")
 }

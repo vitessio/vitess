@@ -19,6 +19,8 @@ package stats
 import (
 	"expvar"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestHistogram(t *testing.T) {
@@ -27,30 +29,28 @@ func TestHistogram(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		h.Add(int64(i))
 	}
-	want := `{"1": 2, "5": 4, "inf": 4, "Count": 10, "Total": 45}`
-	if h.String() != want {
-		t.Errorf("got %v, want %v", h.String(), want)
-	}
+
+	assert.Equal(t, h.String(), `{"1": 2, "5": 4, "inf": 4, "Count": 10, "Total": 45}`)
+
 	counts := h.Counts()
 	counts["Count"] = h.Count()
 	counts["Total"] = h.Total()
-	for k, want := range map[string]int64{
+	for key, want := range map[string]int64{
 		"1":     2,
 		"5":     4,
 		"inf":   4,
 		"Count": 10,
 		"Total": 45,
 	} {
-		if got := counts[k]; got != want {
-			t.Errorf("histogram counts [%v]: got %d, want %d", k, got, want)
-		}
+		assert.Equal(t, counts[key], want)
 	}
-	if got, want := h.CountLabel(), "Count"; got != want {
-		t.Errorf("got %v, want %v", got, want)
-	}
-	if got, want := h.TotalLabel(), "Total"; got != want {
-		t.Errorf("got %v, want %v", got, want)
-	}
+
+	assert.Equal(t, h.CountLabel(), "Count")
+	assert.Equal(t, h.TotalLabel(), "Total")
+	assert.Equal(t, h.Labels(), []string{"1", "5", "inf"})
+	assert.Equal(t, h.Cutoffs(), []int64{1, 5})
+	assert.Equal(t, h.Buckets(), []int64{2, 4, 4})
+	assert.Equal(t, h.Help(), "help")
 }
 
 func TestGenericHistogram(t *testing.T) {
@@ -63,27 +63,69 @@ func TestGenericHistogram(t *testing.T) {
 		"count",
 		"total",
 	)
-	want := `{"one": 0, "five": 0, "max": 0, "count": 0, "total": 0}`
-	if got := h.String(); got != want {
-		t.Errorf("got %v, want %v", got, want)
-	}
+	assert.Equal(t, h.String(), `{"one": 0, "five": 0, "max": 0, "count": 0, "total": 0}`)
+}
+
+func TestInvalidGenericHistogram(t *testing.T) {
+	// Use a deferred function to capture the panic that the code should throw
+	defer func() {
+		r := recover()
+		assert.NotNil(t, r)
+		assert.Equal(t, r, "mismatched cutoff and label lengths")
+	}()
+
+	clearStats()
+	NewGenericHistogram(
+		"histgen",
+		"help",
+		[]int64{1, 5},
+		[]string{"one", "five"},
+		"count",
+		"total",
+	)
 }
 
 func TestHistogramHook(t *testing.T) {
-	var gotname string
-	var gotv *Histogram
+	// Check the results of Register hook function
+	var gotName string
+	var gotV *Histogram
 	clearStats()
 	Register(func(name string, v expvar.Var) {
-		gotname = name
-		gotv = v.(*Histogram)
+		gotName = name
+		gotV = v.(*Histogram)
 	})
 
-	name := "hist2"
-	v := NewHistogram(name, "help", []int64{1})
-	if gotname != name {
-		t.Errorf("got %v; want %v", gotname, name)
-	}
-	if gotv != v {
-		t.Errorf("got %#v, want %#v", gotv, v)
-	}
+	v := NewHistogram("hist2", "help", []int64{1})
+
+	assert.Equal(t, gotName, "hist2")
+	assert.Equal(t, gotV, v)
+
+	// Check the results of AddHook function
+	hookCalled := false
+	var addedValue int64
+
+	v.AddHook(func(value int64) {
+		hookCalled = true
+		addedValue = value
+	})
+
+	v.Add(42)
+	assert.Equal(t, hookCalled, true)
+	assert.Equal(t, addedValue, int64(42))
+
+	// Check the results of RegisterHistogramHook function
+	hookCalled = false
+	addedValue = 0
+	gotName = ""
+
+	RegisterHistogramHook(func(name string, value int64) {
+		hookCalled = true
+		gotName = name
+		addedValue = value
+	})
+
+	v.Add(10)
+	assert.Equal(t, gotName, "hist2")
+	assert.Equal(t, hookCalled, true)
+	assert.Equal(t, addedValue, int64(10))
 }

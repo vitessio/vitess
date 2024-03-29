@@ -233,8 +233,6 @@ func TestConsulDiscoverVTGates(t *testing.T) {
 	ctx := context.Background()
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -344,8 +342,6 @@ func TestConsulDiscoverVTGate(t *testing.T) {
 	ctx := context.Background()
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -442,8 +438,6 @@ func TestConsulDiscoverVTGateAddr(t *testing.T) {
 	ctx := context.Background()
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 

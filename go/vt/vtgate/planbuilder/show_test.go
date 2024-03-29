@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/test/vschemawrapper"
+	"vitess.io/vitess/go/vt/vtenv"
 
 	"github.com/stretchr/testify/require"
 
@@ -35,6 +36,7 @@ import (
 func TestBuildDBPlan(t *testing.T) {
 	vschema := &vschemawrapper.VSchemaWrapper{
 		Keyspace: &vindexes.Keyspace{Name: "main"},
+		Env:      vtenv.NewTestEnv(),
 	}
 
 	testCases := []struct {
@@ -50,7 +52,7 @@ func TestBuildDBPlan(t *testing.T) {
 
 	for _, s := range testCases {
 		t.Run(s.query, func(t *testing.T) {
-			parserOut, err := sqlparser.Parse(s.query)
+			parserOut, err := sqlparser.NewTestParser().Parse(s.query)
 			require.NoError(t, err)
 
 			show := parserOut.(*sqlparser.Show)
@@ -76,7 +78,7 @@ func TestGenerateCharsetRows(t *testing.T) {
 		append(buildVarCharRow(
 			"utf8mb4",
 			"UTF-8 Unicode",
-			collations.Local().LookupName(collations.Default())),
+			collations.MySQL8().LookupName(collations.MySQL8().DefaultConnectionCharset())),
 			sqltypes.NewUint32(4)),
 	}
 	rows2 := [][]sqltypes.Value{
@@ -88,7 +90,7 @@ func TestGenerateCharsetRows(t *testing.T) {
 		append(buildVarCharRow(
 			"utf8mb4",
 			"UTF-8 Unicode",
-			collations.Local().LookupName(collations.Default())),
+			collations.MySQL8().LookupName(collations.MySQL8().DefaultConnectionCharset())),
 			sqltypes.NewUint32(4)),
 	}
 
@@ -110,7 +112,7 @@ func TestGenerateCharsetRows(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(tc.input, func(t *testing.T) {
-			stmt, err := sqlparser.Parse(tc.input)
+			stmt, err := sqlparser.NewTestParser().Parse(tc.input)
 			require.NoError(t, err)
 			match := stmt.(*sqlparser.Show).Internal.(*sqlparser.ShowBasic)
 			filter := match.Filter

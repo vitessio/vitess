@@ -22,7 +22,6 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 type (
@@ -36,8 +35,8 @@ type (
 	}
 )
 
-var _ Expr = (*builtinToBase64)(nil)
-var _ Expr = (*builtinFromBase64)(nil)
+var _ IR = (*builtinToBase64)(nil)
+var _ IR = (*builtinFromBase64)(nil)
 
 // MySQL wraps every 76 characters with a newline. That maps
 // to a 57 byte input. So we encode here in blocks of 57 bytes
@@ -83,17 +82,9 @@ func (call *builtinToBase64) eval(env *ExpressionEnv) (eval, error) {
 	encoded := mysqlBase64Encode(b.bytes)
 
 	if arg.SQLType() == sqltypes.Blob || arg.SQLType() == sqltypes.TypeJSON {
-		return newEvalRaw(sqltypes.Text, encoded, defaultCoercionCollation(call.collate)), nil
+		return newEvalRaw(sqltypes.Text, encoded, typedCoercionCollation(sqltypes.Text, call.collate)), nil
 	}
-	return newEvalText(encoded, defaultCoercionCollation(call.collate)), nil
-}
-
-func (call *builtinToBase64) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	tt, f := call.Arguments[0].typeof(env, fields)
-	if tt == sqltypes.Blob || tt == sqltypes.TypeJSON {
-		return sqltypes.Text, f
-	}
-	return sqltypes.VarChar, f
+	return newEvalText(encoded, typedCoercionCollation(sqltypes.VarChar, call.collate)), nil
 }
 
 func (call *builtinToBase64) compile(c *compiler) (ctype, error) {
@@ -112,14 +103,14 @@ func (call *builtinToBase64) compile(c *compiler) (ctype, error) {
 	switch {
 	case str.isTextual():
 	default:
-		c.asm.Convert_xb(1, t, 0, false)
+		c.asm.Convert_xb(1, t, nil)
 	}
 
-	col := defaultCoercionCollation(c.cfg.Collation)
+	col := typedCoercionCollation(t, c.collation)
 	c.asm.Fn_TO_BASE64(t, col)
 	c.asm.jumpDestination(skip)
 
-	return ctype{Type: t, Col: col}, nil
+	return ctype{Type: t, Flag: nullableFlags(str.Flag), Col: col}, nil
 }
 
 func (call *builtinFromBase64) eval(env *ExpressionEnv) (eval, error) {
@@ -142,14 +133,6 @@ func (call *builtinFromBase64) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalBinary(decoded), nil
 }
 
-func (call *builtinFromBase64) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	tt, f := call.Arguments[0].typeof(env, fields)
-	if tt == sqltypes.Text || tt == sqltypes.TypeJSON {
-		return sqltypes.Blob, f | flagNullable
-	}
-	return sqltypes.VarBinary, f | flagNullable
-}
-
 func (call *builtinFromBase64) compile(c *compiler) (ctype, error) {
 	str, err := call.Arguments[0].compile(c)
 	if err != nil {
@@ -166,11 +149,11 @@ func (call *builtinFromBase64) compile(c *compiler) (ctype, error) {
 	switch {
 	case str.isTextual():
 	default:
-		c.asm.Convert_xb(1, t, 0, false)
+		c.asm.Convert_xb(1, t, nil)
 	}
 
 	c.asm.Fn_FROM_BASE64(t)
 	c.asm.jumpDestination(skip)
 
-	return ctype{Type: t, Col: collationBinary}, nil
+	return ctype{Type: t, Flag: nullableFlags(str.Flag), Col: collationBinary}, nil
 }

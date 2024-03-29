@@ -21,7 +21,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
@@ -36,7 +38,7 @@ func TestSimpleInsertSelect(t *testing.T) {
 	mcmp.Exec("insert into u_tbl(id, num) values (1,2),(3,4)")
 
 	for i, mode := range []string{"oltp", "olap"} {
-		t.Run(mode, func(t *testing.T) {
+		mcmp.Run(mode, func(mcmp *utils.MySQLCompare) {
 			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = %s", mode))
 
 			qr := mcmp.Exec(fmt.Sprintf("insert into s_tbl(id, num) select id*%d, num*%d from s_tbl where id < 10", 10+i, 20+i))
@@ -63,16 +65,25 @@ func TestFailureInsertSelect(t *testing.T) {
 	mcmp.Exec("insert into u_tbl(id, num) values (1,2),(3,4)")
 
 	for _, mode := range []string{"oltp", "olap"} {
-		t.Run(mode, func(t *testing.T) {
+		mcmp.Run(mode, func(mcmp *utils.MySQLCompare) {
 			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = %s", mode))
 
 			// primary key same
 			mcmp.AssertContainsError("insert into s_tbl(id, num) select id, num*20 from s_tbl where id = 1", `AlreadyExists desc = Duplicate entry '1' for key`)
-			// lookup key same (does not fail on MySQL as there is no lookup, and we have not put unique contrains on num column)
-			utils.AssertContainsError(t, mcmp.VtConn, "insert into s_tbl(id, num) select id*20, num from s_tbl where id = 1", `lookup.Create: Code: ALREADY_EXISTS`)
-			// mismatch column count
-			mcmp.AssertContainsError("insert into s_tbl(id, num) select 100,200,300", `column count does not match value count at row 1`)
-			mcmp.AssertContainsError("insert into s_tbl(id, num) select 100", `column count does not match value count at row 1`)
+			// lookup key same (does not fail on MySQL as there is no lookup, and we have not put unique constraint on num column)
+			vtgateVersion, err := cluster.GetMajorVersion("vtgate")
+			require.NoError(t, err)
+			if vtgateVersion >= 19 {
+				utils.AssertContainsError(t, mcmp.VtConn, "insert into s_tbl(id, num) select id*20, num from s_tbl where id = 1", `(errno 1062) (sqlstate 23000)`)
+				// mismatch column count
+				mcmp.AssertContainsError("insert into s_tbl(id, num) select 100,200,300", `column count does not match value count with the row`)
+				mcmp.AssertContainsError("insert into s_tbl(id, num) select 100", `column count does not match value count with the row`)
+			} else {
+				utils.AssertContainsError(t, mcmp.VtConn, "insert into s_tbl(id, num) select id*20, num from s_tbl where id = 1", `lookup.Create: Code: ALREADY_EXISTS`)
+				// mismatch column count
+				mcmp.AssertContainsError("insert into s_tbl(id, num) select 100,200,300", `column count does not match value count at row 1`)
+				mcmp.AssertContainsError("insert into s_tbl(id, num) select 100", `column count does not match value count at row 1`)
+			}
 		})
 	}
 }
@@ -116,7 +127,7 @@ func TestAutoIncInsertSelect(t *testing.T) {
 	}}
 
 	for _, tcase := range tcases {
-		t.Run(tcase.query, func(t *testing.T) {
+		mcmp.Run(tcase.query, func(mcmp *utils.MySQLCompare) {
 			qr := utils.Exec(t, mcmp.VtConn, tcase.query)
 			assert.EqualValues(t, tcase.expRowsAffected, qr.RowsAffected)
 			assert.EqualValues(t, tcase.expInsertID, qr.InsertID)
@@ -167,7 +178,7 @@ func TestAutoIncInsertSelectOlapMode(t *testing.T) {
 	}}
 
 	for _, tcase := range tcases {
-		t.Run(tcase.query, func(t *testing.T) {
+		mcmp.Run(tcase.query, func(mcmp *utils.MySQLCompare) {
 			qr := utils.Exec(t, mcmp.VtConn, tcase.query)
 			assert.EqualValues(t, tcase.expRowsAffected, qr.RowsAffected)
 			assert.EqualValues(t, tcase.expInsertID, qr.InsertID)
@@ -298,7 +309,7 @@ func TestIgnoreInsertSelect(t *testing.T) {
 	mcmp.Exec("insert into order_tbl(region_id, oid, cust_no) values (1,1,100),(1,2,200),(1,3,300)")
 
 	// inserting same rows, throws error.
-	mcmp.AssertContainsError("insert into order_tbl(region_id, oid, cust_no) select region_id, oid, cust_no from order_tbl", `lookup.Create: Code: ALREADY_EXISTS`)
+	mcmp.AssertContainsError("insert into order_tbl(region_id, oid, cust_no) select region_id, oid, cust_no from order_tbl", `(errno 1062) (sqlstate 23000)`)
 	// inserting same rows with ignore
 	qr := mcmp.Exec("insert ignore into order_tbl(region_id, oid, cust_no) select region_id, oid, cust_no from order_tbl")
 	assert.EqualValues(t, 0, qr.RowsAffected)
@@ -336,7 +347,7 @@ func TestIgnoreInsertSelectOlapMode(t *testing.T) {
 	mcmp.Exec("insert into order_tbl(region_id, oid, cust_no) values (1,1,100),(1,2,200),(1,3,300)")
 
 	// inserting same rows, throws error.
-	mcmp.AssertContainsError("insert into order_tbl(region_id, oid, cust_no) select region_id, oid, cust_no from order_tbl", `lookup.Create: Code: ALREADY_EXISTS`)
+	mcmp.AssertContainsError("insert into order_tbl(region_id, oid, cust_no) select region_id, oid, cust_no from order_tbl", `(errno 1062) (sqlstate 23000)`)
 	// inserting same rows with ignore
 	qr := mcmp.Exec("insert ignore into order_tbl(region_id, oid, cust_no) select region_id, oid, cust_no from order_tbl")
 	assert.EqualValues(t, 0, qr.RowsAffected)
@@ -375,7 +386,7 @@ func TestInsertSelectUnshardedUsingSharded(t *testing.T) {
 	mcmp.Exec("insert into s_tbl(id, num) values (1,2),(3,4)")
 
 	for _, mode := range []string{"oltp", "olap"} {
-		t.Run(mode, func(t *testing.T) {
+		mcmp.Run(mode, func(mcmp *utils.MySQLCompare) {
 			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = %s", mode))
 			qr := mcmp.Exec("insert into u_tbl(id, num) select id, num from s_tbl where s_tbl.id in (1,3)")
 			assert.EqualValues(t, 2, qr.RowsAffected)
@@ -442,7 +453,7 @@ func TestMixedCases(t *testing.T) {
 	}}
 
 	for _, tc := range tcases {
-		t.Run(tc.insQuery, func(t *testing.T) {
+		mcmp.Run(tc.insQuery, func(mcmp *utils.MySQLCompare) {
 			utils.Exec(t, mcmp.VtConn, tc.insQuery)
 			utils.AssertMatches(t, mcmp.VtConn, tc.selQuery, tc.exp)
 		})

@@ -18,6 +18,7 @@ package mysqlctl
 
 import (
 	"context"
+	"time"
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
@@ -33,12 +34,13 @@ import (
 type MysqlDaemon interface {
 	// methods related to mysql running or not
 	Start(ctx context.Context, cnf *Mycnf, mysqldArgs ...string) error
-	Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bool) error
+	Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bool, mysqlShutdownTimeout time.Duration) error
 	RunMysqlUpgrade(ctx context.Context) error
 	ApplyBinlogFile(ctx context.Context, req *mysqlctlpb.ApplyBinlogFileRequest) error
 	ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlctlpb.ReadBinlogFilesTimestampsRequest) (*mysqlctlpb.ReadBinlogFilesTimestampsResponse, error)
 	ReinitConfig(ctx context.Context, cnf *Mycnf) error
 	Wait(ctx context.Context, cnf *Mycnf) error
+	WaitForDBAGrants(ctx context.Context, waitTime time.Duration) (err error)
 
 	// GetMysqlPort returns the current port mysql is listening on.
 	GetMysqlPort() (int32, error)
@@ -93,7 +95,6 @@ type MysqlDaemon interface {
 	GetSchema(ctx context.Context, dbName string, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error)
 	GetColumns(ctx context.Context, dbName, table string) ([]*querypb.Field, []string, error)
 	GetPrimaryKeyColumns(ctx context.Context, dbName, table string) ([]string, error)
-	GetPrimaryKeyEquivalentColumns(ctx context.Context, dbName, table string) ([]string, string, error)
 	PreflightSchemaChange(ctx context.Context, dbName string, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error)
 	ApplySchemaChange(ctx context.Context, dbName string, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error)
 

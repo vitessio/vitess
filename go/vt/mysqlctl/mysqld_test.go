@@ -17,6 +17,8 @@ limitations under the License.
 package mysqlctl
 
 import (
+	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -139,7 +141,6 @@ func TestParseBinlogEntryTimestamp(t *testing.T) {
 	tcases := []struct {
 		name  string
 		entry string
-		found bool
 		tm    time.Time
 	}{
 		{
@@ -157,24 +158,49 @@ func TestParseBinlogEntryTimestamp(t *testing.T) {
 		{
 			name:  "mysql80",
 			entry: "#230605 16:06:34 server id 22233  end_log_pos 1037 CRC32 0xa4707c5b 	GTID	last_committed=4	sequence_number=5	rbr_only=no	original_committed_timestamp=1685970394031366	immediate_commit_timestamp=1685970394032458	transaction_length=186",
-			found: true,
 			tm:    time.UnixMicro(1685970394031366),
 		},
 		{
 			name:  "mysql57",
 			entry: "#230608 13:14:31 server id 484362839  end_log_pos 259 CRC32 0xc07510d0 	GTID	last_committed=0	sequence_number=1	rbr_only=yes",
-			found: true,
 			tm:    time.Date(2023, time.June, 8, 13, 14, 31, 0, time.UTC),
 		},
 	}
 	for _, tcase := range tcases {
 		t.Run(tcase.name, func(t *testing.T) {
-			found, tm, err := parseBinlogEntryTimestamp(tcase.entry)
+			tm, err := parseBinlogEntryTimestamp(tcase.entry)
 			assert.NoError(t, err)
-			assert.Equal(t, tcase.found, found)
-			if tcase.found {
-				assert.Equal(t, tcase.tm, tm)
-			}
+			assert.Equal(t, tcase.tm, tm)
 		})
 	}
+}
+
+func TestCleanupLockfile(t *testing.T) {
+	t.Cleanup(func() {
+		os.Remove("mysql.sock.lock")
+	})
+	ts := "prefix"
+	// All good if no lockfile exists
+	assert.NoError(t, cleanupLockfile("mysql.sock", ts))
+
+	// If lockfile exists, but the process is not found, we clean it up.
+	os.WriteFile("mysql.sock.lock", []byte("123456789"), 0o600)
+	assert.NoError(t, cleanupLockfile("mysql.sock", ts))
+	assert.NoFileExists(t, "mysql.sock.lock")
+
+	// If lockfile exists, but the process is not found, we clean it up.
+	os.WriteFile("mysql.sock.lock", []byte("123456789\n"), 0o600)
+	assert.NoError(t, cleanupLockfile("mysql.sock", ts))
+	assert.NoFileExists(t, "mysql.sock.lock")
+
+	// If the lockfile exists, and the process is found, but it's for ourselves,
+	// we clean it up.
+	os.WriteFile("mysql.sock.lock", []byte(strconv.Itoa(os.Getpid())), 0o600)
+	assert.NoError(t, cleanupLockfile("mysql.sock", ts))
+	assert.NoFileExists(t, "mysql.sock.lock")
+
+	// If the lockfile exists, and the process is found, we don't clean it up.
+	os.WriteFile("mysql.sock.lock", []byte(strconv.Itoa(os.Getppid())), 0o600)
+	assert.Error(t, cleanupLockfile("mysql.sock", ts))
+	assert.FileExists(t, "mysql.sock.lock")
 }

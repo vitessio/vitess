@@ -173,7 +173,8 @@ func (bh *S3BackupHandle) AddFile(ctx context.Context, filename string, filesize
 		})
 		object := objName(bh.dir, bh.name, filename)
 		sendStats := bh.bs.params.Stats.Scope(stats.Operation("AWS:Request:Send"))
-		_, err := uploader.UploadWithContext(ctx, &s3manager.UploadInput{
+		// Using UploadWithContext breaks uploading to Minio and Ceph https://github.com/vitessio/vitess/issues/14188
+		_, err := uploader.Upload(&s3manager.UploadInput{
 			Bucket:               &bucket,
 			Key:                  object,
 			Body:                 reader,
@@ -280,10 +281,21 @@ func (s3ServerSideEncryption *S3ServerSideEncryption) reset() {
 
 // S3BackupStorage implements the backupstorage.BackupStorage interface.
 type S3BackupStorage struct {
-	_client *s3.S3
-	mu      sync.Mutex
-	s3SSE   S3ServerSideEncryption
-	params  backupstorage.Params
+	_client   *s3.S3
+	mu        sync.Mutex
+	s3SSE     S3ServerSideEncryption
+	params    backupstorage.Params
+	transport *http.Transport
+}
+
+func newS3BackupStorage() *S3BackupStorage {
+	// This initialises a new transport based off http.DefaultTransport the first time and returns the same
+	// transport on subsequent calls so connections can be reused as part of the same transport.
+	tlsClientConf := &tls.Config{InsecureSkipVerify: tlsSkipVerifyCert}
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.TLSClientConfig = tlsClientConf
+
+	return &S3BackupStorage{params: backupstorage.NoParams(), transport: transport}
 }
 
 // ListBackups is part of the backupstorage.BackupStorage interface.
@@ -423,7 +435,7 @@ func (bs *S3BackupStorage) Close() error {
 }
 
 func (bs *S3BackupStorage) WithParams(params backupstorage.Params) backupstorage.BackupStorage {
-	return &S3BackupStorage{params: params}
+	return &S3BackupStorage{params: params, transport: bs.transport}
 }
 
 var _ backupstorage.BackupStorage = (*S3BackupStorage)(nil)
@@ -444,9 +456,7 @@ func (bs *S3BackupStorage) client() (*s3.S3, error) {
 	if bs._client == nil {
 		logLevel := getLogLevel()
 
-		tlsClientConf := &tls.Config{InsecureSkipVerify: tlsSkipVerifyCert}
-		httpTransport := &http.Transport{TLSClientConfig: tlsClientConf}
-		httpClient := &http.Client{Transport: httpTransport}
+		httpClient := &http.Client{Transport: bs.transport}
 
 		session, err := session.NewSession()
 		if err != nil {
@@ -496,7 +506,7 @@ func objName(parts ...string) *string {
 }
 
 func init() {
-	backupstorage.BackupStorageMap["s3"] = &S3BackupStorage{params: backupstorage.NoParams()}
+	backupstorage.BackupStorageMap["s3"] = newS3BackupStorage()
 
 	logNameMap = logNameToLogLevel{
 		"LogOff":                     aws.LogOff,

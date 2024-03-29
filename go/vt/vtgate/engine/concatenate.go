@@ -18,8 +18,10 @@ package engine
 
 import (
 	"context"
+	"slices"
 	"sync"
-	"sync/atomic"
+
+	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -94,16 +96,16 @@ func (c *Concatenate) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 		return nil, err
 	}
 
-	fields, err := c.getFields(res)
+	fields, fieldTypes, err := c.getFieldTypes(vcursor, res)
 	if err != nil {
 		return nil, err
 	}
 
 	var rows [][]sqltypes.Value
-	err = c.coerceAndVisitResults(res, fields, func(result *sqltypes.Result) error {
+	err = c.coerceAndVisitResults(res, fieldTypes, func(result *sqltypes.Result) error {
 		rows = append(rows, result.Rows...)
 		return nil
-	})
+	}, evalengine.ParseSQLMode(vcursor.SQLMode()))
 	if err != nil {
 		return nil, err
 	}
@@ -114,8 +116,8 @@ func (c *Concatenate) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 	}, nil
 }
 
-func (c *Concatenate) coerceValuesTo(row sqltypes.Row, fields []*querypb.Field) error {
-	if len(row) != len(fields) {
+func (c *Concatenate) coerceValuesTo(row sqltypes.Row, fieldTypes []evalengine.Type, sqlmode evalengine.SQLMode) error {
+	if len(row) != len(fieldTypes) {
 		return errWrongNumberOfColumnsInSelect
 	}
 
@@ -123,8 +125,8 @@ func (c *Concatenate) coerceValuesTo(row sqltypes.Row, fields []*querypb.Field) 
 		if _, found := c.NoNeedToTypeCheck[i]; found {
 			continue
 		}
-		if fields[i].Type != value.Type() {
-			newValue, err := evalengine.CoerceTo(value, fields[i].Type)
+		if fieldTypes[i].Type() != value.Type() {
+			newValue, err := evalengine.CoerceTo(value, fieldTypes[i], sqlmode)
 			if err != nil {
 				return err
 			}
@@ -134,44 +136,44 @@ func (c *Concatenate) coerceValuesTo(row sqltypes.Row, fields []*querypb.Field) 
 	return nil
 }
 
-func (c *Concatenate) getFields(res []*sqltypes.Result) (resultFields []*querypb.Field, err error) {
+func (c *Concatenate) getFieldTypes(vcursor VCursor, res []*sqltypes.Result) ([]*querypb.Field, []evalengine.Type, error) {
 	if len(res) == 0 {
-		return nil, nil
+		return nil, nil, nil
 	}
 
-	resultFields = res[0].Fields
-	columns := make([][]sqltypes.Type, len(resultFields))
-
-	addFields := func(fields []*querypb.Field) error {
-		if len(fields) != len(columns) {
-			return errWrongNumberOfColumnsInSelect
-		}
-		for idx, field := range fields {
-			columns[idx] = append(columns[idx], field.Type)
-		}
-		return nil
-	}
+	typers := make([]evalengine.TypeAggregator, len(res[0].Fields))
+	collations := vcursor.Environment().CollationEnv()
 
 	for _, r := range res {
 		if r == nil || r.Fields == nil {
 			continue
 		}
-		err := addFields(r.Fields)
-		if err != nil {
-			return nil, err
+		if len(r.Fields) != len(typers) {
+			return nil, nil, errWrongNumberOfColumnsInSelect
+		}
+		for idx, field := range r.Fields {
+			if err := typers[idx].AddField(field, collations); err != nil {
+				return nil, nil, err
+			}
 		}
 	}
 
-	// The resulting column types need to be the coercion of all the input columns
-	for colIdx, t := range columns {
+	fields := make([]*querypb.Field, 0, len(typers))
+	types := make([]evalengine.Type, 0, len(typers))
+	for colIdx, typer := range typers {
+		f := res[0].Fields[colIdx]
+
 		if _, found := c.NoNeedToTypeCheck[colIdx]; found {
+			fields = append(fields, f)
+			types = append(types, evalengine.NewTypeFromField(f))
 			continue
 		}
 
-		resultFields[colIdx].Type = evalengine.AggregateTypes(t)
+		t := typer.Type()
+		fields = append(fields, t.ToField(f.Name))
+		types = append(types, t)
 	}
-
-	return resultFields, nil
+	return fields, types, nil
 }
 
 func (c *Concatenate) execSources(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) ([]*sqltypes.Result, error) {
@@ -226,44 +228,51 @@ func (c *Concatenate) sequentialExec(ctx context.Context, vcursor VCursor, bindV
 
 // TryStreamExecute performs a streaming exec.
 func (c *Concatenate) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool, callback func(*sqltypes.Result) error) error {
+	sqlmode := evalengine.ParseSQLMode(vcursor.SQLMode())
 	if vcursor.Session().InTransaction() {
 		// as we are in a transaction, we need to execute all queries inside a single connection,
 		// which holds the single transaction we have
-		return c.sequentialStreamExec(ctx, vcursor, bindVars, callback)
+		return c.sequentialStreamExec(ctx, vcursor, bindVars, callback, sqlmode)
 	}
 	// not in transaction, so execute in parallel.
-	return c.parallelStreamExec(ctx, vcursor, bindVars, callback)
+	return c.parallelStreamExec(ctx, vcursor, bindVars, callback, sqlmode)
 }
 
-func (c *Concatenate) parallelStreamExec(inCtx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, in func(*sqltypes.Result) error) error {
+func (c *Concatenate) parallelStreamExec(inCtx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, in func(*sqltypes.Result) error, sqlmode evalengine.SQLMode) error {
+	// Scoped context; any early exit triggers cancel() to clean up ongoing work.
 	ctx, cancel := context.WithCancel(inCtx)
 	defer cancel()
-	var outerErr error
 
-	var cbMu sync.Mutex
-	var wg, fieldMu sync.WaitGroup
-	var fieldRec atomic.Int64
-	fieldRec.Store(int64(len(c.Sources)))
-	fieldMu.Add(1)
+	// Mutexes for dealing with concurrent access to shared state.
+	var (
+		muCallback sync.Mutex                                 // Protects callback
+		muFields   sync.Mutex                                 // Protects field state
+		condFields = sync.NewCond(&muFields)                  // Condition var for field arrival
+		wg         errgroup.Group                             // Wait group for all streaming goroutines
+		rest       = make([]*sqltypes.Result, len(c.Sources)) // Collects first result from each source to derive fields
+		fieldTypes []evalengine.Type                          // Cached final field types
+	)
 
-	rest := make([]*sqltypes.Result, len(c.Sources))
-	var fields []*querypb.Field
+	// Process each result chunk, considering type coercion.
 	callback := func(res *sqltypes.Result, srcIdx int) error {
-		cbMu.Lock()
-		defer cbMu.Unlock()
+		muCallback.Lock()
+		defer muCallback.Unlock()
 
+		// Check if type coercion needed for this source.
+		// We only need to check if fields are not in NoNeedToTypeCheck set.
 		needsCoercion := false
 		for idx, field := range rest[srcIdx].Fields {
-			_, ok := c.NoNeedToTypeCheck[idx]
-			if !ok && fields[idx].Type != field.Type {
+			_, skip := c.NoNeedToTypeCheck[idx]
+			if !skip && fieldTypes[idx].Type() != field.Type {
 				needsCoercion = true
 				break
 			}
 		}
+
+		// Apply type coercion if needed.
 		if needsCoercion {
 			for _, row := range res.Rows {
-				err := c.coerceValuesTo(row, fields)
-				if err != nil {
+				if err := c.coerceValuesTo(row, fieldTypes, sqlmode); err != nil {
 					return err
 				}
 			}
@@ -271,60 +280,66 @@ func (c *Concatenate) parallelStreamExec(inCtx context.Context, vcursor VCursor,
 		return in(res)
 	}
 
-	once := sync.Once{}
-
+	// Start streaming query execution in parallel for all sources.
 	for i, source := range c.Sources {
-		wg.Add(1)
 		currIndex, currSource := i, source
-
-		go func() {
-			defer wg.Done()
+		wg.Go(func() error {
 			err := vcursor.StreamExecutePrimitive(ctx, currSource, bindVars, true, func(resultChunk *sqltypes.Result) error {
-				// if we have fields to compare, make sure all the fields are all the same
-				if fieldRec.Load() > 0 && resultChunk.Fields != nil {
+				muFields.Lock()
+
+				// Process fields when they arrive; coordinate field agreement across sources.
+				if resultChunk.Fields != nil && rest[currIndex] == nil {
+					// Capture the initial result chunk to determine field types later.
 					rest[currIndex] = resultChunk
-					res := fieldRec.Add(-1)
-					if res == 0 {
+
+					// If this was the last source to report its fields, derive the final output fields.
+					if !slices.Contains(rest, nil) {
 						// We have received fields from all sources. We can now calculate the output types
 						var err error
-						fields, err = c.getFields(rest)
+						resultChunk.Fields, fieldTypes, err = c.getFieldTypes(vcursor, rest)
 						if err != nil {
+							muFields.Unlock()
 							return err
 						}
-						resultChunk.Fields = fields
-						defer once.Do(func() {
-							fieldMu.Done()
-						})
 
+						muFields.Unlock()
+						defer condFields.Broadcast()
 						return callback(resultChunk, currIndex)
-					} else {
-						fieldMu.Wait()
 					}
 				}
 
-				// If we get here, all the fields have been received
-				select {
-				case <-ctx.Done():
-					return nil
-				default:
-					return callback(resultChunk, currIndex)
+				// Wait for fields from all sources.
+				for slices.Contains(rest, nil) {
+					condFields.Wait()
 				}
-			})
-			if err != nil {
-				outerErr = err
-				cancel()
-				once.Do(func() {
-					fieldMu.Done()
-				})
-			}
-		}()
+				muFields.Unlock()
 
+				// Context check to avoid extra work.
+				if ctx.Err() != nil {
+					return nil
+				}
+				return callback(resultChunk, currIndex)
+			})
+
+			// Error handling and context cleanup for this source.
+			if err != nil {
+				muFields.Lock()
+				if rest[currIndex] == nil {
+					// Signal that this source is done, even if by failure, to unblock field waiting.
+					rest[currIndex] = &sqltypes.Result{}
+				}
+				cancel()
+				condFields.Broadcast()
+				muFields.Unlock()
+			}
+			return err
+		})
 	}
-	wg.Wait()
-	return outerErr
+	// Wait for all sources to complete.
+	return wg.Wait()
 }
 
-func (c *Concatenate) sequentialStreamExec(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
+func (c *Concatenate) sequentialStreamExec(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error, sqlmode evalengine.SQLMode) error {
 	// all the below fields ensure that the fields are sent only once.
 	results := make([][]*sqltypes.Result, len(c.Sources))
 
@@ -353,12 +368,12 @@ func (c *Concatenate) sequentialStreamExec(ctx context.Context, vcursor VCursor,
 		firsts[i] = result[0]
 	}
 
-	fields, err := c.getFields(firsts)
+	_, fieldTypes, err := c.getFieldTypes(vcursor, firsts)
 	if err != nil {
 		return err
 	}
 	for _, res := range results {
-		if err = c.coerceAndVisitResults(res, fields, callback); err != nil {
+		if err = c.coerceAndVisitResults(res, fieldTypes, callback, sqlmode); err != nil {
 			return err
 		}
 	}
@@ -368,25 +383,26 @@ func (c *Concatenate) sequentialStreamExec(ctx context.Context, vcursor VCursor,
 
 func (c *Concatenate) coerceAndVisitResults(
 	res []*sqltypes.Result,
-	fields []*querypb.Field,
+	fieldTypes []evalengine.Type,
 	callback func(*sqltypes.Result) error,
+	sqlmode evalengine.SQLMode,
 ) error {
 	for _, r := range res {
 		if len(r.Rows) > 0 &&
-			len(fields) != len(r.Rows[0]) {
+			len(fieldTypes) != len(r.Rows[0]) {
 			return errWrongNumberOfColumnsInSelect
 		}
 
 		needsCoercion := false
 		for idx, field := range r.Fields {
-			if fields[idx].Type != field.Type {
+			if fieldTypes[idx].Type() != field.Type {
 				needsCoercion = true
 				break
 			}
 		}
 		if needsCoercion {
 			for _, row := range r.Rows {
-				err := c.coerceValuesTo(row, fields)
+				err := c.coerceValuesTo(row, fieldTypes, sqlmode)
 				if err != nil {
 					return err
 				}
@@ -402,35 +418,29 @@ func (c *Concatenate) coerceAndVisitResults(
 
 // GetFields fetches the field info.
 func (c *Concatenate) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	res, err := c.Sources[0].GetFields(ctx, vcursor, bindVars)
-	if err != nil {
-		return nil, err
-	}
-
-	columns := make([][]sqltypes.Type, len(res.Fields))
-
-	addFields := func(fields []*querypb.Field) {
-		for idx, field := range fields {
-			columns[idx] = append(columns[idx], field.Type)
-		}
-	}
-
-	addFields(res.Fields)
-
-	for i := 1; i < len(c.Sources); i++ {
-		result, err := c.Sources[i].GetFields(ctx, vcursor, bindVars)
+	sourceFields := make([][]*querypb.Field, 0, len(c.Sources))
+	for _, src := range c.Sources {
+		f, err := src.GetFields(ctx, vcursor, bindVars)
 		if err != nil {
 			return nil, err
 		}
-		addFields(result.Fields)
+		sourceFields = append(sourceFields, f.Fields)
 	}
 
-	// The resulting column types need to be the coercion of all the input columns
-	for colIdx, t := range columns {
-		res.Fields[colIdx].Type = evalengine.AggregateTypes(t)
-	}
+	fields := make([]*querypb.Field, 0, len(sourceFields[0]))
+	collations := vcursor.Environment().CollationEnv()
 
-	return res, nil
+	for colIdx := 0; colIdx < len(sourceFields[0]); colIdx++ {
+		var typer evalengine.TypeAggregator
+		for _, src := range sourceFields {
+			if err := typer.AddField(src[colIdx], collations); err != nil {
+				return nil, err
+			}
+		}
+		name := sourceFields[0][colIdx].Name
+		fields = append(fields, typer.Field(name))
+	}
+	return &sqltypes.Result{Fields: fields}, nil
 }
 
 // NeedsTransaction returns whether a transaction is needed for this primitive

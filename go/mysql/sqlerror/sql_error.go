@@ -17,13 +17,11 @@ limitations under the License.
 package sqlerror
 
 import (
-	"bytes"
 	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
 
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -53,17 +51,17 @@ func NewSQLError(number ErrorCode, sqlState string, format string, args ...any) 
 
 // Error implements the error interface
 func (se *SQLError) Error() string {
-	buf := &bytes.Buffer{}
+	var buf strings.Builder
 	buf.WriteString(se.Message)
 
 	// Add MySQL errno and SQLSTATE in a format that we can later parse.
 	// There's no avoiding string parsing because all errors
 	// are converted to strings anyway at RPC boundaries.
 	// See NewSQLErrorFromError.
-	fmt.Fprintf(buf, " (errno %v) (sqlstate %v)", se.Num, se.State)
+	fmt.Fprintf(&buf, " (errno %v) (sqlstate %v)", se.Num, se.State)
 
 	if se.Query != "" {
-		fmt.Fprintf(buf, " during query: %s", sqlparser.TruncateForLog(se.Query))
+		fmt.Fprintf(&buf, " during query: %s", se.Query)
 	}
 
 	return buf.String()
@@ -79,7 +77,7 @@ func (se *SQLError) SQLState() string {
 	return se.State
 }
 
-var errExtract = regexp.MustCompile(`.*\(errno ([0-9]*)\) \(sqlstate ([0-9a-zA-Z]{5})\).*`)
+var errExtract = regexp.MustCompile(`\(errno ([0-9]*)\) \(sqlstate ([0-9a-zA-Z]{5})\)`)
 
 // NewSQLErrorFromError returns a *SQLError from the provided error.
 // If it's not the right type, it still tries to get it from a regexp.
@@ -219,6 +217,7 @@ var stateToMysqlCode = map[vterrors.State]mysqlCode{
 	vterrors.WrongValueCountOnRow:         {num: ERWrongValueCountOnRow, state: SSWrongValueCountOnRow},
 	vterrors.WrongArguments:               {num: ERWrongArguments, state: SSUnknownSQLState},
 	vterrors.UnknownStmtHandler:           {num: ERUnknownStmtHandler, state: SSUnknownSQLState},
+	vterrors.KeyDoesNotExist:              {num: ERKeyDoesNotExist, state: SSClientError},
 	vterrors.UnknownTimeZone:              {num: ERUnknownTimeZone, state: SSUnknownSQLState},
 	vterrors.RegexpStringNotTerminated:    {num: ERRegexpStringNotTerminated, state: SSUnknownSQLState},
 	vterrors.RegexpBufferOverflow:         {num: ERRegexpBufferOverflow, state: SSUnknownSQLState},
@@ -243,6 +242,8 @@ var stateToMysqlCode = map[vterrors.State]mysqlCode{
 	vterrors.CharacterSetMismatch:         {num: ERCharacterSetMismatch, state: SSUnknownSQLState},
 	vterrors.WrongParametersToNativeFct:   {num: ERWrongParametersToNativeFct, state: SSUnknownSQLState},
 	vterrors.KillDeniedError:              {num: ERKillDenied, state: SSUnknownSQLState},
+	vterrors.BadNullError:                 {num: ERBadNullError, state: SSConstraintViolation},
+	vterrors.InvalidGroupFuncUse:          {num: ERInvalidGroupFuncUse, state: SSUnknownSQLState},
 }
 
 func getStateToMySQLState(state vterrors.State) mysqlCode {

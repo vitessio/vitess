@@ -45,11 +45,11 @@ jobs:
 
     - name: Check out code
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Check for changes in relevant files
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
-      uses: frouioui/paths-filter@main
+      uses: dorny/paths-filter@v3.0.1
       id: changes
       with:
         token: ''
@@ -69,13 +69,13 @@ jobs:
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v5
       with:
-        go-version: 1.21.3
+        go-version: 1.22.1
 
     - name: Set up python
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
 
     - name: Tune the OS
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
@@ -89,35 +89,35 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
       run: |
         export DEBIAN_FRONTEND="noninteractive"
-        sudo apt-get update
+        sudo apt-get -qq update
 
         # Uninstall any previously installed MySQL first
         sudo systemctl stop apparmor
-        sudo DEBIAN_FRONTEND="noninteractive" apt-get remove -y --purge mysql-server mysql-client mysql-common
-        sudo apt-get -y autoremove
-        sudo apt-get -y autoclean
+        sudo DEBIAN_FRONTEND="noninteractive" apt-get -qq remove -y --purge mysql-server mysql-client mysql-common
+        sudo apt-get -qq -y autoremove
+        sudo apt-get -qq -y autoclean
         sudo deluser mysql
         sudo rm -rf /var/lib/mysql
         sudo rm -rf /etc/mysql
 
         # Get key to latest MySQL repo
-        sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 467B942D3A79BD29
+        sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A8D3785C
 
         # mysql80
-        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.24-1_all.deb
+        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.29-1_all.deb
         echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
-        sudo apt-get update
-        sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-server mysql-client
+        sudo apt-get -qq update
+        sudo DEBIAN_FRONTEND="noninteractive" apt-get -qq install -y mysql-server mysql-client
 
-        sudo apt-get install -y make unzip g++ curl git wget ant openjdk-11-jdk eatmydata
+        sudo apt-get -qq install -y make unzip g++ curl git wget ant openjdk-11-jdk eatmydata
         sudo service mysql stop
         sudo bash -c "echo '/usr/sbin/mysqld { }' > /etc/apparmor.d/usr.sbin.mysqld" # https://bugs.launchpad.net/ubuntu/+source/mariadb-10.1/+bug/1806263
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
         sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld || echo "could not remove mysqld profile"
 
         mkdir -p dist bin
-        curl -L https://github.com/coreos/etcd/releases/download/v3.3.10/etcd-v3.3.10-linux-amd64.tar.gz | tar -zxC dist
+        curl -s -L https://github.com/coreos/etcd/releases/download/v3.3.10/etcd-v3.3.10-linux-amd64.tar.gz | tar -zxC dist
         mv dist/etcd-v3.3.10-linux-amd64/{etcd,etcdctl} bin/
 
         go mod download

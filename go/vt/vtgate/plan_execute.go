@@ -80,7 +80,7 @@ func (e *Executor) newExecute(
 	query, comments := sqlparser.SplitMarginComments(sql)
 
 	// 2: Parse and Validate query
-	stmt, reservedVars, err := parseAndValidateQuery(query)
+	stmt, reservedVars, err := parseAndValidateQuery(query, e.env.Parser())
 	if err != nil {
 		return err
 	}

@@ -48,8 +48,6 @@ var (
 					) Engine=InnoDB
 `
 	commonTabletArg = []string{
-		"--vreplication_healthcheck_topology_refresh", "1s",
-		"--vreplication_healthcheck_retry_delay", "1s",
 		"--vreplication_retry_delay", "1s",
 		"--degraded_threshold", "5s",
 		"--lock_tables_timeout", "5s",
@@ -195,14 +193,14 @@ func TestMain(m *testing.M) {
 				return 1, err
 			}
 		}
-		if err := clusterInstance.VtctlclientProcess.InitializeShard(keyspaceName, shard1.Name, shard1Primary.Cell, shard1Primary.TabletUID); err != nil {
+		if err := clusterInstance.VtctldClientProcess.InitializeShard(keyspaceName, shard1.Name, shard1Primary.Cell, shard1Primary.TabletUID); err != nil {
 			return 1, err
 		}
 
 		// run a health check on source replica so it responds to discovery
 		// (for binlog players) and on the source rdonlys (for workers)
 		for _, tablet := range []string{shard1Replica.Alias, shard1Rdonly.Alias} {
-			if err := clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", tablet); err != nil {
+			if err := clusterInstance.VtctldClientProcess.ExecuteCommand("RunHealthCheck", tablet); err != nil {
 				return 1, err
 			}
 		}
@@ -213,7 +211,7 @@ func TestMain(m *testing.M) {
 			}
 		}
 
-		if err := clusterInstance.VtctlclientProcess.InitializeShard(keyspaceName, shard2.Name, shard2Primary.Cell, shard2Primary.TabletUID); err != nil {
+		if err := clusterInstance.VtctldClientProcess.InitializeShard(keyspaceName, shard2.Name, shard2Primary.Cell, shard2Primary.TabletUID); err != nil {
 			return 1, err
 		}
 
@@ -221,14 +219,14 @@ func TestMain(m *testing.M) {
 			return 1, err
 		}
 
-		if err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, fmt.Sprintf(sqlSchema, tableName)); err != nil {
+		if err := clusterInstance.VtctldClientProcess.ApplySchema(keyspaceName, fmt.Sprintf(sqlSchema, tableName)); err != nil {
 			return 1, err
 		}
-		if err := clusterInstance.VtctlclientProcess.ApplyVSchema(keyspaceName, fmt.Sprintf(vSchema, tableName)); err != nil {
+		if err := clusterInstance.VtctldClientProcess.ApplyVSchema(keyspaceName, fmt.Sprintf(vSchema, tableName)); err != nil {
 			return 1, err
 		}
 
-		_ = clusterInstance.VtctlclientProcess.ExecuteCommand("RebuildKeyspaceGraph", keyspaceName)
+		_ = clusterInstance.VtctldClientProcess.ExecuteCommand("RebuildKeyspaceGraph", keyspaceName)
 
 		return m.Run(), nil
 	}()

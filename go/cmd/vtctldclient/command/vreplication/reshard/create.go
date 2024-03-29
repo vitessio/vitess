@@ -60,9 +60,8 @@ func commandReshardCreate(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	req := &vtctldatapb.ReshardCreateRequest{
-		Workflow: common.BaseOptions.Workflow,
-		Keyspace: common.BaseOptions.TargetKeyspace,
-
+		Workflow:                  common.BaseOptions.Workflow,
+		Keyspace:                  common.BaseOptions.TargetKeyspace,
 		TabletTypes:               common.CreateOptions.TabletTypes,
 		TabletSelectionPreference: tsp,
 		Cells:                     common.CreateOptions.Cells,
@@ -70,10 +69,9 @@ func commandReshardCreate(cmd *cobra.Command, args []string) error {
 		DeferSecondaryKeys:        common.CreateOptions.DeferSecondaryKeys,
 		AutoStart:                 common.CreateOptions.AutoStart,
 		StopAfterCopy:             common.CreateOptions.StopAfterCopy,
-
-		SourceShards:   reshardCreateOptions.sourceShards,
-		TargetShards:   reshardCreateOptions.targetShards,
-		SkipSchemaCopy: reshardCreateOptions.skipSchemaCopy,
+		SourceShards:              reshardCreateOptions.sourceShards,
+		TargetShards:              reshardCreateOptions.targetShards,
+		SkipSchemaCopy:            reshardCreateOptions.skipSchemaCopy,
 	}
 	resp, err := common.GetClient().ReshardCreate(common.GetCommandCtx(), req)
 	if err != nil {

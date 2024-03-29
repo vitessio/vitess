@@ -101,7 +101,7 @@ func getTableSizeOpts(r Request) (*vtadminpb.GetSchemaTableSizeOptions, error) {
 
 // ReloadSchemas implements the http wrapper for /schemas/reload
 func ReloadSchemas(ctx context.Context, r Request, api *API) *JSONResponse {
-	concurrency, err := r.ParseQueryParamAsUint32("concurrency", 0)
+	concurrency, err := r.ParseQueryParamAsInt32("concurrency", 0)
 	if err != nil {
 		return NewJSONResponse(nil, err)
 	}

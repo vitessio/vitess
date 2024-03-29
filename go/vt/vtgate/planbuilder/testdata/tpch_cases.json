@@ -2,7 +2,50 @@
   {
     "comment": "TPC-H query 1",
     "query": "select l_returnflag, l_linestatus, sum(l_quantity) as sum_qty, sum(l_extendedprice) as sum_base_price, sum(l_extendedprice * (1 - l_discount)) as sum_disc_price, sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) as sum_charge, avg(l_quantity) as avg_qty, avg(l_extendedprice) as avg_price, avg(l_discount) as avg_disc, count(*) as count_order from lineitem where l_shipdate <= '1998-12-01' - interval '108' day group by l_returnflag, l_linestatus order by l_returnflag, l_linestatus",
-    "plan": "VT12001: unsupported: in scatter query: aggregation function 'avg(l_quantity) as avg_qty'"
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select l_returnflag, l_linestatus, sum(l_quantity) as sum_qty, sum(l_extendedprice) as sum_base_price, sum(l_extendedprice * (1 - l_discount)) as sum_disc_price, sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) as sum_charge, avg(l_quantity) as avg_qty, avg(l_extendedprice) as avg_price, avg(l_discount) as avg_disc, count(*) as count_order from lineitem where l_shipdate <= '1998-12-01' - interval '108' day group by l_returnflag, l_linestatus order by l_returnflag, l_linestatus",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          ":0 as l_returnflag",
+          ":1 as l_linestatus",
+          ":2 as sum_qty",
+          ":3 as sum_base_price",
+          ":4 as sum_disc_price",
+          ":5 as sum_charge",
+          "sum(l_quantity) / count(l_quantity) as avg_qty",
+          "sum(l_extendedprice) / count(l_extendedprice) as avg_price",
+          "sum(l_discount) / count(l_discount) as avg_disc",
+          ":9 as count_order"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Ordered",
+            "Aggregates": "sum(2) AS sum_qty, sum(3) AS sum_base_price, sum(4) AS sum_disc_price, sum(5) AS sum_charge, sum(6) AS avg_qty, sum(7) AS avg_price, sum(8) AS avg_disc, sum_count_star(9) AS count_order, sum_count(10) AS count(l_quantity), sum_count(11) AS count(l_extendedprice), sum_count(12) AS count(l_discount)",
+            "GroupBy": "(0|13), (1|14)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": true
+                },
+                "FieldQuery": "select l_returnflag, l_linestatus, sum(l_quantity) as sum_qty, sum(l_extendedprice) as sum_base_price, sum(l_extendedprice * (1 - l_discount)) as sum_disc_price, sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) as sum_charge, sum(l_quantity) as avg_qty, sum(l_extendedprice) as avg_price, sum(l_discount) as avg_disc, count(*) as count_order, count(l_quantity), count(l_extendedprice), count(l_discount), weight_string(l_returnflag), weight_string(l_linestatus) from lineitem where 1 != 1 group by l_returnflag, l_linestatus, weight_string(l_returnflag), weight_string(l_linestatus)",
+                "OrderBy": "(0|13) ASC, (1|14) ASC",
+                "Query": "select l_returnflag, l_linestatus, sum(l_quantity) as sum_qty, sum(l_extendedprice) as sum_base_price, sum(l_extendedprice * (1 - l_discount)) as sum_disc_price, sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) as sum_charge, sum(l_quantity) as avg_qty, sum(l_extendedprice) as avg_price, sum(l_discount) as avg_disc, count(*) as count_order, count(l_quantity), count(l_extendedprice), count(l_discount), weight_string(l_returnflag), weight_string(l_linestatus) from lineitem where l_shipdate <= '1998-12-01' - interval '108' day group by l_returnflag, l_linestatus, weight_string(l_returnflag), weight_string(l_linestatus) order by lineitem.l_returnflag asc, lineitem.l_linestatus asc",
+                "Table": "lineitem"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.lineitem"
+      ]
+    }
   },
   {
     "comment": "TPC-H query 2",
@@ -17,12 +60,12 @@
       "Original": "select l_orderkey, sum(l_extendedprice * (1 - l_discount)) as revenue, o_orderdate, o_shippriority from customer, orders, lineitem where c_mktsegment = 'BUILDING' and c_custkey = o_custkey and l_orderkey = o_orderkey and o_orderdate < date('1995-03-15') and l_shipdate > date('1995-03-15') group by l_orderkey, o_orderdate, o_shippriority order by revenue desc, o_orderdate limit 10",
       "Instructions": {
         "OperatorType": "Limit",
-        "Count": "INT64(10)",
+        "Count": "10",
         "Inputs": [
           {
             "OperatorType": "Sort",
             "Variant": "Memory",
-            "OrderBy": "1 DESC, (2|5) ASC",
+            "OrderBy": "1 DESC COLLATE utf8mb4_0900_ai_ci, (2|5) ASC",
             "ResultColumns": 4,
             "Inputs": [
               {
@@ -34,13 +77,13 @@
                   {
                     "OperatorType": "Projection",
                     "Expressions": [
-                      "[COLUMN 2] as l_orderkey",
-                      "[COLUMN 0] * [COLUMN 1] as revenue",
-                      "[COLUMN 3] as o_orderdate",
-                      "[COLUMN 4] as o_shippriority",
-                      "[COLUMN 5] as weight_string(l_orderkey)",
-                      "[COLUMN 6] as weight_string(o_orderdate)",
-                      "[COLUMN 7] as weight_string(o_shippriority)"
+                      ":2 as l_orderkey",
+                      "sum(l_extendedprice * (1 - l_discount)) * count(*) as revenue",
+                      ":3 as o_orderdate",
+                      ":4 as o_shippriority",
+                      ":5 as weight_string(l_orderkey)",
+                      ":6 as weight_string(o_orderdate)",
+                      ":7 as weight_string(o_shippriority)"
                     ],
                     "Inputs": [
                       {
@@ -71,11 +114,11 @@
                               {
                                 "OperatorType": "Projection",
                                 "Expressions": [
-                                  "[COLUMN 0] * [COLUMN 1] as count(*)",
-                                  "[COLUMN 2] as o_orderdate",
-                                  "[COLUMN 3] as o_shippriority",
-                                  "[COLUMN 4] as weight_string(o_orderdate)",
-                                  "[COLUMN 5] as weight_string(o_shippriority)"
+                                  "count(*) * count(*) as count(*)",
+                                  ":2 as o_orderdate",
+                                  ":3 as o_shippriority",
+                                  ":4 as weight_string(o_orderdate)",
+                                  ":5 as weight_string(o_shippriority)"
                                 ],
                                 "Inputs": [
                                   {
@@ -170,7 +213,7 @@
                 },
                 "FieldQuery": "select o_orderpriority, count(*) as order_count, o_orderkey, weight_string(o_orderpriority) from orders where 1 != 1 group by o_orderpriority, o_orderkey, weight_string(o_orderpriority)",
                 "OrderBy": "(0|3) ASC",
-                "Query": "select o_orderpriority, count(*) as order_count, o_orderkey, weight_string(o_orderpriority) from orders where o_orderdate >= date('1993-07-01') and o_orderdate < date('1993-07-01') + interval '3' month group by o_orderpriority, o_orderkey, weight_string(o_orderpriority) order by o_orderpriority asc",
+                "Query": "select o_orderpriority, count(*) as order_count, o_orderkey, weight_string(o_orderpriority) from orders where o_orderdate >= date('1993-07-01') and o_orderdate < date('1993-07-01') + interval '3' month group by o_orderpriority, o_orderkey, weight_string(o_orderpriority) order by orders.o_orderpriority asc",
                 "Table": "orders"
               },
               {
@@ -233,7 +276,7 @@
       "Instructions": {
         "OperatorType": "Sort",
         "Variant": "Memory",
-        "OrderBy": "1 DESC",
+        "OrderBy": "1 DESC COLLATE utf8mb4_0900_ai_ci",
         "ResultColumns": 2,
         "Inputs": [
           {
@@ -245,9 +288,9 @@
               {
                 "OperatorType": "Projection",
                 "Expressions": [
-                  "[COLUMN 2] as n_name",
-                  "[COLUMN 0] * [COLUMN 1] as revenue",
-                  "[COLUMN 3] as weight_string(n_name)"
+                  ":2 as n_name",
+                  "sum(l_extendedprice * (1 - l_discount)) * count(*) as revenue",
+                  ":3 as weight_string(n_name)"
                 ],
                 "Inputs": [
                   {
@@ -267,8 +310,8 @@
                           {
                             "OperatorType": "Projection",
                             "Expressions": [
-                              "[COLUMN 1] * [COLUMN 0] as revenue",
-                              "[COLUMN 2] as s_nationkey"
+                              "count(*) * sum(l_extendedprice * (1 - l_discount)) as revenue",
+                              ":2 as s_nationkey"
                             ],
                             "Inputs": [
                               {
@@ -284,9 +327,9 @@
                                   {
                                     "OperatorType": "Projection",
                                     "Expressions": [
-                                      "[COLUMN 0] * [COLUMN 1] as count(*)",
-                                      "[COLUMN 2] as o_orderkey",
-                                      "[COLUMN 3] as c_nationkey"
+                                      "count(*) * count(*) as count(*)",
+                                      ":2 as o_orderkey",
+                                      ":3 as c_nationkey"
                                     ],
                                     "Inputs": [
                                       {
@@ -331,8 +374,8 @@
                                   {
                                     "OperatorType": "Projection",
                                     "Expressions": [
-                                      "[COLUMN 0] * [COLUMN 1] as revenue",
-                                      "[COLUMN 2] as s_nationkey"
+                                      "sum(l_extendedprice * (1 - l_discount)) * count(*) as revenue",
+                                      ":2 as s_nationkey"
                                     ],
                                     "Inputs": [
                                       {
@@ -410,9 +453,9 @@
                           {
                             "OperatorType": "Projection",
                             "Expressions": [
-                              "[COLUMN 0] * [COLUMN 1] as count(*)",
-                              "[COLUMN 2] as n_name",
-                              "[COLUMN 3] as weight_string(n_name)"
+                              "count(*) * count(*) as count(*)",
+                              ":2 as n_name",
+                              ":3 as weight_string(n_name)"
                             ],
                             "Inputs": [
                               {
@@ -523,21 +566,21 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 2] as supp_nation",
-              "[COLUMN 3] as cust_nation",
-              "[COLUMN 4] as l_year",
-              "[COLUMN 0] * [COLUMN 1] as revenue",
-              "[COLUMN 5] as weight_string(supp_nation)",
-              "[COLUMN 6] as weight_string(cust_nation)",
-              "[COLUMN 7] as weight_string(l_year)"
+              ":2 as supp_nation",
+              ":3 as cust_nation",
+              ":4 as l_year",
+              "sum(volume) * count(*) as revenue",
+              ":5 as weight_string(supp_nation)",
+              ":6 as weight_string(cust_nation)",
+              ":7 as weight_string(l_year)"
             ],
             "Inputs": [
               {
                 "OperatorType": "Join",
                 "Variant": "Join",
-                "JoinColumnIndexes": "L:0,R:0,L:1,R:1,L:2,L:5,R:2,L:6",
+                "JoinColumnIndexes": "L:0,R:0,L:1,R:1,L:2,L:4,R:2,L:5",
                 "JoinVars": {
-                  "n1_n_name": 4,
+                  "n1_n_name": 1,
                   "o_custkey": 3
                 },
                 "TableName": "lineitem_orders_supplier_nation_customer_nation",
@@ -545,41 +588,39 @@
                   {
                     "OperatorType": "Projection",
                     "Expressions": [
-                      "[COLUMN 0] * [COLUMN 1] as revenue",
-                      "[COLUMN 2] as supp_nation",
-                      "[COLUMN 3] as l_year",
-                      "[COLUMN 4] as orders.o_custkey",
-                      "[COLUMN 5] as n1.n_name",
-                      "[COLUMN 6] as weight_string(supp_nation)",
-                      "[COLUMN 7] as weight_string(l_year)"
+                      "sum(volume) * count(*) as revenue",
+                      ":2 as supp_nation",
+                      ":3 as l_year",
+                      ":4 as o_custkey",
+                      ":5 as weight_string(supp_nation)",
+                      ":6 as weight_string(l_year)"
                     ],
                     "Inputs": [
                       {
                         "OperatorType": "Join",
                         "Variant": "Join",
-                        "JoinColumnIndexes": "L:0,R:0,R:1,L:1,L:2,L:3,R:2,L:5",
+                        "JoinColumnIndexes": "L:0,R:0,R:1,L:1,L:2,R:2,L:4",
                         "JoinVars": {
-                          "l_suppkey": 4
+                          "l_suppkey": 3
                         },
                         "TableName": "lineitem_orders_supplier_nation",
                         "Inputs": [
                           {
                             "OperatorType": "Projection",
                             "Expressions": [
-                              "[COLUMN 0] * [COLUMN 1] as revenue",
-                              "[COLUMN 2] as l_year",
-                              "[COLUMN 3] as orders.o_custkey",
-                              "[COLUMN 4] as n1.n_name",
-                              "[COLUMN 5] as lineitem.l_suppkey",
-                              "[COLUMN 6] as weight_string(l_year)"
+                              "sum(volume) * count(*) as revenue",
+                              ":2 as l_year",
+                              ":3 as o_custkey",
+                              ":4 as l_suppkey",
+                              ":5 as weight_string(l_year)"
                             ],
                             "Inputs": [
                               {
                                 "OperatorType": "Join",
                                 "Variant": "Join",
-                                "JoinColumnIndexes": "L:0,R:0,L:1,L:2,L:3,L:4,L:6",
+                                "JoinColumnIndexes": "L:0,R:0,L:1,R:1,L:2,L:4",
                                 "JoinVars": {
-                                  "l_orderkey": 5
+                                  "l_orderkey": 3
                                 },
                                 "TableName": "lineitem_orders",
                                 "Inputs": [
@@ -590,9 +631,9 @@
                                       "Name": "main",
                                       "Sharded": true
                                     },
-                                    "FieldQuery": "select sum(volume) as revenue, l_year, shipping.`orders.o_custkey`, shipping.`n1.n_name`, shipping.`lineitem.l_suppkey`, shipping.`lineitem.l_orderkey`, weight_string(l_year), supp_nation, weight_string(supp_nation), cust_nation, weight_string(cust_nation) from (select extract(year from l_shipdate) as l_year, l_extendedprice * (1 - l_discount) as volume, orders.o_custkey as `orders.o_custkey`, lineitem.l_suppkey as `lineitem.l_suppkey`, lineitem.l_orderkey as `lineitem.l_orderkey` from lineitem where 1 != 1) as shipping where 1 != 1 group by l_year, shipping.`orders.o_custkey`, shipping.`n1.n_name`, shipping.`lineitem.l_suppkey`, shipping.`lineitem.l_orderkey`, weight_string(l_year)",
-                                    "OrderBy": "(7|8) ASC, (9|10) ASC, (1|6) ASC",
-                                    "Query": "select sum(volume) as revenue, l_year, shipping.`orders.o_custkey`, shipping.`n1.n_name`, shipping.`lineitem.l_suppkey`, shipping.`lineitem.l_orderkey`, weight_string(l_year), supp_nation, weight_string(supp_nation), cust_nation, weight_string(cust_nation) from (select extract(year from l_shipdate) as l_year, l_extendedprice * (1 - l_discount) as volume, orders.o_custkey as `orders.o_custkey`, lineitem.l_suppkey as `lineitem.l_suppkey`, lineitem.l_orderkey as `lineitem.l_orderkey` from lineitem where l_shipdate between date('1995-01-01') and date('1996-12-31')) as shipping group by l_year, shipping.`orders.o_custkey`, shipping.`n1.n_name`, shipping.`lineitem.l_suppkey`, shipping.`lineitem.l_orderkey`, weight_string(l_year) order by supp_nation asc, cust_nation asc, l_year asc",
+                                    "FieldQuery": "select sum(volume) as revenue, l_year, shipping.l_suppkey, shipping.l_orderkey, weight_string(l_year), shipping.supp_nation, weight_string(shipping.supp_nation), shipping.cust_nation, weight_string(shipping.cust_nation) from (select extract(year from l_shipdate) as l_year, l_extendedprice * (1 - l_discount) as volume, l_suppkey as l_suppkey, l_orderkey as l_orderkey from lineitem where 1 != 1) as shipping where 1 != 1 group by l_year, shipping.l_suppkey, shipping.l_orderkey, weight_string(l_year)",
+                                    "OrderBy": "(5|6) ASC, (7|8) ASC, (1|4) ASC",
+                                    "Query": "select sum(volume) as revenue, l_year, shipping.l_suppkey, shipping.l_orderkey, weight_string(l_year), shipping.supp_nation, weight_string(shipping.supp_nation), shipping.cust_nation, weight_string(shipping.cust_nation) from (select extract(year from l_shipdate) as l_year, l_extendedprice * (1 - l_discount) as volume, l_suppkey as l_suppkey, l_orderkey as l_orderkey from lineitem where l_shipdate between date('1995-01-01') and date('1996-12-31')) as shipping group by l_year, shipping.l_suppkey, shipping.l_orderkey, weight_string(l_year) order by shipping.supp_nation asc, shipping.cust_nation asc, shipping.l_year asc",
                                     "Table": "lineitem"
                                   },
                                   {
@@ -602,8 +643,8 @@
                                       "Name": "main",
                                       "Sharded": true
                                     },
-                                    "FieldQuery": "select count(*) from orders where 1 != 1 group by .0",
-                                    "Query": "select count(*) from orders where o_orderkey = :l_orderkey group by .0",
+                                    "FieldQuery": "select count(*), shipping.o_custkey from (select o_custkey as o_custkey from orders where 1 != 1) as shipping where 1 != 1 group by shipping.o_custkey",
+                                    "Query": "select count(*), shipping.o_custkey from (select o_custkey as o_custkey from orders where o_orderkey = :l_orderkey) as shipping group by shipping.o_custkey",
                                     "Table": "orders",
                                     "Values": [
                                       ":l_orderkey"
@@ -617,9 +658,9 @@
                           {
                             "OperatorType": "Projection",
                             "Expressions": [
-                              "[COLUMN 0] * [COLUMN 1] as count(*)",
-                              "[COLUMN 2] as supp_nation",
-                              "[COLUMN 3] as weight_string(supp_nation)"
+                              "count(*) * count(*) as count(*)",
+                              ":2 as supp_nation",
+                              ":3 as weight_string(supp_nation)"
                             ],
                             "Inputs": [
                               {
@@ -638,8 +679,8 @@
                                       "Name": "main",
                                       "Sharded": true
                                     },
-                                    "FieldQuery": "select count(*), shipping.`supplier.s_nationkey` from (select supplier.s_nationkey as `supplier.s_nationkey` from supplier where 1 != 1) as shipping where 1 != 1 group by shipping.`supplier.s_nationkey`",
-                                    "Query": "select count(*), shipping.`supplier.s_nationkey` from (select supplier.s_nationkey as `supplier.s_nationkey` from supplier where s_suppkey = :l_suppkey) as shipping group by shipping.`supplier.s_nationkey`",
+                                    "FieldQuery": "select count(*), shipping.s_nationkey from (select s_nationkey as s_nationkey from supplier where 1 != 1) as shipping where 1 != 1 group by shipping.s_nationkey",
+                                    "Query": "select count(*), shipping.s_nationkey from (select s_nationkey as s_nationkey from supplier where s_suppkey = :l_suppkey) as shipping group by shipping.s_nationkey",
                                     "Table": "supplier",
                                     "Values": [
                                       ":l_suppkey"
@@ -653,8 +694,8 @@
                                       "Name": "main",
                                       "Sharded": true
                                     },
-                                    "FieldQuery": "select count(*), supp_nation, weight_string(supp_nation) from (select n1.n_name as supp_nation from nation as n1 where 1 != 1) as shipping where 1 != 1 group by supp_nation, weight_string(supp_nation)",
-                                    "Query": "select count(*), supp_nation, weight_string(supp_nation) from (select n1.n_name as supp_nation from nation as n1 where n1.n_nationkey = :s_nationkey) as shipping group by supp_nation, weight_string(supp_nation)",
+                                    "FieldQuery": "select count(*), supp_nation, weight_string(supp_nation) from (select n1.n_name as supp_nation, n1.n_name = 'FRANCE' as `n1.n_name = 'FRANCE'`, n1.n_name = 'GERMANY' as `n1.n_name = 'GERMANY'` from nation as n1 where 1 != 1) as shipping where 1 != 1 group by supp_nation, weight_string(supp_nation)",
+                                    "Query": "select count(*), supp_nation, weight_string(supp_nation) from (select n1.n_name as supp_nation, n1.n_name = 'FRANCE' as `n1.n_name = 'FRANCE'`, n1.n_name = 'GERMANY' as `n1.n_name = 'GERMANY'` from nation as n1 where n1.n_nationkey = :s_nationkey) as shipping group by supp_nation, weight_string(supp_nation)",
                                     "Table": "nation",
                                     "Values": [
                                       ":s_nationkey"
@@ -672,9 +713,9 @@
                   {
                     "OperatorType": "Projection",
                     "Expressions": [
-                      "[COLUMN 0] * [COLUMN 1] as count(*)",
-                      "[COLUMN 2] as cust_nation",
-                      "[COLUMN 3] as weight_string(cust_nation)"
+                      "count(*) * count(*) as count(*)",
+                      ":2 as cust_nation",
+                      ":3 as weight_string(cust_nation)"
                     ],
                     "Inputs": [
                       {
@@ -693,8 +734,8 @@
                               "Name": "main",
                               "Sharded": true
                             },
-                            "FieldQuery": "select count(*), shipping.`customer.c_nationkey` from (select customer.c_nationkey as `customer.c_nationkey` from customer where 1 != 1) as shipping where 1 != 1 group by shipping.`customer.c_nationkey`",
-                            "Query": "select count(*), shipping.`customer.c_nationkey` from (select customer.c_nationkey as `customer.c_nationkey` from customer where c_custkey = :o_custkey) as shipping group by shipping.`customer.c_nationkey`",
+                            "FieldQuery": "select count(*), shipping.c_nationkey from (select c_nationkey as c_nationkey from customer where 1 != 1) as shipping where 1 != 1 group by shipping.c_nationkey",
+                            "Query": "select count(*), shipping.c_nationkey from (select c_nationkey as c_nationkey from customer where c_custkey = :o_custkey) as shipping group by shipping.c_nationkey",
                             "Table": "customer",
                             "Values": [
                               ":o_custkey"
@@ -753,12 +794,12 @@
       "Original": "select c_custkey, c_name, sum(l_extendedprice * (1 - l_discount)) as revenue, c_acctbal, n_name, c_address, c_phone, c_comment from customer, orders, lineitem, nation where c_custkey = o_custkey and l_orderkey = o_orderkey and o_orderdate >= date('1993-10-01') and o_orderdate < date('1993-10-01') + interval '3' month and l_returnflag = 'R' and c_nationkey = n_nationkey group by c_custkey, c_name, c_acctbal, c_phone, n_name, c_address, c_comment order by revenue desc limit 20",
       "Instructions": {
         "OperatorType": "Limit",
-        "Count": "INT64(20)",
+        "Count": "20",
         "Inputs": [
           {
             "OperatorType": "Sort",
             "Variant": "Memory",
-            "OrderBy": "2 DESC",
+            "OrderBy": "2 DESC COLLATE utf8mb4_0900_ai_ci",
             "ResultColumns": 8,
             "Inputs": [
               {
@@ -770,21 +811,21 @@
                   {
                     "OperatorType": "Projection",
                     "Expressions": [
-                      "[COLUMN 2] as c_custkey",
-                      "[COLUMN 3] as c_name",
-                      "[COLUMN 0] * [COLUMN 1] as revenue",
-                      "[COLUMN 4] as c_acctbal",
-                      "[COLUMN 6] as n_name",
-                      "[COLUMN 7] as c_address",
-                      "[COLUMN 5] as c_phone",
-                      "[COLUMN 8] as c_comment",
-                      "[COLUMN 9] as weight_string(c_custkey)",
-                      "[COLUMN 10] as weight_string(c_name)",
-                      "[COLUMN 11] as weight_string(c_acctbal)",
-                      "[COLUMN 12] as weight_string(c_phone)",
-                      "[COLUMN 13] as weight_string(n_name)",
-                      "[COLUMN 14] as weight_string(c_address)",
-                      "[COLUMN 15] as weight_string(c_comment)"
+                      ":2 as c_custkey",
+                      ":3 as c_name",
+                      "sum(l_extendedprice * (1 - l_discount)) * count(*) as revenue",
+                      ":4 as c_acctbal",
+                      ":6 as n_name",
+                      ":7 as c_address",
+                      ":5 as c_phone",
+                      ":8 as c_comment",
+                      ":9 as weight_string(c_custkey)",
+                      ":10 as weight_string(c_name)",
+                      ":11 as weight_string(c_acctbal)",
+                      ":12 as weight_string(c_phone)",
+                      ":13 as weight_string(n_name)",
+                      ":14 as weight_string(c_address)",
+                      ":15 as weight_string(c_comment)"
                     ],
                     "Inputs": [
                       {
@@ -804,8 +845,8 @@
                               {
                                 "OperatorType": "Projection",
                                 "Expressions": [
-                                  "[COLUMN 1] * [COLUMN 0] as revenue",
-                                  "[COLUMN 2] as o_custkey"
+                                  "count(*) * sum(l_extendedprice * (1 - l_discount)) as revenue",
+                                  ":2 as o_custkey"
                                 ],
                                 "Inputs": [
                                   {
@@ -875,21 +916,21 @@
                               {
                                 "OperatorType": "Projection",
                                 "Expressions": [
-                                  "[COLUMN 0] * [COLUMN 1] as count(*)",
-                                  "[COLUMN 2] as c_custkey",
-                                  "[COLUMN 3] as c_name",
-                                  "[COLUMN 4] as c_acctbal",
-                                  "[COLUMN 5] as c_phone",
-                                  "[COLUMN 6] as n_name",
-                                  "[COLUMN 7] as c_address",
-                                  "[COLUMN 8] as c_comment",
-                                  "[COLUMN 9] as weight_string(c_custkey)",
-                                  "[COLUMN 10] as weight_string(c_name)",
-                                  "[COLUMN 11] as weight_string(c_acctbal)",
-                                  "[COLUMN 12] as weight_string(c_phone)",
-                                  "[COLUMN 13] as weight_string(n_name)",
-                                  "[COLUMN 14] as weight_string(c_address)",
-                                  "[COLUMN 15] as weight_string(c_comment)"
+                                  "count(*) * count(*) as count(*)",
+                                  ":2 as c_custkey",
+                                  ":3 as c_name",
+                                  ":4 as c_acctbal",
+                                  ":5 as c_phone",
+                                  ":6 as n_name",
+                                  ":7 as c_address",
+                                  ":8 as c_comment",
+                                  ":9 as weight_string(c_custkey)",
+                                  ":10 as weight_string(c_name)",
+                                  ":11 as weight_string(c_acctbal)",
+                                  ":12 as weight_string(c_phone)",
+                                  ":13 as weight_string(n_name)",
+                                  ":14 as weight_string(c_address)",
+                                  ":15 as weight_string(c_comment)"
                                 ],
                                 "Inputs": [
                                   {
@@ -972,7 +1013,7 @@
             "InputName": "SubQuery",
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 0] * [COLUMN 1] as sum(ps_supplycost * ps_availqty) * 0.00001000000"
+              "sum(ps_supplycost * ps_availqty) * 0.00001000000 as sum(ps_supplycost * ps_availqty) * 0.00001000000"
             ],
             "Inputs": [
               {
@@ -983,8 +1024,8 @@
                   {
                     "OperatorType": "Projection",
                     "Expressions": [
-                      "[COLUMN 0] * [COLUMN 1] as sum(ps_supplycost * ps_availqty)",
-                      "[COLUMN 2] as 0.00001000000"
+                      "sum(ps_supplycost * ps_availqty) * count(*) as sum(ps_supplycost * ps_availqty)",
+                      ":2 as 0.00001000000"
                     ],
                     "Inputs": [
                       {
@@ -999,9 +1040,9 @@
                           {
                             "OperatorType": "Projection",
                             "Expressions": [
-                              "[COLUMN 0] * [COLUMN 1] as sum(ps_supplycost * ps_availqty)",
-                              "[COLUMN 2] as 0.00001000000",
-                              "[COLUMN 3] as s_nationkey"
+                              "sum(ps_supplycost * ps_availqty) * count(*) as sum(ps_supplycost * ps_availqty)",
+                              ":2 as 0.00001000000",
+                              ":3 as s_nationkey"
                             ],
                             "Inputs": [
                               {
@@ -1075,7 +1116,7 @@
               {
                 "OperatorType": "Sort",
                 "Variant": "Memory",
-                "OrderBy": "1 DESC",
+                "OrderBy": "1 DESC COLLATE utf8mb4_0900_ai_ci",
                 "Inputs": [
                   {
                     "OperatorType": "Aggregate",
@@ -1086,9 +1127,9 @@
                       {
                         "OperatorType": "Projection",
                         "Expressions": [
-                          "[COLUMN 2] as ps_partkey",
-                          "[COLUMN 0] * [COLUMN 1] as value",
-                          "[COLUMN 3] as weight_string(ps_partkey)"
+                          ":2 as ps_partkey",
+                          "sum(ps_supplycost * ps_availqty) * count(*) as value",
+                          ":3 as weight_string(ps_partkey)"
                         ],
                         "Inputs": [
                           {
@@ -1103,10 +1144,10 @@
                               {
                                 "OperatorType": "Projection",
                                 "Expressions": [
-                                  "[COLUMN 0] * [COLUMN 1] as value",
-                                  "[COLUMN 2] as ps_partkey",
-                                  "[COLUMN 3] as s_nationkey",
-                                  "[COLUMN 4] as weight_string(ps_partkey)"
+                                  "sum(ps_supplycost * ps_availqty) * count(*) as value",
+                                  ":2 as ps_partkey",
+                                  ":3 as s_nationkey",
+                                  ":4 as weight_string(ps_partkey)"
                                 ],
                                 "Inputs": [
                                   {
@@ -1306,10 +1347,10 @@
                       {
                         "OperatorType": "Projection",
                         "Expressions": [
-                          "[COLUMN 2] as c_custkey",
-                          "[COLUMN 1] * [COLUMN 0] as count(o_orderkey)",
-                          "[COLUMN 3] as weight_string(c_custkey)",
-                          "[COLUMN 4] as 1"
+                          ":2 as c_custkey",
+                          "count(*) * count(o_orderkey) as count(o_orderkey)",
+                          ":3 as weight_string(c_custkey)",
+                          ":4 as 1"
                         ],
                         "Inputs": [
                           {
@@ -1378,7 +1419,7 @@
       "Instructions": {
         "OperatorType": "Projection",
         "Expressions": [
-          "([COLUMN 0] * [COLUMN 1]) / [COLUMN 2] as promo_revenue"
+          "100.00 * sum(case when p_type like 'PROMO%' then l_extendedprice * (1 - l_discount) else 0 end) / sum(l_extendedprice * (1 - l_discount)) as promo_revenue"
         ],
         "Inputs": [
           {
@@ -1477,7 +1518,7 @@
             },
             "FieldQuery": "select s_suppkey, s_name, s_address, s_phone, total_revenue, weight_string(s_suppkey) from supplier, revenue0 where 1 != 1",
             "OrderBy": "(0|5) ASC",
-            "Query": "select s_suppkey, s_name, s_address, s_phone, total_revenue, weight_string(s_suppkey) from supplier, revenue0 where s_suppkey = supplier_no and total_revenue = :__sq1 order by s_suppkey asc",
+            "Query": "select s_suppkey, s_name, s_address, s_phone, total_revenue, weight_string(s_suppkey) from supplier, revenue0 where s_suppkey = supplier_no and total_revenue = :__sq1 order by supplier.s_suppkey asc",
             "ResultColumns": 5,
             "Table": "revenue0, supplier"
           }
@@ -1551,7 +1592,7 @@
                               "Sharded": true
                             },
                             "FieldQuery": "select ps_suppkey, weight_string(ps_suppkey), ps_partkey from partsupp where 1 != 1",
-                            "Query": "select ps_suppkey, weight_string(ps_suppkey), ps_partkey from partsupp where not :__sq_has_values and ps_suppkey not in ::__sq1",
+                            "Query": "select ps_suppkey, weight_string(ps_suppkey), ps_partkey from partsupp where not :__sq_has_values or ps_suppkey not in ::__sq1",
                             "Table": "partsupp"
                           }
                         ]
@@ -1599,7 +1640,7 @@
       "Original": "select c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice, sum(l_quantity) from customer, orders, lineitem where o_orderkey in ( select l_orderkey from lineitem group by l_orderkey having sum(l_quantity) > 300 ) and c_custkey = o_custkey and o_orderkey = l_orderkey group by c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice order by o_totalprice desc, o_orderdate limit 100",
       "Instructions": {
         "OperatorType": "Limit",
-        "Count": "INT64(100)",
+        "Count": "100",
         "Inputs": [
           {
             "OperatorType": "Aggregate",
@@ -1740,7 +1781,7 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 0] * [COLUMN 1] as revenue"
+              "sum(l_extendedprice * (1 - l_discount)) * count(*) as revenue"
             ],
             "Inputs": [
               {
@@ -1802,7 +1843,7 @@
       "Original": "select s_name, count(*) as numwait from supplier, lineitem l1, orders, nation where s_suppkey = l1.l_suppkey and o_orderkey = l1.l_orderkey and o_orderstatus = 'F' and l1.l_receiptdate > l1.l_commitdate and exists ( select * from lineitem l2 where l2.l_orderkey = l1.l_orderkey and l2.l_suppkey <> l1.l_suppkey ) and not exists ( select * from lineitem l3 where l3.l_orderkey = l1.l_orderkey and l3.l_suppkey <> l1.l_suppkey and l3.l_receiptdate > l3.l_commitdate ) and s_nationkey = n_nationkey and n_name = 'SAUDI ARABIA' group by s_name order by numwait desc, s_name limit 100",
       "Instructions": {
         "OperatorType": "Limit",
-        "Count": "INT64(100)",
+        "Count": "100",
         "Inputs": [
           {
             "OperatorType": "Sort",
@@ -1819,9 +1860,9 @@
                   {
                     "OperatorType": "Projection",
                     "Expressions": [
-                      "[COLUMN 2] as s_name",
-                      "[COLUMN 0] * [COLUMN 1] as numwait",
-                      "[COLUMN 3] as weight_string(s_name)"
+                      ":2 as s_name",
+                      "count(*) * count(*) as numwait",
+                      ":3 as weight_string(s_name)"
                     ],
                     "Inputs": [
                       {
@@ -1841,8 +1882,8 @@
                               {
                                 "OperatorType": "Projection",
                                 "Expressions": [
-                                  "[COLUMN 0] * [COLUMN 1] as count(*)",
-                                  "[COLUMN 2] as l_suppkey"
+                                  "count(*) * count(*) as count(*)",
+                                  ":2 as l_suppkey"
                                 ],
                                 "Inputs": [
                                   {
@@ -1888,9 +1929,9 @@
                               {
                                 "OperatorType": "Projection",
                                 "Expressions": [
-                                  "[COLUMN 0] * [COLUMN 1] as count(*)",
-                                  "[COLUMN 2] as s_name",
-                                  "[COLUMN 3] as weight_string(s_name)"
+                                  "count(*) * count(*) as count(*)",
+                                  ":2 as s_name",
+                                  ":3 as weight_string(s_name)"
                                 ],
                                 "Inputs": [
                                   {

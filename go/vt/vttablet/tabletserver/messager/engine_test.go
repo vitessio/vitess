@@ -21,10 +21,10 @@ import (
 	"reflect"
 	"testing"
 
-	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -67,9 +67,7 @@ var (
 )
 
 func TestEngineSchemaChanged(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	engine := newTestEngine(db)
+	engine := newTestEngine()
 	defer engine.Close()
 
 	engine.schemaChanged(nil, []*schema.Table{meTableT1, tableT2}, nil, nil)
@@ -110,9 +108,7 @@ func extractManagerNames(in map[string]*messageManager) map[string]bool {
 }
 
 func TestSubscribe(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	engine := newTestEngine(db)
+	engine := newTestEngine()
 	engine.schemaChanged(nil, []*schema.Table{meTableT1, meTableT2}, nil, nil)
 	f1, ch1 := newEngineReceiver()
 	f2, ch2 := newEngineReceiver()
@@ -142,9 +138,7 @@ func TestSubscribe(t *testing.T) {
 }
 
 func TestEngineGenerate(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	engine := newTestEngine(db)
+	engine := newTestEngine()
 	defer engine.Close()
 	engine.schemaChanged(nil, []*schema.Table{meTableT1}, nil, nil)
 
@@ -157,10 +151,10 @@ func TestEngineGenerate(t *testing.T) {
 	}
 }
 
-func newTestEngine(db *fakesqldb.DB) *Engine {
-	config := tabletenv.NewDefaultConfig()
+func newTestEngine() *Engine {
+	cfg := tabletenv.NewDefaultConfig()
 	tsv := &fakeTabletServer{
-		Env: tabletenv.NewEnv(config, "MessagerTest"),
+		Env: tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "MessagerTest"),
 	}
 	se := schema.NewEngine(tsv)
 	te := NewEngine(tsv, se, newFakeVStreamer())

@@ -26,7 +26,6 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 type builtinMD5 struct {
@@ -34,7 +33,7 @@ type builtinMD5 struct {
 	collate collations.ID
 }
 
-var _ Expr = (*builtinMD5)(nil)
+var _ IR = (*builtinMD5)(nil)
 
 func (call *builtinMD5) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
@@ -49,12 +48,7 @@ func (call *builtinMD5) eval(env *ExpressionEnv) (eval, error) {
 	sum := md5.Sum(b.bytes)
 	buf := make([]byte, hex.EncodedLen(len(sum)))
 	hex.Encode(buf, sum[:])
-	return newEvalText(buf, defaultCoercionCollation(call.collate)), nil
-}
-
-func (call *builtinMD5) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, t := call.Arguments[0].typeof(env, fields)
-	return sqltypes.VarChar, t
+	return newEvalText(buf, typedCoercionCollation(sqltypes.VarChar, call.collate)), nil
 }
 
 func (call *builtinMD5) compile(c *compiler) (ctype, error) {
@@ -68,13 +62,13 @@ func (call *builtinMD5) compile(c *compiler) (ctype, error) {
 	switch {
 	case str.isTextual():
 	default:
-		c.asm.Convert_xb(1, sqltypes.Binary, 0, false)
+		c.asm.Convert_xb(1, sqltypes.Binary, nil)
 	}
 
-	col := defaultCoercionCollation(c.cfg.Collation)
+	col := typedCoercionCollation(sqltypes.VarChar, c.collation)
 	c.asm.Fn_MD5(col)
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.VarChar, Col: col, Flag: str.Flag}, nil
+	return ctype{Type: sqltypes.VarChar, Col: col, Flag: nullableFlags(str.Flag)}, nil
 }
 
 type builtinSHA1 struct {
@@ -82,7 +76,7 @@ type builtinSHA1 struct {
 	collate collations.ID
 }
 
-var _ Expr = (*builtinSHA1)(nil)
+var _ IR = (*builtinSHA1)(nil)
 
 func (call *builtinSHA1) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
@@ -97,12 +91,7 @@ func (call *builtinSHA1) eval(env *ExpressionEnv) (eval, error) {
 	sum := sha1.Sum(b.bytes)
 	buf := make([]byte, hex.EncodedLen(len(sum)))
 	hex.Encode(buf, sum[:])
-	return newEvalText(buf, defaultCoercionCollation(call.collate)), nil
-}
-
-func (call *builtinSHA1) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, t := call.Arguments[0].typeof(env, fields)
-	return sqltypes.VarChar, t
+	return newEvalText(buf, typedCoercionCollation(sqltypes.VarChar, call.collate)), nil
 }
 
 func (call *builtinSHA1) compile(c *compiler) (ctype, error) {
@@ -116,12 +105,12 @@ func (call *builtinSHA1) compile(c *compiler) (ctype, error) {
 	switch {
 	case str.isTextual():
 	default:
-		c.asm.Convert_xb(1, sqltypes.Binary, 0, false)
+		c.asm.Convert_xb(1, sqltypes.Binary, nil)
 	}
-	col := defaultCoercionCollation(c.cfg.Collation)
+	col := typedCoercionCollation(sqltypes.VarChar, c.collation)
 	c.asm.Fn_SHA1(col)
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.VarChar, Col: col, Flag: str.Flag}, nil
+	return ctype{Type: sqltypes.VarChar, Col: col, Flag: nullableFlags(str.Flag)}, nil
 }
 
 type builtinSHA2 struct {
@@ -129,7 +118,7 @@ type builtinSHA2 struct {
 	collate collations.ID
 }
 
-var _ Expr = (*builtinSHA2)(nil)
+var _ IR = (*builtinSHA2)(nil)
 
 func (call *builtinSHA2) eval(env *ExpressionEnv) (eval, error) {
 	arg1, arg2, err := call.arg2(env)
@@ -164,12 +153,7 @@ func (call *builtinSHA2) eval(env *ExpressionEnv) (eval, error) {
 
 	buf := make([]byte, hex.EncodedLen(len(sum)))
 	hex.Encode(buf, sum[:])
-	return newEvalText(buf, defaultCoercionCollation(call.collate)), nil
-}
-
-func (call *builtinSHA2) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, t := call.Arguments[0].typeof(env, fields)
-	return sqltypes.VarChar, t
+	return newEvalText(buf, typedCoercionCollation(sqltypes.VarChar, call.collate)), nil
 }
 
 func (call *builtinSHA2) compile(c *compiler) (ctype, error) {
@@ -190,7 +174,7 @@ func (call *builtinSHA2) compile(c *compiler) (ctype, error) {
 	switch {
 	case str.isTextual():
 	default:
-		c.asm.Convert_xb(2, sqltypes.Binary, 0, false)
+		c.asm.Convert_xb(2, sqltypes.Binary, nil)
 	}
 
 	switch bits.Type {
@@ -202,17 +186,17 @@ func (call *builtinSHA2) compile(c *compiler) (ctype, error) {
 		c.asm.Convert_xi(1)
 	}
 
-	col := defaultCoercionCollation(c.cfg.Collation)
+	col := typedCoercionCollation(sqltypes.VarChar, c.collation)
 	c.asm.Fn_SHA2(col)
 	c.asm.jumpDestination(skip1, skip2)
-	return ctype{Type: sqltypes.VarChar, Col: col, Flag: str.Flag | flagNullable}, nil
+	return ctype{Type: sqltypes.VarChar, Col: col, Flag: nullableFlags(str.Flag)}, nil
 }
 
 type builtinRandomBytes struct {
 	CallExpr
 }
 
-var _ Expr = (*builtinRandomBytes)(nil)
+var _ IR = (*builtinRandomBytes)(nil)
 
 func (call *builtinRandomBytes) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
@@ -235,11 +219,6 @@ func (call *builtinRandomBytes) eval(env *ExpressionEnv) (eval, error) {
 		return nil, err
 	}
 	return newEvalBinary(buf), nil
-}
-
-func (call *builtinRandomBytes) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, t := call.Arguments[0].typeof(env, fields)
-	return sqltypes.VarBinary, t
 }
 
 func (call *builtinRandomBytes) constant() bool {
@@ -265,5 +244,5 @@ func (call *builtinRandomBytes) compile(c *compiler) (ctype, error) {
 
 	c.asm.Fn_RandomBytes()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.VarBinary, Col: collationBinary, Flag: arg.Flag | flagNullable}, nil
+	return ctype{Type: sqltypes.VarBinary, Col: collationBinary, Flag: nullableFlags(arg.Flag) | flagNullable}, nil
 }

@@ -117,7 +117,7 @@ func RegisterVTOrcAPIEndpoints() {
 	}
 }
 
-// returnAsJSON returns the argument received on the resposeWriter as a json object
+// returnAsJSON returns the argument received on the responseWriter as a json object
 func returnAsJSON(response http.ResponseWriter, code int, stuff any) {
 	response.Header().Set("Content-Type", "application/json; charset=utf-8")
 	response.WriteHeader(code)

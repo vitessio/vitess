@@ -51,9 +51,10 @@ func TestEmptyErrorAndComments(t *testing.T) {
 			output: "select 1 from dual",
 		},
 	}
+	parser := NewTestParser()
 	for _, testcase := range testcases {
 		t.Run(testcase.input, func(t *testing.T) {
-			res, err := Parse(testcase.input)
+			res, err := parser.Parse(testcase.input)
 			if testcase.err != nil {
 				require.Equal(t, testcase.err, err)
 			} else {
@@ -63,7 +64,7 @@ func TestEmptyErrorAndComments(t *testing.T) {
 		})
 
 		t.Run(testcase.input+"-Strict DDL", func(t *testing.T) {
-			res, err := ParseStrictDDL(testcase.input)
+			res, err := parser.ParseStrictDDL(testcase.input)
 			if testcase.err != nil {
 				require.Equal(t, testcase.err, err)
 			} else {

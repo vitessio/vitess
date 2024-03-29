@@ -26,9 +26,9 @@ import (
 
 var (
 	retryDelay          = 5 * time.Second
-	maxTimeToRetryError time.Duration // default behavior is to keep retrying, for backward compatibility
+	maxTimeToRetryError time.Duration // Default behavior is to keep retrying, for backward compatibility
 
-	tabletTypesStr = "in_order:REPLICA,PRIMARY"
+	tabletTypesStr = "in_order:REPLICA,PRIMARY" // Default value
 
 	relayLogMaxSize  = 250000
 	relayLogMaxItems = 5000
@@ -45,10 +45,6 @@ func registerVReplicationFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&retryDelay, "vreplication_retry_delay", retryDelay, "delay before retrying a failed workflow event in the replication phase")
 	fs.DurationVar(&maxTimeToRetryError, "vreplication_max_time_to_retry_on_error", maxTimeToRetryError, "stop automatically retrying when we've had consecutive failures with the same error for this long after the first occurrence")
 
-	// these are the default tablet_types that will be used by the tablet picker to find source tablets for a vreplication stream
-	// it can be overridden by passing a different list to the MoveTables or Reshard commands
-	fs.StringVar(&tabletTypesStr, "vreplication_tablet_type", tabletTypesStr, "comma separated list of tablet types used as a source")
-
 	fs.IntVar(&relayLogMaxSize, "relay_log_max_size", relayLogMaxSize, "Maximum buffer size (in bytes) for VReplication target buffering. If single rows are larger than this, a single row is buffered at a time.")
 	fs.IntVar(&relayLogMaxItems, "relay_log_max_items", relayLogMaxItems, "Maximum number of rows for VReplication target buffering.")
 
@@ -62,12 +58,11 @@ func registerVReplicationFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&vreplicationHeartbeatUpdateInterval, "vreplication_heartbeat_update_interval", vreplicationHeartbeatUpdateInterval, "Frequency (in seconds, default 1, max 60) at which the time_updated column of a vreplication stream when idling")
 	fs.BoolVar(&vreplicationStoreCompressedGTID, "vreplication_store_compressed_gtid", vreplicationStoreCompressedGTID, "Store compressed gtids in the pos column of the sidecar database's vreplication table")
 
-	// deprecated flags (7.0), however there are several e2e tests that still depend on them
-	fs.Duration("vreplication_healthcheck_topology_refresh", 30*time.Second, "refresh interval for re-reading the topology")
-	fs.Duration("vreplication_healthcheck_retry_delay", 5*time.Second, "healthcheck retry delay")
-	fs.Duration("vreplication_healthcheck_timeout", 1*time.Minute, "healthcheck retry delay")
-
 	fs.IntVar(&vreplicationParallelInsertWorkers, "vreplication-parallel-insert-workers", vreplicationParallelInsertWorkers, "Number of parallel insertion workers to use during copy phase. Set <= 1 to disable parallelism, or > 1 to enable concurrent insertion during copy phase.")
+
+	// Deprecated and ignored in v19.
+	fs.String("vreplication_tablet_type", tabletTypesStr, "Comma-separated list of tablet types used as a source.")
+	fs.MarkDeprecated("vreplication_tablet_type", "As of v19 this is ignored and will be removed in a future release.")
 }
 
 func init() {

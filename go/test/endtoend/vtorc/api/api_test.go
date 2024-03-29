@@ -37,21 +37,18 @@ func TestAPIEndpoints(t *testing.T) {
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, nil, cluster.VTOrcConfiguration{
 		PreventCrossDataCenterPrimaryFailover: true,
 		RecoveryPeriodBlockSeconds:            5,
-		// The default topo refresh time is 3 seconds. We are intentionally making it slower for the test, so that we have time to verify
-		// the /debug/health output before and after the first refresh runs.
-		TopologyRefreshSeconds: 10,
 	}, 1, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	vtorc := clusterInfo.ClusterInstance.VTOrcProcesses[0]
 	// Call API with retry to ensure VTOrc is up
 	status, resp := utils.MakeAPICallRetry(t, vtorc, "/debug/health", func(code int, response string) bool {
-		return code == 0
+		return code != 200
 	})
-	// When VTOrc is up and hasn't run the topo-refresh, is should be healthy but HasDiscovered should be false.
-	assert.Equal(t, 500, status)
+	// Verify when VTOrc is healthy, it has also run the first discovery.
+	assert.Equal(t, 200, status)
 	assert.Contains(t, resp, `"Healthy": true,`)
-	assert.Contains(t, resp, `"DiscoveredOnce": false`)
+	assert.Contains(t, resp, `"DiscoveredOnce": true`)
 
 	// find primary from topo
 	primary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
@@ -106,7 +103,7 @@ func TestAPIEndpoints(t *testing.T) {
 
 	t.Run("Replication Analysis API", func(t *testing.T) {
 		// use vtctlclient to stop replication
-		_, err := clusterInfo.ClusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("StopReplication", replica.Alias)
+		_, err := clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("StopReplication", replica.Alias)
 		require.NoError(t, err)
 
 		// We know VTOrc won't fix this since we disabled global recoveries!

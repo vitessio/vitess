@@ -86,7 +86,7 @@ func NewBackgroundClient(throttler *Throttler, appName throttlerapp.Name, checkT
 // ThrottleCheckOK checks the throttler, and returns 'true' when the throttler is satisfied.
 // It does not sleep.
 // The function caches results for a brief amount of time, hence it's safe and efficient to
-// be called very frequenty.
+// be called very frequently.
 // The function is not thread safe.
 func (c *Client) ThrottleCheckOK(ctx context.Context, overrideAppName throttlerapp.Name) (throttleCheckOK bool) {
 	if c == nil {
@@ -117,7 +117,7 @@ func (c *Client) ThrottleCheckOK(ctx context.Context, overrideAppName throttlera
 
 }
 
-// ThrottleCheckOKOrWait checks the throttler; if throttler is satisfied, the function returns 'true' mmediately,
+// ThrottleCheckOKOrWait checks the throttler; if throttler is satisfied, the function returns 'true' immediately,
 // otherwise it briefly sleeps and returns 'false'.
 // Non-empty appName overrides the default appName.
 // The function is not thread safe.
@@ -129,7 +129,7 @@ func (c *Client) ThrottleCheckOKOrWaitAppName(ctx context.Context, appName throt
 	return ok
 }
 
-// ThrottleCheckOKOrWait checks the throttler; if throttler is satisfied, the function returns 'true' mmediately,
+// ThrottleCheckOKOrWait checks the throttler; if throttler is satisfied, the function returns 'true' immediately,
 // otherwise it briefly sleeps and returns 'false'.
 // The function is not thread safe.
 func (c *Client) ThrottleCheckOKOrWait(ctx context.Context) bool {

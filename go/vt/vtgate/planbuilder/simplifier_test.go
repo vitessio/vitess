@@ -21,19 +21,15 @@ import (
 	"fmt"
 	"testing"
 
-	"vitess.io/vitess/go/test/vschemawrapper"
-
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"github.com/stretchr/testify/assert"
-
-	"vitess.io/vitess/go/vt/vtgate/simplifier"
-
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/test/vschemawrapper"
 	"vitess.io/vitess/go/vt/log"
-
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/simplifier"
 )
 
 // TestSimplifyBuggyQuery should be used to whenever we get a planner bug reported
@@ -45,10 +41,11 @@ func TestSimplifyBuggyQuery(t *testing.T) {
 	vschema := &vschemawrapper.VSchemaWrapper{
 		V:       loadSchema(t, "vschemas/schema.json", true),
 		Version: Gen4,
+		Env:     vtenv.NewTestEnv(),
 	}
-	stmt, reserved, err := sqlparser.Parse2(query)
+	stmt, reserved, err := sqlparser.NewTestParser().Parse2(query)
 	require.NoError(t, err)
-	rewritten, _ := sqlparser.RewriteAST(sqlparser.CloneStatement(stmt), vschema.CurrentDb(), sqlparser.SQLSelectLimitUnset, "", nil, nil)
+	rewritten, _ := sqlparser.RewriteAST(sqlparser.CloneStatement(stmt), vschema.CurrentDb(), sqlparser.SQLSelectLimitUnset, "", nil, nil, nil)
 	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
 
 	simplified := simplifier.SimplifyStatement(
@@ -67,10 +64,11 @@ func TestSimplifyPanic(t *testing.T) {
 	vschema := &vschemawrapper.VSchemaWrapper{
 		V:       loadSchema(t, "vschemas/schema.json", true),
 		Version: Gen4,
+		Env:     vtenv.NewTestEnv(),
 	}
-	stmt, reserved, err := sqlparser.Parse2(query)
+	stmt, reserved, err := sqlparser.NewTestParser().Parse2(query)
 	require.NoError(t, err)
-	rewritten, _ := sqlparser.RewriteAST(sqlparser.CloneStatement(stmt), vschema.CurrentDb(), sqlparser.SQLSelectLimitUnset, "", nil, nil)
+	rewritten, _ := sqlparser.RewriteAST(sqlparser.CloneStatement(stmt), vschema.CurrentDb(), sqlparser.SQLSelectLimitUnset, "", nil, nil, nil)
 	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
 
 	simplified := simplifier.SimplifyStatement(
@@ -88,19 +86,20 @@ func TestUnsupportedFile(t *testing.T) {
 	vschema := &vschemawrapper.VSchemaWrapper{
 		V:       loadSchema(t, "vschemas/schema.json", true),
 		Version: Gen4,
+		Env:     vtenv.NewTestEnv(),
 	}
 	fmt.Println(vschema)
 	for _, tcase := range readJSONTests("unsupported_cases.txt") {
 		t.Run(tcase.Query, func(t *testing.T) {
 			log.Errorf("unsupported_cases.txt - %s", tcase.Query)
-			stmt, reserved, err := sqlparser.Parse2(tcase.Query)
+			stmt, reserved, err := sqlparser.NewTestParser().Parse2(tcase.Query)
 			require.NoError(t, err)
 			_, ok := stmt.(sqlparser.SelectStatement)
 			if !ok {
 				t.Skip()
 				return
 			}
-			rewritten, err := sqlparser.RewriteAST(stmt, vschema.CurrentDb(), sqlparser.SQLSelectLimitUnset, "", nil, nil)
+			rewritten, err := sqlparser.RewriteAST(stmt, vschema.CurrentDb(), sqlparser.SQLSelectLimitUnset, "", nil, nil, nil)
 			if err != nil {
 				t.Skip()
 			}
@@ -109,7 +108,7 @@ func TestUnsupportedFile(t *testing.T) {
 			reservedVars := sqlparser.NewReservedVars("vtg", reserved)
 			ast := rewritten.AST
 			origQuery := sqlparser.String(ast)
-			stmt, _, _ = sqlparser.Parse2(tcase.Query)
+			stmt, _, _ = sqlparser.NewTestParser().Parse2(tcase.Query)
 			simplified := simplifier.SimplifyStatement(
 				stmt.(sqlparser.SelectStatement),
 				vschema.CurrentDb(),
@@ -130,11 +129,11 @@ func TestUnsupportedFile(t *testing.T) {
 }
 
 func keepSameError(query string, reservedVars *sqlparser.ReservedVars, vschema *vschemawrapper.VSchemaWrapper, needs *sqlparser.BindVarNeeds) func(statement sqlparser.SelectStatement) bool {
-	stmt, _, err := sqlparser.Parse2(query)
+	stmt, _, err := sqlparser.NewTestParser().Parse2(query)
 	if err != nil {
 		panic(err)
 	}
-	rewritten, _ := sqlparser.RewriteAST(stmt, vschema.CurrentDb(), sqlparser.SQLSelectLimitUnset, "", nil, nil)
+	rewritten, _ := sqlparser.RewriteAST(stmt, vschema.CurrentDb(), sqlparser.SQLSelectLimitUnset, "", nil, nil, nil)
 	ast := rewritten.AST
 	_, expected := BuildFromStmt(context.Background(), query, ast, reservedVars, vschema, rewritten.BindVarNeeds, true, true)
 	if expected == nil {
@@ -169,7 +168,7 @@ func keepPanicking(query string, reservedVars *sqlparser.ReservedVars, vschema *
 		return false
 	}
 
-	stmt, _, err := sqlparser.Parse2(query)
+	stmt, _, err := sqlparser.NewTestParser().Parse2(query)
 	if err != nil {
 		panic(err.Error())
 	}

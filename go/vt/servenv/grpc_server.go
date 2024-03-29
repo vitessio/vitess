@@ -99,6 +99,9 @@ var (
 	// even when there are no active streams (RPCs). If false, and client sends ping when
 	// there are no active streams, server will send GOAWAY and close the connection.
 	gRPCKeepAliveEnforcementPolicyPermitWithoutStream bool
+
+	gRPCKeepaliveTime    = 10 * time.Second
+	gRPCKeepaliveTimeout = 10 * time.Second
 )
 
 // TLS variables.
@@ -141,6 +144,8 @@ func RegisterGRPCServerFlags() {
 		fs.StringVar(&gRPCCRL, "grpc_crl", gRPCCRL, "path to a certificate revocation list in PEM format, client certificates will be further verified against this file during TLS handshake")
 		fs.BoolVar(&gRPCEnableOptionalTLS, "grpc_enable_optional_tls", gRPCEnableOptionalTLS, "enable optional TLS mode when a server accepts both TLS and plain-text connections on the same port")
 		fs.StringVar(&gRPCServerCA, "grpc_server_ca", gRPCServerCA, "path to server CA in PEM format, which will be combine with server cert, return full certificate chain to clients")
+		fs.DurationVar(&gRPCKeepaliveTime, "grpc_server_keepalive_time", gRPCKeepaliveTime, "After a duration of this time, if the server doesn't see any activity, it pings the client to see if the transport is still alive.")
+		fs.DurationVar(&gRPCKeepaliveTimeout, "grpc_server_keepalive_timeout", gRPCKeepaliveTimeout, "After having pinged for keepalive check, the server waits for a duration of Timeout and if no activity is seen even after that the connection is closed.")
 	})
 }
 
@@ -233,6 +238,8 @@ func createGRPCServer() {
 	ka := keepalive.ServerParameters{
 		MaxConnectionAge:      gRPCMaxConnectionAge,
 		MaxConnectionAgeGrace: gRPCMaxConnectionAgeGrace,
+		Time:                  gRPCKeepaliveTime,
+		Timeout:               gRPCKeepaliveTimeout,
 	}
 	opts = append(opts, grpc.KeepaliveParams(ka))
 

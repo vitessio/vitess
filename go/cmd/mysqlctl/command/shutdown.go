@@ -30,7 +30,6 @@ var Shutdown = &cobra.Command{
 	Use:   "shutdown",
 	Short: "Shuts down mysqld, without removing any files.",
 	Long: "Stop a `mysqld` instance that was previously started with `init` or `start`.\n\n" +
-
 		"For large `mysqld` instances, you may need to extend the `wait_time` to shutdown cleanly.",
 	Example: `mysqlctl --tablet_uid 101 --alsologtostderr shutdown`,
 	Args:    cobra.NoArgs,
@@ -45,15 +44,15 @@ var shutdownArgs = struct {
 
 func commandShutdown(cmd *cobra.Command, args []string) error {
 	// There ought to be an existing my.cnf, so use it to find mysqld.
-	mysqld, cnf, err := mysqlctl.OpenMysqldAndMycnf(tabletUID)
+	mysqld, cnf, err := mysqlctl.OpenMysqldAndMycnf(tabletUID, collationEnv)
 	if err != nil {
 		return fmt.Errorf("failed to find mysql config: %v", err)
 	}
 	defer mysqld.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), shutdownArgs.WaitTime)
+	ctx, cancel := context.WithTimeout(context.Background(), shutdownArgs.WaitTime+10*time.Second)
 	defer cancel()
-	if err := mysqld.Shutdown(ctx, cnf, true); err != nil {
+	if err := mysqld.Shutdown(ctx, cnf, true, shutdownArgs.WaitTime); err != nil {
 		return fmt.Errorf("failed shutdown mysql: %v", err)
 	}
 	return nil

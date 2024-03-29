@@ -218,24 +218,6 @@ func main() {
 	writeFile(dockerComposeFile, "docker-compose.yml")
 }
 
-func applyFilePatch(dockerYaml []byte, patchFile string) []byte {
-	yamlPatch, err := os.ReadFile(patchFile)
-	if err != nil {
-		log.Fatalf("reading yaml patch file %s: %s", patchFile, err)
-	}
-
-	patch, err := yamlpatch.DecodePatch(yamlPatch)
-	if err != nil {
-		log.Fatalf("decoding patch failed: %s", err)
-	}
-
-	bs, err := patch.Apply(dockerYaml)
-	if err != nil {
-		log.Fatalf("applying patch failed: %s", err)
-	}
-	return bs
-}
-
 func applyJsonInMemoryPatch(vSchemaFile []byte, patchString string) []byte {
 	patch, err := jsonpatch.DecodePatch([]byte(patchString))
 	if err != nil {
@@ -446,7 +428,7 @@ func applyKeyspaceDependentPatches(
 		dockerComposeFile = applyShardPatches(dockerComposeFile, tabAlias, shard, keyspaceData, externalDbInfoMap, opts)
 	} else {
 		// Determine shard range
-		for i := 0; i < keyspaceData.shards; i++ {
+		for i := range keyspaceData.shards {
 			if i == 0 {
 				shard = fmt.Sprintf("-%x", interval)
 			} else if i == (keyspaceData.shards - 1) {
@@ -517,28 +499,6 @@ func applyShardPatches(
 	return dockerComposeFile
 }
 
-func generateDefaultShard(tabAlias int, shard string, keyspaceData keyspaceInfo, opts vtOptions) string {
-	aliases := []int{tabAlias + 1} // primary alias, e.g. 201
-	for i := 0; i < keyspaceData.replicaTablets; i++ {
-		aliases = append(aliases, tabAlias+2+i) // replica aliases, e.g. 202, 203, ...
-	}
-	tabletDepends := make([]string, len(aliases))
-	for i, tabletId := range aliases {
-		tabletDepends[i] = fmt.Sprintf("vttablet%d: {condition : service_healthy}", tabletId)
-	}
-	// Wait on all shard tablets to be healthy
-	dependsOn := "depends_on: {" + strings.Join(tabletDepends, ", ") + "}"
-
-	return fmt.Sprintf(`
-- op: add
-  path: /services/init_shard_primary%[2]d
-  value:
-    image: vitess/lite:${VITESS_TAG:-latest}
-    command: ["sh", "-c", "/vt/bin/vtctldclient %[5]s InitShardPrimary --force %[4]s/%[3]s %[6]s-%[2]d "]
-    %[1]s
-`, dependsOn, aliases[0], shard, keyspaceData.keyspace, opts.topologyFlags, opts.cell)
-}
-
 func generateExternalPrimary(
 	tabAlias int,
 	shard string,
@@ -548,7 +508,7 @@ func generateExternalPrimary(
 ) string {
 
 	aliases := []int{tabAlias + 1} // primary alias, e.g. 201
-	for i := 0; i < keyspaceData.replicaTablets; i++ {
+	for i := range keyspaceData.replicaTablets {
 		aliases = append(aliases, tabAlias+2+i) // replica aliases, e.g. 202, 203, ...
 	}
 
@@ -558,7 +518,7 @@ func generateExternalPrimary(
 	if dbInfo.dbName != "" {
 		externalDb = "1"
 	} else {
-		return fmt.Sprintf(``)
+		return ""
 	}
 
 	return fmt.Sprintf(`
@@ -611,7 +571,7 @@ func applyTabletPatches(
 		dbInfo = val
 	}
 	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateDefaultTablet(tabAlias+1, shard, "primary", keyspaceData.keyspace, dbInfo, opts))
-	for i := 0; i < keyspaceData.replicaTablets; i++ {
+	for i := range keyspaceData.replicaTablets {
 		dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateDefaultTablet(tabAlias+2+i, shard, "replica", keyspaceData.keyspace, dbInfo, opts))
 	}
 	return dockerComposeFile

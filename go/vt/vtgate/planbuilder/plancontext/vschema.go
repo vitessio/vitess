@@ -6,6 +6,7 @@ import (
 
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -41,6 +42,7 @@ type VSchema interface {
 	Planner() PlannerVersion
 	SetPlannerVersion(pv PlannerVersion)
 	ConnCollation() collations.ID
+	Environment() *vtenv.Environment
 
 	// ErrorIfShardedF will return an error if the keyspace is sharded,
 	// and produce a warning if the vtgate if configured to do so
@@ -56,6 +58,11 @@ type VSchema interface {
 
 	// ForeignKeyMode returns the foreign_key flag value
 	ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error)
+
+	// KeyspaceError returns any error in the keyspace vschema.
+	KeyspaceError(keyspace string) error
+
+	GetForeignKeyChecksState() *bool
 
 	// GetVSchema returns the latest cached vindexes.VSchema
 	GetVSchema() *vindexes.VSchema
