@@ -41,7 +41,7 @@ Starting this release, all unmanaged tablets should specify this flag.
 
 #### <a id="durabler-interface-method-renaming"/>`Durabler` interface method renaming
 
-The methods of [the `Durabler` interface](https://github.com/timvaillancourt/vitess/blob/main/go/vt/vtctl/reparentutil/durability.go#L70-L79) in `go/vt/vtctl/reparentutil` were renamed to be public _(capitalized)_ methods to make it easier to integrate custom Durability Policies from external packages. See [RFC for details](https://github.com/vitessio/vitess/issues/15544).
+The methods of [the `Durabler` interface](https://github.com/vitessio/vitess/blob/main/go/vt/vtctl/reparentutil/durability.go#L70-L79) in `go/vt/vtctl/reparentutil` were renamed to be public _(capitalized)_ methods to make it easier to integrate custom Durability Policies from external packages. See [RFC for details](https://github.com/vitessio/vitess/issues/15544).
 
 Users of custom Durability Policies must rename private `Durabler` methods.
 
