@@ -1320,12 +1320,13 @@ func (c *Cluster) getTablets(ctx context.Context) ([]*vtadminpb.Tablet, error) {
 	}
 
 	var (
-		m       sync.Mutex
-		wg      sync.WaitGroup
-		tablets []*vtadminpb.Tablet
+		m  sync.Mutex
+		wg sync.WaitGroup
 	)
 
-	for _, t := range res.Tablets {
+	tablets := make([]*vtadminpb.Tablet, len(res.Tablets))
+
+	for i, t := range res.Tablets {
 		wg.Add(1)
 
 		go func(tablet *topodatapb.Tablet) {
@@ -1343,16 +1344,15 @@ func (c *Cluster) getTablets(ctx context.Context) ([]*vtadminpb.Tablet, error) {
 			m.Lock()
 			defer m.Unlock()
 
-			tablets = append(tablets, &vtadminpb.Tablet{
+			tablets[i] = &vtadminpb.Tablet{
 				Cluster: c.ToProto(),
 				Tablet:  tablet,
 				State:   state,
-			})
+			}
 		}(t)
 	}
 
 	wg.Wait()
-
 	return tablets, nil
 }
 

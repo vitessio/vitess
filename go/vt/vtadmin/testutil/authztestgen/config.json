@@ -87,6 +87,11 @@
                     "comment": "this structure exists primarily to support the VTExplain test cases; for GetSrvVSchema(s) itself, an empty but non-nil map is sufficient"
                 },
                 {
+                    "field": "GetTabletsResults",
+                    "type": "&struct{\nTablets []*topodatapb.Tablet\nError error}",
+                    "value": "Tablets: []*topodatapb.Tablet{\n{\nAlias: &topodatapb.TabletAlias{\nCell: \"zone1\",\nUid: 100,\n},\nKeyspace: \"test\",\nType: topodatapb.TabletType_REPLICA,\n},\n},\nError: nil,"
+                },
+                {
                     "field": "GetVSchemaResults",
                     "type": "map[string]struct{\nResponse *vtctldatapb.GetVSchemaResponse\nError error}",
                     "value": "\"test\": {\nResponse: &vtctldatapb.GetVSchemaResponse{\nVSchema: &vschemapb.Keyspace{},\n},\n},"
@@ -231,6 +236,11 @@
                     "field": "GetSrvVSchemaResults",
                     "type": "map[string]struct{\nResponse *vtctldatapb.GetSrvVSchemaResponse\nError error}",
                     "value": "\"other1\": {\nResponse: &vtctldatapb.GetSrvVSchemaResponse{\nSrvVSchema: &vschemapb.SrvVSchema{},\n},\n},"
+                },
+                {
+                    "field": "GetTabletsResults",
+                    "type": "&struct{\nTablets []*topodatapb.Tablet\nError error}",
+                    "value": "Tablets: []*topodatapb.Tablet{\n{\nAlias: &topodatapb.TabletAlias{\nCell: \"other1\",\nUid: 100,\n},\nKeyspace: \"otherks\",\nType: topodatapb.TabletType_REPLICA,\n},\n},\nError: nil,"
                 },
                 {
                     "field": "GetVSchemaResults",

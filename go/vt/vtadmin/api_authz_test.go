@@ -3639,6 +3639,22 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 						},
 					},
 				},
+				GetTabletsResults: &struct {
+					Tablets []*topodatapb.Tablet
+					Error   error
+				}{
+					Tablets: []*topodatapb.Tablet{
+						{
+							Alias: &topodatapb.TabletAlias{
+								Cell: "zone1",
+								Uid:  100,
+							},
+							Keyspace: "test",
+							Type:     topodatapb.TabletType_REPLICA,
+						},
+					},
+					Error: nil,
+				},
 				GetVSchemaResults: map[string]struct {
 					Response *vtctldatapb.GetVSchemaResponse
 					Error    error
@@ -3881,6 +3897,22 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 							SrvVSchema: &vschemapb.SrvVSchema{},
 						},
 					},
+				},
+				GetTabletsResults: &struct {
+					Tablets []*topodatapb.Tablet
+					Error   error
+				}{
+					Tablets: []*topodatapb.Tablet{
+						{
+							Alias: &topodatapb.TabletAlias{
+								Cell: "other1",
+								Uid:  100,
+							},
+							Keyspace: "otherks",
+							Type:     topodatapb.TabletType_REPLICA,
+						},
+					},
+					Error: nil,
 				},
 				GetVSchemaResults: map[string]struct {
 					Response *vtctldatapb.GetVSchemaResponse
