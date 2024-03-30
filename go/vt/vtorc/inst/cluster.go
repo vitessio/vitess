@@ -18,16 +18,6 @@ package inst
 
 // ClusterInfo makes for a cluster status/info summary
 type ClusterInfo struct {
-	Keyspace                                string
-	Shard                                   string
-	CountInstances                          uint
-	HeuristicLag                            int64
-	HasAutomatedPrimaryRecovery             bool
-	HasAutomatedIntermediatePrimaryRecovery bool
-}
-
-// ReadRecoveryInfo
-func (clusterInfo *ClusterInfo) ReadRecoveryInfo() {
-	clusterInfo.HasAutomatedPrimaryRecovery = true
-	clusterInfo.HasAutomatedIntermediatePrimaryRecovery = true
+	Keyspace string
+	Shard    string
 }

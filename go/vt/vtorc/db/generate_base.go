@@ -31,7 +31,6 @@ var TableNames = []string{
 	"vtorc_db_deployments",
 	"global_recovery_disable",
 	"topology_recovery_steps",
-	"database_instance_stale_binlog_coordinates",
 	"vitess_tablet",
 	"vitess_keyspace",
 	"vitess_shard",
@@ -54,31 +53,19 @@ CREATE TABLE database_instance (
 	binlog_format varchar(16) NOT NULL,
 	log_bin tinyint NOT NULL,
 	log_replica_updates tinyint NOT NULL,
-	binary_log_file varchar(128) NOT NULL,
-	binary_log_pos bigint NOT NULL,
 	source_host varchar(128) NOT NULL,
 	source_port smallint NOT NULL,
 	replica_sql_running tinyint NOT NULL,
 	replica_io_running tinyint NOT NULL,
-	source_log_file varchar(128) NOT NULL,
-	read_source_log_pos bigint NOT NULL,
-	relay_source_log_file varchar(128) NOT NULL,
-	exec_source_log_pos bigint NOT NULL,
 	replication_lag_seconds bigint DEFAULT NULL,
 	replica_lag_seconds bigint DEFAULT NULL,
 	read_only TINYint not null default 0,
 	last_sql_error TEXT not null default '',
 	last_io_error TEXT not null default '',
 	oracle_gtid TINYint not null default 0,
-	mariadb_gtid TINYint not null default 0,
-	relay_log_file varchar(128) not null default '',
-	relay_log_pos bigint not null default 0,
-	pseudo_gtid TINYint not null default 0,
 	replication_depth TINYint not null default 0,
 	has_replication_filters TINYint not null default 0,
-	data_center varchar(32) not null default '',
-	physical_environment varchar(32) not null default '',
-	is_co_primary TINYint not null default 0,
+	cell varchar(32) not null default '',
 	sql_delay int not null default 0,
 	binlog_server TINYint not null default 0,
 	supports_oracle_gtid TINYint not null default 0,
@@ -88,7 +75,6 @@ CREATE TABLE database_instance (
 	gtid_purged text not null default '',
 	has_replication_credentials TINYint not null default 0,
 	allow_tls TINYint not null default 0,
-	semi_sync_enforced TINYint not null default 0,
 	version_comment varchar(128) NOT NULL DEFAULT '',
 	major_version varchar(16) not null default '',
 	binlog_row_image varchar(16) not null default '',
@@ -102,7 +88,6 @@ CREATE TABLE database_instance (
 	ancestry_uuid text not null default '',
 	replication_sql_thread_state tinyint signed not null default 0,
 	replication_io_thread_state tinyint signed not null default 0,
-	region varchar(32) not null default '',
 	semi_sync_primary_timeout int NOT NULL DEFAULT 0,
 	semi_sync_primary_wait_for_replica_count int NOT NULL DEFAULT 0,
 	semi_sync_primary_status TINYint NOT NULL DEFAULT 0,
@@ -306,20 +291,6 @@ CREATE TABLE topology_recovery_steps (
 	message text NOT NULL,
 	PRIMARY KEY (recovery_step_id)
 )`,
-	`
-DROP TABLE IF EXISTS database_instance_stale_binlog_coordinates
-`,
-	`
-CREATE TABLE database_instance_stale_binlog_coordinates (
-	alias varchar(256) NOT NULL,
-	binary_log_file varchar(128) NOT NULL,
-	binary_log_pos bigint NOT NULL,
-	first_seen timestamp not null default (''),
-	PRIMARY KEY (alias)
-)`,
-	`
-CREATE INDEX first_seen_idx_database_instance_stale_binlog_coordinates ON database_instance_stale_binlog_coordinates (first_seen)
-	`,
 	`
 DROP TABLE IF EXISTS vitess_tablet
 `,

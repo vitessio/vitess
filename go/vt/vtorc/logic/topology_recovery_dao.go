@@ -193,9 +193,6 @@ func readRecoveries(whereCondition string, limit string, args []any) ([]*Topolog
 		topologyRecovery.AnalysisEntry.ClusterDetails.Shard = m.GetString("shard")
 
 		topologyRecovery.SuccessorAlias = m.GetString("successor_alias")
-
-		topologyRecovery.AnalysisEntry.ClusterDetails.ReadRecoveryInfo()
-
 		topologyRecovery.AllErrors = strings.Split(m.GetString("all_errors"), "\n")
 
 		topologyRecovery.DetectionID = m.GetInt64("detection_id")

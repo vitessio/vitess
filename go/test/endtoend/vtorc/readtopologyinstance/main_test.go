@@ -17,7 +17,6 @@ limitations under the License.
 package readtopologyinstance
 
 import (
-	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -86,8 +85,6 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	assert.Equal(t, "ROW", primaryInstance.BinlogFormat)
 	assert.Equal(t, "ON", primaryInstance.GTIDMode)
 	assert.Equal(t, "FULL", primaryInstance.BinlogRowImage)
-	assert.Contains(t, primaryInstance.SelfBinlogCoordinates.LogFile, fmt.Sprintf("vt-0000000%d-bin", primary.TabletUID))
-	assert.Greater(t, primaryInstance.SelfBinlogCoordinates.LogPos, uint32(0))
 	assert.True(t, primaryInstance.SemiSyncPrimaryEnabled)
 	assert.True(t, primaryInstance.SemiSyncReplicaEnabled)
 	assert.True(t, primaryInstance.SemiSyncPrimaryStatus)
@@ -136,8 +133,6 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	assert.Equal(t, "FULL", replicaInstance.BinlogRowImage)
 	assert.Equal(t, utils.Hostname, replicaInstance.SourceHost)
 	assert.Equal(t, primary.MySQLPort, replicaInstance.SourcePort)
-	assert.Contains(t, replicaInstance.SelfBinlogCoordinates.LogFile, fmt.Sprintf("vt-0000000%d-bin", replica.TabletUID))
-	assert.Greater(t, replicaInstance.SelfBinlogCoordinates.LogPos, uint32(0))
 	assert.False(t, replicaInstance.SemiSyncPrimaryEnabled)
 	assert.True(t, replicaInstance.SemiSyncReplicaEnabled)
 	assert.False(t, replicaInstance.SemiSyncPrimaryStatus)
@@ -154,12 +149,6 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	assert.Equal(t, replicaInstance.ReplicationSQLThreadState, inst.ReplicationThreadStateRunning)
 	assert.True(t, replicaInstance.ReplicationIOThreadRuning)
 	assert.True(t, replicaInstance.ReplicationSQLThreadRuning)
-	assert.Equal(t, replicaInstance.ReadBinlogCoordinates.LogFile, primaryInstance.SelfBinlogCoordinates.LogFile)
-	assert.Greater(t, replicaInstance.ReadBinlogCoordinates.LogPos, uint32(0))
-	assert.Equal(t, replicaInstance.ExecBinlogCoordinates.LogFile, primaryInstance.SelfBinlogCoordinates.LogFile)
-	assert.Greater(t, replicaInstance.ExecBinlogCoordinates.LogPos, uint32(0))
-	assert.Contains(t, replicaInstance.RelaylogCoordinates.LogFile, fmt.Sprintf("vt-0000000%d-relay", replica.TabletUID))
-	assert.Greater(t, replicaInstance.RelaylogCoordinates.LogPos, uint32(0))
 	assert.Empty(t, replicaInstance.LastIOError)
 	assert.Empty(t, replicaInstance.LastSQLError)
 	assert.EqualValues(t, 0, replicaInstance.SQLDelay)

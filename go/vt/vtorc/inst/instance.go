@@ -33,13 +33,11 @@ type Instance struct {
 	ServerUUID                   string
 	Version                      string
 	VersionComment               string
-	FlavorName                   string
 	ReadOnly                     bool
 	BinlogFormat                 string
 	BinlogRowImage               string
 	LogBinEnabled                bool
 	LogReplicationUpdatesEnabled bool
-	SelfBinlogCoordinates        BinlogCoordinates
 	SourceHost                   string
 	SourcePort                   int
 	SourceUUID                   string
@@ -54,12 +52,6 @@ type Instance struct {
 	GTIDMode              string
 	SupportsOracleGTID    bool
 	UsingOracleGTID       bool
-	UsingMariaDBGTID      bool
-	UsingPseudoGTID       bool // Legacy. Always 'false'
-	ReadBinlogCoordinates BinlogCoordinates
-	ExecBinlogCoordinates BinlogCoordinates
-	IsDetached            bool
-	RelaylogCoordinates   BinlogCoordinates
 	LastSQLError          string
 	LastIOError           string
 	SecondsBehindPrimary  sql.NullInt64
@@ -71,13 +63,9 @@ type Instance struct {
 	primaryExecutedGtidSet string // Not exported
 
 	ReplicationLagSeconds              sql.NullInt64
-	DataCenter                         string
-	Region                             string
-	PhysicalEnvironment                string
+	Cell                               string
 	ReplicationDepth                   uint
-	IsCoPrimary                        bool
 	HasReplicationCredentials          bool
-	SemiSyncEnforced                   bool
 	SemiSyncPrimaryEnabled             bool
 	SemiSyncReplicaEnabled             bool
 	SemiSyncPrimaryTimeout             uint64
@@ -132,64 +120,14 @@ func (instance *Instance) MajorVersionString() string {
 	return strings.Join(instance.MajorVersion(), ".")
 }
 
-// IsMariaDB checks whether this is any version of MariaDB
-func (instance *Instance) IsMariaDB() bool {
-	return strings.Contains(instance.Version, "MariaDB")
-}
-
-// IsPercona checks whether this is any version of Percona Server
-func (instance *Instance) IsPercona() bool {
-	return strings.Contains(instance.VersionComment, "Percona")
-}
-
 // IsBinlogServer checks whether this is any type of a binlog server
 func (instance *Instance) IsBinlogServer() bool {
 	return false
 }
 
-// IsOracleMySQL checks whether this is an Oracle MySQL distribution
-func (instance *Instance) IsOracleMySQL() bool {
-	if instance.IsMariaDB() {
-		return false
-	}
-	if instance.IsPercona() {
-		return false
-	}
-	if instance.IsBinlogServer() {
-		return false
-	}
-	return true
-}
-
-// applyFlavorName
-func (instance *Instance) applyFlavorName() {
-	if instance == nil {
-		return
-	}
-	if instance.IsOracleMySQL() {
-		instance.FlavorName = "MySQL"
-	} else if instance.IsMariaDB() {
-		instance.FlavorName = "MariaDB"
-	} else if instance.IsPercona() {
-		instance.FlavorName = "Percona"
-	} else {
-		instance.FlavorName = "unknown"
-	}
-}
-
-// FlavorNameAndMajorVersion returns a string of the combined
-// flavor and major version which is useful in some checks.
-func (instance *Instance) FlavorNameAndMajorVersion() string {
-	if instance.FlavorName == "" {
-		instance.applyFlavorName()
-	}
-
-	return instance.FlavorName + "-" + instance.MajorVersionString()
-}
-
 // IsReplica makes simple heuristics to decide whether this instance is a replica of another instance
 func (instance *Instance) IsReplica() bool {
-	return instance.SourceHost != "" && instance.SourceHost != "_" && instance.SourcePort != 0 && (instance.ReadBinlogCoordinates.LogFile != "" || instance.UsingGTID())
+	return instance.SourceHost != "" && instance.SourceHost != "_" && instance.SourcePort != 0 && instance.UsingGTID()
 }
 
 // IsPrimary makes simple heuristics to decide whether this instance is a primary (not replicating from any other server),
@@ -213,12 +151,7 @@ func (instance *Instance) ReplicationThreadsExist() bool {
 	return instance.ReplicationSQLThreadState.Exists() && instance.ReplicationIOThreadState.Exists()
 }
 
-// SQLThreadUpToDate returns true when the instance had consumed all relay logs.
-func (instance *Instance) SQLThreadUpToDate() bool {
-	return instance.ReadBinlogCoordinates.Equals(&instance.ExecBinlogCoordinates)
-}
-
-// UsingGTID returns true when this replica is currently replicating via GTID (either Oracle or MariaDB)
+// UsingGTID returns true when this replica is currently replicating via GTID
 func (instance *Instance) UsingGTID() bool {
-	return instance.UsingOracleGTID || instance.UsingMariaDBGTID
+	return instance.UsingOracleGTID
 }

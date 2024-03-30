@@ -182,7 +182,7 @@ func TestUpdateConfigValuesFromFlags(t *testing.T) {
 		}()
 
 		testConfig := newConfiguration()
-		testConfig.PreventCrossDataCenterPrimaryFailover = true
+		testConfig.PreventCrossCellPrimaryFailover = true
 		UpdateConfigValuesFromFlags()
 		require.Equal(t, testConfig, Config)
 	})

@@ -71,7 +71,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 	}
 
 	// TODO(sougou); deprecate ReduceReplicationAnalysisCount
-	args := sqlutils.Args(config.Config.ReasonableReplicationLagSeconds, ValidSecondsFromSeenToLastAttemptedCheck(), config.Config.ReasonableReplicationLagSeconds, keyspace, shard)
+	args := sqlutils.Args(ValidSecondsFromSeenToLastAttemptedCheck(), config.Config.ReasonableReplicationLagSeconds, keyspace, shard)
 	query := `
 	SELECT
 		vitess_tablet.info AS tablet_info,
@@ -87,20 +87,8 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		primary_instance.read_only AS read_only,
 		MIN(primary_instance.gtid_errant) AS gtid_errant, 
 		MIN(primary_instance.alias) IS NULL AS is_invalid,
-		MIN(primary_instance.data_center) AS data_center,
-		MIN(primary_instance.region) AS region,
-		MIN(primary_instance.physical_environment) AS physical_environment,
-		MIN(primary_instance.binary_log_file) AS binary_log_file,
-		MIN(primary_instance.binary_log_pos) AS binary_log_pos,
+		MIN(primary_instance.cell) AS cell,
 		MIN(primary_tablet.info) AS primary_tablet_info,
-		MIN(
-			IFNULL(
-				primary_instance.binary_log_file = database_instance_stale_binlog_coordinates.binary_log_file
-				AND primary_instance.binary_log_pos = database_instance_stale_binlog_coordinates.binary_log_pos
-				AND database_instance_stale_binlog_coordinates.first_seen < NOW() - interval ? second,
-				0
-			)
-		) AS is_stale_binlog_coordinates,
 		MIN(
 			primary_instance.last_checked <= primary_instance.last_seen
 			and primary_instance.last_attempted_check <= primary_instance.last_seen + interval ? second
@@ -115,7 +103,6 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 				OR substr(primary_instance.source_host, 1, 2) = '//'
 			)
 		) AS is_primary,
-		MIN(primary_instance.is_co_primary) AS is_co_primary,
 		MIN(primary_instance.gtid_mode) AS gtid_mode,
 		COUNT(replica_instance.server_id) AS count_replicas,
 		IFNULL(
@@ -172,7 +159,6 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		MIN(
 			primary_instance.semi_sync_replica_enabled
 		) AS semi_sync_replica_enabled,
-		SUM(replica_instance.is_co_primary) AS count_co_primary_replicas,
 		SUM(replica_instance.oracle_gtid) AS count_oracle_gtid_replicas,
 		IFNULL(
 			SUM(
@@ -181,9 +167,6 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			),
 			0
 		) AS count_valid_oracle_gtid_replicas,
-		SUM(
-			replica_instance.binlog_server
-		) AS count_binlog_server_replicas,
 		IFNULL(
 			SUM(
 				replica_instance.last_checked <= replica_instance.last_seen
@@ -201,17 +184,6 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			),
 			0
 		) AS count_valid_semi_sync_replicas,
-		MIN(
-			primary_instance.mariadb_gtid
-		) AS is_mariadb_gtid,
-		SUM(replica_instance.mariadb_gtid) AS count_mariadb_gtid_replicas,
-		IFNULL(
-			SUM(
-				replica_instance.last_checked <= replica_instance.last_seen
-				AND replica_instance.mariadb_gtid != 0
-			),
-			0
-		) AS count_valid_mariadb_gtid_replicas,
 		IFNULL(
 			SUM(
 				replica_instance.log_bin
@@ -285,9 +257,6 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			primary_instance.hostname = replica_instance.source_host
 			AND primary_instance.port = replica_instance.source_port
 		)
-		LEFT JOIN database_instance_stale_binlog_coordinates ON (
-			vitess_tablet.alias = database_instance_stale_binlog_coordinates.alias
-		)
 	WHERE
 		? IN ('', vitess_keyspace.keyspace)
 		AND ? IN ('', vitess_tablet.shard)
@@ -331,21 +300,8 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 
 		a.ShardPrimaryTermTimestamp = m.GetString("shard_primary_term_timestamp")
 		a.IsPrimary = m.GetBool("is_primary")
-		countCoPrimaryReplicas := m.GetUint("count_co_primary_replicas")
-		a.IsCoPrimary = m.GetBool("is_co_primary") || (countCoPrimaryReplicas > 0)
-		a.AnalyzedInstanceHostname = m.GetString("hostname")
-		a.AnalyzedInstancePort = m.GetInt("port")
 		a.AnalyzedInstanceAlias = topoproto.TabletAliasString(tablet.Alias)
 		a.AnalyzedInstancePrimaryAlias = topoproto.TabletAliasString(primaryTablet.Alias)
-		a.AnalyzedInstanceDataCenter = m.GetString("data_center")
-		a.AnalyzedInstanceRegion = m.GetString("region")
-		a.AnalyzedInstancePhysicalEnvironment = m.GetString("physical_environment")
-		a.AnalyzedInstanceBinlogCoordinates = BinlogCoordinates{
-			LogFile: m.GetString("binary_log_file"),
-			LogPos:  m.GetUint32("binary_log_pos"),
-			Type:    BinaryLog,
-		}
-		isStaleBinlogCoordinates := m.GetBool("is_stale_binlog_coordinates")
 		a.ClusterDetails.Keyspace = m.GetString("keyspace")
 		a.ClusterDetails.Shard = m.GetString("shard")
 		a.GTIDMode = m.GetString("gtid_mode")
@@ -359,13 +315,10 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		a.IsFailingToConnectToPrimary = m.GetBool("is_failing_to_connect_to_primary")
 		a.ReplicationStopped = m.GetBool("replication_stopped")
 		a.IsBinlogServer = m.GetBool("is_binlog_server")
-		a.ClusterDetails.ReadRecoveryInfo()
 		a.ErrantGTID = m.GetString("gtid_errant")
 
 		countValidOracleGTIDReplicas := m.GetUint("count_valid_oracle_gtid_replicas")
 		a.OracleGTIDImmediateTopology = countValidOracleGTIDReplicas == a.CountValidReplicas && a.CountValidReplicas > 0
-		countValidMariaDBGTIDReplicas := m.GetUint("count_valid_mariadb_gtid_replicas")
-		a.MariaDBGTIDImmediateTopology = countValidMariaDBGTIDReplicas == a.CountValidReplicas && a.CountValidReplicas > 0
 		countValidBinlogServerReplicas := m.GetUint("count_valid_binlog_server_replicas")
 		a.BinlogServerImmediateTopology = countValidBinlogServerReplicas == a.CountValidReplicas && a.CountValidReplicas > 0
 		a.SemiSyncPrimaryEnabled = m.GetBool("semi_sync_primary_enabled")
@@ -528,14 +481,8 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			a.Description = "Primary cannot be reached by vtorc but it has replicating replicas; possibly a network/host issue"
 			//
 		} else if a.IsPrimary && a.SemiSyncPrimaryEnabled && a.SemiSyncPrimaryStatus && a.SemiSyncPrimaryWaitForReplicaCount > 0 && a.SemiSyncPrimaryClients < a.SemiSyncPrimaryWaitForReplicaCount {
-			if isStaleBinlogCoordinates {
-				a.Analysis = LockedSemiSyncPrimary
-				a.Description = "Semi sync primary is locked since it doesn't get enough replica acknowledgements"
-			} else {
-				a.Analysis = LockedSemiSyncPrimaryHypothesis
-				a.Description = "Semi sync primary seems to be locked, more samplings needed to validate"
-			}
-			//
+			a.Analysis = LockedSemiSyncPrimaryHypothesis
+			a.Description = "Semi sync primary seems to be locked, more samplings needed to validate"
 		} else if a.IsPrimary && a.LastCheckValid && a.CountReplicas == 1 && a.CountValidReplicas == a.CountReplicas && a.CountValidReplicatingReplicas == 0 {
 			a.Analysis = PrimarySingleReplicaNotReplicating
 			a.Description = "Primary is reachable but its single replica is not replicating"
@@ -569,7 +516,6 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			}
 			if a.IsPrimary && a.CountReplicas > 1 &&
 				!a.OracleGTIDImmediateTopology &&
-				!a.MariaDBGTIDImmediateTopology &&
 				!a.BinlogServerImmediateTopology {
 				a.StructureAnalysis = append(a.StructureAnalysis, NoFailoverSupportStructureWarning)
 			}

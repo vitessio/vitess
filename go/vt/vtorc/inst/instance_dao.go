@@ -222,12 +222,6 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 		instance.LogReplicationUpdatesEnabled = fs.LogReplicaUpdates
 		instance.VersionComment = fs.VersionComment
 
-		if instance.LogBinEnabled && fs.PrimaryStatus != nil {
-			binlogPos, err := getBinlogCoordinatesFromPositionString(fs.PrimaryStatus.FilePosition)
-			instance.SelfBinlogCoordinates = binlogPos
-			errorChan <- err
-		}
-
 		instance.SemiSyncPrimaryEnabled = fs.SemiSyncPrimaryEnabled
 		instance.SemiSyncReplicaEnabled = fs.SemiSyncReplicaEnabled
 		instance.SemiSyncPrimaryWaitForReplicaCount = uint(fs.SemiSyncWaitForReplicaCount)
@@ -237,29 +231,27 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 		instance.SemiSyncPrimaryStatus = fs.SemiSyncPrimaryStatus
 		instance.SemiSyncReplicaStatus = fs.SemiSyncReplicaStatus
 
-		if instance.IsOracleMySQL() || instance.IsPercona() {
-			// Stuff only supported on Oracle / Percona MySQL
-			// ...
-			// @@gtid_mode only available in Oracle / Percona MySQL >= 5.6
-			instance.GTIDMode = fs.GtidMode
-			instance.ServerUUID = fs.ServerUuid
-			if fs.PrimaryStatus != nil {
-				GtidExecutedPos, err := replication.DecodePosition(fs.PrimaryStatus.Position)
-				errorChan <- err
-				if err == nil && GtidExecutedPos.GTIDSet != nil {
-					instance.ExecutedGtidSet = GtidExecutedPos.GTIDSet.String()
-				}
-			}
-			GtidPurgedPos, err := replication.DecodePosition(fs.GtidPurged)
+		// Stuff only supported on Oracle / Percona MySQL
+		// ...
+		// @@gtid_mode only available in Oracle / Percona MySQL >= 5.6
+		instance.GTIDMode = fs.GtidMode
+		instance.ServerUUID = fs.ServerUuid
+		if fs.PrimaryStatus != nil {
+			GtidExecutedPos, err := replication.DecodePosition(fs.PrimaryStatus.Position)
 			errorChan <- err
-			if err == nil && GtidPurgedPos.GTIDSet != nil {
-				instance.GtidPurged = GtidPurgedPos.GTIDSet.String()
+			if err == nil && GtidExecutedPos.GTIDSet != nil {
+				instance.ExecutedGtidSet = GtidExecutedPos.GTIDSet.String()
 			}
-			instance.BinlogRowImage = fs.BinlogRowImage
+		}
+		GtidPurgedPos, err := replication.DecodePosition(fs.GtidPurged)
+		errorChan <- err
+		if err == nil && GtidPurgedPos.GTIDSet != nil {
+			instance.GtidPurged = GtidPurgedPos.GTIDSet.String()
+		}
+		instance.BinlogRowImage = fs.BinlogRowImage
 
-			if instance.GTIDMode != "" && instance.GTIDMode != "OFF" {
-				instance.SupportsOracleGTID = true
-			}
+		if instance.GTIDMode != "" && instance.GTIDMode != "OFF" {
+			instance.SupportsOracleGTID = true
 		}
 	}
 
@@ -273,26 +265,11 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 		instance.ReplicationIOThreadRuning = instance.ReplicationIOThreadState.IsRunning()
 		instance.ReplicationSQLThreadRuning = instance.ReplicationSQLThreadState.IsRunning()
 
-		binlogPos, err := getBinlogCoordinatesFromPositionString(fs.ReplicationStatus.RelayLogSourceBinlogEquivalentPosition)
-		instance.ReadBinlogCoordinates = binlogPos
-		errorChan <- err
-
-		binlogPos, err = getBinlogCoordinatesFromPositionString(fs.ReplicationStatus.FilePosition)
-		instance.ExecBinlogCoordinates = binlogPos
-		errorChan <- err
-		instance.IsDetached, _ = instance.ExecBinlogCoordinates.ExtractDetachedCoordinates()
-
-		binlogPos, err = getBinlogCoordinatesFromPositionString(fs.ReplicationStatus.RelayLogFilePosition)
-		instance.RelaylogCoordinates = binlogPos
-		instance.RelaylogCoordinates.Type = RelayLog
-		errorChan <- err
-
 		instance.LastSQLError = emptyQuotesRegexp.ReplaceAllString(strconv.QuoteToASCII(fs.ReplicationStatus.LastSqlError), "")
 		instance.LastIOError = emptyQuotesRegexp.ReplaceAllString(strconv.QuoteToASCII(fs.ReplicationStatus.LastIoError), "")
 
 		instance.SQLDelay = fs.ReplicationStatus.SqlDelay
 		instance.UsingOracleGTID = fs.ReplicationStatus.AutoPosition
-		instance.UsingMariaDBGTID = fs.ReplicationStatus.UsingGtid
 		instance.SourceUUID = fs.ReplicationStatus.SourceUuid
 		instance.HasReplicationFilters = fs.ReplicationStatus.HasReplicationFilters
 
@@ -322,7 +299,7 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 	// No `goto Cleanup` after this point.
 	// -------------------------------------------------------------------------
 
-	instance.DataCenter = tablet.Alias.Cell
+	instance.Cell = tablet.Alias.Cell
 	instance.InstanceAlias = topoproto.TabletAliasString(tablet.Alias)
 
 	{
@@ -349,12 +326,7 @@ Cleanup:
 	}()
 
 	if instanceFound {
-		if instance.IsCoPrimary {
-			// Take co-primary into account, and avoid infinite loop
-			instance.AncestryUUID = fmt.Sprintf("%s,%s", instance.SourceUUID, instance.ServerUUID)
-		} else {
-			instance.AncestryUUID = fmt.Sprintf("%s,%s", instance.AncestryUUID, instance.ServerUUID)
-		}
+		instance.AncestryUUID = fmt.Sprintf("%s,%s", instance.AncestryUUID, instance.ServerUUID)
 		// Add replication group ancestry UUID as well. Otherwise, VTOrc thinks there are errant GTIDs in group
 		// members and its replicas, even though they are not.
 		instance.AncestryUUID = strings.Trim(instance.AncestryUUID, ",")
@@ -366,11 +338,6 @@ Cleanup:
 			redactedExecutedGtidSet, _ := NewOracleGtidSet(instance.ExecutedGtidSet)
 			for _, uuid := range strings.Split(instance.AncestryUUID, ",") {
 				if uuid != instance.ServerUUID {
-					redactedExecutedGtidSet.RemoveUUID(uuid)
-				}
-				if instance.IsCoPrimary && uuid == instance.ServerUUID {
-					// If this is a co-primary, then this server is likely to show its own generated GTIDs as errant,
-					// because its co-primary has not applied them yet
 					redactedExecutedGtidSet.RemoveUUID(uuid)
 				}
 			}
@@ -411,18 +378,6 @@ Cleanup:
 // getKeyspaceShardName returns a single string having both the keyspace and shard
 func getKeyspaceShardName(keyspace, shard string) string {
 	return fmt.Sprintf("%v:%v", keyspace, shard)
-}
-
-func getBinlogCoordinatesFromPositionString(position string) (BinlogCoordinates, error) {
-	pos, err := replication.DecodePosition(position)
-	if err != nil || pos.GTIDSet == nil {
-		return BinlogCoordinates{}, err
-	}
-	binLogCoordinates, err := ParseBinlogCoordinates(pos.String())
-	if err != nil {
-		return BinlogCoordinates{}, err
-	}
-	return *binLogCoordinates, nil
 }
 
 // ReadInstanceClusterAttributes will return the cluster name for a given instance by looking at its primary
@@ -466,13 +421,7 @@ func ReadInstanceClusterAttributes(instance *Instance) (err error) {
 	if primaryDataFound {
 		replicationDepth = primaryReplicationDepth + 1
 	}
-	isCoPrimary := false
-	if primaryHostname == instance.Hostname && primaryPort == instance.Port {
-		// co-primary calls for special case, in fear of the infinite loop
-		isCoPrimary = true
-	}
 	instance.ReplicationDepth = replicationDepth
-	instance.IsCoPrimary = isCoPrimary
 	instance.AncestryUUID = ancestryUUID
 	instance.primaryExecutedGtidSet = primaryExecutedGtidSet
 	return nil
@@ -508,26 +457,12 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.GTIDMode = m.GetString("gtid_mode")
 	instance.GtidPurged = m.GetString("gtid_purged")
 	instance.GtidErrant = m.GetString("gtid_errant")
-	instance.UsingMariaDBGTID = m.GetBool("mariadb_gtid")
-	instance.SelfBinlogCoordinates.LogFile = m.GetString("binary_log_file")
-	instance.SelfBinlogCoordinates.LogPos = m.GetUint32("binary_log_pos")
-	instance.ReadBinlogCoordinates.LogFile = m.GetString("source_log_file")
-	instance.ReadBinlogCoordinates.LogPos = m.GetUint32("read_source_log_pos")
-	instance.ExecBinlogCoordinates.LogFile = m.GetString("relay_source_log_file")
-	instance.ExecBinlogCoordinates.LogPos = m.GetUint32("exec_source_log_pos")
-	instance.IsDetached, _ = instance.ExecBinlogCoordinates.ExtractDetachedCoordinates()
-	instance.RelaylogCoordinates.LogFile = m.GetString("relay_log_file")
-	instance.RelaylogCoordinates.LogPos = m.GetUint32("relay_log_pos")
-	instance.RelaylogCoordinates.Type = RelayLog
 	instance.LastSQLError = m.GetString("last_sql_error")
 	instance.LastIOError = m.GetString("last_io_error")
 	instance.SecondsBehindPrimary = m.GetNullInt64("replication_lag_seconds")
 	instance.ReplicationLagSeconds = m.GetNullInt64("replica_lag_seconds")
 	instance.SQLDelay = m.GetUint32("sql_delay")
-	instance.DataCenter = m.GetString("data_center")
-	instance.Region = m.GetString("region")
-	instance.PhysicalEnvironment = m.GetString("physical_environment")
-	instance.SemiSyncEnforced = m.GetBool("semi_sync_enforced")
+	instance.Cell = m.GetString("cell")
 	instance.SemiSyncPrimaryEnabled = m.GetBool("semi_sync_primary_enabled")
 	instance.SemiSyncPrimaryTimeout = m.GetUint64("semi_sync_primary_timeout")
 	instance.SemiSyncPrimaryWaitForReplicaCount = m.GetUint("semi_sync_primary_wait_for_replica_count")
@@ -536,7 +471,6 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.SemiSyncPrimaryClients = m.GetUint("semi_sync_primary_clients")
 	instance.SemiSyncReplicaStatus = m.GetBool("semi_sync_replica_status")
 	instance.ReplicationDepth = m.GetUint("replication_depth")
-	instance.IsCoPrimary = m.GetBool("is_co_primary")
 	instance.HasReplicationCredentials = m.GetBool("has_replication_credentials")
 	instance.IsUpToDate = (m.GetUint("seconds_since_last_checked") <= config.Config.InstancePollSeconds)
 	instance.IsRecentlyChecked = (m.GetUint("seconds_since_last_checked") <= config.Config.InstancePollSeconds*5)
@@ -546,8 +480,6 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.AllowTLS = m.GetBool("allow_tls")
 	instance.InstanceAlias = m.GetString("alias")
 	instance.LastDiscoveryLatency = time.Duration(m.GetInt64("last_discovery_latency")) * time.Nanosecond
-
-	instance.applyFlavorName()
 
 	// problems
 	if !instance.IsLastCheckValid {
@@ -798,8 +730,6 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		"binlog_row_image",
 		"log_bin",
 		"log_replica_updates",
-		"binary_log_file",
-		"binary_log_pos",
 		"source_host",
 		"source_port",
 		"replica_sql_running",
@@ -815,27 +745,15 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		"gtid_mode",
 		"gtid_purged",
 		"gtid_errant",
-		"mariadb_gtid",
-		"pseudo_gtid",
-		"source_log_file",
-		"read_source_log_pos",
-		"relay_source_log_file",
-		"exec_source_log_pos",
-		"relay_log_file",
-		"relay_log_pos",
 		"last_sql_error",
 		"last_io_error",
 		"replication_lag_seconds",
 		"replica_lag_seconds",
 		"sql_delay",
-		"data_center",
-		"region",
-		"physical_environment",
+		"cell",
 		"replication_depth",
-		"is_co_primary",
 		"has_replication_credentials",
 		"allow_tls",
-		"semi_sync_enforced",
 		"semi_sync_primary_enabled",
 		"semi_sync_primary_timeout",
 		"semi_sync_primary_wait_for_replica_count",
@@ -877,8 +795,6 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		args = append(args, instance.BinlogRowImage)
 		args = append(args, instance.LogBinEnabled)
 		args = append(args, instance.LogReplicationUpdatesEnabled)
-		args = append(args, instance.SelfBinlogCoordinates.LogFile)
-		args = append(args, instance.SelfBinlogCoordinates.LogPos)
 		args = append(args, instance.SourceHost)
 		args = append(args, instance.SourcePort)
 		args = append(args, instance.ReplicationSQLThreadRuning)
@@ -894,27 +810,15 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		args = append(args, instance.GTIDMode)
 		args = append(args, instance.GtidPurged)
 		args = append(args, instance.GtidErrant)
-		args = append(args, instance.UsingMariaDBGTID)
-		args = append(args, instance.UsingPseudoGTID)
-		args = append(args, instance.ReadBinlogCoordinates.LogFile)
-		args = append(args, instance.ReadBinlogCoordinates.LogPos)
-		args = append(args, instance.ExecBinlogCoordinates.LogFile)
-		args = append(args, instance.ExecBinlogCoordinates.LogPos)
-		args = append(args, instance.RelaylogCoordinates.LogFile)
-		args = append(args, instance.RelaylogCoordinates.LogPos)
 		args = append(args, instance.LastSQLError)
 		args = append(args, instance.LastIOError)
 		args = append(args, instance.SecondsBehindPrimary)
 		args = append(args, instance.ReplicationLagSeconds)
 		args = append(args, instance.SQLDelay)
-		args = append(args, instance.DataCenter)
-		args = append(args, instance.Region)
-		args = append(args, instance.PhysicalEnvironment)
+		args = append(args, instance.Cell)
 		args = append(args, instance.ReplicationDepth)
-		args = append(args, instance.IsCoPrimary)
 		args = append(args, instance.HasReplicationCredentials)
 		args = append(args, instance.AllowTLS)
-		args = append(args, instance.SemiSyncEnforced)
 		args = append(args, instance.SemiSyncPrimaryEnabled)
 		args = append(args, instance.SemiSyncPrimaryTimeout)
 		args = append(args, instance.SemiSyncPrimaryWaitForReplicaCount)
@@ -1118,25 +1022,6 @@ func SnapshotTopologies() error {
 		}
 
 		return nil
-	}
-	return ExecDBWriteFunc(writeFunc)
-}
-
-func ExpireStaleInstanceBinlogCoordinates() error {
-	expireSeconds := config.Config.ReasonableReplicationLagSeconds * 2
-	if expireSeconds < config.StaleInstanceCoordinatesExpireSeconds {
-		expireSeconds = config.StaleInstanceCoordinatesExpireSeconds
-	}
-	writeFunc := func() error {
-		_, err := db.ExecVTOrc(`
-					delete from database_instance_stale_binlog_coordinates
-					where first_seen < NOW() - INTERVAL ? SECOND
-					`, expireSeconds,
-		)
-		if err != nil {
-			log.Error(err)
-		}
-		return err
 	}
 	return ExecDBWriteFunc(writeFunc)
 }

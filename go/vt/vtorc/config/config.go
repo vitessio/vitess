@@ -91,20 +91,20 @@ func RegisterFlags(fs *pflag.FlagSet) {
 // strictly expected from user.
 // TODO(sougou): change this to yaml parsing, and possible merge with tabletenv.
 type Configuration struct {
-	SQLite3DataFile                       string // full path to sqlite3 datafile
-	InstancePollSeconds                   uint   // Number of seconds between instance reads
-	SnapshotTopologiesIntervalHours       uint   // Interval in hour between snapshot-topologies invocation. Default: 0 (disabled)
-	ReasonableReplicationLagSeconds       int    // Above this value is considered a problem
-	AuditLogFile                          string // Name of log file for audit operations. Disabled when empty.
-	AuditToSyslog                         bool   // If true, audit messages are written to syslog
-	AuditToBackendDB                      bool   // If true, audit messages are written to the backend DB's `audit` table (default: true)
-	AuditPurgeDays                        uint   // Days after which audit entries are purged from the database
-	RecoveryPeriodBlockSeconds            int    // (overrides `RecoveryPeriodBlockMinutes`) The time for which an instance's recovery is kept "active", so as to avoid concurrent recoveries on smae instance as well as flapping
-	PreventCrossDataCenterPrimaryFailover bool   // When true (default: false), cross-DC primary failover are not allowed, vtorc will do all it can to only fail over within same DC, or else not fail over at all.
-	WaitReplicasTimeoutSeconds            int    // Timeout on amount of time to wait for the replicas in case of ERS. Should be a small value because we should fail-fast. Should not be larger than LockTimeout since that is the total time we use for an ERS.
-	TolerableReplicationLagSeconds        int    // Amount of replication lag that is considered acceptable for a tablet to be eligible for promotion when Vitess makes the choice of a new primary in PRS.
-	TopoInformationRefreshSeconds         int    // Timer duration on which VTOrc refreshes the keyspace and vttablet records from the topo-server.
-	RecoveryPollSeconds                   int    // Timer duration on which VTOrc recovery analysis runs
+	SQLite3DataFile                 string // full path to sqlite3 datafile
+	InstancePollSeconds             uint   // Number of seconds between instance reads
+	SnapshotTopologiesIntervalHours uint   // Interval in hour between snapshot-topologies invocation. Default: 0 (disabled)
+	ReasonableReplicationLagSeconds int    // Above this value is considered a problem
+	AuditLogFile                    string // Name of log file for audit operations. Disabled when empty.
+	AuditToSyslog                   bool   // If true, audit messages are written to syslog
+	AuditToBackendDB                bool   // If true, audit messages are written to the backend DB's `audit` table (default: true)
+	AuditPurgeDays                  uint   // Days after which audit entries are purged from the database
+	RecoveryPeriodBlockSeconds      int    // (overrides `RecoveryPeriodBlockMinutes`) The time for which an instance's recovery is kept "active", so as to avoid concurrent recoveries on smae instance as well as flapping
+	PreventCrossCellPrimaryFailover bool   // When true (default: false), cross-DC primary failover are not allowed, vtorc will do all it can to only fail over within same DC, or else not fail over at all.
+	WaitReplicasTimeoutSeconds      int    // Timeout on amount of time to wait for the replicas in case of ERS. Should be a small value because we should fail-fast. Should not be larger than LockTimeout since that is the total time we use for an ERS.
+	TolerableReplicationLagSeconds  int    // Amount of replication lag that is considered acceptable for a tablet to be eligible for promotion when Vitess makes the choice of a new primary in PRS.
+	TopoInformationRefreshSeconds   int    // Timer duration on which VTOrc refreshes the keyspace and vttablet records from the topo-server.
+	RecoveryPollSeconds             int    // Timer duration on which VTOrc recovery analysis runs
 }
 
 // ToJSONString will marshal this configuration as JSON
@@ -130,7 +130,7 @@ func UpdateConfigValuesFromFlags() {
 	Config.AuditToSyslog = auditToSyslog
 	Config.AuditPurgeDays = uint(auditPurgeDuration / (time.Hour * 24))
 	Config.RecoveryPeriodBlockSeconds = int(recoveryPeriodBlockDuration / time.Second)
-	Config.PreventCrossDataCenterPrimaryFailover = preventCrossCellFailover
+	Config.PreventCrossCellPrimaryFailover = preventCrossCellFailover
 	Config.WaitReplicasTimeoutSeconds = int(waitReplicasTimeout / time.Second)
 	Config.TolerableReplicationLagSeconds = int(tolerableReplicationLag / time.Second)
 	Config.TopoInformationRefreshSeconds = int(topoInformationRefreshDuration / time.Second)
@@ -165,19 +165,19 @@ func LogConfigValues() {
 
 func newConfiguration() *Configuration {
 	return &Configuration{
-		SQLite3DataFile:                       "file::memory:?mode=memory&cache=shared",
-		InstancePollSeconds:                   5,
-		SnapshotTopologiesIntervalHours:       0,
-		ReasonableReplicationLagSeconds:       10,
-		AuditLogFile:                          "",
-		AuditToSyslog:                         false,
-		AuditToBackendDB:                      false,
-		AuditPurgeDays:                        7,
-		RecoveryPeriodBlockSeconds:            30,
-		PreventCrossDataCenterPrimaryFailover: false,
-		WaitReplicasTimeoutSeconds:            30,
-		TopoInformationRefreshSeconds:         15,
-		RecoveryPollSeconds:                   1,
+		SQLite3DataFile:                 "file::memory:?mode=memory&cache=shared",
+		InstancePollSeconds:             5,
+		SnapshotTopologiesIntervalHours: 0,
+		ReasonableReplicationLagSeconds: 10,
+		AuditLogFile:                    "",
+		AuditToSyslog:                   false,
+		AuditToBackendDB:                false,
+		AuditPurgeDays:                  7,
+		RecoveryPeriodBlockSeconds:      30,
+		PreventCrossCellPrimaryFailover: false,
+		WaitReplicasTimeoutSeconds:      30,
+		TopoInformationRefreshSeconds:   15,
+		RecoveryPollSeconds:             1,
 	}
 }
 

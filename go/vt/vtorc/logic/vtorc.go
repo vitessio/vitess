@@ -371,7 +371,6 @@ func ContinuousDiscovery() {
 
 					go inst.ForgetLongUnseenInstances()
 					go inst.ExpireAudit()
-					go inst.ExpireStaleInstanceBinlogCoordinates()
 					go process.ExpireNodesHistory()
 					go process.ExpireAvailableNodes()
 					go ExpireRecoveryDetectionHistory()
