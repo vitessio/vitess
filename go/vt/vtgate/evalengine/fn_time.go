@@ -17,6 +17,7 @@ limitations under the License.
 package evalengine
 
 import (
+	"fmt"
 	"math"
 	"time"
 
@@ -119,6 +120,10 @@ type (
 		CallExpr
 	}
 
+	builtinSecToTime struct {
+		CallExpr
+	}
+
 	builtinTimeToSec struct {
 		CallExpr
 	}
@@ -187,6 +192,7 @@ var _ IR = (*builtinMonthName)(nil)
 var _ IR = (*builtinLastDay)(nil)
 var _ IR = (*builtinToDays)(nil)
 var _ IR = (*builtinFromDays)(nil)
+var _ IR = (*builtinSecToTime)(nil)
 var _ IR = (*builtinTimeToSec)(nil)
 var _ IR = (*builtinQuarter)(nil)
 var _ IR = (*builtinSecond)(nil)
@@ -1334,6 +1340,45 @@ func (call *builtinFromDays) compile(c *compiler) (ctype, error) {
 	c.asm.Fn_FROM_DAYS()
 	c.asm.jumpDestination(skip)
 	return ctype{Type: sqltypes.Date, Flag: arg.Flag | flagNullable}, nil
+}
+
+func (b *builtinSecToTime) eval(env *ExpressionEnv) (eval, error) {
+	arg, err := b.arg1(env)
+	if arg == nil {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	e := evalToDecimal(arg, 0, 0)
+	prec := min(evalDecimalPrecision(e), datetime.DefaultPrecision)
+	sec, _ := e.toFloat0()
+	return newEvalTime(datetime.NewTimeFromSeconds(sec), int(prec)), nil
+}
+
+func (call *builtinSecToTime) compile(c *compiler) (ctype, error) {
+	arg, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch {
+	case sqltypes.IsIntegral(arg.Type):
+		c.asm.Convert_xd(1, 0, 0)
+	case sqltypes.IsDateOrTime(arg.Type):
+		fmt.Println("time is this")
+		c.asm.Convert_xd(1, 0, 0)
+	case arg.Type == sqltypes.Decimal:
+	default:
+		c.asm.Convert_xd(1, 0, datetime.DefaultPrecision)
+	}
+
+	c.asm.Fn_SEC_TO_TIME(arg.Type)
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Time, Flag: arg.Flag}, nil
 }
 
 func (b *builtinTimeToSec) eval(env *ExpressionEnv) (eval, error) {

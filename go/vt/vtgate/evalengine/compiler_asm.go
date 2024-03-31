@@ -3914,6 +3914,22 @@ func (asm *assembler) Fn_FROM_DAYS() {
 	}, "FN FROM_DAYS INT64(SP-1)")
 }
 
+func (asm *assembler) Fn_SEC_TO_TIME(tt sqltypes.Type) {
+	asm.emit(func(env *ExpressionEnv) int {
+		e := env.vm.stack[env.vm.sp-1].(*evalDecimal)
+		prec := min(evalDecimalPrecision(e), datetime.DefaultPrecision)
+		sec, _ := e.toFloat0()
+		// if tt == sqltypes.TypeJSON {
+		// 	env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalTime(datetime.NewTimeFromSeconds(sec), datetime.DefaultPrecision)
+		// } else if sqltypes.IsDateOrTime(tt) {
+		// 	env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalTime(datetime.NewTimeFromSeconds(sec), int(prec))
+		// } else {
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalTime(datetime.NewTimeFromSeconds(sec), int(prec))
+		// }
+		return 1
+	}, "FN SEC_TO_TIME DECIMAL(SP-1)")
+}
+
 func (asm *assembler) Fn_TIME_TO_SEC() {
 	asm.emit(func(env *ExpressionEnv) int {
 		if env.vm.stack[env.vm.sp-1] == nil {

@@ -714,6 +714,36 @@ func NewTimeFromStd(t time.Time) Time {
 	}
 }
 
+func NewTimeFromSeconds(seconds float64) Time {
+	var neg bool
+	if seconds < 0 {
+		neg = true
+		seconds = -seconds
+	}
+
+	s := int64(seconds)
+	nsec := int(1e9 * (seconds - float64(s)))
+
+	h, s := s/3600, s%3600
+	m, s := s/60, s%60
+
+	if h >= 839 {
+		h, m, s, nsec = 838, 59, 59, 0
+	}
+
+	hour := uint16(h)
+	if neg {
+		hour |= negMask
+	}
+
+	return Time{
+		hour:       hour,
+		minute:     uint8(m),
+		second:     uint8(s),
+		nanosecond: uint32(nsec),
+	}
+}
+
 func NewDateTimeFromStd(t time.Time) DateTime {
 	return DateTime{
 		Date: NewDateFromStd(t),

@@ -141,6 +141,7 @@ var Cases = []TestCase{
 	{Run: FnLastDay},
 	{Run: FnToDays},
 	{Run: FnFromDays},
+	{Run: FnSecToTime},
 	{Run: FnTimeToSec},
 	{Run: FnQuarter},
 	{Run: FnSecond},
@@ -1970,6 +1971,42 @@ func FnFromDays(yield Query) {
 
 	for _, d := range days {
 		yield(fmt.Sprintf("FROM_DAYS(%s)", d), nil)
+	}
+}
+
+func FnSecToTime(yield Query) {
+	// for _, s := range inputConversions {
+	// 	yield(fmt.Sprintf("SEC_TO_TIME(%s)", s), nil)
+	// }
+
+	seconds := []string{
+		"0",
+		"0.99",
+		"1",
+		"-1.45632",
+		"366",
+		"365242",
+		"3652424",
+		"3652425",
+		"3652500",
+		"3652499",
+		"'3652499'",
+		"730669",
+		"730669.213",
+		"730669.99999999999",
+		"730669.213123321213",
+		"730669.213123",
+		"730669.213123",
+		"'12.12'",
+		"'730669.213123'",
+		"time '130:34:58.6'",
+		"time '-31:34:58'",
+		"cast(0b001 as json)",
+		"cast(0xFF666F6F626172FF as json)",
+	}
+
+	for _, s := range seconds {
+		yield(fmt.Sprintf("SEC_TO_TIME(%s)", s), nil)
 	}
 }
 
