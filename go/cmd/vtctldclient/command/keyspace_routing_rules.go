@@ -52,11 +52,8 @@ var (
 )
 
 func validateApplyKeyspaceRoutingRulesOptions(cmd *cobra.Command, args []string) error {
-	if applyKeyspaceRoutingRulesOptions.Rules != "" && applyKeyspaceRoutingRulesOptions.RulesFilePath != "" {
-		return fmt.Errorf("cannot pass both --rules (=%s) and --rules-file (=%s)", applyKeyspaceRoutingRulesOptions.Rules, applyKeyspaceRoutingRulesOptions.RulesFilePath)
-	}
-
-	if applyKeyspaceRoutingRulesOptions.Rules == "" && applyKeyspaceRoutingRulesOptions.RulesFilePath == "" {
+	opts := applyKeyspaceRoutingRulesOptions
+	if (opts.Rules != "" && opts.RulesFilePath != "") || (opts.Rules == "" && opts.RulesFilePath == "") {
 		return errors.New("must pass exactly one of --rules or --rules-file")
 	}
 	return nil
@@ -71,39 +68,38 @@ var applyKeyspaceRoutingRulesOptions = struct {
 }{}
 
 func commandApplyKeyspaceRoutingRules(cmd *cobra.Command, args []string) error {
-
+	opts := applyKeyspaceRoutingRulesOptions
 	cli.FinishedParsing(cmd)
 
 	var rulesBytes []byte
-	if applyKeyspaceRoutingRulesOptions.RulesFilePath != "" {
-		data, err := os.ReadFile(applyKeyspaceRoutingRulesOptions.RulesFilePath)
+	if opts.RulesFilePath != "" {
+		data, err := os.ReadFile(opts.RulesFilePath)
 		if err != nil {
 			return err
 		}
-
 		rulesBytes = data
 	} else {
-		rulesBytes = []byte(applyKeyspaceRoutingRulesOptions.Rules)
+		rulesBytes = []byte(opts.Rules)
 	}
 
 	krr := &vschemapb.KeyspaceRoutingRules{}
 	if err := json2.Unmarshal(rulesBytes, &krr); err != nil {
 		return err
 	}
-	// Round-trip so when we display the result it's readable.
+	// Round-trip so that when we display the result it's readable.
 	data, err := cli.MarshalJSON(krr)
 	if err != nil {
 		return err
 	}
 
-	if applyKeyspaceRoutingRulesOptions.DryRun {
+	if opts.DryRun {
 		fmt.Printf("[DRY RUN] Would have saved new KeyspaceRoutingRules object:\n%s\n", data)
 
-		if applyRoutingRulesOptions.SkipRebuild {
+		if opts.SkipRebuild {
 			fmt.Println("[DRY RUN] Would not have rebuilt VSchema graph, would have required operator to run RebuildVSchemaGraph for changes to take effect.")
 		} else {
 			fmt.Print("[DRY RUN] Would have rebuilt the VSchema graph")
-			if len(applyRoutingRulesOptions.Cells) == 0 {
+			if len(opts.Cells) == 0 {
 				fmt.Print(" in all cells\n")
 			} else {
 				fmt.Printf(" in the following cells: %s.\n", strings.Join(applyKeyspaceRoutingRulesOptions.Cells, ", "))
@@ -115,8 +111,8 @@ func commandApplyKeyspaceRoutingRules(cmd *cobra.Command, args []string) error {
 
 	_, err = client.ApplyKeyspaceRoutingRules(commandCtx, &vtctldatapb.ApplyKeyspaceRoutingRulesRequest{
 		KeyspaceRoutingRules: krr,
-		SkipRebuild:          applyKeyspaceRoutingRulesOptions.SkipRebuild,
-		RebuildCells:         applyKeyspaceRoutingRulesOptions.Cells,
+		SkipRebuild:          opts.SkipRebuild,
+		RebuildCells:         opts.Cells,
 	})
 	if err != nil {
 		return err
@@ -124,7 +120,7 @@ func commandApplyKeyspaceRoutingRules(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("New KeyspaceRoutingRules object:\n%s\nIf this is not what you expected, check the input data (as JSON parsing will skip unexpected fields).\n", data)
 
-	if applyRoutingRulesOptions.SkipRebuild {
+	if opts.SkipRebuild {
 		fmt.Println("Skipping rebuild of VSchema graph as requested, you will need to run RebuildVSchemaGraph for the changes to take effect.")
 	}
 
@@ -156,6 +152,5 @@ func init() {
 	ApplyKeyspaceRoutingRules.Flags().BoolVar(&applyKeyspaceRoutingRulesOptions.SkipRebuild, "skip-rebuild", false, "Skip rebuilding the SrvVSchema objects.")
 	ApplyKeyspaceRoutingRules.Flags().BoolVarP(&applyKeyspaceRoutingRulesOptions.DryRun, "dry-run", "d", false, "Validate the specified keyspace routing rules and note actions that would be taken, but do not actually apply the rules to the topo.")
 	Root.AddCommand(ApplyKeyspaceRoutingRules)
-
 	Root.AddCommand(GetKeyspaceRoutingRules)
 }

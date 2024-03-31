@@ -1532,7 +1532,7 @@ func (s *Server) validateRoutingRuleFlags(req *vtctldatapb.MoveTablesCreateReque
 		case req.NoRoutingRules:
 			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot use --no-routing-rules in a multi-tenant migration")
 		case mz.isPartial:
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot use run partial shard migration along with multi-tenant migration")
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot run partial shard migration along with multi-tenant migration")
 		}
 	}
 	return nil

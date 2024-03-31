@@ -280,8 +280,8 @@ func (ks *KeyspaceSchema) MarshalJSON() ([]byte, error) {
 		Sharded:         ks.Keyspace.Sharded,
 		Tables:          ks.Tables,
 		ForeignKeyMode:  ks.ForeignKeyMode.String(),
-		MultiTenantSpec: ks.MultiTenantSpec,
 		Vindexes:        ks.Vindexes,
+		MultiTenantSpec: ks.MultiTenantSpec,
 	}
 	if ks.Error != nil {
 		ksJ.Error = ks.Error.Error()
