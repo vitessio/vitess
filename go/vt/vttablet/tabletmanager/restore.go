@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
@@ -237,9 +238,15 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "--restore-to-pos and --restore-to-timestamp are mutually exclusive")
 	}
 	if request.RestoreToPos != "" {
-		pos, err := replication.DecodePosition(request.RestoreToPos)
+		pos, err := replication.DecodePositionDefaultFlavor(request.RestoreToPos, replication.Mysql56FlavorID)
 		if err != nil {
 			return vterrors.Wrapf(err, "restore failed: unable to decode --restore-to-pos: %s", request.RestoreToPos)
+		}
+		if !pos.MatchesFlavor(replication.Mysql56FlavorID) {
+			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "restore to position only supports MySQL GTID positions. Got: %v", request.RestoreToPos)
+		}
+		if _, ok := pos.GTIDSet.(replication.Mysql56GTIDSet); !ok {
+			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot get MySQL GTID value: %v", pos)
 		}
 		params.RestoreToPos = pos
 	}
