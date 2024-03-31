@@ -47,14 +47,23 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 )
 
+type MetricResult struct {
+	StatusCode int     `json:"StatusCode"`
+	Value      float64 `json:"Value"`
+	Threshold  float64 `json:"Threshold"`
+	Error      error   `json:"-"`
+	Message    string  `json:"Message"`
+}
+
 // CheckResult is the result for an app inquiring on a metric. It also exports as JSON via the API
 type CheckResult struct {
-	StatusCode      int     `json:"StatusCode"`
-	Value           float64 `json:"Value"`
-	Threshold       float64 `json:"Threshold"`
-	Error           error   `json:"-"`
-	Message         string  `json:"Message"`
-	RecentlyChecked bool    `json:"RecentlyChecked"`
+	StatusCode      int                      `json:"StatusCode"`
+	Value           float64                  `json:"Value"`
+	Threshold       float64                  `json:"Threshold"`
+	Error           error                    `json:"-"`
+	Message         string                   `json:"Message"`
+	RecentlyChecked bool                     `json:"RecentlyChecked"`
+	Metrics         map[string]*MetricResult `json:"Metrics"`
 }
 
 // NewCheckResult returns a CheckResult
