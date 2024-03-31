@@ -977,7 +977,7 @@ func (s *Server) getWorkflowState(ctx context.Context, targetKeyspace, workflowN
 		}
 		table := ts.Tables()[0]
 
-		if ts.IsMultiTenantMigration() {
+		if ts.IsMultiTenantMigration() { // traffic switching for multi-tenant migrations is all or nothing
 			keyspaceRoutingRules, err := topotools.GetKeyspaceRoutingRules(ctx, ts.TopoServer())
 			if err != nil {
 				return nil, nil, err

@@ -473,8 +473,8 @@ func TestMoveTablesDDLFlag(t *testing.T) {
 			defer env.close()
 			// This is the default and go does not marshal defaults
 			// for prototext fields so we use the default insert stmt.
-			//insert = fmt.Sprintf(`/insert into .vreplication\(.*on_ddl:%s.*`, onDDLAction)
-			//env.tmc.expectVRQuery(100, "/.*", &sqltypes.Result{})
+			// insert = fmt.Sprintf(`/insert into .vreplication\(.*on_ddl:%s.*`, onDDLAction)
+			// env.tmc.expectVRQuery(100, "/.*", &sqltypes.Result{})
 
 			// TODO: we cannot test the actual query generated w/o having a
 			// TabletManager. Importing the tabletmanager package, however, causes
@@ -522,8 +522,8 @@ func TestMoveTablesNoRoutingRules(t *testing.T) {
 	defer env.close()
 	// This is the default and go does not marshal defaults
 	// for prototext fields so we use the default insert stmt.
-	//insert = fmt.Sprintf(`/insert into .vreplication\(.*on_ddl:%s.*`, onDDLAction)
-	//env.tmc.expectVRQuery(100, "/.*", &sqltypes.Result{})
+	// insert = fmt.Sprintf(`/insert into .vreplication\(.*on_ddl:%s.*`, onDDLAction)
+	// env.tmc.expectVRQuery(100, "/.*", &sqltypes.Result{})
 
 	// TODO: we cannot test the actual query generated w/o having a
 	// TabletManager. Importing the tabletmanager package, however, causes
@@ -2431,7 +2431,6 @@ func TestKeyRangesEqualOptimization(t *testing.T) {
 				if tablet.Keyspace != targetKs || tablet.Type != topodatapb.TabletType_PRIMARY {
 					continue
 				}
-				//env.tmc.expectVRQuery(int(tablet.Alias.Uid), mzSelectFrozenQuery, &sqltypes.Result{})
 				// If we are doing a partial MoveTables, we will only perform the workflow
 				// stream creation / INSERT statment on the shard(s) we're migrating.
 				if len(tc.moveTablesReq.SourceShards) > 0 && !slices.Contains(tc.moveTablesReq.SourceShards, tablet.Shard) {

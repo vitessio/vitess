@@ -991,7 +991,7 @@ func buildShardRoutingRule(source *vschemapb.SrvVSchema, vschema *VSchema) {
 
 func buildKeyspaceRoutingRule(source *vschemapb.SrvVSchema, vschema *VSchema) {
 	vschema.KeyspaceRoutingRules = nil
-	if source.KeyspaceRoutingRules == nil || len(source.KeyspaceRoutingRules.Rules) == 0 {
+	if len(source.GetKeyspaceRoutingRules().GetRules()) == 0 {
 		return
 	}
 	rulesMap := topotools.GetKeyspaceRoutingRulesMap(source.KeyspaceRoutingRules)
