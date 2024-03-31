@@ -415,7 +415,7 @@ func getTabletPosition(t *testing.T, tablet *cluster.Vttablet) replication.Posit
 	require.NotNil(t, row)
 	gtidExecuted := row.AsString("gtid_executed", "")
 	require.NotEmpty(t, gtidExecuted)
-	pos, err := replication.DecodePositionDefaultFlavor(gtidExecuted, replication.Mysql56FlavorID)
+	pos, _, err := replication.DecodePositionMySQL56(gtidExecuted)
 	assert.NoError(t, err)
 	return pos
 }

@@ -223,18 +223,11 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 
 // getIncrementalFromPosGTIDSet turns the given string into a valid Mysql56GTIDSet
 func getIncrementalFromPosGTIDSet(incrementalFromPos string) (replication.Mysql56GTIDSet, error) {
-	pos, err := replication.DecodePositionDefaultFlavor(incrementalFromPos, replication.Mysql56FlavorID)
+	_, gtidSet, err := replication.DecodePositionMySQL56(incrementalFromPos)
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "cannot decode position in incremental backup: %v", incrementalFromPos)
 	}
-	if !pos.MatchesFlavor(replication.Mysql56FlavorID) {
-		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "incremental backup only supports MySQL GTID positions. Got: %v", incrementalFromPos)
-	}
-	ifPosGTIDSet, ok := pos.GTIDSet.(replication.Mysql56GTIDSet)
-	if !ok {
-		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot get MySQL GTID value: %v", pos)
-	}
-	return ifPosGTIDSet, nil
+	return gtidSet, nil
 }
 
 // executeIncrementalBackup runs an incremental backup, based on given 'incremental_from_pos', which can be:
@@ -269,7 +262,7 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 		params.Logger.Infof("auto evaluated incremental_from_pos: %s", params.IncrementalFromPos)
 	}
 
-	if _, err := replication.DecodePositionDefaultFlavor(params.IncrementalFromPos, replication.Mysql56FlavorID); err != nil {
+	if _, _, err := replication.DecodePositionMySQL56(params.IncrementalFromPos); err != nil {
 		// This does not seem to be a valid position. Maybe it's a backup name?
 		backupName := params.IncrementalFromPos
 		pos, err := findBackupPosition(ctx, params, backupName)

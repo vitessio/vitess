@@ -153,3 +153,40 @@ func TestMysql56ParseGTID(t *testing.T) {
 	require.NoError(t, err, "unexpected error: %v", err)
 	assert.Equal(t, want, got, "(&mysql56{}).ParseGTID(%#v) = %#v, want %#v", input, got, want)
 }
+
+func TestDecodePositionMySQL56(t *testing.T) {
+	{
+		pos, gtidSet, err := DecodePositionMySQL56("")
+		assert.NoError(t, err)
+		assert.True(t, pos.IsZero())
+		assert.Nil(t, gtidSet)
+	}
+	{
+		pos, gtidSet, err := DecodePositionMySQL56("MySQL56/16b1039f-22b6-11ed-b765-0a43f95f28a3:1-615")
+		assert.NoError(t, err)
+		assert.False(t, pos.IsZero())
+		assert.NotNil(t, gtidSet)
+	}
+	{
+		pos, gtidSet, err := DecodePositionMySQL56("16b1039f-22b6-11ed-b765-0a43f95f28a3:1-615")
+		assert.NoError(t, err)
+		assert.False(t, pos.IsZero())
+		assert.NotNil(t, gtidSet)
+	}
+	{
+		_, _, err := DecodePositionMySQL56("q-22b6-11ed-b765-0a43f95f28a3:1-615")
+		assert.Error(t, err)
+	}
+	{
+		_, _, err := DecodePositionMySQL56("16b1039f-22b6-11ed-b765-0a43f95f28a3")
+		assert.Error(t, err)
+	}
+	{
+		_, _, err := DecodePositionMySQL56("FilePos/mysql-bin.000001:234")
+		assert.Error(t, err)
+	}
+	{
+		_, _, err := DecodePositionMySQL56("mysql-bin.000001:234")
+		assert.Error(t, err)
+	}
+}
