@@ -597,9 +597,9 @@ func (vre *Engine) registerJournal(journal *binlogdatapb.Journal, id int32) erro
 	}
 	for _, jks := range journal.Participants {
 		ks := fmt.Sprintf("%s:%s", jks.Keyspace, jks.Shard)
-		if _, ok := controllerSources[ks]; !ok && !(jks.Keyspace == vre.controllers[id].source.Keyspace && jks.Shard == vre.controllers[id].source.Shard) {
+		if _, ok := controllerSources[ks]; !ok {
 			log.Errorf("cannot redirect on journal: not all sources are present in this workflow: missing %v", ks)
-			//return fmt.Errorf("cannot redirect on journal: not all sources are present in this workflow: missing %v", ks)
+			return fmt.Errorf("cannot redirect on journal: not all sources are present in this workflow: missing %v", ks)
 		}
 		if _, ok := je.participants[ks]; !ok {
 			log.Infof("New participant %s found for workflow %s", ks, workflow)

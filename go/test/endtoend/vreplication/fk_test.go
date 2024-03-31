@@ -34,7 +34,7 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
-const testWorkflowFlavor = workflowFlavorVtctld
+const testWorkflowFlavor = workflowFlavorRandom
 
 // TestFKWorkflow runs a MoveTables workflow with atomic copy for a db with foreign key constraints.
 // It inserts initial data, then simulates load. We insert both child rows with foreign keys and those without,

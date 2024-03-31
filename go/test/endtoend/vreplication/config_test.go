@@ -142,11 +142,11 @@ create table nopk (name varchar(128), age int unsigned);
         "sequence": "customer_seq"
       }
     },
-    "customer_individual": {
+    "customer_names": {
       "column_vindexes": [
         {
-          "column": "cid",
-          "name": "reverse_bits"
+          "column": "name",
+          "name": "xxhash"
         }
       ]
     },
@@ -411,13 +411,13 @@ create table nopk (name varchar(128), age int unsigned);
 
 	materializeCustomerCopySpec = `
 {
-  "workflow": "customer_individual",
+  "workflow": "customer_names",
   "source_keyspace": "customer",
   "target_keyspace": "customer",
   "table_settings": [{
-    "target_table": "customer_individual",
-    "source_expression": "select cid, name from customer where typ = 'individual'",
-    "create_ddl": "create table if not exists customer_individual (cid bigint not null, name varchar(128), primary key(cid), key(name))"
+    "target_table": "customer_names",
+    "source_expression": "select cid, name from customer",
+    "create_ddl": "create table if not exists customer_names (cid bigint not null, name varchar(128), primary key(cid), key(name))"
   }]
 }
 `

@@ -158,16 +158,14 @@ func (mz *materializer) generateBinlogSources(ctx context.Context, targetShard *
 			TargetTimeZone:  mz.ms.TargetTimeZone,
 			OnDdl:           binlogdatapb.OnDDLAction(binlogdatapb.OnDDLAction_value[mz.ms.OnDdl]),
 		}
-		/*
-			if mz.workflowType == binlogdatapb.VReplicationWorkflowType_Materialize && bls.Keyspace == targetShard.Keyspace() && bls.Shard != targetShard.ShardName() {
-				// There's always a one-to-one shard mapping for intra-keyspace materializations.
-				// So don't create the unnecessary stream where it's simply pulling from itself.
-				continue
-			}
-		*/
 		for _, ts := range mz.ms.TableSettings {
 			rule := &binlogdatapb.Rule{
 				Match: ts.TargetTable,
+			}
+
+			if ts.SourceExpression == "" {
+				bls.Filter.Rules = append(bls.Filter.Rules, rule)
+				continue
 			}
 
 			// Validate non-empty query.

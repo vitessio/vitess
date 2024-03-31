@@ -145,7 +145,7 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 		if BypassLagCheck {
 			args = append(args, "--max-replication-lag-allowed=2542087h")
 		}
-		args = append(args, "--timeout=90s")
+		args = append(args, "--timeout=9m")
 	}
 	if action == workflowActionCreate && options.atomicCopy {
 		args = append(args, "--atomic-copy")
@@ -444,22 +444,20 @@ func testReshardV2Workflow(t *testing.T) {
 	execMultipleQueries(t, vtgateConn, targetKs+"/-80", internalSchema)
 	execMultipleQueries(t, vtgateConn, targetKs+"/80-", internalSchema)
 
-	/*
-		createAdditionalCustomerShards(t, "-40,40-80,80-c0,c0-")
-			createReshardWorkflow(t, "-80,80-", "-40,40-80,80-c0,c0-")
-				validateReadsRouteToSource(t, "replica")
-				validateWritesRouteToSource(t)
+	createAdditionalCustomerShards(t, "-40,40-80,80-c0,c0-")
+	createReshardWorkflow(t, "-80,80-", "-40,40-80,80-c0,c0-")
+	validateReadsRouteToSource(t, "replica")
+	validateWritesRouteToSource(t)
 
-				// Verify that we've properly ignored any internal operational tables
-				// and that they were not copied to the new target shards
-				verifyNoInternalTables(t, vtgateConn, targetKs+"/-40")
-				verifyNoInternalTables(t, vtgateConn, targetKs+"/c0-")
+	// Verify that we've properly ignored any internal operational tables
+	// and that they were not copied to the new target shards
+	verifyNoInternalTables(t, vtgateConn, targetKs+"/-40")
+	verifyNoInternalTables(t, vtgateConn, targetKs+"/c0-")
 
-				// Confirm that updating Reshard workflows works.
-				testWorkflowUpdate(t)
+	// Confirm that updating Reshard workflows works.
+	testWorkflowUpdate(t)
 
-				testRestOfWorkflow(t)
-	*/
+	testRestOfWorkflow(t)
 }
 
 func testMoveTablesV2Workflow(t *testing.T) {
@@ -468,7 +466,7 @@ func testMoveTablesV2Workflow(t *testing.T) {
 	currentWorkflowType = binlogdatapb.VReplicationWorkflowType_MoveTables
 
 	materializeShow := func() {
-		output, err := vc.VtctldClient.ExecuteCommandWithOutput("materialize", "--target-keyspace=customer", "show", "--workflow=customer_individual", "--compact", "--include-logs=false")
+		output, err := vc.VtctldClient.ExecuteCommandWithOutput("materialize", "--target-keyspace=customer", "show", "--workflow=customer_names", "--compact", "--include-logs=false")
 		require.NoError(t, err)
 		log.Error("Materialize show output: ", output)
 	}
@@ -521,7 +519,7 @@ func testMoveTablesV2Workflow(t *testing.T) {
 
 	output, err = vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)
 	require.NoError(t, err)
-	require.True(t, listOutputContainsWorkflow(output, "customer_individual") && !listOutputContainsWorkflow(output, "wf1"))
+	require.True(t, listOutputContainsWorkflow(output, "customer_names") && !listOutputContainsWorkflow(output, "wf1"))
 
 	testVSchemaForSequenceAfterMoveTables(t)
 
@@ -529,14 +527,14 @@ func testMoveTablesV2Workflow(t *testing.T) {
 		createMoveTablesWorkflow(t, "Lead,Lead-1")
 		output, err = vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)
 		require.NoError(t, err)
-		require.True(t, listOutputContainsWorkflow(output, "wf1") && listOutputContainsWorkflow(output, "customer_individual"))
+		require.True(t, listOutputContainsWorkflow(output, "wf1") && listOutputContainsWorkflow(output, "customer_names"))
 
 		err = tstWorkflowCancel(t)
 		require.NoError(t, err)
 
 		output, err = vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)
 		require.NoError(t, err)
-		require.True(t, listOutputContainsWorkflow(output, "customer_individual") && !listOutputContainsWorkflow(output, "wf1"))
+		require.True(t, listOutputContainsWorkflow(output, "customer_names") && !listOutputContainsWorkflow(output, "wf1"))
 	*/
 }
 
