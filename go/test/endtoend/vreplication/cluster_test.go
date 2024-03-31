@@ -734,27 +734,19 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 	err := vc.VtctlClient.ExecuteCommand("RebuildKeyspaceGraph", keyspace.Name)
 	require.NoError(t, err)
 
-	if false {
-		/*
-			FIXME: The check for throttler config is failing with
-			I0318 11:56:57.937571   89514 util.go:363] http Get returns
-			Get "http://localhost:17101/throttler/status": net/http: HTTP/1.x transport connection broken:
-			malformed HTTP response "J\x00\x00\x00"
-		*/
-		log.Infof("Waiting for throttler config to be applied on all shards")
-		for _, shardName := range shardNames {
-			shard := keyspace.Shards[shardName]
-			for _, tablet := range shard.Tablets {
-				clusterTablet := &cluster.Vttablet{
-					Alias:    tablet.Name,
-					HTTPPort: tablet.Vttablet.Port,
-				}
-				log.Infof("+ Waiting for throttler config to be applied on %s, type=%v", tablet.Name, tablet.Vttablet.TabletType)
-				throttler.WaitForThrottlerStatusEnabled(t, clusterTablet, true, nil, time.Minute)
+	log.Infof("Waiting for throttler config to be applied on all shards")
+	for _, shardName := range shardNames {
+		shard := keyspace.Shards[shardName]
+		for _, tablet := range shard.Tablets {
+			clusterTablet := &cluster.Vttablet{
+				Alias:    tablet.Name,
+				HTTPPort: tablet.Vttablet.Port,
 			}
+			log.Infof("+ Waiting for throttler config to be applied on %s, type=%v", tablet.Name, tablet.Vttablet.TabletType)
+			throttler.WaitForThrottlerStatusEnabled(t, clusterTablet, true, nil, time.Minute)
 		}
-		log.Infof("Throttler config applied on all shards")
 	}
+	log.Infof("Throttler config applied on all shards")
 	return nil
 }
 
