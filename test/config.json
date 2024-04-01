@@ -1031,7 +1031,7 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"vreplication_multitenant": {
+		"vreplication_multi_tenant": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication","-run", "MultiTenant"],
 			"Command": [],

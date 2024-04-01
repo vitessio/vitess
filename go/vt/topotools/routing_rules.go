@@ -148,14 +148,14 @@ func GetKeyspaceRoutingRules(ctx context.Context, ts *topo.Server) (map[string]s
 }
 
 func SaveKeyspaceRoutingRules(ctx context.Context, ts *topo.Server, rules map[string]string) error {
-	ks_rr := &vschemapb.KeyspaceRoutingRules{Rules: make([]*vschemapb.KeyspaceRoutingRule, 0, len(rules))}
+	keyspaceRoutingRules := &vschemapb.KeyspaceRoutingRules{Rules: make([]*vschemapb.KeyspaceRoutingRule, 0, len(rules))}
 	for from, to := range rules {
-		ks_rr.Rules = append(ks_rr.Rules, &vschemapb.KeyspaceRoutingRule{
+		keyspaceRoutingRules.Rules = append(keyspaceRoutingRules.Rules, &vschemapb.KeyspaceRoutingRule{
 			FromKeyspace: from,
 			ToKeyspace:   to,
 		})
 	}
-	return ts.SaveKeyspaceRoutingRules(ctx, ks_rr)
+	return ts.SaveKeyspaceRoutingRules(ctx, keyspaceRoutingRules)
 }
 
 // endregion
