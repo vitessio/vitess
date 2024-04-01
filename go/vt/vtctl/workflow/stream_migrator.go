@@ -819,8 +819,14 @@ func (sm *StreamMigrator) syncSourceStreams(ctx context.Context) (map[string]rep
 					allErrors.RecordError(err)
 					return
 				}
-
-				query := fmt.Sprintf("update _vt.vreplication set state='Running', stop_pos='%s', message='synchronizing for cutover' where id=%d", replication.EncodePosition(pos), vrs.ID)
+				comment := ""
+				if vrs.WorkflowType == binlogdatapb.VReplicationWorkflowType_Materialize && vrs.BinlogSource.Keyspace == sm.ts.TargetKeyspaceName() {
+					// For intra-keyspace materializations in a keyspace that's being
+					// resharded, we may not have any serving tablets in the source keyspace.
+					comment = fmt.Sprintf("/*vt+ %s=1 */ ", vreplication.IncludeNonServingTabletsCommentDirective)
+				}
+				query := fmt.Sprintf("update %s_vt.vreplication set state='Running', stop_pos='%s', message='synchronizing for cutover' where id=%d",
+					comment, replication.EncodePosition(pos), vrs.ID)
 				if _, err := sm.ts.TabletManagerClient().VReplicationExec(ctx, primary.Tablet, query); err != nil {
 					allErrors.RecordError(err)
 					return

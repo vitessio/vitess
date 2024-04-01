@@ -29572,6 +29572,12 @@ export namespace tabletmanagerdata {
 
         /** UpdateVReplicationWorkflowRequest shards */
         shards?: (string[]|null);
+
+        /** UpdateVReplicationWorkflowRequest stop_position */
+        stop_position?: (string|null);
+
+        /** UpdateVReplicationWorkflowRequest include_ids */
+        include_ids?: ((number|Long)[]|null);
     }
 
     /** Represents an UpdateVReplicationWorkflowRequest. */
@@ -29603,6 +29609,12 @@ export namespace tabletmanagerdata {
 
         /** UpdateVReplicationWorkflowRequest shards. */
         public shards: string[];
+
+        /** UpdateVReplicationWorkflowRequest stop_position. */
+        public stop_position: string;
+
+        /** UpdateVReplicationWorkflowRequest include_ids. */
+        public include_ids: (number|Long)[];
 
         /**
          * Creates a new UpdateVReplicationWorkflowRequest instance using the specified properties.
