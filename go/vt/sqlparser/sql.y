@@ -1260,22 +1260,22 @@ alter_table_prefix:
   }
 
 create_index_prefix:
-  CREATE comment_opt INDEX ci_identifier using_opt ON table_name
+  CREATE comment_opt INDEX sql_id using_opt ON table_name
   {
     $$ = &AlterTable{Table: $7, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$4}, Options:$5}}}}
     setDDL(yylex, $$)
   }
-| CREATE comment_opt FULLTEXT INDEX ci_identifier using_opt ON table_name
+| CREATE comment_opt FULLTEXT INDEX sql_id using_opt ON table_name
   {
     $$ = &AlterTable{Table: $8, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$5, Type: IndexTypeFullText}, Options:$6}}}}
     setDDL(yylex, $$)
   }
-| CREATE comment_opt SPATIAL INDEX ci_identifier using_opt ON table_name
+| CREATE comment_opt SPATIAL INDEX sql_id using_opt ON table_name
   {
     $$ = &AlterTable{Table: $8, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$5, Type: IndexTypeSpatial}, Options:$6}}}}
     setDDL(yylex, $$)
   }
-| CREATE comment_opt UNIQUE INDEX ci_identifier using_opt ON table_name
+| CREATE comment_opt UNIQUE INDEX sql_id using_opt ON table_name
   {
     $$ = &AlterTable{Table: $8, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$5, Type: IndexTypeUnique}, Options:$6}}}}
     setDDL(yylex, $$)
@@ -2508,7 +2508,7 @@ name_opt:
   {
     $$ = ""
   }
-| ci_identifier
+| sql_id
   {
     $$ = string($1.String())
   }
@@ -3024,15 +3024,15 @@ alter_option:
   {
     $$ = &AlterColumn{Column: $3, Invisible: ptr.Of(true)}
   }
-| ALTER CHECK ci_identifier enforced
+| ALTER CHECK sql_id enforced
   {
     $$ = &AlterCheck{Name: $3, Enforced: $4}
   }
-| ALTER INDEX ci_identifier VISIBLE
+| ALTER INDEX sql_id VISIBLE
   {
     $$ = &AlterIndex{Name: $3, Invisible: false}
   }
-| ALTER INDEX ci_identifier INVISIBLE
+| ALTER INDEX sql_id INVISIBLE
   {
     $$ = &AlterIndex{Name: $3, Invisible: true}
   }
@@ -3072,7 +3072,7 @@ alter_option:
   {
     $$ = &DropColumn{Name:$3}
   }
-| DROP index_or_key ci_identifier
+| DROP index_or_key sql_id
   {
     $$ = &DropKey{Type:NormalKeyType, Name:$3}
   }
@@ -3080,15 +3080,15 @@ alter_option:
   {
     $$ = &DropKey{Type:PrimaryKeyType}
   }
-| DROP FOREIGN KEY ci_identifier
+| DROP FOREIGN KEY sql_id
   {
     $$ = &DropKey{Type:ForeignKeyType, Name:$4}
   }
-| DROP CHECK ci_identifier
+| DROP CHECK sql_id
   {
     $$ = &DropKey{Type:CheckKeyType, Name:$3}
   }
-| DROP CONSTRAINT ci_identifier
+| DROP CONSTRAINT sql_id
   {
     $$ = &DropKey{Type:CheckKeyType, Name:$3}
   }
@@ -3100,7 +3100,7 @@ alter_option:
   {
     $$ = &RenameTableName{Table:$3}
   }
-| RENAME index_or_key ci_identifier TO ci_identifier
+| RENAME index_or_key sql_id TO sql_id
   {
     $$ = &RenameIndex{OldName:$3, NewName:$5}
   }
@@ -3958,7 +3958,7 @@ drop_statement:
   {
     $$ = &DropTable{FromTables: $6, IfExists: $5, Comments: Comments($2).Parsed(), Temp: $3}
   }
-| DROP comment_opt INDEX ci_identifier ON table_name algorithm_lock_opt
+| DROP comment_opt INDEX sql_id ON table_name algorithm_lock_opt
   {
     // Change this to an alter statement
     if $4.Lowered() == "primary" {
