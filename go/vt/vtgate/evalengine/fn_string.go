@@ -30,6 +30,16 @@ import (
 )
 
 type (
+	builtinField struct {
+		CallExpr
+		collate collations.ID
+	}
+
+	builtinElt struct {
+		CallExpr
+		collate collations.ID
+	}
+
 	builtinInsert struct {
 		CallExpr
 		collate collations.ID
@@ -141,6 +151,8 @@ type (
 	}
 )
 
+var _ IR = (*builtinField)(nil)
+var _ IR = (*builtinElt)(nil)
 var _ IR = (*builtinInsert)(nil)
 var _ IR = (*builtinChangeCase)(nil)
 var _ IR = (*builtinCharLength)(nil)
@@ -163,6 +175,296 @@ var _ IR = (*builtinRepeat)(nil)
 var _ IR = (*builtinConcat)(nil)
 var _ IR = (*builtinConcatWs)(nil)
 var _ IR = (*builtinReplace)(nil)
+
+func fieldSQLType(arg sqltypes.Type, tt sqltypes.Type) sqltypes.Type {
+	if sqltypes.IsNull(arg) {
+		// If we have a NULL combined with only so far numerical types,
+		// we have to convert it all to DOUBLE.
+		if sqltypes.IsIntegral(tt) || sqltypes.IsDecimal(tt) {
+			return sqltypes.Float64
+		}
+		return tt
+	}
+
+	if typeIsTextual(arg) && typeIsTextual(tt) {
+		return sqltypes.VarChar
+	} else if sqltypes.IsIntegral(arg) && sqltypes.IsIntegral(tt) {
+		return sqltypes.Int64
+	}
+
+	if (sqltypes.IsIntegral(arg) || sqltypes.IsDecimal(arg)) && (sqltypes.IsIntegral(tt) || sqltypes.IsDecimal(tt)) {
+		return sqltypes.Decimal
+	}
+
+	return sqltypes.Float64
+}
+
+func (call *builtinField) eval(env *ExpressionEnv) (eval, error) {
+	args, err := call.args(env)
+	if err != nil {
+		return nil, err
+	}
+	if args[0] == nil {
+		return newEvalInt64(0), nil
+	}
+
+	// If the arguments contain both integral and string values
+	// MySQL converts all the arguments to DOUBLE
+	tt := args[0].SQLType()
+
+	for _, arg := range args[1:] {
+		var at sqltypes.Type
+		if arg == nil {
+			at = sqltypes.Null
+		} else {
+			at = arg.SQLType()
+		}
+
+		tt = fieldSQLType(at, tt)
+	}
+
+	if tt == sqltypes.Int64 {
+		tar := evalToInt64(args[0])
+
+		for i, arg := range args[1:] {
+			if arg == nil {
+				continue
+			}
+
+			e := evalToInt64(arg)
+			if tar.i == e.i {
+				return newEvalInt64(int64(i + 1)), nil
+			}
+		}
+	} else if tt == sqltypes.VarChar {
+		col := evalCollation(args[0])
+		collation := colldata.Lookup(col.Collation)
+		tar := args[0].(*evalBytes)
+
+		for i, arg := range args[1:] {
+			if arg == nil {
+				continue
+			}
+
+			e, err := evalToVarchar(arg, col.Collation, true)
+			if err != nil {
+				return nil, err
+			}
+
+			// Compare target and current string
+			if collation.Collate(tar.bytes, e.bytes, false) == 0 {
+				return newEvalInt64(int64(i + 1)), nil
+			}
+		}
+	} else if tt == sqltypes.Decimal {
+		tar := evalToDecimal(args[0], 0, 0)
+
+		for i, arg := range args[1:] {
+			if arg == nil {
+				continue
+			}
+
+			e := evalToDecimal(arg, 0, 0)
+			if tar.dec.Equal(e.dec) {
+				return newEvalInt64(int64(i + 1)), nil
+			}
+		}
+	} else {
+		tar, _ := evalToFloat(args[0])
+
+		for i, arg := range args[1:] {
+			if arg == nil {
+				continue
+			}
+
+			e, _ := evalToFloat(arg)
+			if tar.f == e.f {
+				return newEvalInt64(int64(i + 1)), nil
+			}
+		}
+	}
+
+	return newEvalInt64(0), nil
+}
+
+func (call *builtinField) compile(c *compiler) (ctype, error) {
+	strs := make([]ctype, len(call.Arguments))
+
+	for i, arg := range call.Arguments {
+		var err error
+		strs[i], err = arg.compile(c)
+		if err != nil {
+			return ctype{}, err
+		}
+	}
+
+	// If the arguments contain both integral and string values
+	// MySQL converts all the arguments to DOUBLE
+	tt := strs[0].Type
+	col := strs[0].Col
+
+	for _, str := range strs {
+		tt = fieldSQLType(str.Type, tt)
+	}
+
+	if tt == sqltypes.Int64 {
+		for i, str := range strs {
+			offset := len(strs) - i
+			skip := c.compileNullCheckOffset(str, offset)
+
+			switch str.Type {
+			case sqltypes.Int64:
+			default:
+				c.asm.Convert_xi(offset)
+			}
+			c.asm.jumpDestination(skip)
+		}
+
+		c.asm.Fn_FIELD_i(len(call.Arguments))
+	} else if tt == sqltypes.VarChar {
+		collation := colldata.Lookup(col.Collation)
+		c.asm.Fn_FIELD_b(len(call.Arguments), collation)
+	} else if tt == sqltypes.Decimal {
+		for i, str := range strs {
+			offset := len(strs) - i
+			skip := c.compileNullCheckOffset(str, offset)
+
+			switch str.Type {
+			case sqltypes.Decimal:
+			default:
+				c.asm.Convert_xd(offset, 0, 0)
+			}
+			c.asm.jumpDestination(skip)
+		}
+
+		c.asm.Fn_FIELD_d(len(call.Arguments))
+	} else {
+		for i, str := range strs {
+			offset := len(strs) - i
+			skip := c.compileNullCheckOffset(str, offset)
+
+			switch str.Type {
+			case sqltypes.Float64:
+			default:
+				c.asm.Convert_xf(offset)
+			}
+
+			c.asm.jumpDestination(skip)
+		}
+
+		c.asm.Fn_FIELD_f(len(call.Arguments))
+	}
+
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric}, nil
+}
+
+func (call *builtinElt) eval(env *ExpressionEnv) (eval, error) {
+	var ca collationAggregation
+	tt := sqltypes.VarChar
+
+	args, err := call.args(env)
+	if err != nil {
+		return nil, err
+	}
+
+	if args[0] == nil {
+		return nil, nil
+	}
+
+	i := evalToInt64(args[0]).i
+	if i < 1 || i >= int64(len(args)) || args[i] == nil {
+		return nil, nil
+	}
+
+	for _, arg := range args[1:] {
+		if arg == nil {
+			continue
+		}
+
+		tt = concatSQLType(arg.SQLType(), tt)
+		err = ca.add(evalCollation(arg), env.collationEnv)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	tc := ca.result()
+	// If we only had numbers, we instead fall back to the default
+	// collation instead of using the numeric collation.
+	if tc.Coercibility == collations.CoerceNumeric {
+		tc = typedCoercionCollation(tt, call.collate)
+	}
+
+	b, err := evalToVarchar(args[i], tc.Collation, true)
+	if err != nil {
+		return nil, err
+	}
+
+	return newEvalRaw(tt, b.bytes, b.col), nil
+}
+
+func (call *builtinElt) compile(c *compiler) (ctype, error) {
+	args := make([]ctype, len(call.Arguments))
+
+	var ca collationAggregation
+	tt := sqltypes.VarChar
+
+	var skip *jump
+	for i, arg := range call.Arguments {
+		var err error
+		args[i], err = arg.compile(c)
+		if err != nil {
+			return ctype{}, nil
+		}
+
+		if i == 0 {
+			skip = c.compileNullCheck1(args[i])
+			continue
+		}
+
+		tt = concatSQLType(args[i].Type, tt)
+		err = ca.add(args[i].Col, c.env.CollationEnv())
+		if err != nil {
+			return ctype{}, err
+		}
+	}
+
+	tc := ca.result()
+	// If we only had numbers, we instead fall back to the default
+	// collation instead of using the numeric collation.
+	if tc.Coercibility == collations.CoerceNumeric {
+		tc = typedCoercionCollation(tt, call.collate)
+	}
+
+	_ = c.compileToInt64(args[0], len(args))
+
+	for i, arg := range args[1:] {
+		offset := len(args) - (i + 1)
+		skip := c.compileNullCheckOffset(arg, offset)
+
+		switch arg.Type {
+		case sqltypes.VarBinary, sqltypes.Binary, sqltypes.Blob:
+			if tc.Collation != collations.CollationBinaryID {
+				c.asm.Convert_xce(offset, arg.Type, tc.Collation)
+			}
+		case sqltypes.VarChar, sqltypes.Char, sqltypes.Text:
+			fromCharset := colldata.Lookup(arg.Col.Collation).Charset()
+			toCharset := colldata.Lookup(tc.Collation).Charset()
+			if fromCharset != toCharset && !toCharset.IsSuperset(fromCharset) {
+				c.asm.Convert_xce(offset, arg.Type, tc.Collation)
+			}
+		default:
+			c.asm.Convert_xce(offset, arg.Type, tc.Collation)
+		}
+
+		c.asm.jumpDestination(skip)
+	}
+
+	c.asm.Fn_ELT(len(args), tt, tc)
+	c.asm.jumpDestination(skip)
+
+	return ctype{Type: tt, Col: tc, Flag: flagNullable}, nil
+}
 
 func insert(str, newstr *evalBytes, pos, l int) []byte {
 	pos--

@@ -2347,6 +2347,167 @@ func (asm *assembler) Fn_BIT_LENGTH() {
 	}, "FN BIT_LENGTH VARCHAR(SP-1)")
 }
 
+func (asm *assembler) Fn_FIELD_i(args int) {
+	asm.adjustStack(-args + 1)
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-args] == nil {
+			env.vm.stack[env.vm.sp-args] = env.vm.arena.newEvalInt64(0)
+			env.vm.sp -= args - 1
+			return 1
+		}
+
+		tar := env.vm.stack[env.vm.sp-args].(*evalInt64)
+
+		for i := range args - 1 {
+			if env.vm.stack[env.vm.sp-args+i+1] == nil {
+				continue
+			}
+
+			arg := env.vm.stack[env.vm.sp-args+i+1].(*evalInt64)
+
+			if tar.i == arg.i {
+				env.vm.stack[env.vm.sp-args] = env.vm.arena.newEvalInt64(int64(i + 1))
+				env.vm.sp -= args - 1
+				return 1
+			}
+		}
+
+		env.vm.stack[env.vm.sp-args] = env.vm.arena.newEvalInt64(0)
+		env.vm.sp -= args - 1
+		return 1
+	}, "FN FIELD INT64(SP-%d)...INT64(SP-1)", args)
+}
+
+func (asm *assembler) Fn_FIELD_b(args int, col colldata.Collation) {
+	asm.adjustStack(-args + 1)
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-args] == nil {
+			env.vm.stack[env.vm.sp-args] = env.vm.arena.newEvalInt64(0)
+			env.vm.sp -= args - 1
+			return 1
+		}
+
+		tar := env.vm.stack[env.vm.sp-args].(*evalBytes)
+
+		for i := range args - 1 {
+			if env.vm.stack[env.vm.sp-args+i+1] == nil {
+				continue
+			}
+
+			str := env.vm.stack[env.vm.sp-args+i+1].(*evalBytes)
+
+			// We cannot do these comparison earlier in the compilation,
+			// because if we convert everything first, we error on cases
+			// where there is a match. MySQL will do an element for element
+			// comparison where if there's a match already, it doesn't matter
+			// if there was an invalid conversion later on.
+			//
+			// This means we also must convert here in this compiler function
+			// and can't eagerly do the conversion.
+			toCharset := col.Charset()
+			fromCharset := colldata.Lookup(str.col.Collation).Charset()
+			if fromCharset != toCharset && !toCharset.IsSuperset(fromCharset) {
+				str, env.vm.err = evalToVarchar(str, col.ID(), true)
+				if env.vm.err != nil {
+					env.vm.stack[env.vm.sp-args] = nil
+					env.vm.sp -= args - 1
+					return 1
+				}
+			}
+
+			// Compare target and current string
+			if col.Collate(tar.bytes, str.bytes, false) == 0 {
+				env.vm.stack[env.vm.sp-args] = env.vm.arena.newEvalInt64(int64(i + 1))
+				env.vm.sp -= args - 1
+				return 1
+			}
+		}
+
+		env.vm.stack[env.vm.sp-args] = env.vm.arena.newEvalInt64(0)
+		env.vm.sp -= args - 1
+		return 1
+	}, "FN FIELD VARCHAR(SP-%d)...VARCHAR(SP-1)", args)
+}
+
+func (asm *assembler) Fn_FIELD_d(args int) {
+	asm.adjustStack(-args + 1)
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-args] == nil {
+			env.vm.stack[env.vm.sp-args] = env.vm.arena.newEvalInt64(0)
+			env.vm.sp -= args - 1
+			return 1
+		}
+
+		tar := env.vm.stack[env.vm.sp-args].(*evalDecimal)
+
+		for i := range args - 1 {
+			if env.vm.stack[env.vm.sp-args+i+1] == nil {
+				continue
+			}
+
+			arg := env.vm.stack[env.vm.sp-args+i+1].(*evalDecimal)
+
+			if tar.dec.Equal(arg.dec) {
+				env.vm.stack[env.vm.sp-args] = env.vm.arena.newEvalInt64(int64(i + 1))
+				env.vm.sp -= args - 1
+				return 1
+			}
+		}
+
+		env.vm.stack[env.vm.sp-args] = env.vm.arena.newEvalInt64(0)
+		env.vm.sp -= args - 1
+		return 1
+	}, "FN FIELD DECIMAL(SP-%d)...DECIMAL(SP-1)", args)
+}
+
+func (asm *assembler) Fn_FIELD_f(args int) {
+	asm.adjustStack(-args + 1)
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-args] == nil {
+			env.vm.stack[env.vm.sp-args] = env.vm.arena.newEvalInt64(0)
+			env.vm.sp -= args - 1
+			return 1
+		}
+
+		tar := env.vm.stack[env.vm.sp-args].(*evalFloat)
+
+		for i := range args - 1 {
+			if env.vm.stack[env.vm.sp-args+i+1] == nil {
+				continue
+			}
+
+			arg := env.vm.stack[env.vm.sp-args+i+1].(*evalFloat)
+
+			if tar.f == arg.f {
+				env.vm.stack[env.vm.sp-args] = env.vm.arena.newEvalInt64(int64(i + 1))
+				env.vm.sp -= args - 1
+				return 1
+			}
+		}
+
+		env.vm.stack[env.vm.sp-args] = env.vm.arena.newEvalInt64(0)
+		env.vm.sp -= args - 1
+		return 1
+	}, "FN FIELD FLOAT64(SP-%d)...FLOAT64(SP-1)", args)
+}
+
+func (asm *assembler) Fn_ELT(args int, tt sqltypes.Type, tc collations.TypedCollation) {
+	asm.adjustStack(-args + 1)
+	asm.emit(func(env *ExpressionEnv) int {
+		i := env.vm.stack[env.vm.sp-args].(*evalInt64)
+
+		if i.i < 1 || int(i.i) >= args || env.vm.stack[env.vm.sp-args+int(i.i)] == nil {
+			env.vm.stack[env.vm.sp-args] = nil
+		} else {
+			b := env.vm.stack[env.vm.sp-args+int(i.i)].(*evalBytes)
+			env.vm.stack[env.vm.sp-args] = env.vm.arena.newEvalRaw(b.bytes, tt, tc)
+		}
+
+		env.vm.sp -= args - 1
+		return 1
+	}, "FN ELT INT64(SP-%d) VARCHAR(SP-%d)...VARCHAR(SP-1)", args, args-1)
+}
+
 func (asm *assembler) Fn_INSERT(col collations.TypedCollation) {
 	asm.adjustStack(-3)
 
