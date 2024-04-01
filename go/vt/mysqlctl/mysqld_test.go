@@ -211,11 +211,23 @@ func TestCleanupLockfile(t *testing.T) {
 }
 
 func TestRunMysqlUpgrade(t *testing.T) {
-	testMysqld := NewMysqld(&dbconfigs.GlobalDBConfigs)
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+
+	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
 
 	ctx := context.Background()
 	err := testMysqld.RunMysqlUpgrade(ctx)
+	assert.NoError(t, err)
+
+	// Should not fail for older versions
+	testMysqld.capabilities = newCapabilitySet(FlavorMySQL, ServerVersion{Major: 8, Minor: 0, Patch: 15})
+	err = testMysqld.RunMysqlUpgrade(ctx)
 	assert.NoError(t, err)
 }
 

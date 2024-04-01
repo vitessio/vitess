@@ -18,6 +18,7 @@ package mysqlctl
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"testing"
 
@@ -100,6 +101,23 @@ func TestWaitForReplicationStart(t *testing.T) {
 
 	err := WaitForReplicationStart(fakemysqld, 2)
 	assert.NoError(t, err)
+
+	fakemysqld.ReplicationStatusError = fmt.Errorf("test error")
+	err = WaitForReplicationStart(fakemysqld, 2)
+	assert.ErrorContains(t, err, "test error")
+
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+
+	testMysqld := NewMysqld(dbc)
+	defer testMysqld.Close()
+
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+	db.AddQuery("SHOW SLAVE STATUS", sqltypes.MakeTestResult(sqltypes.MakeTestFields("Last_SQL_Error|Last_IO_Error", "varchar|varchar"), "test sql error|test io error"))
+
+	err = WaitForReplicationStart(testMysqld, 2)
+	assert.ErrorContains(t, err, "Last_SQL_Error: test sql error, Last_IO_Error: test io error")
 }
 
 func TestGetMysqlPort(t *testing.T) {
