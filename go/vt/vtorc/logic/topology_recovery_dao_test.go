@@ -21,6 +21,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/external/golib/sqlutils"
+	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 )
@@ -64,4 +66,72 @@ func TestTopologyRecovery(t *testing.T) {
 		// Assert that the ID field matches the one that we just wrote
 		require.EqualValues(t, topologyRecovery.ID, recoveries[0].ID)
 	})
+}
+
+func TestExpireTableData(t *testing.T) {
+	oldVal := config.Config.AuditPurgeDays
+	config.Config.AuditPurgeDays = 10
+	defer func() {
+		config.Config.AuditPurgeDays = oldVal
+	}()
+
+	tests := []struct {
+		name             string
+		tableName        string
+		insertQuery      string
+		expectedRowCount int
+		expireFunc       func() error
+	}{
+		{
+			name:             "ExpireRecoveryDetectionHistory",
+			tableName:        "recovery_detection",
+			expectedRowCount: 2,
+			insertQuery: `insert into recovery_detection (detection_id, detection_timestamp, alias, analysis, keyspace, shard) values
+(1, NOW() - INTERVAL 3 DAY,'a','a','a','a'),
+(2, NOW() - INTERVAL 5 DAY,'a','a','a','a'),
+(3, NOW() - INTERVAL 15 DAY,'a','a','a','a')`,
+			expireFunc: ExpireRecoveryDetectionHistory,
+		},
+		{
+			name:             "ExpireTopologyRecoveryHistory",
+			tableName:        "topology_recovery",
+			expectedRowCount: 1,
+			insertQuery: `insert into topology_recovery (recovery_id, start_recovery, alias, analysis, keyspace, shard) values
+(1, NOW() - INTERVAL 13 DAY,'a','a','a','a'),
+(2, NOW() - INTERVAL 5 DAY,'a','a','a','a'),
+(3, NOW() - INTERVAL 15 DAY,'a','a','a','a')`,
+			expireFunc: ExpireTopologyRecoveryHistory,
+		},
+		{
+			name:             "ExpireTopologyRecoveryStepsHistory",
+			tableName:        "topology_recovery_steps",
+			expectedRowCount: 1,
+			insertQuery: `insert into topology_recovery_steps (recovery_step_id, audit_at, recovery_id, message) values
+(1, NOW() - INTERVAL 13 DAY, 1, 'a'),
+(2, NOW() - INTERVAL 5 DAY, 2, 'a'),
+(3, NOW() - INTERVAL 15 DAY, 3, 'a')`,
+			expireFunc: ExpireTopologyRecoveryStepsHistory,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
+			defer func() {
+				db.ClearVTOrcDatabase()
+			}()
+			_, err := db.ExecVTOrc(tt.insertQuery)
+			require.NoError(t, err)
+
+			err = tt.expireFunc()
+			require.NoError(t, err)
+
+			rowsCount := 0
+			err = db.QueryVTOrc(`select * from `+tt.tableName, nil, func(rowMap sqlutils.RowMap) error {
+				rowsCount++
+				return nil
+			})
+			require.NoError(t, err)
+			require.EqualValues(t, tt.expectedRowCount, rowsCount)
+		})
+	}
 }
