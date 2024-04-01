@@ -63,6 +63,8 @@ var Cases = []TestCase{
 	{Run: TupleComparisons},
 	{Run: Comparisons},
 	{Run: InStatement},
+	{Run: FnField},
+	{Run: FnElt},
 	{Run: FnInsert},
 	{Run: FnLower},
 	{Run: FnUpper},
@@ -1337,6 +1339,90 @@ var JSONExtract_Schema = []*querypb.Field{
 		Type:       sqltypes.TypeJSON,
 		ColumnType: "JSON",
 	},
+}
+
+func FnField(yield Query) {
+	for _, s1 := range inputStrings {
+		for _, s2 := range inputStrings {
+			for _, s3 := range inputStrings {
+				yield(fmt.Sprintf("FIELD(%s, %s, %s)", s1, s2, s3), nil)
+			}
+		}
+	}
+
+	for _, s1 := range radianInputs {
+		for _, s2 := range radianInputs {
+			for _, s3 := range radianInputs {
+				yield(fmt.Sprintf("FIELD(%s, %s, %s)", s1, s2, s3), nil)
+			}
+		}
+	}
+
+	// Contains failing testcases
+	for _, s1 := range inputStrings {
+		for _, s2 := range radianInputs {
+			for _, s3 := range inputStrings {
+				yield(fmt.Sprintf("FIELD(%s, %s, %s)", s1, s2, s3), nil)
+			}
+		}
+	}
+
+	// Contains failing testcases
+	for _, s1 := range inputBitwise {
+		for _, s2 := range inputBitwise {
+			for _, s3 := range inputBitwise {
+				yield(fmt.Sprintf("FIELD(%s, %s, %s)", s1, s2, s3), nil)
+			}
+		}
+	}
+
+	mysqlDocSamples := []string{
+		"FIELD('Bb', 'Aa', 'Bb', 'Cc', 'Dd', 'Ff')",
+		"FIELD('Gg', 'Aa', 'Bb', 'Cc', 'Dd', 'Ff')",
+	}
+	for _, q := range mysqlDocSamples {
+		yield(q, nil)
+	}
+}
+
+func FnElt(yield Query) {
+	for _, s1 := range inputStrings {
+		for _, n := range inputBitwise {
+			yield(fmt.Sprintf("ELT(%s, %s)", n, s1), nil)
+		}
+	}
+
+	for _, s1 := range inputStrings {
+		for _, s2 := range inputStrings {
+			for _, n := range inputBitwise {
+				yield(fmt.Sprintf("ELT(%s, %s, %s)", n, s1, s2), nil)
+			}
+		}
+	}
+
+	validIndex := []string{
+		"1",
+		"2",
+		"3",
+	}
+	for _, s1 := range inputStrings {
+		for _, s2 := range inputStrings {
+			for _, s3 := range inputStrings {
+				for _, n := range validIndex {
+					yield(fmt.Sprintf("ELT(%s, %s, %s, %s)", n, s1, s2, s3), nil)
+				}
+			}
+		}
+	}
+
+	mysqlDocSamples := []string{
+		"ELT(1, 'Aa', 'Bb', 'Cc', 'Dd')",
+		"ELT(4, 'Aa', 'Bb', 'Cc', 'Dd')",
+	}
+
+	for _, q := range mysqlDocSamples {
+		yield(q, nil)
+	}
 }
 
 func FnInsert(yield Query) {
