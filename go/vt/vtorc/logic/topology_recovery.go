@@ -35,8 +35,6 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/util"
 )
 
-type RecoveryType string
-
 const (
 	CheckAndRecoverGenericProblemRecoveryName        string = "CheckAndRecoverGenericProblem"
 	RecoverDeadPrimaryRecoveryName                   string = "RecoverDeadPrimary"
@@ -103,16 +101,12 @@ const (
 type TopologyRecovery struct {
 	ID                     int64
 	AnalysisEntry          inst.ReplicationAnalysis
-	SuccessorHostname      string
-	SuccessorPort          int
 	SuccessorAlias         string
 	IsSuccessful           bool
 	AllErrors              []string
 	RecoveryStartTimestamp string
 	RecoveryEndTimestamp   string
 	DetectionID            int64
-	RelatedRecoveryID      int64
-	Type                   RecoveryType
 }
 
 func NewTopologyRecovery(replicationAnalysis inst.ReplicationAnalysis) *TopologyRecovery {
