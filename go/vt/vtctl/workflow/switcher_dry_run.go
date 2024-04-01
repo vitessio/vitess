@@ -56,6 +56,13 @@ func (dr *switcherDryRun) deleteShardRoutingRules(ctx context.Context) error {
 	return nil
 }
 
+func (dr *switcherDryRun) deleteKeyspaceRoutingRules(ctx context.Context) error {
+	if dr.ts.IsMultiTenantMigration() {
+		dr.drLog.Log("Keyspace routing rules will be deleted")
+	}
+	return nil
+}
+
 func (dr *switcherDryRun) switchShardReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection) error {
 	sourceShards := make([]string, 0)
 	targetShards := make([]string, 0)

@@ -27,7 +27,7 @@ import (
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
-//region routing rules
+// region routing rules
 
 func GetRoutingRulesMap(rules *vschemapb.RoutingRules) map[string][]string {
 	if rules == nil {
@@ -69,9 +69,9 @@ func SaveRoutingRules(ctx context.Context, ts *topo.Server, rules map[string][]s
 	return ts.SaveRoutingRules(ctx, rrs)
 }
 
-//endregion
+// endregion
 
-//region shard routing rules
+// region shard routing rules
 
 func GetShardRoutingRuleKey(fromKeyspace, shard string) string {
 	return fmt.Sprintf("%s.%s", fromKeyspace, shard)
@@ -122,3 +122,40 @@ func SaveShardRoutingRules(ctx context.Context, ts *topo.Server, srr map[string]
 
 	return ts.SaveShardRoutingRules(ctx, srs)
 }
+
+// endregion
+
+// region keyspace routing rules
+
+func GetKeyspaceRoutingRulesMap(rules *vschemapb.KeyspaceRoutingRules) map[string]string {
+	if rules == nil {
+		return make(map[string]string)
+	}
+	rulesMap := make(map[string]string, len(rules.Rules))
+	for _, rr := range rules.Rules {
+		rulesMap[rr.FromKeyspace] = rr.ToKeyspace
+	}
+	return rulesMap
+}
+
+func GetKeyspaceRoutingRules(ctx context.Context, ts *topo.Server) (map[string]string, error) {
+	keyspaceRoutingRules, err := ts.GetKeyspaceRoutingRules(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rules := GetKeyspaceRoutingRulesMap(keyspaceRoutingRules)
+	return rules, nil
+}
+
+func SaveKeyspaceRoutingRules(ctx context.Context, ts *topo.Server, rules map[string]string) error {
+	keyspaceRoutingRules := &vschemapb.KeyspaceRoutingRules{Rules: make([]*vschemapb.KeyspaceRoutingRule, 0, len(rules))}
+	for from, to := range rules {
+		keyspaceRoutingRules.Rules = append(keyspaceRoutingRules.Rules, &vschemapb.KeyspaceRoutingRule{
+			FromKeyspace: from,
+			ToKeyspace:   to,
+		})
+	}
+	return ts.SaveKeyspaceRoutingRules(ctx, keyspaceRoutingRules)
+}
+
+// endregion

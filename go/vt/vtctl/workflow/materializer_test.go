@@ -45,13 +45,11 @@ import (
 
 const (
 	position             = "9d10e6ec-07a0-11ee-ae73-8e53f4cf3083:1-97"
-	mzUpdateQuery        = "update _vt.vreplication set state='Running' where db_name='vt_targetks' and workflow='workflow'"
 	mzSelectFrozenQuery  = "select 1 from _vt.vreplication where db_name='vt_targetks' and message='FROZEN' and workflow_sub_type != 1"
 	mzCheckJournal       = "/select val from _vt.resharding_journal where id="
 	mzGetCopyState       = "select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = 1"
 	mzGetLatestCopyState = "select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (1) and id in (select max(id) from _vt.copy_state where vrepl_id in (1) group by vrepl_id, table_name)"
-	insertPrefix         = `/insert into _vt.vreplication\(workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys\) values `
-	eol                  = "$"
+	insertPrefix         = `/insert into _vt.vreplication\(workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys, options\) values `
 )
 
 var (
@@ -475,8 +473,8 @@ func TestMoveTablesDDLFlag(t *testing.T) {
 			defer env.close()
 			// This is the default and go does not marshal defaults
 			// for prototext fields so we use the default insert stmt.
-			//insert = fmt.Sprintf(`/insert into .vreplication\(.*on_ddl:%s.*`, onDDLAction)
-			//env.tmc.expectVRQuery(100, "/.*", &sqltypes.Result{})
+			// insert = fmt.Sprintf(`/insert into .vreplication\(.*on_ddl:%s.*`, onDDLAction)
+			// env.tmc.expectVRQuery(100, "/.*", &sqltypes.Result{})
 
 			// TODO: we cannot test the actual query generated w/o having a
 			// TabletManager. Importing the tabletmanager package, however, causes
@@ -524,8 +522,8 @@ func TestMoveTablesNoRoutingRules(t *testing.T) {
 	defer env.close()
 	// This is the default and go does not marshal defaults
 	// for prototext fields so we use the default insert stmt.
-	//insert = fmt.Sprintf(`/insert into .vreplication\(.*on_ddl:%s.*`, onDDLAction)
-	//env.tmc.expectVRQuery(100, "/.*", &sqltypes.Result{})
+	// insert = fmt.Sprintf(`/insert into .vreplication\(.*on_ddl:%s.*`, onDDLAction)
+	// env.tmc.expectVRQuery(100, "/.*", &sqltypes.Result{})
 
 	// TODO: we cannot test the actual query generated w/o having a
 	// TabletManager. Importing the tabletmanager package, however, causes
@@ -2246,6 +2244,7 @@ func TestKeyRangesEqualOptimization(t *testing.T) {
 							},
 						},
 					},
+					Options: "{}",
 				},
 			},
 		},
@@ -2279,6 +2278,7 @@ func TestKeyRangesEqualOptimization(t *testing.T) {
 							},
 						},
 					},
+					Options: "{}",
 				},
 				210: {
 					Workflow:     workflow,
@@ -2298,6 +2298,7 @@ func TestKeyRangesEqualOptimization(t *testing.T) {
 							},
 						},
 					},
+					Options: "{}",
 				},
 			},
 		},
@@ -2343,6 +2344,7 @@ func TestKeyRangesEqualOptimization(t *testing.T) {
 							},
 						},
 					},
+					Options: "{}",
 				},
 			},
 		},
@@ -2376,6 +2378,7 @@ func TestKeyRangesEqualOptimization(t *testing.T) {
 							},
 						},
 					},
+					Options: "{}",
 				},
 				210: {
 					Workflow:     workflow,
@@ -2395,6 +2398,7 @@ func TestKeyRangesEqualOptimization(t *testing.T) {
 							},
 						},
 					},
+					Options: "{}",
 				},
 			},
 		},
@@ -2427,7 +2431,6 @@ func TestKeyRangesEqualOptimization(t *testing.T) {
 				if tablet.Keyspace != targetKs || tablet.Type != topodatapb.TabletType_PRIMARY {
 					continue
 				}
-				env.tmc.expectVRQuery(int(tablet.Alias.Uid), mzSelectFrozenQuery, &sqltypes.Result{})
 				// If we are doing a partial MoveTables, we will only perform the workflow
 				// stream creation / INSERT statment on the shard(s) we're migrating.
 				if len(tc.moveTablesReq.SourceShards) > 0 && !slices.Contains(tc.moveTablesReq.SourceShards, tablet.Shard) {
@@ -2454,6 +2457,7 @@ func TestKeyRangesEqualOptimization(t *testing.T) {
 				DeferSecondaryKeys:        tc.moveTablesReq.DeferSecondaryKeys,
 				AutoStart:                 tc.moveTablesReq.AutoStart,
 				StopAfterCopy:             tc.moveTablesReq.StopAfterCopy,
+				Options:                   "{}",
 			})
 			require.NoError(t, err, "createWorkflowStreams failed: %v", err)
 		})
