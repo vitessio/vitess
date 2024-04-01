@@ -19,12 +19,18 @@ package workflow
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"hash/fnv"
 	"math"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
+
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	"google.golang.org/protobuf/encoding/prototext"
 
@@ -119,12 +125,6 @@ func validateNewWorkflow(ctx context.Context, ts *topo.Server, tmc tmclient.Tabl
 				if wf.Workflow == workflow {
 					allErrors.RecordError(fmt.Errorf("workflow %s already exists in keyspace %s on tablet %v", workflow, keyspace, primary.Alias))
 					return
-				}
-				for _, stream := range wf.Streams {
-					if stream.Message == Frozen && wf.WorkflowSubType != binlogdatapb.VReplicationWorkflowSubType_Partial {
-						allErrors.RecordError(fmt.Errorf("found previous frozen workflow on tablet %v, please review and delete it first before creating a new workflow", primary.Alias))
-						return
-					}
 				}
 			}
 		}(si)
@@ -337,6 +337,7 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 		targets         = make(map[string]*MigrationTarget, len(targetShards))
 		workflowType    binlogdatapb.VReplicationWorkflowType
 		workflowSubType binlogdatapb.VReplicationWorkflowSubType
+		options         vtctldatapb.WorkflowOptions
 	)
 
 	// We check all shards in the target keyspace. Not all of them may have a
@@ -375,6 +376,13 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 		optTabletTypes = topoproto.MakeStringTypeCSV(wf.TabletTypes)
 		workflowType = wf.WorkflowType
 		workflowSubType = wf.WorkflowSubType
+		optionsJSON := wf.GetOptions()
+		if optionsJSON != "" {
+			if err := json.Unmarshal([]byte(optionsJSON), &options); err != nil {
+				log.Errorf("failed to unmarshal options: %v %s", err, optionsJSON)
+				return nil, err
+			}
+		}
 
 		for _, stream := range wf.Streams {
 			if stream.Message == Frozen {
@@ -397,6 +405,7 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 		OptTabletTypes:  optTabletTypes,
 		WorkflowType:    workflowType,
 		WorkflowSubType: workflowSubType,
+		Options:         &options,
 	}, nil
 }
 
@@ -764,4 +773,93 @@ func LegacyBuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.Table
 		WorkflowType:    workflowType,
 		WorkflowSubType: workflowSubType,
 	}, nil
+}
+
+func addFilter(sel *sqlparser.Select, filter sqlparser.Expr) {
+	if sel.Where != nil {
+		sel.Where = &sqlparser.Where{
+			Type: sqlparser.WhereClause,
+			Expr: &sqlparser.AndExpr{
+				Left:  filter,
+				Right: sel.Where.Expr,
+			},
+		}
+	} else {
+		sel.Where = &sqlparser.Where{
+			Type: sqlparser.WhereClause,
+			Expr: filter,
+		}
+	}
+}
+
+func getTenantClause(vrOptions *vtctldatapb.WorkflowOptions,
+	targetVSchema *vindexes.KeyspaceSchema, parser *sqlparser.Parser) (*sqlparser.Expr, error) {
+	if vrOptions.TenantId == "" {
+		return nil, nil
+	}
+	if targetVSchema == nil || targetVSchema.MultiTenantSpec == nil {
+		return nil, fmt.Errorf("target keyspace not defined, or it does not have multi-tenant spec")
+	}
+	tenantColumnName := targetVSchema.MultiTenantSpec.TenantIdColumnName
+	tenantColumnType := targetVSchema.MultiTenantSpec.TenantIdColumnType
+	if tenantColumnName == "" {
+		return nil, fmt.Errorf("tenant column name not defined in multi-tenant spec")
+	}
+
+	var tenantId string
+	switch tenantColumnType {
+	case querypb.Type_INT64:
+		_, err := strconv.Atoi(vrOptions.TenantId)
+		if err != nil {
+			return nil, fmt.Errorf("tenant id is not a valid int: %s", vrOptions.TenantId)
+		}
+		tenantId = vrOptions.TenantId
+	case querypb.Type_VARCHAR:
+		tenantId = fmt.Sprintf("'%s'", vrOptions.TenantId)
+	default:
+		return nil, fmt.Errorf("unsupported tenant column type: %s", tenantColumnType)
+	}
+
+	stmt, err := parser.Parse(fmt.Sprintf("select * from t where %s = %s", tenantColumnName, tenantId))
+	if err != nil {
+		return nil, err
+	}
+	sel, ok := stmt.(*sqlparser.Select)
+	if !ok {
+		return nil, fmt.Errorf("error getting select: %s", tenantId)
+	}
+	return &sel.Where.Expr, nil
+}
+
+// updateKeyspaceRoutingRule updates the keyspace routing rule for the (effective) source keyspace to the target keyspace.
+func updateKeyspaceRoutingRule(ctx context.Context, ts *topo.Server, routes map[string]string) error {
+	rules, err := topotools.GetKeyspaceRoutingRules(ctx, ts)
+	if err != nil {
+		return err
+	}
+	if rules == nil {
+		rules = make(map[string]string)
+	}
+	for fromKeyspace, toKeyspace := range routes {
+		rules[fromKeyspace] = toKeyspace
+	}
+	if err := topotools.SaveKeyspaceRoutingRules(ctx, ts, rules); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateTenantId(dataType querypb.Type, value string) error {
+	switch dataType {
+	case querypb.Type_INT64:
+		_, err := strconv.Atoi(value)
+		if err != nil {
+			return fmt.Errorf("value %s is not a valid int", value)
+		}
+	case querypb.Type_VARCHAR:
+	// no validation needed
+	default:
+		return fmt.Errorf("unsupported data type: %s", dataType)
+	}
+	return nil
 }

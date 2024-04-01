@@ -39,6 +39,7 @@ var (
 		SourceTimeZone      string
 		NoRoutingRules      bool
 		AtomicCopy          bool
+		WorkflowOptions     vtctldatapb.WorkflowOptions
 	}{}
 
 	// create makes a MoveTablesCreate gRPC call to a vtctld.
@@ -109,6 +110,7 @@ func commandCreate(cmd *cobra.Command, args []string) error {
 		StopAfterCopy:             common.CreateOptions.StopAfterCopy,
 		NoRoutingRules:            createOptions.NoRoutingRules,
 		AtomicCopy:                createOptions.AtomicCopy,
+		WorkflowOptions:           &createOptions.WorkflowOptions,
 	}
 
 	resp, err := common.GetClient().MoveTablesCreate(common.GetCommandCtx(), req)

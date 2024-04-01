@@ -1817,7 +1817,7 @@ func TestPlayerDDL(t *testing.T) {
 func TestGTIDCompress(t *testing.T) {
 	ctx := context.Background()
 	defer deleteTablet(addTablet(100))
-	err := env.Mysqld.ExecuteSuperQuery(ctx, "insert into _vt.vreplication (id, workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state,db_name) values (1, '', '', '', 0,0,0,0,'Stopped','')")
+	err := env.Mysqld.ExecuteSuperQuery(ctx, "insert into _vt.vreplication (id, workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state,db_name, options) values (1, '', '', '', 0,0,0,0,'Stopped','', '{}')")
 	require.NoError(t, err)
 
 	type testCase struct {

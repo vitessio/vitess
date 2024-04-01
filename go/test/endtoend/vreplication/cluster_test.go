@@ -747,7 +747,6 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 		}
 	}
 	log.Infof("Throttler config applied on all shards")
-
 	return nil
 }
 
