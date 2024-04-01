@@ -17,6 +17,7 @@ limitations under the License.
 package logic
 
 import (
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -134,4 +135,36 @@ func TestExpireTableData(t *testing.T) {
 			require.EqualValues(t, tt.expectedRowCount, rowsCount)
 		})
 	}
+}
+
+func TestInsertRecoveryDetection(t *testing.T) {
+	// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
+	defer func() {
+		db.ClearVTOrcDatabase()
+	}()
+	ra := &inst.ReplicationAnalysis{
+		AnalyzedInstanceAlias: "alias-1",
+		Analysis:              inst.ClusterHasNoPrimary,
+		ClusterDetails: inst.ClusterInfo{
+			Keyspace: keyspace,
+			Shard:    shard,
+		},
+	}
+	err := InsertRecoveryDetection(ra)
+	require.NoError(t, err)
+	require.NotEqual(t, 0, ra.RecoveryId)
+
+	var rows []map[string]sqlutils.CellData
+	err = db.QueryVTOrc("select * from recovery_detection", nil, func(rowMap sqlutils.RowMap) error {
+		rows = append(rows, rowMap)
+		return nil
+	})
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	require.EqualValues(t, ra.AnalyzedInstanceAlias, rows[0]["alias"].String)
+	require.EqualValues(t, ra.Analysis, rows[0]["analysis"].String)
+	require.EqualValues(t, keyspace, rows[0]["keyspace"].String)
+	require.EqualValues(t, shard, rows[0]["shard"].String)
+	require.EqualValues(t, strconv.Itoa(int(ra.RecoveryId)), rows[0]["detection_id"].String)
+	require.NotEqual(t, "", rows[0]["detection_timestamp"].String)
 }
