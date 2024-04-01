@@ -259,23 +259,23 @@ func TestMultiTenantAttribute(t *testing.T) {
 		wanted          *vschemapb.MultiTenantSpec
 	}{
 		{
-			name: "Default Value",
+			name: "Not Set",
 		}, {
-			name: "MultiTenantSpec Set to True",
-			multiTenantSpec: &vschemapb.MultiTenantSpec{
-				TenantIdColumnName: "tenant_id",
-				TenantIdColumnType: "int64",
-			},
-			wanted: &vschemapb.MultiTenantSpec{
-				TenantIdColumnName: "tenant_id",
-				TenantIdColumnType: "int64",
-			},
-		}, {
-			name: "MultiTenantSpec Set to True",
+			name: "Empty MultiTenantSpec",
 			multiTenantSpec: &vschemapb.MultiTenantSpec{
 				TenantIdColumnName: "",
 			},
 			wanted: &vschemapb.MultiTenantSpec{},
+		}, {
+			name: "String",
+			multiTenantSpec: &vschemapb.MultiTenantSpec{
+				TenantIdColumnName: "tenant_id",
+				TenantIdColumnType: querypb.Type_VARCHAR,
+			},
+			wanted: &vschemapb.MultiTenantSpec{
+				TenantIdColumnName: "tenant_id",
+				TenantIdColumnType: querypb.Type_VARCHAR,
+			},
 		},
 	}
 	for _, test := range tests {
@@ -2660,7 +2660,7 @@ func TestVSchemaPBJSON(t *testing.T) {
 		"foreignKeyMode": "unmanaged",
         "multi_tenant_spec": {
 			"tenant_id_column_name": "tenant_id",
-			"tenant_id_column_type": "int64"
+			"tenant_id_column_type": 265
 		},
 		"tables": {
 			"t1": {
@@ -2694,7 +2694,7 @@ func TestVSchemaPBJSON(t *testing.T) {
 		ForeignKeyMode: vschemapb.Keyspace_unmanaged,
 		MultiTenantSpec: &vschemapb.MultiTenantSpec{
 			TenantIdColumnName: "tenant_id",
-			TenantIdColumnType: "int64",
+			TenantIdColumnType: querypb.Type_INT64,
 		},
 		Tables: map[string]*vschemapb.Table{
 			"t1": {
@@ -2742,7 +2742,7 @@ func TestVSchemaJSON(t *testing.T) {
 			ForeignKeyMode: vschemapb.Keyspace_managed,
 			MultiTenantSpec: &vschemapb.MultiTenantSpec{
 				TenantIdColumnName: "tenant_id",
-				TenantIdColumnType: "int64",
+				TenantIdColumnType: querypb.Type_INT64,
 			},
 			Keyspace: &Keyspace{
 				Name: "k1",
@@ -2840,7 +2840,7 @@ func TestVSchemaJSON(t *testing.T) {
     },
     "multi_tenant_spec": {
       "tenant_id_column_name": "tenant_id",
-      "tenant_id_column_type": "int64"
+      "tenant_id_column_type": 265
     }
   }
 }`

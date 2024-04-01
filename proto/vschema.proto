@@ -63,7 +63,7 @@ message MultiTenantSpec {
   // tenant_column is the name of the column that specifies the tenant id.
   string tenant_id_column_name = 1;
   // tenant_column_type is the type of the column that specifies the tenant id.
-  string tenant_id_column_type = 2;
+  query.Type tenant_id_column_type = 2;
 }
 
 // Vindex is the vindex info for a Keyspace.

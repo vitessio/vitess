@@ -93,7 +93,7 @@ const (
 {
   "multi_tenant_spec": {
       "tenant_id_column_name": "tenant_id",
-      "tenant_id_column_type": "int64"
+      "tenant_id_column_type": 265
   },
   "tables": {
     "t1": {}

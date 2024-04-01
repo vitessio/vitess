@@ -28,6 +28,8 @@ import (
 	"strings"
 	"sync"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
+
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -806,13 +808,13 @@ func getTenantClause(vrOptions *vtctldatapb.WorkflowOptions,
 
 	var tenantId string
 	switch tenantColumnType {
-	case "int", "int64":
+	case querypb.Type_INT64:
 		_, err := strconv.Atoi(vrOptions.TenantId)
 		if err != nil {
 			return nil, fmt.Errorf("tenant id is not a valid int: %s", vrOptions.TenantId)
 		}
 		tenantId = vrOptions.TenantId
-	case "string":
+	case querypb.Type_VARCHAR:
 		tenantId = fmt.Sprintf("'%s'", vrOptions.TenantId)
 	default:
 		return nil, fmt.Errorf("unsupported tenant column type: %s", tenantColumnType)
@@ -847,14 +849,14 @@ func updateKeyspaceRoutingRule(ctx context.Context, ts *topo.Server, routes map[
 	return nil
 }
 
-func validateTenantId(dataType, value string) error {
+func validateTenantId(dataType querypb.Type, value string) error {
 	switch dataType {
-	case "int", "int64":
+	case querypb.Type_INT64:
 		_, err := strconv.Atoi(value)
 		if err != nil {
 			return fmt.Errorf("value %s is not a valid int", value)
 		}
-	case "string":
+	case querypb.Type_VARCHAR:
 	// no validation needed
 	default:
 		return fmt.Errorf("unsupported data type: %s", dataType)

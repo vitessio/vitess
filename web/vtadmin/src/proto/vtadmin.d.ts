@@ -42995,7 +42995,7 @@ export namespace vschema {
         tenant_id_column_name?: (string|null);
 
         /** MultiTenantSpec tenant_id_column_type */
-        tenant_id_column_type?: (string|null);
+        tenant_id_column_type?: (query.Type|null);
     }
 
     /** Represents a MultiTenantSpec. */
@@ -43011,7 +43011,7 @@ export namespace vschema {
         public tenant_id_column_name: string;
 
         /** MultiTenantSpec tenant_id_column_type. */
-        public tenant_id_column_type: string;
+        public tenant_id_column_type: query.Type;
 
         /**
          * Creates a new MultiTenantSpec instance using the specified properties.
