@@ -56,8 +56,3 @@ COPY LICENSE /licenses
 VOLUME /vt/vtdataroot
 USER vitess
 
-LABEL name="Vitess Lite image - MySQL Community Server 8.0" \
-      io.k8s.display-name="Vitess Lite image - MySQL Community Server 8.0" \
-      maintainer="cncf-vitess-maintainers@lists.cncf.io" \
-      vendor="CNCF" \
-      url="https://vitess.io"
