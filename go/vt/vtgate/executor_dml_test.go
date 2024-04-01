@@ -876,8 +876,10 @@ func TestUpdateUseHigherCostVindexIfBackfilling(t *testing.T) {
 			Sql:           "select id, wo_lu_col, erl_lu_col, srl_lu_col, nrl_lu_col, nv_lu_col, lu_col, lu_col = 5 from t2_lookup where wo_lu_col = 2 and lu_col in (1, 2) for update",
 			BindVariables: map[string]*querypb.BindVariable{},
 		}, {
-			Sql:           "update t2_lookup set lu_col = 5 where wo_lu_col = 2 and lu_col in (1, 2)",
-			BindVariables: map[string]*querypb.BindVariable{},
+			Sql: "update t2_lookup set lu_col = 5 where wo_lu_col = 2 and lu_col in ::__vals",
+			BindVariables: map[string]*querypb.BindVariable{
+				"__vals": sqltypes.TestBindVariable([]any{int64(1), int64(2)}),
+			},
 		}}
 
 	vars, _ := sqltypes.BuildBindVariable([]any{
@@ -1109,8 +1111,10 @@ func TestDeleteUseHigherCostVindexIfBackfilling(t *testing.T) {
 			Sql:           "select id, wo_lu_col, erl_lu_col, srl_lu_col, nrl_lu_col, nv_lu_col, lu_col from t2_lookup where wo_lu_col = 1 and lu_col in (1, 2) for update",
 			BindVariables: map[string]*querypb.BindVariable{},
 		}, {
-			Sql:           "delete from t2_lookup where wo_lu_col = 1 and lu_col in (1, 2)",
-			BindVariables: map[string]*querypb.BindVariable{},
+			Sql: "delete from t2_lookup where wo_lu_col = 1 and lu_col in ::__vals",
+			BindVariables: map[string]*querypb.BindVariable{
+				"__vals": sqltypes.TestBindVariable([]any{int64(1), int64(2)}),
+			},
 		}}
 
 	vars, _ := sqltypes.BuildBindVariable([]any{
@@ -3107,7 +3111,7 @@ func TestDeleteMultiTable(t *testing.T) {
 		{Sql: "select `user`.id, `user`.col from `user`", BindVariables: map[string]*querypb.BindVariable{}},
 		bq, bq, bq, bq, bq, bq, bq, bq,
 		{Sql: "select `user`.Id, `user`.`name` from `user` where `user`.id in ::dml_vals for update", BindVariables: map[string]*querypb.BindVariable{"dml_vals": {Type: querypb.Type_TUPLE, Values: dmlVals}}},
-		{Sql: "delete from `user` where `user`.id in ::dml_vals", BindVariables: map[string]*querypb.BindVariable{"dml_vals": {Type: querypb.Type_TUPLE, Values: dmlVals}}}}
+		{Sql: "delete from `user` where `user`.id in ::dml_vals", BindVariables: map[string]*querypb.BindVariable{"__vals": sqltypes.TestBindVariable([]any{int64(1), int64(1), int64(1), int64(1), int64(1), int64(1), int64(1), int64(1)}), "dml_vals": {Type: querypb.Type_TUPLE, Values: dmlVals}}}}
 	assertQueries(t, sbc1, wantQueries)
 
 	wantQueries = []*querypb.BoundQuery{
