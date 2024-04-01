@@ -1,11 +1,11 @@
-# Copyright 2019 The Vitess Authors.
-# 
+# Copyright 2022 The Vitess Authors.
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -17,8 +17,8 @@
 #       ensure images contain the right binaries.
 
 # Use a temporary layer for the build stage.
-ARG bootstrap_version=29
-ARG image="vitess/bootstrap:${bootstrap_version}-mysql80"
+ARG bootstrap_version=30
+ARG image="vitess/bootstrap:${bootstrap_version}-common"
 
 FROM "${image}" AS builder
 
@@ -30,17 +30,14 @@ COPY --chown=vitess:vitess . /vt/src/vitess.io/vitess
 
 # Build and install Vitess in a temporary output directory.
 USER vitess
+
 RUN make install PREFIX=/vt/install
 
 # Start over and build the final image.
-FROM debian:bullseye-slim
-
-# Install dependencies
-COPY docker/lite/install_dependencies.sh /vt/dist/install_dependencies.sh
-RUN /vt/dist/install_dependencies.sh mysql80
+FROM registry.access.redhat.com/ubi8/ubi:latest
 
 # Set up Vitess user and directory tree.
-RUN groupadd -r vitess && useradd -r -g vitess vitess
+RUN groupadd -g 1001 -r vitess && useradd -r -u 1001 -g vitess vitess
 RUN mkdir -p /vt/vtdataroot && chown -R vitess:vitess /vt
 
 # Set up Vitess environment (just enough to run pre-built Go binaries)
@@ -52,6 +49,21 @@ ENV PATH $VTROOT/bin:$PATH
 COPY --from=builder --chown=vitess:vitess /vt/install /vt
 COPY --from=builder --chown=vitess:vitess /vt/src/vitess.io/vitess/web/vtadmin /vt/web/vtadmin
 
+RUN mkdir -p /licenses
+COPY LICENSE /licenses
+
 # Create mount point for actual data (e.g. MySQL data dir)
 VOLUME /vt/vtdataroot
 USER vitess
+
+LABEL name="Vitess Lite image - MySQL Community Server 8.0" \
+      io.k8s.display-name="Vitess Lite image - MySQL Community Server 8.0" \
+      maintainer="cncf-vitess-maintainers@lists.cncf.io" \
+      vendor="CNCF" \
+      version="13.0.0" \
+      release="1" \
+      summary="Vitess base container image, containing Vitess components along with MySQL Community Server 8.0" \
+      description="Vitess base container image, containing Vitess components along with MySQL Community Server 8.0" \
+      io.k8s.description="Vitess base container image, containing Vitess components along with MySQL Community Server 8.0" \
+      distribution-scope="public" \
+      url="https://vitess.io"
