@@ -552,10 +552,21 @@ func TestToSeconds(t *testing.T) {
 	assert.Equal(t, 45020, int(res))
 
 	// Neg Time Case
-	tt.hour = 1<<15 | tt.hour
+	tt.hour |= 1 << 15
 	res = tt.ToSeconds()
 
 	assert.Equal(t, -45020, int(res))
+
+	dt := NewDateTimeFromStd(testGoTime)
+
+	res = dt.ToSeconds()
+	assert.Equal(t, 63877465820, int(res))
+
+	// Neg Time Case
+	dt.Time.hour |= 1 << 15
+	res = dt.ToSeconds()
+
+	assert.Equal(t, 63877375780, int(res))
 }
 
 func TestToStdTime(t *testing.T) {
