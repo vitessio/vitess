@@ -46,5 +46,11 @@ VOLUME /vt/vtdataroot
 # Add compatibility to the previous layout for now
 RUN su vitess -c "mkdir -p /vt/src/vitess.io/vitess/bin && rm -rf /vt/bin && ln -s /vt/src/vitess.io/vitess/bin /vt/bin"
 
+# Bootstrap Vitess
+WORKDIR /vt/src/vitess.io/vitess
+
+USER vitess
+RUN ./bootstrap.sh
+
 # If the user doesn't specify a command, load a shell.
 CMD ["/bin/bash"]
