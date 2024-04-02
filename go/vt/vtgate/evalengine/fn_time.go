@@ -222,7 +222,7 @@ func (call *builtinNow) compile(c *compiler) (ctype, error) {
 		t = sqltypes.Datetime
 		c.asm.Fn_Now(call.prec, call.utc)
 	}
-	return ctype{Type: t, Col: collationBinary}, nil
+	return ctype{Type: t, Col: collationBinary, Size: int32(call.prec)}, nil
 }
 
 func (call *builtinNow) constant() bool {
@@ -239,7 +239,7 @@ func (call *builtinSysdate) eval(env *ExpressionEnv) (eval, error) {
 
 func (call *builtinSysdate) compile(c *compiler) (ctype, error) {
 	c.asm.Fn_Sysdate(call.prec)
-	return ctype{Type: sqltypes.Datetime, Col: collationBinary}, nil
+	return ctype{Type: sqltypes.Datetime, Col: collationBinary, Size: int32(call.prec)}, nil
 }
 
 func (call *builtinSysdate) constant() bool {

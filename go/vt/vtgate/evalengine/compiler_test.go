@@ -631,6 +631,10 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `REPLACE('www.mysql.com', '', 'Ww')`,
 			result:     `VARCHAR("www.mysql.com")`,
 		},
+		{
+			expression: `1 * unix_timestamp(utc_timestamp(1))`,
+			result:     `DECIMAL(1698134400.1)`,
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")
