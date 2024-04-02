@@ -48,7 +48,6 @@ func TestAPIEndpoints(t *testing.T) {
 	// Verify when VTOrc is healthy, it has also run the first discovery.
 	assert.Equal(t, 200, status)
 	assert.Contains(t, resp, `"Healthy": true,`)
-	assert.Contains(t, resp, `"DiscoveredOnce": true`)
 
 	// find primary from topo
 	primary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
@@ -77,7 +76,6 @@ func TestAPIEndpoints(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, 200, status)
 		assert.Contains(t, resp, `"Healthy": true,`)
-		assert.Contains(t, resp, `"DiscoveredOnce": true`)
 	})
 
 	t.Run("Liveness API", func(t *testing.T) {

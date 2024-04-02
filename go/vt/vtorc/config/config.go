@@ -27,15 +27,10 @@ import (
 	"vitess.io/vitess/go/vt/log"
 )
 
-const (
-	LostInRecoveryDowntimeSeconds int = 60 * 60 * 24 * 365
-)
-
 var configurationLoaded = make(chan bool)
 
 const (
 	HealthPollSeconds                     = 1
-	ActiveNodeExpireSeconds               = 5
 	AuditPageSize                         = 20
 	DebugMetricsIntervalSeconds           = 10
 	StaleInstanceCoordinatesExpireSeconds = 60
