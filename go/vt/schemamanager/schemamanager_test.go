@@ -20,10 +20,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 
@@ -61,10 +61,7 @@ func TestSchemaManagerControllerOpenFail(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := Run(ctx, controller, newFakeExecutor(t))
-	if err != errControllerOpen {
-		t.Fatalf("controller.Open fail, should get error: %v, but get error: %v",
-			errControllerOpen, err)
-	}
+	require.ErrorIs(t, err, errControllerOpen)
 }
 
 func TestSchemaManagerControllerReadFail(t *testing.T) {
@@ -72,13 +69,8 @@ func TestSchemaManagerControllerReadFail(t *testing.T) {
 		[]string{"select * from test_db"}, false, true, false)
 	ctx := context.Background()
 	_, err := Run(ctx, controller, newFakeExecutor(t))
-	if err != errControllerRead {
-		t.Fatalf("controller.Read fail, should get error: %v, but get error: %v",
-			errControllerRead, err)
-	}
-	if !controller.onReadFailTriggered {
-		t.Fatalf("OnReadFail should be called")
-	}
+	require.ErrorIs(t, err, errControllerRead)
+	require.True(t, controller.onReadFailTriggered, "OnReadFail should be called")
 }
 
 func TestSchemaManagerValidationFail(t *testing.T) {
@@ -87,9 +79,7 @@ func TestSchemaManagerValidationFail(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := Run(ctx, controller, newFakeExecutor(t))
-	if err == nil || !strings.Contains(err.Error(), "failed to parse sql") {
-		t.Fatalf("run schema change should fail due to executor.Validate fail, but got: %v", err)
-	}
+	require.ErrorContains(t, err, "failed to parse sql", "run schema change should fail due to executor.Validate fail")
 }
 
 func TestSchemaManagerExecutorOpenFail(t *testing.T) {
@@ -100,9 +90,7 @@ func TestSchemaManagerExecutorOpenFail(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := Run(ctx, controller, executor)
-	if err == nil || !strings.Contains(err.Error(), "unknown_keyspace") {
-		t.Fatalf("run schema change should fail due to executor.Open fail, but got: %v", err)
-	}
+	require.ErrorContains(t, err, "unknown_keyspace", "run schema change should fail due to executor.Open fail")
 }
 
 func TestSchemaManagerRun(t *testing.T) {
@@ -132,28 +120,14 @@ func TestSchemaManagerRun(t *testing.T) {
 			ctx := context.Background()
 			resp, err := Run(ctx, controller, executor)
 
-			if len(resp.UUIDs) > 0 {
-				t.Fatalf("response should contain an empty list of UUIDs, found %v", len(resp.UUIDs))
-			}
+			require.Lenf(t, resp.UUIDs, 0, "response should contain an empty list of UUIDs")
+			require.NoError(t, err)
 
-			if err != nil {
-				t.Fatalf("schema change should success but get error: %v", err)
-			}
-			if !controller.onReadSuccessTriggered {
-				t.Fatalf("OnReadSuccess should be called")
-			}
-			if controller.onReadFailTriggered {
-				t.Fatalf("OnReadFail should not be called")
-			}
-			if !controller.onValidationSuccessTriggered {
-				t.Fatalf("OnValidateSuccess should be called")
-			}
-			if controller.onValidationFailTriggered {
-				t.Fatalf("OnValidationFail should not be called")
-			}
-			if !controller.onExecutorCompleteTriggered {
-				t.Fatalf("OnExecutorComplete should be called")
-			}
+			require.True(t, controller.onReadSuccessTriggered, "OnReadSuccess should be called")
+			require.False(t, controller.onReadFailTriggered, "OnReadFail should not be called")
+			require.True(t, controller.onValidationSuccessTriggered, "OnValidateSuccess should be called")
+			require.False(t, controller.onValidationFailTriggered, "OnValidationFail should not be called")
+			require.True(t, controller.onExecutorCompleteTriggered, "OnExecutorComplete should be called")
 		})
 	}
 }
@@ -182,13 +156,8 @@ func TestSchemaManagerExecutorFail(t *testing.T) {
 
 	ctx := context.Background()
 	resp, err := Run(ctx, controller, executor)
-	if len(resp.UUIDs) > 0 {
-		t.Fatalf("response should contain an empty list of UUIDs, found %v", len(resp.UUIDs))
-	}
-
-	if err == nil || !strings.Contains(err.Error(), "schema change failed") {
-		t.Fatalf("schema change should fail, but got err: %v", err)
-	}
+	require.Lenf(t, resp.UUIDs, 0, "response should contain an empty list of UUIDs")
+	require.ErrorContains(t, err, "schema change failed", "schema change should fail")
 }
 
 func TestSchemaManagerExecutorBatchVsStrategyFail(t *testing.T) {
@@ -249,19 +218,15 @@ func TestSchemaManagerRegisterControllerFactory(t *testing.T) {
 		})
 
 	_, err := GetControllerFactory("unknown")
-	if err == nil || !strings.Contains(err.Error(), "there is no data sourcer factory") {
-		t.Fatalf("controller factory is not registered, GetControllerFactory should return an error, but got: %v", err)
-	}
+	require.ErrorContains(t, err, "there is no data sourcer factory", "controller factory is not registered, GetControllerFactory should return an error")
+
 	_, err = GetControllerFactory("test_controller")
-	if err != nil {
-		t.Fatalf("GetControllerFactory should succeed, but get an error: %v", err)
-	}
+	require.NoError(t, err)
+
 	func() {
 		defer func() {
 			err := recover()
-			if err == nil {
-				t.Fatalf("RegisterControllerFactory should fail, it registers a registered ControllerFactory")
-			}
+			require.NotNil(t, err, "RegisterControllerFactory should fail, it registers a registered ControllerFactory")
 		}()
 		RegisterControllerFactory(
 			"test_controller",
@@ -336,13 +301,13 @@ func newFakeTopo(t *testing.T) *topo.Server {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "test_cell")
-	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
-		t.Fatalf("CreateKeyspace failed: %v", err)
-	}
+	err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{})
+	require.NoError(t, err)
+
 	for i, shard := range []string{"0", "1", "2"} {
-		if err := ts.CreateShard(ctx, "test_keyspace", shard); err != nil {
-			t.Fatalf("CreateShard(%v) failed: %v", shard, err)
-		}
+		err = ts.CreateShard(ctx, "test_keyspace", shard)
+		require.NoError(t, err)
+
 		tablet := &topodatapb.Tablet{
 			Alias: &topodatapb.TabletAlias{
 				Cell: "test_cell",
@@ -351,22 +316,23 @@ func newFakeTopo(t *testing.T) *topo.Server {
 			Keyspace: "test_keyspace",
 			Shard:    shard,
 		}
-		if err := ts.CreateTablet(ctx, tablet); err != nil {
-			t.Fatalf("CreateTablet failed: %v", err)
-		}
-		if _, err := ts.UpdateShardFields(ctx, "test_keyspace", shard, func(si *topo.ShardInfo) error {
+
+		err = ts.CreateTablet(ctx, tablet)
+		require.NoError(t, err)
+
+		_, err = ts.UpdateShardFields(ctx, "test_keyspace", shard, func(si *topo.ShardInfo) error {
 			si.Shard.PrimaryAlias = tablet.Alias
 			return nil
-		}); err != nil {
-			t.Fatalf("UpdateShardFields failed: %v", err)
-		}
+		})
+		require.NoError(t, err)
 	}
-	if err := ts.CreateKeyspace(ctx, "unsharded_keyspace", &topodatapb.Keyspace{}); err != nil {
-		t.Fatalf("CreateKeyspace failed: %v", err)
-	}
-	if err := ts.CreateShard(ctx, "unsharded_keyspace", "0"); err != nil {
-		t.Fatalf("CreateShard(%v) failed: %v", "0", err)
-	}
+
+	err = ts.CreateKeyspace(ctx, "unsharded_keyspace", &topodatapb.Keyspace{})
+	require.NoError(t, err)
+
+	err = ts.CreateShard(ctx, "unsharded_keyspace", "0")
+	require.NoError(t, err)
+
 	tablet := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
 			Cell: "test_cell",
@@ -375,15 +341,14 @@ func newFakeTopo(t *testing.T) *topo.Server {
 		Keyspace: "test_keyspace",
 		Shard:    "0",
 	}
-	if err := ts.CreateTablet(ctx, tablet); err != nil {
-		t.Fatalf("CreateTablet failed: %v", err)
-	}
-	if _, err := ts.UpdateShardFields(ctx, "unsharded_keyspace", "0", func(si *topo.ShardInfo) error {
+	err = ts.CreateTablet(ctx, tablet)
+	require.NoError(t, err)
+
+	_, err = ts.UpdateShardFields(ctx, "unsharded_keyspace", "0", func(si *topo.ShardInfo) error {
 		si.Shard.PrimaryAlias = tablet.Alias
 		return nil
-	}); err != nil {
-		t.Fatalf("UpdateShardFields failed: %v", err)
-	}
+	})
+	require.NoError(t, err)
 	return ts
 }
 

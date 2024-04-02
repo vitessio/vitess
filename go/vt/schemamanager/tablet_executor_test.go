@@ -19,11 +19,11 @@ package schemamanager
 import (
 	"context"
 	"fmt"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -43,15 +43,13 @@ func TestTabletExecutorOpen(t *testing.T) {
 	executor := newFakeExecutor(t)
 	ctx := context.Background()
 
-	if err := executor.Open(ctx, "test_keyspace"); err != nil {
-		t.Fatalf("executor.Open should succeed")
-	}
+	err := executor.Open(ctx, "test_keyspace")
+	require.NoError(t, err)
 
 	defer executor.Close()
 
-	if err := executor.Open(ctx, "test_keyspace"); err != nil {
-		t.Fatalf("open an opened executor should also succeed")
-	}
+	err = executor.Open(ctx, "test_keyspace")
+	require.NoError(t, err, "open an opened executor should also succeed")
 }
 
 func TestTabletExecutorOpenWithEmptyPrimaryAlias(t *testing.T) {
@@ -69,13 +67,12 @@ func TestTabletExecutorOpenWithEmptyPrimaryAlias(t *testing.T) {
 	}
 	// This will create the Keyspace, Shard and Tablet record.
 	// Since this is a replica tablet, the Shard will have no primary.
-	if err := ts.InitTablet(ctx, tablet, false /*allowPrimaryOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/); err != nil {
-		t.Fatalf("InitTablet failed: %v", err)
-	}
+	err := ts.InitTablet(ctx, tablet, false /*allowPrimaryOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/)
+	require.NoError(t, err)
+
 	executor := NewTabletExecutor("TestTabletExecutorOpenWithEmptyPrimaryAlias", ts, newFakeTabletManagerClient(), logutil.NewConsoleLogger(), testWaitReplicasTimeout, 0, sqlparser.NewTestParser())
-	if err := executor.Open(ctx, "test_keyspace"); err == nil || !strings.Contains(err.Error(), "does not have a primary") {
-		t.Fatalf("executor.Open() = '%v', want error", err)
-	}
+	err = executor.Open(ctx, "test_keyspace")
+	require.ErrorContains(t, err, "does not have a primary")
 	executor.Close()
 }
 
@@ -115,42 +112,37 @@ func TestTabletExecutorValidate(t *testing.T) {
 		"ALTER SCHEMA db_name CHARACTER SET = utf8mb4",
 	}
 
-	if err := executor.Validate(ctx, sqls); err == nil {
-		t.Fatalf("validate should fail because executor is closed")
-	}
+	err := executor.Validate(ctx, sqls)
+	require.Error(t, err, "validate should fail because executor is closed")
 
 	executor.Open(ctx, "test_keyspace")
 	defer executor.Close()
 
 	// schema changes with DMLs should fail
-	if err := executor.Validate(ctx, []string{
-		"INSERT INTO test_table VALUES(1)"}); err == nil {
-		t.Fatalf("schema changes are for DDLs")
-	}
+	err = executor.Validate(ctx, []string{
+		"INSERT INTO test_table VALUES(1)",
+	})
+	require.Error(t, err, "schema changes are for DDLs")
 
 	// validates valid ddls
-	if err := executor.Validate(ctx, sqls); err != nil {
-		t.Fatalf("executor.Validate should succeed, but got error: %v", err)
-	}
+	err = executor.Validate(ctx, sqls)
+	require.NoError(t, err)
 
 	// alter a table with more than 100,000 rows
-	if err := executor.Validate(ctx, []string{
+	err = executor.Validate(ctx, []string{
 		"ALTER TABLE test_table_03 ADD COLUMN new_id bigint(20)",
-	}); err != nil {
-		t.Fatalf("executor.Validate should not fail, even for a table with more than 100,000 rows")
-	}
+	})
+	require.NoError(t, err, "executor.Validate should not fail, even for a table with more than 100,000 rows")
 
-	if err := executor.Validate(ctx, []string{
+	err = executor.Validate(ctx, []string{
 		"TRUNCATE TABLE test_table_04",
-	}); err != nil {
-		t.Fatalf("executor.Validate should succeed, drop a table with more than 2,000,000 rows is allowed")
-	}
+	})
+	require.NoError(t, err, "executor.Validate should succeed, truncate a table with more than 2,000,000 rows is allowed")
 
-	if err := executor.Validate(ctx, []string{
+	err = executor.Validate(ctx, []string{
 		"DROP TABLE test_table_04",
-	}); err != nil {
-		t.Fatalf("executor.Validate should succeed, drop a table with more than 2,000,000 rows is allowed")
-	}
+	})
+	require.NoError(t, err, "executor.Validate should succeed, drop a table with more than 2,000,000 rows is allowed")
 }
 
 func TestTabletExecutorDML(t *testing.T) {
@@ -186,10 +178,10 @@ func TestTabletExecutorDML(t *testing.T) {
 	defer executor.Close()
 
 	// schema changes with DMLs should fail
-	if err := executor.Validate(ctx, []string{
-		"INSERT INTO test_table VALUES(1)"}); err != nil {
-		t.Fatalf("executor.Validate should succeed, for DML to unsharded keyspace")
-	}
+	err := executor.Validate(ctx, []string{
+		"INSERT INTO test_table VALUES(1)",
+	})
+	require.NoError(t, err, "executor.Validate should succeed, for DML to unsharded keyspace")
 }
 
 func TestTabletExecutorExecute(t *testing.T) {
@@ -199,9 +191,7 @@ func TestTabletExecutorExecute(t *testing.T) {
 	sqls := []string{"DROP TABLE unknown_table"}
 
 	result := executor.Execute(ctx, sqls)
-	if result.ExecutorErr == "" {
-		t.Fatalf("execute should fail, call execute.Open first")
-	}
+	require.NotEmpty(t, result.ExecutorErr, "execute should fail, call execute.Open first")
 }
 
 func TestIsOnlineSchemaDDL(t *testing.T) {
