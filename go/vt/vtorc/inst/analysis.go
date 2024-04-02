@@ -142,9 +142,7 @@ type ReplicationAnalysis struct {
 	CountDelayedReplicas                      uint
 	CountLaggingReplicas                      uint
 	IsActionableRecovery                      bool
-	ProcessingNodeHostname                    string
-	ProcessingNodeToken                       string
-	StartActivePeriod                         string
+	RecoveryId                                int64
 	GTIDMode                                  string
 	MinReplicaGTIDMode                        string
 	MaxReplicaGTIDMode                        string

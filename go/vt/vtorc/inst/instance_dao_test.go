@@ -715,3 +715,60 @@ func TestGetDatabaseState(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, ds, `"alias": "zone1-0000000112"`)
 }
+
+func TestExpireTableData(t *testing.T) {
+	oldVal := config.Config.AuditPurgeDays
+	config.Config.AuditPurgeDays = 10
+	defer func() {
+		config.Config.AuditPurgeDays = oldVal
+	}()
+
+	tests := []struct {
+		name             string
+		tableName        string
+		insertQuery      string
+		timestampColumn  string
+		expectedRowCount int
+	}{
+		{
+			name:             "ExpireAudit",
+			tableName:        "audit",
+			timestampColumn:  "audit_timestamp",
+			expectedRowCount: 1,
+			insertQuery: `insert into audit (audit_id, audit_timestamp, audit_type, alias, message, keyspace, shard) values
+(1, NOW() - INTERVAL 50 DAY, 'a','a','a','a','a'),
+(2, NOW() - INTERVAL 5 DAY, 'a','a','a','a','a')`,
+		},
+		{
+			name:             "ExpireRecoveryDetectionHistory",
+			tableName:        "recovery_detection",
+			timestampColumn:  "detection_timestamp",
+			expectedRowCount: 2,
+			insertQuery: `insert into recovery_detection (detection_id, detection_timestamp, alias, analysis, keyspace, shard) values
+(1, NOW() - INTERVAL 3 DAY,'a','a','a','a'),
+(2, NOW() - INTERVAL 5 DAY,'a','a','a','a'),
+(3, NOW() - INTERVAL 15 DAY,'a','a','a','a')`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
+			defer func() {
+				db.ClearVTOrcDatabase()
+			}()
+			_, err := db.ExecVTOrc(tt.insertQuery)
+			require.NoError(t, err)
+
+			err = ExpireTableData(tt.tableName, tt.timestampColumn)
+			require.NoError(t, err)
+
+			rowsCount := 0
+			err = db.QueryVTOrc(`select * from `+tt.tableName, nil, func(rowMap sqlutils.RowMap) error {
+				rowsCount++
+				return nil
+			})
+			require.NoError(t, err)
+			require.EqualValues(t, tt.expectedRowCount, rowsCount)
+		})
+	}
+}

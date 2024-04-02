@@ -6,6 +6,7 @@
   - **[Breaking changes](#breaking-changes)**
     - [`shutdown_grace_period` Default Change](#shutdown-grace-period-default)
     - [New `unmanaged` Flag and `disable_active_reparents` deprecation](#unmanaged-flag)
+    - [`recovery-period-block-duration` Flag deprecation](#recovery-block-deprecation)
     - [`mysqlctld` `onterm-timeout` Default Change](#mysqlctld-onterm-timeout)
     - [`Durabler` interface method renaming](#durabler-interface-method-renaming)
   - **[Query Compatibility](#query-compatibility)**
@@ -39,6 +40,13 @@ In order to preserve the old behaviour, the users can set the flag back to `0 se
 New flag `--unmanaged` has been introduced in this release to make it easier to flag unmanaged tablets. It also runs validations to make sure the unmanaged tablets are configured properly. `--disable_active_reparents` flag has been deprecated for `vttablet`, `vtcombo` and `vttestserver` binaries and will be removed in future releases. Specifying the `--unmanaged` flag will also block replication commands and replication repairs.
 
 Starting this release, all unmanaged tablets should specify this flag.
+
+
+#### <a id="recovery-block-deprecation"/> `recovery-period-block-duration` Flag deprecation
+
+The flag `--recovery-period-block-duration` has been deprecated in VTOrc from this release. Its value is now ignored and the flag will be removed in later releases.
+VTOrc no longer blocks recoveries for a certain duration after a previous recovery has completed. Since VTOrc refreshes the required information after
+acquiring a shard lock, blocking of recoveries is not required.
 
 #### <a id="mysqlctld-onterm-timeout"/>`mysqlctld` `onterm_timeout` Default Change
 
