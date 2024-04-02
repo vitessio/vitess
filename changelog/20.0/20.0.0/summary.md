@@ -44,7 +44,7 @@ Starting this release, all unmanaged tablets should specify this flag.
 
 #### <a id="recovery-block-deprecation"/> `recovery-period-block-duration` Flag deprecation
 
-The flag `--recovery-period-block-duration` has been deprecated in VTOrc from this release. Its value is ignored and will be removed in later releases.
+The flag `--recovery-period-block-duration` has been deprecated in VTOrc from this release. Its value is now ignored and the flag will be removed in later releases.
 VTOrc no longer blocks recoveries for a certain duration after a previous recovery has completed. Since VTOrc refreshes the required information after
 acquiring a shard lock, blocking of recoveries is not required.
 
