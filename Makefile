@@ -318,16 +318,6 @@ define build_docker_image
 	fi
 endef
 
-docker_base:
-	${call build_docker_image,docker/base/Dockerfile,vitess/base}
-
-DOCKER_BASE_SUFFIX = mysql80 percona57 percona80
-DOCKER_BASE_TARGETS = $(addprefix docker_base_, $(DOCKER_BASE_SUFFIX))
-$(DOCKER_BASE_TARGETS): docker_base_%:
-	${call build_docker_image,docker/base/Dockerfile.$*,vitess/base:$*}
-
-docker_base_all: docker_base $(DOCKER_BASE_TARGETS)
-
 docker_lite:
 	${call build_docker_image,docker/lite/Dockerfile,vitess/lite}
 

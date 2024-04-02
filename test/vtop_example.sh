@@ -486,7 +486,6 @@ EOF
 # Build the docker image for vitess/lite using the local code
 docker build -f docker/lite/Dockerfile -t vitess/lite:pr .
 # Build the docker image for vitess/vtadmin using the local code
-docker build -f docker/base/Dockerfile -t vitess/base:pr .
 docker build -f docker/k8s/Dockerfile --build-arg VT_BASE_VER=pr -t vitess/k8s:pr .
 docker build -f docker/k8s/vtadmin/Dockerfile --build-arg VT_BASE_VER=pr -t vitess/vtadmin:pr .
 
