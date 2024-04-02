@@ -119,7 +119,7 @@ func (vtctlclient *VtctlClientProcess) ApplyRoutingRules(JSON string) (err error
 	return vtctlclient.ExecuteCommand("ApplyRoutingRules", "--", "--rules", JSON)
 }
 
-// ApplyRoutingRules does it
+// ApplyShardRoutingRules does it
 func (vtctlclient *VtctlClientProcess) ApplyShardRoutingRules(JSON string) (err error) {
 	return vtctlclient.ExecuteCommand("ApplyShardRoutingRules", "--", "--rules", JSON)
 }

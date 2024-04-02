@@ -40,7 +40,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
-// TestMultiStmt checks that multiStatements=True and multiStatements=False work properly.
+// TestMultiStatement checks that multiStatements=True and multiStatements=False work properly.
 func TestMultiStatement(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()

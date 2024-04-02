@@ -208,7 +208,7 @@ func TestTLSClientDisabled(t *testing.T) {
 	}
 }
 
-// TestTLSClientDisabled creates a Server with TLS support, then connects
+// TestTLSClientPreferredDefault creates a Server with TLS support, then connects
 // with a client with TLS preferred.
 func TestTLSClientPreferredDefault(t *testing.T) {
 	th := &testHandler{}
