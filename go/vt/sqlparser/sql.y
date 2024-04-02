@@ -586,7 +586,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <vindexParams> vindex_param_list vindex_params_opt
 %type <jsonObjectParam> json_object_param
 %type <jsonObjectParams> json_object_param_list json_object_param_opt
-%type <identifierCI> ci_identifier ci_identifier_opt vindex_type vindex_type_opt
+%type <identifierCI> ci_identifier vindex_type vindex_type_opt
 %type <str> database_or_schema column_opt insert_method_options row_format_options
 %type <referenceAction> fk_reference_action fk_on_delete fk_on_update
 %type <matchAction> fk_match fk_match_opt fk_match_action
@@ -681,15 +681,6 @@ ci_identifier:
   ID
   {
     $$ = NewIdentifierCI(string($1))
-  }
-
-ci_identifier_opt:
-  {
-    $$ = NewIdentifierCI("")
-  }
-| ci_identifier
-  {
-    $$ = $1
   }
 
 variable_expr:
@@ -2534,7 +2525,7 @@ index_column:
   }
 
 constraint_definition:
-  CONSTRAINT ci_identifier_opt constraint_info
+  CONSTRAINT sql_id_opt constraint_info
   {
     $$ = &ConstraintDefinition{Name: $2, Details: $3}
   }
@@ -2544,7 +2535,7 @@ constraint_definition:
   }
 
 check_constraint_definition:
-  CONSTRAINT ci_identifier_opt check_constraint_info
+  CONSTRAINT sql_id_opt check_constraint_info
   {
     $$ = &ConstraintDefinition{Name: $2, Details: $3}
   }
