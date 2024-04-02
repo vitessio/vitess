@@ -635,6 +635,42 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `1 * unix_timestamp(utc_timestamp(1))`,
 			result:     `DECIMAL(1698134400.1)`,
 		},
+		{
+			expression: `1 * unix_timestamp(CONVERT_TZ(20040101120000.10e0,'+00:00','+10:00'))`,
+			result:     `DECIMAL(1072990800.101563)`,
+		},
+		{
+			expression: `1 * unix_timestamp(CONVERT_TZ(20040101120000.10,'+00:00','+10:00'))`,
+			result:     `DECIMAL(1072990800.10)`,
+		},
+		{
+			expression: `1 * unix_timestamp(CONVERT_TZ(timestamp'2004-01-01 12:00:00.10','+00:00','+10:00'))`,
+			result:     `DECIMAL(1072990800.10)`,
+		},
+		{
+			expression: `1 * unix_timestamp(CONVERT_TZ('2004-01-01 12:00:00.10','+00:00','+10:00'))`,
+			result:     `DECIMAL(1072990800.10)`,
+		},
+		{
+			expression: `1 * unix_timestamp('2004-01-01 12:00:00.10')`,
+			result:     `DECIMAL(1072954800.10)`,
+		},
+		{
+			expression: `1 * unix_timestamp(from_unixtime(1447430881.123))`,
+			result:     `DECIMAL(1447430881.123)`,
+		},
+		{
+			expression: `1 * unix_timestamp(from_unixtime('1447430881.123'))`,
+			result:     `DECIMAL(1447430881.123000)`,
+		},
+		{
+			expression: `1 * unix_timestamp(from_unixtime(time '31:34:58'))`,
+			result:     `INT64(313458)`,
+		},
+		{
+			expression: `1 * unix_timestamp(from_unixtime(time '31:34:58.123'))`,
+			result:     `DECIMAL(313458.123)`,
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")
