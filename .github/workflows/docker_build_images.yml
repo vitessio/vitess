@@ -1,4 +1,4 @@
-name: Docker Build Base
+name: Docker Build Images
 on:
   push:
     branches:
@@ -7,21 +7,21 @@ on:
       - '*'
 
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Docker Build Base')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Docker Build Images')
   cancel-in-progress: true
 
 permissions: read-all
 
 jobs:
-  build_and_push_base:
-    name: Build and push vitess/base Docker images
+  build_and_push_lite:
+    name: Build and push vitess/lite Docker images
     runs-on: gh-hosted-runners-16cores-1
     if: github.repository == 'vitessio/vitess'
 
     strategy:
       fail-fast: true
       matrix:
-        branch: [ latest, mysql57, percona57, percona80 ]
+        branch: [ latest ]
 
     steps:
       - name: Check out code
@@ -36,9 +36,9 @@ jobs:
       - name: Set Dockerfile path
         run: |
           if [[ "${{ matrix.branch }}" == "latest" ]]; then
-            echo "DOCKERFILE=./docker/base/Dockerfile" >> $GITHUB_ENV
+            echo "DOCKERFILE=./docker/lite/Dockerfile" >> $GITHUB_ENV
           else
-            echo "DOCKERFILE=./docker/base/Dockerfile.${{ matrix.branch }}" >> $GITHUB_ENV
+            echo "DOCKERFILE=./docker/lite/Dockerfile.${{ matrix.branch }}" >> $GITHUB_ENV
           fi
 
       - name: Build and push on main
@@ -48,25 +48,26 @@ jobs:
           context: .
           file: ${{ env.DOCKERFILE }}
           push: true
-          tags: vitess/base:${{ matrix.branch }}
+          tags: vitess/lite:${{ matrix.branch }}
 
       ######
       # All code below only applies to new tags
       ######
-
       - name: Get the Git tag
         if: startsWith(github.ref, 'refs/tags/')
         run: echo "TAG_NAME=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
 
       - name: Set Docker tag name
-        if: startsWith(github.ref, 'refs/tags/') && matrix.branch == 'latest'
+        if: startsWith(github.ref, 'refs/tags/')
         run: |
           if [[ "${{ matrix.branch }}" == "latest" ]]; then
-            echo "DOCKER_TAG=vitess/base:${TAG_NAME}" >> $GITHUB_ENV
+            echo "DOCKER_TAG=vitess/lite:${TAG_NAME}" >> $GITHUB_ENV
+          else
+            echo "DOCKER_TAG=vitess/lite:${TAG_NAME}-${{ matrix.branch }}" >> $GITHUB_ENV
           fi
 
       - name: Build and push on tags
-        if: startsWith(github.ref, 'refs/tags/') && matrix.branch == 'latest'
+        if: startsWith(github.ref, 'refs/tags/')
         uses: docker/build-push-action@v5
         with:
           context: .
