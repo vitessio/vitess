@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -620,12 +621,6 @@ func (sm *StreamMigrator) readSourceStreams(ctx context.Context, cancelMigrate b
 						tabletStreams = append(tabletStreams[:i], tabletStreams[i+1:]...)
 						return nil
 					}
-					/*
-						if refStream.WorkflowType == binlogdatapb.VReplicationWorkflowType_Materialize && refStream.BinlogSource.Keyspace == sm.ts.TargetKeyspaceName() {
-							tabletStreams = append(tabletStreams[:i], tabletStreams[i+1:]...)
-							return nil
-						}
-					*/
 				}
 
 				return fmt.Errorf("streams are mismatched across source shards: %s vs %s", refshard, shard)
@@ -1016,6 +1011,11 @@ func (sm *StreamMigrator) createTargetStreams(ctx context.Context, tmpl []*VRepl
 					return key.KeyRangeLess(targets[i].GetShard().GetKeyRange(), targets[j].GetShard().GetKeyRange())
 				})
 				for _, tablet := range targets {
+					if slices.ContainsFunc(tabletStreams, func(s *VReplicationStream) bool {
+						return s.BinlogSource.Shard == tablet.GetShard().ShardName()
+					}) {
+						continue // We've already created it in a previous traffic switch.
+					}
 					stream := *vrs // Copy
 					stream.BinlogSource.Shard = tablet.GetShard().ShardName()
 					pos, err := sm.ts.TabletManagerClient().PrimaryPosition(ctx, tablet.primary.Tablet)
