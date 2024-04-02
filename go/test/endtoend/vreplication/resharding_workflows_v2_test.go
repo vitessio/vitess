@@ -145,7 +145,7 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 		if BypassLagCheck {
 			args = append(args, "--max-replication-lag-allowed=2542087h")
 		}
-		args = append(args, "--timeout=9m")
+		args = append(args, "--timeout=90s")
 	}
 	if action == workflowActionCreate && options.atomicCopy {
 		args = append(args, "--atomic-copy")
@@ -261,7 +261,6 @@ func validateWritesRouteToSource(t *testing.T) {
 	matchInsertQuery := "insert into customer(`name`, cid) values"
 	assertQueryExecutesOnTablet(t, vtgateConn, sourceTab, "customer", insertQuery, matchInsertQuery)
 	execVtgateQuery(t, vtgateConn, "customer", "delete from customer where cid > 100")
-	waitForLowLag(t, "customer", "customer_names")
 }
 
 func validateWritesRouteToTarget(t *testing.T) {
@@ -273,7 +272,6 @@ func validateWritesRouteToTarget(t *testing.T) {
 	insertQuery = "insert into customer(name, cid) values('tempCustomer3', 102)"
 	assertQueryExecutesOnTablet(t, vtgateConn, targetTab1, "customer", insertQuery, matchInsertQuery)
 	execVtgateQuery(t, vtgateConn, "customer", "delete from customer where cid > 100")
-	waitForLowLag(t, "customer", "customer_names")
 }
 
 func revert(t *testing.T, workflowType string) {

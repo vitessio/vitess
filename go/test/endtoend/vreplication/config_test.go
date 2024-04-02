@@ -145,7 +145,7 @@ create table nopk (name varchar(128), age int unsigned);
     "customer_names": {
       "column_vindexes": [
         {
-          "column": "name",
+          "column": "cid",
           "name": "xxhash"
         }
       ]

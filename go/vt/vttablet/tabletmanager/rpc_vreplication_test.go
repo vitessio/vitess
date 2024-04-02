@@ -77,8 +77,8 @@ const (
 	readAllWorkflows         = "select workflow, id, source, pos, stop_pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, message, db_name, rows_copied, tags, time_heartbeat, workflow_type, time_throttled, component_throttled, workflow_sub_type, defer_secondary_keys, options from _vt.vreplication where db_name = '%s'%s group by workflow, id order by workflow, id"
 	readWorkflowsLimited     = "select workflow, id, source, pos, stop_pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, message, db_name, rows_copied, tags, time_heartbeat, workflow_type, time_throttled, component_throttled, workflow_sub_type, defer_secondary_keys, options from _vt.vreplication where db_name = '%s' and workflow in ('%s') group by workflow, id order by workflow, id"
 	readWorkflow             = "select id, source, pos, stop_pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, message, db_name, rows_copied, tags, time_heartbeat, workflow_type, time_throttled, component_throttled, workflow_sub_type, defer_secondary_keys, options from _vt.vreplication where workflow = '%s' and db_name = '%s'"
-	readWorkflowConfig       = "select id, source, cell, tablet_types, state, message from _vt.vreplication where workflow = '%s'"
-	updateWorkflow           = "update _vt.vreplication set state = '%s', source = '%s', cell = '%s', tablet_types = '%s' where id in (%d)"
+	readWorkflowConfig       = "select id, source, cell, tablet_types, stop_pos, state, message from _vt.vreplication where workflow = '%s'"
+	updateWorkflow           = "update _vt.vreplication set state = '%s', source = '%s', cell = '%s', tablet_types = '%s', stop_pos = '%s' where id in (%d)"
 )
 
 var (
@@ -414,13 +414,13 @@ func TestMoveTables(t *testing.T) {
 		), nil)
 		ftc.vrdbClient.ExpectRequest(fmt.Sprintf(readWorkflowConfig, wf), sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
-				"id|source|cell|tablet_types|state|message",
-				"int64|blob|varchar|varchar|varchar|varchar",
+				"id|source|cell|tablet_types|stop_pos|state|message",
+				"int64|blob|varchar|varchar|varchar|varchar|varchar",
 			),
-			fmt.Sprintf("%d|%s|||Stopped|", vreplID, bls),
+			fmt.Sprintf("%d|%s||||Stopped|", vreplID, bls),
 		), nil)
 		ftc.vrdbClient.ExpectRequest(idQuery, idRes, nil)
-		ftc.vrdbClient.ExpectRequest(fmt.Sprintf(updateWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String(), strings.Replace(bls, `"`, `\"`, -1), "", "", vreplID), &sqltypes.Result{}, nil)
+		ftc.vrdbClient.ExpectRequest(fmt.Sprintf(updateWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String(), strings.Replace(bls, `"`, `\"`, -1), "", "", "", vreplID), &sqltypes.Result{}, nil)
 		ftc.vrdbClient.ExpectRequest(fmt.Sprintf(getVReplicationRecord, vreplID),
 			sqltypes.MakeTestResult(
 				sqltypes.MakeTestFields(
@@ -541,6 +541,7 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 	defer cancel()
 	cells := []string{"zone1"}
 	tabletTypes := []string{"replica"}
+	stopPosition := "MySQL56/6bd7be54-f0a0-11ee-84c7-ea290aba8775:1-1305"
 	workflow := "testwf"
 	keyspace := "testks"
 	vreplID := 1
@@ -552,7 +553,7 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 	tablet := tenv.addTablet(t, tabletUID, keyspace, shard)
 	defer tenv.deleteTablet(tablet.tablet)
 
-	parsed := sqlparser.BuildParsedQuery(sqlSelectVReplicationWorkflowConfig, sidecar.GetIdentifier(), ":wf")
+	parsed := sqlparser.BuildParsedQuery(sqlSelectVReplicationWorkflowConfig, sidecar.GetIdentifier(), ":wf", "")
 	bindVars := map[string]*querypb.BindVariable{
 		"wf": sqltypes.StringBindVariable(workflow),
 	}
@@ -562,10 +563,10 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 		keyspace, shard)
 	selectRes := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
-			"id|source|cell|tablet_types|state|message",
-			"int64|varchar|varchar|varchar|varchar|varbinary",
+			"id|source|cell|tablet_types|stop_pos|state|message",
+			"int64|varchar|varchar|varchar|varchar|varchar|varbinary",
 		),
-		fmt.Sprintf("%d|%s|%s|%s|Running|", vreplID, blsStr, cells[0], tabletTypes[0]),
+		fmt.Sprintf("%d|%s|%s|%s|%s|Running|", vreplID, blsStr, cells[0], tabletTypes[0], stopPosition),
 	)
 	idQuery, err := sqlparser.ParseAndBind("select id from _vt.vreplication where id = %a",
 		sqltypes.Int64BindVariable(int64(vreplID)))
@@ -590,20 +591,22 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 				State:    binlogdatapb.VReplicationWorkflowState(textutil.SimulatedNullInt),
 				Cells:    []string{"zone2"},
 				// TabletTypes is an empty value, so the current value should be cleared
+				StopPosition: textutil.SimulatedNullString,
 			},
-			query: fmt.Sprintf(`update _vt.vreplication set state = 'Running', source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"corder\" filter:\"select * from corder\"} rules:{match:\"customer\" filter:\"select * from customer\"}}', cell = '%s', tablet_types = '' where id in (%d)`,
-				keyspace, shard, "zone2", vreplID),
+			query: fmt.Sprintf(`update _vt.vreplication set state = 'Running', source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"corder\" filter:\"select * from corder\"} rules:{match:\"customer\" filter:\"select * from customer\"}}', cell = '%s', tablet_types = '', stop_pos = '%s' where id in (%d)`,
+				keyspace, shard, "zone2", stopPosition, vreplID),
 		},
 		{
 			name: "update cells, NULL tablet_types",
 			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
-				Workflow:    workflow,
-				State:       binlogdatapb.VReplicationWorkflowState(textutil.SimulatedNullInt),
-				Cells:       []string{"zone3"},
-				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)}, // So keep the current value of replica
+				Workflow:     workflow,
+				State:        binlogdatapb.VReplicationWorkflowState(textutil.SimulatedNullInt),
+				Cells:        []string{"zone3"},
+				TabletTypes:  []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)}, // So keep the current value of replica
+				StopPosition: textutil.SimulatedNullString,
 			},
-			query: fmt.Sprintf(`update _vt.vreplication set state = 'Running', source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"corder\" filter:\"select * from corder\"} rules:{match:\"customer\" filter:\"select * from customer\"}}', cell = '%s', tablet_types = '%s' where id in (%d)`,
-				keyspace, shard, "zone3", tabletTypes[0], vreplID),
+			query: fmt.Sprintf(`update _vt.vreplication set state = 'Running', source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"corder\" filter:\"select * from corder\"} rules:{match:\"customer\" filter:\"select * from customer\"}}', cell = '%s', tablet_types = '%s', stop_pos = '%s' where id in (%d)`,
+				keyspace, shard, "zone3", tabletTypes[0], stopPosition, vreplID),
 		},
 		{
 			name: "update tablet_types",
@@ -612,54 +615,72 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 				State:                     binlogdatapb.VReplicationWorkflowState(textutil.SimulatedNullInt),
 				TabletSelectionPreference: tabletmanagerdatapb.TabletSelectionPreference_INORDER,
 				TabletTypes:               []topodatapb.TabletType{topodatapb.TabletType_RDONLY, topodatapb.TabletType_REPLICA},
+				StopPosition:              textutil.SimulatedNullString,
 			},
-			query: fmt.Sprintf(`update _vt.vreplication set state = 'Running', source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"corder\" filter:\"select * from corder\"} rules:{match:\"customer\" filter:\"select * from customer\"}}', cell = '', tablet_types = '%s' where id in (%d)`,
-				keyspace, shard, "in_order:rdonly,replica", vreplID),
+			query: fmt.Sprintf(`update _vt.vreplication set state = 'Running', source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"corder\" filter:\"select * from corder\"} rules:{match:\"customer\" filter:\"select * from customer\"}}', cell = '', tablet_types = '%s', stop_pos = '%s' where id in (%d)`,
+				keyspace, shard, "in_order:rdonly,replica", stopPosition, vreplID),
 		},
 		{
 			name: "update tablet_types, NULL cells",
 			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
-				Workflow:    workflow,
-				State:       binlogdatapb.VReplicationWorkflowState(textutil.SimulatedNullInt),
-				Cells:       textutil.SimulatedNullStringSlice, // So keep the current value of zone1
-				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_RDONLY},
+				Workflow:     workflow,
+				State:        binlogdatapb.VReplicationWorkflowState(textutil.SimulatedNullInt),
+				Cells:        textutil.SimulatedNullStringSlice, // So keep the current value of zone1
+				TabletTypes:  []topodatapb.TabletType{topodatapb.TabletType_RDONLY},
+				StopPosition: textutil.SimulatedNullString,
 			},
-			query: fmt.Sprintf(`update _vt.vreplication set state = 'Running', source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"corder\" filter:\"select * from corder\"} rules:{match:\"customer\" filter:\"select * from customer\"}}', cell = '%s', tablet_types = '%s' where id in (%d)`,
-				keyspace, shard, cells[0], "rdonly", vreplID),
+			query: fmt.Sprintf(`update _vt.vreplication set state = 'Running', source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"corder\" filter:\"select * from corder\"} rules:{match:\"customer\" filter:\"select * from customer\"}}', cell = '%s', tablet_types = '%s', stop_pos = '%s' where id in (%d)`,
+				keyspace, shard, cells[0], "rdonly", stopPosition, vreplID),
 		},
 		{
 			name: "update on_ddl",
 			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
-				Workflow: workflow,
-				State:    binlogdatapb.VReplicationWorkflowState(textutil.SimulatedNullInt),
-				OnDdl:    binlogdatapb.OnDDLAction_EXEC,
+				Workflow:     workflow,
+				State:        binlogdatapb.VReplicationWorkflowState(textutil.SimulatedNullInt),
+				OnDdl:        binlogdatapb.OnDDLAction_EXEC,
+				StopPosition: textutil.SimulatedNullString,
 			},
-			query: fmt.Sprintf(`update _vt.vreplication set state = 'Running', source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"corder\" filter:\"select * from corder\"} rules:{match:\"customer\" filter:\"select * from customer\"}} on_ddl:%s', cell = '', tablet_types = '' where id in (%d)`,
-				keyspace, shard, binlogdatapb.OnDDLAction_EXEC.String(), vreplID),
+			query: fmt.Sprintf(`update _vt.vreplication set state = 'Running', source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"corder\" filter:\"select * from corder\"} rules:{match:\"customer\" filter:\"select * from customer\"}} on_ddl:%s', cell = '', tablet_types = '', stop_pos = '%s' where id in (%d)`,
+				keyspace, shard, binlogdatapb.OnDDLAction_EXEC.String(), stopPosition, vreplID),
 		},
 		{
 			name: "update cell,tablet_types,on_ddl",
 			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
-				Workflow:    workflow,
-				State:       binlogdatapb.VReplicationWorkflowState(textutil.SimulatedNullInt),
-				Cells:       []string{"zone1", "zone2", "zone3"},
-				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_RDONLY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_PRIMARY},
-				OnDdl:       binlogdatapb.OnDDLAction_EXEC_IGNORE,
+				Workflow:     workflow,
+				State:        binlogdatapb.VReplicationWorkflowState(textutil.SimulatedNullInt),
+				Cells:        []string{"zone1", "zone2", "zone3"},
+				TabletTypes:  []topodatapb.TabletType{topodatapb.TabletType_RDONLY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_PRIMARY},
+				OnDdl:        binlogdatapb.OnDDLAction_EXEC_IGNORE,
+				StopPosition: textutil.SimulatedNullString,
 			},
-			query: fmt.Sprintf(`update _vt.vreplication set state = 'Running', source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"corder\" filter:\"select * from corder\"} rules:{match:\"customer\" filter:\"select * from customer\"}} on_ddl:%s', cell = '%s', tablet_types = '%s' where id in (%d)`,
-				keyspace, shard, binlogdatapb.OnDDLAction_EXEC_IGNORE.String(), "zone1,zone2,zone3", "rdonly,replica,primary", vreplID),
+			query: fmt.Sprintf(`update _vt.vreplication set state = 'Running', source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"corder\" filter:\"select * from corder\"} rules:{match:\"customer\" filter:\"select * from customer\"}} on_ddl:%s', cell = '%s', tablet_types = '%s', stop_pos = '%s' where id in (%d)`,
+				keyspace, shard, binlogdatapb.OnDDLAction_EXEC_IGNORE.String(), "zone1,zone2,zone3", "rdonly,replica,primary", stopPosition, vreplID),
 		},
 		{
 			name: "update state",
 			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
-				Workflow:    workflow,
-				State:       binlogdatapb.VReplicationWorkflowState_Stopped,
-				Cells:       textutil.SimulatedNullStringSlice,
-				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)},
-				OnDdl:       binlogdatapb.OnDDLAction(textutil.SimulatedNullInt),
+				Workflow:     workflow,
+				State:        binlogdatapb.VReplicationWorkflowState_Stopped,
+				Cells:        textutil.SimulatedNullStringSlice,
+				TabletTypes:  []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)},
+				OnDdl:        binlogdatapb.OnDDLAction(textutil.SimulatedNullInt),
+				StopPosition: textutil.SimulatedNullString,
 			},
-			query: fmt.Sprintf(`update _vt.vreplication set state = '%s', source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"corder\" filter:\"select * from corder\"} rules:{match:\"customer\" filter:\"select * from customer\"}}', cell = '%s', tablet_types = '%s' where id in (%d)`,
-				binlogdatapb.VReplicationWorkflowState_Stopped.String(), keyspace, shard, cells[0], tabletTypes[0], vreplID),
+			query: fmt.Sprintf(`update _vt.vreplication set state = '%s', source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"corder\" filter:\"select * from corder\"} rules:{match:\"customer\" filter:\"select * from customer\"}}', cell = '%s', tablet_types = '%s', stop_pos = '%s' where id in (%d)`,
+				binlogdatapb.VReplicationWorkflowState_Stopped.String(), keyspace, shard, cells[0], tabletTypes[0], stopPosition, vreplID),
+		},
+		{
+			name: "update state and stop_pos",
+			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
+				Workflow:     workflow,
+				State:        binlogdatapb.VReplicationWorkflowState_Running,
+				Cells:        textutil.SimulatedNullStringSlice,
+				TabletTypes:  []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)},
+				OnDdl:        binlogdatapb.OnDDLAction(textutil.SimulatedNullInt),
+				StopPosition: "MySQL56/5aff8896-f0a0-11ee-a0bd-d6d8b502eb94:1-1312",
+			},
+			query: fmt.Sprintf(`update _vt.vreplication set state = '%s', source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"corder\" filter:\"select * from corder\"} rules:{match:\"customer\" filter:\"select * from customer\"}}', cell = '%s', tablet_types = '%s', stop_pos = '%s' where id in (%d)`,
+				binlogdatapb.VReplicationWorkflowState_Running.String(), keyspace, shard, cells[0], tabletTypes[0], "MySQL56/5aff8896-f0a0-11ee-a0bd-d6d8b502eb94:1-1312", vreplID),
 		},
 	}
 

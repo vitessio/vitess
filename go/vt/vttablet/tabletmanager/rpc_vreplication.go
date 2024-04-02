@@ -54,7 +54,7 @@ const (
 	// Delete VReplication records for the given workflow.
 	sqlDeleteVReplicationWorkflow = "delete from %s.vreplication where workflow = %a and db_name = %a"
 	// Retrieve the current configuration values for a workflow's vreplication stream(s).
-	sqlSelectVReplicationWorkflowConfig = "select id, source, cell, tablet_types, state, message from %s.vreplication where workflow = %a%s"
+	sqlSelectVReplicationWorkflowConfig = "select id, source, cell, tablet_types, stop_pos, state, message from %s.vreplication where workflow = %a%s"
 	// Update the configuration values for a workflow's vreplication stream.
 	sqlUpdateVReplicationWorkflowStreamConfig = "update %s.vreplication set state = %a, source = %a, cell = %a, tablet_types = %a, stop_pos = %a where id = %a"
 	// Update field values for multiple workflows. The final format specifier is
