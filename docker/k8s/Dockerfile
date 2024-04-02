@@ -44,6 +44,7 @@ COPY --from=lite /vt/bin/vttablet /vt/bin/
 COPY --from=lite /vt/bin/vtbackup /vt/bin/
 COPY --from=lite /vt/bin/vtadmin /vt/bin/
 COPY --from=lite /vt/bin/vtorc /vt/bin/
+COPY --from=lite /vt/bin/vtexplain /vt/bin/
 
 # copy web admin files
 COPY --from=lite $VTROOT/web /vt/web/

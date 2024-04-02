@@ -15,7 +15,7 @@
 ARG VT_BASE_VER=latest
 ARG DEBIAN_VER=stable-slim
 
-FROM vitess/lite:${VT_BASE_VER} AS lite
+FROM vitess/k8s:${VT_BASE_VER} AS k8s
 
 FROM debian:${DEBIAN_VER}
 
@@ -26,7 +26,7 @@ ENV VTROOT /vt
 RUN mkdir -p /vt/bin && mkdir -p /vtdataroot
 
 # Copy binaries
-COPY --from=lite /vt/bin/vtexplain /vt/bin/
+COPY --from=k8s /vt/bin/vtexplain /vt/bin/
 
 # add vitess user/group and add permissions
 RUN groupadd -r --gid 2000 vitess && \
