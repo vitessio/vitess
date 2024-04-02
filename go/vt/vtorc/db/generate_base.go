@@ -22,7 +22,6 @@ var TableNames = []string{
 	"node_health",
 	"topology_recovery",
 	"database_instance_topology_history",
-	"candidate_database_instance",
 	"recovery_detection",
 	"database_instance_last_analysis",
 	"database_instance_analysis_changelog",
@@ -180,20 +179,6 @@ CREATE TABLE database_instance_topology_history (
 )`,
 	`
 CREATE INDEX keyspace_shard_idx_database_instance_topology_history ON database_instance_topology_history (snapshot_unix_timestamp, keyspace, shard)
-	`,
-	`
-DROP TABLE IF EXISTS candidate_database_instance
-`,
-	`
-CREATE TABLE candidate_database_instance (
-	alias varchar(256) NOT NULL,
-	last_suggested timestamp not null default (''),
-	priority TINYINT SIGNED NOT NULL DEFAULT 1,
-	promotion_rule text check(promotion_rule in ('must', 'prefer', 'neutral', 'prefer_not', 'must_not')) NOT NULL DEFAULT 'neutral',
-	PRIMARY KEY (alias)
-)`,
-	`
-CREATE INDEX last_suggested_idx_candidate_database_instance ON candidate_database_instance (last_suggested)
 	`,
 	`
 DROP TABLE IF EXISTS recovery_detection
