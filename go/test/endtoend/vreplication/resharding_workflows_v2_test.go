@@ -28,6 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/throttler"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/wrangler"
 
@@ -584,6 +585,11 @@ func testPartialSwitches(t *testing.T) {
 }
 
 func testRestOfWorkflow(t *testing.T) {
+	// Relax the throttler so that it does not cause switches to fail because it can block
+	// the catchup for the intra-keyspace materialization.
+	res, err := throttler.UpdateThrottlerTopoConfigRaw(vc.VtctldClient, "customer", true, false, throttlerConfig.Threshold*5, throttlerConfig.Query, nil)
+	require.NoError(t, err, res)
+
 	testPartialSwitches(t)
 
 	// test basic forward and reverse flows
@@ -645,7 +651,7 @@ func testRestOfWorkflow(t *testing.T) {
 	validateWritesRouteToSource(t)
 
 	// trying to complete an unswitched workflow should error
-	err := tstWorkflowComplete(t)
+	err = tstWorkflowComplete(t)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), wrangler.ErrWorkflowNotFullySwitched)
 
