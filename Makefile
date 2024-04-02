@@ -365,20 +365,6 @@ docker_test:
 docker_unit_test:
 	go run test.go -flavor $(flavor) unit
 
-# Release a version.
-# This will generate a tar.gz file into the releases folder with the current source
-release: docker_base
-	@if [ -z "$VERSION" ]; then \
-		echo "Set the env var VERSION with the release version"; exit 1;\
-	fi
-	mkdir -p releases
-	docker build -f docker/Dockerfile.release -t vitess/release .
-	docker run -v ${PWD}/releases:/vt/releases --env VERSION=$(VERSION) vitess/release
-	git tag -m Version\ $(VERSION) v$(VERSION)
-	echo "A git tag was created, you can push it with:"
-	echo "git push origin v$(VERSION)"
-	echo "Also, don't forget the upload releases/v$(VERSION).tar.gz file to GitHub releases"
-
 create_release:
 	./tools/create_release.sh
 
