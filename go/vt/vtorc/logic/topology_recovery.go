@@ -198,10 +198,6 @@ func recoverPrimaryHasPrimary(ctx context.Context, analysisEntry *inst.Replicati
 // runEmergencyReparentOp runs a recovery for which we have to run ERS. Here waitForAllTablets is a boolean telling ERS whether it should wait for all the tablets
 // or is it okay to skip 1.
 func runEmergencyReparentOp(ctx context.Context, analysisEntry *inst.ReplicationAnalysis, recoveryName string, waitForAllTablets bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
-	if !analysisEntry.ClusterDetails.HasAutomatedPrimaryRecovery {
-		return false, nil, nil
-	}
-
 	// Read the tablet information from the database to find the shard and keyspace of the tablet
 	tablet, err := inst.ReadTablet(analysisEntry.AnalyzedInstanceAlias)
 	if err != nil {

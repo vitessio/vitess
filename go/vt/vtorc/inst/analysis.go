@@ -54,9 +54,7 @@ const (
 	AllPrimaryReplicasNotReplicatingOrDead AnalysisCode = "AllPrimaryReplicasNotReplicatingOrDead"
 	LockedSemiSyncPrimaryHypothesis        AnalysisCode = "LockedSemiSyncPrimaryHypothesis"
 	LockedSemiSyncPrimary                  AnalysisCode = "LockedSemiSyncPrimary"
-	PrimaryWithoutReplicas                 AnalysisCode = "PrimaryWithoutReplicas"
 	BinlogServerFailingToConnectToPrimary  AnalysisCode = "BinlogServerFailingToConnectToPrimary"
-	GraceFulPrimaryTakeover                AnalysisCode = "GracefulPrimaryTakeover"
 	ErrantGTIDDetected                     AnalysisCode = "ErrantGTIDDetected"
 )
 
@@ -83,34 +81,20 @@ type ReplicationAnalysisHints struct {
 	AuditAnalysis bool
 }
 
-type AnalysisInstanceType string
-
-const (
-	AnalysisInstanceTypePrimary             AnalysisInstanceType = "primary"
-	AnalysisInstanceTypeCoPrimary           AnalysisInstanceType = "co-primary"
-	AnalysisInstanceTypeIntermediatePrimary AnalysisInstanceType = "intermediate-primary"
-)
-
 // ReplicationAnalysis notes analysis on replication chain status, per instance
 type ReplicationAnalysis struct {
-	AnalyzedInstanceHostname     string
-	AnalyzedInstancePort         int
 	AnalyzedInstanceAlias        string
 	AnalyzedInstancePrimaryAlias string
 	TabletType                   topodatapb.TabletType
 	PrimaryTimeStamp             time.Time
 	ClusterDetails               ClusterInfo
-	AnalyzedInstanceDataCenter   string
-	AnalyzedInstanceRegion       string
 	AnalyzedKeyspace             string
 	AnalyzedShard                string
 	// ShardPrimaryTermTimestamp is the primary term start time stored in the shard record.
 	ShardPrimaryTermTimestamp                 string
-	AnalyzedInstancePhysicalEnvironment       string
 	AnalyzedInstanceBinlogCoordinates         BinlogCoordinates
 	IsPrimary                                 bool
 	IsClusterPrimary                          bool
-	IsCoPrimary                               bool
 	LastCheckValid                            bool
 	LastCheckPartialSuccess                   bool
 	CountReplicas                             uint
@@ -157,18 +141,6 @@ func (replicationAnalysis *ReplicationAnalysis) MarshalJSON() ([]byte, error) {
 	i.ReplicationAnalysis = *replicationAnalysis
 
 	return json.Marshal(i)
-}
-
-// Get a string description of the analyzed instance type (primary? co-primary? intermediate-primary?)
-func (replicationAnalysis *ReplicationAnalysis) GetAnalysisInstanceType() AnalysisInstanceType {
-	if replicationAnalysis.IsCoPrimary {
-		return AnalysisInstanceTypeCoPrimary
-	}
-
-	if replicationAnalysis.IsPrimary {
-		return AnalysisInstanceTypePrimary
-	}
-	return AnalysisInstanceTypeIntermediatePrimary
 }
 
 // ValidSecondsFromSeenToLastAttemptedCheck returns the maximum allowed elapsed time
