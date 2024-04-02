@@ -15,7 +15,7 @@
 ARG VT_BASE_VER=latest
 ARG DEBIAN_VER=stable-slim
 
-FROM vitess/base:${VT_BASE_VER} AS base
+FROM vitess/lite:${VT_BASE_VER} AS lite
 
 FROM debian:${DEBIAN_VER}
 
@@ -31,28 +31,28 @@ RUN mkdir -p /vt && \
     mkdir -p /vtdataroot/tabletdata
 
 # Copy CA certs for https calls
-COPY --from=base /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=lite /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
 # Copy binaries
-COPY --from=base /vt/bin/mysqlctld /vt/bin/
-COPY --from=base /vt/bin/mysqlctl /vt/bin/
-COPY --from=base /vt/bin/vtctld /vt/bin/
-COPY --from=base /vt/bin/vtctl /vt/bin/
-COPY --from=base /vt/bin/vtctlclient /vt/bin/
-COPY --from=base /vt/bin/vtgate /vt/bin/
-COPY --from=base /vt/bin/vttablet /vt/bin/
-COPY --from=base /vt/bin/vtbackup /vt/bin/
-COPY --from=base /vt/bin/vtadmin /vt/bin/
-COPY --from=base /vt/bin/vtorc /vt/bin/
+COPY --from=lite /vt/bin/mysqlctld /vt/bin/
+COPY --from=lite /vt/bin/mysqlctl /vt/bin/
+COPY --from=lite /vt/bin/vtctld /vt/bin/
+COPY --from=lite /vt/bin/vtctl /vt/bin/
+COPY --from=lite /vt/bin/vtctlclient /vt/bin/
+COPY --from=lite /vt/bin/vtgate /vt/bin/
+COPY --from=lite /vt/bin/vttablet /vt/bin/
+COPY --from=lite /vt/bin/vtbackup /vt/bin/
+COPY --from=lite /vt/bin/vtadmin /vt/bin/
+COPY --from=lite /vt/bin/vtorc /vt/bin/
 
 # copy web admin files
-COPY --from=base $VTROOT/web /vt/web/
+COPY --from=lite $VTROOT/web /vt/web/
 
 # copy vitess config
-COPY --from=base $VTROOT/config/init_db.sql /vt/config/
+COPY --from=lite $VTROOT/config/init_db.sql /vt/config/
 
 # my.cnf include files
-COPY --from=base $VTROOT/config/mycnf /vt/config/mycnf
+COPY --from=lite $VTROOT/config/mycnf /vt/config/mycnf
 
 # add vitess user and add permissions
 RUN groupadd -r --gid 2000 vitess && useradd -r -g vitess --uid 1000 vitess && \
