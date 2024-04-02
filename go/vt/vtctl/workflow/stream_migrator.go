@@ -692,11 +692,11 @@ func (sm *StreamMigrator) stopSourceStreams(ctx context.Context) error {
 			return nil
 		}
 
-		// For materialize workflows where the source and target are both the keyspace
-		// that is being resharded, we need to wait for those to catchup as well.
-		// New writes have already been blocked on the source, but the materialization
-		// workflow(s) may still need to catchup with writes that happend just before
-		// writes were stopped on the source.
+		// For intra-keyspace materialize workflows where the source and target are both
+		// the keyspace that is being resharded, we need to wait for those to catchup as
+		// well. New writes have already been blocked on the source, but the materialization
+		// workflow(s) still need to catchup with writes that happened just before writes
+		// were stopped on the source.
 		eg, egCtx := errgroup.WithContext(ctx)
 		for _, vrs := range tabletStreams {
 			if vrs.WorkflowType == binlogdatapb.VReplicationWorkflowType_Materialize && vrs.BinlogSource.Keyspace == sm.ts.TargetKeyspaceName() {
@@ -816,7 +816,10 @@ func (sm *StreamMigrator) syncSourceStreams(ctx context.Context) (map[string]rep
 				comment := ""
 				if vrs.WorkflowType == binlogdatapb.VReplicationWorkflowType_Materialize && vrs.BinlogSource.Keyspace == sm.ts.TargetKeyspaceName() {
 					// For intra-keyspace materializations in a keyspace that's being
-					// resharded, we may not have any serving tablets in the source keyspace.
+					// resharded, we don't have serving tablets in the source keyspace.
+					// So we instruct the VReplication engine and controller on the
+					// target tablets to include non-serving tablets in their search
+					// for source tablets to stream from.
 					comment = fmt.Sprintf("/*vt+ %s=1 */ ", vreplication.IncludeNonServingTabletsCommentDirective)
 				}
 				query := fmt.Sprintf("update %s_vt.vreplication set state='Running', stop_pos='%s', message='synchronizing for cutover' where id=%d",

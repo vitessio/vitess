@@ -339,7 +339,7 @@ func (vre *Engine) getDBClient(isAdmin bool) binlogplayer.DBClient {
 }
 
 // ExecWithDBA runs the specified query as the DBA user.
-func (vre *Engine) ExecWithDBA(query string, options ...any) (*sqltypes.Result, error) {
+func (vre *Engine) ExecWithDBA(query string) (*sqltypes.Result, error) {
 	return vre.exec(query, true /*runAsAdmin*/)
 }
 
