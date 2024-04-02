@@ -261,6 +261,7 @@ func validateWritesRouteToSource(t *testing.T) {
 	matchInsertQuery := "insert into customer(`name`, cid) values"
 	assertQueryExecutesOnTablet(t, vtgateConn, sourceTab, "customer", insertQuery, matchInsertQuery)
 	execVtgateQuery(t, vtgateConn, "customer", "delete from customer where cid > 100")
+	waitForLowLag(t, "customer", "customer_names")
 }
 
 func validateWritesRouteToTarget(t *testing.T) {
@@ -272,6 +273,7 @@ func validateWritesRouteToTarget(t *testing.T) {
 	insertQuery = "insert into customer(name, cid) values('tempCustomer3', 102)"
 	assertQueryExecutesOnTablet(t, vtgateConn, targetTab1, "customer", insertQuery, matchInsertQuery)
 	execVtgateQuery(t, vtgateConn, "customer", "delete from customer where cid > 100")
+	waitForLowLag(t, "customer", "customer_names")
 }
 
 func revert(t *testing.T, workflowType string) {
@@ -461,8 +463,8 @@ func testReshardV2Workflow(t *testing.T) {
 }
 
 func testMoveTablesV2Workflow(t *testing.T) {
-	//vtgateConn, closeConn := getVTGateConn()
-	//defer closeConn()
+	vtgateConn, closeConn := getVTGateConn()
+	defer closeConn()
 	currentWorkflowType = binlogdatapb.VReplicationWorkflowType_MoveTables
 
 	materializeShow := func() {
@@ -501,17 +503,17 @@ func testMoveTablesV2Workflow(t *testing.T) {
 	// If it's not then we'll get an error as the table doesn't exist in the vschema
 	createMoveTablesWorkflow(t, "customer,loadtest,vdiff_order,reftable,_vt_PURGE_4f9194b43b2011eb8a0104ed332e05c2_20221210194431")
 	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
-	//validateReadsRouteToSource(t, "replica")
-	//validateWritesRouteToSource(t)
+	validateReadsRouteToSource(t, "replica")
+	validateWritesRouteToSource(t)
 
 	// Verify that we've properly ignored any internal operational tables
 	// and that they were not copied to the new target keyspace
-	//verifyNoInternalTables(t, vtgateConn, targetKs)
+	verifyNoInternalTables(t, vtgateConn, targetKs)
 
-	//testReplicatingWithPKEnumCols(t)
+	testReplicatingWithPKEnumCols(t)
 
 	// Confirm that updating MoveTable workflows works.
-	//testWorkflowUpdate(t)
+	testWorkflowUpdate(t)
 
 	testRestOfWorkflow(t)
 	materialize(t, materializeCustomerCopySpec, false)
@@ -523,19 +525,17 @@ func testMoveTablesV2Workflow(t *testing.T) {
 
 	testVSchemaForSequenceAfterMoveTables(t)
 
-	/*
-		createMoveTablesWorkflow(t, "Lead,Lead-1")
-		output, err = vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)
-		require.NoError(t, err)
-		require.True(t, listOutputContainsWorkflow(output, "wf1") && listOutputContainsWorkflow(output, "customer_names"))
+	createMoveTablesWorkflow(t, "Lead,Lead-1")
+	output, err = vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)
+	require.NoError(t, err)
+	require.True(t, listOutputContainsWorkflow(output, "wf1") && listOutputContainsWorkflow(output, "customer_names"))
 
-		err = tstWorkflowCancel(t)
-		require.NoError(t, err)
+	err = tstWorkflowCancel(t)
+	require.NoError(t, err)
 
-		output, err = vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)
-		require.NoError(t, err)
-		require.True(t, listOutputContainsWorkflow(output, "customer_names") && !listOutputContainsWorkflow(output, "wf1"))
-	*/
+	output, err = vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)
+	require.NoError(t, err)
+	require.True(t, listOutputContainsWorkflow(output, "customer_names") && !listOutputContainsWorkflow(output, "wf1"))
 }
 
 func testPartialSwitches(t *testing.T) {
