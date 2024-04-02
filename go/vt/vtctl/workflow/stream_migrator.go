@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -1001,34 +1000,38 @@ func (sm *StreamMigrator) createTargetStreams(ctx context.Context, tmpl []*VRepl
 			return nil
 		}
 
+		var intraKeyspaceStreams map[string]bool
+
 		for _, vrs := range tabletStreams {
 			// If we have an intra-keyspace materialization workflow, we need to
-			// create the streams from each target shard to each target shard.
+			// create the streams from each target shard to each target shard
+			// rather than simply copying the streams from the source shards.
 			if vrs.WorkflowType == binlogdatapb.VReplicationWorkflowType_Materialize && vrs.BinlogSource.Keyspace == sm.ts.TargetKeyspaceName() {
-				tm := sm.ts.Targets()
-				targets := maps.Values(tm)
+				if intraKeyspaceStreams == nil {
+					intraKeyspaceStreams = make(map[string]bool)
+				}
+				targets := maps.Values(sm.ts.Targets())
 				sort.Slice(targets, func(i, j int) bool {
 					return key.KeyRangeLess(targets[i].GetShard().GetKeyRange(), targets[j].GetShard().GetKeyRange())
 				})
-				for _, tablet := range targets {
-					if slices.ContainsFunc(tabletStreams, func(s *VReplicationStream) bool {
-						return s.BinlogSource.Shard == tablet.GetShard().ShardName()
-					}) {
-						continue // We've already created it in a previous traffic switch.
-					}
+				for _, st := range targets {
 					stream := *vrs // Copy
-					stream.BinlogSource.Shard = tablet.GetShard().ShardName()
-					pos, err := sm.ts.TabletManagerClient().PrimaryPosition(ctx, tablet.primary.Tablet)
+					stream.BinlogSource.Shard = st.GetShard().ShardName()
+					key := fmt.Sprintf("%s/%s:%s/%s", target.si.Keyspace(), target.GetShard().ShardName(), st.GetShard().Keyspace(), st.GetShard().ShardName())
+					if intraKeyspaceStreams[key] {
+						continue // We've already created it.
+					}
+					pos, err := sm.ts.TabletManagerClient().PrimaryPosition(ctx, st.primary.Tablet)
 					if err != nil {
 						return err
 					}
 					sm.ts.Logger().Infof("Setting position for intra-keyspace materialization workflow %s on %v/%v to %v on tablet %s",
-						vrs.Workflow, tablet.primary.Keyspace, tablet.primary.Shard, pos, topoproto.TabletAliasString(tablet.primary.Tablet.Alias))
+						stream.Workflow, st.primary.Keyspace, st.primary.Shard, pos, topoproto.TabletAliasString(st.primary.Tablet.Alias))
 					stream.Position, err = binlogplayer.DecodePosition(pos)
 					if err != nil {
 						return err
 					}
-					tabletStreams = append(tabletStreams, &stream)
+					intraKeyspaceStreams[key] = true
 					if err := addStreamRow(&stream); err != nil {
 						return err
 					}

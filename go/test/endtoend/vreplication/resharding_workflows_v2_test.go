@@ -466,6 +466,9 @@ func testMoveTablesV2Workflow(t *testing.T) {
 	currentWorkflowType = binlogdatapb.VReplicationWorkflowType_MoveTables
 
 	materializeShow := func() {
+		if !debugMode {
+			return
+		}
 		output, err := vc.VtctldClient.ExecuteCommandWithOutput("materialize", "--target-keyspace=customer", "show", "--workflow=customer_names", "--compact", "--include-logs=false")
 		require.NoError(t, err)
 		log.Error("Materialize show output: ", output)
@@ -648,6 +651,7 @@ func testRestOfWorkflow(t *testing.T) {
 
 	// fully switch and complete
 	waitForLowLag(t, "customer", "wf1")
+	waitForLowLag(t, "customer", "customer_names")
 	tstWorkflowSwitchReadsAndWrites(t)
 	validateReadsRoute(t, "rdonly", targetRdonlyTab1)
 	validateReadsRouteToTarget(t, "replica")
