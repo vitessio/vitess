@@ -27,65 +27,58 @@ import { WorkspaceTitle } from '../layout/WorkspaceTitle';
 import { QueryLoadingPlaceholder } from '../placeholders/QueryLoadingPlaceholder';
 
 export const Vtctlds = () => {
-    const vtctldsQuery = useVtctlds();
-    const { data: vtctlds = [] } = vtctldsQuery;
+  const vtctldsQuery = useVtctlds();
+  const { data: vtctlds = [] } = vtctldsQuery;
 
-    const { value: filter, updateValue: updateFilter } = useSyncedURLParam('filter');
+  const { value: filter, updateValue: updateFilter } = useSyncedURLParam('filter');
 
-    const data = useMemo(() => {
-        const mapped = vtctlds.map((v) => ({
-            cluster: v.cluster?.name,
-            clusterID: v.cluster?.id,
-            hostname: v.hostname,
-            fqdn: v.FQDN,
-        }));
+  const data = useMemo(() => {
+    const mapped = vtctlds.map((v) => ({
+      cluster: v.cluster?.name,
+      clusterID: v.cluster?.id,
+      hostname: v.hostname,
+    }));
 
-        const filtered = filterNouns(filter, mapped);
+    const filtered = filterNouns(filter, mapped);
 
-        return orderBy(filtered, ['cluster', 'hostname']);
-    }, [filter, vtctlds]);
+    return orderBy(filtered, ['cluster', 'hostname']);
+  }, [filter, vtctlds]);
 
-    const renderRows = (rows: typeof data) => {
-        return rows.map((row) => {
-            return (
-                <tr key={row.hostname}>
-                    <DataCell>
-                        <div className="font-bold">
-                            {row.fqdn ? (
-                                <a href={`//${row.fqdn}`} rel="noopener noreferrer" target="_blank">
-                                    {row.hostname}
-                                </a>
-                            ) : (
-                                row.hostname
-                            )}
-                        </div>
-                    </DataCell>
-                    <DataCell>
-                        {row.cluster}
-                        <div className="text-sm text-secondary">{row.clusterID}</div>
-                    </DataCell>
-                </tr>
-            );
-        });
-    };
+  const renderRows = (rows: typeof data) => {
+    return rows.map((row) => {
+      return (
+        <tr key={row.hostname}>
+          <DataCell>
+            <div className="font-bold">
+              {row.hostname}
+            </div>
+          </DataCell>
+          <DataCell>
+            {row.cluster}
+            <div className="text-sm text-secondary">{row.clusterID}</div>
+          </DataCell>
+        </tr>
+      );
+    });
+  };
 
-    return (
-        <div>
-            <WorkspaceHeader>
-                <WorkspaceTitle>vtctlds</WorkspaceTitle>
-            </WorkspaceHeader>
+  return (
+    <div>
+      <WorkspaceHeader>
+        <WorkspaceTitle>vtctlds</WorkspaceTitle>
+      </WorkspaceHeader>
 
-            <ContentContainer>
-                <DataFilter
-                    autoFocus
-                    onChange={(e) => updateFilter(e.target.value)}
-                    onClear={() => updateFilter('')}
-                    placeholder="Filter vtctlds"
-                    value={filter || ''}
-                />
-                <DataTable columns={['Hostname', 'Cluster']} data={data} renderRows={renderRows} />
-                <QueryLoadingPlaceholder query={vtctldsQuery} />
-            </ContentContainer>
-        </div>
-    );
+      <ContentContainer>
+        <DataFilter
+          autoFocus
+          onChange={(e) => updateFilter(e.target.value)}
+          onClear={() => updateFilter('')}
+          placeholder="Filter vtctlds"
+          value={filter || ''}
+        />
+        <DataTable columns={['Hostname', 'Cluster']} data={data} renderRows={renderRows} />
+        <QueryLoadingPlaceholder query={vtctldsQuery} />
+      </ContentContainer>
+    </div>
+  );
 };
