@@ -29,7 +29,7 @@ import (
 
 var SystemTime = time.Now
 
-const maxTimePrec = 6
+const maxTimePrec = datetime.DefaultPrecision
 
 type (
 	builtinNow struct {
@@ -424,15 +424,28 @@ func (call *builtinConvertTz) compile(c *compiler) (ctype, error) {
 		c.asm.Convert_xb(1, sqltypes.VarBinary, nil)
 	}
 
+	var prec int32
 	switch n.Type {
 	case sqltypes.Datetime, sqltypes.Date:
+		prec = n.Size
+	case sqltypes.Decimal, sqltypes.Time:
+		prec = n.Size
+		c.asm.Convert_xDT(3, -1, false)
+	case sqltypes.VarChar, sqltypes.VarBinary:
+		if lit, ok := call.Arguments[0].(*Literal); ok && !n.isHexOrBitLiteral() {
+			if dt := evalToDateTime(lit.inner, -1, time.Now(), c.sqlmode.AllowZeroDate()); dt != nil {
+				prec = int32(dt.prec)
+			}
+		}
+		c.asm.Convert_xDT(3, -1, false)
 	default:
+		prec = maxTimePrec
 		c.asm.Convert_xDT(3, -1, false)
 	}
 
 	c.asm.Fn_CONVERT_TZ()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Datetime, Col: collationBinary, Flag: n.Flag | flagNullable}, nil
+	return ctype{Type: sqltypes.Datetime, Col: collationBinary, Flag: n.Flag | flagNullable, Size: prec}, nil
 }
 
 func (b *builtinDate) eval(env *ExpressionEnv) (eval, error) {
@@ -689,17 +702,21 @@ func (call *builtinFromUnixtime) compile(c *compiler) (ctype, error) {
 	}
 	skip1 := c.compileNullCheck1(arg)
 
+	var prec int32
 	switch arg.Type {
 	case sqltypes.Int64:
 		c.asm.Fn_FROM_UNIXTIME_i()
 	case sqltypes.Uint64:
 		c.asm.Fn_FROM_UNIXTIME_u()
 	case sqltypes.Float64:
+		prec = maxTimePrec
 		c.asm.Fn_FROM_UNIXTIME_f()
 	case sqltypes.Decimal:
+		prec = arg.Size
 		c.asm.Fn_FROM_UNIXTIME_d()
 	case sqltypes.Datetime, sqltypes.Date, sqltypes.Time:
-		if arg.Size == 0 {
+		prec = arg.Size
+		if prec == 0 {
 			c.asm.Convert_Ti(1)
 			c.asm.Fn_FROM_UNIXTIME_i()
 		} else {
@@ -711,17 +728,19 @@ func (call *builtinFromUnixtime) compile(c *compiler) (ctype, error) {
 			c.asm.Convert_xu(1)
 			c.asm.Fn_FROM_UNIXTIME_u()
 		} else {
+			prec = maxTimePrec
 			c.asm.Convert_xf(1)
 			c.asm.Fn_FROM_UNIXTIME_f()
 		}
 	default:
+		prec = maxTimePrec
 		c.asm.Convert_xf(1)
 		c.asm.Fn_FROM_UNIXTIME_f()
 	}
 
 	if len(call.Arguments) == 1 {
 		c.asm.jumpDestination(skip1)
-		return ctype{Type: sqltypes.Datetime, Col: collationBinary, Flag: arg.Flag | flagNullable}, nil
+		return ctype{Type: sqltypes.Datetime, Col: collationBinary, Flag: arg.Flag | flagNullable, Size: prec}, nil
 	}
 
 	format, err := call.Arguments[1].compile(c)
