@@ -36,12 +36,9 @@ import (
 
 var supportedOpps = []string{"*", "+", "-"}
 
-// getTestName prepends whether the test is for a sharded keyspace or not to the test name.
-func getTestName(testName string, testSharded bool) string {
-	if testSharded {
-		return "Sharded - " + testName
-	}
-	return "Unsharded - " + testName
+// getTestName prepends the test with keyspace name.
+func getTestName(testName string, keyspace string) string {
+	return keyspace + " - " + testName
 }
 
 // isMultiColFkTable tells if the table is a multicol table or not.

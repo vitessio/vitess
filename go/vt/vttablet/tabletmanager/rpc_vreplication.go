@@ -44,13 +44,13 @@ import (
 
 const (
 	// Create a new VReplication workflow record.
-	sqlCreateVReplicationWorkflow = "insert into %s.vreplication (workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys) values (%a, %a, '', 0, 0, %a, %a, now(), 0, %a, %a, %a, %a, %a)"
+	sqlCreateVReplicationWorkflow = "insert into %s.vreplication (workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys, options) values (%a, %a, '', 0, 0, %a, %a, now(), 0, %a, %a, %a, %a, %a, %a)"
 	sqlHasVReplicationWorkflows   = "select if(count(*) > 0, 1, 0) as has_workflows from %s.vreplication where db_name = %a"
 	// Read all VReplication workflows. The final format specifier is used to
 	// optionally add any additional predicates to the query.
-	sqlReadVReplicationWorkflows = "select workflow, id, source, pos, stop_pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, message, db_name, rows_copied, tags, time_heartbeat, workflow_type, time_throttled, component_throttled, workflow_sub_type, defer_secondary_keys from %s.vreplication where db_name = %a%s group by workflow, id order by workflow, id"
+	sqlReadVReplicationWorkflows = "select workflow, id, source, pos, stop_pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, message, db_name, rows_copied, tags, time_heartbeat, workflow_type, time_throttled, component_throttled, workflow_sub_type, defer_secondary_keys, options from %s.vreplication where db_name = %a%s group by workflow, id order by workflow, id"
 	// Read a VReplication workflow.
-	sqlReadVReplicationWorkflow = "select id, source, pos, stop_pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, message, db_name, rows_copied, tags, time_heartbeat, workflow_type, time_throttled, component_throttled, workflow_sub_type, defer_secondary_keys from %s.vreplication where workflow = %a and db_name = %a"
+	sqlReadVReplicationWorkflow = "select id, source, pos, stop_pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, message, db_name, rows_copied, tags, time_heartbeat, workflow_type, time_throttled, component_throttled, workflow_sub_type, defer_secondary_keys, options from %s.vreplication where workflow = %a and db_name = %a"
 	// Delete VReplication records for the given workflow.
 	sqlDeleteVReplicationWorkflow = "delete from %s.vreplication where workflow = %a and db_name = %a"
 	// Retrieve the current configuration values for a workflow's vreplication stream(s).
@@ -97,9 +97,11 @@ func (tm *TabletManager) CreateVReplicationWorkflow(ctx context.Context, req *ta
 			"workflowType":       sqltypes.Int64BindVariable(int64(req.WorkflowType)),
 			"workflowSubType":    sqltypes.Int64BindVariable(int64(req.WorkflowSubType)),
 			"deferSecondaryKeys": sqltypes.BoolBindVariable(req.DeferSecondaryKeys),
+			"options":            sqltypes.StringBindVariable(req.Options),
 		}
 		parsed := sqlparser.BuildParsedQuery(sqlCreateVReplicationWorkflow, sidecar.GetIdentifier(),
-			":workflow", ":source", ":cells", ":tabletTypes", ":state", ":dbname", ":workflowType", ":workflowSubType", ":deferSecondaryKeys",
+			":workflow", ":source", ":cells", ":tabletTypes", ":state", ":dbname", ":workflowType", ":workflowSubType",
+			":deferSecondaryKeys", ":options",
 		)
 		stmt, err := parsed.GenerateQuery(bindVars, nil)
 		if err != nil {
@@ -213,7 +215,7 @@ func (tm *TabletManager) ReadVReplicationWorkflows(ctx context.Context, req *tab
 		}
 		workflows[workflow].WorkflowSubType = binlogdatapb.VReplicationWorkflowSubType(wfst)
 		workflows[workflow].DeferSecondaryKeys = row["defer_secondary_keys"].ToString() == "1"
-
+		workflows[workflow].Options = row["options"].ToString()
 		// Now the individual streams (there can be more than 1 with shard merges).
 		if workflows[workflow].Streams == nil {
 			workflows[workflow].Streams = make([]*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream, 0, 1)
@@ -321,7 +323,7 @@ func (tm *TabletManager) ReadVReplicationWorkflow(ctx context.Context, req *tabl
 	}
 	resp.WorkflowSubType = binlogdatapb.VReplicationWorkflowSubType(wfst)
 	resp.DeferSecondaryKeys = rows[0]["defer_secondary_keys"].ToString() == "1"
-
+	resp.Options = rows[0]["options"].ToString()
 	// Now the individual streams (there can be more than 1 with shard merges).
 	for i, row := range rows {
 		streams[i] = &tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{}
