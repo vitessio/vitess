@@ -196,53 +196,6 @@ func TestReadInstance(t *testing.T) {
 	}
 }
 
-// TestReadReplicaInstances is used to test the functionality of ReadReplicaInstances and verify its failure modes and successes.
-func TestReadReplicaInstances(t *testing.T) {
-	tests := []struct {
-		name        string
-		tabletPort  int
-		replicasLen int
-	}{
-		{
-			name: "Read success - Multiple replicas",
-			// This tabletPort corresponds to zone1-0000000101. That is the primary for the data inserted.
-			// Check initialSQL for more details.
-			tabletPort:  6714,
-			replicasLen: 3,
-		}, {
-			name: "Unknown tablet",
-			// This tabletPort corresponds to none of the tablets.
-			// Check initialSQL for more details.
-			tabletPort:  343,
-			replicasLen: 0,
-		}, {
-			name: "Read success - No replicas",
-			// This tabletPort corresponds to zone1-0000000100. That is a replica tablet, with no replicas of its own.
-			// Check initialSQL for more details.
-			tabletPort:  6711,
-			replicasLen: 0,
-		},
-	}
-
-	// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
-	defer func() {
-		db.ClearVTOrcDatabase()
-	}()
-	for _, query := range initialSQL {
-		_, err := db.ExecVTOrc(query)
-		require.NoError(t, err)
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-
-			instances, err := ReadReplicaInstances("localhost", tt.tabletPort)
-			require.NoError(t, err)
-			require.EqualValues(t, tt.replicasLen, len(instances))
-		})
-	}
-}
-
 // TestReadProblemInstances is used to test the functionality of ReadProblemInstances and verify its failure modes and successes.
 func TestReadProblemInstances(t *testing.T) {
 	// The test is intended to be used as follows. The initial data is stored into the database. Following this, some specific queries are run that each individual test specifies to get the desired state.
