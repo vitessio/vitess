@@ -24,8 +24,7 @@ var TableNames = []string{
 	"topology_recovery",
 	"database_instance_topology_history",
 	"candidate_database_instance",
-	"topology_failure_detection",
-	"blocked_topology_recovery",
+	"recovery_detection",
 	"database_instance_last_analysis",
 	"database_instance_analysis_changelog",
 	"node_health_history",
@@ -172,35 +171,19 @@ DROP TABLE IF EXISTS topology_recovery
 CREATE TABLE topology_recovery (
 	recovery_id integer,
 	alias varchar(256) NOT NULL,
-	in_active_period tinyint NOT NULL DEFAULT 0,
-	start_active_period timestamp not null default (''),
-	end_active_period_unixtime int,
+	start_recovery timestamp NOT NULL DEFAULT (''),
 	end_recovery timestamp NULL DEFAULT NULL,
-	processing_node_hostname varchar(128) NOT NULL,
-	processcing_node_token varchar(128) NOT NULL,
 	successor_alias varchar(256) DEFAULT NULL,
 	analysis varchar(128) not null default '',
 	keyspace varchar(128) NOT NULL,
 	shard varchar(128) NOT NULL,
-	count_affected_replicas int not null default 0,
 	is_successful TINYint NOT NULL DEFAULT 0,
-	acknowledged TINYint NOT NULL DEFAULT 0,
-	acknowledged_by varchar(128) not null default '',
-	acknowledge_comment text not null default '',
 	all_errors text not null default '',
-	acknowledged_at TIMESTAMP NULL,
-	last_detection_id bigint not null default 0,
-	uid varchar(128) not null default '',
+	detection_id bigint not null default 0,
 	PRIMARY KEY (recovery_id)
 )`,
 	`
-CREATE INDEX in_active_start_period_idx_topology_recovery ON topology_recovery (in_active_period, start_active_period)
-	`,
-	`
-CREATE INDEX start_active_period_idx_topology_recovery ON topology_recovery (start_active_period)
-	`,
-	`
-CREATE UNIQUE INDEX alias_active_period_uidx_topology_recovery ON topology_recovery (alias, in_active_period, end_active_period_unixtime)
+CREATE INDEX start_recovery_idx_topology_recovery ON topology_recovery (start_recovery)
 	`,
 	`
 DROP TABLE IF EXISTS database_instance_topology_history
@@ -236,43 +219,18 @@ CREATE TABLE candidate_database_instance (
 CREATE INDEX last_suggested_idx_candidate_database_instance ON candidate_database_instance (last_suggested)
 	`,
 	`
-DROP TABLE IF EXISTS topology_failure_detection
+DROP TABLE IF EXISTS recovery_detection
 `,
 	`
-CREATE TABLE topology_failure_detection (
+CREATE TABLE recovery_detection (
 	detection_id integer,
 	alias varchar(256) NOT NULL,
-	in_active_period tinyint NOT NULL DEFAULT '0',
-	start_active_period timestamp not null default (''),
-	end_active_period_unixtime int NOT NULL,
-	processing_node_hostname varchar(128) NOT NULL,
-	processcing_node_token varchar(128) NOT NULL,
 	analysis varchar(128) NOT NULL,
 	keyspace varchar(128) NOT NULL,
 	shard varchar(128) NOT NULL,
-	count_affected_replicas int NOT NULL,
-	is_actionable tinyint not null default 0,
+	detection_timestamp timestamp NOT NULL default (''),
 	PRIMARY KEY (detection_id)
 )`,
-	`
-CREATE INDEX in_active_start_period_idx_topology_failure_detection ON topology_failure_detection (in_active_period, start_active_period)
-	`,
-	`
-DROP TABLE IF EXISTS blocked_topology_recovery
-`,
-	`
-CREATE TABLE blocked_topology_recovery (
-	alias varchar(256) NOT NULL,
-	keyspace varchar(128) NOT NULL,
-	shard varchar(128) NOT NULL,
-	analysis varchar(128) NOT NULL,
-	last_blocked_timestamp timestamp not null default (''),
-	blocking_recovery_id bigint,
-	PRIMARY KEY (alias)
-)`,
-	`
-CREATE INDEX keyspace_shard_blocked_idx_blocked_topology_recovery ON blocked_topology_recovery (keyspace, shard, last_blocked_timestamp)
-	`,
 	`
 DROP TABLE IF EXISTS database_instance_last_analysis
 `,
@@ -343,7 +301,7 @@ DROP TABLE IF EXISTS topology_recovery_steps
 	`
 CREATE TABLE topology_recovery_steps (
 	recovery_step_id integer,
-	recovery_uid varchar(128) NOT NULL,
+	recovery_id integer NOT NULL,
 	audit_at timestamp not null default (''),
 	message text NOT NULL,
 	PRIMARY KEY (recovery_step_id)
@@ -409,33 +367,21 @@ CREATE TABLE vitess_shard (
 CREATE INDEX source_host_port_idx_database_instance_database_instance on database_instance (source_host, source_port)
 	`,
 	`
-CREATE INDEX keyspace_shard_in_active_idx_topology_recovery on topology_recovery (keyspace, shard, in_active_period)
+CREATE INDEX keyspace_shard_idx_topology_recovery on topology_recovery (keyspace, shard)
 	`,
 	`
 CREATE INDEX end_recovery_idx_topology_recovery on topology_recovery (end_recovery)
 	`,
 	`
-CREATE INDEX acknowledged_idx_topology_recovery on topology_recovery (acknowledged, acknowledged_at)
-	`,
-	`
-CREATE INDEX last_blocked_idx_blocked_topology_recovery on blocked_topology_recovery (last_blocked_timestamp)
-	`,
-	`
 CREATE INDEX instance_timestamp_idx_database_instance_analysis_changelog on database_instance_analysis_changelog (alias, analysis_timestamp)
 	`,
 	`
-CREATE INDEX last_detection_idx_topology_recovery on topology_recovery (last_detection_id)
+CREATE INDEX detection_idx_topology_recovery on topology_recovery (detection_id)
 	`,
 	`
 CREATE INDEX last_seen_active_idx_node_health on node_health (last_seen_active)
 	`,
 	`
-CREATE INDEX uid_idx_topology_recovery ON topology_recovery(uid)
-	`,
-	`
-CREATE INDEX recovery_uid_idx_topology_recovery_steps ON topology_recovery_steps(recovery_uid)
-	`,
-	`
-CREATE UNIQUE INDEX alias_active_recoverable_uidx_topology_failure_detection ON topology_failure_detection (alias, in_active_period, end_active_period_unixtime, is_actionable)
+CREATE INDEX recovery_id_idx_topology_recovery_steps ON topology_recovery_steps(recovery_id)
 	`,
 }
