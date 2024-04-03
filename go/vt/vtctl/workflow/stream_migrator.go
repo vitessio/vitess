@@ -1020,9 +1020,9 @@ func (sm *StreamMigrator) createTargetStreams(ctx context.Context, tmpl []*VRepl
 				for _, st := range targets {
 					stream := *vrs // Copy
 					stream.BinlogSource.Shard = st.GetShard().ShardName()
-					key := fmt.Sprintf("%s/%s:%s/%s", target.si.Keyspace(), target.GetShard().ShardName(), st.GetShard().Keyspace(), st.GetShard().ShardName())
+					key := fmt.Sprintf("%s:%s/%s:%s/%s", stream.Workflow, target.si.Keyspace(), target.GetShard().ShardName(), st.GetShard().Keyspace(), st.GetShard().ShardName())
 					if intraKeyspaceStreams[key] {
-						continue // We've already created it.
+						continue // We've already created the stream.
 					}
 					pos, err := sm.ts.TabletManagerClient().PrimaryPosition(ctx, st.primary.Tablet)
 					if err != nil {
