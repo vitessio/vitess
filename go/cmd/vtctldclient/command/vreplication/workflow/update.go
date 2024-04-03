@@ -112,6 +112,7 @@ func commandUpdate(cmd *cobra.Command, args []string) error {
 			TabletSelectionPreference: tsp,
 			OnDdl:                     binlogdatapb.OnDDLAction(onddl),
 			Shards:                    baseOptions.Shards,
+			StopPosition:              textutil.SimulatedNullString, // We don't allow changing this in the client command
 		},
 	}
 

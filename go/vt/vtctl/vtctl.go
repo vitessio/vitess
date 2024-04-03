@@ -3829,6 +3829,7 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag
 				TabletTypes:               tabletTypes,
 				TabletSelectionPreference: tsp,
 				OnDdl:                     binlogdatapb.OnDDLAction(onddl),
+				StopPosition:              textutil.SimulatedNullString, // We don't allow changing this in the client command
 			}
 		}
 		results, err = wr.WorkflowAction(ctx, workflow, keyspace, action, *dryRun, rpcReq, *shards) // Only update currently uses the new RPC path
