@@ -15,7 +15,7 @@
 ARG VT_BASE_VER=latest
 ARG DEBIAN_VER=stable-slim
 
-FROM vitess/lite:${VT_BASE_VER} AS lite
+FROM frouioui/lite:${VT_BASE_VER} AS lite
 
 FROM debian:${DEBIAN_VER}
 
@@ -56,5 +56,4 @@ COPY --from=lite $VTROOT/config/init_db.sql /vt/config/
 COPY --from=lite $VTROOT/config/mycnf /vt/config/mycnf
 
 # add vitess user and add permissions
-RUN groupadd -r --gid 2000 vitess && useradd -r -g vitess --uid 1000 vitess && \
-   chown -R vitess:vitess /vt;
+RUN groupadd -r --gid 2000 vitess && useradd -r -g vitess --uid 1000 vitess && chown -R vitess:vitess /vt;
