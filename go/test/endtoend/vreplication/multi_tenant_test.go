@@ -190,6 +190,7 @@ func TestMultiTenantSimple(t *testing.T) {
 	for _, ks := range []string{sourceKeyspace, sourceAliasKeyspace} {
 		lastIndex = insertRows(lastIndex, ks)
 	}
+	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKeyspace, mt.workflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
 	mt.SwitchReadsAndWrites()
 	validateKeyspaceRoutingRules(t, vc, primaries, rulesMap, true)
 	// Note: here we have already switched and we can insert into the target keyspace and it should get reverse
