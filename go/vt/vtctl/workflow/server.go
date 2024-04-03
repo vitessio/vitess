@@ -2250,7 +2250,6 @@ func (s *Server) WorkflowUpdate(ctx context.Context, req *vtctldatapb.WorkflowUp
 	span.Annotate("tablet_types", req.TabletRequest.TabletTypes)
 	span.Annotate("on_ddl", req.TabletRequest.OnDdl)
 	span.Annotate("state", req.TabletRequest.State)
-	span.Annotate("stop_position", req.TabletRequest.StopPosition)
 
 	// We don't allow users to update the stop_position.
 	req.TabletRequest.StopPosition = textutil.SimulatedNullString

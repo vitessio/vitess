@@ -141,11 +141,12 @@ func commandUpdateState(cmd *cobra.Command, args []string) error {
 	req := &vtctldatapb.WorkflowUpdateRequest{
 		Keyspace: workflowOptions.Keyspace,
 		TabletRequest: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
-			Workflow:    workflowUpdateOptions.Workflow,
-			Cells:       textutil.SimulatedNullStringSlice,
-			TabletTypes: []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)},
-			OnDdl:       binlogdatapb.OnDDLAction(textutil.SimulatedNullInt),
-			State:       state,
+			Workflow:     workflowUpdateOptions.Workflow,
+			Cells:        textutil.SimulatedNullStringSlice,
+			TabletTypes:  []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)},
+			OnDdl:        binlogdatapb.OnDDLAction(textutil.SimulatedNullInt),
+			StopPosition: textutil.SimulatedNullString, // We don't allow changing this in the client command
+			State:        state,
 		},
 	}
 
