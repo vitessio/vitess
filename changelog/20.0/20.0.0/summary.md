@@ -5,6 +5,7 @@
 - **[Major Changes](#major-changes)**
   - **[Deletions](#deletions)** 
     - [MySQL binaries in the vitess/lite Docker images](#vitess-lite)
+    - [vitess/base and vitess/k8s Docker images](#base-k8s-images)
   - **[Breaking changes](#breaking-changes)**
     - [`shutdown_grace_period` Default Change](#shutdown-grace-period-default)
     - [New `unmanaged` Flag and `disable_active_reparents` deprecation](#unmanaged-flag)
@@ -70,6 +71,12 @@ Below is an example of a kubernetes yaml file before and after upgrading to an o
     mysqld:
       mysql80Compatible: mysql:8.0.30 # or even mysql:8.0.34 for instance
 ```
+
+#### <a id="base-k8s-images"/>`vitess/base` and `vitess/k8s` Docker images
+
+Since we have deleted MySQL from our `vitess/lite` image, we are removing the `vitess/base` and `vitess/k8s` images.
+
+These images are no longer useful since we can use `vitess/lite` as the base of many other Docker images (`vitess/vtgate`, `vitess/vtgate`, ...).
 
 ### <a id="breaking-changes"/>Breaking Changes
 
