@@ -29582,9 +29582,6 @@ export namespace tabletmanagerdata {
         /** UpdateVReplicationWorkflowRequest state */
         state?: (binlogdata.VReplicationWorkflowState|null);
 
-        /** UpdateVReplicationWorkflowRequest shards */
-        shards?: (string[]|null);
-
         /** UpdateVReplicationWorkflowRequest stop_position */
         stop_position?: (string|null);
 
@@ -29618,9 +29615,6 @@ export namespace tabletmanagerdata {
 
         /** UpdateVReplicationWorkflowRequest state. */
         public state: binlogdata.VReplicationWorkflowState;
-
-        /** UpdateVReplicationWorkflowRequest shards. */
-        public shards: string[];
 
         /** UpdateVReplicationWorkflowRequest stop_position. */
         public stop_position: string;

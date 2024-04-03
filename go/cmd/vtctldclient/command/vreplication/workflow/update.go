@@ -111,8 +111,8 @@ func commandUpdate(cmd *cobra.Command, args []string) error {
 			TabletTypes:               updateOptions.TabletTypes,
 			TabletSelectionPreference: tsp,
 			OnDdl:                     binlogdatapb.OnDDLAction(onddl),
-			Shards:                    baseOptions.Shards,
-			StopPosition:              textutil.SimulatedNullString, // We don't allow changing this in the client command
+			StopPosition:              textutil.SimulatedNullString,                                      // We don't allow changing this in the client command
+			State:                     binlogdatapb.VReplicationWorkflowState(textutil.SimulatedNullInt), // We don't allow changing this in the client command
 		},
 	}
 

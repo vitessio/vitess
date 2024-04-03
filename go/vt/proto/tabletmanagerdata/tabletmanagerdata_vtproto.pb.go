@@ -2313,11 +2313,6 @@ func (m *UpdateVReplicationWorkflowRequest) CloneVT() *UpdateVReplicationWorkflo
 		copy(tmpContainer, rhs)
 		r.TabletTypes = tmpContainer
 	}
-	if rhs := m.Shards; rhs != nil {
-		tmpContainer := make([]string, len(rhs))
-		copy(tmpContainer, rhs)
-		r.Shards = tmpContainer
-	}
 	if rhs := m.IncludeIds; rhs != nil {
 		tmpContainer := make([]int64, len(rhs))
 		copy(tmpContainer, rhs)
@@ -8067,15 +8062,6 @@ func (m *UpdateVReplicationWorkflowRequest) MarshalToSizedBufferVT(dAtA []byte) 
 		i--
 		dAtA[i] = 0x42
 	}
-	if len(m.Shards) > 0 {
-		for iNdEx := len(m.Shards) - 1; iNdEx >= 0; iNdEx-- {
-			i -= len(m.Shards[iNdEx])
-			copy(dAtA[i:], m.Shards[iNdEx])
-			i = encodeVarint(dAtA, i, uint64(len(m.Shards[iNdEx])))
-			i--
-			dAtA[i] = 0x3a
-		}
-	}
 	if m.State != 0 {
 		i = encodeVarint(dAtA, i, uint64(m.State))
 		i--
@@ -10483,12 +10469,6 @@ func (m *UpdateVReplicationWorkflowRequest) SizeVT() (n int) {
 	}
 	if m.State != 0 {
 		n += 1 + sov(uint64(m.State))
-	}
-	if len(m.Shards) > 0 {
-		for _, s := range m.Shards {
-			l = len(s)
-			n += 1 + l + sov(uint64(l))
-		}
 	}
 	l = len(m.StopPosition)
 	if l > 0 {
@@ -22984,38 +22964,6 @@ func (m *UpdateVReplicationWorkflowRequest) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
-		case 7:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Shards", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return ErrInvalidLength
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLength
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.Shards = append(m.Shards, string(dAtA[iNdEx:postIndex]))
-			iNdEx = postIndex
 		case 8:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field StopPosition", wireType)
