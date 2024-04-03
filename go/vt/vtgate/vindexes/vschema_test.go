@@ -424,10 +424,12 @@ func TestVSchemaViews(t *testing.T) {
       "columns": [
         {
           "name": "c1",
+          "nullable": true,
           "type": "NULL_TYPE"
         },
         {
           "name": "c2",
+          "nullable": true,
           "type": "VARCHAR"
         }
       ]
@@ -438,6 +440,51 @@ func TestVSchemaViews(t *testing.T) {
   }
 }`
 	require.JSONEq(t, want, got)
+}
+
+func TestColumnMarshal(t *testing.T) {
+	tests := []struct {
+		name   string
+		col    Column
+		wanted string
+	}{
+		{
+			name: "Decimal column",
+			col: Column{
+				Name:  sqlparser.NewIdentifierCI("col1"),
+				Type:  sqltypes.Decimal,
+				Size:  15,
+				Scale: 2,
+			},
+			wanted: `{"name":"col1", "scale":2, "size":15, "type":"DECIMAL"}`,
+		},
+		{
+			name: "Decimal column with no scale",
+			col: Column{
+				Name:  sqlparser.NewIdentifierCI("col1"),
+				Type:  sqltypes.Decimal,
+				Size:  15,
+				Scale: 0,
+			},
+			wanted: `{"name":"col1", "size":15, "type":"DECIMAL"}`,
+		},
+		{
+			name: "enum with values column",
+			col: Column{
+				Name:   sqlparser.NewIdentifierCI("col1"),
+				Type:   sqltypes.Enum,
+				Values: []string{"{A", "B\"", "C"},
+			},
+			wanted: `{"name":"col1","type":"ENUM","values":["{A","B\"","C"]}`,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			res, err := test.col.MarshalJSON()
+			require.NoError(t, err)
+			require.JSONEq(t, test.wanted, string(res), string(res))
+		})
+	}
 }
 
 func TestVSchemaForeignKeys(t *testing.T) {
@@ -482,10 +529,12 @@ func TestVSchemaForeignKeys(t *testing.T) {
       "columns": [
         {
           "name": "c1",
+		  "nullable": true,
           "type": "NULL_TYPE"
         },
         {
           "name": "c2",
+		  "nullable": true,
           "type": "VARCHAR"
         }
       ],
