@@ -1,11 +1,11 @@
-name: Docker Build Base
+name: Docker Build Base (<v20)
 on:
   push:
     tags-ignore:
       - 'v[2-9][0-9]*.*' # ignore all the tags greater or equal to v20.0.0
 
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Docker Build Base')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Docker Build Base (<v20)')
   cancel-in-progress: true
 
 permissions: read-all
