@@ -611,6 +611,10 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `now() + interval 654321 microsecond`,
 			result:     `DATETIME("2023-10-24 12:00:00.654321")`,
 		},
+		{
+			expression: `1 * unix_timestamp(utc_timestamp(1))`,
+			result:     `DECIMAL(1698134400.1)`,
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")
