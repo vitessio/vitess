@@ -353,14 +353,12 @@ func TestProcessHealth(t *testing.T) {
 		process.FirstDiscoveryCycleComplete.Store(false)
 	}()
 	// Verify in the beginning, we have the first DiscoveredOnce field false.
-	health, err := process.HealthTest()
-	require.NoError(t, err)
-	require.False(t, health.DiscoveredOnce)
+	_, discoveredOnce := process.HealthTest()
+	require.False(t, discoveredOnce)
 	ts = memorytopo.NewServer(context.Background(), cell1)
 	populateAllInformation()
 	require.True(t, process.FirstDiscoveryCycleComplete.Load())
 	// Verify after we populate all information, we have the first DiscoveredOnce field true.
-	health, err = process.HealthTest()
-	require.NoError(t, err)
-	require.True(t, health.DiscoveredOnce)
+	_, discoveredOnce = process.HealthTest()
+	require.True(t, discoveredOnce)
 }
