@@ -15,7 +15,7 @@
 ARG VT_BASE_VER=latest
 ARG DEBIAN_VER=bullseye-slim
 
-FROM vitess/k8s:${VT_BASE_VER} AS k8s
+FROM vitess/lite:${VT_BASE_VER} AS lite
 
 FROM node:18-${DEBIAN_VER} as node
 
@@ -23,7 +23,7 @@ FROM node:18-${DEBIAN_VER} as node
 RUN mkdir -p /vt/web
 
 # copy web admin files
-COPY --from=k8s /vt/web/vtadmin /vt/web/vtadmin
+COPY --from=lite /vt/web/vtadmin /vt/web/vtadmin
 
 # install/build/clean web dependencies
 RUN npm --prefix /vt/web/vtadmin ci && \
@@ -37,10 +37,10 @@ ENV VTADMIN_WEB_PORT=14201
 ENV VTROOT /vt
 
 # Copy binaries
-COPY --from=k8s /vt/bin/vtadmin /vt/bin/
+COPY --from=lite /vt/bin/vtadmin /vt/bin/
 
 # Copy certs to allow https calls
-COPY --from=k8s /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=lite /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
 COPY --chown=nginx --from=node /vt/web/vtadmin/build /var/www/
 COPY --chown=nginx default.conf /etc/nginx/templates/default.conf.template
