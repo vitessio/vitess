@@ -668,6 +668,12 @@ message VDiffOptions {
   VDiffReportOptions report_options = 3;
 }
 
+// UpdateVReplicationWorkflowRequest is used to update an existing VReplication
+// workflow. Note that the following fields MUST have an explicit value provided
+// if you do NOT wish to update the existing value to the given type's ZeroValue:
+// cells, tablet_types, on_ddl, and state.
+// TODO: leverage the optional modifier for these fields rather than using SimulatedNull
+// values: https://github.com/vitessio/vitess/issues/15627
 message UpdateVReplicationWorkflowRequest {
   string workflow = 1;
   repeated string cells = 2;
@@ -675,13 +681,19 @@ message UpdateVReplicationWorkflowRequest {
   TabletSelectionPreference tablet_selection_preference = 4;
   binlogdata.OnDDLAction on_ddl = 5;
   binlogdata.VReplicationWorkflowState state = 6;
-  repeated string shards = 7;
+  reserved 7; // unused, was: repeated string shards
 }
 
 message UpdateVReplicationWorkflowResponse {
   query.QueryResult result = 1;
 }
 
+// UpdateVReplicationWorkflowsRequest is used to update multiple existing VReplication
+// workflows. Note that the following fields MUST have an explicit value provided
+// if you do NOT wish to update the existing values to the given type's ZeroValue:
+// state, message, and stop_position.
+// TODO: leverage the optional modifier for these fields rather than using SimulatedNull
+// values: https://github.com/vitessio/vitess/issues/15627
 message UpdateVReplicationWorkflowsRequest {
   bool all_workflows = 1;
   repeated string include_workflows = 2;
