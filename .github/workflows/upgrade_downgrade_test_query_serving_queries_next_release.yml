@@ -202,6 +202,12 @@ jobs:
 
         rm -f $PWD/bin/vtgate $PWD/bin/vttablet $PWD/bin/mysqlctl $PWD/bin/mysqlctld
         cp /tmp/vitess-build-current/bin/vtgate $PWD/bin/vtgate
+
+        cp /tmp/vitess-build-other/bin/vtctld $PWD/bin
+        cp /tmp/vitess-build-other/bin/vtctldclient $PWD/bin
+        cp /tmp/vitess-build-other/bin/vtctl $PWD/bin
+        cp /tmp/vitess-build-other/bin/vtctlclient $PWD/bin
+
         cp /tmp/vitess-build-other/bin/vttablet $PWD/bin/vttablet
         cp /tmp/vitess-build-other/bin/mysqlctl $PWD/bin/mysqlctl
         cp /tmp/vitess-build-other/bin/mysqlctld $PWD/bin/mysqlctld
