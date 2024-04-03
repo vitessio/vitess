@@ -27,12 +27,14 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/wrangler"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 const (
@@ -120,7 +122,9 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 		// Test new experimental --defer-secondary-keys flag
 		switch currentWorkflowType {
 		case binlogdatapb.VReplicationWorkflowType_MoveTables, binlogdatapb.VReplicationWorkflowType_Migrate, binlogdatapb.VReplicationWorkflowType_Reshard:
-			args = append(args, "--defer-secondary-keys")
+			if !atomicCopy {
+				args = append(args, "--defer-secondary-keys")
+			}
 		}
 	}
 	if currentWorkflowType == binlogdatapb.VReplicationWorkflowType_MoveTables && action == workflowActionSwitchTraffic {
@@ -131,6 +135,9 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 			args = append(args, "--max-replication-lag-allowed=2542087h")
 		}
 		args = append(args, "--timeout=90s")
+	}
+	if action == workflowActionCreate && atomicCopy {
+		args = append(args, "--atomic-copy")
 	}
 	if (action == workflowActionCreate || action == workflowActionSwitchTraffic || action == workflowActionReverseTraffic) && cells != "" {
 		args = append(args, "--cells", cells)
@@ -194,19 +201,42 @@ func tstWorkflowComplete(t *testing.T) error {
 // to primary,replica,rdonly (the only applicable types in these tests).
 func testWorkflowUpdate(t *testing.T) {
 	tabletTypes := "primary,replica,rdonly"
-	// Test vtctlclient first
+	// Test vtctlclient first.
 	_, err := vc.VtctlClient.ExecuteCommandWithOutput("workflow", "--", "--tablet-types", tabletTypes, "noexist.noexist", "update")
 	require.Error(t, err, err)
 	resp, err := vc.VtctlClient.ExecuteCommandWithOutput("workflow", "--", "--tablet-types", tabletTypes, ksWorkflow, "update")
 	require.NoError(t, err)
 	require.NotEmpty(t, resp)
 
-	// Test vtctldclient last
+	// Test vtctldclient last.
 	_, err = vc.VtctldClient.ExecuteCommandWithOutput("workflow", "--keyspace", "noexist", "update", "--workflow", "noexist", "--tablet-types", tabletTypes)
 	require.Error(t, err)
+	// Change the tablet-types to rdonly.
+	resp, err = vc.VtctldClient.ExecuteCommandWithOutput("workflow", "--keyspace", targetKs, "update", "--workflow", workflowName, "--tablet-types", "rdonly")
+	require.NoError(t, err, err)
+	// Confirm that we changed the workflow.
+	var ures vtctldatapb.WorkflowUpdateResponse
+	require.NoError(t, err)
+	err = protojson.Unmarshal([]byte(resp), &ures)
+	require.NoError(t, err)
+	require.Greater(t, len(ures.Details), 0)
+	require.True(t, ures.Details[0].Changed)
+	// Change tablet-types back to primary,replica,rdonly.
 	resp, err = vc.VtctldClient.ExecuteCommandWithOutput("workflow", "--keyspace", targetKs, "update", "--workflow", workflowName, "--tablet-types", tabletTypes)
 	require.NoError(t, err, err)
-	require.NotEmpty(t, resp)
+	// Confirm that we changed the workflow.
+	err = protojson.Unmarshal([]byte(resp), &ures)
+	require.NoError(t, err)
+	require.Greater(t, len(ures.Details), 0)
+	require.True(t, ures.Details[0].Changed)
+	// Execute a no-op as tablet-types is already primary,replica,rdonly.
+	resp, err = vc.VtctldClient.ExecuteCommandWithOutput("workflow", "--keyspace", targetKs, "update", "--workflow", workflowName, "--tablet-types", tabletTypes)
+	require.NoError(t, err, err)
+	// Confirm that we didn't change the workflow.
+	err = protojson.Unmarshal([]byte(resp), &ures)
+	require.NoError(t, err)
+	require.Greater(t, len(ures.Details), 0)
+	require.False(t, ures.Details[0].Changed)
 }
 
 func tstWorkflowCancel(t *testing.T) error {
