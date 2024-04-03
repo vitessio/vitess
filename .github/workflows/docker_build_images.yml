@@ -1,5 +1,6 @@
-name: Docker Build Images
+name: Docker Build Images (v20+)
 on:
+  pull_request:
   push:
     branches:
       - main
@@ -7,7 +8,7 @@ on:
       - '*'
 
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Docker Build Images')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Docker Build Images (v20+)')
   cancel-in-progress: true
 
 permissions: read-all
@@ -26,6 +27,12 @@ jobs:
     steps:
       - name: Check out code
         uses: actions/checkout@v4
+
+      - name: Skip workflow if below version 20
+        run: |
+          if [ "$(sed -n 's/.*versionName.*\"\([[:digit:]\.]*\).*\"/\1/p' ./go/vt/servenv/version.go | awk -F'.' '{print substr($1, 1, 2)}')" -lt 20 ]; then
+            exit 0
+          fi
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -77,6 +84,7 @@ jobs:
 
   build_and_push_components:
     name: Build and push vitess components Docker images
+    needs: build_and_push_lite
     runs-on: gh-hosted-runners-16cores-1
     if: github.repository == 'vitessio/vitess'
 
@@ -89,6 +97,12 @@ jobs:
     steps:
       - name: Check out code
         uses: actions/checkout@v4
+
+      - name: Skip workflow if below version 20
+        run: |
+          if [ "$(sed -n 's/.*versionName.*\"\([[:digit:]\.]*\).*\"/\1/p' ./go/vt/servenv/version.go | awk -F'.' '{print substr($1, 1, 2)}')" -lt 20 ]; then
+            exit 0
+          fi
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
