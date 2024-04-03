@@ -18,9 +18,12 @@ package topo_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
@@ -76,7 +79,7 @@ func TestServerGetTabletsByCell(t *testing.T) {
 			ts, factory := memorytopo.NewServerAndFactory(ctx, cell)
 			defer ts.Close()
 			if tt.listError != nil {
-				factory.SetListError(tt.listError)
+				factory.AddOperationError(memorytopo.List, ".*", tt.listError)
 			}
 
 			// Create an ephemeral keyspace and generate shard records within
@@ -115,4 +118,56 @@ func TestServerGetTabletsByCell(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestServerGetTabletsByCellPartialResults(t *testing.T) {
+	const cell = "zone1"
+	const keyspace = "keyspace"
+	const shard = "shard"
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ts, factory := memorytopo.NewServerAndFactory(ctx, cell)
+	defer ts.Close()
+
+	// Create an ephemeral keyspace and generate shard records within
+	// the keyspace to fetch later.
+	require.NoError(t, ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}))
+	require.NoError(t, ts.CreateShard(ctx, keyspace, shard))
+
+	tablets := make([]*topo.TabletInfo, 3)
+
+	for i := 0; i < len(tablets); i++ {
+		tablet := &topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{
+				Cell: cell,
+				Uid:  uint32(i),
+			},
+			Hostname: "host1",
+			PortMap: map[string]int32{
+				"vt": int32(i),
+			},
+			Keyspace: keyspace,
+			Shard:    shard,
+		}
+		tInfo := &topo.TabletInfo{Tablet: tablet}
+		tablets[i] = tInfo
+		require.NoError(t, ts.CreateTablet(ctx, tablet))
+	}
+
+	// Force fallback to getting tablets individually.
+	factory.AddOperationError(memorytopo.List, ".*", topo.NewError(topo.NoImplementation, "List not supported"))
+
+	// Cause the Get for the second tablet to fail.
+	factory.AddOperationError(memorytopo.Get, "tablets/zone1-0000000001/Tablet", errors.New("fake error"))
+
+	// Verify that we return a partial list of tablets and that each
+	// tablet matches what we expect.
+	out, err := ts.GetTabletsByCell(ctx, cell, nil)
+	assert.Error(t, err)
+	assert.True(t, topo.IsErrType(err, topo.PartialResult), "Not a partial result: %v", err)
+	assert.Len(t, out, 2)
+	assert.True(t, proto.Equal(tablets[0].Tablet, out[0].Tablet), "Got: %v, want %v", tablets[0].Tablet, out[0].Tablet)
+	assert.True(t, proto.Equal(tablets[2].Tablet, out[1].Tablet), "Got: %v, want %v", tablets[2].Tablet, out[1].Tablet)
 }
