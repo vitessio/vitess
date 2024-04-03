@@ -445,8 +445,8 @@ func testReshardV2Workflow(t *testing.T) {
 
 	// Generate customer records in the background for the rest of the test
 	// in order to confirm that no writes are lost in either the customer
-	// table or the customer_names materialization against it during the
-	// Reshard and all of the traffic switches.
+	// table or the customer_names and customer_types materializations
+	// against it during the Reshard and all of the traffic switches.
 	dataGenCtx, dataGenCancel := context.WithCancel(context.Background())
 	defer dataGenCancel()
 	dataGenConn, dataGenCloseConn := getVTGateConn()
@@ -499,7 +499,7 @@ func testReshardV2Workflow(t *testing.T) {
 	require.EqualValues(t, cres.Rows, cnres.Rows)
 	waitForNoWorkflowLag(t, vc, "customer", "customer_types")
 	ctres := execVtgateQuery(t, dataGenConn, "customer", "select count(*) from customer_types")
-	require.Len(t, cnres.Rows, 1)
+	require.Len(t, ctres.Rows, 1)
 	require.EqualValues(t, cres.Rows, ctres.Rows)
 	if debugMode {
 		t.Logf("Done inserting customer data. Record counts in customer: %s, customer_names: %s, customer_types: %s",
@@ -707,6 +707,7 @@ func testRestOfWorkflow(t *testing.T) {
 	// fully switch and complete
 	waitForLowLag(t, "customer", "wf1")
 	waitForLowLag(t, "customer", "customer_names")
+	waitForLowLag(t, "customer", "customer_types")
 	tstWorkflowSwitchReadsAndWrites(t)
 	validateReadsRoute(t, "rdonly", targetRdonlyTab1)
 	validateReadsRouteToTarget(t, "replica")
