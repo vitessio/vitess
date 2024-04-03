@@ -50,6 +50,8 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 func TestTPCHQueries(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
+	err := utils.WaitForColumn(t, clusterInstance.VtgateProcess, keyspaceName, "region", `R_COMMENT`)
+	require.NoError(t, err)
 
 	insertQueries := []string{
 		`INSERT INTO region (R_REGIONKEY, R_NAME, R_COMMENT) VALUES
