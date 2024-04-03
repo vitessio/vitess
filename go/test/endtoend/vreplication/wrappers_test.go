@@ -122,13 +122,13 @@ func (vmt *VtctlMoveTables) Create() {
 }
 
 func (vmt *VtctlMoveTables) SwitchReadsAndWrites() {
-	err := tstWorkflowExec(vmt.vc.t, "", vmt.workflowName, vmt.sourceKeyspace, vmt.targetKeyspace,
+	err := tstWorkflowExecVtctl(vmt.vc.t, "", vmt.workflowName, vmt.sourceKeyspace, vmt.targetKeyspace,
 		vmt.tables, workflowActionSwitchTraffic, "", "", "", defaultWorkflowExecOptions)
 	require.NoError(vmt.vc.t, err)
 }
 
 func (vmt *VtctlMoveTables) ReverseReadsAndWrites() {
-	err := tstWorkflowExec(vmt.vc.t, "", vmt.workflowName, vmt.sourceKeyspace, vmt.targetKeyspace,
+	err := tstWorkflowExecVtctl(vmt.vc.t, "", vmt.workflowName, vmt.sourceKeyspace, vmt.targetKeyspace,
 		vmt.tables, workflowActionReverseTraffic, "", "", "", defaultWorkflowExecOptions)
 	require.NoError(vmt.vc.t, err)
 }
@@ -143,7 +143,7 @@ func (vmt *VtctlMoveTables) exec(action string) {
 		deferSecondaryKeys: false,
 		atomicCopy:         vmt.atomicCopy,
 	}
-	err := tstWorkflowExec(vmt.vc.t, "", vmt.workflowName, vmt.sourceKeyspace, vmt.targetKeyspace,
+	err := tstWorkflowExecVtctl(vmt.vc.t, "", vmt.workflowName, vmt.sourceKeyspace, vmt.targetKeyspace,
 		vmt.tables, action, vmt.tabletTypes, vmt.sourceShards, "", options)
 	require.NoError(vmt.vc.t, err)
 }
@@ -333,7 +333,7 @@ func (vrs *VtctlReshard) Show() {
 
 func (vrs *VtctlReshard) exec(action string) {
 	options := &workflowExecOptions{}
-	err := tstWorkflowExec(vrs.vc.t, "", vrs.workflowName, "", vrs.targetKeyspace,
+	err := tstWorkflowExecVtctl(vrs.vc.t, "", vrs.workflowName, "", vrs.targetKeyspace,
 		"", action, vrs.tabletTypes, vrs.sourceShards, vrs.targetShards, options)
 	require.NoError(vrs.vc.t, err)
 }

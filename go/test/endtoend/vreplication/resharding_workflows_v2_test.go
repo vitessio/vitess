@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -163,6 +164,69 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 		t.Logf("Executing workflow command: vtctldclient %v", strings.Join(args, " "))
 	}
 	output, err := vc.VtctldClient.ExecuteCommandWithOutput(args...)
+	lastOutput = output
+	if err != nil {
+		return fmt.Errorf("%s: %s", err, output)
+	}
+	return nil
+}
+
+func tstWorkflowExecVtctl(t *testing.T, cells, workflow, sourceKs, targetKs, tables, action, tabletTypes,
+	sourceShards, targetShards string, options *workflowExecOptions) error {
+
+	var args []string
+	if currentWorkflowType == binlogdatapb.VReplicationWorkflowType_MoveTables {
+		args = append(args, "MoveTables")
+	} else {
+		args = append(args, "Reshard")
+	}
+
+	args = append(args, "--")
+
+	if BypassLagCheck {
+		args = append(args, "--max_replication_lag_allowed=2542087h")
+	}
+	if options.atomicCopy {
+		args = append(args, "--atomic-copy")
+	}
+	switch action {
+	case workflowActionCreate:
+		if currentWorkflowType == binlogdatapb.VReplicationWorkflowType_MoveTables {
+			args = append(args, "--source", sourceKs)
+			if tables != "" {
+				args = append(args, "--tables", tables)
+			} else {
+				args = append(args, "--all")
+			}
+			if sourceShards != "" {
+				args = append(args, "--source_shards", sourceShards)
+			}
+		} else {
+			args = append(args, "--source_shards", sourceShards, "--target_shards", targetShards)
+		}
+		// Test new experimental --defer-secondary-keys flag
+		switch currentWorkflowType {
+		case binlogdatapb.VReplicationWorkflowType_MoveTables, binlogdatapb.VReplicationWorkflowType_Migrate, binlogdatapb.VReplicationWorkflowType_Reshard:
+			if !options.atomicCopy && options.deferSecondaryKeys {
+				args = append(args, "--defer-secondary-keys")
+			}
+			args = append(args, "--initialize-target-sequences") // Only used for MoveTables
+		}
+	default:
+		if options.shardSubset != "" {
+			args = append(args, "--shards", options.shardSubset)
+		}
+	}
+	if cells != "" {
+		args = append(args, "--cells", cells)
+	}
+	if tabletTypes != "" {
+		args = append(args, "--tablet_types", tabletTypes)
+	}
+	args = append(args, "--timeout", time.Minute.String())
+	ksWorkflow := fmt.Sprintf("%s.%s", targetKs, workflow)
+	args = append(args, action, ksWorkflow)
+	output, err := vc.VtctlClient.ExecuteCommandWithOutput(args...)
 	lastOutput = output
 	if err != nil {
 		return fmt.Errorf("%s: %s", err, output)
