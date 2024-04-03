@@ -328,32 +328,6 @@ func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *ta
 	}, nil
 }
 
-<<<<<<< HEAD
-=======
-// UpdateVReplicationWorkflows operates in much the same way that
-// UpdateVReplicationWorkflow does, but it allows you to update the
-// metadata/flow control fields -- state, message, and stop_pos -- for
-// multiple workflows.
-// Note: today this is only used during Reshard as all of the vreplication
-// streams need to be migrated from the old shards to the new ones.
-func (tm *TabletManager) UpdateVReplicationWorkflows(ctx context.Context, req *tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest) (*tabletmanagerdatapb.UpdateVReplicationWorkflowsResponse, error) {
-	query, err := tm.buildUpdateVReplicationWorkflowsQuery(req)
-	if err != nil {
-		return nil, err
-	}
-	res, err := tm.VREngine.Exec(query)
-	if err != nil {
-		return nil, err
-	}
-
-	return &tabletmanagerdatapb.UpdateVReplicationWorkflowsResponse{
-		Result: &querypb.QueryResult{
-			RowsAffected: res.RowsAffected,
-		},
-	}, nil
-}
-
->>>>>>> 0e2f1751d4 (VReplication: Fix workflow update changed handling (#15621))
 // VReplicationExec executes a vreplication command.
 func (tm *TabletManager) VReplicationExec(ctx context.Context, query string) (*querypb.QueryResult, error) {
 	// Replace any provided sidecar databsae qualifiers with the correct one.
