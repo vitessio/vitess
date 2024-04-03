@@ -1768,6 +1768,24 @@ var (
 		input:  "alter schema d collate = 'utf8_bin' character set = geostd8 character set = geostd8",
 		output: "alter database d collate 'utf8_bin' character set geostd8 character set geostd8",
 	}, {
+		input:  `DROP INDEX Indexes ON mydb.mytable`,
+		output: "alter table mydb.mytable drop key `Indexes`",
+	}, {
+		input:  `create index Indexes on b (col1)`,
+		output: "alter table b add key `Indexes` (col1)",
+	}, {
+		input:  `create fulltext index Indexes on b (col1)`,
+		output: "alter table b add fulltext key `Indexes` (col1)",
+	}, {
+		input:  `create spatial index Indexes on b (col1)`,
+		output: "alter table b add spatial key `Indexes` (col1)",
+	}, {
+		input:  "alter table a alter index indexes visible, alter index indexes invisible",
+		output: "alter table a alter index `indexes` visible, alter index `indexes` invisible",
+	}, {
+		input:  "alter table a add spatial key indexes (column1)",
+		output: "alter table a add spatial key `indexes` (column1)",
+	}, {
 		input:      "create table a",
 		partialDDL: true,
 	}, {
@@ -4764,6 +4782,7 @@ func TestCreateTable(t *testing.T) {
 	primary key (id),
 	spatial key geom (geom),
 	fulltext key fts (full_name),
+	fulltext key indexes (full_name),
 	unique key by_username (username),
 	unique key by_username2 (username),
 	unique key by_username3 (username),
@@ -4780,6 +4799,7 @@ func TestCreateTable(t *testing.T) {
 	primary key (id),
 	spatial key geom (geom),
 	fulltext key fts (full_name),
+	fulltext key ` + "`indexes`" + ` (full_name),
 	unique key by_username (username),
 	unique key by_username2 (username),
 	unique key by_username3 (username),
@@ -4964,6 +4984,7 @@ func TestCreateTable(t *testing.T) {
 	primary key (id, username),
 	key by_email (email(10), username),
 	constraint second_ibfk_1 foreign key (k, j) references t2 (a, b),
+	constraint indexes foreign key (k, j) references t2 (a, b),
 	constraint second_ibfk_1 foreign key (k, j) references t2 (a, b) on delete restrict,
 	constraint second_ibfk_1 foreign key (k, j) references t2 (a, b) on delete no action,
 	constraint second_ibfk_1 foreign key (k, j) references t2 (a, b) on delete cascade on update set default,
@@ -5000,6 +5021,7 @@ func TestCreateTable(t *testing.T) {
 	primary key (id, username),
 	key by_email (email(10), username),
 	constraint second_ibfk_1 foreign key (k, j) references t2 (a, b),
+	constraint ` + "`indexes`" + ` foreign key (k, j) references t2 (a, b),
 	constraint second_ibfk_1 foreign key (k, j) references t2 (a, b) on delete restrict,
 	constraint second_ibfk_1 foreign key (k, j) references t2 (a, b) on delete no action,
 	constraint second_ibfk_1 foreign key (k, j) references t2 (a, b) on delete cascade on update set default,

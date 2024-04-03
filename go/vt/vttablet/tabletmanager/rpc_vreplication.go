@@ -421,6 +421,7 @@ func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *ta
 		return &tabletmanagerdatapb.UpdateVReplicationWorkflowResponse{Result: nil}, nil
 	}
 
+	rowsAffected := uint64(0)
 	for _, row := range res.Named().Rows {
 		id := row.AsInt64("id", 0)
 		cells := strings.Split(row.AsString("cell", ""), ",")
@@ -493,11 +494,12 @@ func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *ta
 		if err != nil {
 			return nil, err
 		}
+		rowsAffected += res.RowsAffected
 	}
 
 	return &tabletmanagerdatapb.UpdateVReplicationWorkflowResponse{
 		Result: &querypb.QueryResult{
-			RowsAffected: uint64(len(res.Rows)),
+			RowsAffected: rowsAffected,
 		},
 	}, nil
 }
@@ -520,7 +522,7 @@ func (tm *TabletManager) UpdateVReplicationWorkflows(ctx context.Context, req *t
 
 	return &tabletmanagerdatapb.UpdateVReplicationWorkflowsResponse{
 		Result: &querypb.QueryResult{
-			RowsAffected: uint64(len(res.Rows)),
+			RowsAffected: res.RowsAffected,
 		},
 	}, nil
 }

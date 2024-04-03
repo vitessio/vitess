@@ -35,8 +35,6 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/util"
 )
 
-type RecoveryType string
-
 const (
 	CheckAndRecoverGenericProblemRecoveryName        string = "CheckAndRecoverGenericProblem"
 	RecoverDeadPrimaryRecoveryName                   string = "RecoverDeadPrimary"
@@ -102,30 +100,17 @@ const (
 // TopologyRecovery represents an entry in the topology_recovery table
 type TopologyRecovery struct {
 	ID                     int64
-	UID                    string
 	AnalysisEntry          inst.ReplicationAnalysis
-	SuccessorHostname      string
-	SuccessorPort          int
 	SuccessorAlias         string
-	IsActive               bool
 	IsSuccessful           bool
 	AllErrors              []string
 	RecoveryStartTimestamp string
 	RecoveryEndTimestamp   string
-	ProcessingNodeHostname string
-	ProcessingNodeToken    string
-	Acknowledged           bool
-	AcknowledgedAt         string
-	AcknowledgedBy         string
-	AcknowledgedComment    string
-	LastDetectionID        int64
-	RelatedRecoveryID      int64
-	Type                   RecoveryType
+	DetectionID            int64
 }
 
 func NewTopologyRecovery(replicationAnalysis inst.ReplicationAnalysis) *TopologyRecovery {
 	topologyRecovery := &TopologyRecovery{}
-	topologyRecovery.UID = util.PrettyUniqueToken()
 	topologyRecovery.AnalysisEntry = replicationAnalysis
 	topologyRecovery.AllErrors = []string{}
 	return topologyRecovery
@@ -145,16 +130,16 @@ func (topologyRecovery *TopologyRecovery) AddErrors(errs []error) {
 }
 
 type TopologyRecoveryStep struct {
-	ID          int64
-	RecoveryUID string
-	AuditAt     string
-	Message     string
+	ID         int64
+	RecoveryID int64
+	AuditAt    string
+	Message    string
 }
 
-func NewTopologyRecoveryStep(uid string, message string) *TopologyRecoveryStep {
+func NewTopologyRecoveryStep(id int64, message string) *TopologyRecoveryStep {
 	return &TopologyRecoveryStep{
-		RecoveryUID: uid,
-		Message:     message,
+		RecoveryID: id,
+		Message:    message,
 	}
 }
 
@@ -173,7 +158,7 @@ func AuditTopologyRecovery(topologyRecovery *TopologyRecovery, message string) e
 		return nil
 	}
 
-	recoveryStep := NewTopologyRecoveryStep(topologyRecovery.UID, message)
+	recoveryStep := NewTopologyRecoveryStep(topologyRecovery.ID, message)
 	return writeTopologyRecoveryStep(recoveryStep)
 }
 
@@ -187,7 +172,7 @@ func resolveRecovery(topologyRecovery *TopologyRecovery, successorInstance *inst
 
 // recoverPrimaryHasPrimary resets the replication on the primary instance
 func recoverPrimaryHasPrimary(ctx context.Context, analysisEntry *inst.ReplicationAnalysis) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
-	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry, false, true)
+	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry)
 	if topologyRecovery == nil {
 		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another fixPrimaryHasPrimary.", analysisEntry.AnalyzedInstanceAlias))
 		return false, nil, err
@@ -213,17 +198,13 @@ func recoverPrimaryHasPrimary(ctx context.Context, analysisEntry *inst.Replicati
 // runEmergencyReparentOp runs a recovery for which we have to run ERS. Here waitForAllTablets is a boolean telling ERS whether it should wait for all the tablets
 // or is it okay to skip 1.
 func runEmergencyReparentOp(ctx context.Context, analysisEntry *inst.ReplicationAnalysis, recoveryName string, waitForAllTablets bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
-	if !analysisEntry.ClusterDetails.HasAutomatedPrimaryRecovery {
-		return false, nil, nil
-	}
-
 	// Read the tablet information from the database to find the shard and keyspace of the tablet
 	tablet, err := inst.ReadTablet(analysisEntry.AnalyzedInstanceAlias)
 	if err != nil {
 		return false, nil, err
 	}
 
-	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry, true, true)
+	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry)
 	if topologyRecovery == nil {
 		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another %v.", analysisEntry.AnalyzedInstanceAlias, recoveryName))
 		return false, nil, err
@@ -298,19 +279,6 @@ func checkAndRecoverLockedSemiSyncPrimary(ctx context.Context, analysisEntry *in
 // checkAndRecoverGenericProblem is a general-purpose recovery function
 func checkAndRecoverGenericProblem(ctx context.Context, analysisEntry *inst.ReplicationAnalysis) (bool, *TopologyRecovery, error) {
 	return false, nil, nil
-}
-
-// checkAndExecuteFailureDetectionProcesses tries to register for failure detection and potentially executes
-// failure-detection processes.
-func checkAndExecuteFailureDetectionProcesses(analysisEntry *inst.ReplicationAnalysis) (detectionRegistrationSuccess bool, processesExecutionAttempted bool, err error) {
-	if ok, _ := AttemptFailureDetectionRegistration(analysisEntry); !ok {
-		if util.ClearToLog("checkAndExecuteFailureDetectionProcesses", analysisEntry.AnalyzedInstanceAlias) {
-			log.Infof("checkAndExecuteFailureDetectionProcesses: could not register %+v detection on %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceAlias)
-		}
-		return false, false, nil
-	}
-	log.Infof("topology_recovery: detected %+v failure on %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceAlias)
-	return true, false, nil
 }
 
 // getCheckAndRecoverFunctionCode gets the recovery function code to use for the given analysis.
@@ -500,17 +468,12 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 	}
 
 	// At this point we have validated there's a failure scenario for which we have a recovery path.
-
-	// Initiate detection:
-	_, _, err = checkAndExecuteFailureDetectionProcesses(analysisEntry)
+	// Record the failure detected in the logs.
+	err = InsertRecoveryDetection(analysisEntry)
 	if err != nil {
-		log.Errorf("executeCheckAndRecoverFunction: error on failure detection: %+v", err)
+		log.Errorf("executeCheckAndRecoverFunction: error on inserting recovery detection record: %+v", err)
 		return err
 	}
-	// We don't mind whether detection really executed the processes or not
-	// (it may have been silenced due to previous detection). We only care there's no error.
-
-	// We're about to embark on recovery shortly...
 
 	// Check for recovery being disabled globally
 	if recoveryDisabledGlobally, err := IsRecoveryDisabled(); err != nil {
@@ -705,7 +668,7 @@ func postPrsCompletion(topologyRecovery *TopologyRecovery, analysisEntry *inst.R
 
 // electNewPrimary elects a new primary while none were present before.
 func electNewPrimary(ctx context.Context, analysisEntry *inst.ReplicationAnalysis) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
-	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry, false /*failIfFailedInstanceInActiveRecovery*/, true /*failIfClusterInActiveRecovery*/)
+	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry)
 	if topologyRecovery == nil || err != nil {
 		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another electNewPrimary.", analysisEntry.AnalyzedInstanceAlias))
 		return false, nil, err
@@ -754,7 +717,7 @@ func electNewPrimary(ctx context.Context, analysisEntry *inst.ReplicationAnalysi
 
 // fixPrimary sets the primary as read-write.
 func fixPrimary(ctx context.Context, analysisEntry *inst.ReplicationAnalysis) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
-	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry, false, true)
+	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry)
 	if topologyRecovery == nil {
 		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another fixPrimary.", analysisEntry.AnalyzedInstanceAlias))
 		return false, nil, err
@@ -785,7 +748,7 @@ func fixPrimary(ctx context.Context, analysisEntry *inst.ReplicationAnalysis) (r
 
 // fixReplica sets the replica as read-only and points it at the current primary.
 func fixReplica(ctx context.Context, analysisEntry *inst.ReplicationAnalysis) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
-	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry, false, true)
+	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry)
 	if topologyRecovery == nil {
 		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another fixReplica.", analysisEntry.AnalyzedInstanceAlias))
 		return false, nil, err
@@ -826,7 +789,7 @@ func fixReplica(ctx context.Context, analysisEntry *inst.ReplicationAnalysis) (r
 
 // recoverErrantGTIDDetected changes the tablet type of a replica tablet that has errant GTIDs.
 func recoverErrantGTIDDetected(ctx context.Context, analysisEntry *inst.ReplicationAnalysis) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
-	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry, false, true)
+	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry)
 	if topologyRecovery == nil {
 		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another recoverErrantGTIDDetected.", analysisEntry.AnalyzedInstanceAlias))
 		return false, nil, err

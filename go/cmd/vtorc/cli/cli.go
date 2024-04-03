@@ -39,7 +39,6 @@ var (
 	--topo_global_root /vitess/global \
 	--log_dir $VTDATAROOT/tmp \
 	--port 15000 \
-	--recovery-period-block-duration "10m" \
 	--instance-poll-time "1s" \
 	--topo-information-refresh-duration "30s" \
 	--alsologtostderr`,
@@ -85,7 +84,7 @@ func run(cmd *cobra.Command, args []string) {
 // addStatusParts adds UI parts to the /debug/status page of VTOrc
 func addStatusParts() {
 	servenv.AddStatusPart("Recent Recoveries", logic.TopologyRecoveriesTemplate, func() any {
-		recoveries, _ := logic.ReadRecentRecoveries(false, 0)
+		recoveries, _ := logic.ReadRecentRecoveries(0)
 		return recoveries
 	})
 }

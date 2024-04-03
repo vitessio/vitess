@@ -203,16 +203,22 @@ type Column struct {
 // MarshalJSON returns a JSON representation of Column.
 func (col *Column) MarshalJSON() ([]byte, error) {
 	cj := struct {
-		Name      string `json:"name"`
-		Type      string `json:"type,omitempty"`
-		Invisible bool   `json:"invisible,omitempty"`
-		Default   string `json:"default,omitempty"`
+		Name      string   `json:"name"`
+		Type      string   `json:"type,omitempty"`
+		Invisible bool     `json:"invisible,omitempty"`
+		Default   string   `json:"default,omitempty"`
+		Size      int32    `json:"size,omitempty"`
+		Scale     int32    `json:"scale,omitempty"`
+		Nullable  bool     `json:"nullable,omitempty"`
+		Values    []string `json:"values,omitempty"`
 	}{
-		Name: col.Name.String(),
-		Type: querypb.Type_name[int32(col.Type)],
-	}
-	if col.Invisible {
-		cj.Invisible = true
+		Name:      col.Name.String(),
+		Type:      querypb.Type_name[int32(col.Type)],
+		Invisible: col.Invisible,
+		Size:      col.Size,
+		Scale:     col.Scale,
+		Nullable:  col.Nullable,
+		Values:    col.Values,
 	}
 	if col.Default != nil {
 		cj.Default = sqlparser.String(col.Default)

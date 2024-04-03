@@ -196,53 +196,6 @@ func TestReadInstance(t *testing.T) {
 	}
 }
 
-// TestReadReplicaInstances is used to test the functionality of ReadReplicaInstances and verify its failure modes and successes.
-func TestReadReplicaInstances(t *testing.T) {
-	tests := []struct {
-		name        string
-		tabletPort  int
-		replicasLen int
-	}{
-		{
-			name: "Read success - Multiple replicas",
-			// This tabletPort corresponds to zone1-0000000101. That is the primary for the data inserted.
-			// Check initialSQL for more details.
-			tabletPort:  6714,
-			replicasLen: 3,
-		}, {
-			name: "Unknown tablet",
-			// This tabletPort corresponds to none of the tablets.
-			// Check initialSQL for more details.
-			tabletPort:  343,
-			replicasLen: 0,
-		}, {
-			name: "Read success - No replicas",
-			// This tabletPort corresponds to zone1-0000000100. That is a replica tablet, with no replicas of its own.
-			// Check initialSQL for more details.
-			tabletPort:  6711,
-			replicasLen: 0,
-		},
-	}
-
-	// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
-	defer func() {
-		db.ClearVTOrcDatabase()
-	}()
-	for _, query := range initialSQL {
-		_, err := db.ExecVTOrc(query)
-		require.NoError(t, err)
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-
-			instances, err := ReadReplicaInstances("localhost", tt.tabletPort)
-			require.NoError(t, err)
-			require.EqualValues(t, tt.replicasLen, len(instances))
-		})
-	}
-}
-
 // TestReadProblemInstances is used to test the functionality of ReadProblemInstances and verify its failure modes and successes.
 func TestReadProblemInstances(t *testing.T) {
 	// The test is intended to be used as follows. The initial data is stored into the database. Following this, some specific queries are run that each individual test specifies to get the desired state.
@@ -761,4 +714,61 @@ func TestGetDatabaseState(t *testing.T) {
 	ds, err := GetDatabaseState()
 	require.NoError(t, err)
 	require.Contains(t, ds, `"alias": "zone1-0000000112"`)
+}
+
+func TestExpireTableData(t *testing.T) {
+	oldVal := config.Config.AuditPurgeDays
+	config.Config.AuditPurgeDays = 10
+	defer func() {
+		config.Config.AuditPurgeDays = oldVal
+	}()
+
+	tests := []struct {
+		name             string
+		tableName        string
+		insertQuery      string
+		timestampColumn  string
+		expectedRowCount int
+	}{
+		{
+			name:             "ExpireAudit",
+			tableName:        "audit",
+			timestampColumn:  "audit_timestamp",
+			expectedRowCount: 1,
+			insertQuery: `insert into audit (audit_id, audit_timestamp, audit_type, alias, message, keyspace, shard) values
+(1, NOW() - INTERVAL 50 DAY, 'a','a','a','a','a'),
+(2, NOW() - INTERVAL 5 DAY, 'a','a','a','a','a')`,
+		},
+		{
+			name:             "ExpireRecoveryDetectionHistory",
+			tableName:        "recovery_detection",
+			timestampColumn:  "detection_timestamp",
+			expectedRowCount: 2,
+			insertQuery: `insert into recovery_detection (detection_id, detection_timestamp, alias, analysis, keyspace, shard) values
+(1, NOW() - INTERVAL 3 DAY,'a','a','a','a'),
+(2, NOW() - INTERVAL 5 DAY,'a','a','a','a'),
+(3, NOW() - INTERVAL 15 DAY,'a','a','a','a')`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
+			defer func() {
+				db.ClearVTOrcDatabase()
+			}()
+			_, err := db.ExecVTOrc(tt.insertQuery)
+			require.NoError(t, err)
+
+			err = ExpireTableData(tt.tableName, tt.timestampColumn)
+			require.NoError(t, err)
+
+			rowsCount := 0
+			err = db.QueryVTOrc(`select * from `+tt.tableName, nil, func(rowMap sqlutils.RowMap) error {
+				rowsCount++
+				return nil
+			})
+			require.NoError(t, err)
+			require.EqualValues(t, tt.expectedRowCount, rowsCount)
+		})
+	}
 }

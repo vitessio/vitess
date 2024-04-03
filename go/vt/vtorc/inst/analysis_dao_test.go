@@ -917,21 +917,19 @@ func TestAuditInstanceAnalysisInChangelog(t *testing.T) {
 // TestPostProcessAnalyses tests the functionality of the postProcessAnalyses function.
 func TestPostProcessAnalyses(t *testing.T) {
 	ks0 := ClusterInfo{
-		Keyspace:       "ks",
-		Shard:          "0",
-		CountInstances: 4,
+		Keyspace: "ks",
+		Shard:    "0",
 	}
 	ks80 := ClusterInfo{
-		Keyspace:       "ks",
-		Shard:          "80-",
-		CountInstances: 3,
+		Keyspace: "ks",
+		Shard:    "80-",
 	}
 	clusters := map[string]*clusterAnalysis{
 		getKeyspaceShardName(ks0.Keyspace, ks0.Shard): {
-			totalTablets: int(ks0.CountInstances),
+			totalTablets: 4,
 		},
 		getKeyspaceShardName(ks80.Keyspace, ks80.Shard): {
-			totalTablets: int(ks80.CountInstances),
+			totalTablets: 3,
 		},
 	}
 
