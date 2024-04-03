@@ -6068,7 +6068,7 @@ func (x *VDiffOptions) GetReportOptions() *VDiffReportOptions {
 // UpdateVReplicationWorkflowRequest is used to update an existing VReplication
 // workflow. Note that the following fields MUST have an explicit value provided
 // if you do NOT wish to update the existing value to the given type's ZeroValue:
-// cells, tablet_types, on_ddl, and state.
+// cells, tablet_types, on_ddl, state, and stop_position.
 type UpdateVReplicationWorkflowRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -6222,7 +6222,7 @@ func (x *UpdateVReplicationWorkflowResponse) GetResult() *query.QueryResult {
 // UpdateVReplicationWorkflowsRequest is used to update multiple existing VReplication
 // workflows. Note that the following fields MUST have an explicit value provided
 // if you do NOT wish to update the existing values to the given type's ZeroValue:
-// state, message, stop_position.
+// state, message, and stop_position.
 type UpdateVReplicationWorkflowsRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
