@@ -90,9 +90,6 @@ func refreshAllTablets() {
 }
 
 func refreshTabletsUsing(loader func(tabletAlias string), forceRefresh bool) {
-	if !IsLeaderOrActive() {
-		return
-	}
 	if len(clustersToWatch) == 0 { // all known clusters
 		ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 		defer cancel()

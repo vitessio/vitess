@@ -21,7 +21,6 @@ import (
 )
 
 // CandidatePromotionRule describe the promotion preference/rule for an instance.
-// It maps to promotion_rule column in candidate_database_instance
 type CandidatePromotionRule string
 
 const (
