@@ -651,28 +651,6 @@ message UpdateVReplicationWorkflowResponse {
   query.QueryResult result = 1;
 }
 
-<<<<<<< HEAD
-=======
-// UpdateVReplicationWorkflowsRequest is used to update multiple existing VReplication
-// workflows. Note that the following fields MUST have an explicit value provided
-// if you do NOT wish to update the existing values to the given type's ZeroValue:
-// state, message, and stop_position.
-// TODO: leverage the optional modifier for these fields rather than using SimulatedNull
-// values: https://github.com/vitessio/vitess/issues/15627
-message UpdateVReplicationWorkflowsRequest {
-  bool all_workflows = 1;
-  repeated string include_workflows = 2;
-  repeated string exclude_workflows = 3;
-  binlogdata.VReplicationWorkflowState state = 4;
-  string message = 5;
-  string stop_position = 6;
-}
-
-message UpdateVReplicationWorkflowsResponse {
-  query.QueryResult result = 1;
-}
-
->>>>>>> 0e2f1751d4 (VReplication: Fix workflow update changed handling (#15621))
 message ResetSequencesRequest {
   repeated string tables = 1;
 }
