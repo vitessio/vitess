@@ -122,7 +122,9 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 		// Test new experimental --defer-secondary-keys flag
 		switch currentWorkflowType {
 		case binlogdatapb.VReplicationWorkflowType_MoveTables, binlogdatapb.VReplicationWorkflowType_Migrate, binlogdatapb.VReplicationWorkflowType_Reshard:
-			args = append(args, "--defer-secondary-keys")
+			if !atomicCopy {
+				args = append(args, "--defer-secondary-keys")
+			}
 		}
 	}
 	if currentWorkflowType == binlogdatapb.VReplicationWorkflowType_MoveTables && action == workflowActionSwitchTraffic {
@@ -133,6 +135,9 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 			args = append(args, "--max-replication-lag-allowed=2542087h")
 		}
 		args = append(args, "--timeout=90s")
+	}
+	if action == workflowActionCreate && atomicCopy {
+		args = append(args, "--atomic-copy")
 	}
 	if (action == workflowActionCreate || action == workflowActionSwitchTraffic || action == workflowActionReverseTraffic) && cells != "" {
 		args = append(args, "--cells", cells)
