@@ -17,12 +17,15 @@ limitations under the License.
 package vreplication
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -241,8 +244,8 @@ func validateReadsRoute(t *testing.T, tabletTypes string, tablet *cluster.Vttabl
 	for _, tt := range []string{"replica", "rdonly"} {
 		destination := fmt.Sprintf("%s:%s@%s", tablet.Keyspace, tablet.Shard, tt)
 		if strings.Contains(tabletTypes, tt) {
-			readQuery := "select * from customer"
-			assertQueryExecutesOnTablet(t, vtgateConn, tablet, destination, readQuery, readQuery)
+			readQuery := "select cid from customer limit 10"
+			assertQueryExecutesOnTablet(t, vtgateConn, tablet, destination, readQuery, "select cid from customer limit :vtg1")
 		}
 	}
 }
@@ -261,7 +264,7 @@ func validateWritesRouteToSource(t *testing.T) {
 	insertQuery := "insert into customer(name, cid) values('tempCustomer2', 200)"
 	matchInsertQuery := "insert into customer(`name`, cid) values"
 	assertQueryExecutesOnTablet(t, vtgateConn, sourceTab, "customer", insertQuery, matchInsertQuery)
-	execVtgateQuery(t, vtgateConn, "customer", "delete from customer where cid > 100")
+	execVtgateQuery(t, vtgateConn, "customer", "delete from customer where cid = 200")
 }
 
 func validateWritesRouteToTarget(t *testing.T) {
@@ -272,7 +275,7 @@ func validateWritesRouteToTarget(t *testing.T) {
 	assertQueryExecutesOnTablet(t, vtgateConn, targetTab2, "customer", insertQuery, matchInsertQuery)
 	insertQuery = "insert into customer(name, cid) values('tempCustomer3', 102)"
 	assertQueryExecutesOnTablet(t, vtgateConn, targetTab1, "customer", insertQuery, matchInsertQuery)
-	execVtgateQuery(t, vtgateConn, "customer", "delete from customer where cid > 100")
+	execVtgateQuery(t, vtgateConn, "customer", "delete from customer where cid in (101, 102)")
 }
 
 func revert(t *testing.T, workflowType string) {
@@ -440,6 +443,31 @@ func testReshardV2Workflow(t *testing.T) {
 	defer closeConn()
 	currentWorkflowType = binlogdatapb.VReplicationWorkflowType_Reshard
 
+	// Generate customer records in the background for the rest of the test
+	// in order to confirm that no writes are lost in either the customer
+	// table or the customer_names materialization against it during the
+	// Reshard and all of the traffic switches.
+	dataGenCtx, dataGenCancel := context.WithCancel(context.Background())
+	defer dataGenCancel()
+	dataGenConn, dataGenCloseConn := getVTGateConn()
+	defer dataGenCloseConn()
+	dataGenWg := sync.WaitGroup{}
+	dataGenWg.Add(1)
+	go func() {
+		defer dataGenWg.Done()
+		id := 1000
+		for {
+			select {
+			case <-dataGenCtx.Done():
+				return
+			default:
+				_ = execVtgateQuery(t, dataGenConn, "customer", fmt.Sprintf("insert into customer (cid, name) values (%d, 'tempCustomer%d')", id, id))
+			}
+			time.Sleep(5 * time.Millisecond)
+			id++
+		}
+	}()
+
 	// create internal tables on the original customer shards that should be
 	// ignored and not show up on the new shards
 	execMultipleQueries(t, vtgateConn, targetKs+"/-80", internalSchema)
@@ -459,6 +487,20 @@ func testReshardV2Workflow(t *testing.T) {
 	testWorkflowUpdate(t)
 
 	testRestOfWorkflow(t)
+
+	// Confirm that we lost no customer related writes during the Reshard.
+	dataGenCancel()
+	dataGenWg.Wait()
+	cres := execVtgateQuery(t, dataGenConn, "customer", "select count(*) from customer")
+	require.Len(t, cres.Rows, 1)
+	waitForNoWorkflowLag(t, vc, "customer", "customer_names")
+	cnres := execVtgateQuery(t, dataGenConn, "customer", "select count(*) from customer_names")
+	require.Len(t, cnres.Rows, 1)
+	require.EqualValues(t, cres.Rows, cnres.Rows)
+	if debugMode {
+		t.Logf("Done inserting customer data. Record counts in customer: %s, customer_names: %s",
+			cres.Rows[0][0].ToString(), cnres.Rows[0][0].ToString())
+	}
 }
 
 func testMoveTablesV2Workflow(t *testing.T) {
@@ -472,7 +514,7 @@ func testMoveTablesV2Workflow(t *testing.T) {
 		}
 		output, err := vc.VtctldClient.ExecuteCommandWithOutput("materialize", "--target-keyspace=customer", "show", "--workflow=customer_names", "--compact", "--include-logs=false")
 		require.NoError(t, err)
-		log.Error("Materialize show output: ", output)
+		t.Logf("Materialize show output: %s", output)
 	}
 
 	// Test basic forward and reverse flows.
