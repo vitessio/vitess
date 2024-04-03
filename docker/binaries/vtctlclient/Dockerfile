@@ -1,41 +1,35 @@
 # Copyright 2019 The Vitess Authors.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG bootstrap_version=30
-ARG image="vitess/bootstrap:${bootstrap_version}-mysql80"
+ARG VT_BASE_VER=latest
+ARG DEBIAN_VER=stable-slim
 
-FROM "${image}"
+FROM vitess/lite:${VT_BASE_VER} AS lite
 
-# Allows some docker builds to disable CGO
-ARG CGO_ENABLED=0
+FROM debian:${DEBIAN_VER}
 
-# Allows docker builds to set the BUILD_NUMBER
-ARG BUILD_NUMBER
+RUN apt-get update && \
+   apt-get upgrade -qq && \
+   apt-get install jq curl -qq --no-install-recommends && \
+   apt-get autoremove && \
+   apt-get clean && \
+   rm -rf /var/lib/apt/lists/*
 
-# Allows docker builds to set the BUILD_GIT_BRANCH
-ARG BUILD_GIT_BRANCH
+COPY --from=lite /vt/bin/vtctlclient /usr/bin/
 
-# Allows docker builds to set the BUILD_GIT_REV
-ARG BUILD_GIT_REV
+# add vitess user/group and add permissions
+RUN groupadd -r --gid 2000 vitess && \
+   useradd -r -g vitess --uid 1000 vitess
 
-# Allows docker builds to set the BUILD_TIME
-ARG BUILD_TIME
-
-# Re-copy sources from working tree
-COPY --chown=vitess:vitess . /vt/src/vitess.io/vitess
-
-USER vitess
-
-# Build Vitess
-RUN make build
+CMD ["/usr/bin/vtctlclient"]

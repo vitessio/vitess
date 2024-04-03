@@ -1,25 +1,35 @@
 # Copyright 2019 The Vitess Authors.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# We rely on the base image, as that will re-copy the local
-# working tree and build it. Because of so, we trust the local
-# vendor folder is up to data.
-FROM vitess/base
+ARG VT_BASE_VER=latest
+ARG DEBIAN_VER=stable-slim
 
-# Clean local files, and keep vendorer libs
-RUN git clean -xdf --exclude="vendor"
+FROM vitess/lite:${VT_BASE_VER} AS lite
 
-RUN mkdir /vt/releases
+FROM debian:${DEBIAN_VER}
 
-CMD tar -czf /vt/releases/v$VERSION.tar.gz --exclude .git .
+# Set up Vitess environment (just enough to run pre-built Go binaries)
+ENV VTROOT /vt
+
+# Prepare directory structure.
+RUN mkdir -p /vt/bin && mkdir -p /vtdataroot
+
+# Copy binaries
+COPY --from=lite /vt/bin/vtexplain /vt/bin/
+
+# add vitess user/group and add permissions
+RUN groupadd -r --gid 2000 vitess && \
+   useradd -r -g vitess --uid 1000 vitess && \
+   chown -R vitess:vitess /vt && \
+   chown -R vitess:vitess /vtdataroot

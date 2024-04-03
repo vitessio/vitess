@@ -15,21 +15,26 @@
 ARG VT_BASE_VER=latest
 ARG DEBIAN_VER=stable-slim
 
-FROM vitess/k8s:${VT_BASE_VER} AS k8s
+FROM vitess/lite:${VT_BASE_VER} AS lite
 
 FROM debian:${DEBIAN_VER}
 
-RUN apt-get update && \
-   apt-get upgrade -qq && \
-   apt-get install jq curl -qq --no-install-recommends && \
-   apt-get autoremove && \
-   apt-get clean && \
-   rm -rf /var/lib/apt/lists/*
+# Set up Vitess environment (just enough to run pre-built Go binaries)
+ENV VTROOT /vt
+ENV VTDATAROOT /vtdataroot
 
-COPY --from=k8s /vt/bin/vtctlclient /usr/bin/
+# Prepare directory structure.
+RUN mkdir -p /vt/bin && mkdir -p /vtdataroot
+
+# Copy binaries
+COPY --from=lite /vt/bin/vttablet /vt/bin/
+COPY --from=lite /vt/bin/vtctlclient /vt/bin/
+
+# Copy certs to allow https calls
+COPY --from=lite /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
 # add vitess user/group and add permissions
 RUN groupadd -r --gid 2000 vitess && \
-   useradd -r -g vitess --uid 1000 vitess
-
-CMD ["/usr/bin/vtctlclient"]
+   useradd -r -g vitess --uid 1000 vitess && \
+   chown -R vitess:vitess /vt && \
+   chown -R vitess:vitess /vtdataroot
