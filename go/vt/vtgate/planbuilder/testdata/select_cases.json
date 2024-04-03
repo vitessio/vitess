@@ -1696,6 +1696,58 @@
     }
   },
   {
+    "comment": "avg in sharded keyspace with group by without selecting the group by columns",
+    "query": "select avg(intcol) as avg_col from user group by textcol1, textcol2 order by textcol1, textcol2;",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select avg(intcol) as avg_col from user group by textcol1, textcol2 order by textcol1, textcol2;",
+      "Instructions": {
+        "OperatorType": "SimpleProjection",
+        "ColumnNames": [
+          "avg_col"
+        ],
+        "Columns": [
+          0
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              "sum(intcol) / count(intcol) as avg_col",
+              ":1 as textcol1",
+              ":2 as textcol2"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Aggregate",
+                "Variant": "Ordered",
+                "Aggregates": "sum(0) AS avg_col, sum_count(3) AS count(intcol)",
+                "GroupBy": "1 COLLATE latin1_swedish_ci, (2|4) COLLATE ",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select sum(intcol) as avg_col, textcol1, textcol2, count(intcol), weight_string(textcol2) from `user` where 1 != 1 group by textcol1, textcol2, weight_string(textcol2)",
+                    "OrderBy": "1 ASC COLLATE latin1_swedish_ci, (2|4) ASC COLLATE ",
+                    "Query": "select sum(intcol) as avg_col, textcol1, textcol2, count(intcol), weight_string(textcol2) from `user` group by textcol1, textcol2, weight_string(textcol2) order by textcol1 asc, textcol2 asc",
+                    "Table": "`user`"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "don't filter on the vtgate",
     "query": "select 42 from dual where false",
     "plan": {
