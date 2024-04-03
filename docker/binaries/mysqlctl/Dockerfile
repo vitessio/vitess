@@ -15,25 +15,26 @@
 ARG VT_BASE_VER=latest
 ARG DEBIAN_VER=stable-slim
 
-FROM vitess/k8s:${VT_BASE_VER} AS k8s
+FROM vitess/lite:${VT_BASE_VER} AS lite
 
 FROM debian:${DEBIAN_VER}
 
 # Set up Vitess environment (just enough to run pre-built Go binaries)
 ENV VTROOT /vt
+ENV VTDATAROOT /vtdataroot
 
 # Prepare directory structure.
 RUN mkdir -p /vt/bin && \
-   mkdir -p /vt/web && mkdir -p /vtdataroot
+   mkdir -p /vt/config && mkdir -p /vtdataroot
 
 # Copy binaries
-COPY --from=k8s /vt/bin/vtctld /vt/bin/
+COPY --from=lite /vt/bin/mysqlctl /vt/bin/
 
 # Copy certs to allow https calls
-COPY --from=k8s /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=lite /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
-# copy web admin files
-COPY --from=k8s /vt/web /vt/web
+# copy vitess config
+COPY --from=lite /vt/config /vt/config
 
 # add vitess user/group and add permissions
 RUN groupadd -r --gid 2000 vitess && \

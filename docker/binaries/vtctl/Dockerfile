@@ -15,7 +15,7 @@
 ARG VT_BASE_VER=latest
 ARG DEBIAN_VER=stable-slim
 
-FROM vitess/k8s:${VT_BASE_VER} AS k8s
+FROM vitess/lite:${VT_BASE_VER} AS lite
 
 FROM debian:${DEBIAN_VER}
 
@@ -26,10 +26,10 @@ ENV VTROOT /vt
 RUN mkdir -p /vt/bin && mkdir -p /vtdataroot
 
 # Copy certs to allow https calls
-COPY --from=k8s /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=lite /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
 # Copy binaries
-COPY --from=k8s /vt/bin/vtgate /vt/bin/
+COPY --from=lite /vt/bin/vtctl /vt/bin/
 
 # add vitess user/group and add permissions
 RUN groupadd -r --gid 2000 vitess && \
