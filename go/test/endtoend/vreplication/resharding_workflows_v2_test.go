@@ -497,9 +497,13 @@ func testReshardV2Workflow(t *testing.T) {
 	cnres := execVtgateQuery(t, dataGenConn, "customer", "select count(*) from customer_names")
 	require.Len(t, cnres.Rows, 1)
 	require.EqualValues(t, cres.Rows, cnres.Rows)
+	waitForNoWorkflowLag(t, vc, "customer", "customer_types")
+	ctres := execVtgateQuery(t, dataGenConn, "customer", "select count(*) from customer_types")
+	require.Len(t, cnres.Rows, 1)
+	require.EqualValues(t, cres.Rows, ctres.Rows)
 	if debugMode {
-		t.Logf("Done inserting customer data. Record counts in customer: %s, customer_names: %s",
-			cres.Rows[0][0].ToString(), cnres.Rows[0][0].ToString())
+		t.Logf("Done inserting customer data. Record counts in customer: %s, customer_names: %s, customer_types: %s",
+			cres.Rows[0][0].ToString(), cnres.Rows[0][0].ToString(), ctres.Rows[0][0].ToString())
 	}
 }
 
@@ -560,26 +564,29 @@ func testMoveTablesV2Workflow(t *testing.T) {
 	testWorkflowUpdate(t)
 
 	testRestOfWorkflow(t)
-	materialize(t, materializeCustomerCopySpec, false)
+	// Create our primary intra-keyspace materialization.
+	materialize(t, materializeCustomerNamesSpec, false)
+	// Create a second one to confirm that multiple ones get migrated correctly.
+	materialize(t, materializeCustomerTypesSpec, false)
 	materializeShow()
 
 	output, err = vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)
 	require.NoError(t, err)
-	require.True(t, listOutputContainsWorkflow(output, "customer_names") && !listOutputContainsWorkflow(output, "wf1"))
+	require.True(t, listOutputContainsWorkflow(output, "customer_names") && listOutputContainsWorkflow(output, "customer_types") && !listOutputContainsWorkflow(output, "wf1"))
 
 	testVSchemaForSequenceAfterMoveTables(t)
 
 	createMoveTablesWorkflow(t, "Lead,Lead-1")
 	output, err = vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)
 	require.NoError(t, err)
-	require.True(t, listOutputContainsWorkflow(output, "wf1") && listOutputContainsWorkflow(output, "customer_names"))
+	require.True(t, listOutputContainsWorkflow(output, "wf1") && listOutputContainsWorkflow(output, "customer_names") && listOutputContainsWorkflow(output, "customer_types"))
 
 	err = tstWorkflowCancel(t)
 	require.NoError(t, err)
 
 	output, err = vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)
 	require.NoError(t, err)
-	require.True(t, listOutputContainsWorkflow(output, "customer_names") && !listOutputContainsWorkflow(output, "wf1"))
+	require.True(t, listOutputContainsWorkflow(output, "customer_names") && listOutputContainsWorkflow(output, "customer_types") && !listOutputContainsWorkflow(output, "wf1"))
 }
 
 func testPartialSwitches(t *testing.T) {

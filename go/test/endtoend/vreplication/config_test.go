@@ -150,6 +150,14 @@ create table nopk (name varchar(128), age int unsigned);
         }
       ]
     },
+    "customer_types": {
+      "column_vindexes": [
+        {
+          "column": "cid",
+          "name": "xxhash"
+        }
+      ]
+    },
     "customer2": {
       "column_vindexes": [
         {
@@ -409,7 +417,7 @@ create table nopk (name varchar(128), age int unsigned);
 }
 `
 
-	materializeCustomerCopySpec = `
+	materializeCustomerNamesSpec = `
 {
   "workflow": "customer_names",
   "source_keyspace": "customer",
@@ -418,6 +426,19 @@ create table nopk (name varchar(128), age int unsigned);
     "target_table": "customer_names",
     "source_expression": "select cid, name from customer",
     "create_ddl": "create table if not exists customer_names (cid bigint not null, name varchar(128), primary key(cid), key(name))"
+  }]
+}
+`
+
+	materializeCustomerTypesSpec = `
+{
+  "workflow": "customer_types",
+  "source_keyspace": "customer",
+  "target_keyspace": "customer",
+  "table_settings": [{
+    "target_table": "customer_types",
+    "source_expression": "select cid, typ from customer",
+    "create_ddl": "create table if not exists customer_types (cid bigint not null, typ varchar(128), primary key(cid), key(typ))"
   }]
 }
 `
