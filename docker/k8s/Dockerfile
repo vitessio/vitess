@@ -15,7 +15,7 @@
 ARG VT_BASE_VER=latest
 ARG DEBIAN_VER=stable-slim
 
-FROM frouioui/lite:${VT_BASE_VER} AS lite
+FROM vitess/lite:${VT_BASE_VER} AS lite
 
 FROM debian:${DEBIAN_VER}
 
