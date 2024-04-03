@@ -72,23 +72,23 @@ func NewMariaDBBinlogFormat() BinlogFormat {
 	}
 }
 
-// FakeBinlogStream is used to generate consistent BinlogEvent packets
-// for a stream. It makes sure the ServerID and log positions are
-// reasonable.
-type FakeBinlogStream struct {
+// BinlogStream is used to generate consistent BinlogEvent packets
+// for a stream. It stores the ServerID, log position, and timestamp
+// fields which are needed for a binlog event's outer packet.
+type BinlogStream struct {
 	// ServerID is the server ID of the originating mysql-server.
 	ServerID uint32
 
 	// LogPosition is an incrementing log position.
 	LogPosition uint32
 
-	// Timestamp is a uint32 of when the events occur. It is not changed.
+	// Timestamp is a uint32 indicating when the events occurred.
 	Timestamp uint32
 }
 
-// NewFakeBinlogStream returns a simple FakeBinlogStream.
-func NewFakeBinlogStream() *FakeBinlogStream {
-	return &FakeBinlogStream{
+// NewFakeBinlogStream returns a simple BinlogStream with hardcoded values for testing.
+func NewFakeBinlogStream() *BinlogStream {
+	return &BinlogStream{
 		ServerID:    1,
 		LogPosition: 4,
 		Timestamp:   1407805592,
@@ -97,7 +97,7 @@ func NewFakeBinlogStream() *FakeBinlogStream {
 
 // Packetize adds the binlog event header to a packet, and optionally
 // the checksum.
-func (s *FakeBinlogStream) Packetize(f BinlogFormat, typ byte, flags uint16, data []byte) []byte {
+func (s *BinlogStream) Packetize(f BinlogFormat, typ byte, flags uint16, data []byte) []byte {
 	length := int(f.HeaderLength) + len(data)
 	if typ == eFormatDescriptionEvent || f.ChecksumAlgorithm == BinlogChecksumAlgCRC32 {
 		// Just add 4 zeroes to the end.
@@ -137,7 +137,7 @@ func NewInvalidEvent() BinlogEvent {
 // NewFormatDescriptionEvent creates a new FormatDescriptionEvent
 // based on the provided BinlogFormat. It uses a mysql56BinlogEvent
 // but could use a MariaDB one.
-func NewFormatDescriptionEvent(f BinlogFormat, s *FakeBinlogStream) BinlogEvent {
+func NewFormatDescriptionEvent(f BinlogFormat, s *BinlogStream) BinlogEvent {
 	length := 2 + // binlog-version
 		50 + // server version
 		4 + // create timestamp
@@ -158,7 +158,7 @@ func NewFormatDescriptionEvent(f BinlogFormat, s *FakeBinlogStream) BinlogEvent 
 
 // NewInvalidFormatDescriptionEvent returns an invalid FormatDescriptionEvent.
 // The binlog version is set to 3. It IsValid() though.
-func NewInvalidFormatDescriptionEvent(f BinlogFormat, s *FakeBinlogStream) BinlogEvent {
+func NewInvalidFormatDescriptionEvent(f BinlogFormat, s *BinlogStream) BinlogEvent {
 	length := 75
 	data := make([]byte, length)
 	data[0] = 3
@@ -169,7 +169,7 @@ func NewInvalidFormatDescriptionEvent(f BinlogFormat, s *FakeBinlogStream) Binlo
 
 // NewRotateEvent returns a RotateEvent.
 // The timestamp of such an event should be zero, so we patch it in.
-func NewRotateEvent(f BinlogFormat, s *FakeBinlogStream, position uint64, filename string) BinlogEvent {
+func NewRotateEvent(f BinlogFormat, s *BinlogStream, position uint64, filename string) BinlogEvent {
 	length := 8 + // position
 		len(filename)
 	data := make([]byte, length)
@@ -180,7 +180,7 @@ func NewRotateEvent(f BinlogFormat, s *FakeBinlogStream, position uint64, filena
 	return NewMysql56BinlogEvent(ev)
 }
 
-func NewFakeRotateEvent(f BinlogFormat, s *FakeBinlogStream, filename string) BinlogEvent {
+func NewFakeRotateEvent(f BinlogFormat, s *BinlogStream, filename string) BinlogEvent {
 	length := 8 + // position
 		len(filename)
 	data := make([]byte, length)
@@ -193,14 +193,14 @@ func NewFakeRotateEvent(f BinlogFormat, s *FakeBinlogStream, filename string) Bi
 
 // NewHeartbeatEvent returns a HeartbeatEvent.
 // see https://dev.mysql.com/doc/internals/en/heartbeat-event.html
-func NewHeartbeatEvent(f BinlogFormat, s *FakeBinlogStream) BinlogEvent {
+func NewHeartbeatEvent(f BinlogFormat, s *BinlogStream) BinlogEvent {
 	ev := s.Packetize(f, eHeartbeatEvent, 0, []byte{})
 	return NewMysql56BinlogEvent(ev)
 }
 
 // NewHeartbeatEvent returns a HeartbeatEvent.
 // see https://dev.mysql.com/doc/internals/en/heartbeat-event.html
-func NewHeartbeatEventWithLogFile(f BinlogFormat, s *FakeBinlogStream, filename string) BinlogEvent {
+func NewHeartbeatEventWithLogFile(f BinlogFormat, s *BinlogStream, filename string) BinlogEvent {
 	length := len(filename)
 	data := make([]byte, length)
 	copy(data, filename)
@@ -210,7 +210,7 @@ func NewHeartbeatEventWithLogFile(f BinlogFormat, s *FakeBinlogStream, filename 
 }
 
 // NewQueryEvent makes up a QueryEvent based on the Query structure.
-func NewQueryEvent(f BinlogFormat, s *FakeBinlogStream, q Query) BinlogEvent {
+func NewQueryEvent(f BinlogFormat, s *BinlogStream, q Query) BinlogEvent {
 	statusVarLength := 0
 	if q.Charset != nil {
 		statusVarLength += 1 + 2 + 2 + 2
@@ -253,7 +253,7 @@ func NewQueryEvent(f BinlogFormat, s *FakeBinlogStream, q Query) BinlogEvent {
 
 // NewInvalidQueryEvent returns an invalid QueryEvent. IsValid is however true.
 // sqlPos is out of bounds.
-func NewInvalidQueryEvent(f BinlogFormat, s *FakeBinlogStream) BinlogEvent {
+func NewInvalidQueryEvent(f BinlogFormat, s *BinlogStream) BinlogEvent {
 	length := 100
 	data := make([]byte, length)
 	data[4+4] = 200 // > 100
@@ -263,7 +263,7 @@ func NewInvalidQueryEvent(f BinlogFormat, s *FakeBinlogStream) BinlogEvent {
 }
 
 // NewXIDEvent returns a XID event. We do not use the data, so keep it 0.
-func NewXIDEvent(f BinlogFormat, s *FakeBinlogStream) BinlogEvent {
+func NewXIDEvent(f BinlogFormat, s *BinlogStream) BinlogEvent {
 	length := 8
 	data := make([]byte, length)
 
@@ -272,7 +272,7 @@ func NewXIDEvent(f BinlogFormat, s *FakeBinlogStream) BinlogEvent {
 }
 
 // NewIntVarEvent returns an IntVar event.
-func NewIntVarEvent(f BinlogFormat, s *FakeBinlogStream, typ byte, value uint64) BinlogEvent {
+func NewIntVarEvent(f BinlogFormat, s *BinlogStream, typ byte, value uint64) BinlogEvent {
 	length := 9
 	data := make([]byte, length)
 
@@ -291,8 +291,8 @@ func NewIntVarEvent(f BinlogFormat, s *FakeBinlogStream, typ byte, value uint64)
 }
 
 // NewMariaDBGTIDEvent returns a MariaDB specific GTID event.
-// It ignores the Server in the gtid, instead uses the FakeBinlogStream.ServerID.
-func NewMariaDBGTIDEvent(f BinlogFormat, s *FakeBinlogStream, gtid MariadbGTID, hasBegin bool) BinlogEvent {
+// It ignores the Server in the gtid, instead uses the BinlogStream.ServerID.
+func NewMariaDBGTIDEvent(f BinlogFormat, s *BinlogStream, gtid MariadbGTID, hasBegin bool) BinlogEvent {
 	length := 8 + // sequence
 		4 + // domain
 		1 // flags2
@@ -323,7 +323,7 @@ func NewMariaDBGTIDEvent(f BinlogFormat, s *FakeBinlogStream, gtid MariadbGTID, 
 }
 
 // NewMySQLGTIDEvent returns a MySQL specific GTID event.
-func NewMySQLGTIDEvent(f BinlogFormat, s *FakeBinlogStream, gtid Mysql56GTID, hasBegin bool) BinlogEvent {
+func NewMySQLGTIDEvent(f BinlogFormat, s *BinlogStream, gtid Mysql56GTID, hasBegin bool) BinlogEvent {
 	length := 1 + // flags
 		16 + // SID (server UUID)
 		8 // GNO (sequence number, signed int)
@@ -354,7 +354,7 @@ func NewMySQLGTIDEvent(f BinlogFormat, s *FakeBinlogStream, gtid Mysql56GTID, ha
 
 // NewTableMapEvent returns a TableMap event.
 // Only works with post_header_length=8.
-func NewTableMapEvent(f BinlogFormat, s *FakeBinlogStream, tableID uint64, tm *TableMap) BinlogEvent {
+func NewTableMapEvent(f BinlogFormat, s *BinlogStream, tableID uint64, tm *TableMap) BinlogEvent {
 	if f.HeaderSize(eTableMapEvent) != 8 {
 		panic("Not implemented, post_header_length!=8")
 	}
@@ -411,17 +411,17 @@ func NewTableMapEvent(f BinlogFormat, s *FakeBinlogStream, tableID uint64, tm *T
 }
 
 // NewWriteRowsEvent returns a WriteRows event. Uses v2.
-func NewWriteRowsEvent(f BinlogFormat, s *FakeBinlogStream, tableID uint64, rows Rows) BinlogEvent {
+func NewWriteRowsEvent(f BinlogFormat, s *BinlogStream, tableID uint64, rows Rows) BinlogEvent {
 	return newRowsEvent(f, s, eWriteRowsEventV2, tableID, rows)
 }
 
 // NewUpdateRowsEvent returns an UpdateRows event. Uses v2.
-func NewUpdateRowsEvent(f BinlogFormat, s *FakeBinlogStream, tableID uint64, rows Rows) BinlogEvent {
+func NewUpdateRowsEvent(f BinlogFormat, s *BinlogStream, tableID uint64, rows Rows) BinlogEvent {
 	return newRowsEvent(f, s, eUpdateRowsEventV2, tableID, rows)
 }
 
 // NewDeleteRowsEvent returns an DeleteRows event. Uses v2.
-func NewDeleteRowsEvent(f BinlogFormat, s *FakeBinlogStream, tableID uint64, rows Rows) BinlogEvent {
+func NewDeleteRowsEvent(f BinlogFormat, s *BinlogStream, tableID uint64, rows Rows) BinlogEvent {
 	return newRowsEvent(f, s, eDeleteRowsEventV2, tableID, rows)
 }
 
@@ -429,7 +429,7 @@ func NewDeleteRowsEvent(f BinlogFormat, s *FakeBinlogStream, tableID uint64, row
 // eWriteRowsEventV1, eWriteRowsEventV2,
 // eUpdateRowsEventV1, eUpdateRowsEventV2,
 // eDeleteRowsEventV1, eDeleteRowsEventV2.
-func newRowsEvent(f BinlogFormat, s *FakeBinlogStream, typ byte, tableID uint64, rows Rows) BinlogEvent {
+func newRowsEvent(f BinlogFormat, s *BinlogStream, typ byte, tableID uint64, rows Rows) BinlogEvent {
 	if f.HeaderSize(typ) == 6 {
 		panic("Not implemented, post_header_length==6")
 	}
