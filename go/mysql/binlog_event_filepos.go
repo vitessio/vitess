@@ -177,6 +177,10 @@ func (ev filePosFakeEvent) Timestamp() uint32 {
 	return ev.timestamp
 }
 
+func (ev filePosFakeEvent) Length() uint32 {
+	return 0
+}
+
 func (ev filePosFakeEvent) Format() (BinlogFormat, error) {
 	return BinlogFormat{}, nil
 }

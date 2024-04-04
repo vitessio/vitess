@@ -81,6 +81,8 @@ type BinlogEvent interface {
 
 	// Timestamp returns the timestamp from the event header.
 	Timestamp() uint32
+	// Length returns the size in bytes of this binlog event from the event header.
+	Length() uint32
 
 	// Format returns a BinlogFormat struct based on the event data.
 	// This is only valid if IsFormatDescription() returns true.
