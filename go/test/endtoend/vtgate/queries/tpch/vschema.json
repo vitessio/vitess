@@ -1,0 +1,121 @@
+{
+  "sharded": true,
+  "foreignKeyMode": "unspecified",
+  "vindexes": {
+    "hash": {
+      "type": "hash"
+    }
+  },
+  "tables": {
+    "basic": {
+      "name": "basic",
+      "column_vindexes": [
+        {
+          "columns": [
+            "a"
+          ],
+          "type": "hash",
+          "name": "hash"
+        }
+      ]
+    },
+    "customer": {
+      "name": "customer",
+      "column_vindexes": [
+        {
+          "columns": [
+            "C_CUSTKEY"
+          ],
+          "type": "hash",
+          "name": "hash"
+        }
+      ]
+    },
+    "lineitem": {
+      "name": "lineitem",
+      "column_vindexes": [
+        {
+          "columns": [
+            "L_ORDERKEY",
+            "L_LINENUMBER"
+          ],
+          "type": "hash",
+          "name": "hash"
+        }
+      ]
+    },
+    "nation": {
+      "name": "nation",
+      "column_vindexes": [
+        {
+          "columns": [
+            "N_NATIONKEY"
+          ],
+          "type": "hash",
+          "name": "hash"
+        }
+      ]
+    },
+    "orders": {
+      "name": "orders",
+      "column_vindexes": [
+        {
+          "columns": [
+            "O_ORDERKEY"
+          ],
+          "type": "hash",
+          "name": "hash"
+        }
+      ]
+    },
+    "part": {
+      "name": "part",
+      "column_vindexes": [
+        {
+          "columns": [
+            "P_PARTKEY"
+          ],
+          "type": "hash",
+          "name": "hash"
+        }
+      ]
+    },
+    "partsupp": {
+      "name": "partsupp",
+      "column_vindexes": [
+        {
+          "columns": [
+            "PS_PARTKEY",
+            "PS_SUPPKEY"
+          ],
+          "type": "hash",
+          "name": "hash"
+        }
+      ]
+    },
+    "region": {
+      "name": "region",
+      "column_vindexes": [
+        {
+          "columns": [
+            "R_REGIONKEY"
+          ],
+          "type": "hash",
+          "name": "hash"
+        }
+      ]
+    },
+    "supplier": {
+      "name": "supplier",
+      "column_vindexes": [
+        {
+          "columns": [
+            "S_SUPPKEY"
+          ],
+          "type": "hash",
+          "name": "hash"
+        }
+      ]
+    }
+  }
+}
