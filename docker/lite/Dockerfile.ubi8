@@ -46,6 +46,7 @@ ENV VTDATAROOT /vt/vtdataroot
 ENV PATH $VTROOT/bin:$PATH
 
 # Copy artifacts from builder layer.
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=builder --chown=vitess:vitess /vt/install /vt
 COPY --from=builder --chown=vitess:vitess /vt/src/vitess.io/vitess/web/vtadmin /vt/web/vtadmin
 COPY --from=builder --chown=vitess:vitess /vt/src/vitess.io/vitess/config/init_db.sql /vt/config/
