@@ -153,7 +153,7 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 		}
 		args = append(args, "--timeout=90s")
 	}
-	if action == workflowActionCreate && options.atomicCopy {
+	if currentWorkflowType == binlogdatapb.VReplicationWorkflowType_MoveTables && action == workflowActionCreate && options.atomicCopy {
 		args = append(args, "--atomic-copy")
 	}
 	if (action == workflowActionCreate || action == workflowActionSwitchTraffic || action == workflowActionReverseTraffic) && cells != "" {
