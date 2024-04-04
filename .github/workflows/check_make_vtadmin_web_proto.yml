@@ -52,7 +52,7 @@ jobs:
       uses: actions/setup-go@v5
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.proto_changes == 'true'
       with:
-        go-version: 1.20.13
+        go-version: 1.21.9
 
     - name: Setup Node
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.proto_changes == 'true'
@@ -70,3 +70,4 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.proto_changes == 'true'
       run: |
         tools/check_make_vtadmin_web_proto.sh
+

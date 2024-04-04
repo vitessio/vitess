@@ -58,7 +58,7 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.examples == 'true'
       uses: actions/setup-go@v5
       with:
-        go-version: 1.20.13
+        go-version: 1.21.9
 
     - name: Tune the OS
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.examples == 'true'
@@ -107,3 +107,4 @@ jobs:
           export PATH="/usr/local/opt/mysql@5.7/bin:$PATH"
         fi
         eatmydata -- go run test.go -print-log -follow -retry=1 local_example
+
