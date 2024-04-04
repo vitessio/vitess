@@ -914,7 +914,7 @@ query_primary:
   }
 
 insert_statement:
-  insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause insert_data row_alias_opt on_dup_opt
+  insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause insert_data on_dup_opt
   {
     // insert_data returns a *Insert pre-filled with Columns & Values
     ins := $6
@@ -923,8 +923,7 @@ insert_statement:
     ins.Ignore = $3
     ins.Table = getAliasedTableExprFromTableName($4)
     ins.Partitions = $5
-    ins.RowAlias = $7
-    ins.OnDup = OnDup($8)
+    ins.OnDup = OnDup($7)
     $$ = ins
   }
 | insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause SET update_list on_dup_opt
@@ -7704,21 +7703,21 @@ optionally_opt:
 // Because the rules are together, the parser can keep shifting
 // the tokens until it disambiguates a as sql_id and select as keyword.
 insert_data:
-  VALUES tuple_list
+  VALUES tuple_list row_alias_opt
   {
-    $$ = &Insert{Rows: $2}
+    $$ = &Insert{Rows: $2, RowAlias: $3}
   }
 | select_statement
   {
     $$ = &Insert{Rows: $1}
   }
-| openb ins_column_list closeb VALUES tuple_list
+| openb ins_column_list closeb VALUES tuple_list row_alias_opt
   {
-    $$ = &Insert{Columns: $2, Rows: $5}
+    $$ = &Insert{Columns: $2, Rows: $5, RowAlias: $6}
   }
-| openb closeb VALUES tuple_list
+| openb closeb VALUES tuple_list row_alias_opt
   {
-    $$ = &Insert{Columns: []IdentifierCI{}, Rows: $4}
+    $$ = &Insert{Columns: []IdentifierCI{}, Rows: $4, RowAlias: $5}
   }
 | openb ins_column_list closeb select_statement
   {
