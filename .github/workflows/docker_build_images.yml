@@ -1,6 +1,5 @@
 name: Docker Build Images (v20+)
 on:
-  pull_request:
   push:
     branches:
       - main
