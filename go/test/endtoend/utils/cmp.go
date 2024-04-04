@@ -263,8 +263,8 @@ func (mcmp *MySQLCompare) ExecAndIgnore(query string) (*sqltypes.Result, error) 
 	return mcmp.VtConn.ExecuteFetch(query, 1000, true)
 }
 
-func (mcmp *MySQLCompare) Run(query string, f func(mcmp *MySQLCompare)) {
-	mcmp.t.Run(query, func(t *testing.T) {
+func (mcmp *MySQLCompare) Run(name string, f func(mcmp *MySQLCompare)) {
+	mcmp.t.Run(name, func(t *testing.T) {
 		inner := &MySQLCompare{
 			t:         t,
 			MySQLConn: mcmp.MySQLConn,

@@ -651,6 +651,10 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `1 * unix_timestamp(from_unixtime(time '31:34:58.123'))`,
 			result:     `DECIMAL(313458.123)`,
 		},
+		{
+			expression: `1 * unix_timestamp(time('1.0000'))`,
+			result:     `DECIMAL(1698098401.0000)`,
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")
