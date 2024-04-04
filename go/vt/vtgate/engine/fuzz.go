@@ -80,7 +80,7 @@ func execUpdate(f *fuzz.ConsumeFuzzer) {
 	_, _ = upd.TryExecute(ctx, vc, map[string]*querypb.BindVariable{}, false)
 }
 
-// execUpdate implements a wrapper to fuzz Insert.Tryexecute()
+// execInsert implements a wrapper to fuzz Insert.Tryexecute()
 func execInsert(f *fuzz.ConsumeFuzzer) {
 	ins := &Insert{}
 	err := f.GenerateStruct(ins)
@@ -91,7 +91,7 @@ func execInsert(f *fuzz.ConsumeFuzzer) {
 	_, _ = ins.TryExecute(ctx, vc, map[string]*querypb.BindVariable{}, false)
 }
 
-// execUpdate implements a wrapper to fuzz Route.Tryexecute()
+// execRoute implements a wrapper to fuzz Route.Tryexecute()
 func execRoute(f *fuzz.ConsumeFuzzer) {
 	sel := &Route{}
 	err := f.GenerateStruct(sel)

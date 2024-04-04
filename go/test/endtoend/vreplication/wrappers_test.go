@@ -17,13 +17,13 @@ limitations under the License.
 package vreplication
 
 import (
-	"math/rand"
+	"math/rand/v2"
 	"strconv"
 
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/wrangler"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
 type iWorkflow interface {
@@ -90,7 +90,7 @@ func newMoveTables(vc *VitessCluster, mt *moveTablesWorkflow, flavor workflowFla
 	mt.vc = vc
 	var mt2 iMoveTables
 	if flavor == workflowFlavorRandom {
-		flavor = workflowFlavors[rand.Intn(len(workflowFlavors))]
+		flavor = workflowFlavors[rand.IntN(len(workflowFlavors))]
 	}
 	switch flavor {
 	case workflowFlavorVtctl:
@@ -117,7 +117,7 @@ func newVtctlMoveTables(mt *moveTablesWorkflow) *VtctlMoveTables {
 }
 
 func (vmt *VtctlMoveTables) Create() {
-	currentWorkflowType = wrangler.MoveTablesWorkflow
+	currentWorkflowType = binlogdatapb.VReplicationWorkflowType_MoveTables
 	vmt.exec(workflowActionCreate)
 }
 
@@ -287,7 +287,7 @@ func newReshard(vc *VitessCluster, rs *reshardWorkflow, flavor workflowFlavor) i
 	rs.vc = vc
 	var rs2 iReshard
 	if flavor == workflowFlavorRandom {
-		flavor = workflowFlavors[rand.Intn(len(workflowFlavors))]
+		flavor = workflowFlavors[rand.IntN(len(workflowFlavors))]
 	}
 	switch flavor {
 	case workflowFlavorVtctl:
@@ -314,7 +314,7 @@ func newVtctlReshard(rs *reshardWorkflow) *VtctlReshard {
 }
 
 func (vrs *VtctlReshard) Create() {
-	currentWorkflowType = wrangler.ReshardWorkflow
+	currentWorkflowType = binlogdatapb.VReplicationWorkflowType_Reshard
 	vrs.exec(workflowActionCreate)
 }
 

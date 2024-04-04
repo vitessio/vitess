@@ -19,6 +19,7 @@ package reparentutil
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -88,18 +89,23 @@ func ElectNewPrimary(
 
 	// candidates are the list of tablets that can be potentially promoted after filtering out based on preliminary checks.
 	candidates := []*topodatapb.Tablet{}
+	reasonsToInvalidate := strings.Builder{}
 	for _, tablet := range tabletMap {
 		switch {
 		case newPrimaryAlias != nil:
 			// If newPrimaryAlias is provided, then that is the only valid tablet, even if it is not of type replica or in a different cell.
 			if !topoproto.TabletAliasEqual(tablet.Alias, newPrimaryAlias) {
+				reasonsToInvalidate.WriteString(fmt.Sprintf("\n%v does not match the new primary alias provided", topoproto.TabletAliasString(tablet.Alias)))
 				continue
 			}
 		case primaryCell != "" && tablet.Alias.Cell != primaryCell:
+			reasonsToInvalidate.WriteString(fmt.Sprintf("\n%v is not in the same cell as the previous primary", topoproto.TabletAliasString(tablet.Alias)))
 			continue
 		case avoidPrimaryAlias != nil && topoproto.TabletAliasEqual(tablet.Alias, avoidPrimaryAlias):
+			reasonsToInvalidate.WriteString(fmt.Sprintf("\n%v matches the primary alias to avoid", topoproto.TabletAliasString(tablet.Alias)))
 			continue
 		case tablet.Tablet.Type != topodatapb.TabletType_REPLICA:
+			reasonsToInvalidate.WriteString(fmt.Sprintf("\n%v is not a replica", topoproto.TabletAliasString(tablet.Alias)))
 			continue
 		}
 
@@ -124,6 +130,8 @@ func ElectNewPrimary(
 			if err == nil && (tolerableReplLag == 0 || tolerableReplLag >= replLag) {
 				validTablets = append(validTablets, tb)
 				tabletPositions = append(tabletPositions, pos)
+			} else {
+				reasonsToInvalidate.WriteString(fmt.Sprintf("\n%v has %v replication lag which is more than the tolerable amount", topoproto.TabletAliasString(tablet.Alias), replLag))
 			}
 			return err
 		})
@@ -136,7 +144,7 @@ func ElectNewPrimary(
 
 	// return an error if there are no valid tablets available
 	if len(validTablets) == 0 {
-		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "cannot find a tablet to reparent to in the same cell as the current primary")
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "cannot find a tablet to reparent to%v", reasonsToInvalidate.String())
 	}
 
 	// sort the tablets for finding the best primary

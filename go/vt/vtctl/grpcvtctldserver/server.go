@@ -1257,6 +1257,36 @@ func (s *VtctldServer) ExecuteFetchAsDBA(ctx context.Context, req *vtctldatapb.E
 	return &vtctldatapb.ExecuteFetchAsDBAResponse{Result: qr}, nil
 }
 
+// ExecuteMultiFetchAsDBA is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ExecuteMultiFetchAsDBA(ctx context.Context, req *vtctldatapb.ExecuteMultiFetchAsDBARequest) (resp *vtctldatapb.ExecuteMultiFetchAsDBAResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ExecuteMultiFetchAsDBA")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+	span.Annotate("max_rows", req.MaxRows)
+	span.Annotate("disable_binlogs", req.DisableBinlogs)
+	span.Annotate("reload_schema", req.ReloadSchema)
+
+	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return nil, err
+	}
+
+	qrs, err := s.tmc.ExecuteMultiFetchAsDba(ctx, ti.Tablet, false, &tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest{
+		Sql:            []byte(req.Sql),
+		MaxRows:        uint64(req.MaxRows),
+		DisableBinlogs: req.DisableBinlogs,
+		ReloadSchema:   req.ReloadSchema,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.ExecuteMultiFetchAsDBAResponse{Results: qrs}, nil
+}
+
 // ExecuteHook is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) ExecuteHook(ctx context.Context, req *vtctldatapb.ExecuteHookRequest) (resp *vtctldatapb.ExecuteHookResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.ExecuteHook")
@@ -5134,4 +5164,44 @@ func (s *VtctldServer) diffVersion(ctx context.Context, primaryVersion string, p
 	if primaryVersion != replicaVersion.Version {
 		er.RecordError(fmt.Errorf("primary %v version %v is different than replica %v version %v", topoproto.TabletAliasString(primaryAlias), primaryVersion, topoproto.TabletAliasString(alias), replicaVersion))
 	}
+}
+
+// ApplyKeyspaceRoutingRules is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ApplyKeyspaceRoutingRules(ctx context.Context, req *vtctldatapb.ApplyKeyspaceRoutingRulesRequest) (*vtctldatapb.ApplyKeyspaceRoutingRulesResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ApplyKeyspaceRoutingRules")
+	defer span.Finish()
+
+	span.Annotate("skip_rebuild", req.SkipRebuild)
+	span.Annotate("rebuild_cells", strings.Join(req.RebuildCells, ","))
+
+	if err := s.ts.SaveKeyspaceRoutingRules(ctx, req.KeyspaceRoutingRules); err != nil {
+		return nil, err
+	}
+
+	resp := &vtctldatapb.ApplyKeyspaceRoutingRulesResponse{}
+
+	if req.SkipRebuild {
+		return resp, nil
+	}
+
+	if err := s.ts.RebuildSrvVSchema(ctx, req.RebuildCells); err != nil {
+		return nil, vterrors.Wrapf(err, "RebuildSrvVSchema(%v) failed: %v", req.RebuildCells, err)
+	}
+
+	return resp, nil
+}
+
+// GetKeyspaceRoutingRules is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetKeyspaceRoutingRules(ctx context.Context, req *vtctldatapb.GetKeyspaceRoutingRulesRequest) (*vtctldatapb.GetKeyspaceRoutingRulesResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetKeyspaceRoutingRules")
+	defer span.Finish()
+
+	rules, err := s.ts.GetKeyspaceRoutingRules(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.GetKeyspaceRoutingRulesResponse{
+		KeyspaceRoutingRules: rules,
+	}, nil
 }

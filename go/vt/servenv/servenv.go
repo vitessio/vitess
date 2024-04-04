@@ -75,14 +75,23 @@ var (
 
 // Flags specific to Init, Run, and RunDefault functions.
 var (
-	lameduckPeriod       = 50 * time.Millisecond
-	onTermTimeout        = 10 * time.Second
-	onCloseTimeout       = 10 * time.Second
 	catchSigpipe         bool
 	maxStackSize         = 64 * 1024 * 1024
 	initStartTime        time.Time // time when tablet init started: for debug purposes to time how long a tablet init takes
 	tableRefreshInterval int
 )
+
+type TimeoutFlags struct {
+	LameduckPeriod time.Duration
+	OnTermTimeout  time.Duration
+	OnCloseTimeout time.Duration
+}
+
+var timeouts = &TimeoutFlags{
+	LameduckPeriod: 50 * time.Millisecond,
+	OnTermTimeout:  10 * time.Second,
+	OnCloseTimeout: 10 * time.Second,
+}
 
 // RegisterFlags installs the flags used by Init, Run, and RunDefault.
 //
@@ -90,15 +99,31 @@ var (
 // functions.
 func RegisterFlags() {
 	OnParse(func(fs *pflag.FlagSet) {
-		fs.DurationVar(&lameduckPeriod, "lameduck-period", lameduckPeriod, "keep running at least this long after SIGTERM before stopping")
-		fs.DurationVar(&onTermTimeout, "onterm_timeout", onTermTimeout, "wait no more than this for OnTermSync handlers before stopping")
-		fs.DurationVar(&onCloseTimeout, "onclose_timeout", onCloseTimeout, "wait no more than this for OnClose handlers before stopping")
+		fs.DurationVar(&timeouts.LameduckPeriod, "lameduck-period", timeouts.LameduckPeriod, "keep running at least this long after SIGTERM before stopping")
+		fs.DurationVar(&timeouts.OnTermTimeout, "onterm_timeout", timeouts.OnTermTimeout, "wait no more than this for OnTermSync handlers before stopping")
+		fs.DurationVar(&timeouts.OnCloseTimeout, "onclose_timeout", timeouts.OnCloseTimeout, "wait no more than this for OnClose handlers before stopping")
 		fs.BoolVar(&catchSigpipe, "catch-sigpipe", catchSigpipe, "catch and ignore SIGPIPE on stdout and stderr if specified")
 		fs.IntVar(&maxStackSize, "max-stack-size", maxStackSize, "configure the maximum stack size in bytes")
 		fs.IntVar(&tableRefreshInterval, "table-refresh-interval", tableRefreshInterval, "interval in milliseconds to refresh tables in status page with refreshRequired class")
 
 		// pid_file.go
 		fs.StringVar(&pidFile, "pid_file", pidFile, "If set, the process will write its pid to the named file, and delete it on graceful shutdown.")
+	})
+}
+
+func RegisterFlagsWithTimeouts(tf *TimeoutFlags) {
+	OnParse(func(fs *pflag.FlagSet) {
+		fs.DurationVar(&tf.LameduckPeriod, "lameduck-period", tf.LameduckPeriod, "keep running at least this long after SIGTERM before stopping")
+		fs.DurationVar(&tf.OnTermTimeout, "onterm_timeout", tf.OnTermTimeout, "wait no more than this for OnTermSync handlers before stopping")
+		fs.DurationVar(&tf.OnCloseTimeout, "onclose_timeout", tf.OnCloseTimeout, "wait no more than this for OnClose handlers before stopping")
+		fs.BoolVar(&catchSigpipe, "catch-sigpipe", catchSigpipe, "catch and ignore SIGPIPE on stdout and stderr if specified")
+		fs.IntVar(&maxStackSize, "max-stack-size", maxStackSize, "configure the maximum stack size in bytes")
+		fs.IntVar(&tableRefreshInterval, "table-refresh-interval", tableRefreshInterval, "interval in milliseconds to refresh tables in status page with refreshRequired class")
+
+		// pid_file.go
+		fs.StringVar(&pidFile, "pid_file", pidFile, "If set, the process will write its pid to the named file, and delete it on graceful shutdown.")
+
+		timeouts = tf
 	})
 }
 

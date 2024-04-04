@@ -23,7 +23,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"strconv"
 	"strings"
@@ -744,7 +744,7 @@ func TestEOFOrLengthEncodedIntFuzz(t *testing.T) {
 	}()
 
 	for i := 0; i < 100; i++ {
-		bytes := make([]byte, rand.Intn(16)+1)
+		bytes := make([]byte, rand.IntN(16)+1)
 		_, err := crypto_rand.Read(bytes)
 		require.NoError(t, err, "error doing rand.Read")
 
@@ -990,7 +990,7 @@ var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 func randSeq(n int) string {
 	b := make([]rune, n)
 	for i := range b {
-		b[i] = letters[rand.Intn(len(letters))]
+		b[i] = letters[rand.IntN(len(letters))]
 	}
 	return string(b)
 }

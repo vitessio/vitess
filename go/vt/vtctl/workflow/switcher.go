@@ -42,6 +42,10 @@ func (r *switcher) deleteShardRoutingRules(ctx context.Context) error {
 	return r.ts.deleteShardRoutingRules(ctx)
 }
 
+func (r *switcher) deleteKeyspaceRoutingRules(ctx context.Context) error {
+	return r.ts.deleteKeyspaceRoutingRules(ctx)
+}
+
 func (r *switcher) dropSourceDeniedTables(ctx context.Context) error {
 	return r.ts.dropSourceDeniedTables(ctx)
 }

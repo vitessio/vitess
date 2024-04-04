@@ -17,6 +17,7 @@
 package inst
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -118,9 +119,11 @@ func ExecDBWriteFunc(f func() error) error {
 }
 
 func ExpireTableData(tableName string, timestampColumn string) error {
-	query := fmt.Sprintf("delete from %s where %s < NOW() - INTERVAL ? DAY", tableName, timestampColumn)
 	writeFunc := func() error {
-		_, err := db.ExecVTOrc(query, config.Config.AuditPurgeDays)
+		_, err := db.ExecVTOrc(
+			fmt.Sprintf("delete from %s where %s < NOW() - INTERVAL ? DAY", tableName, timestampColumn),
+			config.Config.AuditPurgeDays,
+		)
 		return err
 	}
 	return ExecDBWriteFunc(writeFunc)
@@ -155,13 +158,6 @@ func RegisterStats() {
 		instances, _ := ReadInstancesWithErrantGTIds("", "")
 		return int64(len(instances))
 	})
-}
-
-// ReadTopologyInstance collects information on the state of a MySQL
-// server and writes the result synchronously to the vtorc
-// backend.
-func ReadTopologyInstance(tabletAlias string) (*Instance, error) {
-	return ReadTopologyInstanceBufferable(tabletAlias, nil)
 }
 
 // ReadTopologyInstanceBufferable connects to a topology MySQL instance
@@ -626,35 +622,6 @@ func ReadInstance(tabletAlias string) (*Instance, bool, error) {
 		return instances[0], false, err
 	}
 	return instances[0], true, nil
-}
-
-// ReadReplicaInstances reads replicas of a given primary
-func ReadReplicaInstances(primaryHost string, primaryPort int) ([](*Instance), error) {
-	condition := `
-			source_host = ?
-			and source_port = ?
-		`
-	return readInstancesByCondition(condition, sqlutils.Args(primaryHost, primaryPort), "")
-}
-
-// ReadReplicaInstancesIncludingBinlogServerSubReplicas returns a list of direct slves including any replicas
-// of a binlog server replica
-func ReadReplicaInstancesIncludingBinlogServerSubReplicas(primaryHost string, primaryPort int) ([](*Instance), error) {
-	replicas, err := ReadReplicaInstances(primaryHost, primaryPort)
-	if err != nil {
-		return replicas, err
-	}
-	for _, replica := range replicas {
-		replica := replica
-		if replica.IsBinlogServer() {
-			binlogServerReplicas, err := ReadReplicaInstancesIncludingBinlogServerSubReplicas(replica.Hostname, replica.Port)
-			if err != nil {
-				return replicas, err
-			}
-			replicas = append(replicas, binlogServerReplicas...)
-		}
-	}
-	return replicas, err
 }
 
 // ReadProblemInstances reads all instances with problems
@@ -1155,43 +1122,6 @@ func SnapshotTopologies() error {
 	return ExecDBWriteFunc(writeFunc)
 }
 
-// RecordStaleInstanceBinlogCoordinates snapshots the binlog coordinates of instances
-func RecordStaleInstanceBinlogCoordinates(tabletAlias string, binlogCoordinates *BinlogCoordinates) error {
-	args := sqlutils.Args(
-		tabletAlias,
-		binlogCoordinates.LogFile, binlogCoordinates.LogPos,
-	)
-	_, err := db.ExecVTOrc(`
-			delete from
-				database_instance_stale_binlog_coordinates
-			where
-				alias = ?
-				and (
-					binary_log_file != ?
-					or binary_log_pos != ?
-				)
-				`,
-		args...,
-	)
-	if err != nil {
-		log.Error(err)
-		return err
-	}
-	_, err = db.ExecVTOrc(`
-			insert ignore into
-				database_instance_stale_binlog_coordinates (
-					alias,	binary_log_file, binary_log_pos, first_seen
-				)
-				values (
-					?, ?, ?, NOW()
-				)`,
-		args...)
-	if err != nil {
-		log.Error(err)
-	}
-	return err
-}
-
 func ExpireStaleInstanceBinlogCoordinates() error {
 	expireSeconds := config.Config.ReasonableReplicationLagSeconds * 2
 	if expireSeconds < config.StaleInstanceCoordinatesExpireSeconds {
@@ -1209,4 +1139,33 @@ func ExpireStaleInstanceBinlogCoordinates() error {
 		return err
 	}
 	return ExecDBWriteFunc(writeFunc)
+}
+
+// GetDatabaseState takes the snapshot of the database and returns it.
+func GetDatabaseState() (string, error) {
+	type tableState struct {
+		TableName string
+		Rows      []sqlutils.RowMap
+	}
+
+	var dbState []tableState
+	for _, tableName := range db.TableNames {
+		ts := tableState{
+			TableName: tableName,
+		}
+		err := db.QueryVTOrc("select * from "+tableName, nil, func(rowMap sqlutils.RowMap) error {
+			ts.Rows = append(ts.Rows, rowMap)
+			return nil
+		})
+		if err != nil {
+			return "", err
+		}
+		dbState = append(dbState, ts)
+	}
+	jsonData, err := json.MarshalIndent(dbState, "", "\t")
+	if err != nil {
+		return "", err
+	}
+
+	return string(jsonData), nil
 }

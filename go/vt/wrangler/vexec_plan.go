@@ -279,7 +279,7 @@ func (vx *vexec) buildUpdatePlan(ctx context.Context, planner vexecPlanner, upd 
 	}, nil
 }
 
-// buildUpdatePlan builds a plan for a DELETE query
+// buildDeletePlan builds a plan for a DELETE query
 func (vx *vexec) buildDeletePlan(ctx context.Context, planner vexecPlanner, del *sqlparser.Delete) (*vexecPlan, error) {
 	if del.Targets != nil {
 		return nil, fmt.Errorf("unsupported construct: %v", sqlparser.String(del))
@@ -330,7 +330,7 @@ func (vx *vexec) buildInsertPlan(ctx context.Context, planner vexecPlanner, ins 
 	}, nil
 }
 
-// buildUpdatePlan builds a plan for a SELECT query
+// buildSelectPlan builds a plan for a SELECT query
 func (vx *vexec) buildSelectPlan(ctx context.Context, planner vexecPlanner, sel *sqlparser.Select) (*vexecPlan, error) {
 	sel.Where = vx.addDefaultWheres(planner, sel.Where)
 	buf := sqlparser.NewTrackedBuffer(nil)

@@ -153,7 +153,7 @@ func (ins *InsertCommon) executeUnshardedTableQuery(ctx context.Context, vcursor
 		return nil, err
 	}
 	if len(rss) != 1 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace does not have exactly one shard: %v", rss)
+		return nil, vterrors.VT09022(rss)
 	}
 	err = allowOnlyPrimary(rss...)
 	if err != nil {
@@ -209,12 +209,11 @@ func (ic *InsertCommon) processPrimary(ctx context.Context, vcursor VCursor, vin
 			// This is a single keyspace id, we're good.
 			keyspaceIDs[i] = d
 		case key.DestinationNone:
-			// No valid keyspace id, we may return an error.
-			if !ic.Ignore {
-				return nil, fmt.Errorf("could not map %v to a keyspace id", vindexColumnsKeys[i])
-			}
+			// Not a valid keyspace id, so we cannot determine which shard this row belongs to.
+			// We have to return an error.
+			return nil, vterrors.VT09023(vindexColumnsKeys[i])
 		default:
-			return nil, fmt.Errorf("could not map %v to a unique keyspace id: %v", vindexColumnsKeys[i], destination)
+			return nil, vterrors.VT09024(vindexColumnsKeys[i], destination)
 		}
 	}
 

@@ -11,6 +11,7 @@ Usage:
 Available Commands:
   AddCellInfo                 Registers a local topology service in a new cell by creating the CellInfo.
   AddCellsAlias               Defines a group of cells that can be referenced by a single name (the alias).
+  ApplyKeyspaceRoutingRules   Applies the provided keyspace routing rules.
   ApplyRoutingRules           Applies the VSchema routing rules.
   ApplySchema                 Applies the schema change to the specified keyspace on every primary, running in parallel on all shards. The changes are then propagated to replicas via replication.
   ApplyShardRoutingRules      Applies the provided shard routing rules.
@@ -30,6 +31,7 @@ Available Commands:
   ExecuteFetchAsApp           Executes the given query as the App user on the remote tablet.
   ExecuteFetchAsDBA           Executes the given query as the DBA user on the remote tablet.
   ExecuteHook                 Runs the specified hook on the given tablet.
+  ExecuteMultiFetchAsDBA      Executes given multiple queries as the DBA user on the remote tablet.
   FindAllShardsInKeyspace     Returns a map of shard names to shard references for a given keyspace.
   GenerateShardRanges         Print a set of shard ranges assuming a keyspace with N shards.
   GetBackups                  Lists backups for the given shard.
@@ -38,6 +40,7 @@ Available Commands:
   GetCellsAliases             Gets all CellsAlias objects in the cluster.
   GetFullStatus               Outputs a JSON structure that contains full status of MySQL including the replication information, semi-sync information, GTID information among others.
   GetKeyspace                 Returns information about the given keyspace from the topology.
+  GetKeyspaceRoutingRules     Displays the currently active keyspace routing rules.
   GetKeyspaces                Returns information about every keyspace in the topology.
   GetPermissions              Displays the permissions for a tablet.
   GetRoutingRules             Displays the VSchema routing rules.

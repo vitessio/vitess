@@ -4849,6 +4849,135 @@ func TestExecuteFetchAsDBA(t *testing.T) {
 	}
 }
 
+func TestExecuteMultiFetchAsDBA(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		tablet    *topodatapb.Tablet
+		tmc       *testutil.TabletManagerClient
+		req       *vtctldatapb.ExecuteMultiFetchAsDBARequest
+		expected  *vtctldatapb.ExecuteMultiFetchAsDBAResponse
+		shouldErr bool
+	}{
+		{
+			name: "ok",
+			tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			tmc: &testutil.TabletManagerClient{
+				ExecuteMultiFetchAsDbaResults: map[string]struct {
+					Response []*querypb.QueryResult
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Response: []*querypb.QueryResult{
+							{InsertId: 100},
+							{InsertId: 101},
+						},
+					},
+				},
+			},
+			req: &vtctldatapb.ExecuteMultiFetchAsDBARequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				Sql: "select 1; select 2",
+			},
+			expected: &vtctldatapb.ExecuteMultiFetchAsDBAResponse{
+				Results: []*querypb.QueryResult{
+					{InsertId: 100},
+					{InsertId: 101},
+				},
+			},
+		},
+		{
+			name: "tablet not found",
+			tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			tmc: &testutil.TabletManagerClient{
+				ExecuteMultiFetchAsDbaResults: map[string]struct {
+					Response []*querypb.QueryResult
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Response: []*querypb.QueryResult{
+							{InsertId: 100},
+							{InsertId: 101},
+						},
+					},
+				},
+			},
+			req: &vtctldatapb.ExecuteMultiFetchAsDBARequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  404,
+				},
+				Sql: "select 1; select 2;",
+			},
+			shouldErr: true,
+		},
+		{
+			name: "query error",
+			tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			tmc: &testutil.TabletManagerClient{
+				ExecuteMultiFetchAsDbaResults: map[string]struct {
+					Response []*querypb.QueryResult
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Error: assert.AnError,
+					},
+				},
+			},
+			req: &vtctldatapb.ExecuteMultiFetchAsDBARequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				Sql: "select 1; select 2",
+			},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			ts := memorytopo.NewServer(ctx, "zone1")
+			testutil.AddTablet(ctx, t, ts, tt.tablet, nil)
+
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(vtenv.NewTestEnv(), ts)
+			})
+			resp, err := vtctld.ExecuteMultiFetchAsDBA(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			utils.MustMatch(t, tt.expected, resp)
+		})
+	}
+}
+
 func TestExecuteHook(t *testing.T) {
 	t.Parallel()
 

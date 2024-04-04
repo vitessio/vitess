@@ -380,6 +380,7 @@ func TestFkScenarios(t *testing.T) {
 		dataQueries      []string
 		dmlQuery         string
 		dmlShouldErr     bool
+		skipShardScoped  bool
 		assertionQueries []string
 	}{
 		{
@@ -421,7 +422,8 @@ func TestFkScenarios(t *testing.T) {
 				"insert into fk_t1(id, col) values (1, 7), (2, 9)",
 				"insert into fk_t2(id, col) values (1, 7)",
 			},
-			dmlQuery: "update fk_t1 set col = 5 where id = 2",
+			dmlQuery:        "update fk_t1 set col = 5 where id = 2",
+			skipShardScoped: true,
 			assertionQueries: []string{
 				"select * from fk_t1 order by id",
 				"select * from fk_t2 order by id",
@@ -457,7 +459,8 @@ func TestFkScenarios(t *testing.T) {
 				"insert into fk_t3(id, col) values (1, 7)",
 				"insert into fk_t6(id, col) values (1, 7)",
 			},
-			dmlQuery: "update fk_t3 set col = 9 where id = 1",
+			dmlQuery:        "update fk_t3 set col = 9 where id = 1",
+			skipShardScoped: true,
 			assertionQueries: []string{
 				"select * from fk_t1 order by id",
 				"select * from fk_t2 order by id",
@@ -491,7 +494,8 @@ func TestFkScenarios(t *testing.T) {
 				"insert into fk_t4(id, col) values (1, 7), (2, 9)",
 				"insert into fk_t6(id, col) values (1, 7), (2, 9)",
 			},
-			dmlQuery: "update fk_t2 set col = 9 where id = 1",
+			dmlQuery:        "update fk_t2 set col = 9 where id = 1",
+			skipShardScoped: true,
 			assertionQueries: []string{
 				"select * from fk_t1 order by id",
 				"select * from fk_t2 order by id",
@@ -507,7 +511,8 @@ func TestFkScenarios(t *testing.T) {
 				"insert into fk_t3(id, col) values (1, 7), (2, 9)",
 				"insert into fk_t6(id, col) values (1, 7)",
 			},
-			dmlQuery: "delete from fk_t3 where id = 1",
+			dmlQuery:        "delete from fk_t3 where id = 1",
+			skipShardScoped: true,
 			assertionQueries: []string{
 				"select * from fk_t1 order by id",
 				"select * from fk_t2 order by id",
@@ -541,7 +546,8 @@ func TestFkScenarios(t *testing.T) {
 				"insert into fk_t4(id, col) values (1, 7), (2, 9)",
 				"insert into fk_t6(id, col) values (1, 7), (2, 9)",
 			},
-			dmlQuery: "delete from fk_t2 where id = 1",
+			dmlQuery:        "delete from fk_t2 where id = 1",
+			skipShardScoped: true,
 			assertionQueries: []string{
 				"select * from fk_t1 order by id",
 				"select * from fk_t2 order by id",
@@ -555,7 +561,8 @@ func TestFkScenarios(t *testing.T) {
 				"insert into fk_t10(id, col) values (1, 7), (2, 9)",
 				"insert into fk_t11(id, col) values (1, 7)",
 			},
-			dmlQuery: "update fk_t10 set col = 5 where id = 1",
+			dmlQuery:        "update fk_t10 set col = 5 where id = 1",
+			skipShardScoped: true,
 			assertionQueries: []string{
 				"select * from fk_t10 order by id",
 				"select * from fk_t11 order by id",
@@ -581,7 +588,8 @@ func TestFkScenarios(t *testing.T) {
 				"insert into fk_t11(id, col) values (1, 7)",
 				"insert into fk_t12(id, col) values (1, 7)",
 			},
-			dmlQuery: "update fk_t10 set col = 5 where id = 1",
+			dmlQuery:        "update fk_t10 set col = 5 where id = 1",
+			skipShardScoped: true,
 			assertionQueries: []string{
 				"select * from fk_t10 order by id",
 				"select * from fk_t11 order by id",
@@ -633,7 +641,8 @@ func TestFkScenarios(t *testing.T) {
 				"insert into fk_multicol_t17(id, cola, colb) values (1, 7, 1)",
 				"insert into fk_multicol_t18(id, cola, colb) values (1, 7, 1)",
 			},
-			dmlQuery: "delete from fk_multicol_t16 where id = 1",
+			dmlQuery:        "delete from fk_multicol_t16 where id = 1",
+			skipShardScoped: true,
 			assertionQueries: []string{
 				"select * from fk_multicol_t15 order by id",
 				"select * from fk_multicol_t16 order by id",
@@ -648,7 +657,8 @@ func TestFkScenarios(t *testing.T) {
 				"insert into fk_multicol_t17(id, cola, colb) values (1, 7, 1)",
 				"insert into fk_multicol_t18(id, cola, colb) values (1, 7, 1)",
 			},
-			dmlQuery: "delete from fk_multicol_t15 where id = 1",
+			dmlQuery:        "delete from fk_multicol_t15 where id = 1",
+			skipShardScoped: true,
 			assertionQueries: []string{
 				"select * from fk_multicol_t15 order by id",
 				"select * from fk_multicol_t16 order by id",
@@ -663,7 +673,8 @@ func TestFkScenarios(t *testing.T) {
 				"insert into fk_multicol_t17(id, cola, colb) values (1, 7, 1)",
 				"insert into fk_multicol_t18(id, cola, colb) values (1, 7, 1)",
 			},
-			dmlQuery: "update fk_multicol_t15 set cola = 3 where id = 1",
+			dmlQuery:        "update fk_multicol_t15 set cola = 3 where id = 1",
+			skipShardScoped: true,
 			assertionQueries: []string{
 				"select * from fk_multicol_t15 order by id",
 				"select * from fk_multicol_t16 order by id",
@@ -675,7 +686,8 @@ func TestFkScenarios(t *testing.T) {
 			dataQueries: []string{
 				"insert into fk_t20(id, col, col2) values (1, 7, NULL)",
 			},
-			dmlQuery: "insert into fk_t20(id, col, col2) values (2, 9, 7), (3, 10, 9)",
+			skipShardScoped: true,
+			dmlQuery:        "insert into fk_t20(id, col, col2) values (2, 9, 7), (3, 10, 9)",
 			assertionQueries: []string{
 				"select * from fk_t20 order by id",
 			},
@@ -684,8 +696,9 @@ func TestFkScenarios(t *testing.T) {
 			dataQueries: []string{
 				"insert into fk_t20(id, col, col2) values (5, 7, NULL)",
 			},
-			dmlQuery:     "insert into fk_t20(id, col, col2) values (6, 9, 6)",
-			dmlShouldErr: true,
+			skipShardScoped: true,
+			dmlQuery:        "insert into fk_t20(id, col, col2) values (6, 9, 6)",
+			dmlShouldErr:    true,
 			assertionQueries: []string{
 				"select * from fk_t20 order by id",
 			},
@@ -697,7 +710,25 @@ func TestFkScenarios(t *testing.T) {
 				"insert into fk_multicol_t17(id, cola, colb) values (1, 7, 1)",
 				"insert into fk_multicol_t19(id, cola, colb) values (1, 7, 1)",
 			},
-			dmlQuery: "delete fk_multicol_t15 from fk_multicol_t15 join fk_multicol_t17 where fk_multicol_t15.id = fk_multicol_t17.id",
+			skipShardScoped: true,
+			dmlQuery:        "delete fk_multicol_t15 from fk_multicol_t15 join fk_multicol_t17 where fk_multicol_t15.id = fk_multicol_t17.id",
+			assertionQueries: []string{
+				"select * from fk_multicol_t15 order by id",
+				"select * from fk_multicol_t16 order by id",
+				"select * from fk_multicol_t17 order by id",
+				"select * from fk_multicol_t19 order by id",
+			},
+		}, {
+			name: "Multi Target Delete success",
+			dataQueries: []string{
+				"insert into fk_multicol_t15(id, cola, colb) values (1, 7, 1), (2, 9, 1), (3, 11, 1), (4, 13, 1)",
+				"insert into fk_multicol_t16(id, cola, colb) values (1, 7, 1), (2, 9, 1), (3, 11, 1), (4, 13, 1)",
+				"insert into fk_multicol_t17(id, cola, colb) values (1, 7, 1), (2, 9, 1), (3, 11, 1)",
+				"insert into fk_multicol_t18(id, cola, colb) values (1, 7, 1), (3, 11, 1)",
+				"insert into fk_multicol_t19(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
+			},
+			skipShardScoped: true,
+			dmlQuery:        "delete fk_multicol_t15, fk_multicol_t17 from fk_multicol_t15 join fk_multicol_t17 where fk_multicol_t15.id = fk_multicol_t17.id",
 			assertionQueries: []string{
 				"select * from fk_multicol_t15 order by id",
 				"select * from fk_multicol_t16 order by id",
@@ -712,7 +743,8 @@ func TestFkScenarios(t *testing.T) {
 				"insert into fk_multicol_t17(id, cola, colb) values (1, 7, 1)",
 				"insert into fk_multicol_t19(id, cola, colb) values (1, 7, 1)",
 			},
-			dmlQuery: "delete from fk_multicol_t15 order by id limit 1",
+			skipShardScoped: true,
+			dmlQuery:        "delete from fk_multicol_t15 order by id limit 1",
 			assertionQueries: []string{
 				"select * from fk_multicol_t15 order by id",
 				"select * from fk_multicol_t16 order by id",
@@ -720,7 +752,8 @@ func TestFkScenarios(t *testing.T) {
 				"select * from fk_multicol_t19 order by id",
 			},
 		}, {
-			name: "Delete with limit 0 success",
+			name:            "Delete with limit 0 success",
+			skipShardScoped: true,
 			dataQueries: []string{
 				"insert into fk_multicol_t15(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
 				"insert into fk_multicol_t16(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
@@ -735,7 +768,8 @@ func TestFkScenarios(t *testing.T) {
 				"select * from fk_multicol_t19 order by id",
 			},
 		}, {
-			name: "Update with limit success",
+			name:            "Update with limit success",
+			skipShardScoped: true,
 			dataQueries: []string{
 				"insert into fk_multicol_t15(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
 				"insert into fk_multicol_t16(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
@@ -750,7 +784,8 @@ func TestFkScenarios(t *testing.T) {
 				"select * from fk_multicol_t19 order by id",
 			},
 		}, {
-			name: "Update with limit 0 success",
+			name:            "Update with limit 0 success",
+			skipShardScoped: true,
 			dataQueries: []string{
 				"insert into fk_multicol_t15(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
 				"insert into fk_multicol_t16(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
@@ -765,7 +800,8 @@ func TestFkScenarios(t *testing.T) {
 				"select * from fk_multicol_t19 order by id",
 			},
 		}, {
-			name: "Update with non-literal update and limit success",
+			name:            "Update with non-literal update and limit success",
+			skipShardScoped: true,
 			dataQueries: []string{
 				"insert into fk_multicol_t15(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
 				"insert into fk_multicol_t16(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
@@ -780,7 +816,8 @@ func TestFkScenarios(t *testing.T) {
 				"select * from fk_multicol_t19 order by id",
 			},
 		}, {
-			name: "Update with non-literal update order by and limit - multiple update",
+			name:            "Update with non-literal update order by and limit - multiple update",
+			skipShardScoped: true,
 			dataQueries: []string{
 				"insert into fk_multicol_t15(id, cola, colb) values (1, 7, 1), (2, 9, 1), (3, 12, 1)",
 				"insert into fk_multicol_t16(id, cola, colb) values (1, 7, 1), (2, 9, 1), (3, 12, 1)",
@@ -795,7 +832,8 @@ func TestFkScenarios(t *testing.T) {
 				"select * from fk_multicol_t19 order by id",
 			},
 		}, {
-			name: "Update with non-literal update order by and limit - single update",
+			name:            "Update with non-literal update order by and limit - single update",
+			skipShardScoped: true,
 			dataQueries: []string{
 				"insert into fk_multicol_t15(id, cola, colb) values (1, 7, 1), (2, 9, 1), (3, 12, 1)",
 				"insert into fk_multicol_t16(id, cola, colb) values (1, 7, 1), (2, 9, 1), (3, 12, 1)",
@@ -809,21 +847,54 @@ func TestFkScenarios(t *testing.T) {
 				"select * from fk_multicol_t17 order by id",
 				"select * from fk_multicol_t19 order by id",
 			},
+		}, {
+			name:            "Multi Table Update with non-literal update",
+			skipShardScoped: true,
+			dataQueries: []string{
+				"insert into fk_multicol_t15(id, cola, colb) values (1, 7, 1), (2, 9, 1), (3, 12, 1)",
+				"insert into fk_multicol_t16(id, cola, colb) values (1, 7, 1), (2, 9, 1), (3, 12, 1)",
+				"insert into fk_multicol_t17(id, cola, colb) values (1, 7, 1)",
+				"insert into fk_multicol_t19(id, cola, colb) values (1, 7, 1)",
+			},
+			dmlQuery: "update fk_multicol_t15 m1 join fk_multicol_t17 on m1.id = fk_multicol_t17.id set m1.cola = m1.id + 8 where m1.id < 3",
+			assertionQueries: []string{
+				"select * from fk_multicol_t15 order by id",
+				"select * from fk_multicol_t16 order by id",
+				"select * from fk_multicol_t17 order by id",
+				"select * from fk_multicol_t19 order by id",
+			},
+		}, {
+			name:            "Multi Target Update with non-literal update",
+			skipShardScoped: true,
+			dataQueries: []string{
+				"insert into fk_multicol_t15(id, cola, colb) values (1, 7, 1), (2, 9, 1), (3, 12, 1)",
+				"insert into fk_multicol_t16(id, cola, colb) values (1, 7, 1), (2, 9, 1), (3, 12, 1)",
+				"insert into fk_multicol_t17(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
+				"insert into fk_multicol_t19(id, cola, colb) values (1, 7, 1)",
+			},
+			dmlQuery: "update fk_multicol_t15 m1 join fk_multicol_t17 on m1.id = fk_multicol_t17.id set m1.cola = m1.id + 8, fk_multicol_t17.colb = 32 where m1.id < 3",
+			assertionQueries: []string{
+				"select * from fk_multicol_t15 order by id",
+				"select * from fk_multicol_t16 order by id",
+				"select * from fk_multicol_t17 order by id",
+				"select * from fk_multicol_t19 order by id",
+			},
 		},
 	}
 
 	for _, tt := range testcases {
-		for _, testSharded := range []bool{false, true} {
-			t.Run(getTestName(tt.name, testSharded), func(t *testing.T) {
+		for _, keyspace := range []string{unshardedKs, shardedKs, shardScopedKs} {
+			t.Run(getTestName(tt.name, keyspace), func(t *testing.T) {
 				mcmp, closer := start(t)
 				defer closer()
-				// Set the correct keyspace to use from VtGates.
-				if testSharded {
+				if keyspace == shardedKs {
 					t.Skip("Skip test since we don't have sharded foreign key support yet")
-					_ = utils.Exec(t, mcmp.VtConn, "use `ks`")
-				} else {
-					_ = utils.Exec(t, mcmp.VtConn, "use `uks`")
 				}
+				if keyspace == shardScopedKs && tt.skipShardScoped {
+					t.Skip("Skip test since we don't support updates in primary vindex columns")
+				}
+				// Set the correct keyspace to use from VtGates.
+				_ = utils.Exec(t, mcmp.VtConn, fmt.Sprintf("use `%v`", keyspace))
 
 				// Insert all the data required for running the test.
 				for _, query := range tt.dataQueries {
@@ -846,17 +917,15 @@ func TestFkScenarios(t *testing.T) {
 		}
 	}
 
-	for _, testSharded := range []bool{false, true} {
-		t.Run(getTestName("Transactions with intermediate failure", testSharded), func(t *testing.T) {
+	for _, keyspace := range []string{unshardedKs, shardedKs} {
+		t.Run(getTestName("Transactions with intermediate failure", keyspace), func(t *testing.T) {
 			mcmp, closer := start(t)
 			defer closer()
-			// Set the correct keyspace to use from VtGates.
-			if testSharded {
+			if keyspace == shardedKs {
 				t.Skip("Skip test since we don't have sharded foreign key support yet")
-				_ = utils.Exec(t, mcmp.VtConn, "use `ks`")
-			} else {
-				_ = utils.Exec(t, mcmp.VtConn, "use `uks`")
 			}
+			// Set the correct keyspace to use from VtGates.
+			_ = utils.Exec(t, mcmp.VtConn, fmt.Sprintf("use `%v`", keyspace))
 
 			// Insert some rows
 			mcmp.Exec("INSERT INTO fk_t10(id, col) VALUES (1, 7), (2, 9), (3, 5)")
@@ -1068,28 +1137,34 @@ func TestFkQueries(t *testing.T) {
 		},
 	}
 
-	for _, testcase := range testcases {
-		t.Run(testcase.name, func(t *testing.T) {
-			mcmp, closer := start(t)
-			defer closer()
-			_ = utils.Exec(t, mcmp.VtConn, "use `uks`")
-
-			// Ensure that the Vitess database is originally empty
-			ensureDatabaseState(t, mcmp.VtConn, true)
-			ensureDatabaseState(t, mcmp.MySQLConn, true)
-
-			for _, query := range testcase.queries {
-				_, _ = mcmp.ExecAllowAndCompareError(query)
-				if t.Failed() {
-					break
+	for _, tt := range testcases {
+		for _, keyspace := range []string{unshardedKs, shardedKs} {
+			t.Run(getTestName(tt.name, keyspace), func(t *testing.T) {
+				mcmp, closer := start(t)
+				defer closer()
+				if keyspace == shardedKs {
+					t.Skip("Skip test since we don't have sharded foreign key support yet")
 				}
-			}
+				// Set the correct keyspace to use from VtGates.
+				_ = utils.Exec(t, mcmp.VtConn, fmt.Sprintf("use `%v`", keyspace))
 
-			// ensure Vitess database has some data. This ensures not all the commands failed.
-			ensureDatabaseState(t, mcmp.VtConn, false)
-			// Verify the consistency of the data.
-			verifyDataIsCorrect(t, mcmp, 1)
-		})
+				// Ensure that the Vitess database is originally empty
+				ensureDatabaseState(t, mcmp.VtConn, true)
+				ensureDatabaseState(t, mcmp.MySQLConn, true)
+
+				for _, query := range tt.queries {
+					_, _ = mcmp.ExecAllowAndCompareError(query)
+					if t.Failed() {
+						break
+					}
+				}
+
+				// ensure Vitess database has some data. This ensures not all the commands failed.
+				ensureDatabaseState(t, mcmp.VtConn, false)
+				// Verify the consistency of the data.
+				verifyDataIsCorrect(t, mcmp, 1)
+			})
+		}
 	}
 }
 

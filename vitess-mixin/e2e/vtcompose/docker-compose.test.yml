@@ -52,7 +52,7 @@ services:
       - SCHEMA_FILES=test_keyspace_schema_file.sql
       - POST_LOAD_FILE=
       - EXTERNAL_DB=0
-    image: vitess/base
+    image: vitess/lite
     volumes:
       - .:/script
   schemaload_unsharded_keyspace:
@@ -76,7 +76,7 @@ services:
       - SCHEMA_FILES=unsharded_keyspace_schema_file.sql
       - POST_LOAD_FILE=
       - EXTERNAL_DB=0
-    image: vitess/base
+    image: vitess/lite
     volumes:
       - .:/script
   vtctld:
@@ -91,7 +91,7 @@ services:
       - consul1
       - consul2
       - consul3
-    image: vitess/base
+    image: vitess/lite
     ports:
       - 15000:8080
       - "15999"
@@ -108,7 +108,7 @@ services:
       --pid_file $$VTDATAROOT/tmp/vtgate.pid --normalize_queries=true '
     depends_on:
       - vtctld
-    image: vitess/base
+    image: vitess/lite
     ports:
       - 15099:8080
       - "15999"
@@ -145,7 +145,7 @@ services:
         - CMD-SHELL
         - curl localhost:8080/debug/health
       timeout: 10s
-    image: vitess/base
+    image: vitess/lite
     ports:
       - 15101:8080
       - "15999"
@@ -182,7 +182,7 @@ services:
         - CMD-SHELL
         - curl localhost:8080/debug/health
       timeout: 10s
-    image: vitess/base
+    image: vitess/lite
     ports:
       - 15102:8080
       - "15999"
@@ -219,7 +219,7 @@ services:
         - CMD-SHELL
         - curl localhost:8080/debug/health
       timeout: 10s
-    image: vitess/base
+    image: vitess/lite
     ports:
       - 15201:8080
       - "15999"
@@ -256,7 +256,7 @@ services:
         - CMD-SHELL
         - curl localhost:8080/debug/health
       timeout: 10s
-    image: vitess/base
+    image: vitess/lite
     ports:
       - 15202:8080
       - "15999"
@@ -293,7 +293,7 @@ services:
         - CMD-SHELL
         - curl localhost:8080/debug/health
       timeout: 10s
-    image: vitess/base
+    image: vitess/lite
     ports:
       - 15301:8080
       - "15999"

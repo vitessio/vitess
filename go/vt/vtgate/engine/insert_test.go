@@ -64,7 +64,7 @@ func TestInsertUnsharded(t *testing.T) {
 
 	vc = &loggingVCursor{}
 	_, err = ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
-	require.EqualError(t, err, `Keyspace does not have exactly one shard: []`)
+	require.EqualError(t, err, `VT09022: Destination does not have exactly one shard: []`)
 }
 
 func TestInsertUnshardedGenerate(t *testing.T) {
@@ -515,7 +515,7 @@ func TestInsertShardedFail(t *testing.T) {
 
 	// The lookup will fail to map to a keyspace id.
 	_, err := ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
-	require.EqualError(t, err, `could not map [INT64(1)] to a keyspace id`)
+	require.EqualError(t, err, `VT09023: could not map [INT64(1)] to a keyspace id`)
 }
 
 func TestInsertShardedGenerate(t *testing.T) {
@@ -964,7 +964,6 @@ func TestInsertShardedIgnoreOwned(t *testing.T) {
 				// rows for id
 
 				evalengine.NewLiteralInt(1),
-				evalengine.NewLiteralInt(2),
 				evalengine.NewLiteralInt(3),
 				evalengine.NewLiteralInt(4),
 			},
@@ -973,14 +972,12 @@ func TestInsertShardedIgnoreOwned(t *testing.T) {
 			{
 				// rows for c1
 				evalengine.NewLiteralInt(5),
-				evalengine.NewLiteralInt(6),
 				evalengine.NewLiteralInt(7),
 				evalengine.NewLiteralInt(8),
 			},
 			{
 				// rows for c2
 				evalengine.NewLiteralInt(9),
-				evalengine.NewLiteralInt(10),
 				evalengine.NewLiteralInt(11),
 				evalengine.NewLiteralInt(12),
 			},
@@ -989,7 +986,6 @@ func TestInsertShardedIgnoreOwned(t *testing.T) {
 			{
 				// rows for c3
 				evalengine.NewLiteralInt(13),
-				evalengine.NewLiteralInt(14),
 				evalengine.NewLiteralInt(15),
 				evalengine.NewLiteralInt(16),
 			},
@@ -1000,7 +996,6 @@ func TestInsertShardedIgnoreOwned(t *testing.T) {
 			{&sqlparser.Argument{Name: "_id_0", Type: sqltypes.Int64}, &sqlparser.Argument{Name: "_c1_0", Type: sqltypes.Int64}, &sqlparser.Argument{Name: "_c2_0", Type: sqltypes.Int64}, &sqlparser.Argument{Name: "_c3_0", Type: sqltypes.Int64}},
 			{&sqlparser.Argument{Name: "_id_1", Type: sqltypes.Int64}, &sqlparser.Argument{Name: "_c1_1", Type: sqltypes.Int64}, &sqlparser.Argument{Name: "_c2_1", Type: sqltypes.Int64}, &sqlparser.Argument{Name: "_c3_1", Type: sqltypes.Int64}},
 			{&sqlparser.Argument{Name: "_id_2", Type: sqltypes.Int64}, &sqlparser.Argument{Name: "_c1_2", Type: sqltypes.Int64}, &sqlparser.Argument{Name: "_c2_2", Type: sqltypes.Int64}, &sqlparser.Argument{Name: "_c3_2", Type: sqltypes.Int64}},
-			{&sqlparser.Argument{Name: "_id_3", Type: sqltypes.Int64}, &sqlparser.Argument{Name: "_c1_3", Type: sqltypes.Int64}, &sqlparser.Argument{Name: "_c2_3", Type: sqltypes.Int64}, &sqlparser.Argument{Name: "_c3_3", Type: sqltypes.Int64}},
 		},
 		nil,
 	)
@@ -1045,31 +1040,29 @@ func TestInsertShardedIgnoreOwned(t *testing.T) {
 		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
-		`Execute select from1, toc from prim where from1 in ::from1 from1: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"2"} values:{type:INT64 value:"3"} values:{type:INT64 value:"4"} false`,
-		`Execute insert ignore into lkp2(from1, from2, toc) values(:from1_0, :from2_0, :toc_0), (:from1_1, :from2_1, :toc_1), (:from1_2, :from2_2, :toc_2) ` +
+		`Execute select from1, toc from prim where from1 in ::from1 ` +
+			`from1: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"3"} values:{type:INT64 value:"4"} false`,
+		`Execute insert ignore into lkp2(from1, from2, toc) values` +
+			`(:from1_0, :from2_0, :toc_0), (:from1_1, :from2_1, :toc_1), (:from1_2, :from2_2, :toc_2) ` +
 			`from1_0: type:INT64 value:"5" from1_1: type:INT64 value:"7" from1_2: type:INT64 value:"8" ` +
 			`from2_0: type:INT64 value:"9" from2_1: type:INT64 value:"11" from2_2: type:INT64 value:"12" ` +
-			`toc_0: type:VARBINARY value:"\x00" toc_1: type:VARBINARY value:"\x00" toc_2: type:VARBINARY value:"\x00" ` +
-			`true`,
-		// row 2 is out because it didn't map to a ksid.
+			`toc_0: type:VARBINARY value:"\x00" toc_1: type:VARBINARY value:"\x00" toc_2: type:VARBINARY value:"\x00" true`,
 		`Execute select from1 from lkp2 where from1 = :from1 and toc = :toc from1: type:INT64 value:"5" toc: type:VARBINARY value:"\x00" false`,
 		`Execute select from1 from lkp2 where from1 = :from1 and toc = :toc from1: type:INT64 value:"7" toc: type:VARBINARY value:"\x00" false`,
 		`Execute select from1 from lkp2 where from1 = :from1 and toc = :toc from1: type:INT64 value:"8" toc: type:VARBINARY value:"\x00" false`,
 		`Execute insert ignore into lkp1(from, toc) values(:from_0, :toc_0), (:from_1, :toc_1) ` +
 			`from_0: type:INT64 value:"13" from_1: type:INT64 value:"16" ` +
-			`toc_0: type:VARBINARY value:"\x00" toc_1: type:VARBINARY value:"\x00" ` +
-			`true`,
-		// row 3 is out because it failed Verify. Only two verifications from lkp1.
+			`toc_0: type:VARBINARY value:"\x00" toc_1: type:VARBINARY value:"\x00" true`,
+		// row 2 is out because it failed Verify. Only two verifications from lkp1.
 		`Execute select from from lkp1 where from = :from and toc = :toc from: type:INT64 value:"13" toc: type:VARBINARY value:"\x00" false`,
 		`Execute select from from lkp1 where from = :from and toc = :toc from: type:INT64 value:"16" toc: type:VARBINARY value:"\x00" false`,
-		`ResolveDestinations sharded [value:"0" value:"3"] Destinations:DestinationKeyspaceID(00),DestinationKeyspaceID(00)`,
-		// Bind vars for rows 2 & 3 may be missing because they were not sent.
+		`ResolveDestinations sharded [value:"0" value:"2"] Destinations:DestinationKeyspaceID(00),DestinationKeyspaceID(00)`,
+		// Bind vars for rows 2 may be missing because they were not sent.
 		`ExecuteMultiShard ` +
 			`sharded.20-: prefix(:_id_0 /* INT64 */, :_c1_0 /* INT64 */, :_c2_0 /* INT64 */, :_c3_0 /* INT64 */) ` +
 			`{_c1_0: type:INT64 value:"5" _c2_0: type:INT64 value:"9" _c3_0: type:INT64 value:"13" _id_0: type:INT64 value:"1"} ` +
-			`sharded.-20: prefix(:_id_3 /* INT64 */, :_c1_3 /* INT64 */, :_c2_3 /* INT64 */, :_c3_3 /* INT64 */) ` +
-			`{_c1_3: type:INT64 value:"8" _c2_3: type:INT64 value:"12" _c3_3: type:INT64 value:"16" _id_3: type:INT64 value:"4"} ` +
-			`true false`,
+			`sharded.-20: prefix(:_id_2 /* INT64 */, :_c1_2 /* INT64 */, :_c2_2 /* INT64 */, :_c3_2 /* INT64 */) ` +
+			`{_c1_2: type:INT64 value:"8" _c2_2: type:INT64 value:"12" _c3_2: type:INT64 value:"16" _id_2: type:INT64 value:"4"} true false`,
 	})
 }
 

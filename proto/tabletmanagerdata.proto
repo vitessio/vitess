@@ -268,6 +268,19 @@ message ExecuteFetchAsDbaResponse {
   query.QueryResult result = 1;
 }
 
+message ExecuteMultiFetchAsDbaRequest {
+  bytes sql = 1;
+  string db_name = 2;
+  uint64 max_rows = 3;
+  bool disable_binlogs = 4;
+  bool reload_schema = 5;
+  bool disable_foreign_key_checks = 6;
+}
+
+message ExecuteMultiFetchAsDbaResponse {
+  repeated query.QueryResult results = 1;
+}
+
 message ExecuteFetchAsAllPrivsRequest {
   bytes query = 1;
   string db_name = 2;
@@ -538,6 +551,7 @@ message CreateVReplicationWorkflowRequest {
   bool auto_start = 9;
   // Should the workflow stop after the copy phase.
   bool stop_after_copy = 10;
+  string options = 11;
 }
 
 message CreateVReplicationWorkflowResponse {
@@ -603,6 +617,7 @@ message ReadVReplicationWorkflowResponse {
     string component_throttled = 14;
   }
   repeated Stream streams = 11;
+  string options = 12;
 }
 
 message VDiffRequest {
@@ -653,6 +668,12 @@ message VDiffOptions {
   VDiffReportOptions report_options = 3;
 }
 
+// UpdateVReplicationWorkflowRequest is used to update an existing VReplication
+// workflow. Note that the following fields MUST have an explicit value provided
+// if you do NOT wish to update the existing value to the given type's ZeroValue:
+// cells, tablet_types, on_ddl, and state.
+// TODO: leverage the optional modifier for these fields rather than using SimulatedNull
+// values: https://github.com/vitessio/vitess/issues/15627
 message UpdateVReplicationWorkflowRequest {
   string workflow = 1;
   repeated string cells = 2;
@@ -660,13 +681,19 @@ message UpdateVReplicationWorkflowRequest {
   TabletSelectionPreference tablet_selection_preference = 4;
   binlogdata.OnDDLAction on_ddl = 5;
   binlogdata.VReplicationWorkflowState state = 6;
-  repeated string shards = 7;
+  reserved 7; // unused, was: repeated string shards
 }
 
 message UpdateVReplicationWorkflowResponse {
   query.QueryResult result = 1;
 }
 
+// UpdateVReplicationWorkflowsRequest is used to update multiple existing VReplication
+// workflows. Note that the following fields MUST have an explicit value provided
+// if you do NOT wish to update the existing values to the given type's ZeroValue:
+// state, message, and stop_position.
+// TODO: leverage the optional modifier for these fields rather than using SimulatedNull
+// values: https://github.com/vitessio/vitess/issues/15627
 message UpdateVReplicationWorkflowsRequest {
   bool all_workflows = 1;
   repeated string include_workflows = 2;
