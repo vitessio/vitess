@@ -94,16 +94,10 @@ func tstWorkflowAction(t *testing.T, action, tabletTypes, cells string) error {
 	return tstWorkflowExec(t, cells, workflowName, sourceKs, targetKs, tablesToMove, action, tabletTypes, "", "", false)
 }
 
-<<<<<<< HEAD
-func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, action, tabletTypes, sourceShards, targetShards string, atomicCopy bool) error {
-=======
 // tstWorkflowExec executes a MoveTables or Reshard workflow command using
 // vtctldclient. If you need to use the legacy vtctlclient, use
 // tstWorkflowExecVtctl instead.
-func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, action, tabletTypes,
-	sourceShards, targetShards string, options *workflowExecOptions) error {
-
->>>>>>> 4a1870ad59 (VReplication: Get workflowFlavorVtctl endtoend testing working properly again (#15636))
+func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, action, tabletTypes, sourceShards, targetShards string, atomicCopy bool) error {
 	var args []string
 	if currentWorkflowType == binlogdatapb.VReplicationWorkflowType_MoveTables {
 		args = append(args, "MoveTables")
@@ -145,11 +139,7 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 		}
 		args = append(args, "--timeout=90s")
 	}
-<<<<<<< HEAD
-	if action == workflowActionCreate && atomicCopy {
-=======
-	if currentWorkflowType == binlogdatapb.VReplicationWorkflowType_MoveTables && action == workflowActionCreate && options.atomicCopy {
->>>>>>> 4a1870ad59 (VReplication: Get workflowFlavorVtctl endtoend testing working properly again (#15636))
+	if currentWorkflowType == binlogdatapb.VReplicationWorkflowType_MoveTables && action == workflowActionCreate && atomicCopy {
 		args = append(args, "--atomic-copy")
 	}
 	if (action == workflowActionCreate || action == workflowActionSwitchTraffic || action == workflowActionReverseTraffic) && cells != "" {
@@ -173,9 +163,7 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 // tstWorkflowExecVtctl executes a MoveTables or Reshard workflow command using
 // vtctlclient. It should operate exactly the same way as tstWorkflowExec, but
 // using the legacy client.
-func tstWorkflowExecVtctl(t *testing.T, cells, workflow, sourceKs, targetKs, tables, action, tabletTypes,
-	sourceShards, targetShards string, options *workflowExecOptions) error {
-
+func tstWorkflowExecVtctl(t *testing.T, cells, workflow, sourceKs, targetKs, tables, action, tabletTypes, sourceShards, targetShards string, atomicCopy bool) error {
 	var args []string
 	if currentWorkflowType == binlogdatapb.VReplicationWorkflowType_MoveTables {
 		args = append(args, "MoveTables")
@@ -188,7 +176,7 @@ func tstWorkflowExecVtctl(t *testing.T, cells, workflow, sourceKs, targetKs, tab
 	if BypassLagCheck {
 		args = append(args, "--max_replication_lag_allowed=2542087h")
 	}
-	if options.atomicCopy {
+	if atomicCopy {
 		args = append(args, "--atomic-copy")
 	}
 	switch action {
@@ -209,14 +197,10 @@ func tstWorkflowExecVtctl(t *testing.T, cells, workflow, sourceKs, targetKs, tab
 		// Test new experimental --defer-secondary-keys flag
 		switch currentWorkflowType {
 		case binlogdatapb.VReplicationWorkflowType_MoveTables, binlogdatapb.VReplicationWorkflowType_Migrate, binlogdatapb.VReplicationWorkflowType_Reshard:
-			if !options.atomicCopy && options.deferSecondaryKeys {
+			if !atomicCopy {
 				args = append(args, "--defer-secondary-keys")
 			}
 			args = append(args, "--initialize-target-sequences") // Only used for MoveTables
-		}
-	default:
-		if options.shardSubset != "" {
-			args = append(args, "--shards", options.shardSubset)
 		}
 	}
 	if cells != "" {
