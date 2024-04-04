@@ -102,6 +102,9 @@ func tstWorkflowAction(t *testing.T, action, tabletTypes, cells string) error {
 	return tstWorkflowExec(t, cells, workflowName, sourceKs, targetKs, "customer", action, tabletTypes, "", "", defaultWorkflowExecOptions)
 }
 
+// tstWorkflowExec executes a MoveTables or Reshard workflow command using
+// vtctldclient. If you need to use the legacy vtctlclient, use
+// tstWorkflowExecVtctl instead.
 func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, action, tabletTypes,
 	sourceShards, targetShards string, options *workflowExecOptions) error {
 
@@ -171,6 +174,9 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 	return nil
 }
 
+// tstWorkflowExecVtctl executes a MoveTables or Reshard workflow command using
+// vtctlclient. It should operate exactly the same way as tstWorkflowExec, but
+// using the legacy client.
 func tstWorkflowExecVtctl(t *testing.T, cells, workflow, sourceKs, targetKs, tables, action, tabletTypes,
 	sourceShards, targetShards string, options *workflowExecOptions) error {
 
