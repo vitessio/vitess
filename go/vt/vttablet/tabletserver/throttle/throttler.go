@@ -314,7 +314,11 @@ func (throttler *Throttler) GetMetricsQuery() string {
 }
 
 func (throttler *Throttler) GetCustomMetricsQuery() string {
-	return throttler.customMetricsQuery.Load().(string)
+	val := throttler.customMetricsQuery.Load()
+	if val == nil {
+		return ""
+	}
+	return val.(string)
 }
 
 func (throttler *Throttler) GetMetricsThreshold() float64 {
@@ -1133,9 +1137,9 @@ func (throttler *Throttler) updateMySQLClusterProbes(ctx context.Context, cluste
 func (throttler *Throttler) isConsideredDefaultMetric(metricName base.MetricName) bool {
 	switch metricName {
 	case base.LagMetricName:
-		return throttler.customMetricsQuery.Load() == ""
+		return throttler.GetCustomMetricsQuery() == ""
 	case base.CustomMetricName:
-		return throttler.customMetricsQuery.Load() != ""
+		return throttler.GetCustomMetricsQuery() != ""
 	default:
 		return false
 	}

@@ -97,6 +97,7 @@ const (
 type fakeTMClient struct {
 	tmclient.TabletManagerClient
 	appNames []string
+	v19      atomic.Bool // help validate v19 backwards compatibility
 
 	mu sync.Mutex
 }
@@ -110,16 +111,17 @@ func (c *fakeTMClient) CheckThrottler(ctx context.Context, tablet *topodatapb.Ta
 		Value:           0.139,
 		Threshold:       1,
 		RecentlyChecked: false,
-
-		Metrics: make(map[string]*tabletmanagerdatapb.CheckThrottlerResponse_Metric),
 	}
-	for name, metric := range replicaMetrics {
-		resp.Metrics[name] = &tabletmanagerdatapb.CheckThrottlerResponse_Metric{
-			Name:       name,
-			StatusCode: int32(metric.StatusCode),
-			Value:      metric.Value,
-			Threshold:  metric.Threshold,
-			Message:    metric.Message,
+	if !c.v19.Load() {
+		resp.Metrics = make(map[string]*tabletmanagerdatapb.CheckThrottlerResponse_Metric)
+		for name, metric := range replicaMetrics {
+			resp.Metrics[name] = &tabletmanagerdatapb.CheckThrottlerResponse_Metric{
+				Name:       name,
+				StatusCode: int32(metric.StatusCode),
+				Value:      metric.Value,
+				Threshold:  metric.Threshold,
+				Message:    metric.Message,
+			}
 		}
 	}
 	c.mu.Lock()
@@ -454,18 +456,26 @@ func TestProbesWhileOperating(t *testing.T) {
 				case selfStoreName:
 					switch metricName {
 					case base.DefaultMetricName:
-						assert.Equalf(t, float64(0.3), val, "storeName=%v, metricName=%v", storeName, metricName)
+						assert.Equalf(t, float64(0.3), val, "storeName=%v, metricName=%v", storeName, metricName) // same value as "lag"
 					case base.LagMetricName:
 						assert.Equalf(t, float64(0.3), val, "storeName=%v, metricName=%v", storeName, metricName)
+					case base.ThreadsRunningMetricName:
+						assert.Equalf(t, float64(26), val, "storeName=%v, metricName=%v", storeName, metricName)
+					case base.CustomMetricName:
+						assert.Equalf(t, float64(17), val, "storeName=%v, metricName=%v", storeName, metricName)
 					case base.LoadAvgMetricName:
 						assert.Equalf(t, float64(2.718), val, "storeName=%v, metricName=%v", storeName, metricName)
 					}
 				case shardStoreName:
 					switch metricName {
 					case base.DefaultMetricName:
-						assert.Equalf(t, float64(1), val, "storeName=%v, metricName=%v", storeName, metricName)
+						assert.Equalf(t, float64(1), val, "storeName=%v, metricName=%v", storeName, metricName) // same value as "lag"
 					case base.LagMetricName:
 						assert.Equalf(t, float64(1), val, "storeName=%v, metricName=%v", storeName, metricName)
+					case base.ThreadsRunningMetricName:
+						assert.Equalf(t, float64(13), val, "storeName=%v, metricName=%v", storeName, metricName)
+					case base.CustomMetricName:
+						assert.Equalf(t, float64(14), val, "storeName=%v, metricName=%v", storeName, metricName)
 					case base.LoadAvgMetricName:
 						assert.Equalf(t, float64(0.8), val, "storeName=%v, metricName=%v", storeName, metricName)
 					}
@@ -486,9 +496,57 @@ func TestProbesWhileOperating(t *testing.T) {
 			assert.Truef(t, ok, "%+v", uniqueNames)
 			// And that's the only app we expect to see.
 			assert.Equalf(t, 1, len(uniqueNames), "%+v", uniqueNames)
-
-			cancel() // end test early
 		})
+		t.Run("aggregated with custom query", func(t *testing.T) {
+			// The query itself isn't important here, since we're emulating. What's important is that it's not empty.
+			// Hence, the throttler will choose to set the "custom" metric results in the aggregated "default" metrics,
+			// as opposed to choosing the "lag" metric results.
+			throttler.customMetricsQuery.Store("select non_empty")
+			throttler.aggregateMySQLMetrics(ctx)
+			aggr := throttler.aggregatedMetricsSnapshot()
+			assert.Equalf(t, 2*len(base.KnownMetricNames), len(aggr), "aggregated: %+v", aggr)     // "self" and "shard", per known metric
+			assert.Equal(t, 2*len(base.KnownMetricNames), throttler.aggregatedMetrics.ItemCount()) // flushed upon Disable()
+			for aggregatedMetricName, metricResult := range aggr {
+				val, err := metricResult.Get()
+				assert.NoErrorf(t, err, "aggregatedMetricName: %v", aggregatedMetricName)
+				assert.NotEmpty(t, aggregatedMetricName)
+				storeName, metricName, err := splitMetricTokens(aggregatedMetricName)
+				assert.NotEmpty(t, metricName)
+				assert.NoError(t, err)
+
+				switch storeName {
+				case selfStoreName:
+					switch metricName {
+					case base.DefaultMetricName:
+						assert.Equalf(t, float64(17), val, "storeName=%v, metricName=%v", storeName, metricName) // same value as "custom"
+					case base.LagMetricName:
+						assert.Equalf(t, float64(0.3), val, "storeName=%v, metricName=%v", storeName, metricName)
+					case base.ThreadsRunningMetricName:
+						assert.Equalf(t, float64(26), val, "storeName=%v, metricName=%v", storeName, metricName)
+					case base.CustomMetricName:
+						assert.Equalf(t, float64(17), val, "storeName=%v, metricName=%v", storeName, metricName)
+					case base.LoadAvgMetricName:
+						assert.Equalf(t, float64(2.718), val, "storeName=%v, metricName=%v", storeName, metricName)
+					}
+				case shardStoreName:
+					switch metricName {
+					case base.DefaultMetricName:
+						assert.Equalf(t, float64(14), val, "storeName=%v, metricName=%v", storeName, metricName) // same value as "custom"
+					case base.LagMetricName:
+						assert.Equalf(t, float64(1), val, "storeName=%v, metricName=%v", storeName, metricName)
+					case base.ThreadsRunningMetricName:
+						assert.Equalf(t, float64(13), val, "storeName=%v, metricName=%v", storeName, metricName)
+					case base.CustomMetricName:
+						assert.Equalf(t, float64(14), val, "storeName=%v, metricName=%v", storeName, metricName)
+					case base.LoadAvgMetricName:
+						assert.Equalf(t, float64(0.8), val, "storeName=%v, metricName=%v", storeName, metricName)
+					}
+				default:
+					assert.Failf(t, "unknown storeName", "storeName=%v", storeName)
+				}
+			}
+		})
+		cancel() // end test early
 	})
 }
 
