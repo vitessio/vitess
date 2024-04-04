@@ -920,7 +920,7 @@ func (cluster *LocalProcessCluster) ExecOnVTGate(ctx context.Context, addr strin
 		return nil, err
 	}
 
-	conn, err := vtgateconn.Dial(ctx, addr)
+	conn, err := vtgateconn.Dial(addr)
 	if err != nil {
 		return nil, err
 	}

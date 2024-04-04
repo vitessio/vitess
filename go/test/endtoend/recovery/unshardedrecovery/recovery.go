@@ -308,7 +308,7 @@ func TestRecoveryImpl(t *testing.T) {
 
 	// Build vtgate grpc connection
 	grpcAddress := fmt.Sprintf("%s:%d", localCluster.Hostname, localCluster.VtgateGrpcPort)
-	vtgateConn, err := vtgateconn.Dial(context.Background(), grpcAddress)
+	vtgateConn, err := vtgateconn.Dial(grpcAddress)
 	assert.NoError(t, err)
 	defer vtgateConn.Close()
 	session := vtgateConn.Session("@replica", nil)

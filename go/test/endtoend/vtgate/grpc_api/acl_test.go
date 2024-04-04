@@ -32,7 +32,7 @@ func TestEffectiveCallerIDWithAccess(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	vtgateConn, err := cluster.DialVTGate(ctx, t.Name(), vtgateGrpcAddress, "some_other_user", "test_password")
+	vtgateConn, err := cluster.DialVTGate(t.Name(), vtgateGrpcAddress, "some_other_user", "test_password")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
@@ -48,7 +48,7 @@ func TestEffectiveCallerIDWithNoAccess(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	vtgateConn, err := cluster.DialVTGate(ctx, t.Name(), vtgateGrpcAddress, "another_unrelated_user", "test_password")
+	vtgateConn, err := cluster.DialVTGate(t.Name(), vtgateGrpcAddress, "another_unrelated_user", "test_password")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
@@ -66,7 +66,7 @@ func TestAuthenticatedUserWithAccess(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	vtgateConn, err := cluster.DialVTGate(ctx, t.Name(), vtgateGrpcAddress, "user_with_access", "test_password")
+	vtgateConn, err := cluster.DialVTGate(t.Name(), vtgateGrpcAddress, "user_with_access", "test_password")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
@@ -81,7 +81,7 @@ func TestAuthenticatedUserNoAccess(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	vtgateConn, err := cluster.DialVTGate(ctx, t.Name(), vtgateGrpcAddress, "user_no_access", "test_password")
+	vtgateConn, err := cluster.DialVTGate(t.Name(), vtgateGrpcAddress, "user_no_access", "test_password")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
@@ -98,7 +98,7 @@ func TestUnauthenticatedUser(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	vtgateConn, err := cluster.DialVTGate(ctx, t.Name(), vtgateGrpcAddress, "", "")
+	vtgateConn, err := cluster.DialVTGate(t.Name(), vtgateGrpcAddress, "", "")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
