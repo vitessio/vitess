@@ -143,7 +143,7 @@ func (dialer *cachedConnDialer) dial(ctx context.Context, tablet *topodatapb.Tab
 			dialer.connWaitSema.Release(1)
 			return client, closer, err
 		}
-		return dialer.newdial(ctx, addr)
+		return dialer.newdial(addr)
 	}
 
 	defer func() {
@@ -156,7 +156,7 @@ func (dialer *cachedConnDialer) dial(ctx context.Context, tablet *topodatapb.Tab
 			dialerStats.DialTimeouts.Add(1)
 			return nil, nil, ctx.Err()
 		default:
-			if client, closer, found, err := dialer.pollOnce(ctx, addr); found {
+			if client, closer, found, err := dialer.pollOnce(addr); found {
 				return client, closer, err
 			}
 		}
@@ -204,7 +204,7 @@ func (dialer *cachedConnDialer) tryFromCache(addr string, locker sync.Locker) (c
 //
 // It returns a TabletManagerClient impl, an io.Closer, a flag to indicate
 // whether the dial() poll loop should exit, and an error.
-func (dialer *cachedConnDialer) pollOnce(ctx context.Context, addr string) (client tabletmanagerservicepb.TabletManagerClient, closer io.Closer, found bool, err error) {
+func (dialer *cachedConnDialer) pollOnce(addr string) (client tabletmanagerservicepb.TabletManagerClient, closer io.Closer, found bool, err error) {
 	dialer.m.Lock()
 
 	if client, closer, found, err := dialer.tryFromCache(addr, nil); found {
@@ -225,7 +225,7 @@ func (dialer *cachedConnDialer) pollOnce(ctx context.Context, addr string) (clie
 	conn.cc.Close()
 	dialer.m.Unlock()
 
-	client, closer, err = dialer.newdial(ctx, addr)
+	client, closer, err = dialer.newdial(addr)
 	return client, closer, true, err
 }
 
@@ -236,14 +236,14 @@ func (dialer *cachedConnDialer) pollOnce(ctx context.Context, addr string) (clie
 //
 // It returns the three-tuple of client-interface, closer, and error that the
 // main dial func returns.
-func (dialer *cachedConnDialer) newdial(ctx context.Context, addr string) (tabletmanagerservicepb.TabletManagerClient, io.Closer, error) {
+func (dialer *cachedConnDialer) newdial(addr string) (tabletmanagerservicepb.TabletManagerClient, io.Closer, error) {
 	opt, err := grpcclient.SecureDialOption(cert, key, ca, crl, name)
 	if err != nil {
 		dialer.connWaitSema.Release(1)
 		return nil, nil, err
 	}
 
-	cc, err := grpcclient.DialContext(ctx, addr, grpcclient.FailFast(false), opt)
+	cc, err := grpcclient.Dial(addr, grpcclient.FailFast(false), opt)
 	if err != nil {
 		dialer.connWaitSema.Release(1)
 		return nil, nil, err

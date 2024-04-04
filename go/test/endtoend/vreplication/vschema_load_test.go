@@ -94,7 +94,7 @@ func TestVSchemaChangesUnderLoad(t *testing.T) {
 				Filter: "select * from customer",
 			}},
 		}
-		conn, err := vtgateconn.Dial(ctx, net.JoinHostPort("localhost", strconv.Itoa(vc.ClusterConfig.vtgateGrpcPort)))
+		conn, err := vtgateconn.Dial(net.JoinHostPort("localhost", strconv.Itoa(vc.ClusterConfig.vtgateGrpcPort)))
 		require.NoError(t, err)
 		defer conn.Close()
 

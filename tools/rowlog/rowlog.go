@@ -154,7 +154,7 @@ func startStreaming(ctx context.Context, vtgate, vtctld, keyspace, tablet, table
 		}},
 		FieldEventMode: 1,
 	}
-	conn, err := vtgateconn.Dial(ctx, vtgate)
+	conn, err := vtgateconn.Dial(vtgate)
 	if err != nil {
 		log.Fatal(err)
 	}
