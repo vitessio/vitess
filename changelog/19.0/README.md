@@ -3,10 +3,6 @@
 	* [Changelog](19.0.3/changelog.md)
 	* [Release Notes](19.0.3/release_notes.md)
 
-* **[19.0.2](19.0.2)**
-	* [Changelog](19.0.2/changelog.md)
-	* [Release Notes](19.0.2/release_notes.md)
-
 * **[19.0.1](19.0.1)**
 	* [Changelog](19.0.1/changelog.md)
 	* [Release Notes](19.0.1/release_notes.md)
