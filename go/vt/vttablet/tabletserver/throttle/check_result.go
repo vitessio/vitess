@@ -63,7 +63,7 @@ type CheckResult struct {
 	Error           error                    `json:"-"`
 	Message         string                   `json:"Message"`
 	RecentlyChecked bool                     `json:"RecentlyChecked"`
-	Metrics         map[string]*MetricResult `json:"Metrics"`
+	Metrics         map[string]*MetricResult `json:"Metrics"` // New in multi-metrics support. Will eventually replace the above fields.
 }
 
 // NewCheckResult returns a CheckResult
@@ -78,6 +78,10 @@ func NewCheckResult(statusCode int, value float64, threshold float64, err error)
 		result.Message = err.Error()
 	}
 	return result
+}
+
+func (c *CheckResult) IsOK() bool {
+	return c.StatusCode == http.StatusOK
 }
 
 // NewErrorCheckResult returns a check result that indicates an error

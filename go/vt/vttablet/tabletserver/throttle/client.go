@@ -108,7 +108,7 @@ func (c *Client) ThrottleCheckOK(ctx context.Context, overrideAppName throttlera
 	if overrideAppName != "" {
 		checkApp = overrideAppName
 	}
-	checkResult := c.throttler.CheckByType(ctx, checkApp.String(), "", &c.flags, c.checkType)
+	checkResult := c.throttler.CheckByType(ctx, checkApp.String(), nil, "", &c.flags, c.checkType)
 	if checkResult.StatusCode != http.StatusOK {
 		return false
 	}

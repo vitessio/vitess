@@ -62,6 +62,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txserializer"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txthrottler"
@@ -1777,7 +1778,7 @@ func (tsv *TabletServer) TopoServer() *topo.Server {
 
 // CheckThrottler issues a self check
 func (tsv *TabletServer) CheckThrottler(ctx context.Context, appName string, flags *throttle.CheckFlags) *throttle.CheckResult {
-	r := tsv.lagThrottler.CheckByType(ctx, appName, "", flags, throttle.ThrottleCheckSelf)
+	r := tsv.lagThrottler.CheckByType(ctx, appName, base.KnownMetricNames, "", flags, throttle.ThrottleCheckSelf)
 	return r
 }
 
@@ -1899,7 +1900,8 @@ func (tsv *TabletServer) registerThrottlerCheckHandlers() {
 				LowPriority:           (r.URL.Query().Get("p") == "low"),
 				SkipRequestHeartbeats: (r.URL.Query().Get("s") == "true"),
 			}
-			checkResult := tsv.lagThrottler.CheckByType(ctx, appName, remoteAddr, flags, checkType)
+			metricNames := tsv.lagThrottler.MetricNames(r.URL.Query()["m"])
+			checkResult := tsv.lagThrottler.CheckByType(ctx, appName, metricNames, remoteAddr, flags, checkType)
 			if checkResult.StatusCode == http.StatusNotFound && flags.OKIfNotExists {
 				checkResult.StatusCode = http.StatusOK // 200
 			}

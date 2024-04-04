@@ -14,37 +14,34 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// This codebase originates from https://github.com/github/freno, See https://github.com/github/freno/blob/master/LICENSE
-/*
-	MIT License
-
-	Copyright (c) 2017 GitHub
-
-	Permission is hereby granted, free of charge, to any person obtaining a copy
-	of this software and associated documentation files (the "Software"), to deal
-	in the Software without restriction, including without limitation the rights
-	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-	copies of the Software, and to permit persons to whom the Software is
-	furnished to do so, subject to the following conditions:
-
-	The above copyright notice and this permission notice shall be included in all
-	copies or substantial portions of the Software.
-
-	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-	SOFTWARE.
-*/
-
 package base
 
 import (
 	"errors"
 	"strings"
 )
+
+type MetricName string
+
+const (
+	DefaultMetricName        MetricName = "default"
+	LagMetricName            MetricName = "lag"
+	ThreadsRunningMetricName MetricName = "threads_running"
+	CustomMetricName         MetricName = "custom"
+	LoadAvgMetricName        MetricName = "loadavg"
+)
+
+func (metric MetricName) String() string {
+	return string(metric)
+}
+
+var KnownMetricNames = []MetricName{
+	DefaultMetricName,
+	LagMetricName,
+	ThreadsRunningMetricName,
+	CustomMetricName,
+	LoadAvgMetricName,
+}
 
 // MetricResult is what we expect our probes to return. This can be a numeric result, or
 // a special type of result indicating more meta-information
@@ -55,15 +52,25 @@ type MetricResult interface {
 // MetricResultFunc is a function that returns a metric result
 type MetricResultFunc func() (metricResult MetricResult, threshold float64)
 
+type MetricResultMap map[MetricName]MetricResult
+
+func NewMetricResultMap() MetricResultMap {
+	result := make(MetricResultMap)
+	for _, metricName := range KnownMetricNames {
+		result[metricName] = nil
+	}
+	return result
+}
+
 // ErrThresholdExceeded is the common error one may get checking on metric result
-var ErrThresholdExceeded = errors.New("Threshold exceeded")
-var errNoResultYet = errors.New("Metric not collected yet")
+var ErrThresholdExceeded = errors.New("threshold exceeded")
+var errNoResultYet = errors.New("metric not collected yet")
 
 // ErrNoSuchMetric is for when a user requests a metric by an unknown metric name
-var ErrNoSuchMetric = errors.New("No such metric")
+var ErrNoSuchMetric = errors.New("no such metric")
 
 // ErrInvalidCheckType is an internal error indicating an unknown check type
-var ErrInvalidCheckType = errors.New("Unknown throttler check type")
+var ErrInvalidCheckType = errors.New("unknown throttler check type")
 
 // IsDialTCPError sees if the given error indicates a TCP issue
 func IsDialTCPError(e error) bool {

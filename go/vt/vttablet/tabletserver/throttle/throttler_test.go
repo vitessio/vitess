@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/config"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/mysql"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
@@ -40,6 +41,53 @@ import (
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+)
+
+var (
+	selfMetrics = mysql.MySQLThrottleMetrics{
+		base.LagMetricName: &mysql.MySQLThrottleMetric{
+			StoreName: selfStoreName,
+			Alias:     "",
+			Value:     0.3,
+			Err:       nil,
+		},
+		base.ThreadsRunningMetricName: &mysql.MySQLThrottleMetric{
+			StoreName: selfStoreName,
+			Alias:     "",
+			Value:     26,
+			Err:       nil,
+		},
+		base.CustomMetricName: &mysql.MySQLThrottleMetric{
+			StoreName: selfStoreName,
+			Alias:     "",
+			Value:     17,
+			Err:       nil,
+		},
+		base.LoadAvgMetricName: &mysql.MySQLThrottleMetric{
+			StoreName: selfStoreName,
+			Alias:     "",
+			Value:     2.718,
+			Err:       nil,
+		},
+	}
+	replicaMetrics = map[string]*MetricResult{
+		base.LagMetricName.String(): {
+			StatusCode: http.StatusOK,
+			Value:      1,
+		},
+		base.ThreadsRunningMetricName.String(): {
+			StatusCode: http.StatusOK,
+			Value:      13,
+		},
+		base.CustomMetricName.String(): {
+			StatusCode: http.StatusOK,
+			Value:      14,
+		},
+		base.LoadAvgMetricName.String(): {
+			StatusCode: http.StatusOK,
+			Value:      0.8,
+		},
+	}
 )
 
 const (
@@ -59,9 +107,20 @@ func (c *fakeTMClient) Close() {
 func (c *fakeTMClient) CheckThrottler(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.CheckThrottlerRequest) (*tabletmanagerdatapb.CheckThrottlerResponse, error) {
 	resp := &tabletmanagerdatapb.CheckThrottlerResponse{
 		StatusCode:      http.StatusOK,
-		Value:           0,
+		Value:           0.139,
 		Threshold:       1,
 		RecentlyChecked: false,
+
+		Metrics: make(map[string]*tabletmanagerdatapb.CheckThrottlerResponse_Metric),
+	}
+	for name, metric := range replicaMetrics {
+		resp.Metrics[name] = &tabletmanagerdatapb.CheckThrottlerResponse_Metric{
+			Name:       name,
+			StatusCode: int32(metric.StatusCode),
+			Value:      metric.Value,
+			Threshold:  metric.Threshold,
+			Message:    metric.Message,
+		}
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -98,9 +157,9 @@ func (ts *FakeTopoServer) GetTablet(ctx context.Context, alias *topodatapb.Table
 
 func (ts *FakeTopoServer) FindAllTabletAliasesInShard(ctx context.Context, keyspace, shard string) ([]*topodatapb.TabletAlias, error) {
 	aliases := []*topodatapb.TabletAlias{
-		{Cell: "fakezone1", Uid: 100},
-		{Cell: "fakezone2", Uid: 101},
-		{Cell: "fakezone3", Uid: 103},
+		{Cell: "fakezone0", Uid: 100},
+		{Cell: "fakezone1", Uid: 101},
+		{Cell: "fakezone2", Uid: 102},
 	}
 	return aliases, nil
 }
@@ -122,22 +181,18 @@ func (w *FakeHeartbeatWriter) Requests() int64 {
 	return w.requests.Load()
 }
 
+func TestGetAggregatedMetricName(t *testing.T) {
+	assert.Equal(t, "self", getAggregatedMetricName("self", base.DefaultMetricName))
+	assert.Equal(t, "self/lag", getAggregatedMetricName("self", base.LagMetricName))
+	assert.Equal(t, "shard/loadavg", getAggregatedMetricName("shard", base.LoadAvgMetricName))
+}
+
 func newTestThrottler() *Throttler {
 	metricsQuery := "select 1"
-	configSettings := config.NewConfigurationSettings()
-	configSettings.Stores.MySQL.Clusters = map[string]*config.MySQLClusterConfigurationSettings{
-		selfStoreName:  {},
-		shardStoreName: {},
-	}
-	for _, s := range configSettings.Stores.MySQL.Clusters {
-		s.MetricQuery = metricsQuery
-		s.ThrottleThreshold = &atomic.Uint64{}
-		s.ThrottleThreshold.Store(1)
-	}
+
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), nil, "TabletServerTest")
 	throttler := &Throttler{
 		mysqlClusterProbesChan: make(chan *mysql.ClusterProbes),
-		mysqlClusterThresholds: cache.New(cache.NoExpiration, 0),
 		heartbeatWriter:        &FakeHeartbeatWriter{},
 		ts:                     &FakeTopoServer{},
 		mysqlInventory:         mysql.NewInventory(),
@@ -145,20 +200,20 @@ func newTestThrottler() *Throttler {
 		tabletTypeFunc:         func() topodatapb.TabletType { return topodatapb.TabletType_PRIMARY },
 		overrideTmClient:       &fakeTMClient{},
 	}
-	throttler.configSettings = configSettings
+	throttler.metricsQuery.Store(metricsQuery)
+	throttler.configSettings = config.NewConfigurationSettings()
+	throttler.initConfig()
 	throttler.mysqlThrottleMetricChan = make(chan *mysql.MySQLThrottleMetric)
-	throttler.mysqlInventoryChan = make(chan *mysql.Inventory, 1)
 	throttler.mysqlClusterProbesChan = make(chan *mysql.ClusterProbes)
 	throttler.throttlerConfigChan = make(chan *topodatapb.ThrottlerConfig)
 	throttler.mysqlInventory = mysql.NewInventory()
 
 	throttler.throttledApps = cache.New(cache.NoExpiration, 0)
-	throttler.mysqlClusterThresholds = cache.New(cache.NoExpiration, 0)
+	throttler.mysqlMetricThresholds = cache.New(cache.NoExpiration, 0)
 	throttler.aggregatedMetrics = cache.New(10*aggregatedMetricsExpiration, 0)
 	throttler.recentApps = cache.New(recentAppsExpiration, 0)
 	throttler.metricsHealth = cache.New(cache.NoExpiration, 0)
 	throttler.nonLowPriorityAppRequestsThrottled = cache.New(nonDeprioritizedAppMapExpiration, 0)
-	throttler.metricsQuery.Store(metricsQuery)
 	throttler.initThrottleTabletTypes()
 	throttler.check = NewThrottlerCheck(throttler)
 
@@ -172,13 +227,12 @@ func newTestThrottler() *Throttler {
 	throttler.dormantPeriod = 5 * time.Second
 	throttler.recentCheckDormantDiff = int64(throttler.dormantPeriod / recentCheckRateLimiterInterval)
 
-	throttler.readSelfThrottleMetric = func(ctx context.Context, p *mysql.Probe) *mysql.MySQLThrottleMetric {
-		return &mysql.MySQLThrottleMetric{
-			ClusterName: selfStoreName,
-			Alias:       "",
-			Value:       1,
-			Err:         nil,
+	throttler.readSelfThrottleMetrics = func(ctx context.Context) mysql.MySQLThrottleMetrics {
+		for metricName, metric := range selfMetrics {
+			metric.Name = metricName
+			go func() { throttler.mysqlThrottleMetricChan <- metric }()
 		}
+		return selfMetrics
 	}
 
 	return throttler
@@ -244,51 +298,37 @@ func TestIsAppExempted(t *testing.T) {
 // TestRefreshMySQLInventory tests the behavior of the throttler's RefreshMySQLInventory() function, which
 // is called periodically in actual throttler. For a given cluster name, it generates a list of probes
 // the throttler will use to check metrics.
-// On a "self" cluster, that list is expect to probe the tablet itself.
-// On any other cluster, the list is expected to be empty if non-leader (only leader throttler, on a
-// `PRIMARY` tablet, probes other tablets). On the leader, the list is expected to be non-empty.
+// On a replica tablet, that list is expect to probe the tablet itself.
+// On the PRIMARY, the list includes all shard tablets, including the PRIMARY itself.
 func TestRefreshMySQLInventory(t *testing.T) {
 	metricsQuery := "select 1"
 	configSettings := config.NewConfigurationSettings()
-	clusters := map[string]*config.MySQLClusterConfigurationSettings{
-		selfStoreName: {},
-		"ks1":         {},
-		"ks2":         {},
-	}
-	for _, s := range clusters {
-		s.MetricQuery = metricsQuery
-		s.ThrottleThreshold = &atomic.Uint64{}
-		s.ThrottleThreshold.Store(1)
-	}
-	configSettings.Stores.MySQL.Clusters = clusters
 
 	throttler := &Throttler{
 		mysqlClusterProbesChan: make(chan *mysql.ClusterProbes),
-		mysqlClusterThresholds: cache.New(cache.NoExpiration, 0),
+		mysqlMetricThresholds:  cache.New(cache.NoExpiration, 0),
 		ts:                     &FakeTopoServer{},
 		mysqlInventory:         mysql.NewInventory(),
 	}
-	throttler.configSettings = configSettings
 	throttler.metricsQuery.Store(metricsQuery)
+	throttler.configSettings = configSettings
+	throttler.initConfig()
 	throttler.initThrottleTabletTypes()
 
 	validateClusterProbes := func(t *testing.T, ctx context.Context) {
 		testName := fmt.Sprintf("leader=%t", throttler.isLeader.Load())
 		t.Run(testName, func(t *testing.T) {
 			// validateProbesCount expects number of probes according to cluster name and throttler's leadership status
-			validateProbesCount := func(t *testing.T, clusterName string, probes mysql.Probes) {
-				if clusterName == selfStoreName {
-					assert.Equal(t, 1, len(probes))
-				} else if throttler.isLeader.Load() {
-					assert.NotZero(t, len(probes))
+			validateProbesCount := func(t *testing.T, probes mysql.Probes) {
+				if throttler.isLeader.Load() {
+					assert.Equal(t, 3, len(probes))
 				} else {
-					assert.Empty(t, probes)
+					assert.Equal(t, 1, len(probes))
 				}
 			}
 			t.Run("waiting for probes", func(t *testing.T) {
 				ctx, cancel := context.WithTimeout(ctx, waitForProbesTimeout)
 				defer cancel()
-				numClusterProbesResults := 0
 				for {
 					select {
 					case probes := <-throttler.mysqlClusterProbesChan:
@@ -296,27 +336,18 @@ func TestRefreshMySQLInventory(t *testing.T) {
 						// not run, and therefore there is none but us to both populate `mysqlClusterProbesChan` as well as
 						// read from it. We do not compete here with any other goroutine.
 						assert.NotNil(t, probes)
-
 						throttler.updateMySQLClusterProbes(ctx, probes)
-
-						numClusterProbesResults++
-						validateProbesCount(t, probes.ClusterName, probes.TabletProbes)
-
-						if numClusterProbesResults == len(clusters) {
-							// Achieved our goal
-							return
-						}
+						validateProbesCount(t, probes.TabletProbes)
+						// Achieved our goal
+						return
 					case <-ctx.Done():
-						assert.FailNowf(t, ctx.Err().Error(), "waiting for %d cluster probes", len(clusters))
+						assert.FailNowf(t, ctx.Err().Error(), "waiting for cluster probes")
 					}
 				}
 			})
 			t.Run("validating probes", func(t *testing.T) {
-				for clusterName := range clusters {
-					probes, ok := throttler.mysqlInventory.ClustersProbes[clusterName]
-					require.True(t, ok)
-					validateProbesCount(t, clusterName, probes)
-				}
+				probes := throttler.mysqlInventory.ClustersProbes
+				validateProbesCount(t, probes)
 			})
 		})
 	}
@@ -401,26 +432,45 @@ func TestProbesWhileOperating(t *testing.T) {
 	require.True(t, ok)
 	assert.Empty(t, tmClient.AppNames())
 
-	t.Run("aggregated", func(t *testing.T) {
+	t.Run("aggregated initial", func(t *testing.T) {
 		assert.Equal(t, 0, throttler.aggregatedMetrics.ItemCount())
 	})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	runThrottler(t, ctx, throttler, time.Minute, func(t *testing.T, ctx context.Context) {
 		t.Run("aggregated", func(t *testing.T) {
-			assert.Equal(t, 2, throttler.aggregatedMetrics.ItemCount()) // flushed upon Disable()
 			aggr := throttler.aggregatedMetricsSnapshot()
-			assert.Equal(t, 2, len(aggr)) // "self" and "shard" clusters
-			for clusterName, metricResult := range aggr {
+			assert.Equalf(t, 2*len(base.KnownMetricNames), len(aggr), "aggregated: %+v", aggr)     // "self" and "shard", per known metric
+			assert.Equal(t, 2*len(base.KnownMetricNames), throttler.aggregatedMetrics.ItemCount()) // flushed upon Disable()
+			for aggregatedMetricName, metricResult := range aggr {
 				val, err := metricResult.Get()
+				assert.NoErrorf(t, err, "aggregatedMetricName: %v", aggregatedMetricName)
+				assert.NotEmpty(t, aggregatedMetricName)
+				storeName, metricName, err := splitMetricTokens(aggregatedMetricName)
+				assert.NotEmpty(t, metricName)
 				assert.NoError(t, err)
-				switch clusterName {
-				case "mysql/self":
-					assert.Equal(t, float64(1), val)
-				case "mysql/shard":
-					assert.Equal(t, float64(0), val)
+
+				switch storeName {
+				case selfStoreName:
+					switch metricName {
+					case base.DefaultMetricName:
+						assert.Equalf(t, float64(0.3), val, "storeName=%v, metricName=%v", storeName, metricName)
+					case base.LagMetricName:
+						assert.Equalf(t, float64(0.3), val, "storeName=%v, metricName=%v", storeName, metricName)
+					case base.LoadAvgMetricName:
+						assert.Equalf(t, float64(2.718), val, "storeName=%v, metricName=%v", storeName, metricName)
+					}
+				case shardStoreName:
+					switch metricName {
+					case base.DefaultMetricName:
+						assert.Equalf(t, float64(1), val, "storeName=%v, metricName=%v", storeName, metricName)
+					case base.LagMetricName:
+						assert.Equalf(t, float64(1), val, "storeName=%v, metricName=%v", storeName, metricName)
+					case base.LoadAvgMetricName:
+						assert.Equalf(t, float64(0.8), val, "storeName=%v, metricName=%v", storeName, metricName)
+					}
 				default:
-					assert.Failf(t, "unknown clusterName", "%v", clusterName)
+					assert.Failf(t, "unknown storeName", "storeName=%v", storeName)
 				}
 			}
 			assert.NotEmpty(t, tmClient.AppNames())
@@ -448,33 +498,21 @@ func TestProbesPostDisable(t *testing.T) {
 	runThrottler(t, context.Background(), throttler, 2*time.Second, nil)
 
 	probes := throttler.mysqlInventory.ClustersProbes
-	assert.NotEmpty(t, probes)
 
-	selfProbes := probes[selfStoreName]
-	t.Run("self", func(t *testing.T) {
-		assert.NotEmpty(t, selfProbes)
-		require.Equal(t, 1, len(selfProbes)) // should always be true once refreshMySQLInventory() runs
-		probe, ok := selfProbes[""]
-		assert.True(t, ok)
-		assert.NotNil(t, probe)
-
-		assert.Equal(t, "", probe.Alias)
-		assert.Nil(t, probe.Tablet)
-		assert.Equal(t, "select 1", probe.MetricQuery)
-		assert.Zero(t, atomic.LoadInt64(&probe.QueryInProgress))
-	})
-
-	shardProbes := probes[shardStoreName]
-	t.Run("shard", func(t *testing.T) {
-		assert.NotEmpty(t, shardProbes)
-		assert.Equal(t, 2, len(shardProbes)) // see fake FindAllTabletAliasesInShard above
-		for _, probe := range shardProbes {
+	t.Run("probes", func(t *testing.T) {
+		assert.Equal(t, 3, len(probes)) // see fake FindAllTabletAliasesInShard above
+		localTabletFound := 0
+		for _, probe := range probes {
 			require.NotNil(t, probe)
-			assert.NotEmpty(t, probe.Alias)
-			assert.NotNil(t, probe.Tablet)
-			assert.Equal(t, "select 1", probe.MetricQuery)
+			if probe.Alias == throttler.tabletAlias {
+				localTabletFound++
+			} else {
+				assert.NotEmpty(t, probe.Alias)
+				assert.NotNil(t, probe.Tablet)
+			}
 			assert.Zero(t, atomic.LoadInt64(&probe.QueryInProgress))
 		}
+		assert.Equal(t, 1, localTabletFound)
 	})
 
 	t.Run("metrics", func(t *testing.T) {
@@ -502,7 +540,7 @@ func TestDormant(t *testing.T) {
 		assert.True(t, throttler.isDormant())
 		assert.EqualValues(t, 1, heartbeatWriter.Requests()) // once upon Enable()
 		flags := &CheckFlags{}
-		throttler.CheckByType(ctx, throttlerapp.VitessName.String(), "", flags, ThrottleCheckSelf)
+		throttler.CheckByType(ctx, throttlerapp.VitessName.String(), nil, "", flags, ThrottleCheckSelf)
 		go func() {
 			select {
 			case <-ctx.Done():
@@ -511,7 +549,7 @@ func TestDormant(t *testing.T) {
 				assert.True(t, throttler.isDormant())
 				assert.EqualValues(t, 1, heartbeatWriter.Requests()) // "vitess" name does not cause heartbeat requests
 			}
-			throttler.CheckByType(ctx, throttlerapp.ThrottlerStimulatorName.String(), "", flags, ThrottleCheckSelf)
+			throttler.CheckByType(ctx, throttlerapp.ThrottlerStimulatorName.String(), nil, "", flags, ThrottleCheckSelf)
 			select {
 			case <-ctx.Done():
 				require.FailNow(t, "context expired before testing completed")
@@ -519,7 +557,7 @@ func TestDormant(t *testing.T) {
 				assert.False(t, throttler.isDormant())
 				assert.Greater(t, heartbeatWriter.Requests(), int64(1))
 			}
-			throttler.CheckByType(ctx, throttlerapp.OnlineDDLName.String(), "", flags, ThrottleCheckSelf)
+			throttler.CheckByType(ctx, throttlerapp.OnlineDDLName.String(), nil, "", flags, ThrottleCheckSelf)
 			select {
 			case <-ctx.Done():
 				require.FailNow(t, "context expired before testing completed")
@@ -555,7 +593,7 @@ func TestReplica(t *testing.T) {
 	runThrottler(t, ctx, throttler, time.Minute, func(t *testing.T, ctx context.Context) {
 		assert.Empty(t, tmClient.AppNames())
 		flags := &CheckFlags{}
-		throttler.CheckByType(ctx, throttlerapp.VitessName.String(), "", flags, ThrottleCheckSelf)
+		throttler.CheckByType(ctx, throttlerapp.VitessName.String(), nil, "", flags, ThrottleCheckSelf)
 		go func() {
 			select {
 			case <-ctx.Done():
@@ -563,7 +601,7 @@ func TestReplica(t *testing.T) {
 			case <-time.After(time.Second):
 				assert.Empty(t, tmClient.AppNames())
 			}
-			throttler.CheckByType(ctx, throttlerapp.OnlineDDLName.String(), "", flags, ThrottleCheckSelf)
+			throttler.CheckByType(ctx, throttlerapp.OnlineDDLName.String(), nil, "", flags, ThrottleCheckSelf)
 			select {
 			case <-ctx.Done():
 				require.FailNow(t, "context expired before testing completed")
@@ -573,7 +611,7 @@ func TestReplica(t *testing.T) {
 				assert.Containsf(t, appNames, throttlerapp.ThrottlerStimulatorName.String(), "%+v", appNames)
 				assert.Equalf(t, 1, len(appNames), "%+v", appNames)
 			}
-			throttler.CheckByType(ctx, throttlerapp.OnlineDDLName.String(), "", flags, ThrottleCheckSelf)
+			throttler.CheckByType(ctx, throttlerapp.OnlineDDLName.String(), nil, "", flags, ThrottleCheckSelf)
 			select {
 			case <-ctx.Done():
 				require.FailNow(t, "context expired before testing completed")

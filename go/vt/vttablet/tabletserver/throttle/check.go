@@ -88,12 +88,11 @@ func NewThrottlerCheck(throttler *Throttler) *ThrottlerCheck {
 }
 
 // checkAppMetricResult allows an app to check on a metric
-func (check *ThrottlerCheck) checkAppMetricResult(ctx context.Context, appName string, storeType string, storeName string, metricResultFunc base.MetricResultFunc, flags *CheckFlags) (checkResult *CheckResult) {
+func (check *ThrottlerCheck) checkAppMetricResult(ctx context.Context, appName string, storeName string, metricResultFunc base.MetricResultFunc, flags *CheckFlags) (checkResult *CheckResult) {
 	// Handle deprioritized app logic
 	denyApp := false
-	metricName := fmt.Sprintf("%s/%s", storeType, storeName)
 	if flags.LowPriority {
-		if _, exists := check.throttler.nonLowPriorityAppRequestsThrottled.Get(metricName); exists {
+		if _, exists := check.throttler.nonLowPriorityAppRequestsThrottled.Get(storeName); exists {
 			// a non-deprioritized app, ie a "normal" app, has recently been throttled.
 			// This is now a deprioritized app. Deny access to this request.
 			denyApp = true
@@ -128,7 +127,7 @@ func (check *ThrottlerCheck) checkAppMetricResult(ctx context.Context, appName s
 
 		if !flags.LowPriority && !flags.ReadCheck && throttlerapp.VitessName.Equals(appName) {
 			// low priority requests will henceforth be denied
-			go check.throttler.nonLowPriorityAppRequestsThrottled.SetDefault(metricName, true)
+			go check.throttler.nonLowPriorityAppRequestsThrottled.SetDefault(storeName, true)
 		}
 	default:
 		// all good!
@@ -138,72 +137,96 @@ func (check *ThrottlerCheck) checkAppMetricResult(ctx context.Context, appName s
 }
 
 // Check is the core function that runs when a user wants to check a metric
-func (check *ThrottlerCheck) Check(ctx context.Context, appName string, storeType string, storeName string, remoteAddr string, flags *CheckFlags) (checkResult *CheckResult) {
-	var metricResultFunc base.MetricResultFunc
-	switch storeType {
-	case "mysql":
-		{
-			metricResultFunc = func() (metricResult base.MetricResult, threshold float64) {
-				return check.throttler.getMySQLClusterMetrics(ctx, storeName)
-			}
+func (check *ThrottlerCheck) Check(ctx context.Context, appName string, storeName string, metricNames []base.MetricName, remoteAddr string, flags *CheckFlags) (checkResult *CheckResult) {
+	checkResult = &CheckResult{
+		StatusCode: http.StatusOK,
+		Metrics:    make(map[string]*MetricResult),
+	}
+	for _, metricName := range metricNames {
+		metricResultFunc := func() (metricResult base.MetricResult, threshold float64) {
+			return check.throttler.getMySQLStoreMetric(ctx, storeName, metricName)
 		}
-	}
-	if metricResultFunc == nil {
-		return NoSuchMetricCheckResult
-	}
 
-	checkResult = check.checkAppMetricResult(ctx, appName, storeType, storeName, metricResultFunc, flags)
-	check.throttler.markRecentApp(appName, remoteAddr)
-	if !throttlerapp.VitessName.Equals(appName) {
-		go func(statusCode int) {
-			statsThrottlerCheckAnyTotal.Add(1)
-			stats.GetOrNewCounter(fmt.Sprintf("ThrottlerCheckAny%s%sTotal", textutil.SingleWordCamel(storeType), textutil.SingleWordCamel(storeName)), "").Add(1)
+		metricCheckResult := check.checkAppMetricResult(ctx, appName, storeName, metricResultFunc, flags)
+		check.throttler.markRecentApp(appName, remoteAddr)
+		if !throttlerapp.VitessName.Equals(appName) {
+			go func(statusCode int) {
+				statsThrottlerCheckAnyTotal.Add(1)
+				stats.GetOrNewCounter(fmt.Sprintf("ThrottlerCheckAny%sTotal", textutil.SingleWordCamel(storeName)), "").Add(1)
 
-			if statusCode != http.StatusOK {
-				statsThrottlerCheckAnyError.Add(1)
-				stats.GetOrNewCounter(fmt.Sprintf("ThrottlerCheckAny%s%sError", textutil.SingleWordCamel(storeType), textutil.SingleWordCamel(storeName)), "").Add(1)
-			}
-		}(checkResult.StatusCode)
+				if statusCode != http.StatusOK {
+					statsThrottlerCheckAnyError.Add(1)
+					stats.GetOrNewCounter(fmt.Sprintf("ThrottlerCheckAny%sError", textutil.SingleWordCamel(storeName)), "").Add(1)
+				}
+			}(metricCheckResult.StatusCode)
+		}
+		if !metricCheckResult.IsOK() {
+			checkResult.StatusCode = metricCheckResult.StatusCode
+			checkResult.Message = metricCheckResult.Message
+			checkResult.Error = metricCheckResult.Error
+		}
+		if metricCheckResult.RecentlyChecked {
+			checkResult.RecentlyChecked = true
+		}
+		checkResult.Metrics[metricName.String()] = &MetricResult{
+			StatusCode: metricCheckResult.StatusCode,
+			Value:      metricCheckResult.Value,
+			Threshold:  metricCheckResult.Threshold,
+			Error:      metricCheckResult.Error,
+			Message:    metricCheckResult.Message,
+		}
 	}
 	return checkResult
 }
 
-func (check *ThrottlerCheck) splitMetricTokens(metricName string) (storeType string, storeName string, err error) {
-	metricTokens := strings.Split(metricName, "/")
-	if len(metricTokens) != 2 {
-		return storeType, storeName, base.ErrNoSuchMetric
+// splitMetricTokens splits a metric name into its store name and metric name
+// aggregated metric name could be in the form:
+// - self
+// - self/threads_running
+// - shard
+// - shard/lag
+func splitMetricTokens(aggregatedMetricName string) (storeName string, metricName base.MetricName, err error) {
+	if aggregatedMetricName == "" {
+		return storeName, base.DefaultMetricName, base.ErrNoSuchMetric
 	}
-	storeType = metricTokens[0]
-	storeName = metricTokens[1]
+	metricTokens := strings.Split(aggregatedMetricName, "/")
+	storeName = metricTokens[0]
+	metricName = base.DefaultMetricName
+	if len(metricTokens) > 1 {
+		metricName = base.MetricName(metricTokens[1])
+	}
+	if len(metricTokens) > 2 {
+		return storeName, base.DefaultMetricName, base.ErrNoSuchMetric
+	}
 
-	return storeType, storeName, nil
+	return storeName, metricName, nil
 }
 
 // localCheck
-func (check *ThrottlerCheck) localCheck(ctx context.Context, metricName string) (checkResult *CheckResult) {
-	storeType, storeName, err := check.splitMetricTokens(metricName)
+func (check *ThrottlerCheck) localCheck(ctx context.Context, aggregatedMetricName string) (checkResult *CheckResult) {
+	storeName, metricName, err := splitMetricTokens(aggregatedMetricName)
 	if err != nil {
 		return NoSuchMetricCheckResult
 	}
-	checkResult = check.Check(ctx, throttlerapp.VitessName.String(), storeType, storeName, "local", StandardCheckFlags)
+	checkResult = check.Check(ctx, throttlerapp.VitessName.String(), storeName, []base.MetricName{metricName}, "local", StandardCheckFlags)
 
 	if checkResult.StatusCode == http.StatusOK {
-		check.throttler.markMetricHealthy(metricName)
+		check.throttler.markMetricHealthy(aggregatedMetricName)
 	}
-	if timeSinceHealthy, found := check.throttler.timeSinceMetricHealthy(metricName); found {
-		stats.GetOrNewGauge(fmt.Sprintf("ThrottlerCheck%s%sSecondsSinceHealthy", textutil.SingleWordCamel(storeType), textutil.SingleWordCamel(storeName)), fmt.Sprintf("seconds since last healthy cehck for %s.%s", storeType, storeName)).Set(int64(timeSinceHealthy.Seconds()))
+	if timeSinceHealthy, found := check.throttler.timeSinceMetricHealthy(aggregatedMetricName); found {
+		stats.GetOrNewGauge(fmt.Sprintf("ThrottlerCheck%sSecondsSinceHealthy", textutil.SingleWordCamel(storeName)), fmt.Sprintf("seconds since last healthy check for %s", storeName)).Set(int64(timeSinceHealthy.Seconds()))
 	}
 
 	return checkResult
 }
 
-func (check *ThrottlerCheck) reportAggregated(metricName string, metricResult base.MetricResult) {
-	storeType, storeName, err := check.splitMetricTokens(metricName)
+func (check *ThrottlerCheck) reportAggregated(aggregatedMetricName string, metricResult base.MetricResult) {
+	storeName, metricName, err := splitMetricTokens(aggregatedMetricName)
 	if err != nil {
 		return
 	}
 	if value, err := metricResult.Get(); err == nil {
-		stats.GetOrNewGaugeFloat64(fmt.Sprintf("ThrottlerAggregated%s%s", textutil.SingleWordCamel(storeType), textutil.SingleWordCamel(storeName)), fmt.Sprintf("aggregated value for %s.%s", storeType, storeName)).Set(value)
+		stats.GetOrNewGaugeFloat64(fmt.Sprintf("ThrottlerAggregated%s%s", textutil.SingleWordCamel(storeName), textutil.SingleWordCamel(metricName.String())), fmt.Sprintf("aggregated value for %s", storeName)).Set(value)
 	}
 }
 
@@ -228,11 +251,11 @@ func (check *ThrottlerCheck) SelfChecks(ctx context.Context) {
 				return
 			case <-selfCheckTicker.C:
 				for metricName, metricResult := range check.AggregatedMetrics(ctx) {
-					metricName := metricName
+					aggregatedMetricName := metricName
 					metricResult := metricResult
 
-					go check.localCheck(ctx, metricName)
-					go check.reportAggregated(metricName, metricResult)
+					go check.localCheck(ctx, aggregatedMetricName)
+					go check.reportAggregated(aggregatedMetricName, metricResult)
 				}
 			}
 		}

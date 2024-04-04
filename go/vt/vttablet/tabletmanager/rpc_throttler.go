@@ -24,6 +24,7 @@ import (
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
 
@@ -51,11 +52,20 @@ func (tm *TabletManager) CheckThrottler(ctx context.Context, req *tabletmanagerd
 	}
 	for name, metric := range checkResult.Metrics {
 		resp.Metrics[name] = &tabletmanagerdatapb.CheckThrottlerResponse_Metric{
+			Name:       name,
 			StatusCode: int32(metric.StatusCode),
 			Value:      metric.Value,
 			Threshold:  metric.Threshold,
 			Message:    metric.Message,
 		}
+	}
+	// For backwards compatibility, when the checked table is of lower version, it does not return a
+	// matrics map, but only the one metric.
+	resp.Metrics[base.DefaultMetricName.String()] = &tabletmanagerdatapb.CheckThrottlerResponse_Metric{
+		StatusCode: int32(checkResult.StatusCode),
+		Value:      checkResult.Value,
+		Threshold:  checkResult.Threshold,
+		Message:    checkResult.Message,
 	}
 	if checkResult.Error != nil {
 		resp.Error = checkResult.Error.Error()
