@@ -3,11 +3,11 @@ package vreplication
 import (
 	"testing"
 
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/log"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
 func TestMoveTablesBuffering(t *testing.T) {

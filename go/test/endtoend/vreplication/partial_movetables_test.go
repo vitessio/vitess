@@ -272,7 +272,7 @@ func TestPartialMoveTablesBasic(t *testing.T) {
 
 	// We cannot Complete a partial move tables at the moment because
 	// it will find that all traffic has (obviously) not been switched.
-	err = tstWorkflowExec(t, "", wfName, "", targetKs, "", workflowActionComplete, "", "", "", false)
+	err = tstWorkflowExecVtctl(t, "", wfName, "", targetKs, "", workflowActionComplete, "", "", "", false)
 	require.Error(t, err)
 
 	// Confirm global routing rules: -80 should still be be routed to customer
@@ -313,7 +313,7 @@ func TestPartialMoveTablesBasic(t *testing.T) {
 		// We switched traffic, so it's the reverse workflow we want to cancel.
 		reverseWf := wf + "_reverse"
 		reverseKs := sourceKs // customer
-		err = tstWorkflowExec(t, "", reverseWf, "", reverseKs, "", workflowActionCancel, "", "", "", false)
+		err = tstWorkflowExecVtctl(t, "", reverseWf, "", reverseKs, "", workflowActionCancel, "", "", "", false)
 		require.NoError(t, err)
 
 		output, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", fmt.Sprintf("%s.%s", reverseKs, reverseWf), "show")

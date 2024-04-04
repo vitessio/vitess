@@ -52,6 +52,7 @@ func TestFKWorkflow(t *testing.T) {
 	defaultCell = vc.Cells[defaultCellName]
 	sourceKeyspace := "fksource"
 	shardName := "0"
+	currentWorkflowType = binlogdatapb.VReplicationWorkflowType_MoveTables
 
 	defer vc.TearDown(t)
 
