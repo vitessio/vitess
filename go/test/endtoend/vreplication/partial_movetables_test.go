@@ -270,9 +270,20 @@ func TestPartialMoveTablesBasic(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "target: customer.-80.replica", "Query was routed to the target before partial SwitchTraffic")
 
+<<<<<<< HEAD
 	// We cannot Complete a partial move tables at the moment because
 	// it will find that all traffic has (obviously) not been switched.
 	err = tstWorkflowExec(t, "", wfName, "", targetKs, "", workflowActionComplete, "", "", "", false)
+=======
+	workflowExec := tstWorkflowExec
+	if flavor == workflowFlavorVtctl {
+		workflowExec = tstWorkflowExecVtctl
+	}
+
+	// We cannot Complete a partial move tables at the moment because
+	// it will find that all traffic has (obviously) not been switched.
+	err = workflowExec(t, "", workflowName, "", targetKs, "", workflowActionComplete, "", "", "", workflowExecOptsPartial80Dash)
+>>>>>>> 4a1870ad59 (VReplication: Get workflowFlavorVtctl endtoend testing working properly again (#15636))
 	require.Error(t, err)
 
 	// Confirm global routing rules: -80 should still be be routed to customer
@@ -312,8 +323,13 @@ func TestPartialMoveTablesBasic(t *testing.T) {
 	for _, wf := range []string{"partialDash80", "partial80Dash"} {
 		// We switched traffic, so it's the reverse workflow we want to cancel.
 		reverseWf := wf + "_reverse"
+<<<<<<< HEAD
 		reverseKs := sourceKs // customer
 		err = tstWorkflowExec(t, "", reverseWf, "", reverseKs, "", workflowActionCancel, "", "", "", false)
+=======
+		reverseKs := sourceKeyspace
+		err = workflowExec(t, "", reverseWf, "", reverseKs, "", workflowActionCancel, "", "", "", opts)
+>>>>>>> 4a1870ad59 (VReplication: Get workflowFlavorVtctl endtoend testing working properly again (#15636))
 		require.NoError(t, err)
 
 		output, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", fmt.Sprintf("%s.%s", reverseKs, reverseWf), "show")
@@ -337,4 +353,17 @@ func TestPartialMoveTablesBasic(t *testing.T) {
 	// Confirm that the shard routing rules are now gone.
 	require.Equal(t, emptyShardRoutingRules, getShardRoutingRules(t))
 
+<<<<<<< HEAD
+=======
+// TestPartialMoveTablesBasic tests partial move tables by moving each
+// customer shard -- -80,80- -- once a a time to customer2.
+// We test with both the vtctlclient and vtctldclient flavors.
+func TestPartialMoveTablesBasic(t *testing.T) {
+	currentWorkflowType = binlogdatapb.VReplicationWorkflowType_MoveTables
+	for _, flavor := range workflowFlavors {
+		t.Run(workflowFlavorNames[flavor], func(t *testing.T) {
+			testPartialMoveTablesBasic(t, flavor)
+		})
+	}
+>>>>>>> 4a1870ad59 (VReplication: Get workflowFlavorVtctl endtoend testing working properly again (#15636))
 }
