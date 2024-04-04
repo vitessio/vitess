@@ -4,6 +4,7 @@ FROM --platform=linux/amd64 golang:1.22.1-bullseye
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     # TODO(mberlin): Group these to make it easier to understand which library actually requires them.
     ant \
+    ca-certificates \
     chromium \
     curl \
     default-jdk \
