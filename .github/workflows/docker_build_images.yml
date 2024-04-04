@@ -43,13 +43,13 @@ jobs:
           fi
 
       - name: Build and push on main
-#        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main'
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ${{ env.DOCKERFILE }}
           push: true
-          tags: vitess/lite:test-${{ matrix.branch }}
+          tags: vitess/lite:${{ matrix.branch }}
 
       ######
       # All code below only applies to new tags
@@ -103,26 +103,25 @@ jobs:
           echo "DOCKER_CTX=./docker/binaries/${{ matrix.component }}" >> $GITHUB_ENV
 
       - name: Build and push on main latest tag
-#        if: github.ref == 'refs/heads/main' && matrix.debian == 'bookworm'
-        if: matrix.debian == 'bookworm'
+        if: github.ref == 'refs/heads/main' && matrix.debian == 'bookworm'
         uses: docker/build-push-action@v5
         with:
           context: ${{ env.DOCKER_CTX }}
           push: true
-          tags: vitess/${{ matrix.component }}:test-latest
+          tags: vitess/${{ matrix.component }}:latest
           build-args: |
-            VT_BASE_VER=test-latest
+            VT_BASE_VER=latest
             DEBIAN_VER=${{ matrix.debian }}-slim
 
       - name: Build and push on main debian specific tag
-#        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main'
         uses: docker/build-push-action@v5
         with:
           context: ${{ env.DOCKER_CTX }}
           push: true
-          tags: vitess/${{ matrix.component }}:test-latest-${{ matrix.debian }}
+          tags: vitess/${{ matrix.component }}:latest-${{ matrix.debian }}
           build-args: |
-            VT_BASE_VER=test-latest
+            VT_BASE_VER=latest
             DEBIAN_VER=${{ matrix.debian }}-slim
 
       ######
