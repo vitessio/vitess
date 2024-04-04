@@ -19,13 +19,10 @@ package server
 import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtorc/logic"
-	"vitess.io/vitess/go/vt/vtorc/process"
 )
 
 // StartVTOrcDiscovery starts VTOrc discovery serving
 func StartVTOrcDiscovery() {
-	process.ContinuousRegistration(string(process.VTOrcExecutionHTTPMode), "")
-
 	log.Info("Starting Discovery")
 	go logic.ContinuousDiscovery()
 }

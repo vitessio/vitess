@@ -2249,10 +2249,8 @@ func (s *Server) WorkflowUpdate(ctx context.Context, req *vtctldatapb.WorkflowUp
 	span.Annotate("tablet_types", req.TabletRequest.TabletTypes)
 	span.Annotate("on_ddl", req.TabletRequest.OnDdl)
 	span.Annotate("state", req.TabletRequest.State)
-	span.Annotate("shards", req.TabletRequest.Shards)
 
 	vx := vexec.NewVExec(req.Keyspace, req.TabletRequest.Workflow, s.ts, s.tmc, s.env.Parser())
-	vx.SetShardSubset(req.TabletRequest.Shards)
 	callback := func(ctx context.Context, tablet *topo.TabletInfo) (*querypb.QueryResult, error) {
 		res, err := s.tmc.UpdateVReplicationWorkflow(ctx, tablet.Tablet, req.TabletRequest)
 		if err != nil {
