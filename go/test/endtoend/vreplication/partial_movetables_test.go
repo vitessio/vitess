@@ -297,9 +297,15 @@ func testPartialMoveTablesBasic(t *testing.T, flavor workflowFlavor) {
 	_, err = vtgateConn.ExecuteFetch(shardDash80RoutedQuery, 0, false)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "target: customer.-80.replica", "Query was routed to the target before partial SwitchTraffic")
+
+	workflowExec := tstWorkflowExec
+	if flavor == workflowFlavorVtctl {
+		workflowExec = tstWorkflowExecVtctl
+	}
+
 	// We cannot Complete a partial move tables at the moment because
 	// it will find that all traffic has (obviously) not been switched.
-	err = tstWorkflowExec(t, "", workflowName, "", targetKs, "", workflowActionComplete, "", "", "", workflowExecOptsPartial80Dash)
+	err = workflowExec(t, "", workflowName, "", targetKs, "", workflowActionComplete, "", "", "", workflowExecOptsPartial80Dash)
 	require.Error(t, err)
 
 	// Confirm global routing rules: -80 should still be be routed to customer
@@ -348,7 +354,7 @@ func testPartialMoveTablesBasic(t *testing.T, flavor workflowFlavor) {
 		}
 		reverseWf := wf + "_reverse"
 		reverseKs := sourceKeyspace
-		err = tstWorkflowExec(t, "", reverseWf, "", reverseKs, "", workflowActionCancel, "", "", "", opts)
+		err = workflowExec(t, "", reverseWf, "", reverseKs, "", workflowActionCancel, "", "", "", opts)
 		require.NoError(t, err)
 
 		output, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", "--", "--shards", opts.shardSubset, fmt.Sprintf("%s.%s", reverseKs, reverseWf), "show")
@@ -377,6 +383,7 @@ func testPartialMoveTablesBasic(t *testing.T, flavor workflowFlavor) {
 // customer shard -- -80,80- -- once a a time to customer2.
 // We test with both the vtctlclient and vtctldclient flavors.
 func TestPartialMoveTablesBasic(t *testing.T) {
+	currentWorkflowType = binlogdatapb.VReplicationWorkflowType_MoveTables
 	for _, flavor := range workflowFlavors {
 		t.Run(workflowFlavorNames[flavor], func(t *testing.T) {
 			testPartialMoveTablesBasic(t, flavor)
