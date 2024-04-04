@@ -84,6 +84,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
   ctes          []*CommonTableExpr
   order         *Order
   limit         *Limit
+  rowAlias      *RowAlias
 
   updateExpr    *UpdateExpr
   setExpr       *SetExpr
@@ -542,6 +543,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <identifierCI> sql_id sql_id_opt reserved_sql_id col_alias as_ci_opt
 %type <expr> charset_value
 %type <identifierCS> table_id reserved_table_id table_alias as_opt_id table_id_opt from_database_opt use_table_name
+%type <rowAlias> row_alias_opt
 %type <empty> as_opt work_opt savepoint_opt
 %type <empty> skip_to_end ddl_skip_to_end
 %type <str> charset
@@ -7701,21 +7703,21 @@ optionally_opt:
 // Because the rules are together, the parser can keep shifting
 // the tokens until it disambiguates a as sql_id and select as keyword.
 insert_data:
-  VALUES tuple_list
+  VALUES tuple_list row_alias_opt
   {
-    $$ = &Insert{Rows: $2}
+    $$ = &Insert{Rows: $2, RowAlias: $3}
   }
 | select_statement
   {
     $$ = &Insert{Rows: $1}
   }
-| openb ins_column_list closeb VALUES tuple_list
+| openb ins_column_list closeb VALUES tuple_list row_alias_opt
   {
-    $$ = &Insert{Columns: $2, Rows: $5}
+    $$ = &Insert{Columns: $2, Rows: $5, RowAlias: $6}
   }
-| openb closeb VALUES tuple_list
+| openb closeb VALUES tuple_list row_alias_opt
   {
-    $$ = &Insert{Columns: []IdentifierCI{}, Rows: $4}
+    $$ = &Insert{Columns: []IdentifierCI{}, Rows: $4, RowAlias: $5}
   }
 | openb ins_column_list closeb select_statement
   {
@@ -7738,6 +7740,19 @@ ins_column_list:
 | ins_column_list ',' sql_id '.' sql_id
   {
     $$ = append($$, $5)
+  }
+
+row_alias_opt:
+  {
+    $$ = nil
+  }
+| AS table_alias
+  {
+    $$ = &RowAlias{TableName: $2}
+  }
+| AS table_alias openb column_list closeb
+  {
+    $$ = &RowAlias{TableName: $2, Columns: $4}
   }
 
 on_dup_opt:
