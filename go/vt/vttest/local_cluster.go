@@ -156,6 +156,9 @@ type Config struct {
 	ExternalTopoGlobalRoot string
 
 	VtgateTabletRefreshInterval time.Duration
+
+	// Set the planner to fail on scatter queries
+	NoScatter bool
 }
 
 // InitSchemas is a shortcut for tests that just want to setup a single
