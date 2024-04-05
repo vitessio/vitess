@@ -5655,7 +5655,7 @@ argument_expression:
   }
 | table_id '.' reserved_table_id '.' '*'
   {
-    $$ = &StarExpr{TableName: TableName{Qualifier: $1, Name: $3}}
+    $$ = &StarExpr{TableName: TableName{DbQualifier: $1, Name: $3}}
   }
 
 select_expression:
@@ -5673,7 +5673,7 @@ select_expression:
   }
 | table_id '.' reserved_table_id '.' '*'
   {
-    $$ = &StarExpr{TableName: TableName{Qualifier: $1, Name: $3}}
+    $$ = &StarExpr{TableName: TableName{DbQualifier: $1, Name: $3}}
   }
 
 over:
@@ -6397,7 +6397,7 @@ table_name:
   }
 | table_id '.' reserved_table_id
   {
-    $$ = TableName{Qualifier: $1, Name: $3}
+    $$ = TableName{DbQualifier: $1, Name: $3}
   }
 | column_name_safe_keyword
   {
@@ -7561,7 +7561,7 @@ column_name:
   }
 | table_id '.' reserved_table_id '.' reserved_sql_id
   {
-    $$ = &ColName{Qualifier: TableName{Qualifier: $1, Name: $3}, Name: $5}
+    $$ = &ColName{Qualifier: TableName{DbQualifier: $1, Name: $3}, Name: $5}
   }
 
 value:

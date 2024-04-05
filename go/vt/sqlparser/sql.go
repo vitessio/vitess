@@ -17968,7 +17968,7 @@ yydefault:
 		yyDollar = yyS[yypt-5 : yypt+1]
 //line sql.y:5657
 		{
-			yyVAL.selectExpr = &StarExpr{TableName: TableName{Qualifier: yyDollar[1].tableIdent, Name: yyDollar[3].tableIdent}}
+			yyVAL.selectExpr = &StarExpr{TableName: TableName{DbQualifier: yyDollar[1].tableIdent, Name: yyDollar[3].tableIdent}}
 		}
 	case 1121:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -17992,7 +17992,7 @@ yydefault:
 		yyDollar = yyS[yypt-5 : yypt+1]
 //line sql.y:5675
 		{
-			yyVAL.selectExpr = &StarExpr{TableName: TableName{Qualifier: yyDollar[1].tableIdent, Name: yyDollar[3].tableIdent}}
+			yyVAL.selectExpr = &StarExpr{TableName: TableName{DbQualifier: yyDollar[1].tableIdent, Name: yyDollar[3].tableIdent}}
 		}
 	case 1125:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -18865,7 +18865,7 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:6399
 		{
-			yyVAL.tableName = TableName{Qualifier: yyDollar[1].tableIdent, Name: yyDollar[3].tableIdent}
+			yyVAL.tableName = TableName{DbQualifier: yyDollar[1].tableIdent, Name: yyDollar[3].tableIdent}
 		}
 	case 1286:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -20439,7 +20439,7 @@ yydefault:
 		yyDollar = yyS[yypt-5 : yypt+1]
 //line sql.y:7563
 		{
-			yyVAL.colName = &ColName{Qualifier: TableName{Qualifier: yyDollar[1].tableIdent, Name: yyDollar[3].tableIdent}, Name: yyDollar[5].colIdent}
+			yyVAL.colName = &ColName{Qualifier: TableName{DbQualifier: yyDollar[1].tableIdent, Name: yyDollar[3].tableIdent}, Name: yyDollar[5].colIdent}
 		}
 	case 1554:
 		yyDollar = yyS[yypt-1 : yypt+1]

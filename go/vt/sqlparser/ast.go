@@ -4483,12 +4483,15 @@ func (node EventName) IsEmpty() bool {
 }
 
 // TableName represents a table  name.
-// Qualifier, if specified, represents a database or keyspace.
+// DbQualifier, if specified, represents a database or keyspace.
 // TableName is a value struct whose fields are case sensitive.
 // This means two TableName vars can be compared for equality
 // and a TableName can also be used as key in a map.
+// SchemaQualifier, if specified, represents a schema name, which is an additional level of namespace supported in
+// other dialects. Supported here so that this AST can act as a translation layer for those dialects, but is unused in 
+// MySQL.
 type TableName struct {
-	Name, Qualifier TableIdent
+	Name, DbQualifier, SchemaQualifier TableIdent
 }
 
 // Format formats the node.
@@ -4496,8 +4499,8 @@ func (node TableName) Format(buf *TrackedBuffer) {
 	if node.IsEmpty() {
 		return
 	}
-	if !node.Qualifier.IsEmpty() {
-		buf.Myprintf("%v.", node.Qualifier)
+	if !node.DbQualifier.IsEmpty() {
+		buf.Myprintf("%v.", node.DbQualifier)
 	}
 	buf.Myprintf("%v", node.Name)
 }
@@ -4507,8 +4510,8 @@ func (node TableName) String() string {
 	if node.IsEmpty() {
 		return ""
 	}
-	if !node.Qualifier.IsEmpty() {
-		return fmt.Sprintf("%s.%s", node.Qualifier.String(), node.Name)
+	if !node.DbQualifier.IsEmpty() {
+		return fmt.Sprintf("%s.%s", node.DbQualifier.String(), node.Name)
 	}
 	return node.Name.String()
 }
@@ -4517,7 +4520,7 @@ func (node TableName) walkSubtree(visit Visit) error {
 	return Walk(
 		visit,
 		node.Name,
-		node.Qualifier,
+		node.DbQualifier,
 	)
 }
 
@@ -4529,11 +4532,11 @@ func (node TableName) IsEmpty() bool {
 
 // ToViewName returns a TableName acceptable for use as a VIEW. VIEW names are
 // always lowercase, so ToViewName lowercasese the name. Databases are case-sensitive
-// so Qualifier is left untouched.
+// so DbQualifier is left untouched.
 func (node TableName) ToViewName() TableName {
 	return TableName{
-		Qualifier: node.Qualifier,
-		Name:      NewTableIdent(strings.ToLower(node.Name.v)),
+		DbQualifier: node.DbQualifier,
+		Name:        NewTableIdent(strings.ToLower(node.Name.v)),
 	}
 }
 
@@ -6537,7 +6540,7 @@ func VarScopeForColName(colName *ColName) (*ColName, SetScope, string, error) {
 			}
 			return &ColName{Name: ColIdent{val: varName}}, scope, specifiedScope, nil
 		}
-	} else if colName.Qualifier.Qualifier.IsEmpty() { // Forms are like `@@GLOBAL.x` and `@@SESSION.x`
+	} else if colName.Qualifier.DbQualifier.IsEmpty() { // Forms are like `@@GLOBAL.x` and `@@SESSION.x`
 		varName, scope, specifiedScope, err := VarScope(colName.Qualifier.Name.v, colName.Name.val)
 		if err != nil {
 			return nil, SetScope_None, "", err
@@ -6547,7 +6550,7 @@ func VarScopeForColName(colName *ColName) (*ColName, SetScope, string, error) {
 		}
 		return &ColName{Name: ColIdent{val: varName}}, scope, specifiedScope, nil
 	} else { // Forms are like `@@GLOBAL.validate_password.length`, which is currently unsupported
-		_, _, _, err := VarScope(colName.Qualifier.Qualifier.v, colName.Qualifier.Name.v, colName.Name.val)
+		_, _, _, err := VarScope(colName.Qualifier.DbQualifier.v, colName.Qualifier.Name.v, colName.Name.val)
 		return colName, SetScope_None, "", err
 	}
 }
