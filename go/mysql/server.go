@@ -90,7 +90,7 @@ type Handler interface {
 	// ConnectionClosed is called when a connection is closed.
 	ConnectionClosed(c *Conn)
 
-	// InitDB is called once at the beginning to set db name,
+	// ComInitDB is called once at the beginning to set db name,
 	// and subsequently for every ComInitDB event.
 	ComInitDB(c *Conn, schemaName string) error
 
@@ -122,7 +122,11 @@ type Handler interface {
 	WarningCount(c *Conn) uint16
 
 	// ComResetConnection is called when a connection receives a COM_RESET_CONNECTION signal.
-	ComResetConnection(c *Conn)
+	// This is used to reset the session state (e.g. clearing user vars, resetting session vars, releasing
+	// locks, releasing cached prepared statements, etc). One of the primary use cases for COM_RESET_CONNECTION
+	// is to reset a pooled connection's session state so that it can be safely returned to the connection pool
+	// and given to another application process to reuse.
+	ComResetConnection(c *Conn) error
 
 	// ParserOptionsForConnection returns any parser options that should be used for the given connection. For
 	// example, if the connection has enabled ANSI_QUOTES or ANSI SQL_MODE, then the parser needs to know that
@@ -130,6 +134,15 @@ type Handler interface {
 	// and the Vitess layer needs to parse the query to identify the query parameters so that the correct response
 	// packets can be sent.
 	ParserOptionsForConnection(c *Conn) (sqlparser.ParserOptions, error)
+}
+
+// BinlogReplicaHandler is an extension to the Handler interface, to add support for binlog replication server commands.
+type BinlogReplicaHandler interface {
+	// ComRegisterReplica is called when a connection receives a ComRegisterReplica request
+	ComRegisterReplica(c *Conn, replicaHost string, replicaPort uint16, replicaUser string, replicaPassword string) error
+
+	// ComBinlogDumpGTID is called when a connection receives a ComBinlogDumpGTID request
+	ComBinlogDumpGTID(c *Conn, logFile string, logPos uint64, gtidSet GTIDSet) error
 }
 
 // ResultSpoolFn is the callback function used by ComQuery and related functions to handle rows returned by a query

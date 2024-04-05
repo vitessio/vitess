@@ -24,6 +24,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"unicode"
@@ -894,8 +896,8 @@ func (node *Load) walkSubtree(visit Visit) error {
 
 type Fields struct {
 	TerminatedBy *SQLVal
-	*EnclosedBy
-	EscapedBy *SQLVal
+	EnclosedBy   *EnclosedBy
+	EscapedBy    *SQLVal
 	SQLNode
 }
 
@@ -903,18 +905,14 @@ func (node *Fields) Format(buf *TrackedBuffer) {
 	if node == nil {
 		return
 	}
-
-	terminated := ""
+	buf.Myprintf(" fields")
 	if node.TerminatedBy != nil {
-		terminated = "terminated by " + "'" + string(node.TerminatedBy.Val) + "'"
+		buf.Myprintf(" terminated by '%s'", node.TerminatedBy.Val)
 	}
-
-	escaped := ""
+	buf.Myprintf("%v", node.EnclosedBy)
 	if node.EscapedBy != nil {
-		escaped = " escaped by " + "'" + string(node.EscapedBy.Val) + "'"
+		buf.Myprintf(" escaped by '%s'", node.EscapedBy.Val)
 	}
-
-	buf.Myprintf(" fields %s%v%s", terminated, node.EnclosedBy, escaped)
 }
 
 type EnclosedBy struct {
@@ -927,15 +925,10 @@ func (node *EnclosedBy) Format(buf *TrackedBuffer) {
 	if node == nil {
 		return
 	}
-
-	enclosed := "enclosed by " + "'" + string(node.Delim.Val) + "'"
 	if node.Optionally {
-		enclosed = " optionally " + enclosed
-	} else {
-		enclosed = " " + enclosed
+		buf.Myprintf(" optionally")
 	}
-
-	buf.Myprintf(enclosed)
+	buf.Myprintf(" enclosed by '%s'", node.Delim.Val)
 }
 
 type Lines struct {
@@ -948,18 +941,13 @@ func (node *Lines) Format(buf *TrackedBuffer) {
 	if node == nil {
 		return
 	}
-
-	starting := ""
+	buf.Myprintf(" lines")
 	if node.StartingBy != nil {
-		starting = " starting by " + "'" + string(node.StartingBy.Val) + "'"
+		buf.Myprintf(" starting by '%s'", node.StartingBy.Val)
 	}
-
-	terminated := ""
 	if node.TerminatedBy != nil {
-		terminated = " terminated by " + "'" + string(node.TerminatedBy.Val) + "'"
+		buf.Myprintf(" terminated by '%s'", node.TerminatedBy.Val)
 	}
-
-	buf.Myprintf(" lines%s%s", starting, terminated)
 }
 
 // BeginEndBlock represents a BEGIN .. END block with one or more statements nested within
@@ -2515,7 +2503,10 @@ type TableSpec struct {
 	Columns     []*ColumnDefinition
 	Indexes     []*IndexDefinition
 	Constraints []*ConstraintDefinition
-	Options     string
+	TableOpts   []*TableOption
+
+	// TODO: should be some sort of struct
+	PartitionOpts string
 }
 
 // Format formats the node.
@@ -2534,8 +2525,15 @@ func (ts *TableSpec) Format(buf *TrackedBuffer) {
 	for _, c := range ts.Constraints {
 		buf.Myprintf(",\n\t%v", c)
 	}
+	buf.Myprintf("\n)")
+	for _, tblOpt := range ts.TableOpts {
+		buf.Myprintf(" %s %s", tblOpt.Name, tblOpt.Value)
+	}
+	if len(ts.PartitionOpts) > 0 {
+		buf.Myprintf(" %s", ts.PartitionOpts)
+	}
 
-	buf.Myprintf("\n)%s", strings.Replace(ts.Options, ", ", ",\n  ", -1))
+	//buf.Myprintf("\n)%s", strings.Replace(ts.TableOpts, ", ", ",\n  ", -1))
 }
 
 // AddColumn appends the given column to the list in the spec
@@ -2556,6 +2554,11 @@ func (ts *TableSpec) AddIndex(id *IndexDefinition) {
 // AddConstraint appends the given index to the list in the spec
 func (ts *TableSpec) AddConstraint(cd *ConstraintDefinition) {
 	ts.Constraints = append(ts.Constraints, cd)
+}
+
+// AddOption appends the given option to the list in the spec
+func (ts *TableSpec) AddTableOption(to *TableOption) {
+	ts.TableOpts = append(ts.TableOpts, to)
 }
 
 func (ts *TableSpec) walkSubtree(visit Visit) error {
@@ -2611,6 +2614,9 @@ func (col *ColumnDefinition) walkSubtree(visit Visit) error {
 type ColumnType struct {
 	// The base type string
 	Type string
+
+	// The base type if it has already been resolved
+	ResolvedType any
 
 	// Generic field options.
 	Null          BoolVal
@@ -2683,10 +2689,22 @@ func (ct *ColumnType) merge(other ColumnType) error {
 	}
 
 	if other.KeyOpt != colKeyNone {
-		if ct.KeyOpt != colKeyNone {
+		keyOptions := []ColumnKeyOption{ct.KeyOpt, other.KeyOpt}
+		sort.Slice(keyOptions, func(i, j int) bool { return keyOptions[i] < keyOptions[j] })
+		if other.KeyOpt == ct.KeyOpt {
+			// MySQL will deduplicate key options when they are repeated.
+		} else if keyOptions[0] == colKeyPrimary && (keyOptions[1] == colKeyUnique || keyOptions[1] == colKeyUniqueKey) {
+			// If UNIQUE is specified with PRIMARY KEY, we ignore UNIQUE for now since
+			// the PRIMARY KEY option will ensure uniqueness already. MySQL does still
+			// generate a UNIQUE index for the column, but we can add that later if needed.
+			ct.KeyOpt = colKeyPrimary
+		} else if ct.KeyOpt == colKeyNone {
+			// If this column doesn't have a key option yet, just use the new one.
+			ct.KeyOpt = other.KeyOpt
+		} else {
+			// Otherwise throw an error if there are multiple key options that need to be applied.
 			return errors.New("cannot include more than one key option for a column definition")
 		}
-		ct.KeyOpt = other.KeyOpt
 	}
 
 	if other.ForeignKeyDef != nil {
@@ -2758,17 +2776,19 @@ func (ct *ColumnType) merge(other ColumnType) error {
 
 // Format returns a canonical string representation of the type and all relevant options
 func (ct *ColumnType) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%s", ct.Type)
+	if stringer, ok := ct.ResolvedType.(fmt.Stringer); ok {
+		buf.WriteString(stringer.String())
+	} else {
+		buf.Myprintf("%s", ct.Type)
+		if ct.Length != nil && ct.Scale != nil {
+			buf.Myprintf("(%v,%v)", ct.Length, ct.Scale)
 
-	if ct.Length != nil && ct.Scale != nil {
-		buf.Myprintf("(%v,%v)", ct.Length, ct.Scale)
-
-	} else if ct.Length != nil {
-		buf.Myprintf("(%v)", ct.Length)
-	}
-
-	if len(ct.EnumValues) > 0 {
-		buf.Myprintf("('%s')", strings.Join(ct.EnumValues, "', '"))
+		} else if ct.Length != nil {
+			buf.Myprintf("(%v)", ct.Length)
+		}
+		if len(ct.EnumValues) > 0 {
+			buf.Myprintf("('%s')", strings.Join(ct.EnumValues, "', '"))
+		}
 	}
 
 	opts := make([]string, 0, 16)
@@ -3295,6 +3315,12 @@ type IndexOption struct {
 	Name  string
 	Value *SQLVal
 	Using string
+}
+
+// TableOption describes a table option in a CREATE TABLE statement
+type TableOption struct {
+	Name  string
+	Value string
 }
 
 // ColumnKeyOption indicates whether or not the given column is defined as an
@@ -4298,8 +4324,12 @@ func (w *With) walkSubtree(visit Visit) error {
 
 type Into struct {
 	Variables Variables
-	Outfile   string
 	Dumpfile  string
+
+	Outfile string
+	Charset string
+	Fields  *Fields
+	Lines   *Lines
 }
 
 func (i *Into) Format(buf *TrackedBuffer) {
@@ -4308,14 +4338,17 @@ func (i *Into) Format(buf *TrackedBuffer) {
 	}
 
 	buf.Myprintf(" into ")
-	if i.Variables != nil {
-		buf.Myprintf("%v", i.Variables)
+	buf.Myprintf("%v", i.Variables)
+	if i.Dumpfile != "" {
+		buf.Myprintf("dumpfile '%s'", i.Dumpfile)
 	}
 	if i.Outfile != "" {
 		buf.Myprintf("outfile '%s'", i.Outfile)
-	}
-	if i.Dumpfile != "" {
-		buf.Myprintf("dumpfile '%s'", i.Dumpfile)
+		if i.Charset != "" {
+			buf.Myprintf(" character set %s", i.Charset)
+		}
+		buf.Myprintf("%v", i.Fields)
+		buf.Myprintf("%v", i.Lines)
 	}
 }
 
@@ -4781,7 +4814,7 @@ func (*ConvertExpr) iExpr()       {}
 func (*SubstrExpr) iExpr()        {}
 func (*TrimExpr) iExpr()          {}
 func (*ConvertUsingExpr) iExpr()  {}
-func (*CharExpr) iExpr()  {}
+func (*CharExpr) iExpr()          {}
 func (*MatchExpr) iExpr()         {}
 func (*GroupConcatExpr) iExpr()   {}
 func (*Default) iExpr()           {}
@@ -5137,7 +5170,16 @@ func ExprFromValue(value sqltypes.Value) (Expr, error) {
 		return &NullVal{}, nil
 	case value.IsIntegral():
 		return NewIntVal(value.ToBytes()), nil
-	case value.IsFloat() || value.Type() == sqltypes.Decimal:
+	case value.IsFloat():
+		// Ensure that the resulting expression will be parsed back as a float, not a decimal.
+		// We do this by parsing the float, then reserializing it with exponential notation.
+		floatValue, err := strconv.ParseFloat(string(value.ToBytes()), 64)
+		if err != nil {
+			return nil, err
+		}
+		newValue := sqltypes.MakeTrusted(sqltypes.Float64, strconv.AppendFloat(nil, floatValue, 'e', -1, 64))
+		return NewFloatVal(newValue.ToBytes()), nil
+	case value.Type() == sqltypes.Decimal:
 		return NewFloatVal(value.ToBytes()), nil
 	case value.IsQuoted():
 		return NewStrVal(value.ToBytes()), nil
@@ -5615,13 +5657,13 @@ func (node *TimestampFuncExpr) replace(from, to Expr) bool {
 
 // CollateExpr represents dynamic collate operator.
 type CollateExpr struct {
-	Expr    Expr
-	Charset string
+	Expr      Expr
+	Collation string
 }
 
 // Format formats the node.
 func (node *CollateExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%v collate %s", node.Expr, node.Charset)
+	buf.Myprintf("%v collate %s", node.Expr, node.Collation)
 }
 
 func (node *CollateExpr) walkSubtree(visit Visit) error {
@@ -6887,6 +6929,15 @@ func (node *TableFuncExpr) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+func (node *TableFuncExpr) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		node.Exprs)
+}
+
 // TableIdent is a case sensitive SQL identifier. It will be escaped with
 // backquotes if necessary.
 type TableIdent struct {
@@ -7213,4 +7264,35 @@ func (node *SrsAttribute) Format(buf *TrackedBuffer) {
 	buf.Myprintf("definition '%s'\n", node.Definition)
 	buf.Myprintf("organization '%s' identified by %v\n", node.Organization, node.OrgID)
 	buf.Myprintf("description '%s'", node.Description)
+}
+
+// InjectableExpression is an expression that can accept a set of analyzed/resolved children. Used within InjectedExpr.
+type InjectableExpression interface {
+	WithResolvedChildren(children []any) (any, error)
+}
+
+// InjectedExpr allows bypassing AST analysis. This is used by projects that rely on Vitess, but may not implement
+// MySQL's dialect.
+type InjectedExpr struct {
+	Expression InjectableExpression
+	Children   []Expr
+}
+
+var _ Expr = InjectedExpr{}
+
+// iExpr implements the Expr interface.
+func (d InjectedExpr) iExpr() {}
+
+// replace implements the Expr interface.
+func (d InjectedExpr) replace(from, to Expr) bool {
+	return false
+}
+
+// Format implements the Expr interface.
+func (d InjectedExpr) Format(buf *TrackedBuffer) {
+	if stringer, ok := d.Expression.(fmt.Stringer); ok {
+		buf.WriteString(stringer.String())
+	} else {
+		buf.WriteString("InjectedExpr")
+	}
 }

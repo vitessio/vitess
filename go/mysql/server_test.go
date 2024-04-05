@@ -305,8 +305,16 @@ func (th *testHandler) ComStmtExecute(c *Conn, prepare *PrepareData, callback fu
 	}
 }
 
-func (th *testHandler) ComResetConnection(c *Conn) {
+func (th *testHandler) ComResetConnection(c *Conn) error {
+	return nil
+}
 
+func (th *testHandler) ComRegisterReplica(c *Conn, replicaHost string, replicaPort uint16, replicaUser string, replicaPassword string) error {
+	return nil
+}
+
+func (th *testHandler) ComBinlogDumpGTID(c *Conn, logFile string, logPos uint64, gtidSet GTIDSet) error {
+	return nil
 }
 
 func (th *testHandler) WarningCount(c *Conn) uint16 {

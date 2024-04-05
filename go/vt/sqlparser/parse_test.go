@@ -48,7 +48,7 @@ var (
 			output: "create view `version` as select * from base.`version`",
 		},
 		{
-			input: "create table t123 (c1 varchar(5) check (c1 in ('v1', 'v2')) NOT NULL);",
+			input:  "create table t123 (c1 varchar(5) check (c1 in ('v1', 'v2')) NOT NULL);",
 			output: "create table t123 (\n\tc1 varchar(5) not null,\n\tcheck (c1 in ('v1', 'v2'))\n)",
 		},
 		{
@@ -118,6 +118,15 @@ var (
 			output: "set global GTID_PURGED = '+beabe64c-9dc6-11ed-8021-a0f9021e8e70:1-126'",
 		},
 		{
+			input:  "show replicas",
+		},
+		{
+			input:  "show binary logs",
+		},
+		{
+			input:  "show binary log status",
+		},
+		{
 			input: "start replica",
 		},
 		{
@@ -129,6 +138,10 @@ var (
 		{
 			input:  "change replication source to SOURCE_HOST = 'Host'",
 			output: "change replication source to source_host = Host",
+		},
+		{
+			input:  "change replication source to SOURCE_HOST = 'Host', SOURCE_AUTO_POSITION=0",
+			output: "change replication source to source_host = Host, source_auto_position = 0",
 		},
 		{
 			input:  "change replication source to SOURCE_HOST = 'host', SOURCE_PASSWORD='PaSSword', SOURCE_PORT=12345, source_user='root', SOURCE_CONNECT_RETRY=60, SOURCE_RETRY_COUNT=3",
@@ -691,6 +704,9 @@ var (
 		}, {
 			input: "select /* s.t */ 1 from s.t",
 		}, {
+			input:  "select /* s.keyword */ 1 from s.account",
+			output: "select /* s.keyword */ 1 from s.`account`",
+		}, {
 			input: "select /* keyword schema & table name */ 1 from `By`.`bY`",
 		}, {
 			input: "select /* select in from */ 1 from (select 1 from t) as a",
@@ -848,80 +864,80 @@ var (
 			input: "select /* if as func */ 1 from t where a = if(b)",
 		},
 		{
-			input: "select /* current_date */ current_date from t",
+			input:  "select /* current_date */ current_date from t",
 			output: "select /* current_date */ current_date() from t",
 		},
 		{
 			input: "select /* current_date as func */ current_date() from t",
 		},
 		{
-			input: "select /* current_time */ current_time from t",
+			input:  "select /* current_time */ current_time from t",
 			output: "select /* current_time */ current_time(0) from t",
 		},
 		{
-			input: "select /* current_time as func */ current_time() from t",
+			input:  "select /* current_time as func */ current_time() from t",
 			output: "select /* current_time as func */ current_time(0) from t",
 		},
 		{
 			input: "select /* current_time with fsp */ current_time(1) from t",
 		},
 		{
-			input: "select /* current_timestamp */ current_timestamp from t",
+			input:  "select /* current_timestamp */ current_timestamp from t",
 			output: "select /* current_timestamp */ current_timestamp(0) from t",
 		},
 		{
-			input: "select /* current_timestamp as func */ current_timestamp() from t",
+			input:  "select /* current_timestamp as func */ current_timestamp() from t",
 			output: "select /* current_timestamp as func */ current_timestamp(0) from t",
 		},
 		{
 			input: "select /* current_timestamp with fsp */ current_timestamp(3) from t",
 		},
 		{
-			input: "select /* localtime */ localtime from t",
+			input:  "select /* localtime */ localtime from t",
 			output: "select /* localtime */ localtime(0) from t",
 		},
 		{
-			input: "select /* localtime as func */ localtime() from t",
+			input:  "select /* localtime as func */ localtime() from t",
 			output: "select /* localtime as func */ localtime(0) from t",
 		},
 		{
 			input: "select /* localtime with fsp */ localtime(5) from t",
 		},
 		{
-			input: "select /* localtimestamp */ localtimestamp from t",
+			input:  "select /* localtimestamp */ localtimestamp from t",
 			output: "select /* localtimestamp */ localtimestamp(0) from t",
 		},
 		{
-			input: "select /* localtimestamp as func */ localtimestamp() from t",
+			input:  "select /* localtimestamp as func */ localtimestamp() from t",
 			output: "select /* localtimestamp as func */ localtimestamp(0) from t",
 		},
 		{
 			input: "select /* localtimestamp with fsp */ localtimestamp(7) from t",
 		},
 		{
-			input: "select /* utc_date */ utc_date from t",
+			input:  "select /* utc_date */ utc_date from t",
 			output: "select /* utc_date */ utc_date() from t",
 		},
 		{
 			input: "select /* utc_date as func */ utc_date() from t",
 		},
 		{
-			input: "select /* utc_time */ utc_time from t",
+			input:  "select /* utc_time */ utc_time from t",
 			output: "select /* utc_time */ utc_time(0) from t",
 		},
 		{
-			input: "select /* utc_time as func */ utc_time() from t",
+			input:  "select /* utc_time as func */ utc_time() from t",
 			output: "select /* utc_time as func */ utc_time(0) from t",
 		},
 		{
 			input: "select /* utc_time with fsp */ utc_time(4) from t",
 		},
 		{
-			input: "select /* utc_timestamp */ utc_timestamp from t",
+			input:  "select /* utc_timestamp */ utc_timestamp from t",
 			output: "select /* utc_timestamp */ utc_timestamp(0) from t",
 		},
 		{
-			input: "select /* utc_timestamp as func */ utc_timestamp() from t",
+			input:  "select /* utc_timestamp as func */ utc_timestamp() from t",
 			output: "select /* utc_timestamp as func */ utc_timestamp(0) from t",
 		},
 		{
@@ -1641,6 +1657,21 @@ var (
 			input:  "alter table a rename column a as b",
 			output: "alter table a rename column a to b",
 		}, {
+			input:  "create table t1 (id serial primary key, c1 text not null);",
+			output: "create table t1 (\n\tid bigint not null auto_increment primary key,\n\tc1 text not null\n)",
+		}, {
+			input:  "create table t1 (id int primary key unique, c1 varchar(111) not null);",
+			output: "create table t1 (\n\tid int primary key,\n\tc1 varchar(111) not null\n)",
+		}, {
+			input:  "create table t1 (id int primary key unique key, c1 varchar(111) not null);",
+			output: "create table t1 (\n\tid int primary key,\n\tc1 varchar(111) not null\n)",
+		}, {
+			input:  "create table t1 (id int primary key primary key, c1 varchar(111) not null);",
+			output: "create table t1 (\n\tid int primary key,\n\tc1 varchar(111) not null\n)",
+		}, {
+			input:  "create table t1 (id int unique unique unique unique, c1 varchar(111) not null);",
+			output: "create table t1 (\n\tid int unique,\n\tc1 varchar(111) not null\n)",
+		}, {
 			input:  "create table a (b1 bool not null primary key, b2 boolean not null)",
 			output: "create table a (\n\tb1 bool not null primary key,\n\tb2 boolean not null\n)",
 		}, {
@@ -1725,7 +1756,7 @@ var (
 		{
 			input: "create trigger t1 after delete on foo for each row delete from xxy where old.y = z",
 		},
-		{   //TODO: figure out why `SET SESSION sys_var = x` does not work when set directly on the trigger (works in BEGIN/END block)
+		{ //TODO: figure out why `SET SESSION sys_var = x` does not work when set directly on the trigger (works in BEGIN/END block)
 			input:  "create trigger t1 after delete on foo for each row set @@sum = @@sum + old.b",
 			output: "create trigger t1 after delete on foo for each row set session sum = @@sum + old.b",
 		},
@@ -1739,7 +1770,7 @@ var (
 			input: "create trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
 		},
 		{
-			input: "create trigger t1 before insert on foo for each row begin end",
+			input:  "create trigger t1 before insert on foo for each row begin end",
 			output: "create trigger t1 before insert on foo for each row begin\nend",
 		},
 		{
@@ -3179,27 +3210,89 @@ var (
 			input:  "SELECT m.id, t.category FROM mytable m JOIN testtable t on m.id = t.id LIMIT 1 INTO @myId, @myCategory",
 			output: "select m.id, t.category from mytable as m join testtable as t on m.id = t.id limit 1 into @myId, @myCategory",
 		}, {
+			input:  "select * from foo limit a",
+			output: "select * from foo limit a",
+		}, {
+			input:  "select * from foo limit a ,a",
+			output: "select * from foo limit a, a",
+		}, {
+			input:  "select * from foo limit a offset a",
+			output: "select * from foo limit a, a",
+		}, {
 			input:  "SELECT id FROM mytable UNION select id FROM testtable LIMIT 1 INTO @myId",
 			output: "select id from mytable union select id from testtable limit 1 into @myId",
 		}, {
 			input:  "SELECT id FROM mytable UNION select id FROM testtable UNION select id FROM othertable LIMIT 1 INTO @myId",
 			output: "select id from mytable union select id from testtable union select id from othertable limit 1 into @myId",
-		}, {
+		},
+		{
 			input:  "SELECT 1 INTO OUTFILE 'x.txt'",
 			output: "select 1 into outfile 'x.txt'",
-		}, {
+		},
+		{
 			input:  "SELECT * FROM (VALUES ROW(2,4,8),ROW(1,2,3)) AS t(a,b,c) INTO OUTFILE 'myfile.txt'",
 			output: "select * from (values row(2, 4, 8), row(1, 2, 3)) as t (a, b, c) into outfile 'myfile.txt'",
-		}, {
+		},
+		{
 			input:  "SELECT id INTO OUTFILE 'myfile.txt' FROM mytable ORDER BY id DESC",
 			output: "select id from mytable order by id desc into outfile 'myfile.txt'",
-		}, {
+		},
+		{
 			input:  "SELECT * FROM (VALUES ROW(2,4,8)) AS t INTO DUMPFILE 'even.dump'",
 			output: "select * from (values row(2, 4, 8)) as t into dumpfile 'even.dump'",
-		}, {
+		},
+		{
 			input:  "SELECT id INTO DUMPFILE 'dump.txt' FROM mytable ORDER BY id DESC LIMIT 15",
 			output: "select id from mytable order by id desc limit 15 into dumpfile 'dump.txt'",
-		}, {
+		},
+		{
+			input:  "select * from tbl into outfile 'outfile.txt' fields terminated by 'a'",
+		},
+		{
+			input:  "select * from tbl into outfile 'outfile.txt' columns terminated by 'a'",
+			output: "select * from tbl into outfile 'outfile.txt' fields terminated by 'a'",
+		},
+		{
+			input:  "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' enclosed by 'b'",
+		},
+		{
+			input:  "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' optionally enclosed by 'b'",
+		},
+		{
+			input:  "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' escaped by 'c'",
+		},
+		{
+			input:  "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' enclosed by 'b' escaped by 'c'",
+		},
+		{
+			input:  "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' optionally enclosed by 'b' escaped by 'c'",
+		},
+		{
+			input:  "select * from tbl into outfile 'outfile.txt' lines terminated by 'd'",
+		},
+		{
+			input:  "select * from tbl into outfile 'outfile.txt' lines starting by 'd' terminated by 'e'",
+		},
+		{
+			input:  "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' lines terminated by 'd'",
+		},
+		{
+			input:  "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' enclosed by 'b' lines terminated by 'd'",
+		},
+		{
+			input:  "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' escaped by 'c' lines terminated by 'd'",
+		},
+		{
+			input:  "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' optionally enclosed by 'b' escaped by 'c' lines terminated by 'd'",
+		},
+		{
+			input:  "select * from tbl into outfile 'outfile.txt' character set binary fields terminated by 'a'",
+		},
+		{
+			input:  "table tbl into outfile 'outfile.txt' fields terminated by 'a' optionally enclosed by 'b' escaped by 'c' lines terminated by 'd'",
+			output: "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' optionally enclosed by 'b' escaped by 'c' lines terminated by 'd'",
+		},
+		{
 			input:  "CREATE PROCEDURE proc (IN p_store_id INT, OUT current INT) SELECT COUNT(*) INTO current FROM inventory WHERE store_id = p_store_id",
 			output: "create procedure proc (in p_store_id INT, out current INT) select COUNT(*) from inventory where store_id = p_store_id into `current`",
 		}, {
@@ -3253,12 +3346,22 @@ var (
 		}, {
 			input:  "DROP TABLE `dual`",
 			output: "drop table `dual`",
-		}, {
+		},
+		{
 			input:  "CREATE TABLE `t4` (`pk` int NOT NULL, `_tinytext` tinytext, `_text` text, `_longtext` longtext, `_mediumtext` mediumtext, PRIMARY KEY (`pk`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3;",
-			output: "create table t4 (\n\tpk int not null,\n\t_tinytext tinytext,\n\t_text text,\n\t_longtext longtext,\n\t_mediumtext mediumtext,\n\tPRIMARY KEY (pk)\n) ENGINE InnoDB DEFAULT CHARSET utf8mb3",
-		}, {
+			output: "create table t4 (\n\tpk int not null,\n\t_tinytext tinytext,\n\t_text text,\n\t_longtext longtext,\n\t_mediumtext mediumtext,\n\tPRIMARY KEY (pk)\n) ENGINE InnoDB CHARACTER SET utf8mb3",
+		},
+		{
+			input:  "CREATE TABLE `t` (pk int) ENGINE=InnoDB DEFAULT CHARSET=binary;",
+			output: "create table t (\n\tpk int\n) ENGINE InnoDB CHARACTER SET binary",
+		},
+		{
+			input:  "CREATE TABLE `t` (pk int) ENGINE=InnoDB CHARACTER SET=binary;",
+			output: "create table t (\n\tpk int\n) ENGINE InnoDB CHARACTER SET binary",
+		},
+		{
 			input:  "CREATE TABLE test (\n  data varchar(5) NULL DEFAULT _utf8 \"KZPVD\"\n) ENGINE = InnoDB DEFAULT CHARACTER SET = utf8mb4 DEFAULT COLLATE = UTF8MB4_BIN;",
-			output: "create table test (\n\t`data` varchar(5) default _utf8mb3 'KZPVD'\n) ENGINE InnoDB DEFAULT CHARACTER SET utf8mb4 DEFAULT COLLATE UTF8MB4_BIN",
+			output: "create table test (\n\t`data` varchar(5) default _utf8mb3 'KZPVD'\n) ENGINE InnoDB CHARACTER SET utf8mb4 COLLATE UTF8MB4_BIN",
 		}, {
 			input: "select EXTRACT(DAY from '2020-10-1')",
 		}, {
@@ -3431,13 +3534,13 @@ var (
 			input: "create table t (i int) secondary_engine_attribute='rapid'",
 			output: "create table t (\n" +
 				"\ti int\n" +
-				") secondary_engine_attribute 'rapid'",
+				") secondary_engine_attribute rapid",
 		},
 		{
 			input: "create table t (i int) secondary_engine_attribute='rapid'",
 			output: "create table t (\n" +
 				"\ti int\n" +
-				") secondary_engine_attribute 'rapid'",
+				") secondary_engine_attribute rapid",
 		},
 		{
 			input:  "alter table t secondary_engine_attribute='rapid'",
@@ -4638,6 +4741,56 @@ func TestInvalid(t *testing.T) {
 			input: "select sql_cache sql_no_cache * from t",
 			err:   "incorrect usage of SQL_CACHE and SQL_NO_CACHE",
 		},
+		{
+			input: "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' fields terminated by 'a'",
+			err:   "syntax error",
+		},
+		{
+			input: "select * from tbl into outfile 'outfile.txt' enclosed by 'b'",
+			err:   "syntax error",
+		},
+		{
+			input: "select * from tbl into outfile 'outfile.txt' escaped by 'c'",
+			err:   "syntax error",
+		},
+		{
+			input: "select * from tbl into outfile 'outfile.txt' enclosed by 'b' fields terminated by 'a'",
+			err:   "syntax error",
+		},
+		{
+			input: "select * from tbl into outfile 'outfile.txt' escaped by 'c' fields terminated by 'a'",
+			err:   "syntax error",
+		},
+		{
+			input: "select * from tbl into outfile 'outfile.txt' lines terminated by 'd' fields terminated by 'a'",
+			err:   "syntax error",
+		},
+
+		{
+			// TODO: should work
+			input: "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' enclosed by 'b' enclosed by 'b'",
+			err:   "syntax error",
+		},
+		{
+			// TODO: should work
+			input: "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' optionally enclosed by 'b' optionally enclosed by 'b'",
+			err:   "syntax error",
+		},
+		{
+			// TODO: should work
+			input: "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' escaped by 'c' escaped by 'c'",
+			err:   "syntax error",
+		},
+		{
+			// TODO: should work
+			input:  "select * from tbl into outfile 'outfile.txt' lines terminated by 'e' starting by 'd'",
+			err:   "syntax error",
+		},
+		{
+			// TODO: should work
+			input:  "select * from tbl into outfile 'outfile.txt' lines starting by 'd' terminated by 'e' starting by 'd' terminated by 'e'",
+			err:   "syntax error",
+		},
 	}
 
 	for _, tcase := range invalidSQL {
@@ -4656,8 +4809,8 @@ func TestInvalid(t *testing.T) {
 		input string
 		err   string
 	}{{
-		input: "create table t (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique primary key)",
-		err:   "cannot include more than one key option for a column definition at position 130 near 'key'",
+		input: "create table t (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' fulltext key primary key)",
+		err:   "cannot include more than one key option for a column definition at position 136 near 'key'",
 	}, {
 		input: "create table t (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique comment 'another')",
 		err:   "cannot include more than one comment for a column definition at position 136 near 'another'",
@@ -4677,8 +4830,8 @@ func TestInvalid(t *testing.T) {
 		input: "create table t (c default 0 int on update current_timestamp() auto_increment comment 'a comment here' unique)",
 		err:   "syntax error at position 26 near 'default'",
 	}, {
-		input: "alter table t add (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique primary key)",
-		err:   "cannot include more than one key option for a column definition at position 133 near 'key'",
+		input: "alter table t add (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' fulltext key primary key)",
+		err:   "cannot include more than one key option for a column definition at position 139 near 'key'",
 	}, {
 		input: "alter table t add (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique comment 'another')",
 		err:   "cannot include more than one comment for a column definition at position 139 near 'another'",
@@ -4815,7 +4968,7 @@ func TestKeywords(t *testing.T) {
 			useSelectExpressionLiteral: true,
 		},
 		{
-			input: "update t set a = current_timestamp()",
+			input:  "update t set a = current_timestamp()",
 			output: "update t set a = current_timestamp(0)",
 		},
 		{
@@ -5478,64 +5631,97 @@ func TestConvert(t *testing.T) {
 	validSQL := []parseTest{
 		{
 			input: "select cast('abc' as date) from t",
-		}, {
-			input:                      "select cast('abc' as date) from t",
+		},
+		{
+			input: "select cast('abc' as year) from t",
+		},
+		{
+			input: "select cast('abc' as date) from t",
 			useSelectExpressionLiteral: true,
-		}, {
+		},
+		{
 			input: "select convert('abc', binary(4)) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', binary) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', char character set binary) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', char(4) ascii) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', char unicode) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', char(4)) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', char) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', nchar(4)) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', nchar) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', signed) from t",
-		}, {
+		},
+		{
 			input:  "select convert('abc', signed integer) from t",
 			output: "select convert('abc', signed) from t",
-		}, {
+		},
+		{
 			input:  "select convert('abc', signed) from t",
 			output: "select convert('abc', signed) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', unsigned) from t",
-		}, {
+		},
+		{
 			input:  "select convert('abc', unsigned integer) from t",
 			output: "select convert('abc', unsigned) from t",
-		}, {
+		},
+		{
 			input:  "select convert('abc', unsigned) from t",
 			output: "select convert('abc', unsigned) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', decimal(3, 4)) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', decimal(4)) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', decimal) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', date) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', time(4)) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', time) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', datetime(9)) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', datetime) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', json) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc' using ascii) from t",
-		}}
+		},
+		{
+			input: "select convert('abc', year) from t",
+		},
+		}
 
 	for _, tcase := range validSQL {
 		runParseTestCase(t, tcase)
@@ -5764,185 +5950,6 @@ func TestCreateTable(t *testing.T) {
 		createStatement.WriteString(col)
 	}
 	createStatement.WriteString("\n)")
-	validSQL := []string{
-		// test all the data types and options
-		createStatement.String(),
-
-		// test defining indexes separately
-		"create table t (\n" +
-			"	id int auto_increment,\n" +
-			"	username varchar,\n" +
-			"	email varchar,\n" +
-			"	full_name varchar,\n" +
-			"	geom point not null,\n" +
-			"	status_nonkeyword varchar,\n" +
-			"	primary key (id),\n" +
-			"	spatial key geom (geom),\n" +
-			"	fulltext key fts (full_name),\n" +
-			"	unique key by_username (username),\n" +
-			"	unique by_username2 (username),\n" +
-			"	unique index by_username3 (username),\n" +
-			"	index by_status (status_nonkeyword),\n" +
-			"	key by_full_name (full_name)\n" +
-			")",
-
-		// test that indexes support USING <id>
-		"create table t (\n" +
-			"	id int auto_increment,\n" +
-			"	username varchar,\n" +
-			"	email varchar,\n" +
-			"	full_name varchar,\n" +
-			"	status_nonkeyword varchar,\n" +
-			"	primary key (id) using BTREE,\n" +
-			"	unique key by_username (username) using HASH,\n" +
-			"	unique by_username2 (username) using OTHER,\n" +
-			"	unique index by_username3 (username) using XYZ,\n" +
-			"	index by_status (status_nonkeyword) using PDQ,\n" +
-			"	key by_full_name (full_name) using OTHER\n" +
-			")",
-		// test other index options
-		"create table t (\n" +
-			"	id int auto_increment,\n" +
-			"	username varchar,\n" +
-			"	email varchar,\n" +
-			"	primary key (id) comment 'hi',\n" +
-			"	unique key by_username (username) key_block_size 8,\n" +
-			"	unique index by_username4 (username) comment 'hi' using BTREE,\n" +
-			"	unique index by_username4 (username) using BTREE key_block_size 4 comment 'hi'\n" +
-			")",
-
-		// multi-column indexes
-		"create table t (\n" +
-			"	id int auto_increment,\n" +
-			"	username varchar,\n" +
-			"	email varchar,\n" +
-			"	full_name varchar,\n" +
-			"	a int,\n" +
-			"	b int,\n" +
-			"	c int,\n" +
-			"	primary key (id, username),\n" +
-			"	unique key by_abc (a, b, c),\n" +
-			"	unique key (a, b, c),\n" +
-			"	key by_email (email(10), username)\n" +
-			")",
-
-		// foreign keys
-		"create table t (\n" +
-			"	id int auto_increment,\n" +
-			"	username varchar,\n" +
-			"	k int,\n" +
-			"	Z int,\n" +
-			"	primary key (id, username),\n" +
-			"	key by_email (email(10), username),\n" +
-			"	constraint second_ibfk_1 foreign key (k, j) references simple (a, b),\n" +
-			"	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on delete restrict,\n" +
-			"	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on delete no action,\n" +
-			"	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on delete cascade on update set default,\n" +
-			"	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on delete set default on update set null,\n" +
-			"	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on delete set null on update restrict,\n" +
-			"	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on update no action,\n" +
-			"	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on update cascade\n" +
-			")",
-
-		// check constraint
-		"create table t (\n" +
-			"	id int auto_increment,\n" +
-			"	username varchar,\n" +
-			"	a int,\n" +
-			"	b int,\n" +
-			"	check (b in (0, 1)),\n" +
-			"	constraint a_positive check (a > 0),\n" +
-			"	check (a > b)\n" +
-			")",
-
-		// table options
-		"create table t (\n" +
-			"	id int auto_increment\n" +
-			") engine InnoDB,\n" +
-			"  auto_increment 123,\n" +
-			"  avg_row_length 1,\n" +
-			"  default character set utf8mb4,\n" +
-			"  character set latin1,\n" +
-			"  checksum 0,\n" +
-			"  default collate binary,\n" +
-			"  collate ascii_bin,\n" +
-			"  comment 'this is a comment',\n" +
-			"  compression 'zlib',\n" +
-			"  connection 'connect_string',\n" +
-			"  data directory 'absolute path to directory',\n" +
-			"  delay_key_write 1,\n" +
-			"  encryption 'n',\n" +
-			"  index directory 'absolute path to directory',\n" +
-			"  insert_method no,\n" +
-			"  key_block_size 1024,\n" +
-			"  max_rows 100,\n" +
-			"  min_rows 10,\n" +
-			"  pack_keys 0,\n" +
-			"  password 'sekret',\n" +
-			"  row_format default,\n" +
-			"  stats_auto_recalc default,\n" +
-			"  stats_persistent 0,\n" +
-			"  stats_sample_pages 1,\n" +
-			"  tablespace tablespace_name storage disk,\n" +
-			"  tablespace tablespace_name\n",
-
-		// passing hex nums to table options
-		"create table t (\n" +
-			"	id int auto_increment\n" +
-			") engine InnoDB,\n" +
-			"  auto_increment 0x1,\n" +
-			"  avg_row_length 0x2,\n" +
-			"  checksum 0x3,\n" +
-			"  delay_key_write 0x4,\n" +
-			"  key_block_size 0x5,\n" +
-			"  max_rows 0x6,\n" +
-			"  min_rows 0x7,\n" +
-			"  pack_keys 0x8,\n" +
-			"  stats_persistent 0x9,\n" +
-			"  stats_sample_pages 0x10\n",
-
-		// passing floats to table options
-		"create table t (\n" +
-			"	id int auto_increment\n" +
-			") engine InnoDB,\n" +
-			"  auto_increment 4.1,\n" +
-			"  avg_row_length 4.2,\n" +
-			"  checksum 4.3,\n" +
-			"  delay_key_write 4.4,\n" +
-			"  key_block_size 4.5,\n" +
-			"  max_rows 4.6,\n" +
-			"  min_rows 4.7,\n" +
-			"  pack_keys 4.8,\n" +
-			"  stats_persistent 4.9,\n" +
-			"  stats_sample_pages 4.01\n",
-
-		// boolean columns
-		"create table t (\n" +
-			"	bi bigint not null primary key,\n" +
-			"	b1 bool not null,\n" +
-			"	b2 boolean\n" +
-			")",
-		// generated by serial
-		"create table t (\n" +
-			"	id bigint not null auto_increment unique,\n" +
-			"	a bigint not null\n" +
-			")",
-	}
-	for _, sql := range validSQL {
-		t.Run(sql, func(t *testing.T) {
-			sql = strings.TrimSpace(sql)
-			tree, err := Parse(sql)
-			if err != nil {
-				t.Errorf("input: %s, err: %v", sql, err)
-				return
-			}
-			got := String(tree.(*DDL))
-
-			if sql != got {
-				t.Errorf("want:\n%s\ngot:\n%s", sql, got)
-			}
-		})
-	}
 
 	sql := "create table t garbage"
 	tree, err := Parse(sql)
@@ -5950,225 +5957,499 @@ func TestCreateTable(t *testing.T) {
 		t.Errorf("Parse unexpectedly accepted input %s", sql)
 	}
 
-	testCases := []struct {
-		input  string
-		output string
-	}{{
-		// Tet varchar (MAX) syntax
-		input:  "create table t (username varchar(MAX))",
-		output: "create table t (\n\tusername varchar(MAX)\n)",
-	}, {
-		// Test the signed keyword – as the default for numeric types, it is a no-op
-		input:  "create table t (pk int signed primary key)",
-		output: "create table t (\n\tpk int primary key\n)",
-	}, {
-		// test key_block_size
-		input: "create table t (\n" +
-			"	id int auto_increment,\n" +
-			"	username varchar,\n" +
-			"	unique key by_username (username) key_block_size 8,\n" +
-			"	unique key by_username2 (username) key_block_size=8,\n" +
-			"	unique by_username3 (username) key_block_size = 4\n" +
-			")",
-		output: "create table t (\n" +
-			"	id int auto_increment,\n" +
-			"	username varchar,\n" +
-			"	unique key by_username (username) key_block_size 8,\n" +
-			"	unique key by_username2 (username) key_block_size 8,\n" +
-			"	unique by_username3 (username) key_block_size 4\n" +
-			")",
-	}, {
-		// test defaults
-		input: "create table t (\n" +
-			"	i1 int default 1,\n" +
-			"	i2 int default null,\n" +
-			"	f1 float default 1.23,\n" +
-			"	s1 varchar default 'c',\n" +
-			"	s2 varchar default 'this is a string',\n" +
-			"	s3 varchar default null,\n" +
-			"	s4 timestamp default current_timestamp,\n" +
-			"	s5 bit(1) default B'0'\n" +
-			")",
-		output: "create table t (\n" +
-			"	i1 int default 1,\n" +
-			"	i2 int default null,\n" +
-			"	f1 float default 1.23,\n" +
-			"	s1 varchar default 'c',\n" +
-			"	s2 varchar default 'this is a string',\n" +
-			"	s3 varchar default null,\n" +
-			"	s4 timestamp default current_timestamp(0),\n" +
-			"	s5 bit(1) default B'0'\n" +
-			")",
-	}, {
-		// test key field options
-		input: "create table t (\n" +
-			"	id int auto_increment primary key,\n" +
-			"	username varchar unique key,\n" +
-			"	email varchar unique,\n" +
-			"	full_name varchar key,\n" +
-			"	time1 timestamp on update current_timestamp,\n" +
-			"	time2 timestamp default current_timestamp on update current_timestamp\n" +
-			")",
-		output: "create table t (\n" +
-			"	id int auto_increment primary key,\n" +
-			"	username varchar unique key,\n" +
-			"	email varchar unique,\n" +
-			"	full_name varchar key,\n" +
-			"	time1 timestamp on update current_timestamp(0),\n" +
-			"	time2 timestamp default current_timestamp(0) on update current_timestamp(0)\n" +
-			")",
-	}, {
-		// test alternate key syntax
-		input: "create table t (\n" +
-			"	id int,\n" +
-			"	full_name varchar,\n" +
-			"	constraint unique key (full_name),\n" +
-			"	constraint unique index named (full_name),\n" +
-			"	constraint namedx unique (full_name),\n" +
-			"	constraint pk primary key (id)\n" +
-			")",
-		output: "create table t (\n" +
-			"	id int,\n" +
-			"	full_name varchar,\n" +
-			"	unique key (full_name),\n" +
-			"	unique index named (full_name),\n" +
-			"	unique  namedx (full_name),\n" +
-			"	primary key (id)\n" +
-			")",
-	},
-	{
-		// test now
-		input: "create table t (\n" +
-			"	time1 timestamp default now(),\n" +
-			"	time2 timestamp default now() on update now(),\n" +
-			"	time3 timestamp(3) default now(3) on update now(3)\n" +
-			")",
-		output: "create table t (\n" +
-			"	time1 timestamp default now(),\n" +
-			"	time2 timestamp default now() on update now(),\n" +
-			"	time3 timestamp(3) default now(3) on update now(3)\n" +
-			")",
-	},
-	{
-		// test current_timestamp with and without ()
-		input: "create table t (\n" +
-			"	time1 timestamp default current_timestamp,\n" +
-			"	time2 timestamp default current_timestamp(),\n" +
-			"	time3 timestamp default current_timestamp on update current_timestamp,\n" +
-			"	time4 timestamp default current_timestamp() on update current_timestamp(),\n" +
-			"	time5 timestamp(3) default current_timestamp(3) on update current_timestamp(3)\n" +
-			")",
-		output: "create table t (\n" +
-			"	time1 timestamp default current_timestamp(0),\n" +
-			"	time2 timestamp default current_timestamp(0),\n" +
-			"	time3 timestamp default current_timestamp(0) on update current_timestamp(0),\n" +
-			"	time4 timestamp default current_timestamp(0) on update current_timestamp(0),\n" +
-			"	time5 timestamp(3) default current_timestamp(3) on update current_timestamp(3)\n" +
-			")",
-	},
-	{
-		// test inline check constraint
-		input: "create table t (\n" +
-			"	a int,\n" +
-			"	b int constraint b_positive check (b > 0)\n" +
-			")",
-		output: "create table t (\n" +
-			"	a int,\n" +
-			"	b int,\n" +
-			"	constraint b_positive check (b > 0)\n" +
-			")",
-	}, {
-		// test initial table constraint
-		input: "create table t (\n" +
-			"	check (a <> b),\n" +
-			"	a int,\n" +
-			"	b int\n" +
-			")",
-		output: "create table t (\n" +
-			"	a int,\n" +
-			"	b int,\n" +
-			"	check (a != b)\n" +
-			")",
-	}, {
-		input: "create table t (\n" +
-			"	id int,\n" +
-			"	status int,\n" +
-			"	constraint status check (a > 0)\n" +
-			")",
-		output: "create table t (\n" +
-			"	id int,\n" +
-			"	`status` int,\n" +
-			"	constraint status check (a > 0)\n" +
-			")",
-	}, {
-		input: "create table t (\n" +
-			"	id int,\n" +
-			"	status int,\n" +
-			"	constraint status check (status in (0, 1))\n" +
-			")",
-		output: "create table t (\n" +
-			"	id int,\n" +
-			"	`status` int,\n" +
-			"	constraint status check (`status` in (0, 1))\n" +
-			")",
-	}, {
-		// we don't support named primary keys currently
-		input: "create table t (\n" +
-			"	id int auto_increment,\n" +
-			"	username varchar,\n" +
-			"	a int,\n" +
-			"	b int,\n" +
-			"	constraint a_positive primary key (a, b)\n" +
-			")",
-		output: "create table t (\n" +
-			"	id int auto_increment,\n" +
-			"	username varchar,\n" +
-			"	a int,\n" +
-			"	b int,\n" +
-			"	primary key (a, b)\n" +
-			")",
-	}, {
-		// test localtime with and without ()
-		input: "create table t (\n" +
-			"	time1 timestamp default localtime,\n" +
-			"	time2 timestamp default localtime(),\n" +
-			"	time3 timestamp default localtime on update localtime,\n" +
-			"	time4 timestamp default localtime() on update localtime(),\n" +
-			"	time5 timestamp(6) default localtime(6) on update localtime(6)\n" +
-			")",
-		output: "create table t (\n" +
-			"	time1 timestamp default localtime(0),\n" +
-			"	time2 timestamp default localtime(0),\n" +
-			"	time3 timestamp default localtime(0) on update localtime(0),\n" +
-			"	time4 timestamp default localtime(0) on update localtime(0),\n" +
-			"	time5 timestamp(6) default localtime(6) on update localtime(6)\n" +
-			")",
-	}, {
-		// test localtimestamp with and without ()
-		input: "create table t (\n" +
-			"	time1 timestamp default localtimestamp,\n" +
-			"	time2 timestamp default localtimestamp(),\n" +
-			"	time3 timestamp default localtimestamp on update localtimestamp,\n" +
-			"	time4 timestamp default localtimestamp() on update localtimestamp(),\n" +
-			"	time5 timestamp(1) default localtimestamp(1) on update localtimestamp(1)\n" +
-			")",
-		output: "create table t (\n" +
-			"	time1 timestamp default localtimestamp(0),\n" +
-			"	time2 timestamp default localtimestamp(0),\n" +
-			"	time3 timestamp default localtimestamp(0) on update localtimestamp(0),\n" +
-			"	time4 timestamp default localtimestamp(0) on update localtimestamp(0),\n" +
-			"	time5 timestamp(1) default localtimestamp(1) on update localtimestamp(1)\n" +
-			")",
-	}, {
-		input: "create table t (\n" +
-			"	id serial not null,\n" +
-			"	a bigint not null\n" +
-			")",
-		output: "create table t (\n" +
-			"	id bigint not null auto_increment unique,\n" +
-			"	a bigint not null\n" +
-			")",
-	},
+	testCases := []parseTest{
+		// test all the data types and options
+		{
+			input: createStatement.String(),
+		},
+		{
+			// test defining indexes separately
+			input: "create table t (\n" +
+				"	id int auto_increment,\n" +
+				"	username varchar,\n" +
+				"	email varchar,\n" +
+				"	full_name varchar,\n" +
+				"	geom point not null,\n" +
+				"	status_nonkeyword varchar,\n" +
+				"	primary key (id),\n" +
+				"	spatial key geom (geom),\n" +
+				"	fulltext key fts (full_name),\n" +
+				"	unique key by_username (username),\n" +
+				"	unique by_username2 (username),\n" +
+				"	unique index by_username3 (username),\n" +
+				"	index by_status (status_nonkeyword),\n" +
+				"	key by_full_name (full_name)\n" +
+				")",
+		},
+		{
+			// test that indexes support USING <id>
+			input: "create table t (\n" +
+				"	id int auto_increment,\n" +
+				"	username varchar,\n" +
+				"	email varchar,\n" +
+				"	full_name varchar,\n" +
+				"	status_nonkeyword varchar,\n" +
+				"	primary key (id) using BTREE,\n" +
+				"	unique key by_username (username) using HASH,\n" +
+				"	unique by_username2 (username) using OTHER,\n" +
+				"	unique index by_username3 (username) using XYZ,\n" +
+				"	index by_status (status_nonkeyword) using PDQ,\n" +
+				"	key by_full_name (full_name) using OTHER\n" +
+				")",
+		},
+		{
+			// test other index options
+			input: "create table t (\n" +
+				"	id int auto_increment,\n" +
+				"	username varchar,\n" +
+				"	email varchar,\n" +
+				"	primary key (id) comment 'hi',\n" +
+				"	unique key by_username (username) key_block_size 8,\n" +
+				"	unique index by_username4 (username) comment 'hi' using BTREE,\n" +
+				"	unique index by_username4 (username) using BTREE key_block_size 4 comment 'hi'\n" +
+				")",
+		},
+		{
+			// multi-column indexes
+			input: "create table t (\n" +
+				"	id int auto_increment,\n" +
+				"	username varchar,\n" +
+				"	email varchar,\n" +
+				"	full_name varchar,\n" +
+				"	a int,\n" +
+				"	b int,\n" +
+				"	c int,\n" +
+				"	primary key (id, username),\n" +
+				"	unique key by_abc (a, b, c),\n" +
+				"	unique key (a, b, c),\n" +
+				"	key by_email (email(10), username)\n" +
+				")",
+		},
+		{
+			// foreign keys
+			input: "create table t (\n" +
+				"	id int auto_increment,\n" +
+				"	username varchar,\n" +
+				"	k int,\n" +
+				"	Z int,\n" +
+				"	primary key (id, username),\n" +
+				"	key by_email (email(10), username),\n" +
+				"	constraint second_ibfk_1 foreign key (k, j) references simple (a, b),\n" +
+				"	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on delete restrict,\n" +
+				"	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on delete no action,\n" +
+				"	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on delete cascade on update set default,\n" +
+				"	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on delete set default on update set null,\n" +
+				"	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on delete set null on update restrict,\n" +
+				"	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on update no action,\n" +
+				"	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on update cascade\n" +
+				")",
+		},
+		{
+			// check constraint
+			input: "create table t (\n" +
+				"	id int auto_increment,\n" +
+				"	username varchar,\n" +
+				"	a int,\n" +
+				"	b int,\n" +
+				"	check (b in (0, 1)),\n" +
+				"	constraint a_positive check (a > 0),\n" +
+				"	check (a > b)\n" +
+				")",
+		},
+		{
+			// table options
+			input: "create table t (\n" +
+				"\tid int auto_increment\n" +
+				") engine InnoDB" +
+				" auto_increment 123" +
+				" avg_row_length 1" +
+				" character set utf8mb4" +
+				" character set latin1" +
+				" checksum 0" +
+				" default collate binary" +
+				" collate ascii_bin" +
+				" comment 'this is a comment'" +
+				" compression 'zlib'" +
+				" connection 'connect_string'" +
+				" data directory 'absolute path to directory'" +
+				" delay_key_write 1" +
+				" encryption 'n'" +
+				" index directory 'absolute path to directory'" +
+				" insert_method no" +
+				" key_block_size 1024" +
+				" max_rows 100" +
+				" min_rows 10" +
+				" pack_keys 0" +
+				" password 'sekret'" +
+				" row_format default" +
+				" stats_auto_recalc default" +
+				" stats_persistent 0" +
+				" stats_sample_pages 1" +
+				" tablespace tablespace_name storage disk" +
+				" tablespace tablespace_name",
+			output: "create table t (\n" +
+				"\tid int auto_increment\n" +
+				") engine InnoDB" +
+				" auto_increment 123" +
+				" avg_row_length 1" +
+				" character set utf8mb4" +
+				" character set latin1" +
+				" checksum 0" +
+				" collate binary" +
+				" collate ascii_bin" +
+				" comment this is a comment" +
+				" compression zlib" +
+				" connection connect_string" +
+				" data directory absolute path to directory" +
+				" delay_key_write 1" +
+				" encryption n" +
+				" index directory absolute path to directory" +
+				" insert_method no" +
+				" key_block_size 1024" +
+				" max_rows 100" +
+				" min_rows 10" +
+				" pack_keys 0" +
+				" password sekret" +
+				" row_format default" +
+				" stats_auto_recalc default" +
+				" stats_persistent 0" +
+				" stats_sample_pages 1" +
+				" tablespace tablespace_name storage disk" +
+				" tablespace tablespace_name",
+		},
+		{
+			// table options out of order
+			input: "create table t (\n" +
+				"	id int auto_increment\n" +
+				") engine InnoDB" +
+				" avg_row_length 1" +
+				" character set utf8mb4" +
+				" auto_increment 123" +
+				" character set latin1",
+		},
+		{
+			// passing hex nums to table options
+			input: "create table t (\n" +
+				"	id int auto_increment\n" +
+				") engine InnoDB,\n" +
+				"  auto_increment 0x1,\n" +
+				"  avg_row_length 0x2,\n" +
+				"  checksum 0x3,\n" +
+				"  delay_key_write 0x4,\n" +
+				"  key_block_size 0x5,\n" +
+				"  max_rows 0x6,\n" +
+				"  min_rows 0x7,\n" +
+				"  pack_keys 0x8,\n" +
+				"  stats_auto_recalc 0x1,\n" +
+				"  stats_persistent 0x9,\n" +
+				"  stats_sample_pages 0x10\n",
+			output: "create table t (\n" +
+				"\tid int auto_increment\n" +
+				") engine InnoDB" +
+				" auto_increment 0x1" +
+				" avg_row_length 0x2" +
+				" checksum 0x3" +
+				" delay_key_write 0x4" +
+				" key_block_size 0x5" +
+				" max_rows 0x6" +
+				" min_rows 0x7" +
+				" pack_keys 0x8" +
+				" stats_auto_recalc 0x1" +
+				" stats_persistent 0x9" +
+				" stats_sample_pages 0x10",
+		},
+		{
+			// passing floats to table options
+			input: "create table t (\n" +
+				"	id int auto_increment\n" +
+				") engine InnoDB,\n" +
+				"  auto_increment 4.1,\n" +
+				"  avg_row_length 4.2,\n" +
+				"  checksum 4.3,\n" +
+				"  delay_key_write 4.4,\n" +
+				"  key_block_size 4.5,\n" +
+				"  max_rows 4.6,\n" +
+				"  min_rows 4.7,\n" +
+				"  pack_keys 4.8,\n" +
+				"  stats_persistent 4.9,\n" +
+				"  stats_sample_pages 4.01\n",
+			output: "create table t (\n" +
+				"\tid int auto_increment\n" +
+				") engine InnoDB" +
+				" auto_increment 4.1" +
+				" avg_row_length 4.2" +
+				" checksum 4.3" +
+				" delay_key_write 4.4" +
+				" key_block_size 4.5" +
+				" max_rows 4.6" +
+				" min_rows 4.7" +
+				" pack_keys 4.8" +
+				" stats_persistent 4.9" +
+				" stats_sample_pages 4.01",
+		},
+		{
+			// boolean columns
+			input: "create table t (\n" +
+				"	bi bigint not null primary key,\n" +
+				"	b1 bool not null,\n" +
+				"	b2 boolean\n" +
+				")",
+		},
+		{
+			// generated by serial
+			input: "create table t (\n" +
+				"	id bigint not null auto_increment unique,\n" +
+				"	a bigint not null\n" +
+				")",
+		},
+		{
+			// Tet varchar (MAX) syntax
+			input:  "create table t (username varchar(MAX))",
+			output: "create table t (\n\tusername varchar(MAX)\n)",
+		},
+		{
+			// Test the signed keyword – as the default for numeric types, it is a no-op
+			input:  "create table t (pk int signed primary key)",
+			output: "create table t (\n\tpk int primary key\n)",
+		},
+		{
+			// test key_block_size
+			input: "create table t (\n" +
+				"	id int auto_increment,\n" +
+				"	username varchar,\n" +
+				"	unique key by_username (username) key_block_size 8,\n" +
+				"	unique key by_username2 (username) key_block_size=8,\n" +
+				"	unique by_username3 (username) key_block_size = 4\n" +
+				")",
+			output: "create table t (\n" +
+				"	id int auto_increment,\n" +
+				"	username varchar,\n" +
+				"	unique key by_username (username) key_block_size 8,\n" +
+				"	unique key by_username2 (username) key_block_size 8,\n" +
+				"	unique by_username3 (username) key_block_size 4\n" +
+				")",
+		},
+		{
+			// test defaults
+			input: "create table t (\n" +
+				"	i1 int default 1,\n" +
+				"	i2 int default null,\n" +
+				"	f1 float default 1.23,\n" +
+				"	s1 varchar default 'c',\n" +
+				"	s2 varchar default 'this is a string',\n" +
+				"	s3 varchar default null,\n" +
+				"	s4 timestamp default current_timestamp,\n" +
+				"	s5 bit(1) default B'0'\n" +
+				")",
+			output: "create table t (\n" +
+				"	i1 int default 1,\n" +
+				"	i2 int default null,\n" +
+				"	f1 float default 1.23,\n" +
+				"	s1 varchar default 'c',\n" +
+				"	s2 varchar default 'this is a string',\n" +
+				"	s3 varchar default null,\n" +
+				"	s4 timestamp default current_timestamp(0),\n" +
+				"	s5 bit(1) default B'0'\n" +
+				")",
+		},
+		{
+			// test key field options
+			input: "create table t (\n" +
+				"	id int auto_increment primary key,\n" +
+				"	username varchar unique key,\n" +
+				"	email varchar unique,\n" +
+				"	full_name varchar key,\n" +
+				"	time1 timestamp on update current_timestamp,\n" +
+				"	time2 timestamp default current_timestamp on update current_timestamp\n" +
+				")",
+			output: "create table t (\n" +
+				"	id int auto_increment primary key,\n" +
+				"	username varchar unique key,\n" +
+				"	email varchar unique,\n" +
+				"	full_name varchar key,\n" +
+				"	time1 timestamp on update current_timestamp(0),\n" +
+				"	time2 timestamp default current_timestamp(0) on update current_timestamp(0)\n" +
+				")",
+		},
+		{
+			// test alternate key syntax
+			input: "create table t (\n" +
+				"	id int,\n" +
+				"	full_name varchar,\n" +
+				"	constraint unique key (full_name),\n" +
+				"	constraint unique index named (full_name),\n" +
+				"	constraint namedx unique (full_name),\n" +
+				"	constraint pk primary key (id)\n" +
+				")",
+			output: "create table t (\n" +
+				"	id int,\n" +
+				"	full_name varchar,\n" +
+				"	unique key (full_name),\n" +
+				"	unique index named (full_name),\n" +
+				"	unique  namedx (full_name),\n" +
+				"	primary key (id)\n" +
+				")",
+		},
+		{
+			input: "create table t (\n" +
+				"	id int,\n" +
+				"	constraint primary key (id)\n" +
+				")",
+			output: "create table t (\n" +
+				"	id int,\n" +
+				"	primary key (id)\n" +
+				")",
+		},
+		{
+			input: "create table t (\n" +
+				"	id int,\n" +
+				"	constraint abc primary key def (id)\n" +
+				")",
+			output: "create table t (\n" +
+				"	id int,\n" +
+				"	primary key (id)\n" +
+				")",
+		},
+		{
+			// test now
+			input: "create table t (\n" +
+				"	time1 timestamp default now(),\n" +
+				"	time2 timestamp default now() on update now(),\n" +
+				"	time3 timestamp(3) default now(3) on update now(3)\n" +
+				")",
+			output: "create table t (\n" +
+				"	time1 timestamp default now(),\n" +
+				"	time2 timestamp default now() on update now(),\n" +
+				"	time3 timestamp(3) default now(3) on update now(3)\n" +
+				")",
+		},
+		{
+			// test current_timestamp with and without ()
+			input: "create table t (\n" +
+				"	time1 timestamp default current_timestamp,\n" +
+				"	time2 timestamp default current_timestamp(),\n" +
+				"	time3 timestamp default current_timestamp on update current_timestamp,\n" +
+				"	time4 timestamp default current_timestamp() on update current_timestamp(),\n" +
+				"	time5 timestamp(3) default current_timestamp(3) on update current_timestamp(3)\n" +
+				")",
+			output: "create table t (\n" +
+				"	time1 timestamp default current_timestamp(0),\n" +
+				"	time2 timestamp default current_timestamp(0),\n" +
+				"	time3 timestamp default current_timestamp(0) on update current_timestamp(0),\n" +
+				"	time4 timestamp default current_timestamp(0) on update current_timestamp(0),\n" +
+				"	time5 timestamp(3) default current_timestamp(3) on update current_timestamp(3)\n" +
+				")",
+		},
+		{
+			// test inline check constraint
+			input: "create table t (\n" +
+				"	a int,\n" +
+				"	b int constraint b_positive check (b > 0)\n" +
+				")",
+			output: "create table t (\n" +
+				"	a int,\n" +
+				"	b int,\n" +
+				"	constraint b_positive check (b > 0)\n" +
+				")",
+		},
+		{
+			// test initial table constraint
+			input: "create table t (\n" +
+				"	check (a <> b),\n" +
+				"	a int,\n" +
+				"	b int\n" +
+				")",
+			output: "create table t (\n" +
+				"	a int,\n" +
+				"	b int,\n" +
+				"	check (a != b)\n" +
+				")",
+		},
+		{
+			input: "create table t (\n" +
+				"	id int,\n" +
+				"	status int,\n" +
+				"	constraint status check (a > 0)\n" +
+				")",
+			output: "create table t (\n" +
+				"	id int,\n" +
+				"	`status` int,\n" +
+				"	constraint status check (a > 0)\n" +
+				")",
+		},
+		{
+			input: "create table t (\n" +
+				"	id int,\n" +
+				"	status int,\n" +
+				"	constraint status check (status in (0, 1))\n" +
+				")",
+			output: "create table t (\n" +
+				"	id int,\n" +
+				"	`status` int,\n" +
+				"	constraint status check (`status` in (0, 1))\n" +
+				")",
+		},
+		{
+			// we don't support named primary keys currently
+			input: "create table t (\n" +
+				"	id int auto_increment,\n" +
+				"	username varchar,\n" +
+				"	a int,\n" +
+				"	b int,\n" +
+				"	constraint a_positive primary key (a, b)\n" +
+				")",
+			output: "create table t (\n" +
+				"	id int auto_increment,\n" +
+				"	username varchar,\n" +
+				"	a int,\n" +
+				"	b int,\n" +
+				"	primary key (a, b)\n" +
+				")",
+		},
+		{
+			// test localtime with and without ()
+			input: "create table t (\n" +
+				"	time1 timestamp default localtime,\n" +
+				"	time2 timestamp default localtime(),\n" +
+				"	time3 timestamp default localtime on update localtime,\n" +
+				"	time4 timestamp default localtime() on update localtime(),\n" +
+				"	time5 timestamp(6) default localtime(6) on update localtime(6)\n" +
+				")",
+			output: "create table t (\n" +
+				"	time1 timestamp default localtime(0),\n" +
+				"	time2 timestamp default localtime(0),\n" +
+				"	time3 timestamp default localtime(0) on update localtime(0),\n" +
+				"	time4 timestamp default localtime(0) on update localtime(0),\n" +
+				"	time5 timestamp(6) default localtime(6) on update localtime(6)\n" +
+				")",
+		},
+		{
+			// test localtimestamp with and without ()
+			input: "create table t (\n" +
+				"	time1 timestamp default localtimestamp,\n" +
+				"	time2 timestamp default localtimestamp(),\n" +
+				"	time3 timestamp default localtimestamp on update localtimestamp,\n" +
+				"	time4 timestamp default localtimestamp() on update localtimestamp(),\n" +
+				"	time5 timestamp(1) default localtimestamp(1) on update localtimestamp(1)\n" +
+				")",
+			output: "create table t (\n" +
+				"	time1 timestamp default localtimestamp(0),\n" +
+				"	time2 timestamp default localtimestamp(0),\n" +
+				"	time3 timestamp default localtimestamp(0) on update localtimestamp(0),\n" +
+				"	time4 timestamp default localtimestamp(0) on update localtimestamp(0),\n" +
+				"	time5 timestamp(1) default localtimestamp(1) on update localtimestamp(1)\n" +
+				")",
+		},
+		{
+			input: "create table t (\n" +
+				"	id serial not null,\n" +
+				"	a bigint not null\n" +
+				")",
+			output: "create table t (\n" +
+				"	id bigint not null auto_increment unique,\n" +
+				"	a bigint not null\n" +
+				")",
+		},
 
 		// partition options
 		{
@@ -6182,7 +6463,7 @@ func TestCreateTable(t *testing.T) {
 				")",
 			output: "create table t (\n" +
 				"\ti int\n)" +
-				"PARTITION BY RANGE (store_id)(partition_definitions)",
+				" PARTITION BY RANGE (store_id)(partition_definitions)",
 		},
 		{
 			input: "create table t (\n" +
@@ -6190,7 +6471,7 @@ func TestCreateTable(t *testing.T) {
 				"PARTITION BY HASH ('values')",
 			output: "create table t (\n" +
 				"\ti int\n)" +
-				"PARTITION BY HASH (value)",
+				" PARTITION BY HASH (value)",
 		},
 		{
 			input: "create table t (\n" +
@@ -6198,7 +6479,7 @@ func TestCreateTable(t *testing.T) {
 				"PARTITION BY HASH (col)",
 			output: "create table t (\n" +
 				"\ti int\n)" +
-				"PARTITION BY HASH (col)",
+				" PARTITION BY HASH (col)",
 		},
 		{
 			input: "create table t (\n" +
@@ -6206,7 +6487,7 @@ func TestCreateTable(t *testing.T) {
 				"PARTITION BY LINEAR HASH (col)",
 			output: "create table t (\n" +
 				"\ti int\n)" +
-				"PARTITION BY LINEAR HASH (col)",
+				" PARTITION BY LINEAR HASH (col)",
 		},
 		{
 			input: "create table t (\n" +
@@ -6214,7 +6495,7 @@ func TestCreateTable(t *testing.T) {
 				"PARTITION BY KEY (col)",
 			output: "create table t (\n" +
 				"\ti int\n)" +
-				"PARTITION BY KEY (column_list)",
+				" PARTITION BY KEY (column_list)",
 		},
 		{
 			input: "create table t (\n" +
@@ -6222,7 +6503,7 @@ func TestCreateTable(t *testing.T) {
 				"PARTITION BY KEY ALGORITHM = 7 (col)",
 			output: "create table t (\n" +
 				"\ti int\n)" +
-				"PARTITION BY KEY ALGORITHM 7 (column_list)",
+				" PARTITION BY KEY ALGORITHM 7 (column_list)",
 		},
 		{
 			input: "create table t (\n" +
@@ -6230,7 +6511,7 @@ func TestCreateTable(t *testing.T) {
 				"PARTITION BY LINEAR KEY ALGORITHM = 7 (col)",
 			output: "create table t (\n" +
 				"\ti int\n)" +
-				"PARTITION BY LINEAR KEY ALGORITHM 7 (column_list)",
+				" PARTITION BY LINEAR KEY ALGORITHM 7 (column_list)",
 		},
 		{
 			input: "create table t (\n" +
@@ -6238,7 +6519,7 @@ func TestCreateTable(t *testing.T) {
 				"PARTITION BY RANGE (column)",
 			output: "create table t (\n" +
 				"\ti int\n)" +
-				"PARTITION BY RANGE (column)",
+				" PARTITION BY RANGE (column)",
 		},
 		{
 			input: "create table t (\n" +
@@ -6246,7 +6527,7 @@ func TestCreateTable(t *testing.T) {
 				"PARTITION BY RANGE COLUMNS (c1, c2, c3)",
 			output: "create table t (\n" +
 				"\ti int\n)" +
-				"PARTITION BY RANGE COLUMNS (column_list)",
+				" PARTITION BY RANGE COLUMNS (column_list)",
 		},
 		{
 			input: "create table t (\n" +
@@ -6254,7 +6535,7 @@ func TestCreateTable(t *testing.T) {
 				"PARTITION BY LIST (column)",
 			output: "create table t (\n" +
 				"\ti int\n)" +
-				"PARTITION BY LIST (column)",
+				" PARTITION BY LIST (column)",
 		},
 		{
 			input: "create table t (\n" +
@@ -6262,7 +6543,7 @@ func TestCreateTable(t *testing.T) {
 				"PARTITION BY LIST COLUMNS (c1, c2, c3)",
 			output: "create table t (\n" +
 				"\ti int\n)" +
-				"PARTITION BY LIST COLUMNS (column_list)",
+				" PARTITION BY LIST COLUMNS (column_list)",
 		},
 		{
 			input: "create table t (\n" +
@@ -6270,15 +6551,15 @@ func TestCreateTable(t *testing.T) {
 				"PARTITION BY LINEAR HASH (a) PARTITIONS 20",
 			output: "create table t (\n" +
 				"\ti int\n)" +
-				"PARTITION BY LINEAR HASH (a)PARTITIONS 20 ",
+				" PARTITION BY LINEAR HASH (a)PARTITIONS 20 ",
 		},
 		{
 			input: "create table t (\n" +
 				"\ti int\n)" +
 				"PARTITION BY LINEAR HASH (a) PARTITIONS 10 SUBPARTITION BY LINEAR HASH (b) SUBPARTITIONS 20",
 			output: "create table t (\n" +
-				"\ti int\n)" +
-				"PARTITION BY LINEAR HASH (a)PARTITIONS 10 SUBPARTITION BY LINEAR HASH (b) SUBPARTITIONS 20 ",
+				"\ti int\n" +
+				") PARTITION BY LINEAR HASH (a)PARTITIONS 10 SUBPARTITION BY LINEAR HASH (b) SUBPARTITIONS 20 ",
 		},
 		{
 			input: "create table t (\n" +
@@ -6297,14 +6578,13 @@ func TestCreateTable(t *testing.T) {
 				"default character set utf8mb4\n" +
 				"PARTITION BY LINEAR HASH (a) " +
 				"PARTITIONS 10 SUBPARTITION BY LINEAR HASH (b) SUBPARTITIONS 20",
-			output: "create table t (\n" +
-				"\ti int\n) " +
-				"engine innodb " +
-				"auto_increment 123,\n" +
-				"  avg_row_length 1,\n" +
-				"  default character set utf8mb4" +
-				"PARTITION BY LINEAR HASH (a)" +
-				"PARTITIONS 10 SUBPARTITION BY LINEAR HASH (b) SUBPARTITIONS 20 ",
+			output: "create table t (\n\t" +
+				"i int\n" +
+				") engine innodb" +
+				" auto_increment 123" +
+				" avg_row_length 1" +
+				" character set utf8mb4" +
+				" PARTITION BY LINEAR HASH (a)PARTITIONS 10 SUBPARTITION BY LINEAR HASH (b) SUBPARTITIONS 20 ",
 		},
 		{
 			input: "create table t (\n" +
@@ -6333,20 +6613,15 @@ func TestCreateTable(t *testing.T) {
 		},
 	}
 	for _, tcase := range testCases {
-		t.Run(tcase.input, func(t *testing.T) {
-			tree, err := Parse(tcase.input)
-			if err != nil {
-				t.Errorf("input: %s, err: %v", tcase.input, err)
-				return
-			}
-			if got, want := String(tree.(*DDL)), tcase.output; got != want {
-				t.Errorf("Parse(%s):\nGot:%s\nWant:%s", tcase.input, got, want)
-			}
-		})
+		runParseTestCase(t, tcase)
 	}
 
+	// these are keywords in our grammar due to their special syntax, but they should parse unquoted in MySQL
 	nonsupportedKeywords := []string{
 		"comment",
+		"cast",
+		"position",
+		"trim",
 	}
 	nonsupported := map[string]bool{}
 	for _, x := range nonsupportedKeywords {
@@ -6354,12 +6629,12 @@ func TestCreateTable(t *testing.T) {
 	}
 
 	for key := range keywords {
-		//input := fmt.Sprintf("create table t {key} bigint)")
 		input := fmt.Sprintf("create table t (\n\t`%s` bigint\n)", key)
 		output := fmt.Sprintf("create table t (\n\t`%s` bigint\n)", key)
 		t.Run(input, func(t *testing.T) {
 			if _, ok := nonsupported[key]; ok {
-				t.Skipf("Keyword currently not supported as a column name: %s", key)
+				input = fmt.Sprintf("create table %s (\n\t%s bigint\n)", key, key)
+				output = fmt.Sprintf("create table `%s` (\n\t`%s` bigint\n)", key, key)
 			}
 			tree, err := Parse(input)
 			if err != nil {
@@ -6864,9 +7139,6 @@ var (
 	}, {
 		input:  "select * from foo limit 1+1",
 		output: "syntax error at position 27 near '1'",
-	}, {
-		input:  "select * from foo limit a",
-		output: "syntax error at position 26 near 'a'",
 	}, {
 		input:  "select * from foo limit '100'",
 		output: "syntax error at position 30 near '100'",

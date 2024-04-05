@@ -21,6 +21,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"google.golang.org/protobuf/proto"
 
@@ -84,163 +85,214 @@ func TestBuildBindVariable(t *testing.T) {
 		in  interface{}
 		out *querypb.BindVariable
 		err string
-	}{{
-		in: "aa",
-		out: &querypb.BindVariable{
-			Type:  querypb.Type_VARCHAR,
-			Value: []byte("aa"),
-		},
-	}, {
-		in: []byte("aa"),
-		out: &querypb.BindVariable{
-			Type:  querypb.Type_VARBINARY,
-			Value: []byte("aa"),
-		},
-	}, {
-		in: true,
-		out: &querypb.BindVariable{
-			Type:  querypb.Type_INT8,
-			Value: []byte("1"),
-		},
-	}, {
-		in: false,
-		out: &querypb.BindVariable{
-			Type:  querypb.Type_INT8,
-			Value: []byte("0"),
-		},
-	}, {
-		in: int(1),
-		out: &querypb.BindVariable{
-			Type:  querypb.Type_INT64,
-			Value: []byte("1"),
-		},
-	}, {
-		in: int64(1),
-		out: &querypb.BindVariable{
-			Type:  querypb.Type_INT64,
-			Value: []byte("1"),
-		},
-	}, {
-		in: uint64(1),
-		out: &querypb.BindVariable{
-			Type:  querypb.Type_UINT64,
-			Value: []byte("1"),
-		},
-	}, {
-		in: float64(1),
-		out: &querypb.BindVariable{
-			Type:  querypb.Type_FLOAT64,
-			Value: []byte("1"),
-		},
-	}, {
-		in:  nil,
-		out: NullBindVariable,
-	}, {
-		in: MakeTrusted(Int64, []byte("1")),
-		out: &querypb.BindVariable{
-			Type:  querypb.Type_INT64,
-			Value: []byte("1"),
-		},
-	}, {
-		in: &querypb.BindVariable{
-			Type:  querypb.Type_INT64,
-			Value: []byte("1"),
-		},
-		out: &querypb.BindVariable{
-			Type:  querypb.Type_INT64,
-			Value: []byte("1"),
-		},
-	}, {
-		in: []interface{}{"aa", int64(1)},
-		out: &querypb.BindVariable{
-			Type: querypb.Type_TUPLE,
-			Values: []*querypb.Value{{
+	}{
+		{
+			in: "aa",
+			out: &querypb.BindVariable{
 				Type:  querypb.Type_VARCHAR,
 				Value: []byte("aa"),
-			}, {
-				Type:  querypb.Type_INT64,
-				Value: []byte("1"),
-			}},
+			},
 		},
-	}, {
-		in: []string{"aa", "bb"},
-		out: &querypb.BindVariable{
-			Type: querypb.Type_TUPLE,
-			Values: []*querypb.Value{{
-				Type:  querypb.Type_VARCHAR,
-				Value: []byte("aa"),
-			}, {
-				Type:  querypb.Type_VARCHAR,
-				Value: []byte("bb"),
-			}},
-		},
-	}, {
-		in: [][]byte{[]byte("aa"), []byte("bb")},
-		out: &querypb.BindVariable{
-			Type: querypb.Type_TUPLE,
-			Values: []*querypb.Value{{
+		{
+			in: []byte("aa"),
+			out: &querypb.BindVariable{
 				Type:  querypb.Type_VARBINARY,
 				Value: []byte("aa"),
-			}, {
-				Type:  querypb.Type_VARBINARY,
-				Value: []byte("bb"),
-			}},
+			},
 		},
-	}, {
-		in: []int{1, 2},
-		out: &querypb.BindVariable{
-			Type: querypb.Type_TUPLE,
-			Values: []*querypb.Value{{
+		{
+			in: true,
+			out: &querypb.BindVariable{
+				Type:  querypb.Type_INT8,
+				Value: []byte("1"),
+			},
+		},
+		{
+			in: false,
+			out: &querypb.BindVariable{
+				Type:  querypb.Type_INT8,
+				Value: []byte("0"),
+			},
+		},
+		{
+			in: int(1),
+			out: &querypb.BindVariable{
 				Type:  querypb.Type_INT64,
 				Value: []byte("1"),
-			}, {
-				Type:  querypb.Type_INT64,
-				Value: []byte("2"),
-			}},
+			},
 		},
-	}, {
-		in: []int64{1, 2},
-		out: &querypb.BindVariable{
-			Type: querypb.Type_TUPLE,
-			Values: []*querypb.Value{{
+		{
+			in: int64(1),
+			out: &querypb.BindVariable{
 				Type:  querypb.Type_INT64,
 				Value: []byte("1"),
-			}, {
-				Type:  querypb.Type_INT64,
-				Value: []byte("2"),
-			}},
+			},
 		},
-	}, {
-		in: []uint64{1, 2},
-		out: &querypb.BindVariable{
-			Type: querypb.Type_TUPLE,
-			Values: []*querypb.Value{{
+		{
+			in: uint64(1),
+			out: &querypb.BindVariable{
 				Type:  querypb.Type_UINT64,
 				Value: []byte("1"),
-			}, {
-				Type:  querypb.Type_UINT64,
-				Value: []byte("2"),
-			}},
+			},
 		},
-	}, {
-		in: []float64{1, 2},
-		out: &querypb.BindVariable{
-			Type: querypb.Type_TUPLE,
-			Values: []*querypb.Value{{
+		{
+			in: float64(1),
+			out: &querypb.BindVariable{
 				Type:  querypb.Type_FLOAT64,
 				Value: []byte("1"),
-			}, {
-				Type:  querypb.Type_FLOAT64,
-				Value: []byte("2"),
-			}},
+			},
 		},
-	}, {
-		in:  byte(1),
-		err: "type uint8 not supported as bind var: 1",
-	}, {
-		in:  []interface{}{1, byte(1)},
-		err: "type uint8 not supported as bind var: 1",
-	}}
+		// TODO: decimals lose precision
+		//{
+		//	in: decimal.NewFromInt(1),
+		//	out: &querypb.BindVariable{
+		//		Type:  querypb.Type_DECIMAL,
+		//		Value: []byte("1"),
+		//	},
+		//},
+		{
+			in: time.Time{},
+			out: &querypb.BindVariable{
+				Type:  querypb.Type_TIMESTAMP,
+				Value: []byte("0001-01-01 00:00:00 +0000 UTC"),
+			},
+		},
+		{
+			in:  nil,
+			out: NullBindVariable,
+		},
+		{
+			in: MakeTrusted(Int64, []byte("1")),
+			out: &querypb.BindVariable{
+				Type:  querypb.Type_INT64,
+				Value: []byte("1"),
+			},
+		},
+		{
+			in: &querypb.BindVariable{
+				Type:  querypb.Type_INT64,
+				Value: []byte("1"),
+			},
+			out: &querypb.BindVariable{
+				Type:  querypb.Type_INT64,
+				Value: []byte("1"),
+			},
+		},
+		{
+			in: []interface{}{"aa", int64(1)},
+			out: &querypb.BindVariable{
+				Type: querypb.Type_TUPLE,
+				Values: []*querypb.Value{
+					{
+						Type:  querypb.Type_VARCHAR,
+						Value: []byte("aa"),
+					},
+					{
+						Type:  querypb.Type_INT64,
+						Value: []byte("1"),
+					},
+				},
+			},
+		}, {
+			in: []string{"aa", "bb"},
+			out: &querypb.BindVariable{
+				Type: querypb.Type_TUPLE,
+				Values: []*querypb.Value{
+					{
+						Type:  querypb.Type_VARCHAR,
+						Value: []byte("aa"),
+					}, {
+						Type:  querypb.Type_VARCHAR,
+						Value: []byte("bb"),
+					},
+				},
+			},
+		}, {
+			in: [][]byte{[]byte("aa"), []byte("bb")},
+			out: &querypb.BindVariable{
+				Type: querypb.Type_TUPLE,
+				Values: []*querypb.Value{{
+					Type:  querypb.Type_VARBINARY,
+					Value: []byte("aa"),
+				}, {
+					Type:  querypb.Type_VARBINARY,
+					Value: []byte("bb"),
+				},
+				},
+			},
+		},
+		{
+			in: []int{1, 2},
+			out: &querypb.BindVariable{
+				Type: querypb.Type_TUPLE,
+				Values: []*querypb.Value{
+					{
+						Type:  querypb.Type_INT64,
+						Value: []byte("1"),
+					},
+					{
+						Type:  querypb.Type_INT64,
+						Value: []byte("2"),
+					},
+				},
+			},
+		},
+		{
+			in: []int64{1, 2},
+			out: &querypb.BindVariable{
+				Type: querypb.Type_TUPLE,
+				Values: []*querypb.Value{
+					{
+						Type:  querypb.Type_INT64,
+						Value: []byte("1"),
+					}, {
+						Type:  querypb.Type_INT64,
+						Value: []byte("2"),
+					},
+				},
+			},
+		},
+		{
+			in: []uint64{1, 2},
+			out: &querypb.BindVariable{
+				Type: querypb.Type_TUPLE,
+				Values: []*querypb.Value{
+					{
+						Type:  querypb.Type_UINT64,
+						Value: []byte("1"),
+					},
+					{
+						Type:  querypb.Type_UINT64,
+						Value: []byte("2"),
+					},
+				},
+			},
+		},
+		{
+			in: []float64{1, 2},
+			out: &querypb.BindVariable{
+				Type: querypb.Type_TUPLE,
+				Values: []*querypb.Value{
+					{
+						Type:  querypb.Type_FLOAT64,
+						Value: []byte("1"),
+					},
+					{
+						Type:  querypb.Type_FLOAT64,
+						Value: []byte("2"),
+					},
+				},
+			},
+		},
+		{
+			in:  byte(1),
+			err: "type uint8 not supported as bind var: 1",
+		},
+		{
+			in:  []interface{}{1, byte(1)},
+			err: "type uint8 not supported as bind var: 1",
+		},
+	}
 	for _, tcase := range tcases {
 		bv, err := BuildBindVariable(tcase.in)
 		if err != nil {

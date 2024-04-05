@@ -140,6 +140,8 @@ func yySpecialCommentMode(yylex interface{}) bool {
   indexColumns  []*IndexColumn
   constraintDefinition *ConstraintDefinition
   constraintInfo ConstraintInfo
+  tableOption   *TableOption
+  tableOptions  []*TableOption
   ReferenceAction ReferenceAction
   partDefs      []*PartitionDefinition
   partDef       *PartitionDefinition
@@ -301,8 +303,8 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> TABLE_ENCRYPTION_ADMIN TP_CONNECTION_ADMIN VERSION_TOKEN_ADMIN XA_RECOVER_ADMIN
 
 // Replication Tokens
-%token <bytes> REPLICA SOURCE STOP RESET FILTER
-%token <bytes> SOURCE_HOST SOURCE_USER SOURCE_PASSWORD SOURCE_PORT SOURCE_CONNECT_RETRY SOURCE_RETRY_COUNT
+%token <bytes> REPLICA REPLICAS SOURCE STOP RESET FILTER LOG
+%token <bytes> SOURCE_HOST SOURCE_USER SOURCE_PASSWORD SOURCE_PORT SOURCE_CONNECT_RETRY SOURCE_RETRY_COUNT SOURCE_AUTO_POSITION
 %token <bytes> REPLICATE_DO_TABLE REPLICATE_IGNORE_TABLE
 
 // Transaction Tokens
@@ -464,7 +466,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <boolean> all_opt enforced_opt
 %type <str> compare
 %type <ins> insert_data
-%type <expr> value value_expression num_val as_of_opt integral_or_value_arg integral_or_interval_expr timestamp_value
+%type <expr> value value_expression num_val as_of_opt limit_val integral_or_interval_expr timestamp_value
 %type <bytes> time_unit non_microsecond_time_unit
 %type <expr> function_call_keyword function_call_nonkeyword function_call_generic function_call_conflict
 %type <expr> func_datetime_prec_opt function_call_window function_call_aggregate_with_window function_call_on_update
@@ -521,7 +523,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <empty> to_opt to_or_as as_opt column_opt
 %type <str> algorithm_opt definer_opt security_opt
 %type <viewSpec> view_opts
-%type <bytes> reserved_keyword qualified_column_name_safe_reserved_keyword non_reserved_keyword column_name_safe_keyword non_reserved_keyword2 non_reserved_keyword3 all_non_reserved
+%type <bytes> reserved_keyword qualified_column_name_safe_reserved_keyword non_reserved_keyword column_name_safe_keyword function_call_keywords non_reserved_keyword2 non_reserved_keyword3 all_non_reserved
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt existing_window_name_opt
 %type <colIdents> reserved_sql_id_list
 %type <expr> charset_value
@@ -551,13 +553,15 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <str> name_opt
 %type <str> equal_opt assignment_op
 %type <TableSpec> table_spec table_column_list
-%type <str> table_option_list table_option table_opt_value row_fmt_opt
+%type <str> table_opt_value row_fmt_opt
 %type <str> partition_options partition_option linear_partition_opt linear_opt partition_num_opt subpartition_opt subpartition_num_opt
 %type <indexInfo> index_info
 %type <indexColumn> index_column
 %type <indexColumns> index_column_list
 %type <indexOption> index_option
 %type <indexOptions> index_option_list index_option_list_opt
+%type <tableOption> table_option
+%type <tableOptions> table_option_list
 %type <flushOption> flush_option
 %type <replicationOptions> replication_option_list replication_filter_option_list
 %type <replicationOption> replication_option replication_filter_option
@@ -868,13 +872,13 @@ into_opt:
   {
     $$ = &Into{Variables: $2}
   }
-| INTO OUTFILE STRING
-  {
-    $$ = &Into{Outfile: string($3)}
-  }
 | INTO DUMPFILE STRING
   {
     $$ = &Into{Dumpfile: string($3)}
+  }
+| INTO OUTFILE STRING charset_opt fields_opt lines_opt
+  {
+    $$ = &Into{Outfile: string($3), Charset: $4, Fields: $5, Lines: $6}
   }
 
 variable_list:
@@ -2791,7 +2795,10 @@ table_spec:
   '(' table_column_list ')' table_option_list partition_options
   {
     $$ = $2
-    $$.Options = $4 + $5
+    for _, opt := range $4 {
+      $$.AddTableOption(opt)
+    }
+    $$.PartitionOpts = $5
   }
 
 table_column_list:
@@ -2874,6 +2881,14 @@ column_definition_for_create:
     $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
   }
 | ESCAPE column_type column_type_options
+  {
+    if err := $2.merge($3); err != nil {
+      yylex.Error(err.Error())
+      return 1
+    }
+    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
+  }
+| function_call_keywords column_type column_type_options
   {
     if err := $2.merge($3); err != nil {
       yylex.Error(err.Error())
@@ -3786,6 +3801,10 @@ replication_option:
   {
     $$ = &ReplicationOption{Name: string($1), Value: mustAtoi(yylex, string($3))}
   }
+| SOURCE_AUTO_POSITION '=' INTEGRAL
+  {
+    $$ = &ReplicationOption{Name: string($1), Value: mustAtoi(yylex, string($3))}
+  }
 
 replication_filter_option_list:
   replication_filter_option
@@ -3894,9 +3913,9 @@ index_info:
   {
     $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewColIdent("PRIMARY"), Primary: true, Unique: true}
   }
-| CONSTRAINT ID PRIMARY KEY name_opt
+| CONSTRAINT name_opt PRIMARY KEY name_opt
   {
-    $$ = &IndexInfo{Type: string($3) + " " + string($4), Name: NewColIdent(string($2)), Primary: true, Unique: true}
+    $$ = &IndexInfo{Type: string($3) + " " + string($4), Name: NewColIdent("PRIMARY"), Primary: true, Unique: true}
   }
 | SPATIAL index_or_key name_opt
   {
@@ -4140,193 +4159,181 @@ enforced_opt:
 
 table_option_list:
   {
-    $$ = ""
+    $$ = nil
   }
 | table_option_list table_option
   {
-    $$ = $1 + " " + string($2)
+    $$ = append($1, $2)
   }
 | table_option_list ',' table_option
   {
-    $$ = string($1) + ", " + string($3)
+    $$ = append($1, $3)
   }
 
 table_option:
   AUTOEXTEND_SIZE equal_opt table_opt_value
   {
-    $$ = string($1) + " " + $3
+    $$ = &TableOption{Name: string($1), Value: $3}
   }
 | AUTO_INCREMENT equal_opt table_opt_value
   {
-    $$ = string($1) + " " + $3
+    $$ = &TableOption{Name: string($1), Value: $3}
   }
 | AVG_ROW_LENGTH equal_opt table_opt_value
   {
-    $$ = string($1) + " " + $3
+    $$ = &TableOption{Name: string($1), Value: $3}
   }
-| CHARSET equal_opt charset
+| default_keyword_opt CHARSET equal_opt charset
   {
-    $$ = string($1) + " " + string($3) + " "
+    $$ = &TableOption{Name: "CHARACTER SET", Value: $4}
   }
-| DEFAULT CHARSET equal_opt charset
+| default_keyword_opt CHARACTER SET equal_opt charset
   {
-    $$ = string($1) + " " + string($2) + " " + $4
-  }
-| CHARACTER SET equal_opt charset
-  {
-    $$ = string($1) + " " + string($2) + " " + $4
-  }
-| DEFAULT CHARACTER SET equal_opt charset
-  {
-    $$ = string($1) + " "  + string($2) + " "  + string($3) + " " + $5
+    $$ = &TableOption{Name: string($2) + " " + string($3), Value: $5}
   }
 | CHECKSUM equal_opt coericble_to_integral
   {
-    $$ = string($1) + " " + string($3)
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | TABLE_CHECKSUM equal_opt coericble_to_integral
   {
-    $$ = "CHECKSUM" + " " + string($3)
+    $$ = &TableOption{Name: "CHECKSUM", Value: string($3)}
   }
-| COLLATE equal_opt table_option_collate
+| default_keyword_opt COLLATE equal_opt table_option_collate
   {
-    $$ = string($1) + " " + $3
-  }
-| DEFAULT COLLATE equal_opt table_option_collate
-  {
-    $$ = string($1) + " "  + string($2) + " " + $4
+    $$ = &TableOption{Name: string($2), Value: $4}
   }
 | COMMENT_KEYWORD equal_opt STRING
   {
-    $$ = string($1) + " " + "'" + string($3) + "'"
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | COMPRESSION equal_opt STRING
   {
-    $$ = string($1) + " " + "'" + string($3) + "'"
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | CONNECTION equal_opt STRING
   {
-    $$ = string($1) + " " + "'" + string($3) + "'"
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | DATA DIRECTORY equal_opt STRING
   {
-    $$ = string($1) + " "  + string($2) + " " + "'" + string($4) + "'"
+    $$ = &TableOption{Name: string($1) + " "  + string($2), Value: string($4)}
   }
 | INDEX DIRECTORY equal_opt STRING
   {
-    $$ = string($1) + " "  + string($2) + " " + "'" + string($4) + "'"
+    $$ = &TableOption{Name: string($1) + " "  + string($2), Value: string($4)}
   }
 | DELAY_KEY_WRITE equal_opt coericble_to_integral
   {
-    $$ = string($1) + " " + string($3)
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | ENCRYPTION equal_opt STRING
   {
-    $$ = string($1) + " " + "'" + string($3) + "'"
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | ENGINE equal_opt any_identifier
   {
-    $$ = string($1) + " " + string($3)
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | ENGINE_ATTRIBUTE equal_opt STRING
   {
-    $$ = string($1) + " " + "'" + string($3) + "'"
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | INSERT_METHOD equal_opt NO
   {
-    $$ = string($1) + " " + string($3)
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | INSERT_METHOD equal_opt FIRST
   {
-    $$ = string($1) + " " + string($3)
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | INSERT_METHOD equal_opt LAST
   {
-    $$ = string($1) + " " + string($3)
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | KEY_BLOCK_SIZE equal_opt table_opt_value
   {
-    $$ = string($1) + " " + $3
+    $$ = &TableOption{Name: string($1), Value: $3}
   }
 | MAX_ROWS equal_opt table_opt_value
   {
-    $$ = string($1) + " " + $3
+    $$ = &TableOption{Name: string($1), Value: $3}
   }
 | MIN_ROWS equal_opt table_opt_value
   {
-    $$ = string($1) + " " + $3
+    $$ = &TableOption{Name: string($1), Value: $3}
   }
 | PACK_KEYS equal_opt coericble_to_integral
   {
-    $$ = string($1) + " " + string($3)
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | PASSWORD equal_opt STRING
   {
-    $$ = string($1) + " " + "'" + string($3) + "'"
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | ROW_FORMAT equal_opt row_fmt_opt
   {
-    $$ = string($1) + " " + $3
+    $$ = &TableOption{Name: string($1), Value: $3}
   }
 | START TRANSACTION
   {
-    $$ = string($1) + " "  + string($2)
+    $$ = &TableOption{Name: string($1) + string($2)}
   }
 | SECONDARY_ENGINE equal_opt ID
   {
-    $$ = string($1) + " " + string($3)
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | SECONDARY_ENGINE equal_opt NULL
   {
-    $$ = string($1) + " " + string($3)
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | SECONDARY_ENGINE equal_opt STRING
   {
-    $$ = string($1) + " " + string($3)
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | SECONDARY_ENGINE_ATTRIBUTE equal_opt STRING
   {
-    $$ = string($1) + " " + "'" + string($3) + "'"
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | STATS_AUTO_RECALC equal_opt DEFAULT
   {
-    $$ = string($1) + " " + string($3)
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
-| STATS_AUTO_RECALC equal_opt INTEGRAL
+| STATS_AUTO_RECALC equal_opt coericble_to_integral
   {
-    $$ = string($1) + " " + string($3)
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | STATS_PERSISTENT equal_opt DEFAULT
   {
-    $$ = string($1) + " " + string($3)
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | STATS_PERSISTENT equal_opt coericble_to_integral
   {
-    $$ = string($1) + " " + string($3)
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | STATS_SAMPLE_PAGES equal_opt table_opt_value
   {
-    $$ = string($1) + " " + $3
+    $$ = &TableOption{Name: string($1), Value: $3}
   }
 | TABLESPACE table_opt_value
   {
-    $$ = string($1) + $2
+    $$ = &TableOption{Name: string($1), Value: $2}
   }
 | TABLESPACE any_identifier
-    {
-      $$ = string($1) + " "  + string($2)
-    }
+  {
+    $$ = &TableOption{Name: string($1), Value: string($2)}
+  }
 | TABLESPACE any_identifier STORAGE DISK
   {
-    $$ = string($1) + " "  + string($2) + " "  + string($3) + " "  + string($4)
+    $$ = &TableOption{Name: string($1), Value: string($2) + " "  + string($3) + " "  + string($4)}
   }
 | TABLESPACE any_identifier STORAGE MEMORY
   {
-    $$ = string($1) + " "  + string($2) + " "  + string($3) + " "  + string($4)
+    $$ = &TableOption{Name: string($1), Value: string($2) + " "  + string($3) + " "  + string($4)}
   }
 | UNION equal_opt openb any_identifier_list closeb
   {
-    $$ = string($1) + " " + "(" + $4 + ")"
+    $$ = &TableOption{Name: string($1), Value: "(" + $4 + ")"}
   }
 
 table_option_collate:
@@ -4449,9 +4456,9 @@ partition_option:
     $$ = string($1) + " (" + string($3) + ")"
   }
 | LIST COLUMNS openb column_list closeb
- {
-   $$ = string($1) + " " + string($2) + " (column_list)"
- }
+  {
+    $$ = string($1) + " " + string($2) + " (column_list)"
+  }
 
 linear_partition_opt:
   linear_opt HASH openb value closeb
@@ -5253,6 +5260,18 @@ show_statement:
 | SHOW EVENTS from_database_opt like_or_where_opt
   {
     $$ = &Show{Type: string($2), ShowTablesOpt: &ShowTablesOpt{DbName: $3, Filter: $4}}
+  }
+| SHOW REPLICAS
+  {
+    $$ = &Show{Type: string($2)}
+  }
+| SHOW BINARY LOG STATUS
+  {
+    $$ = &Show{Type: string($2) + " " + string($3) + " " + string($4)}
+  }
+| SHOW BINARY LOGS
+  {
+    $$ = &Show{Type: string($2) + " " + string($3)}
   }
 
 naked_like:
@@ -6407,6 +6426,10 @@ table_name:
   {
     $$ = TableName{Name: NewTableIdent(string($1))}
   }
+| function_call_keywords
+  {
+    $$ = TableName{Name: NewTableIdent(string($1))}
+  }
 | ACCOUNT
   {
     $$ = TableName{Name: NewTableIdent(string($1))}
@@ -6762,7 +6785,7 @@ value_expression:
   }
 | value_expression COLLATE charset
   {
-    $$ = &CollateExpr{Expr: $1, Charset: $3}
+    $$ = &CollateExpr{Expr: $1, Collation: $3}
   }
 | BINARY value_expression %prec UNARY
   {
@@ -7228,6 +7251,10 @@ charset:
 {
     $$ = string($1)
 }
+| BINARY
+{
+    $$ = string($1)
+}
 
 underscore_charsets:
   UNDERSCORE_ARMSCII8
@@ -7426,6 +7453,14 @@ convert_type:
     $$.Length = $2.Length
     $$.Scale = $2.Scale
   }
+| DOUBLE
+  {
+    $$ = &ConvertType{Type: string($1)}
+  }
+| FLOAT_TYPE
+  {
+    $$ = &ConvertType{Type: string($1)}
+  }
 | JSON
   {
     $$ = &ConvertType{Type: string($1)}
@@ -7454,11 +7489,7 @@ convert_type:
   {
     $$ = &ConvertType{Type: string($1)}
   }
-| DOUBLE
-  {
-    $$ = &ConvertType{Type: string($1)}
-  }
-| FLOAT_TYPE
+| YEAR
   {
     $$ = &ConvertType{Type: string($1)}
   }
@@ -7558,6 +7589,10 @@ column_name:
 | FORMAT '.' reserved_sql_id
   {
     $$ = &ColName{Qualifier: TableName{Name: NewTableIdent(string($1))}, Name: $3}
+  }
+| function_call_keywords
+  {
+    $$ = &ColName{Name: NewColIdent(string($1))}
   }
 | table_id '.' reserved_table_id '.' reserved_sql_id
   {
@@ -7694,20 +7729,20 @@ limit_opt:
   {
     $$ = nil
   }
-| LIMIT integral_or_value_arg
+| LIMIT limit_val
   {
     $$ = &Limit{Rowcount: $2}
   }
-| LIMIT integral_or_value_arg ',' integral_or_value_arg
+| LIMIT limit_val ',' limit_val
   {
     $$ = &Limit{Offset: $2, Rowcount: $4}
   }
-| LIMIT integral_or_value_arg OFFSET integral_or_value_arg
+| LIMIT limit_val OFFSET limit_val
   {
     $$ = &Limit{Offset: $4, Rowcount: $2}
   }
 
-integral_or_value_arg:
+limit_val:
 INTEGRAL
   {
     $$ = NewIntVal($1)
@@ -7715,6 +7750,10 @@ INTEGRAL
 | VALUE_ARG
   {
     $$ = NewValArg($1)
+  }
+| column_name
+  {
+    $$ = $1
   }
 
 lock_opt:
@@ -8121,6 +8160,14 @@ reserved_table_id:
   {
     $$ = NewTableIdent(string($1))
   }
+| non_reserved_keyword2
+  {
+    $$ = NewTableIdent(string($1))
+  }
+| non_reserved_keyword3
+  {
+    $$ = NewTableIdent(string($1))
+  }
 
 infile_opt:
   { $$ = string("") }
@@ -8175,6 +8222,9 @@ escaped_by_opt:
     $$ = NewStrVal($3)
   }
 
+// TODO: support any number of enclosed_by_opt
+// TODO: support any number of escaped_by_opt
+// TODO: escaped_by_opt and enclosed_by_opt can appear in any order
 fields_opt:
   {
     $$ = nil
@@ -8954,6 +9004,7 @@ non_reserved_keyword:
 | LIST
 | LOCAL
 | LOCKED
+| LOG
 | LOGS
 | MASTER_COMPRESSION_ALGORITHMS
 | MASTER_PUBLIC_KEY_PATH
@@ -9022,6 +9073,7 @@ non_reserved_keyword:
 | REPAIR
 | REPEATABLE
 | REPLICA
+| REPLICAS
 | REPLICATE_DO_TABLE
 | REPLICATE_IGNORE_TABLE
 | REPLICATION
@@ -9059,6 +9111,7 @@ non_reserved_keyword:
 | SOURCE_HOST
 | SOURCE_PASSWORD
 | SOURCE_PORT
+| SOURCE_AUTO_POSITION
 | SOURCE_RETRY_COUNT
 | SOURCE_USER
 | SRID
@@ -9149,6 +9202,12 @@ column_name_safe_keyword:
 | MAX
 | MIN
 | SUM
+
+// Names of functions that require special grammar support. These aren't reserved or non-reserved in MySQL's docs, but are labeled as keywords in our grammar because of their custom syntax.
+function_call_keywords:
+  CAST
+| POSITION
+| TRIM
 
 openb:
   '('

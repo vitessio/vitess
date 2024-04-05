@@ -232,6 +232,9 @@ const (
 	// ComBinlogDumpGTID is COM_BINLOG_DUMP_GTID.
 	ComBinlogDumpGTID = 0x1e
 
+	// ComRegisterReplica is COM_REGISTER_REPLICA
+	ComRegisterReplica = 0x15
+
 	// OKPacket is the header of the OK packet.
 	OKPacket = 0x00
 

@@ -323,22 +323,39 @@ func TestDropIndex(t *testing.T) {
 	testIndex(t, tests)
 }
 
-// TestShowTablePrepared tests that Vitess can correctly walk all the SQLVal instances
-// in a parsed SHOW TABLES statement to identify the bound variables.
-func TestShowTablePrepared(t *testing.T) {
-	statement, err := Parse("SHOW TABLES FROM `mydb` WHERE `Tables_in_mydb` = ?")
-	require.NoError(t, err)
-	paramsCount := uint16(0)
-	_ = Walk(func(node SQLNode) (bool, error) {
-		switch node := node.(type) {
-		case *SQLVal:
-			if strings.HasPrefix(string(node.Val), ":v") {
-				paramsCount++
-			}
-		}
-		return true, nil
-	}, statement)
-	assert.Equal(t, uint16(1), paramsCount)
+// TestWalkPrepared tests that Vitess can correctly walk all the SQLVal instances
+// in a parsed statement to identify the bound variables.
+func TestWalkPrepared(t *testing.T) {
+	tests := []struct {
+		q        string
+		paramCnt int
+	}{
+		{
+			q:        "SHOW TABLES FROM `mydb` WHERE `Tables_in_mydb` = ?",
+			paramCnt: 1,
+		},
+		{
+			q:        "select * from table_function(?,?)",
+			paramCnt: 2,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("prepare param count: %s", tt.q), func(t *testing.T) {
+			statement, err := Parse(tt.q)
+			require.NoError(t, err)
+			paramsCount := uint16(0)
+			_ = Walk(func(node SQLNode) (bool, error) {
+				switch node := node.(type) {
+				case *SQLVal:
+					if strings.HasPrefix(string(node.Val), ":v") {
+						paramsCount++
+					}
+				}
+				return true, nil
+			}, statement)
+			assert.Equal(t, uint16(tt.paramCnt), paramsCount)
+		})
+	}
 }
 
 func TestShowIndex(t *testing.T) {
