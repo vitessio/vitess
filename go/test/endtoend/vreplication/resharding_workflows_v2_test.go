@@ -488,7 +488,7 @@ func testReshardV2Workflow(t *testing.T) {
 			default:
 				_ = execVtgateQuery(t, dataGenConn, "customer", fmt.Sprintf("insert into customer (cid, name) values (%d, 'tempCustomer%d')", id, id))
 			}
-			time.Sleep(5 * time.Millisecond)
+			time.Sleep(1 * time.Millisecond)
 			id++
 		}
 	}()
