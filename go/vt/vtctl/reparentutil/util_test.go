@@ -75,7 +75,7 @@ func TestElectNewPrimary(t *testing.T) {
 		avoidPrimaryAlias *topodatapb.TabletAlias
 		tolerableReplLag  time.Duration
 		expected          *topodatapb.TabletAlias
-		shouldErr         bool
+		errContains       []string
 	}{
 		{
 			name: "found a replica",
@@ -135,7 +135,7 @@ func TestElectNewPrimary(t *testing.T) {
 				Cell: "zone1",
 				Uid:  102,
 			},
-			shouldErr: false,
+			errContains: nil,
 		},
 		{
 			name:             "new primary alias provided - no tolerable replication lag",
@@ -174,7 +174,7 @@ func TestElectNewPrimary(t *testing.T) {
 				Cell: "zone1",
 				Uid:  101,
 			},
-			shouldErr: false,
+			errContains: nil,
 		},
 		{
 			name: "new primary alias provided - with tolerable replication lag",
@@ -231,7 +231,7 @@ func TestElectNewPrimary(t *testing.T) {
 				Cell: "zone1",
 				Uid:  102,
 			},
-			shouldErr: false,
+			errContains: nil,
 		},
 		{
 			name: "new primary alias provided - with intolerable replication lag",
@@ -284,8 +284,13 @@ func TestElectNewPrimary(t *testing.T) {
 				Cell: "zone1",
 				Uid:  102,
 			},
-			expected:  nil,
-			shouldErr: true,
+			expected: nil,
+			errContains: []string{
+				`cannot find a tablet to reparent to`,
+				`zone1-0000000100 does not match the new primary alias provided`,
+				`zone1-0000000101 does not match the new primary alias provided`,
+				`zone1-0000000102 has 1m40s replication lag which is more than the tolerable amount`,
+			},
 		},
 		{
 			name: "found a replica ignoring replica lag",
@@ -345,7 +350,7 @@ func TestElectNewPrimary(t *testing.T) {
 				Cell: "zone1",
 				Uid:  102,
 			},
-			shouldErr: false,
+			errContains: nil,
 		},
 		{
 			name: "found a replica - ignore one with replication lag",
@@ -405,7 +410,7 @@ func TestElectNewPrimary(t *testing.T) {
 				Cell: "zone1",
 				Uid:  101,
 			},
-			shouldErr: false,
+			errContains: nil,
 		},
 		{
 			name: "found a replica - more advanced relay log position",
@@ -465,7 +470,7 @@ func TestElectNewPrimary(t *testing.T) {
 				Cell: "zone1",
 				Uid:  102,
 			},
-			shouldErr: false,
+			errContains: nil,
 		},
 		{
 			name: "no active primary in shard",
@@ -505,7 +510,7 @@ func TestElectNewPrimary(t *testing.T) {
 				Cell: "zone1",
 				Uid:  101,
 			},
-			shouldErr: false,
+			errContains: nil,
 		},
 		{
 			name: "avoid primary alias is nil",
@@ -547,7 +552,7 @@ func TestElectNewPrimary(t *testing.T) {
 				Cell: "zone1",
 				Uid:  101,
 			},
-			shouldErr: false,
+			errContains: nil,
 		}, {
 			name: "avoid primary alias and shard primary are nil",
 			tmc: &chooseNewPrimaryTestTMClient{
@@ -586,7 +591,7 @@ func TestElectNewPrimary(t *testing.T) {
 				Cell: "zone1",
 				Uid:  101,
 			},
-			shouldErr: false,
+			errContains: nil,
 		},
 		{
 			name: "no replicas in primary cell",
@@ -640,8 +645,13 @@ func TestElectNewPrimary(t *testing.T) {
 				Cell: "zone1",
 				Uid:  0,
 			},
-			expected:  nil,
-			shouldErr: true,
+			expected: nil,
+			errContains: []string{
+				`cannot find a tablet to reparent to`,
+				`zone2-0000000200 is not a replica`,
+				`zone1-0000000101 is not in the same cell as the previous primary`,
+				`zone1-0000000102 is not in the same cell as the previous primary`,
+			},
 		},
 		{
 			name: "only available tablet is AvoidPrimary",
@@ -677,8 +687,11 @@ func TestElectNewPrimary(t *testing.T) {
 				Cell: "zone1",
 				Uid:  101,
 			},
-			expected:  nil,
-			shouldErr: true,
+			expected: nil,
+			errContains: []string{
+				`cannot find a tablet to reparent to
+zone1-0000000101 matches the primary alias to avoid`,
+			},
 		},
 		{
 			name: "no replicas in shard",
@@ -704,8 +717,11 @@ func TestElectNewPrimary(t *testing.T) {
 				Cell: "zone1",
 				Uid:  0,
 			},
-			expected:  nil,
-			shouldErr: true,
+			expected: nil,
+			errContains: []string{
+				`cannot find a tablet to reparent to
+zone1-0000000100 is not a replica`,
+			},
 		},
 	}
 
@@ -716,8 +732,10 @@ func TestElectNewPrimary(t *testing.T) {
 			t.Parallel()
 
 			actual, err := ElectNewPrimary(ctx, tt.tmc, tt.shardInfo, tt.tabletMap, tt.newPrimaryAlias, tt.avoidPrimaryAlias, time.Millisecond*50, tt.tolerableReplLag, durability, logger)
-			if tt.shouldErr {
-				assert.Error(t, err)
+			if len(tt.errContains) > 0 {
+				for _, errC := range tt.errContains {
+					assert.ErrorContains(t, err, errC)
+				}
 				return
 			}
 

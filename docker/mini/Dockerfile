@@ -12,16 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# NOTE: We have to build the Vitess binaries from scratch instead of sharing
-#       a base image because Docker Hub dropped the feature we relied upon to
-#       ensure images contain the right binaries.
-
-# Use a temporary layer for the build stage.
-FROM vitess/base AS base
-
 FROM vitess/lite
 
 USER root
+
+# Install dependencies
+COPY docker/utils/install_dependencies.sh /vt/dist/install_dependencies.sh
+RUN /vt/dist/install_dependencies.sh mysql80
 
 RUN apt-get update
 RUN apt-get install -y sudo curl vim python3 jq sqlite3
@@ -39,9 +36,6 @@ COPY docker/mini/vtctld-mini-up.sh /vt/dist/scripts/vtctld-mini-up.sh
 COPY docker/mini/vttablet-mini-up.sh /vt/dist/scripts/vttablet-mini-up.sh
 RUN echo "hostname=127.0.0.1" >> /vt/dist/scripts/env.sh
 RUN cat /vt/dist/scripts/env.sh | egrep "^alias" >> /etc/bash.bashrc
-
-COPY --from=base /vt/bin/vtctl /vt/bin/
-COPY --from=base /vt/bin/mysqlctl /vt/bin/
 
 # Set up Vitess environment (just enough to run pre-built Go binaries)
 ENV VTROOT /vt/src/vitess.io/vitess

@@ -24,6 +24,12 @@ web_dir="${script_dir}"
 
 vtadmin_api_port=14200
 
+if [ -z "${hostname}" ]
+then
+  hostname=$(hostname -f)
+  output "\n\033[1;32mhostname was empty, set it to \"${hostname}\"\033[0m"
+fi
+
 # Download nvm and node
 if [[ -z ${NVM_DIR} ]]; then
     export NVM_DIR="$HOME/.nvm"
@@ -49,6 +55,9 @@ nvm install "$NODE_VERSION" || fail "Could not install and use nvm $NODE_VERSION
 npm --prefix "$web_dir" --silent install
 
 export PATH=$PATH:$web_dir/node_modules/.bin/
+
+vite_vtadmin_api_address="http://${hostname}:${vtadmin_api_port}"
+output "\n\033[1;32mSetting VITE_VTADMIN_API_ADDRESS to \"${vite_vtadmin_api_address}\"\033[0m"
 
 VITE_VTADMIN_API_ADDRESS="http://${hostname}:${vtadmin_api_port}" \
   VITE_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS="true" \

@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"sync"
 	"testing"
 
@@ -21,12 +21,12 @@ const cValueTemplate = "###########-###########-###########-" +
 const padValueTemplate = "###########-###########-###########-" +
 	"###########-###########"
 
-func sysbenchRandom(rng *rand.Rand, template string) []byte {
+func sysbenchRandom(template string) []byte {
 	out := make([]byte, 0, len(template))
 	for i := range template {
 		switch template[i] {
 		case '#':
-			out = append(out, '0'+byte(rng.Intn(10)))
+			out = append(out, '0'+byte(rand.IntN(10)))
 		default:
 			out = append(out, template[i])
 		}
@@ -39,8 +39,6 @@ var oltpInitOnce sync.Once
 func BenchmarkOLTP(b *testing.B) {
 	const MaxRows = 10000
 	const RangeSize = 100
-
-	rng := rand.New(rand.NewSource(1234))
 
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -62,7 +60,7 @@ func BenchmarkOLTP(b *testing.B) {
 				if j > 0 {
 					query.WriteString(", ")
 				}
-				_, _ = fmt.Fprintf(&query, "(%d, %d, '%s', '%s')", rows, rng.Int31n(0xFFFF), sysbenchRandom(rng, cValueTemplate), sysbenchRandom(rng, padValueTemplate))
+				_, _ = fmt.Fprintf(&query, "(%d, %d, '%s', '%s')", rows, rand.Int32N(0xFFFF), sysbenchRandom(cValueTemplate), sysbenchRandom(padValueTemplate))
 				rows++
 			}
 
@@ -77,10 +75,10 @@ func BenchmarkOLTP(b *testing.B) {
 	b.Run("SimpleRanges", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			id := rng.Intn(MaxRows)
+			id := rand.IntN(MaxRows)
 
 			query.Reset()
-			_, _ = fmt.Fprintf(&query, "SELECT c FROM oltp_test WHERE id BETWEEN %d AND %d", id, id+rng.Intn(RangeSize)-1)
+			_, _ = fmt.Fprintf(&query, "SELECT c FROM oltp_test WHERE id BETWEEN %d AND %d", id, id+rand.IntN(RangeSize)-1)
 			_, err := conn.ExecuteFetch(query.String(), 1000, false)
 			if err != nil {
 				b.Error(err)
@@ -91,10 +89,10 @@ func BenchmarkOLTP(b *testing.B) {
 	b.Run("SumRanges", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			id := rng.Intn(MaxRows)
+			id := rand.IntN(MaxRows)
 
 			query.Reset()
-			_, _ = fmt.Fprintf(&query, "SELECT SUM(k) FROM oltp_test WHERE id BETWEEN %d AND %d", id, id+rng.Intn(RangeSize)-1)
+			_, _ = fmt.Fprintf(&query, "SELECT SUM(k) FROM oltp_test WHERE id BETWEEN %d AND %d", id, id+rand.IntN(RangeSize)-1)
 			_, err := conn.ExecuteFetch(query.String(), 1000, false)
 			if err != nil {
 				b.Error(err)
@@ -105,10 +103,10 @@ func BenchmarkOLTP(b *testing.B) {
 	b.Run("OrderRanges", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			id := rng.Intn(MaxRows)
+			id := rand.IntN(MaxRows)
 
 			query.Reset()
-			_, _ = fmt.Fprintf(&query, "SELECT c FROM oltp_test WHERE id BETWEEN %d AND %d ORDER BY c", id, id+rng.Intn(RangeSize)-1)
+			_, _ = fmt.Fprintf(&query, "SELECT c FROM oltp_test WHERE id BETWEEN %d AND %d ORDER BY c", id, id+rand.IntN(RangeSize)-1)
 			_, err := conn.ExecuteFetch(query.String(), 1000, false)
 			if err != nil {
 				b.Error(err)
@@ -119,10 +117,10 @@ func BenchmarkOLTP(b *testing.B) {
 	b.Run("DistinctRanges", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			id := rng.Intn(MaxRows)
+			id := rand.IntN(MaxRows)
 
 			query.Reset()
-			_, _ = fmt.Fprintf(&query, "SELECT DISTINCT c FROM oltp_test WHERE id BETWEEN %d AND %d ORDER BY c", id, id+rng.Intn(RangeSize)-1)
+			_, _ = fmt.Fprintf(&query, "SELECT DISTINCT c FROM oltp_test WHERE id BETWEEN %d AND %d ORDER BY c", id, id+rand.IntN(RangeSize)-1)
 			_, err := conn.ExecuteFetch(query.String(), 1000, false)
 			if err != nil {
 				b.Error(err)

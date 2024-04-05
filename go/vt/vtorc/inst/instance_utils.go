@@ -17,7 +17,6 @@
 package inst
 
 import (
-	"regexp"
 	"strings"
 )
 
@@ -28,14 +27,4 @@ func MajorVersion(version string) []string {
 		return []string{"0", "0"}
 	}
 	return tokens[:2]
-}
-
-// RegexpMatchPatterns returns true if s matches any of the provided regexpPatterns
-func RegexpMatchPatterns(s string, regexpPatterns []string) bool {
-	for _, filter := range regexpPatterns {
-		if matched, err := regexp.MatchString(filter, s); err == nil && matched {
-			return true
-		}
-	}
-	return false
 }

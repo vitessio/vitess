@@ -1861,6 +1861,8 @@ func (cached *Insert) CachedSize(alloc bool) int64 {
 			size += elem.CachedSize(true)
 		}
 	}
+	// field RowAlias *vitess.io/vitess/go/vt/sqlparser.RowAlias
+	size += cached.RowAlias.CachedSize(true)
 	return size
 }
 func (cached *InsertExpr) CachedSize(alloc bool) int64 {
@@ -3587,6 +3589,25 @@ func (cached *RevertMigration) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.UUID)))
 	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
 	size += cached.Comments.CachedSize(true)
+	return size
+}
+func (cached *RowAlias) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field TableName vitess.io/vitess/go/vt/sqlparser.IdentifierCS
+	size += cached.TableName.CachedSize(false)
+	// field Columns vitess.io/vitess/go/vt/sqlparser.Columns
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Columns)) * int64(32))
+		for _, elem := range cached.Columns {
+			size += elem.CachedSize(false)
+		}
+	}
 	return size
 }
 func (cached *SRollback) CachedSize(alloc bool) int64 {

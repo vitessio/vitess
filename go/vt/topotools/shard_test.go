@@ -19,7 +19,7 @@ package topotools
 import (
 	"context"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"sync"
 	"testing"
 
@@ -114,7 +114,7 @@ func TestGetOrCreateShard(t *testing.T) {
 			defer wg.Done()
 
 			for j := 0; j < 100; j++ {
-				index := rand.Intn(10)
+				index := rand.IntN(10)
 				shard := fmt.Sprintf("%v", index)
 				si, err := ts.GetOrCreateShard(ctx, keyspace, shard)
 				if err != nil {

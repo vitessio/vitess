@@ -39,6 +39,11 @@ func (client *localVtctldClient) AddCellsAlias(ctx context.Context, in *vtctldat
 	return client.s.AddCellsAlias(ctx, in)
 }
 
+// ApplyKeyspaceRoutingRules is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ApplyKeyspaceRoutingRules(ctx context.Context, in *vtctldatapb.ApplyKeyspaceRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldatapb.ApplyKeyspaceRoutingRulesResponse, error) {
+	return client.s.ApplyKeyspaceRoutingRules(ctx, in)
+}
+
 // ApplyRoutingRules is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) ApplyRoutingRules(ctx context.Context, in *vtctldatapb.ApplyRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldatapb.ApplyRoutingRulesResponse, error) {
 	return client.s.ApplyRoutingRules(ctx, in)
@@ -241,6 +246,11 @@ func (client *localVtctldClient) ExecuteHook(ctx context.Context, in *vtctldatap
 	return client.s.ExecuteHook(ctx, in)
 }
 
+// ExecuteMultiFetchAsDBA is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ExecuteMultiFetchAsDBA(ctx context.Context, in *vtctldatapb.ExecuteMultiFetchAsDBARequest, opts ...grpc.CallOption) (*vtctldatapb.ExecuteMultiFetchAsDBAResponse, error) {
+	return client.s.ExecuteMultiFetchAsDBA(ctx, in)
+}
+
 // FindAllShardsInKeyspace is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) FindAllShardsInKeyspace(ctx context.Context, in *vtctldatapb.FindAllShardsInKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.FindAllShardsInKeyspaceResponse, error) {
 	return client.s.FindAllShardsInKeyspace(ctx, in)
@@ -279,6 +289,11 @@ func (client *localVtctldClient) GetFullStatus(ctx context.Context, in *vtctldat
 // GetKeyspace is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) GetKeyspace(ctx context.Context, in *vtctldatapb.GetKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.GetKeyspaceResponse, error) {
 	return client.s.GetKeyspace(ctx, in)
+}
+
+// GetKeyspaceRoutingRules is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) GetKeyspaceRoutingRules(ctx context.Context, in *vtctldatapb.GetKeyspaceRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldatapb.GetKeyspaceRoutingRulesResponse, error) {
+	return client.s.GetKeyspaceRoutingRules(ctx, in)
 }
 
 // GetKeyspaces is part of the vtctlservicepb.VtctldClient interface.

@@ -22,7 +22,6 @@ package grpcmysqlctlserver
 
 import (
 	"context"
-	"time"
 
 	"google.golang.org/grpc"
 
@@ -43,8 +42,6 @@ func (s *server) Start(ctx context.Context, request *mysqlctlpb.StartRequest) (*
 	return &mysqlctlpb.StartResponse{}, s.mysqld.Start(ctx, s.cnf, request.MysqldArgs...)
 }
 
-const mysqlShutdownTimeout = 5 * time.Minute
-
 // Shutdown implements the server side of the MysqlctlClient interface.
 func (s *server) Shutdown(ctx context.Context, request *mysqlctlpb.ShutdownRequest) (*mysqlctlpb.ShutdownResponse, error) {
 	timeout, ok, err := protoutil.DurationFromProto(request.MysqlShutdownTimeout)
@@ -52,7 +49,7 @@ func (s *server) Shutdown(ctx context.Context, request *mysqlctlpb.ShutdownReque
 		return nil, err
 	}
 	if !ok {
-		timeout = mysqlShutdownTimeout
+		timeout = mysqlctl.DefaultShutdownTimeout
 	}
 	return &mysqlctlpb.ShutdownResponse{}, s.mysqld.Shutdown(ctx, s.cnf, request.WaitForMysqld, timeout)
 }

@@ -87,7 +87,7 @@ var (
 	mysqlPort            = 3306
 	mysqlSocket          string
 	mysqlTimeout         = 5 * time.Minute
-	mysqlShutdownTimeout = 5 * time.Minute
+	mysqlShutdownTimeout = mysqlctl.DefaultShutdownTimeout
 	initDBSQLFile        string
 	detachedMode         bool
 	keepAliveTimeout     time.Duration

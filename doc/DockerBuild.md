@@ -37,22 +37,8 @@ Then you can run our build script for the `lite` image which extracts the Vitess
     image on your machine before then it could be old, which may cause build
     failures. So it would be a good idea to always execute this step.
 
-1.  Build the `vitess/base[:<flavor>]` image.
-    It will include the compiled the Vitess binaries.
-    (`vitess/base` also contains the source code and tests i.e. everything needed for development work.)
-
-    Choose one of the following commands (the command without suffix builds
-    the default image containing MySQL 5.7):
-
-    ```sh
-    vitess$ make docker_base
-    vitess$ make docker_base_mysql56
-    vitess$ make docker_base_percona57
-    vitess$ make docker_base_percona
-    ```
-
 1.  Build the `vitess/lite[:<flavor>]` image.
-    This will run a script that extracts from `vitess/base` only the files
+    This will run a script that extracts from `vitess/bootstrap` only the files
     needed to run Vitess.
 
     Choose one of the following commands (the command without suffix builds

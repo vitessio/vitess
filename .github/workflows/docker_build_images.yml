@@ -1,0 +1,169 @@
+name: Docker Build Images (v20+)
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v[2-9][0-9]*.*' # run only on tags greater or equal to v20.0.0
+
+concurrency:
+  group: format('{0}-{1}', ${{ github.ref }}, 'Docker Build Images (v20+)')
+  cancel-in-progress: true
+
+permissions: read-all
+
+jobs:
+  build_and_push_lite:
+    name: Build and push vitess/lite Docker images
+    runs-on: gh-hosted-runners-16cores-1
+    if: github.repository == 'vitessio/vitess'
+
+    strategy:
+      fail-fast: true
+      matrix:
+        branch: [ latest ]
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Set Dockerfile path
+        run: |
+          if [[ "${{ matrix.branch }}" == "latest" ]]; then
+            echo "DOCKERFILE=./docker/lite/Dockerfile" >> $GITHUB_ENV
+          else
+            echo "DOCKERFILE=./docker/lite/Dockerfile.${{ matrix.branch }}" >> $GITHUB_ENV
+          fi
+
+      - name: Build and push on main
+        if: github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ${{ env.DOCKERFILE }}
+          push: true
+          tags: vitess/lite:${{ matrix.branch }}
+
+      ######
+      # All code below only applies to new tags
+      ######
+      - name: Get the Git tag
+        if: startsWith(github.ref, 'refs/tags/')
+        run: echo "TAG_NAME=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+
+      - name: Set Docker tag name
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          if [[ "${{ matrix.branch }}" == "latest" ]]; then
+            echo "DOCKER_TAG=vitess/lite:${TAG_NAME}" >> $GITHUB_ENV
+          else
+            echo "DOCKER_TAG=vitess/lite:${TAG_NAME}-${{ matrix.branch }}" >> $GITHUB_ENV
+          fi
+
+      - name: Build and push on tags
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ${{ env.DOCKERFILE }}
+          push: true
+          tags: ${{ env.DOCKER_TAG }}
+
+  build_and_push_components:
+    name: Build and push vitess components Docker images
+    needs: build_and_push_lite
+    runs-on: gh-hosted-runners-16cores-1
+    if: github.repository == 'vitessio/vitess'
+
+    strategy:
+      fail-fast: true
+      matrix:
+        debian: [ bullseye, bookworm ]
+        component: [ vtadmin, vtorc, vtgate, vttablet, mysqlctld, mysqlctl, vtctl, vtctlclient, vtctld, logrotate, logtail, vtbackup, vtexplain ]
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Set Docker context path
+        run: |
+          echo "DOCKER_CTX=./docker/binaries/${{ matrix.component }}" >> $GITHUB_ENV
+
+      - name: Build and push on main latest tag
+        if: github.ref == 'refs/heads/main' && matrix.debian == 'bookworm'
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ env.DOCKER_CTX }}
+          push: true
+          tags: vitess/${{ matrix.component }}:latest
+          build-args: |
+            VT_BASE_VER=latest
+            DEBIAN_VER=${{ matrix.debian }}-slim
+
+      - name: Build and push on main debian specific tag
+        if: github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ env.DOCKER_CTX }}
+          push: true
+          tags: vitess/${{ matrix.component }}:latest-${{ matrix.debian }}
+          build-args: |
+            VT_BASE_VER=latest
+            DEBIAN_VER=${{ matrix.debian }}-slim
+
+      ######
+      # All code below only applies to new tags
+      ######
+
+      - name: Get the Git tag
+        if: startsWith(github.ref, 'refs/tags/')
+        run: echo "TAG_NAME=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+
+      # We push git-tag-based images to three tags, i.e. for 'v19.0.0' we push to:
+      #
+      #     vitess/${{ matrix.component }}:v19.0.0            (DOCKER_TAG_DEFAULT_DEBIAN)
+      #     vitess/${{ matrix.component }}:v19.0.0-bookworm   (DOCKER_TAG)
+      #     vitess/${{ matrix.component }}:v19.0.0-bullseye   (DOCKER_TAG)
+      #
+      - name: Set Docker tag name
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          echo "DOCKER_TAG_DEFAULT_DEBIAN=vitess/${{ matrix.component }}:${TAG_NAME}" >> $GITHUB_ENV
+          echo "DOCKER_TAG=vitess/${{ matrix.component }}:${TAG_NAME}-${{ matrix.debian }}" >> $GITHUB_ENV
+
+      # Build and Push component image to DOCKER_TAG, applies to both debian version
+      - name: Build and push on tags using Debian extension
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ env.DOCKER_CTX }}
+          push: true
+          tags: ${{ env.DOCKER_TAG }}
+          build-args: |
+            VT_BASE_VER=${{ env.TAG_NAME }}
+            DEBIAN_VER=${{ matrix.debian }}-slim
+
+      # Build and Push component image to DOCKER_TAG_DEFAULT_DEBIAN, only applies when building the default Debian version (bookworm)
+      # It is fine to build a second time here when "matrix.debian == 'bookworm'" as we have cached the first build already
+      - name: Build and push on tags without Debian extension
+        if: startsWith(github.ref, 'refs/tags/') && matrix.debian == 'bookworm'
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ env.DOCKER_CTX }}
+          push: true
+          tags: ${{ env.DOCKER_TAG_DEFAULT_DEBIAN }}
+          build-args: |
+            VT_BASE_VER=${{ env.TAG_NAME }}
+            DEBIAN_VER=${{ matrix.debian }}-slim

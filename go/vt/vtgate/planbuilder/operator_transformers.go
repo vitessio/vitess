@@ -464,7 +464,7 @@ func transformApplyJoinPlan(ctx *plancontext.PlanningContext, n *operators.Apply
 		return nil, err
 	}
 	opCode := engine.InnerJoin
-	if n.LeftJoin {
+	if !n.JoinType.IsInner() {
 		opCode = engine.LeftJoin
 	}
 
@@ -562,7 +562,7 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 }
 
 func buildRouteLogicalPlan(ctx *plancontext.PlanningContext, op *operators.Route, stmt sqlparser.SelectStatement, hints *queryHints) (logicalPlan, error) {
-	_ = updateSelectedVindexPredicate(op)
+	_ = updateSelectedVindexPredicate(op.Routing)
 
 	eroute, err := routeToEngineRoute(ctx, op, hints)
 	for _, order := range op.Ordering {
@@ -705,7 +705,7 @@ func buildUpdateLogicalPlan(
 	if upd.VerifyAll {
 		stmt.SetComments(stmt.GetParsedComments().SetMySQLSetVarValue(sysvars.ForeignKeyChecks, "OFF"))
 	}
-
+	_ = updateSelectedVindexPredicate(rb.Routing)
 	edml := createDMLPrimitive(ctx, rb, hints, upd.Target.VTable, generateQuery(stmt), vindexes, vQuery)
 
 	return &primitiveWrapper{prim: &engine.Update{
@@ -725,7 +725,7 @@ func buildDeleteLogicalPlan(ctx *plancontext.PlanningContext, rb *operators.Rout
 		vQuery = sqlparser.String(del.OwnedVindexQuery)
 		vindexes = del.Target.VTable.Owned
 	}
-
+	_ = updateSelectedVindexPredicate(rb.Routing)
 	edml := createDMLPrimitive(ctx, rb, hints, del.Target.VTable, generateQuery(stmt), vindexes, vQuery)
 
 	return &primitiveWrapper{prim: &engine.Delete{DML: edml}}, nil
@@ -755,8 +755,8 @@ func createDMLPrimitive(ctx *plancontext.PlanningContext, rb *operators.Route, h
 	return edml
 }
 
-func updateSelectedVindexPredicate(op *operators.Route) sqlparser.Expr {
-	tr, ok := op.Routing.(*operators.ShardedRouting)
+func updateSelectedVindexPredicate(routing operators.Routing) sqlparser.Expr {
+	tr, ok := routing.(*operators.ShardedRouting)
 	if !ok || tr.Selected == nil {
 		return nil
 	}
@@ -771,7 +771,9 @@ func updateSelectedVindexPredicate(op *operators.Route) sqlparser.Expr {
 		if !ok {
 			continue
 		}
-
+		if sqlparser.Equals.Expr(cmp.Right, sqlparser.ListArg(engine.DmlVals)) {
+			continue
+		}
 		var argName string
 		if isMultiColumn {
 			argName = engine.ListVarName + strconv.Itoa(idx)

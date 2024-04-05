@@ -45,6 +45,8 @@ service Vtctld {
   rpc ApplyRoutingRules(vtctldata.ApplyRoutingRulesRequest) returns (vtctldata.ApplyRoutingRulesResponse) {};
   // ApplySchema applies a schema to a keyspace.
   rpc ApplySchema(vtctldata.ApplySchemaRequest) returns (vtctldata.ApplySchemaResponse) {};
+  // ApplyKeyspaceRoutingRules applies the VSchema keyspace routing rules.
+  rpc ApplyKeyspaceRoutingRules(vtctldata.ApplyKeyspaceRoutingRulesRequest) returns (vtctldata.ApplyKeyspaceRoutingRulesResponse) {};
   // ApplyShardRoutingRules applies the VSchema shard routing rules.
   rpc ApplyShardRoutingRules(vtctldata.ApplyShardRoutingRulesRequest) returns (vtctldata.ApplyShardRoutingRulesResponse) {};
   // ApplyVSchema applies a vschema to a keyspace.
@@ -100,6 +102,8 @@ service Vtctld {
   rpc ExecuteFetchAsDBA(vtctldata.ExecuteFetchAsDBARequest) returns (vtctldata.ExecuteFetchAsDBAResponse) {};
   // ExecuteHook runs the hook on the tablet.
   rpc ExecuteHook(vtctldata.ExecuteHookRequest) returns (vtctldata.ExecuteHookResponse);
+  // ExecuteMultiFetchAsDBA executes one or more SQL queries on the remote tablet as the DBA user.
+  rpc ExecuteMultiFetchAsDBA(vtctldata.ExecuteMultiFetchAsDBARequest) returns (vtctldata.ExecuteMultiFetchAsDBAResponse) {};
   // FindAllShardsInKeyspace returns a map of shard names to shard references
   // for a given keyspace.
   rpc FindAllShardsInKeyspace(vtctldata.FindAllShardsInKeyspaceRequest) returns (vtctldata.FindAllShardsInKeyspaceResponse) {};
@@ -121,6 +125,8 @@ service Vtctld {
   rpc GetKeyspace(vtctldata.GetKeyspaceRequest) returns (vtctldata.GetKeyspaceResponse) {};
   // GetKeyspaces returns the keyspace struct of all keyspaces in the topo.
   rpc GetKeyspaces(vtctldata.GetKeyspacesRequest) returns (vtctldata.GetKeyspacesResponse) {};
+  // GetKeyspaceRoutingRules returns the VSchema keyspace routing rules.
+  rpc GetKeyspaceRoutingRules(vtctldata.GetKeyspaceRoutingRulesRequest) returns (vtctldata.GetKeyspaceRoutingRulesResponse) {};
   // GetPermissions returns the permissions set on the remote tablet.
   rpc GetPermissions(vtctldata.GetPermissionsRequest) returns (vtctldata.GetPermissionsResponse) {};
   // GetRoutingRules returns the VSchema routing rules.

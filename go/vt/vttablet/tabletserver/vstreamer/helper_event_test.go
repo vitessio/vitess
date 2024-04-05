@@ -46,12 +46,14 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/colldata"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/proto/binlogdata"
 	"vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/schemadiff"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
 const (
@@ -69,16 +71,58 @@ var (
 // TestColumn has all the attributes of a column required for the test cases.
 type TestColumn struct {
 	name, dataType, colType string
-	collationID             collations.ID
 	len                     int64
+	collationID             collations.ID
 	dataTypeLowered         string
 	skip                    bool
+	collationName           string
 }
 
 // TestFieldEvent has all the attributes of a table required for creating a field event.
 type TestFieldEvent struct {
 	table, db string
 	cols      []*TestColumn
+}
+
+func (tfe *TestFieldEvent) String() string {
+	var fe binlogdatapb.FieldEvent
+	var field *query.Field
+	fe.TableName = tfe.table
+	for _, col := range tfe.cols {
+		if col.skip {
+			continue
+		}
+		if col.name == "keyspace_id" {
+			field = &query.Field{
+				Name:    col.name,
+				Type:    getQueryType(col.dataType),
+				Charset: uint32(col.collationID),
+			}
+		} else {
+			field = &query.Field{
+				Name:         col.name,
+				Type:         getQueryType(col.dataType),
+				Table:        tfe.table,
+				OrgTable:     tfe.table,
+				Database:     tfe.db,
+				OrgName:      col.name,
+				ColumnLength: uint32(col.len),
+				Charset:      uint32(col.collationID),
+				ColumnType:   col.colType,
+			}
+		}
+		fe.Fields = append(fe.Fields, field)
+
+	}
+	if !ignoreKeyspaceShardInFieldAndRowEvents {
+		fe.Keyspace = testenv.DBName
+		fe.Shard = testenv.DefaultShard
+	}
+	ev := &binlogdatapb.VEvent{
+		Type:       binlogdatapb.VEventType_FIELD,
+		FieldEvent: &fe,
+	}
+	return ev.String()
 }
 
 // TestQuery represents a database query and the expected events it generates.
@@ -95,19 +139,21 @@ type TestRowChange struct {
 
 // TestRowEventSpec is used for defining a custom row event.
 type TestRowEventSpec struct {
-	table   string
-	changes []TestRowChange
+	table    string
+	changes  []TestRowChange
+	keyspace string
+	shard    string
 }
 
 // Generates a string representation for a custom row event.
 func (s *TestRowEventSpec) String() string {
-	ev := &binlogdata.RowEvent{
+	ev := &binlogdatapb.RowEvent{
 		TableName: s.table,
 	}
-	var rowChanges []*binlogdata.RowChange
+	var rowChanges []*binlogdatapb.RowChange
 	if s.changes != nil && len(s.changes) > 0 {
 		for _, c := range s.changes {
-			rowChange := binlogdata.RowChange{}
+			rowChange := binlogdatapb.RowChange{}
 			if c.before != nil && len(c.before) > 0 {
 				rowChange.Before = &query.Row{}
 				for _, val := range c.before {
@@ -126,8 +172,18 @@ func (s *TestRowEventSpec) String() string {
 		}
 		ev.RowChanges = rowChanges
 	}
-	vEvent := &binlogdata.VEvent{
-		Type:     binlogdata.VEventType_ROW,
+	if !ignoreKeyspaceShardInFieldAndRowEvents {
+		ev.Keyspace = testenv.DBName
+		ev.Shard = "0" // this is the default shard
+		if s.keyspace != "" {
+			ev.Keyspace = s.keyspace
+		}
+		if s.shard != "" {
+			ev.Shard = s.shard
+		}
+	}
+	vEvent := &binlogdatapb.VEvent{
+		Type:     binlogdatapb.VEventType_ROW,
 		RowEvent: ev,
 	}
 	return vEvent.String()
@@ -136,15 +192,20 @@ func (s *TestRowEventSpec) String() string {
 // TestRowEvent is used to define either the actual row event string (the `event` field) or a custom row event
 // (the `spec` field). Only one should be specified. If a test validates `flags` of a RowEvent then it is set.
 type TestRowEvent struct {
-	event string
-	spec  *TestRowEventSpec
-	flags int
+	event   string
+	spec    *TestRowEventSpec
+	flags   int
+	restart bool // if set to true, it will start a new group of output events
 }
 
 // TestSpecOptions has any non-standard test-specific options which can modify the event generation behaviour.
 type TestSpecOptions struct {
-	noblob bool
-	filter *binlogdata.Filter
+	noblob bool // if set to true, it will skip blob and text columns in the row event
+	// by default the filter will be a "select * from table", set this to specify a custom one
+	// if filter is set, customFieldEvents need to be specified as well
+	filter            *binlogdatapb.Filter
+	customFieldEvents bool
+	position          string
 }
 
 // TestSpec is defined one per unit test.
@@ -175,11 +236,13 @@ func (ts *TestSpec) setCurrentState(table string, row *query.Row) {
 }
 
 // Init() initializes the test. It creates the tables and sets up the internal state.
-func (ts *TestSpec) Init() error {
+func (ts *TestSpec) Init() {
 	var err error
 	if ts.inited {
-		return nil
+		return
 	}
+	// setup SrvVschema watcher, if not already done
+	engine.watcherOnce.Do(engine.setWatch)
 	defer func() { ts.inited = true }()
 	if ts.options == nil {
 		ts.options = &TestSpecOptions{}
@@ -194,9 +257,7 @@ func (ts *TestSpec) Init() error {
 		ts.ddls[i] = fmt.Sprintf("%s %s", ts.ddls[i], tableOptions)
 	}
 	ts.schema, err = schemadiff.NewSchemaFromQueries(schemadiff.NewTestEnv(), ts.ddls)
-	if err != nil {
-		return err
-	}
+	require.NoError(ts.t, err)
 	ts.fieldEvents = make(map[string]*TestFieldEvent)
 	ts.fieldEventsSent = make(map[string]bool)
 	ts.state = make(map[string]*query.Row)
@@ -208,7 +269,6 @@ func (ts *TestSpec) Init() error {
 		execStatement(ts.t, ts.ddls[i])
 		fe := ts.getFieldEvent(t)
 		ts.fieldEvents[t.Name()] = fe
-
 		var pkColumns []string
 		var hasPK bool
 		for _, index := range t.TableSpec.Indexes {
@@ -229,7 +289,6 @@ func (ts *TestSpec) Init() error {
 		ts.pkColumns[t.Name()] = pkColumns
 	}
 	engine.se.Reload(context.Background())
-	return nil
 }
 
 // Close() should be called (via defer) at the end of the test to clean up the tables created in the test.
@@ -267,10 +326,7 @@ func (ts *TestSpec) getBindVarsForInsert(stmt sqlparser.Statement) (string, map[
 func (ts *TestSpec) getBindVarsForUpdate(stmt sqlparser.Statement) (string, map[string]string) {
 	bv := make(map[string]string)
 	upd := stmt.(*sqlparser.Update)
-	//buf := sqlparser.NewTrackedBuffer(nil)
 	table := sqlparser.String(upd.TableExprs[0].(*sqlparser.AliasedTableExpr).Expr)
-	//upd.TableExprs[0].(*sqlparser.AliasedTableExpr).Expr.Format(buf)
-	//table := buf.String()
 	fe, ok := ts.fieldEvents[table]
 	require.True(ts.t, ok, "field event for table %s not found", table)
 	index := int64(0)
@@ -293,7 +349,7 @@ func (ts *TestSpec) getBindVarsForUpdate(stmt sqlparser.Statement) (string, map[
 func (ts *TestSpec) Run() {
 	require.NoError(ts.t, engine.se.Reload(context.Background()))
 	if !ts.inited {
-		require.NoError(ts.t, ts.Init())
+		ts.Init()
 	}
 	var testcases []testcase
 	for _, t := range ts.tests {
@@ -310,6 +366,10 @@ func (ts *TestSpec) Run() {
 				(len(tq.events) > 0 &&
 					!(len(tq.events) == 1 && tq.events[0].event == "" && tq.events[0].spec == nil)):
 				for _, e := range tq.events {
+					if e.restart {
+						tc.output = append(tc.output, output)
+						output = []string{}
+					}
 					if e.event != "" {
 						output = append(output, e.event)
 					} else if e.spec != nil {
@@ -345,27 +405,58 @@ func (ts *TestSpec) Run() {
 					del := stmt.(*sqlparser.Delete)
 					table = del.TableExprs[0].(*sqlparser.AliasedTableExpr).As.String()
 				default:
-					require.FailNowf(ts.t, "unsupported statement type", "stmt: %s", stmt)
+					_, ok := stmt.(sqlparser.DDLStatement)
+					if !ok {
+						require.FailNowf(ts.t, "unsupported statement type", "stmt: %s", stmt)
+					}
+					output = append(output, "gtid")
+					output = append(output, ts.getDDLEvent(tq.query))
 				}
 				if isRowEvent {
 					fe := ts.fieldEvents[table]
 					if fe == nil {
 						require.FailNowf(ts.t, "field event for table %s not found", table)
 					}
-					if !ts.fieldEventsSent[table] {
+					// for the first row event, we send the field event as well, if a custom field event is not specified
+					if !ts.options.customFieldEvents && !ts.fieldEventsSent[table] {
 						output = append(output, fe.String())
 						ts.fieldEventsSent[table] = true
 					}
 					output = append(output, ts.getRowEvent(table, bv, fe, stmt, uint32(flags)))
 				}
 			}
-
 		}
 		tc.input = input
 		tc.output = append(tc.output, output)
 		testcases = append(testcases, tc)
 	}
-	runCases(ts.t, ts.options.filter, testcases, "current", nil)
+	startPos := "current"
+	if ts.options.position != "" {
+		startPos = ts.options.position
+	}
+	runCases(ts.t, ts.options.filter, testcases, startPos, nil)
+}
+
+func (ts *TestSpec) getDDLEvent(query string) string {
+	ddlEvent := &binlogdatapb.VEvent{
+		Type:      binlogdatapb.VEventType_DDL,
+		Statement: query,
+	}
+	return ddlEvent.String()
+}
+
+func (ts *TestSpec) reloadSchema() {
+	engine.se.Reload(context.Background())
+	var ddls []string
+	for _, table := range ts.tables {
+		showCreateTableDDL := fmt.Sprintf("show create table %s", table)
+		qr, err := env.Mysqld.FetchSuperQuery(context.Background(), showCreateTableDDL)
+		require.NoError(ts.t, err)
+		ddls = append(ddls, qr.Rows[0][1].ToString())
+	}
+	var err error
+	ts.schema, err = schemadiff.NewSchemaFromQueries(schemadiff.NewTestEnv(), ddls)
+	require.NoError(ts.t, err)
 }
 
 func (ts *TestSpec) getFieldEvent(table *schemadiff.CreateTableEntity) *TestFieldEvent {
@@ -407,8 +498,8 @@ func (ts *TestSpec) getFieldEvent(table *schemadiff.CreateTableEntity) *TestFiel
 			tc.colType = fmt.Sprintf("%s(%d)", tc.dataTypeLowered, l)
 		case "blob":
 			tc.len = lengthBlob
-			tc.colType = "blob"
 			tc.collationID = collations.CollationBinaryID
+			tc.colType = "blob"
 		case "text":
 			tc.len = lengthText
 			tc.colType = "text"
@@ -462,15 +553,19 @@ func (ts *TestSpec) getMetadataMap(table string, col *TestColumn, value string) 
 }
 
 func (ts *TestSpec) getRowEvent(table string, bv map[string]string, fe *TestFieldEvent, stmt sqlparser.Statement, flags uint32) string {
-	ev := &binlogdata.RowEvent{
+	ev := &binlogdatapb.RowEvent{
 		TableName: table,
-		RowChanges: []*binlogdata.RowChange{
+		RowChanges: []*binlogdatapb.RowChange{
 			{
 				Before: nil,
 				After:  nil,
 			},
 		},
 		Flags: flags,
+	}
+	if !ignoreKeyspaceShardInFieldAndRowEvents {
+		ev.Keyspace = testenv.DBName
+		ev.Shard = "0" // this is the default shard
 	}
 	var row query.Row
 	for i, col := range fe.cols {
@@ -492,16 +587,16 @@ func (ts *TestSpec) getRowEvent(table string, bv map[string]string, fe *TestFiel
 		row.Lengths = append(row.Lengths, l)
 	}
 	ev.RowChanges = ts.getRowChanges(table, stmt, &row)
-	vEvent := &binlogdata.VEvent{
-		Type:     binlogdata.VEventType_ROW,
+	vEvent := &binlogdatapb.VEvent{
+		Type:     binlogdatapb.VEventType_ROW,
 		RowEvent: ev,
 	}
 	return vEvent.String()
 }
 
-func (ts *TestSpec) getRowChanges(table string, stmt sqlparser.Statement, row *query.Row) []*binlogdata.RowChange {
-	var rowChanges []*binlogdata.RowChange
-	var rowChange binlogdata.RowChange
+func (ts *TestSpec) getRowChanges(table string, stmt sqlparser.Statement, row *query.Row) []*binlogdatapb.RowChange {
+	var rowChanges []*binlogdatapb.RowChange
+	var rowChange binlogdatapb.RowChange
 	switch stmt.(type) {
 	case *sqlparser.Insert:
 		rowChange.After = row
@@ -517,8 +612,8 @@ func (ts *TestSpec) getRowChanges(table string, stmt sqlparser.Statement, row *q
 	return rowChanges
 }
 
-func (ts *TestSpec) getRowChangeForUpdate(table string, newState *query.Row) *binlogdata.RowChange {
-	var rowChange binlogdata.RowChange
+func (ts *TestSpec) getRowChangeForUpdate(table string, newState *query.Row) *binlogdatapb.RowChange {
+	var rowChange binlogdatapb.RowChange
 	var bitmap byte
 	var before, after query.Row
 
@@ -566,7 +661,7 @@ func (ts *TestSpec) getRowChangeForUpdate(table string, newState *query.Row) *bi
 	rowChange.Before = &before
 	rowChange.After = &after
 	if hasSkip {
-		rowChange.DataColumns = &binlogdata.RowChange_Bitmap{
+		rowChange.DataColumns = &binlogdatapb.RowChange_Bitmap{
 			Count: int64(len(currentState.Lengths)),
 			Cols:  []byte{bitmap},
 		}
@@ -596,4 +691,83 @@ func (ts *TestSpec) getBefore(table string) *query.Row {
 		currentValueIndex += l
 	}
 	return &row
+}
+
+func (ts *TestSpec) Reset() {
+	for table := range ts.fieldEvents {
+		ts.fieldEventsSent[table] = false
+	}
+}
+
+func (ts *TestSpec) SetStartPosition(pos string) {
+	ts.options.position = pos
+}
+
+func getRowEvent(ts *TestSpec, fe *TestFieldEvent, query string) string {
+	stmt, err := sqlparser.NewTestParser().Parse(query)
+	var bv map[string]string
+	var table string
+	switch stmt.(type) {
+	case *sqlparser.Insert:
+		table, bv = ts.getBindVarsForInsert(stmt)
+	default:
+		panic("unhandled statement type for query " + query)
+	}
+	require.NoError(ts.t, err)
+	return ts.getRowEvent(table, bv, fe, stmt, 0)
+}
+
+func getLastPKEvent(table, colName string, colType query.Type, colValue []sqltypes.Value, collationId, flags uint32) string {
+	lastPK := getQRFromLastPK([]*query.Field{{Name: colName,
+		Type: colType, Charset: collationId,
+		Flags: flags}}, colValue)
+	ev := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_LASTPK,
+		LastPKEvent: &binlogdatapb.LastPKEvent{
+			TableLastPK: &binlogdatapb.TableLastPK{TableName: table, Lastpk: lastPK},
+		},
+	}
+	return ev.String()
+}
+
+func getCopyCompletedEvent(table string) string {
+	ev := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_LASTPK,
+		LastPKEvent: &binlogdatapb.LastPKEvent{
+			Completed:   true,
+			TableLastPK: &binlogdatapb.TableLastPK{TableName: table},
+		},
+	}
+	return ev.String()
+}
+
+func getQueryType(strType string) query.Type {
+	switch strType {
+	case "INT32":
+		return query.Type_INT32
+	case "INT64":
+		return query.Type_INT64
+	case "UINT64":
+		return query.Type_UINT64
+	case "UINT32":
+		return query.Type_UINT32
+	case "VARBINARY":
+		return query.Type_VARBINARY
+	case "BINARY":
+		return query.Type_BINARY
+	case "VARCHAR":
+		return query.Type_VARCHAR
+	case "CHAR":
+		return query.Type_CHAR
+	case "TEXT":
+		return query.Type_TEXT
+	case "BLOB":
+		return query.Type_BLOB
+	case "ENUM":
+		return query.Type_ENUM
+	case "SET":
+		return query.Type_SET
+	default:
+		panic("unknown type " + strType)
+	}
 }

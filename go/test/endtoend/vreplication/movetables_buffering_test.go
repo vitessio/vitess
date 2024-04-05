@@ -3,12 +3,11 @@ package vreplication
 import (
 	"testing"
 
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/wrangler"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
 func TestMoveTablesBuffering(t *testing.T) {
@@ -16,7 +15,7 @@ func TestMoveTablesBuffering(t *testing.T) {
 	vc = setupMinimalCluster(t)
 	defer vc.TearDown()
 
-	currentWorkflowType = wrangler.MoveTablesWorkflow
+	currentWorkflowType = binlogdatapb.VReplicationWorkflowType_MoveTables
 	setupMinimalCustomerKeyspace(t)
 	tables := "loadtest"
 	err := tstWorkflowExec(t, defaultCellName, workflowName, sourceKs, targetKs,

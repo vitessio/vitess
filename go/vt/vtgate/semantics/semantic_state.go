@@ -198,9 +198,23 @@ func (st *SemTable) GetChildForeignKeysForTargets() (fks []vindexes.ChildFKInfo)
 	return fks
 }
 
-// GetChildForeignKeysForTableSet gets the child foreign keys as a list for the specified TableSet.
-func (st *SemTable) GetChildForeignKeysForTableSet(ts TableSet) []vindexes.ChildFKInfo {
-	return st.childForeignKeysInvolved[ts]
+// GetChildForeignKeysForTableSet gets the child foreign keys as a listfor the TableSet.
+func (st *SemTable) GetChildForeignKeysForTableSet(target TableSet) (fks []vindexes.ChildFKInfo) {
+	for _, ts := range st.Targets.Constituents() {
+		if target.IsSolvedBy(ts) {
+			fks = append(fks, st.childForeignKeysInvolved[ts]...)
+		}
+	}
+	return fks
+}
+
+// GetChildForeignKeysForTable gets the child foreign keys as a list for the specified TableName.
+func (st *SemTable) GetChildForeignKeysForTable(tbl sqlparser.TableName) ([]vindexes.ChildFKInfo, error) {
+	ts, err := st.GetTargetTableSetForTableName(tbl)
+	if err != nil {
+		return nil, err
+	}
+	return st.childForeignKeysInvolved[ts], nil
 }
 
 // GetChildForeignKeysList gets the child foreign keys as a list.
@@ -216,6 +230,16 @@ func (st *SemTable) GetChildForeignKeysList() []vindexes.ChildFKInfo {
 func (st *SemTable) GetParentForeignKeysForTargets() (fks []vindexes.ParentFKInfo) {
 	for _, ts := range st.Targets.Constituents() {
 		fks = append(fks, st.parentForeignKeysInvolved[ts]...)
+	}
+	return fks
+}
+
+// GetParentForeignKeysForTableSet gets the parent foreign keys as a list for the TableSet.
+func (st *SemTable) GetParentForeignKeysForTableSet(target TableSet) (fks []vindexes.ParentFKInfo) {
+	for _, ts := range st.Targets.Constituents() {
+		if target.IsSolvedBy(ts) {
+			fks = append(fks, st.parentForeignKeysInvolved[ts]...)
+		}
 	}
 	return fks
 }

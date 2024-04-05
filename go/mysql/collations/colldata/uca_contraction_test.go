@@ -19,7 +19,7 @@ package colldata
 import (
 	"encoding/json"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"sort"
 	"testing"
@@ -203,14 +203,13 @@ func (s *strgen) generate(length int, freq float64) (out []byte) {
 		return flat[i] < flat[j]
 	})
 
-	gen := rand.New(rand.NewSource(0xDEADBEEF))
 	out = make([]byte, 0, length)
 	for len(out) < length {
-		if gen.Float64() < freq {
-			cnt := s.contractions[rand.Intn(len(s.contractions))]
+		if rand.Float64() < freq {
+			cnt := s.contractions[rand.IntN(len(s.contractions))]
 			out = append(out, cnt...)
 		} else {
-			cp := flat[rand.Intn(len(flat))]
+			cp := flat[rand.IntN(len(flat))]
 			out = append(out, string(cp)...)
 		}
 	}

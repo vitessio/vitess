@@ -77,29 +77,6 @@ func IsRunningQueryService(tt topodatapb.TabletType) bool {
 	return false
 }
 
-// IsSubjectToLameduck returns if a tablet is subject to being
-// lameduck.  Lameduck is a transition period where we are still
-// allowed to serve, but we tell the clients we are going away
-// soon. Typically, a vttablet will still serve, but broadcast a
-// non-serving state through its health check. then vtgate will catch
-// that non-serving state, and stop sending queries.
-//
-// Primaries are not subject to lameduck, as we usually want to transition
-// them as fast as possible.
-//
-// Replica and rdonly will use lameduck when going from healthy to
-// unhealthy (either because health check fails, or they're shutting down).
-//
-// Other types are probably not serving user visible traffic, so they
-// need to transition as fast as possible too.
-func IsSubjectToLameduck(tt topodatapb.TabletType) bool {
-	switch tt {
-	case topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY:
-		return true
-	}
-	return false
-}
-
 // IsRunningUpdateStream returns if a tablet is running the update stream
 // RPC service.
 func IsRunningUpdateStream(tt topodatapb.TabletType) bool {
@@ -132,36 +109,6 @@ func NewTablet(uid uint32, cell, host string) *topodatapb.Tablet {
 		Hostname: host,
 		PortMap:  make(map[string]int32),
 	}
-}
-
-// TabletEquality returns true iff two Tablet are representing the same tablet
-// process: same uid/cell, running on the same host / ports.
-func TabletEquality(left, right *topodatapb.Tablet) bool {
-	if !topoproto.TabletAliasEqual(left.Alias, right.Alias) {
-		return false
-	}
-	if left.Hostname != right.Hostname {
-		return false
-	}
-	if left.MysqlHostname != right.MysqlHostname {
-		return false
-	}
-	if left.MysqlPort != right.MysqlPort {
-		return false
-	}
-	if len(left.PortMap) != len(right.PortMap) {
-		return false
-	}
-	for key, lvalue := range left.PortMap {
-		rvalue, ok := right.PortMap[key]
-		if !ok {
-			return false
-		}
-		if lvalue != rvalue {
-			return false
-		}
-	}
-	return true
 }
 
 // TabletInfo is the container for a Tablet, read from the topology server.

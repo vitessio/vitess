@@ -21,7 +21,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"strconv"
 	"strings"
 	"time"
@@ -181,7 +181,7 @@ func TestRandomValues() (Value, Value) {
 }
 
 func randomNumericType(i int) Value {
-	r := rand.Intn(len(numericTypes))
+	r := rand.IntN(len(numericTypes))
 	return numericTypes[r](i)
 }
 
@@ -201,7 +201,7 @@ var numericTypes = []func(int) Value{
 type RandomGenerator func() Value
 
 func randomBytes() []byte {
-	b := make([]byte, rand.Intn(128))
+	b := make([]byte, rand.IntN(128))
 	_, _ = crand.Read(b)
 	return b
 }
@@ -211,13 +211,13 @@ var RandomGenerators = map[Type]RandomGenerator{
 		return NULL
 	},
 	Int8: func() Value {
-		return NewInt8(int8(rand.Intn(255)))
+		return NewInt8(int8(rand.IntN(255)))
 	},
 	Int32: func() Value {
-		return NewInt32(rand.Int31())
+		return NewInt32(rand.Int32())
 	},
 	Int64: func() Value {
-		return NewInt64(rand.Int63())
+		return NewInt64(rand.Int64())
 	},
 	Uint32: func() Value {
 		return NewUint32(rand.Uint32())
@@ -229,7 +229,7 @@ var RandomGenerators = map[Type]RandomGenerator{
 		return NewFloat64(rand.ExpFloat64())
 	},
 	Decimal: func() Value {
-		dec := fmt.Sprintf("%d.%d", rand.Intn(999999999), rand.Intn(999999999))
+		dec := fmt.Sprintf("%d.%d", rand.IntN(999999999), rand.IntN(999999999))
 		if rand.Int()&0x1 == 1 {
 			dec = "-" + dec
 		}
@@ -255,11 +255,11 @@ var RandomGenerators = map[Type]RandomGenerator{
 	},
 	TypeJSON: func() Value {
 		var j string
-		switch rand.Intn(6) {
+		switch rand.IntN(6) {
 		case 0:
 			j = "null"
 		case 1:
-			i := rand.Int63()
+			i := rand.Int64()
 			if rand.Int()&0x1 == 1 {
 				i = -i
 			}
@@ -286,6 +286,6 @@ func randTime() time.Time {
 	max := time.Date(2070, 1, 0, 0, 0, 0, 0, time.UTC).Unix()
 	delta := max - min
 
-	sec := rand.Int63n(delta) + min
+	sec := rand.Int64N(delta) + min
 	return time.Unix(sec, 0)
 }
