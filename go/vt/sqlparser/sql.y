@@ -1149,7 +1149,7 @@ create_statement:
     if $3 != 0 {
       ne = true
     }
-    $$ = &DBDDL{Action: CreateStr, DBName: string($4), IfNotExists: ne, CharsetCollate: $5}
+    $$ = &DBDDL{Action: CreateStr, SchemaOrDatabase: "database", DBName: string($4), IfNotExists: ne, CharsetCollate: $5}
   }
 | CREATE SCHEMA not_exists_opt ID creation_option_opt
   {
@@ -1157,7 +1157,7 @@ create_statement:
     if $3 != 0 {
       ne = true
     }
-    $$ = &DBDDL{Action: CreateStr, DBName: string($4), IfNotExists: ne, CharsetCollate: $5}
+    $$ = &DBDDL{Action: CreateStr, SchemaOrDatabase: "schema", DBName: string($4), IfNotExists: ne, CharsetCollate: $5}
   }
 | CREATE definer_opt TRIGGER trigger_name trigger_time trigger_event ON table_name FOR EACH ROW trigger_order_opt lexer_position special_comment_mode trigger_body lexer_position
   {
@@ -4545,11 +4545,11 @@ alter_statement:
 alter_database_statement:
   ALTER DATABASE ID creation_option_opt
   {
-    $$ = &DBDDL{Action: AlterStr, DBName: string($3), CharsetCollate: $4}
+    $$ = &DBDDL{Action: AlterStr, SchemaOrDatabase: "database", DBName: string($3), CharsetCollate: $4}
   }
 | ALTER DATABASE creation_option_opt
   {
-    $$ = &DBDDL{Action: AlterStr, CharsetCollate: $3}
+    $$ = &DBDDL{Action: AlterStr, SchemaOrDatabase: "database", CharsetCollate: $3}
   }
 
 alter_table_statement:
@@ -4925,7 +4925,7 @@ drop_statement:
     if $3 != 0 {
       exists = true
     }
-    $$ = &DBDDL{Action: DropStr, DBName: string($4), IfExists: exists}
+    $$ = &DBDDL{Action: DropStr, SchemaOrDatabase: "database", DBName: string($4), IfExists: exists}
   }
 | DROP SCHEMA exists_opt ID
   {
@@ -4933,7 +4933,7 @@ drop_statement:
     if $3 != 0 {
       exists = true
     }
-    $$ = &DBDDL{Action: DropStr, DBName: string($4), IfExists: exists}
+    $$ = &DBDDL{Action: DropStr, SchemaOrDatabase: "schema", DBName: string($4), IfExists: exists}
   }
 | DROP TRIGGER exists_opt trigger_name
   {

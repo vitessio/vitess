@@ -1761,11 +1761,12 @@ type CharsetAndCollate struct {
 
 // DBDDL represents a CREATE, DROP database statement.
 type DBDDL struct {
-	Action         string
-	DBName         string
-	IfNotExists    bool
-	IfExists       bool
-	CharsetCollate []*CharsetAndCollate
+	Action           string
+	SchemaOrDatabase string
+	DBName           string
+	IfNotExists      bool
+	IfExists         bool
+	CharsetCollate   []*CharsetAndCollate
 }
 
 // Format formats the node.
@@ -1790,13 +1791,13 @@ func (node *DBDDL) Format(buf *TrackedBuffer) {
 			charsetCollateStr += fmt.Sprintf("%s %s %s", charsetDef, typeStr, obj.Value)
 		}
 
-		buf.WriteString(fmt.Sprintf("%s database%s%s%s", node.Action, exists, dbname, charsetCollateStr))
+		buf.WriteString(fmt.Sprintf("%s %s%s%s%s", node.Action, node.SchemaOrDatabase, exists, dbname, charsetCollateStr))
 	case DropStr:
 		exists := ""
 		if node.IfExists {
 			exists = " if exists"
 		}
-		buf.WriteString(fmt.Sprintf("%s database%s %v", node.Action, exists, node.DBName))
+		buf.WriteString(fmt.Sprintf("%s %s%s %v", node.Action, node.SchemaOrDatabase, exists, node.DBName))
 	}
 }
 

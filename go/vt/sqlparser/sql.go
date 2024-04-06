@@ -12381,7 +12381,7 @@ yydefault:
 			if yyDollar[3].byt != 0 {
 				ne = true
 			}
-			yyVAL.statement = &DBDDL{Action: CreateStr, DBName: string(yyDollar[4].bytes), IfNotExists: ne, CharsetCollate: yyDollar[5].charsetCollates}
+			yyVAL.statement = &DBDDL{Action: CreateStr, SchemaOrDatabase: "database", DBName: string(yyDollar[4].bytes), IfNotExists: ne, CharsetCollate: yyDollar[5].charsetCollates}
 		}
 	case 120:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -12391,7 +12391,7 @@ yydefault:
 			if yyDollar[3].byt != 0 {
 				ne = true
 			}
-			yyVAL.statement = &DBDDL{Action: CreateStr, DBName: string(yyDollar[4].bytes), IfNotExists: ne, CharsetCollate: yyDollar[5].charsetCollates}
+			yyVAL.statement = &DBDDL{Action: CreateStr, SchemaOrDatabase: "schema", DBName: string(yyDollar[4].bytes), IfNotExists: ne, CharsetCollate: yyDollar[5].charsetCollates}
 		}
 	case 121:
 		yyDollar = yyS[yypt-16 : yypt+1]
@@ -16730,13 +16730,13 @@ yydefault:
 		yyDollar = yyS[yypt-4 : yypt+1]
 //line sql.y:4547
 		{
-			yyVAL.statement = &DBDDL{Action: AlterStr, DBName: string(yyDollar[3].bytes), CharsetCollate: yyDollar[4].charsetCollates}
+			yyVAL.statement = &DBDDL{Action: AlterStr, SchemaOrDatabase: "database", DBName: string(yyDollar[3].bytes), CharsetCollate: yyDollar[4].charsetCollates}
 		}
 	case 892:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:4551
 		{
-			yyVAL.statement = &DBDDL{Action: AlterStr, CharsetCollate: yyDollar[3].charsetCollates}
+			yyVAL.statement = &DBDDL{Action: AlterStr, SchemaOrDatabase: "database", CharsetCollate: yyDollar[3].charsetCollates}
 		}
 	case 893:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -17226,7 +17226,7 @@ yydefault:
 			if yyDollar[3].byt != 0 {
 				exists = true
 			}
-			yyVAL.statement = &DBDDL{Action: DropStr, DBName: string(yyDollar[4].bytes), IfExists: exists}
+			yyVAL.statement = &DBDDL{Action: DropStr, SchemaOrDatabase: "database", DBName: string(yyDollar[4].bytes), IfExists: exists}
 		}
 	case 966:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -17236,7 +17236,7 @@ yydefault:
 			if yyDollar[3].byt != 0 {
 				exists = true
 			}
-			yyVAL.statement = &DBDDL{Action: DropStr, DBName: string(yyDollar[4].bytes), IfExists: exists}
+			yyVAL.statement = &DBDDL{Action: DropStr, SchemaOrDatabase: "schema", DBName: string(yyDollar[4].bytes), IfExists: exists}
 		}
 	case 967:
 		yyDollar = yyS[yypt-4 : yypt+1]
