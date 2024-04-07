@@ -125,18 +125,6 @@ func TestSetSuperReadOnlyMySQL(t *testing.T) {
 	assert.True(t, isReadOnly, "read_only should be set to True")
 }
 
-// TODO: add some queries
-// func TestWaitForReplicationStart(t *testing.T) {
-// 	require.NotNil(t, mysqld)
-
-// 	err := mysqlctl.WaitForReplicationStart(mysqld, 2)
-// 	assert.ErrorContains(t, err, "no replication status")
-
-// 	_, _ = clusterInstance.VtctldClientProcess.GetShardReplication("test_delete_keyspace", "0")
-// 	err = mysqld.StartReplication(map[string]string{})
-// 	require.NoError(t, err)
-// }
-
 func TestGetMysqlPort(t *testing.T) {
 	require.NotNil(t, mysqld)
 
@@ -150,23 +138,15 @@ func TestGetMysqlPort(t *testing.T) {
 }
 
 func TestGetServerID(t *testing.T) {
-	// TODO: write tests
 	require.NotNil(t, mysqld)
 
 	sid, err := mysqld.GetServerID(context.Background())
 	assert.NoError(t, err)
+	assert.Equal(t, serverID, sid)
 
 	suuid, err := mysqld.GetServerUUID(context.Background())
 	assert.NoError(t, err)
-	fmt.Println(suuid, sid)
-}
-
-func TestWaitSourcePos(t *testing.T) {
-	err := mysqld.WaitSourcePos(context.Background(), replication.Position{GTIDSet: replication.Mysql56GTIDSet{}})
-	fmt.Println(err)
-
-	err = mysqld.WaitSourcePos(context.Background(), replication.Position{GTIDSet: replication.MariadbGTIDSet{}})
-	fmt.Println(err)
+	assert.NotEmpty(t, suuid)
 }
 
 func TestReplicationStatus(t *testing.T) {
@@ -290,15 +270,6 @@ func TestSetAndResetReplication(t *testing.T) {
 	assert.Equal(t, int32(0), r.SourcePort)
 }
 
-func TestFindReplicas(t *testing.T) {
-	// TODO: add more checks
-	require.NotNil(t, mysqld)
-
-	res, err := mysqlctl.FindReplicas(mysqld)
-	assert.NoError(t, err)
-	assert.Empty(t, res)
-}
-
 func TestGetBinlogInformation(t *testing.T) {
 	require.NotNil(t, mysqld)
 
@@ -376,7 +347,6 @@ func TestBinaryLogs(t *testing.T) {
 }
 
 func TestGetPreviousGTIDs(t *testing.T) {
-	// TODO: can we add more tests
 	require.NotNil(t, mysqld)
 
 	res, err := mysqld.GetBinaryLogs(context.Background())
@@ -408,4 +378,93 @@ func TestSemiSyncEnabled(t *testing.T) {
 	p, r = mysqld.SemiSyncEnabled()
 	assert.False(t, p)
 	assert.True(t, r)
+}
+
+func TestWaitForReplicationStart(t *testing.T) {
+	require.NotNil(t, mysqld)
+
+	err := mysqlctl.WaitForReplicationStart(mysqld, 1)
+	assert.ErrorContains(t, err, "no replication status")
+
+	port, err := mysqld.GetMysqlPort()
+	require.NoError(t, err)
+	host := "localhost"
+
+	err = mysqld.SetReplicationSource(context.Background(), host, port, true, true)
+	assert.NoError(t, err)
+
+	err = mysqlctl.WaitForReplicationStart(mysqld, 1)
+	assert.NoError(t, err)
+
+	err = mysqld.ResetReplication(context.Background())
+	require.NoError(t, err)
+}
+
+func TestStartReplication(t *testing.T) {
+	require.NotNil(t, mysqld)
+
+	err := mysqld.StartReplication(map[string]string{})
+	assert.ErrorContains(t, err, "The server is not configured as replica")
+
+	port, err := mysqld.GetMysqlPort()
+	require.NoError(t, err)
+	host := "localhost"
+
+	// Set startReplicationAfter to false as we want to test StartReplication here
+	err = mysqld.SetReplicationSource(context.Background(), host, port, true, false)
+	assert.NoError(t, err)
+
+	err = mysqld.StartReplication(map[string]string{})
+	assert.NoError(t, err)
+
+	err = mysqld.ResetReplication(context.Background())
+	require.NoError(t, err)
+}
+
+func TestStopReplication(t *testing.T) {
+	require.NotNil(t, mysqld)
+
+	port, err := mysqld.GetMysqlPort()
+	require.NoError(t, err)
+	host := "localhost"
+
+	err = mysqld.SetReplicationSource(context.Background(), host, port, true, true)
+	assert.NoError(t, err)
+
+	r, err := mysqld.ReplicationStatus()
+	assert.NoError(t, err)
+	assert.Equal(t, host, r.SourceHost)
+	assert.Equal(t, port, r.SourcePort)
+	assert.Equal(t, replication.ReplicationStateRunning, r.SQLState)
+
+	err = mysqld.StopReplication(map[string]string{})
+	assert.NoError(t, err)
+
+	r, err = mysqld.ReplicationStatus()
+	assert.NoError(t, err)
+	assert.Equal(t, replication.ReplicationStateStopped, r.SQLState)
+}
+
+func TestStopSQLThread(t *testing.T) {
+	require.NotNil(t, mysqld)
+
+	port, err := mysqld.GetMysqlPort()
+	require.NoError(t, err)
+	host := "localhost"
+
+	err = mysqld.SetReplicationSource(context.Background(), host, port, true, true)
+	assert.NoError(t, err)
+
+	r, err := mysqld.ReplicationStatus()
+	assert.NoError(t, err)
+	assert.Equal(t, host, r.SourceHost)
+	assert.Equal(t, port, r.SourcePort)
+	assert.Equal(t, replication.ReplicationStateRunning, r.SQLState)
+
+	err = mysqld.StopSQLThread(context.Background())
+	assert.NoError(t, err)
+
+	r, err = mysqld.ReplicationStatus()
+	assert.NoError(t, err)
+	assert.Equal(t, replication.ReplicationStateStopped, r.SQLState)
 }

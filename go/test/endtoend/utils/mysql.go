@@ -38,6 +38,8 @@ import (
 
 const mysqlShutdownTimeout = 1 * time.Minute
 
+var serverID uint32
+
 // NewMySQL creates a new MySQL server using the local mysqld binary. The name of the database
 // will be set to `dbName`. SQL queries that need to be executed on the new MySQL instance
 // can be passed through the `schemaSQL` argument.
@@ -65,6 +67,7 @@ func CreateMysqldAndMycnf(tabletUID uint32, mysqlSocket string, mysqlPort int) (
 	if err := mycnf.RandomizeMysqlServerID(); err != nil {
 		return nil, nil, fmt.Errorf("couldn't generate random MySQL server_id: %v", err)
 	}
+	serverID = mycnf.ServerID
 	if mysqlSocket != "" {
 		mycnf.SocketFile = mysqlSocket
 	}
