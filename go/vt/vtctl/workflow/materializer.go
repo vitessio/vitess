@@ -258,7 +258,9 @@ func (mz *materializer) deploySchema() error {
 	var mu sync.Mutex
 
 	removeAutoInc := false
-	if mz.workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables && mz.ms.WorkflowOptions.StripAutoIncrement && mz.targetVSchema.Keyspace.Sharded {
+	if mz.workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables &&
+		(mz.targetVSchema != nil && mz.targetVSchema.Keyspace != nil && mz.targetVSchema.Keyspace.Sharded) &&
+		(mz.ms != nil && mz.ms.GetWorkflowOptions().GetStripAutoIncrement()) {
 		// Auto-increment columns are not generally used with sharded tables.
 		removeAutoInc = true
 	}
