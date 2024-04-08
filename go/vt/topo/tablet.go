@@ -293,6 +293,7 @@ type GetTabletsByCellOptions struct {
 
 // GetTabletsByCell returns all the tablets in the cell.
 // It returns ErrNoNode if the cell doesn't exist.
+// It returns ErrPartialResult if some tablets couldn't be read. The results in the slice are incomplete.
 // It returns (nil, nil) if the cell exists, but there are no tablets in it.
 func (ts *Server) GetTabletsByCell(ctx context.Context, cellAlias string, opt *GetTabletsByCellOptions) ([]*TabletInfo, error) {
 	// If the cell doesn't exist, this will return ErrNoNode.
@@ -330,6 +331,7 @@ func (ts *Server) GetTabletsByCell(ctx context.Context, cellAlias string, opt *G
 // GetTabletsIndividuallyByCell returns a sorted list of tablets for topo servers that do not
 // directly support the topoConn.List() functionality.
 // It returns ErrNoNode if the cell doesn't exist.
+// It returns ErrPartialResult if some tablets couldn't be read. The results in the slice are incomplete.
 // It returns (nil, nil) if the cell exists, but there are no tablets in it.
 func (ts *Server) GetTabletsIndividuallyByCell(ctx context.Context, cell string, opt *GetTabletsByCellOptions) ([]*TabletInfo, error) {
 	// If the cell doesn't exist, this will return ErrNoNode.
@@ -339,10 +341,14 @@ func (ts *Server) GetTabletsIndividuallyByCell(ctx context.Context, cell string,
 	}
 	sort.Sort(topoproto.TabletAliasList(aliases))
 
+	var partialResultErr error
 	tabletMap, err := ts.GetTabletMap(ctx, aliases, opt)
 	if err != nil {
-		// we got another error than topo.ErrNoNode
-		return nil, err
+		if IsErrType(err, PartialResult) {
+			partialResultErr = err
+		} else {
+			return nil, err
+		}
 	}
 	tablets := make([]*TabletInfo, 0, len(aliases))
 	for _, tabletAlias := range aliases {
@@ -356,7 +362,7 @@ func (ts *Server) GetTabletsIndividuallyByCell(ctx context.Context, cell string,
 		}
 	}
 
-	return tablets, nil
+	return tablets, partialResultErr
 }
 
 // UpdateTablet updates the tablet data only - not associated replication paths.

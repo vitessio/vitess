@@ -143,6 +143,7 @@ func (tw *TopologyWatcher) Stop() {
 
 func (tw *TopologyWatcher) loadTablets() {
 	newTablets := make(map[string]*tabletInfo)
+	var partialResult bool
 
 	// First get the list of all tablets.
 	tabletInfos, err := tw.getTablets()
@@ -152,6 +153,7 @@ func (tw *TopologyWatcher) loadTablets() {
 		// If we get a partial result error, we just log it and process the tablets that we did manage to fetch.
 		if topo.IsErrType(err, topo.PartialResult) {
 			log.Errorf("received partial result from getTablets for cell %v: %v", tw.cell, err)
+			partialResult = true
 		} else { // For all other errors, just return.
 			log.Errorf("error getting tablets for cell: %v: %v", tw.cell, err)
 			return
@@ -180,6 +182,18 @@ func (tw *TopologyWatcher) loadTablets() {
 		newTablets[aliasStr] = &tabletInfo{
 			alias:  aliasStr,
 			tablet: tInfo.Tablet,
+		}
+	}
+
+	if partialResult {
+		// We don't want to remove any tablets from the tablets map or the healthcheck if we got a partial result
+		// because we don't know if they were actually deleted or if we simply failed to fetch them.
+		// Fill any gaps in the newTablets map using the existing tablets.
+		for alias, val := range tw.tablets {
+			if _, ok := newTablets[alias]; !ok {
+				tabletAliasStrs = append(tabletAliasStrs, alias)
+				newTablets[alias] = val
+			}
 		}
 	}
 
