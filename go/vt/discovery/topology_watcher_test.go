@@ -18,6 +18,7 @@ package discovery
 
 import (
 	"context"
+	"errors"
 	"math/rand"
 	"testing"
 	"time"
@@ -575,4 +576,85 @@ func TestFilterByKeyspaceSkipsIgnoredTablets(t *testing.T) {
 	assert.Empty(t, fhc.GetAllTablets())
 
 	tw.Stop()
+}
+
+func TestGetTabletErrorDoesNotRemoveFromHealthcheck(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
+	ts, factory := memorytopo.NewServerAndFactory(ctx, "aa")
+	defer ts.Close()
+	fhc := NewFakeHealthCheck(nil)
+	defer fhc.Close()
+	topologyWatcherOperations.ZeroAll()
+	counts := topologyWatcherOperations.Counts()
+	tw := NewTopologyWatcher(context.Background(), ts, fhc, nil, "aa", 10*time.Minute, true, 5)
+	defer tw.Stop()
+
+	// Force fallback to getting tablets individually.
+	factory.AddOperationError(memorytopo.List, ".*", topo.NewError(topo.NoImplementation, "List not supported"))
+
+	counts = checkOpCounts(t, counts, map[string]int64{})
+	checkChecksum(t, tw, 0)
+
+	// Add a tablet to the topology.
+	tablet1 := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "aa",
+			Uid:  0,
+		},
+		Hostname: "host1",
+		PortMap: map[string]int32{
+			"vt": 123,
+		},
+		Keyspace: "keyspace",
+		Shard:    "shard",
+	}
+	require.NoError(t, ts.CreateTablet(ctx, tablet1), "CreateTablet failed for %v", tablet1.Alias)
+
+	tw.loadTablets()
+	counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "AddTablet": 1})
+	checkChecksum(t, tw, 3238442862)
+
+	// Check the tablet is returned by GetAllTablets().
+	allTablets := fhc.GetAllTablets()
+	key1 := TabletToMapKey(tablet1)
+	assert.Len(t, allTablets, 1)
+	assert.Contains(t, allTablets, key1)
+	assert.True(t, proto.Equal(tablet1, allTablets[key1]))
+
+	// Add a second tablet to the topology.
+	tablet2 := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "aa",
+			Uid:  2,
+		},
+		Hostname: "host2",
+		PortMap: map[string]int32{
+			"vt": 789,
+		},
+		Keyspace: "keyspace",
+		Shard:    "shard",
+	}
+	require.NoError(t, ts.CreateTablet(ctx, tablet2), "CreateTablet failed for %v", tablet2.Alias)
+
+	// Cause the Get for the first tablet to fail.
+	factory.AddOperationError(memorytopo.Get, "tablets/aa-0000000000/Tablet", errors.New("fake error"))
+
+	// Ensure that a topo Get error results in a partial results error. If not, the rest of this test is invalid.
+	_, err := ts.GetTabletsByCell(ctx, "aa", &topo.GetTabletsByCellOptions{})
+	require.ErrorContains(t, err, "partial result")
+
+	// Now force the error during loadTablets.
+	tw.loadTablets()
+	checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "AddTablet": 1})
+	checkChecksum(t, tw, 2762153755)
+
+	// Ensure the first tablet is still returned by GetAllTablets() and the second tablet has been added.
+	allTablets = fhc.GetAllTablets()
+	key2 := TabletToMapKey(tablet2)
+	assert.Len(t, allTablets, 2)
+	assert.Contains(t, allTablets, key1)
+	assert.Contains(t, allTablets, key2)
+	assert.True(t, proto.Equal(tablet1, allTablets[key1]))
+	assert.True(t, proto.Equal(tablet2, allTablets[key2]))
 }
