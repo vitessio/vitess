@@ -23,6 +23,7 @@ import (
 	"context"
 	"errors"
 	"math/rand/v2"
+	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -50,6 +51,25 @@ const (
 	UnreachableServerAddr = "unreachable"
 )
 
+// Operation is one of the operations defined by topo.Conn
+type Operation int
+
+// The following is the list of topo.Conn operations
+const (
+	ListDir = Operation(iota)
+	Create
+	Update
+	Get
+	List
+	Delete
+	Lock
+	TryLock
+	Watch
+	WatchRecursive
+	NewLeaderParticipation
+	Close
+)
+
 // Factory is a memory-based implementation of topo.Factory.  It
 // takes a file-system like approach, with directories at each level
 // being an actual directory node. This is meant to be closer to
@@ -72,12 +92,18 @@ type Factory struct {
 	// err is used for testing purposes to force queries / watches
 	// to return the given error
 	err error
-	// listErr is used for testing purposed to fake errors from
-	// calls to List.
-	listErr error
+	// operationErrors is used for testing purposes to fake errors from
+	// operations and paths matching the spec
+	operationErrors map[Operation][]errorSpec
 	// callstats allows us to keep track of how many topo.Conn calls
 	// we make (Create, Get, Update, Delete, List, ListDir, etc).
 	callstats *stats.CountersWithMultiLabels
+}
+
+type errorSpec struct {
+	op          Operation
+	pathPattern *regexp.Regexp
+	err         error
 }
 
 // HasGlobalReadOnlyCell is part of the topo.Factory interface.
@@ -248,9 +274,10 @@ func (n *node) PropagateWatchError(err error) {
 // in case of a problem.
 func NewServerAndFactory(ctx context.Context, cells ...string) (*topo.Server, *Factory) {
 	f := &Factory{
-		cells:      make(map[string]*node),
-		generation: uint64(rand.Int64N(1 << 60)),
-		callstats:  stats.NewCountersWithMultiLabels("", "", []string{"Call"}),
+		cells:           make(map[string]*node),
+		generation:      uint64(rand.Int64N(1 << 60)),
+		callstats:       stats.NewCountersWithMultiLabels("", "", []string{"Call"}),
+		operationErrors: make(map[Operation][]errorSpec),
 	}
 	f.cells[topo.GlobalCell] = f.newDirectory(topo.GlobalCell, nil)
 
@@ -363,9 +390,23 @@ func (f *Factory) recursiveDelete(n *node) {
 	}
 }
 
-func (f *Factory) SetListError(err error) {
+func (f *Factory) AddOperationError(op Operation, pathPattern string, err error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	f.listErr = err
+	f.operationErrors[op] = append(f.operationErrors[op], errorSpec{
+		op:          op,
+		pathPattern: regexp.MustCompile(pathPattern),
+		err:         err,
+	})
+}
+
+func (f *Factory) getOperationError(op Operation, path string) error {
+	specs := f.operationErrors[op]
+	for _, spec := range specs {
+		if spec.pathPattern.MatchString(path) {
+			return spec.err
+		}
+	}
+	return nil
 }
