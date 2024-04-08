@@ -28,6 +28,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	vdiff2 "vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
 )
 
@@ -80,6 +81,7 @@ func doVtctlclientVDiff(t *testing.T, keyspace, workflow, cells string, want *ex
 		} else {
 			require.Equal(t, "completed", info.State, "vdiff results: %+v", info)
 			require.False(t, info.HasMismatch, "vdiff results: %+v", info)
+			require.NotZero(t, info.RowsCompared)
 		}
 		if strings.Contains(t.Name(), "AcrossDBVersions") {
 			log.Errorf("VDiff resume cannot be guaranteed between major MySQL versions due to implied collation differences, skipping resume test...")
@@ -150,9 +152,10 @@ func waitForVDiff2ToComplete(t *testing.T, useVtctlclient bool, ksWorkflow, cell
 }
 
 type expectedVDiff2Result struct {
-	state       string
-	shards      []string
-	hasMismatch bool
+	state               string
+	shards              []string
+	hasMismatch         bool
+	minimumRowsCompared int64
 }
 
 func doVtctldclientVDiff(t *testing.T, keyspace, workflow, cells string, want *expectedVDiff2Result, extraFlags ...string) {
@@ -172,6 +175,8 @@ func doVtctldclientVDiff(t *testing.T, keyspace, workflow, cells string, want *e
 			require.Equal(t, want.state, info.State)
 			require.Equal(t, strings.Join(want.shards, ","), info.Shards)
 			require.Equal(t, want.hasMismatch, info.HasMismatch)
+			require.GreaterOrEqual(t, info.RowsCompared, want.minimumRowsCompared,
+				"not enough rows compared: want at least %d, got %d", want.minimumRowsCompared, info.RowsCompared)
 		} else {
 			require.Equal(t, "completed", info.State, "vdiff results: %+v", info)
 			require.False(t, info.HasMismatch, "vdiff results: %+v", info)
@@ -187,7 +192,7 @@ func performVDiff2Action(t *testing.T, useVtctlclient bool, ksWorkflow, cells, a
 	var err error
 	targetKeyspace, workflowName, ok := strings.Cut(ksWorkflow, ".")
 	require.True(t, ok, "invalid keyspace.workflow value: %s", ksWorkflow)
-
+	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
 	if useVtctlclient {
 		// This will always result in us using a PRIMARY tablet, which is all
 		// we start in many e2e tests, but it avoids the tablet picker logic

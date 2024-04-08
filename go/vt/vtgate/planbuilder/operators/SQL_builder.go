@@ -603,6 +603,7 @@ func buildDerivedSelect(op *Horizon, qb *queryBuilder, sel *sqlparser.Select) {
 	sel.GroupBy = opQuery.GroupBy
 	sel.Having = mergeHaving(sel.Having, opQuery.Having)
 	sel.SelectExprs = opQuery.SelectExprs
+	sel.Distinct = opQuery.Distinct
 	qb.addTableExpr(op.Alias, op.Alias, TableID(op), &sqlparser.DerivedTable{
 		Select: sel,
 	}, nil, op.ColumnAliases)
