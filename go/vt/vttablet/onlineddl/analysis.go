@@ -208,8 +208,15 @@ func (e *Executor) analyzeSpecialAlterPlan(ctx context.Context, onlineDDL *schem
 	}
 
 	// special plans which support reverts are trivially desired:
-	// special plans which do not support reverts are flag protected:
-	if onlineDDL.StrategySetting().IsFastRangeRotationFlag() {
+	//
+	// - nothing here thus far
+	//
+	// special plans that do not support revert, but are always desired over Online DDL,
+	// hence not flag protected:
+	{
+		// Dropping a range partition has to run directly. It is incorrect to run with Online DDL
+		// because the table copy will make the second-oldest partition "adopt" the rows which
+		// we really want purged from the oldest partition.
 		op, err := analyzeDropRangePartition(alterTable, createTable)
 		if err != nil {
 			return nil, err
@@ -217,10 +224,16 @@ func (e *Executor) analyzeSpecialAlterPlan(ctx context.Context, onlineDDL *schem
 		if op != nil {
 			return op, nil
 		}
+	}
+	{
+		// Adding a range partition _can_ technically run with Online DDL, but it is wasteful
+		// and pointless. The user fully expects the operation to run immediately and without
+		// any copy of data.
 		if op := analyzeAddRangePartition(alterTable, createTable); op != nil {
 			return op, nil
 		}
 	}
+	// special plans which do not support reverts are flag protected:
 	if onlineDDL.StrategySetting().IsPreferInstantDDL() {
 		op, err := analyzeInstantDDL(alterTable, createTable, capableOf)
 		if err != nil {
