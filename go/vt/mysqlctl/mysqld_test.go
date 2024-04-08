@@ -20,6 +20,7 @@ import (
 	"context"
 	"os"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -211,6 +212,12 @@ func TestCleanupLockfile(t *testing.T) {
 }
 
 func TestRunMysqlUpgrade(t *testing.T) {
+	ver, err := GetVersionString()
+	require.NoError(t, err)
+	if strings.Contains(ver, "5.7") {
+		t.Skipf("Run the test only for 8.0")
+	}
+
 	db := fakesqldb.New(t)
 	defer db.Close()
 
@@ -222,7 +229,7 @@ func TestRunMysqlUpgrade(t *testing.T) {
 	defer testMysqld.Close()
 
 	ctx := context.Background()
-	err := testMysqld.RunMysqlUpgrade(ctx)
+	err = testMysqld.RunMysqlUpgrade(ctx)
 	assert.NoError(t, err)
 
 	// Should not fail for older versions
