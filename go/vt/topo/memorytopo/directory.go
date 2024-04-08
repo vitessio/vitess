@@ -39,6 +39,9 @@ func (c *Conn) ListDir(ctx context.Context, dirPath string, full bool) ([]topo.D
 	if c.factory.err != nil {
 		return nil, c.factory.err
 	}
+	if err := c.factory.getOperationError(ListDir, dirPath); err != nil {
+		return nil, err
+	}
 
 	isRoot := false
 	if dirPath == "" || dirPath == "/" {
