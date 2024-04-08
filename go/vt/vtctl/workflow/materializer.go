@@ -257,6 +257,12 @@ func (mz *materializer) deploySchema() error {
 	var sourceDDLs map[string]string
 	var mu sync.Mutex
 
+	removeAutoInc := false
+	if mz.workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables && mz.ms.WorkflowOptions.StripAutoIncrement && mz.targetVSchema.Keyspace.Sharded {
+		// Auto-increment columns are not generally used with sharded tables.
+		removeAutoInc = true
+	}
+
 	return forAllShards(mz.targetShards, func(target *topo.ShardInfo) error {
 		allTables := []string{"/.*/"}
 
@@ -301,7 +307,8 @@ func (mz *materializer) deploySchema() error {
 			}
 
 			createDDL := ts.CreateDdl
-			if createDDL == createDDLAsCopy || createDDL == createDDLAsCopyDropConstraint || createDDL == createDDLAsCopyDropForeignKeys {
+			// Make any necessary adjustments to the create DDL.
+			if removeAutoInc || createDDL == createDDLAsCopy || createDDL == createDDLAsCopyDropConstraint || createDDL == createDDLAsCopyDropForeignKeys {
 				if ts.SourceExpression != "" {
 					// Check for table if non-empty SourceExpression.
 					sourceTableName, err := mz.env.Parser().TableFromStatement(ts.SourceExpression)
@@ -336,6 +343,14 @@ func (mz *materializer) deploySchema() error {
 
 					ddl = strippedDDL
 				}
+
+				if removeAutoInc {
+					ddl, err = stripAutoIncrement(ddl, mz.env.Parser())
+					if err != nil {
+						return err
+					}
+				}
+
 				createDDL = ddl
 			}
 

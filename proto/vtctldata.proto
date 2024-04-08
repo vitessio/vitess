@@ -209,6 +209,7 @@ message Shard {
 message WorkflowOptions {
   string tenant_id = 1;
   string source_keyspace_alias = 2;
+  bool strip_auto_increment = 3;
 }
 
 // TODO: comment the hell out of this.
