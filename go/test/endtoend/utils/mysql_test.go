@@ -35,6 +35,7 @@ var (
 	clusterInstance *cluster.LocalProcessCluster
 	mysqlParams     mysql.ConnParams
 	mysqld          *mysqlctl.Mysqld
+	mycnf           *mysqlctl.Mycnf
 	keyspaceName    = "ks"
 	cell            = "test"
 	schemaSQL       = `create table t1(
@@ -54,7 +55,7 @@ func TestMain(m *testing.M) {
 
 		var closer func()
 		var err error
-		mysqlParams, mysqld, closer, err = NewMySQLWithMysqld(clusterInstance.GetAndReservePort(), clusterInstance.Hostname, keyspaceName, schemaSQL)
+		mysqlParams, mysqld, mycnf, closer, err = NewMySQLWithMysqld(clusterInstance.GetAndReservePort(), clusterInstance.Hostname, keyspaceName, schemaSQL)
 		if err != nil {
 			fmt.Println(err)
 			return 1
@@ -142,7 +143,7 @@ func TestGetServerID(t *testing.T) {
 
 	sid, err := mysqld.GetServerID(context.Background())
 	assert.NoError(t, err)
-	assert.Equal(t, serverID, sid)
+	assert.Equal(t, mycnf.ServerID, sid)
 
 	suuid, err := mysqld.GetServerUUID(context.Background())
 	assert.NoError(t, err)

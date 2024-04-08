@@ -38,8 +38,6 @@ import (
 
 const mysqlShutdownTimeout = 1 * time.Minute
 
-var serverID uint32
-
 // NewMySQL creates a new MySQL server using the local mysqld binary. The name of the database
 // will be set to `dbName`. SQL queries that need to be executed on the new MySQL instance
 // can be passed through the `schemaSQL` argument.
@@ -56,7 +54,7 @@ func NewMySQL(cluster *cluster.LocalProcessCluster, dbName string, schemaSQL ...
 		}
 		sqls = append(sqls, split...)
 	}
-	mysqlParam, _, closer, error := NewMySQLWithMysqld(cluster.GetAndReservePort(), cluster.Hostname, dbName, sqls...)
+	mysqlParam, _, _, closer, error := NewMySQLWithMysqld(cluster.GetAndReservePort(), cluster.Hostname, dbName, sqls...)
 	return mysqlParam, closer, error
 }
 
@@ -67,7 +65,6 @@ func CreateMysqldAndMycnf(tabletUID uint32, mysqlSocket string, mysqlPort int) (
 	if err := mycnf.RandomizeMysqlServerID(); err != nil {
 		return nil, nil, fmt.Errorf("couldn't generate random MySQL server_id: %v", err)
 	}
-	serverID = mycnf.ServerID
 	if mysqlSocket != "" {
 		mycnf.SocketFile = mysqlSocket
 	}
@@ -78,24 +75,24 @@ func CreateMysqldAndMycnf(tabletUID uint32, mysqlSocket string, mysqlPort int) (
 	return mysqlctl.NewMysqld(&cfg), mycnf, nil
 }
 
-func NewMySQLWithMysqld(port int, hostname, dbName string, schemaSQL ...string) (mysql.ConnParams, *mysqlctl.Mysqld, func(), error) {
+func NewMySQLWithMysqld(port int, hostname, dbName string, schemaSQL ...string) (mysql.ConnParams, *mysqlctl.Mysqld, *mysqlctl.Mycnf, func(), error) {
 	mysqlDir, err := createMySQLDir()
 	if err != nil {
-		return mysql.ConnParams{}, nil, nil, err
+		return mysql.ConnParams{}, nil, nil, nil, err
 	}
 	initMySQLFile, err := createInitSQLFile(mysqlDir, dbName)
 	if err != nil {
-		return mysql.ConnParams{}, nil, nil, err
+		return mysql.ConnParams{}, nil, nil, nil, err
 	}
 
 	mysqlPort := port
 	mysqld, mycnf, err := CreateMysqldAndMycnf(0, "", mysqlPort)
 	if err != nil {
-		return mysql.ConnParams{}, nil, nil, err
+		return mysql.ConnParams{}, nil, nil, nil, err
 	}
 	err = initMysqld(mysqld, mycnf, initMySQLFile)
 	if err != nil {
-		return mysql.ConnParams{}, nil, nil, err
+		return mysql.ConnParams{}, nil, nil, nil, err
 	}
 
 	params := mysql.ConnParams{
@@ -107,10 +104,10 @@ func NewMySQLWithMysqld(port int, hostname, dbName string, schemaSQL ...string) 
 	for _, sql := range schemaSQL {
 		err = prepareMySQLWithSchema(params, sql)
 		if err != nil {
-			return mysql.ConnParams{}, nil, nil, err
+			return mysql.ConnParams{}, nil, nil, nil, err
 		}
 	}
-	return params, mysqld, func() {
+	return params, mysqld, mycnf, func() {
 		ctx := context.Background()
 		_ = mysqld.Teardown(ctx, mycnf, true, mysqlShutdownTimeout)
 	}, nil
