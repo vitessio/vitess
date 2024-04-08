@@ -324,7 +324,7 @@ func (setting *DDLStrategySetting) RuntimeOptions() []string {
 		}
 		switch {
 		case isFlag(opt, declarativeFlag):
-		case isFlag(opt, skipTopoFlag):
+		case isFlag(opt, skipTopoFlag): // deprecated flag, parsed for backwards compatibility
 		case isFlag(opt, singletonFlag):
 		case isFlag(opt, singletonContextFlag):
 		case isFlag(opt, allowZeroInDateFlag):
@@ -333,7 +333,7 @@ func (setting *DDLStrategySetting) RuntimeOptions() []string {
 		case isFlag(opt, inOrderCompletionFlag):
 		case isFlag(opt, allowConcurrentFlag):
 		case isFlag(opt, preferInstantDDL):
-		case isFlag(opt, fastRangeRotationFlag):
+		case isFlag(opt, fastRangeRotationFlag): // deprecated flag, parsed for backwards compatibility
 		case isFlag(opt, vreplicationTestSuite):
 		case isFlag(opt, allowForeignKeysFlag):
 		case isFlag(opt, analyzeTableFlag):
