@@ -298,3 +298,14 @@ func (vtctldclient *VtctldClientProcess) OnlineDDLShowRecent(Keyspace string) (r
 		"recent",
 	)
 }
+
+// OnlineDDLShow responds with recent schema migration list
+func (vtctldclient *VtctldClientProcess) OnlineDDLShow(keyspace, workflow string) (result string, err error) {
+	return vtctldclient.ExecuteCommandWithOutput(
+		"OnlineDDL",
+		"show",
+		"--json",
+		keyspace,
+		workflow,
+	)
+}
