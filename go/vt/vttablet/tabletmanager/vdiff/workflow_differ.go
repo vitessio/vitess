@@ -24,6 +24,8 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/vt/schema"
+
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -340,6 +342,9 @@ func (wd *workflowDiffer) buildPlan(dbClient binlogplayer.DBClient, filter *binl
 	for _, table := range schm.TableDefinitions {
 		// if user specified tables explicitly only use those, otherwise diff all tables in workflow
 		if len(specifiedTables) != 0 && !stringListContains(specifiedTables, table.Name) {
+			continue
+		}
+		if schema.IsInternalOperationTableName(table.Name) && !schema.IsOnlineDDLTableName(table.Name) {
 			continue
 		}
 		rule, err := vreplication.MatchTable(table.Name, filter)

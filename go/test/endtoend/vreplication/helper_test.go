@@ -522,7 +522,6 @@ func validateDryRunResults(t *testing.T, output string, want []string) {
 			w = strings.TrimSpace(w[1:])
 			result := strings.HasPrefix(g, w)
 			match = result
-			// t.Logf("Partial match |%v|%v|%v\n", w, g, match)
 		} else {
 			match = g == w
 		}

@@ -3968,7 +3968,7 @@ func (s *Server) getWorkflowStatus(ctx context.Context, keyspace string, workflo
 	if err != nil {
 		return workflowStatus, err
 	}
-	for _, shardStream := range wf.ShardStreams {
+	for _, shardStream := range wf.GetShardStreams() {
 		for _, stream := range shardStream.GetStreams() {
 			state, ok := binlogdatapb.VReplicationWorkflowState_value[stream.State]
 			if !ok {

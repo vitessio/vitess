@@ -21,11 +21,13 @@ import (
 // TestOnlineDDLVDiff is to run a vdiff on a table that is part of an OnlineDDL workflow.
 func TestOnlineDDLVDiff(t *testing.T) {
 	setSidecarDBName("_vt")
+	originalRdonly := defaultRdonly
+	originalReplicas := defaultReplicas
 	defaultRdonly = 0
 	defaultReplicas = 0
 	defer func() {
-		defaultRdonly = 1
-		defaultReplicas = 1
+		defaultRdonly = originalRdonly
+		defaultReplicas = originalReplicas
 	}()
 
 	vc = setupMinimalCluster(t)
@@ -46,13 +48,23 @@ func TestOnlineDDLVDiff(t *testing.T) {
 
 	t.Run("OnlineDDL VDiff", func(t *testing.T) {
 		var done = make(chan bool)
-		go populate(ctx, done, insertTemplate, updateTemplate)
+		go populate(ctx, t, done, insertTemplate, updateTemplate)
 
 		waitForAdditionalRows(t, keyspace, "temp", 100)
 		output = execOnlineDDL(t, "vitess --postpone-completion", keyspace, alterQuery)
 		uuid := strings.TrimSpace(output)
 		waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", keyspace, uuid), binlogdatapb.VReplicationWorkflowState_Running.String())
 		waitForAdditionalRows(t, keyspace, "temp", 200)
+
+		require.NoError(t, waitForCondition("online ddl migration to be ready to complete", func() bool {
+			response := onlineDDLShow(t, keyspace, uuid)
+			if len(response.Migrations) > 0 &&
+				response.Migrations[0].ReadyToComplete == true {
+				return true
+			}
+			return false
+		}, defaultTimeout))
+
 		want := &expectedVDiff2Result{
 			state:               "completed",
 			minimumRowsCompared: 200,
@@ -66,27 +78,29 @@ func TestOnlineDDLVDiff(t *testing.T) {
 	})
 }
 
+func onlineDDLShow(t *testing.T, keyspace, uuid string) *vtctldata.GetSchemaMigrationsResponse {
+	var response vtctldata.GetSchemaMigrationsResponse
+	output, err := vc.VtctldClient.OnlineDDLShow(keyspace, uuid)
+	require.NoError(t, err, output)
+	err = protojson.Unmarshal([]byte(output), &response)
+	require.NoErrorf(t, err, "error unmarshalling OnlineDDL showresponse")
+	return &response
+}
+
 func execOnlineDDL(t *testing.T, strategy, keyspace, query string) string {
 	output, err := vc.VtctldClient.ExecuteCommandWithOutput("ApplySchema", "--ddl-strategy", strategy, "--sql", query, keyspace)
 	require.NoError(t, err, output)
 	uuid := strings.TrimSpace(output)
 	if strategy != "direct" {
 		err = waitForCondition("online ddl to start", func() bool {
-			var response vtctldata.GetSchemaMigrationsResponse
-			output, err := vc.VtctldClient.OnlineDDLShow(keyspace, uuid)
-			require.NoError(t, err, output)
-			err = protojson.Unmarshal([]byte(output), &response)
-			if err != nil {
-				log.Errorf("error unmarshalling response: %v", err)
-				return false
-			}
+			response := onlineDDLShow(t, keyspace, uuid)
 			if len(response.Migrations) > 0 &&
 				(response.Migrations[0].Status == vtctldata.SchemaMigration_RUNNING ||
 					response.Migrations[0].Status == vtctldata.SchemaMigration_COMPLETE) {
 				return true
 			}
 			return false
-		}, 30*time.Second)
+		}, defaultTimeout)
 		require.NoError(t, err)
 
 	}
@@ -98,18 +112,19 @@ func waitForAdditionalRows(t *testing.T, keyspace, table string, count int) {
 	defer cancel()
 
 	numRowsStart := getNumRows(t, vtgateConn, keyspace, table)
-	shortCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	numRows := 0
+	shortCtx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 	for {
 		switch {
 		case shortCtx.Err() != nil:
-			t.Fatalf("Timed out waiting for additional rows")
+			require.FailNowf(t, "Timed out waiting for additional rows", "wanted %d rows, got %d rows", count, numRows)
 		default:
-			numRows := getNumRows(t, vtgateConn, keyspace, table)
+			numRows = getNumRows(t, vtgateConn, keyspace, table)
 			if numRows >= numRowsStart+count {
 				return
 			}
-			time.Sleep(10 * time.Millisecond)
+			time.Sleep(defaultTick)
 		}
 	}
 }
@@ -122,7 +137,7 @@ func getNumRows(t *testing.T, vtgateConn *mysql.Conn, keyspace, table string) in
 	return numRows
 }
 
-func populate(ctx context.Context, done chan bool, insertTemplate, updateTemplate string) {
+func populate(ctx context.Context, t *testing.T, done chan bool, insertTemplate, updateTemplate string) {
 	defer close(done)
 	vtgateConn, closeConn := getVTGateConn()
 	defer closeConn()
@@ -135,16 +150,10 @@ func populate(ctx context.Context, done chan bool, insertTemplate, updateTemplat
 		default:
 			query := fmt.Sprintf(insertTemplate, id, id, id)
 			_, err := vtgateConn.ExecuteFetch(query, 1, false)
-			if err != nil {
-				log.Errorf("error in insert: %v", err)
-				panic(err)
-			}
+			require.NoErrorf(t, err, "error in insert")
 			query = fmt.Sprintf(updateTemplate, id, id)
 			_, err = vtgateConn.ExecuteFetch(query, 1, false)
-			if err != nil {
-				log.Errorf("error in update: %v", err)
-				panic(err)
-			}
+			require.NoErrorf(t, err, "error in update")
 			id++
 			time.Sleep(10 * time.Millisecond)
 		}
