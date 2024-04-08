@@ -1244,29 +1244,15 @@ func (c *CreateTableEntity) isRangePartitionsRotation(
 	var partitionSpecs []*sqlparser.PartitionSpec
 	// Dropped partitions:
 	if len(droppedPartitions1) > 0 {
-		switch hints.RangeRotationStrategy {
-		case RangeRotationCombinedStatements:
-			// A single DROP PARTITION with multiple partition names
-			partitionSpec := &sqlparser.PartitionSpec{
-				Action: sqlparser.DropAction,
-			}
-			for _, p := range droppedPartitions1 {
-				partitionSpec.Names = append(partitionSpec.Names, p.Name)
-			}
-			partitionSpecs = append(partitionSpecs, partitionSpec)
-		default:
-			// Multiple DROP PARTITION each with a single partition name
-			for _, p := range droppedPartitions1 {
-				partitionSpec := &sqlparser.PartitionSpec{
-					Action: sqlparser.DropAction,
-					Names:  []sqlparser.IdentifierCI{p.Name},
-				}
-				partitionSpecs = append(partitionSpecs, partitionSpec)
-			}
+		// A single DROP PARTITION clause can specify multiple partition names
+		partitionSpec := &sqlparser.PartitionSpec{
+			Action: sqlparser.DropAction,
 		}
 		for _, p := range droppedPartitions1 {
+			partitionSpec.Names = append(partitionSpec.Names, p.Name)
 			annotations.MarkRemoved(sqlparser.CanonicalString(p))
 		}
+		partitionSpecs = append(partitionSpecs, partitionSpec)
 	}
 	// Added partitions:
 	for _, p := range addedPartitions2 {
@@ -1324,8 +1310,7 @@ func (c *CreateTableEntity) diffPartitions(alterTable *sqlparser.AlterTable,
 			switch hints.RangeRotationStrategy {
 			case RangeRotationIgnore:
 				return nil, nil
-			case RangeRotationCombinedStatements,
-				RangeRotationDistinctStatements:
+			case RangeRotationDistinctStatements:
 				return partitionSpecs, nil
 			case RangeRotationFullSpec:
 				// proceed to return a full rebuild

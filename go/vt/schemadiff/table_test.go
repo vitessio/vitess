@@ -1333,17 +1333,6 @@ func TestCreateTableDiff(t *testing.T) {
 			},
 		},
 		{
-			name:     "change partitioning range: statements, drop, combined",
-			from:     "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
-			to:       "create table t1 (id int primary key) partition by range (id) (partition p2 values less than (20), partition p3 values less than (30))",
-			rotation: RangeRotationCombinedStatements, // combining just 1 statement is trivially identical to distinct statements output
-			diff:     "alter table t1 drop partition p1",
-			cdiff:    "ALTER TABLE `t1` DROP PARTITION `p1`",
-			textdiffs: []string{
-				"-(PARTITION `p1` VALUES LESS THAN (10),",
-			},
-		},
-		{
 			name:     "change partitioning range: statements, add",
 			from:     "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20))",
 			to:       "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
@@ -1355,24 +1344,12 @@ func TestCreateTableDiff(t *testing.T) {
 			},
 		},
 		{
-			name:     "change partitioning range: statements, multiple drops, combined",
-			from:     "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
-			to:       "create table t1 (id int primary key) partition by range (id) (partition p3 values less than (30))",
-			rotation: RangeRotationCombinedStatements,
-			diffs:    []string{"alter table t1 drop partition p1, p2"},
-			cdiffs:   []string{"ALTER TABLE `t1` DROP PARTITION `p1`, `p2`"},
-			textdiffs: []string{
-				"-(PARTITION `p1` VALUES LESS THAN (10),",
-				"- PARTITION `p2` VALUES LESS THAN (20),",
-			},
-		},
-		{
 			name:     "change partitioning range: statements, multiple drops, distinct",
 			from:     "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
 			to:       "create table t1 (id int primary key) partition by range (id) (partition p3 values less than (30))",
 			rotation: RangeRotationDistinctStatements,
-			diffs:    []string{"alter table t1 drop partition p1", "alter table t1 drop partition p2"},
-			cdiffs:   []string{"ALTER TABLE `t1` DROP PARTITION `p1`", "ALTER TABLE `t1` DROP PARTITION `p2`"},
+			diffs:    []string{"alter table t1 drop partition p1, p2"},
+			cdiffs:   []string{"ALTER TABLE `t1` DROP PARTITION `p1`, `p2`"},
 			textdiffs: []string{
 				"-(PARTITION `p1` VALUES LESS THAN (10),",
 				"- PARTITION `p2` VALUES LESS THAN (20),",
@@ -1383,18 +1360,6 @@ func TestCreateTableDiff(t *testing.T) {
 			from:     "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10))",
 			to:       "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
 			rotation: RangeRotationDistinctStatements,
-			diffs:    []string{"alter table t1 add partition (partition p2 values less than (20))", "alter table t1 add partition (partition p3 values less than (30))"},
-			cdiffs:   []string{"ALTER TABLE `t1` ADD PARTITION (PARTITION `p2` VALUES LESS THAN (20))", "ALTER TABLE `t1` ADD PARTITION (PARTITION `p3` VALUES LESS THAN (30))"},
-			textdiffs: []string{
-				"+ PARTITION `p2` VALUES LESS THAN (20),",
-				"+ PARTITION `p3` VALUES LESS THAN (30)",
-			},
-		},
-		{
-			name:     "change partitioning range: statements, multiple adds, combined",
-			from:     "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10))",
-			to:       "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
-			rotation: RangeRotationCombinedStatements, // ADD PARTITION syntax only supports a single partition so _combining_ is not different than RangeRotationDistinctStatements
 			diffs:    []string{"alter table t1 add partition (partition p2 values less than (20))", "alter table t1 add partition (partition p3 values less than (30))"},
 			cdiffs:   []string{"ALTER TABLE `t1` ADD PARTITION (PARTITION `p2` VALUES LESS THAN (20))", "ALTER TABLE `t1` ADD PARTITION (PARTITION `p3` VALUES LESS THAN (30))"},
 			textdiffs: []string{
@@ -1427,8 +1392,8 @@ func TestCreateTableDiff(t *testing.T) {
 			from:     "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
 			to:       "create table t1 (id int primary key, i int) partition by range (id) (partition p3 values less than (30))",
 			rotation: RangeRotationDistinctStatements,
-			diffs:    []string{"alter table t1 add column i int", "alter table t1 drop partition p1", "alter table t1 drop partition p2"},
-			cdiffs:   []string{"ALTER TABLE `t1` ADD COLUMN `i` int", "ALTER TABLE `t1` DROP PARTITION `p1`", "ALTER TABLE `t1` DROP PARTITION `p2`"},
+			diffs:    []string{"alter table t1 add column i int", "alter table t1 drop partition p1, p2"},
+			cdiffs:   []string{"ALTER TABLE `t1` ADD COLUMN `i` int", "ALTER TABLE `t1` DROP PARTITION `p1`, `p2`"},
 			textdiffs: []string{
 				"+	`i` int",
 				"-(PARTITION `p1` VALUES LESS THAN (10),",
@@ -2071,7 +2036,7 @@ func TestCreateTableDiff(t *testing.T) {
 				if len(ts.diffs) > 0 {
 
 					allSubsequentDiffs := AllSubsequent(alter)
-					require.Equal(t, len(ts.diffs), len(allSubsequentDiffs))
+					require.Equal(t, len(ts.diffs), len(allSubsequentDiffs), alter.CanonicalStatementString())
 					require.Equal(t, len(ts.cdiffs), len(allSubsequentDiffs))
 					for i := range ts.diffs {
 						assert.Equal(t, ts.diffs[i], allSubsequentDiffs[i].StatementString())
