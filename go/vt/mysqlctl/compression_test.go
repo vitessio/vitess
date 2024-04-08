@@ -19,14 +19,13 @@ package mysqlctl
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/logutil"
@@ -47,15 +46,8 @@ func TestGetExtensionFromEngine(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.engine, func(t *testing.T) {
 			ext, err := getExtensionFromEngine(tt.engine)
-			// if err != tt.err {
-			if !errors.Is(err, tt.err) {
-				t.Errorf("got err: %v; expected: %v", err, tt.err)
-			}
-			// }
-
-			if ext != tt.extension {
-				t.Errorf("got err: %v; expected: %v", ext, tt.extension)
-			}
+			assert.ErrorIs(t, err, tt.err)
+			assert.Equal(t, tt.extension, ext)
 		})
 	}
 }
@@ -69,33 +61,20 @@ func TestBuiltinCompressors(t *testing.T) {
 			var compressed, decompressed bytes.Buffer
 			reader := bytes.NewReader(data)
 			compressor, err := newBuiltinCompressor(engine, &compressed, logger)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
+
 			_, err = io.Copy(compressor, reader)
-			if err != nil {
-				t.Error(err)
-				return
-			}
+			require.NoError(t, err)
+
 			compressor.Close()
 			decompressor, err := newBuiltinDecompressor(engine, &compressed, logger)
-			if err != nil {
-				t.Error(err)
-				return
-			}
-			_, err = io.Copy(&decompressed, decompressor)
-			if err != nil {
-				t.Error(err)
-				return
-			}
-			decompressor.Close()
-			if len(data) != len(decompressed.Bytes()) {
-				t.Errorf("Different size of original (%d bytes) and uncompressed (%d bytes) data", len(data), len(decompressed.Bytes()))
-			}
+			require.NoError(t, err)
 
-			if !reflect.DeepEqual(data, decompressed.Bytes()) {
-				t.Error("decompressed content differs from the original")
-			}
+			_, err = io.Copy(&decompressed, decompressor)
+			require.NoError(t, err)
+
+			decompressor.Close()
+			assert.Equal(t, data, decompressed.Bytes())
 		})
 	}
 }
@@ -142,33 +121,20 @@ func TestExternalCompressors(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 			defer cancel()
 			compressor, err := newExternalCompressor(ctx, tt.compress, &compressed, logger)
-			if err != nil {
-				t.Error(err)
-				return
-			}
+			require.NoError(t, err)
+
 			_, err = io.Copy(compressor, reader)
-			if err != nil {
-				t.Error(err)
-				return
-			}
+			require.NoError(t, err)
+
 			compressor.Close()
 			decompressor, err := newExternalDecompressor(ctx, tt.decompress, &compressed, logger)
-			if err != nil {
-				t.Error(err)
-				return
-			}
+			require.NoError(t, err)
+
 			_, err = io.Copy(&decompressed, decompressor)
-			if err != nil {
-				t.Error(err)
-				return
-			}
+			require.NoError(t, err)
+
 			decompressor.Close()
-			if len(data) != len(decompressed.Bytes()) {
-				t.Errorf("Different size of original (%d bytes) and uncompressed (%d bytes) data", len(data), len(decompressed.Bytes()))
-			}
-			if !reflect.DeepEqual(data, decompressed.Bytes()) {
-				t.Error("decompressed content differs from the original")
-			}
+			assert.Equal(t, data, decompressed.Bytes())
 
 		})
 	}
@@ -190,19 +156,13 @@ func TestValidateExternalCmd(t *testing.T) {
 		t.Run(fmt.Sprintf("Test #%d", i+1), func(t *testing.T) {
 			CmdName := tt.cmdName
 			path, err := validateExternalCmd(CmdName)
-			if tt.path != "" {
-				if !strings.HasSuffix(path, tt.path) {
-					t.Errorf("Expected path \"%s\" to include \"%s\"", path, tt.path)
-				}
-			}
+
+			assert.Contains(t, path, tt.path)
+
 			if tt.errStr == "" {
-				if err != nil {
-					t.Errorf("Expected result \"%v\", got \"%v\"", "<nil>", err)
-				}
+				assert.NoError(t, err)
 			} else {
-				if !strings.Contains(fmt.Sprintf("%v", err), tt.errStr) {
-					t.Errorf("Expected result \"%v\", got \"%v\"", tt.errStr, err)
-				}
+				assert.ErrorContains(t, err, tt.errStr)
 			}
 		})
 	}
