@@ -204,58 +204,77 @@ func TestStripAutoIncrement(t *testing.T) {
 		newDDL string
 	}{
 		{
+			desc: "invalid DDL",
+			ddl: "CREATE TABLE `table1` (\n" +
+				"`id` massiveint NOT NULL,\n" +
+				"PRIMARY KEY (`id`)\n" +
+				") ENGINE=InnoDB DEFAULT CHARSET=latin1;",
+			hasErr: true,
+		},
+		{
 			desc: "has auto increment",
 			ddl: "CREATE TABLE `table1` (\n" +
-				"`id` int(11) NOT NULL AUTO_INCREMENT,\n" +
+				"`id` int NOT NULL AUTO_INCREMENT,\n" +
 				"`c1` varchar(128),\n" +
 				"PRIMARY KEY (`id`)\n" +
 				") ENGINE=InnoDB DEFAULT CHARSET=latin1;",
-
 			newDDL: "create table table1 (\n" +
-				"\tid int(11) not null,\n" +
+				"\tid int not null,\n" +
 				"\tc1 varchar(128),\n" +
 				"\tprimary key (id)\n" +
 				") ENGINE InnoDB,\n" +
 				"  CHARSET latin1",
-
 			hasErr: false,
 		},
 		{
 			desc: "has no auto increment",
 			ddl: "CREATE TABLE `table1` (\n" +
-				"`id` int(11) NOT NULL,\n" +
+				"`id` int NOT NULL,\n" +
 				"`c1` varchar(128),\n" +
 				"PRIMARY KEY (`id`)\n" +
 				") ENGINE=InnoDB DEFAULT CHARSET=latin1;",
-
 			newDDL: "create table table1 (\n" +
-				"\tid int(11) not null,\n" +
+				"\tid int not null,\n" +
 				"\tc1 varchar(128),\n" +
 				"\tprimary key (id)\n" +
 				") ENGINE InnoDB,\n" +
 				"  CHARSET latin1",
-
 			hasErr: false,
 		},
 		{
 			desc: "has auto increment with secondary key",
 			ddl: "CREATE TABLE `table1` (\n" +
-				"`id` int(11) NOT NULL,\n" +
+				"`id` int NOT NULL auto_increment,\n" +
 				"`c1` varchar(128),\n" +
 				"`c2` varchar(128),\n" +
 				"UNIQUE KEY `c1` (`c1`),\n" +
 				"PRIMARY KEY (`id`)\n" +
 				") ENGINE=InnoDB DEFAULT CHARSET=latin1;",
-
 			newDDL: "create table table1 (\n" +
-				"\tid int(11) not null,\n" +
+				"\tid int not null,\n" +
 				"\tc1 varchar(128),\n" +
 				"\tc2 varchar(128),\n" +
 				"\tunique key c1 (c1),\n" +
 				"\tprimary key (id)\n" +
 				") ENGINE InnoDB,\n" +
 				"  CHARSET latin1",
-
+			hasErr: false,
+		},
+		{
+			desc: "has auto increment with multi-col PK",
+			ddl: "CREATE TABLE `table1` (\n" +
+				"`id` int NOT NULL auto_increment,\n" +
+				"`c1` varchar(128) NOT NULL,\n" +
+				"`c2` varchar(128),\n" +
+				"PRIMARY KEY (`id`, `c2`)\n" +
+				") ENGINE=InnoDB DEFAULT CHARSET=latin1;",
+			newDDL: "create table table1 (\n" +
+				"\tid int not null,\n" +
+				"\tc1 varchar(128) not null,\n" +
+				"\tc2 varchar(128),\n" +
+				"\tprimary key (id, c2)\n" +
+				") ENGINE InnoDB,\n" +
+				"  CHARSET latin1",
 			hasErr: false,
 		},
 	}
