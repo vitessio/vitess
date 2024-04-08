@@ -197,11 +197,10 @@ func TestStripConstraints(t *testing.T) {
 
 func TestStripAutoIncrement(t *testing.T) {
 	tcs := []struct {
-		desc string
-		ddl  string
-
-		hasErr bool
-		newDDL string
+		desc      string
+		ddl       string
+		want      string
+		expectErr bool
 	}{
 		{
 			desc: "invalid DDL",
@@ -209,7 +208,7 @@ func TestStripAutoIncrement(t *testing.T) {
 				"`id` massiveint NOT NULL,\n" +
 				"PRIMARY KEY (`id`)\n" +
 				") ENGINE=InnoDB DEFAULT CHARSET=latin1;",
-			hasErr: true,
+			expectErr: true,
 		},
 		{
 			desc: "has auto increment",
@@ -218,13 +217,12 @@ func TestStripAutoIncrement(t *testing.T) {
 				"`c1` varchar(128),\n" +
 				"PRIMARY KEY (`id`)\n" +
 				") ENGINE=InnoDB DEFAULT CHARSET=latin1;",
-			newDDL: "create table table1 (\n" +
+			want: "create table table1 (\n" +
 				"\tid int not null,\n" +
 				"\tc1 varchar(128),\n" +
 				"\tprimary key (id)\n" +
 				") ENGINE InnoDB,\n" +
 				"  CHARSET latin1",
-			hasErr: false,
 		},
 		{
 			desc: "has no auto increment",
@@ -233,13 +231,12 @@ func TestStripAutoIncrement(t *testing.T) {
 				"`c1` varchar(128),\n" +
 				"PRIMARY KEY (`id`)\n" +
 				") ENGINE=InnoDB DEFAULT CHARSET=latin1;",
-			newDDL: "create table table1 (\n" +
+			want: "create table table1 (\n" +
 				"\tid int not null,\n" +
 				"\tc1 varchar(128),\n" +
 				"\tprimary key (id)\n" +
 				") ENGINE InnoDB,\n" +
 				"  CHARSET latin1",
-			hasErr: false,
 		},
 		{
 			desc: "has auto increment with secondary key",
@@ -250,7 +247,7 @@ func TestStripAutoIncrement(t *testing.T) {
 				"UNIQUE KEY `c1` (`c1`),\n" +
 				"PRIMARY KEY (`id`)\n" +
 				") ENGINE=InnoDB DEFAULT CHARSET=latin1;",
-			newDDL: "create table table1 (\n" +
+			want: "create table table1 (\n" +
 				"\tid int not null,\n" +
 				"\tc1 varchar(128),\n" +
 				"\tc2 varchar(128),\n" +
@@ -258,7 +255,6 @@ func TestStripAutoIncrement(t *testing.T) {
 				"\tprimary key (id)\n" +
 				") ENGINE InnoDB,\n" +
 				"  CHARSET latin1",
-			hasErr: false,
 		},
 		{
 			desc: "has auto increment with multi-col PK",
@@ -268,25 +264,24 @@ func TestStripAutoIncrement(t *testing.T) {
 				"`c2` varchar(128),\n" +
 				"PRIMARY KEY (`id`, `c2`)\n" +
 				") ENGINE=InnoDB DEFAULT CHARSET=latin1;",
-			newDDL: "create table table1 (\n" +
+			want: "create table table1 (\n" +
 				"\tid int not null,\n" +
 				"\tc1 varchar(128) not null,\n" +
 				"\tc2 varchar(128),\n" +
 				"\tprimary key (id, c2)\n" +
 				") ENGINE InnoDB,\n" +
 				"  CHARSET latin1",
-			hasErr: false,
 		},
 	}
 
 	for _, tc := range tcs {
-		newDDL, err := stripAutoIncrement(tc.ddl, sqlparser.NewTestParser())
-		if tc.hasErr != (err != nil) {
-			require.Failf(t, "unexpected error result", "hasErr does not match: err: %v, tc: %+v", err, tc)
+		strippedDDL, err := stripAutoIncrement(tc.ddl, sqlparser.NewTestParser())
+		if tc.expectErr != (err != nil) {
+			require.Failf(t, "unexpected error result", "expected error %t, got: %v", tc.expectErr, err)
 		}
 
-		if newDDL != tc.newDDL {
-			utils.MustMatch(t, tc.newDDL, newDDL, fmt.Sprintf("newDDL does not match. tc: %+v", tc))
+		if strippedDDL != tc.want {
+			utils.MustMatch(t, tc.want, strippedDDL, fmt.Sprintf("stripped DDL %q does not match our expected result: %q", strippedDDL, tc.want))
 		}
 	}
 }

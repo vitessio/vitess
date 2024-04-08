@@ -20,9 +20,11 @@ package vreplication
 // We violate the NO_ZERO_DATES and NO_ZERO_IN_DATE sql_modes that are enabled by default in
 // MySQL 5.7+ and MariaDB 10.2+ to ensure that vreplication still works everywhere and the
 // permissive sql_mode now used in vreplication causes no unwanted side effects.
-// The customer table also tests two important things:
+// The customer table also tests several important things:
 //  1. Composite or multi-column primary keys
 //  2. PKs that contain an ENUM column
+//  3. That we properly handle tables with auto_increment columns (which are stripped by default when
+//     moving the table to a sharded keyspace with vtctldclient and left in place when using vtctlclient)
 //
 // The Lead and Lead-1 tables also allows us to test several things:
 //  1. Mixed case identifiers
