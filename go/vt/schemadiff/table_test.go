@@ -46,6 +46,7 @@ func TestCreateTableDiff(t *testing.T) {
 		charset     int
 		algorithm   int
 		enumreorder int
+		subsequent  int
 		textdiffs   []string
 	}{
 		{
@@ -804,12 +805,32 @@ func TestCreateTableDiff(t *testing.T) {
 			},
 		},
 		{
+			name:       "add two fulltext keys, distinct statements, reject",
+			from:       "create table t1 (id int primary key, name1 tinytext not null, name2 tinytext not null)",
+			to:         "create table t1 (id int primary key, name1 tinytext not null, name2 tinytext not null, fulltext key name1_ft(name1), fulltext key name2_ft(name2))",
+			subsequent: SubsequentDiffStrategyReject,
+			errorMsg:   (&SubsequentDiffRejectedError{Table: "t1"}).Error(),
+		},
+		{
 			name:     "add two fulltext keys, unify statements",
 			from:     "create table t1 (id int primary key, name1 tinytext not null, name2 tinytext not null)",
 			to:       "create table t1 (id int primary key, name1 tinytext not null, name2 tinytext not null, fulltext key name1_ft(name1), fulltext key name2_ft(name2))",
 			fulltext: FullTextKeyUnifyStatements,
 			diff:     "alter table t1 add fulltext key name1_ft (name1), add fulltext key name2_ft (name2)",
 			cdiff:    "ALTER TABLE `t1` ADD FULLTEXT KEY `name1_ft` (`name1`), ADD FULLTEXT KEY `name2_ft` (`name2`)",
+			textdiffs: []string{
+				"+	FULLTEXT KEY `name1_ft` (`name1`)",
+				"+	FULLTEXT KEY `name2_ft` (`name2`)",
+			},
+		},
+		{
+			name:       "add two fulltext keys, unify statements, no reject",
+			from:       "create table t1 (id int primary key, name1 tinytext not null, name2 tinytext not null)",
+			to:         "create table t1 (id int primary key, name1 tinytext not null, name2 tinytext not null, fulltext key name1_ft(name1), fulltext key name2_ft(name2))",
+			fulltext:   FullTextKeyUnifyStatements,
+			subsequent: SubsequentDiffStrategyReject,
+			diff:       "alter table t1 add fulltext key name1_ft (name1), add fulltext key name2_ft (name2)",
+			cdiff:      "ALTER TABLE `t1` ADD FULLTEXT KEY `name1_ft` (`name1`), ADD FULLTEXT KEY `name2_ft` (`name2`)",
 			textdiffs: []string{
 				"+	FULLTEXT KEY `name1_ft` (`name1`)",
 				"+	FULLTEXT KEY `name2_ft` (`name2`)",
@@ -1359,6 +1380,14 @@ func TestCreateTableDiff(t *testing.T) {
 			},
 		},
 		{
+			name:       "change partitioning range: statements, multiple, reject",
+			from:       "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
+			to:         "create table t1 (id int primary key) partition by range (id) (partition p2 values less than (20), partition p3 values less than (30), partition p4 values less than (40))",
+			rotation:   RangeRotationDistinctStatements,
+			subsequent: SubsequentDiffStrategyReject,
+			errorMsg:   (&SubsequentDiffRejectedError{Table: "t1"}).Error(),
+		},
+		{
 			name:     "change partitioning range: mixed with nonpartition changes",
 			from:     "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
 			to:       "create table t1 (id int primary key, i int) partition by range (id) (partition p3 values less than (30))",
@@ -1370,6 +1399,14 @@ func TestCreateTableDiff(t *testing.T) {
 				"-(PARTITION `p1` VALUES LESS THAN (10),",
 				"- PARTITION `p2` VALUES LESS THAN (20),",
 			},
+		},
+		{
+			name:       "change partitioning range: mixed with nonpartition changes, reject",
+			from:       "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
+			to:         "create table t1 (id int primary key, i int) partition by range (id) (partition p3 values less than (30))",
+			rotation:   RangeRotationDistinctStatements,
+			subsequent: SubsequentDiffStrategyReject,
+			errorMsg:   (&SubsequentDiffRejectedError{Table: "t1"}).Error(),
 		},
 		{
 			name:     "change partitioning range: single partition change, mixed with nonpartition changes",
@@ -1953,6 +1990,7 @@ func TestCreateTableDiff(t *testing.T) {
 			hints.TableCharsetCollateStrategy = ts.charset
 			hints.AlterTableAlgorithmStrategy = ts.algorithm
 			hints.EnumReorderStrategy = ts.enumreorder
+			hints.SubsequentDiffStrategy = ts.subsequent
 			alter, err := c.Diff(other, &hints)
 
 			require.Equal(t, len(ts.diffs), len(ts.cdiffs))
@@ -2367,6 +2405,7 @@ func TestValidate(t *testing.T) {
 			alter:     "alter table t add column i int",
 			expectErr: &ApplyDuplicatePartitionError{Table: "t1", Partition: "p2"},
 		},
+		// More columns and indexes
 		{
 			name:  "change to visible with alter column",
 			from:  "create table t (id int, i int invisible, primary key (id))",

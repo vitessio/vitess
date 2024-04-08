@@ -453,3 +453,18 @@ type UnknownColumnCollationCharsetError struct {
 func (e *UnknownColumnCollationCharsetError) Error() string {
 	return fmt.Sprintf("unable to determine charset for column %s with collation %q", sqlescape.EscapeID(e.Column), e.Collation)
 }
+
+type SubsequentDiffRejectedError struct {
+	Table string
+	Diffs []EntityDiff
+}
+
+func (e *SubsequentDiffRejectedError) Error() string {
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("multiple changes not allowed on table %s. Found:", sqlescape.EscapeID(e.Table)))
+	for _, d := range e.Diffs {
+		b.WriteString("\n")
+		b.WriteString(d.CanonicalStatementString())
+	}
+	return b.String()
+}
