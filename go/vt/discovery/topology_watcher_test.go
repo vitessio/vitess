@@ -18,12 +18,8 @@ package discovery
 
 import (
 	"context"
-<<<<<<< HEAD
-	"math/rand"
-=======
 	"errors"
-	"math/rand/v2"
->>>>>>> 4caa8d55c6 (discovery: Fix tablets removed from healthcheck when topo server GetTablet call fails (#15633))
+	"math/rand"
 	"testing"
 	"time"
 

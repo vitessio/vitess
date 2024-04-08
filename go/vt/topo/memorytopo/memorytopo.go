@@ -22,12 +22,8 @@ package memorytopo
 import (
 	"context"
 	"errors"
-<<<<<<< HEAD
 	"math/rand"
-=======
-	"math/rand/v2"
 	"regexp"
->>>>>>> 4caa8d55c6 (discovery: Fix tablets removed from healthcheck when topo server GetTablet call fails (#15633))
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -278,16 +274,10 @@ func (n *node) PropagateWatchError(err error) {
 // in case of a problem.
 func NewServerAndFactory(ctx context.Context, cells ...string) (*topo.Server, *Factory) {
 	f := &Factory{
-<<<<<<< HEAD
-		cells:      make(map[string]*node),
-		generation: uint64(rand.Int63n(1 << 60)),
-		callstats:  stats.NewCountersWithMultiLabels("", "", []string{"Call"}),
-=======
 		cells:           make(map[string]*node),
-		generation:      uint64(rand.Int64N(1 << 60)),
+		generation:      uint64(rand.Int63n(1 << 60)),
 		callstats:       stats.NewCountersWithMultiLabels("", "", []string{"Call"}),
 		operationErrors: make(map[Operation][]errorSpec),
->>>>>>> 4caa8d55c6 (discovery: Fix tablets removed from healthcheck when topo server GetTablet call fails (#15633))
 	}
 	f.cells[topo.GlobalCell] = f.newDirectory(topo.GlobalCell, nil)
 
