@@ -1391,6 +1391,18 @@ func TestCreateTableDiff(t *testing.T) {
 			},
 		},
 		{
+			name:     "change partitioning range: statements, multiple adds, combined",
+			from:     "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10))",
+			to:       "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
+			rotation: RangeRotationCombinedStatements, // ADD PARTITION syntax only supports a single partition so _combining_ is not different than RangeRotationDistinctStatements
+			diffs:    []string{"alter table t1 add partition (partition p2 values less than (20))", "alter table t1 add partition (partition p3 values less than (30))"},
+			cdiffs:   []string{"ALTER TABLE `t1` ADD PARTITION (PARTITION `p2` VALUES LESS THAN (20))", "ALTER TABLE `t1` ADD PARTITION (PARTITION `p3` VALUES LESS THAN (30))"},
+			textdiffs: []string{
+				"+ PARTITION `p2` VALUES LESS THAN (20),",
+				"+ PARTITION `p3` VALUES LESS THAN (30)",
+			},
+		},
+		{
 			name:     "change partitioning range: statements, multiple, assorted",
 			from:     "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
 			to:       "create table t1 (id int primary key) partition by range (id) (partition p2 values less than (20), partition p3 values less than (30), partition p4 values less than (40))",

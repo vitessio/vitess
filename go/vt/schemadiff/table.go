@@ -1243,28 +1243,30 @@ func (c *CreateTableEntity) isRangePartitionsRotation(
 	addedPartitions2 := definitions2
 	var partitionSpecs []*sqlparser.PartitionSpec
 	// Dropped partitions:
-	switch hints.RangeRotationStrategy {
-	case RangeRotationCombinedStatements:
-		// A single DROP PARTITION with multiple partition names
-		partitionSpec := &sqlparser.PartitionSpec{
-			Action: sqlparser.DropAction,
-		}
-		for _, p := range droppedPartitions1 {
-			partitionSpec.Names = append(partitionSpec.Names, p.Name)
-		}
-		partitionSpecs = append(partitionSpecs, partitionSpec)
-	default:
-		// Multiple DROP PARTITION each with a single partition name
-		for _, p := range droppedPartitions1 {
+	if len(droppedPartitions1) > 0 {
+		switch hints.RangeRotationStrategy {
+		case RangeRotationCombinedStatements:
+			// A single DROP PARTITION with multiple partition names
 			partitionSpec := &sqlparser.PartitionSpec{
 				Action: sqlparser.DropAction,
-				Names:  []sqlparser.IdentifierCI{p.Name},
+			}
+			for _, p := range droppedPartitions1 {
+				partitionSpec.Names = append(partitionSpec.Names, p.Name)
 			}
 			partitionSpecs = append(partitionSpecs, partitionSpec)
+		default:
+			// Multiple DROP PARTITION each with a single partition name
+			for _, p := range droppedPartitions1 {
+				partitionSpec := &sqlparser.PartitionSpec{
+					Action: sqlparser.DropAction,
+					Names:  []sqlparser.IdentifierCI{p.Name},
+				}
+				partitionSpecs = append(partitionSpecs, partitionSpec)
+			}
 		}
-	}
-	for _, p := range droppedPartitions1 {
-		annotations.MarkRemoved(sqlparser.CanonicalString(p))
+		for _, p := range droppedPartitions1 {
+			annotations.MarkRemoved(sqlparser.CanonicalString(p))
+		}
 	}
 	// Added partitions:
 	for _, p := range addedPartitions2 {
