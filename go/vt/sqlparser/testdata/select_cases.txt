@@ -7597,8 +7597,8 @@ END
 INPUT
 select a, a is not false, a is not true, a is not unknown from t1;
 END
-ERROR
-syntax error at position 58 near 'unknown'
+OUTPUT
+select a, a is not false, a is not true, a is not null from t1
 END
 INPUT
 select cast(NULL as signed), cast(1/0 as signed);
@@ -8671,8 +8671,8 @@ END
 INPUT
 select a, a is false, a is true, a is unknown from t1;
 END
-ERROR
-syntax error at position 46 near 'unknown'
+OUTPUT
+select a, a is false, a is true, a is null from t1
 END
 INPUT
 select std(e) from bug22555 group by i;
