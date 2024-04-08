@@ -257,7 +257,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> VALUE_ARG LIST_ARG OFFSET_ARG
 %token <str> JSON_PRETTY JSON_STORAGE_SIZE JSON_STORAGE_FREE JSON_CONTAINS JSON_CONTAINS_PATH JSON_EXTRACT JSON_KEYS JSON_OVERLAPS JSON_SEARCH JSON_VALUE
 %token <str> EXTRACT
-%token <str> NULL TRUE FALSE OFF
+%token <str> NULL UNKNOWN TRUE FALSE OFF
 %token <str> DISCARD IMPORT ENABLE DISABLE TABLESPACE
 %token <str> VIRTUAL STORED
 %token <str> BOTH LEADING TRAILING
@@ -601,7 +601,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <colKeyOpt> keys
 %type <referenceDefinition> reference_definition reference_definition_opt
 %type <str> underscore_charsets
-%type <str> expire_opt
+%type <str> expire_opt null_or_unknown
 %type <literal> ratio_opt
 %type <txAccessModes> tx_chacteristics_opt tx_chars
 %type <txAccessMode> tx_char
@@ -5270,12 +5270,20 @@ expression:
     $$ = &MemberOfExpr{Value: $1, JSONArr:$5 }
   }
 
+null_or_unknown:
+  NULL
+  {
+  }
+| UNKNOWN
+  {
+  }
+
 bool_pri:
-bool_pri IS NULL %prec IS
+bool_pri IS null_or_unknown %prec IS
   {
 	 $$ = &IsExpr{Left: $1, Right: IsNullOp}
   }
-| bool_pri IS NOT NULL %prec IS
+| bool_pri IS NOT null_or_unknown %prec IS
   {
   	$$ = &IsExpr{Left: $1, Right: IsNotNullOp}
   }
@@ -8540,6 +8548,7 @@ non_reserved_keyword:
 | UNCOMMITTED
 | UNDEFINED
 | UNICODE
+| UNKNOWN
 | UNSIGNED
 | UNTHROTTLE
 | UNUSED
