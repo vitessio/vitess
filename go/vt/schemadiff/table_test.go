@@ -1333,6 +1333,17 @@ func TestCreateTableDiff(t *testing.T) {
 			},
 		},
 		{
+			name:     "change partitioning range: statements, drop, combined",
+			from:     "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
+			to:       "create table t1 (id int primary key) partition by range (id) (partition p2 values less than (20), partition p3 values less than (30))",
+			rotation: RangeRotationCombinedStatements, // combining just 1 statement is trivially identical to distinct statements output
+			diff:     "alter table t1 drop partition p1",
+			cdiff:    "ALTER TABLE `t1` DROP PARTITION `p1`",
+			textdiffs: []string{
+				"-(PARTITION `p1` VALUES LESS THAN (10),",
+			},
+		},
+		{
 			name:     "change partitioning range: statements, add",
 			from:     "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20))",
 			to:       "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
@@ -1344,7 +1355,19 @@ func TestCreateTableDiff(t *testing.T) {
 			},
 		},
 		{
-			name:     "change partitioning range: statements, multiple drops",
+			name:     "change partitioning range: statements, multiple drops, combined",
+			from:     "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
+			to:       "create table t1 (id int primary key) partition by range (id) (partition p3 values less than (30))",
+			rotation: RangeRotationCombinedStatements,
+			diffs:    []string{"alter table t1 drop partition p1, p2"},
+			cdiffs:   []string{"ALTER TABLE `t1` DROP PARTITION `p1`, `p2`"},
+			textdiffs: []string{
+				"-(PARTITION `p1` VALUES LESS THAN (10),",
+				"- PARTITION `p2` VALUES LESS THAN (20),",
+			},
+		},
+		{
+			name:     "change partitioning range: statements, multiple drops, distinct",
 			from:     "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
 			to:       "create table t1 (id int primary key) partition by range (id) (partition p3 values less than (30))",
 			rotation: RangeRotationDistinctStatements,

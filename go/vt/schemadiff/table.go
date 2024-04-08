@@ -1195,6 +1195,7 @@ func (c *CreateTableEntity) isRangePartitionsRotation(
 	annotations *TextualAnnotations,
 	t1Partitions *sqlparser.PartitionOption,
 	t2Partitions *sqlparser.PartitionOption,
+	hints *DiffHints,
 ) (bool, []*sqlparser.PartitionSpec, error) {
 	// Validate that both tables have range partitioning
 	if t1Partitions.Type != t2Partitions.Type {
@@ -1240,15 +1241,32 @@ func (c *CreateTableEntity) isRangePartitionsRotation(
 		definitions2 = definitions2[1:]
 	}
 	addedPartitions2 := definitions2
-	partitionSpecs := make([]*sqlparser.PartitionSpec, 0, len(droppedPartitions1)+len(addedPartitions2))
-	for _, p := range droppedPartitions1 {
+	var partitionSpecs []*sqlparser.PartitionSpec
+	// Dropped partitions:
+	switch hints.RangeRotationStrategy {
+	case RangeRotationCombinedStatements:
+		// A single DROP PARTITION with multiple partition names
 		partitionSpec := &sqlparser.PartitionSpec{
 			Action: sqlparser.DropAction,
-			Names:  []sqlparser.IdentifierCI{p.Name},
+		}
+		for _, p := range droppedPartitions1 {
+			partitionSpec.Names = append(partitionSpec.Names, p.Name)
 		}
 		partitionSpecs = append(partitionSpecs, partitionSpec)
+	default:
+		// Multiple DROP PARTITION each with a single partition name
+		for _, p := range droppedPartitions1 {
+			partitionSpec := &sqlparser.PartitionSpec{
+				Action: sqlparser.DropAction,
+				Names:  []sqlparser.IdentifierCI{p.Name},
+			}
+			partitionSpecs = append(partitionSpecs, partitionSpec)
+		}
+	}
+	for _, p := range droppedPartitions1 {
 		annotations.MarkRemoved(sqlparser.CanonicalString(p))
 	}
+	// Added partitions:
 	for _, p := range addedPartitions2 {
 		partitionSpec := &sqlparser.PartitionSpec{
 			Action:      sqlparser.AddAction,
@@ -1296,7 +1314,7 @@ func (c *CreateTableEntity) diffPartitions(alterTable *sqlparser.AlterTable,
 		// Having said that, we _do_ analyze the scenario of a RANGE partitioning rotation of partitions:
 		// where zero or more partitions may have been dropped from the earlier range, and zero or more
 		// partitions have been added with a later range:
-		isRotation, partitionSpecs, err := c.isRangePartitionsRotation(annotations, t1Partitions, t2Partitions)
+		isRotation, partitionSpecs, err := c.isRangePartitionsRotation(annotations, t1Partitions, t2Partitions, hints)
 		if err != nil {
 			return nil, err
 		}
@@ -1304,7 +1322,8 @@ func (c *CreateTableEntity) diffPartitions(alterTable *sqlparser.AlterTable,
 			switch hints.RangeRotationStrategy {
 			case RangeRotationIgnore:
 				return nil, nil
-			case RangeRotationDistinctStatements:
+			case RangeRotationCombinedStatements,
+				RangeRotationDistinctStatements:
 				return partitionSpecs, nil
 			case RangeRotationFullSpec:
 				// proceed to return a full rebuild
