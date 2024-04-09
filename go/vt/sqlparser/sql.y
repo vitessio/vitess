@@ -4690,8 +4690,30 @@ alter_table_statement_part:
   }
 | DROP FOREIGN KEY ID
   {
-    $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
-        []*ConstraintDefinition{&ConstraintDefinition{Name: string($4), Details: &ForeignKeyDefinition{}}}}}
+    ddl := &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{}}
+    ddl.TableSpec.AddConstraint(&ConstraintDefinition{Name: string($4), Details: &ForeignKeyDefinition{}})
+    $$ = ddl
+  }
+| RENAME CONSTRAINT FOREIGN KEY ID TO ID
+  {
+    ddl := &DDL{Action: AlterStr, ConstraintAction: RenameStr, TableSpec: &TableSpec{}}
+    ddl.TableSpec.AddConstraint(&ConstraintDefinition{Name: string($5), Details: &ForeignKeyDefinition{}})
+    ddl.TableSpec.AddConstraint(&ConstraintDefinition{Name: string($7), Details: &ForeignKeyDefinition{}})
+    $$ = ddl
+  }
+| RENAME CONSTRAINT CHECK ID TO ID
+  {
+    ddl := &DDL{Action: AlterStr, ConstraintAction: RenameStr, TableSpec: &TableSpec{}}
+    ddl.TableSpec.AddConstraint(&ConstraintDefinition{Name: string($4), Details: &CheckConstraintDefinition{}})
+    ddl.TableSpec.AddConstraint(&ConstraintDefinition{Name: string($6), Details: &CheckConstraintDefinition{}})
+    $$ = ddl
+  }
+| RENAME CONSTRAINT ID TO ID
+  {
+    ddl := &DDL{Action: AlterStr, ConstraintAction: RenameStr, TableSpec: &TableSpec{}}
+    ddl.TableSpec.AddConstraint(&ConstraintDefinition{Name: string($3)})
+    ddl.TableSpec.AddConstraint(&ConstraintDefinition{Name: string($5)})
+    $$ = ddl
   }
 | AUTO_INCREMENT equal_opt expression
   {

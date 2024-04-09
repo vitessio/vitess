@@ -1627,11 +1627,23 @@ var (
 			input: "alter table a drop check status",
 		}, {
 			input: "alter table a drop constraint status",
-		}, {
+		},
+		{
 			input: "alter table a drop foreign key fk_something",
-		}, {
+		},
+		{
 			input: "alter table a drop constraint b",
-		}, {
+		},
+		{
+			input: "alter table a rename constraint foreign key oldfk to newfk",
+		},
+		{
+			input: "alter table a rename constraint check oldchk to newchk",
+		},
+		{
+			input: "alter table a rename constraint oldcon to newcon",
+		},
+		{
 			input:  "alter table a drop id",
 			output: "alter table a drop column id",
 		}, {

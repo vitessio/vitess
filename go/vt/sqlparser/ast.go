@@ -2372,6 +2372,17 @@ func (node *DDL) alterFormat(buf *TrackedBuffer) {
 		default:
 			buf.Myprintf(" drop constraint %s", node.TableSpec.Constraints[0].Name)
 		}
+	} else if node.ConstraintAction == RenameStr && node.TableSpec != nil && len(node.TableSpec.Constraints) == 2 {
+		buf.Myprintf(" rename constraint")
+		switch node.TableSpec.Constraints[0].Details.(type) {
+		case *ForeignKeyDefinition:
+			buf.Myprintf(" foreign key %s to", node.TableSpec.Constraints[0].Name)
+		case *CheckConstraintDefinition:
+			buf.Myprintf(" check %s to", node.TableSpec.Constraints[0].Name)
+		default:
+			buf.Myprintf(" %s to", node.TableSpec.Constraints[0].Name)
+		}
+		buf.Myprintf(" %s", node.TableSpec.Constraints[1].Name)
 	} else if node.DefaultSpec != nil {
 		buf.Myprintf(" %v", node.DefaultSpec)
 	} else if node.AlterCollationSpec != nil {
