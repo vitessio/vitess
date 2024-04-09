@@ -655,5 +655,55 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "Derived table split across two shards, and ordered by both",
+    "query": "select * from (select u.foo, ue.bar from user u, user_extra ue) poo order by poo.bar, poo.foo",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select * from (select u.foo, ue.bar from user u, user_extra ue) poo order by poo.bar, poo.foo",
+      "Instructions": {
+        "OperatorType": "Sort",
+        "Variant": "Memory",
+        "OrderBy": "(1|2) ASC, (0|3) ASC",
+        "ResultColumns": 2,
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "L:0,R:0,R:1,L:1",
+            "TableName": "`user`_user_extra",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select foo, weight_string(foo) from (select u.foo from `user` as u where 1 != 1) as poo where 1 != 1",
+                "Query": "select foo, weight_string(foo) from (select u.foo from `user` as u) as poo",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select bar, weight_string(bar) from (select ue.bar from user_extra as ue where 1 != 1) as poo where 1 != 1",
+                "Query": "select bar, weight_string(bar) from (select ue.bar from user_extra as ue) as poo",
+                "Table": "user_extra"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
   }
 ]
