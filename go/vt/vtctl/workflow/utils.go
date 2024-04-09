@@ -218,13 +218,13 @@ func stripTableForeignKeys(ddl string, parser *sqlparser.Parser) (string, error)
 }
 
 func stripAutoIncrement(ddl string, parser *sqlparser.Parser) (string, error) {
-	ast, err := parser.ParseStrictDDL(ddl)
+	newDDL, err := parser.ParseStrictDDL(ddl)
 	if err != nil {
 		return "", err
 	}
 
-	stripAutoIncrement := func(cursor *sqlparser.Cursor) bool {
-		switch node := cursor.Node().(type) {
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch node := node.(type) {
 		case sqlparser.DDLStatement:
 			if node.GetTableSpec() != nil {
 				for _, column := range node.GetTableSpec().Columns {
@@ -234,12 +234,10 @@ func stripAutoIncrement(ddl string, parser *sqlparser.Parser) (string, error) {
 				}
 			}
 		}
-		return true
-	}
+		return true, nil
+	}, newDDL)
 
-	noAutoIncAST := sqlparser.Rewrite(ast, stripAutoIncrement, nil)
-	newDDL := sqlparser.String(noAutoIncAST)
-	return newDDL, nil
+	return sqlparser.String(newDDL), nil
 }
 
 func getSourceTableDDLs(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, shards []*topo.ShardInfo) (map[string]string, error) {

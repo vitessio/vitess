@@ -611,7 +611,7 @@ func testMoveTablesV2Workflow(t *testing.T) {
 	require.Len(t, cs.Rows, 1)
 	require.Len(t, cs.Rows[0], 2) // Table and "Create Table"
 	csddl := strings.ToLower(cs.Rows[0][1].ToString())
-	require.False(t, strings.Contains(csddl, "auto_increment"), "customer table still has auto_increment clause: %s", csddl)
+	require.NotContains(t, csddl, "auto_increment", "customer table still has auto_increment clause: %s", csddl)
 
 	createMoveTablesWorkflow(t, "Lead,Lead-1")
 	output, err = vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)

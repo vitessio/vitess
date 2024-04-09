@@ -279,9 +279,7 @@ func TestStripAutoIncrement(t *testing.T) {
 		if tc.expectErr != (err != nil) {
 			require.Failf(t, "unexpected error result", "expected error %t, got: %v", tc.expectErr, err)
 		}
-		if strippedDDL != tc.want {
-			utils.MustMatch(t, tc.want, strippedDDL, fmt.Sprintf("stripped DDL %q does not match our expected result: %q", strippedDDL, tc.want))
-		}
+		require.Equal(t, tc.want, strippedDDL, fmt.Sprintf("stripped DDL %q does not match our expected result: %q", strippedDDL, tc.want))
 	}
 }
 
