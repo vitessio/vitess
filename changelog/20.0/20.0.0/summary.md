@@ -11,6 +11,7 @@
     - [New `unmanaged` Flag and `disable_active_reparents` deprecation](#unmanaged-flag)
     - [`recovery-period-block-duration` Flag deprecation](#recovery-block-deprecation)
     - [`mysqlctld` `onterm-timeout` Default Change](#mysqlctld-onterm-timeout)
+    - [`MoveTables` now removes `auto_increment` clauses by default when moving tables from an unsharded keyspace to a sharded one](#move-tables-auto-increment)
     - [`Durabler` interface method renaming](#durabler-interface-method-renaming)
   - **[Query Compatibility](#query-compatibility)**
     - [Vindex Hints](#vindex-hints)
@@ -105,6 +106,10 @@ acquiring a shard lock, blocking of recoveries is not required.
 The `--onterm_timeout` flag default value has changed for `mysqlctld`. It now is by default long enough to be able to wait for the default `--shutdown-wait-time` when shutting down on a `TERM` signal. 
 
 This is necessary since otherwise MySQL would never shut down cleanly with the old defaults, since `mysqlctld` would shut down already after 10 seconds by default.
+
+#### <a id="move-tables-auto-increment"/>`MoveTables` now removes `auto_increment` clauses by default when moving tables from an unsharded keyspace to a sharded one
+
+A new `--remove-sharded-auto-increment` flag has been added to the [`MoveTables` create sub-command](https://vitess.io/docs/20.0/reference/programs/vtctldclient/vtctldclient_movetables/vtctldclient_movetables_create/) and it is set to `true` by default. This flag controls whether any [MySQL `auto_increment`](https://dev.mysql.com/doc/refman/en/example-auto-increment.html) clauses should be removed from the table definitions when moving tables from an unsharded keyspace to a sharded one. This is now done by default as `auto_increment` clauses should not typically be used with sharded tables and you should instead rely on externally generated values such as a form of universally/globally unique identifiers or use [Vitess sequences](https://vitess.io/docs/reference/features/vitess-sequences/) in order to ensure that each row has a unique identifier (Primary Key value) across all shards. If for some reason you want to retain them you can set this new flag to `false` when creating the workflow.
 
 #### <a id="durabler-interface-method-renaming"/>`Durabler` interface method renaming
 
