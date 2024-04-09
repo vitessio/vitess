@@ -32,7 +32,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: 1.20.13
+          go-version: 1.21.9
 
       # Initializes the CodeQL tools for scanning.
       - name: Initialize CodeQL
@@ -103,3 +103,4 @@ jobs:
         if: ${{ failure() }}
         run: |
           exit 1
+
