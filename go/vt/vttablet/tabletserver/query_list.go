@@ -26,7 +26,9 @@ import (
 
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/callinfo"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // QueryDetail is a simple wrapper for Query, Context and a killable conn.
@@ -58,28 +60,41 @@ type QueryList struct {
 	// and remove appropriately.
 	queryDetails map[int64][]*QueryDetail
 
-	parser *sqlparser.Parser
+	parser                  *sqlparser.Parser
+	clusterActionInProgress bool
 }
 
 // NewQueryList creates a new QueryList
 func NewQueryList(name string, parser *sqlparser.Parser) *QueryList {
 	return &QueryList{
-		name:         name,
-		queryDetails: make(map[int64][]*QueryDetail),
-		parser:       parser,
+		name:                    name,
+		queryDetails:            make(map[int64][]*QueryDetail),
+		parser:                  parser,
+		clusterActionInProgress: false,
 	}
 }
 
-// Add adds a QueryDetail to QueryList
-func (ql *QueryList) Add(qd *QueryDetail) {
+// SetClusterAction sets the clusterActionInProgress field.
+func (ql *QueryList) SetClusterAction(inProgress bool) {
 	ql.mu.Lock()
 	defer ql.mu.Unlock()
+	ql.clusterActionInProgress = inProgress
+}
+
+// Add adds a QueryDetail to QueryList
+func (ql *QueryList) Add(qd *QueryDetail) error {
+	ql.mu.Lock()
+	defer ql.mu.Unlock()
+	if ql.clusterActionInProgress {
+		return vterrors.New(vtrpcpb.Code_CLUSTER_EVENT, vterrors.ShuttingDown)
+	}
 	qds, exists := ql.queryDetails[qd.connID]
 	if exists {
 		ql.queryDetails[qd.connID] = append(qds, qd)
 	} else {
 		ql.queryDetails[qd.connID] = []*QueryDetail{qd}
 	}
+	return nil
 }
 
 // Remove removes a QueryDetail from QueryList

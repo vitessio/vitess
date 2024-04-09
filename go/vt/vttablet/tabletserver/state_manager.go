@@ -542,6 +542,8 @@ func (sm *stateManager) connect(tabletType topodatapb.TabletType) error {
 }
 
 func (sm *stateManager) unserveCommon() {
+	sm.markClusterAction(true)
+	defer sm.markClusterAction(false)
 	// We create a wait group that tracks whether all the queries have been terminated or not.
 	wg := sync.WaitGroup{}
 	wg.Add(1)
@@ -849,4 +851,11 @@ func (sm *stateManager) IsServingString() string {
 
 func (sm *stateManager) SetUnhealthyThreshold(v time.Duration) {
 	sm.unhealthyThreshold.Store(v.Nanoseconds())
+}
+
+// markClusterAction marks whether a cluster action is in progress or not for all the query details.
+func (sm *stateManager) markClusterAction(inProgress bool) {
+	sm.statefulql.SetClusterAction(inProgress)
+	sm.statelessql.SetClusterAction(inProgress)
+	sm.olapql.SetClusterAction(inProgress)
 }

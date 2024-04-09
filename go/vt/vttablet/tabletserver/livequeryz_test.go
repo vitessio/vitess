@@ -30,8 +30,8 @@ func TestLiveQueryzHandlerJSON(t *testing.T) {
 	req, _ := http.NewRequest("GET", "/livequeryz/?format=json", nil)
 
 	queryList := NewQueryList("test", sqlparser.NewTestParser())
-	queryList.Add(NewQueryDetail(context.Background(), &testConn{id: 1}))
-	queryList.Add(NewQueryDetail(context.Background(), &testConn{id: 2}))
+	_ = queryList.Add(NewQueryDetail(context.Background(), &testConn{id: 1}))
+	_ = queryList.Add(NewQueryDetail(context.Background(), &testConn{id: 2}))
 
 	livequeryzHandler([]*QueryList{queryList}, resp, req)
 }
@@ -41,8 +41,8 @@ func TestLiveQueryzHandlerHTTP(t *testing.T) {
 	req, _ := http.NewRequest("GET", "/livequeryz/", nil)
 
 	queryList := NewQueryList("test", sqlparser.NewTestParser())
-	queryList.Add(NewQueryDetail(context.Background(), &testConn{id: 1}))
-	queryList.Add(NewQueryDetail(context.Background(), &testConn{id: 2}))
+	_ = queryList.Add(NewQueryDetail(context.Background(), &testConn{id: 1}))
+	_ = queryList.Add(NewQueryDetail(context.Background(), &testConn{id: 2}))
 
 	livequeryzHandler([]*QueryList{queryList}, resp, req)
 }
@@ -64,7 +64,7 @@ func TestLiveQueryzHandlerTerminateConn(t *testing.T) {
 
 	queryList := NewQueryList("test", sqlparser.NewTestParser())
 	testConn := &testConn{id: 1}
-	queryList.Add(NewQueryDetail(context.Background(), testConn))
+	_ = queryList.Add(NewQueryDetail(context.Background(), testConn))
 	if testConn.IsKilled() {
 		t.Fatalf("conn should still be alive")
 	}
