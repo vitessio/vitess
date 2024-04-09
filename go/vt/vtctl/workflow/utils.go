@@ -225,13 +225,9 @@ func stripAutoIncrement(ddl string, parser *sqlparser.Parser) (string, error) {
 
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
-		case sqlparser.DDLStatement:
-			if node.GetTableSpec() != nil {
-				for _, column := range node.GetTableSpec().Columns {
-					if column.Type.Options.Autoincrement {
-						column.Type.Options.Autoincrement = false
-					}
-				}
+		case *sqlparser.ColumnDefinition:
+			if node.Type.Options.Autoincrement {
+				node.Type.Options.Autoincrement = false
 			}
 		}
 		return true, nil
