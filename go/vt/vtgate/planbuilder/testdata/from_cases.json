@@ -793,7 +793,39 @@
   {
     "comment": "DISTINCT inside derived table",
     "query": "select * from (select distinct name from user) as t",
-    "plan": {
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "select * from (select distinct name from user) as t",
+      "Instructions": {
+        "OperatorType": "SimpleProjection",
+        "Columns": [
+          0
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Ordered",
+            "GroupBy": "0",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `name`, weight_string(`name`) from `user` where 1 != 1",
+                "OrderBy": "(0|1) ASC",
+                "Query": "select distinct `name`, weight_string(`name`) from `user` order by `name` asc",
+                "ResultColumns": 1,
+                "Table": "`user`"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select * from (select distinct name from user) as t",
       "Instructions": {
@@ -803,8 +835,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select `name` from (select `name` from `user` where 1 != 1) as t where 1 != 1",
-        "Query": "select `name` from (select distinct `name` from `user`) as t",
+        "FieldQuery": "select t.`name` from (select `name` from `user` where 1 != 1) as t where 1 != 1",
+        "Query": "select t.`name` from (select distinct `name` from `user`) as t",
         "Table": "`user`"
       },
       "TablesUsed": [
@@ -6396,44 +6428,7 @@
   {
     "comment": "join predicate only depending on the RHS should not turn outer join into inner join",
     "query": "select t1.id1, t2.id1 from t1 left join t1 as t2 on t2.id1 = t2.id2",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select t1.id1, t2.id1 from t1 left join t1 as t2 on t2.id1 = t2.id2",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "LeftJoin",
-        "JoinColumnIndexes": "L:0,R:0",
-        "TableName": "t1_t1",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "zlookup_unique",
-              "Sharded": true
-            },
-            "FieldQuery": "select t1.id1 from t1 where 1 != 1",
-            "Query": "select t1.id1 from t1",
-            "Table": "t1"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "zlookup_unique",
-              "Sharded": true
-            },
-            "FieldQuery": "select t2.id1 from t1 as t2 where 1 != 1",
-            "Query": "select t2.id1 from t1 as t2 where t2.id1 = t2.id2",
-            "Table": "t1"
-          }
-        ]
-      },
-      "TablesUsed": [
-        "zlookup_unique.t1"
-      ]
-    },
-    "gen4-plan": {
+    "plan": {
       "QueryType": "SELECT",
       "Original": "select t1.id1, t2.id1 from t1 left join t1 as t2 on t2.id1 = t2.id2",
       "Instructions": {
