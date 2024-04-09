@@ -605,6 +605,14 @@ func testMoveTablesV2Workflow(t *testing.T) {
 
 	testVSchemaForSequenceAfterMoveTables(t)
 
+	// Confirm that the auto_increment clause on customer.cid was removed.
+	cs, err := vtgateConn.ExecuteFetch("show create table customer", 1, false)
+	require.NoError(t, err)
+	require.Len(t, cs.Rows, 1)
+	require.Len(t, cs.Rows[0], 2) // Table and "Create Table"
+	csddl := strings.ToLower(cs.Rows[0][1].ToString())
+	require.NotContains(t, csddl, "auto_increment", "customer table still has auto_increment clause: %s", csddl)
+
 	createMoveTablesWorkflow(t, "Lead,Lead-1")
 	output, err = vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)
 	require.NoError(t, err)
