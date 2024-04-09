@@ -33,5 +33,5 @@ loose_rpl_semi_sync_master_wait_no_slave = 1
 super-read-only
 
 # Replication parameters to ensure reparents are fast.
-replica_net_timeout = 8
+slave_net_timeout = 8
 
