@@ -196,6 +196,8 @@ func TestStripConstraints(t *testing.T) {
 }
 
 func TestStripAutoIncrement(t *testing.T) {
+	parser := sqlparser.NewTestParser()
+
 	tcs := []struct {
 		desc      string
 		ddl       string
@@ -275,7 +277,7 @@ func TestStripAutoIncrement(t *testing.T) {
 	}
 
 	for _, tc := range tcs {
-		strippedDDL, err := stripAutoIncrement(tc.ddl, sqlparser.NewTestParser())
+		strippedDDL, err := stripAutoIncrement(tc.ddl, parser)
 		require.Equal(t, tc.expectErr, (err != nil), "unexpected error result", "expected error %t, got: %v", tc.expectErr, err)
 		require.Equal(t, tc.want, strippedDDL, fmt.Sprintf("stripped DDL %q does not match our expected result: %q", strippedDDL, tc.want))
 	}
