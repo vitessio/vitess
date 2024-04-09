@@ -73,7 +73,7 @@ var (
 	replicaMetrics = map[string]*MetricResult{
 		base.LagMetricName.String(): {
 			StatusCode: http.StatusOK,
-			Value:      1,
+			Value:      0.9,
 		},
 		base.ThreadsRunningMetricName.String(): {
 			StatusCode: http.StatusOK,
@@ -469,9 +469,9 @@ func TestProbesWhileOperating(t *testing.T) {
 				case shardStoreName:
 					switch metricName {
 					case base.DefaultMetricName:
-						assert.Equalf(t, float64(1), val, "storeName=%v, metricName=%v", storeName, metricName) // same value as "lag"
+						assert.Equalf(t, float64(0.9), val, "storeName=%v, metricName=%v", storeName, metricName) // same value as "lag"
 					case base.LagMetricName:
-						assert.Equalf(t, float64(1), val, "storeName=%v, metricName=%v", storeName, metricName)
+						assert.Equalf(t, float64(0.9), val, "storeName=%v, metricName=%v", storeName, metricName)
 					case base.ThreadsRunningMetricName:
 						assert.Equalf(t, float64(13), val, "storeName=%v, metricName=%v", storeName, metricName)
 					case base.CustomMetricName:
@@ -533,7 +533,7 @@ func TestProbesWhileOperating(t *testing.T) {
 					case base.DefaultMetricName:
 						assert.Equalf(t, float64(14), val, "storeName=%v, metricName=%v", storeName, metricName) // same value as "custom"
 					case base.LagMetricName:
-						assert.Equalf(t, float64(1), val, "storeName=%v, metricName=%v", storeName, metricName)
+						assert.Equalf(t, float64(0.9), val, "storeName=%v, metricName=%v", storeName, metricName)
 					case base.ThreadsRunningMetricName:
 						assert.Equalf(t, float64(13), val, "storeName=%v, metricName=%v", storeName, metricName)
 					case base.CustomMetricName:
@@ -545,6 +545,86 @@ func TestProbesWhileOperating(t *testing.T) {
 					assert.Failf(t, "unknown storeName", "storeName=%v", storeName)
 				}
 			}
+		})
+		cancel() // end test early
+	})
+}
+
+// TestProbesWithV19Replicas is similar to TestProbesWhileOperating, but assumes a v19 replica, which does not report any of the named metrics.
+func TestProbesWithV19Replicas(t *testing.T) {
+	throttler := newTestThrottler()
+
+	tmClient, ok := throttler.overrideTmClient.(*fakeTMClient)
+	require.True(t, ok)
+	assert.Empty(t, tmClient.AppNames())
+	tmClient.v19.Store(true)
+
+	t.Run("aggregated initial", func(t *testing.T) {
+		assert.Equal(t, 0, throttler.aggregatedMetrics.ItemCount())
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	runThrottler(t, ctx, throttler, time.Minute, func(t *testing.T, ctx context.Context) {
+		t.Run("aggregated", func(t *testing.T) {
+			aggr := throttler.aggregatedMetricsSnapshot()
+			assert.Equalf(t, 2*len(base.KnownMetricNames), len(aggr), "aggregated: %+v", aggr)     // "self" and "shard", per known metric
+			assert.Equal(t, 2*len(base.KnownMetricNames), throttler.aggregatedMetrics.ItemCount()) // flushed upon Disable()
+			for aggregatedMetricName, metricResult := range aggr {
+				assert.NotEmpty(t, aggregatedMetricName)
+				storeName, metricName, err := splitMetricTokens(aggregatedMetricName)
+				assert.NotEmpty(t, metricName)
+				assert.NoError(t, err)
+
+				val, metricResultErr := metricResult.Get()
+				expectMetricNotCollectedYet := false
+				switch storeName {
+				case selfStoreName:
+					switch metricName {
+					case base.DefaultMetricName:
+						assert.Equalf(t, float64(0.3), val, "storeName=%v, metricName=%v", storeName, metricName) // same value as "lag"
+					case base.LagMetricName:
+						assert.Equalf(t, float64(0.3), val, "storeName=%v, metricName=%v", storeName, metricName)
+					case base.ThreadsRunningMetricName:
+						assert.Equalf(t, float64(26), val, "storeName=%v, metricName=%v", storeName, metricName)
+					case base.CustomMetricName:
+						assert.Equalf(t, float64(17), val, "storeName=%v, metricName=%v", storeName, metricName)
+					case base.LoadAvgMetricName:
+						assert.Equalf(t, float64(2.718), val, "storeName=%v, metricName=%v", storeName, metricName)
+					}
+				case shardStoreName:
+					// Replicas will nto report named metrics, since they now assume v19 behavior. They will only
+					// produce the single v19 metric (which we call "default", though they don't advertise it under the name "base.DefaultMetricName")
+					switch metricName {
+					case base.DefaultMetricName:
+						assert.Equalf(t, float64(0.139), val, "storeName=%v, metricName=%v", storeName, metricName) // same value as "lag"
+					case base.LagMetricName:
+						assert.Equalf(t, float64(0.139), val, "storeName=%v, metricName=%v", storeName, metricName) //
+					default:
+						assert.Zero(t, val, "storeName=%v, metricName=%v", storeName, metricName)
+						expectMetricNotCollectedYet = true
+					}
+				default:
+					assert.Failf(t, "unknown storeName", "storeName=%v", storeName)
+				}
+				if expectMetricNotCollectedYet {
+					assert.ErrorIs(t, metricResultErr, base.ErrNoResultYet)
+				} else {
+					assert.NoErrorf(t, metricResultErr, "aggregatedMetricName: %v", aggregatedMetricName)
+				}
+			}
+			assert.NotEmpty(t, tmClient.AppNames())
+			// The throttler here emulates a PRIMARY tablet, and therefore should probe the replicas using
+			// the "vitess" app name.
+			uniqueNames := map[string]int{}
+			for _, appName := range tmClient.AppNames() {
+				uniqueNames[appName]++
+			}
+			// PRIMARY throttler probes replicas with empty app name, which is then
+			// interpreted as "vitess" name.
+			_, ok := uniqueNames[""]
+			assert.Truef(t, ok, "%+v", uniqueNames)
+			// And that's the only app we expect to see.
+			assert.Equalf(t, 1, len(uniqueNames), "%+v", uniqueNames)
 		})
 		cancel() // end test early
 	})

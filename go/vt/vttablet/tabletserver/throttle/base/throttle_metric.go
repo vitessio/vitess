@@ -64,7 +64,7 @@ func NewMetricResultMap() MetricResultMap {
 
 // ErrThresholdExceeded is the common error one may get checking on metric result
 var ErrThresholdExceeded = errors.New("threshold exceeded")
-var errNoResultYet = errors.New("metric not collected yet")
+var ErrNoResultYet = errors.New("metric not collected yet")
 
 // ErrNoSuchMetric is for when a user requests a metric by an unknown metric name
 var ErrNoSuchMetric = errors.New("no such metric")
@@ -94,7 +94,7 @@ type noMetricResultYet struct{}
 
 // Get implements MetricResult
 func (metricResult *noMetricResultYet) Get() (float64, error) {
-	return 0, errNoResultYet
+	return 0, ErrNoResultYet
 }
 
 // NoMetricResultYet is a result indicating "no data"

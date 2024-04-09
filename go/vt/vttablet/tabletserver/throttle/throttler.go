@@ -919,6 +919,7 @@ func (throttler *Throttler) generateTabletProbeFunction(storeName string, tmClie
 
 		// Hit a tablet's `check-self` via HTTP, and convert its CheckResult JSON output into a MySQLThrottleMetric
 		mySQLThrottleMetric := mysql.NewMySQLThrottleMetric()
+		mySQLThrottleMetric.Name = base.DefaultMetricName
 		mySQLThrottleMetric.StoreName = storeName
 		mySQLThrottleMetric.Alias = probe.Alias
 
@@ -954,10 +955,11 @@ func (throttler *Throttler) generateTabletProbeFunction(storeName string, tmClie
 				metrics[metricName].Err = errors.New(metric.Error)
 			}
 		}
-		// if _, ok := resp.Metrics[base.DefaultMetricName.String()]; !ok {
-		// 	// Backwards compatibility to v19. v19 does not report multi metrics.
-		// 	metrics[base.DefaultMetricName] = mySQLThrottleMetric
-		// }
+		if len(resp.Metrics) == 0 {
+			// Backwards compatibility to v19. v19 does not report multi metrics.
+			mySQLThrottleMetric.Name = throttler.metricNameUsedAsDefault()
+			metrics[mySQLThrottleMetric.Name] = mySQLThrottleMetric
+		}
 
 		return metrics
 	}
@@ -1134,15 +1136,11 @@ func (throttler *Throttler) updateMySQLClusterProbes(ctx context.Context, cluste
 	return nil
 }
 
-func (throttler *Throttler) isConsideredDefaultMetric(metricName base.MetricName) bool {
-	switch metricName {
-	case base.LagMetricName:
-		return throttler.GetCustomMetricsQuery() == ""
-	case base.CustomMetricName:
-		return throttler.GetCustomMetricsQuery() != ""
-	default:
-		return false
+func (throttler *Throttler) metricNameUsedAsDefault() base.MetricName {
+	if throttler.GetCustomMetricsQuery() == "" {
+		return base.LagMetricName
 	}
+	return base.CustomMetricName
 }
 
 func getAggregatedMetricName(storeName string, metricName base.MetricName) string {
@@ -1155,6 +1153,7 @@ func getAggregatedMetricName(storeName string, metricName base.MetricName) strin
 
 // synchronous aggregation of collected data
 func (throttler *Throttler) aggregateMySQLMetrics(ctx context.Context) error {
+	metricNameUsedAsDefault := throttler.metricNameUsedAsDefault()
 	aggregateTabletsMetrics := func(storeName string, metricName base.MetricName, tabletResultsMap mysql.TabletResultMap) {
 		ignoreHostsCount := throttler.mysqlInventory.IgnoreHostsCount
 		ignoreHostsThreshold := throttler.mysqlInventory.IgnoreHostsThreshold
@@ -1163,7 +1162,7 @@ func (throttler *Throttler) aggregateMySQLMetrics(ctx context.Context) error {
 		aggregatedMetric := aggregateMySQLProbes(ctx, metricName, tabletResultsMap, ignoreHostsCount, ignoreDialTCPErrors, ignoreHostsThreshold)
 		aggregatedMetricName := getAggregatedMetricName(storeName, metricName)
 		throttler.aggregatedMetrics.Set(aggregatedMetricName, aggregatedMetric, cache.DefaultExpiration)
-		if throttler.isConsideredDefaultMetric(metricName) {
+		if metricName == metricNameUsedAsDefault {
 			throttler.aggregatedMetrics.Set(getAggregatedMetricName(storeName, base.DefaultMetricName), aggregatedMetric, cache.DefaultExpiration)
 		}
 	}

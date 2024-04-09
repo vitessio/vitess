@@ -45,7 +45,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 )
 
-// TabletResultMap maps a cluster-tablet to a result
+// TabletResultMap maps a tablet to a result
 type TabletResultMap map[string]base.MetricResultMap
 
 func (m TabletResultMap) Split(alias string) (withAlias TabletResultMap, withoutAlias TabletResultMap) {
