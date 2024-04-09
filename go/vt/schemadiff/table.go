@@ -19,6 +19,7 @@ package schemadiff
 import (
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -1195,7 +1196,6 @@ func (c *CreateTableEntity) isRangePartitionsRotation(
 	annotations *TextualAnnotations,
 	t1Partitions *sqlparser.PartitionOption,
 	t2Partitions *sqlparser.PartitionOption,
-	hints *DiffHints,
 ) (bool, []*sqlparser.PartitionSpec, error) {
 	// Validate that both tables have range partitioning
 	if t1Partitions.Type != t2Partitions.Type {
@@ -1204,43 +1204,50 @@ func (c *CreateTableEntity) isRangePartitionsRotation(
 	if t1Partitions.Type != sqlparser.RangeType {
 		return false, nil, nil
 	}
-	definitions1 := t1Partitions.Definitions
+	definitions1 := slices.Clone(t1Partitions.Definitions)
 	definitions2 := t2Partitions.Definitions
-	// there has to be a non-empty shared list, therefore both definitions must be non-empty:
 	if len(definitions1) == 0 {
 		return false, nil, nil
 	}
 	if len(definitions2) == 0 {
 		return false, nil, nil
 	}
-	var droppedPartitions1 []*sqlparser.PartitionDefinition
-	// It's OK for prefix of t1 partitions to be nonexistent in t2 (as they may have been rotated away in t2)
-	for len(definitions1) > 0 && !sqlparser.Equals.RefOfPartitionDefinition(definitions1[0], definitions2[0]) {
-		droppedPartitions1 = append(droppedPartitions1, definitions1[0])
-		definitions1 = definitions1[1:]
+	definitions2map := make(map[string]*sqlparser.PartitionDefinition, len(definitions2))
+	for _, definition := range definitions2 {
+		definitions2map[sqlparser.CanonicalString(definition)] = definition
 	}
+	// Find dropped partitions:
+	var droppedPartitions1 []*sqlparser.PartitionDefinition
+	for i := len(definitions1) - 1; i >= 0; i-- {
+		definition := definitions1[i]
+		if _, ok := definitions2map[sqlparser.CanonicalString(definition)]; !ok {
+			// In range partitioning, it's allowed to drop any partition, whether it's the first, somewhere in the middle, or last.
+			droppedPartitions1 = append(droppedPartitions1, definition)
+			// We remove the definition from the list, so that we can then compare the remaining definitions
+			definitions1 = append(definitions1[:i], definitions1[i+1:]...)
+		}
+	}
+	slices.Reverse(droppedPartitions1)
 	if len(definitions1) == 0 {
-		// We've exhausted definition1 trying to find a shared partition with definitions2. Nothing found.
-		// so there is no shared sequence between the two tables.
+		// Nothing shared between the two partition lists.
 		return false, nil, nil
 	}
+	// In range partitioning, it's only allowed to ADD one partition at the end of the range.
+	// We allow multiple here, and the diff mechanism will later split them to subsequent diffs.
+
+	// Let's now validate that any added partitions in t2Partitions are strictly a suffix of t1Partitions
 	if len(definitions1) > len(definitions2) {
 		return false, nil, nil
 	}
-	// To save computation, and because we've already shown that sqlparser.EqualsRefOfPartitionDefinition(definitions1[0], definitions2[0]), nil,
-	// we can skip one element
-	definitions1 = definitions1[1:]
-	definitions2 = definitions2[1:]
-	// Now let's ensure that whatever is remaining in definitions1 is an exact match for a prefix of definitions2
-	// It's ok if we end up with leftover elements in definition2
-	for len(definitions1) > 0 {
-		if !sqlparser.Equals.RefOfPartitionDefinition(definitions1[0], definitions2[0]) {
+	for i := range definitions1 {
+		if !sqlparser.Equals.RefOfPartitionDefinition(definitions1[i], definitions2[i]) {
+			// Not a suffix
 			return false, nil, nil
 		}
-		definitions1 = definitions1[1:]
-		definitions2 = definitions2[1:]
 	}
-	addedPartitions2 := definitions2
+	// And the suffix is any remaining definitions
+	addedPartitions2 := definitions2[len(definitions1):]
+
 	var partitionSpecs []*sqlparser.PartitionSpec
 	// Dropped partitions:
 	if len(droppedPartitions1) > 0 {
@@ -1302,7 +1309,7 @@ func (c *CreateTableEntity) diffPartitions(alterTable *sqlparser.AlterTable,
 		// Having said that, we _do_ analyze the scenario of a RANGE partitioning rotation of partitions:
 		// where zero or more partitions may have been dropped from the earlier range, and zero or more
 		// partitions have been added with a later range:
-		isRotation, partitionSpecs, err := c.isRangePartitionsRotation(annotations, t1Partitions, t2Partitions, hints)
+		isRotation, partitionSpecs, err := c.isRangePartitionsRotation(annotations, t1Partitions, t2Partitions)
 		if err != nil {
 			return nil, err
 		}
