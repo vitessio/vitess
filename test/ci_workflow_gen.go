@@ -81,7 +81,6 @@ var (
 		"22",
 		"mysql_server_vault",
 		"vstream",
-		"onlineddl_ghost",
 		"onlineddl_vrepl",
 		"onlineddl_vrepl_stress",
 		"onlineddl_vrepl_stress_suite",
