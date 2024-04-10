@@ -542,7 +542,6 @@ func (sm *stateManager) connect(tabletType topodatapb.TabletType) error {
 }
 
 func (sm *stateManager) unserveCommon() {
-	sm.markClusterAction(true)
 	defer sm.markClusterAction(false)
 	// We create a wait group that tracks whether all the queries have been terminated or not.
 	wg := sync.WaitGroup{}
@@ -603,6 +602,8 @@ func (sm *stateManager) terminateAllQueries(wg *sync.WaitGroup) (cancel func()) 
 		if err := timer.SleepContext(ctx, sm.shutdownGracePeriod); err != nil {
 			return
 		}
+		// Prevent any new queries from being added before we kill all the queries in the list.
+		sm.markClusterAction(true)
 		log.Infof("Grace Period %v exceeded. Killing all OLTP queries.", sm.shutdownGracePeriod)
 		sm.statelessql.TerminateAll()
 		log.Infof("Killed all stateless OLTP queries.")
