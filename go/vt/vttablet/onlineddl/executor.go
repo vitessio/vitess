@@ -89,8 +89,8 @@ var acceptableDropTableIfExistsErrorCodes = []sqlerror.ErrorCode{sqlerror.ERCant
 var copyAlgorithm = sqlparser.AlgorithmValue(sqlparser.CopyStr)
 
 var (
-	ghostOverridePath       string
-	ptOSCOverridePath       string
+	ghostBinaryPath         = "/usr/bin/gh-ost"
+	ptOSCBinaryPath         = "/usr/bin/pt-online-schema-change"
 	migrationCheckInterval  = 1 * time.Minute
 	retainOnlineDDLTables   = 24 * time.Hour
 	defaultCutOverThreshold = 10 * time.Second
@@ -107,8 +107,8 @@ func init() {
 }
 
 func registerOnlineDDLFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&ghostOverridePath, "gh-ost-path", ghostOverridePath, "override default gh-ost binary full path")
-	fs.StringVar(&ptOSCOverridePath, "pt-osc-path", ptOSCOverridePath, "override default pt-online-schema-change binary full path")
+	fs.StringVar(&ghostBinaryPath, "gh-ost-path", ghostBinaryPath, "override default gh-ost binary full path")
+	fs.StringVar(&ptOSCBinaryPath, "pt-osc-path", ptOSCBinaryPath, "override default pt-online-schema-change binary full path")
 	fs.DurationVar(&migrationCheckInterval, "migration_check_interval", migrationCheckInterval, "Interval between migration checks")
 	fs.DurationVar(&retainOnlineDDLTables, "retain_online_ddl_tables", retainOnlineDDLTables, "How long should vttablet keep an old migrated table before purging it")
 	fs.IntVar(&maxConcurrentOnlineDDLs, "max_concurrent_online_ddl", maxConcurrentOnlineDDLs, "Maximum number of online DDL changes that may run concurrently")
@@ -216,23 +216,6 @@ type cancellableMigration struct {
 
 func newCancellableMigration(uuid string, message string) *cancellableMigration {
 	return &cancellableMigration{uuid: uuid, message: message}
-}
-
-// GhostBinaryFileName returns the full path+name of the gh-ost binary
-func GhostBinaryFileName() (fileName string, isOverride bool) {
-	if ghostOverridePath != "" {
-		return ghostOverridePath, true
-	}
-	return path.Join(os.TempDir(), "vt-gh-ost"), false
-}
-
-// PTOSCFileName returns the full path+name of the pt-online-schema-change binary
-// Note that vttablet does not include pt-online-schema-change
-func PTOSCFileName() (fileName string, isOverride bool) {
-	if ptOSCOverridePath != "" {
-		return ptOSCOverridePath, true
-	}
-	return "/usr/bin/pt-online-schema-change", false
 }
 
 // newGCTableRetainTime returns the time until which a new GC table is to be retained
@@ -1698,7 +1681,6 @@ func (e *Executor) ExecuteWithGhost(ctx context.Context, onlineDDL *schema.Onlin
 		log.Errorf("Error creating temporary directory: %+v", err)
 		return err
 	}
-	binaryFileName, _ := GhostBinaryFileName()
 	credentialsConfigFileContent := fmt.Sprintf(`[client]
 user=%s
 password=${ONLINE_DDL_PASSWORD}
@@ -1720,7 +1702,7 @@ export ONLINE_DDL_PASSWORD
 exit_code=$?
 grep -o '\bFATAL\b.*' "$ghost_log_path/$ghost_log_file" | tail -1 > "$ghost_log_path/$ghost_log_failure_file"
 exit $exit_code
-	`, tempDir, migrationLogFileName, migrationFailureFileName, binaryFileName,
+	`, tempDir, migrationLogFileName, migrationFailureFileName, ghostBinaryPath,
 	)
 	wrapperScriptFileName, err := createTempScript(tempDir, "gh-ost-wrapper.sh", wrapperScriptContent)
 	if err != nil {
@@ -1913,7 +1895,6 @@ func (e *Executor) ExecuteWithPTOSC(ctx context.Context, onlineDDL *schema.Onlin
 		return err
 	}
 
-	binaryFileName, _ := PTOSCFileName()
 	wrapperScriptContent := fmt.Sprintf(`#!/bin/bash
 pt_log_path="%s"
 pt_log_file="%s"
@@ -1922,7 +1903,7 @@ mkdir -p "$pt_log_path"
 
 export MYSQL_PWD
 %s "$@" > "$pt_log_path/$pt_log_file" 2>&1
-	`, tempDir, migrationLogFileName, binaryFileName,
+	`, tempDir, migrationLogFileName, ptOSCBinaryPath,
 	)
 	wrapperScriptFileName, err := createTempScript(tempDir, "pt-online-schema-change-wrapper.sh", wrapperScriptContent)
 	if err != nil {
