@@ -342,20 +342,17 @@ func (throttler *Throttler) initConfig() {
 	}
 	// TODO (shlomi)
 	metrics[base.DefaultMetricName].CustomQuery = ""
-	metrics[base.DefaultMetricName].Threshold = &throttler.MetricsThreshold
+	metrics[base.DefaultMetricName].Threshold.Store(throttler.MetricsThreshold.Load())
 
 	metrics[base.LagMetricName].CustomQuery = sqlparser.BuildParsedQuery(defaultReplicationLagQuery, sidecar.GetIdentifier()).Query
-	metrics[base.LagMetricName].Threshold = &throttler.MetricsThreshold
+	metrics[base.LagMetricName].Threshold.Store(throttler.MetricsThreshold.Load())
 
 	metrics[base.ThreadsRunningMetricName].CustomQuery = threadsRunningQuery
-	metrics[base.ThreadsRunningMetricName].Threshold = &atomic.Uint64{}
-	metrics[base.ThreadsRunningMetricName].Threshold.Store(100)
+	metrics[base.ThreadsRunningMetricName].Threshold.Store(math.Float64bits(100))
 
 	metrics[base.CustomMetricName].CustomQuery = ""
-	metrics[base.CustomMetricName].Threshold = &atomic.Uint64{}
-	metrics[base.CustomMetricName].Threshold.Store(0)
+	metrics[base.CustomMetricName].Threshold.Store(math.Float64bits(0))
 
-	metrics[base.LoadAvgMetricName].Threshold = &atomic.Uint64{}
 	metrics[base.LoadAvgMetricName].Threshold.Store(math.Float64bits(1.0))
 
 	throttler.configSettings.MySQLStore.Metrics = metrics
@@ -1075,11 +1072,18 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 		}
 	}
 
+	metricNameUsedAsDefault := throttler.metricNameUsedAsDefault()
 	mysqlSettings := &throttler.configSettings.MySQLStore
 	mysqlSettings.Metrics[base.DefaultMetricName].Threshold.Store(metricsThreshold)
 	for metricName, metricConfig := range mysqlSettings.Metrics {
-		throttler.mysqlMetricThresholds.Set(metricName.String(), math.Float64frombits(metricConfig.Threshold.Load()), cache.DefaultExpiration)
+		threshold := metricConfig.Threshold.Load()
+		if metricName == metricNameUsedAsDefault && metricConfig.Threshold.Load() == 0 && metricsThreshold != 0 {
+			// backwards compatibility to v19:
+			threshold = metricsThreshold
+		}
+		throttler.mysqlMetricThresholds.Set(metricName.String(), math.Float64frombits(threshold), cache.DefaultExpiration)
 	}
+
 	clusterSettingsCopy := *mysqlSettings
 	// config may dynamically change, but internal structure (config.Settings().MySQLStore.Clusters in our case)
 	// is immutable and can only be _replaced_. Hence, it's safe to read in a goroutine:
@@ -1400,6 +1404,15 @@ func (throttler *Throttler) checkStore(ctx context.Context, appName string, stor
 	}
 
 	checkResult = throttler.check.Check(ctx, appName, storeName, metricNames, remoteAddr, flags)
+	if metric, ok := checkResult.Metrics[throttler.metricNameUsedAsDefault().String()]; ok {
+		// v19 compatibility: if this v20 server is a replica, reporting to a v19 primary,
+		// then we must supply the v19-flavor check result.
+		checkResult.StatusCode = metric.StatusCode
+		checkResult.Value = metric.Value
+		checkResult.Threshold = metric.Threshold
+		checkResult.Error = metric.Error
+		checkResult.Message = metric.Message
+	}
 
 	shouldRequestHeartbeats := !flags.SkipRequestHeartbeats
 	if throttlerapp.VitessName.Equals(appName) {

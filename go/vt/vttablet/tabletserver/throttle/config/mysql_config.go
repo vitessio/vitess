@@ -54,7 +54,7 @@ import (
 type MySQLMetricConfigurationSettings struct {
 	Name        base.MetricName
 	CustomQuery string
-	Threshold   *atomic.Uint64
+	Threshold   atomic.Uint64
 }
 
 // MySQLConfigurationSettings has the general configuration for all MySQL clusters
