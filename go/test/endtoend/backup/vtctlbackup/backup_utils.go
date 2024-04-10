@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"os"
 	"os/exec"
 	"path"
@@ -1299,6 +1300,13 @@ func TestReplicaRestoreToPos(t *testing.T, replicaIndex int, restoreToPos replic
 
 	require.False(t, restoreToPos.IsZero())
 	restoreToPosArg := replication.EncodePosition(restoreToPos)
+	assert.Contains(t, restoreToPosArg, "MySQL56/")
+	if rand.Intn(2) == 0 {
+		// Verify that restore works whether or not the MySQL56/ prefix is present.
+		restoreToPosArg = strings.Replace(restoreToPosArg, "MySQL56/", "", 1)
+		assert.NotContains(t, restoreToPosArg, "MySQL56/")
+	}
+
 	output, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("RestoreFromBackup", "--restore-to-pos", restoreToPosArg, replica.Alias)
 	if expectError != "" {
 		require.Errorf(t, err, "expected: %v", expectError)
