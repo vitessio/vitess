@@ -6,6 +6,7 @@
   - **[Deletions](#deletions)** 
     - [MySQL binaries in the vitess/lite Docker images](#vitess-lite)
     - [vitess/base and vitess/k8s Docker images](#base-k8s-images)
+    - [`gh-ost` binary and endtoend tests](#gh-ost-binary-tests-removal)
   - **[Breaking changes](#breaking-changes)**
     - [`shutdown_grace_period` Default Change](#shutdown-grace-period-default)
     - [New `unmanaged` Flag and `disable_active_reparents` deprecation](#unmanaged-flag)
@@ -78,6 +79,14 @@ Below is an example of a kubernetes yaml file before and after upgrading to an o
 Since we have deleted MySQL from our `vitess/lite` image, we are removing the `vitess/base` and `vitess/k8s` images.
 
 These images are no longer useful since we can use `vitess/lite` as the base of many other Docker images (`vitess/vtgate`, `vitess/vtgate`, ...).
+
+#### <a id="gh-ost-binary-tests-removal"/>`gh-ost` binary and endtoend tests
+
+Vitess 20.0 drops support for `gh-ost` DDL strategy.
+
+`vttablet` binary no longer embeds a `gh-ost` binary. Users of `gh-ost` DDL strategy will need to supply a `gh-ost` binary on the `vttablet` host or pod. Vitess will look for the `gh-ost` binary in the system `PATH`; otherwise the user should supply `vttablet --gh-ost-path`.
+
+Vitess' endtoend tests no longer use nor test `gh-ost` migrations.
 
 ### <a id="breaking-changes"/>Breaking Changes
 
