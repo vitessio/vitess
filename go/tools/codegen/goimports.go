@@ -31,7 +31,8 @@ func FormatJenFile(file *jen.File) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-
+	defer os.Remove(tempFile.Name())
+	defer tempFile.Close()
 	err = file.Save(tempFile.Name())
 	if err != nil {
 		return nil, err
