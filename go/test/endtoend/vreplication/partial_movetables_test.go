@@ -27,7 +27,6 @@ import (
 	"github.com/tidwall/gjson"
 
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/wrangler"
 )
 
 // testCancel() starts and cancels a partial MoveTables for one of the shards which will be actually moved later on.
@@ -103,6 +102,7 @@ func TestPartialMoveTablesBasic(t *testing.T) {
 	defer vtgateConn.Close()
 	defer vc.TearDown(t)
 	setupMinimalCustomerKeyspace(t)
+	currentWorkflowType = binlogdatapb.VReplicationWorkflowType_MoveTables
 
 	// Move customer table from unsharded product keyspace to
 	// sharded customer keyspace.
@@ -132,7 +132,7 @@ func TestPartialMoveTablesBasic(t *testing.T) {
 
 	testCancel(t)
 
-	currentWorkflowType = wrangler.MoveTablesWorkflow
+	currentWorkflowType = binlogdatapb.VReplicationWorkflowType_MoveTables
 	wfName := "partial80Dash"
 	sourceKs := "customer"
 	targetKs := "customer2"
@@ -215,7 +215,7 @@ func TestPartialMoveTablesBasic(t *testing.T) {
 
 	// Switch all traffic for the shard
 	require.NoError(t, tstWorkflowExec(t, "", wfName, "", targetKs, "", workflowActionSwitchTraffic, "", "", "", false))
-	expectedSwitchOutput := fmt.Sprintf("SwitchTraffic was successful for workflow %s.%s\nStart State: Reads Not Switched. Writes Not Switched\nCurrent State: Reads partially switched, for shards: %s. Writes partially switched, for shards: %s\n\n",
+	expectedSwitchOutput := fmt.Sprintf("SwitchTraffic was successful for workflow %s.%s\n\nStart State: Reads Not Switched. Writes Not Switched\nCurrent State: Reads partially switched, for shards: %s. Writes partially switched, for shards: %s\n\n",
 		targetKs, wfName, shard, shard)
 	require.Equal(t, expectedSwitchOutput, lastOutput)
 
@@ -272,7 +272,7 @@ func TestPartialMoveTablesBasic(t *testing.T) {
 
 	// We cannot Complete a partial move tables at the moment because
 	// it will find that all traffic has (obviously) not been switched.
-	err = tstWorkflowExec(t, "", wfName, "", targetKs, "", workflowActionComplete, "", "", "", false)
+	err = tstWorkflowExecVtctl(t, "", wfName, "", targetKs, "", workflowActionComplete, "", "", "", false)
 	require.Error(t, err)
 
 	// Confirm global routing rules: -80 should still be be routed to customer
@@ -293,7 +293,7 @@ func TestPartialMoveTablesBasic(t *testing.T) {
 
 	// Switch all traffic for the shard
 	require.NoError(t, tstWorkflowExec(t, "", wfName, "", targetKs, "", workflowActionSwitchTraffic, "", "", "", false))
-	expectedSwitchOutput = fmt.Sprintf("SwitchTraffic was successful for workflow %s.%s\nStart State: Reads partially switched, for shards: 80-. Writes partially switched, for shards: 80-\nCurrent State: All Reads Switched. All Writes Switched\n\n",
+	expectedSwitchOutput = fmt.Sprintf("SwitchTraffic was successful for workflow %s.%s\n\nStart State: Reads partially switched, for shards: 80-. Writes partially switched, for shards: 80-\nCurrent State: All Reads Switched. All Writes Switched\n\n",
 		targetKs, wfName)
 	require.Equal(t, expectedSwitchOutput, lastOutput)
 
@@ -313,7 +313,7 @@ func TestPartialMoveTablesBasic(t *testing.T) {
 		// We switched traffic, so it's the reverse workflow we want to cancel.
 		reverseWf := wf + "_reverse"
 		reverseKs := sourceKs // customer
-		err = tstWorkflowExec(t, "", reverseWf, "", reverseKs, "", workflowActionCancel, "", "", "", false)
+		err = tstWorkflowExecVtctl(t, "", reverseWf, "", reverseKs, "", workflowActionCancel, "", "", "", false)
 		require.NoError(t, err)
 
 		output, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", fmt.Sprintf("%s.%s", reverseKs, reverseWf), "show")

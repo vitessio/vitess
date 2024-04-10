@@ -28,7 +28,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/wrangler"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
@@ -236,12 +235,12 @@ func (wf *workflow) create() {
 	cell := wf.tc.defaultCellName
 	switch typ {
 	case "movetables":
-		currentWorkflowType = wrangler.MoveTablesWorkflow
+		currentWorkflowType = binlogdatapb.VReplicationWorkflowType_MoveTables
 		sourceShards := strings.Join(wf.options.sourceShards, ",")
 		err = tstWorkflowExec(t, cell, wf.name, wf.fromKeyspace, wf.toKeyspace,
 			strings.Join(wf.options.tables, ","), workflowActionCreate, "", sourceShards, "", false)
 	case "reshard":
-		currentWorkflowType = wrangler.ReshardWorkflow
+		currentWorkflowType = binlogdatapb.VReplicationWorkflowType_Reshard
 		sourceShards := strings.Join(wf.options.sourceShards, ",")
 		targetShards := strings.Join(wf.options.targetShards, ",")
 		if targetShards == "" {
@@ -395,7 +394,7 @@ func TestPartialMoveTablesWithSequences(t *testing.T) {
 
 		// Switch all traffic for the shard
 		wf80Dash.switchTraffic()
-		expectedSwitchOutput := fmt.Sprintf("SwitchTraffic was successful for workflow %s.%s\nStart State: Reads Not Switched. Writes Not Switched\nCurrent State: Reads partially switched, for shards: %s. Writes partially switched, for shards: %s\n\n",
+		expectedSwitchOutput := fmt.Sprintf("SwitchTraffic was successful for workflow %s.%s\n\nStart State: Reads Not Switched. Writes Not Switched\nCurrent State: Reads partially switched, for shards: %s. Writes partially switched, for shards: %s\n\n",
 			targetKs, wfName, shard, shard)
 		require.Equal(t, expectedSwitchOutput, lastOutput)
 		currentCustomerCount = getCustomerCount(t, "")
@@ -455,7 +454,7 @@ func TestPartialMoveTablesWithSequences(t *testing.T) {
 		wfDash80.create()
 		wfDash80.switchTraffic()
 
-		expectedSwitchOutput := fmt.Sprintf("SwitchTraffic was successful for workflow %s.%s\nStart State: Reads partially switched, for shards: 80-. Writes partially switched, for shards: 80-\nCurrent State: All Reads Switched. All Writes Switched\n\n",
+		expectedSwitchOutput := fmt.Sprintf("SwitchTraffic was successful for workflow %s.%s\n\nStart State: Reads partially switched, for shards: 80-. Writes partially switched, for shards: 80-\nCurrent State: All Reads Switched. All Writes Switched\n\n",
 			targetKs, wfName)
 		require.Equal(t, expectedSwitchOutput, lastOutput)
 

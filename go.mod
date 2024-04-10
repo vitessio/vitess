@@ -1,6 +1,6 @@
 module vitess.io/vitess
 
-go 1.21
+go 1.21.9
 
 require (
 	cloud.google.com/go/storage v1.39.0
@@ -72,7 +72,7 @@ require (
 	go.uber.org/mock v0.2.0
 	golang.org/x/crypto v0.21.0 // indirect
 	golang.org/x/mod v0.16.0 // indirect
-	golang.org/x/net v0.22.0
+	golang.org/x/net v0.23.0
 	golang.org/x/oauth2 v0.18.0
 	golang.org/x/sys v0.18.0
 	golang.org/x/term v0.18.0
