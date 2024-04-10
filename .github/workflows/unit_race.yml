@@ -6,6 +6,11 @@ concurrency:
 
 permissions: read-all
 
+env:
+  LAUNCHABLE_ORGANIZATION: "vitess"
+  LAUNCHABLE_WORKSPACE: "vitess-app"
+  GITHUB_PR_HEAD_SHA: "${{ github.event.pull_request.head.sha }}"
+
 jobs:
 
   build:
@@ -28,6 +33,13 @@ jobs:
         fi
         echo Skip ${skip}
         echo "skip-workflow=${skip}" >> $GITHUB_OUTPUT
+        
+        PR_DATA=$(curl \
+          -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          -H "Accept: application/vnd.github.v3+json" \
+          "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}")
+        draft=$(echo "$PR_DATA" | jq .draft -r)
+        echo "is_draft=${draft}" >> $GITHUB_OUTPUT
 
     - name: Check out code
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
@@ -59,6 +71,10 @@ jobs:
       with:
         go-version: 1.22.2
 
+    - name: Set up python
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
+      uses: actions/setup-python@v5
+
     - name: Tune the OS
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
       run: |
@@ -85,11 +101,26 @@ jobs:
 
         go mod download
         go install golang.org/x/tools/cmd/goimports@latest
+        
+        # install JUnit report formatter
+        go install github.com/vitessio/go-junit-report@HEAD
 
     - name: Run make tools
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
       run: |
         make tools
+
+    - name: Setup launchable dependencies
+      if: steps.skip-workflow.outputs.is_draft == 'false' && steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true' && github.base_ref == 'main'
+      run: |
+        # Get Launchable CLI installed. If you can, make it a part of the builder image to speed things up
+        pip3 install --user launchable~=1.0 > /dev/null
+
+        # verify that launchable setup is all correct.
+        launchable verify || true
+
+        # Tell Launchable about the build you are producing and testing
+        launchable record build --name "$GITHUB_RUN_ID" --no-commit-collection --source .
 
     - name: unit_race
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
@@ -100,4 +131,15 @@ jobs:
         export VTDATAROOT="/tmp/"
         export NOVTADMINBUILD=1
 
-        eatmydata -- make unit_test_race
+        eatmydata -- make unit_test_race | tee -a output.txt | go-junit-report -set-exit-code > report.xml
+
+    - name: Print test output and Record test result in launchable if PR is not a draft
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true' && always()
+      run: |
+        if [[ "${{steps.skip-workflow.outputs.is_draft}}" ==  "false" ]]; then
+          # send recorded tests to launchable
+          launchable record tests --build "$GITHUB_RUN_ID" go-test . || true
+        fi
+
+        # print test output
+        cat output.txt
