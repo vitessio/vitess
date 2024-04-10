@@ -17,7 +17,6 @@ limitations under the License.
 package cli
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -38,14 +37,12 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtenv"
-	"vitess.io/vitess/go/vt/vttablet/onlineddl"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/yaml2"
-	"vitess.io/vitess/resources"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -144,10 +141,6 @@ func run(cmd *cobra.Command, args []string) error {
 	mysqld := mysqlctl.NewMysqld(config.DB)
 	servenv.OnClose(mysqld.Close)
 
-	if err := extractOnlineDDL(); err != nil {
-		ts.Close()
-		return fmt.Errorf("failed to extract online DDL binaries: %w", err)
-	}
 	// Initialize and start tm.
 	gRPCPort := int32(0)
 	if servenv.GRPCPort() != 0 {
@@ -234,25 +227,6 @@ func initConfig(tabletAlias *topodatapb.TabletAlias, collationEnv *collations.En
 		cfg.InitWithSocket("", collationEnv)
 	}
 	return config, mycnf, nil
-}
-
-// extractOnlineDDL extracts the gh-ost binary from this executable. gh-ost is appended
-// to vttablet executable by `make build` with a go:embed
-func extractOnlineDDL() error {
-	if binaryFileName, isOverride := onlineddl.GhostBinaryFileName(); !isOverride {
-		if err := os.WriteFile(binaryFileName, resources.GhostBinary, 0755); err != nil {
-			// One possibility of failure is that gh-ost is up and running. In that case,
-			// let's pause and check if the running gh-ost is exact same binary as the one we wish to extract.
-			foundBytes, _ := os.ReadFile(binaryFileName)
-			if bytes.Equal(resources.GhostBinary, foundBytes) {
-				// OK, it's the same binary, there is no need to extract the file anyway
-				return nil
-			}
-			return err
-		}
-	}
-
-	return nil
 }
 
 func createTabletServer(ctx context.Context, env *vtenv.Environment, config *tabletenv.TabletConfig, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, srvTopoCounts *stats.CountersWithSingleLabel) (*tabletserver.TabletServer, error) {

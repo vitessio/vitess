@@ -259,15 +259,6 @@
 				"site_test"
 			]
 		},
-		"onlineddl_ghost": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/ghost", "-timeout", "30m"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "onlineddl_ghost",
-			"RetryMax": 2,
-			"Tags": []
-		},
 		"onlineddl_vrepl": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/vrepl", "-timeout", "30m"],
