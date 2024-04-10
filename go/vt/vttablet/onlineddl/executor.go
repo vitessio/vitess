@@ -89,7 +89,7 @@ var acceptableDropTableIfExistsErrorCodes = []sqlerror.ErrorCode{sqlerror.ERCant
 var copyAlgorithm = sqlparser.AlgorithmValue(sqlparser.CopyStr)
 
 var (
-	ghostBinaryPath         = "/usr/bin/gh-ost"
+	ghostBinaryPath         = "gh-ost"
 	ptOSCBinaryPath         = "/usr/bin/pt-online-schema-change"
 	migrationCheckInterval  = 1 * time.Minute
 	retainOnlineDDLTables   = 24 * time.Hour
