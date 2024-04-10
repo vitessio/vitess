@@ -114,6 +114,7 @@ var keywords = map[string]int{
 	"by":                            BY,
 	"call":                          CALL,
 	"cascade":                       CASCADE,
+	"cascaded":                      CASCADED,
 	"case":                          CASE,
 	"cast":                          CAST,
 	"catalog_name":                  CATALOG_NAME,

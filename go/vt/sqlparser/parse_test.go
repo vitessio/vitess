@@ -118,13 +118,13 @@ var (
 			output: "set global GTID_PURGED = '+beabe64c-9dc6-11ed-8021-a0f9021e8e70:1-126'",
 		},
 		{
-			input:  "show replicas",
+			input: "show replicas",
 		},
 		{
-			input:  "show binary logs",
+			input: "show binary logs",
 		},
 		{
-			input:  "show binary log status",
+			input: "show binary log status",
 		},
 		{
 			input: "start replica",
@@ -3199,6 +3199,18 @@ var (
 			input:  "create view v_today(today) as select CURRENT_DATE()",
 			output: "create view v_today(today) as select CURRENT_DATE()",
 		}, {
+			input:  "create or replace view v_today(today) as select CURRENT_DATE()",
+			output: "create or replace view v_today(today) as select CURRENT_DATE()",
+		}, {
+			input:  "create view v_today(today) as select CURRENT_DATE() WITH CHECK OPTION",
+			output: "create view v_today(today) as select CURRENT_DATE() with cascaded check option",
+		}, {
+			input:  "create view v_today(today) as select CURRENT_DATE() WITH CASCADED CHECK OPTION",
+			output: "create view v_today(today) as select CURRENT_DATE() with cascaded check option",
+		}, {
+			input:  "create view v_today(today) as select CURRENT_DATE() WITH LOCAL CHECK OPTION",
+			output: "create view v_today(today) as select CURRENT_DATE() with local check option",
+		}, {
 			input: "select 1 into @aaa",
 		}, {
 			input:  "select now() into @late where now() > '2019-04-04 13:25:44'",
@@ -3258,47 +3270,47 @@ var (
 			output: "select id from mytable order by id desc limit 15 into dumpfile 'dump.txt'",
 		},
 		{
-			input:  "select * from tbl into outfile 'outfile.txt' fields terminated by 'a'",
+			input: "select * from tbl into outfile 'outfile.txt' fields terminated by 'a'",
 		},
 		{
 			input:  "select * from tbl into outfile 'outfile.txt' columns terminated by 'a'",
 			output: "select * from tbl into outfile 'outfile.txt' fields terminated by 'a'",
 		},
 		{
-			input:  "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' enclosed by 'b'",
+			input: "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' enclosed by 'b'",
 		},
 		{
-			input:  "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' optionally enclosed by 'b'",
+			input: "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' optionally enclosed by 'b'",
 		},
 		{
-			input:  "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' escaped by 'c'",
+			input: "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' escaped by 'c'",
 		},
 		{
-			input:  "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' enclosed by 'b' escaped by 'c'",
+			input: "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' enclosed by 'b' escaped by 'c'",
 		},
 		{
-			input:  "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' optionally enclosed by 'b' escaped by 'c'",
+			input: "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' optionally enclosed by 'b' escaped by 'c'",
 		},
 		{
-			input:  "select * from tbl into outfile 'outfile.txt' lines terminated by 'd'",
+			input: "select * from tbl into outfile 'outfile.txt' lines terminated by 'd'",
 		},
 		{
-			input:  "select * from tbl into outfile 'outfile.txt' lines starting by 'd' terminated by 'e'",
+			input: "select * from tbl into outfile 'outfile.txt' lines starting by 'd' terminated by 'e'",
 		},
 		{
-			input:  "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' lines terminated by 'd'",
+			input: "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' lines terminated by 'd'",
 		},
 		{
-			input:  "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' enclosed by 'b' lines terminated by 'd'",
+			input: "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' enclosed by 'b' lines terminated by 'd'",
 		},
 		{
-			input:  "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' escaped by 'c' lines terminated by 'd'",
+			input: "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' escaped by 'c' lines terminated by 'd'",
 		},
 		{
-			input:  "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' optionally enclosed by 'b' escaped by 'c' lines terminated by 'd'",
+			input: "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' optionally enclosed by 'b' escaped by 'c' lines terminated by 'd'",
 		},
 		{
-			input:  "select * from tbl into outfile 'outfile.txt' character set binary fields terminated by 'a'",
+			input: "select * from tbl into outfile 'outfile.txt' character set binary fields terminated by 'a'",
 		},
 		{
 			input:  "table tbl into outfile 'outfile.txt' fields terminated by 'a' optionally enclosed by 'b' escaped by 'c' lines terminated by 'd'",
@@ -4795,12 +4807,12 @@ func TestInvalid(t *testing.T) {
 		},
 		{
 			// TODO: should work
-			input:  "select * from tbl into outfile 'outfile.txt' lines terminated by 'e' starting by 'd'",
+			input: "select * from tbl into outfile 'outfile.txt' lines terminated by 'e' starting by 'd'",
 			err:   "syntax error",
 		},
 		{
 			// TODO: should work
-			input:  "select * from tbl into outfile 'outfile.txt' lines starting by 'd' terminated by 'e' starting by 'd' terminated by 'e'",
+			input: "select * from tbl into outfile 'outfile.txt' lines starting by 'd' terminated by 'e' starting by 'd' terminated by 'e'",
 			err:   "syntax error",
 		},
 	}
@@ -5648,7 +5660,7 @@ func TestConvert(t *testing.T) {
 			input: "select cast('abc' as year) from t",
 		},
 		{
-			input: "select cast('abc' as date) from t",
+			input:                      "select cast('abc' as date) from t",
 			useSelectExpressionLiteral: true,
 		},
 		{
@@ -5733,7 +5745,7 @@ func TestConvert(t *testing.T) {
 		{
 			input: "select convert('abc', year) from t",
 		},
-		}
+	}
 
 	for _, tcase := range validSQL {
 		runParseTestCase(t, tcase)
