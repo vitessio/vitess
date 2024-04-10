@@ -974,7 +974,10 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 	defer renameConn.Recycle()
 	defer func() {
 		if !renameWasSuccessful {
-			renameConn.Conn.Kill("premature exit while renaming tables", 0)
+			err := renameConn.Conn.Kill("premature exit while renaming tables", 0)
+			if err != nil {
+				log.Warningf("failed to kill rename connection: %v", err)
+			}
 		}
 	}()
 	// See if backend MySQL server supports 'rename_table_preserve_foreign_key' variable

@@ -320,11 +320,11 @@ func TestDBKillWithContext(t *testing.T) {
 		time.Sleep(200 * time.Millisecond)
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
+	// set a lower timeout value
+	dbConn.killTimeout = 100 * time.Millisecond
 
-	// KillWithContext should return context.DeadlineExceeded
-	err = dbConn.KillWithContext(ctx, "test kill", 0)
+	// Kill should return context.DeadlineExceeded
+	err = dbConn.Kill("test kill", 0)
 	require.ErrorIs(t, err, context.DeadlineExceeded)
 }
 

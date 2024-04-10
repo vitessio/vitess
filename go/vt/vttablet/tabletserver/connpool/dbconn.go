@@ -182,10 +182,7 @@ func (dbc *Conn) execOnce(ctx context.Context, query string, maxrows int, wantfi
 
 	select {
 	case <-ctx.Done():
-		killCtx, cancel := context.WithTimeout(context.Background(), dbc.killTimeout)
-		defer cancel()
-
-		_ = dbc.KillWithContext(killCtx, ctx.Err().Error(), time.Since(now))
+		_ = dbc.Kill(ctx.Err().Error(), time.Since(now))
 		return nil, dbc.Err()
 	case r := <-ch:
 		if dbcErr := dbc.Err(); dbcErr != nil {
@@ -281,10 +278,7 @@ func (dbc *Conn) streamOnce(ctx context.Context, query string, callback func(*sq
 
 	select {
 	case <-ctx.Done():
-		killCtx, cancel := context.WithTimeout(context.Background(), dbc.killTimeout)
-		defer cancel()
-
-		_ = dbc.KillWithContext(killCtx, ctx.Err().Error(), time.Since(now))
+		_ = dbc.Kill(ctx.Err().Error(), time.Since(now))
 		return dbc.Err()
 	case err := <-ch:
 		if dbcErr := dbc.Err(); dbcErr != nil {
@@ -391,7 +385,10 @@ func (dbc *Conn) IsClosed() bool {
 
 // Kill wraps KillWithContext using context.Background.
 func (dbc *Conn) Kill(reason string, elapsed time.Duration) error {
-	return dbc.KillWithContext(context.Background(), reason, elapsed)
+	killCtx, cancel := context.WithTimeout(context.Background(), dbc.killTimeout)
+	defer cancel()
+
+	return dbc.KillWithContext(killCtx, reason, elapsed)
 }
 
 // KillWithContext kills the currently executing query both on MySQL side
