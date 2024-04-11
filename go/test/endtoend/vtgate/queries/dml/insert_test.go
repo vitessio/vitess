@@ -396,6 +396,70 @@ func TestInsertSelectUnshardedUsingSharded(t *testing.T) {
 	}
 }
 
+// MySQL returns 0 as the `LastInsertId` on `... ON DUPLICATE KEY UPDATE ...` queries
+// when no new row is inserted. This test verifies that Vitess behaves the same way.
+func TestInsertShardedWithOnDuplicateKeyNoInserts(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into last_insert_id_test (id, sharding_key, user_id, reason) values (1, '1:1:1', 1, 'foo'), (2, '2:2:2', 2, 'bar')")
+
+	// Bump the sequence value so the sequence accounts for the 2 explicit inserts above.
+	utils.Exec(t, mcmp.VtConn, "SELECT NEXT 2 VALUES FROM uks.last_insert_id_test_seq")
+
+	// First test case, insert a row that already exists, and don't actually change any column at all.
+	query := "insert into last_insert_id_test (sharding_key, user_id, reason) values ('1:1:1', 1, 'foo') on duplicate key update reason = reason"
+
+	mysqlResult := utils.Exec(t, mcmp.MySQLConn, query)
+	// no new row inserted, so insert id should be 0.
+	assert.Equal(t, uint64(0), mysqlResult.InsertID)
+	// no row was modified, so rows affected should be 0.
+	assert.Equal(t, uint64(0), mysqlResult.RowsAffected)
+
+	vitessResult := utils.Exec(t, mcmp.VtConn, query)
+	assert.Equal(t, mysqlResult.RowsAffected, vitessResult.RowsAffected)
+	assert.Equal(t, mysqlResult.InsertID, vitessResult.InsertID)
+
+	// Second test case, insert a row that already exists, and change a column on the existing row.
+	query = "insert into last_insert_id_test (sharding_key, user_id, reason) values ('1:1:1', 1, 'bar') on duplicate key update reason = VALUES(reason)"
+
+	mysqlResult = utils.Exec(t, mcmp.MySQLConn, query)
+	// a row was modified, so insert id should match the auto increment column value of the modified row
+	assert.Equal(t, uint64(1), mysqlResult.InsertID)
+	// one row was modified, so rows affected should be 2.
+	assert.Equal(t, uint64(2), mysqlResult.RowsAffected)
+
+	vitessResult = utils.Exec(t, mcmp.VtConn, query)
+	assert.Equal(t, mysqlResult.RowsAffected, vitessResult.RowsAffected)
+	assert.Equal(t, mysqlResult.InsertID, vitessResult.InsertID)
+
+	// Second test case, insert multiple rows, all of which already exist, and change a column on existing rows.
+	query = "insert into last_insert_id_test (sharding_key, user_id, reason) values ('2:2:2', 2, 'qux'), ('1:1:1', 1, 'baz') on duplicate key update reason = VALUES(reason)"
+
+	mysqlResult = utils.Exec(t, mcmp.MySQLConn, query)
+	// two rows were modified, so insert id will match the auto increment column value of the last modified row
+	assert.Equal(t, uint64(1), mysqlResult.InsertID)
+	// two rows were modified, so rows affected should be 2.
+	assert.Equal(t, uint64(4), mysqlResult.RowsAffected)
+
+	vitessResult = utils.Exec(t, mcmp.VtConn, query)
+	assert.Equal(t, mysqlResult.RowsAffected, vitessResult.RowsAffected)
+	assert.Equal(t, mysqlResult.InsertID, vitessResult.InsertID)
+
+	// Third test case, insert multiple rows, some of which already exist, and change a column on existing rows.
+	query = "insert into last_insert_id_test (sharding_key, user_id, reason) values ('3:3:3', 3, 'apa'), ('2:2:2', 2, 'bpa'), ('1:1:1', 1, 'cpa') on duplicate key update reason = VALUES(reason)"
+
+	mysqlResult = utils.Exec(t, mcmp.MySQLConn, query)
+	// a new row was inserted, so insert id should match the auto increment column value of the new row
+	assert.Equal(t, uint64(7), mysqlResult.InsertID)
+	// one row was inserted, two rows were modified, so rows affected should be 5.
+	assert.Equal(t, uint64(5), mysqlResult.RowsAffected)
+
+	vitessResult = utils.Exec(t, mcmp.VtConn, query)
+	assert.Equal(t, mysqlResult.RowsAffected, vitessResult.RowsAffected)
+	assert.Equal(t, mysqlResult.InsertID, vitessResult.InsertID)
+}
+
 func TestRedactDupError(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()

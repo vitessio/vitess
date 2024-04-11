@@ -4,6 +4,9 @@
     "hash": {
       "type": "hash"
     },
+    "xxhash": {
+      "type": "xxhash"
+    },
     "num_vdx": {
       "type": "consistent_lookup_unique",
       "params": {
@@ -186,6 +189,18 @@
         {
           "column": "lkp_key",
           "name": "hash"
+        }
+      ]
+    },
+    "last_insert_id_test": {
+      "auto_increment": {
+        "column": "id",
+        "sequence": "uks.last_insert_id_test_seq"
+      },
+      "column_vindexes": [
+        {
+          "column": "sharding_key",
+          "name": "xxhash"
         }
       ]
     }
