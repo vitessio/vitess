@@ -36,7 +36,6 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
-	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/inst"
@@ -91,9 +90,6 @@ func refreshAllTablets() {
 }
 
 func refreshTabletsUsing(loader func(tabletAlias string), forceRefresh bool) {
-	if !IsLeaderOrActive() {
-		return
-	}
 	if len(clustersToWatch) == 0 { // all known clusters
 		ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 		defer cancel()
@@ -337,39 +333,4 @@ func shardPrimary(keyspace string, shard string) (primary *topodatapb.Tablet, er
 		err = ErrNoPrimaryTablet
 	}
 	return primary, err
-}
-
-// restartsReplication restarts the replication on the provided replicaKey. It also sets the correct semi-sync settings when it starts replication
-func restartReplication(replicaAlias string) error {
-	replicaTablet, err := inst.ReadTablet(replicaAlias)
-	if err != nil {
-		log.Info("Could not read tablet - %+v", replicaAlias)
-		return err
-	}
-
-	primaryTablet, err := shardPrimary(replicaTablet.Keyspace, replicaTablet.Shard)
-	if err != nil {
-		log.Info("Could not compute primary for %v/%v", replicaTablet.Keyspace, replicaTablet.Shard)
-		return err
-	}
-
-	durabilityPolicy, err := inst.GetDurabilityPolicy(replicaTablet.Keyspace)
-	if err != nil {
-		log.Info("Could not read the durability policy for %v/%v", replicaTablet.Keyspace, replicaTablet.Shard)
-		return err
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(config.Config.WaitReplicasTimeoutSeconds)*time.Second)
-	defer cancel()
-	err = tmc.StopReplication(ctx, replicaTablet)
-	if err != nil {
-		log.Info("Could not stop replication on %v", replicaAlias)
-		return err
-	}
-	err = tmc.StartReplication(ctx, replicaTablet, reparentutil.IsReplicaSemiSync(durabilityPolicy, primaryTablet, replicaTablet))
-	if err != nil {
-		log.Info("Could not start replication on %v", replicaAlias)
-		return err
-	}
-	return nil
 }

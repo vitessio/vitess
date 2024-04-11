@@ -24,6 +24,8 @@ web_dir="${script_dir}/../../../web/vtadmin"
 vtadmin_api_port=14200
 vtadmin_web_port=14201
 
+echo "vtadmin-api http-origin set to \"http://${hostname}:${vtadmin_web_port}\""
+
 vtadmin \
   --addr "${hostname}:${vtadmin_api_port}" \
   --http-origin "http://${hostname}:${vtadmin_web_port}" \
@@ -48,9 +50,12 @@ vtadmin-api is running!
   - PID: ${vtadmin_api_pid}
 "
 
+echo "Building vtadmin-web..."
+source "${web_dir}/build.sh"
+
 # Wait for vtadmin to successfully discover the cluster
 expected_cluster_result="{\"result\":{\"clusters\":[{\"id\":\"${cluster_name}\",\"name\":\"${cluster_name}\"}]},\"ok\":true}"
-for _ in {0..300}; do
+for _ in {0..100}; do
   result=$(curl -s "http://${hostname}:${vtadmin_api_port}/api/clusters")
   if [[ ${result} == "${expected_cluster_result}" ]]; then
     break

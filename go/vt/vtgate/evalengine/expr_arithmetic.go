@@ -116,6 +116,7 @@ func (op *opArithAdd) compile(c *compiler, left, right IR) (ctype, error) {
 		}
 		c.asm.Add_dd()
 		ct.Type = sqltypes.Decimal
+		ct.Size = max(lt.Size, rt.Size)
 		ct.Scale = max(lt.Scale, rt.Scale)
 	case sqltypes.Float64:
 		if swap {
@@ -170,6 +171,7 @@ func (op *opArithSub) compile(c *compiler, left, right IR) (ctype, error) {
 			c.compileToDecimal(lt, 2)
 			c.asm.Sub_dd()
 			ct.Type = sqltypes.Decimal
+			ct.Size = max(lt.Size, rt.Size)
 			ct.Scale = max(lt.Scale, rt.Scale)
 		}
 	case sqltypes.Uint64:
@@ -188,6 +190,7 @@ func (op *opArithSub) compile(c *compiler, left, right IR) (ctype, error) {
 			c.compileToDecimal(lt, 2)
 			c.asm.Sub_dd()
 			ct.Type = sqltypes.Decimal
+			ct.Size = max(lt.Size, rt.Size)
 			ct.Scale = max(lt.Scale, rt.Scale)
 		}
 	case sqltypes.Float64:
@@ -204,6 +207,7 @@ func (op *opArithSub) compile(c *compiler, left, right IR) (ctype, error) {
 			c.compileToDecimal(rt, 1)
 			c.asm.Sub_dd()
 			ct.Type = sqltypes.Decimal
+			ct.Size = max(lt.Size, rt.Size)
 			ct.Scale = max(lt.Scale, rt.Scale)
 		}
 	}
@@ -269,6 +273,7 @@ func (op *opArithMul) compile(c *compiler, left, right IR) (ctype, error) {
 		}
 		c.asm.Mul_dd()
 		ct.Type = sqltypes.Decimal
+		ct.Size = lt.Size + rt.Size
 		ct.Scale = lt.Scale + rt.Scale
 	}
 
@@ -309,6 +314,7 @@ func (op *opArithDiv) compile(c *compiler, left, right IR) (ctype, error) {
 		c.compileToDecimal(lt, 2)
 		c.compileToDecimal(rt, 1)
 		c.asm.Div_dd()
+		ct.Size = lt.Size + divPrecisionIncrement
 		ct.Scale = lt.Scale + divPrecisionIncrement
 	}
 	c.asm.jumpDestination(skip1, skip2)
@@ -438,6 +444,7 @@ func (op *opArithMod) compile(c *compiler, left, right IR) (ctype, error) {
 			c.asm.Mod_ff()
 		case sqltypes.Decimal:
 			ct.Type = sqltypes.Decimal
+			ct.Size = max(lt.Size, rt.Size)
 			ct.Scale = max(lt.Scale, rt.Scale)
 			c.asm.Convert_xd(2, 0, 0)
 			c.asm.Mod_dd()
@@ -455,6 +462,7 @@ func (op *opArithMod) compile(c *compiler, left, right IR) (ctype, error) {
 			c.asm.Mod_ff()
 		case sqltypes.Decimal:
 			ct.Type = sqltypes.Decimal
+			ct.Size = max(lt.Size, rt.Size)
 			ct.Scale = max(lt.Scale, rt.Scale)
 			c.asm.Convert_xd(2, 0, 0)
 			c.asm.Mod_dd()

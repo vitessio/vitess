@@ -25,6 +25,8 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/vt/topotools"
+
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqlescape"
@@ -67,10 +69,11 @@ type VSchema struct {
 	// table is uniquely named, the value will be the qualified Table object
 	// with the keyspace where this table exists. If multiple keyspaces have a
 	// table with the same name, the value will be a `nil`.
-	globalTables      map[string]*Table
-	uniqueVindexes    map[string]Vindex
-	Keyspaces         map[string]*KeyspaceSchema `json:"keyspaces"`
-	ShardRoutingRules map[string]string          `json:"shard_routing_rules"`
+	globalTables         map[string]*Table
+	uniqueVindexes       map[string]Vindex
+	Keyspaces            map[string]*KeyspaceSchema `json:"keyspaces"`
+	ShardRoutingRules    map[string]string          `json:"shard_routing_rules"`
+	KeyspaceRoutingRules map[string]string          `json:"keyspace_routing_rules"`
 	// created is the time when the VSchema object was created. Used to detect if a cached
 	// copy of the vschema is stale.
 	created time.Time
@@ -200,16 +203,22 @@ type Column struct {
 // MarshalJSON returns a JSON representation of Column.
 func (col *Column) MarshalJSON() ([]byte, error) {
 	cj := struct {
-		Name      string `json:"name"`
-		Type      string `json:"type,omitempty"`
-		Invisible bool   `json:"invisible,omitempty"`
-		Default   string `json:"default,omitempty"`
+		Name      string   `json:"name"`
+		Type      string   `json:"type,omitempty"`
+		Invisible bool     `json:"invisible,omitempty"`
+		Default   string   `json:"default,omitempty"`
+		Size      int32    `json:"size,omitempty"`
+		Scale     int32    `json:"scale,omitempty"`
+		Nullable  bool     `json:"nullable,omitempty"`
+		Values    []string `json:"values,omitempty"`
 	}{
-		Name: col.Name.String(),
-		Type: querypb.Type_name[int32(col.Type)],
-	}
-	if col.Invisible {
-		cj.Invisible = true
+		Name:      col.Name.String(),
+		Type:      querypb.Type_name[int32(col.Type)],
+		Invisible: col.Invisible,
+		Size:      col.Size,
+		Scale:     col.Scale,
+		Nullable:  col.Nullable,
+		Values:    col.Values,
 	}
 	if col.Default != nil {
 		cj.Default = sqlparser.String(col.Default)
@@ -229,21 +238,23 @@ func (col *Column) ToEvalengineType(collationEnv *collations.Environment) evalen
 
 // KeyspaceSchema contains the schema(table) for a keyspace.
 type KeyspaceSchema struct {
-	Keyspace       *Keyspace
-	ForeignKeyMode vschemapb.Keyspace_ForeignKeyMode
-	Tables         map[string]*Table
-	Vindexes       map[string]Vindex
-	Views          map[string]sqlparser.SelectStatement
-	Error          error
+	Keyspace        *Keyspace
+	ForeignKeyMode  vschemapb.Keyspace_ForeignKeyMode
+	Tables          map[string]*Table
+	Vindexes        map[string]Vindex
+	Views           map[string]sqlparser.SelectStatement
+	Error           error
+	MultiTenantSpec *vschemapb.MultiTenantSpec
 }
 
 type ksJSON struct {
-	Sharded        bool              `json:"sharded,omitempty"`
-	ForeignKeyMode string            `json:"foreignKeyMode,omitempty"`
-	Tables         map[string]*Table `json:"tables,omitempty"`
-	Vindexes       map[string]Vindex `json:"vindexes,omitempty"`
-	Views          map[string]string `json:"views,omitempty"`
-	Error          string            `json:"error,omitempty"`
+	Sharded         bool                       `json:"sharded,omitempty"`
+	ForeignKeyMode  string                     `json:"foreignKeyMode,omitempty"`
+	Tables          map[string]*Table          `json:"tables,omitempty"`
+	Vindexes        map[string]Vindex          `json:"vindexes,omitempty"`
+	Views           map[string]string          `json:"views,omitempty"`
+	Error           string                     `json:"error,omitempty"`
+	MultiTenantSpec *vschemapb.MultiTenantSpec `json:"multi_tenant_spec,omitempty"`
 }
 
 // findTable looks for the table with the requested tablename in the keyspace.
@@ -272,10 +283,11 @@ func (ks *KeyspaceSchema) findTable(
 // MarshalJSON returns a JSON representation of KeyspaceSchema.
 func (ks *KeyspaceSchema) MarshalJSON() ([]byte, error) {
 	ksJ := ksJSON{
-		Sharded:        ks.Keyspace.Sharded,
-		Tables:         ks.Tables,
-		ForeignKeyMode: ks.ForeignKeyMode.String(),
-		Vindexes:       ks.Vindexes,
+		Sharded:         ks.Keyspace.Sharded,
+		Tables:          ks.Tables,
+		ForeignKeyMode:  ks.ForeignKeyMode.String(),
+		Vindexes:        ks.Vindexes,
+		MultiTenantSpec: ks.MultiTenantSpec,
 	}
 	if ks.Error != nil {
 		ksJ.Error = ks.Error.Error()
@@ -322,6 +334,7 @@ func BuildVSchema(source *vschemapb.SrvVSchema, parser *sqlparser.Parser) (vsche
 	buildReferences(source, vschema)
 	buildRoutingRule(source, vschema, parser)
 	buildShardRoutingRule(source, vschema)
+	buildKeyspaceRoutingRule(source, vschema)
 	// Resolve auto-increments after routing rules are built since sequence tables also obey routing rules.
 	resolveAutoIncrement(source, vschema, parser)
 	return vschema
@@ -362,9 +375,10 @@ func buildKeyspaces(source *vschemapb.SrvVSchema, vschema *VSchema, parser *sqlp
 				Name:    ksname,
 				Sharded: ks.Sharded,
 			},
-			ForeignKeyMode: replaceUnspecifiedForeignKeyMode(ks.ForeignKeyMode),
-			Tables:         make(map[string]*Table),
-			Vindexes:       make(map[string]Vindex),
+			ForeignKeyMode:  replaceUnspecifiedForeignKeyMode(ks.ForeignKeyMode),
+			Tables:          make(map[string]*Table),
+			Vindexes:        make(map[string]Vindex),
+			MultiTenantSpec: ks.MultiTenantSpec,
 		}
 		vschema.Keyspaces[ksname] = ksvschema
 		ksvschema.Error = buildTables(ks, vschema, ksvschema, parser)
@@ -981,6 +995,15 @@ func buildShardRoutingRule(source *vschemapb.SrvVSchema, vschema *VSchema) {
 	}
 }
 
+func buildKeyspaceRoutingRule(source *vschemapb.SrvVSchema, vschema *VSchema) {
+	vschema.KeyspaceRoutingRules = nil
+	if len(source.GetKeyspaceRoutingRules().GetRules()) == 0 {
+		return
+	}
+	rulesMap := topotools.GetKeyspaceRoutingRulesMap(source.KeyspaceRoutingRules)
+	vschema.KeyspaceRoutingRules = rulesMap
+}
+
 // FindTable returns a pointer to the Table. If a keyspace is specified, only tables
 // from that keyspace are searched. If the specified keyspace is unsharded
 // and no tables matched, it's considered valid: FindTable will construct a table
@@ -1093,6 +1116,11 @@ func (vschema *VSchema) FirstKeyspace() *Keyspace {
 
 // FindRoutedTable finds a table checking the routing rules.
 func (vschema *VSchema) FindRoutedTable(keyspace, tablename string, tabletType topodatapb.TabletType) (*Table, error) {
+	routedKeyspace, ok := vschema.KeyspaceRoutingRules[keyspace]
+	if ok {
+		keyspace = routedKeyspace
+	}
+
 	qualified := tablename
 	if keyspace != "" {
 		qualified = keyspace + "." + tablename

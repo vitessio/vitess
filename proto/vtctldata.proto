@@ -97,6 +97,7 @@ message MaterializeSettings {
   bool defer_secondary_keys = 14;
   tabletmanagerdata.TabletSelectionPreference tablet_selection_preference = 15;
   bool atomic_copy = 16;
+  WorkflowOptions workflow_options = 17;
 }
 
 /* Data types for VtctldServer */
@@ -205,6 +206,14 @@ message Shard {
   topodata.Shard shard = 3;
 }
 
+message WorkflowOptions {
+  string tenant_id = 1;
+  string source_keyspace_alias = 2;
+  // Remove auto_increment clauses on tables when moving them to a sharded
+  // keyspace.
+  bool strip_sharded_auto_increment = 3;
+}
+
 // TODO: comment the hell out of this.
 message Workflow {
   string name = 1;
@@ -222,6 +231,9 @@ message Workflow {
   int64 max_v_replication_transaction_lag = 8;
   // This specifies whether to defer the creation of secondary keys.
   bool defer_secondary_keys = 9;
+  // These are additional (optional) settings for vreplication workflows. Previously we used to add it to the
+  // binlogdata.BinlogSource proto object. More details in go/vt/sidecardb/schema/vreplication.sql.
+  WorkflowOptions options = 10;
 
   message ReplicationLocation {
     string keyspace = 1;
@@ -307,6 +319,22 @@ message AddCellsAliasRequest {
 message AddCellsAliasResponse {
 }
 
+
+message ApplyKeyspaceRoutingRulesRequest {
+  vschema.KeyspaceRoutingRules keyspace_routing_rules = 1;
+  // SkipRebuild, if set, will cause ApplyKeyspaceRoutingRules to skip rebuilding the
+  // SrvVSchema objects in each cell in RebuildCells.
+  bool skip_rebuild = 2;
+  // RebuildCells limits the SrvVSchema rebuild to the specified cells. If not
+  // provided the SrvVSchema will be rebuilt in every cell in the topology.
+  //
+  // Ignored if SkipRebuild is set.
+  repeated string rebuild_cells = 3;
+}
+
+message ApplyKeyspaceRoutingRulesResponse {
+}
+
 message ApplyRoutingRulesRequest {
   vschema.RoutingRules routing_rules = 1;
   // SkipRebuild, if set, will cause ApplyRoutingRules to skip rebuilding the
@@ -336,6 +364,8 @@ message ApplyShardRoutingRulesRequest {
 
 message ApplyShardRoutingRulesResponse {
 }
+
+
 
 message ApplySchemaRequest {
   string keyspace = 1;
@@ -808,6 +838,13 @@ message GetPermissionsResponse {
   tabletmanagerdata.Permissions permissions = 1;
 }
 
+message GetKeyspaceRoutingRulesRequest {
+}
+
+message GetKeyspaceRoutingRulesResponse {
+  vschema.KeyspaceRoutingRules keyspace_routing_rules = 1;
+}
+
 message GetRoutingRulesRequest {
 }
 
@@ -1217,6 +1254,7 @@ message MoveTablesCreateRequest {
   bool no_routing_rules = 18;
   // Run a single copy phase for the entire database.
   bool atomic_copy = 19;
+  WorkflowOptions workflow_options = 20;
 }
 
 message MoveTablesCreateResponse {

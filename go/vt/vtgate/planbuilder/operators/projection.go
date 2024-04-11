@@ -182,12 +182,12 @@ var _ selectExpressions = (*Projection)(nil)
 
 // createSimpleProjection returns a projection where all columns are offsets.
 // used to change the name and order of the columns in the final output
-func createSimpleProjection(ctx *plancontext.PlanningContext, qp *QueryProjection, src Operator) *Projection {
+func createSimpleProjection(ctx *plancontext.PlanningContext, selExprs []sqlparser.SelectExpr, src Operator) *Projection {
 	p := newAliasedProjection(src)
-	for _, e := range qp.SelectExprs {
-		ae, err := e.GetAliasedExpr()
-		if err != nil {
-			panic(err)
+	for _, e := range selExprs {
+		ae, isAe := e.(*sqlparser.AliasedExpr)
+		if !isAe {
+			panic(vterrors.VT09015())
 		}
 		offset := p.Source.AddColumn(ctx, true, false, ae)
 		expr := newProjExpr(ae)

@@ -165,7 +165,7 @@ Flags:
       --gc_purge_check_interval duration                                 Interval between purge discovery checks (default 1m0s)
       --gcs_backup_storage_bucket string                                 Google Cloud Storage bucket to use for backups.
       --gcs_backup_storage_root string                                   Root prefix for all backup-related object names.
-      --gh-ost-path string                                               override default gh-ost binary full path
+      --gh-ost-path string                                               override default gh-ost binary full path (default "gh-ost")
       --grpc_auth_mode string                                            Which auth plugin implementation to use (eg: static)
       --grpc_auth_mtls_allowed_substrings string                         List of substrings of at least one of the client certificate names (separated by colon).
       --grpc_auth_static_client_creds string                             When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
@@ -256,7 +256,7 @@ Flags:
       --port int                                                         port for the server
       --pprof strings                                                    enable profiling
       --pprof-http                                                       enable pprof http endpoints
-      --pt-osc-path string                                               override default pt-online-schema-change binary full path
+      --pt-osc-path string                                               override default pt-online-schema-change binary full path (default "/usr/bin/pt-online-schema-change")
       --publish_retry_interval duration                                  how long vttablet waits to retry publishing the tablet record (default 30s)
       --purge_logs_interval duration                                     how often try to remove old logs (default 1h0m0s)
       --query-log-stream-handler string                                  URL handler for streaming queries log (default "/debug/querylog")

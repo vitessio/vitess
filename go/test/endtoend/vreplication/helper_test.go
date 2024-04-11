@@ -46,9 +46,11 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 const (
@@ -356,7 +358,7 @@ func waitForWorkflowState(t *testing.T, vc *VitessCluster, ksWorkflow string, wa
 	log.Infof("Waiting for workflow %q to fully reach %q state", ksWorkflow, wantState)
 	for {
 		output, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", ksWorkflow, "show")
-		require.NoError(t, err)
+		require.NoError(t, err, output)
 		done = true
 		state := ""
 		result := gjson.Get(output, "ShardStatuses")
@@ -376,6 +378,9 @@ func waitForWorkflowState(t *testing.T, vc *VitessCluster, ksWorkflow string, wa
 										done = false
 									}
 								}
+							}
+							if wantState == binlogdatapb.VReplicationWorkflowState_Running.String() && attributeValue.Get("Pos").String() == "" {
+								done = false
 							}
 						} else {
 							done = false
@@ -410,7 +415,7 @@ func waitForWorkflowState(t *testing.T, vc *VitessCluster, ksWorkflow string, wa
 // as a CSV have secondary keys. This is useful when testing the
 // --defer-secondary-keys flag to confirm that the secondary keys
 // were re-added by the time the workflow hits the running phase.
-// For a Reshard workflow, where no tables are specififed, pass
+// For a Reshard workflow, where no tables are specified, pass
 // an empty string for the tables and all tables in the target
 // keyspace will be checked.
 func confirmTablesHaveSecondaryKeys(t *testing.T, tablets []*cluster.VttabletProcess, ksName string, tables string) {
@@ -430,6 +435,12 @@ func confirmTablesHaveSecondaryKeys(t *testing.T, tablets []*cluster.VttabletPro
 		}
 	}
 	for _, tablet := range tablets {
+		// Be sure that the schema is up to date.
+		err := vc.VtctldClient.ExecuteCommand("ReloadSchema", topoproto.TabletAliasString(&topodatapb.TabletAlias{
+			Cell: tablet.Cell,
+			Uid:  uint32(tablet.TabletUID),
+		}))
+		require.NoError(t, err)
 		for _, table := range tableArr {
 			if schema.IsInternalOperationTableName(table) {
 				continue
@@ -511,7 +522,6 @@ func validateDryRunResults(t *testing.T, output string, want []string) {
 			w = strings.TrimSpace(w[1:])
 			result := strings.HasPrefix(g, w)
 			match = result
-			//t.Logf("Partial match |%v|%v|%v\n", w, g, match)
 		} else {
 			match = g == w
 		}

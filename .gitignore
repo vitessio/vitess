@@ -86,3 +86,6 @@ report
 
 # plan test output
 /go/vt/vtgate/planbuilder/testdata/plan_test*
+
+# mise files
+.mise.toml

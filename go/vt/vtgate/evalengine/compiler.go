@@ -198,7 +198,7 @@ func (c *compiler) compileToNumeric(ct ctype, offset int, fallback sqltypes.Type
 				return ctype{Type: sqltypes.Int64, Flag: ct.Flag, Col: collationNumeric}
 			}
 			c.asm.Convert_Td(offset)
-			return ctype{Type: sqltypes.Decimal, Flag: ct.Flag, Col: collationNumeric, Size: ct.Size}
+			return ctype{Type: sqltypes.Decimal, Flag: ct.Flag, Col: collationNumeric, Size: ct.Size + decimalSizeBase, Scale: ct.Size}
 		}
 		c.asm.Convert_Tf(offset)
 		return ctype{Type: sqltypes.Float64, Flag: ct.Flag, Col: collationNumeric}
@@ -281,15 +281,21 @@ func (c *compiler) compileToDecimal(ct ctype, offset int) ctype {
 	if sqltypes.IsDecimal(ct.Type) {
 		return ct
 	}
+	var scale int32
+	var size int32
 	switch ct.Type {
 	case sqltypes.Int64:
 		c.asm.Convert_id(offset)
 	case sqltypes.Uint64:
 		c.asm.Convert_ud(offset)
+	case sqltypes.Datetime, sqltypes.Time:
+		scale = ct.Size
+		size = ct.Size + decimalSizeBase
+		fallthrough
 	default:
 		c.asm.Convert_xd(offset, 0, 0)
 	}
-	return ctype{Type: sqltypes.Decimal, Flag: ct.Flag, Col: collationNumeric}
+	return ctype{Type: sqltypes.Decimal, Flag: ct.Flag, Col: collationNumeric, Scale: scale, Size: size}
 }
 
 func (c *compiler) compileToDate(doct ctype, offset int) ctype {

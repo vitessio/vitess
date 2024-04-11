@@ -3,6 +3,8 @@ ARG image="vitess/bootstrap:${bootstrap_version}-common"
 
 FROM --platform=linux/amd64 "${image}"
 
+USER root
+
 # Install MySQL 5.7
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends gnupg dirmngr ca-certificates && \
     for i in $(seq 1 10); do apt-key adv --no-tty --recv-keys --keyserver keyserver.ubuntu.com A8D3785C && break; done && \
@@ -18,8 +20,4 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     DEBIAN_FRONTEND=noninteractive apt-get install -y mysql-server libmysqlclient-dev libdbd-mysql-perl rsync libev4 percona-xtrabackup-24 && \
     rm -rf /var/lib/apt/lists/*
 
-# Bootstrap Vitess
-WORKDIR /vt/src/vitess.io/vitess
-
 USER vitess
-RUN ./bootstrap.sh

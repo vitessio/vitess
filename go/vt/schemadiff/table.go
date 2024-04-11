@@ -946,6 +946,12 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 	}
 	sortAlterOptions(parentAlterTableEntityDiff)
 
+	if hints.SubsequentDiffStrategy == SubsequentDiffStrategyReject {
+		if allSubsequent := AllSubsequent(parentAlterTableEntityDiff); len(allSubsequent) > 1 {
+			return nil, &SubsequentDiffRejectedError{Table: c.Name(), Diffs: allSubsequent}
+		}
+	}
+
 	return parentAlterTableEntityDiff, nil
 }
 

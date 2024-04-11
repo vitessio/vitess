@@ -141,7 +141,8 @@ func TestUpdateVSchema(t *testing.T) {
       }
     }
   },
-  "shard_routing_rules": null
+  "shard_routing_rules": null,
+  "keyspace_routing_rules": null
 }`
 	b, err := json.MarshalIndent(engine.vschema(), "", "  ")
 	if err != nil {

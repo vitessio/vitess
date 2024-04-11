@@ -136,7 +136,7 @@ func (conn *snapshotConn) startSnapshot(ctx context.Context, table string) (gtid
 	if _, err := conn.ExecuteFetch("set transaction isolation level repeatable read", 1, false); err != nil {
 		return "", err
 	}
-	if _, err := conn.ExecuteFetch("start transaction with consistent snapshot", 1, false); err != nil {
+	if _, err := conn.ExecuteFetch("start transaction with consistent snapshot, read only", 1, false); err != nil {
 		return "", err
 	}
 	if _, err := conn.ExecuteFetch("set @@session.time_zone = '+00:00'", 1, false); err != nil {
@@ -152,7 +152,7 @@ func (conn *snapshotConn) startSnapshotWithConsistentGTID(ctx context.Context) (
 	if _, err := conn.ExecuteFetch("set transaction isolation level repeatable read", 1, false); err != nil {
 		return "", err
 	}
-	result, err := conn.ExecuteFetch("start transaction with consistent snapshot", 1, false)
+	result, err := conn.ExecuteFetch("start transaction with consistent snapshot, read only", 1, false)
 	if err != nil {
 		return "", err
 	}
@@ -290,7 +290,7 @@ func (conn *snapshotConn) startSnapshotAllTables(ctx context.Context) (gtid stri
 	if _, err := conn.ExecuteFetch("set transaction isolation level repeatable read", 1, false); err != nil {
 		return "", err
 	}
-	if _, err := conn.ExecuteFetch("start transaction with consistent snapshot", 1, false); err != nil {
+	if _, err := conn.ExecuteFetch("start transaction with consistent snapshot, read only", 1, false); err != nil {
 		return "", err
 	}
 	if _, err := conn.ExecuteFetch("set @@session.time_zone = '+00:00'", 1, false); err != nil {

@@ -721,6 +721,7 @@ var keywords = []keyword{
 	{"unicode", UNICODE},
 	{"union", UNION},
 	{"unique", UNIQUE},
+	{"unknown", UNKNOWN},
 	{"unlock", UNLOCK},
 	{"unsigned", UNSIGNED},
 	{"unthrottle", UNTHROTTLE},

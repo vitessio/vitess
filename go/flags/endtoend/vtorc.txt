@@ -10,7 +10,6 @@ vtorc \
 	--topo_global_root /vitess/global \
 	--log_dir $VTDATAROOT/tmp \
 	--port 15000 \
-	--recovery-period-block-duration "10m" \
 	--instance-poll-time "1s" \
 	--topo-information-refresh-duration "30s" \
 	--alsologtostderr
@@ -65,7 +64,6 @@ Flags:
       --prevent-cross-cell-failover                                 Prevent VTOrc from promoting a primary in a different cell than the current primary in case of a failover
       --purge_logs_interval duration                                how often try to remove old logs (default 1h0m0s)
       --reasonable-replication-lag duration                         Maximum replication lag on replicas which is deemed to be acceptable (default 10s)
-      --recovery-period-block-duration duration                     Duration for which a new recovery is blocked on an instance after running a recovery (default 30s)
       --recovery-poll-duration duration                             Timer duration on which VTOrc polls its database to run a recovery (default 1s)
       --remote_operation_timeout duration                           time to wait for a remote operation (default 15s)
       --security_policy string                                      the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)

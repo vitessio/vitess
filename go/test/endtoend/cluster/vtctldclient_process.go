@@ -22,6 +22,8 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -69,7 +71,8 @@ func (vtctldclient *VtctldClientProcess) ExecuteCommandWithOutput(args ...string
 			vtctldclient.Binary,
 			filterDoubleDashArgs(pArgs, vtctldclient.VtctldClientMajorVersion)...,
 		)
-		log.Infof("Executing vtctldclient with command: %v (attempt %d of %d)", strings.Join(tmpProcess.Args, " "), i, retries)
+		msg := binlogplayer.LimitString(strings.Join(tmpProcess.Args, " "), 256) // limit log line length
+		log.Infof("Executing vtctldclient with command: %v (attempt %d of %d)", msg, i, retries)
 		resultByte, err = tmpProcess.CombinedOutput()
 		resultStr = string(resultByte)
 		if err == nil || !shouldRetry(resultStr) {
@@ -293,5 +296,16 @@ func (vtctldclient *VtctldClientProcess) OnlineDDLShowRecent(Keyspace string) (r
 		"show",
 		Keyspace,
 		"recent",
+	)
+}
+
+// OnlineDDLShow responds with recent schema migration list
+func (vtctldclient *VtctldClientProcess) OnlineDDLShow(keyspace, workflow string) (result string, err error) {
+	return vtctldclient.ExecuteCommandWithOutput(
+		"OnlineDDL",
+		"show",
+		"--json",
+		keyspace,
+		workflow,
 	)
 }

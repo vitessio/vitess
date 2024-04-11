@@ -48,7 +48,6 @@ func TestAPIEndpoints(t *testing.T) {
 	// Verify when VTOrc is healthy, it has also run the first discovery.
 	assert.Equal(t, 200, status)
 	assert.Contains(t, resp, `"Healthy": true,`)
-	assert.Contains(t, resp, `"DiscoveredOnce": true`)
 
 	// find primary from topo
 	primary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
@@ -77,7 +76,6 @@ func TestAPIEndpoints(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, 200, status)
 		assert.Contains(t, resp, `"Healthy": true,`)
-		assert.Contains(t, resp, `"DiscoveredOnce": true`)
 	})
 
 	t.Run("Liveness API", func(t *testing.T) {
@@ -91,6 +89,24 @@ func TestAPIEndpoints(t *testing.T) {
 	// Before we disable recoveries, let us wait until VTOrc has fixed all the issues (if any).
 	_, _ = utils.MakeAPICallRetry(t, vtorc, "/api/replication-analysis", func(_ int, response string) bool {
 		return response != "null"
+	})
+
+	t.Run("Database State", func(t *testing.T) {
+		// Get database state
+		status, resp, err := utils.MakeAPICall(t, vtorc, "/api/database-state")
+		require.NoError(t, err)
+		assert.Equal(t, 200, status)
+		assert.Contains(t, resp, `"alias": "zone1-0000000101"`)
+		assert.Contains(t, resp, `{
+		"TableName": "vitess_keyspace",
+		"Rows": [
+			{
+				"durability_policy": "none",
+				"keyspace": "ks",
+				"keyspace_type": "0"
+			}
+		]
+	},`)
 	})
 
 	t.Run("Disable Recoveries API", func(t *testing.T) {

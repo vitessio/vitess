@@ -23,7 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/wrangler"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
 type iWorkflow interface {
@@ -117,18 +117,18 @@ func newVtctlMoveTables(mt *moveTablesWorkflow) *VtctlMoveTables {
 }
 
 func (vmt *VtctlMoveTables) Create() {
-	currentWorkflowType = wrangler.MoveTablesWorkflow
+	currentWorkflowType = binlogdatapb.VReplicationWorkflowType_MoveTables
 	vmt.exec(workflowActionCreate)
 }
 
 func (vmt *VtctlMoveTables) SwitchReadsAndWrites() {
-	err := tstWorkflowExec(vmt.vc.t, "", vmt.workflowName, vmt.sourceKeyspace, vmt.targetKeyspace,
+	err := tstWorkflowExecVtctl(vmt.vc.t, "", vmt.workflowName, vmt.sourceKeyspace, vmt.targetKeyspace,
 		vmt.tables, workflowActionSwitchTraffic, "", "", "", defaultWorkflowExecOptions)
 	require.NoError(vmt.vc.t, err)
 }
 
 func (vmt *VtctlMoveTables) ReverseReadsAndWrites() {
-	err := tstWorkflowExec(vmt.vc.t, "", vmt.workflowName, vmt.sourceKeyspace, vmt.targetKeyspace,
+	err := tstWorkflowExecVtctl(vmt.vc.t, "", vmt.workflowName, vmt.sourceKeyspace, vmt.targetKeyspace,
 		vmt.tables, workflowActionReverseTraffic, "", "", "", defaultWorkflowExecOptions)
 	require.NoError(vmt.vc.t, err)
 }
@@ -143,7 +143,7 @@ func (vmt *VtctlMoveTables) exec(action string) {
 		deferSecondaryKeys: false,
 		atomicCopy:         vmt.atomicCopy,
 	}
-	err := tstWorkflowExec(vmt.vc.t, "", vmt.workflowName, vmt.sourceKeyspace, vmt.targetKeyspace,
+	err := tstWorkflowExecVtctl(vmt.vc.t, "", vmt.workflowName, vmt.sourceKeyspace, vmt.targetKeyspace,
 		vmt.tables, action, vmt.tabletTypes, vmt.sourceShards, "", options)
 	require.NoError(vmt.vc.t, err)
 }
@@ -314,7 +314,7 @@ func newVtctlReshard(rs *reshardWorkflow) *VtctlReshard {
 }
 
 func (vrs *VtctlReshard) Create() {
-	currentWorkflowType = wrangler.ReshardWorkflow
+	currentWorkflowType = binlogdatapb.VReplicationWorkflowType_Reshard
 	vrs.exec(workflowActionCreate)
 }
 
@@ -333,7 +333,7 @@ func (vrs *VtctlReshard) Show() {
 
 func (vrs *VtctlReshard) exec(action string) {
 	options := &workflowExecOptions{}
-	err := tstWorkflowExec(vrs.vc.t, "", vrs.workflowName, "", vrs.targetKeyspace,
+	err := tstWorkflowExecVtctl(vrs.vc.t, "", vrs.workflowName, "", vrs.targetKeyspace,
 		"", action, vrs.tabletTypes, vrs.sourceShards, vrs.targetShards, options)
 	require.NoError(vrs.vc.t, err)
 }

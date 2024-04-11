@@ -257,20 +257,20 @@ func (fz *fuzzer) generateDeleteDMLQuery() string {
 }
 
 // start starts running the fuzzer.
-func (fz *fuzzer) start(t *testing.T, sharded bool) {
+func (fz *fuzzer) start(t *testing.T, keyspace string) {
 	// We mark the fuzzer thread to be running now.
 	fz.shouldStop.Store(false)
 	fz.wg.Add(fz.concurrency)
 	for i := 0; i < fz.concurrency; i++ {
 		fuzzerThreadId := i
 		go func() {
-			fz.runFuzzerThread(t, sharded, fuzzerThreadId)
+			fz.runFuzzerThread(t, keyspace, fuzzerThreadId)
 		}()
 	}
 }
 
 // runFuzzerThread is used to run a thread of the fuzzer.
-func (fz *fuzzer) runFuzzerThread(t *testing.T, sharded bool, fuzzerThreadId int) {
+func (fz *fuzzer) runFuzzerThread(t *testing.T, keyspace string, fuzzerThreadId int) {
 	// Whenever we finish running this thread, we should mark the thread has stopped.
 	defer func() {
 		fz.wg.Done()
@@ -293,16 +293,9 @@ func (fz *fuzzer) runFuzzerThread(t *testing.T, sharded bool, fuzzerThreadId int
 		defer mysqlDb.Close()
 	}
 	// Set the correct keyspace to use from VtGates.
-	if sharded {
-		_ = utils.Exec(t, mcmp.VtConn, "use `ks`")
-		if vitessDb != nil {
-			_, _ = vitessDb.Exec("use `ks`")
-		}
-	} else {
-		_ = utils.Exec(t, mcmp.VtConn, "use `uks`")
-		if vitessDb != nil {
-			_, _ = vitessDb.Exec("use `uks`")
-		}
+	_ = utils.Exec(t, mcmp.VtConn, fmt.Sprintf("use `%v`", keyspace))
+	if vitessDb != nil {
+		_, _ = vitessDb.Exec(fmt.Sprintf("use `%v`", keyspace))
 	}
 	if fz.queryFormat == OlapSQLQueries {
 		_ = utils.Exec(t, mcmp.VtConn, "set workload = olap")
@@ -715,21 +708,19 @@ func TestFkFuzzTest(t *testing.T) {
 	valFalse := false
 	for _, fkState := range []*bool{nil, &valTrue, &valFalse} {
 		for _, tt := range testcases {
-			for _, testSharded := range []bool{false, true} {
+			for _, keyspace := range []string{unshardedKs, shardedKs} {
 				for _, queryFormat := range []QueryFormat{OlapSQLQueries, SQLQueries, PreparedStatmentQueries, PreparedStatementPacket} {
 					if fkState != nil && (queryFormat != SQLQueries || tt.concurrency != 1) {
 						continue
 					}
-					t.Run(getTestName(tt.name, testSharded)+fmt.Sprintf(" FkState - %v QueryFormat - %v", sqlparser.FkChecksStateString(fkState), queryFormat), func(t *testing.T) {
+					t.Run(getTestName(tt.name, keyspace)+fmt.Sprintf(" FkState - %v QueryFormat - %v", sqlparser.FkChecksStateString(fkState), queryFormat), func(t *testing.T) {
 						mcmp, closer := start(t)
 						defer closer()
-						// Set the correct keyspace to use from VtGates.
-						if testSharded {
+						if keyspace == shardedKs {
 							t.Skip("Skip test since we don't have sharded foreign key support yet")
-							_ = utils.Exec(t, mcmp.VtConn, "use `ks`")
-						} else {
-							_ = utils.Exec(t, mcmp.VtConn, "use `uks`")
 						}
+						// Set the correct keyspace to use from VtGates.
+						_ = utils.Exec(t, mcmp.VtConn, fmt.Sprintf("use `%v`", keyspace))
 
 						// Ensure that the Vitess database is originally empty
 						ensureDatabaseState(t, mcmp.VtConn, true)
@@ -739,7 +730,7 @@ func TestFkFuzzTest(t *testing.T) {
 						fz := newFuzzer(tt.concurrency, tt.maxValForId, tt.maxValForCol, tt.insertShare, tt.deleteShare, tt.updateShare, queryFormat, fkState)
 
 						// Start the fuzzer.
-						fz.start(t, testSharded)
+						fz.start(t, keyspace)
 
 						// Wait for the timeForTesting so that the threads continue to run.
 						totalTime := time.After(tt.timeForTesting)

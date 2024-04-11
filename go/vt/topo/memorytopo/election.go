@@ -35,6 +35,10 @@ func (c *Conn) NewLeaderParticipation(name, id string) (topo.LeaderParticipation
 	c.factory.mu.Lock()
 	defer c.factory.mu.Unlock()
 
+	if err := c.factory.getOperationError(NewLeaderParticipation, id); err != nil {
+		return nil, err
+	}
+
 	// Make sure the global path exists.
 	electionPath := path.Join(electionsPath, name)
 	if n := c.factory.getOrCreatePath(c.cell, electionPath); n == nil {
