@@ -84,7 +84,11 @@ func TestReferenceRouting(t *testing.T) {
 	)
 
 	t.Run("Complex reference query", func(t *testing.T) {
-		utils.SkipIfBinaryIsBelowVersion(t, 17, "vtgate")
+		version, err := cluster.GetMajorVersion("vtgate")
+		require.NoError(t, err)
+		if version != 17 {
+			t.Skip("Current version of vtgate: v", version, ", expected version == v17")
+		}
 		// Verify a complex query using reference tables with a left join having a derived table with an order by clause works as intended.
 		utils.AssertMatches(
 			t,
