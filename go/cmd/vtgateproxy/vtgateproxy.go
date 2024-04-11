@@ -21,11 +21,10 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/exit"
+	"vitess.io/vitess/go/stats/prometheusbackend"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtgateproxy"
 )
-
-var ()
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
@@ -37,6 +36,8 @@ func main() {
 
 	servenv.ParseFlags("vtgateproxy")
 	servenv.Init()
+
+	prometheusbackend.Init("vtgateproxy")
 
 	servenv.OnRun(func() {
 		// Flags are parsed now. Parse the template using the actual flag value and overwrite the current template.
