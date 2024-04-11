@@ -70,8 +70,8 @@ func (r *switcher) switchShardReads(ctx context.Context, cells []string, servedT
 	return r.ts.switchShardReads(ctx, cells, servedTypes, direction)
 }
 
-func (r *switcher) switchTableReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection) error {
-	return r.ts.switchTableReads(ctx, cells, servedTypes, direction)
+func (r *switcher) switchTableReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, rebuildSrvVSchema bool, direction TrafficSwitchDirection) error {
+	return r.ts.switchTableReads(ctx, cells, servedTypes, rebuildSrvVSchema, direction)
 }
 
 func (r *switcher) startReverseVReplication(ctx context.Context) error {

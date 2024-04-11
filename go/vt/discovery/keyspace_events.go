@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"sync"
 
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/key"
@@ -93,18 +94,8 @@ func NewKeyspaceEventWatcher(ctx context.Context, topoServer srvtopo.Server, hc 
 	return kew
 }
 
-type MoveTablesStatus int
-
-const (
-	MoveTablesUnknown MoveTablesStatus = iota
-	// MoveTablesSwitching is set when the write traffic is the middle of being switched from the source to the target
-	MoveTablesSwitching
-	// MoveTablesSwitched is set when write traffic has been completely switched to the target
-	MoveTablesSwitched
-)
-
 // keyspaceState is the internal state for all the keyspaces that the KEW is
-// currently watching
+// currently watching.
 type keyspaceState struct {
 	kew      *KeyspaceEventWatcher
 	keyspace string
@@ -120,7 +111,7 @@ type keyspaceState struct {
 	moveTablesState *MoveTablesState
 }
 
-// Format prints the internal state for this keyspace for debug purposes
+// Format prints the internal state for this keyspace for debug purposes.
 func (kss *keyspaceState) Format(f fmt.State, verb rune) {
 	kss.mu.Lock()
 	defer kss.mu.Unlock()
@@ -183,7 +174,14 @@ type shardState struct {
 func (kew *KeyspaceEventWatcher) Subscribe() chan *KeyspaceEvent {
 	kew.subsMu.Lock()
 	defer kew.subsMu.Unlock()
-	c := make(chan *KeyspaceEvent, 2)
+	// Use a decent size buffer to:
+	// 1. Avoid blocking the KEW
+	// 2. While not losing/missing any events
+	// 3. And processing them in the order received
+	// TODO: do we care about intermediate events?
+	// If not, then we could instead e.g. pull the first/oldest event
+	// from the channel, discard it, and add the current/latest.
+	c := make(chan *KeyspaceEvent, 10)
 	kew.subs[c] = struct{}{}
 	return c
 }
@@ -199,10 +197,7 @@ func (kew *KeyspaceEventWatcher) broadcast(th *KeyspaceEvent) {
 	kew.subsMu.Lock()
 	defer kew.subsMu.Unlock()
 	for c := range kew.subs {
-		select {
-		case c <- th:
-		default:
-		}
+		c <- th
 	}
 }
 
@@ -240,7 +235,8 @@ func (kew *KeyspaceEventWatcher) run(ctx context.Context) {
 }
 
 // ensureConsistentLocked checks if the current keyspace has recovered from an availability
-// event, and if so, returns information about the availability event to all subscribers
+// event, and if so, returns information about the availability event to all subscribers.
+// Note: you MUST be holding the ks.mu when calling this function.
 func (kss *keyspaceState) ensureConsistentLocked() {
 	// if this keyspace is consistent, there's no ongoing availability event
 	if kss.consistent {
@@ -313,7 +309,7 @@ func (kss *keyspaceState) ensureConsistentLocked() {
 		})
 
 		log.Infof("keyspace event resolved: %s/%s is now consistent (serving: %v)",
-			sstate.target.Keyspace, sstate.target.Keyspace,
+			sstate.target.Keyspace, sstate.target.Shard,
 			sstate.serving,
 		)
 
@@ -371,6 +367,16 @@ func (kss *keyspaceState) onHealthCheck(th *TabletHealth) {
 	kss.ensureConsistentLocked()
 }
 
+type MoveTablesStatus int
+
+const (
+	MoveTablesUnknown MoveTablesStatus = iota
+	// MoveTablesSwitching is set when the write traffic is the middle of being switched from the source to the target
+	MoveTablesSwitching
+	// MoveTablesSwitched is set when write traffic has been completely switched to the target
+	MoveTablesSwitched
+)
+
 type MoveTablesType int
 
 const (
@@ -384,33 +390,66 @@ type MoveTablesState struct {
 	State MoveTablesStatus
 }
 
+func (mts MoveTablesState) String() string {
+	var typ, state string
+	switch mts.Typ {
+	case MoveTablesRegular:
+		typ = "Regular"
+	case MoveTablesShardByShard:
+		typ = "ShardByShard"
+	default:
+		typ = "None"
+	}
+	switch mts.State {
+	case MoveTablesSwitching:
+		state = "Switching"
+	case MoveTablesSwitched:
+		state = "Switched"
+	default:
+		state = "Unknown"
+	}
+	return fmt.Sprintf("{Type: %s, State: %s}", typ, state)
+}
+
 func (kss *keyspaceState) getMoveTablesStatus(vs *vschemapb.SrvVSchema) (*MoveTablesState, error) {
 	mtState := &MoveTablesState{
 		Typ:   MoveTablesNone,
 		State: MoveTablesUnknown,
 	}
 
-	// if there are no routing rules defined, then movetables is not in progress, exit early
+	// If there are no routing rules defined, then movetables is not in progress, exit early.
 	if len(vs.GetRoutingRules().GetRules()) == 0 && len(vs.GetShardRoutingRules().GetRules()) == 0 {
 		return mtState, nil
 	}
 
 	shortCtx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 	defer cancel()
-	ts, _ := kss.kew.ts.GetTopoServer()
-
-	// collect all current shard information from the topo
+	ts, err := kss.kew.ts.GetTopoServer()
+	if err != nil {
+		return mtState, err
+	}
+	// Collect all current shard information from the topo.
 	var shardInfos []*topo.ShardInfo
+	mu := sync.Mutex{}
+	eg, ectx := errgroup.WithContext(shortCtx)
 	for _, sstate := range kss.shards {
-		si, err := ts.GetShard(shortCtx, kss.keyspace, sstate.target.Shard)
-		if err != nil {
-			return nil, err
-		}
-		shardInfos = append(shardInfos, si)
+		eg.Go(func() error {
+			si, err := ts.GetShard(ectx, kss.keyspace, sstate.target.Shard)
+			if err != nil {
+				return err
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			shardInfos = append(shardInfos, si)
+			return nil
+		})
+	}
+	if eg.Wait() != nil {
+		return mtState, err
 	}
 
-	// check if any shard has denied tables and if so, record one of these to check where it currently points to
-	// using the (shard) routing rules
+	// Check if any shard has denied tables and if so, record one of these to check where it
+	// currently points to using the (shard) routing rules.
 	var shardsWithDeniedTables []string
 	var oneDeniedTable string
 	for _, si := range shardInfos {
@@ -425,11 +464,11 @@ func (kss *keyspaceState) getMoveTablesStatus(vs *vschemapb.SrvVSchema) (*MoveTa
 		return mtState, nil
 	}
 
-	// check if a shard by shard migration is in progress and if so detect if it has been switched
-	isPartialTables := vs.ShardRoutingRules != nil && len(vs.ShardRoutingRules.Rules) > 0
+	// Check if a shard by shard migration is in progress and if so detect if it has been switched.
+	isPartialTables := vs.GetShardRoutingRules() != nil && len(vs.GetShardRoutingRules().GetRules()) > 0
 
 	if isPartialTables {
-		srr := topotools.GetShardRoutingRulesMap(vs.ShardRoutingRules)
+		srr := topotools.GetShardRoutingRulesMap(vs.GetShardRoutingRules())
 		mtState.Typ = MoveTablesShardByShard
 		mtState.State = MoveTablesSwitched
 		for _, shard := range shardsWithDeniedTables {
@@ -440,23 +479,23 @@ func (kss *keyspaceState) getMoveTablesStatus(vs *vschemapb.SrvVSchema) (*MoveTa
 				break
 			}
 		}
-		log.Infof("getMoveTablesStatus: keyspace %s declaring partial move tables %v", kss.keyspace, mtState)
+		log.Infof("getMoveTablesStatus: keyspace %s declaring partial move tables %s", kss.keyspace, mtState.String())
 		return mtState, nil
 	}
 
-	// it wasn't a shard by shard migration, but since we have denied tables it must be a regular MoveTables
+	// It wasn't a shard by shard migration, but since we have denied tables it must be a regular MoveTables.
 	mtState.Typ = MoveTablesRegular
 	mtState.State = MoveTablesSwitching
-	rr := topotools.GetRoutingRulesMap(vs.RoutingRules)
+	rr := topotools.GetRoutingRulesMap(vs.GetRoutingRules())
 	if rr != nil {
 		r, ok := rr[oneDeniedTable]
-		// if a rule exists for the table and points to the target keyspace, writes have been switched
+		// If a rule exists for the table and points to the target keyspace, writes have been switched.
 		if ok && len(r) > 0 && r[0] != fmt.Sprintf("%s.%s", kss.keyspace, oneDeniedTable) {
 			mtState.State = MoveTablesSwitched
 			log.Infof("onSrvKeyspace::  keyspace %s writes have been switched for table %s, rule %v", kss.keyspace, oneDeniedTable, r[0])
 		}
 	}
-	log.Infof("getMoveTablesStatus: keyspace %s declaring regular move tables %v", kss.keyspace, mtState)
+	log.Infof("getMoveTablesStatus: keyspace %s declaring regular move tables %s", kss.keyspace, mtState.String())
 
 	return mtState, nil
 }
@@ -528,16 +567,19 @@ func (kss *keyspaceState) isServing() bool {
 // In addition, the traffic switcher updates SrvVSchema when the DeniedTables attributes in a Shard record is
 // modified.
 func (kss *keyspaceState) onSrvVSchema(vs *vschemapb.SrvVSchema, err error) bool {
-	// the vschema can be nil if the server is currently shutting down
+	// The vschema can be nil if the server is currently shutting down.
 	if vs == nil {
 		return true
 	}
 
 	kss.mu.Lock()
 	defer kss.mu.Unlock()
-	kss.moveTablesState, _ = kss.getMoveTablesStatus(vs)
+	var kerr error
+	if kss.moveTablesState, kerr = kss.getMoveTablesStatus(vs); err != nil {
+		log.Errorf("onSrvVSchema: keyspace %s failed to get move tables status: %v", kss.keyspace, kerr)
+	}
 	if kss.moveTablesState != nil && kss.moveTablesState.Typ != MoveTablesNone {
-		// mark the keyspace as inconsistent. ensureConsistentLocked() checks if the workflow is switched,
+		// Mark the keyspace as inconsistent. ensureConsistentLocked() checks if the workflow is switched,
 		// and if so, it will send an event to the buffering subscribers to indicate that buffering can be stopped.
 		kss.consistent = false
 		kss.ensureConsistentLocked()

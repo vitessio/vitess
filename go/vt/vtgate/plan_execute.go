@@ -24,13 +24,14 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 type planExec func(ctx context.Context, plan *engine.Plan, vc *vcursorImpl, bindVars map[string]*querypb.BindVariable, startTime time.Time) error
@@ -48,7 +49,7 @@ func waitForNewerVSchema(ctx context.Context, e *Executor, lastVSchemaCreated ti
 		case <-waitCtx.Done():
 			return false
 		case <-ticker.C:
-			if e.VSchema().GetCreated().After(lastVSchemaCreated) {
+			if e.VSchema() != nil && e.VSchema().GetCreated().After(lastVSchemaCreated) {
 				return true
 			}
 		}
@@ -64,11 +65,11 @@ func (e *Executor) newExecute(
 	logStats *logstats.LogStats,
 	execPlan planExec, // used when there is a plan to execute
 	recResult txResult, // used when it's something simple like begin/commit/rollback/savepoint
-) error {
+) (err error) {
 	// 1: Prepare before planning and execution
 
 	// Start an implicit transaction if necessary.
-	err := e.startTxIfNecessary(ctx, safeSession)
+	err = e.startTxIfNecessary(ctx, safeSession)
 	if err != nil {
 		return err
 	}
@@ -85,16 +86,28 @@ func (e *Executor) newExecute(
 		return err
 	}
 
-	var lastVSchemaCreated time.Time
 	vs := e.VSchema()
-	lastVSchemaCreated = vs.GetCreated()
-	for try := 0; try < MaxBufferingRetries; try++ {
-		if try > 0 && !vs.GetCreated().After(lastVSchemaCreated) {
-			// There is a race due to which the executor's vschema may not have been updated yet.
-			// Without a wait we fail non-deterministically since the previous vschema will not have the updated routing rules
-			if waitForNewerVSchema(ctx, e, lastVSchemaCreated) {
-				vs = e.VSchema()
+	lastVSchemaCreated := vs.GetCreated()
+	try := 0
+
+	for ; try < MaxBufferingRetries; try++ {
+		if try > 0 {
+			defer func() {
+				// Prevent any plan cache pollution from queries planned against the wrong keyspace
+				// during a MoveTables traffic switching operation.
+				if err != nil {
+					e.ClearPlans()
+				}
+			}()
+			if !vs.GetCreated().After(lastVSchemaCreated) { // We need to wait for a vschema update
+				// There is a race due to which the executor's vschema may not have been updated yet.
+				// Without a wait we fail non-deterministically since the previous vschema will not have
+				// the updated routing rules.
+				if waitForNewerVSchema(ctx, e, lastVSchemaCreated) {
+					lastVSchemaCreated = vs.GetCreated()
+				}
 			}
+			vs = e.VSchema() // We're going to replan either way, so let's use the current vschema.
 		}
 
 		vcursor, err := newVCursorImpl(safeSession, comments, e, logStats, e.vm, vs, e.resolver.resolver, e.serv, e.warnShardedOnly, e.pv)
@@ -161,7 +174,6 @@ func (e *Executor) newExecute(
 		rootCause := vterrors.RootCause(err)
 		if rootCause != nil && strings.Contains(rootCause.Error(), "enforce denied tables") {
 			log.V(2).Infof("Retry: %d, will retry query %s due to %v", try, query, err)
-			lastVSchemaCreated = vs.GetCreated()
 			continue
 		}
 
