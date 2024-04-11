@@ -308,8 +308,8 @@ func (kss *keyspaceState) ensureConsistentLocked() {
 			Serving: sstate.serving,
 		})
 
-		log.Infof("keyspace event resolved: %s/%s is now consistent (serving: %v)",
-			sstate.target.Keyspace, sstate.target.Shard,
+		log.Infof("keyspace event resolved: %s is now consistent (serving: %t)",
+			topoproto.KeyspaceShardString(sstate.target.Keyspace, sstate.target.Shard),
 			sstate.serving,
 		)
 
