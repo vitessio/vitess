@@ -43,6 +43,24 @@ values (database(), :table_name, :create_statement, :create_time)`
 	// fetchTables queries fetches all information about tables
 	fetchTables = `select table_name, create_statement from %s.tables where table_schema = database()`
 
+	// detectUdfChange query detects if there is any udf change from previous copy.
+	detectUdfChange = `
+SELECT UDF_NAME
+FROM (
+	SELECT UDF_NAME FROM 
+	performance_schema.user_defined_functions 
+	WHERE udf_type = 'aggregate'
+
+	UNION ALL
+
+	SELECT FUNCTION_NAME
+	FROM %s.udfs
+) _inner
+GROUP BY UDF_NAME
+HAVING COUNT(*) = 1
+LIMIT 1
+`
+
 	// detectViewChange query detects if there is any view change from previous copy.
 	detectViewChange = `
 SELECT distinct table_name
@@ -311,6 +329,27 @@ func getChangedViewNames(ctx context.Context, conn *connpool.Conn, isServingPrim
 	}
 
 	return views, nil
+}
+
+func getChangedUserDefinedFunctions(ctx context.Context, conn *connpool.Conn, isServingPrimary bool) (bool, error) {
+	if !isServingPrimary {
+		return false, nil
+	}
+
+	udfsChanged := false
+	callback := func(qr *sqltypes.Result) error {
+		udfsChanged = true
+		return nil
+	}
+	alloc := func() *sqltypes.Result { return &sqltypes.Result{} }
+	bufferSize := 1000
+
+	udfChangeQuery := sqlparser.BuildParsedQuery(detectUdfChange, sidecar.GetIdentifier()).Query
+	err := conn.Stream(ctx, udfChangeQuery, callback, alloc, bufferSize, 0)
+	if err != nil {
+		return false, err
+	}
+	return udfsChanged, nil
 }
 
 // getMismatchedTableNames gets the tables that do not align with the tables information we have in the cache.

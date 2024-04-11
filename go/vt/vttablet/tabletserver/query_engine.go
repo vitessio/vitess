@@ -530,7 +530,7 @@ func (qe *QueryEngine) IsMySQLReachable() error {
 	return nil
 }
 
-func (qe *QueryEngine) schemaChanged(tables map[string]*schema.Table, created, altered, dropped []*schema.Table) {
+func (qe *QueryEngine) schemaChanged(tables map[string]*schema.Table, created, altered, dropped []*schema.Table, _ bool) {
 	qe.schemaMu.Lock()
 	defer qe.schemaMu.Unlock()
 
