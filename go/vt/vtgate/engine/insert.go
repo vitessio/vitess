@@ -177,12 +177,10 @@ func (ins *Insert) executeInsertQueries(
 	// If this insert used auto increment values from a sequence, we need to set the `last_insert_id` value.
 	if insertID != 0 {
 		if result.RowsAffected > 0 {
-			// If at least one row was affected, we set the `last_insert_id` value to the highest reserved sequence id.
-			// Note that this is not the same behavior as MySQL, which sets the `last_insert_id` value to
-			// highest actually inserted auto increment value.
+			// If at least one row was affected, we set the `last_insert_id` value to the lowest reserved sequence id.
 			//
-			// Unfortunately, we don't have a way to get the actual inserted auto increment value in a multi-shard
-			// insert, so we have to settle for the highest reserved sequence id.
+			// This does not match the behaviour of MySQL in case where no new rows where inserted (but one or more rows were updated
+			// via `ON DUPLICATE KEY UPDATE`), where the `last_insert_id` value is set to the `auto_increment` column value.
 			result.InsertID = insertID
 		} else {
 			// If no rows were inserted or updated, clear the `last_insert_id` value.
