@@ -248,18 +248,21 @@ func newTestThrottler() *Throttler {
 	return throttler
 }
 
-func runSequentialFunction(t *testing.T, ctx context.Context, throttler *Throttler, f func(context.Context)) {
-	var wg sync.WaitGroup
-	wg.Add(1)
+// runSerialFunction runs the given function inside the throttler's serial and goroutine-safe main `select` loop.
+// This function returns a channel that is populated when the input function is completed. Callers of this
+// function should read from the channel if they want to block until the function is completed, or that could
+// ignore the channel if they just want to fire-and-forget the function.
+func runSerialFunction(t *testing.T, ctx context.Context, throttler *Throttler, f func(context.Context)) (done chan any) {
+	done = make(chan any, 1)
 	select {
 	case throttler.serialFuncChan <- func() {
-		defer wg.Done()
 		f(ctx)
+		done <- true
 	}:
 	case <-ctx.Done():
-		assert.FailNow(t, ctx.Err().Error(), "waiting for runSequentially")
+		assert.FailNow(t, ctx.Err().Error(), "waiting in runSerialFunction")
 	}
-	wg.Wait()
+	return done
 }
 
 func TestIsAppThrottled(t *testing.T) {
@@ -524,7 +527,7 @@ func TestProbesWhileOperating(t *testing.T) {
 			// Hence, the throttler will choose to set the "custom" metric results in the aggregated "default" metrics,
 			// as opposed to choosing the "lag" metric results.
 			throttler.customMetricsQuery.Store("select non_empty")
-			runSequentialFunction(t, ctx, throttler, func(ctx context.Context) {
+			<-runSerialFunction(t, ctx, throttler, func(ctx context.Context) {
 				throttler.aggregateMySQLMetrics(ctx)
 			})
 			// throttler.aggregateMySQLMetrics(ctx)
