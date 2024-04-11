@@ -228,11 +228,13 @@ type ThrottlerStatus struct {
 	IsEnabled bool
 	IsDormant bool
 
-	Query       string
-	CustomQuery string
-	Threshold   float64
+	Query                   string
+	CustomQuery             string
+	Threshold               float64
+	MetricNameUsedAsDefault string
 
 	AggregatedMetrics map[string]base.MetricResult
+	MetricsThresholds map[string]float64
 	MetricsHealth     base.MetricHealthMap
 }
 
@@ -1206,6 +1208,15 @@ func (throttler *Throttler) getMySQLStoreMetric(ctx context.Context, storeName s
 	return throttler.getAggregatedMetric(aggregatedName), threshold
 }
 
+func (throttler *Throttler) mysqlMetricThresholdsSnapshot() map[string]float64 {
+	snapshot := make(map[string]float64)
+	for key, value := range throttler.mysqlMetricThresholds.Items() {
+		threshold, _ := value.Object.(float64)
+		snapshot[key] = threshold
+	}
+	return snapshot
+}
+
 func (throttler *Throttler) aggregatedMetricsSnapshot() map[string]base.MetricResult {
 	snapshot := make(map[string]base.MetricResult)
 	for key, value := range throttler.aggregatedMetrics.Items() {
@@ -1496,11 +1507,13 @@ func (throttler *Throttler) Status() *ThrottlerStatus {
 		IsEnabled: throttler.isEnabled.Load(),
 		IsDormant: throttler.isDormant(),
 
-		Query:       throttler.GetMetricsQuery(),
-		CustomQuery: throttler.GetCustomMetricsQuery(),
-		Threshold:   throttler.GetMetricsThreshold(),
+		Query:                   throttler.GetMetricsQuery(),
+		CustomQuery:             throttler.GetCustomMetricsQuery(),
+		Threshold:               throttler.GetMetricsThreshold(),
+		MetricNameUsedAsDefault: throttler.metricNameUsedAsDefault().String(),
 
 		AggregatedMetrics: throttler.aggregatedMetricsSnapshot(),
+		MetricsThresholds: throttler.mysqlMetricThresholdsSnapshot(),
 		MetricsHealth:     throttler.metricsHealthSnapshot(),
 	}
 }
