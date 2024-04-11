@@ -195,6 +195,94 @@ func TestStripConstraints(t *testing.T) {
 	}
 }
 
+func TestStripAutoIncrement(t *testing.T) {
+	parser := sqlparser.NewTestParser()
+
+	tcs := []struct {
+		desc      string
+		ddl       string
+		want      string
+		expectErr bool
+	}{
+		{
+			desc: "invalid DDL",
+			ddl: "CREATE TABLE `table1` (\n" +
+				"`id` massiveint NOT NULL,\n" +
+				"PRIMARY KEY (`id`)\n" +
+				") ENGINE=InnoDB DEFAULT CHARSET=latin1;",
+			expectErr: true,
+		},
+		{
+			desc: "has auto increment",
+			ddl: "CREATE TABLE `table1` (\n" +
+				"`id` int NOT NULL AUTO_INCREMENT,\n" +
+				"`c1` varchar(128),\n" +
+				"PRIMARY KEY (`id`)\n" +
+				") ENGINE=InnoDB DEFAULT CHARSET=latin1;",
+			want: "create table table1 (\n" +
+				"\tid int not null,\n" +
+				"\tc1 varchar(128),\n" +
+				"\tprimary key (id)\n" +
+				") ENGINE InnoDB,\n" +
+				"  CHARSET latin1",
+		},
+		{
+			desc: "has no auto increment",
+			ddl: "CREATE TABLE `table1` (\n" +
+				"`id` int NOT NULL,\n" +
+				"`c1` varchar(128),\n" +
+				"PRIMARY KEY (`id`)\n" +
+				") ENGINE=InnoDB DEFAULT CHARSET=latin1;",
+			want: "create table table1 (\n" +
+				"\tid int not null,\n" +
+				"\tc1 varchar(128),\n" +
+				"\tprimary key (id)\n" +
+				") ENGINE InnoDB,\n" +
+				"  CHARSET latin1",
+		},
+		{
+			desc: "has auto increment with secondary key",
+			ddl: "CREATE TABLE `table1` (\n" +
+				"`id` int NOT NULL auto_increment,\n" +
+				"`c1` varchar(128),\n" +
+				"`c2` varchar(128),\n" +
+				"UNIQUE KEY `c1` (`c1`),\n" +
+				"PRIMARY KEY (`id`)\n" +
+				") ENGINE=InnoDB DEFAULT CHARSET=latin1;",
+			want: "create table table1 (\n" +
+				"\tid int not null,\n" +
+				"\tc1 varchar(128),\n" +
+				"\tc2 varchar(128),\n" +
+				"\tunique key c1 (c1),\n" +
+				"\tprimary key (id)\n" +
+				") ENGINE InnoDB,\n" +
+				"  CHARSET latin1",
+		},
+		{
+			desc: "has auto increment with multi-col PK",
+			ddl: "CREATE TABLE `table1` (\n" +
+				"`id` int NOT NULL auto_increment,\n" +
+				"`c1` varchar(128) NOT NULL,\n" +
+				"`c2` varchar(128),\n" +
+				"PRIMARY KEY (`id`, `c2`)\n" +
+				") ENGINE=InnoDB DEFAULT CHARSET=latin1;",
+			want: "create table table1 (\n" +
+				"\tid int not null,\n" +
+				"\tc1 varchar(128) not null,\n" +
+				"\tc2 varchar(128),\n" +
+				"\tprimary key (id, c2)\n" +
+				") ENGINE InnoDB,\n" +
+				"  CHARSET latin1",
+		},
+	}
+
+	for _, tc := range tcs {
+		strippedDDL, err := stripAutoIncrement(tc.ddl, parser)
+		require.Equal(t, tc.expectErr, (err != nil), "unexpected error result", "expected error %t, got: %v", tc.expectErr, err)
+		require.Equal(t, tc.want, strippedDDL, fmt.Sprintf("stripped DDL %q does not match our expected result: %q", strippedDDL, tc.want))
+	}
+}
+
 func TestAddTablesToVSchema(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

@@ -6,11 +6,13 @@
   - **[Deletions](#deletions)** 
     - [MySQL binaries in the vitess/lite Docker images](#vitess-lite)
     - [vitess/base and vitess/k8s Docker images](#base-k8s-images)
+    - [`gh-ost` binary and endtoend tests](#gh-ost-binary-tests-removal)
   - **[Breaking changes](#breaking-changes)**
     - [`shutdown_grace_period` Default Change](#shutdown-grace-period-default)
     - [New `unmanaged` Flag and `disable_active_reparents` deprecation](#unmanaged-flag)
     - [`recovery-period-block-duration` Flag deprecation](#recovery-block-deprecation)
     - [`mysqlctld` `onterm-timeout` Default Change](#mysqlctld-onterm-timeout)
+    - [`MoveTables` now removes `auto_increment` clauses by default when moving tables from an unsharded keyspace to a sharded one](#move-tables-auto-increment)
     - [`Durabler` interface method renaming](#durabler-interface-method-renaming)
   - **[Query Compatibility](#query-compatibility)**
     - [Vindex Hints](#vindex-hints)
@@ -78,6 +80,14 @@ Since we have deleted MySQL from our `vitess/lite` image, we are removing the `v
 
 These images are no longer useful since we can use `vitess/lite` as the base of many other Docker images (`vitess/vtgate`, `vitess/vtgate`, ...).
 
+#### <a id="gh-ost-binary-tests-removal"/>`gh-ost` binary and endtoend tests
+
+Vitess 20.0 drops support for `gh-ost` DDL strategy.
+
+`vttablet` binary no longer embeds a `gh-ost` binary. Users of `gh-ost` DDL strategy will need to supply a `gh-ost` binary on the `vttablet` host or pod. Vitess will look for the `gh-ost` binary in the system `PATH`; otherwise the user should supply `vttablet --gh-ost-path`.
+
+Vitess' endtoend tests no longer use nor test `gh-ost` migrations.
+
 ### <a id="breaking-changes"/>Breaking Changes
 
 #### <a id="shutdown-grace-period-default"/>`shutdown_grace_period` Default Change
@@ -105,6 +115,10 @@ acquiring a shard lock, blocking of recoveries is not required.
 The `--onterm_timeout` flag default value has changed for `mysqlctld`. It now is by default long enough to be able to wait for the default `--shutdown-wait-time` when shutting down on a `TERM` signal. 
 
 This is necessary since otherwise MySQL would never shut down cleanly with the old defaults, since `mysqlctld` would shut down already after 10 seconds by default.
+
+#### <a id="move-tables-auto-increment"/>`MoveTables` now removes `auto_increment` clauses by default when moving tables from an unsharded keyspace to a sharded one
+
+A new `--remove-sharded-auto-increment` flag has been added to the [`MoveTables` create sub-command](https://vitess.io/docs/20.0/reference/programs/vtctldclient/vtctldclient_movetables/vtctldclient_movetables_create/) and it is set to `true` by default. This flag controls whether any [MySQL `auto_increment`](https://dev.mysql.com/doc/refman/en/example-auto-increment.html) clauses should be removed from the table definitions when moving tables from an unsharded keyspace to a sharded one. This is now done by default as `auto_increment` clauses should not typically be used with sharded tables and you should instead rely on externally generated values such as a form of universally/globally unique identifiers or use [Vitess sequences](https://vitess.io/docs/reference/features/vitess-sequences/) in order to ensure that each row has a unique identifier (Primary Key value) across all shards. If for some reason you want to retain them you can set this new flag to `false` when creating the workflow.
 
 #### <a id="durabler-interface-method-renaming"/>`Durabler` interface method renaming
 

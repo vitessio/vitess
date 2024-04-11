@@ -186,6 +186,21 @@ func TestForeignKeysAndDDLModes(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestNoScatter(t *testing.T) {
+	conf := config
+	defer resetConfig(conf)
+
+	cluster, err := startCluster("--no_scatter")
+	assert.NoError(t, err)
+	defer cluster.TearDown()
+
+	_ = execOnCluster(cluster, "app_customer", func(conn *mysql.Conn) error {
+		_, err = conn.ExecuteFetch("SELECT * FROM customers", 100, false)
+		require.ErrorContains(t, err, "plan includes scatter, which is disallowed")
+		return nil
+	})
+}
+
 // TestCreateDbaTCPUser tests that the vt_dba_tcp user is created and can connect through TCP/IP connection
 // when --initialize-with-vt-dba-tcp is set to true.
 func TestCreateDbaTCPUser(t *testing.T) {

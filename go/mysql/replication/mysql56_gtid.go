@@ -29,6 +29,10 @@ import (
 // Mysql56FlavorID is the string identifier for the Mysql56 flavor.
 const Mysql56FlavorID = "MySQL56"
 
+var (
+	ErrExpectMysql56Flavor = vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "expected MySQL GTID position but found a different or invalid format.")
+)
+
 // parseMysql56GTID is registered as a GTID parser.
 func parseMysql56GTID(s string) (GTID, error) {
 	// Split into parts.
@@ -127,4 +131,33 @@ func (gtid Mysql56GTID) GTIDSet() GTIDSet {
 
 func init() {
 	gtidParsers[Mysql56FlavorID] = parseMysql56GTID
+}
+
+// DecodePositionMySQL56 converts a string into a Position value with the MySQL56 flavor. The function returns an error if the given
+// string does not translate to a MySQL56 GTID set.
+// The prefix "MySQL56/" is optional in the input string. Examples of inputs strings that produce valid result:
+// - "MySQL56/16b1039f-22b6-11ed-b765-0a43f95f28a3:1-615"
+// - "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-615"
+func DecodePositionMySQL56(s string) (rp Position, gtidSet Mysql56GTIDSet, err error) {
+	if s == "" {
+		return rp, nil, nil
+	}
+
+	flav, gtid, ok := strings.Cut(s, "/")
+	if !ok {
+		gtid = s
+		flav = Mysql56FlavorID
+	}
+	rp, err = ParsePosition(flav, gtid)
+	if err != nil {
+		return rp, nil, err
+	}
+	if !rp.MatchesFlavor(Mysql56FlavorID) {
+		return rp, nil, vterrors.Wrapf(ErrExpectMysql56Flavor, s)
+	}
+	gtidSet, ok = rp.GTIDSet.(Mysql56GTIDSet)
+	if !ok {
+		return rp, nil, vterrors.Wrapf(ErrExpectMysql56Flavor, s)
+	}
+	return rp, gtidSet, nil
 }

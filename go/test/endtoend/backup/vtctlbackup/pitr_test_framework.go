@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand/v2"
+	"strings"
 	"testing"
 	"time"
 
@@ -227,9 +228,17 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 					if tc.fromFullPosition {
 						incrementalFromPos = replication.EncodePosition(fullBackupPos)
 					}
+					assert.Contains(t, incrementalFromPos, "MySQL56/")
+				}
+				incrementalFromPosArg := incrementalFromPos
+				if tc.incrementalFrom == incrementalFromPosPosition && tc.fromFullPosition {
+					// Verify that backup works whether or not the MySQL56/ prefix is present.
+					// We arbitrarily decide to strip the prefix when "tc.fromFullPosition" is true, and keep it when false.
+					incrementalFromPosArg = strings.Replace(incrementalFromPosArg, "MySQL56/", "", 1)
+					assert.NotContains(t, incrementalFromPosArg, "MySQL56/")
 				}
 				// always use same 1st replica
-				manifest, backupName := TestReplicaIncrementalBackup(t, 0, incrementalFromPos, tc.expectEmpty, tc.expectError)
+				manifest, backupName := TestReplicaIncrementalBackup(t, 0, incrementalFromPosArg, tc.expectEmpty, tc.expectError)
 				if tc.expectError != "" {
 					return
 				}
@@ -271,6 +280,7 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 				t.Run(testName, func(t *testing.T) {
 					restoreToPos, err := replication.DecodePosition(pos)
 					require.NoError(t, err)
+					require.False(t, restoreToPos.IsZero())
 					TestReplicaRestoreToPos(t, 0, restoreToPos, "")
 					msgs := ReadRowsFromReplica(t, 0)
 					count, ok := rowsPerPosition[pos]

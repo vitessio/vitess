@@ -46,6 +46,9 @@ func (c *Conn) Create(ctx context.Context, filePath string, contents []byte) (to
 	if c.factory.err != nil {
 		return nil, c.factory.err
 	}
+	if err := c.factory.getOperationError(Create, filePath); err != nil {
+		return nil, err
+	}
 
 	// Get the parent dir.
 	dir, file := path.Split(filePath)
@@ -91,6 +94,9 @@ func (c *Conn) Update(ctx context.Context, filePath string, contents []byte, ver
 
 	if c.factory.err != nil {
 		return nil, c.factory.err
+	}
+	if err := c.factory.getOperationError(Update, filePath); err != nil {
+		return nil, err
 	}
 
 	// Get the parent dir, we'll need it in case of creation.
@@ -168,6 +174,9 @@ func (c *Conn) Get(ctx context.Context, filePath string) ([]byte, topo.Version, 
 	if c.factory.err != nil {
 		return nil, nil, c.factory.err
 	}
+	if err := c.factory.getOperationError(Get, filePath); err != nil {
+		return nil, nil, err
+	}
 
 	// Get the node.
 	n := c.factory.nodeByPath(c.cell, filePath)
@@ -195,8 +204,8 @@ func (c *Conn) List(ctx context.Context, filePathPrefix string) ([]topo.KVInfo, 
 	if c.factory.err != nil {
 		return nil, c.factory.err
 	}
-	if c.factory.listErr != nil {
-		return nil, c.factory.listErr
+	if err := c.factory.getOperationError(List, filePathPrefix); err != nil {
+		return nil, err
 	}
 
 	dir, file := path.Split(filePathPrefix)
@@ -258,6 +267,9 @@ func (c *Conn) Delete(ctx context.Context, filePath string, version topo.Version
 
 	if c.factory.err != nil {
 		return c.factory.err
+	}
+	if err := c.factory.getOperationError(Delete, filePath); err != nil {
+		return err
 	}
 
 	// Get the parent dir.

@@ -46,12 +46,8 @@ func TestFindReplicationPosition(t *testing.T) {
 	want := "145e508e-ae54-11e9-8ce6-46824dd1815e:1-3,1e51f8be-ae54-11e9-a7c6-4280a041109b:1-3,47b59de1-b368-11e9-b48b-624401d35560:1-152981,557def0a-b368-11e9-84ed-f6fffd91cc57:1-3,599ef589-ae55-11e9-9688-ca1f44501925:1-14857169,b9ce485d-b36b-11e9-9b17-2a6e0a6011f4:1-371262"
 
 	pos, err := findReplicationPosition(input, "MySQL56", logutil.NewConsoleLogger())
-	if err != nil {
-		t.Fatalf("findReplicationPosition error: %v", err)
-	}
-	if got := pos.String(); got != want {
-		t.Errorf("findReplicationPosition() = %v; want %v", got, want)
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, want, pos.String())
 }
 
 func TestFindReplicationPositionNoMatch(t *testing.T) {
@@ -59,9 +55,7 @@ func TestFindReplicationPositionNoMatch(t *testing.T) {
 	input := `nothing`
 
 	_, err := findReplicationPosition(input, "MySQL56", logutil.NewConsoleLogger())
-	if err == nil {
-		t.Fatalf("expected error from findReplicationPosition but got nil")
-	}
+	assert.Error(t, err)
 }
 
 func TestFindReplicationPositionEmptyMatch(t *testing.T) {
@@ -71,9 +65,7 @@ func TestFindReplicationPositionEmptyMatch(t *testing.T) {
 	'`
 
 	_, err := findReplicationPosition(input, "MySQL56", logutil.NewConsoleLogger())
-	if err == nil {
-		t.Fatalf("expected error from findReplicationPosition but got nil")
-	}
+	assert.Error(t, err)
 }
 
 func TestStripeRoundTrip(t *testing.T) {
@@ -96,16 +88,11 @@ func TestStripeRoundTrip(t *testing.T) {
 		// Read it back and merge.
 		outBuf := &bytes.Buffer{}
 		written, err := io.Copy(outBuf, stripeReader(readers, blockSize))
-		if err != nil {
-			t.Errorf("dataSize=%d, blockSize=%d, stripes=%d; copy error: %v", dataSize, blockSize, stripes, err)
-		}
-		if written != dataSize {
-			t.Errorf("dataSize=%d, blockSize=%d, stripes=%d; copy error: wrote %d total bytes instead of dataSize", dataSize, blockSize, stripes, written)
-		}
+		assert.NoError(t, err)
+		assert.Equal(t, dataSize, written)
+
 		output := outBuf.Bytes()
-		if !bytes.Equal(input, output) {
-			t.Errorf("output bytes are not the same as input")
-		}
+		assert.Equal(t, input, output)
 	}
 
 	// Test block size that evenly divides data size.

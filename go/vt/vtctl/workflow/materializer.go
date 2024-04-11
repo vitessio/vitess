@@ -257,6 +257,20 @@ func (mz *materializer) deploySchema() error {
 	var sourceDDLs map[string]string
 	var mu sync.Mutex
 
+	// Auto-increment columns are typically used with unsharded MySQL tables
+	// but should not generally be used with sharded ones. Because it's common
+	// to use MoveTables to move table(s) from an unsharded keyspace to a
+	// sharded one we automatically remove the clauses by default to prevent
+	// accidents and avoid having to later do a costly ALTER TABLE operation
+	// to remove them.
+	// We do, however, allow the user to override this behavior and retain them.
+	removeAutoInc := false
+	if mz.workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables &&
+		(mz.targetVSchema != nil && mz.targetVSchema.Keyspace != nil && mz.targetVSchema.Keyspace.Sharded) &&
+		(mz.ms != nil && mz.ms.GetWorkflowOptions().GetStripShardedAutoIncrement()) {
+		removeAutoInc = true
+	}
+
 	return forAllShards(mz.targetShards, func(target *topo.ShardInfo) error {
 		allTables := []string{"/.*/"}
 
@@ -301,7 +315,8 @@ func (mz *materializer) deploySchema() error {
 			}
 
 			createDDL := ts.CreateDdl
-			if createDDL == createDDLAsCopy || createDDL == createDDLAsCopyDropConstraint || createDDL == createDDLAsCopyDropForeignKeys {
+			// Make any necessary adjustments to the create DDL.
+			if removeAutoInc || createDDL == createDDLAsCopy || createDDL == createDDLAsCopyDropConstraint || createDDL == createDDLAsCopyDropForeignKeys {
 				if ts.SourceExpression != "" {
 					// Check for table if non-empty SourceExpression.
 					sourceTableName, err := mz.env.Parser().TableFromStatement(ts.SourceExpression)
@@ -336,6 +351,14 @@ func (mz *materializer) deploySchema() error {
 
 					ddl = strippedDDL
 				}
+
+				if removeAutoInc {
+					ddl, err = stripAutoIncrement(ddl, mz.env.Parser())
+					if err != nil {
+						return err
+					}
+				}
+
 				createDDL = ddl
 			}
 

@@ -3790,6 +3790,9 @@ var (
 	}, {
 		input:  `kill 18446744073709551615`,
 		output: `kill connection 18446744073709551615`,
+	}, {
+		input:  `select * from tbl where foo is unknown or bar is not unknown`,
+		output: `select * from tbl where foo is null or bar is not null`,
 	}}
 )
 

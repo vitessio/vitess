@@ -45388,6 +45388,9 @@ export namespace vtctldata {
 
         /** WorkflowOptions source_keyspace_alias */
         source_keyspace_alias?: (string|null);
+
+        /** WorkflowOptions strip_sharded_auto_increment */
+        strip_sharded_auto_increment?: (boolean|null);
     }
 
     /** Represents a WorkflowOptions. */
@@ -45404,6 +45407,9 @@ export namespace vtctldata {
 
         /** WorkflowOptions source_keyspace_alias. */
         public source_keyspace_alias: string;
+
+        /** WorkflowOptions strip_sharded_auto_increment. */
+        public strip_sharded_auto_increment: boolean;
 
         /**
          * Creates a new WorkflowOptions instance using the specified properties.

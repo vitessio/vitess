@@ -588,14 +588,14 @@ func TestExecutorShow(t *testing.T) {
 	_, err = executor.Execute(ctx, nil, "TestExecute", session, fmt.Sprintf("show create table %v.unknown", KsTestUnsharded), nil)
 	require.NoError(t, err)
 	lastQuery = sbclookup.Queries[len(sbclookup.Queries)-1].Sql
-	wantQuery = "show create table unknown"
+	wantQuery = "show create table `unknown`"
 	assert.Equal(t, wantQuery, lastQuery, "Got: %v. Want: %v", lastQuery, wantQuery)
 
 	// SHOW KEYS with two different syntax
 	_, err = executor.Execute(ctx, nil, "TestExecute", session, fmt.Sprintf("show keys from %v.unknown", KsTestUnsharded), nil)
 	require.NoError(t, err)
 	lastQuery = sbclookup.Queries[len(sbclookup.Queries)-1].Sql
-	wantQuery = "show indexes from unknown"
+	wantQuery = "show indexes from `unknown`"
 	assert.Equal(t, wantQuery, lastQuery, "Got: %v. Want: %v", lastQuery, wantQuery)
 
 	_, err = executor.Execute(ctx, nil, "TestExecute", session, fmt.Sprintf("show keys from unknown from %v", KsTestUnsharded), nil)

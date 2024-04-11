@@ -407,7 +407,7 @@
           "Sharded": false
         },
         "TargetDestination": "AnyShard()",
-        "Query": "show create table unknown",
+        "Query": "show create table `unknown`",
         "SingleShardOnly": true
       }
     }
