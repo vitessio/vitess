@@ -83,6 +83,29 @@ func TestReferenceRouting(t *testing.T) {
 		`[[INT64(0)]]`,
 	)
 
+	t.Run("Complex reference query", func(t *testing.T) {
+		version, err := cluster.GetMajorVersion("vtgate")
+		require.NoError(t, err)
+		if version != 17 {
+			t.Skip("Current version of vtgate: v", version, ", expected version == v17")
+		}
+		// Verify a complex query using reference tables with a left join having a derived table with an order by clause works as intended.
+		utils.AssertMatches(
+			t,
+			conn,
+			`SELECT t.id FROM (
+                        SELECT zd.id, zd.zip_id
+                        FROM `+shardedKeyspaceName+`.zip_detail AS zd
+                        WHERE zd.id IN (2)
+                        ORDER BY zd.discontinued_at
+                        LIMIT 1
+                ) AS t
+                LEFT JOIN `+shardedKeyspaceName+`.zip_detail AS t0 ON t.zip_id = t0.zip_id
+                ORDER BY t.id`,
+			`[[INT64(2)]]`,
+		)
+	})
+
 	// UPDATE should route an unqualified zip_detail to unsharded keyspace.
 	utils.Exec(t, conn,
 		"UPDATE zip_detail SET discontinued_at = NULL WHERE id = 2")

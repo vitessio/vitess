@@ -465,12 +465,12 @@ func pushDownProjectionInApplyJoin(
 	var err error
 
 	// Create and update the Projection operators for the left and right children, if needed.
-	src.LHS, err = createProjectionWithTheseColumns(src.LHS, lhs, p.TableID, p.Alias)
+	src.LHS, err = createProjectionWithTheseColumns(ctx, src.LHS, lhs, p.TableID, p.Alias)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	src.RHS, err = createProjectionWithTheseColumns(src.RHS, rhs, p.TableID, p.Alias)
+	src.RHS, err = createProjectionWithTheseColumns(ctx, src.RHS, rhs, p.TableID, p.Alias)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -579,6 +579,7 @@ func prefixColNames(tblName sqlparser.TableName, e sqlparser.Expr) (out sqlparse
 }
 
 func createProjectionWithTheseColumns(
+	ctx *plancontext.PlanningContext,
 	src ops.Operator,
 	p *projector,
 	tableID *semantics.TableSet,
@@ -587,7 +588,7 @@ func createProjectionWithTheseColumns(
 	if len(p.cols) == 0 {
 		return src, nil
 	}
-	proj, err := createProjection(src)
+	proj, err := createProjection(ctx, src, "")
 	if err != nil {
 		return nil, err
 	}
