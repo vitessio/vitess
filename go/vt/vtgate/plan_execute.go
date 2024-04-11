@@ -85,9 +85,13 @@ func (e *Executor) newExecute(
 		return err
 	}
 
-	vs := e.VSchema()
-	lastVSchemaCreated := vs.GetCreated()
-	try := 0
+	var (
+		vs                 = e.VSchema()
+		lastVSchemaCreated = vs.GetCreated()
+		result             *sqltypes.Result
+		plan               *engine.Plan
+		try                = 0
+	)
 
 	for ; try < MaxBufferingRetries; try++ {
 		if try > 0 {
@@ -124,7 +128,6 @@ func (e *Executor) newExecute(
 		// punt on this and choose not to prematurely optimize since it is not clear how much caching
 		// will help and if it will result in hard-to-track edge cases.
 
-		var plan *engine.Plan
 		plan, err = e.getPlan(ctx, vcursor, query, stmt, comments, bindVars, reservedVars, e.normalize, logStats)
 		execStart := e.logPlanningFinished(logStats, plan)
 
@@ -142,7 +145,7 @@ func (e *Executor) newExecute(
 			safeSession.RecordWarning(warning)
 		}
 
-		result, err := e.handleTransactions(ctx, mysqlCtx, safeSession, plan, logStats, vcursor, stmt)
+		result, err = e.handleTransactions(ctx, mysqlCtx, safeSession, plan, logStats, vcursor, stmt)
 		if err != nil {
 			return err
 		}
