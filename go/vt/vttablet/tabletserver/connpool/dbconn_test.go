@@ -328,31 +328,6 @@ func TestDBKillWithContext(t *testing.T) {
 	require.ErrorIs(t, err, context.DeadlineExceeded)
 }
 
-func TestDBKillWithContextDoneContext(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	connPool := newPool()
-	params := dbconfigs.New(db.ConnParams())
-	connPool.Open(params, params, params)
-	defer connPool.Close()
-	dbConn, err := newPooledConn(context.Background(), connPool, params)
-	if dbConn != nil {
-		defer dbConn.Close()
-	}
-	require.NoError(t, err)
-
-	query := fmt.Sprintf("kill %d", dbConn.ID())
-	db.AddRejectedQuery(query, errors.New("rejected"))
-
-	contextErr := errors.New("context error")
-	ctx, cancel := context.WithCancelCause(context.Background())
-	cancel(contextErr) // cancel the context immediately
-
-	// KillWithContext should return the cancellation cause
-	err = dbConn.KillWithContext(ctx, "test kill", 0)
-	require.ErrorIs(t, err, contextErr)
-}
-
 // TestDBConnClose tests that an Exec returns immediately if a connection
 // is asynchronously killed (and closed) in the middle of an execution.
 func TestDBConnClose(t *testing.T) {
