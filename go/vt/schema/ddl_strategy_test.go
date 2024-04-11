@@ -384,7 +384,6 @@ func TestParseDDLStrategy(t *testing.T) {
 			assert.Equal(t, ts.isPostponeLaunch, setting.IsPostponeLaunch())
 			assert.Equal(t, ts.isAllowConcurrent, setting.IsAllowConcurrent())
 			assert.Equal(t, ts.fastOverRevertible, setting.IsPreferInstantDDL())
-			assert.True(t, setting.IsFastRangeRotationFlag())
 			assert.Equal(t, ts.allowForeignKeys, setting.IsAllowForeignKeysFlag())
 			assert.Equal(t, ts.analyzeTable, setting.IsAnalyzeTableFlag())
 			cutOverThreshold, err := setting.CutOverThreshold()

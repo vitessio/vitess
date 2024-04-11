@@ -207,11 +207,6 @@ func (setting *DDLStrategySetting) IsPreferInstantDDL() bool {
 	return setting.hasFlag(preferInstantDDL)
 }
 
-// IsFastRangeRotationFlag checks if strategy options include --fast-range-rotation
-func (setting *DDLStrategySetting) IsFastRangeRotationFlag() bool {
-	return true
-}
-
 // isCutOverThresholdFlag returns true when given option denotes a `--cut-over-threshold=[...]` flag
 func isCutOverThresholdFlag(opt string) (string, bool) {
 	submatch := cutOverThresholdFlagRegexp.FindStringSubmatch(opt)
