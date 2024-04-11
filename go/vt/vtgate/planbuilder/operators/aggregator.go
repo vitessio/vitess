@@ -109,6 +109,13 @@ func (a *Aggregator) isDerived() bool {
 	return a.TableID != nil
 }
 
+func (a *Aggregator) derivedName() string {
+	if a.TableID == nil {
+		return ""
+	}
+	return a.Alias
+}
+
 func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, _, addToGroupBy bool) (ops.Operator, int, error) {
 	if addToGroupBy {
 		return nil, 0, vterrors.VT13001("did not expect to add group by here")

@@ -92,6 +92,13 @@ func (p *Projection) isDerived() bool {
 	return p.TableID != nil
 }
 
+func (p *Projection) derivedName() string {
+	if p.TableID == nil {
+		return ""
+	}
+	return p.Alias
+}
+
 func (p *Projection) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, _, addToGroupBy bool) (ops.Operator, int, error) {
 	if offset, found := canReuseColumn(ctx, p.Columns, expr.Expr, extractExpr); found {
 		return p, offset, nil

@@ -531,14 +531,26 @@ func (r *Route) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 	return r, err
 }
 
-func createProjection(src ops.Operator) (*Projection, error) {
+func createProjection(ctx *plancontext.PlanningContext, src ops.Operator, derivedName string) (*Projection, error) {
 	proj := &Projection{Source: src}
 	cols, err := src.GetColumns()
 	if err != nil {
 		return nil, err
 	}
 	for _, col := range cols {
-		proj.addUnexploredExpr(col, col.Expr)
+		if derivedName == "" {
+			proj.addUnexploredExpr(col, col.Expr)
+			continue
+		}
+
+		// for derived tables, we want to use the exposed colname
+		tableName := sqlparser.TableName{
+			Name: sqlparser.NewIdentifierCS(derivedName),
+		}
+		columnName := col.ColumnName()
+		colName := sqlparser.NewColNameWithQualifier(columnName, tableName)
+		ctx.SemTable.CopyDependencies(col.Expr, colName)
+		proj.addUnexploredExpr(aeWrap(colName), colName)
 	}
 	return proj, nil
 }
@@ -560,19 +572,20 @@ func (r *Route) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.Alia
 
 	// if column is not already present, we check if we can easily find a projection
 	// or aggregation in our source that we can add to
-	if ok, offset := addColumnToInput(r.Source, expr, addToGroupBy); ok {
+	derived, ok, offset := addColumnToInput(r.Source, expr, addToGroupBy)
+	if ok {
 		return r, offset, nil
 	}
 
 	// If no-one could be found, we probably don't have one yet, so we add one here
-	src, err := createProjection(r.Source)
+	src, err := createProjection(ctx, r.Source, derived)
 	if err != nil {
 		return nil, 0, err
 	}
 	r.Source = src
 
 	// And since we are under the route, we don't need to continue pushing anything further down
-	offset := src.addColumnWithoutPushing(expr, false)
+	offset = src.addColumnWithoutPushing(expr, false)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -582,9 +595,14 @@ func (r *Route) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.Alia
 type selectExpressions interface {
 	addColumnWithoutPushing(expr *sqlparser.AliasedExpr, addToGroupBy bool) int
 	isDerived() bool
+	derivedName() string
 }
 
-func addColumnToInput(operator ops.Operator, expr *sqlparser.AliasedExpr, addToGroupBy bool) (bool, int) {
+func addColumnToInput(operator ops.Operator, expr *sqlparser.AliasedExpr, addToGroupBy bool) (
+	derivedName string, // if we found a derived table, this will contain its name
+	found bool, // whether a matching op was found or not
+	offset int, // the offsets the expressions received
+) {
 	switch op := operator.(type) {
 	case *CorrelatedSubQueryOp:
 		return addColumnToInput(op.Outer, expr, addToGroupBy)
@@ -592,16 +610,19 @@ func addColumnToInput(operator ops.Operator, expr *sqlparser.AliasedExpr, addToG
 		return addColumnToInput(op.Source, expr, addToGroupBy)
 	case *Ordering:
 		return addColumnToInput(op.Source, expr, addToGroupBy)
+	case *Derived:
+		// Get the alias for the derived table. We should use this for creating the projection.
+		return op.Alias, false, 0
 	case selectExpressions:
 		if op.isDerived() {
 			// if the only thing we can push to is a derived table,
 			// we have to add a new projection and can't build on this one
-			return false, 0
+			return op.derivedName(), false, 0
 		}
 		offset := op.addColumnWithoutPushing(expr, addToGroupBy)
-		return true, offset
+		return "", true, offset
 	default:
-		return false, 0
+		return "", false, 0
 	}
 }
 
