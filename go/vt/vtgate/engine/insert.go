@@ -174,9 +174,16 @@ func (ins *Insert) executeInsertQueries(
 		return nil, vterrors.Aggregate(errs)
 	}
 
+	// If this insert used auto increment values from a sequence, we need to set the `last_insert_id` value.
 	if insertID != 0 {
-		result.InsertID = insertID
+		// If no rows were inserted or updated, clear the `last_insert_id` value.
+		if result.RowsAffected > 0 {
+			result.InsertID = insertID
+		} else {
+			result.InsertID = 0
+		}
 	}
+
 	return result, nil
 }
 
