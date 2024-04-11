@@ -542,7 +542,8 @@ func (sm *stateManager) connect(tabletType topodatapb.TabletType) error {
 }
 
 func (sm *stateManager) unserveCommon() {
-	defer sm.markClusterAction(false)
+	sm.markClusterAction(ClusterActionInProgress)
+	defer sm.markClusterAction(ClusterActionNotInProgress)
 	// We create a wait group that tracks whether all the queries have been terminated or not.
 	wg := sync.WaitGroup{}
 	wg.Add(1)
@@ -603,7 +604,7 @@ func (sm *stateManager) terminateAllQueries(wg *sync.WaitGroup) (cancel func()) 
 			return
 		}
 		// Prevent any new queries from being added before we kill all the queries in the list.
-		sm.markClusterAction(true)
+		sm.markClusterAction(ClusterActionNoQueries)
 		log.Infof("Grace Period %v exceeded. Killing all OLTP queries.", sm.shutdownGracePeriod)
 		sm.statelessql.TerminateAll()
 		log.Infof("Killed all stateless OLTP queries.")
@@ -855,8 +856,8 @@ func (sm *stateManager) SetUnhealthyThreshold(v time.Duration) {
 }
 
 // markClusterAction marks whether a cluster action is in progress or not for all the query details.
-func (sm *stateManager) markClusterAction(inProgress bool) {
-	sm.statefulql.SetClusterAction(inProgress)
-	sm.statelessql.SetClusterAction(inProgress)
-	sm.olapql.SetClusterAction(inProgress)
+func (sm *stateManager) markClusterAction(ca ClusterActionState) {
+	sm.statefulql.SetClusterAction(ca)
+	sm.statelessql.SetClusterAction(ca)
+	sm.olapql.SetClusterAction(ca)
 }

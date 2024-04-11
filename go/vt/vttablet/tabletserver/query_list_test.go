@@ -102,11 +102,16 @@ func TestClusterAction(t *testing.T) {
 	connID := int64(1)
 	qd1 := NewQueryDetail(context.Background(), &testConn{id: connID})
 
-	ql.SetClusterAction(true)
+	ql.SetClusterAction(ClusterActionInProgress)
+	ql.SetClusterAction(ClusterActionNoQueries)
 	err := ql.Add(qd1)
 	require.ErrorContains(t, err, "operation not allowed in state SHUTTING_DOWN")
 
-	ql.SetClusterAction(false)
+	ql.SetClusterAction(ClusterActionNotInProgress)
+	err = ql.Add(qd1)
+	require.NoError(t, err)
+	// If the current state is not in progress, then setting no queries, shouldn't change anything.
+	ql.SetClusterAction(ClusterActionNoQueries)
 	err = ql.Add(qd1)
 	require.NoError(t, err)
 }

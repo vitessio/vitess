@@ -60,32 +60,44 @@ type QueryList struct {
 	// and remove appropriately.
 	queryDetails map[int64][]*QueryDetail
 
-	parser                  *sqlparser.Parser
-	clusterActionInProgress bool
+	parser *sqlparser.Parser
+	ca     ClusterActionState
 }
+
+type ClusterActionState int
+
+const (
+	ClusterActionNotInProgress ClusterActionState = iota
+	ClusterActionInProgress    ClusterActionState = iota
+	ClusterActionNoQueries     ClusterActionState = iota
+)
 
 // NewQueryList creates a new QueryList
 func NewQueryList(name string, parser *sqlparser.Parser) *QueryList {
 	return &QueryList{
-		name:                    name,
-		queryDetails:            make(map[int64][]*QueryDetail),
-		parser:                  parser,
-		clusterActionInProgress: false,
+		name:         name,
+		queryDetails: make(map[int64][]*QueryDetail),
+		parser:       parser,
+		ca:           ClusterActionNotInProgress,
 	}
 }
 
 // SetClusterAction sets the clusterActionInProgress field.
-func (ql *QueryList) SetClusterAction(inProgress bool) {
+func (ql *QueryList) SetClusterAction(ca ClusterActionState) {
 	ql.mu.Lock()
 	defer ql.mu.Unlock()
-	ql.clusterActionInProgress = inProgress
+	// If the current state is ClusterActionNotInProgress, then we want to ignore setting ClusterActionNoQueries.
+	if ca == ClusterActionNoQueries && ql.ca == ClusterActionNotInProgress {
+		return
+	}
+	ql.ca = ca
 }
 
 // Add adds a QueryDetail to QueryList
 func (ql *QueryList) Add(qd *QueryDetail) error {
 	ql.mu.Lock()
 	defer ql.mu.Unlock()
-	if ql.clusterActionInProgress {
+	if ql.ca == ClusterActionNoQueries {
 		return vterrors.New(vtrpcpb.Code_CLUSTER_EVENT, vterrors.ShuttingDown)
 	}
 	qds, exists := ql.queryDetails[qd.connID]
