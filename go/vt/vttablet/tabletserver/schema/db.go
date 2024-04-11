@@ -61,6 +61,21 @@ HAVING COUNT(*) = 1
 LIMIT 1
 `
 
+	// deleteAllUdfs clears out the udfs table.
+	deleteAllUdfs = `
+DELETE FROM 
+%s.udfs
+`
+
+	// copyUdfs copies user defined function to the udfs table.
+	copyUdfs = `
+INSERT INTO 
+%s.udfs
+SELECT UDF_NAME FROM 
+performance_schema.user_defined_functions 
+WHERE udf_type = 'aggregate'
+`
+
 	// detectViewChange query detects if there is any view change from previous copy.
 	detectViewChange = `
 SELECT distinct table_name
@@ -397,7 +412,7 @@ func (se *Engine) getMismatchedTableNames(ctx context.Context, conn *connpool.Co
 }
 
 // reloadDataInDB reloads the schema tracking data in the database
-func reloadDataInDB(ctx context.Context, conn *connpool.Conn, altered []*Table, created []*Table, dropped []*Table, parser *sqlparser.Parser) error {
+func reloadDataInDB(ctx context.Context, conn *connpool.Conn, altered, created, dropped []*Table, udfsChanged bool, parser *sqlparser.Parser) error {
 	// tablesToReload and viewsToReload stores the tables and views that need reloading and storing in our MySQL database.
 	var tablesToReload, viewsToReload []*Table
 	// droppedTables, droppedViews stores the list of tables and views we need to delete, respectively.
@@ -427,6 +442,42 @@ func reloadDataInDB(ctx context.Context, conn *connpool.Conn, altered []*Table, 
 	if err := reloadViewsDataInDB(ctx, conn, viewsToReload, droppedViews, parser); err != nil {
 		return err
 	}
+	if err := reloadUdfsInDB(ctx, conn, udfsChanged, parser); err != nil {
+		return err
+	}
+	return nil
+}
+
+func reloadUdfsInDB(ctx context.Context, conn *connpool.Conn, udfsChanged bool, parser *sqlparser.Parser) error {
+	if !udfsChanged {
+		return nil
+	}
+
+	clearUdfQuery := sqlparser.BuildParsedQuery(deleteAllUdfs, sidecar.GetIdentifier()).Query
+	copyUdfQuery := sqlparser.BuildParsedQuery(copyUdfs, sidecar.GetIdentifier()).Query
+
+	// Reload the udfs in a transaction.
+	_, err := conn.Exec(ctx, "begin", 1, false)
+	if err != nil {
+		return err
+	}
+	defer conn.Exec(ctx, "rollback", 1, false)
+
+	_, err = conn.Exec(ctx, clearUdfQuery, 1, false)
+	if err != nil {
+		return err
+	}
+
+	_, err = conn.Exec(ctx, copyUdfQuery, 1, false)
+	if err != nil {
+		return err
+	}
+
+	_, err = conn.Exec(ctx, "commit", 1, false)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 

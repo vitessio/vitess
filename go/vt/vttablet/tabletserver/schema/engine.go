@@ -541,7 +541,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 	if shouldUseDatabase {
 		// If reloadDataInDB succeeds, then we don't want to prevent sending the broadcast notification.
 		// So, we do this step in the end when we can receive no more errors that fail the reload operation.
-		err = reloadDataInDB(ctx, conn.Conn, altered, created, dropped, se.env.Environment().Parser())
+		err = reloadDataInDB(ctx, conn.Conn, altered, created, dropped, udfsChanged, se.env.Environment().Parser())
 		if err != nil {
 			log.Errorf("error in updating schema information in Engine.reload() - %v", err)
 		}
