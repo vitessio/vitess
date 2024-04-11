@@ -347,6 +347,13 @@ func assertQueryDoesNotExecutesOnTablet(t *testing.T, conn *mysql.Conn, tablet *
 	assert.Equalf(t, count0, count1, "query %q executed in target;\ntried to match %q\nbefore:\n%s\n\nafter:\n%s\n\n", query, matchQuery, body0, body1)
 }
 
+func waitForWorkflowToBeCreated(t *testing.T, vc *VitessCluster, ksWorkflow string) {
+	require.NoError(t, waitForCondition("workflow to be created", func() bool {
+		_, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", ksWorkflow, "show")
+		return err == nil
+	}, defaultTimeout))
+}
+
 // waitForWorkflowState waits for all of the given workflow's
 // streams to reach the provided state. You can pass optional
 // key value pairs of the form "key==value" to also wait for
