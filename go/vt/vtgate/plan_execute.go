@@ -37,9 +37,8 @@ import (
 type planExec func(ctx context.Context, plan *engine.Plan, vc *vcursorImpl, bindVars map[string]*querypb.BindVariable, startTime time.Time) error
 type txResult func(sqlparser.StatementType, *sqltypes.Result) error
 
-func waitForNewerVSchema(ctx context.Context, e *Executor, lastVSchemaCreated time.Time) bool {
-	timeout := 30 * time.Second
-	pollingInterval := 10 * time.Millisecond
+func waitForNewerVSchema(ctx context.Context, e *Executor, lastVSchemaCreated time.Time, timeout time.Duration) bool {
+	pollingInterval := timeout / 100
 	waitCtx, cancel := context.WithTimeout(ctx, timeout)
 	ticker := time.NewTicker(pollingInterval)
 	defer ticker.Stop()
@@ -103,7 +102,8 @@ func (e *Executor) newExecute(
 				// There is a race due to which the executor's vschema may not have been updated yet.
 				// Without a wait we fail non-deterministically since the previous vschema will not have
 				// the updated routing rules.
-				if waitForNewerVSchema(ctx, e, lastVSchemaCreated) {
+				timeout := e.resolver.scatterConn.gateway.buffer.GetConfig().MinTimeBetweenFailovers / MaxBufferingRetries
+				if waitForNewerVSchema(ctx, e, lastVSchemaCreated, timeout) {
 					lastVSchemaCreated = vs.GetCreated()
 				}
 			}
