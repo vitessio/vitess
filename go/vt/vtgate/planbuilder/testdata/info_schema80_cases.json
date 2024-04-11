@@ -1284,8 +1284,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select table_name from (select table_name from information_schema.`tables` where 1 != 1) as `tables` where 1 != 1",
-            "Query": "select table_name from (select table_name from information_schema.`tables` where table_schema != 'information_schema' limit 1) as `tables`",
+            "FieldQuery": "select `tables`.table_name from (select table_name from information_schema.`tables` where 1 != 1) as `tables` where 1 != 1",
+            "Query": "select `tables`.table_name from (select table_name from information_schema.`tables` where table_schema != 'information_schema' limit 1) as `tables`",
             "Table": "information_schema.`tables`"
           },
           {
