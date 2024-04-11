@@ -184,6 +184,12 @@ func (w *FakeHeartbeatWriter) Requests() int64 {
 	return w.requests.Load()
 }
 
+func init() {
+	for metricName, metric := range selfMetrics {
+		metric.Name = metricName
+	}
+}
+
 func TestGetAggregatedMetricName(t *testing.T) {
 	assert.Equal(t, "self", getAggregatedMetricName("self", base.DefaultMetricName))
 	assert.Equal(t, "self/lag", getAggregatedMetricName("self", base.LagMetricName))
@@ -232,8 +238,7 @@ func newTestThrottler() *Throttler {
 	throttler.recentCheckDormantDiff = int64(throttler.dormantPeriod / recentCheckRateLimiterInterval)
 
 	throttler.readSelfThrottleMetrics = func(ctx context.Context) mysql.MySQLThrottleMetrics {
-		for metricName, metric := range selfMetrics {
-			metric.Name = metricName
+		for _, metric := range selfMetrics {
 			go func() { throttler.mysqlThrottleMetricChan <- metric }()
 		}
 		return selfMetrics
