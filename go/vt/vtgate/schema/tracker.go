@@ -19,6 +19,7 @@ package schema
 import (
 	"context"
 	"maps"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -45,6 +46,7 @@ type (
 		mu     sync.Mutex
 		tables *tableMap
 		views  *viewMap
+		udfs   map[keyspaceStr][]string
 		ctx    context.Context
 		signal func() // a function that we'll call whenever we have new schema data
 
@@ -66,6 +68,7 @@ func NewTracker(ch chan *discovery.TabletHealth, enableViews bool, parser *sqlpa
 		ch:           ch,
 		tables:       &tableMap{m: make(map[keyspaceStr]map[tableNameStr]*vindexes.TableInfo)},
 		tracked:      map[keyspaceStr]*updateController{},
+		udfs:         map[keyspaceStr][]string{},
 		consumeDelay: defaultConsumeDelay,
 		parser:       parser,
 	}
@@ -83,6 +86,10 @@ func (t *Tracker) LoadKeyspace(conn queryservice.QueryService, target *querypb.T
 		return err
 	}
 	err = t.loadViews(conn, target)
+	if err != nil {
+		return err
+	}
+	err = t.loadUDFs(conn, target)
 	if err != nil {
 		return err
 	}
@@ -143,6 +150,26 @@ func (t *Tracker) loadViews(conn queryservice.QueryService, target *querypb.Targ
 		return err
 	}
 	log.Infof("finished loading views for keyspace %s. Found %d views", target.Keyspace, numViews)
+	return nil
+}
+
+func (t *Tracker) loadUDFs(conn queryservice.QueryService, target *querypb.Target) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	err := conn.GetSchema(t.ctx, target, querypb.SchemaTableType_UDF, nil, func(schemaRes *querypb.GetSchemaResponse) error {
+		var udfs []string
+		for name := range schemaRes.TableDefinition {
+			udfs = append(udfs, name)
+		}
+
+		t.udfs[target.Keyspace] = udfs
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	log.Infof("finished loading UDFs for keyspace %s", target.Keyspace)
 	return nil
 }
 
@@ -253,6 +280,13 @@ func (t *Tracker) Views(ks string) map[string]sqlparser.SelectStatement {
 
 	m := t.views.m[ks]
 	return maps.Clone(m)
+}
+
+func (t *Tracker) UDFs(ks string) []string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	return slices.Clone(t.udfs[ks])
 }
 
 func (t *Tracker) updateSchema(th *discovery.TabletHealth) bool {

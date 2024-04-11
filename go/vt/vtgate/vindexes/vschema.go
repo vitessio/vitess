@@ -243,6 +243,7 @@ type KeyspaceSchema struct {
 	Tables          map[string]*Table
 	Vindexes        map[string]Vindex
 	Views           map[string]sqlparser.SelectStatement
+	AggregateUDFs   []string
 	Error           error
 	MultiTenantSpec *vschemapb.MultiTenantSpec
 }

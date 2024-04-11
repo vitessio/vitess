@@ -3,6 +3,8 @@ package vtgate
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/utils"
@@ -762,6 +764,24 @@ func TestVSchemaUpdateWithFKReferenceToInternalTables(t *testing.T) {
 	utils.MustMatch(t, vs, vm.currentVschema, "currentVschema should have same reference as Vschema")
 }
 
+func TestVSchemaUpdateUDFInfo(t *testing.T) {
+	vm := &VSchemaManager{}
+	var vs *vindexes.VSchema
+	vm.subscriber = func(vschema *vindexes.VSchema, _ *VSchemaStats) {
+		vs = vschema
+		vs.ResetCreated()
+	}
+	funcs := []string{"udf1", "udf2"}
+	vm.schema = &fakeSchema{udfs: funcs}
+	vm.VSchemaUpdate(&vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"ks": {Sharded: true},
+		},
+	}, nil)
+
+	assert.Equal(t, funcs, vs.Keyspaces["ks"].AggregateUDFs)
+}
+
 // createFkDefinition is a helper function to create a Foreign key definition struct from the columns used in it provided as list of strings.
 func createFkDefinition(childCols []string, parentTableName string, parentCols []string, onUpdate, onDelete sqlparser.ReferenceAction) *sqlparser.ForeignKeyDefinition {
 	pKs, pTbl, _ := sqlparser.NewTestParser().ParseTable(parentTableName)
@@ -813,7 +833,8 @@ func makeTestSrvVSchema(ks string, sharded bool, tbls map[string]*vschemapb.Tabl
 }
 
 type fakeSchema struct {
-	t map[string]*vindexes.TableInfo
+	t    map[string]*vindexes.TableInfo
+	udfs []string
 }
 
 func (f *fakeSchema) Tables(string) map[string]*vindexes.TableInfo {
@@ -823,5 +844,6 @@ func (f *fakeSchema) Tables(string) map[string]*vindexes.TableInfo {
 func (f *fakeSchema) Views(string) map[string]sqlparser.SelectStatement {
 	return nil
 }
+func (f *fakeSchema) UDFs(string) []string { return f.udfs }
 
 var _ SchemaInfo = (*fakeSchema)(nil)
