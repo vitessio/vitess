@@ -19,8 +19,9 @@ package throttler
 import (
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestThrottlerzHandler_MissingSlash(t *testing.T) {
@@ -30,9 +31,8 @@ func TestThrottlerzHandler_MissingSlash(t *testing.T) {
 
 	throttlerzHandler(response, request, m)
 
-	if got, want := response.Body.String(), "invalid /throttlerz path"; !strings.Contains(got, want) {
-		t.Fatalf("/throttlerz without the slash does not work (the Go HTTP server does automatically redirect in practice though). got = %v, want = %v", got, want)
-	}
+	got := response.Body.String()
+	require.Contains(t, got, "invalid /throttlerz path", "/throttlerz without the slash does not work (the Go HTTP server does automatically redirect in practice though)")
 }
 
 func TestThrottlerzHandler_List(t *testing.T) {
@@ -47,12 +47,9 @@ func TestThrottlerzHandler_List(t *testing.T) {
 
 	throttlerzHandler(response, request, f.m)
 
-	if got, want := response.Body.String(), `<a href="/throttlerz/t1">t1</a>`; !strings.Contains(got, want) {
-		t.Fatalf("list does not include 't1'. got = %v, want = %v", got, want)
-	}
-	if got, want := response.Body.String(), `<a href="/throttlerz/t2">t2</a>`; !strings.Contains(got, want) {
-		t.Fatalf("list does not include 't1'. got = %v, want = %v", got, want)
-	}
+	got := response.Body.String()
+	require.Contains(t, got, `<a href="/throttlerz/t1">t1</a>`, "list does not include 't1'")
+	require.Contains(t, got, `<a href="/throttlerz/t2">t2</a>`, "list does not include 't2'")
 }
 
 func TestThrottlerzHandler_Details(t *testing.T) {
@@ -67,7 +64,6 @@ func TestThrottlerzHandler_Details(t *testing.T) {
 
 	throttlerzHandler(response, request, f.m)
 
-	if got, want := response.Body.String(), `<title>Details for Throttler 't1'</title>`; !strings.Contains(got, want) {
-		t.Fatalf("details for 't1' not shown. got = %v, want = %v", got, want)
-	}
+	got := response.Body.String()
+	require.Contains(t, got, `<title>Details for Throttler 't1'</title>`, "details for 't1' not shown")
 }

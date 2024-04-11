@@ -19,8 +19,9 @@ package throttler
 import (
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestThrottlerlogzHandler_MissingSlash(t *testing.T) {
@@ -30,9 +31,8 @@ func TestThrottlerlogzHandler_MissingSlash(t *testing.T) {
 
 	throttlerlogzHandler(response, request, m)
 
-	if got, want := response.Body.String(), "invalid /throttlerlogz path"; !strings.Contains(got, want) {
-		t.Fatalf("/throttlerlogz without the slash does not work (the Go HTTP server does automatically redirect in practice though). got = %v, want = %v", got, want)
-	}
+	got := response.Body.String()
+	require.Contains(t, got, "invalid /throttlerlogz path", "/throttlerlogz without the slash does not work (the Go HTTP server does automatically redirect in practice though)")
 }
 
 func TestThrottlerlogzHandler_NonExistantThrottler(t *testing.T) {
@@ -41,9 +41,8 @@ func TestThrottlerlogzHandler_NonExistantThrottler(t *testing.T) {
 
 	throttlerlogzHandler(response, request, newManager())
 
-	if got, want := response.Body.String(), `throttler not found`; !strings.Contains(got, want) {
-		t.Fatalf("/throttlerlogz page for non-existent t1 should not succeed. got = %v, want = %v", got, want)
-	}
+	got := response.Body.String()
+	require.Contains(t, got, "throttler not found", "/throttlerlogz page for non-existent t1 should not succeed")
 }
 
 func TestThrottlerlogzHandler(t *testing.T) {
@@ -152,8 +151,6 @@ func TestThrottlerlogzHandler(t *testing.T) {
 		throttlerlogzHandler(response, request, f.m)
 
 		got := response.Body.String()
-		if !strings.Contains(got, tc.want) {
-			t.Fatalf("testcase '%v': result not shown in log. got = %v, want = %v", tc.desc, got, tc.want)
-		}
+		require.Containsf(t, got, tc.want, "testcase '%v': result not shown in log", tc.desc)
 	}
 }
