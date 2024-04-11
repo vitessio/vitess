@@ -431,7 +431,9 @@ func TestInsertShardedWithOnDuplicateKeyNoInserts(t *testing.T) {
 
 	vitessResult = utils.Exec(t, mcmp.VtConn, query)
 	assert.Equal(t, mysqlResult.RowsAffected, vitessResult.RowsAffected)
-	assert.Equal(t, mysqlResult.InsertID, vitessResult.InsertID)
+	// Vitess can't return the `auto_increment` value of the last updated row, but it returns a value larger than 0.
+	assert.Greater(t, vitessResult.InsertID, uint64(0))
+	assert.NotEqual(t, mysqlResult.InsertID, vitessResult.InsertID)
 
 	// Second test case, insert multiple rows, all of which already exist, and change a column on existing rows.
 	query = "insert into last_insert_id_test (sharding_key, user_id, reason) values ('2:2:2', 2, 'qux'), ('1:1:1', 1, 'baz') on duplicate key update reason = VALUES(reason)"
@@ -444,7 +446,9 @@ func TestInsertShardedWithOnDuplicateKeyNoInserts(t *testing.T) {
 
 	vitessResult = utils.Exec(t, mcmp.VtConn, query)
 	assert.Equal(t, mysqlResult.RowsAffected, vitessResult.RowsAffected)
-	assert.Equal(t, mysqlResult.InsertID, vitessResult.InsertID)
+	// Vitess can't return the `auto_increment` value of the last updated row, but it returns a value larger than 0.
+	assert.Greater(t, vitessResult.InsertID, uint64(0))
+	assert.NotEqual(t, mysqlResult.InsertID, vitessResult.InsertID)
 
 	// Third test case, insert multiple rows, some of which already exist, and change a column on existing rows.
 	query = "insert into last_insert_id_test (sharding_key, user_id, reason) values ('3:3:3', 3, 'apa'), ('2:2:2', 2, 'bpa'), ('1:1:1', 1, 'cpa') on duplicate key update reason = VALUES(reason)"
