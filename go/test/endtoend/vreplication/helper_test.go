@@ -350,10 +350,7 @@ func assertQueryDoesNotExecutesOnTablet(t *testing.T, conn *mysql.Conn, tablet *
 func waitForWorkflowToBeCreated(t *testing.T, vc *VitessCluster, ksWorkflow string) {
 	require.NoError(t, waitForCondition("workflow to be created", func() bool {
 		_, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", ksWorkflow, "show")
-		if err == nil {
-			return true
-		}
-		return false
+		return err == nil
 	}, defaultTimeout))
 }
 
