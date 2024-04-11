@@ -189,6 +189,7 @@ type Throttler struct {
 	mysqlThrottleMetricChan chan *mysql.MySQLThrottleMetric
 	mysqlClusterProbesChan  chan *mysql.ClusterProbes
 	throttlerConfigChan     chan *topodatapb.ThrottlerConfig
+	serialFuncChan          chan func() // Used by unit tests to inject non-racy behavior
 
 	mysqlInventory *mysql.Inventory
 
@@ -253,6 +254,7 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 	throttler.mysqlThrottleMetricChan = make(chan *mysql.MySQLThrottleMetric)
 	throttler.mysqlClusterProbesChan = make(chan *mysql.ClusterProbes)
 	throttler.throttlerConfigChan = make(chan *topodatapb.ThrottlerConfig)
+	throttler.serialFuncChan = make(chan func())
 	throttler.mysqlInventory = mysql.NewInventory()
 
 	throttler.throttledApps = cache.New(cache.NoExpiration, 0)
@@ -891,6 +893,9 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 				}
 			case throttlerConfig := <-throttler.throttlerConfigChan:
 				throttler.applyThrottlerConfig(ctx, throttlerConfig)
+			case f := <-throttler.serialFuncChan:
+				// Used in unit testing to serialize operations and avoid race conditions
+				f()
 			}
 		}
 	}()

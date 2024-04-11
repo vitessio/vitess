@@ -216,6 +216,7 @@ func newTestThrottler() *Throttler {
 	throttler.mysqlThrottleMetricChan = make(chan *mysql.MySQLThrottleMetric)
 	throttler.mysqlClusterProbesChan = make(chan *mysql.ClusterProbes)
 	throttler.throttlerConfigChan = make(chan *topodatapb.ThrottlerConfig)
+	throttler.serialFuncChan = make(chan func())
 	throttler.mysqlInventory = mysql.NewInventory()
 
 	throttler.throttledApps = cache.New(cache.NoExpiration, 0)
@@ -245,6 +246,20 @@ func newTestThrottler() *Throttler {
 	}
 
 	return throttler
+}
+
+func runSequentialFunction(t *testing.T, ctx context.Context, throttler *Throttler, f func(context.Context)) {
+	var wg sync.WaitGroup
+	wg.Add(1)
+	select {
+	case throttler.serialFuncChan <- func() {
+		defer wg.Done()
+		f(ctx)
+	}:
+	case <-ctx.Done():
+		assert.FailNow(t, ctx.Err().Error(), "waiting for runSequentially")
+	}
+	wg.Wait()
 }
 
 func TestIsAppThrottled(t *testing.T) {
@@ -509,7 +524,10 @@ func TestProbesWhileOperating(t *testing.T) {
 			// Hence, the throttler will choose to set the "custom" metric results in the aggregated "default" metrics,
 			// as opposed to choosing the "lag" metric results.
 			throttler.customMetricsQuery.Store("select non_empty")
-			throttler.aggregateMySQLMetrics(ctx)
+			runSequentialFunction(t, ctx, throttler, func(ctx context.Context) {
+				throttler.aggregateMySQLMetrics(ctx)
+			})
+			// throttler.aggregateMySQLMetrics(ctx)
 			aggr := throttler.aggregatedMetricsSnapshot()
 			assert.Equalf(t, 2*len(base.KnownMetricNames), len(aggr), "aggregated: %+v", aggr)     // "self" and "shard", per known metric
 			assert.Equal(t, 2*len(base.KnownMetricNames), throttler.aggregatedMetrics.ItemCount()) // flushed upon Disable()
