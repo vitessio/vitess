@@ -65,7 +65,7 @@ func (e *Executor) newExecute(
 	execPlan planExec, // used when there is a plan to execute
 	recResult txResult, // used when it's something simple like begin/commit/rollback/savepoint
 ) (err error) {
-	// 1: Prepare before planning and execution
+	// 1: Prepare before planning and execution.
 
 	// Start an implicit transaction if necessary.
 	err = e.startTxIfNecessary(ctx, safeSession)
@@ -79,7 +79,7 @@ func (e *Executor) newExecute(
 
 	query, comments := sqlparser.SplitMarginComments(sql)
 
-	// 2: Parse and Validate query
+	// 2: Parse and Validate query.
 	stmt, reservedVars, err := parseAndValidateQuery(query, e.env.Parser())
 	if err != nil {
 		return err
@@ -106,12 +106,12 @@ func (e *Executor) newExecute(
 				// There is a race due to which the executor's vschema may not have been updated yet.
 				// Without a wait we fail non-deterministically since the previous vschema will not have
 				// the updated routing rules.
-				timeout := e.resolver.scatterConn.gateway.buffer.GetConfig().MinTimeBetweenFailovers / MaxBufferingRetries
+				timeout := e.resolver.scatterConn.gateway.buffer.GetConfig().MaxFailoverDuration / MaxBufferingRetries
 				if waitForNewerVSchema(ctx, e, lastVSchemaCreated, timeout) {
+					vs = e.VSchema()
 					lastVSchemaCreated = vs.GetCreated()
 				}
 			}
-			vs = e.VSchema() // We're going to replan either way, so let's use the current vschema.
 		}
 
 		vcursor, err := newVCursorImpl(safeSession, comments, e, logStats, e.vm, vs, e.resolver.resolver, e.serv, e.warnShardedOnly, e.pv)
@@ -119,15 +119,13 @@ func (e *Executor) newExecute(
 			return err
 		}
 
-		// 3: Create a plan for the query
+		// 3: Create a plan for the query.
 		// If we are retrying, it is likely that the routing rules have changed and hence we need to
 		// replan the query since the target keyspace of the resolved shards may have changed as a
-		// result of MoveTables. So we cannot reuse the plan from the first try.
-		// When buffering ends, many queries might be getting planned at the same time. Ideally we
-		// should be able to reuse plans once the first drained query has been planned. For now, we
-		// punt on this and choose not to prematurely optimize since it is not clear how much caching
-		// will help and if it will result in hard-to-track edge cases.
-
+		// result of MoveTables SwitchTraffic which does a RebuildSrvVSchema which in turn causes
+		// the vtgate to clear the cached plans when processing the new serving vschema.
+		// When buffering ends, many queries might be getting planned at the same time and we then
+		// take full advatange of the cached plan.
 		plan, err = e.getPlan(ctx, vcursor, query, stmt, comments, bindVars, reservedVars, e.normalize, logStats)
 		execStart := e.logPlanningFinished(logStats, plan)
 
@@ -140,7 +138,7 @@ func (e *Executor) newExecute(
 			safeSession.ClearWarnings()
 		}
 
-		// add any warnings that the planner wants to add
+		// Add any warnings that the planner wants to add.
 		for _, warning := range plan.Warnings {
 			safeSession.RecordWarning(warning)
 		}
@@ -153,14 +151,14 @@ func (e *Executor) newExecute(
 			return recResult(plan.Type, result)
 		}
 
-		// 4: Prepare for execution
+		// 4: Prepare for execution.
 		err = e.addNeededBindVars(vcursor, plan.BindVarNeeds, bindVars, safeSession)
 		if err != nil {
 			logStats.Error = err
 			return err
 		}
 
-		// 5: Execute the plan and retry if needed
+		// 5: Execute the plan.
 		if plan.Instructions.NeedsTransaction() {
 			err = e.insideTransaction(ctx, safeSession, logStats,
 				func() error {
@@ -174,6 +172,7 @@ func (e *Executor) newExecute(
 			return err
 		}
 
+		// 6: Retry if needed.
 		rootCause := vterrors.RootCause(err)
 		if rootCause != nil && strings.Contains(rootCause.Error(), "enforce denied tables") {
 			log.V(2).Infof("Retry: %d, will retry query %s due to %v", try, query, err)
