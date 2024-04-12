@@ -537,6 +537,11 @@ func TestHavingColumnName(t *testing.T) {
 		expDeps: TS0,
 		warning: "Column 'foo' in having clause is ambiguous",
 	}, {
+		sql:     "select id, sum(t1.foo) as foo from t1 having custom_udf(foo) > 1",
+		expSQL:  "select id, sum(t1.foo) as foo from t1 having custom_udf(foo) > 1",
+		expDeps: TS0,
+		warning: "Column 'foo' in having clause is ambiguous",
+	}, {
 		sql:    "select id, sum(t1.foo) as XYZ from t1 having sum(XYZ) > 1",
 		expErr: "Invalid use of group function",
 	}, {

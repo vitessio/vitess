@@ -78,6 +78,7 @@ func (a *analyzer) lateInit() {
 		aliasMapCache:   map[*sqlparser.Select]map[string]exprContainer{},
 		reAnalyze:       a.reAnalyze,
 		tables:          a.tables,
+		aggrUDFs:        a.si.GetAggregateUDFs(),
 	}
 	a.fk = &fkManager{
 		binder:   a.binder,

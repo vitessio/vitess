@@ -41,6 +41,7 @@ type earlyRewriter struct {
 	// have happened, and we are introducing or changing the AST. We invoke it so all parts of the query have been
 	// typed, scoped and bound correctly
 	reAnalyze func(n sqlparser.SQLNode) error
+	aggrUDFs  []string
 }
 
 func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
@@ -500,6 +501,15 @@ func (r *earlyRewriter) rewriteAliasesInGroupBy(node sqlparser.Expr, sel *sqlpar
 	return
 }
 
+func (at *aggrTracker) isAggregateUDF(name sqlparser.IdentifierCI) bool {
+	for _, aggrUDF := range at.aggrUDFs {
+		if name.EqualString(aggrUDF) {
+			return true
+		}
+	}
+	return false
+}
+
 func (r *earlyRewriter) rewriteAliasesInHaving(node sqlparser.Expr, sel *sqlparser.Select) (expr sqlparser.Expr, err error) {
 	currentScope := r.scoper.currentScope()
 	if currentScope.isUnion {
@@ -508,13 +518,21 @@ func (r *earlyRewriter) rewriteAliasesInHaving(node sqlparser.Expr, sel *sqlpars
 	}
 
 	aliases := r.getAliasMap(sel)
-	aggrTrack := &aggrTracker{}
+	aggrTrack := &aggrTracker{
+		insideAggr: false,
+		aggrUDFs:   r.aggrUDFs,
+	}
 	output := sqlparser.CopyOnRewrite(node, aggrTrack.down, func(cursor *sqlparser.CopyOnWriteCursor) {
 		var col *sqlparser.ColName
 
 		switch node := cursor.Node().(type) {
 		case sqlparser.AggrFunc:
 			aggrTrack.popAggr()
+			return
+		case *sqlparser.FuncExpr:
+			if aggrTrack.isAggregateUDF(node.Name) {
+				aggrTrack.popAggr()
+			}
 			return
 		case *sqlparser.ColName:
 			col = node
@@ -565,14 +583,19 @@ func (r *earlyRewriter) rewriteAliasesInHaving(node sqlparser.Expr, sel *sqlpars
 
 type aggrTracker struct {
 	insideAggr bool
+	aggrUDFs   []string
 }
 
 func (at *aggrTracker) down(node, _ sqlparser.SQLNode) bool {
-	switch node.(type) {
+	switch node := node.(type) {
 	case *sqlparser.Subquery:
 		return false
 	case sqlparser.AggrFunc:
 		at.insideAggr = true
+	case *sqlparser.FuncExpr:
+		if at.isAggregateUDF(node.Name) {
+			at.insideAggr = true
+		}
 	}
 
 	return true
