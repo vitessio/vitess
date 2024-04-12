@@ -590,7 +590,7 @@ func TestDBExecOnceKillTimeout(t *testing.T) {
 	// It should also run into a timeout.
 	var timestampKill atomic.Int64
 	dbConn.killTimeout = 100 * time.Millisecond
-	db.AddQueryPatternWithCallback(`kill \d+`, &sqltypes.Result{}, func(string) {
+	db.AddQueryPatternWithCallback(`kill query \d+`, &sqltypes.Result{}, func(string) {
 		timestampKill.Store(time.Now().UnixMicro())
 		// should take longer than the configured kill timeout above.
 		time.Sleep(200 * time.Millisecond)

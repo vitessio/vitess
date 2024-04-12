@@ -184,7 +184,7 @@ func (dbc *Conn) execOnce(ctx context.Context, query string, maxrows int, wantfi
 
 	select {
 	case <-ctx.Done():
-		_ = dbc.Kill(ctx.Err().Error(), time.Since(now))
+		_ = dbc.KillQuery(ctx.Err().Error(), time.Since(now))
 		return nil, dbc.Err()
 	case r := <-ch:
 		if dbcErr := dbc.Err(); dbcErr != nil {
@@ -280,7 +280,7 @@ func (dbc *Conn) streamOnce(ctx context.Context, query string, callback func(*sq
 
 	select {
 	case <-ctx.Done():
-		_ = dbc.Kill(ctx.Err().Error(), time.Since(now))
+		_ = dbc.KillQuery(ctx.Err().Error(), time.Since(now))
 		return dbc.Err()
 	case err := <-ch:
 		if dbcErr := dbc.Err(); dbcErr != nil {
