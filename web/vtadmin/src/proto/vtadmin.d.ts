@@ -41782,7 +41782,7 @@ export namespace query {
         VIEWS = 0,
         TABLES = 1,
         ALL = 2,
-        UDF = 3
+        UDF_AGGREGATE = 3
     }
 
     /** Properties of a GetSchemaRequest. */

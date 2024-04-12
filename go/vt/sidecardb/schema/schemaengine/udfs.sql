@@ -17,5 +17,7 @@ limitations under the License.
 CREATE TABLE IF NOT EXISTS udfs
 (
     FUNCTION_NAME varchar(128) CHARACTER SET `utf8mb3` COLLATE `utf8mb3_bin` NOT NULL,
+    FUNCTION_RETURN_TYPE varchar(20) CHARACTER SET `utf8mb3` COLLATE `utf8mb3_bin` NOT NULL,
+    FUNCTION_TYPE varchar(20) CHARACTER SET `utf8mb3` COLLATE `utf8mb3_bin` NOT NULL,
     PRIMARY KEY (FUNCTION_NAME)
 ) engine = InnoDB

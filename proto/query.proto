@@ -992,7 +992,7 @@ enum SchemaTableType {
   VIEWS = 0;
   TABLES = 1;
   ALL = 2;
-  UDF = 3;
+  UDF_AGGREGATE = 3;
 }
 
 // GetSchemaRequest is the payload to GetSchema

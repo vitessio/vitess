@@ -49,7 +49,6 @@ SELECT UDF_NAME
 FROM (
 	SELECT UDF_NAME FROM 
 	performance_schema.user_defined_functions 
-	WHERE udf_type = 'aggregate'
 
 	UNION ALL
 
@@ -70,10 +69,9 @@ DELETE FROM
 	// copyUdfs copies user defined function to the udfs table.
 	copyUdfs = `
 INSERT INTO 
-%s.udfs
-SELECT UDF_NAME FROM 
+%s.udfs(FUNCTION_NAME, FUNCTION_RETURN_TYPE, FUNCTION_TYPE)
+SELECT UDF_NAME, UDF_RETURN_TYPE, UDF_TYPE FROM 
 performance_schema.user_defined_functions 
-WHERE udf_type = 'aggregate'
 `
 
 	// detectViewChange query detects if there is any view change from previous copy.
@@ -119,6 +117,9 @@ where table_schema = database() and table_name in ::viewNames`
 
 	// fetchTablesAndViews queries fetches all information about tables and views
 	fetchTablesAndViews = `select table_name, create_statement from %s.tables where table_schema = database() union select table_name, create_statement from %s.views where table_schema = database()`
+
+	// fetchAggregateUdfs queries fetches all the aggregate user defined functions.
+	fetchAggregateUdfs = `select function_name, function_return_type from %s.udfs where function_type = 'AGGREGATE'`
 )
 
 // reloadTablesDataInDB reloads teh tables information we have stored in our database we use for schema-tracking.
@@ -548,4 +549,13 @@ func GetFetchTableAndViewsQuery(tableNames []string, parser *sqlparser.Parser) (
 		return "", err
 	}
 	return parsedQuery.GenerateQuery(bv, nil)
+}
+
+// GetFetchUDFsQuery gets the fetch query to retrieve all the UDFs.
+func GetFetchUDFsQuery(parser *sqlparser.Parser) (string, error) {
+	parsedQuery, err := generateFullQuery(fetchAggregateUdfs, parser)
+	if err != nil {
+		return "", err
+	}
+	return parsedQuery.Query, nil
 }
