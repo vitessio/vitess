@@ -63,3 +63,24 @@ defaults:
   # - schema-read-pool => for GetSchema, GetSchemas, and FindSchema api methods
   # - topo-read-pool => for generic topo methods (e.g. GetKeyspace, FindAllShardsInKeyspace)
   # - workflow-read-pool => for GetWorkflow/GetWorkflows api methods.
+
+  # How long to keep values in schema cache by default (duration passed to Add takes precedence).
+  # Defaults to the sentinal NoExpiration to make values never expire by default.
+  schema-cache-default-expiration: 1m
+  # How many outstanding backfil requests to permit in schema cache.
+  # If the queue is full, calls backfill schemas will return false, and those requests will be discarded.
+  # Defaults to 1.
+  schema-cache-backfill-queue-size: 1
+  # How often expired values are removed from schema cache.
+  schema-cache-cleanup-interval: 5m
+  # How long a backfill request is considered valid.
+  # If the backfill goroutin encounters a request older than this, it is discarded.
+  # Defaults to 100ms.
+  schema-cache-backfill-request-ttl: 100ms
+  # How much time must pass before the backfill goroutin will re-backfill the same key.
+  # Used to prevent multiple callers from queueing up too many requests for the same key,
+  # when one backfill would satisfy all of them.
+  schema-cache-backfill-request-duplicate-interval: 1m
+  # How long to wait whe attempting to enqueue a backfill request before giving up.
+  # Defaults to 50ms.
+  schema-cache-backfill-enqueue-wait-time: 50ms
