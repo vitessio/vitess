@@ -56,7 +56,7 @@ const (
 	DefaultBackfillRequestTTL = time.Millisecond * 100
 	// DefaultBackfillQueueSize is the default value used for the size of the
 	// backfill queue, if a config is passed with a non-positive BackfillQueueSize.
-	DefaultBackfillQueueSize = 1
+	DefaultBackfillQueueSize = 0
 )
 
 // Config is the configuration for a cache.
@@ -128,7 +128,7 @@ func New[Key Keyer, Value any](fillFunc func(ctx context.Context, req Key) (Valu
 		cfg.BackfillRequestTTL = DefaultBackfillRequestTTL
 	}
 
-	if cfg.BackfillQueueSize <= 0 {
+	if cfg.BackfillQueueSize < 0 {
 		log.Warningf("BackfillQueueSize (%v) must be positive, defaulting to %v", cfg.BackfillQueueSize, DefaultBackfillQueueSize)
 		cfg.BackfillQueueSize = DefaultBackfillQueueSize
 	}

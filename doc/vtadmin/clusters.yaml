@@ -69,8 +69,8 @@ defaults:
   schema-cache-default-expiration: 1m
   # How many outstanding backfil requests to permit in schema cache.
   # If the queue is full, calls backfill schemas will return false, and those requests will be discarded.
-  # Defaults to 1.
-  schema-cache-backfill-queue-size: 1
+  # Defaults to 0 if a negative value is passed.
+  schema-cache-backfill-queue-size: 0
   # How often expired values are removed from schema cache.
   schema-cache-cleanup-interval: 5m
   # How long a backfill request is considered valid.
