@@ -167,6 +167,7 @@ func (t *Tracker) loadUDFs(conn queryservice.QueryService, target *querypb.Targe
 		return nil
 	})
 	if err != nil {
+		log.Errorf("error fetching new UDFs for %v: %w", target.Keyspace, err)
 		return err
 	}
 	log.Infof("finished loading UDFs for keyspace %s", target.Keyspace)
@@ -235,6 +236,9 @@ func (t *Tracker) GetColumns(ks string, tbl string) []vindexes.Column {
 	defer t.mu.Unlock()
 
 	tblInfo := t.tables.get(ks, tbl)
+	if tblInfo == nil {
+		return nil
+	}
 	return tblInfo.Columns
 }
 
@@ -294,11 +298,20 @@ func (t *Tracker) updateSchema(th *discovery.TabletHealth) bool {
 	if th.Stats.TableSchemaChanged != nil {
 		success = t.updatedTableSchema(th)
 	}
-	if !success || th.Stats.ViewSchemaChanged == nil {
+	if !success {
+		return false
+	}
+
+	// there is view definition change in the tablet
+	if th.Stats.ViewSchemaChanged != nil {
+		success = t.updatedViewSchema(th)
+	}
+
+	if !success || !th.Stats.UdfsChanged {
 		return success
 	}
-	// there is view definition change in the tablet
-	return t.updatedViewSchema(th)
+
+	return t.loadUDFs(th.Conn, th.Target) == nil
 }
 
 func (t *Tracker) updatedTableSchema(th *discovery.TabletHealth) bool {

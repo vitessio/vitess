@@ -3,8 +3,6 @@ package vtgate
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/utils"
@@ -762,24 +760,6 @@ func TestVSchemaUpdateWithFKReferenceToInternalTables(t *testing.T) {
 		},
 	}, vs)
 	utils.MustMatch(t, vs, vm.currentVschema, "currentVschema should have same reference as Vschema")
-}
-
-func TestVSchemaUpdateUDFInfo(t *testing.T) {
-	vm := &VSchemaManager{}
-	var vs *vindexes.VSchema
-	vm.subscriber = func(vschema *vindexes.VSchema, _ *VSchemaStats) {
-		vs = vschema
-		vs.ResetCreated()
-	}
-	funcs := []string{"udf1", "udf2"}
-	vm.schema = &fakeSchema{udfs: funcs}
-	vm.VSchemaUpdate(&vschemapb.SrvVSchema{
-		Keyspaces: map[string]*vschemapb.Keyspace{
-			"ks": {Sharded: true},
-		},
-	}, nil)
-
-	assert.Equal(t, funcs, vs.Keyspaces["ks"].AggregateUDFs)
 }
 
 // createFkDefinition is a helper function to create a Foreign key definition struct from the columns used in it provided as list of strings.

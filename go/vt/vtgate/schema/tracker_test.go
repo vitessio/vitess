@@ -94,43 +94,51 @@ func TestTrackingUnHealthyTablet(t *testing.T) {
 	})
 
 	tcases := []struct {
-		name          string
-		serving       bool
-		expectedQuery string
-		updatedTbls   []string
+		name                   string
+		serving                bool
+		expectedQuery          string
+		updatedTbls            []string
+		expectedGetSchemaCount int
 	}{
 		{
-			name:    "initial load",
-			serving: true,
+			name:                   "initial load",
+			serving:                true,
+			expectedGetSchemaCount: 2,
 		},
 		{
-			name:        "initial load",
-			serving:     true,
-			updatedTbls: []string{"a"},
+			name:                   "first update",
+			serving:                true,
+			updatedTbls:            []string{"a"},
+			expectedGetSchemaCount: 1,
 		},
 		{
-			name:    "non serving tablet",
-			serving: false,
+			name:                   "non serving tablet",
+			serving:                false,
+			expectedGetSchemaCount: 0,
 		},
 		{
-			name:    "now serving tablet",
-			serving: true,
+			name:                   "serving tablet",
+			serving:                true,
+			expectedGetSchemaCount: 2,
 		},
 	}
 
 	for _, tcase := range tcases {
-		ch <- &discovery.TabletHealth{
-			Conn:    sbc,
-			Tablet:  tablet,
-			Target:  target,
-			Serving: tcase.serving,
-			Stats:   &querypb.RealtimeStats{TableSchemaChanged: tcase.updatedTbls},
-		}
-		time.Sleep(5 * time.Millisecond)
+		t.Run(tcase.name, func(t *testing.T) {
+			ch <- &discovery.TabletHealth{
+				Conn:    sbc,
+				Tablet:  tablet,
+				Target:  target,
+				Serving: tcase.serving,
+				Stats:   &querypb.RealtimeStats{TableSchemaChanged: tcase.updatedTbls},
+			}
+			time.Sleep(5 * time.Millisecond)
+			assert.EqualValues(t, tcase.expectedGetSchemaCount, sbc.GetSchemaCount.Load())
+			sbc.GetSchemaCount.Store(0)
+		})
 	}
 
 	require.False(t, waitTimeout(&wg, 5*time.Second), "schema was updated but received no signal")
-	require.EqualValues(t, 3, sbc.GetSchemaCount.Load())
 }
 
 // TestTrackerGetKeyspaceUpdateController tests table update controller initialization.
@@ -187,6 +195,7 @@ func TestTableTracking(t *testing.T) {
 		expTbl: map[string][]vindexes.Column{
 			"prior": {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT32, CollationName: "binary", Nullable: true}},
 		},
+		expSchemaCount: 3,
 	}, {
 		testName: "new tables",
 		updTbl:   []string{"t1", "T1"},
@@ -195,6 +204,7 @@ func TestTableTracking(t *testing.T) {
 			"t1":    {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64, CollationName: "binary", Nullable: true}, {Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, Size: 50, Nullable: true}, {Name: sqlparser.NewIdentifierCI("email"), Type: querypb.Type_VARCHAR, Size: 50, Nullable: false, Default: &sqlparser.Literal{Val: "a@b.com"}}},
 			"T1":    {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_VARCHAR, Size: 50, Nullable: true}},
 		},
+		expSchemaCount: 1,
 	}, {
 		testName: "delete prior, updated T1 and new t3",
 		updTbl:   []string{"prior", "T1", "t3"},
@@ -203,6 +213,7 @@ func TestTableTracking(t *testing.T) {
 			"T1": {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_VARCHAR, Size: 50, Nullable: true}, {Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, Size: 50, Nullable: true}},
 			"t3": {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_DATETIME, CollationName: "binary", Size: 0, Nullable: true}},
 		},
+		expSchemaCount: 1,
 	}, {
 		testName: "new t4",
 		updTbl:   []string{"t4"},
@@ -212,6 +223,7 @@ func TestTableTracking(t *testing.T) {
 			"t3": {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_DATETIME, CollationName: "binary", Size: 0, Nullable: true}},
 			"t4": {{Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, Size: 50, Nullable: true}},
 		},
+		expSchemaCount: 1,
 	}}
 
 	testTracker(t, schemaDefResult, testcases)
@@ -382,6 +394,65 @@ func TestIndexInfoRetrieval(t *testing.T) {
 	testTracker(t, schemaDefResult, testcases)
 }
 
+func TestUDFRetrieval(t *testing.T) {
+	schemaDefResult := []map[string]string{{
+		"my_tbl": "CREATE TABLE `my_tbl` (" +
+			"`id` bigint NOT NULL AUTO_INCREMENT," +
+			"`name` varchar(50) CHARACTER SET latin1 COLLATE latin1_swedish_ci DEFAULT NULL," +
+			"`email` varbinary(100) DEFAULT NULL," +
+			"PRIMARY KEY (`id`)," +
+			"KEY `id` (`id`,`name`)) " +
+			"ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci",
+	}, {
+		// initial load of view - kept empty
+	}, {
+		"my_tbl": "CREATE TABLE `my_tbl` (" +
+			"`id` bigint NOT NULL AUTO_INCREMENT," +
+			"`name` varchar(50) CHARACTER SET latin1 COLLATE latin1_swedish_ci DEFAULT NULL," +
+			"`email` varbinary(100) DEFAULT NULL," +
+			"PRIMARY KEY (`id`)," +
+			"KEY `id` (`id`,`name`), " +
+			"UNIQUE KEY `email` (`email`)) " +
+			"ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci",
+	}}
+
+	testcases := []testCases{{
+		testName: "initial table load",
+		expTbl: map[string][]vindexes.Column{
+			"my_tbl": {
+				{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64, CollationName: "binary", Nullable: false},
+				{Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, CollationName: "latin1_swedish_ci", Size: 50, Nullable: true, Default: &sqlparser.NullVal{}},
+				{Name: sqlparser.NewIdentifierCI("email"), Type: querypb.Type_VARBINARY, CollationName: "binary", Size: 100, Nullable: true, Default: &sqlparser.NullVal{}},
+			},
+		},
+		expIdx: map[string][]string{
+			"my_tbl": {
+				"primary key (id)",
+				"key id (id, `name`)",
+			},
+		},
+	}, {
+		testName: "next load",
+		updTbl:   []string{"my_tbl"},
+		expTbl: map[string][]vindexes.Column{
+			"my_tbl": {
+				{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64, CollationName: "binary", Nullable: false},
+				{Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, CollationName: "latin1_swedish_ci", Size: 50, Nullable: true, Default: &sqlparser.NullVal{}},
+				{Name: sqlparser.NewIdentifierCI("email"), Type: querypb.Type_VARBINARY, CollationName: "binary", Size: 100, Nullable: true, Default: &sqlparser.NullVal{}},
+			},
+		},
+		expIdx: map[string][]string{
+			"my_tbl": {
+				"primary key (id)",
+				"key id (id, `name`)",
+				"unique key email (email)",
+			},
+		},
+	}}
+
+	testTracker(t, schemaDefResult, testcases)
+}
+
 type testCases struct {
 	testName string
 
@@ -390,8 +461,9 @@ type testCases struct {
 	expFk  map[string]string
 	expIdx map[string][]string
 
-	updView []string
-	expView map[string]string
+	updView        []string
+	expView        map[string]string
+	expSchemaCount int
 }
 
 func testTracker(t *testing.T, schemaDefResult []map[string]string, tcases []testCases) {
@@ -412,7 +484,7 @@ func testTracker(t *testing.T, schemaDefResult []map[string]string, tcases []tes
 	sbc := sandboxconn.NewSandboxConn(tablet)
 	sbc.SetSchemaResult(schemaDefResult)
 
-	for count, tcase := range tcases {
+	for _, tcase := range tcases {
 		t.Run(tcase.testName, func(t *testing.T) {
 			wg.Add(1)
 			ch <- &discovery.TabletHealth{
@@ -424,7 +496,10 @@ func testTracker(t *testing.T, schemaDefResult []map[string]string, tcases []tes
 			}
 
 			require.False(t, waitTimeout(&wg, time.Second), "schema was updated but received no signal")
-			require.EqualValues(t, count+2, sbc.GetSchemaCount.Load())
+			defer func() {
+				sbc.GetSchemaCount.Store(0)
+			}()
+			require.EqualValues(t, tcase.expSchemaCount, sbc.GetSchemaCount.Load())
 
 			_, keyspacePresent := tracker.tracked[target.Keyspace]
 			require.Equal(t, true, keyspacePresent)
@@ -434,23 +509,21 @@ func testTracker(t *testing.T, schemaDefResult []map[string]string, tcases []tes
 				if len(tcase.expFk[k]) > 0 {
 					fks := tracker.GetForeignKeys(keyspace, k)
 					for _, fk := range fks {
-						utils.MustMatch(t, tcase.expFk[k], sqlparser.String(fk), "mismatch foreign keys for table: ", k)
+						assert.Equal(t, tcase.expFk[k], sqlparser.String(fk), "mismatch foreign keys for table: ", k)
 					}
 				}
 				expIndexes := tcase.expIdx[k]
 				if len(expIndexes) > 0 {
 					idxs := tracker.GetIndexes(keyspace, k)
-					if len(expIndexes) != len(idxs) {
-						t.Fatalf("mismatch index for table: %s", k)
-					}
+					require.Equal(t, len(expIndexes), len(idxs))
 					for i, idx := range idxs {
-						utils.MustMatch(t, expIndexes[i], sqlparser.String(idx), "mismatch index for table: ", k)
+						assert.Equal(t, expIndexes[i], sqlparser.String(idx), "mismatch index for table: ", k)
 					}
 				}
 			}
 
 			for k, v := range tcase.expView {
-				utils.MustMatch(t, v, sqlparser.String(tracker.GetViews(keyspace, k)), "mismatch for view: ", k)
+				assert.Equal(t, v, sqlparser.String(tracker.GetViews(keyspace, k)), "mismatch for view: ", k)
 			}
 		})
 	}

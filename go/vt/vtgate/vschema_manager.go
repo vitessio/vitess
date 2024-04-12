@@ -204,7 +204,6 @@ func (vm *VSchemaManager) updateFromSchema(vschema *vindexes.VSchema) {
 	for ksName, ks := range vschema.Keyspaces {
 		vm.updateTableInfo(vschema, ks, ksName)
 		vm.updateViewInfo(ks, ksName)
-		vm.updateUDFInfo(ks, ksName)
 	}
 }
 
@@ -266,10 +265,6 @@ func (vm *VSchemaManager) updateTableInfo(vschema *vindexes.VSchema, ks *vindexe
 			}
 		}
 	}
-}
-
-func (vm *VSchemaManager) updateUDFInfo(ks *vindexes.KeyspaceSchema, name string) {
-	ks.AggregateUDFs = vm.schema.UDFs(name)
 }
 
 func markErrorIfCyclesInFk(vschema *vindexes.VSchema) {

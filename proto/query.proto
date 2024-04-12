@@ -883,6 +883,9 @@ message RealtimeStats {
 
   // view_schema_changed is to provide list of views that have schema changes detected by the tablet.
   repeated string view_schema_changed = 8;
+
+  // udfs_changed is used to signal that the UDFs have changed on the tablet.
+  bool udfs_changed = 9;
 }
 
 // AggregateStats contains information about the health of a group of
@@ -989,6 +992,7 @@ enum SchemaTableType {
   VIEWS = 0;
   TABLES = 1;
   ALL = 2;
+  UDF = 3;
 }
 
 // GetSchemaRequest is the payload to GetSchema
