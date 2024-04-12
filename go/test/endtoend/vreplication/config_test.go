@@ -438,7 +438,7 @@ create table nopk (name varchar(128), age int unsigned);
   "table_settings": [{
     "target_table": "customer_types",
     "source_expression": "select cid, typ from customer",
-    "create_ddl": "create table if not exists customer_types (cid bigint not null, typ varchar(128), primary key(cid), key(typ))"
+    "create_ddl": "create table if not exists customer_types (cid bigint not null, typ enum('individual','soho','enterprise'), primary key(cid), key(typ))"
   }]
 }
 `
