@@ -273,13 +273,14 @@ func interceptors() []grpc.ServerOption {
 }
 
 func serveGRPC() {
-	if grpccommon.EnableGRPCPrometheus() {
-		grpc_prometheus.Register(GRPCServer)
-		grpc_prometheus.EnableHandlingTimeHistogram()
-	}
 	// skip if not registered
 	if gRPCPort == 0 {
 		return
+	}
+
+	if grpccommon.EnableGRPCPrometheus {
+		grpc_prometheus.Register(GRPCServer)
+		grpc_prometheus.EnableHandlingTimeHistogram()
 	}
 
 	// register reflection to support list calls :)
