@@ -148,11 +148,11 @@ func (u *updateController) add(th *discovery.TabletHealth) {
 	}
 
 	// If the keyspace schema is loaded and there is no schema change detected. Then there is nothing to process.
-	if len(th.Stats.TableSchemaChanged) == 0 && len(th.Stats.ViewSchemaChanged) == 0 && u.loaded {
+	if len(th.Stats.TableSchemaChanged) == 0 && len(th.Stats.ViewSchemaChanged) == 0 && !th.Stats.UdfsChanged && u.loaded {
 		return
 	}
 
-	if (len(th.Stats.TableSchemaChanged) > 0 || len(th.Stats.ViewSchemaChanged) > 0) && u.ignore {
+	if (len(th.Stats.TableSchemaChanged) > 0 || len(th.Stats.ViewSchemaChanged) > 0 || th.Stats.UdfsChanged) && u.ignore {
 		// we got an update for this keyspace - we need to stop ignoring it, and reload everything
 		u.ignore = false
 		u.loaded = false

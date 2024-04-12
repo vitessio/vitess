@@ -62,19 +62,21 @@ type (
 const defaultConsumeDelay = 1 * time.Second
 
 // NewTracker creates the tracker object.
-func NewTracker(ch chan *discovery.TabletHealth, enableViews bool, parser *sqlparser.Parser) *Tracker {
+func NewTracker(ch chan *discovery.TabletHealth, enableViews, enableUDFs bool, parser *sqlparser.Parser) *Tracker {
 	t := &Tracker{
 		ctx:          context.Background(),
 		ch:           ch,
 		tables:       &tableMap{m: make(map[keyspaceStr]map[tableNameStr]*vindexes.TableInfo)},
 		tracked:      map[keyspaceStr]*updateController{},
-		udfs:         map[keyspaceStr][]string{},
 		consumeDelay: defaultConsumeDelay,
 		parser:       parser,
 	}
 
 	if enableViews {
 		t.views = &viewMap{m: map[keyspaceStr]map[viewNameStr]sqlparser.SelectStatement{}, parser: parser}
+	}
+	if enableUDFs {
+		t.udfs = map[keyspaceStr][]string{}
 	}
 	return t
 }
@@ -154,10 +156,15 @@ func (t *Tracker) loadViews(conn queryservice.QueryService, target *querypb.Targ
 }
 
 func (t *Tracker) loadUDFs(conn queryservice.QueryService, target *querypb.Target) error {
+	if t.udfs == nil {
+		// This happens only when UDFs are not enabled.
+		return nil
+	}
+
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	err := conn.GetSchema(t.ctx, target, querypb.SchemaTableType_UDF, nil, func(schemaRes *querypb.GetSchemaResponse) error {
+	err := conn.GetSchema(t.ctx, target, querypb.SchemaTableType_UDF_AGGREGATE, nil, func(schemaRes *querypb.GetSchemaResponse) error {
 		var udfs []string
 		for name := range schemaRes.TableDefinition {
 			udfs = append(udfs, name)
@@ -275,18 +282,22 @@ func (t *Tracker) Tables(ks string) map[string]*vindexes.TableInfo {
 
 // Views returns all known views in the keyspace with their definition.
 func (t *Tracker) Views(ks string) map[string]sqlparser.SelectStatement {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
 	if t.views == nil {
 		return nil
 	}
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
 
 	m := t.views.m[ks]
 	return maps.Clone(m)
 }
 
 func (t *Tracker) UDFs(ks string) []string {
+	if t.udfs == nil {
+		return nil
+	}
+
 	t.mu.Lock()
 	defer t.mu.Unlock()
 

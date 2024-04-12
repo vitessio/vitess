@@ -81,7 +81,7 @@ func TestTrackingUnHealthyTablet(t *testing.T) {
 
 	sbc := sandboxconn.NewSandboxConn(tablet)
 	ch := make(chan *discovery.TabletHealth)
-	tracker := NewTracker(ch, false, sqlparser.NewTestParser())
+	tracker := NewTracker(ch, false, false, sqlparser.NewTestParser())
 	tracker.consumeDelay = 1 * time.Millisecond
 	tracker.Start()
 	defer tracker.Stop()
@@ -94,32 +94,27 @@ func TestTrackingUnHealthyTablet(t *testing.T) {
 	})
 
 	tcases := []struct {
-		name                   string
-		serving                bool
-		expectedQuery          string
-		updatedTbls            []string
-		expectedGetSchemaCount int
+		name          string
+		serving       bool
+		expectedQuery string
+		updatedTbls   []string
 	}{
 		{
-			name:                   "initial load",
-			serving:                true,
-			expectedGetSchemaCount: 2,
+			name:    "initial load",
+			serving: true,
 		},
 		{
-			name:                   "first update",
-			serving:                true,
-			updatedTbls:            []string{"a"},
-			expectedGetSchemaCount: 1,
+			name:        "first update",
+			serving:     true,
+			updatedTbls: []string{"a"},
 		},
 		{
-			name:                   "non serving tablet",
-			serving:                false,
-			expectedGetSchemaCount: 0,
+			name:    "non serving tablet",
+			serving: false,
 		},
 		{
-			name:                   "serving tablet",
-			serving:                true,
-			expectedGetSchemaCount: 2,
+			name:    "serving tablet",
+			serving: true,
 		},
 	}
 
@@ -133,12 +128,11 @@ func TestTrackingUnHealthyTablet(t *testing.T) {
 				Stats:   &querypb.RealtimeStats{TableSchemaChanged: tcase.updatedTbls},
 			}
 			time.Sleep(5 * time.Millisecond)
-			assert.EqualValues(t, tcase.expectedGetSchemaCount, sbc.GetSchemaCount.Load())
-			sbc.GetSchemaCount.Store(0)
 		})
 	}
 
 	require.False(t, waitTimeout(&wg, 5*time.Second), "schema was updated but received no signal")
+	assert.EqualValues(t, 3, sbc.GetSchemaCount.Load())
 }
 
 // TestTrackerGetKeyspaceUpdateController tests table update controller initialization.
@@ -195,7 +189,6 @@ func TestTableTracking(t *testing.T) {
 		expTbl: map[string][]vindexes.Column{
 			"prior": {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT32, CollationName: "binary", Nullable: true}},
 		},
-		expSchemaCount: 3,
 	}, {
 		testName: "new tables",
 		updTbl:   []string{"t1", "T1"},
@@ -204,7 +197,6 @@ func TestTableTracking(t *testing.T) {
 			"t1":    {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64, CollationName: "binary", Nullable: true}, {Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, Size: 50, Nullable: true}, {Name: sqlparser.NewIdentifierCI("email"), Type: querypb.Type_VARCHAR, Size: 50, Nullable: false, Default: &sqlparser.Literal{Val: "a@b.com"}}},
 			"T1":    {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_VARCHAR, Size: 50, Nullable: true}},
 		},
-		expSchemaCount: 1,
 	}, {
 		testName: "delete prior, updated T1 and new t3",
 		updTbl:   []string{"prior", "T1", "t3"},
@@ -213,7 +205,6 @@ func TestTableTracking(t *testing.T) {
 			"T1": {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_VARCHAR, Size: 50, Nullable: true}, {Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, Size: 50, Nullable: true}},
 			"t3": {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_DATETIME, CollationName: "binary", Size: 0, Nullable: true}},
 		},
-		expSchemaCount: 1,
 	}, {
 		testName: "new t4",
 		updTbl:   []string{"t4"},
@@ -223,10 +214,9 @@ func TestTableTracking(t *testing.T) {
 			"t3": {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_DATETIME, CollationName: "binary", Size: 0, Nullable: true}},
 			"t4": {{Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, Size: 50, Nullable: true}},
 		},
-		expSchemaCount: 1,
 	}}
 
-	testTracker(t, schemaDefResult, testcases)
+	testTracker(t, false, schemaDefResult, testcases)
 }
 
 // TestViewsTracking tests that the tracker is able to track views.
@@ -273,7 +263,7 @@ func TestViewsTracking(t *testing.T) {
 			"t4": "select 1 from tbl4"},
 	}}
 
-	testTracker(t, schemaDefResult, testcases)
+	testTracker(t, false, schemaDefResult, testcases)
 }
 
 // TestFKInfoRetrieval tests that the tracker is able to retrieve required foreign key information from ddl statement.
@@ -331,7 +321,7 @@ func TestFKInfoRetrieval(t *testing.T) {
 		},
 	}}
 
-	testTracker(t, schemaDefResult, testcases)
+	testTracker(t, false, schemaDefResult, testcases)
 }
 
 // TestIndexInfoRetrieval tests that the tracker is able to retrieve required index information from ddl statement.
@@ -391,66 +381,39 @@ func TestIndexInfoRetrieval(t *testing.T) {
 		},
 	}}
 
-	testTracker(t, schemaDefResult, testcases)
+	testTracker(t, false, schemaDefResult, testcases)
 }
 
+// TestUDFRetrieval tests that the tracker is able to retrieve required UDF information.
 func TestUDFRetrieval(t *testing.T) {
 	schemaDefResult := []map[string]string{{
-		"my_tbl": "CREATE TABLE `my_tbl` (" +
-			"`id` bigint NOT NULL AUTO_INCREMENT," +
-			"`name` varchar(50) CHARACTER SET latin1 COLLATE latin1_swedish_ci DEFAULT NULL," +
-			"`email` varbinary(100) DEFAULT NULL," +
-			"PRIMARY KEY (`id`)," +
-			"KEY `id` (`id`,`name`)) " +
-			"ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci",
+		// initial load of table - kept empty
 	}, {
 		// initial load of view - kept empty
 	}, {
-		"my_tbl": "CREATE TABLE `my_tbl` (" +
-			"`id` bigint NOT NULL AUTO_INCREMENT," +
-			"`name` varchar(50) CHARACTER SET latin1 COLLATE latin1_swedish_ci DEFAULT NULL," +
-			"`email` varbinary(100) DEFAULT NULL," +
-			"PRIMARY KEY (`id`)," +
-			"KEY `id` (`id`,`name`), " +
-			"UNIQUE KEY `email` (`email`)) " +
-			"ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci",
+		"my_udf": "int",
+	}, {
+		"my_udf2": "char",
+		"my_udf3": "int",
+	}, {
+		"my_udf2": "char",
+		"my_udf4": "int",
 	}}
 
 	testcases := []testCases{{
-		testName: "initial table load",
-		expTbl: map[string][]vindexes.Column{
-			"my_tbl": {
-				{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64, CollationName: "binary", Nullable: false},
-				{Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, CollationName: "latin1_swedish_ci", Size: 50, Nullable: true, Default: &sqlparser.NullVal{}},
-				{Name: sqlparser.NewIdentifierCI("email"), Type: querypb.Type_VARBINARY, CollationName: "binary", Size: 100, Nullable: true, Default: &sqlparser.NullVal{}},
-			},
-		},
-		expIdx: map[string][]string{
-			"my_tbl": {
-				"primary key (id)",
-				"key id (id, `name`)",
-			},
-		},
+		testName: "initial load",
+		expUDFs:  []string{"my_udf"},
 	}, {
-		testName: "next load",
-		updTbl:   []string{"my_tbl"},
-		expTbl: map[string][]vindexes.Column{
-			"my_tbl": {
-				{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64, CollationName: "binary", Nullable: false},
-				{Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, CollationName: "latin1_swedish_ci", Size: 50, Nullable: true, Default: &sqlparser.NullVal{}},
-				{Name: sqlparser.NewIdentifierCI("email"), Type: querypb.Type_VARBINARY, CollationName: "binary", Size: 100, Nullable: true, Default: &sqlparser.NullVal{}},
-			},
-		},
-		expIdx: map[string][]string{
-			"my_tbl": {
-				"primary key (id)",
-				"key id (id, `name`)",
-				"unique key email (email)",
-			},
-		},
+		testName: "next load 1",
+		updUdfs:  true,
+		expUDFs:  []string{"my_udf2", "my_udf3"},
+	}, {
+		testName: "next load 2",
+		updUdfs:  true,
+		expUDFs:  []string{"my_udf2", "my_udf4"},
 	}}
 
-	testTracker(t, schemaDefResult, testcases)
+	testTracker(t, true, schemaDefResult, testcases)
 }
 
 type testCases struct {
@@ -461,14 +424,16 @@ type testCases struct {
 	expFk  map[string]string
 	expIdx map[string][]string
 
-	updView        []string
-	expView        map[string]string
-	expSchemaCount int
+	updView []string
+	expView map[string]string
+
+	updUdfs bool
+	expUDFs []string
 }
 
-func testTracker(t *testing.T, schemaDefResult []map[string]string, tcases []testCases) {
+func testTracker(t *testing.T, enableUDFs bool, schemaDefResult []map[string]string, tcases []testCases) {
 	ch := make(chan *discovery.TabletHealth)
-	tracker := NewTracker(ch, true, sqlparser.NewTestParser())
+	tracker := NewTracker(ch, true, enableUDFs, sqlparser.NewTestParser())
 	tracker.consumeDelay = 1 * time.Millisecond
 	tracker.Start()
 	defer tracker.Stop()
@@ -484,7 +449,11 @@ func testTracker(t *testing.T, schemaDefResult []map[string]string, tcases []tes
 	sbc := sandboxconn.NewSandboxConn(tablet)
 	sbc.SetSchemaResult(schemaDefResult)
 
-	for _, tcase := range tcases {
+	initialLoadCount := 2
+	if enableUDFs {
+		initialLoadCount = 3
+	}
+	for count, tcase := range tcases {
 		t.Run(tcase.testName, func(t *testing.T) {
 			wg.Add(1)
 			ch <- &discovery.TabletHealth{
@@ -492,14 +461,11 @@ func testTracker(t *testing.T, schemaDefResult []map[string]string, tcases []tes
 				Tablet:  tablet,
 				Target:  target,
 				Serving: true,
-				Stats:   &querypb.RealtimeStats{TableSchemaChanged: tcase.updTbl, ViewSchemaChanged: tcase.updView},
+				Stats:   &querypb.RealtimeStats{TableSchemaChanged: tcase.updTbl, ViewSchemaChanged: tcase.updView, UdfsChanged: tcase.updUdfs},
 			}
 
 			require.False(t, waitTimeout(&wg, time.Second), "schema was updated but received no signal")
-			defer func() {
-				sbc.GetSchemaCount.Store(0)
-			}()
-			require.EqualValues(t, tcase.expSchemaCount, sbc.GetSchemaCount.Load())
+			require.EqualValues(t, count+initialLoadCount, sbc.GetSchemaCount.Load())
 
 			_, keyspacePresent := tracker.tracked[target.Keyspace]
 			require.Equal(t, true, keyspacePresent)
@@ -525,6 +491,8 @@ func testTracker(t *testing.T, schemaDefResult []map[string]string, tcases []tes
 			for k, v := range tcase.expView {
 				assert.Equal(t, v, sqlparser.String(tracker.GetViews(keyspace, k)), "mismatch for view: ", k)
 			}
+
+			assert.Equal(t, tcase.expUDFs, tracker.UDFs(keyspace), "mismatch for udfs")
 		})
 	}
 }
