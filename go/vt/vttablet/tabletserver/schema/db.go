@@ -43,37 +43,6 @@ values (database(), :table_name, :create_statement, :create_time)`
 	// fetchTables queries fetches all information about tables
 	fetchTables = `select table_name, create_statement from %s.tables where table_schema = database()`
 
-	// detectUdfChange query detects if there is any udf change from previous copy.
-	detectUdfChange = `
-SELECT UDF_NAME
-FROM (
-	SELECT UDF_NAME FROM 
-	performance_schema.user_defined_functions 
-
-	UNION ALL
-
-	SELECT FUNCTION_NAME
-	FROM %s.udfs
-) _inner
-GROUP BY UDF_NAME
-HAVING COUNT(*) = 1
-LIMIT 1
-`
-
-	// deleteAllUdfs clears out the udfs table.
-	deleteAllUdfs = `
-DELETE FROM 
-%s.udfs
-`
-
-	// copyUdfs copies user defined function to the udfs table.
-	copyUdfs = `
-INSERT INTO 
-%s.udfs(FUNCTION_NAME, FUNCTION_RETURN_TYPE, FUNCTION_TYPE)
-SELECT UDF_NAME, UDF_RETURN_TYPE, UDF_TYPE FROM 
-performance_schema.user_defined_functions 
-`
-
 	// detectViewChange query detects if there is any view change from previous copy.
 	detectViewChange = `
 SELECT distinct table_name
@@ -118,8 +87,32 @@ where table_schema = database() and table_name in ::viewNames`
 	// fetchTablesAndViews queries fetches all information about tables and views
 	fetchTablesAndViews = `select table_name, create_statement from %s.tables where table_schema = database() union select table_name, create_statement from %s.views where table_schema = database()`
 
+	// detectUdfChange query detects if there is any udf change from previous copy.
+	detectUdfChange = `
+SELECT name
+FROM (
+	SELECT name FROM 
+	mysql.func 
+
+	UNION ALL
+
+	SELECT function_name
+	FROM %s.udfs
+) _inner
+GROUP BY name
+HAVING COUNT(*) = 1
+LIMIT 1
+`
+
+	// deleteAllUdfs clears out the udfs table.
+	deleteAllUdfs = `delete from %s.udfs`
+
+	// copyUdfs copies user defined function to the udfs table.
+	copyUdfs = `INSERT INTO %s.udfs(FUNCTION_NAME, FUNCTION_RETURN_TYPE, FUNCTION_TYPE) 
+SELECT f.name, i.UDF_RETURN_TYPE, f.type FROM mysql.func f left join performance_schema.user_defined_functions i on f.name = i.udf_name
+`
 	// fetchAggregateUdfs queries fetches all the aggregate user defined functions.
-	fetchAggregateUdfs = `select function_name, function_return_type from %s.udfs where function_type = 'AGGREGATE'`
+	fetchAggregateUdfs = `select function_name, function_return_type from %s.udfs where function_type = 'aggregate'`
 )
 
 // reloadTablesDataInDB reloads teh tables information we have stored in our database we use for schema-tracking.
