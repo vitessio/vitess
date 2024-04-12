@@ -530,6 +530,12 @@ func testReshardV2Workflow(t *testing.T) {
 		t.Logf("Done inserting customer data. Record counts in customer: %s, customer_names: %s, customer_types: %s",
 			cres.Rows[0][0].ToString(), cnres.Rows[0][0].ToString(), ctres.Rows[0][0].ToString())
 	}
+	// We also do a vdiff on the customer_names workflow for good measure.
+	// We don't vdiff customer_types as vdiff reports differences because
+	// customer.typ is an ENUM but customer_names.typ is a VARCHAR as we
+	// copy the string value.
+	// TODO: should we detect and support this kind of case in VDiff?
+	doVtctldclientVDiff(t, "customer", "customer_names", "", nil)
 }
 
 func testMoveTablesV2Workflow(t *testing.T) {
