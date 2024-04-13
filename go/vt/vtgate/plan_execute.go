@@ -38,7 +38,7 @@ type planExec func(ctx context.Context, plan *engine.Plan, vc *vcursorImpl, bind
 type txResult func(sqlparser.StatementType, *sqltypes.Result) error
 
 func waitForNewerVSchema(ctx context.Context, e *Executor, lastVSchemaCreated time.Time, timeout time.Duration) bool {
-	pollingInterval := timeout / 100
+	pollingInterval := 10 * time.Millisecond
 	waitCtx, cancel := context.WithTimeout(ctx, timeout)
 	ticker := time.NewTicker(pollingInterval)
 	defer ticker.Stop()
@@ -90,27 +90,17 @@ func (e *Executor) newExecute(
 		lastVSchemaCreated = vs.GetCreated()
 		result             *sqltypes.Result
 		plan               *engine.Plan
-		try                = 0
 	)
 
-	for ; try < MaxBufferingRetries; try++ {
-		if try > 0 {
-			defer func() {
-				// Prevent any plan cache pollution from queries planned against the wrong keyspace
-				// during a MoveTables traffic switching operation.
-				if err != nil {
-					e.ClearPlans()
-				}
-			}()
-			if !vs.GetCreated().After(lastVSchemaCreated) { // We need to wait for a vschema update
-				// There is a race due to which the executor's vschema may not have been updated yet.
-				// Without a wait we fail non-deterministically since the previous vschema will not have
-				// the updated routing rules.
-				timeout := e.resolver.scatterConn.gateway.buffer.GetConfig().MaxFailoverDuration / MaxBufferingRetries
-				if waitForNewerVSchema(ctx, e, lastVSchemaCreated, timeout) {
-					vs = e.VSchema()
-					lastVSchemaCreated = vs.GetCreated()
-				}
+	for try := 0; try < MaxBufferingRetries; try++ {
+		if try > 0 && !vs.GetCreated().After(lastVSchemaCreated) { // We need to wait for a vschema update
+			// There is a race due to which the executor's vschema may not have been updated yet.
+			// Without a wait we fail non-deterministically since the previous vschema will not have
+			// the updated routing rules.
+			timeout := e.resolver.scatterConn.gateway.buffer.GetConfig().MaxFailoverDuration / MaxBufferingRetries
+			if waitForNewerVSchema(ctx, e, lastVSchemaCreated, timeout) {
+				vs = e.VSchema()
+				lastVSchemaCreated = vs.GetCreated()
 			}
 		}
 
@@ -176,6 +166,15 @@ func (e *Executor) newExecute(
 		rootCause := vterrors.RootCause(err)
 		if rootCause != nil && strings.Contains(rootCause.Error(), "enforce denied tables") {
 			log.V(2).Infof("Retry: %d, will retry query %s due to %v", try, query, err)
+			if try == 0 { // We are going to retry at least once
+				defer func() {
+					// Prevent any plan cache pollution from queries planned against the
+					// wrong keyspace during a MoveTables traffic switching operation.
+					if err != nil {
+						e.ClearPlans()
+					}
+				}()
+			}
 			continue
 		}
 

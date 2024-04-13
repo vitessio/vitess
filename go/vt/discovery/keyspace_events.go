@@ -128,9 +128,9 @@ func (kss *keyspaceState) Format(f fmt.State, verb rune) {
 	fmt.Fprintf(f, "]\n")
 }
 
-// beingResharded returns whether this keyspace is thought to be in the middle of a resharding
-// operation. currentShard is the name of the shard that belongs to this keyspace and which
-// we are trying to access. currentShard can _only_ be a primary shard.
+// beingResharded returns whether this keyspace is thought to be in the middle of a
+// resharding operation. currentShard is the name of the shard that belongs to this
+// keyspace and which we are trying to access. currentShard can _only_ be a primary shard.
 func (kss *keyspaceState) beingResharded(currentShard string) bool {
 	kss.mu.Lock()
 	defer kss.mu.Unlock()
@@ -170,7 +170,8 @@ type shardState struct {
 	currentPrimary       *topodatapb.TabletAlias
 }
 
-// Subscribe returns a channel that will receive any KeyspaceEvents for all keyspaces in the current cell
+// Subscribe returns a channel that will receive any KeyspaceEvents for all keyspaces in the
+// current cell.
 func (kew *KeyspaceEventWatcher) Subscribe() chan *KeyspaceEvent {
 	kew.subsMu.Lock()
 	defer kew.subsMu.Unlock()
@@ -193,11 +194,11 @@ func (kew *KeyspaceEventWatcher) Unsubscribe(c chan *KeyspaceEvent) {
 	delete(kew.subs, c)
 }
 
-func (kew *KeyspaceEventWatcher) broadcast(th *KeyspaceEvent) {
+func (kew *KeyspaceEventWatcher) broadcast(ev *KeyspaceEvent) {
 	kew.subsMu.Lock()
 	defer kew.subsMu.Unlock()
 	for c := range kew.subs {
-		c <- th
+		c <- ev
 	}
 }
 
@@ -281,7 +282,8 @@ func (kss *keyspaceState) ensureConsistentLocked() {
 		}
 	}
 
-	// clone the current moveTablesState, if any, to handle race conditions where it can get updated while we're broadcasting
+	// Clone the current moveTablesState, if any, to handle race conditions where it can get
+	// updated while we're broadcasting.
 	var moveTablesState MoveTablesState
 	if kss.moveTablesState != nil {
 		moveTablesState = *kss.moveTablesState
@@ -321,9 +323,10 @@ func (kss *keyspaceState) ensureConsistentLocked() {
 	kss.kew.broadcast(ksevent)
 }
 
-// onHealthCheck is the callback that updates this keyspace with event data from the HealthCheck stream.
-// the HealthCheck stream applies to all the keyspaces in the cluster and emits TabletHealth events to our
-// parent KeyspaceWatcher, which will mux them into their corresponding keyspaceState
+// onHealthCheck is the callback that updates this keyspace with event data from the HealthCheck
+// stream. The HealthCheck stream applies to all the keyspaces in the cluster and emits
+// TabletHealth events to our parent KeyspaceWatcher, which will mux them into their
+// corresponding keyspaceState.
 func (kss *keyspaceState) onHealthCheck(th *TabletHealth) {
 	// we only care about health events on the primary
 	if th.Target.TabletType != topodatapb.TabletType_PRIMARY {
@@ -371,9 +374,10 @@ type MoveTablesStatus int
 
 const (
 	MoveTablesUnknown MoveTablesStatus = iota
-	// MoveTablesSwitching is set when the write traffic is the middle of being switched from the source to the target
+	// MoveTablesSwitching is set when the write traffic is the middle of being switched from
+	// the source to the target.
 	MoveTablesSwitching
-	// MoveTablesSwitched is set when write traffic has been completely switched to the target
+	// MoveTablesSwitched is set when write traffic has been completely switched to the target.
 	MoveTablesSwitched
 )
 
@@ -483,7 +487,8 @@ func (kss *keyspaceState) getMoveTablesStatus(vs *vschemapb.SrvVSchema) (*MoveTa
 		return mtState, nil
 	}
 
-	// It wasn't a shard by shard migration, but since we have denied tables it must be a regular MoveTables.
+	// It wasn't a shard by shard migration, but since we have denied tables it must be a
+	// regular MoveTables.
 	mtState.Typ = MoveTablesRegular
 	mtState.State = MoveTablesSwitching
 	rr := topotools.GetRoutingRulesMap(vs.GetRoutingRules())
@@ -500,10 +505,10 @@ func (kss *keyspaceState) getMoveTablesStatus(vs *vschemapb.SrvVSchema) (*MoveTa
 	return mtState, nil
 }
 
-// onSrvKeyspace is the callback that updates this keyspace with fresh topology data from our topology server.
-// this callback is called from a Watcher in the topo server whenever a change to the topology for this keyspace
-// occurs. this watcher is dedicated to this keyspace, and will only yield topology metadata changes for as
-// long as we're interested on this keyspace.
+// onSrvKeyspace is the callback that updates this keyspace with fresh topology data from our
+// topology server. this callback is called from a Watcher in the topo server whenever a change to
+// the topology for this keyspace occurs. This watcher is dedicated to this keyspace, and will
+// only yield topology metadata changes for as long as we're interested on this keyspace.
 func (kss *keyspaceState) onSrvKeyspace(newKeyspace *topodatapb.SrvKeyspace, newError error) bool {
 	kss.mu.Lock()
 	defer kss.mu.Unlock()
@@ -517,23 +522,25 @@ func (kss *keyspaceState) onSrvKeyspace(newKeyspace *topodatapb.SrvKeyspace, new
 		return false
 	}
 
-	// if there's another kind of error while watching this keyspace, we assume it's temporary and related
-	// to the topology server, not to the keyspace itself. we'll keep waiting for more topology events.
+	// If there's another kind of error while watching this keyspace, we assume it's temporary and
+	// related to the topology server, not to the keyspace itself. we'll keep waiting for more
+	// topology events.
 	if newError != nil {
 		kss.lastError = newError
 		log.Errorf("error while watching keyspace %q: %v", kss.keyspace, newError)
 		return true
 	}
 
-	// if the topology metadata for our keyspace is identical to the last one we saw there's nothing to do
-	// here. this is a side-effect of the way ETCD watchers work.
+	// If the topology metadata for our keyspace is identical to the last one we saw there's nothing to
+	// do here. this is a side-effect of the way ETCD watchers work.
 	if proto.Equal(kss.lastKeyspace, newKeyspace) {
 		// no changes
 		return true
 	}
 
-	// we only mark this keyspace as inconsistent if there has been a topology change in the PRIMARY for
-	// this keyspace, but we store the topology metadata for both primary and replicas for future-proofing.
+	// we only mark this keyspace as inconsistent if there has been a topology change in the PRIMARY
+	// for this keyspace, but we store the topology metadata for both primary and replicas for
+	// future-proofing.
 	var oldPrimary, newPrimary *topodatapb.SrvKeyspace_KeyspacePartition
 	if kss.lastKeyspace != nil {
 		oldPrimary = topoproto.SrvKeyspaceGetPartition(kss.lastKeyspace, topodatapb.TabletType_PRIMARY)
@@ -564,8 +571,8 @@ func (kss *keyspaceState) isServing() bool {
 
 // onSrvVSchema is called from a Watcher in the topo server whenever the SrvVSchema is updated by Vitess.
 // For the purposes here, we are interested in updates to the RoutingRules or ShardRoutingRules.
-// In addition, the traffic switcher updates SrvVSchema when the DeniedTables attributes in a Shard record is
-// modified.
+// In addition, the traffic switcher updates SrvVSchema when the DeniedTables attributes in a Shard
+// record is modified.
 func (kss *keyspaceState) onSrvVSchema(vs *vschemapb.SrvVSchema, err error) bool {
 	// The vschema can be nil if the server is currently shutting down.
 	if vs == nil {
@@ -579,8 +586,9 @@ func (kss *keyspaceState) onSrvVSchema(vs *vschemapb.SrvVSchema, err error) bool
 		log.Errorf("onSrvVSchema: keyspace %s failed to get move tables status: %v", kss.keyspace, kerr)
 	}
 	if kss.moveTablesState != nil && kss.moveTablesState.Typ != MoveTablesNone {
-		// Mark the keyspace as inconsistent. ensureConsistentLocked() checks if the workflow is switched,
-		// and if so, it will send an event to the buffering subscribers to indicate that buffering can be stopped.
+		// Mark the keyspace as inconsistent. ensureConsistentLocked() checks if the workflow is
+		// switched, and if so, it will send an event to the buffering subscribers to indicate that
+		// buffering can be stopped.
 		kss.consistent = false
 		kss.ensureConsistentLocked()
 	}
@@ -602,8 +610,9 @@ func newKeyspaceState(ctx context.Context, kew *KeyspaceEventWatcher, cell, keys
 	return kss
 }
 
-// processHealthCheck is the callback that is called by the global HealthCheck stream that was initiated
-// by this KeyspaceEventWatcher. it redirects the TabletHealth event to the corresponding keyspaceState
+// processHealthCheck is the callback that is called by the global HealthCheck stream that was
+// initiated by this KeyspaceEventWatcher. It redirects the TabletHealth event to the
+// corresponding keyspaceState.
 func (kew *KeyspaceEventWatcher) processHealthCheck(ctx context.Context, th *TabletHealth) {
 	kss := kew.getKeyspaceStatus(ctx, th.Target.Keyspace)
 	if kss == nil {
@@ -613,8 +622,8 @@ func (kew *KeyspaceEventWatcher) processHealthCheck(ctx context.Context, th *Tab
 	kss.onHealthCheck(th)
 }
 
-// getKeyspaceStatus returns the keyspaceState object for the corresponding keyspace, allocating it
-// if we've never seen the keyspace before.
+// getKeyspaceStatus returns the keyspaceState object for the corresponding keyspace, allocating
+// it if we've never seen the keyspace before.
 func (kew *KeyspaceEventWatcher) getKeyspaceStatus(ctx context.Context, keyspace string) *keyspaceState {
 	kew.mu.Lock()
 	defer kew.mu.Unlock()
@@ -654,15 +663,15 @@ func (kew *KeyspaceEventWatcher) TargetIsBeingResharded(ctx context.Context, tar
 }
 
 // PrimaryIsNotServing checks if the reason why the given target is not accessible right now is
-// that the primary tablet for that shard is not serving. This is possible during a Planned Reparent Shard
-// operation. Just as the operation completes, a new primary will be elected, and it will send its own healthcheck
-// stating that it is serving. We should buffer requests until that point.
-// There are use cases where people do not run with a Primary server at all, so we must verify that
-// we only start buffering when a primary was present, and it went not serving.
-// The shard state keeps track of the current primary and the last externally reparented time, which we can use
-// to determine that there was a serving primary which now became non serving. This is only possible in a DemotePrimary
-// RPC which are only called from ERS and PRS. So buffering will stop when these operations succeed.
-// We return the tablet alias of the primary if it is serving.
+// that the primary tablet for that shard is not serving. This is possible during a Planned
+// Reparent Shard operation. Just as the operation completes, a new primary will be elected, and
+// it will send its own healthcheck stating that it is serving. We should buffer requests until
+// that point. There are use cases where people do not run with a Primary server at all, so we must
+// verify that we only start buffering when a primary was present, and it went not serving.
+// The shard state keeps track of the current primary and the last externally reparented time, which
+// we can use to determine that there was a serving primary which now became non serving. This is
+// only possible in a DemotePrimary RPC which are only called from ERS and PRS. So buffering will
+// stop when these operations succeed. We return the tablet alias of the primary if it is serving.
 func (kew *KeyspaceEventWatcher) PrimaryIsNotServing(ctx context.Context, target *querypb.Target) (*topodatapb.TabletAlias, bool) {
 	if target.TabletType != topodatapb.TabletType_PRIMARY {
 		return nil, false
@@ -674,7 +683,8 @@ func (kew *KeyspaceEventWatcher) PrimaryIsNotServing(ctx context.Context, target
 	ks.mu.Lock()
 	defer ks.mu.Unlock()
 	if state, ok := ks.shards[target.Shard]; ok {
-		// If the primary tablet was present then externallyReparented will be non-zero and currentPrimary will be not nil
+		// If the primary tablet was present then externallyReparented will be non-zero and
+		// currentPrimary will be not nil.
 		return state.currentPrimary, !state.serving && !ks.consistent && state.externallyReparented != 0 && state.currentPrimary != nil
 	}
 	return nil, false

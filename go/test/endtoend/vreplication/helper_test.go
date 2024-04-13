@@ -828,7 +828,9 @@ func newLoadGenerator(t *testing.T, vc *VitessCluster) *loadGenerator {
 }
 
 func (lg *loadGenerator) stop() {
-	time.Sleep(loadTestBufferingWindowDuration * 2) // wait for buffering to stop and additional records to be inserted by startLoad after traffic is switched
+	// Wait for buffering to stop and additional records to be inserted by start
+	// after traffic is switched.
+	time.Sleep(loadTestBufferingWindowDuration * 2)
 	log.Infof("Canceling load")
 	lg.cancel()
 	lg.wg.Wait()
@@ -840,21 +842,21 @@ func (lg *loadGenerator) start() {
 	var connectionCount atomic.Int64
 
 	var id int64
-	log.Infof("startLoad: starting")
+	log.Infof("loadGenerator: starting")
 	queryTemplate := "insert into loadtest(id, name) values (%d, 'name-%d')"
 	var totalQueries, successfulQueries int64
 	var deniedErrors, ambiguousErrors, reshardedErrors, tableNotFoundErrors, otherErrors int64
 	lg.wg.Add(1)
 	defer func() {
 		defer lg.wg.Done()
-		log.Infof("startLoad: totalQueries: %d, successfulQueries: %d, deniedErrors: %d, ambiguousErrors: %d, reshardedErrors: %d, tableNotFoundErrors: %d, otherErrors: %d",
+		log.Infof("loadGenerator: totalQueries: %d, successfulQueries: %d, deniedErrors: %d, ambiguousErrors: %d, reshardedErrors: %d, tableNotFoundErrors: %d, otherErrors: %d",
 			totalQueries, successfulQueries, deniedErrors, ambiguousErrors, reshardedErrors, tableNotFoundErrors, otherErrors)
 	}()
 	for {
 		select {
 		case <-lg.ctx.Done():
-			log.Infof("startLoad: context cancelled")
-			log.Infof("startLoad: deniedErrors: %d, ambiguousErrors: %d, reshardedErrors: %d, tableNotFoundErrors: %d, otherErrors: %d",
+			log.Infof("loadGenerator: context cancelled")
+			log.Infof("loadGenerator: deniedErrors: %d, ambiguousErrors: %d, reshardedErrors: %d, tableNotFoundErrors: %d, otherErrors: %d",
 				deniedErrors, ambiguousErrors, reshardedErrors, tableNotFoundErrors, otherErrors)
 			require.Equal(t, int64(0), deniedErrors)
 			require.Equal(t, int64(0), otherErrors)
@@ -884,12 +886,12 @@ func (lg *loadGenerator) start() {
 							sqlErr := err.(*sqlerror.SQLError)
 							if strings.Contains(strings.ToLower(err.Error()), "denied tables") {
 								if debugMode {
-									t.Logf("startLoad: denied tables error executing query: %d:%v", sqlErr.Number(), err)
+									t.Logf("loadGenerator: denied tables error executing query: %d:%v", sqlErr.Number(), err)
 								}
 								atomic.AddInt64(&deniedErrors, 1)
 							} else if strings.Contains(strings.ToLower(err.Error()), "ambiguous") {
-								// this can happen when a second keyspace is setup with the same tables, but there are no routing rules
-								// set yet by MoveTables. So we ignore these errors.
+								// This can happen when a second keyspace is setup with the same tables, but
+								// there are no routing rules set yet by MoveTables. So we ignore these errors.
 								atomic.AddInt64(&ambiguousErrors, 1)
 							} else if strings.Contains(strings.ToLower(err.Error()), "current keyspace is being resharded") {
 								atomic.AddInt64(&reshardedErrors, 1)
@@ -897,7 +899,7 @@ func (lg *loadGenerator) start() {
 								atomic.AddInt64(&tableNotFoundErrors, 1)
 							} else {
 								if debugMode {
-									t.Logf("startLoad: error executing query: %d:%v", sqlErr.Number(), err)
+									t.Logf("loadGenerator: error executing query: %d:%v", sqlErr.Number(), err)
 								}
 								atomic.AddInt64(&otherErrors, 1)
 							}
