@@ -56,6 +56,14 @@ var (
 			output: "insert into hourly_logins(applications_id, `count`, `hour`) values (:v1, :v2, :v3) on duplicate key update count = `count` + values(`count`)",
 		},
 		{
+			input:  "INSERT INTO hourly_logins (applications_id, count, hour) VALUES (?, ?, ?) AS dt ON DUPLICATE KEY UPDATE count = count + dt.count",
+			output: "insert into hourly_logins(applications_id, `count`, `hour`) values (:v1, :v2, :v3) AS dt on duplicate key update count = `count` + dt.`count`",
+		},
+		{
+			input:  "INSERT INTO hourly_logins (applications_id, count, hour) VALUES (?, ?, ?) AS dt(new_id, new_count, new_hour) ON DUPLICATE KEY UPDATE count = count + dt.count",
+			output: "insert into hourly_logins(applications_id, `count`, `hour`) values (:v1, :v2, :v3) AS dt(new_id, new_count, new_hour) on duplicate key update count = `count` + dt.`count`",
+		},
+		{
 			input:  "INSERT INTO hourly_logins (applications_id, count, hour) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE account = account + VALUES(account)",
 			output: "insert into hourly_logins(applications_id, `count`, `hour`) values (:v1, :v2, :v3) on duplicate key update account = `account` + values(`account`)",
 		},

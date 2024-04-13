@@ -1628,10 +1628,11 @@ type InsertRows interface {
 	SQLNode
 }
 
-func (*Select) iInsertRows()      {}
-func (*SetOp) iInsertRows()       {}
-func (Values) iInsertRows()       {}
-func (*ParenSelect) iInsertRows() {}
+func (*Select) iInsertRows()       {}
+func (*SetOp) iInsertRows()        {}
+func (AliasedValues) iInsertRows() {}
+func (Values) iInsertRows()        {}
+func (*ParenSelect) iInsertRows()  {}
 
 // Update represents an UPDATE statement.
 // If you add fields here, consider adding them to calls to validateUnshardedRoute.
@@ -6501,6 +6502,21 @@ func (node Values) walkSubtree(visit Visit) error {
 		}
 	}
 	return nil
+}
+
+// AliasedValues represents a VALUES clause with an optional `AS name(colnames...)`
+type AliasedValues struct {
+	Values
+	As      TableIdent
+	Columns Columns
+}
+
+// Format formats the node.
+func (node AliasedValues) Format(buf *TrackedBuffer) {
+	node.Values.Format(buf)
+	if node.As.v != "" {
+		buf.Myprintf(" AS %v%v", node.As, node.Columns)
+	}
 }
 
 // AssignmentExprs represents a list of assignment expressions.
