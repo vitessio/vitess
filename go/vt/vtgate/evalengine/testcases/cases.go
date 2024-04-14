@@ -1975,38 +1975,17 @@ func FnFromDays(yield Query) {
 }
 
 func FnSecToTime(yield Query) {
-	// for _, s := range inputConversions {
-	// 	yield(fmt.Sprintf("SEC_TO_TIME(%s)", s), nil)
-	// }
-
-	seconds := []string{
-		"0",
-		"0.99",
-		"1",
-		"-1.45632",
-		"366",
-		"365242",
-		"3652424",
-		"3652425",
-		"3652500",
-		"3652499",
-		"'3652499'",
-		"730669",
-		"730669.213",
-		"730669.99999999999",
-		"730669.213123321213",
-		"730669.213123",
-		"730669.213123",
-		"'12.12'",
-		"'730669.213123'",
-		"time '130:34:58.6'",
-		"time '-31:34:58'",
-		"cast(0b001 as json)",
-		"cast(0xFF666F6F626172FF as json)",
+	for _, s := range inputConversions {
+		yield(fmt.Sprintf("SEC_TO_TIME(%s)", s), nil)
 	}
 
-	for _, s := range seconds {
-		yield(fmt.Sprintf("SEC_TO_TIME(%s)", s), nil)
+	mysqlDocSamples := []string{
+		`SEC_TO_TIME(2378)`,
+		`SEC_TO_TIME(2378) + 0`,
+	}
+
+	for _, q := range mysqlDocSamples {
+		yield(q, nil)
 	}
 }
 

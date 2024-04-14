@@ -17,8 +17,8 @@ limitations under the License.
 package evalengine
 
 import (
-	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	"vitess.io/vitess/go/hack"
@@ -1351,9 +1351,34 @@ func (b *builtinSecToTime) eval(env *ExpressionEnv) (eval, error) {
 		return nil, err
 	}
 
-	e := evalToDecimal(arg, 0, 0)
+	var e *evalDecimal
+	switch {
+	case arg.SQLType() == sqltypes.Decimal:
+		e = arg.(*evalDecimal)
+	case sqltypes.IsIntegral(arg.SQLType()):
+		e = evalToDecimal(arg, 0, 0)
+	case sqltypes.IsTextOrBinary(arg.SQLType()):
+		b := arg.(*evalBytes)
+		if b.isHexOrBitLiteral() {
+			e = evalToDecimal(arg, 0, 0)
+		} else {
+			e = evalToDecimal(arg, 0, datetime.DefaultPrecision)
+		}
+	default:
+		e = evalToDecimal(arg, 0, datetime.DefaultPrecision)
+	}
+
 	prec := min(evalDecimalPrecision(e), datetime.DefaultPrecision)
 	sec, _ := e.toFloat0()
+
+	if sqltypes.IsDateOrTime(arg.SQLType()) {
+		parts := strings.Split(e.dec.String(), ".")
+		if len(parts) == 1 {
+			prec = 0
+		} else {
+			prec = min(int32(len(parts[1])), datetime.DefaultPrecision)
+		}
+	}
 	return newEvalTime(datetime.NewTimeFromSeconds(sec), int(prec)), nil
 }
 
@@ -1366,12 +1391,11 @@ func (call *builtinSecToTime) compile(c *compiler) (ctype, error) {
 	skip := c.compileNullCheck1(arg)
 
 	switch {
+	case arg.Type == sqltypes.Decimal:
 	case sqltypes.IsIntegral(arg.Type):
 		c.asm.Convert_xd(1, 0, 0)
-	case sqltypes.IsDateOrTime(arg.Type):
-		fmt.Println("time is this")
+	case sqltypes.IsTextOrBinary(arg.Type) && arg.isHexOrBitLiteral():
 		c.asm.Convert_xd(1, 0, 0)
-	case arg.Type == sqltypes.Decimal:
 	default:
 		c.asm.Convert_xd(1, 0, datetime.DefaultPrecision)
 	}

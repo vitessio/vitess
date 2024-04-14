@@ -18,6 +18,7 @@ package datetime
 
 import (
 	"encoding/binary"
+	"math"
 	"time"
 
 	"vitess.io/vitess/go/mysql/decimal"
@@ -721,14 +722,15 @@ func NewTimeFromSeconds(seconds float64) Time {
 		seconds = -seconds
 	}
 
-	s := int64(seconds)
-	nsec := int(1e9 * (seconds - float64(s)))
+	sec, nsec := math.Modf(seconds)
+	s := int(sec)
+	ns := nsec * (1e9)
 
 	h, s := s/3600, s%3600
 	m, s := s/60, s%60
 
 	if h >= 839 {
-		h, m, s, nsec = 838, 59, 59, 0
+		h, m, s, ns = 838, 59, 59, 0
 	}
 
 	hour := uint16(h)
@@ -740,7 +742,7 @@ func NewTimeFromSeconds(seconds float64) Time {
 		hour:       hour,
 		minute:     uint8(m),
 		second:     uint8(s),
-		nanosecond: uint32(nsec),
+		nanosecond: uint32(ns),
 	}
 }
 
