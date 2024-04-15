@@ -128,6 +128,7 @@ func StartServer(ctx context.Context, connParams, connAppDebugParams mysql.ConnP
 	config.Olap.TxTimeout = 5 * time.Second
 	config.EnableViews = true
 	config.QueryCacheDoorkeeper = false
+	config.SchemaReloadInterval = 5 * time.Second
 	gotBytes, _ := yaml2.Marshal(config)
 	log.Infof("Config:\n%s", gotBytes)
 	return StartCustomServer(ctx, connParams, connAppDebugParams, dbName, config)

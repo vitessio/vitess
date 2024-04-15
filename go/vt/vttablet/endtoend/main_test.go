@@ -37,6 +37,7 @@ import (
 var (
 	connParams         mysql.ConnParams
 	connAppDebugParams mysql.ConnParams
+	cluster            vttest.LocalCluster
 )
 
 func TestMain(m *testing.M) {
@@ -69,7 +70,7 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 		defer os.RemoveAll(cfg.SchemaDir)
-		cluster := vttest.LocalCluster{
+		cluster = vttest.LocalCluster{
 			Config: cfg,
 		}
 		if err := cluster.Setup(); err != nil {
@@ -307,7 +308,7 @@ var tableACLConfig = `{
     },
     {
       "name": "sys_table",
-      "table_names_or_prefixes": ["tables", "user", "processlist", "mutex_instances", "columns", "a"],
+      "table_names_or_prefixes": ["tables", "user", "processlist", "mutex_instances", "columns", "a", "func"],
       "readers": ["dev"],
       "writers": ["dev"],
       "admins": ["dev"]
@@ -329,6 +330,13 @@ var tableACLConfig = `{
     {
       "name": "vitess_views",
       "table_names_or_prefixes": ["views", "vitess_view1", "vitess_view2", "vitess_view3"],
+      "readers": ["dev"],
+      "writers": ["dev"],
+      "admins": ["dev"]
+    },
+    {
+      "name": "vitess_internal",
+      "table_names_or_prefixes": ["udfs"],
       "readers": ["dev"],
       "writers": ["dev"],
       "admins": ["dev"]

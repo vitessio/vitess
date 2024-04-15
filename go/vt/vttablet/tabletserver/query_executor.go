@@ -1161,6 +1161,8 @@ func (qre *QueryExecutor) GetSchemaDefinitions(tableType querypb.SchemaTableType
 		return qre.getTableDefinitions(tableNames, callback)
 	case querypb.SchemaTableType_ALL:
 		return qre.getAllDefinitions(tableNames, callback)
+	case querypb.SchemaTableType_UDF_AGGREGATE:
+		return qre.getUDFs(callback)
 	}
 	return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid table type %v", tableType)
 }
@@ -1205,6 +1207,28 @@ func (qre *QueryExecutor) executeGetSchemaQuery(query string, callback func(sche
 				continue
 			}
 			schemaDef[tableName] = row[1].ToString()
+		}
+		return callback(&querypb.GetSchemaResponse{TableDefinition: schemaDef})
+	})
+}
+
+func (qre *QueryExecutor) getUDFs(callback func(schemaRes *querypb.GetSchemaResponse) error) error {
+	query, err := eschema.GetFetchUDFsQuery(qre.tsv.env.Parser())
+	if err != nil {
+		return err
+	}
+
+	conn, err := qre.getStreamConn()
+	if err != nil {
+		return err
+	}
+	defer conn.Recycle()
+
+	return qre.execStreamSQL(conn, false /* isTransaction */, query, func(result *sqltypes.Result) error {
+		schemaDef := make(map[string]string)
+		for _, row := range result.Rows {
+			udf := row[0].ToString()
+			schemaDef[udf] = row[1].ToString()
 		}
 		return callback(&querypb.GetSchemaResponse{TableDefinition: schemaDef})
 	})
