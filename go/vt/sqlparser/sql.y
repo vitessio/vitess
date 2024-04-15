@@ -304,7 +304,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> TABLE_ENCRYPTION_ADMIN TP_CONNECTION_ADMIN VERSION_TOKEN_ADMIN XA_RECOVER_ADMIN
 
 // Replication Tokens
-%token <bytes> REPLICA REPLICAS SOURCE STOP RESET FILTER LOG
+%token <bytes> REPLICA REPLICAS SOURCE STOP RESET FILTER LOG MASTER
 %token <bytes> SOURCE_HOST SOURCE_USER SOURCE_PASSWORD SOURCE_PORT SOURCE_CONNECT_RETRY SOURCE_RETRY_COUNT SOURCE_AUTO_POSITION
 %token <bytes> REPLICATE_DO_TABLE REPLICATE_IGNORE_TABLE
 
@@ -565,6 +565,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <tableOption> table_option
 %type <tableOptions> table_option_list
 %type <flushOption> flush_option
+%type <boolean> flush_tables_read_lock_opt
 %type <replicationOptions> replication_option_list replication_filter_option_list
 %type <replicationOption> replication_option replication_filter_option
 %type <str> relay_logs_attribute
@@ -3744,6 +3745,19 @@ flush_option:
   {
     $$ = &FlushOption{Name: string($1)}
   }
+| TABLE table_name_list flush_tables_read_lock_opt
+  {
+    $$ = &FlushOption{Name: string($1), Tables: $2, ReadLock: $3}
+  }
+| TABLES table_name_list flush_tables_read_lock_opt
+  {
+    $$ = &FlushOption{Name: string($1), Tables: $2, ReadLock: $3}
+  }
+
+flush_tables_read_lock_opt:
+  {$$ = false}
+| WITH READ LOCK
+  {$$ = true}
 
 relay_logs_attribute:
   { $$ = "" }
@@ -5313,6 +5327,10 @@ show_statement:
 | SHOW BINARY LOG STATUS
   {
     $$ = &Show{Type: string($2) + " " + string($3) + " " + string($4)}
+  }
+| SHOW MASTER STATUS
+  {
+    $$ = &Show{Type: "BINARY LOG STATUS"}
   }
 | SHOW BINARY LOGS
   {
@@ -9052,6 +9070,7 @@ non_reserved_keyword:
 | LOCKED
 | LOG
 | LOGS
+| MASTER
 | MASTER_COMPRESSION_ALGORITHMS
 | MASTER_PUBLIC_KEY_PATH
 | MASTER_TLS_CIPHERSUITES
