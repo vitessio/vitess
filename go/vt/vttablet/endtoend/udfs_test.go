@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -157,6 +158,9 @@ func copySOFile(t *testing.T, client *framework.QueryClient) {
 	defer source.Close()
 
 	destination, err := os.Create(pluginDir + soFileName)
+	if err != nil && strings.Contains(err.Error(), "permission denied") {
+		t.Skip("permission denied to copy so file")
+	}
 	require.NoError(t, err)
 	defer destination.Close()
 
