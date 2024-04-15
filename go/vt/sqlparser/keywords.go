@@ -363,6 +363,7 @@ var keywords = map[string]int{
 	"longtext":                      LONGTEXT,
 	"loop":                          LOOP,
 	"low_priority":                  LOW_PRIORITY,
+	"master":                        MASTER,
 	"master_bind":                   MASTER_BIND,
 	"master_ssl_verify_server_cert": MASTER_SSL_VERIFY_SERVER_CERT,
 	"match":                         MATCH,

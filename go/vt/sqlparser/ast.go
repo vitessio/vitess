@@ -3771,8 +3771,10 @@ func (node *Rollback) Format(buf *TrackedBuffer) {
 
 // FlushOption is used for trailing options for flush statement
 type FlushOption struct {
-	Name    string
-	Channel string
+	Name     string
+	Channel  string
+	Tables   []TableName
+	ReadLock bool
 }
 
 // Flush represents a Flush statement.
@@ -3789,10 +3791,23 @@ func (node *Flush) Format(buf *TrackedBuffer) {
 		buf.Myprintf(" %s", strings.ToLower(node.Type))
 	}
 
-	if node.Option.Name == "RELAY LOGS" && node.Option.Channel != "" {
+	if strings.ToLower(node.Option.Name) == "relay logs" && node.Option.Channel != "" {
 		buf.Myprintf(" %s for channel %s", strings.ToLower(node.Option.Name), strings.ToLower(node.Option.Channel))
 	} else {
 		buf.Myprintf(" %s", strings.ToLower(node.Option.Name))
+	}
+
+	if len(node.Option.Tables) > 0 {
+		for i, tableName := range node.Option.Tables {
+			if i > 0 {
+				buf.Myprintf(",")
+			}
+			buf.Myprintf(" %s", strings.ToLower(tableName.String()))
+		}
+
+		if node.Option.ReadLock {
+			buf.Myprintf(" with read lock")
+		}
 	}
 }
 

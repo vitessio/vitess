@@ -563,6 +563,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <tableOption> table_option
 %type <tableOptions> table_option_list
 %type <flushOption> flush_option
+%type <boolean> flush_tables_read_lock_opt
 %type <replicationOptions> replication_option_list replication_filter_option_list
 %type <replicationOption> replication_option replication_filter_option
 %type <str> relay_logs_attribute
@@ -3721,6 +3722,19 @@ flush_option:
   {
     $$ = &FlushOption{Name: string($1)}
   }
+| TABLE table_name_list flush_tables_read_lock_opt
+  {
+    $$ = &FlushOption{Name: string($1), Tables: $2, ReadLock: $3}
+  }
+| TABLES table_name_list flush_tables_read_lock_opt
+  {
+    $$ = &FlushOption{Name: string($1), Tables: $2, ReadLock: $3}
+  }
+
+flush_tables_read_lock_opt:
+  {$$ = false}
+| WITH READ LOCK
+  {$$ = true}
 
 relay_logs_attribute:
   { $$ = "" }
