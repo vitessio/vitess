@@ -1424,7 +1424,10 @@ func (c *Cluster) GetSchemas(ctx context.Context, opts GetSchemaOptions) ([]*vta
 
 		span.Annotate("cache_hit", ok)
 		if ok {
+			log.Infof("GetSchemas(cluster = %s) fetching schemas from schema cache", c.ID)
 			return schemas, err
+		} else {
+			log.Infof("GetSchemas(cluster = %s) bypassing schema cache", c.ID)
 		}
 	}
 
