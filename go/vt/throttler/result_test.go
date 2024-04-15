@@ -17,9 +17,10 @@ limitations under the License.
 package throttler
 
 import (
-	"reflect"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -127,9 +128,7 @@ reason: emergency state decreased the rate`,
 
 	for _, tc := range testcases {
 		got := tc.r.String()
-		if got != tc.want {
-			t.Fatalf("record.String() = %v, want = %v for full record: %#v", got, tc.want, tc.r)
-		}
+		require.Equal(t, tc.want, got)
 	}
 }
 
@@ -143,19 +142,16 @@ func TestResultRing(t *testing.T) {
 
 	// Use the ring partially.
 	rr.add(r1)
-	if got, want := rr.latestValues(), []result{r1}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("items not correctly added to resultRing. got = %v, want = %v", got, want)
-	}
+	got, want := rr.latestValues(), []result{r1}
+	require.Equal(t, want, got, "items not correctly added to resultRing")
 
 	// Use it fully.
 	rr.add(r2)
-	if got, want := rr.latestValues(), []result{r2, r1}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("items not correctly added to resultRing. got = %v, want = %v", got, want)
-	}
+	got, want = rr.latestValues(), []result{r2, r1}
+	require.Equal(t, want, got, "items not correctly added to resultRing")
 
 	// Let it wrap.
 	rr.add(r3)
-	if got, want := rr.latestValues(), []result{r3, r2}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("resultRing did not wrap correctly. got = %v, want = %v", got, want)
-	}
+	got, want = rr.latestValues(), []result{r3, r2}
+	require.Equal(t, want, got, "resultRing did not wrap correctly")
 }
