@@ -3815,7 +3815,7 @@ func (node *Flush) Format(buf *TrackedBuffer) {
 		buf.Myprintf(" %s", strings.ToLower(node.Type))
 	}
 
-	if strings.ToLower(node.Option.Name) == "relay logs" && node.Option.Channel != "" {
+	if strings.EqualFold(node.Option.Name, "relay logs") && node.Option.Channel != "" {
 		buf.Myprintf(" %s for channel %s", strings.ToLower(node.Option.Name), strings.ToLower(node.Option.Channel))
 	} else {
 		buf.Myprintf(" %s", strings.ToLower(node.Option.Name))
