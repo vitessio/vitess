@@ -129,6 +129,8 @@ func addColumnsToInput(ctx *plancontext.PlanningContext, root Operator) Operator
 
 		return in, NoRewrite
 	}
+
+	// while we are out here walking the operator tree, if we find a UDF in an aggregation, we should fail
 	failUDFAggregation := func(in Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult) {
 		aggrOp, ok := in.(*Aggregator)
 		if !ok {
