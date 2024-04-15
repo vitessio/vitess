@@ -715,6 +715,38 @@ func NewTimeFromStd(t time.Time) Time {
 	}
 }
 
+func NewTimeFromSecondsDecimal(seconds decimal.Decimal) Time {
+	var neg bool
+	if seconds.Cmp(decimal.NewFromInt(0)) >= 0 {
+		neg = true
+		seconds = seconds.Mul(decimal.NewFromInt(-1))
+	}
+
+	id, frac := seconds.QuoRem(decimal.New(1, 0), 0)
+	ns := frac.Mul(decimal.New(1, 9))
+
+	s, _ := id.Int64()
+	h, s := s/3600, s%3600
+	m, s := s/60, s%60
+
+	if h >= 839 {
+		h, m, s = 838, 59, 59
+	}
+
+	hour := uint16(h)
+	if neg {
+		hour |= negMask
+	}
+
+	nsec, _ := ns.Int64()
+	return Time{
+		hour:       hour,
+		minute:     uint8(m),
+		second:     uint8(s),
+		nanosecond: uint32(nsec),
+	}
+}
+
 func NewTimeFromSeconds(seconds float64) Time {
 	var neg bool
 	if seconds < 0 {
