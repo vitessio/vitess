@@ -289,10 +289,8 @@ func (cfg Config) Merge(override Config) Config {
 }
 
 func formatID(id string) string {
-	if strings.Contains(id, "_") {
-		// gRPC can't process custom resolver names with underscores
-		id = strings.Replace(id, "_", "-", -1)
-	}
+	// gRPC can't process custom resolver names with underscores
+	id = strings.Replace(id, "_", "-", -1)
 
 	return id
 }
