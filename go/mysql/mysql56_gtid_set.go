@@ -37,8 +37,8 @@ func (iv interval) contains(other interval) bool {
 
 // overlaps returns true if any part of |other| overlaps with this interval.
 func (iv interval) overlaps(other interval) bool {
-	return other.start >= iv.start && other.start < iv.end ||
-		other.end <= iv.end && other.end > iv.start ||
+	return other.start >= iv.start && other.start <= iv.end ||
+		other.end <= iv.end && other.end >= iv.start ||
 		other.start == iv.start && other.end == iv.end
 }
 

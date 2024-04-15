@@ -422,7 +422,10 @@ func TestMysql56GTIDSetSubtract(t *testing.T) {
 	sid2 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16}
 	sid3 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17}
 
-	table := []struct{name string; left, right, expected Mysql56GTIDSet}{
+	table := []struct {
+		name                  string
+		left, right, expected Mysql56GTIDSet
+	}{
 		{
 			name: "non-overlapping GTIDSets don't subtract anything",
 			left: Mysql56GTIDSet{
@@ -510,15 +513,39 @@ func TestMysql56GTIDSetSubtract(t *testing.T) {
 				sid2: []interval{{50, 50}, {60, 63}, {66, 70}},
 			},
 		},
+		{
+			name: "subtracting an interval that ends at the start of an interval",
+			left: Mysql56GTIDSet{
+				sid1: []interval{{21, 57}},
+			},
+			right: Mysql56GTIDSet{
+				sid1: []interval{{20, 21}},
+			},
+			expected: Mysql56GTIDSet{
+				sid1: []interval{{22, 57}},
+			},
+		},
+		{
+			name: "subtracting an interval that starts at the end of an interval",
+			left: Mysql56GTIDSet{
+				sid1: []interval{{21, 57}},
+			},
+			right: Mysql56GTIDSet{
+				sid1: []interval{{57, 58}},
+			},
+			expected: Mysql56GTIDSet{
+				sid1: []interval{{21, 56}},
+			},
+		},
 	}
 
 	for _, test := range table {
 		t.Run(test.name, func(t *testing.T) {
 			if got := test.left.Subtract(test.right); !got.Equal(test.expected) {
-				t.Errorf("failed test case:\n" +
-					"left:     %#v\n" +
-					"right:    %#v\n" +
-					"expected: %#v\n" +
+				t.Errorf("failed test case:\n"+
+					"left:     %#v\n"+
+					"right:    %#v\n"+
+					"expected: %#v\n"+
 					"got:      %#v",
 					test.left, test.right, test.expected, got)
 			}
