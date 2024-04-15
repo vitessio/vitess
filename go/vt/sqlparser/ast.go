@@ -2024,6 +2024,9 @@ type DDL struct {
 	SpecialCommentMode        bool
 	SubStatementPositionStart int
 	SubStatementPositionEnd   int
+	// SubStatementStr will have the sub statement as a string rather than having to slice the original query.
+	// If it's empty, then use the position start and end values to slice the sub statement out of the original query.
+	SubStatementStr string
 
 	// FromViews is set if Action is DropStr.
 	FromViews TableNames
