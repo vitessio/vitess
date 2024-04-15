@@ -1284,6 +1284,9 @@ func TestEngineReload(t *testing.T) {
 		db.AddQuery("insert into _vt.views(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'V2', 'create_table_V2', 'select_V2')", &sqltypes.Result{})
 	}
 
+	// adding query pattern for udfs
+	db.AddQueryPattern("SELECT name.*", &sqltypes.Result{})
+
 	// Verify the list of created, altered and dropped tables seen.
 	se.RegisterNotifier("test", func(full map[string]*Table, created, altered, dropped []*Table, _ bool) {
 		require.ElementsMatch(t, extractNamesFromTablesList(created), []string{"T2", "V2"})

@@ -35,7 +35,7 @@ import (
 
 const (
 	soFileName = "udf.so"
-	udfRows    = "select function_name from _vt.udfs"
+	udfRows    = "select * from _vt.udfs"
 )
 
 // Test will validate that UDFs signal is sent through the stream health.
@@ -86,23 +86,28 @@ func TestUDFs(t *testing.T) {
 	// wait for udf update
 	select {
 	case <-ch:
-	case <-time.After(5 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("timed out waiting for udf create signal")
 	}
 
 	// validate the row in _vt.udfs.
 	qr, err = client.Execute(udfRows, nil)
 	require.NoError(t, err)
-	require.Equal(t, `[[VARCHAR("myudf") VARCHAR("double") VARCHAR("aggregate")]]`, fmt.Sprintf("%v", qr.Rows))
+	require.Equal(t, `[[VARBINARY("myudf") VARBINARY("double") VARBINARY("aggregate")]]`, fmt.Sprintf("%v", qr.Rows))
 
 	// dropping the user defined function.
-	_, err = client.Execute("drop function myudf", nil)
+	err = cluster.Execute([]string{"drop function myudf"}, "vttest")
 	require.NoError(t, err)
+
+	// validate the row in mysql.func.
+	qr, err = client.Execute("select * from mysql.func", nil)
+	require.NoError(t, err)
+	require.Equal(t, `[]`, fmt.Sprintf("%v", qr.Rows))
 
 	// wait for views update
 	select {
 	case <-ch:
-	case <-time.After(5 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("timed out waiting for udf drop signal")
 	}
 

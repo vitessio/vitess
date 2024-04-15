@@ -313,8 +313,7 @@ func (hs *healthStreamer) MakePrimary(serving bool) {
 	// and we are going to a serving primary state.
 	if serving && hs.signalWhenSchemaChange {
 		hs.se.RegisterNotifier("healthStreamer", func(full map[string]*schema.Table, created, altered, dropped []*schema.Table, udfsChanged bool) {
-			// TODO: use udfsChanged
-			if err := hs.reload(full, created, altered, dropped); err != nil {
+			if err := hs.reload(created, altered, dropped, udfsChanged); err != nil {
 				log.Errorf("periodic schema reload failed in health stream: %v", err)
 			}
 		}, false)
@@ -329,7 +328,7 @@ func (hs *healthStreamer) MakeNonPrimary() {
 }
 
 // reload reloads the schema from the underlying mysql for the tables that we get the alert on.
-func (hs *healthStreamer) reload(full map[string]*schema.Table, created, altered, dropped []*schema.Table) error {
+func (hs *healthStreamer) reload(created, altered, dropped []*schema.Table, udfsChanged bool) error {
 	hs.mu.Lock()
 	defer hs.mu.Unlock()
 	// Schema Reload to happen only on primary when it is serving.
@@ -367,16 +366,17 @@ func (hs *healthStreamer) reload(full map[string]*schema.Table, created, altered
 	}
 
 	// no change detected
-	if len(tables) == 0 && len(views) == 0 {
+	if len(tables) == 0 && len(views) == 0 && !udfsChanged {
 		return nil
 	}
 
 	hs.state.RealtimeStats.TableSchemaChanged = tables
 	hs.state.RealtimeStats.ViewSchemaChanged = views
+	hs.state.RealtimeStats.UdfsChanged = udfsChanged
 	shr := hs.state.CloneVT()
 	hs.broadCastToClients(shr)
 	hs.state.RealtimeStats.TableSchemaChanged = nil
 	hs.state.RealtimeStats.ViewSchemaChanged = nil
-
+	hs.state.RealtimeStats.UdfsChanged = false
 	return nil
 }

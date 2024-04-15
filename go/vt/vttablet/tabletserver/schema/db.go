@@ -19,6 +19,8 @@ package schema
 import (
 	"context"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -88,8 +90,7 @@ where table_schema = database() and table_name in ::viewNames`
 	fetchTablesAndViews = `select table_name, create_statement from %s.tables where table_schema = database() union select table_name, create_statement from %s.views where table_schema = database()`
 
 	// detectUdfChange query detects if there is any udf change from previous copy.
-	detectUdfChange = `
-SELECT name
+	detectUdfChange = `SELECT name
 FROM (
 	SELECT name FROM 
 	mysql.func 
@@ -347,7 +348,8 @@ func getChangedUserDefinedFunctions(ctx context.Context, conn *connpool.Conn, is
 
 	udfsChanged := false
 	callback := func(qr *sqltypes.Result) error {
-		udfsChanged = true
+		// If we receive any row as output which means udf was modified.
+		udfsChanged = len(qr.Rows) > 0
 		return nil
 	}
 	alloc := func() *sqltypes.Result { return &sqltypes.Result{} }
@@ -357,6 +359,9 @@ func getChangedUserDefinedFunctions(ctx context.Context, conn *connpool.Conn, is
 	err := conn.Stream(ctx, udfChangeQuery, callback, alloc, bufferSize, 0)
 	if err != nil {
 		return false, err
+	}
+	if udfsChanged {
+		log.Info("Underlying User Defined Functions have changed")
 	}
 	return udfsChanged, nil
 }
