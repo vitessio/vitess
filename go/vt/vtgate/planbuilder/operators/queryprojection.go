@@ -29,7 +29,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type (
@@ -88,12 +87,6 @@ type (
 		WSOffset  int
 
 		SubQueryExpression []*SubQuery
-	}
-
-	AggrRewriter struct {
-		qp     *QueryProjection
-		st     *semantics.SemTable
-		failed bool
 	}
 )
 
@@ -182,61 +175,6 @@ func createQPFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select)
 	qp.calculateDistinct(ctx)
 
 	return qp
-}
-
-// RewriteDown stops the walker from entering inside aggregation functions
-func (ar *AggrRewriter) RewriteDown() func(sqlparser.SQLNode, sqlparser.SQLNode) bool {
-	return func(node, _ sqlparser.SQLNode) bool {
-		if ar.failed {
-			return true
-		}
-		_, ok := node.(sqlparser.AggrFunc)
-		return !ok
-	}
-}
-
-// RewriteUp will go through an expression, add aggregations to the QP, and rewrite them to use column offset
-func (ar *AggrRewriter) RewriteUp() func(*sqlparser.Cursor) bool {
-	return func(cursor *sqlparser.Cursor) bool {
-		if ar.failed {
-			return false
-		}
-		sqlNode := cursor.Node()
-		fExp, ok := sqlNode.(sqlparser.AggrFunc)
-		if !ok {
-			return true
-		}
-		for offset, expr := range ar.qp.SelectExprs {
-			ae, err := expr.GetAliasedExpr()
-			if err != nil {
-				ar.failed = true
-				return false
-			}
-			if ar.st.EqualsExprWithDeps(ae.Expr, fExp) {
-				cursor.Replace(sqlparser.NewOffset(offset, fExp))
-				return true
-			}
-		}
-
-		col := SelectExpr{
-			Aggr: true,
-			Col:  &sqlparser.AliasedExpr{Expr: fExp},
-		}
-		ar.qp.HasAggr = true
-		cursor.Replace(sqlparser.NewOffset(len(ar.qp.SelectExprs), fExp))
-		ar.qp.SelectExprs = append(ar.qp.SelectExprs, col)
-		ar.qp.AddedColumn++
-
-		return true
-	}
-}
-
-// AggrRewriter extracts
-func (qp *QueryProjection) AggrRewriter(ctx *plancontext.PlanningContext) *AggrRewriter {
-	return &AggrRewriter{
-		qp: qp,
-		st: ctx.SemTable,
-	}
 }
 
 func (qp *QueryProjection) addSelectExpressions(ctx *plancontext.PlanningContext, sel *sqlparser.Select) {
@@ -387,7 +325,7 @@ func (qp *QueryProjection) addGroupBy(ctx *plancontext.PlanningContext, groupBy 
 	es := &expressionSet{}
 	for _, grouping := range groupBy {
 		selectExprIdx := qp.FindSelectExprIndexForExpr(ctx, grouping)
-		checkForInvalidGroupingExpressions(grouping)
+		checkForInvalidGroupingExpressions(ctx, grouping)
 
 		if !es.add(ctx, grouping) {
 			continue
@@ -755,9 +693,9 @@ func (qp *QueryProjection) useGroupingOverDistinct(ctx *plancontext.PlanningCont
 	return true
 }
 
-func checkForInvalidGroupingExpressions(expr sqlparser.Expr) {
+func checkForInvalidGroupingExpressions(ctx *plancontext.PlanningContext, expr sqlparser.Expr) {
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
-		if _, isAggregate := node.(sqlparser.AggrFunc); isAggregate {
+		if IsAggr(ctx, node) {
 			panic(vterrors.VT03005(sqlparser.String(expr)))
 		}
 		_, isSubQ := node.(*sqlparser.Subquery)
