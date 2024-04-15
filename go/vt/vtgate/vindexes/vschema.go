@@ -245,6 +245,9 @@ type KeyspaceSchema struct {
 	Views           map[string]sqlparser.SelectStatement
 	Error           error
 	MultiTenantSpec *vschemapb.MultiTenantSpec
+
+	// These are the UDFs that exist in the schema and are aggregations
+	AggregateUDFs []string
 }
 
 type ksJSON struct {
@@ -419,6 +422,18 @@ func (vschema *VSchema) AddView(ksname, viewName, query string, parser *sqlparse
 		ColumnListAuthoritative: true,
 	}
 	vschema.addTableName(t)
+	return nil
+}
+
+// AddTable adds a table to an existing keyspace in the VSchema.
+// It's only used from tests.
+func (vschema *VSchema) AddUDF(ksname, udfName string) error {
+	ks, ok := vschema.Keyspaces[ksname]
+	if !ok {
+		return fmt.Errorf("keyspace %s not found in vschema", ksname)
+	}
+
+	ks.AggregateUDFs = append(ks.AggregateUDFs, udfName)
 	return nil
 }
 
@@ -1270,6 +1285,20 @@ func (vschema *VSchema) GetCreated() time.Time {
 // Used only in tests where vschema protos are compared.
 func (vschema *VSchema) ResetCreated() {
 	vschema.created = time.Time{}
+}
+
+func (vschema *VSchema) GetAggregateUDFs() (udfs []string) {
+	seen := make(map[string]bool)
+	for _, ks := range vschema.Keyspaces {
+		for _, udf := range ks.AggregateUDFs {
+			if seen[udf] {
+				continue
+			}
+			seen[udf] = true
+			udfs = append(udfs, udf)
+		}
+	}
+	return
 }
 
 // ByCost provides the interface needed for ColumnVindexes to

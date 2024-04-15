@@ -93,6 +93,9 @@ type VSchema interface {
 
 	// StorePrepareData stores the prepared data in the session.
 	StorePrepareData(name string, v *vtgatepb.PrepareData)
+
+	// GetAggregateUDFs returns the list of aggregate UDFs.
+	GetAggregateUDFs() []string
 }
 
 // PlannerNameToVersion returns the numerical representation of the planner

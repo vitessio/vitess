@@ -71,6 +71,10 @@ func (si *declarativeSchemaInformation) KeyspaceError(keyspace string) error {
 	return nil
 }
 
+func (si *declarativeSchemaInformation) GetAggregateUDFs() []string {
+	return nil
+}
+
 func (si *declarativeSchemaInformation) GetForeignKeyChecksState() *bool {
 	return nil
 }

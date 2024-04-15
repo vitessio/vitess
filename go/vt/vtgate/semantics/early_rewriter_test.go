@@ -645,6 +645,7 @@ func getSchemaWithKnownColumns() *FakeSI {
 				ColumnListAuthoritative: true,
 			},
 		},
+		UDFs: []string{"custom_udf"},
 	}
 	return schemaInfo
 }
