@@ -127,6 +127,10 @@ var (
 			input:  "show binary log status",
 		},
 		{
+			input:  "SHOW MASTER STATUS",
+			output: "show binary log status",
+		},
+		{
 			input: "start replica",
 		},
 		{

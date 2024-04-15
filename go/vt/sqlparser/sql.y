@@ -303,7 +303,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> TABLE_ENCRYPTION_ADMIN TP_CONNECTION_ADMIN VERSION_TOKEN_ADMIN XA_RECOVER_ADMIN
 
 // Replication Tokens
-%token <bytes> REPLICA REPLICAS SOURCE STOP RESET FILTER LOG
+%token <bytes> REPLICA REPLICAS SOURCE STOP RESET FILTER LOG MASTER
 %token <bytes> SOURCE_HOST SOURCE_USER SOURCE_PASSWORD SOURCE_PORT SOURCE_CONNECT_RETRY SOURCE_RETRY_COUNT SOURCE_AUTO_POSITION
 %token <bytes> REPLICATE_DO_TABLE REPLICATE_IGNORE_TABLE
 
@@ -5283,6 +5283,10 @@ show_statement:
   {
     $$ = &Show{Type: string($2) + " " + string($3) + " " + string($4)}
   }
+| SHOW MASTER STATUS
+  {
+    $$ = &Show{Type: "BINARY LOG STATUS"}
+  }
 | SHOW BINARY LOGS
   {
     $$ = &Show{Type: string($2) + " " + string($3)}
@@ -9020,6 +9024,7 @@ non_reserved_keyword:
 | LOCKED
 | LOG
 | LOGS
+| MASTER
 | MASTER_COMPRESSION_ALGORITHMS
 | MASTER_PUBLIC_KEY_PATH
 | MASTER_TLS_CIPHERSUITES
