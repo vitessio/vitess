@@ -19,6 +19,8 @@ package schema
 import (
 	"context"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -86,6 +88,32 @@ where table_schema = database() and table_name in ::viewNames`
 
 	// fetchTablesAndViews queries fetches all information about tables and views
 	fetchTablesAndViews = `select table_name, create_statement from %s.tables where table_schema = database() union select table_name, create_statement from %s.views where table_schema = database()`
+
+	// detectUdfChange query detects if there is any udf change from previous copy.
+	detectUdfChange = `SELECT name
+FROM (
+	SELECT name FROM 
+	mysql.func 
+
+	UNION ALL
+
+	SELECT function_name
+	FROM %s.udfs
+) _inner
+GROUP BY name
+HAVING COUNT(*) = 1
+LIMIT 1
+`
+
+	// deleteAllUdfs clears out the udfs table.
+	deleteAllUdfs = `delete from %s.udfs`
+
+	// copyUdfs copies user defined function to the udfs table.
+	copyUdfs = `INSERT INTO %s.udfs(FUNCTION_NAME, FUNCTION_RETURN_TYPE, FUNCTION_TYPE) 
+SELECT f.name, i.UDF_RETURN_TYPE, f.type FROM mysql.func f left join performance_schema.user_defined_functions i on f.name = i.udf_name
+`
+	// fetchAggregateUdfs queries fetches all the aggregate user defined functions.
+	fetchAggregateUdfs = `select function_name, function_return_type from %s.udfs where function_type = 'aggregate'`
 )
 
 // reloadTablesDataInDB reloads teh tables information we have stored in our database we use for schema-tracking.
@@ -313,6 +341,31 @@ func getChangedViewNames(ctx context.Context, conn *connpool.Conn, isServingPrim
 	return views, nil
 }
 
+func getChangedUserDefinedFunctions(ctx context.Context, conn *connpool.Conn, isServingPrimary bool) (bool, error) {
+	if !isServingPrimary {
+		return false, nil
+	}
+
+	udfsChanged := false
+	callback := func(qr *sqltypes.Result) error {
+		// If we receive any row as output which means udf was modified.
+		udfsChanged = len(qr.Rows) > 0
+		return nil
+	}
+	alloc := func() *sqltypes.Result { return &sqltypes.Result{} }
+	bufferSize := 1000
+
+	udfChangeQuery := sqlparser.BuildParsedQuery(detectUdfChange, sidecar.GetIdentifier()).Query
+	err := conn.Stream(ctx, udfChangeQuery, callback, alloc, bufferSize, 0)
+	if err != nil {
+		return false, err
+	}
+	if udfsChanged {
+		log.Info("Underlying User Defined Functions have changed")
+	}
+	return udfsChanged, nil
+}
+
 // getMismatchedTableNames gets the tables that do not align with the tables information we have in the cache.
 func (se *Engine) getMismatchedTableNames(ctx context.Context, conn *connpool.Conn, isServingPrimary bool) (map[string]any, error) {
 	tablesMismatched := make(map[string]any)
@@ -358,7 +411,7 @@ func (se *Engine) getMismatchedTableNames(ctx context.Context, conn *connpool.Co
 }
 
 // reloadDataInDB reloads the schema tracking data in the database
-func reloadDataInDB(ctx context.Context, conn *connpool.Conn, altered []*Table, created []*Table, dropped []*Table, parser *sqlparser.Parser) error {
+func reloadDataInDB(ctx context.Context, conn *connpool.Conn, altered, created, dropped []*Table, udfsChanged bool, parser *sqlparser.Parser) error {
 	// tablesToReload and viewsToReload stores the tables and views that need reloading and storing in our MySQL database.
 	var tablesToReload, viewsToReload []*Table
 	// droppedTables, droppedViews stores the list of tables and views we need to delete, respectively.
@@ -388,6 +441,42 @@ func reloadDataInDB(ctx context.Context, conn *connpool.Conn, altered []*Table, 
 	if err := reloadViewsDataInDB(ctx, conn, viewsToReload, droppedViews, parser); err != nil {
 		return err
 	}
+	if err := reloadUdfsInDB(ctx, conn, udfsChanged, parser); err != nil {
+		return err
+	}
+	return nil
+}
+
+func reloadUdfsInDB(ctx context.Context, conn *connpool.Conn, udfsChanged bool, parser *sqlparser.Parser) error {
+	if !udfsChanged {
+		return nil
+	}
+
+	clearUdfQuery := sqlparser.BuildParsedQuery(deleteAllUdfs, sidecar.GetIdentifier()).Query
+	copyUdfQuery := sqlparser.BuildParsedQuery(copyUdfs, sidecar.GetIdentifier()).Query
+
+	// Reload the udfs in a transaction.
+	_, err := conn.Exec(ctx, "begin", 1, false)
+	if err != nil {
+		return err
+	}
+	defer conn.Exec(ctx, "rollback", 1, false)
+
+	_, err = conn.Exec(ctx, clearUdfQuery, 1, false)
+	if err != nil {
+		return err
+	}
+
+	_, err = conn.Exec(ctx, copyUdfQuery, 1, false)
+	if err != nil {
+		return err
+	}
+
+	_, err = conn.Exec(ctx, "commit", 1, false)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -458,4 +547,13 @@ func GetFetchTableAndViewsQuery(tableNames []string, parser *sqlparser.Parser) (
 		return "", err
 	}
 	return parsedQuery.GenerateQuery(bv, nil)
+}
+
+// GetFetchUDFsQuery gets the fetch query to retrieve all the UDFs.
+func GetFetchUDFsQuery(parser *sqlparser.Parser) (string, error) {
+	parsedQuery, err := generateFullQuery(fetchAggregateUdfs, parser)
+	if err != nil {
+		return "", err
+	}
+	return parsedQuery.Query, nil
 }

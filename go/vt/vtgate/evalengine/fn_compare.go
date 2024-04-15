@@ -300,12 +300,16 @@ func (call *builtinMultiComparison) compile_c(c *compiler, args []ctype) (ctype,
 
 func (call *builtinMultiComparison) compile_d(c *compiler, args []ctype) (ctype, error) {
 	var f typeFlag
+	var size int32
+	var scale int32
 	for i, tt := range args {
 		f |= nullableFlags(tt.Flag)
+		size = max(size, tt.Size)
+		scale = max(scale, tt.Scale)
 		c.compileToDecimal(tt, len(args)-i)
 	}
 	c.asm.Fn_MULTICMP_d(len(args), call.cmp < 0)
-	return ctype{Type: sqltypes.Decimal, Flag: f, Col: collationNumeric}, nil
+	return ctype{Type: sqltypes.Decimal, Flag: f, Col: collationNumeric, Size: size, Scale: scale}, nil
 }
 
 func (call *builtinMultiComparison) compile(c *compiler) (ctype, error) {

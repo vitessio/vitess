@@ -410,6 +410,28 @@
     }
   },
   {
+    "comment": "DISTINCT inside derived table",
+    "query": "select * from (select distinct name from user) as t",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select * from (select distinct name from user) as t",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `name` from (select `name` from `user` where 1 != 1) as t where 1 != 1",
+        "Query": "select `name` from (select distinct `name` from `user`) as t",
+        "Table": "`user`"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "',' join unsharded",
     "query": "select u1.a, u2.a from unsharded u1, unsharded u2",
     "plan": {

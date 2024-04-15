@@ -41299,6 +41299,9 @@ export namespace query {
 
         /** RealtimeStats view_schema_changed */
         view_schema_changed?: (string[]|null);
+
+        /** RealtimeStats udfs_changed */
+        udfs_changed?: (boolean|null);
     }
 
     /** Represents a RealtimeStats. */
@@ -41333,6 +41336,9 @@ export namespace query {
 
         /** RealtimeStats view_schema_changed. */
         public view_schema_changed: string[];
+
+        /** RealtimeStats udfs_changed. */
+        public udfs_changed: boolean;
 
         /**
          * Creates a new RealtimeStats instance using the specified properties.
@@ -41775,7 +41781,8 @@ export namespace query {
     enum SchemaTableType {
         VIEWS = 0,
         TABLES = 1,
-        ALL = 2
+        ALL = 2,
+        UDF_AGGREGATE = 3
     }
 
     /** Properties of a GetSchemaRequest. */
@@ -45388,6 +45395,9 @@ export namespace vtctldata {
 
         /** WorkflowOptions source_keyspace_alias */
         source_keyspace_alias?: (string|null);
+
+        /** WorkflowOptions strip_sharded_auto_increment */
+        strip_sharded_auto_increment?: (boolean|null);
     }
 
     /** Represents a WorkflowOptions. */
@@ -45404,6 +45414,9 @@ export namespace vtctldata {
 
         /** WorkflowOptions source_keyspace_alias. */
         public source_keyspace_alias: string;
+
+        /** WorkflowOptions strip_sharded_auto_increment. */
+        public strip_sharded_auto_increment: boolean;
 
         /**
          * Creates a new WorkflowOptions instance using the specified properties.

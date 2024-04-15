@@ -241,7 +241,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "alter table unknown add key a (id)"
+        "Query": "alter table `unknown` add key a (id)"
       },
       "TablesUsed": [
         "main.unknown"

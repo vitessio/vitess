@@ -139,7 +139,7 @@ endif
 install: build
 	# binaries
 	mkdir -p "$${PREFIX}/bin"
-	cp "$${VTROOTBIN}/"{mysqlctl,mysqlctld,vtorc,vtadmin,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtbackup} "$${PREFIX}/bin/"
+	cp "$${VTROOTBIN}/"{mysqlctl,mysqlctld,vtorc,vtadmin,vtctl,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtbackup,vtexplain} "$${PREFIX}/bin/"
 
 # Will only work inside the docker bootstrap for now
 cross-install: cross-build
@@ -282,7 +282,7 @@ $(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
 # This rule builds the bootstrap images for all flavors.
 DOCKER_IMAGES_FOR_TEST = mysql57 mysql80 percona57 percona80
 DOCKER_IMAGES = common $(DOCKER_IMAGES_FOR_TEST)
-BOOTSTRAP_VERSION=30
+BOOTSTRAP_VERSION=31
 ensure_bootstrap_version:
 	find docker/ -type f -exec sed -i "s/^\(ARG bootstrap_version\)=.*/\1=${BOOTSTRAP_VERSION}/" {} \;
 	sed -i 's/\(^.*flag.String(\"bootstrap-version\",\) *\"[^\"]\+\"/\1 \"${BOOTSTRAP_VERSION}\"/' test.go
@@ -317,16 +317,6 @@ define build_docker_image
 		docker build -f ${1} -t ${2} --build-arg bootstrap_version=${BOOTSTRAP_VERSION} .; \
 	fi
 endef
-
-docker_base:
-	${call build_docker_image,docker/base/Dockerfile,vitess/base}
-
-DOCKER_BASE_SUFFIX = mysql80 percona57 percona80
-DOCKER_BASE_TARGETS = $(addprefix docker_base_, $(DOCKER_BASE_SUFFIX))
-$(DOCKER_BASE_TARGETS): docker_base_%:
-	${call build_docker_image,docker/base/Dockerfile.$*,vitess/base:$*}
-
-docker_base_all: docker_base $(DOCKER_BASE_TARGETS)
 
 docker_lite:
 	${call build_docker_image,docker/lite/Dockerfile,vitess/lite}
@@ -364,20 +354,6 @@ docker_test:
 
 docker_unit_test:
 	go run test.go -flavor $(flavor) unit
-
-# Release a version.
-# This will generate a tar.gz file into the releases folder with the current source
-release: docker_base
-	@if [ -z "$VERSION" ]; then \
-		echo "Set the env var VERSION with the release version"; exit 1;\
-	fi
-	mkdir -p releases
-	docker build -f docker/Dockerfile.release -t vitess/release .
-	docker run -v ${PWD}/releases:/vt/releases --env VERSION=$(VERSION) vitess/release
-	git tag -m Version\ $(VERSION) v$(VERSION)
-	echo "A git tag was created, you can push it with:"
-	echo "git push origin v$(VERSION)"
-	echo "Also, don't forget the upload releases/v$(VERSION).tar.gz file to GitHub releases"
 
 create_release:
 	./tools/create_release.sh

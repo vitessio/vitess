@@ -20,9 +20,11 @@ package vreplication
 // We violate the NO_ZERO_DATES and NO_ZERO_IN_DATE sql_modes that are enabled by default in
 // MySQL 5.7+ and MariaDB 10.2+ to ensure that vreplication still works everywhere and the
 // permissive sql_mode now used in vreplication causes no unwanted side effects.
-// The customer table also tests two important things:
+// The customer table also tests several important things:
 //  1. Composite or multi-column primary keys
 //  2. PKs that contain an ENUM column
+//  3. That we properly handle tables with auto_increment columns (which are stripped by default when
+//     moving the table to a sharded keyspace with vtctldclient and left in place when using vtctlclient)
 //
 // The Lead and Lead-1 tables also allows us to test several things:
 //  1. Mixed case identifiers
@@ -40,7 +42,7 @@ var (
 	// All standard user tables should have a primary key and at least one secondary key.
 	initialProductSchema = `
 create table product(pid int, description varbinary(128), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key(pid), key(date1,date2)) CHARSET=utf8mb4;
-create table customer(cid int, name varchar(128) collate utf8mb4_bin, meta json default null, typ enum('individual','soho','enterprise'), sport set('football','cricket','baseball'),
+create table customer(cid int auto_increment, name varchar(128) collate utf8mb4_bin, meta json default null, typ enum('individual','soho','enterprise'), sport set('football','cricket','baseball'),
 	ts timestamp not null default current_timestamp, bits bit(2) default b'11', date1 datetime not null default '0000-00-00 00:00:00', 
 	date2 datetime not null default '2021-00-01 00:00:00', dec80 decimal(8,0), blb blob, primary key(cid,typ), key(name)) CHARSET=utf8mb4;
 create table customer_seq(id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence';

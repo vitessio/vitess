@@ -19,11 +19,11 @@ package mysqlctl
 import (
 	"bytes"
 	"os"
-	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -120,14 +120,11 @@ func NoTestMycnfHook(t *testing.T) {
 	servenv.OnClose(mysqld.Close)
 
 	err := mysqld.InitConfig(cnf)
-	if err != nil {
-		t.Errorf("err: %v", err)
-	}
+	require.NoError(t, err)
+
 	_, err = os.ReadFile(cnf.Path)
-	if err != nil {
-		t.Errorf("failed reading, err %v", err)
-		return
-	}
+	require.NoError(t, err)
+
 	mycnf := NewMycnf(uid, 0)
 	mycnf.Path = cnf.Path
 	mycnf, err = ReadMycnf(mycnf, 0)
@@ -137,33 +134,17 @@ func NoTestMycnfHook(t *testing.T) {
 		t.Logf("socket file %v", mycnf.SocketFile)
 	}
 	// Tablet UID should be 11111, which determines tablet/data dir.
-	if got, want := mycnf.DataDir, "/vt_0000011111/"; !strings.Contains(got, want) {
-		t.Errorf("mycnf.DataDir = %v, want *%v*", got, want)
-	}
+	assert.Contains(t, mycnf.DataDir, "/vt_0000011111/")
+
 	// MySQL server-id should be 22222, different from Tablet UID.
-	if got, want := mycnf.ServerID, uint32(22222); got != want {
-		t.Errorf("mycnf.ServerID = %v, want %v", got, want)
-	}
+	assert.Equal(t, uint32(22222), mycnf.ServerID)
+
 	// check that the env variables we set were passed correctly to the hook
-	if got, want := mycnf.lookup("KEYSPACE"), "test-messagedb"; got != want {
-		t.Errorf("Error passing env %v, got %v, want %v", "KEYSPACE", got, want)
-	}
-	if got, want := mycnf.lookup("SHARD"), "0"; got != want {
-		t.Errorf("Error passing env %v, got %v, want %v", "SHARD", got, want)
-	}
-	if got, want := mycnf.lookup("TABLET_TYPE"), "PRIMARY"; got != want {
-		t.Errorf("Error passing env %v, got %v, want %v", "TABLET_TYPE", got, want)
-	}
-	if got, want := mycnf.lookup("TABLET_ID"), "11111"; got != want {
-		t.Errorf("Error passing env %v, got %v, want %v", "TABLET_ID", got, want)
-	}
-	if got, want := mycnf.lookup("TABLET_DIR"), "/vt_0000011111"; !strings.Contains(got, want) {
-		t.Errorf("Error passing env %v, got %v, want %v", "TABLET_DIR", got, want)
-	}
-	if got, want := mycnf.lookup("MYSQL_PORT"), "15306"; got != want {
-		t.Errorf("Error passing env %v, got %v, want %v", "MYSQL_PORT", got, want)
-	}
-	if got := mycnf.lookup("MY_VAR"); got != "" {
-		t.Errorf("Unexpected env %v set to %v", "MY_VAR", got)
-	}
+	assert.Equal(t, "test-messagedb", mycnf.lookup("KEYSPACE"))
+	assert.Equal(t, "test-0", mycnf.lookup("SHARD"))
+	assert.Equal(t, "PRIMARY", mycnf.lookup("TABLET_TYPE"))
+	assert.Equal(t, "11111", mycnf.lookup("TABLET_ID"))
+	assert.Equal(t, "/vt_0000011111", mycnf.lookup("TABLET_DIR"))
+	assert.Equal(t, "15306", mycnf.lookup("MYSQL_PORT"))
+	assert.Equal(t, "", mycnf.lookup("MY_VAR"))
 }

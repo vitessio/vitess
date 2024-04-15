@@ -1299,6 +1299,12 @@ var (
 	}, {
 		input: "insert /* bool in on duplicate */ into a values (1, 2, 3) on duplicate key update b = values(a.b), c = d",
 	}, {
+		input:  "insert into a values (1, 2, 3) as `a_values`",
+		output: "insert into a values (1, 2, 3) as a_values",
+	}, {
+		input:  "insert into a values (1, 2, 3) as `a_values` (`foo`, bar, baz)",
+		output: "insert into a values (1, 2, 3) as a_values (foo, bar, baz)",
+	}, {
 		input: "insert /* bool expression on duplicate */ into a values (1, 2) on duplicate key update b = func(a), c = a > d",
 	}, {
 		input: "insert into `user`(username, `status`) values ('Chuck', default(`status`))",
@@ -3784,6 +3790,9 @@ var (
 	}, {
 		input:  `kill 18446744073709551615`,
 		output: `kill connection 18446744073709551615`,
+	}, {
+		input:  `select * from tbl where foo is unknown or bar is not unknown`,
+		output: `select * from tbl where foo is null or bar is not null`,
 	}}
 )
 

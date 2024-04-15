@@ -22,6 +22,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -30,8 +32,10 @@ func TestLiveQueryzHandlerJSON(t *testing.T) {
 	req, _ := http.NewRequest("GET", "/livequeryz/?format=json", nil)
 
 	queryList := NewQueryList("test", sqlparser.NewTestParser())
-	queryList.Add(NewQueryDetail(context.Background(), &testConn{id: 1}))
-	queryList.Add(NewQueryDetail(context.Background(), &testConn{id: 2}))
+	err := queryList.Add(NewQueryDetail(context.Background(), &testConn{id: 1}))
+	require.NoError(t, err)
+	err = queryList.Add(NewQueryDetail(context.Background(), &testConn{id: 2}))
+	require.NoError(t, err)
 
 	livequeryzHandler([]*QueryList{queryList}, resp, req)
 }
@@ -41,8 +45,10 @@ func TestLiveQueryzHandlerHTTP(t *testing.T) {
 	req, _ := http.NewRequest("GET", "/livequeryz/", nil)
 
 	queryList := NewQueryList("test", sqlparser.NewTestParser())
-	queryList.Add(NewQueryDetail(context.Background(), &testConn{id: 1}))
-	queryList.Add(NewQueryDetail(context.Background(), &testConn{id: 2}))
+	err := queryList.Add(NewQueryDetail(context.Background(), &testConn{id: 1}))
+	require.NoError(t, err)
+	err = queryList.Add(NewQueryDetail(context.Background(), &testConn{id: 2}))
+	require.NoError(t, err)
 
 	livequeryzHandler([]*QueryList{queryList}, resp, req)
 }
@@ -64,7 +70,8 @@ func TestLiveQueryzHandlerTerminateConn(t *testing.T) {
 
 	queryList := NewQueryList("test", sqlparser.NewTestParser())
 	testConn := &testConn{id: 1}
-	queryList.Add(NewQueryDetail(context.Background(), testConn))
+	err := queryList.Add(NewQueryDetail(context.Background(), testConn))
+	require.NoError(t, err)
 	if testConn.IsKilled() {
 		t.Fatalf("conn should still be alive")
 	}

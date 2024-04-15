@@ -1792,6 +1792,16 @@ func (s *Server) VDiffCreate(ctx context.Context, req *vtctldatapb.VDiffCreateRe
 			req.TargetKeyspace, req.Workflow)
 	}
 
+	workflowStatus, err := s.getWorkflowStatus(ctx, req.TargetKeyspace, req.Workflow)
+	if err != nil {
+		return nil, err
+	}
+	if workflowStatus != binlogdatapb.VReplicationWorkflowState_Running {
+		log.Infof("Workflow %s.%s is not running, cannot start VDiff in state %s", req.TargetKeyspace, req.Workflow, workflowStatus)
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+			"not all streams are running in workflow %s.%s", req.TargetKeyspace, req.Workflow)
+	}
+
 	err = ts.ForAllTargets(func(target *MigrationTarget) error {
 		_, err := s.tmc.VDiff(ctx, target.GetPrimary().Tablet, tabletreq)
 		return err
@@ -3961,4 +3971,28 @@ func (s *Server) MigrateCreate(ctx context.Context, req *vtctldatapb.MigrateCrea
 		NoRoutingRules:            req.NoRoutingRules,
 	}
 	return s.moveTablesCreate(ctx, moveTablesCreateRequest, binlogdatapb.VReplicationWorkflowType_Migrate)
+}
+
+// getWorkflowStatus gets the overall status of the workflow by checking the status of all the streams. If all streams are not
+// in the same state, it returns the unknown state.
+func (s *Server) getWorkflowStatus(ctx context.Context, keyspace string, workflow string) (binlogdatapb.VReplicationWorkflowState, error) {
+	workflowStatus := binlogdatapb.VReplicationWorkflowState_Unknown
+	wf, err := s.GetWorkflow(ctx, keyspace, workflow, false, nil)
+	if err != nil {
+		return workflowStatus, err
+	}
+	for _, shardStream := range wf.GetShardStreams() {
+		for _, stream := range shardStream.GetStreams() {
+			state, ok := binlogdatapb.VReplicationWorkflowState_value[stream.State]
+			if !ok {
+				return workflowStatus, fmt.Errorf("invalid state for stream %s of workflow %s.%s", stream.State, keyspace, workflow)
+			}
+			currentStatus := binlogdatapb.VReplicationWorkflowState(state)
+			if workflowStatus != binlogdatapb.VReplicationWorkflowState_Unknown && currentStatus != workflowStatus {
+				return binlogdatapb.VReplicationWorkflowState_Unknown, nil
+			}
+			workflowStatus = currentStatus
+		}
+	}
+	return workflowStatus, nil
 }

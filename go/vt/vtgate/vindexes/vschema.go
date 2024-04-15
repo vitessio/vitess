@@ -393,6 +393,8 @@ func replaceUnspecifiedForeignKeyMode(fkMode vschemapb.Keyspace_ForeignKeyMode) 
 	return fkMode
 }
 
+// AddView adds a view to an existing keyspace in the VSchema.
+// It's only used from tests.
 func (vschema *VSchema) AddView(ksname, viewName, query string, parser *sqlparser.Parser) error {
 	ks, ok := vschema.Keyspaces[ksname]
 	if !ok {

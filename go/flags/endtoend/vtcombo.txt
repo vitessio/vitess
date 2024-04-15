@@ -115,6 +115,7 @@ Flags:
       --enable-partial-keyspace-migration                                (Experimental) Follow shard routing rules: enable only while migrating a keyspace shard by shard. See documentation on Partial MoveTables for more. (default false)
       --enable-per-workload-table-metrics                                If true, query counts and query error metrics include a label that identifies the workload
       --enable-tx-throttler                                              Synonym to -enable_tx_throttler
+      --enable-udfs                                                      Enable UDFs support in vtgate.
       --enable-views                                                     Enable views support in vtgate.
       --enable_buffer                                                    Enable buffering (stalling) of primary traffic during failovers.
       --enable_buffer_dry_run                                            Detect and log failover events, but do not actually buffer requests.
@@ -139,7 +140,7 @@ Flags:
       --gate_query_cache_memory int                                      gate server query cache size in bytes, maximum amount of memory to be cached. vtgate analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache. (default 33554432)
       --gc_check_interval duration                                       Interval between garbage collection checks (default 1h0m0s)
       --gc_purge_check_interval duration                                 Interval between purge discovery checks (default 1m0s)
-      --gh-ost-path string                                               override default gh-ost binary full path
+      --gh-ost-path string                                               override default gh-ost binary full path (default "gh-ost")
       --grpc-send-session-in-streaming                                   If set, will send the session as last packet in streaming api to support transactions in streaming
       --grpc-use-effective-groups                                        If set, and SSL is not used, will set the immediate caller's security groups from the effective caller id's groups.
       --grpc-use-static-authentication-callerid                          If set, will set the immediate caller id to the username authenticated by the static auth plugin.
@@ -263,7 +264,7 @@ Flags:
       --proto_topo vttest.TopoData                                       vttest proto definition of the topology, encoded in compact text format. See vttest.proto for more information.
       --proxy_protocol                                                   Enable HAProxy PROXY protocol on MySQL listener socket
       --proxy_tablets                                                    Setting this true will make vtctld proxy the tablet status instead of redirecting to them
-      --pt-osc-path string                                               override default pt-online-schema-change binary full path
+      --pt-osc-path string                                               override default pt-online-schema-change binary full path (default "/usr/bin/pt-online-schema-change")
       --publish_retry_interval duration                                  how long vttablet waits to retry publishing the tablet record (default 30s)
       --purge_logs_interval duration                                     how often try to remove old logs (default 1h0m0s)
       --query-log-stream-handler string                                  URL handler for streaming queries log (default "/debug/querylog")

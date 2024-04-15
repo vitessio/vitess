@@ -224,6 +224,8 @@ func New() (cmd *cobra.Command) {
 	cmd.Flags().DurationVar(&config.VtgateTabletRefreshInterval, "tablet_refresh_interval", 10*time.Second, "Interval at which vtgate refreshes tablet information from topology server.")
 
 	cmd.Flags().BoolVar(&doCreateTCPUser, "initialize-with-vt-dba-tcp", false, "If this flag is enabled, MySQL will be initialized with an additional user named vt_dba_tcp, who will have access via TCP/IP connection.")
+
+	cmd.Flags().BoolVar(&config.NoScatter, "no_scatter", false, "when set to true, the planner will fail instead of producing a plan that includes scatter queries")
 	acl.RegisterFlags(cmd.Flags())
 
 	return cmd

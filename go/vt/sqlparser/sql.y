@@ -84,6 +84,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
   ctes          []*CommonTableExpr
   order         *Order
   limit         *Limit
+  rowAlias      *RowAlias
 
   updateExpr    *UpdateExpr
   setExpr       *SetExpr
@@ -256,7 +257,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> VALUE_ARG LIST_ARG OFFSET_ARG
 %token <str> JSON_PRETTY JSON_STORAGE_SIZE JSON_STORAGE_FREE JSON_CONTAINS JSON_CONTAINS_PATH JSON_EXTRACT JSON_KEYS JSON_OVERLAPS JSON_SEARCH JSON_VALUE
 %token <str> EXTRACT
-%token <str> NULL TRUE FALSE OFF
+%token <str> NULL UNKNOWN TRUE FALSE OFF
 %token <str> DISCARD IMPORT ENABLE DISABLE TABLESPACE
 %token <str> VIRTUAL STORED
 %token <str> BOTH LEADING TRAILING
@@ -542,6 +543,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <identifierCI> sql_id sql_id_opt reserved_sql_id col_alias as_ci_opt
 %type <expr> charset_value
 %type <identifierCS> table_id reserved_table_id table_alias as_opt_id table_id_opt from_database_opt use_table_name
+%type <rowAlias> row_alias_opt
 %type <empty> as_opt work_opt savepoint_opt
 %type <empty> skip_to_end ddl_skip_to_end
 %type <str> charset
@@ -599,7 +601,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <colKeyOpt> keys
 %type <referenceDefinition> reference_definition reference_definition_opt
 %type <str> underscore_charsets
-%type <str> expire_opt
+%type <str> expire_opt null_or_unknown
 %type <literal> ratio_opt
 %type <txAccessModes> tx_chacteristics_opt tx_chars
 %type <txAccessMode> tx_char
@@ -5268,12 +5270,20 @@ expression:
     $$ = &MemberOfExpr{Value: $1, JSONArr:$5 }
   }
 
+null_or_unknown:
+  NULL
+  {
+  }
+| UNKNOWN
+  {
+  }
+
 bool_pri:
-bool_pri IS NULL %prec IS
+bool_pri IS null_or_unknown %prec IS
   {
 	 $$ = &IsExpr{Left: $1, Right: IsNullOp}
   }
-| bool_pri IS NOT NULL %prec IS
+| bool_pri IS NOT null_or_unknown %prec IS
   {
   	$$ = &IsExpr{Left: $1, Right: IsNotNullOp}
   }
@@ -7701,21 +7711,21 @@ optionally_opt:
 // Because the rules are together, the parser can keep shifting
 // the tokens until it disambiguates a as sql_id and select as keyword.
 insert_data:
-  VALUES tuple_list
+  VALUES tuple_list row_alias_opt
   {
-    $$ = &Insert{Rows: $2}
+    $$ = &Insert{Rows: $2, RowAlias: $3}
   }
 | select_statement
   {
     $$ = &Insert{Rows: $1}
   }
-| openb ins_column_list closeb VALUES tuple_list
+| openb ins_column_list closeb VALUES tuple_list row_alias_opt
   {
-    $$ = &Insert{Columns: $2, Rows: $5}
+    $$ = &Insert{Columns: $2, Rows: $5, RowAlias: $6}
   }
-| openb closeb VALUES tuple_list
+| openb closeb VALUES tuple_list row_alias_opt
   {
-    $$ = &Insert{Columns: []IdentifierCI{}, Rows: $4}
+    $$ = &Insert{Columns: []IdentifierCI{}, Rows: $4, RowAlias: $5}
   }
 | openb ins_column_list closeb select_statement
   {
@@ -7738,6 +7748,19 @@ ins_column_list:
 | ins_column_list ',' sql_id '.' sql_id
   {
     $$ = append($$, $5)
+  }
+
+row_alias_opt:
+  {
+    $$ = nil
+  }
+| AS table_alias
+  {
+    $$ = &RowAlias{TableName: $2}
+  }
+| AS table_alias openb column_list closeb
+  {
+    $$ = &RowAlias{TableName: $2, Columns: $4}
   }
 
 on_dup_opt:
@@ -8525,6 +8548,7 @@ non_reserved_keyword:
 | UNCOMMITTED
 | UNDEFINED
 | UNICODE
+| UNKNOWN
 | UNSIGNED
 | UNTHROTTLE
 | UNUSED

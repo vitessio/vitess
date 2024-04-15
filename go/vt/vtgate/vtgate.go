@@ -96,13 +96,13 @@ var (
 	enableOnlineDDL    = true
 	enableDirectDDL    = true
 
-	// vtgate schema tracking flags
+	// schema tracking flags
 	enableSchemaChangeSignal = true
-
-	queryTimeout int
+	enableViews              bool
+	enableUdfs               bool
 
 	// vtgate views flags
-	enableViews bool
+	queryTimeout int
 
 	// queryLogToFile controls whether query logs are sent to a file
 	queryLogToFile string
@@ -149,6 +149,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&queryLogBufferSize, "querylog-buffer-size", queryLogBufferSize, "Maximum number of buffered query logs before throttling log output")
 	fs.DurationVar(&messageStreamGracePeriod, "message_stream_grace_period", messageStreamGracePeriod, "the amount of time to give for a vttablet to resume if it ends a message stream, usually because of a reparent.")
 	fs.BoolVar(&enableViews, "enable-views", enableViews, "Enable views support in vtgate.")
+	fs.BoolVar(&enableViews, "enable-udfs", enableUdfs, "Enable UDFs support in vtgate.")
 	fs.BoolVar(&allowKillStmt, "allow-kill-statement", allowKillStmt, "Allows the execution of kill statement")
 	fs.IntVar(&warmingReadsPercent, "warming-reads-percent", 0, "Percentage of reads on the primary to forward to replicas. Useful for keeping buffer pools warm")
 	fs.IntVar(&warmingReadsConcurrency, "warming-reads-concurrency", 500, "Number of concurrent warming reads allowed")
@@ -302,7 +303,7 @@ func Init(
 	var si SchemaInfo // default nil
 	var st *vtschema.Tracker
 	if enableSchemaChangeSignal {
-		st = vtschema.NewTracker(gw.hc.Subscribe(), enableViews, env.Parser())
+		st = vtschema.NewTracker(gw.hc.Subscribe(), enableViews, enableUdfs, env.Parser())
 		addKeyspacesToTracker(ctx, srvResolver, st, gw)
 		si = st
 	}

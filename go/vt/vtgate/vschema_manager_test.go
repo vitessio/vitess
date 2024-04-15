@@ -813,7 +813,8 @@ func makeTestSrvVSchema(ks string, sharded bool, tbls map[string]*vschemapb.Tabl
 }
 
 type fakeSchema struct {
-	t map[string]*vindexes.TableInfo
+	t    map[string]*vindexes.TableInfo
+	udfs []string
 }
 
 func (f *fakeSchema) Tables(string) map[string]*vindexes.TableInfo {
@@ -823,5 +824,6 @@ func (f *fakeSchema) Tables(string) map[string]*vindexes.TableInfo {
 func (f *fakeSchema) Views(string) map[string]sqlparser.SelectStatement {
 	return nil
 }
+func (f *fakeSchema) UDFs(string) []string { return f.udfs }
 
 var _ SchemaInfo = (*fakeSchema)(nil)
