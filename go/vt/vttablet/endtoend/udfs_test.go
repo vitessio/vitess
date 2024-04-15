@@ -27,10 +27,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/callerid"
-	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
 )
 
 const (
@@ -38,7 +37,7 @@ const (
 	udfRows    = "select * from _vt.udfs"
 )
 
-// Test will validate that UDFs signal is sent through the stream health.
+// TestUDFs will validate that UDFs signal is sent through the stream health.
 func TestUDFs(t *testing.T) {
 	client := framework.NewClient()
 
@@ -47,20 +46,7 @@ func TestUDFs(t *testing.T) {
 		&vtrpcpb.CallerID{},
 		&querypb.VTGateCallerID{Username: "dev"}))
 
-	qr, err := client.Execute("select @@plugin_dir", nil)
-	require.NoError(t, err)
-	pluginDir := qr.Rows[0][0].ToString()
-
-	source, err := os.Open(soFileName)
-	require.NoError(t, err)
-	defer source.Close()
-
-	destination, err := os.Create(pluginDir + soFileName)
-	require.NoError(t, err)
-	defer destination.Close()
-
-	_, err = io.Copy(destination, source)
-	require.NoError(t, err)
+	copySOFile(t, client)
 
 	ch := make(chan any)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -76,12 +62,29 @@ func TestUDFs(t *testing.T) {
 	}()
 
 	// create a user defined function directly on mysql as it is not supported by vitess parser.
-	err = cluster.Execute([]string{"CREATE AGGREGATE FUNCTION myudf RETURNS REAL SONAME 'udf.so';"}, "vttest")
+	err := cluster.Execute([]string{"CREATE AGGREGATE FUNCTION myudf RETURNS REAL SONAME 'udf.so';"}, "vttest")
 	require.NoError(t, err)
+
+	validateHealthStreamSignal(t, client, ch,
+		`[[BINARY("myudf") INT8(1) BINARY("udf.so") ENUM("aggregate")]]`,
+		`[[VARBINARY("myudf") VARBINARY("double") VARBINARY("aggregate")]]`)
+
+	// dropping the user defined function.
+	err = cluster.Execute([]string{"drop function myudf"}, "vttest")
+	require.NoError(t, err)
+
+	validateHealthStreamSignal(t, client, ch,
+		`[]`,
+		`[]`)
+}
+
+func validateHealthStreamSignal(t *testing.T, client *framework.QueryClient, ch chan any, expected ...string) {
+	t.Helper()
+
 	// validate the row in mysql.func.
-	qr, err = client.Execute("select * from mysql.func", nil)
+	qr, err := client.Execute("select * from mysql.func", nil)
 	require.NoError(t, err)
-	require.Equal(t, `[[BINARY("myudf") INT8(1) BINARY("udf.so") ENUM("aggregate")]]`, fmt.Sprintf("%v", qr.Rows))
+	require.Equal(t, expected[0], fmt.Sprintf("%v", qr.Rows))
 
 	// wait for udf update
 	select {
@@ -93,26 +96,70 @@ func TestUDFs(t *testing.T) {
 	// validate the row in _vt.udfs.
 	qr, err = client.Execute(udfRows, nil)
 	require.NoError(t, err)
-	require.Equal(t, `[[VARBINARY("myudf") VARBINARY("double") VARBINARY("aggregate")]]`, fmt.Sprintf("%v", qr.Rows))
+	require.Equal(t, expected[1], fmt.Sprintf("%v", qr.Rows))
+}
+
+// TestUDFRFC will validate that UDFs are received through the rfc call.
+func TestUDFRFC(t *testing.T) {
+	client := framework.NewClient()
+
+	client.UpdateContext(callerid.NewContext(
+		context.Background(),
+		&vtrpcpb.CallerID{},
+		&querypb.VTGateCallerID{Username: "dev"}))
+
+	copySOFile(t, client)
+
+	// create a user defined function directly on mysql as it is not supported by vitess parser.
+	err := cluster.Execute([]string{"CREATE AGGREGATE FUNCTION myudf RETURNS REAL SONAME 'udf.so';"}, "vttest")
+	require.NoError(t, err)
+
+	validateRPC(t, client, func(udfs map[string]string) bool {
+		// keep checking till the udf is added.
+		return len(udfs) == 0
+	})
 
 	// dropping the user defined function.
 	err = cluster.Execute([]string{"drop function myudf"}, "vttest")
 	require.NoError(t, err)
 
-	// validate the row in mysql.func.
-	qr, err = client.Execute("select * from mysql.func", nil)
-	require.NoError(t, err)
-	require.Equal(t, `[]`, fmt.Sprintf("%v", qr.Rows))
+	validateRPC(t, client, func(udfs map[string]string) bool {
+		// keep checking till the udf is removed.
+		return len(udfs) != 0
+	})
+}
 
-	// wait for views update
-	select {
-	case <-ch:
-	case <-time.After(30 * time.Second):
-		t.Fatal("timed out waiting for udf drop signal")
+func validateRPC(t *testing.T, client *framework.QueryClient, cond func(udfs map[string]string) bool) (<-chan time.Time, bool) {
+	timeout := time.After(30 * time.Second)
+	conditionNotMet := true
+	for conditionNotMet {
+		time.Sleep(1 * time.Second)
+		select {
+		case <-timeout:
+			t.Fatal("timed out waiting for updated udf")
+		default:
+			udfs, err := client.GetSchema(querypb.SchemaTableType_UDF_AGGREGATE)
+			require.NoError(t, err)
+			conditionNotMet = cond(udfs)
+		}
 	}
+	return timeout, conditionNotMet
+}
 
-	// validate the row in _vt.udfs.
-	qr, err = client.Execute(udfRows, nil)
+func copySOFile(t *testing.T, client *framework.QueryClient) {
+	t.Helper()
+	qr, err := client.Execute("select @@plugin_dir", nil)
 	require.NoError(t, err)
-	require.Equal(t, "[]", fmt.Sprintf("%v", qr.Rows))
+	pluginDir := qr.Rows[0][0].ToString()
+
+	source, err := os.Open(soFileName)
+	require.NoError(t, err)
+	defer source.Close()
+
+	destination, err := os.Create(pluginDir + soFileName)
+	require.NoError(t, err)
+	defer destination.Close()
+
+	_, err = io.Copy(destination, source)
+	require.NoError(t, err)
 }
