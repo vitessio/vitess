@@ -1628,10 +1628,11 @@ type InsertRows interface {
 	SQLNode
 }
 
-func (*Select) iInsertRows()      {}
-func (*SetOp) iInsertRows()       {}
-func (Values) iInsertRows()       {}
-func (*ParenSelect) iInsertRows() {}
+func (*Select) iInsertRows()       {}
+func (*SetOp) iInsertRows()        {}
+func (AliasedValues) iInsertRows() {}
+func (Values) iInsertRows()        {}
+func (*ParenSelect) iInsertRows()  {}
 
 // Update represents an UPDATE statement.
 // If you add fields here, consider adding them to calls to validateUnshardedRoute.
@@ -2024,6 +2025,9 @@ type DDL struct {
 	SpecialCommentMode        bool
 	SubStatementPositionStart int
 	SubStatementPositionEnd   int
+	// SubStatementStr will have the sub statement as a string rather than having to slice the original query.
+	// If it's empty, then use the position start and end values to slice the sub statement out of the original query.
+	SubStatementStr string
 
 	// FromViews is set if Action is DropStr.
 	FromViews TableNames
@@ -6516,6 +6520,21 @@ func (node Values) walkSubtree(visit Visit) error {
 		}
 	}
 	return nil
+}
+
+// AliasedValues represents a VALUES clause with an optional `AS name(colnames...)`
+type AliasedValues struct {
+	Values
+	As      TableIdent
+	Columns Columns
+}
+
+// Format formats the node.
+func (node AliasedValues) Format(buf *TrackedBuffer) {
+	node.Values.Format(buf)
+	if node.As.v != "" {
+		buf.Myprintf(" AS %v%v", node.As, node.Columns)
+	}
 }
 
 // AssignmentExprs represents a list of assignment expressions.
