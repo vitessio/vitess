@@ -135,6 +135,10 @@ var (
 			input: "show binary log status",
 		},
 		{
+			input:  "SHOW MASTER STATUS",
+			output: "show binary log status",
+		},
+		{
 			input: "start replica",
 		},
 		{
@@ -3039,11 +3043,29 @@ var (
 			input:  "FLUSH LOCAL RELAY LOGS FOR CHANNEL 'connections'",
 			output: "flush local relay logs for channel connections",
 		}, {
+			input:  "FLUSH LOCAL reLay lOgs FOR CHANNEL 'connections'",
+			output: "flush local relay logs for channel connections",
+		}, {
 			input:  "FLUSH LOCAL OPTIMIZER_COSTS",
 			output: "flush local optimizer_costs",
 		}, {
 			input:  "FLUSH NO_WRITE_TO_BINLOG HOSTS",
 			output: "flush no_write_to_binlog hosts",
+		}, {
+			input:  "FLUSH TABLE `inventory`.`customers` WITH READ LOCK",
+			output: "flush table inventory.customers with read lock",
+		}, {
+			input:  "FLUSH TABLES `inventory`.`customers` WITH READ LOCK",
+			output: "flush tables inventory.customers with read lock",
+		}, {
+			input:  "FLUSH TABLES `inventory`.`customers`",
+			output: "flush tables inventory.customers",
+		}, {
+			input:  "FLUSH TABLE table1, foo.table2 WITH READ LOCK",
+			output: "flush table table1, foo.table2 with read lock",
+		}, {
+			input:  "FLUSH TABLES table1, foo.table2 WITH READ LOCK",
+			output: "flush tables table1, foo.table2 with read lock",
 		}, {
 			input:  "SHOW GRANTS",
 			output: "show grants",
