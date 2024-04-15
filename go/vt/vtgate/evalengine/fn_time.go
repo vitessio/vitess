@@ -1106,13 +1106,7 @@ func (call *builtinMaketime) compile(c *compiler) (ctype, error) {
 			c.asm.Convert_xf(1)
 			c.asm.Fn_MAKETIME_f()
 		}
-	case sqltypes.Datetime:
-		c.asm.Fn_MAKETIME_D()
-	case sqltypes.Date:
-		c.asm.Fn_MAKETIME_D()
-	case sqltypes.Time:
-		c.asm.Fn_MAKETIME_D()
-	case sqltypes.Timestamp:
+	case sqltypes.Datetime, sqltypes.Date, sqltypes.Timestamp, sqltypes.Time:
 		c.asm.Fn_MAKETIME_D()
 	default:
 		c.asm.Convert_xf(1)
