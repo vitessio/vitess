@@ -417,7 +417,7 @@ create table nopk (name varchar(128), age int unsigned);
 }
 `
 
-	materializeCustomerNamesSpec = `
+	materializeCustomerNameSpec = `
 {
   "workflow": "customer_name",
   "source_keyspace": "customer",
@@ -430,7 +430,7 @@ create table nopk (name varchar(128), age int unsigned);
 }
 `
 
-	materializeCustomerTypesSpec = `
+	materializeCustomerTypeSpec = `
 {
   "workflow": "customer_type",
   "source_keyspace": "customer",

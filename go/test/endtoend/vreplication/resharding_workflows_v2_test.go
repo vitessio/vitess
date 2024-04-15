@@ -593,9 +593,9 @@ func testMoveTablesV2Workflow(t *testing.T) {
 
 	testRestOfWorkflow(t)
 	// Create our primary intra-keyspace materialization.
-	materialize(t, materializeCustomerNamesSpec, false)
+	materialize(t, materializeCustomerNameSpec, false)
 	// Create a second one to confirm that multiple ones get migrated correctly.
-	materialize(t, materializeCustomerTypesSpec, false)
+	materialize(t, materializeCustomerTypeSpec, false)
 	materializeShow()
 
 	output, err = vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)

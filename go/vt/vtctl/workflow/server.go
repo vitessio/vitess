@@ -3292,13 +3292,13 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 			return 0, sw.logs(), nil
 		}
 
-		// We stop writes on the source before stopping the source streams so that the
-		// catchup time is lessened and other workflows that we have to migrate such as
-		// intra-keyspace materialize workflows also have a chance to catch up as well
-		// because those are internally generated GTIDs within the keyspace being resharded.
-		// For intra-keyspace materialization streams that we migrate where the source and
-		// target are the keyspace being resharded, we wait for those to catchup in the
-		// stopStreams path before we actually stop them.
+		// We stop writes on the source before stopping the source streams so that the catchup time
+		// is lessened and other workflows that we have to migrate such as intra-keyspace materialize
+		// workflows also have a chance to catch up as well because those are internally generated
+		// GTIDs within the shards we're switching traffic away from.
+		// For intra-keyspace materialization streams that we migrate where the source and target are
+		// the keyspace being resharded, we wait for those to catchup in the stopStreams path before
+		// we actually stop them.
 		ts.Logger().Infof("Stopping source writes")
 		if err := sw.stopSourceWrites(ctx); err != nil {
 			sw.cancelMigration(ctx, sm)
@@ -3308,8 +3308,8 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 		ts.Logger().Infof("Stopping streams")
 		// Use a shorter context for this since since when doing a Reshard, if there are intra-keyspace
 		// materializations then we have to wait for them to catchup before switching traffic for the
-		// Reshard workflow. We use the timeout here which is used to limit the amount of time that we
-		// wait for VReplication to catch up.
+		// Reshard workflow. We use the the same timeout value here that is used for VReplication catchup
+		// with the inter-keyspace workflows.
 		stopCtx, stopCancel := context.WithTimeout(ctx, timeout)
 		defer stopCancel()
 		sourceWorkflows, err = sw.stopStreams(stopCtx, sm)
