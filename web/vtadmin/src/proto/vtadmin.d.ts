@@ -45386,9 +45386,6 @@ export namespace vtctldata {
         /** WorkflowOptions tenant_id */
         tenant_id?: (string|null);
 
-        /** WorkflowOptions source_keyspace_alias */
-        source_keyspace_alias?: (string|null);
-
         /** WorkflowOptions strip_sharded_auto_increment */
         strip_sharded_auto_increment?: (boolean|null);
     }
@@ -45404,9 +45401,6 @@ export namespace vtctldata {
 
         /** WorkflowOptions tenant_id. */
         public tenant_id: string;
-
-        /** WorkflowOptions source_keyspace_alias. */
-        public source_keyspace_alias: string;
 
         /** WorkflowOptions strip_sharded_auto_increment. */
         public strip_sharded_auto_increment: boolean;
