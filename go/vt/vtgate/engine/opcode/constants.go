@@ -154,6 +154,8 @@ func (code AggregateOpcode) SQLType(typ querypb.Type) querypb.Type {
 		return sqltypes.Int64
 	case AggregateGtid:
 		return sqltypes.VarChar
+	case AggregateUDF:
+		return sqltypes.Unknown
 	default:
 		panic(code.String()) // we have a unit test checking we never reach here
 	}
