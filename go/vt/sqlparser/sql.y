@@ -147,6 +147,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
   partDef       *PartitionDefinition
   partSpec      *PartitionSpec
   viewSpec      *ViewSpec
+  viewCheckOption ViewCheckOption
   showFilter    *ShowFilter
   frame         *Frame
   frameExtent   *FrameExtent
@@ -274,7 +275,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> SEQUENCE ENABLE DISABLE
 %token <bytes> EACH ROW BEFORE FOLLOWS PRECEDES DEFINER INVOKER
 %token <bytes> INOUT OUT DETERMINISTIC CONTAINS READS MODIFIES SQL SECURITY TEMPORARY ALGORITHM MERGE TEMPTABLE UNDEFINED
-%token <bytes> EVENT EVENTS SCHEDULE EVERY STARTS ENDS COMPLETION PRESERVE
+%token <bytes> EVENT EVENTS SCHEDULE EVERY STARTS ENDS COMPLETION PRESERVE CASCADED
 
 // SIGNAL Tokens
 %token <bytes> CLASS_ORIGIN SUBCLASS_ORIGIN MESSAGE_TEXT MYSQL_ERRNO CONSTRAINT_CATALOG CONSTRAINT_SCHEMA
@@ -523,6 +524,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <empty> to_opt to_or_as as_opt column_opt
 %type <str> algorithm_opt definer_opt security_opt
 %type <viewSpec> view_opts
+%type <viewCheckOption> opt_with_check_option
 %type <bytes> reserved_keyword qualified_column_name_safe_reserved_keyword non_reserved_keyword column_name_safe_keyword function_call_keywords non_reserved_keyword2 non_reserved_keyword3 all_non_reserved
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt existing_window_name_opt
 %type <colIdents> reserved_sql_id_list
@@ -1131,18 +1133,21 @@ create_statement:
     ddl := &DDL{Action: AlterStr, Table: $7, IndexSpec: &IndexSpec{Action: CreateStr, ToName: $4, Using: $5, Type: $2, Columns: $9, Options: $11}}
     $$ = &AlterTable{Table: $7, Statements: []*DDL{ddl}}
   }
-| CREATE view_opts VIEW table_name ins_column_list_opt AS lexer_position special_comment_mode select_statement_with_no_trailing_into lexer_position
+| CREATE view_opts VIEW table_name ins_column_list_opt AS lexer_position special_comment_mode select_statement_with_no_trailing_into lexer_position opt_with_check_option
   {
     $2.ViewName = $4.ToViewName()
     $2.ViewExpr = $9
     $2.Columns = $5
+    $2.CheckOption = $11
     $$ = &DDL{Action: CreateStr, ViewSpec: $2, SpecialCommentMode: $8, SubStatementPositionStart: $7, SubStatementPositionEnd: $10 - 1}
   }
-| CREATE OR REPLACE view_opts VIEW table_name AS lexer_position special_comment_mode select_statement_with_no_trailing_into lexer_position
+| CREATE OR REPLACE view_opts VIEW table_name ins_column_list_opt AS lexer_position special_comment_mode select_statement_with_no_trailing_into lexer_position opt_with_check_option
   {
     $4.ViewName = $6.ToViewName()
-    $4.ViewExpr = $10
-    $$ = &DDL{Action: CreateStr, ViewSpec: $4,  SpecialCommentMode: $9, SubStatementPositionStart: $8, SubStatementPositionEnd: $11 - 1, OrReplace: true}
+    $4.ViewExpr = $11
+    $4.Columns = $7
+    $4.CheckOption = $13
+    $$ = &DDL{Action: CreateStr, ViewSpec: $4,  SpecialCommentMode: $10, SubStatementPositionStart: $9, SubStatementPositionEnd: $12 - 1, OrReplace: true}
   }
 | CREATE DATABASE not_exists_opt ID creation_option_opt
   {
@@ -1262,6 +1267,24 @@ srs_attribute:
     }
     $1.Description = string($3)
     $$ = $1
+  }
+
+opt_with_check_option:
+  /* EMPTY */
+  {
+    $$ = ViewCheckOptionUnspecified
+  }
+| WITH CHECK OPTION
+  {
+    $$ = ViewCheckOptionCascaded
+  }
+| WITH CASCADED CHECK OPTION
+  {
+    $$ = ViewCheckOptionCascaded
+  }
+| WITH LOCAL CHECK OPTION
+  {
+    $$ = ViewCheckOptionLocal
   }
 
 default_role_opt:
@@ -4704,8 +4727,30 @@ alter_table_statement_part:
   }
 | DROP FOREIGN KEY ID
   {
-    $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
-        []*ConstraintDefinition{&ConstraintDefinition{Name: string($4), Details: &ForeignKeyDefinition{}}}}}
+    ddl := &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{}}
+    ddl.TableSpec.AddConstraint(&ConstraintDefinition{Name: string($4), Details: &ForeignKeyDefinition{}})
+    $$ = ddl
+  }
+| RENAME CONSTRAINT FOREIGN KEY ID TO ID
+  {
+    ddl := &DDL{Action: AlterStr, ConstraintAction: RenameStr, TableSpec: &TableSpec{}}
+    ddl.TableSpec.AddConstraint(&ConstraintDefinition{Name: string($5), Details: &ForeignKeyDefinition{}})
+    ddl.TableSpec.AddConstraint(&ConstraintDefinition{Name: string($7), Details: &ForeignKeyDefinition{}})
+    $$ = ddl
+  }
+| RENAME CONSTRAINT CHECK ID TO ID
+  {
+    ddl := &DDL{Action: AlterStr, ConstraintAction: RenameStr, TableSpec: &TableSpec{}}
+    ddl.TableSpec.AddConstraint(&ConstraintDefinition{Name: string($4), Details: &CheckConstraintDefinition{}})
+    ddl.TableSpec.AddConstraint(&ConstraintDefinition{Name: string($6), Details: &CheckConstraintDefinition{}})
+    $$ = ddl
+  }
+| RENAME CONSTRAINT ID TO ID
+  {
+    ddl := &DDL{Action: AlterStr, ConstraintAction: RenameStr, TableSpec: &TableSpec{}}
+    ddl.TableSpec.AddConstraint(&ConstraintDefinition{Name: string($3)})
+    ddl.TableSpec.AddConstraint(&ConstraintDefinition{Name: string($5)})
+    $$ = ddl
   }
 | AUTO_INCREMENT equal_opt expression
   {
@@ -8923,6 +8968,7 @@ non_reserved_keyword:
 | BOOL
 | BOOLEAN
 | BUCKETS
+| CASCADED
 | CATALOG_NAME
 | CHAIN
 | CHANNEL

@@ -1800,13 +1800,22 @@ func (node *DBDDL) Format(buf *TrackedBuffer) {
 	}
 }
 
+type ViewCheckOption string
+
+const (
+	ViewCheckOptionUnspecified ViewCheckOption = ""
+	ViewCheckOptionCascaded    ViewCheckOption = "cascaded"
+	ViewCheckOptionLocal       ViewCheckOption = "local"
+)
+
 type ViewSpec struct {
-	ViewName  TableName
-	Columns   Columns
-	Algorithm string
-	Definer   string
-	Security  string
-	ViewExpr  SelectStatement
+	ViewName    TableName
+	Columns     Columns
+	Algorithm   string
+	Definer     string
+	Security    string
+	ViewExpr    SelectStatement
+	CheckOption ViewCheckOption
 }
 
 type TriggerSpec struct {
@@ -2107,6 +2116,7 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 		if node.ViewSpec != nil {
 			view := node.ViewSpec
 			afterCreate := ""
+			checkOpt := ""
 			if node.OrReplace {
 				afterCreate = "or replace "
 			}
@@ -2119,7 +2129,10 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 			if view.Security != "" {
 				afterCreate = fmt.Sprintf("%ssql security %s ", afterCreate, strings.ToLower(view.Security))
 			}
-			buf.Myprintf("%s %sview %v%v as %v", node.Action, afterCreate, view.ViewName, view.Columns, view.ViewExpr)
+			if view.CheckOption != ViewCheckOptionUnspecified {
+				checkOpt = fmt.Sprintf(" with %s check option", view.CheckOption)
+			}
+			buf.Myprintf("%s %sview %v%v as %v%s", node.Action, afterCreate, view.ViewName, view.Columns, view.ViewExpr, checkOpt)
 		} else if node.TriggerSpec != nil {
 			trigger := node.TriggerSpec
 			triggerDef := ""
@@ -2372,6 +2385,17 @@ func (node *DDL) alterFormat(buf *TrackedBuffer) {
 		default:
 			buf.Myprintf(" drop constraint %s", node.TableSpec.Constraints[0].Name)
 		}
+	} else if node.ConstraintAction == RenameStr && node.TableSpec != nil && len(node.TableSpec.Constraints) == 2 {
+		buf.Myprintf(" rename constraint")
+		switch node.TableSpec.Constraints[0].Details.(type) {
+		case *ForeignKeyDefinition:
+			buf.Myprintf(" foreign key %s to", node.TableSpec.Constraints[0].Name)
+		case *CheckConstraintDefinition:
+			buf.Myprintf(" check %s to", node.TableSpec.Constraints[0].Name)
+		default:
+			buf.Myprintf(" %s to", node.TableSpec.Constraints[0].Name)
+		}
+		buf.Myprintf(" %s", node.TableSpec.Constraints[1].Name)
 	} else if node.DefaultSpec != nil {
 		buf.Myprintf(" %v", node.DefaultSpec)
 	} else if node.AlterCollationSpec != nil {

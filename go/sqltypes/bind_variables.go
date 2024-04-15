@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"time"
 
 	"google.golang.org/protobuf/proto"
 
@@ -120,6 +121,18 @@ func BuildBindVariable(v interface{}) (*querypb.BindVariable, error) {
 		return Uint64BindVariable(v), nil
 	case float64:
 		return Float64BindVariable(v), nil
+	// TODO: fix this
+	//case decimal.Decimal:
+	//	return &querypb.BindVariable{
+	//		Type:   querypb.Type_DECIMAL,
+	//		Value: []byte(v.String()),
+	//	}, nil
+	case time.Time:
+		return &querypb.BindVariable{
+			Type:   querypb.Type_TIMESTAMP,
+			Value: []byte(v.String()),
+		}, nil
+	// TODO: somehow support types.Timespan
 	case nil:
 		return NullBindVariable, nil
 	case Value:
