@@ -607,6 +607,10 @@ func TestDBExecOnceKillTimeout(t *testing.T) {
 	require.Nil(t, result)
 	timeQuery := time.UnixMicro(timestampQuery.Load())
 	timeKill := time.UnixMicro(timestampKill.Load())
+	// In this unit test, the execution of `select 1` is blocked for 1000ms.
+	// The kill query gets executed after 100ms but waits for the query to return which will happen after 1000ms due to the test framework.
+	// In real scenario mysql will kill the query immediately and return the error.
+	// Here, kill call happens after 100ms but took 1000ms to complete.
 	require.WithinDuration(t, timeQuery, timeKill, 150*time.Millisecond)
-	require.WithinDuration(t, timeKill, timeDone, 150*time.Millisecond)
+	require.WithinDuration(t, timeKill, timeDone, 1000*time.Millisecond)
 }

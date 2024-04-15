@@ -180,11 +180,14 @@ func (dbc *Conn) execOnce(ctx context.Context, query string, maxrows int, wantfi
 	go func() {
 		result, err := dbc.conn.ExecuteFetch(query, maxrows, wantfields)
 		ch <- execResult{result, err}
+		close(ch)
 	}()
 
 	select {
 	case <-ctx.Done():
 		_ = dbc.KillQuery(ctx.Err().Error(), time.Since(now))
+		// wait for the execute method to finish to make connection reusable.
+		<-ch
 		return nil, dbc.Err()
 	case r := <-ch:
 		if dbcErr := dbc.Err(); dbcErr != nil {
@@ -276,11 +279,14 @@ func (dbc *Conn) streamOnce(ctx context.Context, query string, callback func(*sq
 	ch := make(chan error)
 	go func() {
 		ch <- dbc.conn.ExecuteStreamFetch(query, callback, alloc, streamBufferSize)
+		close(ch)
 	}()
 
 	select {
 	case <-ctx.Done():
 		_ = dbc.KillQuery(ctx.Err().Error(), time.Since(now))
+		// wait for the execute method to finish to make connection reusable.
+		<-ch
 		return dbc.Err()
 	case err := <-ch:
 		if dbcErr := dbc.Err(); dbcErr != nil {
