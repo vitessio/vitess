@@ -21,6 +21,16 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 		}
 		return nil
 	}
+	findIndexCoveringColumn := func(colName string) *sqlparser.IndexDefinition {
+		for _, index := range createTable.TableSpec.Indexes {
+			for _, col := range index.Columns {
+				if col.Column.String() == colName {
+					return index
+				}
+			}
+		}
+		return nil
+	}
 	findTableOption := func(optName string) *sqlparser.TableOption {
 		if createTable == nil {
 			return nil
@@ -89,6 +99,10 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 			if strings.EqualFold(opt.String, "COMPRESSED") {
 				return false, nil
 			}
+		}
+		if findIndexCoveringColumn(opt.Name.Name.String()) != nil {
+			// not supported if the column is part of an index
+			return false, nil
 		}
 		if isVirtualColumn(opt.Name.Name.String()) {
 			// supported by all 8.0 versions
