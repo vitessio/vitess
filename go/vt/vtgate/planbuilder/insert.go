@@ -33,7 +33,7 @@ func gen4InsertStmtPlanner(version querypb.ExecuteOptions_PlannerVersion, insStm
 		return nil, err
 	}
 
-	err = queryRewrite(ctx.SemTable, reservedVars, insStmt)
+	err = queryRewrite(ctx, insStmt)
 	if err != nil {
 		return nil, err
 	}

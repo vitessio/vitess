@@ -244,6 +244,7 @@ var stateToMysqlCode = map[vterrors.State]mysqlCode{
 	vterrors.KillDeniedError:              {num: ERKillDenied, state: SSUnknownSQLState},
 	vterrors.BadNullError:                 {num: ERBadNullError, state: SSConstraintViolation},
 	vterrors.InvalidGroupFuncUse:          {num: ERInvalidGroupFuncUse, state: SSUnknownSQLState},
+	vterrors.AggregateMustPushDown:        {num: ERNotSupportedYet, state: SSUnknownSQLState},
 }
 
 func getStateToMySQLState(state vterrors.State) mysqlCode {

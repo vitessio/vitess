@@ -501,15 +501,6 @@ func (r *earlyRewriter) rewriteAliasesInGroupBy(node sqlparser.Expr, sel *sqlpar
 	return
 }
 
-func (at *aggrTracker) isAggregateUDF(name sqlparser.IdentifierCI) bool {
-	for _, aggrUDF := range at.aggrUDFs {
-		if name.EqualString(aggrUDF) {
-			return true
-		}
-	}
-	return false
-}
-
 func (r *earlyRewriter) rewriteAliasesInHaving(node sqlparser.Expr, sel *sqlparser.Select) (expr sqlparser.Expr, err error) {
 	currentScope := r.scoper.currentScope()
 	if currentScope.isUnion {
@@ -530,7 +521,7 @@ func (r *earlyRewriter) rewriteAliasesInHaving(node sqlparser.Expr, sel *sqlpars
 			aggrTrack.popAggr()
 			return
 		case *sqlparser.FuncExpr:
-			if aggrTrack.isAggregateUDF(node.Name) {
+			if node.Name.EqualsAnyString(r.aggrUDFs) {
 				aggrTrack.popAggr()
 			}
 			return
@@ -593,7 +584,7 @@ func (at *aggrTracker) down(node, _ sqlparser.SQLNode) bool {
 	case sqlparser.AggrFunc:
 		at.insideAggr = true
 	case *sqlparser.FuncExpr:
-		if at.isAggregateUDF(node.Name) {
+		if node.Name.EqualsAnyString(at.aggrUDFs) {
 			at.insideAggr = true
 		}
 	}
@@ -761,7 +752,10 @@ func (r *earlyRewriter) rewriteOrderByLiteral(node *sqlparser.Literal) (expr sql
 	}
 
 	if num < 1 || num > len(stmt.SelectExprs) {
-		return nil, false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown column '%d' in '%s'", num, r.clause)
+		return nil, false, &ColumnNotFoundClauseError{
+			Column: fmt.Sprintf("%d", num),
+			Clause: r.clause,
+		}
 	}
 
 	// We loop like this instead of directly accessing the offset, to make sure there are no unexpanded `*` before

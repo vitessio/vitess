@@ -128,7 +128,7 @@ func explainPlan(explain *sqlparser.ExplainStmt, reservedVars *sqlparser.Reserve
 		return nil, vterrors.VT03031()
 	}
 
-	if err = queryRewrite(ctx.SemTable, reservedVars, explain.Statement); err != nil {
+	if err = queryRewrite(ctx, explain.Statement); err != nil {
 		return nil, err
 	}
 

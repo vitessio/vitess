@@ -19,6 +19,8 @@ package operators
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -56,10 +58,12 @@ func planOffsets(ctx *plancontext.PlanningContext, root Operator) Operator {
 }
 
 // mustFetchFromInput returns true for expressions that have to be fetched from the input and cannot be evaluated
-func mustFetchFromInput(e sqlparser.SQLNode) bool {
-	switch e.(type) {
+func mustFetchFromInput(ctx *plancontext.PlanningContext, e sqlparser.SQLNode) bool {
+	switch fun := e.(type) {
 	case *sqlparser.ColName, sqlparser.AggrFunc:
 		return true
+	case *sqlparser.FuncExpr:
+		return fun.Name.EqualsAnyString(ctx.VSchema.GetAggregateUDFs())
 	default:
 		return false
 	}
@@ -93,10 +97,10 @@ func useOffsets(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op Operat
 	return rewritten.(sqlparser.Expr)
 }
 
-// addColumnsToInput adds columns needed by an operator to its input.
-// This happens only when the filter expression can be retrieved as an offset from the underlying mysql.
 func addColumnsToInput(ctx *plancontext.PlanningContext, root Operator) Operator {
-	visitor := func(in Operator, _ semantics.TableSet, isRoot bool) (Operator, *ApplyResult) {
+	// addColumnsToInput adds columns needed by an operator to its input.
+	// This happens only when the filter expression can be retrieved as an offset from the underlying mysql.
+	addColumnsNeededByFilter := func(in Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult) {
 		filter, ok := in.(*Filter)
 		if !ok {
 			return in, NoRewrite
@@ -125,12 +129,30 @@ func addColumnsToInput(ctx *plancontext.PlanningContext, root Operator) Operator
 
 		return in, NoRewrite
 	}
+	failUDFAggregation := func(in Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult) {
+		aggrOp, ok := in.(*Aggregator)
+		if !ok {
+			return in, NoRewrite
+		}
+		for _, aggr := range aggrOp.Aggregations {
+			if aggr.OpCode == opcode.AggregateUDF {
+				// we don't support UDFs in aggregation if it's still above a route
+				panic(vterrors.VT03033(sqlparser.String(aggr.Original.Expr)))
+			}
+		}
+		return in, NoRewrite
+	}
+
+	visitor := func(in Operator, _ semantics.TableSet, isRoot bool) (Operator, *ApplyResult) {
+		out, res := addColumnsNeededByFilter(in, semantics.EmptyTableSet(), isRoot)
+		failUDFAggregation(in, semantics.EmptyTableSet(), isRoot)
+		return out, res
+	}
 
 	return TopDown(root, TableID, visitor, stopAtRoute)
 }
 
-// addColumnsToInput adds columns needed by an operator to its input.
-// This happens only when the filter expression can be retrieved as an offset from the underlying mysql.
+// pullDistinctFromUNION will pull out the distinct from a union operator
 func pullDistinctFromUNION(_ *plancontext.PlanningContext, root Operator) Operator {
 	visitor := func(in Operator, _ semantics.TableSet, isRoot bool) (Operator, *ApplyResult) {
 		union, ok := in.(*Union)
@@ -170,7 +192,7 @@ func getOffsetRewritingVisitor(
 			return false
 		}
 
-		if mustFetchFromInput(e) {
+		if mustFetchFromInput(ctx, e) {
 			notFound(e)
 			return false
 		}

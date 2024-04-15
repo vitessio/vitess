@@ -225,7 +225,7 @@ func newBuildSelectPlan(
 }
 
 func createSelectOperator(ctx *plancontext.PlanningContext, selStmt sqlparser.SelectStatement, reservedVars *sqlparser.ReservedVars) (operators.Operator, error) {
-	err := queryRewrite(ctx.SemTable, reservedVars, selStmt)
+	err := queryRewrite(ctx, selStmt)
 	if err != nil {
 		return nil, err
 	}
