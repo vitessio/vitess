@@ -81,7 +81,7 @@ func TestTrackingUnHealthyTablet(t *testing.T) {
 
 	sbc := sandboxconn.NewSandboxConn(tablet)
 	ch := make(chan *discovery.TabletHealth)
-	tracker := NewTracker(ch, false, sqlparser.NewTestParser())
+	tracker := NewTracker(ch, false, false, sqlparser.NewTestParser())
 	tracker.consumeDelay = 1 * time.Millisecond
 	tracker.Start()
 	defer tracker.Stop()
@@ -104,7 +104,7 @@ func TestTrackingUnHealthyTablet(t *testing.T) {
 			serving: true,
 		},
 		{
-			name:        "initial load",
+			name:        "first update",
 			serving:     true,
 			updatedTbls: []string{"a"},
 		},
@@ -113,24 +113,26 @@ func TestTrackingUnHealthyTablet(t *testing.T) {
 			serving: false,
 		},
 		{
-			name:    "now serving tablet",
+			name:    "serving tablet",
 			serving: true,
 		},
 	}
 
 	for _, tcase := range tcases {
-		ch <- &discovery.TabletHealth{
-			Conn:    sbc,
-			Tablet:  tablet,
-			Target:  target,
-			Serving: tcase.serving,
-			Stats:   &querypb.RealtimeStats{TableSchemaChanged: tcase.updatedTbls},
-		}
-		time.Sleep(5 * time.Millisecond)
+		t.Run(tcase.name, func(t *testing.T) {
+			ch <- &discovery.TabletHealth{
+				Conn:    sbc,
+				Tablet:  tablet,
+				Target:  target,
+				Serving: tcase.serving,
+				Stats:   &querypb.RealtimeStats{TableSchemaChanged: tcase.updatedTbls},
+			}
+			time.Sleep(5 * time.Millisecond)
+		})
 	}
 
 	require.False(t, waitTimeout(&wg, 5*time.Second), "schema was updated but received no signal")
-	require.EqualValues(t, 3, sbc.GetSchemaCount.Load())
+	assert.EqualValues(t, 3, sbc.GetSchemaCount.Load())
 }
 
 // TestTrackerGetKeyspaceUpdateController tests table update controller initialization.
@@ -214,7 +216,7 @@ func TestTableTracking(t *testing.T) {
 		},
 	}}
 
-	testTracker(t, schemaDefResult, testcases)
+	testTracker(t, false, schemaDefResult, testcases)
 }
 
 // TestViewsTracking tests that the tracker is able to track views.
@@ -261,7 +263,7 @@ func TestViewsTracking(t *testing.T) {
 			"t4": "select 1 from tbl4"},
 	}}
 
-	testTracker(t, schemaDefResult, testcases)
+	testTracker(t, false, schemaDefResult, testcases)
 }
 
 // TestFKInfoRetrieval tests that the tracker is able to retrieve required foreign key information from ddl statement.
@@ -319,7 +321,7 @@ func TestFKInfoRetrieval(t *testing.T) {
 		},
 	}}
 
-	testTracker(t, schemaDefResult, testcases)
+	testTracker(t, false, schemaDefResult, testcases)
 }
 
 // TestIndexInfoRetrieval tests that the tracker is able to retrieve required index information from ddl statement.
@@ -379,7 +381,39 @@ func TestIndexInfoRetrieval(t *testing.T) {
 		},
 	}}
 
-	testTracker(t, schemaDefResult, testcases)
+	testTracker(t, false, schemaDefResult, testcases)
+}
+
+// TestUDFRetrieval tests that the tracker is able to retrieve required UDF information.
+func TestUDFRetrieval(t *testing.T) {
+	schemaDefResult := []map[string]string{{
+		// initial load of table - kept empty
+	}, {
+		// initial load of view - kept empty
+	}, {
+		"my_udf": "int",
+	}, {
+		"my_udf2": "char",
+		"my_udf3": "int",
+	}, {
+		"my_udf2": "char",
+		"my_udf4": "int",
+	}}
+
+	testcases := []testCases{{
+		testName: "initial load",
+		expUDFs:  []string{"my_udf"},
+	}, {
+		testName: "next load 1",
+		updUdfs:  true,
+		expUDFs:  []string{"my_udf2", "my_udf3"},
+	}, {
+		testName: "next load 2",
+		updUdfs:  true,
+		expUDFs:  []string{"my_udf2", "my_udf4"},
+	}}
+
+	testTracker(t, true, schemaDefResult, testcases)
 }
 
 type testCases struct {
@@ -392,11 +426,14 @@ type testCases struct {
 
 	updView []string
 	expView map[string]string
+
+	updUdfs bool
+	expUDFs []string
 }
 
-func testTracker(t *testing.T, schemaDefResult []map[string]string, tcases []testCases) {
+func testTracker(t *testing.T, enableUDFs bool, schemaDefResult []map[string]string, tcases []testCases) {
 	ch := make(chan *discovery.TabletHealth)
-	tracker := NewTracker(ch, true, sqlparser.NewTestParser())
+	tracker := NewTracker(ch, true, enableUDFs, sqlparser.NewTestParser())
 	tracker.consumeDelay = 1 * time.Millisecond
 	tracker.Start()
 	defer tracker.Stop()
@@ -412,6 +449,10 @@ func testTracker(t *testing.T, schemaDefResult []map[string]string, tcases []tes
 	sbc := sandboxconn.NewSandboxConn(tablet)
 	sbc.SetSchemaResult(schemaDefResult)
 
+	initialLoadCount := 2
+	if enableUDFs {
+		initialLoadCount = 3
+	}
 	for count, tcase := range tcases {
 		t.Run(tcase.testName, func(t *testing.T) {
 			wg.Add(1)
@@ -420,11 +461,11 @@ func testTracker(t *testing.T, schemaDefResult []map[string]string, tcases []tes
 				Tablet:  tablet,
 				Target:  target,
 				Serving: true,
-				Stats:   &querypb.RealtimeStats{TableSchemaChanged: tcase.updTbl, ViewSchemaChanged: tcase.updView},
+				Stats:   &querypb.RealtimeStats{TableSchemaChanged: tcase.updTbl, ViewSchemaChanged: tcase.updView, UdfsChanged: tcase.updUdfs},
 			}
 
 			require.False(t, waitTimeout(&wg, time.Second), "schema was updated but received no signal")
-			require.EqualValues(t, count+2, sbc.GetSchemaCount.Load())
+			require.EqualValues(t, count+initialLoadCount, sbc.GetSchemaCount.Load())
 
 			_, keyspacePresent := tracker.tracked[target.Keyspace]
 			require.Equal(t, true, keyspacePresent)
@@ -434,24 +475,24 @@ func testTracker(t *testing.T, schemaDefResult []map[string]string, tcases []tes
 				if len(tcase.expFk[k]) > 0 {
 					fks := tracker.GetForeignKeys(keyspace, k)
 					for _, fk := range fks {
-						utils.MustMatch(t, tcase.expFk[k], sqlparser.String(fk), "mismatch foreign keys for table: ", k)
+						assert.Equal(t, tcase.expFk[k], sqlparser.String(fk), "mismatch foreign keys for table: ", k)
 					}
 				}
 				expIndexes := tcase.expIdx[k]
 				if len(expIndexes) > 0 {
 					idxs := tracker.GetIndexes(keyspace, k)
-					if len(expIndexes) != len(idxs) {
-						t.Fatalf("mismatch index for table: %s", k)
-					}
+					require.Equal(t, len(expIndexes), len(idxs))
 					for i, idx := range idxs {
-						utils.MustMatch(t, expIndexes[i], sqlparser.String(idx), "mismatch index for table: ", k)
+						assert.Equal(t, expIndexes[i], sqlparser.String(idx), "mismatch index for table: ", k)
 					}
 				}
 			}
 
 			for k, v := range tcase.expView {
-				utils.MustMatch(t, v, sqlparser.String(tracker.GetViews(keyspace, k)), "mismatch for view: ", k)
+				assert.Equal(t, v, sqlparser.String(tracker.GetViews(keyspace, k)), "mismatch for view: ", k)
 			}
+
+			assert.Equal(t, tcase.expUDFs, tracker.UDFs(keyspace), "mismatch for udfs")
 		})
 	}
 }
