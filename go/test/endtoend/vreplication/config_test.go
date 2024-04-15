@@ -142,7 +142,7 @@ create table nopk (name varchar(128), age int unsigned);
         "sequence": "customer_seq"
       }
     },
-    "customer_names": {
+    "customer_name": {
       "column_vindexes": [
         {
           "column": "cid",
@@ -150,7 +150,7 @@ create table nopk (name varchar(128), age int unsigned);
         }
       ]
     },
-    "customer_types": {
+    "customer_type": {
       "column_vindexes": [
         {
           "column": "cid",
@@ -419,26 +419,26 @@ create table nopk (name varchar(128), age int unsigned);
 
 	materializeCustomerNamesSpec = `
 {
-  "workflow": "customer_names",
+  "workflow": "customer_name",
   "source_keyspace": "customer",
   "target_keyspace": "customer",
   "table_settings": [{
-    "target_table": "customer_names",
+    "target_table": "customer_name",
     "source_expression": "select cid, name from customer",
-    "create_ddl": "create table if not exists customer_names (cid bigint not null, name varchar(128), primary key(cid), key(name))"
+    "create_ddl": "create table if not exists customer_name (cid bigint not null, name varchar(128), primary key(cid), key(name))"
   }]
 }
 `
 
 	materializeCustomerTypesSpec = `
 {
-  "workflow": "customer_types",
+  "workflow": "customer_type",
   "source_keyspace": "customer",
   "target_keyspace": "customer",
   "table_settings": [{
-    "target_table": "customer_types",
+    "target_table": "customer_type",
     "source_expression": "select cid, typ from customer",
-    "create_ddl": "create table if not exists customer_types (cid bigint not null, typ enum('individual','soho','enterprise'), primary key(cid), key(typ))"
+    "create_ddl": "create table if not exists customer_type (cid bigint not null, typ enum('individual','soho','enterprise'), primary key(cid), key(typ))"
   }]
 }
 `

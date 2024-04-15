@@ -816,10 +816,12 @@ func (sm *StreamMigrator) syncSourceStreams(ctx context.Context) (map[string]rep
 				comment := ""
 				if vrs.WorkflowType == binlogdatapb.VReplicationWorkflowType_Materialize && vrs.BinlogSource.Keyspace == sm.ts.TargetKeyspaceName() {
 					// For intra-keyspace materializations in a keyspace that's being
-					// resharded, we don't have serving tablets in the source keyspace.
-					// So we instruct the VReplication engine and controller on the
-					// target tablets to include non-serving tablets in their search
-					// for source tablets to stream from.
+					// resharded, we don't have serving tablets on the workflow's current
+					// target side. So we instruct the VReplication engine and controller
+					// on the target tablets to include non-serving tablets in their
+					// search for source tablets to stream from as we migrate and setup
+					// these intra-keyspace materializations on the current target side
+					// that we're preparing to switch traffic to.
 					comment = fmt.Sprintf("/*vt+ %s=1 */ ", vreplication.IncludeNonServingTabletsCommentDirective)
 				}
 				query := fmt.Sprintf("update %s_vt.vreplication set state='Running', stop_pos='%s', message='synchronizing for cutover' where id=%d",

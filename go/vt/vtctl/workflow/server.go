@@ -3312,7 +3312,7 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 		ts.Logger().Infof("Stopping streams")
 		// Use a shorter context for this since since when doing a Reshard, if there are intra-keyspace
 		// materializations then we have to wait for them to catchup before switching traffic for the
-		// Reshard workflow. We use the timeout where which is used to limit the amount of time that we
+		// Reshard workflow. We use the timeout here which is used to limit the amount of time that we
 		// wait for VReplication to catch up.
 		stopCtx, stopCancel := context.WithTimeout(ctx, timeout)
 		defer stopCancel()

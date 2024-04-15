@@ -470,7 +470,7 @@ func testReshardV2Workflow(t *testing.T) {
 
 	// Generate customer records in the background for the rest of the test
 	// in order to confirm that no writes are lost in either the customer
-	// table or the customer_names and customer_types materializations
+	// table or the customer_name and customer_type materializations
 	// against it during the Reshard and all of the traffic switches.
 	dataGenCtx, dataGenCancel := context.WithCancel(context.Background())
 	defer dataGenCancel()
@@ -518,21 +518,21 @@ func testReshardV2Workflow(t *testing.T) {
 	dataGenWg.Wait()
 	cres := execVtgateQuery(t, dataGenConn, "customer", "select count(*) from customer")
 	require.Len(t, cres.Rows, 1)
-	waitForNoWorkflowLag(t, vc, "customer", "customer_names")
-	cnres := execVtgateQuery(t, dataGenConn, "customer", "select count(*) from customer_names")
+	waitForNoWorkflowLag(t, vc, "customer", "customer_name")
+	cnres := execVtgateQuery(t, dataGenConn, "customer", "select count(*) from customer_name")
 	require.Len(t, cnres.Rows, 1)
 	require.EqualValues(t, cres.Rows, cnres.Rows)
-	waitForNoWorkflowLag(t, vc, "customer", "customer_types")
-	ctres := execVtgateQuery(t, dataGenConn, "customer", "select count(*) from customer_types")
+	waitForNoWorkflowLag(t, vc, "customer", "customer_type")
+	ctres := execVtgateQuery(t, dataGenConn, "customer", "select count(*) from customer_type")
 	require.Len(t, ctres.Rows, 1)
 	require.EqualValues(t, cres.Rows, ctres.Rows)
 	if debugMode {
-		t.Logf("Done inserting customer data. Record counts in customer: %s, customer_names: %s, customer_types: %s",
+		t.Logf("Done inserting customer data. Record counts in customer: %s, customer_name: %s, customer_type: %s",
 			cres.Rows[0][0].ToString(), cnres.Rows[0][0].ToString(), ctres.Rows[0][0].ToString())
 	}
 	// We also do a vdiff on the materialize workflows for good measure.
-	doVtctldclientVDiff(t, "customer", "customer_names", "", nil)
-	doVtctldclientVDiff(t, "customer", "customer_types", "", nil)
+	doVtctldclientVDiff(t, "customer", "customer_name", "", nil)
+	doVtctldclientVDiff(t, "customer", "customer_type", "", nil)
 }
 
 func testMoveTablesV2Workflow(t *testing.T) {
@@ -544,7 +544,7 @@ func testMoveTablesV2Workflow(t *testing.T) {
 		if !debugMode {
 			return
 		}
-		output, err := vc.VtctldClient.ExecuteCommandWithOutput("materialize", "--target-keyspace=customer", "show", "--workflow=customer_names", "--compact", "--include-logs=false")
+		output, err := vc.VtctldClient.ExecuteCommandWithOutput("materialize", "--target-keyspace=customer", "show", "--workflow=customer_name", "--compact", "--include-logs=false")
 		require.NoError(t, err)
 		t.Logf("Materialize show output: %s", output)
 	}
@@ -600,21 +600,21 @@ func testMoveTablesV2Workflow(t *testing.T) {
 
 	output, err = vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)
 	require.NoError(t, err)
-	require.True(t, listOutputContainsWorkflow(output, "customer_names") && listOutputContainsWorkflow(output, "customer_types") && !listOutputContainsWorkflow(output, "wf1"))
+	require.True(t, listOutputContainsWorkflow(output, "customer_name") && listOutputContainsWorkflow(output, "customer_type") && !listOutputContainsWorkflow(output, "wf1"))
 
 	testVSchemaForSequenceAfterMoveTables(t)
 
 	createMoveTablesWorkflow(t, "Lead,Lead-1")
 	output, err = vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)
 	require.NoError(t, err)
-	require.True(t, listOutputContainsWorkflow(output, "wf1") && listOutputContainsWorkflow(output, "customer_names") && listOutputContainsWorkflow(output, "customer_types"))
+	require.True(t, listOutputContainsWorkflow(output, "wf1") && listOutputContainsWorkflow(output, "customer_name") && listOutputContainsWorkflow(output, "customer_type"))
 
 	err = tstWorkflowCancel(t)
 	require.NoError(t, err)
 
 	output, err = vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)
 	require.NoError(t, err)
-	require.True(t, listOutputContainsWorkflow(output, "customer_names") && listOutputContainsWorkflow(output, "customer_types") && !listOutputContainsWorkflow(output, "wf1"))
+	require.True(t, listOutputContainsWorkflow(output, "customer_name") && listOutputContainsWorkflow(output, "customer_type") && !listOutputContainsWorkflow(output, "wf1"))
 }
 
 func testPartialSwitches(t *testing.T) {
@@ -734,8 +734,8 @@ func testRestOfWorkflow(t *testing.T) {
 
 	// fully switch and complete
 	waitForLowLag(t, "customer", "wf1")
-	waitForLowLag(t, "customer", "customer_names")
-	waitForLowLag(t, "customer", "customer_types")
+	waitForLowLag(t, "customer", "customer_name")
+	waitForLowLag(t, "customer", "customer_type")
 	tstWorkflowSwitchReadsAndWrites(t)
 	validateReadsRoute(t, "rdonly", targetRdonlyTab1)
 	validateReadsRouteToTarget(t, "replica")
