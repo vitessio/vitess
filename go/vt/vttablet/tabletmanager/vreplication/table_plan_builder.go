@@ -27,7 +27,6 @@ import (
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet"
@@ -231,12 +230,6 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 		Match: fromTable,
 	}
 
-	enumValuesMap := map[string](map[string]string){}
-	for k, v := range rule.ConvertEnumToText {
-		tokensMap := schema.ParseEnumOrSetTokensMap(v)
-		enumValuesMap[k] = tokensMap
-	}
-
 	if expr, ok := sel.SelectExprs[0].(*sqlparser.StarExpr); ok {
 		// If it's a "select *", we return a partial plan, and complete
 		// it when we get back field info from the stream.
@@ -252,7 +245,6 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 			SendRule:         sendRule,
 			Lastpk:           lastpk,
 			Stats:            stats,
-			EnumValuesMap:    enumValuesMap,
 			ConvertCharset:   rule.ConvertCharset,
 			ConvertIntToEnum: rule.ConvertIntToEnum,
 			CollationEnv:     collationEnv,
@@ -335,7 +327,6 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 
 	tablePlan := tpb.generate()
 	tablePlan.SendRule = sendRule
-	tablePlan.EnumValuesMap = enumValuesMap
 	tablePlan.ConvertCharset = rule.ConvertCharset
 	tablePlan.ConvertIntToEnum = rule.ConvertIntToEnum
 	return tablePlan, nil

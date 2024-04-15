@@ -21,6 +21,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strconv"
+	"strings"
 	"time"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -35,6 +37,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	schemautils "vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet"
@@ -753,6 +756,22 @@ func (vs *vstreamer) buildTablePlan(id uint64, tm *mysql.TableMap) (*binlogdatap
 		Plan:     plan,
 		TableMap: tm,
 	}
+	// Add any necessary ENUM and SET ordinal to string mappings.
+	for i, col := range cols {
+		if col.Type == querypb.Type_ENUM || col.Type == querypb.Type_SET {
+			if plan.EnumValuesMap == nil {
+				plan.EnumValuesMap = make(map[int]map[int]string)
+			}
+			// Strip the enum() / set() parts out.
+			begin := strings.Index(col.ColumnType, "(")
+			end := strings.LastIndex(col.ColumnType, ")")
+			if begin == -1 || end == -1 {
+				return nil, fmt.Errorf("enum or set column %s does not have valid string values: %s",
+					col.Name, col.ColumnType)
+			}
+			plan.EnumValuesMap[i] = schemautils.ParseEnumOrSetTokensMap(col.ColumnType[begin+1 : end])
+		}
+	}
 	return &binlogdatapb.VEvent{
 		Type: binlogdatapb.VEventType_FIELD,
 		FieldEvent: &binlogdatapb.FieldEvent{
@@ -827,7 +846,7 @@ func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, er
 	// initially using collations for the column types based on the *connection
 	// collation* and not the actual *column collation*.
 	// But because we now get the correct collation for the actual column from
-	// mysqld in getExtColsInfo we know this is the correct one for the vstream
+	// mysqld in getExtColInfos we know this is the correct one for the vstream
 	// target and we use that rather than any that were in the binlog events,
 	// which were for the source and which can be using a different collation
 	// than the target.
@@ -835,7 +854,6 @@ func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, er
 	if err != nil {
 		return nil, err
 	}
-
 	return fieldsCopy, nil
 }
 
@@ -1045,6 +1063,49 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 			return false, nil, false, err
 		}
 		pos += l
+
+		// Convert the ordinal values in the binlog event for SET and ENUM fields into their
+		// string representations.
+		if plan.Table.Fields[colNum].Type == querypb.Type_ENUM {
+			ordinalValue, err := value.ToInt()
+			if err != nil {
+				log.Errorf("extractRowAndFilter: %s, table: %s, colNum: %d, fields: %+v, current values: %+v",
+					err, plan.Table.Name, colNum, plan.Table.Fields, values)
+				return false, nil, false, err
+			}
+			strVal := plan.EnumValuesMap[colNum][ordinalValue]
+			value = sqltypes.MakeTrusted(plan.Table.Fields[colNum].Type, []byte(strVal))
+			log.Errorf("DEBUG: extractRowAndFilter: mapped string value for col %d: %v", colNum, strVal)
+		}
+		if plan.Table.Fields[colNum].Type == querypb.Type_SET {
+			val := bytes.Buffer{}
+			// A SET column can have 64 unique values: https://dev.mysql.com/doc/refman/en/set.html
+			// For this reason the binlog event contains the values encoded as a 64-bit integer.
+			// This value can then be converted to a binary / base 2 integer where it becomes
+			// a bitmap of the values specified.
+			bv, err := value.ToUint64()
+			if err != nil {
+				log.Errorf("extractRowAndFilter: %s, table: %s, colNum: %d, fields: %+v, current values: %+v",
+					err, plan.Table.Name, colNum, plan.Table.Fields, values)
+				return false, nil, false, err
+			}
+			// Convert it to a base2 integer / binary value. Finally, strconv converts this to a
+			// string of 1s and 0s and we can then loop through the bytes. Note that this map is
+			// in reverse order as this was a little endian integer.
+			valMap := strconv.FormatUint(bv, 2)
+			valLen := len(valMap)
+			for i := 0; i < valLen; i++ {
+				if valMap[i] == '1' {
+					strVal := plan.EnumValuesMap[colNum][valLen-i]
+					if val.Len() > 0 {
+						val.WriteByte(',')
+					}
+					val.WriteString(strVal)
+				}
+			}
+			value = sqltypes.MakeTrusted(plan.Table.Fields[colNum].Type, val.Bytes())
+			log.Errorf("DEBUG: extractRowAndFilter: mapped string value for col %d: %v", colNum, val.String())
+		}
 
 		charsets[colNum] = collations.ID(plan.Table.Fields[colNum].Charset)
 		values[colNum] = value

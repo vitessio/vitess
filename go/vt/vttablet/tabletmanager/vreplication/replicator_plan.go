@@ -200,7 +200,6 @@ type TablePlan struct {
 	Delete           *sqlparser.ParsedQuery
 	MultiDelete      *sqlparser.ParsedQuery
 	Fields           []*querypb.Field
-	EnumValuesMap    map[string](map[string]string)
 	ConvertIntToEnum map[string]bool
 	// PKReferences is used to check if an event changed
 	// a primary key column (row move).
@@ -334,34 +333,6 @@ func (tp *TablePlan) bindFieldVal(field *querypb.Field, val *sqltypes.Value) (*q
 	if tp.ConvertIntToEnum[field.Name] && !val.IsNull() {
 		// An integer converted to an enum. We must write the textual value of the int. i.e. 0 turns to '0'
 		return sqltypes.StringBindVariable(val.ToString()), nil
-	}
-	if enumValues, ok := tp.EnumValuesMap[field.Name]; ok && !val.IsNull() {
-		// The fact that this field has a EnumValuesMap entry, means we must
-		// use the enum's text value as opposed to the enum's numerical value.
-		// This may be needed in Online DDL, when the enum column could be modified:
-		// - Either from ENUM to a text type (VARCHAR/TEXT)
-		// - Or from ENUM to another ENUM with different value ordering,
-		//   e.g. from `('red', 'green', 'blue')` to `('red', 'blue')`.
-		// By applying the textual value of an enum we eliminate the ordering concern.
-		// In non-Online DDL this shouldn't be a concern because the schema is static,
-		// and so passing the enum's numerical value is sufficient.
-		enumValue, enumValueOK := enumValues[val.ToString()]
-		if !enumValueOK {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Invalid enum value: %v for field %s", val, field.Name)
-		}
-		// get the enum text for this val
-		return sqltypes.StringBindVariable(enumValue), nil
-	}
-	if field.Type == querypb.Type_ENUM {
-		// This is an ENUM w/o a values map, which means that we are most likely using
-		// the index value -- what is stored and binlogged vs. the list of strings
-		// defined in the table schema -- and we must use an int bindvar or we'll have
-		// invalid/incorrect predicates like WHERE enumcol='2'.
-		// This will be the case when applying binlog events.
-		enumIndexVal := sqltypes.MakeTrusted(querypb.Type_UINT64, val.Raw())
-		if enumIndex, err := enumIndexVal.ToUint64(); err == nil {
-			return sqltypes.Uint64BindVariable(enumIndex), nil
-		}
 	}
 	return sqltypes.ValueBindVariable(*val), nil
 }
