@@ -38,7 +38,7 @@ func (mysqlFlavor) masterGTIDSet(c *Conn) (GTIDSet, error) {
 	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
 		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected result format for gtid_executed: %#v", qr)
 	}
-	return parseMysql56GTIDSet(qr.Rows[0][0].ToString())
+	return ParseMysql56GTIDSet(qr.Rows[0][0].ToString())
 }
 
 func (mysqlFlavor) startSlaveCommand() string {
@@ -109,7 +109,7 @@ func (mysqlFlavor) status(c *Conn) (SlaveStatus, error) {
 	}
 
 	status := parseSlaveStatus(resultMap)
-	status.Position.GTIDSet, err = parseMysql56GTIDSet(resultMap["Executed_Gtid_Set"])
+	status.Position.GTIDSet, err = ParseMysql56GTIDSet(resultMap["Executed_Gtid_Set"])
 	if err != nil {
 		return SlaveStatus{}, vterrors.Wrapf(err, "SlaveStatus can't parse MySQL 5.6 GTID (Executed_Gtid_Set: %#v)", resultMap["Executed_Gtid_Set"])
 	}

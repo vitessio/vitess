@@ -35,6 +35,35 @@ func (iv interval) contains(other interval) bool {
 	return iv.start <= other.start && other.end <= iv.end
 }
 
+// overlaps returns true if any part of |other| overlaps with this interval.
+func (iv interval) overlaps(other interval) bool {
+	return other.start >= iv.start && other.start < iv.end ||
+		other.end <= iv.end && other.end > iv.start ||
+		other.start == iv.start && other.end == iv.end
+}
+
+// subtract returns a slice of intervals created by subtracting |other| from this interval. If this interval is
+// completely contained by |other|, then nil is returned. If |other| overlaps with the middle of this interval, but
+// not the start or end, then two intervals are returned.
+func (iv interval) subtract(other interval) []interval {
+	if iv.start < other.start {
+		if iv.end > other.end {
+			return []interval{
+				{start: iv.start, end: other.start - 1},
+				{start: other.end + 1, end: iv.end},
+			}
+		} else {
+			return []interval{{start: iv.start, end: other.start - 1}}
+		}
+	} else {
+		if iv.end > other.end {
+			return []interval{{start: other.end + 1, end: iv.end}}
+		} else {
+			return nil
+		}
+	}
+}
+
 type intervalList []interval
 
 // Len implements sort.Interface.
@@ -70,10 +99,10 @@ func parseInterval(s string) (interval, error) {
 	}
 }
 
-// parseMysql56GTIDSet is registered as a GTIDSet parser.
+// ParseMysql56GTIDSet is registered as a GTIDSet parser.
 //
 // https://dev.mysql.com/doc/refman/5.6/en/replication-gtids-concepts.html
-func parseMysql56GTIDSet(s string) (GTIDSet, error) {
+func ParseMysql56GTIDSet(s string) (GTIDSet, error) {
 	set := Mysql56GTIDSet{}
 
 	// gtid_set: uuid_set [, uuid_set] ...
@@ -229,6 +258,41 @@ func (set Mysql56GTIDSet) Contains(other GTIDSet) bool {
 
 	// No uncovered intervals were found.
 	return true
+}
+
+func (set Mysql56GTIDSet) Subtract(arg GTIDSet) GTIDSet {
+	other, ok := arg.(Mysql56GTIDSet)
+	if !ok {
+		panic("can't compare GTID sets of different flavors")
+	}
+
+	result := make(Mysql56GTIDSet)
+	for _, sid := range set.SIDs() {
+		if _, ok := other[sid]; ok {
+			leftIntervals := set[sid]
+			rightIntervals := other[sid]
+			for _, leftInterval := range leftIntervals {
+				found := false
+				for rightIntervalsIdx := 0; rightIntervalsIdx < len(rightIntervals); rightIntervalsIdx++ {
+					rightInterval := rightIntervals[rightIntervalsIdx]
+					if leftInterval.overlaps(rightInterval) {
+						found = true
+						newIntervals := leftInterval.subtract(rightInterval)
+						if newIntervals != nil {
+							result[sid] = append(result[sid], newIntervals...)
+						}
+					}
+				}
+				if !found {
+					result[sid] = append(result[sid], leftInterval)
+				}
+			}
+		} else {
+			result[sid] = set[sid]
+		}
+	}
+
+	return result
 }
 
 // Equal implements GTIDSet.
@@ -408,5 +472,5 @@ func NewMysql56GTIDSetFromSIDBlock(data []byte) (Mysql56GTIDSet, error) {
 }
 
 func init() {
-	gtidSetParsers[mysql56FlavorID] = parseMysql56GTIDSet
+	gtidSetParsers[mysql56FlavorID] = ParseMysql56GTIDSet
 }

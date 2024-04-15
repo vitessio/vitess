@@ -91,13 +91,13 @@ func TestParseMysql56GTIDSet(t *testing.T) {
 	}
 
 	for input, want := range table {
-		got, err := parseMysql56GTIDSet(input)
+		got, err := ParseMysql56GTIDSet(input)
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 			continue
 		}
 		if !got.Equal(want) {
-			t.Errorf("parseMysql56GTIDSet(%#v) = %#v, want %#v", input, got, want)
+			t.Errorf("ParseMysql56GTIDSet(%#v) = %#v, want %#v", input, got, want)
 		}
 	}
 }
@@ -116,9 +116,9 @@ func TestParseMysql56GTIDSetInvalid(t *testing.T) {
 	}
 
 	for _, input := range table {
-		_, err := parseMysql56GTIDSet(input)
+		_, err := ParseMysql56GTIDSet(input)
 		if err == nil {
-			t.Errorf("parseMysql56GTIDSet(%#v) expected error, got none", err)
+			t.Errorf("ParseMysql56GTIDSet(%#v) expected error, got none", err)
 		}
 	}
 }
@@ -414,6 +414,115 @@ func TestMysql56GTIDSetAddGTID(t *testing.T) {
 		if got := set.AddGTID(input); !got.Equal(want) {
 			t.Errorf("AddGTID(%#v) = %#v, want %#v", input, got, want)
 		}
+	}
+}
+
+func TestMysql56GTIDSetSubtract(t *testing.T) {
+	sid1 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+	sid2 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16}
+	sid3 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17}
+
+	table := []struct{name string; left, right, expected Mysql56GTIDSet}{
+		{
+			name: "non-overlapping GTIDSets don't subtract anything",
+			left: Mysql56GTIDSet{
+				sid1: []interval{{20, 30}, {35, 40}, {42, 45}},
+				sid2: []interval{{1, 5}, {50, 50}, {60, 70}},
+			},
+			right: Mysql56GTIDSet{
+				sid3: []interval{{20, 30}, {35, 40}, {42, 45}},
+				sid2: []interval{{6, 10}, {51, 52}},
+			},
+			expected: Mysql56GTIDSet{
+				sid1: []interval{{20, 30}, {35, 40}, {42, 45}},
+				sid2: []interval{{1, 5}, {50, 50}, {60, 70}},
+			},
+		},
+		{
+			name: "identical GTIDSets produce an empty GTIDSet",
+			left: Mysql56GTIDSet{
+				sid1: []interval{{20, 30}, {35, 40}, {42, 45}},
+				sid2: []interval{{1, 5}, {50, 50}, {60, 70}},
+			},
+			right: Mysql56GTIDSet{
+				sid1: []interval{{20, 30}, {35, 40}, {42, 45}},
+				sid2: []interval{{1, 5}, {50, 50}, {60, 70}},
+			},
+			expected: Mysql56GTIDSet{},
+		},
+		{
+			name: "simple subtraction: remove half of one interval",
+			left: Mysql56GTIDSet{
+				sid1: []interval{{20, 30}, {35, 40}, {42, 45}},
+				sid2: []interval{{1, 5}, {50, 50}, {60, 70}},
+			},
+			right: Mysql56GTIDSet{
+				sid1: []interval{{20, 25}, {100, 102}},
+				sid3: []interval{{1, 5}, {50, 50}, {60, 70}},
+			},
+			expected: Mysql56GTIDSet{
+				sid1: []interval{{26, 30}, {35, 40}, {42, 45}},
+				sid2: []interval{{1, 5}, {50, 50}, {60, 70}},
+			},
+		},
+		{
+			name: "simple subtraction: remove one interval, split one interval",
+			left: Mysql56GTIDSet{
+				sid1: []interval{{20, 30}, {35, 40}, {42, 45}},
+				sid2: []interval{{1, 5}, {50, 50}, {60, 70}},
+			},
+			right: Mysql56GTIDSet{
+				sid1: []interval{{20, 25}, {43, 44}},
+				sid3: []interval{{1, 5}, {50, 50}, {60, 70}},
+			},
+			expected: Mysql56GTIDSet{
+				sid1: []interval{{26, 30}, {35, 40}, {42, 42}, {45, 45}},
+				sid2: []interval{{1, 5}, {50, 50}, {60, 70}},
+			},
+		},
+		{
+			name: "simple subtraction: unsorted intervals: remove one interval, split one interval",
+			left: Mysql56GTIDSet{
+				sid1: []interval{{35, 40}, {42, 45}, {20, 30}},
+				sid2: []interval{{1, 5}, {50, 50}, {60, 70}},
+			},
+			right: Mysql56GTIDSet{
+				sid1: []interval{{20, 25}, {43, 44}},
+				sid3: []interval{{1, 5}, {50, 50}, {60, 70}},
+			},
+			expected: Mysql56GTIDSet{
+				sid1: []interval{{35, 40}, {42, 42}, {45, 45}, {26, 30}},
+				sid2: []interval{{1, 5}, {50, 50}, {60, 70}},
+			},
+		},
+		{
+			name: "simple subtraction: multiple SIDs",
+			left: Mysql56GTIDSet{
+				sid1: []interval{{20, 30}, {35, 40}, {42, 45}},
+				sid2: []interval{{2, 5}, {50, 50}, {60, 70}},
+			},
+			right: Mysql56GTIDSet{
+				sid1: []interval{{19, 29}, {43, 49}},
+				sid2: []interval{{1, 5}, {64, 65}},
+			},
+			expected: Mysql56GTIDSet{
+				sid1: []interval{{30, 30}, {35, 40}, {42, 42}},
+				sid2: []interval{{50, 50}, {60, 63}, {66, 70}},
+			},
+		},
+	}
+
+	for _, test := range table {
+		t.Run(test.name, func(t *testing.T) {
+			if got := test.left.Subtract(test.right); !got.Equal(test.expected) {
+				t.Errorf("failed test case:\n" +
+					"left:     %#v\n" +
+					"right:    %#v\n" +
+					"expected: %#v\n" +
+					"got:      %#v",
+					test.left, test.right, test.expected, got)
+			}
+		})
 	}
 }
 

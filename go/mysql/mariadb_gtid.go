@@ -166,6 +166,10 @@ func (gtidSet MariadbGTIDSet) Contains(other GTIDSet) bool {
 	return true
 }
 
+func (gtidSet MariadbGTIDSet) Subtract(GTIDSet) GTIDSet {
+	panic("not implemented")
+}
+
 // Equal implements GTIDSet.Equal().
 func (gtidSet MariadbGTIDSet) Equal(other GTIDSet) bool {
 	mdbOther, ok := other.(MariadbGTIDSet)

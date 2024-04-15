@@ -40,6 +40,10 @@ type GTIDSet interface {
 	// Contains returns true if the set is a superset of another set.
 	Contains(GTIDSet) bool
 
+	// Subtract returns a new GTIDSet that is the difference between the receiver
+	// and the supplied GTIDSet.
+	Subtract(GTIDSet) GTIDSet
+
 	// Equal returns true if the set is equal to another set.
 	Equal(GTIDSet) bool
 
