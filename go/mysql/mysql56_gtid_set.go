@@ -44,7 +44,8 @@ func (iv interval) overlaps(other interval) bool {
 
 // subtract returns a slice of intervals created by subtracting |other| from this interval. If this interval is
 // completely contained by |other|, then nil is returned. If |other| overlaps with the middle of this interval, but
-// not the start or end, then two intervals are returned.
+// not the start or end, then two intervals are returned. Note that interval end points are *inclusive* at both
+// ends, so a subtraction operation will exclude both end points from any new intervals returned.
 func (iv interval) subtract(other interval) []interval {
 	if iv.start < other.start {
 		if iv.end > other.end {
