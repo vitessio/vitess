@@ -166,13 +166,11 @@ func TestMultiTenantSimple(t *testing.T) {
 
 	preSwitchRules := &vschemapb.KeyspaceRoutingRules{
 		Rules: []*vschemapb.KeyspaceRoutingRule{
-			{FromKeyspace: "a1", ToKeyspace: "s1"},
 			{FromKeyspace: "s1", ToKeyspace: "s1"},
 		},
 	}
 	postSwitchRules := &vschemapb.KeyspaceRoutingRules{
 		Rules: []*vschemapb.KeyspaceRoutingRule{
-			{FromKeyspace: "a1", ToKeyspace: "mt"},
 			{FromKeyspace: "s1", ToKeyspace: "mt"},
 		},
 	}
@@ -217,14 +215,12 @@ func validateKeyspaceRoutingRules(t *testing.T, vc *VitessCluster, primaries map
 		require.ElementsMatch(t, rulesMap["post"].Rules, currentRules.Rules)
 		validateQueryRoute("mt", "target")
 		validateQueryRoute("s1", "target")
-		validateQueryRoute("a1", "target")
 	} else {
 		require.ElementsMatch(t, rulesMap["pre"].Rules, currentRules.Rules)
 		// Note that with multi-tenant migration, we cannot redirect the target keyspace since
 		// there are multiple source keyspaces and the target has the aggregate of all the tenants.
 		validateQueryRoute("mt", "target")
 		validateQueryRoute("s1", "source")
-		validateQueryRoute("a1", "source")
 	}
 }
 
