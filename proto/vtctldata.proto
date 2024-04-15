@@ -208,6 +208,8 @@ message Shard {
 
 message WorkflowOptions {
   string tenant_id = 1;
+  // Previously used for source_keyspace_alias which was removed before being formally released.
+  reserved 2;
   // Remove auto_increment clauses on tables when moving them to a sharded
   // keyspace.
   bool strip_sharded_auto_increment = 3;
