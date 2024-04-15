@@ -23,11 +23,11 @@ func TestClusterFromString(t *testing.T) {
 		{
 			name: "ok",
 			s: `{
-				"id": "dynamic_cluster",
+				"id": "dynamic-cluster",
 				"discovery": "dynamic",
 				"discovery-dynamic-discovery": "{\"vtctlds\": [ { \"host\": { \"fqdn\": \"localhost:15000\", \"hostname\": \"localhost:15999\" } } ], \"vtgates\": [ { \"host\": {\"hostname\": \"localhost:15991\" } } ] }"
 			}`,
-			expectedID: "dynamic_cluster",
+			expectedID: "dynamic-cluster",
 		},
 		{
 			name:      "empty id",
@@ -49,6 +49,15 @@ func TestClusterFromString(t *testing.T) {
 			name:      "invalid json",
 			s:         `{`,
 			shouldErr: true,
+		},
+		{
+			name: "id with underscores",
+			s: `{
+				"id": "id_with_underscores",
+				"discovery": "dynamic",
+				"discovery-dynamic-discovery": "{\"vtctlds\": [ { \"host\": { \"fqdn\": \"localhost:15000\", \"hostname\": \"localhost:15999\" } } ], \"vtgates\": [ { \"host\": {\"hostname\": \"localhost:15991\" } } ] }"
+			}`,
+			expectedID: "id-with-underscores",
 		},
 	}
 
