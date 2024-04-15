@@ -1004,7 +1004,7 @@ func (b *builtinMaketime) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	m := evalToInt64(min).i
-	s := evalToNumeric(sec, false)
+	s := evalToNumeric(sec, true)
 
 	var ok bool
 	var t datetime.Time
@@ -1106,6 +1106,14 @@ func (call *builtinMaketime) compile(c *compiler) (ctype, error) {
 			c.asm.Convert_xf(1)
 			c.asm.Fn_MAKETIME_f()
 		}
+	case sqltypes.Datetime:
+		c.asm.Fn_MAKETIME_D()
+	case sqltypes.Date:
+		c.asm.Fn_MAKETIME_D()
+	case sqltypes.Time:
+		c.asm.Fn_MAKETIME_D()
+	case sqltypes.Timestamp:
+		c.asm.Fn_MAKETIME_D()
 	default:
 		c.asm.Convert_xf(1)
 		c.asm.Fn_MAKETIME_f()
