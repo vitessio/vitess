@@ -40,8 +40,12 @@ import (
 )
 
 var (
-	poolTypeAttr = flag.String("pool_type_attr", "", "Attribute (both mysql connection and JSON file) used to specify the target vtgate type and filter the hosts, e.g. 'type'")
-	affinityAttr = flag.String("affinity_attr", "", "Attribute (both mysql protocol connection and JSON file) used to specify the routing affinity , e.g. 'az_id'")
+	vtgateHostsFile = flag.String("vtgate_hosts_file", "", "json file describing the host list to use for vtgate:// resolution")
+	numConnections  = flag.Int("num_connections", 4, "number of outbound GPRC connections to maintain")
+	poolTypeField   = flag.String("pool_type_field", "", "Field name used to specify the target vtgate type and filter the hosts")
+	affinityField   = flag.String("affinity_field", "", "Attribute (both mysql protocol connection and JSON file) used to specify the routing affinity , e.g. 'az_id'")
+	addressField    = flag.String("address_field", "address", "field name in the json file containing the address")
+	portField       = flag.String("port_field", "port", "field name in the json file containing the port")
 
 	vtGateProxy *VTGateProxy = &VTGateProxy{
 		targetConns: map[string]*vtgateconn.VTGateConn{},
@@ -103,19 +107,19 @@ func (proxy *VTGateProxy) NewSession(ctx context.Context, options *querypb.Execu
 
 	values := url.Values{}
 
-	if *poolTypeAttr != "" {
-		poolType, ok := connectionAttributes[*poolTypeAttr]
+	if *poolTypeField != "" {
+		poolType, ok := connectionAttributes[*poolTypeField]
 		if ok {
-			values.Set(*poolTypeAttr, poolType)
+			values.Set(*poolTypeField, poolType)
 		} else {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "pool type attribute %s not supplied by client", *poolTypeAttr)
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "pool type attribute %s not supplied by client", *poolTypeField)
 		}
 	}
 
-	if *affinityAttr != "" {
-		affinity, ok := connectionAttributes[*affinityAttr]
+	if *affinityField != "" {
+		affinity, ok := connectionAttributes[*affinityField]
 		if ok {
-			values.Set(*affinityAttr, affinity)
+			values.Set(*affinityField, affinity)
 		}
 	}
 
@@ -183,4 +187,12 @@ func Init() {
 	grpcclient.RegisterGRPCDialOptions(func(opts []grpc.DialOption) ([]grpc.DialOption, error) {
 		return append(opts, grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"round_robin":{}}]}`)), nil
 	})
+
+	RegisterJSONGateResolver(
+		*vtgateHostsFile,
+		*addressField,
+		*portField,
+		*poolTypeField,
+		*affinityField,
+	)
 }
