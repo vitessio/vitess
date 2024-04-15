@@ -377,50 +377,25 @@ func (gw *TabletGateway) getStatsAggregator(target *querypb.Target) *TabletStatu
 }
 
 func (gw *TabletGateway) shuffleTablets(cell string, tablets []*discovery.TabletHealth) {
-	sameCell, diffCell, sameCellMax := 0, 0, -1
-	length := len(tablets)
 
-	// move all same cell tablets to the front, this is O(n)
-	for {
-		sameCellMax = diffCell - 1
-		sameCell = gw.nextTablet(cell, tablets, sameCell, length, true)
-		diffCell = gw.nextTablet(cell, tablets, diffCell, length, false)
-		// either no more diffs or no more same cells should stop the iteration
-		if sameCell < 0 || diffCell < 0 {
-			break
-		}
+	// Randomly shuffle the list of tablets, putting the same-cell hosts at the front
+	// of the list and the other-cell hosts at the back
+	//
+	// Only need to do n-1 swaps since the last host is always in the right place.
+	n := len(tablets)
+	head := 0
+	tail := n - 1
+	for i := 0; i < n-1; i++ {
+		j := head + rand.IntN(tail-head+1)
 
-		if sameCell < diffCell {
-			// fast forward the `sameCell` lookup to `diffCell + 1`, `diffCell` unchanged
-			sameCell = diffCell + 1
+		if tablets[j].Tablet.Alias.Cell == cell {
+			tablets[head], tablets[j] = tablets[j], tablets[head]
+			head++
 		} else {
-			// sameCell > diffCell, swap needed
-			tablets[sameCell], tablets[diffCell] = tablets[diffCell], tablets[sameCell]
-			sameCell++
-			diffCell++
+			tablets[tail], tablets[j] = tablets[j], tablets[tail]
+			tail--
 		}
 	}
-
-	// shuffle in same cell tablets
-	for i := sameCellMax; i > 0; i-- {
-		swap := rand.IntN(i + 1)
-		tablets[i], tablets[swap] = tablets[swap], tablets[i]
-	}
-
-	// shuffle in diff cell tablets
-	for i, diffCellMin := length-1, sameCellMax+1; i > diffCellMin; i-- {
-		swap := rand.IntN(i-sameCellMax) + diffCellMin
-		tablets[i], tablets[swap] = tablets[swap], tablets[i]
-	}
-}
-
-func (gw *TabletGateway) nextTablet(cell string, tablets []*discovery.TabletHealth, offset, length int, sameCell bool) int {
-	for ; offset < length; offset++ {
-		if (tablets[offset].Tablet.Alias.Cell == cell) == sameCell {
-			return offset
-		}
-	}
-	return -1
 }
 
 // TabletsCacheStatus returns a displayable version of the health check cache.
