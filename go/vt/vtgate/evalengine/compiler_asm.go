@@ -3934,6 +3934,34 @@ func (asm *assembler) Fn_MAKETIME_i() {
 	}, "FN MAKETIME INT64(SP-3) INT64(SP-2) INT64(SP-1)")
 }
 
+func (asm *assembler) Fn_MAKETIME_D() {
+	asm.adjustStack(-2)
+	asm.emit(func(env *ExpressionEnv) int {
+		h := env.vm.stack[env.vm.sp-3].(*evalInt64)
+		m := env.vm.stack[env.vm.sp-2].(*evalInt64)
+		sec := env.vm.stack[env.vm.sp-1].(*evalTemporal)
+
+		s := newEvalDecimalWithPrec(sec.toDecimal(), int32(sec.prec))
+
+		d, ok := makeTime_d(h.i, m.i, s.dec)
+		if !ok {
+			env.vm.stack[env.vm.sp-3] = nil
+			env.vm.sp -= 2
+			return 1
+		}
+		t, l, ok := datetime.ParseTimeDecimal(d, s.length, -1)
+		if !ok {
+			env.vm.stack[env.vm.sp-3] = nil
+			env.vm.sp -= 2
+			return 1
+		}
+
+		env.vm.stack[env.vm.sp-3] = env.vm.arena.newEvalTime(t, l)
+		env.vm.sp -= 2
+		return 1
+	}, "FN MAKETIME INT64(SP-3) INT64(SP-2) TEMPORAL(SP-1)")
+}
+
 func (asm *assembler) Fn_MAKETIME_d() {
 	asm.adjustStack(-2)
 	asm.emit(func(env *ExpressionEnv) int {
