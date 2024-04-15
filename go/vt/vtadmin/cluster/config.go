@@ -151,9 +151,10 @@ func LoadConfig(r io.Reader, configType string) (cfg *Config, id string, err err
 	}
 
 	if strings.Contains(id, "_") {
-		// gRPC can't process custom names with underscores
-		id := strings.Replace(id, "_", "-", -1)
-		log.Infof("replaced underscores in old id '%s' with dashes to form new id '%s'", id, id)
+		old_id := id
+		// gRPC can't process custom resolver names with underscores
+		id = strings.Replace(id, "_", "-", -1)
+		log.Infof("replaced underscores in old id '%s' with dashes to form new id '%s'", old_id, id)
 	}
 
 	tmp := map[string]string{}
