@@ -101,6 +101,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
   sqlVal        *SQLVal
   colTuple      ColTuple
   values        Values
+  aliasedvalues AliasedValues
   valTuple      ValTuple
   whens         []*When
   when          *When
@@ -466,7 +467,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <boolVal> boolean_value
 %type <boolean> all_opt enforced_opt
 %type <str> compare
-%type <ins> insert_data
+%type <ins> insert_data insert_data_alias insert_data_select insert_data_values
 %type <expr> value value_expression num_val as_of_opt limit_val integral_or_interval_expr timestamp_value
 %type <bytes> time_unit non_microsecond_time_unit
 %type <expr> function_call_keyword function_call_nonkeyword function_call_generic function_call_conflict
@@ -475,6 +476,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <colTuple> col_tuple
 %type <exprs> expression_list group_by_list partition_by_opt
 %type <values> tuple_list row_list
+
 %type <valTuple> row_tuple tuple_or_empty
 %type <expr> tuple_expression
 %type <colName> column_name
@@ -920,7 +922,7 @@ common_table_expression:
   }
 
 insert_statement:
-  with_clause_opt insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause insert_data on_dup_opt
+  with_clause_opt insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause insert_data_alias on_dup_opt
   {
     // insert_data returns a *Insert pre-filled with Columns & Values
     ins := $7
@@ -941,7 +943,7 @@ insert_statement:
       cols = append(cols, updateList.Name.Name)
       vals = append(vals, updateList.Expr)
     }
-    $$ = &Insert{Action: $2, Comments: Comments($3), Ignore: $4, Table: $5, Partitions: $6, Columns: cols, Rows: Values{vals}, OnDup: OnDup($9), With: $1}
+    $$ = &Insert{Action: $2, Comments: Comments($3), Ignore: $4, Table: $5, Partitions: $6, Columns: cols, Rows: AliasedValues{Values: Values{vals}}, OnDup: OnDup($9), With: $1}
   }
 
 insert_or_replace:
@@ -7836,6 +7838,23 @@ lock_opt:
     $$ = ShareModeStr
   }
 
+insert_data_alias:
+  insert_data
+  {
+    $$ = $1
+  }
+| insert_data_values as_opt table_alias column_list_opt
+  {
+    $$ = $1
+    // Rows is guarenteed to be an AliasedValues here.
+    rows := $$.Rows.(AliasedValues)
+    rows.As = $3
+    if $4 != nil {
+        rows.Columns = $4
+    }
+    $$.Rows = rows
+  }
+
 // insert_data expands all combinations into a single rule.
 // This avoids a shift/reduce conflict while encountering the
 // following two possible constructs:
@@ -7844,35 +7863,48 @@ lock_opt:
 // Because the rules are together, the parser can keep shifting
 // the tokens until it disambiguates a as sql_id and select as keyword.
 insert_data:
-  value_or_values tuple_list
+  insert_data_select
   {
-    $$ = &Insert{Rows: $2}
+    $$ = $1
   }
-| openb closeb value_or_values tuple_list
+| insert_data_values
   {
-    $$ = &Insert{Columns: []ColIdent{}, Rows: $4}
+    $$ = $1
   }
-| select_statement_with_no_trailing_into
+
+insert_data_select:
+  select_statement_with_no_trailing_into
   {
     $$ = &Insert{Rows: $1}
+  }
+| openb ins_column_list closeb select_statement_with_no_trailing_into
+  {
+    $$ = &Insert{Columns: $2, Rows: $4}
   }
 | openb select_statement_with_no_trailing_into closeb
   {
     // Drop the redundant parenthesis.
     $$ = &Insert{Rows: $2}
   }
-| openb ins_column_list closeb value_or_values tuple_list
-  {
-    $$ = &Insert{Columns: $2, Rows: $5}
-  }
-| openb ins_column_list closeb select_statement_with_no_trailing_into
-  {
-    $$ = &Insert{Columns: $2, Rows: $4}
-  }
 | openb ins_column_list closeb openb select_statement_with_no_trailing_into closeb
   {
     // Drop the redundant parenthesis.
     $$ = &Insert{Columns: $2, Rows: $5}
+  }
+
+insert_data_values:
+  value_or_values tuple_list
+  {
+    $$ = &Insert{Rows: &AliasedValues{Values: $2}}
+  }
+| openb closeb value_or_values tuple_list
+  {
+    $$ = &Insert{Columns: []ColIdent{}, Rows: AliasedValues{Values: $4}}
+  }
+
+| openb ins_column_list closeb value_or_values tuple_list
+  {
+    $$ = &Insert{Columns: $2, Rows: AliasedValues{Values: $5}}
   }
 
 value_or_values:
