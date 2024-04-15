@@ -138,7 +138,7 @@ func (me *Engine) Subscribe(ctx context.Context, name string, send func(*sqltype
 	return mm.Subscribe(ctx, send), nil
 }
 
-func (me *Engine) schemaChanged(tables map[string]*schema.Table, created, altered, dropped []*schema.Table) {
+func (me *Engine) schemaChanged(tables map[string]*schema.Table, created, altered, dropped []*schema.Table, _ bool) {
 	me.mu.Lock()
 	defer me.mu.Unlock()
 	for _, table := range append(dropped, altered...) {

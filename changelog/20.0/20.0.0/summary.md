@@ -21,6 +21,7 @@
     - [Update with Multi Target Support](#update-multi-target)
     - [Delete with Subquery Support](#delete-subquery)
     - [Delete with Multi Target Support](#delete-multi-target)
+    - [User Defined Functions Support](#udf-support)
   - **[Flag changes](#flag-changes)**
     - [`pprof-http` default change](#pprof-http-default)
     - [New `healthcheck-dial-concurrency` flag](#healthcheck-dial-concurrency-flag)
@@ -182,6 +183,15 @@ Support is added for sharded multi table target delete.
 Example: `delete t1, t3 from t1 join t2 on t1.id = t2.id join t3 on t1.col = t3.col`
 
 More details about how it works is available in [MySQL Docs](https://dev.mysql.com/doc/refman/8.0/en/delete.html)
+
+#### <a id="udf-support"/> User Defined Functions Support
+
+VTGate can track any user defined functions for better planning.
+User Defined Functions (UDFs) should be directly loaded in the underlying MySQL.
+
+It should be enabled in VTGate with the `--enable-udfs` flag.
+
+More details about how to load UDFs is available in [MySQL Docs](https://dev.mysql.com/doc/extending-mysql/8.0/en/adding-loadable-function.html)
 
 ### <a id="flag-changes"/>Flag Changes
 

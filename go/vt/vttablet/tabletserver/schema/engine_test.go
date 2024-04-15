@@ -154,7 +154,7 @@ func TestOpenAndReload(t *testing.T) {
 	AddFakeInnoDBReadRowsResult(db, secondReadRowsValue)
 
 	firstTime := true
-	notifier := func(full map[string]*Table, created, altered, dropped []*Table) {
+	notifier := func(full map[string]*Table, created, altered, dropped []*Table, _ bool) {
 		if firstTime {
 			firstTime = false
 			createTables := extractNamesFromTablesList(created)
@@ -718,7 +718,7 @@ func TestRegisterNotifier(t *testing.T) {
 
 	var tablesReceived map[string]*Table
 	// Register a notifier and make it run immediately.
-	se.RegisterNotifier("TestRegisterNotifier", func(full map[string]*Table, created, altered, dropped []*Table) {
+	se.RegisterNotifier("TestRegisterNotifier", func(full map[string]*Table, created, altered, dropped []*Table, _ bool) {
 		tablesReceived = full
 	}, true)
 
@@ -1284,8 +1284,11 @@ func TestEngineReload(t *testing.T) {
 		db.AddQuery("insert into _vt.views(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'V2', 'create_table_V2', 'select_V2')", &sqltypes.Result{})
 	}
 
+	// adding query pattern for udfs
+	db.AddQueryPattern("SELECT name.*", &sqltypes.Result{})
+
 	// Verify the list of created, altered and dropped tables seen.
-	se.RegisterNotifier("test", func(full map[string]*Table, created, altered, dropped []*Table) {
+	se.RegisterNotifier("test", func(full map[string]*Table, created, altered, dropped []*Table, _ bool) {
 		require.ElementsMatch(t, extractNamesFromTablesList(created), []string{"T2", "V2"})
 		require.ElementsMatch(t, extractNamesFromTablesList(altered), []string{"t2", "v2"})
 		require.ElementsMatch(t, extractNamesFromTablesList(dropped), []string{"t4", "v4", "t5", "v5"})

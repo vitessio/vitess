@@ -86,6 +86,18 @@ func TestAlterTableCapableOfInstantDDL(t *testing.T) {
 			expectCapableOfInstantDDL: false,
 		},
 		{
+			name:                      "drop column fail due to index",
+			create:                    "create table t(id int, i1 int not null, i2 int not null, primary key(id), key i1_idx (i1))",
+			alter:                     "alter table t drop column i1",
+			expectCapableOfInstantDDL: false,
+		},
+		{
+			name:                      "drop column fail due to multicolumn index",
+			create:                    "create table t(id int, i1 int not null, i2 int not null, primary key(id), key i21_idx (i2, i1))",
+			alter:                     "alter table t drop column i1",
+			expectCapableOfInstantDDL: false,
+		},
+		{
 			name:                      "add two columns",
 			create:                    "create table t(id int, i1 int not null, primary key(id))",
 			alter:                     "alter table t add column i2 int not null after id, add column i3 int not null",

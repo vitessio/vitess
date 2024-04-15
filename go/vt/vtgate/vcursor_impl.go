@@ -1324,7 +1324,7 @@ func (vc *vcursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCurso
 	callerId := callerid.EffectiveCallerIDFromContext(ctx)
 	immediateCallerId := callerid.ImmediateCallerIDFromContext(ctx)
 
-	timedCtx, _ := context.WithTimeout(context.Background(), warmingReadsQueryTimeout) //nolint
+	timedCtx, _ := context.WithTimeout(context.Background(), warmingReadsQueryTimeout) // nolint
 	clonedCtx := callerid.NewContext(timedCtx, callerId, immediateCallerId)
 
 	v := &vcursorImpl{

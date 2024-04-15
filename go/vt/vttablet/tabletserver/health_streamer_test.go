@@ -91,7 +91,7 @@ func TestNotServingPrimaryNoWrite(t *testing.T) {
 	// A reload now should not write anything to the database. If any write happens it will error out since we have not
 	// added any query to the database to expect.
 	t1 := schema.NewTable("t1", schema.NoType)
-	err := hs.reload(map[string]*schema.Table{"t1": t1}, []*schema.Table{t1}, nil, nil)
+	err := hs.reload([]*schema.Table{t1}, nil, nil, false)
 	require.NoError(t, err)
 	require.NoError(t, db.LastError())
 }
@@ -380,6 +380,8 @@ func TestReloadView(t *testing.T) {
 	))
 	db.AddQueryPattern(".*SELECT table_name, view_definition.*views.*", &sqltypes.Result{})
 	db.AddQuery("SELECT TABLE_NAME, CREATE_TIME FROM _vt.`tables`", &sqltypes.Result{})
+	// adding query pattern for udfs
+	db.AddQueryPattern("SELECT name.*", &sqltypes.Result{})
 
 	hs.InitDBConfig(target, configs.DbaWithDB())
 	se.InitDBConfig(configs.DbaWithDB())

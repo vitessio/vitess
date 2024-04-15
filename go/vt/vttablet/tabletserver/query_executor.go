@@ -1085,7 +1085,10 @@ func (qre *QueryExecutor) execDBConn(conn *connpool.Conn, sql string, wantfields
 	defer qre.logStats.AddRewrittenSQL(sql, time.Now())
 
 	qd := NewQueryDetail(qre.logStats.Ctx, conn)
-	qre.tsv.statelessql.Add(qd)
+	err := qre.tsv.statelessql.Add(qd)
+	if err != nil {
+		return nil, err
+	}
 	defer qre.tsv.statelessql.Remove(qd)
 
 	return conn.Exec(ctx, sql, int(qre.tsv.qe.maxResultSize.Load()), wantfields)
@@ -1098,7 +1101,10 @@ func (qre *QueryExecutor) execStatefulConn(conn *StatefulConnection, sql string,
 	defer qre.logStats.AddRewrittenSQL(sql, time.Now())
 
 	qd := NewQueryDetail(qre.logStats.Ctx, conn)
-	qre.tsv.statefulql.Add(qd)
+	err := qre.tsv.statefulql.Add(qd)
+	if err != nil {
+		return nil, err
+	}
 	defer qre.tsv.statefulql.Remove(qd)
 
 	return conn.Exec(ctx, sql, int(qre.tsv.qe.maxResultSize.Load()), wantfields)
@@ -1122,11 +1128,17 @@ func (qre *QueryExecutor) execStreamSQL(conn *connpool.PooledConn, isTransaction
 	// once their grace period is over.
 	qd := NewQueryDetail(qre.logStats.Ctx, conn.Conn)
 	if isTransaction {
-		qre.tsv.statefulql.Add(qd)
+		err := qre.tsv.statefulql.Add(qd)
+		if err != nil {
+			return err
+		}
 		defer qre.tsv.statefulql.Remove(qd)
 		return conn.Conn.StreamOnce(ctx, sql, callBackClosingSpan, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Load()), sqltypes.IncludeFieldsOrDefault(qre.options))
 	}
-	qre.tsv.olapql.Add(qd)
+	err := qre.tsv.olapql.Add(qd)
+	if err != nil {
+		return err
+	}
 	defer qre.tsv.olapql.Remove(qd)
 	return conn.Conn.Stream(ctx, sql, callBackClosingSpan, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Load()), sqltypes.IncludeFieldsOrDefault(qre.options))
 }
@@ -1149,6 +1161,8 @@ func (qre *QueryExecutor) GetSchemaDefinitions(tableType querypb.SchemaTableType
 		return qre.getTableDefinitions(tableNames, callback)
 	case querypb.SchemaTableType_ALL:
 		return qre.getAllDefinitions(tableNames, callback)
+	case querypb.SchemaTableType_UDF_AGGREGATE:
+		return qre.getUDFs(callback)
 	}
 	return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid table type %v", tableType)
 }
@@ -1193,6 +1207,28 @@ func (qre *QueryExecutor) executeGetSchemaQuery(query string, callback func(sche
 				continue
 			}
 			schemaDef[tableName] = row[1].ToString()
+		}
+		return callback(&querypb.GetSchemaResponse{TableDefinition: schemaDef})
+	})
+}
+
+func (qre *QueryExecutor) getUDFs(callback func(schemaRes *querypb.GetSchemaResponse) error) error {
+	query, err := eschema.GetFetchUDFsQuery(qre.tsv.env.Parser())
+	if err != nil {
+		return err
+	}
+
+	conn, err := qre.getStreamConn()
+	if err != nil {
+		return err
+	}
+	defer conn.Recycle()
+
+	return qre.execStreamSQL(conn, false /* isTransaction */, query, func(result *sqltypes.Result) error {
+		schemaDef := make(map[string]string)
+		for _, row := range result.Rows {
+			udf := row[0].ToString()
+			schemaDef[udf] = row[1].ToString()
 		}
 		return callback(&querypb.GetSchemaResponse{TableDefinition: schemaDef})
 	})
