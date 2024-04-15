@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/spf13/viper"
@@ -149,6 +150,12 @@ func LoadConfig(r io.Reader, configType string) (cfg *Config, id string, err err
 		return nil, "", ErrNoConfigID
 	}
 
+	if strings.Contains(id, "_") {
+		// gRPC can't process custom names with underscores
+		id := strings.Replace(id, "_", "-", -1)
+		log.Infof("replaced underscores in old id '%s' with dashes to form new id '%s'", id, id)
+	}
+
 	tmp := map[string]string{}
 	if err := v.Unmarshal(&tmp); err != nil {
 		return nil, id, err
@@ -164,6 +171,7 @@ func LoadConfig(r io.Reader, configType string) (cfg *Config, id string, err err
 	if err := cfg.unmarshalMap(tmp); err != nil {
 		return nil, id, err
 	}
+	cfg.ID = id
 
 	return cfg, id, nil
 }
