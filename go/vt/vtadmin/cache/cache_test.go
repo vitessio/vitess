@@ -93,6 +93,45 @@ func TestBackfillDuplicates(t *testing.T) {
 	}
 }
 
+func TestBackfillQueueSize(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name                        string
+		configuredBackfillQueueSize int
+		expectedBackfillQueueSize   int
+	}{
+		{
+			name:                        "configured negative backfill queue size",
+			configuredBackfillQueueSize: -1,
+			expectedBackfillQueueSize:   0,
+		}, {
+			name:                        "configured 0 backfill queue size",
+			configuredBackfillQueueSize: 0,
+			expectedBackfillQueueSize:   0,
+		}, {
+			name:                        "configured positive backfill queue size",
+			configuredBackfillQueueSize: 1,
+			expectedBackfillQueueSize:   1,
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			c := cache.New(func(ctx context.Context, req intkey) (any, error) {
+				return nil, nil
+			}, cache.Config{
+				BackfillQueueSize: tt.configuredBackfillQueueSize,
+			})
+			var config cache.Config = c.Debug()["config"].(cache.Config)
+			assert.Equal(t, tt.expectedBackfillQueueSize, config.BackfillQueueSize)
+		})
+	}
+}
+
 func TestBackfillTTL(t *testing.T) {
 	t.Parallel()
 
