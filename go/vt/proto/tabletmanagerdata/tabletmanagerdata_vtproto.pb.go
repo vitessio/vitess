@@ -2301,7 +2301,6 @@ func (m *UpdateVReplicationWorkflowRequest) CloneVT() *UpdateVReplicationWorkflo
 		TabletSelectionPreference: m.TabletSelectionPreference,
 		OnDdl:                     m.OnDdl,
 		State:                     m.State,
-		StopPosition:              m.StopPosition,
 	}
 	if rhs := m.Cells; rhs != nil {
 		tmpContainer := make([]string, len(rhs))
@@ -2312,11 +2311,6 @@ func (m *UpdateVReplicationWorkflowRequest) CloneVT() *UpdateVReplicationWorkflo
 		tmpContainer := make([]topodata.TabletType, len(rhs))
 		copy(tmpContainer, rhs)
 		r.TabletTypes = tmpContainer
-	}
-	if rhs := m.IncludeIds; rhs != nil {
-		tmpContainer := make([]int64, len(rhs))
-		copy(tmpContainer, rhs)
-		r.IncludeIds = tmpContainer
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -8034,34 +8028,6 @@ func (m *UpdateVReplicationWorkflowRequest) MarshalToSizedBufferVT(dAtA []byte) 
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if len(m.IncludeIds) > 0 {
-		var pksize2 int
-		for _, num := range m.IncludeIds {
-			pksize2 += sov(uint64(num))
-		}
-		i -= pksize2
-		j1 := i
-		for _, num1 := range m.IncludeIds {
-			num := uint64(num1)
-			for num >= 1<<7 {
-				dAtA[j1] = uint8(uint64(num)&0x7f | 0x80)
-				num >>= 7
-				j1++
-			}
-			dAtA[j1] = uint8(num)
-			j1++
-		}
-		i = encodeVarint(dAtA, i, uint64(pksize2))
-		i--
-		dAtA[i] = 0x4a
-	}
-	if len(m.StopPosition) > 0 {
-		i -= len(m.StopPosition)
-		copy(dAtA[i:], m.StopPosition)
-		i = encodeVarint(dAtA, i, uint64(len(m.StopPosition)))
-		i--
-		dAtA[i] = 0x42
-	}
 	if m.State != 0 {
 		i = encodeVarint(dAtA, i, uint64(m.State))
 		i--
@@ -8078,23 +8044,23 @@ func (m *UpdateVReplicationWorkflowRequest) MarshalToSizedBufferVT(dAtA []byte) 
 		dAtA[i] = 0x20
 	}
 	if len(m.TabletTypes) > 0 {
-		var pksize4 int
+		var pksize2 int
 		for _, num := range m.TabletTypes {
-			pksize4 += sov(uint64(num))
+			pksize2 += sov(uint64(num))
 		}
-		i -= pksize4
-		j3 := i
+		i -= pksize2
+		j1 := i
 		for _, num1 := range m.TabletTypes {
 			num := uint64(num1)
 			for num >= 1<<7 {
-				dAtA[j3] = uint8(uint64(num)&0x7f | 0x80)
+				dAtA[j1] = uint8(uint64(num)&0x7f | 0x80)
 				num >>= 7
-				j3++
+				j1++
 			}
-			dAtA[j3] = uint8(num)
-			j3++
+			dAtA[j1] = uint8(num)
+			j1++
 		}
-		i = encodeVarint(dAtA, i, uint64(pksize4))
+		i = encodeVarint(dAtA, i, uint64(pksize2))
 		i--
 		dAtA[i] = 0x1a
 	}
@@ -10469,17 +10435,6 @@ func (m *UpdateVReplicationWorkflowRequest) SizeVT() (n int) {
 	}
 	if m.State != 0 {
 		n += 1 + sov(uint64(m.State))
-	}
-	l = len(m.StopPosition)
-	if l > 0 {
-		n += 1 + l + sov(uint64(l))
-	}
-	if len(m.IncludeIds) > 0 {
-		l = 0
-		for _, e := range m.IncludeIds {
-			l += sov(uint64(e))
-		}
-		n += 1 + sov(uint64(l)) + l
 	}
 	n += len(m.unknownFields)
 	return n
@@ -22963,114 +22918,6 @@ func (m *UpdateVReplicationWorkflowRequest) UnmarshalVT(dAtA []byte) error {
 				if b < 0x80 {
 					break
 				}
-			}
-		case 8:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field StopPosition", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return ErrInvalidLength
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLength
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.StopPosition = string(dAtA[iNdEx:postIndex])
-			iNdEx = postIndex
-		case 9:
-			if wireType == 0 {
-				var v int64
-				for shift := uint(0); ; shift += 7 {
-					if shift >= 64 {
-						return ErrIntOverflow
-					}
-					if iNdEx >= l {
-						return io.ErrUnexpectedEOF
-					}
-					b := dAtA[iNdEx]
-					iNdEx++
-					v |= int64(b&0x7F) << shift
-					if b < 0x80 {
-						break
-					}
-				}
-				m.IncludeIds = append(m.IncludeIds, v)
-			} else if wireType == 2 {
-				var packedLen int
-				for shift := uint(0); ; shift += 7 {
-					if shift >= 64 {
-						return ErrIntOverflow
-					}
-					if iNdEx >= l {
-						return io.ErrUnexpectedEOF
-					}
-					b := dAtA[iNdEx]
-					iNdEx++
-					packedLen |= int(b&0x7F) << shift
-					if b < 0x80 {
-						break
-					}
-				}
-				if packedLen < 0 {
-					return ErrInvalidLength
-				}
-				postIndex := iNdEx + packedLen
-				if postIndex < 0 {
-					return ErrInvalidLength
-				}
-				if postIndex > l {
-					return io.ErrUnexpectedEOF
-				}
-				var elementCount int
-				var count int
-				for _, integer := range dAtA[iNdEx:postIndex] {
-					if integer < 128 {
-						count++
-					}
-				}
-				elementCount = count
-				if elementCount != 0 && len(m.IncludeIds) == 0 {
-					m.IncludeIds = make([]int64, 0, elementCount)
-				}
-				for iNdEx < postIndex {
-					var v int64
-					for shift := uint(0); ; shift += 7 {
-						if shift >= 64 {
-							return ErrIntOverflow
-						}
-						if iNdEx >= l {
-							return io.ErrUnexpectedEOF
-						}
-						b := dAtA[iNdEx]
-						iNdEx++
-						v |= int64(b&0x7F) << shift
-						if b < 0x80 {
-							break
-						}
-					}
-					m.IncludeIds = append(m.IncludeIds, v)
-				}
-			} else {
-				return fmt.Errorf("proto: wrong wireType = %d for field IncludeIds", wireType)
 			}
 		default:
 			iNdEx = preIndex

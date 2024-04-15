@@ -682,8 +682,6 @@ message UpdateVReplicationWorkflowRequest {
   binlogdata.OnDDLAction on_ddl = 5;
   binlogdata.VReplicationWorkflowState state = 6;
   reserved 7; // unused, was: repeated string shards
-  string stop_position = 8;
-  repeated int64 include_ids = 9;
 }
 
 message UpdateVReplicationWorkflowResponse {

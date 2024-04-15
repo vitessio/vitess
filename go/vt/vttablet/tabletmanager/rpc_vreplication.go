@@ -25,7 +25,6 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/constants/sidecar"
-	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
@@ -54,9 +53,9 @@ const (
 	// Delete VReplication records for the given workflow.
 	sqlDeleteVReplicationWorkflow = "delete from %s.vreplication where workflow = %a and db_name = %a"
 	// Retrieve the current configuration values for a workflow's vreplication stream(s).
-	sqlSelectVReplicationWorkflowConfig = "select id, source, cell, tablet_types, stop_pos, state, message from %s.vreplication where workflow = %a%s"
+	sqlSelectVReplicationWorkflowConfig = "select id, source, cell, tablet_types, state, message from %s.vreplication where workflow = %a"
 	// Update the configuration values for a workflow's vreplication stream.
-	sqlUpdateVReplicationWorkflowStreamConfig = "update %s.vreplication set state = %a, source = %a, cell = %a, tablet_types = %a, stop_pos = %a where id = %a"
+	sqlUpdateVReplicationWorkflowStreamConfig = "update %s.vreplication set state = %a, source = %a, cell = %a, tablet_types = %a where id = %a"
 	// Update field values for multiple workflows. The final format specifier is
 	// used to optionally add any additional predicates to the query.
 	sqlUpdateVReplicationWorkflows = "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ %s.vreplication set%s where db_name = '%s'%s"
@@ -393,18 +392,7 @@ func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *ta
 	bindVars := map[string]*querypb.BindVariable{
 		"wf": sqltypes.StringBindVariable(req.Workflow),
 	}
-	extraPredicates := strings.Builder{}
-	if len(req.GetIncludeIds()) > 0 {
-		extraPredicates.WriteString(" and id in (")
-		for i, id := range req.GetIncludeIds() {
-			if i > 0 {
-				extraPredicates.WriteByte(',')
-			}
-			extraPredicates.WriteString(fmt.Sprintf("%d", id))
-		}
-		extraPredicates.WriteByte(')')
-	}
-	parsed := sqlparser.BuildParsedQuery(sqlSelectVReplicationWorkflowConfig, sidecar.GetIdentifier(), ":wf", extraPredicates.String())
+	parsed := sqlparser.BuildParsedQuery(sqlSelectVReplicationWorkflowConfig, sidecar.GetIdentifier(), ":wf")
 	stmt, err := parsed.GenerateQuery(bindVars, nil)
 	if err != nil {
 		return nil, err
@@ -436,7 +424,6 @@ func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *ta
 		source := row.AsBytes("source", []byte{})
 		state := row.AsString("state", "")
 		message := row.AsString("message", "")
-		stopPos := row.AsString("stop_pos", "")
 		if req.State == binlogdatapb.VReplicationWorkflowState_Running && strings.ToUpper(message) == workflow.Frozen {
 			return &tabletmanagerdatapb.UpdateVReplicationWorkflowResponse{Result: nil},
 				vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "cannot start a workflow when it is frozen")
@@ -449,13 +436,6 @@ func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *ta
 		}
 		if !textutil.ValueIsSimulatedNull(req.TabletTypes) {
 			tabletTypes = req.TabletTypes
-		}
-		if !textutil.ValueIsSimulatedNull(req.StopPosition) {
-			newPos, err := replication.DecodePosition(req.StopPosition)
-			if err != nil {
-				return nil, err
-			}
-			stopPos = replication.EncodePosition(newPos)
 		}
 		tabletTypesStr := topoproto.MakeStringTypeCSV(tabletTypes)
 		if (inorder && req.TabletSelectionPreference == tabletmanagerdatapb.TabletSelectionPreference_UNKNOWN) ||
@@ -482,10 +462,9 @@ func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *ta
 			"sc": sqltypes.StringBindVariable(string(source)),
 			"cl": sqltypes.StringBindVariable(strings.Join(cells, ",")),
 			"tt": sqltypes.StringBindVariable(tabletTypesStr),
-			"sp": sqltypes.StringBindVariable(stopPos),
 			"id": sqltypes.Int64BindVariable(id),
 		}
-		parsed = sqlparser.BuildParsedQuery(sqlUpdateVReplicationWorkflowStreamConfig, sidecar.GetIdentifier(), ":st", ":sc", ":cl", ":tt", ":sp", ":id")
+		parsed = sqlparser.BuildParsedQuery(sqlUpdateVReplicationWorkflowStreamConfig, sidecar.GetIdentifier(), ":st", ":sc", ":cl", ":tt", ":id")
 		stmt, err = parsed.GenerateQuery(bindVars, nil)
 		if err != nil {
 			return nil, err

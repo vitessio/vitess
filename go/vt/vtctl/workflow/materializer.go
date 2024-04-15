@@ -474,8 +474,7 @@ func (mz *materializer) startStreams(ctx context.Context) error {
 			TabletTypes: []topodatapb.TabletType{
 				topodatapb.TabletType(textutil.SimulatedNullInt),
 			},
-			StopPosition: textutil.SimulatedNullString,
-			OnDdl:        binlogdatapb.OnDDLAction(textutil.SimulatedNullInt),
+			OnDdl: binlogdatapb.OnDDLAction(textutil.SimulatedNullInt),
 		}); err != nil {
 			return vterrors.Wrap(err, "failed to update workflow")
 		}
