@@ -10,6 +10,12 @@ import (
 // alterOptionAvailableViaInstantDDL checks if the specific alter option is eligible to run via ALGORITHM=INSTANT
 // reference: https://dev.mysql.com/doc/refman/8.0/en/innodb-online-ddl-operations.html
 func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTable *sqlparser.CreateTable, capableOf capabilities.CapableOf) (bool, error) {
+	// A table with FULLTEXT index can't have any sort of INSTANT DDL
+	for _, key := range createTable.TableSpec.Indexes {
+		if key.Info.Type == sqlparser.IndexTypeFullText {
+			return false, nil
+		}
+	}
 	findColumn := func(colName string) *sqlparser.ColumnDefinition {
 		if createTable == nil {
 			return nil

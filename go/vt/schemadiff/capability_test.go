@@ -98,6 +98,12 @@ func TestAlterTableCapableOfInstantDDL(t *testing.T) {
 			expectCapableOfInstantDDL: false,
 		},
 		{
+			name:                      "drop column fail due to fulltext index in table",
+			create:                    "create table t(id int, i1 int not null, name varchar(128), primary key(id), fulltext key (name))",
+			alter:                     "alter table t drop column i1",
+			expectCapableOfInstantDDL: false,
+		},
+		{
 			name:                      "add two columns",
 			create:                    "create table t(id int, i1 int not null, primary key(id))",
 			alter:                     "alter table t add column i2 int not null after id, add column i3 int not null",
