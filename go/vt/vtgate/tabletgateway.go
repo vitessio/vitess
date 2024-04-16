@@ -51,7 +51,8 @@ var (
 	bufferImplementation = "keyspace_events"
 	initialTabletTimeout = 30 * time.Second
 	// retryCount is the number of times a query will be retried on error
-	retryCount = 2
+	retryCount           = 2
+	routeReplicaToRdonly bool
 )
 
 func init() {
@@ -60,6 +61,7 @@ func init() {
 		fs.StringVar(&bufferImplementation, "buffer_implementation", "keyspace_events", "Allowed values: healthcheck (legacy implementation), keyspace_events (default)")
 		fs.DurationVar(&initialTabletTimeout, "gateway_initial_tablet_timeout", 30*time.Second, "At startup, the tabletGateway will wait up to this duration to get at least one tablet per keyspace/shard/tablet type")
 		fs.IntVar(&retryCount, "retry-count", 2, "retry count")
+		fs.BoolVar(&routeReplicaToRdonly, "gateway_route_replica_to_rdonly", false, "route REPLICA queries to RDONLY tablets as well as REPLICA tablets")
 	})
 }
 
@@ -293,6 +295,20 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 		}
 
 		tablets := gw.hc.GetHealthyTabletStats(target)
+
+		// temporary hack to enable REPLICA type queries to address both REPLICA tablets and RDONLY tablets
+		// original commit - https://github.com/tinyspeck/vitess/pull/166/commits/2552b4ce25a9fdb41ff07fa69f2ccf485fea83ac
+		// discoverygateway patch - https://github.com/slackhq/vitess/commit/47adb7c8fc720cb4cb7a090530b3e88d310ff6d3
+		if routeReplicaToRdonly && target.TabletType == topodatapb.TabletType_REPLICA {
+			// Create a new target for the same original keyspace/shard, but RDONLY tablet type.
+			rdonlyTarget := &querypb.Target{
+				Keyspace:   target.Keyspace,
+				Shard:      target.Shard,
+				TabletType: topodatapb.TabletType_RDONLY,
+			}
+			tablets = append(tablets, gw.hc.GetHealthyTabletStats(rdonlyTarget)...)
+		}
+
 		if len(tablets) == 0 {
 			// if we have a keyspace event watcher, check if the reason why our primary is not available is that it's currently being resharded
 			// or if a reparent operation is in progress.
@@ -341,7 +357,11 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 
 		startTime := time.Now()
 		var canRetry bool
-		canRetry, err = inner(ctx, target, th.Conn)
+		if routeReplicaToRdonly && target.TabletType == topodatapb.TabletType_REPLICA {
+			canRetry, err = inner(ctx, th.Target, th.Conn)
+		} else {
+			canRetry, err = inner(ctx, target, th.Conn)
+		}
 		gw.updateStats(target, startTime, err)
 		if canRetry {
 			invalidTablets[topoproto.TabletAliasString(tabletLastUsed.Alias)] = true
