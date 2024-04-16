@@ -1079,13 +1079,16 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 		// Convert the integer values in the binlog event for SET and ENUM fields into their
 		// string representations.
 		if plan.Table.Fields[colNum].Type == querypb.Type_ENUM {
-			ordinalValue, err := value.ToInt()
+			iv, err := value.ToUint64()
 			if err != nil {
-				log.Errorf("extractRowAndFilter: %s, table: %s, colNum: %d, fields: %+v, current values: %+v",
-					err, plan.Table.Name, colNum, plan.Table.Fields, values)
-				return false, nil, false, err
+				return false, nil, false, fmt.Errorf("no valid integer value found for column %s in table %s, bytes: %b",
+					plan.Table.Fields[colNum].Name, plan.Table.Name, iv)
 			}
-			strVal := plan.EnumSetValuesMap[colNum][ordinalValue]
+			strVal, ok := plan.EnumSetValuesMap[colNum][int(iv)]
+			if !ok {
+				return false, nil, false, fmt.Errorf("no string value found for ENUM column %s in table %s using the found integer value: %d",
+					plan.Table.Fields[colNum].Name, plan.Table.Name, iv)
+			}
 			value = sqltypes.MakeTrusted(plan.Table.Fields[colNum].Type, []byte(strVal))
 			log.Errorf("DEBUG: extractRowAndFilter: mapped string value for col %d: %v", colNum, strVal)
 		}
@@ -1098,16 +1101,19 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 			// integer values which are not present in the set).
 			iv, err := value.ToUint64()
 			if err != nil {
-				log.Errorf("extractRowAndFilter: %s, table: %s, colNum: %d, fields: %+v, current values: %+v",
-					err, plan.Table.Name, colNum, plan.Table.Fields, values)
-				return false, nil, false, err
+				return false, nil, false, fmt.Errorf("no valid integer value found for SET column %s in table %s, bytes: %b",
+					plan.Table.Fields[colNum].Name, plan.Table.Name, iv)
 			}
 			idx := 1
 			// See what bits are set in the uint64 using bitmasks.
 			for b := uint64(1); b < 1<<63; b <<= 1 {
 				if iv&b > 0 {
 					log.Errorf("DEBUG: bit at position %d is set", idx)
-					strVal := plan.EnumSetValuesMap[colNum][idx]
+					strVal, ok := plan.EnumSetValuesMap[colNum][idx]
+					if !ok {
+						return false, nil, false, fmt.Errorf("no string value found for SET column %s in table %s using the found bit map: %b",
+							plan.Table.Fields[colNum].Name, plan.Table.Name, iv)
+					}
 					if val.Len() > 0 {
 						val.WriteByte(',')
 					}
