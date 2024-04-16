@@ -19,7 +19,6 @@ package vstreamer
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
 	"fmt"
 	"io"
 	"strings"
@@ -1094,44 +1093,26 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 			val := bytes.Buffer{}
 			// A SET column can have 64 unique values: https://dev.mysql.com/doc/refman/en/set.html
 			// For this reason the binlog event contains the values encoded as an unsigned 64-bit
-			// integer. When examining the bits then, in reverse order as this is a little-endian
-			// value, it becomes a bitmap of the values specified.
+			// integer.
 			iv, err := value.ToUint64()
 			if err != nil {
 				log.Errorf("extractRowAndFilter: %s, table: %s, colNum: %d, fields: %+v, current values: %+v",
 					err, plan.Table.Name, colNum, plan.Table.Fields, values)
 				return false, nil, false, err
 			}
-			bv := make([]byte, 8)
-			// Flip the byte order so that the bytes and bits are again both in reverse order and are both
-			// examined in reverse order or right to left. This is all done so that we generate the same
-			// ordered sequence in the vevent as the original SET values in the SQL statement and resulting
-			// row event.
-			binary.BigEndian.PutUint64(bv, iv)
-			log.Errorf("DEBUG: iv: %08b, bv: %08b (len %d)", iv, bv, len(bv))
 			idx := 1
-			for i := 7; i >= 0; i-- { // Examine each byte in reverse order
-				if bv[i] == 0x0 { // Skip null bytes
-					log.Errorf("DEBUG: skipping null byte at position %d", i)
-					idx += 8
-					continue
-				}
-				log.Errorf("DEBUG: bits at byte position %d: %08b", i, bv[i])
-				for j := 0; j < 8; j++ {
-					// Use a bit mask. We're looking at each bit in little endian order, so reverse order
-					// or right to left.
-					bm := byte(1 << uint8(j))
-					if bv[i]&bm > 0 {
-						log.Errorf("DEBUG: bit at position %d is set", idx)
-						strVal := plan.EnumValuesMap[colNum][idx]
-						if val.Len() > 0 {
-							val.WriteByte(',')
-						}
-						val.WriteString(strVal)
-						log.Errorf("DEBUG: extractRowAndFilter: mapped string value for col %s: %v", plan.Table.Name, strVal)
+			// See what bits are set in the uint64 using bitmasks.
+			for b := uint64(1); b < 1<<63; b <<= 1 {
+				if iv&b > 0 {
+					log.Errorf("DEBUG: bit at position %d is set", idx)
+					strVal := plan.EnumValuesMap[colNum][idx]
+					if val.Len() > 0 {
+						val.WriteByte(',')
 					}
-					idx++
+					val.WriteString(strVal)
+					log.Errorf("DEBUG: extractRowAndFilter: mapped string value for col %s: %v", plan.Table.Name, strVal)
 				}
+				idx++
 			}
 			value = sqltypes.MakeTrusted(plan.Table.Fields[colNum].Type, val.Bytes())
 			log.Errorf("DEBUG: extractRowAndFilter: mapped string value for col %d: %v", colNum, val.String())
