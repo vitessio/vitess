@@ -926,7 +926,5 @@ func grantAllPrivilegesToUser(t *testing.T, connParams mysql.ConnParams, testUse
 	require.NoError(t, err)
 	_, err = conn.ExecuteFetch(fmt.Sprintf(`GRANT GRANT OPTION ON *.* TO '%v'@'localhost'`, testUser), 1000, false)
 	require.NoError(t, err)
-	_, err = conn.ExecuteFetch("FLUSH PRIVILEGES", 1000, false)
-	require.NoError(t, err)
 	conn.Close()
 }

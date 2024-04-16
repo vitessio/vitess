@@ -25,6 +25,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 
@@ -62,10 +63,11 @@ var (
 			},
 		},
 	}
-	testSelectorResponse1 = &sqltypes.Result{Rows: [][]sqltypes.Value{{sqltypes.NewInt64(1)}}}
-	testSelectorResponse2 = &sqltypes.Result{Rows: [][]sqltypes.Value{{sqltypes.NewInt64(1)}, {sqltypes.NewInt64(2)}}}
-	testDMLResponse       = &sqltypes.Result{RowsAffected: 1}
-	testPos               = "MariaDB/0-1-1083"
+	testSelectorResponse1      = &sqltypes.Result{Rows: [][]sqltypes.Value{{sqltypes.NewInt64(1)}}}
+	testSelectorResponse2      = &sqltypes.Result{Rows: [][]sqltypes.Value{{sqltypes.NewInt64(1)}, {sqltypes.NewInt64(2)}}}
+	testDMLResponse            = &sqltypes.Result{RowsAffected: 1}
+	testPos                    = "MariaDB/0-1-1083"
+	defaultTabletPickerOptions = discovery.TabletPickerOptions{}
 )
 
 func TestControllerKeyRange(t *testing.T) {
@@ -92,7 +94,7 @@ func TestControllerKeyRange(t *testing.T) {
 	mysqld.MysqlPort.Store(3306)
 	vre := NewTestEngine(nil, wantTablet.GetAlias().Cell, mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
 
-	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], "replica", nil, vre)
+	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], "replica", nil, vre, defaultTabletPickerOptions)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +156,7 @@ func TestControllerTables(t *testing.T) {
 	mysqld.MysqlPort.Store(3306)
 	vre := NewTestEngine(nil, wantTablet.GetAlias().Cell, mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
 
-	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], "replica", nil, vre)
+	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], "replica", nil, vre, defaultTabletPickerOptions)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,7 +173,7 @@ func TestControllerBadID(t *testing.T) {
 	params := map[string]string{
 		"id": "bad",
 	}
-	_, err := newController(context.Background(), params, nil, nil, nil, "", "", nil, nil)
+	_, err := newController(context.Background(), params, nil, nil, nil, "", "", nil, nil, defaultTabletPickerOptions)
 	want := `strconv.ParseInt: parsing "bad": invalid syntax`
 	if err == nil || err.Error() != want {
 		t.Errorf("newController err: %v, want %v", err, want)
@@ -184,7 +186,7 @@ func TestControllerStopped(t *testing.T) {
 		"state": binlogdatapb.VReplicationWorkflowState_Stopped.String(),
 	}
 
-	ct, err := newController(context.Background(), params, nil, nil, nil, "", "", nil, nil)
+	ct, err := newController(context.Background(), params, nil, nil, nil, "", "", nil, nil, defaultTabletPickerOptions)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -224,7 +226,7 @@ func TestControllerOverrides(t *testing.T) {
 	mysqld.MysqlPort.Store(3306)
 	vre := NewTestEngine(nil, wantTablet.GetAlias().Cell, mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
 
-	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], "rdonly", nil, vre)
+	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], "rdonly", nil, vre, defaultTabletPickerOptions)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -251,7 +253,7 @@ func TestControllerCanceledContext(t *testing.T) {
 	cancel()
 	vre := NewTestEngine(nil, wantTablet.GetAlias().Cell, nil, nil, nil, "", nil)
 
-	ct, err := newController(ctx, params, nil, nil, env.TopoServ, env.Cells[0], "rdonly", nil, vre)
+	ct, err := newController(ctx, params, nil, nil, env.TopoServ, env.Cells[0], "rdonly", nil, vre, defaultTabletPickerOptions)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -297,7 +299,7 @@ func TestControllerRetry(t *testing.T) {
 	mysqld.MysqlPort.Store(3306)
 	vre := NewTestEngine(nil, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
 
-	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], "rdonly", nil, vre)
+	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], "rdonly", nil, vre, defaultTabletPickerOptions)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -359,7 +361,7 @@ func TestControllerStopPosition(t *testing.T) {
 	mysqld.MysqlPort.Store(3306)
 	vre := NewTestEngine(nil, wantTablet.GetAlias().Cell, mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
 
-	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], "replica", nil, vre)
+	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], "replica", nil, vre, defaultTabletPickerOptions)
 	if err != nil {
 		t.Fatal(err)
 	}

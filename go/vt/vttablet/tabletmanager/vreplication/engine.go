@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
@@ -280,7 +281,7 @@ func (vre *Engine) retry(ctx context.Context, err error) {
 
 func (vre *Engine) initControllers(rows []map[string]string) {
 	for _, row := range rows {
-		ct, err := newController(vre.ctx, row, vre.dbClientFactoryFiltered, vre.mysqld, vre.ts, vre.cell, tabletTypesStr, nil, vre)
+		ct, err := newController(vre.ctx, row, vre.dbClientFactoryFiltered, vre.mysqld, vre.ts, vre.cell, tabletTypesStr, nil, vre, discovery.TabletPickerOptions{})
 		if err != nil {
 			log.Errorf("Controller could not be initialized for stream: %v", row)
 			continue
@@ -337,12 +338,12 @@ func (vre *Engine) getDBClient(isAdmin bool) binlogplayer.DBClient {
 	return vre.dbClientFactoryFiltered()
 }
 
-// ExecWithDBA runs the specified query as the DBA user
+// ExecWithDBA runs the specified query as the DBA user.
 func (vre *Engine) ExecWithDBA(query string) (*sqltypes.Result, error) {
 	return vre.exec(query, true /*runAsAdmin*/)
 }
 
-// Exec runs the specified query as the Filtered user
+// Exec runs the specified query as the Filtered user.
 func (vre *Engine) Exec(query string) (*sqltypes.Result, error) {
 	return vre.exec(query, false /*runAsAdmin*/)
 }
@@ -428,7 +429,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 			if err != nil {
 				return nil, err
 			}
-			ct, err := newController(vre.ctx, params, vre.dbClientFactoryFiltered, vre.mysqld, vre.ts, vre.cell, tabletTypesStr, nil, vre)
+			ct, err := newController(vre.ctx, params, vre.dbClientFactoryFiltered, vre.mysqld, vre.ts, vre.cell, tabletTypesStr, nil, vre, plan.tabletPickerOptions)
 			if err != nil {
 				return nil, err
 			}
@@ -468,7 +469,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 			}
 			// Create a new controller in place of the old one.
 			// For continuity, the new controller inherits the previous stats.
-			ct, err := newController(vre.ctx, params, vre.dbClientFactoryFiltered, vre.mysqld, vre.ts, vre.cell, tabletTypesStr, blpStats[id], vre)
+			ct, err := newController(vre.ctx, params, vre.dbClientFactoryFiltered, vre.mysqld, vre.ts, vre.cell, tabletTypesStr, blpStats[id], vre, plan.tabletPickerOptions)
 			if err != nil {
 				return nil, err
 			}
@@ -728,7 +729,7 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 			log.Errorf("transitionJournal: %v", err)
 			return
 		}
-		ct, err := newController(vre.ctx, params, vre.dbClientFactoryFiltered, vre.mysqld, vre.ts, vre.cell, tabletTypesStr, nil, vre)
+		ct, err := newController(vre.ctx, params, vre.dbClientFactoryFiltered, vre.mysqld, vre.ts, vre.cell, tabletTypesStr, nil, vre, discovery.TabletPickerOptions{})
 		if err != nil {
 			log.Errorf("transitionJournal: %v", err)
 			return
