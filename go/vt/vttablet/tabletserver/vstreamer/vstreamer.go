@@ -19,9 +19,9 @@ package vstreamer
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"io"
-	"strconv"
 	"strings"
 	"time"
 
@@ -1080,27 +1080,29 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 		if plan.Table.Fields[colNum].Type == querypb.Type_SET {
 			val := bytes.Buffer{}
 			// A SET column can have 64 unique values: https://dev.mysql.com/doc/refman/en/set.html
-			// For this reason the binlog event contains the values encoded as a 64-bit integer.
-			// This value can then be converted to a binary / base 2 integer where it becomes
-			// a bitmap of the values specified.
-			bv, err := value.ToUint64()
+			// For this reason the binlog event contains the values encoded as an unsigned 64-bit
+			// integer. This value can then be converted to a binary / base 2 integer where it
+			// becomes a bitmap of the values specified.
+			iv, err := value.ToUint64()
 			if err != nil {
 				log.Errorf("extractRowAndFilter: %s, table: %s, colNum: %d, fields: %+v, current values: %+v",
 					err, plan.Table.Name, colNum, plan.Table.Fields, values)
 				return false, nil, false, err
 			}
-			// Convert it to a base2 integer / binary value. Finally, strconv converts this to a
-			// string of 1s and 0s and we can then loop through the bytes. Note that this map is
-			// in reverse order as this was a little endian integer.
-			valMap := strconv.FormatUint(bv, 2)
-			valLen := len(valMap)
-			for i := 0; i < valLen; i++ {
-				if valMap[i] == '1' {
-					strVal := plan.EnumValuesMap[colNum][valLen-i]
-					if val.Len() > 0 {
-						val.WriteByte(',')
+			// Convert the uint64 to bytes.
+			bv := make([]byte, 8)
+			binary.LittleEndian.PutUint64(bv, iv)
+			numVals := len(plan.EnumValuesMap[colNum])
+			for i := len(bv) - 1; i >= 0; i-- { // Examine each byte
+				for j := 7; j >= 0; j-- { // And each bit in the byte
+					bm := byte(1 << uint(j)) // Bit mask
+					if bv[i]&bm > 0 {
+						strVal := plan.EnumValuesMap[colNum][numVals-(i+j)]
+						if val.Len() > 0 {
+							val.WriteByte(',')
+						}
+						val.WriteString(strVal)
 					}
-					val.WriteString(strVal)
 				}
 			}
 			value = sqltypes.MakeTrusted(plan.Table.Fields[colNum].Type, val.Bytes())

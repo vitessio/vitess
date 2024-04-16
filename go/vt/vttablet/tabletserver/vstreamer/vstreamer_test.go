@@ -125,9 +125,16 @@ func TestSetAndEnum(t *testing.T) {
 	ts.Init()
 	ts.tests = [][]*TestQuery{{
 		{"begin", nil},
-		{"insert into t1 values (1, 'aaa', 'red,blue', 'S')", nil},
-		{"insert into t1 values (2, 'bbb', 'green', 'M')", nil},
-		{"insert into t1 values (3, 'ccc', 'red,blue,green', 'L')", nil},
+		{"insert into t1 values (1, 'aaa', 'red,blue', 'S')", []TestRowEvent{
+			{event: "type:FIELD field_event:{table_name:\"t1\" fields:{name:\"id\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id\" column_length:11 charset:63 column_type:\"int\"} fields:{name:\"val\" type:BINARY table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"val\" column_length:4 charset:63 column_type:\"binary(4)\"} fields:{name:\"color\" type:SET table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"color\" column_length:56 charset:255 column_type:\"set('red','green','blue')\"} fields:{name:\"size\" type:ENUM table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"size\" column_length:4 charset:255 column_type:\"enum('S','M','L')\"}}"},
+			{event: "type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:1 lengths:4 lengths:8 lengths:1 values:\"1aaa\\x00red,blueS\"}}}"},
+		}},
+		{"insert into t1 values (2, 'bbb', 'green', 'M')", []TestRowEvent{
+			{event: "type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:1 lengths:4 lengths:5 lengths:1 values:\"2bbb\\x00greenM\"}}}"},
+		}},
+		{"insert into t1 values (3, 'ccc', 'red,blue,green', 'L')", []TestRowEvent{
+			{event: "type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:1 lengths:4 lengths:14 lengths:1 values:\"3ccc\\x00red,green,blueL\"}}}"},
+		}},
 		{"commit", nil},
 	}}
 	ts.Run()
@@ -1550,8 +1557,8 @@ func TestTypes(t *testing.T) {
 		output: [][]string{{
 			`begin`,
 			fmt.Sprintf(`type:FIELD field_event:{table_name:"vitess_strings" fields:{name:"vb" type:VARBINARY table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"vb" column_length:16 charset:63 column_type:"varbinary(16)"} fields:{name:"c" type:CHAR table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"c" column_length:64 charset:%d column_type:"char(16)"} fields:{name:"vc" type:VARCHAR table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"vc" column_length:64 charset:%d column_type:"varchar(16)"} fields:{name:"b" type:BINARY table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"b" column_length:4 charset:63 column_type:"binary(4)"} fields:{name:"tb" type:BLOB table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"tb" column_length:255 charset:63 column_type:"tinyblob"} fields:{name:"bl" type:BLOB table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"bl" column_length:65535 charset:63 column_type:"blob"} fields:{name:"ttx" type:TEXT table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"ttx" column_length:1020 charset:%d column_type:"tinytext"} fields:{name:"tx" type:TEXT table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"tx" column_length:262140 charset:%d column_type:"text"} fields:{name:"en" type:ENUM table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"en" column_length:4 charset:%d column_type:"enum('a','b')"} fields:{name:"s" type:SET table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"s" column_length:12 charset:%d column_type:"set('a','b')"}}`, testenv.DefaultCollationID, testenv.DefaultCollationID, testenv.DefaultCollationID, testenv.DefaultCollationID, testenv.DefaultCollationID, testenv.DefaultCollationID),
-			`type:ROW row_event:{table_name:"vitess_strings" row_changes:{after:{lengths:1 lengths:1 lengths:1 lengths:4 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 ` +
-				`values:"abcd\x00\x00\x00efgh13"}}}`,
+			`type:ROW row_event:{table_name:"vitess_strings" row_changes:{after:{lengths:1 lengths:1 lengths:1 lengths:4 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:3 ` +
+				`values:"abcd\x00\x00\x00efghaa,b"}}}`,
 			`gtid`,
 			`commit`,
 		}},
