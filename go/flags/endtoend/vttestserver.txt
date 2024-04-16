@@ -108,9 +108,12 @@ Usage of vttestserver:
       --tablet_manager_grpc_key string                                   the key to use to connect
       --tablet_manager_grpc_server_name string                           the server name to use to validate server certificate
       --tablet_manager_protocol string                                   Protocol to use to make tabletmanager RPCs to vttablets. (default "grpc")
+      --topo_consul_idle_conn_timeout duration                           Maximum amount of time to pool idle connections. (default 1m30s)
       --topo_consul_lock_delay duration                                  LockDelay for consul session. (default 15s)
       --topo_consul_lock_session_checks string                           List of checks for consul session. (default "serfHealth")
       --topo_consul_lock_session_ttl string                              TTL for consul session.
+      --topo_consul_max_conns_per_host int                               Maximum number of consul connections per host.
+      --topo_consul_max_idle_conns int                                   Maximum number of idle consul connections. (default 100)
       --topo_consul_watch_poll_duration duration                         time of the long poll for watch queries. (default 30s)
       --topo_zk_auth_file string                                         auth to use when connecting to the zk topo server, file contents should be <scheme>:<auth>, e.g., digest:user:pass
       --topo_zk_base_timeout duration                                    zk base timeout (see zk.Connect) (default 30s)

@@ -38,6 +38,7 @@ import (
 
 var (
 	consulAuthClientStaticFile string
+	consulConfig               = api.DefaultConfig()
 	// serfHealth is the default check from consul
 	consulLockSessionChecks = "serfHealth"
 	consulLockSessionTTL    string
@@ -53,6 +54,9 @@ func registerServerFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&consulLockSessionChecks, "topo_consul_lock_session_checks", consulLockSessionChecks, "List of checks for consul session.")
 	fs.StringVar(&consulLockSessionTTL, "topo_consul_lock_session_ttl", consulLockSessionTTL, "TTL for consul session.")
 	fs.DurationVar(&consulLockDelay, "topo_consul_lock_delay", consulLockDelay, "LockDelay for consul session.")
+	fs.IntVar(&consulConfig.Transport.MaxConnsPerHost, "topo_consul_max_conns_per_host", consulConfig.Transport.MaxConnsPerHost, "Maximum number of consul connections per host.")
+	fs.IntVar(&consulConfig.Transport.MaxIdleConns, "topo_consul_max_idle_conns", consulConfig.Transport.MaxIdleConns, "Maximum number of idle consul connections.")
+	fs.DurationVar(&consulConfig.Transport.IdleConnTimeout, "topo_consul_idle_conn_timeout", consulConfig.Transport.IdleConnTimeout, "Maximum amount of time to pool idle connections.")
 }
 
 // ClientAuthCred credential to use for consul clusters
@@ -131,7 +135,7 @@ func NewServer(cell, serverAddr, root string) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	cfg := api.DefaultConfig()
+	cfg := consulConfig
 	cfg.Address = serverAddr
 	if creds != nil {
 		if creds[cell] != nil {

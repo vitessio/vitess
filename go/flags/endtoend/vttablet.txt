@@ -302,9 +302,12 @@ Usage of vttablet:
       --throttle_metrics_threshold float                                 Override default throttle threshold, respective to -throttle_metrics_query (default 1.7976931348623157e+308)
       --throttle_tablet_types string                                     Comma separated VTTablet types to be considered by the throttler. default: 'replica'. example: 'replica,rdonly'. 'replica' aways implicitly included (default "replica")
       --throttle_threshold duration                                      Replication lag threshold for default lag throttling (default 1s)
+      --topo_consul_idle_conn_timeout duration                           Maximum amount of time to pool idle connections. (default 1m30s)
       --topo_consul_lock_delay duration                                  LockDelay for consul session. (default 15s)
       --topo_consul_lock_session_checks string                           List of checks for consul session. (default "serfHealth")
       --topo_consul_lock_session_ttl string                              TTL for consul session.
+      --topo_consul_max_conns_per_host int                               Maximum number of consul connections per host.
+      --topo_consul_max_idle_conns int                                   Maximum number of idle consul connections. (default 100)
       --topo_consul_watch_poll_duration duration                         time of the long poll for watch queries. (default 30s)
       --topo_etcd_lease_ttl int                                          Lease TTL for locks and leader election. The client will use KeepAlive to keep the lease going. (default 30)
       --topo_etcd_tls_ca string                                          path to the ca to use to validate the server cert when connecting to the etcd topo server
