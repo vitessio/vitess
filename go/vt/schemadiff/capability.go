@@ -50,6 +50,13 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 		}
 		return nil
 	}
+	tableIsCompressed := false
+	if opt := findTableOption("ROW_FORMAT"); opt != nil {
+		if strings.EqualFold(opt.String, "COMPRESSED") {
+			tableIsCompressed = true
+		}
+	}
+
 	isVirtualColumn := func(colName string) bool {
 		col := findColumn(colName)
 		if col == nil {
@@ -100,10 +107,8 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 			return false, nil
 		}
 		// Not supported in COMPRESSED tables
-		if opt := findTableOption("ROW_FORMAT"); opt != nil {
-			if strings.EqualFold(opt.String, "COMPRESSED") {
-				return false, nil
-			}
+		if tableIsCompressed {
+			return false, nil
 		}
 		if opt.First || opt.After != nil {
 			// not a "last" column. Only supported as of 8.0.29
@@ -117,10 +122,8 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 			return false, nil
 		}
 		// Not supported in COMPRESSED tables
-		if opt := findTableOption("ROW_FORMAT"); opt != nil {
-			if strings.EqualFold(opt.String, "COMPRESSED") {
-				return false, nil
-			}
+		if tableIsCompressed {
+			return false, nil
 		}
 		if findIndexCoveringColumn(opt.Name.Name.String()) != nil {
 			// not supported if the column is part of an index
