@@ -1569,9 +1569,6 @@ func (s *Server) setupInitialRoutingRules(ctx context.Context, req *vtctldatapb.
 		// Note that you can never point the target keyspace to the source keyspace in a multi-tenant migration
 		// since the target takes write traffic for all tenants!
 		keyspaces = append(keyspaces, sourceKeyspace)
-		if req.GetWorkflowOptions().GetSourceKeyspaceAlias() != "" {
-			keyspaces = append(keyspaces, req.WorkflowOptions.SourceKeyspaceAlias)
-		}
 		routes := make(map[string]string)
 		for _, ks := range keyspaces {
 			routes[ks] = sourceKeyspace
