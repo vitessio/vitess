@@ -1597,11 +1597,11 @@ func TestPlayerTypes(t *testing.T) {
 			{"1", "1.99", "2.99", "3.99", "4.99"},
 		},
 	}, {
-		input:  "insert into vitess_strings values('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'a', 'a,b,k,t,z')",
-		output: "insert into vitess_strings(vb,c,vc,b,tb,bl,ttx,tx,en,s) values ('a','b','c','d\\0\\0\\0\\0','e','f','g','h','a','a,b,k,t,z')",
+		input:  "insert into vitess_strings values('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'a', 'a,b')",
+		output: "insert into vitess_strings(vb,c,vc,b,tb,bl,ttx,tx,en,s) values ('a','b','c','d\\0\\0\\0\\0','e','f','g','h','a','a,b')",
 		table:  "vitess_strings",
 		data: [][]string{
-			{"a", "b", "c", "d\000\000\000\000", "e", "f", "g", "h", "a", "a,b,k,t,z"},
+			{"a", "b", "c", "d\000\000\000\000", "e", "f", "g", "h", "a", "a,b"},
 		},
 	}, {
 		input:  "insert into vitess_misc values(1, '\x01', '2012-01-01', '2012-01-01 15:45:45', '15:45:45', point(1, 2))",

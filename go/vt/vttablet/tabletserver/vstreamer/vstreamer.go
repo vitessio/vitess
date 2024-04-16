@@ -755,11 +755,11 @@ func (vs *vstreamer) buildTablePlan(id uint64, tm *mysql.TableMap) (*binlogdatap
 		Plan:     plan,
 		TableMap: tm,
 	}
-	// Add any necessary ENUM and SET ordinal to string mappings.
+	// Add any necessary ENUM and SET integer position to string mappings.
 	for i, col := range cols {
 		if col.Type == querypb.Type_ENUM || col.Type == querypb.Type_SET {
-			if plan.EnumValuesMap == nil {
-				plan.EnumValuesMap = make(map[int]map[int]string)
+			if plan.EnumSetValuesMap == nil {
+				plan.EnumSetValuesMap = make(map[int]map[int]string)
 			}
 			// Strip the enum() / set() parts out.
 			begin := strings.Index(col.ColumnType, "(")
@@ -768,7 +768,8 @@ func (vs *vstreamer) buildTablePlan(id uint64, tm *mysql.TableMap) (*binlogdatap
 				return nil, fmt.Errorf("enum or set column %s does not have valid string values: %s",
 					col.Name, col.ColumnType)
 			}
-			plan.EnumValuesMap[i] = schemautils.ParseEnumOrSetTokensMap(col.ColumnType[begin+1 : end])
+			plan.EnumSetValuesMap[i] = schemautils.ParseEnumOrSetTokensMap(col.ColumnType[begin+1 : end])
+			log.Errorf("DEBUG: enum values for %s: %v", col.Name, plan.EnumSetValuesMap[i])
 		}
 	}
 	return &binlogdatapb.VEvent{
@@ -1084,7 +1085,7 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 					err, plan.Table.Name, colNum, plan.Table.Fields, values)
 				return false, nil, false, err
 			}
-			strVal := plan.EnumValuesMap[colNum][ordinalValue]
+			strVal := plan.EnumSetValuesMap[colNum][ordinalValue]
 			value = sqltypes.MakeTrusted(plan.Table.Fields[colNum].Type, []byte(strVal))
 			log.Errorf("DEBUG: extractRowAndFilter: mapped string value for col %d: %v", colNum, strVal)
 		}
@@ -1093,7 +1094,8 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 			val := bytes.Buffer{}
 			// A SET column can have 64 unique values: https://dev.mysql.com/doc/refman/en/set.html
 			// For this reason the binlog event contains the values encoded as an unsigned 64-bit
-			// integer.
+			// integer (note that position 0 is reserved for '' which is used if you insert any
+			// integer values which are not present in the set).
 			iv, err := value.ToUint64()
 			if err != nil {
 				log.Errorf("extractRowAndFilter: %s, table: %s, colNum: %d, fields: %+v, current values: %+v",
@@ -1105,7 +1107,7 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 			for b := uint64(1); b < 1<<63; b <<= 1 {
 				if iv&b > 0 {
 					log.Errorf("DEBUG: bit at position %d is set", idx)
-					strVal := plan.EnumValuesMap[colNum][idx]
+					strVal := plan.EnumSetValuesMap[colNum][idx]
 					if val.Len() > 0 {
 						val.WriteByte(',')
 					}

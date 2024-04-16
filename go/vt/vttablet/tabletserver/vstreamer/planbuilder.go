@@ -58,10 +58,10 @@ type Plan struct {
 	// of the table.
 	Filters []Filter
 
-	// Convert any ordinal values seen in the binlog events for ENUM
-	// or SET columns to the string value. The map is keyed on the
+	// Convert any integer position values seen in the binlog events for
+	// ENUM or SET columns to the string value. The map is keyed on the
 	// column number, with the value being the map of ordinal to string.
-	EnumValuesMap map[int](map[int]string)
+	EnumSetValuesMap map[int](map[int]string)
 
 	env *vtenv.Environment
 }
