@@ -6540,7 +6540,7 @@ func (m *WorkflowOptions) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 			dAtA[i] = 0
 		}
 		i--
-		dAtA[i] = 0x18
+		dAtA[i] = 0x10
 	}
 	if len(m.TenantId) > 0 {
 		i -= len(m.TenantId)
@@ -28538,7 +28538,7 @@ func (m *WorkflowOptions) UnmarshalVT(dAtA []byte) error {
 			}
 			m.TenantId = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
-		case 3:
+		case 2:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field StripShardedAutoIncrement", wireType)
 			}
