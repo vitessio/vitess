@@ -62,6 +62,18 @@ func TestAlterTableCapableOfInstantDDL(t *testing.T) {
 			expectCapableOfInstantDDL: false,
 		},
 		{
+			name:                      "add column fails on COMPRESSED tables",
+			create:                    "create table t1 (id int, i1 int) row_format=compressed",
+			alter:                     "alter table t1 add column i2 int",
+			expectCapableOfInstantDDL: false,
+		},
+		{
+			name:                      "add column fails on table with FULLTEXT index",
+			create:                    "create table t(id int, name varchar(128), primary key(id), fulltext key (name))",
+			alter:                     "alter table t1 add column i2 int",
+			expectCapableOfInstantDDL: false,
+		},
+		{
 			name:                      "drop virtual column",
 			create:                    "create table t(id int, i1 int not null, i2 int generated always as (i1 + 1) virtual, primary key(id))",
 			alter:                     "alter table t drop column i2",
@@ -125,6 +137,12 @@ func TestAlterTableCapableOfInstantDDL(t *testing.T) {
 		{
 			name:                      "change a default column value",
 			create:                    "create table t(id int, i1 int not null, primary key(id))",
+			alter:                     "alter table t modify column i1 int not null default 3",
+			expectCapableOfInstantDDL: true,
+		},
+		{
+			name:                      "change a default column value on a table with FULLTEXT index",
+			create:                    "create table t(id int, i1 int not null, name varchar(128), primary key(id), fulltext key (name))",
 			alter:                     "alter table t modify column i1 int not null default 3",
 			expectCapableOfInstantDDL: true,
 		},

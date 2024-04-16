@@ -11,9 +11,11 @@ import (
 // reference: https://dev.mysql.com/doc/refman/8.0/en/innodb-online-ddl-operations.html
 func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTable *sqlparser.CreateTable, capableOf capabilities.CapableOf) (bool, error) {
 	// A table with FULLTEXT index can't have any sort of INSTANT DDL
+	tableHasFulltextIndex := false
 	for _, key := range createTable.TableSpec.Indexes {
 		if key.Info.Type == sqlparser.IndexTypeFullText {
-			return false, nil
+			tableHasFulltextIndex = true
+			break
 		}
 	}
 	findColumn := func(colName string) *sqlparser.ColumnDefinition {
@@ -93,6 +95,16 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 		//    in another table. Which is a bit too much to compute here.
 		return false, nil
 	case *sqlparser.AddColumns:
+		if tableHasFulltextIndex {
+			// not supported if the table has a FULLTEXT index
+			return false, nil
+		}
+		// Not supported in COMPRESSED tables
+		if opt := findTableOption("ROW_FORMAT"); opt != nil {
+			if strings.EqualFold(opt.String, "COMPRESSED") {
+				return false, nil
+			}
+		}
 		if opt.First || opt.After != nil {
 			// not a "last" column. Only supported as of 8.0.29
 			return capableOf(capabilities.InstantAddDropColumnFlavorCapability)
@@ -100,6 +112,10 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 		// Adding a *last* column is supported in 8.0
 		return capableOf(capabilities.InstantAddLastColumnFlavorCapability)
 	case *sqlparser.DropColumn:
+		if tableHasFulltextIndex {
+			// not supported if the table has a FULLTEXT index
+			return false, nil
+		}
 		// Not supported in COMPRESSED tables
 		if opt := findTableOption("ROW_FORMAT"); opt != nil {
 			if strings.EqualFold(opt.String, "COMPRESSED") {
