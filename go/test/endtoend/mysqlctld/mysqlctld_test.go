@@ -88,7 +88,7 @@ func initCluster(shardNames []string, totalTabletsRequired int) error {
 		shard := &cluster.Shard{
 			Name: shardName,
 		}
-		for i := 0; i < totalTabletsRequired; i++ {
+		for i := range totalTabletsRequired {
 			// instantiate vttablet object with reserved ports
 			tabletUID := clusterInstance.GetAndReserveTabletUID()
 			tablet := &cluster.Vttablet{

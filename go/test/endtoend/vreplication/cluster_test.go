@@ -291,7 +291,7 @@ func downloadDBTypeVersion(dbType string, majorVersion string, path string) erro
 	}
 	retries := 5
 	var dlerr error
-	for i := 0; i < retries; i++ {
+	for range retries {
 		if dlerr = downloadFile(); dlerr == nil {
 			break
 		}
@@ -615,7 +615,7 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 				primary.Vttablet.IsPrimary = true
 			}
 
-			for i := 0; i < numReplicas; i++ {
+			for range numReplicas {
 				log.Infof("Adding Replica tablet")
 				tablet, proc, err := vc.AddTablet(t, cell, keyspace, shard, "replica", tabletID+tabletIndex)
 				require.NoError(t, err)
@@ -626,7 +626,7 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 			}
 			// Only create RDONLY tablets in the default cell
 			if cell.Name == cluster.DefaultCell {
-				for i := 0; i < numRdonly; i++ {
+				for range numRdonly {
 					log.Infof("Adding RdOnly tablet")
 					tablet, proc, err := vc.AddTablet(t, cell, keyspace, shard, "rdonly", tabletID+tabletIndex)
 					require.NoError(t, err)

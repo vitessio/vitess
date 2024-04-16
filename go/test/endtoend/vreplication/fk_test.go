@@ -257,7 +257,7 @@ func (ls *fkLoadSimulator) insert() {
 	qr := ls.exec(insertQuery)
 	require.NotNil(t, qr)
 	// insert one or more children, some with valid foreign keys, some without.
-	for i := 0; i < rand.IntN(4)+1; i++ {
+	for i := range rand.IntN(4) + 1 {
 		currentChildId++
 		if i == 3 {
 			insertQuery = fmt.Sprintf("INSERT /*+ SET_VAR(foreign_key_checks=0) */ INTO child (id, parent_id) VALUES (%d, %d)", currentChildId, currentParentId+1000000)

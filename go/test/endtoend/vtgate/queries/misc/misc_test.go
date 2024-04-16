@@ -204,7 +204,7 @@ func TestHighNumberOfParams(t *testing.T) {
 	// create the value and argument slices used to build the prepare stmt
 	var vals []any
 	var params []string
-	for i := 0; i < paramCount; i++ {
+	for i := range paramCount {
 		vals = append(vals, strconv.Itoa(i))
 		params = append(params, "?")
 	}

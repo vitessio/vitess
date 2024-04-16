@@ -49,7 +49,7 @@ func (fs *fuzzStore) createTablets(f *fuzz.ConsumeFuzzer) error {
 		return fmt.Errorf("We don't need a nil-len list")
 	}
 	tablets := make([]*topodatapb.Tablet, 0)
-	for i := 0; i < tabletCount; i++ {
+	for range tabletCount {
 		tablet := &topodatapb.Tablet{}
 		err = f.GenerateStruct(tablet)
 		if err != nil {
@@ -73,7 +73,7 @@ func (fs *fuzzStore) createTabletAliases(f *fuzz.ConsumeFuzzer) error {
 		return fmt.Errorf("We don't need a nil-len list")
 	}
 	tabletAliases := make([]*topodatapb.TabletAlias, 0)
-	for i := 0; i < tabletAliasCount; i++ {
+	for range tabletAliasCount {
 		tabletAlias := &topodatapb.TabletAlias{}
 		err = f.GenerateStruct(tabletAlias)
 		if err != nil {
@@ -97,7 +97,7 @@ func (fs *fuzzStore) createStrings(f *fuzz.ConsumeFuzzer) error {
 		return fmt.Errorf("We don't need a nil-len list")
 	}
 	stringSlice := make([]string, 0)
-	for i := 0; i < stringCount; i++ {
+	for range stringCount {
 		newString, err := f.GetString()
 		if err != nil {
 			return err
@@ -120,7 +120,7 @@ func (fs *fuzzStore) createBytes(f *fuzz.ConsumeFuzzer) error {
 		return fmt.Errorf("We don't need a nil-len list")
 	}
 	byteSlice := make([][]byte, 0)
-	for i := 0; i < bytesCount; i++ {
+	for range bytesCount {
 		newBytes, err := f.GetBytes()
 		if err != nil {
 			return err
@@ -143,7 +143,7 @@ func (fs *fuzzStore) createInts(f *fuzz.ConsumeFuzzer) error {
 		return fmt.Errorf("We don't need a nil-len list")
 	}
 	intSlice := make([]int, 0)
-	for i := 0; i < intCount; i++ {
+	for range intCount {
 		newInt, err := f.GetInt()
 		if err != nil {
 			return err
@@ -166,7 +166,7 @@ func (fs *fuzzStore) createExecutionOrder(f *fuzz.ConsumeFuzzer) error {
 		return fmt.Errorf("We don't need a nil-len list")
 	}
 	executionOrder := make([]int, 0)
-	for i := 0; i < intCount; i++ {
+	for range intCount {
 		newInt, err := f.GetInt()
 		if err != nil {
 			return err

@@ -137,7 +137,7 @@ func initializeCluster(t *testing.T) (int, error) {
 		shard := &cluster.Shard{
 			Name: shardName,
 		}
-		for i := 0; i < 2; i++ {
+		for range 2 {
 			// instantiate vttablet object with reserved ports
 			tabletUID := clusterInstance.GetAndReserveTabletUID()
 			tablet := clusterInstance.NewVttabletInstance("replica", tabletUID, cell)

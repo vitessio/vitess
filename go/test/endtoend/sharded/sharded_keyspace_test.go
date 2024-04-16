@@ -202,7 +202,7 @@ func initCluster(shardNames []string, totalTabletsRequired int) {
 
 		var mysqlCtlProcessList []*exec.Cmd
 
-		for i := 0; i < totalTabletsRequired; i++ {
+		for i := range totalTabletsRequired {
 			// instantiate vttablet object with reserved ports
 			tabletUID := clusterInstance.GetAndReserveTabletUID()
 			tablet := &cluster.Vttablet{

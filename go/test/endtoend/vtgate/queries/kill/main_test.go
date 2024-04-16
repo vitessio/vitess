@@ -109,7 +109,7 @@ func setupData(t *testing.T, huge bool) {
 	r3 := getRandomString(30)
 	r4 := getRandomString(40)
 
-	for i := 0; i < initialRow; i += 4 {
+	for i := range initialRow {
 		utils.Exec(t, conn, fmt.Sprintf("insert into test(id, msg, extra) values (%d, '%s', '%s'),(%d, '%s', '%s'),(%d, '%s', '%s'),(%d, '%s', '%s')",
 			i, r1, r2,
 			i+1, r2, r3,
@@ -141,7 +141,7 @@ func dropData(t *testing.T) {
 func getRandomString(size int) string {
 	var str strings.Builder
 
-	for i := 0; i < size; i++ {
+	for range size {
 		str.WriteByte(byte((rand.Int() % 26) + 97))
 	}
 

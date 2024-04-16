@@ -469,7 +469,7 @@ func TestSchemaChange(t *testing.T) {
 		// spawn n migrations; cancel them via cancel-all
 		var wg sync.WaitGroup
 		count := 4
-		for i := 0; i < count; i++ {
+		for range count {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -487,8 +487,7 @@ func TestSchemaChange(t *testing.T) {
 
 		// spawn n migrations; cancel them via cancel-all
 		var wg sync.WaitGroup
-		count := 4
-		for i := 0; i < count; i++ {
+		for range 4 {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -867,7 +866,7 @@ func insertRow(t *testing.T) {
 }
 
 func insertRows(t *testing.T, count int) {
-	for i := 0; i < count; i++ {
+	for range count {
 		insertRow(t)
 	}
 }
@@ -903,7 +902,7 @@ func testMigrationRowCount(t *testing.T, uuid string) {
 func testWithInitialSchema(t *testing.T) {
 	// Create 4 tables
 	var sqlQuery = "" //nolint
-	for i := 0; i < totalTableCount; i++ {
+	for i := range totalTableCount {
 		sqlQuery = fmt.Sprintf(createTable, fmt.Sprintf("vt_onlineddl_test_%02d", i))
 		err := clusterInstance.VtctldClientProcess.ApplySchema(keyspaceName, sqlQuery)
 		require.Nil(t, err)

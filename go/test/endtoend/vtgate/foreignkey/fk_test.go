@@ -288,7 +288,7 @@ func runVStream(t *testing.T, ctx context.Context, ch chan *binlogdatapb.VEvent,
 
 func drainEvents(t *testing.T, ch chan *binlogdatapb.VEvent, count int) []string {
 	var rowEvents []string
-	for i := 0; i < count; i++ {
+	for i := range count {
 		select {
 		case re := <-ch:
 			rowEvents = append(rowEvents, re.RowEvent.String())

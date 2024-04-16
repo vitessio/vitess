@@ -154,7 +154,7 @@ func populateTable(t *testing.T) {
 	require.NoError(t, err)
 	_, err = primaryTablet.VttabletProcess.QueryTablet("insert into t1 (id, value) values (null, md5(rand()))", keyspaceName, true)
 	require.NoError(t, err)
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		_, err = primaryTablet.VttabletProcess.QueryTablet("insert into t1 (id, value) select null, md5(rand()) from t1", keyspaceName, true)
 		require.NoError(t, err)
 	}

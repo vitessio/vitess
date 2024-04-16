@@ -46,7 +46,7 @@ func TestRandomExprWithTables(t *testing.T) {
 		{name: "loc", typ: "varchar"},
 	}...)
 
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		genConfig := sqlparser.NewExprGeneratorConfig(sqlparser.CanAggregate, "", 0, false)
 		g := sqlparser.NewGenerator(3, slice.Map(schemaTables, func(t tableT) sqlparser.ExprGenerator { return &t })...)
 		g.Expression(genConfig)

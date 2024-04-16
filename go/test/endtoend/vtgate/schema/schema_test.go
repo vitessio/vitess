@@ -119,7 +119,7 @@ func TestSchemaChange(t *testing.T) {
 func testWithInitialSchema(t *testing.T) {
 	// Create 4 tables
 	var sqlQuery = "" // nolint
-	for i := 0; i < totalTableCount; i++ {
+	for i := range totalTableCount {
 		sqlQuery = fmt.Sprintf(createTable, fmt.Sprintf("vt_select_test_%02d", i))
 		err := clusterInstance.VtctldClientProcess.ApplySchema(keyspaceName, sqlQuery)
 		require.Nil(t, err)
@@ -295,7 +295,7 @@ func testCopySchemaShards(t *testing.T, source string, shard int) {
 	checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[0], 0)
 	checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[1], 0)
 	// Run the command twice to make sure it's idempotent.
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		err := clusterInstance.VtctlclientProcess.ExecuteCommand("CopySchemaShard", source, fmt.Sprintf("%s/%d", keyspaceName, shard))
 		require.Nil(t, err)
 	}

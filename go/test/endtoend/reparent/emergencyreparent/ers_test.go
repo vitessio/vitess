@@ -381,7 +381,7 @@ func TestERSForInitialization(t *testing.T) {
 	require.NoError(t, err)
 	err = clusterInstance.TopoProcess.ManageTopoDir("mkdir", "/vitess/"+"zone1")
 	require.NoError(t, err)
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		tablet := clusterInstance.NewVttabletInstance("replica", 100+i, "zone1")
 		tablets = append(tablets, tablet)
 	}

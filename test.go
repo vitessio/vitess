@@ -475,7 +475,7 @@ func main() {
 	}()
 
 	// Start the requested number of parallel runners.
-	for i := 0; i < *parallel; i++ {
+	for range *parallel {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

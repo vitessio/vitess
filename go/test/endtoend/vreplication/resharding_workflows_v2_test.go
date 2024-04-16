@@ -468,7 +468,7 @@ func testVSchemaForSequenceAfterMoveTables(t *testing.T) {
 
 	// ensure sequence is available to vtgate
 	num := 5
-	for i := 0; i < num; i++ {
+	for range num {
 		execVtgateQuery(t, vtgateConn, "customer", "insert into customer2(name) values('a')")
 	}
 	waitForRowCount(t, vtgateConn, "customer", "customer2", 3+num)
@@ -500,7 +500,7 @@ func testVSchemaForSequenceAfterMoveTables(t *testing.T) {
 	assert.Contains(t, output, "\"sequence\": \"customer_seq2\"", "customer2 still found in keyspace product")
 
 	// ensure sequence is available to vtgate
-	for i := 0; i < num; i++ {
+	for range num {
 		execVtgateQuery(t, vtgateConn, "product", "insert into customer2(name) values('a')")
 	}
 	waitForRowCount(t, vtgateConn, "product", "customer2", 3+num+num)

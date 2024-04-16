@@ -113,7 +113,7 @@ func TestUnionAll(t *testing.T) {
 			// this test is quite good at uncovering races in the Concatenate engine primitive. make it run many times
 			// see: https://github.com/vitessio/vitess/issues/15434
 			if utils.BinaryIsAtLeastAtVersion(20, "vtgate") {
-				for i := 0; i < 100; i++ {
+				for range 100 {
 					// union all between two select unique in tables
 					mcmp.AssertMatchesNoOrder("select id1 from t1 where id1 in (1, 2, 3, 4, 5, 6, 7, 8) union all select id1 from t1 where id1 in (1, 2, 3, 4, 5, 6, 7, 8)",
 						"[[INT64(1)] [INT64(2)] [INT64(1)] [INT64(2)]]")

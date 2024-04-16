@@ -285,7 +285,7 @@ func setupBenchmark(b *testing.B, maxValForId int, maxValForCol int, insertShare
 	fz := newFuzzer(1, maxValForId, maxValForCol, insertShare, deleteShare, updateShare, SQLQueries, nil)
 	fz.noFkSetVar = true
 	var queries []string
-	for j := 0; j < numQueries; j++ {
+	for range numQueries {
 		genQueries := fz.generateQuery()
 		require.Len(b, genQueries, 1)
 		queries = append(queries, genQueries[0])

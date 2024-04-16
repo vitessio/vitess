@@ -143,7 +143,7 @@ func TestDeploySchema(t *testing.T) {
 		return
 	}
 	// Create n tables, populate
-	for i := 0; i < totalTableCount; i++ {
+	for i := range totalTableCount {
 		tableName := fmt.Sprintf("vt_upgrade_test_%02d", i)
 
 		{
@@ -186,7 +186,7 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName stri
 // TestTablesData checks the data in tables
 func TestTablesData(t *testing.T) {
 	// Create n tables, populate
-	for i := 0; i < totalTableCount; i++ {
+	for i := range totalTableCount {
 		tableName := fmt.Sprintf("vt_upgrade_test_%02d", i)
 
 		for i := range clusterInstance.Keyspaces[0].Shards {

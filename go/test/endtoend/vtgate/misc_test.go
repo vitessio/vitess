@@ -788,7 +788,7 @@ func TestRowCountExceed(t *testing.T) {
 		conn.Close()
 	}()
 
-	for i := 0; i < 250; i++ {
+	for i := range 250 {
 		utils.Exec(t, conn, fmt.Sprintf("insert into t1 (id1, id2) values (%d, %d)", i, i+1))
 	}
 

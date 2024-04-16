@@ -566,7 +566,7 @@ func ExecuteFKTest(t *testing.T, tcase *testCase) {
 				defer cancel()
 
 				var wg sync.WaitGroup
-				for i := 0; i < maxConcurrency; i++ {
+				for i := range maxConcurrency {
 					tableName := tableNames[i%len(tableNames)]
 					wg.Add(1)
 					go func() {
@@ -1159,13 +1159,13 @@ func populateTables(t *testing.T, tcase *testCase) {
 			t.Run(tableName, func(t *testing.T) {
 				t.Run("populating", func(t *testing.T) {
 					// populate parent, then child, child2, then grandchild
-					for i := 0; i < maxTableRows/2; i++ {
+					for range maxTableRows / 2 {
 						generateInsert(t, tableName, conn)
 					}
-					for i := 0; i < maxTableRows/4; i++ {
+					for range maxTableRows / 4 {
 						generateUpdate(t, tableName, conn)
 					}
-					for i := 0; i < maxTableRows/4; i++ {
+					for range maxTableRows / 4 {
 						generateDelete(t, tableName, conn)
 					}
 				})

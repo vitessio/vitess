@@ -531,7 +531,7 @@ func executeQuery(dbConn *mysql.Conn, query string) (*sqltypes.Result, error) {
 	)
 	retries := 10
 	retryDelay := 1 * time.Second
-	for i := 0; i < retries; i++ {
+	for i := range retries {
 		if i > 0 {
 			// We only audit from 2nd attempt and onwards, otherwise this is just too verbose.
 			log.Infof("Executing query %s (attempt %d of %d)", query, (i + 1), retries)
@@ -551,7 +551,7 @@ func executeQuery(dbConn *mysql.Conn, query string) (*sqltypes.Result, error) {
 func executeMultiQuery(dbConn *mysql.Conn, query string) (err error) {
 	retries := 10
 	retryDelay := 1 * time.Second
-	for i := 0; i < retries; i++ {
+	for i := range retries {
 		if i > 0 {
 			// We only audit from 2nd attempt and onwards, otherwise this is just too verbose.
 			log.Infof("Executing query %s (attempt %d of %d)", query, (i + 1), retries)

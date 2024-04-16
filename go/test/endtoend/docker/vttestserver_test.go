@@ -155,7 +155,7 @@ func TestLargeNumberOfKeyspaces(t *testing.T) {
 		t.Run(image, func(t *testing.T) {
 			var keyspaces []string
 			var numShards []int
-			for i := 0; i < 100; i++ {
+			for i := range 100 {
 				keyspaces = append(keyspaces, fmt.Sprintf("unsharded_ks%d", i))
 				numShards = append(numShards, 1)
 			}

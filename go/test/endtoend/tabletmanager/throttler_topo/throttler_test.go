@@ -517,7 +517,7 @@ func TestCustomQuery(t *testing.T) {
 		sleepDuration := 20 * time.Second
 		var wg sync.WaitGroup
 		t.Run("generate running queries", func(t *testing.T) {
-			for i := 0; i < customThreshold+1; i++ {
+			for i := range customThreshold + 1 {
 				// Generate different Sleep() calls, all at minimum sleepDuration.
 				wg.Add(1)
 				go func(i int) {

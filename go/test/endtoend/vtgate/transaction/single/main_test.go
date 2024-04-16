@@ -226,7 +226,7 @@ func TestNoRecordInTableNotFail(t *testing.T) {
 	utils.AssertMatches(t, conn, `select @@transaction_mode`, `[[VARCHAR("SINGLE")]]`)
 	// Need to run this test multiple times as shards are picked randomly for Impossible query.
 	// After the fix it is not random if a shard session already exists then it reuses that same shard session.
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		utils.Exec(t, conn, `begin`)
 		utils.Exec(t, conn, `INSERT INTO t1(id, txn_id) VALUES (1, "t1")`)
 		utils.Exec(t, conn, `SELECT * FROM t2 WHERE id = 1`)

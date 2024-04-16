@@ -194,7 +194,7 @@ func createMainFuzzer(functionList, harnesses []string) {
 	mainFuzzer.WriteString(fmt.Sprintf("\tfuncOp := int(data[0])%%%d\n", maxOps))
 	mainFuzzer.WriteString("\tdata2 := data[1:]\n")
 	mainFuzzer.WriteString("\tswitch funcOp {\n")
-	for i := 0; i < len(functionList); i++ {
+	for i := range len(functionList) {
 		mainFuzzer.WriteString(fmt.Sprintf("\tcase %d:\n", i))
 		mainFuzzer.WriteString(fmt.Sprintf("\t%s\n", functionList[i]))
 	}
@@ -203,7 +203,7 @@ func createMainFuzzer(functionList, harnesses []string) {
 	mainFuzzer.WriteString("}")
 
 	// add all the internal harnesses
-	for i := 0; i < len(harnesses); i++ {
+	for i := range len(harnesses) {
 		mainFuzzer.WriteString(harnesses[i])
 	}
 

@@ -296,7 +296,7 @@ func TestStreamingRPCStuck(t *testing.T) {
 	// We want the table to have enough rows such that a streaming call returns multiple packets.
 	// Therefore, we insert one row and keep doubling it.
 	utils.Exec(t, vtConn, "insert into customer(email) values('testemail')")
-	for i := 0; i < 15; i++ {
+	for range 15 {
 		// Double the number of rows in customer table.
 		utils.Exec(t, vtConn, "insert into customer (email) select email from customer")
 	}

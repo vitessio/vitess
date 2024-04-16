@@ -34,7 +34,7 @@ type testQuery struct {
 
 func (tq *testQuery) getInsertQuery(rows int) string {
 	var allRows []string
-	for i := 0; i < rows; i++ {
+	for i := range rows {
 		var row []string
 		for _, isInt := range tq.intTyp {
 			if isInt {
@@ -61,7 +61,7 @@ func (tq *testQuery) getUpdateQuery(rows int) string {
 	allRows = append(allRows, strings.Join(row, ","))
 
 	var ids []string
-	for i := 0; i <= rows; i++ {
+	for i := range rows {
 		ids = append(ids, strconv.Itoa(i))
 	}
 	return fmt.Sprintf("update %s set %s where id in (%s)", tq.tableName, strings.Join(allRows, ","), strings.Join(ids, ","))
@@ -69,7 +69,7 @@ func (tq *testQuery) getUpdateQuery(rows int) string {
 
 func (tq *testQuery) getDeleteQuery(rows int) string {
 	var ids []string
-	for i := 0; i <= rows; i++ {
+	for i := range rows {
 		ids = append(ids, strconv.Itoa(i))
 	}
 	return fmt.Sprintf("delete from %s where id in (%s)", tq.tableName, strings.Join(ids, ","))
@@ -78,7 +78,7 @@ func (tq *testQuery) getDeleteQuery(rows int) string {
 func getRandomString(size int) string {
 	var str strings.Builder
 
-	for i := 0; i < size; i++ {
+	for range size {
 		str.WriteByte(byte(rand.IntN(27) + 97))
 	}
 	return str.String()
@@ -99,7 +99,7 @@ func BenchmarkShardedTblNoLookup(b *testing.B) {
 	for _, rows := range []int{1, 10, 100, 500, 1000, 5000, 10000} {
 		insStmt := tq.getInsertQuery(rows)
 		b.Run(fmt.Sprintf("16-shards-%d-rows", rows), func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
+			for range b.N {
 				_ = utils.Exec(b, conn, insStmt)
 			}
 		})
@@ -122,7 +122,7 @@ func BenchmarkShardedTblUpdateIn(b *testing.B) {
 	for _, rows := range []int{1, 10, 100, 500, 1000, 5000, 10000} {
 		updStmt := tq.getUpdateQuery(rows)
 		b.Run(fmt.Sprintf("16-shards-%d-rows", rows), func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
+			for range b.N {
 				_ = utils.Exec(b, conn, updStmt)
 			}
 		})
@@ -140,7 +140,7 @@ func BenchmarkShardedTblDeleteIn(b *testing.B) {
 		_ = utils.Exec(b, conn, insStmt)
 		delStmt := tq.getDeleteQuery(rows)
 		b.Run(fmt.Sprintf("16-shards-%d-rows", rows), func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
+			for range b.N {
 				_ = utils.Exec(b, conn, delStmt)
 			}
 		})

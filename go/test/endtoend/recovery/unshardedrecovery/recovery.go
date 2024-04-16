@@ -114,7 +114,7 @@ func TestMainImpl(m *testing.M) {
 		}
 
 		var mysqlProcs []*exec.Cmd
-		for i := 0; i < 4; i++ {
+		for i := range 4 {
 			tabletType := "replica"
 			if i == 0 {
 				tabletType = "primary"

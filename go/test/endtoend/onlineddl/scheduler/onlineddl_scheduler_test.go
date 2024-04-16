@@ -1698,13 +1698,13 @@ func testDeclarative(t *testing.T) {
 		_, err = conn.ExecuteFetch(truncateStatement, 1000, true)
 		require.Nil(t, err)
 
-		for i := 0; i < maxTableRows/2; i++ {
+		for range maxTableRows / 2 {
 			generateInsert(t, conn)
 		}
-		for i := 0; i < maxTableRows/4; i++ {
+		for range maxTableRows / 4 {
 			generateUpdate(t, conn)
 		}
-		for i := 0; i < maxTableRows/4; i++ {
+		for range maxTableRows / 4 {
 			generateDelete(t, conn)
 		}
 	}

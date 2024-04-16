@@ -149,7 +149,7 @@ func TestHealthCheckCacheWithTabletChurn(t *testing.T) {
 	qr, _ := vtgateConn.ExecuteFetch(query, 100, true)
 	assert.Equal(t, expectedTabletHCcacheEntries, len(qr.Rows), "wrong number of tablet records in healthcheck cache, expected %d but had %d. Results: %v", expectedTabletHCcacheEntries, len(qr.Rows), qr.Rows)
 
-	for i := 0; i < tries; i++ {
+	for range tries {
 		tablet := addTablet(t, churnTabletUID, churnTabletType)
 		expectedTabletHCcacheEntries++
 

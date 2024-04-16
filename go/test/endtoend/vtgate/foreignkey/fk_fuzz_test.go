@@ -261,7 +261,7 @@ func (fz *fuzzer) start(t *testing.T, keyspace string) {
 	// We mark the fuzzer thread to be running now.
 	fz.shouldStop.Store(false)
 	fz.wg.Add(fz.concurrency)
-	for i := 0; i < fz.concurrency; i++ {
+	for i := range fz.concurrency {
 		fuzzerThreadId := i
 		go func() {
 			fz.runFuzzerThread(t, keyspace, fuzzerThreadId)
@@ -776,7 +776,7 @@ func BenchmarkFkFuzz(b *testing.B) {
 	numQueries := 1000
 	// Wait for schema-tracking to be complete.
 	waitForSchemaTrackingForFkTables(b)
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		queries, mysqlConn, vtConn, vtUnmanagedConn := setupBenchmark(b, maxValForId, maxValForCol, insertShare, deleteShare, updateShare, numQueries)
 
 		// Now we run the benchmarks!

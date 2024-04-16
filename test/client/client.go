@@ -53,7 +53,7 @@ func main() {
 
 	// Insert some messages on random pages.
 	fmt.Println("Inserting into primary...")
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		tx, err := db.Begin()
 		if err != nil {
 			fmt.Printf("begin failed: %v\n", err)

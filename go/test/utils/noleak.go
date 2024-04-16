@@ -85,7 +85,7 @@ func ensureNoGoroutines() error {
 	}
 
 	var err error
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		err = goleak.Find(ignored...)
 		if err == nil {
 			return nil

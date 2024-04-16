@@ -74,7 +74,7 @@ func TestQueryTimeoutWithTables(t *testing.T) {
 
 	// unsharded
 	utils.Exec(t, mcmp.VtConn, "insert /*vt+ QUERY_TIMEOUT_MS=1000 */ into uks.unsharded(id1) values (1),(2),(3),(4),(5)")
-	for i := 0; i < 12; i++ {
+	for range 12 {
 		utils.Exec(t, mcmp.VtConn, "insert /*vt+ QUERY_TIMEOUT_MS=2000 */ into uks.unsharded(id1) select id1+5 from uks.unsharded")
 	}
 

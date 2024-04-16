@@ -44,7 +44,7 @@ func TestTransactionsWithGRPCAPI(t *testing.T) {
 
 	vtSession := vtgateConn.Session(keyspaceName, nil)
 	workload := []string{"OLTP", "OLAP"}
-	for i := 0; i < 4; i++ { // running all switch combinations.
+	for i := range 4 { // running all switch combinations.
 		index := i % len(workload)
 		_, session, err := exec(ctx, vtSession, fmt.Sprintf("set workload = %s", workload[index]), nil)
 		require.NoError(t, err)

@@ -243,7 +243,7 @@ func TestSchemaChange(t *testing.T) {
 		assert.Equal(t, 1, len(clusterInstance.Keyspaces[0].Shards))
 		testWithInitialSchema(t)
 	})
-	for i := 0; i < countIterations; i++ {
+	for i := range countIterations {
 		// This first tests the general functionality of initializing the table with data,
 		// no concurrency involved. Just counting.
 		testName := fmt.Sprintf("init table %d/%d", (i + 1), countIterations)
@@ -252,7 +252,7 @@ func TestSchemaChange(t *testing.T) {
 			testSelectTableMetrics(t)
 		})
 	}
-	for i := 0; i < countIterations; i++ {
+	for i := range countIterations {
 		// This tests running a workload on the table, then comparing expected metrics with
 		// actual table metrics. All this without any ALTER TABLE: this is to validate
 		// that our testing/metrics logic is sound in the first place.
@@ -284,7 +284,7 @@ func TestSchemaChange(t *testing.T) {
 		testSelectTableMetrics(t)
 	})
 
-	for i := 0; i < countIterations; i++ {
+	for i := range countIterations {
 		// Finally, this is the real test:
 		// We populate a table, and begin a concurrent workload (this is the "mini stress")
 		// We then ALTER TABLE via vreplication.
@@ -546,7 +546,7 @@ func runMultipleConnections(ctx context.Context, t *testing.T) {
 
 	log.Infof("Running multiple connections: maxConcurrency=%v, sleep interval=%v", maxConcurrency, sleepInterval)
 	var wg sync.WaitGroup
-	for i := 0; i < maxConcurrency; i++ {
+	for range maxConcurrency {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -579,13 +579,13 @@ func initTable(t *testing.T) {
 	_, err = conn.ExecuteFetch(truncateStatement, 1000, true)
 	require.Nil(t, err)
 
-	for i := 0; i < maxTableRows/2; i++ {
+	for range maxTableRows / 2 {
 		generateInsert(t, conn)
 	}
-	for i := 0; i < maxTableRows/4; i++ {
+	for range maxTableRows / 4 {
 		generateUpdate(t, conn)
 	}
-	for i := 0; i < maxTableRows/4; i++ {
+	for range maxTableRows / 4 {
 		generateDelete(t, conn)
 	}
 }

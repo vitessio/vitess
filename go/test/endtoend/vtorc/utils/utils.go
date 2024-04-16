@@ -118,13 +118,13 @@ func createVttablets(clusterInstance *cluster.LocalProcessCluster, cellInfos []*
 	// creating tablets by hand instead of using StartKeyspace because we don't want to call InitShardPrimary
 	var tablets []*cluster.Vttablet
 	for _, cellInfo := range cellInfos {
-		for i := 0; i < cellInfo.NumReplicas; i++ {
+		for range cellInfo.NumReplicas {
 			vttabletInstance := clusterInstance.NewVttabletInstance("replica", cellInfo.UIDBase, cellInfo.CellName)
 			cellInfo.UIDBase++
 			tablets = append(tablets, vttabletInstance)
 			cellInfo.ReplicaTablets = append(cellInfo.ReplicaTablets, vttabletInstance)
 		}
-		for i := 0; i < cellInfo.NumRdonly; i++ {
+		for range cellInfo.NumRdonly {
 			vttabletInstance := clusterInstance.NewVttabletInstance("rdonly", cellInfo.UIDBase, cellInfo.CellName)
 			cellInfo.UIDBase++
 			tablets = append(tablets, vttabletInstance)
@@ -234,7 +234,7 @@ func resetShardPrimary(ts *topo.Server) (err error) {
 func StartVTOrcs(t *testing.T, clusterInfo *VTOrcClusterInfo, orcExtraArgs []string, config cluster.VTOrcConfiguration, count int) {
 	t.Helper()
 	// Start vtorc
-	for i := 0; i < count; i++ {
+	for range count {
 		vtorcProcess := clusterInfo.ClusterInstance.NewVTOrcProcess(config)
 		vtorcProcess.ExtraArgs = orcExtraArgs
 		err := vtorcProcess.Setup()
@@ -763,7 +763,7 @@ func SetupNewClusterSemiSync(t *testing.T) *VTOrcClusterInfo {
 	err = clusterInstance.TopoProcess.ManageTopoDir("mkdir", "/vitess/"+Cell1)
 	require.NoError(t, err, "Error managing topo: %v", err)
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		tablet := clusterInstance.NewVttabletInstance("replica", 100+i, Cell1)
 		tablets = append(tablets, tablet)
 	}
@@ -836,7 +836,7 @@ func AddSemiSyncKeyspace(t *testing.T, clusterInfo *VTOrcClusterInfo) {
 	keyspaceSemiSyncName := "ks2"
 	keyspace := &cluster.Keyspace{Name: keyspaceSemiSyncName}
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		tablet := clusterInfo.ClusterInstance.NewVttabletInstance("replica", 300+i, Cell1)
 		tablets = append(tablets, tablet)
 	}

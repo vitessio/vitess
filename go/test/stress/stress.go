@@ -236,7 +236,7 @@ func (s *Stresser) Start() *Stresser {
 
 func generateNewTables(prefix string, nb int) []*table {
 	tbls := make([]*table, 0, nb)
-	for i := 0; i < nb; i++ {
+	for i := range nb {
 		tbls = append(tbls, &table{
 			name: fmt.Sprintf("%s%d", prefix, i),
 		})
@@ -263,13 +263,13 @@ func (s *Stresser) startClients() {
 	resultCh := make(chan result, maxClient)
 
 	// Start the concurrent clients.
-	for i := 0; i < maxClient; i++ {
+	for range maxClient {
 		go s.startStressClient(resultCh)
 	}
 
 	// Wait for the different clients to publish their results.
 	perClientResults := make([]result, 0, maxClient)
-	for i := 0; i < maxClient; i++ {
+	for range maxClient {
 		newResult := <-resultCh
 		perClientResults = append(perClientResults, newResult)
 	}

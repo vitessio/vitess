@@ -376,7 +376,7 @@ func waitForWorkflowState(t *testing.T, vc *VitessCluster, ksWorkflow string, wa
 						// we need to wait for all streams to have the desired state
 						state = attributeValue.Get("State").String()
 						if state == wantState {
-							for i := 0; i < len(fieldEqualityChecks); i++ {
+							for i := range len(fieldEqualityChecks) {
 								if kvparts := strings.Split(fieldEqualityChecks[i], "=="); len(kvparts) == 2 {
 									key := kvparts[0]
 									val := kvparts[1]
@@ -702,7 +702,7 @@ func getShardRoutingRules(t *testing.T) string {
 		return shardI < shardJ
 	})
 	sb := strings.Builder{}
-	for i := 0; i < len(rules); i++ {
+	for i := range len(rules) {
 		if i > 0 {
 			sb.WriteString(",")
 		}

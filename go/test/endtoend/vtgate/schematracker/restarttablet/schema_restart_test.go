@@ -147,7 +147,7 @@ func TestVSchemaTrackerKeyspaceReInit(t *testing.T) {
 	assert.NotNil(t, originalResults)
 
 	// restart the primary tablet so that the vschema gets reloaded for the keyspace
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		err := primaryTablet.VttabletProcess.TearDownWithTimeout(30 * time.Second)
 		require.NoError(t, err)
 		err = primaryTablet.VttabletProcess.Setup()

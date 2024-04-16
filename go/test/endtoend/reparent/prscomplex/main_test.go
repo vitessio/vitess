@@ -131,7 +131,7 @@ func TestAcquireSameConnID(t *testing.T) {
 	totalErrCount := 0
 	// run through 100 times to acquire new connection, this might override the original connection id.
 	var conn2 *mysql.Conn
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		conn2, err = mysql.Connect(ctx, &vtParams)
 		require.NoError(t, err)
 
