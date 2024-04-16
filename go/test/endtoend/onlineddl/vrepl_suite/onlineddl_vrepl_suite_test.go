@@ -59,7 +59,7 @@ var (
 )
 
 const (
-	testDataPath = "testdata"
+	testDataPath = "/tmp/onlineddltests"
 )
 
 func TestMain(m *testing.M) {

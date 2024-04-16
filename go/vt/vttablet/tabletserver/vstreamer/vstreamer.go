@@ -963,6 +963,12 @@ nextrow:
 }
 
 func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *streamerPlan, rows mysql.Rows) ([]*binlogdatapb.VEvent, error) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Errorf("DEBUG: caught panic: %v", r)
+			log.Flush()
+		}
+	}()
 	rowChanges := make([]*binlogdatapb.RowChange, 0, len(rows.Rows))
 	for _, row := range rows.Rows {
 		beforeOK, beforeValues, _, err := vs.extractRowAndFilter(plan, row.Identify, rows.IdentifyColumns, row.NullIdentifyColumns)
@@ -1035,6 +1041,12 @@ func (vs *vstreamer) rebuildPlans() error {
 //   - data values, array of one value per column
 //   - true, if the row image was partial (i.e. binlog_row_image=noblob and dml doesn't update one or more blob/text columns)
 func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataColumns, nullColumns mysql.Bitmap) (bool, []sqltypes.Value, bool, error) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Errorf("DEBUG: caught panic: %v", r)
+			log.Flush()
+		}
+	}()
 	if len(data) == 0 {
 		return false, nil, false, nil
 	}
@@ -1064,7 +1076,7 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 		}
 		pos += l
 
-		// Convert the ordinal values in the binlog event for SET and ENUM fields into their
+		// Convert the integer values in the binlog event for SET and ENUM fields into their
 		// string representations.
 		if plan.Table.Fields[colNum].Type == querypb.Type_ENUM {
 			ordinalValue, err := value.ToInt()
@@ -1078,31 +1090,47 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 			log.Errorf("DEBUG: extractRowAndFilter: mapped string value for col %d: %v", colNum, strVal)
 		}
 		if plan.Table.Fields[colNum].Type == querypb.Type_SET {
+			log.Errorf("DEBUG: column %s is a SET column", plan.Table.Name)
 			val := bytes.Buffer{}
 			// A SET column can have 64 unique values: https://dev.mysql.com/doc/refman/en/set.html
 			// For this reason the binlog event contains the values encoded as an unsigned 64-bit
-			// integer. This value can then be converted to a binary / base 2 integer where it
-			// becomes a bitmap of the values specified.
+			// integer. When examining the bits then, in reverse order as this is a little-endian
+			// value, it becomes a bitmap of the values specified.
 			iv, err := value.ToUint64()
 			if err != nil {
 				log.Errorf("extractRowAndFilter: %s, table: %s, colNum: %d, fields: %+v, current values: %+v",
 					err, plan.Table.Name, colNum, plan.Table.Fields, values)
 				return false, nil, false, err
 			}
-			// Convert the uint64 to bytes.
 			bv := make([]byte, 8)
-			binary.LittleEndian.PutUint64(bv, iv)
-			numVals := len(plan.EnumValuesMap[colNum])
-			for i := len(bv) - 1; i >= 0; i-- { // Examine each byte
-				for j := 7; j >= 0; j-- { // And each bit in the byte
-					bm := byte(1 << uint(j)) // Bit mask
+			// Flip the byte order so that the bytes and bits are again both in reverse order and are both
+			// examined in reverse order or right to left. This is all done so that we generate the same
+			// ordered sequence in the vevent as the original SET values in the SQL statement and resulting
+			// row event.
+			binary.BigEndian.PutUint64(bv, iv)
+			log.Errorf("DEBUG: iv: %08b, bv: %08b (len %d)", iv, bv, len(bv))
+			idx := 1
+			for i := 7; i >= 0; i-- { // Examine each byte in reverse order
+				if bv[i] == 0x0 { // Skip null bytes
+					log.Errorf("DEBUG: skipping null byte at position %d", i)
+					idx += 8
+					continue
+				}
+				log.Errorf("DEBUG: bits at byte position %d: %08b", i, bv[i])
+				for j := 0; j < 8; j++ {
+					// Use a bit mask. We're looking at each bit in little endian order, so reverse order
+					// or right to left.
+					bm := byte(1 << uint8(j))
 					if bv[i]&bm > 0 {
-						strVal := plan.EnumValuesMap[colNum][numVals-(i+j)]
+						log.Errorf("DEBUG: bit at position %d is set", idx)
+						strVal := plan.EnumValuesMap[colNum][idx]
 						if val.Len() > 0 {
 							val.WriteByte(',')
 						}
 						val.WriteString(strVal)
+						log.Errorf("DEBUG: extractRowAndFilter: mapped string value for col %s: %v", plan.Table.Name, strVal)
 					}
+					idx++
 				}
 			}
 			value = sqltypes.MakeTrusted(plan.Table.Fields[colNum].Type, val.Bytes())
