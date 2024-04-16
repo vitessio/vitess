@@ -107,7 +107,7 @@ func saveKey(key crypto.PrivateKey, keyPath string) error {
 	return os.WriteFile(keyPath, out.Bytes(), permissions)
 }
 
-// pubkey is an interface to get a public key from a private key
+// pubKey is an interface to get a public key from a private key
 // The Go specification for a private key defines that this always
 // exists, although there's no interface for it since it would break
 // backwards compatibility. See https://pkg.go.dev/crypto#PrivateKey

@@ -89,7 +89,7 @@ type vcopierCopyTaskResult struct {
 	state     vcopierCopyTaskState
 }
 
-// vcopierCopyTaskHooks contains callback functions to be triggered when a copy
+// vcopierCopyTaskResultHooks contains callback functions to be triggered when a copy
 // reaches a "done" state (= canceled, completed, failed).
 type vcopierCopyTaskResultHooks struct {
 	fns []func(context.Context, *vcopierCopyTaskResult)

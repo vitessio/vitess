@@ -4,7 +4,7 @@ import (
 	"math"
 )
 
-// doorkeeper is a small bloom-filter-based cache admission policy
+// Bloomfilter is a small bloom-filter-based cache admission policy
 type Bloomfilter struct {
 	Filter            bitvector // our filter bit vector
 	M                 uint32    // size of bit vector in bits

@@ -559,7 +559,7 @@ func validateField(t *testing.T, field *querypb.Field, name string, _type queryp
 	assert.Equal(t, _type, field.Type)
 }
 
-// MsgStream handles all meta required for grpc connection with vtgate.
+// VTGateStream handles all meta required for grpc connection with vtgate.
 type VTGateStream struct {
 	ctx      context.Context
 	host     string
