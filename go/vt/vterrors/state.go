@@ -49,7 +49,6 @@ const (
 	WrongArguments
 	BadNullError
 	InvalidGroupFuncUse
-	AggregateMustPushDown
 
 	// failed precondition
 	NoDB

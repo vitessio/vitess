@@ -139,7 +139,8 @@ func addColumnsToInput(ctx *plancontext.PlanningContext, root Operator) Operator
 		for _, aggr := range aggrOp.Aggregations {
 			if aggr.OpCode == opcode.AggregateUDF {
 				// we don't support UDFs in aggregation if it's still above a route
-				panic(vterrors.VT03033(sqlparser.String(aggr.Original.Expr)))
+				message := fmt.Sprintf("Aggregate UDF %s must be pushed down to MySQL", sqlparser.String(aggr.Original.Expr))
+				panic(vterrors.VT12001(message))
 			}
 		}
 		return in, NoRewrite
@@ -154,8 +155,8 @@ func addColumnsToInput(ctx *plancontext.PlanningContext, root Operator) Operator
 	return TopDown(root, TableID, visitor, stopAtRoute)
 }
 
-// pullDistinctFromUNION will pull out the distinct from a union operator
-func pullDistinctFromUNION(_ *plancontext.PlanningContext, root Operator) Operator {
+// isolateDistinctFromUnion will pull out the distinct from a union operator
+func isolateDistinctFromUnion(_ *plancontext.PlanningContext, root Operator) Operator {
 	visitor := func(in Operator, _ semantics.TableSet, isRoot bool) (Operator, *ApplyResult) {
 		union, ok := in.(*Union)
 		if !ok || !union.distinct {

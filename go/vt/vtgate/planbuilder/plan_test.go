@@ -586,9 +586,7 @@ func TestOtherPlanningFromFile(t *testing.T) {
 
 func loadSchema(t testing.TB, filename string, setCollation bool) *vindexes.VSchema {
 	formal, err := vindexes.LoadFormal(locateFile(filename))
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	vschema := vindexes.BuildVSchema(formal, sqlparser.NewTestParser())
 	require.NoError(t, err)
 	for _, ks := range vschema.Keyspaces {

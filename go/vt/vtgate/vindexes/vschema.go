@@ -425,7 +425,7 @@ func (vschema *VSchema) AddView(ksname, viewName, query string, parser *sqlparse
 	return nil
 }
 
-// AddTable adds a table to an existing keyspace in the VSchema.
+// AddUDF adds a UDF to an existing keyspace in the VSchema.
 // It's only used from tests.
 func (vschema *VSchema) AddUDF(ksname, udfName string) error {
 	ks, ok := vschema.Keyspaces[ksname]
