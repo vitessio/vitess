@@ -12125,7 +12125,7 @@ yydefault:
 				cols = append(cols, updateList.Name.Name)
 				vals = append(vals, updateList.Expr)
 			}
-			yyVAL.statement = &Insert{Action: yyDollar[2].str, Comments: Comments(yyDollar[3].bytes2), Ignore: yyDollar[4].str, Table: yyDollar[5].tableName, Partitions: yyDollar[6].partitions, Columns: cols, Rows: AliasedValues{Values: Values{vals}}, OnDup: OnDup(yyDollar[9].assignExprs), With: yyDollar[1].with}
+			yyVAL.statement = &Insert{Action: yyDollar[2].str, Comments: Comments(yyDollar[3].bytes2), Ignore: yyDollar[4].str, Table: yyDollar[5].tableName, Partitions: yyDollar[6].partitions, Columns: cols, Rows: &AliasedValues{Values: Values{vals}}, OnDup: OnDup(yyDollar[9].assignExprs), With: yyDollar[1].with}
 		}
 	case 80:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -21007,8 +21007,8 @@ yydefault:
 //line sql.y:7847
 		{
 			yyVAL.ins = yyDollar[1].ins
-			// Rows is guarenteed to be an AliasedValues here.
-			rows := yyVAL.ins.Rows.(AliasedValues)
+			// Rows is guarenteed to be an *AliasedValues here.
+			rows := yyVAL.ins.Rows.(*AliasedValues)
 			rows.As = yyDollar[3].tableIdent
 			if yyDollar[4].columns != nil {
 				rows.Columns = yyDollar[4].columns
@@ -21063,13 +21063,13 @@ yydefault:
 		yyDollar = yyS[yypt-4 : yypt+1]
 //line sql.y:7901
 		{
-			yyVAL.ins = &Insert{Columns: []ColIdent{}, Rows: AliasedValues{Values: yyDollar[4].values}}
+			yyVAL.ins = &Insert{Columns: []ColIdent{}, Rows: &AliasedValues{Values: yyDollar[4].values}}
 		}
 	case 1620:
 		yyDollar = yyS[yypt-5 : yypt+1]
 //line sql.y:7906
 		{
-			yyVAL.ins = &Insert{Columns: yyDollar[2].columns, Rows: AliasedValues{Values: yyDollar[5].values}}
+			yyVAL.ins = &Insert{Columns: yyDollar[2].columns, Rows: &AliasedValues{Values: yyDollar[5].values}}
 		}
 	case 1623:
 		yyDollar = yyS[yypt-0 : yypt+1]

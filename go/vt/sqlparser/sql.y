@@ -943,7 +943,7 @@ insert_statement:
       cols = append(cols, updateList.Name.Name)
       vals = append(vals, updateList.Expr)
     }
-    $$ = &Insert{Action: $2, Comments: Comments($3), Ignore: $4, Table: $5, Partitions: $6, Columns: cols, Rows: AliasedValues{Values: Values{vals}}, OnDup: OnDup($9), With: $1}
+    $$ = &Insert{Action: $2, Comments: Comments($3), Ignore: $4, Table: $5, Partitions: $6, Columns: cols, Rows: &AliasedValues{Values: Values{vals}}, OnDup: OnDup($9), With: $1}
   }
 
 insert_or_replace:
@@ -7846,8 +7846,8 @@ insert_data_alias:
 | insert_data_values as_opt table_alias column_list_opt
   {
     $$ = $1
-    // Rows is guarenteed to be an AliasedValues here.
-    rows := $$.Rows.(AliasedValues)
+    // Rows is guarenteed to be an *AliasedValues here.
+    rows := $$.Rows.(*AliasedValues)
     rows.As = $3
     if $4 != nil {
         rows.Columns = $4
@@ -7899,12 +7899,12 @@ insert_data_values:
   }
 | openb closeb value_or_values tuple_list
   {
-    $$ = &Insert{Columns: []ColIdent{}, Rows: AliasedValues{Values: $4}}
+    $$ = &Insert{Columns: []ColIdent{}, Rows: &AliasedValues{Values: $4}}
   }
 
 | openb ins_column_list closeb value_or_values tuple_list
   {
-    $$ = &Insert{Columns: $2, Rows: AliasedValues{Values: $5}}
+    $$ = &Insert{Columns: $2, Rows: &AliasedValues{Values: $5}}
   }
 
 value_or_values:
