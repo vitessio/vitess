@@ -18,11 +18,13 @@ package throttle
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
 
@@ -35,6 +37,7 @@ var throttleInit sync.Once
 
 func initThrottleTicker() {
 	throttleInit.Do(func() {
+		throttleTicks = 1 // above zero so that `lastSuccessfulThrottle` is initially stale
 		go func() {
 			tick := time.NewTicker(throttleCheckDuration)
 			defer tick.Stop()
@@ -45,6 +48,10 @@ func initThrottleTicker() {
 	})
 }
 
+func lastSuccessfulThrottleKey(appName throttlerapp.Name, metricNames base.MetricNames) string {
+	return fmt.Sprintf("%s:%v", appName, metricNames)
+}
+
 // Client construct is used by apps who wish to consult with a throttler. It encapsulates the check/throttling/backoff logic
 type Client struct {
 	throttler *Throttler
@@ -53,7 +60,10 @@ type Client struct {
 	flags     CheckFlags
 
 	lastSuccessfulThrottleMu sync.Mutex
-	lastSuccessfulThrottle   int64
+	// lastSuccessfulThrottle records the latest tick (value of `throttleTicks`) when the throttler was
+	// satisfied for a given metric. This makes it possible to potentially skip a throttler check.
+	// key is a combination of the app and the metric names
+	lastSuccessfulThrottle map[string]int64
 }
 
 // NewProductionClient creates a client suitable for foreground/production jobs, which have normal priority.
@@ -66,6 +76,7 @@ func NewProductionClient(throttler *Throttler, appName throttlerapp.Name, checkT
 		flags: CheckFlags{
 			LowPriority: false,
 		},
+		lastSuccessfulThrottle: make(map[string]int64),
 	}
 }
 
@@ -80,7 +91,15 @@ func NewBackgroundClient(throttler *Throttler, appName throttlerapp.Name, checkT
 		flags: CheckFlags{
 			LowPriority: true,
 		},
+		lastSuccessfulThrottle: make(map[string]int64),
 	}
+}
+
+// clearSuccessfulResultsCache clears lastSuccessfulThrottleMu, so that the next check will be fresh.
+func (c *Client) clearSuccessfulResultsCache() {
+	c.lastSuccessfulThrottleMu.Lock()
+	defer c.lastSuccessfulThrottleMu.Unlock()
+	c.lastSuccessfulThrottle = make(map[string]int64)
 }
 
 // ThrottleCheckOK checks the throttler, and returns 'true' when the throttler is satisfied.
@@ -97,22 +116,24 @@ func (c *Client) ThrottleCheckOK(ctx context.Context, overrideAppName throttlera
 		// no throttler
 		return true
 	}
-	c.lastSuccessfulThrottleMu.Lock()
-	defer c.lastSuccessfulThrottleMu.Unlock()
-	if c.lastSuccessfulThrottle >= atomic.LoadInt64(&throttleTicks) {
-		// if last check was OK just very recently there is no need to check again
-		return true
-	}
-	// It's time to run a throttler check
 	checkApp := c.appName
 	if overrideAppName != "" {
 		checkApp = overrideAppName
 	}
-	checkResult := c.throttler.CheckByType(ctx, checkApp.String(), nil, "", &c.flags, c.checkType)
+	metricNames := base.MetricNames{c.throttler.check.throttler.metricNameUsedAsDefault()} // TODO(shlomi): populate metric names
+	key := lastSuccessfulThrottleKey(checkApp, metricNames)
+	c.lastSuccessfulThrottleMu.Lock()
+	defer c.lastSuccessfulThrottleMu.Unlock()
+	if c.lastSuccessfulThrottle[key] >= atomic.LoadInt64(&throttleTicks) {
+		// if last check was OK just very recently there is no need to check again
+		return true
+	}
+	// It's time to run a throttler check
+	checkResult := c.throttler.CheckByType(ctx, checkApp.String(), metricNames, "", &c.flags, c.checkType)
 	if checkResult.StatusCode != http.StatusOK {
 		return false
 	}
-	c.lastSuccessfulThrottle = atomic.LoadInt64(&throttleTicks)
+	c.lastSuccessfulThrottle[key] = atomic.LoadInt64(&throttleTicks)
 	return true
 
 }

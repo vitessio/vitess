@@ -244,6 +244,7 @@ func newTestThrottler() *Throttler {
 		}
 		return selfMetrics
 	}
+	throttler.ThrottleApp(throttlerapp.TestingAlwaysThrottlerName.String(), time.Now().Add(time.Hour*24*365*10), DefaultThrottleRatio, false)
 
 	return throttler
 }
@@ -522,7 +523,44 @@ func TestProbesWhileOperating(t *testing.T) {
 			assert.Truef(t, ok, "%+v", uniqueNames)
 			// And that's the only app we expect to see.
 			assert.Equalf(t, 1, len(uniqueNames), "%+v", uniqueNames)
+
+			t.Run("client, shard", func(t *testing.T) {
+				client := NewProductionClient(throttler, "test", ThrottleCheckPrimaryWrite)
+				t.Run("threshold exceeded", func(t *testing.T) {
+					<-runSerialFunction(t, ctx, throttler, func(ctx context.Context) {
+						throttler.refreshMySQLInventory(ctx)
+					})
+					{
+						checkOK := client.ThrottleCheckOK(ctx, "")
+						assert.False(t, checkOK) // we expect threshold exceeded
+					}
+				})
+
+				savedThreshold := throttler.MetricsThreshold.Load()
+				t.Run("adjust threshold", func(t *testing.T) {
+					throttler.MetricsThreshold.Store(math.Float64bits(0.95))
+					<-runSerialFunction(t, ctx, throttler, func(ctx context.Context) {
+						throttler.refreshMySQLInventory(ctx)
+					})
+					{
+						checkOK := client.ThrottleCheckOK(ctx, "")
+						assert.True(t, checkOK)
+					}
+				})
+				t.Run("restore threshold", func(t *testing.T) {
+					throttler.MetricsThreshold.Store(savedThreshold)
+					<-runSerialFunction(t, ctx, throttler, func(ctx context.Context) {
+						throttler.refreshMySQLInventory(ctx)
+					})
+					client.clearSuccessfulResultsCache() // ensure we don't read the successful result from the test above
+					{
+						checkOK := client.ThrottleCheckOK(ctx, "")
+						assert.False(t, checkOK)
+					}
+				})
+			})
 		})
+
 		t.Run("aggregated with custom query", func(t *testing.T) {
 			// The query itself isn't important here, since we're emulating. What's important is that it's not empty.
 			// Hence, the throttler will choose to set the "custom" metric results in the aggregated "default" metrics,
@@ -575,6 +613,52 @@ func TestProbesWhileOperating(t *testing.T) {
 					assert.Failf(t, "unknown storeName", "storeName=%v", storeName)
 				}
 			}
+
+			t.Run("client, shard", func(t *testing.T) {
+				client := NewProductionClient(throttler, "test", ThrottleCheckPrimaryWrite)
+				t.Run("threshold exceeded", func(t *testing.T) {
+					<-runSerialFunction(t, ctx, throttler, func(ctx context.Context) {
+						throttler.refreshMySQLInventory(ctx)
+					})
+					{
+						checkOK := client.ThrottleCheckOK(ctx, "")
+						assert.False(t, checkOK) // we expect threshold exceeded
+					}
+				})
+
+				savedThreshold := throttler.MetricsThreshold.Load()
+				t.Run("adjust threshold, too low", func(t *testing.T) {
+					throttler.MetricsThreshold.Store(math.Float64bits(0.95))
+					<-runSerialFunction(t, ctx, throttler, func(ctx context.Context) {
+						throttler.refreshMySQLInventory(ctx)
+					})
+					{
+						checkOK := client.ThrottleCheckOK(ctx, "")
+						assert.False(t, checkOK) // 0.95 still too low for custom query
+					}
+				})
+				t.Run("adjust threshold", func(t *testing.T) {
+					throttler.MetricsThreshold.Store(math.Float64bits(15))
+					<-runSerialFunction(t, ctx, throttler, func(ctx context.Context) {
+						throttler.refreshMySQLInventory(ctx)
+					})
+					{
+						checkOK := client.ThrottleCheckOK(ctx, "")
+						assert.True(t, checkOK)
+					}
+				})
+				t.Run("restore threshold", func(t *testing.T) {
+					throttler.MetricsThreshold.Store(savedThreshold)
+					<-runSerialFunction(t, ctx, throttler, func(ctx context.Context) {
+						throttler.refreshMySQLInventory(ctx)
+					})
+					client.clearSuccessfulResultsCache() // ensure we don't read the successful result from the test above
+					{
+						checkOK := client.ThrottleCheckOK(ctx, "")
+						assert.False(t, checkOK)
+					}
+				})
+			})
 		})
 		cancel() // end test early
 	})
@@ -764,84 +848,105 @@ func TestReplica(t *testing.T) {
 		checkResult := throttler.CheckByType(ctx, throttlerapp.VitessName.String(), nil, "", flags, ThrottleCheckSelf)
 		assert.NotNil(t, checkResult)
 		go func() {
-			select {
-			case <-ctx.Done():
-				require.FailNow(t, "context expired before testing completed")
-			case <-time.After(time.Second):
-				assert.Empty(t, tmClient.AppNames())
-			}
-			checkResult := throttler.CheckByType(ctx, throttlerapp.OnlineDDLName.String(), nil, "", flags, ThrottleCheckSelf)
-			assert.NotNil(t, checkResult)
-			select {
-			case <-ctx.Done():
-				require.FailNow(t, "context expired before testing completed")
-			case <-time.After(time.Second):
-				appNames := tmClient.AppNames()
-				assert.Equal(t, []string{throttlerapp.ThrottlerStimulatorName.String()}, appNames)
-			}
-			checkResult = throttler.CheckByType(ctx, throttlerapp.OnlineDDLName.String(), nil, "", flags, ThrottleCheckSelf)
-			assert.NotNil(t, checkResult)
-			select {
-			case <-ctx.Done():
-				require.FailNow(t, "context expired before testing completed")
-			case <-time.After(time.Second):
-				// Due to stimulation rate limiting, we shouldn't see a 2nd CheckThrottler request.
-				appNames := tmClient.AppNames()
-				assert.Equal(t, []string{throttlerapp.ThrottlerStimulatorName.String()}, appNames)
-			}
-
-			// See which metrics are available
-			checkResult = throttler.CheckByType(ctx, throttlerapp.VitessName.String(), base.KnownMetricNames, "", flags, ThrottleCheckSelf)
-			require.NotNil(t, checkResult)
-			assert.Equal(t, len(base.KnownMetricNames), len(checkResult.Metrics))
-
-			for metricName, metricResult := range checkResult.Metrics {
-				val := metricResult.Value
-				threshold := metricResult.Threshold
-				storeName := selfStoreName
-				switch base.MetricName(metricName) {
-				case base.DefaultMetricName:
-					assert.NoError(t, metricResult.Error, "metricName=%v, value=%v, threshold=%v", metricName, metricResult.Value, metricResult.Threshold)
-					assert.Equalf(t, float64(0.3), val, "storeName=%v, metricName=%v", storeName, metricName) // same value as "lag"
-					assert.Equalf(t, float64(0.75), threshold, "storeName=%v, metricName=%v", storeName, metricName)
-				case base.LagMetricName:
-					assert.NoError(t, metricResult.Error, "metricName=%v, value=%v, threshold=%v", metricName, metricResult.Value, metricResult.Threshold)
-					assert.Equalf(t, float64(0.3), val, "storeName=%v, metricName=%v", storeName, metricName)
-					assert.Equalf(t, float64(0.75), threshold, "storeName=%v, metricName=%v", storeName, metricName) // default threshold
-				case base.ThreadsRunningMetricName:
-					assert.NoError(t, metricResult.Error, "metricName=%v, value=%v, threshold=%v", metricName, metricResult.Value, metricResult.Threshold)
-					assert.Equalf(t, float64(26), val, "storeName=%v, metricName=%v", storeName, metricName)
-					assert.Equalf(t, float64(100), threshold, "storeName=%v, metricName=%v", storeName, metricName)
-				case base.CustomMetricName:
-					assert.ErrorIs(t, metricResult.Error, base.ErrThresholdExceeded)
-					assert.Equalf(t, float64(0), threshold, "storeName=%v, metricName=%v", storeName, metricName)
-				case base.LoadAvgMetricName:
-					assert.ErrorIs(t, metricResult.Error, base.ErrThresholdExceeded)
-					assert.Equalf(t, float64(1), threshold, "storeName=%v, metricName=%v", storeName, metricName)
+			t.Run("checks", func(t *testing.T) {
+				select {
+				case <-ctx.Done():
+					require.FailNow(t, "context expired before testing completed")
+				case <-time.After(time.Second):
+					assert.Empty(t, tmClient.AppNames())
 				}
-			}
-			// For v19 backwards compatibility, we also report the standard metric/value in CheckResult:
-			assert.NoError(t, checkResult.Error, "value=%v, threshold=%v", checkResult.Value, checkResult.Threshold)
-			assert.Equal(t, float64(0.3), checkResult.Value)
-			// Change custom threshold
-			throttler.MetricsThreshold.Store(math.Float64bits(0.1))
-			throttler.refreshMySQLInventory(ctx)
-			checkResult = throttler.CheckByType(ctx, throttlerapp.VitessName.String(), base.KnownMetricNames, "", flags, ThrottleCheckSelf)
-			require.NotNil(t, checkResult)
-			assert.Equal(t, len(base.KnownMetricNames), len(checkResult.Metrics))
-
-			for metricName, metricResult := range checkResult.Metrics {
-				switch base.MetricName(metricName) {
-				case base.CustomMetricName,
-					base.LoadAvgMetricName,
-					base.DefaultMetricName:
-					assert.Error(t, metricResult.Error, "metricName=%v, value=%v, threshold=%v", metricName, metricResult.Value, metricResult.Threshold)
-					assert.ErrorIs(t, metricResult.Error, base.ErrThresholdExceeded)
-				case base.LagMetricName, // Lag metrics has an explicit threshold
-					base.ThreadsRunningMetricName:
-					assert.NoError(t, metricResult.Error, "metricName=%v, value=%v, threshold=%v", metricName, metricResult.Value, metricResult.Threshold)
+				checkResult := throttler.CheckByType(ctx, throttlerapp.OnlineDDLName.String(), nil, "", flags, ThrottleCheckSelf)
+				assert.NotNil(t, checkResult)
+				select {
+				case <-ctx.Done():
+					require.FailNow(t, "context expired before testing completed")
+				case <-time.After(time.Second):
+					appNames := tmClient.AppNames()
+					assert.Equal(t, []string{throttlerapp.ThrottlerStimulatorName.String()}, appNames)
 				}
-			}
+				checkResult = throttler.CheckByType(ctx, throttlerapp.OnlineDDLName.String(), nil, "", flags, ThrottleCheckSelf)
+				assert.NotNil(t, checkResult)
+				select {
+				case <-ctx.Done():
+					require.FailNow(t, "context expired before testing completed")
+				case <-time.After(time.Second):
+					// Due to stimulation rate limiting, we shouldn't see a 2nd CheckThrottler request.
+					appNames := tmClient.AppNames()
+					assert.Equal(t, []string{throttlerapp.ThrottlerStimulatorName.String()}, appNames)
+				}
+			})
+
+			t.Run("metrics", func(t *testing.T) {
+				// See which metrics are available
+				checkResult = throttler.CheckByType(ctx, throttlerapp.VitessName.String(), base.KnownMetricNames, "", flags, ThrottleCheckSelf)
+				require.NotNil(t, checkResult)
+				assert.Equal(t, len(base.KnownMetricNames), len(checkResult.Metrics))
+
+				for metricName, metricResult := range checkResult.Metrics {
+					val := metricResult.Value
+					threshold := metricResult.Threshold
+					storeName := selfStoreName
+					switch base.MetricName(metricName) {
+					case base.DefaultMetricName:
+						assert.NoError(t, metricResult.Error, "metricName=%v, value=%v, threshold=%v", metricName, metricResult.Value, metricResult.Threshold)
+						assert.Equalf(t, float64(0.3), val, "storeName=%v, metricName=%v", storeName, metricName) // same value as "lag"
+						assert.Equalf(t, float64(0.75), threshold, "storeName=%v, metricName=%v", storeName, metricName)
+					case base.LagMetricName:
+						assert.NoError(t, metricResult.Error, "metricName=%v, value=%v, threshold=%v", metricName, metricResult.Value, metricResult.Threshold)
+						assert.Equalf(t, float64(0.3), val, "storeName=%v, metricName=%v", storeName, metricName)
+						assert.Equalf(t, float64(0.75), threshold, "storeName=%v, metricName=%v", storeName, metricName) // default threshold
+					case base.ThreadsRunningMetricName:
+						assert.NoError(t, metricResult.Error, "metricName=%v, value=%v, threshold=%v", metricName, metricResult.Value, metricResult.Threshold)
+						assert.Equalf(t, float64(26), val, "storeName=%v, metricName=%v", storeName, metricName)
+						assert.Equalf(t, float64(100), threshold, "storeName=%v, metricName=%v", storeName, metricName)
+					case base.CustomMetricName:
+						assert.ErrorIs(t, metricResult.Error, base.ErrThresholdExceeded)
+						assert.Equalf(t, float64(0), threshold, "storeName=%v, metricName=%v", storeName, metricName)
+					case base.LoadAvgMetricName:
+						assert.ErrorIs(t, metricResult.Error, base.ErrThresholdExceeded)
+						assert.Equalf(t, float64(1), threshold, "storeName=%v, metricName=%v", storeName, metricName)
+					}
+				}
+			})
+			t.Run("client, OK", func(t *testing.T) {
+				client := NewProductionClient(throttler, throttlerapp.TestingName, ThrottleCheckSelf)
+				checkOK := client.ThrottleCheckOK(ctx, "")
+				assert.True(t, checkOK)
+			})
+
+			t.Run("custom query, metrics", func(t *testing.T) {
+				// For v19 backwards compatibility, we also report the standard metric/value in CheckResult:
+				assert.NoError(t, checkResult.Error, "value=%v, threshold=%v", checkResult.Value, checkResult.Threshold)
+				assert.Equal(t, float64(0.3), checkResult.Value)
+				// Change custom threshold
+				throttler.MetricsThreshold.Store(math.Float64bits(0.1))
+				<-runSerialFunction(t, ctx, throttler, func(ctx context.Context) {
+					throttler.refreshMySQLInventory(ctx)
+				})
+				checkResult = throttler.CheckByType(ctx, throttlerapp.VitessName.String(), base.KnownMetricNames, "", flags, ThrottleCheckSelf)
+				require.NotNil(t, checkResult)
+				assert.Equal(t, len(base.KnownMetricNames), len(checkResult.Metrics))
+
+				assert.Equal(t, base.LagMetricName, throttler.metricNameUsedAsDefault())
+
+				for metricName, metricResult := range checkResult.Metrics {
+					switch base.MetricName(metricName) {
+					case base.CustomMetricName,
+						base.LagMetricName, // Lag metrics affected by the new low threshold
+						base.LoadAvgMetricName,
+						base.DefaultMetricName:
+						assert.Error(t, metricResult.Error, "metricName=%v, value=%v, threshold=%v", metricName, metricResult.Value, metricResult.Threshold)
+						assert.ErrorIs(t, metricResult.Error, base.ErrThresholdExceeded)
+					case base.ThreadsRunningMetricName:
+						assert.NoError(t, metricResult.Error, "metricName=%v, value=%v, threshold=%v", metricName, metricResult.Value, metricResult.Threshold)
+					}
+				}
+			})
+			t.Run("client, not OK", func(t *testing.T) {
+				client := NewProductionClient(throttler, throttlerapp.TestingName, ThrottleCheckSelf)
+				checkOK := client.ThrottleCheckOK(ctx, "")
+				assert.False(t, checkOK)
+			})
 
 			// done
 			cancel() // end test early

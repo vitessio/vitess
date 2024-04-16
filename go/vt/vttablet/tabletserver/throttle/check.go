@@ -137,10 +137,13 @@ func (check *ThrottlerCheck) checkAppMetricResult(ctx context.Context, appName s
 }
 
 // Check is the core function that runs when a user wants to check a metric
-func (check *ThrottlerCheck) Check(ctx context.Context, appName string, storeName string, metricNames []base.MetricName, remoteAddr string, flags *CheckFlags) (checkResult *CheckResult) {
+func (check *ThrottlerCheck) Check(ctx context.Context, appName string, storeName string, metricNames base.MetricNames, remoteAddr string, flags *CheckFlags) (checkResult *CheckResult) {
 	checkResult = &CheckResult{
 		StatusCode: http.StatusOK,
 		Metrics:    make(map[string]*MetricResult),
+	}
+	if len(metricNames) == 0 {
+		metricNames = base.MetricNames{check.throttler.metricNameUsedAsDefault()}
 	}
 	for _, metricName := range metricNames {
 		metricResultFunc := func() (metricResult base.MetricResult, threshold float64) {
@@ -208,7 +211,7 @@ func (check *ThrottlerCheck) localCheck(ctx context.Context, aggregatedMetricNam
 	if err != nil {
 		return NoSuchMetricCheckResult
 	}
-	checkResult = check.Check(ctx, throttlerapp.VitessName.String(), storeName, []base.MetricName{metricName}, "local", StandardCheckFlags)
+	checkResult = check.Check(ctx, throttlerapp.VitessName.String(), storeName, base.MetricNames{metricName}, "local", StandardCheckFlags)
 
 	if checkResult.StatusCode == http.StatusOK {
 		check.throttler.markMetricHealthy(aggregatedMetricName)

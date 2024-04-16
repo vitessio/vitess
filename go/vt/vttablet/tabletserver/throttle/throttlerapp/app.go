@@ -63,6 +63,9 @@ const (
 	BinlogWatcherName Name = "binlog-watcher"
 	MessagerName      Name = "messager"
 	SchemaTrackerName Name = "schema-tracker"
+
+	TestingName                Name = "test"
+	TestingAlwaysThrottlerName Name = "always-throttled-app"
 )
 
 var (

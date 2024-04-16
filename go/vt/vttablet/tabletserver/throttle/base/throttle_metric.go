@@ -23,6 +23,8 @@ import (
 
 type MetricName string
 
+type MetricNames []MetricName
+
 const (
 	DefaultMetricName        MetricName = "default"
 	LagMetricName            MetricName = "lag"

@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/test/endtoend/throttler"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -371,7 +372,7 @@ func TestThrottlerAfterMetricsCollected(t *testing.T) {
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		assert.Equalf(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %s", getResponseBody(resp))
-		assert.Contains(t, body, "always-throttled-app")
+		assert.Contains(t, body, throttlerapp.TestingAlwaysThrottlerName)
 	})
 	t.Run("validating primary check self", func(t *testing.T) {
 		resp, err := throttleCheckSelf(primaryTablet)

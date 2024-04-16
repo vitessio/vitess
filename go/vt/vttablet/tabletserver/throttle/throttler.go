@@ -572,7 +572,7 @@ func (throttler *Throttler) Open() error {
 	throttler.initConfig()
 	throttler.pool.Open(throttler.env.Config().DB.AppWithDB(), throttler.env.Config().DB.DbaWithDB(), throttler.env.Config().DB.AppDebugWithDB())
 
-	throttler.ThrottleApp("always-throttled-app", time.Now().Add(time.Hour*24*365*10), DefaultThrottleRatio, false)
+	throttler.ThrottleApp(throttlerapp.TestingAlwaysThrottlerName.String(), time.Now().Add(time.Hour*24*365*10), DefaultThrottleRatio, false)
 
 	go throttler.retryReadAndApplyThrottlerConfig(ctx)
 
@@ -1084,7 +1084,7 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 	mysqlSettings.Metrics[base.DefaultMetricName].Threshold.Store(metricsThreshold)
 	for metricName, metricConfig := range mysqlSettings.Metrics {
 		threshold := metricConfig.Threshold.Load()
-		if metricName == metricNameUsedAsDefault && metricConfig.Threshold.Load() == 0 && metricsThreshold != 0 {
+		if metricName == metricNameUsedAsDefault && metricsThreshold != 0 {
 			// backwards compatibility to v19:
 			threshold = metricsThreshold
 		}
@@ -1409,7 +1409,7 @@ func (throttler *Throttler) AppRequestMetricResult(ctx context.Context, appName 
 }
 
 // checkStore checks the aggregated value of given MySQL store
-func (throttler *Throttler) checkStore(ctx context.Context, appName string, storeName string, metricNames []base.MetricName, remoteAddr string, flags *CheckFlags) (checkResult *CheckResult) {
+func (throttler *Throttler) checkStore(ctx context.Context, appName string, storeName string, metricNames base.MetricNames, remoteAddr string, flags *CheckFlags) (checkResult *CheckResult) {
 	if !throttler.IsRunning() {
 		return okMetricCheckResult
 	}
@@ -1454,17 +1454,17 @@ func (throttler *Throttler) checkStore(ctx context.Context, appName string, stor
 }
 
 // checkShard checks the health of the shard, and runs on the primary tablet only
-func (throttler *Throttler) checkShard(ctx context.Context, appName string, metricNames []base.MetricName, remoteAddr string, flags *CheckFlags) (checkResult *CheckResult) {
+func (throttler *Throttler) checkShard(ctx context.Context, appName string, metricNames base.MetricNames, remoteAddr string, flags *CheckFlags) (checkResult *CheckResult) {
 	return throttler.checkStore(ctx, appName, shardStoreName, metricNames, remoteAddr, flags)
 }
 
 // CheckSelf is checks the mysql/self metric, and is available on each tablet
-func (throttler *Throttler) checkSelf(ctx context.Context, appName string, metricNames []base.MetricName, remoteAddr string, flags *CheckFlags) (checkResult *CheckResult) {
+func (throttler *Throttler) checkSelf(ctx context.Context, appName string, metricNames base.MetricNames, remoteAddr string, flags *CheckFlags) (checkResult *CheckResult) {
 	return throttler.checkStore(ctx, appName, selfStoreName, metricNames, remoteAddr, flags)
 }
 
 // CheckByType runs a check by requested check type
-func (throttler *Throttler) CheckByType(ctx context.Context, appName string, metricNames []base.MetricName, remoteAddr string, flags *CheckFlags, checkType ThrottleCheckType) (checkResult *CheckResult) {
+func (throttler *Throttler) CheckByType(ctx context.Context, appName string, metricNames base.MetricNames, remoteAddr string, flags *CheckFlags, checkType ThrottleCheckType) (checkResult *CheckResult) {
 	switch checkType {
 	case ThrottleCheckSelf:
 		return throttler.checkSelf(ctx, appName, metricNames, remoteAddr, flags)
@@ -1485,8 +1485,8 @@ func (throttler *Throttler) MetricName(s string) base.MetricName {
 	return base.MetricName(s)
 }
 
-func (throttler *Throttler) MetricNames(s []string) []base.MetricName {
-	result := make([]base.MetricName, len(s))
+func (throttler *Throttler) MetricNames(s []string) base.MetricNames {
+	result := make(base.MetricNames, len(s))
 	for i, metricName := range s {
 		result[i] = throttler.MetricName(metricName)
 	}
