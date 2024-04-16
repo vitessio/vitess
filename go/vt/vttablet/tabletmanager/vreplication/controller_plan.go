@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/constants/sidecar"
+	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -28,6 +29,9 @@ import (
 type controllerPlan struct {
 	query  string
 	opcode int
+
+	// tabletPickerOptions is set for updateQuery.
+	tabletPickerOptions discovery.TabletPickerOptions
 
 	// numInserts is set for insertQuery.
 	numInserts int
@@ -56,6 +60,13 @@ const (
 // being selective. The full comment directive looks like this:
 // delete /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ from _vt.vreplication
 const AllowUnsafeWriteCommentDirective = "ALLOW_UNSAFE_VREPLICATION_WRITE"
+
+// A comment directive that you need to include in your VReplication
+// statements if you want the controller to include non-serving tablets
+// in the execution plan (via tablet picker options). The full comment
+// directive looks like this:
+// update /*vt+ INCLUDE_NON_SERVING_TABLETS_IN_PLAN=1 */ _vt.vreplication set ...
+const IncludeNonServingTabletsCommentDirective = "INCLUDE_NON_SERVING_TABLETS_IN_PLAN"
 
 // Check that the given WHERE clause is using at least one of the specified
 // columns with an equality or in operator to ensure that it is being
@@ -232,6 +243,9 @@ func buildUpdatePlan(upd *sqlparser.Update) (*controllerPlan, error) {
 	if tableName.Qualifier.String() != sidecar.GetName() && tableName.Qualifier.String() != sidecar.DefaultName {
 		return nil, fmt.Errorf("invalid database name: %s", tableName.Qualifier.String())
 	}
+	cp := &controllerPlan{
+		opcode: updateQuery,
+	}
 	switch tableName.Name.String() {
 	case reshardingJournalTableName:
 		return &controllerPlan{
@@ -242,6 +256,12 @@ func buildUpdatePlan(upd *sqlparser.Update) (*controllerPlan, error) {
 			if safe := isSelective(upd.Where, tableSelectiveColumns[vreplicationTableName]...); !safe {
 				return nil, fmt.Errorf("unsafe WHERE clause in update without the /*vt+ %s */ comment directive: %s; should be using = or in with at least one of the following columns: %s",
 					AllowUnsafeWriteCommentDirective, sqlparser.String(upd.Where), columnsAsCSV(tableSelectiveColumns[vreplicationTableName]))
+			}
+		}
+
+		if upd.Comments != nil && upd.Comments.Directives().IsSet(IncludeNonServingTabletsCommentDirective) {
+			cp.tabletPickerOptions = discovery.TabletPickerOptions{
+				IncludeNonServingTablets: true,
 			}
 		}
 	default:
@@ -266,15 +286,13 @@ func buildUpdatePlan(upd *sqlparser.Update) (*controllerPlan, error) {
 			Right:    sqlparser.ListArg("ids"),
 		},
 	}
+	cp.selector = buf1.String()
 
 	buf2 := sqlparser.NewTrackedBuffer(nil)
 	buf2.Myprintf("%v", upd)
+	cp.applier = buf2.ParsedQuery()
 
-	return &controllerPlan{
-		opcode:   updateQuery,
-		selector: buf1.String(),
-		applier:  buf2.ParsedQuery(),
-	}, nil
+	return cp, nil
 }
 
 func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {

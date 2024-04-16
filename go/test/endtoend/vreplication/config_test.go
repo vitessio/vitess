@@ -144,6 +144,22 @@ create table nopk (name varchar(128), age int unsigned);
         "sequence": "customer_seq"
       }
     },
+    "customer_name": {
+      "column_vindexes": [
+        {
+          "column": "cid",
+          "name": "xxhash"
+        }
+      ]
+    },
+    "customer_type": {
+      "column_vindexes": [
+        {
+          "column": "cid",
+          "name": "xxhash"
+        }
+      ]
+    },
     "customer2": {
       "column_vindexes": [
         {
@@ -400,6 +416,32 @@ create table nopk (name varchar(128), age int unsigned);
 		"source_expression": "select * from product",
 		"create_ddl": "create table cproduct(pid bigint, description varchar(128), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key(pid)) CHARSET=utf8mb4"
 	}]
+}
+`
+
+	materializeCustomerNameSpec = `
+{
+  "workflow": "customer_name",
+  "source_keyspace": "customer",
+  "target_keyspace": "customer",
+  "table_settings": [{
+    "target_table": "customer_name",
+    "source_expression": "select cid, name from customer",
+    "create_ddl": "create table if not exists customer_name (cid bigint not null, name varchar(128), primary key(cid), key(name))"
+  }]
+}
+`
+
+	materializeCustomerTypeSpec = `
+{
+  "workflow": "customer_type",
+  "source_keyspace": "customer",
+  "target_keyspace": "customer",
+  "table_settings": [{
+    "target_table": "customer_type",
+    "source_expression": "select cid, typ from customer",
+    "create_ddl": "create table if not exists customer_type (cid bigint not null, typ enum('individual','soho','enterprise'), primary key(cid), key(typ))"
+  }]
 }
 `
 
