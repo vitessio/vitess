@@ -1,7 +1,9 @@
-name: {{.Name}}
+# DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
+
+name: Unit Test (non_evalengine_mysql57)
 on: [push, pull_request]
 concurrency:
-  group: format('{0}-{1}', ${{"{{"}} github.ref {{"}}"}}, '{{.Name}}')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Unit Test (non_evalengine_mysql57)')
   cancel-in-progress: true
 
 permissions: read-all
@@ -9,17 +11,17 @@ permissions: read-all
 env:
   LAUNCHABLE_ORGANIZATION: "vitess"
   LAUNCHABLE_WORKSPACE: "vitess-app"
-  GITHUB_PR_HEAD_SHA: "${{`{{ github.event.pull_request.head.sha }}`}}"
+  GITHUB_PR_HEAD_SHA: "${{ github.event.pull_request.head.sha }}"
 
 jobs:
   test:
-    name: {{.Name}}
+    name: Unit Test (non_evalengine_mysql57)
     runs-on: gh-hosted-runners-4cores-1
 
     steps:
     - name: Skip CI
       run: |
-        if [[ "{{"${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}"}}" == "true" ]]; then
+        if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
           echo "skipping CI due to the 'Skip CI' label"
           exit 1
         fi
@@ -28,16 +30,16 @@ jobs:
       id: skip-workflow
       run: |
         skip='false'
-        if [[ "{{"${{github.event.pull_request}}"}}" ==  "" ]] && [[ "{{"${{github.ref}}"}}" != "refs/heads/main" ]] && [[ ! "{{"${{github.ref}}"}}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "{{"${{github.ref}}"}}" =~ "refs/tags/.*" ]]; then
+        if [[ "${{github.event.pull_request}}" ==  "" ]] && [[ "${{github.ref}}" != "refs/heads/main" ]] && [[ ! "${{github.ref}}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "${{github.ref}}" =~ "refs/tags/.*" ]]; then
           skip='true'
         fi
         echo Skip ${skip}
         echo "skip-workflow=${skip}" >> $GITHUB_OUTPUT
 
         PR_DATA=$(curl \
-          -H "{{"Authorization: token ${{ secrets.GITHUB_TOKEN }}"}}" \
+          -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
           -H "Accept: application/vnd.github.v3+json" \
-          "{{"https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}"}}")
+          "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}")
         draft=$(echo "$PR_DATA" | jq .draft -r)
         echo "is_draft=${draft}" >> $GITHUB_OUTPUT
 
@@ -63,7 +65,7 @@ jobs:
             - 'tools/**'
             - 'config/**'
             - 'bootstrap.sh'
-            - '.github/workflows/{{.FileName}}'
+            - '.github/workflows/unit_test_non_evalengine_mysql57.yml'
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
@@ -98,7 +100,6 @@ jobs:
         sudo rm -rf /var/lib/mysql
         sudo rm -rf /etc/mysql
 
-        {{if (eq .Platform "mysql57")}}
         # Get key to latest MySQL repo
         sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A8D3785C
 
@@ -111,21 +112,6 @@ jobs:
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
         sudo apt-get -qq update
         sudo DEBIAN_FRONTEND="noninteractive" apt-get -qq install -y mysql-client=5.7* mysql-community-server=5.7* mysql-server=5.7* libncurses5
-
-        {{end}}
-
-        {{if (eq .Platform "mysql80")}}
-        # Get key to latest MySQL repo
-        sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A8D3785C
-
-        # mysql80
-        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.29-1_all.deb
-        echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
-        sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
-        sudo apt-get -qq update
-        sudo DEBIAN_FRONTEND="noninteractive" apt-get -qq install -y mysql-server mysql-client
-
-        {{end}}
 
         sudo apt-get -qq install -y make unzip g++ curl git wget ant openjdk-11-jdk eatmydata
         sudo service mysql stop
@@ -170,14 +156,14 @@ jobs:
         export VTDATAROOT="/tmp/"
 
         export NOVTADMINBUILD=1
-        export VT_EVALENGINE_TEST="{{.Evalengine}}"
+        export VT_EVALENGINE_TEST="-1"
         
         eatmydata -- make unit_test | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
     - name: Print test output and Record test result in launchable if PR is not a draft
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true' && always()
       run: |
-        if [[ "{{"${{steps.skip-workflow.outputs.is_draft}}"}}" ==  "false" ]]; then
+        if [[ "${{steps.skip-workflow.outputs.is_draft}}" ==  "false" ]]; then
           # send recorded tests to launchable
           launchable record tests --build "$GITHUB_RUN_ID" go-test . || true
         fi

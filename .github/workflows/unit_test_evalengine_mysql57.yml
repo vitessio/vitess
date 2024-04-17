@@ -1,9 +1,9 @@
 # DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
 
-name: Unit Test (mysql80)
+name: Unit Test (evalengine_mysql57)
 on: [push, pull_request]
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Unit Test (mysql80)')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Unit Test (evalengine_mysql57)')
   cancel-in-progress: true
 
 permissions: read-all
@@ -15,7 +15,7 @@ env:
 
 jobs:
   test:
-    name: Unit Test (mysql80)
+    name: Unit Test (evalengine_mysql57)
     runs-on: gh-hosted-runners-4cores-1
 
     steps:
@@ -65,7 +65,7 @@ jobs:
             - 'tools/**'
             - 'config/**'
             - 'bootstrap.sh'
-            - '.github/workflows/unit_test_mysql80.yml'
+            - '.github/workflows/unit_test_evalengine_mysql57.yml'
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
@@ -103,12 +103,15 @@ jobs:
         # Get key to latest MySQL repo
         sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A8D3785C
 
-        # mysql80
+        # mysql57
         wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.29-1_all.deb
-        echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
+        # Bionic packages are still compatible for Jammy since there's no MySQL 5.7
+        # packages for Jammy.
+        echo mysql-apt-config mysql-apt-config/repo-codename select bionic | sudo debconf-set-selections
+        echo mysql-apt-config mysql-apt-config/select-server select mysql-5.7 | sudo debconf-set-selections
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
         sudo apt-get -qq update
-        sudo DEBIAN_FRONTEND="noninteractive" apt-get -qq install -y mysql-server mysql-client
+        sudo DEBIAN_FRONTEND="noninteractive" apt-get -qq install -y mysql-client=5.7* mysql-community-server=5.7* mysql-server=5.7* libncurses5
 
         sudo apt-get -qq install -y make unzip g++ curl git wget ant openjdk-11-jdk eatmydata
         sudo service mysql stop
@@ -153,6 +156,8 @@ jobs:
         export VTDATAROOT="/tmp/"
 
         export NOVTADMINBUILD=1
+        export VT_EVALENGINE_TEST="1"
+        
         eatmydata -- make unit_test | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
     - name: Print test output and Record test result in launchable if PR is not a draft
