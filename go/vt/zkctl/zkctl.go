@@ -40,7 +40,7 @@ import (
 
 const (
 	// startWaitTime is how long to wait at Start.
-	startWaitTime = 60 * time.Second
+	startWaitTime = 30 * time.Second
 	// shutdownWaitTime is how long to wait at Shutdown.
 	shutdownWaitTime = 20 * time.Second
 )

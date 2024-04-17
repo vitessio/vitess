@@ -58,7 +58,8 @@ func TestLifeCycle(t *testing.T) {
 		for _, cline := range clines {
 			if strings.Contains(cline, "/usr/bin/java") {
 				args := strings.Split(cline, "starting ")[1]
-				out, err := exec.Command("/usr/bin/java", strings.Split(args, " ")[1:]...).CombinedOutput()
+				argsSlice := strings.Split(args, " ")[1:]
+				out, err := exec.Command("/usr/bin/java", argsSlice...).CombinedOutput()
 				if err != nil {
 					fmt.Println(string(out))
 					t.Fatalf(err.Error())

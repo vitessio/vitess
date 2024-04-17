@@ -56,7 +56,7 @@ fi
 cmd="$java -DZOO_LOG_DIR=$logdir $zk_java_opts -cp $classpath org.apache.zookeeper.server.quorum.QuorumPeerMain $config"
 
 log "INFO starting $cmd"
-$cmd < /dev/null &> /dev/null &
+$cmd < /dev/null &> "$logdir/zksrv.log" &
 pid=$!
 
 log "INFO pid: $pid pidfile: $pidfile"
