@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -129,7 +130,9 @@ func TestSetSuperReadOnlyMySQL(t *testing.T) {
 func TestGetMysqlPort(t *testing.T) {
 	require.NotNil(t, mysqld)
 
-	port, err := mysqld.GetMysqlPort()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	port, err := mysqld.GetMysqlPort(ctx)
 
 	// Expected port should be one less than the port returned by GetAndReservePort
 	// As we are calling this second time to get port
@@ -161,7 +164,9 @@ func TestReplicationStatus(t *testing.T) {
 	conn, err := mysql.Connect(ctx, &mysqlParams)
 	require.NoError(t, err)
 
-	port, err := mysqld.GetMysqlPort()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	port, err := mysqld.GetMysqlPort(ctx)
 	require.NoError(t, err)
 	host := "localhost"
 
@@ -234,7 +239,9 @@ func TestSetReplicationPosition(t *testing.T) {
 func TestSetAndResetReplication(t *testing.T) {
 	require.NotNil(t, mysqld)
 
-	port, err := mysqld.GetMysqlPort()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	port, err := mysqld.GetMysqlPort(ctx)
 	require.NoError(t, err)
 	host := "localhost"
 
@@ -387,7 +394,9 @@ func TestWaitForReplicationStart(t *testing.T) {
 	err := mysqlctl.WaitForReplicationStart(mysqld, 1)
 	assert.ErrorContains(t, err, "no replication status")
 
-	port, err := mysqld.GetMysqlPort()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	port, err := mysqld.GetMysqlPort(ctx)
 	require.NoError(t, err)
 	host := "localhost"
 
@@ -407,7 +416,9 @@ func TestStartReplication(t *testing.T) {
 	err := mysqld.StartReplication(map[string]string{})
 	assert.ErrorContains(t, err, "The server is not configured as replica")
 
-	port, err := mysqld.GetMysqlPort()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	port, err := mysqld.GetMysqlPort(ctx)
 	require.NoError(t, err)
 	host := "localhost"
 
@@ -425,7 +436,9 @@ func TestStartReplication(t *testing.T) {
 func TestStopReplication(t *testing.T) {
 	require.NotNil(t, mysqld)
 
-	port, err := mysqld.GetMysqlPort()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	port, err := mysqld.GetMysqlPort(ctx)
 	require.NoError(t, err)
 	host := "localhost"
 
@@ -449,7 +462,9 @@ func TestStopReplication(t *testing.T) {
 func TestStopSQLThread(t *testing.T) {
 	require.NotNil(t, mysqld)
 
-	port, err := mysqld.GetMysqlPort()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	port, err := mysqld.GetMysqlPort(ctx)
 	require.NoError(t, err)
 	host := "localhost"
 
