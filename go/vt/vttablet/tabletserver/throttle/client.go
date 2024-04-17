@@ -143,11 +143,15 @@ func (c *Client) ThrottleCheckOK(ctx context.Context, overrideAppName throttlera
 // Non-empty appName overrides the default appName.
 // The function is not thread safe.
 func (c *Client) ThrottleCheckOKOrWaitAppName(ctx context.Context, appName throttlerapp.Name) bool {
-	ok := c.ThrottleCheckOK(ctx, appName)
-	if !ok {
-		time.Sleep(throttleCheckDuration)
+	if c.ThrottleCheckOK(ctx, appName) {
+		return true
 	}
-	return ok
+	if ctx.Err() != nil {
+		// context expired, skip sleeping
+		return false
+	}
+	time.Sleep(throttleCheckDuration)
+	return false
 }
 
 // ThrottleCheckOKOrWait checks the throttler; if throttler is satisfied, the function returns 'true' immediately,
