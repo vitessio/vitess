@@ -42,7 +42,7 @@ jobs:
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v4
         with:
-          branch: "upgrade-go-deps-on-main"
+          branch: "upgrade-go-deps-on-main-test"
           commit-message: "upgrade go deps"
           signoff: true
           delete-branch: true
