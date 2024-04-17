@@ -751,7 +751,7 @@ func (vs *vstreamer) buildTablePlan(id uint64, tm *mysql.TableMap) (*binlogdatap
 		vs.plans[id] = nil
 		return nil, nil
 	}
-	if err := addEnumAndSetMappingstoPlan(plan, cols); err != nil {
+	if err := addEnumAndSetMappingstoPlan(plan, cols, tm.Metadata); err != nil {
 		return nil, fmt.Errorf("failed to build ENUM and SET column integer to string mappings: %v", err)
 	}
 	vs.plans[id] = &streamerPlan{
@@ -1051,13 +1051,20 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 		pos += l
 
 		if plan.EnumSetValuesMap == nil {
-			if err := addEnumAndSetMappingstoPlan(plan.Plan, plan.Table.Fields); err != nil {
+			if err := addEnumAndSetMappingstoPlan(plan.Plan, plan.Table.Fields, plan.TableMap.Metadata); err != nil {
 				return false, nil, false, fmt.Errorf("failed to build ENUM and SET column integer to string mappings: %v", err)
 			}
 		}
+		// If the column is a CHAR based type with a binary collation (e.g. utf8mb4_bin) then
+		// the actual column type is included in the event metadata while the event's type
+		// for the field is BINARY. This is true for ENUM and SET types.
+		var subType uint16
+		if sqltypes.IsQuoted(plan.Table.Fields[colNum].Type) {
+			subType = plan.TableMap.Metadata[colNum] >> 8
+		}
 		// Convert the integer values in the binlog event for SET and ENUM fields into their
 		// string representations.
-		if plan.Table.Fields[colNum].Type == querypb.Type_ENUM {
+		if plan.Table.Fields[colNum].Type == querypb.Type_ENUM || subType == mysqlbinlog.TypeEnum {
 			iv, err := value.ToUint64()
 			if err != nil {
 				return false, nil, false, fmt.Errorf("no valid integer value found for column %s in table %s, bytes: %b",
@@ -1070,7 +1077,7 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 			}
 			value = sqltypes.MakeTrusted(plan.Table.Fields[colNum].Type, []byte(strVal))
 		}
-		if plan.Table.Fields[colNum].Type == querypb.Type_SET {
+		if plan.Table.Fields[colNum].Type == querypb.Type_SET || subType == mysqlbinlog.TypeSet {
 			val := bytes.Buffer{}
 			// A SET column can have 64 unique values: https://dev.mysql.com/doc/refman/en/set.html
 			// For this reason the binlog event contains the values encoded as an unsigned 64-bit
@@ -1110,10 +1117,18 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 }
 
 // Add any necessary ENUM and SET integer position to string mappings.
-func addEnumAndSetMappingstoPlan(plan *Plan, cols []*querypb.Field) error {
+func addEnumAndSetMappingstoPlan(plan *Plan, cols []*querypb.Field, metadata []uint16) error {
 	plan.EnumSetValuesMap = make(map[int]map[int]string)
 	for i, col := range cols {
-		if col.Type == querypb.Type_ENUM || col.Type == querypb.Type_SET {
+		// If the column is a CHAR based type with a binary collation (e.g. utf8mb4_bin) then
+		// the actual column type is included in the event metadata while the event's type
+		// for the field is BINARY. This is true for ENUM and SET types.
+		var subType uint16
+		if sqltypes.IsQuoted(col.Type) {
+			subType = metadata[i] >> 8
+		}
+		if col.Type == querypb.Type_ENUM || subType == mysqlbinlog.TypeEnum ||
+			col.Type == querypb.Type_SET || subType == mysqlbinlog.TypeSet {
 			// Strip the enum() / set() parts out.
 			begin := strings.Index(col.ColumnType, "(")
 			end := strings.LastIndex(col.ColumnType, ")")
