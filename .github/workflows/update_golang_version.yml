@@ -70,6 +70,7 @@ jobs:
           commit-message: "bump go version to go${{steps.detect-and-update.outputs.go-version}}"
           signoff: true
           delete-branch: true
+          reviewers: vitessio/release
           title: "[${{ matrix.branch }}] Upgrade the Golang version to `go${{steps.detect-and-update.outputs.go-version}}`"
           body: |
             This Pull Request bumps the Golang version to `go${{steps.detect-and-update.outputs.go-version}}` and the bootstrap version to `${{steps.detect-and-update.outputs.bootstrap-version}}`.
@@ -81,6 +82,8 @@ jobs:
               - [ ] Build and Push the bootstrap images to Docker Hub, the bot cannot handle that.
               - [ ] Update the `./.github/workflows/*.yml` files with the newer Golang version, the bot cannot handle that due to permissions.
                 - To accomplish this, run the following: `go run ./go/tools/go-upgrade/go-upgrade.go upgrade workflows --go-to=${{steps.detect-and-update.outputs.go-version}}`
+            
+            cc @vitessio/release
           base: ${{ matrix.branch }}
           labels: |
             Skip CI
