@@ -381,7 +381,7 @@ func (gw *TabletGateway) shuffleTablets(cell string, tablets []*discovery.Tablet
 	// Randomly shuffle the list of tablets, putting the same-cell hosts at the front
 	// of the list and the other-cell hosts at the back
 	//
-	// Only need to do n-1 swaps since the last host is always in the right place.
+	// Only need to do n-1 swaps since the last tablet is always in the right place.
 	n := len(tablets)
 	head := 0
 	tail := n - 1
