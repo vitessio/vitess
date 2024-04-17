@@ -115,7 +115,6 @@ Flags:
       --enable-partial-keyspace-migration                                (Experimental) Follow shard routing rules: enable only while migrating a keyspace shard by shard. See documentation on Partial MoveTables for more. (default false)
       --enable-per-workload-table-metrics                                If true, query counts and query error metrics include a label that identifies the workload
       --enable-tx-throttler                                              Synonym to -enable_tx_throttler
-      --enable-udfs                                                      Enable UDFs support in vtgate.
       --enable-views                                                     Enable views support in vtgate.
       --enable_buffer                                                    Enable buffering (stalling) of primary traffic during failovers.
       --enable_buffer_dry_run                                            Detect and log failover events, but do not actually buffer requests.
@@ -377,6 +376,7 @@ Flags:
       --tracing-enable-logging                                           whether to enable logging in the tracing service
       --tracing-sampling-rate float                                      sampling rate for the probabilistic jaeger sampler (default 0.1)
       --tracing-sampling-type string                                     sampling strategy to use for jaeger. possible values are 'const', 'probabilistic', 'rateLimiting', or 'remote' (default "const")
+      --track-udfs                                                       Track UDFs in vtgate.
       --track_schema_versions                                            When enabled, vttablet will store versions of schemas at each position that a DDL is applied and allow retrieval of the schema corresponding to a position
       --transaction-log-stream-handler string                            URL handler for streaming transactions log (default "/debug/txlog")
       --transaction_limit_by_component                                   Include CallerID.component when considering who the user is for the purpose of transaction limit.
