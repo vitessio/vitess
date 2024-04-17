@@ -42,7 +42,7 @@ jobs:
         uses: peter-evans/create-pull-request@v4
         with:
           token: ${{ secrets.CREATE_PR_VITESS_BOT }}
-          branch: "upgrade-go-deps-on-main-test"
+          branch: "upgrade-go-deps-on-main"
           commit-message: "upgrade go deps"
           signoff: true
           delete-branch: true
