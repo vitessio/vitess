@@ -203,6 +203,7 @@ type Throttler struct {
 	throttledApps         *cache.Cache
 	recentApps            *cache.Cache
 	metricsHealth         *cache.Cache
+	appCheckedMetrics     *cache.Cache
 
 	initMutex           sync.Mutex
 	enableMutex         sync.Mutex
@@ -264,6 +265,7 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 	throttler.aggregatedMetrics = cache.New(aggregatedMetricsExpiration, 0)
 	throttler.recentApps = cache.New(recentAppsExpiration, 0)
 	throttler.metricsHealth = cache.New(cache.NoExpiration, 0)
+	throttler.appCheckedMetrics = cache.New(cache.NoExpiration, 0)
 	throttler.nonLowPriorityAppRequestsThrottled = cache.New(nonDeprioritizedAppMapExpiration, 0)
 
 	throttler.httpClient = base.SetupHTTPClient(2 * mysqlCollectInterval)
@@ -1022,6 +1024,8 @@ func (throttler *Throttler) collectShardMySQLMetrics(ctx context.Context, tmClie
 			if !atomic.CompareAndSwapInt64(&probe.QueryInProgress, 0, 1) {
 				return
 			}
+			fmt.Println("===== ++++ query in progress for", probe.Alias)
+			defer fmt.Println("===== ---- query in progress for", probe.Alias)
 			defer atomic.StoreInt64(&probe.QueryInProgress, 0)
 
 			// Throttler probing other tablets:
@@ -1418,6 +1422,9 @@ func (throttler *Throttler) checkStore(ctx context.Context, appName string, stor
 		return okMetricCheckResult
 	}
 
+	if len(metricNames) == 0 {
+		metricNames = base.MetricNames{throttler.metricNameUsedAsDefault()}
+	}
 	checkResult = throttler.check.Check(ctx, appName, storeName, metricNames, flags)
 	if metric, ok := checkResult.Metrics[throttler.metricNameUsedAsDefault().String()]; ok {
 		// v19 compatibility: if this v20 server is a replica, reporting to a v19 primary,

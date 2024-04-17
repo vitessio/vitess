@@ -224,6 +224,7 @@ func newTestThrottler() *Throttler {
 	throttler.aggregatedMetrics = cache.New(10*aggregatedMetricsExpiration, 0)
 	throttler.recentApps = cache.New(recentAppsExpiration, 0)
 	throttler.metricsHealth = cache.New(cache.NoExpiration, 0)
+	throttler.appCheckedMetrics = cache.New(cache.NoExpiration, 0)
 	throttler.nonLowPriorityAppRequestsThrottled = cache.New(nonDeprioritizedAppMapExpiration, 0)
 	throttler.initThrottleTabletTypes()
 	throttler.check = NewThrottlerCheck(throttler)
@@ -762,7 +763,7 @@ func TestProbesPostDisable(t *testing.T) {
 				assert.NotEmpty(t, probe.Alias)
 				assert.NotNil(t, probe.Tablet)
 			}
-			assert.Zero(t, atomic.LoadInt64(&probe.QueryInProgress))
+			assert.Zero(t, atomic.LoadInt64(&probe.QueryInProgress), probe.Alias)
 		}
 		assert.Equal(t, 1, localTabletFound)
 	})

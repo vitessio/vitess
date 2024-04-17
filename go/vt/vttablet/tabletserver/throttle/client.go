@@ -62,7 +62,7 @@ type Client struct {
 	lastSuccessfulThrottleMu sync.Mutex
 	// lastSuccessfulThrottle records the latest tick (value of `throttleTicks`) when the throttler was
 	// satisfied for a given metric. This makes it possible to potentially skip a throttler check.
-	// key is a combination of the app and the metric names
+	// key is the app name.
 	lastSuccessfulThrottle map[string]int64
 }
 
@@ -120,20 +120,18 @@ func (c *Client) ThrottleCheckOK(ctx context.Context, overrideAppName throttlera
 	if overrideAppName != "" {
 		checkApp = overrideAppName
 	}
-	metricNames := base.MetricNames{c.throttler.check.throttler.metricNameUsedAsDefault()} // TODO(shlomi): populate metric names
-	key := lastSuccessfulThrottleKey(checkApp, metricNames)
 	c.lastSuccessfulThrottleMu.Lock()
 	defer c.lastSuccessfulThrottleMu.Unlock()
-	if c.lastSuccessfulThrottle[key] >= atomic.LoadInt64(&throttleTicks) {
+	if c.lastSuccessfulThrottle[checkApp.String()] >= atomic.LoadInt64(&throttleTicks) {
 		// if last check was OK just very recently there is no need to check again
 		return true
 	}
 	// It's time to run a throttler check
-	checkResult := c.throttler.CheckByType(ctx, checkApp.String(), metricNames, &c.flags, c.checkType)
+	checkResult := c.throttler.CheckByType(ctx, checkApp.String(), nil, &c.flags, c.checkType)
 	if checkResult.StatusCode != http.StatusOK {
 		return false
 	}
-	c.lastSuccessfulThrottle[key] = atomic.LoadInt64(&throttleTicks)
+	c.lastSuccessfulThrottle[checkApp.String()] = atomic.LoadInt64(&throttleTicks)
 	return true
 
 }
