@@ -18,6 +18,7 @@ package zkctl
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 )
@@ -46,6 +47,11 @@ func TestLifeCycle(t *testing.T) {
 
 	zkd := NewZkd(zkConf)
 	if err := zkd.Init(); err != nil {
+		c, err := os.ReadFile("/tmp/zk_255/logs/zksrv.log")
+		if err != nil {
+			t.Fatalf(err.Error())
+		}
+		fmt.Println(string(c))
 		t.Fatalf("Init() err: %v", err)
 	}
 
