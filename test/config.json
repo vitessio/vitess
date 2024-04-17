@@ -572,6 +572,15 @@
 			"RetryMax": 2,
 			"Tags": ["upgrade_downgrade_query_serving_queries"]
 		},
+		"vtgate_queries_tpch": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/tpch", "-timeout", "20m"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_queries",
+			"RetryMax": 2,
+			"Tags": ["upgrade_downgrade_query_serving_queries"]
+		},
 		"vtgate_queries_subquery": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/subquery", "-timeout", "20m"],
