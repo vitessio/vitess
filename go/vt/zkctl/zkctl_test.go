@@ -19,6 +19,7 @@ package zkctl
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
 )
@@ -52,6 +53,18 @@ func TestLifeCycle(t *testing.T) {
 			t.Fatalf(err.Error())
 		}
 		fmt.Println(string(c))
+		cstr := string(c)
+		clines := strings.Split(cstr, "\n")
+		for _, cline := range clines {
+			if strings.Contains(cline, "/usr/bin/java") {
+				args := strings.Split(cline, "starting ")[1]
+				out, err := exec.Command("/usr/bin/java", strings.Split(args, " ")[1:]...).CombinedOutput()
+				if err != nil {
+					fmt.Println(string(out))
+					t.Fatalf(err.Error())
+				}
+			}
+		}
 		t.Fatalf("Init() err: %v", err)
 	}
 
