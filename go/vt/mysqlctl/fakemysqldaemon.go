@@ -273,7 +273,7 @@ func (fmd *FakeMysqlDaemon) WaitForDBAGrants(ctx context.Context, waitTime time.
 }
 
 // GetMysqlPort is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) GetMysqlPort() (int32, error) {
+func (fmd *FakeMysqlDaemon) GetMysqlPort(ctx context.Context) (int32, error) {
 	if fmd.MysqlPort.Load() == -1 {
 		return 0, fmt.Errorf("FakeMysqlDaemon.GetMysqlPort returns an error")
 	}

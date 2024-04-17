@@ -43,7 +43,7 @@ type MysqlDaemon interface {
 	WaitForDBAGrants(ctx context.Context, waitTime time.Duration) (err error)
 
 	// GetMysqlPort returns the current port mysql is listening on.
-	GetMysqlPort() (int32, error)
+	GetMysqlPort(ctx context.Context) (int32, error)
 
 	// GetServerID returns the servers ID.
 	GetServerID(ctx context.Context) (uint32, error)
