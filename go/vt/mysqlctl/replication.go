@@ -29,6 +29,7 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/hook"
@@ -174,8 +175,21 @@ func (mysqld *Mysqld) RestartReplication(hookExtraEnv map[string]string) error {
 }
 
 // GetMysqlPort returns mysql port
-func (mysqld *Mysqld) GetMysqlPort() (int32, error) {
-	qr, err := mysqld.FetchSuperQuery(context.TODO(), "SHOW VARIABLES LIKE 'port'")
+func (mysqld *Mysqld) GetMysqlPort(ctx context.Context) (int32, error) {
+	// We can not use the connection pool here. This check runs very early
+	// during MySQL startup when we still might be loading things like grants.
+	// This means we need to use an isolated connection to avoid poisoning the
+	// DBA connection pool for further queries.
+	params, err := mysqld.dbcfgs.DbaConnector().MysqlParams()
+	if err != nil {
+		return 0, err
+	}
+	conn, err := mysql.Connect(ctx, params)
+	if err != nil {
+		return 0, err
+	}
+	defer conn.Close()
+	qr, err := conn.ExecuteFetch("SHOW VARIABLES LIKE 'port'", 1, false)
 	if err != nil {
 		return 0, err
 	}

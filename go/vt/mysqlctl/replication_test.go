@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -133,12 +134,14 @@ func TestGetMysqlPort(t *testing.T) {
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
 
-	res, err := testMysqld.GetMysqlPort()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	res, err := testMysqld.GetMysqlPort(ctx)
 	assert.Equal(t, int32(12), res)
 	assert.NoError(t, err)
 
 	db.AddQuery("SHOW VARIABLES LIKE 'port'", &sqltypes.Result{})
-	res, err = testMysqld.GetMysqlPort()
+	res, err = testMysqld.GetMysqlPort(ctx)
 	assert.ErrorContains(t, err, "no port variable in mysql")
 	assert.Equal(t, int32(0), res)
 }
