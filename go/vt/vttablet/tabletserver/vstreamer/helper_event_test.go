@@ -38,7 +38,6 @@ import (
 	"context"
 	"fmt"
 	"slices"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -60,7 +59,7 @@ const (
 	lengthInt  = 11
 	lengthBlob = 65535
 	lengthText = 262140
-	lengthSet  = 56
+	lengthSet  = 204 // This is the expected length of the only SET column in the test schema
 )
 
 var (
@@ -312,10 +311,8 @@ func (ts *TestSpec) getBindVarsForInsert(stmt sqlparser.Statement) (string, map[
 			v.Format(bufV)
 			s := bufV.String()
 			switch fe.cols[i].dataTypeLowered {
-			case "varchar", "char", "binary", "varbinary", "blob", "text":
+			case "varchar", "char", "binary", "varbinary", "blob", "text", "enum", "set":
 				s = strings.Trim(s, "'")
-			case "set", "enum":
-				s = ts.getMetadataMap(table, fe.cols[i], s)
 			}
 			bv[fe.cols[i].name] = s
 		}
@@ -528,28 +525,6 @@ func (ts *TestSpec) setMetadataMap(table, col, value string) {
 	valuesReversed := slices.Clone(values)
 	slices.Reverse(valuesReversed)
 	ts.metadata[getMetadataKey(table, col)] = valuesReversed
-}
-
-func (ts *TestSpec) getMetadataMap(table string, col *TestColumn, value string) string {
-	var bits int64
-	value = strings.Trim(value, "'")
-	meta := ts.metadata[getMetadataKey(table, col.name)]
-	values := strings.Split(value, ",")
-	for _, v := range values {
-		v2 := strings.Trim(v, "'")
-		for i, m := range meta {
-			m2 := strings.Trim(m, "'")
-			if m2 == v2 {
-				switch col.dataTypeLowered {
-				case "set":
-					bits |= 1 << uint(i)
-				case "enum":
-					bits = int64(i) + 1
-				}
-			}
-		}
-	}
-	return strconv.FormatInt(bits, 10)
 }
 
 func (ts *TestSpec) getRowEvent(table string, bv map[string]string, fe *TestFieldEvent, stmt sqlparser.Statement, flags uint32) string {

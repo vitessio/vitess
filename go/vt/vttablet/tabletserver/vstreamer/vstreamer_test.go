@@ -118,23 +118,16 @@ func TestSetAndEnum(t *testing.T) {
 	ts := &TestSpec{
 		t: t,
 		ddls: []string{
-			"create table t1(id int, val binary(4), color set('red','green','blue'), size enum('S','M','L'), primary key(id))",
+			"create table t1(id int, val binary(4), color set('red','green','blue','black','white','pink','purple','yellow','brown'), size enum('S','M','L'), primary key(id))",
 		},
 	}
 	defer ts.Close()
 	ts.Init()
 	ts.tests = [][]*TestQuery{{
 		{"begin", nil},
-		{"insert into t1 values (1, 'aaa', 'red,blue', 'S')", []TestRowEvent{
-			{event: "type:FIELD field_event:{table_name:\"t1\" fields:{name:\"id\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id\" column_length:11 charset:63 column_type:\"int\"} fields:{name:\"val\" type:BINARY table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"val\" column_length:4 charset:63 column_type:\"binary(4)\"} fields:{name:\"color\" type:SET table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"color\" column_length:56 charset:255 column_type:\"set('red','green','blue')\"} fields:{name:\"size\" type:ENUM table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"size\" column_length:4 charset:255 column_type:\"enum('S','M','L')\"}}"},
-			{event: "type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:1 lengths:4 lengths:8 lengths:1 values:\"1aaa\\x00red,blueS\"}}}"},
-		}},
-		{"insert into t1 values (2, 'bbb', 'green', 'M')", []TestRowEvent{
-			{event: "type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:1 lengths:4 lengths:5 lengths:1 values:\"2bbb\\x00greenM\"}}}"},
-		}},
-		{"insert into t1 values (3, 'ccc', 'red,blue,green', 'L')", []TestRowEvent{
-			{event: "type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:1 lengths:4 lengths:14 lengths:1 values:\"3ccc\\x00red,green,blueL\"}}}"},
-		}},
+		{"insert into t1 values (1, 'aaa', 'red,blue', 'S')", nil},
+		{"insert into t1 values (2, 'bbb', 'green,pink,purple,yellow,brown', 'M')", nil},
+		{"insert into t1 values (3, 'ccc', 'red,green,blue', 'L')", nil},
 		{"commit", nil},
 	}}
 	ts.Run()
