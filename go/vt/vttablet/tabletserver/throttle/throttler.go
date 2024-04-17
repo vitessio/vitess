@@ -1359,9 +1359,8 @@ func (throttler *Throttler) ThrottledAppsMap() (result map[string](*base.AppThro
 }
 
 // markRecentApp takes note that an app has just asked about throttling, making it "recent"
-func (throttler *Throttler) markRecentApp(appName string, remoteAddr string) {
-	recentAppKey := fmt.Sprintf("%s/%s", appName, remoteAddr)
-	throttler.recentApps.Set(recentAppKey, time.Now(), cache.DefaultExpiration)
+func (throttler *Throttler) markRecentApp(appName string) {
+	throttler.recentApps.Set(appName, time.Now(), cache.DefaultExpiration)
 }
 
 // RecentAppsMap returns a (copy) map of apps which checked for throttling recently
@@ -1409,7 +1408,7 @@ func (throttler *Throttler) AppRequestMetricResult(ctx context.Context, appName 
 }
 
 // checkStore checks the aggregated value of given MySQL store
-func (throttler *Throttler) checkStore(ctx context.Context, appName string, storeName string, metricNames base.MetricNames, remoteAddr string, flags *CheckFlags) (checkResult *CheckResult) {
+func (throttler *Throttler) checkStore(ctx context.Context, appName string, storeName string, metricNames base.MetricNames, flags *CheckFlags) (checkResult *CheckResult) {
 	if !throttler.IsRunning() {
 		return okMetricCheckResult
 	}
@@ -1419,7 +1418,7 @@ func (throttler *Throttler) checkStore(ctx context.Context, appName string, stor
 		return okMetricCheckResult
 	}
 
-	checkResult = throttler.check.Check(ctx, appName, storeName, metricNames, remoteAddr, flags)
+	checkResult = throttler.check.Check(ctx, appName, storeName, metricNames, flags)
 	if metric, ok := checkResult.Metrics[throttler.metricNameUsedAsDefault().String()]; ok {
 		// v19 compatibility: if this v20 server is a replica, reporting to a v19 primary,
 		// then we must supply the v19-flavor check result.
@@ -1454,25 +1453,25 @@ func (throttler *Throttler) checkStore(ctx context.Context, appName string, stor
 }
 
 // checkShard checks the health of the shard, and runs on the primary tablet only
-func (throttler *Throttler) checkShard(ctx context.Context, appName string, metricNames base.MetricNames, remoteAddr string, flags *CheckFlags) (checkResult *CheckResult) {
-	return throttler.checkStore(ctx, appName, shardStoreName, metricNames, remoteAddr, flags)
+func (throttler *Throttler) checkShard(ctx context.Context, appName string, metricNames base.MetricNames, flags *CheckFlags) (checkResult *CheckResult) {
+	return throttler.checkStore(ctx, appName, shardStoreName, metricNames, flags)
 }
 
 // CheckSelf is checks the mysql/self metric, and is available on each tablet
-func (throttler *Throttler) checkSelf(ctx context.Context, appName string, metricNames base.MetricNames, remoteAddr string, flags *CheckFlags) (checkResult *CheckResult) {
-	return throttler.checkStore(ctx, appName, selfStoreName, metricNames, remoteAddr, flags)
+func (throttler *Throttler) checkSelf(ctx context.Context, appName string, metricNames base.MetricNames, flags *CheckFlags) (checkResult *CheckResult) {
+	return throttler.checkStore(ctx, appName, selfStoreName, metricNames, flags)
 }
 
 // CheckByType runs a check by requested check type
-func (throttler *Throttler) CheckByType(ctx context.Context, appName string, metricNames base.MetricNames, remoteAddr string, flags *CheckFlags, checkType ThrottleCheckType) (checkResult *CheckResult) {
+func (throttler *Throttler) CheckByType(ctx context.Context, appName string, metricNames base.MetricNames, flags *CheckFlags, checkType ThrottleCheckType) (checkResult *CheckResult) {
 	switch checkType {
 	case ThrottleCheckSelf:
-		return throttler.checkSelf(ctx, appName, metricNames, remoteAddr, flags)
+		return throttler.checkSelf(ctx, appName, metricNames, flags)
 	case ThrottleCheckPrimaryWrite:
 		if throttler.checkAsCheckSelf.Load() {
-			return throttler.checkSelf(ctx, appName, metricNames, remoteAddr, flags)
+			return throttler.checkSelf(ctx, appName, metricNames, flags)
 		}
-		return throttler.checkShard(ctx, appName, metricNames, remoteAddr, flags)
+		return throttler.checkShard(ctx, appName, metricNames, flags)
 	default:
 		return invalidCheckTypeCheckResult
 	}

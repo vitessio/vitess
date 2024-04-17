@@ -792,7 +792,7 @@ func TestDormant(t *testing.T) {
 		assert.True(t, throttler.isDormant())
 		assert.EqualValues(t, 1, heartbeatWriter.Requests()) // once upon Enable()
 		flags := &CheckFlags{}
-		throttler.CheckByType(ctx, throttlerapp.VitessName.String(), nil, "", flags, ThrottleCheckSelf)
+		throttler.CheckByType(ctx, throttlerapp.VitessName.String(), nil, flags, ThrottleCheckSelf)
 		go func() {
 			select {
 			case <-ctx.Done():
@@ -801,7 +801,7 @@ func TestDormant(t *testing.T) {
 				assert.True(t, throttler.isDormant())
 				assert.EqualValues(t, 1, heartbeatWriter.Requests()) // "vitess" name does not cause heartbeat requests
 			}
-			throttler.CheckByType(ctx, throttlerapp.ThrottlerStimulatorName.String(), nil, "", flags, ThrottleCheckSelf)
+			throttler.CheckByType(ctx, throttlerapp.ThrottlerStimulatorName.String(), nil, flags, ThrottleCheckSelf)
 			select {
 			case <-ctx.Done():
 				require.FailNow(t, "context expired before testing completed")
@@ -809,7 +809,7 @@ func TestDormant(t *testing.T) {
 				assert.False(t, throttler.isDormant())
 				assert.Greater(t, heartbeatWriter.Requests(), int64(1))
 			}
-			throttler.CheckByType(ctx, throttlerapp.OnlineDDLName.String(), nil, "", flags, ThrottleCheckSelf)
+			throttler.CheckByType(ctx, throttlerapp.OnlineDDLName.String(), nil, flags, ThrottleCheckSelf)
 			select {
 			case <-ctx.Done():
 				require.FailNow(t, "context expired before testing completed")
@@ -845,7 +845,7 @@ func TestReplica(t *testing.T) {
 	runThrottler(t, ctx, throttler, time.Minute, func(t *testing.T, ctx context.Context) {
 		assert.Empty(t, tmClient.AppNames())
 		flags := &CheckFlags{}
-		checkResult := throttler.CheckByType(ctx, throttlerapp.VitessName.String(), nil, "", flags, ThrottleCheckSelf)
+		checkResult := throttler.CheckByType(ctx, throttlerapp.VitessName.String(), nil, flags, ThrottleCheckSelf)
 		assert.NotNil(t, checkResult)
 		go func() {
 			t.Run("checks", func(t *testing.T) {
@@ -855,7 +855,7 @@ func TestReplica(t *testing.T) {
 				case <-time.After(time.Second):
 					assert.Empty(t, tmClient.AppNames())
 				}
-				checkResult := throttler.CheckByType(ctx, throttlerapp.OnlineDDLName.String(), nil, "", flags, ThrottleCheckSelf)
+				checkResult := throttler.CheckByType(ctx, throttlerapp.OnlineDDLName.String(), nil, flags, ThrottleCheckSelf)
 				assert.NotNil(t, checkResult)
 				select {
 				case <-ctx.Done():
@@ -864,7 +864,7 @@ func TestReplica(t *testing.T) {
 					appNames := tmClient.AppNames()
 					assert.Equal(t, []string{throttlerapp.ThrottlerStimulatorName.String()}, appNames)
 				}
-				checkResult = throttler.CheckByType(ctx, throttlerapp.OnlineDDLName.String(), nil, "", flags, ThrottleCheckSelf)
+				checkResult = throttler.CheckByType(ctx, throttlerapp.OnlineDDLName.String(), nil, flags, ThrottleCheckSelf)
 				assert.NotNil(t, checkResult)
 				select {
 				case <-ctx.Done():
@@ -878,7 +878,7 @@ func TestReplica(t *testing.T) {
 
 			t.Run("metrics", func(t *testing.T) {
 				// See which metrics are available
-				checkResult = throttler.CheckByType(ctx, throttlerapp.VitessName.String(), base.KnownMetricNames, "", flags, ThrottleCheckSelf)
+				checkResult = throttler.CheckByType(ctx, throttlerapp.VitessName.String(), base.KnownMetricNames, flags, ThrottleCheckSelf)
 				require.NotNil(t, checkResult)
 				assert.Equal(t, len(base.KnownMetricNames), len(checkResult.Metrics))
 
@@ -923,7 +923,7 @@ func TestReplica(t *testing.T) {
 				<-runSerialFunction(t, ctx, throttler, func(ctx context.Context) {
 					throttler.refreshMySQLInventory(ctx)
 				})
-				checkResult = throttler.CheckByType(ctx, throttlerapp.VitessName.String(), base.KnownMetricNames, "", flags, ThrottleCheckSelf)
+				checkResult = throttler.CheckByType(ctx, throttlerapp.VitessName.String(), base.KnownMetricNames, flags, ThrottleCheckSelf)
 				require.NotNil(t, checkResult)
 				assert.Equal(t, len(base.KnownMetricNames), len(checkResult.Metrics))
 
