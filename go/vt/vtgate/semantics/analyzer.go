@@ -53,7 +53,7 @@ type analyzer struct {
 // newAnalyzer create the semantic analyzer
 func newAnalyzer(dbName string, si SchemaInformation, fullAnalysis bool) *analyzer {
 	// TODO  dependencies between these components are a little tangled. We should try to clean up
-	s := newScoper(si.GetAggregateUDFs())
+	s := newScoper(si)
 	a := &analyzer{
 		scoper:       s,
 		earlyTables:  newEarlyTableCollector(si, dbName),

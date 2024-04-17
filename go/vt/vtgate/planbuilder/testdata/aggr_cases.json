@@ -6962,7 +6962,7 @@
   {
     "comment": "Aggregate UDFs can't be handled by vtgate",
     "query": "select id from t1 group by id having udf_aggr(foo) > 1 and sum(foo) = 10",
-    "plan": "VT03033: aggregate user-defined function udf_aggr(foo) must be pushed down to mysql"
+    "plan": "VT12001: unsupported: Aggregate UDF 'udf_aggr(foo)' must be pushed down to MySQL"
   },
   {
     "comment": "Valid to run since we can push down the aggregate function because of the grouping",

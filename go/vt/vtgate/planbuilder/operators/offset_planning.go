@@ -139,7 +139,7 @@ func addColumnsToInput(ctx *plancontext.PlanningContext, root Operator) Operator
 		for _, aggr := range aggrOp.Aggregations {
 			if aggr.OpCode == opcode.AggregateUDF {
 				// we don't support UDFs in aggregation if it's still above a route
-				message := fmt.Sprintf("Aggregate UDF %s must be pushed down to MySQL", sqlparser.String(aggr.Original.Expr))
+				message := fmt.Sprintf("Aggregate UDF '%s' must be pushed down to MySQL", sqlparser.String(aggr.Original.Expr))
 				panic(vterrors.VT12001(message))
 			}
 		}
