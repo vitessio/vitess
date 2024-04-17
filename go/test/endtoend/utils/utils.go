@@ -249,7 +249,7 @@ func WaitForAuthoritative(t TestingT, ks, tbl string, readVSchema func() (*inter
 	for {
 		select {
 		case <-timeout:
-			return fmt.Errorf("schema tracking didn't mark table t2 as authoritative until timeout")
+			return fmt.Errorf("schema tracking didn't mark table %v.%v as authoritative until timeout", ks, tbl)
 		default:
 			res, err := readVSchema()
 			require.NoError(t, err, res)
