@@ -88,7 +88,7 @@ func (p Phase) shouldRun(s semantics.QuerySignature) bool {
 func (p Phase) act(ctx *plancontext.PlanningContext, op Operator) Operator {
 	switch p {
 	case pullDistinctFromUnion:
-		return pullDistinctFromUNION(ctx, op)
+		return isolateDistinctFromUnion(ctx, op)
 	case delegateAggregation:
 		return enableDelegateAggregation(ctx, op)
 	case addAggrOrdering:

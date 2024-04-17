@@ -77,20 +77,8 @@ const (
 	AggregateCountStar
 	AggregateGroupConcat
 	AggregateAvg
+	AggregateUDF  // This is an opcode used to represent UDFs
 	_NumOfOpCodes // This line must be last of the opcodes!
-)
-
-var (
-	// OpcodeType keeps track of the known output types for different aggregate functions
-	OpcodeType = map[AggregateOpcode]querypb.Type{
-		AggregateCountDistinct: sqltypes.Int64,
-		AggregateCount:         sqltypes.Int64,
-		AggregateCountStar:     sqltypes.Int64,
-		AggregateSumDistinct:   sqltypes.Decimal,
-		AggregateSum:           sqltypes.Decimal,
-		AggregateAvg:           sqltypes.Decimal,
-		AggregateGtid:          sqltypes.VarChar,
-	}
 )
 
 // SupportedAggregates maps the list of supported aggregate
@@ -166,6 +154,8 @@ func (code AggregateOpcode) SQLType(typ querypb.Type) querypb.Type {
 		return sqltypes.Int64
 	case AggregateGtid:
 		return sqltypes.VarChar
+	case AggregateUDF:
+		return sqltypes.Unknown
 	default:
 		panic(code.String()) // we have a unit test checking we never reach here
 	}

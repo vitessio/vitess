@@ -19,6 +19,8 @@ package planbuilder
 import (
 	"testing"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -74,7 +76,11 @@ func TestHavingRewrite(t *testing.T) {
 	for _, tcase := range tcases {
 		t.Run(tcase.input, func(t *testing.T) {
 			semTable, reservedVars, sel := prepTest(t, tcase.input)
-			err := queryRewrite(semTable, reservedVars, sel)
+			ctx := &plancontext.PlanningContext{
+				ReservedVars: reservedVars,
+				SemTable:     semTable,
+			}
+			err := queryRewrite(ctx, sel)
 			require.NoError(t, err)
 			assert.Equal(t, tcase.output, sqlparser.String(sel))
 		})
