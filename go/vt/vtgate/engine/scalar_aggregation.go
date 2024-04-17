@@ -80,7 +80,7 @@ func (sa *ScalarAggregate) NeedsTransaction() bool {
 
 // TryExecute implements the Primitive interface
 func (sa *ScalarAggregate) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	result, err := vcursor.ExecutePrimitive(ctx, sa.Input, bindVars, wantfields)
+	result, err := vcursor.ExecutePrimitive(ctx, sa.Input, bindVars, true)
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +114,7 @@ func (sa *ScalarAggregate) TryStreamExecute(ctx context.Context, vcursor VCursor
 	var fields []*querypb.Field
 	fieldsSent := !wantfields
 
-	err := vcursor.StreamExecutePrimitive(ctx, sa.Input, bindVars, wantfields, func(result *sqltypes.Result) error {
+	err := vcursor.StreamExecutePrimitive(ctx, sa.Input, bindVars, true, func(result *sqltypes.Result) error {
 		// as the underlying primitive call is not sync
 		// and here scalar aggregate is using shared variables we have to sync the callback
 		// for correct aggregation.
