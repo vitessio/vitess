@@ -166,9 +166,6 @@ func (c *Client) ThrottleCheckOKOrWait(ctx context.Context) bool {
 // The function is not thread safe.
 func (c *Client) Throttle(ctx context.Context) {
 	for {
-		if ctx.Err() != nil {
-			return
-		}
 		if c.ThrottleCheckOKOrWait(ctx) {
 			return
 		}
