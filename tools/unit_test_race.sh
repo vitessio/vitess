@@ -24,11 +24,13 @@ fi
 # Output per line: <full Go package name> <all _test.go files in the package>*
 
 packages_with_tests=$(go list -f '{{if len .TestGoFiles}}{{.ImportPath}} {{join .TestGoFiles " "}}{{end}}{{if len .XTestGoFiles}}{{.ImportPath}} {{join .XTestGoFiles " "}}{{end}}' ./go/... | sort)
+if [[ "$VT_EVALENGINE_TEST" == "1" ]]; then
+  packages_with_tests=$(echo "$packages_with_tests" | grep "evalengine")
+fi
 
-# exclude end to end tests
-packages_to_test=$(echo "$packages_with_tests" | cut -d" " -f1 | grep -v "endtoend")
-all_except_flaky_tests=$(echo "$packages_to_test" | grep -vE ".+ .+_flaky_test\.go" | cut -d" " -f1 | grep -v "endtoend")
-flaky_tests=$(echo "$packages_to_test" | grep -E ".+ .+_flaky_test\.go" | cut -d" " -f1)
+if [[ "$VT_EVALENGINE_TEST" == "-1" ]]; then
+  packages_with_tests=$(echo "$packages_with_tests" | grep -v "evalengine")
+fi
 
 # Flaky tests have the suffix "_flaky_test.go".
 # Exclude endtoend tests
