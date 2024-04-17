@@ -161,6 +161,7 @@ type (
 		ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error)
 		GetForeignKeyChecksState() *bool
 		KeyspaceError(keyspace string) error
+		GetAggregateUDFs() []string
 	}
 
 	shortCut = int

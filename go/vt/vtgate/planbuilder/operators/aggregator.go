@@ -83,7 +83,7 @@ func (a *Aggregator) AddPredicate(_ *plancontext.PlanningContext, expr sqlparser
 	return newFilter(a, expr)
 }
 
-func (a *Aggregator) addColumnWithoutPushing(_ *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, addToGroupBy bool) int {
+func (a *Aggregator) addColumnWithoutPushing(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, addToGroupBy bool) int {
 	offset := len(a.Columns)
 	a.Columns = append(a.Columns, expr)
 
@@ -96,6 +96,12 @@ func (a *Aggregator) addColumnWithoutPushing(_ *plancontext.PlanningContext, exp
 		switch e := expr.Expr.(type) {
 		case sqlparser.AggrFunc:
 			aggr = createAggrFromAggrFunc(e, expr)
+		case *sqlparser.FuncExpr:
+			if IsAggr(ctx, e) {
+				aggr = NewAggr(opcode.AggregateUDF, nil, expr, expr.As.String())
+			} else {
+				aggr = NewAggr(opcode.AggregateAnyValue, nil, expr, expr.As.String())
+			}
 		default:
 			aggr = NewAggr(opcode.AggregateAnyValue, nil, expr, expr.As.String())
 		}

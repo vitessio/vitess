@@ -292,7 +292,7 @@ func (hj *HashJoin) addColumn(ctx *plancontext.PlanningContext, in sqlparser.Exp
 			}
 			inOffset := op.FindCol(ctx, expr, false)
 			if inOffset == -1 {
-				if !mustFetchFromInput(expr) {
+				if !mustFetchFromInput(ctx, expr) {
 					return -1
 				}
 
@@ -398,7 +398,7 @@ func (hj *HashJoin) addSingleSidedColumn(
 			}
 			inOffset := op.FindCol(ctx, expr, false)
 			if inOffset == -1 {
-				if !mustFetchFromInput(expr) {
+				if !mustFetchFromInput(ctx, expr) {
 					return -1
 				}
 

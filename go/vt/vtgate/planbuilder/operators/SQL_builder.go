@@ -96,7 +96,7 @@ func (qb *queryBuilder) addPredicate(expr sqlparser.Expr) {
 
 	switch stmt := qb.stmt.(type) {
 	case *sqlparser.Select:
-		if containsAggr(expr) {
+		if ContainsAggr(qb.ctx, expr) {
 			addPred = stmt.AddHaving
 		} else {
 			addPred = stmt.AddWhere
