@@ -65,14 +65,13 @@ jobs:
       - name: Create Pull Request
         if: steps.detect-and-update.outputs.create-pr == 'true'
         uses: peter-evans/create-pull-request@v4
-        env:
-          GITHUB_TOKEN: ${{ secrets.CREATE_PR_VITESS_BOT }}
         with:
+          token: ${{ secrets.CREATE_PR_VITESS_BOT }}
           branch: "upgrade-go-to-${{steps.detect-and-update.outputs.go-version}}-on-${{ matrix.branch }}"
           commit-message: "bump go version to go${{steps.detect-and-update.outputs.go-version}}"
           signoff: true
           delete-branch: true
-          team-reviewers: vitessio/release
+          team-reviewers: Release
           title: "[${{ matrix.branch }}] Upgrade the Golang version to `go${{steps.detect-and-update.outputs.go-version}}`"
           body: |
             This Pull Request bumps the Golang version to `go${{steps.detect-and-update.outputs.go-version}}` and the bootstrap version to `${{steps.detect-and-update.outputs.bootstrap-version}}`.

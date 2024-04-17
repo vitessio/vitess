@@ -1,7 +1,6 @@
 name: Update Golang Dependencies
 
 on:
-  pull_request:
   schedule:
     - cron: "0 0 1,15 * *" # Runs every month on the 1st and 15th days at midnight UTC
   workflow_dispatch:
