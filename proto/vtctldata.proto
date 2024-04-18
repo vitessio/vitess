@@ -211,6 +211,7 @@ message WorkflowOptions {
   // Remove auto_increment clauses on tables when moving them to a sharded
   // keyspace.
   bool strip_sharded_auto_increment = 2;
+  repeated string shards = 3;
 }
 
 // TODO: comment the hell out of this.
