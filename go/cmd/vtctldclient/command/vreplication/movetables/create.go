@@ -78,6 +78,10 @@ var (
 			if err := checkAtomicCopyOptions(); err != nil {
 				return err
 			}
+
+			if len(createOptions.WorkflowOptions.GetShards()) > 0 && createOptions.WorkflowOptions.GetTenantId() == "" {
+				return fmt.Errorf("`shards` specified, but not `tenant-id`: you can only specify target shards for multi-tenant migrations")
+			}
 			return nil
 		},
 		RunE: commandCreate,
