@@ -331,30 +331,45 @@ func TestDBKillWithContext(t *testing.T) {
 // TestDBConnClose tests that an Exec returns immediately if a connection
 // is asynchronously killed (and closed) in the middle of an execution.
 func TestDBConnClose(t *testing.T) {
+	t.Run("context cancel", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		go func() {
+			time.Sleep(10 * time.Millisecond)
+			cancel()
+		}()
+		testContextError(t, ctx, "(errno 1317) (sqlstate 70100): Query execution was interrupted")
+	})
+
+	t.Run("context deadline", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		defer cancel()
+		testContextError(t, ctx, "(errno 3024) (sqlstate HY000): Query execution was interrupted, maximum statement execution time exceeded")
+	})
+}
+
+func testContextError(t *testing.T, ctx context.Context, expErrMsg string) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	connPool := newPool()
 	params := dbconfigs.New(db.ConnParams())
 	connPool.Open(params, params, params)
 	defer connPool.Close()
-	dbConn, err := newPooledConn(context.Background(), connPool, params)
-	require.NoError(t, err)
-	defer dbConn.Close()
 
 	query := "sleep"
 	db.AddQuery(query, &sqltypes.Result{})
 	db.SetBeforeFunc(query, func() {
 		time.Sleep(100 * time.Millisecond)
 	})
+	db.AddQueryPattern(`kill query \d+`, &sqltypes.Result{})
+
+	dbConn, err := newPooledConn(context.Background(), connPool, params)
+	require.NoError(t, err)
+	defer dbConn.Close()
 
 	start := time.Now()
-	go func() {
-		time.Sleep(10 * time.Millisecond)
-		dbConn.Kill("test kill", 0)
-	}()
-	_, err = dbConn.Exec(context.Background(), query, 1, false)
-	assert.Contains(t, err.Error(), "(errno 2013) due to")
-	assert.True(t, time.Since(start) < 100*time.Millisecond, "%v %v", time.Since(start), 100*time.Millisecond)
+	_, err = dbConn.Exec(ctx, query, 1, false)
+	assert.ErrorContains(t, err, expErrMsg)
+	assert.True(t, time.Since(start) > 100*time.Millisecond, "%v %v", time.Since(start), 100*time.Millisecond)
 }
 
 func TestDBNoPoolConnKill(t *testing.T) {
@@ -564,6 +579,23 @@ func TestDBConnReApplySetting(t *testing.T) {
 }
 
 func TestDBExecOnceKillTimeout(t *testing.T) {
+	executeWithTimeout(t, `kill \d+`, 150*time.Millisecond, func(ctx context.Context, dbConn *Conn) (*sqltypes.Result, error) {
+		return dbConn.ExecOnce(ctx, "select 1", 1, false)
+	})
+}
+
+func TestDBExecKillTimeout(t *testing.T) {
+	executeWithTimeout(t, `kill query \d+`, 1000*time.Millisecond, func(ctx context.Context, dbConn *Conn) (*sqltypes.Result, error) {
+		return dbConn.Exec(ctx, "select 1", 1, false)
+	})
+}
+
+func executeWithTimeout(
+	t *testing.T,
+	expectedKillQuery string,
+	responseTime time.Duration,
+	execute func(context.Context, *Conn) (*sqltypes.Result, error),
+) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	connPool := newPool()
@@ -590,7 +622,8 @@ func TestDBExecOnceKillTimeout(t *testing.T) {
 	// It should also run into a timeout.
 	var timestampKill atomic.Int64
 	dbConn.killTimeout = 100 * time.Millisecond
-	db.AddQueryPatternWithCallback(`kill query \d+`, &sqltypes.Result{}, func(string) {
+
+	db.AddQueryPatternWithCallback(expectedKillQuery, &sqltypes.Result{}, func(string) {
 		timestampKill.Store(time.Now().UnixMicro())
 		// should take longer than the configured kill timeout above.
 		time.Sleep(200 * time.Millisecond)
@@ -599,7 +632,7 @@ func TestDBExecOnceKillTimeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 
-	result, err := dbConn.ExecOnce(ctx, "select 1", 1, false)
+	result, err := execute(ctx, dbConn)
 	timeDone := time.Now()
 
 	require.Error(t, err)
@@ -612,5 +645,5 @@ func TestDBExecOnceKillTimeout(t *testing.T) {
 	// In real scenario mysql will kill the query immediately and return the error.
 	// Here, kill call happens after 100ms but took 1000ms to complete.
 	require.WithinDuration(t, timeQuery, timeKill, 150*time.Millisecond)
-	require.WithinDuration(t, timeKill, timeDone, 1000*time.Millisecond)
+	require.WithinDuration(t, timeKill, timeDone, responseTime)
 }

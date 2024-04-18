@@ -18,6 +18,7 @@ package connpool
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -124,7 +125,7 @@ func (dbc *Conn) Exec(ctx context.Context, query string, maxrows int, wantfields
 	defer span.Finish()
 
 	for attempt := 1; attempt <= 2; attempt++ {
-		r, err := dbc.execOnce(ctx, query, maxrows, wantfields)
+		r, err := dbc.execOnce(ctx, query, maxrows, wantfields, false)
 		switch {
 		case err == nil:
 			// Success.
@@ -158,7 +159,7 @@ func (dbc *Conn) Exec(ctx context.Context, query string, maxrows int, wantfields
 	panic("unreachable")
 }
 
-func (dbc *Conn) execOnce(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
+func (dbc *Conn) execOnce(ctx context.Context, query string, maxrows int, wantfields bool, insideTxn bool) (*sqltypes.Result, error) {
 	dbc.current.Store(&query)
 	defer dbc.current.Store(nil)
 
@@ -185,9 +186,11 @@ func (dbc *Conn) execOnce(ctx context.Context, query string, maxrows int, wantfi
 
 	select {
 	case <-ctx.Done():
-		_ = dbc.KillQuery(ctx.Err().Error(), time.Since(now))
-		// wait for the execute method to finish to make connection reusable.
-		<-ch
+		dbc.terminate(ctx, insideTxn, now)
+		if !insideTxn {
+			// wait for the execute method to finish to make connection reusable.
+			<-ch
+		}
 		return nil, dbc.Err()
 	case r := <-ch:
 		if dbcErr := dbc.Err(); dbcErr != nil {
@@ -197,9 +200,28 @@ func (dbc *Conn) execOnce(ctx context.Context, query string, maxrows int, wantfi
 	}
 }
 
+// terminate kills the query or connection based on the transaction status
+func (dbc *Conn) terminate(ctx context.Context, insideTxn bool, now time.Time) {
+	var errMsg string
+	switch {
+	case errors.Is(ctx.Err(), context.DeadlineExceeded):
+		errMsg = "(errno 3024) (sqlstate HY000): Query execution was interrupted, maximum statement execution time exceeded"
+	case errors.Is(ctx.Err(), context.Canceled):
+		errMsg = "(errno 1317) (sqlstate 70100): Query execution was interrupted"
+	default:
+		errMsg = ctx.Err().Error()
+	}
+	if insideTxn {
+		// we can't safely kill a query in a transaction, we need to kill the connection
+		_ = dbc.Kill(errMsg, time.Since(now))
+	} else {
+		_ = dbc.KillQuery(errMsg, time.Since(now))
+	}
+}
+
 // ExecOnce executes the specified query, but does not retry on connection errors.
 func (dbc *Conn) ExecOnce(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
-	return dbc.execOnce(ctx, query, maxrows, wantfields)
+	return dbc.execOnce(ctx, query, maxrows, wantfields, true /* Once means we are in a txn*/)
 }
 
 // FetchNext returns the next result set.
@@ -237,6 +259,7 @@ func (dbc *Conn) Stream(ctx context.Context, query string, callback func(*sqltyp
 			},
 			alloc,
 			streamBufferSize,
+			false,
 		)
 		switch {
 		case err == nil:
@@ -269,7 +292,14 @@ func (dbc *Conn) Stream(ctx context.Context, query string, callback func(*sqltyp
 	panic("unreachable")
 }
 
-func (dbc *Conn) streamOnce(ctx context.Context, query string, callback func(*sqltypes.Result) error, alloc func() *sqltypes.Result, streamBufferSize int) error {
+func (dbc *Conn) streamOnce(
+	ctx context.Context,
+	query string,
+	callback func(*sqltypes.Result) error,
+	alloc func() *sqltypes.Result,
+	streamBufferSize int,
+	insideTxn bool,
+) error {
 	dbc.current.Store(&query)
 	defer dbc.current.Store(nil)
 
@@ -284,9 +314,11 @@ func (dbc *Conn) streamOnce(ctx context.Context, query string, callback func(*sq
 
 	select {
 	case <-ctx.Done():
-		_ = dbc.KillQuery(ctx.Err().Error(), time.Since(now))
-		// wait for the execute method to finish to make connection reusable.
-		<-ch
+		dbc.terminate(ctx, insideTxn, now)
+		if !insideTxn {
+			// wait for the execute method to finish to make connection reusable.
+			<-ch
+		}
 		return dbc.Err()
 	case err := <-ch:
 		if dbcErr := dbc.Err(); dbcErr != nil {
@@ -297,7 +329,14 @@ func (dbc *Conn) streamOnce(ctx context.Context, query string, callback func(*sq
 }
 
 // StreamOnce executes the query and streams the results. But, does not retry on connection errors.
-func (dbc *Conn) StreamOnce(ctx context.Context, query string, callback func(*sqltypes.Result) error, alloc func() *sqltypes.Result, streamBufferSize int, includedFields querypb.ExecuteOptions_IncludedFields) error {
+func (dbc *Conn) StreamOnce(
+	ctx context.Context,
+	query string,
+	callback func(*sqltypes.Result) error,
+	alloc func() *sqltypes.Result,
+	streamBufferSize int,
+	includedFields querypb.ExecuteOptions_IncludedFields,
+) error {
 	resultSent := false
 	return dbc.streamOnce(
 		ctx,
@@ -311,6 +350,7 @@ func (dbc *Conn) StreamOnce(ctx context.Context, query string, callback func(*sq
 		},
 		alloc,
 		streamBufferSize,
+		true, // Once means we are in a txn
 	)
 }
 
@@ -366,7 +406,7 @@ func (dbc *Conn) Close() {
 
 // ApplySetting implements the pools.Resource interface.
 func (dbc *Conn) ApplySetting(ctx context.Context, setting *smartconnpool.Setting) error {
-	if _, err := dbc.execOnce(ctx, setting.ApplyQuery(), 1, false); err != nil {
+	if _, err := dbc.execOnce(ctx, setting.ApplyQuery(), 1, false, false); err != nil {
 		return err
 	}
 	dbc.setting = setting
@@ -375,7 +415,7 @@ func (dbc *Conn) ApplySetting(ctx context.Context, setting *smartconnpool.Settin
 
 // ResetSetting implements the pools.Resource interface.
 func (dbc *Conn) ResetSetting(ctx context.Context) error {
-	if _, err := dbc.execOnce(ctx, dbc.setting.ResetQuery(), 1, false); err != nil {
+	if _, err := dbc.execOnce(ctx, dbc.setting.ResetQuery(), 1, false, false); err != nil {
 		return err
 	}
 	dbc.setting = nil
@@ -415,7 +455,7 @@ func (dbc *Conn) kill(ctx context.Context, reason string, elapsed time.Duration)
 
 	// Client side action. Set error and close connection.
 	dbc.errmu.Lock()
-	dbc.err = vterrors.Errorf(vtrpcpb.Code_CANCELED, "(errno 2013) due to %s, elapsed time: %v, killing connection ID %v", reason, elapsed, dbc.conn.ID())
+	dbc.err = vterrors.Errorf(vtrpcpb.Code_CANCELED, "%s, elapsed time: %v, killing connection ID %v", reason, elapsed, dbc.conn.ID())
 	dbc.errmu.Unlock()
 	dbc.conn.Close()
 
@@ -459,7 +499,7 @@ func (dbc *Conn) killQuery(ctx context.Context, reason string, elapsed time.Dura
 
 	// Client side action. Set error for killing the query on timeout.
 	dbc.errmu.Lock()
-	dbc.err = vterrors.Errorf(vtrpcpb.Code_CANCELED, "(errno 3024) due to %s, elapsed time: %v, killing query ID %v", reason, elapsed, dbc.conn.ID())
+	dbc.err = vterrors.Errorf(vtrpcpb.Code_CANCELED, "%s, elapsed time: %v, killing query ID %v", reason, elapsed, dbc.conn.ID())
 	dbc.errmu.Unlock()
 
 	// Server side action. Kill the executing query.
@@ -554,7 +594,7 @@ func (dbc *Conn) CurrentForLogging() string {
 	return dbc.env.Environment().Parser().TruncateForLog(queryToLog)
 }
 
-func (dbc *Conn) applySameSetting(ctx context.Context) (err error) {
-	_, err = dbc.execOnce(ctx, dbc.setting.ApplyQuery(), 1, false)
-	return
+func (dbc *Conn) applySameSetting(ctx context.Context) error {
+	_, err := dbc.execOnce(ctx, dbc.setting.ApplyQuery(), 1, false, false)
+	return err
 }

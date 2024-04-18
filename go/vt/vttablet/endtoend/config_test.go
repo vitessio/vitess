@@ -276,7 +276,7 @@ func TestQueryTimeout(t *testing.T) {
 	assert.Equal(t, vtrpcpb.Code_ABORTED, vterrors.Code(err))
 	vend := framework.DebugVars()
 	verifyIntValue(t, vend, "QueryTimeout", int(100*time.Millisecond))
-	compareIntDiff(t, vend, "Kills/Queries", vstart, 1)
+	compareIntDiff(t, vend, "Kills/Connections", vstart, 1)
 }
 
 func changeVar(t *testing.T, name, value string) (revert func()) {
