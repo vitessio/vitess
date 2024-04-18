@@ -235,8 +235,10 @@ func (client *grpcClient) dialDedicatedPool(ctx context.Context, dialPoolGroup D
 	invalidator := func() {
 		client.mu.Lock()
 		defer client.mu.Unlock()
-		m[addr].cc.Close()
-		delete(m, addr)
+		if _, exists := m[addr]; exists {
+			m[addr].cc.Close()
+			delete(m, addr)
+		}
 	}
 	return m[addr].client, invalidator, nil
 }
