@@ -18,7 +18,6 @@ package evalengine
 
 import (
 	"math"
-	"strings"
 	"time"
 
 	"vitess.io/vitess/go/hack"
@@ -1352,8 +1351,10 @@ func (b *builtinSecToTime) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	var e *evalDecimal
+	prec := datetime.DefaultPrecision
+
 	switch {
-	case arg.SQLType() == sqltypes.Decimal:
+	case sqltypes.IsDecimal(arg.SQLType()):
 		e = arg.(*evalDecimal)
 	case sqltypes.IsIntegral(arg.SQLType()):
 		e = evalToDecimal(arg, 0, 0)
@@ -1364,22 +1365,16 @@ func (b *builtinSecToTime) eval(env *ExpressionEnv) (eval, error) {
 		} else {
 			e = evalToDecimal(arg, 0, datetime.DefaultPrecision)
 		}
+	case sqltypes.IsDateOrTime(arg.SQLType()):
+		d := arg.(*evalTemporal)
+		e = evalToDecimal(d, 0, int32(d.prec))
+		prec = int(d.prec)
 	default:
 		e = evalToDecimal(arg, 0, datetime.DefaultPrecision)
 	}
 
-	prec := min(evalDecimalPrecision(e), datetime.DefaultPrecision)
-	sec, _ := e.toFloat0()
-
-	if sqltypes.IsDateOrTime(arg.SQLType()) {
-		parts := strings.Split(e.dec.String(), ".")
-		if len(parts) == 1 {
-			prec = 0
-		} else {
-			prec = min(int32(len(parts[1])), datetime.DefaultPrecision)
-		}
-	}
-	return newEvalTime(datetime.NewTimeFromSeconds(sec), int(prec)), nil
+	prec = min(int(evalDecimalPrecision(e)), prec)
+	return newEvalTime(datetime.NewTimeFromSecondsDecimal(e.dec), prec), nil
 }
 
 func (call *builtinSecToTime) compile(c *compiler) (ctype, error) {
@@ -1391,16 +1386,21 @@ func (call *builtinSecToTime) compile(c *compiler) (ctype, error) {
 	skip := c.compileNullCheck1(arg)
 
 	switch {
-	case arg.Type == sqltypes.Decimal:
+	case sqltypes.IsDecimal(arg.Type):
+		c.asm.Fn_SEC_TO_TIME_d()
 	case sqltypes.IsIntegral(arg.Type):
 		c.asm.Convert_xd(1, 0, 0)
+		c.asm.Fn_SEC_TO_TIME_d()
 	case sqltypes.IsTextOrBinary(arg.Type) && arg.isHexOrBitLiteral():
 		c.asm.Convert_xd(1, 0, 0)
+		c.asm.Fn_SEC_TO_TIME_d()
+	case sqltypes.IsDateOrTime(arg.Type):
+		c.asm.Fn_SEC_TO_TIME_D()
 	default:
 		c.asm.Convert_xd(1, 0, datetime.DefaultPrecision)
+		c.asm.Fn_SEC_TO_TIME_d()
 	}
 
-	c.asm.Fn_SEC_TO_TIME(arg.Type)
 	c.asm.jumpDestination(skip)
 	return ctype{Type: sqltypes.Time, Flag: arg.Flag}, nil
 }

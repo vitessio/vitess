@@ -18,7 +18,6 @@ package datetime
 
 import (
 	"encoding/binary"
-	"math"
 	"time"
 
 	"vitess.io/vitess/go/mysql/decimal"
@@ -717,64 +716,47 @@ func NewTimeFromStd(t time.Time) Time {
 
 func NewTimeFromSecondsDecimal(seconds decimal.Decimal) Time {
 	var neg bool
-	if seconds.Cmp(decimal.NewFromInt(0)) >= 0 {
+	if seconds.Cmp(decimal.NewFromInt(0)) < 0 {
 		neg = true
 		seconds = seconds.Mul(decimal.NewFromInt(-1))
 	}
 
-	id, frac := seconds.QuoRem(decimal.New(1, 0), 0)
+	sec, frac := seconds.QuoRem(decimal.New(1, 0), 0)
 	ns := frac.Mul(decimal.New(1, 9))
 
-	s, _ := id.Int64()
-	h, s := s/3600, s%3600
-	m, s := s/60, s%60
+	h := sec.Div(decimal.NewFromInt(3600), 0)
+	_, sec = sec.QuoRem(decimal.NewFromInt(3600), 0)
+	min := sec.Div(decimal.NewFromInt(60), 0)
+	_, sec = sec.QuoRem(decimal.NewFromInt(60), 0)
 
-	if h >= 839 {
-		h, m, s = 838, 59, 59
+	if h.Cmp(decimal.NewFromInt(839)) >= 0 {
+		h := uint16(838)
+		if neg {
+			h |= negMask
+		}
+
+		return Time{
+			hour:       h,
+			minute:     59,
+			second:     59,
+			nanosecond: 0,
+		}
 	}
 
-	hour := uint16(h)
+	hour, _ := h.Int64()
 	if neg {
-		hour |= negMask
+		hour |= int64(negMask)
 	}
 
+	m, _ := min.Int64()
+	s, _ := sec.Int64()
 	nsec, _ := ns.Int64()
+
 	return Time{
-		hour:       hour,
+		hour:       uint16(hour),
 		minute:     uint8(m),
 		second:     uint8(s),
 		nanosecond: uint32(nsec),
-	}
-}
-
-func NewTimeFromSeconds(seconds float64) Time {
-	var neg bool
-	if seconds < 0 {
-		neg = true
-		seconds = -seconds
-	}
-
-	sec, nsec := math.Modf(seconds)
-	s := int(sec)
-	ns := nsec * (1e9)
-
-	h, s := s/3600, s%3600
-	m, s := s/60, s%60
-
-	if h >= 839 {
-		h, m, s, ns = 838, 59, 59, 0
-	}
-
-	hour := uint16(h)
-	if neg {
-		hour |= negMask
-	}
-
-	return Time{
-		hour:       hour,
-		minute:     uint8(m),
-		second:     uint8(s),
-		nanosecond: uint32(ns),
 	}
 }
 

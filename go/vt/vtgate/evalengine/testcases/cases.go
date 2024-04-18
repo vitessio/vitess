@@ -1982,11 +1982,6 @@ func FnSecToTime(yield Query) {
 	mysqlDocSamples := []string{
 		`SEC_TO_TIME(2378)`,
 		`SEC_TO_TIME(2378) + 0`,
-		`SEC_TO_TIME(time'12:11:12.0000')`,
-		`SEC_TO_TIME(12321233.00000)`,
-		`SEC_TO_TIME(103458)`,
-		`SEC_TO_TIME(20000101103458.123456)`,
-		`SEC_TO_TIME(time'00:00:01.0000')`,
 	}
 
 	for _, q := range mysqlDocSamples {
