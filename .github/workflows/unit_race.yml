@@ -14,7 +14,7 @@ env:
 jobs:
 
   build:
-    name: Unit Test (Non_Evalengine_Race)
+    name: Unit Test (Race)
     runs-on: gh-hosted-runners-16cores-1
     steps:
     - name: Skip CI
@@ -130,7 +130,7 @@ jobs:
         # which musn't be more than 107 characters long.
         export VTDATAROOT="/tmp/"
         export NOVTADMINBUILD=1
-        export VT_EVALENGINE_TEST="-1"
+        export VTEVALENGINETEST="-1"
 
         eatmydata -- make unit_test_race | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 

@@ -1,9 +1,9 @@
 # DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
 
-name: Unit Test (non_evalengine_mysql80)
+name: Unit Test (mysql80)
 on: [push, pull_request]
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Unit Test (non_evalengine_mysql80)')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Unit Test (mysql80)')
   cancel-in-progress: true
 
 permissions: read-all
@@ -15,7 +15,7 @@ env:
 
 jobs:
   test:
-    name: Unit Test (non_evalengine_mysql80)
+    name: Unit Test (mysql80)
     runs-on: gh-hosted-runners-4cores-1
 
     steps:
@@ -65,7 +65,7 @@ jobs:
             - 'tools/**'
             - 'config/**'
             - 'bootstrap.sh'
-            - '.github/workflows/unit_test_non_evalengine_mysql80.yml'
+            - '.github/workflows/unit_test_mysql80.yml'
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
@@ -153,7 +153,7 @@ jobs:
         export VTDATAROOT="/tmp/"
 
         export NOVTADMINBUILD=1
-        export VT_EVALENGINE_TEST="-1"
+        export VTEVALENGINETEST="-1"
         
         eatmydata -- make unit_test | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 

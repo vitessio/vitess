@@ -24,11 +24,11 @@ fi
 # Output per line: <full Go package name> <all _test.go files in the package>*
 
 packages_with_tests=$(go list -f '{{if len .TestGoFiles}}{{.ImportPath}} {{join .TestGoFiles " "}}{{end}}{{if len .XTestGoFiles}}{{.ImportPath}} {{join .XTestGoFiles " "}}{{end}}' ./go/... | sort)
-if [[ "$VT_EVALENGINE_TEST" == "1" ]]; then
+if [[ "$VTEVALENGINETEST" == "1" ]]; then
   packages_with_tests=$(echo "$packages_with_tests" | grep "evalengine")
 fi
 
-if [[ "$VT_EVALENGINE_TEST" == "-1" ]]; then
+if [[ "$VTEVALENGINETEST" == "-1" ]]; then
   packages_with_tests=$(echo "$packages_with_tests" | grep -v "evalengine")
 fi
 

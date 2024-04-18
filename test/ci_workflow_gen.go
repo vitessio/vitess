@@ -407,11 +407,11 @@ func generateUnitTestWorkflows() {
 	for _, platform := range unitTestDatabases {
 		for _, evalengine := range []string{"1", "-1"} {
 			test := &unitTest{
-				Name:       fmt.Sprintf("Unit Test (%s_%s)", evalengineToString(evalengine), platform),
+				Name:       fmt.Sprintf("Unit Test (%s%s)", evalengineToString(evalengine), platform),
 				Platform:   string(platform),
 				Evalengine: evalengine,
 			}
-			test.FileName = fmt.Sprintf("unit_test_%s_%s.yml", evalengineToString(evalengine), platform)
+			test.FileName = fmt.Sprintf("unit_test_%s%s.yml", evalengineToString(evalengine), platform)
 			path := fmt.Sprintf("%s/%s", workflowConfigDir, test.FileName)
 			err := writeFileFromTemplate(unitTestTemplate, path, test)
 			if err != nil {
@@ -423,9 +423,9 @@ func generateUnitTestWorkflows() {
 
 func evalengineToString(evalengine string) string {
 	if evalengine == "1" {
-		return "evalengine"
+		return "evalengine_"
 	}
-	return "non_evalengine"
+	return ""
 }
 
 func setupTestDockerFile(test *selfHostedTest) error {

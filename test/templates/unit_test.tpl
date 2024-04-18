@@ -170,7 +170,7 @@ jobs:
         export VTDATAROOT="/tmp/"
 
         export NOVTADMINBUILD=1
-        export VT_EVALENGINE_TEST="{{.Evalengine}}"
+        export VTEVALENGINETEST="{{.Evalengine}}"
         
         eatmydata -- make unit_test | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
