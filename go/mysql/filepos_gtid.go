@@ -108,6 +108,10 @@ func (gtid filePosGTID) Contains(other GTIDSet) bool {
 	return gtid.ContainsGTID(filePosOther)
 }
 
+func (gtid filePosGTID) Subtract(GTIDSet) GTIDSet {
+	panic("not implemented")
+}
+
 // Equal implements GTIDSet.Equal().
 func (gtid filePosGTID) Equal(other GTIDSet) bool {
 	filePosOther, ok := other.(filePosGTID)

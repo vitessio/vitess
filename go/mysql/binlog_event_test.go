@@ -34,7 +34,7 @@ func TestQueryString(t *testing.T) {
 		Charset:  charset,
 		SQL:      "sql",
 	}
-	want := fmt.Sprintf(`{Database: "test_database", Charset: %s, SQL: "sql"}`, charset.String())
+	want := fmt.Sprintf(`{Database: "test_database", Charset: %s, SQL: "sql", Options: 0, SqlMode: 0}`, charset.String())
 	if got := input.String(); got != want {
 		t.Errorf("%#v.String() = %#v, want %#v", input, got, want)
 	}
@@ -46,7 +46,7 @@ func TestQueryStringNilCharset(t *testing.T) {
 		Charset:  nil,
 		SQL:      "sql",
 	}
-	want := `{Database: "test_database", Charset: <nil>, SQL: "sql"}`
+	want := `{Database: "test_database", Charset: <nil>, SQL: "sql", Options: 0, SqlMode: 0}`
 	if got := input.String(); got != want {
 		t.Errorf("%#v.String() = %#v, want %#v", input, got, want)
 	}

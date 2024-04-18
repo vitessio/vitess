@@ -101,6 +101,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
   sqlVal        *SQLVal
   colTuple      ColTuple
   values        Values
+  aliasedvalues AliasedValues
   valTuple      ValTuple
   whens         []*When
   when          *When
@@ -147,6 +148,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
   partDef       *PartitionDefinition
   partSpec      *PartitionSpec
   viewSpec      *ViewSpec
+  viewCheckOption ViewCheckOption
   showFilter    *ShowFilter
   frame         *Frame
   frameExtent   *FrameExtent
@@ -274,7 +276,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> SEQUENCE ENABLE DISABLE
 %token <bytes> EACH ROW BEFORE FOLLOWS PRECEDES DEFINER INVOKER
 %token <bytes> INOUT OUT DETERMINISTIC CONTAINS READS MODIFIES SQL SECURITY TEMPORARY ALGORITHM MERGE TEMPTABLE UNDEFINED
-%token <bytes> EVENT EVENTS SCHEDULE EVERY STARTS ENDS COMPLETION PRESERVE
+%token <bytes> EVENT EVENTS SCHEDULE EVERY STARTS ENDS COMPLETION PRESERVE CASCADED
 
 // SIGNAL Tokens
 %token <bytes> CLASS_ORIGIN SUBCLASS_ORIGIN MESSAGE_TEXT MYSQL_ERRNO CONSTRAINT_CATALOG CONSTRAINT_SCHEMA
@@ -303,7 +305,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> TABLE_ENCRYPTION_ADMIN TP_CONNECTION_ADMIN VERSION_TOKEN_ADMIN XA_RECOVER_ADMIN
 
 // Replication Tokens
-%token <bytes> REPLICA REPLICAS SOURCE STOP RESET FILTER LOG
+%token <bytes> REPLICA REPLICAS SOURCE STOP RESET FILTER LOG MASTER
 %token <bytes> SOURCE_HOST SOURCE_USER SOURCE_PASSWORD SOURCE_PORT SOURCE_CONNECT_RETRY SOURCE_RETRY_COUNT SOURCE_AUTO_POSITION
 %token <bytes> REPLICATE_DO_TABLE REPLICATE_IGNORE_TABLE
 
@@ -465,7 +467,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <boolVal> boolean_value
 %type <boolean> all_opt enforced_opt
 %type <str> compare
-%type <ins> insert_data
+%type <ins> insert_data insert_data_alias insert_data_select insert_data_values
 %type <expr> value value_expression num_val as_of_opt limit_val integral_or_interval_expr timestamp_value
 %type <bytes> time_unit non_microsecond_time_unit
 %type <expr> function_call_keyword function_call_nonkeyword function_call_generic function_call_conflict
@@ -474,6 +476,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <colTuple> col_tuple
 %type <exprs> expression_list group_by_list partition_by_opt
 %type <values> tuple_list row_list
+
 %type <valTuple> row_tuple tuple_or_empty
 %type <expr> tuple_expression
 %type <colName> column_name
@@ -523,6 +526,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <empty> to_opt to_or_as as_opt column_opt
 %type <str> algorithm_opt definer_opt security_opt
 %type <viewSpec> view_opts
+%type <viewCheckOption> opt_with_check_option
 %type <bytes> reserved_keyword qualified_column_name_safe_reserved_keyword non_reserved_keyword column_name_safe_keyword function_call_keywords non_reserved_keyword2 non_reserved_keyword3 all_non_reserved
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt existing_window_name_opt
 %type <colIdents> reserved_sql_id_list
@@ -563,6 +567,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <tableOption> table_option
 %type <tableOptions> table_option_list
 %type <flushOption> flush_option
+%type <boolean> flush_tables_read_lock_opt
 %type <replicationOptions> replication_option_list replication_filter_option_list
 %type <replicationOption> replication_option replication_filter_option
 %type <str> relay_logs_attribute
@@ -917,7 +922,7 @@ common_table_expression:
   }
 
 insert_statement:
-  with_clause_opt insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause insert_data on_dup_opt
+  with_clause_opt insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause insert_data_alias on_dup_opt
   {
     // insert_data returns a *Insert pre-filled with Columns & Values
     ins := $7
@@ -938,7 +943,7 @@ insert_statement:
       cols = append(cols, updateList.Name.Name)
       vals = append(vals, updateList.Expr)
     }
-    $$ = &Insert{Action: $2, Comments: Comments($3), Ignore: $4, Table: $5, Partitions: $6, Columns: cols, Rows: Values{vals}, OnDup: OnDup($9), With: $1}
+    $$ = &Insert{Action: $2, Comments: Comments($3), Ignore: $4, Table: $5, Partitions: $6, Columns: cols, Rows: &AliasedValues{Values: Values{vals}}, OnDup: OnDup($9), With: $1}
   }
 
 insert_or_replace:
@@ -1130,18 +1135,21 @@ create_statement:
     ddl := &DDL{Action: AlterStr, Table: $7, IndexSpec: &IndexSpec{Action: CreateStr, ToName: $4, Using: $5, Type: $2, Columns: $9, Options: $11}}
     $$ = &AlterTable{Table: $7, Statements: []*DDL{ddl}}
   }
-| CREATE view_opts VIEW table_name ins_column_list_opt AS lexer_position special_comment_mode select_statement_with_no_trailing_into lexer_position
+| CREATE view_opts VIEW table_name ins_column_list_opt AS lexer_position special_comment_mode select_statement_with_no_trailing_into lexer_position opt_with_check_option
   {
     $2.ViewName = $4.ToViewName()
     $2.ViewExpr = $9
     $2.Columns = $5
+    $2.CheckOption = $11
     $$ = &DDL{Action: CreateStr, ViewSpec: $2, SpecialCommentMode: $8, SubStatementPositionStart: $7, SubStatementPositionEnd: $10 - 1}
   }
-| CREATE OR REPLACE view_opts VIEW table_name AS lexer_position special_comment_mode select_statement_with_no_trailing_into lexer_position
+| CREATE OR REPLACE view_opts VIEW table_name ins_column_list_opt AS lexer_position special_comment_mode select_statement_with_no_trailing_into lexer_position opt_with_check_option
   {
     $4.ViewName = $6.ToViewName()
-    $4.ViewExpr = $10
-    $$ = &DDL{Action: CreateStr, ViewSpec: $4,  SpecialCommentMode: $9, SubStatementPositionStart: $8, SubStatementPositionEnd: $11 - 1, OrReplace: true}
+    $4.ViewExpr = $11
+    $4.Columns = $7
+    $4.CheckOption = $13
+    $$ = &DDL{Action: CreateStr, ViewSpec: $4,  SpecialCommentMode: $10, SubStatementPositionStart: $9, SubStatementPositionEnd: $12 - 1, OrReplace: true}
   }
 | CREATE DATABASE not_exists_opt ID creation_option_opt
   {
@@ -1261,6 +1269,24 @@ srs_attribute:
     }
     $1.Description = string($3)
     $$ = $1
+  }
+
+opt_with_check_option:
+  /* EMPTY */
+  {
+    $$ = ViewCheckOptionUnspecified
+  }
+| WITH CHECK OPTION
+  {
+    $$ = ViewCheckOptionCascaded
+  }
+| WITH CASCADED CHECK OPTION
+  {
+    $$ = ViewCheckOptionCascaded
+  }
+| WITH LOCAL CHECK OPTION
+  {
+    $$ = ViewCheckOptionLocal
   }
 
 default_role_opt:
@@ -3721,6 +3747,19 @@ flush_option:
   {
     $$ = &FlushOption{Name: string($1)}
   }
+| TABLE table_name_list flush_tables_read_lock_opt
+  {
+    $$ = &FlushOption{Name: string($1), Tables: $2, ReadLock: $3}
+  }
+| TABLES table_name_list flush_tables_read_lock_opt
+  {
+    $$ = &FlushOption{Name: string($1), Tables: $2, ReadLock: $3}
+  }
+
+flush_tables_read_lock_opt:
+  {$$ = false}
+| WITH READ LOCK
+  {$$ = true}
 
 relay_logs_attribute:
   { $$ = "" }
@@ -4690,8 +4729,30 @@ alter_table_statement_part:
   }
 | DROP FOREIGN KEY ID
   {
-    $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
-        []*ConstraintDefinition{&ConstraintDefinition{Name: string($4), Details: &ForeignKeyDefinition{}}}}}
+    ddl := &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{}}
+    ddl.TableSpec.AddConstraint(&ConstraintDefinition{Name: string($4), Details: &ForeignKeyDefinition{}})
+    $$ = ddl
+  }
+| RENAME CONSTRAINT FOREIGN KEY ID TO ID
+  {
+    ddl := &DDL{Action: AlterStr, ConstraintAction: RenameStr, TableSpec: &TableSpec{}}
+    ddl.TableSpec.AddConstraint(&ConstraintDefinition{Name: string($5), Details: &ForeignKeyDefinition{}})
+    ddl.TableSpec.AddConstraint(&ConstraintDefinition{Name: string($7), Details: &ForeignKeyDefinition{}})
+    $$ = ddl
+  }
+| RENAME CONSTRAINT CHECK ID TO ID
+  {
+    ddl := &DDL{Action: AlterStr, ConstraintAction: RenameStr, TableSpec: &TableSpec{}}
+    ddl.TableSpec.AddConstraint(&ConstraintDefinition{Name: string($4), Details: &CheckConstraintDefinition{}})
+    ddl.TableSpec.AddConstraint(&ConstraintDefinition{Name: string($6), Details: &CheckConstraintDefinition{}})
+    $$ = ddl
+  }
+| RENAME CONSTRAINT ID TO ID
+  {
+    ddl := &DDL{Action: AlterStr, ConstraintAction: RenameStr, TableSpec: &TableSpec{}}
+    ddl.TableSpec.AddConstraint(&ConstraintDefinition{Name: string($3)})
+    ddl.TableSpec.AddConstraint(&ConstraintDefinition{Name: string($5)})
+    $$ = ddl
   }
 | AUTO_INCREMENT equal_opt expression
   {
@@ -5268,6 +5329,10 @@ show_statement:
 | SHOW BINARY LOG STATUS
   {
     $$ = &Show{Type: string($2) + " " + string($3) + " " + string($4)}
+  }
+| SHOW MASTER STATUS
+  {
+    $$ = &Show{Type: "BINARY LOG STATUS"}
   }
 | SHOW BINARY LOGS
   {
@@ -7773,6 +7838,23 @@ lock_opt:
     $$ = ShareModeStr
   }
 
+insert_data_alias:
+  insert_data
+  {
+    $$ = $1
+  }
+| insert_data_values as_opt table_alias column_list_opt
+  {
+    $$ = $1
+    // Rows is guarenteed to be an *AliasedValues here.
+    rows := $$.Rows.(*AliasedValues)
+    rows.As = $3
+    if $4 != nil {
+        rows.Columns = $4
+    }
+    $$.Rows = rows
+  }
+
 // insert_data expands all combinations into a single rule.
 // This avoids a shift/reduce conflict while encountering the
 // following two possible constructs:
@@ -7781,35 +7863,48 @@ lock_opt:
 // Because the rules are together, the parser can keep shifting
 // the tokens until it disambiguates a as sql_id and select as keyword.
 insert_data:
-  value_or_values tuple_list
+  insert_data_select
   {
-    $$ = &Insert{Rows: $2}
+    $$ = $1
   }
-| openb closeb value_or_values tuple_list
+| insert_data_values
   {
-    $$ = &Insert{Columns: []ColIdent{}, Rows: $4}
+    $$ = $1
   }
-| select_statement_with_no_trailing_into
+
+insert_data_select:
+  select_statement_with_no_trailing_into
   {
     $$ = &Insert{Rows: $1}
+  }
+| openb ins_column_list closeb select_statement_with_no_trailing_into
+  {
+    $$ = &Insert{Columns: $2, Rows: $4}
   }
 | openb select_statement_with_no_trailing_into closeb
   {
     // Drop the redundant parenthesis.
     $$ = &Insert{Rows: $2}
   }
-| openb ins_column_list closeb value_or_values tuple_list
-  {
-    $$ = &Insert{Columns: $2, Rows: $5}
-  }
-| openb ins_column_list closeb select_statement_with_no_trailing_into
-  {
-    $$ = &Insert{Columns: $2, Rows: $4}
-  }
 | openb ins_column_list closeb openb select_statement_with_no_trailing_into closeb
   {
     // Drop the redundant parenthesis.
     $$ = &Insert{Columns: $2, Rows: $5}
+  }
+
+insert_data_values:
+  value_or_values tuple_list
+  {
+    $$ = &Insert{Rows: &AliasedValues{Values: $2}}
+  }
+| openb closeb value_or_values tuple_list
+  {
+    $$ = &Insert{Columns: []ColIdent{}, Rows: &AliasedValues{Values: $4}}
+  }
+
+| openb ins_column_list closeb value_or_values tuple_list
+  {
+    $$ = &Insert{Columns: $2, Rows: &AliasedValues{Values: $5}}
   }
 
 value_or_values:
@@ -8905,6 +9000,7 @@ non_reserved_keyword:
 | BOOL
 | BOOLEAN
 | BUCKETS
+| CASCADED
 | CATALOG_NAME
 | CHAIN
 | CHANNEL
@@ -9006,6 +9102,7 @@ non_reserved_keyword:
 | LOCKED
 | LOG
 | LOGS
+| MASTER
 | MASTER_COMPRESSION_ALGORITHMS
 | MASTER_PUBLIC_KEY_PATH
 | MASTER_TLS_CIPHERSUITES

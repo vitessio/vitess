@@ -174,8 +174,8 @@ type Query struct {
 
 // String pretty-prints a Query.
 func (q Query) String() string {
-	return fmt.Sprintf("{Database: %q, Charset: %v, SQL: %q}",
-		q.Database, q.Charset, q.SQL)
+	return fmt.Sprintf("{Database: %q, Charset: %v, SQL: %q, Options: %v, SqlMode: %v}",
+		q.Database, q.Charset, q.SQL, q.Options, q.SqlMode)
 }
 
 // TableMap contains data from a TABLE_MAP_EVENT.

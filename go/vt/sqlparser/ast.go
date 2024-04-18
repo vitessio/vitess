@@ -1628,10 +1628,11 @@ type InsertRows interface {
 	SQLNode
 }
 
-func (*Select) iInsertRows()      {}
-func (*SetOp) iInsertRows()       {}
-func (Values) iInsertRows()       {}
-func (*ParenSelect) iInsertRows() {}
+func (*Select) iInsertRows()       {}
+func (*SetOp) iInsertRows()        {}
+func (AliasedValues) iInsertRows() {}
+func (Values) iInsertRows()        {}
+func (*ParenSelect) iInsertRows()  {}
 
 // Update represents an UPDATE statement.
 // If you add fields here, consider adding them to calls to validateUnshardedRoute.
@@ -1801,13 +1802,22 @@ func (node *DBDDL) Format(buf *TrackedBuffer) {
 	}
 }
 
+type ViewCheckOption string
+
+const (
+	ViewCheckOptionUnspecified ViewCheckOption = ""
+	ViewCheckOptionCascaded    ViewCheckOption = "cascaded"
+	ViewCheckOptionLocal       ViewCheckOption = "local"
+)
+
 type ViewSpec struct {
-	ViewName  TableName
-	Columns   Columns
-	Algorithm string
-	Definer   string
-	Security  string
-	ViewExpr  SelectStatement
+	ViewName    TableName
+	Columns     Columns
+	Algorithm   string
+	Definer     string
+	Security    string
+	ViewExpr    SelectStatement
+	CheckOption ViewCheckOption
 }
 
 type TriggerSpec struct {
@@ -2016,6 +2026,9 @@ type DDL struct {
 	SpecialCommentMode        bool
 	SubStatementPositionStart int
 	SubStatementPositionEnd   int
+	// SubStatementStr will have the sub statement as a string rather than having to slice the original query.
+	// If it's empty, then use the position start and end values to slice the sub statement out of the original query.
+	SubStatementStr string
 
 	// FromViews is set if Action is DropStr.
 	FromViews TableNames
@@ -2108,6 +2121,7 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 		if node.ViewSpec != nil {
 			view := node.ViewSpec
 			afterCreate := ""
+			checkOpt := ""
 			if node.OrReplace {
 				afterCreate = "or replace "
 			}
@@ -2120,7 +2134,10 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 			if view.Security != "" {
 				afterCreate = fmt.Sprintf("%ssql security %s ", afterCreate, strings.ToLower(view.Security))
 			}
-			buf.Myprintf("%s %sview %v%v as %v", node.Action, afterCreate, view.ViewName, view.Columns, view.ViewExpr)
+			if view.CheckOption != ViewCheckOptionUnspecified {
+				checkOpt = fmt.Sprintf(" with %s check option", view.CheckOption)
+			}
+			buf.Myprintf("%s %sview %v%v as %v%s", node.Action, afterCreate, view.ViewName, view.Columns, view.ViewExpr, checkOpt)
 		} else if node.TriggerSpec != nil {
 			trigger := node.TriggerSpec
 			triggerDef := ""
@@ -2373,6 +2390,17 @@ func (node *DDL) alterFormat(buf *TrackedBuffer) {
 		default:
 			buf.Myprintf(" drop constraint %s", node.TableSpec.Constraints[0].Name)
 		}
+	} else if node.ConstraintAction == RenameStr && node.TableSpec != nil && len(node.TableSpec.Constraints) == 2 {
+		buf.Myprintf(" rename constraint")
+		switch node.TableSpec.Constraints[0].Details.(type) {
+		case *ForeignKeyDefinition:
+			buf.Myprintf(" foreign key %s to", node.TableSpec.Constraints[0].Name)
+		case *CheckConstraintDefinition:
+			buf.Myprintf(" check %s to", node.TableSpec.Constraints[0].Name)
+		default:
+			buf.Myprintf(" %s to", node.TableSpec.Constraints[0].Name)
+		}
+		buf.Myprintf(" %s", node.TableSpec.Constraints[1].Name)
 	} else if node.DefaultSpec != nil {
 		buf.Myprintf(" %v", node.DefaultSpec)
 	} else if node.AlterCollationSpec != nil {
@@ -3772,8 +3800,10 @@ func (node *Rollback) Format(buf *TrackedBuffer) {
 
 // FlushOption is used for trailing options for flush statement
 type FlushOption struct {
-	Name    string
-	Channel string
+	Name     string
+	Channel  string
+	Tables   []TableName
+	ReadLock bool
 }
 
 // Flush represents a Flush statement.
@@ -3790,10 +3820,23 @@ func (node *Flush) Format(buf *TrackedBuffer) {
 		buf.Myprintf(" %s", strings.ToLower(node.Type))
 	}
 
-	if node.Option.Name == "RELAY LOGS" && node.Option.Channel != "" {
+	if strings.EqualFold(node.Option.Name, "relay logs") && node.Option.Channel != "" {
 		buf.Myprintf(" %s for channel %s", strings.ToLower(node.Option.Name), strings.ToLower(node.Option.Channel))
 	} else {
 		buf.Myprintf(" %s", strings.ToLower(node.Option.Name))
+	}
+
+	if len(node.Option.Tables) > 0 {
+		for i, tableName := range node.Option.Tables {
+			if i > 0 {
+				buf.Myprintf(",")
+			}
+			buf.Myprintf(" %s", strings.ToLower(tableName.String()))
+		}
+
+		if node.Option.ReadLock {
+			buf.Myprintf(" with read lock")
+		}
 	}
 }
 
@@ -6481,6 +6524,21 @@ func (node Values) walkSubtree(visit Visit) error {
 		}
 	}
 	return nil
+}
+
+// AliasedValues represents a VALUES clause with an optional `AS name(colnames...)`
+type AliasedValues struct {
+	Values
+	As      TableIdent
+	Columns Columns
+}
+
+// Format formats the node.
+func (node AliasedValues) Format(buf *TrackedBuffer) {
+	node.Values.Format(buf)
+	if node.As.v != "" {
+		buf.Myprintf(" AS %v%v", node.As, node.Columns)
+	}
 }
 
 // AssignmentExprs represents a list of assignment expressions.
