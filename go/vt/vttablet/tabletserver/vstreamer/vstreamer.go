@@ -1101,7 +1101,7 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 					plan.Table.Fields[colNum].Name, plan.Table.Name, iv)
 			}
 			idx := 1
-			// See what bits are set in the uint64 using bitmasks.
+			// See what bits are set in the bitmap using bitmasks.
 			for b := uint64(1); b < 1<<63; b <<= 1 {
 				if iv&b > 0 {
 					strVal, ok := plan.EnumSetValuesMap[colNum][idx]

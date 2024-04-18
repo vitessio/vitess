@@ -38,7 +38,7 @@ import (
 */
 func main() {
 	ctx := context.Background()
-	streamCustomer := false
+	streamCustomer := true
 	var vgtid *binlogdatapb.VGtid
 	if streamCustomer {
 		vgtid = &binlogdatapb.VGtid{
