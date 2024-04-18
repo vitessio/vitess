@@ -59,7 +59,15 @@ const (
 	lengthInt  = 11
 	lengthBlob = 65535
 	lengthText = 262140
-	lengthSet  = 204 // This is the expected length of the only SET column in the test schema
+
+	// We have to hardcode the set lengths as the parser does NOT parse and store
+	// the SetValues like it does EnumValues.
+	// TODO: we should support SETs as well as ENUMs in the parser.
+	// This is the expected length of the only SET column in the test schema.
+	lengthSet = 204
+	// This is the expected length of the only SET column using a binary collation
+	// in the test schema.
+	lengthSetBinary = 428
 )
 
 var (
@@ -501,11 +509,19 @@ func (ts *TestSpec) getFieldEvent(table *schemadiff.CreateTableEntity) *TestFiel
 			tc.len = lengthText
 			tc.colType = "text"
 		case "set":
-			tc.len = lengthSet
+			if collation.IsBinary() {
+				tc.len = lengthSetBinary
+				tc.dataType = "BINARY"
+			} else {
+				tc.len = lengthSet
+			}
 			tc.colType = fmt.Sprintf("%s(%s)", tc.dataTypeLowered, strings.Join(col.Type.EnumValues, ","))
 			ts.metadata[getMetadataKey(table.Name(), tc.name)] = col.Type.EnumValues
 		case "enum":
 			tc.len = int64(len(col.Type.EnumValues) + 1)
+			if collation.IsBinary() {
+				tc.dataType = "BINARY"
+			}
 			tc.colType = fmt.Sprintf("%s(%s)", tc.dataTypeLowered, strings.Join(col.Type.EnumValues, ","))
 			ts.metadata[getMetadataKey(table.Name(), tc.name)] = col.Type.EnumValues
 		default:

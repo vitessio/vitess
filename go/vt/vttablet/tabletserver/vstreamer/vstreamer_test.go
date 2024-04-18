@@ -119,17 +119,27 @@ func TestSetAndEnum(t *testing.T) {
 		t: t,
 		ddls: []string{
 			"create table t1(id int, val binary(4), color set('red','green','blue','black','white','pink','purple','yellow','brown'), size enum('S','M','L'), primary key(id))",
+			"create table t2(id int, val binary(4), color set('red','green','blue','black','white','pink','purple','yellow','brown','eggshell','mint','tan','fuschia','teal','babyblue','grey','bulletgrey') collate utf8mb4_bin, size enum('S','M','L') collate utf8mb4_bin, primary key(id)) charset=utf8mb4",
 		},
 	}
 	defer ts.Close()
 	ts.Init()
-	ts.tests = [][]*TestQuery{{
-		{"begin", nil},
-		{"insert into t1 values (1, 'aaa', 'red,blue', 'S')", nil},
-		{"insert into t1 values (2, 'bbb', 'green,pink,purple,yellow,brown', 'M')", nil},
-		{"insert into t1 values (3, 'ccc', 'red,green,blue', 'L')", nil},
-		{"commit", nil},
-	}}
+	ts.tests = [][]*TestQuery{
+		{
+			{"begin", nil},
+			{"insert into t1 values (1, 'aaa', 'red,blue', 'S')", nil},
+			{"insert into t1 values (2, 'bbb', 'green,pink,purple,yellow,brown', 'M')", nil},
+			{"insert into t1 values (3, 'ccc', 'red,green,blue', 'L')", nil},
+			{"commit", nil},
+		},
+		{
+			{"begin", nil},
+			{"insert into t2 values (1, 'xxx', 'red,blue,black,grey', 'S')", nil},
+			{"insert into t2 values (2, 'yyy', 'green,black,pink,purple,yellow,brown,mint,tan,bulletgrey', 'M')", nil},
+			{"insert into t2 values (3, 'zzz', 'red,green,blue', 'L')", nil},
+			{"commit", nil},
+		},
+	}
 	ts.Run()
 }
 
