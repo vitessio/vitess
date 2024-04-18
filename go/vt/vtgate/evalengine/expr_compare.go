@@ -114,7 +114,7 @@ func (compareNullSafeEQ) compare(collationEnv *collations.Environment, left, rig
 }
 
 func typeIsTextual(tt sqltypes.Type) bool {
-	return sqltypes.IsTextOrBinary(tt) || tt == sqltypes.Time
+	return sqltypes.IsTextOrBinary(tt) || tt == sqltypes.Time || tt == sqltypes.Enum || tt == sqltypes.Set
 }
 
 func compareAsStrings(l, r sqltypes.Type) bool {
