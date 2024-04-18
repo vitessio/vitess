@@ -98,12 +98,13 @@ func (mz *materializer) getWorkflowSubType() (binlogdatapb.VReplicationWorkflowS
 }
 
 func (mz *materializer) getOptionsJSON() (string, error) {
-	optionsJSON, err := json.Marshal(mz.ms.WorkflowOptions)
-	if err != nil {
-		return "", err
+	defaultJSON := "{}"
+	if mz.ms.WorkflowOptions == nil {
+		return defaultJSON, nil
 	}
-	if optionsJSON == nil {
-		optionsJSON = []byte("{}")
+	optionsJSON, err := json.Marshal(mz.ms.WorkflowOptions)
+	if err != nil || optionsJSON == nil {
+		return defaultJSON, err
 	}
 	return string(optionsJSON), nil
 }
