@@ -80,6 +80,7 @@ type moveTablesWorkflow struct {
 	createFlags   []string
 	completeFlags []string
 	switchFlags   []string
+	showFlags     []string
 }
 
 type iMoveTables interface {
@@ -228,7 +229,9 @@ func (v VtctldMoveTables) ReverseReadsAndWrites() {
 }
 
 func (v VtctldMoveTables) Show() {
-	v.exec("Show")
+	args := []string{"Show"}
+	args = append(args, v.showFlags...)
+	v.exec(args...)
 }
 
 func (v VtctldMoveTables) SwitchReads() {
