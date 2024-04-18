@@ -1075,6 +1075,10 @@ func (vc *vcursorImpl) KeyspaceError(keyspace string) error {
 	return ks.Error
 }
 
+func (vc *vcursorImpl) GetAggregateUDFs() []string {
+	return vc.vschema.GetAggregateUDFs()
+}
+
 // ParseDestinationTarget parses destination target string and sets default keyspace if possible.
 func parseDestinationTarget(targetString string, vschema *vindexes.VSchema) (string, topodatapb.TabletType, key.Destination, error) {
 	destKeyspace, destTabletType, dest, err := topoprotopb.ParseDestination(targetString, defaultTabletType)

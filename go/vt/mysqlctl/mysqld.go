@@ -521,11 +521,15 @@ func (mysqld *Mysqld) WaitForDBAGrants(ctx context.Context, waitTime time.Durati
 	if waitTime == 0 {
 		return nil
 	}
+	params, err := mysqld.dbcfgs.DbaConnector().MysqlParams()
+	if err != nil {
+		return err
+	}
 	timer := time.NewTimer(waitTime)
 	ctx, cancel := context.WithTimeout(ctx, waitTime)
 	defer cancel()
 	for {
-		conn, connErr := dbconnpool.NewDBConnection(ctx, mysqld.dbcfgs.DbaConnector())
+		conn, connErr := mysql.Connect(ctx, params)
 		if connErr == nil {
 			res, fetchErr := conn.ExecuteFetch("SHOW GRANTS", 1000, false)
 			conn.Close()

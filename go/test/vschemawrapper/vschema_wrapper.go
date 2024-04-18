@@ -147,6 +147,10 @@ func (vw *VSchemaWrapper) KeyspaceError(keyspace string) error {
 	return nil
 }
 
+func (vw *VSchemaWrapper) GetAggregateUDFs() (udfs []string) {
+	return vw.V.GetAggregateUDFs()
+}
+
 func (vw *VSchemaWrapper) GetForeignKeyChecksState() *bool {
 	return vw.ForeignKeyChecksState
 }

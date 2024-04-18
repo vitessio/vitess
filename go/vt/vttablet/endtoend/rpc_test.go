@@ -218,8 +218,9 @@ func TestGetSchemaRPC(t *testing.T) {
 					t.Errorf("Schema tracking hasn't caught up")
 					return
 				case <-time.After(1 * time.Second):
-					schemaDefs, err := client.GetSchema(testcase.getSchemaQueryType, testcase.getSchemaTables...)
+					schemaDefs, udfs, err := client.GetSchema(testcase.getSchemaQueryType, testcase.getSchemaTables...)
 					require.NoError(t, err)
+					require.Empty(t, udfs)
 					success := true
 					for tableName, expectedCreateStatement := range testcase.mapToExpect {
 						if schemaDefs[tableName] != expectedCreateStatement {

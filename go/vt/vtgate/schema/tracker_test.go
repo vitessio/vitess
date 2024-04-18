@@ -26,6 +26,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/sqltypes"
+
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
@@ -168,21 +170,39 @@ func TestTrackerGetKeyspaceUpdateController(t *testing.T) {
 	assert.Nil(t, ks3.reloadKeyspace, "ks3 already initialized")
 }
 
+type myTable struct {
+	name, create string
+}
+
+func tbl(name, create string) myTable {
+	return myTable{name: name, create: create}
+}
+
+func tables(tables ...myTable) sandboxconn.SchemaResult {
+	m := map[string]string{}
+	for _, table := range tables {
+		m[table.name] = table.create
+	}
+	return sandboxconn.SchemaResult{TablesAndViews: m}
+}
+
 // TestTableTracking tests that the tracker is able to track table schema changes.
 func TestTableTracking(t *testing.T) {
-	schemaDefResult := []map[string]string{{
-		"prior": "create table prior(id int primary key)",
-	}, {
-		// initial load of view - kept empty
-	}, {
-		"t1": "create table t1(id bigint primary key, name varchar(50), email varchar(50) not null default 'a@b.com')",
-		"T1": "create table T1(id varchar(50) primary key)",
-	}, {
-		"T1": "create table T1(id varchar(50) primary key, name varchar(50))",
-		"t3": "create table t3(id datetime primary key)",
-	}, {
-		"t4": "create table t4(name varchar(50) primary key)",
-	}}
+	schemaResponse := []sandboxconn.SchemaResult{
+		tables(tbl("prior", "create table prior(id int primary key)")),
+		empty(), /*initial load of view*/
+		tables(
+			tbl("t1", "create table t1(id bigint primary key, name varchar(50), email varchar(50) not null default 'a@b.com')"),
+			tbl("T1", "create table T1(id varchar(50) primary key)"),
+		),
+		tables(
+			tbl("T1", "create table T1(id varchar(50) primary key, name varchar(50))"),
+			tbl("t3", "create table t3(id datetime primary key)"),
+		),
+		tables(
+			tbl("t4", "create table t4(name varchar(50) primary key)"),
+		),
+	}
 
 	testcases := []testCases{{
 		testName: "initial table load",
@@ -216,24 +236,24 @@ func TestTableTracking(t *testing.T) {
 		},
 	}}
 
-	testTracker(t, false, schemaDefResult, testcases)
+	testTracker(t, false, schemaResponse, testcases)
 }
 
 // TestViewsTracking tests that the tracker is able to track views.
 func TestViewsTracking(t *testing.T) {
-	schemaDefResult := []map[string]string{{
-		// initial load of table - kept empty
-	}, {
-		"prior": "create view prior as select 1 from tbl",
-	}, {
-		"t1": "create view t1 as select 1 from tbl1",
-		"V1": "create view V1 as select 1 from tbl2",
-	}, {
-		"V1": "create view V1 as select 1,2 from tbl2",
-		"t3": "create view t3 as select 1 from tbl3",
-	}, {
-		"t4": "create view t4 as select 1 from tbl4",
-	}}
+	schemaDefResult := []sandboxconn.SchemaResult{
+		empty(), /*initial load of view*/
+		tables(tbl("prior", "create view prior as select 1 from tbl")),
+		tables(
+			tbl("t1", "create view t1 as select 1 from tbl1"),
+			tbl("V1", "create view V1 as select 1 from tbl2"),
+		),
+		tables(
+			tbl("V1", "create view V1 as select 1,2 from tbl2"),
+			tbl("t3", "create view t3 as select 1 from tbl3"),
+		),
+		tables(tbl("t4", "create view t4 as select 1 from tbl4")),
+	}
 
 	testcases := []testCases{{
 		testName: "initial view load",
@@ -268,27 +288,26 @@ func TestViewsTracking(t *testing.T) {
 
 // TestFKInfoRetrieval tests that the tracker is able to retrieve required foreign key information from ddl statement.
 func TestFKInfoRetrieval(t *testing.T) {
-	schemaDefResult := []map[string]string{{
-		"my_tbl": "CREATE TABLE `my_tbl` (" +
-			"`id` bigint NOT NULL AUTO_INCREMENT," +
-			"`name` varchar(50) CHARACTER SET latin1 COLLATE latin1_swedish_ci DEFAULT NULL," +
-			"`email` varbinary(100) DEFAULT NULL," +
-			"PRIMARY KEY (`id`)," +
-			"KEY `id` (`id`,`name`)) " +
-			"ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci",
-	}, {
-		// initial load of view - kept empty
-	}, {
-		"my_child_tbl": "CREATE TABLE `my_child_tbl` (" +
-			"`id` bigint NOT NULL AUTO_INCREMENT," +
-			"`name` varchar(50) CHARACTER SET latin1 COLLATE latin1_swedish_ci DEFAULT NULL," +
-			"`code` varchar(6) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL," +
-			"`my_id` bigint DEFAULT NULL," +
-			"PRIMARY KEY (`id`)," +
-			"KEY `my_id` (`my_id`,`name`)," +
-			"CONSTRAINT `my_child_tbl_ibfk_1` FOREIGN KEY (`my_id`, `name`) REFERENCES `my_tbl` (`id`, `name`) ON DELETE CASCADE) " +
-			"ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci",
-	}}
+	schemaDefResult := []sandboxconn.SchemaResult{
+		tables(tbl("my_tbl", "CREATE TABLE `my_tbl` ("+
+			"`id` bigint NOT NULL AUTO_INCREMENT,"+
+			"`name` varchar(50) CHARACTER SET latin1 COLLATE latin1_swedish_ci DEFAULT NULL,"+
+			"`email` varbinary(100) DEFAULT NULL,"+
+			"PRIMARY KEY (`id`),"+
+			"KEY `id` (`id`,`name`)) "+
+			"ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci")),
+		empty(),
+		tables(tbl(
+			"my_child_tbl", "CREATE TABLE `my_child_tbl` ("+
+				"`id` bigint NOT NULL AUTO_INCREMENT,"+
+				"`name` varchar(50) CHARACTER SET latin1 COLLATE latin1_swedish_ci DEFAULT NULL,"+
+				"`code` varchar(6) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL,"+
+				"`my_id` bigint DEFAULT NULL,"+
+				"PRIMARY KEY (`id`),"+
+				"KEY `my_id` (`my_id`,`name`),"+
+				"CONSTRAINT `my_child_tbl_ibfk_1` FOREIGN KEY (`my_id`, `name`) REFERENCES `my_tbl` (`id`, `name`) ON DELETE CASCADE) "+
+				"ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci")),
+	}
 
 	testcases := []testCases{{
 		testName: "initial table load",
@@ -326,26 +345,26 @@ func TestFKInfoRetrieval(t *testing.T) {
 
 // TestIndexInfoRetrieval tests that the tracker is able to retrieve required index information from ddl statement.
 func TestIndexInfoRetrieval(t *testing.T) {
-	schemaDefResult := []map[string]string{{
-		"my_tbl": "CREATE TABLE `my_tbl` (" +
-			"`id` bigint NOT NULL AUTO_INCREMENT," +
-			"`name` varchar(50) CHARACTER SET latin1 COLLATE latin1_swedish_ci DEFAULT NULL," +
-			"`email` varbinary(100) DEFAULT NULL," +
-			"PRIMARY KEY (`id`)," +
-			"KEY `id` (`id`,`name`)) " +
-			"ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci",
-	}, {
-		// initial load of view - kept empty
-	}, {
-		"my_tbl": "CREATE TABLE `my_tbl` (" +
-			"`id` bigint NOT NULL AUTO_INCREMENT," +
-			"`name` varchar(50) CHARACTER SET latin1 COLLATE latin1_swedish_ci DEFAULT NULL," +
-			"`email` varbinary(100) DEFAULT NULL," +
-			"PRIMARY KEY (`id`)," +
-			"KEY `id` (`id`,`name`), " +
-			"UNIQUE KEY `email` (`email`)) " +
-			"ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci",
-	}}
+	schemaDefResult := []sandboxconn.SchemaResult{
+		tables(tbl(
+			"my_tbl", "CREATE TABLE `my_tbl` ("+
+				"`id` bigint NOT NULL AUTO_INCREMENT,"+
+				"`name` varchar(50) CHARACTER SET latin1 COLLATE latin1_swedish_ci DEFAULT NULL,"+
+				"`email` varbinary(100) DEFAULT NULL,"+
+				"PRIMARY KEY (`id`),"+
+				"KEY `id` (`id`,`name`)) "+
+				"ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci")),
+		empty(), /*initial load of view*/
+		tables(tbl(
+			"my_tbl", "CREATE TABLE `my_tbl` ("+
+				"`id` bigint NOT NULL AUTO_INCREMENT,"+
+				"`name` varchar(50) CHARACTER SET latin1 COLLATE latin1_swedish_ci DEFAULT NULL,"+
+				"`email` varbinary(100) DEFAULT NULL,"+
+				"PRIMARY KEY (`id`),"+
+				"KEY `id` (`id`,`name`), "+
+				"UNIQUE KEY `email` (`email`)) "+
+				"ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci")),
+	}
 
 	testcases := []testCases{{
 		testName: "initial table load",
@@ -384,21 +403,24 @@ func TestIndexInfoRetrieval(t *testing.T) {
 	testTracker(t, false, schemaDefResult, testcases)
 }
 
+func empty() sandboxconn.SchemaResult {
+	return sandboxconn.SchemaResult{TablesAndViews: map[string]string{}}
+}
+
 // TestUDFRetrieval tests that the tracker is able to retrieve required UDF information.
 func TestUDFRetrieval(t *testing.T) {
-	schemaDefResult := []map[string]string{{
-		// initial load of table - kept empty
-	}, {
-		// initial load of view - kept empty
-	}, {
-		"my_udf": "int",
-	}, {
-		"my_udf2": "char",
-		"my_udf3": "int",
-	}, {
-		"my_udf2": "char",
-		"my_udf4": "int",
-	}}
+	schemaDefResult := []sandboxconn.SchemaResult{
+		empty(), // initial load of table
+		empty(),
+		udfs(udf("my_udf", true, sqltypes.Int32)),
+		udfs(
+			udf("my_udf2", true, sqltypes.Char),
+			udf("my_udf3", true, sqltypes.Int32),
+		),
+		udfs(
+			udf("my_udf2", true, sqltypes.Char),
+			udf("my_udf4", true, sqltypes.Int32),
+		)}
 
 	testcases := []testCases{{
 		testName: "initial load",
@@ -416,6 +438,21 @@ func TestUDFRetrieval(t *testing.T) {
 	testTracker(t, true, schemaDefResult, testcases)
 }
 
+func udfs(udfs ...*querypb.UDFInfo) sandboxconn.SchemaResult {
+	return sandboxconn.SchemaResult{
+		TablesAndViews: map[string]string{},
+		UDFs:           udfs,
+	}
+}
+
+func udf(name string, aggr bool, typ querypb.Type) *querypb.UDFInfo {
+	return &querypb.UDFInfo{
+		Name:        name,
+		Aggregating: aggr,
+		ReturnType:  typ,
+	}
+}
+
 type testCases struct {
 	testName string
 
@@ -431,7 +468,7 @@ type testCases struct {
 	expUDFs []string
 }
 
-func testTracker(t *testing.T, enableUDFs bool, schemaDefResult []map[string]string, tcases []testCases) {
+func testTracker(t *testing.T, enableUDFs bool, schemaDefResult []sandboxconn.SchemaResult, tcases []testCases) {
 	ch := make(chan *discovery.TabletHealth)
 	tracker := NewTracker(ch, true, enableUDFs, sqlparser.NewTestParser())
 	tracker.consumeDelay = 1 * time.Millisecond
@@ -470,8 +507,9 @@ func testTracker(t *testing.T, enableUDFs bool, schemaDefResult []map[string]str
 			_, keyspacePresent := tracker.tracked[target.Keyspace]
 			require.Equal(t, true, keyspacePresent)
 
-			for k, v := range tcase.expTbl {
-				utils.MustMatch(t, v, tracker.GetColumns(keyspace, k), "mismatch columns for table: ", k)
+			for k, expectedCols := range tcase.expTbl {
+				actualCols := tracker.GetColumns(keyspace, k)
+				utils.MustMatch(t, expectedCols, actualCols, "mismatch columns for table: ", k)
 				if len(tcase.expFk[k]) > 0 {
 					fks := tracker.GetForeignKeys(keyspace, k)
 					for _, fk := range fks {

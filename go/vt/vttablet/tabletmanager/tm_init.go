@@ -366,7 +366,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 	if err := tm.checkPrimaryShip(ctx, si); err != nil {
 		return err
 	}
-	if err := tm.checkMysql(); err != nil {
+	if err := tm.checkMysql(ctx); err != nil {
 		return err
 	}
 	if err := tm.initTablet(ctx); err != nil {
@@ -702,7 +702,7 @@ func (tm *TabletManager) checkPrimaryShip(ctx context.Context, si *topo.ShardInf
 	return nil
 }
 
-func (tm *TabletManager) checkMysql() error {
+func (tm *TabletManager) checkMysql(ctx context.Context) error {
 	appConfig, err := tm.DBConfigs.AppWithDB().MysqlParams()
 	if err != nil {
 		return err
@@ -717,7 +717,7 @@ func (tm *TabletManager) checkMysql() error {
 		tm.tmState.UpdateTablet(func(tablet *topodatapb.Tablet) {
 			tablet.MysqlHostname = tablet.Hostname
 		})
-		mysqlPort, err := tm.MysqlDaemon.GetMysqlPort()
+		mysqlPort, err := tm.MysqlDaemon.GetMysqlPort(ctx)
 		if err != nil {
 			log.Warningf("Cannot get current mysql port, will keep retrying every %v: %v", mysqlPortRetryInterval, err)
 			go tm.findMysqlPort(mysqlPortRetryInterval)
@@ -730,10 +730,18 @@ func (tm *TabletManager) checkMysql() error {
 	return nil
 }
 
+const portCheckTimeout = 5 * time.Second
+
+func (tm *TabletManager) getMysqlPort() (int32, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), portCheckTimeout)
+	defer cancel()
+	return tm.MysqlDaemon.GetMysqlPort(ctx)
+}
+
 func (tm *TabletManager) findMysqlPort(retryInterval time.Duration) {
 	for {
 		time.Sleep(retryInterval)
-		mport, err := tm.MysqlDaemon.GetMysqlPort()
+		mport, err := tm.getMysqlPort()
 		if err != nil || mport == 0 {
 			continue
 		}

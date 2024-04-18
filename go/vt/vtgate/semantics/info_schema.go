@@ -1661,3 +1661,7 @@ func (i *infoSchemaWithColumns) GetForeignKeyChecksState() *bool {
 func (i *infoSchemaWithColumns) KeyspaceError(keyspace string) error {
 	return i.inner.KeyspaceError(keyspace)
 }
+
+func (i *infoSchemaWithColumns) GetAggregateUDFs() []string {
+	return i.inner.GetAggregateUDFs()
+}

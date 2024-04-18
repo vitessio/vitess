@@ -130,9 +130,14 @@ type SandboxConn struct {
 
 	NotServing bool
 
-	getSchemaResult []map[string]string
+	getSchemaResult []SchemaResult
 
 	parser *sqlparser.Parser
+}
+
+type SchemaResult struct {
+	TablesAndViews map[string]string
+	UDFs           []*querypb.UDFInfo
 }
 
 var _ queryservice.QueryService = (*SandboxConn)(nil) // compile-time interface check
@@ -203,7 +208,7 @@ func (sbc *SandboxConn) SetResults(r []*sqltypes.Result) {
 }
 
 // SetSchemaResult sets what GetSchema should return on each call.
-func (sbc *SandboxConn) SetSchemaResult(r []map[string]string) {
+func (sbc *SandboxConn) SetSchemaResult(r []SchemaResult) {
 	sbc.getSchemaResult = r
 }
 
@@ -662,7 +667,12 @@ func (sbc *SandboxConn) GetSchema(ctx context.Context, target *querypb.Target, t
 	}
 	resp := sbc.getSchemaResult[0]
 	sbc.getSchemaResult = sbc.getSchemaResult[1:]
-	return callback(&querypb.GetSchemaResponse{TableDefinition: resp})
+
+	response := &querypb.GetSchemaResponse{
+		TableDefinition: resp.TablesAndViews,
+		Udfs:            resp.UDFs,
+	}
+	return callback(response)
 }
 
 // Close does not change ExecCount
