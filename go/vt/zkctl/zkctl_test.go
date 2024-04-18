@@ -18,8 +18,6 @@ package zkctl
 
 import (
 	"fmt"
-	"os"
-	"os/exec"
 	"strings"
 	"testing"
 )
@@ -37,35 +35,20 @@ func TestLifeCycle(t *testing.T) {
 	myID := 255
 
 	zkConf := MakeZkConfigFromString(config, uint32(myID))
-	zkExtraConfLine := "tcpKeepAlive=true"
-	zkConf.Extra = []string{zkExtraConfLine, "admin.serverPort=8081"}
+	tpcKeepAliveCfg := "tcpKeepAlive=true"
+	adminServerCfg := "admin.serverPort=8081"
+	zkConf.Extra = []string{tpcKeepAliveCfg, adminServerCfg}
 
 	if zkObservedConf, err := MakeZooCfg([]string{zkConf.ConfigFile()}, zkConf, "header"); err != nil {
 		t.Fatalf("MakeZooCfg err: %v", err)
-	} else if !strings.Contains(string(zkObservedConf), fmt.Sprintf("\n%s\n", zkExtraConfLine)) {
-		t.Fatalf("Expected zkExtraConfLine in zkObservedConf")
+	} else if !strings.Contains(zkObservedConf, fmt.Sprintf("\n%s\n", tpcKeepAliveCfg)) {
+		t.Fatalf("Expected tpcKeepAliveCfg in zkObservedConf")
+	} else if !strings.Contains(zkObservedConf, fmt.Sprintf("\n%s\n", adminServerCfg)) {
+		t.Fatalf("Expected adminServerCfg in zkObservedConf")
 	}
 
 	zkd := NewZkd(zkConf)
 	if err := zkd.Init(); err != nil {
-		c, err := os.ReadFile("/tmp/zk_255/logs/zksrv.log")
-		if err != nil {
-			t.Fatalf(err.Error())
-		}
-		fmt.Println(string(c))
-		cstr := string(c)
-		clines := strings.Split(cstr, "\n")
-		for _, cline := range clines {
-			if strings.Contains(cline, "/usr/bin/java") {
-				args := strings.Split(cline, "starting ")[1]
-				argsSlice := strings.Split(args, " ")[1:]
-				out, err := exec.Command("/usr/bin/java", argsSlice...).CombinedOutput()
-				if err != nil {
-					fmt.Println(string(out))
-					t.Fatalf(err.Error())
-				}
-			}
-		}
 		t.Fatalf("Init() err: %v", err)
 	}
 
