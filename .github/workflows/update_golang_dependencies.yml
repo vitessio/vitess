@@ -55,6 +55,5 @@ jobs:
           base: main
           labels: |
             go
-            dependencies
             Component: General
-            Type: Internal Cleanup
+            Type: Dependencies
