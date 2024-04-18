@@ -43,7 +43,11 @@ import (
 	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
 )
 
-const DBName = "vttest"
+const (
+	DBName               = "vttest"
+	DefaultCollationName = "utf8mb4_0900_ai_ci"
+	DefaultShard         = "0"
+)
 
 var (
 	// These are exported to coordinate on version specific

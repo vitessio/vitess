@@ -38,6 +38,12 @@ CREATE TABLE IF NOT EXISTS vreplication
     `component_throttled`   varchar(255)     NOT NULL DEFAULT '',
     `workflow_sub_type`     int              NOT NULL DEFAULT '0',
     `defer_secondary_keys`  tinyint(1)       NOT NULL DEFAULT '0',
+    /*
+      The options column is used to store any applicable additional attributes for a vreplication workflow.
+      Currently used for optional flag(s):
+        - `tenant-id`: used to specify the tenant id for a multi-tenant migration. (MoveTables only)
+     */
+    `options`               json             NOT NULL,
     PRIMARY KEY (`id`),
     KEY `workflow_idx` (`workflow`(64))
 ) ENGINE = InnoDB

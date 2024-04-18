@@ -113,3 +113,11 @@ List of changes between bootstrap image versions.
 ## [29] - 2024-03-05
 ### Changes
 - Update build to golang 1.22.1
+
+## [30] - 2024-04-01
+### Changes
+- Move the bootstrap phase to the common image so other Dockerfiles don't have to rely on the version based tags.
+
+## [31] - 2024-04-03
+### Changes
+- Update build to golang 1.22.2

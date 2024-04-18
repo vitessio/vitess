@@ -29,7 +29,13 @@ import (
 
 var SystemTime = time.Now
 
-const maxTimePrec = 6
+const maxTimePrec = datetime.DefaultPrecision
+
+// The length of a datetime converted to a numerical value is always 14 characters,
+// see for example "20240404102732". We also have a `.` since we know it's a decimal
+// and then additionally the number of decimals behind the dot. So total is always
+// the input datetime size + 15.
+const decimalSizeBase = 15
 
 type (
 	builtinNow struct {
@@ -127,6 +133,10 @@ type (
 		CallExpr
 	}
 
+	builtinToSeconds struct {
+		CallExpr
+	}
+
 	builtinQuarter struct {
 		CallExpr
 	}
@@ -193,6 +203,7 @@ var _ IR = (*builtinToDays)(nil)
 var _ IR = (*builtinFromDays)(nil)
 var _ IR = (*builtinSecToTime)(nil)
 var _ IR = (*builtinTimeToSec)(nil)
+var _ IR = (*builtinToSeconds)(nil)
 var _ IR = (*builtinQuarter)(nil)
 var _ IR = (*builtinSecond)(nil)
 var _ IR = (*builtinTime)(nil)
@@ -222,7 +233,7 @@ func (call *builtinNow) compile(c *compiler) (ctype, error) {
 		t = sqltypes.Datetime
 		c.asm.Fn_Now(call.prec, call.utc)
 	}
-	return ctype{Type: t, Col: collationBinary}, nil
+	return ctype{Type: t, Col: collationBinary, Size: int32(call.prec)}, nil
 }
 
 func (call *builtinNow) constant() bool {
@@ -239,7 +250,7 @@ func (call *builtinSysdate) eval(env *ExpressionEnv) (eval, error) {
 
 func (call *builtinSysdate) compile(c *compiler) (ctype, error) {
 	c.asm.Fn_Sysdate(call.prec)
-	return ctype{Type: sqltypes.Datetime, Col: collationBinary}, nil
+	return ctype{Type: sqltypes.Datetime, Col: collationBinary, Size: int32(call.prec)}, nil
 }
 
 func (call *builtinSysdate) constant() bool {
@@ -424,15 +435,31 @@ func (call *builtinConvertTz) compile(c *compiler) (ctype, error) {
 		c.asm.Convert_xb(1, sqltypes.VarBinary, nil)
 	}
 
+	var prec int32
 	switch n.Type {
 	case sqltypes.Datetime, sqltypes.Date:
+		prec = n.Size
+	case sqltypes.Decimal:
+		prec = n.Scale
+		c.asm.Convert_xDT(3, -1, false)
+	case sqltypes.Time:
+		prec = n.Size
+		c.asm.Convert_xDT(3, -1, false)
+	case sqltypes.VarChar, sqltypes.VarBinary:
+		if lit, ok := call.Arguments[0].(*Literal); ok && !n.isHexOrBitLiteral() {
+			if dt := evalToDateTime(lit.inner, -1, time.Now(), c.sqlmode.AllowZeroDate()); dt != nil {
+				prec = int32(dt.prec)
+			}
+		}
+		c.asm.Convert_xDT(3, -1, false)
 	default:
+		prec = maxTimePrec
 		c.asm.Convert_xDT(3, -1, false)
 	}
 
 	c.asm.Fn_CONVERT_TZ()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Datetime, Col: collationBinary, Flag: n.Flag | flagNullable}, nil
+	return ctype{Type: sqltypes.Datetime, Col: collationBinary, Flag: n.Flag | flagNullable, Size: prec}, nil
 }
 
 func (b *builtinDate) eval(env *ExpressionEnv) (eval, error) {
@@ -689,17 +716,21 @@ func (call *builtinFromUnixtime) compile(c *compiler) (ctype, error) {
 	}
 	skip1 := c.compileNullCheck1(arg)
 
+	var prec int32
 	switch arg.Type {
 	case sqltypes.Int64:
 		c.asm.Fn_FROM_UNIXTIME_i()
 	case sqltypes.Uint64:
 		c.asm.Fn_FROM_UNIXTIME_u()
 	case sqltypes.Float64:
+		prec = maxTimePrec
 		c.asm.Fn_FROM_UNIXTIME_f()
 	case sqltypes.Decimal:
+		prec = arg.Size
 		c.asm.Fn_FROM_UNIXTIME_d()
 	case sqltypes.Datetime, sqltypes.Date, sqltypes.Time:
-		if arg.Size == 0 {
+		prec = arg.Size
+		if prec == 0 {
 			c.asm.Convert_Ti(1)
 			c.asm.Fn_FROM_UNIXTIME_i()
 		} else {
@@ -711,17 +742,19 @@ func (call *builtinFromUnixtime) compile(c *compiler) (ctype, error) {
 			c.asm.Convert_xu(1)
 			c.asm.Fn_FROM_UNIXTIME_u()
 		} else {
+			prec = maxTimePrec
 			c.asm.Convert_xf(1)
 			c.asm.Fn_FROM_UNIXTIME_f()
 		}
 	default:
+		prec = maxTimePrec
 		c.asm.Convert_xf(1)
 		c.asm.Fn_FROM_UNIXTIME_f()
 	}
 
 	if len(call.Arguments) == 1 {
 		c.asm.jumpDestination(skip1)
-		return ctype{Type: sqltypes.Datetime, Col: collationBinary, Flag: arg.Flag | flagNullable}, nil
+		return ctype{Type: sqltypes.Datetime, Col: collationBinary, Flag: arg.Flag | flagNullable, Size: prec}, nil
 	}
 
 	format, err := call.Arguments[1].compile(c)
@@ -976,7 +1009,7 @@ func (b *builtinMaketime) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	m := evalToInt64(min).i
-	s := evalToNumeric(sec, false)
+	s := evalToNumeric(sec, true)
 
 	var ok bool
 	var t datetime.Time
@@ -1078,6 +1111,8 @@ func (call *builtinMaketime) compile(c *compiler) (ctype, error) {
 			c.asm.Convert_xf(1)
 			c.asm.Fn_MAKETIME_f()
 		}
+	case sqltypes.Datetime, sqltypes.Date, sqltypes.Timestamp, sqltypes.Time:
+		c.asm.Fn_MAKETIME_D()
 	default:
 		c.asm.Convert_xf(1)
 		c.asm.Fn_MAKETIME_f()
@@ -1442,6 +1477,40 @@ func (call *builtinTimeToSec) compile(c *compiler) (ctype, error) {
 	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
 }
 
+func (b *builtinToSeconds) eval(env *ExpressionEnv) (eval, error) {
+	date, err := b.arg1(env)
+	if err != nil {
+		return nil, err
+	}
+	if date == nil {
+		return nil, nil
+	}
+	dt := evalToDateTime(date, -1, env.now, false)
+	if dt == nil {
+		return nil, nil
+	}
+
+	return newEvalInt64(dt.dt.ToSeconds()), nil
+}
+
+func (call *builtinToSeconds) compile(c *compiler) (ctype, error) {
+	arg, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch arg.Type {
+	case sqltypes.Date, sqltypes.Datetime:
+	default:
+		c.asm.Convert_xDT(1, -1, false)
+	}
+	c.asm.Fn_TO_SECONDS()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
+}
+
 func (b *builtinQuarter) eval(env *ExpressionEnv) (eval, error) {
 	date, err := b.arg1(env)
 	if err != nil {
@@ -1531,13 +1600,28 @@ func (call *builtinTime) compile(c *compiler) (ctype, error) {
 
 	skip := c.compileNullCheck1(arg)
 
+	var prec int32
 	switch arg.Type {
 	case sqltypes.Time:
+	case sqltypes.Datetime, sqltypes.Date:
+		prec = arg.Size
+		c.asm.Convert_xT(1, -1)
+	case sqltypes.Decimal:
+		prec = arg.Scale
+		c.asm.Convert_xT(1, -1)
+	case sqltypes.VarChar, sqltypes.VarBinary:
+		if lit, ok := call.Arguments[0].(*Literal); ok && !arg.isHexOrBitLiteral() {
+			if t := evalToTime(lit.inner, -1); t != nil {
+				prec = int32(t.prec)
+			}
+		}
+		c.asm.Convert_xT(1, -1)
 	default:
+		prec = maxTimePrec
 		c.asm.Convert_xT(1, -1)
 	}
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Time, Col: collationBinary, Flag: arg.Flag | flagNullable}, nil
+	return ctype{Type: sqltypes.Time, Col: collationBinary, Flag: arg.Flag | flagNullable, Size: prec}, nil
 }
 
 func dateTimeUnixTimestamp(env *ExpressionEnv, date eval) evalNumeric {
@@ -1623,7 +1707,7 @@ func (call *builtinUnixTimestamp) compile(c *compiler) (ctype, error) {
 		if arg.Size == 0 {
 			return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag}, nil
 		}
-		return ctype{Type: sqltypes.Decimal, Size: arg.Size, Col: collationNumeric, Flag: arg.Flag}, nil
+		return ctype{Type: sqltypes.Decimal, Size: decimalSizeBase + arg.Size, Scale: arg.Size, Col: collationNumeric, Flag: arg.Flag}, nil
 	case sqltypes.Date, sqltypes.Int64, sqltypes.Uint64:
 		return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag}, nil
 	case sqltypes.VarChar, sqltypes.VarBinary:
@@ -1635,12 +1719,12 @@ func (call *builtinUnixTimestamp) compile(c *compiler) (ctype, error) {
 				if dt.prec == 0 {
 					return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag}, nil
 				}
-				return ctype{Type: sqltypes.Decimal, Size: int32(dt.prec), Col: collationNumeric, Flag: arg.Flag}, nil
+				return ctype{Type: sqltypes.Decimal, Size: decimalSizeBase + int32(dt.prec), Scale: int32(dt.prec), Col: collationNumeric, Flag: arg.Flag}, nil
 			}
 		}
 		fallthrough
 	default:
-		return ctype{Type: sqltypes.Decimal, Size: maxTimePrec, Col: collationNumeric, Flag: arg.Flag}, nil
+		return ctype{Type: sqltypes.Decimal, Size: decimalSizeBase + maxTimePrec, Scale: maxTimePrec, Col: collationNumeric, Flag: arg.Flag}, nil
 	}
 }
 

@@ -431,16 +431,17 @@ func (client *QueryClient) UpdateContext(ctx context.Context) {
 	client.ctx = ctx
 }
 
-func (client *QueryClient) GetSchema(tableType querypb.SchemaTableType, tableNames ...string) (map[string]string, error) {
-	schemaDef := make(map[string]string)
-	err := client.server.GetSchema(client.ctx, client.target, tableType, tableNames, func(schemaRes *querypb.GetSchemaResponse) error {
+func (client *QueryClient) GetSchema(
+	tableType querypb.SchemaTableType,
+	tableNames ...string,
+) (schemaDef map[string]string, udfs []*querypb.UDFInfo, err error) {
+	schemaDef = make(map[string]string)
+	err = client.server.GetSchema(client.ctx, client.target, tableType, tableNames, func(schemaRes *querypb.GetSchemaResponse) error {
 		for tableName, schemaDefinition := range schemaRes.TableDefinition {
 			schemaDef[tableName] = schemaDefinition
 		}
+		udfs = append(udfs, schemaRes.Udfs...)
 		return nil
 	})
-	if err != nil {
-		return nil, err
-	}
-	return schemaDef, nil
+	return
 }

@@ -35,7 +35,6 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/discovery"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 	ometrics "vitess.io/vitess/go/vt/vtorc/metrics"
-	"vitess.io/vitess/go/vt/vtorc/process"
 	"vitess.io/vitess/go/vt/vtorc/util"
 )
 
@@ -56,11 +55,7 @@ var failedDiscoveriesCounter = metrics.NewCounter()
 var instancePollSecondsExceededCounter = metrics.NewCounter()
 var discoveryQueueLengthGauge = metrics.NewGauge()
 var discoveryRecentCountGauge = metrics.NewGauge()
-var isElectedGauge = metrics.NewGauge()
-var isHealthyGauge = metrics.NewGauge()
 var discoveryMetrics = collection.CreateOrReturnCollection(DiscoveryMetricsName)
-
-var isElectedNode int64
 
 var recentDiscoveryOperationKeys *cache.Cache
 
@@ -72,8 +67,6 @@ func init() {
 	_ = metrics.Register("discoveries.instance_poll_seconds_exceeded", instancePollSecondsExceededCounter)
 	_ = metrics.Register("discoveries.queue_length", discoveryQueueLengthGauge)
 	_ = metrics.Register("discoveries.recent_count", discoveryRecentCountGauge)
-	_ = metrics.Register("elect.is_elected", isElectedGauge)
-	_ = metrics.Register("health.is_healthy", isHealthyGauge)
 
 	ometrics.OnMetricsTick(func() {
 		discoveryQueueLengthGauge.Update(int64(discoveryQueue.QueueLen()))
@@ -84,20 +77,6 @@ func init() {
 		}
 		discoveryRecentCountGauge.Update(int64(recentDiscoveryOperationKeys.ItemCount()))
 	})
-	ometrics.OnMetricsTick(func() {
-		isElectedGauge.Update(atomic.LoadInt64(&isElectedNode))
-	})
-	ometrics.OnMetricsTick(func() {
-		isHealthyGauge.Update(atomic.LoadInt64(&process.LastContinousCheckHealthy))
-	})
-}
-
-func IsLeader() bool {
-	return atomic.LoadInt64(&isElectedNode) == 1
-}
-
-func IsLeaderOrActive() bool {
-	return atomic.LoadInt64(&isElectedNode) == 1
 }
 
 // used in several places
@@ -161,15 +140,6 @@ func handleDiscoveryRequests() {
 		go func() {
 			for {
 				tabletAlias := discoveryQueue.Consume()
-				// Possibly this used to be the elected node, but has
-				// been demoted, while still the queue is full.
-				if !IsLeaderOrActive() {
-					log.Infof("Node apparently demoted. Skipping discovery of %+v. "+
-						"Remaining queue size: %+v", tabletAlias, discoveryQueue.QueueLen())
-					discoveryQueue.Release(tabletAlias)
-					continue
-				}
-
 				DiscoverInstance(tabletAlias, false /* forceDiscovery */)
 				discoveryQueue.Release(tabletAlias)
 			}
@@ -275,38 +245,9 @@ func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
 
 // onHealthTick handles the actions to take to discover/poll instances
 func onHealthTick() {
-	wasAlreadyElected := IsLeader()
-	{
-		myIsElectedNode, err := process.AttemptElection()
-		if err != nil {
-			log.Error(err)
-		}
-		if myIsElectedNode {
-			atomic.StoreInt64(&isElectedNode, 1)
-		} else {
-			atomic.StoreInt64(&isElectedNode, 0)
-		}
-		if !myIsElectedNode {
-			if electedNode, _, err := process.ElectedNode(); err == nil {
-				log.Infof("Not elected as active node; active node: %v; polling", electedNode.Hostname)
-			} else {
-				log.Infof("Not elected as active node; active node: Unable to determine: %v; polling", err)
-			}
-		}
-	}
-	if !IsLeaderOrActive() {
-		return
-	}
 	tabletAliases, err := inst.ReadOutdatedInstanceKeys()
 	if err != nil {
 		log.Error(err)
-	}
-
-	if !wasAlreadyElected {
-		// Just turned to be leader!
-		go func() {
-			_, _ = process.RegisterNode(process.ThisNodeHealth)
-		}()
 	}
 
 	func() {
@@ -367,43 +308,30 @@ func ContinuousDiscovery() {
 		case <-caretakingTick:
 			// Various periodic internal maintenance tasks
 			go func() {
-				if IsLeaderOrActive() {
-
-					go inst.ForgetLongUnseenInstances()
-					go inst.ExpireAudit()
-					go inst.ExpireStaleInstanceBinlogCoordinates()
-					go process.ExpireNodesHistory()
-					go process.ExpireAvailableNodes()
-					go ExpireFailureDetectionHistory()
-					go ExpireTopologyRecoveryHistory()
-					go ExpireTopologyRecoveryStepsHistory()
-				}
+				go inst.ForgetLongUnseenInstances()
+				go inst.ExpireAudit()
+				go inst.ExpireStaleInstanceBinlogCoordinates()
+				go ExpireRecoveryDetectionHistory()
+				go ExpireTopologyRecoveryHistory()
+				go ExpireTopologyRecoveryStepsHistory()
 			}()
 		case <-recoveryTick:
 			go func() {
-				if IsLeaderOrActive() {
-					go ClearActiveFailureDetections()
-					go ClearActiveRecoveries()
-					go ExpireBlockedRecoveries()
-					go AcknowledgeCrashedRecoveries()
-					go inst.ExpireInstanceAnalysisChangelog()
+				go inst.ExpireInstanceAnalysisChangelog()
 
-					go func() {
-						// This function is non re-entrant (it can only be running once at any point in time)
-						if atomic.CompareAndSwapInt64(&recoveryEntrance, 0, 1) {
-							defer atomic.StoreInt64(&recoveryEntrance, 0)
-						} else {
-							return
-						}
-						CheckAndRecover()
-					}()
-				}
+				go func() {
+					// This function is non re-entrant (it can only be running once at any point in time)
+					if atomic.CompareAndSwapInt64(&recoveryEntrance, 0, 1) {
+						defer atomic.StoreInt64(&recoveryEntrance, 0)
+					} else {
+						return
+					}
+					CheckAndRecover()
+				}()
 			}()
 		case <-snapshotTopologiesTick:
 			go func() {
-				if IsLeaderOrActive() {
-					go inst.SnapshotTopologies()
-				}
+				go inst.SnapshotTopologies()
 			}()
 		case <-tabletTopoTick:
 			refreshAllInformation()

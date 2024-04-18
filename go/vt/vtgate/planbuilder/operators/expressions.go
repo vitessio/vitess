@@ -31,7 +31,7 @@ func breakExpressionInLHSandRHSForApplyJoin(
 ) (col applyJoinColumn) {
 	rewrittenExpr := sqlparser.CopyOnRewrite(expr, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
 		nodeExpr, ok := cursor.Node().(sqlparser.Expr)
-		if !ok || !mustFetchFromInput(nodeExpr) {
+		if !ok || !mustFetchFromInput(ctx, nodeExpr) {
 			return
 		}
 		deps := ctx.SemTable.RecursiveDeps(nodeExpr)

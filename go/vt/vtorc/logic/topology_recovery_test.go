@@ -131,7 +131,7 @@ func TestElectNewPrimaryPanic(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestDifferentAnalysescHaveDifferentCooldowns(t *testing.T) {
+func TestRecoveryRegistration(t *testing.T) {
 	orcDb, err := db.OpenVTOrc()
 	require.NoError(t, err)
 	oldTs := ts
@@ -181,13 +181,20 @@ func TestDifferentAnalysescHaveDifferentCooldowns(t *testing.T) {
 	defer cancel()
 
 	ts = memorytopo.NewServer(ctx, "zone1")
-	_, err = AttemptRecoveryRegistration(&replicaAnalysisEntry, false, true)
-	require.Nil(t, err)
+	tp, err := AttemptRecoveryRegistration(&replicaAnalysisEntry)
+	require.NoError(t, err)
 
-	// even though this is another recovery on the same cluster, allow it to go through
-	// because the analysis is different (ReplicationStopped vs DeadPrimary)
-	_, err = AttemptRecoveryRegistration(&primaryAnalysisEntry, true, true)
-	require.Nil(t, err)
+	// because there is another recovery in progress for this shard, this will fail.
+	_, err = AttemptRecoveryRegistration(&primaryAnalysisEntry)
+	require.ErrorContains(t, err, "Active recovery")
+
+	// Lets say the recovery finishes after some time.
+	err = resolveRecovery(tp, nil)
+	require.NoError(t, err)
+
+	// now this recovery registration should be successful.
+	_, err = AttemptRecoveryRegistration(&primaryAnalysisEntry)
+	require.NoError(t, err)
 }
 
 func TestGetCheckAndRecoverFunctionCode(t *testing.T) {

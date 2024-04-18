@@ -29,6 +29,7 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/hook"
@@ -40,27 +41,27 @@ type ResetSuperReadOnlyFunc func() error
 
 // WaitForReplicationStart waits until the deadline for replication to start.
 // This validates the current primary is correct and can be connected to.
-func WaitForReplicationStart(mysqld MysqlDaemon, replicaStartDeadline int) error {
-	var rowMap map[string]string
+func WaitForReplicationStart(mysqld MysqlDaemon, replicaStartDeadline int) (err error) {
+	var replicaStatus replication.ReplicationStatus
 	for replicaWait := 0; replicaWait < replicaStartDeadline; replicaWait++ {
-		status, err := mysqld.ReplicationStatus()
+		replicaStatus, err = mysqld.ReplicationStatus()
 		if err != nil {
 			return err
 		}
 
-		if status.Running() {
+		if replicaStatus.Running() {
 			return nil
 		}
 		time.Sleep(time.Second)
 	}
-
-	errorKeys := []string{"Last_Error", "Last_IO_Error", "Last_SQL_Error"}
-	errs := make([]string, 0, len(errorKeys))
-	for _, key := range errorKeys {
-		if rowMap[key] != "" {
-			errs = append(errs, key+": "+rowMap[key])
-		}
+	errs := make([]string, 0, 2)
+	if replicaStatus.LastSQLError != "" {
+		errs = append(errs, "Last_SQL_Error: "+replicaStatus.LastSQLError)
 	}
+	if replicaStatus.LastIOError != "" {
+		errs = append(errs, "Last_IO_Error: "+replicaStatus.LastIOError)
+	}
+
 	if len(errs) != 0 {
 		return errors.New(strings.Join(errs, ", "))
 	}
@@ -174,8 +175,21 @@ func (mysqld *Mysqld) RestartReplication(hookExtraEnv map[string]string) error {
 }
 
 // GetMysqlPort returns mysql port
-func (mysqld *Mysqld) GetMysqlPort() (int32, error) {
-	qr, err := mysqld.FetchSuperQuery(context.TODO(), "SHOW VARIABLES LIKE 'port'")
+func (mysqld *Mysqld) GetMysqlPort(ctx context.Context) (int32, error) {
+	// We can not use the connection pool here. This check runs very early
+	// during MySQL startup when we still might be loading things like grants.
+	// This means we need to use an isolated connection to avoid poisoning the
+	// DBA connection pool for further queries.
+	params, err := mysqld.dbcfgs.DbaConnector().MysqlParams()
+	if err != nil {
+		return 0, err
+	}
+	conn, err := mysql.Connect(ctx, params)
+	if err != nil {
+		return 0, err
+	}
+	defer conn.Close()
+	qr, err := conn.ExecuteFetch("SHOW VARIABLES LIKE 'port'", 1, false)
 	if err != nil {
 		return 0, err
 	}

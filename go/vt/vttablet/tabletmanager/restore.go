@@ -237,7 +237,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "--restore-to-pos and --restore-to-timestamp are mutually exclusive")
 	}
 	if request.RestoreToPos != "" {
-		pos, err := replication.DecodePosition(request.RestoreToPos)
+		pos, _, err := replication.DecodePositionMySQL56(request.RestoreToPos)
 		if err != nil {
 			return vterrors.Wrapf(err, "restore failed: unable to decode --restore-to-pos: %s", request.RestoreToPos)
 		}

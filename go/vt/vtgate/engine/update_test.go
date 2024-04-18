@@ -638,7 +638,7 @@ func TestUpdateIn(t *testing.T) {
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations sharded [type:INT64 value:"1" type:INT64 value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f)`,
 		// ResolveDestinations is hard-coded to return -20.
-		`ExecuteMultiShard sharded.-20: dummy_update {} true true`,
+		`ExecuteMultiShard sharded.-20: dummy_update {__vals: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"2"}} true true`,
 	})
 }
 
@@ -664,7 +664,7 @@ func TestUpdateInStreamExecute(t *testing.T) {
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations sharded [type:INT64 value:"1" type:INT64 value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f)`,
 		// ResolveDestinations is hard-coded to return -20.
-		`ExecuteMultiShard sharded.-20: dummy_update {} true true`,
+		`ExecuteMultiShard sharded.-20: dummy_update {__vals: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"2"}} true true`,
 	})
 }
 
@@ -689,7 +689,7 @@ func TestUpdateInMultiCol(t *testing.T) {
 	vc.ExpectLog(t, []string{
 		`ResolveDestinationsMultiCol sharded [[INT64(1) INT64(3)] [INT64(1) INT64(4)] [INT64(2) INT64(3)] [INT64(2) INT64(4)]] Destinations:DestinationKeyspaceID(014eb190c9a2fa169c),DestinationKeyspaceID(01d2fd8867d50d2dfe),DestinationKeyspaceID(024eb190c9a2fa169c),DestinationKeyspaceID(02d2fd8867d50d2dfe)`,
 		// ResolveDestinations is hard-coded to return -20.
-		`ExecuteMultiShard sharded.-20: dummy_update {} true true`,
+		`ExecuteMultiShard sharded.-20: dummy_update {__vals0: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"2"} __vals1: type:TUPLE values:{type:INT64 value:"3"} values:{type:INT64 value:"4"}} true true`,
 	})
 }
 
@@ -762,7 +762,7 @@ func TestUpdateInChangedVindex(t *testing.T) {
 		`Execute delete from lkp1 where from = :from and toc = :toc from: type:INT64 value:"23" toc: type:VARBINARY value:"\x06\xe7\xea\"Βp\x8f" true`,
 		`Execute insert into lkp1(from, toc) values(:from_0, :toc_0) from_0: type:INT64 value:"3" toc_0: type:VARBINARY value:"\x06\xe7\xea\"Βp\x8f" true`,
 		// Finally, the actual update, which is also sent to -20, same route as the subquery.
-		`ExecuteMultiShard sharded.-20: dummy_update {} true true`,
+		`ExecuteMultiShard sharded.-20: dummy_update {__vals: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"2"}} true true`,
 	})
 
 	// No rows changing
@@ -776,7 +776,7 @@ func TestUpdateInChangedVindex(t *testing.T) {
 		// It gets used to perform the subquery to fetch the changing column values.
 		`ExecuteMultiShard sharded.-20: dummy_subquery {} false false`,
 		// Subquery returns no rows. So, no vindexes are updated. We still pass-through the original update.
-		`ExecuteMultiShard sharded.-20: dummy_update {} true true`,
+		`ExecuteMultiShard sharded.-20: dummy_update {__vals: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"2"}} true true`,
 	})
 
 	// multiple rows changing.
@@ -819,7 +819,7 @@ func TestUpdateInChangedVindex(t *testing.T) {
 		`Execute delete from lkp1 where from = :from and toc = :toc from: type:INT64 value:"23" toc: type:VARBINARY value:"\x06\xe7\xea\"Βp\x8f" true`,
 		`Execute insert into lkp1(from, toc) values(:from_0, :toc_0) from_0: type:INT64 value:"3" toc_0: type:VARBINARY value:"\x06\xe7\xea\"Βp\x8f" true`,
 		// Finally, the actual update, which is also sent to -20, same route as the subquery.
-		`ExecuteMultiShard sharded.-20: dummy_update {} true true`,
+		`ExecuteMultiShard sharded.-20: dummy_update {__vals: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"2"}} true true`,
 	})
 }
 
@@ -881,7 +881,7 @@ func TestUpdateInChangedVindexMultiCol(t *testing.T) {
 		`Execute delete from lkp_rg_tbl where from = :from and toc = :toc from: type:INT64 value:"7" toc: type:VARBINARY value:"\x02N\xb1\x90ɢ\xfa\x16\x9c" true`,
 		`Execute insert into lkp_rg_tbl(from, toc) values(:from_0, :toc_0) from_0: type:INT64 value:"5" toc_0: type:VARBINARY value:"\x02N\xb1\x90ɢ\xfa\x16\x9c" true`,
 		// Finally, the actual update, which is also sent to -20, same route as the subquery.
-		`ExecuteMultiShard sharded.-20: dummy_update {} true true`,
+		`ExecuteMultiShard sharded.-20: dummy_update {__vals0: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"2"}} true true`,
 	})
 }
 
@@ -946,6 +946,39 @@ func TestUpdateMultiEqual(t *testing.T) {
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations sharded [type:INT64 value:"1" type:INT64 value:"5"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(70bb023c810ca87a)`,
 		`ExecuteMultiShard sharded.-20: dummy_update {} sharded.20-: dummy_update {} true false`,
+	})
+}
+
+// TestUpdateInUnique is a test function for update statement using an IN clause with the Vindexes,
+// the query is correctly split according to the corresponding values in the IN list.
+func TestUpdateInUnique(t *testing.T) {
+	ks := buildTestVSchema().Keyspaces["sharded"]
+	upd := &Update{
+		DML: &DML{
+			RoutingParameters: &RoutingParameters{
+				Opcode:   IN,
+				Keyspace: ks.Keyspace,
+				Vindex:   ks.Vindexes["hash"],
+				Values: []evalengine.Expr{evalengine.TupleExpr{
+					evalengine.NewLiteralInt(1),
+					evalengine.NewLiteralInt(2),
+					evalengine.NewLiteralInt(4),
+				}}},
+			Query: "update t set n = 'b' where id in ::__vals",
+		},
+	}
+
+	tupleBV := &querypb.BindVariable{
+		Type:   querypb.Type_TUPLE,
+		Values: append([]*querypb.Value{sqltypes.ValueToProto(sqltypes.NewInt64(1))}, sqltypes.ValueToProto(sqltypes.NewInt64(2)), sqltypes.ValueToProto(sqltypes.NewInt64(4))),
+	}
+	vc := newDMLTestVCursor("-20", "20-")
+	vc.shardForKsid = []string{"-20", "20-"}
+	_, err := upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{"__vals": tupleBV}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations sharded [type:INT64 value:"1" type:INT64 value:"2" type:INT64 value:"4"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(d2fd8867d50d2dfe)`,
+		`ExecuteMultiShard sharded.-20: update t set n = 'b' where id in ::__vals {__vals: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"4"}} sharded.20-: update t set n = 'b' where id in ::__vals {__vals: type:TUPLE values:{type:INT64 value:"2"}} true false`,
 	})
 }
 

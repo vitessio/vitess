@@ -47,6 +47,15 @@ func (client *gRPCVtctldClient) AddCellsAlias(ctx context.Context, in *vtctldata
 	return client.c.AddCellsAlias(ctx, in, opts...)
 }
 
+// ApplyKeyspaceRoutingRules is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) ApplyKeyspaceRoutingRules(ctx context.Context, in *vtctldatapb.ApplyKeyspaceRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldatapb.ApplyKeyspaceRoutingRulesResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.ApplyKeyspaceRoutingRules(ctx, in, opts...)
+}
+
 // ApplyRoutingRules is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) ApplyRoutingRules(ctx context.Context, in *vtctldatapb.ApplyRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldatapb.ApplyRoutingRulesResponse, error) {
 	if client.c == nil {
@@ -324,6 +333,15 @@ func (client *gRPCVtctldClient) GetKeyspace(ctx context.Context, in *vtctldatapb
 	}
 
 	return client.c.GetKeyspace(ctx, in, opts...)
+}
+
+// GetKeyspaceRoutingRules is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) GetKeyspaceRoutingRules(ctx context.Context, in *vtctldatapb.GetKeyspaceRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldatapb.GetKeyspaceRoutingRulesResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.GetKeyspaceRoutingRules(ctx, in, opts...)
 }
 
 // GetKeyspaces is part of the vtctlservicepb.VtctldClient interface.

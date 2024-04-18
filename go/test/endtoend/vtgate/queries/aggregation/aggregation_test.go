@@ -91,6 +91,10 @@ func TestAggregateTypes(t *testing.T) {
 		mcmp.SkipIfBinaryIsBelowVersion(19, "vtgate")
 		mcmp.AssertMatches("select avg(val1) from aggr_test", `[[FLOAT64(0)]]`)
 	})
+	mcmp.Run("Average with group by without selecting the grouped columns", func(mcmp *utils.MySQLCompare) {
+		mcmp.SkipIfBinaryIsBelowVersion(20, "vtgate")
+		mcmp.AssertMatches("select avg(val2) from aggr_test group by val1 order by val1", `[[DECIMAL(1.0000)] [DECIMAL(1.0000)] [DECIMAL(3.5000)] [NULL] [DECIMAL(1.0000)]]`)
+	})
 }
 
 func TestGroupBy(t *testing.T) {

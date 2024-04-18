@@ -54,7 +54,7 @@ import (
 )
 
 const (
-	insertVReplicationPrefix = "insert into _vt.vreplication (workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys)"
+	insertVReplicationPrefix = "insert into _vt.vreplication (workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys, options)"
 	checkForJournal          = "/select val from _vt.resharding_journal where id="
 	getWorkflowState         = "select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys from _vt.vreplication where id=%d"
 	getCopyState             = "select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = 1"
@@ -74,9 +74,9 @@ const (
 	updatePickedSourceTablet = `update _vt.vreplication set message='Picked source tablet: cell:\"%s\" uid:%d' where id=%d`
 	getRowsCopied            = "SELECT rows_copied FROM _vt.vreplication WHERE id=%d"
 	hasWorkflows             = "select if(count(*) > 0, 1, 0) as has_workflows from _vt.vreplication where db_name = '%s'"
-	readAllWorkflows         = "select workflow, id, source, pos, stop_pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, message, db_name, rows_copied, tags, time_heartbeat, workflow_type, time_throttled, component_throttled, workflow_sub_type, defer_secondary_keys from _vt.vreplication where db_name = '%s'%s group by workflow, id order by workflow, id"
-	readWorkflowsLimited     = "select workflow, id, source, pos, stop_pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, message, db_name, rows_copied, tags, time_heartbeat, workflow_type, time_throttled, component_throttled, workflow_sub_type, defer_secondary_keys from _vt.vreplication where db_name = '%s' and workflow in ('%s') group by workflow, id order by workflow, id"
-	readWorkflow             = "select id, source, pos, stop_pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, message, db_name, rows_copied, tags, time_heartbeat, workflow_type, time_throttled, component_throttled, workflow_sub_type, defer_secondary_keys from _vt.vreplication where workflow = '%s' and db_name = '%s'"
+	readAllWorkflows         = "select workflow, id, source, pos, stop_pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, message, db_name, rows_copied, tags, time_heartbeat, workflow_type, time_throttled, component_throttled, workflow_sub_type, defer_secondary_keys, options from _vt.vreplication where db_name = '%s'%s group by workflow, id order by workflow, id"
+	readWorkflowsLimited     = "select workflow, id, source, pos, stop_pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, message, db_name, rows_copied, tags, time_heartbeat, workflow_type, time_throttled, component_throttled, workflow_sub_type, defer_secondary_keys, options from _vt.vreplication where db_name = '%s' and workflow in ('%s') group by workflow, id order by workflow, id"
+	readWorkflow             = "select id, source, pos, stop_pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, message, db_name, rows_copied, tags, time_heartbeat, workflow_type, time_throttled, component_throttled, workflow_sub_type, defer_secondary_keys, options from _vt.vreplication where workflow = '%s' and db_name = '%s'"
 	readWorkflowConfig       = "select id, source, cell, tablet_types, state, message from _vt.vreplication where workflow = '%s'"
 	updateWorkflow           = "update _vt.vreplication set state = '%s', source = '%s', cell = '%s', tablet_types = '%s' where id in (%d)"
 )
@@ -135,7 +135,7 @@ func TestCreateVReplicationWorkflow(t *testing.T) {
 				Cells:          tenv.cells,
 				AllTables:      true,
 			},
-			query: fmt.Sprintf(`%s values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1\"}}', '', 0, 0, '%s', '', now(), 0, 'Stopped', '%s', 1, 0, 0)`,
+			query: fmt.Sprintf(`%s values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1\"}}', '', 0, 0, '%s', '', now(), 0, 'Stopped', '%s', 1, 0, 0, '{}')`,
 				insertVReplicationPrefix, wf, sourceKs, shard, tenv.cells[0], tenv.dbName),
 		},
 		{
@@ -170,7 +170,7 @@ func TestCreateVReplicationWorkflow(t *testing.T) {
 				DeferSecondaryKeys: true,
 				AutoStart:          true,
 			},
-			query: fmt.Sprintf(`%s values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1\"}} on_ddl:EXEC stop_after_copy:true source_time_zone:\"EDT\" target_time_zone:\"UTC\"', '', 0, 0, '%s', '', now(), 0, 'Stopped', '%s', 1, 0, 1)`,
+			query: fmt.Sprintf(`%s values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1\"}} on_ddl:EXEC stop_after_copy:true source_time_zone:\"EDT\" target_time_zone:\"UTC\"', '', 0, 0, '%s', '', now(), 0, 'Stopped', '%s', 1, 0, 1, '{}')`,
 				insertVReplicationPrefix, wf, sourceKs, shard, tenv.cells[0], tenv.dbName),
 		},
 		{
@@ -210,7 +210,7 @@ func TestCreateVReplicationWorkflow(t *testing.T) {
 				DeferSecondaryKeys: true,
 				AutoStart:          true,
 			},
-			query: fmt.Sprintf(`%s values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1\"} rules:{match:\"wut\" filter:\"select * from wut\"} rules:{match:\"zt\" filter:\"select * from zt\"}} on_ddl:EXEC stop_after_copy:true source_time_zone:\"EDT\" target_time_zone:\"UTC\"', '', 0, 0, '%s', '', now(), 0, 'Stopped', '%s', 1, 0, 1)`,
+			query: fmt.Sprintf(`%s values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1\"} rules:{match:\"wut\" filter:\"select * from wut\"} rules:{match:\"zt\" filter:\"select * from zt\"}} on_ddl:EXEC stop_after_copy:true source_time_zone:\"EDT\" target_time_zone:\"UTC\"', '', 0, 0, '%s', '', now(), 0, 'Stopped', '%s', 1, 0, 1, '{}')`,
 				insertVReplicationPrefix, wf, sourceKs, shard, tenv.cells[0], tenv.dbName),
 		},
 		{
@@ -250,7 +250,7 @@ func TestCreateVReplicationWorkflow(t *testing.T) {
 				DeferSecondaryKeys: true,
 				AutoStart:          true,
 			},
-			query: fmt.Sprintf(`%s values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1\"} rules:{match:\"wut\" filter:\"select * from wut\"} rules:{match:\"zt\" filter:\"select * from zt\"}} on_ddl:EXEC stop_after_copy:true source_time_zone:\"EDT\" target_time_zone:\"UTC\"', '', 0, 0, '%s', '', now(), 0, 'Stopped', '%s', 1, 0, 1)`,
+			query: fmt.Sprintf(`%s values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1\"} rules:{match:\"wut\" filter:\"select * from wut\"} rules:{match:\"zt\" filter:\"select * from zt\"}} on_ddl:EXEC stop_after_copy:true source_time_zone:\"EDT\" target_time_zone:\"UTC\"', '', 0, 0, '%s', '', now(), 0, 'Stopped', '%s', 1, 0, 1, '{}')`,
 				insertVReplicationPrefix, wf, sourceKs, shard, tenv.cells[0], tenv.dbName),
 		},
 	}
@@ -393,7 +393,7 @@ func TestMoveTables(t *testing.T) {
 
 		tenv.tmc.setVReplicationExecResults(ftc.tablet, getCopyState, &sqltypes.Result{})
 		ftc.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
-		insert := fmt.Sprintf(`%s values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1 where in_keyrange(id, \'%s.hash\', \'%s\')\"}}', '', 0, 0, '%s', 'primary,replica,rdonly', now(), 0, 'Stopped', '%s', %d, 0, 0)`,
+		insert := fmt.Sprintf(`%s values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1 where in_keyrange(id, \'%s.hash\', \'%s\')\"}}', '', 0, 0, '%s', 'primary,replica,rdonly', now(), 0, 'Stopped', '%s', %d, 0, 0, '{}')`,
 			insertVReplicationPrefix, wf, sourceKs, sourceShard, targetKs, ftc.tablet.Shard, tenv.cells[0], tenv.dbName, vreplID)
 		ftc.vrdbClient.ExpectRequest(insert, &sqltypes.Result{InsertID: 1}, nil)
 		ftc.vrdbClient.ExpectRequest(getAutoIncrementStep, &sqltypes.Result{}, nil)
@@ -993,7 +993,7 @@ func TestSourceShardSelection(t *testing.T) {
 					}
 					tt.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
 					tt.vrdbClient.ExpectRequest(
-						fmt.Sprintf(`%s values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1 where in_keyrange(id, \'%s.hash\', \'%s\')\"}}', '', 0, 0, '%s', '', now(), 0, 'Stopped', '%s', 1, 0, 0)`,
+						fmt.Sprintf(`%s values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1 where in_keyrange(id, \'%s.hash\', \'%s\')\"}}', '', 0, 0, '%s', '', now(), 0, 'Stopped', '%s', 1, 0, 0, '{}')`,
 							insertVReplicationPrefix, wf, sourceKs, sourceShard, targetKs, tt.tablet.Shard, tenv.cells[0], tenv.dbName),
 						&sqltypes.Result{InsertID: uint64(i + 1)},
 						err,
@@ -1077,7 +1077,7 @@ func TestFailedMoveTablesCreateCleanup(t *testing.T) {
 	targetTablet.vrdbClient.ExpectRequest(
 		fmt.Sprintf("%s %s",
 			insertVReplicationPrefix,
-			fmt.Sprintf(`values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"%s\" filter:\"select * from %s\"}} source_time_zone:\"%s\" target_time_zone:\"UTC\"', '', 0, 0, '%s', 'primary', now(), 0, 'Stopped', '%s', 1, 0, 0)`,
+			fmt.Sprintf(`values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"%s\" filter:\"select * from %s\"}} source_time_zone:\"%s\" target_time_zone:\"UTC\"', '', 0, 0, '%s', 'primary', now(), 0, 'Stopped', '%s', 1, 0, 0, '{}')`,
 				wf, sourceKs, shard, table, table, invalidTimeZone, strings.Join(tenv.cells, ","), tenv.dbName),
 		),
 		&sqltypes.Result{
@@ -1753,7 +1753,7 @@ func TestMaterializerOneToOne(t *testing.T) {
 	// the test with an error as at this point we've tested what
 	// we wanted to test.
 	insert := insertVReplicationPrefix +
-		fmt.Sprintf(` values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1\"} rules:{match:\"t2\" filter:\"select * from t3\"} rules:{match:\"t4\"}}', '', 0, 0, '%s', 'primary,rdonly', now(), 0, 'Stopped', '%s', 0, 0, 0)`,
+		fmt.Sprintf(` values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1\"} rules:{match:\"t2\" filter:\"select * from t3\"} rules:{match:\"t4\"}}', '', 0, 0, '%s', 'primary,rdonly', now(), 0, 'Stopped', '%s', 0, 0, 0, '{}')`,
 			wf, sourceKs, shard, tenv.cells[0], tenv.dbName)
 	targetTablet.vrdbClient.ExpectRequest(insert, &sqltypes.Result{}, errShortCircuit)
 
@@ -1818,7 +1818,7 @@ func TestMaterializerManyToOne(t *testing.T) {
 
 		bls := fmt.Sprintf("keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1\"} rules:{match:\"t2\" filter:\"select * from t3\"}}", sourceKs, sourceShard)
 		insert := insertVReplicationPrefix +
-			fmt.Sprintf(` values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1\"} rules:{match:\"t2\" filter:\"select * from t3\"}}', '', 0, 0, '%s', 'primary,rdonly', now(), 0, 'Stopped', '%s', 0, 0, 0)`,
+			fmt.Sprintf(` values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1\"} rules:{match:\"t2\" filter:\"select * from t3\"}}', '', 0, 0, '%s', 'primary,rdonly', now(), 0, 'Stopped', '%s', 0, 0, 0, '{}')`,
 				wf, sourceKs, sourceShard, tenv.cells[0], tenv.dbName)
 		if vreplID == 1 {
 			targetTablet.vrdbClient.ExpectRequest(insert, &sqltypes.Result{InsertID: uint64(vreplID)}, nil)
@@ -1914,7 +1914,7 @@ func TestMaterializerOneToMany(t *testing.T) {
 		bls := fmt.Sprintf("keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1 where in_keyrange(c1, '%s.xxhash', '%s')\"}}",
 			sourceKs, sourceShard, targetKs, targetShard)
 		insert := insertVReplicationPrefix +
-			fmt.Sprintf(` values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1 where in_keyrange(c1, \'%s.xxhash\', \'%s\')\"}}', '', 0, 0, '%s', 'primary,rdonly', now(), 0, 'Stopped', '%s', 0, 0, 0)`,
+			fmt.Sprintf(` values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1 where in_keyrange(c1, \'%s.xxhash\', \'%s\')\"}}', '', 0, 0, '%s', 'primary,rdonly', now(), 0, 'Stopped', '%s', 0, 0, 0, '{}')`,
 				wf, sourceKs, sourceShard, targetKs, targetShard, tenv.cells[0], tenv.dbName)
 		if targetShard == "-80" {
 			targetTablet.vrdbClient.ExpectRequest(insert, &sqltypes.Result{InsertID: uint64(vreplID)}, nil)
@@ -2014,7 +2014,7 @@ func TestMaterializerManyToMany(t *testing.T) {
 			bls := fmt.Sprintf("keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1 where in_keyrange(c1, '%s.xxhash', '%s')\"}}",
 				sourceKs, sourceShard, targetKs, targetShard)
 			insert := insertVReplicationPrefix +
-				fmt.Sprintf(` values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1 where in_keyrange(c1, \'%s.xxhash\', \'%s\')\"}}', '', 0, 0, '%s', 'primary,rdonly', now(), 0, 'Stopped', '%s', 0, 0, 0)`,
+				fmt.Sprintf(` values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1 where in_keyrange(c1, \'%s.xxhash\', \'%s\')\"}}', '', 0, 0, '%s', 'primary,rdonly', now(), 0, 'Stopped', '%s', 0, 0, 0, '{}')`,
 					wf, sourceKs, sourceShard, targetKs, targetShard, tenv.cells[0], tenv.dbName)
 			if targetShard == "80-" && sourceShard == "40-" { // Last insert
 				targetTablet.vrdbClient.ExpectRequest(insert, &sqltypes.Result{InsertID: uint64(vreplID)}, errShortCircuit)
@@ -2115,7 +2115,7 @@ func TestMaterializerMulticolumnVindex(t *testing.T) {
 		bls := fmt.Sprintf("keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1 where in_keyrange(c1, c2, '%s.region', '%s')\"}}",
 			sourceKs, sourceShard, targetKs, targetShard)
 		insert := insertVReplicationPrefix +
-			fmt.Sprintf(` values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1 where in_keyrange(c1, c2, \'%s.region\', \'%s\')\"}}', '', 0, 0, '%s', 'primary,rdonly', now(), 0, 'Stopped', '%s', 0, 0, 0)`,
+			fmt.Sprintf(` values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1 where in_keyrange(c1, c2, \'%s.region\', \'%s\')\"}}', '', 0, 0, '%s', 'primary,rdonly', now(), 0, 'Stopped', '%s', 0, 0, 0, '{}')`,
 				wf, sourceKs, sourceShard, targetKs, targetShard, tenv.cells[0], tenv.dbName)
 		if targetShard == "-80" {
 			targetTablet.vrdbClient.ExpectRequest(insert, &sqltypes.Result{InsertID: uint64(vreplID)}, nil)
@@ -2199,7 +2199,7 @@ func TestMaterializerDeploySchema(t *testing.T) {
 	// the test with an error as at this point we've tested what
 	// we wanted to test.
 	insert := insertVReplicationPrefix +
-		fmt.Sprintf(` values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1\"} rules:{match:\"t2\" filter:\"select * from t3\"}}', '', 0, 0, '%s', 'primary,rdonly', now(), 0, 'Stopped', '%s', 0, 0, 0)`,
+		fmt.Sprintf(` values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1\"} rules:{match:\"t2\" filter:\"select * from t3\"}}', '', 0, 0, '%s', 'primary,rdonly', now(), 0, 'Stopped', '%s', 0, 0, 0, '{}')`,
 			wf, sourceKs, shard, tenv.cells[0], tenv.dbName)
 	targetTablet.vrdbClient.ExpectRequest(insert, &sqltypes.Result{}, errShortCircuit)
 
@@ -2269,7 +2269,7 @@ func TestMaterializerCopySchema(t *testing.T) {
 	// the test with an error as at this point we've tested what
 	// we wanted to test.
 	insert := insertVReplicationPrefix +
-		fmt.Sprintf(` values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1\"} rules:{match:\"t2\" filter:\"select * from t3\"}}', '', 0, 0, '%s', 'primary,rdonly', now(), 0, 'Stopped', '%s', 0, 0, 0)`,
+		fmt.Sprintf(` values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1\"} rules:{match:\"t2\" filter:\"select * from t3\"}}', '', 0, 0, '%s', 'primary,rdonly', now(), 0, 'Stopped', '%s', 0, 0, 0, '{}')`,
 			wf, sourceKs, shard, tenv.cells[0], tenv.dbName)
 	targetTablet.vrdbClient.ExpectRequest(insert, &sqltypes.Result{}, errShortCircuit)
 
@@ -2355,7 +2355,7 @@ func TestMaterializerExplicitColumns(t *testing.T) {
 		bls := fmt.Sprintf("keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select c1, c1 + c2, c2 from t1 where in_keyrange(c1, c2, '%s.region', '%s')\"}}",
 			sourceKs, sourceShard, targetKs, targetShard)
 		insert := insertVReplicationPrefix +
-			fmt.Sprintf(` values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select c1, c1 + c2, c2 from t1 where in_keyrange(c1, c2, \'%s.region\', \'%s\')\"}}', '', 0, 0, '%s', 'primary,rdonly', now(), 0, 'Stopped', '%s', 0, 0, 0)`,
+			fmt.Sprintf(` values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select c1, c1 + c2, c2 from t1 where in_keyrange(c1, c2, \'%s.region\', \'%s\')\"}}', '', 0, 0, '%s', 'primary,rdonly', now(), 0, 'Stopped', '%s', 0, 0, 0, '{}')`,
 				wf, sourceKs, sourceShard, targetKs, targetShard, tenv.cells[0], tenv.dbName)
 		if targetShard == "-80" {
 			targetTablet.vrdbClient.ExpectRequest(insert, &sqltypes.Result{InsertID: uint64(vreplID)}, nil)
@@ -2455,7 +2455,7 @@ func TestMaterializerRenamedColumns(t *testing.T) {
 		bls := fmt.Sprintf("keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select c3 as c1, c1 + c2, c4 as c2 from t1 where in_keyrange(c3, c4, '%s.region', '%s')\"}}",
 			sourceKs, sourceShard, targetKs, targetShard)
 		insert := insertVReplicationPrefix +
-			fmt.Sprintf(` values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select c3 as c1, c1 + c2, c4 as c2 from t1 where in_keyrange(c3, c4, \'%s.region\', \'%s\')\"}}', '', 0, 0, '%s', 'primary,rdonly', now(), 0, 'Stopped', '%s', 0, 0, 0)`,
+			fmt.Sprintf(` values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select c3 as c1, c1 + c2, c4 as c2 from t1 where in_keyrange(c3, c4, \'%s.region\', \'%s\')\"}}', '', 0, 0, '%s', 'primary,rdonly', now(), 0, 'Stopped', '%s', 0, 0, 0, '{}')`,
 				wf, sourceKs, sourceShard, targetKs, targetShard, tenv.cells[0], tenv.dbName)
 		if targetShard == "-80" {
 			targetTablet.vrdbClient.ExpectRequest(insert, &sqltypes.Result{InsertID: uint64(vreplID)}, nil)
@@ -2530,7 +2530,7 @@ func TestMaterializerStopAfterCopy(t *testing.T) {
 	// the test with an error as at this point we've tested what
 	// we wanted to test.
 	insert := insertVReplicationPrefix +
-		fmt.Sprintf(` values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1\"} rules:{match:\"t2\" filter:\"select * from t3\"}} stop_after_copy:true', '', 0, 0, '%s', 'primary,rdonly', now(), 0, 'Stopped', '%s', 0, 0, 0)`,
+		fmt.Sprintf(` values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1\"} rules:{match:\"t2\" filter:\"select * from t3\"}} stop_after_copy:true', '', 0, 0, '%s', 'primary,rdonly', now(), 0, 'Stopped', '%s', 0, 0, 0, '{}')`,
 			wf, sourceKs, shard, tenv.cells[0], tenv.dbName)
 	targetTablet.vrdbClient.ExpectRequest(insert, &sqltypes.Result{}, errShortCircuit)
 
@@ -3165,7 +3165,7 @@ func TestBuildReadVReplicationWorkflowsQuery(t *testing.T) {
 				IncludeStates:    []binlogdatapb.VReplicationWorkflowState{binlogdatapb.VReplicationWorkflowState_Stopped, binlogdatapb.VReplicationWorkflowState_Error},
 				ExcludeFrozen:    true,
 			},
-			want: "select workflow, id, source, pos, stop_pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, message, db_name, rows_copied, tags, time_heartbeat, workflow_type, time_throttled, component_throttled, workflow_sub_type, defer_secondary_keys from _vt.vreplication where db_name = 'vt_testks' and message != 'FROZEN' and id in (1,2,3) and workflow in ('wf1','wf2') and workflow not in ('1wf') and state in ('Stopped','Error') group by workflow, id order by workflow, id",
+			want: "select workflow, id, source, pos, stop_pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, message, db_name, rows_copied, tags, time_heartbeat, workflow_type, time_throttled, component_throttled, workflow_sub_type, defer_secondary_keys, options from _vt.vreplication where db_name = 'vt_testks' and message != 'FROZEN' and id in (1,2,3) and workflow in ('wf1','wf2') and workflow not in ('1wf') and state in ('Stopped','Error') group by workflow, id order by workflow, id",
 		},
 		{
 			name: "2 workflows if running",
@@ -3173,7 +3173,7 @@ func TestBuildReadVReplicationWorkflowsQuery(t *testing.T) {
 				IncludeWorkflows: []string{"wf1", "wf2"},
 				IncludeStates:    []binlogdatapb.VReplicationWorkflowState{binlogdatapb.VReplicationWorkflowState_Running},
 			},
-			want: "select workflow, id, source, pos, stop_pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, message, db_name, rows_copied, tags, time_heartbeat, workflow_type, time_throttled, component_throttled, workflow_sub_type, defer_secondary_keys from _vt.vreplication where db_name = 'vt_testks' and workflow in ('wf1','wf2') and state in ('Running') group by workflow, id order by workflow, id",
+			want: "select workflow, id, source, pos, stop_pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, message, db_name, rows_copied, tags, time_heartbeat, workflow_type, time_throttled, component_throttled, workflow_sub_type, defer_secondary_keys, options from _vt.vreplication where db_name = 'vt_testks' and workflow in ('wf1','wf2') and state in ('Running') group by workflow, id order by workflow, id",
 		},
 	}
 	for _, tt := range tests {

@@ -409,18 +409,20 @@ func TestStateManagerShutdownGracePeriod(t *testing.T) {
 
 	sm.te = &delayedTxEngine{}
 	kconn1 := &killableConn{id: 1}
-	sm.statelessql.Add(&QueryDetail{
+	err := sm.statelessql.Add(&QueryDetail{
 		conn:   kconn1,
 		connID: kconn1.id,
 	})
+	require.NoError(t, err)
 	kconn2 := &killableConn{id: 2}
-	sm.statefulql.Add(&QueryDetail{
+	err = sm.statefulql.Add(&QueryDetail{
 		conn:   kconn2,
 		connID: kconn2.id,
 	})
+	require.NoError(t, err)
 
 	// Transition to replica with no shutdown grace period should kill kconn2 but not kconn1.
-	err := sm.SetServingType(topodatapb.TabletType_PRIMARY, testNow, StateServing, "")
+	err = sm.SetServingType(topodatapb.TabletType_PRIMARY, testNow, StateServing, "")
 	require.NoError(t, err)
 	assert.False(t, kconn1.killed.Load())
 	assert.True(t, kconn2.killed.Load())

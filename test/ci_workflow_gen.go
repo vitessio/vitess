@@ -81,7 +81,6 @@ var (
 		"22",
 		"mysql_server_vault",
 		"vstream",
-		"onlineddl_ghost",
 		"onlineddl_vrepl",
 		"onlineddl_vrepl_stress",
 		"onlineddl_vrepl_stress_suite",
@@ -118,6 +117,7 @@ var (
 		"vreplication_partial_movetables_and_materialize",
 		"vreplication_foreign_key_stress",
 		"vreplication_migrate_vdiff2_convert_tz",
+		"vreplication_multi_tenant",
 		"schemadiff_vrepl",
 		"topo_connection_cache",
 		"vtgate_partial_keyspace",
@@ -151,7 +151,7 @@ var (
 )
 
 type unitTest struct {
-	Name, Platform, FileName string
+	Name, Platform, FileName, Evalengine string
 }
 
 type clusterTest struct {
@@ -405,17 +405,27 @@ func generateClusterWorkflows(list []string, tpl string) {
 
 func generateUnitTestWorkflows() {
 	for _, platform := range unitTestDatabases {
-		test := &unitTest{
-			Name:     fmt.Sprintf("Unit Test (%s)", platform),
-			Platform: string(platform),
-		}
-		test.FileName = fmt.Sprintf("unit_test_%s.yml", platform)
-		path := fmt.Sprintf("%s/%s", workflowConfigDir, test.FileName)
-		err := writeFileFromTemplate(unitTestTemplate, path, test)
-		if err != nil {
-			log.Print(err)
+		for _, evalengine := range []string{"1", "0"} {
+			test := &unitTest{
+				Name:       fmt.Sprintf("Unit Test (%s%s)", evalengineToString(evalengine), platform),
+				Platform:   string(platform),
+				Evalengine: evalengine,
+			}
+			test.FileName = fmt.Sprintf("unit_test_%s%s.yml", evalengineToString(evalengine), platform)
+			path := fmt.Sprintf("%s/%s", workflowConfigDir, test.FileName)
+			err := writeFileFromTemplate(unitTestTemplate, path, test)
+			if err != nil {
+				log.Print(err)
+			}
 		}
 	}
+}
+
+func evalengineToString(evalengine string) string {
+	if evalengine == "1" {
+		return "evalengine_"
+	}
+	return ""
 }
 
 func setupTestDockerFile(test *selfHostedTest) error {

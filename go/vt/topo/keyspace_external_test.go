@@ -142,7 +142,7 @@ func TestServerGetServingShards(t *testing.T) {
 			require.NotNil(t, stats)
 
 			if tt.fallback {
-				factory.SetListError(errNoListImpl)
+				factory.AddOperationError(memorytopo.List, ".*", errNoListImpl)
 			}
 
 			err := ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{})

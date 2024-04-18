@@ -259,15 +259,6 @@
 				"site_test"
 			]
 		},
-		"onlineddl_ghost": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/ghost", "-timeout", "30m"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "onlineddl_ghost",
-			"RetryMax": 2,
-			"Tags": []
-		},
 		"onlineddl_vrepl": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/vrepl", "-timeout", "30m"],
@@ -575,6 +566,15 @@
 		"vtgate_queries_orderby": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/orderby", "-timeout", "20m"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_queries",
+			"RetryMax": 2,
+			"Tags": ["upgrade_downgrade_query_serving_queries"]
+		},
+		"vtgate_queries_tpch": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/tpch", "-timeout", "20m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_queries",
@@ -1031,6 +1031,15 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"vreplication_multi_tenant": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication","-run", "MultiTenant"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_multi_tenant",
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"vreplication_partial_movetables_basic": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "PartialMoveTablesBasic"],
@@ -1056,6 +1065,15 @@
 			"Manual": false,
 			"Shard": "vreplication_cellalias",
 			"RetryMax": 0,
+			"Tags": []
+		},
+		"vreplication_onlineddl_vdiff": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestOnlineDDLVDiff"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_cellalias",
+			"RetryMax": 2,
 			"Tags": []
 		},
 		"vreplication_vschema_load": {
@@ -1204,7 +1222,7 @@
 		},
 		"vreplication_v2": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestBasicV2Workflows", "-timeout", "20m"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestBasicV2Workflows", "-timeout", "30m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_v2",

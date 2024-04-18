@@ -21,9 +21,10 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -32,64 +33,50 @@ func TestLocalControllerNoSchemaChanges(t *testing.T) {
 	schemaChangeDir := t.TempDir()
 	controller := NewLocalController(schemaChangeDir)
 	ctx := context.Background()
-	if err := controller.Open(ctx); err != nil {
-		t.Fatalf("Open should succeed, but got error: %v", err)
-	}
+	err := controller.Open(ctx)
+	require.NoError(t, err)
+
 	defer controller.Close()
 	data, err := controller.Read(ctx)
-	if err != nil {
-		t.Fatalf("Read should succeed, but got error: %v", err)
-	}
-	if len(data) != 0 {
-		t.Fatalf("there is no schema change, Read should return empty data")
-	}
+	require.NoError(t, err)
+	require.Empty(t, data, "there is no schema change, Read should return empty data")
 }
 
 func TestLocalControllerOpen(t *testing.T) {
 	controller := NewLocalController("")
 	ctx := context.Background()
 
-	if err := controller.Open(ctx); err == nil || !strings.Contains(err.Error(), "no such file or directory") {
-		t.Fatalf("Open should fail, no such dir, but got: %v", err)
-	}
+	err := controller.Open(ctx)
+	require.ErrorContains(t, err, "no such file or directory", "Open should fail, no such dir")
 
 	schemaChangeDir := t.TempDir()
 
 	// create a file under schema change dir
-	_, err := os.Create(path.Join(schemaChangeDir, "create_test_table.sql"))
-	if err != nil {
-		t.Fatalf("failed to create sql file, error: %v", err)
-	}
+	_, err = os.Create(path.Join(schemaChangeDir, "create_test_table.sql"))
+	require.NoError(t, err, "failed to create sql file")
 
 	controller = NewLocalController(schemaChangeDir)
-	if err := controller.Open(ctx); err != nil {
-		t.Fatalf("Open should succeed")
-	}
+	err = controller.Open(ctx)
+	require.NoError(t, err)
+
 	data, err := controller.Read(ctx)
-	if err != nil {
-		t.Fatalf("Read should succeed, but got error: %v", err)
-	}
-	if len(data) != 0 {
-		t.Fatalf("there is no schema change, Read should return empty data")
-	}
+	require.NoError(t, err)
+	require.Empty(t, data, "there is no schema change, Read should return empty data")
+
 	controller.Close()
 
 	testKeyspaceDir := path.Join(schemaChangeDir, "test_keyspace")
-	if err := os.MkdirAll(testKeyspaceDir, os.ModePerm); err != nil {
-		t.Fatalf("failed to create test_keyspace dir, error: %v", err)
-	}
+	err = os.MkdirAll(testKeyspaceDir, os.ModePerm)
+	require.NoError(t, err, "failed to create test_keyspace dir")
 
 	controller = NewLocalController(schemaChangeDir)
-	if err := controller.Open(ctx); err != nil {
-		t.Fatalf("Open should succeed")
-	}
+	err = controller.Open(ctx)
+	require.NoError(t, err)
+
 	data, err = controller.Read(ctx)
-	if err != nil {
-		t.Fatalf("Read should succeed, but got error: %v", err)
-	}
-	if len(data) != 0 {
-		t.Fatalf("there is no schema change, Read should return empty data")
-	}
+	require.NoError(t, err)
+	require.Empty(t, data, "there is no schema change, Read should return empty data")
+
 	controller.Close()
 }
 
@@ -97,14 +84,11 @@ func TestLocalControllerSchemaChange(t *testing.T) {
 	schemaChangeDir := t.TempDir()
 
 	testKeyspaceInputDir := path.Join(schemaChangeDir, "test_keyspace/input")
-	if err := os.MkdirAll(testKeyspaceInputDir, os.ModePerm); err != nil {
-		t.Fatalf("failed to create test_keyspace dir, error: %v", err)
-	}
+	err := os.MkdirAll(testKeyspaceInputDir, os.ModePerm)
+	require.NoError(t, err, "failed to create test_keyspace dir")
 
 	file, err := os.Create(path.Join(testKeyspaceInputDir, "create_test_table.sql"))
-	if err != nil {
-		t.Fatalf("failed to create sql file, error: %v", err)
-	}
+	require.NoError(t, err, "failed to create sql file")
 
 	sqls := []string{
 		"create table test_table_01 (id int)",
@@ -117,51 +101,36 @@ func TestLocalControllerSchemaChange(t *testing.T) {
 	controller := NewLocalController(schemaChangeDir)
 	ctx := context.Background()
 
-	if err := controller.Open(ctx); err != nil {
-		t.Fatalf("Open should succeed, but got error: %v", err)
-	}
+	err = controller.Open(ctx)
+	require.NoError(t, err)
 
 	defer controller.Close()
 
 	data, err := controller.Read(ctx)
-	if err != nil {
-		t.Fatalf("Read should succeed, but got error: %v", err)
-	}
-
-	if !reflect.DeepEqual(sqls, data) {
-		t.Fatalf("expect to get sqls: %v, but got: %v", sqls, data)
-	}
-
-	if controller.Keyspace() != "test_keyspace" {
-		t.Fatalf("expect to get keyspace: 'test_keyspace', but got: '%s'",
-			controller.Keyspace())
-	}
+	require.NoError(t, err)
+	require.Equal(t, sqls, data)
+	require.Equal(t, "test_keyspace", controller.Keyspace())
 
 	// test various callbacks
-	if err := controller.OnReadSuccess(ctx); err != nil {
-		t.Fatalf("OnReadSuccess should succeed, but got error: %v", err)
-	}
+	err = controller.OnReadSuccess(ctx)
+	require.NoError(t, err)
 
-	if err := controller.OnReadFail(ctx, fmt.Errorf("read fail")); err != nil {
-		t.Fatalf("OnReadFail should succeed, but got error: %v", err)
-	}
+	err = controller.OnReadFail(ctx, fmt.Errorf("read fail"))
+	require.NoError(t, err)
 
 	errorPath := path.Join(controller.errorDir, controller.sqlFilename)
 
-	if err := controller.OnValidationSuccess(ctx); err != nil {
-		t.Fatalf("OnReadSuccess should succeed, but got error: %v", err)
-	}
+	err = controller.OnValidationSuccess(ctx)
+	require.NoError(t, err)
 
 	// move sql file from error dir to input dir for OnValidationFail test
 	os.Rename(errorPath, controller.sqlPath)
 
-	if err := controller.OnValidationFail(ctx, fmt.Errorf("validation fail")); err != nil {
-		t.Fatalf("OnValidationFail should succeed, but got error: %v", err)
-	}
+	err = controller.OnValidationFail(ctx, fmt.Errorf("validation fail"))
+	require.NoError(t, err)
 
-	if _, err := os.Stat(errorPath); os.IsNotExist(err) {
-		t.Fatalf("sql file should be moved to error dir, error: %v", err)
-	}
+	_, err = os.Stat(errorPath)
+	require.Falsef(t, os.IsNotExist(err), "sql file should be moved to error dir, error: %v", err)
 
 	// move sql file from error dir to input dir for OnExecutorComplete test
 	os.Rename(errorPath, controller.sqlPath)
@@ -175,16 +144,14 @@ func TestLocalControllerSchemaChange(t *testing.T) {
 	}
 	logPath := path.Join(controller.logDir, controller.sqlFilename)
 	completePath := path.Join(controller.completeDir, controller.sqlFilename)
-	if err := controller.OnExecutorComplete(ctx, result); err != nil {
-		t.Fatalf("OnExecutorComplete should succeed, but got error: %v", err)
-	}
-	if _, err := os.Stat(completePath); os.IsNotExist(err) {
-		t.Fatalf("sql file should be moved to complete dir, error: %v", err)
-	}
+	err = controller.OnExecutorComplete(ctx, result)
+	require.NoError(t, err)
 
-	if _, err := os.Stat(logPath); os.IsNotExist(err) {
-		t.Fatalf("sql file should be moved to log dir, error: %v", err)
-	}
+	_, err = os.Stat(completePath)
+	require.Falsef(t, os.IsNotExist(err), "sql file should be moved to complete dir, error: %v", err)
+
+	_, err = os.Stat(logPath)
+	require.Falsef(t, os.IsNotExist(err), "sql file should be moved to log dir, error: %v", err)
 
 	// move sql file from error dir to input dir for OnExecutorComplete test
 	os.Rename(completePath, controller.sqlPath)
@@ -197,11 +164,9 @@ func TestLocalControllerSchemaChange(t *testing.T) {
 		}},
 	}
 
-	if err := controller.OnExecutorComplete(ctx, result); err != nil {
-		t.Fatalf("OnExecutorComplete should succeed, but got error: %v", err)
-	}
+	err = controller.OnExecutorComplete(ctx, result)
+	require.NoError(t, err)
 
-	if _, err := os.Stat(errorPath); os.IsNotExist(err) {
-		t.Fatalf("sql file should be moved to error dir, error: %v", err)
-	}
+	_, err = os.Stat(errorPath)
+	require.Falsef(t, os.IsNotExist(err), "sql file should be moved to error dir, error: %v", err)
 }

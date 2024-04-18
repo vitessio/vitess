@@ -422,6 +422,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfRollback(n, parent)
 	case RootNode:
 		return c.copyOnRewriteRootNode(n, parent)
+	case *RowAlias:
+		return c.copyOnRewriteRefOfRowAlias(n, parent)
 	case *SRollback:
 		return c.copyOnRewriteRefOfSRollback(n, parent)
 	case *Savepoint:
@@ -2815,7 +2817,8 @@ func (c *cow) copyOnRewriteRefOfInsert(n *Insert, parent SQLNode) (out SQLNode, 
 		_Columns, changedColumns := c.copyOnRewriteColumns(n.Columns, n)
 		_Rows, changedRows := c.copyOnRewriteInsertRows(n.Rows, n)
 		_OnDup, changedOnDup := c.copyOnRewriteOnDup(n.OnDup, n)
-		if changedComments || changedTable || changedPartitions || changedColumns || changedRows || changedOnDup {
+		_RowAlias, changedRowAlias := c.copyOnRewriteRefOfRowAlias(n.RowAlias, n)
+		if changedComments || changedTable || changedPartitions || changedColumns || changedRows || changedOnDup || changedRowAlias {
 			res := *n
 			res.Comments, _ = _Comments.(*ParsedComments)
 			res.Table, _ = _Table.(*AliasedTableExpr)
@@ -2823,6 +2826,7 @@ func (c *cow) copyOnRewriteRefOfInsert(n *Insert, parent SQLNode) (out SQLNode, 
 			res.Columns, _ = _Columns.(Columns)
 			res.Rows, _ = _Rows.(InsertRows)
 			res.OnDup, _ = _OnDup.(OnDup)
+			res.RowAlias, _ = _RowAlias.(*RowAlias)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -5074,6 +5078,30 @@ func (c *cow) copyOnRewriteRootNode(n RootNode, parent SQLNode) (out SQLNode, ch
 		if changedSQLNode {
 			res := n
 			res.SQLNode, _ = _SQLNode.(SQLNode)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+func (c *cow) copyOnRewriteRefOfRowAlias(n *RowAlias, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_TableName, changedTableName := c.copyOnRewriteIdentifierCS(n.TableName, n)
+		_Columns, changedColumns := c.copyOnRewriteColumns(n.Columns, n)
+		if changedTableName || changedColumns {
+			res := *n
+			res.TableName, _ = _TableName.(IdentifierCS)
+			res.Columns, _ = _Columns.(Columns)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)

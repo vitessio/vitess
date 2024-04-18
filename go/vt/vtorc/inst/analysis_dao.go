@@ -31,7 +31,6 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
-	"vitess.io/vitess/go/vt/vtorc/process"
 	"vitess.io/vitess/go/vt/vtorc/util"
 
 	"github.com/patrickmn/go-cache"
@@ -76,8 +75,6 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 	query := `
 	SELECT
 		vitess_tablet.info AS tablet_info,
-		vitess_tablet.hostname,
-		vitess_tablet.port,
 		vitess_tablet.tablet_type,
 		vitess_tablet.primary_timestamp,
 		vitess_tablet.shard AS shard,
@@ -88,9 +85,6 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		primary_instance.read_only AS read_only,
 		MIN(primary_instance.gtid_errant) AS gtid_errant, 
 		MIN(primary_instance.alias) IS NULL AS is_invalid,
-		MIN(primary_instance.data_center) AS data_center,
-		MIN(primary_instance.region) AS region,
-		MIN(primary_instance.physical_environment) AS physical_environment,
 		MIN(primary_instance.binary_log_file) AS binary_log_file,
 		MIN(primary_instance.binary_log_pos) AS binary_log_pos,
 		MIN(primary_tablet.info) AS primary_tablet_info,
@@ -116,7 +110,6 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 				OR substr(primary_instance.source_host, 1, 2) = '//'
 			)
 		) AS is_primary,
-		MIN(primary_instance.is_co_primary) AS is_co_primary,
 		MIN(primary_instance.gtid_mode) AS gtid_mode,
 		COUNT(replica_instance.server_id) AS count_replicas,
 		IFNULL(
@@ -173,7 +166,6 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		MIN(
 			primary_instance.semi_sync_replica_enabled
 		) AS semi_sync_replica_enabled,
-		SUM(replica_instance.is_co_primary) AS count_co_primary_replicas,
 		SUM(replica_instance.oracle_gtid) AS count_oracle_gtid_replicas,
 		IFNULL(
 			SUM(
@@ -302,9 +294,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 	clusters := make(map[string]*clusterAnalysis)
 	err := db.Db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
 		a := &ReplicationAnalysis{
-			Analysis:               NoProblem,
-			ProcessingNodeHostname: process.ThisHostname,
-			ProcessingNodeToken:    util.ProcessToken.Hash,
+			Analysis: NoProblem,
 		}
 
 		tablet := &topodatapb.Tablet{}
@@ -334,15 +324,8 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 
 		a.ShardPrimaryTermTimestamp = m.GetString("shard_primary_term_timestamp")
 		a.IsPrimary = m.GetBool("is_primary")
-		countCoPrimaryReplicas := m.GetUint("count_co_primary_replicas")
-		a.IsCoPrimary = m.GetBool("is_co_primary") || (countCoPrimaryReplicas > 0)
-		a.AnalyzedInstanceHostname = m.GetString("hostname")
-		a.AnalyzedInstancePort = m.GetInt("port")
 		a.AnalyzedInstanceAlias = topoproto.TabletAliasString(tablet.Alias)
 		a.AnalyzedInstancePrimaryAlias = topoproto.TabletAliasString(primaryTablet.Alias)
-		a.AnalyzedInstanceDataCenter = m.GetString("data_center")
-		a.AnalyzedInstanceRegion = m.GetString("region")
-		a.AnalyzedInstancePhysicalEnvironment = m.GetString("physical_environment")
 		a.AnalyzedInstanceBinlogCoordinates = BinlogCoordinates{
 			LogFile: m.GetString("binary_log_file"),
 			LogPos:  m.GetUint32("binary_log_pos"),
@@ -362,7 +345,6 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		a.IsFailingToConnectToPrimary = m.GetBool("is_failing_to_connect_to_primary")
 		a.ReplicationStopped = m.GetBool("replication_stopped")
 		a.IsBinlogServer = m.GetBool("is_binlog_server")
-		a.ClusterDetails.ReadRecoveryInfo()
 		a.ErrantGTID = m.GetString("gtid_errant")
 
 		countValidOracleGTIDReplicas := m.GetUint("count_valid_oracle_gtid_replicas")

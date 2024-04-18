@@ -247,14 +247,10 @@ func replicationAnalysisAPIHandler(response http.ResponseWriter, request *http.R
 
 // healthAPIHandler is the handler for the healthAPI endpoint
 func healthAPIHandler(response http.ResponseWriter, request *http.Request) {
-	health, err := process.HealthTest()
-	if err != nil {
-		http.Error(response, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	health, discoveredOnce := process.HealthTest()
 	code := http.StatusOK
 	// If the process isn't healthy, or if the first discovery cycle hasn't completed, we return an internal server error.
-	if !health.Healthy || !health.DiscoveredOnce {
+	if !health.Healthy || !discoveredOnce {
 		code = http.StatusInternalServerError
 	}
 	returnAsJSON(response, code, health)

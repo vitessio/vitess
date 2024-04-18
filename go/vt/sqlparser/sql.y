@@ -84,6 +84,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
   ctes          []*CommonTableExpr
   order         *Order
   limit         *Limit
+  rowAlias      *RowAlias
 
   updateExpr    *UpdateExpr
   setExpr       *SetExpr
@@ -256,7 +257,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> VALUE_ARG LIST_ARG OFFSET_ARG
 %token <str> JSON_PRETTY JSON_STORAGE_SIZE JSON_STORAGE_FREE JSON_CONTAINS JSON_CONTAINS_PATH JSON_EXTRACT JSON_KEYS JSON_OVERLAPS JSON_SEARCH JSON_VALUE
 %token <str> EXTRACT
-%token <str> NULL TRUE FALSE OFF
+%token <str> NULL UNKNOWN TRUE FALSE OFF
 %token <str> DISCARD IMPORT ENABLE DISABLE TABLESPACE
 %token <str> VIRTUAL STORED
 %token <str> BOTH LEADING TRAILING
@@ -542,6 +543,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <identifierCI> sql_id sql_id_opt reserved_sql_id col_alias as_ci_opt
 %type <expr> charset_value
 %type <identifierCS> table_id reserved_table_id table_alias as_opt_id table_id_opt from_database_opt use_table_name
+%type <rowAlias> row_alias_opt
 %type <empty> as_opt work_opt savepoint_opt
 %type <empty> skip_to_end ddl_skip_to_end
 %type <str> charset
@@ -586,7 +588,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <vindexParams> vindex_param_list vindex_params_opt
 %type <jsonObjectParam> json_object_param
 %type <jsonObjectParams> json_object_param_list json_object_param_opt
-%type <identifierCI> ci_identifier ci_identifier_opt vindex_type vindex_type_opt
+%type <identifierCI> ci_identifier vindex_type vindex_type_opt
 %type <str> database_or_schema column_opt insert_method_options row_format_options
 %type <referenceAction> fk_reference_action fk_on_delete fk_on_update
 %type <matchAction> fk_match fk_match_opt fk_match_action
@@ -599,7 +601,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <colKeyOpt> keys
 %type <referenceDefinition> reference_definition reference_definition_opt
 %type <str> underscore_charsets
-%type <str> expire_opt
+%type <str> expire_opt null_or_unknown
 %type <literal> ratio_opt
 %type <txAccessModes> tx_chacteristics_opt tx_chars
 %type <txAccessMode> tx_char
@@ -681,15 +683,6 @@ ci_identifier:
   ID
   {
     $$ = NewIdentifierCI(string($1))
-  }
-
-ci_identifier_opt:
-  {
-    $$ = NewIdentifierCI("")
-  }
-| ci_identifier
-  {
-    $$ = $1
   }
 
 variable_expr:
@@ -1260,22 +1253,22 @@ alter_table_prefix:
   }
 
 create_index_prefix:
-  CREATE comment_opt INDEX ci_identifier using_opt ON table_name
+  CREATE comment_opt INDEX sql_id using_opt ON table_name
   {
     $$ = &AlterTable{Table: $7, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$4}, Options:$5}}}}
     setDDL(yylex, $$)
   }
-| CREATE comment_opt FULLTEXT INDEX ci_identifier using_opt ON table_name
+| CREATE comment_opt FULLTEXT INDEX sql_id using_opt ON table_name
   {
     $$ = &AlterTable{Table: $8, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$5, Type: IndexTypeFullText}, Options:$6}}}}
     setDDL(yylex, $$)
   }
-| CREATE comment_opt SPATIAL INDEX ci_identifier using_opt ON table_name
+| CREATE comment_opt SPATIAL INDEX sql_id using_opt ON table_name
   {
     $$ = &AlterTable{Table: $8, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$5, Type: IndexTypeSpatial}, Options:$6}}}}
     setDDL(yylex, $$)
   }
-| CREATE comment_opt UNIQUE INDEX ci_identifier using_opt ON table_name
+| CREATE comment_opt UNIQUE INDEX sql_id using_opt ON table_name
   {
     $$ = &AlterTable{Table: $8, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$5, Type: IndexTypeUnique}, Options:$6}}}}
     setDDL(yylex, $$)
@@ -2508,7 +2501,7 @@ name_opt:
   {
     $$ = ""
   }
-| ci_identifier
+| sql_id
   {
     $$ = string($1.String())
   }
@@ -2534,7 +2527,7 @@ index_column:
   }
 
 constraint_definition:
-  CONSTRAINT ci_identifier_opt constraint_info
+  CONSTRAINT sql_id_opt constraint_info
   {
     $$ = &ConstraintDefinition{Name: $2, Details: $3}
   }
@@ -2544,7 +2537,7 @@ constraint_definition:
   }
 
 check_constraint_definition:
-  CONSTRAINT ci_identifier_opt check_constraint_info
+  CONSTRAINT sql_id_opt check_constraint_info
   {
     $$ = &ConstraintDefinition{Name: $2, Details: $3}
   }
@@ -3024,15 +3017,15 @@ alter_option:
   {
     $$ = &AlterColumn{Column: $3, Invisible: ptr.Of(true)}
   }
-| ALTER CHECK ci_identifier enforced
+| ALTER CHECK sql_id enforced
   {
     $$ = &AlterCheck{Name: $3, Enforced: $4}
   }
-| ALTER INDEX ci_identifier VISIBLE
+| ALTER INDEX sql_id VISIBLE
   {
     $$ = &AlterIndex{Name: $3, Invisible: false}
   }
-| ALTER INDEX ci_identifier INVISIBLE
+| ALTER INDEX sql_id INVISIBLE
   {
     $$ = &AlterIndex{Name: $3, Invisible: true}
   }
@@ -3072,7 +3065,7 @@ alter_option:
   {
     $$ = &DropColumn{Name:$3}
   }
-| DROP index_or_key ci_identifier
+| DROP index_or_key sql_id
   {
     $$ = &DropKey{Type:NormalKeyType, Name:$3}
   }
@@ -3080,15 +3073,15 @@ alter_option:
   {
     $$ = &DropKey{Type:PrimaryKeyType}
   }
-| DROP FOREIGN KEY ci_identifier
+| DROP FOREIGN KEY sql_id
   {
     $$ = &DropKey{Type:ForeignKeyType, Name:$4}
   }
-| DROP CHECK ci_identifier
+| DROP CHECK sql_id
   {
     $$ = &DropKey{Type:CheckKeyType, Name:$3}
   }
-| DROP CONSTRAINT ci_identifier
+| DROP CONSTRAINT sql_id
   {
     $$ = &DropKey{Type:CheckKeyType, Name:$3}
   }
@@ -3100,7 +3093,7 @@ alter_option:
   {
     $$ = &RenameTableName{Table:$3}
   }
-| RENAME index_or_key ci_identifier TO ci_identifier
+| RENAME index_or_key sql_id TO sql_id
   {
     $$ = &RenameIndex{OldName:$3, NewName:$5}
   }
@@ -3958,7 +3951,7 @@ drop_statement:
   {
     $$ = &DropTable{FromTables: $6, IfExists: $5, Comments: Comments($2).Parsed(), Temp: $3}
   }
-| DROP comment_opt INDEX ci_identifier ON table_name algorithm_lock_opt
+| DROP comment_opt INDEX sql_id ON table_name algorithm_lock_opt
   {
     // Change this to an alter statement
     if $4.Lowered() == "primary" {
@@ -5277,12 +5270,20 @@ expression:
     $$ = &MemberOfExpr{Value: $1, JSONArr:$5 }
   }
 
+null_or_unknown:
+  NULL
+  {
+  }
+| UNKNOWN
+  {
+  }
+
 bool_pri:
-bool_pri IS NULL %prec IS
+bool_pri IS null_or_unknown %prec IS
   {
 	 $$ = &IsExpr{Left: $1, Right: IsNullOp}
   }
-| bool_pri IS NOT NULL %prec IS
+| bool_pri IS NOT null_or_unknown %prec IS
   {
   	$$ = &IsExpr{Left: $1, Right: IsNotNullOp}
   }
@@ -7710,21 +7711,21 @@ optionally_opt:
 // Because the rules are together, the parser can keep shifting
 // the tokens until it disambiguates a as sql_id and select as keyword.
 insert_data:
-  VALUES tuple_list
+  VALUES tuple_list row_alias_opt
   {
-    $$ = &Insert{Rows: $2}
+    $$ = &Insert{Rows: $2, RowAlias: $3}
   }
 | select_statement
   {
     $$ = &Insert{Rows: $1}
   }
-| openb ins_column_list closeb VALUES tuple_list
+| openb ins_column_list closeb VALUES tuple_list row_alias_opt
   {
-    $$ = &Insert{Columns: $2, Rows: $5}
+    $$ = &Insert{Columns: $2, Rows: $5, RowAlias: $6}
   }
-| openb closeb VALUES tuple_list
+| openb closeb VALUES tuple_list row_alias_opt
   {
-    $$ = &Insert{Columns: []IdentifierCI{}, Rows: $4}
+    $$ = &Insert{Columns: []IdentifierCI{}, Rows: $4, RowAlias: $5}
   }
 | openb ins_column_list closeb select_statement
   {
@@ -7747,6 +7748,19 @@ ins_column_list:
 | ins_column_list ',' sql_id '.' sql_id
   {
     $$ = append($$, $5)
+  }
+
+row_alias_opt:
+  {
+    $$ = nil
+  }
+| AS table_alias
+  {
+    $$ = &RowAlias{TableName: $2}
+  }
+| AS table_alias openb column_list closeb
+  {
+    $$ = &RowAlias{TableName: $2, Columns: $4}
   }
 
 on_dup_opt:
@@ -8534,6 +8548,7 @@ non_reserved_keyword:
 | UNCOMMITTED
 | UNDEFINED
 | UNICODE
+| UNKNOWN
 | UNSIGNED
 | UNTHROTTLE
 | UNUSED

@@ -923,6 +923,16 @@ func (node IdentifierCI) EqualString(str string) bool {
 	return node.Lowered() == strings.ToLower(str)
 }
 
+// EqualsAnyString returns true if any of these strings match
+func (node IdentifierCI) EqualsAnyString(str []string) bool {
+	for _, s := range str {
+		if node.EqualString(s) {
+			return true
+		}
+	}
+	return false
+}
+
 // MarshalJSON marshals into JSON.
 func (node IdentifierCI) MarshalJSON() ([]byte, error) {
 	return json.Marshal(node.val)

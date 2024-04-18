@@ -71,7 +71,7 @@ message EventToken {
 // Flags sent from the MySQL C API
 enum MySqlFlag {
   option allow_alias = true;
-  
+
   EMPTY = 0;
   NOT_NULL_FLAG = 1;
   PRI_KEY_FLAG = 2;
@@ -277,7 +277,7 @@ message ExecuteOptions {
   // query timeouts are shorter.
   // OLAP: DMLS not allowed, no limit on row count, timeouts
   // can be as high as desired.
-  // DBA: no limit on rowcount or timeout, all queries allowed 
+  // DBA: no limit on rowcount or timeout, all queries allowed
   // but intended for long DMLs and DDLs.
   Workload workload = 6;
 
@@ -317,8 +317,8 @@ message ExecuteOptions {
     Gen4CompareV3 = 6;
     V3Insert = 7;
   }
-  
-  // PlannerVersion specifies which planner to use. 
+
+  // PlannerVersion specifies which planner to use.
   // If DEFAULT is chosen, whatever vtgate was started with will be used
   PlannerVersion planner_version = 11;
 
@@ -883,6 +883,9 @@ message RealtimeStats {
 
   // view_schema_changed is to provide list of views that have schema changes detected by the tablet.
   repeated string view_schema_changed = 8;
+
+  // udfs_changed is used to signal that the UDFs have changed on the tablet.
+  bool udfs_changed = 9;
 }
 
 // AggregateStats contains information about the health of a group of
@@ -989,6 +992,7 @@ enum SchemaTableType {
   VIEWS = 0;
   TABLES = 1;
   ALL = 2;
+  UDFS = 3;
 }
 
 // GetSchemaRequest is the payload to GetSchema
@@ -998,8 +1002,16 @@ message GetSchemaRequest {
   repeated string table_names = 3;
 }
 
+// UDFInfo represents the information about a UDF.
+message UDFInfo {
+  string name = 1;
+  bool aggregating = 2;
+  Type return_type = 3;
+}
+
 // GetSchemaResponse is the returned value from GetSchema
 message GetSchemaResponse {
-  // this is for the schema definition for the requested tables.
+  repeated UDFInfo udfs = 1;
+  // this is for the schema definition for the requested tables and views.
   map<string, string> table_definition = 2;
 }

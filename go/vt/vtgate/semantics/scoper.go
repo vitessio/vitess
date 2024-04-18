@@ -37,6 +37,7 @@ type (
 		// These scopes are only used for rewriting ORDER BY 1 and GROUP BY 1
 		specialExprScopes map[*sqlparser.Literal]*scope
 		statementIDs      map[sqlparser.Statement]TableSet
+		si                SchemaInformation
 	}
 
 	scope struct {
@@ -53,12 +54,13 @@ type (
 	}
 )
 
-func newScoper() *scoper {
+func newScoper(si SchemaInformation) *scoper {
 	return &scoper{
 		rScope:            map[*sqlparser.Select]*scope{},
 		wScope:            map[*sqlparser.Select]*scope{},
 		specialExprScopes: map[*sqlparser.Literal]*scope{},
 		statementIDs:      map[sqlparser.Statement]TableSet{},
+		si:                si,
 	}
 }
 
@@ -84,6 +86,13 @@ func (s *scoper) down(cursor *sqlparser.Cursor) error {
 			break
 		}
 		s.currentScope().inHavingAggr = true
+	case *sqlparser.FuncExpr:
+		if !s.currentScope().inHaving {
+			break
+		}
+		if node.Name.EqualsAnyString(s.si.GetAggregateUDFs()) {
+			s.currentScope().inHavingAggr = true
+		}
 	case *sqlparser.Where:
 		if node.Type == sqlparser.HavingClause {
 			err := s.createSpecialScopePostProjection(cursor.Parent())

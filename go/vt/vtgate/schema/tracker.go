@@ -19,6 +19,7 @@ package schema
 import (
 	"context"
 	"maps"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -45,6 +46,7 @@ type (
 		mu     sync.Mutex
 		tables *tableMap
 		views  *viewMap
+		udfs   map[keyspaceStr][]string
 		ctx    context.Context
 		signal func() // a function that we'll call whenever we have new schema data
 
@@ -60,7 +62,7 @@ type (
 const defaultConsumeDelay = 1 * time.Second
 
 // NewTracker creates the tracker object.
-func NewTracker(ch chan *discovery.TabletHealth, enableViews bool, parser *sqlparser.Parser) *Tracker {
+func NewTracker(ch chan *discovery.TabletHealth, enableViews, enableUDFs bool, parser *sqlparser.Parser) *Tracker {
 	t := &Tracker{
 		ctx:          context.Background(),
 		ch:           ch,
@@ -73,6 +75,9 @@ func NewTracker(ch chan *discovery.TabletHealth, enableViews bool, parser *sqlpa
 	if enableViews {
 		t.views = &viewMap{m: map[keyspaceStr]map[viewNameStr]sqlparser.SelectStatement{}, parser: parser}
 	}
+	if enableUDFs {
+		t.udfs = map[keyspaceStr][]string{}
+	}
 	return t
 }
 
@@ -83,6 +88,10 @@ func (t *Tracker) LoadKeyspace(conn queryservice.QueryService, target *querypb.T
 		return err
 	}
 	err = t.loadViews(conn, target)
+	if err != nil {
+		return err
+	}
+	err = t.loadUDFs(conn, target)
 	if err != nil {
 		return err
 	}
@@ -143,6 +152,35 @@ func (t *Tracker) loadViews(conn queryservice.QueryService, target *querypb.Targ
 		return err
 	}
 	log.Infof("finished loading views for keyspace %s. Found %d views", target.Keyspace, numViews)
+	return nil
+}
+
+func (t *Tracker) loadUDFs(conn queryservice.QueryService, target *querypb.Target) error {
+	if t.udfs == nil {
+		// This happens only when UDFs are not enabled.
+		return nil
+	}
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	err := conn.GetSchema(t.ctx, target, querypb.SchemaTableType_UDFS, nil, func(schemaRes *querypb.GetSchemaResponse) error {
+		var udfs []string
+		for _, udf := range schemaRes.Udfs {
+			if !udf.Aggregating {
+				continue
+			}
+			udfs = append(udfs, udf.Name)
+		}
+
+		t.udfs[target.Keyspace] = udfs
+		return nil
+	})
+	if err != nil {
+		log.Errorf("error fetching new UDFs for %v: %w", target.Keyspace, err)
+		return err
+	}
+	log.Infof("finished loading UDFs for keyspace %s", target.Keyspace)
 	return nil
 }
 
@@ -208,6 +246,9 @@ func (t *Tracker) GetColumns(ks string, tbl string) []vindexes.Column {
 	defer t.mu.Unlock()
 
 	tblInfo := t.tables.get(ks, tbl)
+	if tblInfo == nil {
+		return nil
+	}
 	return tblInfo.Columns
 }
 
@@ -244,15 +285,26 @@ func (t *Tracker) Tables(ks string) map[string]*vindexes.TableInfo {
 
 // Views returns all known views in the keyspace with their definition.
 func (t *Tracker) Views(ks string) map[string]sqlparser.SelectStatement {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
 	if t.views == nil {
 		return nil
 	}
 
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	m := t.views.m[ks]
 	return maps.Clone(m)
+}
+
+func (t *Tracker) UDFs(ks string) []string {
+	if t.udfs == nil {
+		return nil
+	}
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	return slices.Clone(t.udfs[ks])
 }
 
 func (t *Tracker) updateSchema(th *discovery.TabletHealth) bool {
@@ -260,11 +312,20 @@ func (t *Tracker) updateSchema(th *discovery.TabletHealth) bool {
 	if th.Stats.TableSchemaChanged != nil {
 		success = t.updatedTableSchema(th)
 	}
-	if !success || th.Stats.ViewSchemaChanged == nil {
+	if !success {
+		return false
+	}
+
+	// there is view definition change in the tablet
+	if th.Stats.ViewSchemaChanged != nil {
+		success = t.updatedViewSchema(th)
+	}
+
+	if !success || !th.Stats.UdfsChanged {
 		return success
 	}
-	// there is view definition change in the tablet
-	return t.updatedViewSchema(th)
+
+	return t.loadUDFs(th.Conn, th.Target) == nil
 }
 
 func (t *Tracker) updatedTableSchema(th *discovery.TabletHealth) bool {

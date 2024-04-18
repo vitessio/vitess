@@ -2157,7 +2157,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "Query": "update user_extra set val = 1 where user_id in (1, 2)",
+        "Query": "update user_extra set val = 1 where user_id in ::__vals",
         "Table": "user_extra",
         "Values": [
           "(1, 2)"
@@ -2383,7 +2383,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "Query": "delete from user_extra where user_id in (1, 2)",
+        "Query": "delete from user_extra where user_id in ::__vals",
         "Table": "user_extra",
         "Values": [
           "(1, 2)"
@@ -2516,7 +2516,7 @@
         "KsidLength": 1,
         "KsidVindex": "user_index",
         "OwnedVindexQuery": "select Id, `Name`, Costly, `name` = null from `user` where id in (1, 2, 3) for update",
-        "Query": "update `user` set `name` = null where id in (1, 2, 3)",
+        "Query": "update `user` set `name` = null where id in ::__vals",
         "Table": "user",
         "Values": [
           "(1, 2, 3)"
@@ -2601,7 +2601,7 @@
         "KsidLength": 1,
         "KsidVindex": "user_index",
         "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where id in (1, 2, 3) for update",
-        "Query": "delete from `user` where id in (1, 2, 3)",
+        "Query": "delete from `user` where id in ::__vals",
         "Table": "user",
         "Values": [
           "(1, 2, 3)"
@@ -3101,7 +3101,7 @@
         "KsidLength": 1,
         "KsidVindex": "xxhash",
         "OwnedVindexQuery": "select c1, c2, c3 from t1 where c2 = 10 and c3 in (20, 21) for update",
-        "Query": "delete from t1 where c2 = 10 and c3 in (20, 21)",
+        "Query": "delete from t1 where c2 = 10 and c3 in ::__vals",
         "Table": "t1",
         "Values": [
           "(20, 21)"
@@ -3133,7 +3133,7 @@
         "KsidLength": 1,
         "KsidVindex": "xxhash",
         "OwnedVindexQuery": "select c1, c2, c3, c2 = 1 from t1 where c2 = 10 and c3 in (20, 21) for update",
-        "Query": "update t1 set c2 = 1 where c2 = 10 and c3 in (20, 21)",
+        "Query": "update t1 set c2 = 1 where c2 = 10 and c3 in ::__vals",
         "Table": "t1",
         "Values": [
           "(20, 21)"
@@ -3266,7 +3266,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "Query": "update multicol_tbl set x = 1 where colb in (1, 2) and cola = 1",
+        "Query": "update multicol_tbl set x = 1 where colb in ::__vals1 and cola = 1",
         "Table": "multicol_tbl",
         "Values": [
           "1",
@@ -3293,7 +3293,7 @@
           "Sharded": true
         },
         "TargetTabletType": "PRIMARY",
-        "Query": "update multicol_tbl set x = 1 where colb in (1, 2) and cola in (3, 4)",
+        "Query": "update multicol_tbl set x = 1 where colb in ::__vals1 and cola in ::__vals0",
         "Table": "multicol_tbl",
         "Values": [
           "(3, 4)",
@@ -3383,7 +3383,7 @@
         "KsidLength": 2,
         "KsidVindex": "multicolIdx",
         "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where colb in (1, 2) and cola = 1 for update",
-        "Query": "delete from multicol_tbl where colb in (1, 2) and cola = 1",
+        "Query": "delete from multicol_tbl where colb in ::__vals1 and cola = 1",
         "Table": "multicol_tbl",
         "Values": [
           "1",
@@ -3413,7 +3413,7 @@
         "KsidLength": 2,
         "KsidVindex": "multicolIdx",
         "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where colb in (1, 2) and cola in (3, 4) for update",
-        "Query": "delete from multicol_tbl where colb in (1, 2) and cola in (3, 4)",
+        "Query": "delete from multicol_tbl where colb in ::__vals1 and cola in ::__vals0",
         "Table": "multicol_tbl",
         "Values": [
           "(3, 4)",
@@ -3563,7 +3563,7 @@
         "KsidLength": 2,
         "KsidVindex": "multicolIdx",
         "OwnedVindexQuery": "select cola, colb, colc, `name`, `name` = 'bar' from multicol_tbl where cola in (1, 2) for update",
-        "Query": "update multicol_tbl set `name` = 'bar' where cola in (1, 2)",
+        "Query": "update multicol_tbl set `name` = 'bar' where cola in ::__vals0",
         "Table": "multicol_tbl",
         "Values": [
           "(1, 2)"
@@ -3676,7 +3676,7 @@
         "KsidLength": 2,
         "KsidVindex": "multicolIdx",
         "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where cola in (1, 2) for update",
-        "Query": "delete from multicol_tbl where cola in (1, 2)",
+        "Query": "delete from multicol_tbl where cola in ::__vals0",
         "Table": "multicol_tbl",
         "Values": [
           "(1, 2)"
@@ -5822,12 +5822,12 @@
   {
     "comment": "update with multi table reference with multi target update on a derived table",
     "query": "update ignore (select foo, col, bar from user) u, music m set u.foo = 21, u.bar = 'abc' where u.col = m.col",
-    "plan": "VT03031: the target table (select foo, col, bar from `user`) as u of the UPDATE is not updatable"
+    "plan": "VT03032: the target table (select foo, col, bar from `user`) as u of the UPDATE is not updatable"
   },
   {
     "comment": "update with derived table",
     "query": "update (select id from user) as u set id = 4",
-    "plan": "VT03031: the target table (select id from `user`) as u of the UPDATE is not updatable"
+    "plan": "VT03032: the target table (select id from `user`) as u of the UPDATE is not updatable"
   },
   {
     "comment": "Delete with routed table on music",

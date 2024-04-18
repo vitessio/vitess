@@ -41,6 +41,7 @@ type earlyRewriter struct {
 	// have happened, and we are introducing or changing the AST. We invoke it so all parts of the query have been
 	// typed, scoped and bound correctly
 	reAnalyze func(n sqlparser.SQLNode) error
+	aggrUDFs  []string
 }
 
 func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
@@ -508,13 +509,21 @@ func (r *earlyRewriter) rewriteAliasesInHaving(node sqlparser.Expr, sel *sqlpars
 	}
 
 	aliases := r.getAliasMap(sel)
-	aggrTrack := &aggrTracker{}
+	aggrTrack := &aggrTracker{
+		insideAggr: false,
+		aggrUDFs:   r.aggrUDFs,
+	}
 	output := sqlparser.CopyOnRewrite(node, aggrTrack.down, func(cursor *sqlparser.CopyOnWriteCursor) {
 		var col *sqlparser.ColName
 
 		switch node := cursor.Node().(type) {
 		case sqlparser.AggrFunc:
 			aggrTrack.popAggr()
+			return
+		case *sqlparser.FuncExpr:
+			if node.Name.EqualsAnyString(r.aggrUDFs) {
+				aggrTrack.popAggr()
+			}
 			return
 		case *sqlparser.ColName:
 			col = node
@@ -565,14 +574,19 @@ func (r *earlyRewriter) rewriteAliasesInHaving(node sqlparser.Expr, sel *sqlpars
 
 type aggrTracker struct {
 	insideAggr bool
+	aggrUDFs   []string
 }
 
 func (at *aggrTracker) down(node, _ sqlparser.SQLNode) bool {
-	switch node.(type) {
+	switch node := node.(type) {
 	case *sqlparser.Subquery:
 		return false
 	case sqlparser.AggrFunc:
 		at.insideAggr = true
+	case *sqlparser.FuncExpr:
+		if node.Name.EqualsAnyString(at.aggrUDFs) {
+			at.insideAggr = true
+		}
 	}
 
 	return true
@@ -738,7 +752,10 @@ func (r *earlyRewriter) rewriteOrderByLiteral(node *sqlparser.Literal) (expr sql
 	}
 
 	if num < 1 || num > len(stmt.SelectExprs) {
-		return nil, false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown column '%d' in '%s'", num, r.clause)
+		return nil, false, &ColumnNotFoundClauseError{
+			Column: fmt.Sprintf("%d", num),
+			Clause: r.clause,
+		}
 	}
 
 	// We loop like this instead of directly accessing the offset, to make sure there are no unexpanded `*` before

@@ -24,11 +24,13 @@ fi
 # Output per line: <full Go package name> <all _test.go files in the package>*
 
 packages_with_tests=$(go list -f '{{if len .TestGoFiles}}{{.ImportPath}} {{join .TestGoFiles " "}}{{end}}{{if len .XTestGoFiles}}{{.ImportPath}} {{join .XTestGoFiles " "}}{{end}}' ./go/... | sort)
+if [[ "$VTEVALENGINETEST" == "1" ]]; then
+  packages_with_tests=$(echo "$packages_with_tests" | grep "evalengine")
+fi
 
-# exclude end to end tests
-packages_to_test=$(echo "$packages_with_tests" | cut -d" " -f1 | grep -v "endtoend")
-all_except_flaky_tests=$(echo "$packages_to_test" | grep -vE ".+ .+_flaky_test\.go" | cut -d" " -f1 | grep -v "endtoend")
-flaky_tests=$(echo "$packages_to_test" | grep -E ".+ .+_flaky_test\.go" | cut -d" " -f1)
+if [[ "$VTEVALENGINETEST" == "0" ]]; then
+  packages_with_tests=$(echo "$packages_with_tests" | grep -v "evalengine")
+fi
 
 # Flaky tests have the suffix "_flaky_test.go".
 # Exclude endtoend tests
@@ -36,7 +38,7 @@ all_except_flaky_tests=$(echo "$packages_with_tests" | grep -vE ".+ .+_flaky_tes
 flaky_tests=$(echo "$packages_with_tests" | grep -E ".+ .+_flaky_test\.go" | cut -d" " -f1)
 
 # Run non-flaky tests.
-echo "$all_except_flaky_tests" | xargs go test $VT_GO_PARALLEL -race -count=1
+echo "$all_except_flaky_tests" | xargs go test $VT_GO_PARALLEL -v -race -count=1
 if [ $? -ne 0 ]; then
   echo "ERROR: Go unit tests failed. See above for errors."
   echo
@@ -52,7 +54,7 @@ for pkg in $flaky_tests; do
   max_attempts=3
   attempt=1
   # Set a timeout because some tests may deadlock when they flake.
-  until go test -timeout 2m $VT_GO_PARALLEL $pkg -race -count=1; do
+  until go test -timeout 2m $VT_GO_PARALLEL $pkg -v -race -count=1; do
     echo "FAILED (try $attempt/$max_attempts) in $pkg (return code $?). See above for errors."
     if [ $((++attempt)) -gt $max_attempts ]; then
       echo "ERROR: Flaky Go unit tests in package $pkg failed too often (after $max_attempts retries). Please reduce the flakiness."

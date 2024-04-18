@@ -251,6 +251,54 @@ func TestUnshardedVSchemaValid(t *testing.T) {
 	require.NoError(t, err)
 }
 
+// TestMultiTenantAttribute verifies that the MultiTenantSpec attribute is updated in KeyspaceSchema.
+func TestMultiTenantAttribute(t *testing.T) {
+	tests := []struct {
+		name            string
+		multiTenantSpec *vschemapb.MultiTenantSpec
+		wanted          *vschemapb.MultiTenantSpec
+	}{
+		{
+			name: "Not Set",
+		}, {
+			name: "Empty MultiTenantSpec",
+			multiTenantSpec: &vschemapb.MultiTenantSpec{
+				TenantIdColumnName: "",
+			},
+			wanted: &vschemapb.MultiTenantSpec{},
+		}, {
+			name: "String",
+			multiTenantSpec: &vschemapb.MultiTenantSpec{
+				TenantIdColumnName: "tenant_id",
+				TenantIdColumnType: querypb.Type_VARCHAR,
+			},
+			wanted: &vschemapb.MultiTenantSpec{
+				TenantIdColumnName: "tenant_id",
+				TenantIdColumnType: querypb.Type_VARCHAR,
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ksSchema, err := BuildKeyspace(&vschemapb.Keyspace{
+				Sharded:         false,
+				MultiTenantSpec: test.multiTenantSpec,
+				Vindexes:        make(map[string]*vschemapb.Vindex),
+				Tables:          make(map[string]*vschemapb.Table),
+			}, sqlparser.NewTestParser())
+			require.NoError(t, err)
+			if test.multiTenantSpec == nil {
+				require.Empty(t, test.wanted)
+			} else {
+				require.NotNil(t, test.wanted)
+				require.Equal(t, test.wanted.TenantIdColumnName, ksSchema.MultiTenantSpec.TenantIdColumnName)
+				require.Equal(t, test.wanted.TenantIdColumnType, ksSchema.MultiTenantSpec.TenantIdColumnType)
+			}
+
+		})
+	}
+}
+
 func TestForeignKeyMode(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -376,10 +424,12 @@ func TestVSchemaViews(t *testing.T) {
       "columns": [
         {
           "name": "c1",
+          "nullable": true,
           "type": "NULL_TYPE"
         },
         {
           "name": "c2",
+          "nullable": true,
           "type": "VARCHAR"
         }
       ]
@@ -390,6 +440,51 @@ func TestVSchemaViews(t *testing.T) {
   }
 }`
 	require.JSONEq(t, want, got)
+}
+
+func TestColumnMarshal(t *testing.T) {
+	tests := []struct {
+		name   string
+		col    Column
+		wanted string
+	}{
+		{
+			name: "Decimal column",
+			col: Column{
+				Name:  sqlparser.NewIdentifierCI("col1"),
+				Type:  sqltypes.Decimal,
+				Size:  15,
+				Scale: 2,
+			},
+			wanted: `{"name":"col1", "scale":2, "size":15, "type":"DECIMAL"}`,
+		},
+		{
+			name: "Decimal column with no scale",
+			col: Column{
+				Name:  sqlparser.NewIdentifierCI("col1"),
+				Type:  sqltypes.Decimal,
+				Size:  15,
+				Scale: 0,
+			},
+			wanted: `{"name":"col1", "size":15, "type":"DECIMAL"}`,
+		},
+		{
+			name: "enum with values column",
+			col: Column{
+				Name:   sqlparser.NewIdentifierCI("col1"),
+				Type:   sqltypes.Enum,
+				Values: []string{"{A", "B\"", "C"},
+			},
+			wanted: `{"name":"col1","type":"ENUM","values":["{A","B\"","C"]}`,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			res, err := test.col.MarshalJSON()
+			require.NoError(t, err)
+			require.JSONEq(t, test.wanted, string(res), string(res))
+		})
+	}
 }
 
 func TestVSchemaForeignKeys(t *testing.T) {
@@ -434,10 +529,12 @@ func TestVSchemaForeignKeys(t *testing.T) {
       "columns": [
         {
           "name": "c1",
+		  "nullable": true,
           "type": "NULL_TYPE"
         },
         {
           "name": "c2",
+		  "nullable": true,
           "type": "VARCHAR"
         }
       ],
@@ -2609,6 +2706,11 @@ func TestVSchemaPBJSON(t *testing.T) {
 	in := `
 	{
 		"sharded": true,
+		"foreignKeyMode": "unmanaged",
+        "multi_tenant_spec": {
+			"tenant_id_column_name": "tenant_id",
+			"tenant_id_column_type": 265
+		},
 		"tables": {
 			"t1": {
 				"column_vindexes":[{
@@ -2637,7 +2739,12 @@ func TestVSchemaPBJSON(t *testing.T) {
 		t.Error(err)
 	}
 	want := vschemapb.Keyspace{
-		Sharded: true,
+		Sharded:        true,
+		ForeignKeyMode: vschemapb.Keyspace_unmanaged,
+		MultiTenantSpec: &vschemapb.MultiTenantSpec{
+			TenantIdColumnName: "tenant_id",
+			TenantIdColumnType: querypb.Type_INT64,
+		},
 		Tables: map[string]*vschemapb.Table{
 			"t1": {
 				ColumnVindexes: []*vschemapb.ColumnVindex{
@@ -2682,6 +2789,10 @@ func TestVSchemaJSON(t *testing.T) {
 	in := map[string]*KeyspaceSchema{
 		"unsharded": {
 			ForeignKeyMode: vschemapb.Keyspace_managed,
+			MultiTenantSpec: &vschemapb.MultiTenantSpec{
+				TenantIdColumnName: "tenant_id",
+				TenantIdColumnType: querypb.Type_INT64,
+			},
 			Keyspace: &Keyspace{
 				Name: "k1",
 			},
@@ -2775,6 +2886,10 @@ func TestVSchemaJSON(t *testing.T) {
         "type": "sequence",
         "name": "n2"
       }
+    },
+    "multi_tenant_spec": {
+      "tenant_id_column_name": "tenant_id",
+      "tenant_id_column_type": 265
     }
   }
 }`

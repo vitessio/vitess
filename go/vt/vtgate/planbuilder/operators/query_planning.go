@@ -26,6 +26,12 @@ import (
 )
 
 func planQuery(ctx *plancontext.PlanningContext, root Operator) Operator {
+	var selExpr sqlparser.SelectExprs
+	if horizon, isHorizon := root.(*Horizon); isHorizon {
+		sel := sqlparser.GetFirstSelect(horizon.Query)
+		selExpr = sqlparser.CloneSelectExprs(sel.SelectExprs)
+	}
+
 	output := runPhases(ctx, root)
 	output = planOffsets(ctx, output)
 
@@ -36,7 +42,7 @@ func planQuery(ctx *plancontext.PlanningContext, root Operator) Operator {
 
 	output = compact(ctx, output)
 
-	return addTruncationOrProjectionToReturnOutput(ctx, root, output)
+	return addTruncationOrProjectionToReturnOutput(ctx, selExpr, output)
 }
 
 // runPhases is the process of figuring out how to perform the operations in the Horizon
@@ -281,7 +287,7 @@ func tryPushOrdering(ctx *plancontext.PlanningContext, in *Ordering) (Operator, 
 	case *Projection:
 		// we can move ordering under a projection if it's not introducing a column we're sorting by
 		for _, by := range in.Order {
-			if !mustFetchFromInput(by.SimplifiedExpr) {
+			if !mustFetchFromInput(ctx, by.SimplifiedExpr) {
 				return in, NoRewrite
 			}
 		}
@@ -453,7 +459,7 @@ func pushFilterUnderProjection(ctx *plancontext.PlanningContext, filter *Filter,
 	for _, p := range filter.Predicates {
 		cantPush := false
 		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-			if !mustFetchFromInput(node) {
+			if !mustFetchFromInput(ctx, node) {
 				return true, nil
 			}
 
@@ -571,24 +577,21 @@ func tryPushUnion(ctx *plancontext.PlanningContext, op *Union) (Operator, *Apply
 }
 
 // addTruncationOrProjectionToReturnOutput uses the original Horizon to make sure that the output columns line up with what the user asked for
-func addTruncationOrProjectionToReturnOutput(ctx *plancontext.PlanningContext, oldHorizon Operator, output Operator) Operator {
-	horizon, ok := oldHorizon.(*Horizon)
-	if !ok {
+func addTruncationOrProjectionToReturnOutput(ctx *plancontext.PlanningContext, selExprs sqlparser.SelectExprs, output Operator) Operator {
+	if len(selExprs) == 0 {
 		return output
 	}
 
 	cols := output.GetSelectExprs(ctx)
-	sel := sqlparser.GetFirstSelect(horizon.Query)
-	if len(sel.SelectExprs) == len(cols) {
+	if len(selExprs) == len(cols) {
 		return output
 	}
 
-	if tryTruncateColumnsAt(output, len(sel.SelectExprs)) {
+	if tryTruncateColumnsAt(output, len(selExprs)) {
 		return output
 	}
 
-	qp := horizon.getQP(ctx)
-	proj := createSimpleProjection(ctx, qp, output)
+	proj := createSimpleProjection(ctx, selExprs, output)
 	return proj
 }
 

@@ -599,6 +599,11 @@ func (dt DateTime) toDuration() time.Duration {
 	return dur
 }
 
+func (dt DateTime) ToSeconds() int64 {
+	numDays := MysqlDayNumber(dt.Date.Year(), dt.Date.Month(), dt.Date.Day())
+	return int64(numDays*24*3600) + dt.Time.ToSeconds()
+}
+
 func (dt *DateTime) addInterval(itv *Interval) bool {
 	switch {
 	case itv.unit.HasTimeParts():

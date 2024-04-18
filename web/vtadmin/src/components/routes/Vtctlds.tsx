@@ -37,7 +37,6 @@ export const Vtctlds = () => {
             cluster: v.cluster?.name,
             clusterID: v.cluster?.id,
             hostname: v.hostname,
-            fqdn: v.FQDN,
         }));
 
         const filtered = filterNouns(filter, mapped);
@@ -50,15 +49,7 @@ export const Vtctlds = () => {
             return (
                 <tr key={row.hostname}>
                     <DataCell>
-                        <div className="font-bold">
-                            {row.fqdn ? (
-                                <a href={`//${row.fqdn}`} rel="noopener noreferrer" target="_blank">
-                                    {row.hostname}
-                                </a>
-                            ) : (
-                                row.hostname
-                            )}
-                        </div>
+                        <div className="font-bold">{row.hostname}</div>
                     </DataCell>
                     <DataCell>
                         {row.cluster}
