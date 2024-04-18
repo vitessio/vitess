@@ -135,12 +135,6 @@ type SandboxConn struct {
 	parser *sqlparser.Parser
 }
 
-type UDF struct {
-	Name        string
-	Aggregating bool
-	Type        querypb.Type
-}
-
 type SchemaResult struct {
 	TablesAndViews map[string]string
 	UDFs           []*querypb.UDFInfo
