@@ -48,6 +48,13 @@ func TestDialDedicatedPool(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, invalidator)
 		assert.NotNil(t, cli)
+		_, invalidatorTwo, err := poolDialer.dialDedicatedPool(ctx, dialPoolGroupThrottler, tablet)
+		assert.NoError(t, err)
+		// Ensure that running both the invalidators doesn't cause any issues.
+		invalidator()
+		invalidatorTwo()
+		_, _, err = poolDialer.dialDedicatedPool(ctx, dialPoolGroupThrottler, tablet)
+		assert.NoError(t, err)
 	})
 
 	var cachedTmc *tmc
