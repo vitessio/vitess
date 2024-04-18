@@ -149,7 +149,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&queryLogBufferSize, "querylog-buffer-size", queryLogBufferSize, "Maximum number of buffered query logs before throttling log output")
 	fs.DurationVar(&messageStreamGracePeriod, "message_stream_grace_period", messageStreamGracePeriod, "the amount of time to give for a vttablet to resume if it ends a message stream, usually because of a reparent.")
 	fs.BoolVar(&enableViews, "enable-views", enableViews, "Enable views support in vtgate.")
-	fs.BoolVar(&enableViews, "track-udfs", enableUdfs, "Track UDFs in vtgate.")
+	fs.BoolVar(&enableUdfs, "track-udfs", enableUdfs, "Track UDFs in vtgate.")
 	fs.BoolVar(&allowKillStmt, "allow-kill-statement", allowKillStmt, "Allows the execution of kill statement")
 	fs.IntVar(&warmingReadsPercent, "warming-reads-percent", 0, "Percentage of reads on the primary to forward to replicas. Useful for keeping buffer pools warm")
 	fs.IntVar(&warmingReadsConcurrency, "warming-reads-concurrency", 500, "Number of concurrent warming reads allowed")
