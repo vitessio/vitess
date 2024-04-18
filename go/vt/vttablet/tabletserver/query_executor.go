@@ -1161,7 +1161,7 @@ func (qre *QueryExecutor) GetSchemaDefinitions(tableType querypb.SchemaTableType
 		return qre.getTableDefinitions(tableNames, callback)
 	case querypb.SchemaTableType_ALL:
 		return qre.getAllDefinitions(tableNames, callback)
-	case querypb.SchemaTableType_UDF_AGGREGATE:
+	case querypb.SchemaTableType_UDFS:
 		return qre.getUDFs(callback)
 	}
 	return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid table type %v", tableType)
@@ -1225,11 +1225,18 @@ func (qre *QueryExecutor) getUDFs(callback func(schemaRes *querypb.GetSchemaResp
 	defer conn.Recycle()
 
 	return qre.execStreamSQL(conn, false /* isTransaction */, query, func(result *sqltypes.Result) error {
-		schemaDef := make(map[string]string)
+		var udfs []*querypb.UDFInfo
 		for _, row := range result.Rows {
-			udf := row[0].ToString()
-			schemaDef[udf] = row[1].ToString()
+			aggr := strings.EqualFold(row[2].ToString(), "aggregate")
+			udf := &querypb.UDFInfo{
+				Name:        row[0].ToString(),
+				Aggregating: aggr,
+				ReturnType:  sqlparser.SQLTypeToQueryType(row[1].ToString(), false),
+			}
+			udfs = append(udfs, udf)
 		}
-		return callback(&querypb.GetSchemaResponse{TableDefinition: schemaDef})
+		return callback(&querypb.GetSchemaResponse{
+			Udfs: udfs,
+		})
 	})
 }
