@@ -1,7 +1,7 @@
-name: unit_race_non_evalengine
+name: unit_race
 on: [push, pull_request]
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'unit_race_non_evalengine')
+  group: format('{0}-{1}', ${{ github.ref }}, 'unit_race')
   cancel-in-progress: true
 
 permissions: read-all
@@ -63,7 +63,7 @@ jobs:
             - 'tools/**'
             - 'config/**'
             - 'bootstrap.sh'
-            - '.github/workflows/unit_race_non_evalengine.yml'
+            - '.github/workflows/unit_race.yml'
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
@@ -122,7 +122,7 @@ jobs:
         # Tell Launchable about the build you are producing and testing
         launchable record build --name "$GITHUB_RUN_ID" --no-commit-collection --source .
 
-    - name: unit_race_non_evalengine
+    - name: unit_race
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
       timeout-minutes: 45
       run: |
