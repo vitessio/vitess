@@ -38,7 +38,7 @@ func TestLifeCycle(t *testing.T) {
 
 	zkConf := MakeZkConfigFromString(config, uint32(myID))
 	zkExtraConfLine := "tcpKeepAlive=true"
-	zkConf.Extra = []string{zkExtraConfLine}
+	zkConf.Extra = []string{zkExtraConfLine, "admin.serverPort=8081"}
 
 	if zkObservedConf, err := MakeZooCfg([]string{zkConf.ConfigFile()}, zkConf, "header"); err != nil {
 		t.Fatalf("MakeZooCfg err: %v", err)
