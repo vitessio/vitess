@@ -234,7 +234,7 @@ func WaitForAuthoritative(t *testing.T, ks, tbl string, readVSchema func() (*int
 	for {
 		select {
 		case <-timeout:
-			return fmt.Errorf("schema tracking didn't mark table t2 as authoritative until timeout")
+			return fmt.Errorf("schema tracking didn't mark table %v.%v as authoritative until timeout", ks, tbl)
 		default:
 			res, err := readVSchema()
 			require.NoError(t, err, res)
@@ -340,7 +340,7 @@ func WaitForColumn(t testing.TB, vtgateProcess cluster.VtgateProcess, ks, tbl, c
 				if !isMap {
 					break
 				}
-				if colName, exists := colDef["name"]; exists && colName == col {
+				if colName, exists := colDef["name"]; exists && strings.EqualFold(colName.(string), col) {
 					return nil
 				}
 			}
