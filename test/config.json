@@ -579,7 +579,7 @@
 			"Manual": false,
 			"Shard": "vtgate_queries",
 			"RetryMax": 2,
-			"Tags": ["upgrade_downgrade_query_serving_queries"]
+			"Tags": [""]
 		},
 		"vtgate_queries_subquery": {
 			"File": "unused.go",
