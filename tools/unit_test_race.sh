@@ -28,7 +28,7 @@ if [[ "$VTEVALENGINETEST" == "1" ]]; then
   packages_with_tests=$(echo "$packages_with_tests" | grep "evalengine")
 fi
 
-if [[ "$VTEVALENGINETEST" == "-1" ]]; then
+if [[ "$VTEVALENGINETEST" == "0" ]]; then
   packages_with_tests=$(echo "$packages_with_tests" | grep -v "evalengine")
 fi
 

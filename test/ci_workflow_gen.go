@@ -405,7 +405,7 @@ func generateClusterWorkflows(list []string, tpl string) {
 
 func generateUnitTestWorkflows() {
 	for _, platform := range unitTestDatabases {
-		for _, evalengine := range []string{"1", "-1"} {
+		for _, evalengine := range []string{"1", "0"} {
 			test := &unitTest{
 				Name:       fmt.Sprintf("Unit Test (%s%s)", evalengineToString(evalengine), platform),
 				Platform:   string(platform),
