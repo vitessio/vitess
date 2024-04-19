@@ -91,17 +91,17 @@ func (zs *Server) lock(ctx context.Context, dirPath, contents string) (topo.Lock
 		case context.Canceled:
 			errToReturn = topo.NewError(topo.Interrupted, nodePath)
 		default:
-			errToReturn = vterrors.Wrapf(err, "failed to obtain action lock: %v", nodePath)
+			errToReturn = vterrors.Wrapf(err, "failed to obtain lock: %v", nodePath)
 		}
 
 		// Regardless of the reason, try to cleanup.
-		log.Warningf("Failed to obtain action lock: %v", err)
+		log.Warningf("Failed to obtain lock: %v", err)
 
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), baseTimeout)
 		defer cancel()
 
 		if err := zs.conn.Delete(cleanupCtx, nodePath, -1); err != nil {
-			log.Warningf("Failed to close connection :%v", err)
+			log.Warningf("Cleanup unsuccessful lock path %s: %v", nodePath, err)
 		}
 
 		// Show the other locks in the directory
