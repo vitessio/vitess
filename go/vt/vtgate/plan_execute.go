@@ -184,7 +184,7 @@ func (e *Executor) newExecute(
 							// topo.RebuildSrvVSchema/vtctldclient RebuildVSchemaGraph which then causes the VSchemaManager
 							// to clear the plan cache. It's essentially a race between the two SrvVSchema watchers and the
 							// work they do when a new one is received. If we DID a retry AND the last time we retried
-							// still encountered an error, we know that the plan used was 1) not valid/correct and going to
+							// still encountered the error, we know that the plan used was 1) not valid/correct and going to
 							// the wrong side of the traffic switch as it failed with the denied tables error and 2) it will
 							// remain the plan in the cache if we do not clear the plans after it was added to to the cache.
 							// So here we clear the plan cache in order to prevent this scenario where the bad plan is
