@@ -30,14 +30,13 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 
-	"vitess.io/vitess/go/sqltypes"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 type testCase struct {
@@ -1144,6 +1143,16 @@ func TestNullsafeCompare(t *testing.T) {
 			v1:  TestValue(sqltypes.Enum, "foo"),
 			v2:  TestValue(sqltypes.Enum, "bar"),
 			out: 1,
+		},
+		{
+			v1:  TestValue(sqltypes.Enum, "foo"),
+			v2:  TestValue(sqltypes.VarChar, "bar"),
+			out: 1,
+		},
+		{
+			v1:  TestValue(sqltypes.Enum, "foobar"),
+			v2:  TestValue(sqltypes.VarChar, "foobar"),
+			out: 0,
 		},
 	}
 	for _, tcase := range tcases {
