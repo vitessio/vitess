@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/rand/v2"
 	"net"
 	"strconv"
 	"strings"
@@ -555,13 +556,9 @@ func testReshardV2Workflow(t *testing.T) {
 			case <-dataGenCtx.Done():
 				return
 			default:
-				// Create an enterprise customer every so often to fill out the
-				// enterprise_customer materialized table.
-				if id%1000 == 1 {
-					_ = execVtgateQuery(t, dataGenConn, "customer", fmt.Sprintf("insert into customer (cid, name, typ) values (%d, 'tempCustomer%d', 'enterprise')", id, id))
-				} else {
-					_ = execVtgateQuery(t, dataGenConn, "customer", fmt.Sprintf("insert into customer (cid, name) values (%d, 'tempCustomer%d')", id, id))
-				}
+				// Use a random customer type for each record.
+				_ = execVtgateQuery(t, dataGenConn, "customer", fmt.Sprintf("insert into customer (cid, name, typ) values (%d, 'tempCustomer%d', %s)",
+					id, id, customerTypes[rand.IntN(len(customerTypes))]))
 			}
 			time.Sleep(1 * time.Millisecond)
 			id++
