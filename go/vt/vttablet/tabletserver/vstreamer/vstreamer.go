@@ -1050,26 +1050,26 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 		}
 		pos += l
 
-		// If the column is a CHAR based type with a binary collation (e.g. utf8mb4_bin) then
-		// the actual column type is included in the second byte of the event metadata while
-		// the event's type for the field is BINARY. This is true for ENUM and SET types.
+		// If the column is a CHAR based type with a binary collation (e.g. utf8mb4_bin) then the
+		// actual column type is included in the second byte of the event metadata while the
+		// event's type for the field is BINARY. This is true for ENUM and SET types.
 		var mysqlType uint16
 		if sqltypes.IsQuoted(plan.Table.Fields[colNum].Type) {
 			mysqlType = plan.TableMap.Metadata[colNum] >> 8
 		}
-		// Convert the integer values in the binlog event for SET and ENUM fields into their
+		// Convert the integer values in the binlog event for any SET and ENUM fields into their
 		// string representations.
 		if plan.Table.Fields[colNum].Type == querypb.Type_ENUM || mysqlType == mysqlbinlog.TypeEnum {
-			// Add the mapping JiT in case we haven't properly received and processed
-			// a table map event to initialize it.
+			// Add the mapping JiT in case we haven't properly received and processed a table map
+			// event to initialize it.
 			if plan.EnumSetValuesMap == nil {
 				if err := addEnumAndSetMappingstoPlan(plan.Plan, plan.Table.Fields, plan.TableMap.Metadata); err != nil {
 					return false, nil, false, fmt.Errorf("failed to build ENUM and SET column integer to string mappings: %v", err)
 				}
 			}
-			// ENUM columns are stored as an unsigned 16-bit integer as they can contain a
-			// maximum of 65,535 elements with the 0 element reserved for any integer value
-			// that has no string mapping.
+			// ENUM columns are stored as an unsigned 16-bit integer as they can contain a maximum
+			// of 65,535 elements (https://dev.mysql.com/doc/refman/en/enum.html) with the 0 element
+			// reserved for any integer value that has no string mapping.
 			iv, err := value.ToUint16()
 			if err != nil {
 				return false, nil, false, fmt.Errorf("no valid integer value found for column %s in table %s, bytes: %b",
@@ -1083,8 +1083,8 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 			value = sqltypes.MakeTrusted(plan.Table.Fields[colNum].Type, []byte(strVal))
 		}
 		if plan.Table.Fields[colNum].Type == querypb.Type_SET || mysqlType == mysqlbinlog.TypeSet {
-			// Add the mapping JiT in case we haven't properly received and processed
-			// a table map event to initialize it.
+			// Add the mapping JiT in case we haven't properly received and processed a table map
+			// event to initialize it.
 			if plan.EnumSetValuesMap == nil {
 				if err := addEnumAndSetMappingstoPlan(plan.Plan, plan.Table.Fields, plan.TableMap.Metadata); err != nil {
 					return false, nil, false, fmt.Errorf("failed to build ENUM and SET column integer to string mappings: %v", err)
@@ -1093,8 +1093,8 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 			val := bytes.Buffer{}
 			// A SET column can have 64 unique values: https://dev.mysql.com/doc/refman/en/set.html
 			// For this reason the binlog event contains the values encoded as an unsigned 64-bit
-			// integer (note that position 0 is reserved for '' which is used if you insert any
-			// integer values which are not present in the set).
+			// integer which is really a bitmap (note that position 0 is reserved for '' which is
+			// used if you insert any integer values which have no valid string mapping in the set).
 			iv, err := value.ToUint64()
 			if err != nil {
 				return false, nil, false, fmt.Errorf("no valid integer value found for SET column %s in table %s, bytes: %b",
@@ -1103,7 +1103,7 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 			idx := 1
 			// See what bits are set in the bitmap using bitmasks.
 			for b := uint64(1); b < 1<<63; b <<= 1 {
-				if iv&b > 0 {
+				if iv&b > 0 { // This bit is set and the SET's string value needs to be provided.
 					strVal, ok := plan.EnumSetValuesMap[colNum][idx]
 					if !ok {
 						return false, nil, false, fmt.Errorf("no string value found for SET column %s in table %s -- with available values being: %v -- using the found bit map: %b",
