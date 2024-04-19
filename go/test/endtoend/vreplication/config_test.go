@@ -152,7 +152,7 @@ create table nopk (name varchar(128), age int unsigned);
         }
       ]
     },
-    "customer_type": {
+    "enterprise_customer": {
       "column_vindexes": [
         {
           "column": "cid",
@@ -434,13 +434,13 @@ create table nopk (name varchar(128), age int unsigned);
 
 	materializeCustomerTypeSpec = `
 {
-  "workflow": "customer_type",
+  "workflow": "enterprise_customer",
   "source_keyspace": "customer",
   "target_keyspace": "customer",
   "table_settings": [{
-    "target_table": "customer_type",
-    "source_expression": "select cid, typ from customer",
-    "create_ddl": "create table if not exists customer_type (cid bigint not null, typ enum('individual','soho','enterprise'), primary key(cid), key(typ))"
+    "target_table": "enterprise_customer",
+    "source_expression": "select cid, name, typ from customer where typ = 'enterprise'",
+    "create_ddl": "create table if not exists enterprise_customer (cid bigint not null, name varchar(128), typ varchar(64), primary key(cid), key(typ))"
   }]
 }
 `
