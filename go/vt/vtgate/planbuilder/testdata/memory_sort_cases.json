@@ -658,10 +658,10 @@
   },
   {
     "comment": "Derived table split across two shards, and ordered by both",
-    "query": "select * from (select u.foo, ue.bar from user u, user_extra ue) poo order by poo.bar, poo.foo",
+    "query": "select * from (select u.foo, ue.bar from user u, user_extra ue) tbl order by tbl.bar, tbl.foo",
     "plan": {
       "QueryType": "SELECT",
-      "Original": "select * from (select u.foo, ue.bar from user u, user_extra ue) poo order by poo.bar, poo.foo",
+      "Original": "select * from (select u.foo, ue.bar from user u, user_extra ue) tbl order by tbl.bar, tbl.foo",
       "Instructions": {
         "OperatorType": "Sort",
         "Variant": "Memory",
@@ -681,8 +681,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select foo, weight_string(foo) from (select u.foo from `user` as u where 1 != 1) as poo where 1 != 1",
-                "Query": "select foo, weight_string(foo) from (select u.foo from `user` as u) as poo",
+                "FieldQuery": "select foo, weight_string(foo) from (select u.foo from `user` as u where 1 != 1) as tbl where 1 != 1",
+                "Query": "select foo, weight_string(foo) from (select u.foo from `user` as u) as tbl",
                 "Table": "`user`"
               },
               {
@@ -692,8 +692,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select bar, weight_string(bar) from (select ue.bar from user_extra as ue where 1 != 1) as poo where 1 != 1",
-                "Query": "select bar, weight_string(bar) from (select ue.bar from user_extra as ue) as poo",
+                "FieldQuery": "select bar, weight_string(bar) from (select ue.bar from user_extra as ue where 1 != 1) as tbl where 1 != 1",
+                "Query": "select bar, weight_string(bar) from (select ue.bar from user_extra as ue) as tbl",
                 "Table": "user_extra"
               }
             ]
