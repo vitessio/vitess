@@ -101,7 +101,7 @@ func (zs *Server) lock(ctx context.Context, dirPath, contents string) (topo.Lock
 		defer cancel()
 
 		if err := zs.conn.Delete(cleanupCtx, nodePath, -1); err != nil {
-			log.Warningf("Cleanup unsuccessful lock path %s: %v", nodePath, err)
+			log.Warningf("Failed to cleanup unsuccessful lock path %s: %v", nodePath, err)
 		}
 
 		// Show the other locks in the directory
