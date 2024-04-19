@@ -168,10 +168,30 @@ func (e *Executor) newExecute(
 			log.V(2).Infof("Retry: %d, will retry query %s due to %v", try, query, err)
 			if try == 0 { // We are going to retry at least once
 				defer func() {
-					// Prevent any plan cache pollution from queries planned against the
-					// wrong keyspace during a MoveTables traffic switching operation.
+					// Prevent any plan cache pollution from queries planned against the wrong keyspace during a MoveTables
+					// traffic switching operation.
 					if err != nil {
-						e.ClearPlans()
+						cause := vterrors.RootCause(err)
+						if cause != nil && strings.Contains(cause.Error(), "enforce denied tables") {
+							// The executor's VSchemaManager clears the plan cache when it receives a new vschema via its
+							// SrvVSchema watcher (it calls executor.SaveVSchema() in its watch's subscriber callback). This
+							// happens concurrently with the KeyspaceEventWatcher also receiving the new vschema in its
+							// SrvVSchema watcher and in its subscriber callback processing it (which includes getting info
+							// on all shards from the topo), and eventually determining that the keyspace is consistent and
+							// ending the buffering window. So there's race with query retries such that a query could be
+							// planned against the wrong side just as the keyspace event is getting resolved and the buffers
+							// drained. Then that bad plan is the cached plan for the query until you do another
+							// topo.RebuildSrvVSchema/vtctldclient RebuildVSchemaGraph which then causes the VSchemaManager
+							// to clear the plan cache. It's essentially a race between the two SrvVSchema watchers and the
+							// work they do when a new one is received. If we DID a retry AND the last time we retried
+							// still encountered an error, we know that the plan used was 1) not valid/correct and going to
+							// the wrong side of the traffic switch as it failed with the denied tables error and 2) it will
+							// remain the plan in the cache if we do not clear the plans after it was added to to the cache.
+							// So here we clear the plan cache in order to prevent this scenario where the bad plan is
+							// cached indefinitely and re-used after the buffering window ends and the keyspace event is
+							// resolved.
+							e.ClearPlans()
+						}
 					}
 				}()
 			}
