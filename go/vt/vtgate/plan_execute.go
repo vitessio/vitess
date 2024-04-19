@@ -170,7 +170,7 @@ func (e *Executor) newExecute(
 				defer func() {
 					// Prevent any plan cache pollution from queries planned against the wrong keyspace during a MoveTables
 					// traffic switching operation.
-					if err != nil {
+					if err != nil { // The error we're checking here is the return value from the newExecute function
 						cause := vterrors.RootCause(err)
 						if cause != nil && strings.Contains(cause.Error(), "enforce denied tables") {
 							// The executor's VSchemaManager clears the plan cache when it receives a new vschema via its
