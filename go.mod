@@ -70,14 +70,14 @@ require (
 	go.etcd.io/etcd/client/v3 v3.5.13
 	go.uber.org/mock v0.2.0
 	golang.org/x/crypto v0.22.0 // indirect
-	golang.org/x/mod v0.16.0 // indirect
+	golang.org/x/mod v0.17.0 // indirect
 	golang.org/x/net v0.24.0
 	golang.org/x/oauth2 v0.18.0
 	golang.org/x/sys v0.19.0
 	golang.org/x/term v0.19.0
 	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/time v0.5.0
-	golang.org/x/tools v0.19.0
+	golang.org/x/tools v0.20.0
 	google.golang.org/api v0.172.0
 	google.golang.org/genproto v0.0.0-20240325203815-454cdb8f5daa // indirect
 	google.golang.org/grpc v1.62.1
@@ -106,7 +106,7 @@ require (
 	github.com/xlab/treeprint v1.2.0
 	go.uber.org/goleak v1.3.0
 	golang.org/x/exp v0.0.0-20240325151524-a685a6edb6d8
-	golang.org/x/sync v0.6.0
+	golang.org/x/sync v0.7.0
 	gonum.org/v1/gonum v0.14.0
 	modernc.org/sqlite v1.29.5
 )
