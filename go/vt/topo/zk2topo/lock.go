@@ -106,7 +106,7 @@ func (zs *Server) lock(ctx context.Context, dirPath, contents string) (topo.Lock
 
 		// Show the other locks in the directory
 		dir := path.Dir(nodePath)
-		children, _, err := zs.conn.Children(ctx, dir)
+		children, _, err := zs.conn.Children(cleanupCtx, dir)
 		if err != nil {
 			log.Warningf("Failed to get children of %v: %v", dir, err)
 			return nil, errToReturn
@@ -118,7 +118,7 @@ func (zs *Server) lock(ctx context.Context, dirPath, contents string) (topo.Lock
 		}
 
 		childPath := path.Join(dir, children[0])
-		data, _, err := zs.conn.Get(ctx, childPath)
+		data, _, err := zs.conn.Get(cleanupCtx, childPath)
 		if err != nil {
 			log.Warningf("Failed to get first locks node %v (may have just ended): %v", childPath, err)
 			return nil, errToReturn
