@@ -39,13 +39,12 @@ import (
 
 	"google.golang.org/protobuf/encoding/protojson"
 
-	"vitess.io/vitess/go/vt/proto/vtctldata"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	"vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 type tenantMigrationStatus int
@@ -252,9 +251,9 @@ func confirmOnlyWritesSwitched(t *testing.T) {
 	validateKeyspaceRoutingRules(t, vc, rules)
 }
 
-// TestMultiTenantSimple tests a single tenant migration. The aim here is to test all the steps of the migration process
-// including keyspace routing rules, addition of tenant filters to the forward and reverse vreplication streams, and
-// verifying that the data is migrated correctly.
+// TestMultiTenantSimpleSharded tests a single tenant migration to a sharded target. The aim is to test
+// the specification of the target shards in all the MoveTables subcommands, including creating only one stream
+// for a tenant on the shard to which this tenant id will be routed, using the specified Vindex.
 func TestMultiTenantSimpleSharded(t *testing.T) {
 	setSidecarDBName("_vt")
 	// Don't create RDONLY tablets to reduce number of tablets created to reduce resource requirements for the test.
@@ -319,6 +318,7 @@ func TestMultiTenantSimpleSharded(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, len(workflowState.Workflows))
 	wf := workflowState.Workflows[0]
+	// Verifies that only one stream is created for the tenant on the shard to which this tenant id will be routed.
 	require.Equal(t, 1, len(wf.ShardStreams))
 
 	// Note: we cannot insert into the target keyspace since that is never routed to the source keyspace.
