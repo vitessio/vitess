@@ -25,6 +25,8 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/vt/topotools"
 
@@ -1132,13 +1134,29 @@ func (vschema *VSchema) FirstKeyspace() *Keyspace {
 	return ks.Keyspace
 }
 
+// FIXME: remove logs before merging
+// findRoutedKeyspace checks if there is a keyspace routing rule for the given keyspace and tablet type.
+func (vschema *VSchema) findRoutedKeyspace(keyspace string, tabletType topodatapb.TabletType) string {
+	log.Infof("findRoutedKeyspace called with keyspace %s, tabletType %s", keyspace, tabletType)
+	tabletTypeSuffix := TabletTypeSuffix[tabletType]
+	if tabletTypeSuffix == "@primary" {
+		tabletTypeSuffix = ""
+	}
+	if len(vschema.KeyspaceRoutingRules) == 0 {
+		log.Infof("findRoutedKeyspace: no keyspace routing rules found")
+		return keyspace
+	}
+	if routedKeyspace, ok := vschema.KeyspaceRoutingRules[keyspace+tabletTypeSuffix]; ok {
+		log.Infof("findRoutedKeyspace: found routed keyspace %s for key %s", routedKeyspace, keyspace+tabletTypeSuffix)
+		return routedKeyspace
+	}
+	log.Infof("findRoutedKeyspace: no routed keyspace found")
+	return keyspace
+}
+
 // FindRoutedTable finds a table checking the routing rules.
 func (vschema *VSchema) FindRoutedTable(keyspace, tablename string, tabletType topodatapb.TabletType) (*Table, error) {
-	routedKeyspace, ok := vschema.KeyspaceRoutingRules[keyspace]
-	if ok {
-		keyspace = routedKeyspace
-	}
-
+	keyspace = vschema.findRoutedKeyspace(keyspace, tabletType)
 	qualified := tablename
 	if keyspace != "" {
 		qualified = keyspace + "." + tablename
