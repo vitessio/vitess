@@ -328,26 +328,121 @@ func TestDBKillWithContext(t *testing.T) {
 	require.ErrorIs(t, err, context.DeadlineExceeded)
 }
 
-// TestDBConnClose tests that an Exec returns immediately if a connection
-// is asynchronously killed (and closed) in the middle of an execution.
-func TestDBConnClose(t *testing.T) {
-	t.Run("context cancel", func(t *testing.T) {
+// TestDBConnCtxError tests that an Exec returns with appropriate error code.
+// Also, verifies that does it wait for the query to finish before returning.
+func TestDBConnCtxError(t *testing.T) {
+	exec := func(ctx context.Context, query string, dbconn *Conn) error {
+		_, err := dbconn.Exec(ctx, query, 1, false)
+		return err
+	}
+
+	execOnce := func(ctx context.Context, query string, dbconn *Conn) error {
+		_, err := dbconn.ExecOnce(ctx, query, 1, false)
+		return err
+	}
+
+	t.Run("context cancel - non-tx exec", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		go func() {
 			time.Sleep(10 * time.Millisecond)
 			cancel()
 		}()
-		testContextError(t, ctx, "(errno 1317) (sqlstate 70100): Query execution was interrupted")
+		testContextError(t, ctx, exec,
+			"(errno 1317) (sqlstate 70100): Query execution was interrupted",
+			150*time.Millisecond)
 	})
 
-	t.Run("context deadline", func(t *testing.T) {
+	t.Run("context deadline - non-tx exec", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 		defer cancel()
-		testContextError(t, ctx, "(errno 3024) (sqlstate HY000): Query execution was interrupted, maximum statement execution time exceeded")
+		testContextError(t, ctx, exec,
+			"(errno 3024) (sqlstate HY000): Query execution was interrupted, maximum statement execution time exceeded",
+			150*time.Millisecond)
+	})
+
+	t.Run("context cancel - tx exec", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		go func() {
+			time.Sleep(10 * time.Millisecond)
+			cancel()
+		}()
+		testContextError(t, ctx, execOnce,
+			"(errno 1317) (sqlstate 70100): Query execution was interrupted",
+			50*time.Millisecond)
+	})
+
+	t.Run("context deadline - tx exec", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		defer cancel()
+		testContextError(t, ctx, execOnce,
+			"(errno 3024) (sqlstate HY000): Query execution was interrupted, maximum statement execution time exceeded",
+			50*time.Millisecond)
 	})
 }
 
-func testContextError(t *testing.T, ctx context.Context, expErrMsg string) {
+var alloc = func() *sqltypes.Result {
+	return &sqltypes.Result{}
+}
+
+// TestDBConnStreamCtxError tests that an StreamExec returns with appropriate error code.
+// Also, verifies that does it wait for the query to finish before returning.
+func TestDBConnStreamCtxError(t *testing.T) {
+	exec := func(ctx context.Context, query string, dbconn *Conn) error {
+		return dbconn.Stream(ctx, query, func(result *sqltypes.Result) error {
+			return nil
+		}, alloc, 1, querypb.ExecuteOptions_ALL)
+	}
+
+	execOnce := func(ctx context.Context, query string, dbconn *Conn) error {
+		return dbconn.StreamOnce(ctx, query, func(result *sqltypes.Result) error {
+			return nil
+		}, alloc, 1, querypb.ExecuteOptions_ALL)
+	}
+
+	t.Run("context cancel - non-tx exec", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		go func() {
+			time.Sleep(10 * time.Millisecond)
+			cancel()
+		}()
+		testContextError(t, ctx, exec,
+			"(errno 1317) (sqlstate 70100): Query execution was interrupted",
+			150*time.Millisecond)
+	})
+
+	t.Run("context deadline - non-tx exec", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		defer cancel()
+		testContextError(t, ctx, exec,
+			"(errno 3024) (sqlstate HY000): Query execution was interrupted, maximum statement execution time exceeded",
+			150*time.Millisecond)
+	})
+
+	t.Run("context cancel - tx exec", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		go func() {
+			time.Sleep(10 * time.Millisecond)
+			cancel()
+		}()
+		testContextError(t, ctx, execOnce,
+			"(errno 1317) (sqlstate 70100): Query execution was interrupted",
+			50*time.Millisecond)
+	})
+
+	t.Run("context deadline - tx exec", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		defer cancel()
+		testContextError(t, ctx, execOnce,
+			"(errno 3024) (sqlstate HY000): Query execution was interrupted, maximum statement execution time exceeded",
+			50*time.Millisecond)
+	})
+}
+
+func testContextError(t *testing.T,
+	ctx context.Context,
+	exec func(context.Context, string, *Conn) error,
+	expErrMsg string,
+	expDuration time.Duration) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	connPool := newPool()
@@ -361,15 +456,17 @@ func testContextError(t *testing.T, ctx context.Context, expErrMsg string) {
 		time.Sleep(100 * time.Millisecond)
 	})
 	db.AddQueryPattern(`kill query \d+`, &sqltypes.Result{})
+	db.AddQueryPattern(`kill \d+`, &sqltypes.Result{})
 
 	dbConn, err := newPooledConn(context.Background(), connPool, params)
 	require.NoError(t, err)
 	defer dbConn.Close()
 
 	start := time.Now()
-	_, err = dbConn.Exec(ctx, query, 1, false)
+	err = exec(ctx, query, dbConn)
+	end := time.Now()
 	assert.ErrorContains(t, err, expErrMsg)
-	assert.True(t, time.Since(start) > 100*time.Millisecond, "%v %v", time.Since(start), 100*time.Millisecond)
+	assert.WithinDuration(t, end, start, expDuration)
 }
 
 func TestDBNoPoolConnKill(t *testing.T) {
@@ -453,9 +550,7 @@ func TestDBConnStream(t *testing.T) {
 				result.Rows = append(result.Rows, r.Rows...)
 			}
 			return nil
-		}, func() *sqltypes.Result {
-			return &sqltypes.Result{}
-		},
+		}, alloc,
 		10, querypb.ExecuteOptions_ALL)
 	if err != nil {
 		t.Fatalf("should not get an error, err: %v", err)
@@ -480,7 +575,25 @@ func TestDBConnStream(t *testing.T) {
 	}
 }
 
-func TestDBConnStreamKill(t *testing.T) {
+// TestDBConnKillCall tests that direct Kill method calls work as expected.
+func TestDBConnKillCall(t *testing.T) {
+	t.Run("stream exec", func(t *testing.T) {
+		testKill(t, func(ctx context.Context, query string, dbconn *Conn) error {
+			return dbconn.Stream(context.Background(), query,
+				func(r *sqltypes.Result) error { return nil },
+				alloc, 10, querypb.ExecuteOptions_ALL)
+		})
+	})
+
+	t.Run("exec", func(t *testing.T) {
+		testKill(t, func(ctx context.Context, query string, dbconn *Conn) error {
+			_, err := dbconn.Exec(context.Background(), query, 1, false)
+			return err
+		})
+	})
+}
+
+func testKill(t *testing.T, exec func(context.Context, string, *Conn) error) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	sql := "select * from test_table limit 1000"
@@ -490,6 +603,13 @@ func TestDBConnStreamKill(t *testing.T) {
 		},
 	}
 	db.AddQuery(sql, expectedResult)
+	db.SetBeforeFunc(sql, func() {
+		time.Sleep(100 * time.Millisecond)
+	})
+
+	db.AddQueryPattern(`kill query \d+`, &sqltypes.Result{})
+	db.AddQueryPattern(`kill \d+`, &sqltypes.Result{})
+
 	connPool := newPool()
 	params := dbconfigs.New(db.ConnParams())
 	connPool.Open(params, params, params)
@@ -500,20 +620,11 @@ func TestDBConnStreamKill(t *testing.T) {
 
 	go func() {
 		time.Sleep(10 * time.Millisecond)
-		dbConn.Kill("test kill", 0)
+		dbConn.Kill("kill connection called", 0)
 	}()
 
-	err = dbConn.Stream(context.Background(), sql,
-		func(r *sqltypes.Result) error {
-			time.Sleep(100 * time.Millisecond)
-			return nil
-		},
-		func() *sqltypes.Result {
-			return &sqltypes.Result{}
-		},
-		10, querypb.ExecuteOptions_ALL)
-
-	assert.Contains(t, err.Error(), "(errno 2013) due to")
+	err = exec(context.Background(), sql, dbConn)
+	assert.ErrorContains(t, err, "kill connection called")
 }
 
 func TestDBConnReconnect(t *testing.T) {
