@@ -303,7 +303,8 @@ func (p *Projection) AddWSColumn(ctx *plancontext.PlanningContext, offset int, u
 		panic(vterrors.VT13001(fmt.Sprintf("offset [%d] out of range [%d]", offset, len(cols))))
 	}
 
-	ws := weightStringFor(cols[offset].Expr)
+	expr := cols[offset].Expr
+	ws := weightStringFor(expr)
 	aeWs := aeWrap(ws)
 
 	pe := newProjExprWithInner(aeWs, ws)
@@ -312,15 +313,21 @@ func (p *Projection) AddWSColumn(ctx *plancontext.PlanningContext, offset int, u
 	}
 
 	// we need to push down this column to our input
-	var inputOffset int
+	inputOffset := -1
 	wsOp, ok := supportsWSByOffset(p.Source)
 	if ok {
-		inputOffset = wsOp.AddWSColumn(ctx, offset, false)
+		offsetOnInput := p.Source.FindCol(ctx, expr, false)
+		if offsetOnInput >= 0 {
+			// if we are not getting this from the source, we can solve this at offset planning time
+			inputOffset = wsOp.AddWSColumn(ctx, offsetOnInput, false)
+		}
 	} else {
 		inputOffset = p.Source.AddColumn(ctx, true, true, aeWs)
 	}
 
-	pe.Info = Offset(inputOffset) // since we already know the offset, let's save the information
+	if inputOffset >= 0 {
+		pe.Info = Offset(inputOffset)
+	}
 	return p.addProjExpr(pe)
 }
 

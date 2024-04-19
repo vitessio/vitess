@@ -196,7 +196,7 @@ func (*Aggregator) CanTakeColumnsByOffset() bool {
 
 func (a *Aggregator) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
 	if len(a.Columns) <= offset {
-		panic(vterrors.VT13001("offset out of range1"))
+		panic(vterrors.VT13001("offset out of range"))
 	}
 
 	var expr sqlparser.Expr
@@ -354,6 +354,7 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) Operator {
 		if gb.ColOffset == -1 {
 			offset := a.internalAddColumn(ctx, aeWrap(gb.Inner), false)
 			a.Grouping[idx].ColOffset = offset
+			gb.ColOffset = offset
 		}
 		if gb.WSOffset != -1 || !ctx.SemTable.NeedsWeightString(gb.Inner) {
 			continue
