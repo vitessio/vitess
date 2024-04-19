@@ -66,7 +66,7 @@ func RegisterFlags(fs *pflag.FlagSet) {
 func OpenTabletDiscovery() <-chan time.Time {
 	// TODO(sougou): If there's a shutdown signal, we have to close the topo.
 	ts = topo.Open()
-	tmc = tmclient.NewTabletManagerClient()
+	tmc = inst.InitializeTMC()
 	// Clear existing cache and perform a new refresh.
 	if _, err := db.ExecVTOrc("delete from vitess_tablet"); err != nil {
 		log.Error(err)
@@ -291,6 +291,11 @@ func setReadOnly(ctx context.Context, tablet *topodatapb.Tablet) error {
 // changeTabletType calls the said RPC for the given tablet with the given parameters.
 func changeTabletType(ctx context.Context, tablet *topodatapb.Tablet, tabletType topodatapb.TabletType, semiSync bool) error {
 	return tmc.ChangeType(ctx, tablet, tabletType, semiSync)
+}
+
+// resetReplicationParameters resets the replication parameters on the given tablet.
+func resetReplicationParameters(ctx context.Context, tablet *topodatapb.Tablet) error {
+	return tmc.ResetReplicationParameters(ctx, tablet)
 }
 
 // setReplicationSource calls the said RPC with the parameters provided
