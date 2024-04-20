@@ -555,18 +555,19 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 				case ctx.Err() != nil:
 					err = fmt.Errorf("context has ended")
 				case shr == nil || shr.RealtimeStats == nil || shr.Target == nil:
-					err = fmt.Errorf("health check failed")
+					err = fmt.Errorf("health check failed on %s", topoproto.TabletAliasString(tablet.Alias))
 				case vs.tabletType != shr.Target.TabletType:
-					err = fmt.Errorf("tablet type has changed from %s to %s, restarting vstream",
-						vs.tabletType, shr.Target.TabletType)
+					err = fmt.Errorf("tablet %s type has changed from %s to %s, restarting vstream",
+						topoproto.TabletAliasString(tablet.Alias), vs.tabletType, shr.Target.TabletType)
 				case shr.RealtimeStats.HealthError != "":
 					err = fmt.Errorf("tablet %s is no longer healthy: %s, restarting vstream",
-						tablet.Alias, shr.RealtimeStats.HealthError)
+						topoproto.TabletAliasString(tablet.Alias), shr.RealtimeStats.HealthError)
 				case shr.RealtimeStats.ReplicationLagSeconds > uint32(discovery.GetLowReplicationLag().Seconds()):
 					err = fmt.Errorf("tablet %s has a replication lag of %d seconds which is beyond the value provided in --discovery_low_replication_lag of %s so the tablet is no longer considered healthy, restarting vstream",
 						topoproto.TabletAliasString(tablet.Alias), shr.RealtimeStats.ReplicationLagSeconds, discovery.GetLowReplicationLag())
 				}
 				if err != nil {
+					log.Warningf("Tablet state changed: %s, attempting to restart", err)
 					errCh <- err
 					return err
 				}
@@ -597,7 +598,6 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 			case <-ctx.Done():
 				return ctx.Err()
 			case streamErr := <-errCh:
-				log.Warningf("Tablet state changed: %s, attempting to restart", streamErr)
 				return vterrors.New(vtrpcpb.Code_UNAVAILABLE, streamErr.Error())
 			case <-journalDone:
 				// Unreachable.

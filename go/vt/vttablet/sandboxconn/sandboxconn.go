@@ -133,6 +133,8 @@ type SandboxConn struct {
 	getSchemaResult []SchemaResult
 
 	parser *sqlparser.Parser
+
+	streamHealthResponse *querypb.StreamHealthResponse
 }
 
 type SchemaResult struct {
@@ -475,8 +477,20 @@ func (sbc *SandboxConn) MessageAck(ctx context.Context, target *querypb.Target, 
 // SandboxSQRowCount is the default number of fake splits returned.
 var SandboxSQRowCount = int64(10)
 
-// StreamHealth always mocks a "healthy" result.
+func (sbc *SandboxConn) SetStreamHealthResponse(res *querypb.StreamHealthResponse) {
+	sbc.mapMu.Lock()
+	defer sbc.mapMu.Unlock()
+	sbc.streamHealthResponse = res
+}
+
+// StreamHealth always mocks a "healthy" result by default. If you want to overrid this behavior you
+// call SetStreamHealthResponse.
 func (sbc *SandboxConn) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
+	sbc.mapMu.Lock()
+	defer sbc.mapMu.Unlock()
+	if sbc.streamHealthResponse != nil {
+		return callback(sbc.streamHealthResponse)
+	}
 	return nil
 }
 
