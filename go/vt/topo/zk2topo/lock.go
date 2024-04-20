@@ -91,19 +91,22 @@ func (zs *Server) lock(ctx context.Context, dirPath, contents string) (topo.Lock
 		case context.Canceled:
 			errToReturn = topo.NewError(topo.Interrupted, nodePath)
 		default:
-			errToReturn = vterrors.Wrapf(err, "failed to obtain action lock: %v", nodePath)
+			errToReturn = vterrors.Wrapf(err, "failed to obtain lock: %v", nodePath)
 		}
 
 		// Regardless of the reason, try to cleanup.
-		log.Warningf("Failed to obtain action lock: %v", err)
+		log.Warningf("Failed to obtain lock: %v", err)
 
-		if err := zs.conn.Delete(ctx, nodePath, -1); err != nil {
-			log.Warningf("Failed to close connection :%v", err)
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), baseTimeout)
+		defer cancel()
+
+		if err := zs.conn.Delete(cleanupCtx, nodePath, -1); err != nil {
+			log.Warningf("Failed to cleanup unsuccessful lock path %s: %v", nodePath, err)
 		}
 
 		// Show the other locks in the directory
 		dir := path.Dir(nodePath)
-		children, _, err := zs.conn.Children(ctx, dir)
+		children, _, err := zs.conn.Children(cleanupCtx, dir)
 		if err != nil {
 			log.Warningf("Failed to get children of %v: %v", dir, err)
 			return nil, errToReturn
@@ -115,7 +118,7 @@ func (zs *Server) lock(ctx context.Context, dirPath, contents string) (topo.Lock
 		}
 
 		childPath := path.Join(dir, children[0])
-		data, _, err := zs.conn.Get(ctx, childPath)
+		data, _, err := zs.conn.Get(cleanupCtx, childPath)
 		if err != nil {
 			log.Warningf("Failed to get first locks node %v (may have just ended): %v", childPath, err)
 			return nil, errToReturn
