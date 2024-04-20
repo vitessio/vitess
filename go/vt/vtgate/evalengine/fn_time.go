@@ -891,12 +891,12 @@ func (call *builtinMakedate) compile(c *compiler) (ctype, error) {
 
 func clampHourMinute(h, m int64) (int64, int64, bool, bool) {
 	var clamped bool
-	if h > 838 || h < -838 {
+	if h > datetime.MaxHours || h < -datetime.MaxHours {
 		clamped = true
 		if h > 0 {
-			h = 838
+			h = datetime.MaxHours
 		} else {
-			h = -838
+			h = -datetime.MaxHours
 		}
 		m = 59
 	}
@@ -1409,7 +1409,7 @@ func (b *builtinSecToTime) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	prec = min(int(evalDecimalPrecision(e)), prec)
-	return newEvalTime(datetime.NewTimeFromSecondsDecimal(e.dec), prec), nil
+	return newEvalTime(datetime.NewTimeFromSeconds(e.dec), prec), nil
 }
 
 func (call *builtinSecToTime) compile(c *compiler) (ctype, error) {

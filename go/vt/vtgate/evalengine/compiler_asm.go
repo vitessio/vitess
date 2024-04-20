@@ -4109,7 +4109,7 @@ func (asm *assembler) Fn_SEC_TO_TIME_D() {
 		prec := int(e.prec)
 
 		sec := newEvalDecimalWithPrec(e.toDecimal(), int32(prec))
-		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalTime(datetime.NewTimeFromSecondsDecimal(sec.dec), prec)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalTime(datetime.NewTimeFromSeconds(sec.dec), prec)
 		return 1
 	}, "FN SEC_TO_TIME TEMPORAL(SP-1)")
 }
@@ -4119,7 +4119,7 @@ func (asm *assembler) Fn_SEC_TO_TIME_d() {
 		e := env.vm.stack[env.vm.sp-1].(*evalDecimal)
 		prec := min(evalDecimalPrecision(e), datetime.DefaultPrecision)
 
-		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalTime(datetime.NewTimeFromSecondsDecimal(e.dec), int(prec))
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalTime(datetime.NewTimeFromSeconds(e.dec), int(prec))
 		return 1
 	}, "FN SEC_TO_TIME DECIMAL(SP-1)")
 }

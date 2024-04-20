@@ -44,7 +44,10 @@ type DateTime struct {
 	Time Time
 }
 
-const DefaultPrecision = 6
+const (
+	DefaultPrecision = 6
+	MaxHours         = 838
+)
 
 func (t Time) AppendFormat(b []byte, prec uint8) []byte {
 	if t.Neg() {
@@ -719,7 +722,7 @@ func NewTimeFromStd(t time.Time) Time {
 	}
 }
 
-func NewTimeFromSecondsDecimal(seconds decimal.Decimal) Time {
+func NewTimeFromSeconds(seconds decimal.Decimal) Time {
 	var neg bool
 	if seconds.Cmp(decimal.NewFromInt(0)) < 0 {
 		neg = true
@@ -734,8 +737,8 @@ func NewTimeFromSecondsDecimal(seconds decimal.Decimal) Time {
 	min := sec.Div(decimal.NewFromInt(60), 0)
 	_, sec = sec.QuoRem(decimal.NewFromInt(60), 0)
 
-	if h.Cmp(decimal.NewFromInt(839)) >= 0 {
-		h := uint16(838)
+	if h.Cmp(decimal.NewFromInt(MaxHours)) > 0 {
+		h := uint16(MaxHours)
 		if neg {
 			h |= negMask
 		}
