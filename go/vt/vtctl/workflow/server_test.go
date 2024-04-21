@@ -180,9 +180,10 @@ func TestVDiffCreate(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name:    "no values",
-			req:     &vtctldatapb.VDiffCreateRequest{},
-			wantErr: "FindAllShardsInKeyspace(): List: node doesn't exist: keyspaces/shards", // We did not provide any keyspace or shard
+			name: "no values",
+			req:  &vtctldatapb.VDiffCreateRequest{},
+			// We did not provide any keyspace or shard.
+			wantErr: "FindAllShardsInKeyspace() invalid keyspace name: UnescapeID err: invalid input identifier ''",
 		},
 	}
 	for _, tt := range tests {

@@ -219,7 +219,7 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string, 
 	// characters such as a dash.
 	keyspace, err := sqlescape.UnescapeID(keyspace)
 	if err != nil {
-		return nil, vterrors.Wrapf(err, "FindAllShardsInKeyspace(%s) invalid keyspace name: %v", keyspace, err)
+		return nil, vterrors.Wrapf(err, "FindAllShardsInKeyspace(%s) invalid keyspace name", keyspace)
 	}
 
 	// First try to get all shards using List if we can.

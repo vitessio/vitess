@@ -58,7 +58,7 @@ func TestServerFindAllShardsInKeyspace(t *testing.T) {
 			opt:    &topo.FindAllShardsInKeyspaceOptions{Concurrency: 8},
 		},
 		{
-			name:     "backtick'd keyspace",
+			name:     "SQL escaped keyspace",
 			shards:   32,
 			keyspace: "`my-keyspace`",
 			opt:      &topo.FindAllShardsInKeyspaceOptions{Concurrency: 8},
