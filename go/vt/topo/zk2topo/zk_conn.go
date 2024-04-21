@@ -20,7 +20,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"fmt"
+	"errors"
 	"math/rand/v2"
 	"net"
 	"os"
@@ -411,7 +411,7 @@ func dialZk(ctx context.Context, addr string) (*zk.Conn, <-chan zk.Event, error)
 			case zk.StateAuthFailed:
 				// fast fail this one
 				zconn.Close()
-				return nil, nil, fmt.Errorf("zk connect failed: StateAuthFailed")
+				return nil, nil, errors.New("zk connect failed: StateAuthFailed")
 			}
 		}
 	}
