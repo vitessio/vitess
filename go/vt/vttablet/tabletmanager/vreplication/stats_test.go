@@ -195,6 +195,15 @@ func TestVReplicationStats(t *testing.T) {
 	require.Equal(t, int64(10), testStats.controllers[1].blpStats.ThrottledCounts.Counts()["tablet.vcopier"])
 	require.Equal(t, int64(80), testStats.controllers[1].blpStats.ThrottledCounts.Counts()["tablet.vplayer"])
 
+	blpStats.DDLEventActions.Add([]string{"ignore"}, 4)
+	blpStats.DDLEventActions.Add([]string{"exec"}, 3)
+	blpStats.DDLEventActions.Add([]string{"exec_ignore"}, 2)
+	blpStats.DDLEventActions.Add([]string{"stop"}, 1)
+	require.Equal(t, int64(4), testStats.controllers[1].blpStats.DDLEventActions.Counts()["ignore"])
+	require.Equal(t, int64(3), testStats.controllers[1].blpStats.DDLEventActions.Counts()["exec"])
+	require.Equal(t, int64(2), testStats.controllers[1].blpStats.DDLEventActions.Counts()["exec_ignore"])
+	require.Equal(t, int64(1), testStats.controllers[1].blpStats.DDLEventActions.Counts()["stop"])
+
 	var tm int64 = 1234567890
 	blpStats.RecordHeartbeat(tm)
 	require.Equal(t, tm, blpStats.Heartbeat())
