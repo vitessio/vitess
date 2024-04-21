@@ -170,8 +170,8 @@ func TestVReplicationDDLHandling(t *testing.T) {
 	waitForQueryResult(t, vtgateConn, targetKs, checkColQueryTarget, "[[INT64(0)]]")
 	// Confirm new col does exist on source
 	waitForQueryResult(t, vtgateConn, sourceKs, checkColQuerySource, "[[INT64(1)]]")
-	// Also test Cancel --keep_routing_rules
-	moveTablesAction(t, "Cancel", defaultCellName, workflow, sourceKs, targetKs, table, "--keep_routing_rules")
+	// Also test Cancel --keep-routing-rules
+	moveTablesAction(t, "Cancel", defaultCellName, workflow, sourceKs, targetKs, table, "--keep-routing-rules")
 	// Confirm that the routing rules were NOT cleared
 	rr, err := vc.VtctldClient.ExecuteCommandWithOutput("GetRoutingRules")
 	require.NoError(t, err)
@@ -186,6 +186,13 @@ func TestVReplicationDDLHandling(t *testing.T) {
 	// Drop the column on source to start fresh again
 	_, err = vtgateConn.ExecuteFetch(dropColDDL, 1, false)
 	require.NoError(t, err, "error executing %q: %v", dropColDDL, err)
+	// Confirm that we updated the stats on the target tablet as expected.
+	jsVal, err := getDebugVar(t, targetTab.Port, []string{"VReplicationDDLActions"})
+	require.NoError(t, err)
+	require.NotEqual(t, "{}", jsVal)
+	// The JSON value looks like this: {"cproduct.1.ignore": 1}
+	streamIgnoreCount := gjson.Get(jsVal, fmt.Sprintf(`%s.1.ignore`, workflow)).Int()
+	require.Greater(t, streamIgnoreCount, int64(0))
 
 	// Test STOP behavior (new col now exists nowhere)
 	moveTablesAction(t, "Create", defaultCellName, workflow, sourceKs, targetKs, table, "--on-ddl=STOP")
@@ -199,6 +206,13 @@ func TestVReplicationDDLHandling(t *testing.T) {
 	// Confirm that the target does not have new col
 	waitForQueryResult(t, vtgateConn, targetKs, checkColQueryTarget, "[[INT64(0)]]")
 	moveTablesAction(t, "Cancel", defaultCellName, workflow, sourceKs, targetKs, table)
+	// Confirm that we updated the stats on the target tablet as expected.
+	jsVal, err = getDebugVar(t, targetTab.Port, []string{"VReplicationDDLActions"})
+	require.NoError(t, err)
+	require.NotEqual(t, "{}", jsVal)
+	// The JSON value looks like this: {"cproduct.1.stop": 1}
+	streamStopCount := gjson.Get(jsVal, fmt.Sprintf(`%s.1.stop`, workflow)).Int()
+	require.Greater(t, streamStopCount, int64(0))
 
 	// Test EXEC behavior (new col now exists on source)
 	moveTablesAction(t, "Create", defaultCellName, workflow, sourceKs, targetKs, table, "--on-ddl=EXEC")
@@ -214,6 +228,13 @@ func TestVReplicationDDLHandling(t *testing.T) {
 	// Confirm new col was dropped on target
 	waitForQueryResult(t, vtgateConn, targetKs, checkColQueryTarget, "[[INT64(0)]]")
 	moveTablesAction(t, "Cancel", defaultCellName, workflow, sourceKs, targetKs, table)
+	// Confirm that we updated the stats on the target tablet as expected.
+	jsVal, err = getDebugVar(t, targetTab.Port, []string{"VReplicationDDLActions"})
+	require.NoError(t, err)
+	require.NotEqual(t, "{}", jsVal)
+	// The JSON value looks like this: {"cproduct.1.exec": 1}
+	streamExecCount := gjson.Get(jsVal, fmt.Sprintf(`%s.1.exec`, workflow)).Int()
+	require.Greater(t, streamExecCount, int64(0))
 }
 
 // TestVreplicationCopyThrottling tests the logic that is used
