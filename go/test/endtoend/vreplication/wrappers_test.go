@@ -134,7 +134,7 @@ func (vmt *VtctlMoveTables) ReverseReadsAndWrites() {
 }
 
 func (vmt *VtctlMoveTables) Show() {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
@@ -148,12 +148,12 @@ func (vmt *VtctlMoveTables) exec(action string) {
 	require.NoError(vmt.vc.t, err)
 }
 func (vmt *VtctlMoveTables) SwitchReads() {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
 func (vmt *VtctlMoveTables) SwitchWrites() {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
@@ -232,13 +232,15 @@ func (v VtctldMoveTables) Show() {
 }
 
 func (v VtctldMoveTables) SwitchReads() {
-	//TODO implement me
-	panic("implement me")
+	args := []string{"SwitchTraffic", "--tablet-types=rdonly,replica"}
+	args = append(args, v.switchFlags...)
+	v.exec(args...)
 }
 
 func (v VtctldMoveTables) SwitchWrites() {
-	//TODO implement me
-	panic("implement me")
+	args := []string{"SwitchTraffic", "--tablet-types=primary"}
+	args = append(args, v.switchFlags...)
+	v.exec(args...)
 }
 
 func (v VtctldMoveTables) Cancel() {
@@ -327,7 +329,7 @@ func (vrs *VtctlReshard) ReverseReadsAndWrites() {
 }
 
 func (vrs *VtctlReshard) Show() {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
@@ -339,12 +341,12 @@ func (vrs *VtctlReshard) exec(action string) {
 }
 
 func (vrs *VtctlReshard) SwitchReads() {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
 func (vrs *VtctlReshard) SwitchWrites() {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
@@ -421,12 +423,12 @@ func (v VtctldReshard) Show() {
 }
 
 func (v VtctldReshard) SwitchReads() {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
 func (v VtctldReshard) SwitchWrites() {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
