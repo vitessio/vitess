@@ -115,6 +115,8 @@ type Stats struct {
 	PartialQueryCacheSize *stats.CountersWithMultiLabels
 
 	ThrottledCounts *stats.CountersWithMultiLabels // By throttler and component
+
+	DDLEventActions *stats.CountersWithMultiLabels
 }
 
 // RecordHeartbeat updates the time the last heartbeat from vstreamer was seen
@@ -185,6 +187,7 @@ func NewStats() *Stats {
 	bps.PartialQueryCacheSize = stats.NewCountersWithMultiLabels("", "", []string{"type"})
 	bps.PartialQueryCount = stats.NewCountersWithMultiLabels("", "", []string{"type"})
 	bps.ThrottledCounts = stats.NewCountersWithMultiLabels("", "", []string{"throttler", "component"})
+	bps.DDLEventActions = stats.NewCountersWithMultiLabels("", "", []string{"action"})
 	return bps
 }
 
