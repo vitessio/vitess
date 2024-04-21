@@ -882,3 +882,33 @@ func validateTenantId(dataType querypb.Type, value string) error {
 	}
 	return nil
 }
+
+func getKeyspaceRoutingRulesState(ctx context.Context, ts *topo.Server, sourceKeyspace, targetKeyspace string) (
+	rdonlySwitched bool, replicaSwitched bool, primarySwitched bool, err error) {
+
+	rules, err := topotools.GetKeyspaceRoutingRules(ctx, ts)
+	if err != nil {
+		return false, false, false, err
+	}
+	hasSwitched := func(tabletTypePrefix string) bool {
+		ks, ok := rules[sourceKeyspace+tabletTypePrefix]
+		return ok && ks == targetKeyspace
+	}
+	rdonlySwitched = hasSwitched(rdonlyTabletSuffix)
+	replicaSwitched = hasSwitched(replicaTabletSuffix)
+	primarySwitched = hasSwitched(primaryTabletSuffix)
+
+	return rdonlySwitched, replicaSwitched, primarySwitched, nil
+}
+
+func getTabletTypeSuffix(tabletType topodatapb.TabletType) string {
+	switch tabletType {
+	case topodatapb.TabletType_REPLICA:
+		return replicaTabletSuffix
+	case topodatapb.TabletType_RDONLY:
+		return rdonlyTabletSuffix
+	case topodatapb.TabletType_PRIMARY:
+		return primaryTabletSuffix
+	}
+	return ""
+}
