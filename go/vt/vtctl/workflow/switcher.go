@@ -66,6 +66,10 @@ func (r *switcher) dropSourceShards(ctx context.Context) error {
 	return r.ts.dropSourceShards(ctx)
 }
 
+func (r *switcher) switchKeyspaceReads(ctx context.Context, servedTypes []topodatapb.TabletType) error {
+	return r.ts.switchKeyspaceReads(ctx, servedTypes)
+}
+
 func (r *switcher) switchShardReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection) error {
 	return r.ts.switchShardReads(ctx, cells, servedTypes, direction)
 }

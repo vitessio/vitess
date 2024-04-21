@@ -63,6 +63,16 @@ func (dr *switcherDryRun) deleteKeyspaceRoutingRules(ctx context.Context) error 
 	return nil
 }
 
+func (dr *switcherDryRun) switchKeyspaceReads(ctx context.Context, types []topodatapb.TabletType) error {
+	var tabletTypes []string
+	for _, servedType := range types {
+		tabletTypes = append(tabletTypes, servedType.String())
+	}
+	dr.drLog.Logf("Switch reads for keyspace %s to keyspace %s for tablet types [%s]",
+		dr.ts.SourceKeyspaceName(), dr.ts.TargetKeyspaceName(), strings.Join(tabletTypes, ","))
+	return nil
+}
+
 func (dr *switcherDryRun) switchShardReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection) error {
 	sourceShards := make([]string, 0)
 	targetShards := make([]string, 0)
