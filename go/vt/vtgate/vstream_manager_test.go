@@ -1658,7 +1658,6 @@ func TestVStreamManagerHealthcheckResponseHandling(t *testing.T) {
 		},
 	}
 
-	warningIdx := 0
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
 			done := make(chan struct{})
@@ -1672,12 +1671,7 @@ func TestVStreamManagerHealthcheckResponseHandling(t *testing.T) {
 					return nil
 				})
 				if tc.wantErr != "" { // Otherwise we simply expect the context to timeout
-					if len(logger.Events) < warningIdx+1 {
-						require.Fail(t, "expected vstream error", "vstream did not encounter a healthstream error, expected: %s", tc.wantErr)
-					}
-					loggedErr := logger.Events[warningIdx]
-					warningIdx++
-					if loggedErr == nil || !strings.Contains(loggedErr.String(), tc.wantErr) {
+					if !strings.Contains(logger.String(), tc.wantErr) {
 						require.Fail(t, "unexpected vstream error", "vstream ended with error: %v, which did not contain: %s", err, tc.wantErr)
 					}
 				}
@@ -1686,6 +1680,7 @@ func TestVStreamManagerHealthcheckResponseHandling(t *testing.T) {
 				source.SetStreamHealthResponse(tc.hcRes)
 			}
 			<-done
+			logger.Clear()
 		})
 	}
 }
