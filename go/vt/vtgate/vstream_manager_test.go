@@ -1579,8 +1579,7 @@ func TestVStreamManagerHealthcheckResponseHandling(t *testing.T) {
 	shard := "0"
 	tabletType := topodatapb.TabletType_REPLICA
 	_ = createSandbox(ks)
-	healthChan := make(chan *discovery.TabletHealth)
-	hc := discovery.NewFakeHealthCheck(healthChan)
+	hc := discovery.NewFakeHealthCheck(nil)
 	st := getSandboxTopo(ctx, cell, ks, []string{shard})
 	vsm := newTestVStreamManager(ctx, hc, st, cell)
 	vgtid := &binlogdatapb.VGtid{
