@@ -448,9 +448,9 @@ func (ts *trafficSwitcher) deleteKeyspaceRoutingRules(ctx context.Context) error
 	if err != nil {
 		return err
 	}
-	log.Infof("deleteKeyspaceRoutingRules before: %s", krr)
-	delete(krr, ts.SourceKeyspaceName())
-	log.Infof("deleteKeyspaceRoutingRules after: %s", krr)
+	for _, suffix := range tabletTypeSuffixes {
+		delete(krr, ts.SourceKeyspaceName()+suffix)
+	}
 	if err := topotools.SaveKeyspaceRoutingRules(ctx, ts.TopoServer(), krr); err != nil {
 		return err
 	}
@@ -733,16 +733,22 @@ func (ts *trafficSwitcher) changeRouting(ctx context.Context) error {
 	return ts.changeShardRouting(ctx)
 }
 
+func changeKeyspaceRoute(ctx context.Context, ts *topo.Server, tabletTypes []topodatapb.TabletType, sourceKeyspace, routedKeyspace string) error {
+	routes := make(map[string]string)
+	for _, tabletType := range tabletTypes {
+		suffix := getTabletTypeSuffix(tabletType)
+		routes[sourceKeyspace+suffix] = routedKeyspace
+	}
+	if err := updateKeyspaceRoutingRule(ctx, ts, routes); err != nil {
+		return err
+	}
+	return ts.RebuildSrvVSchema(ctx, nil)
+}
 func (ts *trafficSwitcher) changeWriteRoute(ctx context.Context) error {
 	if ts.IsMultiTenantMigration() {
-		ts.Logger().Infof("Pointing keyspace routing rules to %s for workflow %s", ts.TargetKeyspaceName(), ts.workflow)
-		var keyspaces []string
-		keyspaces = append(keyspaces, ts.SourceKeyspaceName())
-		routes := make(map[string]string)
-		for _, ks := range keyspaces {
-			routes[ks] = ts.TargetKeyspaceName()
-		}
-		if err := updateKeyspaceRoutingRule(ctx, ts.TopoServer(), routes); err != nil {
+		// For multi-tenant migrations, we can only move forward and not backwards.
+		ts.Logger().Infof("Pointing keyspace routing rules for primary to %s for workflow %s", ts.TargetKeyspaceName(), ts.workflow)
+		if err := changeKeyspaceRoute(ctx, ts.TopoServer(), []topodatapb.TabletType{topodatapb.TabletType_PRIMARY}, ts.SourceKeyspaceName(), ts.TargetKeyspaceName()); err != nil {
 			return err
 		}
 	} else if ts.isPartialMigration {
@@ -1642,4 +1648,11 @@ func (ts *trafficSwitcher) IsMultiTenantMigration() bool {
 		return true
 	}
 	return false
+}
+
+func (ts *trafficSwitcher) switchKeyspaceReads(ctx context.Context, tabletTypeSuffixes []topodatapb.TabletType) error {
+	if err := changeKeyspaceRoute(ctx, ts.TopoServer(), tabletTypeSuffixes, ts.SourceKeyspaceName(), ts.TargetKeyspaceName()); err != nil {
+		return err
+	}
+	return nil
 }
