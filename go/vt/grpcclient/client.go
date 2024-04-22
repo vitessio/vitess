@@ -138,7 +138,7 @@ func Dial(target string, failFast FailFast, opts ...grpc.DialOption) (*grpc.Clie
 
 	newopts = append(newopts, interceptors()...)
 
-	return grpc.NewClient(target, newopts...)
+	return grpc.Dial(target, newopts...)
 }
 
 func interceptors() []grpc.DialOption {
