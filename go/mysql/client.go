@@ -173,7 +173,7 @@ func (c *Conn) Ping() error {
 	if err := c.writePacket([]byte{ComPing}); err != nil {
 		return NewSQLError(CRServerGone, SSUnknownSQLState, "%v", err)
 	}
-	data, err := c.readEphemeralPacket()
+	data, err := c.readEphemeralPacket(context.Background())
 	if err != nil {
 		return NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 	}
@@ -215,7 +215,7 @@ func parseCharacterSet(cs string) (uint8, error) {
 // Returns a SQLError.
 func (c *Conn) clientHandshake(params *ConnParams) error {
 	// Wait for the server initial handshake packet, and parse it.
-	data, err := c.readPacket()
+	data, err := c.readPacket(context.Background())
 	if err != nil {
 		return NewSQLError(CRServerLost, "", "initial packet read failed: %v", err)
 	}
@@ -336,7 +336,7 @@ func (c *Conn) clientHandshake(params *ConnParams) error {
 		}
 
 		// Wait for response, should be OK.
-		response, err := c.readPacket()
+		response, err := c.readPacket(context.Background())
 		if err != nil {
 			return NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 		}
@@ -358,7 +358,7 @@ func (c *Conn) clientHandshake(params *ConnParams) error {
 // handleAuthResponse parses server's response after client sends the password for authentication
 // and handles next steps for AuthSwitchRequestPacket and AuthMoreDataPacket.
 func (c *Conn) handleAuthResponse(params *ConnParams) error {
-	response, err := c.readPacket()
+	response, err := c.readPacket(context.Background())
 	if err != nil {
 		return NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 	}
@@ -759,7 +759,7 @@ func (c *Conn) requestPublicKey() (rsaKey *rsa.PublicKey, err error) {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error sending public key request packet: %v", err)
 	}
 
-	response, err := c.readPacket()
+	response, err := c.readPacket(context.Background())
 	if err != nil {
 		return nil, NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 	}

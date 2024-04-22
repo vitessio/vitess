@@ -19,11 +19,13 @@ package sqlparser
 //go:generate goyacc -o sql.go sql.y
 
 import (
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"runtime/trace"
 	"sort"
 	"strconv"
 	"strings"
@@ -102,14 +104,16 @@ type ParserOptions struct {
 // is partially parsed but still contains a syntax error, the
 // error is ignored and the DDL is returned anyway.
 func Parse(sql string) (Statement, error) {
-	return ParseWithOptions(sql, ParserOptions{})
+	return ParseWithOptions(ctx, sql, ParserOptions{})
 }
 
 // ParseWithOptions fully parses the SQL in |sql|, using any custom options specified
 // in |options|, and returns a Statement, which is the AST representation of the query.
 // If a DDL statement is partially parsed but contains a syntax error, the
 // error is ignored and the DDL is returned anyway.
-func ParseWithOptions(sql string, options ParserOptions) (Statement, error) {
+func ParseWithOptions(ctx context.Context, sql string, options ParserOptions) (Statement, error) {
+	defer trace.StartRegion(ctx, "ParseWithOptions").End()
+
 	tokenizer := NewStringTokenizer(sql)
 	if options.AnsiQuotes {
 		tokenizer = NewStringTokenizerForAnsiQuotes(sql)

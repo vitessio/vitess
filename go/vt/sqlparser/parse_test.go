@@ -4025,7 +4025,7 @@ func TestAnsiQuotesMode(t *testing.T) {
 	}
 	for _, tcase := range invalidAnsiQuotesSQL {
 		t.Run(tcase.input, func(t *testing.T) {
-			_, err := ParseWithOptions(tcase.input, parserOptions)
+			_, err := ParseWithOptions(ctx, tcase.input, parserOptions)
 			require.NotNil(t, err)
 			assert.Equal(t, tcase.output, err.Error())
 		})
@@ -5184,7 +5184,7 @@ func runParseTestCaseWithParserOptions(t *testing.T, tcase parseTest, options Pa
 		if tcase.output == "" {
 			tcase.output = tcase.input
 		}
-		tree, err := ParseWithOptions(tcase.input, options)
+		tree, err := ParseWithOptions(ctx, tcase.input, options)
 		require.NoError(t, err)
 
 		assertTestcaseOutput(t, tcase, tree)

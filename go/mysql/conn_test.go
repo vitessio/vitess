@@ -18,6 +18,7 @@ package mysql
 
 import (
 	"bytes"
+	"context"
 	crypto_rand "crypto/rand"
 	"math/rand"
 	"net"
@@ -89,7 +90,7 @@ func useWriteEphemeralPacketBuffered(t *testing.T, cConn *Conn, data []byte) {
 		}
 	}()
 	cConn.startWriterBuffering()
-	defer cConn.flush()
+	defer cConn.flush(context.Background())
 
 	buf := cConn.startEphemeralPacket(len(data))
 	copy(buf, data)
@@ -114,7 +115,7 @@ func useWriteEphemeralPacketDirect(t *testing.T, cConn *Conn, data []byte) {
 
 func verifyPacketCommsSpecific(t *testing.T, cConn *Conn, data []byte,
 	write func(t *testing.T, cConn *Conn, data []byte),
-	read func() ([]byte, error)) {
+	read func(context.Context) ([]byte, error)) {
 	// Have to do it in the background if it cannot be buffered.
 	// Note we have to wait for it to finish at the end of the
 	// test, as the write may write all the data to the socket,
@@ -126,7 +127,7 @@ func verifyPacketCommsSpecific(t *testing.T, cConn *Conn, data []byte,
 		wg.Done()
 	}()
 
-	received, err := read()
+	received, err := read(context.Background())
 	if err != nil || !bytes.Equal(data, received) {
 		t.Fatalf("ReadPacket failed: %v %v", received, err)
 	}
@@ -208,7 +209,7 @@ func TestBasicPackets(t *testing.T) {
 	if err := sConn.writeOKPacket(12, 34, 56, 78); err != nil {
 		t.Fatalf("writeOKPacket failed: %v", err)
 	}
-	data, err := cConn.ReadPacket()
+	data, err := cConn.ReadPacket(context.Background())
 	if err != nil || len(data) == 0 || data[0] != OKPacket {
 		t.Fatalf("cConn.ReadPacket - OKPacket failed: %v %v", data, err)
 	}
@@ -221,7 +222,7 @@ func TestBasicPackets(t *testing.T) {
 	if err := sConn.writeOKPacketWithEOFHeader(12, 34, 56, 78); err != nil {
 		t.Fatalf("writeOKPacketWithEOFHeader failed: %v", err)
 	}
-	data, err = cConn.ReadPacket()
+	data, err = cConn.ReadPacket(context.Background())
 	if err != nil || len(data) == 0 || !isEOFPacket(data) {
 		t.Fatalf("cConn.ReadPacket - OKPacket with EOF header failed: %v %v", data, err)
 	}
@@ -234,7 +235,7 @@ func TestBasicPackets(t *testing.T) {
 	if err := sConn.writeErrorPacket(ERAccessDeniedError, SSAccessDeniedError, "access denied: %v", "reason"); err != nil {
 		t.Fatalf("writeErrorPacket failed: %v", err)
 	}
-	data, err = cConn.ReadPacket()
+	data, err = cConn.ReadPacket(context.Background())
 	if err != nil || len(data) == 0 || data[0] != ErrPacket {
 		t.Fatalf("cConn.ReadPacket - ErrorPacket failed: %v %v", data, err)
 	}
@@ -247,7 +248,7 @@ func TestBasicPackets(t *testing.T) {
 	if err := sConn.writeErrorPacketFromError(NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "access denied")); err != nil {
 		t.Fatalf("writeErrorPacketFromError failed: %v", err)
 	}
-	data, err = cConn.ReadPacket()
+	data, err = cConn.ReadPacket(context.Background())
 	if err != nil || len(data) == 0 || data[0] != ErrPacket {
 		t.Fatalf("cConn.ReadPacket - ErrorPacket failed: %v %v", data, err)
 	}
@@ -260,7 +261,7 @@ func TestBasicPackets(t *testing.T) {
 	if err := sConn.writeEOFPacket(0x8912, 0xabba); err != nil {
 		t.Fatalf("writeEOFPacket failed: %v", err)
 	}
-	data, err = cConn.ReadPacket()
+	data, err = cConn.ReadPacket(context.Background())
 	if err != nil || len(data) == 0 || !isEOFPacket(data) {
 		t.Fatalf("cConn.ReadPacket - EOFPacket failed: %v %v", data, err)
 	}

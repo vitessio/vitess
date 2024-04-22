@@ -18,6 +18,7 @@ package mysql
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha1"
@@ -221,7 +222,7 @@ func authServerDialogSwitchData() []byte {
 func AuthServerReadPacketString(c *Conn) (string, error) {
 	// Read a packet, the password is the payload, as a
 	// zero terminated string.
-	data, err := c.ReadPacket()
+	data, err := c.ReadPacket(context.Background())
 	if err != nil {
 		return "", err
 	}

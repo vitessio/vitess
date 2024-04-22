@@ -34,7 +34,7 @@ func TestComBinlogDump(t *testing.T) {
 		t.Fatalf("WriteComBinlogDump failed: %v", err)
 	}
 
-	data, err := sConn.ReadPacket()
+	data, err := sConn.ReadPacket(ctx)
 	if err != nil {
 		t.Fatalf("sConn.ReadPacket - ComBinlogDump failed: %v", err)
 	}
@@ -56,7 +56,7 @@ func TestComBinlogDump(t *testing.T) {
 		t.Fatalf("WriteComBinlogDump failed: %v", err)
 	}
 
-	data, err = sConn.ReadPacket()
+	data, err = sConn.ReadPacket(ctx)
 	if err != nil {
 		t.Fatalf("sConn.ReadPacket - ComBinlogDump failed: %v", err)
 	}
@@ -85,7 +85,7 @@ func TestComBinlogDumpGTID(t *testing.T) {
 		t.Fatalf("WriteComBinlogDumpGTID failed: %v", err)
 	}
 
-	data, err := sConn.ReadPacket()
+	data, err := sConn.ReadPacket(ctx)
 	if err != nil {
 		t.Fatalf("sConn.ReadPacket - ComBinlogDumpGTID failed: %v", err)
 	}
@@ -110,7 +110,7 @@ func TestComBinlogDumpGTID(t *testing.T) {
 		t.Fatalf("WriteComBinlogDumpGTID failed: %v", err)
 	}
 
-	data, err = sConn.ReadPacket()
+	data, err = sConn.ReadPacket(ctx)
 	if err != nil {
 		t.Fatalf("sConn.ReadPacket - ComBinlogDumpGTID failed: %v", err)
 	}
