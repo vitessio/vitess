@@ -305,8 +305,12 @@ func (p *Projection) AddWSColumn(ctx *plancontext.PlanningContext, offset int, u
 
 	expr := cols[offset].Expr
 	ws := weightStringFor(expr)
-	aeWs := aeWrap(ws)
+	if offset := p.FindCol(ctx, ws, underRoute); offset >= 0 {
+		// if we already have this column, we can just return the offset
+		return offset
+	}
 
+	aeWs := aeWrap(ws)
 	pe := newProjExprWithInner(aeWs, ws)
 	if underRoute {
 		return p.addProjExpr(pe)
