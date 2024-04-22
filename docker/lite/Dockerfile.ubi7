@@ -33,6 +33,8 @@ USER vitess
 
 RUN make install PREFIX=/vt/install
 
+FROM registry.access.redhat.com/ubi8/ubi:latest as lib
+
 # Start over and build the final image.
 FROM registry.access.redhat.com/ubi7/ubi:latest
 
@@ -51,8 +53,9 @@ COPY --from=builder --chown=vitess:vitess /vt/install /vt
 COPY --from=builder --chown=vitess:vitess /vt/src/vitess.io/vitess/web/vtadmin /vt/web/vtadmin
 COPY --from=builder --chown=vitess:vitess /vt/src/vitess.io/vitess/config/init_db.sql /vt/config/
 COPY --from=builder --chown=vitess:vitess /vt/src/vitess.io/vitess/config/mycnf /vt/config/
-COPY --from=builder /lib64/ld-linux-x86-64.so.2 /lib64/ld-linux-x86-64.so.2
 COPY --from=builder /usr/bin/mysqlbinlog /usr/bin/mysqlbinlog
+COPY --from=lib /lib64/libssl.so.1.1 /lib64/libssl.so.1.1
+COPY --from=lib /lib64/libcrypto.so.1.1 /lib64/libcrypto.so.1.1
 
 RUN mkdir -p /licenses
 COPY LICENSE /licenses
