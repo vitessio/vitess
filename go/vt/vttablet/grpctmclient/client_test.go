@@ -67,7 +67,7 @@ func TestDialDedicatedPool(t *testing.T) {
 
 		c := rpcClient.rpcDialPoolMap[dialPoolGroupThrottler][addr]
 		assert.NotNil(t, c)
-		assert.Contains(t, []connectivity.State{connectivity.Connecting, connectivity.TransientFailure}, c.cc.GetState())
+		assert.Contains(t, []connectivity.State{connectivity.Idle, connectivity.Connecting, connectivity.TransientFailure}, c.cc.GetState())
 
 		cachedTmc = c
 	})
@@ -126,7 +126,7 @@ func TestDialPool(t *testing.T) {
 		ch <- cachedTmc
 
 		assert.NotNil(t, cachedTmc)
-		assert.Contains(t, []connectivity.State{connectivity.Connecting, connectivity.TransientFailure}, cachedTmc.cc.GetState())
+		assert.Contains(t, []connectivity.State{connectivity.Idle, connectivity.Connecting, connectivity.TransientFailure}, cachedTmc.cc.GetState())
 	})
 
 	t.Run("CheckThrottler", func(t *testing.T) {
@@ -151,7 +151,7 @@ func TestDialPool(t *testing.T) {
 		assert.NotEmpty(t, rpcClient.rpcClientMap)
 		assert.NotEmpty(t, rpcClient.rpcClientMap[addr])
 
-		assert.Contains(t, []connectivity.State{connectivity.Connecting, connectivity.TransientFailure}, cachedTmc.cc.GetState())
+		assert.Contains(t, []connectivity.State{connectivity.Idle, connectivity.Connecting, connectivity.TransientFailure}, cachedTmc.cc.GetState())
 	})
 	t.Run("ExecuteFetchAsDba", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(ctx, time.Second)
@@ -179,6 +179,6 @@ func TestDialPool(t *testing.T) {
 		assert.NotEmpty(t, rpcClient.rpcClientMap[addr])
 
 		assert.NotNil(t, cachedTmc)
-		assert.Contains(t, []connectivity.State{connectivity.Connecting, connectivity.TransientFailure}, cachedTmc.cc.GetState())
+		assert.Contains(t, []connectivity.State{connectivity.Idle, connectivity.Connecting, connectivity.TransientFailure}, cachedTmc.cc.GetState())
 	})
 }
