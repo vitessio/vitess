@@ -25,6 +25,7 @@
   - **[Flag changes](#flag-changes)**
     - [`pprof-http` default change](#pprof-http-default)
     - [New `healthcheck-dial-concurrency` flag](#healthcheck-dial-concurrency-flag)
+    - [New `track-udfs` vtgate flag](#vtgate-track-udfs-flag)
 - **[Minor Changes](#minor-changes)**
   - **[New Stats](#new-stats)**
     - [VTTablet Query Cache Hits and Misses](#vttablet-query-cache-hits-and-misses)
@@ -189,7 +190,9 @@ More details about how it works is available in [MySQL Docs](https://dev.mysql.c
 VTGate can track any user defined functions for better planning.
 User Defined Functions (UDFs) should be directly loaded in the underlying MySQL.
 
-It should be enabled in VTGate with the `--enable-udfs` flag.
+It should be enabled in VTGate with the `--track-udfs` flag.
+This will enable the tracking of UDFs in VTGate and will be used for planning.
+Without this flag, VTGate will not be aware that there might be aggregating user-defined functions in the query that need to be pushed down to MySQL.
 
 More details about how to load UDFs is available in [MySQL Docs](https://dev.mysql.com/doc/extending-mysql/8.0/en/adding-loadable-function.html)
 
@@ -204,6 +207,10 @@ To continue enabling these endpoints, explicitly set `--pprof-http` when startin
 #### <a id="healthcheck-dial-concurrency-flag"/>New `--healthcheck-dial-concurrency` flag
 
 The new `--healthcheck-dial-concurrency` flag defines the maximum number of healthcheck connections that can open concurrently. This limit is to avoid hitting Go runtime panics on deployments watching enough tablets [to hit the runtime's maximum thread limit of `10000`](https://pkg.go.dev/runtime/debug#SetMaxThreads) due to blocking network syscalls. This flag applies to `vtcombo`, `vtctld` and `vtgate` only and a value less than the runtime max thread limit _(`10000`)_ is recommended.
+
+#### <a id="vtgate-track-udfs-flag"/>New `--track-udfs` vtgate flag
+
+The new `--track-udfs` flag enables VTGate to track user defined functions for better planning.
 
 ## <a id="minor-changes"/>Minor Changes
 

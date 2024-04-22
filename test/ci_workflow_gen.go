@@ -151,7 +151,7 @@ var (
 )
 
 type unitTest struct {
-	Name, Platform, FileName string
+	Name, Platform, FileName, Evalengine string
 }
 
 type clusterTest struct {
@@ -405,17 +405,27 @@ func generateClusterWorkflows(list []string, tpl string) {
 
 func generateUnitTestWorkflows() {
 	for _, platform := range unitTestDatabases {
-		test := &unitTest{
-			Name:     fmt.Sprintf("Unit Test (%s)", platform),
-			Platform: string(platform),
-		}
-		test.FileName = fmt.Sprintf("unit_test_%s.yml", platform)
-		path := fmt.Sprintf("%s/%s", workflowConfigDir, test.FileName)
-		err := writeFileFromTemplate(unitTestTemplate, path, test)
-		if err != nil {
-			log.Print(err)
+		for _, evalengine := range []string{"1", "0"} {
+			test := &unitTest{
+				Name:       fmt.Sprintf("Unit Test (%s%s)", evalengineToString(evalengine), platform),
+				Platform:   string(platform),
+				Evalengine: evalengine,
+			}
+			test.FileName = fmt.Sprintf("unit_test_%s%s.yml", evalengineToString(evalengine), platform)
+			path := fmt.Sprintf("%s/%s", workflowConfigDir, test.FileName)
+			err := writeFileFromTemplate(unitTestTemplate, path, test)
+			if err != nil {
+				log.Print(err)
+			}
 		}
 	}
+}
+
+func evalengineToString(evalengine string) string {
+	if evalengine == "1" {
+		return "evalengine_"
+	}
+	return ""
 }
 
 func setupTestDockerFile(test *selfHostedTest) error {
