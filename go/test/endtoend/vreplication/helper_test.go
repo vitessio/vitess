@@ -34,6 +34,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/json2"
+
 	"github.com/buger/jsonparser"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -985,4 +987,43 @@ func getCellNames(cells []*Cell) string {
 		cellNames = append(cellNames, cell.Name)
 	}
 	return strings.Join(cellNames, ",")
+}
+
+type VExplainPlan struct {
+	OperatorType string           `json:"OperatorType"`
+	Variant      string           `json:"Variant"`
+	Keyspace     VExplainKeyspace `json:"Keyspace"`
+	FieldQuery   string           `json:"FieldQuery"`
+	Query        string           `json:"Query"`
+	Table        string           `json:"Table"`
+}
+
+type VExplainKeyspace struct {
+	Name    string `json:"Name"`
+	Sharded bool   `json:"Sharded"`
+}
+
+func vexplain(t *testing.T, database, query string) *VExplainPlan {
+	vtgateConn := vc.GetVTGateConn(t)
+	defer vtgateConn.Close()
+	qr := execVtgateQuery(t, vtgateConn, database, fmt.Sprintf("vexplain %s", query))
+	require.NotNil(t, qr)
+	require.Equal(t, 1, len(qr.Rows))
+	json := qr.Rows[0][0].ToString()
+	var plan VExplainPlan
+	require.NoError(t, json2.Unmarshal([]byte(json), &plan))
+	return &plan
+}
+
+func confirmKeyspacesRoutedTo(t *testing.T, keyspaces []string, routedKeyspace, table string, tabletTypes []string) {
+	if len(tabletTypes) == 0 {
+		tabletTypes = []string{"primary", "replica", "rdonly"}
+	}
+	for _, ks := range keyspaces {
+		for _, tt := range tabletTypes {
+			database := fmt.Sprintf("%s@%s", ks, tt)
+			plan := vexplain(t, database, fmt.Sprintf("select * from %s.%s", ks, table))
+			require.Equalf(t, routedKeyspace, plan.Keyspace.Name, "for database %s, keyspaces %v, tabletType %s", database, keyspaces, tt)
+		}
+	}
 }
