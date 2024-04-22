@@ -298,12 +298,16 @@ func (p *Projection) CanTakeColumnsByOffset() bool {
 }
 
 func (p *Projection) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
-	cols := p.Columns.GetColumns()
+	cols, aliased := p.Columns.(AliasedProjections)
+	if !aliased {
+		panic(vterrors.VT09015("need schema tracking for this query"))
+	}
+
 	if offset >= len(cols) || offset < 0 {
 		panic(vterrors.VT13001(fmt.Sprintf("offset [%d] out of range [%d]", offset, len(cols))))
 	}
 
-	expr := cols[offset].Expr
+	expr := cols[offset].EvalExpr
 	ws := weightStringFor(expr)
 	if offset := p.FindCol(ctx, ws, underRoute); offset >= 0 {
 		// if we already have this column, we can just return the offset

@@ -1830,8 +1830,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select dt.id, dt.foo, weight_string(dt.id), weight_string(dt.foo) from (select id, foo from (select id, foo from `user` where 1 != 1) as x where 1 != 1 union select id, foo from (select id, foo from `user` where 1 != 1) as x where 1 != 1) as dt where 1 != 1",
-            "Query": "select dt.id, dt.foo, weight_string(dt.id), weight_string(dt.foo) from (select id, foo from (select id, foo from `user`) as x union select id, foo from (select id, foo from `user`) as x) as dt",
+            "FieldQuery": "select dt.c0 as id, dt.c1 as foo, weight_string(dt.c0), weight_string(dt.c1) from (select id, foo from (select id, foo from `user` where 1 != 1) as x where 1 != 1 union select id, foo from (select id, foo from `user` where 1 != 1) as x where 1 != 1) as dt(c0, c1) where 1 != 1",
+            "Query": "select dt.c0 as id, dt.c1 as foo, weight_string(dt.c0), weight_string(dt.c1) from (select id, foo from (select id, foo from `user`) as x union select id, foo from (select id, foo from `user`) as x) as dt(c0, c1)",
             "Table": "`user`"
           }
         ]

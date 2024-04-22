@@ -2288,8 +2288,8 @@
                   "Name": "main",
                   "Sharded": false
                 },
-                "FieldQuery": "select 1, 2, weight_string(1) from dual where 1 != 1",
-                "Query": "select 1, 2, weight_string(1) from dual",
+                "FieldQuery": "select dt.c0 as `1`, dt.c1 as `2`, weight_string(dt.c0) from (select 1, 2 from dual where 1 != 1) as dt(c0, c1) where 1 != 1",
+                "Query": "select dt.c0 as `1`, dt.c1 as `2`, weight_string(dt.c0) from (select 1, 2 from dual) as dt(c0, c1)",
                 "Table": "dual"
               }
             ]
@@ -2355,8 +2355,8 @@
                   "Name": "main",
                   "Sharded": false
                 },
-                "FieldQuery": "select 1, 2, weight_string(2) from dual where 1 != 1",
-                "Query": "select 1, 2, weight_string(2) from dual",
+                "FieldQuery": "select dt.c0 as `1`, dt.c1 as `2`, weight_string(dt.c1) from (select 1, 2 from dual where 1 != 1) as dt(c0, c1) where 1 != 1",
+                "Query": "select dt.c0 as `1`, dt.c1 as `2`, weight_string(dt.c1) from (select 1, 2 from dual) as dt(c0, c1)",
                 "Table": "dual"
               }
             ]

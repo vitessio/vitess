@@ -4220,14 +4220,13 @@
           "(0:2)",
           "(1:3)"
         ],
-        "ResultColumns": 2,
         "Inputs": [
           {
             "OperatorType": "Join",
             "Variant": "HashLeftJoin",
             "Collation": "binary",
             "ComparisonType": "INT16",
-            "JoinColumnIndexes": "-1,2",
+            "JoinColumnIndexes": "-1,2,-3,3",
             "Predicate": "u.col = ue.col",
             "TableName": "`user`_user_extra",
             "Inputs": [
@@ -4238,8 +4237,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select u.id, u.col from (select id, col from `user` where 1 != 1) as u where 1 != 1",
-                "Query": "select distinct u.id, u.col from (select id, col from `user`) as u",
+                "FieldQuery": "select u.id, u.col, weight_string(u.id) from (select id, col from `user` where 1 != 1) as u where 1 != 1",
+                "Query": "select distinct u.id, u.col, weight_string(u.id) from (select id, col from `user`) as u",
                 "Table": "`user`"
               },
               {
@@ -4253,8 +4252,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select ue.col, ue.user_id from (select col, user_id from user_extra where 1 != 1) as ue where 1 != 1",
-                    "Query": "select ue.col, ue.user_id from (select col, user_id from user_extra) as ue limit :__upper_limit",
+                    "FieldQuery": "select ue.col, ue.user_id, weight_string(ue.user_id) from (select col, user_id from user_extra where 1 != 1) as ue where 1 != 1",
+                    "Query": "select ue.col, ue.user_id, weight_string(ue.user_id) from (select col, user_id from user_extra) as ue limit :__upper_limit",
                     "Table": "user_extra"
                   }
                 ]
