@@ -18,7 +18,7 @@
 
 # Use a temporary layer for the build stage.
 ARG bootstrap_version=31
-ARG image="vitess/bootstrap:${bootstrap_version}-common"
+ARG image="vitess/bootstrap:${bootstrap_version}-mysql80"
 
 FROM "${image}" AS builder
 
@@ -51,6 +51,7 @@ COPY --from=builder --chown=vitess:vitess /vt/install /vt
 COPY --from=builder --chown=vitess:vitess /vt/src/vitess.io/vitess/web/vtadmin /vt/web/vtadmin
 COPY --from=builder --chown=vitess:vitess /vt/src/vitess.io/vitess/config/init_db.sql /vt/config/
 COPY --from=builder --chown=vitess:vitess /vt/src/vitess.io/vitess/config/mycnf /vt/config/
+COPY --from=builder /usr/bin/mysqlbinlog /usr/bin/mysqlbinlog
 
 RUN mkdir -p /licenses
 COPY LICENSE /licenses
