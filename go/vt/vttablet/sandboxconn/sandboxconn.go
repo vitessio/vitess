@@ -125,20 +125,9 @@ type SandboxConn struct {
 
 	NotServing bool
 
-<<<<<<< HEAD
 	getSchemaResult []map[string]string
-=======
-	getSchemaResult []SchemaResult
-
-	parser *sqlparser.Parser
 
 	streamHealthResponse *querypb.StreamHealthResponse
-}
-
-type SchemaResult struct {
-	TablesAndViews map[string]string
-	UDFs           []*querypb.UDFInfo
->>>>>>> 495de697cd (VReplication: Take replication lag into account in VStreamManager healthcheck result processing (#15761))
 }
 
 var _ queryservice.QueryService = (*SandboxConn)(nil) // compile-time interface check
