@@ -450,6 +450,7 @@ func (ts *trafficSwitcher) deleteKeyspaceRoutingRules(ctx context.Context) error
 	}
 	for _, suffix := range tabletTypeSuffixes {
 		delete(krr, ts.SourceKeyspaceName()+suffix)
+		delete(krr, ts.TargetKeyspaceName()+suffix)
 	}
 	if err := topotools.SaveKeyspaceRoutingRules(ctx, ts.TopoServer(), krr); err != nil {
 		return err
@@ -733,22 +734,12 @@ func (ts *trafficSwitcher) changeRouting(ctx context.Context) error {
 	return ts.changeShardRouting(ctx)
 }
 
-func changeKeyspaceRoute(ctx context.Context, ts *topo.Server, tabletTypes []topodatapb.TabletType, sourceKeyspace, routedKeyspace string) error {
-	routes := make(map[string]string)
-	for _, tabletType := range tabletTypes {
-		suffix := getTabletTypeSuffix(tabletType)
-		routes[sourceKeyspace+suffix] = routedKeyspace
-	}
-	if err := updateKeyspaceRoutingRule(ctx, ts, routes); err != nil {
-		return err
-	}
-	return ts.RebuildSrvVSchema(ctx, nil)
-}
 func (ts *trafficSwitcher) changeWriteRoute(ctx context.Context) error {
 	if ts.IsMultiTenantMigration() {
 		// For multi-tenant migrations, we can only move forward and not backwards.
 		ts.Logger().Infof("Pointing keyspace routing rules for primary to %s for workflow %s", ts.TargetKeyspaceName(), ts.workflow)
-		if err := changeKeyspaceRoute(ctx, ts.TopoServer(), []topodatapb.TabletType{topodatapb.TabletType_PRIMARY}, ts.SourceKeyspaceName(), ts.TargetKeyspaceName()); err != nil {
+		if err := changeKeyspaceRoute(ctx, ts.TopoServer(), []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
+			[]string{ts.SourceKeyspaceName(), ts.TargetKeyspaceName()}, ts.TargetKeyspaceName()); err != nil {
 			return err
 		}
 	} else if ts.isPartialMigration {
@@ -1648,11 +1639,4 @@ func (ts *trafficSwitcher) IsMultiTenantMigration() bool {
 		return true
 	}
 	return false
-}
-
-func (ts *trafficSwitcher) switchKeyspaceReads(ctx context.Context, tabletTypeSuffixes []topodatapb.TabletType) error {
-	if err := changeKeyspaceRoute(ctx, ts.TopoServer(), tabletTypeSuffixes, ts.SourceKeyspaceName(), ts.TargetKeyspaceName()); err != nil {
-		return err
-	}
-	return nil
 }

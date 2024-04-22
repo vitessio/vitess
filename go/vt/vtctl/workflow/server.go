@@ -1586,10 +1586,12 @@ func (s *Server) setupInitialRoutingRules(ctx context.Context, req *vtctldatapb.
 		var keyspaces []string
 		// Note that you can never point the target keyspace to the source keyspace in a multi-tenant migration
 		// since the target takes write traffic for all tenants!
-		keyspaces = append(keyspaces, sourceKeyspace)
+		keyspaces = append(keyspaces, sourceKeyspace, targetKeyspace)
 		routes := make(map[string]string)
 		for _, ks := range keyspaces {
-			routes[ks] = sourceKeyspace
+			for _, tt := range tabletTypeSuffixes {
+				routes[ks+tt] = sourceKeyspace
+			}
 		}
 		if err := updateKeyspaceRoutingRule(ctx, s.ts, routes); err != nil {
 			return err

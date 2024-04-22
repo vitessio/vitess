@@ -850,6 +850,20 @@ func getTenantClause(vrOptions *vtctldatapb.WorkflowOptions,
 	return &sel.Where.Expr, nil
 }
 
+func changeKeyspaceRoute(ctx context.Context, ts *topo.Server, tabletTypes []topodatapb.TabletType, keyspaces []string, routedKeyspace string) error {
+	routes := make(map[string]string)
+	for _, keyspace := range keyspaces {
+		for _, tabletType := range tabletTypes {
+			suffix := getTabletTypeSuffix(tabletType)
+			routes[keyspace+suffix] = routedKeyspace
+		}
+	}
+	if err := updateKeyspaceRoutingRule(ctx, ts, routes); err != nil {
+		return err
+	}
+	return ts.RebuildSrvVSchema(ctx, nil)
+}
+
 // updateKeyspaceRoutingRule updates the keyspace routing rule for the (effective) source keyspace to the target keyspace.
 func updateKeyspaceRoutingRule(ctx context.Context, ts *topo.Server, routes map[string]string) error {
 	rules, err := topotools.GetKeyspaceRoutingRules(ctx, ts)
