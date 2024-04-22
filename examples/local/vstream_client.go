@@ -67,7 +67,7 @@ func main() {
 			Filter: "select * from customer",
 		}},
 	}
-	conn, err := vtgateconn.Dial(ctx, "localhost:15991")
+	conn, err := vtgateconn.Dial("localhost:15991")
 	if err != nil {
 		log.Fatal(err)
 	}

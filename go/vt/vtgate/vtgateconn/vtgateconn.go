@@ -190,7 +190,7 @@ type Impl interface {
 
 // DialerFunc represents a function that will return an Impl
 // object that can communicate with a VTGate.
-type DialerFunc func(ctx context.Context, address string) (Impl, error)
+type DialerFunc func(address string) (Impl, error)
 
 var (
 	dialers  = make(map[string]DialerFunc)
@@ -221,7 +221,7 @@ func DeregisterDialer(name string) {
 }
 
 // DialProtocol dials a specific protocol, and returns the *VTGateConn
-func DialProtocol(ctx context.Context, protocol string, address string) (*VTGateConn, error) {
+func DialProtocol(protocol string, address string) (*VTGateConn, error) {
 	dialersM.Lock()
 	dialer, ok := dialers[protocol]
 	dialersM.Unlock()
@@ -229,7 +229,7 @@ func DialProtocol(ctx context.Context, protocol string, address string) (*VTGate
 	if !ok {
 		return nil, fmt.Errorf("no dialer registered for VTGate protocol %s", protocol)
 	}
-	impl, err := dialer(ctx, address)
+	impl, err := dialer(address)
 	if err != nil {
 		return nil, err
 	}
@@ -240,6 +240,6 @@ func DialProtocol(ctx context.Context, protocol string, address string) (*VTGate
 
 // Dial dials using the command-line specified protocol, and returns
 // the *VTGateConn.
-func Dial(ctx context.Context, address string) (*VTGateConn, error) {
-	return DialProtocol(ctx, vtgateProtocol, address)
+func Dial(address string) (*VTGateConn, error) {
+	return DialProtocol(vtgateProtocol, address)
 }

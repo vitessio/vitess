@@ -61,7 +61,7 @@ func RegisterFakeVTGateConnDialer() (*FakeVTGateConn, string) {
 	impl := &FakeVTGateConn{
 		execMap: make(map[string]*queryResponse),
 	}
-	vtgateconn.RegisterDialer(protocol, func(ctx context.Context, address string) (vtgateconn.Impl, error) {
+	vtgateconn.RegisterDialer(protocol, func(address string) (vtgateconn.Impl, error) {
 		return impl, nil
 	})
 	return impl, protocol

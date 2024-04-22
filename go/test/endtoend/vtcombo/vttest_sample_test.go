@@ -131,7 +131,7 @@ func TestStandalone(t *testing.T) {
 	require.Contains(t, tmp[0], "vtcombo")
 
 	ctx := context.Background()
-	conn, err := vtgateconn.Dial(ctx, grpcAddress)
+	conn, err := vtgateconn.Dial(grpcAddress)
 	require.NoError(t, err)
 	defer conn.Close()
 

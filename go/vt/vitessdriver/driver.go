@@ -174,13 +174,13 @@ func (d drv) newConnector(cfg Configuration) (driver.Connector, error) {
 }
 
 // Connect implements the database/sql/driver.Connector interface.
-func (c *connector) Connect(ctx context.Context) (driver.Conn, error) {
+func (c *connector) Connect(_ context.Context) (driver.Conn, error) {
 	conn := &conn{
 		cfg:     c.cfg,
 		convert: c.convert,
 	}
 
-	if err := conn.dial(ctx); err != nil {
+	if err := conn.dial(); err != nil {
 		return nil, err
 	}
 
@@ -267,9 +267,9 @@ type conn struct {
 	session *vtgateconn.VTGateSession
 }
 
-func (c *conn) dial(ctx context.Context) error {
+func (c *conn) dial() error {
 	var err error
-	c.conn, err = vtgateconn.DialProtocol(ctx, c.cfg.Protocol, c.cfg.Address)
+	c.conn, err = vtgateconn.DialProtocol(c.cfg.Protocol, c.cfg.Address)
 	if err != nil {
 		return err
 	}
