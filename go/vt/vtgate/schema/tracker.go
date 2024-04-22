@@ -164,23 +164,22 @@ func (t *Tracker) loadUDFs(conn queryservice.QueryService, target *querypb.Targe
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
+	var udfs []string
 	err := conn.GetSchema(t.ctx, target, querypb.SchemaTableType_UDFS, nil, func(schemaRes *querypb.GetSchemaResponse) error {
-		var udfs []string
 		for _, udf := range schemaRes.Udfs {
 			if !udf.Aggregating {
 				continue
 			}
 			udfs = append(udfs, udf.Name)
 		}
-
-		t.udfs[target.Keyspace] = udfs
 		return nil
 	})
 	if err != nil {
 		log.Errorf("error fetching new UDFs for %v: %w", target.Keyspace, err)
 		return err
 	}
-	log.Infof("finished loading UDFs for keyspace %s", target.Keyspace)
+	t.udfs[target.Keyspace] = udfs
+	log.Infof("finished loading %d UDFs for keyspace %s", len(udfs), target.Keyspace)
 	return nil
 }
 
