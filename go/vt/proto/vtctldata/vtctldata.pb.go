@@ -1238,8 +1238,10 @@ type WorkflowOptions struct {
 	TenantId string `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
 	// Remove auto_increment clauses on tables when moving them to a sharded
 	// keyspace.
-	StripShardedAutoIncrement bool     `protobuf:"varint,2,opt,name=strip_sharded_auto_increment,json=stripShardedAutoIncrement,proto3" json:"strip_sharded_auto_increment,omitempty"`
-	Shards                    []string `protobuf:"bytes,3,rep,name=shards,proto3" json:"shards,omitempty"`
+	StripShardedAutoIncrement bool `protobuf:"varint,2,opt,name=strip_sharded_auto_increment,json=stripShardedAutoIncrement,proto3" json:"strip_sharded_auto_increment,omitempty"`
+	// Shards on which vreplication streams in the target keyspace are created for this workflow and to which the data
+	// from the source will be vreplicated.
+	Shards []string `protobuf:"bytes,3,rep,name=shards,proto3" json:"shards,omitempty"`
 }
 
 func (x *WorkflowOptions) Reset() {
