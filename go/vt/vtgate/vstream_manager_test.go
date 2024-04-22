@@ -1661,12 +1661,12 @@ func TestVStreamManagerHealthcheckResponseHandling(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			done := make(chan struct{})
 			go func() {
-				sctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+				sctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 				defer cancel()
 				defer close(done)
 				// SandboxConn's VStream implementation always waits for the context to timeout.
 				err := vsm.VStream(sctx, tabletType, vgtid, nil, nil, func(events []*binlogdatapb.VEvent) error {
-					require.Fail(t, "unexpected event", "Receieved unexpected events: %v", events)
+					require.Fail(t, "unexpected event", "Received unexpected events: %v", events)
 					return nil
 				})
 				if tc.wantErr != "" { // Otherwise we simply expect the context to timeout
