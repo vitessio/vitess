@@ -251,7 +251,7 @@ func TestVReplicationDDLHandling(t *testing.T) {
 	require.Equal(t, int64(0), streamIgnoreCount, "expected ignore stat counter of 0 but got %d, full value: %s", streamIgnoreCount, jsVal)
 	moveTablesAction(t, "Cancel", defaultCellName, workflow, sourceKs, targetKs, table)
 	// The JSON value looks like this: {"onddl_test.3.stop": 0}
-	streamStopCount = gjson.Get(jsVal, fmt.Sprintf(`%s\.2\.stop`, workflow)).Int()
+	streamStopCount = gjson.Get(jsVal, fmt.Sprintf(`%s\.3\.stop`, workflow)).Int()
 	require.Equal(t, int64(0), streamStopCount, "expected stop stat counter of 0 but got %d, full value: %s", streamStopCount, jsVal)
 }
 
