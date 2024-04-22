@@ -672,17 +672,7 @@ func addMultipleColumnsToInput(
 		return "", op, true, offset
 
 	case *Union:
-		tableID := semantics.SingleTableSet(len(ctx.SemTable.Tables))
-		ctx.SemTable.Tables = append(ctx.SemTable.Tables, nil)
-		unionColumns := op.GetColumns(ctx)
-		proj := &Projection{
-			Source:  op,
-			Columns: AliasedProjections(slice.Map(unionColumns, newProjExpr)),
-			DT: &DerivedTable{
-				TableID: tableID,
-				Alias:   "dt",
-			},
-		}
+		proj := addDerivedProj(ctx, op)
 		return addMultipleColumnsToInput(ctx, proj, reuse, addToGroupBy, exprs)
 	default:
 		return "", op, false, nil

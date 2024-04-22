@@ -1101,8 +1101,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select dt.id, weight_string(dt.id) from (select id from `user` where 1 != 1 union select 3 from dual where 1 != 1) as dt where 1 != 1",
-                "Query": "select dt.id, weight_string(dt.id) from (select id from `user` union select 3 from dual) as dt",
+                "FieldQuery": "select dt.c0 as id, weight_string(dt.c0) from (select id from `user` where 1 != 1 union select 3 from dual where 1 != 1) as dt(c0) where 1 != 1",
+                "Query": "select dt.c0 as id, weight_string(dt.c0) from (select id from `user` union select 3 from dual) as dt(c0)",
                 "Table": "`user`, dual"
               }
             ]
