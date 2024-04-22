@@ -39,7 +39,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -132,13 +131,6 @@ func TestMultiTenantSimple(t *testing.T) {
 	_, err = vc.AddKeyspace(t, []*Cell{vc.Cells["zone1"]}, sourceKeyspace, "0", stVSchema, stSchema, 1, 0, getInitialTabletIdForTenant(tenantId), nil)
 	require.NoError(t, err)
 
-	targetPrimary := vc.getPrimaryTablet(t, targetKeyspace, "0")
-	sourcePrimary := vc.getPrimaryTablet(t, sourceKeyspace, "0")
-	primaries := map[string]*cluster.VttabletProcess{
-		"target": targetPrimary,
-		"source": sourcePrimary,
-	}
-
 	vtgateConn, closeConn := getVTGateConn()
 	defer closeConn()
 	numRows := 10
@@ -164,6 +156,7 @@ func TestMultiTenantSimple(t *testing.T) {
 		},
 	})
 
+	// Expected keyspace routing rules on creation of the workflow.
 	preSwitchRules := &vschemapb.KeyspaceRoutingRules{
 		Rules: []*vschemapb.KeyspaceRoutingRule{
 			{FromKeyspace: "s1", ToKeyspace: "s1"},
@@ -174,6 +167,8 @@ func TestMultiTenantSimple(t *testing.T) {
 			{FromKeyspace: "mt@replica", ToKeyspace: "s1"},
 		},
 	}
+
+	// Expected keyspace routing rules after reads are switched.
 	postSwitchReadsRules := &vschemapb.KeyspaceRoutingRules{
 		Rules: []*vschemapb.KeyspaceRoutingRule{
 			{FromKeyspace: "s1", ToKeyspace: "s1"},
@@ -184,6 +179,8 @@ func TestMultiTenantSimple(t *testing.T) {
 			{FromKeyspace: "mt@replica", ToKeyspace: "mt"},
 		},
 	}
+
+	// Expected keyspace routing rules after reads and writes are switched.
 	postSwitchWritesRules := &vschemapb.KeyspaceRoutingRules{
 		Rules: []*vschemapb.KeyspaceRoutingRule{
 			{FromKeyspace: "s1", ToKeyspace: "mt"},
@@ -199,26 +196,30 @@ func TestMultiTenantSimple(t *testing.T) {
 		"postSwitchReads":  postSwitchReadsRules,
 		"postSwitchWrites": postSwitchWritesRules,
 	}
+
 	require.Zero(t, len(getKeyspaceRoutingRules(t, vc).Rules))
 	mt.Create()
 	allKeyspaces := []string{sourceKeyspace, targetKeyspace}
 	confirmKeyspacesRoutedTo(t, allKeyspaces, "s1", "t1", nil)
-	validateKeyspaceRoutingRules(t, vc, primaries, rulesMap, notSwitched)
-	// Note: we cannot insert into the target keyspace since that is never routed to the source keyspace.
+	validateKeyspaceRoutingRules(t, vc, rulesMap, notSwitched)
+
 	lastIndex = insertRows(lastIndex, sourceKeyspace)
 	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKeyspace, mt.workflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
 	mt.SwitchReads()
 	confirmKeyspacesRoutedTo(t, allKeyspaces, "mt", "t1", []string{"rdonly", "replica"})
 	confirmKeyspacesRoutedTo(t, allKeyspaces, "s1", "t1", []string{"primary"})
-	validateKeyspaceRoutingRules(t, vc, primaries, rulesMap, readsSwitched)
+	validateKeyspaceRoutingRules(t, vc, rulesMap, readsSwitched)
+
 	mt.SwitchWrites()
 	confirmKeyspacesRoutedTo(t, allKeyspaces, "mt", "t1", nil)
-	validateKeyspaceRoutingRules(t, vc, primaries, rulesMap, writesSwitched)
+	validateKeyspaceRoutingRules(t, vc, rulesMap, writesSwitched)
+
 	// Note: here we have already switched, and we can insert into the target keyspace, and it should get reverse
 	// replicated to the source keyspace. The source keyspace is routed to the target keyspace at this point.
 	lastIndex = insertRows(lastIndex, sourceKeyspace)
 	mt.Complete()
 	require.Zero(t, len(getKeyspaceRoutingRules(t, vc).Rules))
+
 	actualRowsInserted := getRowCount(t, vtgateConn, fmt.Sprintf("%s.%s", targetKeyspace, "t1"))
 	log.Infof("Migration completed, total rows in target: %d", actualRowsInserted)
 	require.Equal(t, lastIndex, int64(actualRowsInserted))
@@ -232,9 +233,7 @@ const (
 	writesSwitched
 )
 
-// If switched, queries with source qualifiers should execute on target, else on source. Confirm that
-// the routing rules are as expected and that the query executes on the expected tablet.
-func validateKeyspaceRoutingRules(t *testing.T, vc *VitessCluster, primaries map[string]*cluster.VttabletProcess, rulesMap map[string]*vschemapb.KeyspaceRoutingRules, status switchStatus) {
+func validateKeyspaceRoutingRules(t *testing.T, vc *VitessCluster, rulesMap map[string]*vschemapb.KeyspaceRoutingRules, status switchStatus) {
 	currentRules := getKeyspaceRoutingRules(t, vc)
 	switch status {
 	case notSwitched:
