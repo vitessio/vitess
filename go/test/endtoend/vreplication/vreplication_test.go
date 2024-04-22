@@ -170,6 +170,19 @@ func TestVReplicationDDLHandling(t *testing.T) {
 	waitForQueryResult(t, vtgateConn, targetKs, checkColQueryTarget, "[[INT64(0)]]")
 	// Confirm new col does exist on source
 	waitForQueryResult(t, vtgateConn, sourceKs, checkColQuerySource, "[[INT64(1)]]")
+	// Confirm that we updated the stats on the target tablet as expected.
+	jsVal, err := getDebugVar(t, targetTab.Port, []string{"VReplicationDDLActions"})
+	require.NoError(t, err)
+	require.NotEqual(t, "{}", jsVal)
+	// The JSON value looks like this: {"onddl_test.1.ignore": 1}
+	streamIgnoreCount := gjson.Get(jsVal, fmt.Sprintf(`%s\.1\.ignore`, workflow)).Int()
+	require.Equal(t, int64(1), streamIgnoreCount, "expected ignore stat counter of 1 but got %d, full value: %s", streamIgnoreCount, jsVal)
+	// The JSON value looks like this: {"onddl_test.1.stop": 0}
+	streamStopCount := gjson.Get(jsVal, fmt.Sprintf(`%s\.1\.stop`, workflow)).Int()
+	require.Equal(t, int64(0), streamStopCount, "expected stop stat counter of 0 but got %d, full value: %s", streamStopCount, jsVal)
+	// The JSON value looks like this: {"onddl_test.1.exec": 0}
+	streamExecCount := gjson.Get(jsVal, fmt.Sprintf(`%s\.1\.exec`, workflow)).Int()
+	require.Equal(t, int64(0), streamExecCount, "expected exec stat counter of 0 but got %d, full value: %s", streamExecCount, jsVal)
 	// Also test Cancel --keep-routing-rules
 	moveTablesAction(t, "Cancel", defaultCellName, workflow, sourceKs, targetKs, table, "--keep-routing-rules")
 	// Confirm that the routing rules were NOT cleared
@@ -186,13 +199,6 @@ func TestVReplicationDDLHandling(t *testing.T) {
 	// Drop the column on source to start fresh again
 	_, err = vtgateConn.ExecuteFetch(dropColDDL, 1, false)
 	require.NoError(t, err, "error executing %q: %v", dropColDDL, err)
-	// Confirm that we updated the stats on the target tablet as expected.
-	jsVal, err := getDebugVar(t, targetTab.Port, []string{"VReplicationDDLActions"})
-	require.NoError(t, err)
-	require.NotEqual(t, "{}", jsVal)
-	// The JSON value looks like this: {"cproduct.1.ignore": 1}
-	streamIgnoreCount := gjson.Get(jsVal, fmt.Sprintf(`%s.1.ignore`, workflow)).Int()
-	require.Greater(t, streamIgnoreCount, int64(0))
 
 	// Test STOP behavior (new col now exists nowhere)
 	moveTablesAction(t, "Create", defaultCellName, workflow, sourceKs, targetKs, table, "--on-ddl=STOP")
@@ -205,14 +211,20 @@ func TestVReplicationDDLHandling(t *testing.T) {
 	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Stopped.String(), fmt.Sprintf("Message==Stopped at DDL %s", addColDDL))
 	// Confirm that the target does not have new col
 	waitForQueryResult(t, vtgateConn, targetKs, checkColQueryTarget, "[[INT64(0)]]")
-	moveTablesAction(t, "Cancel", defaultCellName, workflow, sourceKs, targetKs, table)
 	// Confirm that we updated the stats on the target tablet as expected.
 	jsVal, err = getDebugVar(t, targetTab.Port, []string{"VReplicationDDLActions"})
 	require.NoError(t, err)
 	require.NotEqual(t, "{}", jsVal)
-	// The JSON value looks like this: {"cproduct.1.stop": 1}
-	streamStopCount := gjson.Get(jsVal, fmt.Sprintf(`%s.1.stop`, workflow)).Int()
-	require.Greater(t, streamStopCount, int64(0))
+	// The JSON value looks like this: {"onddl_test.2.stop": 1}
+	streamStopCount = gjson.Get(jsVal, fmt.Sprintf(`%s\.2\.stop`, workflow)).Int()
+	require.Equal(t, int64(1), streamStopCount, "expected stop stat counter of 1 but got %d, full value: %s", streamStopCount, jsVal)
+	// The JSON value looks like this: {"onddl_test.2.ignore": 0}
+	streamIgnoreCount = gjson.Get(jsVal, fmt.Sprintf(`%s\.2\.ignore`, workflow)).Int()
+	require.Equal(t, int64(0), streamIgnoreCount, "expected ignore stat counter of 0 but got %d, full value: %s", streamIgnoreCount, jsVal)
+	// The JSON value looks like this: {"onddl_test.2.exec": 0}
+	streamExecCount = gjson.Get(jsVal, fmt.Sprintf(`%s\.2\.exec`, workflow)).Int()
+	require.Equal(t, int64(0), streamExecCount, "expected exec stat counter of 0 but got %d, full value: %s", streamExecCount, jsVal)
+	moveTablesAction(t, "Cancel", defaultCellName, workflow, sourceKs, targetKs, table)
 
 	// Test EXEC behavior (new col now exists on source)
 	moveTablesAction(t, "Create", defaultCellName, workflow, sourceKs, targetKs, table, "--on-ddl=EXEC")
@@ -227,14 +239,20 @@ func TestVReplicationDDLHandling(t *testing.T) {
 	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
 	// Confirm new col was dropped on target
 	waitForQueryResult(t, vtgateConn, targetKs, checkColQueryTarget, "[[INT64(0)]]")
-	moveTablesAction(t, "Cancel", defaultCellName, workflow, sourceKs, targetKs, table)
 	// Confirm that we updated the stats on the target tablet as expected.
 	jsVal, err = getDebugVar(t, targetTab.Port, []string{"VReplicationDDLActions"})
 	require.NoError(t, err)
 	require.NotEqual(t, "{}", jsVal)
-	// The JSON value looks like this: {"cproduct.1.exec": 1}
-	streamExecCount := gjson.Get(jsVal, fmt.Sprintf(`%s.1.exec`, workflow)).Int()
-	require.Greater(t, streamExecCount, int64(0))
+	// The JSON value looks like this: {"onddl_test.3.exec": 1}
+	streamExecCount = gjson.Get(jsVal, fmt.Sprintf(`%s\.3\.exec`, workflow)).Int()
+	require.Equal(t, int64(1), streamExecCount, "expected exec stat counter of 1 but got %d, full value: %s", streamExecCount, jsVal)
+	// The JSON value looks like this: {"onddl_test.3.ignore": 0}
+	streamIgnoreCount = gjson.Get(jsVal, fmt.Sprintf(`%s\.3\.ignore`, workflow)).Int()
+	require.Equal(t, int64(0), streamIgnoreCount, "expected ignore stat counter of 0 but got %d, full value: %s", streamIgnoreCount, jsVal)
+	moveTablesAction(t, "Cancel", defaultCellName, workflow, sourceKs, targetKs, table)
+	// The JSON value looks like this: {"onddl_test.3.stop": 0}
+	streamStopCount = gjson.Get(jsVal, fmt.Sprintf(`%s\.2\.stop`, workflow)).Int()
+	require.Equal(t, int64(0), streamStopCount, "expected stop stat counter of 0 but got %d, full value: %s", streamStopCount, jsVal)
 }
 
 // TestVreplicationCopyThrottling tests the logic that is used
