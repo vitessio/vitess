@@ -180,16 +180,7 @@ func (sq *SubQuery) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bo
 }
 
 func (sq *SubQuery) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
-	wsop, ok := supportsWSByOffset(sq.Outer)
-	if !ok || !wsop.CanTakeColumnsByOffset() {
-		panic("AddWSColumn not supported")
-	}
-	return wsop.AddWSColumn(ctx, offset, underRoute)
-}
-
-func (sq *SubQuery) CanTakeColumnsByOffset() bool {
-	_, ok := supportsWSByOffset(sq.Outer)
-	return ok
+	return sq.Outer.AddWSColumn(ctx, offset, underRoute)
 }
 
 func (sq *SubQuery) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {

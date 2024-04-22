@@ -757,10 +757,6 @@ func addDerivedProj(
 	return proj
 }
 
-func (r *Route) CanTakeColumnsByOffset() bool {
-	return true
-}
-
 func (r *Route) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, _ bool) int {
 	return r.Source.FindCol(ctx, expr, true)
 }

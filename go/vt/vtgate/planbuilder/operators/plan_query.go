@@ -114,10 +114,6 @@ func (noColumns) AddWSColumn(ctx *plancontext.PlanningContext, offset int, under
 	panic(vterrors.VT13001("noColumns operators have no column"))
 }
 
-func (noColumns) CanTakeColumnsByOffset() bool {
-	return true
-}
-
 func (noColumns) GetColumns(*plancontext.PlanningContext) []*sqlparser.AliasedExpr {
 	panic(vterrors.VT13001("noColumns operators have no column"))
 }

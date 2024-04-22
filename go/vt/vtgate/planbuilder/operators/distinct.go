@@ -47,18 +47,12 @@ type (
 
 func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	columns := d.GetColumns(ctx)
-	wsOp, supportsOffsets := supportsWSByOffset(d.Source)
 	for idx, col := range columns {
 		e := col.Expr
 		var wsCol *int
 		if ctx.SemTable.NeedsWeightString(e) {
-			if supportsOffsets {
-				offset := wsOp.AddWSColumn(ctx, idx, false)
-				wsCol = &offset
-			} else {
-				offset := d.Source.AddColumn(ctx, true, false, aeWrap(weightStringFor(e)))
-				wsCol = &offset
-			}
+			offset := d.Source.AddWSColumn(ctx, idx, false)
+			wsCol = &offset
 		}
 		typ, _ := ctx.SemTable.TypeForExpr(e)
 		d.Columns = append(d.Columns, engine.CheckCol{
@@ -99,16 +93,7 @@ func (d *Distinct) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bo
 	return d.Source.AddColumn(ctx, reuse, gb, expr)
 }
 func (d *Distinct) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
-	wsop, ok := supportsWSByOffset(d.Source)
-	if !ok || !wsop.CanTakeColumnsByOffset() {
-		panic("AddWSColumn not supported")
-	}
-	return wsop.AddWSColumn(ctx, offset, underRoute)
-}
-
-func (d *Distinct) CanTakeColumnsByOffset() bool {
-	_, ok := supportsWSByOffset(d.Source)
-	return ok
+	return d.Source.AddWSColumn(ctx, offset, underRoute)
 }
 
 func (d *Distinct) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {

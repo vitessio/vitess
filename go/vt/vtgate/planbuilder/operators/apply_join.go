@@ -237,10 +237,6 @@ func (aj *ApplyJoin) AddColumn(
 	return offset
 }
 
-func (*ApplyJoin) CanTakeColumnsByOffset() bool {
-	return true
-}
-
 func (aj *ApplyJoin) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
 	if len(aj.Columns) == 0 {
 		aj.planOffsets(ctx)
@@ -258,23 +254,13 @@ func (aj *ApplyJoin) AddWSColumn(ctx *plancontext.PlanningContext, offset int, u
 	i := aj.Columns[offset]
 	out := 0
 	if i < 0 {
-		wsOp, ok := supportsWSByOffset(aj.LHS)
-		if ok {
-			out = wsOp.AddWSColumn(ctx, FromLeftOffset(i), underRoute)
-			out = ToLeftOffset(out)
-			aj.JoinColumns.addLeft(wsExpr)
-		} else {
-			out = -1
-		}
+		out = aj.LHS.AddWSColumn(ctx, FromLeftOffset(i), underRoute)
+		out = ToLeftOffset(out)
+		aj.JoinColumns.addLeft(wsExpr)
 	} else {
-		wsOp, ok := supportsWSByOffset(aj.RHS)
-		if ok {
-			out = wsOp.AddWSColumn(ctx, FromRightOffset(i), underRoute)
-			out = ToRightOffset(out)
-			aj.JoinColumns.addRight(wsExpr)
-		} else {
-			out = -1
-		}
+		out = aj.RHS.AddWSColumn(ctx, FromRightOffset(i), underRoute)
+		out = ToRightOffset(out)
+		aj.JoinColumns.addRight(wsExpr)
 	}
 
 	if out >= 0 {

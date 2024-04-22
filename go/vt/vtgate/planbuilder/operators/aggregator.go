@@ -190,10 +190,6 @@ func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gro
 	return offset
 }
 
-func (*Aggregator) CanTakeColumnsByOffset() bool {
-	return true
-}
-
 func (a *Aggregator) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
 	if len(a.Columns) <= offset {
 		panic(vterrors.VT13001("offset out of range"))
@@ -252,13 +248,8 @@ func (a *Aggregator) AddWSColumn(ctx *plancontext.PlanningContext, offset int, u
 	if underRoute {
 		return wsOffset
 	}
-	wsop, ok := supportsWSByOffset(a.Source)
-	var incomingOffset int
-	if ok {
-		incomingOffset = wsop.AddWSColumn(ctx, offset, false)
-	} else {
-		incomingOffset = a.Source.AddColumn(ctx, true, true, wsAe)
-	}
+
+	incomingOffset := a.Source.AddWSColumn(ctx, offset, false)
 
 	if wsOffset != incomingOffset {
 		panic(errFailedToPlan(wsAe))

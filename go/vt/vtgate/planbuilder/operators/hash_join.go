@@ -137,32 +137,14 @@ func (hj *HashJoin) AddWSColumn(ctx *plancontext.PlanningContext, offset int, un
 	i := hj.ColumnOffsets[offset]
 	out := 0
 	if i < 0 {
-		wsOp, ok := supportsWSByOffset(hj.LHS)
-		if ok {
-			out = wsOp.AddWSColumn(ctx, FromLeftOffset(i), underRoute)
-			out = ToLeftOffset(out)
-		} else {
-			expr := hj.columns.columns[offset].expr
-			hj.columns.add(weightStringFor(expr))
-			return len(hj.columns.columns) - 1
-		}
+		out = hj.LHS.AddWSColumn(ctx, FromLeftOffset(i), underRoute)
+		out = ToLeftOffset(out)
 	} else {
-		wsOp, ok := supportsWSByOffset(hj.RHS)
-		if ok {
-			out = wsOp.AddWSColumn(ctx, FromRightOffset(i), underRoute)
-			out = ToRightOffset(out)
-		} else {
-			expr := hj.columns.columns[offset].expr
-			hj.columns.add(weightStringFor(expr))
-			return len(hj.columns.columns) - 1
-		}
+		out = hj.RHS.AddWSColumn(ctx, FromRightOffset(i), underRoute)
+		out = ToRightOffset(out)
 	}
 	hj.ColumnOffsets = append(hj.ColumnOffsets, out)
 	return len(hj.ColumnOffsets) - 1
-}
-
-func (*HashJoin) CanTakeColumnsByOffset() bool {
-	return true
 }
 
 func (hj *HashJoin) planOffsets(ctx *plancontext.PlanningContext) Operator {

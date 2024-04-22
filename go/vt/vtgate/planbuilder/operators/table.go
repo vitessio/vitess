@@ -72,10 +72,6 @@ func (*Table) AddWSColumn(*plancontext.PlanningContext, int, bool) int {
 	panic(vterrors.VT13001("did not expect this method to be called"))
 }
 
-func (*Table) CanTakeColumnsByOffset() bool {
-	return true
-}
-
 func (to *Table) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
 	colToFind, ok := expr.(*sqlparser.ColName)
 	if !ok {

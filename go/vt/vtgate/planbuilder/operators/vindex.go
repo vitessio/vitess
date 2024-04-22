@@ -79,10 +79,6 @@ func (*Vindex) AddWSColumn(*plancontext.PlanningContext, int, bool) int {
 	panic(vterrors.VT13001("did not expect this method to be called"))
 }
 
-func (*Vindex) CanTakeColumnsByOffset() bool {
-	return true
-}
-
 func colNameToExpr(c *sqlparser.ColName) *sqlparser.AliasedExpr {
 	return &sqlparser.AliasedExpr{
 		Expr: c,

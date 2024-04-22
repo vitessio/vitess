@@ -160,11 +160,7 @@ func (u *Union) GetSelectFor(source int) *sqlparser.Select {
 }
 
 func (u *Union) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
-	return u.addWeightStringToOffset(ctx, offset, true)
-}
-
-func (*Union) CanTakeColumnsByOffset() bool {
-	return true
+	return u.addWeightStringToOffset(ctx, offset)
 }
 
 func (u *Union) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) int {
@@ -196,27 +192,15 @@ func (u *Union) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool,
 			panic(vterrors.VT13001(fmt.Sprintf("could not find the argument to the weight_string function: %s", sqlparser.String(wsArg))))
 		}
 
-		return u.addWeightStringToOffset(ctx, argIdx, gb)
+		return u.addWeightStringToOffset(ctx, argIdx)
 	default:
 		panic(vterrors.VT13001(fmt.Sprintf("only weight_string function is expected - got %s", sqlparser.String(expr))))
 	}
 }
 
-func (u *Union) addWeightStringToOffset(ctx *plancontext.PlanningContext, argIdx int, addToGroupBy bool) (outputOffset int) {
+func (u *Union) addWeightStringToOffset(ctx *plancontext.PlanningContext, argIdx int) (outputOffset int) {
 	for i, src := range u.Sources {
-		wsOp, ok := supportsWSByOffset(src)
-		var thisOffset int
-		if ok {
-			thisOffset = wsOp.AddWSColumn(ctx, argIdx, false)
-		} else {
-			exprs := u.Selects[i]
-			selectExpr := exprs[argIdx]
-			ae, ok := selectExpr.(*sqlparser.AliasedExpr)
-			if !ok {
-				panic(vterrors.VT09015())
-			}
-			thisOffset = src.AddColumn(ctx, false, addToGroupBy, aeWrap(weightStringFor(ae.Expr)))
-		}
+		thisOffset := src.AddWSColumn(ctx, argIdx, false)
 
 		// all offsets for the newly added ws need to line up
 		if i == 0 {

@@ -293,10 +293,6 @@ func (p *Projection) addColumnsWithoutPushing(ctx *plancontext.PlanningContext, 
 	return offsets
 }
 
-func (p *Projection) CanTakeColumnsByOffset() bool {
-	return true
-}
-
 func (p *Projection) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
 	cols, aliased := p.Columns.(AliasedProjections)
 	if !aliased {
@@ -321,21 +317,13 @@ func (p *Projection) AddWSColumn(ctx *plancontext.PlanningContext, offset int, u
 	}
 
 	// we need to push down this column to our input
-	inputOffset := -1
-	wsOp, ok := supportsWSByOffset(p.Source)
-	if ok {
-		offsetOnInput := p.Source.FindCol(ctx, expr, false)
-		if offsetOnInput >= 0 {
-			// if we are not getting this from the source, we can solve this at offset planning time
-			inputOffset = wsOp.AddWSColumn(ctx, offsetOnInput, false)
-		}
-	} else {
-		inputOffset = p.Source.AddColumn(ctx, true, true, aeWs)
-	}
-
-	if inputOffset >= 0 {
+	offsetOnInput := p.Source.FindCol(ctx, expr, false)
+	if offsetOnInput >= 0 {
+		// if we are not getting this from the source, we can solve this at offset planning time
+		inputOffset := p.Source.AddWSColumn(ctx, offsetOnInput, false)
 		pe.Info = Offset(inputOffset)
 	}
+
 	return p.addProjExpr(pe)
 }
 

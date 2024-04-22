@@ -59,16 +59,7 @@ func (l *Limit) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool,
 }
 
 func (l *Limit) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
-	wsop, ok := supportsWSByOffset(l.Source)
-	if !ok || !wsop.CanTakeColumnsByOffset() {
-		panic("AddWSColumn not supported")
-	}
-	return wsop.AddWSColumn(ctx, offset, underRoute)
-}
-
-func (l *Limit) CanTakeColumnsByOffset() bool {
-	_, ok := supportsWSByOffset(l.Source)
-	return ok
+	return l.Source.AddWSColumn(ctx, offset, underRoute)
 }
 
 func (l *Limit) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
