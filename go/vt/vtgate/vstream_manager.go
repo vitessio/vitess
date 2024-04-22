@@ -25,22 +25,22 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/vt/discovery"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/topo"
-
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
-
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/srvtopo"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // vstreamManager manages vstream requests.
@@ -521,18 +521,23 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 		go func() {
 			_ = tabletConn.StreamHealth(ctx, func(shr *querypb.StreamHealthResponse) error {
 				var err error
-				if ctx.Err() != nil {
+				switch {
+				case ctx.Err() != nil:
 					err = fmt.Errorf("context has ended")
-				} else if shr == nil || shr.RealtimeStats == nil || shr.Target == nil {
-					err = fmt.Errorf("health check failed")
-				} else if vs.tabletType != shr.Target.TabletType {
-					err = fmt.Errorf("tablet type has changed from %s to %s, restarting vstream",
-						vs.tabletType, shr.Target.TabletType)
-				} else if shr.RealtimeStats.HealthError != "" {
+				case shr == nil || shr.RealtimeStats == nil || shr.Target == nil:
+					err = fmt.Errorf("health check failed on %s", topoproto.TabletAliasString(tablet.Alias))
+				case vs.tabletType != shr.Target.TabletType:
+					err = fmt.Errorf("tablet %s type has changed from %s to %s, restarting vstream",
+						topoproto.TabletAliasString(tablet.Alias), vs.tabletType, shr.Target.TabletType)
+				case shr.RealtimeStats.HealthError != "":
 					err = fmt.Errorf("tablet %s is no longer healthy: %s, restarting vstream",
-						tablet.Alias, shr.RealtimeStats.HealthError)
+						topoproto.TabletAliasString(tablet.Alias), shr.RealtimeStats.HealthError)
+				case shr.RealtimeStats.ReplicationLagSeconds > uint32(discovery.GetLowReplicationLag().Seconds()):
+					err = fmt.Errorf("tablet %s has a replication lag of %d seconds which is beyond the value provided in --discovery_low_replication_lag of %s so the tablet is no longer considered healthy, restarting vstream",
+						topoproto.TabletAliasString(tablet.Alias), shr.RealtimeStats.ReplicationLagSeconds, discovery.GetLowReplicationLag())
 				}
 				if err != nil {
+					log.Warningf("Tablet state changed: %s, attempting to restart", err)
 					errCh <- err
 					return err
 				}
@@ -563,7 +568,6 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 			case <-ctx.Done():
 				return ctx.Err()
 			case streamErr := <-errCh:
-				log.Warningf("Tablet state changed: %s, attempting to restart", streamErr)
 				return vterrors.New(vtrpcpb.Code_UNAVAILABLE, streamErr.Error())
 			case <-journalDone:
 				// Unreachable.

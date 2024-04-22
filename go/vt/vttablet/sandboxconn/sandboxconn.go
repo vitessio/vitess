@@ -123,6 +123,8 @@ type SandboxConn struct {
 	NotServing bool
 
 	getSchemaResult []map[string]string
+
+	streamHealthResponse *querypb.StreamHealthResponse
 }
 
 var _ queryservice.QueryService = (*SandboxConn)(nil) // compile-time interface check
@@ -415,9 +417,22 @@ func (sbc *SandboxConn) MessageAck(ctx context.Context, target *querypb.Target, 
 // SandboxSQRowCount is the default number of fake splits returned.
 var SandboxSQRowCount = int64(10)
 
-// StreamHealth is not implemented.
+// SetStreamHealthResponse sets the StreamHealthResponse to be returned in StreamHealth.
+func (sbc *SandboxConn) SetStreamHealthResponse(res *querypb.StreamHealthResponse) {
+	sbc.mapMu.Lock()
+	defer sbc.mapMu.Unlock()
+	sbc.streamHealthResponse = res
+}
+
+// StreamHealth always mocks a "healthy" result by default. If you want to override this behavior you
+// can call SetStreamHealthResponse.
 func (sbc *SandboxConn) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
-	return fmt.Errorf("not implemented in test")
+	sbc.mapMu.Lock()
+	defer sbc.mapMu.Unlock()
+	if sbc.streamHealthResponse != nil {
+		return callback(sbc.streamHealthResponse)
+	}
+	return nil
 }
 
 // ExpectVStreamStartPos makes the conn verify that that the next vstream request has the right startPos.

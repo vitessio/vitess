@@ -25,24 +25,26 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/topo"
-
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
-
-	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/proto/binlogdata"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/srvtopo"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var mu sync.Mutex
@@ -1183,6 +1185,124 @@ func TestVStreamIdleHeartbeat(t *testing.T) {
 			defer mu.Unlock()
 			require.Equalf(t, heartbeatCount, tcase.want, "got %d, want %d", heartbeatCount, tcase.want)
 			cancel()
+		})
+	}
+}
+
+// TestVStreamManagerHealthCheckResponseHandling tests the handling of healthcheck responses by
+// the vstream manager to confirm that we are correctly restarting the vstream when we should.
+func TestVStreamManagerHealthCheckResponseHandling(t *testing.T) {
+	// Capture the vstream warning log. Otherwise we need to re-implement the vstream error
+	// handling in SandboxConn's implementation and then we're not actually testing the
+	// production code.
+	logger := logutil.NewMemoryLogger()
+	log.Warningf = logger.Warningf
+
+	cell := "aa"
+	ks := "TestVStream"
+	shard := "0"
+	tabletType := topodatapb.TabletType_REPLICA
+	_ = createSandbox(ks)
+	hc := discovery.NewFakeHealthCheck(nil)
+	st := getSandboxTopo(ctx, cell, ks, []string{shard})
+	vsm := newTestVStreamManager(hc, st, cell)
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{
+			Keyspace: ks,
+			Shard:    shard,
+		}},
+	}
+	source := hc.AddTestTablet(cell, "1.1.1.1", 1001, ks, shard, tabletType, true, 0, nil)
+	tabletAlias := topoproto.TabletAliasString(source.Tablet().Alias)
+	addTabletToSandboxTopo(t, st, ks, shard, source.Tablet())
+	target := &querypb.Target{
+		Cell:       cell,
+		Keyspace:   ks,
+		Shard:      shard,
+		TabletType: tabletType,
+	}
+	highLag := uint32(discovery.GetLowReplicationLag().Seconds()) + 1
+
+	type testcase struct {
+		name    string
+		hcRes   *querypb.StreamHealthResponse
+		wantErr string
+	}
+	testcases := []testcase{
+		{
+			name: "all healthy", // Will hit the context timeout
+		},
+		{
+			name: "failure",
+			hcRes: &querypb.StreamHealthResponse{
+				TabletAlias: source.Tablet().Alias,
+				Target:      nil, // This is seen as a healthcheck stream failure
+			},
+			wantErr: fmt.Sprintf("health check failed on %s", tabletAlias),
+		},
+		{
+			name: "tablet type changed",
+			hcRes: &querypb.StreamHealthResponse{
+				TabletAlias: source.Tablet().Alias,
+				Target: &querypb.Target{
+					Cell:       cell,
+					Keyspace:   ks,
+					Shard:      shard,
+					TabletType: topodatapb.TabletType_PRIMARY,
+				},
+				RealtimeStats: &querypb.RealtimeStats{},
+			},
+			wantErr: fmt.Sprintf("tablet %s type has changed from %s to %s",
+				tabletAlias, tabletType, topodatapb.TabletType_PRIMARY.String()),
+		},
+		{
+			name: "unhealthy",
+			hcRes: &querypb.StreamHealthResponse{
+				TabletAlias: source.Tablet().Alias,
+				Target:      target,
+				RealtimeStats: &querypb.RealtimeStats{
+					HealthError: "unhealthy",
+				},
+			},
+			wantErr: fmt.Sprintf("tablet %s is no longer healthy", tabletAlias),
+		},
+		{
+			name: "replication lag too high",
+			hcRes: &querypb.StreamHealthResponse{
+				TabletAlias: source.Tablet().Alias,
+				Target:      target,
+				RealtimeStats: &querypb.RealtimeStats{
+					ReplicationLagSeconds: highLag,
+				},
+			},
+			wantErr: fmt.Sprintf("%s has a replication lag of %d seconds which is beyond the value provided",
+				tabletAlias, highLag),
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			done := make(chan struct{})
+			go func() {
+				sctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+				defer cancel()
+				defer close(done)
+				// SandboxConn's VStream implementation always waits for the context to timeout.
+				err := vsm.VStream(sctx, tabletType, vgtid, nil, nil, func(events []*binlogdatapb.VEvent) error {
+					require.Fail(t, "unexpected event", "Received unexpected events: %v", events)
+					return nil
+				})
+				if tc.wantErr != "" { // Otherwise we simply expect the context to timeout
+					if !strings.Contains(logger.String(), tc.wantErr) {
+						require.Fail(t, "unexpected vstream error", "vstream ended with error: %v, which did not contain: %s", err, tc.wantErr)
+					}
+				}
+			}()
+			if tc.wantErr != "" {
+				source.SetStreamHealthResponse(tc.hcRes)
+			}
+			<-done
+			logger.Clear()
 		})
 	}
 }
