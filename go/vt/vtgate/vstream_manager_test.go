@@ -1563,9 +1563,9 @@ func TestKeyspaceHasBeenSharded(t *testing.T) {
 	}
 }
 
-// TestVStreamManagerHealthcheckResponseHandling tests the handling of healthcheck responses by
+// TestVStreamManagerHealthCheckResponseHandling tests the handling of healthcheck responses by
 // the vstream manager to confirm that we are correctly restarting the vstream when we should.
-func TestVStreamManagerHealthcheckResponseHandling(t *testing.T) {
+func TestVStreamManagerHealthCheckResponseHandling(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 
 	// Capture the vstream warning log. Otherwise we need to re-implement the vstream error
