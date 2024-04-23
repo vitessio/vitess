@@ -431,6 +431,7 @@ func TestVStreamCopySimpleFlow(t *testing.T) {
 			{name: "id11", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
 			{name: "id12", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
 		},
+		enumSetStrings: true,
 	}
 	t2FieldEvent := &TestFieldEvent{
 		table: "t2",
@@ -439,6 +440,7 @@ func TestVStreamCopySimpleFlow(t *testing.T) {
 			{name: "id21", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
 			{name: "id22", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
 		},
+		enumSetStrings: true,
 	}
 
 	t1Events := []string{}
@@ -452,6 +454,9 @@ func TestVStreamCopySimpleFlow(t *testing.T) {
 	t1Events = append(t1Events, "lastpk", "commit")
 	t2Events = append(t2Events, "lastpk", "commit")
 
+	// Now we're past the copy phase and have no ENUM or SET columns.
+	t1FieldEvent.enumSetStrings = false
+	t2FieldEvent.enumSetStrings = false
 	insertEvents1 := []string{
 		"begin",
 		t1FieldEvent.String(),
@@ -521,6 +526,7 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 			{name: "id1", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
 			{name: "id2", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
 		},
+		enumSetStrings: true,
 	}
 
 	execStatements(t, []string{
@@ -529,6 +535,12 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 		"insert into t2b(id1, id2) values ('b', 6)",
 		"insert into t2b(id1, id2) values ('a', 5)",
 	})
+
+	// All field events in this test are in the copy phase so they should all
+	// have the enum_set_string_values field set.
+	for _, fe := range ts.fieldEvents {
+		fe.enumSetStrings = true
+	}
 
 	var expectedEvents = []string{
 		"begin",
@@ -582,14 +594,17 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 				log.Infof("Got %d events as expected", len(allEvents))
 				for i, ev := range allEvents {
 					ev.Timestamp = 0
-					if ev.Type == binlogdatapb.VEventType_FIELD {
+					switch ev.Type {
+					case binlogdatapb.VEventType_FIELD:
 						for j := range ev.FieldEvent.Fields {
 							ev.FieldEvent.Fields[j].Flags = 0
 						}
 						ev.FieldEvent.Keyspace = ""
 						ev.FieldEvent.Shard = ""
-					}
-					if ev.Type == binlogdatapb.VEventType_ROW {
+						// All events in this test are in the copy phase so they should
+						// all have the enum_set_string_values field set.
+						ev.FieldEvent.EnumSetStringValues = true
+					case binlogdatapb.VEventType_ROW:
 						ev.RowEvent.Keyspace = ""
 						ev.RowEvent.Shard = ""
 					}
@@ -1559,7 +1574,7 @@ func TestTypes(t *testing.T) {
 		},
 		output: [][]string{{
 			`begin`,
-			fmt.Sprintf(`type:FIELD field_event:{table_name:"vitess_strings" fields:{name:"vb" type:VARBINARY table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"vb" column_length:16 charset:63 column_type:"varbinary(16)"} fields:{name:"c" type:CHAR table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"c" column_length:64 charset:%d column_type:"char(16)"} fields:{name:"vc" type:VARCHAR table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"vc" column_length:64 charset:%d column_type:"varchar(16)"} fields:{name:"b" type:BINARY table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"b" column_length:4 charset:63 column_type:"binary(4)"} fields:{name:"tb" type:BLOB table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"tb" column_length:255 charset:63 column_type:"tinyblob"} fields:{name:"bl" type:BLOB table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"bl" column_length:65535 charset:63 column_type:"blob"} fields:{name:"ttx" type:TEXT table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"ttx" column_length:1020 charset:%d column_type:"tinytext"} fields:{name:"tx" type:TEXT table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"tx" column_length:262140 charset:%d column_type:"text"} fields:{name:"en" type:ENUM table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"en" column_length:4 charset:%d column_type:"enum('a','b')"} fields:{name:"s" type:SET table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"s" column_length:12 charset:%d column_type:"set('a','b')"}}`, testenv.DefaultCollationID, testenv.DefaultCollationID, testenv.DefaultCollationID, testenv.DefaultCollationID, testenv.DefaultCollationID, testenv.DefaultCollationID),
+			fmt.Sprintf(`type:FIELD field_event:{table_name:"vitess_strings" fields:{name:"vb" type:VARBINARY table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"vb" column_length:16 charset:63 column_type:"varbinary(16)"} fields:{name:"c" type:CHAR table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"c" column_length:64 charset:%d column_type:"char(16)"} fields:{name:"vc" type:VARCHAR table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"vc" column_length:64 charset:%d column_type:"varchar(16)"} fields:{name:"b" type:BINARY table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"b" column_length:4 charset:63 column_type:"binary(4)"} fields:{name:"tb" type:BLOB table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"tb" column_length:255 charset:63 column_type:"tinyblob"} fields:{name:"bl" type:BLOB table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"bl" column_length:65535 charset:63 column_type:"blob"} fields:{name:"ttx" type:TEXT table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"ttx" column_length:1020 charset:%d column_type:"tinytext"} fields:{name:"tx" type:TEXT table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"tx" column_length:262140 charset:%d column_type:"text"} fields:{name:"en" type:ENUM table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"en" column_length:4 charset:%d column_type:"enum('a','b')"} fields:{name:"s" type:SET table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"s" column_length:12 charset:%d column_type:"set('a','b')"} enum_set_string_values:true}`, testenv.DefaultCollationID, testenv.DefaultCollationID, testenv.DefaultCollationID, testenv.DefaultCollationID, testenv.DefaultCollationID, testenv.DefaultCollationID),
 			`type:ROW row_event:{table_name:"vitess_strings" row_changes:{after:{lengths:1 lengths:1 lengths:1 lengths:4 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:3 ` +
 				`values:"abcd\x00\x00\x00efghaa,b"}}}`,
 			`gtid`,

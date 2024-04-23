@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -152,6 +153,7 @@ func expectLog(ctx context.Context, t *testing.T, input any, ch <-chan []*binlog
 	defer timer.Stop()
 	for _, wantset := range output {
 		var evs []*binlogdatapb.VEvent
+		inCopyPhase := false
 		for {
 			select {
 			case allevs, ok := <-ch:
@@ -160,18 +162,30 @@ func expectLog(ctx context.Context, t *testing.T, input any, ch <-chan []*binlog
 				}
 				for _, ev := range allevs {
 					// Ignore spurious heartbeats that can happen on slow machines.
-					if ev.Type == binlogdatapb.VEventType_HEARTBEAT {
+					if ev.Throttled || ev.Type == binlogdatapb.VEventType_HEARTBEAT {
 						continue
 					}
-					if ev.Throttled {
-						continue
+					switch ev.Type {
+					case binlogdatapb.VEventType_OTHER:
+						if strings.Contains(strings.ToLower(ev.Gtid), "copy start") {
+							inCopyPhase = true
+						}
+					case binlogdatapb.VEventType_FIELD:
+						ev.FieldEvent.EnumSetStringValues = inCopyPhase
+					case binlogdatapb.VEventType_COPY_COMPLETED:
+						inCopyPhase = false
+					}
+					if strings.Contains(ev.String(), "enum(") || strings.Contains(ev.String(), "set(") {
+						// This is set in the running phase when there are ENUM or SET
+						// columns in the table.
+						ev.FieldEvent.EnumSetStringValues = true
 					}
 					evs = append(evs, ev)
 				}
 			case <-ctx.Done():
-				t.Fatalf("expectLog: Done(), stream ended early")
+				require.Fail(t, "expectLog: Done(), stream ended early")
 			case <-timer.C:
-				t.Fatalf("expectLog: timed out waiting for events: %v", wantset)
+				require.Fail(t, "expectLog: timed out waiting for events: %v", wantset)
 			}
 			if len(evs) != 0 {
 				break
@@ -204,7 +218,6 @@ func expectLog(ctx context.Context, t *testing.T, input any, ch <-chan []*binlog
 				if evs[i].Type != binlogdatapb.VEventType_LASTPK {
 					t.Fatalf("%v (%d): event: %v, want lastpk", input, i, evs[i])
 				}
-				evs[i].FieldEvent.EnumSetStringValues = true
 			case "commit":
 				if evs[i].Type != binlogdatapb.VEventType_COMMIT {
 					t.Fatalf("%v (%d): event: %v, want commit", input, i, evs[i])
