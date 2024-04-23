@@ -580,7 +580,11 @@ func (d Decimal) Exponent() int32 {
 }
 
 func (d Decimal) Size() int32 {
-	return int32(len(d.value.String()))
+	digitsCount := int32(len(d.value.String()))
+	if d.value.Sign() == -1 {
+		digitsCount--
+	}
+	return max(digitsCount, -d.exp)
 }
 
 func (d Decimal) Int64() (int64, bool) {
