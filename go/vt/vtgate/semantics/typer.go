@@ -47,7 +47,7 @@ func (t *typer) up(cursor *sqlparser.Cursor) error {
 		t.m[node] = evalengine.NewType(node.SQLType(), collations.CollationForType(node.SQLType(), t.collationEnv.DefaultConnectionCharset()))
 	case *sqlparser.Argument:
 		if node.Type >= 0 {
-			t.m[node] = evalengine.NewType(node.Type, collations.CollationForType(node.Type, t.collationEnv.DefaultConnectionCharset()))
+			t.m[node] = evalengine.NewTypeEx(node.Type, collations.CollationForType(node.Type, t.collationEnv.DefaultConnectionCharset()), true, node.Size, node.Scale)
 		}
 	case sqlparser.AggrFunc:
 		code, ok := opcode.SupportedAggregates[node.AggrName()]

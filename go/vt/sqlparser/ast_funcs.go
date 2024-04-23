@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -560,6 +561,20 @@ func parseBindVariable(yylex yyLexer, bvar string) *Argument {
 
 func NewTypedArgument(in string, t sqltypes.Type) *Argument {
 	return &Argument{Name: in, Type: t}
+}
+
+func NewTypedArgumentFromLiteral(in string, lit *Literal) (*Argument, error) {
+	arg := &Argument{Name: in, Type: lit.SQLType()}
+	switch arg.Type {
+	case sqltypes.Decimal:
+		dec, err := decimal.NewFromMySQL(lit.Bytes())
+		if err != nil {
+			return nil, err
+		}
+		arg.Scale = -dec.Exponent()
+		arg.Size = dec.Size()
+	}
+	return arg, nil
 }
 
 // NewListArg builds a new ListArg.

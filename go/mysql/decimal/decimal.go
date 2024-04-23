@@ -579,6 +579,10 @@ func (d Decimal) Exponent() int32 {
 	return d.exp
 }
 
+func (d Decimal) Size() int32 {
+	return int32(len(d.value.String()))
+}
+
 func (d Decimal) Int64() (int64, bool) {
 	scaledD := d.rescale(0)
 	return scaledD.value.Int64(), scaledD.value.IsInt64()

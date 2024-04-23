@@ -1869,6 +1869,8 @@ func (cmp *Comparator) RefOfArgument(a, b *Argument) bool {
 		return false
 	}
 	return a.Name == b.Name &&
+		a.Size == b.Size &&
+		a.Scale == b.Scale &&
 		a.Type == b.Type
 }
 

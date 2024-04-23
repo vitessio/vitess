@@ -1780,6 +1780,15 @@ func (node *Argument) FormatFast(buf *TrackedBuffer) {
 		// type safety when using the query as a cache key.
 		buf.WriteString(" /* ")
 		buf.WriteString(node.Type.String())
+		if node.Size != 0 || node.Scale != 0 {
+			buf.WriteByte('(')
+			buf.WriteString(fmt.Sprintf("%d", node.Size))
+			if node.Scale != 0 {
+				buf.WriteString(", ")
+				buf.WriteString(fmt.Sprintf("%d", node.Scale))
+			}
+			buf.WriteString(")")
+		}
 		buf.WriteString(" */")
 	}
 }
