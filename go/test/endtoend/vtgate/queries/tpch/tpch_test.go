@@ -162,12 +162,8 @@ order by
 	value desc;`,
 		},
 		{
-			name: "Q14",
-			query: `select 100.00 * sum(case
-                        when p_type like 'PROMO%'
-                            then l_extendedprice * (1 - l_discount)
-                        else 0
-    end) / sum(l_extendedprice * (1 - l_discount)) as promo_revenue
+			name: "Q14 without case",
+			query: `select 100.00 * sum(l_extendedprice * (1 - l_discount)) / sum(l_extendedprice * (1 - l_discount)) as promo_revenue
 from lineitem,
      part
 where l_partkey = p_partkey
