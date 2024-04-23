@@ -97,7 +97,7 @@ func TestOptionalTLS(t *testing.T) {
 	testFunc := func(t *testing.T, dialOpt grpc.DialOption) {
 		ctx, cancel := context.WithTimeout(testCtx, 5*time.Second)
 		defer cancel()
-		conn, err := grpc.NewClient(addr, dialOpt)
+		conn, err := grpc.DialContext(ctx, addr, dialOpt)
 		if err != nil {
 			t.Fatalf("failed to connect to the server %v", err)
 		}

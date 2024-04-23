@@ -41,7 +41,7 @@ import (
 )
 
 func initialize(ctx context.Context, t *testing.T) (*vtgateconn.VTGateConn, *mysql.Conn, *mysql.Conn, func()) {
-	gconn, err := vtgateconn.Dial(grpcAddress)
+	gconn, err := vtgateconn.Dial(ctx, grpcAddress)
 	if err != nil {
 		t.Fatal(err)
 	}

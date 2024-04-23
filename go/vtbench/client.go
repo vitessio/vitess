@@ -93,7 +93,7 @@ func (c *grpcVtgateConn) connect(ctx context.Context, cp ConnParams) error {
 	conn, ok := vtgateConns[address]
 	if !ok {
 		var err error
-		conn, err = vtgateconn.DialProtocol("grpc", address)
+		conn, err = vtgateconn.DialProtocol(ctx, "grpc", address)
 		if err != nil {
 			return err
 		}

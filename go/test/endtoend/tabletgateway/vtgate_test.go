@@ -302,7 +302,7 @@ func TestStreamingRPCStuck(t *testing.T) {
 	}
 
 	// Connect to vtgate and run a streaming query.
-	vtgateConn, err := cluster.DialVTGate(t.Name(), vtgateGrpcAddress, "test_user", "")
+	vtgateConn, err := cluster.DialVTGate(ctx, t.Name(), vtgateGrpcAddress, "test_user", "")
 	require.NoError(t, err)
 	stream, err := vtgateConn.Session("", &querypb.ExecuteOptions{}).StreamExecute(ctx, "select * from customer", map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
