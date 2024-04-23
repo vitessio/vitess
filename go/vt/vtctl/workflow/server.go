@@ -75,10 +75,12 @@ import (
 )
 
 const (
+	// We don't use a suffix for the primary tablet types in routing rules.
 	primaryTabletSuffix = ""
 	replicaTabletSuffix = "@replica"
 	rdonlyTabletSuffix  = "@rdonly"
-	globalTableRoute    = ""
+	// Globally routable tables don't have a keyspace prefix.
+	globalTableQualifier = ""
 )
 
 var tabletTypeSuffixes = []string{primaryTabletSuffix, replicaTabletSuffix, rdonlyTabletSuffix}
@@ -1596,7 +1598,7 @@ func (s *Server) setupInitialRoutingRules(ctx context.Context, req *vtctldatapb.
 		}
 	}
 	for _, table := range tables {
-		for _, ks := range []string{globalTableRoute, targetKeyspace, sourceKeyspace} {
+		for _, ks := range []string{globalTableQualifier, targetKeyspace, sourceKeyspace} {
 			routeTableToSource(ks, table)
 		}
 	}
@@ -3015,6 +3017,9 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 			return nil, err
 		}
 		if ts.IsMultiTenantMigration() {
+			// In a multi-tenant migration, multiple migrations would be writing to the same table, so we can't stop writes like
+			// we do with MoveTables, using denied tables, since it would block all other migrations as well as traffic for
+			// tenants which have already been migrated.
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot reverse traffic for multi-tenant migrations")
 		}
 	}
@@ -3198,7 +3203,8 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 		case ts.IsMultiTenantMigration():
 			err := sw.switchKeyspaceReads(ctx, roTabletTypes)
 			if err != nil {
-				return handleError(fmt.Sprintf("failed to switch read traffic for keyspace %s", ts.SourceKeyspaceName()), err)
+				return handleError(fmt.Sprintf("failed to switch read traffic for keyspace %s, workflow %s",
+					ts.SourceKeyspaceName(), ts.WorkflowName()), err)
 			}
 		case ts.isPartialMigration:
 			ts.Logger().Infof("Partial migration, skipping switchTableReads as traffic is all or nothing per shard and overridden for reads AND writes in the ShardRoutingRule created when switching writes.")
