@@ -217,6 +217,7 @@ func (b *JSONGateResolverBuilder) parse() (bool, error) {
 		return false, fmt.Errorf("error parsing JSON discovery file %s: %v", b.jsonPath, err)
 	}
 
+	var targets []targetHost
 	for _, host := range hosts {
 		address, hasAddress := host[b.addressField]
 		port, hasPort := host[b.portField]
@@ -257,8 +258,9 @@ func (b *JSONGateResolverBuilder) parse() (bool, error) {
 			return false, fmt.Errorf("error parsing JSON discovery file %s: port field %s has invalid value %v", b.jsonPath, b.portField, port)
 		}
 
-		b.targets = append(b.targets, targetHost{fmt.Sprintf("%s:%s", address, port), poolType.(string), affinity.(string)})
+		targets = append(targets, targetHost{fmt.Sprintf("%s:%s", address, port), poolType.(string), affinity.(string)})
 	}
+	b.targets = targets
 
 	return true, nil
 }
