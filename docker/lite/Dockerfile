@@ -36,9 +36,10 @@ RUN make install PREFIX=/vt/install
 # Start over and build the final image.
 FROM debian:bullseye-slim
 
-# Install mysqlbinglog
+# Install mysqlbinglog and xtrabackup
 RUN apt-get update && apt-get -y install libssl-dev
 COPY --from=builder /usr/bin/mysqlbinlog /usr/bin/mysqlbinlog
+COPY --from=builder /usr/bin/xtrabackup /usr/bin/xtrabackup
 
 # Set up Vitess user and directory tree.
 RUN groupadd -r vitess && useradd -r -g vitess vitess
