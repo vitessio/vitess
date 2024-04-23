@@ -125,6 +125,10 @@ type (
 		CallExpr
 	}
 
+	builtinSecToTime struct {
+		CallExpr
+	}
+
 	builtinTimeToSec struct {
 		CallExpr
 	}
@@ -197,6 +201,7 @@ var _ IR = (*builtinMonthName)(nil)
 var _ IR = (*builtinLastDay)(nil)
 var _ IR = (*builtinToDays)(nil)
 var _ IR = (*builtinFromDays)(nil)
+var _ IR = (*builtinSecToTime)(nil)
 var _ IR = (*builtinTimeToSec)(nil)
 var _ IR = (*builtinToSeconds)(nil)
 var _ IR = (*builtinQuarter)(nil)
@@ -886,12 +891,12 @@ func (call *builtinMakedate) compile(c *compiler) (ctype, error) {
 
 func clampHourMinute(h, m int64) (int64, int64, bool, bool) {
 	var clamped bool
-	if h > 838 || h < -838 {
+	if h > datetime.MaxHours || h < -datetime.MaxHours {
 		clamped = true
 		if h > 0 {
-			h = 838
+			h = datetime.MaxHours
 		} else {
-			h = -838
+			h = -datetime.MaxHours
 		}
 		m = 59
 	}
@@ -1369,6 +1374,70 @@ func (call *builtinFromDays) compile(c *compiler) (ctype, error) {
 	c.asm.Fn_FROM_DAYS()
 	c.asm.jumpDestination(skip)
 	return ctype{Type: sqltypes.Date, Flag: arg.Flag | flagNullable}, nil
+}
+
+func (b *builtinSecToTime) eval(env *ExpressionEnv) (eval, error) {
+	arg, err := b.arg1(env)
+	if arg == nil {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	var e *evalDecimal
+	prec := datetime.DefaultPrecision
+
+	switch {
+	case sqltypes.IsDecimal(arg.SQLType()):
+		e = arg.(*evalDecimal)
+	case sqltypes.IsIntegral(arg.SQLType()):
+		e = evalToDecimal(arg, 0, 0)
+	case sqltypes.IsTextOrBinary(arg.SQLType()):
+		b := arg.(*evalBytes)
+		if b.isHexOrBitLiteral() {
+			e = evalToDecimal(arg, 0, 0)
+		} else {
+			e = evalToDecimal(arg, 0, datetime.DefaultPrecision)
+		}
+	case sqltypes.IsDateOrTime(arg.SQLType()):
+		d := arg.(*evalTemporal)
+		e = evalToDecimal(d, 0, int32(d.prec))
+		prec = int(d.prec)
+	default:
+		e = evalToDecimal(arg, 0, datetime.DefaultPrecision)
+	}
+
+	prec = min(int(evalDecimalPrecision(e)), prec)
+	return newEvalTime(datetime.NewTimeFromSeconds(e.dec), prec), nil
+}
+
+func (call *builtinSecToTime) compile(c *compiler) (ctype, error) {
+	arg, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch {
+	case sqltypes.IsDecimal(arg.Type):
+		c.asm.Fn_SEC_TO_TIME_d()
+	case sqltypes.IsIntegral(arg.Type):
+		c.asm.Convert_xd(1, 0, 0)
+		c.asm.Fn_SEC_TO_TIME_d()
+	case sqltypes.IsTextOrBinary(arg.Type) && arg.isHexOrBitLiteral():
+		c.asm.Convert_xd(1, 0, 0)
+		c.asm.Fn_SEC_TO_TIME_d()
+	case sqltypes.IsDateOrTime(arg.Type):
+		c.asm.Fn_SEC_TO_TIME_D()
+	default:
+		c.asm.Convert_xd(1, 0, datetime.DefaultPrecision)
+		c.asm.Fn_SEC_TO_TIME_d()
+	}
+
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Time, Flag: arg.Flag}, nil
 }
 
 func (b *builtinTimeToSec) eval(env *ExpressionEnv) (eval, error) {
