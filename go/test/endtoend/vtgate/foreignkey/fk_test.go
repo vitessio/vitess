@@ -1135,6 +1135,14 @@ func TestFkQueries(t *testing.T) {
 				"delete fk_t11 from fk_t11 join fk_t12 using (id) where fk_t11.id = 4",
 			},
 		},
+		{
+			name: "Foreign key join rows affected",
+			queries: []string{
+				"insert /*+ SET_VAR(foreign_key_checks=0) */ into fk_t11 (id, col) values (4, '1'), (5, '3'), (7, '22'), (8, '5'), (9, NULL), (10, '3')",
+				"insert /*+ SET_VAR(foreign_key_checks=0) */ into fk_t12 (id, col) values (4, '1'), (5, '3'), (7, '22'), (8, '5'), (9, NULL), (10, '3')",
+				"delete fk_t11, fk_t12 from fk_t11 join fk_t12 using (id) where fk_t11.id = 5",
+			},
+		},
 	}
 
 	for _, tt := range testcases {
