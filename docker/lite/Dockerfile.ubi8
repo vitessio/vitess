@@ -36,6 +36,9 @@ RUN make install PREFIX=/vt/install
 # Start over and build the final image.
 FROM registry.access.redhat.com/ubi8/ubi:latest
 
+# Install mysqlbinglog
+COPY --from=builder /usr/bin/mysqlbinlog /usr/bin/mysqlbinlog
+
 # Set up Vitess user and directory tree.
 RUN groupadd -g 1001 -r vitess && useradd -r -u 1001 -g vitess vitess
 RUN mkdir -p /vt/vtdataroot && chown -R vitess:vitess /vt
