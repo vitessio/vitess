@@ -148,7 +148,7 @@ func SetupLocalVtctldClient(t *testing.T, ctx context.Context, cells ...string) 
 	vtctld := grpcvtctldserver.NewVtctldServer(vtenv.NewTestEnv(), ts)
 	localvtctldclient.SetServer(vtctld)
 	command.VtctldClientProtocol = "local"
-	client, err := vtctldclient.New(command.VtctldClientProtocol, "")
+	client, err := vtctldclient.New(ctx, command.VtctldClientProtocol, "")
 	require.NoError(t, err, "failed to create local vtctld client which uses an internal vtctld server")
 	common.SetClient(client)
 }

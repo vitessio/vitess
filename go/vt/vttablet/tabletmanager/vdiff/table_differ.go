@@ -406,7 +406,7 @@ func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStr
 		td.wgShardStreamers.Done()
 	}()
 	participant.err = func() error {
-		conn, err := tabletconn.GetDialer()(participant.tablet, false)
+		conn, err := tabletconn.GetDialer()(ctx, participant.tablet, false)
 		if err != nil {
 			return err
 		}
