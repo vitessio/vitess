@@ -12,7 +12,7 @@ type evalSet struct {
 	string string
 }
 
-func newEvalSet(val []byte, values []string) *evalSet {
+func newEvalSet(val []byte, values *EnumSetValues) *evalSet {
 	value := string(val)
 
 	return &evalSet{
@@ -29,8 +29,8 @@ func (e *evalSet) SQLType() sqltypes.Type {
 	return sqltypes.Set
 }
 
-func evalSetBits(values []string, value string) uint64 {
-	if len(values) > 64 {
+func evalSetBits(values *EnumSetValues, value string) uint64 {
+	if values != nil && len(*values) > 64 {
 		// This never would happen as MySQL limits SET
 		// to 64 elements. Safeguard here just in case though.
 		panic("too many values for set")

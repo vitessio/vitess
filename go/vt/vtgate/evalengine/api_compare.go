@@ -43,7 +43,7 @@ func (err UnsupportedCollationError) Error() string {
 // UnsupportedCollationHashError is returned when we try to get the hash value and are missing the collation to use
 var UnsupportedCollationHashError = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "text type with an unknown/unsupported collation cannot be hashed")
 
-func compare(v1, v2 sqltypes.Value, collationEnv *collations.Environment, collationID collations.ID, values []string) (int, error) {
+func compare(v1, v2 sqltypes.Value, collationEnv *collations.Environment, collationID collations.ID, values *EnumSetValues) (int, error) {
 	v1t := v1.Type()
 
 	// We have a fast path here for the case where both values are
@@ -147,7 +147,7 @@ func compare(v1, v2 sqltypes.Value, collationEnv *collations.Environment, collat
 // numeric, then a numeric comparison is performed after
 // necessary conversions. If none are numeric, then it's
 // a simple binary comparison. Uncomparable values return an error.
-func NullsafeCompare(v1, v2 sqltypes.Value, collationEnv *collations.Environment, collationID collations.ID, values []string) (int, error) {
+func NullsafeCompare(v1, v2 sqltypes.Value, collationEnv *collations.Environment, collationID collations.ID, values *EnumSetValues) (int, error) {
 	// Based on the categorization defined for the types,
 	// we're going to allow comparison of the following:
 	// Null, isNumber, IsBinary. This will exclude IsQuoted

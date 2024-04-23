@@ -107,7 +107,7 @@ type aggregatorDistinct struct {
 	last         sqltypes.Value
 	coll         collations.ID
 	collationEnv *collations.Environment
-	values       []string
+	values       *evalengine.EnumSetValues
 }
 
 func (a *aggregatorDistinct) shouldReturn(row []sqltypes.Value) (bool, error) {

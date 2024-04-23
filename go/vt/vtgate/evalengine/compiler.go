@@ -52,12 +52,14 @@ type compiledCoercion struct {
 	right colldata.Coercion
 }
 
+type EnumSetValues []string
+
 type ctype struct {
 	Type        sqltypes.Type
 	Flag        typeFlag
 	Size, Scale int32
 	Col         collations.TypedCollation
-	Values      []string
+	Values      *EnumSetValues
 }
 
 type Type struct {
@@ -66,7 +68,17 @@ type Type struct {
 	nullable    bool
 	init        bool
 	size, scale int32
-	values      []string
+	values      *EnumSetValues
+}
+
+func (v *EnumSetValues) Equal(other *EnumSetValues) bool {
+	if v == nil && other == nil {
+		return true
+	}
+	if v == nil || other == nil {
+		return false
+	}
+	return slices.Equal(*v, *other)
 }
 
 func NewType(t sqltypes.Type, collation collations.ID) Type {
@@ -74,7 +86,7 @@ func NewType(t sqltypes.Type, collation collations.ID) Type {
 	return NewTypeEx(t, collation, true, 0, 0, nil)
 }
 
-func NewTypeEx(t sqltypes.Type, collation collations.ID, nullable bool, size, scale int32, values []string) Type {
+func NewTypeEx(t sqltypes.Type, collation collations.ID, nullable bool, size, scale int32, values *EnumSetValues) Type {
 	return Type{
 		typ:       t,
 		collation: collation,
@@ -144,7 +156,7 @@ func (t *Type) Nullable() bool {
 	return true // nullable by default for unknown types
 }
 
-func (t *Type) Values() []string {
+func (t *Type) Values() *EnumSetValues {
 	return t.values
 }
 
@@ -158,27 +170,27 @@ func (t *Type) Equal(other *Type) bool {
 		t.nullable == other.nullable &&
 		t.size == other.size &&
 		t.scale == other.scale &&
-		slices.Equal(t.values, other.values)
+		t.values.Equal(other.values)
 }
 
-func (ct ctype) equal(other ctype) bool {
+func (ct *ctype) equal(other ctype) bool {
 	return ct.Type == other.Type &&
 		ct.Flag == other.Flag &&
 		ct.Size == other.Size &&
 		ct.Scale == other.Scale &&
 		ct.Col == other.Col &&
-		slices.Equal(ct.Values, other.Values)
+		ct.Values.Equal(other.Values)
 }
 
-func (ct ctype) nullable() bool {
+func (ct *ctype) nullable() bool {
 	return ct.Flag&flagNullable != 0
 }
 
-func (ct ctype) isTextual() bool {
+func (ct *ctype) isTextual() bool {
 	return sqltypes.IsTextOrBinary(ct.Type)
 }
 
-func (ct ctype) isHexOrBitLiteral() bool {
+func (ct *ctype) isHexOrBitLiteral() bool {
 	return ct.Flag&flagBit != 0 || ct.Flag&flagHex != 0
 }
 

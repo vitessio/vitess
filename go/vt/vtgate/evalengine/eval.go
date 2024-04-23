@@ -212,7 +212,7 @@ func evalCoerce(e eval, typ sqltypes.Type, col collations.ID, now time.Time, all
 	}
 }
 
-func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type, collation collations.ID, values []string, sqlmode SQLMode) (eval, error) {
+func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type, collation collations.ID, values *EnumSetValues, sqlmode SQLMode) (eval, error) {
 	switch {
 	case typ == sqltypes.Null:
 		return nil, nil
@@ -367,7 +367,7 @@ func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type, collation collations.I
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value: %v", v)
 }
 
-func valueToEval(value sqltypes.Value, collation collations.TypedCollation, values []string) (eval, error) {
+func valueToEval(value sqltypes.Value, collation collations.TypedCollation, values *EnumSetValues) (eval, error) {
 	wrap := func(err error) error {
 		if err == nil {
 			return nil

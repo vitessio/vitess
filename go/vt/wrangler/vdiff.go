@@ -31,6 +31,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/vt/vtenv"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -116,10 +117,10 @@ type vdiff struct {
 
 // compareColInfo contains the metadata for a column of the table being diffed
 type compareColInfo struct {
-	colIndex  int           // index of the column in the filter's select
-	collation collations.ID // is the collation of the column, if any
-	values    []string      // is the list of enum or set values for the column, if any
-	isPK      bool          // is this column part of the primary key
+	colIndex  int                       // index of the column in the filter's select
+	collation collations.ID             // is the collation of the column, if any
+	values    *evalengine.EnumSetValues // is the list of enum or set values for the column, if any
+	isPK      bool                      // is this column part of the primary key
 }
 
 // tableDiffer performs a diff for one table in the workflow.
@@ -538,7 +539,7 @@ func findPKs(env *vtenv.Environment, table *tabletmanagerdatapb.TableDefinition,
 // getColumnCollations determines the proper collation to use for each
 // column in the table definition leveraging MySQL's collation inheritance
 // rules.
-func getColumnCollations(venv *vtenv.Environment, table *tabletmanagerdatapb.TableDefinition) (map[string]collations.ID, map[string][]string, error) {
+func getColumnCollations(venv *vtenv.Environment, table *tabletmanagerdatapb.TableDefinition) (map[string]collations.ID, map[string]*evalengine.EnumSetValues, error) {
 	createstmt, err := venv.Parser().Parse(table.Schema)
 	if err != nil {
 		return nil, nil, err
@@ -581,7 +582,7 @@ func getColumnCollations(venv *vtenv.Environment, table *tabletmanagerdatapb.Tab
 	}
 
 	columnCollations := make(map[string]collations.ID)
-	columnValues := make(map[string][]string)
+	columnValues := make(map[string]*evalengine.EnumSetValues)
 	for _, column := range tableschema.TableSpec.Columns {
 		// If it's not a character based type then no collation is used.
 		if !sqltypes.IsQuoted(column.Type.SQLType()) {
@@ -589,7 +590,10 @@ func getColumnCollations(venv *vtenv.Environment, table *tabletmanagerdatapb.Tab
 			continue
 		}
 		columnCollations[column.Name.Lowered()] = getColumnCollation(column)
-		columnValues[column.Name.Lowered()] = column.Type.EnumValues
+		if len(column.Type.EnumValues) == 0 {
+			continue
+		}
+		columnValues[column.Name.Lowered()] = ptr.Of(evalengine.EnumSetValues(column.Type.EnumValues))
 	}
 	return columnCollations, columnValues, nil
 }

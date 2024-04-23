@@ -10,7 +10,7 @@ type evalEnum struct {
 	string string
 }
 
-func newEvalEnum(val []byte, values []string) *evalEnum {
+func newEvalEnum(val []byte, values *EnumSetValues) *evalEnum {
 	s := string(val)
 	return &evalEnum{
 		value:  valueIdx(values, s),
@@ -26,8 +26,11 @@ func (e *evalEnum) SQLType() sqltypes.Type {
 	return sqltypes.Enum
 }
 
-func valueIdx(values []string, value string) int {
-	for i, v := range values {
+func valueIdx(values *EnumSetValues, value string) int {
+	if values == nil {
+		return -1
+	}
+	for i, v := range *values {
 		v, _ = sqltypes.DecodeStringSQL(v)
 		if v == value {
 			return i

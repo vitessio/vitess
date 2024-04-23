@@ -34,7 +34,7 @@ type (
 		Collation collations.TypedCollation
 		Original  sqlparser.Expr
 		Nullable  bool
-		Values    []string // For ENUM and SET types
+		Values    *EnumSetValues // For ENUM and SET types
 
 		// dynamicTypeOffset is set when the type of this column cannot be calculated
 		// at translation time. Since expressions with dynamic types cannot be compiled ahead of time,

@@ -37,7 +37,7 @@ func TestTinyWeightStrings(t *testing.T) {
 		col    collations.ID
 		len    int
 		prec   int
-		values []string
+		values *EnumSetValues
 	}{
 		{typ: sqltypes.Int32, gen: sqltypes.RandomGenerators[sqltypes.Int32], col: collations.CollationBinaryID},
 		{typ: sqltypes.Int64, gen: sqltypes.RandomGenerators[sqltypes.Int64], col: collations.CollationBinaryID},
@@ -48,8 +48,8 @@ func TestTinyWeightStrings(t *testing.T) {
 		{typ: sqltypes.VarBinary, gen: sqltypes.RandomGenerators[sqltypes.VarBinary], col: collations.CollationBinaryID},
 		{typ: sqltypes.Decimal, gen: sqltypes.RandomGenerators[sqltypes.Decimal], col: collations.CollationBinaryID, len: 20, prec: 10},
 		{typ: sqltypes.TypeJSON, gen: sqltypes.RandomGenerators[sqltypes.TypeJSON], col: collations.CollationBinaryID},
-		{typ: sqltypes.Enum, gen: sqltypes.RandomGenerators[sqltypes.Enum], col: collations.CollationBinaryID, values: []string{"'xxsmall'", "'xsmall'", "'small'", "'medium'", "'large'", "'xlarge'", "'xxlarge'"}},
-		{typ: sqltypes.Set, gen: sqltypes.RandomGenerators[sqltypes.Set], col: collations.CollationBinaryID, values: []string{"'a'", "'b'", "'c'", "'d'", "'e'", "'f'", "'g'"}},
+		{typ: sqltypes.Enum, gen: sqltypes.RandomGenerators[sqltypes.Enum], col: collations.CollationBinaryID, values: &EnumSetValues{"'xxsmall'", "'xsmall'", "'small'", "'medium'", "'large'", "'xlarge'", "'xxlarge'"}},
+		{typ: sqltypes.Set, gen: sqltypes.RandomGenerators[sqltypes.Set], col: collations.CollationBinaryID, values: &EnumSetValues{"'a'", "'b'", "'c'", "'d'", "'e'", "'f'", "'g'"}},
 	}
 
 	for _, tc := range cases {
@@ -119,7 +119,7 @@ func TestWeightStrings(t *testing.T) {
 		col    collations.ID
 		len    int
 		prec   int
-		values []string
+		values *EnumSetValues
 	}{
 		{name: "int64", gen: sqltypes.RandomGenerators[sqltypes.Int64], types: []sqltypes.Type{sqltypes.Int64, sqltypes.VarChar, sqltypes.TypeJSON}, col: collations.CollationBinaryID},
 		{name: "uint64", gen: sqltypes.RandomGenerators[sqltypes.Uint64], types: []sqltypes.Type{sqltypes.Uint64, sqltypes.VarChar, sqltypes.TypeJSON}, col: collations.CollationBinaryID},
@@ -132,8 +132,8 @@ func TestWeightStrings(t *testing.T) {
 		{name: "datetime", gen: sqltypes.RandomGenerators[sqltypes.Datetime], types: []sqltypes.Type{sqltypes.Datetime, sqltypes.VarChar, sqltypes.TypeJSON}, col: collations.CollationBinaryID},
 		{name: "timestamp", gen: sqltypes.RandomGenerators[sqltypes.Timestamp], types: []sqltypes.Type{sqltypes.Timestamp, sqltypes.VarChar, sqltypes.TypeJSON}, col: collations.CollationBinaryID},
 		{name: "time", gen: sqltypes.RandomGenerators[sqltypes.Time], types: []sqltypes.Type{sqltypes.Time, sqltypes.VarChar, sqltypes.TypeJSON}, col: collations.CollationBinaryID},
-		{name: "enum", gen: sqltypes.RandomGenerators[sqltypes.Enum], types: []sqltypes.Type{sqltypes.Enum, sqltypes.VarChar, sqltypes.TypeJSON}, col: collations.CollationBinaryID, values: []string{"'xxsmall'", "'xsmall'", "'small'", "'medium'", "'large'", "'xlarge'", "'xxlarge'"}},
-		{name: "set", gen: sqltypes.RandomGenerators[sqltypes.Set], types: []sqltypes.Type{sqltypes.Set, sqltypes.VarChar, sqltypes.TypeJSON}, col: collations.CollationBinaryID, values: []string{"'a'", "'b'", "'c'", "'d'", "'e'", "'f'", "'g'"}},
+		{name: "enum", gen: sqltypes.RandomGenerators[sqltypes.Enum], types: []sqltypes.Type{sqltypes.Enum, sqltypes.VarChar, sqltypes.TypeJSON}, col: collations.CollationBinaryID, values: &EnumSetValues{"'xxsmall'", "'xsmall'", "'small'", "'medium'", "'large'", "'xlarge'", "'xxlarge'"}},
+		{name: "set", gen: sqltypes.RandomGenerators[sqltypes.Set], types: []sqltypes.Type{sqltypes.Set, sqltypes.VarChar, sqltypes.TypeJSON}, col: collations.CollationBinaryID, values: &EnumSetValues{"'a'", "'b'", "'c'", "'d'", "'e'", "'f'", "'g'"}},
 	}
 
 	for _, tc := range cases {

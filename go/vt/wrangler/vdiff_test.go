@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 func TestVDiffPlanSuccess(t *testing.T) {
@@ -1186,7 +1187,7 @@ func TestGetColumnCollations(t *testing.T) {
 		name       string
 		table      *tabletmanagerdatapb.TableDefinition
 		wantCols   map[string]collations.ID
-		wantValues map[string][]string
+		wantValues map[string]*evalengine.EnumSetValues
 		wantErr    bool
 	}{
 		{
@@ -1205,9 +1206,7 @@ func TestGetColumnCollations(t *testing.T) {
 				"c1":   collations.Unknown,
 				"name": collationEnv.DefaultConnectionCharset(),
 			},
-			wantValues: map[string][]string{
-				"name": nil,
-			},
+			wantValues: map[string]*evalengine.EnumSetValues{},
 		},
 		{
 			name: "char pk with global default collation",
@@ -1218,10 +1217,7 @@ func TestGetColumnCollations(t *testing.T) {
 				"c1":   collationEnv.DefaultConnectionCharset(),
 				"name": collationEnv.DefaultConnectionCharset(),
 			},
-			wantValues: map[string][]string{
-				"c1":   nil,
-				"name": nil,
-			},
+			wantValues: map[string]*evalengine.EnumSetValues{},
 		},
 		{
 			name: "compound char int pk with global default collation",
@@ -1232,9 +1228,7 @@ func TestGetColumnCollations(t *testing.T) {
 				"c1":   collations.Unknown,
 				"name": collationEnv.DefaultConnectionCharset(),
 			},
-			wantValues: map[string][]string{
-				"name": nil,
-			},
+			wantValues: map[string]*evalengine.EnumSetValues{},
 		},
 		{
 			name: "char pk with table default charset",
@@ -1245,10 +1239,7 @@ func TestGetColumnCollations(t *testing.T) {
 				"c1":   collationEnv.DefaultCollationForCharset("ucs2"),
 				"name": collationEnv.DefaultCollationForCharset("ucs2"),
 			},
-			wantValues: map[string][]string{
-				"c1":   nil,
-				"name": nil,
-			},
+			wantValues: map[string]*evalengine.EnumSetValues{},
 		},
 		{
 			name: "char pk with table default collation",
@@ -1259,10 +1250,7 @@ func TestGetColumnCollations(t *testing.T) {
 				"c1":   collationEnv.LookupByName("utf32_icelandic_ci"),
 				"name": collationEnv.LookupByName("utf32_icelandic_ci"),
 			},
-			wantValues: map[string][]string{
-				"c1":   nil,
-				"name": nil,
-			},
+			wantValues: map[string]*evalengine.EnumSetValues{},
 		},
 		{
 			name: "char pk with column charset override",
@@ -1273,10 +1261,7 @@ func TestGetColumnCollations(t *testing.T) {
 				"c1":   collationEnv.DefaultCollationForCharset("sjis"),
 				"name": collationEnv.DefaultCollationForCharset("utf8mb3"),
 			},
-			wantValues: map[string][]string{
-				"c1":   nil,
-				"name": nil,
-			},
+			wantValues: map[string]*evalengine.EnumSetValues{},
 		},
 		{
 			name: "char pk with column collation override",
@@ -1287,10 +1272,7 @@ func TestGetColumnCollations(t *testing.T) {
 				"c1":   collationEnv.LookupByName("hebrew_bin"),
 				"name": collationEnv.DefaultCollationForCharset("hebrew"),
 			},
-			wantValues: map[string][]string{
-				"c1":   nil,
-				"name": nil,
-			},
+			wantValues: map[string]*evalengine.EnumSetValues{},
 		},
 		{
 			name: "compound char int pk with column collation override",
@@ -1302,10 +1284,7 @@ func TestGetColumnCollations(t *testing.T) {
 				"c2":   collations.Unknown,
 				"name": collationEnv.LookupByName("utf16_icelandic_ci"),
 			},
-			wantValues: map[string][]string{
-				"c1":   nil,
-				"name": nil,
-			},
+			wantValues: map[string]*evalengine.EnumSetValues{},
 		},
 		{
 			name: "col with enum values",
@@ -1316,8 +1295,7 @@ func TestGetColumnCollations(t *testing.T) {
 				"c1":   collationEnv.DefaultConnectionCharset(),
 				"size": collationEnv.DefaultConnectionCharset(),
 			},
-			wantValues: map[string][]string{
-				"c1":   nil,
+			wantValues: map[string]*evalengine.EnumSetValues{
 				"size": {"'small'", "'medium'", "'large'"},
 			},
 		},
@@ -1330,8 +1308,7 @@ func TestGetColumnCollations(t *testing.T) {
 				"c1":   collationEnv.DefaultConnectionCharset(),
 				"size": collationEnv.DefaultConnectionCharset(),
 			},
-			wantValues: map[string][]string{
-				"c1":   nil,
+			wantValues: map[string]*evalengine.EnumSetValues{
 				"size": {"'small'", "'medium'", "'large'"},
 			},
 		},

@@ -17,8 +17,6 @@ limitations under the License.
 package evalengine
 
 import (
-	"slices"
-
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/mysql/decimal"
@@ -67,7 +65,7 @@ func (a *Arena) newEvalDecimal(dec decimal.Decimal, m, d int32) *evalDecimal {
 	return a.newEvalDecimalWithPrec(dec.Clamp(m-d, d), d)
 }
 
-func (a *Arena) newEvalEnum(raw []byte, values []string) *evalEnum {
+func (a *Arena) newEvalEnum(raw []byte, values *EnumSetValues) *evalEnum {
 	if cap(a.aEnum) > len(a.aEnum) {
 		a.aEnum = a.aEnum[:len(a.aEnum)+1]
 	} else {
@@ -76,11 +74,11 @@ func (a *Arena) newEvalEnum(raw []byte, values []string) *evalEnum {
 	val := &a.aEnum[len(a.aInt64)-1]
 	s := string(raw)
 	val.string = s
-	val.value = slices.Index(values, s)
+	val.value = valueIdx(values, s)
 	return val
 }
 
-func (a *Arena) newEvalSet(raw []byte, values []string) *evalSet {
+func (a *Arena) newEvalSet(raw []byte, values *EnumSetValues) *evalSet {
 	if cap(a.aSet) > len(a.aSet) {
 		a.aSet = a.aSet[:len(a.aSet)+1]
 	} else {

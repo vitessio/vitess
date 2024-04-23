@@ -30,14 +30,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
-
-	"vitess.io/vitess/go/sqltypes"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 type testCase struct {
@@ -1114,7 +1112,7 @@ func TestNullsafeCompare(t *testing.T) {
 		v1, v2 sqltypes.Value
 		out    int
 		err    error
-		values []string
+		values *EnumSetValues
 	}{
 		{
 			v1:  NULL,
@@ -1145,7 +1143,7 @@ func TestNullsafeCompare(t *testing.T) {
 			v1:     TestValue(sqltypes.Enum, "foo"),
 			v2:     TestValue(sqltypes.Enum, "bar"),
 			out:    -1,
-			values: []string{"'foo'", "'bar'"},
+			values: &EnumSetValues{"'foo'", "'bar'"},
 		},
 		{
 			v1:  TestValue(sqltypes.Enum, "foo"),
@@ -1156,7 +1154,7 @@ func TestNullsafeCompare(t *testing.T) {
 			v1:     TestValue(sqltypes.Enum, "foo"),
 			v2:     TestValue(sqltypes.VarChar, "bar"),
 			out:    1,
-			values: []string{"'foo'", "'bar'"},
+			values: &EnumSetValues{"'foo'", "'bar'"},
 		},
 		{
 			v1:  TestValue(sqltypes.VarChar, "foo"),
@@ -1167,7 +1165,7 @@ func TestNullsafeCompare(t *testing.T) {
 			v1:     TestValue(sqltypes.Set, "bar"),
 			v2:     TestValue(sqltypes.Set, "foo,bar"),
 			out:    -1,
-			values: []string{"'foo'", "'bar'"},
+			values: &EnumSetValues{"'foo'", "'bar'"},
 		},
 		{
 			v1:  TestValue(sqltypes.Set, "bar"),
@@ -1178,7 +1176,7 @@ func TestNullsafeCompare(t *testing.T) {
 			v1:     TestValue(sqltypes.VarChar, "bar"),
 			v2:     TestValue(sqltypes.Set, "foo,bar"),
 			out:    -1,
-			values: []string{"'foo'", "'bar'"},
+			values: &EnumSetValues{"'foo'", "'bar'"},
 		},
 		{
 			v1:  TestValue(sqltypes.Set, "bar"),

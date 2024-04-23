@@ -34,7 +34,7 @@ type HashCode = uint64
 
 // NullsafeHashcode returns an int64 hashcode that is guaranteed to be the same
 // for two values that are considered equal by `NullsafeCompare`.
-func NullsafeHashcode(v sqltypes.Value, collation collations.ID, coerceType sqltypes.Type, sqlmode SQLMode, values []string) (HashCode, error) {
+func NullsafeHashcode(v sqltypes.Value, collation collations.ID, coerceType sqltypes.Type, sqlmode SQLMode, values *EnumSetValues) (HashCode, error) {
 	e, err := valueToEvalCast(v, coerceType, collation, values, sqlmode)
 	if err != nil {
 		return 0, err
@@ -75,7 +75,7 @@ var ErrHashCoercionIsNotExact = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "
 // for two values that are considered equal by `NullsafeCompare`.
 // This can be used to avoid having to do comparison checks after a hash,
 // since we consider the 128 bits of entropy enough to guarantee uniqueness.
-func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collations.ID, coerceTo sqltypes.Type, sqlmode SQLMode, values []string) error {
+func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collations.ID, coerceTo sqltypes.Type, sqlmode SQLMode, values *EnumSetValues) error {
 	switch {
 	case v.IsNull(), sqltypes.IsNull(coerceTo):
 		hash.Write16(hashPrefixNil)
@@ -233,7 +233,7 @@ func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collat
 	return nil
 }
 
-func nullsafeHashcode128Default(hash *vthash.Hasher, v sqltypes.Value, collation collations.ID, coerceTo sqltypes.Type, sqlmode SQLMode, values []string) error {
+func nullsafeHashcode128Default(hash *vthash.Hasher, v sqltypes.Value, collation collations.ID, coerceTo sqltypes.Type, sqlmode SQLMode, values *EnumSetValues) error {
 	// Slow path to handle all other types. This uses the generic
 	// logic for value casting to ensure we match MySQL here.
 	e, err := valueToEvalCast(v, coerceTo, collation, values, sqlmode)

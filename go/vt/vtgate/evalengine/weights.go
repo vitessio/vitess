@@ -41,7 +41,7 @@ import (
 // externally communicates with the `WEIGHT_STRING` function, so that we
 // can also use this to order / sort other types like Float and Decimal
 // as well.
-func WeightString(dst []byte, v sqltypes.Value, coerceTo sqltypes.Type, col collations.ID, length, precision int, values []string, sqlmode SQLMode) ([]byte, bool, error) {
+func WeightString(dst []byte, v sqltypes.Value, coerceTo sqltypes.Type, col collations.ID, length, precision int, values *EnumSetValues, sqlmode SQLMode) ([]byte, bool, error) {
 	// We optimize here for the case where we already have the desired type.
 	// Otherwise, we fall back to the general evalengine conversion logic.
 	if v.Type() != coerceTo {
@@ -125,7 +125,7 @@ func WeightString(dst []byte, v sqltypes.Value, coerceTo sqltypes.Type, col coll
 	}
 }
 
-func fallbackWeightString(dst []byte, v sqltypes.Value, coerceTo sqltypes.Type, col collations.ID, length, precision int, values []string, sqlmode SQLMode) ([]byte, bool, error) {
+func fallbackWeightString(dst []byte, v sqltypes.Value, coerceTo sqltypes.Type, col collations.ID, length, precision int, values *EnumSetValues, sqlmode SQLMode) ([]byte, bool, error) {
 	e, err := valueToEvalCast(v, coerceTo, col, values, sqlmode)
 	if err != nil {
 		return dst, false, err

@@ -69,7 +69,7 @@ type (
 		CollationEnv *collations.Environment
 
 		// Values for enum and set types
-		Values []string
+		Values *evalengine.EnumSetValues
 	}
 
 	hashJoinProbeTable struct {
@@ -81,7 +81,7 @@ type (
 		cols           []int
 		hasher         vthash.Hasher
 		sqlmode        evalengine.SQLMode
-		values         []string
+		values         *evalengine.EnumSetValues
 	}
 
 	probeTableEntry struct {
@@ -264,7 +264,7 @@ func (hj *HashJoin) description() PrimitiveDescription {
 	}
 }
 
-func newHashJoinProbeTable(coll collations.ID, typ querypb.Type, lhsKey, rhsKey int, cols []int, values []string) *hashJoinProbeTable {
+func newHashJoinProbeTable(coll collations.ID, typ querypb.Type, lhsKey, rhsKey int, cols []int, values *evalengine.EnumSetValues) *hashJoinProbeTable {
 	return &hashJoinProbeTable{
 		innerMap: map[vthash.Hash]*probeTableEntry{},
 		coll:     coll,
