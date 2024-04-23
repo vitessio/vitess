@@ -36,7 +36,7 @@ RUN make install PREFIX=/vt/install
 # Start over and build the final image.
 FROM debian:bullseye-slim
 
-RUN apt-get update && apt-get -y install openssl
+RUN apt-get update && apt-get -y install libssl-dev
 
 # Set up Vitess user and directory tree.
 RUN groupadd -r vitess && useradd -r -g vitess vitess
