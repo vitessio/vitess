@@ -50,7 +50,8 @@ func TestGRPCVTGateConn(t *testing.T) {
 	go server.Serve(listener)
 
 	// Create a Go RPC client connecting to the server
-	client, err := dial(listener.Addr().String())
+	ctx := context.Background()
+	client, err := dial(ctx, listener.Addr().String())
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}
@@ -103,6 +104,7 @@ func TestGRPCVTGateConnAuth(t *testing.T) {
 	}
 
 	// Create a Go RPC client connecting to the server
+	ctx := context.Background()
 	fs := pflag.NewFlagSet("", pflag.ContinueOnError)
 	grpcclient.RegisterFlags(fs)
 
@@ -112,7 +114,7 @@ func TestGRPCVTGateConnAuth(t *testing.T) {
 		f.Name(),
 	})
 	require.NoError(t, err, "failed to set `--grpc_auth_static_client_creds=%s`", f.Name())
-	client, err := dial(listener.Addr().String())
+	client, err := dial(ctx, listener.Addr().String())
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}
@@ -143,6 +145,7 @@ func TestGRPCVTGateConnAuth(t *testing.T) {
 	}
 
 	// Create a Go RPC client connecting to the server
+	ctx = context.Background()
 	fs = pflag.NewFlagSet("", pflag.ContinueOnError)
 	grpcclient.RegisterFlags(fs)
 
@@ -152,12 +155,12 @@ func TestGRPCVTGateConnAuth(t *testing.T) {
 		f.Name(),
 	})
 	require.NoError(t, err, "failed to set `--grpc_auth_static_client_creds=%s`", f.Name())
-	client, err = dial(listener.Addr().String())
+	client, err = dial(ctx, listener.Addr().String())
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}
 	RegisterTestDialProtocol(client)
-	conn, _ := vtgateconn.DialProtocol("test", "")
+	conn, _ := vtgateconn.DialProtocol(context.Background(), "test", "")
 	// run the test suite
 	_, err = conn.Session("", nil).Execute(context.Background(), "select * from t", nil)
 	want := "rpc error: code = Unauthenticated desc = username and password must be provided"

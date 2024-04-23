@@ -156,7 +156,7 @@ func TestMain(m *testing.M) {
 		go func() {
 			ctx := context.Background()
 			vtgateAddr := fmt.Sprintf("%s:%d", clusterInstance.Hostname, clusterInstance.VtgateProcess.GrpcPort)
-			vtgateConn, err := vtgateconn.Dial(vtgateAddr)
+			vtgateConn, err := vtgateconn.Dial(ctx, vtgateAddr)
 			if err != nil {
 				done <- false
 				return
@@ -234,7 +234,7 @@ func TestMain(m *testing.M) {
 
 		ctx := context.Background()
 		vtgateAddr := fmt.Sprintf("%s:%d", clusterInstance.Hostname, clusterInstance.VtgateProcess.GrpcPort)
-		vtgateConn, err := vtgateconn.Dial(vtgateAddr)
+		vtgateConn, err := vtgateconn.Dial(ctx, vtgateAddr)
 		if err != nil {
 			return 1
 		}

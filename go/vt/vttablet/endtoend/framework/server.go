@@ -64,7 +64,7 @@ func StartCustomServer(ctx context.Context, connParams, connAppDebugParams mysql
 	// Setup a fake vtgate server.
 	protocol := "resolveTest"
 	vtgateconn.SetVTGateProtocol(protocol)
-	vtgateconn.RegisterDialer(protocol, func(string) (vtgateconn.Impl, error) {
+	vtgateconn.RegisterDialer(protocol, func(context.Context, string) (vtgateconn.Impl, error) {
 		return &txResolver{
 			FakeVTGateConn: fakerpcvtgateconn.FakeVTGateConn{},
 		}, nil
