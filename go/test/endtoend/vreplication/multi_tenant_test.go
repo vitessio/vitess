@@ -114,14 +114,14 @@ const (
     }
   },
   "tables": {
-    "t1": { 
-	      "column_vindexes": [
-	        {
-	          "column": "tenant_id",
-	          "name": "reverse_bits"
-	        }
-         ]
-      }
+     "t1": { 
+       "column_vindexes": [
+         {
+           "column": "tenant_id",
+           "name": "reverse_bits"
+         }
+     ]
+   }
   }
 }
 `

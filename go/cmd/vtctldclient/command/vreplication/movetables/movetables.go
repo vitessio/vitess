@@ -49,7 +49,7 @@ func registerCommands(root *cobra.Command) {
 	create.Flags().BoolVar(&createOptions.AtomicCopy, "atomic-copy", false, "(EXPERIMENTAL) A single copy phase is run for all tables from the source. Use this, for example, if your source keyspace has tables which use foreign key constraints.")
 	create.Flags().StringVar(&createOptions.WorkflowOptions.TenantId, "tenant-id", "", "(EXPERIMENTAL) The tenant ID to use for the MoveTables workflow into a multi-tenant keyspace.")
 	create.Flags().BoolVar(&createOptions.WorkflowOptions.StripShardedAutoIncrement, "remove-sharded-auto-increment", true, "If moving the table(s) to a sharded keyspace, remove any auto_increment clauses when copying the schema to the target as sharded keyspaces should rely on either user/application generated values or Vitess sequences to ensure uniqueness.")
-	create.Flags().StringSliceVar(&createOptions.WorkflowOptions.Shards, "shards", nil, "Only create vreplication streams in these target shards. Ensure that that all rows on the source will route to the selected shards, as per your Vindex choice.")
+	create.Flags().StringSliceVar(&createOptions.WorkflowOptions.Shards, "shards", nil, "(Multi-tenant migrations only) Specify that vreplication streams should only be created on this subset of target shards. Warning: you should first ensure that all rows on the source route to the specified subset of target shards using your VIndex of choice or you could lose data during the migration.")
 	base.AddCommand(create)
 
 	opts := &common.SubCommandsOpts{
