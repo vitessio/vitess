@@ -165,7 +165,7 @@ func TestActivePoolGetConnNonExistentTransaction(t *testing.T) {
 	params := dbconfigs.New(db.ConnParams())
 	pool.Open(params, params, params)
 	_, err := pool.GetAndLock(12345, "for query")
-	require.EqualError(t, err, "not found")
+	require.EqualError(t, err, "not found (potential transaction timeout)")
 }
 
 func TestExecWithAbortedCtx(t *testing.T) {
