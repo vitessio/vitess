@@ -986,31 +986,12 @@ func (s *Server) getWorkflowState(ctx context.Context, targetKeyspace, workflowN
 		}
 		table := ts.Tables()[0]
 
-		if ts.IsMultiTenantMigration() { // traffic switching for multi-tenant migrations is all or nothing
-			cells, err := s.ts.GetCellInfoNames(ctx)
+		if ts.IsMultiTenantMigration() {
+			// Deduce which traffic has been switched by looking at the current keyspace routing rules.
+			err := updateKeyspaceRoutingState(ctx, ts.TopoServer(), sourceKeyspace, targetKeyspace, state)
 			if err != nil {
 				return nil, nil, err
 			}
-			replicaSwitched, rdonlySwitched, primarySwitched, err := getKeyspaceRoutingRulesState(
-				ctx, ts.TopoServer(), sourceKeyspace, targetKeyspace)
-			if err != nil {
-				return nil, nil, err
-			}
-			if rdonlySwitched {
-				state.RdonlyCellsSwitched = cells
-				state.RdonlyCellsNotSwitched = nil
-			} else {
-				state.RdonlyCellsNotSwitched = cells
-				state.RdonlyCellsSwitched = nil
-			}
-			if replicaSwitched {
-				state.ReplicaCellsSwitched = cells
-				state.ReplicaCellsNotSwitched = nil
-			} else {
-				state.ReplicaCellsNotSwitched = cells
-				state.ReplicaCellsSwitched = nil
-			}
-			state.WritesSwitched = primarySwitched
 		} else if ts.isPartialMigration { // shard level traffic switching is all or nothing
 			shardRoutingRules, err := s.ts.GetShardRoutingRules(ctx)
 			if err != nil {
@@ -3152,6 +3133,7 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 		if direction == DirectionBackward {
 			return handleError("invalid request", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "requesting reversal of read traffic for multi-tenant migrations is not supported"))
 		}
+		// For multi-tenant migrations, we only support switching traffic to all cells at once
 		allCells, err := ts.TopoServer().GetCellInfoNames(ctx)
 		if err != nil {
 			return nil, err
