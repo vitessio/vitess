@@ -55,7 +55,7 @@ type testVTCtlEnv struct {
 var vtctlEnv *testVTCtlEnv
 
 func init() {
-	tabletconn.RegisterDialer("VTCtlTest", func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
+	tabletconn.RegisterDialer("VTCtlTest", func(ctx context.Context, tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
 		vtctlEnv.mu.Lock()
 		defer vtctlEnv.mu.Unlock()
 		if qs, ok := vtctlEnv.tablets[int(tablet.Alias.Uid)]; ok {

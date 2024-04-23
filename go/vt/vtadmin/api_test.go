@@ -1065,7 +1065,7 @@ func TestGetKeyspace(t *testing.T) {
 				})
 			}
 
-			testutil.WithTestServers(t, func(t *testing.T, clients ...vtctldclient.VtctldClient) {
+			testutil.WithTestServers(ctx, t, func(t *testing.T, clients ...vtctldclient.VtctldClient) {
 				clusters := make([]*cluster.Cluster, len(clients))
 				for i, client := range clients {
 					clusters[i] = vtadmintestutil.BuildCluster(t, vtadmintestutil.TestClusterConfig{
@@ -1310,7 +1310,7 @@ func TestGetKeyspaces(t *testing.T) {
 				}),
 			}
 
-			testutil.WithTestServers(t, func(t *testing.T, clients ...vtctldclient.VtctldClient) {
+			testutil.WithTestServers(ctx, t, func(t *testing.T, clients ...vtctldclient.VtctldClient) {
 				clusters := []*cluster.Cluster{
 					vtadmintestutil.BuildCluster(t, vtadmintestutil.TestClusterConfig{
 						Cluster: &vtadminpb.Cluster{
@@ -1541,7 +1541,7 @@ func TestGetSchema(t *testing.T) {
 
 			testutil.AddTablets(ctx, t, tt.ts, nil, vtadmintestutil.TopodataTabletsFromVTAdminTablets(tt.tablets)...)
 
-			testutil.WithTestServer(t, vtctld, func(t *testing.T, client vtctldclient.VtctldClient) {
+			testutil.WithTestServer(ctx, t, vtctld, func(t *testing.T, client vtctldclient.VtctldClient) {
 				c := vtadmintestutil.BuildCluster(t, vtadmintestutil.TestClusterConfig{
 					Cluster: &vtadminpb.Cluster{
 						Id:   fmt.Sprintf("c%d", tt.clusterID),
@@ -2195,7 +2195,7 @@ func TestGetSchemas(t *testing.T) {
 				}),
 			}
 
-			testutil.WithTestServers(t, func(t *testing.T, clients ...vtctldclient.VtctldClient) {
+			testutil.WithTestServers(ctx, t, func(t *testing.T, clients ...vtctldclient.VtctldClient) {
 				clusters := make([]*cluster.Cluster, len(topos))
 				for cdx, toposerver := range topos {
 					// Handle when a test doesn't define any tablets for a given cluster.
@@ -2628,7 +2628,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 				return grpcvtctldserver.NewVtctldServer(vtenv.NewTestEnv(), ts)
 			})
 
-			testutil.WithTestServer(t, vtctldserver, func(t *testing.T, vtctldClient vtctldclient.VtctldClient) {
+			testutil.WithTestServer(ctx, t, vtctldserver, func(t *testing.T, vtctldClient vtctldclient.VtctldClient) {
 				for cell, sks := range tt.cellSrvKeyspaces {
 					err := toposerver.UpdateSrvKeyspace(ctx, cell, tt.keyspace, sks)
 					require.NoError(t, err)
@@ -2790,7 +2790,7 @@ func TestGetSrvKeyspaces(t *testing.T) {
 				return grpcvtctldserver.NewVtctldServer(vtenv.NewTestEnv(), ts)
 			})
 
-			testutil.WithTestServer(t, vtctldserver, func(t *testing.T, vtctldClient vtctldclient.VtctldClient) {
+			testutil.WithTestServer(ctx, t, vtctldserver, func(t *testing.T, vtctldClient vtctldclient.VtctldClient) {
 				for keyspace, sks := range tt.cellSrvKeyspaces {
 					for cell, sk := range sks {
 						err := toposerver.UpdateSrvKeyspace(ctx, cell, keyspace, sk)
@@ -2953,7 +2953,7 @@ func TestGetSrvVSchema(t *testing.T) {
 				return grpcvtctldserver.NewVtctldServer(vtenv.NewTestEnv(), ts)
 			})
 
-			testutil.WithTestServer(t, vtctldserver, func(t *testing.T, vtctldClient vtctldclient.VtctldClient) {
+			testutil.WithTestServer(ctx, t, vtctldserver, func(t *testing.T, vtctldClient vtctldclient.VtctldClient) {
 				for cell, svs := range tt.cellSrvVSchemas {
 					err := toposerver.UpdateSrvVSchema(ctx, cell, svs)
 					require.NoError(t, err)
@@ -3245,7 +3245,7 @@ func TestGetSrvVSchemas(t *testing.T) {
 				return grpcvtctldserver.NewVtctldServer(vtenv.NewTestEnv(), ts)
 			})
 
-			testutil.WithTestServer(t, vtctldserver, func(t *testing.T, vtctldClient vtctldclient.VtctldClient) {
+			testutil.WithTestServer(ctx, t, vtctldserver, func(t *testing.T, vtctldClient vtctldclient.VtctldClient) {
 				for cell, svs := range tt.cellSrvVSchemas {
 					err := toposerver.UpdateSrvVSchema(ctx, cell, svs)
 					require.NoError(t, err)
@@ -5083,7 +5083,7 @@ func TestVTExplain(t *testing.T) {
 				return grpcvtctldserver.NewVtctldServer(vtenv.NewTestEnv(), ts)
 			})
 
-			testutil.WithTestServer(t, vtctldserver, func(t *testing.T, vtctldClient vtctldclient.VtctldClient) {
+			testutil.WithTestServer(ctx, t, vtctldserver, func(t *testing.T, vtctldClient vtctldclient.VtctldClient) {
 				if tt.srvVSchema != nil {
 					err := toposerver.UpdateSrvVSchema(ctx, "c0_cell1", tt.srvVSchema)
 					require.NoError(t, err)

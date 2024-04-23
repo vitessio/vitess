@@ -128,7 +128,7 @@ func (thc *tabletHealthCheck) setServingState(serving bool, reason string) {
 
 // stream streams healthcheck responses to callback.
 func (thc *tabletHealthCheck) stream(ctx context.Context, hc *HealthCheckImpl, callback func(*query.StreamHealthResponse) error) error {
-	conn := thc.Connection(hc)
+	conn := thc.Connection(ctx, hc)
 	if conn == nil {
 		// This signals the caller to retry
 		return nil
@@ -141,10 +141,10 @@ func (thc *tabletHealthCheck) stream(ctx context.Context, hc *HealthCheckImpl, c
 	return err
 }
 
-func (thc *tabletHealthCheck) Connection(hc *HealthCheckImpl) queryservice.QueryService {
+func (thc *tabletHealthCheck) Connection(ctx context.Context, hc *HealthCheckImpl) queryservice.QueryService {
 	thc.connMu.Lock()
 	defer thc.connMu.Unlock()
-	return thc.connectionLocked(hc)
+	return thc.connectionLocked(ctx, hc)
 }
 
 func healthCheckDialerFactory(hc *HealthCheckImpl) func(ctx context.Context, addr string) (net.Conn, error) {
@@ -162,14 +162,14 @@ func healthCheckDialerFactory(hc *HealthCheckImpl) func(ctx context.Context, add
 	}
 }
 
-func (thc *tabletHealthCheck) connectionLocked(hc *HealthCheckImpl) queryservice.QueryService {
+func (thc *tabletHealthCheck) connectionLocked(ctx context.Context, hc *HealthCheckImpl) queryservice.QueryService {
 	if thc.Conn == nil {
 		withDialerContextOnce.Do(func() {
 			grpcclient.RegisterGRPCDialOptions(func(opts []grpc.DialOption) ([]grpc.DialOption, error) {
 				return append(opts, grpc.WithContextDialer(healthCheckDialerFactory(hc))), nil
 			})
 		})
-		conn, err := tabletconn.GetDialer()(thc.Tablet, grpcclient.FailFast(true))
+		conn, err := tabletconn.GetDialer()(ctx, thc.Tablet, grpcclient.FailFast(true))
 		if err != nil {
 			thc.LastError = err
 			return nil

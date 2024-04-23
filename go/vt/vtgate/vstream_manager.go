@@ -541,7 +541,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 			TabletType: vs.tabletType,
 			Cell:       vs.vsm.cell,
 		}
-		tabletConn, err := vs.vsm.resolver.GetGateway().QueryServiceByAlias(tablet.Alias, target)
+		tabletConn, err := vs.vsm.resolver.GetGateway().QueryServiceByAlias(ctx, tablet.Alias, target)
 		if err != nil {
 			log.Errorf(err.Error())
 			return err
