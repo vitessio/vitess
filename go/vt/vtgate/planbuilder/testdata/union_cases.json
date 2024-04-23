@@ -1116,6 +1116,47 @@
     }
   },
   {
+    "comment": "Conflicting column names in union",
+    "query": "select id, id from user union select id, bar from user_extra order by 1",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select id, id from user union select id, bar from user_extra order by 1",
+      "Instructions": {
+        "OperatorType": "Sort",
+        "Variant": "Memory",
+        "OrderBy": "(0|2) ASC",
+        "ResultColumns": 2,
+        "Inputs": [
+          {
+            "OperatorType": "Distinct",
+            "Collations": [
+              "(0:2)",
+              "(1:3)",
+              "2"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select dt.c0 as id, dt.c1 as id, weight_string(dt.c0), weight_string(dt.c1) from (select id, id from `user` where 1 != 1 union select id, bar from user_extra where 1 != 1) as dt(c0, c1) where 1 != 1",
+                "Query": "select dt.c0 as id, dt.c1 as id, weight_string(dt.c0), weight_string(dt.c1) from (select id, id from `user` union select id, bar from user_extra) as dt(c0, c1)",
+                "Table": "`user`, user_extra"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
     "comment": "select 1 from (select id+42 as foo from user union select 1+id as foo from unsharded) as t",
     "query": "select 1 from (select id+42 as foo from user union select 1+id as foo from unsharded) as t",
     "plan": {
