@@ -157,7 +157,7 @@ func TestMultiTenantSimple(t *testing.T) {
 	})
 
 	// Expected keyspace routing rules on creation of the workflow.
-	preSwitchRules := &vschemapb.KeyspaceRoutingRules{
+	initialRules := &vschemapb.KeyspaceRoutingRules{
 		Rules: []*vschemapb.KeyspaceRoutingRule{
 			{FromKeyspace: "s1", ToKeyspace: "s1"},
 			{FromKeyspace: "mt", ToKeyspace: "s1"},
@@ -168,51 +168,20 @@ func TestMultiTenantSimple(t *testing.T) {
 		},
 	}
 
-	// Expected keyspace routing rules after reads are switched.
-	postSwitchReadsRules := &vschemapb.KeyspaceRoutingRules{
-		Rules: []*vschemapb.KeyspaceRoutingRule{
-			{FromKeyspace: "s1", ToKeyspace: "s1"},
-			{FromKeyspace: "mt", ToKeyspace: "s1"},
-			{FromKeyspace: "s1@rdonly", ToKeyspace: "mt"},
-			{FromKeyspace: "s1@replica", ToKeyspace: "mt"},
-			{FromKeyspace: "mt@rdonly", ToKeyspace: "mt"},
-			{FromKeyspace: "mt@replica", ToKeyspace: "mt"},
-		},
-	}
-
-	// Expected keyspace routing rules after reads and writes are switched.
-	postSwitchWritesRules := &vschemapb.KeyspaceRoutingRules{
-		Rules: []*vschemapb.KeyspaceRoutingRule{
-			{FromKeyspace: "s1", ToKeyspace: "mt"},
-			{FromKeyspace: "mt", ToKeyspace: "mt"},
-			{FromKeyspace: "s1@rdonly", ToKeyspace: "mt"},
-			{FromKeyspace: "s1@replica", ToKeyspace: "mt"},
-			{FromKeyspace: "mt@rdonly", ToKeyspace: "mt"},
-			{FromKeyspace: "mt@replica", ToKeyspace: "mt"},
-		},
-	}
-	rulesMap := map[string]*vschemapb.KeyspaceRoutingRules{
-		"pre":              preSwitchRules,
-		"postSwitchReads":  postSwitchReadsRules,
-		"postSwitchWrites": postSwitchWritesRules,
-	}
-
 	require.Zero(t, len(getKeyspaceRoutingRules(t, vc).Rules))
 	mt.Create()
 	allKeyspaces := []string{sourceKeyspace, targetKeyspace}
 	confirmKeyspacesRoutedTo(t, allKeyspaces, "s1", "t1", nil)
-	validateKeyspaceRoutingRules(t, vc, rulesMap, notSwitched)
+	validateKeyspaceRoutingRules(t, vc, initialRules)
 
 	lastIndex = insertRows(lastIndex, sourceKeyspace)
 	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKeyspace, mt.workflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
+
 	mt.SwitchReads()
-	confirmKeyspacesRoutedTo(t, allKeyspaces, "mt", "t1", []string{"rdonly", "replica"})
-	confirmKeyspacesRoutedTo(t, allKeyspaces, "s1", "t1", []string{"primary"})
-	validateKeyspaceRoutingRules(t, vc, rulesMap, readsSwitched)
+	confirmReadsSwitched(t)
 
 	mt.SwitchWrites()
-	confirmKeyspacesRoutedTo(t, allKeyspaces, "mt", "t1", nil)
-	validateKeyspaceRoutingRules(t, vc, rulesMap, writesSwitched)
+	confirmReadsAndWritesSwitched(t)
 
 	// Note: here we have already switched, and we can insert into the target keyspace, and it should get reverse
 	// replicated to the source keyspace. The source keyspace is routed to the target keyspace at this point.
@@ -225,26 +194,57 @@ func TestMultiTenantSimple(t *testing.T) {
 	require.Equal(t, lastIndex, int64(actualRowsInserted))
 }
 
-type switchStatus int
-
-const (
-	notSwitched switchStatus = iota
-	readsSwitched
-	writesSwitched
-)
-
-func validateKeyspaceRoutingRules(t *testing.T, vc *VitessCluster, rulesMap map[string]*vschemapb.KeyspaceRoutingRules, status switchStatus) {
-	currentRules := getKeyspaceRoutingRules(t, vc)
-	switch status {
-	case notSwitched:
-		require.ElementsMatch(t, rulesMap["pre"].Rules, currentRules.Rules)
-	case readsSwitched:
-		require.ElementsMatch(t, rulesMap["postSwitchReads"].Rules, currentRules.Rules)
-	case writesSwitched:
-		require.ElementsMatch(t, rulesMap["postSwitchWrites"].Rules, currentRules.Rules)
-	default:
-		panic("unhandled default case")
+func confirmReadsSwitched(t *testing.T) {
+	confirmKeyspacesRoutedTo(t, []string{"s1", "mt"}, "mt", "t1", []string{"rdonly", "replica"})
+	confirmKeyspacesRoutedTo(t, []string{"s1", "mt"}, "s1", "t1", []string{"primary"})
+	rules := &vschemapb.KeyspaceRoutingRules{
+		Rules: []*vschemapb.KeyspaceRoutingRule{
+			{FromKeyspace: "s1", ToKeyspace: "s1"},
+			{FromKeyspace: "mt", ToKeyspace: "s1"},
+			{FromKeyspace: "s1@rdonly", ToKeyspace: "mt"},
+			{FromKeyspace: "s1@replica", ToKeyspace: "mt"},
+			{FromKeyspace: "mt@rdonly", ToKeyspace: "mt"},
+			{FromKeyspace: "mt@replica", ToKeyspace: "mt"},
+		},
 	}
+	validateKeyspaceRoutingRules(t, vc, rules)
+}
+
+func confirmWritesSwitched(t *testing.T) {
+	confirmKeyspacesRoutedTo(t, []string{"s1", "mt"}, "s1", "t1", []string{"rdonly", "replica"})
+	confirmKeyspacesRoutedTo(t, []string{"s1", "mt"}, "mt", "t1", []string{"primary"})
+	rules := &vschemapb.KeyspaceRoutingRules{
+		Rules: []*vschemapb.KeyspaceRoutingRule{
+			{FromKeyspace: "s1", ToKeyspace: "mt"},
+			{FromKeyspace: "mt", ToKeyspace: "mt"},
+			{FromKeyspace: "s1@rdonly", ToKeyspace: "s1"},
+			{FromKeyspace: "s1@replica", ToKeyspace: "s1"},
+			{FromKeyspace: "mt@rdonly", ToKeyspace: "s1"},
+			{FromKeyspace: "mt@replica", ToKeyspace: "s1"},
+		},
+	}
+	validateKeyspaceRoutingRules(t, vc, rules)
+}
+
+func confirmReadsAndWritesSwitched(t *testing.T) {
+	confirmKeyspacesRoutedTo(t, []string{"s1", "mt"}, "mt", "t1", []string{"rdonly", "replica"})
+	confirmKeyspacesRoutedTo(t, []string{"s1", "mt"}, "mt", "t1", []string{"primary"})
+	rules := &vschemapb.KeyspaceRoutingRules{
+		Rules: []*vschemapb.KeyspaceRoutingRule{
+			{FromKeyspace: "s1", ToKeyspace: "mt"},
+			{FromKeyspace: "mt", ToKeyspace: "mt"},
+			{FromKeyspace: "s1@rdonly", ToKeyspace: "mt"},
+			{FromKeyspace: "s1@replica", ToKeyspace: "mt"},
+			{FromKeyspace: "mt@rdonly", ToKeyspace: "mt"},
+			{FromKeyspace: "mt@replica", ToKeyspace: "mt"},
+		},
+	}
+	validateKeyspaceRoutingRules(t, vc, rules)
+}
+
+func validateKeyspaceRoutingRules(t *testing.T, vc *VitessCluster, expectedRules *vschemapb.KeyspaceRoutingRules) {
+	currentRules := getKeyspaceRoutingRules(t, vc)
+	require.ElementsMatch(t, expectedRules.Rules, currentRules.Rules)
 }
 
 func getSourceKeyspace(tenantId int64) string {
