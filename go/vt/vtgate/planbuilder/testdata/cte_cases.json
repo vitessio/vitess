@@ -143,8 +143,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select sum(col), 32 from (select `user`.col as col, 32 from `user` where 1 != 1) as t where 1 != 1",
-                    "Query": "select sum(col), 32 from (select `user`.col as col, 32 from `user`) as t",
+                    "FieldQuery": "select sum(col) from (select `user`.col as col, 32 from `user` where 1 != 1) as t where 1 != 1",
+                    "Query": "select sum(col) from (select `user`.col as col, 32 from `user`) as t",
                     "Table": "`user`"
                   },
                   {

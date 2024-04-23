@@ -278,8 +278,19 @@ func (a *Aggregator) findColInternal(ctx *plancontext.PlanningContext, ae *sqlpa
 	return -1
 }
 
+func isDerived(op Operator) bool {
+	switch op := op.(type) {
+	case *Horizon:
+		return op.IsDerived()
+	case selectExpressions:
+		return op.derivedName() != ""
+	default:
+		return false
+	}
+}
+
 func (a *Aggregator) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
-	if _, isSourceDerived := a.Source.(*Horizon); isSourceDerived {
+	if isDerived(a.Source) {
 		return a.Columns
 	}
 

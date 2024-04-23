@@ -18,6 +18,7 @@ package operators
 
 import (
 	"slices"
+
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/test/dbg"
 	"vitess.io/vitess/go/vt/sqlparser"
