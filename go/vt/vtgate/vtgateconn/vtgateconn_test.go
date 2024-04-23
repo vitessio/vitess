@@ -17,11 +17,12 @@ limitations under the License.
 package vtgateconn
 
 import (
+	"context"
 	"testing"
 )
 
 func TestRegisterDialer(t *testing.T) {
-	dialerFunc := func(string) (Impl, error) {
+	dialerFunc := func(context.Context, string) (Impl, error) {
 		return nil, nil
 	}
 	RegisterDialer("test1", dialerFunc)
@@ -30,14 +31,14 @@ func TestRegisterDialer(t *testing.T) {
 
 func TestGetDialerWithProtocol(t *testing.T) {
 	protocol := "test2"
-	_, err := DialProtocol(protocol, "")
+	_, err := DialProtocol(context.Background(), protocol, "")
 	if err == nil || err.Error() != "no dialer registered for VTGate protocol "+protocol {
 		t.Fatalf("protocol: %s is not registered, should return error: %v", protocol, err)
 	}
-	RegisterDialer(protocol, func(string) (Impl, error) {
+	RegisterDialer(protocol, func(context.Context, string) (Impl, error) {
 		return nil, nil
 	})
-	c, err := DialProtocol(protocol, "")
+	c, err := DialProtocol(context.Background(), protocol, "")
 	if err != nil || c == nil {
 		t.Fatalf("dialerFunc has been registered, should not get nil: %v %v", err, c)
 	}
@@ -46,13 +47,13 @@ func TestGetDialerWithProtocol(t *testing.T) {
 func TestDeregisterDialer(t *testing.T) {
 	const protocol = "test3"
 
-	RegisterDialer(protocol, func(string) (Impl, error) {
+	RegisterDialer(protocol, func(context.Context, string) (Impl, error) {
 		return nil, nil
 	})
 
 	DeregisterDialer(protocol)
 
-	_, err := DialProtocol(protocol, "")
+	_, err := DialProtocol(context.Background(), protocol, "")
 	if err == nil || err.Error() != "no dialer registered for VTGate protocol "+protocol {
 		t.Fatalf("protocol: %s is not registered, should return error: %v", protocol, err)
 	}

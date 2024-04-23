@@ -482,13 +482,13 @@ func WaitForHealthyShard(vtctldclient *VtctldClientProcess, keyspace, shard stri
 }
 
 // DialVTGate returns a VTGate grpc connection.
-func DialVTGate(name, addr, username, password string) (*vtgateconn.VTGateConn, error) {
+func DialVTGate(ctx context.Context, name, addr, username, password string) (*vtgateconn.VTGateConn, error) {
 	clientCreds := &grpcclient.StaticAuthClientCreds{Username: username, Password: password}
 	creds := grpc.WithPerRPCCredentials(clientCreds)
 	dialerFunc := grpcvtgateconn.Dial(creds)
 	dialerName := name
 	vtgateconn.RegisterDialer(dialerName, dialerFunc)
-	return vtgateconn.DialProtocol(dialerName, addr)
+	return vtgateconn.DialProtocol(ctx, dialerName, addr)
 }
 
 // PrintFiles prints the files that are asked for. If no file is specified, all the files are printed.

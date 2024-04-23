@@ -573,7 +573,7 @@ func VtgateGrpcConn(ctx context.Context, cluster *cluster.LocalProcessCluster) (
 	stream := new(VTGateStream)
 	stream.ctx = ctx
 	stream.host = fmt.Sprintf("%s:%d", cluster.Hostname, cluster.VtgateProcess.GrpcPort)
-	conn, err := vtgateconn.Dial(stream.host)
+	conn, err := vtgateconn.Dial(ctx, stream.host)
 	// init components
 	stream.respChan = make(chan *sqltypes.Result)
 	stream.VTGateConn = conn

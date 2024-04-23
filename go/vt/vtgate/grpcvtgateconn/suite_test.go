@@ -261,7 +261,7 @@ func CreateFakeServer(t *testing.T) vtgateservice.VTGateService {
 
 // RegisterTestDialProtocol registers a vtgateconn implementation under the "test" protocol
 func RegisterTestDialProtocol(impl vtgateconn.Impl) {
-	vtgateconn.RegisterDialer("test", func(address string) (vtgateconn.Impl, error) {
+	vtgateconn.RegisterDialer("test", func(ctx context.Context, address string) (vtgateconn.Impl, error) {
 		return impl, nil
 	})
 }
@@ -277,10 +277,10 @@ func (f *fakeVTGateService) HandlePanic(err *error) {
 
 // RunTests runs all the tests
 func RunTests(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGateService) {
-	vtgateconn.RegisterDialer("test", func(address string) (vtgateconn.Impl, error) {
+	vtgateconn.RegisterDialer("test", func(ctx context.Context, address string) (vtgateconn.Impl, error) {
 		return impl, nil
 	})
-	conn, err := vtgateconn.DialProtocol("test", "")
+	conn, err := vtgateconn.DialProtocol(context.Background(), "test", "")
 	if err != nil {
 		t.Fatalf("Got err: %v from vtgateconn.DialProtocol", err)
 	}
@@ -304,7 +304,7 @@ func RunTests(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGat
 
 // RunErrorTests runs all the tests that expect errors
 func RunErrorTests(t *testing.T, fakeServer vtgateservice.VTGateService) {
-	conn, err := vtgateconn.DialProtocol("test", "")
+	conn, err := vtgateconn.DialProtocol(context.Background(), "test", "")
 	if err != nil {
 		t.Fatalf("Got err: %v from vtgateconn.DialProtocol", err)
 	}

@@ -513,7 +513,7 @@ func testVStreamCellFlag(t *testing.T) {
 
 	for _, tc := range vstreamTestCases {
 		t.Run("VStreamCellsFlag/"+tc.cells, func(t *testing.T) {
-			conn, err := vtgateconn.Dial(fmt.Sprintf("localhost:%d", vc.ClusterConfig.vtgateGrpcPort))
+			conn, err := vtgateconn.Dial(ctx, fmt.Sprintf("localhost:%d", vc.ClusterConfig.vtgateGrpcPort))
 			require.NoError(t, err)
 			defer conn.Close()
 
