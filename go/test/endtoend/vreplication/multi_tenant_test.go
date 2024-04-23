@@ -298,7 +298,7 @@ func TestMultiTenantComplex(t *testing.T) {
 	vtgateConn, closeConn := getVTGateConn()
 	defer closeConn()
 	t.Run("Verify all rows have been migrated", func(t *testing.T) {
-		numAdditionalInsertSets := 2 // during the SwitchTraffic stop
+		numAdditionalInsertSets := 2 /* during the SwitchTraffic stop */ + 1 /* after Complete */
 		totalRowsInsertedPerTenant := numInitialRowsPerTenant + numAdditionalRowsPerTenant*numAdditionalInsertSets
 		totalRowsInserted := totalRowsInsertedPerTenant * numTenants
 		totalActualRowsInserted := getRowCount(t, vtgateConn, fmt.Sprintf("%s.%s", mtm.targetKeyspace, "t1"))
@@ -416,6 +416,7 @@ func (mtm *multiTenantMigration) switchTraffic(tenantId int64) {
 func (mtm *multiTenantMigration) complete(tenantId int64) {
 	mt := mtm.getActiveMoveTables(tenantId)
 	mt.Complete()
+	mtm.insertSomeData(mtm.t, tenantId, mtm.targetKeyspace, numAdditionalRowsPerTenant)
 	vtgateConn := vc.GetVTGateConn(mtm.t)
 	defer vtgateConn.Close()
 	waitForQueryResult(mtm.t, vtgateConn, "",
