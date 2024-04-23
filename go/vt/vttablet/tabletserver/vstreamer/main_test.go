@@ -204,6 +204,7 @@ func expectLog(ctx context.Context, t *testing.T, input any, ch <-chan []*binlog
 				if evs[i].Type != binlogdatapb.VEventType_LASTPK {
 					t.Fatalf("%v (%d): event: %v, want lastpk", input, i, evs[i])
 				}
+				evs[i].FieldEvent.EnumSetStringValues = true
 			case "commit":
 				if evs[i].Type != binlogdatapb.VEventType_COMMIT {
 					t.Fatalf("%v (%d): event: %v, want commit", input, i, evs[i])

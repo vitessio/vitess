@@ -765,6 +765,9 @@ func (vs *vstreamer) buildTablePlan(id uint64, tm *mysql.TableMap) (*binlogdatap
 			Fields:    plan.fields(),
 			Keyspace:  vs.vse.keyspace,
 			Shard:     vs.vse.shard,
+			// This mapping will be done, if needed, in the vstreamer when we process
+			// and build ROW events.
+			EnumSetStringValues: len(plan.EnumSetValuesMap) > 0,
 		},
 	}, nil
 }

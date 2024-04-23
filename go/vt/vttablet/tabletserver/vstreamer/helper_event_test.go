@@ -87,14 +87,16 @@ type TestColumn struct {
 
 // TestFieldEvent has all the attributes of a table required for creating a field event.
 type TestFieldEvent struct {
-	table, db string
-	cols      []*TestColumn
+	table, db      string
+	cols           []*TestColumn
+	enumSetStrings bool
 }
 
 func (tfe *TestFieldEvent) String() string {
 	var fe binlogdatapb.FieldEvent
 	var field *query.Field
 	fe.TableName = tfe.table
+	fe.EnumSetStringValues = tfe.enumSetStrings
 	for _, col := range tfe.cols {
 		if col.skip {
 			continue
@@ -517,6 +519,7 @@ func (ts *TestSpec) getFieldEvent(table *schemadiff.CreateTableEntity) *TestFiel
 			}
 			tc.colType = fmt.Sprintf("%s(%s)", tc.dataTypeLowered, strings.Join(col.Type.EnumValues, ","))
 			ts.metadata[getMetadataKey(table.Name(), tc.name)] = col.Type.EnumValues
+			tfe.enumSetStrings = true
 		case "enum":
 			tc.len = int64(len(col.Type.EnumValues) + 1)
 			if collation.IsBinary() {
@@ -524,6 +527,7 @@ func (ts *TestSpec) getFieldEvent(table *schemadiff.CreateTableEntity) *TestFiel
 			}
 			tc.colType = fmt.Sprintf("%s(%s)", tc.dataTypeLowered, strings.Join(col.Type.EnumValues, ","))
 			ts.metadata[getMetadataKey(table.Name(), tc.name)] = col.Type.EnumValues
+			tfe.enumSetStrings = true
 		default:
 			log.Infof(fmt.Sprintf("unknown sqlTypeString %s", tc.dataTypeLowered))
 		}

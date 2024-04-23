@@ -32124,6 +32124,9 @@ export namespace binlogdata {
 
         /** FieldEvent shard */
         shard?: (string|null);
+
+        /** FieldEvent enum_set_string_values */
+        enum_set_string_values?: (boolean|null);
     }
 
     /** Represents a FieldEvent. */
@@ -32146,6 +32149,9 @@ export namespace binlogdata {
 
         /** FieldEvent shard. */
         public shard: string;
+
+        /** FieldEvent enum_set_string_values. */
+        public enum_set_string_values: boolean;
 
         /**
          * Creates a new FieldEvent instance using the specified properties.
