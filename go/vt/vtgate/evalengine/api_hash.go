@@ -34,8 +34,8 @@ type HashCode = uint64
 
 // NullsafeHashcode returns an int64 hashcode that is guaranteed to be the same
 // for two values that are considered equal by `NullsafeCompare`.
-func NullsafeHashcode(v sqltypes.Value, collation collations.ID, coerceType sqltypes.Type, sqlmode SQLMode) (HashCode, error) {
-	e, err := valueToEvalCast(v, coerceType, collation, sqlmode)
+func NullsafeHashcode(v sqltypes.Value, collation collations.ID, coerceType sqltypes.Type, sqlmode SQLMode, values []string) (HashCode, error) {
+	e, err := valueToEvalCast(v, coerceType, collation, values, sqlmode)
 	if err != nil {
 		return 0, err
 	}
@@ -75,7 +75,7 @@ var ErrHashCoercionIsNotExact = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "
 // for two values that are considered equal by `NullsafeCompare`.
 // This can be used to avoid having to do comparison checks after a hash,
 // since we consider the 128 bits of entropy enough to guarantee uniqueness.
-func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collations.ID, coerceTo sqltypes.Type, sqlmode SQLMode) error {
+func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collations.ID, coerceTo sqltypes.Type, sqlmode SQLMode, values []string) error {
 	switch {
 	case v.IsNull(), sqltypes.IsNull(coerceTo):
 		hash.Write16(hashPrefixNil)
@@ -97,7 +97,7 @@ func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collat
 		case v.IsText(), v.IsBinary():
 			f, _ = fastparse.ParseFloat64(v.RawStr())
 		default:
-			return nullsafeHashcode128Default(hash, v, collation, coerceTo, sqlmode)
+			return nullsafeHashcode128Default(hash, v, collation, coerceTo, sqlmode, values)
 		}
 		if err != nil {
 			return err
@@ -137,7 +137,7 @@ func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collat
 			}
 			neg = i < 0
 		default:
-			return nullsafeHashcode128Default(hash, v, collation, coerceTo, sqlmode)
+			return nullsafeHashcode128Default(hash, v, collation, coerceTo, sqlmode, values)
 		}
 		if err != nil {
 			return err
@@ -180,7 +180,7 @@ func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collat
 				u, err = uint64(fval), nil
 			}
 		default:
-			return nullsafeHashcode128Default(hash, v, collation, coerceTo, sqlmode)
+			return nullsafeHashcode128Default(hash, v, collation, coerceTo, sqlmode, values)
 		}
 		if err != nil {
 			return err
@@ -223,20 +223,20 @@ func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collat
 			fval, _ := fastparse.ParseFloat64(v.RawStr())
 			dec = decimal.NewFromFloat(fval)
 		default:
-			return nullsafeHashcode128Default(hash, v, collation, coerceTo, sqlmode)
+			return nullsafeHashcode128Default(hash, v, collation, coerceTo, sqlmode, values)
 		}
 		hash.Write16(hashPrefixDecimal)
 		dec.Hash(hash)
 	default:
-		return nullsafeHashcode128Default(hash, v, collation, coerceTo, sqlmode)
+		return nullsafeHashcode128Default(hash, v, collation, coerceTo, sqlmode, values)
 	}
 	return nil
 }
 
-func nullsafeHashcode128Default(hash *vthash.Hasher, v sqltypes.Value, collation collations.ID, coerceTo sqltypes.Type, sqlmode SQLMode) error {
+func nullsafeHashcode128Default(hash *vthash.Hasher, v sqltypes.Value, collation collations.ID, coerceTo sqltypes.Type, sqlmode SQLMode, values []string) error {
 	// Slow path to handle all other types. This uses the generic
 	// logic for value casting to ensure we match MySQL here.
-	e, err := valueToEvalCast(v, coerceTo, collation, sqlmode)
+	e, err := valueToEvalCast(v, coerceTo, collation, values, sqlmode)
 	if err != nil {
 		return err
 	}

@@ -67,6 +67,9 @@ type (
 		ComparisonType querypb.Type
 
 		CollationEnv *collations.Environment
+
+		// Values for enum and set types
+		Values []string
 	}
 
 	hashJoinProbeTable struct {
@@ -78,6 +81,7 @@ type (
 		cols           []int
 		hasher         vthash.Hasher
 		sqlmode        evalengine.SQLMode
+		values         []string
 	}
 
 	probeTableEntry struct {
@@ -94,7 +98,7 @@ func (hj *HashJoin) TryExecute(ctx context.Context, vcursor VCursor, bindVars ma
 		return nil, err
 	}
 
-	pt := newHashJoinProbeTable(hj.Collation, hj.ComparisonType, hj.LHSKey, hj.RHSKey, hj.Cols)
+	pt := newHashJoinProbeTable(hj.Collation, hj.ComparisonType, hj.LHSKey, hj.RHSKey, hj.Cols, hj.Values)
 	// build the probe table from the LHS result
 	for _, row := range lresult.Rows {
 		err := pt.addLeftRow(row)
@@ -130,7 +134,7 @@ func (hj *HashJoin) TryExecute(ctx context.Context, vcursor VCursor, bindVars ma
 // TryStreamExecute implements the Primitive interface
 func (hj *HashJoin) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	// build the probe table from the LHS result
-	pt := newHashJoinProbeTable(hj.Collation, hj.ComparisonType, hj.LHSKey, hj.RHSKey, hj.Cols)
+	pt := newHashJoinProbeTable(hj.Collation, hj.ComparisonType, hj.LHSKey, hj.RHSKey, hj.Cols, hj.Values)
 	var lfields []*querypb.Field
 	var mu sync.Mutex
 	err := vcursor.StreamExecutePrimitive(ctx, hj.Left, bindVars, wantfields, func(result *sqltypes.Result) error {
@@ -260,7 +264,7 @@ func (hj *HashJoin) description() PrimitiveDescription {
 	}
 }
 
-func newHashJoinProbeTable(coll collations.ID, typ querypb.Type, lhsKey, rhsKey int, cols []int) *hashJoinProbeTable {
+func newHashJoinProbeTable(coll collations.ID, typ querypb.Type, lhsKey, rhsKey int, cols []int, values []string) *hashJoinProbeTable {
 	return &hashJoinProbeTable{
 		innerMap: map[vthash.Hash]*probeTableEntry{},
 		coll:     coll,
@@ -269,6 +273,7 @@ func newHashJoinProbeTable(coll collations.ID, typ querypb.Type, lhsKey, rhsKey 
 		rhsKey:   rhsKey,
 		cols:     cols,
 		hasher:   vthash.New(),
+		values:   values,
 	}
 }
 
@@ -286,7 +291,7 @@ func (pt *hashJoinProbeTable) addLeftRow(r sqltypes.Row) error {
 }
 
 func (pt *hashJoinProbeTable) hash(val sqltypes.Value) (vthash.Hash, error) {
-	err := evalengine.NullsafeHashcode128(&pt.hasher, val, pt.coll, pt.typ, pt.sqlmode)
+	err := evalengine.NullsafeHashcode128(&pt.hasher, val, pt.coll, pt.typ, pt.sqlmode, pt.values)
 	if err != nil {
 		return vthash.Hash{}, err
 	}

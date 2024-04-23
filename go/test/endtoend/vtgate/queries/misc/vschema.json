@@ -53,6 +53,14 @@
         }
       ]
     },
+    "tbl_enum_set": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "hash"
+        }
+      ]
+    },
     "unq_idx": {
       "column_vindexes": [
         {

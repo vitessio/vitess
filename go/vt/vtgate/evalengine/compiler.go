@@ -17,6 +17,8 @@ limitations under the License.
 package evalengine
 
 import (
+	"slices"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/mysql/collations/colldata"
@@ -55,6 +57,7 @@ type ctype struct {
 	Flag        typeFlag
 	Size, Scale int32
 	Col         collations.TypedCollation
+	Values      []string
 }
 
 type Type struct {
@@ -63,14 +66,15 @@ type Type struct {
 	nullable    bool
 	init        bool
 	size, scale int32
+	values      []string
 }
 
 func NewType(t sqltypes.Type, collation collations.ID) Type {
 	// New types default to being nullable
-	return NewTypeEx(t, collation, true, 0, 0)
+	return NewTypeEx(t, collation, true, 0, 0, nil)
 }
 
-func NewTypeEx(t sqltypes.Type, collation collations.ID, nullable bool, size, scale int32) Type {
+func NewTypeEx(t sqltypes.Type, collation collations.ID, nullable bool, size, scale int32, values []string) Type {
 	return Type{
 		typ:       t,
 		collation: collation,
@@ -78,6 +82,7 @@ func NewTypeEx(t sqltypes.Type, collation collations.ID, nullable bool, size, sc
 		init:      true,
 		size:      size,
 		scale:     scale,
+		values:    values,
 	}
 }
 
@@ -139,8 +144,30 @@ func (t *Type) Nullable() bool {
 	return true // nullable by default for unknown types
 }
 
+func (t *Type) Values() []string {
+	return t.values
+}
+
 func (t *Type) Valid() bool {
 	return t.init
+}
+
+func (t *Type) Equal(other *Type) bool {
+	return t.typ == other.typ &&
+		t.collation == other.collation &&
+		t.nullable == other.nullable &&
+		t.size == other.size &&
+		t.scale == other.scale &&
+		slices.Equal(t.values, other.values)
+}
+
+func (ct ctype) equal(other ctype) bool {
+	return ct.Type == other.Type &&
+		ct.Flag == other.Flag &&
+		ct.Size == other.Size &&
+		ct.Scale == other.Scale &&
+		ct.Col == other.Col &&
+		slices.Equal(ct.Values, other.Values)
 }
 
 func (ct ctype) nullable() bool {

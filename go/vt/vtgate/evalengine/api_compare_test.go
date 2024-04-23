@@ -1109,11 +1109,12 @@ func TestNullComparisons(t *testing.T) {
 }
 
 func TestNullsafeCompare(t *testing.T) {
-	collation := collationEnv.LookupByName("utf8mb4_general_ci")
+	collation := collations.ID(collations.CollationUtf8mb4ID)
 	tcases := []struct {
 		v1, v2 sqltypes.Value
 		out    int
 		err    error
+		values []string
 	}{
 		{
 			v1:  NULL,
@@ -1141,22 +1142,59 @@ func TestNullsafeCompare(t *testing.T) {
 			out: -1,
 		},
 		{
+			v1:     TestValue(sqltypes.Enum, "foo"),
+			v2:     TestValue(sqltypes.Enum, "bar"),
+			out:    -1,
+			values: []string{"'foo'", "'bar'"},
+		},
+		{
 			v1:  TestValue(sqltypes.Enum, "foo"),
 			v2:  TestValue(sqltypes.Enum, "bar"),
 			out: 1,
 		},
+		{
+			v1:     TestValue(sqltypes.Enum, "foo"),
+			v2:     TestValue(sqltypes.VarChar, "bar"),
+			out:    1,
+			values: []string{"'foo'", "'bar'"},
+		},
+		{
+			v1:  TestValue(sqltypes.VarChar, "foo"),
+			v2:  TestValue(sqltypes.Enum, "bar"),
+			out: 1,
+		},
+		{
+			v1:     TestValue(sqltypes.Set, "bar"),
+			v2:     TestValue(sqltypes.Set, "foo,bar"),
+			out:    -1,
+			values: []string{"'foo'", "'bar'"},
+		},
+		{
+			v1:  TestValue(sqltypes.Set, "bar"),
+			v2:  TestValue(sqltypes.Set, "foo,bar"),
+			out: -1,
+		},
+		{
+			v1:     TestValue(sqltypes.VarChar, "bar"),
+			v2:     TestValue(sqltypes.Set, "foo,bar"),
+			out:    -1,
+			values: []string{"'foo'", "'bar'"},
+		},
+		{
+			v1:  TestValue(sqltypes.Set, "bar"),
+			v2:  TestValue(sqltypes.VarChar, "foo,bar"),
+			out: -1,
+		},
 	}
 	for _, tcase := range tcases {
 		t.Run(fmt.Sprintf("%v/%v", tcase.v1, tcase.v2), func(t *testing.T) {
-			got, err := NullsafeCompare(tcase.v1, tcase.v2, collations.MySQL8(), collation)
+			got, err := NullsafeCompare(tcase.v1, tcase.v2, collations.MySQL8(), collation, tcase.values)
 			if tcase.err != nil {
 				require.EqualError(t, err, tcase.err.Error())
 				return
 			}
 			require.NoError(t, err)
-			if got != tcase.out {
-				t.Errorf("NullsafeCompare(%v, %v): %v, want %v", printValue(tcase.v1), printValue(tcase.v2), got, tcase.out)
-			}
+			assert.Equal(t, tcase.out, got)
 		})
 	}
 }
@@ -1237,7 +1275,7 @@ func TestNullsafeCompareCollate(t *testing.T) {
 	}
 	for _, tcase := range tcases {
 		t.Run(fmt.Sprintf("%v/%v", tcase.v1, tcase.v2), func(t *testing.T) {
-			got, err := NullsafeCompare(TestValue(sqltypes.VarChar, tcase.v1), TestValue(sqltypes.VarChar, tcase.v2), collations.MySQL8(), tcase.collation)
+			got, err := NullsafeCompare(TestValue(sqltypes.VarChar, tcase.v1), TestValue(sqltypes.VarChar, tcase.v2), collations.MySQL8(), tcase.collation, nil)
 			if tcase.err == nil {
 				require.NoError(t, err)
 			} else {
@@ -1288,7 +1326,7 @@ func BenchmarkNullSafeComparison(b *testing.B) {
 				for i := 0; i < b.N; i++ {
 					for _, lhs := range inputs {
 						for _, rhs := range inputs {
-							_, _ = NullsafeCompare(lhs, rhs, collations.MySQL8(), collid)
+							_, _ = NullsafeCompare(lhs, rhs, collations.MySQL8(), collid, nil)
 						}
 					}
 				}
@@ -1318,7 +1356,7 @@ func BenchmarkNullSafeComparison(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			for _, lhs := range inputs {
 				for _, rhs := range inputs {
-					_, _ = NullsafeCompare(lhs, rhs, collations.MySQL8(), collations.CollationUtf8mb4ID)
+					_, _ = NullsafeCompare(lhs, rhs, collations.MySQL8(), collations.CollationUtf8mb4ID, nil)
 				}
 			}
 		}

@@ -667,7 +667,7 @@ func (st *SemTable) TypeForExpr(e sqlparser.Expr) (evalengine.Type, bool) {
 	ws, isWS := e.(*sqlparser.WeightStringFuncExpr)
 	if isWS {
 		wt, _ := st.TypeForExpr(ws.Expr)
-		return evalengine.NewTypeEx(sqltypes.VarBinary, collations.CollationBinaryID, wt.Nullable(), 0, 0), true
+		return evalengine.NewTypeEx(sqltypes.VarBinary, collations.CollationBinaryID, wt.Nullable(), 0, 0, nil), true
 	}
 
 	return evalengine.Type{}, false

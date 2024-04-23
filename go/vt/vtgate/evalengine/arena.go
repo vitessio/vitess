@@ -17,6 +17,8 @@ limitations under the License.
 package evalengine
 
 import (
+	"slices"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/mysql/decimal"
@@ -32,6 +34,8 @@ type Arena struct {
 	aFloat64 []evalFloat
 	aDecimal []evalDecimal
 	aBytes   []evalBytes
+	aEnum    []evalEnum
+	aSet     []evalSet
 }
 
 func (a *Arena) reset() {
@@ -40,6 +44,8 @@ func (a *Arena) reset() {
 	a.aFloat64 = a.aFloat64[:0]
 	a.aDecimal = a.aDecimal[:0]
 	a.aBytes = a.aBytes[:0]
+	a.aEnum = a.aEnum[:0]
+	a.aSet = a.aSet[:0]
 }
 
 func (a *Arena) newEvalDecimalWithPrec(dec decimal.Decimal, prec int32) *evalDecimal {
@@ -59,6 +65,32 @@ func (a *Arena) newEvalDecimal(dec decimal.Decimal, m, d int32) *evalDecimal {
 		return a.newEvalDecimalWithPrec(dec, -dec.Exponent())
 	}
 	return a.newEvalDecimalWithPrec(dec.Clamp(m-d, d), d)
+}
+
+func (a *Arena) newEvalEnum(raw []byte, values []string) *evalEnum {
+	if cap(a.aEnum) > len(a.aEnum) {
+		a.aEnum = a.aEnum[:len(a.aEnum)+1]
+	} else {
+		a.aEnum = append(a.aEnum, evalEnum{})
+	}
+	val := &a.aEnum[len(a.aInt64)-1]
+	s := string(raw)
+	val.string = s
+	val.value = slices.Index(values, s)
+	return val
+}
+
+func (a *Arena) newEvalSet(raw []byte, values []string) *evalSet {
+	if cap(a.aSet) > len(a.aSet) {
+		a.aSet = a.aSet[:len(a.aSet)+1]
+	} else {
+		a.aSet = append(a.aSet, evalSet{})
+	}
+	val := &a.aSet[len(a.aInt64)-1]
+	s := string(raw)
+	val.string = s
+	val.set = evalSetBits(values, s)
+	return val
 }
 
 func (a *Arena) newEvalBool(b bool) *evalInt64 {
