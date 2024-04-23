@@ -739,7 +739,7 @@ func (ts *trafficSwitcher) changeWriteRoute(ctx context.Context) error {
 		// For multi-tenant migrations, we can only move forward and not backwards.
 		ts.Logger().Infof("Pointing keyspace routing rules for primary to %s for workflow %s", ts.TargetKeyspaceName(), ts.workflow)
 		if err := changeKeyspaceRoute(ctx, ts.TopoServer(), []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
-			[]string{ts.SourceKeyspaceName(), ts.TargetKeyspaceName()}, ts.TargetKeyspaceName()); err != nil {
+			ts.SourceKeyspaceName() /* from */, ts.TargetKeyspaceName() /* to */); err != nil {
 			return err
 		}
 	} else if ts.isPartialMigration {

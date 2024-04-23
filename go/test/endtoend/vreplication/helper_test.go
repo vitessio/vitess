@@ -1020,15 +1020,13 @@ func vexplain(t *testing.T, database, query string) *VExplainPlan {
 }
 
 // confirmKeyspacesRoutedTo confirms that the given keyspaces are routed as expected for the given tablet types, using vexplain.
-func confirmKeyspacesRoutedTo(t *testing.T, keyspaces []string, routedKeyspace, table string, tabletTypes []string) {
+func confirmKeyspacesRoutedTo(t *testing.T, keyspace string, routedKeyspace, table string, tabletTypes []string) {
 	if len(tabletTypes) == 0 {
 		tabletTypes = []string{"primary", "replica", "rdonly"}
 	}
-	for _, ks := range keyspaces {
-		for _, tt := range tabletTypes {
-			database := fmt.Sprintf("%s@%s", ks, tt)
-			plan := vexplain(t, database, fmt.Sprintf("select * from %s.%s", ks, table))
-			require.Equalf(t, routedKeyspace, plan.Keyspace.Name, "for database %s, keyspaces %v, tabletType %s", database, keyspaces, tt)
-		}
+	for _, tt := range tabletTypes {
+		database := fmt.Sprintf("%s@%s", keyspace, tt)
+		plan := vexplain(t, database, fmt.Sprintf("select * from %s.%s", keyspace, table))
+		require.Equalf(t, routedKeyspace, plan.Keyspace.Name, "for database %s, keyspace %v, tabletType %s", database, keyspace, tt)
 	}
 }

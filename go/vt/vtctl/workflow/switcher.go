@@ -68,8 +68,7 @@ func (r *switcher) dropSourceShards(ctx context.Context) error {
 
 func (r *switcher) switchKeyspaceReads(ctx context.Context, servedTypes []topodatapb.TabletType) error {
 	if err := changeKeyspaceRoute(ctx, r.ts.TopoServer(), servedTypes,
-		[]string{r.ts.SourceKeyspaceName(), r.ts.TargetKeyspaceName()},
-		r.ts.TargetKeyspaceName()); err != nil {
+		r.ts.SourceKeyspaceName() /* from */, r.ts.TargetKeyspaceName() /* to */); err != nil {
 		return err
 	}
 	return nil

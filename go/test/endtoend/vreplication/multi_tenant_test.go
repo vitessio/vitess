@@ -160,18 +160,14 @@ func TestMultiTenantSimple(t *testing.T) {
 	initialRules := &vschemapb.KeyspaceRoutingRules{
 		Rules: []*vschemapb.KeyspaceRoutingRule{
 			{FromKeyspace: "s1", ToKeyspace: "s1"},
-			{FromKeyspace: "mt", ToKeyspace: "s1"},
 			{FromKeyspace: "s1@rdonly", ToKeyspace: "s1"},
 			{FromKeyspace: "s1@replica", ToKeyspace: "s1"},
-			{FromKeyspace: "mt@rdonly", ToKeyspace: "s1"},
-			{FromKeyspace: "mt@replica", ToKeyspace: "s1"},
 		},
 	}
 
 	require.Zero(t, len(getKeyspaceRoutingRules(t, vc).Rules))
 	mt.Create()
-	allKeyspaces := []string{sourceKeyspace, targetKeyspace}
-	confirmKeyspacesRoutedTo(t, allKeyspaces, "s1", "t1", nil)
+	confirmKeyspacesRoutedTo(t, sourceKeyspace, "s1", "t1", nil)
 	validateKeyspaceRoutingRules(t, vc, initialRules)
 
 	lastIndex = insertRows(lastIndex, sourceKeyspace)
@@ -193,6 +189,8 @@ func TestMultiTenantSimple(t *testing.T) {
 
 	mt.Complete()
 	require.Zero(t, len(getKeyspaceRoutingRules(t, vc).Rules))
+	// Targeting to target keyspace should start working now. Upto this point we had to target the source keyspace.
+	lastIndex = insertRows(lastIndex, targetKeyspace)
 
 	actualRowsInserted := getRowCount(t, vtgateConn, fmt.Sprintf("%s.%s", targetKeyspace, "t1"))
 	log.Infof("Migration completed, total rows in target: %d", actualRowsInserted)
@@ -201,48 +199,39 @@ func TestMultiTenantSimple(t *testing.T) {
 }
 
 func confirmReadsSwitched(t *testing.T) {
-	confirmKeyspacesRoutedTo(t, []string{"s1", "mt"}, "mt", "t1", []string{"rdonly", "replica"})
-	confirmKeyspacesRoutedTo(t, []string{"s1", "mt"}, "s1", "t1", []string{"primary"})
+	confirmKeyspacesRoutedTo(t, "s1", "mt", "t1", []string{"rdonly", "replica"})
+	confirmKeyspacesRoutedTo(t, "s1", "s1", "t1", []string{"primary"})
 	rules := &vschemapb.KeyspaceRoutingRules{
 		Rules: []*vschemapb.KeyspaceRoutingRule{
 			{FromKeyspace: "s1", ToKeyspace: "s1"},
-			{FromKeyspace: "mt", ToKeyspace: "s1"},
 			{FromKeyspace: "s1@rdonly", ToKeyspace: "mt"},
 			{FromKeyspace: "s1@replica", ToKeyspace: "mt"},
-			{FromKeyspace: "mt@rdonly", ToKeyspace: "mt"},
-			{FromKeyspace: "mt@replica", ToKeyspace: "mt"},
 		},
 	}
 	validateKeyspaceRoutingRules(t, vc, rules)
 }
 
 func confirmWritesSwitched(t *testing.T) {
-	confirmKeyspacesRoutedTo(t, []string{"s1", "mt"}, "s1", "t1", []string{"rdonly", "replica"})
-	confirmKeyspacesRoutedTo(t, []string{"s1", "mt"}, "mt", "t1", []string{"primary"})
+	confirmKeyspacesRoutedTo(t, "s1", "s1", "t1", []string{"rdonly", "replica"})
+	confirmKeyspacesRoutedTo(t, "s1", "mt", "t1", []string{"primary"})
 	rules := &vschemapb.KeyspaceRoutingRules{
 		Rules: []*vschemapb.KeyspaceRoutingRule{
 			{FromKeyspace: "s1", ToKeyspace: "mt"},
-			{FromKeyspace: "mt", ToKeyspace: "mt"},
 			{FromKeyspace: "s1@rdonly", ToKeyspace: "s1"},
 			{FromKeyspace: "s1@replica", ToKeyspace: "s1"},
-			{FromKeyspace: "mt@rdonly", ToKeyspace: "s1"},
-			{FromKeyspace: "mt@replica", ToKeyspace: "s1"},
 		},
 	}
 	validateKeyspaceRoutingRules(t, vc, rules)
 }
 
 func confirmReadsAndWritesSwitched(t *testing.T) {
-	confirmKeyspacesRoutedTo(t, []string{"s1", "mt"}, "mt", "t1", []string{"rdonly", "replica"})
-	confirmKeyspacesRoutedTo(t, []string{"s1", "mt"}, "mt", "t1", []string{"primary"})
+	confirmKeyspacesRoutedTo(t, "s1", "mt", "t1", []string{"rdonly", "replica"})
+	confirmKeyspacesRoutedTo(t, "s1", "mt", "t1", []string{"primary"})
 	rules := &vschemapb.KeyspaceRoutingRules{
 		Rules: []*vschemapb.KeyspaceRoutingRule{
 			{FromKeyspace: "s1", ToKeyspace: "mt"},
-			{FromKeyspace: "mt", ToKeyspace: "mt"},
 			{FromKeyspace: "s1@rdonly", ToKeyspace: "mt"},
 			{FromKeyspace: "s1@replica", ToKeyspace: "mt"},
-			{FromKeyspace: "mt@rdonly", ToKeyspace: "mt"},
-			{FromKeyspace: "mt@replica", ToKeyspace: "mt"},
 		},
 	}
 	validateKeyspaceRoutingRules(t, vc, rules)
