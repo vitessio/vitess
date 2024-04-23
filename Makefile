@@ -321,7 +321,7 @@ endef
 docker_lite:
 	${call build_docker_image,docker/lite/Dockerfile,vitess/lite}
 
-DOCKER_LITE_SUFFIX = testing ubi7 ubi8 ubi8.arm64
+DOCKER_LITE_SUFFIX = testing
 DOCKER_LITE_TARGETS = $(addprefix docker_lite_,$(DOCKER_LITE_SUFFIX))
 $(DOCKER_LITE_TARGETS): docker_lite_%:
 	${call build_docker_image,docker/lite/Dockerfile.$*,vitess/lite:$*}
