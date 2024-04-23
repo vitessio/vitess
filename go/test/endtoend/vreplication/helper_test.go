@@ -285,6 +285,7 @@ func waitForRowCountInTablet(t *testing.T, vttablet *cluster.VttabletProcess, da
 		require.NoError(t, err)
 		require.NotNil(t, qr)
 		if wantRes == fmt.Sprintf("%v", qr.Rows) {
+			log.Infof("waitForRowCountInTablet: found %d rows in table %s on tablet %s", want, table, vttablet.Name)
 			return
 		}
 		select {
