@@ -722,22 +722,26 @@ func NewTimeFromStd(t time.Time) Time {
 	}
 }
 
+var (
+	decSecondsInHour = decimal.NewFromInt(3600)
+	decMinutesInHour = decimal.NewFromInt(60)
+	decMaxHours      = decimal.NewFromInt(MaxHours)
+)
+
 func NewTimeFromSeconds(seconds decimal.Decimal) Time {
 	var neg bool
-	if seconds.Cmp(decimal.NewFromInt(0)) < 0 {
+	if seconds.Sign() < 0 {
 		neg = true
-		seconds = seconds.Mul(decimal.NewFromInt(-1))
+		seconds = seconds.Abs()
 	}
 
 	sec, frac := seconds.QuoRem(decimal.New(1, 0), 0)
 	ns := frac.Mul(decimal.New(1, 9))
 
-	h := sec.Div(decimal.NewFromInt(3600), 0)
-	_, sec = sec.QuoRem(decimal.NewFromInt(3600), 0)
-	min := sec.Div(decimal.NewFromInt(60), 0)
-	_, sec = sec.QuoRem(decimal.NewFromInt(60), 0)
+	h, sec := sec.QuoRem(decSecondsInHour, 0)
+	min, sec := sec.QuoRem(decMinutesInHour, 0)
 
-	if h.Cmp(decimal.NewFromInt(MaxHours)) > 0 {
+	if h.Cmp(decMaxHours) > 0 {
 		h := uint16(MaxHours)
 		if neg {
 			h |= negMask
