@@ -321,15 +321,9 @@ endef
 docker_lite:
 	${call build_docker_image,docker/lite/Dockerfile,vitess/lite}
 
-DOCKER_LITE_SUFFIX = testing
-DOCKER_LITE_TARGETS = $(addprefix docker_lite_,$(DOCKER_LITE_SUFFIX))
-$(DOCKER_LITE_TARGETS): docker_lite_%:
-	${call build_docker_image,docker/lite/Dockerfile.$*,vitess/lite:$*}
-
 docker_lite_push:
-	for i in $(DOCKER_LITE_SUFFIX); do echo "pushing lite image: $$i"; docker push vitess/lite:$$i || exit 1; done
-
-docker_lite_all: docker_lite $(DOCKER_LITE_TARGETS)
+	echo "pushing lite image: latest"
+	docker push vitess/lite:latest
 
 docker_local:
 	${call build_docker_image,docker/local/Dockerfile,vitess/local}
