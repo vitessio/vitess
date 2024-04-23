@@ -44,7 +44,7 @@ COPY --from=builder /usr/bin/mysqlbinlog /usr/bin/mysqlbinlog
 RUN apt-key adv --no-tty --keyserver keyserver.ubuntu.com --recv-keys 9334A25F8507EFA5
 RUN echo 'deb http://repo.percona.com/apt bullseye main' > /etc/apt/sources.list.d/percona.list
 RUN apt-get update -y
-RUN apt-get install percona-xtrabackup-80
+RUN apt-get install -y percona-xtrabackup-80
 
 # Set up Vitess user and directory tree.
 RUN groupadd -r vitess && useradd -r -g vitess vitess
