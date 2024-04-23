@@ -49,7 +49,6 @@ ENV VTROOT /vt/src/vitess.io/vitess
 ENV VTDATAROOT /vt/vtdataroot
 ENV PATH $VTROOT/bin:$PATH
 
-
 # Copy artifacts from builder layer.
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=builder --chown=vitess:vitess /vt/install /vt
