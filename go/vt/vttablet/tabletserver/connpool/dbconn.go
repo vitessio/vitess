@@ -472,6 +472,7 @@ func (dbc *Conn) kill(ctx context.Context, reason string, elapsed time.Duration)
 	go func() {
 		_, err := killConn.Conn.ExecuteFetch(sql, -1, false)
 		ch <- err
+		close(ch)
 	}()
 
 	select {
@@ -479,8 +480,7 @@ func (dbc *Conn) kill(ctx context.Context, reason string, elapsed time.Duration)
 		killConn.Close()
 
 		dbc.stats.InternalErrors.Add("HungConnection", 1)
-		log.Warningf("Connection may be hung: %s", dbc.CurrentForLogging())
-
+		log.Warningf("Failed to kill MySQL connection ID %d which was executing the following query, it may be hung: %s", dbc.conn.ID(), dbc.CurrentForLogging())
 		return context.Cause(ctx)
 	case err := <-ch:
 		if err != nil {
@@ -515,6 +515,7 @@ func (dbc *Conn) killQuery(ctx context.Context, reason string, elapsed time.Dura
 	go func() {
 		_, err := killConn.Conn.ExecuteFetch(sql, -1, false)
 		ch <- err
+		close(ch)
 	}()
 
 	select {
@@ -522,8 +523,7 @@ func (dbc *Conn) killQuery(ctx context.Context, reason string, elapsed time.Dura
 		killConn.Close()
 
 		dbc.stats.InternalErrors.Add("HungQuery", 1)
-		log.Warningf("Query may be hung: %s", dbc.CurrentForLogging())
-
+		log.Warningf("Failed to kill MySQL query ID %d which was executing the following query, it may be hung: %s", dbc.conn.ID(), dbc.CurrentForLogging())
 		return context.Cause(ctx)
 	case err := <-ch:
 		if err != nil {

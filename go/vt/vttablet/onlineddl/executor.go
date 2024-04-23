@@ -976,7 +976,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 		if !renameWasSuccessful {
 			err := renameConn.Conn.Kill("premature exit while renaming tables", 0)
 			if err != nil {
-				log.Warningf("failed to kill rename connection: %v", err)
+				log.Warningf("Failed to kill connection being used to rename tables in OnlineDDL migration %s: %v", onlineDDL.UUID, err)
 			}
 		}
 	}()
