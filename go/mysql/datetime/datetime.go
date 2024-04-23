@@ -44,7 +44,10 @@ type DateTime struct {
 	Time Time
 }
 
-const DefaultPrecision = 6
+const (
+	DefaultPrecision = 6
+	MaxHours         = 838
+)
 
 func (t Time) AppendFormat(b []byte, prec uint8) []byte {
 	if t.Neg() {
@@ -715,6 +718,56 @@ func NewTimeFromStd(t time.Time) Time {
 		hour:       uint16(hour),
 		minute:     uint8(min),
 		second:     uint8(sec),
+		nanosecond: uint32(nsec),
+	}
+}
+
+var (
+	decSecondsInHour = decimal.NewFromInt(3600)
+	decMinutesInHour = decimal.NewFromInt(60)
+	decMaxHours      = decimal.NewFromInt(MaxHours)
+)
+
+func NewTimeFromSeconds(seconds decimal.Decimal) Time {
+	var neg bool
+	if seconds.Sign() < 0 {
+		neg = true
+		seconds = seconds.Abs()
+	}
+
+	sec, frac := seconds.QuoRem(decimal.New(1, 0), 0)
+	ns := frac.Mul(decimal.New(1, 9))
+
+	h, sec := sec.QuoRem(decSecondsInHour, 0)
+	min, sec := sec.QuoRem(decMinutesInHour, 0)
+
+	if h.Cmp(decMaxHours) > 0 {
+		h := uint16(MaxHours)
+		if neg {
+			h |= negMask
+		}
+
+		return Time{
+			hour:       h,
+			minute:     59,
+			second:     59,
+			nanosecond: 0,
+		}
+	}
+
+	hour, _ := h.Int64()
+	if neg {
+		hour |= int64(negMask)
+	}
+
+	m, _ := min.Int64()
+	s, _ := sec.Int64()
+	nsec, _ := ns.Int64()
+
+	return Time{
+		hour:       uint16(hour),
+		minute:     uint8(m),
+		second:     uint8(s),
 		nanosecond: uint32(nsec),
 	}
 }
