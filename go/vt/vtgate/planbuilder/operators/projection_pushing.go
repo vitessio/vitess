@@ -18,8 +18,6 @@ package operators
 
 import (
 	"slices"
-	"strconv"
-
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/test/dbg"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -50,8 +48,7 @@ func (p *projector) add(pe *ProjExpr, alias string) {
 func (p *projector) get(ctx *plancontext.PlanningContext, expr sqlparser.Expr) sqlparser.Expr {
 	for _, column := range p.columns {
 		if ctx.SemTable.EqualsExprWithDeps(expr, column.ColExpr) {
-			alias := p.claimUnusedAlias(column.Original)
-			out := sqlparser.NewColName(alias)
+			out := sqlparser.NewColName(column.Original.ColumnName())
 			out.Qualifier = p.tableName
 
 			ctx.SemTable.CopySemanticInfo(expr, out)
@@ -71,16 +68,6 @@ func (p *projector) get(ctx *plancontext.PlanningContext, expr sqlparser.Expr) s
 	ctx.SemTable.CopySemanticInfo(expr, out)
 
 	return out
-}
-
-// claimUnusedAlias generates a unique alias based on the provided expression, ensuring no duplication in the projector
-func (p *projector) claimUnusedAlias(ae *sqlparser.AliasedExpr) string {
-	bare := ae.ColumnName()
-	alias := bare
-	for i := int64(0); slices.Index(p.columnAliases, alias) > -1; i++ {
-		alias = bare + strconv.FormatInt(i, 10)
-	}
-	return alias
 }
 
 // tryPushProjection attempts to optimize a projection by pushing it down in the query plan
@@ -256,12 +243,6 @@ func splitProjectionAcrossJoin(
 	pe *ProjExpr,
 	colAlias string,
 ) {
-
-	// Check if the current expression can reuse an existing column in the ApplyJoin.
-	if _, found := canReuseColumn(ctx, join.JoinColumns.columns, pe.EvalExpr, joinColumnToExpr); found {
-		return
-	}
-
 	switch pe.Info.(type) {
 	case nil:
 		join.JoinColumns.add(splitUnexploredExpression(ctx, join, lhs, rhs, pe, colAlias))
@@ -271,7 +252,7 @@ func splitProjectionAcrossJoin(
 	case SubQueryExpression:
 		join.JoinColumns.add(splitSubqueryExpression(ctx, join, lhs, rhs, pe, colAlias))
 	default:
-		panic(dbg.S(pe.Info))
+		panic(vterrors.VT13001(dbg.S(pe.Info)))
 	}
 }
 
