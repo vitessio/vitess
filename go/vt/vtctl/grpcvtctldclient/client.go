@@ -48,13 +48,13 @@ type gRPCVtctldClient struct {
 //go:generate -command grpcvtctldclient go run ../vtctldclient/codegen
 //go:generate grpcvtctldclient --out client_gen.go
 
-func gRPCVtctldClientFactory(addr string) (vtctldclient.VtctldClient, error) {
+func gRPCVtctldClientFactory(ctx context.Context, addr string) (vtctldclient.VtctldClient, error) {
 	opt, err := grpcclientcommon.SecureDialOption()
 	if err != nil {
 		return nil, err
 	}
 
-	conn, err := grpcclient.Dial(addr, grpcclient.FailFast(false), opt)
+	conn, err := grpcclient.DialContext(ctx, addr, grpcclient.FailFast(false), opt)
 	if err != nil {
 		return nil, err
 	}
@@ -67,8 +67,8 @@ func gRPCVtctldClientFactory(addr string) (vtctldclient.VtctldClient, error) {
 
 // NewWithDialOpts returns a vtctldclient.VtctldClient configured with the given
 // DialOptions. It is exported for use in vtadmin.
-func NewWithDialOpts(addr string, failFast grpcclient.FailFast, opts ...grpc.DialOption) (vtctldclient.VtctldClient, error) {
-	conn, err := grpcclient.Dial(addr, failFast, opts...)
+func NewWithDialOpts(ctx context.Context, addr string, failFast grpcclient.FailFast, opts ...grpc.DialOption) (vtctldclient.VtctldClient, error) {
+	conn, err := grpcclient.DialContext(ctx, addr, failFast, opts...)
 	if err != nil {
 		return nil, err
 	}

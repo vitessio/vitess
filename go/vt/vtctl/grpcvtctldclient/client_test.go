@@ -45,7 +45,7 @@ func TestFindAllShardsInKeyspace(t *testing.T) {
 		return grpcvtctldserver.NewVtctldServer(vtenv.NewTestEnv(), ts)
 	})
 
-	testutil.WithTestServer(t, vtctld, func(t *testing.T, client vtctldclient.VtctldClient) {
+	testutil.WithTestServer(ctx, t, vtctld, func(t *testing.T, client vtctldclient.VtctldClient) {
 		ks := &vtctldatapb.Keyspace{
 			Name:     "testkeyspace",
 			Keyspace: &topodatapb.Keyspace{},
@@ -92,7 +92,7 @@ func TestGetKeyspace(t *testing.T) {
 		return grpcvtctldserver.NewVtctldServer(vtenv.NewTestEnv(), ts)
 	})
 
-	testutil.WithTestServer(t, vtctld, func(t *testing.T, client vtctldclient.VtctldClient) {
+	testutil.WithTestServer(ctx, t, vtctld, func(t *testing.T, client vtctldclient.VtctldClient) {
 		expected := &vtctldatapb.GetKeyspaceResponse{
 			Keyspace: &vtctldatapb.Keyspace{
 				Name:     "testkeyspace",
@@ -121,7 +121,7 @@ func TestGetKeyspaces(t *testing.T) {
 		return grpcvtctldserver.NewVtctldServer(vtenv.NewTestEnv(), ts)
 	})
 
-	testutil.WithTestServer(t, vtctld, func(t *testing.T, client vtctldclient.VtctldClient) {
+	testutil.WithTestServer(ctx, t, vtctld, func(t *testing.T, client vtctldclient.VtctldClient) {
 		resp, err := client.GetKeyspaces(ctx, &vtctldatapb.GetKeyspacesRequest{})
 		assert.NoError(t, err)
 		assert.Empty(t, resp.Keyspaces)

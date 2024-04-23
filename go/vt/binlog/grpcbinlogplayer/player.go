@@ -52,14 +52,14 @@ type client struct {
 	c  binlogservicepb.UpdateStreamClient
 }
 
-func (client *client) Dial(tablet *topodatapb.Tablet) error {
+func (client *client) Dial(ctx context.Context, tablet *topodatapb.Tablet) error {
 	addr := netutil.JoinHostPort(tablet.Hostname, tablet.PortMap["grpc"])
 	var err error
 	opt, err := grpcclient.SecureDialOption(cert, key, ca, crl, name)
 	if err != nil {
 		return err
 	}
-	client.cc, err = grpcclient.Dial(addr, grpcclient.FailFast(true), opt)
+	client.cc, err = grpcclient.DialContext(ctx, addr, grpcclient.FailFast(true), opt)
 	if err != nil {
 		return err
 	}

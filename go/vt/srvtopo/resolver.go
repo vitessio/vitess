@@ -41,7 +41,7 @@ type Gateway interface {
 	queryservice.QueryService
 
 	// QueryServiceByAlias returns a QueryService
-	QueryServiceByAlias(alias *topodatapb.TabletAlias, target *querypb.Target) (queryservice.QueryService, error)
+	QueryServiceByAlias(ctx context.Context, alias *topodatapb.TabletAlias, target *querypb.Target) (queryservice.QueryService, error)
 
 	// GetServingKeyspaces returns list of serving keyspaces.
 	GetServingKeyspaces() []string

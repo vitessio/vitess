@@ -1283,7 +1283,7 @@ func TestDebugURLFormatting(t *testing.T) {
 	require.Contains(t, wr.String(), expectedURL, "output missing formatted URL")
 }
 
-func tabletDialer(tablet *topodatapb.Tablet, _ grpcclient.FailFast) (queryservice.QueryService, error) {
+func tabletDialer(ctx context.Context, tablet *topodatapb.Tablet, _ grpcclient.FailFast) (queryservice.QueryService, error) {
 	connMapMu.Lock()
 	defer connMapMu.Unlock()
 

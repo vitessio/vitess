@@ -41,7 +41,7 @@ import (
 // implementation, then runs the test func with a client created to point at
 // that server.
 func WithTestServer(
-	t *testing.T,
+	ctx context.Context, t *testing.T,
 	server vtctlservicepb.VtctldServer,
 	test func(t *testing.T, client vtctldclient.VtctldClient),
 ) {
@@ -56,7 +56,7 @@ func WithTestServer(
 	go s.Serve(lis)
 	defer s.Stop()
 
-	client, err := vtctldclient.New("grpc", lis.Addr().String())
+	client, err := vtctldclient.New(ctx, "grpc", lis.Addr().String())
 	require.NoError(t, err, "cannot create vtctld client")
 	defer client.Close()
 
@@ -67,7 +67,7 @@ func WithTestServer(
 // implementations, and then runs the test func with N clients created, where
 // clients[i] points at servers[i].
 func WithTestServers(
-	t *testing.T,
+	ctx context.Context, t *testing.T,
 	test func(t *testing.T, clients ...vtctldclient.VtctldClient),
 	servers ...vtctlservicepb.VtctldServer,
 ) {
@@ -91,7 +91,7 @@ func WithTestServers(
 
 		// Start up a test server for the head of our server slice, accumulate
 		// the resulting client, and recurse on the tail of our server slice.
-		WithTestServer(t, servers[0], func(t *testing.T, client vtctldclient.VtctldClient) {
+		WithTestServer(ctx, t, servers[0], func(t *testing.T, client vtctldclient.VtctldClient) {
 			clients = append(clients, client)
 			withTestServers(t, servers[1:]...)
 		})

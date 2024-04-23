@@ -56,7 +56,7 @@ type VtctlClient interface {
 }
 
 // Factory functions are registered by client implementations
-type Factory func(addr string) (VtctlClient, error)
+type Factory func(ctx context.Context, addr string) (VtctlClient, error)
 
 var factories = make(map[string]Factory)
 
@@ -69,10 +69,10 @@ func RegisterFactory(name string, factory Factory) {
 }
 
 // New allows a user of the client library to get its implementation.
-func New(addr string) (VtctlClient, error) {
+func New(ctx context.Context, addr string) (VtctlClient, error) {
 	factory, ok := factories[vtctlClientProtocol]
 	if !ok {
 		return nil, fmt.Errorf("unknown vtctl client protocol: %v", vtctlClientProtocol)
 	}
-	return factory(addr)
+	return factory(ctx, addr)
 }

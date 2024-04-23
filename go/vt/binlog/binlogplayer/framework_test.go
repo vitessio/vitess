@@ -46,7 +46,7 @@ func newFakeBinlogClient() *fakeBinlogClient {
 	return globalFBC
 }
 
-func (fbc *fakeBinlogClient) Dial(tablet *topodatapb.Tablet) error {
+func (fbc *fakeBinlogClient) Dial(ctx context.Context, tablet *topodatapb.Tablet) error {
 	fbc.lastTablet = tablet
 	return nil
 }

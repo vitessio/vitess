@@ -218,7 +218,7 @@ func getClientForCommand(cmd *cobra.Command) (vtctldclient.VtctldClient, error) 
 		server = ""
 	}
 
-	return vtctldclient.New(VtctldClientProtocol, server)
+	return vtctldclient.New(cmd.Context(), VtctldClientProtocol, server)
 }
 
 func init() {
