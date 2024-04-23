@@ -36,7 +36,9 @@ RUN make install PREFIX=/vt/install
 # Start over and build the final image.
 FROM debian:bullseye-slim
 
+# Install mysqlbinglog
 RUN apt-get update && apt-get -y install libssl-dev
+COPY --from=builder /usr/bin/mysqlbinlog /usr/bin/mysqlbinlog
 
 # Set up Vitess user and directory tree.
 RUN groupadd -r vitess && useradd -r -g vitess vitess
@@ -54,7 +56,6 @@ COPY --from=builder --chown=vitess:vitess /vt/install /vt
 COPY --from=builder --chown=vitess:vitess /vt/src/vitess.io/vitess/web/vtadmin /vt/web/vtadmin
 COPY --from=builder --chown=vitess:vitess /vt/src/vitess.io/vitess/config/init_db.sql /vt/config/
 COPY --from=builder --chown=vitess:vitess /vt/src/vitess.io/vitess/config/mycnf /vt/config/
-COPY --from=builder /usr/bin/mysqlbinlog /usr/bin/mysqlbinlog
 
 # Create mount point for actual data (e.g. MySQL data dir)
 VOLUME /vt/vtdataroot
