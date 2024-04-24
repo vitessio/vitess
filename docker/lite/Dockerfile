@@ -37,7 +37,7 @@ RUN make install PREFIX=/vt/install
 FROM debian:bullseye-slim
 
 # Install mysqlbinglog
-RUN apt-get update && apt-get -y install libssl-dev gnupg
+RUN apt-get update && apt-get -y install libssl1.1 gnupg
 COPY --from=builder /usr/bin/mysqlbinlog /usr/bin/mysqlbinlog
 
 # Install xtrabackup
