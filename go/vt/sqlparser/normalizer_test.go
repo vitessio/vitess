@@ -80,6 +80,20 @@ func TestNormalize(t *testing.T) {
 			"foobar": sqltypes.DecimalBindVariable("1.2"),
 		},
 	}, {
+		// datetime val
+		in:      "select * from t where foobar = timestamp'2012-02-29 12:34:56.123456'",
+		outstmt: "select * from t where foobar = :foobar /* DATETIME(6) */",
+		outbv: map[string]*querypb.BindVariable{
+			"foobar": sqltypes.ValueBindVariable(sqltypes.NewDatetime("2012-02-29 12:34:56.123456")),
+		},
+	}, {
+		// time val
+		in:      "select * from t where foobar = time'12:34:56.123456'",
+		outstmt: "select * from t where foobar = :foobar /* TIME(6) */",
+		outbv: map[string]*querypb.BindVariable{
+			"foobar": sqltypes.ValueBindVariable(sqltypes.NewTime("12:34:56.123456")),
+		},
+	}, {
 		// multiple vals
 		in:      "select * from t where foo = 1.2 and bar = 2",
 		outstmt: "select * from t where foo = :foo /* DECIMAL(2,1) */ and bar = :bar /* INT64 */",

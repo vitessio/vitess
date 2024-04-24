@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
@@ -569,6 +570,9 @@ func NewTypedArgumentFromLiteral(in string, lit *Literal) (*Argument, error) {
 	case sqltypes.Decimal:
 		siz, scale := decimal.SizeAndScaleFromString(lit.Val)
 		arg.Scale = scale
+		arg.Size = siz
+	case sqltypes.Datetime, sqltypes.Time:
+		siz := datetime.SizeFromString(lit.Val)
 		arg.Size = siz
 	}
 	return arg, nil
