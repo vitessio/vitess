@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/vt/topotools"
 
 	"vitess.io/vitess/go/json2"
@@ -233,7 +234,7 @@ func (col *Column) ToEvalengineType(collationEnv *collations.Environment) evalen
 	} else {
 		collation = collations.CollationForType(col.Type, collationEnv.DefaultConnectionCharset())
 	}
-	return evalengine.NewTypeEx(col.Type, collation, col.Nullable, col.Size, col.Scale)
+	return evalengine.NewTypeEx(col.Type, collation, col.Nullable, col.Size, col.Scale, ptr.Of(evalengine.EnumSetValues(col.Values)))
 }
 
 // KeyspaceSchema contains the schema(table) for a keyspace.

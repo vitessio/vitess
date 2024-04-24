@@ -918,6 +918,7 @@ func transformHashJoin(ctx *plancontext.PlanningContext, op *operators.HashJoin)
 			Collation:      comparisonType.Collation(),
 			ComparisonType: comparisonType.Type(),
 			CollationEnv:   ctx.VSchema.Environment().CollationEnv(),
+			Values:         comparisonType.Values(),
 		},
 	}, nil
 }

@@ -180,7 +180,7 @@ func (code AggregateOpcode) ResolveType(t evalengine.Type, env *collations.Envir
 	if code == AggregateAvg {
 		scale += 4
 	}
-	return evalengine.NewTypeEx(sqltype, collation, nullable, size, scale)
+	return evalengine.NewTypeEx(sqltype, collation, nullable, size, scale, t.Values())
 }
 
 func (code AggregateOpcode) NeedsComparableValues() bool {
