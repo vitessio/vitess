@@ -28,7 +28,6 @@ import (
 	"testing/quick"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 type testEnt struct {
@@ -955,46 +954,55 @@ func TestDecimal_ScalesNotEqual(t *testing.T) {
 }
 
 func TestDecimal_Cmp1(t *testing.T) {
+	a := New(123, 3)
+	b := New(-1234, 2)
+	assert.Equal(t, 1, a.Cmp(b))
+}
+
+func TestSizeAndScaleFromString(t *testing.T) {
 	testcases := []struct {
-		value        string
-		sizeExpected int32
+		value         string
+		sizeExpected  int32
+		scaleExpected int32
 	}{
 		{
-			value:        "0.00003",
-			sizeExpected: 5,
+			value:         "0.00003",
+			sizeExpected:  6,
+			scaleExpected: 5,
 		},
 		{
-			value:        "-0.00003",
-			sizeExpected: 5,
+			value:         "-0.00003",
+			sizeExpected:  6,
+			scaleExpected: 5,
 		},
 		{
-			value:        "12.00003",
-			sizeExpected: 7,
+			value:         "12.00003",
+			sizeExpected:  7,
+			scaleExpected: 5,
 		},
 		{
-			value:        "-12.00003",
-			sizeExpected: 7,
+			value:         "-12.00003",
+			sizeExpected:  7,
+			scaleExpected: 5,
 		},
 		{
-			value:        "1000003",
-			sizeExpected: 7,
+			value:         "1000003",
+			sizeExpected:  7,
+			scaleExpected: 0,
 		},
 		{
-			value:        "-1000003",
-			sizeExpected: 7,
+			value:         "-1000003",
+			sizeExpected:  7,
+			scaleExpected: 0,
 		},
 	}
 	for _, testcase := range testcases {
 		t.Run(testcase.value, func(t *testing.T) {
-			val, err := NewFromString(testcase.value)
-			require.NoError(t, err)
-			assert.EqualValues(t, testcase.sizeExpected, val.Size())
+			siz, scale := SizeAndScaleFromString(testcase.value)
+			assert.EqualValues(t, testcase.sizeExpected, siz)
+			assert.EqualValues(t, testcase.scaleExpected, scale)
 		})
 	}
-}
-
-func TestDecimal_Size(t *testing.T) {
-
 }
 
 func TestDecimal_Cmp2(t *testing.T) {

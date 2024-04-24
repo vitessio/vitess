@@ -567,12 +567,9 @@ func NewTypedArgumentFromLiteral(in string, lit *Literal) (*Argument, error) {
 	arg := &Argument{Name: in, Type: lit.SQLType()}
 	switch arg.Type {
 	case sqltypes.Decimal:
-		dec, err := decimal.NewFromMySQL(lit.Bytes())
-		if err != nil {
-			return nil, err
-		}
-		arg.Scale = -dec.Exponent()
-		arg.Size = dec.Size()
+		siz, scale := decimal.SizeAndScaleFromString(lit.Val)
+		arg.Scale = scale
+		arg.Size = siz
 	}
 	return arg, nil
 }

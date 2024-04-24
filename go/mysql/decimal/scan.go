@@ -23,6 +23,7 @@ import (
 	"math"
 	"math/big"
 	"math/bits"
+	"strings"
 
 	"vitess.io/vitess/go/mysql/fastparse"
 )
@@ -69,6 +70,21 @@ func parseDecimal64(s []byte) (Decimal, error) {
 		value: new(big.Int).SetUint64(n),
 		exp:   exp,
 	}, nil
+}
+
+// SizeAndScaleFromString
+func SizeAndScaleFromString(s string) (int32, int32) {
+	sign := 0
+	switch s[0] {
+	case '+', '-':
+		sign = 1
+	}
+	lenWithoutSign := len(s) - sign
+	idx := strings.Index(s, ".")
+	if idx == -1 {
+		return int32(lenWithoutSign), 0
+	}
+	return int32(lenWithoutSign - 1), int32(len(s) - 1 - idx)
 }
 
 func NewFromMySQL(s []byte) (Decimal, error) {
