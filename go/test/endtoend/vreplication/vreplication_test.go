@@ -175,7 +175,7 @@ func TestVReplicationDDLHandling(t *testing.T) {
 	}
 
 	// Test IGNORE behavior
-	moveTablesAction(t, "Create", defaultCellName, workflow, sourceKs, targetKs, table, "--on-ddl=IGNORE")
+	moveTablesAction(t, "Create", defaultCellName, workflow, sourceKs, targetKs, table, "--on-ddl", binlogdatapb.OnDDLAction_IGNORE.String())
 	// Wait until we get through the copy phase...
 	catchup(t, targetTab, workflow, "MoveTables")
 	// Add new col on source
@@ -207,7 +207,7 @@ func TestVReplicationDDLHandling(t *testing.T) {
 	require.NoError(t, err, "error executing %q: %v", dropColDDL, err)
 
 	// Test STOP behavior (new col now exists nowhere)
-	moveTablesAction(t, "Create", defaultCellName, workflow, sourceKs, targetKs, table, "--on-ddl=STOP")
+	moveTablesAction(t, "Create", defaultCellName, workflow, sourceKs, targetKs, table, "--on-ddl", binlogdatapb.OnDDLAction_STOP.String())
 	// Wait until we get through the copy phase...
 	catchup(t, targetTab, workflow, "MoveTables")
 	// Add new col on the source
@@ -222,7 +222,7 @@ func TestVReplicationDDLHandling(t *testing.T) {
 	moveTablesAction(t, "Cancel", defaultCellName, workflow, sourceKs, targetKs, table)
 
 	// Test EXEC behavior (new col now exists on source)
-	moveTablesAction(t, "Create", defaultCellName, workflow, sourceKs, targetKs, table, "--on-ddl=EXEC")
+	moveTablesAction(t, "Create", defaultCellName, workflow, sourceKs, targetKs, table, "--on-ddl", binlogdatapb.OnDDLAction_EXEC.String())
 	// Wait until we get through the copy phase...
 	catchup(t, targetTab, workflow, "MoveTables")
 	// Confirm target has new col from copy phase
