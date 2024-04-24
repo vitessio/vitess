@@ -113,7 +113,7 @@ LIMIT 1
 SELECT f.name, i.UDF_RETURN_TYPE, f.type FROM mysql.func f left join performance_schema.user_defined_functions i on f.name = i.udf_name
 `
 	// fetchAggregateUdfs queries fetches all the aggregate user defined functions.
-	fetchAggregateUdfs = `select function_name, function_return_type from %s.udfs where function_type = 'aggregate'`
+	fetchAggregateUdfs = `select function_name, function_return_type, function_type from %s.udfs`
 )
 
 // reloadTablesDataInDB reloads teh tables information we have stored in our database we use for schema-tracking.

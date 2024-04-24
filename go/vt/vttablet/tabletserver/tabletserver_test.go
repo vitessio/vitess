@@ -497,7 +497,7 @@ func TestTabletServerCommiRollbacktFail(t *testing.T) {
 
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	_, err := tsv.Commit(ctx, &target, -1)
-	want := "transaction -1: not found"
+	want := "transaction -1: not found (potential transaction timeout)"
 	require.Equal(t, want, err.Error())
 	_, err = tsv.Rollback(ctx, &target, -1)
 	require.Equal(t, want, err.Error())

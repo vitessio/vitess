@@ -303,7 +303,7 @@ func (tp *TablePlan) isOutsidePKRange(bindvars map[string]*querypb.BindVariable,
 
 		rowVal, _ := sqltypes.BindVariableToValue(bindvar)
 		// TODO(king-11) make collation aware
-		result, err := evalengine.NullsafeCompare(rowVal, tp.Lastpk.Rows[0][0], tp.CollationEnv, collations.Unknown)
+		result, err := evalengine.NullsafeCompare(rowVal, tp.Lastpk.Rows[0][0], tp.CollationEnv, collations.Unknown, nil)
 		// If rowVal is > last pk, transaction will be a noop, so don't apply this statement
 		if err == nil && result > 0 {
 			tp.Stats.NoopQueryCount.Add(stmtType, 1)

@@ -52,9 +52,8 @@ const (
 	tenantMigrationStatusMigrating
 	tenantMigrationStatusMigrated
 
-	sourceKeyspaceTemplate      = "s%d"
-	sourceAliasKeyspaceTemplate = "a%d"
-	targetKeyspaceName          = "mt"
+	sourceKeyspaceTemplate = "s%d"
+	targetKeyspaceName     = "mt"
 
 	numTenants                 = 10
 	numInitialRowsPerTenant    = 10
@@ -130,7 +129,6 @@ func TestMultiTenantSimple(t *testing.T) {
 
 	tenantId := int64(1)
 	sourceKeyspace := getSourceKeyspace(tenantId)
-	sourceAliasKeyspace := getSourceAliasKeyspace(tenantId)
 	_, err = vc.AddKeyspace(t, []*Cell{vc.Cells["zone1"]}, sourceKeyspace, "0", stVSchema, stSchema, 1, 0, getInitialTabletIdForTenant(tenantId), nil)
 	require.NoError(t, err)
 
@@ -163,19 +161,16 @@ func TestMultiTenantSimple(t *testing.T) {
 		sourceKeyspace: sourceKeyspace,
 		createFlags: []string{
 			"--tenant-id", strconv.FormatInt(tenantId, 10),
-			"--source-keyspace-alias", sourceAliasKeyspace,
 		},
 	})
 
 	preSwitchRules := &vschemapb.KeyspaceRoutingRules{
 		Rules: []*vschemapb.KeyspaceRoutingRule{
-			{FromKeyspace: "a1", ToKeyspace: "s1"},
 			{FromKeyspace: "s1", ToKeyspace: "s1"},
 		},
 	}
 	postSwitchRules := &vschemapb.KeyspaceRoutingRules{
 		Rules: []*vschemapb.KeyspaceRoutingRule{
-			{FromKeyspace: "a1", ToKeyspace: "mt"},
 			{FromKeyspace: "s1", ToKeyspace: "mt"},
 		},
 	}
@@ -187,17 +182,13 @@ func TestMultiTenantSimple(t *testing.T) {
 	mt.Create()
 	validateKeyspaceRoutingRules(t, vc, primaries, rulesMap, false)
 	// Note: we cannot insert into the target keyspace since that is never routed to the source keyspace.
-	for _, ks := range []string{sourceKeyspace, sourceAliasKeyspace} {
-		lastIndex = insertRows(lastIndex, ks)
-	}
+	lastIndex = insertRows(lastIndex, sourceKeyspace)
 	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKeyspace, mt.workflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
 	mt.SwitchReadsAndWrites()
 	validateKeyspaceRoutingRules(t, vc, primaries, rulesMap, true)
-	// Note: here we have already switched and we can insert into the target keyspace and it should get reverse
-	// replicated to the source keyspace. The source and alias are also routed to the target keyspace at this point.
-	for _, ks := range []string{sourceKeyspace, sourceAliasKeyspace, targetKeyspace} {
-		lastIndex = insertRows(lastIndex, ks)
-	}
+	// Note: here we have already switched, and we can insert into the target keyspace, and it should get reverse
+	// replicated to the source keyspace. The source keyspace is routed to the target keyspace at this point.
+	lastIndex = insertRows(lastIndex, sourceKeyspace)
 	mt.Complete()
 	require.Zero(t, len(getKeyspaceRoutingRules(t, vc).Rules))
 	actualRowsInserted := getRowCount(t, vtgateConn, fmt.Sprintf("%s.%s", targetKeyspace, "t1"))
@@ -205,7 +196,7 @@ func TestMultiTenantSimple(t *testing.T) {
 	require.Equal(t, lastIndex, int64(actualRowsInserted))
 }
 
-// If switched queries with source/alias qualifiers should execute on target, else on source. Confirm that
+// If switched, queries with source qualifiers should execute on target, else on source. Confirm that
 // the routing rules are as expected and that the query executes on the expected tablet.
 func validateKeyspaceRoutingRules(t *testing.T, vc *VitessCluster, primaries map[string]*cluster.VttabletProcess, rulesMap map[string]*vschemapb.KeyspaceRoutingRules, switched bool) {
 	currentRules := getKeyspaceRoutingRules(t, vc)
@@ -224,23 +215,17 @@ func validateKeyspaceRoutingRules(t *testing.T, vc *VitessCluster, primaries map
 		require.ElementsMatch(t, rulesMap["post"].Rules, currentRules.Rules)
 		validateQueryRoute("mt", "target")
 		validateQueryRoute("s1", "target")
-		validateQueryRoute("a1", "target")
 	} else {
 		require.ElementsMatch(t, rulesMap["pre"].Rules, currentRules.Rules)
 		// Note that with multi-tenant migration, we cannot redirect the target keyspace since
 		// there are multiple source keyspaces and the target has the aggregate of all the tenants.
 		validateQueryRoute("mt", "target")
 		validateQueryRoute("s1", "source")
-		validateQueryRoute("a1", "source")
 	}
 }
 
 func getSourceKeyspace(tenantId int64) string {
 	return fmt.Sprintf(sourceKeyspaceTemplate, tenantId)
-}
-
-func getSourceAliasKeyspace(tenantId int64) string {
-	return fmt.Sprintf(sourceAliasKeyspaceTemplate, tenantId)
 }
 
 func (mtm *multiTenantMigration) insertSomeData(t *testing.T, tenantId int64, keyspace string, numRows int64) {
@@ -362,7 +347,7 @@ func (mtm *multiTenantMigration) getLastID(tenantId int64) int64 {
 	return mtm.lastIDs[tenantId]
 }
 
-func (mtm *multiTenantMigration) initTenantData(t *testing.T, tenantId int64, sourceAliasKeyspace string) {
+func (mtm *multiTenantMigration) initTenantData(t *testing.T, tenantId int64) {
 	mtm.insertSomeData(t, tenantId, getSourceKeyspace(tenantId), numInitialRowsPerTenant)
 }
 
@@ -374,16 +359,14 @@ func (mtm *multiTenantMigration) setup(tenantId int64) {
 	log.Infof("Creating MoveTables for tenant %d", tenantId)
 	mtm.setLastID(tenantId, 0)
 	sourceKeyspace := getSourceKeyspace(tenantId)
-	sourceAliasKeyspace := getSourceAliasKeyspace(tenantId)
 	_, err := vc.AddKeyspace(mtm.t, []*Cell{vc.Cells["zone1"]}, sourceKeyspace, "0", stVSchema, stSchema,
 		1, 0, getInitialTabletIdForTenant(tenantId), nil)
 	require.NoError(mtm.t, err)
-	mtm.initTenantData(mtm.t, tenantId, sourceAliasKeyspace)
+	mtm.initTenantData(mtm.t, tenantId)
 }
 
 func (mtm *multiTenantMigration) start(tenantId int64) {
 	sourceKeyspace := getSourceKeyspace(tenantId)
-	sourceAliasKeyspace := getSourceAliasKeyspace(tenantId)
 	mtm.setTenantMigrationStatus(tenantId, tenantMigrationStatusMigrating)
 	mt := newVtctldMoveTables(&moveTablesWorkflow{
 		workflowInfo: &workflowInfo{
@@ -395,7 +378,6 @@ func (mtm *multiTenantMigration) start(tenantId int64) {
 		tables:         mtm.tables,
 		createFlags: []string{
 			"--tenant-id", strconv.FormatInt(tenantId, 10),
-			"--source-keyspace-alias", sourceAliasKeyspace,
 		},
 	})
 	mtm.setActiveMoveTables(tenantId, mt)
@@ -404,13 +386,11 @@ func (mtm *multiTenantMigration) start(tenantId int64) {
 
 func (mtm *multiTenantMigration) switchTraffic(tenantId int64) {
 	t := mtm.t
-	sourceAliasKeyspace := getSourceAliasKeyspace(tenantId)
 	sourceKeyspaceName := getSourceKeyspace(tenantId)
 	mt := mtm.getActiveMoveTables(tenantId)
 	ksWorkflow := fmt.Sprintf("%s.%s", mtm.targetKeyspace, mt.workflowName)
 	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
-	// we intentionally insert first into the source alias keyspace and then the source keyspace to test routing rules for both.
-	mtm.insertSomeData(t, tenantId, sourceAliasKeyspace, numAdditionalRowsPerTenant)
+	mtm.insertSomeData(t, tenantId, sourceKeyspaceName, numAdditionalRowsPerTenant)
 	mt.SwitchReadsAndWrites()
 	mtm.insertSomeData(t, tenantId, sourceKeyspaceName, numAdditionalRowsPerTenant)
 }

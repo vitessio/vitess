@@ -100,8 +100,8 @@ func validateHealthStreamSignal(t *testing.T, client *framework.QueryClient, ch 
 	require.Equal(t, expected[1], fmt.Sprintf("%v", qr.Rows))
 }
 
-// TestUDFRFC will validate that UDFs are received through the rfc call.
-func TestUDFRFC(t *testing.T) {
+// TestUDF_RPC will validate that UDFs are received through the rpc call.
+func TestUDF_RPC(t *testing.T) {
 	client := framework.NewClient()
 
 	client.UpdateContext(callerid.NewContext(
@@ -115,7 +115,7 @@ func TestUDFRFC(t *testing.T) {
 	err := cluster.Execute([]string{"CREATE AGGREGATE FUNCTION myudf RETURNS REAL SONAME 'udf.so';"}, "vttest")
 	require.NoError(t, err)
 
-	validateRPC(t, client, func(udfs map[string]string) bool {
+	validateRPC(t, client, func(udfs []*querypb.UDFInfo) bool {
 		// keep checking till the udf is added.
 		return len(udfs) == 0
 	})
@@ -124,13 +124,13 @@ func TestUDFRFC(t *testing.T) {
 	err = cluster.Execute([]string{"drop function myudf"}, "vttest")
 	require.NoError(t, err)
 
-	validateRPC(t, client, func(udfs map[string]string) bool {
+	validateRPC(t, client, func(udfs []*querypb.UDFInfo) bool {
 		// keep checking till the udf is removed.
 		return len(udfs) != 0
 	})
 }
 
-func validateRPC(t *testing.T, client *framework.QueryClient, cond func(udfs map[string]string) bool) (<-chan time.Time, bool) {
+func validateRPC(t *testing.T, client *framework.QueryClient, cond func(udfs []*querypb.UDFInfo) bool) (<-chan time.Time, bool) {
 	timeout := time.After(30 * time.Second)
 	conditionNotMet := true
 	for conditionNotMet {
@@ -139,8 +139,9 @@ func validateRPC(t *testing.T, client *framework.QueryClient, cond func(udfs map
 		case <-timeout:
 			t.Fatal("timed out waiting for updated udf")
 		default:
-			udfs, err := client.GetSchema(querypb.SchemaTableType_UDF_AGGREGATE)
+			schemaDef, udfs, err := client.GetSchema(querypb.SchemaTableType_UDFS, "")
 			require.NoError(t, err)
+			require.Empty(t, schemaDef)
 			conditionNotMet = cond(udfs)
 		}
 	}

@@ -49,7 +49,7 @@ func gen4DeleteStmtPlanner(
 		return nil, err
 	}
 
-	err = queryRewrite(ctx.SemTable, reservedVars, deleteStmt)
+	err = queryRewrite(ctx, deleteStmt)
 	if err != nil {
 		return nil, err
 	}

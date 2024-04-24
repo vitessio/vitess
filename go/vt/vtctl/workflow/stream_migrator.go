@@ -18,27 +18,35 @@ package workflow
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"text/template"
 
+	"golang.org/x/exp/maps"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 /*
@@ -249,7 +257,7 @@ func (sm *StreamMigrator) LegacyStopStreams(ctx context.Context) ([]string, erro
 	return sm.legacyVerifyStreamPositions(ctx, positions)
 }
 
-// StopStreams stops streams
+// StopStreams stops streams.
 func (sm *StreamMigrator) StopStreams(ctx context.Context) ([]string, error) {
 	if sm.streams == nil {
 		return nil, nil
@@ -678,9 +686,61 @@ func (sm *StreamMigrator) stopSourceStreams(ctx context.Context) error {
 	)
 
 	err := sm.ts.ForAllSources(func(source *MigrationSource) error {
-		tabletStreams := sm.streams[source.GetShard().ShardName()]
+		shard := source.GetShard().ShardName()
+		tabletStreams := sm.streams[shard]
 		if len(tabletStreams) == 0 {
 			return nil
+		}
+
+		// For intra-keyspace materialize workflows where the source and target are both
+		// the keyspace that is being resharded, we need to wait for those to catchup as
+		// well. New writes have already been blocked on the source, but the materialization
+		// workflow(s) still need to catchup with writes that happened just before writes
+		// were stopped on the source.
+		eg, egCtx := errgroup.WithContext(ctx)
+		for _, vrs := range tabletStreams {
+			if vrs.WorkflowType == binlogdatapb.VReplicationWorkflowType_Materialize && vrs.BinlogSource.Keyspace == sm.ts.TargetKeyspaceName() {
+				if vrs.BinlogSource == nil { // Should never happen
+					return fmt.Errorf("no binlog source is defined for materialization workflow %s", vrs.Workflow)
+				}
+				eg.Go(func() error {
+					sourceTablet := source.primary.Tablet.CloneVT()
+					if sourceTablet.Shard != vrs.BinlogSource.Shard {
+						si, err := sm.ts.TopoServer().GetTabletMapForShard(egCtx, vrs.BinlogSource.GetKeyspace(), vrs.BinlogSource.GetShard())
+						if err != nil {
+							return err
+						}
+						for _, tablet := range si {
+							if tablet.GetType() == topodatapb.TabletType_PRIMARY {
+								sourceTablet = tablet.CloneVT()
+								break
+							}
+						}
+					}
+					if sourceTablet == nil {
+						return fmt.Errorf("no primary tablet found for materialization workflow %s and its stream from the binary log source %s/%s",
+							vrs.Workflow, vrs.BinlogSource.GetKeyspace(), vrs.BinlogSource.GetShard())
+					}
+					pos, err := sm.ts.TabletManagerClient().PrimaryPosition(egCtx, sourceTablet)
+					if err != nil {
+						return err
+					}
+					sm.ts.Logger().Infof("Waiting for intra-keyspace materialization workflow %s on %v/%v to reach position %v for stream source from %s/%s, starting from position %s on tablet %s",
+						vrs.Workflow, source.primary.Keyspace, source.primary.Shard, pos, vrs.BinlogSource.Keyspace, vrs.BinlogSource.Shard, vrs.Position, topoproto.TabletAliasString(source.primary.Tablet.Alias))
+					if err := sm.ts.TabletManagerClient().VReplicationWaitForPos(egCtx, source.primary.Tablet, vrs.ID, pos); err != nil {
+						return err
+					}
+					return nil
+				})
+			}
+		}
+		if err := eg.Wait(); err != nil {
+			var xtra string
+			if errors.Is(err, context.DeadlineExceeded) {
+				xtra = " (increase the --timeout value if needed)"
+			}
+			return vterrors.Errorf(vtrpcpb.Code_CANCELED, "error waiting for intra-keyspace materialization workflow %s to catch up%s: %v",
+				tabletStreams[0].Workflow, xtra, err)
 		}
 
 		query := fmt.Sprintf("update _vt.vreplication set state='Stopped', message='for cutover' where id in %s", VReplicationStreams(tabletStreams).Values())
@@ -753,8 +813,19 @@ func (sm *StreamMigrator) syncSourceStreams(ctx context.Context) (map[string]rep
 					allErrors.RecordError(err)
 					return
 				}
-
-				query := fmt.Sprintf("update _vt.vreplication set state='Running', stop_pos='%s', message='synchronizing for cutover' where id=%d", replication.EncodePosition(pos), vrs.ID)
+				comment := ""
+				if vrs.WorkflowType == binlogdatapb.VReplicationWorkflowType_Materialize && vrs.BinlogSource.Keyspace == sm.ts.TargetKeyspaceName() {
+					// For intra-keyspace materializations in a keyspace that's being
+					// resharded, we don't have serving tablets on the workflow's current
+					// target side. So we instruct the VReplication engine and controller
+					// on the target tablets to include non-serving tablets in their
+					// search for source tablets to stream from as we migrate and setup
+					// these intra-keyspace materializations on the current target side
+					// that we're preparing to switch traffic to.
+					comment = fmt.Sprintf("/*vt+ %s=1 */ ", vreplication.IncludeNonServingTabletsCommentDirective)
+				}
+				query := fmt.Sprintf("update %s_vt.vreplication set state='Running', stop_pos='%s', message='synchronizing for cutover' where id=%d",
+					comment, replication.EncodePosition(pos), vrs.ID)
 				if _, err := sm.ts.TabletManagerClient().VReplicationExec(ctx, primary.Tablet, query); err != nil {
 					allErrors.RecordError(err)
 					return
@@ -915,13 +986,14 @@ func (sm *StreamMigrator) createTargetStreams(ctx context.Context, tmpl []*VRepl
 	return sm.ts.ForAllTargets(func(target *MigrationTarget) error {
 		ig := vreplication.NewInsertGenerator(binlogdatapb.VReplicationWorkflowState_Stopped, target.GetPrimary().DbName())
 		tabletStreams := VReplicationStreams(tmpl).Copy().ToSlice()
+		var err error
 
-		for _, vrs := range tabletStreams {
+		addStreamRow := func(vrs *VReplicationStream) error {
 			for _, rule := range vrs.BinlogSource.Filter.Rules {
 				buf := &strings.Builder{}
 
 				t := template.Must(template.New("").Parse(rule.Filter))
-				if err := t.Execute(buf, key.KeyRangeString(target.GetShard().KeyRange)); err != nil {
+				if err := t.Execute(buf, key.KeyRangeString(target.GetShard().GetKeyRange())); err != nil {
 					return err
 				}
 
@@ -930,9 +1002,53 @@ func (sm *StreamMigrator) createTargetStreams(ctx context.Context, tmpl []*VRepl
 
 			ig.AddRow(vrs.Workflow, vrs.BinlogSource, replication.EncodePosition(vrs.Position), "", "",
 				vrs.WorkflowType, vrs.WorkflowSubType, vrs.DeferSecondaryKeys)
+			return nil
 		}
 
-		_, err := sm.ts.VReplicationExec(ctx, target.GetPrimary().GetAlias(), ig.String())
+		var intraKeyspaceStreams map[string]bool
+
+		for _, vrs := range tabletStreams {
+			// If we have an intra-keyspace materialization workflow, we need to
+			// create the streams from each target shard to each target shard
+			// rather than simply copying the streams from the source shards.
+			if vrs.WorkflowType == binlogdatapb.VReplicationWorkflowType_Materialize && vrs.BinlogSource.Keyspace == sm.ts.TargetKeyspaceName() {
+				if intraKeyspaceStreams == nil {
+					intraKeyspaceStreams = make(map[string]bool)
+				}
+				targets := maps.Values(sm.ts.Targets())
+				sort.Slice(targets, func(i, j int) bool {
+					return key.KeyRangeLess(targets[i].GetShard().GetKeyRange(), targets[j].GetShard().GetKeyRange())
+				})
+				for _, st := range targets {
+					stream := *vrs // Copy
+					stream.BinlogSource.Shard = st.GetShard().ShardName()
+					key := fmt.Sprintf("%s:%s/%s:%s/%s", stream.Workflow, target.si.Keyspace(), target.GetShard().ShardName(), st.GetShard().Keyspace(), st.GetShard().ShardName())
+					if intraKeyspaceStreams[key] {
+						continue // We've already created the stream.
+					}
+					pos, err := sm.ts.TabletManagerClient().PrimaryPosition(ctx, st.primary.Tablet)
+					if err != nil {
+						return err
+					}
+					sm.ts.Logger().Infof("Setting position for intra-keyspace materialization workflow %s on %v/%v to %v on tablet %s",
+						stream.Workflow, st.primary.Keyspace, st.primary.Shard, pos, topoproto.TabletAliasString(st.primary.Tablet.Alias))
+					stream.Position, err = binlogplayer.DecodePosition(pos)
+					if err != nil {
+						return err
+					}
+					intraKeyspaceStreams[key] = true
+					if err := addStreamRow(&stream); err != nil {
+						return err
+					}
+				}
+				continue
+			}
+			if err := addStreamRow(vrs); err != nil {
+				return err
+			}
+		}
+
+		_, err = sm.ts.VReplicationExec(ctx, target.GetPrimary().GetAlias(), ig.String())
 		return err
 	})
 }

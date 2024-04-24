@@ -26,6 +26,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/constants/sidecar"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -211,6 +212,14 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string, 
 	}
 	if opt.Concurrency <= 0 {
 		opt.Concurrency = DefaultConcurrency
+	}
+
+	// Unescape the keyspace name as this can e.g. come from the VSchema where
+	// a keyspace/database name will need to be SQL escaped if it has special
+	// characters such as a dash.
+	keyspace, err := sqlescape.UnescapeID(keyspace)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "FindAllShardsInKeyspace(%s) invalid keyspace name", keyspace)
 	}
 
 	// First try to get all shards using List if we can.

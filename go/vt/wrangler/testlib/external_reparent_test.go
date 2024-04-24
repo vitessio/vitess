@@ -51,7 +51,7 @@ func TestTabletExternallyReparentedBasic(t *testing.T) {
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
-	vp := NewVtctlPipe(t, ts)
+	vp := NewVtctlPipe(ctx, t, ts)
 	defer vp.Close()
 
 	// Create an old primary, a new primary, two good replicas, one bad replica

@@ -1569,9 +1569,6 @@ func (s *Server) setupInitialRoutingRules(ctx context.Context, req *vtctldatapb.
 		// Note that you can never point the target keyspace to the source keyspace in a multi-tenant migration
 		// since the target takes write traffic for all tenants!
 		keyspaces = append(keyspaces, sourceKeyspace)
-		if req.GetWorkflowOptions().GetSourceKeyspaceAlias() != "" {
-			keyspaces = append(keyspaces, req.WorkflowOptions.SourceKeyspaceAlias)
-		}
 		routes := make(map[string]string)
 		for _, ks := range keyspaces {
 			routes[ks] = sourceKeyspace
@@ -3304,8 +3301,27 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 			return 0, sw.logs(), nil
 		}
 
+		// We stop writes on the source before stopping the source streams so that the catchup time
+		// is lessened and other workflows that we have to migrate such as intra-keyspace materialize
+		// workflows also have a chance to catch up as well because those are internally generated
+		// GTIDs within the shards we're switching traffic away from.
+		// For intra-keyspace materialization streams that we migrate where the source and target are
+		// the keyspace being resharded, we wait for those to catchup in the stopStreams path before
+		// we actually stop them.
+		ts.Logger().Infof("Stopping source writes")
+		if err := sw.stopSourceWrites(ctx); err != nil {
+			sw.cancelMigration(ctx, sm)
+			return handleError(fmt.Sprintf("failed to stop writes in the %s keyspace", ts.SourceKeyspaceName()), err)
+		}
+
 		ts.Logger().Infof("Stopping streams")
-		sourceWorkflows, err = sw.stopStreams(ctx, sm)
+		// Use a shorter context for this since since when doing a Reshard, if there are intra-keyspace
+		// materializations then we have to wait for them to catchup before switching traffic for the
+		// Reshard workflow. We use the the same timeout value here that is used for VReplication catchup
+		// with the inter-keyspace workflows.
+		stopCtx, stopCancel := context.WithTimeout(ctx, timeout)
+		defer stopCancel()
+		sourceWorkflows, err = sw.stopStreams(stopCtx, sm)
 		if err != nil {
 			for key, streams := range sm.Streams() {
 				for _, stream := range streams {
@@ -3313,13 +3329,7 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 				}
 			}
 			sw.cancelMigration(ctx, sm)
-			return handleError("failed to stop the workflow streams", err)
-		}
-
-		ts.Logger().Infof("Stopping source writes")
-		if err := sw.stopSourceWrites(ctx); err != nil {
-			sw.cancelMigration(ctx, sm)
-			return handleError(fmt.Sprintf("failed to stop writes in the %s keyspace", ts.SourceKeyspaceName()), err)
+			return handleError(fmt.Sprintf("failed to stop the workflow streams in the %s keyspace", ts.SourceKeyspaceName()), err)
 		}
 
 		if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {

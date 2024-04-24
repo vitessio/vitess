@@ -24,11 +24,8 @@ SET GLOBAL read_only='OFF';
 # Changes during the init db should not make it to the binlog.
 # They could potentially create errant transactions on replicas.
 SET sql_log_bin = 0;
-# Remove anonymous users.
-DELETE FROM mysql.user WHERE User = '';
-
-# Disable remote root access (only allow UNIX socket).
-DELETE FROM mysql.user WHERE User = 'root' AND Host != 'localhost';
+# Remove anonymous users & disable remote root access (only allow UNIX socket).
+DROP USER IF EXISTS ''@'%', ''@'localhost', 'root'@'%';
 
 # Remove test database.
 DROP DATABASE IF EXISTS test;
@@ -81,8 +78,6 @@ GRANT SELECT, PROCESS, SUPER, REPLICATION CLIENT, RELOAD
       ON *.* TO 'vt_monitoring'@'localhost';
 GRANT SELECT, UPDATE, DELETE, DROP
       ON performance_schema.* TO 'vt_monitoring'@'localhost';
-
-FLUSH PRIVILEGES;
 
 RESET SLAVE ALL;
 RESET MASTER;

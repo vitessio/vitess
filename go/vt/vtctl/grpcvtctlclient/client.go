@@ -18,9 +18,8 @@ limitations under the License.
 package grpcvtctlclient
 
 import (
-	"time"
-
 	"context"
+	"time"
 
 	"google.golang.org/grpc"
 
@@ -39,13 +38,13 @@ type gRPCVtctlClient struct {
 	c  vtctlservicepb.VtctlClient
 }
 
-func gRPCVtctlClientFactory(addr string) (vtctlclient.VtctlClient, error) {
+func gRPCVtctlClientFactory(ctx context.Context, addr string) (vtctlclient.VtctlClient, error) {
 	opt, err := grpcclientcommon.SecureDialOption()
 	if err != nil {
 		return nil, err
 	}
 	// create the RPC client
-	cc, err := grpcclient.Dial(addr, grpcclient.FailFast(false), opt)
+	cc, err := grpcclient.DialContext(ctx, addr, grpcclient.FailFast(false), opt)
 	if err != nil {
 		return nil, err
 	}

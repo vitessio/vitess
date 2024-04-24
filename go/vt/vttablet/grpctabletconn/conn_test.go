@@ -56,9 +56,13 @@ func TestGRPCTabletConn(t *testing.T) {
 	server := grpc.NewServer()
 	grpcqueryservice.Register(server, service)
 	go server.Serve(listener)
+	defer server.Stop()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	// run the test suite
-	tabletconntest.TestSuite(t, protocolName, &topodatapb.Tablet{
+	tabletconntest.TestSuite(ctx, t, protocolName, &topodatapb.Tablet{
 		Keyspace: tabletconntest.TestTarget.Keyspace,
 		Shard:    tabletconntest.TestTarget.Shard,
 		Type:     tabletconntest.TestTarget.TabletType,
@@ -91,6 +95,7 @@ func TestGRPCTabletAuthConn(t *testing.T) {
 
 	grpcqueryservice.Register(server, service)
 	go server.Serve(listener)
+	defer server.Stop()
 
 	authJSON := `{
          "Username": "valid",
@@ -109,8 +114,10 @@ func TestGRPCTabletAuthConn(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	// run the test suite
-	tabletconntest.TestSuite(t, protocolName, &topodatapb.Tablet{
+	tabletconntest.TestSuite(ctx, t, protocolName, &topodatapb.Tablet{
 		Keyspace: tabletconntest.TestTarget.Keyspace,
 		Shard:    tabletconntest.TestTarget.Shard,
 		Type:     tabletconntest.TestTarget.TabletType,

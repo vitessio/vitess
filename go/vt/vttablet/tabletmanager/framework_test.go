@@ -56,7 +56,7 @@ const (
 )
 
 func init() {
-	tabletconn.RegisterDialer("grpc", func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
+	tabletconn.RegisterDialer("grpc", func(ctx context.Context, tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
 		return &tabletconntest.FakeQueryService{
 			StreamHealthResponse: &querypb.StreamHealthResponse{
 				Serving: true,
@@ -98,7 +98,7 @@ func newTestEnv(t *testing.T, ctx context.Context, sourceKeyspace string, source
 	tenv.tmc.sourceShards = sourceShards
 	tenv.tmc.schema = defaultSchema
 
-	tabletconn.RegisterDialer(t.Name(), func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
+	tabletconn.RegisterDialer(t.Name(), func(ctx context.Context, tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
 		tenv.mu.Lock()
 		defer tenv.mu.Unlock()
 		if qs, ok := tenv.tmc.tablets[int(tablet.Alias.Uid)]; ok {

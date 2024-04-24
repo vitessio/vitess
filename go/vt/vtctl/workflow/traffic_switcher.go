@@ -450,9 +450,6 @@ func (ts *trafficSwitcher) deleteKeyspaceRoutingRules(ctx context.Context) error
 	}
 	log.Infof("deleteKeyspaceRoutingRules before: %s", krr)
 	delete(krr, ts.SourceKeyspaceName())
-	if ts.options.SourceKeyspaceAlias != "" {
-		delete(krr, ts.options.SourceKeyspaceAlias)
-	}
 	log.Infof("deleteKeyspaceRoutingRules after: %s", krr)
 	if err := topotools.SaveKeyspaceRoutingRules(ctx, ts.TopoServer(), krr); err != nil {
 		return err
@@ -741,9 +738,6 @@ func (ts *trafficSwitcher) changeWriteRoute(ctx context.Context) error {
 		ts.Logger().Infof("Pointing keyspace routing rules to %s for workflow %s", ts.TargetKeyspaceName(), ts.workflow)
 		var keyspaces []string
 		keyspaces = append(keyspaces, ts.SourceKeyspaceName())
-		if ts.options.SourceKeyspaceAlias != "" {
-			keyspaces = append(keyspaces, ts.options.SourceKeyspaceAlias)
-		}
 		routes := make(map[string]string)
 		for _, ks := range keyspaces {
 			routes[ks] = ts.TargetKeyspaceName()

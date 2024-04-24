@@ -5822,12 +5822,12 @@
   {
     "comment": "update with multi table reference with multi target update on a derived table",
     "query": "update ignore (select foo, col, bar from user) u, music m set u.foo = 21, u.bar = 'abc' where u.col = m.col",
-    "plan": "VT03031: the target table (select foo, col, bar from `user`) as u of the UPDATE is not updatable"
+    "plan": "VT03032: the target table (select foo, col, bar from `user`) as u of the UPDATE is not updatable"
   },
   {
     "comment": "update with derived table",
     "query": "update (select id from user) as u set id = 4",
-    "plan": "VT03031: the target table (select id from `user`) as u of the UPDATE is not updatable"
+    "plan": "VT03032: the target table (select id from `user`) as u of the UPDATE is not updatable"
   },
   {
     "comment": "Delete with routed table on music",
