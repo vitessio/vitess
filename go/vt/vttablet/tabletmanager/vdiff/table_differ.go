@@ -763,7 +763,7 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
 	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 		return err
 	}
-	td.wd.ct.TableDiffRowCounts.Add([]string{td.table.Name}, dr.ProcessedRows)
+	td.wd.ct.TableDiffRowCounts.Add(td.table.Name, dr.ProcessedRows)
 	return nil
 }
 

@@ -78,8 +78,8 @@ type controller struct {
 	externalCluster string // For Mount+Migrate
 
 	// Information used in vdiff stats/metrics.
-	Errors                *stats.CountersWithMultiLabels
-	TableDiffRowCounts    *stats.CountersWithMultiLabels
+	Errors                *stats.CountersWithSingleLabel
+	TableDiffRowCounts    *stats.CountersWithSingleLabel
 	TableDiffPhaseTimings *stats.Timings
 }
 
@@ -100,8 +100,8 @@ func newController(ctx context.Context, row sqltypes.RowNamedValues, dbClientFac
 		tmc:                   vde.tmClientFactory(),
 		sources:               make(map[string]*migrationSource),
 		options:               options,
-		Errors:                stats.NewCountersWithMultiLabels("", "", []string{"Error"}),
-		TableDiffRowCounts:    stats.NewCountersWithMultiLabels("", "", []string{"Rows"}),
+		Errors:                stats.NewCountersWithSingleLabel("", "", "Error"),
+		TableDiffRowCounts:    stats.NewCountersWithSingleLabel("", "", "Rows"),
 		TableDiffPhaseTimings: stats.NewTimings("", "", "", "TablePhase"),
 	}
 	ctx, ct.cancel = context.WithCancel(ctx)

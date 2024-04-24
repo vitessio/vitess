@@ -157,8 +157,8 @@ func TestVReplicationDDLHandling(t *testing.T) {
 	checkColQueryTarget := fmt.Sprintf("select count(column_name) from information_schema.columns where table_schema='vt_%s' and table_name='%s' and column_name='%s'",
 		targetKs, table, newColumn)
 
-	// action is the specific action, e.g. ignore, that should have a count of 1. All other
-	// actions should have a count of 0.
+	// expectedAction is the specific action, e.g. ignore, that should have a count of 1. All other
+	// actions should have a count of 0. id is the stream ID to check.
 	checkOnDDLStats := func(expectedAction string, id int) {
 		jsVal, err := getDebugVar(t, targetTab.Port, []string{"VReplicationDDLActions"})
 		require.NoError(t, err)

@@ -664,7 +664,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			if err != nil {
 				return err
 			}
-			vp.vr.stats.DDLEventActions.Add([]string{"ignore"}, 1)
+			vp.vr.stats.DDLEventActions.Add("ignore", 1)
 			if posReached {
 				return io.EOF
 			}
@@ -681,7 +681,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			if err := vp.commit(); err != nil {
 				return err
 			}
-			vp.vr.stats.DDLEventActions.Add([]string{"stop"}, 1)
+			vp.vr.stats.DDLEventActions.Add("stop", 1)
 			return io.EOF
 		case binlogdatapb.OnDDLAction_EXEC:
 			// It's impossible to save the position transactionally with the statement.
@@ -696,7 +696,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			if err != nil {
 				return err
 			}
-			vp.vr.stats.DDLEventActions.Add([]string{"exec"}, 1)
+			vp.vr.stats.DDLEventActions.Add("exec", 1)
 			if posReached {
 				return io.EOF
 			}
@@ -709,7 +709,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			if err != nil {
 				return err
 			}
-			vp.vr.stats.DDLEventActions.Add([]string{"exec_ignore"}, 1)
+			vp.vr.stats.DDLEventActions.Add("exec_ignore", 1)
 			if posReached {
 				return io.EOF
 			}
