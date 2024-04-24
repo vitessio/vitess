@@ -657,6 +657,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			log.Errorf("internal error: vplayer is in a transaction on event: %v", event)
 			return fmt.Errorf("internal error: vplayer is in a transaction on event: %v", event)
 		}
+		vp.vr.stats.DDLEventActions.Add(vp.vr.source.OnDdl.String(), 1) // Record the DDL handling
 		switch vp.vr.source.OnDdl {
 		case binlogdatapb.OnDDLAction_IGNORE:
 			// We still have to update the position.
@@ -664,7 +665,6 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			if err != nil {
 				return err
 			}
-			vp.vr.stats.DDLEventActions.Add(binlogdatapb.OnDDLAction_IGNORE.String(), 1)
 			if posReached {
 				return io.EOF
 			}
@@ -681,7 +681,6 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			if err := vp.commit(); err != nil {
 				return err
 			}
-			vp.vr.stats.DDLEventActions.Add(binlogdatapb.OnDDLAction_STOP.String(), 1)
 			return io.EOF
 		case binlogdatapb.OnDDLAction_EXEC:
 			// It's impossible to save the position transactionally with the statement.
@@ -696,7 +695,6 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			if err != nil {
 				return err
 			}
-			vp.vr.stats.DDLEventActions.Add(binlogdatapb.OnDDLAction_EXEC.String(), 1)
 			if posReached {
 				return io.EOF
 			}
@@ -709,7 +707,6 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			if err != nil {
 				return err
 			}
-			vp.vr.stats.DDLEventActions.Add(binlogdatapb.OnDDLAction_EXEC_IGNORE.String(), 1)
 			if posReached {
 				return io.EOF
 			}
