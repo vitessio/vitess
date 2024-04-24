@@ -83,7 +83,7 @@ func newTestVDiffEnv(t testing.TB, ctx context.Context, sourceShards, targetShar
 
 	// Generate a unique dialer name.
 	dialerName := fmt.Sprintf("VDiffTest-%s-%d", t.Name(), rand.IntN(1000000000))
-	tabletconn.RegisterDialer(dialerName, func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
+	tabletconn.RegisterDialer(dialerName, func(ctx context.Context, tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
 		env.mu.Lock()
 		defer env.mu.Unlock()
 		if qs, ok := env.tablets[int(tablet.Alias.Uid)]; ok {

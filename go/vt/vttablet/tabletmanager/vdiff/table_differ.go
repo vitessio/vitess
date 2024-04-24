@@ -406,7 +406,7 @@ func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStr
 		td.wgShardStreamers.Done()
 	}()
 	participant.err = func() error {
-		conn, err := tabletconn.GetDialer()(participant.tablet, false)
+		conn, err := tabletconn.GetDialer()(ctx, participant.tablet, false)
 		if err != nil {
 			return err
 		}
@@ -701,7 +701,7 @@ func (td *tableDiffer) compare(sourceRow, targetRow []sqltypes.Value, cols []com
 		if collationID == collations.Unknown {
 			collationID = collations.CollationBinaryID
 		}
-		c, err = evalengine.NullsafeCompare(sourceRow[compareIndex], targetRow[compareIndex], td.wd.collationEnv, collationID)
+		c, err = evalengine.NullsafeCompare(sourceRow[compareIndex], targetRow[compareIndex], td.wd.collationEnv, collationID, nil)
 		if err != nil {
 			return 0, err
 		}

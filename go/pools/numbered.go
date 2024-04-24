@@ -108,7 +108,7 @@ func (nu *Numbered) Get(id int64, purpose string) (val any, err error) {
 		if unreg, ok := nu.recentlyUnregistered.Get(fmt.Sprintf("%v", id)); ok {
 			return nil, fmt.Errorf("ended at %v (%v)", unreg.timeUnregistered.Format("2006-01-02 15:04:05.000 MST"), unreg.reason)
 		}
-		return nil, fmt.Errorf("not found")
+		return nil, fmt.Errorf("not found (potential transaction timeout)")
 	}
 	if nw.inUse {
 		return nil, fmt.Errorf("in use: %s", nw.purpose)

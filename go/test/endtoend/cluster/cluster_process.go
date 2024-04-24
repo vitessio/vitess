@@ -897,7 +897,7 @@ func (cluster *LocalProcessCluster) ExecOnTablet(ctx context.Context, vttablet *
 		return nil, err
 	}
 
-	conn, err := tabletconn.GetDialer()(tablet, grpcclient.FailFast(false))
+	conn, err := tabletconn.GetDialer()(ctx, tablet, grpcclient.FailFast(false))
 	if err != nil {
 		return nil, err
 	}
@@ -940,7 +940,7 @@ func (cluster *LocalProcessCluster) StreamTabletHealth(ctx context.Context, vtta
 		return nil, err
 	}
 
-	conn, err := tabletconn.GetDialer()(tablet, grpcclient.FailFast(false))
+	conn, err := tabletconn.GetDialer()(ctx, tablet, grpcclient.FailFast(false))
 	if err != nil {
 		return nil, err
 	}
@@ -975,7 +975,7 @@ func (cluster *LocalProcessCluster) StreamTabletHealthUntil(ctx context.Context,
 		return err
 	}
 
-	conn, err := tabletconn.GetDialer()(tablet, grpcclient.FailFast(false))
+	conn, err := tabletconn.GetDialer()(ctx, tablet, grpcclient.FailFast(false))
 	if err != nil {
 		return err
 	}

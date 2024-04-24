@@ -143,6 +143,14 @@ func compareAsDates(l, r sqltypes.Type) bool {
 	return sqltypes.IsDateOrTime(l) && sqltypes.IsDateOrTime(r)
 }
 
+func compareAsEnums(l, r sqltypes.Type) bool {
+	return sqltypes.IsEnum(l) && sqltypes.IsEnum(r)
+}
+
+func compareAsSets(l, r sqltypes.Type) bool {
+	return sqltypes.IsSet(l) && sqltypes.IsSet(r)
+}
+
 func compareAsDateAndString(l, r sqltypes.Type) bool {
 	return (sqltypes.IsDate(l) && typeIsTextual(r)) || (typeIsTextual(l) && sqltypes.IsDate(r))
 }
@@ -223,6 +231,10 @@ func evalCompare(left, right eval, collationEnv *collations.Environment) (comp i
 	switch {
 	case compareAsDates(lt, rt):
 		return compareDates(left.(*evalTemporal), right.(*evalTemporal)), nil
+	case compareAsEnums(lt, rt):
+		return compareEnums(left.(*evalEnum), right.(*evalEnum)), nil
+	case compareAsSets(lt, rt):
+		return compareSets(left.(*evalSet), right.(*evalSet)), nil
 	case compareAsStrings(lt, rt):
 		return compareStrings(left, right, collationEnv)
 	case compareAsSameNumericType(lt, rt) || compareAsDecimal(lt, rt):

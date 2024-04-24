@@ -80,7 +80,7 @@ func (ta *TypeAggregator) Type() Type {
 	if ta.invalid > 0 || ta.types.empty() {
 		return Type{}
 	}
-	return NewTypeEx(ta.types.result(), ta.collations.result().Collation, ta.types.nullable, ta.size, ta.scale)
+	return NewTypeEx(ta.types.result(), ta.collations.result().Collation, ta.types.nullable, ta.size, ta.scale, nil)
 }
 
 func (ta *TypeAggregator) Field(name string) *query.Field {

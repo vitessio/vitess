@@ -3,6 +3,7 @@
 package vtctldclient
 
 import (
+	"context"
 	"fmt"
 	"log"
 
@@ -17,7 +18,7 @@ type VtctldClient interface {
 }
 
 // Factory is a function that creates new VtctldClients.
-type Factory func(addr string) (VtctldClient, error)
+type Factory func(ctx context.Context, addr string) (VtctldClient, error)
 
 var registry = map[string]Factory{}
 
@@ -40,11 +41,11 @@ func Register(name string, factory Factory) {
 // global namespace to determine the protocol to use. Instead, we require
 // users to specify their own flag in their own (hopefully not global) namespace
 // to determine the protocol to pass into here.
-func New(protocol string, addr string) (VtctldClient, error) {
+func New(ctx context.Context, protocol string, addr string) (VtctldClient, error) {
 	factory, ok := registry[protocol]
 	if !ok {
 		return nil, fmt.Errorf("unknown vtctld client protocol: %s", protocol)
 	}
 
-	return factory(addr)
+	return factory(ctx, addr)
 }

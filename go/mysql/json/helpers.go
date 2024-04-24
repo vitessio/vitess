@@ -106,6 +106,10 @@ func NewFromSQL(v sqltypes.Value) (*Value, error) {
 		return NewDate(v.RawStr()), nil
 	case v.IsTime():
 		return NewTime(v.RawStr()), nil
+	case v.IsEnum():
+		return NewString(v.RawStr()), nil
+	case v.IsSet():
+		return NewString(v.RawStr()), nil
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot coerce %v as a JSON type", v)
 	}

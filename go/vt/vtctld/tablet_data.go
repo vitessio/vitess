@@ -113,7 +113,7 @@ func (th *tabletHealth) stream(ctx context.Context, ts *topo.Server, tabletAlias
 		return err
 	}
 
-	conn, err := tabletconn.GetDialer()(ti.Tablet, grpcclient.FailFast(true))
+	conn, err := tabletconn.GetDialer()(ctx, ti.Tablet, grpcclient.FailFast(true))
 	if err != nil {
 		return err
 	}
