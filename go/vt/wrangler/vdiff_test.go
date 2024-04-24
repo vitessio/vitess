@@ -18,7 +18,6 @@ package wrangler
 
 import (
 	"context"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -35,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 func TestVDiffPlanSuccess(t *testing.T) {
@@ -94,12 +94,12 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetTable:      "t1",
 			sourceExpression: "select c1, c2 from t1 order by c1 asc",
 			targetExpression: "select c1, c2 from t1 order by c1 asc",
-			compareCols:      []compareColInfo{{0, collations.Unknown, true}, {1, collations.Unknown, false}},
-			comparePKs:       []compareColInfo{{0, collations.Unknown, true}},
+			compareCols:      []compareColInfo{{0, collations.Unknown, nil, true}, {1, collations.Unknown, nil, false}},
+			comparePKs:       []compareColInfo{{0, collations.Unknown, nil, true}},
 			pkCols:           []int{0},
 			selectPks:        []int{0},
-			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, true}}, collationEnv),
-			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, true}}, collationEnv),
+			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
+			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
 			collationEnv:     collationEnv,
 			parser:           parser,
 		},
@@ -113,12 +113,12 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetTable:      "t1",
 			sourceExpression: "select c1, c2 from t1 order by c1 asc",
 			targetExpression: "select c1, c2 from t1 order by c1 asc",
-			compareCols:      []compareColInfo{{0, collations.Unknown, true}, {1, collations.Unknown, false}},
-			comparePKs:       []compareColInfo{{0, collations.Unknown, true}},
+			compareCols:      []compareColInfo{{0, collations.Unknown, nil, true}, {1, collations.Unknown, nil, false}},
+			comparePKs:       []compareColInfo{{0, collations.Unknown, nil, true}},
 			pkCols:           []int{0},
 			selectPks:        []int{0},
-			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, true}}, collationEnv),
-			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, true}}, collationEnv),
+			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
+			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
 			collationEnv:     collationEnv,
 			parser:           parser,
 		},
@@ -132,12 +132,12 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetTable:      "t1",
 			sourceExpression: "select c1, c2 from t1 order by c1 asc",
 			targetExpression: "select c1, c2 from t1 order by c1 asc",
-			compareCols:      []compareColInfo{{0, collations.Unknown, true}, {1, collations.Unknown, false}},
-			comparePKs:       []compareColInfo{{0, collations.Unknown, true}},
+			compareCols:      []compareColInfo{{0, collations.Unknown, nil, true}, {1, collations.Unknown, nil, false}},
+			comparePKs:       []compareColInfo{{0, collations.Unknown, nil, true}},
 			pkCols:           []int{0},
 			selectPks:        []int{0},
-			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, true}}, collationEnv),
-			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, true}}, collationEnv),
+			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
+			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
 			collationEnv:     collationEnv,
 			parser:           parser,
 		},
@@ -151,12 +151,12 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetTable:      "t1",
 			sourceExpression: "select c2, c1 from t1 order by c1 asc",
 			targetExpression: "select c2, c1 from t1 order by c1 asc",
-			compareCols:      []compareColInfo{{0, collations.Unknown, false}, {1, collations.Unknown, true}},
-			comparePKs:       []compareColInfo{{1, collations.Unknown, true}},
+			compareCols:      []compareColInfo{{0, collations.Unknown, nil, false}, {1, collations.Unknown, nil, true}},
+			comparePKs:       []compareColInfo{{1, collations.Unknown, nil, true}},
 			pkCols:           []int{1},
 			selectPks:        []int{1},
-			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{1, collations.Unknown, true}}, collationEnv),
-			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{1, collations.Unknown, true}}, collationEnv),
+			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{1, collations.Unknown, nil, true}}, collationEnv),
+			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{1, collations.Unknown, nil, true}}, collationEnv),
 			collationEnv:     collationEnv,
 			parser:           parser,
 		},
@@ -170,12 +170,12 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetTable:      "t1",
 			sourceExpression: "select c0 as c1, c2 from t2 order by c1 asc",
 			targetExpression: "select c1, c2 from t1 order by c1 asc",
-			compareCols:      []compareColInfo{{0, collations.Unknown, true}, {1, collations.Unknown, false}},
-			comparePKs:       []compareColInfo{{0, collations.Unknown, true}},
+			compareCols:      []compareColInfo{{0, collations.Unknown, nil, true}, {1, collations.Unknown, nil, false}},
+			comparePKs:       []compareColInfo{{0, collations.Unknown, nil, true}},
 			pkCols:           []int{0},
 			selectPks:        []int{0},
-			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, true}}, collationEnv),
-			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, true}}, collationEnv),
+			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
+			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
 			collationEnv:     collationEnv,
 			parser:           parser,
 		},
@@ -190,12 +190,12 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetTable:      "nonpktext",
 			sourceExpression: "select c1, textcol from nonpktext order by c1 asc",
 			targetExpression: "select c1, textcol from nonpktext order by c1 asc",
-			compareCols:      []compareColInfo{{0, collations.Unknown, true}, {1, collations.Unknown, false}},
-			comparePKs:       []compareColInfo{{0, collations.Unknown, true}},
+			compareCols:      []compareColInfo{{0, collations.Unknown, nil, true}, {1, collations.Unknown, nil, false}},
+			comparePKs:       []compareColInfo{{0, collations.Unknown, nil, true}},
 			pkCols:           []int{0},
 			selectPks:        []int{0},
-			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, true}}, collationEnv),
-			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, true}}, collationEnv),
+			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
+			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
 			collationEnv:     collationEnv,
 			parser:           parser,
 		},
@@ -210,12 +210,12 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetTable:      "nonpktext",
 			sourceExpression: "select textcol, c1 from nonpktext order by c1 asc",
 			targetExpression: "select textcol, c1 from nonpktext order by c1 asc",
-			compareCols:      []compareColInfo{{0, collations.Unknown, false}, {1, collations.Unknown, true}},
-			comparePKs:       []compareColInfo{{1, collations.Unknown, true}},
+			compareCols:      []compareColInfo{{0, collations.Unknown, nil, false}, {1, collations.Unknown, nil, true}},
+			comparePKs:       []compareColInfo{{1, collations.Unknown, nil, true}},
 			pkCols:           []int{1},
 			selectPks:        []int{1},
-			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{1, collations.Unknown, true}}, collationEnv),
-			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{1, collations.Unknown, true}}, collationEnv),
+			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{1, collations.Unknown, nil, true}}, collationEnv),
+			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{1, collations.Unknown, nil, true}}, collationEnv),
 			collationEnv:     collationEnv,
 			parser:           parser,
 		},
@@ -230,12 +230,12 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetTable:      "pktext",
 			sourceExpression: "select textcol, c2 from pktext order by textcol asc",
 			targetExpression: "select textcol, c2 from pktext order by textcol asc",
-			compareCols:      []compareColInfo{{0, collationEnv.DefaultConnectionCharset(), true}, {1, collations.Unknown, false}},
-			comparePKs:       []compareColInfo{{0, collationEnv.DefaultConnectionCharset(), true}},
+			compareCols:      []compareColInfo{{0, collationEnv.DefaultConnectionCharset(), nil, true}, {1, collations.Unknown, nil, false}},
+			comparePKs:       []compareColInfo{{0, collationEnv.DefaultConnectionCharset(), nil, true}},
 			pkCols:           []int{0},
 			selectPks:        []int{0},
-			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collationEnv.DefaultConnectionCharset(), false}}, collationEnv),
-			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collationEnv.DefaultConnectionCharset(), false}}, collationEnv),
+			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collationEnv.DefaultConnectionCharset(), nil, false}}, collationEnv),
+			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collationEnv.DefaultConnectionCharset(), nil, false}}, collationEnv),
 			collationEnv:     collationEnv,
 			parser:           parser,
 		},
@@ -250,12 +250,12 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetTable:      "pktext",
 			sourceExpression: "select c2, textcol from pktext order by textcol asc",
 			targetExpression: "select c2, textcol from pktext order by textcol asc",
-			compareCols:      []compareColInfo{{0, collations.Unknown, false}, {1, collationEnv.DefaultConnectionCharset(), true}},
-			comparePKs:       []compareColInfo{{1, collationEnv.DefaultConnectionCharset(), true}},
+			compareCols:      []compareColInfo{{0, collations.Unknown, nil, false}, {1, collationEnv.DefaultConnectionCharset(), nil, true}},
+			comparePKs:       []compareColInfo{{1, collationEnv.DefaultConnectionCharset(), nil, true}},
 			pkCols:           []int{1},
 			selectPks:        []int{1},
-			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{1, collationEnv.DefaultConnectionCharset(), false}}, collationEnv),
-			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{1, collationEnv.DefaultConnectionCharset(), false}}, collationEnv),
+			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{1, collationEnv.DefaultConnectionCharset(), nil, false}}, collationEnv),
+			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{1, collationEnv.DefaultConnectionCharset(), nil, false}}, collationEnv),
 			collationEnv:     collationEnv,
 			parser:           parser,
 		},
@@ -270,12 +270,12 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetTable:      "pktext",
 			sourceExpression: "select c2, a + b as textcol from pktext order by textcol asc",
 			targetExpression: "select c2, textcol from pktext order by textcol asc",
-			compareCols:      []compareColInfo{{0, collations.Unknown, false}, {1, collationEnv.DefaultConnectionCharset(), true}},
-			comparePKs:       []compareColInfo{{1, collationEnv.DefaultConnectionCharset(), true}},
+			compareCols:      []compareColInfo{{0, collations.Unknown, nil, false}, {1, collationEnv.DefaultConnectionCharset(), nil, true}},
+			comparePKs:       []compareColInfo{{1, collationEnv.DefaultConnectionCharset(), nil, true}},
 			pkCols:           []int{1},
 			selectPks:        []int{1},
-			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{1, collationEnv.DefaultConnectionCharset(), false}}, collationEnv),
-			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{1, collationEnv.DefaultConnectionCharset(), false}}, collationEnv),
+			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{1, collationEnv.DefaultConnectionCharset(), nil, false}}, collationEnv),
+			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{1, collationEnv.DefaultConnectionCharset(), nil, false}}, collationEnv),
 			collationEnv:     collationEnv,
 			parser:           parser,
 		},
@@ -288,12 +288,12 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetTable:      "multipk",
 			sourceExpression: "select c1, c2 from multipk order by c1 asc, c2 asc",
 			targetExpression: "select c1, c2 from multipk order by c1 asc, c2 asc",
-			compareCols:      []compareColInfo{{0, collations.Unknown, true}, {1, collations.Unknown, true}},
-			comparePKs:       []compareColInfo{{0, collations.Unknown, true}, {1, collations.Unknown, true}},
+			compareCols:      []compareColInfo{{0, collations.Unknown, nil, true}, {1, collations.Unknown, nil, true}},
+			comparePKs:       []compareColInfo{{0, collations.Unknown, nil, true}, {1, collations.Unknown, nil, true}},
 			pkCols:           []int{0, 1},
 			selectPks:        []int{0, 1},
-			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, true}, {1, collations.Unknown, true}}, collationEnv),
-			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, true}, {1, collations.Unknown, true}}, collationEnv),
+			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}, {1, collations.Unknown, nil, true}}, collationEnv),
+			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}, {1, collations.Unknown, nil, true}}, collationEnv),
 			collationEnv:     collationEnv,
 			parser:           parser,
 		},
@@ -308,12 +308,12 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetTable:      "t1",
 			sourceExpression: "select c1, c2 from t1 order by c1 asc",
 			targetExpression: "select c1, c2 from t1 order by c1 asc",
-			compareCols:      []compareColInfo{{0, collations.Unknown, true}, {1, collations.Unknown, false}},
-			comparePKs:       []compareColInfo{{0, collations.Unknown, true}},
+			compareCols:      []compareColInfo{{0, collations.Unknown, nil, true}, {1, collations.Unknown, nil, false}},
+			comparePKs:       []compareColInfo{{0, collations.Unknown, nil, true}},
 			pkCols:           []int{0},
 			selectPks:        []int{0},
-			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, true}}, collationEnv),
-			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, true}}, collationEnv),
+			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
+			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
 			collationEnv:     collationEnv,
 			parser:           parser,
 		},
@@ -329,12 +329,12 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetTable:      "t1",
 			sourceExpression: "select c1, c2 from t1 where c2 = 2 order by c1 asc",
 			targetExpression: "select c1, c2 from t1 order by c1 asc",
-			compareCols:      []compareColInfo{{0, collations.Unknown, true}, {1, collations.Unknown, false}},
-			comparePKs:       []compareColInfo{{0, collations.Unknown, true}},
+			compareCols:      []compareColInfo{{0, collations.Unknown, nil, true}, {1, collations.Unknown, nil, false}},
+			comparePKs:       []compareColInfo{{0, collations.Unknown, nil, true}},
 			pkCols:           []int{0},
 			selectPks:        []int{0},
-			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, true}}, collationEnv),
-			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, true}}, collationEnv),
+			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
+			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
 			collationEnv:     collationEnv,
 			parser:           parser,
 		},
@@ -350,12 +350,12 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetTable:      "t1",
 			sourceExpression: "select c1, c2 from t1 where c2 = 2 order by c1 asc",
 			targetExpression: "select c1, c2 from t1 order by c1 asc",
-			compareCols:      []compareColInfo{{0, collations.Unknown, true}, {1, collations.Unknown, false}},
-			comparePKs:       []compareColInfo{{0, collations.Unknown, true}},
+			compareCols:      []compareColInfo{{0, collations.Unknown, nil, true}, {1, collations.Unknown, nil, false}},
+			comparePKs:       []compareColInfo{{0, collations.Unknown, nil, true}},
 			pkCols:           []int{0},
 			selectPks:        []int{0},
-			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, true}}, collationEnv),
-			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, true}}, collationEnv),
+			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
+			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
 			collationEnv:     collationEnv,
 			parser:           parser,
 		},
@@ -371,12 +371,12 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetTable:      "t1",
 			sourceExpression: "select c1, c2 from t1 where c2 = 2 and c1 = 1 order by c1 asc",
 			targetExpression: "select c1, c2 from t1 order by c1 asc",
-			compareCols:      []compareColInfo{{0, collations.Unknown, true}, {1, collations.Unknown, false}},
-			comparePKs:       []compareColInfo{{0, collations.Unknown, true}},
+			compareCols:      []compareColInfo{{0, collations.Unknown, nil, true}, {1, collations.Unknown, nil, false}},
+			comparePKs:       []compareColInfo{{0, collations.Unknown, nil, true}},
 			pkCols:           []int{0},
 			selectPks:        []int{0},
-			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, true}}, collationEnv),
-			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, true}}, collationEnv),
+			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
+			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
 			collationEnv:     collationEnv,
 			parser:           parser,
 		},
@@ -392,12 +392,12 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetTable:      "t1",
 			sourceExpression: "select c1, c2 from t1 where c2 = 2 order by c1 asc",
 			targetExpression: "select c1, c2 from t1 order by c1 asc",
-			compareCols:      []compareColInfo{{0, collations.Unknown, true}, {1, collations.Unknown, false}},
-			comparePKs:       []compareColInfo{{0, collations.Unknown, true}},
+			compareCols:      []compareColInfo{{0, collations.Unknown, nil, true}, {1, collations.Unknown, nil, false}},
+			comparePKs:       []compareColInfo{{0, collations.Unknown, nil, true}},
 			pkCols:           []int{0},
 			selectPks:        []int{0},
-			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, true}}, collationEnv),
-			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, true}}, collationEnv),
+			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
+			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
 			collationEnv:     collationEnv,
 			parser:           parser,
 		},
@@ -412,12 +412,12 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetTable:      "t1",
 			sourceExpression: "select c1, c2 from t1 group by c1 order by c1 asc",
 			targetExpression: "select c1, c2 from t1 order by c1 asc",
-			compareCols:      []compareColInfo{{0, collations.Unknown, true}, {1, collations.Unknown, false}},
-			comparePKs:       []compareColInfo{{0, collations.Unknown, true}},
+			compareCols:      []compareColInfo{{0, collations.Unknown, nil, true}, {1, collations.Unknown, nil, false}},
+			comparePKs:       []compareColInfo{{0, collations.Unknown, nil, true}},
 			pkCols:           []int{0},
 			selectPks:        []int{0},
-			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, true}}, collationEnv),
-			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, true}}, collationEnv),
+			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
+			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
 			collationEnv:     collationEnv,
 			parser:           parser,
 		},
@@ -432,8 +432,8 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetTable:      "aggr",
 			sourceExpression: "select c1, c2, count(*) as c3, sum(c4) as c4 from t1 group by c1 order by c1 asc",
 			targetExpression: "select c1, c2, c3, c4 from aggr order by c1 asc",
-			compareCols:      []compareColInfo{{0, collations.Unknown, true}, {1, collations.Unknown, false}, {2, collations.Unknown, false}, {3, collations.Unknown, false}},
-			comparePKs:       []compareColInfo{{0, collations.Unknown, true}},
+			compareCols:      []compareColInfo{{0, collations.Unknown, nil, true}, {1, collations.Unknown, nil, false}, {2, collations.Unknown, nil, false}, {3, collations.Unknown, nil, false}},
+			comparePKs:       []compareColInfo{{0, collations.Unknown, nil, true}},
 			pkCols:           []int{0},
 			selectPks:        []int{0},
 			sourcePrimitive: &engine.OrderedAggregate{
@@ -442,10 +442,10 @@ func TestVDiffPlanSuccess(t *testing.T) {
 					engine.NewAggregateParam(opcode.AggregateSum, 3, "", collationEnv),
 				},
 				GroupByKeys:  []*engine.GroupByParams{{KeyCol: 0, WeightStringCol: -1, CollationEnv: collations.MySQL8()}},
-				Input:        newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, true}}, collationEnv),
+				Input:        newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
 				CollationEnv: collationEnv,
 			},
-			targetPrimitive: newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, true}}, collationEnv),
+			targetPrimitive: newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
 			collationEnv:    collationEnv,
 			parser:          parser,
 		},
@@ -459,12 +459,12 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetTable:      "datze",
 			sourceExpression: "select id, dt from datze order by id asc",
 			targetExpression: "select id, convert_tz(dt, 'UTC', 'US/Pacific') as dt from datze order by id asc",
-			compareCols:      []compareColInfo{{0, collations.Unknown, true}, {1, collations.Unknown, false}},
-			comparePKs:       []compareColInfo{{0, collations.Unknown, true}},
+			compareCols:      []compareColInfo{{0, collations.Unknown, nil, true}, {1, collations.Unknown, nil, false}},
+			comparePKs:       []compareColInfo{{0, collations.Unknown, nil, true}},
 			pkCols:           []int{0},
 			selectPks:        []int{0},
-			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, true}}, collationEnv),
-			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, true}}, collationEnv),
+			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
+			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
 			collationEnv:     collationEnv,
 			parser:           parser,
 		},
@@ -1078,13 +1078,13 @@ func TestVDiffFindPKs(t *testing.T) {
 				},
 			},
 			tdIn: &tableDiffer{
-				compareCols: []compareColInfo{{0, collations.Unknown, false}, {1, collations.Unknown, false}},
+				compareCols: []compareColInfo{{0, collations.Unknown, nil, false}, {1, collations.Unknown, nil, false}},
 				comparePKs:  []compareColInfo{},
 				pkCols:      []int{},
 			},
 			tdOut: &tableDiffer{
-				compareCols: []compareColInfo{{0, collations.Unknown, true}, {1, collations.Unknown, false}},
-				comparePKs:  []compareColInfo{{0, collations.Unknown, true}},
+				compareCols: []compareColInfo{{0, collations.Unknown, nil, true}, {1, collations.Unknown, nil, false}},
+				comparePKs:  []compareColInfo{{0, collations.Unknown, nil, true}},
 				pkCols:      []int{0},
 				selectPks:   []int{0},
 			},
@@ -1106,13 +1106,13 @@ func TestVDiffFindPKs(t *testing.T) {
 				},
 			},
 			tdIn: &tableDiffer{
-				compareCols: []compareColInfo{{0, collations.Unknown, false}, {1, collations.Unknown, false}, {2, collations.Unknown, false}, {3, collations.Unknown, false}},
+				compareCols: []compareColInfo{{0, collations.Unknown, nil, false}, {1, collations.Unknown, nil, false}, {2, collations.Unknown, nil, false}, {3, collations.Unknown, nil, false}},
 				comparePKs:  []compareColInfo{},
 				pkCols:      []int{},
 			},
 			tdOut: &tableDiffer{
-				compareCols: []compareColInfo{{0, collations.Unknown, true}, {1, collations.Unknown, false}, {2, collations.Unknown, false}, {3, collations.Unknown, true}},
-				comparePKs:  []compareColInfo{{0, collations.Unknown, true}, {3, collations.Unknown, true}},
+				compareCols: []compareColInfo{{0, collations.Unknown, nil, true}, {1, collations.Unknown, nil, false}, {2, collations.Unknown, nil, false}, {3, collations.Unknown, nil, true}},
+				comparePKs:  []compareColInfo{{0, collations.Unknown, nil, true}, {3, collations.Unknown, nil, true}},
 				pkCols:      []int{0, 3},
 				selectPks:   []int{0, 3},
 			},
@@ -1184,10 +1184,11 @@ func TestVDiffPlanInclude(t *testing.T) {
 func TestGetColumnCollations(t *testing.T) {
 	collationEnv := collations.MySQL8()
 	tests := []struct {
-		name    string
-		table   *tabletmanagerdatapb.TableDefinition
-		want    map[string]collations.ID
-		wantErr bool
+		name       string
+		table      *tabletmanagerdatapb.TableDefinition
+		wantCols   map[string]collations.ID
+		wantValues map[string]*evalengine.EnumSetValues
+		wantErr    bool
 	}{
 		{
 			name: "invalid schema",
@@ -1201,94 +1202,128 @@ func TestGetColumnCollations(t *testing.T) {
 			table: &tabletmanagerdatapb.TableDefinition{
 				Schema: "create table t1 (c1 int, name varchar(10), primary key(c1))",
 			},
-			want: map[string]collations.ID{
+			wantCols: map[string]collations.ID{
 				"c1":   collations.Unknown,
 				"name": collationEnv.DefaultConnectionCharset(),
 			},
+			wantValues: map[string]*evalengine.EnumSetValues{},
 		},
 		{
 			name: "char pk with global default collation",
 			table: &tabletmanagerdatapb.TableDefinition{
 				Schema: "create table t1 (c1 varchar(10), name varchar(10), primary key(c1))",
 			},
-			want: map[string]collations.ID{
+			wantCols: map[string]collations.ID{
 				"c1":   collationEnv.DefaultConnectionCharset(),
 				"name": collationEnv.DefaultConnectionCharset(),
 			},
+			wantValues: map[string]*evalengine.EnumSetValues{},
 		},
 		{
 			name: "compound char int pk with global default collation",
 			table: &tabletmanagerdatapb.TableDefinition{
 				Schema: "create table t1 (c1 int, name varchar(10), primary key(c1, name))",
 			},
-			want: map[string]collations.ID{
+			wantCols: map[string]collations.ID{
 				"c1":   collations.Unknown,
 				"name": collationEnv.DefaultConnectionCharset(),
 			},
+			wantValues: map[string]*evalengine.EnumSetValues{},
 		},
 		{
 			name: "char pk with table default charset",
 			table: &tabletmanagerdatapb.TableDefinition{
 				Schema: "create table t1 (c1 varchar(10), name varchar(10), primary key(c1)) default character set ucs2",
 			},
-			want: map[string]collations.ID{
+			wantCols: map[string]collations.ID{
 				"c1":   collationEnv.DefaultCollationForCharset("ucs2"),
 				"name": collationEnv.DefaultCollationForCharset("ucs2"),
 			},
+			wantValues: map[string]*evalengine.EnumSetValues{},
 		},
 		{
 			name: "char pk with table default collation",
 			table: &tabletmanagerdatapb.TableDefinition{
 				Schema: "create table t1 (c1 varchar(10), name varchar(10), primary key(c1)) charset=utf32 collate=utf32_icelandic_ci",
 			},
-			want: map[string]collations.ID{
+			wantCols: map[string]collations.ID{
 				"c1":   collationEnv.LookupByName("utf32_icelandic_ci"),
 				"name": collationEnv.LookupByName("utf32_icelandic_ci"),
 			},
+			wantValues: map[string]*evalengine.EnumSetValues{},
 		},
 		{
 			name: "char pk with column charset override",
 			table: &tabletmanagerdatapb.TableDefinition{
 				Schema: "create table t1 (c1 varchar(10) charset sjis, name varchar(10), primary key(c1)) character set=utf8",
 			},
-			want: map[string]collations.ID{
+			wantCols: map[string]collations.ID{
 				"c1":   collationEnv.DefaultCollationForCharset("sjis"),
 				"name": collationEnv.DefaultCollationForCharset("utf8mb3"),
 			},
+			wantValues: map[string]*evalengine.EnumSetValues{},
 		},
 		{
 			name: "char pk with column collation override",
 			table: &tabletmanagerdatapb.TableDefinition{
 				Schema: "create table t1 (c1 varchar(10) collate hebrew_bin, name varchar(10), primary key(c1)) charset=hebrew",
 			},
-			want: map[string]collations.ID{
+			wantCols: map[string]collations.ID{
 				"c1":   collationEnv.LookupByName("hebrew_bin"),
 				"name": collationEnv.DefaultCollationForCharset("hebrew"),
 			},
+			wantValues: map[string]*evalengine.EnumSetValues{},
 		},
 		{
 			name: "compound char int pk with column collation override",
 			table: &tabletmanagerdatapb.TableDefinition{
 				Schema: "create table t1 (c1 varchar(10) collate utf16_turkish_ci, c2 int, name varchar(10), primary key(c1, c2)) charset=utf16 collate=utf16_icelandic_ci",
 			},
-			want: map[string]collations.ID{
+			wantCols: map[string]collations.ID{
 				"c1":   collationEnv.LookupByName("utf16_turkish_ci"),
 				"c2":   collations.Unknown,
 				"name": collationEnv.LookupByName("utf16_icelandic_ci"),
+			},
+			wantValues: map[string]*evalengine.EnumSetValues{},
+		},
+		{
+			name: "col with enum values",
+			table: &tabletmanagerdatapb.TableDefinition{
+				Schema: "create table t1 (c1 varchar(10), size enum('small', 'medium', 'large'), primary key(c1))",
+			},
+			wantCols: map[string]collations.ID{
+				"c1":   collationEnv.DefaultConnectionCharset(),
+				"size": collationEnv.DefaultConnectionCharset(),
+			},
+			wantValues: map[string]*evalengine.EnumSetValues{
+				"size": {"'small'", "'medium'", "'large'"},
+			},
+		},
+		{
+			name: "col with set values",
+			table: &tabletmanagerdatapb.TableDefinition{
+				Schema: "create table t1 (c1 varchar(10), size set('small', 'medium', 'large'), primary key(c1))",
+			},
+			wantCols: map[string]collations.ID{
+				"c1":   collationEnv.DefaultConnectionCharset(),
+				"size": collationEnv.DefaultConnectionCharset(),
+			},
+			wantValues: map[string]*evalengine.EnumSetValues{
+				"size": {"'small'", "'medium'", "'large'"},
 			},
 		},
 	}
 	env := vtenv.NewTestEnv()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := getColumnCollations(env, tt.table)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("getColumnCollations() error = %v, wantErr = %t", err, tt.wantErr)
+			gotCols, gotValues, err := getColumnCollations(env, tt.table)
+			if tt.wantErr {
+				require.Error(t, err)
 				return
 			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("getColumnCollations() = %+v, want %+v", got, tt.want)
-			}
+			require.NoError(t, err)
+			require.Equal(t, tt.wantCols, gotCols)
+			require.Equal(t, tt.wantValues, gotValues)
 		})
 	}
 }

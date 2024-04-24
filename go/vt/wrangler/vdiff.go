@@ -31,6 +31,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/vt/vtenv"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -116,9 +117,10 @@ type vdiff struct {
 
 // compareColInfo contains the metadata for a column of the table being diffed
 type compareColInfo struct {
-	colIndex  int           // index of the column in the filter's select
-	collation collations.ID // is the collation of the column, if any
-	isPK      bool          // is this column part of the primary key
+	colIndex  int                       // index of the column in the filter's select
+	collation collations.ID             // is the collation of the column, if any
+	values    *evalengine.EnumSetValues // is the list of enum or set values for the column, if any
+	isPK      bool                      // is this column part of the primary key
 }
 
 // tableDiffer performs a diff for one table in the workflow.
@@ -492,7 +494,7 @@ func (df *vdiff) buildVDiffPlan(filter *binlogdatapb.Filter, schm *tabletmanager
 // findPKs identifies PKs, determines any collations to be used for
 // them, and removes them from the columns used for data comparison.
 func findPKs(env *vtenv.Environment, table *tabletmanagerdatapb.TableDefinition, targetSelect *sqlparser.Select, td *tableDiffer) (sqlparser.OrderBy, error) {
-	columnCollations, err := getColumnCollations(env, table)
+	columnCollations, columnValues, err := getColumnCollations(env, table)
 	if err != nil {
 		return nil, err
 	}
@@ -513,6 +515,7 @@ func findPKs(env *vtenv.Environment, table *tabletmanagerdatapb.TableDefinition,
 			if strings.EqualFold(pk, colname) {
 				td.compareCols[i].isPK = true
 				td.compareCols[i].collation = columnCollations[strings.ToLower(colname)]
+				td.compareCols[i].values = columnValues[strings.ToLower(colname)]
 				td.comparePKs = append(td.comparePKs, td.compareCols[i])
 				td.selectPks = append(td.selectPks, i)
 				// We'll be comparing pks separately. So, remove them from compareCols.
@@ -536,19 +539,19 @@ func findPKs(env *vtenv.Environment, table *tabletmanagerdatapb.TableDefinition,
 // getColumnCollations determines the proper collation to use for each
 // column in the table definition leveraging MySQL's collation inheritance
 // rules.
-func getColumnCollations(venv *vtenv.Environment, table *tabletmanagerdatapb.TableDefinition) (map[string]collations.ID, error) {
+func getColumnCollations(venv *vtenv.Environment, table *tabletmanagerdatapb.TableDefinition) (map[string]collations.ID, map[string]*evalengine.EnumSetValues, error) {
 	createstmt, err := venv.Parser().Parse(table.Schema)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	createtable, ok := createstmt.(*sqlparser.CreateTable)
 	if !ok {
-		return nil, vterrors.Wrapf(err, "invalid table schema %s for table %s", table.Schema, table.Name)
+		return nil, nil, vterrors.Wrapf(err, "invalid table schema %s for table %s", table.Schema, table.Name)
 	}
 	env := schemadiff.NewEnv(venv, venv.CollationEnv().DefaultConnectionCharset())
 	tableschema, err := schemadiff.NewCreateTableEntity(env, createtable)
 	if err != nil {
-		return nil, vterrors.Wrapf(err, "invalid table schema %s for table %s", table.Schema, table.Name)
+		return nil, nil, vterrors.Wrapf(err, "invalid table schema %s for table %s", table.Schema, table.Name)
 	}
 	tableCharset := tableschema.GetCharset()
 	tableCollation := tableschema.GetCollation()
@@ -579,6 +582,7 @@ func getColumnCollations(venv *vtenv.Environment, table *tabletmanagerdatapb.Tab
 	}
 
 	columnCollations := make(map[string]collations.ID)
+	columnValues := make(map[string]*evalengine.EnumSetValues)
 	for _, column := range tableschema.TableSpec.Columns {
 		// If it's not a character based type then no collation is used.
 		if !sqltypes.IsQuoted(column.Type.SQLType()) {
@@ -586,8 +590,12 @@ func getColumnCollations(venv *vtenv.Environment, table *tabletmanagerdatapb.Tab
 			continue
 		}
 		columnCollations[column.Name.Lowered()] = getColumnCollation(column)
+		if len(column.Type.EnumValues) == 0 {
+			continue
+		}
+		columnValues[column.Name.Lowered()] = ptr.Of(evalengine.EnumSetValues(column.Type.EnumValues))
 	}
-	return columnCollations, nil
+	return columnCollations, columnValues, nil
 }
 
 // If SourceTimeZone is defined in the BinlogSource, the VReplication workflow would have converted the datetime
@@ -1318,7 +1326,7 @@ func (td *tableDiffer) compare(sourceRow, targetRow []sqltypes.Value, cols []com
 		if col.collation == collations.Unknown {
 			collationID = collations.CollationBinaryID
 		}
-		c, err = evalengine.NullsafeCompare(sourceRow[compareIndex], targetRow[compareIndex], td.collationEnv, collationID)
+		c, err = evalengine.NullsafeCompare(sourceRow[compareIndex], targetRow[compareIndex], td.collationEnv, collationID, col.values)
 		if err != nil {
 			return 0, err
 		}

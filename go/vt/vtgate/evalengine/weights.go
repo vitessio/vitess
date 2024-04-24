@@ -41,11 +41,11 @@ import (
 // externally communicates with the `WEIGHT_STRING` function, so that we
 // can also use this to order / sort other types like Float and Decimal
 // as well.
-func WeightString(dst []byte, v sqltypes.Value, coerceTo sqltypes.Type, col collations.ID, length, precision int, sqlmode SQLMode) ([]byte, bool, error) {
+func WeightString(dst []byte, v sqltypes.Value, coerceTo sqltypes.Type, col collations.ID, length, precision int, values *EnumSetValues, sqlmode SQLMode) ([]byte, bool, error) {
 	// We optimize here for the case where we already have the desired type.
 	// Otherwise, we fall back to the general evalengine conversion logic.
 	if v.Type() != coerceTo {
-		return fallbackWeightString(dst, v, coerceTo, col, length, precision, sqlmode)
+		return fallbackWeightString(dst, v, coerceTo, col, length, precision, values, sqlmode)
 	}
 
 	switch {
@@ -116,13 +116,17 @@ func WeightString(dst []byte, v sqltypes.Value, coerceTo sqltypes.Type, col coll
 			return dst, false, err
 		}
 		return j.WeightString(dst), false, nil
+	case coerceTo == sqltypes.Enum:
+		return evalWeightString(dst, newEvalEnum(v.Raw(), values), length, precision)
+	case coerceTo == sqltypes.Set:
+		return evalWeightString(dst, newEvalSet(v.Raw(), values), length, precision)
 	default:
-		return fallbackWeightString(dst, v, coerceTo, col, length, precision, sqlmode)
+		return fallbackWeightString(dst, v, coerceTo, col, length, precision, values, sqlmode)
 	}
 }
 
-func fallbackWeightString(dst []byte, v sqltypes.Value, coerceTo sqltypes.Type, col collations.ID, length, precision int, sqlmode SQLMode) ([]byte, bool, error) {
-	e, err := valueToEvalCast(v, coerceTo, col, sqlmode)
+func fallbackWeightString(dst []byte, v sqltypes.Value, coerceTo sqltypes.Type, col collations.ID, length, precision int, values *EnumSetValues, sqlmode SQLMode) ([]byte, bool, error) {
+	e, err := valueToEvalCast(v, coerceTo, col, values, sqlmode)
 	if err != nil {
 		return dst, false, err
 	}
@@ -174,6 +178,14 @@ func evalWeightString(dst []byte, e eval, length, precision int) ([]byte, bool, 
 		return e.dt.WeightString(dst), true, nil
 	case *evalJSON:
 		return e.WeightString(dst), false, nil
+	case *evalEnum:
+		raw := uint64(e.value)
+		raw = raw ^ (1 << 63)
+		return binary.BigEndian.AppendUint64(dst, raw), true, nil
+	case *evalSet:
+		raw := e.set
+		raw = raw ^ (1 << 63)
+		return binary.BigEndian.AppendUint64(dst, raw), true, nil
 	}
 
 	return dst, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected type %v", e.SQLType())
@@ -192,7 +204,7 @@ func TinyWeighter(f *querypb.Field, collation collations.ID) func(v *sqltypes.Va
 	case sqltypes.IsNull(f.Type):
 		return nil
 
-	case sqltypes.IsSigned(f.Type):
+	case sqltypes.IsSigned(f.Type), f.Type == sqltypes.Enum, f.Type == sqltypes.Set:
 		return func(v *sqltypes.Value) {
 			i, err := v.ToInt64()
 			if err != nil {
@@ -301,7 +313,6 @@ func TinyWeighter(f *querypb.Field, collation collations.ID) func(v *sqltypes.Va
 			copy(w32[:4], j.WeightString(nil))
 			v.SetTinyWeight(binary.BigEndian.Uint32(w32[:4]))
 		}
-
 	default:
 		return nil
 	}
