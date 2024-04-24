@@ -94,10 +94,17 @@ func (e *Executor) newExecute(
 
 	for try := 0; try < MaxBufferingRetries; try++ {
 		if try > 0 && !vs.GetCreated().After(lastVSchemaCreated) { // We need to wait for a vschema update
-			// There is a race due to which the executor's vschema may not have been updated yet.
 			// Without a wait we fail non-deterministically since the previous vschema will not have
 			// the updated routing rules.
-			timeout := e.resolver.scatterConn.gateway.buffer.GetConfig().MaxFailoverDuration / MaxBufferingRetries
+			// We retry MaxBufferingRetries-1 (2) times before giving up. How long we wait before each retry
+			// -- IF we don't see a newer vschema come in -- affects how long we retry in total and how quickly
+			// we retry the query and (should) succeed when the traffic switch fails or we otherwise hit the
+			// max buffer failover time without resolving the keyspace event and marking it as consistent.
+			// This calculation attemps to ensure that we retry at a sensible interval and number of times
+			// based on the buffering configuration. This way we should be able to perform the max retries
+			// within the given window of time for most queries and we should not end up waiting too long
+			// after the traffic switch fails or the buffer window has ended, retrying old queries.
+			timeout := e.resolver.scatterConn.gateway.buffer.GetConfig().MaxFailoverDuration / (MaxBufferingRetries - 1)
 			if waitForNewerVSchema(ctx, e, lastVSchemaCreated, timeout) {
 				vs = e.VSchema()
 				lastVSchemaCreated = vs.GetCreated()

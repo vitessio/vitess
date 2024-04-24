@@ -448,7 +448,7 @@ func (kss *keyspaceState) getMoveTablesStatus(vs *vschemapb.SrvVSchema) (*MoveTa
 			return nil
 		})
 	}
-	if eg.Wait() != nil {
+	if err := eg.Wait(); err != nil {
 		return mtState, err
 	}
 
