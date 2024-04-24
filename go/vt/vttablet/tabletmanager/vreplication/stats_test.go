@@ -28,7 +28,6 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
-	"vitess.io/vitess/go/vt/proto/binlogdata"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -93,7 +92,7 @@ func TestStatusHtml(t *testing.T) {
 	testStats.controllers = map[int32]*controller{
 		1: {
 			id: 1,
-			source: &binlogdata.BinlogSource{
+			source: &binlogdatapb.BinlogSource{
 				Keyspace: "ks",
 				Shard:    "0",
 			},
@@ -103,7 +102,7 @@ func TestStatusHtml(t *testing.T) {
 		},
 		2: {
 			id: 2,
-			source: &binlogdata.BinlogSource{
+			source: &binlogdatapb.BinlogSource{
 				Keyspace: "ks",
 				Shard:    "1",
 			},
@@ -140,7 +139,7 @@ func TestVReplicationStats(t *testing.T) {
 	testStats.controllers = map[int32]*controller{
 		1: {
 			id: 1,
-			source: &binlogdata.BinlogSource{
+			source: &binlogdatapb.BinlogSource{
 				Keyspace: "ks",
 				Shard:    "0",
 			},
