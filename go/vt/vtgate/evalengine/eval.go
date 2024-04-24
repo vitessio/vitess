@@ -172,7 +172,7 @@ func evalIsTruthy(e eval) boolean {
 	}
 }
 
-func evalCoerce(e eval, typ sqltypes.Type, col collations.ID, now time.Time, allowZero bool) (eval, error) {
+func evalCoerce(e eval, typ sqltypes.Type, size, scale int32, col collations.ID, now time.Time, allowZero bool) (eval, error) {
 	if e == nil {
 		return nil, nil
 	}
@@ -183,7 +183,7 @@ func evalCoerce(e eval, typ sqltypes.Type, col collations.ID, now time.Time, all
 		// if we have an explicit VARCHAR coercion, always force it so the collation is replaced in the target
 		return evalToVarchar(e, col, false)
 	}
-	if e.SQLType() == typ {
+	if e.SQLType() == typ && e.Size() == size && e.Scale() == scale {
 		// nothing to be done here
 		return e, nil
 	}
@@ -206,9 +206,9 @@ func evalCoerce(e eval, typ sqltypes.Type, col collations.ID, now time.Time, all
 	case sqltypes.Date:
 		return evalToDate(e, now, allowZero), nil
 	case sqltypes.Datetime, sqltypes.Timestamp:
-		return evalToDateTime(e, -1, now, allowZero), nil
+		return evalToDateTime(e, int(size), now, allowZero), nil
 	case sqltypes.Time:
-		return evalToTime(e, -1), nil
+		return evalToTime(e, int(size)), nil
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported type conversion: %s", typ.String())
 	}

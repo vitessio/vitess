@@ -96,6 +96,7 @@ func (ta *typeAggregation) empty() bool {
 func (ta *typeAggregation) addEval(e eval) {
 	var t sqltypes.Type
 	var f typeFlag
+	var size, scale int32
 	switch e := e.(type) {
 	case nil:
 		t = sqltypes.Null
@@ -103,10 +104,14 @@ func (ta *typeAggregation) addEval(e eval) {
 	case *evalBytes:
 		t = sqltypes.Type(e.tt)
 		f = e.flag
+		size = e.Size()
+		scale = e.Scale()
 	default:
 		t = e.SQLType()
+		size = e.Size()
+		scale = e.Scale()
 	}
-	ta.add(t, f, e.Size(), e.Scale())
+	ta.add(t, f, size, scale)
 }
 
 func (ta *typeAggregation) addNullable(typ sqltypes.Type, nullable bool, size, scale int32) {
@@ -191,14 +196,6 @@ func nextSignedTypeForUnsigned(t sqltypes.Type) sqltypes.Type {
 	default:
 		panic("bad unsigned integer type")
 	}
-}
-
-func (ta *typeAggregation) Size() int32 {
-	return ta.size
-}
-
-func (ta *typeAggregation) Scale() int32 {
-	return ta.scale
 }
 
 func (ta *typeAggregation) result() sqltypes.Type {

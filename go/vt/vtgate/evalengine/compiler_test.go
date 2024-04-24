@@ -686,6 +686,19 @@ func TestCompilerSingle(t *testing.T) {
 			result:     `DECIMAL(0.0001)`,
 			typeWanted: evalengine.NewTypeEx(sqltypes.Decimal, collations.CollationBinaryID, false, 4, 4, nil),
 		},
+		{
+			expression: `case when true then 0.02 else 1.000 end`,
+			result:     `DECIMAL(0.02)`,
+		},
+		{
+			expression: `case
+				when false
+				then timestamp'2023-10-24 12:00:00.123456'
+				else timestamp'2023-10-24 12:00:00'
+			end`,
+			result:     `DATETIME("2023-10-24 12:00:00.000000")`,
+			typeWanted: evalengine.NewTypeEx(sqltypes.Datetime, collations.CollationBinaryID, false, 6, 0, nil),
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")

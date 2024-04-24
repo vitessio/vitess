@@ -43,7 +43,7 @@ func (e *evalTemporal) SQLType() sqltypes.Type {
 }
 
 func (e *evalTemporal) Size() int32 {
-	return 0
+	return int32(e.prec)
 }
 
 func (e *evalTemporal) Scale() int32 {
