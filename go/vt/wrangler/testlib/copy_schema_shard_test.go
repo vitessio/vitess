@@ -57,7 +57,7 @@ func copySchema(t *testing.T, useShardAsSource bool) {
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
-	vp := NewVtctlPipe(t, ts)
+	vp := NewVtctlPipe(ctx, t, ts)
 	defer vp.Close()
 
 	if err := ts.CreateKeyspace(context.Background(), "ks", &topodatapb.Keyspace{}); err != nil {

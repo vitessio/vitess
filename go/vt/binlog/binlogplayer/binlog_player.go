@@ -329,7 +329,7 @@ func (blp *BinlogPlayer) applyEvents(ctx context.Context) error {
 		return fmt.Errorf("no binlog player client factory named %v", binlogPlayerProtocol)
 	}
 	blplClient := clientFactory()
-	err = blplClient.Dial(blp.tablet)
+	err = blplClient.Dial(ctx, blp.tablet)
 	if err != nil {
 		err := fmt.Errorf("error dialing binlog server: %v", err)
 		log.Error(err)

@@ -27,3 +27,11 @@ create table tbl
     primary key (id),
     unique (unq_col)
 ) Engine = InnoDB;
+
+create table tbl_enum_set
+(
+    id         bigint,
+    enum_col   enum('xsmall', 'small', 'medium', 'large', 'xlarge'),
+    set_col    set('a', 'b', 'c', 'd', 'e', 'f', 'g'),
+    primary key (id)
+) Engine = InnoDB;

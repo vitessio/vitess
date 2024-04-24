@@ -214,7 +214,7 @@ type HealthCheck interface {
 	WaitForAllServingTablets(ctx context.Context, targets []*query.Target) error
 
 	// TabletConnection returns the TabletConn of the given tablet.
-	TabletConnection(alias *topodata.TabletAlias, target *query.Target) (queryservice.QueryService, error)
+	TabletConnection(ctx context.Context, alias *topodata.TabletAlias, target *query.Target) (queryservice.QueryService, error)
 
 	// RegisterStats registers the connection counts stats
 	RegisterStats()
@@ -828,7 +828,7 @@ func (hc *HealthCheckImpl) GetTabletHealth(kst KeyspaceShardTabletType, alias *t
 }
 
 // TabletConnection returns the Connection to a given tablet.
-func (hc *HealthCheckImpl) TabletConnection(alias *topodata.TabletAlias, target *query.Target) (queryservice.QueryService, error) {
+func (hc *HealthCheckImpl) TabletConnection(ctx context.Context, alias *topodata.TabletAlias, target *query.Target) (queryservice.QueryService, error) {
 	hc.mu.Lock()
 	thc := hc.healthByAlias[tabletAliasString(topoproto.TabletAliasString(alias))]
 	hc.mu.Unlock()
@@ -836,7 +836,7 @@ func (hc *HealthCheckImpl) TabletConnection(alias *topodata.TabletAlias, target 
 		// TODO: test that throws this error
 		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "tablet: %v is either down or nonexistent", alias)
 	}
-	return thc.Connection(hc), nil
+	return thc.Connection(ctx, hc), nil
 }
 
 // getAliasByCell should only be called while holding hc.mu

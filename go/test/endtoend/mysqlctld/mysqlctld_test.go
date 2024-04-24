@@ -164,7 +164,7 @@ func TestAutoDetect(t *testing.T) {
 }
 
 func TestVersionString(t *testing.T) {
-	client, err := mysqlctlclient.New("unix", primaryTablet.MysqlctldProcess.SocketFile)
+	client, err := mysqlctlclient.New(context.Background(), "unix", primaryTablet.MysqlctldProcess.SocketFile)
 	require.NoError(t, err)
 	version, err := client.VersionString(context.Background())
 	require.NoError(t, err)
@@ -172,7 +172,7 @@ func TestVersionString(t *testing.T) {
 }
 
 func TestReadBinlogFilesTimestamps(t *testing.T) {
-	client, err := mysqlctlclient.New("unix", primaryTablet.MysqlctldProcess.SocketFile)
+	client, err := mysqlctlclient.New(context.Background(), "unix", primaryTablet.MysqlctldProcess.SocketFile)
 	require.NoError(t, err)
 	_, err = client.ReadBinlogFilesTimestamps(context.Background(), &mysqlctl.ReadBinlogFilesTimestampsRequest{})
 	require.ErrorContains(t, err, "empty binlog list in ReadBinlogFilesTimestampsRequest")

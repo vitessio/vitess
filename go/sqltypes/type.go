@@ -119,6 +119,16 @@ func IsNull(t querypb.Type) bool {
 	return t == Null
 }
 
+// IsEnum returns true if the type is Enum type
+func IsEnum(t querypb.Type) bool {
+	return t == Enum
+}
+
+// IsSet returns true if the type is Set type
+func IsSet(t querypb.Type) bool {
+	return t == Set
+}
+
 // Vitess data types. These are idiomatically named synonyms for the querypb.Type values.
 // Although these constants are interchangeable, they should be treated as different from querypb.Type.
 // Use the synonyms only to refer to the type in Value. For proto variables, use the querypb.Type constants instead.

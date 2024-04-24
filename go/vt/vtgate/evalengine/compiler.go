@@ -17,6 +17,8 @@ limitations under the License.
 package evalengine
 
 import (
+	"slices"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/mysql/collations/colldata"
@@ -50,11 +52,14 @@ type compiledCoercion struct {
 	right colldata.Coercion
 }
 
+type EnumSetValues []string
+
 type ctype struct {
 	Type        sqltypes.Type
 	Flag        typeFlag
 	Size, Scale int32
 	Col         collations.TypedCollation
+	Values      *EnumSetValues
 }
 
 type Type struct {
@@ -63,14 +68,25 @@ type Type struct {
 	nullable    bool
 	init        bool
 	size, scale int32
+	values      *EnumSetValues
+}
+
+func (v *EnumSetValues) Equal(other *EnumSetValues) bool {
+	if v == nil && other == nil {
+		return true
+	}
+	if v == nil || other == nil {
+		return false
+	}
+	return slices.Equal(*v, *other)
 }
 
 func NewType(t sqltypes.Type, collation collations.ID) Type {
 	// New types default to being nullable
-	return NewTypeEx(t, collation, true, 0, 0)
+	return NewTypeEx(t, collation, true, 0, 0, nil)
 }
 
-func NewTypeEx(t sqltypes.Type, collation collations.ID, nullable bool, size, scale int32) Type {
+func NewTypeEx(t sqltypes.Type, collation collations.ID, nullable bool, size, scale int32, values *EnumSetValues) Type {
 	return Type{
 		typ:       t,
 		collation: collation,
@@ -78,6 +94,7 @@ func NewTypeEx(t sqltypes.Type, collation collations.ID, nullable bool, size, sc
 		init:      true,
 		size:      size,
 		scale:     scale,
+		values:    values,
 	}
 }
 
@@ -139,19 +156,41 @@ func (t *Type) Nullable() bool {
 	return true // nullable by default for unknown types
 }
 
+func (t *Type) Values() *EnumSetValues {
+	return t.values
+}
+
 func (t *Type) Valid() bool {
 	return t.init
 }
 
-func (ct ctype) nullable() bool {
+func (t *Type) Equal(other *Type) bool {
+	return t.typ == other.typ &&
+		t.collation == other.collation &&
+		t.nullable == other.nullable &&
+		t.size == other.size &&
+		t.scale == other.scale &&
+		t.values.Equal(other.values)
+}
+
+func (ct *ctype) equal(other ctype) bool {
+	return ct.Type == other.Type &&
+		ct.Flag == other.Flag &&
+		ct.Size == other.Size &&
+		ct.Scale == other.Scale &&
+		ct.Col == other.Col &&
+		ct.Values.Equal(other.Values)
+}
+
+func (ct *ctype) nullable() bool {
 	return ct.Flag&flagNullable != 0
 }
 
-func (ct ctype) isTextual() bool {
+func (ct *ctype) isTextual() bool {
 	return sqltypes.IsTextOrBinary(ct.Type)
 }
 
-func (ct ctype) isHexOrBitLiteral() bool {
+func (ct *ctype) isHexOrBitLiteral() bool {
 	return ct.Flag&flagBit != 0 || ct.Flag&flagHex != 0
 }
 

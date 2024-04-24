@@ -4103,6 +4103,27 @@ func (asm *assembler) Fn_FROM_DAYS() {
 	}, "FN FROM_DAYS INT64(SP-1)")
 }
 
+func (asm *assembler) Fn_SEC_TO_TIME_D() {
+	asm.emit(func(env *ExpressionEnv) int {
+		e := env.vm.stack[env.vm.sp-1].(*evalTemporal)
+		prec := int(e.prec)
+
+		sec := newEvalDecimalWithPrec(e.toDecimal(), int32(prec))
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalTime(datetime.NewTimeFromSeconds(sec.dec), prec)
+		return 1
+	}, "FN SEC_TO_TIME TEMPORAL(SP-1)")
+}
+
+func (asm *assembler) Fn_SEC_TO_TIME_d() {
+	asm.emit(func(env *ExpressionEnv) int {
+		e := env.vm.stack[env.vm.sp-1].(*evalDecimal)
+		prec := min(evalDecimalPrecision(e), datetime.DefaultPrecision)
+
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalTime(datetime.NewTimeFromSeconds(e.dec), int(prec))
+		return 1
+	}, "FN SEC_TO_TIME DECIMAL(SP-1)")
+}
+
 func (asm *assembler) Fn_TIME_TO_SEC() {
 	asm.emit(func(env *ExpressionEnv) int {
 		if env.vm.stack[env.vm.sp-1] == nil {

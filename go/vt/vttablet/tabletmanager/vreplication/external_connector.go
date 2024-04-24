@@ -172,7 +172,7 @@ func newTabletConnector(tablet *topodatapb.Tablet) *tabletConnector {
 
 func (tc *tabletConnector) Open(ctx context.Context) error {
 	var err error
-	tc.qs, err = tabletconn.GetDialer()(tc.tablet, grpcclient.FailFast(true))
+	tc.qs, err = tabletconn.GetDialer()(ctx, tc.tablet, grpcclient.FailFast(true))
 	return err
 }
 

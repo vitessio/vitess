@@ -238,6 +238,9 @@ func TestCanGetKeyspaces(t *testing.T) {
 	conf := config
 	defer resetConfig(conf)
 
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
 	clusterInstance, err := startCluster()
 	assert.NoError(t, err)
 	defer clusterInstance.TearDown()
@@ -248,12 +251,15 @@ func TestCanGetKeyspaces(t *testing.T) {
 		}
 	}()
 
-	assertGetKeyspaces(t, clusterInstance)
+	assertGetKeyspaces(ctx, t, clusterInstance)
 }
 
 func TestExternalTopoServerConsul(t *testing.T) {
 	conf := config
 	defer resetConfig(conf)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
 	// Start a single consul in the background.
 	cmd, serverAddr := startConsul(t)
@@ -273,7 +279,7 @@ func TestExternalTopoServerConsul(t *testing.T) {
 	assert.NoError(t, err)
 	defer cluster.TearDown()
 
-	assertGetKeyspaces(t, cluster)
+	assertGetKeyspaces(ctx, t, cluster)
 }
 
 func TestMtlsAuth(t *testing.T) {
@@ -445,12 +451,12 @@ func randomPort() int {
 	return int(v + 10000)
 }
 
-func assertGetKeyspaces(t *testing.T, cluster vttest.LocalCluster) {
-	client, err := vtctlclient.New(fmt.Sprintf("localhost:%v", cluster.GrpcPort()))
+func assertGetKeyspaces(ctx context.Context, t *testing.T, cluster vttest.LocalCluster) {
+	client, err := vtctlclient.New(ctx, fmt.Sprintf("localhost:%v", cluster.GrpcPort()))
 	assert.NoError(t, err)
 	defer client.Close()
 	stream, err := client.ExecuteVtctlCommand(
-		context.Background(),
+		ctx,
 		[]string{
 			"GetKeyspaces",
 			"--server",
