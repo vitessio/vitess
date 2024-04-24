@@ -1361,7 +1361,7 @@ func (node *Argument) Format(buf *TrackedBuffer) {
 		if node.Size != 0 || node.Scale != 0 {
 			buf.astPrintf(node, "(%d", node.Size)
 			if node.Scale != 0 {
-				buf.astPrintf(node, ", %d", node.Scale)
+				buf.astPrintf(node, ",%d", node.Scale)
 			}
 			buf.WriteString(")")
 		}

@@ -210,6 +210,7 @@ func (nz *normalizer) convertLiteralDedup(node *Literal, cursor *Cursor) {
 	arg, err := NewTypedArgumentFromLiteral(bvname, node)
 	if err != nil {
 		nz.err = err
+		return
 	}
 	cursor.Replace(arg)
 }
@@ -231,6 +232,7 @@ func (nz *normalizer) convertLiteral(node *Literal, cursor *Cursor) {
 	arg, err := NewTypedArgumentFromLiteral(bvname, node)
 	if err != nil {
 		nz.err = err
+		return
 	}
 	cursor.Replace(arg)
 }
@@ -279,6 +281,7 @@ func (nz *normalizer) parameterize(left, right Expr) Expr {
 	arg, err := NewTypedArgumentFromLiteral(bvname, lit)
 	if err != nil {
 		nz.err = err
+		return nil
 	}
 	return arg
 }

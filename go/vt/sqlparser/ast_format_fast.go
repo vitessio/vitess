@@ -1784,7 +1784,7 @@ func (node *Argument) FormatFast(buf *TrackedBuffer) {
 			buf.WriteByte('(')
 			buf.WriteString(fmt.Sprintf("%d", node.Size))
 			if node.Scale != 0 {
-				buf.WriteString(", ")
+				buf.WriteByte(',')
 				buf.WriteString(fmt.Sprintf("%d", node.Scale))
 			}
 			buf.WriteString(")")
