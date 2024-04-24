@@ -47,7 +47,8 @@ type typeAggregation struct {
 	blob     uint16
 	total    uint16
 
-	nullable bool
+	nullable    bool
+	scale, size int32
 }
 
 type TypeAggregator struct {
@@ -63,7 +64,7 @@ func (ta *TypeAggregator) Add(typ Type, env *collations.Environment) error {
 		return nil
 	}
 
-	ta.types.addNullable(typ.typ, typ.nullable)
+	ta.types.addNullable(typ.typ, typ.nullable, typ.size, typ.scale)
 	if err := ta.collations.add(typedCoercionCollation(typ.typ, typ.collation), env); err != nil {
 		return err
 	}
@@ -105,10 +106,10 @@ func (ta *typeAggregation) addEval(e eval) {
 	default:
 		t = e.SQLType()
 	}
-	ta.add(t, f)
+	ta.add(t, f, e.Size(), e.Scale())
 }
 
-func (ta *typeAggregation) addNullable(typ sqltypes.Type, nullable bool) {
+func (ta *typeAggregation) addNullable(typ sqltypes.Type, nullable bool, size, scale int32) {
 	var flag typeFlag
 	if typ == sqltypes.HexVal || typ == sqltypes.HexNum {
 		typ = sqltypes.Binary
@@ -117,13 +118,15 @@ func (ta *typeAggregation) addNullable(typ sqltypes.Type, nullable bool) {
 	if nullable {
 		flag |= flagNullable
 	}
-	ta.add(typ, flag)
+	ta.add(typ, flag, size, scale)
 }
 
-func (ta *typeAggregation) add(tt sqltypes.Type, f typeFlag) {
+func (ta *typeAggregation) add(tt sqltypes.Type, f typeFlag, size, scale int32) {
 	if f&flagNullable != 0 {
 		ta.nullable = true
 	}
+	ta.size = max(ta.size, size)
+	ta.scale = max(ta.scale, scale)
 	switch tt {
 	case sqltypes.Float32, sqltypes.Float64:
 		ta.double++
@@ -188,6 +191,14 @@ func nextSignedTypeForUnsigned(t sqltypes.Type) sqltypes.Type {
 	default:
 		panic("bad unsigned integer type")
 	}
+}
+
+func (ta *typeAggregation) Size() int32 {
+	return ta.size
+}
+
+func (ta *typeAggregation) Scale() int32 {
+	return ta.scale
 }
 
 func (ta *typeAggregation) result() sqltypes.Type {

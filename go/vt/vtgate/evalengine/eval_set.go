@@ -29,6 +29,14 @@ func (e *evalSet) SQLType() sqltypes.Type {
 	return sqltypes.Set
 }
 
+func (e *evalSet) Size() int32 {
+	return 0
+}
+
+func (e *evalSet) Scale() int32 {
+	return 0
+}
+
 func evalSetBits(values *EnumSetValues, value string) uint64 {
 	if values != nil && len(*values) > 64 {
 		// This never would happen as MySQL limits SET

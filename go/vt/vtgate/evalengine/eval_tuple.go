@@ -33,3 +33,11 @@ func (e *evalTuple) ToRawBytes() []byte {
 func (e *evalTuple) SQLType() sqltypes.Type {
 	return sqltypes.Tuple
 }
+
+func (e *evalTuple) Size() int32 {
+	return 0
+}
+
+func (e *evalTuple) Scale() int32 {
+	return 0
+}

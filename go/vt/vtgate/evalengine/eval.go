@@ -72,6 +72,8 @@ func (f typeFlag) Nullable() bool {
 type eval interface {
 	ToRawBytes() []byte
 	SQLType() sqltypes.Type
+	Size() int32
+	Scale() int32
 }
 
 type hashable interface {
