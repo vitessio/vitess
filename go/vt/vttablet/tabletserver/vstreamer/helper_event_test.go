@@ -59,6 +59,14 @@ const (
 	lengthInt  = 11
 	lengthBlob = 65535
 	lengthText = 262140
+
+	// We have to hardcode the set lengths as we don't yet have an encoded way
+	// to calculate the length for the TableMap event,
+	// This is the expected length of the only SET column in the test schema.
+	lengthSet = 204
+	// This is the expected length of the only SET column using a binary collation
+	// in the test schema.
+	lengthSetBinary = 428
 )
 
 var (
@@ -502,9 +510,11 @@ func (ts *TestSpec) getFieldEvent(table *schemadiff.CreateTableEntity) *TestFiel
 			tc.len = lengthText
 			tc.colType = "text"
 		case "set":
-			tc.len = int64((len(col.Type.EnumValues) + 1) * (strings.Count(col.Type.EnumValues[0], ",") + 1))
 			if collation.IsBinary() {
+				tc.len = lengthSetBinary
 				tc.dataType = "BINARY"
+			} else {
+				tc.len = lengthSet
 			}
 			tc.colType = fmt.Sprintf("%s(%s)", tc.dataTypeLowered, strings.Join(col.Type.EnumValues, ","))
 			ts.metadata[getMetadataKey(table.Name(), tc.name)] = col.Type.EnumValues
