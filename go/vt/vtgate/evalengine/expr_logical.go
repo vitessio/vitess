@@ -674,6 +674,7 @@ func (c *CaseExpr) simplify(env *ExpressionEnv) error {
 func (cs *CaseExpr) compile(c *compiler) (ctype, error) {
 	var ca collationAggregation
 	var ta typeAggregation
+	var scale, size int32
 
 	for _, wt := range cs.cases {
 		when, err := wt.when.compile(c)
@@ -691,6 +692,8 @@ func (cs *CaseExpr) compile(c *compiler) (ctype, error) {
 		}
 
 		ta.add(then.Type, then.Flag)
+		scale = max(scale, then.Scale)
+		size = max(size, then.Size)
 		if err := ca.add(then.Col, c.env.CollationEnv()); err != nil {
 			return ctype{}, err
 		}
@@ -703,6 +706,8 @@ func (cs *CaseExpr) compile(c *compiler) (ctype, error) {
 		}
 
 		ta.add(els.Type, els.Flag)
+		scale = max(scale, els.Scale)
+		size = max(size, els.Size)
 		if err := ca.add(els.Col, c.env.CollationEnv()); err != nil {
 			return ctype{}, err
 		}
@@ -712,7 +717,7 @@ func (cs *CaseExpr) compile(c *compiler) (ctype, error) {
 	if ta.nullable {
 		f |= flagNullable
 	}
-	ct := ctype{Type: ta.result(), Flag: f, Col: ca.result()}
+	ct := ctype{Type: ta.result(), Flag: f, Col: ca.result(), Scale: scale, Size: size}
 	c.asm.CmpCase(len(cs.cases), cs.Else != nil, ct.Type, ct.Col, c.sqlmode.AllowZeroDate())
 	return ct, nil
 }

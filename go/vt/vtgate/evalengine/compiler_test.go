@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/olekukonko/tablewriter"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
@@ -168,6 +169,7 @@ func TestCompilerSingle(t *testing.T) {
 		values     []sqltypes.Value
 		result     string
 		collation  collations.ID
+		typeWanted evalengine.Type
 	}{
 		{
 			expression: "1 + column0",
@@ -675,6 +677,15 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `1 * unix_timestamp(time('1.0000'))`,
 			result:     `DECIMAL(1698098401.0000)`,
 		},
+		{
+			expression: `(case
+               when 'PROMOTION' like 'PROMO%'
+                   then 0.01
+               else 0
+    end) * 0.01`,
+			result:     `DECIMAL(0.0001)`,
+			typeWanted: evalengine.NewTypeEx(sqltypes.Decimal, collations.CollationBinaryID, false, 4, 4),
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")
@@ -713,6 +724,12 @@ func TestCompilerSingle(t *testing.T) {
 			}
 			if tc.collation != collations.Unknown && tc.collation != expected.Collation() {
 				t.Fatalf("bad collation evaluation from eval engine: got %d, want %d", expected.Collation(), tc.collation)
+			}
+
+			if tc.typeWanted.Type() != sqltypes.Unknown {
+				typ, err := env.TypeOf(converted)
+				require.NoError(t, err)
+				require.EqualValues(t, tc.typeWanted, typ)
 			}
 
 			// re-run the same evaluation multiple times to ensure results are always consistent
