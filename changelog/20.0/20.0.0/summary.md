@@ -218,6 +218,7 @@ The new `--healthcheck-dial-concurrency` flag defines the maximum number of heal
 #### <a id="buffer_min_time_between_failovers-flag"/>New minimum for `--buffer_min_time_between_failovers`
 
 The `--buffer_min_time_between_failovers` `vttablet` flag now has a minimum value of `1s`. This is because a value of 0 can cause issues with the buffering mechanics resulting in unexpected and unnecessary query errors — in particular during `MoveTables SwitchTraffic` operations. If you are currently specifying a value of 0 for this flag then you will need to update the config value to 1s *prior to upgrading to v20 or later* as `vttablet` will report an error and terminate if you attempt to start it with a value of 0.
+
 #### <a id="vtgate-track-udfs-flag"/>New `--track-udfs` vtgate flag
 
 The new `--track-udfs` flag enables VTGate to track user defined functions for better planning.
