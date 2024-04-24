@@ -17,6 +17,7 @@ limitations under the License.
 package engine
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"strings"
@@ -107,7 +108,7 @@ func bindvarForType(field *querypb.Field) *querypb.BindVariable {
 	case querypb.Type_FLOAT32, querypb.Type_FLOAT64:
 		bv.Value = []byte("0e0")
 	case querypb.Type_DECIMAL:
-		bv.Value = []byte(fmt.Sprintf("%s.%s", strings.Repeat("0", max(1, int(field.ColumnLength-field.Decimals))), strings.Repeat("0", max(1, int(field.Decimals)))))
+		bv.Value = append(append(bytes.Repeat([]byte{'0'}, max(1, int(field.ColumnLength-field.Decimals))), byte('.')), bytes.Repeat([]byte{'0'}, max(1, int(field.Decimals)))...)
 	default:
 		return sqltypes.NullBindVariable
 	}

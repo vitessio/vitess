@@ -684,7 +684,7 @@ func TestCompilerSingle(t *testing.T) {
                else 0
     end) * 0.01`,
 			result:     `DECIMAL(0.0001)`,
-			typeWanted: evalengine.NewTypeEx(sqltypes.Decimal, collations.CollationBinaryID, false, 4, 4),
+			typeWanted: evalengine.NewTypeEx(sqltypes.Decimal, collations.CollationBinaryID, false, 4, 4, nil),
 		},
 	}
 
@@ -729,7 +729,7 @@ func TestCompilerSingle(t *testing.T) {
 			if tc.typeWanted.Type() != sqltypes.Unknown {
 				typ, err := env.TypeOf(converted)
 				require.NoError(t, err)
-				require.EqualValues(t, tc.typeWanted, typ)
+				require.True(t, tc.typeWanted.Equal(&typ))
 			}
 
 			// re-run the same evaluation multiple times to ensure results are always consistent
