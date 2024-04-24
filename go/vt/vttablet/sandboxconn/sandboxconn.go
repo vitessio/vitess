@@ -133,6 +133,8 @@ type SandboxConn struct {
 	getSchemaResult []SchemaResult
 
 	parser *sqlparser.Parser
+
+	streamHealthResponse *querypb.StreamHealthResponse
 }
 
 type SchemaResult struct {
@@ -475,8 +477,21 @@ func (sbc *SandboxConn) MessageAck(ctx context.Context, target *querypb.Target, 
 // SandboxSQRowCount is the default number of fake splits returned.
 var SandboxSQRowCount = int64(10)
 
-// StreamHealth always mocks a "healthy" result.
+// SetStreamHealthResponse sets the StreamHealthResponse to be returned in StreamHealth.
+func (sbc *SandboxConn) SetStreamHealthResponse(res *querypb.StreamHealthResponse) {
+	sbc.mapMu.Lock()
+	defer sbc.mapMu.Unlock()
+	sbc.streamHealthResponse = res
+}
+
+// StreamHealth always mocks a "healthy" result by default. If you want to override this behavior you
+// can call SetStreamHealthResponse.
 func (sbc *SandboxConn) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
+	sbc.mapMu.Lock()
+	defer sbc.mapMu.Unlock()
+	if sbc.streamHealthResponse != nil {
+		return callback(sbc.streamHealthResponse)
+	}
 	return nil
 }
 
@@ -571,7 +586,7 @@ func (sbc *SandboxConn) VStreamResults(ctx context.Context, target *querypb.Targ
 }
 
 // QueryServiceByAlias is part of the Gateway interface.
-func (sbc *SandboxConn) QueryServiceByAlias(_ *topodatapb.TabletAlias, _ *querypb.Target) (queryservice.QueryService, error) {
+func (sbc *SandboxConn) QueryServiceByAlias(_ context.Context, _ *topodatapb.TabletAlias, _ *querypb.Target) (queryservice.QueryService, error) {
 	return sbc, nil
 }
 

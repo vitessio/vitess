@@ -104,13 +104,13 @@ func TestSettingsPoolWithTXAndPRS(t *testing.T) {
 	// prs should happen without any error.
 	text, err := rutils.Prs(t, clusterInstance, tablets[1])
 	require.NoError(t, err, text)
-	rutils.WaitForTabletToBeServing(t, clusterInstance, tablets[0], 1*time.Minute)
+	rutils.WaitForTabletToBeServing(ctx, t, clusterInstance, tablets[0], 1*time.Minute)
 
 	defer func() {
 		// reset state
 		text, err = rutils.Prs(t, clusterInstance, tablets[0])
 		require.NoError(t, err, text)
-		rutils.WaitForTabletToBeServing(t, clusterInstance, tablets[1], 1*time.Minute)
+		rutils.WaitForTabletToBeServing(ctx, t, clusterInstance, tablets[1], 1*time.Minute)
 	}()
 
 	// no error should occur and it should go to the right tablet.
@@ -134,12 +134,12 @@ func TestSettingsPoolWithoutTXAndPRS(t *testing.T) {
 	// prs should happen without any error.
 	text, err := rutils.Prs(t, clusterInstance, tablets[1])
 	require.NoError(t, err, text)
-	rutils.WaitForTabletToBeServing(t, clusterInstance, tablets[0], 1*time.Minute)
+	rutils.WaitForTabletToBeServing(ctx, t, clusterInstance, tablets[0], 1*time.Minute)
 	defer func() {
 		// reset state
 		text, err = rutils.Prs(t, clusterInstance, tablets[0])
 		require.NoError(t, err, text)
-		rutils.WaitForTabletToBeServing(t, clusterInstance, tablets[1], 1*time.Minute)
+		rutils.WaitForTabletToBeServing(ctx, t, clusterInstance, tablets[1], 1*time.Minute)
 	}()
 
 	// no error should occur and it should go to the right tablet.

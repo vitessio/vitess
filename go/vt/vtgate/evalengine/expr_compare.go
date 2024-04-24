@@ -114,7 +114,7 @@ func (compareNullSafeEQ) compare(collationEnv *collations.Environment, left, rig
 }
 
 func typeIsTextual(tt sqltypes.Type) bool {
-	return sqltypes.IsTextOrBinary(tt) || tt == sqltypes.Time
+	return sqltypes.IsTextOrBinary(tt) || tt == sqltypes.Time || tt == sqltypes.Enum || tt == sqltypes.Set
 }
 
 func compareAsStrings(l, r sqltypes.Type) bool {
@@ -141,6 +141,14 @@ func compareAsDecimal(ltype, rtype sqltypes.Type) bool {
 
 func compareAsDates(l, r sqltypes.Type) bool {
 	return sqltypes.IsDateOrTime(l) && sqltypes.IsDateOrTime(r)
+}
+
+func compareAsEnums(l, r sqltypes.Type) bool {
+	return sqltypes.IsEnum(l) && sqltypes.IsEnum(r)
+}
+
+func compareAsSets(l, r sqltypes.Type) bool {
+	return sqltypes.IsSet(l) && sqltypes.IsSet(r)
 }
 
 func compareAsDateAndString(l, r sqltypes.Type) bool {
@@ -223,6 +231,10 @@ func evalCompare(left, right eval, collationEnv *collations.Environment) (comp i
 	switch {
 	case compareAsDates(lt, rt):
 		return compareDates(left.(*evalTemporal), right.(*evalTemporal)), nil
+	case compareAsEnums(lt, rt):
+		return compareEnums(left.(*evalEnum), right.(*evalEnum)), nil
+	case compareAsSets(lt, rt):
+		return compareSets(left.(*evalSet), right.(*evalSet)), nil
 	case compareAsStrings(lt, rt):
 		return compareStrings(left, right, collationEnv)
 	case compareAsSameNumericType(lt, rt) || compareAsDecimal(lt, rt):

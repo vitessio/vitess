@@ -22,6 +22,7 @@
     - [Delete with Subquery Support](#delete-subquery)
     - [Delete with Multi Target Support](#delete-multi-target)
     - [User Defined Functions Support](#udf-support)
+  - **[Query Timeout](#query-timeout)**
   - **[Flag changes](#flag-changes)**
     - [`pprof-http` default change](#pprof-http-default)
     - [New `healthcheck-dial-concurrency` flag](#healthcheck-dial-concurrency-flag)
@@ -195,6 +196,11 @@ This will enable the tracking of UDFs in VTGate and will be used for planning.
 Without this flag, VTGate will not be aware that there might be aggregating user-defined functions in the query that need to be pushed down to MySQL.
 
 More details about how to load UDFs is available in [MySQL Docs](https://dev.mysql.com/doc/extending-mysql/8.0/en/adding-loadable-function.html)
+
+### <a id="query-timeout"/>Query Timeout
+On a query timeout, Vitess closed the connection using the `kill connection` statement. This leads to connection churn 
+which is not desirable in some cases. To avoid this, Vitess now uses the `kill query` statement to cancel the query. 
+This will only cancel the query and does not terminate the connection.
 
 ### <a id="flag-changes"/>Flag Changes
 

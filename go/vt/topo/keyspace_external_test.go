@@ -24,6 +24,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -32,10 +33,12 @@ import (
 )
 
 func TestServerFindAllShardsInKeyspace(t *testing.T) {
+	const defaultKeyspace = "keyspace"
 	tests := []struct {
-		name   string
-		shards int
-		opt    *topo.FindAllShardsInKeyspaceOptions
+		name     string
+		shards   int
+		keyspace string // If you want to override the default
+		opt      *topo.FindAllShardsInKeyspaceOptions
 	}{
 		{
 			name:   "negative concurrency",
@@ -54,9 +57,25 @@ func TestServerFindAllShardsInKeyspace(t *testing.T) {
 			shards: 32,
 			opt:    &topo.FindAllShardsInKeyspaceOptions{Concurrency: 8},
 		},
+		{
+			name:     "SQL escaped keyspace",
+			shards:   32,
+			keyspace: "`my-keyspace`",
+			opt:      &topo.FindAllShardsInKeyspaceOptions{Concurrency: 8},
+		},
 	}
 
 	for _, tt := range tests {
+		keyspace := defaultKeyspace
+		if tt.keyspace != "" {
+			// Most calls such as CreateKeyspace will not accept invalid characters
+			// in the value so we'll only use the original test case value in
+			// FindAllShardsInKeyspace. This allows us to test and confirm that
+			// FindAllShardsInKeyspace can handle SQL escaped or backtick'd names.
+			keyspace, _ = sqlescape.UnescapeID(tt.keyspace)
+		} else {
+			tt.keyspace = defaultKeyspace
+		}
 		t.Run(tt.name, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -66,7 +85,6 @@ func TestServerFindAllShardsInKeyspace(t *testing.T) {
 
 			// Create an ephemeral keyspace and generate shard records within
 			// the keyspace to fetch later.
-			const keyspace = "keyspace"
 			require.NoError(t, ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}))
 
 			shards, err := key.GenerateShardRanges(tt.shards)
@@ -78,7 +96,7 @@ func TestServerFindAllShardsInKeyspace(t *testing.T) {
 
 			// Verify that we return a complete list of shards and that each
 			// key range is present in the output.
-			out, err := ts.FindAllShardsInKeyspace(ctx, keyspace, tt.opt)
+			out, err := ts.FindAllShardsInKeyspace(ctx, tt.keyspace, tt.opt)
 			require.NoError(t, err)
 			require.Len(t, out, tt.shards)
 

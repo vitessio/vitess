@@ -45,7 +45,7 @@ func TestNumberedGeneral(t *testing.T) {
 
 	p.Put(id)
 	_, err = p.Get(1, "test2")
-	assert.Contains(t, "not found", err.Error())
+	assert.ErrorContains(t, err, "not found (potential transaction timeout)")
 	p.Unregister(1, "test") // Should not fail
 	p.Unregister(0, "test")
 	// p is now empty

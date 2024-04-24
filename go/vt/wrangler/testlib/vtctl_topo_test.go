@@ -62,7 +62,7 @@ func TestVtctlTopoCommands(t *testing.T) {
 	if err := ts.CreateKeyspace(context.Background(), "ks2", &topodatapb.Keyspace{KeyspaceType: topodatapb.KeyspaceType_SNAPSHOT}); err != nil {
 		t.Fatalf("CreateKeyspace() failed: %v", err)
 	}
-	vp := NewVtctlPipe(t, ts)
+	vp := NewVtctlPipe(ctx, t, ts)
 	defer vp.Close()
 
 	tmp := t.TempDir()

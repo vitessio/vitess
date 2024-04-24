@@ -159,7 +159,7 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 	}
 
 	dialerName := fmt.Sprintf("TrafficSwitcherTest-%s-%d", t.Name(), rand.IntN(1000000000))
-	tabletconn.RegisterDialer(dialerName, func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
+	tabletconn.RegisterDialer(dialerName, func(ctx context.Context, tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
 		tme.mu.Lock()
 		defer tme.mu.Unlock()
 		allPrimaries := append(tme.sourcePrimaries, tme.targetPrimaries...)
@@ -425,7 +425,7 @@ func newTestTablePartialMigrater(ctx context.Context, t *testing.T, shards, shar
 	}
 
 	dialerName := fmt.Sprintf("TrafficSwitcherTest-%s-%d", t.Name(), rand.IntN(1000000000))
-	tabletconn.RegisterDialer(dialerName, func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
+	tabletconn.RegisterDialer(dialerName, func(ctx context.Context, tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
 		tme.mu.Lock()
 		defer tme.mu.Unlock()
 		for _, ft := range append(tme.sourcePrimaries, tme.targetPrimaries...) {
@@ -590,7 +590,7 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 	}
 
 	dialerName := fmt.Sprintf("TrafficSwitcherTest-%s-%d", t.Name(), rand.IntN(1000000000))
-	tabletconn.RegisterDialer(dialerName, func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
+	tabletconn.RegisterDialer(dialerName, func(ctx context.Context, tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
 		tme.mu.Lock()
 		defer tme.mu.Unlock()
 		for _, ft := range append(tme.sourcePrimaries, tme.targetPrimaries...) {

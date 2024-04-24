@@ -457,7 +457,7 @@ func (tp *TabletPicker) GetMatchingTablets(ctx context.Context) []*topo.TabletIn
 			log.Warningf("Tablet picker failed to load tablet %v", tabletAlias)
 		} else if topoproto.IsTypeInList(tabletInfo.Type, tp.tabletTypes) {
 			// Try to connect to the tablet and confirm that it's usable.
-			if conn, err := tabletconn.GetDialer()(tabletInfo.Tablet, grpcclient.FailFast(true)); err == nil {
+			if conn, err := tabletconn.GetDialer()(ctx, tabletInfo.Tablet, grpcclient.FailFast(true)); err == nil {
 				// Ensure that the tablet is healthy and serving.
 				shortCtx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 				defer cancel()

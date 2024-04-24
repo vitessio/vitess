@@ -146,8 +146,8 @@ func (gw *TabletGateway) setupBuffering(ctx context.Context) {
 }
 
 // QueryServiceByAlias satisfies the Gateway interface
-func (gw *TabletGateway) QueryServiceByAlias(alias *topodatapb.TabletAlias, target *querypb.Target) (queryservice.QueryService, error) {
-	qs, err := gw.hc.TabletConnection(alias, target)
+func (gw *TabletGateway) QueryServiceByAlias(ctx context.Context, alias *topodatapb.TabletAlias, target *querypb.Target) (queryservice.QueryService, error) {
+	qs, err := gw.hc.TabletConnection(ctx, alias, target)
 	return queryservice.Wrap(qs, gw.withShardError), NewShardError(err, target)
 }
 

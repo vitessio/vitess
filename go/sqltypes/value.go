@@ -568,6 +568,16 @@ func (v Value) IsDecimal() bool {
 	return IsDecimal(v.Type())
 }
 
+// IsEnum returns true if Value is enum.
+func (v Value) IsEnum() bool {
+	return v.Type() == querypb.Type_ENUM
+}
+
+// IsSet returns true if Value is set.
+func (v Value) IsSet() bool {
+	return v.Type() == querypb.Type_SET
+}
+
 // IsComparable returns true if the Value is null safe comparable without collation information.
 func (v *Value) IsComparable() bool {
 	if v.Type() == Null || IsNumber(v.Type()) || IsBinary(v.Type()) {

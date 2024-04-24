@@ -18,6 +18,7 @@ package evalengine
 
 import (
 	"bytes"
+	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/colldata"
@@ -120,6 +121,42 @@ func compareNumeric(left, right eval) (int, error) {
 
 func compareDates(l, r *evalTemporal) int {
 	return l.dt.Compare(r.dt)
+}
+
+func compareEnums(l, r *evalEnum) int {
+	if l.value == -1 || r.value == -1 {
+		// If the values are equal normally the strings
+		// are equal too. In case we didn't find the proper
+		// value in the enum we return the string comparison.
+		// This is not always correct, but a best effort and still
+		// works for the cases where we only care about
+		// equality.
+		return strings.Compare(l.string, r.string)
+	}
+	if l.value == r.value {
+		return 0
+	}
+	if l.value < r.value {
+		return -1
+	}
+	return 1
+}
+
+func compareSets(l, r *evalSet) int {
+	if l.set == r.set {
+		if l.set == 0 && (len(l.string) != 0 || len(r.string) != 0) {
+			// In this case we didn't have the proper values passed
+			// in when creating the evalSet. We can't compare the set
+			// values then, but fall back to string comparison to at
+			// least compare something and to handle equality checks.
+			return strings.Compare(l.string, r.string)
+		}
+		return 0
+	}
+	if l.set < r.set {
+		return -1
+	}
+	return 1
 }
 
 func compareDateAndString(l, r eval) int {

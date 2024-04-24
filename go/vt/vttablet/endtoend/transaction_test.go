@@ -471,7 +471,7 @@ func TestShutdownGracePeriodWithReserveExecute(t *testing.T) {
 	client.Rollback()
 }
 
-func TestShortTxTimeout(t *testing.T) {
+func TestShortTxTimeoutOltp(t *testing.T) {
 	client := framework.NewClient()
 	defer framework.Server.Config().SetTxTimeoutForWorkload(
 		framework.Server.Config().TxTimeoutForWorkload(querypb.ExecuteOptions_OLTP),
@@ -483,6 +483,23 @@ func TestShortTxTimeout(t *testing.T) {
 	require.NoError(t, err)
 	start := time.Now()
 	_, err = client.Execute("select sleep(10) from dual", nil)
+	assert.Error(t, err)
+	assert.True(t, time.Since(start) < 5*time.Second, time.Since(start))
+	client.Rollback()
+}
+
+func TestShortTxTimeoutOlap(t *testing.T) {
+	client := framework.NewClient()
+	defer framework.Server.Config().SetTxTimeoutForWorkload(
+		framework.Server.Config().TxTimeoutForWorkload(querypb.ExecuteOptions_OLAP),
+		querypb.ExecuteOptions_OLAP,
+	)
+	framework.Server.Config().SetTxTimeoutForWorkload(10*time.Millisecond, querypb.ExecuteOptions_OLAP)
+
+	err := client.Begin(false)
+	require.NoError(t, err)
+	start := time.Now()
+	_, err = client.StreamExecute("select sleep(10) from dual", nil)
 	assert.Error(t, err)
 	assert.True(t, time.Since(start) < 5*time.Second, time.Since(start))
 	client.Rollback()
