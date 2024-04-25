@@ -22,6 +22,7 @@
     - [Delete with Subquery Support](#delete-subquery)
     - [Delete with Multi Target Support](#delete-multi-target)
     - [User Defined Functions Support](#udf-support)
+    - [Insert Row Alias Support](#insert-row-alias-support)
   - **[Query Timeout](#query-timeout)**
   - **[Flag changes](#flag-changes)**
     - [`pprof-http` default change](#pprof-http-default)
@@ -196,6 +197,16 @@ This will enable the tracking of UDFs in VTGate and will be used for planning.
 Without this flag, VTGate will not be aware that there might be aggregating user-defined functions in the query that need to be pushed down to MySQL.
 
 More details about how to load UDFs is available in [MySQL Docs](https://dev.mysql.com/doc/extending-mysql/8.0/en/adding-loadable-function.html)
+
+#### <a id="insert-row-alias-support"/> Insert Row Alias Support
+
+Support is added to have row alias in Insert statement to be used with `on duplicate key update`.
+
+Example:
+- `insert into user(id, name, email) valies (100, 'Alice', 'alice@mail.com') as new on duplicate key update name = new.name, email = new.email`
+- `insert into user(id, name, email) valies (100, 'Alice', 'alice@mail.com') as new(m, n, p) on duplicate key update name = n, email = p`
+
+More details about how it works is available in [MySQL Docs](https://dev.mysql.com/doc/refman/8.0/en/insert-on-duplicate.html)
 
 ### <a id="query-timeout"/>Query Timeout
 On a query timeout, Vitess closed the connection using the `kill connection` statement. This leads to connection churn 
