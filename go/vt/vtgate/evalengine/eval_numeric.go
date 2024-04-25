@@ -366,6 +366,14 @@ func (e *evalInt64) SQLType() sqltypes.Type {
 	return sqltypes.Int64
 }
 
+func (e *evalInt64) Size() int32 {
+	return 0
+}
+
+func (e *evalInt64) Scale() int32 {
+	return 0
+}
+
 func (e *evalInt64) ToRawBytes() []byte {
 	return strconv.AppendInt(nil, e.i, 10)
 }
@@ -409,6 +417,14 @@ func (e *evalUint64) SQLType() sqltypes.Type {
 	return sqltypes.Uint64
 }
 
+func (e *evalUint64) Size() int32 {
+	return 0
+}
+
+func (e *evalUint64) Scale() int32 {
+	return 0
+}
+
 func (e *evalUint64) ToRawBytes() []byte {
 	return strconv.AppendUint(nil, e.u, 10)
 }
@@ -450,6 +466,14 @@ func (e *evalFloat) Hash(h *vthash.Hasher) {
 
 func (e *evalFloat) SQLType() sqltypes.Type {
 	return sqltypes.Float64
+}
+
+func (e *evalFloat) Size() int32 {
+	return 0
+}
+
+func (e *evalFloat) Scale() int32 {
+	return 0
 }
 
 func (e *evalFloat) ToRawBytes() []byte {
@@ -526,6 +550,14 @@ func (e *evalDecimal) Hash(h *vthash.Hasher) {
 
 func (e *evalDecimal) SQLType() sqltypes.Type {
 	return sqltypes.Decimal
+}
+
+func (e *evalDecimal) Size() int32 {
+	return e.length
+}
+
+func (e *evalDecimal) Scale() int32 {
+	return -e.dec.Exponent()
 }
 
 func (e *evalDecimal) ToRawBytes() []byte {
