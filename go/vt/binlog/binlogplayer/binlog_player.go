@@ -115,6 +115,8 @@ type Stats struct {
 	PartialQueryCacheSize *stats.CountersWithMultiLabels
 
 	ThrottledCounts *stats.CountersWithMultiLabels // By throttler and component
+
+	DDLEventActions *stats.CountersWithSingleLabel
 }
 
 // RecordHeartbeat updates the time the last heartbeat from vstreamer was seen
@@ -171,20 +173,21 @@ func NewStats() *Stats {
 	bps.ReplicationLagSeconds.Store(math.MaxInt64)
 	bps.PhaseTimings = stats.NewTimings("", "", "Phase")
 	bps.QueryTimings = stats.NewTimings("", "", "Phase")
-	bps.QueryCount = stats.NewCountersWithSingleLabel("", "", "Phase", "")
-	bps.BulkQueryCount = stats.NewCountersWithSingleLabel("", "", "Statement", "")
-	bps.TrxQueryBatchCount = stats.NewCountersWithSingleLabel("", "", "Statement", "")
+	bps.QueryCount = stats.NewCountersWithSingleLabel("", "", "Phase")
+	bps.BulkQueryCount = stats.NewCountersWithSingleLabel("", "", "Statement")
+	bps.TrxQueryBatchCount = stats.NewCountersWithSingleLabel("", "", "Statement")
 	bps.CopyRowCount = stats.NewCounter("", "")
 	bps.CopyLoopCount = stats.NewCounter("", "")
 	bps.ErrorCounts = stats.NewCountersWithMultiLabels("", "", []string{"type"})
-	bps.NoopQueryCount = stats.NewCountersWithSingleLabel("", "", "Statement", "")
+	bps.NoopQueryCount = stats.NewCountersWithSingleLabel("", "", "Statement")
 	bps.VReplicationLags = stats.NewTimings("", "", "")
 	bps.VReplicationLagRates = stats.NewRates("", bps.VReplicationLags, 15*60/5, 5*time.Second)
-	bps.TableCopyRowCounts = stats.NewCountersWithSingleLabel("", "", "Table", "")
+	bps.TableCopyRowCounts = stats.NewCountersWithSingleLabel("", "", "Table")
 	bps.TableCopyTimings = stats.NewTimings("", "", "Table")
 	bps.PartialQueryCacheSize = stats.NewCountersWithMultiLabels("", "", []string{"type"})
 	bps.PartialQueryCount = stats.NewCountersWithMultiLabels("", "", []string{"type"})
 	bps.ThrottledCounts = stats.NewCountersWithMultiLabels("", "", []string{"throttler", "component"})
+	bps.DDLEventActions = stats.NewCountersWithSingleLabel("", "", "action")
 	return bps
 }
 

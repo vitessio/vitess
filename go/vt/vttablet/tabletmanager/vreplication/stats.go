@@ -527,6 +527,22 @@ func (st *vrStats) register() {
 			}
 			return result
 		})
+
+	stats.NewCountersFuncWithMultiLabels(
+		"VReplicationDDLActions",
+		"vreplication DDL processing actions per stream",
+		[]string{"workflow", "action"},
+		func() map[string]int64 {
+			st.mu.Lock()
+			defer st.mu.Unlock()
+			result := make(map[string]int64, len(st.controllers))
+			for _, ct := range st.controllers {
+				for key, val := range ct.blpStats.DDLEventActions.Counts() {
+					result[fmt.Sprintf("%s.%d.%s", ct.workflow, ct.id, key)] = val
+				}
+			}
+			return result
+		})
 }
 
 func (st *vrStats) numControllers() int64 {
