@@ -6504,112 +6504,109 @@ func TestCreateTable(t *testing.T) {
 		// partition options
 		{
 			input: "create table t (\n" +
-				"\ti int\n)" +
-				"PARTITION BY RANGE (store_id) (\n" +
-				"PARTITION p0 VALUES LESS THAN (6),\n" +
-				"PARTITION p1 VALUES LESS THAN (11),\n" +
-				"PARTITION p2 VALUES LESS THAN (16),\n" +
-				"PARTITION p3 VALUES LESS THAN (21)\n" +
+				"\ti int\n" +
+				") partition by range (store_id) (\n" +
+				"partition p0 values less than (6),\n" +
+				"partition p1 values less than (11),\n" +
+				"partition p2 values less than (16),\n" +
+				"partition p3 values less than (21)\n" +
 				")",
-			output: "create table t (\n" +
-				"\ti int\n)" +
-				" PARTITION BY RANGE (store_id)(partition_definitions)",
 		},
 		{
 			input: "create table t (\n" +
-				"\ti int\n)" +
-				"PARTITION BY HASH ('values')",
-			output: "create table t (\n" +
-				"\ti int\n)" +
-				" PARTITION BY HASH (value)",
+				"\ti int\n" +
+				") partition by hash ('values')",
 		},
 		{
 			input: "create table t (\n" +
-				"\ti int\n)" +
-				"PARTITION BY HASH (col)",
-			output: "create table t (\n" +
-				"\ti int\n)" +
-				" PARTITION BY HASH (col)",
+				"\ti int\n" +
+				") partition by hash (col)",
 		},
 		{
 			input: "create table t (\n" +
-				"\ti int\n)" +
-				"PARTITION BY LINEAR HASH (col)",
-			output: "create table t (\n" +
-				"\ti int\n)" +
-				" PARTITION BY LINEAR HASH (col)",
+				"\ti int\n" +
+				") partition by linear hash (col)",
 		},
 		{
 			input: "create table t (\n" +
-				"\ti int\n)" +
-				"PARTITION BY KEY (col)",
-			output: "create table t (\n" +
-				"\ti int\n)" +
-				" PARTITION BY KEY (column_list)",
+				"\ti int\n" +
+				") partition by KEY (col)",
 		},
 		{
 			input: "create table t (\n" +
-				"\ti int\n)" +
-				"PARTITION BY KEY ALGORITHM = 7 (col)",
-			output: "create table t (\n" +
-				"\ti int\n)" +
-				" PARTITION BY KEY ALGORITHM 7 (column_list)",
+				"\ti int\n" +
+				") partition by KEY ALGORITHM = 7 (col)",
 		},
 		{
 			input: "create table t (\n" +
-				"\ti int\n)" +
-				"PARTITION BY LINEAR KEY ALGORITHM = 7 (col)",
-			output: "create table t (\n" +
-				"\ti int\n)" +
-				" PARTITION BY LINEAR KEY ALGORITHM 7 (column_list)",
+				"\ti int\n" +
+				") partition by linear KEY ALGORITHM = 7 (col)",
 		},
 		{
 			input: "create table t (\n" +
-				"\ti int\n)" +
-				"PARTITION BY RANGE (column)",
-			output: "create table t (\n" +
-				"\ti int\n)" +
-				" PARTITION BY RANGE (column)",
+				"\ti int\n" +
+				") partition by RANGE (col)",
 		},
 		{
 			input: "create table t (\n" +
-				"\ti int\n)" +
-				"PARTITION BY RANGE COLUMNS (c1, c2, c3)",
-			output: "create table t (\n" +
-				"\ti int\n)" +
-				" PARTITION BY RANGE COLUMNS (column_list)",
+				"\ti int\n" +
+				") partition by RANGE (i + j)",
 		},
 		{
 			input: "create table t (\n" +
-				"\ti int\n)" +
-				"PARTITION BY LIST (column)",
-			output: "create table t (\n" +
-				"\ti int\n)" +
-				" PARTITION BY LIST (column)",
+				"\ti int\n" +
+				") partition by RANGE (month(i))",
 		},
 		{
 			input: "create table t (\n" +
-				"\ti int\n)" +
-				"PARTITION BY LIST COLUMNS (c1, c2, c3)",
-			output: "create table t (\n" +
-				"\ti int\n)" +
-				" PARTITION BY LIST COLUMNS (column_list)",
+				"\ti int\n" +
+				") partition by RANGE (concat(i))",
 		},
 		{
 			input: "create table t (\n" +
-				"\ti int\n)" +
-				"PARTITION BY LINEAR HASH (a) PARTITIONS 20",
-			output: "create table t (\n" +
-				"\ti int\n)" +
-				" PARTITION BY LINEAR HASH (a)PARTITIONS 20 ",
-		},
-		{
-			input: "create table t (\n" +
-				"\ti int\n)" +
-				"PARTITION BY LINEAR HASH (a) PARTITIONS 10 SUBPARTITION BY LINEAR HASH (b) SUBPARTITIONS 20",
+				"\ti int\n" +
+				") partition by RANGE COLUMNS (c1, c2, c3)",
 			output: "create table t (\n" +
 				"\ti int\n" +
-				") PARTITION BY LINEAR HASH (a)PARTITIONS 10 SUBPARTITION BY LINEAR HASH (b) SUBPARTITIONS 20 ",
+				") partition by RANGE (c1, c2, c3)",
+		},
+		{
+			input: "create table t (\n" +
+				"\ti int\n" +
+				") partition by LIST (col)",
+		},
+		{
+			input: "create table t (\n" +
+				"\ti int\n" +
+				") partition by LIST (i + j)",
+		},
+		{
+			input: "create table t (\n" +
+				"\ti int\n" +
+				") partition by LIST (month(i))",
+		},
+		{
+			input: "create table t (\n" +
+				"\ti int\n" +
+				") partition by LIST (concat(i))",
+		},
+		{
+			input: "create table t (\n" +
+				"\ti int\n" +
+				") partition by LIST COLUMNS (c1, c2, c3)",
+			output: "create table t (\n" +
+				"\ti int\n" +
+				") partition by LIST (c1, c2, c3)",
+		},
+		{
+			input: "create table t (\n" +
+				"\ti int\n" +
+				") partition by linear hash (a) partitions 20",
+		},
+		{
+			input: "create table t (\n" +
+				"\ti int\n" +
+				") partition by linear hash (a) partitions 10 subpartition by linear hash (b) subpartitions 20",
 		},
 		{
 			input: "create table t (\n" +
@@ -6621,20 +6618,13 @@ func TestCreateTable(t *testing.T) {
 		},
 		{
 			input: "create table t (\n" +
-				"\ti int\n)" +
-				"engine = innodb\n" +
-				"auto_increment 123,\n" +
-				"avg_row_length 1,\n" +
-				"default character set utf8mb4\n" +
-				"PARTITION BY LINEAR HASH (a) " +
-				"PARTITIONS 10 SUBPARTITION BY LINEAR HASH (b) SUBPARTITIONS 20",
-			output: "create table t (\n\t" +
-				"i int\n" +
-				") engine innodb" +
-				" auto_increment 123" +
-				" avg_row_length 1" +
-				" character set utf8mb4" +
-				" PARTITION BY LINEAR HASH (a)PARTITIONS 10 SUBPARTITION BY LINEAR HASH (b) SUBPARTITIONS 20 ",
+				"\ti int\n" +
+				") engine innodb " +
+				"auto_increment 123 " +
+				"avg_row_length 1 " +
+				"character set utf8mb4 " +
+				"partition by linear hash (a) partitions 10 " +
+				"subpartition by linear hash (b) subpartitions 20",
 		},
 		{
 			input: "create table t (\n" +

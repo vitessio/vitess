@@ -2529,13 +2529,11 @@ func (node *PartitionDefinition) walkSubtree(visit Visit) error {
 
 // TableSpec describes the structure of a table from a CREATE TABLE statement
 type TableSpec struct {
-	Columns     []*ColumnDefinition
-	Indexes     []*IndexDefinition
-	Constraints []*ConstraintDefinition
-	TableOpts   []*TableOption
-
-	// TODO: should be some sort of struct
-	PartitionOpts string
+	Columns      []*ColumnDefinition
+	Indexes      []*IndexDefinition
+	Constraints  []*ConstraintDefinition
+	TableOpts    []*TableOption
+	PartitionOpt *PartitionOption
 }
 
 // Format formats the node.
@@ -2558,8 +2556,8 @@ func (ts *TableSpec) Format(buf *TrackedBuffer) {
 	for _, tblOpt := range ts.TableOpts {
 		buf.Myprintf(" %s %s", tblOpt.Name, tblOpt.Value)
 	}
-	if len(ts.PartitionOpts) > 0 {
-		buf.Myprintf(" %s", ts.PartitionOpts)
+	if ts.PartitionOpt != nil {
+		buf.Myprintf(" %v", ts.PartitionOpt)
 	}
 
 	//buf.Myprintf("\n)%s", strings.Replace(ts.TableOpts, ", ", ",\n  ", -1))
@@ -3350,6 +3348,83 @@ type IndexOption struct {
 type TableOption struct {
 	Name  string
 	Value string
+}
+
+// PartitionOption describes a partition option in a CREATE TABLE statement
+type PartitionOption struct {
+	PartitionType string // HASH, KEY, RANGE, LIST
+	IsLinear      bool
+	KeyAlgorithm  string
+	ColList       Columns
+	Expr          Expr
+	Partitions    *SQLVal
+	SubPartition  *SubPartition
+	Definitions   []*PartitionDefinition
+}
+
+// Format formats the node.
+func (node *PartitionOption) Format(buf *TrackedBuffer) {
+	buf.Myprintf("partition by")
+	if node.IsLinear {
+		buf.Myprintf(" linear")
+	}
+	buf.Myprintf(" %s", node.PartitionType)
+	if node.KeyAlgorithm != "" {
+		buf.Myprintf(" %s", node.KeyAlgorithm)
+	}
+	if node.ColList != nil {
+		buf.Myprintf(" %v", node.ColList)
+	}
+	if node.Expr != nil {
+		buf.Myprintf(" (%v)", node.Expr)
+	}
+	if node.Partitions != nil {
+		buf.Myprintf(" partitions %v", node.Partitions)
+	}
+	if node.SubPartition != nil {
+		buf.Myprintf("%v", node.SubPartition)
+	}
+	if len(node.Definitions) > 0 {
+		buf.Myprintf(" (\n")
+		for i, def := range node.Definitions {
+			if i != 0 {
+				buf.Myprintf(",\n")
+			}
+			buf.Myprintf("%v", def)
+		}
+		buf.Myprintf("\n)")
+	}
+}
+
+// SubPartition describes subpartitions control
+type SubPartition struct {
+	PartitionType string
+	IsLinear      bool
+	KeyAlgorithm  string
+	ColList       Columns
+	Expr          Expr
+	SubPartitions *SQLVal
+}
+
+// Format formats the node.
+func (node *SubPartition) Format(buf *TrackedBuffer) {
+	buf.Myprintf(" subpartition by")
+	if node.IsLinear {
+		buf.Myprintf(" linear")
+	}
+	buf.Myprintf(" %s", node.PartitionType)
+	if node.KeyAlgorithm != "" {
+		buf.Myprintf(" %s", node.KeyAlgorithm)
+	}
+	if node.ColList != nil {
+		buf.Myprintf(" %v", node.ColList)
+	}
+	if node.Expr != nil {
+		buf.Myprintf(" (%v)", node.Expr)
+	}
+	if node.SubPartitions != nil {
+		buf.Myprintf(" subpartitions %v", node.SubPartitions)
+	}
 }
 
 // ColumnKeyOption indicates whether or not the given column is defined as an
