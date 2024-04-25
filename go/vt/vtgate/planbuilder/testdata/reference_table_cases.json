@@ -281,7 +281,7 @@
         "Query": "select * from ref_with_source as ref, `user` as u where u.id = 2 and ref.id = u.ref_id",
         "Table": "`user`, ref_with_source",
         "Values": [
-          "INT64(2)"
+          "2"
         ]
       },
       "TablesUsed": [
@@ -308,7 +308,7 @@
         "Query": "select * from ref_with_source as ref, `user` as u where u.id = 2 and ref.id = u.ref_id",
         "Table": "`user`, ref_with_source",
         "Values": [
-          "INT64(2)"
+          "2"
         ]
       },
       "TablesUsed": [
