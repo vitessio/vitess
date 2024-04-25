@@ -1357,7 +1357,15 @@ func (node *Argument) Format(buf *TrackedBuffer) {
 		// For bind variables that are statically typed, emit their type as an adjacent comment.
 		// This comment will be ignored by older versions of Vitess (and by MySQL) but will provide
 		// type safety when using the query as a cache key.
-		buf.astPrintf(node, " /* %s */", node.Type.String())
+		buf.astPrintf(node, " /* %s", node.Type.String())
+		if node.Size != 0 || node.Scale != 0 {
+			buf.astPrintf(node, "(%d", node.Size)
+			if node.Scale != 0 {
+				buf.astPrintf(node, ",%d", node.Scale)
+			}
+			buf.WriteString(")")
+		}
+		buf.WriteString(" */")
 	}
 }
 
