@@ -3905,13 +3905,13 @@ func (a *application) rewriteRefOfInsert(parent SQLNode, node *Insert, replacer 
 	}) {
 		return false
 	}
-	if !a.rewriteOnDup(node, node.OnDup, func(newNode, parent SQLNode) {
-		parent.(*Insert).OnDup = newNode.(OnDup)
+	if !a.rewriteRefOfRowAlias(node, node.RowAlias, func(newNode, parent SQLNode) {
+		parent.(*Insert).RowAlias = newNode.(*RowAlias)
 	}) {
 		return false
 	}
-	if !a.rewriteRefOfRowAlias(node, node.RowAlias, func(newNode, parent SQLNode) {
-		parent.(*Insert).RowAlias = newNode.(*RowAlias)
+	if !a.rewriteOnDup(node, node.OnDup, func(newNode, parent SQLNode) {
+		parent.(*Insert).OnDup = newNode.(OnDup)
 	}) {
 		return false
 	}

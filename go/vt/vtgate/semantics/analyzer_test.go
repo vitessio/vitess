@@ -1290,6 +1290,16 @@ func parseAndAnalyze(t *testing.T, query, dbName string) (sqlparser.Statement, *
 	return parse, semTable
 }
 
+func parseAndAnalyzeStrict(t *testing.T, query, dbName string) (sqlparser.Statement, *SemTable) {
+	t.Helper()
+	parse, err := sqlparser.NewTestParser().Parse(query)
+	require.NoError(t, err)
+
+	semTable, err := AnalyzeStrict(parse, dbName, fakeSchemaInfo())
+	require.NoError(t, err)
+	return parse, semTable
+}
+
 func TestSingleUnshardedKeyspace(t *testing.T) {
 	tests := []struct {
 		query     string

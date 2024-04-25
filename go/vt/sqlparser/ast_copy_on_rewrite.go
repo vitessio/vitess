@@ -2816,17 +2816,17 @@ func (c *cow) copyOnRewriteRefOfInsert(n *Insert, parent SQLNode) (out SQLNode, 
 		_Partitions, changedPartitions := c.copyOnRewritePartitions(n.Partitions, n)
 		_Columns, changedColumns := c.copyOnRewriteColumns(n.Columns, n)
 		_Rows, changedRows := c.copyOnRewriteInsertRows(n.Rows, n)
-		_OnDup, changedOnDup := c.copyOnRewriteOnDup(n.OnDup, n)
 		_RowAlias, changedRowAlias := c.copyOnRewriteRefOfRowAlias(n.RowAlias, n)
-		if changedComments || changedTable || changedPartitions || changedColumns || changedRows || changedOnDup || changedRowAlias {
+		_OnDup, changedOnDup := c.copyOnRewriteOnDup(n.OnDup, n)
+		if changedComments || changedTable || changedPartitions || changedColumns || changedRows || changedRowAlias || changedOnDup {
 			res := *n
 			res.Comments, _ = _Comments.(*ParsedComments)
 			res.Table, _ = _Table.(*AliasedTableExpr)
 			res.Partitions, _ = _Partitions.(Partitions)
 			res.Columns, _ = _Columns.(Columns)
 			res.Rows, _ = _Rows.(InsertRows)
-			res.OnDup, _ = _OnDup.(OnDup)
 			res.RowAlias, _ = _RowAlias.(*RowAlias)
+			res.OnDup, _ = _OnDup.(OnDup)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)

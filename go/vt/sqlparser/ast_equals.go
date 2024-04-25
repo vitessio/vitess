@@ -2896,8 +2896,8 @@ func (cmp *Comparator) RefOfInsert(a, b *Insert) bool {
 		cmp.Partitions(a.Partitions, b.Partitions) &&
 		cmp.Columns(a.Columns, b.Columns) &&
 		cmp.InsertRows(a.Rows, b.Rows) &&
-		cmp.OnDup(a.OnDup, b.OnDup) &&
-		cmp.RefOfRowAlias(a.RowAlias, b.RowAlias)
+		cmp.RefOfRowAlias(a.RowAlias, b.RowAlias) &&
+		cmp.OnDup(a.OnDup, b.OnDup)
 }
 
 // RefOfInsertExpr does deep equals between the two objects.

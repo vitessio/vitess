@@ -87,3 +87,20 @@ func TestUpdBindingExpr(t *testing.T) {
 func extractFromUpdateSet(in *sqlparser.Update, idx int) *sqlparser.UpdateExpr {
 	return in.Exprs[idx]
 }
+
+func TestInsertBindingColName(t *testing.T) {
+	queries := []string{
+		"insert into t2 (uid, name, textcol) values (1,'foo','bar') as new on duplicate key update texcol = new.uid + new.name",
+		"insert into t2 (uid, name, textcol) values (1,'foo','bar') as new(x, y, z) on duplicate key update texcol = x + y",
+		"insert into t2 values (1,'foo','bar') as new(x, y, z) on duplicate key update texcol = x + y",
+	}
+	for _, query := range queries {
+		t.Run(query, func(t *testing.T) {
+			stmt, semTable := parseAndAnalyzeStrict(t, query, "d")
+			ins, _ := stmt.(*sqlparser.Insert)
+			ue := ins.OnDup[0]
+			ts := semTable.RecursiveDeps(ue.Expr)
+			assert.Equal(t, SingleTableSet(0), ts)
+		})
+	}
+}

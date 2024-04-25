@@ -19,6 +19,10 @@ package semantics
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqltypes"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -64,6 +68,7 @@ func (etc *earlyTableCollector) up(cursor *sqlparser.Cursor) {
 			etc.withTables[cte.ID] = nil
 		}
 	}
+
 }
 
 func (etc *earlyTableCollector) visitAliasedTableExpr(aet *sqlparser.AliasedTableExpr) {
@@ -104,12 +109,99 @@ func (etc *earlyTableCollector) handleTableName(tbl sqlparser.TableName, aet *sq
 	etc.Tables = append(etc.Tables, tableInfo)
 }
 
+func (tc *tableCollector) visitRowAlias(ins *sqlparser.Insert, rowAlias *sqlparser.RowAlias) error {
+	origTableInfo := tc.Tables[0]
+
+	var colNames []string
+	var types []evalengine.Type
+	switch {
+	case len(rowAlias.Columns) > 0 && len(ins.Columns) > 0:
+		// we have explicit column list on the row alias and the insert statement
+		if len(rowAlias.Columns) != len(ins.Columns) {
+			panic("column count mismatch")
+		}
+		origCols := origTableInfo.getColumns()
+	for1:
+		for idx, column := range rowAlias.Columns {
+			colNames = append(colNames, column.String())
+			col := ins.Columns[idx]
+			for _, origCol := range origCols {
+				if col.EqualString(origCol.Name) {
+					types = append(types, origCol.Type)
+					continue for1
+				}
+			}
+			return vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadFieldError, "Unknown column '%s' in 'field list'", col)
+		}
+	case len(rowAlias.Columns) > 0:
+		if !origTableInfo.authoritative() {
+			return vterrors.VT09015()
+		}
+		// TODO: we need to handle invisible columns here :sigh:
+		if len(rowAlias.Columns) != len(origTableInfo.getColumns()) {
+			panic("column count mismatch")
+		}
+		origCols := origTableInfo.getColumns()
+		for idx, column := range rowAlias.Columns {
+			colNames = append(colNames, column.String())
+			types = append(types, origCols[idx].Type)
+		}
+	case len(ins.Columns) > 0:
+		origCols := origTableInfo.getColumns()
+	for2:
+		for _, column := range ins.Columns {
+			colNames = append(colNames, column.String())
+			for _, origCol := range origCols {
+				if column.EqualString(origCol.Name) {
+					types = append(types, origCol.Type)
+					continue for2
+				}
+			}
+			types = append(types, evalengine.NewType(sqltypes.Unknown, collations.Unknown))
+		}
+	default:
+		if !origTableInfo.authoritative() {
+			return vterrors.VT09015()
+		}
+		for _, column := range origTableInfo.getColumns() {
+			colNames = append(colNames, column.Name)
+			types = append(types, column.Type)
+		}
+	}
+	deps := make([]TableSet, len(colNames))
+	for i := range colNames {
+		deps[i] = SingleTableSet(0)
+	}
+
+	derivedTable := &DerivedTable{
+		tableName: rowAlias.TableName.String(),
+		ASTNode: &sqlparser.AliasedTableExpr{
+			Expr: sqlparser.NewTableName(rowAlias.TableName.String()),
+		},
+		columnNames:     colNames,
+		tables:          SingleTableSet(0),
+		recursive:       deps,
+		isAuthoritative: true,
+		types:           types,
+	}
+
+	tc.Tables = append(tc.Tables, derivedTable)
+	current := tc.scoper.currentScope()
+	return current.addTable(derivedTable)
+}
+
 func (tc *tableCollector) up(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.AliasedTableExpr:
 		return tc.visitAliasedTableExpr(node)
 	case *sqlparser.Union:
 		return tc.visitUnion(node)
+	case *sqlparser.RowAlias:
+		ins, ok := cursor.Parent().(*sqlparser.Insert)
+		if !ok {
+			return vterrors.VT13001("RowAlias is expected to hang off an Insert statement")
+		}
+		return tc.visitRowAlias(ins, node)
 	default:
 		return nil
 	}
