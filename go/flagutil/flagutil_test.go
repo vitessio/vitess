@@ -119,3 +119,179 @@ func TestStringMapValue(t *testing.T) {
 	require.Equal(t, "StringMap", strMapVal.Type())
 	require.Equal(t, map[string]string(map[string]string{"key": "val"}), strMapVal.Get())
 }
+
+func TestDualFormatStringListVar(t *testing.T) {
+	testFlagSet := pflag.NewFlagSet("testFlagSet", pflag.ExitOnError)
+
+	testFlagName := "test-flag_name"
+	var flagVal []string
+	testValue := []string{"testValue1", "testValue2", "testValue3"}
+
+	DualFormatStringListVar(testFlagSet, &flagVal, testFlagName, testValue, "usage string")
+	assert.Equal(t, testValue, flagVal)
+
+	want := "testValue1,testValue2,testValue3"
+	f := testFlagSet.Lookup("test-flag-name")
+	assert.NotNil(t, f)
+	assert.Equal(t, want, f.Value.String())
+
+	f = testFlagSet.Lookup("test_flag_name")
+	assert.NotNil(t, f)
+	assert.Equal(t, want, f.Value.String())
+
+	newVal := "newValue1,newValue2"
+	err := testFlagSet.Set("test-flag-name", newVal)
+	assert.NoError(t, err)
+
+	assert.Equal(t, newVal, f.Value.String())
+	assert.Equal(t, []string{"newValue1", "newValue2"}, flagVal)
+}
+
+func TestDualFormatStringVar(t *testing.T) {
+	testFlagSet := pflag.NewFlagSet("testFlagSet", pflag.ExitOnError)
+
+	testFlagName := "test-flag_name"
+	var flagVal string
+	testValue := "testValue"
+
+	DualFormatStringVar(testFlagSet, &flagVal, testFlagName, testValue, "usage string")
+	assert.Equal(t, testValue, flagVal)
+
+	f := testFlagSet.Lookup("test-flag-name")
+	assert.NotNil(t, f)
+	assert.Equal(t, testValue, f.Value.String())
+
+	f = testFlagSet.Lookup("test_flag_name")
+	assert.NotNil(t, f)
+	assert.Equal(t, testValue, f.Value.String())
+
+	newVal := "newValue"
+	err := testFlagSet.Set("test-flag-name", newVal)
+	assert.NoError(t, err)
+
+	assert.Equal(t, newVal, f.Value.String())
+	assert.Equal(t, newVal, flagVal)
+}
+
+func TestDualFormatBoolVar(t *testing.T) {
+	testFlagSet := pflag.NewFlagSet("testFlagSet", pflag.ExitOnError)
+
+	testFlagName := "test-flag_name"
+	var flagVal bool
+
+	DualFormatBoolVar(testFlagSet, &flagVal, testFlagName, true, "usage string")
+	assert.True(t, flagVal)
+
+	f := testFlagSet.Lookup("test-flag-name")
+	assert.NotNil(t, f)
+	assert.Equal(t, "true", f.Value.String())
+
+	f = testFlagSet.Lookup("test_flag_name")
+	assert.NotNil(t, f)
+	assert.Equal(t, "true", f.Value.String())
+
+	err := testFlagSet.Set("test-flag-name", "false")
+	assert.NoError(t, err)
+
+	assert.Equal(t, "false", f.Value.String())
+	assert.False(t, flagVal)
+}
+
+func TestDualFormatInt64Var(t *testing.T) {
+	testFlagSet := pflag.NewFlagSet("testFlagSet", pflag.ExitOnError)
+
+	testFlagName := "test-flag_name"
+	var flagVal int64
+
+	DualFormatInt64Var(testFlagSet, &flagVal, testFlagName, int64(256), "usage string")
+	assert.Equal(t, int64(256), flagVal)
+
+	f := testFlagSet.Lookup("test-flag-name")
+	assert.NotNil(t, f)
+	assert.Equal(t, "256", f.Value.String())
+
+	f = testFlagSet.Lookup("test_flag_name")
+	assert.NotNil(t, f)
+	assert.Equal(t, "256", f.Value.String())
+
+	newVal := "128"
+	err := testFlagSet.Set("test-flag-name", newVal)
+	assert.NoError(t, err)
+
+	assert.Equal(t, newVal, f.Value.String())
+	assert.Equal(t, int64(128), flagVal)
+}
+
+func TestDualFormatIntVar(t *testing.T) {
+	testFlagSet := pflag.NewFlagSet("testFlagSet", pflag.ExitOnError)
+
+	testFlagName := "test-flag_name"
+	var flagVal int
+
+	DualFormatIntVar(testFlagSet, &flagVal, testFlagName, 128, "usage string")
+	assert.Equal(t, 128, flagVal)
+
+	f := testFlagSet.Lookup("test-flag-name")
+	assert.NotNil(t, f)
+	assert.Equal(t, "128", f.Value.String())
+
+	f = testFlagSet.Lookup("test_flag_name")
+	assert.NotNil(t, f)
+	assert.Equal(t, "128", f.Value.String())
+
+	newVal := "256"
+	err := testFlagSet.Set("test-flag-name", newVal)
+	assert.NoError(t, err)
+
+	assert.Equal(t, newVal, f.Value.String())
+	assert.Equal(t, 256, flagVal)
+}
+
+type MockValue struct {
+	val *bool
+}
+
+func (b MockValue) Set(s string) error {
+	if s == "true" {
+		*b.val = true
+	} else {
+		*b.val = false
+	}
+	return nil
+}
+
+func (b MockValue) String() string {
+	if *b.val {
+		return "true"
+	}
+	return "false"
+}
+
+func (b MockValue) Type() string {
+	return "bool"
+}
+
+func TestDualFormatVar(t *testing.T) {
+	testFlagSet := pflag.NewFlagSet("testFlagSet", pflag.ExitOnError)
+
+	testFlagName := "test-flag_name"
+	flagVal := true
+	value := MockValue{val: &flagVal}
+
+	DualFormatVar(testFlagSet, value, testFlagName, "usage string")
+
+	f := testFlagSet.Lookup("test-flag-name")
+	assert.NotNil(t, f)
+	assert.Equal(t, "true", f.Value.String())
+
+	f = testFlagSet.Lookup("test_flag_name")
+	assert.NotNil(t, f)
+	assert.Equal(t, "true", f.Value.String())
+
+	newVal := "false"
+	err := testFlagSet.Set("test-flag-name", newVal)
+	assert.NoError(t, err)
+
+	assert.Equal(t, newVal, f.Value.String())
+	assert.False(t, flagVal)
+}
