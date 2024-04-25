@@ -35,10 +35,9 @@ func TestStringList(t *testing.T) {
 		"3ala,":          "3ala.",
 	}
 	for in, out := range wanted {
-		if err := p.Set(in); err != nil {
-			t.Errorf("v.Set(%v): %v", in, err)
-			continue
-		}
+		err := p.Set(in)
+		assert.NoError(t, err)
+
 		assert.Equal(t, out, strings.Join(p, "."))
 		assert.Equal(t, in, p.String())
 
@@ -49,12 +48,10 @@ func TestStringList(t *testing.T) {
 func TestEmptyStringList(t *testing.T) {
 	var p StringListValue
 	var _ pflag.Value = &p
-	if err := p.Set(""); err != nil {
-		t.Fatalf("p.Set(\"\"): %v", err)
-	}
-	if len(p) != 0 {
-		t.Fatalf("len(p) != 0: got %v", len(p))
-	}
+
+	err := p.Set("")
+	require.NoError(t, err)
+	require.Len(t, p, 0)
 }
 
 type pair struct {
@@ -81,28 +78,15 @@ func TestStringMap(t *testing.T) {
 		},
 	}
 	for _, want := range wanted {
-		if err := v.Set(want.in); err != want.err {
-			t.Errorf("v.Set(%v): %v", want.in, want.err)
-			continue
-		}
+		err := v.Set(want.in)
+		assert.ErrorIs(t, err, want.err)
+
 		if want.err != nil {
 			continue
 		}
 
-		if len(want.out) != len(v) {
-			t.Errorf("want %#v, got %#v", want.out, v)
-			continue
-		}
-		for key, value := range want.out {
-			if v[key] != value {
-				t.Errorf("want %#v, got %#v", want.out, v)
-				continue
-			}
-		}
-
-		if vs := v.String(); vs != want.in {
-			t.Errorf("v.String(): want %#v, got %#v", want.in, vs)
-		}
+		assert.EqualValues(t, want.out, v)
+		assert.Equal(t, want.in, v.String())
 	}
 }
 
