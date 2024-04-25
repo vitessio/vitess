@@ -138,6 +138,14 @@ func (e *evalBytes) SQLType() sqltypes.Type {
 	return sqltypes.Type(e.tt)
 }
 
+func (e *evalBytes) Size() int32 {
+	return 0
+}
+
+func (e *evalBytes) Scale() int32 {
+	return 0
+}
+
 func (e *evalBytes) ToRawBytes() []byte {
 	return e.bytes
 }
