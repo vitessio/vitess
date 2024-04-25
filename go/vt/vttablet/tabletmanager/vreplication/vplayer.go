@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vttablet"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -497,8 +498,19 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 				return nil
 			}
 		}
+
+		// The parent context is a cancelable context. We create a new one here with a timeout
+		// to unblock the case where we're never able to complete applying the current vstream
+		// packet last read from the relay log.
+		iCtx, iCancel := context.WithTimeout(ctx, tabletenv.NewCurrentConfig().Oltp.TxTimeout)
+		defer iCancel()
 		for i, events := range items {
 			for j, event := range events {
+				select {
+				case <-iCtx.Done():
+					return errors.New("timed out replaying events from the relay log")
+				default:
+				}
 				if event.Timestamp != 0 {
 					vp.lastTimestampNs = event.Timestamp * 1e9
 					vp.timeOffsetNs = time.Now().UnixNano() - event.CurrentTime
@@ -523,7 +535,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 						continue
 					}
 				}
-				if err := vp.applyEvent(ctx, event, mustSave); err != nil {
+				if err := vp.applyEvent(iCtx, event, mustSave); err != nil {
 					if err != io.EOF {
 						vp.vr.stats.ErrorCounts.Add([]string{"Apply"}, 1)
 						log.Errorf("Error applying event: %s", err.Error())

@@ -17,6 +17,7 @@ limitations under the License.
 package vreplication
 
 import (
+	"errors"
 	"io"
 	"sync"
 	"time"
@@ -24,6 +25,16 @@ import (
 	"context"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+)
+
+const (
+	// At what point should we consider writing to the relay log to be stalled
+	// and return an error. This stall can happen if vplayer is stuck in a
+	// loop trying to process the previous relay log contents. This can happen
+	// e.g. if the queries it's executing are doing table scans and it thus
+	// cannot finish the transaction wrapping the contents before it gets
+	// termined due to crossing the query server transaction timeout.
+	sendTimeout = 1 * time.Minute
 )
 
 type relayLog struct {
@@ -69,11 +80,19 @@ func (rl *relayLog) Send(events []*binlogdatapb.VEvent) error {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 
+	ctx, cancel := context.WithTimeout(rl.ctx, sendTimeout)
+	defer cancel()
 	if err := rl.checkDone(); err != nil {
 		return err
 	}
 	for rl.curSize > rl.maxSize || len(rl.items) >= rl.maxItems {
 		rl.canAccept.Wait()
+		select {
+		case <-ctx.Done():
+			return errors.New("relay log write stalled")
+		default:
+		}
+		// Be sure that the vplayer contex is not done.
 		if err := rl.checkDone(); err != nil {
 			return err
 		}

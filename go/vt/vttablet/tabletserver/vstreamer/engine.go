@@ -234,7 +234,6 @@ func (vse *Engine) validateBinlogRowImage(ctx context.Context, db dbconfigs.Conn
 // Stream starts a new stream.
 // This streams events from the binary logs
 func (vse *Engine) Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, throttlerApp throttlerapp.Name, send func([]*binlogdatapb.VEvent) error) error {
-
 	if err := vse.validateBinlogRowImage(ctx, vse.se.GetDBConnector()); err != nil {
 		return err
 	}
