@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -90,17 +91,50 @@ func extractFromUpdateSet(in *sqlparser.Update, idx int) *sqlparser.UpdateExpr {
 
 func TestInsertBindingColName(t *testing.T) {
 	queries := []string{
-		"insert into t2 (uid, name, textcol) values (1,'foo','bar') as new on duplicate key update texcol = new.uid + new.name",
-		"insert into t2 (uid, name, textcol) values (1,'foo','bar') as new(x, y, z) on duplicate key update texcol = x + y",
-		"insert into t2 values (1,'foo','bar') as new(x, y, z) on duplicate key update texcol = x + y",
+		"insert into t2 (uid, name, textcol) values (1,'foo','bar') as new on duplicate key update textcol = new.uid + new.name",
+		"insert into t2 (uid, name, textcol) values (1,'foo','bar') as new(x, y, z) on duplicate key update textcol = x + y",
+		"insert into t2 values (1,'foo','bar') as new(x, y, z) on duplicate key update textcol = x + y",
+		"insert into t3(uid, name, invcol) values (1,'foo','bar') as new on duplicate key update textcol = new.invcol",
+		"insert into t3 values (1,'foo','bar') as new on duplicate key update textcol = new.uid+new.name+new.textcol",
+		"insert into t3 values (1,'foo','bar') as new on duplicate key update textcol = new.uid+new.name+new.textcol, uid = new.name",
 	}
 	for _, query := range queries {
 		t.Run(query, func(t *testing.T) {
 			stmt, semTable := parseAndAnalyzeStrict(t, query, "d")
 			ins, _ := stmt.(*sqlparser.Insert)
-			ue := ins.OnDup[0]
-			ts := semTable.RecursiveDeps(ue.Expr)
-			assert.Equal(t, SingleTableSet(0), ts)
+			for _, ue := range ins.OnDup {
+				// check deps on the column
+				ts := semTable.RecursiveDeps(ue.Name)
+				assert.Equal(t, SingleTableSet(0), ts)
+				// check deps on the expression
+				ts = semTable.RecursiveDeps(ue.Expr)
+				assert.Equal(t, SingleTableSet(0), ts)
+			}
+		})
+	}
+}
+
+func TestInsertBindingColNameErrorCases(t *testing.T) {
+	tcases := []struct {
+		query  string
+		expErr string
+	}{{
+		"insert into t2 values (1,'foo','bar') as new on duplicate key update textcol = new.unknowncol",
+		"column 'new.unknowncol' not found",
+	}, {
+		"insert into t3 values (1,'foo','bar', 'baz') as new on duplicate key update textcol = new.invcol",
+		"column 'new.invcol' not found",
+	}, {
+		"insert into t3(uid, name) values (1,'foo') as new(x, y, z) on duplicate key update textcol = x + y",
+		"column 'new.invcol' not found",
+	}}
+	for _, tc := range tcases {
+		t.Run(tc.query, func(t *testing.T) {
+			parse, err := sqlparser.NewTestParser().Parse(tc.query)
+			require.NoError(t, err)
+
+			_, err = AnalyzeStrict(parse, "d", fakeSchemaInfo())
+			require.ErrorContains(t, err, tc.expErr)
 		})
 	}
 }

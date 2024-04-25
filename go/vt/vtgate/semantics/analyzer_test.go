@@ -1403,6 +1403,7 @@ func fakeSchemaInfo() *FakeSI {
 			"t":  tableT(),
 			"t1": tableT1(),
 			"t2": tableT2(),
+			"t3": tableT3(),
 		},
 	}
 	return si
@@ -1442,6 +1443,31 @@ func tableT2() *vindexes.Table {
 			Name:          sqlparser.NewIdentifierCI("textcol"),
 			Type:          querypb.Type_VARCHAR,
 			CollationName: "big5_bin",
+		}},
+		ColumnListAuthoritative: true,
+		Keyspace:                ks3,
+	}
+}
+
+func tableT3() *vindexes.Table {
+	return &vindexes.Table{
+		Name: sqlparser.NewIdentifierCS("t3"),
+		Columns: []vindexes.Column{{
+			Name: sqlparser.NewIdentifierCI("uid"),
+			Type: querypb.Type_INT64,
+		}, {
+			Name:          sqlparser.NewIdentifierCI("name"),
+			Type:          querypb.Type_VARCHAR,
+			CollationName: "utf8_bin",
+		}, {
+			Name:          sqlparser.NewIdentifierCI("textcol"),
+			Type:          querypb.Type_VARCHAR,
+			CollationName: "big5_bin",
+		}, {
+			Name:          sqlparser.NewIdentifierCI("invcol"),
+			Type:          querypb.Type_VARCHAR,
+			CollationName: "big5_bin",
+			Invisible:     true,
 		}},
 		ColumnListAuthoritative: true,
 		Keyspace:                ks3,

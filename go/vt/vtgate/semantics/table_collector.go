@@ -120,7 +120,7 @@ func (tc *tableCollector) visitRowAlias(ins *sqlparser.Insert, rowAlias *sqlpars
 		if len(rowAlias.Columns) != len(ins.Columns) {
 			panic("column count mismatch")
 		}
-		origCols := origTableInfo.getColumns()
+		origCols := origTableInfo.getColumns(false /* ignoreInvisbleCol */)
 	for1:
 		for idx, column := range rowAlias.Columns {
 			colNames = append(colNames, column.String())
@@ -137,17 +137,16 @@ func (tc *tableCollector) visitRowAlias(ins *sqlparser.Insert, rowAlias *sqlpars
 		if !origTableInfo.authoritative() {
 			return vterrors.VT09015()
 		}
-		// TODO: we need to handle invisible columns here :sigh:
-		if len(rowAlias.Columns) != len(origTableInfo.getColumns()) {
+		origCols := origTableInfo.getColumns(true /* ignoreInvisibleCol */)
+		if len(rowAlias.Columns) != len(origCols) {
 			panic("column count mismatch")
 		}
-		origCols := origTableInfo.getColumns()
 		for idx, column := range rowAlias.Columns {
 			colNames = append(colNames, column.String())
 			types = append(types, origCols[idx].Type)
 		}
 	case len(ins.Columns) > 0:
-		origCols := origTableInfo.getColumns()
+		origCols := origTableInfo.getColumns(false /* ignoreInvisbleCol */)
 	for2:
 		for _, column := range ins.Columns {
 			colNames = append(colNames, column.String())
@@ -163,7 +162,7 @@ func (tc *tableCollector) visitRowAlias(ins *sqlparser.Insert, rowAlias *sqlpars
 		if !origTableInfo.authoritative() {
 			return vterrors.VT09015()
 		}
-		for _, column := range origTableInfo.getColumns() {
+		for _, column := range origTableInfo.getColumns(true /* ignoreInvisibleCol */) {
 			colNames = append(colNames, column.Name)
 			types = append(types, column.Type)
 		}
