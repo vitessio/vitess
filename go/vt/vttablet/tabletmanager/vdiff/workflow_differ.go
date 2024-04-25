@@ -240,7 +240,7 @@ func (wd *workflowDiffer) diff(ctx context.Context) (err error) {
 	defer func() {
 		if err != nil {
 			globalStats.ErrorCount.Add(1)
-			wd.ct.Errors.Add([]string{err.Error()}, 1)
+			wd.ct.Errors.Add(err.Error(), 1)
 		}
 	}()
 	dbClient := wd.ct.dbClientFactory()
