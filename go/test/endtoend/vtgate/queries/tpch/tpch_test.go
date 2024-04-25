@@ -19,10 +19,10 @@ package union
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
-
-	"github.com/stretchr/testify/require"
 )
 
 func start(t *testing.T) (utils.MySQLCompare, func()) {
@@ -160,6 +160,19 @@ group by
 		)
 order by
 	value desc;`,
+		},
+		{
+			name: "Q14 without decimal literal",
+			query: `select sum(case
+               when p_type like 'PROMO%'
+                   then l_extendedprice * (1 - l_discount)
+               else 0
+    end) / sum(l_extendedprice * (1 - l_discount)) as promo_revenue
+from lineitem,
+     part
+where l_partkey = p_partkey
+  and l_shipdate >= '1996-12-01'
+  and l_shipdate < date_add('1996-12-01', interval '1' month);`,
 		},
 	}
 

@@ -669,6 +669,14 @@ type Value struct {
 	n NumberType
 }
 
+func (v *Value) Size() int32 {
+	return 0
+}
+
+func (v *Value) Scale() int32 {
+	return 0
+}
+
 func (v *Value) MarshalDate() string {
 	if d, ok := v.Date(); ok {
 		return d.ToStdTime(time.Local).Format("2006-01-02")

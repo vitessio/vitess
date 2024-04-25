@@ -71,7 +71,7 @@ func (b *builtinCoalesce) compile(c *compiler) (ctype, error) {
 		if !tt.nullable() {
 			f = 0
 		}
-		ta.add(tt.Type, tt.Flag)
+		ta.add(tt.Type, tt.Flag, tt.Size, tt.Scale)
 		if err := ca.add(tt.Col, c.env.CollationEnv()); err != nil {
 			return ctype{}, err
 		}
