@@ -109,6 +109,16 @@ func createOperatorFromInsert(ctx *plancontext.PlanningContext, ins *sqlparser.I
 
 	vTbl, routing := buildVindexTableForDML(ctx, tableInfo, qt, "insert")
 
+	if tableInfo.GetVindexTable().Type == vindexes.TypeReference {
+		// If the table being inserted into is a reference table, we need to insert into the source table.
+		tname, _ := tableInfo.Name()
+		if vTbl.Name != tname.Name || vTbl.Keyspace.Name == tname.Name.String() { // optimization
+			newAliasTbl := sqlparser.NewAliasedTableExpr(vTbl.GetTableName(), "")
+			ins.Table.Expr = newAliasTbl.Expr
+			ins.Table.As = newAliasTbl.As
+		}
+	}
+
 	deleteBeforeInsert := false
 	if ins.Action == sqlparser.ReplaceAct &&
 		(ctx.SemTable.ForeignKeysPresent() || vTbl.Keyspace.Sharded) &&
