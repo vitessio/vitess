@@ -126,7 +126,7 @@ func TestInsertBindingColNameErrorCases(t *testing.T) {
 		"column 'new.invcol' not found",
 	}, {
 		"insert into t3(uid, name) values (1,'foo') as new(x, y, z) on duplicate key update textcol = x + y",
-		"column 'new.invcol' not found",
+		"VT03033: In definition of view, derived table or common table expression, SELECT list and column names list have different column counts",
 	}}
 	for _, tc := range tcases {
 		t.Run(tc.query, func(t *testing.T) {

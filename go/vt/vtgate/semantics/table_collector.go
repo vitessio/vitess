@@ -118,7 +118,7 @@ func (tc *tableCollector) visitRowAlias(ins *sqlparser.Insert, rowAlias *sqlpars
 	case len(rowAlias.Columns) > 0 && len(ins.Columns) > 0:
 		// we have explicit column list on the row alias and the insert statement
 		if len(rowAlias.Columns) != len(ins.Columns) {
-			panic("column count mismatch")
+			return vterrors.VT03033()
 		}
 		origCols := origTableInfo.getColumns(false /* ignoreInvisbleCol */)
 	for1:
@@ -139,7 +139,7 @@ func (tc *tableCollector) visitRowAlias(ins *sqlparser.Insert, rowAlias *sqlpars
 		}
 		origCols := origTableInfo.getColumns(true /* ignoreInvisibleCol */)
 		if len(rowAlias.Columns) != len(origCols) {
-			panic("column count mismatch")
+			return vterrors.VT03033()
 		}
 		for idx, column := range rowAlias.Columns {
 			colNames = append(colNames, column.String())
