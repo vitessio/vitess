@@ -72,19 +72,18 @@ func parseDecimal64(s []byte) (Decimal, error) {
 	}, nil
 }
 
-// SizeAndScaleFromString
+// SizeAndScaleFromString gets the size and scale for the decimal value without needing to parse it.
 func SizeAndScaleFromString(s string) (int32, int32) {
-	sign := 0
 	switch s[0] {
 	case '+', '-':
-		sign = 1
+		s = s[1:]
 	}
-	lenWithoutSign := len(s) - sign
+	totalLen := len(s)
 	idx := strings.Index(s, ".")
 	if idx == -1 {
-		return int32(lenWithoutSign), 0
+		return int32(totalLen), 0
 	}
-	return int32(lenWithoutSign - 1), int32(len(s) - 1 - idx)
+	return int32(totalLen - 1), int32(totalLen - 1 - idx)
 }
 
 func NewFromMySQL(s []byte) (Decimal, error) {
