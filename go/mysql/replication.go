@@ -138,12 +138,29 @@ func (c *Conn) WriteBinlogEvent(ev BinlogEvent, semiSyncEnabled bool) error {
 	return nil
 }
 
+type SemiSyncType int8
+
+const (
+	SemiSyncTypeUnknown SemiSyncType = iota
+	SemiSyncTypeOff
+	SemiSyncTypeSource
+	SemiSyncTypeMaster
+)
+
 // SemiSyncExtensionLoaded checks if the semisync extension has been loaded.
 // It should work for both MariaDB and MySQL.
-func (c *Conn) SemiSyncExtensionLoaded() bool {
-	qr, err := c.ExecuteFetch("SHOW GLOBAL VARIABLES LIKE 'rpl_semi_sync%'", 10, false)
+func (c *Conn) SemiSyncExtensionLoaded() (SemiSyncType, error) {
+	qr, err := c.ExecuteFetch("SHOW VARIABLES LIKE 'rpl_semi_sync_%_enabled'", 10, false)
 	if err != nil {
-		return false
+		return SemiSyncTypeUnknown, err
 	}
-	return len(qr.Rows) >= 1
+	for _, row := range qr.Rows {
+		if row[0].ToString() == "rpl_semi_sync_source_enabled" {
+			return SemiSyncTypeSource, nil
+		}
+		if row[0].ToString() == "rpl_semi_sync_master_enabled" {
+			return SemiSyncTypeMaster, nil
+		}
+	}
+	return SemiSyncTypeOff, nil
 }

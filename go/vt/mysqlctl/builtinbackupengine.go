@@ -404,7 +404,7 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	superReadOnly := true //nolint
 	readOnly := true      //nolint
 	var replicationPosition replication.Position
-	semiSyncSource, semiSyncReplica := params.Mysqld.SemiSyncEnabled()
+	semiSyncSource, semiSyncReplica := params.Mysqld.SemiSyncEnabled(ctx)
 
 	// See if we need to restart replication after backup.
 	params.Logger.Infof("getting current replication status")
@@ -519,7 +519,7 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 		// the plugin isn't even loaded, and the server variables don't exist.
 		params.Logger.Infof("restoring semi-sync settings from before backup: primary=%v, replica=%v",
 			semiSyncSource, semiSyncReplica)
-		err := params.Mysqld.SetSemiSyncEnabled(semiSyncSource, semiSyncReplica)
+		err := params.Mysqld.SetSemiSyncEnabled(ctx, semiSyncSource, semiSyncReplica)
 		if err != nil {
 			return backupResult, err
 		}

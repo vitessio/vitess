@@ -612,9 +612,48 @@ func (mysqld *Mysqld) GetPreviousGTIDs(ctx context.Context, binlog string) (prev
 	return previousGtids, nil
 }
 
+var ErrNoSemiSync = errors.New("semi-sync plugin not loaded")
+
+func (mysqld *Mysqld) SemiSyncType(ctx context.Context) mysql.SemiSyncType {
+	if mysqld.semiSyncType == mysql.SemiSyncTypeUnknown {
+		mysqld.semiSyncType, _ = mysqld.SemiSyncExtensionLoaded(ctx)
+	}
+	return mysqld.semiSyncType
+}
+
+func (mysqld *Mysqld) enableSemiSyncQuery(ctx context.Context) (string, error) {
+	switch mysqld.SemiSyncType(ctx) {
+	case mysql.SemiSyncTypeSource:
+		return "SET GLOBAL rpl_semi_sync_source_enabled = %v, GLOBAL rpl_semi_sync_replica_enabled = %v", nil
+	case mysql.SemiSyncTypeMaster:
+		return "SET GLOBAL rpl_semi_sync_master_enabled = %v, GLOBAL rpl_semi_sync_slave_enabled = %v", nil
+	}
+	return "", ErrNoSemiSync
+}
+
+func (mysqld *Mysqld) semiSyncClientsQuery(ctx context.Context) (string, error) {
+	switch mysqld.SemiSyncType(ctx) {
+	case mysql.SemiSyncTypeSource:
+		return "SHOW STATUS LIKE 'Rpl_semi_sync_source_clients'", nil
+	case mysql.SemiSyncTypeMaster:
+		return "SHOW STATUS LIKE 'Rpl_semi_sync_master_clients'", nil
+	}
+	return "", ErrNoSemiSync
+}
+
+func (mysqld *Mysqld) semiSyncReplicationStatusQuery(ctx context.Context) (string, error) {
+	switch mysqld.SemiSyncType(ctx) {
+	case mysql.SemiSyncTypeSource:
+		return "SHOW STATUS LIKE 'rpl_semi_sync_replica_status'", nil
+	case mysql.SemiSyncTypeMaster:
+		return "SHOW STATUS LIKE 'rpl_semi_sync_slave_status'", nil
+	}
+	return "", ErrNoSemiSync
+}
+
 // SetSemiSyncEnabled enables or disables semi-sync replication for
 // primary and/or replica mode.
-func (mysqld *Mysqld) SetSemiSyncEnabled(primary, replica bool) error {
+func (mysqld *Mysqld) SetSemiSyncEnabled(ctx context.Context, primary, replica bool) error {
 	log.Infof("Setting semi-sync mode: primary=%v, replica=%v", primary, replica)
 
 	// Convert bool to int.
@@ -626,9 +665,11 @@ func (mysqld *Mysqld) SetSemiSyncEnabled(primary, replica bool) error {
 		s = 1
 	}
 
-	err := mysqld.ExecuteSuperQuery(context.TODO(), fmt.Sprintf(
-		"SET GLOBAL rpl_semi_sync_master_enabled = %v, GLOBAL rpl_semi_sync_slave_enabled = %v",
-		p, s))
+	query, err := mysqld.enableSemiSyncQuery(ctx)
+	if err != nil {
+		return err
+	}
+	err = mysqld.ExecuteSuperQuery(ctx, fmt.Sprintf(query, p, s))
 	if err != nil {
 		return fmt.Errorf("can't set semi-sync mode: %v; make sure plugins are loaded in my.cnf", err)
 	}
@@ -637,30 +678,46 @@ func (mysqld *Mysqld) SetSemiSyncEnabled(primary, replica bool) error {
 
 // SemiSyncEnabled returns whether semi-sync is enabled for primary or replica.
 // If the semi-sync plugin is not loaded, we assume semi-sync is disabled.
-func (mysqld *Mysqld) SemiSyncEnabled() (primary, replica bool) {
-	vars, err := mysqld.fetchVariables(context.TODO(), "rpl_semi_sync_%_enabled")
+func (mysqld *Mysqld) SemiSyncEnabled(ctx context.Context) (primary, replica bool) {
+	vars, err := mysqld.fetchVariables(ctx, "rpl_semi_sync_%_enabled")
 	if err != nil {
 		return false, false
 	}
-	primary = vars["rpl_semi_sync_master_enabled"] == "ON"
-	replica = vars["rpl_semi_sync_slave_enabled"] == "ON"
+	switch mysqld.SemiSyncType(ctx) {
+	case mysql.SemiSyncTypeSource:
+		primary = vars["rpl_semi_sync_source_enabled"] == "ON"
+		replica = vars["rpl_semi_sync_replica_enabled"] == "ON"
+	case mysql.SemiSyncTypeMaster:
+		primary = vars["rpl_semi_sync_master_enabled"] == "ON"
+		replica = vars["rpl_semi_sync_slave_enabled"] == "ON"
+	}
 	return primary, replica
 }
 
 // SemiSyncStatus returns the current status of semi-sync for primary and replica.
-func (mysqld *Mysqld) SemiSyncStatus() (primary, replica bool) {
-	vars, err := mysqld.fetchStatuses(context.TODO(), "Rpl_semi_sync_%_status")
+func (mysqld *Mysqld) SemiSyncStatus(ctx context.Context) (primary, replica bool) {
+	vars, err := mysqld.fetchStatuses(ctx, "Rpl_semi_sync_%_status")
 	if err != nil {
 		return false, false
 	}
-	primary = vars["Rpl_semi_sync_master_status"] == "ON"
-	replica = vars["Rpl_semi_sync_slave_status"] == "ON"
+	switch mysqld.SemiSyncType(ctx) {
+	case mysql.SemiSyncTypeSource:
+		primary = vars["Rpl_semi_sync_source_status"] == "ON"
+		replica = vars["Rpl_semi_sync_replica_status"] == "ON"
+	case mysql.SemiSyncTypeMaster:
+		primary = vars["Rpl_semi_sync_master_status"] == "ON"
+		replica = vars["Rpl_semi_sync_slave_status"] == "ON"
+	}
 	return primary, replica
 }
 
 // SemiSyncClients returns the number of semi-sync clients for the primary.
-func (mysqld *Mysqld) SemiSyncClients() uint32 {
-	qr, err := mysqld.FetchSuperQuery(context.TODO(), "SHOW STATUS LIKE 'Rpl_semi_sync_master_clients'")
+func (mysqld *Mysqld) SemiSyncClients(ctx context.Context) uint32 {
+	query, err := mysqld.semiSyncClientsQuery(ctx)
+	if err != nil {
+		return 0
+	}
+	qr, err := mysqld.FetchSuperQuery(ctx, query)
 	if err != nil {
 		return 0
 	}
@@ -673,24 +730,35 @@ func (mysqld *Mysqld) SemiSyncClients() uint32 {
 }
 
 // SemiSyncSettings returns the settings of semi-sync which includes the timeout and the number of replicas to wait for.
-func (mysqld *Mysqld) SemiSyncSettings() (timeout uint64, numReplicas uint32) {
-	vars, err := mysqld.fetchVariables(context.TODO(), "rpl_semi_sync_%")
+func (mysqld *Mysqld) SemiSyncSettings(ctx context.Context) (timeout uint64, numReplicas uint32) {
+	vars, err := mysqld.fetchVariables(ctx, "rpl_semi_sync_%")
 	if err != nil {
 		return 0, 0
 	}
-	timeout, _ = strconv.ParseUint(vars["rpl_semi_sync_master_timeout"], 10, 64)
-	numReplicasUint, _ := strconv.ParseUint(vars["rpl_semi_sync_master_wait_for_slave_count"], 10, 32)
+	var numReplicasUint uint64
+	switch mysqld.SemiSyncType(ctx) {
+	case mysql.SemiSyncTypeSource:
+		timeout, _ = strconv.ParseUint(vars["rpl_semi_sync_source_timeout"], 10, 64)
+		numReplicasUint, _ = strconv.ParseUint(vars["rpl_semi_sync_source_wait_for_replica_count"], 10, 32)
+	case mysql.SemiSyncTypeMaster:
+		timeout, _ = strconv.ParseUint(vars["rpl_semi_sync_master_timeout"], 10, 64)
+		numReplicasUint, _ = strconv.ParseUint(vars["rpl_semi_sync_master_wait_for_slave_count"], 10, 32)
+	}
 	return timeout, uint32(numReplicasUint)
 }
 
 // SemiSyncReplicationStatus returns whether semi-sync is currently used by replication.
-func (mysqld *Mysqld) SemiSyncReplicationStatus() (bool, error) {
-	qr, err := mysqld.FetchSuperQuery(context.TODO(), "SHOW STATUS LIKE 'rpl_semi_sync_slave_status'")
+func (mysqld *Mysqld) SemiSyncReplicationStatus(ctx context.Context) (bool, error) {
+	query, err := mysqld.semiSyncReplicationStatusQuery(ctx)
+	if err != nil {
+		return false, err
+	}
+	qr, err := mysqld.FetchSuperQuery(ctx, query)
 	if err != nil {
 		return false, err
 	}
 	if len(qr.Rows) != 1 {
-		return false, errors.New("no rpl_semi_sync_slave_status variable in mysql")
+		return false, errors.New("no rpl_semi_sync_replica_status variable in mysql")
 	}
 	if qr.Rows[0][1].ToString() == "ON" {
 		return true, nil
@@ -699,14 +767,12 @@ func (mysqld *Mysqld) SemiSyncReplicationStatus() (bool, error) {
 }
 
 // SemiSyncExtensionLoaded returns whether semi-sync plugins are loaded.
-func (mysqld *Mysqld) SemiSyncExtensionLoaded() (bool, error) {
-	qr, err := mysqld.FetchSuperQuery(context.Background(), "SELECT COUNT(*) > 0 AS plugin_loaded FROM information_schema.plugins WHERE plugin_name LIKE 'rpl_semi_sync%'")
-	if err != nil {
-		return false, err
+func (mysqld *Mysqld) SemiSyncExtensionLoaded(ctx context.Context) (mysql.SemiSyncType, error) {
+	conn, connErr := getPoolReconnect(ctx, mysqld.dbaPool)
+	if connErr != nil {
+		return mysql.SemiSyncTypeUnknown, connErr
 	}
-	pluginPresent, err := qr.Rows[0][0].ToBool()
-	if err != nil {
-		return false, err
-	}
-	return pluginPresent, nil
+	defer conn.Recycle()
+
+	return conn.Conn.SemiSyncExtensionLoaded()
 }

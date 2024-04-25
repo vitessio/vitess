@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/vtorc/utils"
 	"vitess.io/vitess/go/vt/log"
@@ -349,12 +350,44 @@ func TestSemiSync(t *testing.T) {
 	// check that the replication is setup correctly
 	utils.CheckReplication(t, newCluster, primary, []*cluster.Vttablet{rdonly, replica1, replica2}, 10*time.Second)
 
-	_, err := utils.RunSQL(t, "SET GLOBAL rpl_semi_sync_slave_enabled = 0", replica1, "")
+	semisyncType, err := utils.SemiSyncExtensionLoaded(t, replica1)
 	require.NoError(t, err)
-	_, err = utils.RunSQL(t, "SET GLOBAL rpl_semi_sync_slave_enabled = 1", rdonly, "")
+	switch semisyncType {
+	case mysql.SemiSyncTypeSource:
+		_, err := utils.RunSQL(t, "SET GLOBAL rpl_semi_sync_replica_enabled = 0", replica1, "")
+		require.NoError(t, err)
+	case mysql.SemiSyncTypeMaster:
+		_, err := utils.RunSQL(t, "SET GLOBAL rpl_semi_sync_slave_enabled = 0", replica1, "")
+		require.NoError(t, err)
+	default:
+		require.Fail(t, "unexpected semi-sync type %v", semisyncType)
+	}
+
+	semisyncType, err = utils.SemiSyncExtensionLoaded(t, rdonly)
 	require.NoError(t, err)
-	_, err = utils.RunSQL(t, "SET GLOBAL rpl_semi_sync_master_enabled = 0", primary, "")
+	switch semisyncType {
+	case mysql.SemiSyncTypeSource:
+		_, err := utils.RunSQL(t, "SET GLOBAL rpl_semi_sync_replica_enabled = 0", rdonly, "")
+		require.NoError(t, err)
+	case mysql.SemiSyncTypeMaster:
+		_, err := utils.RunSQL(t, "SET GLOBAL rpl_semi_sync_slave_enabled = 0", rdonly, "")
+		require.NoError(t, err)
+	default:
+		require.Fail(t, "unexpected semi-sync type %v", semisyncType)
+	}
+
+	semisyncType, err = utils.SemiSyncExtensionLoaded(t, primary)
 	require.NoError(t, err)
+	switch semisyncType {
+	case mysql.SemiSyncTypeSource:
+		_, err := utils.RunSQL(t, "SET GLOBAL rpl_semi_sync_source_enabled = 0", primary, "")
+		require.NoError(t, err)
+	case mysql.SemiSyncTypeMaster:
+		_, err := utils.RunSQL(t, "SET GLOBAL rpl_semi_sync_master_enabled = 0", primary, "")
+		require.NoError(t, err)
+	default:
+		require.Fail(t, "unexpected semi-sync type %v", semisyncType)
+	}
 
 	timeout := time.After(20 * time.Second)
 	for {
