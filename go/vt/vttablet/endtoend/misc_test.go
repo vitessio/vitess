@@ -970,28 +970,91 @@ func TestShowTablesWithSizes(t *testing.T) {
 		_, err := conn.ExecuteFetch(query, 1, false)
 		require.NoError(t, err)
 	}
-	expectTables := map[string]([]string){ // TABLE_TYPE, TABLE_COMMENT
-		"show_tables_with_sizes_t1":        {"BASE TABLE", ""},
-		"show_tables_with_sizes_v1":        {"VIEW", "VIEW"},
-		"show_tables_with_sizes_employees": {"BASE TABLE", ""},
+
+	expectedTables := []string{
+		"show_tables_with_sizes_t1",
+		"show_tables_with_sizes_v1",
+		"show_tables_with_sizes_employees",
 	}
+	actualTables := []string{}
 
 	rs, err := conn.ExecuteFetch(conn.BaseShowTablesWithSizes(), math.MaxInt, false)
 	require.NoError(t, err)
 	require.NotEmpty(t, rs.Rows)
 
-	assert.GreaterOrEqual(t, len(rs.Rows), len(expectTables))
-	matchedTables := map[string]bool{}
+	assert.GreaterOrEqual(t, len(rs.Rows), len(expectedTables))
+
 	for _, row := range rs.Rows {
+		assert.Equal(t, 6, len(row))
+
 		tableName := row[0].ToString()
-		vals, ok := expectTables[tableName]
-		if ok {
-			assert.Equal(t, vals[0], row[1].ToString()) // TABLE_TYPE
-			assert.Equal(t, vals[1], row[3].ToString()) // TABLE_COMMENT
-			matchedTables[tableName] = true
+		if tableName == "show_tables_with_sizes_t1" {
+			// TABLE_TYPE
+			assert.Equal(t, "BASE TABLE", row[1].ToString())
+
+			assert.True(t, row[2].IsIntegral())
+			createTime, err := row[2].ToCastInt64()
+			assert.NoError(t, err)
+			assert.Greater(t, createTime, int64(0))
+
+			// TABLE_COMMENT
+			assert.Equal(t, "", row[3].ToString())
+
+			assert.True(t, row[4].IsDecimal())
+			fileSize, err := row[4].ToCastInt64()
+			assert.NoError(t, err)
+			assert.Greater(t, fileSize, int64(0))
+
+			assert.True(t, row[4].IsDecimal())
+			allocatedSize, err := row[5].ToCastInt64()
+			assert.NoError(t, err)
+			assert.Greater(t, allocatedSize, int64(0))
+
+			actualTables = append(actualTables, tableName)
+		} else if tableName == "show_tables_with_sizes_v1" {
+			// TABLE_TYPE
+			assert.Equal(t, "VIEW", row[1].ToString())
+
+			assert.True(t, row[2].IsIntegral())
+			createTime, err := row[2].ToCastInt64()
+			assert.NoError(t, err)
+			assert.Greater(t, createTime, int64(0))
+
+			// TABLE_COMMENT
+			assert.Equal(t, "VIEW", row[3].ToString())
+
+			assert.True(t, row[4].IsNull())
+			assert.True(t, row[5].IsNull())
+
+			actualTables = append(actualTables, tableName)
+		} else if tableName == "show_tables_with_sizes_employees" {
+			// TABLE_TYPE
+			assert.Equal(t, "BASE TABLE", row[1].ToString())
+
+			assert.True(t, row[2].IsIntegral())
+			createTime, err := row[2].ToCastInt64()
+			assert.NoError(t, err)
+			assert.Greater(t, createTime, int64(0))
+
+			// TABLE_COMMENT
+			assert.Equal(t, "", row[3].ToString())
+
+			assert.True(t, row[4].IsDecimal())
+			fileSize, err := row[4].ToCastInt64()
+			assert.NoError(t, err)
+			assert.Greater(t, fileSize, int64(0))
+
+			assert.True(t, row[5].IsDecimal())
+			allocatedSize, err := row[5].ToCastInt64()
+			assert.NoError(t, err)
+			assert.Greater(t, allocatedSize, int64(0))
+
+			actualTables = append(actualTables, tableName)
 		}
 	}
-	assert.Equalf(t, len(expectTables), len(matchedTables), "%v", matchedTables)
+
+	assert.Equal(t, len(expectedTables), len(actualTables))
+	assert.ElementsMatch(t, expectedTables, actualTables)
 }
 
 // TestTuple tests that bind variables having tuple values work with vttablet.
