@@ -108,7 +108,9 @@ func bindvarForType(field *querypb.Field) *querypb.BindVariable {
 	case querypb.Type_FLOAT32, querypb.Type_FLOAT64:
 		bv.Value = []byte("0e0")
 	case querypb.Type_DECIMAL:
-		bv.Value = append(append(bytes.Repeat([]byte{'0'}, max(1, int(field.ColumnLength-field.Decimals))), byte('.')), bytes.Repeat([]byte{'0'}, max(1, int(field.Decimals)))...)
+		size := max(1, int(field.ColumnLength-field.Decimals))
+		scale := max(1, int(field.Decimals))
+		bv.Value = append(append(bytes.Repeat([]byte{'0'}, size), byte('.')), bytes.Repeat([]byte{'0'}, scale)...)
 	default:
 		return sqltypes.NullBindVariable
 	}
