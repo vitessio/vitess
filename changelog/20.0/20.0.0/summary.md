@@ -26,6 +26,7 @@
   - **[Flag changes](#flag-changes)**
     - [`pprof-http` default change](#pprof-http-default)
     - [New `healthcheck-dial-concurrency` flag](#healthcheck-dial-concurrency-flag)
+    - [New minimum for `--buffer_min_time_between_failovers`](#buffer_min_time_between_failovers-flag)
     - [New `track-udfs` vtgate flag](#vtgate-track-udfs-flag)
 - **[Minor Changes](#minor-changes)**
   - **[New Stats](#new-stats)**
@@ -213,6 +214,10 @@ To continue enabling these endpoints, explicitly set `--pprof-http` when startin
 #### <a id="healthcheck-dial-concurrency-flag"/>New `--healthcheck-dial-concurrency` flag
 
 The new `--healthcheck-dial-concurrency` flag defines the maximum number of healthcheck connections that can open concurrently. This limit is to avoid hitting Go runtime panics on deployments watching enough tablets [to hit the runtime's maximum thread limit of `10000`](https://pkg.go.dev/runtime/debug#SetMaxThreads) due to blocking network syscalls. This flag applies to `vtcombo`, `vtctld` and `vtgate` only and a value less than the runtime max thread limit _(`10000`)_ is recommended.
+
+#### <a id="buffer_min_time_between_failovers-flag"/>New minimum for `--buffer_min_time_between_failovers`
+
+The `--buffer_min_time_between_failovers` `vttablet` flag now has a minimum value of `1s`. This is because a value of 0 can cause issues with the buffering mechanics resulting in unexpected and unnecessary query errors — in particular during `MoveTables SwitchTraffic` operations. If you are currently specifying a value of 0 for this flag then you will need to update the config value to 1s *prior to upgrading to v20 or later* as `vttablet` will report an error and terminate if you attempt to start it with a value of 0.
 
 #### <a id="vtgate-track-udfs-flag"/>New `--track-udfs` vtgate flag
 

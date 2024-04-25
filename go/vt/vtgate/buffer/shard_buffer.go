@@ -25,14 +25,13 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/discovery"
-
-	"vitess.io/vitess/go/vt/vtgate/errorsanitizer"
-
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/errorsanitizer"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // bufferState represents the different states a shardBuffer object can be in.
