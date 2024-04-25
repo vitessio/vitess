@@ -104,7 +104,7 @@ type ParserOptions struct {
 // is partially parsed but still contains a syntax error, the
 // error is ignored and the DDL is returned anyway.
 func Parse(sql string) (Statement, error) {
-	return ParseWithOptions(ctx, sql, ParserOptions{})
+	return ParseWithOptions(context.Background(), sql, ParserOptions{})
 }
 
 // ParseWithOptions fully parses the SQL in |sql|, using any custom options specified
