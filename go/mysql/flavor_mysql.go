@@ -331,7 +331,7 @@ GROUP BY t.table_name, t.table_type, t.create_time, t.table_comment`
 //
 // Note the following:
 //   - We use a single query to fetch both partitioned and non-partitioned tables. This is because
-//     accessing `information_schema.innodb_tablespaces` is expensive on servers with many tables,
+//     accessing `information_schema.innodb_tablespaces` is expensive on servers with many tablespaces,
 //     and every query that loads the table needs to perform full table scans on it. Doing a single
 //     table scan is more efficient than doing more than one.
 //   - We utilize `INFORMATION_SCHEMA`.`TABLES`.`CREATE_OPTIONS` column to do early pruning before the JOIN.
