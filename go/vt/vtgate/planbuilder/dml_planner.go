@@ -20,6 +20,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 func rewriteRoutedTables(stmt sqlparser.Statement, vschema plancontext.VSchema) error {
@@ -42,7 +43,22 @@ func rewriteRoutedTables(stmt sqlparser.Statement, vschema plancontext.VSchema) 
 			return false, vterrors.VT09014()
 		}
 
-		if vschemaTable.Name.String() != tableName.Name.String() {
+		if vschemaTable.Type == vindexes.TypeReference && vschemaTable.Source != nil {
+			// This is a reference table. We need to rewrite the table name and keyspace to that of the source table.
+			vschemaTable, vindexTbl, _, _, _, err = vschema.FindTableOrVindex(vschemaTable.Source.TableName)
+			if err != nil {
+				return false, err
+			}
+			if vindexTbl != nil {
+				// vindex cannot be present in a dml statement.
+				return false, vterrors.VT09014()
+			}
+			tableName.Qualifier = vschemaTable.GetTableName().Qualifier
+			tableName.Name = sqlparser.NewIdentifierCS(vschemaTable.Name.String())
+			newAliasTbl := sqlparser.NewAliasedTableExpr(tableName, "")
+			aliasTbl.Expr = newAliasTbl.Expr
+			aliasTbl.As = newAliasTbl.As
+		} else if vschemaTable.Name.String() != tableName.Name.String() {
 			name := tableName.Name
 			if aliasTbl.As.IsEmpty() {
 				// if the user hasn't specified an alias, we'll insert one here so the old table name still works
