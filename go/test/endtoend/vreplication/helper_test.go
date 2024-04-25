@@ -18,17 +18,18 @@ package vreplication
 
 import (
 	"context"
-	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"os"
 	"os/exec"
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -121,9 +122,10 @@ func getConnectionNoError(t *testing.T, hostname string, port int) *mysql.Conn {
 
 func getConnection(t *testing.T, hostname string, port int) *mysql.Conn {
 	vtParams := mysql.ConnParams{
-		Host:  hostname,
-		Port:  port,
-		Uname: "vt_dba",
+		Host:             hostname,
+		Port:             port,
+		Uname:            "vt_dba",
+		ConnectTimeoutMs: 1000,
 	}
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -803,92 +805,111 @@ func getRowCount(t *testing.T, vtgateConn *mysql.Conn, table string) int {
 }
 
 const (
-	loadTestBufferingWindowDurationStr = "30s"
-	loadTestPostBufferingInsertWindow  = 60 * time.Second // should be greater than loadTestBufferingWindowDurationStr
-	loadTestWaitForCancel              = 30 * time.Second
-	loadTestWaitBetweenQueries         = 2 * time.Millisecond
+	loadTestBufferingWindowDuration = 10 * time.Second
+	loadTestAvgWaitBetweenQueries   = 500 * time.Microsecond
+	loadTestDefaultConnections      = 100
 )
 
 type loadGenerator struct {
-	t      *testing.T
-	vc     *VitessCluster
-	ctx    context.Context
-	cancel context.CancelFunc
+	t           *testing.T
+	vc          *VitessCluster
+	ctx         context.Context
+	cancel      context.CancelFunc
+	connections int
+	wg          sync.WaitGroup
 }
 
 func newLoadGenerator(t *testing.T, vc *VitessCluster) *loadGenerator {
 	return &loadGenerator{
-		t:  t,
-		vc: vc,
+		t:           t,
+		vc:          vc,
+		connections: loadTestDefaultConnections,
 	}
 }
 
 func (lg *loadGenerator) stop() {
-	time.Sleep(loadTestPostBufferingInsertWindow) // wait for buffering to stop and additional records to be inserted by startLoad after traffic is switched
+	// Wait for buffering to stop and additional records to be inserted by start
+	// after traffic is switched.
+	time.Sleep(loadTestBufferingWindowDuration * 2)
 	log.Infof("Canceling load")
 	lg.cancel()
-	time.Sleep(loadTestWaitForCancel) // wait for cancel to take effect
+	lg.wg.Wait()
 }
 
 func (lg *loadGenerator) start() {
 	t := lg.t
 	lg.ctx, lg.cancel = context.WithCancel(context.Background())
+	var connectionCount atomic.Int64
 
 	var id int64
-	log.Infof("startLoad: starting")
+	log.Infof("loadGenerator: starting")
 	queryTemplate := "insert into loadtest(id, name) values (%d, 'name-%d')"
 	var totalQueries, successfulQueries int64
 	var deniedErrors, ambiguousErrors, reshardedErrors, tableNotFoundErrors, otherErrors int64
+	lg.wg.Add(1)
 	defer func() {
-
-		log.Infof("startLoad: totalQueries: %d, successfulQueries: %d, deniedErrors: %d, ambiguousErrors: %d, reshardedErrors: %d, tableNotFoundErrors: %d, otherErrors: %d",
+		defer lg.wg.Done()
+		log.Infof("loadGenerator: totalQueries: %d, successfulQueries: %d, deniedErrors: %d, ambiguousErrors: %d, reshardedErrors: %d, tableNotFoundErrors: %d, otherErrors: %d",
 			totalQueries, successfulQueries, deniedErrors, ambiguousErrors, reshardedErrors, tableNotFoundErrors, otherErrors)
 	}()
-	logOnce := true
 	for {
 		select {
 		case <-lg.ctx.Done():
-			log.Infof("startLoad: context cancelled")
-			log.Infof("startLoad: deniedErrors: %d, ambiguousErrors: %d, reshardedErrors: %d, tableNotFoundErrors: %d, otherErrors: %d",
+			log.Infof("loadGenerator: context cancelled")
+			log.Infof("loadGenerator: deniedErrors: %d, ambiguousErrors: %d, reshardedErrors: %d, tableNotFoundErrors: %d, otherErrors: %d",
 				deniedErrors, ambiguousErrors, reshardedErrors, tableNotFoundErrors, otherErrors)
 			require.Equal(t, int64(0), deniedErrors)
 			require.Equal(t, int64(0), otherErrors)
+			require.Equal(t, int64(0), reshardedErrors)
 			require.Equal(t, totalQueries, successfulQueries)
 			return
 		default:
-			go func() {
-				conn := vc.GetVTGateConn(t)
-				defer conn.Close()
-				atomic.AddInt64(&id, 1)
-				query := fmt.Sprintf(queryTemplate, id, id)
-				_, err := conn.ExecuteFetch(query, 1, false)
-				atomic.AddInt64(&totalQueries, 1)
-				if err != nil {
-					sqlErr := err.(*sqlerror.SQLError)
-					if strings.Contains(strings.ToLower(err.Error()), "denied tables") {
-						log.Infof("startLoad: denied tables error executing query: %d:%v", sqlErr.Number(), err)
-						atomic.AddInt64(&deniedErrors, 1)
-					} else if strings.Contains(strings.ToLower(err.Error()), "ambiguous") {
-						// this can happen when a second keyspace is setup with the same tables, but there are no routing rules
-						// set yet by MoveTables. So we ignore these errors.
-						atomic.AddInt64(&ambiguousErrors, 1)
-					} else if strings.Contains(strings.ToLower(err.Error()), "current keyspace is being resharded") {
-						atomic.AddInt64(&reshardedErrors, 1)
-					} else if strings.Contains(strings.ToLower(err.Error()), "not found") {
-						atomic.AddInt64(&tableNotFoundErrors, 1)
-					} else {
-						if logOnce {
-							log.Infof("startLoad: error executing query: %d:%v", sqlErr.Number(), err)
-							logOnce = false
+			if int(connectionCount.Load()) < lg.connections {
+				connectionCount.Add(1)
+				lg.wg.Add(1)
+				go func() {
+					defer lg.wg.Done()
+					defer connectionCount.Add(-1)
+					conn := vc.GetVTGateConn(t)
+					defer conn.Close()
+					for {
+						select {
+						case <-lg.ctx.Done():
+							return
+						default:
 						}
-						atomic.AddInt64(&otherErrors, 1)
+						newID := atomic.AddInt64(&id, 1)
+						query := fmt.Sprintf(queryTemplate, newID, newID)
+						_, err := conn.ExecuteFetch(query, 1, false)
+						atomic.AddInt64(&totalQueries, 1)
+						if err != nil {
+							sqlErr := err.(*sqlerror.SQLError)
+							if strings.Contains(strings.ToLower(err.Error()), "denied tables") {
+								if debugMode {
+									t.Logf("loadGenerator: denied tables error executing query: %d:%v", sqlErr.Number(), err)
+								}
+								atomic.AddInt64(&deniedErrors, 1)
+							} else if strings.Contains(strings.ToLower(err.Error()), "ambiguous") {
+								// This can happen when a second keyspace is setup with the same tables, but
+								// there are no routing rules set yet by MoveTables. So we ignore these errors.
+								atomic.AddInt64(&ambiguousErrors, 1)
+							} else if strings.Contains(strings.ToLower(err.Error()), "current keyspace is being resharded") {
+								atomic.AddInt64(&reshardedErrors, 1)
+							} else if strings.Contains(strings.ToLower(err.Error()), "not found") {
+								atomic.AddInt64(&tableNotFoundErrors, 1)
+							} else {
+								if debugMode {
+									t.Logf("loadGenerator: error executing query: %d:%v", sqlErr.Number(), err)
+								}
+								atomic.AddInt64(&otherErrors, 1)
+							}
+						} else {
+							atomic.AddInt64(&successfulQueries, 1)
+						}
+						time.Sleep(time.Duration(int64(float64(loadTestAvgWaitBetweenQueries.Microseconds()) * rand.Float64())))
 					}
-					time.Sleep(loadTestWaitBetweenQueries)
-				} else {
-					atomic.AddInt64(&successfulQueries, 1)
-				}
-			}()
-			time.Sleep(loadTestWaitBetweenQueries)
+				}()
+			}
 		}
 	}
 }

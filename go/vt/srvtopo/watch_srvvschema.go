@@ -21,8 +21,9 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/stats"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/topo"
+
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
 type SrvVSchemaWatcher struct {

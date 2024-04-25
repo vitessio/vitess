@@ -600,7 +600,7 @@ func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string,
 	return nil
 }
 
-func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection) error {
+func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, rebuildSrvVSchema bool, direction TrafficSwitchDirection) error {
 	log.Infof("switchTableReads: cells: %s, tablet types: %+v, direction %d", strings.Join(cells, ","), servedTypes, direction)
 	rules, err := topotools.GetRoutingRules(ctx, ts.TopoServer())
 	if err != nil {
@@ -632,7 +632,10 @@ func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string,
 	if err := topotools.SaveRoutingRules(ctx, ts.TopoServer(), rules); err != nil {
 		return err
 	}
-	return ts.TopoServer().RebuildSrvVSchema(ctx, cells)
+	if rebuildSrvVSchema {
+		return ts.TopoServer().RebuildSrvVSchema(ctx, cells)
+	}
+	return nil
 }
 
 func (ts *trafficSwitcher) startReverseVReplication(ctx context.Context) error {
