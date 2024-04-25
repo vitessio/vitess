@@ -143,6 +143,8 @@ func yySpecialCommentMode(yylex interface{}) bool {
   constraintInfo ConstraintInfo
   tableOption   *TableOption
   tableOptions  []*TableOption
+  partOption    *PartitionOption
+  subpart       *SubPartition
   ReferenceAction ReferenceAction
   partDefs      []*PartitionDefinition
   partDef       *PartitionDefinition
@@ -215,7 +217,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %left <bytes> EXCEPT
 %left <bytes> UNION
 %left <bytes> INTERSECT
-%token <bytes> SELECT STREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR CALL 
+%token <bytes> SELECT STREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR CALL
 %token <bytes> ALL DISTINCT AS EXISTS ASC DESC DUPLICATE DEFAULT SET LOCK UNLOCK KEYS OF
 %token <bytes> OUTFILE DUMPFILE DATA LOAD LINES TERMINATED ESCAPED ENCLOSED OPTIONALLY STARTING
 %right <bytes> UNIQUE KEY
@@ -524,7 +526,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <str> key_type key_type_opt
 %type <str> flush_type flush_type_opt
 %type <empty> to_opt to_or_as as_opt column_opt
-%type <str> algorithm_opt definer_opt security_opt
+%type <str> algorithm_view_opt algorithm_part_opt definer_opt security_opt
 %type <viewSpec> view_opts
 %type <viewCheckOption> opt_with_check_option
 %type <bytes> reserved_keyword qualified_column_name_safe_reserved_keyword non_reserved_keyword column_name_safe_keyword function_call_keywords non_reserved_keyword2 non_reserved_keyword3 all_non_reserved
@@ -558,7 +560,11 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <str> equal_opt assignment_op
 %type <TableSpec> table_spec table_column_list
 %type <str> table_opt_value row_fmt_opt
-%type <str> partition_options partition_option linear_partition_opt linear_opt partition_num_opt subpartition_opt subpartition_num_opt
+%type <partOption> partition_option_opt partition_option linear_partition_opt
+%type <subpart> subpartition_opt
+%type <boolean> linear_opt
+%type <str> range_or_list
+%type <sqlVal> partition_num_opt subpartition_num_opt
 %type <indexInfo> index_info
 %type <indexColumn> index_column
 %type <indexColumns> index_column_list
@@ -572,7 +578,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <replicationOption> replication_option replication_filter_option
 %type <str> relay_logs_attribute
 %type <constraintInfo> foreign_key_details check_constraint_info
-%type <partDefs> partition_definitions
+%type <partDefs> partition_definitions partition_definitions_opt
 %type <partDef> partition_definition
 %type <partSpec> partition_operation
 %type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update drop_statement_action
@@ -1978,12 +1984,12 @@ view_opts:
   {
     $$ = &ViewSpec{Algorithm: "", Definer: $1, Security: $2}
   }
-| algorithm_opt definer_opt security_opt
+| algorithm_view_opt definer_opt security_opt
   {
     $$ = &ViewSpec{Algorithm: $1, Definer: $2, Security: $3}
   }
 
-algorithm_opt:
+algorithm_view_opt:
   ALGORITHM '=' UNDEFINED
   {
     $$ = string($3)
@@ -2818,13 +2824,13 @@ create_table_prefix:
   }
 
 table_spec:
-  '(' table_column_list ')' table_option_list partition_options
+  '(' table_column_list ')' table_option_list partition_option_opt
   {
     $$ = $2
     for _, opt := range $4 {
       $$.AddTableOption(opt)
     }
-    $$.PartitionOpts = $5
+    $$.PartitionOpt = $5
   }
 
 table_column_list:
@@ -4051,7 +4057,7 @@ index_column:
   {
       $$ = &IndexColumn{Column: NewColIdent(string($1)), Length: $2, Order: $3}
   }
-  
+
 foreign_key_definition:
   CONSTRAINT ID foreign_key_details
   {
@@ -4092,7 +4098,7 @@ index_name_opt:
   {
     $$ = nil
   }
-| ID   
+| ID
   {
     $$ = $1
   }
@@ -4464,17 +4470,16 @@ any_identifier:
 | reserved_keyword
 
 // TODO: partition options for table creation will parse, but do nothing for now
-partition_options:
+partition_option_opt:
   {
-    $$ = ""
+    $$ = nil
   }
-| PARTITION BY partition_option partition_num_opt subpartition_opt
+| PARTITION BY partition_option partition_num_opt subpartition_opt partition_definitions_opt
   {
-    $$ = string($1) + " " + string($2) + " " + $3 + $4 + $5
-  }
-| PARTITION BY partition_option partition_num_opt subpartition_opt openb partition_definitions closeb
-  {
-    $$ = string($1) + " " + string($2) + " " + $3 + $4 + $5 + "(partition_definitions)"
+    $3.Partitions = $4
+    $3.SubPartition = $5
+    $3.Definitions = $6
+    $$ = $3
   }
 
 partition_option:
@@ -4482,75 +4487,108 @@ partition_option:
   {
     $$ = $1
   }
-| RANGE openb any_identifier closeb
+| range_or_list openb value_expression closeb
   {
-    $$ = string($1) + " (" + string($3) + ")"
+    $$ = &PartitionOption {
+    	PartitionType: string($1),
+    	Expr: $3,
+    }
   }
-| RANGE COLUMNS openb column_list closeb
+| range_or_list COLUMNS openb column_list closeb
   {
-    $$ = string($1) + " " + string($2) + " (column_list)"
-  }
-| LIST openb any_identifier closeb
-  {
-    $$ = string($1) + " (" + string($3) + ")"
-  }
-| LIST COLUMNS openb column_list closeb
-  {
-    $$ = string($1) + " " + string($2) + " (column_list)"
+    $$ = &PartitionOption {
+    	PartitionType: string($1),
+    	ColList: $4,
+    }
   }
 
 linear_partition_opt:
-  linear_opt HASH openb value closeb
+  linear_opt HASH openb value_expression closeb
   {
-    $$ = $1 + string($2) + " (value)"
+    $$ = &PartitionOption {
+    	IsLinear: $1,
+    	PartitionType: string($2),
+    	Expr: $4,
+    }
   }
-| linear_opt HASH openb ID closeb
+| linear_opt KEY algorithm_part_opt openb column_list closeb
   {
-    $$ = $1 + string($2) + " (" + string($4) + ")"
-  }
-| linear_opt KEY openb column_list closeb
-  {
-    $$ = $1 + string($2) + " (column_list)"
-  }
-| linear_opt KEY ALGORITHM '=' INTEGRAL openb column_list closeb
-  {
-    $$ = $1 + string($2) + " " + string($3) + " " + string($5) + " (column_list)"
+    $$ = &PartitionOption {
+	IsLinear: $1,
+	PartitionType: string($2),
+	KeyAlgorithm: $3,
+	ColList: $5,
+    }
   }
 
 linear_opt:
   {
-    $$ = ""
+    $$ = false
   }
 | LINEAR
   {
-    $$ = string($1) + " "
+    $$ = true
+  }
+
+algorithm_part_opt:
+  {
+    $$ = ""
+  }
+| ALGORITHM '=' INTEGRAL
+  {
+    $$ = string($1) + " = " + string($3)
+  }
+
+range_or_list:
+  RANGE
+  {
+    $$ = string($1)
+  }
+| LIST
+  {
+    $$ = string($1)
   }
 
 partition_num_opt:
   {
-    $$ = ""
+    $$ = nil
   }
 | PARTITIONS INTEGRAL
   {
-    $$ = string($1) + " " + string($2) + " "
+    $$ = NewIntVal($2)
   }
 
 subpartition_opt:
   {
-    $$ = ""
+    $$ = nil
   }
-| SUBPARTITION BY linear_partition_opt subpartition_num_opt
+| SUBPARTITION BY linear_opt HASH openb value_expression closeb subpartition_num_opt
   {
-    $$ = string($1) + " " + string($2) + " " + $3 + " " + $4
+    $$ = &SubPartition{
+    	IsLinear: $3,
+    	PartitionType: string($4),
+    	Expr: $6,
+    	SubPartitions: $8,
+    }
+  }
+| SUBPARTITION BY linear_opt KEY algorithm_part_opt openb value_expression closeb subpartition_num_opt
+  {
+    $$ = &SubPartition{
+    	IsLinear: $3,
+    	PartitionType: string($4),
+    	KeyAlgorithm: $5,
+    	Expr: $7,
+    	SubPartitions: $9,
+    }
   }
 
 subpartition_num_opt:
   {
-    $$ = ""
+    $$ = nil
   }
 | SUBPARTITIONS INTEGRAL
   {
-    $$ = string($1) + " " + string($2) + " "
+    $$ = NewIntVal($2)
   }
 
 constraint_symbol_opt:
@@ -4871,6 +4909,15 @@ partition_operation:
   REORGANIZE PARTITION sql_id INTO openb partition_definitions closeb
   {
     $$ = &PartitionSpec{Action: ReorganizeStr, Name: $3, Definitions: $6}
+  }
+
+partition_definitions_opt:
+  {
+    $$ = nil
+  }
+| openb partition_definitions closeb
+  {
+    $$ = $2
   }
 
 partition_definitions:
@@ -6103,7 +6150,7 @@ as_of_clause:
   {
     $$ = $1
   }
-  
+
 between_times:
   FOR_SYSTEM_TIME BETWEEN value_expression AND value_expression
   {
