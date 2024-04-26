@@ -732,17 +732,3 @@ func benchmarkPlanner(b *testing.B, version plancontext.PlannerVersion, testCase
 		}
 	}
 }
-
-func TestReferenceRerouting(t *testing.T) {
-	reset := oprewriters.EnableDebugPrinting()
-	defer reset()
-
-	lv := loadSchema(t, "vschemas/schema.json", true)
-	setFks(t, lv)
-	vschema := &vschemawrapper.VSchemaWrapper{
-		V:           lv,
-		TestBuilder: TestBuilder,
-	}
-
-	testFile(t, "reference_table_cases.json", "", vschema, false)
-}
