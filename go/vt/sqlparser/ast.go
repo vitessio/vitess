@@ -162,22 +162,37 @@ func parseTokenizer(sql string, tokenizer *Tokenizer) (Statement, error) {
 	return tokenizer.ParseTree, nil
 }
 
-// For select statements, capture the verbatim select expressions from the original query text
+// For select statements, capture the verbatim select expressions from the original query text.
+// It searches select expressions in walkable nodes.
 func captureSelectExpressions(sql string, tokenizer *Tokenizer) {
-	if s, ok := tokenizer.ParseTree.(SelectStatement); ok {
-		s.walkSubtree(func(node SQLNode) (bool, error) {
-			if node, ok := node.(*AliasedExpr); ok && node.EndParsePos > node.StartParsePos {
-				_, ok := node.Expr.(*ColName)
-				if ok {
-					// column names don't need any special handling to capture the input expression
-					return false, nil
-				} else {
-					node.InputExpression = trimQuotes(strings.Trim(sql[node.StartParsePos:node.EndParsePos], " \n\t"))
-				}
+	if s, isSelect := tokenizer.ParseTree.(SelectStatement); isSelect {
+		walkSelectExpressions(s, sql)
+	} else if w, ok := tokenizer.ParseTree.(WalkableSQLNode); ok {
+		w.walkSubtree(func(node SQLNode) (bool, error) {
+			if s, isSelect = node.(SelectStatement); isSelect {
+				walkSelectExpressions(s, sql)
 			}
 			return true, nil
 		})
 	}
+}
+
+// walkSelectExpressions fills in `InputExpression` of `AliasedExpr` if it's not a column name.
+// This is used to display the result as defined original query text. This function gets called
+// by captureSelectExpressions.
+func walkSelectExpressions(s SelectStatement, sql string) {
+	s.walkSubtree(func(node SQLNode) (bool, error) {
+		if node, ok := node.(*AliasedExpr); ok && node.EndParsePos > node.StartParsePos {
+			_, ok := node.Expr.(*ColName)
+			if ok {
+				// column names don't need any special handling to capture the input expression
+				return false, nil
+			} else {
+				node.InputExpression = trimQuotes(strings.Trim(sql[node.StartParsePos:node.EndParsePos], " \n\t"))
+			}
+		}
+		return true, nil
+	})
 }
 
 // For DDL statements that capture the position of a sub-statement (create view and others), we need to adjust these
@@ -2339,6 +2354,12 @@ func (node *DDL) walkSubtree(visit Visit) error {
 			return err
 		}
 	}
+
+	if node.ViewSpec != nil {
+		err := Walk(visit, node.ViewSpec.ViewExpr)
+		return err
+	}
+	// TODO: add missing nodes that are walkable
 	return nil
 }
 
