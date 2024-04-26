@@ -546,6 +546,37 @@ func (vttablet *VttabletProcess) GetDBStatus(status string, ksName string) (stri
 	return vttablet.getDBSystemValues("status", status, ksName)
 }
 
+type SemiSyncType int8
+
+const (
+	SemiSyncTypeUnknown SemiSyncType = iota
+	SemiSyncTypeOff
+	SemiSyncTypeSource
+	SemiSyncTypeMaster
+)
+
+func (vttablet *VttabletProcess) SemiSyncExtensionLoaded() (SemiSyncType, error) {
+	conn, err := vttablet.defaultConn("")
+	if err != nil {
+		return SemiSyncTypeUnknown, err
+	}
+	defer conn.Close()
+
+	qr, err := conn.ExecuteFetch("SHOW VARIABLES LIKE 'rpl_semi_sync_%_enabled'", 10, false)
+	if err != nil {
+		return SemiSyncTypeUnknown, err
+	}
+	for _, row := range qr.Rows {
+		if row[0].ToString() == "rpl_semi_sync_source_enabled" {
+			return SemiSyncTypeSource, nil
+		}
+		if row[0].ToString() == "rpl_semi_sync_master_enabled" {
+			return SemiSyncTypeMaster, nil
+		}
+	}
+	return SemiSyncTypeOff, nil
+}
+
 func (vttablet *VttabletProcess) getDBSystemValues(placeholder string, value string, ksName string) (string, error) {
 	output, err := vttablet.QueryTablet(fmt.Sprintf("show %s like '%s'", placeholder, value), ksName, true)
 	if err != nil || output.Rows == nil {
