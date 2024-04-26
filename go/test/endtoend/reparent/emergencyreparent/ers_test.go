@@ -301,7 +301,14 @@ func TestPullFromRdonly(t *testing.T) {
 	require.NoError(t, err)
 
 	// stop semi-sync on the primary so that any transaction now added does not require an ack
-	utils.RunSQL(ctx, t, "SET GLOBAL rpl_semi_sync_master_enabled = false", tablets[0])
+	semisyncType, err := tablets[0].VttabletProcess.SemiSyncExtensionLoaded()
+	require.NoError(t, err)
+	switch semisyncType {
+	case cluster.SemiSyncTypeSource:
+		utils.RunSQL(ctx, t, "SET GLOBAL rpl_semi_sync_source_enabled = false", tablets[0])
+	case cluster.SemiSyncTypeMaster:
+		utils.RunSQL(ctx, t, "SET GLOBAL rpl_semi_sync_master_enabled = false", tablets[0])
+	}
 
 	// confirm that rdonly is able to replicate from our primary
 	// This will also introduce a new transaction into the rdonly tablet which the other 2 replicas don't have

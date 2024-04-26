@@ -477,9 +477,20 @@ func CheckInsertedValues(ctx context.Context, t *testing.T, tablet *cluster.Vtta
 }
 
 func CheckSemiSyncSetupCorrectly(t *testing.T, tablet *cluster.Vttablet, semiSyncVal string) {
-	dbVar, err := tablet.VttabletProcess.GetDBVar("rpl_semi_sync_slave_enabled", "")
+	semisyncType, err := tablet.VttabletProcess.SemiSyncExtensionLoaded()
 	require.NoError(t, err)
-	require.Equal(t, semiSyncVal, dbVar)
+	switch semisyncType {
+	case cluster.SemiSyncTypeSource:
+		dbVar, err := tablet.VttabletProcess.GetDBVar("rpl_semi_sync_replica_enabled", "")
+		require.NoError(t, err)
+		require.Equal(t, semiSyncVal, dbVar)
+	case cluster.SemiSyncTypeMaster:
+		dbVar, err := tablet.VttabletProcess.GetDBVar("rpl_semi_sync_slave_enabled", "")
+		require.NoError(t, err)
+		require.Equal(t, semiSyncVal, dbVar)
+	default:
+		require.Fail(t, "Unknown semi sync type")
+	}
 }
 
 // CheckCountOfInsertedValues checks that the number of inserted values matches the given count on the given tablet
@@ -669,30 +680,60 @@ func assertNodeCount(t *testing.T, result string, want int) {
 	assert.Equal(t, want, got)
 }
 
-// CheckDBvar checks the db var
-func CheckDBvar(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, variable string, status string) {
+func CheckSemisyncEnabled(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, enabled bool) {
 	tabletParams := getMysqlConnParam(tablet)
 	conn, err := mysql.Connect(ctx, &tabletParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
-	qr := execute(t, conn, fmt.Sprintf("show variables like '%s'", variable))
-	got := fmt.Sprintf("%v", qr.Rows)
-	want := fmt.Sprintf("[[VARCHAR(\"%s\") VARCHAR(\"%s\")]]", variable, status)
-	assert.Equal(t, want, got)
+	status := "OFF"
+	if enabled {
+		status = "ON"
+	}
+
+	semisyncType, err := tablet.VttabletProcess.SemiSyncExtensionLoaded()
+	require.NoError(t, err)
+	switch semisyncType {
+	case cluster.SemiSyncTypeSource:
+		qr := execute(t, conn, "show variables like 'rpl_semi_sync_replica_enabled'")
+		got := fmt.Sprintf("%v", qr.Rows)
+		want := fmt.Sprintf("[[VARCHAR(\"%s\") VARCHAR(\"%s\")]]", "rpl_semi_sync_replica_enabled", status)
+		assert.Equal(t, want, got)
+	case cluster.SemiSyncTypeMaster:
+		qr := execute(t, conn, "show variables like 'rpl_semi_sync_slave_enabled'")
+		got := fmt.Sprintf("%v", qr.Rows)
+		want := fmt.Sprintf("[[VARCHAR(\"%s\") VARCHAR(\"%s\")]]", "rpl_semi_sync_slave_enabled", status)
+		assert.Equal(t, want, got)
+	}
 }
 
-// CheckDBstatus checks the db status
-func CheckDBstatus(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, variable string, status string) {
+func CheckSemisyncStatus(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, enabled bool) {
 	tabletParams := getMysqlConnParam(tablet)
 	conn, err := mysql.Connect(ctx, &tabletParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
-	qr := execute(t, conn, fmt.Sprintf("show status like '%s'", variable))
-	got := fmt.Sprintf("%v", qr.Rows)
-	want := fmt.Sprintf("[[VARCHAR(\"%s\") VARCHAR(\"%s\")]]", variable, status)
-	assert.Equal(t, want, got)
+	status := "OFF"
+	if enabled {
+		status = "ON"
+	}
+
+	semisyncType, err := tablet.VttabletProcess.SemiSyncExtensionLoaded()
+	require.NoError(t, err)
+	switch semisyncType {
+	case cluster.SemiSyncTypeSource:
+		qr := execute(t, conn, "show status like 'Rpl_semi_sync_replica_status'")
+		got := fmt.Sprintf("%v", qr.Rows)
+		want := fmt.Sprintf("[[VARCHAR(\"%s\") VARCHAR(\"%s\")]]", "Rpl_semi_sync_replica_status", status)
+		assert.Equal(t, want, got)
+	case cluster.SemiSyncTypeMaster:
+		qr := execute(t, conn, "show status like 'Rpl_semi_sync_slave_status'")
+		got := fmt.Sprintf("%v", qr.Rows)
+		want := fmt.Sprintf("[[VARCHAR(\"%s\") VARCHAR(\"%s\")]]", "Rpl_semi_sync_slave_status", status)
+		assert.Equal(t, want, got)
+	default:
+		assert.Fail(t, "unknown semi-sync type")
+	}
 }
 
 // SetReplicationSourceFailed returns true if the given output from PRS had failed because the given tablet was

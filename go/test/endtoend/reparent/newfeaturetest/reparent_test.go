@@ -131,8 +131,18 @@ func TestChangeTypeWithoutSemiSync(t *testing.T) {
 			utils.RunSQL(ctx, t, "set global super_read_only = 0", tablet)
 		}
 
-		utils.RunSQL(ctx, t, "UNINSTALL PLUGIN rpl_semi_sync_slave;", tablet)
-		utils.RunSQL(ctx, t, "UNINSTALL PLUGIN rpl_semi_sync_master;", tablet)
+		semisyncType, err := tablet.VttabletProcess.SemiSyncExtensionLoaded()
+		require.NoError(t, err)
+		switch semisyncType {
+		case cluster.SemiSyncTypeSource:
+			utils.RunSQL(ctx, t, "UNINSTALL PLUGIN rpl_semi_sync_replica", tablet)
+			utils.RunSQL(ctx, t, "UNINSTALL PLUGIN rpl_semi_sync_source", tablet)
+		case cluster.SemiSyncTypeMaster:
+			utils.RunSQL(ctx, t, "UNINSTALL PLUGIN rpl_semi_sync_slave", tablet)
+			utils.RunSQL(ctx, t, "UNINSTALL PLUGIN rpl_semi_sync_master", tablet)
+		default:
+			require.Fail(t, "Unknown semi sync type")
+		}
 	}
 
 	utils.ValidateTopology(t, clusterInstance, true)
