@@ -373,17 +373,17 @@ func TestGetPreviousGTIDs(t *testing.T) {
 func TestSemiSyncEnabled(t *testing.T) {
 	require.NotNil(t, mysqld)
 
-	err := mysqld.SetSemiSyncEnabled(true, false)
+	err := mysqld.SetSemiSyncEnabled(context.Background(), true, false)
 	assert.NoError(t, err)
 
-	p, r := mysqld.SemiSyncEnabled()
+	p, r := mysqld.SemiSyncEnabled(context.Background())
 	assert.True(t, p)
 	assert.False(t, r)
 
-	err = mysqld.SetSemiSyncEnabled(false, true)
+	err = mysqld.SetSemiSyncEnabled(context.Background(), false, true)
 	assert.NoError(t, err)
 
-	p, r = mysqld.SemiSyncEnabled()
+	p, r = mysqld.SemiSyncEnabled(context.Background())
 	assert.False(t, p)
 	assert.True(t, r)
 }
