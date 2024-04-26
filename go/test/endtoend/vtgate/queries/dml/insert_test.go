@@ -466,6 +466,7 @@ func TestMixedCases(t *testing.T) {
 // TestInsertAlias test the alias feature in insert statement.
 func TestInsertAlias(t *testing.T) {
 	utils.SkipIfBinaryIsBelowVersion(t, 20, "vtgate")
+	utils.SkipIfBinaryIsBelowVersion(t, 20, "vttablet")
 
 	mcmp, closer := start(t)
 	defer closer()
