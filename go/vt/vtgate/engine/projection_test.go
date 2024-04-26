@@ -212,3 +212,41 @@ func TestFields(t *testing.T) {
 		})
 	}
 }
+
+func TestFieldConversion(t *testing.T) {
+	var testCases = []struct {
+		name      string
+		expr      string
+		typ       querypb.Type
+		collation collations.ID
+	}{
+		{
+			name:      `convert different charset`,
+			expr:      `_latin1 0xFF`,
+			typ:       sqltypes.VarChar,
+			collation: collations.MySQL8().DefaultConnectionCharset(),
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			arg, err := sqlparser.NewTestParser().ParseExpr(testCase.expr)
+			require.NoError(t, err)
+			bindExpr, err := evalengine.Translate(arg, &evalengine.Config{
+				Environment: vtenv.NewTestEnv(),
+				Collation:   collations.MySQL8().DefaultConnectionCharset(),
+			})
+			require.NoError(t, err)
+			proj := &Projection{
+				Cols:       []string{"col"},
+				Exprs:      []evalengine.Expr{bindExpr},
+				Input:      &SingleRow{},
+				noTxNeeded: noTxNeeded{},
+			}
+			qr, err := proj.TryExecute(context.Background(), &noopVCursor{}, nil, true)
+			require.NoError(t, err)
+			assert.Equal(t, testCase.typ, qr.Fields[0].Type)
+			assert.Equal(t, testCase.collation, collations.ID(qr.Fields[0].Charset))
+		})
+	}
+}
