@@ -564,129 +564,74 @@
         "ResultColumns": 4,
         "Inputs": [
           {
-            "OperatorType": "SimpleProjection",
-            "Columns": [
-              4,
-              1,
-              5,
-              6,
-              7,
-              8,
-              9
-            ],
+            "OperatorType": "Sort",
+            "Variant": "Memory",
+            "OrderBy": "(0|4) ASC, (1|5) ASC, (2|6) ASC",
             "Inputs": [
               {
-                "OperatorType": "Sort",
-                "Variant": "Memory",
-                "OrderBy": "(4|7) ASC, (1|8) ASC, (5|9) ASC",
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "JoinColumnIndexes": "L:0,R:0,L:1,L:2,L:4,R:1,L:5",
+                "JoinVars": {
+                  "n1_n_name": 0,
+                  "o_custkey": 3
+                },
+                "TableName": "lineitem_orders_supplier_nation_customer_nation",
                 "Inputs": [
                   {
                     "OperatorType": "Join",
                     "Variant": "Join",
-                    "JoinColumnIndexes": "L:0,R:1,L:4,L:5,L:0,L:4,L:5,L:6,R:2,L:7",
+                    "JoinColumnIndexes": "R:0,L:0,L:1,L:2,R:1,L:4",
                     "JoinVars": {
-                      "n1_n_name": 0,
-                      "o_custkey": 3
+                      "l_suppkey": 3
                     },
-                    "TableName": "lineitem_orders_supplier_nation_customer_nation",
+                    "TableName": "lineitem_orders_supplier_nation",
                     "Inputs": [
                       {
                         "OperatorType": "Join",
                         "Variant": "Join",
-                        "JoinColumnIndexes": "R:1,L:4,L:5,L:2,L:4,L:5,R:2,L:6",
+                        "JoinColumnIndexes": "L:0,L:1,R:0,L:2,L:4",
                         "JoinVars": {
-                          "l_suppkey": 3
+                          "l_orderkey": 3
                         },
-                        "TableName": "lineitem_orders_supplier_nation",
+                        "TableName": "lineitem_orders",
                         "Inputs": [
                           {
-                            "OperatorType": "Join",
-                            "Variant": "Join",
-                            "JoinColumnIndexes": "L:0,L:1,R:0,L:2,L:0,L:1,L:4",
-                            "JoinVars": {
-                              "l_orderkey": 3
+                            "OperatorType": "Route",
+                            "Variant": "Scatter",
+                            "Keyspace": {
+                              "Name": "main",
+                              "Sharded": true
                             },
-                            "TableName": "lineitem_orders",
-                            "Inputs": [
-                              {
-                                "OperatorType": "Route",
-                                "Variant": "Scatter",
-                                "Keyspace": {
-                                  "Name": "main",
-                                  "Sharded": true
-                                },
-                                "FieldQuery": "select shipping.l_year, shipping.volume, shipping.l_suppkey, shipping.l_orderkey, weight_string(shipping.l_year) from (select extract(year from l_shipdate) as l_year, l_extendedprice * (1 - l_discount) as volume, l_suppkey as l_suppkey, l_orderkey as l_orderkey from lineitem where 1 != 1) as shipping where 1 != 1",
-                                "Query": "select shipping.l_year, shipping.volume, shipping.l_suppkey, shipping.l_orderkey, weight_string(shipping.l_year) from (select extract(year from l_shipdate) as l_year, l_extendedprice * (1 - l_discount) as volume, l_suppkey as l_suppkey, l_orderkey as l_orderkey from lineitem where l_shipdate between date('1995-01-01') and date('1996-12-31')) as shipping",
-                                "Table": "lineitem"
-                              },
-                              {
-                                "OperatorType": "Route",
-                                "Variant": "EqualUnique",
-                                "Keyspace": {
-                                  "Name": "main",
-                                  "Sharded": true
-                                },
-                                "FieldQuery": "select shipping.o_custkey from (select o_custkey as o_custkey from orders where 1 != 1) as shipping where 1 != 1",
-                                "Query": "select shipping.o_custkey from (select o_custkey as o_custkey from orders where o_orderkey = :l_orderkey) as shipping",
-                                "Table": "orders",
-                                "Values": [
-                                  ":l_orderkey"
-                                ],
-                                "Vindex": "hash"
-                              }
-                            ]
+                            "FieldQuery": "select shipping.l_year, shipping.volume, shipping.l_suppkey, shipping.l_orderkey, weight_string(shipping.l_year) from (select extract(year from l_shipdate) as l_year, l_extendedprice * (1 - l_discount) as volume, l_suppkey as l_suppkey, l_orderkey as l_orderkey from lineitem where 1 != 1) as shipping where 1 != 1",
+                            "Query": "select shipping.l_year, shipping.volume, shipping.l_suppkey, shipping.l_orderkey, weight_string(shipping.l_year) from (select extract(year from l_shipdate) as l_year, l_extendedprice * (1 - l_discount) as volume, l_suppkey as l_suppkey, l_orderkey as l_orderkey from lineitem where l_shipdate between date('1995-01-01') and date('1996-12-31')) as shipping",
+                            "Table": "lineitem"
                           },
                           {
-                            "OperatorType": "Join",
-                            "Variant": "Join",
-                            "JoinColumnIndexes": "R:1,R:1,R:2",
-                            "JoinVars": {
-                              "s_nationkey": 0
+                            "OperatorType": "Route",
+                            "Variant": "EqualUnique",
+                            "Keyspace": {
+                              "Name": "main",
+                              "Sharded": true
                             },
-                            "TableName": "supplier_nation",
-                            "Inputs": [
-                              {
-                                "OperatorType": "Route",
-                                "Variant": "EqualUnique",
-                                "Keyspace": {
-                                  "Name": "main",
-                                  "Sharded": true
-                                },
-                                "FieldQuery": "select shipping.s_nationkey from (select s_nationkey as s_nationkey from supplier where 1 != 1) as shipping where 1 != 1",
-                                "Query": "select shipping.s_nationkey from (select s_nationkey as s_nationkey from supplier where s_suppkey = :l_suppkey) as shipping",
-                                "Table": "supplier",
-                                "Values": [
-                                  ":l_suppkey"
-                                ],
-                                "Vindex": "hash"
-                              },
-                              {
-                                "OperatorType": "Route",
-                                "Variant": "EqualUnique",
-                                "Keyspace": {
-                                  "Name": "main",
-                                  "Sharded": true
-                                },
-                                "FieldQuery": "select shipping.supp_nation, n1.n_name, weight_string(shipping.supp_nation) from (select n1.n_name as supp_nation from nation as n1 where 1 != 1) as shipping where 1 != 1",
-                                "Query": "select shipping.supp_nation, n1.n_name, weight_string(shipping.supp_nation) from (select n1.n_name as supp_nation from nation as n1 where n1.n_nationkey = :s_nationkey) as shipping",
-                                "Table": "nation",
-                                "Values": [
-                                  ":s_nationkey"
-                                ],
-                                "Vindex": "hash"
-                              }
-                            ]
+                            "FieldQuery": "select shipping.o_custkey from (select o_custkey as o_custkey from orders where 1 != 1) as shipping where 1 != 1",
+                            "Query": "select shipping.o_custkey from (select o_custkey as o_custkey from orders where o_orderkey = :l_orderkey) as shipping",
+                            "Table": "orders",
+                            "Values": [
+                              ":l_orderkey"
+                            ],
+                            "Vindex": "hash"
                           }
                         ]
                       },
                       {
                         "OperatorType": "Join",
                         "Variant": "Join",
-                        "JoinColumnIndexes": "R:1,R:1,R:2",
+                        "JoinColumnIndexes": "R:0,R:1",
                         "JoinVars": {
-                          "c_nationkey": 0
+                          "s_nationkey": 0
                         },
-                        "TableName": "customer_nation",
+                        "TableName": "supplier_nation",
                         "Inputs": [
                           {
                             "OperatorType": "Route",
@@ -695,11 +640,11 @@
                               "Name": "main",
                               "Sharded": true
                             },
-                            "FieldQuery": "select shipping.c_nationkey from (select c_nationkey as c_nationkey from customer where 1 != 1) as shipping where 1 != 1",
-                            "Query": "select shipping.c_nationkey from (select c_nationkey as c_nationkey from customer where c_custkey = :o_custkey) as shipping",
-                            "Table": "customer",
+                            "FieldQuery": "select shipping.s_nationkey from (select s_nationkey as s_nationkey from supplier where 1 != 1) as shipping where 1 != 1",
+                            "Query": "select shipping.s_nationkey from (select s_nationkey as s_nationkey from supplier where s_suppkey = :l_suppkey) as shipping",
+                            "Table": "supplier",
                             "Values": [
-                              ":o_custkey"
+                              ":l_suppkey"
                             ],
                             "Vindex": "hash"
                           },
@@ -710,15 +655,56 @@
                               "Name": "main",
                               "Sharded": true
                             },
-                            "FieldQuery": "select shipping.cust_nation, n2.n_name, weight_string(shipping.cust_nation) from (select n2.n_name as cust_nation from nation as n2 where 1 != 1) as shipping where 1 != 1",
-                            "Query": "select shipping.cust_nation, n2.n_name, weight_string(shipping.cust_nation) from (select n2.n_name as cust_nation from nation as n2 where (:n1_n_name = 'FRANCE' and n2.n_name = 'GERMANY' or :n1_n_name = 'GERMANY' and n2.n_name = 'FRANCE') and n2.n_nationkey = :c_nationkey) as shipping",
+                            "FieldQuery": "select shipping.supp_nation, weight_string(shipping.supp_nation) from (select n1.n_name as supp_nation from nation as n1 where 1 != 1) as shipping where 1 != 1",
+                            "Query": "select shipping.supp_nation, weight_string(shipping.supp_nation) from (select n1.n_name as supp_nation from nation as n1 where n1.n_nationkey = :s_nationkey) as shipping",
                             "Table": "nation",
                             "Values": [
-                              ":c_nationkey"
+                              ":s_nationkey"
                             ],
                             "Vindex": "hash"
                           }
                         ]
+                      }
+                    ]
+                  },
+                  {
+                    "OperatorType": "Join",
+                    "Variant": "Join",
+                    "JoinColumnIndexes": "R:0,R:1",
+                    "JoinVars": {
+                      "c_nationkey": 0
+                    },
+                    "TableName": "customer_nation",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "EqualUnique",
+                        "Keyspace": {
+                          "Name": "main",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select shipping.c_nationkey from (select c_nationkey as c_nationkey from customer where 1 != 1) as shipping where 1 != 1",
+                        "Query": "select shipping.c_nationkey from (select c_nationkey as c_nationkey from customer where c_custkey = :o_custkey) as shipping",
+                        "Table": "customer",
+                        "Values": [
+                          ":o_custkey"
+                        ],
+                        "Vindex": "hash"
+                      },
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "EqualUnique",
+                        "Keyspace": {
+                          "Name": "main",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select shipping.cust_nation, weight_string(shipping.cust_nation) from (select n2.n_name as cust_nation from nation as n2 where 1 != 1) as shipping where 1 != 1",
+                        "Query": "select shipping.cust_nation, weight_string(shipping.cust_nation) from (select n2.n_name as cust_nation from nation as n2 where (:n1_n_name = 'FRANCE' and n2.n_name = 'GERMANY' or :n1_n_name = 'GERMANY' and n2.n_name = 'FRANCE') and n2.n_nationkey = :c_nationkey) as shipping",
+                        "Table": "nation",
+                        "Values": [
+                          ":c_nationkey"
+                        ],
+                        "Vindex": "hash"
                       }
                     ]
                   }
@@ -759,21 +745,21 @@
               {
                 "OperatorType": "SimpleProjection",
                 "Columns": [
+                  0,
                   3,
-                  4,
-                  5,
-                  6
+                  1,
+                  4
                 ],
                 "Inputs": [
                   {
                     "OperatorType": "Sort",
                     "Variant": "Memory",
-                    "OrderBy": "(3|6) ASC",
+                    "OrderBy": "(0|4) ASC",
                     "Inputs": [
                       {
                         "OperatorType": "Join",
                         "Variant": "Join",
-                        "JoinColumnIndexes": "R:0,L:3,L:1,R:2,L:4,L:3,R:3",
+                        "JoinColumnIndexes": "R:0,L:0,L:1,L:3,R:1",
                         "JoinVars": {
                           "l_orderkey": 2
                         },
@@ -782,17 +768,17 @@
                           {
                             "OperatorType": "Join",
                             "Variant": "Join",
-                            "JoinColumnIndexes": "L:3,R:1,L:1,L:3,R:2",
+                            "JoinColumnIndexes": "L:0,R:0,L:1,R:1",
                             "JoinVars": {
                               "l_suppkey": 2,
-                              "volume": 3
+                              "volume": 0
                             },
                             "TableName": "lineitem_part_supplier_nation",
                             "Inputs": [
                               {
                                 "OperatorType": "Join",
                                 "Variant": "Join",
-                                "JoinColumnIndexes": "L:0,L:1,L:2,L:0",
+                                "JoinColumnIndexes": "L:0,L:1,L:2",
                                 "JoinVars": {
                                   "l_partkey": 3
                                 },
@@ -829,7 +815,7 @@
                               {
                                 "OperatorType": "Join",
                                 "Variant": "Join",
-                                "JoinColumnIndexes": "R:1,R:1,R:2",
+                                "JoinColumnIndexes": "R:0,R:1",
                                 "JoinVars": {
                                   "s_nationkey": 0
                                 },
@@ -857,8 +843,8 @@
                                       "Name": "main",
                                       "Sharded": true
                                     },
-                                    "FieldQuery": "select all_nations.nation, n2.n_name, case when nation = 'BRAZIL' then :volume else 0 end from (select n2.n_name as nation from nation as n2 where 1 != 1) as all_nations where 1 != 1",
-                                    "Query": "select all_nations.nation, n2.n_name, case when nation = 'BRAZIL' then :volume else 0 end from (select n2.n_name as nation from nation as n2 where n2.n_nationkey = :s_nationkey) as all_nations",
+                                    "FieldQuery": "select all_nations.nation, case when nation = 'BRAZIL' then :volume else 0 end from (select n2.n_name as nation from nation as n2 where 1 != 1) as all_nations where 1 != 1",
+                                    "Query": "select all_nations.nation, case when nation = 'BRAZIL' then :volume else 0 end from (select n2.n_name as nation from nation as n2 where n2.n_nationkey = :s_nationkey) as all_nations",
                                     "Table": "nation",
                                     "Values": [
                                       ":s_nationkey"
@@ -872,18 +858,18 @@
                           {
                             "OperatorType": "Join",
                             "Variant": "Join",
-                            "JoinColumnIndexes": "L:3,L:1,L:3,L:4",
+                            "JoinColumnIndexes": "L:0,L:2",
                             "JoinVars": {
-                              "c_nationkey": 2
+                              "c_nationkey": 1
                             },
                             "TableName": "orders_customer_nation_region",
                             "Inputs": [
                               {
                                 "OperatorType": "Join",
                                 "Variant": "Join",
-                                "JoinColumnIndexes": "L:0,L:1,R:0,L:0,L:3",
+                                "JoinColumnIndexes": "L:0,R:0,L:2",
                                 "JoinVars": {
-                                  "o_custkey": 2
+                                  "o_custkey": 1
                                 },
                                 "TableName": "orders_customer",
                                 "Inputs": [
@@ -894,8 +880,8 @@
                                       "Name": "main",
                                       "Sharded": true
                                     },
-                                    "FieldQuery": "select all_nations.o_year, all_nations.o_orderdate, all_nations.o_custkey, weight_string(all_nations.o_year) from (select extract(year from o_orderdate) as o_year, o_orderdate as o_orderdate, o_custkey as o_custkey from orders where 1 != 1) as all_nations where 1 != 1",
-                                    "Query": "select all_nations.o_year, all_nations.o_orderdate, all_nations.o_custkey, weight_string(all_nations.o_year) from (select extract(year from o_orderdate) as o_year, o_orderdate as o_orderdate, o_custkey as o_custkey from orders where o_orderdate between date'1995-01-01' and date('1996-12-31') and o_orderkey = :l_orderkey) as all_nations",
+                                    "FieldQuery": "select all_nations.o_year, all_nations.o_custkey, weight_string(all_nations.o_year) from (select extract(year from o_orderdate) as o_year, o_custkey as o_custkey from orders where 1 != 1) as all_nations where 1 != 1",
+                                    "Query": "select all_nations.o_year, all_nations.o_custkey, weight_string(all_nations.o_year) from (select extract(year from o_orderdate) as o_year, o_custkey as o_custkey from orders where o_orderdate between date'1995-01-01' and date('1996-12-31') and o_orderkey = :l_orderkey) as all_nations",
                                     "Table": "orders",
                                     "Values": [
                                       ":l_orderkey"
@@ -996,212 +982,197 @@
         "ResultColumns": 3,
         "Inputs": [
           {
-            "OperatorType": "SimpleProjection",
-            "Columns": [
-              0,
-              3,
-              4,
-              5,
-              6
-            ],
+            "OperatorType": "Sort",
+            "Variant": "Memory",
+            "OrderBy": "(0|3) ASC, (1|4) DESC",
             "Inputs": [
               {
-                "OperatorType": "Sort",
-                "Variant": "Memory",
-                "OrderBy": "(0|5) ASC, (3|6) DESC",
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "JoinColumnIndexes": "R:0,L:0,L:1,R:1,L:3",
+                "JoinVars": {
+                  "l_suppkey": 2
+                },
+                "TableName": "orders_lineitem_part_partsupp_supplier_nation",
                 "Inputs": [
                   {
                     "OperatorType": "Join",
                     "Variant": "Join",
-                    "JoinColumnIndexes": "R:1,L:3,L:4,L:3,L:4,R:2,L:5",
+                    "JoinColumnIndexes": "L:0,R:0,L:1,L:3",
                     "JoinVars": {
-                      "l_suppkey": 2
+                      "l_partkey": 2,
+                      "l_suppkey": 1
                     },
-                    "TableName": "orders_lineitem_part_partsupp_supplier_nation",
+                    "TableName": "orders_lineitem_part_partsupp",
                     "Inputs": [
                       {
                         "OperatorType": "Join",
                         "Variant": "Join",
-                        "JoinColumnIndexes": "L:6,R:2,L:4,L:6,R:0,L:7",
+                        "JoinColumnIndexes": "L:0,R:0,R:1,L:2",
                         "JoinVars": {
-                          "l_discount": 2,
-                          "l_extendedprice": 1,
-                          "l_partkey": 5,
-                          "l_quantity": 3,
-                          "l_suppkey": 4
+                          "o_orderkey": 1
                         },
-                        "TableName": "orders_lineitem_part_partsupp",
+                        "TableName": "orders_lineitem_part",
                         "Inputs": [
                           {
-                            "OperatorType": "Join",
-                            "Variant": "Join",
-                            "JoinColumnIndexes": "L:0,R:0,R:1,R:2,R:3,R:4,L:0,L:2",
-                            "JoinVars": {
-                              "o_orderkey": 1
-                            },
-                            "TableName": "orders_lineitem_part",
-                            "Inputs": [
-                              {
-                                "OperatorType": "Route",
-                                "Variant": "Scatter",
-                                "Keyspace": {
-                                  "Name": "main",
-                                  "Sharded": true
-                                },
-                                "FieldQuery": "select profit.o_year, profit.o_orderkey, weight_string(profit.o_year) from (select extract(year from o_orderdate) as o_year, o_orderkey as o_orderkey from orders where 1 != 1) as profit where 1 != 1",
-                                "Query": "select profit.o_year, profit.o_orderkey, weight_string(profit.o_year) from (select extract(year from o_orderdate) as o_year, o_orderkey as o_orderkey from orders) as profit",
-                                "Table": "orders"
-                              },
-                              {
-                                "OperatorType": "Join",
-                                "Variant": "Join",
-                                "JoinColumnIndexes": "L:0,L:1,L:2,L:3,L:4",
-                                "JoinVars": {
-                                  "l_partkey": 4
-                                },
-                                "TableName": "lineitem_part",
-                                "Inputs": [
-                                  {
-                                    "OperatorType": "VindexLookup",
-                                    "Variant": "EqualUnique",
-                                    "Keyspace": {
-                                      "Name": "main",
-                                      "Sharded": true
-                                    },
-                                    "Values": [
-                                      ":o_orderkey"
-                                    ],
-                                    "Vindex": "lineitem_map",
-                                    "Inputs": [
-                                      {
-                                        "OperatorType": "Route",
-                                        "Variant": "IN",
-                                        "Keyspace": {
-                                          "Name": "main",
-                                          "Sharded": true
-                                        },
-                                        "FieldQuery": "select l_orderkey, l_linenumber from lineitem_map where 1 != 1",
-                                        "Query": "select l_orderkey, l_linenumber from lineitem_map where l_orderkey in ::__vals",
-                                        "Table": "lineitem_map",
-                                        "Values": [
-                                          "::l_orderkey"
-                                        ],
-                                        "Vindex": "md5"
-                                      },
-                                      {
-                                        "OperatorType": "Route",
-                                        "Variant": "ByDestination",
-                                        "Keyspace": {
-                                          "Name": "main",
-                                          "Sharded": true
-                                        },
-                                        "FieldQuery": "select profit.l_extendedprice, profit.l_discount, profit.l_quantity, profit.l_suppkey, profit.l_partkey from (select l_extendedprice, l_discount, l_quantity, l_suppkey as l_suppkey, l_partkey as l_partkey from lineitem where 1 != 1) as profit where 1 != 1",
-                                        "Query": "select profit.l_extendedprice, profit.l_discount, profit.l_quantity, profit.l_suppkey, profit.l_partkey from (select l_extendedprice, l_discount, l_quantity, l_suppkey as l_suppkey, l_partkey as l_partkey from lineitem where l_orderkey = :o_orderkey) as profit",
-                                        "Table": "lineitem"
-                                      }
-                                    ]
-                                  },
-                                  {
-                                    "OperatorType": "Route",
-                                    "Variant": "EqualUnique",
-                                    "Keyspace": {
-                                      "Name": "main",
-                                      "Sharded": true
-                                    },
-                                    "FieldQuery": "select 1 from part where 1 != 1",
-                                    "Query": "select 1 from part where p_name like '%green%' and p_partkey = :l_partkey",
-                                    "Table": "part",
-                                    "Values": [
-                                      ":l_partkey"
-                                    ],
-                                    "Vindex": "hash"
-                                  }
-                                ]
-                              }
-                            ]
-                          },
-                          {
-                            "OperatorType": "VindexLookup",
-                            "Variant": "EqualUnique",
+                            "OperatorType": "Route",
+                            "Variant": "Scatter",
                             "Keyspace": {
                               "Name": "main",
                               "Sharded": true
                             },
-                            "Values": [
-                              ":l_partkey"
-                            ],
-                            "Vindex": "partsupp_map",
+                            "FieldQuery": "select profit.o_year, profit.o_orderkey, weight_string(profit.o_year) from (select extract(year from o_orderdate) as o_year, o_orderkey as o_orderkey from orders where 1 != 1) as profit where 1 != 1",
+                            "Query": "select profit.o_year, profit.o_orderkey, weight_string(profit.o_year) from (select extract(year from o_orderdate) as o_year, o_orderkey as o_orderkey from orders) as profit",
+                            "Table": "orders"
+                          },
+                          {
+                            "OperatorType": "Join",
+                            "Variant": "Join",
+                            "JoinColumnIndexes": "L:0,L:1",
+                            "JoinVars": {
+                              "l_partkey": 1
+                            },
+                            "TableName": "lineitem_part",
                             "Inputs": [
                               {
-                                "OperatorType": "Route",
-                                "Variant": "IN",
+                                "OperatorType": "VindexLookup",
+                                "Variant": "EqualUnique",
                                 "Keyspace": {
                                   "Name": "main",
                                   "Sharded": true
                                 },
-                                "FieldQuery": "select ps_partkey, ps_suppkey from partsupp_map where 1 != 1",
-                                "Query": "select ps_partkey, ps_suppkey from partsupp_map where ps_partkey in ::__vals",
-                                "Table": "partsupp_map",
                                 "Values": [
-                                  "::ps_partkey"
+                                  ":o_orderkey"
                                 ],
-                                "Vindex": "md5"
+                                "Vindex": "lineitem_map",
+                                "Inputs": [
+                                  {
+                                    "OperatorType": "Route",
+                                    "Variant": "IN",
+                                    "Keyspace": {
+                                      "Name": "main",
+                                      "Sharded": true
+                                    },
+                                    "FieldQuery": "select l_orderkey, l_linenumber from lineitem_map where 1 != 1",
+                                    "Query": "select l_orderkey, l_linenumber from lineitem_map where l_orderkey in ::__vals",
+                                    "Table": "lineitem_map",
+                                    "Values": [
+                                      "::l_orderkey"
+                                    ],
+                                    "Vindex": "md5"
+                                  },
+                                  {
+                                    "OperatorType": "Route",
+                                    "Variant": "ByDestination",
+                                    "Keyspace": {
+                                      "Name": "main",
+                                      "Sharded": true
+                                    },
+                                    "FieldQuery": "select profit.l_suppkey, profit.l_partkey from (select l_suppkey as l_suppkey, l_partkey as l_partkey from lineitem where 1 != 1) as profit where 1 != 1",
+                                    "Query": "select profit.l_suppkey, profit.l_partkey from (select l_suppkey as l_suppkey, l_partkey as l_partkey from lineitem where l_orderkey = :o_orderkey) as profit",
+                                    "Table": "lineitem"
+                                  }
+                                ]
                               },
                               {
                                 "OperatorType": "Route",
-                                "Variant": "ByDestination",
+                                "Variant": "EqualUnique",
                                 "Keyspace": {
                                   "Name": "main",
                                   "Sharded": true
                                 },
-                                "FieldQuery": "select profit.amount, profit.ps_supplycost, :l_extendedprice * (1 - :l_discount) - ps_supplycost * :l_quantity from (select :l_extendedprice * (1 - :l_discount) - ps_supplycost * :l_quantity as amount, ps_supplycost as ps_supplycost from partsupp where 1 != 1) as profit where 1 != 1",
-                                "Query": "select profit.amount, profit.ps_supplycost, :l_extendedprice * (1 - :l_discount) - ps_supplycost * :l_quantity from (select :l_extendedprice * (1 - :l_discount) - ps_supplycost * :l_quantity as amount, ps_supplycost as ps_supplycost from partsupp where ps_partkey = :l_partkey and ps_suppkey = :l_suppkey) as profit",
-                                "Table": "partsupp"
+                                "FieldQuery": "select 1 from part where 1 != 1",
+                                "Query": "select 1 from part where p_name like '%green%' and p_partkey = :l_partkey",
+                                "Table": "part",
+                                "Values": [
+                                  ":l_partkey"
+                                ],
+                                "Vindex": "hash"
                               }
                             ]
                           }
                         ]
                       },
                       {
-                        "OperatorType": "Join",
-                        "Variant": "Join",
-                        "JoinColumnIndexes": "R:1,R:1,R:2",
-                        "JoinVars": {
-                          "s_nationkey": 0
+                        "OperatorType": "VindexLookup",
+                        "Variant": "EqualUnique",
+                        "Keyspace": {
+                          "Name": "main",
+                          "Sharded": true
                         },
-                        "TableName": "supplier_nation",
+                        "Values": [
+                          ":l_partkey"
+                        ],
+                        "Vindex": "partsupp_map",
                         "Inputs": [
                           {
                             "OperatorType": "Route",
-                            "Variant": "EqualUnique",
+                            "Variant": "IN",
                             "Keyspace": {
                               "Name": "main",
                               "Sharded": true
                             },
-                            "FieldQuery": "select profit.s_nationkey from (select s_nationkey as s_nationkey from supplier where 1 != 1) as profit where 1 != 1",
-                            "Query": "select profit.s_nationkey from (select s_nationkey as s_nationkey from supplier where s_suppkey = :l_suppkey) as profit",
-                            "Table": "supplier",
+                            "FieldQuery": "select ps_partkey, ps_suppkey from partsupp_map where 1 != 1",
+                            "Query": "select ps_partkey, ps_suppkey from partsupp_map where ps_partkey in ::__vals",
+                            "Table": "partsupp_map",
                             "Values": [
-                              ":l_suppkey"
+                              "::ps_partkey"
                             ],
-                            "Vindex": "hash"
+                            "Vindex": "md5"
                           },
                           {
                             "OperatorType": "Route",
-                            "Variant": "EqualUnique",
+                            "Variant": "ByDestination",
                             "Keyspace": {
                               "Name": "main",
                               "Sharded": true
                             },
-                            "FieldQuery": "select profit.nation, n_name, weight_string(profit.nation) from (select n_name as nation from nation where 1 != 1) as profit where 1 != 1",
-                            "Query": "select profit.nation, n_name, weight_string(profit.nation) from (select n_name as nation from nation where n_nationkey = :s_nationkey) as profit",
-                            "Table": "nation",
-                            "Values": [
-                              ":s_nationkey"
-                            ],
-                            "Vindex": "hash"
+                            "FieldQuery": "select profit.amount from (select l_extendedprice * (1 - l_discount) - ps_supplycost * l_quantity as amount from partsupp where 1 != 1) as profit where 1 != 1",
+                            "Query": "select profit.amount from (select l_extendedprice * (1 - l_discount) - ps_supplycost * l_quantity as amount from partsupp where ps_partkey = :l_partkey and ps_suppkey = :l_suppkey) as profit",
+                            "Table": "partsupp"
                           }
                         ]
+                      }
+                    ]
+                  },
+                  {
+                    "OperatorType": "Join",
+                    "Variant": "Join",
+                    "JoinColumnIndexes": "R:0,R:1",
+                    "JoinVars": {
+                      "s_nationkey": 0
+                    },
+                    "TableName": "supplier_nation",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "EqualUnique",
+                        "Keyspace": {
+                          "Name": "main",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select profit.s_nationkey from (select s_nationkey as s_nationkey from supplier where 1 != 1) as profit where 1 != 1",
+                        "Query": "select profit.s_nationkey from (select s_nationkey as s_nationkey from supplier where s_suppkey = :l_suppkey) as profit",
+                        "Table": "supplier",
+                        "Values": [
+                          ":l_suppkey"
+                        ],
+                        "Vindex": "hash"
+                      },
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "EqualUnique",
+                        "Keyspace": {
+                          "Name": "main",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select profit.nation, weight_string(profit.nation) from (select n_name as nation from nation where 1 != 1) as profit where 1 != 1",
+                        "Query": "select profit.nation, weight_string(profit.nation) from (select n_name as nation from nation where n_nationkey = :s_nationkey) as profit",
+                        "Table": "nation",
+                        "Values": [
+                          ":s_nationkey"
+                        ],
+                        "Vindex": "hash"
                       }
                     ]
                   }

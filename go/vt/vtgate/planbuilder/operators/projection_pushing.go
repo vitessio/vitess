@@ -238,7 +238,7 @@ func pushProjectionInApplyJoin(
 			}
 			alias = p.DT.Columns[idx].String()
 		}
-		splitProjectionAcrossJoin(ctx, src, lhs, rhs, pe, alias)
+		splitProjectionAcrossJoin(ctx, src, lhs, rhs, pe, alias, p.DT)
 	}
 
 	if p.isDerived() {
@@ -260,13 +260,12 @@ func splitProjectionAcrossJoin(
 	lhs, rhs *projector,
 	pe *ProjExpr,
 	colAlias string,
+	dt *DerivedTable,
 ) {
 	switch pe.Info.(type) {
-	case nil:
-		join.JoinColumns.add(splitUnexploredExpression(ctx, join, lhs, rhs, pe, colAlias))
-	case Offset:
+	case Offset, nil:
 		// for offsets, we'll just treat the expression as unexplored, and later stages will handle the new offset
-		join.JoinColumns.add(splitUnexploredExpression(ctx, join, lhs, rhs, pe, colAlias))
+		join.JoinColumns.add(splitUnexploredExpression(ctx, join, lhs, rhs, pe, colAlias, dt))
 	case SubQueryExpression:
 		join.JoinColumns.add(splitSubqueryExpression(ctx, join, lhs, rhs, pe, colAlias))
 	default:
@@ -291,9 +290,24 @@ func splitUnexploredExpression(
 	lhs, rhs *projector,
 	pe *ProjExpr,
 	alias string,
+	dt *DerivedTable,
 ) applyJoinColumn {
+	original := sqlparser.CloneRefOfAliasedExpr(pe.Original)
+	expr := pe.ColExpr
+
+	if dt != nil {
+		if !pe.isSameInAndOut(ctx) {
+			panic("not sure what to do here")
+		}
+		colName := pe.Original.ColumnName()
+		newExpr := sqlparser.NewColNameWithQualifier(colName, sqlparser.NewTableName(dt.Alias))
+		ctx.SemTable.CopySemanticInfo(expr, newExpr)
+		original.Expr = newExpr
+		expr = newExpr
+	}
+
 	// Get a applyJoinColumn for the current expression.
-	col := join.getJoinColumnFor(ctx, pe.Original, pe.ColExpr, false)
+	col := join.getJoinColumnFor(ctx, original, expr, false)
 
 	return pushDownSplitJoinCol(col, lhs, pe, alias, rhs)
 }
@@ -348,8 +362,7 @@ func exposeColumnsThroughDerivedTable(ctx *plancontext.PlanningContext, p *Proje
 
 	lhsIDs := TableID(src.LHS)
 	rhsIDs := TableID(src.RHS)
-	rewriteColumnsForJoin(ctx, src.JoinPredicates.columns, lhsIDs, rhsIDs, lhs, rhs, false)
-	rewriteColumnsForJoin(ctx, src.JoinColumns.columns, lhsIDs, rhsIDs, lhs, rhs, true)
+	rewriteColumnsForJoin(ctx, src.JoinPredicates.columns, lhsIDs, rhsIDs, lhs, rhs)
 }
 
 func rewriteColumnsForJoin(
@@ -357,8 +370,6 @@ func rewriteColumnsForJoin(
 	columns []applyJoinColumn,
 	lhsIDs, rhsIDs semantics.TableSet,
 	lhs, rhs *projector,
-	exposeRHS bool, // we only want to expose the returned columns from the RHS.
-	// For predicates, we don't need to expose the RHS columns
 ) {
 	for colIdx, column := range columns {
 		for lhsIdx, bve := range column.LHSExprs {
@@ -395,9 +406,6 @@ func rewriteColumnsForJoin(
 				rewriteTo = lhs.get(ctx, col)
 				return false
 			case deps.IsSolvedBy(rhsIDs):
-				if exposeRHS {
-					rewriteTo = rhs.get(ctx, col)
-				}
 				return false
 			default:
 				return true
