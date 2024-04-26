@@ -154,8 +154,17 @@ func (mysqlFlavor) resetReplicationCommands(c *Conn) []string {
 		"RESET SLAVE ALL", // "ALL" makes it forget source host:port.
 		"RESET MASTER",    // This will also clear gtid_executed and gtid_purged.
 	}
-	if c.SemiSyncExtensionLoaded() {
+	status, err := c.SemiSyncExtensionLoaded()
+	if err != nil {
+		return resetCommands
+	}
+	switch status {
+	case SemiSyncTypeSource:
+		resetCommands = append(resetCommands, "SET GLOBAL rpl_semi_sync_source_enabled = false, GLOBAL rpl_semi_sync_replica_enabled = false") // semi-sync will be enabled if needed when replica is started.
+	case SemiSyncTypeMaster:
 		resetCommands = append(resetCommands, "SET GLOBAL rpl_semi_sync_master_enabled = false, GLOBAL rpl_semi_sync_slave_enabled = false") // semi-sync will be enabled if needed when replica is started.
+	default:
+		// Nothing to do.
 	}
 	return resetCommands
 }

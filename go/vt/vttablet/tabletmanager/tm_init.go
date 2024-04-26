@@ -974,12 +974,12 @@ func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType t
 
 	tablet.Type = tabletType
 
-	semiSyncAction, err := tm.convertBoolToSemiSyncAction(reparentutil.IsReplicaSemiSync(durability, currentPrimary.Tablet, tablet))
+	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, reparentutil.IsReplicaSemiSync(durability, currentPrimary.Tablet, tablet))
 	if err != nil {
 		return nil, err
 	}
 
-	if err := tm.fixSemiSync(tabletType, semiSyncAction); err != nil {
+	if err := tm.fixSemiSync(ctx, tabletType, semiSyncAction); err != nil {
 		return nil, err
 	}
 

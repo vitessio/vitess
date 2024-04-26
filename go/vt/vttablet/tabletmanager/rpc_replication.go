@@ -134,16 +134,16 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 	}
 
 	// Semi sync settings - "show global variables like 'rpl_semi_sync_%_enabled'"
-	primarySemiSync, replicaSemiSync := tm.MysqlDaemon.SemiSyncEnabled()
+	primarySemiSync, replicaSemiSync := tm.MysqlDaemon.SemiSyncEnabled(ctx)
 
 	// Semi sync status - "show status like 'Rpl_semi_sync_%_status'"
-	primarySemiSyncStatus, replicaSemiSyncStatus := tm.MysqlDaemon.SemiSyncStatus()
+	primarySemiSyncStatus, replicaSemiSyncStatus := tm.MysqlDaemon.SemiSyncStatus(ctx)
 
-	//  Semi sync clients count - "show status like 'semi_sync_primary_clients'"
-	semiSyncClients := tm.MysqlDaemon.SemiSyncClients()
+	//  Semi sync clients count - "show status like 'semi_sync_source_clients'"
+	semiSyncClients := tm.MysqlDaemon.SemiSyncClients(ctx)
 
 	// Semi sync settings - "show status like 'rpl_semi_sync_%'
-	semiSyncTimeout, semiSyncNumReplicas := tm.MysqlDaemon.SemiSyncSettings()
+	semiSyncTimeout, semiSyncNumReplicas := tm.MysqlDaemon.SemiSyncSettings(ctx)
 
 	return &replicationdatapb.FullStatus{
 		ServerId:                    serverID,
@@ -274,12 +274,12 @@ func (tm *TabletManager) StartReplication(ctx context.Context, semiSync bool) er
 	}
 	defer tm.unlock()
 
-	semiSyncAction, err := tm.convertBoolToSemiSyncAction(semiSync)
+	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, semiSync)
 	if err != nil {
 		return err
 	}
 
-	if err := tm.fixSemiSync(tm.Tablet().Type, semiSyncAction); err != nil {
+	if err := tm.fixSemiSync(ctx, tm.Tablet().Type, semiSyncAction); err != nil {
 		return err
 	}
 	return tm.MysqlDaemon.StartReplication(tm.hookExtraEnv())
@@ -363,7 +363,7 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 		return "", err
 	}
 
-	semiSyncAction, err := tm.convertBoolToSemiSyncAction(semiSync)
+	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, semiSync)
 	if err != nil {
 		return "", err
 	}
@@ -377,7 +377,7 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 
 	// Enforce semi-sync after changing the tablet type to PRIMARY. Otherwise, the
 	// primary will hang while trying to create the database.
-	if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, semiSyncAction); err != nil {
+	if err := tm.fixSemiSync(ctx, topodatapb.TabletType_PRIMARY, semiSyncAction); err != nil {
 		return "", err
 	}
 
@@ -413,7 +413,7 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 	}
 	defer tm.unlock()
 
-	semiSyncAction, err := tm.convertBoolToSemiSyncAction(semiSync)
+	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, semiSync)
 	if err != nil {
 		return err
 	}
@@ -443,7 +443,7 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 	if tt == topodatapb.TabletType_PRIMARY {
 		tt = topodatapb.TabletType_REPLICA
 	}
-	if err := tm.fixSemiSync(tt, semiSyncAction); err != nil {
+	if err := tm.fixSemiSync(ctx, tt, semiSyncAction); err != nil {
 		return err
 	}
 
@@ -547,15 +547,15 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 
 	// Here, we check if the primary side semi sync is enabled or not. If it isn't enabled then we do not need to take any action.
 	// If it is enabled then we should turn it off and revert in case of failure.
-	if tm.isPrimarySideSemiSyncEnabled() {
+	if tm.isPrimarySideSemiSyncEnabled(ctx) {
 		// If using semi-sync, we need to disable primary-side.
-		if err := tm.fixSemiSync(topodatapb.TabletType_REPLICA, SemiSyncActionSet); err != nil {
+		if err := tm.fixSemiSync(ctx, topodatapb.TabletType_REPLICA, SemiSyncActionSet); err != nil {
 			return nil, err
 		}
 		defer func() {
 			if finalErr != nil && revertPartialFailure && wasPrimary {
 				// enable primary-side semi-sync again
-				if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, SemiSyncActionSet); err != nil {
+				if err := tm.fixSemiSync(ctx, topodatapb.TabletType_PRIMARY, SemiSyncActionSet); err != nil {
 					log.Warningf("fixSemiSync(PRIMARY) failed during revert: %v", err)
 				}
 			}
@@ -583,13 +583,13 @@ func (tm *TabletManager) UndoDemotePrimary(ctx context.Context, semiSync bool) e
 	}
 	defer tm.unlock()
 
-	semiSyncAction, err := tm.convertBoolToSemiSyncAction(semiSync)
+	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, semiSync)
 	if err != nil {
 		return err
 	}
 
 	// If using semi-sync, we need to enable source-side.
-	if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, semiSyncAction); err != nil {
+	if err := tm.fixSemiSync(ctx, topodatapb.TabletType_PRIMARY, semiSyncAction); err != nil {
 		return err
 	}
 
@@ -655,7 +655,7 @@ func (tm *TabletManager) SetReplicationSource(ctx context.Context, parentAlias *
 	}
 	defer tm.unlock()
 
-	semiSyncAction, err := tm.convertBoolToSemiSyncAction(semiSync)
+	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, semiSync)
 	if err != nil {
 		return err
 	}
@@ -720,7 +720,7 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 	if tabletType == topodatapb.TabletType_PRIMARY {
 		tabletType = topodatapb.TabletType_REPLICA
 	}
-	if err := tm.fixSemiSync(tabletType, semiSync); err != nil {
+	if err := tm.fixSemiSync(ctx, tabletType, semiSync); err != nil {
 		return err
 	}
 	// Update the primary/source address only if needed.
@@ -909,13 +909,13 @@ func (tm *TabletManager) PromoteReplica(ctx context.Context, semiSync bool) (str
 		return "", err
 	}
 
-	semiSyncAction, err := tm.convertBoolToSemiSyncAction(semiSync)
+	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, semiSync)
 	if err != nil {
 		return "", err
 	}
 
 	// If using semi-sync, we need to enable it before going read-write.
-	if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, semiSyncAction); err != nil {
+	if err := tm.fixSemiSync(ctx, topodatapb.TabletType_PRIMARY, semiSyncAction); err != nil {
 		return "", err
 	}
 
@@ -934,27 +934,27 @@ func isPrimaryEligible(tabletType topodatapb.TabletType) bool {
 	return false
 }
 
-func (tm *TabletManager) fixSemiSync(tabletType topodatapb.TabletType, semiSync SemiSyncAction) error {
+func (tm *TabletManager) fixSemiSync(ctx context.Context, tabletType topodatapb.TabletType, semiSync SemiSyncAction) error {
 	switch semiSync {
 	case SemiSyncActionNone:
 		return nil
 	case SemiSyncActionSet:
 		// Always enable replica-side since it doesn't hurt to keep it on for a primary.
 		// The primary-side needs to be off for a replica, or else it will get stuck.
-		return tm.MysqlDaemon.SetSemiSyncEnabled(tabletType == topodatapb.TabletType_PRIMARY, true)
+		return tm.MysqlDaemon.SetSemiSyncEnabled(ctx, tabletType == topodatapb.TabletType_PRIMARY, true)
 	case SemiSyncActionUnset:
-		return tm.MysqlDaemon.SetSemiSyncEnabled(false, false)
+		return tm.MysqlDaemon.SetSemiSyncEnabled(ctx, false, false)
 	default:
 		return vterrors.Errorf(vtrpc.Code_INTERNAL, "Unknown SemiSyncAction - %v", semiSync)
 	}
 }
 
-func (tm *TabletManager) isPrimarySideSemiSyncEnabled() bool {
-	semiSyncEnabled, _ := tm.MysqlDaemon.SemiSyncEnabled()
+func (tm *TabletManager) isPrimarySideSemiSyncEnabled(ctx context.Context) bool {
+	semiSyncEnabled, _ := tm.MysqlDaemon.SemiSyncEnabled(ctx)
 	return semiSyncEnabled
 }
 
-func (tm *TabletManager) fixSemiSyncAndReplication(tabletType topodatapb.TabletType, semiSync SemiSyncAction) error {
+func (tm *TabletManager) fixSemiSyncAndReplication(ctx context.Context, tabletType topodatapb.TabletType, semiSync SemiSyncAction) error {
 	if semiSync == SemiSyncActionNone {
 		// Semi-sync handling is not required.
 		return nil
@@ -967,7 +967,7 @@ func (tm *TabletManager) fixSemiSyncAndReplication(tabletType topodatapb.TabletT
 		return nil
 	}
 
-	if err := tm.fixSemiSync(tabletType, semiSync); err != nil {
+	if err := tm.fixSemiSync(ctx, tabletType, semiSync); err != nil {
 		return vterrors.Wrapf(err, "failed to fixSemiSync(%v)", tabletType)
 	}
 
@@ -986,7 +986,7 @@ func (tm *TabletManager) fixSemiSyncAndReplication(tabletType topodatapb.TabletT
 
 	// shouldAck := semiSync == SemiSyncActionSet
 	shouldAck := isPrimaryEligible(tabletType)
-	acking, err := tm.MysqlDaemon.SemiSyncReplicationStatus()
+	acking, err := tm.MysqlDaemon.SemiSyncReplicationStatus(ctx)
 	if err != nil {
 		return vterrors.Wrap(err, "failed to get SemiSyncReplicationStatus")
 	}
