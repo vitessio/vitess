@@ -32,8 +32,6 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/json2"
-
 	"github.com/buger/jsonparser"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -832,34 +830,4 @@ func (lg *loadGenerator) waitForCount(want int64) {
 			time.Sleep(defaultTick)
 		}
 	}
-}
-
-// VExplainPlan is the struct that represents the json output of a vexplain query.
-type VExplainPlan struct {
-	OperatorType string           `json:"OperatorType"`
-	Variant      string           `json:"Variant"`
-	Keyspace     VExplainKeyspace `json:"Keyspace"`
-	FieldQuery   string           `json:"FieldQuery"`
-	Query        string           `json:"Query"`
-	Table        string           `json:"TableName"`
-}
-
-type VExplainKeyspace struct {
-	Name    string `json:"Name"`
-	Sharded bool   `json:"Sharded"`
-}
-
-// vexplain runs vexplain on the given query and returns the plan. Useful for validating routing rules.
-func vexplain(t *testing.T, database, query string) *VExplainPlan {
-	vtgateConn := vc.GetVTGateConn(t)
-	defer vtgateConn.Close()
-
-	qr := execVtgateQuery(t, vtgateConn, database, fmt.Sprintf("vexplain %s", query))
-	require.NotNil(t, qr)
-	require.Equal(t, 1, len(qr.Rows))
-	json := qr.Rows[0][0].ToString()
-
-	var plan VExplainPlan
-	require.NoError(t, json2.Unmarshal([]byte(json), &plan))
-	return &plan
 }

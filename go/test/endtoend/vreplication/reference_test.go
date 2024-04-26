@@ -118,7 +118,7 @@ func TestReferenceTableMaterializationAndRouting(t *testing.T) {
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
 	waitForRowCount(t, vtgateConn, sks, "cat", 3)
-	waitForRowCount(t, vtgateConn, sks, "mfg2", 3)
+	waitForRowCount(t, vtgateConn, sks, "mfg2", 4)
 
 	execRefQuery(t, "insert into mfg values (5, 'm5')")
 	execRefQuery(t, "insert into mfg2 values (6, 'm6')")
@@ -129,7 +129,7 @@ func TestReferenceTableMaterializationAndRouting(t *testing.T) {
 	execRefQuery(t, "update mfg set name = concat(name, '-updated') where id = 1")
 	execRefQuery(t, "update mfg2 set name = concat(name, '-updated') where id = 2")
 	execRefQuery(t, "update uks.mfg set name = concat(name, '-updated') where id = 3")
-	execRefQuery(t, "update sks.mfg set name = concat(name, '-updated') where id = 4")
+	execRefQuery(t, "update sks.mfg2 set name = concat(name, '-updated') where id = 4")
 
 	waitForRowCount(t, vtgateConn, uks, "mfg", 8)
 	qr := execVtgateQuery(t, vtgateConn, "uks", "select count(*) from uks.mfg where name like '%updated%'")
@@ -139,7 +139,7 @@ func TestReferenceTableMaterializationAndRouting(t *testing.T) {
 	execRefQuery(t, "delete from mfg where id = 5")
 	execRefQuery(t, "delete from mfg2 where id = 6")
 	execRefQuery(t, "delete from uks.mfg where id = 7")
-	execRefQuery(t, "delete from sks.mfg where id = 8")
+	execRefQuery(t, "delete from sks.mfg2 where id = 8")
 	waitForRowCount(t, vtgateConn, uks, "mfg", 4)
 
 }
