@@ -192,10 +192,27 @@ func pushProjectionToOuterContainer(ctx *plancontext.PlanningContext, p *Project
 	return src, Rewrote("push projection into outer side of subquery container")
 }
 
-// pushProjectionInApplyJoin pushes down a projection operation into an ApplyJoin operation.
-// It processes each input column and creates new JoinPredicates for the ApplyJoin operation based on
-// the input column's expression. It also creates new Projection operators for the left and right
-// children of the ApplyJoin operation, if needed.
+// pushProjectionInApplyJoin optimizes the ApplyJoin operation by pushing down the projection operation into it. This function works as follows:
+//
+// 1. It traverses each input column of the projection operation.
+// 2. For each column, it generates new JoinPredicates for the ApplyJoin operation. These predicates are derived from the column's expression.
+/*
+Here's an ASCII representation of the transformation:
+  Before:
+   Projection[L.colX, R.colY]
+ 	    |
+ 	ApplyJoin
+ 	 /   \
+ 	LHS  RHS
+  After:
+ 	             ApplyJoin
+ 	            /         \
+  Projection[L.colX] Projection[R.colY]
+ 	     |                   |
+ 	     LHS                 RHS
+*/
+// In the transformed state, if necessary, new Projection operators are created for the left and right children of the ApplyJoin operation.
+// These Projections can then hopefully be pushed down under a Route or Limit operation.
 func pushProjectionInApplyJoin(
 	ctx *plancontext.PlanningContext,
 	p *Projection,
@@ -352,29 +369,34 @@ func rewriteColumnsForJoin(
 			continue
 		}
 
-		// now we need to go over the predicate and find
+		// The RHSExprs are the expressions on the RHS of the join, and these have already been pushed down on the RHS
+		// of the ApplyJoin. These expressions don't need to be exposed through the derived table, they are just
+		// receiving the expressions from the LHS of the join using parameters.
+
 		var rewriteTo sqlparser.Expr
 
 		pre := func(node, _ sqlparser.SQLNode) bool {
-			_, isSQ := node.(*sqlparser.Subquery)
-			if isSQ {
+			// We are looking for ColNames that belong to either the RHS or LHS of the join
+			// We'll replace these with columns being passed through the derived table
+			var col *sqlparser.ColName
+			switch node := node.(type) {
+			case *sqlparser.ColName:
+				col = node
+			case *sqlparser.Subquery:
 				return false
-			}
-			expr, ok := node.(sqlparser.Expr)
-			if !ok {
+			default:
 				return true
 			}
-			deps := ctx.SemTable.RecursiveDeps(expr)
+
+			deps := ctx.SemTable.RecursiveDeps(col)
 
 			switch {
-			case deps.IsEmpty():
-				return true
 			case deps.IsSolvedBy(lhsIDs):
-				rewriteTo = lhs.get(ctx, expr)
+				rewriteTo = lhs.get(ctx, col)
 				return false
 			case deps.IsSolvedBy(rhsIDs):
 				if exposeRHS {
-					rewriteTo = rhs.get(ctx, expr)
+					rewriteTo = rhs.get(ctx, col)
 				}
 				return false
 			default:

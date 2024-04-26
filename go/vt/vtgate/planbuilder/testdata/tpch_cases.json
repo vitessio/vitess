@@ -583,7 +583,7 @@
                   {
                     "OperatorType": "Join",
                     "Variant": "Join",
-                    "JoinColumnIndexes": "L:0,R:1,L:6,L:7,L:0,L:6,L:7,L:8,R:2,L:9",
+                    "JoinColumnIndexes": "L:0,R:1,L:4,L:5,L:0,L:4,L:5,L:6,R:2,L:7",
                     "JoinVars": {
                       "n1_n_name": 0,
                       "o_custkey": 3
@@ -593,7 +593,7 @@
                       {
                         "OperatorType": "Join",
                         "Variant": "Join",
-                        "JoinColumnIndexes": "R:3,L:4,L:5,L:2,R:4,R:5,L:4,L:5,R:6,L:6",
+                        "JoinColumnIndexes": "R:1,L:4,L:5,L:2,L:4,L:5,R:2,L:6",
                         "JoinVars": {
                           "l_suppkey": 3
                         },
@@ -639,7 +639,7 @@
                           {
                             "OperatorType": "Join",
                             "Variant": "Join",
-                            "JoinColumnIndexes": "R:3,R:4,R:5,R:3,R:4,R:5,R:6",
+                            "JoinColumnIndexes": "R:1,R:1,R:2",
                             "JoinVars": {
                               "s_nationkey": 0
                             },
@@ -667,8 +667,8 @@
                                   "Name": "main",
                                   "Sharded": true
                                 },
-                                "FieldQuery": "select shipping.supp_nation, shipping.`n1.n_name = 'FRANCE'`, shipping.`n1.n_name = 'GERMANY'`, n1.n_name, n1.n_name = 'FRANCE', n1.n_name = 'GERMANY', weight_string(shipping.supp_nation) from (select n1.n_name as supp_nation, n1.n_name = 'FRANCE' as `n1.n_name = 'FRANCE'`, n1.n_name = 'GERMANY' as `n1.n_name = 'GERMANY'` from nation as n1 where 1 != 1) as shipping where 1 != 1",
-                                "Query": "select shipping.supp_nation, shipping.`n1.n_name = 'FRANCE'`, shipping.`n1.n_name = 'GERMANY'`, n1.n_name, n1.n_name = 'FRANCE', n1.n_name = 'GERMANY', weight_string(shipping.supp_nation) from (select n1.n_name as supp_nation, n1.n_name = 'FRANCE' as `n1.n_name = 'FRANCE'`, n1.n_name = 'GERMANY' as `n1.n_name = 'GERMANY'` from nation as n1 where n1.n_nationkey = :s_nationkey) as shipping",
+                                "FieldQuery": "select shipping.supp_nation, n1.n_name, weight_string(shipping.supp_nation) from (select n1.n_name as supp_nation from nation as n1 where 1 != 1) as shipping where 1 != 1",
+                                "Query": "select shipping.supp_nation, n1.n_name, weight_string(shipping.supp_nation) from (select n1.n_name as supp_nation from nation as n1 where n1.n_nationkey = :s_nationkey) as shipping",
                                 "Table": "nation",
                                 "Values": [
                                   ":s_nationkey"
@@ -759,21 +759,21 @@
               {
                 "OperatorType": "SimpleProjection",
                 "Columns": [
-                  0,
                   3,
                   4,
-                  5
+                  5,
+                  6
                 ],
                 "Inputs": [
                   {
                     "OperatorType": "Sort",
                     "Variant": "Memory",
-                    "OrderBy": "(0|5) ASC",
+                    "OrderBy": "(3|6) ASC",
                     "Inputs": [
                       {
                         "OperatorType": "Join",
                         "Variant": "Join",
-                        "JoinColumnIndexes": "R:0,L:3,L:1,L:4,L:3,R:1",
+                        "JoinColumnIndexes": "R:0,L:3,L:1,R:2,L:4,L:3,R:3",
                         "JoinVars": {
                           "l_orderkey": 2
                         },
@@ -872,18 +872,18 @@
                           {
                             "OperatorType": "Join",
                             "Variant": "Join",
-                            "JoinColumnIndexes": "L:2,L:3",
+                            "JoinColumnIndexes": "L:3,L:1,L:3,L:4",
                             "JoinVars": {
-                              "c_nationkey": 1
+                              "c_nationkey": 2
                             },
                             "TableName": "orders_customer_nation_region",
                             "Inputs": [
                               {
                                 "OperatorType": "Join",
                                 "Variant": "Join",
-                                "JoinColumnIndexes": "L:0,R:0,L:0,L:2",
+                                "JoinColumnIndexes": "L:0,L:1,R:0,L:0,L:3",
                                 "JoinVars": {
-                                  "o_custkey": 1
+                                  "o_custkey": 2
                                 },
                                 "TableName": "orders_customer",
                                 "Inputs": [
@@ -894,8 +894,8 @@
                                       "Name": "main",
                                       "Sharded": true
                                     },
-                                    "FieldQuery": "select all_nations.o_year, all_nations.o_custkey, weight_string(all_nations.o_year) from (select extract(year from o_orderdate) as o_year, o_custkey as o_custkey from orders where 1 != 1) as all_nations where 1 != 1",
-                                    "Query": "select all_nations.o_year, all_nations.o_custkey, weight_string(all_nations.o_year) from (select extract(year from o_orderdate) as o_year, o_custkey as o_custkey from orders where o_orderdate between date'1995-01-01' and date('1996-12-31') and o_orderkey = :l_orderkey) as all_nations",
+                                    "FieldQuery": "select all_nations.o_year, all_nations.o_orderdate, all_nations.o_custkey, weight_string(all_nations.o_year) from (select extract(year from o_orderdate) as o_year, o_orderdate as o_orderdate, o_custkey as o_custkey from orders where 1 != 1) as all_nations where 1 != 1",
+                                    "Query": "select all_nations.o_year, all_nations.o_orderdate, all_nations.o_custkey, weight_string(all_nations.o_year) from (select extract(year from o_orderdate) as o_year, o_orderdate as o_orderdate, o_custkey as o_custkey from orders where o_orderdate between date'1995-01-01' and date('1996-12-31') and o_orderkey = :l_orderkey) as all_nations",
                                     "Table": "orders",
                                     "Values": [
                                       ":l_orderkey"
@@ -1022,7 +1022,7 @@
                       {
                         "OperatorType": "Join",
                         "Variant": "Join",
-                        "JoinColumnIndexes": "L:7,R:2,L:4,L:7,R:0,L:8",
+                        "JoinColumnIndexes": "L:6,R:2,L:4,L:6,R:0,L:7",
                         "JoinVars": {
                           "l_discount": 2,
                           "l_extendedprice": 1,
@@ -1035,7 +1035,7 @@
                           {
                             "OperatorType": "Join",
                             "Variant": "Join",
-                            "JoinColumnIndexes": "L:0,R:0,R:1,R:2,R:3,R:4,R:5,L:0,L:2",
+                            "JoinColumnIndexes": "L:0,R:0,R:1,R:2,R:3,R:4,L:0,L:2",
                             "JoinVars": {
                               "o_orderkey": 1
                             },
@@ -1055,7 +1055,7 @@
                               {
                                 "OperatorType": "Join",
                                 "Variant": "Join",
-                                "JoinColumnIndexes": "L:0,L:1,L:2,L:3,L:4,L:5",
+                                "JoinColumnIndexes": "L:0,L:1,L:2,L:3,L:4",
                                 "JoinVars": {
                                   "l_partkey": 4
                                 },
@@ -1095,8 +1095,8 @@
                                           "Name": "main",
                                           "Sharded": true
                                         },
-                                        "FieldQuery": "select profit.l_extendedprice, profit.l_discount, profit.l_quantity, profit.l_suppkey, profit.l_partkey, profit.`l_extendedprice * (1 - l_discount)` from (select l_extendedprice, l_discount, l_quantity, l_suppkey as l_suppkey, l_partkey as l_partkey, l_extendedprice * (1 - l_discount) as `l_extendedprice * (1 - l_discount)` from lineitem where 1 != 1) as profit where 1 != 1",
-                                        "Query": "select profit.l_extendedprice, profit.l_discount, profit.l_quantity, profit.l_suppkey, profit.l_partkey, profit.`l_extendedprice * (1 - l_discount)` from (select l_extendedprice, l_discount, l_quantity, l_suppkey as l_suppkey, l_partkey as l_partkey, l_extendedprice * (1 - l_discount) as `l_extendedprice * (1 - l_discount)` from lineitem where l_orderkey = :o_orderkey) as profit",
+                                        "FieldQuery": "select profit.l_extendedprice, profit.l_discount, profit.l_quantity, profit.l_suppkey, profit.l_partkey from (select l_extendedprice, l_discount, l_quantity, l_suppkey as l_suppkey, l_partkey as l_partkey from lineitem where 1 != 1) as profit where 1 != 1",
+                                        "Query": "select profit.l_extendedprice, profit.l_discount, profit.l_quantity, profit.l_suppkey, profit.l_partkey from (select l_extendedprice, l_discount, l_quantity, l_suppkey as l_suppkey, l_partkey as l_partkey from lineitem where l_orderkey = :o_orderkey) as profit",
                                         "Table": "lineitem"
                                       }
                                     ]
