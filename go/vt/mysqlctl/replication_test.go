@@ -558,15 +558,15 @@ func TestSetSemiSyncEnabled(t *testing.T) {
 
 	// We expect this query to be executed
 	err := testMysqld.SetSemiSyncEnabled(context.Background(), true, true)
-	assert.ErrorContains(t, err, "semisync plugin not loaded")
+	assert.ErrorIs(t, err, ErrNoSemiSync)
 
 	// We expect this query to be executed
 	err = testMysqld.SetSemiSyncEnabled(context.Background(), true, false)
-	assert.ErrorContains(t, err, "semisync plugin not loaded")
+	assert.ErrorIs(t, err, ErrNoSemiSync)
 
 	// We expect this query to be executed
 	err = testMysqld.SetSemiSyncEnabled(context.Background(), false, true)
-	assert.ErrorContains(t, err, "semisync plugin not loaded")
+	assert.ErrorIs(t, err, ErrNoSemiSync)
 }
 
 func TestSemiSyncEnabled(t *testing.T) {
