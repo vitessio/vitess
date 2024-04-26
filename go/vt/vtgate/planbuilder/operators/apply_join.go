@@ -248,6 +248,7 @@ func (aj *ApplyJoin) AddWSColumn(ctx *plancontext.PlanningContext, offset int, u
 
 	wsExpr := weightStringFor(aj.JoinColumns.columns[offset].Original)
 	if index := aj.FindCol(ctx, wsExpr, false); index != -1 {
+		// nice, we already have this column. no need to add anything
 		return index
 	}
 

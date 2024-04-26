@@ -213,7 +213,7 @@ func (a *Aggregator) AddWSColumn(ctx *plancontext.PlanningContext, offset int, u
 	}
 
 	if expr == nil {
-		for i, aggr := range a.Aggregations {
+		for _, aggr := range a.Aggregations {
 			if aggr.ColOffset != offset {
 				continue
 			}
@@ -222,17 +222,7 @@ func (a *Aggregator) AddWSColumn(ctx *plancontext.PlanningContext, offset int, u
 				return aggr.WSOffset
 			}
 
-			// we need to add a WS column
-			offset := len(a.Columns)
-			a.Aggregations[i].WSOffset = offset
-			expr = aggr.getPushColumn()
-			a.Grouping = append(a.Grouping, GroupBy{
-				Inner:     weightStringFor(expr),
-				ColOffset: offset,
-				WSOffset:  -1,
-			})
-			panic("not sure this is correct")
-			// break
+			panic(vterrors.VT13001("did not expect to get here"))
 		}
 	}
 
@@ -246,12 +236,15 @@ func (a *Aggregator) AddWSColumn(ctx *plancontext.PlanningContext, offset int, u
 	wsOffset := len(a.Columns)
 	a.Columns = append(a.Columns, wsAe)
 	if underRoute {
+		// if we are under a route, we are done here.
+		// the column will be use when creating the query to send to the tablet, and that is all we need
 		return wsOffset
 	}
 
 	incomingOffset := a.Source.AddWSColumn(ctx, offset, false)
 
 	if wsOffset != incomingOffset {
+		// TODO: we could handle this case by adding a projection on under the aggregator to make the columns line up
 		panic(errFailedToPlan(wsAe))
 	}
 	return wsOffset
