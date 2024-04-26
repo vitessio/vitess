@@ -32,6 +32,7 @@ import (
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache/theine"
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
@@ -952,15 +953,29 @@ func (e *Executor) showVitessReplicationStatus(ctx context.Context, filter *sqlp
 			replSQLThreadHealth := ""
 			replLastError := ""
 			replLag := "-1" // A string to support NULL as a value
-			sql := "show slave status"
+			replicaQueries, _ := capabilities.MySQLVersionHasCapability(e.env.MySQLVersion(), capabilities.ReplicaQueries)
+			sql := "show replica status"
+			sourceHostField := "Source_Host"
+			sourcePortField := "Source_Port"
+			replicaIORunningField := "Replica_IO_Running"
+			replicaSQLRunningField := "Replica_SQL_Running"
+			secondsBehindSourceField := "Seconds_Behind_Source"
+			if !replicaQueries {
+				sql = "show slave status"
+				sourceHostField = "Master_Host"
+				sourcePortField = "Master_Port"
+				replicaIORunningField = "Slave_IO_Running"
+				replicaSQLRunningField = "Slave_SQL_Running"
+				secondsBehindSourceField = "Seconds_Behind_Master"
+			}
 			results, err := e.txConn.tabletGateway.Execute(ctx, ts.Target, sql, nil, 0, 0, nil)
 			if err != nil || results == nil {
 				log.Warningf("Could not get replication status from %s: %v", tabletHostPort, err)
 			} else if row := results.Named().Row(); row != nil {
-				replSourceHost = row["Master_Host"].ToString()
-				replSourcePort, _ = row["Master_Port"].ToInt64()
-				replIOThreadHealth = row["Slave_IO_Running"].ToString()
-				replSQLThreadHealth = row["Slave_SQL_Running"].ToString()
+				replSourceHost = row[sourceHostField].ToString()
+				replSourcePort, _ = row[sourcePortField].ToInt64()
+				replIOThreadHealth = row[replicaIORunningField].ToString()
+				replSQLThreadHealth = row[replicaSQLRunningField].ToString()
 				replLastError = row["Last_Error"].ToString()
 				// We cannot check the tablet's tabletenv config from here so
 				// we only use the tablet's stat -- which is managed by the
@@ -976,10 +991,10 @@ func (e *Executor) showVitessReplicationStatus(ctx context.Context, filter *sqlp
 				if ts.Stats != nil && ts.Stats.ReplicationLagSeconds > 0 { // Use the value we get from the ReplicationTracker
 					replLag = fmt.Sprintf("%d", ts.Stats.ReplicationLagSeconds)
 				} else { // Use the value from mysqld
-					if row["Seconds_Behind_Master"].IsNull() {
+					if row[secondsBehindSourceField].IsNull() {
 						replLag = strings.ToUpper(sqltypes.NullStr) // Uppercase to match mysqld's output in SHOW REPLICA STATUS
 					} else {
-						replLag = row["Seconds_Behind_Master"].ToString()
+						replLag = row[secondsBehindSourceField].ToString()
 					}
 				}
 			}

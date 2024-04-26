@@ -21,6 +21,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"vitess.io/vitess/go/mysql/capabilities"
@@ -95,6 +96,10 @@ func (mariadbFlavor) restartReplicationCommands() []string {
 
 func (mariadbFlavor) stopReplicationCommand() string {
 	return "STOP SLAVE"
+}
+
+func (mariadbFlavor) resetReplicationCommand() string {
+	return "RESET SLAVE ALL"
 }
 
 func (mariadbFlavor) stopIOThreadCommand() string {
@@ -182,9 +187,31 @@ func (mariadbFlavor) setReplicationPositionCommands(pos replication.Position) []
 	}
 }
 
-// setReplicationPositionCommands is part of the Flavor interface.
-func (mariadbFlavor) changeReplicationSourceArg() string {
-	return "MASTER_USE_GTID = current_pos"
+func (mariadbFlavor) setReplicationSourceCommand(params *ConnParams, host string, port int32, connectRetry int) string {
+	args := []string{
+		fmt.Sprintf("MASTER_HOST = '%s'", host),
+		fmt.Sprintf("MASTER_PORT = %d", port),
+		fmt.Sprintf("MASTER_USER = '%s'", params.Uname),
+		fmt.Sprintf("MASTER_PASSWORD = '%s'", params.Pass),
+		fmt.Sprintf("MASTER_CONNECT_RETRY = %d", connectRetry),
+	}
+	if params.SslEnabled() {
+		args = append(args, "MASTER_SSL = 1")
+	}
+	if params.SslCa != "" {
+		args = append(args, fmt.Sprintf("MASTER_SSL_CA = '%s'", params.SslCa))
+	}
+	if params.SslCaPath != "" {
+		args = append(args, fmt.Sprintf("MASTER_SSL_CAPATH = '%s'", params.SslCaPath))
+	}
+	if params.SslCert != "" {
+		args = append(args, fmt.Sprintf("MASTER_SSL_CERT = '%s'", params.SslCert))
+	}
+	if params.SslKey != "" {
+		args = append(args, fmt.Sprintf("MASTER_SSL_KEY = '%s'", params.SslKey))
+	}
+	args = append(args, "MASTER_USE_GTID = current_pos")
+	return "CHANGE MASTER TO\n  " + strings.Join(args, ",\n  ")
 }
 
 // status is part of the Flavor interface.
@@ -295,4 +322,12 @@ func (mariadbFlavor) supportsCapability(capability capabilities.FlavorCapability
 	default:
 		return false, nil
 	}
+}
+
+func (mariadbFlavor) catchupToGTIDCommands(_ *ConnParams, _ replication.Position) []string {
+	return []string{"unsupported"}
+}
+
+func (mariadbFlavor) binlogReplicaField() string {
+	return "@@global.log_slave_updates"
 }

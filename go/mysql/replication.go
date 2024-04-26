@@ -17,6 +17,9 @@ limitations under the License.
 package mysql
 
 import (
+	"errors"
+	"fmt"
+
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -163,4 +166,35 @@ func (c *Conn) SemiSyncExtensionLoaded() (SemiSyncType, error) {
 		}
 	}
 	return SemiSyncTypeOff, nil
+}
+
+func (c *Conn) BinlogInformation() (string, bool, bool, string, error) {
+	replicaField := c.flavor.binlogReplicaField()
+
+	query := fmt.Sprintf("select @@global.binlog_format, @@global.log_bin, %s, @@global.binlog_row_image", replicaField)
+	qr, err := c.ExecuteFetch(query, 1, true)
+	if err != nil {
+		return "", false, false, "", err
+	}
+	if len(qr.Rows) != 1 {
+		return "", false, false, "", errors.New("unable to read global variables binlog_format, log_bin, log_replica_updates, gtid_mode, binlog_rowge")
+	}
+	res := qr.Named().Row()
+	binlogFormat, err := res.ToString("@@global.binlog_format")
+	if err != nil {
+		return "", false, false, "", err
+	}
+	logBin, err := res.ToInt64("@@global.log_bin")
+	if err != nil {
+		return "", false, false, "", err
+	}
+	logReplicaUpdates, err := res.ToInt64(replicaField)
+	if err != nil {
+		return "", false, false, "", err
+	}
+	binlogRowImage, err := res.ToString("@@global.binlog_row_image")
+	if err != nil {
+		return "", false, false, "", err
+	}
+	return binlogFormat, logBin == 1, logReplicaUpdates == 1, binlogRowImage, nil
 }

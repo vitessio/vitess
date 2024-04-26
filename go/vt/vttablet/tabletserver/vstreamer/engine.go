@@ -558,7 +558,7 @@ func (vse *Engine) getInnoDBTrxHistoryLen(ctx context.Context, db dbconfigs.Conn
 	return histLen
 }
 
-// getMySQLReplicationLag attempts to get the seconds_behind_master value.
+// getMySQLReplicationLag attempts to get the seconds_behind_source value.
 // If the value cannot be determined for any reason then -1 is returned, which
 // means "unknown" or "irrelevant" (meaning it's not actively replicating).
 func (vse *Engine) getMySQLReplicationLag(ctx context.Context, db dbconfigs.Connector) int64 {
@@ -569,12 +569,11 @@ func (vse *Engine) getMySQLReplicationLag(ctx context.Context, db dbconfigs.Conn
 	}
 	defer conn.Close()
 
-	res, err := conn.ExecuteFetch(replicaLagQuery, 1, true)
-	if err != nil || len(res.Rows) != 1 || res.Rows[0] == nil {
+	status, err := conn.ShowReplicationStatus()
+	if err != nil {
 		return lagSecs
 	}
-	row := res.Named().Row()
-	return row.AsInt64("Seconds_Behind_Master", -1)
+	return int64(status.ReplicationLagSeconds)
 }
 
 // getMySQLEndpoint returns the host:port value for the vstreamer (MySQL) instance

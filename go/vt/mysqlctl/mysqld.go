@@ -1383,7 +1383,7 @@ func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, req *mysqlctlpb.Apply
 		// parameters.  We do it blindly, since this will fail on MariaDB, which doesn't
 		// have super_read_only This is safe, since we're restarting MySQL after the restore anyway
 		log.Infof("ApplyBinlogFile: disabling super_read_only")
-		resetFunc, err := mysqld.SetSuperReadOnly(false)
+		resetFunc, err := mysqld.SetSuperReadOnly(ctx, false)
 		if err != nil {
 			if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
 				log.Warningf("ApplyBinlogFile: server does not know about super_read_only, continuing anyway...")
