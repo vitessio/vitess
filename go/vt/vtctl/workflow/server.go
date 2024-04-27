@@ -3139,7 +3139,7 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 		if err != nil {
 			return nil, err
 		}
-		if len(req.GetCells()) != len(allCells) {
+		if len(req.GetCells()) != 0 && len(req.GetCells()) != len(allCells) {
 			return handleError("invalid request", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "requesting read traffic for multi-tenant migrations must include all cells"))
 		}
 	}
