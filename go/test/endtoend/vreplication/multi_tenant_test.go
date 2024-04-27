@@ -39,7 +39,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -132,13 +131,6 @@ func TestMultiTenantSimple(t *testing.T) {
 	_, err = vc.AddKeyspace(t, []*Cell{vc.Cells["zone1"]}, sourceKeyspace, "0", stVSchema, stSchema, 1, 0, getInitialTabletIdForTenant(tenantId), nil)
 	require.NoError(t, err)
 
-	targetPrimary := vc.getPrimaryTablet(t, targetKeyspace, "0")
-	sourcePrimary := vc.getPrimaryTablet(t, sourceKeyspace, "0")
-	primaries := map[string]*cluster.VttabletProcess{
-		"target": targetPrimary,
-		"source": sourcePrimary,
-	}
-
 	vtgateConn, closeConn := getVTGateConn()
 	defer closeConn()
 	numRows := 10
@@ -164,64 +156,90 @@ func TestMultiTenantSimple(t *testing.T) {
 		},
 	})
 
-	preSwitchRules := &vschemapb.KeyspaceRoutingRules{
+	// Expected keyspace routing rules on creation of the workflow.
+	initialRules := &vschemapb.KeyspaceRoutingRules{
 		Rules: []*vschemapb.KeyspaceRoutingRule{
 			{FromKeyspace: "s1", ToKeyspace: "s1"},
+			{FromKeyspace: "s1@rdonly", ToKeyspace: "s1"},
+			{FromKeyspace: "s1@replica", ToKeyspace: "s1"},
 		},
 	}
-	postSwitchRules := &vschemapb.KeyspaceRoutingRules{
-		Rules: []*vschemapb.KeyspaceRoutingRule{
-			{FromKeyspace: "s1", ToKeyspace: "mt"},
-		},
-	}
-	rulesMap := map[string]*vschemapb.KeyspaceRoutingRules{
-		"pre":  preSwitchRules,
-		"post": postSwitchRules,
-	}
+
 	require.Zero(t, len(getKeyspaceRoutingRules(t, vc).Rules))
 	mt.Create()
-	validateKeyspaceRoutingRules(t, vc, primaries, rulesMap, false)
-	// Note: we cannot insert into the target keyspace since that is never routed to the source keyspace.
+	confirmKeyspacesRoutedTo(t, sourceKeyspace, "s1", "t1", nil)
+	validateKeyspaceRoutingRules(t, vc, initialRules)
+
 	lastIndex = insertRows(lastIndex, sourceKeyspace)
 	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKeyspace, mt.workflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
-	mt.SwitchReadsAndWrites()
-	validateKeyspaceRoutingRules(t, vc, primaries, rulesMap, true)
+
+	mt.SwitchReads()
+	confirmOnlyReadsSwitched(t)
+
+	mt.SwitchWrites()
+	confirmBothReadsAndWritesSwitched(t)
+
 	// Note: here we have already switched, and we can insert into the target keyspace, and it should get reverse
 	// replicated to the source keyspace. The source keyspace is routed to the target keyspace at this point.
 	lastIndex = insertRows(lastIndex, sourceKeyspace)
+	sourceTablet := vc.getPrimaryTablet(t, sourceKeyspace, "0")
+	require.NotNil(t, sourceTablet)
+	// Wait for the rows to be reverse replicated to the source keyspace.
+	waitForRowCountInTablet(t, sourceTablet, sourceKeyspace, "t1", int(lastIndex))
+
 	mt.Complete()
 	require.Zero(t, len(getKeyspaceRoutingRules(t, vc).Rules))
+	// Targeting to target keyspace should start working now. Upto this point we had to target the source keyspace.
+	lastIndex = insertRows(lastIndex, targetKeyspace)
+
 	actualRowsInserted := getRowCount(t, vtgateConn, fmt.Sprintf("%s.%s", targetKeyspace, "t1"))
 	log.Infof("Migration completed, total rows in target: %d", actualRowsInserted)
 	require.Equal(t, lastIndex, int64(actualRowsInserted))
+
 }
 
-// If switched, queries with source qualifiers should execute on target, else on source. Confirm that
-// the routing rules are as expected and that the query executes on the expected tablet.
-func validateKeyspaceRoutingRules(t *testing.T, vc *VitessCluster, primaries map[string]*cluster.VttabletProcess, rulesMap map[string]*vschemapb.KeyspaceRoutingRules, switched bool) {
+func confirmOnlyReadsSwitched(t *testing.T) {
+	confirmKeyspacesRoutedTo(t, "s1", "mt", "t1", []string{"rdonly", "replica"})
+	confirmKeyspacesRoutedTo(t, "s1", "s1", "t1", []string{"primary"})
+	rules := &vschemapb.KeyspaceRoutingRules{
+		Rules: []*vschemapb.KeyspaceRoutingRule{
+			{FromKeyspace: "s1", ToKeyspace: "s1"},
+			{FromKeyspace: "s1@rdonly", ToKeyspace: "mt"},
+			{FromKeyspace: "s1@replica", ToKeyspace: "mt"},
+		},
+	}
+	validateKeyspaceRoutingRules(t, vc, rules)
+}
+
+func confirmOnlyWritesSwitched(t *testing.T) {
+	confirmKeyspacesRoutedTo(t, "s1", "s1", "t1", []string{"rdonly", "replica"})
+	confirmKeyspacesRoutedTo(t, "s1", "mt", "t1", []string{"primary"})
+	rules := &vschemapb.KeyspaceRoutingRules{
+		Rules: []*vschemapb.KeyspaceRoutingRule{
+			{FromKeyspace: "s1", ToKeyspace: "mt"},
+			{FromKeyspace: "s1@rdonly", ToKeyspace: "s1"},
+			{FromKeyspace: "s1@replica", ToKeyspace: "s1"},
+		},
+	}
+	validateKeyspaceRoutingRules(t, vc, rules)
+}
+
+func confirmBothReadsAndWritesSwitched(t *testing.T) {
+	confirmKeyspacesRoutedTo(t, "s1", "mt", "t1", []string{"rdonly", "replica"})
+	confirmKeyspacesRoutedTo(t, "s1", "mt", "t1", []string{"primary"})
+	rules := &vschemapb.KeyspaceRoutingRules{
+		Rules: []*vschemapb.KeyspaceRoutingRule{
+			{FromKeyspace: "s1", ToKeyspace: "mt"},
+			{FromKeyspace: "s1@rdonly", ToKeyspace: "mt"},
+			{FromKeyspace: "s1@replica", ToKeyspace: "mt"},
+		},
+	}
+	validateKeyspaceRoutingRules(t, vc, rules)
+}
+
+func validateKeyspaceRoutingRules(t *testing.T, vc *VitessCluster, expectedRules *vschemapb.KeyspaceRoutingRules) {
 	currentRules := getKeyspaceRoutingRules(t, vc)
-	vtgateConn, closeConn := getVTGateConn()
-	defer closeConn()
-	queryTemplate := "select count(*) from %s.t1"
-	matchQuery := "select count(*) from t1"
-
-	validateQueryRoute := func(qualifier, dest string) {
-		query := fmt.Sprintf(queryTemplate, qualifier)
-		assertQueryExecutesOnTablet(t, vtgateConn, primaries[dest], "", query, matchQuery)
-		log.Infof("query %s executed on %s", query, dest)
-	}
-
-	if switched {
-		require.ElementsMatch(t, rulesMap["post"].Rules, currentRules.Rules)
-		validateQueryRoute("mt", "target")
-		validateQueryRoute("s1", "target")
-	} else {
-		require.ElementsMatch(t, rulesMap["pre"].Rules, currentRules.Rules)
-		// Note that with multi-tenant migration, we cannot redirect the target keyspace since
-		// there are multiple source keyspaces and the target has the aggregate of all the tenants.
-		validateQueryRoute("mt", "target")
-		validateQueryRoute("s1", "source")
-	}
+	require.ElementsMatch(t, expectedRules.Rules, currentRules.Rules)
 }
 
 func getSourceKeyspace(tenantId int64) string {
@@ -280,7 +298,7 @@ func TestMultiTenantComplex(t *testing.T) {
 	vtgateConn, closeConn := getVTGateConn()
 	defer closeConn()
 	t.Run("Verify all rows have been migrated", func(t *testing.T) {
-		numAdditionalInsertSets := 2 // during the SwitchTraffic stop
+		numAdditionalInsertSets := 2 /* during the SwitchTraffic stop */ + 1 /* after Complete */
 		totalRowsInsertedPerTenant := numInitialRowsPerTenant + numAdditionalRowsPerTenant*numAdditionalInsertSets
 		totalRowsInserted := totalRowsInsertedPerTenant * numTenants
 		totalActualRowsInserted := getRowCount(t, vtgateConn, fmt.Sprintf("%s.%s", mtm.targetKeyspace, "t1"))
@@ -398,6 +416,7 @@ func (mtm *multiTenantMigration) switchTraffic(tenantId int64) {
 func (mtm *multiTenantMigration) complete(tenantId int64) {
 	mt := mtm.getActiveMoveTables(tenantId)
 	mt.Complete()
+	mtm.insertSomeData(mtm.t, tenantId, mtm.targetKeyspace, numAdditionalRowsPerTenant)
 	vtgateConn := vc.GetVTGateConn(mtm.t)
 	defer vtgateConn.Close()
 	waitForQueryResult(mtm.t, vtgateConn, "",
