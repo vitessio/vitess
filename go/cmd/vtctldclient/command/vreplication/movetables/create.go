@@ -79,9 +79,14 @@ var (
 				return err
 			}
 
-			if len(createOptions.WorkflowOptions.GetShards()) > 0 && createOptions.WorkflowOptions.GetTenantId() == "" {
+			tenantId := createOptions.WorkflowOptions.GetTenantId()
+			if len(createOptions.WorkflowOptions.GetShards()) > 0 && tenantId == "" {
 				return fmt.Errorf("--shards specified, but not --tenant-id: you can only specify target shards for multi-tenant migrations")
 			}
+			if tenantId != "" && len(createOptions.SourceShards) > 0 {
+				return fmt.Errorf("cannot specify both --tenant-id (i.e. a multi-tenant migration) and --source-shards (i.e. a shard-by-shard migration)")
+			}
+
 			return nil
 		},
 		RunE: commandCreate,

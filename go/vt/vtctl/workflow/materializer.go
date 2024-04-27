@@ -438,6 +438,11 @@ func (mz *materializer) buildMaterializer() error {
 	if err != nil {
 		return err
 	}
+
+	// For a multi-tenant migration, user can specify a subset of target shards to stream to, based
+	// on the vindex they have chosen. This is to optimize the number of streams: for example, if we
+	// have 256 shards and a tenant maps to a single shard we can avoid creating 255 unnecessary streams
+	// that would be filtered out by the vindex anyway.
 	var specifiedTargetShards []string
 	switch {
 	case mz.IsMultiTenantMigration():
