@@ -680,7 +680,7 @@ func assertNodeCount(t *testing.T, result string, want int) {
 	assert.Equal(t, want, got)
 }
 
-func CheckSemisyncEnabled(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, enabled bool) {
+func CheckSemiSyncEnabled(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, enabled bool) {
 	tabletParams := getMysqlConnParam(tablet)
 	conn, err := mysql.Connect(ctx, &tabletParams)
 	require.NoError(t, err)
@@ -707,7 +707,7 @@ func CheckSemisyncEnabled(ctx context.Context, t *testing.T, tablet *cluster.Vtt
 	}
 }
 
-func CheckSemisyncStatus(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, enabled bool) {
+func CheckSemiSyncStatus(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, enabled bool) {
 	tabletParams := getMysqlConnParam(tablet)
 	conn, err := mysql.Connect(ctx, &tabletParams)
 	require.NoError(t, err)
