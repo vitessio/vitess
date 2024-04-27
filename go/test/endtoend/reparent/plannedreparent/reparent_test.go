@@ -354,38 +354,38 @@ func TestChangeTypeSemiSync(t *testing.T) {
 	// The flag is only an indication of the value to use next time
 	// we turn replication on, so also check the status.
 	// rdonly1 is not replicating, so its status is off.
-	utils.CheckSemisyncEnabled(ctx, t, replica, true)
-	utils.CheckSemisyncEnabled(ctx, t, rdonly1, false)
-	utils.CheckSemisyncEnabled(ctx, t, rdonly2, false)
-	utils.CheckSemisyncStatus(ctx, t, replica, true)
-	utils.CheckSemisyncStatus(ctx, t, rdonly1, false)
-	utils.CheckSemisyncStatus(ctx, t, rdonly2, false)
+	utils.CheckSemiSyncEnabled(ctx, t, replica, true)
+	utils.CheckSemiSyncEnabled(ctx, t, rdonly1, false)
+	utils.CheckSemiSyncEnabled(ctx, t, rdonly2, false)
+	utils.CheckSemiSyncStatus(ctx, t, replica, true)
+	utils.CheckSemiSyncStatus(ctx, t, rdonly1, false)
+	utils.CheckSemiSyncStatus(ctx, t, rdonly2, false)
 
 	// Change replica to rdonly while replicating, should turn off semi-sync, and restart replication.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", replica.Alias, "rdonly")
 	require.NoError(t, err)
-	utils.CheckSemisyncEnabled(ctx, t, replica, false)
-	utils.CheckSemisyncStatus(ctx, t, replica, false)
+	utils.CheckSemiSyncEnabled(ctx, t, replica, false)
+	utils.CheckSemiSyncStatus(ctx, t, replica, false)
 
 	// Change rdonly1 to replica, should turn on semi-sync, and not start replication.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", rdonly1.Alias, "replica")
 	require.NoError(t, err)
-	utils.CheckSemisyncEnabled(ctx, t, rdonly1, true)
-	utils.CheckSemisyncStatus(ctx, t, rdonly1, false)
+	utils.CheckSemiSyncEnabled(ctx, t, rdonly1, true)
+	utils.CheckSemiSyncStatus(ctx, t, rdonly1, false)
 	utils.CheckReplicaStatus(ctx, t, rdonly1)
 
 	// Now change from replica back to rdonly, make sure replication is still not enabled.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", rdonly1.Alias, "rdonly")
 	require.NoError(t, err)
-	utils.CheckSemisyncEnabled(ctx, t, rdonly1, false)
-	utils.CheckSemisyncStatus(ctx, t, rdonly1, false)
+	utils.CheckSemiSyncEnabled(ctx, t, rdonly1, false)
+	utils.CheckSemiSyncStatus(ctx, t, rdonly1, false)
 	utils.CheckReplicaStatus(ctx, t, rdonly1)
 
 	// Change rdonly2 to replica, should turn on semi-sync, and restart replication.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", rdonly2.Alias, "replica")
 	require.NoError(t, err)
-	utils.CheckSemisyncEnabled(ctx, t, rdonly2, true)
-	utils.CheckSemisyncStatus(ctx, t, rdonly2, true)
+	utils.CheckSemiSyncEnabled(ctx, t, rdonly2, true)
+	utils.CheckSemiSyncStatus(ctx, t, rdonly2, true)
 }
 
 // TestCrossCellDurability tests 2 things -
