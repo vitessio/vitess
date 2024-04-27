@@ -991,17 +991,17 @@ func getCellNames(cells []*Cell) string {
 
 // VExplainPlan is the struct that represents the json output of a vexplain query.
 type VExplainPlan struct {
-	OperatorType string           `json:"OperatorType"`
-	Variant      string           `json:"Variant"`
-	Keyspace     VExplainKeyspace `json:"Keyspace"`
-	FieldQuery   string           `json:"FieldQuery"`
-	Query        string           `json:"Query"`
-	Table        string           `json:"Table"`
+	OperatorType string
+	Variant      string
+	Keyspace     VExplainKeyspace
+	FieldQuery   string
+	Query        string
+	Table        string
 }
 
 type VExplainKeyspace struct {
-	Name    string `json:"Name"`
-	Sharded bool   `json:"Sharded"`
+	Name    string
+	Sharded bool
 }
 
 // vexplain runs vexplain on the given query and returns the plan. Useful for validating routing rules.
