@@ -25,7 +25,6 @@ import (
 	"strings"
 	"time"
 
-
 	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/vt/topotools"
 
