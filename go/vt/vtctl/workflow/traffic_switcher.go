@@ -450,7 +450,6 @@ func (ts *trafficSwitcher) deleteKeyspaceRoutingRules(ctx context.Context) error
 	}
 	for _, suffix := range tabletTypeSuffixes {
 		delete(krr, ts.SourceKeyspaceName()+suffix)
-		delete(krr, ts.TargetKeyspaceName()+suffix)
 	}
 	if err := topotools.SaveKeyspaceRoutingRules(ctx, ts.TopoServer(), krr); err != nil {
 		return err
@@ -738,7 +737,7 @@ func (ts *trafficSwitcher) changeWriteRoute(ctx context.Context) error {
 	if ts.IsMultiTenantMigration() {
 		// For multi-tenant migrations, we can only move forward and not backwards.
 		ts.Logger().Infof("Pointing keyspace routing rules for primary to %s for workflow %s", ts.TargetKeyspaceName(), ts.workflow)
-		if err := changeKeyspaceRoute(ctx, ts.TopoServer(), []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
+		if err := changeKeyspaceRouting(ctx, ts.TopoServer(), []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
 			ts.SourceKeyspaceName() /* from */, ts.TargetKeyspaceName() /* to */); err != nil {
 			return err
 		}

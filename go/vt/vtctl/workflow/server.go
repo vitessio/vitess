@@ -3139,7 +3139,7 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 		if err != nil {
 			return nil, err
 		}
-		if req.Cells != nil && len(req.Cells) != len(allCells) {
+		if len(req.GetCells()) != len(allCells) {
 			return handleError("invalid request", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "requesting read traffic for multi-tenant migrations must include all cells"))
 		}
 	}
@@ -3199,8 +3199,8 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 		case ts.IsMultiTenantMigration():
 			err := sw.switchKeyspaceReads(ctx, roTabletTypes)
 			if err != nil {
-				return handleError(fmt.Sprintf("failed to switch read traffic for keyspace %s, workflow %s",
-					ts.SourceKeyspaceName(), ts.WorkflowName()), err)
+				return handleError(fmt.Sprintf("failed to switch read traffic, from source keyspace %s to target keyspace %s, workflow %s",
+					ts.SourceKeyspaceName(), ts.TargetKeyspaceName(), ts.WorkflowName()), err)
 			}
 		case ts.isPartialMigration:
 			ts.Logger().Infof("Partial migration, skipping switchTableReads as traffic is all or nothing per shard and overridden for reads AND writes in the ShardRoutingRule created when switching writes.")

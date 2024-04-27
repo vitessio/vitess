@@ -174,10 +174,10 @@ func TestMultiTenantSimple(t *testing.T) {
 	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKeyspace, mt.workflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
 
 	mt.SwitchReads()
-	confirmReadsSwitched(t)
+	confirmOnlyReadsSwitched(t)
 
 	mt.SwitchWrites()
-	confirmReadsAndWritesSwitched(t)
+	confirmBothReadsAndWritesSwitched(t)
 
 	// Note: here we have already switched, and we can insert into the target keyspace, and it should get reverse
 	// replicated to the source keyspace. The source keyspace is routed to the target keyspace at this point.
@@ -198,7 +198,7 @@ func TestMultiTenantSimple(t *testing.T) {
 
 }
 
-func confirmReadsSwitched(t *testing.T) {
+func confirmOnlyReadsSwitched(t *testing.T) {
 	confirmKeyspacesRoutedTo(t, "s1", "mt", "t1", []string{"rdonly", "replica"})
 	confirmKeyspacesRoutedTo(t, "s1", "s1", "t1", []string{"primary"})
 	rules := &vschemapb.KeyspaceRoutingRules{
@@ -211,7 +211,7 @@ func confirmReadsSwitched(t *testing.T) {
 	validateKeyspaceRoutingRules(t, vc, rules)
 }
 
-func confirmWritesSwitched(t *testing.T) {
+func confirmOnlyWritesSwitched(t *testing.T) {
 	confirmKeyspacesRoutedTo(t, "s1", "s1", "t1", []string{"rdonly", "replica"})
 	confirmKeyspacesRoutedTo(t, "s1", "mt", "t1", []string{"primary"})
 	rules := &vschemapb.KeyspaceRoutingRules{
@@ -224,7 +224,7 @@ func confirmWritesSwitched(t *testing.T) {
 	validateKeyspaceRoutingRules(t, vc, rules)
 }
 
-func confirmReadsAndWritesSwitched(t *testing.T) {
+func confirmBothReadsAndWritesSwitched(t *testing.T) {
 	confirmKeyspacesRoutedTo(t, "s1", "mt", "t1", []string{"rdonly", "replica"})
 	confirmKeyspacesRoutedTo(t, "s1", "mt", "t1", []string{"primary"})
 	rules := &vschemapb.KeyspaceRoutingRules{

@@ -68,7 +68,7 @@ func (dr *switcherDryRun) switchKeyspaceReads(ctx context.Context, types []topod
 	for _, servedType := range types {
 		tabletTypes = append(tabletTypes, servedType.String())
 	}
-	dr.drLog.Logf("Switch reads for keyspace %s to keyspace %s for tablet types [%s]",
+	dr.drLog.Logf("Switch reads from keyspace %s to keyspace %s for tablet types [%s]",
 		dr.ts.SourceKeyspaceName(), dr.ts.TargetKeyspaceName(), strings.Join(tabletTypes, ","))
 	return nil
 }
