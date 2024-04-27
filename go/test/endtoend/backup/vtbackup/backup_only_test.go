@@ -328,12 +328,24 @@ func tearDown(t *testing.T, initMysql bool) {
 	caughtUp := waitForReplicationToCatchup([]cluster.Vttablet{*replica1, *replica2})
 	require.True(t, caughtUp, "Timed out waiting for all replicas to catch up")
 	promoteCommands := []string{"STOP SLAVE", "RESET SLAVE ALL", "RESET MASTER"}
-	disableSemiSyncCommands := []string{"SET GLOBAL rpl_semi_sync_master_enabled = false", " SET GLOBAL rpl_semi_sync_slave_enabled = false"}
+	disableSemiSyncCommandsSource := []string{"SET GLOBAL rpl_semi_sync_source_enabled = false", " SET GLOBAL rpl_semi_sync_replica_enabled = false"}
+	disableSemiSyncCommandsMaster := []string{"SET GLOBAL rpl_semi_sync_master_enabled = false", " SET GLOBAL rpl_semi_sync_slave_enabled = false"}
+
 	for _, tablet := range []cluster.Vttablet{*primary, *replica1, *replica2} {
 		err := tablet.VttabletProcess.QueryTabletMultiple(promoteCommands, keyspaceName, true)
-		require.Nil(t, err)
-		err = tablet.VttabletProcess.QueryTabletMultiple(disableSemiSyncCommands, keyspaceName, true)
-		require.Nil(t, err)
+
+		require.NoError(t, err)
+		semisyncType, err := tablet.VttabletProcess.SemiSyncExtensionLoaded()
+		require.NoError(t, err)
+
+		switch semisyncType {
+		case cluster.SemiSyncTypeSource:
+			err = tablet.VttabletProcess.QueryTabletMultiple(disableSemiSyncCommandsSource, keyspaceName, true)
+			require.NoError(t, err)
+		case cluster.SemiSyncTypeMaster:
+			err = tablet.VttabletProcess.QueryTabletMultiple(disableSemiSyncCommandsMaster, keyspaceName, true)
+			require.NoError(t, err)
+		}
 	}
 
 	for _, tablet := range []cluster.Vttablet{*primary, *replica1, *replica2} {
