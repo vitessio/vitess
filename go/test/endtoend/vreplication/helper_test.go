@@ -39,6 +39,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 
+	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqlescape"
@@ -284,6 +285,7 @@ func waitForRowCountInTablet(t *testing.T, vttablet *cluster.VttabletProcess, da
 		require.NoError(t, err)
 		require.NotNil(t, qr)
 		if wantRes == fmt.Sprintf("%v", qr.Rows) {
+			log.Infof("waitForRowCountInTablet: found %d rows in table %s on tablet %s", want, table, vttablet.Name)
 			return
 		}
 		select {
@@ -985,4 +987,46 @@ func getCellNames(cells []*Cell) string {
 		cellNames = append(cellNames, cell.Name)
 	}
 	return strings.Join(cellNames, ",")
+}
+
+// VExplainPlan is the struct that represents the json output of a vexplain query.
+type VExplainPlan struct {
+	OperatorType string
+	Variant      string
+	Keyspace     VExplainKeyspace
+	FieldQuery   string
+	Query        string
+	Table        string
+}
+
+type VExplainKeyspace struct {
+	Name    string
+	Sharded bool
+}
+
+// vexplain runs vexplain on the given query and returns the plan. Useful for validating routing rules.
+func vexplain(t *testing.T, database, query string) *VExplainPlan {
+	vtgateConn := vc.GetVTGateConn(t)
+	defer vtgateConn.Close()
+
+	qr := execVtgateQuery(t, vtgateConn, database, fmt.Sprintf("vexplain %s", query))
+	require.NotNil(t, qr)
+	require.Equal(t, 1, len(qr.Rows))
+	json := qr.Rows[0][0].ToString()
+
+	var plan VExplainPlan
+	require.NoError(t, json2.Unmarshal([]byte(json), &plan))
+	return &plan
+}
+
+// confirmKeyspacesRoutedTo confirms that the given keyspaces are routed as expected for the given tablet types, using vexplain.
+func confirmKeyspacesRoutedTo(t *testing.T, keyspace string, routedKeyspace, table string, tabletTypes []string) {
+	if len(tabletTypes) == 0 {
+		tabletTypes = []string{"primary", "replica", "rdonly"}
+	}
+	for _, tt := range tabletTypes {
+		database := fmt.Sprintf("%s@%s", keyspace, tt)
+		plan := vexplain(t, database, fmt.Sprintf("select * from %s.%s", keyspace, table))
+		require.Equalf(t, routedKeyspace, plan.Keyspace.Name, "for database %s, keyspace %v, tabletType %s", database, keyspace, tt)
+	}
 }
