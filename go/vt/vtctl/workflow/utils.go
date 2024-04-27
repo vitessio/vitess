@@ -857,15 +857,32 @@ func changeKeyspaceRouting(ctx context.Context, ts *topo.Server, tabletTypes []t
 		suffix := getTabletTypeSuffix(tabletType)
 		routes[sourceKeyspace+suffix] = targetKeyspace
 	}
-	if err := updateKeyspaceRoutingRule(ctx, ts, routes); err != nil {
+	if err := updateKeyspaceRoutingRule(ctx, ts, sourceKeyspace, routes); err != nil {
 		return err
 	}
 	return ts.RebuildSrvVSchema(ctx, nil)
 }
 
 // updateKeyspaceRoutingRule updates the keyspace routing rule for the (effective) source keyspace to the target keyspace.
-func updateKeyspaceRoutingRule(ctx context.Context, ts *topo.Server, routes map[string]string) error {
-	rules, err := topotools.GetKeyspaceRoutingRules(ctx, ts)
+func updateKeyspaceRoutingRule(ctx context.Context, ts *topo.Server, sourceKeyspace string, routes map[string]string) (err error) {
+	log.Infof("Updating keyspace routing rules for keyspace %s", sourceKeyspace)
+	defer func() {
+		if err != nil {
+			log.Errorf("Failed to update keyspace routing rules for keyspace %s: %v", sourceKeyspace, err)
+		} else {
+			log.Infof("Successfully updated keyspace routing rules for keyspace %s", sourceKeyspace)
+		}
+	}()
+	lock, err := topo.NewKeyspaceRoutingRulesLock(ctx, ts, sourceKeyspace)
+	if err != nil {
+		return err
+	}
+	lockCtx, unlock, lockErr := lock.Lock(ctx)
+	if lockErr != nil {
+		return lockErr
+	}
+	defer unlock(&err)
+	rules, err := topotools.GetKeyspaceRoutingRules(lockCtx, ts)
 	if err != nil {
 		return err
 	}
@@ -875,7 +892,7 @@ func updateKeyspaceRoutingRule(ctx context.Context, ts *topo.Server, routes map[
 	for fromKeyspace, toKeyspace := range routes {
 		rules[fromKeyspace] = toKeyspace
 	}
-	if err := topotools.SaveKeyspaceRoutingRules(ctx, ts, rules); err != nil {
+	if err := topotools.SaveKeyspaceRoutingRules(lockCtx, ts, rules); err != nil {
 		return err
 	}
 	return nil
