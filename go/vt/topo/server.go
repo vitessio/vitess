@@ -84,13 +84,15 @@ const (
 
 // Path for all object types.
 const (
-	CellsPath             = "cells"
-	CellsAliasesPath      = "cells_aliases"
-	KeyspacesPath         = "keyspaces"
-	ShardsPath            = "shards"
-	TabletsPath           = "tablets"
-	MetadataPath          = "metadata"
-	ExternalClusterVitess = "vitess"
+	CellsPath                   = "cells"
+	CellsAliasesPath            = "cells_aliases"
+	KeyspacesPath               = "keyspaces"
+	ShardsPath                  = "shards"
+	TabletsPath                 = "tablets"
+	MetadataPath                = "metadata"
+	ExternalClusterVitess       = "vitess"
+	KeyspaceRoutingRulesPath    = "keyspaces_routing_rules"
+	KeyspaceRoutingRulesLockDir = "lock"
 )
 
 // Factory is a factory interface to create Conn objects.
@@ -352,7 +354,7 @@ func (ts *Server) Close() {
 	ts.cellConns = make(map[string]cellConn)
 }
 
-func (ts *Server) GetGlobalConn() Conn {
+func (ts *Server) GetGlobalCell() Conn {
 	return ts.globalCell
 }
 

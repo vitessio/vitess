@@ -36,7 +36,7 @@ func TestTopoLockTimeout(t *testing.T) {
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "zone1")
 	defer ts.Close()
-	conn := ts.GetGlobalConn()
+	conn := ts.GetGlobalCell()
 	require.NotNil(t, conn)
 	_, err := conn.Create(ctx, "root/key1", []byte("value"))
 	if err != nil {
@@ -67,7 +67,7 @@ func TestTopoLockBasic(t *testing.T) {
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "zone1")
 	defer ts.Close()
-	conn := ts.GetGlobalConn()
+	conn := ts.GetGlobalCell()
 	require.NotNil(t, conn)
 	_, err := conn.Create(ctx, "root/key1", []byte("value"))
 	if err != nil {
