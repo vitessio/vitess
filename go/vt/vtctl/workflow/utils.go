@@ -882,6 +882,7 @@ func updateKeyspaceRoutingRule(ctx context.Context, ts *topo.Server, sourceKeysp
 		return lockErr
 	}
 	defer unlock(&err)
+
 	rules, err := topotools.GetKeyspaceRoutingRules(lockCtx, ts)
 	if err != nil {
 		return err

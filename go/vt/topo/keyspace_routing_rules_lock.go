@@ -21,13 +21,18 @@ import (
 	"fmt"
 )
 
+// KeyspaceRoutingRulesLock is a wrapper over TopoLock, to serialize updates to the keyspace routing rules.
 type KeyspaceRoutingRulesLock struct {
 	*TopoLock
 
+	// sourceKeyspace is only used for logging, at the moment
 	sourceKeyspace string
 }
 
 func NewKeyspaceRoutingRulesLock(ctx context.Context, ts *Server, sourceKeyspace string) (*KeyspaceRoutingRulesLock, error) {
+	if sourceKeyspace == "" {
+		return nil, fmt.Errorf("sourceKeyspace is not specified")
+	}
 	return &KeyspaceRoutingRulesLock{
 		TopoLock: &TopoLock{
 			Root:   "", // global

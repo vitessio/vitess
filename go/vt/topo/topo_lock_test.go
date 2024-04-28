@@ -19,15 +19,19 @@ package topo_test
 import (
 	"context"
 	"testing"
-
-	"vitess.io/vitess/go/vt/topo"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 )
 
-func TestTopoLock(t *testing.T) {
+// lower the lock timeout for testing
+const testLockTimeout = 3 * time.Second
+
+// TestTopoLockTimeout tests that the lock times out after the specified duration.
+func TestTopoLockTimeout(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "zone1")
@@ -38,18 +42,42 @@ func TestTopoLock(t *testing.T) {
 	if err != nil {
 		return
 	}
-	_, err = conn.Create(ctx, "root/key2", []byte("value"))
+
+	currentTopoLockTimeout := topo.LockTimeout
+	topo.LockTimeout = testLockTimeout
+	defer func() {
+		topo.LockTimeout = currentTopoLockTimeout
+	}()
+
+	// acquire the lock
+	origCtx := ctx
+	tl1 := ts.NewTopoLock("root", "key1", "action1", "name")
+	_, unlock, err := tl1.Lock(origCtx)
+	require.NoError(t, err)
+	defer unlock(&err)
+
+	// re-acquiring the lock should fail
+	_, _, err2 := tl1.Lock(origCtx)
+	require.Errorf(t, err2, "deadline exceeded")
+}
+
+// TestTopoLockBasic tests basic lock operations.
+func TestTopoLockBasic(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "zone1")
+	defer ts.Close()
+	conn := ts.GetGlobalConn()
+	require.NotNil(t, conn)
+	_, err := conn.Create(ctx, "root/key1", []byte("value"))
 	if err != nil {
 		return
 	}
 
-	var tl1, tl2 topo.ITopoLock
-
 	origCtx := ctx
-	tl1 = ts.NewTopoLock("root", "key1", "action1", "name")
+	tl1 := ts.NewTopoLock("root", "key1", "action1", "name")
 	ctx, unlock, err := tl1.Lock(origCtx)
 	require.NoError(t, err)
-	require.NotNil(t, unlock)
 
 	// locking the same key again, without unlocking, should return an error
 	_, _, err2 := tl1.Lock(ctx)
@@ -59,14 +87,16 @@ func TestTopoLock(t *testing.T) {
 	unlock(&err)
 	ctx, unlock, err = tl1.Lock(origCtx)
 	require.NoError(t, err)
-	require.NotNil(t, unlock)
 	defer unlock(&err)
 
 	// locking another key should work
-	tl2 = ts.NewTopoLock("root", "key2", "action2", "name")
+	_, err = conn.Create(ctx, "root/key2", []byte("value"))
+	if err != nil {
+		return
+	}
+	tl2 := ts.NewTopoLock("root", "key2", "action2", "name")
 	_, unlock2, err := tl2.Lock(ctx)
 	require.NoError(t, err)
-	require.NotNil(t, unlock2)
 	defer unlock2(&err)
 
 }

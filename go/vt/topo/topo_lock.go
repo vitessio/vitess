@@ -18,6 +18,7 @@ package topo
 
 import (
 	"context"
+	"fmt"
 	"path"
 
 	"vitess.io/vitess/go/trace"
@@ -26,21 +27,42 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
+// ITopoLock is the interface for a lock that can be used to lock a key in the topology server.
+// The lock is associated with a context and can be unlocked by calling the returned function.
+// Note that we don't need an Unlock method on the interface, as the Lock() function
+// returns a function that can be used to unlock the lock.
 type ITopoLock interface {
 	Lock(ctx context.Context) (context.Context, func(*error), error)
-	Unlock(ctx context.Context) error
 	Check(ctx context.Context) error
 }
 
 type TopoLock struct {
-	Root, Key, Action, Name string
+	Root   string // topo path
+	Key    string // the topo file to lock, relative to Root
+	Action string // action, for logging purposes
+	Name   string // name, for logging purposes
 
 	ts *Server
 }
 
-func (l *Lock) lock(ctx context.Context, ts *Server, root, key string) (LockDescriptor, error) {
-	log.Infof("Locking %s/%s for action %v", root, key, l.Action)
+var _ ITopoLock = (*TopoLock)(nil)
 
+func (ts *Server) NewTopoLock(root, key, action, name string) *TopoLock {
+	return &TopoLock{
+		ts:     ts,
+		Root:   root,
+		Key:    key,
+		Action: action,
+		Name:   name,
+	}
+}
+
+func (tl *TopoLock) String() string {
+	return fmt.Sprintf("TopoLock{Root: %v, Key: %v, Action: %v, Name: %v}", tl.Root, tl.Key, tl.Action, tl.Name)
+}
+
+// perform the topo lock operation
+func (l *Lock) lock(ctx context.Context, ts *Server, root, key string) (LockDescriptor, error) {
 	ctx, cancel := context.WithTimeout(ctx, getLockTimeout())
 	defer cancel()
 	span, ctx := trace.NewSpan(ctx, "TopoServer.LockKeyForAction")
@@ -74,15 +96,15 @@ func (l *Lock) unlock(ctx context.Context, ts *Server, root, key string, lockDes
 
 	// first update the actionNode
 	if actionError != nil {
-		log.Infof("Unlocking keyspace %v for action %v with error %v", key, l.Action, actionError)
 		l.Status = "Error: " + actionError.Error()
 	} else {
-		log.Infof("Unlocking keyspace %v for successful action %v", key, l.Action)
 		l.Status = "Done"
 	}
 	return lockDescriptor.Unlock(ctx)
 }
 
+// Lock adds lock information to the context, checks that the lock is not already held, and locks it.
+// It returns a new context with the lock information and a function to unlock the lock.
 func (tl TopoLock) Lock(ctx context.Context) (context.Context, func(*error), error) {
 	i, ok := ctx.Value(locksKey).(*locksInfo)
 	if !ok {
@@ -124,6 +146,7 @@ func (tl TopoLock) Lock(ctx context.Context) (context.Context, func(*error), err
 		}
 
 		err := l.unlock(ctx, tl.ts, tl.Root, tl.Key, lockDescriptor, *finalErr)
+		// if we have an error, we log it, but we still want to delete the lock
 		if *finalErr != nil {
 			if err != nil {
 				// both error are set, just log the unlock error
@@ -136,28 +159,20 @@ func (tl TopoLock) Lock(ctx context.Context) (context.Context, func(*error), err
 	}, nil
 }
 
-func (tl TopoLock) Unlock(ctx context.Context) error {
-	// TODO implement me
-	panic("implement me")
-}
-
+// Check checks that the lock is held in the context: it just validates that the lockInfo is present in the context.
 func (tl TopoLock) Check(ctx context.Context) error {
-	// TODO implement me
-	panic("implement me")
-}
-
-var _ ITopoLock = (*TopoLock)(nil)
-
-func (ts *Server) NewTopoLock(root, key, action, name string) TopoLock {
-	return TopoLock{
-		ts:     ts,
-		Root:   root,
-		Key:    key,
-		Action: action,
-		Name:   name,
+	// extract the locksInfo pointer
+	i, ok := ctx.Value(locksKey).(*locksInfo)
+	if !ok {
+		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "%s is not locked (no locksInfo)", tl.String())
 	}
-}
+	i.mu.Lock()
+	defer i.mu.Unlock()
 
-func (ts *Server) GetGlobalConn() Conn {
-	return ts.globalCell
+	// find the individual entry
+	_, ok = i.info[tl.Key]
+	if !ok {
+		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "%s is not locked (no lockInfo in map)", tl.String())
+	}
+	return nil
 }
