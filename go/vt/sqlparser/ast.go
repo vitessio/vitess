@@ -341,8 +341,8 @@ type (
 		Partitions Partitions
 		Columns    Columns
 		Rows       InsertRows
-		OnDup      OnDup
 		RowAlias   *RowAlias
+		OnDup      OnDup
 	}
 
 	// Ignore represents whether ignore was specified or not

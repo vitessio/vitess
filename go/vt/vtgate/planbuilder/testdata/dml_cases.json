@@ -6752,5 +6752,109 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "RowAlias in INSERT",
+    "query": "INSERT INTO authoritative (user_id,col1,col2) VALUES (1,'2',3),(4,'5',6) AS new ON DUPLICATE KEY UPDATE col2 = new.user_id+new.col1",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "INSERT INTO authoritative (user_id,col1,col2) VALUES (1,'2',3),(4,'5',6) AS new ON DUPLICATE KEY UPDATE col2 = new.user_id+new.col1",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Sharded",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "InsertIgnore": true,
+        "Query": "insert into authoritative(user_id, col1, col2) values (:_user_id_0, '2', 3), (:_user_id_1, '5', 6) as new on duplicate key update col2 = new.user_id + new.col1",
+        "TableName": "authoritative",
+        "VindexValues": {
+          "user_index": "1, 4"
+        }
+      },
+      "TablesUsed": [
+        "user.authoritative"
+      ]
+    }
+  },
+  {
+    "comment": "RowAlias with explicit columns in INSERT",
+    "query": "INSERT INTO authoritative (user_id,col1,col2) VALUES (1,'2',3),(4,'5',6) AS new(a,b,c) ON DUPLICATE KEY UPDATE col1 = a+c",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "INSERT INTO authoritative (user_id,col1,col2) VALUES (1,'2',3),(4,'5',6) AS new(a,b,c) ON DUPLICATE KEY UPDATE col1 = a+c",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Sharded",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "InsertIgnore": true,
+        "Query": "insert into authoritative(user_id, col1, col2) values (:_user_id_0, '2', 3), (:_user_id_1, '5', 6) as new (a, b, c) on duplicate key update col1 = a + c",
+        "TableName": "authoritative",
+        "VindexValues": {
+          "user_index": "1, 4"
+        }
+      },
+      "TablesUsed": [
+        "user.authoritative"
+      ]
+    }
+  },
+  {
+    "comment": "RowAlias in INSERT (no column list)",
+    "query": "INSERT INTO authoritative VALUES (1,'2',3),(4,'5',6) AS new ON DUPLICATE KEY UPDATE col2 = new.user_id+new.col1",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "INSERT INTO authoritative VALUES (1,'2',3),(4,'5',6) AS new ON DUPLICATE KEY UPDATE col2 = new.user_id+new.col1",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Sharded",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "InsertIgnore": true,
+        "Query": "insert into authoritative(user_id, col1, col2) values (:_user_id_0, '2', 3), (:_user_id_1, '5', 6) as new on duplicate key update col2 = new.user_id + new.col1",
+        "TableName": "authoritative",
+        "VindexValues": {
+          "user_index": "1, 4"
+        }
+      },
+      "TablesUsed": [
+        "user.authoritative"
+      ]
+    }
+  },
+  {
+    "comment": "RowAlias with explicit columns in INSERT (no column list)",
+    "query": "INSERT INTO authoritative VALUES (1,'2',3),(4,'5',6) AS new(a,b,c) ON DUPLICATE KEY UPDATE col1 = a+c",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "INSERT INTO authoritative VALUES (1,'2',3),(4,'5',6) AS new(a,b,c) ON DUPLICATE KEY UPDATE col1 = a+c",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Sharded",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "InsertIgnore": true,
+        "Query": "insert into authoritative(user_id, col1, col2) values (:_user_id_0, '2', 3), (:_user_id_1, '5', 6) as new (a, b, c) on duplicate key update col1 = a + c",
+        "TableName": "authoritative",
+        "VindexValues": {
+          "user_index": "1, 4"
+        }
+      },
+      "TablesUsed": [
+        "user.authoritative"
+      ]
+    }
   }
 ]

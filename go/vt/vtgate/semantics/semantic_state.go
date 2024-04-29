@@ -58,7 +58,7 @@ type (
 		canShortCut() shortCut
 
 		// getColumns returns the known column information for this table
-		getColumns() []ColumnInfo
+		getColumns(ignoreInvisibleCol bool) []ColumnInfo
 
 		dependencies(colName string, org originable) (dependencies, error)
 		getExprFor(s string) (sqlparser.Expr, error)

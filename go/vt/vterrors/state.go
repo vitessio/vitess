@@ -49,6 +49,7 @@ const (
 	WrongArguments
 	BadNullError
 	InvalidGroupFuncUse
+	ViewWrongList
 
 	// failed precondition
 	NoDB

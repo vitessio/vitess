@@ -462,3 +462,27 @@ func TestMixedCases(t *testing.T) {
 	// final check count on the lookup vindex table.
 	utils.AssertMatches(t, mcmp.VtConn, "select count(*) from lkp_mixed_idx", "[[INT64(12)]]")
 }
+
+// TestInsertAlias test the alias feature in insert statement.
+func TestInsertAlias(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 20, "vtgate")
+	utils.SkipIfBinaryIsBelowVersion(t, 20, "vttablet")
+
+	mcmp, closer := start(t)
+	defer closer()
+
+	// initial record
+	mcmp.Exec("insert into user_tbl(id, region_id, name) values (1, 1,'foo'),(2, 2,'bar'),(3, 3,'baz'),(4, 4,'buzz')")
+
+	qr := mcmp.Exec("insert into user_tbl(id, region_id, name) values (2, 2, 'foo') as new on duplicate key update name = new.name")
+	assert.EqualValues(t, 2, qr.RowsAffected)
+
+	// this validates the record.
+	mcmp.Exec("select id, region_id, name from user_tbl order by id")
+
+	qr = mcmp.Exec("insert into user_tbl(id, region_id, name) values (3, 3, 'foo') as new(m, n, p) on duplicate key update name = p")
+	assert.EqualValues(t, 2, qr.RowsAffected)
+
+	// this validates the record.
+	mcmp.Exec("select id, region_id, name from user_tbl order by id")
+}
