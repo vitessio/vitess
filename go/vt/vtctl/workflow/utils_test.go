@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"vitess.io/vitess/go/vt/topotools"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -18,4 +20,7 @@ func TestUpdateKeyspaceRoutingRule(t *testing.T) {
 	routes["from"] = "to"
 	err := updateKeyspaceRoutingRule(ctx, ts, "ks", routes)
 	require.NoError(t, err)
+	rules, err := topotools.GetKeyspaceRoutingRules(ctx, ts)
+	require.NoError(t, err)
+	require.EqualValues(t, routes, rules)
 }

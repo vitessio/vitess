@@ -51,7 +51,7 @@ func TestTopoLockTimeout(t *testing.T) {
 
 	// acquire the lock
 	origCtx := ctx
-	tl1 := ts.NewTopoLock("root", "key1", "action1", "name")
+	tl1 := ts.NewTopoLock("root", "name")
 	_, unlock, err := tl1.Lock(origCtx)
 	require.NoError(t, err)
 	defer unlock(&err)
@@ -75,7 +75,7 @@ func TestTopoLockBasic(t *testing.T) {
 	}
 
 	origCtx := ctx
-	tl1 := ts.NewTopoLock("root", "key1", "action1", "name")
+	tl1 := ts.NewTopoLock("root/key1", "name")
 	ctx, unlock, err := tl1.Lock(origCtx)
 	require.NoError(t, err)
 
@@ -94,9 +94,8 @@ func TestTopoLockBasic(t *testing.T) {
 	if err != nil {
 		return
 	}
-	tl2 := ts.NewTopoLock("root", "key2", "action2", "name")
+	tl2 := ts.NewTopoLock("root/key2", "name")
 	_, unlock2, err := tl2.Lock(ctx)
 	require.NoError(t, err)
 	defer unlock2(&err)
-
 }

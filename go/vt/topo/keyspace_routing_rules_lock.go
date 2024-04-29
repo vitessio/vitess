@@ -32,19 +32,14 @@ type KeyspaceRoutingRulesLock struct {
 	sourceKeyspace string
 }
 
-func checkAndCreateLocksFile(ctx context.Context, ts *Server) error {
-	topoPath := path.Join(KeyspaceRoutingRulesPath, "lock")
+func createTopoDirIfNeeded(ctx context.Context, ts *Server) error {
+	topoPath := path.Join(KeyspaceRoutingRulesPath, KeyspaceRoutingRulesLockDir)
 	_, _, err := ts.GetGlobalCell().Get(ctx, topoPath)
 	if IsErrType(err, NoNode) {
 		log.Infof("Creating keyspace routing rules file %s", topoPath)
 		_, err = ts.globalCell.Create(ctx, topoPath, []byte("lock file for keyspace routing rules"))
 		if err != nil {
 			log.Errorf("Failed to create keyspace routing rules lock file: %v", err)
-		} else {
-			_, _, err := ts.GetGlobalCell().Get(ctx, topoPath)
-			if err != nil {
-				log.Errorf("Failed to read keyspace routing rules lock file: %v", err)
-			}
 		}
 	}
 	return err
@@ -55,20 +50,16 @@ func NewKeyspaceRoutingRulesLock(ctx context.Context, ts *Server, sourceKeyspace
 		return nil, fmt.Errorf("sourceKeyspace is not specified")
 	}
 
-	// TODO: check if this can be done better: catch is that we never explicitly create keyspaces routing rules file,
-	// unless required.
-	if err := checkAndCreateLocksFile(ctx, ts); err != nil {
+	if err := createTopoDirIfNeeded(ctx, ts); err != nil {
 		log.Errorf("Failed to create keyspace routing rules lock file: %v", err)
 		return nil, err
 	}
 
 	return &KeyspaceRoutingRulesLock{
 		TopoLock: &TopoLock{
-			Root:   KeyspaceRoutingRulesPath,
-			Key:    "",
-			Action: "Lock",
-			Name:   fmt.Sprintf("KeyspaceRoutingRules for %s", sourceKeyspace),
-			ts:     ts,
+			Path: KeyspaceRoutingRulesPath,
+			Name: fmt.Sprintf("KeyspaceRoutingRules for %s", sourceKeyspace),
+			ts:   ts,
 		},
 	}, nil
 }
