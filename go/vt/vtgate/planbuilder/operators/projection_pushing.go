@@ -17,10 +17,10 @@ limitations under the License.
 package operators
 
 import (
+	"fmt"
 	"slices"
 
 	"vitess.io/vitess/go/slice"
-	"vitess.io/vitess/go/test/dbg"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -269,7 +269,7 @@ func splitProjectionAcrossJoin(
 	case SubQueryExpression:
 		join.JoinColumns.add(splitSubqueryExpression(ctx, join, lhs, rhs, pe, colAlias))
 	default:
-		panic(vterrors.VT13001(dbg.S(pe.Info)))
+		panic(vterrors.VT13001(fmt.Sprintf("unknown projection type %T", pe.Info)))
 	}
 }
 
@@ -297,7 +297,7 @@ func splitUnexploredExpression(
 
 	if dt != nil {
 		if !pe.isSameInAndOut(ctx) {
-			panic("not sure what to do here")
+			panic(vterrors.VT13001("derived table columns must be the same in and out"))
 		}
 		colName := pe.Original.ColumnName()
 		newExpr := sqlparser.NewColNameWithQualifier(colName, sqlparser.NewTableName(dt.Alias))

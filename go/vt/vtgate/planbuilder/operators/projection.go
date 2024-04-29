@@ -296,7 +296,7 @@ func (p *Projection) addColumnsWithoutPushing(ctx *plancontext.PlanningContext, 
 func (p *Projection) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
 	cols, aliased := p.Columns.(AliasedProjections)
 	if !aliased {
-		panic(vterrors.VT09015("need schema tracking for this query"))
+		panic(vterrors.VT09015())
 	}
 
 	if offset >= len(cols) || offset < 0 {

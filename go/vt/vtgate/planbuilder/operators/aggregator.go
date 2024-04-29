@@ -222,12 +222,10 @@ func (a *Aggregator) AddWSColumn(ctx *plancontext.PlanningContext, offset int, u
 				return aggr.WSOffset
 			}
 
-			panic(vterrors.VT13001("did not expect to get here"))
+			panic(vterrors.VT13001("expected to find a weight string for aggregation"))
 		}
-	}
 
-	if expr == nil {
-		panic(vterrors.VT13001("could not find group by"))
+		panic(vterrors.VT13001("could not find expression at offset"))
 	}
 
 	wsExpr := weightStringFor(expr)

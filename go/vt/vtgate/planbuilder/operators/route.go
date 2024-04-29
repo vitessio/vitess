@@ -682,7 +682,7 @@ func addMultipleColumnsToInput(
 func (r *Route) AddWSColumn(ctx *plancontext.PlanningContext, offset int, _ bool) int {
 	columns := r.GetColumns(ctx)
 	if offset > len(columns) {
-		panic(vterrors.VT13001("column %d not found", offset))
+		panic(vterrors.VT13001(fmt.Sprintf("column %d not found", offset)))
 	}
 	col := columns[offset]
 	if offset := r.FindCol(ctx, weightStringFor(col.Expr), true); offset >= 0 {
@@ -718,9 +718,6 @@ func addDerivedProj(
 	ctx *plancontext.PlanningContext,
 	op Operator,
 ) (projection *Projection) {
-	// create new table ID
-	tableID := semantics.SingleTableSet(len(ctx.SemTable.Tables))
-	ctx.SemTable.Tables = append(ctx.SemTable.Tables, nil)
 	unionColumns := op.GetColumns(ctx)
 	columns := make(sqlparser.Columns, 0, len(unionColumns))
 	for i := range unionColumns {
@@ -730,7 +727,7 @@ func addDerivedProj(
 		Source:  op,
 		Columns: AliasedProjections(slice.Map(unionColumns, newProjExpr)),
 		DT: &DerivedTable{
-			TableID: tableID,
+			TableID: ctx.SemTable.NewTableId(),
 			Alias:   "dt",
 			Columns: columns,
 		},
