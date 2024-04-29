@@ -121,6 +121,32 @@ func (hj *HashJoin) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bo
 	return len(hj.columns.columns) - 1
 }
 
+func (hj *HashJoin) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
+	hj.planOffsets(ctx)
+
+	if len(hj.ColumnOffsets) <= offset {
+		panic(vterrors.VT13001("offset out of range"))
+	}
+
+	// check if it already exists
+	wsExpr := weightStringFor(hj.columns.columns[offset].expr)
+	if index := hj.FindCol(ctx, wsExpr, false); index != -1 {
+		return index
+	}
+
+	i := hj.ColumnOffsets[offset]
+	out := 0
+	if i < 0 {
+		out = hj.LHS.AddWSColumn(ctx, FromLeftOffset(i), underRoute)
+		out = ToLeftOffset(out)
+	} else {
+		out = hj.RHS.AddWSColumn(ctx, FromRightOffset(i), underRoute)
+		out = ToRightOffset(out)
+	}
+	hj.ColumnOffsets = append(hj.ColumnOffsets, out)
+	return len(hj.ColumnOffsets) - 1
+}
+
 func (hj *HashJoin) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	if hj.offset {
 		return nil
@@ -449,4 +475,20 @@ func (hj *HashJoin) addSingleSidedColumn(
 		ColExpr:  rewrittenExpr,
 		Info:     &EvalEngine{EExpr: eexpr},
 	}, isPureOffset
+}
+
+func FromLeftOffset(i int) int {
+	return -i - 1
+}
+
+func ToLeftOffset(i int) int {
+	return -i - 1
+}
+
+func FromRightOffset(i int) int {
+	return i - 1
+}
+
+func ToRightOffset(i int) int {
+	return i + 1
 }

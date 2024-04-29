@@ -50,7 +50,7 @@ func (p Phase) String() string {
 	case initialPlanning:
 		return "initial horizon planning optimization"
 	case pullDistinctFromUnion:
-		return "pull distinct from UNION1"
+		return "pull distinct from UNION"
 	case delegateAggregation:
 		return "split aggregation between vtgate and mysql"
 	case addAggrOrdering:

@@ -2465,41 +2465,32 @@
       "QueryType": "SELECT",
       "Original": "select id, t.id from (select user.id from user join user_extra) as t",
       "Instructions": {
-        "OperatorType": "SimpleProjection",
-        "Columns": [
-          0,
-          0
-        ],
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0,L:0",
+        "TableName": "`user`_user_extra",
         "Inputs": [
           {
-            "OperatorType": "Join",
-            "Variant": "Join",
-            "JoinColumnIndexes": "L:0",
-            "TableName": "`user`_user_extra",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select id from (select `user`.id from `user` where 1 != 1) as t where 1 != 1",
-                "Query": "select id from (select `user`.id from `user`) as t",
-                "Table": "`user`"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select 1 from user_extra where 1 != 1",
-                "Query": "select 1 from user_extra",
-                "Table": "user_extra"
-              }
-            ]
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id, t.id from (select `user`.id from `user` where 1 != 1) as t where 1 != 1",
+            "Query": "select id, t.id from (select `user`.id from `user`) as t",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "Query": "select 1 from user_extra",
+            "Table": "user_extra"
           }
         ]
       },
@@ -4220,14 +4211,13 @@
           "(0:2)",
           "(1:3)"
         ],
-        "ResultColumns": 2,
         "Inputs": [
           {
             "OperatorType": "Join",
             "Variant": "HashLeftJoin",
             "Collation": "binary",
             "ComparisonType": "INT16",
-            "JoinColumnIndexes": "-1,2",
+            "JoinColumnIndexes": "-1,2,-3,3",
             "Predicate": "u.col = ue.col",
             "TableName": "`user`_user_extra",
             "Inputs": [
@@ -4238,8 +4228,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select u.id, u.col from (select id, col from `user` where 1 != 1) as u where 1 != 1",
-                "Query": "select distinct u.id, u.col from (select id, col from `user`) as u",
+                "FieldQuery": "select u.id, u.col, weight_string(u.id) from (select id, col from `user` where 1 != 1) as u where 1 != 1",
+                "Query": "select distinct u.id, u.col, weight_string(u.id) from (select id, col from `user`) as u",
                 "Table": "`user`"
               },
               {
@@ -4253,8 +4243,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select ue.col, ue.user_id from (select col, user_id from user_extra where 1 != 1) as ue where 1 != 1",
-                    "Query": "select ue.col, ue.user_id from (select col, user_id from user_extra) as ue limit :__upper_limit",
+                    "FieldQuery": "select ue.col, ue.user_id, weight_string(ue.user_id) from (select col, user_id from user_extra where 1 != 1) as ue where 1 != 1",
+                    "Query": "select ue.col, ue.user_id, weight_string(ue.user_id) from (select col, user_id from user_extra) as ue limit :__upper_limit",
                     "Table": "user_extra"
                   }
                 ]
