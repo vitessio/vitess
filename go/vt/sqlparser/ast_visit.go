@@ -2003,10 +2003,10 @@ func VisitRefOfInsert(in *Insert, f Visit) error {
 	if err := VisitInsertRows(in.Rows, f); err != nil {
 		return err
 	}
-	if err := VisitOnDup(in.OnDup, f); err != nil {
+	if err := VisitRefOfRowAlias(in.RowAlias, f); err != nil {
 		return err
 	}
-	if err := VisitRefOfRowAlias(in.RowAlias, f); err != nil {
+	if err := VisitOnDup(in.OnDup, f); err != nil {
 		return err
 	}
 	return nil

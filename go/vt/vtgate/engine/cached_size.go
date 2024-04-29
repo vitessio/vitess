@@ -440,7 +440,7 @@ func (cached *Insert) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(208)
+		size += int64(224)
 	}
 	// field InsertCommon vitess.io/vitess/go/vt/vtgate/engine.InsertCommon
 	size += cached.InsertCommon.CachedSize(false)
@@ -479,6 +479,8 @@ func (cached *Insert) CachedSize(alloc bool) int64 {
 			}
 		}
 	}
+	// field Alias string
+	size += hack.RuntimeAllocSize(int64(len(cached.Alias)))
 	return size
 }
 func (cached *InsertCommon) CachedSize(alloc bool) int64 {
