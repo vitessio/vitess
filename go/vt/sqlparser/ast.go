@@ -889,8 +889,11 @@ func (node *Load) Format(buf *TrackedBuffer) {
 		ignoreOrReplace += " "
 	}
 
-	buf.Myprintf("load data %sinfile '%s' %sinto table %s%v%s%v%v%s%v", local, node.Infile, ignoreOrReplace, node.Table.String(),
-		node.Partition, charset, node.Fields, node.Lines, ignoreNum, node.Columns)
+	buf.Myprintf("load data %sinfile '%s' %sinto table %s", local, node.Infile, ignoreOrReplace, node.Table.String())
+	if len(node.Partition) > 0 {
+		buf.Myprintf(" partition (%v)", node.Partition)
+	}
+	buf.Myprintf("%s%v%v%s%v", charset, node.Fields, node.Lines, ignoreNum, node.Columns)
 }
 
 func (node *Load) walkSubtree(visit Visit) error {
@@ -1615,11 +1618,15 @@ const (
 
 // Format formats the node.
 func (node *Insert) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%v%s %v%sinto %v%v%v %v%v",
+	buf.Myprintf("%v%s %v%sinto %v",
 		node.With,
 		node.Action,
 		node.Comments, node.Ignore,
-		node.Table, node.Partitions, node.Columns, node.Rows, node.OnDup)
+		node.Table)
+	if len(node.Partitions) > 0 {
+		buf.Myprintf(" partition (%v)", node.Partitions)
+	}
+	buf.Myprintf("%v %v%v", node.Columns, node.Rows, node.OnDup)
 }
 
 func (node *Insert) walkSubtree(visit Visit) error {
@@ -1704,7 +1711,11 @@ func (node *Delete) Format(buf *TrackedBuffer) {
 	if node.Targets != nil {
 		buf.Myprintf("%v ", node.Targets)
 	}
-	buf.Myprintf("from %v%v%v%v%v", node.TableExprs, node.Partitions, node.Where, node.OrderBy, node.Limit)
+	buf.Myprintf("from %v", node.TableExprs)
+	if len(node.Partitions) > 0 {
+		buf.Myprintf(" partition (%v)", node.Partitions)
+	}
+	buf.Myprintf("%v%v%v", node.Where, node.OrderBy, node.Limit)
 }
 
 func (node *Delete) walkSubtree(visit Visit) error {
@@ -1975,8 +1986,9 @@ func (c Characteristic) String() string {
 
 // AlterTable represents an ALTER table statement, which can include multiple DDL clauses.
 type AlterTable struct {
-	Table      TableName
-	Statements []*DDL
+	Table          TableName
+	Statements     []*DDL
+	PartitionSpecs []*PartitionSpec
 }
 
 var _ SQLNode = (*AlterTable)(nil)
@@ -1989,6 +2001,12 @@ func (m *AlterTable) Format(buf *TrackedBuffer) {
 			buf.Myprintf(",")
 		}
 		ddl.alterFormat(buf)
+	}
+	for i, partitionSpec := range m.PartitionSpecs {
+		if i > 0 {
+			buf.Myprintf(" ")
+		}
+		buf.Myprintf("%v", partitionSpec)
 	}
 }
 
@@ -2448,6 +2466,16 @@ func (node *DDL) AffectedTables() TableNames {
 // Partition strings
 const (
 	ReorganizeStr = "reorganize partition"
+	DiscardStr    = "discard"
+	ImportStr     = "import"
+	CoalesceStr   = "coalesce"
+	ExchangeStr   = "exchange"
+	AnalyzeStr    = "analyze"
+	CheckStr      = "check"
+	OptimizeStr   = "optimize"
+	RebuildStr    = "rebuild"
+	RepairStr     = "repair"
+	RemoveStr     = "remove"
 )
 
 // OptLike works for create table xxx like xxx
@@ -2485,24 +2513,58 @@ func (node *OptSelect) walkSubtree(visit Visit) error {
 
 // PartitionSpec describe partition actions (for alter and create)
 type PartitionSpec struct {
-	Action      string
-	Name        ColIdent
-	Definitions []*PartitionDefinition
+	Action         string
+	IsAll          bool
+	Names          Partitions
+	Definitions    []*PartitionDefinition
+	WithValidation bool
+	TableName      TableName
+	Number         *SQLVal
 }
 
 // Format formats the node.
 func (node *PartitionSpec) Format(buf *TrackedBuffer) {
 	switch node.Action {
-	case ReorganizeStr:
-		buf.Myprintf("%s %v into (", node.Action, node.Name)
-		var prefix string
+	case AddStr:
+		buf.Myprintf(" %s partition (", node.Action)
 		for _, pd := range node.Definitions {
-			buf.Myprintf("%s%v", prefix, pd)
-			prefix = ", "
+			buf.Myprintf("%v", pd)
 		}
 		buf.Myprintf(")")
+	case DropStr, AnalyzeStr, OptimizeStr, RebuildStr, RepairStr:
+		if node.IsAll {
+			buf.Myprintf(" %s partition all", node.Action)
+		} else {
+			buf.Myprintf(" %s partition %v", node.Action, node.Names)
+		}
+	case DiscardStr, ImportStr, TruncateStr:
+		if node.IsAll {
+			buf.Myprintf(" %s partition all tablespace", node.Action)
+		} else {
+			buf.Myprintf(" %s partition %v tablespace", node.Action, node.Names)
+		}
+	case ReorganizeStr:
+		buf.Myprintf(" %s %v into (", node.Action, node.Names)
+		for i, pd := range node.Definitions {
+			if i > 0 {
+				buf.Myprintf(", ")
+			}
+			buf.Myprintf("%v", pd)
+		}
+		buf.Myprintf(")")
+	case CoalesceStr:
+		buf.Myprintf(" %s partition %v", node.Action, node.Number)
+	case ExchangeStr:
+		buf.Myprintf(" %s partition %v with table %v", node.Action, node.Names, node.TableName)
+		if node.WithValidation {
+			buf.Myprintf(" with validation")
+		} else {
+			buf.Myprintf(" without validation")
+		}
+	case RemoveStr:
+		buf.Myprintf(" %s partitioning", node.Action)
 	default:
-		panic("unimplemented")
+		//panic("unimplemented")
 	}
 }
 
@@ -2510,7 +2572,7 @@ func (node *PartitionSpec) walkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
 	}
-	if err := Walk(visit, node.Name); err != nil {
+	if err := Walk(visit, node.Names); err != nil {
 		return err
 	}
 	for _, def := range node.Definitions {
@@ -4250,12 +4312,12 @@ func (node Partitions) Format(buf *TrackedBuffer) {
 	if node == nil {
 		return
 	}
-	prefix := " partition ("
-	for _, n := range node {
-		buf.Myprintf("%s%v", prefix, n)
-		prefix = ", "
+	for i, n := range node {
+		if i > 0 {
+			buf.Myprintf(", ")
+		}
+		buf.Myprintf("%v", n)
 	}
-	buf.WriteString(")")
 }
 
 func (node Partitions) walkSubtree(visit Visit) error {
@@ -4380,7 +4442,10 @@ func (node *AliasedTableExpr) Format(buf *TrackedBuffer) {
 	case *ValuesStatement:
 		buf.Myprintf("(%v)", node.Expr)
 	default:
-		buf.Myprintf("%v%v", node.Expr, node.Partitions)
+		buf.Myprintf("%v", node.Expr)
+		if len(node.Partitions) > 0 {
+			buf.Myprintf(" partition (%v)", node.Partitions)
+		}
 	}
 
 	if node.AsOf != nil {

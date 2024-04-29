@@ -149,6 +149,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
   partDefs      []*PartitionDefinition
   partDef       *PartitionDefinition
   partSpec      *PartitionSpec
+  partSpecs     []*PartitionSpec
   viewSpec      *ViewSpec
   viewCheckOption ViewCheckOption
   showFilter    *ShowFilter
@@ -279,6 +280,11 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> EACH ROW BEFORE FOLLOWS PRECEDES DEFINER INVOKER
 %token <bytes> INOUT OUT DETERMINISTIC CONTAINS READS MODIFIES SQL SECURITY TEMPORARY ALGORITHM MERGE TEMPTABLE UNDEFINED
 %token <bytes> EVENT EVENTS SCHEDULE EVERY STARTS ENDS COMPLETION PRESERVE CASCADED
+%token <bytes> INSTANT INPLACE COPY
+%token <bytes> DISCARD IMPORT
+%token <bytes> SHARED EXCLUSIVE
+%token <bytes> WITHOUT VALIDATION
+%token <bytes> COALESCE EXCHANGE REBUILD REMOVE PARTITIONING
 
 // SIGNAL Tokens
 %token <bytes> CLASS_ORIGIN SUBCLASS_ORIGIN MESSAGE_TEXT MYSQL_ERRNO CONSTRAINT_CATALOG CONSTRAINT_SCHEMA
@@ -434,13 +440,14 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <declareHandlerAction> declare_handler_action
 %type <bytes> signal_condition_value
 %type <str> trigger_time trigger_event
+%type <boolean> with_or_without
 %type <statement> alter_statement alter_table_statement alter_database_statement alter_event_statement alter_user_statement
-%type <ddl> create_table_prefix rename_list alter_table_statement_part
+%type <ddl> create_table_prefix rename_list alter_table_statement_part alter_table_options
 %type <ddls> alter_table_statement_list
 %type <statement> analyze_statement analyze_opt show_statement use_statement prepare_statement execute_statement deallocate_statement
 %type <statement> describe_statement explain_statement explainable_statement
 %type <statement> begin_statement commit_statement rollback_statement start_transaction_statement load_statement
-%type <bytes> work_opt no_opt chain_opt release_opt index_name_opt
+%type <bytes> work_opt no_opt chain_opt release_opt index_name_opt no_first_last
 %type <bytes2> comment_opt comment_list
 %type <str> distinct_opt union_op intersect_op except_op insert_or_replace
 %type <str> match_option format_opt
@@ -525,11 +532,11 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <queryOpts> query_opts
 %type <str> key_type key_type_opt
 %type <str> flush_type flush_type_opt
-%type <empty> to_opt to_or_as as_opt column_opt
+%type <empty> to_or_as_opt to_or_as /*to_opt*/ as_opt column_opt
 %type <str> algorithm_view_opt algorithm_part_opt definer_opt security_opt
 %type <viewSpec> view_opts
 %type <viewCheckOption> opt_with_check_option
-%type <bytes> reserved_keyword qualified_column_name_safe_reserved_keyword non_reserved_keyword column_name_safe_keyword function_call_keywords non_reserved_keyword2 non_reserved_keyword3 all_non_reserved
+%type <bytes> reserved_keyword qualified_column_name_safe_reserved_keyword non_reserved_keyword column_name_safe_keyword function_call_keywords non_reserved_keyword2 non_reserved_keyword3 all_non_reserved id_or_non_reserved
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt existing_window_name_opt
 %type <colIdents> reserved_sql_id_list
 %type <expr> charset_value
@@ -581,6 +588,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <partDefs> partition_definitions partition_definitions_opt
 %type <partDef> partition_definition
 %type <partSpec> partition_operation
+%type <partSpecs> partition_operation_list_opt partition_operation_list
 %type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update drop_statement_action
 %type <str> pk_name_opt constraint_symbol_opt infile_opt ignore_or_replace_opt
 %type <exprs> call_param_list_opt
@@ -4059,15 +4067,11 @@ index_column:
   }
 
 foreign_key_definition:
-  CONSTRAINT ID foreign_key_details
+  CONSTRAINT id_or_non_reserved foreign_key_details
   {
     $$ = &ConstraintDefinition{Name: string($2), Details: $3}
   }
-|  CONSTRAINT column_name_safe_keyword foreign_key_details
-   {
-     $$ = &ConstraintDefinition{Name: string($2), Details: $3}
-   }
-|  foreign_key_details
+| foreign_key_details
   {
     $$ = &ConstraintDefinition{Details: $1}
   }
@@ -4098,25 +4102,16 @@ index_name_opt:
   {
     $$ = nil
   }
-| ID
+| id_or_non_reserved
   {
     $$ = $1
   }
 
 check_constraint_definition:
-  CONSTRAINT ID check_constraint_info
+  CONSTRAINT id_or_non_reserved check_constraint_info
   {
     $$ = &ConstraintDefinition{Name: string($2), Details: $3}
   }
-  // TODO: should be possible to use non_reserved_keyword
-| CONSTRAINT STATUS check_constraint_info
-    {
-      $$ = &ConstraintDefinition{Name: string($2), Details: $3}
-    }
-| CONSTRAINT column_name_safe_keyword check_constraint_info
-    {
-      $$ = &ConstraintDefinition{Name: string($2), Details: $3}
-    }
 | CONSTRAINT check_constraint_info
   {
     $$ = &ConstraintDefinition{Details: $2}
@@ -4284,15 +4279,7 @@ table_option:
   {
     $$ = &TableOption{Name: string($1), Value: string($3)}
   }
-| INSERT_METHOD equal_opt NO
-  {
-    $$ = &TableOption{Name: string($1), Value: string($3)}
-  }
-| INSERT_METHOD equal_opt FIRST
-  {
-    $$ = &TableOption{Name: string($1), Value: string($3)}
-  }
-| INSERT_METHOD equal_opt LAST
+| INSERT_METHOD equal_opt no_first_last
   {
     $$ = &TableOption{Name: string($1), Value: string($3)}
   }
@@ -4379,6 +4366,20 @@ table_option:
 | UNION equal_opt openb any_identifier_list closeb
   {
     $$ = &TableOption{Name: string($1), Value: "(" + $4 + ")"}
+  }
+
+no_first_last:
+  NO
+  {
+    $$ = $1
+  }
+| FIRST
+  {
+    $$ = $1
+  }
+| LAST
+  {
+    $$ = $1
   }
 
 table_option_collate:
@@ -4630,16 +4631,20 @@ alter_database_statement:
   }
 
 alter_table_statement:
-  ALTER ignore_opt TABLE table_name alter_table_statement_list
+  ALTER ignore_opt TABLE table_name alter_table_statement_list partition_operation_list_opt
   {
     for i := 0; i < len($5); i++ {
-      if $5[i].Action == RenameStr {
-        $5[i].FromTables = append(TableNames{$4}, $5[i].FromTables...)
-      } else {
-        $5[i].Table = $4
-      }
+    	if $5[i].Action == RenameStr {
+    		$5[i].FromTables = append(TableNames{$4}, $5[i].FromTables...)
+	} else {
+		$5[i].Table = $4
+	}
     }
-    $$ = &AlterTable{Table: $4, Statements: $5}
+    $$ = &AlterTable{Table: $4, Statements: $5, PartitionSpecs: $6}
+  }
+| ALTER ignore_opt TABLE table_name partition_operation_list
+  {
+    $$ = &AlterTable{Table: $4, PartitionSpecs: $5}
   }
 
 alter_table_statement_list:
@@ -4655,50 +4660,39 @@ alter_table_statement_list:
 alter_table_statement_part:
   ADD column_opt '(' column_definition ')'
   {
-    ddl := &DDL{Action: AlterStr, ColumnAction: AddStr, TableSpec: &TableSpec{}}
+    ddl := &DDL{
+    	Action: AlterStr,
+    	ColumnAction: AddStr,
+    	TableSpec: &TableSpec{},
+    }
     ddl.TableSpec.AddColumn($4)
     ddl.Column = $4.Name
     $$ = ddl
   }
 | ADD column_opt column_definition column_order_opt
   {
-    ddl := &DDL{Action: AlterStr, ColumnAction: AddStr, TableSpec: &TableSpec{}, ColumnOrder: $4}
+    ddl := &DDL{
+    	Action: AlterStr,
+	ColumnAction: AddStr,
+	TableSpec: &TableSpec{},
+	ColumnOrder: $4,
+    }
     ddl.TableSpec.AddColumn($3)
     ddl.Column = $3.Name
     $$ = ddl
   }
-| DROP column_opt ID
-  {
-    $$ = &DDL{Action: AlterStr, ColumnAction: DropStr, Column: NewColIdent(string($3))}
-  }
-| DROP column_opt all_non_reserved
-  {
-    $$ = &DDL{Action: AlterStr, ColumnAction: DropStr, Column: NewColIdent(string($3))}
-  }
-| RENAME COLUMN ID to_or_as ID
-  {
-    $$ = &DDL{Action: AlterStr, ColumnAction: RenameStr, Column: NewColIdent(string($3)), ToColumn: NewColIdent(string($5))}
-  }
-| RENAME COLUMN all_non_reserved to_or_as ID
-  {
-    $$ = &DDL{Action: AlterStr, ColumnAction: RenameStr, Column: NewColIdent(string($3)), ToColumn: NewColIdent(string($5))}
-  }
-| RENAME COLUMN ID to_or_as all_non_reserved
-  {
-    $$ = &DDL{Action: AlterStr, ColumnAction: RenameStr, Column: NewColIdent(string($3)), ToColumn: NewColIdent(string($5))}
-  }
-| RENAME COLUMN all_non_reserved to_or_as all_non_reserved
-  {
-    $$ = &DDL{Action: AlterStr, ColumnAction: RenameStr, Column: NewColIdent(string($3)), ToColumn: NewColIdent(string($5))}
-  }
-| RENAME to_opt table_name
-  {
-    // Change this to a rename statement
-    $$ = &DDL{Action: RenameStr, ToTables: TableNames{$3}}
-  }
 | ADD index_or_key name_opt using_opt '(' index_column_list ')' index_option_list_opt
   {
-    $$ = &DDL{Action: AlterStr, IndexSpec: &IndexSpec{Action: CreateStr, ToName: NewColIdent($3),  Using: $4, Columns: $6, Options: $8}}
+    $$ = &DDL{
+    	Action: AlterStr,
+    	IndexSpec: &IndexSpec{
+    		Action: CreateStr,
+    		ToName: NewColIdent($3),
+    		Using: $4,
+    		Columns: $6,
+    		Options: $8,
+	},
+    }
   }
 | ADD constraint_symbol_opt key_type index_or_key_opt name_opt using_opt '(' index_column_list ')' index_option_list_opt
   {
@@ -4706,149 +4700,409 @@ alter_table_statement_part:
     if len(idxName) == 0 {
       idxName = $2
     }
-    $$ = &DDL{Action: AlterStr, IndexSpec: &IndexSpec{Action: CreateStr, ToName: NewColIdent(idxName), Type: $3, Using: $6, Columns: $8, Options: $10}}
-  }
-| DROP CONSTRAINT ID
-  {
-    $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
-        []*ConstraintDefinition{&ConstraintDefinition{Name: string($3)}}}}
-  }
-| DROP CONSTRAINT all_non_reserved
-  {
-    $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
-        []*ConstraintDefinition{&ConstraintDefinition{Name: string($3)}}}}
-  }
-| DROP CHECK ID
-  {
-    $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
-        []*ConstraintDefinition{&ConstraintDefinition{Name: string($3), Details: &CheckConstraintDefinition{}}}}}
-  }
-| DROP CHECK all_non_reserved
-  {
-    $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
-        []*ConstraintDefinition{&ConstraintDefinition{Name: string($3), Details: &CheckConstraintDefinition{}}}}}
-  }
-| DROP index_or_key sql_id
-  {
-    $$ = &DDL{Action: AlterStr, IndexSpec: &IndexSpec{Action: DropStr, ToName: $3}}
-  }
-| RENAME index_or_key sql_id TO sql_id
-  {
-    $$ = &DDL{Action: AlterStr, IndexSpec: &IndexSpec{Action: RenameStr, FromName: $3, ToName: $5}}
-  }
-| MODIFY column_opt column_definition column_order_opt
-  {
-    ddl := &DDL{Action: AlterStr, ColumnAction: ModifyStr, TableSpec: &TableSpec{}, ColumnOrder: $4}
-    ddl.TableSpec.AddColumn($3)
-    ddl.Column = $3.Name
-    $$ = ddl
-  }
-| CHANGE column_opt ID column_definition column_order_opt
-  {
-    ddl := &DDL{Action: AlterStr, ColumnAction: ChangeStr, TableSpec: &TableSpec{}, Column: NewColIdent(string($3)), ColumnOrder: $5}
-    ddl.TableSpec.AddColumn($4)
-    $$ = ddl
-  }
-| partition_operation
-  {
-    $$ = &DDL{Action: AlterStr, PartitionSpec: $1}
-  }
-| ADD foreign_key_definition
-  {
-    ddl := &DDL{Action: AlterStr, ConstraintAction: AddStr, TableSpec: &TableSpec{}}
-    ddl.TableSpec.AddConstraint($2)
-    $$ = ddl
-  }
-| ADD check_constraint_definition
-  {
-    ddl := &DDL{Action: AlterStr, ConstraintAction: AddStr, TableSpec: &TableSpec{}}
-    ddl.TableSpec.AddConstraint($2)
-    $$ = ddl
-  }
-| DROP FOREIGN KEY ID
-  {
-    ddl := &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{}}
-    ddl.TableSpec.AddConstraint(&ConstraintDefinition{Name: string($4), Details: &ForeignKeyDefinition{}})
-    $$ = ddl
-  }
-| RENAME CONSTRAINT FOREIGN KEY ID TO ID
-  {
-    ddl := &DDL{Action: AlterStr, ConstraintAction: RenameStr, TableSpec: &TableSpec{}}
-    ddl.TableSpec.AddConstraint(&ConstraintDefinition{Name: string($5), Details: &ForeignKeyDefinition{}})
-    ddl.TableSpec.AddConstraint(&ConstraintDefinition{Name: string($7), Details: &ForeignKeyDefinition{}})
-    $$ = ddl
-  }
-| RENAME CONSTRAINT CHECK ID TO ID
-  {
-    ddl := &DDL{Action: AlterStr, ConstraintAction: RenameStr, TableSpec: &TableSpec{}}
-    ddl.TableSpec.AddConstraint(&ConstraintDefinition{Name: string($4), Details: &CheckConstraintDefinition{}})
-    ddl.TableSpec.AddConstraint(&ConstraintDefinition{Name: string($6), Details: &CheckConstraintDefinition{}})
-    $$ = ddl
-  }
-| RENAME CONSTRAINT ID TO ID
-  {
-    ddl := &DDL{Action: AlterStr, ConstraintAction: RenameStr, TableSpec: &TableSpec{}}
-    ddl.TableSpec.AddConstraint(&ConstraintDefinition{Name: string($3)})
-    ddl.TableSpec.AddConstraint(&ConstraintDefinition{Name: string($5)})
-    $$ = ddl
-  }
-| AUTO_INCREMENT equal_opt expression
-  {
-    $$ = &DDL{Action: AlterStr, AutoIncSpec: &AutoIncSpec{Value: $3}}
-  }
-| ALTER column_opt sql_id SET DEFAULT value_expression
-  {
-    $$ = &DDL{Action: AlterStr, DefaultSpec: &DefaultSpec{Action: SetStr, Column: $3, Value: $6}}
-  }
-| ALTER column_opt sql_id DROP DEFAULT
-  {
-    $$ = &DDL{Action: AlterStr, DefaultSpec: &DefaultSpec{Action: DropStr, Column: $3}}
-  }
-| DROP PRIMARY KEY
-  {
-    $$ = &DDL{Action: AlterStr, IndexSpec: &IndexSpec{Action: DropStr, Type: PrimaryStr}}
+    $$ = &DDL{
+    	Action: AlterStr,
+    	IndexSpec: &IndexSpec{
+    		Action: CreateStr,
+    		ToName: NewColIdent(idxName),
+    		Type: $3,
+    		Using: $6,
+    		Columns: $8,
+    		Options: $10,
+	},
+    }
   }
 // A name may be specified for a primary key, but it is ignored since the primary
 // key is always named 'PRIMARY'
 | ADD pk_name_opt PRIMARY KEY name_opt '(' index_column_list ')' index_option_list_opt
   {
-    ddl := &DDL{Action: AlterStr, IndexSpec: &IndexSpec{Action: CreateStr}}
-    ddl.IndexSpec = &IndexSpec{Action: CreateStr, Using: NewColIdent(""), ToName: NewColIdent($2), Type: PrimaryStr, Columns: $7, Options: $9}
+    ddl := &DDL{
+    	Action: AlterStr,
+    	IndexSpec: &IndexSpec{
+    		Action: CreateStr,
+	},
+    }
+    ddl.IndexSpec = &IndexSpec{
+    	Action: CreateStr,
+	Using: NewColIdent(""),
+	ToName: NewColIdent($2),
+	Type: PrimaryStr,
+	Columns: $7,
+	Options: $9,
+    }
     $$ = ddl
   }
-| DISABLE KEYS
+| ADD foreign_key_definition
   {
-    $$ = &DDL{Action: AlterStr, IndexSpec: &IndexSpec{Action: string($1)}}
+    ddl := &DDL{
+    	Action: AlterStr,
+    	ConstraintAction: AddStr,
+    	TableSpec: &TableSpec{},
+    }
+    ddl.TableSpec.AddConstraint($2)
+    $$ = ddl
   }
-| ENABLE KEYS
+| ADD check_constraint_definition
   {
-    $$ = &DDL{Action: AlterStr, IndexSpec: &IndexSpec{Action: string($1)}}
+    ddl := &DDL{
+	Action: AlterStr,
+	ConstraintAction: AddStr,
+	TableSpec: &TableSpec{},
+    }
+    ddl.TableSpec.AddConstraint($2)
+    $$ = ddl
+  }
+| DROP CONSTRAINT id_or_non_reserved
+  {
+    $$ = &DDL{
+    	Action: AlterStr,
+	ConstraintAction: DropStr,
+	TableSpec: &TableSpec{
+		Constraints: []*ConstraintDefinition{
+	    		&ConstraintDefinition{
+	    			Name: string($3),
+			},
+		},
+	},
+    }
+  }
+| DROP CHECK id_or_non_reserved
+  {
+    $$ = &DDL{
+    	Action: AlterStr,
+    	ConstraintAction: DropStr,
+    	TableSpec: &TableSpec{
+    		Constraints: []*ConstraintDefinition{
+    			&ConstraintDefinition{
+    				Name: string($3),
+    				Details: &CheckConstraintDefinition{},
+			},
+		},
+	},
+    }
+  }
+| ALTER CONSTRAINT id_or_non_reserved ENFORCED
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| ALTER CHECK id_or_non_reserved ENFORCED
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| ALTER CONSTRAINT id_or_non_reserved NOT_ENFORCED
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| ALTER CHECK id_or_non_reserved NOT_ENFORCED
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| ALGORITHM equal_opt DEFAULT
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| ALGORITHM equal_opt INSTANT
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| ALGORITHM equal_opt INPLACE
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| ALGORITHM equal_opt COPY
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| ALTER column_opt sql_id SET DEFAULT value_expression
+  {
+    $$ = &DDL{
+    	Action: AlterStr,
+	DefaultSpec: &DefaultSpec{
+		Action: SetStr,
+		Column: $3,
+		Value: $6,
+	},
+    }
+  }
+| ALTER column_opt sql_id DROP DEFAULT
+  {
+    $$ = &DDL{
+    	Action: AlterStr,
+    	DefaultSpec: &DefaultSpec{
+    		Action: DropStr,
+    		Column: $3,
+	},
+    }
+  }
+| ALTER INDEX id_or_non_reserved VISIBLE
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| ALTER INDEX id_or_non_reserved INVISIBLE
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| CHANGE column_opt ID column_definition column_order_opt
+  {
+    ddl := &DDL{
+    	Action: AlterStr,
+    	ColumnAction: ChangeStr,
+    	TableSpec: &TableSpec{},
+    	Column: NewColIdent(string($3)),
+    	ColumnOrder: $5,
+    }
+    ddl.TableSpec.AddColumn($4)
+    $$ = ddl
   }
 | default_keyword_opt CHARACTER SET equal_opt charset
   {
-    $$ = &DDL{Action: AlterStr, AlterCollationSpec: &AlterCollationSpec{CharacterSet: $5, Collation: ""}}
+    $$ = &DDL{
+    	Action: AlterStr,
+    	AlterCollationSpec: &AlterCollationSpec{
+    		CharacterSet: $5,
+    		Collation: "",
+	},
+    }
   }
 | default_keyword_opt CHARACTER SET equal_opt charset COLLATE equal_opt charset
   {
-    $$ = &DDL{Action: AlterStr, AlterCollationSpec: &AlterCollationSpec{CharacterSet: $5, Collation: $8}}
+    $$ = &DDL{
+    	Action: AlterStr,
+    	AlterCollationSpec: &AlterCollationSpec{
+    		CharacterSet: $5,
+    		Collation: $8,
+	},
+    }
   }
 | default_keyword_opt COLLATE equal_opt charset
   {
-    $$ = &DDL{Action: AlterStr, AlterCollationSpec: &AlterCollationSpec{CharacterSet: "", Collation: $4}}
+    $$ = &DDL{
+    	Action: AlterStr,
+    	AlterCollationSpec: &AlterCollationSpec{
+    		CharacterSet: "",
+    		Collation: $4,
+	},
+    }
   }
-| SECONDARY_ENGINE equal_opt ID
+| CONVERT TO CHARACTER SET charset
+  {
+    $$ = &DDL{
+    	Action: AlterStr,
+    	AlterCollationSpec: &AlterCollationSpec{
+    		CharacterSet: $5,
+    		Collation: "",
+	},
+    }
+  }
+| CONVERT TO CHARACTER SET charset COLLATE charset
+  {
+    $$ = &DDL{
+    	Action: AlterStr,
+    	AlterCollationSpec: &AlterCollationSpec{
+    		CharacterSet: $5,
+    		Collation: $7,
+	},
+    }
+  }
+| DISABLE KEYS
+  {
+    $$ = &DDL{
+    	Action: AlterStr,
+    	IndexSpec: &IndexSpec{
+    		Action: string($1),
+	},
+    }
+  }
+| ENABLE KEYS
+  {
+    $$ = &DDL{
+    	Action: AlterStr,
+    	IndexSpec: &IndexSpec{
+    		Action: string($1),
+	},
+    }
+  }
+| DISCARD TABLESPACE
   {
     $$ = &DDL{Action: AlterStr}
   }
-| SECONDARY_ENGINE equal_opt STRING
+| IMPORT TABLESPACE
   {
     $$ = &DDL{Action: AlterStr}
   }
- | SECONDARY_ENGINE equal_opt NULL
-   {
-     $$ = &DDL{Action: AlterStr}
-   }
-| SECONDARY_ENGINE_ATTRIBUTE equal_opt STRING
+| DROP column_opt id_or_non_reserved
+  {
+    $$ = &DDL{
+    	Action: AlterStr,
+    	ColumnAction: DropStr,
+    	Column: NewColIdent(string($3)),
+    }
+  }
+| DROP index_or_key sql_id
+  {
+    $$ = &DDL{
+    	Action: AlterStr,
+    	IndexSpec: &IndexSpec{
+    		Action: DropStr,
+    		ToName: $3,
+	},
+    }
+  }
+| DROP PRIMARY KEY
+  {
+    $$ = &DDL{
+    	Action: AlterStr,
+	IndexSpec: &IndexSpec{
+		Action: DropStr,
+		Type: PrimaryStr,
+	},
+    }
+  }
+| DROP FOREIGN KEY id_or_non_reserved
+  {
+    ddl := &DDL{
+    	Action: AlterStr,
+	ConstraintAction: DropStr,
+	TableSpec: &TableSpec{},
+    }
+    ddl.TableSpec.AddConstraint(&ConstraintDefinition{
+    	Name: string($4),
+    	Details: &ForeignKeyDefinition{},
+    })
+    $$ = ddl
+  }
+| FORCE
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| LOCK equal_opt DEFAULT
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| LOCK equal_opt NONE
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| LOCK equal_opt SHARED
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| LOCK equal_opt EXCLUSIVE
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| MODIFY column_opt column_definition column_order_opt
+  {
+    ddl := &DDL{
+    	Action: AlterStr,
+    	ColumnAction: ModifyStr,
+    	TableSpec: &TableSpec{},
+    	ColumnOrder: $4,
+    }
+    ddl.TableSpec.AddColumn($3)
+    ddl.Column = $3.Name
+    $$ = ddl
+  }
+// | ORDER BY col_name [, col_name] ...
+| RENAME COLUMN id_or_non_reserved to_or_as id_or_non_reserved
+  {
+    $$ = &DDL{
+    	Action: AlterStr,
+    	ColumnAction: RenameStr,
+    	Column: NewColIdent(string($3)),
+    	ToColumn: NewColIdent(string($5)),
+    }
+  }
+| RENAME index_or_key sql_id TO sql_id
+  {
+    $$ = &DDL{
+    	Action: AlterStr,
+    	IndexSpec: &IndexSpec{
+    		Action: RenameStr,
+    		FromName: $3,
+    		ToName: $5,
+	},
+    }
+  }
+| RENAME to_or_as_opt table_name
+  {
+    // Change this to a rename statement
+    $$ = &DDL{
+    	Action: RenameStr,
+    	ToTables: TableNames{$3},
+    }
+  }
+| RENAME CONSTRAINT FOREIGN KEY id_or_non_reserved TO id_or_non_reserved
+  {
+    ddl := &DDL{
+    	Action: AlterStr,
+    	ConstraintAction: RenameStr,
+    	TableSpec: &TableSpec{},
+    }
+    ddl.TableSpec.AddConstraint(&ConstraintDefinition{
+    	Name: string($5),
+    	Details: &ForeignKeyDefinition{},
+    })
+    ddl.TableSpec.AddConstraint(&ConstraintDefinition{
+    	Name: string($7),
+    	Details: &ForeignKeyDefinition{},
+    })
+    $$ = ddl
+  }
+| RENAME CONSTRAINT CHECK id_or_non_reserved TO id_or_non_reserved
+  {
+    ddl := &DDL{
+    	Action: AlterStr,
+    	ConstraintAction: RenameStr,
+    	TableSpec: &TableSpec{},
+    }
+    ddl.TableSpec.AddConstraint(&ConstraintDefinition{
+    	Name: string($4),
+    	Details: &CheckConstraintDefinition{},
+    })
+    ddl.TableSpec.AddConstraint(&ConstraintDefinition{
+ 	Name: string($6),
+ 	Details: &CheckConstraintDefinition{},
+    })
+    $$ = ddl
+  }
+| RENAME CONSTRAINT id_or_non_reserved TO id_or_non_reserved
+  {
+    ddl := &DDL{
+    	Action: AlterStr,
+	ConstraintAction: RenameStr,
+	TableSpec: &TableSpec{},
+    }
+    ddl.TableSpec.AddConstraint(&ConstraintDefinition{
+    	Name: string($3),
+    })
+    ddl.TableSpec.AddConstraint(&ConstraintDefinition{
+    	Name: string($5),
+    })
+    $$ = ddl
+  }
+| with_or_without VALIDATION
+  {
+    $$ = &DDL{
+    	Action: AlterStr,
+    }
+  }
+| alter_table_options
+  {
+    $$ = $1
+  }
+
+// TODO: these are the same as table_option_list, but we need to have the return type be different
+alter_table_options:
+  AUTOEXTEND_SIZE equal_opt table_opt_value
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| AUTO_INCREMENT equal_opt expression
+  {
+    $$ = &DDL{Action: AlterStr, AutoIncSpec: &AutoIncSpec{Value: $3}}
+  }
+| AVG_ROW_LENGTH equal_opt table_opt_value
   {
     $$ = &DDL{Action: AlterStr}
   }
@@ -4860,22 +5114,140 @@ alter_table_statement_part:
   {
     $$ = &DDL{Action: AlterStr}
   }
+| COMMENT_KEYWORD equal_opt STRING
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| COMPRESSION equal_opt STRING
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| CONNECTION equal_opt STRING
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| DATA DIRECTORY equal_opt STRING
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| INDEX DIRECTORY equal_opt STRING
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| DELAY_KEY_WRITE equal_opt coericble_to_integral
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| ENCRYPTION equal_opt STRING
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| ENGINE equal_opt any_identifier
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| ENGINE_ATTRIBUTE equal_opt STRING
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| INSERT_METHOD equal_opt no_first_last
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| KEY_BLOCK_SIZE equal_opt table_opt_value
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| MAX_ROWS equal_opt table_opt_value
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| MIN_ROWS equal_opt table_opt_value
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| PACK_KEYS equal_opt coericble_to_integral
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| PASSWORD equal_opt STRING
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| ROW_FORMAT equal_opt row_fmt_opt
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| SECONDARY_ENGINE equal_opt ID
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| SECONDARY_ENGINE equal_opt NULL
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| SECONDARY_ENGINE equal_opt STRING
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| SECONDARY_ENGINE_ATTRIBUTE equal_opt STRING
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| STATS_AUTO_RECALC equal_opt DEFAULT
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| STATS_AUTO_RECALC equal_opt coericble_to_integral
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| STATS_PERSISTENT equal_opt DEFAULT
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| STATS_PERSISTENT equal_opt coericble_to_integral
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| STATS_SAMPLE_PAGES equal_opt table_opt_value
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| TABLESPACE table_opt_value
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| TABLESPACE any_identifier
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| TABLESPACE any_identifier STORAGE DISK
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| TABLESPACE any_identifier STORAGE MEMORY
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
 | UNION equal_opt openb any_identifier_list closeb
   {
     $$ = &DDL{Action: AlterStr}
   }
-| INSERT_METHOD equal_opt NO
+
+with_or_without:
+  WITH
   {
-    $$ = &DDL{Action: AlterStr}
+    $$ = true
   }
-| INSERT_METHOD equal_opt FIRST
+| WITHOUT
   {
-    $$ = &DDL{Action: AlterStr}
+    $$ = false
   }
-| INSERT_METHOD equal_opt LAST
-  {
-    $$ = &DDL{Action: AlterStr}
-  }
+
+id_or_non_reserved:
+  ID
+| all_non_reserved
 
 alter_user_statement:
   ALTER USER exists_opt account_name authentication
@@ -4905,10 +5277,118 @@ column_opt:
 | COLUMN
   { }
 
-partition_operation:
-  REORGANIZE PARTITION sql_id INTO openb partition_definitions closeb
+partition_operation_list_opt:
   {
-    $$ = &PartitionSpec{Action: ReorganizeStr, Name: $3, Definitions: $6}
+    $$ = nil
+  }
+| partition_operation_list
+  {
+    $$ = $1
+  }
+
+partition_operation_list:
+  partition_operation
+  {
+    $$ = []*PartitionSpec{$1}
+  }
+| partition_operation_list partition_operation
+  {
+    $$ = append($1, $2)
+  }
+
+partition_operation:
+  ADD PARTITION openb partition_definitions closeb
+  {
+    $$ = &PartitionSpec{Action: AddStr, Definitions: $4}
+  }
+| DROP PARTITION partition_list
+  {
+    $$ = &PartitionSpec{Action: DropStr, Names: $3}
+  }
+| DISCARD PARTITION partition_list TABLESPACE
+  {
+    $$ = &PartitionSpec{Action: DiscardStr, Names: $3}
+  }
+| DISCARD PARTITION ALL TABLESPACE
+  {
+    $$ = &PartitionSpec{Action: DiscardStr, IsAll: true}
+  }
+| IMPORT PARTITION partition_list TABLESPACE
+  {
+    $$ = &PartitionSpec{Action: ImportStr, Names: $3}
+  }
+| IMPORT PARTITION ALL TABLESPACE
+  {
+    $$ = &PartitionSpec{Action: ImportStr, IsAll: true}
+  }
+| TRUNCATE PARTITION partition_list TABLESPACE
+  {
+    $$ = &PartitionSpec{Action: TruncateStr, Names: $3}
+  }
+| TRUNCATE PARTITION ALL TABLESPACE
+  {
+    $$ = &PartitionSpec{Action: TruncateStr, IsAll: true}
+  }
+| COALESCE PARTITION INTEGRAL
+  {
+    $$ = &PartitionSpec{Action: CoalesceStr, Number: NewIntVal($3)}
+  }
+| REORGANIZE PARTITION partition_list INTO openb partition_definitions closeb
+  {
+    $$ = &PartitionSpec{Action: ReorganizeStr, Names: $3, Definitions: $6}
+  }
+| EXCHANGE PARTITION sql_id WITH TABLE table_name
+  {
+    $$ = &PartitionSpec{Action: ExchangeStr, Names: Partitions{$3}, TableName: $6}
+  }
+| EXCHANGE PARTITION sql_id WITH TABLE table_name with_or_without VALIDATION
+  {
+    $$ = &PartitionSpec{Action: ExchangeStr, Names: Partitions{$3}, TableName: $6, WithValidation: $7}
+  }
+| ANALYZE PARTITION partition_list
+  {
+    $$ = &PartitionSpec{Action: AnalyzeStr, Names: $3}
+  }
+| ANALYZE PARTITION ALL
+  {
+    $$ = &PartitionSpec{Action: AnalyzeStr, IsAll: true}
+  }
+// The parser confuses CHECK with column_definitions
+//| CHECK PARTITION partition_list
+//  {
+//    $$ = &PartitionSpec{Action: CheckStr, Names: $3}
+//  }
+//| CHECK PARTITION ALL
+//  {
+//    $$ = &PartitionSpec{Action: CheckStr, IsAll: true}
+//  }
+| OPTIMIZE PARTITION partition_list
+  {
+    $$ = &PartitionSpec{Action: OptimizeStr, Names: $3}
+  }
+| OPTIMIZE PARTITION ALL
+  {
+    $$ = &PartitionSpec{Action: OptimizeStr, IsAll: true}
+  }
+| REBUILD PARTITION partition_list
+  {
+    $$ = &PartitionSpec{Action: RebuildStr, Names: $3}
+  }
+| REBUILD PARTITION ALL
+  {
+    $$ = &PartitionSpec{Action: RebuildStr, IsAll: true}
+  }
+| REPAIR PARTITION partition_list
+  {
+    $$ = &PartitionSpec{Action: RepairStr, Names: $3}
+  }
+| REPAIR PARTITION ALL
+  {
+    $$ = &PartitionSpec{Action: RepairStr, IsAll: true}
+  }
+| REMOVE PARTITIONING
+  {
+    $$ = &PartitionSpec{Action: RemoveStr}
   }
 
 partition_definitions_opt:
@@ -6322,11 +6802,6 @@ on_expression_opt:
   { $$ = JoinCondition{} }
 | ON expression
   { $$ = JoinCondition{On: $2} }
-
-as_opt:
-  { $$ = struct{}{} }
-| AS
-  { $$ = struct{}{} }
 
 table_alias:
   table_id
@@ -8228,15 +8703,18 @@ ignore_number_opt:
 | IGNORE INTEGRAL ROWS
   { $$ = NewIntVal($2) }
 
+to_or_as_opt:
+  { $$ = struct{}{} }
+| to_or_as
+  { $$ = struct{}{} }
+
 to_or_as:
   TO
   { $$ = struct{}{} }
 | AS
   { $$ = struct{}{} }
 
-to_opt:
-  { $$ = struct{}{} }
-| TO
+as_opt:
   { $$ = struct{}{} }
 | AS
   { $$ = struct{}{} }
@@ -9039,6 +9517,7 @@ non_reserved_keyword:
 | ARRAY
 | AT
 | AUTHENTICATION
+| AUTOEXTEND_SIZE
 | AUTO_INCREMENT
 | AVG_ROW_LENGTH
 | BEGIN
@@ -9058,6 +9537,7 @@ non_reserved_keyword:
 | CLIENT
 | CLONE
 | CLOSE
+| COALESCE
 | COLLATION
 | COLUMNS
 | COLUMN_NAME
@@ -9086,6 +9566,7 @@ non_reserved_keyword:
 | DESCRIPTION
 | DIRECTORY
 | DISABLE
+| DISCARD
 | DISK
 | DO
 | DUMPFILE
@@ -9104,6 +9585,7 @@ non_reserved_keyword:
 | ERRORS
 | EVENTS
 | EVERY
+| EXCHANGE
 | EXCLUDE
 | EXPANSION
 | EXPIRE
@@ -9128,6 +9610,7 @@ non_reserved_keyword:
 | HISTORY
 | HOSTS
 | HOUR
+| IMPORT
 | INACTIVE
 | INDEXES
 | INITIAL
@@ -9159,6 +9642,7 @@ non_reserved_keyword:
 | MAX_ROWS
 | MAX_UPDATES_PER_HOUR
 | MAX_USER_CONNECTIONS
+| MEMORY
 | MERGE
 | MESSAGE_TEXT
 | MICROSECOND
@@ -9192,6 +9676,7 @@ non_reserved_keyword:
 | ORGANIZATION
 | OTHERS
 | PACK_KEYS
+| PARTITIONING
 | PARTITIONS
 | PATH
 | PERSIST
@@ -9210,9 +9695,11 @@ non_reserved_keyword:
 | QUARTER
 | QUERY
 | RANDOM
+| REBUILD
 | REDUNDANT
 | REFERENCE
 | RELAY
+| REMOVE
 | REORGANIZE
 | REPAIR
 | REPEATABLE
@@ -9293,6 +9780,7 @@ non_reserved_keyword:
 | UNUSED
 | USER
 | USER_RESOURCES
+| VALIDATION
 | VALUE
 | VARIABLES
 | VERSION
@@ -9301,6 +9789,7 @@ non_reserved_keyword:
 | UNDEFINED
 | WARNINGS
 | WEEK
+| WITHOUT
 | WORK
 | X509
 | YEAR
