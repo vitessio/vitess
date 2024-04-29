@@ -59,8 +59,7 @@ if [[ "$VTEVALENGINETEST" == "1" ]]; then
 fi
 
 if [[ "$VTEVALENGINETEST" == "0" ]]; then
-  # shellcheck disable=SC2086
-  packages_with_tests=$(echo $packages_with_tests | grep -v "evalengine")
+  packages_with_tests=$(echo "$packages_with_tests" | grep -v "evalengine")
 fi
 
 # Flaky tests have the suffix "_flaky_test.go".
