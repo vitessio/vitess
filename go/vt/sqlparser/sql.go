@@ -13106,7 +13106,7 @@ yydefault:
 			if yyDollar[3].byt != 0 {
 				ne = true
 			}
-			yyVAL.statement = &DBDDL{Action: CreateStr, DBName: string(yyDollar[4].bytes), IfNotExists: ne, CharsetCollate: yyDollar[5].charsetCollates}
+			yyVAL.statement = &DBDDL{Action: CreateStr, SchemaOrDatabase: "database", DBName: string(yyDollar[4].bytes), IfNotExists: ne, CharsetCollate: yyDollar[5].charsetCollates}
 		}
 	case 120:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -13116,7 +13116,7 @@ yydefault:
 			if yyDollar[3].byt != 0 {
 				ne = true
 			}
-			yyVAL.statement = &DBDDL{Action: CreateStr, DBName: string(yyDollar[4].bytes), IfNotExists: ne, CharsetCollate: yyDollar[5].charsetCollates}
+			yyVAL.statement = &DBDDL{Action: CreateStr, SchemaOrDatabase: "schema", DBName: string(yyDollar[4].bytes), IfNotExists: ne, CharsetCollate: yyDollar[5].charsetCollates}
 		}
 	case 121:
 		yyDollar = yyS[yypt-16 : yypt+1]
@@ -17520,13 +17520,13 @@ yydefault:
 		yyDollar = yyS[yypt-4 : yypt+1]
 //line sql.y:4625
 		{
-			yyVAL.statement = &DBDDL{Action: AlterStr, DBName: string(yyDollar[3].bytes), CharsetCollate: yyDollar[4].charsetCollates}
+			yyVAL.statement = &DBDDL{Action: AlterStr, SchemaOrDatabase: "database", DBName: string(yyDollar[3].bytes), CharsetCollate: yyDollar[4].charsetCollates}
 		}
 	case 898:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:4629
 		{
-			yyVAL.statement = &DBDDL{Action: AlterStr, CharsetCollate: yyDollar[3].charsetCollates}
+			yyVAL.statement = &DBDDL{Action: AlterStr, SchemaOrDatabase: "database", CharsetCollate: yyDollar[3].charsetCollates}
 		}
 	case 899:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -18648,7 +18648,7 @@ yydefault:
 			if yyDollar[3].byt != 0 {
 				exists = true
 			}
-			yyVAL.statement = &DBDDL{Action: DropStr, DBName: string(yyDollar[4].bytes), IfExists: exists}
+			yyVAL.statement = &DBDDL{Action: DropStr, SchemaOrDatabase: "database", DBName: string(yyDollar[4].bytes), IfExists: exists}
 		}
 	case 1044:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -18658,7 +18658,7 @@ yydefault:
 			if yyDollar[3].byt != 0 {
 				exists = true
 			}
-			yyVAL.statement = &DBDDL{Action: DropStr, DBName: string(yyDollar[4].bytes), IfExists: exists}
+			yyVAL.statement = &DBDDL{Action: DropStr, SchemaOrDatabase: "schema", DBName: string(yyDollar[4].bytes), IfExists: exists}
 		}
 	case 1045:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -19607,7 +19607,7 @@ yydefault:
 		yyDollar = yyS[yypt-5 : yypt+1]
 //line sql.y:6268
 		{
-			yyVAL.selectExpr = &StarExpr{TableName: TableName{Qualifier: yyDollar[1].tableIdent, Name: yyDollar[3].tableIdent}}
+			yyVAL.selectExpr = &StarExpr{TableName: TableName{DbQualifier: yyDollar[1].tableIdent, Name: yyDollar[3].tableIdent}}
 		}
 	case 1202:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -19631,7 +19631,7 @@ yydefault:
 		yyDollar = yyS[yypt-5 : yypt+1]
 //line sql.y:6286
 		{
-			yyVAL.selectExpr = &StarExpr{TableName: TableName{Qualifier: yyDollar[1].tableIdent, Name: yyDollar[3].tableIdent}}
+			yyVAL.selectExpr = &StarExpr{TableName: TableName{DbQualifier: yyDollar[1].tableIdent, Name: yyDollar[3].tableIdent}}
 		}
 	case 1206:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -20492,7 +20492,7 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:7005
 		{
-			yyVAL.tableName = TableName{Qualifier: yyDollar[1].tableIdent, Name: yyDollar[3].tableIdent}
+			yyVAL.tableName = TableName{DbQualifier: yyDollar[1].tableIdent, Name: yyDollar[3].tableIdent}
 		}
 	case 1365:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -22090,7 +22090,7 @@ yydefault:
 		yyDollar = yyS[yypt-5 : yypt+1]
 //line sql.y:8185
 		{
-			yyVAL.colName = &ColName{Qualifier: TableName{Qualifier: yyDollar[1].tableIdent, Name: yyDollar[3].tableIdent}, Name: yyDollar[5].colIdent}
+			yyVAL.colName = &ColName{Qualifier: TableName{DbQualifier: yyDollar[1].tableIdent, Name: yyDollar[3].tableIdent}, Name: yyDollar[5].colIdent}
 		}
 	case 1637:
 		yyDollar = yyS[yypt-1 : yypt+1]
