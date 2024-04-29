@@ -179,17 +179,7 @@ func clusterMySQLVersions(clusterName string) mysqlVersions {
 		return allMySQLVersions
 	case clusterName == "schemadiff_vrepl":
 		return allMySQLVersions
-	case clusterName == "backup_pitr":
-		return allMySQLVersions
-	case clusterName == "backup_pitr_xtrabackup":
-		return allMySQLVersions
 	case clusterName == "tabletmanager_tablegc":
-		return allMySQLVersions
-	case clusterName == "vtorc":
-		return allMySQLVersions
-	case clusterName == "xb_backup":
-		return allMySQLVersions
-	case clusterName == "xb_recovery":
 		return allMySQLVersions
 	default:
 		return defaultMySQLVersions
