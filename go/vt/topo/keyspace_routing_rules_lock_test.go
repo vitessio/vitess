@@ -43,9 +43,8 @@ func TestKeyspaceRoutingRulesLock(t *testing.T) {
 
 	lock, err := topo.NewKeyspaceRoutingRulesLock(ctx, ts, "ks1")
 	require.NoError(t, err)
-	lockCtx, unlock, err := lock.Lock(ctx)
+	_, unlock, err := lock.Lock(ctx)
 	require.NoError(t, err)
-	require.NoError(t, lock.Check(lockCtx))
 
 	// re-acquiring the lock should fail
 	_, _, err = lock.Lock(ctx)

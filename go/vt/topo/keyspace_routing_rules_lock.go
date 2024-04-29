@@ -33,7 +33,10 @@ type KeyspaceRoutingRulesLock struct {
 }
 
 func createTopoDirIfNeeded(ctx context.Context, ts *Server) error {
-	topoPath := path.Join(KeyspaceRoutingRulesPath, KeyspaceRoutingRulesLockDir)
+	// We need the directory to exist since etcd (for example) will create a file there as part of its locking
+	// mechanism. So we create it if it doesn't exist. The file created below "lock" is just a dummy file.
+	// If no dummy file is specified, the directory doesn't get created (etcd behavior).
+	topoPath := path.Join(KeyspaceRoutingRulesPath, "lock")
 	_, _, err := ts.GetGlobalCell().Get(ctx, topoPath)
 	if IsErrType(err, NoNode) {
 		log.Infof("Creating keyspace routing rules file %s", topoPath)

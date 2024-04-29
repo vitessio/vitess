@@ -84,15 +84,14 @@ const (
 
 // Path for all object types.
 const (
-	CellsPath                   = "cells"
-	CellsAliasesPath            = "cells_aliases"
-	KeyspacesPath               = "keyspaces"
-	ShardsPath                  = "shards"
-	TabletsPath                 = "tablets"
-	MetadataPath                = "metadata"
-	ExternalClusterVitess       = "vitess"
-	KeyspaceRoutingRulesPath    = "keyspaces_routing_rules"
-	KeyspaceRoutingRulesLockDir = "lock"
+	CellsPath                = "cells"
+	CellsAliasesPath         = "cells_aliases"
+	KeyspacesPath            = "keyspaces"
+	ShardsPath               = "shards"
+	TabletsPath              = "tablets"
+	MetadataPath             = "metadata"
+	ExternalClusterVitess    = "vitess"
+	KeyspaceRoutingRulesPath = "keyspaces_routing_rules"
 )
 
 // Factory is a factory interface to create Conn objects.

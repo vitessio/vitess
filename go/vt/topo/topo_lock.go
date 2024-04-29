@@ -32,7 +32,6 @@ import (
 // returns a function that can be used to unlock the lock.
 type ITopoLock interface {
 	Lock(ctx context.Context) (context.Context, func(*error), error)
-	Check(ctx context.Context) error
 }
 
 type TopoLock struct {
@@ -149,22 +148,4 @@ func (tl TopoLock) Lock(ctx context.Context) (context.Context, func(*error), err
 		}
 		delete(i.info, tl.Path)
 	}, nil
-}
-
-// Check checks that the lock is held in the context: it just validates that the lockInfo is present in the context.
-func (tl TopoLock) Check(ctx context.Context) error {
-	// extract the locksInfo pointer
-	i, ok := ctx.Value(locksKey).(*locksInfo)
-	if !ok {
-		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "%s is not locked (no locksInfo)", tl.String())
-	}
-	i.mu.Lock()
-	defer i.mu.Unlock()
-
-	// find the individual entry
-	_, ok = i.info[tl.Path]
-	if !ok {
-		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "%s is not locked (no lockInfo in map)", tl.String())
-	}
-	return nil
 }
