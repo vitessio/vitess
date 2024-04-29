@@ -45510,6 +45510,9 @@ export namespace vtctldata {
 
         /** WorkflowOptions strip_sharded_auto_increment */
         strip_sharded_auto_increment?: (boolean|null);
+
+        /** WorkflowOptions shards */
+        shards?: (string[]|null);
     }
 
     /** Represents a WorkflowOptions. */
@@ -45526,6 +45529,9 @@ export namespace vtctldata {
 
         /** WorkflowOptions strip_sharded_auto_increment. */
         public strip_sharded_auto_increment: boolean;
+
+        /** WorkflowOptions shards. */
+        public shards: string[];
 
         /**
          * Creates a new WorkflowOptions instance using the specified properties.
