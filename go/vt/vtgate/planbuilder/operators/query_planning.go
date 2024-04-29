@@ -404,7 +404,7 @@ func pushOrderingUnderAggr(ctx *plancontext.PlanningContext, order *Ordering, ag
 func canPushLeft(ctx *plancontext.PlanningContext, aj *ApplyJoin, order []OrderBy) bool {
 	lhs := TableID(aj.LHS)
 	for _, order := range order {
-		deps := ctx.SemTable.DirectDeps(order.Inner.Expr)
+		deps := ctx.SemTable.RecursiveDeps(order.Inner.Expr)
 		if !deps.IsSolvedBy(lhs) {
 			return false
 		}

@@ -526,7 +526,7 @@
                       {
                         "OperatorType": "Join",
                         "Variant": "LeftJoin",
-                        "JoinColumnIndexes": "R:0,R:0",
+                        "JoinColumnIndexes": "R:0",
                         "TableName": "tbl10_tbl3",
                         "Inputs": [
                           {
@@ -1421,7 +1421,7 @@
                       {
                         "OperatorType": "Join",
                         "Variant": "LeftJoin",
-                        "JoinColumnIndexes": "R:0,R:0",
+                        "JoinColumnIndexes": "R:0",
                         "JoinVars": {
                           "tbl3_colx": 0
                         },
@@ -1504,7 +1504,7 @@
                       {
                         "OperatorType": "Join",
                         "Variant": "LeftJoin",
-                        "JoinColumnIndexes": "R:0,R:0",
+                        "JoinColumnIndexes": "R:0",
                         "TableName": "tbl3_tbl1",
                         "Inputs": [
                           {
