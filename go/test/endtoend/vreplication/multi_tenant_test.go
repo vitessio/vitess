@@ -37,11 +37,14 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/protobuf/encoding/protojson"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	"vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 type tenantMigrationStatus int
@@ -95,6 +98,30 @@ const (
   },
   "tables": {
     "t1": {}
+  }
+}
+`
+	mtShardedVSchema = `
+{
+  "sharded": true,
+  "multi_tenant_spec": {
+      "tenant_id_column_name": "tenant_id",
+      "tenant_id_column_type": "INT64"
+  },
+ "vindexes": {
+    "reverse_bits": {
+      "type": "reverse_bits"
+    }
+  },
+  "tables": {
+     "t1": { 
+       "column_vindexes": [
+         {
+           "column": "tenant_id",
+           "name": "reverse_bits"
+         }
+     ]
+   }
   }
 }
 `
@@ -222,6 +249,91 @@ func confirmOnlyWritesSwitched(t *testing.T) {
 		},
 	}
 	validateKeyspaceRoutingRules(t, vc, rules)
+}
+
+// TestMultiTenantSimpleSharded tests a single tenant migration to a sharded target. The aim is to test
+// the specification of the target shards in all the MoveTables subcommands, including creating only one stream
+// for a tenant on the shard to which this tenant id will be routed, using the specified Vindex.
+func TestMultiTenantSimpleSharded(t *testing.T) {
+	setSidecarDBName("_vt")
+	// Don't create RDONLY tablets to reduce number of tablets created to reduce resource requirements for the test.
+	origDefaultRdonly := defaultRdonly
+	defer func() {
+		defaultRdonly = origDefaultRdonly
+	}()
+	defaultRdonly = 0
+	vc = setupMinimalCluster(t)
+	defer vc.TearDown()
+
+	targetKeyspace := "mt"
+	_, err := vc.AddKeyspace(t, []*Cell{vc.Cells["zone1"]}, targetKeyspace, "-40,40-80,80-a0,a0-", mtShardedVSchema, mtSchema, 1, 0, 200, nil)
+	require.NoError(t, err)
+
+	tenantId := int64(1)
+	tenantShard := "80-a0" // matches the vindex
+	sourceKeyspace := getSourceKeyspace(tenantId)
+	_, err = vc.AddKeyspace(t, []*Cell{vc.Cells["zone1"]}, sourceKeyspace, "0", stVSchema, stSchema, 1, 0, getInitialTabletIdForTenant(tenantId), nil)
+	require.NoError(t, err)
+
+	vtgateConn, closeConn := getVTGateConn()
+	defer closeConn()
+	numRows := 10
+	lastIndex := int64(0)
+	insertRows := func(lastIndex int64, keyspace string) int64 {
+		for i := 1; i <= numRows; i++ {
+			execQueryWithRetry(t, vtgateConn,
+				fmt.Sprintf("insert into %s.t1(id, tenant_id) values(%d, %d)", keyspace, int64(i)+lastIndex, tenantId), queryTimeout)
+		}
+		return int64(numRows) + lastIndex
+	}
+	lastIndex = insertRows(lastIndex, sourceKeyspace)
+
+	mt := newVtctldMoveTables(&moveTablesWorkflow{
+		workflowInfo: &workflowInfo{
+			vc:             vc,
+			workflowName:   fmt.Sprintf("wf%d", tenantId),
+			targetKeyspace: targetKeyspace,
+		},
+		sourceKeyspace: sourceKeyspace,
+		createFlags: []string{
+			"--tenant-id", strconv.FormatInt(tenantId, 10),
+			"--shards", tenantShard, // create the workflow for tenantid 1 in shard 80-a0: matches the vindex
+		},
+		switchFlags: []string{
+			"--shards", tenantShard,
+		},
+		completeFlags: []string{
+			"--shards", tenantShard,
+		},
+		showFlags: []string{
+			"--shards", tenantShard,
+		},
+	})
+
+	mt.Create()
+	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKeyspace, mt.workflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
+	mt.Show()
+	var workflowState vtctldata.GetWorkflowsResponse
+	err = protojson.Unmarshal([]byte(mt.lastOutput), &workflowState)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(workflowState.Workflows))
+	wf := workflowState.Workflows[0]
+	// Verifies that only one stream is created for the tenant on the shard to which this tenant id will be routed.
+	require.Equal(t, 1, len(wf.ShardStreams))
+
+	// Note: we cannot insert into the target keyspace since that is never routed to the source keyspace.
+	lastIndex = insertRows(lastIndex, sourceKeyspace)
+	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKeyspace, mt.workflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
+	mt.SwitchReadsAndWrites()
+	// Note: here we have already switched, and we can insert into the target keyspace, and it should get reverse
+	// replicated to the source keyspace. The source keyspace is routed to the target keyspace at this point.
+	lastIndex = insertRows(lastIndex, sourceKeyspace)
+	mt.Complete()
+	require.Zero(t, len(getKeyspaceRoutingRules(t, vc).Rules))
+	actualRowsInserted := getRowCount(t, vtgateConn, fmt.Sprintf("%s.%s", targetKeyspace, "t1"))
+	require.Equal(t, lastIndex, int64(actualRowsInserted))
+	require.Equal(t, lastIndex, int64(getRowCount(t, vtgateConn, fmt.Sprintf("%s.%s", targetKeyspace, "t1"))))
+	log.Infof("Migration completed, total rows in target: %d", actualRowsInserted)
 }
 
 func confirmBothReadsAndWritesSwitched(t *testing.T) {

@@ -1524,10 +1524,14 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 			return nil, err
 		}
 	}
-
+	var targetShards []string
+	for _, shard := range mz.targetShards {
+		targetShards = append(targetShards, shard.ShardName())
+	}
 	return s.WorkflowStatus(ctx, &vtctldatapb.WorkflowStatusRequest{
 		Keyspace: targetKeyspace,
 		Workflow: req.Workflow,
+		Shards:   targetShards,
 	})
 }
 
