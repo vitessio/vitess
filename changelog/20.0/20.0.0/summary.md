@@ -33,6 +33,8 @@
   - **[New Stats](#new-stats)**
     - [VTTablet Query Cache Hits and Misses](#vttablet-query-cache-hits-and-misses)
   - **[`SIGHUP` reload of gRPC client static auth creds](#sighup-reload-of-grpc-client-auth-creds)**
+  - **[VTAdmin](#vtadmin)**
+    - [Updated to node v20.12.2](#updated-node)
 
 ## <a id="major-changes"/>Major Changes
 
@@ -248,3 +250,10 @@ VTTablet exposes two new counter stats:
 ### <a id="sighup-reload-of-grpc-client-auth-creds"/>`SIGHUP` reload of gRPC client static auth creds
 
 The internal gRPC client now caches the static auth credentials and supports reloading via the `SIGHUP` signal. Previous to v20 the credentials were not cached. They were re-loaded from disk on every use.
+
+### <a id="vtadmin"/>VTAdmin
+
+#### <a id="updated-node"/>vtadmin-web updated to node v20.12.2 (LTS)
+
+Building `vtadmin-web` now requires node >= v20.12.0 (LTS). Breaking changes from v18 to v20 can be found at https://nodejs.org/en/blog/release/v20.12.0 -- with no known issues that apply to VTAdmin.
+Full details on the node v20.12.2 release can be found at https://nodejs.org/en/blog/release/v20.12.2.
