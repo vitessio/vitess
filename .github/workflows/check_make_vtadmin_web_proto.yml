@@ -59,7 +59,7 @@ jobs:
       uses: actions/setup-node@v4
       with:
         # node-version should match package.json
-        node-version: '18.16.0'
+        node-version: '20.12.2'
 
     - name: Install npm dependencies
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.proto_changes == 'true'
