@@ -2697,6 +2697,9 @@ func (s *Server) dropRelatedArtifacts(ctx context.Context, keepRoutingRules bool
 		if err := sw.deleteShardRoutingRules(ctx); err != nil {
 			return err
 		}
+		if err := sw.deleteKeyspaceRoutingRules(ctx); err != nil {
+			return err
+		}
 	}
 
 	return nil
