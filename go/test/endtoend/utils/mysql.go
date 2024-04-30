@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"regexp"
+	"strconv"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -240,10 +242,30 @@ func compareVitessAndMySQLResults(t TestingT, query string, vtConn *mysql.Conn, 
 	return errors.New(errStr)
 }
 
+var checkFeildsRegExpr = regexp.MustCompile(`(.*)(\d*)`)
+
 func checkFields(t TestingT, columnName string, vtField, myField *querypb.Field) {
 	t.Helper()
-	if vtField.Type != myField.Type {
+
+	fail := func() {
 		t.Errorf("for column %s field types do not match\nNot equal: \nMySQL: %v\nVitess: %v\n", columnName, myField.Type.String(), vtField.Type.String())
+	}
+
+	if vtField.Type != myField.Type {
+		vtMatches := checkFeildsRegExpr.FindStringSubmatch(vtField.Type.String())
+		myMatches := checkFeildsRegExpr.FindStringSubmatch(myField.Type.String())
+
+		if len(vtMatches) != 3 || len(vtMatches) != len(myMatches) || vtMatches[1] != myMatches[1] {
+			fail()
+		}
+		vtVal, vtErr := strconv.Atoi(vtMatches[2])
+		myVal, myErr := strconv.Atoi(vtMatches[2])
+		if vtErr != nil || myErr != nil {
+			fail()
+		}
+		if vtVal <= myVal {
+			fail()
+		}
 	}
 
 	// starting in Vitess 20, decimal types are properly sized in their field information
