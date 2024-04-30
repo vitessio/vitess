@@ -16,14 +16,24 @@ limitations under the License.
 
 package schemadiff
 
-import "vitess.io/vitess/go/vt/sqlparser"
+import (
+	"vitess.io/vitess/go/vt/sqlparser"
+)
 
 // AlterTableRotatesRangePartition answers `true` when the given ALTER TABLE statemnts performas any sort
 // of range partition rotation, that is applicable immediately and without moving data.
 // Such would be:
 // - Dropping any partition(s)
 // - Adding a new partition (empty, at the end of the list)
-func AlterTableRotatesRangePartition(alterTable *sqlparser.AlterTable) (bool, error) {
+func AlterTableRotatesRangePartition(createTable *sqlparser.CreateTable, alterTable *sqlparser.AlterTable) (bool, error) {
+	// Validate original table is partitioned by RANGE
+	if createTable.TableSpec.PartitionOption == nil {
+		return false, nil
+	}
+	if createTable.TableSpec.PartitionOption.Type != sqlparser.RangeType {
+		return false, nil
+	}
+
 	spec := alterTable.PartitionSpec
 	if spec == nil {
 		return false, nil

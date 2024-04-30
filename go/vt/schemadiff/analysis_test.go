@@ -30,6 +30,7 @@ import (
 // cannot apply multiple rotation commands, nor can it mix rotation commands with other types of changes.
 func TestAlterTableRotatesRangePartition(t *testing.T) {
 	tcases := []struct {
+		create string
 		alter  string
 		expect bool
 	}{
@@ -61,12 +62,20 @@ func TestAlterTableRotatesRangePartition(t *testing.T) {
 
 	for _, tcase := range tcases {
 		t.Run(tcase.alter, func(t *testing.T) {
-			stmt, err := sqlparser.NewTestParser().ParseStrictDDL(tcase.alter)
+			if tcase.create == "" {
+				tcase.create = "CREATE TABLE t (id int PRIMARY KEY) PARTITION BY RANGE (id) (PARTITION p0 VALUES LESS THAN (10))"
+			}
+			stmt, err := sqlparser.NewTestParser().ParseStrictDDL(tcase.create)
+			require.NoError(t, err)
+			createTable, ok := stmt.(*sqlparser.CreateTable)
+			require.True(t, ok)
+
+			stmt, err = sqlparser.NewTestParser().ParseStrictDDL(tcase.alter)
 			require.NoError(t, err)
 			alterTable, ok := stmt.(*sqlparser.AlterTable)
 			require.True(t, ok)
 
-			result, err := AlterTableRotatesRangePartition(alterTable)
+			result, err := AlterTableRotatesRangePartition(createTable, alterTable)
 			require.NoError(t, err)
 			assert.Equal(t, tcase.expect, result)
 		})

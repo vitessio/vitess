@@ -130,7 +130,7 @@ func (e *Executor) analyzeSpecialAlterPlan(ctx context.Context, onlineDDL *schem
 		// Adding a range partition _can_ technically run with Online DDL, but it is wasteful
 		// and pointless. The user fully expects the operation to run immediately and without
 		// any copy of data.
-		isRangeRotation, err := schemadiff.AlterTableRotatesRangePartition(alterTable)
+		isRangeRotation, err := schemadiff.AlterTableRotatesRangePartition(createTable, alterTable)
 		if err != nil {
 			return nil, err
 		}
