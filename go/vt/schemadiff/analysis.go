@@ -20,7 +20,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-// AlterTableRotatesRangePartition answers `true` when the given ALTER TABLE statemnts performas any sort
+// AlterTableRotatesRangePartition answers `true` when the given ALTER TABLE statement performs any sort
 // of range partition rotation, that is applicable immediately and without moving data.
 // Such would be:
 // - Dropping any partition(s)
