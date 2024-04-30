@@ -41299,6 +41299,9 @@ export namespace query {
 
         /** RealtimeStats view_schema_changed */
         view_schema_changed?: (string[]|null);
+
+        /** RealtimeStats udfs_changed */
+        udfs_changed?: (boolean|null);
     }
 
     /** Represents a RealtimeStats. */
@@ -41333,6 +41336,9 @@ export namespace query {
 
         /** RealtimeStats view_schema_changed. */
         public view_schema_changed: string[];
+
+        /** RealtimeStats udfs_changed. */
+        public udfs_changed: boolean;
 
         /**
          * Creates a new RealtimeStats instance using the specified properties.
@@ -41775,7 +41781,8 @@ export namespace query {
     enum SchemaTableType {
         VIEWS = 0,
         TABLES = 1,
-        ALL = 2
+        ALL = 2,
+        UDFS = 3
     }
 
     /** Properties of a GetSchemaRequest. */
@@ -41887,8 +41894,120 @@ export namespace query {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of a UDFInfo. */
+    interface IUDFInfo {
+
+        /** UDFInfo name */
+        name?: (string|null);
+
+        /** UDFInfo aggregating */
+        aggregating?: (boolean|null);
+
+        /** UDFInfo return_type */
+        return_type?: (query.Type|null);
+    }
+
+    /** Represents a UDFInfo. */
+    class UDFInfo implements IUDFInfo {
+
+        /**
+         * Constructs a new UDFInfo.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: query.IUDFInfo);
+
+        /** UDFInfo name. */
+        public name: string;
+
+        /** UDFInfo aggregating. */
+        public aggregating: boolean;
+
+        /** UDFInfo return_type. */
+        public return_type: query.Type;
+
+        /**
+         * Creates a new UDFInfo instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns UDFInfo instance
+         */
+        public static create(properties?: query.IUDFInfo): query.UDFInfo;
+
+        /**
+         * Encodes the specified UDFInfo message. Does not implicitly {@link query.UDFInfo.verify|verify} messages.
+         * @param message UDFInfo message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: query.IUDFInfo, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified UDFInfo message, length delimited. Does not implicitly {@link query.UDFInfo.verify|verify} messages.
+         * @param message UDFInfo message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: query.IUDFInfo, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a UDFInfo message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns UDFInfo
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): query.UDFInfo;
+
+        /**
+         * Decodes a UDFInfo message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns UDFInfo
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): query.UDFInfo;
+
+        /**
+         * Verifies a UDFInfo message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a UDFInfo message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns UDFInfo
+         */
+        public static fromObject(object: { [k: string]: any }): query.UDFInfo;
+
+        /**
+         * Creates a plain object from a UDFInfo message. Also converts values to other types if specified.
+         * @param message UDFInfo
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: query.UDFInfo, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this UDFInfo to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for UDFInfo
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Properties of a GetSchemaResponse. */
     interface IGetSchemaResponse {
+
+        /** GetSchemaResponse udfs */
+        udfs?: (query.IUDFInfo[]|null);
 
         /** GetSchemaResponse table_definition */
         table_definition?: ({ [k: string]: string }|null);
@@ -41902,6 +42021,9 @@ export namespace query {
          * @param [properties] Properties to set
          */
         constructor(properties?: query.IGetSchemaResponse);
+
+        /** GetSchemaResponse udfs. */
+        public udfs: query.IUDFInfo[];
 
         /** GetSchemaResponse table_definition. */
         public table_definition: { [k: string]: string };
@@ -45386,11 +45508,11 @@ export namespace vtctldata {
         /** WorkflowOptions tenant_id */
         tenant_id?: (string|null);
 
-        /** WorkflowOptions source_keyspace_alias */
-        source_keyspace_alias?: (string|null);
-
         /** WorkflowOptions strip_sharded_auto_increment */
         strip_sharded_auto_increment?: (boolean|null);
+
+        /** WorkflowOptions shards */
+        shards?: (string[]|null);
     }
 
     /** Represents a WorkflowOptions. */
@@ -45405,11 +45527,11 @@ export namespace vtctldata {
         /** WorkflowOptions tenant_id. */
         public tenant_id: string;
 
-        /** WorkflowOptions source_keyspace_alias. */
-        public source_keyspace_alias: string;
-
         /** WorkflowOptions strip_sharded_auto_increment. */
         public strip_sharded_auto_increment: boolean;
+
+        /** WorkflowOptions shards. */
+        public shards: string[];
 
         /**
          * Creates a new WorkflowOptions instance using the specified properties.

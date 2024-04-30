@@ -118,7 +118,7 @@ var (
 func TestHelpOutput(t *testing.T) {
 	wd, err := os.Getwd()
 	require.NoError(t, err)
-
+	t.Parallel()
 	args := []string{"--help"}
 	for binary, helptext := range helpOutput {
 		t.Run(binary, func(t *testing.T) {

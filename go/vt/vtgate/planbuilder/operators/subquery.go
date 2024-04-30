@@ -179,6 +179,10 @@ func (sq *SubQuery) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bo
 	return sq.Outer.AddColumn(ctx, reuseExisting, addToGroupBy, exprs)
 }
 
+func (sq *SubQuery) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
+	return sq.Outer.AddWSColumn(ctx, offset, underRoute)
+}
+
 func (sq *SubQuery) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
 	return sq.Outer.FindCol(ctx, expr, underRoute)
 }

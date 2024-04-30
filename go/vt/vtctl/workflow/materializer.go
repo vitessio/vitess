@@ -98,19 +98,13 @@ func (mz *materializer) getWorkflowSubType() (binlogdatapb.VReplicationWorkflowS
 }
 
 func (mz *materializer) getOptionsJSON() (string, error) {
-	vrOptions := &vtctldatapb.WorkflowOptions{}
-	if mz.IsMultiTenantMigration() {
-		vrOptions.TenantId = mz.ms.WorkflowOptions.TenantId
-		if mz.ms.WorkflowOptions.SourceKeyspaceAlias != "" {
-			vrOptions.SourceKeyspaceAlias = mz.ms.WorkflowOptions.SourceKeyspaceAlias
-		}
+	defaultJSON := "{}"
+	if mz.ms.WorkflowOptions == nil {
+		return defaultJSON, nil
 	}
-	optionsJSON, err := json.Marshal(vrOptions)
-	if err != nil {
-		return "", err
-	}
-	if optionsJSON == nil {
-		optionsJSON = []byte("{}")
+	optionsJSON, err := json.Marshal(mz.ms.WorkflowOptions)
+	if err != nil || optionsJSON == nil {
+		return defaultJSON, err
 	}
 	return string(optionsJSON), nil
 }
@@ -444,10 +438,22 @@ func (mz *materializer) buildMaterializer() error {
 	if err != nil {
 		return err
 	}
-	if len(ms.SourceShards) > 0 {
+
+	// For a multi-tenant migration, user can specify a subset of target shards to stream to, based
+	// on the vindex they have chosen. This is to optimize the number of streams: for example, if we
+	// have 256 shards and a tenant maps to a single shard we can avoid creating 255 unnecessary streams
+	// that would be filtered out by the vindex anyway.
+	var specifiedTargetShards []string
+	switch {
+	case mz.IsMultiTenantMigration():
+		specifiedTargetShards = ms.WorkflowOptions.Shards
+	case len(ms.SourceShards) > 0: // shard-by-shard migration
+		specifiedTargetShards = ms.SourceShards
+	}
+	if len(specifiedTargetShards) > 0 {
 		var targetShards2 []*topo.ShardInfo
 		for _, shard := range targetShards {
-			for _, shard2 := range ms.SourceShards {
+			for _, shard2 := range specifiedTargetShards {
 				if shard.ShardName() == shard2 {
 					targetShards2 = append(targetShards2, shard)
 					break

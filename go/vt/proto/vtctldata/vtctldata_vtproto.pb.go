@@ -252,8 +252,12 @@ func (m *WorkflowOptions) CloneVT() *WorkflowOptions {
 	}
 	r := &WorkflowOptions{
 		TenantId:                  m.TenantId,
-		SourceKeyspaceAlias:       m.SourceKeyspaceAlias,
 		StripShardedAutoIncrement: m.StripShardedAutoIncrement,
+	}
+	if rhs := m.Shards; rhs != nil {
+		tmpContainer := make([]string, len(rhs))
+		copy(tmpContainer, rhs)
+		r.Shards = tmpContainer
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -6533,6 +6537,15 @@ func (m *WorkflowOptions) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if len(m.Shards) > 0 {
+		for iNdEx := len(m.Shards) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.Shards[iNdEx])
+			copy(dAtA[i:], m.Shards[iNdEx])
+			i = encodeVarint(dAtA, i, uint64(len(m.Shards[iNdEx])))
+			i--
+			dAtA[i] = 0x1a
+		}
+	}
 	if m.StripShardedAutoIncrement {
 		i--
 		if m.StripShardedAutoIncrement {
@@ -6541,14 +6554,7 @@ func (m *WorkflowOptions) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 			dAtA[i] = 0
 		}
 		i--
-		dAtA[i] = 0x18
-	}
-	if len(m.SourceKeyspaceAlias) > 0 {
-		i -= len(m.SourceKeyspaceAlias)
-		copy(dAtA[i:], m.SourceKeyspaceAlias)
-		i = encodeVarint(dAtA, i, uint64(len(m.SourceKeyspaceAlias)))
-		i--
-		dAtA[i] = 0x12
+		dAtA[i] = 0x10
 	}
 	if len(m.TenantId) > 0 {
 		i -= len(m.TenantId)
@@ -20637,12 +20643,14 @@ func (m *WorkflowOptions) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
-	l = len(m.SourceKeyspaceAlias)
-	if l > 0 {
-		n += 1 + l + sov(uint64(l))
-	}
 	if m.StripShardedAutoIncrement {
 		n += 2
+	}
+	if len(m.Shards) > 0 {
+		for _, s := range m.Shards {
+			l = len(s)
+			n += 1 + l + sov(uint64(l))
+		}
 	}
 	n += len(m.unknownFields)
 	return n
@@ -28551,8 +28559,28 @@ func (m *WorkflowOptions) UnmarshalVT(dAtA []byte) error {
 			m.TenantId = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field StripShardedAutoIncrement", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.StripShardedAutoIncrement = bool(v != 0)
+		case 3:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field SourceKeyspaceAlias", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Shards", wireType)
 			}
 			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
@@ -28580,28 +28608,8 @@ func (m *WorkflowOptions) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.SourceKeyspaceAlias = string(dAtA[iNdEx:postIndex])
+			m.Shards = append(m.Shards, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
-		case 3:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field StripShardedAutoIncrement", wireType)
-			}
-			var v int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				v |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			m.StripShardedAutoIncrement = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])

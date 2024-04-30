@@ -17,9 +17,11 @@ limitations under the License.
 package throttler
 
 import (
-	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestIntervalHistory_AverageIncludesPartialIntervals(t *testing.T) {
@@ -33,9 +35,8 @@ func TestIntervalHistory_AverageIncludesPartialIntervals(t *testing.T) {
 	h.add(record{sinceZero(3 * time.Second), 10000000})
 	// Rate within [1s, 2s) = 1000 and within [2s, 3s) = 2000 = average of 1500
 	want := 1500.0
-	if got := h.average(sinceZero(1500*time.Millisecond), sinceZero(2500*time.Millisecond)); got != want {
-		t.Errorf("average(1.5s, 2.5s) = %v, want = %v", got, want)
-	}
+	got := h.average(sinceZero(1500*time.Millisecond), sinceZero(2500*time.Millisecond))
+	assert.Equal(t, want, got)
 }
 
 func TestIntervalHistory_AverageRangeSmallerThanInterval(t *testing.T) {
@@ -43,9 +44,8 @@ func TestIntervalHistory_AverageRangeSmallerThanInterval(t *testing.T) {
 
 	h.add(record{sinceZero(0 * time.Second), 10000})
 	want := 10000.0
-	if got := h.average(sinceZero(250*time.Millisecond), sinceZero(750*time.Millisecond)); got != want {
-		t.Errorf("average(0.25s, 0.75s) = %v, want = %v", got, want)
-	}
+	got := h.average(sinceZero(250*time.Millisecond), sinceZero(750*time.Millisecond))
+	assert.Equal(t, want, got)
 }
 
 func TestIntervalHistory_GapsCountedAsZero(t *testing.T) {
@@ -55,22 +55,17 @@ func TestIntervalHistory_GapsCountedAsZero(t *testing.T) {
 	h.add(record{sinceZero(3 * time.Second), 1000})
 
 	want := 500.0
-	if got := h.average(sinceZero(0*time.Second), sinceZero(4*time.Second)); got != want {
-		t.Errorf("average(0s, 4s) = %v, want = %v", got, want)
-	}
+	got := h.average(sinceZero(0*time.Second), sinceZero(4*time.Second))
+	assert.Equal(t, want, got)
 }
 
 func TestIntervalHistory_AddNoDuplicateInterval(t *testing.T) {
 	defer func() {
 		r := recover()
+		require.NotNil(t, r, "add() did not panic")
 
-		if r == nil {
-			t.Fatal("add() did not panic")
-		}
 		want := "BUG: cannot add record because it is already covered by a previous entry"
-		if !strings.Contains(r.(string), want) {
-			t.Fatalf("add() did panic for the wrong reason: got = %v, want = %v", r, want)
-		}
+		require.Contains(t, r, want, "add() did panic for the wrong reason")
 	}()
 
 	h := newIntervalHistory(10, 1*time.Second)
@@ -82,14 +77,10 @@ func TestIntervalHistory_AddNoDuplicateInterval(t *testing.T) {
 func TestIntervalHistory_RecordDoesNotStartAtInterval(t *testing.T) {
 	defer func() {
 		r := recover()
+		require.NotNil(t, r, "add() did not panic")
 
-		if r == nil {
-			t.Fatal("add() did not panic")
-		}
 		want := "BUG: cannot add record because it does not start at the beginning of the interval"
-		if !strings.Contains(r.(string), want) {
-			t.Fatalf("add() did panic for the wrong reason: got = %v, want = %v", r, want)
-		}
+		require.Contains(t, r, want, "add() did panic for the wrong reason")
 	}()
 
 	h := newIntervalHistory(1, 1*time.Second)

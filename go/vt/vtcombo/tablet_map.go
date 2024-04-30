@@ -405,7 +405,7 @@ func CreateKs(
 //
 
 // dialer is our tabletconn.Dialer
-func dialer(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
+func dialer(ctx context.Context, tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
 	t, ok := tabletMap[tablet.Alias.Uid]
 	if !ok {
 		return nil, vterrors.New(vtrpcpb.Code_UNAVAILABLE, "connection refused")

@@ -248,13 +248,7 @@ func (vx *vexec) buildUpdatePlan(ctx context.Context, planner vexecPlanner, upd 
 	if updatableColumnNames := plannerParams.updatableColumnNames; len(updatableColumnNames) > 0 {
 		// if updatableColumnNames is non empty, then we must only accept changes to columns listed there
 		for _, expr := range upd.Exprs {
-			isUpdatable := false
-			for _, updatableColName := range updatableColumnNames {
-				if expr.Name.Name.EqualString(updatableColName) {
-					isUpdatable = true
-				}
-			}
-			if !isUpdatable {
+			if !expr.Name.Name.EqualsAnyString(updatableColumnNames) {
 				return nil, fmt.Errorf("%+v cannot be changed: %v", expr.Name.Name, sqlparser.String(expr))
 			}
 		}

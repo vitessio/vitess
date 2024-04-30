@@ -339,7 +339,7 @@ func ParseTimeInt64(i int64) (t Time, ok bool) {
 		return t, false
 	}
 
-	if i > 838 {
+	if i > MaxHours {
 		return t, false
 	}
 	t.hour = uint16(i)

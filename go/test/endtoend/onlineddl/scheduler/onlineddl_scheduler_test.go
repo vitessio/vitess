@@ -583,7 +583,7 @@ func testScheduler(t *testing.T) {
 				onlineddl.CheckCompleteMigration(t, &vtParams, shards, t1uuid, true)
 			})
 			t.Run("cut-over fail due to timeout", func(t *testing.T) {
-				waitForMessage(t, t1uuid, "due to context deadline exceeded")
+				waitForMessage(t, t1uuid, "(errno 3024) (sqlstate HY000): Query execution was interrupted, maximum statement execution time exceeded")
 				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusRunning)
 				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 				onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
@@ -606,7 +606,7 @@ func testScheduler(t *testing.T) {
 			})
 			t.Run("expect transaction failure", func(t *testing.T) {
 				select {
-				case commitTransactionChan <- true: //good
+				case commitTransactionChan <- true: // good
 				case <-ctx.Done():
 					assert.Fail(t, ctx.Err().Error())
 				}
@@ -1445,7 +1445,7 @@ DROP TABLE IF EXISTS stress_test
 		}
 	})
 
-	//DROP
+	// DROP
 
 	t.Run("online DROP TABLE", func(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, createParams(dropStatement, onlineSingletonDDLStrategy, "vtgate", "", "", "", false))

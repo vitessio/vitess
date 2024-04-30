@@ -93,7 +93,7 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 	defer db.Close()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
-	vp := NewVtctlPipe(t, ts)
+	vp := NewVtctlPipe(ctx, t, ts)
 	defer vp.Close()
 
 	// Set up mock query results.
@@ -345,7 +345,7 @@ func TestBackupRestoreLagged(t *testing.T) {
 	defer db.Close()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
-	vp := NewVtctlPipe(t, ts)
+	vp := NewVtctlPipe(ctx, t, ts)
 	defer vp.Close()
 
 	// Set up mock query results.
@@ -564,7 +564,7 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 	defer db.Close()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
-	vp := NewVtctlPipe(t, ts)
+	vp := NewVtctlPipe(ctx, t, ts)
 	defer vp.Close()
 
 	// Set up mock query results.
@@ -739,7 +739,7 @@ func TestDisableActiveReparents(t *testing.T) {
 	defer db.Close()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
-	vp := NewVtctlPipe(t, ts)
+	vp := NewVtctlPipe(ctx, t, ts)
 	defer vp.Close()
 
 	// Set up mock query results.

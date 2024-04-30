@@ -21,9 +21,14 @@
     - [Update with Multi Target Support](#update-multi-target)
     - [Delete with Subquery Support](#delete-subquery)
     - [Delete with Multi Target Support](#delete-multi-target)
+    - [User Defined Functions Support](#udf-support)
+    - [Insert Row Alias Support](#insert-row-alias-support)
+  - **[Query Timeout](#query-timeout)**
   - **[Flag changes](#flag-changes)**
     - [`pprof-http` default change](#pprof-http-default)
     - [New `healthcheck-dial-concurrency` flag](#healthcheck-dial-concurrency-flag)
+    - [New minimum for `--buffer_min_time_between_failovers`](#buffer_min_time_between_failovers-flag)
+    - [New `track-udfs` vtgate flag](#vtgate-track-udfs-flag)
 - **[Minor Changes](#minor-changes)**
   - **[New Stats](#new-stats)**
     - [VTTablet Query Cache Hits and Misses](#vttablet-query-cache-hits-and-misses)
@@ -183,6 +188,32 @@ Example: `delete t1, t3 from t1 join t2 on t1.id = t2.id join t3 on t1.col = t3.
 
 More details about how it works is available in [MySQL Docs](https://dev.mysql.com/doc/refman/8.0/en/delete.html)
 
+#### <a id="udf-support"/> User Defined Functions Support
+
+VTGate can track any user defined functions for better planning.
+User Defined Functions (UDFs) should be directly loaded in the underlying MySQL.
+
+It should be enabled in VTGate with the `--track-udfs` flag.
+This will enable the tracking of UDFs in VTGate and will be used for planning.
+Without this flag, VTGate will not be aware that there might be aggregating user-defined functions in the query that need to be pushed down to MySQL.
+
+More details about how to load UDFs is available in [MySQL Docs](https://dev.mysql.com/doc/extending-mysql/8.0/en/adding-loadable-function.html)
+
+#### <a id="insert-row-alias-support"/> Insert Row Alias Support
+
+Support is added to have row alias in Insert statement to be used with `on duplicate key update`.
+
+Example:
+- `insert into user(id, name, email) valies (100, 'Alice', 'alice@mail.com') as new on duplicate key update name = new.name, email = new.email`
+- `insert into user(id, name, email) valies (100, 'Alice', 'alice@mail.com') as new(m, n, p) on duplicate key update name = n, email = p`
+
+More details about how it works is available in [MySQL Docs](https://dev.mysql.com/doc/refman/8.0/en/insert-on-duplicate.html)
+
+### <a id="query-timeout"/>Query Timeout
+On a query timeout, Vitess closed the connection using the `kill connection` statement. This leads to connection churn 
+which is not desirable in some cases. To avoid this, Vitess now uses the `kill query` statement to cancel the query. 
+This will only cancel the query and does not terminate the connection.
+
 ### <a id="flag-changes"/>Flag Changes
 
 #### <a id="pprof-http-default"/> `pprof-http` Default Change
@@ -194,6 +225,14 @@ To continue enabling these endpoints, explicitly set `--pprof-http` when startin
 #### <a id="healthcheck-dial-concurrency-flag"/>New `--healthcheck-dial-concurrency` flag
 
 The new `--healthcheck-dial-concurrency` flag defines the maximum number of healthcheck connections that can open concurrently. This limit is to avoid hitting Go runtime panics on deployments watching enough tablets [to hit the runtime's maximum thread limit of `10000`](https://pkg.go.dev/runtime/debug#SetMaxThreads) due to blocking network syscalls. This flag applies to `vtcombo`, `vtctld` and `vtgate` only and a value less than the runtime max thread limit _(`10000`)_ is recommended.
+
+#### <a id="buffer_min_time_between_failovers-flag"/>New minimum for `--buffer_min_time_between_failovers`
+
+The `--buffer_min_time_between_failovers` `vttablet` flag now has a minimum value of `1s`. This is because a value of 0 can cause issues with the buffering mechanics resulting in unexpected and unnecessary query errors — in particular during `MoveTables SwitchTraffic` operations. If you are currently specifying a value of 0 for this flag then you will need to update the config value to 1s *prior to upgrading to v20 or later* as `vttablet` will report an error and terminate if you attempt to start it with a value of 0.
+
+#### <a id="vtgate-track-udfs-flag"/>New `--track-udfs` vtgate flag
+
+The new `--track-udfs` flag enables VTGate to track user defined functions for better planning.
 
 ## <a id="minor-changes"/>Minor Changes
 

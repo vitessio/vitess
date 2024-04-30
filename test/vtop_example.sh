@@ -36,7 +36,7 @@ unset VTROOT # ensure that the examples can run without VTROOT now.
 function checkSemiSyncSetup() {
   for vttablet in $(kubectl get pods --no-headers -o custom-columns=":metadata.name" | grep "vttablet") ; do
     echo "Checking semi-sync in $vttablet"
-    kubectl exec "$vttablet" -c mysqld -- mysql -S "/vt/socket/mysql.sock" -u root -e "show variables like 'rpl_semi_sync_slave_enabled'" | grep "OFF"
+    kubectl exec "$vttablet" -c mysqld -- mysql -S "/vt/socket/mysql.sock" -u root -e "show variables like 'rpl_semi_sync_replica_enabled'" | grep "OFF"
     if [ $? -ne 0 ]; then
       echo "Semi Sync setup on $vttablet"
       exit 1

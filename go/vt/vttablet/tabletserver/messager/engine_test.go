@@ -70,28 +70,28 @@ func TestEngineSchemaChanged(t *testing.T) {
 	engine := newTestEngine()
 	defer engine.Close()
 
-	engine.schemaChanged(nil, []*schema.Table{meTableT1, tableT2}, nil, nil)
+	engine.schemaChanged(nil, []*schema.Table{meTableT1, tableT2}, nil, nil, true)
 	got := extractManagerNames(engine.managers)
 	want := map[string]bool{"t1": true}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got: %+v, want %+v", got, want)
 	}
 
-	engine.schemaChanged(nil, []*schema.Table{meTableT3}, nil, nil)
+	engine.schemaChanged(nil, []*schema.Table{meTableT3}, nil, nil, true)
 	got = extractManagerNames(engine.managers)
 	want = map[string]bool{"t1": true, "t3": true}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got: %+v, want %+v", got, want)
 	}
 
-	engine.schemaChanged(nil, []*schema.Table{meTableT4}, nil, []*schema.Table{meTableT3, tableT5})
+	engine.schemaChanged(nil, []*schema.Table{meTableT4}, nil, []*schema.Table{meTableT3, tableT5}, true)
 	got = extractManagerNames(engine.managers)
 	want = map[string]bool{"t1": true, "t4": true}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got: %+v, want %+v", got, want)
 	}
 	// Test update
-	engine.schemaChanged(nil, nil, []*schema.Table{meTableT2, tableT4}, nil)
+	engine.schemaChanged(nil, nil, []*schema.Table{meTableT2, tableT4}, nil, true)
 	got = extractManagerNames(engine.managers)
 	want = map[string]bool{"t1": true, "t2": true}
 	if !reflect.DeepEqual(got, want) {
@@ -109,7 +109,7 @@ func extractManagerNames(in map[string]*messageManager) map[string]bool {
 
 func TestSubscribe(t *testing.T) {
 	engine := newTestEngine()
-	engine.schemaChanged(nil, []*schema.Table{meTableT1, meTableT2}, nil, nil)
+	engine.schemaChanged(nil, []*schema.Table{meTableT1, meTableT2}, nil, nil, true)
 	f1, ch1 := newEngineReceiver()
 	f2, ch2 := newEngineReceiver()
 	// Each receiver is subscribed to different managers.
@@ -140,7 +140,7 @@ func TestSubscribe(t *testing.T) {
 func TestEngineGenerate(t *testing.T) {
 	engine := newTestEngine()
 	defer engine.Close()
-	engine.schemaChanged(nil, []*schema.Table{meTableT1}, nil, nil)
+	engine.schemaChanged(nil, []*schema.Table{meTableT1}, nil, nil, true)
 
 	if _, err := engine.GetGenerator("t1"); err != nil {
 		t.Error(err)

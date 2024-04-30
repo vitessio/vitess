@@ -287,7 +287,7 @@ func tryPushOrdering(ctx *plancontext.PlanningContext, in *Ordering) (Operator, 
 	case *Projection:
 		// we can move ordering under a projection if it's not introducing a column we're sorting by
 		for _, by := range in.Order {
-			if !mustFetchFromInput(by.SimplifiedExpr) {
+			if !mustFetchFromInput(ctx, by.SimplifiedExpr) {
 				return in, NoRewrite
 			}
 		}
@@ -404,7 +404,7 @@ func pushOrderingUnderAggr(ctx *plancontext.PlanningContext, order *Ordering, ag
 func canPushLeft(ctx *plancontext.PlanningContext, aj *ApplyJoin, order []OrderBy) bool {
 	lhs := TableID(aj.LHS)
 	for _, order := range order {
-		deps := ctx.SemTable.DirectDeps(order.Inner.Expr)
+		deps := ctx.SemTable.RecursiveDeps(order.Inner.Expr)
 		if !deps.IsSolvedBy(lhs) {
 			return false
 		}
@@ -459,7 +459,7 @@ func pushFilterUnderProjection(ctx *plancontext.PlanningContext, filter *Filter,
 	for _, p := range filter.Predicates {
 		cantPush := false
 		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-			if !mustFetchFromInput(node) {
+			if !mustFetchFromInput(ctx, node) {
 				return true, nil
 			}
 

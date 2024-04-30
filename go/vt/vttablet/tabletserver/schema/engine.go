@@ -58,7 +58,7 @@ import (
 
 const maxTableCount = 10000
 
-type notifier func(full map[string]*Table, created, altered, dropped []*Table)
+type notifier func(full map[string]*Table, created, altered, dropped []*Table, udfsChanged bool)
 
 // Engine stores the schema info and performs operations that
 // keep itself up-to-date.
@@ -447,6 +447,11 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 		return err
 	}
 
+	udfsChanged, err := getChangedUserDefinedFunctions(ctx, conn.Conn, shouldUseDatabase)
+	if err != nil {
+		return err
+	}
+
 	rec := concurrency.AllErrorRecorder{}
 	// curTables keeps track of tables in the new snapshot so we can detect what was dropped.
 	curTables := map[string]bool{"dual": true}
@@ -536,7 +541,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 	if shouldUseDatabase {
 		// If reloadDataInDB succeeds, then we don't want to prevent sending the broadcast notification.
 		// So, we do this step in the end when we can receive no more errors that fail the reload operation.
-		err = reloadDataInDB(ctx, conn.Conn, altered, created, dropped, se.env.Environment().Parser())
+		err = reloadDataInDB(ctx, conn.Conn, altered, created, dropped, udfsChanged, se.env.Environment().Parser())
 		if err != nil {
 			log.Errorf("error in updating schema information in Engine.reload() - %v", err)
 		}
@@ -550,7 +555,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 	if len(created) > 0 || len(altered) > 0 || len(dropped) > 0 {
 		log.Infof("schema engine created %v, altered %v, dropped %v", extractNamesFromTablesList(created), extractNamesFromTablesList(altered), extractNamesFromTablesList(dropped))
 	}
-	se.broadcast(created, altered, dropped)
+	se.broadcast(created, altered, dropped, udfsChanged)
 	return nil
 }
 
@@ -709,7 +714,7 @@ func (se *Engine) RegisterNotifier(name string, f notifier, runNotifier bool) {
 	}
 	if runNotifier {
 		s := maps.Clone(se.tables)
-		f(s, created, nil, nil)
+		f(s, created, nil, nil, true)
 	}
 }
 
@@ -730,7 +735,7 @@ func (se *Engine) UnregisterNotifier(name string) {
 }
 
 // broadcast must be called while holding a lock on se.mu.
-func (se *Engine) broadcast(created, altered, dropped []*Table) {
+func (se *Engine) broadcast(created, altered, dropped []*Table, udfsChanged bool) {
 	if !se.isOpen {
 		return
 	}
@@ -739,7 +744,7 @@ func (se *Engine) broadcast(created, altered, dropped []*Table) {
 	defer se.notifierMu.Unlock()
 	s := maps.Clone(se.tables)
 	for _, f := range se.notifiers {
-		f(s, created, altered, dropped)
+		f(s, created, altered, dropped, udfsChanged)
 	}
 }
 

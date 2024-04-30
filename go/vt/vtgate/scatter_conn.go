@@ -188,7 +188,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 				}
 			}
 
-			qs, err = getQueryService(rs, info, session, false)
+			qs, err = getQueryService(ctx, rs, info, session, false)
 			if err != nil {
 				return nil, err
 			}
@@ -300,11 +300,11 @@ func checkAndResetShardSession(info *shardActionInfo, err error, session *SafeSe
 	return retry
 }
 
-func getQueryService(rs *srvtopo.ResolvedShard, info *shardActionInfo, session *SafeSession, skipReset bool) (queryservice.QueryService, error) {
+func getQueryService(ctx context.Context, rs *srvtopo.ResolvedShard, info *shardActionInfo, session *SafeSession, skipReset bool) (queryservice.QueryService, error) {
 	if info.alias == nil {
 		return rs.Gateway, nil
 	}
-	qs, err := rs.Gateway.QueryServiceByAlias(info.alias, rs.Target)
+	qs, err := rs.Gateway.QueryServiceByAlias(ctx, info.alias, rs.Target)
 	if err == nil || skipReset {
 		return qs, err
 	}
@@ -386,7 +386,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 				}
 			}
 
-			qs, err = getQueryService(rs, info, session, false)
+			qs, err = getQueryService(ctx, rs, info, session, false)
 			if err != nil {
 				return nil, err
 			}
@@ -732,7 +732,7 @@ func (stc *ScatterConn) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedSha
 		_ = stc.txConn.ReleaseLock(ctx, session)
 		return nil, vterrors.Wrap(err, "Any previous held locks are released")
 	}
-	qs, err := getQueryService(rs, info, nil, true)
+	qs, err := getQueryService(ctx, rs, info, nil, true)
 	if err != nil {
 		return nil, err
 	}

@@ -279,6 +279,12 @@ var RandomGenerators = map[Type]RandomGenerator{
 		}
 		return v
 	},
+	Enum: func() Value {
+		return MakeTrusted(Enum, randEnum())
+	},
+	Set: func() Value {
+		return MakeTrusted(Set, randSet())
+	},
 }
 
 func randTime() time.Time {
@@ -288,4 +294,34 @@ func randTime() time.Time {
 
 	sec := rand.Int64N(delta) + min
 	return time.Unix(sec, 0)
+}
+
+func randEnum() []byte {
+	enums := []string{
+		"xxsmall",
+		"xsmall",
+		"small",
+		"medium",
+		"large",
+		"xlarge",
+		"xxlarge",
+	}
+	return []byte(enums[rand.IntN(len(enums))])
+}
+
+func randSet() []byte {
+	set := []string{
+		"a",
+		"b",
+		"c",
+		"d",
+		"e",
+		"f",
+		"g",
+	}
+	rand.Shuffle(len(set), func(i, j int) {
+		set[i], set[j] = set[j], set[i]
+	})
+	set = set[:rand.IntN(len(set))]
+	return []byte(strings.Join(set, ","))
 }

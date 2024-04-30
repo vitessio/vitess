@@ -51,7 +51,7 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 	}
 	wd := &topo.WatchData{
 		Contents: initial.Kvs[0].Value,
-		Version:  EtcdVersion(initial.Kvs[0].ModRevision),
+		Version:  EtcdVersion(initial.Kvs[0].Version),
 	}
 
 	// Create an outer context that will be canceled on return and will cancel all inner watches.
@@ -76,7 +76,7 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 		defer close(notifications)
 		defer outerCancel()
 
-		var currVersion = initial.Header.Revision
+		var rev = initial.Header.Revision
 		var watchRetries int
 		for {
 			select {
@@ -107,9 +107,9 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 					// Cancel inner context on retry and create new one.
 					watchCancel()
 					watchCtx, watchCancel = context.WithCancel(ctx)
-					newWatcher := s.cli.Watch(watchCtx, nodePath, clientv3.WithRev(currVersion))
+					newWatcher := s.cli.Watch(watchCtx, nodePath, clientv3.WithRev(rev))
 					if newWatcher == nil {
-						log.Warningf("watch %v failed and get a nil channel returned, currVersion: %v", nodePath, currVersion)
+						log.Warningf("watch %v failed and get a nil channel returned, rev: %v", nodePath, rev)
 					} else {
 						watcher = newWatcher
 					}
@@ -126,7 +126,7 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 					return
 				}
 
-				currVersion = wresp.Header.GetRevision()
+				rev = wresp.Header.GetRevision()
 
 				for _, ev := range wresp.Events {
 					switch ev.Type {
@@ -174,7 +174,7 @@ func (s *Server) WatchRecursive(ctx context.Context, dirpath string) ([]*topo.Wa
 		var wd topo.WatchDataRecursive
 		wd.Path = string(kv.Key)
 		wd.Contents = kv.Value
-		wd.Version = EtcdVersion(initial.Kvs[0].ModRevision)
+		wd.Version = EtcdVersion(initial.Kvs[0].Version)
 		initialwd = append(initialwd, &wd)
 	}
 
@@ -200,7 +200,7 @@ func (s *Server) WatchRecursive(ctx context.Context, dirpath string) ([]*topo.Wa
 		defer close(notifications)
 		defer outerCancel()
 
-		var currVersion = initial.Header.Revision
+		var rev = initial.Header.Revision
 		var watchRetries int
 		for {
 			select {
@@ -228,9 +228,9 @@ func (s *Server) WatchRecursive(ctx context.Context, dirpath string) ([]*topo.Wa
 					watchCancel()
 					watchCtx, watchCancel = context.WithCancel(ctx)
 
-					newWatcher := s.cli.Watch(watchCtx, nodePath, clientv3.WithRev(currVersion), clientv3.WithPrefix())
+					newWatcher := s.cli.Watch(watchCtx, nodePath, clientv3.WithRev(rev), clientv3.WithPrefix())
 					if newWatcher == nil {
-						log.Warningf("watch %v failed and get a nil channel returned, currVersion: %v", nodePath, currVersion)
+						log.Warningf("watch %v failed and get a nil channel returned, rev: %v", nodePath, rev)
 					} else {
 						watcher = newWatcher
 					}
@@ -247,7 +247,7 @@ func (s *Server) WatchRecursive(ctx context.Context, dirpath string) ([]*topo.Wa
 					return
 				}
 
-				currVersion = wresp.Header.GetRevision()
+				rev = wresp.Header.GetRevision()
 
 				for _, ev := range wresp.Events {
 					switch ev.Type {

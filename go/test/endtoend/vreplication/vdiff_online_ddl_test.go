@@ -102,7 +102,9 @@ func execOnlineDDL(t *testing.T, strategy, keyspace, query string) string {
 			return false
 		}, defaultTimeout)
 		require.NoError(t, err)
-
+		// The online ddl migration is set to SchemaMigration_RUNNING before it creates the
+		// _vt.vreplication records. Hence wait for the vreplication workflow to be created as well.
+		waitForWorkflowToBeCreated(t, vc, fmt.Sprintf("%s.%s", keyspace, uuid))
 	}
 	return uuid
 }

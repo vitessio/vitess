@@ -37,6 +37,7 @@ type (
 		// These scopes are only used for rewriting ORDER BY 1 and GROUP BY 1
 		specialExprScopes map[*sqlparser.Literal]*scope
 		statementIDs      map[sqlparser.Statement]TableSet
+		si                SchemaInformation
 	}
 
 	scope struct {
@@ -53,12 +54,13 @@ type (
 	}
 )
 
-func newScoper() *scoper {
+func newScoper(si SchemaInformation) *scoper {
 	return &scoper{
 		rScope:            map[*sqlparser.Select]*scope{},
 		wScope:            map[*sqlparser.Select]*scope{},
 		specialExprScopes: map[*sqlparser.Literal]*scope{},
 		statementIDs:      map[sqlparser.Statement]TableSet{},
+		si:                si,
 	}
 }
 
@@ -84,6 +86,13 @@ func (s *scoper) down(cursor *sqlparser.Cursor) error {
 			break
 		}
 		s.currentScope().inHavingAggr = true
+	case *sqlparser.FuncExpr:
+		if !s.currentScope().inHaving {
+			break
+		}
+		if node.Name.EqualsAnyString(s.si.GetAggregateUDFs()) {
+			s.currentScope().inHavingAggr = true
+		}
 	case *sqlparser.Where:
 		if node.Type == sqlparser.HavingClause {
 			err := s.createSpecialScopePostProjection(cursor.Parent())
@@ -279,6 +288,7 @@ func (s *scoper) createSpecialScopePostProjection(parent sqlparser.SQLNode) erro
 				nScope.stmt = sel
 				tableInfo = createVTableInfoForExpressions(sel.SelectExprs, nil /*needed for star expressions*/, s.org)
 				nScope.tables = append(nScope.tables, tableInfo)
+				continue
 			}
 			thisTableInfo := createVTableInfoForExpressions(sel.SelectExprs, nil /*needed for star expressions*/, s.org)
 			if len(tableInfo.cols) != len(thisTableInfo.cols) {
@@ -288,7 +298,10 @@ func (s *scoper) createSpecialScopePostProjection(parent sqlparser.SQLNode) erro
 				// at this stage, we don't store the actual dependencies, we only store the expressions.
 				// only later will we walk the expression tree and figure out the deps. so, we need to create a
 				// composite expression that contains all the expressions in the SELECTs that this UNION consists of
-				tableInfo.cols[i] = sqlparser.AndExpressions(col, thisTableInfo.cols[i])
+				tableInfo.cols[i] = &sqlparser.AndExpr{
+					Left:  col,
+					Right: thisTableInfo.cols[i],
+				}
 			}
 		}
 

@@ -26,6 +26,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
@@ -171,9 +172,9 @@ type FakeMysqlDaemon struct {
 	// FetchSuperQueryResults is used by FetchSuperQuery.
 	FetchSuperQueryMap map[string]*sqltypes.Result
 
-	// SemiSyncPrimaryEnabled represents the state of rpl_semi_sync_master_enabled.
+	// SemiSyncPrimaryEnabled represents the state of rpl_semi_sync_source_enabled.
 	SemiSyncPrimaryEnabled bool
-	// SemiSyncReplicaEnabled represents the state of rpl_semi_sync_slave_enabled.
+	// SemiSyncReplicaEnabled represents the state of rpl_semi_sync_replica_enabled.
 	SemiSyncReplicaEnabled bool
 
 	// TimeoutHook is a func that can be called at the beginning of
@@ -273,7 +274,7 @@ func (fmd *FakeMysqlDaemon) WaitForDBAGrants(ctx context.Context, waitTime time.
 }
 
 // GetMysqlPort is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) GetMysqlPort() (int32, error) {
+func (fmd *FakeMysqlDaemon) GetMysqlPort(ctx context.Context) (int32, error) {
 	if fmd.MysqlPort.Load() == -1 {
 		return 0, fmt.Errorf("FakeMysqlDaemon.GetMysqlPort returns an error")
 	}
@@ -667,19 +668,19 @@ func (fmd *FakeMysqlDaemon) GetAllPrivsConnection(ctx context.Context) (*dbconnp
 }
 
 // SetSemiSyncEnabled is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) SetSemiSyncEnabled(primary, replica bool) error {
+func (fmd *FakeMysqlDaemon) SetSemiSyncEnabled(ctx context.Context, primary, replica bool) error {
 	fmd.SemiSyncPrimaryEnabled = primary
 	fmd.SemiSyncReplicaEnabled = replica
 	return nil
 }
 
 // SemiSyncEnabled is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) SemiSyncEnabled() (primary, replica bool) {
+func (fmd *FakeMysqlDaemon) SemiSyncEnabled(ctx context.Context) (primary, replica bool) {
 	return fmd.SemiSyncPrimaryEnabled, fmd.SemiSyncReplicaEnabled
 }
 
 // SemiSyncStatus is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) SemiSyncStatus() (bool, bool) {
+func (fmd *FakeMysqlDaemon) SemiSyncStatus(ctx context.Context) (bool, bool) {
 	// The fake assumes the status worked.
 	if fmd.SemiSyncPrimaryEnabled {
 		return true, false
@@ -688,22 +689,22 @@ func (fmd *FakeMysqlDaemon) SemiSyncStatus() (bool, bool) {
 }
 
 // SemiSyncClients is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) SemiSyncClients() uint32 {
+func (fmd *FakeMysqlDaemon) SemiSyncClients(ctx context.Context) uint32 {
 	return 0
 }
 
 // SemiSyncExtensionLoaded is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) SemiSyncExtensionLoaded() (bool, error) {
-	return true, nil
+func (fmd *FakeMysqlDaemon) SemiSyncExtensionLoaded(ctx context.Context) (mysql.SemiSyncType, error) {
+	return mysql.SemiSyncTypeSource, nil
 }
 
 // SemiSyncSettings is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) SemiSyncSettings() (timeout uint64, numReplicas uint32) {
+func (fmd *FakeMysqlDaemon) SemiSyncSettings(ctx context.Context) (timeout uint64, numReplicas uint32) {
 	return 10000000, 1
 }
 
 // SemiSyncReplicationStatus is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) SemiSyncReplicationStatus() (bool, error) {
+func (fmd *FakeMysqlDaemon) SemiSyncReplicationStatus(ctx context.Context) (bool, error) {
 	// The fake assumes the status worked.
 	return fmd.SemiSyncReplicaEnabled, nil
 }

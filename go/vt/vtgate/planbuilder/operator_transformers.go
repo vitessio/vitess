@@ -619,6 +619,9 @@ func buildInsertLogicalPlan(
 	// when unsharded query with autoincrement for that there is no input operator.
 	if eins.Opcode != engine.InsertUnsharded {
 		eins.Prefix, eins.Mid, eins.Suffix = generateInsertShardedQuery(ins.AST)
+		if ins.AST.RowAlias != nil {
+			eins.Alias = sqlparser.String(ins.AST.RowAlias)
+		}
 	}
 
 	eins.Query = generateQuery(stmt)
@@ -660,7 +663,7 @@ func generateInsertShardedQuery(ins *sqlparser.Insert) (prefix string, mids sqlp
 	prefixBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
 	prefixBuf.Myprintf(prefixFormat,
 		ins.Comments, ins.Ignore.ToString(),
-		ins.Table, ins.Columns)
+		ins.Table, ins.Columns, ins.RowAlias)
 	prefix = prefixBuf.String()
 
 	suffix = sqlparser.CopyOnRewrite(ins.OnDup, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
@@ -918,6 +921,7 @@ func transformHashJoin(ctx *plancontext.PlanningContext, op *operators.HashJoin)
 			Collation:      comparisonType.Collation(),
 			ComparisonType: comparisonType.Type(),
 			CollationEnv:   ctx.VSchema.Environment().CollationEnv(),
+			Values:         comparisonType.Values(),
 		},
 	}, nil
 }

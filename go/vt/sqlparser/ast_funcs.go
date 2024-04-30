@@ -24,6 +24,8 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/datetime"
+	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -562,6 +564,20 @@ func NewTypedArgument(in string, t sqltypes.Type) *Argument {
 	return &Argument{Name: in, Type: t}
 }
 
+func NewTypedArgumentFromLiteral(in string, lit *Literal) (*Argument, error) {
+	arg := &Argument{Name: in, Type: lit.SQLType()}
+	switch arg.Type {
+	case sqltypes.Decimal:
+		siz, scale := decimal.SizeAndScaleFromString(lit.Val)
+		arg.Scale = scale
+		arg.Size = siz
+	case sqltypes.Datetime, sqltypes.Time:
+		siz := datetime.SizeFromString(lit.Val)
+		arg.Size = siz
+	}
+	return arg, nil
+}
+
 // NewListArg builds a new ListArg.
 func NewListArg(in string) ListArg {
 	return ListArg(in)
@@ -921,6 +937,16 @@ func (node IdentifierCI) Equal(in IdentifierCI) bool {
 // EqualString performs a case-insensitive compare with str.
 func (node IdentifierCI) EqualString(str string) bool {
 	return node.Lowered() == strings.ToLower(str)
+}
+
+// EqualsAnyString returns true if any of these strings match
+func (node IdentifierCI) EqualsAnyString(str []string) bool {
+	for _, s := range str {
+		if node.EqualString(s) {
+			return true
+		}
+	}
+	return false
 }
 
 // MarshalJSON marshals into JSON.

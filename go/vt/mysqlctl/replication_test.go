@@ -21,10 +21,12 @@ import (
 	"fmt"
 	"net"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
@@ -133,12 +135,14 @@ func TestGetMysqlPort(t *testing.T) {
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
 
-	res, err := testMysqld.GetMysqlPort()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	res, err := testMysqld.GetMysqlPort(ctx)
 	assert.Equal(t, int32(12), res)
 	assert.NoError(t, err)
 
 	db.AddQuery("SHOW VARIABLES LIKE 'port'", &sqltypes.Result{})
-	res, err = testMysqld.GetMysqlPort()
+	res, err = testMysqld.GetMysqlPort(ctx)
 	assert.ErrorContains(t, err, "no port variable in mysql")
 	assert.Equal(t, int32(0), res)
 }
@@ -553,16 +557,16 @@ func TestSetSemiSyncEnabled(t *testing.T) {
 	defer testMysqld.Close()
 
 	// We expect this query to be executed
-	err := testMysqld.SetSemiSyncEnabled(true, true)
-	assert.ErrorContains(t, err, "SET GLOBAL rpl_semi_sync_master_enabled = 1, GLOBAL rpl_semi_sync_slave_enabled = 1")
+	err := testMysqld.SetSemiSyncEnabled(context.Background(), true, true)
+	assert.ErrorIs(t, err, ErrNoSemiSync)
 
 	// We expect this query to be executed
-	err = testMysqld.SetSemiSyncEnabled(true, false)
-	assert.ErrorContains(t, err, "SET GLOBAL rpl_semi_sync_master_enabled = 1, GLOBAL rpl_semi_sync_slave_enabled = 0")
+	err = testMysqld.SetSemiSyncEnabled(context.Background(), true, false)
+	assert.ErrorIs(t, err, ErrNoSemiSync)
 
 	// We expect this query to be executed
-	err = testMysqld.SetSemiSyncEnabled(false, true)
-	assert.ErrorContains(t, err, "SET GLOBAL rpl_semi_sync_master_enabled = 0, GLOBAL rpl_semi_sync_slave_enabled = 1")
+	err = testMysqld.SetSemiSyncEnabled(context.Background(), false, true)
+	assert.ErrorIs(t, err, ErrNoSemiSync)
 }
 
 func TestSemiSyncEnabled(t *testing.T) {
@@ -574,12 +578,12 @@ func TestSemiSyncEnabled(t *testing.T) {
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
 
 	db.AddQuery("SELECT 1", &sqltypes.Result{})
-	db.AddQuery("SHOW VARIABLES LIKE 'rpl_semi_sync_%_enabled'", sqltypes.MakeTestResult(sqltypes.MakeTestFields("field1|field2", "varchar|varchar"), "rpl_semi_sync_master_enabled|OFF", "rpl_semi_sync_slave_enabled|ON"))
+	db.AddQuery("SHOW VARIABLES LIKE 'rpl_semi_sync_%_enabled'", sqltypes.MakeTestResult(sqltypes.MakeTestFields("field1|field2", "varchar|varchar"), "rpl_semi_sync_source_enabled|OFF", "rpl_semi_sync_replica_enabled|ON"))
 
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
 
-	p, r := testMysqld.SemiSyncEnabled()
+	p, r := testMysqld.SemiSyncEnabled(context.Background())
 	assert.False(t, p)
 	assert.True(t, r)
 }
@@ -593,12 +597,13 @@ func TestSemiSyncStatus(t *testing.T) {
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
 
 	db.AddQuery("SELECT 1", &sqltypes.Result{})
-	db.AddQuery("SHOW STATUS LIKE 'Rpl_semi_sync_%_status'", sqltypes.MakeTestResult(sqltypes.MakeTestFields("field1|field2", "varchar|varchar"), "Rpl_semi_sync_master_status|ON", "Rpl_semi_sync_slave_status|OFF"))
+	db.AddQuery("SHOW VARIABLES LIKE 'rpl_semi_sync_%_enabled'", sqltypes.MakeTestResult(sqltypes.MakeTestFields("field1|field2", "varchar|varchar"), "rpl_semi_sync_source_enabled|ON", "rpl_semi_sync_replica_enabled|ON"))
+	db.AddQuery("SHOW STATUS LIKE 'Rpl_semi_sync_%_status'", sqltypes.MakeTestResult(sqltypes.MakeTestFields("field1|field2", "varchar|varchar"), "Rpl_semi_sync_source_status|ON", "Rpl_semi_sync_replica_status|OFF"))
 
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
 
-	p, r := testMysqld.SemiSyncStatus()
+	p, r := testMysqld.SemiSyncStatus(context.Background())
 	assert.True(t, p)
 	assert.False(t, r)
 }
@@ -612,12 +617,13 @@ func TestSemiSyncClients(t *testing.T) {
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
 
 	db.AddQuery("SELECT 1", &sqltypes.Result{})
-	db.AddQuery("SHOW STATUS LIKE 'Rpl_semi_sync_master_clients'", sqltypes.MakeTestResult(sqltypes.MakeTestFields("field1|field2", "varchar|uint64"), "val1|12"))
+	db.AddQuery("SHOW VARIABLES LIKE 'rpl_semi_sync_%_enabled'", sqltypes.MakeTestResult(sqltypes.MakeTestFields("field1|field2", "varchar|varchar"), "rpl_semi_sync_source_enabled|ON", "rpl_semi_sync_replica_enabled|ON"))
+	db.AddQuery("SHOW STATUS LIKE 'Rpl_semi_sync_source_clients'", sqltypes.MakeTestResult(sqltypes.MakeTestFields("field1|field2", "varchar|uint64"), "val1|12"))
 
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
 
-	res := testMysqld.SemiSyncClients()
+	res := testMysqld.SemiSyncClients(context.Background())
 	assert.Equal(t, uint32(12), res)
 }
 
@@ -630,12 +636,13 @@ func TestSemiSyncSettings(t *testing.T) {
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
 
 	db.AddQuery("SELECT 1", &sqltypes.Result{})
-	db.AddQuery("SHOW VARIABLES LIKE 'rpl_semi_sync_%'", sqltypes.MakeTestResult(sqltypes.MakeTestFields("field1|field2", "varchar|uint64"), "rpl_semi_sync_master_timeout|123", "rpl_semi_sync_master_wait_for_slave_count|80"))
+	db.AddQuery("SHOW VARIABLES LIKE 'rpl_semi_sync_%_enabled'", sqltypes.MakeTestResult(sqltypes.MakeTestFields("field1|field2", "varchar|varchar"), "rpl_semi_sync_source_enabled|ON", "rpl_semi_sync_replica_enabled|ON"))
+	db.AddQuery("SHOW VARIABLES LIKE 'rpl_semi_sync_%'", sqltypes.MakeTestResult(sqltypes.MakeTestFields("field1|field2", "varchar|uint64"), "rpl_semi_sync_source_timeout|123", "rpl_semi_sync_source_wait_for_replica_count|80"))
 
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
 
-	timeout, replicas := testMysqld.SemiSyncSettings()
+	timeout, replicas := testMysqld.SemiSyncSettings(context.Background())
 	assert.Equal(t, uint64(123), timeout)
 	assert.Equal(t, uint32(80), replicas)
 }
@@ -649,18 +656,19 @@ func TestSemiSyncReplicationStatus(t *testing.T) {
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
 
 	db.AddQuery("SELECT 1", &sqltypes.Result{})
-	db.AddQuery("SHOW STATUS LIKE 'rpl_semi_sync_slave_status'", sqltypes.MakeTestResult(sqltypes.MakeTestFields("field1|field2", "varchar|uint64"), "rpl_semi_sync_slave_status|ON"))
+	db.AddQuery("SHOW VARIABLES LIKE 'rpl_semi_sync_%_enabled'", sqltypes.MakeTestResult(sqltypes.MakeTestFields("field1|field2", "varchar|varchar"), "rpl_semi_sync_source_enabled|ON", "rpl_semi_sync_replica_enabled|ON"))
+	db.AddQuery("SHOW STATUS LIKE 'rpl_semi_sync_replica_status'", sqltypes.MakeTestResult(sqltypes.MakeTestFields("field1|field2", "varchar|uint64"), "rpl_semi_sync_replica_status|ON"))
 
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
 
-	res, err := testMysqld.SemiSyncReplicationStatus()
+	res, err := testMysqld.SemiSyncReplicationStatus(context.Background())
 	assert.NoError(t, err)
 	assert.True(t, res)
 
-	db.AddQuery("SHOW STATUS LIKE 'rpl_semi_sync_slave_status'", sqltypes.MakeTestResult(sqltypes.MakeTestFields("field1|field2", "varchar|uint64"), "rpl_semi_sync_slave_status|OFF"))
+	db.AddQuery("SHOW STATUS LIKE 'rpl_semi_sync_replica_status'", sqltypes.MakeTestResult(sqltypes.MakeTestFields("field1|field2", "varchar|uint64"), "rpl_semi_sync_replica_status|OFF"))
 
-	res, err = testMysqld.SemiSyncReplicationStatus()
+	res, err = testMysqld.SemiSyncReplicationStatus(context.Background())
 	assert.NoError(t, err)
 	assert.False(t, res)
 }
@@ -672,20 +680,22 @@ func TestSemiSyncExtensionLoaded(t *testing.T) {
 	params := db.ConnParams()
 	cp := *params
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	db.AddQuery("SELECT 1", &sqltypes.Result{})
-	db.AddQuery("SELECT COUNT(*) > 0 AS plugin_loaded FROM information_schema.plugins WHERE plugin_name LIKE 'rpl_semi_sync%'", sqltypes.MakeTestResult(sqltypes.MakeTestFields("field1", "int64"), "1"))
+	db.AddQuery("SHOW VARIABLES LIKE 'rpl_semi_sync_%_enabled'", sqltypes.MakeTestResult(sqltypes.MakeTestFields("field1|field2", "varchar|varchar"), "rpl_semi_sync_source_enabled|ON", "rpl_semi_sync_replica_enabled|ON"))
 
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
 
-	res, err := testMysqld.SemiSyncExtensionLoaded()
+	res, err := testMysqld.SemiSyncExtensionLoaded(ctx)
 	assert.NoError(t, err)
-	assert.True(t, res)
+	assert.Contains(t, []mysql.SemiSyncType{mysql.SemiSyncTypeSource, mysql.SemiSyncTypeMaster}, res)
 
-	db.AddQuery("SELECT COUNT(*) > 0 AS plugin_loaded FROM information_schema.plugins WHERE plugin_name LIKE 'rpl_semi_sync%'", sqltypes.MakeTestResult(sqltypes.MakeTestFields("field1", "int64"), "0"))
+	db.AddQuery("SHOW VARIABLES LIKE 'rpl_semi_sync_%_enabled'", &sqltypes.Result{})
 
-	res, err = testMysqld.SemiSyncExtensionLoaded()
+	res, err = testMysqld.SemiSyncExtensionLoaded(ctx)
 	assert.NoError(t, err)
-	assert.False(t, res)
+	assert.Equal(t, mysql.SemiSyncTypeOff, res)
 }

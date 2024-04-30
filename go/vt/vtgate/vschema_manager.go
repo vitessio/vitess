@@ -52,6 +52,7 @@ type VSchemaManager struct {
 type SchemaInfo interface {
 	Tables(ks string) map[string]*vindexes.TableInfo
 	Views(ks string) map[string]sqlparser.SelectStatement
+	UDFs(ks string) []string
 }
 
 // GetCurrentSrvVschema returns a copy of the latest SrvVschema from the
@@ -201,63 +202,75 @@ func (vm *VSchemaManager) buildAndEnhanceVSchema(v *vschemapb.SrvVSchema) *vinde
 
 func (vm *VSchemaManager) updateFromSchema(vschema *vindexes.VSchema) {
 	for ksName, ks := range vschema.Keyspaces {
-		m := vm.schema.Tables(ksName)
-		// Before we add the foreign key definitions in the tables, we need to make sure that all the tables
-		// are created in the Vschema, so that later when we try to find the routed tables, we don't end up
-		// getting dummy tables.
-		for tblName, tblInfo := range m {
-			setColumns(ks, tblName, tblInfo.Columns)
-		}
+		vm.updateTableInfo(vschema, ks, ksName)
+		vm.updateViewInfo(ks, ksName)
+		vm.updateUDFsInfo(ks, ksName)
+	}
+}
 
-		// Now that we have ensured that all the tables are created, we can start populating the foreign keys
-		// in the tables.
-		for tblName, tblInfo := range m {
-			rTbl, err := vschema.FindRoutedTable(ksName, tblName, topodatapb.TabletType_PRIMARY)
-			if err != nil {
-				log.Errorf("error finding routed table %s: %v", tblName, err)
+func (vm *VSchemaManager) updateViewInfo(ks *vindexes.KeyspaceSchema, ksName string) {
+	views := vm.schema.Views(ksName)
+	if views != nil {
+		ks.Views = make(map[string]sqlparser.SelectStatement, len(views))
+		for name, def := range views {
+			ks.Views[name] = sqlparser.CloneSelectStatement(def)
+		}
+	}
+}
+func (vm *VSchemaManager) updateTableInfo(vschema *vindexes.VSchema, ks *vindexes.KeyspaceSchema, ksName string) {
+	m := vm.schema.Tables(ksName)
+	// Before we add the foreign key definitions in the tables, we need to make sure that all the tables
+	// are created in the Vschema, so that later when we try to find the routed tables, we don't end up
+	// getting dummy tables.
+	for tblName, tblInfo := range m {
+		setColumns(ks, tblName, tblInfo.Columns)
+	}
+
+	// Now that we have ensured that all the tables are created, we can start populating the foreign keys
+	// in the tables.
+	for tblName, tblInfo := range m {
+		rTbl, err := vschema.FindRoutedTable(ksName, tblName, topodatapb.TabletType_PRIMARY)
+		if err != nil {
+			log.Errorf("error finding routed table %s: %v", tblName, err)
+			continue
+		}
+		for _, fkDef := range tblInfo.ForeignKeys {
+			// Ignore internal tables as part of foreign key references.
+			if schema.IsInternalOperationTableName(fkDef.ReferenceDefinition.ReferencedTable.Name.String()) {
 				continue
 			}
-			for _, fkDef := range tblInfo.ForeignKeys {
-				// Ignore internal tables as part of foreign key references.
-				if schema.IsInternalOperationTableName(fkDef.ReferenceDefinition.ReferencedTable.Name.String()) {
-					continue
-				}
-				parentTbl, err := vschema.FindRoutedTable(ksName, fkDef.ReferenceDefinition.ReferencedTable.Name.String(), topodatapb.TabletType_PRIMARY)
-				if err != nil {
-					log.Errorf("error finding parent table %s: %v", fkDef.ReferenceDefinition.ReferencedTable.Name.String(), err)
-					continue
-				}
-				rTbl.ParentForeignKeys = append(rTbl.ParentForeignKeys, vindexes.NewParentFkInfo(parentTbl, fkDef))
-				parentTbl.ChildForeignKeys = append(parentTbl.ChildForeignKeys, vindexes.NewChildFkInfo(rTbl, fkDef))
+			parentTbl, err := vschema.FindRoutedTable(ksName, fkDef.ReferenceDefinition.ReferencedTable.Name.String(), topodatapb.TabletType_PRIMARY)
+			if err != nil {
+				log.Errorf("error finding parent table %s: %v", fkDef.ReferenceDefinition.ReferencedTable.Name.String(), err)
+				continue
 			}
-			for _, idxDef := range tblInfo.Indexes {
-				switch idxDef.Info.Type {
-				case sqlparser.IndexTypePrimary:
-					for _, idxCol := range idxDef.Columns {
-						rTbl.PrimaryKey = append(rTbl.PrimaryKey, idxCol.Column)
-					}
-				case sqlparser.IndexTypeUnique:
-					var uniqueKey sqlparser.Exprs
-					for _, idxCol := range idxDef.Columns {
-						if idxCol.Expression == nil {
-							uniqueKey = append(uniqueKey, sqlparser.NewColName(idxCol.Column.String()))
-						} else {
-							uniqueKey = append(uniqueKey, idxCol.Expression)
-						}
-					}
-					rTbl.UniqueKeys = append(rTbl.UniqueKeys, uniqueKey)
-				}
-			}
+			rTbl.ParentForeignKeys = append(rTbl.ParentForeignKeys, vindexes.NewParentFkInfo(parentTbl, fkDef))
+			parentTbl.ChildForeignKeys = append(parentTbl.ChildForeignKeys, vindexes.NewChildFkInfo(rTbl, fkDef))
 		}
-
-		views := vm.schema.Views(ksName)
-		if views != nil {
-			ks.Views = make(map[string]sqlparser.SelectStatement, len(views))
-			for name, def := range views {
-				ks.Views[name] = sqlparser.CloneSelectStatement(def)
+		for _, idxDef := range tblInfo.Indexes {
+			switch idxDef.Info.Type {
+			case sqlparser.IndexTypePrimary:
+				for _, idxCol := range idxDef.Columns {
+					rTbl.PrimaryKey = append(rTbl.PrimaryKey, idxCol.Column)
+				}
+			case sqlparser.IndexTypeUnique:
+				var uniqueKey sqlparser.Exprs
+				for _, idxCol := range idxDef.Columns {
+					if idxCol.Expression == nil {
+						uniqueKey = append(uniqueKey, sqlparser.NewColName(idxCol.Column.String()))
+					} else {
+						uniqueKey = append(uniqueKey, idxCol.Expression)
+					}
+				}
+				rTbl.UniqueKeys = append(rTbl.UniqueKeys, uniqueKey)
 			}
 		}
 	}
+}
+
+// updateUDFsInfo updates the aggregate UDFs in the Vschema.
+func (vm *VSchemaManager) updateUDFsInfo(ks *vindexes.KeyspaceSchema, ksName string) {
+	ks.AggregateUDFs = vm.schema.UDFs(ksName)
 }
 
 func markErrorIfCyclesInFk(vschema *vindexes.VSchema) {

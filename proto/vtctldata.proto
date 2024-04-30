@@ -208,10 +208,12 @@ message Shard {
 
 message WorkflowOptions {
   string tenant_id = 1;
-  string source_keyspace_alias = 2;
   // Remove auto_increment clauses on tables when moving them to a sharded
   // keyspace.
-  bool strip_sharded_auto_increment = 3;
+  bool strip_sharded_auto_increment = 2;
+  // Shards on which vreplication streams in the target keyspace are created for this workflow and to which the data
+  // from the source will be vreplicated.
+  repeated string shards = 3;
 }
 
 // TODO: comment the hell out of this.

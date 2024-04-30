@@ -154,8 +154,17 @@ func (mysqlFlavor) resetReplicationCommands(c *Conn) []string {
 		"RESET SLAVE ALL", // "ALL" makes it forget source host:port.
 		"RESET MASTER",    // This will also clear gtid_executed and gtid_purged.
 	}
-	if c.SemiSyncExtensionLoaded() {
+	status, err := c.SemiSyncExtensionLoaded()
+	if err != nil {
+		return resetCommands
+	}
+	switch status {
+	case SemiSyncTypeSource:
+		resetCommands = append(resetCommands, "SET GLOBAL rpl_semi_sync_source_enabled = false, GLOBAL rpl_semi_sync_replica_enabled = false") // semi-sync will be enabled if needed when replica is started.
+	case SemiSyncTypeMaster:
 		resetCommands = append(resetCommands, "SET GLOBAL rpl_semi_sync_master_enabled = false, GLOBAL rpl_semi_sync_slave_enabled = false") // semi-sync will be enabled if needed when replica is started.
+	default:
+		// Nothing to do.
 	}
 	return resetCommands
 }
@@ -329,31 +338,15 @@ GROUP BY t.table_name, t.table_type, t.create_time, t.table_comment`
 
 // TablesWithSize80 is a query to select table along with size for mysql 8.0
 //
-// We join with a subquery that materializes the data from `information_schema.innodb_sys_tablespaces`
-// early for performance reasons. This effectively causes only a single read of `information_schema.innodb_tablespaces`
-// per query.
 // Note the following:
-//   - We use UNION ALL to deal differently with partitioned tables vs. non-partitioned tables.
-//     Originally, the query handled both, but that introduced "WHERE ... OR" conditions that led to poor query
-//     optimization. By separating to UNION ALL we remove all "OR" conditions.
+//   - We use a single query to fetch both partitioned and non-partitioned tables. This is because
+//     accessing `information_schema.innodb_tablespaces` is expensive on servers with many tablespaces,
+//     and every query that loads the table needs to perform full table scans on it. Doing a single
+//     table scan is more efficient than doing more than one.
 //   - We utilize `INFORMATION_SCHEMA`.`TABLES`.`CREATE_OPTIONS` column to do early pruning before the JOIN.
 //   - `TABLES`.`TABLE_NAME` has `utf8mb4_0900_ai_ci` collation.  `INNODB_TABLESPACES`.`NAME` has `utf8mb3_general_ci`.
 //     We normalize the collation to get better query performance (we force the casting at the time of our choosing)
-//   - `create_options` is NULL for views, and therefore we need an additional UNION ALL to include views
 const TablesWithSize80 = `SELECT t.table_name,
-		t.table_type,
-		UNIX_TIMESTAMP(t.create_time),
-		t.table_comment,
-		i.file_size,
-		i.allocated_size
-	FROM information_schema.tables t
-		LEFT JOIN information_schema.innodb_tablespaces i
-	ON i.name = CONCAT(t.table_schema, '/', t.table_name) COLLATE utf8mb3_general_ci
-	WHERE
-		t.table_schema = database() AND not t.create_options <=> 'partitioned'
-UNION ALL
-	SELECT
-		t.table_name,
 		t.table_type,
 		UNIX_TIMESTAMP(t.create_time),
 		t.table_comment,
@@ -361,9 +354,9 @@ UNION ALL
 		SUM(i.allocated_size)
 	FROM information_schema.tables t
 		LEFT JOIN information_schema.innodb_tablespaces i
-	ON i.name LIKE (CONCAT(t.table_schema, '/', t.table_name, '#p#%') COLLATE utf8mb3_general_ci )
+	ON i.name LIKE CONCAT(t.table_schema, '/', t.table_name, IF(t.create_options <=> 'partitioned', '#p#%', '')) COLLATE utf8mb3_general_ci
 	WHERE
-		t.table_schema = database() AND t.create_options <=> 'partitioned'
+		t.table_schema = database()
 	GROUP BY
 		t.table_schema, t.table_name, t.table_type, t.create_time, t.table_comment
 `

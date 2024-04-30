@@ -31,6 +31,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -216,7 +217,7 @@ func run(cmd *cobra.Command, args []string) (err error) {
 			return err
 		}
 		servenv.OnClose(func() {
-			ctx, cancel := context.WithTimeout(context.Background(), mysqlctl.DefaultShutdownTimeout+10*time.Second)
+			ctx, cancel := context.WithTimeout(cmd.Context(), mysqlctl.DefaultShutdownTimeout+10*time.Second)
 			defer cancel()
 			mysqld.Shutdown(ctx, cnf, true, mysqlctl.DefaultShutdownTimeout)
 		})
@@ -240,7 +241,7 @@ func run(cmd *cobra.Command, args []string) (err error) {
 	if err != nil {
 		// ensure we start mysql in the event we fail here
 		if startMysql {
-			ctx, cancel := context.WithTimeout(context.Background(), mysqlctl.DefaultShutdownTimeout+10*time.Second)
+			ctx, cancel := context.WithTimeout(cmd.Context(), mysqlctl.DefaultShutdownTimeout+10*time.Second)
 			defer cancel()
 			mysqld.Shutdown(ctx, cnf, true, mysqlctl.DefaultShutdownTimeout)
 		}
@@ -387,11 +388,11 @@ func (mysqld *vtcomboMysqld) StopReplication(hookExtraEnv map[string]string) err
 }
 
 // SetSemiSyncEnabled implements the MysqlDaemon interface
-func (mysqld *vtcomboMysqld) SetSemiSyncEnabled(source, replica bool) error {
+func (mysqld *vtcomboMysqld) SetSemiSyncEnabled(ctx context.Context, source, replica bool) error {
 	return nil
 }
 
 // SemiSyncExtensionLoaded implements the MysqlDaemon interface
-func (mysqld *vtcomboMysqld) SemiSyncExtensionLoaded() (bool, error) {
-	return true, nil
+func (mysqld *vtcomboMysqld) SemiSyncExtensionLoaded(ctx context.Context) (mysql.SemiSyncType, error) {
+	return mysql.SemiSyncTypeSource, nil
 }

@@ -56,11 +56,11 @@ func isMergeable(ctx *plancontext.PlanningContext, query sqlparser.SelectStateme
 
 		// if we have grouping, we have already checked that it's safe, and don't need to check for aggregations
 		// but if we don't have groupings, we need to check if there are aggregations that will mess with us
-		if sqlparser.ContainsAggregation(node.SelectExprs) {
+		if ContainsAggr(ctx, node.SelectExprs) {
 			return false
 		}
 
-		if sqlparser.ContainsAggregation(node.Having) {
+		if ContainsAggr(ctx, node.Having) {
 			return false
 		}
 
