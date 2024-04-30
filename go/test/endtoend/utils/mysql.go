@@ -242,7 +242,11 @@ func compareVitessAndMySQLResults(t TestingT, query string, vtConn *mysql.Conn, 
 	return errors.New(errStr)
 }
 
-var checkFeildsRegExpr = regexp.MustCompile(`([a-zA-Z]*)(\d*)`)
+// Parse the string representation of a type (i.e. "INT64") into a three elements slice.
+// First element of the slice will contain the full expression, second element contains the
+// type "INT" and the third element contains the size if there is any "64" or empty if we use
+// "TIMESTAMP" for instance.
+var checkFieldsRegExpr = regexp.MustCompile(`([a-zA-Z]*)(\d*)`)
 
 func checkFields(t TestingT, columnName string, vtField, myField *querypb.Field) {
 	t.Helper()
@@ -252,9 +256,11 @@ func checkFields(t TestingT, columnName string, vtField, myField *querypb.Field)
 	}
 
 	if vtField.Type != myField.Type {
-		vtMatches := checkFeildsRegExpr.FindStringSubmatch(vtField.Type.String())
-		myMatches := checkFeildsRegExpr.FindStringSubmatch(myField.Type.String())
+		vtMatches := checkFieldsRegExpr.FindStringSubmatch(vtField.Type.String())
+		myMatches := checkFieldsRegExpr.FindStringSubmatch(myField.Type.String())
 
+		// Here we want to fail if we have totally different types for instance: "INT64" vs "TIMESTAMP"
+		// We do this by checking the length of the regexp slices and checking the second item of the slices (the real type i.e. "INT")
 		if len(vtMatches) != 3 || len(vtMatches) != len(myMatches) || vtMatches[1] != myMatches[1] {
 			fail()
 			return
@@ -265,7 +271,10 @@ func checkFields(t TestingT, columnName string, vtField, myField *querypb.Field)
 			fail()
 			return
 		}
-		if vtVal <= myVal {
+
+		// Types the same now, however, if the size of the type is smaller on Vitess compared to MySQL
+		// we need to fail. We can allow superset but not the opposite.
+		if vtVal < myVal {
 			fail()
 			return
 		}
