@@ -177,7 +177,7 @@ func (c *Conn) BinlogInformation() (string, bool, bool, string, error) {
 		return "", false, false, "", err
 	}
 	if len(qr.Rows) != 1 {
-		return "", false, false, "", errors.New("unable to read global variables binlog_format, log_bin, log_replica_updates, gtid_mode, binlog_rowge")
+		return "", false, false, "", errors.New("unable to read global variables binlog_format, log_bin, log_replica_updates, binlog_row_image")
 	}
 	res := qr.Named().Row()
 	binlogFormat, err := res.ToString("@@global.binlog_format")
