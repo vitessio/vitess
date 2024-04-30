@@ -242,7 +242,7 @@ func compareVitessAndMySQLResults(t TestingT, query string, vtConn *mysql.Conn, 
 	return errors.New(errStr)
 }
 
-var checkFeildsRegExpr = regexp.MustCompile(`(.*)(\d*)`)
+var checkFeildsRegExpr = regexp.MustCompile(`([a-zA-Z]*)(\d*)`)
 
 func checkFields(t TestingT, columnName string, vtField, myField *querypb.Field) {
 	t.Helper()
@@ -257,14 +257,17 @@ func checkFields(t TestingT, columnName string, vtField, myField *querypb.Field)
 
 		if len(vtMatches) != 3 || len(vtMatches) != len(myMatches) || vtMatches[1] != myMatches[1] {
 			fail()
+			return
 		}
 		vtVal, vtErr := strconv.Atoi(vtMatches[2])
-		myVal, myErr := strconv.Atoi(vtMatches[2])
+		myVal, myErr := strconv.Atoi(myMatches[2])
 		if vtErr != nil || myErr != nil {
 			fail()
+			return
 		}
 		if vtVal <= myVal {
 			fail()
+			return
 		}
 	}
 
