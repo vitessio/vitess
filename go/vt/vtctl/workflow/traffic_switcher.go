@@ -440,21 +440,24 @@ func (ts *trafficSwitcher) deleteShardRoutingRules(ctx context.Context) error {
 }
 
 func (ts *trafficSwitcher) deleteKeyspaceRoutingRules(ctx context.Context) error {
-	log.Infof("deleteKeyspaceRoutingRules: workflow %s.%s", ts.targetKeyspace, ts.workflow)
 	if !ts.IsMultiTenantMigration() {
 		return nil
 	}
-	krr, err := topotools.GetKeyspaceRoutingRules(ctx, ts.TopoServer())
-	if err != nil {
-		return err
-	}
-	for _, suffix := range tabletTypeSuffixes {
-		delete(krr, ts.SourceKeyspaceName()+suffix)
-	}
-	if err := topotools.SaveKeyspaceRoutingRules(ctx, ts.TopoServer(), krr); err != nil {
-		return err
-	}
-	return nil
+	log.Infof("deleteKeyspaceRoutingRules: workflow %s.%s", ts.targetKeyspace, ts.workflow)
+	return topotools.SaveKeyspaceRoutingRulesLocked(ctx, ts.TopoServer(), "ApplyKeyspaceRoutingRules",
+		func(ctx context.Context) error {
+			krr, err := topotools.GetKeyspaceRoutingRules(ctx, ts.TopoServer())
+			if err != nil {
+				return err
+			}
+			for _, suffix := range tabletTypeSuffixes {
+				delete(krr, ts.SourceKeyspaceName()+suffix)
+			}
+			if err := topotools.SaveKeyspaceRoutingRules(ctx, ts.TopoServer(), krr); err != nil {
+				return err
+			}
+			return nil
+		})
 }
 
 func (ts *trafficSwitcher) dropSourceDeniedTables(ctx context.Context) error {

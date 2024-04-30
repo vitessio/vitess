@@ -27,9 +27,6 @@ import (
 // KeyspaceRoutingRulesLock is a wrapper over TopoLock, to serialize updates to the keyspace routing rules.
 type KeyspaceRoutingRulesLock struct {
 	*TopoLock
-
-	// sourceKeyspace is only used for logging, at the moment
-	sourceKeyspace string
 }
 
 func createTopoDirIfNeeded(ctx context.Context, ts *Server) error {
@@ -48,11 +45,7 @@ func createTopoDirIfNeeded(ctx context.Context, ts *Server) error {
 	return err
 }
 
-func NewKeyspaceRoutingRulesLock(ctx context.Context, ts *Server, sourceKeyspace string) (*KeyspaceRoutingRulesLock, error) {
-	if sourceKeyspace == "" {
-		return nil, fmt.Errorf("sourceKeyspace is not specified")
-	}
-
+func NewKeyspaceRoutingRulesLock(ctx context.Context, ts *Server, name string) (*KeyspaceRoutingRulesLock, error) {
 	if err := createTopoDirIfNeeded(ctx, ts); err != nil {
 		log.Errorf("Failed to create keyspace routing rules lock file: %v", err)
 		return nil, err
@@ -61,7 +54,7 @@ func NewKeyspaceRoutingRulesLock(ctx context.Context, ts *Server, sourceKeyspace
 	return &KeyspaceRoutingRulesLock{
 		TopoLock: &TopoLock{
 			Path: KeyspaceRoutingRulesPath,
-			Name: fmt.Sprintf("KeyspaceRoutingRules for %s", sourceKeyspace),
+			Name: fmt.Sprintf("KeyspaceRoutingRules:: %s", name),
 			ts:   ts,
 		},
 	}, nil

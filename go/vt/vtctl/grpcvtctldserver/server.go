@@ -5173,7 +5173,10 @@ func (s *VtctldServer) ApplyKeyspaceRoutingRules(ctx context.Context, req *vtctl
 	span.Annotate("skip_rebuild", req.SkipRebuild)
 	span.Annotate("rebuild_cells", strings.Join(req.RebuildCells, ","))
 
-	if err := s.ts.SaveKeyspaceRoutingRules(ctx, req.KeyspaceRoutingRules); err != nil {
+	if err := topotools.SaveKeyspaceRoutingRulesLocked(ctx, s.ts, "ApplyKeyspaceRoutingRules",
+		func(ctx context.Context) error {
+			return s.ts.SaveKeyspaceRoutingRules(ctx, req.KeyspaceRoutingRules)
+		}); err != nil {
 		return nil, err
 	}
 

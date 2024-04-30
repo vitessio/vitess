@@ -158,4 +158,18 @@ func SaveKeyspaceRoutingRules(ctx context.Context, ts *topo.Server, rules map[st
 	return ts.SaveKeyspaceRoutingRules(ctx, keyspaceRoutingRules)
 }
 
+func SaveKeyspaceRoutingRulesLocked(ctx context.Context, ts *topo.Server, name string,
+	callback func(ctx context.Context) error) error {
+	lock, err := topo.NewKeyspaceRoutingRulesLock(ctx, ts, name)
+	if err != nil {
+		return err
+	}
+	lockCtx, unlock, lockErr := lock.Lock(ctx)
+	if lockErr != nil {
+		return lockErr
+	}
+	defer unlock(&err)
+	return callback(lockCtx)
+}
+
 // endregion
