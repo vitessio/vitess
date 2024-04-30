@@ -222,7 +222,7 @@ func run(cmd *cobra.Command, args []string) (err error) {
 			mysqld.Shutdown(ctx, cnf, true, mysqlctl.DefaultShutdownTimeout)
 		})
 		// We want to ensure we can write to this database
-		mysqld.SetReadOnly(false)
+		mysqld.SetReadOnly(cmd.Context(), false)
 
 	} else {
 		dbconfigs.GlobalDBConfigs.InitWithSocket("", env.CollationEnv())
@@ -368,12 +368,12 @@ func (mysqld *vtcomboMysqld) SetReplicationSource(ctx context.Context, host stri
 }
 
 // StartReplication implements the MysqlDaemon interface
-func (mysqld *vtcomboMysqld) StartReplication(hookExtraEnv map[string]string) error {
+func (mysqld *vtcomboMysqld) StartReplication(ctx context.Context, hookExtraEnv map[string]string) error {
 	return nil
 }
 
 // RestartReplication implements the MysqlDaemon interface
-func (mysqld *vtcomboMysqld) RestartReplication(hookExtraEnv map[string]string) error {
+func (mysqld *vtcomboMysqld) RestartReplication(ctx context.Context, hookExtraEnv map[string]string) error {
 	return nil
 }
 
@@ -383,7 +383,7 @@ func (mysqld *vtcomboMysqld) StartReplicationUntilAfter(ctx context.Context, pos
 }
 
 // StopReplication implements the MysqlDaemon interface
-func (mysqld *vtcomboMysqld) StopReplication(hookExtraEnv map[string]string) error {
+func (mysqld *vtcomboMysqld) StopReplication(ctx context.Context, hookExtraEnv map[string]string) error {
 	return nil
 }
 
