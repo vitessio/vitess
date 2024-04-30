@@ -2194,8 +2194,13 @@ func (ae *AliasedExpr) ColumnName() string {
 		return ae.As.String()
 	}
 
-	if col, ok := ae.Expr.(*ColName); ok {
-		return col.Name.String()
+	switch node := ae.Expr.(type) {
+	case *ColName:
+		return node.Name.String()
+	case *Literal:
+		if node.Type == StrVal {
+			return node.Val
+		}
 	}
 
 	return String(ae.Expr)
