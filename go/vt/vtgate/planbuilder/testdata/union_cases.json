@@ -601,8 +601,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select dt.c0 as `'b'`, dt.c1 as `'c'`, weight_string(dt.c0), weight_string(dt.c1) from (select 'b', 'c' from `user` where 1 != 1) as dt(c0, c1) where 1 != 1",
-                "Query": "select dt.c0 as `'b'`, dt.c1 as `'c'`, weight_string(dt.c0), weight_string(dt.c1) from (select distinct 'b', 'c' from `user`) as dt(c0, c1)",
+                "FieldQuery": "select dt.c0 as b, dt.c1 as c, weight_string(dt.c0), weight_string(dt.c1) from (select 'b', 'c' from `user` where 1 != 1) as dt(c0, c1) where 1 != 1",
+                "Query": "select dt.c0 as b, dt.c1 as c, weight_string(dt.c0), weight_string(dt.c1) from (select distinct 'b', 'c' from `user`) as dt(c0, c1)",
                 "Table": "`user`"
               }
             ]
@@ -639,8 +639,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select dt.c0 as `'b'`, dt.c1 as `'c'`, weight_string(dt.c0), weight_string(dt.c1) from (select 'b', 'c' from `user` where 1 != 1) as dt(c0, c1) where 1 != 1",
-                "Query": "select dt.c0 as `'b'`, dt.c1 as `'c'`, weight_string(dt.c0), weight_string(dt.c1) from (select distinct 'b', 'c' from `user`) as dt(c0, c1)",
+                "FieldQuery": "select dt.c0 as b, dt.c1 as c, weight_string(dt.c0), weight_string(dt.c1) from (select 'b', 'c' from `user` where 1 != 1) as dt(c0, c1) where 1 != 1",
+                "Query": "select dt.c0 as b, dt.c1 as c, weight_string(dt.c0), weight_string(dt.c1) from (select distinct 'b', 'c' from `user`) as dt(c0, c1)",
                 "Table": "`user`"
               },
               {
