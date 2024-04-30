@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 var (
@@ -65,6 +66,47 @@ func TestMain(m *testing.M) {
 		return m.Run()
 	}()
 	os.Exit(exitCode)
+}
+
+func TestCheckFields(t *testing.T) {
+	createField := func(typ querypb.Type) *querypb.Field {
+		return &querypb.Field{
+			Type: typ,
+		}
+	}
+
+	cases := []struct {
+		fail    bool
+		vtField querypb.Type
+		myField querypb.Type
+	}{
+		{
+			vtField: querypb.Type_INT32,
+			myField: querypb.Type_INT32,
+		},
+		{
+			vtField: querypb.Type_INT64,
+			myField: querypb.Type_INT32,
+		},
+		{
+			fail:    true,
+			vtField: querypb.Type_FLOAT32,
+			myField: querypb.Type_INT32,
+		},
+		{
+			fail:    true,
+			vtField: querypb.Type_TIMESTAMP,
+			myField: querypb.Type_TUPLE,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(fmt.Sprintf("%s_%s", c.vtField.String(), c.myField.String()), func(t *testing.T) {
+			tt := &testing.T{}
+			checkFields(tt, "col", createField(c.vtField), createField(c.myField))
+			require.Equal(t, c.fail, tt.Failed())
+		})
+	}
 }
 
 func TestCreateMySQL(t *testing.T) {
