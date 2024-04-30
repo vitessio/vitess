@@ -54,6 +54,13 @@ type dmlOp struct {
 func sortDmlOps(dmlOps []dmlOp) []dmlOp {
 	sort.Slice(dmlOps, func(i, j int) bool {
 		a, b := dmlOps[i], dmlOps[j]
+		// We want the dml orders to happen in a specific order so that multi table dml queries
+		// return the correct rows updated. For example in a multi table delete on a pair of tables
+		// related by foreign keys, we want the delete to happen on the child table first and then the parent
+		// so that the cascade operations don't affect the rows affected.
+		if a.vTbl.FkOrder != b.vTbl.FkOrder {
+			return a.vTbl.FkOrder > b.vTbl.FkOrder
+		}
 		// Get the first Vindex of a and b, if available
 		aVdx, bVdx := getFirstVindex(a.vTbl), getFirstVindex(b.vTbl)
 

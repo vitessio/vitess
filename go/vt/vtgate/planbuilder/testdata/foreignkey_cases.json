@@ -794,6 +794,95 @@
     }
   },
   {
+    "comment": "Multi table delete related by foreign keys, ordering of the deletes is important for rows affected",
+    "query": "delete u_tbl7, u_tbl4 from u_tbl7 join u_tbl4 on u_tbl4.col4 = u_tbl7.col7 where u_tbl4.col4 = 5",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete u_tbl7, u_tbl4 from u_tbl7 join u_tbl4 on u_tbl4.col4 = u_tbl7.col7 where u_tbl4.col4 = 5",
+      "Instructions": {
+        "OperatorType": "DMLWithInput",
+        "TargetTabletType": "PRIMARY",
+        "Offset": [
+          "0:[0]",
+          "1:[1]"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "FieldQuery": "select u_tbl4.id, u_tbl7.id from u_tbl7, u_tbl4 where 1 != 1",
+            "Query": "select u_tbl4.id, u_tbl7.id from u_tbl7, u_tbl4 where u_tbl4.col4 = 5 and u_tbl4.col4 = u_tbl7.col7 for update",
+            "Table": "u_tbl4, u_tbl7"
+          },
+          {
+            "OperatorType": "Delete",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "TargetTabletType": "PRIMARY",
+            "Query": "delete from u_tbl4 where u_tbl4.id in ::dml_vals",
+            "Table": "u_tbl4"
+          },
+          {
+            "OperatorType": "FkCascade",
+            "Inputs": [
+              {
+                "InputName": "Selection",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "FieldQuery": "select u_tbl7.col7 from u_tbl7 where 1 != 1",
+                "Query": "select u_tbl7.col7 from u_tbl7 where u_tbl7.id in ::dml_vals for update",
+                "Table": "u_tbl7"
+              },
+              {
+                "InputName": "CascadeChild-1",
+                "OperatorType": "Delete",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "BvName": "fkc_vals",
+                "Cols": [
+                  0
+                ],
+                "Query": "delete from u_tbl4 where (col4) in ::fkc_vals",
+                "Table": "u_tbl4"
+              },
+              {
+                "InputName": "Parent",
+                "OperatorType": "Delete",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "Query": "delete from u_tbl7 where u_tbl7.id in ::dml_vals",
+                "Table": "u_tbl7"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "unsharded_fk_allow.u_tbl4",
+        "unsharded_fk_allow.u_tbl7"
+      ]
+    }
+  },
+  {
     "comment": "update in a table with non-literal value - set null",
     "query": "update u_tbl2 set m = 2, col2 = col1 + 'bar' where id = 1",
     "plan": {

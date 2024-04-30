@@ -169,3 +169,33 @@ F - A`,
 		})
 	}
 }
+
+func TestTopologicalSorting(t *testing.T) {
+	testcases := []struct {
+		name            string
+		edges           [][2]string
+		topologicalSort []string
+	}{
+		{
+			name: "non-cyclic graph",
+			edges: [][2]string{
+				{"A", "B"},
+				{"B", "C"},
+				{"A", "D"},
+				{"B", "E"},
+				{"D", "E"},
+			},
+			topologicalSort: []string{"A", "D", "B", "E", "C"},
+		},
+	}
+	for _, tt := range testcases {
+		t.Run(tt.name, func(t *testing.T) {
+			graph := NewGraph[string]()
+			for _, edge := range tt.edges {
+				graph.AddEdge(edge[0], edge[1])
+			}
+			topoSort := graph.TopologicalSorting()
+			require.EqualValues(t, tt.topologicalSort, topoSort)
+		})
+	}
+}

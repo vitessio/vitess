@@ -129,6 +129,9 @@ type Table struct {
 	// MySQL error message: ERROR 3756 (HY000): The primary key cannot be a functional index
 	PrimaryKey sqlparser.Columns `json:"primary_key,omitempty"`
 	UniqueKeys []sqlparser.Exprs `json:"unique_keys,omitempty"`
+
+	// FkOrder is used to order the tables in a keyspace such that all CASCADE foreign keys have child tables coming before parent tables.
+	FkOrder int `json:"-"`
 }
 
 // GetTableName gets the sqlparser.TableName for the vindex Table.

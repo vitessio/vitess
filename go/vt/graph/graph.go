@@ -157,3 +157,36 @@ func (gr *Graph[C]) hasCyclesDfs(color map[C]int, vertex C) (bool, []C) {
 	color[vertex] = black
 	return false, nil
 }
+
+// TopologicalSorting returns a topological sorting of the vertices. This means that the ordering of vertices such that all the edges will
+// go from a lower number vertex to a higher numbered one. For a acyclic graph, a valid topological sorting solution always exists.
+// More information can be found at https://cp-algorithms.com/graph/topological-sort.html
+func (gr *Graph[C]) TopologicalSorting() []C {
+	// If the graph is empty, then we don't need to check anything.
+	if gr.Empty() {
+		return nil
+	}
+
+	visited := map[C]bool{}
+	var topoSort []C
+	for _, vertex := range gr.orderedVertices {
+		// If any vertex is still white, we initiate a new DFS.
+		if !visited[vertex] {
+			topoSort = gr.topoSortDfs(visited, topoSort, vertex)
+		}
+	}
+
+	slices.Reverse(topoSort)
+	return topoSort
+}
+
+// topoSortDfs is the DFS implementation used for finding a topological sorting.
+func (gr *Graph[C]) topoSortDfs(visited map[C]bool, topoSort []C, vertex C) []C {
+	visited[vertex] = true
+	for _, end := range gr.edges[vertex] {
+		if !visited[end] {
+			topoSort = gr.topoSortDfs(visited, topoSort, end)
+		}
+	}
+	return append(topoSort, vertex)
+}

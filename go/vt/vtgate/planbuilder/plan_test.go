@@ -44,6 +44,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
+	vtgateutils "vitess.io/vitess/go/vt/vtgate/utils"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -231,7 +232,7 @@ func setFks(t *testing.T, vschema *vindexes.VSchema) {
 		addPKs(t, vschema, "unsharded_fk_allow", []string{"u_tbl1", "u_tbl2", "u_tbl3", "u_tbl4", "u_tbl5", "u_tbl6", "u_tbl7", "u_tbl8", "u_tbl9", "u_tbl10", "u_tbl11",
 			"u_multicol_tbl1", "u_multicol_tbl2", "u_multicol_tbl3"})
 	}
-
+	vtgateutils.MarkErrorIfCyclesInFkAndOrderTables(vschema)
 }
 
 func addPKs(t *testing.T, vschema *vindexes.VSchema, ks string, tbls []string) {
