@@ -19,6 +19,10 @@ package semantics
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqltypes"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -64,6 +68,7 @@ func (etc *earlyTableCollector) up(cursor *sqlparser.Cursor) {
 			etc.withTables[cte.ID] = nil
 		}
 	}
+
 }
 
 func (etc *earlyTableCollector) visitAliasedTableExpr(aet *sqlparser.AliasedTableExpr) {
@@ -110,9 +115,25 @@ func (tc *tableCollector) up(cursor *sqlparser.Cursor) error {
 		return tc.visitAliasedTableExpr(node)
 	case *sqlparser.Union:
 		return tc.visitUnion(node)
+	case *sqlparser.RowAlias:
+		ins, ok := cursor.Parent().(*sqlparser.Insert)
+		if !ok {
+			return vterrors.VT13001("RowAlias is expected to hang off an Insert statement")
+		}
+		return tc.visitRowAlias(ins, node)
 	default:
 		return nil
 	}
+}
+
+func (tc *tableCollector) visitAliasedTableExpr(node *sqlparser.AliasedTableExpr) error {
+	switch t := node.Expr.(type) {
+	case *sqlparser.DerivedTable:
+		return tc.handleDerivedTable(node, t)
+	case sqlparser.TableName:
+		return tc.handleTableName(node, t)
+	}
+	return nil
 }
 
 func (tc *tableCollector) visitUnion(union *sqlparser.Union) error {
@@ -157,15 +178,126 @@ func (tc *tableCollector) visitUnion(union *sqlparser.Union) error {
 	return nil
 }
 
-func (tc *tableCollector) visitAliasedTableExpr(node *sqlparser.AliasedTableExpr) error {
-	switch t := node.Expr.(type) {
-	case *sqlparser.DerivedTable:
-		return tc.handleDerivedTable(node, t)
+func (tc *tableCollector) visitRowAlias(ins *sqlparser.Insert, rowAlias *sqlparser.RowAlias) error {
+	origTableInfo := tc.Tables[0]
 
-	case sqlparser.TableName:
-		return tc.handleTableName(node, t)
+	colNames, types, err := tc.getColumnNamesAndTypes(ins, rowAlias, origTableInfo)
+	if err != nil {
+		return err
 	}
-	return nil
+
+	derivedTable := buildDerivedTable(colNames, rowAlias, types)
+	tc.Tables = append(tc.Tables, derivedTable)
+	current := tc.scoper.currentScope()
+	return current.addTable(derivedTable)
+}
+
+func (tc *tableCollector) getColumnNamesAndTypes(ins *sqlparser.Insert, rowAlias *sqlparser.RowAlias, origTableInfo TableInfo) (colNames []string, types []evalengine.Type, err error) {
+	switch {
+	case len(rowAlias.Columns) > 0 && len(ins.Columns) > 0:
+		return tc.handleExplicitColumns(ins, rowAlias, origTableInfo)
+	case len(rowAlias.Columns) > 0:
+		return tc.handleRowAliasColumns(origTableInfo, rowAlias)
+	case len(ins.Columns) > 0:
+		colNames, types = tc.handleInsertColumns(ins, origTableInfo)
+		return colNames, types, nil
+	default:
+		return tc.handleDefaultColumns(origTableInfo)
+	}
+}
+
+// handleDefaultColumns have no explicit column list on the insert statement and no column list on the row alias
+func (tc *tableCollector) handleDefaultColumns(origTableInfo TableInfo) ([]string, []evalengine.Type, error) {
+	if !origTableInfo.authoritative() {
+		return nil, nil, vterrors.VT09015()
+	}
+	var colNames []string
+	var types []evalengine.Type
+	for _, column := range origTableInfo.getColumns(true /* ignoreInvisibleCol */) {
+		colNames = append(colNames, column.Name)
+		types = append(types, column.Type)
+	}
+	return colNames, types, nil
+}
+
+// handleInsertColumns have explicit column list on the insert statement and no column list on the row alias
+func (tc *tableCollector) handleInsertColumns(ins *sqlparser.Insert, origTableInfo TableInfo) ([]string, []evalengine.Type) {
+	var colNames []string
+	var types []evalengine.Type
+	origCols := origTableInfo.getColumns(false /* ignoreInvisbleCol */)
+for2:
+	for _, column := range ins.Columns {
+		colNames = append(colNames, column.String())
+		for _, origCol := range origCols {
+			if column.EqualString(origCol.Name) {
+				types = append(types, origCol.Type)
+				continue for2
+			}
+		}
+		types = append(types, evalengine.NewType(sqltypes.Unknown, collations.Unknown))
+	}
+	return colNames, types
+}
+
+// handleRowAliasColumns have explicit column list on the row alias and no column list on the insert statement
+func (tc *tableCollector) handleRowAliasColumns(origTableInfo TableInfo, rowAlias *sqlparser.RowAlias) ([]string, []evalengine.Type, error) {
+	if !origTableInfo.authoritative() {
+		return nil, nil, vterrors.VT09015()
+	}
+	origCols := origTableInfo.getColumns(true /* ignoreInvisibleCol */)
+	if len(rowAlias.Columns) != len(origCols) {
+		return nil, nil, vterrors.VT03033()
+	}
+	var colNames []string
+	var types []evalengine.Type
+	for idx, column := range rowAlias.Columns {
+		colNames = append(colNames, column.String())
+		types = append(types, origCols[idx].Type)
+	}
+	return colNames, types, nil
+}
+
+// handleExplicitColumns have explicit column list on the row alias and the insert statement
+func (tc *tableCollector) handleExplicitColumns(ins *sqlparser.Insert, rowAlias *sqlparser.RowAlias, origTableInfo TableInfo) ([]string, []evalengine.Type, error) {
+	if len(rowAlias.Columns) != len(ins.Columns) {
+		return nil, nil, vterrors.VT03033()
+	}
+	var colNames []string
+	var types []evalengine.Type
+	origCols := origTableInfo.getColumns(false /* ignoreInvisbleCol */)
+for1:
+	for idx, column := range rowAlias.Columns {
+		colNames = append(colNames, column.String())
+		col := ins.Columns[idx]
+		for _, origCol := range origCols {
+			if col.EqualString(origCol.Name) {
+				types = append(types, origCol.Type)
+				continue for1
+			}
+		}
+		return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadFieldError, "Unknown column '%s' in 'field list'", col)
+	}
+	return colNames, types, nil
+}
+
+func buildDerivedTable(colNames []string, rowAlias *sqlparser.RowAlias, types []evalengine.Type) *DerivedTable {
+	deps := make([]TableSet, len(colNames))
+	for i := range colNames {
+		deps[i] = SingleTableSet(0)
+	}
+
+	derivedTable := &DerivedTable{
+		tableName: rowAlias.TableName.String(),
+		ASTNode: &sqlparser.AliasedTableExpr{
+			Expr: sqlparser.NewTableName(rowAlias.TableName.String()),
+		},
+		columnNames:     colNames,
+		tables:          SingleTableSet(0),
+		recursive:       deps,
+		isAuthoritative: true,
+		types:           types,
+	}
+	return derivedTable
 }
 
 func (tc *tableCollector) handleTableName(node *sqlparser.AliasedTableExpr, t sqlparser.TableName) (err error) {

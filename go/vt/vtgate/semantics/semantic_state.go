@@ -58,7 +58,7 @@ type (
 		canShortCut() shortCut
 
 		// getColumns returns the known column information for this table
-		getColumns() []ColumnInfo
+		getColumns(ignoreInvisibleCol bool) []ColumnInfo
 
 		dependencies(colName string, org originable) (dependencies, error)
 		getExprFor(s string) (sqlparser.Expr, error)
@@ -667,7 +667,7 @@ func (st *SemTable) TypeForExpr(e sqlparser.Expr) (evalengine.Type, bool) {
 	ws, isWS := e.(*sqlparser.WeightStringFuncExpr)
 	if isWS {
 		wt, _ := st.TypeForExpr(ws.Expr)
-		return evalengine.NewTypeEx(sqltypes.VarBinary, collations.CollationBinaryID, wt.Nullable(), 0, 0), true
+		return evalengine.NewTypeEx(sqltypes.VarBinary, collations.CollationBinaryID, wt.Nullable(), 0, 0, nil), true
 	}
 
 	return evalengine.Type{}, false
@@ -993,4 +993,11 @@ func (st *SemTable) GetTargetTableSetForTableName(name sqlparser.TableName) (Tab
 		}
 	}
 	return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "target table '%s' not found", sqlparser.String(name))
+}
+
+// NewTableId creates a new table id and returns it.
+func (st *SemTable) NewTableId() TableSet {
+	tableID := SingleTableSet(len(st.Tables))
+	st.Tables = append(st.Tables, nil)
+	return tableID
 }

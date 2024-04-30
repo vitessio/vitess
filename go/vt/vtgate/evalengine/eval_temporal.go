@@ -42,6 +42,14 @@ func (e *evalTemporal) SQLType() sqltypes.Type {
 	return e.t
 }
 
+func (e *evalTemporal) Size() int32 {
+	return int32(e.prec)
+}
+
+func (e *evalTemporal) Scale() int32 {
+	return 0
+}
+
 func (e *evalTemporal) toInt64() int64 {
 	switch e.SQLType() {
 	case sqltypes.Date:

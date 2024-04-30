@@ -78,7 +78,7 @@ func TestTxExecutorPrepareNotInTx(t *testing.T) {
 	defer db.Close()
 	defer tsv.StopService()
 	err := txe.Prepare(0, "aa")
-	require.EqualError(t, err, "transaction 0: not found")
+	require.EqualError(t, err, "transaction 0: not found (potential transaction timeout)")
 }
 
 func TestTxExecutorPreparePoolFail(t *testing.T) {

@@ -40,9 +40,10 @@ type client struct {
 	c  mysqlctlpb.MysqlCtlClient
 }
 
-func factory(network, addr string) (mysqlctlclient.MysqlctlClient, error) {
+func factory(ctx context.Context, network, addr string) (mysqlctlclient.MysqlctlClient, error) {
 	// create the RPC client
-	cc, err := grpcclient.Dial(
+	cc, err := grpcclient.DialContext(
+		ctx,
 		addr,
 		grpcclient.FailFast(false),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),

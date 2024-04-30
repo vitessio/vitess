@@ -922,7 +922,7 @@ func testStreamHealthPanics(t *testing.T, conn queryservice.QueryService, f *Fak
 // TestSuite runs all the tests.
 // If fake.TestingGateway is set, we only test the calls that can go through
 // a gateway.
-func TestSuite(t *testing.T, protocol string, tablet *topodatapb.Tablet, fake *FakeQueryService, clientCreds *os.File) {
+func TestSuite(ctx context.Context, t *testing.T, protocol string, tablet *topodatapb.Tablet, fake *FakeQueryService, clientCreds *os.File) {
 	tests := []func(*testing.T, queryservice.QueryService, *FakeQueryService){
 		// positive test cases
 		testBegin,
@@ -1015,7 +1015,7 @@ func TestSuite(t *testing.T, protocol string, tablet *topodatapb.Tablet, fake *F
 		require.NoError(t, err, "failed to set `--grpc_auth_static_client_creds=%s`", clientCreds.Name())
 	}
 
-	conn, err := tabletconn.GetDialer()(tablet, grpcclient.FailFast(false))
+	conn, err := tabletconn.GetDialer()(ctx, tablet, grpcclient.FailFast(false))
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}

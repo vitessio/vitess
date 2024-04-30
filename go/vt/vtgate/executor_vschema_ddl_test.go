@@ -17,26 +17,23 @@ limitations under the License.
 package vtgate
 
 import (
-	"context"
 	"reflect"
 	"slices"
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/test/utils"
-
-	"vitess.io/vitess/go/vt/callerid"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 func waitForVindex(t *testing.T, ks, name string, watch chan *vschemapb.SrvVSchema, executor *Executor) (*vschemapb.SrvVSchema, *vschemapb.Vindex) {
@@ -426,9 +423,7 @@ func TestExecutorDropSequenceDDL(t *testing.T) {
 	_, err = executor.Execute(ctx, nil, "TestExecute", session, stmt, nil)
 	require.NoError(t, err)
 
-	ctxWithTimeout, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	if !waitForNewerVSchema(ctxWithTimeout, executor, ts) {
+	if !waitForNewerVSchema(ctx, executor, ts, 5*time.Second) {
 		t.Fatalf("vschema did not drop the sequene 'test_seq'")
 	}
 
@@ -464,9 +459,7 @@ func TestExecutorDropAutoIncDDL(t *testing.T) {
 	stmt = "alter vschema on test_table add auto_increment id using `db-name`.`test_seq`"
 	_, err = executor.Execute(ctx, nil, "TestExecute", session, stmt, nil)
 	require.NoError(t, err)
-	ctxWithTimeout, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	if !waitForNewerVSchema(ctxWithTimeout, executor, ts) {
+	if !waitForNewerVSchema(ctx, executor, ts, 5*time.Second) {
 		t.Fatalf("vschema did not update with auto_increment for 'test_table'")
 	}
 	ts = executor.VSchema().GetCreated()
@@ -480,9 +473,7 @@ func TestExecutorDropAutoIncDDL(t *testing.T) {
 	_, err = executor.Execute(ctx, nil, "TestExecute", session, stmt, nil)
 	require.NoError(t, err)
 
-	ctxWithTimeout, cancel2 := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel2()
-	if !waitForNewerVSchema(ctxWithTimeout, executor, ts) {
+	if !waitForNewerVSchema(ctx, executor, ts, 5*time.Second) {
 		t.Fatalf("vschema did not drop the auto_increment for 'test_table'")
 	}
 	if executor.vm.GetCurrentSrvVschema().Keyspaces[ks].Tables["test_table"].AutoIncrement != nil {

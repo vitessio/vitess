@@ -61,6 +61,10 @@ func (o *Ordering) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bo
 	return o.Source.AddColumn(ctx, reuse, gb, expr)
 }
 
+func (o *Ordering) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
+	return o.Source.AddWSColumn(ctx, offset, underRoute)
+}
+
 func (o *Ordering) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
 	return o.Source.FindCol(ctx, expr, underRoute)
 }

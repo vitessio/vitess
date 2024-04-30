@@ -631,7 +631,7 @@ func (c *CaseExpr) eval(env *ExpressionEnv) (eval, error) {
 	if !matched {
 		return nil, nil
 	}
-	return evalCoerce(result, ta.result(), ca.result().Collation, env.now, env.sqlmode.AllowZeroDate())
+	return evalCoerce(result, ta.result(), ta.size, ta.scale, ca.result().Collation, env.now, env.sqlmode.AllowZeroDate())
 }
 
 func (c *CaseExpr) constant() bool {
@@ -690,7 +690,7 @@ func (cs *CaseExpr) compile(c *compiler) (ctype, error) {
 			return ctype{}, err
 		}
 
-		ta.add(then.Type, then.Flag)
+		ta.add(then.Type, then.Flag, then.Size, then.Scale)
 		if err := ca.add(then.Col, c.env.CollationEnv()); err != nil {
 			return ctype{}, err
 		}
@@ -702,7 +702,7 @@ func (cs *CaseExpr) compile(c *compiler) (ctype, error) {
 			return ctype{}, err
 		}
 
-		ta.add(els.Type, els.Flag)
+		ta.add(els.Type, els.Flag, els.Size, els.Scale)
 		if err := ca.add(els.Col, c.env.CollationEnv()); err != nil {
 			return ctype{}, err
 		}
@@ -712,8 +712,8 @@ func (cs *CaseExpr) compile(c *compiler) (ctype, error) {
 	if ta.nullable {
 		f |= flagNullable
 	}
-	ct := ctype{Type: ta.result(), Flag: f, Col: ca.result()}
-	c.asm.CmpCase(len(cs.cases), cs.Else != nil, ct.Type, ct.Col, c.sqlmode.AllowZeroDate())
+	ct := ctype{Type: ta.result(), Flag: f, Col: ca.result(), Scale: ta.scale, Size: ta.size}
+	c.asm.CmpCase(len(cs.cases), cs.Else != nil, ct.Type, ct.Size, ct.Scale, ct.Col, c.sqlmode.AllowZeroDate())
 	return ct, nil
 }
 

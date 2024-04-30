@@ -17,12 +17,11 @@ limitations under the License.
 package binlogplayertest
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"strings"
 	"testing"
-
-	"context"
 
 	"google.golang.org/protobuf/proto"
 
@@ -227,8 +226,8 @@ func (fake *FakeBinlogStreamer) HandlePanic(err *error) {
 }
 
 // Run runs the test suite
-func Run(t *testing.T, bpc binlogplayer.Client, tablet *topodatapb.Tablet, fake *FakeBinlogStreamer) {
-	if err := bpc.Dial(tablet); err != nil {
+func Run(ctx context.Context, t *testing.T, bpc binlogplayer.Client, tablet *topodatapb.Tablet, fake *FakeBinlogStreamer) {
+	if err := bpc.Dial(ctx, tablet); err != nil {
 		t.Fatalf("Dial failed: %v", err)
 	}
 

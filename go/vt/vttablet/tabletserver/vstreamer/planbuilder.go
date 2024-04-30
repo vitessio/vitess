@@ -172,7 +172,7 @@ func compare(comparison Opcode, columnValue, filterValue sqltypes.Value, collati
 	}
 	// at this point neither values can be null
 	// NullsafeCompare returns 0 if values match, -1 if columnValue < filterValue, 1 if columnValue > filterValue
-	result, err := evalengine.NullsafeCompare(columnValue, filterValue, collationEnv, charset)
+	result, err := evalengine.NullsafeCompare(columnValue, filterValue, collationEnv, charset, nil)
 	if err != nil {
 		return false, err
 	}

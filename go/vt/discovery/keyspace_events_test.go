@@ -19,6 +19,8 @@ package discovery
 import (
 	"context"
 	"encoding/hex"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -51,6 +53,67 @@ func TestSrvKeyspaceWithNilNewKeyspace(t *testing.T) {
 	}
 	kss.lastKeyspace = &topodatapb.SrvKeyspace{}
 	require.True(t, kss.onSrvKeyspace(nil, nil))
+}
+
+// TestKeyspaceEventConcurrency confirms that the keyspace event watcher
+// does not fail to broadcast received keyspace events to subscribers.
+// This verifies that no events are lost when there's a high number of
+// concurrent keyspace events.
+func TestKeyspaceEventConcurrency(t *testing.T) {
+	cell := "cell1"
+	factory := faketopo.NewFakeTopoFactory()
+	factory.AddCell(cell)
+	sts := &fakeTopoServer{}
+	hc := NewFakeHealthCheck(make(chan *TabletHealth))
+	defer hc.Close()
+	kew := &KeyspaceEventWatcher{
+		hc:        hc,
+		ts:        sts,
+		localCell: cell,
+		keyspaces: make(map[string]*keyspaceState),
+		subs:      make(map[chan *KeyspaceEvent]struct{}),
+	}
+
+	// Subscribe to the watcher's broadcasted keyspace events.
+	receiver := kew.Subscribe()
+
+	updates := atomic.Uint32{}
+	updates.Store(0)
+	wg := sync.WaitGroup{}
+	concurrency := 100
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-receiver:
+				updates.Add(1)
+			}
+		}
+	}()
+	// Start up concurent go-routines that will broadcast keyspace events.
+	for i := 1; i <= concurrency; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			kew.broadcast(&KeyspaceEvent{})
+		}()
+	}
+	wg.Wait()
+	for {
+		select {
+		case <-ctx.Done():
+			require.Equal(t, concurrency, int(updates.Load()), "expected %d updates, got %d", concurrency, updates.Load())
+			return
+		default:
+			if int(updates.Load()) == concurrency { // Pass
+				cancel()
+				return
+			}
+		}
+	}
 }
 
 // TestKeyspaceEventTypes confirms that the keyspace event watcher determines
@@ -302,6 +365,26 @@ func (f *fakeTopoServer) GetSrvKeyspace(ctx context.Context, cell, keyspace stri
 	return ks, nil
 }
 
+// GetSrvVSchema returns the SrvVSchema for a cell.
+func (f *fakeTopoServer) GetSrvVSchema(ctx context.Context, cell string) (*vschemapb.SrvVSchema, error) {
+	vs := &vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"ks1": {
+				Sharded: true,
+			},
+		},
+		RoutingRules: &vschemapb.RoutingRules{
+			Rules: []*vschemapb.RoutingRule{
+				{
+					FromTable: "db1.t1",
+					ToTables:  []string{"db1.t1"},
+				},
+			},
+		},
+	}
+	return vs, nil
+}
+
 func (f *fakeTopoServer) WatchSrvKeyspace(ctx context.Context, cell, keyspace string, callback func(*topodatapb.SrvKeyspace, error) bool) {
 	ks, err := f.GetSrvKeyspace(ctx, cell, keyspace)
 	callback(ks, err)
@@ -311,5 +394,6 @@ func (f *fakeTopoServer) WatchSrvKeyspace(ctx context.Context, cell, keyspace st
 // the provided cell.  It will call the callback when
 // a new value or an error occurs.
 func (f *fakeTopoServer) WatchSrvVSchema(ctx context.Context, cell string, callback func(*vschemapb.SrvVSchema, error) bool) {
-
+	sv, err := f.GetSrvVSchema(ctx, cell)
+	callback(sv, err)
 }

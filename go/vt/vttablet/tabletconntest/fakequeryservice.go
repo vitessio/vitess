@@ -709,7 +709,7 @@ func (f *FakeQueryService) VStreamResults(ctx context.Context, target *querypb.T
 }
 
 // QueryServiceByAlias satisfies the Gateway interface
-func (f *FakeQueryService) QueryServiceByAlias(_ *topodatapb.TabletAlias, _ *querypb.Target) (queryservice.QueryService, error) {
+func (f *FakeQueryService) QueryServiceByAlias(_ context.Context, _ *topodatapb.TabletAlias, _ *querypb.Target) (queryservice.QueryService, error) {
 	panic("not implemented")
 }
 

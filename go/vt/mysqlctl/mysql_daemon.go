@@ -20,6 +20,7 @@ import (
 	"context"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconnpool"
@@ -60,13 +61,13 @@ type MysqlDaemon interface {
 	ReplicationStatus() (replication.ReplicationStatus, error)
 	PrimaryStatus(ctx context.Context) (replication.PrimaryStatus, error)
 	GetGTIDPurged(ctx context.Context) (replication.Position, error)
-	SetSemiSyncEnabled(source, replica bool) error
-	SemiSyncEnabled() (source, replica bool)
-	SemiSyncExtensionLoaded() (bool, error)
-	SemiSyncStatus() (source, replica bool)
-	SemiSyncClients() (count uint32)
-	SemiSyncSettings() (timeout uint64, numReplicas uint32)
-	SemiSyncReplicationStatus() (bool, error)
+	SetSemiSyncEnabled(ctx context.Context, source, replica bool) error
+	SemiSyncEnabled(ctx context.Context) (source, replica bool)
+	SemiSyncExtensionLoaded(ctx context.Context) (mysql.SemiSyncType, error)
+	SemiSyncStatus(ctx context.Context) (source, replica bool)
+	SemiSyncClients(ctx context.Context) (count uint32)
+	SemiSyncSettings(ctx context.Context) (timeout uint64, numReplicas uint32)
+	SemiSyncReplicationStatus(ctx context.Context) (bool, error)
 	ResetReplicationParameters(ctx context.Context) error
 	GetBinlogInformation(ctx context.Context) (binlogFormat string, logEnabled bool, logReplicaUpdate bool, binlogRowImage string, err error)
 	GetGTIDMode(ctx context.Context) (gtidMode string, err error)

@@ -54,7 +54,6 @@ const (
 	AllPrimaryReplicasNotReplicatingOrDead AnalysisCode = "AllPrimaryReplicasNotReplicatingOrDead"
 	LockedSemiSyncPrimaryHypothesis        AnalysisCode = "LockedSemiSyncPrimaryHypothesis"
 	LockedSemiSyncPrimary                  AnalysisCode = "LockedSemiSyncPrimary"
-	BinlogServerFailingToConnectToPrimary  AnalysisCode = "BinlogServerFailingToConnectToPrimary"
 	ErrantGTIDDetected                     AnalysisCode = "ErrantGTIDDetected"
 )
 
@@ -100,15 +99,11 @@ type ReplicationAnalysis struct {
 	CountReplicas                             uint
 	CountValidReplicas                        uint
 	CountValidReplicatingReplicas             uint
-	CountReplicasFailingToConnectToPrimary    uint
-	ReplicationDepth                          uint
-	IsFailingToConnectToPrimary               bool
 	ReplicationStopped                        bool
 	ErrantGTID                                string
 	Analysis                                  AnalysisCode
 	Description                               string
 	StructureAnalysis                         []StructureAnalysisCode
-	IsBinlogServer                            bool
 	OracleGTIDImmediateTopology               bool
 	MariaDBGTIDImmediateTopology              bool
 	BinlogServerImmediateTopology             bool

@@ -755,7 +755,7 @@ func (t *explainTablet) analyzeWhere(selStmt *sqlparser.Select, tableColumnMap m
 		// Check if we have a duplicate value
 		isNewValue := true
 		for _, v := range inVal {
-			result, err := evalengine.NullsafeCompare(v, value, t.collationEnv, t.collationEnv.DefaultConnectionCharset())
+			result, err := evalengine.NullsafeCompare(v, value, t.collationEnv, t.collationEnv.DefaultConnectionCharset(), nil)
 			if err != nil {
 				return "", nil, 0, nil, err
 			}

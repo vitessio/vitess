@@ -143,6 +143,7 @@ var Cases = []TestCase{
 	{Run: FnLastDay},
 	{Run: FnToDays},
 	{Run: FnFromDays},
+	{Run: FnSecToTime},
 	{Run: FnTimeToSec},
 	{Run: FnToSeconds},
 	{Run: FnQuarter},
@@ -2057,6 +2058,21 @@ func FnFromDays(yield Query) {
 
 	for _, d := range days {
 		yield(fmt.Sprintf("FROM_DAYS(%s)", d), nil)
+	}
+}
+
+func FnSecToTime(yield Query) {
+	for _, s := range inputConversions {
+		yield(fmt.Sprintf("SEC_TO_TIME(%s)", s), nil)
+	}
+
+	mysqlDocSamples := []string{
+		`SEC_TO_TIME(2378)`,
+		`SEC_TO_TIME(2378) + 0`,
+	}
+
+	for _, q := range mysqlDocSamples {
+		yield(q, nil)
 	}
 }
 

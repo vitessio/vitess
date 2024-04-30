@@ -27,10 +27,9 @@ import (
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/stats"
-
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
-	"vitess.io/vitess/go/vt/proto/binlogdata"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -93,7 +92,7 @@ func TestStatusHtml(t *testing.T) {
 	testStats.controllers = map[int32]*controller{
 		1: {
 			id: 1,
-			source: &binlogdata.BinlogSource{
+			source: &binlogdatapb.BinlogSource{
 				Keyspace: "ks",
 				Shard:    "0",
 			},
@@ -103,7 +102,7 @@ func TestStatusHtml(t *testing.T) {
 		},
 		2: {
 			id: 2,
-			source: &binlogdata.BinlogSource{
+			source: &binlogdatapb.BinlogSource{
 				Keyspace: "ks",
 				Shard:    "1",
 			},
@@ -140,7 +139,7 @@ func TestVReplicationStats(t *testing.T) {
 	testStats.controllers = map[int32]*controller{
 		1: {
 			id: 1,
-			source: &binlogdata.BinlogSource{
+			source: &binlogdatapb.BinlogSource{
 				Keyspace: "ks",
 				Shard:    "0",
 			},
@@ -194,6 +193,15 @@ func TestVReplicationStats(t *testing.T) {
 	blpStats.ThrottledCounts.Add([]string{"tablet", "vplayer"}, 80)
 	require.Equal(t, int64(10), testStats.controllers[1].blpStats.ThrottledCounts.Counts()["tablet.vcopier"])
 	require.Equal(t, int64(80), testStats.controllers[1].blpStats.ThrottledCounts.Counts()["tablet.vplayer"])
+
+	blpStats.DDLEventActions.Add(binlogdatapb.OnDDLAction_IGNORE.String(), 4)
+	blpStats.DDLEventActions.Add(binlogdatapb.OnDDLAction_EXEC.String(), 3)
+	blpStats.DDLEventActions.Add(binlogdatapb.OnDDLAction_EXEC_IGNORE.String(), 2)
+	blpStats.DDLEventActions.Add(binlogdatapb.OnDDLAction_STOP.String(), 1)
+	require.Equal(t, int64(4), testStats.controllers[1].blpStats.DDLEventActions.Counts()[binlogdatapb.OnDDLAction_IGNORE.String()])
+	require.Equal(t, int64(3), testStats.controllers[1].blpStats.DDLEventActions.Counts()[binlogdatapb.OnDDLAction_EXEC.String()])
+	require.Equal(t, int64(2), testStats.controllers[1].blpStats.DDLEventActions.Counts()[binlogdatapb.OnDDLAction_EXEC_IGNORE.String()])
+	require.Equal(t, int64(1), testStats.controllers[1].blpStats.DDLEventActions.Counts()[binlogdatapb.OnDDLAction_STOP.String()])
 
 	var tm int64 = 1234567890
 	blpStats.RecordHeartbeat(tm)

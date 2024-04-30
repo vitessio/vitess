@@ -215,7 +215,7 @@ func getSpecifiedMessageFields(tableFields []*querypb.Field, specifiedCols []str
 	fields := make([]*querypb.Field, 0, len(specifiedCols))
 	for _, col := range specifiedCols {
 		for _, field := range tableFields {
-			if res, _ := evalengine.NullsafeCompare(sqltypes.NewVarChar(field.Name), sqltypes.NewVarChar(strings.TrimSpace(col)), collationEnv, collationEnv.DefaultConnectionCharset()); res == 0 {
+			if res, _ := evalengine.NullsafeCompare(sqltypes.NewVarChar(field.Name), sqltypes.NewVarChar(strings.TrimSpace(col)), collationEnv, collationEnv.DefaultConnectionCharset(), nil); res == 0 {
 				fields = append(fields, field)
 				break
 			}

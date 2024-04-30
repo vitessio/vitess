@@ -57,7 +57,7 @@ func TestVtctlServer(t *testing.T) {
 	go server.Serve(listener)
 
 	// Create a VtctlClient gRPC client to talk to the fake server
-	client, err := gRPCVtctlClientFactory(fmt.Sprintf("localhost:%v", port))
+	client, err := gRPCVtctlClientFactory(ctx, fmt.Sprintf("localhost:%v", port))
 	if err != nil {
 		t.Fatalf("Cannot create client: %v", err)
 	}
@@ -117,7 +117,7 @@ func TestVtctlAuthClient(t *testing.T) {
 	require.NoError(t, err, "failed to set `--grpc_auth_static_client_creds=%s`", f.Name())
 
 	// Create a VtctlClient gRPC client to talk to the fake server
-	client, err := gRPCVtctlClientFactory(fmt.Sprintf("localhost:%v", port))
+	client, err := gRPCVtctlClientFactory(ctx, fmt.Sprintf("localhost:%v", port))
 	if err != nil {
 		t.Fatalf("Cannot create client: %v", err)
 	}

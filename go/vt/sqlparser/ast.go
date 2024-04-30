@@ -341,8 +341,8 @@ type (
 		Partitions Partitions
 		Columns    Columns
 		Rows       InsertRows
-		OnDup      OnDup
 		RowAlias   *RowAlias
+		OnDup      OnDup
 	}
 
 	// Ignore represents whether ignore was specified or not
@@ -2317,8 +2317,9 @@ type (
 
 	// Argument represents bindvariable expression
 	Argument struct {
-		Name string
-		Type sqltypes.Type
+		Name        string
+		Type        sqltypes.Type
+		Size, Scale int32
 	}
 
 	// NullVal represents a NULL value.

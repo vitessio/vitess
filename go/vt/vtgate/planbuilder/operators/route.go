@@ -672,21 +672,76 @@ func addMultipleColumnsToInput(
 		return "", op, true, offset
 
 	case *Union:
-		tableID := semantics.SingleTableSet(len(ctx.SemTable.Tables))
-		ctx.SemTable.Tables = append(ctx.SemTable.Tables, nil)
-		unionColumns := op.GetColumns(ctx)
-		proj := &Projection{
-			Source:  op,
-			Columns: AliasedProjections(slice.Map(unionColumns, newProjExpr)),
-			DT: &DerivedTable{
-				TableID: tableID,
-				Alias:   "dt",
-			},
-		}
+		proj := addDerivedProj(ctx, op)
 		return addMultipleColumnsToInput(ctx, proj, reuse, addToGroupBy, exprs)
 	default:
 		return "", op, false, nil
 	}
+}
+
+func (r *Route) AddWSColumn(ctx *plancontext.PlanningContext, offset int, _ bool) int {
+	columns := r.GetColumns(ctx)
+	if offset > len(columns) {
+		panic(vterrors.VT13001(fmt.Sprintf("column %d not found", offset)))
+	}
+	col := columns[offset]
+	if offset := r.FindCol(ctx, weightStringFor(col.Expr), true); offset >= 0 {
+		return offset
+	}
+
+	ok, foundOffset := addWSColumnToInput(ctx, r.Source, offset)
+	if !ok {
+		src := addDerivedProj(ctx, r.Source)
+		r.Source = src
+		return src.AddWSColumn(ctx, offset, true)
+	}
+	return foundOffset
+}
+
+func addWSColumnToInput(ctx *plancontext.PlanningContext, source Operator, offset int) (bool, int) {
+	switch op := source.(type) {
+	case *SubQuery:
+		return addWSColumnToInput(ctx, op.Outer, offset)
+	case *Distinct:
+		return addWSColumnToInput(ctx, op.Source, offset)
+	case *Filter:
+		return addWSColumnToInput(ctx, op.Source, offset)
+	case *Projection:
+		return true, op.AddWSColumn(ctx, offset, true)
+	case *Aggregator:
+		return true, op.AddWSColumn(ctx, offset, true)
+	}
+	return false, -1
+}
+
+func addDerivedProj(
+	ctx *plancontext.PlanningContext,
+	op Operator,
+) (projection *Projection) {
+	unionColumns := op.GetColumns(ctx)
+	columns := make(sqlparser.Columns, 0, len(unionColumns))
+	for i := range unionColumns {
+		columns = append(columns, sqlparser.NewIdentifierCI(fmt.Sprintf("c%d", i)))
+	}
+	derivedProj := &Projection{
+		Source:  op,
+		Columns: AliasedProjections(slice.Map(unionColumns, newProjExpr)),
+		DT: &DerivedTable{
+			TableID: ctx.SemTable.NewTableId(),
+			Alias:   "dt",
+			Columns: columns,
+		},
+	}
+
+	proj := newAliasedProjection(derivedProj)
+	tbl := sqlparser.NewTableName("dt")
+	for i, col := range unionColumns {
+		projExpr := newProjExpr(col)
+		projExpr.EvalExpr = sqlparser.NewColNameWithQualifier(fmt.Sprintf("c%d", i), tbl)
+		proj.addProjExpr(projExpr)
+	}
+
+	return proj
 }
 
 func (r *Route) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, _ bool) int {

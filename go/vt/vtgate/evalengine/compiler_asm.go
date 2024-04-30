@@ -516,7 +516,7 @@ func (asm *assembler) Cmp_ne_n() {
 	}, "CMPFLAG NE [NULL]")
 }
 
-func (asm *assembler) CmpCase(cases int, hasElse bool, tt sqltypes.Type, cc collations.TypedCollation, allowZeroDate bool) {
+func (asm *assembler) CmpCase(cases int, hasElse bool, tt sqltypes.Type, size, scale int32, cc collations.TypedCollation, allowZeroDate bool) {
 	elseOffset := 0
 	if hasElse {
 		elseOffset = 1
@@ -529,12 +529,12 @@ func (asm *assembler) CmpCase(cases int, hasElse bool, tt sqltypes.Type, cc coll
 		end := env.vm.sp - elseOffset
 		for sp := env.vm.sp - stackDepth; sp < end; sp += 2 {
 			if env.vm.stack[sp] != nil && env.vm.stack[sp].(*evalInt64).i != 0 {
-				env.vm.stack[env.vm.sp-stackDepth], env.vm.err = evalCoerce(env.vm.stack[sp+1], tt, cc.Collation, env.now, allowZeroDate)
+				env.vm.stack[env.vm.sp-stackDepth], env.vm.err = evalCoerce(env.vm.stack[sp+1], tt, size, scale, cc.Collation, env.now, allowZeroDate)
 				goto done
 			}
 		}
 		if elseOffset != 0 {
-			env.vm.stack[env.vm.sp-stackDepth], env.vm.err = evalCoerce(env.vm.stack[env.vm.sp-1], tt, cc.Collation, env.now, allowZeroDate)
+			env.vm.stack[env.vm.sp-stackDepth], env.vm.err = evalCoerce(env.vm.stack[env.vm.sp-1], tt, size, scale, cc.Collation, env.now, allowZeroDate)
 		} else {
 			env.vm.stack[env.vm.sp-stackDepth] = nil
 		}
@@ -4101,6 +4101,27 @@ func (asm *assembler) Fn_FROM_DAYS() {
 		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalDate(d)
 		return 1
 	}, "FN FROM_DAYS INT64(SP-1)")
+}
+
+func (asm *assembler) Fn_SEC_TO_TIME_D() {
+	asm.emit(func(env *ExpressionEnv) int {
+		e := env.vm.stack[env.vm.sp-1].(*evalTemporal)
+		prec := int(e.prec)
+
+		sec := newEvalDecimalWithPrec(e.toDecimal(), int32(prec))
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalTime(datetime.NewTimeFromSeconds(sec.dec), prec)
+		return 1
+	}, "FN SEC_TO_TIME TEMPORAL(SP-1)")
+}
+
+func (asm *assembler) Fn_SEC_TO_TIME_d() {
+	asm.emit(func(env *ExpressionEnv) int {
+		e := env.vm.stack[env.vm.sp-1].(*evalDecimal)
+		prec := min(evalDecimalPrecision(e), datetime.DefaultPrecision)
+
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalTime(datetime.NewTimeFromSeconds(e.dec), int(prec))
+		return 1
+	}, "FN SEC_TO_TIME DECIMAL(SP-1)")
 }
 
 func (asm *assembler) Fn_TIME_TO_SEC() {

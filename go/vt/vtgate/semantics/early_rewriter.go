@@ -681,7 +681,15 @@ func (r *earlyRewriter) fillInQualifiers(cursor *sqlparser.CopyOnWriteCursor) {
 	if !found {
 		panic("uh oh")
 	}
-	tbl := r.tables.Tables[ts.TableOffset()]
+	offset := ts.TableOffset()
+	if offset < 0 {
+		// this is a column that is not coming from a table - it's an alias introduced in a SELECT expression
+		// Example: select (1+1) as foo from bar order by foo
+		// we don't want to add a qualifier to foo here
+		cursor.Replace(sqlparser.NewColName(col.Name.String()))
+		return
+	}
+	tbl := r.tables.Tables[offset]
 	tblName, err := tbl.Name()
 	if err != nil {
 		panic(err)
@@ -1031,7 +1039,7 @@ func findOnlyOneTableInfoThatHasColumn(b *binder, tbl sqlparser.TableExpr, colum
 	case *sqlparser.AliasedTableExpr:
 		ts := b.tc.tableSetFor(tbl)
 		tblInfo := b.tc.Tables[ts.TableOffset()]
-		for _, info := range tblInfo.getColumns() {
+		for _, info := range tblInfo.getColumns(false /* ignoreInvisibleCol */) {
 			if column.EqualString(info.Name) {
 				return []TableInfo{tblInfo}, nil
 			}
@@ -1188,10 +1196,7 @@ func (e *expanderState) processColumnsFor(tbl TableInfo) error {
 
 outer:
 	// in this first loop we just find columns used in any JOIN USING used on this table
-	for _, col := range tbl.getColumns() {
-		if col.Invisible {
-			continue
-		}
+	for _, col := range tbl.getColumns(true /* ignoreInvisibleCol */) {
 		ts, found := usingCols[col.Name]
 		if found {
 			for i, ts := range ts.Constituents() {
@@ -1207,11 +1212,7 @@ outer:
 	}
 
 	// and this time around we are printing any columns not involved in any JOIN USING
-	for _, col := range tbl.getColumns() {
-		if col.Invisible {
-			continue
-		}
-
+	for _, col := range tbl.getColumns(true /* ignoreInvisibleCol */) {
 		if ts, found := usingCols[col.Name]; found && currTable.IsSolvedBy(ts) {
 			continue
 		}

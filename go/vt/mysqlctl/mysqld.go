@@ -118,6 +118,8 @@ type Mysqld struct {
 	mutex         sync.Mutex
 	onTermFuncs   []func()
 	cancelWaitCmd chan struct{}
+
+	semiSyncType mysql.SemiSyncType
 }
 
 func init() {
@@ -263,7 +265,7 @@ func (mysqld *Mysqld) RunMysqlUpgrade(ctx context.Context) error {
 	// Execute as remote action on mysqlctld if requested.
 	if socketFile != "" {
 		log.Infof("executing Mysqld.RunMysqlUpgrade() remotely via mysqlctld server: %v", socketFile)
-		client, err := mysqlctlclient.New("unix", socketFile)
+		client, err := mysqlctlclient.New(ctx, "unix", socketFile)
 		if err != nil {
 			return fmt.Errorf("can't dial mysqlctld: %v", err)
 		}
@@ -332,7 +334,7 @@ func (mysqld *Mysqld) Start(ctx context.Context, cnf *Mycnf, mysqldArgs ...strin
 	// Execute as remote action on mysqlctld if requested.
 	if socketFile != "" {
 		log.Infof("executing Mysqld.Start() remotely via mysqlctld server: %v", socketFile)
-		client, err := mysqlctlclient.New("unix", socketFile)
+		client, err := mysqlctlclient.New(ctx, "unix", socketFile)
 		if err != nil {
 			return fmt.Errorf("can't dial mysqlctld: %v", err)
 		}
@@ -594,7 +596,7 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 	// Execute as remote action on mysqlctld if requested.
 	if socketFile != "" {
 		log.Infof("executing Mysqld.Shutdown() remotely via mysqlctld server: %v", socketFile)
-		client, err := mysqlctlclient.New("unix", socketFile)
+		client, err := mysqlctlclient.New(ctx, "unix", socketFile)
 		if err != nil {
 			return fmt.Errorf("can't dial mysqlctld: %v", err)
 		}
@@ -928,7 +930,13 @@ func (mysqld *Mysqld) getMycnfTemplate() string {
 				log.Infof("this version of Vitess does not include built-in support for %v %v", mysqld.capabilities.flavor, mysqld.capabilities.version)
 			}
 		case 8:
-			versionConfig = config.MycnfMySQL80
+			if mysqld.capabilities.version.Minor >= 4 {
+				versionConfig = config.MycnfMySQL84
+			} else if mysqld.capabilities.version.Minor >= 1 || mysqld.capabilities.version.Patch >= 26 {
+				versionConfig = config.MycnfMySQL8026
+			} else {
+				versionConfig = config.MycnfMySQL80
+			}
 		default:
 			log.Infof("this version of Vitess does not include built-in support for %v %v", mysqld.capabilities.flavor, mysqld.capabilities.version)
 		}
@@ -965,7 +973,7 @@ func (mysqld *Mysqld) RefreshConfig(ctx context.Context, cnf *Mycnf) error {
 	// Execute as remote action on mysqlctld if requested.
 	if socketFile != "" {
 		log.Infof("executing Mysqld.RefreshConfig() remotely via mysqlctld server: %v", socketFile)
-		client, err := mysqlctlclient.New("unix", socketFile)
+		client, err := mysqlctlclient.New(ctx, "unix", socketFile)
 		if err != nil {
 			return fmt.Errorf("can't dial mysqlctld: %v", err)
 		}
@@ -1023,7 +1031,7 @@ func (mysqld *Mysqld) ReinitConfig(ctx context.Context, cnf *Mycnf) error {
 	// Execute as remote action on mysqlctld if requested.
 	if socketFile != "" {
 		log.Infof("executing Mysqld.ReinitConfig() remotely via mysqlctld server: %v", socketFile)
-		client, err := mysqlctlclient.New("unix", socketFile)
+		client, err := mysqlctlclient.New(ctx, "unix", socketFile)
 		if err != nil {
 			return fmt.Errorf("can't dial mysqlctld: %v", err)
 		}
@@ -1260,7 +1268,7 @@ func (mysqld *Mysqld) GetVersionString(ctx context.Context) (string, error) {
 	// Execute as remote action on mysqlctld to use the actual running MySQL
 	// version.
 	if socketFile != "" {
-		client, err := mysqlctlclient.New("unix", socketFile)
+		client, err := mysqlctlclient.New(ctx, "unix", socketFile)
 		if err != nil {
 			return "", fmt.Errorf("can't dial mysqlctld: %v", err)
 		}
@@ -1289,7 +1297,7 @@ func (mysqld *Mysqld) GetVersionComment(ctx context.Context) (string, error) {
 func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, req *mysqlctlpb.ApplyBinlogFileRequest) error {
 	if socketFile != "" {
 		log.Infof("executing Mysqld.ApplyBinlogFile() remotely via mysqlctld server: %v", socketFile)
-		client, err := mysqlctlclient.New("unix", socketFile)
+		client, err := mysqlctlclient.New(ctx, "unix", socketFile)
 		if err != nil {
 			return fmt.Errorf("can't dial mysqlctld: %v", err)
 		}
@@ -1520,7 +1528,7 @@ func (mysqld *Mysqld) ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlc
 	}
 	if socketFile != "" {
 		log.Infof("executing Mysqld.ReadBinlogFilesTimestamps() remotely via mysqlctld server: %v", socketFile)
-		client, err := mysqlctlclient.New("unix", socketFile)
+		client, err := mysqlctlclient.New(ctx, "unix", socketFile)
 		if err != nil {
 			return nil, fmt.Errorf("can't dial mysqlctld: %v", err)
 		}

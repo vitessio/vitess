@@ -24,20 +24,20 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 type planExec func(ctx context.Context, plan *engine.Plan, vc *vcursorImpl, bindVars map[string]*querypb.BindVariable, startTime time.Time) error
 type txResult func(sqlparser.StatementType, *sqltypes.Result) error
 
-func waitForNewerVSchema(ctx context.Context, e *Executor, lastVSchemaCreated time.Time) bool {
-	timeout := 30 * time.Second
+func waitForNewerVSchema(ctx context.Context, e *Executor, lastVSchemaCreated time.Time, timeout time.Duration) bool {
 	pollingInterval := 10 * time.Millisecond
 	waitCtx, cancel := context.WithTimeout(ctx, timeout)
 	ticker := time.NewTicker(pollingInterval)
@@ -48,7 +48,7 @@ func waitForNewerVSchema(ctx context.Context, e *Executor, lastVSchemaCreated ti
 		case <-waitCtx.Done():
 			return false
 		case <-ticker.C:
-			if e.VSchema().GetCreated().After(lastVSchemaCreated) {
+			if e.VSchema() != nil && e.VSchema().GetCreated().After(lastVSchemaCreated) {
 				return true
 			}
 		}
@@ -64,11 +64,11 @@ func (e *Executor) newExecute(
 	logStats *logstats.LogStats,
 	execPlan planExec, // used when there is a plan to execute
 	recResult txResult, // used when it's something simple like begin/commit/rollback/savepoint
-) error {
-	// 1: Prepare before planning and execution
+) (err error) {
+	// 1: Prepare before planning and execution.
 
 	// Start an implicit transaction if necessary.
-	err := e.startTxIfNecessary(ctx, safeSession)
+	err = e.startTxIfNecessary(ctx, safeSession)
 	if err != nil {
 		return err
 	}
@@ -79,21 +79,35 @@ func (e *Executor) newExecute(
 
 	query, comments := sqlparser.SplitMarginComments(sql)
 
-	// 2: Parse and Validate query
+	// 2: Parse and Validate query.
 	stmt, reservedVars, err := parseAndValidateQuery(query, e.env.Parser())
 	if err != nil {
 		return err
 	}
 
-	var lastVSchemaCreated time.Time
-	vs := e.VSchema()
-	lastVSchemaCreated = vs.GetCreated()
+	var (
+		vs                 = e.VSchema()
+		lastVSchemaCreated = vs.GetCreated()
+		result             *sqltypes.Result
+		plan               *engine.Plan
+	)
+
 	for try := 0; try < MaxBufferingRetries; try++ {
-		if try > 0 && !vs.GetCreated().After(lastVSchemaCreated) {
-			// There is a race due to which the executor's vschema may not have been updated yet.
-			// Without a wait we fail non-deterministically since the previous vschema will not have the updated routing rules
-			if waitForNewerVSchema(ctx, e, lastVSchemaCreated) {
+		if try > 0 && !vs.GetCreated().After(lastVSchemaCreated) { // We need to wait for a vschema update
+			// Without a wait we fail non-deterministically since the previous vschema will not have
+			// the updated routing rules.
+			// We retry MaxBufferingRetries-1 (2) times before giving up. How long we wait before each retry
+			// -- IF we don't see a newer vschema come in -- affects how long we retry in total and how quickly
+			// we retry the query and (should) succeed when the traffic switch fails or we otherwise hit the
+			// max buffer failover time without resolving the keyspace event and marking it as consistent.
+			// This calculation attemps to ensure that we retry at a sensible interval and number of times
+			// based on the buffering configuration. This way we should be able to perform the max retries
+			// within the given window of time for most queries and we should not end up waiting too long
+			// after the traffic switch fails or the buffer window has ended, retrying old queries.
+			timeout := e.resolver.scatterConn.gateway.buffer.GetConfig().MaxFailoverDuration / (MaxBufferingRetries - 1)
+			if waitForNewerVSchema(ctx, e, lastVSchemaCreated, timeout) {
 				vs = e.VSchema()
+				lastVSchemaCreated = vs.GetCreated()
 			}
 		}
 
@@ -102,16 +116,13 @@ func (e *Executor) newExecute(
 			return err
 		}
 
-		// 3: Create a plan for the query
+		// 3: Create a plan for the query.
 		// If we are retrying, it is likely that the routing rules have changed and hence we need to
 		// replan the query since the target keyspace of the resolved shards may have changed as a
-		// result of MoveTables. So we cannot reuse the plan from the first try.
-		// When buffering ends, many queries might be getting planned at the same time. Ideally we
-		// should be able to reuse plans once the first drained query has been planned. For now, we
-		// punt on this and choose not to prematurely optimize since it is not clear how much caching
-		// will help and if it will result in hard-to-track edge cases.
-
-		var plan *engine.Plan
+		// result of MoveTables SwitchTraffic which does a RebuildSrvVSchema which in turn causes
+		// the vtgate to clear the cached plans when processing the new serving vschema.
+		// When buffering ends, many queries might be getting planned at the same time and we then
+		// take full advatange of the cached plan.
 		plan, err = e.getPlan(ctx, vcursor, query, stmt, comments, bindVars, reservedVars, e.normalize, logStats)
 		execStart := e.logPlanningFinished(logStats, plan)
 
@@ -124,12 +135,12 @@ func (e *Executor) newExecute(
 			safeSession.ClearWarnings()
 		}
 
-		// add any warnings that the planner wants to add
+		// Add any warnings that the planner wants to add.
 		for _, warning := range plan.Warnings {
 			safeSession.RecordWarning(warning)
 		}
 
-		result, err := e.handleTransactions(ctx, mysqlCtx, safeSession, plan, logStats, vcursor, stmt)
+		result, err = e.handleTransactions(ctx, mysqlCtx, safeSession, plan, logStats, vcursor, stmt)
 		if err != nil {
 			return err
 		}
@@ -137,14 +148,14 @@ func (e *Executor) newExecute(
 			return recResult(plan.Type, result)
 		}
 
-		// 4: Prepare for execution
+		// 4: Prepare for execution.
 		err = e.addNeededBindVars(vcursor, plan.BindVarNeeds, bindVars, safeSession)
 		if err != nil {
 			logStats.Error = err
 			return err
 		}
 
-		// 5: Execute the plan and retry if needed
+		// 5: Execute the plan.
 		if plan.Instructions.NeedsTransaction() {
 			err = e.insideTransaction(ctx, safeSession, logStats,
 				func() error {
@@ -158,10 +169,39 @@ func (e *Executor) newExecute(
 			return err
 		}
 
+		// 6: Retry if needed.
 		rootCause := vterrors.RootCause(err)
 		if rootCause != nil && strings.Contains(rootCause.Error(), "enforce denied tables") {
 			log.V(2).Infof("Retry: %d, will retry query %s due to %v", try, query, err)
-			lastVSchemaCreated = vs.GetCreated()
+			if try == 0 { // We are going to retry at least once
+				defer func() {
+					// Prevent any plan cache pollution from queries planned against the wrong keyspace during a MoveTables
+					// traffic switching operation.
+					if err != nil { // The error we're checking here is the return value from the newExecute function
+						cause := vterrors.RootCause(err)
+						if cause != nil && strings.Contains(cause.Error(), "enforce denied tables") {
+							// The executor's VSchemaManager clears the plan cache when it receives a new vschema via its
+							// SrvVSchema watcher (it calls executor.SaveVSchema() in its watch's subscriber callback). This
+							// happens concurrently with the KeyspaceEventWatcher also receiving the new vschema in its
+							// SrvVSchema watcher and in its subscriber callback processing it (which includes getting info
+							// on all shards from the topo), and eventually determining that the keyspace is consistent and
+							// ending the buffering window. So there's race with query retries such that a query could be
+							// planned against the wrong side just as the keyspace event is getting resolved and the buffers
+							// drained. Then that bad plan is the cached plan for the query until you do another
+							// topo.RebuildSrvVSchema/vtctldclient RebuildVSchemaGraph which then causes the VSchemaManager
+							// to clear the plan cache. It's essentially a race between the two SrvVSchema watchers and the
+							// work they do when a new one is received. If we DID a retry AND the last time we retried
+							// still encountered the error, we know that the plan used was 1) not valid/correct and going to
+							// the wrong side of the traffic switch as it failed with the denied tables error and 2) it will
+							// remain the plan in the cache if we do not clear the plans after it was added to to the cache.
+							// So here we clear the plan cache in order to prevent this scenario where the bad plan is
+							// cached indefinitely and re-used after the buffering window ends and the keyspace event is
+							// resolved.
+							e.ClearPlans()
+						}
+					}
+				}()
+			}
 			continue
 		}
 

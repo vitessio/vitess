@@ -657,6 +657,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			log.Errorf("internal error: vplayer is in a transaction on event: %v", event)
 			return fmt.Errorf("internal error: vplayer is in a transaction on event: %v", event)
 		}
+		vp.vr.stats.DDLEventActions.Add(vp.vr.source.OnDdl.String(), 1) // Record the DDL handling
 		switch vp.vr.source.OnDdl {
 		case binlogdatapb.OnDDLAction_IGNORE:
 			// We still have to update the position.

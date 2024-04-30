@@ -70,7 +70,7 @@ type MysqlctlClient interface {
 }
 
 // Factory functions are registered by client implementations.
-type Factory func(network, addr string) (MysqlctlClient, error)
+type Factory func(ctx context.Context, network, addr string) (MysqlctlClient, error)
 
 var factories = make(map[string]Factory)
 
@@ -83,10 +83,10 @@ func RegisterFactory(name string, factory Factory) {
 }
 
 // New creates a client implementation as specified by a flag.
-func New(network, addr string) (MysqlctlClient, error) {
+func New(ctx context.Context, network, addr string) (MysqlctlClient, error) {
 	factory, ok := factories[protocol]
 	if !ok {
 		return nil, fmt.Errorf("unknown mysqlctl client protocol: %v", protocol)
 	}
-	return factory(network, addr)
+	return factory(ctx, network, addr)
 }
