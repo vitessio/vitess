@@ -73,7 +73,7 @@ func (tm *TabletManager) SetReadOnly(ctx context.Context, rdonly bool) error {
 	}
 	defer tm.unlock()
 
-	return tm.MysqlDaemon.SetReadOnly(rdonly)
+	return tm.MysqlDaemon.SetReadOnly(ctx, rdonly)
 }
 
 // ChangeType changes the tablet type

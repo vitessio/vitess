@@ -37,6 +37,37 @@ func testRedacted(t *testing.T, source, expected string) {
 	assert.Equal(t, expected, redactPassword(source))
 }
 
+func TestRedactSourcePassword(t *testing.T) {
+
+	// regular test case
+	testRedacted(t, `CHANGE REPLICATION SOURCE TO
+  SOURCE_PASSWORD = 'AAA',
+  SOURCE_CONNECT_RETRY = 1
+`,
+		`CHANGE REPLICATION SOURCE TO
+  SOURCE_PASSWORD = '****',
+  SOURCE_CONNECT_RETRY = 1
+`)
+
+	// empty password
+	testRedacted(t, `CHANGE REPLICATION SOURCE TO
+  SOURCE_PASSWORD = '',
+  SOURCE_CONNECT_RETRY = 1
+`,
+		`CHANGE REPLICATION SOURCE TO
+  SOURCE_PASSWORD = '****',
+  SOURCE_CONNECT_RETRY = 1
+`)
+
+	// no beginning match
+	testRedacted(t, "aaaaaaaaaaaaaa", "aaaaaaaaaaaaaa")
+
+	// no end match
+	testRedacted(t, `CHANGE REPLICATION SOURCE TO
+  SOURCE_PASSWORD = 'AAA`, `CHANGE REPLICATION SOURCE TO
+  SOURCE_PASSWORD = 'AAA`)
+}
+
 func TestRedactMasterPassword(t *testing.T) {
 
 	// regular test case
@@ -83,11 +114,11 @@ func TestRedactPassword(t *testing.T) {
 
 	// both primary password and password
 	testRedacted(t, `START xxx
-  MASTER_PASSWORD = 'AAA',
+  SOURCE_PASSWORD = 'AAA',
   PASSWORD = 'BBB'
 `,
 		`START xxx
-  MASTER_PASSWORD = '****',
+  SOURCE_PASSWORD = '****',
   PASSWORD = '****'
 `)
 }
@@ -101,11 +132,11 @@ func TestWaitForReplicationStart(t *testing.T) {
 		fakemysqld.Close()
 	}()
 
-	err := WaitForReplicationStart(fakemysqld, 2)
+	err := WaitForReplicationStart(context.Background(), fakemysqld, 2)
 	assert.NoError(t, err)
 
 	fakemysqld.ReplicationStatusError = fmt.Errorf("test error")
-	err = WaitForReplicationStart(fakemysqld, 2)
+	err = WaitForReplicationStart(context.Background(), fakemysqld, 2)
 	assert.ErrorContains(t, err, "test error")
 
 	params := db.ConnParams()
@@ -116,9 +147,9 @@ func TestWaitForReplicationStart(t *testing.T) {
 	defer testMysqld.Close()
 
 	db.AddQuery("SELECT 1", &sqltypes.Result{})
-	db.AddQuery("SHOW SLAVE STATUS", sqltypes.MakeTestResult(sqltypes.MakeTestFields("Last_SQL_Error|Last_IO_Error", "varchar|varchar"), "test sql error|test io error"))
+	db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(sqltypes.MakeTestFields("Last_SQL_Error|Last_IO_Error", "varchar|varchar"), "test sql error|test io error"))
 
-	err = WaitForReplicationStart(testMysqld, 2)
+	err = WaitForReplicationStart(context.Background(), testMysqld, 2)
 	assert.ErrorContains(t, err, "Last_SQL_Error: test sql error, Last_IO_Error: test io error")
 }
 
@@ -230,17 +261,17 @@ func TestReplicationStatus(t *testing.T) {
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
 
 	db.AddQuery("SELECT 1", &sqltypes.Result{})
-	db.AddQuery("SHOW SLAVE STATUS", sqltypes.MakeTestResult(sqltypes.MakeTestFields("test_field", "varchar"), "test_status"))
+	db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(sqltypes.MakeTestFields("test_field", "varchar"), "test_status"))
 
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
 
-	res, err := testMysqld.ReplicationStatus()
+	res, err := testMysqld.ReplicationStatus(context.Background())
 	assert.NoError(t, err)
 	assert.True(t, res.ReplicationLagUnknown)
 
-	db.AddQuery("SHOW SLAVE STATUS", &sqltypes.Result{})
-	res, err = testMysqld.ReplicationStatus()
+	db.AddQuery("SHOW REPLICA STATUS", &sqltypes.Result{})
+	res, err = testMysqld.ReplicationStatus(context.Background())
 	assert.Error(t, err)
 	assert.False(t, res.ReplicationLagUnknown)
 }
@@ -303,7 +334,7 @@ func TestPrimaryPosition(t *testing.T) {
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
 
-	res, err := testMysqld.PrimaryPosition()
+	res, err := testMysqld.PrimaryPosition(context.Background())
 	assert.NoError(t, err)
 	assert.Equal(t, "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8:12-17", res.String())
 }
@@ -348,7 +379,7 @@ func TestSetReplicationSource(t *testing.T) {
 
 	db.AddQuery("SELECT 1", &sqltypes.Result{})
 	db.AddQuery("RESET MASTER", &sqltypes.Result{})
-	db.AddQuery("STOP SLAVE", &sqltypes.Result{})
+	db.AddQuery("STOP REPLICA", &sqltypes.Result{})
 
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
@@ -357,9 +388,9 @@ func TestSetReplicationSource(t *testing.T) {
 
 	// We expect query containing passed host and port to be executed
 	err := testMysqld.SetReplicationSource(ctx, "test_host", 2, true, true)
-	assert.ErrorContains(t, err, `MASTER_HOST = 'test_host'`)
-	assert.ErrorContains(t, err, `MASTER_PORT = 2`)
-	assert.ErrorContains(t, err, `CHANGE MASTER TO`)
+	assert.ErrorContains(t, err, `SOURCE_HOST = 'test_host'`)
+	assert.ErrorContains(t, err, `SOURCE_PORT = 2`)
+	assert.ErrorContains(t, err, `CHANGE REPLICATION SOURCE TO`)
 }
 
 func TestResetReplication(t *testing.T) {
@@ -372,17 +403,17 @@ func TestResetReplication(t *testing.T) {
 
 	db.AddQuery("SELECT 1", &sqltypes.Result{})
 	db.AddQuery("SHOW GLOBAL VARIABLES LIKE 'rpl_semi_sync%'", &sqltypes.Result{})
-	db.AddQuery("STOP SLAVE", &sqltypes.Result{})
+	db.AddQuery("STOP REPLICA", &sqltypes.Result{})
 
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
 
 	ctx := context.Background()
 	err := testMysqld.ResetReplication(ctx)
-	assert.ErrorContains(t, err, "RESET SLAVE ALL")
+	assert.ErrorContains(t, err, "RESET REPLICA ALL")
 
 	// We expect this query to be executed
-	db.AddQuery("RESET SLAVE ALL", &sqltypes.Result{})
+	db.AddQuery("RESET REPLICA ALL", &sqltypes.Result{})
 	err = testMysqld.ResetReplication(ctx)
 	assert.ErrorContains(t, err, "RESET MASTER")
 
@@ -402,17 +433,17 @@ func TestResetReplicationParameters(t *testing.T) {
 
 	db.AddQuery("SELECT 1", &sqltypes.Result{})
 	db.AddQuery("SHOW GLOBAL VARIABLES LIKE 'rpl_semi_sync%'", &sqltypes.Result{})
-	db.AddQuery("STOP SLAVE", &sqltypes.Result{})
+	db.AddQuery("STOP REPLICA", &sqltypes.Result{})
 
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
 
 	ctx := context.Background()
 	err := testMysqld.ResetReplicationParameters(ctx)
-	assert.ErrorContains(t, err, "RESET SLAVE ALL")
+	assert.ErrorContains(t, err, "RESET REPLICA ALL")
 
 	// We expect this query to be executed
-	db.AddQuery("RESET SLAVE ALL", &sqltypes.Result{})
+	db.AddQuery("RESET REPLICA ALL", &sqltypes.Result{})
 	err = testMysqld.ResetReplicationParameters(ctx)
 	assert.NoError(t, err)
 }
@@ -427,10 +458,10 @@ func TestFindReplicas(t *testing.T) {
 	}()
 
 	fakemysqld.FetchSuperQueryMap = map[string]*sqltypes.Result{
-		"SHOW PROCESSLIST": sqltypes.MakeTestResult(sqltypes.MakeTestFields("Id|User|Host|db|Command|Time|State|Info", "varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar"), "1|user1|localhost:12|db1|Binlog Dump|54|Has sent all binlog to slave|NULL"),
+		"SHOW PROCESSLIST": sqltypes.MakeTestResult(sqltypes.MakeTestFields("Id|User|Host|db|Command|Time|State|Info", "varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar"), "1|user1|localhost:12|db1|Binlog Dump|54|Has sent all binlog to replica|NULL"),
 	}
 
-	res, err := FindReplicas(fakemysqld)
+	res, err := FindReplicas(context.Background(), fakemysqld)
 	assert.NoError(t, err)
 
 	want, err := net.LookupHost("localhost")
@@ -448,18 +479,18 @@ func TestGetBinlogInformation(t *testing.T) {
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
 
 	db.AddQuery("SELECT 1", &sqltypes.Result{})
-	db.AddQuery("SELECT @@global.binlog_format, @@global.log_bin, @@global.log_slave_updates, @@global.binlog_row_image", sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global.binlog_format|@@global.log_bin|@@global.log_slave_updates|@@global.binlog_row_image", "varchar|int64|int64|varchar"), "binlog|1|2|row_image"))
+	db.AddQuery("SELECT @@global.binlog_format, @@global.log_bin, @@global.log_replica_updates, @@global.binlog_row_image", sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global.binlog_format|@@global.log_bin|@@global.log_replica_updates|@@global.binlog_row_image", "varchar|int64|int64|varchar"), "binlog|1|2|row_image"))
 
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
 
 	ctx := context.Background()
-	bin, logBin, slaveUpdate, rowImage, err := testMysqld.GetBinlogInformation(ctx)
+	bin, logBin, replicaUpdate, rowImage, err := testMysqld.GetBinlogInformation(ctx)
 	assert.NoError(t, err)
 	assert.Equal(t, "binlog", bin)
 	assert.Equal(t, "row_image", rowImage)
 	assert.True(t, logBin)
-	assert.False(t, slaveUpdate)
+	assert.False(t, replicaUpdate)
 }
 
 func TestGetGTIDMode(t *testing.T) {

@@ -25,7 +25,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-// ReplicationStatus holds replication information from SHOW SLAVE STATUS.
+// ReplicationStatus holds replication information from SHOW REPLICA STATUS.
 type ReplicationStatus struct {
 	// Position is the current position of the replica. For GTID replication implementations
 	// it is the executed GTID set. For file replication implementation, it is same as
@@ -222,9 +222,14 @@ func (s *ReplicationStatus) FindErrantGTIDs(otherReplicaStatuses []*ReplicationS
 	return diffSet, nil
 }
 
-func ParseMysqlReplicationStatus(resultMap map[string]string) (ReplicationStatus, error) {
-	status := ParseReplicationStatus(resultMap)
-	uuidString := resultMap["Master_UUID"]
+func ParseMysqlReplicationStatus(resultMap map[string]string, replicaTerminology bool) (ReplicationStatus, error) {
+	status := ParseReplicationStatus(resultMap, replicaTerminology)
+
+	uuidField := "Source_UUID"
+	if !replicaTerminology {
+		uuidField = "Master_UUID"
+	}
+	uuidString := resultMap[uuidField]
 	if uuidString != "" {
 		sid, err := ParseSID(uuidString)
 		if err != nil {
@@ -251,7 +256,7 @@ func ParseMysqlReplicationStatus(resultMap map[string]string) (ReplicationStatus
 }
 
 func ParseMariadbReplicationStatus(resultMap map[string]string) (ReplicationStatus, error) {
-	status := ParseReplicationStatus(resultMap)
+	status := ParseReplicationStatus(resultMap, false)
 
 	var err error
 	status.Position.GTIDSet, err = ParseMariadbGTIDSet(resultMap["Gtid_Slave_Pos"])
@@ -263,7 +268,7 @@ func ParseMariadbReplicationStatus(resultMap map[string]string) (ReplicationStat
 }
 
 func ParseFilePosReplicationStatus(resultMap map[string]string) (ReplicationStatus, error) {
-	status := ParseReplicationStatus(resultMap)
+	status := ParseReplicationStatus(resultMap, false)
 
 	status.Position = status.FilePosition
 	status.RelayLogPosition = status.RelayLogSourceBinlogEquivalentPosition
@@ -280,27 +285,53 @@ func ParseFilePosPrimaryStatus(resultMap map[string]string) (PrimaryStatus, erro
 }
 
 // ParseReplicationStatus parses the common (non-flavor-specific) fields of ReplicationStatus
-func ParseReplicationStatus(fields map[string]string) ReplicationStatus {
+func ParseReplicationStatus(fields map[string]string, replica bool) ReplicationStatus {
 	// The field names in the map are identical to what we receive from the database
 	// Hence the names still contain Master
+	sourceHostField := "Source_Host"
+	sourceUserField := "Source_User"
+	sslAllowedField := "Source_SSL_Allowed"
+	replicaIOField := "Replica_IO_Running"
+	replicaSQLField := "Replica_SQL_Running"
+	sourcePortField := "Source_Port"
+	sourceSecondsBehindField := "Seconds_Behind_Source"
+	sourceServerIDField := "Source_Server_Id"
+	execSourceLogPosField := "Exec_Source_Log_Pos"
+	relaySourceLogFileField := "Relay_Source_Log_File"
+	readSourceLogPosField := "Read_Source_Log_Pos"
+	sourceLogFileField := "Source_Log_File"
+	if !replica {
+		sourceHostField = "Master_Host"
+		sourceUserField = "Master_User"
+		sslAllowedField = "Master_SSL_Allowed"
+		replicaIOField = "Slave_IO_Running"
+		replicaSQLField = "Slave_SQL_Running"
+		sourcePortField = "Master_Port"
+		sourceSecondsBehindField = "Seconds_Behind_Master"
+		sourceServerIDField = "Master_Server_Id"
+		execSourceLogPosField = "Exec_Master_Log_Pos"
+		relaySourceLogFileField = "Relay_Master_Log_File"
+		readSourceLogPosField = "Read_Master_Log_Pos"
+		sourceLogFileField = "Master_Log_File"
+	}
+
 	status := ReplicationStatus{
-		SourceHost:            fields["Master_Host"],
-		SourceUser:            fields["Master_User"],
-		SSLAllowed:            fields["Master_SSL_Allowed"] == "Yes",
+		SourceHost:            fields[sourceHostField],
+		SourceUser:            fields[sourceUserField],
+		SSLAllowed:            fields[sslAllowedField] == "Yes",
 		AutoPosition:          fields["Auto_Position"] == "1",
 		UsingGTID:             fields["Using_Gtid"] != "No" && fields["Using_Gtid"] != "",
 		HasReplicationFilters: (fields["Replicate_Do_DB"] != "") || (fields["Replicate_Ignore_DB"] != "") || (fields["Replicate_Do_Table"] != "") || (fields["Replicate_Ignore_Table"] != "") || (fields["Replicate_Wild_Do_Table"] != "") || (fields["Replicate_Wild_Ignore_Table"] != ""),
-		// These fields are returned from the underlying DB and cannot be renamed
-		IOState:      ReplicationStatusToState(fields["Slave_IO_Running"]),
-		LastIOError:  fields["Last_IO_Error"],
-		SQLState:     ReplicationStatusToState(fields["Slave_SQL_Running"]),
-		LastSQLError: fields["Last_SQL_Error"],
+		IOState:               ReplicationStatusToState(fields[replicaIOField]),
+		LastIOError:           fields["Last_IO_Error"],
+		SQLState:              ReplicationStatusToState(fields[replicaSQLField]),
+		LastSQLError:          fields["Last_SQL_Error"],
 	}
-	parseInt, _ := strconv.ParseInt(fields["Master_Port"], 10, 32)
+	parseInt, _ := strconv.ParseInt(fields[sourcePortField], 10, 32)
 	status.SourcePort = int32(parseInt)
 	parseInt, _ = strconv.ParseInt(fields["Connect_Retry"], 10, 32)
 	status.ConnectRetry = int32(parseInt)
-	parseUint, err := strconv.ParseUint(fields["Seconds_Behind_Master"], 10, 32)
+	parseUint, err := strconv.ParseUint(fields[sourceSecondsBehindField], 10, 32)
 	if err != nil {
 		// we could not parse the value into a valid uint32 -- most commonly because the value is NULL from the
 		// database -- so let's reflect that the underlying value was unknown on our last check
@@ -309,13 +340,13 @@ func ParseReplicationStatus(fields map[string]string) ReplicationStatus {
 		status.ReplicationLagUnknown = false
 		status.ReplicationLagSeconds = uint32(parseUint)
 	}
-	parseUint, _ = strconv.ParseUint(fields["Master_Server_Id"], 10, 32)
+	parseUint, _ = strconv.ParseUint(fields[sourceServerIDField], 10, 32)
 	status.SourceServerID = uint32(parseUint)
 	parseUint, _ = strconv.ParseUint(fields["SQL_Delay"], 10, 32)
 	status.SQLDelay = uint32(parseUint)
 
-	executedPosStr := fields["Exec_Master_Log_Pos"]
-	file := fields["Relay_Master_Log_File"]
+	executedPosStr := fields[execSourceLogPosField]
+	file := fields[relaySourceLogFileField]
 	if file != "" && executedPosStr != "" {
 		status.FilePosition.GTIDSet, err = ParseFilePosGTIDSet(fmt.Sprintf("%s:%s", file, executedPosStr))
 		if err != nil {
@@ -323,8 +354,8 @@ func ParseReplicationStatus(fields map[string]string) ReplicationStatus {
 		}
 	}
 
-	readPosStr := fields["Read_Master_Log_Pos"]
-	file = fields["Master_Log_File"]
+	readPosStr := fields[readSourceLogPosField]
+	file = fields[sourceLogFileField]
 	if file != "" && readPosStr != "" {
 		status.RelayLogSourceBinlogEquivalentPosition.GTIDSet, err = ParseFilePosGTIDSet(fmt.Sprintf("%s:%s", file, readPosStr))
 		if err != nil {

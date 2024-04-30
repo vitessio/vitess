@@ -139,12 +139,12 @@ func TestExecuteBackup(t *testing.T) {
 	bh := filebackupstorage.NewBackupHandle(nil, "", "", false)
 
 	// Spin up a fake daemon to be used in backups. It needs to be allowed to receive:
-	//  "STOP SLAVE", "START SLAVE", in that order.
+	//  "STOP REPLICA", "START REPLICA", in that order.
 	fakedb := fakesqldb.New(t)
 	defer fakedb.Close()
 	mysqld := mysqlctl.NewFakeMysqlDaemon(fakedb)
 	defer mysqld.Close()
-	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP SLAVE", "START SLAVE"}
+	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "START REPLICA"}
 	// mysqld.ShutdownTime = time.Minute
 
 	fakeStats := backupstats.NewFakeStats()
@@ -285,13 +285,13 @@ func TestExecuteBackupWithSafeUpgrade(t *testing.T) {
 	bh := filebackupstorage.NewBackupHandle(nil, "", "", false)
 
 	// Spin up a fake daemon to be used in backups. It needs to be allowed to receive:
-	//  "STOP SLAVE", "START SLAVE", in that order.
+	//  "STOP REPLICA", "START REPLICA", in that order.
 	// It also needs to be allowed to receive the query to disable the innodb_fast_shutdown flag.
 	fakedb := fakesqldb.New(t)
 	defer fakedb.Close()
 	mysqld := mysqlctl.NewFakeMysqlDaemon(fakedb)
 	defer mysqld.Close()
-	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP SLAVE", "START SLAVE"}
+	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "START REPLICA"}
 	mysqld.FetchSuperQueryMap = map[string]*sqltypes.Result{
 		"SET GLOBAL innodb_fast_shutdown=0": {},
 	}
@@ -372,12 +372,12 @@ func TestExecuteBackupWithCanceledContext(t *testing.T) {
 	be := &mysqlctl.BuiltinBackupEngine{}
 	bh := filebackupstorage.NewBackupHandle(nil, "", "", false)
 	// Spin up a fake daemon to be used in backups. It needs to be allowed to receive:
-	// "STOP SLAVE", "START SLAVE", in that order.
+	// "STOP REPLICA", "START REPLICA", in that order.
 	fakedb := fakesqldb.New(t)
 	defer fakedb.Close()
 	mysqld := mysqlctl.NewFakeMysqlDaemon(fakedb)
 	defer mysqld.Close()
-	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP SLAVE", "START SLAVE"}
+	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "START REPLICA"}
 
 	// Cancel the context deliberately
 	cancelledCtx, cancelCtx := context.WithCancel(context.Background())
@@ -461,12 +461,12 @@ func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
 	be := &mysqlctl.BuiltinBackupEngine{}
 	bh := filebackupstorage.NewBackupHandle(nil, "", "", false)
 	// Spin up a fake daemon to be used in backups. It needs to be allowed to receive:
-	// "STOP SLAVE", "START SLAVE", in that order.
+	// "STOP REPLICA", "START REPLICA", in that order.
 	fakedb := fakesqldb.New(t)
 	defer fakedb.Close()
 	mysqld := mysqlctl.NewFakeMysqlDaemon(fakedb)
 	defer mysqld.Close()
-	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP SLAVE", "START SLAVE"}
+	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "START REPLICA"}
 
 	backupResult, err := be.ExecuteBackup(ctx, mysqlctl.BackupParams{
 		Logger: logutil.NewConsoleLogger(),
@@ -494,7 +494,7 @@ func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
 	defer fakedb.Close()
 	mysqld = mysqlctl.NewFakeMysqlDaemon(fakedb)
 	defer mysqld.Close()
-	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP SLAVE", "START SLAVE"}
+	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "START REPLICA"}
 
 	fakeStats := backupstats.NewFakeStats()
 
@@ -571,7 +571,7 @@ func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
 	defer fakedb.Close()
 	mysqld = mysqlctl.NewFakeMysqlDaemon(fakedb)
 	defer mysqld.Close()
-	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP SLAVE", "START SLAVE"}
+	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "START REPLICA"}
 	restoreParams.Mysqld = mysqld
 	timedOutCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
 	defer cancel()
