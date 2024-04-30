@@ -351,6 +351,6 @@ func (*filePosFlavor) catchupToGTIDCommands(_ *ConnParams, _ replication.Positio
 	return []string{"unsupported"}
 }
 
-func (*filePosFlavor) binlogReplicaField() string {
+func (*filePosFlavor) binlogReplicatedUpdates() string {
 	return "@@global.log_slave_updates"
 }

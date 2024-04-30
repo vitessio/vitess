@@ -578,13 +578,13 @@ func (mysqlFlavor8) catchupToGTIDCommands(params *ConnParams, replPos replicatio
 		// We need to use TLS
 		cmd := fmt.Sprintf("CHANGE REPLICATION SOURCE TO SOURCE_HOST='%s', SOURCE_PORT=%d, SOURCE_USER='%s', SOURCE_PASSWORD='%s', SOURCE_AUTO_POSITION=1, SOURCE_SSL=1", params.Host, params.Port, params.Uname, params.Pass)
 		if params.SslCa != "" {
-			cmd += fmt.Sprintf(", MASTER_SSL_CA='%s'", params.SslCa)
+			cmd += fmt.Sprintf(", SOURCE_SSL_CA='%s'", params.SslCa)
 		}
 		if params.SslCert != "" {
-			cmd += fmt.Sprintf(", MASTER_SSL_CERT='%s'", params.SslCert)
+			cmd += fmt.Sprintf(", SOURCE_SSL_CERT='%s'", params.SslCert)
 		}
 		if params.SslKey != "" {
-			cmd += fmt.Sprintf(", MASTER_SSL_KEY='%s'", params.SslKey)
+			cmd += fmt.Sprintf(", SOURCE_SSL_KEY='%s'", params.SslKey)
 		}
 		cmds = append(cmds, cmd+";")
 	} else {
@@ -600,10 +600,10 @@ func (mysqlFlavor8) catchupToGTIDCommands(params *ConnParams, replPos replicatio
 	return cmds
 }
 
-func (mysqlFlavor) binlogReplicaField() string {
+func (mysqlFlavor) binlogReplicatedUpdates() string {
 	return "@@global.log_slave_updates"
 }
 
-func (mysqlFlavor8) binlogReplicaField() string {
+func (mysqlFlavor8) binlogReplicatedUpdates() string {
 	return "@@global.log_replica_updates"
 }

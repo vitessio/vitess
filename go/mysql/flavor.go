@@ -46,7 +46,8 @@ const (
 	mariaDBReplicationHackPrefix = "5.5.5-"
 	// mariaDBVersionString is present in
 	mariaDBVersionString = "MariaDB"
-	// mysql8VersionPrefix is the prefix for 8.0 mysql version, such as 8.0.19
+	// mysql8VersionPrefix is the prefix for 8.x mysql version, such as 8.0.19,
+	// but also newer ones like 8.4.0.
 	mysql8VersionPrefix = "8."
 )
 
@@ -136,8 +137,8 @@ type flavor interface {
 	// catchupToGTIDCommands returns the command to catch up to a given GTID.
 	catchupToGTIDCommands(params *ConnParams, pos replication.Position) []string
 
-	// binlogReplicaField returns the field to use to check replica updates.
-	binlogReplicaField() string
+	// binlogReplicatedUpdates returns the field to use to check replica updates.
+	binlogReplicatedUpdates() string
 
 	baseShowTables() string
 	baseShowTablesWithSizes() string
@@ -178,7 +179,7 @@ func GetFlavor(serverVersion string, flavorFunc func() flavor) (f flavor, capabl
 			f = mariadbFlavor102{mariadbFlavor{serverVersion: fmt.Sprintf("%f", mariadbVersion)}}
 		}
 	case strings.HasPrefix(serverVersion, mysql8VersionPrefix):
-		recent, _ := capabilities.ServerVersionAtLeast(serverVersion, 8, 0, 22)
+		recent, _ := capabilities.MySQLVersionHasCapability(serverVersion, capabilities.ReplicaTerminologyCapability)
 		if recent {
 			f = mysqlFlavor8{mysqlFlavor{serverVersion: serverVersion}}
 		} else {

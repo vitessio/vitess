@@ -953,7 +953,7 @@ func (e *Executor) showVitessReplicationStatus(ctx context.Context, filter *sqlp
 			replSQLThreadHealth := ""
 			replLastError := ""
 			replLag := "-1" // A string to support NULL as a value
-			replicaQueries, _ := capabilities.MySQLVersionHasCapability(e.env.MySQLVersion(), capabilities.ReplicaQueries)
+			replicaQueries, _ := capabilities.MySQLVersionHasCapability(e.env.MySQLVersion(), capabilities.ReplicaTerminologyCapability)
 			sql := "show replica status"
 			sourceHostField := "Source_Host"
 			sourcePortField := "Source_Port"

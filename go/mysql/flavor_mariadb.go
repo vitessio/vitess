@@ -328,6 +328,6 @@ func (mariadbFlavor) catchupToGTIDCommands(_ *ConnParams, _ replication.Position
 	return []string{"unsupported"}
 }
 
-func (mariadbFlavor) binlogReplicaField() string {
+func (mariadbFlavor) binlogReplicatedUpdates() string {
 	return "@@global.log_slave_updates"
 }

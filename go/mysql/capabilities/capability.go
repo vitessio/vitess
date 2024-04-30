@@ -47,7 +47,7 @@ const (
 	CheckConstraintsCapability                                          // supported in MySQL 8.0.16 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-16.html
 	PerformanceSchemaDataLocksTableCapability                           // supported in MySQL 8.0.1 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-1.html
 	InstantDDLXtrabackupCapability                                      // Supported in 8.0.32 and above, solving a MySQL-vs-Xtrabackup bug starting 8.0.29
-	ReplicaQueries                                                      // Supported in 8.0.22 and above, using SHOW REPLICA STATUS and all variations.
+	ReplicaTerminologyCapability                                        // Supported in 8.0.26 and above, using SHOW REPLICA STATUS and all variations.
 )
 
 type CapableOf func(capability FlavorCapability) (bool, error)
@@ -113,8 +113,12 @@ func MySQLVersionHasCapability(serverVersion string, capability FlavorCapability
 		return atLeast(8, 0, 30)
 	case InstantDDLXtrabackupCapability:
 		return atLeast(8, 0, 32)
-	case ReplicaQueries:
-		return atLeast(8, 0, 22)
+	case ReplicaTerminologyCapability:
+		// In MySQL 8.0.22 the new replica syntax was introduced, but other changes
+		// like the log_replica_updates field was only present in 8.0.26 and newer.
+		// So be conservative here, and only use the new syntax on newer versions,
+		// so we don't have to have too many different flavors.
+		return atLeast(8, 0, 26)
 	default:
 		return false, nil
 	}

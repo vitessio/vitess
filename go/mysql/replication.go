@@ -17,7 +17,6 @@ limitations under the License.
 package mysql
 
 import (
-	"errors"
 	"fmt"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
@@ -169,7 +168,7 @@ func (c *Conn) SemiSyncExtensionLoaded() (SemiSyncType, error) {
 }
 
 func (c *Conn) BinlogInformation() (string, bool, bool, string, error) {
-	replicaField := c.flavor.binlogReplicaField()
+	replicaField := c.flavor.binlogReplicatedUpdates()
 
 	query := fmt.Sprintf("select @@global.binlog_format, @@global.log_bin, %s, @@global.binlog_row_image", replicaField)
 	qr, err := c.ExecuteFetch(query, 1, true)
@@ -177,7 +176,7 @@ func (c *Conn) BinlogInformation() (string, bool, bool, string, error) {
 		return "", false, false, "", err
 	}
 	if len(qr.Rows) != 1 {
-		return "", false, false, "", errors.New("unable to read global variables binlog_format, log_bin, log_replica_updates, binlog_row_image")
+		return "", false, false, "", fmt.Errorf("unable to read global variables binlog_format, log_bin, %s, binlog_row_image", replicaField)
 	}
 	res := qr.Named().Row()
 	binlogFormat, err := res.ToString("@@global.binlog_format")

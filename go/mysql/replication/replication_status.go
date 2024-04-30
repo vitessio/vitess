@@ -222,11 +222,11 @@ func (s *ReplicationStatus) FindErrantGTIDs(otherReplicaStatuses []*ReplicationS
 	return diffSet, nil
 }
 
-func ParseMysqlReplicationStatus(resultMap map[string]string, replica bool) (ReplicationStatus, error) {
-	status := ParseReplicationStatus(resultMap, replica)
+func ParseMysqlReplicationStatus(resultMap map[string]string, replicaTerminology bool) (ReplicationStatus, error) {
+	status := ParseReplicationStatus(resultMap, replicaTerminology)
 
 	uuidField := "Source_UUID"
-	if !replica {
+	if !replicaTerminology {
 		uuidField = "Master_UUID"
 	}
 	uuidString := resultMap[uuidField]
