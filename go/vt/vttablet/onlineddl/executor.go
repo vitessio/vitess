@@ -3161,42 +3161,7 @@ func (e *Executor) executeSpecialAlterDDLActionMigrationIfApplicable(ctx context
 		if _, err := e.executeDirectly(ctx, onlineDDL); err != nil {
 			return false, err
 		}
-	case dropRangePartitionSpecialOperation:
-		dropPartition := func() error {
-			artifactTableName, err := schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
-			if err != nil {
-				return err
-			}
-			if err := e.updateArtifacts(ctx, onlineDDL.UUID, artifactTableName); err != nil {
-				return err
-			}
-
-			// Apply CREATE TABLE for artifact table
-			if _, _, err := e.createDuplicateTableLike(ctx, artifactTableName, onlineDDL, conn); err != nil {
-				return err
-			}
-			// Remove partitioning
-			parsed := sqlparser.BuildParsedQuery(sqlAlterTableRemovePartitioning, artifactTableName)
-			if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
-				return err
-			}
-			// Exchange with partition
-			partitionName := specialPlan.Detail("partition_name")
-			parsed = sqlparser.BuildParsedQuery(sqlAlterTableExchangePartition, onlineDDL.Table, partitionName, artifactTableName)
-			if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
-				return err
-			}
-			// Drop table's partition
-			parsed = sqlparser.BuildParsedQuery(sqlAlterTableDropPartition, onlineDDL.Table, partitionName)
-			if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
-				return err
-			}
-			return nil
-		}
-		if err := dropPartition(); err != nil {
-			return false, err
-		}
-	case addRangePartitionSpecialOperation:
+	case rangePartitionSpecialOperation:
 		if _, err := e.executeDirectly(ctx, onlineDDL); err != nil {
 			return false, err
 		}

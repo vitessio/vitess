@@ -6082,6 +6082,18 @@ var (
 		output:       "syntax error at position 18 near '.3'",
 		excludeMulti: true,
 	}, {
+		input:  "ALTER TABLE t ADD PARTITION (PARTITION p10 VALUES LESS THAN (10)), ADD PARTITION (PARTITION p20 VALUES LESS THAN (20))",
+		output: "syntax error at position 67",
+	}, {
+		input:  "ALTER TABLE t DROP PARTITION p1, DROP PARTITION p2",
+		output: "syntax error at position 38 near 'DROP'",
+	}, {
+		input:  "ALTER TABLE t DROP PARTITION p1, ADD COLUMN c INT",
+		output: "syntax error at position 37 near 'ADD'",
+	}, {
+		input:  "ALTER TABLE t ADD COLUMN c INT, DROP PARTITION p1",
+		output: "syntax error at position 47 near 'PARTITION'",
+	}, {
 		input:  "execute stmt1 using a, @b",
 		output: "syntax error at position 22 near 'a'",
 	}, {

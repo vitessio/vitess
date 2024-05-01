@@ -1142,7 +1142,7 @@ func testRevert(t *testing.T) {
 		checkPartitionedTableCountRows(t, 6)
 	})
 	t.Run("partitions: drop first partition", func(t *testing.T) {
-		uuid := testOnlineDDLStatementForTable(t, "alter table part_test drop partition `p1`", ddlStrategy+" --fast-range-rotation", "vtgate", "")
+		uuid := testOnlineDDLStatementForTable(t, "alter table part_test drop partition `p1`", ddlStrategy, "vtgate", "")
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		checkTable(t, partitionedTableName, true)
@@ -1157,7 +1157,7 @@ func testRevert(t *testing.T) {
 		checkPartitionedTableCountRows(t, 5)
 	})
 	t.Run("partitions: add new partition", func(t *testing.T) {
-		uuid := testOnlineDDLStatementForTable(t, "alter table part_test add partition (PARTITION p7 VALUES LESS THAN (70))", ddlStrategy+" --fast-range-rotation", "vtgate", "")
+		uuid := testOnlineDDLStatementForTable(t, "alter table part_test add partition (PARTITION p7 VALUES LESS THAN (70))", ddlStrategy, "vtgate", "")
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		checkTable(t, partitionedTableName, true)
