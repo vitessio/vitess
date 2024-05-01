@@ -49,12 +49,14 @@ func TestVSchemaUpdate(t *testing.T) {
 		Keyspace:                ks,
 		Columns:                 cols1,
 		ColumnListAuthoritative: true,
+		FkOrder:                 1,
 	}
 	vindexTable_t2 := &vindexes.Table{
 		Name:                    sqlparser.NewIdentifierCS("t2"),
 		Keyspace:                ks,
 		Columns:                 cols1,
 		ColumnListAuthoritative: true,
+		FkOrder:                 2,
 	}
 	sqlparserCols1 := sqlparser.MakeColumns("id")
 	sqlparserCols2 := sqlparser.MakeColumns("uid", "name")
@@ -484,12 +486,14 @@ func TestVSchemaUpdateWithFKReferenceToInternalTables(t *testing.T) {
 		Keyspace:                ks,
 		Columns:                 cols1,
 		ColumnListAuthoritative: true,
+		FkOrder:                 1,
 	}
 	vindexTable_t2 := &vindexes.Table{
 		Name:                    sqlparser.NewIdentifierCS("t2"),
 		Keyspace:                ks,
 		Columns:                 cols1,
 		ColumnListAuthoritative: true,
+		FkOrder:                 2,
 	}
 
 	vindexTable_t1.ChildForeignKeys = append(vindexTable_t1.ChildForeignKeys, vindexes.ChildFKInfo{

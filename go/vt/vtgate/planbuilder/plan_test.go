@@ -236,6 +236,9 @@ func setFks(t *testing.T, vschema *vindexes.VSchema) {
 }
 
 func setFkOrderForFkTables(vschema *vindexes.VSchema) {
+	// We aren't using the topological sorting algorithm here in the test
+	// because it leads to ambiguity in test output since the topological sort can lead to
+	// multiple different ordering, all of them equally valid.
 	fkOrder := map[string]int{
 		"u_tbl2":          11,
 		"u_tbl7":          9,
