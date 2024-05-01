@@ -686,7 +686,9 @@ func (u *UntypedExpr) loadTypedExpression(env *ExpressionEnv) (*typedExpr, error
 	defer u.mu.Unlock()
 
 	for _, typed := range u.typed {
-		if slices.Equal(typed.types, dynamicTypes) {
+		if slices.EqualFunc(typed.types, dynamicTypes, func(a, b ctype) bool {
+			return a.equal(b)
+		}) {
 			return typed, nil
 		}
 	}

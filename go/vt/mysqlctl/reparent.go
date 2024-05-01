@@ -85,8 +85,7 @@ func (mysqld *Mysqld) WaitForReparentJournal(ctx context.Context, timeCreatedNS 
 }
 
 // Promote will promote this server to be the new primary.
-func (mysqld *Mysqld) Promote(hookExtraEnv map[string]string) (replication.Position, error) {
-	ctx := context.TODO()
+func (mysqld *Mysqld) Promote(ctx context.Context, hookExtraEnv map[string]string) (replication.Position, error) {
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
 		return replication.Position{}, err
@@ -96,7 +95,7 @@ func (mysqld *Mysqld) Promote(hookExtraEnv map[string]string) (replication.Posit
 	// Since we handle replication, just stop it.
 	cmds := []string{
 		conn.Conn.StopReplicationCommand(),
-		"RESET SLAVE ALL", // "ALL" makes it forget primary host:port.
+		conn.Conn.ResetReplicationCommand(),
 		// When using semi-sync and GTID, a replica first connects to the new primary with a given GTID set,
 		// it can take a long time to scan the current binlog file to find the corresponding position.
 		// This can cause commits that occur soon after the primary is promoted to take a long time waiting

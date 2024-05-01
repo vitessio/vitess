@@ -207,7 +207,12 @@ func (nz *normalizer) convertLiteralDedup(node *Literal, cursor *Cursor) {
 	}
 
 	// Modify the AST node to a bindvar.
-	cursor.Replace(NewTypedArgument(bvname, node.SQLType()))
+	arg, err := NewTypedArgumentFromLiteral(bvname, node)
+	if err != nil {
+		nz.err = err
+		return
+	}
+	cursor.Replace(arg)
 }
 
 // convertLiteral converts an Literal without the dedup.
@@ -224,7 +229,12 @@ func (nz *normalizer) convertLiteral(node *Literal, cursor *Cursor) {
 
 	bvname := nz.reserved.nextUnusedVar()
 	nz.bindVars[bvname] = bval
-	cursor.Replace(NewTypedArgument(bvname, node.SQLType()))
+	arg, err := NewTypedArgumentFromLiteral(bvname, node)
+	if err != nil {
+		nz.err = err
+		return
+	}
+	cursor.Replace(arg)
 }
 
 // convertComparison attempts to convert IN clauses to
@@ -268,7 +278,12 @@ func (nz *normalizer) parameterize(left, right Expr) Expr {
 		return nil
 	}
 	bvname := nz.decideBindVarName(lit, col, bval)
-	return NewTypedArgument(bvname, lit.SQLType())
+	arg, err := NewTypedArgumentFromLiteral(bvname, lit)
+	if err != nil {
+		nz.err = err
+		return nil
+	}
+	return arg
 }
 
 func (nz *normalizer) decideBindVarName(lit *Literal, col *ColName, bval *querypb.BindVariable) string {

@@ -136,7 +136,7 @@ jobs:
 
         set -exo pipefail
 
-        cat <<-EOF>>./config/mycnf/mysql80.cnf
+        cat <<-EOF>>./config/mycnf/mysql8026.cnf
         binlog-transaction-compression=ON
         EOF
         

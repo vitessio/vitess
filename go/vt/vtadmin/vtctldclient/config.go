@@ -17,6 +17,7 @@ limitations under the License.
 package vtctldclient
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/spf13/pflag"
@@ -40,7 +41,7 @@ type Config struct {
 
 	ResolverOptions *resolver.Options
 
-	dialFunc func(addr string, ff grpcclient.FailFast, opts ...grpc.DialOption) (vtctldclient.VtctldClient, error)
+	dialFunc func(ctx context.Context, addr string, ff grpcclient.FailFast, opts ...grpc.DialOption) (vtctldclient.VtctldClient, error)
 }
 
 // ConfigOption is a function that mutates a Config. It should return the same
@@ -52,7 +53,7 @@ type ConfigOption func(cfg *Config) *Config
 //
 // It is used to support dependency injection in tests, and needs to be exported
 // for higher-level tests (via vtadmin/testutil).
-func WithDialFunc(f func(addr string, ff grpcclient.FailFast, opts ...grpc.DialOption) (vtctldclient.VtctldClient, error)) ConfigOption {
+func WithDialFunc(f func(ctx context.Context, addr string, ff grpcclient.FailFast, opts ...grpc.DialOption) (vtctldclient.VtctldClient, error)) ConfigOption {
 	return func(cfg *Config) *Config {
 		cfg.dialFunc = f
 		return cfg

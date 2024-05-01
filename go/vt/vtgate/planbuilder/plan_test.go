@@ -586,23 +586,18 @@ func TestOtherPlanningFromFile(t *testing.T) {
 
 func loadSchema(t testing.TB, filename string, setCollation bool) *vindexes.VSchema {
 	formal, err := vindexes.LoadFormal(locateFile(filename))
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	vschema := vindexes.BuildVSchema(formal, sqlparser.NewTestParser())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	for _, ks := range vschema.Keyspaces {
-		if ks.Error != nil {
-			t.Fatal(ks.Error)
-		}
+		require.NoError(t, ks.Error)
 
 		// adding view in user keyspace
 		if ks.Keyspace.Name == "user" {
-			if err = vschema.AddView(ks.Keyspace.Name, "user_details_view", "select user.id, user_extra.col from user join user_extra on user.id = user_extra.user_id", sqlparser.NewTestParser()); err != nil {
-				t.Fatal(err)
-			}
+			err = vschema.AddView(ks.Keyspace.Name, "user_details_view", "select user.id, user_extra.col from user join user_extra on user.id = user_extra.user_id", sqlparser.NewTestParser())
+			require.NoError(t, err)
+			err = vschema.AddUDF(ks.Keyspace.Name, "udf_aggr")
+			require.NoError(t, err)
 		}
 
 		// setting a default value to all the text columns in the tables of this keyspace

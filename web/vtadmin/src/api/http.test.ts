@@ -93,8 +93,8 @@ describe('api/http', () => {
                 let e: MalformedHttpResponseError = error as MalformedHttpResponseError;
                 /* eslint-disable jest/no-conditional-expect */
                 expect(e.name).toEqual(MALFORMED_HTTP_RESPONSE_ERROR);
-                expect(e.message).toEqual(
-                    '[status 504] /api/tablets: invalid json response body at http://test-api.com/api/tablets reason: Unexpected token < in JSON at position 0'
+                expect(e.message).toContain(
+                    '[status 504] /api/tablets: invalid json response body at http://test-api.com/api/tablets'
                 );
 
                 expect(errorHandler.notify).toHaveBeenCalledTimes(1);

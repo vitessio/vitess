@@ -137,7 +137,7 @@ func (c *grpcVttabletConn) connect(ctx context.Context, cp ConnParams) error {
 			Keyspace: keyspace,
 		}
 		var err error
-		qs, err = tabletconn.GetDialer()(&tablet, true)
+		qs, err = tabletconn.GetDialer()(ctx, &tablet, true)
 		if err != nil {
 			return err
 		}

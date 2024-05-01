@@ -136,7 +136,7 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 			}
 
 			isSemiSync := reparentutil.IsReplicaSemiSync(durability, shardPrimary.Tablet, tabletInfo.Tablet)
-			semiSyncAction, err := tm.convertBoolToSemiSyncAction(isSemiSync)
+			semiSyncAction, err := tm.convertBoolToSemiSyncAction(bgCtx, isSemiSync)
 			if err != nil {
 				l.Errorf("Failed to convert bool to semisync action, error: %v", err)
 				return

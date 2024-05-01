@@ -72,7 +72,7 @@ func TestVersion(t *testing.T) {
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
-	vp := NewVtctlPipe(t, ts)
+	vp := NewVtctlPipe(ctx, t, ts)
 	defer vp.Close()
 
 	// couple tablets is enough
@@ -94,9 +94,9 @@ func TestVersion(t *testing.T) {
 	sourceReplica.FakeMysqlDaemon.SetReplicationSourceInputs = append(sourceReplica.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(sourcePrimary.Tablet))
 	sourceReplica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		// These 3 statements come from tablet startup
-		"STOP SLAVE",
-		"FAKE SET MASTER",
-		"START SLAVE",
+		"STOP REPLICA",
+		"FAKE SET SOURCE",
+		"START REPLICA",
 	}
 	sourceReplica.StartActionLoop(t, wr)
 	sourceReplica.HTTPServer.Handler.(*http.ServeMux).HandleFunc("/debug/vars", expvarHandler(&sourceReplicaGitRev))

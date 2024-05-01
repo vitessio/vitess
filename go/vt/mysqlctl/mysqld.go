@@ -118,6 +118,8 @@ type Mysqld struct {
 	mutex         sync.Mutex
 	onTermFuncs   []func()
 	cancelWaitCmd chan struct{}
+
+	semiSyncType mysql.SemiSyncType
 }
 
 func init() {
@@ -263,7 +265,7 @@ func (mysqld *Mysqld) RunMysqlUpgrade(ctx context.Context) error {
 	// Execute as remote action on mysqlctld if requested.
 	if socketFile != "" {
 		log.Infof("executing Mysqld.RunMysqlUpgrade() remotely via mysqlctld server: %v", socketFile)
-		client, err := mysqlctlclient.New("unix", socketFile)
+		client, err := mysqlctlclient.New(ctx, "unix", socketFile)
 		if err != nil {
 			return fmt.Errorf("can't dial mysqlctld: %v", err)
 		}
@@ -332,7 +334,7 @@ func (mysqld *Mysqld) Start(ctx context.Context, cnf *Mycnf, mysqldArgs ...strin
 	// Execute as remote action on mysqlctld if requested.
 	if socketFile != "" {
 		log.Infof("executing Mysqld.Start() remotely via mysqlctld server: %v", socketFile)
-		client, err := mysqlctlclient.New("unix", socketFile)
+		client, err := mysqlctlclient.New(ctx, "unix", socketFile)
 		if err != nil {
 			return fmt.Errorf("can't dial mysqlctld: %v", err)
 		}
@@ -521,11 +523,15 @@ func (mysqld *Mysqld) WaitForDBAGrants(ctx context.Context, waitTime time.Durati
 	if waitTime == 0 {
 		return nil
 	}
+	params, err := mysqld.dbcfgs.DbaConnector().MysqlParams()
+	if err != nil {
+		return err
+	}
 	timer := time.NewTimer(waitTime)
 	ctx, cancel := context.WithTimeout(ctx, waitTime)
 	defer cancel()
 	for {
-		conn, connErr := dbconnpool.NewDBConnection(ctx, mysqld.dbcfgs.DbaConnector())
+		conn, connErr := mysql.Connect(ctx, params)
 		if connErr == nil {
 			res, fetchErr := conn.ExecuteFetch("SHOW GRANTS", 1000, false)
 			conn.Close()
@@ -590,7 +596,7 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 	// Execute as remote action on mysqlctld if requested.
 	if socketFile != "" {
 		log.Infof("executing Mysqld.Shutdown() remotely via mysqlctld server: %v", socketFile)
-		client, err := mysqlctlclient.New("unix", socketFile)
+		client, err := mysqlctlclient.New(ctx, "unix", socketFile)
 		if err != nil {
 			return fmt.Errorf("can't dial mysqlctld: %v", err)
 		}
@@ -924,7 +930,13 @@ func (mysqld *Mysqld) getMycnfTemplate() string {
 				log.Infof("this version of Vitess does not include built-in support for %v %v", mysqld.capabilities.flavor, mysqld.capabilities.version)
 			}
 		case 8:
-			versionConfig = config.MycnfMySQL80
+			if mysqld.capabilities.version.Minor >= 4 {
+				versionConfig = config.MycnfMySQL84
+			} else if mysqld.capabilities.version.Minor >= 1 || mysqld.capabilities.version.Patch >= 26 {
+				versionConfig = config.MycnfMySQL8026
+			} else {
+				versionConfig = config.MycnfMySQL80
+			}
 		default:
 			log.Infof("this version of Vitess does not include built-in support for %v %v", mysqld.capabilities.flavor, mysqld.capabilities.version)
 		}
@@ -961,7 +973,7 @@ func (mysqld *Mysqld) RefreshConfig(ctx context.Context, cnf *Mycnf) error {
 	// Execute as remote action on mysqlctld if requested.
 	if socketFile != "" {
 		log.Infof("executing Mysqld.RefreshConfig() remotely via mysqlctld server: %v", socketFile)
-		client, err := mysqlctlclient.New("unix", socketFile)
+		client, err := mysqlctlclient.New(ctx, "unix", socketFile)
 		if err != nil {
 			return fmt.Errorf("can't dial mysqlctld: %v", err)
 		}
@@ -1019,7 +1031,7 @@ func (mysqld *Mysqld) ReinitConfig(ctx context.Context, cnf *Mycnf) error {
 	// Execute as remote action on mysqlctld if requested.
 	if socketFile != "" {
 		log.Infof("executing Mysqld.ReinitConfig() remotely via mysqlctld server: %v", socketFile)
-		client, err := mysqlctlclient.New("unix", socketFile)
+		client, err := mysqlctlclient.New(ctx, "unix", socketFile)
 		if err != nil {
 			return fmt.Errorf("can't dial mysqlctld: %v", err)
 		}
@@ -1256,7 +1268,7 @@ func (mysqld *Mysqld) GetVersionString(ctx context.Context) (string, error) {
 	// Execute as remote action on mysqlctld to use the actual running MySQL
 	// version.
 	if socketFile != "" {
-		client, err := mysqlctlclient.New("unix", socketFile)
+		client, err := mysqlctlclient.New(ctx, "unix", socketFile)
 		if err != nil {
 			return "", fmt.Errorf("can't dial mysqlctld: %v", err)
 		}
@@ -1285,7 +1297,7 @@ func (mysqld *Mysqld) GetVersionComment(ctx context.Context) (string, error) {
 func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, req *mysqlctlpb.ApplyBinlogFileRequest) error {
 	if socketFile != "" {
 		log.Infof("executing Mysqld.ApplyBinlogFile() remotely via mysqlctld server: %v", socketFile)
-		client, err := mysqlctlclient.New("unix", socketFile)
+		client, err := mysqlctlclient.New(ctx, "unix", socketFile)
 		if err != nil {
 			return fmt.Errorf("can't dial mysqlctld: %v", err)
 		}
@@ -1371,7 +1383,7 @@ func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, req *mysqlctlpb.Apply
 		// parameters.  We do it blindly, since this will fail on MariaDB, which doesn't
 		// have super_read_only This is safe, since we're restarting MySQL after the restore anyway
 		log.Infof("ApplyBinlogFile: disabling super_read_only")
-		resetFunc, err := mysqld.SetSuperReadOnly(false)
+		resetFunc, err := mysqld.SetSuperReadOnly(ctx, false)
 		if err != nil {
 			if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
 				log.Warningf("ApplyBinlogFile: server does not know about super_read_only, continuing anyway...")
@@ -1516,7 +1528,7 @@ func (mysqld *Mysqld) ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlc
 	}
 	if socketFile != "" {
 		log.Infof("executing Mysqld.ReadBinlogFilesTimestamps() remotely via mysqlctld server: %v", socketFile)
-		client, err := mysqlctlclient.New("unix", socketFile)
+		client, err := mysqlctlclient.New(ctx, "unix", socketFile)
 		if err != nil {
 			return nil, fmt.Errorf("can't dial mysqlctld: %v", err)
 		}

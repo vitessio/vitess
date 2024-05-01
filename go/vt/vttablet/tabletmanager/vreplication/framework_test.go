@@ -109,7 +109,7 @@ func setFlag(flagName, flagValue string) {
 }
 
 func init() {
-	tabletconn.RegisterDialer("test", func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
+	tabletconn.RegisterDialer("test", func(ctx context.Context, tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
 		return &fakeTabletConn{
 			QueryService: fakes.ErrorQueryService,
 			tablet:       tablet,
@@ -212,7 +212,7 @@ func resetBinlogClient() {
 
 func primaryPosition(t *testing.T) string {
 	t.Helper()
-	pos, err := env.Mysqld.PrimaryPosition()
+	pos, err := env.Mysqld.PrimaryPosition(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -364,7 +364,7 @@ type fakeBinlogClient struct {
 	lastCharset  *binlogdatapb.Charset
 }
 
-func (fbc *fakeBinlogClient) Dial(tablet *topodatapb.Tablet) error {
+func (fbc *fakeBinlogClient) Dial(ctx context.Context, tablet *topodatapb.Tablet) error {
 	fbc.lastTablet = tablet
 	return nil
 }

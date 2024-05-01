@@ -83,7 +83,7 @@ func (a *Aggregator) AddPredicate(_ *plancontext.PlanningContext, expr sqlparser
 	return newFilter(a, expr)
 }
 
-func (a *Aggregator) addColumnWithoutPushing(_ *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, addToGroupBy bool) int {
+func (a *Aggregator) addColumnWithoutPushing(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, addToGroupBy bool) int {
 	offset := len(a.Columns)
 	a.Columns = append(a.Columns, expr)
 
@@ -96,6 +96,12 @@ func (a *Aggregator) addColumnWithoutPushing(_ *plancontext.PlanningContext, exp
 		switch e := expr.Expr.(type) {
 		case sqlparser.AggrFunc:
 			aggr = createAggrFromAggrFunc(e, expr)
+		case *sqlparser.FuncExpr:
+			if IsAggr(ctx, e) {
+				aggr = NewAggr(opcode.AggregateUDF, nil, expr, expr.As.String())
+			} else {
+				aggr = NewAggr(opcode.AggregateAnyValue, nil, expr, expr.As.String())
+			}
 		default:
 			aggr = NewAggr(opcode.AggregateAnyValue, nil, expr, expr.As.String())
 		}
@@ -184,6 +190,64 @@ func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gro
 	return offset
 }
 
+func (a *Aggregator) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
+	if len(a.Columns) <= offset {
+		panic(vterrors.VT13001("offset out of range"))
+	}
+
+	var expr sqlparser.Expr
+	// first search for the offset among the groupings
+	for i, by := range a.Grouping {
+		if by.ColOffset != offset {
+			continue
+		}
+		if by.WSOffset >= 0 {
+			// ah, we already have a weigh_string for this column. let's return it as is
+			return by.WSOffset
+		}
+
+		// we need to add a WS column
+		a.Grouping[i].WSOffset = len(a.Columns)
+		expr = a.Columns[offset].Expr
+		break
+	}
+
+	if expr == nil {
+		for _, aggr := range a.Aggregations {
+			if aggr.ColOffset != offset {
+				continue
+			}
+			if aggr.WSOffset >= 0 {
+				// ah, we already have a weigh_string for this column. let's return it as is
+				return aggr.WSOffset
+			}
+
+			panic(vterrors.VT13001("expected to find a weight string for aggregation"))
+		}
+
+		panic(vterrors.VT13001("could not find expression at offset"))
+	}
+
+	wsExpr := weightStringFor(expr)
+	wsAe := aeWrap(wsExpr)
+
+	wsOffset := len(a.Columns)
+	a.Columns = append(a.Columns, wsAe)
+	if underRoute {
+		// if we are under a route, we are done here.
+		// the column will be use when creating the query to send to the tablet, and that is all we need
+		return wsOffset
+	}
+
+	incomingOffset := a.Source.AddWSColumn(ctx, offset, false)
+
+	if wsOffset != incomingOffset {
+		// TODO: we could handle this case by adding a projection on under the aggregator to make the columns line up
+		panic(errFailedToPlan(wsAe))
+	}
+	return wsOffset
+}
+
 func (a *Aggregator) findColInternal(ctx *plancontext.PlanningContext, ae *sqlparser.AliasedExpr, addToGroupBy bool) int {
 	expr := ae.Expr
 	offset := a.FindCol(ctx, expr, false)
@@ -205,8 +269,19 @@ func (a *Aggregator) findColInternal(ctx *plancontext.PlanningContext, ae *sqlpa
 	return -1
 }
 
+func isDerived(op Operator) bool {
+	switch op := op.(type) {
+	case *Horizon:
+		return op.IsDerived()
+	case selectExpressions:
+		return op.derivedName() != ""
+	default:
+		return false
+	}
+}
+
 func (a *Aggregator) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
-	if _, isSourceDerived := a.Source.(*Horizon); isSourceDerived {
+	if isDerived(a.Source) {
 		return a.Columns
 	}
 
@@ -272,6 +347,7 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) Operator {
 		if gb.ColOffset == -1 {
 			offset := a.internalAddColumn(ctx, aeWrap(gb.Inner), false)
 			a.Grouping[idx].ColOffset = offset
+			gb.ColOffset = offset
 		}
 		if gb.WSOffset != -1 || !ctx.SemTable.NeedsWeightString(gb.Inner) {
 			continue

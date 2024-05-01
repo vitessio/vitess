@@ -2853,8 +2853,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select sum(col), 32 from (select `user`.col as col, 32 from `user` where 1 != 1) as t where 1 != 1",
-                    "Query": "select sum(col), 32 from (select `user`.col as col, 32 from `user`) as t",
+                    "FieldQuery": "select sum(col) from (select `user`.col as col, 32 from `user` where 1 != 1) as t where 1 != 1",
+                    "Query": "select sum(col) from (select `user`.col as col, 32 from `user`) as t",
                     "Table": "`user`"
                   },
                   {
@@ -6958,5 +6958,80 @@
     "comment": "baz in the HAVING clause can't be accessed because of the GROUP BY",
     "query": "select foo, count(bar) as x from user group by foo having baz > avg(baz) order by x",
     "plan": "Unknown column 'baz' in 'having clause'"
+  },
+  {
+    "comment": "Aggregate UDFs can't be handled by vtgate",
+    "query": "select id from t1 group by id having udf_aggr(foo) > 1 and sum(foo) = 10",
+    "plan": "VT12001: unsupported: Aggregate UDF 'udf_aggr(foo)' must be pushed down to MySQL"
+  },
+  {
+    "comment": "Valid to run since we can push down the aggregate function because of the grouping",
+    "query": "select id from user group by id having udf_aggr(foo) > 1",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select id from user group by id having udf_aggr(foo) > 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1 group by id",
+        "Query": "select id from `user` group by id having udf_aggr(foo) > 1",
+        "Table": "`user`"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Valid to run since we can push down the aggregate function because it's unsharded",
+    "query": "select bar, udf_aggr(foo) from unsharded group by bar",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select bar, udf_aggr(foo) from unsharded group by bar",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select bar, udf_aggr(foo) from unsharded where 1 != 1 group by bar",
+        "Query": "select bar, udf_aggr(foo) from unsharded group by bar",
+        "Table": "unsharded"
+      },
+      "TablesUsed": [
+        "main.unsharded"
+      ]
+    }
+  },
+  {
+    "comment": "Valid to run since we can push down the aggregate function because the where clause using the sharding key",
+    "query": "select bar, udf_aggr(foo) from user where id = 17 group by bar",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select bar, udf_aggr(foo) from user where id = 17 group by bar",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select bar, udf_aggr(foo) from `user` where 1 != 1 group by bar",
+        "Query": "select bar, udf_aggr(foo) from `user` where id = 17 group by bar",
+        "Table": "`user`",
+        "Values": [
+          "17"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
   }
 ]

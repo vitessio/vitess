@@ -116,7 +116,7 @@ func (dt *DerivedTable) dependencies(colName string, org originable) (dependenci
 		return createCertain(directDeps, recursiveDeps, qt), nil
 	}
 
-	if !dt.hasStar() {
+	if dt.authoritative() {
 		return &nothing{}, nil
 	}
 
@@ -154,7 +154,7 @@ func (dt *DerivedTable) GetVindexTable() *vindexes.Table {
 	return nil
 }
 
-func (dt *DerivedTable) getColumns() []ColumnInfo {
+func (dt *DerivedTable) getColumns(bool) []ColumnInfo {
 	cols := make([]ColumnInfo, 0, len(dt.columnNames))
 	for _, col := range dt.columnNames {
 		cols = append(cols, ColumnInfo{
@@ -162,10 +162,6 @@ func (dt *DerivedTable) getColumns() []ColumnInfo {
 		})
 	}
 	return cols
-}
-
-func (dt *DerivedTable) hasStar() bool {
-	return dt.tables.NotEmpty()
 }
 
 // GetTables implements the TableInfo interface

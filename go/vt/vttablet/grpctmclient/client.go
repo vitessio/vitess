@@ -157,7 +157,7 @@ func (client *grpcClient) dial(ctx context.Context, tablet *topodatapb.Tablet) (
 	if err != nil {
 		return nil, nil, err
 	}
-	cc, err := grpcclient.Dial(addr, grpcclient.FailFast(false), opt)
+	cc, err := grpcclient.DialContext(ctx, addr, grpcclient.FailFast(false), opt)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -165,8 +165,8 @@ func (client *grpcClient) dial(ctx context.Context, tablet *topodatapb.Tablet) (
 	return tabletmanagerservicepb.NewTabletManagerClient(cc), cc, nil
 }
 
-func (client *grpcClient) createTmc(addr string, opt grpc.DialOption) (*tmc, error) {
-	cc, err := grpcclient.Dial(addr, grpcclient.FailFast(false), opt)
+func (client *grpcClient) createTmc(ctx context.Context, addr string, opt grpc.DialOption) (*tmc, error) {
+	cc, err := grpcclient.DialContext(ctx, addr, grpcclient.FailFast(false), opt)
 	if err != nil {
 		return nil, err
 	}
@@ -194,7 +194,7 @@ func (client *grpcClient) dialPool(ctx context.Context, tablet *topodatapb.Table
 		client.mu.Unlock()
 
 		for i := 0; i < cap(c); i++ {
-			tm, err := client.createTmc(addr, opt)
+			tm, err := client.createTmc(ctx, addr, opt)
 			if err != nil {
 				return nil, err
 			}
@@ -226,7 +226,7 @@ func (client *grpcClient) dialDedicatedPool(ctx context.Context, dialPoolGroup D
 	}
 	m := client.rpcDialPoolMap[dialPoolGroup]
 	if _, ok := m[addr]; !ok {
-		tm, err := client.createTmc(addr, opt)
+		tm, err := client.createTmc(ctx, addr, opt)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -235,8 +235,12 @@ func (client *grpcClient) dialDedicatedPool(ctx context.Context, dialPoolGroup D
 	invalidator := func() {
 		client.mu.Lock()
 		defer client.mu.Unlock()
-		m[addr].cc.Close()
-		delete(m, addr)
+		if tm, ok := m[addr]; ok {
+			if tm != nil && tm.cc != nil {
+				tm.cc.Close()
+			}
+			delete(m, addr)
+		}
 	}
 	return m[addr].client, invalidator, nil
 }

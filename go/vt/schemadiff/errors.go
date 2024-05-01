@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/sqlescape"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 var (
@@ -467,4 +468,22 @@ func (e *SubsequentDiffRejectedError) Error() string {
 		b.WriteString(d.CanonicalStatementString())
 	}
 	return b.String()
+}
+
+// PartitionSpecNonExclusiveError is returned when a partition spec change is found alongside other changes.
+// for example, in MySQL it is invalid to both DROP PARTITION (a partition spec change) and ADD COLUMN
+// in the same ALTER TABLE statement. In fact, even two partition spec changes in the same ALTER TABLE
+// statement are not allowed.
+// This error should never be encountered in normal circumstances, because:
+// - `sqlparser` should not allow such statements to be parsed.
+// - schemadiff's `Diff()` function will never generate a single `ALTER TABLE` statement with such multiple changes.
+// The error is used for integrity checks only, and should be considered a bug if encountered.
+type PartitionSpecNonExclusiveError struct {
+	Table                string
+	PartitionSpec        *sqlparser.PartitionSpec
+	ConflictingStatement string
+}
+
+func (e *PartitionSpecNonExclusiveError) Error() string {
+	return fmt.Sprintf("ALTER TABLE on %s, may only have a single partition spec change, and other changes are not allowed. Found spec: %s; and change: %s", sqlescape.EscapeID(e.Table), sqlparser.CanonicalString(e.PartitionSpec), e.ConflictingStatement)
 }

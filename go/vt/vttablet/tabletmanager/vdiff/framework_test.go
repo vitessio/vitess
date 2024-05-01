@@ -155,7 +155,7 @@ type LogExpectation struct {
 }
 
 func init() {
-	tabletconn.RegisterDialer("test", func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
+	tabletconn.RegisterDialer("test", func(ctx context.Context, tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
 		vdiffenv.mu.Lock()
 		defer vdiffenv.mu.Unlock()
 		if qs, ok := vdiffenv.tablets[int(tablet.Alias.Uid)]; ok {
@@ -164,7 +164,7 @@ func init() {
 		return nil, fmt.Errorf("tablet %d not found", tablet.Alias.Uid)
 	})
 	// TableDiffer does a default grpc dial just to be sure it can talk to the tablet.
-	tabletconn.RegisterDialer("grpc", func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
+	tabletconn.RegisterDialer("grpc", func(ctx context.Context, tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
 		vdiffenv.mu.Lock()
 		defer vdiffenv.mu.Unlock()
 		if qs, ok := vdiffenv.tablets[int(tablet.Alias.Uid)]; ok {
@@ -295,7 +295,7 @@ type fakeBinlogClient struct {
 	lastCharset  *binlogdatapb.Charset
 }
 
-func (fbc *fakeBinlogClient) Dial(tablet *topodatapb.Tablet) error {
+func (fbc *fakeBinlogClient) Dial(ctx context.Context, tablet *topodatapb.Tablet) error {
 	fbc.lastTablet = tablet
 	return nil
 }

@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/hook"
@@ -72,7 +73,7 @@ func (tm *TabletManager) SetReadOnly(ctx context.Context, rdonly bool) error {
 	}
 	defer tm.unlock()
 
-	return tm.MysqlDaemon.SetReadOnly(rdonly)
+	return tm.MysqlDaemon.SetReadOnly(ctx, rdonly)
 }
 
 // ChangeType changes the tablet type
@@ -82,7 +83,7 @@ func (tm *TabletManager) ChangeType(ctx context.Context, tabletType topodatapb.T
 	}
 	defer tm.unlock()
 
-	semiSyncAction, err := tm.convertBoolToSemiSyncAction(semiSync)
+	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, semiSync)
 	if err != nil {
 		return err
 	}
@@ -102,7 +103,7 @@ func (tm *TabletManager) changeTypeLocked(ctx context.Context, tabletType topoda
 	}
 
 	// Let's see if we need to fix semi-sync acking.
-	if err := tm.fixSemiSyncAndReplication(tm.Tablet().Type, semiSync); err != nil {
+	if err := tm.fixSemiSyncAndReplication(ctx, tm.Tablet().Type, semiSync); err != nil {
 		return vterrors.Wrap(err, "fixSemiSyncAndReplication failed, may not ack correctly")
 	}
 	return nil
@@ -147,19 +148,20 @@ func (tm *TabletManager) RunHealthCheck(ctx context.Context) {
 	tm.QueryServiceControl.BroadcastHealth()
 }
 
-func (tm *TabletManager) convertBoolToSemiSyncAction(semiSync bool) (SemiSyncAction, error) {
-	semiSyncExtensionLoaded, err := tm.MysqlDaemon.SemiSyncExtensionLoaded()
+func (tm *TabletManager) convertBoolToSemiSyncAction(ctx context.Context, semiSync bool) (SemiSyncAction, error) {
+	semiSyncExtensionLoaded, err := tm.MysqlDaemon.SemiSyncExtensionLoaded(ctx)
 	if err != nil {
 		return SemiSyncActionNone, err
 	}
 
-	if semiSyncExtensionLoaded {
+	switch semiSyncExtensionLoaded {
+	case mysql.SemiSyncTypeSource, mysql.SemiSyncTypeMaster:
 		if semiSync {
 			return SemiSyncActionSet, nil
 		} else {
 			return SemiSyncActionUnset, nil
 		}
-	} else {
+	default:
 		if semiSync {
 			return SemiSyncActionNone, vterrors.VT09013()
 		} else {

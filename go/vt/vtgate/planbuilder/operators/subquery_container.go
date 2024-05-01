@@ -79,6 +79,10 @@ func (sqc *SubQueryContainer) AddColumn(ctx *plancontext.PlanningContext, reuseE
 	return sqc.Outer.AddColumn(ctx, reuseExisting, addToGroupBy, exprs)
 }
 
+func (sqc *SubQueryContainer) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
+	return sqc.Outer.AddWSColumn(ctx, offset, underRoute)
+}
+
 func (sqc *SubQueryContainer) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
 	return sqc.Outer.FindCol(ctx, expr, underRoute)
 }

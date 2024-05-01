@@ -351,7 +351,7 @@ func (cached *Argument) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(24)
+		size += int64(32)
 	}
 	// field Name string
 	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
@@ -1854,6 +1854,8 @@ func (cached *Insert) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.Rows.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
+	// field RowAlias *vitess.io/vitess/go/vt/sqlparser.RowAlias
+	size += cached.RowAlias.CachedSize(true)
 	// field OnDup vitess.io/vitess/go/vt/sqlparser.OnDup
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.OnDup)) * int64(8))
@@ -1861,8 +1863,6 @@ func (cached *Insert) CachedSize(alloc bool) int64 {
 			size += elem.CachedSize(true)
 		}
 	}
-	// field RowAlias *vitess.io/vitess/go/vt/sqlparser.RowAlias
-	size += cached.RowAlias.CachedSize(true)
 	return size
 }
 func (cached *InsertExpr) CachedSize(alloc bool) int64 {

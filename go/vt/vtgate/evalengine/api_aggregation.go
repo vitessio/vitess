@@ -448,6 +448,7 @@ type aggregationMinMax struct {
 	current      sqltypes.Value
 	collation    collations.ID
 	collationEnv *collations.Environment
+	values       *EnumSetValues
 }
 
 func (a *aggregationMinMax) minmax(value sqltypes.Value, max bool) (err error) {
@@ -458,7 +459,7 @@ func (a *aggregationMinMax) minmax(value sqltypes.Value, max bool) (err error) {
 		a.current = value
 		return nil
 	}
-	n, err := compare(a.current, value, a.collationEnv, a.collation)
+	n, err := compare(a.current, value, a.collationEnv, a.collation, a.values)
 	if err != nil {
 		return err
 	}
@@ -484,7 +485,7 @@ func (a *aggregationMinMax) Reset() {
 	a.current = sqltypes.NULL
 }
 
-func NewAggregationMinMax(typ sqltypes.Type, collationEnv *collations.Environment, collation collations.ID) MinMax {
+func NewAggregationMinMax(typ sqltypes.Type, collationEnv *collations.Environment, collation collations.ID, values *EnumSetValues) MinMax {
 	switch {
 	case sqltypes.IsSigned(typ):
 		return &aggregationInt{t: typ}
@@ -495,6 +496,6 @@ func NewAggregationMinMax(typ sqltypes.Type, collationEnv *collations.Environmen
 	case sqltypes.IsDecimal(typ):
 		return &aggregationDecimal{}
 	default:
-		return &aggregationMinMax{collation: collation, collationEnv: collationEnv}
+		return &aggregationMinMax{collation: collation, collationEnv: collationEnv, values: values}
 	}
 }

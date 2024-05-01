@@ -41,33 +41,36 @@ func TestDialErrors(t *testing.T) {
 	}
 	wantErr := "Unavailable"
 	for _, address := range addresses {
-		gconn, err := Dial(address, true, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		gconn, err := DialContext(ctx, address, true, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
+			cancel()
 			t.Fatal(err)
 		}
 		vtg := vtgateservicepb.NewVitessClient(gconn)
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		_, err = vtg.Execute(ctx, &vtgatepb.ExecuteRequest{})
 		cancel()
 		gconn.Close()
 		if err == nil || !strings.Contains(err.Error(), wantErr) {
-			t.Errorf("Dial(%s, FailFast=true): %v, must contain %s", address, err, wantErr)
+			t.Errorf("DialContext(%s, FailFast=true): %v, must contain %s", address, err, wantErr)
 		}
 	}
 
 	wantErr = "DeadlineExceeded"
 	for _, address := range addresses {
-		gconn, err := Dial(address, false, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		gconn, err := DialContext(ctx, address, false, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		cancel()
 		if err != nil {
 			t.Fatal(err)
 		}
 		vtg := vtgateservicepb.NewVitessClient(gconn)
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Millisecond)
 		_, err = vtg.Execute(ctx, &vtgatepb.ExecuteRequest{})
 		cancel()
 		gconn.Close()
 		if err == nil || !strings.Contains(err.Error(), wantErr) {
-			t.Errorf("Dial(%s, FailFast=false): %v, must contain %s", address, err, wantErr)
+			t.Errorf("DialContext(%s, FailFast=false): %v, must contain %s", address, err, wantErr)
 		}
 	}
 }

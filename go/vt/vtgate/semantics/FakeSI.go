@@ -36,6 +36,7 @@ type FakeSI struct {
 	VindexTables     map[string]vindexes.Vindex
 	KsForeignKeyMode map[string]vschemapb.Keyspace_ForeignKeyMode
 	KsError          map[string]error
+	UDFs             []string
 }
 
 // FindTableOrVindex implements the SchemaInformation interface
@@ -79,4 +80,8 @@ func (s *FakeSI) KeyspaceError(keyspace string) error {
 		return fkErr
 	}
 	return nil
+}
+
+func (s *FakeSI) GetAggregateUDFs() []string {
+	return s.UDFs
 }

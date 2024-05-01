@@ -41,10 +41,10 @@ function get_replication_status() {
 function reset_replication() {
     # Necessary before sql file can be imported
     echo "Importing MysqlDump: $KEYSPACE.sql"
-    mysql -u$DB_USER -p$DB_PASS -h 127.0.0.1 -e "RESET MASTER;STOP SLAVE;CHANGE MASTER TO MASTER_AUTO_POSITION = 0;source $KEYSPACE.sql;START SLAVE;"
+    mysql -u$DB_USER -p$DB_PASS -h 127.0.0.1 -e "RESET MASTER;STOP REPLICA;CHANGE REPLICATION SOURCE TO SOURCE_AUTO_POSITION = 0;source $KEYSPACE.sql;START REPLICA;"
     # Restore Master Auto Position
     echo "Restoring Master Auto Setting"
-    mysql -u$DB_USER -p$DB_PASS -h 127.0.0.1 -e "STOP SLAVE;CHANGE MASTER TO MASTER_AUTO_POSITION = 1;START SLAVE;"
+    mysql -u$DB_USER -p$DB_PASS -h 127.0.0.1 -e "STOP REPLICA;CHANGE REPLICATION SOURCE TO SOURCE_AUTO_POSITION = 1;START REPLICA;"
 }
 
 # Retrieve replication status

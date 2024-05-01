@@ -134,13 +134,24 @@ func TestMysqlShouldGetPosition(t *testing.T) {
 	assert.Equalf(t, got.FilePosition.GTIDSet.String(), want.FilePosition.GTIDSet.String(), "got FilePosition: %v; want FilePosition: %v", got.FilePosition.GTIDSet, want.FilePosition.GTIDSet)
 }
 
-func TestMysqlRetrieveSourceServerId(t *testing.T) {
+func TestMysqlRetrieveMasterServerId(t *testing.T) {
 	resultMap := map[string]string{
 		"Master_Server_Id": "1",
 	}
 
 	want := ReplicationStatus{SourceServerID: 1}
-	got, err := ParseMysqlReplicationStatus(resultMap)
+	got, err := ParseMysqlReplicationStatus(resultMap, false)
+	require.NoError(t, err)
+	assert.Equalf(t, got.SourceServerID, want.SourceServerID, "got SourceServerID: %v; want SourceServerID: %v", got.SourceServerID, want.SourceServerID)
+}
+
+func TestMysqlRetrieveSourceServerId(t *testing.T) {
+	resultMap := map[string]string{
+		"Source_Server_Id": "1",
+	}
+
+	want := ReplicationStatus{SourceServerID: 1}
+	got, err := ParseMysqlReplicationStatus(resultMap, true)
 	require.NoError(t, err)
 	assert.Equalf(t, got.SourceServerID, want.SourceServerID, "got SourceServerID: %v; want SourceServerID: %v", got.SourceServerID, want.SourceServerID)
 }
@@ -160,14 +171,14 @@ func TestMysqlRetrieveFileBasedPositions(t *testing.T) {
 		RelayLogSourceBinlogEquivalentPosition: Position{GTIDSet: FilePosGTID{File: "master-bin.000003", Pos: 1308}},
 		RelayLogFilePosition:                   Position{GTIDSet: FilePosGTID{File: "relay-bin.000004", Pos: 1309}},
 	}
-	got, err := ParseMysqlReplicationStatus(resultMap)
+	got, err := ParseMysqlReplicationStatus(resultMap, false)
 	require.NoError(t, err)
 	assert.Equalf(t, got.FilePosition.GTIDSet, want.FilePosition.GTIDSet, "got FilePosition: %v; want FilePosition: %v", got.FilePosition.GTIDSet, want.FilePosition.GTIDSet)
 	assert.Equalf(t, got.RelayLogFilePosition.GTIDSet, want.RelayLogFilePosition.GTIDSet, "got RelayLogFilePosition: %v; want RelayLogFilePosition: %v", got.RelayLogFilePosition.GTIDSet, want.RelayLogFilePosition.GTIDSet)
 	assert.Equalf(t, got.RelayLogSourceBinlogEquivalentPosition.GTIDSet, want.RelayLogSourceBinlogEquivalentPosition.GTIDSet, "got RelayLogSourceBinlogEquivalentPosition: %v; want RelayLogSourceBinlogEquivalentPosition: %v", got.RelayLogSourceBinlogEquivalentPosition.GTIDSet, want.RelayLogSourceBinlogEquivalentPosition.GTIDSet)
 }
 
-func TestMysqlShouldGetRelayLogPosition(t *testing.T) {
+func TestMysqlShouldGetLegacyRelayLogPosition(t *testing.T) {
 	resultMap := map[string]string{
 		"Executed_Gtid_Set":     "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
 		"Retrieved_Gtid_Set":    "3e11fa47-71ca-11e1-9e33-c80aa9429562:6-9",
@@ -182,7 +193,27 @@ func TestMysqlShouldGetRelayLogPosition(t *testing.T) {
 		Position:         Position{GTIDSet: Mysql56GTIDSet{sid: []interval{{start: 1, end: 5}}}},
 		RelayLogPosition: Position{GTIDSet: Mysql56GTIDSet{sid: []interval{{start: 1, end: 9}}}},
 	}
-	got, err := ParseMysqlReplicationStatus(resultMap)
+	got, err := ParseMysqlReplicationStatus(resultMap, false)
+	require.NoError(t, err)
+	assert.Equalf(t, got.RelayLogPosition.GTIDSet.String(), want.RelayLogPosition.GTIDSet.String(), "got RelayLogPosition: %v; want RelayLogPosition: %v", got.RelayLogPosition.GTIDSet, want.RelayLogPosition.GTIDSet)
+}
+
+func TestMysqlShouldGetRelayLogPosition(t *testing.T) {
+	resultMap := map[string]string{
+		"Executed_Gtid_Set":     "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
+		"Retrieved_Gtid_Set":    "3e11fa47-71ca-11e1-9e33-c80aa9429562:6-9",
+		"Exec_Source_Log_Pos":   "1307",
+		"Relay_Source_Log_File": "master-bin.000002",
+		"Read_Source_Log_Pos":   "1308",
+		"Source_Log_File":       "master-bin.000003",
+	}
+
+	sid, _ := ParseSID("3e11fa47-71ca-11e1-9e33-c80aa9429562")
+	want := ReplicationStatus{
+		Position:         Position{GTIDSet: Mysql56GTIDSet{sid: []interval{{start: 1, end: 5}}}},
+		RelayLogPosition: Position{GTIDSet: Mysql56GTIDSet{sid: []interval{{start: 1, end: 9}}}},
+	}
+	got, err := ParseMysqlReplicationStatus(resultMap, true)
 	require.NoError(t, err)
 	assert.Equalf(t, got.RelayLogPosition.GTIDSet.String(), want.RelayLogPosition.GTIDSet.String(), "got RelayLogPosition: %v; want RelayLogPosition: %v", got.RelayLogPosition.GTIDSet, want.RelayLogPosition.GTIDSet)
 }

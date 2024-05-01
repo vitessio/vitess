@@ -66,12 +66,20 @@ func (r *switcher) dropSourceShards(ctx context.Context) error {
 	return r.ts.dropSourceShards(ctx)
 }
 
+func (r *switcher) switchKeyspaceReads(ctx context.Context, servedTypes []topodatapb.TabletType) error {
+	if err := changeKeyspaceRouting(ctx, r.ts.TopoServer(), servedTypes,
+		r.ts.SourceKeyspaceName() /* from */, r.ts.TargetKeyspaceName() /* to */); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (r *switcher) switchShardReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection) error {
 	return r.ts.switchShardReads(ctx, cells, servedTypes, direction)
 }
 
-func (r *switcher) switchTableReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection) error {
-	return r.ts.switchTableReads(ctx, cells, servedTypes, direction)
+func (r *switcher) switchTableReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, rebuildSrvVSchema bool, direction TrafficSwitchDirection) error {
+	return r.ts.switchTableReads(ctx, cells, servedTypes, rebuildSrvVSchema, direction)
 }
 
 func (r *switcher) startReverseVReplication(ctx context.Context) error {

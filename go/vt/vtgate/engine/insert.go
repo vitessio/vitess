@@ -55,6 +55,9 @@ type Insert struct {
 
 	// Mid is the row values for the sharded insert plans.
 	Mid sqlparser.Values
+
+	// Alias represents the row alias with columns if specified in the query.
+	Alias string
 }
 
 // newQueryInsert creates an Insert with a query string.
@@ -287,7 +290,7 @@ func (ins *Insert) getInsertShardedQueries(
 				}
 			}
 		}
-		rewritten := ins.Prefix + strings.Join(mids, ",") + sqlparser.String(ins.Suffix)
+		rewritten := ins.Prefix + strings.Join(mids, ",") + ins.Alias + sqlparser.String(ins.Suffix)
 		queries[i] = &querypb.BoundQuery{
 			Sql:           rewritten,
 			BindVariables: shardBindVars,
@@ -361,6 +364,19 @@ func (ins *Insert) description() PrimitiveDescription {
 			valuesOffsets[vindex.Name] = strings.Join(res, ", ")
 		}
 		other["VindexValues"] = valuesOffsets
+	}
+
+	// This is a check to ensure we send the correct query to the database.
+	// "ActualQuery" should not be part of the plan output, if it does, it means the query was not rewritten correctly.
+	if ins.Mid != nil {
+		var mids []string
+		for _, n := range ins.Mid {
+			mids = append(mids, sqlparser.String(n))
+		}
+		shardedQuery := ins.Prefix + strings.Join(mids, ", ") + ins.Alias + sqlparser.String(ins.Suffix)
+		if shardedQuery != ins.Query {
+			other["ActualQuery"] = shardedQuery
+		}
 	}
 
 	return PrimitiveDescription{

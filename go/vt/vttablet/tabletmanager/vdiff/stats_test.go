@@ -31,7 +31,7 @@ import (
 func TestVDiffStats(t *testing.T) {
 	testStats := &vdiffStats{
 		ErrorCount:          stats.NewCounter("", ""),
-		RestartedTableDiffs: stats.NewCountersWithSingleLabel("", "", "Table", ""),
+		RestartedTableDiffs: stats.NewCountersWithSingleLabel("", "", "Table"),
 		RowsDiffedCount:     stats.NewCounter("", ""),
 	}
 	id := int64(1)
@@ -41,8 +41,8 @@ func TestVDiffStats(t *testing.T) {
 			workflow:              "testwf",
 			workflowType:          binlogdatapb.VReplicationWorkflowType_MoveTables,
 			uuid:                  uuid.New().String(),
-			Errors:                stats.NewCountersWithMultiLabels("", "", []string{"Error"}),
-			TableDiffRowCounts:    stats.NewCountersWithMultiLabels("", "", []string{"Rows"}),
+			Errors:                stats.NewCountersWithSingleLabel("", "", "Error"),
+			TableDiffRowCounts:    stats.NewCountersWithSingleLabel("", "", "Rows"),
 			TableDiffPhaseTimings: stats.NewTimings("", "", "", "TablePhase"),
 		},
 	}
@@ -65,7 +65,7 @@ func TestVDiffStats(t *testing.T) {
 	testStats.ErrorCount.Set(11)
 	require.Equal(t, int64(11), testStats.ErrorCount.Get())
 
-	testStats.controllers[id].Errors.Add([]string{"test error"}, int64(12))
+	testStats.controllers[id].Errors.Add("test error", int64(12))
 	require.Equal(t, int64(12), testStats.controllers[id].Errors.Counts()["test error"])
 
 	testStats.RestartedTableDiffs.Add("t1", int64(5))

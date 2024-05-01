@@ -92,6 +92,10 @@ func (flv *filePosFlavor) startReplicationCommand() string {
 	return "unsupported"
 }
 
+func (flv *filePosFlavor) resetReplicationCommand() string {
+	return "unsupported"
+}
+
 func (flv *filePosFlavor) restartReplicationCommands() []string {
 	return []string{"unsupported"}
 }
@@ -223,8 +227,8 @@ func (flv *filePosFlavor) setReplicationPositionCommands(pos replication.Positio
 	}
 }
 
-// setReplicationPositionCommands is part of the Flavor interface.
-func (flv *filePosFlavor) changeReplicationSourceArg() string {
+// setReplicationSourceCommand is part of the Flavor interface.
+func (flv *filePosFlavor) setReplicationSourceCommand(params *ConnParams, host string, port int32, connectRetry int) string {
 	return "unsupported"
 }
 
@@ -341,4 +345,12 @@ func (*filePosFlavor) supportsCapability(capability capabilities.FlavorCapabilit
 	default:
 		return false, nil
 	}
+}
+
+func (*filePosFlavor) catchupToGTIDCommands(_ *ConnParams, _ replication.Position) []string {
+	return []string{"unsupported"}
+}
+
+func (*filePosFlavor) binlogReplicatedUpdates() string {
+	return "@@global.log_slave_updates"
 }

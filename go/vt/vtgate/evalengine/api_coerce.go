@@ -24,7 +24,7 @@ import (
 )
 
 func CoerceTo(value sqltypes.Value, typ Type, sqlmode SQLMode) (sqltypes.Value, error) {
-	cast, err := valueToEvalCast(value, value.Type(), collations.Unknown, sqlmode)
+	cast, err := valueToEvalCast(value, value.Type(), collations.Unknown, typ.values, sqlmode)
 	if err != nil {
 		return sqltypes.Value{}, err
 	}
@@ -33,7 +33,7 @@ func CoerceTo(value sqltypes.Value, typ Type, sqlmode SQLMode) (sqltypes.Value, 
 
 // CoerceTypes takes two input types, and decides how they should be coerced before compared
 func CoerceTypes(v1, v2 Type, collationEnv *collations.Environment) (out Type, err error) {
-	if v1 == v2 {
+	if v1.Equal(&v2) {
 		return v1, nil
 	}
 	if sqltypes.IsNull(v1.Type()) || sqltypes.IsNull(v2.Type()) {

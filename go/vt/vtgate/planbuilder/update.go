@@ -41,7 +41,7 @@ func gen4UpdateStmtPlanner(
 		return nil, err
 	}
 
-	err = queryRewrite(ctx.SemTable, reservedVars, updStmt)
+	err = queryRewrite(ctx, updStmt)
 	if err != nil {
 		return nil, err
 	}

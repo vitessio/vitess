@@ -187,6 +187,11 @@ func TestVStreamerWaitForMySQL(t *testing.T) {
 		"1000",
 	)
 	sbmres := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"Seconds_Behind_Source",
+		"int64"),
+		"10",
+	)
+	sbmlegacyres := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"Seconds_Behind_Master",
 		"int64"),
 		"10",
@@ -242,6 +247,7 @@ func TestVStreamerWaitForMySQL(t *testing.T) {
 	testDB.AddQuery(hostQuery, hostres)
 	testDB.AddQuery(trxHistoryLenQuery, thlres)
 	testDB.AddQuery(replicaLagQuery, sbmres)
+	testDB.AddQuery(legacyLagQuery, sbmlegacyres)
 
 	for _, tt := range tests {
 		tt.fields.cp = dbconfigs.New(testDB.ConnParams())
