@@ -36,10 +36,15 @@ func createTopoDirIfNeeded(ctx context.Context, ts *Server) error {
 	topoPath := path.Join(KeyspaceRoutingRulesPath, "lock")
 	_, _, err := ts.GetGlobalCell().Get(ctx, topoPath)
 	if IsErrType(err, NoNode) {
-		log.Infof("Creating keyspace routing rules file %s", topoPath)
 		_, err = ts.globalCell.Create(ctx, topoPath, []byte("lock file for keyspace routing rules"))
+		if IsErrType(err, NodeExists) {
+			// Another process created the file, which is fine.
+			return nil
+		}
 		if err != nil {
 			log.Errorf("Failed to create keyspace routing rules lock file: %v", err)
+		} else {
+			log.Infof("Successfully created keyspace routing rules lock file %s", topoPath)
 		}
 	}
 	return err

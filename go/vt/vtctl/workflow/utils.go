@@ -865,7 +865,6 @@ func changeKeyspaceRouting(ctx context.Context, ts *topo.Server, tabletTypes []t
 
 // updateKeyspaceRoutingRule updates the keyspace routing rule for the (effective) source keyspace to the target keyspace.
 func updateKeyspaceRoutingRule(ctx context.Context, ts *topo.Server, sourceKeyspace string, routes map[string]string) error {
-	log.Infof("Updating keyspace routing rules for keyspace %s", sourceKeyspace)
 	err := topotools.SaveKeyspaceRoutingRulesLocked(ctx, ts, "ApplyKeyspaceRoutingRules",
 		func(ctx context.Context) error {
 			rules, err := topotools.GetKeyspaceRoutingRules(ctx, ts)
@@ -885,8 +884,6 @@ func updateKeyspaceRoutingRule(ctx context.Context, ts *topo.Server, sourceKeysp
 		})
 	if err != nil {
 		log.Errorf("Failed to update keyspace routing rules for keyspace %s: %v", sourceKeyspace, err)
-	} else {
-		log.Infof("Successfully updated keyspace routing rules for keyspace %s", sourceKeyspace)
 	}
 	return err
 }
