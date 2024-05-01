@@ -175,22 +175,12 @@ type selfHostedTest struct {
 // clusterMySQLVersions return list of mysql versions (one or more) that this cluster needs to test against
 func clusterMySQLVersions(clusterName string) mysqlVersions {
 	switch {
-	case strings.HasPrefix(clusterName, "onlineddl_"):
-		return allMySQLVersions
-	case clusterName == "schemadiff_vrepl":
-		return allMySQLVersions
-	case clusterName == "backup_pitr":
-		return allMySQLVersions
-	case clusterName == "backup_pitr_xtrabackup":
-		return allMySQLVersions
-	case clusterName == "tabletmanager_tablegc":
-		return allMySQLVersions
-	case clusterName == "vtorc":
-		return allMySQLVersions
-	case clusterName == "xb_backup":
-		return allMySQLVersions
-	case clusterName == "xb_recovery":
-		return allMySQLVersions
+	// Add any specific clusters, or groups of clusters, here,
+	// that require allMySQLVersions to be tested against.
+	// At this time this list is clean because Vitess stopped
+	// supporting MySQL 5.7. At some point, we will need to
+	// support post 8.0 versions of MySQL, and this list will
+	// inevitably grow.
 	default:
 		return defaultMySQLVersions
 	}
