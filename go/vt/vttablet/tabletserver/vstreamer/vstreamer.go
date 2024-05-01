@@ -1131,11 +1131,17 @@ func buildEnumStringValue(plan *streamerPlan, colNum int, value sqltypes.Value) 
 		return sqltypes.Value{}, fmt.Errorf("no valid integer value found for column %s in table %s, bytes: %b",
 			plan.Table.Fields[colNum].Name, plan.Table.Name, iv)
 	}
-	strVal, ok := plan.EnumSetValuesMap[colNum][int(iv)]
-	if !ok {
-		// Match the MySQL behavior of returning an empty string for invalid ENUM values.
-		// This is what the 0 position in an ENUM is reserved for.
-		strVal = ""
+	var strVal string
+	// Match the MySQL behavior of returning an empty string for invalid ENUM values.
+	// This is what the 0 position in an ENUM is reserved for.
+	if iv != 0 {
+		var ok bool
+		strVal, ok = plan.EnumSetValuesMap[colNum][int(iv)]
+		if !ok {
+			// The integer value was NOT 0 yet we found no mapping. This should never happen.
+			return sqltypes.Value{}, fmt.Errorf("no string value found for ENUM column %s in table %s -- with available values being: %v -- using the found integer value: %d",
+				plan.Table.Fields[colNum].Name, plan.Table.Name, plan.EnumSetValuesMap[colNum], iv)
+		}
 	}
 	return sqltypes.MakeTrusted(plan.Table.Fields[colNum].Type, []byte(strVal)), nil
 }
@@ -1165,8 +1171,13 @@ func buildSetStringValue(plan *streamerPlan, colNum int, value sqltypes.Value) (
 		// See what bits are set in the bitmap using bitmasks.
 		for b := uint64(1); b < 1<<63; b <<= 1 {
 			if iv&b > 0 { // This bit is set and the SET's string value needs to be provided.
-				strVal := plan.EnumSetValuesMap[colNum][idx]
-				// Match the MySQL behavior of returning an empty string for invalid SET values.
+				strVal, ok := plan.EnumSetValuesMap[colNum][idx]
+				// When you insert values not found in the SET (which requires disabling STRICT mode) then
+				// they are effectively pruned and ignored (not actually saved). So this should never happen.
+				if !ok {
+					return sqltypes.Value{}, fmt.Errorf("no valid integer value found for SET column %s in table %s, bytes: %b",
+						plan.Table.Fields[colNum].Name, plan.Table.Name, iv)
+				}
 				if val.Len() > 0 {
 					val.WriteByte(',')
 				}

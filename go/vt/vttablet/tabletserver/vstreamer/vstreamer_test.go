@@ -145,10 +145,10 @@ func TestSetAndEnum(t *testing.T) {
 			// failed: Data truncated for column 'size' at row 1 (errno 1265) (sqlstate 01000) during query: insert into t2 values (4, 'lll', '', '')
 			{"set @@session.sql_mode = ''", nil},
 			{"insert into t2 values (4, 'lll', '', '')", nil},
-			// TODO: add correct handling for this in the test framework.
-			//{"insert into t2 values (5, 'mmm', NULL, NULL)", []TestRowEvent{
-			//{spec: &TestRowEventSpec{table: "t2", changes: []TestRowChange{{after: []string{"5", "mmm", `\x00`}}}}},
-			//}},
+			{"insert into t2 values (5, 'mmm', 'invalid', 'invalid,invalid,mint,invalid')", []TestRowEvent{
+				{spec: &TestRowEventSpec{table: "t2", changes: []TestRowChange{{after: []string{"5", "mmm", "\x00", ""}}}}},
+			}},
+			{"insert into t2 values (6, 'nnn', NULL, NULL)", nil},
 			{"commit", nil},
 		},
 	}

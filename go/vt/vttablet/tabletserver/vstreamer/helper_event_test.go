@@ -165,14 +165,33 @@ func (s *TestRowEventSpec) String() string {
 			if c.before != nil && len(c.before) > 0 {
 				rowChange.Before = &query.Row{}
 				for _, val := range c.before {
+					if val == sqltypes.NullStr {
+						val = ""
+					}
 					rowChange.Before.Lengths = append(rowChange.Before.Lengths, int64(len(val)))
 					rowChange.Before.Values = append(rowChange.Before.Values, []byte(val)...)
 				}
 			}
 			if c.after != nil && len(c.after) > 0 {
 				rowChange.After = &query.Row{}
-				for _, val := range c.after {
-					rowChange.After.Lengths = append(rowChange.After.Lengths, int64(len(val)))
+				for i, val := range c.after {
+					if val == sqltypes.NullStr {
+						val = ""
+					}
+					l := int64(len(val))
+					if strings.HasPrefix(val, "\x00") {
+						// The null byte hex representation is used when printing NULL ENUM/SET values.
+						// The length is 0, however, rather than the string representation of those
+						// null bytes.
+						l = 0
+						// The previous columns length increases by 1 for some reason. No idea why MySQL
+						// does this, but it does. It may be including the backslash, for example:
+						// row_changes:{after:{lengths:1 lengths:4 lengths:0 lengths:0 values:\"5mmm\\x00\"}}}"
+						if i > 0 {
+							rowChange.After.Lengths[i-1]++
+						}
+					}
+					rowChange.After.Lengths = append(rowChange.After.Lengths, l)
 					rowChange.After.Values = append(rowChange.After.Values, []byte(val)...)
 				}
 			}
@@ -578,12 +597,13 @@ func (ts *TestSpec) getRowEvent(table string, bv map[string]string, fe *TestFiel
 				l++
 			}
 		}
-		row.Values = append(row.Values, val...)
 		if slices.Equal(val, sqltypes.NullBytes) {
 			row.Lengths = append(row.Lengths, -1)
+			val = []byte{}
 		} else {
 			row.Lengths = append(row.Lengths, l)
 		}
+		row.Values = append(row.Values, val...)
 	}
 	ev.RowChanges = ts.getRowChanges(table, stmt, &row)
 	vEvent := &binlogdatapb.VEvent{
