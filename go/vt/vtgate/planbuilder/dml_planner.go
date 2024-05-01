@@ -43,8 +43,8 @@ func rewriteRoutedTables(stmt sqlparser.Statement, vschema plancontext.VSchema) 
 			return false, vterrors.VT09014()
 		}
 
+		// For reference tables, managed by Vitess (Source not nil), we need to use the source table as the target.
 		if vschemaTable.Type == vindexes.TypeReference && vschemaTable.Source != nil {
-			// This is a reference table. We need to rewrite the table name and keyspace to that of the source table.
 			vschemaTable, vindexTbl, _, _, _, err = vschema.FindTableOrVindex(vschemaTable.Source.TableName)
 			if err != nil {
 				return false, err
@@ -54,10 +54,16 @@ func rewriteRoutedTables(stmt sqlparser.Statement, vschema plancontext.VSchema) 
 				return false, vterrors.VT09014()
 			}
 		}
+
+		// The vschema table name can be different due to table routing rules pointing the table to a different one
+		// or if it backed by reference tables whose source table name is named differently.
 		if vschemaTable.Name.String() != tableName.Name.String() {
 			name := tableName.Name
 			if aliasTbl.As.IsEmpty() {
-				// if the user hasn't specified an alias, we'll insert one here so the old table name still works
+				// If the user has not specified an alias, we will insert one here so the old table name still works,
+				// since the original name might be used in a where clause, for example.
+				// If the user already specified an alias we should not change it, since the alias might be used in
+				// a where clause, for example.
 				aliasTbl.As = sqlparser.NewIdentifierCS(name.String())
 			}
 			tableName.Qualifier = sqlparser.IdentifierCS{}
