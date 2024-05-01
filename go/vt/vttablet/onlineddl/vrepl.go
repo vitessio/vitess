@@ -130,6 +130,7 @@ type VRepl struct {
 
 	revertibleNotes string
 	filterQuery     string
+	enumToTextMap   map[string]string
 	intToEnumMap    map[string]bool
 	bls             *binlogdatapb.BinlogSource
 
@@ -167,6 +168,7 @@ func NewVRepl(
 		alterQuery:              alterQuery,
 		analyzeTable:            analyzeTable,
 		parser:                  vrepl.NewAlterTableParser(),
+		enumToTextMap:           map[string]string{},
 		intToEnumMap:            map[string]bool{},
 		convertCharset:          map[string](*binlogdatapb.CharsetConversion){},
 	}
@@ -482,6 +484,7 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 			// that it's part of the PK, but it's still valid), and in that case we must have the string value
 			// to be able to DELETE the old row
 			v.targetSharedColumns.SetEnumToTextConversion(mappedColumn.Name, sourcePKColumn.EnumValues)
+			v.enumToTextMap[sourcePKColumn.Name] = sourcePKColumn.EnumValues
 		}
 	}
 
@@ -490,7 +493,20 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 		mappedColumn := v.targetSharedColumns.Columns()[i]
 		if sourceColumn.Type == vrepl.EnumColumnType {
 			switch {
+			// Either this is an ENUM column that stays an ENUM, or it is converted to a textual type.
+			// We take note of the enum values, and make it available in vreplication's Filter.Rule.ConvertEnumToText.
+			// This, in turn, will be used by vplayer (in TablePlan) like so:
+			// - In the binary log, enum values are integers.
+			// - Upon seeing this map, PlanBuilder will convert said int to the enum's logical string value.
+			// - And will apply the value as a string (`StringBindVariable`) in the query.
+			// What this allows is for enum values to have different ordering in the before/after table schema,
+			// so that for example you could modify an enum column:
+			// - from `('red', 'green', 'blue')` to `('red', 'blue')`
+			// - from `('red', 'green', 'blue')` to `('blue', 'red', 'green')`
+			case mappedColumn.Type == vrepl.EnumColumnType:
+				v.enumToTextMap[sourceColumn.Name] = sourceColumn.EnumValues
 			case mappedColumn.Charset != "":
+				v.enumToTextMap[sourceColumn.Name] = sourceColumn.EnumValues
 				v.targetSharedColumns.SetEnumToTextConversion(mappedColumn.Name, sourceColumn.EnumValues)
 			}
 		}
@@ -622,6 +638,9 @@ func (v *VRepl) analyzeBinlogSource(ctx context.Context) {
 	}
 	if len(v.convertCharset) > 0 {
 		rule.ConvertCharset = v.convertCharset
+	}
+	if len(v.enumToTextMap) > 0 {
+		rule.ConvertEnumToText = v.enumToTextMap
 	}
 	if len(v.intToEnumMap) > 0 {
 		rule.ConvertIntToEnum = v.intToEnumMap
