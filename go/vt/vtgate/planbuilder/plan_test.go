@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/test/vschemawrapper"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -44,7 +45,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
-	vtgateutils "vitess.io/vitess/go/vt/vtgate/utils"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -232,7 +232,34 @@ func setFks(t *testing.T, vschema *vindexes.VSchema) {
 		addPKs(t, vschema, "unsharded_fk_allow", []string{"u_tbl1", "u_tbl2", "u_tbl3", "u_tbl4", "u_tbl5", "u_tbl6", "u_tbl7", "u_tbl8", "u_tbl9", "u_tbl10", "u_tbl11",
 			"u_multicol_tbl1", "u_multicol_tbl2", "u_multicol_tbl3"})
 	}
-	vtgateutils.MarkErrorIfCyclesInFkAndOrderTables(vschema)
+	setFkOrderForFkTables(vschema)
+}
+
+func setFkOrderForFkTables(vschema *vindexes.VSchema) {
+	fkOrder := map[string]int{
+		"u_tbl2":          11,
+		"u_tbl7":          9,
+		"u_tbl":           0,
+		"u_tbl10":         7,
+		"u_tbl3":          12,
+		"u_tbl6":          5,
+		"u_tbl9":          4,
+		"u_tbl5":          0,
+		"u_tbl8":          6,
+		"u_tbl1":          3,
+		"u_multicol_tbl2": 2,
+		"u_multicol_tbl3": 0,
+		"u_tbl4":          10,
+		"u_tbl11":         8,
+		"u_multicol_tbl1": 1,
+	}
+
+	for tblName, ord := range fkOrder {
+		vschema.Keyspaces["unsharded_fk_allow"].Tables[tblName].FkOrder = ord
+	}
+	for _, table := range vschema.Keyspaces["unsharded_fk_allow"].Tables {
+		log.Errorf("%s: %d", table.Name.String(), table.FkOrder)
+	}
 }
 
 func addPKs(t *testing.T, vschema *vindexes.VSchema, ks string, tbls []string) {
