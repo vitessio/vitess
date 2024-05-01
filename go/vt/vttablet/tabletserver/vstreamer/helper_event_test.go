@@ -184,7 +184,7 @@ func (s *TestRowEventSpec) String() string {
 						// The length is 0, however, rather than the string representation of those
 						// null bytes.
 						l = 0
-						// The previous columns length increases by 1 for some reason. No idea why MySQL
+						// The previous column's length increases by 1 for some reason. No idea why MySQL
 						// does this, but it does. It may be including the backslash, for example:
 						// row_changes:{after:{lengths:1 lengths:4 lengths:0 lengths:0 values:\"5mmm\\x00\"}}}"
 						if i > 0 {

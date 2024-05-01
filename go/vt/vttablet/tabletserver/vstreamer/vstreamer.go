@@ -36,7 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
-	schemautils "vitess.io/vitess/go/vt/schema"
+	vtschema "vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet"
@@ -47,7 +47,6 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	vtschema "vitess.io/vitess/go/vt/schema"
 )
 
 const (
@@ -752,7 +751,7 @@ func (vs *vstreamer) buildTablePlan(id uint64, tm *mysql.TableMap) (*binlogdatap
 		return nil, nil
 	}
 	if err := addEnumAndSetMappingstoPlan(plan, cols, tm.Metadata); err != nil {
-		return nil, fmt.Errorf("failed to build ENUM and SET column integer to string mappings: %v", err)
+		return nil, vterrors.Wrapf(err, "failed to build ENUM and SET column integer to string mappings")
 	}
 	vs.plans[id] = &streamerPlan{
 		Plan:     plan,
@@ -1066,13 +1065,13 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 			if plan.Table.Fields[colNum].Type == querypb.Type_ENUM || mysqlType == mysqlbinlog.TypeEnum {
 				value, err = buildEnumStringValue(plan, colNum, value)
 				if err != nil {
-					return false, nil, false, fmt.Errorf("failed to build ENUM column integer to string mapping: %v", err)
+					return false, nil, false, vterrors.Wrapf(err, "failed to perform ENUM column integer to string value mapping")
 				}
 			}
 			if plan.Table.Fields[colNum].Type == querypb.Type_SET || mysqlType == mysqlbinlog.TypeSet {
 				value, err = buildSetStringValue(plan, colNum, value)
 				if err != nil {
-					return false, nil, false, fmt.Errorf("failed to build SET column integer to string mapping: %v", err)
+					return false, nil, false, vterrors.Wrapf(err, "failed to perform SET column integer to string value mapping")
 				}
 			}
 		}
@@ -1106,21 +1105,22 @@ func addEnumAndSetMappingstoPlan(plan *Plan, cols []*querypb.Field, metadata []u
 				return fmt.Errorf("enum or set column %s does not have valid string values: %s",
 					col.Name, col.ColumnType)
 			}
-			plan.EnumSetValuesMap[i] = schemautils.ParseEnumOrSetTokensMap(col.ColumnType[begin+1 : end])
+			plan.EnumSetValuesMap[i] = vtschema.ParseEnumOrSetTokensMap(col.ColumnType[begin+1 : end])
 		}
 	}
 	return nil
 }
 
+// buildEnumtringValue takes the integer value of an ENUM column and returns the string value.
 func buildEnumStringValue(plan *streamerPlan, colNum int, value sqltypes.Value) (sqltypes.Value, error) {
-	if value.IsNull() {
+	if value.IsNull() { // No work is needed
 		return value, nil
 	}
-	// Add the mapping just-in-time in case we haven't properly received and processed a
+	// Add the mappings just-in-time in case we haven't properly received and processed a
 	// table map event to initialize it.
 	if plan.EnumSetValuesMap == nil {
 		if err := addEnumAndSetMappingstoPlan(plan.Plan, plan.Table.Fields, plan.TableMap.Metadata); err != nil {
-			return sqltypes.Value{}, fmt.Errorf("failed to build ENUM column integer to string mappings: %v", err)
+			return sqltypes.Value{}, err
 		}
 	}
 	// ENUM columns are stored as an unsigned 16-bit integer as they can contain a maximum
@@ -1146,15 +1146,16 @@ func buildEnumStringValue(plan *streamerPlan, colNum int, value sqltypes.Value) 
 	return sqltypes.MakeTrusted(plan.Table.Fields[colNum].Type, []byte(strVal)), nil
 }
 
+// buildSetStringValue takes the integer value of a SET column and returns the string value.
 func buildSetStringValue(plan *streamerPlan, colNum int, value sqltypes.Value) (sqltypes.Value, error) {
-	if value.IsNull() {
+	if value.IsNull() { // No work is needed
 		return value, nil
 	}
-	// Add the mapping JiT in case we haven't properly received and processed a table map
-	// event to initialize it.
+	// Add the mappings just-in-time in case we haven't properly received and processed a
+	// table map event to initialize it.
 	if plan.EnumSetValuesMap == nil {
 		if err := addEnumAndSetMappingstoPlan(plan.Plan, plan.Table.Fields, plan.TableMap.Metadata); err != nil {
-			return sqltypes.Value{}, fmt.Errorf("failed to build SET column integer to string mappings: %v", err)
+			return sqltypes.Value{}, err
 		}
 	}
 	// A SET column can have 64 unique values: https://dev.mysql.com/doc/refman/en/set.html
