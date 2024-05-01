@@ -53,12 +53,8 @@ func rewriteRoutedTables(stmt sqlparser.Statement, vschema plancontext.VSchema) 
 				// vindex cannot be present in a dml statement.
 				return false, vterrors.VT09014()
 			}
-			tableName.Qualifier = vschemaTable.GetTableName().Qualifier
-			tableName.Name = sqlparser.NewIdentifierCS(vschemaTable.Name.String())
-			newAliasTbl := sqlparser.NewAliasedTableExpr(tableName, "")
-			aliasTbl.Expr = newAliasTbl.Expr
-			aliasTbl.As = newAliasTbl.As
-		} else if vschemaTable.Name.String() != tableName.Name.String() {
+		}
+		if vschemaTable.Name.String() != tableName.Name.String() {
 			name := tableName.Name
 			if aliasTbl.As.IsEmpty() {
 				// if the user hasn't specified an alias, we'll insert one here so the old table name still works

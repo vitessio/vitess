@@ -443,7 +443,7 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "Query": "delete from source_of_ref where col = 1",
+        "Query": "delete from source_of_ref as ref_with_source where col = 1",
         "Table": "source_of_ref"
       },
       "TablesUsed": [
@@ -465,7 +465,51 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "Query": "update source_of_ref set x = 4 where col = 1",
+        "Query": "update source_of_ref as ref_with_source set x = 4 where col = 1",
+        "Table": "source_of_ref"
+      },
+      "TablesUsed": [
+        "main.source_of_ref"
+      ]
+    }
+  },
+  {
+    "comment": "delete from reference table with another name - query send to source table - with alias",
+    "query": "delete from user.ref_with_source alias where alias.col = 1 and x = 2",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from user.ref_with_source alias where alias.col = 1 and x = 2",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "delete from source_of_ref as alias where alias.col = 1 and x = 2",
+        "Table": "source_of_ref"
+      },
+      "TablesUsed": [
+        "main.source_of_ref"
+      ]
+    }
+  },
+  {
+    "comment": "update from reference table with another name - query send to source table - with alias",
+    "query": "update user.ref_with_source as alias set x = 4 where alias.col = 1 and x = 2",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user.ref_with_source as alias set x = 4 where alias.col = 1 and x = 2",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "update source_of_ref as alias set x = 4 where alias.col = 1 and x = 2",
         "Table": "source_of_ref"
       },
       "TablesUsed": [
@@ -519,6 +563,50 @@
   },
   {
     "comment": "update from reference table - query send to source table",
+    "query": "update source_of_ref set x = 4 where col = 1",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update source_of_ref set x = 4 where col = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "update source_of_ref set x = 4 where col = 1",
+        "Table": "source_of_ref"
+      },
+      "TablesUsed": [
+        "main.source_of_ref"
+      ]
+    }
+  },
+  {
+    "comment": "delete from reference table - query send to source table - with alias",
+    "query": "delete from source_of_ref where col = 1",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from source_of_ref where col = 1",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "delete from source_of_ref where col = 1",
+        "Table": "source_of_ref"
+      },
+      "TablesUsed": [
+        "main.source_of_ref"
+      ]
+    }
+  },
+  {
+    "comment": "update from reference table - query send to source table - with alias",
     "query": "update source_of_ref set x = 4 where col = 1",
     "plan": {
       "QueryType": "UPDATE",
@@ -606,6 +694,50 @@
     }
   },
   {
+    "comment": "delete from reference table qualified with unsharded - query send to source table - with alias",
+    "query": "delete from main.source_of_ref where col = 1",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from main.source_of_ref where col = 1",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "delete from source_of_ref where col = 1",
+        "Table": "source_of_ref"
+      },
+      "TablesUsed": [
+        "main.source_of_ref"
+      ]
+    }
+  },
+  {
+    "comment": "update from reference table qualified with unsharded - query send to source table - with alias",
+    "query": "update main.source_of_ref set x = 4 where col = 1",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update main.source_of_ref set x = 4 where col = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "update source_of_ref set x = 4 where col = 1",
+        "Table": "source_of_ref"
+      },
+      "TablesUsed": [
+        "main.source_of_ref"
+      ]
+    }
+  },
+  {
     "comment": "insert from reference table qualified with unsharded - query send to source table",
     "query": "insert into main.source_of_ref(x) values(4)",
     "plan": {
@@ -641,7 +773,7 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "Query": "delete from source_of_ref where col = 1",
+        "Query": "delete from source_of_ref as ref_with_source where col = 1",
         "Table": "source_of_ref"
       },
       "TablesUsed": [
@@ -663,7 +795,51 @@
           "Sharded": false
         },
         "TargetTabletType": "PRIMARY",
-        "Query": "update source_of_ref set x = 4 where col = 1",
+        "Query": "update source_of_ref as ref_with_source set x = 4 where col = 1",
+        "Table": "source_of_ref"
+      },
+      "TablesUsed": [
+        "main.source_of_ref"
+      ]
+    }
+  },
+  {
+    "comment": "delete from reference table with another name - query send to source table - with alias",
+    "query": "delete from user.ref_with_source where ref_with_source.col = 1",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from user.ref_with_source where ref_with_source.col = 1",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "delete from source_of_ref as ref_with_source where ref_with_source.col = 1",
+        "Table": "source_of_ref"
+      },
+      "TablesUsed": [
+        "main.source_of_ref"
+      ]
+    }
+  },
+  {
+    "comment": "update from reference table with another name - query send to source table - with alias",
+    "query": "update user.ref_with_source set x = 4 where ref_with_source.col = 1",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user.ref_with_source set x = 4 where ref_with_source.col = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "update source_of_ref as ref_with_source set x = 4 where ref_with_source.col = 1",
         "Table": "source_of_ref"
       },
       "TablesUsed": [
