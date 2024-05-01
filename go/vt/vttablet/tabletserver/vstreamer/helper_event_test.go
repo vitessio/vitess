@@ -410,6 +410,7 @@ func (ts *TestSpec) Run() {
 					isRowEvent = true
 					del := stmt.(*sqlparser.Delete)
 					table = del.TableExprs[0].(*sqlparser.AliasedTableExpr).As.String()
+				case *sqlparser.Set:
 				default:
 					_, ok := stmt.(sqlparser.DDLStatement)
 					if !ok {
@@ -578,7 +579,11 @@ func (ts *TestSpec) getRowEvent(table string, bv map[string]string, fe *TestFiel
 			}
 		}
 		row.Values = append(row.Values, val...)
-		row.Lengths = append(row.Lengths, l)
+		if slices.Equal(val, sqltypes.NullBytes) {
+			row.Lengths = append(row.Lengths, -1)
+		} else {
+			row.Lengths = append(row.Lengths, l)
+		}
 	}
 	ev.RowChanges = ts.getRowChanges(table, stmt, &row)
 	vEvent := &binlogdatapb.VEvent{
