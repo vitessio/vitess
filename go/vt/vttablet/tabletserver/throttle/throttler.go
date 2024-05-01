@@ -1024,8 +1024,6 @@ func (throttler *Throttler) collectShardMySQLMetrics(ctx context.Context, tmClie
 			if !atomic.CompareAndSwapInt64(&probe.QueryInProgress, 0, 1) {
 				return
 			}
-			fmt.Println("===== ++++ query in progress for", probe.Alias)
-			defer fmt.Println("===== ---- query in progress for", probe.Alias)
 			defer atomic.StoreInt64(&probe.QueryInProgress, 0)
 
 			// Throttler probing other tablets:
