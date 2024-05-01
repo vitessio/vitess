@@ -10,6 +10,14 @@ import (
 // alterOptionAvailableViaInstantDDL checks if the specific alter option is eligible to run via ALGORITHM=INSTANT
 // reference: https://dev.mysql.com/doc/refman/8.0/en/innodb-online-ddl-operations.html
 func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTable *sqlparser.CreateTable, capableOf capabilities.CapableOf) (bool, error) {
+	// A table with FULLTEXT index won't support adding/removing columns instantly.
+	tableHasFulltextIndex := false
+	for _, key := range createTable.TableSpec.Indexes {
+		if key.Info.Type == sqlparser.IndexTypeFullText {
+			tableHasFulltextIndex = true
+			break
+		}
+	}
 	findColumn := func(colName string) *sqlparser.ColumnDefinition {
 		if createTable == nil {
 			return nil
@@ -42,6 +50,13 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 		}
 		return nil
 	}
+	tableIsCompressed := false
+	if opt := findTableOption("ROW_FORMAT"); opt != nil {
+		if strings.EqualFold(opt.String, "COMPRESSED") {
+			tableIsCompressed = true
+		}
+	}
+
 	isVirtualColumn := func(colName string) bool {
 		col := findColumn(colName)
 		if col == nil {
@@ -87,6 +102,14 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 		//    in another table. Which is a bit too much to compute here.
 		return false, nil
 	case *sqlparser.AddColumns:
+		if tableHasFulltextIndex {
+			// not supported if the table has a FULLTEXT index
+			return false, nil
+		}
+		// Not supported in COMPRESSED tables
+		if tableIsCompressed {
+			return false, nil
+		}
 		if opt.First || opt.After != nil {
 			// not a "last" column. Only supported as of 8.0.29
 			return capableOf(capabilities.InstantAddDropColumnFlavorCapability)
@@ -94,11 +117,13 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 		// Adding a *last* column is supported in 8.0
 		return capableOf(capabilities.InstantAddLastColumnFlavorCapability)
 	case *sqlparser.DropColumn:
+		if tableHasFulltextIndex {
+			// not supported if the table has a FULLTEXT index
+			return false, nil
+		}
 		// Not supported in COMPRESSED tables
-		if opt := findTableOption("ROW_FORMAT"); opt != nil {
-			if strings.EqualFold(opt.String, "COMPRESSED") {
-				return false, nil
-			}
+		if tableIsCompressed {
+			return false, nil
 		}
 		if findIndexCoveringColumn(opt.Name.Name.String()) != nil {
 			// not supported if the column is part of an index
