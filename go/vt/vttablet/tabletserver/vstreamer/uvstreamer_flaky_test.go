@@ -69,6 +69,7 @@ const (
 	bulkInsertQuery  = "insert into %s (id%d1, id%d2) values "
 	insertQuery      = "insert into %s (id%d1, id%d2) values (%d, %d)"
 	numInitialRows   = 10
+	copyPhaseStart   = "Copy Start"
 )
 
 type TestState struct {
@@ -206,7 +207,7 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 	}
 
 	// Test event called after t1 copy is complete
-	callbacks["OTHER.*Copy Start t2"] = func() {
+	callbacks[fmt.Sprintf("OTHER.*%s t2", copyPhaseStart)] = func() {
 		conn, err := env.Mysqld.GetDbaConnection(ctx)
 		require.NoError(t, err)
 		defer conn.Close()
@@ -220,7 +221,7 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 
 	}
 
-	callbacks["OTHER.*Copy Start t3"] = func() {
+	callbacks[fmt.Sprintf("OTHER.*%s t3", copyPhaseStart)] = func() {
 		conn, err := env.Mysqld.GetDbaConnection(ctx)
 		require.NoError(t, err)
 		defer conn.Close()
@@ -303,7 +304,7 @@ func validateReceivedEvents(t *testing.T) {
 		ev.Timestamp = 0
 		switch ev.Type {
 		case binlogdatapb.VEventType_OTHER:
-			if strings.Contains(strings.ToLower(ev.Gtid), "copy start") {
+			if strings.Contains(ev.Gtid, copyPhaseStart) {
 				inCopyPhase = true
 			}
 		case binlogdatapb.VEventType_FIELD:
@@ -480,7 +481,7 @@ func startVStreamCopy(ctx context.Context, t *testing.T, filter *binlogdatapb.Fi
 }
 
 var expectedEvents = []string{
-	"type:OTHER gtid:\"Copy Start t1\"",
+	fmt.Sprintf("type:OTHER gtid:\"%s t1\"", copyPhaseStart),
 	"type:BEGIN",
 	"type:FIELD field_event:{table_name:\"t1\" fields:{name:\"id11\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id11\" column_length:11 charset:63 column_type:\"int(11)\"} fields:{name:\"id12\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id12\" column_length:11 charset:63 column_type:\"int(11)\"} enum_set_string_values:true}",
 	"type:GTID",
@@ -504,7 +505,7 @@ var expectedEvents = []string{
 	"type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:2 lengths:3 values:\"11110\"}}}",
 	"type:GTID",
 	"type:COMMIT", //insert for t2 done along with t1 does not generate an event since t2 is not yet copied
-	"type:OTHER gtid:\"Copy Start t2\"",
+	fmt.Sprintf("type:OTHER gtid:\"%s t2\"", copyPhaseStart),
 	"type:BEGIN",
 	"type:FIELD field_event:{table_name:\"t1\" fields:{name:\"id11\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id11\" column_length:11 charset:63 column_type:\"int(11)\"} fields:{name:\"id12\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id12\" column_length:11 charset:63 column_type:\"int(11)\"} enum_set_string_values:true}",
 	"type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:2 lengths:3 values:\"12120\"}}}",
@@ -528,7 +529,7 @@ var expectedEvents = []string{
 	"type:BEGIN",
 	"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t2\"} completed:true}",
 	"type:COMMIT",
-	"type:OTHER gtid:\"Copy Start t3\"",
+	fmt.Sprintf("type:OTHER gtid:\"%s t3\"", copyPhaseStart),
 	"type:BEGIN",
 	"type:FIELD field_event:{table_name:\"t1\" fields:{name:\"id11\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id11\" column_length:11 charset:63 column_type:\"int(11)\"} fields:{name:\"id12\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id12\" column_length:11 charset:63 column_type:\"int(11)\"} enum_set_string_values:true}",
 	"type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:2 lengths:3 values:\"13130\"}}}",

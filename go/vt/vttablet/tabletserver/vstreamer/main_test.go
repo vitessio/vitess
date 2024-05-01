@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -39,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 var (
@@ -154,6 +156,21 @@ func expectLog(ctx context.Context, t *testing.T, input any, ch <-chan []*binlog
 	for _, wantset := range output {
 		var evs []*binlogdatapb.VEvent
 		inCopyPhase := false
+		haveEnumOrSetField := func(fields []*querypb.Field) bool {
+			return slices.ContainsFunc(fields, func(f *querypb.Field) bool {
+				// We can't simply use querypb.Type_ENUM or querypb.Type_SET here
+				// because if a binary collation is used then the field Type will
+				// be BINARY. And we don't have the binlog event metadata from the
+				// original event any longer that we could use to get the MySQL type
+				// (which would still be ENUM or SET). So we instead look at the column
+				// type string value which will be e.g enum('s','m','l').
+				colTypeStr := strings.ToLower(f.GetColumnType())
+				if strings.HasPrefix(colTypeStr, "enum(") || strings.HasPrefix(colTypeStr, "set(") {
+					return true
+				}
+				return false
+			})
+		}
 		for {
 			select {
 			case allevs, ok := <-ch:
@@ -167,18 +184,15 @@ func expectLog(ctx context.Context, t *testing.T, input any, ch <-chan []*binlog
 					}
 					switch ev.Type {
 					case binlogdatapb.VEventType_OTHER:
-						if strings.Contains(strings.ToLower(ev.Gtid), "copy start") {
+						if strings.Contains(ev.Gtid, copyPhaseStart) {
 							inCopyPhase = true
 						}
-					case binlogdatapb.VEventType_FIELD:
-						ev.FieldEvent.EnumSetStringValues = inCopyPhase
 					case binlogdatapb.VEventType_COPY_COMPLETED:
 						inCopyPhase = false
-					}
-					if strings.Contains(strings.ToLower(ev.String()), "enum(") || strings.Contains(strings.ToLower(ev.String()), "set(") {
-						// This is set in the running phase when there are ENUM or SET
-						// columns in the table.
-						ev.FieldEvent.EnumSetStringValues = true
+					case binlogdatapb.VEventType_FIELD:
+						// This is always set in the copy phase. It's also set in the
+						// running phase when the table has an ENUM or SET field.
+						ev.FieldEvent.EnumSetStringValues = inCopyPhase || haveEnumOrSetField(ev.FieldEvent.Fields)
 					}
 					evs = append(evs, ev)
 				}
