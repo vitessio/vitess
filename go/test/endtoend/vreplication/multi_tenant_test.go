@@ -251,10 +251,10 @@ func confirmOnlyWritesSwitched(t *testing.T) {
 	validateKeyspaceRoutingRules(t, vc, rules)
 }
 
-// TestMultiTenantSimpleSharded tests a single tenant migration to a sharded target. The aim is to test
+// TestMultiTenantSharded tests a single tenant migration to a sharded target. The aim is to test
 // the specification of the target shards in all the MoveTables subcommands, including creating only one stream
 // for a tenant on the shard to which this tenant id will be routed, using the specified Vindex.
-func TestMultiTenantSimpleSharded(t *testing.T) {
+func TestMultiTenantSharded(t *testing.T) {
 	setSidecarDBName("_vt")
 	// Don't create RDONLY tablets to reduce number of tablets created to reduce resource requirements for the test.
 	origDefaultRdonly := defaultRdonly

@@ -9,13 +9,11 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/topo"
-
-	"vitess.io/vitess/go/vt/topotools"
-
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topotools"
 )
 
 // TestUpdateKeyspaceRoutingRule confirms that the keyspace routing rules are updated correctly.
