@@ -31,7 +31,7 @@ import (
 
 var (
 	demoteQueries  = []string{"SET GLOBAL read_only = ON", "FLUSH TABLES WITH READ LOCK", "UNLOCK TABLES"}
-	promoteQueries = []string{"STOP SLAVE", "RESET SLAVE ALL", "SET GLOBAL read_only = OFF"}
+	promoteQueries = []string{"STOP REPLICA", "RESET REPLICA ALL", "SET GLOBAL read_only = OFF"}
 
 	hostname = "localhost"
 )
@@ -73,11 +73,11 @@ func failoverExternalReparenting(t *testing.T, clusterInstance *cluster.LocalPro
 	// Use 'localhost' as hostname because Travis CI worker hostnames
 	// are too long for MySQL replication.
 	changeSourceCommands := []string{
-		"STOP SLAVE",
+		"STOP REPLICA",
 		"RESET MASTER",
 		fmt.Sprintf("SET GLOBAL gtid_purged = '%s'", gtID),
-		fmt.Sprintf("CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='vt_repl', MASTER_AUTO_POSITION = 1", "localhost", newPrimary.MySQLPort),
-		"START SLAVE",
+		fmt.Sprintf("CHANGE REPLICATION SOURCE TO SOURCE_HOST='%s', SOURCE_PORT=%d, SOURCE_USER='vt_repl', SOURCE_AUTO_POSITION = 1", "localhost", newPrimary.MySQLPort),
+		"START REPLICA",
 	}
 	err = oldPrimary.VttabletProcess.QueryTabletMultiple(changeSourceCommands, keyspaceUnshardedName, true)
 	require.NoError(t, err)
