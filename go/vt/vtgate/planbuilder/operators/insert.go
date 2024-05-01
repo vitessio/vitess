@@ -107,17 +107,7 @@ func (i *Insert) Statement() sqlparser.Statement {
 func createOperatorFromInsert(ctx *plancontext.PlanningContext, ins *sqlparser.Insert) Operator {
 	tableInfo, qt := createQueryTableForDML(ctx, ins.Table, nil)
 
-	vTbl, routing := buildVindexTableForDML(ctx, tableInfo, qt, "insert")
-
-	if tableInfo.GetVindexTable().Type == vindexes.TypeReference && tableInfo.GetVindexTable().Source != nil {
-		// If the table being inserted into is a reference table, we need to insert into the source table.
-		tname, _ := tableInfo.Name()
-		if vTbl.Name != tname.Name || vTbl.Keyspace.Name == tname.Name.String() { // optimization
-			newAliasTbl := sqlparser.NewAliasedTableExpr(vTbl.GetTableName(), "")
-			ins.Table.Expr = newAliasTbl.Expr
-			ins.Table.As = newAliasTbl.As
-		}
-	}
+	vTbl, routing := buildVindexTableForDML(ctx, tableInfo, qt, ins, "insert")
 
 	deleteBeforeInsert := false
 	if ins.Action == sqlparser.ReplaceAct &&
