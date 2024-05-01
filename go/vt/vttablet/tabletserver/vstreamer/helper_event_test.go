@@ -598,11 +598,10 @@ func (ts *TestSpec) getRowEvent(table string, bv map[string]string, fe *TestFiel
 			}
 		}
 		if slices.Equal(val, sqltypes.NullBytes) {
-			row.Lengths = append(row.Lengths, -1)
+			l = -1
 			val = []byte{}
-		} else {
-			row.Lengths = append(row.Lengths, l)
 		}
+		row.Lengths = append(row.Lengths, l)
 		row.Values = append(row.Values, val...)
 	}
 	ev.RowChanges = ts.getRowChanges(table, stmt, &row)
