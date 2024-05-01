@@ -175,7 +175,7 @@ func expectLog(ctx context.Context, t *testing.T, input any, ch <-chan []*binlog
 					case binlogdatapb.VEventType_COPY_COMPLETED:
 						inCopyPhase = false
 					}
-					if strings.HasPrefix(strings.ToLower(ev.String()), "enum(") || strings.HasPrefix(strings.ToLower(ev.String()), "set(") {
+					if strings.Contains(strings.ToLower(ev.String()), "enum(") || strings.Contains(strings.ToLower(ev.String()), "set(") {
 						// This is set in the running phase when there are ENUM or SET
 						// columns in the table.
 						ev.FieldEvent.EnumSetStringValues = true
