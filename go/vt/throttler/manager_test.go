@@ -20,9 +20,11 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
-	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	throttlerdatapb "vitess.io/vitess/go/vt/proto/throttlerdata"
 )
@@ -60,12 +62,11 @@ func (f *managerTestFixture) tearDown() {
 func TestManager_Registration(t *testing.T) {
 	m := newManager()
 	t1, err := newThrottler(m, "t1", "TPS", 1 /* threadCount */, MaxRateModuleDisabled, ReplicationLagModuleDisabled, time.Now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := m.registerThrottler("t1", t1); err == nil {
-		t.Fatalf("manager should not accept a duplicate registration of a throttler: %v", err)
-	}
+	require.NoError(t, err)
+
+	err = m.registerThrottler("t1", t1)
+	require.Error(t, err, "manager should not accept a duplicate registration of a throttler")
+
 	t1.Close()
 
 	// Unregistering an unregistered throttler should log an error.
@@ -81,18 +82,16 @@ func TestManager_SetMaxRate(t *testing.T) {
 
 	// Test SetMaxRate().
 	want := []string{"t1", "t2"}
-	if got := f.m.SetMaxRate(23); !reflect.DeepEqual(got, want) {
-		t.Errorf("manager did not set the rate on all throttlers. got = %v, want = %v", got, want)
-	}
+	got := f.m.SetMaxRate(23)
+	assert.Equal(t, want, got, "manager did not set the rate on all throttlers")
 
 	// Test MaxRates().
 	wantRates := map[string]int64{
 		"t1": 23,
 		"t2": 23,
 	}
-	if gotRates := f.m.MaxRates(); !reflect.DeepEqual(gotRates, wantRates) {
-		t.Errorf("manager did not set the rate on all throttlers. got = %v, want = %v", gotRates, wantRates)
-	}
+	gotRates := f.m.MaxRates()
+	assert.Equal(t, wantRates, gotRates, "manager did not set the rate on all throttlers")
 }
 
 func TestManager_GetConfiguration(t *testing.T) {
@@ -108,24 +107,16 @@ func TestManager_GetConfiguration(t *testing.T) {
 		"t2": defaultMaxReplicationLagModuleConfig.Clone().Configuration,
 	}
 	got, err := f.m.GetConfiguration("" /* all */)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("manager did not return the correct initial config for all throttlers. got = %v, want = %v", got, want)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, want, got, "manager did not return the correct initial config for all throttlers")
 
 	// Test GetConfiguration() when a specific throttler is requested.
 	wantT2 := map[string]*throttlerdatapb.Configuration{
 		"t2": defaultMaxReplicationLagModuleConfig.Clone().Configuration,
 	}
 	gotT2, err := f.m.GetConfiguration("t2")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(gotT2, wantT2) {
-		t.Errorf("manager did not return the correct initial config for throttler: %v got = %v, want = %v", "t2", gotT2, wantT2)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, wantT2, gotT2, "manager did not return the correct initial config for throttler: t2")
 
 	// Now change the config and then reset it back.
 	newConfig := &throttlerdatapb.Configuration{
@@ -133,42 +124,35 @@ func TestManager_GetConfiguration(t *testing.T) {
 		IgnoreNSlowestReplicas:  defaultIgnoreNSlowestReplicas + 1,
 	}
 	allNames, err := f.m.UpdateConfiguration("", newConfig, false /* copyZeroValues */)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Verify it was changed.
-	if err := checkConfig(f.m, []string{"t1", "t2"}, allNames, defaultTargetLag+1, defaultIgnoreNSlowestReplicas+1); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+
+	err = checkConfig(f.m, []string{"t1", "t2"}, allNames, defaultTargetLag+1, defaultIgnoreNSlowestReplicas+1)
+	require.NoError(t, err)
+
 	// Reset only "t2".
-	if names, err := f.m.ResetConfiguration("t2"); err != nil || !reflect.DeepEqual(names, []string{"t2"}) {
-		t.Fatalf("Reset failed or returned wrong throttler names: %v err: %v", names, err)
-	}
+	names, err := f.m.ResetConfiguration("t2")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"t2"}, names, "Reset failed or returned wrong throttler names")
+
 	gotT2AfterReset, err := f.m.GetConfiguration("t2")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(gotT2AfterReset, wantT2) {
-		t.Errorf("manager did not return the correct initial config for throttler %v after reset: got = %v, want = %v", "t2", gotT2AfterReset, wantT2)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, wantT2, gotT2AfterReset, "manager did not return the correct initial config for throttler t2 after reset")
+
 	// Reset all throttlers.
-	if names, err := f.m.ResetConfiguration(""); err != nil || !reflect.DeepEqual(names, []string{"t1", "t2"}) {
-		t.Fatalf("Reset failed or returned wrong throttler names: %v err: %v", names, err)
-	}
+
+	names, err = f.m.ResetConfiguration("")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"t1", "t2"}, names, "Reset failed or returned wrong throttler names")
+
 	gotAfterReset, err := f.m.GetConfiguration("")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(gotAfterReset, want) {
-		t.Errorf("manager did not return the correct initial config for all throttlers after reset. got = %v, want = %v", got, want)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, want, gotAfterReset, "manager did not return the correct initial config for all throttlers after reset")
 }
 
 func TestManager_UpdateConfiguration_Error(t *testing.T) {
 	f := &managerTestFixture{}
-	if err := f.setUp(); err != nil {
-		t.Fatal(err)
-	}
+	err := f.setUp()
+	require.NoError(t, err)
 	defer f.tearDown()
 
 	// Check that errors from Verify() are correctly propagated.
@@ -176,21 +160,15 @@ func TestManager_UpdateConfiguration_Error(t *testing.T) {
 		// max < 2 is not allowed.
 		MaxReplicationLagSec: 1,
 	}
-	if _, err := f.m.UpdateConfiguration("t2", invalidConfig, false /* copyZeroValues */); err == nil {
-		t.Fatal("expected error but got nil")
-	} else {
-		want := "max_replication_lag_sec must be >= 2"
-		if !strings.Contains(err.Error(), want) {
-			t.Fatalf("received wrong error. got = %v, want contains = %v", err, want)
-		}
-	}
+	_, err = f.m.UpdateConfiguration("t2", invalidConfig, false /* copyZeroValues */)
+	wantErr := "max_replication_lag_sec must be >= 2"
+	require.ErrorContains(t, err, wantErr)
 }
 
 func TestManager_UpdateConfiguration_Partial(t *testing.T) {
 	f := &managerTestFixture{}
-	if err := f.setUp(); err != nil {
-		t.Fatal(err)
-	}
+	err := f.setUp()
+	require.NoError(t, err)
 	defer f.tearDown()
 
 	// Verify that a partial update only updates that one field.
@@ -199,47 +177,40 @@ func TestManager_UpdateConfiguration_Partial(t *testing.T) {
 		IgnoreNSlowestReplicas: wantIgnoreNSlowestReplicas,
 	}
 	names, err := f.m.UpdateConfiguration("t2", partialConfig, false /* copyZeroValues */)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := checkConfig(f.m, []string{"t2"}, names, defaultTargetLag, wantIgnoreNSlowestReplicas); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+
+	err = checkConfig(f.m, []string{"t2"}, names, defaultTargetLag, wantIgnoreNSlowestReplicas)
+	require.NoError(t, err)
+
 	// Repeat test for all throttlers.
 	allNames, err := f.m.UpdateConfiguration("" /* all */, partialConfig, false /* copyZeroValues */)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := checkConfig(f.m, []string{"t1", "t2"}, allNames, defaultTargetLag, wantIgnoreNSlowestReplicas); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+
+	err = checkConfig(f.m, []string{"t1", "t2"}, allNames, defaultTargetLag, wantIgnoreNSlowestReplicas)
+	require.NoError(t, err)
 }
 
 func TestManager_UpdateConfiguration_ZeroValues(t *testing.T) {
 	f := &managerTestFixture{}
-	if err := f.setUp(); err != nil {
-		t.Fatal(err)
-	}
+	err := f.setUp()
+	require.NoError(t, err)
 	defer f.tearDown()
 
 	// Test the explicit copy of zero values.
 	zeroValueConfig := defaultMaxReplicationLagModuleConfig.Configuration.CloneVT()
 	zeroValueConfig.IgnoreNSlowestReplicas = 0
 	names, err := f.m.UpdateConfiguration("t2", zeroValueConfig, true /* copyZeroValues */)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := checkConfig(f.m, []string{"t2"}, names, defaultTargetLag, 0); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+
+	err = checkConfig(f.m, []string{"t2"}, names, defaultTargetLag, 0)
+	require.NoError(t, err)
+
 	// Repeat test for all throttlers.
 	allNames, err := f.m.UpdateConfiguration("" /* all */, zeroValueConfig, true /* copyZeroValues */)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := checkConfig(f.m, []string{"t1", "t2"}, allNames, defaultTargetLag, 0); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+
+	err = checkConfig(f.m, []string{"t1", "t2"}, allNames, defaultTargetLag, 0)
+	require.NoError(t, err)
 }
 
 func checkConfig(m *managerImpl, throttlers []string, updatedThrottlers []string, targetLag int64, ignoreNSlowestReplicas int32) error {

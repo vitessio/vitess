@@ -47,9 +47,9 @@ func registerCommands(root *cobra.Command) {
 	create.Flags().StringSliceVar(&createOptions.ExcludeTables, "exclude-tables", nil, "Source tables to exclude from copying.")
 	create.Flags().BoolVar(&createOptions.NoRoutingRules, "no-routing-rules", false, "(Advanced) Do not create routing rules while creating the workflow. See the reference documentation for limitations if you use this flag.")
 	create.Flags().BoolVar(&createOptions.AtomicCopy, "atomic-copy", false, "(EXPERIMENTAL) A single copy phase is run for all tables from the source. Use this, for example, if your source keyspace has tables which use foreign key constraints.")
-	create.Flags().StringVar(&createOptions.WorkflowOptions.TenantId, "tenant-id", "", "(EXPERIMENTAL) The tenant ID to use for the MoveTables workflow into a multi-tenant keyspace.")
-	create.Flags().StringVar(&createOptions.WorkflowOptions.SourceKeyspaceAlias, "source-keyspace-alias", "", "(EXPERIMENTAL) Used currently only for multi-tenant migrations. This value will be used instead of the source keyspace name in the keyspace routing rules.")
+	create.Flags().StringVar(&createOptions.WorkflowOptions.TenantId, "tenant-id", "", "(EXPERIMENTAL: Multi-tenant migrations only) The tenant ID to use for the MoveTables workflow into a multi-tenant keyspace.")
 	create.Flags().BoolVar(&createOptions.WorkflowOptions.StripShardedAutoIncrement, "remove-sharded-auto-increment", true, "If moving the table(s) to a sharded keyspace, remove any auto_increment clauses when copying the schema to the target as sharded keyspaces should rely on either user/application generated values or Vitess sequences to ensure uniqueness.")
+	create.Flags().StringSliceVar(&createOptions.WorkflowOptions.Shards, "shards", nil, "(EXPERIMENTAL: Multi-tenant migrations only) Specify that vreplication streams should only be created on this subset of target shards. Warning: you should first ensure that all rows on the source route to the specified subset of target shards using your VIndex of choice or you could lose data during the migration.")
 	base.AddCommand(create)
 
 	opts := &common.SubCommandsOpts{

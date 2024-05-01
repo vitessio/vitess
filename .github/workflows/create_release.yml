@@ -25,7 +25,7 @@ jobs:
     - name: Setup node
       uses: actions/setup-node@v4
       with:
-        node-version: '18.16.0'
+        node-version: '20.12.2'
 
     - name: Tune the OS
       run: |

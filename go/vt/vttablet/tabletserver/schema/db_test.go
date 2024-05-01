@@ -898,7 +898,7 @@ func TestReloadDataInDB(t *testing.T) {
 				db.AddRejectedQuery(query, errorToThrow)
 			}
 
-			err = reloadDataInDB(context.Background(), conn, tc.altered, tc.created, tc.dropped, sqlparser.NewTestParser())
+			err = reloadDataInDB(context.Background(), conn, tc.altered, tc.created, tc.dropped, false, sqlparser.NewTestParser())
 			if tc.expectedError != "" {
 				require.ErrorContains(t, err, tc.expectedError)
 				return

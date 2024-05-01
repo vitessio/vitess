@@ -588,7 +588,7 @@ func TestTxEngineFailReserve(t *testing.T) {
 
 	nonExistingID := int64(42)
 	_, err = te.Reserve(ctx, options, nonExistingID, nil)
-	assert.EqualError(t, err, "transaction 42: not found")
+	assert.EqualError(t, err, "transaction 42: not found (potential transaction timeout)")
 
 	txID, _, _, err := te.Begin(ctx, nil, 0, nil, options)
 	require.NoError(t, err)

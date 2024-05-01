@@ -74,14 +74,14 @@ func (pt *probeTable) hashCodeForRow(inputRow sqltypes.Row) (vthash.Hash, error)
 			return vthash.Hash{}, vterrors.VT13001("index out of range in row when creating the DISTINCT hash code")
 		}
 		col := inputRow[checkCol.Col]
-		err := evalengine.NullsafeHashcode128(&hasher, col, checkCol.Type.Collation(), checkCol.Type.Type(), pt.sqlmode)
+		err := evalengine.NullsafeHashcode128(&hasher, col, checkCol.Type.Collation(), checkCol.Type.Type(), pt.sqlmode, checkCol.Type.Values())
 		if err != nil {
 			if err != evalengine.UnsupportedCollationHashError || checkCol.WsCol == nil {
 				return vthash.Hash{}, err
 			}
 			checkCol = checkCol.SwitchToWeightString()
 			pt.checkCols[i] = checkCol
-			err = evalengine.NullsafeHashcode128(&hasher, inputRow[checkCol.Col], checkCol.Type.Collation(), checkCol.Type.Type(), pt.sqlmode)
+			err = evalengine.NullsafeHashcode128(&hasher, inputRow[checkCol.Col], checkCol.Type.Collation(), checkCol.Type.Type(), pt.sqlmode, checkCol.Type.Values())
 			if err != nil {
 				return vthash.Hash{}, err
 			}

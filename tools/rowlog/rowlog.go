@@ -496,7 +496,7 @@ func getPosition(ctx context.Context, server, keyspace, shard string) (string, e
 }
 
 func execVtctl(ctx context.Context, server string, args []string) ([]string, error) {
-	client, err := vtctlclient.New(server)
+	client, err := vtctlclient.New(ctx, server)
 	if err != nil {
 		fmt.Println(err)
 		return nil, err

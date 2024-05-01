@@ -19,10 +19,10 @@ package union
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
-
-	"github.com/stretchr/testify/require"
 )
 
 func start(t *testing.T) (utils.MySQLCompare, func()) {
@@ -130,6 +130,71 @@ group by
 order by
 	l_returnflag,
 	l_linestatus;`,
+		},
+		{
+			name: "Q11",
+			query: `select
+	ps_partkey,
+	sum(ps_supplycost * ps_availqty) as value
+from
+	partsupp,
+	supplier,
+	nation
+where
+	ps_suppkey = s_suppkey
+	and s_nationkey = n_nationkey
+	and n_name = 'MOZAMBIQUE'
+group by
+	ps_partkey having
+		sum(ps_supplycost * ps_availqty) > (
+			select
+				sum(ps_supplycost * ps_availqty) * 0.0001000000
+			from
+				partsupp,
+				supplier,
+				nation
+			where
+				ps_suppkey = s_suppkey
+				and s_nationkey = n_nationkey
+				and n_name = 'MOZAMBIQUE'
+		)
+order by
+	value desc;`,
+		},
+		{
+			name: "Q14 without decimal literal",
+			query: `select sum(case
+               when p_type like 'PROMO%'
+                   then l_extendedprice * (1 - l_discount)
+               else 0
+    end) / sum(l_extendedprice * (1 - l_discount)) as promo_revenue
+from lineitem,
+     part
+where l_partkey = p_partkey
+  and l_shipdate >= '1996-12-01'
+  and l_shipdate < date_add('1996-12-01', interval '1' month);`,
+		},
+		{
+			name: "Q14 without case",
+			query: `select 100.00 * sum(l_extendedprice * (1 - l_discount)) / sum(l_extendedprice * (1 - l_discount)) as promo_revenue
+from lineitem,
+     part
+where l_partkey = p_partkey
+  and l_shipdate >= '1996-12-01'
+  and l_shipdate < date_add('1996-12-01', interval '1' month);`,
+		},
+		{
+			name: "Q14",
+			query: `select 100.00 * sum(case
+                        when p_type like 'PROMO%'
+                            then l_extendedprice * (1 - l_discount)
+                        else 0
+    end) / sum(l_extendedprice * (1 - l_discount)) as promo_revenue
+from lineitem,
+     part
+where l_partkey = p_partkey
+  and l_shipdate >= '1996-12-01'
+  and l_shipdate < date_add('1996-12-01', interval '1' month);`,
 		},
 	}
 

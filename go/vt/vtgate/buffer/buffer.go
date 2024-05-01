@@ -164,6 +164,10 @@ func New(cfg *Config) *Buffer {
 	}
 }
 
+func (b *Buffer) GetConfig() *Config {
+	return b.config
+}
+
 // WaitForFailoverEnd blocks until a pending buffering due to a failover for
 // keyspace/shard is over.
 // If there is no ongoing failover, "err" is checked. If it's caused by a

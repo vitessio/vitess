@@ -135,19 +135,10 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			),
 			0
 		) AS count_replicas_failing_to_connect_to_primary,
-		MIN(primary_instance.replication_depth) AS replication_depth,
-		MIN(
-			primary_instance.replica_sql_running = 1
-			AND primary_instance.replica_io_running = 0
-			AND primary_instance.last_io_error like '%%error %%connecting to master%%'
-		) AS is_failing_to_connect_to_primary,
 		MIN(
 			primary_instance.replica_sql_running = 0
 			OR primary_instance.replica_io_running = 0
 		) AS replication_stopped,
-		MIN(
-			primary_instance.binlog_server
-		) AS is_binlog_server,
 		MIN(
 			primary_instance.supports_oracle_gtid
 		) AS supports_oracle_gtid,
@@ -340,11 +331,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		a.CountReplicas = m.GetUint("count_replicas")
 		a.CountValidReplicas = m.GetUint("count_valid_replicas")
 		a.CountValidReplicatingReplicas = m.GetUint("count_valid_replicating_replicas")
-		a.CountReplicasFailingToConnectToPrimary = m.GetUint("count_replicas_failing_to_connect_to_primary")
-		a.ReplicationDepth = m.GetUint("replication_depth")
-		a.IsFailingToConnectToPrimary = m.GetBool("is_failing_to_connect_to_primary")
 		a.ReplicationStopped = m.GetBool("replication_stopped")
-		a.IsBinlogServer = m.GetBool("is_binlog_server")
 		a.ErrantGTID = m.GetString("gtid_errant")
 
 		countValidOracleGTIDReplicas := m.GetUint("count_valid_oracle_gtid_replicas")
@@ -377,8 +364,8 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		a.IsReadOnly = m.GetUint("read_only") == 1
 
 		if !a.LastCheckValid {
-			analysisMessage := fmt.Sprintf("analysis: Alias: %+v, Keyspace: %+v, Shard: %+v, IsPrimary: %+v, LastCheckValid: %+v, LastCheckPartialSuccess: %+v, CountReplicas: %+v, CountValidReplicas: %+v, CountValidReplicatingReplicas: %+v, CountLaggingReplicas: %+v, CountDelayedReplicas: %+v, CountReplicasFailingToConnectToPrimary: %+v",
-				a.AnalyzedInstanceAlias, a.ClusterDetails.Keyspace, a.ClusterDetails.Shard, a.IsPrimary, a.LastCheckValid, a.LastCheckPartialSuccess, a.CountReplicas, a.CountValidReplicas, a.CountValidReplicatingReplicas, a.CountLaggingReplicas, a.CountDelayedReplicas, a.CountReplicasFailingToConnectToPrimary,
+			analysisMessage := fmt.Sprintf("analysis: Alias: %+v, Keyspace: %+v, Shard: %+v, IsPrimary: %+v, LastCheckValid: %+v, LastCheckPartialSuccess: %+v, CountReplicas: %+v, CountValidReplicas: %+v, CountValidReplicatingReplicas: %+v, CountLaggingReplicas: %+v, CountDelayedReplicas: %+v",
+				a.AnalyzedInstanceAlias, a.ClusterDetails.Keyspace, a.ClusterDetails.Shard, a.IsPrimary, a.LastCheckValid, a.LastCheckPartialSuccess, a.CountReplicas, a.CountValidReplicas, a.CountValidReplicatingReplicas, a.CountLaggingReplicas, a.CountDelayedReplicas,
 			)
 			if util.ClearToLog("analysis_dao", analysisMessage) {
 				log.Infof(analysisMessage)
@@ -507,11 +494,6 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			a.Analysis = UnreachablePrimary
 			a.Description = "Primary cannot be reached by vtorc but it has replicating replicas; possibly a network/host issue"
 			//
-		} else if a.IsPrimary && !a.LastCheckValid && a.LastCheckPartialSuccess && a.CountReplicasFailingToConnectToPrimary > 0 && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas > 0 {
-			// there's partial success, but also at least one replica is failing to connect to primary
-			a.Analysis = UnreachablePrimary
-			a.Description = "Primary cannot be reached by vtorc but it has replicating replicas; possibly a network/host issue"
-			//
 		} else if a.IsPrimary && a.SemiSyncPrimaryEnabled && a.SemiSyncPrimaryStatus && a.SemiSyncPrimaryWaitForReplicaCount > 0 && a.SemiSyncPrimaryClients < a.SemiSyncPrimaryWaitForReplicaCount {
 			if isStaleBinlogCoordinates {
 				a.Analysis = LockedSemiSyncPrimary
@@ -535,10 +517,6 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		} else if a.IsPrimary && a.LastCheckValid && a.CountReplicas > 1 && a.CountValidReplicas < a.CountReplicas && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas == 0 {
 			a.Analysis = AllPrimaryReplicasNotReplicatingOrDead
 			a.Description = "Primary is reachable but none of its replicas is replicating"
-			//
-		} else if a.IsBinlogServer && a.IsFailingToConnectToPrimary {
-			a.Analysis = BinlogServerFailingToConnectToPrimary
-			a.Description = "Binlog server is unable to connect to its primary"
 			//
 		}
 		//		 else if a.IsPrimary && a.CountReplicas == 0 {

@@ -228,6 +228,7 @@ func NewColumn(offset int, typ Type, original sqlparser.Expr) *Column {
 		Collation:         typedCoercionCollation(typ.Type(), typ.Collation()),
 		Original:          original,
 		Nullable:          typ.nullable,
+		Values:            typ.values,
 		dynamicTypeOffset: -1,
 	}
 }

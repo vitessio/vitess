@@ -54,6 +54,14 @@ esac
 # Output per line: <full Go package name> <all _test.go files in the package>*
 packages_with_tests=$(go list -f '{{if len .TestGoFiles}}{{.ImportPath}} {{join .TestGoFiles " "}}{{end}}{{if len .XTestGoFiles}}{{.ImportPath}} {{join .XTestGoFiles " "}}{{end}}' ./go/... | sort)
 
+if [[ "$VTEVALENGINETEST" == "1" ]]; then
+  packages_with_tests=$(echo "$packages_with_tests" | grep "evalengine")
+fi
+
+if [[ "$VTEVALENGINETEST" == "0" ]]; then
+  packages_with_tests=$(echo "$packages_with_tests" | grep -v "evalengine")
+fi
+
 # Flaky tests have the suffix "_flaky_test.go".
 # Exclude endtoend tests
 all_except_flaky_tests=$(echo "$packages_with_tests" | grep -vE ".+ .+_flaky_test\.go" | cut -d" " -f1 | grep -v "endtoend")

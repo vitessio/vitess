@@ -17,6 +17,7 @@ limitations under the License.
 package datetime
 
 import (
+	"strings"
 	"time"
 )
 
@@ -287,3 +288,12 @@ func parseNanoseconds[bytes []byte | string](value bytes, nbytes int) (ns int, l
 const (
 	durationPerDay = 24 * time.Hour
 )
+
+// SizeAndScaleFromString
+func SizeFromString(s string) int32 {
+	idx := strings.LastIndex(s, ".")
+	if idx == -1 {
+		return 0
+	}
+	return int32(len(s[idx+1:]))
+}

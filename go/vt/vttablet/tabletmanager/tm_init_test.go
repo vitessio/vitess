@@ -379,9 +379,9 @@ func TestCheckPrimaryShip(t *testing.T) {
 	fakeMysql := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
 	fakeMysql.SetReplicationSourceInputs = append(fakeMysql.SetReplicationSourceInputs, fmt.Sprintf("%v:%v", otherTablet.MysqlHostname, otherTablet.MysqlPort))
 	fakeMysql.ExpectedExecuteSuperQueryList = []string{
-		"STOP SLAVE",
-		"FAKE SET MASTER",
-		"START SLAVE",
+		"STOP REPLICA",
+		"FAKE SET SOURCE",
+		"START REPLICA",
 	}
 	err = tm.Start(tablet, nil)
 	require.NoError(t, err)
@@ -925,8 +925,6 @@ func grantAllPrivilegesToUser(t *testing.T, connParams mysql.ConnParams, testUse
 	_, err = conn.ExecuteFetch(fmt.Sprintf(`GRANT ALL ON *.* TO '%v'@'localhost'`, testUser), 1000, false)
 	require.NoError(t, err)
 	_, err = conn.ExecuteFetch(fmt.Sprintf(`GRANT GRANT OPTION ON *.* TO '%v'@'localhost'`, testUser), 1000, false)
-	require.NoError(t, err)
-	_, err = conn.ExecuteFetch("FLUSH PRIVILEGES", 1000, false)
 	require.NoError(t, err)
 	conn.Close()
 }

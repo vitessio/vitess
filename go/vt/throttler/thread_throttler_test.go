@@ -19,6 +19,8 @@ package throttler
 import (
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestThrottle_NoBurst(t *testing.T) {
@@ -28,11 +30,10 @@ func TestThrottle_NoBurst(t *testing.T) {
 	// 1. This means that in any time interval of length t seconds, the throttler should
 	// not allow more than floor(2*t+1) requests. For example, in the interval [1500ms, 1501ms], of
 	// length 1ms, we shouldn't be able to send more than floor(2*10^-3+1)=1 requests.
-	if gotBackoff := tt.throttle(sinceZero(1500 * time.Millisecond)); gotBackoff != NotThrottled {
-		t.Fatalf("throttler should not have throttled us: backoff = %v", gotBackoff)
-	}
+	gotBackoff := tt.throttle(sinceZero(1500 * time.Millisecond))
+	require.Equal(t, NotThrottled, gotBackoff, "throttler should not have throttled us")
+
 	wantBackoff := 499 * time.Millisecond
-	if gotBackoff := tt.throttle(sinceZero(1501 * time.Millisecond)); gotBackoff != wantBackoff {
-		t.Fatalf("throttler should have throttled us. got = %v, want = %v", gotBackoff, wantBackoff)
-	}
+	gotBackoff = tt.throttle(sinceZero(1501 * time.Millisecond))
+	require.Equal(t, wantBackoff, gotBackoff, "throttler should have throttled us")
 }

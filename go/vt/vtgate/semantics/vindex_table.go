@@ -76,8 +76,8 @@ func (v *VindexTable) canShortCut() shortCut {
 }
 
 // GetColumns implements the TableInfo interface
-func (v *VindexTable) getColumns() []ColumnInfo {
-	return v.Table.getColumns()
+func (v *VindexTable) getColumns(ignoreInvisbleCol bool) []ColumnInfo {
+	return v.Table.getColumns(ignoreInvisbleCol)
 }
 
 // IsInfSchema implements the TableInfo interface

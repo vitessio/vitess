@@ -130,6 +130,7 @@ jobs:
         # which musn't be more than 107 characters long.
         export VTDATAROOT="/tmp/"
         export NOVTADMINBUILD=1
+        export VTEVALENGINETEST="0"
 
         eatmydata -- make unit_test_race | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 

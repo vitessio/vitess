@@ -235,6 +235,7 @@ const (
 	ERUnknownTimeZone              = ErrorCode(1298)
 	ERInvalidCharacterString       = ErrorCode(1300)
 	ERQueryInterrupted             = ErrorCode(1317)
+	ERViewWrongList                = ErrorCode(1353)
 	ERTruncatedWrongValueForField  = ErrorCode(1366)
 	ERIllegalValueForType          = ErrorCode(1367)
 	ERDataTooLong                  = ErrorCode(1406)

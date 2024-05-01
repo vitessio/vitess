@@ -1333,6 +1333,17 @@ func TestCreateTableDiff(t *testing.T) {
 			},
 		},
 		{
+			name:     "change partitioning range: statements, drop middle",
+			from:     "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
+			to:       "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p3 values less than (30))",
+			rotation: RangeRotationDistinctStatements,
+			diff:     "alter table t1 drop partition p2",
+			cdiff:    "ALTER TABLE `t1` DROP PARTITION `p2`",
+			textdiffs: []string{
+				"- PARTITION `p2` VALUES LESS THAN (20),",
+			},
+		},
+		{
 			name:     "change partitioning range: statements, add",
 			from:     "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20))",
 			to:       "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
@@ -1344,12 +1355,12 @@ func TestCreateTableDiff(t *testing.T) {
 			},
 		},
 		{
-			name:     "change partitioning range: statements, multiple drops",
+			name:     "change partitioning range: statements, multiple drops, distinct",
 			from:     "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
 			to:       "create table t1 (id int primary key) partition by range (id) (partition p3 values less than (30))",
 			rotation: RangeRotationDistinctStatements,
-			diffs:    []string{"alter table t1 drop partition p1", "alter table t1 drop partition p2"},
-			cdiffs:   []string{"ALTER TABLE `t1` DROP PARTITION `p1`", "ALTER TABLE `t1` DROP PARTITION `p2`"},
+			diffs:    []string{"alter table t1 drop partition p1, p2"},
+			cdiffs:   []string{"ALTER TABLE `t1` DROP PARTITION `p1`, `p2`"},
 			textdiffs: []string{
 				"-(PARTITION `p1` VALUES LESS THAN (10),",
 				"- PARTITION `p2` VALUES LESS THAN (20),",
@@ -1392,8 +1403,8 @@ func TestCreateTableDiff(t *testing.T) {
 			from:     "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
 			to:       "create table t1 (id int primary key, i int) partition by range (id) (partition p3 values less than (30))",
 			rotation: RangeRotationDistinctStatements,
-			diffs:    []string{"alter table t1 add column i int", "alter table t1 drop partition p1", "alter table t1 drop partition p2"},
-			cdiffs:   []string{"ALTER TABLE `t1` ADD COLUMN `i` int", "ALTER TABLE `t1` DROP PARTITION `p1`", "ALTER TABLE `t1` DROP PARTITION `p2`"},
+			diffs:    []string{"alter table t1 add column i int", "alter table t1 drop partition p1, p2"},
+			cdiffs:   []string{"ALTER TABLE `t1` ADD COLUMN `i` int", "ALTER TABLE `t1` DROP PARTITION `p1`, `p2`"},
 			textdiffs: []string{
 				"+	`i` int",
 				"-(PARTITION `p1` VALUES LESS THAN (10),",
@@ -1438,7 +1449,7 @@ func TestCreateTableDiff(t *testing.T) {
 			},
 		},
 		{
-			name:     "change partitioning range: ignore rotate, not a rotation",
+			name:     "change partitioning range: not a rotation, ignore",
 			from:     "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
 			to:       "create table t1 (id int primary key) partition by range (id) (partition p2 values less than (25), partition p3 values less than (30), partition p4 values less than (40))",
 			rotation: RangeRotationIgnore,
@@ -1456,43 +1467,83 @@ func TestCreateTableDiff(t *testing.T) {
 			},
 		},
 		{
-			name:     "change partitioning range: ignore rotate, not a rotation 2",
+			name:     "change partitioning range: not a rotation, ignore 2",
 			from:     "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
-			to:       "create table t1 (id int primary key) partition by range (id) (partition p2 values less than (20), partition p3 values less than (35), partition p4 values less than (40))",
+			to:       "create table t1 (id int primary key) partition by range (id) (partition p2 values less than (25), partition p3 values less than (30), partition p4 values less than (40))",
 			rotation: RangeRotationIgnore,
-			diff:     "alter table t1 \npartition by range (id)\n(partition p2 values less than (20),\n partition p3 values less than (35),\n partition p4 values less than (40))",
-			cdiff:    "ALTER TABLE `t1` \nPARTITION BY RANGE (`id`)\n(PARTITION `p2` VALUES LESS THAN (20),\n PARTITION `p3` VALUES LESS THAN (35),\n PARTITION `p4` VALUES LESS THAN (40))",
+			diff:     "alter table t1 \npartition by range (id)\n(partition p2 values less than (25),\n partition p3 values less than (30),\n partition p4 values less than (40))",
+			cdiff:    "ALTER TABLE `t1` \nPARTITION BY RANGE (`id`)\n(PARTITION `p2` VALUES LESS THAN (25),\n PARTITION `p3` VALUES LESS THAN (30),\n PARTITION `p4` VALUES LESS THAN (40))",
 			textdiffs: []string{
 				"-PARTITION BY RANGE (`id`)",
 				"-(PARTITION `p1` VALUES LESS THAN (10),",
 				"- PARTITION `p2` VALUES LESS THAN (20),",
 				"- PARTITION `p3` VALUES LESS THAN (30))",
 				"+PARTITION BY RANGE (`id`)",
-				"+(PARTITION `p2` VALUES LESS THAN (20)",
+				"+(PARTITION `p2` VALUES LESS THAN (25)",
+				"+ PARTITION `p3` VALUES LESS THAN (30),",
+				"+ PARTITION `p4` VALUES LESS THAN (40))",
+			},
+		},
+		{
+			name:     "change partitioning range: complex rotate, ignore",
+			from:     "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
+			to:       "create table t1 (id int primary key) partition by range (id) (partition p2 values less than (20), partition p3 values less than (35), partition p4 values less than (40))",
+			rotation: RangeRotationIgnore,
+		},
+		{
+			name:     "change partitioning range: complex rotate, distinct",
+			from:     "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
+			to:       "create table t1 (id int primary key) partition by range (id) (partition p2 values less than (20), partition p3 values less than (35), partition p4 values less than (40))",
+			rotation: RangeRotationDistinctStatements,
+			diffs:    []string{"alter table t1 drop partition p1, p3", "alter table t1 add partition (partition p3 values less than (35))", "alter table t1 add partition (partition p4 values less than (40))"},
+			cdiffs:   []string{"ALTER TABLE `t1` DROP PARTITION `p1`, `p3`", "ALTER TABLE `t1` ADD PARTITION (PARTITION `p3` VALUES LESS THAN (35))", "ALTER TABLE `t1` ADD PARTITION (PARTITION `p4` VALUES LESS THAN (40))"},
+			textdiffs: []string{
+				"-(PARTITION `p1` VALUES LESS THAN (10),",
+				"- PARTITION `p3` VALUES LESS THAN (30))",
 				"+ PARTITION `p3` VALUES LESS THAN (35),",
 				"+ PARTITION `p4` VALUES LESS THAN (40))",
 			},
 		},
 		{
-			name:     "change partitioning range: ignore rotate, not a rotation 3",
+			name:     "change partitioning range: complex rotate 2, ignore",
 			from:     "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
 			to:       "create table t1 (id int primary key) partition by range (id) (partition p2 values less than (20), partition pX values less than (30), partition p4 values less than (40))",
 			rotation: RangeRotationIgnore,
-			diff:     "alter table t1 \npartition by range (id)\n(partition p2 values less than (20),\n partition pX values less than (30),\n partition p4 values less than (40))",
-			cdiff:    "ALTER TABLE `t1` \nPARTITION BY RANGE (`id`)\n(PARTITION `p2` VALUES LESS THAN (20),\n PARTITION `pX` VALUES LESS THAN (30),\n PARTITION `p4` VALUES LESS THAN (40))",
+		},
+		{
+			name:     "change partitioning range: complex rotate 2, distinct",
+			from:     "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
+			to:       "create table t1 (id int primary key) partition by range (id) (partition p2 values less than (20), partition pX values less than (30), partition p4 values less than (40))",
+			rotation: RangeRotationDistinctStatements,
+			diffs:    []string{"alter table t1 drop partition p1, p3", "alter table t1 add partition (partition pX values less than (30))", "alter table t1 add partition (partition p4 values less than (40))"},
+			cdiffs:   []string{"ALTER TABLE `t1` DROP PARTITION `p1`, `p3`", "ALTER TABLE `t1` ADD PARTITION (PARTITION `pX` VALUES LESS THAN (30))", "ALTER TABLE `t1` ADD PARTITION (PARTITION `p4` VALUES LESS THAN (40))"},
+			textdiffs: []string{
+				"-(PARTITION `p1` VALUES LESS THAN (10),",
+				"- PARTITION `p3` VALUES LESS THAN (30))",
+				"+ PARTITION `pX` VALUES LESS THAN (30),",
+				"+ PARTITION `p4` VALUES LESS THAN (40))",
+			},
+		},
+		{
+			name:     "change partitioning range: not a rotation",
+			from:     "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
+			to:       "create table t1 (id int primary key) partition by range (id) (partition p2 values less than (25), partition p3 values less than (30), partition p4 values less than (40))",
+			rotation: RangeRotationDistinctStatements,
+			diff:     "alter table t1 \npartition by range (id)\n(partition p2 values less than (25),\n partition p3 values less than (30),\n partition p4 values less than (40))",
+			cdiff:    "ALTER TABLE `t1` \nPARTITION BY RANGE (`id`)\n(PARTITION `p2` VALUES LESS THAN (25),\n PARTITION `p3` VALUES LESS THAN (30),\n PARTITION `p4` VALUES LESS THAN (40))",
 			textdiffs: []string{
 				"-PARTITION BY RANGE (`id`)",
 				"-(PARTITION `p1` VALUES LESS THAN (10),",
 				"- PARTITION `p2` VALUES LESS THAN (20),",
 				"- PARTITION `p3` VALUES LESS THAN (30))",
 				"+PARTITION BY RANGE (`id`)",
-				"+(PARTITION `p2` VALUES LESS THAN (20)",
-				"+ PARTITION `pX` VALUES LESS THAN (30),",
+				"+(PARTITION `p2` VALUES LESS THAN (25)",
+				"+ PARTITION `p3` VALUES LESS THAN (30),",
 				"+ PARTITION `p4` VALUES LESS THAN (40))",
 			},
 		},
 		{
-			name:     "change partitioning range: ignore rotate, not a rotation 4",
+			name:     "change partitioning range: ignore rotate, not a rotation 2",
 			from:     "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
 			to:       "create table t1 (id int primary key) partition by range (id) (partition pX values less than (20), partition p3 values less than (30), partition p4 values less than (40))",
 			rotation: RangeRotationIgnore,
@@ -2036,8 +2087,12 @@ func TestCreateTableDiff(t *testing.T) {
 				if len(ts.diffs) > 0 {
 
 					allSubsequentDiffs := AllSubsequent(alter)
-					require.Equal(t, len(ts.diffs), len(allSubsequentDiffs))
-					require.Equal(t, len(ts.cdiffs), len(allSubsequentDiffs))
+					allSubsequentDiffsStatements := []string{}
+					for _, d := range allSubsequentDiffs {
+						allSubsequentDiffsStatements = append(allSubsequentDiffsStatements, d.CanonicalStatementString())
+					}
+					require.Equal(t, len(ts.diffs), len(allSubsequentDiffs), allSubsequentDiffsStatements)
+					require.Equal(t, len(ts.cdiffs), len(allSubsequentDiffs), allSubsequentDiffsStatements)
 					for i := range ts.diffs {
 						assert.Equal(t, ts.diffs[i], allSubsequentDiffs[i].StatementString())
 						assert.Equal(t, ts.cdiffs[i], allSubsequentDiffs[i].CanonicalStatementString())

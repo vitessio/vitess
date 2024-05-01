@@ -1,30 +1,22 @@
 # This file is executed immediately after initializing a fresh data directory.
 
 ###############################################################################
-# WARNING: This sql is *NOT* safe for production use,
-#          as it contains default well-known users and passwords.
-#          Care should be taken to change these users and passwords
-#          for production.
-###############################################################################
-
-###############################################################################
 # Equivalent of mysql_secure_installation
 ###############################################################################
 # We need to ensure that super_read_only is disabled so that we can execute
 # these commands. Note that disabling it does NOT disable read_only.
 # We save the current value so that we only re-enable it at the end if it was
 # enabled before.
+
 SET @original_super_read_only=IF(@@global.super_read_only=1, 'ON', 'OFF');
 SET GLOBAL super_read_only='OFF';
 
 # Changes during the init db should not make it to the binlog.
 # They could potentially create errant transactions on replicas.
 SET sql_log_bin = 0;
-# Remove anonymous users.
-DELETE FROM mysql.user WHERE User = '';
 
-# Disable remote root access (only allow UNIX socket).
-DELETE FROM mysql.user WHERE User = 'root' AND Host != 'localhost';
+# Remove anonymous users & disable remote root access (only allow UNIX socket).
+DROP USER IF EXISTS ''@'%', ''@'localhost', 'root'@'%';
 
 # Remove test database.
 DROP DATABASE IF EXISTS test;
@@ -77,8 +69,6 @@ GRANT SELECT, PROCESS, SUPER, REPLICATION CLIENT, RELOAD
   ON *.* TO 'vt_monitoring'@'localhost';
 GRANT SELECT, UPDATE, DELETE, DROP
   ON performance_schema.* TO 'vt_monitoring'@'localhost';
-
-FLUSH PRIVILEGES;
 
 RESET SLAVE ALL;
 RESET MASTER;

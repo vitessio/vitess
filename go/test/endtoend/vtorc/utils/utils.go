@@ -896,16 +896,40 @@ func AddSemiSyncKeyspace(t *testing.T, clusterInfo *VTOrcClusterInfo) {
 
 // IsSemiSyncSetupCorrectly checks that the semi-sync is setup correctly on the given vttablet
 func IsSemiSyncSetupCorrectly(t *testing.T, tablet *cluster.Vttablet, semiSyncVal string) bool {
-	dbVar, err := tablet.VttabletProcess.GetDBVar("rpl_semi_sync_slave_enabled", "")
+	semisyncType, err := tablet.VttabletProcess.SemiSyncExtensionLoaded()
 	require.NoError(t, err)
-	return semiSyncVal == dbVar
+	switch semisyncType {
+	case mysql.SemiSyncTypeSource:
+		dbVar, err := tablet.VttabletProcess.GetDBVar("rpl_semi_sync_replica_enabled", "")
+		require.NoError(t, err)
+		return semiSyncVal == dbVar
+	case mysql.SemiSyncTypeMaster:
+		dbVar, err := tablet.VttabletProcess.GetDBVar("rpl_semi_sync_slave_enabled", "")
+		require.NoError(t, err)
+		return semiSyncVal == dbVar
+	default:
+		assert.Fail(t, "semisync extension not loaded")
+		return false
+	}
 }
 
 // IsPrimarySemiSyncSetupCorrectly checks that the priamry side semi-sync is setup correctly on the given vttablet
 func IsPrimarySemiSyncSetupCorrectly(t *testing.T, tablet *cluster.Vttablet, semiSyncVal string) bool {
-	dbVar, err := tablet.VttabletProcess.GetDBVar("rpl_semi_sync_master_enabled", "")
+	semisyncType, err := tablet.VttabletProcess.SemiSyncExtensionLoaded()
 	require.NoError(t, err)
-	return semiSyncVal == dbVar
+	switch semisyncType {
+	case mysql.SemiSyncTypeSource:
+		dbVar, err := tablet.VttabletProcess.GetDBVar("rpl_semi_sync_source_enabled", "")
+		require.NoError(t, err)
+		return semiSyncVal == dbVar
+	case mysql.SemiSyncTypeMaster:
+		dbVar, err := tablet.VttabletProcess.GetDBVar("rpl_semi_sync_master_enabled", "")
+		require.NoError(t, err)
+		return semiSyncVal == dbVar
+	default:
+		assert.Fail(t, "semisync extension not loaded")
+		return false
+	}
 }
 
 // WaitForReadOnlyValue waits for the read_only global variable to reach the provided value
@@ -1113,4 +1137,17 @@ func DisableGlobalRecoveries(t *testing.T, vtorc *cluster.VTOrcProcess) {
 	require.NoError(t, err)
 	assert.Equal(t, 200, status)
 	assert.Equal(t, "Global recoveries disabled\n", resp)
+}
+
+// SemiSyncExtensionLoaded is used to check which semisync extension is loaded.
+func SemiSyncExtensionLoaded(t *testing.T, tablet *cluster.Vttablet) (mysql.SemiSyncType, error) {
+	// Get Connection
+	tabletParams := getMysqlConnParam(tablet, "")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	conn, err := mysql.Connect(ctx, &tabletParams)
+	require.Nil(t, err)
+	defer conn.Close()
+
+	return conn.SemiSyncExtensionLoaded()
 }

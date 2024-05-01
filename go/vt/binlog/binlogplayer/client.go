@@ -53,7 +53,7 @@ type BinlogTransactionStream interface {
 // Client is the interface all clients must satisfy
 type Client interface {
 	// Dial a server
-	Dial(tablet *topodatapb.Tablet) error
+	Dial(ctx context.Context, tablet *topodatapb.Tablet) error
 
 	// Close the connection
 	Close()

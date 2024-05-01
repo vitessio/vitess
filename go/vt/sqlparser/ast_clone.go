@@ -1634,8 +1634,8 @@ func CloneRefOfInsert(n *Insert) *Insert {
 	out.Partitions = ClonePartitions(n.Partitions)
 	out.Columns = CloneColumns(n.Columns)
 	out.Rows = CloneInsertRows(n.Rows)
-	out.OnDup = CloneOnDup(n.OnDup)
 	out.RowAlias = CloneRefOfRowAlias(n.RowAlias)
+	out.OnDup = CloneOnDup(n.OnDup)
 	return &out
 }
 

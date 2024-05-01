@@ -387,7 +387,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 			return fmt.Errorf("can't reset replication: %v", err)
 		}
 		// We need to switch off super_read_only before we create the database.
-		resetFunc, err := mysqld.SetSuperReadOnly(false)
+		resetFunc, err := mysqld.SetSuperReadOnly(ctx, false)
 		if err != nil {
 			return fmt.Errorf("failed to disable super_read_only during backup: %v", err)
 		}
@@ -528,7 +528,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		}
 
 		lastStatus = status
-		status, statusErr = mysqld.ReplicationStatus()
+		status, statusErr = mysqld.ReplicationStatus(ctx)
 		if statusErr != nil {
 			log.Warningf("Error getting replication status: %v", statusErr)
 			continue
@@ -560,12 +560,12 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	phase.Set(phaseNameCatchupReplication, int64(0))
 
 	// Stop replication and see where we are.
-	if err := mysqld.StopReplication(nil); err != nil {
+	if err := mysqld.StopReplication(ctx, nil); err != nil {
 		return fmt.Errorf("can't stop replication: %v", err)
 	}
 
 	// Did we make any progress?
-	status, statusErr = mysqld.ReplicationStatus()
+	status, statusErr = mysqld.ReplicationStatus(ctx)
 	if statusErr != nil {
 		return fmt.Errorf("can't get replication status: %v", err)
 	}
@@ -621,11 +621,10 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 }
 
 func resetReplication(ctx context.Context, pos replication.Position, mysqld mysqlctl.MysqlDaemon) error {
-	cmds := []string{
-		"STOP SLAVE",
-		"RESET SLAVE ALL", // "ALL" makes it forget replication source host:port.
+	if err := mysqld.StopReplication(ctx, nil); err != nil {
+		return vterrors.Wrap(err, "failed to stop replication")
 	}
-	if err := mysqld.ExecuteSuperQueryList(ctx, cmds); err != nil {
+	if err := mysqld.ResetReplicationParameters(ctx); err != nil {
 		return vterrors.Wrap(err, "failed to reset replication")
 	}
 

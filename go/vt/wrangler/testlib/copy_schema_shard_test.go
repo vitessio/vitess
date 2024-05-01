@@ -57,7 +57,7 @@ func copySchema(t *testing.T, useShardAsSource bool) {
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
-	vp := NewVtctlPipe(t, ts)
+	vp := NewVtctlPipe(ctx, t, ts)
 	defer vp.Close()
 
 	if err := ts.CreateKeyspace(context.Background(), "ks", &topodatapb.Keyspace{}); err != nil {
@@ -75,9 +75,9 @@ func copySchema(t *testing.T, useShardAsSource bool) {
 		topodatapb.TabletType_RDONLY, sourceRdonlyDb, TabletKeyspaceShard(t, "ks", "-80"))
 	sourceRdonly.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		// These 3 statements come from tablet startup
-		"STOP SLAVE",
-		"FAKE SET MASTER",
-		"START SLAVE",
+		"STOP REPLICA",
+		"FAKE SET SOURCE",
+		"START REPLICA",
 	}
 	sourceRdonly.FakeMysqlDaemon.SetReplicationSourceInputs = append(sourceRdonly.FakeMysqlDaemon.SetReplicationSourceInputs, fmt.Sprintf("%v:%v", sourcePrimary.Tablet.MysqlHostname, sourcePrimary.Tablet.MysqlPort))
 

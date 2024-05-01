@@ -438,6 +438,38 @@ func TestRebuildVSchema(t *testing.T) {
 	}
 }
 
+// TestVSchemaUDFsUpdate tests that the UDFs are updated in the VSchema.
+func TestVSchemaUDFsUpdate(t *testing.T) {
+	ks := &vindexes.Keyspace{Name: "ks", Sharded: true}
+
+	vm := &VSchemaManager{}
+	var vs *vindexes.VSchema
+	vm.subscriber = func(vschema *vindexes.VSchema, _ *VSchemaStats) {
+		vs = vschema
+		vs.ResetCreated()
+	}
+	vm.schema = &fakeSchema{udfs: []string{"udf1", "udf2"}}
+	vm.VSchemaUpdate(&vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"ks": {Sharded: true},
+		},
+	}, nil)
+
+	utils.MustMatchFn(".globalTables", ".uniqueVindexes")(t, &vindexes.VSchema{
+		RoutingRules: map[string]*vindexes.RoutingRule{},
+		Keyspaces: map[string]*vindexes.KeyspaceSchema{
+			"ks": {
+				Keyspace:       ks,
+				ForeignKeyMode: vschemapb.Keyspace_unmanaged,
+				Tables:         map[string]*vindexes.Table{},
+				Vindexes:       map[string]vindexes.Vindex{},
+				AggregateUDFs:  []string{"udf1", "udf2"},
+			},
+		},
+	}, vs)
+	utils.MustMatch(t, vs, vm.currentVschema, "currentVschema does not match Vschema")
+}
+
 func TestMarkErrorIfCyclesInFk(t *testing.T) {
 	ksName := "ks"
 	keyspace := &vindexes.Keyspace{
@@ -813,7 +845,8 @@ func makeTestSrvVSchema(ks string, sharded bool, tbls map[string]*vschemapb.Tabl
 }
 
 type fakeSchema struct {
-	t map[string]*vindexes.TableInfo
+	t    map[string]*vindexes.TableInfo
+	udfs []string
 }
 
 func (f *fakeSchema) Tables(string) map[string]*vindexes.TableInfo {
@@ -823,5 +856,6 @@ func (f *fakeSchema) Tables(string) map[string]*vindexes.TableInfo {
 func (f *fakeSchema) Views(string) map[string]sqlparser.SelectStatement {
 	return nil
 }
+func (f *fakeSchema) UDFs(string) []string { return f.udfs }
 
 var _ SchemaInfo = (*fakeSchema)(nil)

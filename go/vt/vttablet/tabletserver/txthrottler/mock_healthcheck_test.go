@@ -210,9 +210,9 @@ func (mr *MockHealthCheckMockRecorder) Subscribe() *gomock.Call {
 }
 
 // TabletConnection mocks base method.
-func (m *MockHealthCheck) TabletConnection(arg0 *topodata.TabletAlias, arg1 *query.Target) (queryservice.QueryService, error) {
+func (m *MockHealthCheck) TabletConnection(arg0 context.Context, arg1 *topodata.TabletAlias, arg2 *query.Target) (queryservice.QueryService, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "TabletConnection", arg0, arg1)
+	ret := m.ctrl.Call(m, "TabletConnection", arg0, arg1, arg2)
 	ret0, _ := ret[0].(queryservice.QueryService)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1

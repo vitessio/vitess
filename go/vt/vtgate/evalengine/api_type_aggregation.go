@@ -47,7 +47,8 @@ type typeAggregation struct {
 	blob     uint16
 	total    uint16
 
-	nullable bool
+	nullable    bool
+	scale, size int32
 }
 
 type TypeAggregator struct {
@@ -63,7 +64,7 @@ func (ta *TypeAggregator) Add(typ Type, env *collations.Environment) error {
 		return nil
 	}
 
-	ta.types.addNullable(typ.typ, typ.nullable)
+	ta.types.addNullable(typ.typ, typ.nullable, typ.size, typ.scale)
 	if err := ta.collations.add(typedCoercionCollation(typ.typ, typ.collation), env); err != nil {
 		return err
 	}
@@ -80,7 +81,7 @@ func (ta *TypeAggregator) Type() Type {
 	if ta.invalid > 0 || ta.types.empty() {
 		return Type{}
 	}
-	return NewTypeEx(ta.types.result(), ta.collations.result().Collation, ta.types.nullable, ta.size, ta.scale)
+	return NewTypeEx(ta.types.result(), ta.collations.result().Collation, ta.types.nullable, ta.size, ta.scale, nil)
 }
 
 func (ta *TypeAggregator) Field(name string) *query.Field {
@@ -95,6 +96,7 @@ func (ta *typeAggregation) empty() bool {
 func (ta *typeAggregation) addEval(e eval) {
 	var t sqltypes.Type
 	var f typeFlag
+	var size, scale int32
 	switch e := e.(type) {
 	case nil:
 		t = sqltypes.Null
@@ -102,13 +104,17 @@ func (ta *typeAggregation) addEval(e eval) {
 	case *evalBytes:
 		t = sqltypes.Type(e.tt)
 		f = e.flag
+		size = e.Size()
+		scale = e.Scale()
 	default:
 		t = e.SQLType()
+		size = e.Size()
+		scale = e.Scale()
 	}
-	ta.add(t, f)
+	ta.add(t, f, size, scale)
 }
 
-func (ta *typeAggregation) addNullable(typ sqltypes.Type, nullable bool) {
+func (ta *typeAggregation) addNullable(typ sqltypes.Type, nullable bool, size, scale int32) {
 	var flag typeFlag
 	if typ == sqltypes.HexVal || typ == sqltypes.HexNum {
 		typ = sqltypes.Binary
@@ -117,13 +123,15 @@ func (ta *typeAggregation) addNullable(typ sqltypes.Type, nullable bool) {
 	if nullable {
 		flag |= flagNullable
 	}
-	ta.add(typ, flag)
+	ta.add(typ, flag, size, scale)
 }
 
-func (ta *typeAggregation) add(tt sqltypes.Type, f typeFlag) {
+func (ta *typeAggregation) add(tt sqltypes.Type, f typeFlag, size, scale int32) {
 	if f&flagNullable != 0 {
 		ta.nullable = true
 	}
+	ta.size = max(ta.size, size)
+	ta.scale = max(ta.scale, scale)
 	switch tt {
 	case sqltypes.Float32, sqltypes.Float64:
 		ta.double++

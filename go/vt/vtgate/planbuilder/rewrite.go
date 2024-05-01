@@ -18,19 +18,18 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 type rewriter struct {
-	semTable     *semantics.SemTable
-	reservedVars *sqlparser.ReservedVars
-	err          error
+	err error
+	ctx *plancontext.PlanningContext
 }
 
-func queryRewrite(semTable *semantics.SemTable, reservedVars *sqlparser.ReservedVars, statement sqlparser.Statement) error {
+func queryRewrite(ctx *plancontext.PlanningContext, statement sqlparser.Statement) error {
 	r := rewriter{
-		semTable:     semTable,
-		reservedVars: reservedVars,
+		ctx: ctx,
 	}
 	sqlparser.Rewrite(statement, r.rewriteDown, nil)
 	return nil
@@ -39,15 +38,15 @@ func queryRewrite(semTable *semantics.SemTable, reservedVars *sqlparser.Reserved
 func (r *rewriter) rewriteDown(cursor *sqlparser.Cursor) bool {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.Select:
-		rewriteHavingClause(node)
+		r.rewriteHavingClause(node)
 	case *sqlparser.AliasedTableExpr:
 		if _, isDerived := node.Expr.(*sqlparser.DerivedTable); isDerived {
 			break
 		}
 		// find the tableSet and tableInfo that this table points to
 		// tableInfo should contain the information for the original table that the routed table points to
-		tableSet := r.semTable.TableSetFor(node)
-		tableInfo, err := r.semTable.TableInfoFor(tableSet)
+		tableSet := r.ctx.SemTable.TableSetFor(node)
+		tableInfo, err := r.ctx.SemTable.TableInfoFor(tableSet)
 		if err != nil {
 			// Fail-safe code, should never happen
 			break
@@ -77,7 +76,7 @@ func (r *rewriter) rewriteDown(cursor *sqlparser.Cursor) bool {
 	return true
 }
 
-func rewriteHavingClause(node *sqlparser.Select) {
+func (r *rewriter) rewriteHavingClause(node *sqlparser.Select) {
 	if node.Having == nil {
 		return
 	}
@@ -89,7 +88,7 @@ func rewriteHavingClause(node *sqlparser.Select) {
 	exprs := sqlparser.SplitAndExpression(nil, node.Having.Expr)
 	node.Having = nil
 	for _, expr := range exprs {
-		if sqlparser.ContainsAggregation(expr) {
+		if operators.ContainsAggr(r.ctx, expr) {
 			node.AddHaving(expr)
 		} else {
 			node.AddWhere(expr)

@@ -432,7 +432,7 @@ func (tsv *TabletServer) ReloadSchema(ctx context.Context) error {
 // changes to finish being applied.
 func (tsv *TabletServer) WaitForSchemaReset(timeout time.Duration) {
 	onSchemaChange := make(chan struct{}, 1)
-	tsv.se.RegisterNotifier("_tsv_wait", func(_ map[string]*schema.Table, _, _, _ []*schema.Table) {
+	tsv.se.RegisterNotifier("_tsv_wait", func(_ map[string]*schema.Table, _, _, _ []*schema.Table, _ bool) {
 		onSchemaChange <- struct{}{}
 	}, true)
 	defer tsv.se.UnregisterNotifier("_tsv_wait")

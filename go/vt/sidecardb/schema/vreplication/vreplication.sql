@@ -40,10 +40,8 @@ CREATE TABLE IF NOT EXISTS vreplication
     `defer_secondary_keys`  tinyint(1)       NOT NULL DEFAULT '0',
     /*
       The options column is used to store any applicable additional attributes for a vreplication workflow.
-      Current attributes (all optional) are:
+      Currently used for optional flag(s):
         - `tenant-id`: used to specify the tenant id for a multi-tenant migration. (MoveTables only)
-        - `source_keyspace_alias`: used in conjunction with `use_keyspace_routing_rules` to specify the source keyspace
-        alias which can be used in multi-tenant migrations. (optional) (MoveTables only)
      */
     `options`               json             NOT NULL,
     PRIMARY KEY (`id`),
