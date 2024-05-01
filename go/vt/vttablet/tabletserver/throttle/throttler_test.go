@@ -752,6 +752,7 @@ func TestProbesPostDisable(t *testing.T) {
 
 	probes := throttler.mysqlInventory.ClustersProbes
 
+	<-time.After(1 * time.Second) // throttler's context was cancelled, but still some functionality needs to complete
 	t.Run("probes", func(t *testing.T) {
 		assert.Equal(t, 3, len(probes)) // see fake FindAllTabletAliasesInShard above
 		localTabletFound := 0
@@ -763,7 +764,7 @@ func TestProbesPostDisable(t *testing.T) {
 				assert.NotEmpty(t, probe.Alias)
 				assert.NotNil(t, probe.Tablet)
 			}
-			assert.Zero(t, atomic.LoadInt64(&probe.QueryInProgress), probe.Alias)
+			assert.Zero(t, atomic.LoadInt64(&probe.QueryInProgress), "alias=%s", probe.Alias)
 		}
 		assert.Equal(t, 1, localTabletFound)
 	})
