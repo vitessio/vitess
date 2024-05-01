@@ -1576,7 +1576,8 @@ func (s *Server) setupInitialRoutingRules(ctx context.Context, req *vtctldatapb.
 		for _, tt := range tabletTypeSuffixes {
 			routes[sourceKeyspace+tt] = sourceKeyspace
 		}
-		if err := updateKeyspaceRoutingRule(ctx, s.ts, sourceKeyspace, routes); err != nil {
+
+		if err := updateKeyspaceRoutingRule(ctx, s.ts, sourceKeyspace, "Create", routes); err != nil {
 			return err
 		}
 		return nil

@@ -444,7 +444,8 @@ func (ts *trafficSwitcher) deleteKeyspaceRoutingRules(ctx context.Context) error
 		return nil
 	}
 	log.Infof("deleteKeyspaceRoutingRules: workflow %s.%s", ts.targetKeyspace, ts.workflow)
-	return topotools.SaveKeyspaceRoutingRulesLocked(ctx, ts.TopoServer(), "ApplyKeyspaceRoutingRules",
+	name := fmt.Sprintf("Deleting %s", ts.SourceKeyspaceName())
+	return topotools.SaveKeyspaceRoutingRulesLocked(ctx, ts.TopoServer(), name,
 		func(ctx context.Context) error {
 			krr, err := topotools.GetKeyspaceRoutingRules(ctx, ts.TopoServer())
 			if err != nil {
@@ -741,7 +742,7 @@ func (ts *trafficSwitcher) changeWriteRoute(ctx context.Context) error {
 		// For multi-tenant migrations, we can only move forward and not backwards.
 		ts.Logger().Infof("Pointing keyspace routing rules for primary to %s for workflow %s", ts.TargetKeyspaceName(), ts.workflow)
 		if err := changeKeyspaceRouting(ctx, ts.TopoServer(), []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
-			ts.SourceKeyspaceName() /* from */, ts.TargetKeyspaceName() /* to */); err != nil {
+			ts.SourceKeyspaceName() /* from */, ts.TargetKeyspaceName() /* to */, "SwitchWrites"); err != nil {
 			return err
 		}
 	} else if ts.isPartialMigration {

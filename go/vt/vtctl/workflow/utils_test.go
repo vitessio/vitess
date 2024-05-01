@@ -28,7 +28,7 @@ func TestUpdateKeyspaceRoutingRule(t *testing.T) {
 	for _, tabletType := range tabletTypeSuffixes {
 		routes["from"+tabletType] = "to"
 	}
-	err := updateKeyspaceRoutingRule(ctx, ts, "ks", routes)
+	err := updateKeyspaceRoutingRule(ctx, ts, "ks", "test", routes)
 	require.NoError(t, err)
 	rules, err := topotools.GetKeyspaceRoutingRules(ctx, ts)
 	require.NoError(t, err)
@@ -78,7 +78,7 @@ func update(t *testing.T, ts *topo.Server, id int) {
 		from := fmt.Sprintf("from%s%s", s, tabletType)
 		routes[from] = s + tabletType
 	}
-	err := updateKeyspaceRoutingRule(ctx, ts, "ks", routes)
+	err := updateKeyspaceRoutingRule(ctx, ts, "ks", "test", routes)
 	require.NoError(t, err)
 	got, err := topotools.GetKeyspaceRoutingRules(ctx, ts)
 	require.NoError(t, err)
