@@ -1167,25 +1167,24 @@ func buildSetStringValue(plan *streamerPlan, colNum int, value sqltypes.Value) (
 	if err != nil {
 		return value, fmt.Errorf("no valid integer value found for column %s in table %s, bytes: %b",
 			plan.Table.Fields[colNum].Name, plan.Table.Name, iv)
-	} else {
-		idx := 1
-		// See what bits are set in the bitmap using bitmasks.
-		for b := uint64(1); b < 1<<63; b <<= 1 {
-			if iv&b > 0 { // This bit is set and the SET's string value needs to be provided.
-				strVal, ok := plan.EnumSetValuesMap[colNum][idx]
-				// When you insert values not found in the SET (which requires disabling STRICT mode) then
-				// they are effectively pruned and ignored (not actually saved). So this should never happen.
-				if !ok {
-					return sqltypes.Value{}, fmt.Errorf("no valid integer value found for SET column %s in table %s, bytes: %b",
-						plan.Table.Fields[colNum].Name, plan.Table.Name, iv)
-				}
-				if val.Len() > 0 {
-					val.WriteByte(',')
-				}
-				val.WriteString(strVal)
+	}
+	idx := 1
+	// See what bits are set in the bitmap using bitmasks.
+	for b := uint64(1); b < 1<<63; b <<= 1 {
+		if iv&b > 0 { // This bit is set and the SET's string value needs to be provided.
+			strVal, ok := plan.EnumSetValuesMap[colNum][idx]
+			// When you insert values not found in the SET (which requires disabling STRICT mode) then
+			// they are effectively pruned and ignored (not actually saved). So this should never happen.
+			if !ok {
+				return sqltypes.Value{}, fmt.Errorf("no valid integer value found for SET column %s in table %s, bytes: %b",
+					plan.Table.Fields[colNum].Name, plan.Table.Name, iv)
 			}
-			idx++
+			if val.Len() > 0 {
+				val.WriteByte(',')
+			}
+			val.WriteString(strVal)
 		}
+		idx++
 	}
 	return sqltypes.MakeTrusted(plan.Table.Fields[colNum].Type, val.Bytes()), nil
 }
