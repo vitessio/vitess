@@ -229,9 +229,18 @@ func pushProjectionInApplyJoin(
 		rhs.explicitColumnAliases = true
 	}
 
-	// TODO: looking here
+	// We store the original join columns to reuse them.
+	originalJoinColumns := src.JoinColumns
 	src.JoinColumns = &applyJoinColumns{}
 	for idx, pe := range ap {
+		// First we check if we have already done the work to find how to push this expression.
+		// If we find it then we can directly use it. This is not just a performance improvement, but
+		// is also required for pushing a projection that is just an alias.
+		foundIdx := slices.IndexFunc(originalJoinColumns.columns, applyJoinCompare(ctx, pe.ColExpr))
+		if foundIdx != -1 {
+			src.JoinColumns.add(originalJoinColumns.columns[foundIdx])
+			continue
+		}
 		var alias string
 		if p.DT != nil && len(p.DT.Columns) > 0 {
 			if len(p.DT.Columns) <= idx {
