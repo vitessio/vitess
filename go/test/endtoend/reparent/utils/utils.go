@@ -610,7 +610,7 @@ func WaitForReplicationToStart(t *testing.T, clusterInstance *cluster.LocalProce
 
 // CheckReplicaStatus checks the replication status and asserts that the replication is stopped
 func CheckReplicaStatus(ctx context.Context, t *testing.T, tablet *cluster.Vttablet) {
-	qr := RunSQL(ctx, t, "show slave status", tablet)
+	qr := RunSQL(ctx, t, "show replica status", tablet)
 	IOThreadRunning := fmt.Sprintf("%v", qr.Rows[0][10])
 	SQLThreadRunning := fmt.Sprintf("%v", qr.Rows[0][10])
 	assert.Equal(t, IOThreadRunning, "VARCHAR(\"No\")")
@@ -765,7 +765,7 @@ func SetReplicationSourceFailed(tablet *cluster.Vttablet, prsOut string) bool {
 
 // CheckReplicationStatus checks that the replication for sql and io threads is setup as expected
 func CheckReplicationStatus(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, sqlThreadRunning bool, ioThreadRunning bool) {
-	res := RunSQL(ctx, t, "show slave status", tablet)
+	res := RunSQL(ctx, t, "show replica status", tablet)
 	if ioThreadRunning {
 		require.Equal(t, "Yes", res.Rows[0][10].ToString())
 	} else {

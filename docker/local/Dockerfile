@@ -8,7 +8,7 @@ RUN apt-get install -y sudo curl vim jq
 
 # Install dependencies
 COPY docker/utils/install_dependencies.sh /vt/dist/install_dependencies.sh
-RUN /vt/dist/install_dependencies.sh mysql57
+RUN /vt/dist/install_dependencies.sh mysql80
 
 COPY docker/local/install_local_dependencies.sh /vt/dist/install_local_dependencies.sh
 RUN /vt/dist/install_local_dependencies.sh

@@ -108,11 +108,11 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	// After this we restart the replication and enable the recoveries again.
 	err = logic.DisableRecovery()
 	require.NoError(t, err)
-	err = utils.RunSQLs(t, []string{`STOP SLAVE;`,
+	err = utils.RunSQLs(t, []string{`STOP REPLICA;`,
 		`SET GTID_NEXT="12345678-1234-1234-1234-123456789012:1";`,
 		`BEGIN;`, `COMMIT;`,
 		`SET GTID_NEXT="AUTOMATIC";`,
-		`START SLAVE;`,
+		`START REPLICA;`,
 	}, replica, "")
 	require.NoError(t, err)
 	err = logic.EnableRecovery()

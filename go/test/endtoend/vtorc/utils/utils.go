@@ -327,7 +327,7 @@ func cleanAndStartVttablet(t *testing.T, clusterInfo *VTOrcClusterInfo, vttablet
 	_, err = RunSQL(t, "DROP DATABASE IF EXISTS _vt", vttablet, "")
 	require.NoError(t, err)
 	// stop the replication
-	_, err = RunSQL(t, "STOP SLAVE", vttablet, "")
+	_, err = RunSQL(t, "STOP REPLICA", vttablet, "")
 	require.NoError(t, err)
 	// reset the binlog
 	_, err = RunSQL(t, "RESET MASTER", vttablet, "")
@@ -502,7 +502,7 @@ func WaitForReplicationToStop(t *testing.T, vttablet *cluster.Vttablet) error {
 		case <-timeout:
 			return fmt.Errorf("timedout: waiting for primary to stop replication")
 		default:
-			res, err := RunSQL(t, "SHOW SLAVE STATUS", vttablet, "")
+			res, err := RunSQL(t, "SHOW REPLICA STATUS", vttablet, "")
 			if err != nil {
 				return err
 			}
@@ -699,7 +699,7 @@ func CheckSourcePort(t *testing.T, replica *cluster.Vttablet, source *cluster.Vt
 			t.Fatal("timedout waiting for correct primary to be setup")
 			return
 		default:
-			res, err := RunSQL(t, "SHOW SLAVE STATUS", replica, "")
+			res, err := RunSQL(t, "SHOW REPLICA STATUS", replica, "")
 			require.NoError(t, err)
 
 			if len(res.Rows) != 1 {
@@ -708,7 +708,7 @@ func CheckSourcePort(t *testing.T, replica *cluster.Vttablet, source *cluster.Vt
 			}
 
 			for idx, field := range res.Fields {
-				if strings.EqualFold(field.Name, "MASTER_PORT") || strings.EqualFold(field.Name, "SOURCE_PORT") {
+				if strings.EqualFold(field.Name, "SOURCE_PORT") {
 					port, err := res.Rows[0][idx].ToInt64()
 					require.NoError(t, err)
 					if port == int64(source.MySQLPort) {

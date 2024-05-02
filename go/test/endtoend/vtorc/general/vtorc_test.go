@@ -172,7 +172,7 @@ func TestVTOrcRepairs(t *testing.T) {
 		utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.FixReplicaRecoveryName, 2)
 
 		// Stop just the IO thread on the replica
-		_, err = utils.RunSQL(t, "STOP SLAVE IO_THREAD", replica, "")
+		_, err = utils.RunSQL(t, "STOP REPLICA IO_THREAD", replica, "")
 		require.NoError(t, err)
 
 		// check replication is setup correctly
@@ -180,7 +180,7 @@ func TestVTOrcRepairs(t *testing.T) {
 		utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.FixReplicaRecoveryName, 3)
 
 		// Stop just the SQL thread on the replica
-		_, err = utils.RunSQL(t, "STOP SLAVE SQL_THREAD", replica, "")
+		_, err = utils.RunSQL(t, "STOP REPLICA SQL_THREAD", replica, "")
 		require.NoError(t, err)
 
 		// check replication is setup correctly
@@ -191,10 +191,10 @@ func TestVTOrcRepairs(t *testing.T) {
 	t.Run("ReplicationFromOtherReplica", func(t *testing.T) {
 		// point replica at otherReplica
 		changeReplicationSourceCommands := []string{
-			"STOP SLAVE",
-			"RESET SLAVE ALL",
-			fmt.Sprintf("CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='vt_repl', MASTER_AUTO_POSITION = 1", utils.Hostname, otherReplica.MySQLPort),
-			"START SLAVE",
+			"STOP REPLICA",
+			"RESET REPLICA ALL",
+			fmt.Sprintf("CHANGE REPLICATION SOURCE TO SOURCE_HOST='%s', SOURCE_PORT=%d, SOURCE_USER='vt_repl', SOURCE_AUTO_POSITION = 1", utils.Hostname, otherReplica.MySQLPort),
+			"START REPLICA",
 		}
 		err := utils.RunSQLs(t, changeReplicationSourceCommands, replica, "")
 		require.NoError(t, err)
@@ -210,10 +210,10 @@ func TestVTOrcRepairs(t *testing.T) {
 	t.Run("CircularReplication", func(t *testing.T) {
 		// change the replication source on the primary
 		changeReplicationSourceCommands := []string{
-			"STOP SLAVE",
-			"RESET SLAVE ALL",
-			fmt.Sprintf("CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='vt_repl', MASTER_AUTO_POSITION = 1", replica.VttabletProcess.TabletHostname, replica.MySQLPort),
-			"START SLAVE",
+			"STOP REPLICA",
+			"RESET REPLICA ALL",
+			fmt.Sprintf("CHANGE REPLICATION SOURCE TO SOURCE_HOST='%s', SOURCE_PORT=%d, SOURCE_USER='vt_repl', SOURCE_AUTO_POSITION = 1", replica.VttabletProcess.TabletHostname, replica.MySQLPort),
+			"START REPLICA",
 		}
 		err := utils.RunSQLs(t, changeReplicationSourceCommands, curPrimary, "")
 		require.NoError(t, err)
