@@ -60,7 +60,7 @@ type Plan struct {
 
 	// Convert any integer values seen in the binlog events for ENUM or SET
 	// columns to the string values. The map is keyed on the column number, with
-	// the value being the map of integer values to string values.
+	// the value being the map of ordinal values to string values.
 	EnumSetValuesMap map[int](map[int]string)
 
 	env *vtenv.Environment
