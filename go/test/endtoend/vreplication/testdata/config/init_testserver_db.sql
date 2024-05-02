@@ -79,7 +79,7 @@ GRANT SELECT, PROCESS, SUPER, REPLICATION CLIENT, RELOAD
 GRANT SELECT, UPDATE, DELETE, DROP
       ON performance_schema.* TO 'vt_monitoring'@'localhost';
 
-RESET SLAVE ALL;
+RESET REPLICA ALL;
 RESET MASTER;
 
 # custom sql is used to add custom scripts like creating users/passwords. We use it in our tests
