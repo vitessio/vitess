@@ -310,6 +310,10 @@ func (aj *ApplyJoin) planOffsetFor(ctx *plancontext.PlanningContext, col applyJo
 			offset := aj.LHS.AddColumn(ctx, true, col.GroupBy, aeWrap(col.DTColName))
 			aj.addOffset(ToLeftOffset(offset))
 		} else {
+			for _, lhsExpr := range col.LHSExprs {
+				offset := aj.LHS.AddColumn(ctx, true, col.GroupBy, aeWrap(lhsExpr.Expr))
+				aj.Vars[lhsExpr.Name] = offset
+			}
 			offset := aj.RHS.AddColumn(ctx, true, col.GroupBy, aeWrap(col.DTColName))
 			aj.addOffset(ToRightOffset(offset))
 		}
