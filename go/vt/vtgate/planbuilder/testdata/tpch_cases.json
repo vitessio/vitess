@@ -998,17 +998,17 @@
                   {
                     "OperatorType": "Join",
                     "Variant": "Join",
-                    "JoinColumnIndexes": "L:0,R:0,L:1,L:3",
+                    "JoinColumnIndexes": "L:0,R:0,L:4,L:6",
                     "JoinVars": {
-                      "l_partkey": 2,
-                      "l_suppkey": 1
+                      "l_partkey": 5,
+                      "l_suppkey": 4
                     },
                     "TableName": "orders_lineitem_part_partsupp",
                     "Inputs": [
                       {
                         "OperatorType": "Join",
                         "Variant": "Join",
-                        "JoinColumnIndexes": "L:0,R:0,R:1,L:2",
+                        "JoinColumnIndexes": "L:0,R:0,R:1,R:2,R:3,R:4,L:2",
                         "JoinVars": {
                           "o_orderkey": 1
                         },
@@ -1028,9 +1028,9 @@
                           {
                             "OperatorType": "Join",
                             "Variant": "Join",
-                            "JoinColumnIndexes": "L:0,L:1",
+                            "JoinColumnIndexes": "L:0,L:1,L:2,L:3,L:4",
                             "JoinVars": {
-                              "l_partkey": 1
+                              "l_partkey": 4
                             },
                             "TableName": "lineitem_part",
                             "Inputs": [
@@ -1068,8 +1068,8 @@
                                       "Name": "main",
                                       "Sharded": true
                                     },
-                                    "FieldQuery": "select profit.l_suppkey, profit.l_partkey from (select l_suppkey as l_suppkey, l_partkey as l_partkey from lineitem where 1 != 1) as profit where 1 != 1",
-                                    "Query": "select profit.l_suppkey, profit.l_partkey from (select l_suppkey as l_suppkey, l_partkey as l_partkey from lineitem where l_orderkey = :o_orderkey) as profit",
+                                    "FieldQuery": "select profit.l_extendedprice, profit.l_discount, profit.l_quantity, profit.l_suppkey, profit.l_partkey from (select l_extendedprice, l_discount, l_quantity, l_suppkey as l_suppkey, l_partkey as l_partkey from lineitem where 1 != 1) as profit where 1 != 1",
+                                    "Query": "select profit.l_extendedprice, profit.l_discount, profit.l_quantity, profit.l_suppkey, profit.l_partkey from (select l_extendedprice, l_discount, l_quantity, l_suppkey as l_suppkey, l_partkey as l_partkey from lineitem where l_orderkey = :o_orderkey) as profit",
                                     "Table": "lineitem"
                                   }
                                 ]
@@ -1127,8 +1127,8 @@
                               "Name": "main",
                               "Sharded": true
                             },
-                            "FieldQuery": "select profit.amount from (select l_extendedprice * (1 - l_discount) - ps_supplycost * l_quantity as amount from partsupp where 1 != 1) as profit where 1 != 1",
-                            "Query": "select profit.amount from (select l_extendedprice * (1 - l_discount) - ps_supplycost * l_quantity as amount from partsupp where ps_partkey = :l_partkey and ps_suppkey = :l_suppkey) as profit",
+                            "FieldQuery": "select profit.amount from (select :l_extendedprice * (1 - :l_discount) - ps_supplycost * :l_quantity as amount from partsupp where 1 != 1) as profit where 1 != 1",
+                            "Query": "select profit.amount from (select :l_extendedprice * (1 - :l_discount) - ps_supplycost * :l_quantity as amount from partsupp where ps_partkey = :l_partkey and ps_suppkey = :l_suppkey) as profit",
                             "Table": "partsupp"
                           }
                         ]

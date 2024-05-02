@@ -4432,5 +4432,47 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "Select everything from a derived table having a cross-shard join",
+    "query": "select * from (select u.foo * ue.bar from user u join user_extra ue) as dt",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select * from (select u.foo * ue.bar from user u join user_extra ue) as dt",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "R:0",
+        "TableName": "`user`_user_extra",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from (select u.foo from `user` as u where 1 != 1) as dt where 1 != 1",
+            "Query": "select 1 from (select u.foo from `user` as u) as dt",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `u.foo * ue.bar` from (select :u_foo * ue.bar as `u.foo * ue.bar` from user_extra as ue where 1 != 1) as dt where 1 != 1",
+            "Query": "select `u.foo * ue.bar` from (select :u_foo * ue.bar as `u.foo * ue.bar` from user_extra as ue) as dt",
+            "Table": "user_extra"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
   }
 ]

@@ -229,6 +229,7 @@ func pushProjectionInApplyJoin(
 		rhs.explicitColumnAliases = true
 	}
 
+	// TODO: looking here
 	src.JoinColumns = &applyJoinColumns{}
 	for idx, pe := range ap {
 		var alias string
@@ -295,19 +296,18 @@ func splitUnexploredExpression(
 	original := sqlparser.CloneRefOfAliasedExpr(pe.Original)
 	expr := pe.ColExpr
 
+	var colName *sqlparser.ColName
 	if dt != nil {
 		if !pe.isSameInAndOut(ctx) {
 			panic(vterrors.VT13001("derived table columns must be the same in and out"))
 		}
-		colName := pe.Original.ColumnName()
-		newExpr := sqlparser.NewColNameWithQualifier(colName, sqlparser.NewTableName(dt.Alias))
-		ctx.SemTable.CopySemanticInfo(expr, newExpr)
-		original.Expr = newExpr
-		expr = newExpr
+		colName = sqlparser.NewColNameWithQualifier(pe.Original.ColumnName(), sqlparser.NewTableName(dt.Alias))
+		ctx.SemTable.CopySemanticInfo(expr, colName)
 	}
 
 	// Get a applyJoinColumn for the current expression.
 	col := join.getJoinColumnFor(ctx, original, expr, false)
+	col.DTColName = colName
 
 	return pushDownSplitJoinCol(col, lhs, pe, alias, rhs)
 }
