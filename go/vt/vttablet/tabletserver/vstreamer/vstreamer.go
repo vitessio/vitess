@@ -1111,7 +1111,7 @@ func addEnumAndSetMappingstoPlan(plan *Plan, cols []*querypb.Field, metadata []u
 	return nil
 }
 
-// buildEnumtringValue takes the integer value of an ENUM column and returns the string value.
+// buildEnumStringValue takes the integer value of an ENUM column and returns the string value.
 func buildEnumStringValue(plan *streamerPlan, colNum int, value sqltypes.Value) (sqltypes.Value, error) {
 	if value.IsNull() { // No work is needed
 		return value, nil
@@ -1160,8 +1160,7 @@ func buildSetStringValue(plan *streamerPlan, colNum int, value sqltypes.Value) (
 	}
 	// A SET column can have 64 unique values: https://dev.mysql.com/doc/refman/en/set.html
 	// For this reason the binlog event contains the values encoded as an unsigned 64-bit
-	// integer which is really a bitmap (note that position 0 is reserved for '' which is
-	// used if you insert any integer values which have no valid string mapping in the set).
+	// integer which is really a bitmap.
 	val := bytes.Buffer{}
 	iv, err := value.ToUint64()
 	if err != nil {
