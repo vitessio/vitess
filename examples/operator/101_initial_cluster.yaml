@@ -212,9 +212,6 @@ stringData:
       SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER
       ON *.* TO 'vt_filtered'@'localhost';
 
-    RESET SLAVE ALL;
-    RESET MASTER;
-
     # custom sql is used to add custom scripts like creating users/passwords. We use it in our tests
     # {{custom_sql}}
 
