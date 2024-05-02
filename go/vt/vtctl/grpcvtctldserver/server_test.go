@@ -7750,7 +7750,7 @@ func TestGetTablets(t *testing.T) {
 						ci.ServerAddress = memorytopo.UnreachableServerAddr
 						return nil
 					})
-					require.NoError(t, err, "failed to update %s cell to point at unreachable addr", cell)
+					require.NoError(t, err, "failed to update %s cell to point at unreachable address", cell)
 				}
 			}
 

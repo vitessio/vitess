@@ -269,7 +269,7 @@ func TestEtcd2TopoGetTabletsPartialResults(t *testing.T) {
 	ctx := context.Background()
 	cells := []string{"cell1", "cell2"}
 	root := "/vitess"
-	// Start three etcd instances the background. One will be serve the global topo data
+	// Start three etcd instances in the background. One will serve the global topo data
 	// while the other two will serve the cell topo data.
 	globalClientAddr, _ := startEtcd(t, 0)
 	cellClientAddrs := make([]string, len(cells))
