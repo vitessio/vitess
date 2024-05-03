@@ -2133,7 +2133,6 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 			if req.Strict {
 				return nil, err
 			}
-
 			log.Warningf("GetTablets encountered non-fatal error %s; continuing because Strict=false", err)
 		default:
 			return nil, err
