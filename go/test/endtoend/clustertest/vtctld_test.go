@@ -54,7 +54,7 @@ func TestVtctldProcess(t *testing.T) {
 	url = fmt.Sprintf("http://%s:%d/api/topodata/", clusterInstance.Hostname, clusterInstance.VtctldHTTPPort)
 	testTopoDataAPI(t, url)
 
-	testListAllTablets(t)
+	testGetTablets(t)
 	testTabletStatus(t)
 	testExecuteAsDba(t)
 	testExecuteAsApp(t)
@@ -82,7 +82,7 @@ func testTopoDataAPI(t *testing.T, url string) {
 	assert.Contains(t, childrenGot, clusterInstance.Cell)
 }
 
-func testListAllTablets(t *testing.T) {
+func testGetTablets(t *testing.T) {
 	// first w/o any filters, aside from cell
 	result, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetTablets", "--cell", clusterInstance.Cell)
 	require.NoError(t, err)
