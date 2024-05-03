@@ -257,9 +257,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select id, weight_string(id) from (select `user`.id, `user`.col from `user` where 1 != 1) as t where 1 != 1",
-            "OrderBy": "(0|1) ASC",
-            "Query": "select id, weight_string(id) from (select `user`.id, `user`.col from `user`) as t order by t.id asc",
+            "FieldQuery": "select t.id, t.col, weight_string(t.id) from (select `user`.id, `user`.col from `user` where 1 != 1) as t where 1 != 1",
+            "OrderBy": "(0|2) ASC",
+            "Query": "select t.id, t.col, weight_string(t.id) from (select `user`.id, `user`.col from `user`) as t order by t.id asc",
             "Table": "`user`"
           },
           {
@@ -681,8 +681,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select foo, weight_string(foo) from (select u.foo from `user` as u where 1 != 1) as tbl where 1 != 1",
-                "Query": "select foo, weight_string(foo) from (select u.foo from `user` as u) as tbl",
+                "FieldQuery": "select tbl.foo, weight_string(tbl.foo) from (select u.foo from `user` as u where 1 != 1) as tbl where 1 != 1",
+                "Query": "select tbl.foo, weight_string(tbl.foo) from (select u.foo from `user` as u) as tbl",
                 "Table": "`user`"
               },
               {
@@ -692,8 +692,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select bar, weight_string(bar) from (select ue.bar from user_extra as ue where 1 != 1) as tbl where 1 != 1",
-                "Query": "select bar, weight_string(bar) from (select ue.bar from user_extra as ue) as tbl",
+                "FieldQuery": "select tbl.bar, weight_string(tbl.bar) from (select ue.bar from user_extra as ue where 1 != 1) as tbl where 1 != 1",
+                "Query": "select tbl.bar, weight_string(tbl.bar) from (select ue.bar from user_extra as ue) as tbl",
                 "Table": "user_extra"
               }
             ]

@@ -229,8 +229,18 @@ func pushProjectionInApplyJoin(
 		rhs.explicitColumnAliases = true
 	}
 
+	// We store the original join columns to reuse them.
+	originalJoinColumns := src.JoinColumns
 	src.JoinColumns = &applyJoinColumns{}
 	for idx, pe := range ap {
+		// First we check if we have already done the work to find how to push this expression.
+		// If we find it then we can directly use it. This is not just a performance improvement, but
+		// is also required for pushing a projection that is just an alias.
+		foundIdx := slices.IndexFunc(originalJoinColumns.columns, applyJoinCompare(ctx, pe.ColExpr))
+		if foundIdx != -1 {
+			src.JoinColumns.add(originalJoinColumns.columns[foundIdx])
+			continue
+		}
 		var alias string
 		if p.DT != nil && len(p.DT.Columns) > 0 {
 			if len(p.DT.Columns) <= idx {
@@ -295,19 +305,18 @@ func splitUnexploredExpression(
 	original := sqlparser.CloneRefOfAliasedExpr(pe.Original)
 	expr := pe.ColExpr
 
+	var colName *sqlparser.ColName
 	if dt != nil {
 		if !pe.isSameInAndOut(ctx) {
 			panic(vterrors.VT13001("derived table columns must be the same in and out"))
 		}
-		colName := pe.Original.ColumnName()
-		newExpr := sqlparser.NewColNameWithQualifier(colName, sqlparser.NewTableName(dt.Alias))
-		ctx.SemTable.CopySemanticInfo(expr, newExpr)
-		original.Expr = newExpr
-		expr = newExpr
+		colName = sqlparser.NewColNameWithQualifier(pe.Original.ColumnName(), sqlparser.NewTableName(dt.Alias))
+		ctx.SemTable.CopySemanticInfo(expr, colName)
 	}
 
 	// Get a applyJoinColumn for the current expression.
 	col := join.getJoinColumnFor(ctx, original, expr, false)
+	col.DTColName = colName
 
 	return pushDownSplitJoinCol(col, lhs, pe, alias, rhs)
 }
