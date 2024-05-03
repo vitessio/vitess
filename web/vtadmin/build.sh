@@ -19,7 +19,9 @@ function output() {
 }
 
 script_dir="$(dirname "${BASH_SOURCE[0]:-$0}")"
-source "${script_dir}/../../build.env"
+pushd ${VTROOT}
+source "./build.env"
+popd
 web_dir="${script_dir}"
 
 vtadmin_api_port=14200
