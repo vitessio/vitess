@@ -14,6 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+function output() {
+  echo -e "$@"
+}
+
 script_dir="$(dirname "${BASH_SOURCE[0]:-$0}")"
 source "${script_dir}/../env.sh"
 
@@ -24,7 +28,7 @@ web_dir="${script_dir}/../../../web/vtadmin"
 vtadmin_api_port=14200
 vtadmin_web_port=14201
 
-echo "vtadmin-api http-origin set to \"http://${hostname}:${vtadmin_web_port}\""
+output "\n\033[1;32mvtadmin-api expects vtadmin-web at, and set http-origin to \"http://${hostname}:${vtadmin_web_port}\"\033[0m"
 
 vtadmin \
   --addr "${hostname}:${vtadmin_api_port}" \
