@@ -1406,8 +1406,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select id1 from (select `user`.id as id1 from `user` where 1 != 1) as t where 1 != 1",
-            "Query": "select id1 from (select `user`.id as id1 from `user`) as t",
+            "FieldQuery": "select t.id1 from (select `user`.id as id1 from `user` where 1 != 1) as t where 1 != 1",
+            "Query": "select t.id1 from (select `user`.id as id1 from `user`) as t",
             "Table": "`user`"
           },
           {
@@ -1417,8 +1417,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select id2 from (select user_extra.id as id2 from user_extra where 1 != 1) as t where 1 != 1",
-            "Query": "select id2 from (select user_extra.id as id2 from user_extra) as t",
+            "FieldQuery": "select t.id2 from (select user_extra.id as id2 from user_extra where 1 != 1) as t where 1 != 1",
+            "Query": "select t.id2 from (select user_extra.id as id2 from user_extra) as t",
             "Table": "user_extra"
           }
         ]
