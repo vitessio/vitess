@@ -32,6 +32,8 @@ then
   output "\n\033[1;32mhostname was empty, set it to \"${hostname}\"\033[0m"
 fi
 
+case_insensitive_hostname=$(echo "$hostname" | tr '[:upper:]' '[:lower:]')
+
 # Download nvm and node
 if [[ -z ${NVM_DIR} ]]; then
     export NVM_DIR="$HOME/.nvm"
@@ -58,9 +60,9 @@ npm --prefix "$web_dir" --silent install
 
 export PATH=$PATH:$web_dir/node_modules/.bin/
 
-vite_vtadmin_api_address="http://${hostname}:${vtadmin_api_port}"
+vite_vtadmin_api_address="http://${case_insensitive_hostname}:${vtadmin_api_port}"
 output "\n\033[1;32mSetting VITE_VTADMIN_API_ADDRESS to \"${vite_vtadmin_api_address}\"\033[0m"
 
-VITE_VTADMIN_API_ADDRESS="http://${hostname}:${vtadmin_api_port}" \
+VITE_VTADMIN_API_ADDRESS="http://${case_insensitive_hostname}:${vtadmin_api_port}" \
   VITE_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS="true" \
   npm run --prefix "$web_dir" build
