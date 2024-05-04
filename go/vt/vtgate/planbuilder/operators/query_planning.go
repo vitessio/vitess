@@ -223,15 +223,19 @@ func tryPushLimit(in *Limit) (Operator, *ApplyResult) {
 		return in, NoRewrite
 	case *ApplyJoin:
 		if in.Pushed {
+			// This is the Top limit and it's already pushed down
 			return in, NoRewrite
 		}
 		src.RHS = &Limit{
 			Source: src.RHS,
 			AST:    in.AST,
-			Pushed: true,
 		}
-		in.Pushed = true
-		return in, Rewrote("push limit to RHS of apply join")
+		if in.Top {
+			in.Pushed = true
+			return in, Rewrote("add limit to RHS of apply join")
+		}
+
+		return src, Rewrote("push limit to RHS of apply join")
 	default:
 		return setUpperLimit(in)
 	}
@@ -242,7 +246,23 @@ func tryPushingDownLimitInRoute(in *Limit, src *Route) (Operator, *ApplyResult) 
 		return Swap(in, src, "push limit under route")
 	}
 
-	return setUpperLimit(in)
+	// this limit has already been pushed down, nothing to do here
+	if in.Pushed {
+		return in, NoRewrite
+	}
+
+	src.Source = &Limit{
+		Source: src.Source,
+		AST:    in.AST,
+	}
+
+	// if this is a top limit, we have to keep it above the route
+	if !in.Top {
+		return src, Rewrote("pushed limit under route")
+	}
+	in.Pushed = true
+
+	return in, Rewrote("pushed top limit under route")
 }
 
 func setUpperLimit(in *Limit) (Operator, *ApplyResult) {
@@ -263,7 +283,6 @@ func setUpperLimit(in *Limit) (Operator, *ApplyResult) {
 			newSrc := &Limit{
 				Source: op.Source,
 				AST:    &sqlparser.Limit{Rowcount: sqlparser.NewArgument("__upper_limit")},
-				Pushed: false,
 			}
 			op.Source = newSrc
 			result = result.Merge(Rewrote("push upper limit under route"))

@@ -106,6 +106,7 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 		op = &Limit{
 			Source: op,
 			AST:    sel.Limit,
+			Top:    true,
 		}
 		extracted = append(extracted, "Limit")
 	}

@@ -3161,7 +3161,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select user_id from user_extra where 1 != 1",
-                "Query": "select user_id from user_extra limit :__upper_limit",
+                "Query": "select user_id from user_extra limit 1",
                 "Table": "user_extra"
               }
             ]
@@ -3531,21 +3531,15 @@
                 ]
               },
               {
-                "OperatorType": "Limit",
-                "Count": "1",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
-                    "Query": "select 1 from user_extra as ue",
-                    "Table": "user_extra"
-                  }
-                ]
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
+                "Query": "select 1 from user_extra as ue limit 1",
+                "Table": "user_extra"
               }
             ]
           }
@@ -4119,7 +4113,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select ue.col from (select col from user_extra where 1 != 1) as ue where 1 != 1",
-                "Query": "select ue.col from (select col from user_extra) as ue limit :__upper_limit",
+                "Query": "select ue.col from (select col from user_extra) as ue limit 10",
                 "Table": "user_extra"
               }
             ]
@@ -4159,7 +4153,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select u.id, u.col from (select id, col from `user` where 1 != 1) as u where 1 != 1",
-                "Query": "select u.id, u.col from (select id, col from `user`) as u limit :__upper_limit",
+                "Query": "select u.id, u.col from (select id, col from `user`) as u limit 10",
                 "Table": "`user`"
               }
             ]
@@ -4176,7 +4170,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select ue.col, ue.user_id from (select col, user_id from user_extra where 1 != 1) as ue where 1 != 1",
-                "Query": "select ue.col, ue.user_id from (select col, user_id from user_extra) as ue limit :__upper_limit",
+                "Query": "select ue.col, ue.user_id from (select col, user_id from user_extra) as ue limit 10",
                 "Table": "user_extra"
               }
             ]
@@ -4261,7 +4255,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select ue.col, ue.user_id, weight_string(ue.user_id) from (select col, user_id from user_extra where 1 != 1) as ue where 1 != 1",
-                    "Query": "select ue.col, ue.user_id, weight_string(ue.user_id) from (select col, user_id from user_extra) as ue limit :__upper_limit",
+                    "Query": "select ue.col, ue.user_id, weight_string(ue.user_id) from (select col, user_id from user_extra) as ue limit 10",
                     "Table": "user_extra"
                   }
                 ]

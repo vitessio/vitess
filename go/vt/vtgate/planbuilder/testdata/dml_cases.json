@@ -5447,48 +5447,18 @@
       "QueryType": "DELETE",
       "Original": "delete from user limit 10",
       "Instructions": {
-        "OperatorType": "DMLWithInput",
+        "OperatorType": "Delete",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
         "TargetTabletType": "PRIMARY",
-        "Offset": [
-          "0:[0]"
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Limit",
-            "Count": "10",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select `user`.id from `user` where 1 != 1",
-                "Query": "select `user`.id from `user` limit :__upper_limit",
-                "Table": "`user`"
-              }
-            ]
-          },
-          {
-            "OperatorType": "Delete",
-            "Variant": "IN",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "TargetTabletType": "PRIMARY",
-            "KsidLength": 1,
-            "KsidVindex": "user_index",
-            "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where `user`.id in ::dml_vals for update",
-            "Query": "delete from `user` where `user`.id in ::dml_vals",
-            "Table": "user",
-            "Values": [
-              "::dml_vals"
-            ],
-            "Vindex": "user_index"
-          }
-        ]
+        "KsidLength": 1,
+        "KsidVindex": "user_index",
+        "OwnedVindexQuery": "select Id, `Name`, Costly from `user` limit 10 for update",
+        "Query": "delete from `user` limit 10",
+        "Table": "user"
       },
       "TablesUsed": [
         "user.user"
@@ -5502,49 +5472,18 @@
       "QueryType": "DELETE",
       "Original": "delete from user order by name, col limit 5",
       "Instructions": {
-        "OperatorType": "DMLWithInput",
+        "OperatorType": "Delete",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
         "TargetTabletType": "PRIMARY",
-        "Offset": [
-          "0:[0]"
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Limit",
-            "Count": "5",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select `user`.id, `name`, weight_string(`name`), col from `user` where 1 != 1",
-                "OrderBy": "(1|2) ASC, 3 ASC",
-                "Query": "select `user`.id, `name`, weight_string(`name`), col from `user` order by `name` asc, col asc limit :__upper_limit",
-                "Table": "`user`"
-              }
-            ]
-          },
-          {
-            "OperatorType": "Delete",
-            "Variant": "IN",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "TargetTabletType": "PRIMARY",
-            "KsidLength": 1,
-            "KsidVindex": "user_index",
-            "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where `user`.id in ::dml_vals for update",
-            "Query": "delete from `user` where `user`.id in ::dml_vals",
-            "Table": "user",
-            "Values": [
-              "::dml_vals"
-            ],
-            "Vindex": "user_index"
-          }
-        ]
+        "KsidLength": 1,
+        "KsidVindex": "user_index",
+        "OwnedVindexQuery": "select Id, `Name`, Costly from `user` order by `name` asc, col asc limit 5 for update",
+        "Query": "delete from `user` order by `name` asc, col asc limit 5",
+        "Table": "user"
       },
       "TablesUsed": [
         "user.user"
@@ -5558,45 +5497,15 @@
       "QueryType": "UPDATE",
       "Original": "update user set val = 1 where (name = 'foo' or id = 1) limit 1",
       "Instructions": {
-        "OperatorType": "DMLWithInput",
+        "OperatorType": "Update",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
         "TargetTabletType": "PRIMARY",
-        "Offset": [
-          "0:[0]"
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Limit",
-            "Count": "1",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select `user`.id from `user` where 1 != 1",
-                "Query": "select `user`.id from `user` where `name` = 'foo' or id = 1 limit :__upper_limit lock in share mode",
-                "Table": "`user`"
-              }
-            ]
-          },
-          {
-            "OperatorType": "Update",
-            "Variant": "IN",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "TargetTabletType": "PRIMARY",
-            "Query": "update `user` set val = 1 where `user`.id in ::dml_vals",
-            "Table": "user",
-            "Values": [
-              "::dml_vals"
-            ],
-            "Vindex": "user_index"
-          }
-        ]
+        "Query": "update `user` set val = 1 where `name` = 'foo' or id = 1 limit 1",
+        "Table": "user"
       },
       "TablesUsed": [
         "user.user"
@@ -5606,60 +5515,7 @@
   {
     "comment": "update a vindex column with limit",
     "query": "update user set name = 'abc' where id > 10 limit 1",
-    "plan": {
-      "QueryType": "UPDATE",
-      "Original": "update user set name = 'abc' where id > 10 limit 1",
-      "Instructions": {
-        "OperatorType": "DMLWithInput",
-        "TargetTabletType": "PRIMARY",
-        "Offset": [
-          "0:[0]"
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Limit",
-            "Count": "1",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select `user`.id from `user` where 1 != 1",
-                "Query": "select `user`.id from `user` where id > 10 limit :__upper_limit lock in share mode",
-                "Table": "`user`"
-              }
-            ]
-          },
-          {
-            "OperatorType": "Update",
-            "Variant": "IN",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "TargetTabletType": "PRIMARY",
-            "ChangedVindexValues": [
-              "name_user_map:3"
-            ],
-            "KsidLength": 1,
-            "KsidVindex": "user_index",
-            "OwnedVindexQuery": "select Id, `Name`, Costly, `name` = 'abc' from `user` where `user`.id in ::dml_vals for update",
-            "Query": "update `user` set `name` = 'abc' where `user`.id in ::dml_vals",
-            "Table": "user",
-            "Values": [
-              "::dml_vals"
-            ],
-            "Vindex": "user_index"
-          }
-        ]
-      },
-      "TablesUsed": [
-        "user.user"
-      ]
-    }
+    "plan": "VT12001: unsupported: Vindex update should have ORDER BY clause when using LIMIT"
   },
   {
     "comment": "update with multi table join with single target",
