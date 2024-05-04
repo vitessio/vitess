@@ -192,6 +192,16 @@ func pushProjectionToOuterContainer(ctx *plancontext.PlanningContext, p *Project
 	return src, Rewrote("push projection into outer side of subquery container")
 }
 
+// nullInNullOutExpr returns true if the expression will return NULL if any of its inputs are NULL
+func nullInNullOutExpr(expr sqlparser.Expr) bool {
+	switch expr.(type) {
+	case *sqlparser.ColName:
+		return true
+	default:
+		return false
+	}
+}
+
 // pushProjectionInApplyJoin optimizes the ApplyJoin operation by pushing down the projection operation into it. This function works as follows:
 //
 // 1. It traverses each input column of the projection operation.
@@ -219,10 +229,19 @@ func pushProjectionInApplyJoin(
 	src *ApplyJoin,
 ) (Operator, *ApplyResult) {
 	ap, err := p.GetAliasedProjections()
-	if !src.IsInner() || err != nil {
+	if err != nil {
 		// we can't push down expression evaluation to the rhs if we are not sure if it will even be executed
 		return p, NoRewrite
 	}
+	if IsOuter(src) {
+		// for outer joins, we have to check that we can send down the projection to the rhs
+		for _, expr := range ap.GetColumns() {
+			if !nullInNullOutExpr(expr.Expr) {
+				return p, NoRewrite
+			}
+		}
+	}
+
 	lhs, rhs := &projector{}, &projector{}
 	if p.DT != nil && len(p.DT.Columns) > 0 {
 		lhs.explicitColumnAliases = true

@@ -5149,48 +5149,35 @@
       "QueryType": "SELECT",
       "Original": "select name as t0, name as t1 from user left outer join user_extra on user.cola = user_extra.cola",
       "Instructions": {
-        "OperatorType": "SimpleProjection",
-        "ColumnNames": [
-          "t0",
-          "t1"
-        ],
-        "Columns": [
-          0,
-          0
-        ],
+        "OperatorType": "Join",
+        "Variant": "LeftJoin",
+        "JoinColumnIndexes": "L:0,L:0",
+        "JoinVars": {
+          "user_cola": 2
+        },
+        "TableName": "`user`_user_extra",
         "Inputs": [
           {
-            "OperatorType": "Join",
-            "Variant": "LeftJoin",
-            "JoinColumnIndexes": "L:0",
-            "JoinVars": {
-              "user_cola": 1
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
             },
-            "TableName": "`user`_user_extra",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select `name`, `user`.cola from `user` where 1 != 1",
-                "Query": "select `name`, `user`.cola from `user`",
-                "Table": "`user`"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select 1 from user_extra where 1 != 1",
-                "Query": "select 1 from user_extra where user_extra.cola = :user_cola",
-                "Table": "user_extra"
-              }
-            ]
+            "FieldQuery": "select `name` as t0, `name` as t1, `user`.cola from `user` where 1 != 1",
+            "Query": "select `name` as t0, `name` as t1, `user`.cola from `user`",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "Query": "select 1 from user_extra where user_extra.cola = :user_cola",
+            "Table": "user_extra"
           }
         ]
       },

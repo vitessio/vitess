@@ -3531,15 +3531,21 @@
                 ]
               },
               {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
-                "Query": "select 1 from user_extra as ue",
-                "Table": "user_extra"
+                "OperatorType": "Limit",
+                "Count": "1",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
+                    "Query": "select 1 from user_extra as ue",
+                    "Table": "user_extra"
+                  }
+                ]
               }
             ]
           }

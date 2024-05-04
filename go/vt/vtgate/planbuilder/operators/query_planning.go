@@ -221,6 +221,17 @@ func tryPushLimit(in *Limit) (Operator, *ApplyResult) {
 		return tryPushingDownLimitInRoute(in, src)
 	case *Aggregator:
 		return in, NoRewrite
+	case *ApplyJoin:
+		if in.Pushed {
+			return in, NoRewrite
+		}
+		src.RHS = &Limit{
+			Source: src.RHS,
+			AST:    in.AST,
+			Pushed: true,
+		}
+		in.Pushed = true
+		return in, Rewrote("push limit to RHS of apply join")
 	default:
 		return setUpperLimit(in)
 	}
