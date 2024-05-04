@@ -77,7 +77,7 @@ func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 		case *Projection:
 			return tryPushProjection(ctx, in)
 		case *Limit:
-			return tryPushLimit(in)
+			return tryPushLimit(ctx, in)
 		case *Ordering:
 			return tryPushOrdering(ctx, in)
 		case *Aggregator:
@@ -215,10 +215,10 @@ func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in *Horizon) (Operato
 	return expandHorizon(ctx, in)
 }
 
-func tryPushLimit(in *Limit) (Operator, *ApplyResult) {
+func tryPushLimit(ctx *plancontext.PlanningContext, in *Limit) (Operator, *ApplyResult) {
 	switch src := in.Source.(type) {
 	case *Route:
-		return tryPushingDownLimitInRoute(in, src)
+		return tryPushingDownLimitInRoute(ctx, in, src)
 	case *Aggregator:
 		return in, NoRewrite
 	case *ApplyJoin:
@@ -254,9 +254,13 @@ func createPushedLimit(src Operator, orig *Limit) Operator {
 	}
 }
 
-func tryPushingDownLimitInRoute(in *Limit, src *Route) (Operator, *ApplyResult) {
+func tryPushingDownLimitInRoute(ctx *plancontext.PlanningContext, in *Limit, src *Route) (Operator, *ApplyResult) {
 	if src.IsSingleShardOrByDestination() {
 		return Swap(in, src, "push limit under route")
+	}
+
+	if sqlparser.IsDMLStatement(ctx.Statement) {
+		return setUpperLimit(in)
 	}
 
 	// this limit has already been pushed down, nothing to do here

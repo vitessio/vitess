@@ -856,3 +856,7 @@ func (r *Route) introducesTableID() semantics.TableSet {
 	}
 	return id
 }
+
+func (r *Route) IsDML() bool {
+	return true
+}
