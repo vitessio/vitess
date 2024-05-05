@@ -68,14 +68,15 @@ func testConcurrentKeyspaceRoutingRulesUpdates(t *testing.T, ctx context.Context
 	var wg sync.WaitGroup
 	wg.Add(concurrency)
 
-	stop := make(chan struct{})
+	shortCtx, cancel := context.WithTimeout(ctx, duration)
+	defer cancel()
 	log.Infof("Starting %d concurrent updates", concurrency)
 	for i := 0; i < concurrency; i++ {
 		go func(id int) {
 			defer wg.Done()
 			for {
 				select {
-				case <-stop:
+				case <-shortCtx.Done():
 					return
 				default:
 					update(t, ts, id)
@@ -83,8 +84,6 @@ func testConcurrentKeyspaceRoutingRulesUpdates(t *testing.T, ctx context.Context
 			}
 		}(i)
 	}
-	<-time.After(duration)
-	close(stop)
 	wg.Wait()
 	log.Infof("All updates completed")
 	rules, err := ts.GetKeyspaceRoutingRules(ctx)

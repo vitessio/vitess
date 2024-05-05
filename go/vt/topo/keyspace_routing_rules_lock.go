@@ -33,7 +33,8 @@ func createTopoDirIfNeeded(ctx context.Context, ts *Server) error {
 	// We need the directory to exist since etcd (for example) will create a file there as part of its locking
 	// mechanism. So we create it if it doesn't exist. The file created below "lock" is just a dummy file.
 	// If no dummy file is specified, the directory doesn't get created (etcd behavior).
-	topoPath := path.Join(KeyspaceRoutingRulesPath, "lock")
+	// Without this we get an error when trying to lock :node doesn't exist: /vitess/global/KeyspaceRoutingRules/
+	topoPath := path.Join(KeyspaceRoutingRulesFile, "sentinel")
 	_, _, err := ts.GetGlobalCell().Get(ctx, topoPath)
 	if IsErrType(err, NoNode) {
 		_, err = ts.globalCell.Create(ctx, topoPath, []byte("lock file for keyspace routing rules"))
@@ -58,7 +59,7 @@ func NewKeyspaceRoutingRulesLock(ctx context.Context, ts *Server, name string) (
 
 	return &KeyspaceRoutingRulesLock{
 		TopoLock: &TopoLock{
-			Path: KeyspaceRoutingRulesPath,
+			Path: KeyspaceRoutingRulesFile,
 			Name: fmt.Sprintf("KeyspaceRoutingRules:: %s", name),
 			ts:   ts,
 		},

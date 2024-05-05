@@ -57,7 +57,7 @@ func (tl *TopoLock) String() string {
 
 // perform the topo lock operation
 func (l *Lock) lock(ctx context.Context, ts *Server, path string) (LockDescriptor, error) {
-	ctx, cancel := context.WithTimeout(ctx, getLockTimeout())
+	ctx, cancel := context.WithTimeout(ctx, LockTimeout)
 	defer cancel()
 	span, ctx := trace.NewSpan(ctx, "TopoServer.Lock")
 	span.Annotate("action", l.Action)
@@ -72,7 +72,7 @@ func (l *Lock) lock(ctx context.Context, ts *Server, path string) (LockDescripto
 }
 
 // unlock unlocks a previously locked key.
-func (l *Lock) unlock(ctx context.Context, ts *Server, path string, lockDescriptor LockDescriptor, actionError error) error {
+func (l *Lock) unlock(ctx context.Context, path string, lockDescriptor LockDescriptor, actionError error) error {
 	// Detach from the parent timeout, but copy the trace span.
 	// We need to still release the lock even if the parent
 	// context timed out.
@@ -136,7 +136,7 @@ func (tl TopoLock) Lock(ctx context.Context) (context.Context, func(*error), err
 			return
 		}
 
-		err := l.unlock(ctx, tl.ts, tl.Path, lockDescriptor, *finalErr)
+		err := l.unlock(ctx, tl.Path, lockDescriptor, *finalErr)
 		// if we have an error, we log it, but we still want to delete the lock
 		if *finalErr != nil {
 			if err != nil {

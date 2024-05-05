@@ -91,7 +91,7 @@ const (
 	TabletsPath              = "tablets"
 	MetadataPath             = "metadata"
 	ExternalClusterVitess    = "vitess"
-	KeyspaceRoutingRulesPath = "keyspaces_routing_rules"
+	KeyspaceRoutingRulesPath = "KeyspaceRoutingRules"
 )
 
 // Factory is a factory interface to create Conn objects.
