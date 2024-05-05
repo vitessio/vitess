@@ -29,23 +29,24 @@ type KeyspaceRoutingRulesLock struct {
 	*TopoLock
 }
 
+/*
+createTopoDirIfNeeded creates the keyspace routing rules key by creating a sentinel (dummy) child key under it.
+Vitess expects a key to exist, and to have a child key (it imposes a directory-like structure), before locking it.
+Without this we get an error when trying to lock :node doesn't exist: /vitess/global/KeyspaceRoutingRules/.
+*/
 func createTopoDirIfNeeded(ctx context.Context, ts *Server) error {
-	// We need the directory to exist since etcd (for example) will create a file there as part of its locking
-	// mechanism. So we create it if it doesn't exist. The file created below "lock" is just a dummy file.
-	// If no dummy file is specified, the directory doesn't get created (etcd behavior).
-	// Without this we get an error when trying to lock :node doesn't exist: /vitess/global/KeyspaceRoutingRules/
-	topoPath := path.Join(KeyspaceRoutingRulesFile, "sentinel")
-	_, _, err := ts.GetGlobalCell().Get(ctx, topoPath)
+	sentinelPath := path.Join(KeyspaceRoutingRulesFile, "sentinel")
+	_, _, err := ts.GetGlobalCell().Get(ctx, sentinelPath)
 	if IsErrType(err, NoNode) {
-		_, err = ts.globalCell.Create(ctx, topoPath, []byte("lock file for keyspace routing rules"))
+		_, err = ts.globalCell.Create(ctx, sentinelPath, []byte("force creation of the keyspace routing rules root key"))
 		if IsErrType(err, NodeExists) {
 			// Another process created the file, which is fine.
 			return nil
 		}
 		if err != nil {
-			log.Errorf("Failed to create keyspace routing rules lock file: %v", err)
+			log.Errorf("Failed to create keyspace routing rules sentinel file: %v", err)
 		} else {
-			log.Infof("Successfully created keyspace routing rules lock file %s", topoPath)
+			log.Infof("Successfully created keyspace routing rules sentinel file %s", sentinelPath)
 		}
 	}
 	return err
