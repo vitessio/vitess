@@ -193,7 +193,13 @@ func pushProjectionToOuterContainer(ctx *plancontext.PlanningContext, p *Project
 }
 
 // nullInNullOutExpr returns true if the expression will return NULL if any of its inputs are NULL
+// When we are evaluating an ApplyJoin, the expressions that have any dependency on the outer side of the join
+// will be sent to the outer side of the join. If the expression is null intolerant, then we can push it down,
+// and the result would be NULL for missing matches from the outer side. If the expression is something that can
+// return values other than NULL, like `COALESCE(tbl.foo, 'bar')`, then we can't push it down, because we would
+// get a different result if the outer side is missing.
 func nullInNullOutExpr(expr sqlparser.Expr) bool {
+	// TODO: This is a very basic implementation. We should expand this to handle more cases.
 	switch expr.(type) {
 	case *sqlparser.ColName:
 		return true
