@@ -201,14 +201,16 @@ func createSimpleProjection(ctx *plancontext.PlanningContext, selExprs []sqlpars
 // been settled. Once they have settled, we know where to push the projection, but if we push too early
 // the projection can end up in the wrong branch of joins
 func (p *Projection) canPush(ctx *plancontext.PlanningContext) bool {
-	subQSettled := reachedPhase(ctx, subquerySettling)
+	if reachedPhase(ctx, subquerySettling) {
+		return true
+	}
 	ap, ok := p.Columns.(AliasedProjections)
 	if !ok {
 		// we can't mix subqueries and unexpanded stars, so we know this does not contain any subqueries
 		return true
 	}
 	for _, projection := range ap {
-		if _, ok := projection.Info.(SubQueryExpression); ok && !subQSettled {
+		if _, ok := projection.Info.(SubQueryExpression); ok {
 			return false
 		}
 	}
