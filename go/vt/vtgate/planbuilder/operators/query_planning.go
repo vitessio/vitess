@@ -223,10 +223,16 @@ func tryPushLimit(ctx *plancontext.PlanningContext, in *Limit) (Operator, *Apply
 		return in, NoRewrite
 	case *ApplyJoin:
 		if in.Pushed {
-			// This is the Top limit and it's already pushed down
+			// This is the Top limit, and it's already pushed down
 			return in, NoRewrite
 		}
 		src.RHS = createPushedLimit(src.RHS, in)
+		if IsOuter(src) {
+			// for outer joins, we are guaranteed that all rows from the LHS will be returned,
+			// so we can push down the LIMIT to the LHS
+			src.LHS = createPushedLimit(src.LHS, in)
+		}
+
 		if in.Top {
 			in.Pushed = true
 			return in, Rewrote("add limit to RHS of apply join")
@@ -268,12 +274,11 @@ func tryPushingDownLimitInRoute(ctx *plancontext.PlanningContext, in *Limit, src
 		return in, NoRewrite
 	}
 
+	// when pushing a LIMIT into a Route that is not single sharded,
+	// we leave a LIMIT on top of the Route, and push a LIMIT under the Route
+	// This way we can still limit the number of rows that are returned
+	// from the Route and that way minimize unneeded processing
 	src.Source = createPushedLimit(src.Source, in)
-
-	// if this is a top limit, we have to keep it above the route
-	if !in.Top {
-		return src, Rewrote("pushed limit under route")
-	}
 	in.Pushed = true
 
 	return in, Rewrote("pushed top limit under route")
