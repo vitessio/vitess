@@ -869,6 +869,9 @@ func updateKeyspaceRoutingRules(ctx context.Context, ts *topo.Server, sourceKeys
 			if err != nil {
 				return err
 			}
+			if krri.RoutingRules.Rules == nil {
+				krri.RoutingRules.Rules = make(map[string]string, len(routes))
+			}
 			for fromKeyspace, toKeyspace := range routes {
 				krri.RoutingRules.Rules[fromKeyspace] = toKeyspace
 			}

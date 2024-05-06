@@ -37,14 +37,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 
-	"github.com/stretchr/testify/require"
-
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/proto/vtctldata"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
-	"vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 type tenantMigrationStatus int
@@ -351,7 +351,7 @@ func confirmBothReadsAndWritesSwitched(t *testing.T) {
 
 func validateKeyspaceRoutingRules(t *testing.T, vc *VitessCluster, expectedRules *vschemapb.KeyspaceRoutingRules) {
 	currentRules := getKeyspaceRoutingRules(t, vc)
-	require.ElementsMatch(t, expectedRules.Rules, currentRules.Rules)
+	require.EqualValues(t, expectedRules.Rules, currentRules.Rules)
 }
 
 func getSourceKeyspace(tenantId int64) string {

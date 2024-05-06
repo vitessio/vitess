@@ -455,7 +455,9 @@ func (ts *trafficSwitcher) deleteKeyspaceRoutingRules(ctx context.Context) error
 				delete(krri.RoutingRules.Rules, ts.SourceKeyspaceName()+suffix)
 			}
 			if err := ts.TopoServer().SaveKeyspaceRoutingRules(ctx, krri); err != nil {
-				return err
+				if !topo.IsErrType(err, topo.NoNode) {
+					return err
+				}
 			}
 			return nil
 		})

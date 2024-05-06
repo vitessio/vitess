@@ -19,6 +19,7 @@ package topotools
 import (
 	"context"
 	"fmt"
+	"path"
 	"strings"
 
 	"vitess.io/vitess/go/vt/log"
@@ -141,6 +142,9 @@ func createKeyspaceRoutingRulesKey(ctx context.Context, ts *topo.Server) error {
 		// Another process created it, which is fine.
 		return nil
 	}
+	// We shouldn't need to do this...
+	// TODO: figure out why this is necessary.
+	_, err = ts.GetGlobalCell().Create(ctx, path.Join(topo.KeyspaceRoutingRulesFile, "locks"), data)
 	if err != nil {
 		log.Errorf("Failed to create keyspace empty routing rules key: %v", err)
 	} else {
