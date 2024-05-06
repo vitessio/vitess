@@ -51,7 +51,10 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 	}
 	wd := &topo.WatchData{
 		Contents: initial.Kvs[0].Value,
-		Version:  EtcdVersion(initial.Kvs[0].Version),
+		// ModRevision is used for the topo.Version value as we get the new Revision value back
+		// when updating the file/key within a transaction in file.go and so this is the opaque
+		// version that we can use to enforce serializabile writes for the file/key.
+		Version: EtcdVersion(initial.Kvs[0].ModRevision),
 	}
 
 	// Create an outer context that will be canceled on return and will cancel all inner watches.
