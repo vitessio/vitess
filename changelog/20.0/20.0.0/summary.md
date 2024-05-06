@@ -25,6 +25,7 @@
     - [Insert Row Alias Support](#insert-row-alias-support)
   - **[Query Timeout](#query-timeout)**
   - **[Flag changes](#flag-changes)**
+    - [`Pool Capacity Flags Deletion`](#pool-flags-deletion)
     - [`pprof-http` default change](#pprof-http-default)
     - [New `healthcheck-dial-concurrency` flag](#healthcheck-dial-concurrency-flag)
     - [New minimum for `--buffer_min_time_between_failovers`](#buffer_min_time_between_failovers-flag)
@@ -217,6 +218,10 @@ which is not desirable in some cases. To avoid this, Vitess now uses the `kill q
 This will only cancel the query and does not terminate the connection.
 
 ### <a id="flag-changes"/>Flag Changes
+
+#### <a id="pool-flags-deletion"/>Pool Capacity Flags Deletion
+
+The previously deprecated flags `--queryserver-config-query-pool-waiter-cap`, `--queryserver-config-stream-pool-waiter-cap` and `--queryserver-config-txpool-waiter-cap` have been deleted.
 
 #### <a id="pprof-http-default"/> `pprof-http` Default Change
 
