@@ -1957,5 +1957,138 @@
         "user.user_metadata"
       ]
     }
+  },
+  {
+    "comment": "CTE expression using unions and complex aggregation with literal",
+    "query": "WITH `open` AS (SELECT COUNT(*) as `num` FROM (SELECT `user`.`id` FROM `user` WHERE `user`.`textcol1` = 'open' AND `user`.`intcol` = 1 LIMIT 1000) `t` LIMIT 1 ), `closed` AS (SELECT COUNT(*) as `num` FROM ( SELECT `user`.`id` FROM `user` WHERE `user`.`textcol1` = 'closed' AND `user`.`intcol` = 1 LIMIT 1000) `t` LIMIT 1 ), `all` AS (SELECT LEAST(1000, SUM(`num`)) AS `num` FROM ( SELECT `num` FROM `open` UNION ALL SELECT `num` FROM `closed` ) `t` LIMIT 1 )SELECT 'all' AS `tab`, `num`FROM `all`",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "WITH `open` AS (SELECT COUNT(*) as `num` FROM (SELECT `user`.`id` FROM `user` WHERE `user`.`textcol1` = 'open' AND `user`.`intcol` = 1 LIMIT 1000) `t` LIMIT 1 ), `closed` AS (SELECT COUNT(*) as `num` FROM ( SELECT `user`.`id` FROM `user` WHERE `user`.`textcol1` = 'closed' AND `user`.`intcol` = 1 LIMIT 1000) `t` LIMIT 1 ), `all` AS (SELECT LEAST(1000, SUM(`num`)) AS `num` FROM ( SELECT `num` FROM `open` UNION ALL SELECT `num` FROM `closed` ) `t` LIMIT 1 )SELECT 'all' AS `tab`, `num`FROM `all`",
+      "Instructions": {
+        "OperatorType": "Limit",
+        "Count": "1",
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              "'all' as tab",
+              ":0 as num"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Projection",
+                "Expressions": [
+                  "least(1000, sum(num)) as num"
+                ],
+                "Inputs": [
+                  {
+                    "OperatorType": "Aggregate",
+                    "Variant": "Scalar",
+                    "Aggregates": "any_value(0), sum(1) AS sum(num)",
+                    "Inputs": [
+                      {
+                        "OperatorType": "SimpleProjection",
+                        "Columns": [
+                          1,
+                          0
+                        ],
+                        "Inputs": [
+                          {
+                            "OperatorType": "Concatenate",
+                            "Inputs": [
+                              {
+                                "OperatorType": "Limit",
+                                "Count": "1",
+                                "Inputs": [
+                                  {
+                                    "OperatorType": "Aggregate",
+                                    "Variant": "Scalar",
+                                    "Aggregates": "count_star(0) AS num, any_value(1)",
+                                    "Inputs": [
+                                      {
+                                        "OperatorType": "SimpleProjection",
+                                        "Columns": [
+                                          1,
+                                          2
+                                        ],
+                                        "Inputs": [
+                                          {
+                                            "OperatorType": "Limit",
+                                            "Count": "1000",
+                                            "Inputs": [
+                                              {
+                                                "OperatorType": "Route",
+                                                "Variant": "Scatter",
+                                                "Keyspace": {
+                                                  "Name": "user",
+                                                  "Sharded": true
+                                                },
+                                                "FieldQuery": "select t.id, 1, 1000 from (select `user`.id from `user` where 1 != 1) as t where 1 != 1",
+                                                "Query": "select t.id, 1, 1000 from (select `user`.id from `user` where `user`.textcol1 = 'open' and `user`.intcol = 1) as t limit :__upper_limit",
+                                                "Table": "`user`"
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "OperatorType": "Limit",
+                                "Count": "1",
+                                "Inputs": [
+                                  {
+                                    "OperatorType": "Aggregate",
+                                    "Variant": "Scalar",
+                                    "Aggregates": "count_star(0) AS num, any_value(1)",
+                                    "Inputs": [
+                                      {
+                                        "OperatorType": "SimpleProjection",
+                                        "Columns": [
+                                          1,
+                                          2
+                                        ],
+                                        "Inputs": [
+                                          {
+                                            "OperatorType": "Limit",
+                                            "Count": "1000",
+                                            "Inputs": [
+                                              {
+                                                "OperatorType": "Route",
+                                                "Variant": "Scatter",
+                                                "Keyspace": {
+                                                  "Name": "user",
+                                                  "Sharded": true
+                                                },
+                                                "FieldQuery": "select t.id, 1, 1000 from (select `user`.id from `user` where 1 != 1) as t where 1 != 1",
+                                                "Query": "select t.id, 1, 1000 from (select `user`.id from `user` where `user`.textcol1 = 'closed' and `user`.intcol = 1) as t limit :__upper_limit",
+                                                "Table": "`user`"
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
   }
 ]
