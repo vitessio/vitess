@@ -185,10 +185,10 @@ func TestMultiTenantSimple(t *testing.T) {
 
 	// Expected keyspace routing rules on creation of the workflow.
 	initialRules := &vschemapb.KeyspaceRoutingRules{
-		Rules: []*vschemapb.KeyspaceRoutingRule{
-			{FromKeyspace: "s1", ToKeyspace: "s1"},
-			{FromKeyspace: "s1@rdonly", ToKeyspace: "s1"},
-			{FromKeyspace: "s1@replica", ToKeyspace: "s1"},
+		Rules: map[string]string{
+			"s1":         "s1",
+			"s1@rdonly":  "s1",
+			"s1@replica": "s1",
 		},
 	}
 
@@ -229,10 +229,10 @@ func confirmOnlyReadsSwitched(t *testing.T) {
 	confirmKeyspacesRoutedTo(t, "s1", "mt", "t1", []string{"rdonly", "replica"})
 	confirmKeyspacesRoutedTo(t, "s1", "s1", "t1", []string{"primary"})
 	rules := &vschemapb.KeyspaceRoutingRules{
-		Rules: []*vschemapb.KeyspaceRoutingRule{
-			{FromKeyspace: "s1", ToKeyspace: "s1"},
-			{FromKeyspace: "s1@rdonly", ToKeyspace: "mt"},
-			{FromKeyspace: "s1@replica", ToKeyspace: "mt"},
+		Rules: map[string]string{
+			"s1":         "s1",
+			"s1@rdonly":  "mt",
+			"s1@replica": "mt",
 		},
 	}
 	validateKeyspaceRoutingRules(t, vc, rules)
@@ -242,10 +242,10 @@ func confirmOnlyWritesSwitched(t *testing.T) {
 	confirmKeyspacesRoutedTo(t, "s1", "s1", "t1", []string{"rdonly", "replica"})
 	confirmKeyspacesRoutedTo(t, "s1", "mt", "t1", []string{"primary"})
 	rules := &vschemapb.KeyspaceRoutingRules{
-		Rules: []*vschemapb.KeyspaceRoutingRule{
-			{FromKeyspace: "s1", ToKeyspace: "mt"},
-			{FromKeyspace: "s1@rdonly", ToKeyspace: "s1"},
-			{FromKeyspace: "s1@replica", ToKeyspace: "s1"},
+		Rules: map[string]string{
+			"s1":         "mt",
+			"s1@rdonly":  "s1",
+			"s1@replica": "s1",
 		},
 	}
 	validateKeyspaceRoutingRules(t, vc, rules)
@@ -340,10 +340,10 @@ func confirmBothReadsAndWritesSwitched(t *testing.T) {
 	confirmKeyspacesRoutedTo(t, "s1", "mt", "t1", []string{"rdonly", "replica"})
 	confirmKeyspacesRoutedTo(t, "s1", "mt", "t1", []string{"primary"})
 	rules := &vschemapb.KeyspaceRoutingRules{
-		Rules: []*vschemapb.KeyspaceRoutingRule{
-			{FromKeyspace: "s1", ToKeyspace: "mt"},
-			{FromKeyspace: "s1@rdonly", ToKeyspace: "mt"},
-			{FromKeyspace: "s1@replica", ToKeyspace: "mt"},
+		Rules: map[string]string{
+			"s1":         "mt",
+			"s1@rdonly":  "mt",
+			"s1@replica": "mt",
 		},
 	}
 	validateKeyspaceRoutingRules(t, vc, rules)
