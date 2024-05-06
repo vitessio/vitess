@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/ptr"
-	"vitess.io/vitess/go/vt/topotools"
 
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql/collations"
@@ -336,9 +335,9 @@ func BuildVSchema(source *vschemapb.SrvVSchema, parser *sqlparser.Parser) (vsche
 	// resolve sources which reference global tables.
 	buildGlobalTables(source, vschema)
 	buildReferences(source, vschema)
-	buildRoutingRule(source, vschema, parser)
-	buildShardRoutingRule(source, vschema)
-	buildKeyspaceRoutingRule(source, vschema)
+	buildRoutingRules(source, vschema, parser)
+	buildShardRoutingRules(source, vschema)
+	buildKeyspaceRoutingRules(source, vschema)
 	// Resolve auto-increments after routing rules are built since sequence tables also obey routing rules.
 	resolveAutoIncrement(source, vschema, parser)
 	return vschema
@@ -929,7 +928,7 @@ func parseTable(tableName string) (sqlparser.TableName, error) {
 	}, nil
 }
 
-func buildRoutingRule(source *vschemapb.SrvVSchema, vschema *VSchema, parser *sqlparser.Parser) {
+func buildRoutingRules(source *vschemapb.SrvVSchema, vschema *VSchema, parser *sqlparser.Parser) {
 	var err error
 	if source.RoutingRules == nil {
 		return
@@ -1003,7 +1002,7 @@ outer:
 	}
 }
 
-func buildShardRoutingRule(source *vschemapb.SrvVSchema, vschema *VSchema) {
+func buildShardRoutingRules(source *vschemapb.SrvVSchema, vschema *VSchema) {
 	if source.ShardRoutingRules == nil || len(source.ShardRoutingRules.Rules) == 0 {
 		return
 	}
@@ -1013,13 +1012,14 @@ func buildShardRoutingRule(source *vschemapb.SrvVSchema, vschema *VSchema) {
 	}
 }
 
-func buildKeyspaceRoutingRule(source *vschemapb.SrvVSchema, vschema *VSchema) {
-	vschema.KeyspaceRoutingRules = nil
-	if len(source.GetKeyspaceRoutingRules().GetRules()) == 0 {
+func buildKeyspaceRoutingRules(source *vschemapb.SrvVSchema, vschema *VSchema) {
+	if source.KeyspaceRoutingRules == nil || len(source.KeyspaceRoutingRules.Rules) == 0 {
 		return
 	}
-	rulesMap := topotools.GetKeyspaceRoutingRulesMap(source.KeyspaceRoutingRules)
-	vschema.KeyspaceRoutingRules = rulesMap
+	vschema.KeyspaceRoutingRules = make(map[string]string)
+	for _, rule := range source.ShardRoutingRules.Rules {
+		vschema.KeyspaceRoutingRules[rule.FromKeyspace] = rule.ToKeyspace
+	}
 }
 
 // FindTable returns a pointer to the Table. If a keyspace is specified, only tables
@@ -1134,7 +1134,7 @@ func (vschema *VSchema) FirstKeyspace() *Keyspace {
 
 // findRoutedKeyspace checks if there is a keyspace routing rule for the given keyspace and tablet type.
 func (vschema *VSchema) findRoutedKeyspace(keyspace string, tabletType topodatapb.TabletType) string {
-	if len(vschema.KeyspaceRoutingRules) == 0 {
+	if vschema.KeyspaceRoutingRules == nil || len(vschema.KeyspaceRoutingRules) == 0 {
 		return keyspace
 	}
 	tabletTypeSuffix := TabletTypeSuffix[tabletType]

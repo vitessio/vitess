@@ -18,7 +18,6 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/etcd2topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
-	"vitess.io/vitess/go/vt/topotools"
 )
 
 // TestUpdateKeyspaceRoutingRule confirms that the keyspace routing rules are updated correctly.
@@ -31,11 +30,11 @@ func TestUpdateKeyspaceRoutingRule(t *testing.T) {
 	for _, tabletType := range tabletTypeSuffixes {
 		routes["from"+tabletType] = "to"
 	}
-	err := updateKeyspaceRoutingRule(ctx, ts, "ks", "test", routes)
+	err := updateKeyspaceRoutingRules(ctx, ts, "ks", "test", routes)
 	require.NoError(t, err)
-	rules, err := topotools.GetKeyspaceRoutingRules(ctx, ts)
+	rules, err := ts.GetKeyspaceRoutingRules(ctx)
 	require.NoError(t, err)
-	require.EqualValues(t, routes, rules)
+	require.EqualValues(t, routes, rules.RoutingRules.Rules)
 }
 
 // TestConcurrentKeyspaceRoutingRulesUpdates runs multiple keyspace routing rules updates concurrently to test
@@ -86,9 +85,9 @@ func testConcurrentKeyspaceRoutingRulesUpdates(t *testing.T, ctx context.Context
 	}
 	wg.Wait()
 	log.Infof("All updates completed")
-	rules, err := ts.GetKeyspaceRoutingRules(ctx)
+	krr, err := ts.GetKeyspaceRoutingRules(ctx)
 	require.NoError(t, err)
-	require.LessOrEqual(t, concurrency, len(rules.Rules))
+	require.LessOrEqual(t, concurrency, len(krr.RoutingRules.Rules))
 }
 
 func update(t *testing.T, ts *topo.Server, id int) {
@@ -100,13 +99,13 @@ func update(t *testing.T, ts *topo.Server, id int) {
 		from := fmt.Sprintf("from%s%s", s, tabletType)
 		routes[from] = s + tabletType
 	}
-	err := updateKeyspaceRoutingRule(ctx, ts, "ks", "test", routes)
+	err := updateKeyspaceRoutingRules(ctx, ts, "ks", "test", routes)
 	require.NoError(t, err)
-	got, err := topotools.GetKeyspaceRoutingRules(ctx, ts)
+	got, err := ts.GetKeyspaceRoutingRules(ctx)
 	require.NoError(t, err)
 	for _, tabletType := range tabletTypeSuffixes {
 		from := fmt.Sprintf("from%s%s", s, tabletType)
-		require.Equal(t, s+tabletType, got[from])
+		require.Equal(t, s+tabletType, got.RoutingRules.Rules[from])
 	}
 }
 

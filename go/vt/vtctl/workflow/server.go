@@ -1577,7 +1577,7 @@ func (s *Server) setupInitialRoutingRules(ctx context.Context, req *vtctldatapb.
 			routes[sourceKeyspace+tt] = sourceKeyspace
 		}
 
-		if err := updateKeyspaceRoutingRule(ctx, s.ts, sourceKeyspace, "Create", routes); err != nil {
+		if err := updateKeyspaceRoutingRules(ctx, s.ts, sourceKeyspace, "Create", routes); err != nil {
 			return err
 		}
 		return nil

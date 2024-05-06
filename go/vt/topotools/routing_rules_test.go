@@ -24,6 +24,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/proto/vschema"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 )
 
@@ -101,11 +103,16 @@ func TestKeyspaceRoutingRulesRoundTrip(t *testing.T) {
 		"ks1": "ks2",
 		"ks4": "ks5",
 	}
+	krr := &topo.KeyspaceRoutingRulesInfo{
+		RoutingRules: &vschema.KeyspaceRoutingRules{
+			Rules: rulesMap,
+		},
+	}
 
-	err := SaveKeyspaceRoutingRules(ctx, ts, rulesMap)
+	err := ts.SaveKeyspaceRoutingRules(ctx, krr)
 	require.NoError(t, err, "could not save keyspace routing rules to topo %v", rulesMap)
 
-	roundtripRulesMap, err := GetKeyspaceRoutingRules(ctx, ts)
+	roundtripRulesMap, err := ts.GetKeyspaceRoutingRules(ctx)
 	require.NoError(t, err, "could not fetch keyspace routing rules from topo")
-	assert.EqualValues(t, rulesMap, roundtripRulesMap)
+	assert.EqualValues(t, krr, roundtripRulesMap)
 }

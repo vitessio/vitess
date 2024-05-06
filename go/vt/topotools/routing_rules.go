@@ -127,45 +127,48 @@ func SaveShardRoutingRules(ctx context.Context, ts *topo.Server, srr map[string]
 
 // region keyspace routing rules
 
-func GetKeyspaceRoutingRulesMap(rules *vschemapb.KeyspaceRoutingRules) map[string]string {
-	if rules == nil {
-		return make(map[string]string)
-	}
-	rulesMap := make(map[string]string, len(rules.Rules))
-	for _, rr := range rules.Rules {
-		rulesMap[rr.FromKeyspace] = rr.ToKeyspace
-	}
-	return rulesMap
-}
-
-func GetKeyspaceRoutingRules(ctx context.Context, ts *topo.Server) (map[string]string, error) {
-	keyspaceRoutingRules, err := ts.GetKeyspaceRoutingRules(ctx)
+// createKeyspaceRoutingRulesKey creates the keyspace routing rules key if it doesn't yet
+// exist. Vitess expects a key to exist in order to lock it. So this is used when locking
+// the keyspace routing rules.
+func createKeyspaceRoutingRulesKey(ctx context.Context, ts *topo.Server) error {
+	krr := &vschemapb.KeyspaceRoutingRules{}
+	data, err := krr.MarshalVT()
 	if err != nil {
-		return nil, err
+		return err
 	}
-	rules := GetKeyspaceRoutingRulesMap(keyspaceRoutingRules)
-	return rules, nil
+	_, err = ts.GetGlobalCell().Create(ctx, topo.KeyspaceRoutingRulesFile, data)
+	if topo.IsErrType(err, topo.NodeExists) {
+		// Another process created it, which is fine.
+		return nil
+	}
+	if err != nil {
+		log.Errorf("Failed to create keyspace empty routing rules key: %v", err)
+	} else {
+		log.Infof("Successfully created keyspace routing rules key %s", topo.KeyspaceRoutingRulesFile)
+	}
+	return err
 }
 
-func SaveKeyspaceRoutingRules(ctx context.Context, ts *topo.Server, rules map[string]string) error {
-	keyspaceRoutingRules := &vschemapb.KeyspaceRoutingRules{Rules: make([]*vschemapb.KeyspaceRoutingRule, 0, len(rules))}
-	for from, to := range rules {
-		keyspaceRoutingRules.Rules = append(keyspaceRoutingRules.Rules, &vschemapb.KeyspaceRoutingRule{
-			FromKeyspace: from,
-			ToKeyspace:   to,
-		})
-	}
-	return ts.SaveKeyspaceRoutingRules(ctx, keyspaceRoutingRules)
-}
-
-func SaveKeyspaceRoutingRulesLocked(ctx context.Context, ts *topo.Server, reason string,
-	callback func(ctx context.Context) error) (err error) {
+func UpdateKeyspaceRoutingRulesLocked(ctx context.Context, ts *topo.Server, reason string, callback func(ctx context.Context) error) (err error) {
 	var lock *topo.KeyspaceRoutingRulesLock
 	lock, err = topo.NewKeyspaceRoutingRulesLock(ctx, ts, reason)
 	if err != nil {
 		return err
 	}
-	lockCtx, unlock, lockErr := lock.Lock(ctx)
+	getLock := func() (context.Context, func(*error), error) {
+		lockCtx, unlock, lockErr := lock.Lock(ctx)
+		if lockErr != nil {
+			return nil, nil, lockErr
+		}
+		return lockCtx, unlock, nil
+	}
+	lockCtx, unlock, lockErr := getLock()
+	if topo.IsErrType(lockErr, topo.NoNode) {
+		if err = createKeyspaceRoutingRulesKey(ctx, ts); err != nil {
+			return err
+		}
+		lockCtx, unlock, lockErr = getLock()
+	}
 	if lockErr != nil {
 		return lockErr
 	}
