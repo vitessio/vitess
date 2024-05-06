@@ -569,6 +569,11 @@ func TestDiffViews(t *testing.T) {
 				diff := dq.StatementString()
 				assert.Equal(t, ts.diff, diff)
 			}
+			if d != nil && !d.IsEmpty() {
+				// Validate Clone() works
+				clone := d.Clone()
+				assert.Equal(t, d.Statement(), clone.Statement())
+			}
 		})
 	}
 }
@@ -1060,6 +1065,22 @@ func TestDiffSchemas(t *testing.T) {
 				for _, s := range cstatements {
 					_, err := env.Parser().ParseStrictDDL(s)
 					assert.NoError(t, err)
+				}
+				// Validate Clone() works
+				for _, d := range diffs {
+					if d.IsEmpty() {
+						continue
+					}
+					dFrom, dTo := d.Entities()
+					clone := d.Clone()
+					clonedFrom, clonedTo := clone.Entities()
+					assert.Equal(t, d.CanonicalStatementString(), clone.CanonicalStatementString())
+					if dFrom != nil {
+						assert.Equal(t, dFrom.Name(), clonedFrom.Name())
+					}
+					if dTo != nil {
+						assert.Equal(t, dTo.Name(), clonedTo.Name())
+					}
 				}
 
 				if ts.annotated != nil {
