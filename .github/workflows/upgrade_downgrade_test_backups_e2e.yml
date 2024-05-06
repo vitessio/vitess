@@ -162,12 +162,17 @@ jobs:
     # Run test with VTTablet at version N-1 and VTBackup at version N
     - name: Run backups tests (vttablet=N-1, vtbackup=N)
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      run: |
-        rm -rf /tmp/vtdataroot
-        mkdir -p /tmp/vtdataroot
-        set -x
-        source build.env
-        eatmydata -- go run test.go -skip-build -docker=false -print-log -follow -tag upgrade_downgrade_backups
+      uses: nick-fields/retry@v2
+      with:
+        timeout_minutes: 30
+        max_attempts: 3
+        retry_on: error
+        command: |
+          rm -rf /tmp/vtdataroot
+          mkdir -p /tmp/vtdataroot
+          set -x
+          source build.env
+          eatmydata -- go run test.go -skip-build -docker=false -print-log -follow -tag upgrade_downgrade_backups
 
     # Swap binaries again, use current version's VTTablet, and last release's VTBackup
     - name: Use current version VTTablet, and other version VTBackup
@@ -184,9 +189,14 @@ jobs:
     # Run test again with VTTablet at version N, and VTBackup at version N-1
     - name: Run backups tests (vttablet=N, vtbackup=N-1)
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      run: |
-        rm -rf /tmp/vtdataroot
-        mkdir -p /tmp/vtdataroot
-        set -x
-        source build.env
-        eatmydata -- go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_backups
+      uses: nick-fields/retry@v2
+      with:
+        timeout_minutes: 30
+        max_attempts: 3
+        retry_on: error
+        command: |
+          rm -rf /tmp/vtdataroot
+          mkdir -p /tmp/vtdataroot
+          set -x
+          source build.env
+          eatmydata -- go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_backups

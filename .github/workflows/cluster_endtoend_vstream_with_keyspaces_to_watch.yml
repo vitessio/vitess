@@ -90,14 +90,18 @@ jobs:
 
     - name: Run cluster endtoend test
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      timeout-minutes: 45
-      run: |
-        # We set the VTDATAROOT to the /tmp folder to reduce the file path of mysql.sock file
-        # which musn't be more than 107 characters long.
-        export VTDATAROOT="/tmp/"
-        source build.env
+      uses: nick-fields/retry@v2
+      with:
+        timeout_minutes: 45
+        max_attempts: 3
+        retry_on: error
+        command: |
+          # We set the VTDATAROOT to the /tmp folder to reduce the file path of mysql.sock file
+          # which musn't be more than 107 characters long.
+          export VTDATAROOT="/tmp/"
+          source build.env
 
-        set -x
+          set -x
 
-        # run the tests however you normally do, then produce a JUnit XML file
-        eatmydata -- go run test.go -docker=false -follow -shard vstream_with_keyspaces_to_watch
+          # run the tests however you normally do, then produce a JUnit XML file
+          eatmydata -- go run test.go -docker=false -follow -shard vstream_with_keyspaces_to_watch

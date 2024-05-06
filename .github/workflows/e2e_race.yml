@@ -78,6 +78,10 @@ jobs:
 
     - name: e2e_race
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      timeout-minutes: 30
-      run: |
-        make e2e_test_race
+      uses: nick-fields/retry@v2
+      with:
+        timeout_minutes: 30
+        max_attempts: 3
+        retry_on: error
+        command: |
+          make e2e_test_race

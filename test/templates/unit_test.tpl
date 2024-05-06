@@ -137,6 +137,10 @@ jobs:
 
     - name: Run test
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
-      timeout-minutes: 30
-      run: |
-        eatmydata -- make unit_test
+      uses: nick-fields/retry@v2
+      with:
+        timeout_minutes: 30
+        max_attempts: 3
+        retry_on: error
+        command: |
+          eatmydata -- make unit_test

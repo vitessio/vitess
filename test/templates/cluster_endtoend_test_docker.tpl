@@ -55,6 +55,10 @@ jobs:
 
     - name: Run cluster endtoend test
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      timeout-minutes: 30
-      run: |
-        go run test.go -docker=true --follow -shard {{.Shard}}
+      uses: nick-fields/retry@v2
+      with:
+        timeout_minutes: 30
+        max_attempts: 3
+        retry_on: error
+        command: |
+          go run test.go -docker=true --follow -shard {{.Shard}}

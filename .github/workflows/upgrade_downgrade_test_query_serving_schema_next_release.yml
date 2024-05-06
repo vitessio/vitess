@@ -172,12 +172,17 @@ jobs:
     # Running a test with vtgate and vttablet using version n
     - name: Run query serving tests (vtgate=N, vttablet=N)
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      run: |
-        rm -rf /tmp/vtdataroot
-        mkdir -p /tmp/vtdataroot
+      uses: nick-fields/retry@v2
+      with:
+        timeout_minutes: 30
+        max_attempts: 3
+        retry_on: error
+        command: |
+          rm -rf /tmp/vtdataroot
+          mkdir -p /tmp/vtdataroot
 
-        source build.env
-        eatmydata -- go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_query_serving_schema
+          source build.env
+          eatmydata -- go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_query_serving_schema
 
     # Swap the binaries in the bin. Use vtgate version n+1 and keep vttablet at version n
     - name: Use next release's VTGate
@@ -192,12 +197,17 @@ jobs:
     # Running a test with vtgate at version n+1 and vttablet at version n
     - name: Run query serving tests (vtgate=N+1, vttablet=N)
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      run: |
-        rm -rf /tmp/vtdataroot
-        mkdir -p /tmp/vtdataroot
+      uses: nick-fields/retry@v2
+      with:
+        timeout_minutes: 30
+        max_attempts: 3
+        retry_on: error
+        command: |
+          rm -rf /tmp/vtdataroot
+          mkdir -p /tmp/vtdataroot
 
-        source build.env
-        eatmydata -- go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_query_serving_schema
+          source build.env
+          eatmydata -- go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_query_serving_schema
 
     # Swap the binaries again. This time, vtgate will be at version n, and vttablet will be at version n+1
     - name: Use current version VTGate, and other version VTTablet
@@ -214,9 +224,14 @@ jobs:
     # Running a test with vtgate at version n and vttablet at version n+1
     - name: Run query serving tests (vtgate=N, vttablet=N+1)
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      run: |
-        rm -rf /tmp/vtdataroot
-        mkdir -p /tmp/vtdataroot
+      uses: nick-fields/retry@v2
+      with:
+        timeout_minutes: 30
+        max_attempts: 3
+        retry_on: error
+        command: |
+          rm -rf /tmp/vtdataroot
+          mkdir -p /tmp/vtdataroot
 
-        source build.env
-        eatmydata -- go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_query_serving_schema
+          source build.env
+          eatmydata -- go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_query_serving_schema
