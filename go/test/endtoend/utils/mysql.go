@@ -170,7 +170,12 @@ func prepareMySQLWithSchema(params mysql.ConnParams, sql string) error {
 	return nil
 }
 
-func compareVitessAndMySQLResults(t TestingT, query string, vtConn *mysql.Conn, vtQr, mysqlQr *sqltypes.Result, compareColumnNames bool) error {
+type CompareOptions struct {
+	CompareColumnNames bool
+	IgnoreRowsAffected bool
+}
+
+func compareVitessAndMySQLResults(t TestingT, query string, vtConn *mysql.Conn, vtQr, mysqlQr *sqltypes.Result, opts CompareOptions) error {
 	t.Helper()
 
 	if vtQr == nil && mysqlQr == nil {
@@ -203,7 +208,7 @@ func compareVitessAndMySQLResults(t TestingT, query string, vtConn *mysql.Conn, 
 			myCols = append(myCols, myField.Name)
 		}
 
-		if compareColumnNames && !assert.Equal(t, myCols, vtCols, "column names do not match - the expected values are what mysql produced") {
+		if opts.CompareColumnNames && !assert.Equal(t, myCols, vtCols, "column names do not match - the expected values are what mysql produced") {
 			t.Errorf("column names do not match - the expected values are what mysql produced\nNot equal: \nexpected: %v\nactual: %v\n", myCols, vtCols)
 		}
 	}
