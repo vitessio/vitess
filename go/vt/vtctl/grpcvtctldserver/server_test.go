@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -7089,12 +7090,13 @@ func TestGetTablets(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name      string
-		cells     []string
-		tablets   []*topodatapb.Tablet
-		req       *vtctldatapb.GetTabletsRequest
-		expected  []*topodatapb.Tablet
-		shouldErr bool
+		name             string
+		cells            []string
+		unreachableCells []string // Cells that will return a ctx timeout error when trying to get tablets
+		tablets          []*topodatapb.Tablet
+		req              *vtctldatapb.GetTabletsRequest
+		expected         []*topodatapb.Tablet
+		shouldErr        bool
 	}{
 		{
 			name:      "no tablets",
@@ -7444,6 +7446,72 @@ func TestGetTablets(t *testing.T) {
 			shouldErr: true,
 		},
 		{
+			name:             "multiple cells with one timing out and strict false",
+			cells:            []string{"cell1", "cell2"},
+			unreachableCells: []string{"cell2"},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell1",
+						Uid:  100,
+					},
+					Keyspace: "ks1",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell2",
+						Uid:  200,
+					},
+					Keyspace: "ks1",
+					Shard:    "-",
+				},
+			},
+			req: &vtctldatapb.GetTabletsRequest{
+				Cells:  []string{"cell1", "cell2"},
+				Strict: false,
+			},
+			shouldErr: false,
+			expected: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell1",
+						Uid:  100,
+					},
+					Keyspace: "ks1",
+					Shard:    "-",
+				},
+			},
+		},
+		{
+			name:             "multiple cells with one timing out and strict true",
+			cells:            []string{"cell1", "cell2"},
+			unreachableCells: []string{"cell2"},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell1",
+						Uid:  100,
+					},
+					Keyspace: "ks1",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell2",
+						Uid:  200,
+					},
+					Keyspace: "ks1",
+					Shard:    "-",
+				},
+			},
+			req: &vtctldatapb.GetTabletsRequest{
+				Cells:  []string{"cell1", "cell2"},
+				Strict: true,
+			},
+			shouldErr: true,
+		},
+		{
 			name:  "in nonstrict mode if all cells fail the request fails",
 			cells: []string{"cell1"},
 			tablets: []*topodatapb.Tablet{
@@ -7676,7 +7744,27 @@ func TestGetTablets(t *testing.T) {
 
 			testutil.AddTablets(ctx, t, ts, nil, tt.tablets...)
 
-			resp, err := vtctld.GetTablets(ctx, tt.req)
+			for _, cell := range tt.cells {
+				if slices.Contains(tt.unreachableCells, cell) {
+					err := ts.UpdateCellInfoFields(ctx, cell, func(ci *topodatapb.CellInfo) error {
+						ci.ServerAddress = memorytopo.UnreachableServerAddr
+						return nil
+					})
+					require.NoError(t, err, "failed to update %s cell to point at unreachable address", cell)
+				}
+			}
+
+			var (
+				resp *vtctldatapb.GetTabletsResponse
+				err  error
+			)
+			if len(tt.unreachableCells) > 0 {
+				gtCtx, gtCancel := context.WithTimeout(context.Background(), 2*time.Second)
+				defer gtCancel()
+				resp, err = vtctld.GetTablets(gtCtx, tt.req)
+			} else {
+				resp, err = vtctld.GetTablets(ctx, tt.req)
+			}
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return
