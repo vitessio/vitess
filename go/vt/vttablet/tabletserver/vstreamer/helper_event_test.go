@@ -46,7 +46,6 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/schemadiff"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -67,6 +66,8 @@ const (
 	// This is the expected length of the only SET column using a binary collation
 	// in the test schema.
 	lengthSetBinary = 428
+	lengthSet  = 56
+	lengthJSON = 4294967295
 )
 
 var (
@@ -547,8 +548,12 @@ func (ts *TestSpec) getFieldEvent(table *schemadiff.CreateTableEntity) *TestFiel
 			tc.colType = fmt.Sprintf("%s(%s)", tc.dataTypeLowered, strings.Join(col.Type.EnumValues, ","))
 			ts.metadata[getMetadataKey(table.Name(), tc.name)] = col.Type.EnumValues
 			tfe.enumSetStrings = true
+		case "json":
+			tc.colType = "json"
+			tc.len = lengthJSON
+			tc.collationID = collations.CollationBinaryID
 		default:
-			log.Infof(fmt.Sprintf("unknown sqlTypeString %s", tc.dataTypeLowered))
+			ts.t.Fatalf("unknown sqlTypeString %s", tc.dataTypeLowered)
 		}
 		tfe.cols = append(tfe.cols, &tc)
 	}
@@ -591,11 +596,17 @@ func (ts *TestSpec) getRowEvent(table string, bv map[string]string, fe *TestFiel
 		}
 		val := []byte(bv[col.name])
 		l := int64(len(val))
-		if col.dataTypeLowered == "binary" {
+		switch col.dataTypeLowered {
+		case "binary":
 			for l < col.len {
 				val = append(val, "\x00"...)
 				l++
 			}
+		case "json":
+			sval := strings.Trim(string(val), "'")
+			sval = strings.Replace(sval, "\\", "", -1)
+			val = []byte(sval)
+			l = int64(len(val))
 		}
 		if slices.Equal(val, sqltypes.NullBytes) {
 			l = -1
@@ -785,6 +796,8 @@ func getQueryType(strType string) query.Type {
 		return query.Type_ENUM
 	case "SET":
 		return query.Type_SET
+	case "JSON":
+		return query.Type_JSON
 	default:
 		panic("unknown type " + strType)
 	}

@@ -1648,50 +1648,28 @@ func TestTypes(t *testing.T) {
 	runCases(t, nil, testcases, "", nil)
 }
 
-// todo: migrate to new framework
 func TestJSON(t *testing.T) {
-	if err := env.Mysqld.ExecuteSuperQuery(context.Background(), "create table vitess_json(id int default 1, val json, primary key(id))"); err != nil {
-		// If it's a syntax error, MySQL is an older version. Skip this test.
-		if strings.Contains(err.Error(), "syntax") {
-			return
-		}
-		t.Fatal(err)
+	ts := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table vitess_json(id int default 1, val json, primary key(id))",
+		},
 	}
-	defer execStatement(t, "drop table vitess_json")
-	engine.se.Reload(context.Background())
+	ts.Init()
+	defer ts.Close()
+	ts.tests = [][]*TestQuery{}
+	queries := []*TestQuery{}
 	jsonValues := []string{"{}", "123456", `"vtTablet"`, `{"foo": "bar"}`, `["abc", 3.14, true]`}
-
-	var inputs, outputs []string
-	var outputsArray [][]string
-	fieldAdded := false
-	var expect = func(in string) string {
-		return strings.ReplaceAll(in, "\"", "\\\"")
-	}
+	queries = append(queries, &TestQuery{"begin", nil})
 	for i, val := range jsonValues {
-		inputs = append(inputs, fmt.Sprintf("insert into vitess_json values(%d, %s)", i+1, encodeString(val)))
-
-		outputs = []string{}
-		outputs = append(outputs, `begin`)
-		if !fieldAdded {
-			outputs = append(outputs, `type:FIELD field_event:{table_name:"vitess_json" fields:{name:"id" type:INT32 table:"vitess_json" org_table:"vitess_json" database:"vttest" org_name:"id" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:JSON table:"vitess_json" org_table:"vitess_json" database:"vttest" org_name:"val" column_length:4294967295 charset:63 column_type:"json"}}`)
-			fieldAdded = true
-		}
-		out := expect(val)
-
-		outputs = append(outputs, fmt.Sprintf(`type:ROW row_event:{table_name:"vitess_json" row_changes:{after:{lengths:1 lengths:%d values:"%d%s"}}}`,
-			len(val), i+1 /*id increments*/, out))
-		outputs = append(outputs, `gtid`)
-		outputs = append(outputs, `commit`)
-		outputsArray = append(outputsArray, outputs)
+		queries = append(queries, &TestQuery{fmt.Sprintf("insert into vitess_json values(%d, %s)", i+1, encodeString(val)), nil})
 	}
-	testcases := []testcase{{
-		input:  inputs,
-		output: outputsArray,
-	}}
-	runCases(t, nil, testcases, "", nil)
+	queries = append(queries, &TestQuery{"commit", nil})
+
+	ts.tests = append(ts.tests, queries)
+	ts.Run()
 }
 
-// todo: migrate to new framework
 func TestExternalTable(t *testing.T) {
 	execStatements(t, []string{
 		"create database external",
@@ -1718,7 +1696,6 @@ func TestExternalTable(t *testing.T) {
 	runCases(t, nil, testcases, "", nil)
 }
 
-// todo: migrate to new framework
 func TestJournal(t *testing.T) {
 	execStatements(t, []string{
 		"create table if not exists _vt.resharding_journal(id int, db_name varchar(128), val blob, primary key(id))",
@@ -1754,7 +1731,6 @@ func TestJournal(t *testing.T) {
 	runCases(t, nil, testcases, "", nil)
 }
 
-// todo: migrate to new framework
 // TestMinimalMode confirms that we don't support minimal binlog_row_image mode.
 func TestMinimalMode(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -1778,7 +1754,6 @@ func TestMinimalMode(t *testing.T) {
 	require.Error(t, err, "minimal binlog_row_image is not supported by Vitess VReplication")
 }
 
-// todo: migrate to new framework
 func TestStatementMode(t *testing.T) {
 	execStatements(t, []string{
 		"create table stream1(id int, val varbinary(128), primary key(id))",
@@ -1814,7 +1789,6 @@ func TestStatementMode(t *testing.T) {
 	runCases(t, nil, testcases, "", nil)
 }
 
-// todo: migrate to new framework
 func TestHeartbeat(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -1827,7 +1801,6 @@ func TestHeartbeat(t *testing.T) {
 	cancel()
 }
 
-// todo: migrate to new framework
 func TestNoFutureGTID(t *testing.T) {
 	// Execute something to make sure we have ranges in GTIDs.
 	execStatements(t, []string{
