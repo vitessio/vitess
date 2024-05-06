@@ -15,6 +15,7 @@ The following is the full list, alphabetically ordered.
 * Matt Lord ([mattlord](https://github.com/mattlord)) mlord@planetscale.com
 * Rohit Nayak ([rohit-nayak-ps](https://github.com/rohit-nayak-ps)) rohit@planetscale.com
 * Shlomi Noach ([shlomi-noach](https://github.com/shlomi-noach)) shlomi@planetscale.com
+* Tim Vaillancourt ([timvaillancourt](https://github.com/timvaillancourt)) tim@timvaillancourt.com
 * Vicent Marti ([vmg](https://github.com/vmg)) vmg@planetscale.com
 
 ## Areas of expertise
