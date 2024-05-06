@@ -25,11 +25,13 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"time"
 
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -37,6 +39,12 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
+)
+
+const (
+	// timing metric keys
+	executeTimingKey       = "Execute"
+	streamExecuteTimingKey = "StreamExecute"
 )
 
 var (
@@ -47,6 +55,8 @@ var (
 	affinityValue   = flag.String("affinity_value", "", "Value to match for routing affinity , e.g. 'use-az1'")
 	addressField    = flag.String("address_field", "address", "field name in the json file containing the address")
 	portField       = flag.String("port_field", "port", "field name in the json file containing the port")
+
+	timings = stats.NewTimings("Timings", "proxy timings by operation", "operation")
 
 	vtGateProxy *VTGateProxy = &VTGateProxy{
 		targetConns: map[string]*vtgateconn.VTGateConn{},
@@ -160,10 +170,17 @@ func (proxy *VTGateProxy) Execute(ctx context.Context, session *vtgateconn.VTGat
 		return &sqltypes.Result{}, nil
 	}
 
+	startTime := time.Now()
+	defer timings.Record(executeTimingKey, startTime)
+
 	return session.Execute(ctx, sql, bindVariables)
+
 }
 
 func (proxy *VTGateProxy) StreamExecute(ctx context.Context, session *vtgateconn.VTGateSession, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
+	startTime := time.Now()
+	defer timings.Record(streamExecuteTimingKey, startTime)
+
 	stream, err := session.StreamExecute(ctx, sql, bindVariables)
 	if err != nil {
 		return err
