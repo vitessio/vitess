@@ -71,7 +71,7 @@ func helperTest(t *testing.T, query string) {
 		mcmp, closer := start(t)
 		defer closer()
 
-		result, err := mcmp.ExecAllowAndCompareError(query)
+		result, err := mcmp.ExecAllowAndCompareError(query, utils.CompareOptions{})
 		fmt.Println(result)
 		fmt.Println(err)
 	})
@@ -261,7 +261,7 @@ func TestRandom(t *testing.T) {
 		qg := newQueryGenerator(genConfig, 2, 2, 2, schemaTables)
 		qg.randomQuery()
 		query := sqlparser.String(qg.stmt)
-		_, vtErr := mcmp.ExecAllowAndCompareError(query)
+		_, vtErr := mcmp.ExecAllowAndCompareError(query, utils.CompareOptions{})
 
 		// this assumes all queries are valid mysql queries
 		if vtErr != nil {

@@ -223,6 +223,11 @@ func compareVitessAndMySQLResults(t TestingT, query string, vtConn *mysql.Conn, 
 		orderBy = selStmt.GetOrderBy() != nil
 	}
 
+	if opts.IgnoreRowsAffected {
+		vtQr.RowsAffected = 0
+		mysqlQr.RowsAffected = 0
+	}
+
 	if (orderBy && sqltypes.ResultsEqual([]sqltypes.Result{*vtQr}, []sqltypes.Result{*mysqlQr})) || sqltypes.ResultsEqualUnordered([]sqltypes.Result{*vtQr}, []sqltypes.Result{*mysqlQr}) {
 		return nil
 	}
