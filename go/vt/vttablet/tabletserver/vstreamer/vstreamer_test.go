@@ -1415,7 +1415,6 @@ func TestBuffering(t *testing.T) {
 // collation information, however, in the binlog_row_metadata in 8.0 but
 // not in 5.7. So in 5.7 our best effort uses varchar with its default
 // collation for text fields.
-// todo: migrate to new framework
 func TestBestEffortNameInFieldEvent(t *testing.T) {
 	bestEffortCollation := collations.ID(collations.CollationBinaryID)
 	if strings.HasPrefix(testenv.MySQLVersion, "5.7") {
@@ -1524,7 +1523,6 @@ func TestInternalTables(t *testing.T) {
 	runCases(t, filter, testcases, position, nil)
 }
 
-// todo: migrate to new framework
 func TestTypes(t *testing.T) {
 	// Modeled after vttablet endtoend compatibility tests.
 	execStatements(t, []string{
