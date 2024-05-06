@@ -259,7 +259,7 @@ func (s *Server) WatchRecursive(ctx context.Context, dirpath string) ([]*topo.Wa
 							Path: string(ev.Kv.Key),
 							WatchData: topo.WatchData{
 								Contents: ev.Kv.Value,
-								Version:  EtcdVersion(ev.Kv.Version),
+								Version:  EtcdVersion(ev.Kv.ModRevision),
 							},
 						}
 					case mvccpb.DELETE:
