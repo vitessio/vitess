@@ -3409,7 +3409,7 @@ func (e *Executor) getNonConflictingMigration(ctx context.Context) (*schema.Onli
 			continue // this migration conflicts with a running one
 		}
 		if e.countOwnedRunningMigrations() >= maxConcurrentOnlineDDLs {
-			continue // too many running migrations
+			return nil, nil // too many running migrations
 		}
 		if isImmediateOperation && onlineDDL.StrategySetting().IsInOrderCompletion() {
 			// This migration is immediate: if we run it now, it will complete within a second or two at most.
