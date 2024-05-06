@@ -18,6 +18,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/etcd2topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topotools"
 )
 
 // TestUpdateKeyspaceRoutingRule confirms that the keyspace routing rules are updated correctly.
@@ -30,11 +31,11 @@ func TestUpdateKeyspaceRoutingRule(t *testing.T) {
 	for _, tabletType := range tabletTypeSuffixes {
 		routes["from"+tabletType] = "to"
 	}
-	err := updateKeyspaceRoutingRules(ctx, ts, "ks", "test", routes)
+	err := updateKeyspaceRoutingRule(ctx, ts, "ks", "test", routes)
 	require.NoError(t, err)
-	rules, err := ts.GetKeyspaceRoutingRules(ctx)
+	rules, err := topotools.GetKeyspaceRoutingRules(ctx, ts)
 	require.NoError(t, err)
-	require.EqualValues(t, routes, rules.RoutingRules.Rules)
+	require.EqualValues(t, routes, rules)
 }
 
 // TestConcurrentKeyspaceRoutingRulesUpdates runs multiple keyspace routing rules updates concurrently to test
@@ -85,9 +86,9 @@ func testConcurrentKeyspaceRoutingRulesUpdates(t *testing.T, ctx context.Context
 	}
 	wg.Wait()
 	log.Infof("All updates completed")
-	krr, err := ts.GetKeyspaceRoutingRules(ctx)
+	rules, err := ts.GetKeyspaceRoutingRules(ctx)
 	require.NoError(t, err)
-	require.LessOrEqual(t, concurrency, len(krr.RoutingRules.Rules))
+	require.LessOrEqual(t, concurrency, len(rules.Rules))
 }
 
 func update(t *testing.T, ts *topo.Server, id int) {
@@ -99,13 +100,13 @@ func update(t *testing.T, ts *topo.Server, id int) {
 		from := fmt.Sprintf("from%s%s", s, tabletType)
 		routes[from] = s + tabletType
 	}
-	err := updateKeyspaceRoutingRules(ctx, ts, "ks", "test", routes)
+	err := updateKeyspaceRoutingRule(ctx, ts, "ks", "test", routes)
 	require.NoError(t, err)
-	got, err := ts.GetKeyspaceRoutingRules(ctx)
+	got, err := topotools.GetKeyspaceRoutingRules(ctx, ts)
 	require.NoError(t, err)
 	for _, tabletType := range tabletTypeSuffixes {
 		from := fmt.Sprintf("from%s%s", s, tabletType)
-		require.Equal(t, s+tabletType, got.RoutingRules.Rules[from])
+		require.Equal(t, s+tabletType, got[from])
 	}
 }
 

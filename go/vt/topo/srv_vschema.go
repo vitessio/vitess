@@ -204,11 +204,11 @@ func (ts *Server) RebuildSrvVSchema(ctx context.Context, cells []string) error {
 	}
 	srvVSchema.ShardRoutingRules = srr
 
-	krri, err := ts.GetKeyspaceRoutingRules(ctx)
+	krr, err := ts.GetKeyspaceRoutingRules(ctx)
 	if err != nil {
 		return fmt.Errorf("GetKeyspaceRoutingRules failed: %v", err)
 	}
-	srvVSchema.KeyspaceRoutingRules = krri.RoutingRules
+	srvVSchema.KeyspaceRoutingRules = krr
 
 	// now save the SrvVSchema in all cells in parallel
 	for _, cell := range cells {

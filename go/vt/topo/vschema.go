@@ -158,3 +158,39 @@ func (ts *Server) GetShardRoutingRules(ctx context.Context) (*vschemapb.ShardRou
 	}
 	return srr, nil
 }
+
+func getKeyspaceRoutingRulesFile() string {
+	return path.Join(KeyspaceRoutingRulesPath, KeyspaceRoutingRulesFile)
+}
+
+func (ts *Server) SaveKeyspaceRoutingRules(ctx context.Context, rules *vschemapb.KeyspaceRoutingRules) error {
+	data, err := rules.MarshalVT()
+	if err != nil {
+		return err
+	}
+	if len(data) == 0 {
+		// No rules, remove it.
+		if err := ts.globalCell.Delete(ctx, getKeyspaceRoutingRulesFile(), nil); err != nil && !IsErrType(err, NoNode) {
+			return err
+		}
+		return nil
+	}
+	_, err = ts.globalCell.Update(ctx, getKeyspaceRoutingRulesFile(), data, nil)
+	return err
+}
+
+func (ts *Server) GetKeyspaceRoutingRules(ctx context.Context) (*vschemapb.KeyspaceRoutingRules, error) {
+	rules := &vschemapb.KeyspaceRoutingRules{}
+	data, _, err := ts.globalCell.Get(ctx, getKeyspaceRoutingRulesFile())
+	if err != nil {
+		if IsErrType(err, NoNode) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	err = rules.UnmarshalVT(data)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "bad keyspace routing rules data: %q", data)
+	}
+	return rules, nil
+}

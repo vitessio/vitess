@@ -28,6 +28,10 @@ import (
 	"strings"
 	"sync"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
+
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
+
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/sets"
@@ -42,11 +46,9 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -855,27 +857,27 @@ func changeKeyspaceRouting(ctx context.Context, ts *topo.Server, tabletTypes []t
 		suffix := getTabletTypeSuffix(tabletType)
 		routes[sourceKeyspace+suffix] = targetKeyspace
 	}
-	if err := updateKeyspaceRoutingRules(ctx, ts, sourceKeyspace, reason, routes); err != nil {
+	if err := updateKeyspaceRoutingRule(ctx, ts, sourceKeyspace, reason, routes); err != nil {
 		return err
 	}
 	return ts.RebuildSrvVSchema(ctx, nil)
 }
 
-// updateKeyspaceRoutingRules updates the keyspace routing rules for the (effective) source keyspace to the target keyspace.
-func updateKeyspaceRoutingRules(ctx context.Context, ts *topo.Server, sourceKeyspace, reason string, routes map[string]string) error {
-	err := topotools.UpdateKeyspaceRoutingRulesLocked(ctx, ts, reason,
+// updateKeyspaceRoutingRule updates the keyspace routing rule for the (effective) source keyspace to the target keyspace.
+func updateKeyspaceRoutingRule(ctx context.Context, ts *topo.Server, sourceKeyspace, reason string, routes map[string]string) error {
+	err := topotools.SaveKeyspaceRoutingRulesLocked(ctx, ts, reason,
 		func(ctx context.Context) error {
-			krri, err := ts.GetKeyspaceRoutingRules(ctx)
+			rules, err := topotools.GetKeyspaceRoutingRules(ctx, ts)
 			if err != nil {
 				return err
 			}
-			if krri.RoutingRules.Rules == nil {
-				krri.RoutingRules.Rules = make(map[string]string, len(routes))
+			if rules == nil {
+				rules = make(map[string]string)
 			}
 			for fromKeyspace, toKeyspace := range routes {
-				krri.RoutingRules.Rules[fromKeyspace] = toKeyspace
+				rules[fromKeyspace] = toKeyspace
 			}
-			if err := ts.SaveKeyspaceRoutingRules(ctx, krri); err != nil {
+			if err := topotools.SaveKeyspaceRoutingRules(ctx, ts, rules); err != nil {
 				return err
 			}
 			return nil
@@ -908,12 +910,12 @@ func updateKeyspaceRoutingState(ctx context.Context, ts *topo.Server, sourceKeys
 		return err
 	}
 
-	krri, err := ts.GetKeyspaceRoutingRules(ctx)
+	rules, err := topotools.GetKeyspaceRoutingRules(ctx, ts)
 	if err != nil {
 		return err
 	}
 	hasSwitched := func(tabletTypePrefix string) bool {
-		ks, ok := krri.RoutingRules.Rules[sourceKeyspace+tabletTypePrefix]
+		ks, ok := rules[sourceKeyspace+tabletTypePrefix]
 		return ok && ks == targetKeyspace
 	}
 	rdonlySwitched := hasSwitched(rdonlyTabletSuffix)

@@ -168,7 +168,11 @@ message ShardRoutingRule {
 }
 
 message KeyspaceRoutingRules {
-  // The key is the from keyspace name, which may optionally include
-  // tablet type suffixes. The key is the to keyspace name.
-  map<string, string> rules = 1;
+  repeated KeyspaceRoutingRule rules = 1;
 }
+
+message KeyspaceRoutingRule {
+  string from_keyspace = 1;
+  string to_keyspace = 2;
+}
+

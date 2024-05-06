@@ -37,14 +37,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/proto/vtctldata"
+	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	"vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 type tenantMigrationStatus int
@@ -185,10 +185,10 @@ func TestMultiTenantSimple(t *testing.T) {
 
 	// Expected keyspace routing rules on creation of the workflow.
 	initialRules := &vschemapb.KeyspaceRoutingRules{
-		Rules: map[string]string{
-			"s1":         "s1",
-			"s1@rdonly":  "s1",
-			"s1@replica": "s1",
+		Rules: []*vschemapb.KeyspaceRoutingRule{
+			{FromKeyspace: "s1", ToKeyspace: "s1"},
+			{FromKeyspace: "s1@rdonly", ToKeyspace: "s1"},
+			{FromKeyspace: "s1@replica", ToKeyspace: "s1"},
 		},
 	}
 
@@ -229,10 +229,10 @@ func confirmOnlyReadsSwitched(t *testing.T) {
 	confirmKeyspacesRoutedTo(t, "s1", "mt", "t1", []string{"rdonly", "replica"})
 	confirmKeyspacesRoutedTo(t, "s1", "s1", "t1", []string{"primary"})
 	rules := &vschemapb.KeyspaceRoutingRules{
-		Rules: map[string]string{
-			"s1":         "s1",
-			"s1@rdonly":  "mt",
-			"s1@replica": "mt",
+		Rules: []*vschemapb.KeyspaceRoutingRule{
+			{FromKeyspace: "s1", ToKeyspace: "s1"},
+			{FromKeyspace: "s1@rdonly", ToKeyspace: "mt"},
+			{FromKeyspace: "s1@replica", ToKeyspace: "mt"},
 		},
 	}
 	validateKeyspaceRoutingRules(t, vc, rules)
@@ -242,10 +242,10 @@ func confirmOnlyWritesSwitched(t *testing.T) {
 	confirmKeyspacesRoutedTo(t, "s1", "s1", "t1", []string{"rdonly", "replica"})
 	confirmKeyspacesRoutedTo(t, "s1", "mt", "t1", []string{"primary"})
 	rules := &vschemapb.KeyspaceRoutingRules{
-		Rules: map[string]string{
-			"s1":         "mt",
-			"s1@rdonly":  "s1",
-			"s1@replica": "s1",
+		Rules: []*vschemapb.KeyspaceRoutingRule{
+			{FromKeyspace: "s1", ToKeyspace: "mt"},
+			{FromKeyspace: "s1@rdonly", ToKeyspace: "s1"},
+			{FromKeyspace: "s1@replica", ToKeyspace: "s1"},
 		},
 	}
 	validateKeyspaceRoutingRules(t, vc, rules)
@@ -340,10 +340,10 @@ func confirmBothReadsAndWritesSwitched(t *testing.T) {
 	confirmKeyspacesRoutedTo(t, "s1", "mt", "t1", []string{"rdonly", "replica"})
 	confirmKeyspacesRoutedTo(t, "s1", "mt", "t1", []string{"primary"})
 	rules := &vschemapb.KeyspaceRoutingRules{
-		Rules: map[string]string{
-			"s1":         "mt",
-			"s1@rdonly":  "mt",
-			"s1@replica": "mt",
+		Rules: []*vschemapb.KeyspaceRoutingRule{
+			{FromKeyspace: "s1", ToKeyspace: "mt"},
+			{FromKeyspace: "s1@rdonly", ToKeyspace: "mt"},
+			{FromKeyspace: "s1@replica", ToKeyspace: "mt"},
 		},
 	}
 	validateKeyspaceRoutingRules(t, vc, rules)
@@ -351,7 +351,7 @@ func confirmBothReadsAndWritesSwitched(t *testing.T) {
 
 func validateKeyspaceRoutingRules(t *testing.T, vc *VitessCluster, expectedRules *vschemapb.KeyspaceRoutingRules) {
 	currentRules := getKeyspaceRoutingRules(t, vc)
-	require.EqualValues(t, expectedRules.Rules, currentRules.Rules)
+	require.ElementsMatch(t, expectedRules.Rules, currentRules.Rules)
 }
 
 func getSourceKeyspace(tenantId int64) string {

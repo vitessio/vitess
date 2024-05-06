@@ -18,14 +18,12 @@ package topo_test
 
 import (
 	"context"
-	"sync"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
-	"vitess.io/vitess/go/vt/topotools"
 )
 
 // TestKeyspaceRoutingRulesLock tests that the lock is acquired and released correctly.
@@ -36,27 +34,25 @@ func TestKeyspaceRoutingRulesLock(t *testing.T) {
 	defer ts.Close()
 	conn := ts.GetGlobalCell()
 	require.NotNil(t, conn)
-	now := time.Now()
-	waitTime := 5 * time.Second
 
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		err := topotools.UpdateKeyspaceRoutingRulesLocked(ctx, ts, "ApplyKeyspaceRoutingRules",
-			func(ctx context.Context) error {
-				time.Sleep(waitTime)
-				return nil
-			})
-		require.NoError(t, err)
+	currentTopoLockTimeout := topo.LockTimeout
+	topo.LockTimeout = testLockTimeout
+	defer func() {
+		topo.LockTimeout = currentTopoLockTimeout
 	}()
 
-	// This will wait for the lock until the previous holder releases it.
-	err := topotools.UpdateKeyspaceRoutingRulesLocked(ctx, ts, "ApplyKeyspaceRoutingRules",
-		func(ctx context.Context) error {
-			return nil
-		})
+	lock, err := topo.NewKeyspaceRoutingRulesLock(ctx, ts, "ks1")
 	require.NoError(t, err)
-	require.GreaterOrEqual(t, time.Since(now), waitTime)
-	wg.Wait()
+	_, unlock, err := lock.Lock(ctx)
+	require.NoError(t, err)
+
+	// re-acquiring the lock should fail
+	_, _, err = lock.Lock(ctx)
+	require.Error(t, err)
+
+	unlock(&err)
+
+	// re-acquiring the lock should succeed
+	_, _, err = lock.Lock(ctx)
+	require.NoError(t, err)
 }
