@@ -136,7 +136,7 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 					case mvccpb.PUT:
 						notifications <- &topo.WatchData{
 							Contents: ev.Kv.Value,
-							Version:  EtcdVersion(ev.Kv.Version),
+							Version:  EtcdVersion(ev.Kv.ModRevision),
 						}
 					case mvccpb.DELETE:
 						// Node is gone, send a final notice.
@@ -177,7 +177,7 @@ func (s *Server) WatchRecursive(ctx context.Context, dirpath string) ([]*topo.Wa
 		var wd topo.WatchDataRecursive
 		wd.Path = string(kv.Key)
 		wd.Contents = kv.Value
-		wd.Version = EtcdVersion(initial.Kvs[0].Version)
+		wd.Version = EtcdVersion(initial.Kvs[0].ModRevision)
 		initialwd = append(initialwd, &wd)
 	}
 
