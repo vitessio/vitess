@@ -66,3 +66,27 @@ func TestCTEColumns(t *testing.T) {
 	mcmp.AssertMatches(`with t(id) as (SELECT id FROM user) SELECT t.id FROM t ORDER BY t.id DESC`,
 		`[[INT64(5)] [INT64(4)] [INT64(3)] [INT64(2)] [INT64(1)]]`)
 }
+
+func TestCTEAggregationsInUnion(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 20, "vtgate")
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.AssertMatches(`WITH toto AS (SELECT COUNT(*) as num
+                FROM (SELECT user.id
+                      FROM user
+                      WHERE user.name = 'toto'
+						LIMIT 1000) t LIMIT 1 ),
+    tata AS (SELECT COUNT(*) as num
+                FROM (SELECT user.id
+                        FROM user
+                        WHERE user.name = 'tata'
+						LIMIT 1000) t LIMIT 1),
+    total AS (SELECT LEAST(1000, SUM(num)) AS num
+                FROM (SELECT num
+                        FROM toto
+                        UNION ALL SELECT num
+                                    FROM tata) t LIMIT 1)
+SELECT 'total' AS tab, num
+FROM total`, `[[VARCHAR("total") DECIMAL(2)]]`)
+}
