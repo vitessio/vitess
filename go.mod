@@ -1,6 +1,6 @@
 module vitess.io/vitess
 
-go 1.21.9
+go 1.21.10
 
 require (
 	cloud.google.com/go/storage v1.39.0
