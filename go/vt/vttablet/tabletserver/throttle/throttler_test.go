@@ -930,6 +930,7 @@ func TestReplica(t *testing.T) {
 			})
 			t.Run("metrics names mapped", func(t *testing.T) {
 				throttler.appCheckedMetrics.Set(throttlerapp.VitessName.String(), base.MetricNames{base.LoadAvgMetricName, base.LagMetricName, base.ThreadsRunningMetricName}, cache.DefaultExpiration)
+				defer throttler.appCheckedMetrics.Delete(throttlerapp.VitessName.String())
 				checkResult = throttler.CheckByType(ctx, throttlerapp.VitessName.String(), nil, flags, ThrottleCheckSelf)
 				require.NotNil(t, checkResult)
 				assert.Equal(t, 3, len(checkResult.Metrics))
@@ -938,6 +939,22 @@ func TestReplica(t *testing.T) {
 				client := NewProductionClient(throttler, throttlerapp.TestingName, ThrottleCheckSelf)
 				checkOK := client.ThrottleCheckOK(ctx, "")
 				assert.True(t, checkOK)
+			})
+			t.Run("client, metrics names mapped, OK", func(t *testing.T) {
+				// Specified metrics do not exceed threshold, therefore overall result should be OK.
+				throttler.appCheckedMetrics.Set(throttlerapp.TestingName.String(), base.MetricNames{base.LagMetricName, base.ThreadsRunningMetricName}, cache.DefaultExpiration)
+				defer throttler.appCheckedMetrics.Delete(throttlerapp.TestingName.String())
+				client := NewProductionClient(throttler, throttlerapp.TestingName, ThrottleCheckSelf)
+				checkOK := client.ThrottleCheckOK(ctx, "")
+				assert.True(t, checkOK)
+			})
+			t.Run("client, metrics names mapped, not OK", func(t *testing.T) {
+				// LoadAvgMetricName metric exceeds threshold, therefore overall check should be in error.
+				throttler.appCheckedMetrics.Set(throttlerapp.TestingName.String(), base.MetricNames{base.LagMetricName, base.LoadAvgMetricName, base.ThreadsRunningMetricName}, cache.DefaultExpiration)
+				defer throttler.appCheckedMetrics.Delete(throttlerapp.TestingName.String())
+				client := NewProductionClient(throttler, throttlerapp.TestingName, ThrottleCheckSelf)
+				checkOK := client.ThrottleCheckOK(ctx, "")
+				assert.False(t, checkOK)
 			})
 
 			t.Run("custom query, metrics", func(t *testing.T) {
