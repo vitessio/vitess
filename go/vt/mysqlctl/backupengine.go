@@ -592,6 +592,15 @@ func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backup
 	return restorePath, nil
 }
 
+// See https://github.com/mysql/mysql-server/commit/9a940abe085fc75e1ffe7b72286927fdc9f11207 for the
+// importance of this specific version and why downgrades within patches are allowed since that version.
+var mysql8035 = ServerVersion{Major: 8, Minor: 0, Patch: 35}
+var ltsVersions = []ServerVersion{
+	{Major: 5, Minor: 7, Patch: 0},
+	{Major: 8, Minor: 0, Patch: 0},
+	{Major: 8, Minor: 4, Patch: 0},
+}
+
 func validateMySQLVersionUpgradeCompatible(to string, from string, upgradeSafe bool) error {
 	// It's always safe to use the same version.
 	if to == from {
@@ -613,6 +622,48 @@ func validateMySQLVersionUpgradeCompatible(to string, from string, upgradeSafe b
 	}
 
 	if parsedTo == parsedFrom {
+		return nil
+	}
+
+	// If we're not on the same LTS stream, we have to do additional checks to see if it's safe to
+	// to upgrade. It can only be one newer LTS version for the destination and the backup
+	// has to be marked as upgrade safe.
+
+	// If something is across different LTS streams and not upgrade safe, we can't use it.
+	if !parsedFrom.isSameRelease(parsedTo) {
+		if !upgradeSafe {
+			if parsedTo.atLeast(parsedFrom) {
+				return fmt.Errorf("running MySQL version %q is newer than backup MySQL version %q which is not safe to upgrade", to, from)
+			}
+			return fmt.Errorf("running MySQL version %q is older than backup MySQL version %q", to, from)
+		}
+
+		// Alright, we're across different LTS streams and the backup is upgrade safe.
+		// We can only upgrade to the next LTS version.
+		for i, ltsVersion := range ltsVersions {
+			if parsedFrom.isSameRelease(ltsVersion) {
+				if i < len(ltsVersions)-1 && parsedTo.isSameRelease(ltsVersions[i+1]) {
+					return nil
+				}
+				if parsedTo.atLeast(parsedFrom) {
+					return fmt.Errorf("running MySQL version %q is too new for backup MySQL version %q", to, from)
+				}
+				return fmt.Errorf("running MySQL version %q is older than backup MySQL version %q", to, from)
+			}
+		}
+		if parsedTo.atLeast(parsedFrom) {
+			return fmt.Errorf("running MySQL version %q is newer than backup MySQL version %q which is not safe to upgrade", to, from)
+		}
+		return fmt.Errorf("running MySQL version %q is older than backup MySQL version %q", to, from)
+	}
+
+	// At this point we know the versions are not the same, but we're withing the same version stream
+	// and only the patch version number mismatches.
+
+	// Starting with MySQL 8.0.35, the data dictionary format is stable for 8.0.x, so we can upgrade
+	// from 8.0.35 or later here, also if the backup was taken with innodb_fast_shutdown=0.
+	// This also applies for any version newer like 8.4.x.
+	if parsedFrom.atLeast(mysql8035) && parsedTo.atLeast(mysql8035) {
 		return nil
 	}
 
