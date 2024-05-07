@@ -592,6 +592,8 @@ func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backup
 	return restorePath, nil
 }
 
+// See https://github.com/mysql/mysql-server/commit/9a940abe085fc75e1ffe7b72286927fdc9f11207 for the
+// importance of this specific version and why downgrades within patches are allowed since that version.
 var mysql8035 = ServerVersion{Major: 8, Minor: 0, Patch: 35}
 var ltsVersions = []ServerVersion{
 	{Major: 5, Minor: 7, Patch: 0},
