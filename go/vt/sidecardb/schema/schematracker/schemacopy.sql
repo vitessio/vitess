@@ -16,13 +16,13 @@ limitations under the License.
 
 CREATE TABLE IF NOT EXISTS schemacopy
 (
-    `table_schema`          varchar(64) COLLATE utf8_bin         NOT NULL,
-    `table_name`            varchar(64) COLLATE utf8_bin         NOT NULL,
-    `column_name`           varchar(64) COLLATE utf8_general_ci  NOT NULL,
-    `ordinal_position`      bigint unsigned                      NOT NULL,
-    `character_set_name`    varchar(32) COLLATE utf8_general_ci  DEFAULT NULL,
-    `collation_name`        varchar(32) COLLATE utf8_general_ci  DEFAULT NULL,
-    `data_type`             varchar(64) COLLATE utf8_bin         NOT NULL,
-    `column_key`            varchar(3)  COLLATE utf8_bin         NOT NULL,
+    `table_schema`          varchar(64) CHARACTER SET utf8mb3 COLLATE utf8mb3_bin         NOT NULL,
+    `table_name`            varchar(64) CHARACTER SET utf8mb3 COLLATE utf8mb3_bin         NOT NULL,
+    `column_name`           varchar(64) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci  NOT NULL,
+    `ordinal_position`      bigint unsigned                                               NOT NULL,
+    `character_set_name`    varchar(32) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci  DEFAULT NULL,
+    `collation_name`        varchar(32) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci  DEFAULT NULL,
+    `data_type`             varchar(64) CHARACTER SET utf8mb3 COLLATE utf8mb3_bin         NOT NULL,
+    `column_key`            varchar(3)  CHARACTER SET utf8mb3 COLLATE utf8mb3_bin         NOT NULL,
     PRIMARY KEY (`table_schema`, `table_name`, `ordinal_position`)
 ) ENGINE = InnoDB
