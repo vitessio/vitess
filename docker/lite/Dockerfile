@@ -25,7 +25,7 @@ FROM "${image}" AS builder
 # Allows docker builds to set the BUILD_NUMBER
 ARG BUILD_NUMBER
 
-# Install mysql
+# Download linux generic mysql
 USER root
 RUN apt-get update && apt-get install -y xz-utils
 RUN wget https://dev.mysql.com/get/Downloads/MySQL-8.0/mysql-8.0.37-linux-glibc2.12-x86_64.tar.xz
