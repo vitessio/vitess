@@ -80,15 +80,19 @@ func buildVindexTableForDML(
 	ctx *plancontext.PlanningContext,
 	tableInfo semantics.TableInfo,
 	table *QueryTable,
+	ins *sqlparser.Insert,
 	dmlType string,
 ) (*vindexes.Table, Routing) {
 	vindexTable := tableInfo.GetVindexTable()
-	if vindexTable.Source != nil {
+	if tableInfo.GetVindexTable().Type == vindexes.TypeReference && vindexTable.Source != nil {
 		sourceTable, _, _, _, _, err := ctx.VSchema.FindTableOrVindex(vindexTable.Source.TableName)
 		if err != nil {
 			panic(err)
 		}
 		vindexTable = sourceTable
+		refTbl := sqlparser.NewAliasedTableExpr(vindexTable.GetTableName(), "")
+		ins.Table.Expr = refTbl.Expr
+		// We don't need to process the alias because you cannot define aliases for inserts.
 	}
 
 	if !vindexTable.Keyspace.Sharded {
