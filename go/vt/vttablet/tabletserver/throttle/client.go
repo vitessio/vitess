@@ -131,6 +131,11 @@ func (c *Client) ThrottleCheckOK(ctx context.Context, overrideAppName throttlera
 	if checkResult.StatusCode != http.StatusOK {
 		return false
 	}
+	for _, metricResult := range checkResult.Metrics {
+		if metricResult.StatusCode != http.StatusOK {
+			return false
+		}
+	}
 	c.lastSuccessfulThrottle[checkApp.String()] = atomic.LoadInt64(&throttleTicks)
 	return true
 
