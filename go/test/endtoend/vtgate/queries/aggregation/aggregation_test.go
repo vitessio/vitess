@@ -768,7 +768,7 @@ func TestHavingQueries(t *testing.T) {
 
 	for _, query := range queries {
 		mcmp.Run(query, func(mcmp *utils.MySQLCompare) {
-			mcmp.ExecAllowAndCompareError(query)
+			mcmp.ExecAllowAndCompareError(query, utils.CompareOptions{})
 		})
 	}
 }

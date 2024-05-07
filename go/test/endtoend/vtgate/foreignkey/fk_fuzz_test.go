@@ -333,7 +333,7 @@ func (fz *fuzzer) generateAndExecuteStatementQuery(t *testing.T, mcmp utils.MySQ
 	for _, query := range queries {
 		// When the concurrency is 1, then we run the query both on MySQL and Vitess.
 		if fz.concurrency == 1 {
-			_, _ = mcmp.ExecAllowAndCompareError(query)
+			_, _ = mcmp.ExecAllowAndCompareError(query, utils.CompareOptions{IgnoreRowsAffected: true})
 			// If t is marked failed, we have encountered our first failure.
 			// Let's collect the required information and finish execution.
 			if t.Failed() {

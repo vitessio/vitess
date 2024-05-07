@@ -150,7 +150,7 @@ func TestOrderByComplex(t *testing.T) {
 
 	for _, query := range queries {
 		mcmp.Run(query, func(mcmp *utils.MySQLCompare) {
-			_, _ = mcmp.ExecAllowAndCompareError(query)
+			_, _ = mcmp.ExecAllowAndCompareError(query, utils.CompareOptions{})
 		})
 	}
 }
