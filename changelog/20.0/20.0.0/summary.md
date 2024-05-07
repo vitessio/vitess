@@ -4,6 +4,7 @@
 
 - **[Major Changes](#major-changes)**
   - **[Deletions](#deletions)** 
+    - [`--vreplication_tablet_type` flag is now deleted](#vreplication-tablet-type-deletion)
     - [`Pool Capacity Flags Deletion`](#pool-flags-deletion)
     - [MySQL binaries in the vitess/lite Docker images](#vitess-lite)
     - [vitess/base and vitess/k8s Docker images](#base-k8s-images)
@@ -40,6 +41,10 @@
 ## <a id="major-changes"/>Major Changes
 
 ### <a id="deletions"/>Deletion
+
+#### <a id="vreplication-tablet-type-deletion"\>`--vreplication_tablet_type` flag is now deleted
+
+The previously deprecated flags `--vreplication_tablet_type` has been deleted.
 
 #### <a id="pool-flags-deletion"/>Pool Capacity Flags Deletion
 
