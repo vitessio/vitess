@@ -59,13 +59,15 @@ func (tm *TabletManager) CheckThrottler(ctx context.Context, req *tabletmanagerd
 			Message:    metric.Message,
 		}
 	}
-	// For backwards compatibility, when the checked table is of lower version, it does not return a
-	// matrics map, but only the one metric.
-	resp.Metrics[base.DefaultMetricName.String()] = &tabletmanagerdatapb.CheckThrottlerResponse_Metric{
-		StatusCode: int32(checkResult.StatusCode),
-		Value:      checkResult.Value,
-		Threshold:  checkResult.Threshold,
-		Message:    checkResult.Message,
+	if len(checkResult.Metrics) == 0 {
+		// For backwards compatibility, when the checked tablet is of lower version, it does not return a
+		// matrics map, but only the one metric.
+		resp.Metrics[base.DefaultMetricName.String()] = &tabletmanagerdatapb.CheckThrottlerResponse_Metric{
+			StatusCode: int32(checkResult.StatusCode),
+			Value:      checkResult.Value,
+			Threshold:  checkResult.Threshold,
+			Message:    checkResult.Message,
+		}
 	}
 	if checkResult.Error != nil {
 		resp.Error = checkResult.Error.Error()
