@@ -1421,6 +1421,21 @@ func (throttler *Throttler) checkStore(ctx context.Context, appName string, stor
 	}
 
 	if len(metricNames) == 0 {
+		// No explicit metrics requested.
+		// Get the metric names mappd to the given app
+		if val, found := throttler.appCheckedMetrics.Get(appName); found {
+			// Due to golang type system, it's possible that we put in a base.MetricNames and get back a []base.MetricName.
+			// We allow both forms, which are technically the same type.
+			switch val := val.(type) {
+			case base.MetricNames:
+				metricNames = val
+			case []base.MetricName:
+				metricNames = val
+			}
+		}
+	}
+	if len(metricNames) == 0 {
+		// Nothing mapped? For backwards compatibility and as default, we use the "default" metric.
 		metricNames = base.MetricNames{throttler.metricNameUsedAsDefault()}
 	}
 	checkResult = throttler.check.Check(ctx, appName, storeName, metricNames, flags)
