@@ -207,8 +207,7 @@ func TestValidateMySQLVersionUpgradeCompatible(t *testing.T) {
 			if tc.error == "" {
 				assert.NoError(t, err)
 			} else {
-				assert.Error(t, err)
-				assert.Equal(t, tc.error, err.Error())
+				assert.EqualError(t, err, tc.error)
 			}
 		})
 	}
