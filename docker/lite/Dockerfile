@@ -55,19 +55,19 @@ RUN groupadd -r vitess && useradd -r -g vitess vitess
 RUN mkdir -p /vt/vtdataroot && chown -R vitess:vitess /vt
 
 # Set up Vitess environment (just enough to run pre-built Go binaries)
-ENV VTROOT /vt/src/vitess.io/vitess
-ENV VTDATAROOT /vt/vtdataroot
+ENV VTROOT /vt
+ENV VTDATAROOT $VTROOT/vtdataroot
 ENV PATH $VTROOT/bin:$PATH
 
 # Copy artifacts from builder layer.
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
-COPY --from=builder --chown=vitess:vitess /vt/install /vt
-COPY --from=builder --chown=vitess:vitess /vt/src/vitess.io/vitess/web/vtadmin /vt/web/vtadmin
-COPY --from=builder --chown=vitess:vitess /vt/src/vitess.io/vitess/config/init_db.sql /vt/config/
-COPY --from=builder --chown=vitess:vitess /vt/src/vitess.io/vitess/config/mycnf /vt/config/
-COPY --from=builder --chown=vitess:vitess /vt/src/vitess.io/vitess/mysql-generic-binaries/bin/mysqlbinlog /vt/bin/mysqlbinlog
-COPY --from=builder --chown=vitess:vitess /vt/src/vitess.io/vitess/mysql-generic-binaries/lib/private/libcrypto.so.3 /vt/lib/libcrypto.so.3
-COPY --from=builder --chown=vitess:vitess /vt/src/vitess.io/vitess/mysql-generic-binaries/lib/private/libssl.so.3 /vt/lib/libssl.so.3
+COPY --from=builder --chown=vitess:vitess /vt/install $VTROOT
+COPY --from=builder --chown=vitess:vitess /vt/src/vitess.io/vitess/web/vtadmin $VTROOT/web/vtadmin
+COPY --from=builder --chown=vitess:vitess /vt/src/vitess.io/vitess/config/init_db.sql $VTROOT/config/
+COPY --from=builder --chown=vitess:vitess /vt/src/vitess.io/vitess/config/mycnf $VTROOT/config/
+COPY --from=builder --chown=vitess:vitess /vt/src/vitess.io/vitess/mysql-generic-binaries/bin/mysqlbinlog $VTROOT/bin/mysqlbinlog
+COPY --from=builder --chown=vitess:vitess /vt/src/vitess.io/vitess/mysql-generic-binaries/lib/private/libcrypto.so.3 $VTROOT/lib/private/libcrypto.so.3
+COPY --from=builder --chown=vitess:vitess /vt/src/vitess.io/vitess/mysql-generic-binaries/lib/private/libssl.so.3 $VTROOT/lib/private/libssl.so.3
 
 # Create mount point for actual data (e.g. MySQL data dir)
 VOLUME /vt/vtdataroot
