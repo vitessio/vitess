@@ -4,6 +4,7 @@
 
 - **[Major Changes](#major-changes)**
   - **[Deletions](#deletions)** 
+    - [`Pool Capacity Flags Deletion`](#pool-flags-deletion)
     - [MySQL binaries in the vitess/lite Docker images](#vitess-lite)
     - [vitess/base and vitess/k8s Docker images](#base-k8s-images)
     - [`gh-ost` binary and endtoend tests](#gh-ost-binary-tests-removal)
@@ -39,6 +40,10 @@
 ## <a id="major-changes"/>Major Changes
 
 ### <a id="deletions"/>Deletion
+
+#### <a id="pool-flags-deletion"/>Pool Capacity Flags Deletion
+
+The previously deprecated flags `--queryserver-config-query-pool-waiter-cap`, `--queryserver-config-stream-pool-waiter-cap` and `--queryserver-config-txpool-waiter-cap` have been deleted.
 
 #### <a id="vitess-lite"/>MySQL binaries in the `vitess/lite` Docker images
 
