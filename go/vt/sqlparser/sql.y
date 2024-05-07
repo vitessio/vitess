@@ -5619,6 +5619,7 @@ window_partition_clause_opt:
 
 sql_id_opt:
   {
+    $$ = IdentifierCI{}
   }
 | sql_id
   {
