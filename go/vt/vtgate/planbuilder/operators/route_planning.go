@@ -80,7 +80,7 @@ func buildVindexTableForDML(
 	ctx *plancontext.PlanningContext,
 	tableInfo semantics.TableInfo,
 	table *QueryTable,
-	ins *sqlparser.Insert,
+	stmt sqlparser.Statement,
 	dmlType string,
 ) (*vindexes.Table, Routing) {
 	vindexTable := tableInfo.GetVindexTable()
@@ -91,8 +91,14 @@ func buildVindexTableForDML(
 		}
 		vindexTable = sourceTable
 		refTbl := sqlparser.NewAliasedTableExpr(vindexTable.GetTableName(), "")
-		ins.Table.Expr = refTbl.Expr
-		// We don't need to process the alias because you cannot define aliases for inserts.
+		switch stmt := stmt.(type) {
+		case *sqlparser.Update:
+			stmt.TableExprs[0] = refTbl
+		case *sqlparser.Insert:
+			stmt.Table = refTbl
+		default:
+			panic("unsupported DML type in buildVindexTableForDML")
+		}
 	}
 
 	if !vindexTable.Keyspace.Sharded {
