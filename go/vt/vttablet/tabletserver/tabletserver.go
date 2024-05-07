@@ -1778,7 +1778,7 @@ func (tsv *TabletServer) TopoServer() *topo.Server {
 
 // CheckThrottler issues a self check
 func (tsv *TabletServer) CheckThrottler(ctx context.Context, appName string, flags *throttle.CheckFlags) *throttle.CheckResult {
-	r := tsv.lagThrottler.CheckByType(ctx, appName, base.KnownMetricNames, "", flags, throttle.ThrottleCheckSelf)
+	r := tsv.lagThrottler.CheckByType(ctx, appName, base.KnownMetricNames, flags, throttle.ThrottleCheckSelf)
 	return r
 }
 
@@ -1887,11 +1887,6 @@ func (tsv *TabletServer) registerThrottlerCheckHandlers() {
 	handle := func(path string, checkType throttle.ThrottleCheckType) {
 		tsv.exporter.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
 			ctx := tabletenv.LocalContext()
-			remoteAddr := r.Header.Get("X-Forwarded-For")
-			if remoteAddr == "" {
-				remoteAddr = r.RemoteAddr
-				remoteAddr = strings.Split(remoteAddr, ":")[0]
-			}
 			appName := r.URL.Query().Get("app")
 			if appName == "" {
 				appName = throttlerapp.DefaultName.String()
@@ -1901,7 +1896,7 @@ func (tsv *TabletServer) registerThrottlerCheckHandlers() {
 				SkipRequestHeartbeats: (r.URL.Query().Get("s") == "true"),
 			}
 			metricNames := tsv.lagThrottler.MetricNames(r.URL.Query()["m"])
-			checkResult := tsv.lagThrottler.CheckByType(ctx, appName, metricNames, remoteAddr, flags, checkType)
+			checkResult := tsv.lagThrottler.CheckByType(ctx, appName, metricNames, flags, checkType)
 			if checkResult.StatusCode == http.StatusNotFound && flags.OKIfNotExists {
 				checkResult.StatusCode = http.StatusOK // 200
 			}
