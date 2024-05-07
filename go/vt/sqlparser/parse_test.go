@@ -3649,6 +3649,9 @@ var (
 	}, {
 		input:  `select * from t1 where col1 like 'ks\_' and col2 = 'ks\_' and col1 like 'ks_' and col2 = 'ks_'`,
 		output: `select * from t1 where col1 like 'ks\_' and col2 = 'ks\_' and col1 like 'ks_' and col2 = 'ks_'`,
+	}, {
+		input:  "SELECT id, coalesce( (SELECT Json_arrayagg(Json_array(id)) FROM (SELECT *, Row_number() over (ORDER BY users.order ASC) FROM unsharded as users WHERE users.purchaseorderid = orders.id) users), json_array()) AS users, coalesce( (SELECT json_arrayagg(json_array(id)) FROM (SELECT *, row_number() over (ORDER BY tests.order ASC) FROM unsharded as tests WHERE tests.purchaseorderid = orders.id) tests), json_array()) AS tests FROM unsharded as orders WHERE orders.id = 'xxx'",
+		output: "select id, coalesce((select Json_arrayagg(json_array(id)) from (select *, row_number() over ( order by users.`order` asc) from unsharded as users where users.purchaseorderid = orders.id) as users), json_array()) as users, coalesce((select json_arrayagg(json_array(id)) from (select *, row_number() over ( order by tests.`order` asc) from unsharded as tests where tests.purchaseorderid = orders.id) as tests), json_array()) as tests from unsharded as orders where orders.id = 'xxx'",
 	}}
 )
 
