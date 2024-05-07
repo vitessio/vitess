@@ -864,6 +864,8 @@ func TestReplica(t *testing.T) {
 					require.FailNow(t, "context expired before testing completed")
 				case <-time.After(time.Second):
 					appNames := tmClient.AppNames()
+					// The replica reports to the primary that it had been checked, by issuing a CheckThrottler
+					// on the primary using the ThrottlerStimulatorName app.
 					assert.Equal(t, []string{throttlerapp.ThrottlerStimulatorName.String()}, appNames)
 				}
 				checkResult = throttler.CheckByType(ctx, throttlerapp.OnlineDDLName.String(), nil, flags, ThrottleCheckSelf)
@@ -909,6 +911,28 @@ func TestReplica(t *testing.T) {
 						assert.Equalf(t, float64(1), threshold, "storeName=%v, metricName=%v", storeName, metricName)
 					}
 				}
+			})
+			t.Run("metrics not named", func(t *testing.T) {
+				checkResult = throttler.CheckByType(ctx, throttlerapp.VitessName.String(), nil, flags, ThrottleCheckSelf)
+				require.NotNil(t, checkResult)
+				assert.Equal(t, 1, len(checkResult.Metrics))
+				for metricName, metricResult := range checkResult.Metrics {
+					assert.Equal(t, base.LagMetricName, throttler.metricNameUsedAsDefault())
+					assert.Equal(t, base.LagMetricName.String(), metricName)
+					val := metricResult.Value
+					threshold := metricResult.Threshold
+					storeName := selfStoreName
+
+					assert.NoError(t, metricResult.Error, "metricName=%v, value=%v, threshold=%v", metricName, metricResult.Value, metricResult.Threshold)
+					assert.Equalf(t, float64(0.3), val, "storeName=%v, metricName=%v", storeName, metricName)
+					assert.Equalf(t, float64(0.75), threshold, "storeName=%v, metricName=%v", storeName, metricName) // default threshold
+				}
+			})
+			t.Run("metrics names mapped", func(t *testing.T) {
+				throttler.appCheckedMetrics.Set(throttlerapp.VitessName.String(), base.MetricNames{base.LoadAvgMetricName, base.LagMetricName, base.ThreadsRunningMetricName}, cache.DefaultExpiration)
+				checkResult = throttler.CheckByType(ctx, throttlerapp.VitessName.String(), nil, flags, ThrottleCheckSelf)
+				require.NotNil(t, checkResult)
+				assert.Equal(t, 3, len(checkResult.Metrics))
 			})
 			t.Run("client, OK", func(t *testing.T) {
 				client := NewProductionClient(throttler, throttlerapp.TestingName, ThrottleCheckSelf)
