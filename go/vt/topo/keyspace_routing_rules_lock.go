@@ -61,7 +61,7 @@ func NewKeyspaceRoutingRulesLock(ctx context.Context, ts *Server, name string) (
 	return &KeyspaceRoutingRulesLock{
 		TopoLock: &TopoLock{
 			Path: KeyspaceRoutingRulesFile,
-			Name: fmt.Sprintf("KeyspaceRoutingRules:: %s", name),
+			Name: fmt.Sprintf("KeyspaceRoutingRules::%s", name),
 			ts:   ts,
 		},
 	}, nil
