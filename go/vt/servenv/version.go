@@ -19,4 +19,4 @@ package servenv
 // DO NOT EDIT
 // THIS FILE IS AUTO-GENERATED DURING NEW RELEASES BY THE VITESS-RELEASER
 
-const versionName = "18.0.5-SNAPSHOT"
+const versionName = "18.0.5"
