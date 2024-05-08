@@ -113,11 +113,6 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 		if tableIsCompressed {
 			return false, nil
 		}
-		if len(createTable.TableSpec.Columns)+len(opt.Columns) > maxColumnsForInstantAddColumn {
-			// Per MySQL docs:
-			// > The maximum number of columns in the internal representation of the table cannot exceed 1022 after column addition with the INSTANT algorithm
-			return false, nil
-		}
 		for _, column := range opt.Columns {
 			if isGenerated, storage := isGeneratedColumn(column); isGenerated {
 				if storage == sqlparser.StoredStorage {
@@ -227,6 +222,7 @@ func AlterTableCapableOfInstantDDL(alterTable *sqlparser.AlterTable, createTable
 		return false, nil
 	}
 	// For the ALTER statement to qualify for ALGORITHM=INSTANT, all alter options must each qualify.
+	numAddedColumns := 0
 	for _, alterOption := range alterTable.AlterOptions {
 		instantOK, err := alterOptionCapableOfInstantDDL(alterOption, createTable, capableOf)
 		if err != nil {
@@ -235,6 +231,15 @@ func AlterTableCapableOfInstantDDL(alterTable *sqlparser.AlterTable, createTable
 		if !instantOK {
 			return false, nil
 		}
+		switch opt := alterOption.(type) {
+		case *sqlparser.AddColumns:
+			numAddedColumns += len(opt.Columns)
+		}
+	}
+	if len(createTable.TableSpec.Columns)+numAddedColumns > maxColumnsForInstantAddColumn {
+		// Per MySQL docs:
+		// > The maximum number of columns in the internal representation of the table cannot exceed 1022 after column addition with the INSTANT algorithm
+		return false, nil
 	}
 	return true, nil
 }
