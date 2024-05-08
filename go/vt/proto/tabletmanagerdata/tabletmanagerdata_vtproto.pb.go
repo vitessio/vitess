@@ -1667,6 +1667,7 @@ func (m *SetReplicationSourceRequest) CloneVT() *SetReplicationSourceRequest {
 		ForceStartReplication: m.ForceStartReplication,
 		WaitPosition:          m.WaitPosition,
 		SemiSync:              m.SemiSync,
+		HeartbeatInterval:     m.HeartbeatInterval,
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -6242,6 +6243,12 @@ func (m *SetReplicationSourceRequest) MarshalToSizedBufferVT(dAtA []byte) (int, 
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.HeartbeatInterval != 0 {
+		i -= 8
+		binary.LittleEndian.PutUint64(dAtA[i:], uint64(math.Float64bits(float64(m.HeartbeatInterval))))
+		i--
+		dAtA[i] = 0x31
+	}
 	if m.SemiSync {
 		i--
 		if m.SemiSync {
@@ -9763,6 +9770,9 @@ func (m *SetReplicationSourceRequest) SizeVT() (n int) {
 	}
 	if m.SemiSync {
 		n += 2
+	}
+	if m.HeartbeatInterval != 0 {
+		n += 9
 	}
 	n += len(m.unknownFields)
 	return n
@@ -18508,6 +18518,17 @@ func (m *SetReplicationSourceRequest) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.SemiSync = bool(v != 0)
+		case 6:
+			if wireType != 1 {
+				return fmt.Errorf("proto: wrong wireType = %d for field HeartbeatInterval", wireType)
+			}
+			var v uint64
+			if (iNdEx + 8) > l {
+				return io.ErrUnexpectedEOF
+			}
+			v = uint64(binary.LittleEndian.Uint64(dAtA[iNdEx:]))
+			iNdEx += 8
+			m.HeartbeatInterval = float64(math.Float64frombits(v))
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])

@@ -207,6 +207,18 @@ func TestVTOrcRepairs(t *testing.T) {
 		utils.VerifyWritesSucceed(t, clusterInfo, curPrimary, []*cluster.Vttablet{replica, otherReplica}, 15*time.Second)
 	})
 
+	t.Run("Replication Misconfiguration", func(t *testing.T) {
+		_, err := utils.RunSQL(t, `SET @@global.replica_net_timeout=33`, replica, "")
+		require.NoError(t, err)
+
+		// wait until heart beat interval has been fixed by vtorc.
+		utils.CheckHeartbeatInterval(t, replica, 16.5, 15*time.Second)
+		utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.FixReplicaRecoveryName, 6)
+
+		// check that writes succeed
+		utils.VerifyWritesSucceed(t, clusterInfo, curPrimary, []*cluster.Vttablet{replica, otherReplica}, 15*time.Second)
+	})
+
 	t.Run("CircularReplication", func(t *testing.T) {
 		// change the replication source on the primary
 		changeReplicationSourceCommands := []string{

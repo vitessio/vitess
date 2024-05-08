@@ -546,7 +546,7 @@ func (erp *EmergencyReparenter) reparentReplicas(
 			forceStart = fs
 		}
 
-		err := erp.tmc.SetReplicationSource(replCtx, ti.Tablet, newPrimaryTablet.Alias, 0, "", forceStart, IsReplicaSemiSync(opts.durability, newPrimaryTablet, ti.Tablet))
+		err := erp.tmc.SetReplicationSource(replCtx, ti.Tablet, newPrimaryTablet.Alias, 0, "", forceStart, IsReplicaSemiSync(opts.durability, newPrimaryTablet, ti.Tablet), 0)
 		if err != nil {
 			err = vterrors.Wrapf(err, "tablet %v SetReplicationSource failed: %v", alias, err)
 			rec.RecordError(err)

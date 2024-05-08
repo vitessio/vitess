@@ -286,3 +286,9 @@ func IsNum(typ uint8) bool {
 		typ == typeYear ||
 		typ == typeNewDecimal
 }
+
+const (
+	readReplicationConnectionConfiguration = "SELECT * FROM performance_schema.replication_connection_configuration"
+	readReplicaNetTimeout                  = "select @@global.replica_net_timeout"
+	readSlaveNetTimeout                    = "select @@global.slave_net_timeout"
+)

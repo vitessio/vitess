@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/proto/replicationdata"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -396,6 +397,16 @@ func (mysqld *Mysqld) PrimaryStatus(ctx context.Context) (replication.PrimarySta
 	return conn.Conn.ShowPrimaryStatus()
 }
 
+func (mysqld *Mysqld) ReplicationConfiguration(ctx context.Context) (*replicationdata.Configuration, error) {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Recycle()
+
+	return conn.Conn.ReplicationConfiguration()
+}
+
 // GetGTIDPurged returns the gtid purged statuses
 func (mysqld *Mysqld) GetGTIDPurged(ctx context.Context) (replication.Position, error) {
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
@@ -434,7 +445,7 @@ func (mysqld *Mysqld) SetReplicationPosition(ctx context.Context, pos replicatio
 
 // SetReplicationSource makes the provided host / port the primary. It optionally
 // stops replication before, and starts it after.
-func (mysqld *Mysqld) SetReplicationSource(ctx context.Context, host string, port int32, stopReplicationBefore bool, startReplicationAfter bool) error {
+func (mysqld *Mysqld) SetReplicationSource(ctx context.Context, host string, port int32, heartbeatInterval float64, stopReplicationBefore bool, startReplicationAfter bool) error {
 	params, err := mysqld.dbcfgs.ReplConnector().MysqlParams()
 	if err != nil {
 		return err
@@ -449,7 +460,7 @@ func (mysqld *Mysqld) SetReplicationSource(ctx context.Context, host string, por
 	if stopReplicationBefore {
 		cmds = append(cmds, conn.Conn.StopReplicationCommand())
 	}
-	smc := conn.Conn.SetReplicationSourceCommand(params, host, port, int(replicationConnectRetry.Seconds()))
+	smc := conn.Conn.SetReplicationSourceCommand(params, host, port, heartbeatInterval, int(replicationConnectRetry.Seconds()))
 	cmds = append(cmds, smc)
 	if startReplicationAfter {
 		cmds = append(cmds, conn.Conn.StartReplicationCommand())
