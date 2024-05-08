@@ -473,6 +473,10 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			a.Analysis = NotConnectedToPrimary
 			a.Description = "Not connected to the primary"
 			//
+		} else if topo.IsReplicaType(a.TabletType) && !a.IsPrimary && math.Round(a.HeartbeatInterval*2) != float64(a.ReplicaNetTimeout) {
+			a.Analysis = ReplicaMisconfigured
+			a.Description = "Replica has been misconfigured"
+			//
 		} else if topo.IsReplicaType(a.TabletType) && !a.IsPrimary && ca.primaryAlias != "" && a.AnalyzedInstancePrimaryAlias != ca.primaryAlias {
 			a.Analysis = ConnectedToWrongPrimary
 			a.Description = "Connected to wrong primary"
@@ -490,10 +494,6 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			a.Description = "Replica semi-sync must not be set"
 			//
 			// TODO(sougou): Events below here are either ignored or not possible.
-		} else if topo.IsReplicaType(a.TabletType) && !a.IsPrimary && math.Round(a.HeartbeatInterval*2) != float64(a.ReplicaNetTimeout) {
-			a.Analysis = ReplicaMisconfigured
-			a.Description = "Replica has been misconfigured"
-			//
 		} else if a.IsPrimary && !a.LastCheckValid && a.CountLaggingReplicas == a.CountReplicas && a.CountDelayedReplicas < a.CountReplicas && a.CountValidReplicatingReplicas > 0 {
 			a.Analysis = UnreachablePrimaryWithLaggingReplicas
 			a.Description = "Primary cannot be reached by vtorc and all of its replicas are lagging"
