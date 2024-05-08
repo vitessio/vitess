@@ -189,7 +189,7 @@ func (mariadbFlavor) setReplicationPositionCommands(pos replication.Position) []
 	}
 }
 
-func (mariadbFlavor) setReplicationSourceCommand(params *ConnParams, host string, port int32, connectRetry int) string {
+func (mariadbFlavor) setReplicationSourceCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int) string {
 	args := []string{
 		fmt.Sprintf("MASTER_HOST = '%s'", host),
 		fmt.Sprintf("MASTER_PORT = %d", port),
@@ -211,6 +211,9 @@ func (mariadbFlavor) setReplicationSourceCommand(params *ConnParams, host string
 	}
 	if params.SslKey != "" {
 		args = append(args, fmt.Sprintf("MASTER_SSL_KEY = '%s'", params.SslKey))
+	}
+	if heartbeatInterval != 0 {
+		args = append(args, fmt.Sprintf("MASTER_HEARTBEAT_PERIOD = %v", heartbeatInterval))
 	}
 	args = append(args, "MASTER_USE_GTID = current_pos")
 	return "CHANGE MASTER TO\n  " + strings.Join(args, ",\n  ")

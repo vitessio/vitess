@@ -39,8 +39,21 @@ func TestMariadbSetReplicationSourceCommand(t *testing.T) {
   MASTER_USE_GTID = current_pos`
 
 	conn := &Conn{flavor: mariadbFlavor101{}}
-	got := conn.SetReplicationSourceCommand(params, host, port, connectRetry)
+	got := conn.SetReplicationSourceCommand(params, host, port, 0, connectRetry)
 	assert.Equal(t, want, got, "mariadbFlavor.SetReplicationSourceCommand(%#v, %#v, %#v, %#v) = %#v, want %#v", params, host, port, connectRetry, got, want)
+
+	var heartbeatInterval float64 = 5.4
+	want = `CHANGE MASTER TO
+  MASTER_HOST = 'localhost',
+  MASTER_PORT = 123,
+  MASTER_USER = 'username',
+  MASTER_PASSWORD = 'password',
+  MASTER_CONNECT_RETRY = 1234,
+  MASTER_HEARTBEAT_PERIOD = 5.4,
+  MASTER_USE_GTID = current_pos`
+
+	got = conn.SetReplicationSourceCommand(params, host, port, heartbeatInterval, connectRetry)
+	assert.Equal(t, want, got, "mariadbFlavor.SetReplicationSourceCommand(%#v, %#v, %#v, %#v, %#v) = %#v, want %#v", params, host, port, heartbeatInterval, connectRetry, got, want)
 
 }
 
@@ -71,7 +84,7 @@ func TestMariadbSetReplicationSourceCommandSSL(t *testing.T) {
   MASTER_USE_GTID = current_pos`
 
 	conn := &Conn{flavor: mariadbFlavor101{}}
-	got := conn.SetReplicationSourceCommand(params, host, port, connectRetry)
+	got := conn.SetReplicationSourceCommand(params, host, port, 0, connectRetry)
 	assert.Equal(t, want, got, "mariadbFlavor.SetReplicationSourceCommand(%#v, %#v, %#v, %#v) = %#v, want %#v", params, host, port, connectRetry, got, want)
 
 }

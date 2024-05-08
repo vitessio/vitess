@@ -141,7 +141,7 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 				l.Errorf("Failed to convert bool to semisync action, error: %v", err)
 				return
 			}
-			if err := tm.setReplicationSourceLocked(bgCtx, shardPrimary.Alias, 0, "", false, semiSyncAction); err != nil {
+			if err := tm.setReplicationSourceLocked(bgCtx, shardPrimary.Alias, 0, "", false, semiSyncAction, 0); err != nil {
 				l.Errorf("Failed to set replication source, error: %v", err)
 			}
 		}()

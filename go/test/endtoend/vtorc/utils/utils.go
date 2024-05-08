@@ -722,6 +722,40 @@ func CheckSourcePort(t *testing.T, replica *cluster.Vttablet, source *cluster.Vt
 	}
 }
 
+// CheckHeartbeatInterval is used to check that the replica has the given heartbeat interval set in its MySQL instance
+func CheckHeartbeatInterval(t *testing.T, replica *cluster.Vttablet, heartbeatInterval float64, timeToWait time.Duration) {
+	timeout := time.After(timeToWait)
+	for {
+		select {
+		case <-timeout:
+			t.Fatal("timed out waiting for correct heartbeat interval to be setup")
+			return
+		default:
+			res, err := RunSQL(t, "select * from performance_schema.replication_connection_configuration", replica, "")
+			require.NoError(t, err)
+
+			if len(res.Rows) != 1 {
+				log.Warningf("no replication configuration yet, will retry")
+				break
+			}
+
+			for idx, field := range res.Fields {
+				if strings.EqualFold(field.Name, "HEARTBEAT_INTERVAL") {
+					readVal, err := res.Rows[0][idx].ToFloat64()
+					require.NoError(t, err)
+					if readVal == heartbeatInterval {
+						return
+					} else {
+						log.Warningf("heartbeat interval set to - %v", readVal)
+					}
+				}
+			}
+			log.Warningf("heartbeat interval not set correctly yet, will retry")
+		}
+		time.Sleep(300 * time.Millisecond)
+	}
+}
+
 // MakeAPICall is used make an API call given the url. It returns the status and the body of the response received
 func MakeAPICall(t *testing.T, vtorc *cluster.VTOrcProcess, url string) (status int, response string, err error) {
 	t.Helper()

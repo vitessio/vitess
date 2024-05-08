@@ -456,7 +456,7 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 	if err := tm.MysqlDaemon.SetReplicationPosition(ctx, pos); err != nil {
 		return err
 	}
-	if err := tm.MysqlDaemon.SetReplicationSource(ctx, ti.Tablet.MysqlHostname, ti.Tablet.MysqlPort, false /* stopReplicationBefore */, true /* startReplicationAfter */); err != nil {
+	if err := tm.MysqlDaemon.SetReplicationSource(ctx, ti.Tablet.MysqlHostname, ti.Tablet.MysqlPort, 0, false, true); err != nil {
 		return err
 	}
 
@@ -651,7 +651,7 @@ func (tm *TabletManager) ResetReplicationParameters(ctx context.Context) error {
 
 // SetReplicationSource sets replication primary, and waits for the
 // reparent_journal table entry up to context timeout
-func (tm *TabletManager) SetReplicationSource(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync bool) error {
+func (tm *TabletManager) SetReplicationSource(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync bool, heartbeatInterval float64) error {
 	log.Infof("SetReplicationSource: parent: %v  position: %s force: %v semiSync: %v timeCreatedNS: %d", parentAlias, waitPosition, forceStartReplication, semiSync, timeCreatedNS)
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return err
@@ -668,7 +668,7 @@ func (tm *TabletManager) SetReplicationSource(ctx context.Context, parentAlias *
 
 	// setReplicationSourceLocked also fixes the semi-sync. In case the tablet type is primary it assumes that it will become a replica if SetReplicationSource
 	// is called, so we always call fixSemiSync with a non-primary tablet type. This will always set the source side replication to false.
-	return tm.setReplicationSourceLocked(ctx, parentAlias, timeCreatedNS, waitPosition, forceStartReplication, semiSyncAction)
+	return tm.setReplicationSourceLocked(ctx, parentAlias, timeCreatedNS, waitPosition, forceStartReplication, semiSyncAction, heartbeatInterval)
 }
 
 func (tm *TabletManager) setReplicationSourceSemiSyncNoAction(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) error {
@@ -678,10 +678,10 @@ func (tm *TabletManager) setReplicationSourceSemiSyncNoAction(ctx context.Contex
 	}
 	defer tm.unlock()
 
-	return tm.setReplicationSourceLocked(ctx, parentAlias, timeCreatedNS, waitPosition, forceStartReplication, SemiSyncActionNone)
+	return tm.setReplicationSourceLocked(ctx, parentAlias, timeCreatedNS, waitPosition, forceStartReplication, SemiSyncActionNone, 0)
 }
 
-func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync SemiSyncAction) (err error) {
+func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync SemiSyncAction, heartbeatInterval float64) (err error) {
 	// Change our type to REPLICA if we used to be PRIMARY.
 	// Being sent SetReplicationSource means another PRIMARY has been successfully promoted,
 	// so we convert to REPLICA first, since we want to do it even if other
@@ -745,9 +745,9 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 	if host == "" {
 		return vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "Shard primary has empty mysql hostname")
 	}
-	if status.SourceHost != host || status.SourcePort != port {
+	if status.SourceHost != host || status.SourcePort != port || heartbeatInterval != 0 {
 		// This handles both changing the address and starting replication.
-		if err := tm.MysqlDaemon.SetReplicationSource(ctx, host, port, wasReplicating, shouldbeReplicating); err != nil {
+		if err := tm.MysqlDaemon.SetReplicationSource(ctx, host, port, heartbeatInterval, wasReplicating, shouldbeReplicating); err != nil {
 			if err := tm.handleRelayLogError(ctx, err); err != nil {
 				return err
 			}

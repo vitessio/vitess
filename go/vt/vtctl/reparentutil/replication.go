@@ -194,7 +194,7 @@ func SetReplicationSource(ctx context.Context, ts *topo.Server, tmc tmclient.Tab
 	}
 
 	isSemiSync := IsReplicaSemiSync(durability, shardPrimary.Tablet, tablet)
-	return tmc.SetReplicationSource(ctx, tablet, shardPrimary.Alias, 0, "", false, isSemiSync)
+	return tmc.SetReplicationSource(ctx, tablet, shardPrimary.Alias, 0, "", false, isSemiSync, 0)
 }
 
 // replicationSnapshot stores the status maps and the tablets that were reachable

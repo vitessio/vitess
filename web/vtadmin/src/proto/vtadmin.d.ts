@@ -26360,6 +26360,9 @@ export namespace tabletmanagerdata {
 
         /** SetReplicationSourceRequest semiSync */
         semiSync?: (boolean|null);
+
+        /** SetReplicationSourceRequest heartbeat_interval */
+        heartbeat_interval?: (number|null);
     }
 
     /** Represents a SetReplicationSourceRequest. */
@@ -26385,6 +26388,9 @@ export namespace tabletmanagerdata {
 
         /** SetReplicationSourceRequest semiSync. */
         public semiSync: boolean;
+
+        /** SetReplicationSourceRequest heartbeat_interval. */
+        public heartbeat_interval: number;
 
         /**
          * Creates a new SetReplicationSourceRequest instance using the specified properties.

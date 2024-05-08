@@ -510,7 +510,7 @@ func (s *server) SetReplicationSource(ctx context.Context, request *tabletmanage
 	defer s.tm.HandleRPCPanic(ctx, "SetReplicationSource", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.SetReplicationSourceResponse{}
-	return response, s.tm.SetReplicationSource(ctx, request.Parent, request.TimeCreatedNs, request.WaitPosition, request.ForceStartReplication, request.GetSemiSync())
+	return response, s.tm.SetReplicationSource(ctx, request.Parent, request.TimeCreatedNs, request.WaitPosition, request.ForceStartReplication, request.GetSemiSync(), request.HeartbeatInterval)
 }
 
 func (s *server) ReplicaWasRestarted(ctx context.Context, request *tabletmanagerdatapb.ReplicaWasRestartedRequest) (response *tabletmanagerdatapb.ReplicaWasRestartedResponse, err error) {

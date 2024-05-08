@@ -475,7 +475,7 @@ func (fmd *FakeMysqlDaemon) SetReplicationPosition(ctx context.Context, pos repl
 }
 
 // SetReplicationSource is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) SetReplicationSource(ctx context.Context, host string, port int32, stopReplicationBefore bool, startReplicationAfter bool) error {
+func (fmd *FakeMysqlDaemon) SetReplicationSource(ctx context.Context, host string, port int32, heartbeatInterval float64, stopReplicationBefore bool, startReplicationAfter bool) error {
 	input := fmt.Sprintf("%v:%v", host, port)
 	found := false
 	for _, sourceInput := range fmd.SetReplicationSourceInputs {

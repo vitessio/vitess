@@ -534,7 +534,7 @@ func (f mysqlFlavor8) supportsCapability(capability capabilities.FlavorCapabilit
 	return capabilities.MySQLVersionHasCapability(f.serverVersion, capability)
 }
 
-func (mysqlFlavor) setReplicationSourceCommand(params *ConnParams, host string, port int32, connectRetry int) string {
+func (mysqlFlavor) setReplicationSourceCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int) string {
 	args := []string{
 		fmt.Sprintf("MASTER_HOST = '%s'", host),
 		fmt.Sprintf("MASTER_PORT = %d", port),
@@ -557,11 +557,14 @@ func (mysqlFlavor) setReplicationSourceCommand(params *ConnParams, host string, 
 	if params.SslKey != "" {
 		args = append(args, fmt.Sprintf("MASTER_SSL_KEY = '%s'", params.SslKey))
 	}
+	if heartbeatInterval != 0 {
+		args = append(args, fmt.Sprintf("MASTER_HEARTBEAT_PERIOD = %v", heartbeatInterval))
+	}
 	args = append(args, "MASTER_AUTO_POSITION = 1")
 	return "CHANGE MASTER TO\n  " + strings.Join(args, ",\n  ")
 }
 
-func (mysqlFlavor8) setReplicationSourceCommand(params *ConnParams, host string, port int32, connectRetry int) string {
+func (mysqlFlavor8) setReplicationSourceCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int) string {
 	args := []string{
 		fmt.Sprintf("SOURCE_HOST = '%s'", host),
 		fmt.Sprintf("SOURCE_PORT = %d", port),
@@ -583,6 +586,9 @@ func (mysqlFlavor8) setReplicationSourceCommand(params *ConnParams, host string,
 	}
 	if params.SslKey != "" {
 		args = append(args, fmt.Sprintf("SOURCE_SSL_KEY = '%s'", params.SslKey))
+	}
+	if heartbeatInterval != 0 {
+		args = append(args, fmt.Sprintf("SOURCE_HEARTBEAT_PERIOD = %v", heartbeatInterval))
 	}
 	args = append(args, "SOURCE_AUTO_POSITION = 1")
 	return "CHANGE REPLICATION SOURCE TO\n  " + strings.Join(args, ",\n  ")

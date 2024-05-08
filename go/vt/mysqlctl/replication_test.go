@@ -415,7 +415,7 @@ func TestSetReplicationSource(t *testing.T) {
 	ctx := context.Background()
 
 	// We expect query containing passed host and port to be executed
-	err := testMysqld.SetReplicationSource(ctx, "test_host", 2, true, true)
+	err := testMysqld.SetReplicationSource(ctx, "test_host", 2, 0, true, true)
 	assert.ErrorContains(t, err, `SOURCE_HOST = 'test_host'`)
 	assert.ErrorContains(t, err, `SOURCE_PORT = 2`)
 	assert.ErrorContains(t, err, `CHANGE REPLICATION SOURCE TO`)

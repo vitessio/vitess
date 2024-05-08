@@ -121,7 +121,7 @@ type flavor interface {
 
 	// setReplicationSourceCommand returns the command to use the provided host/port
 	// as the new replication source (without changing any GTID position).
-	setReplicationSourceCommand(params *ConnParams, host string, port int32, connectRetry int) string
+	setReplicationSourceCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int) string
 
 	// status returns the result of the appropriate status command,
 	// with parsed replication position.
@@ -370,8 +370,8 @@ func (c *Conn) SetReplicationPositionCommands(pos replication.Position) []string
 // as the new replication source (without changing any GTID position).
 // It is guaranteed to be called with replication stopped.
 // It should not start or stop replication.
-func (c *Conn) SetReplicationSourceCommand(params *ConnParams, host string, port int32, connectRetry int) string {
-	return c.flavor.setReplicationSourceCommand(params, host, port, connectRetry)
+func (c *Conn) SetReplicationSourceCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int) string {
+	return c.flavor.setReplicationSourceCommand(params, host, port, heartbeatInterval, connectRetry)
 }
 
 // resultToMap is a helper function used by ShowReplicationStatus.
