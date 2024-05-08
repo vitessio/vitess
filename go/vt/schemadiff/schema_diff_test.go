@@ -663,6 +663,16 @@ func TestSchemaDiff(t *testing.T) {
 			expectDeps:  0,
 			entityOrder: []string{"t1"},
 		},
+		{
+			name: "two identical tables, one with explicit charset, one without",
+			fromQueries: []string{
+				"create table t (id int primary key, foo varchar(64) character set utf8mb3 collate utf8mb3_bin)",
+			},
+			toQueries: []string{
+				"create table t (id int primary key, foo varchar(64) collate utf8mb3_bin)",
+			},
+			entityOrder: []string{},
+		},
 	}
 	hints := &DiffHints{RangeRotationStrategy: RangeRotationDistinctStatements}
 	for _, tc := range tt {
