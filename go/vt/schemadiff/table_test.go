@@ -1137,6 +1137,11 @@ func TestCreateTableDiff(t *testing.T) {
 			cdiff: "ALTER TABLE `t` MODIFY COLUMN `t1` varchar(128) NOT NULL, MODIFY COLUMN `t2` varchar(128) NOT NULL, MODIFY COLUMN `t3` tinytext, CHARSET utf8mb4",
 		},
 		{
+			name: "ignore identical implicit charset",
+			from: "create table t (id int primary key, v varchar(64) character set utf8mb3 collate utf8mb3_bin)",
+			to:   "create table t (id int primary key, v varchar(64) collate utf8mb3_bin)",
+		},
+		{
 			name:  "normalized unsigned attribute",
 			from:  "create table t1 (id int primary key)",
 			to:    "create table t1 (id int unsigned primary key)",
