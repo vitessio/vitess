@@ -503,6 +503,30 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `week('2024-12-31', 5)`,
 			result:     `INT64(53)`,
 		},
+		{
+			expression: `convert(0xFF using utf16)`,
+			result:     `VARCHAR("ÿ")`,
+		},
+		{
+			expression: `_utf16 0xFF`,
+			result:     `VARCHAR("ÿ")`,
+		},
+		{
+			expression: `convert(0xFF using utf32)`,
+			result:     `NULL`,
+		},
+		{
+			expression: `cast(_utf32 0xFF as binary)`,
+			result:     `VARBINARY("\x00\x00\x00\xff")`,
+		},
+		{
+			expression: `cast(_utf32 0x00FF as binary)`,
+			result:     `VARBINARY("\x00\x00\x00\xff")`,
+		},
+		{
+			expression: `cast(_utf32 0x0000FF as binary)`,
+			result:     `VARBINARY("\x00\x00\x00\xff")`,
+		},
 	}
 
 	for _, tc := range testCases {
