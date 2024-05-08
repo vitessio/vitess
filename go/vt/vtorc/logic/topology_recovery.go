@@ -783,12 +783,7 @@ func fixReplica(ctx context.Context, analysisEntry *inst.ReplicationAnalysis) (r
 		return true, topologyRecovery, err
 	}
 
-	var heartBeatInterval float64
-	if analysisEntry.Analysis == inst.ReplicaMisconfigured {
-		heartBeatInterval = float64(analysisEntry.ReplicaNetTimeout) / 2
-	}
-
-	err = setReplicationSource(ctx, analyzedTablet, primaryTablet, reparentutil.IsReplicaSemiSync(durabilityPolicy, primaryTablet, analyzedTablet), heartBeatInterval)
+	err = setReplicationSource(ctx, analyzedTablet, primaryTablet, reparentutil.IsReplicaSemiSync(durabilityPolicy, primaryTablet, analyzedTablet), float64(analysisEntry.ReplicaNetTimeout)/2)
 	return true, topologyRecovery, err
 }
 
