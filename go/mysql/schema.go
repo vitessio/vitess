@@ -39,13 +39,13 @@ const (
 	DetectSchemaChange = `
 SELECT DISTINCT table_name
 FROM (
-	SELECT table_name, column_name, ordinal_position, character_set_name, collation_name, data_type, column_key
+	SELECT table_name COLLATE utf8mb3_bin AS table_name, column_name COLLATE utf8mb3_general_ci AS column_name, ordinal_position, character_set_name COLLATE utf8mb3_general_ci AS character_set_name, collation_name COLLATE utf8mb3_general_ci AS collation_name, data_type COLLATE utf8mb3_bin AS data_type, column_key COLLATE utf8mb3_bin AS column_key
 	FROM information_schema.columns
 	WHERE table_schema = database()
 
 	UNION ALL
 
-	SELECT table_name, column_name, ordinal_position, character_set_name, collation_name, data_type, column_key
+	SELECT table_name COLLATE utf8mb3_bin AS table_name, column_name COLLATE utf8mb3_general_ci AS column_name, ordinal_position, character_set_name COLLATE utf8mb3_general_ci AS character_set_name, collation_name COLLATE utf8mb3_general_ci AS collation_name, data_type COLLATE utf8mb3_bin AS data_type, column_key COLLATE utf8mb3_bin AS column_key
 	FROM %s.schemacopy
 	WHERE table_schema = database()
 ) _inner
