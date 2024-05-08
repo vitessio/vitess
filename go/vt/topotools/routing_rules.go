@@ -147,7 +147,7 @@ func GetKeyspaceRoutingRules(ctx context.Context, ts *topo.Server) (map[string]s
 	return rules, nil
 }
 
-func SaveKeyspaceRoutingRules(ctx context.Context, ts *topo.Server, rules map[string]string) error {
+func saveKeyspaceRoutingRulesLocked(ctx context.Context, ts *topo.Server, rules map[string]string) error {
 	keyspaceRoutingRules := &vschemapb.KeyspaceRoutingRules{Rules: make([]*vschemapb.KeyspaceRoutingRule, 0, len(rules))}
 	for from, to := range rules {
 		keyspaceRoutingRules.Rules = append(keyspaceRoutingRules.Rules, &vschemapb.KeyspaceRoutingRule{
@@ -158,8 +158,8 @@ func SaveKeyspaceRoutingRules(ctx context.Context, ts *topo.Server, rules map[st
 	return ts.SaveKeyspaceRoutingRules(ctx, keyspaceRoutingRules)
 }
 
-func SaveKeyspaceRoutingRulesLocked(ctx context.Context, ts *topo.Server, reason string,
-	callback func(ctx context.Context) error) (err error) {
+func UpdateKeyspaceRoutingRules(ctx context.Context, ts *topo.Server, reason string,
+	update func(ctx context.Context, rules *map[string]string) error) (err error) {
 	var lock *topo.KeyspaceRoutingRulesLock
 	lock, err = topo.NewKeyspaceRoutingRulesLock(ctx, ts, reason)
 	if err != nil {
@@ -170,7 +170,17 @@ func SaveKeyspaceRoutingRulesLocked(ctx context.Context, ts *topo.Server, reason
 		return lockErr
 	}
 	defer unlock(&err)
-	return callback(lockCtx)
+	rules, _ := GetKeyspaceRoutingRules(lockCtx, ts)
+	if rules == nil {
+		rules = make(map[string]string)
+	}
+	if err := update(lockCtx, &rules); err != nil {
+		return err
+	}
+	if err := saveKeyspaceRoutingRulesLocked(lockCtx, ts, rules); err != nil {
+		return err
+	}
+	return nil
 }
 
 // endregion

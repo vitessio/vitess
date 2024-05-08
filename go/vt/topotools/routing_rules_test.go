@@ -102,7 +102,12 @@ func TestKeyspaceRoutingRulesRoundTrip(t *testing.T) {
 		"ks4": "ks5",
 	}
 
-	err := SaveKeyspaceRoutingRules(ctx, ts, rulesMap)
+	err := UpdateKeyspaceRoutingRules(ctx, ts, "test", func(ctx context.Context, rules *map[string]string) error {
+		for k, v := range rulesMap {
+			(*rules)[k] = v
+		}
+		return nil
+	})
 	require.NoError(t, err, "could not save keyspace routing rules to topo %v", rulesMap)
 
 	roundtripRulesMap, err := GetKeyspaceRoutingRules(ctx, ts)

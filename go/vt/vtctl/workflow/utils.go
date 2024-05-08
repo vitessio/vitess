@@ -865,20 +865,10 @@ func changeKeyspaceRouting(ctx context.Context, ts *topo.Server, tabletTypes []t
 
 // updateKeyspaceRoutingRules updates the keyspace routing rule for the (effective) source keyspace to the target keyspace.
 func updateKeyspaceRoutingRules(ctx context.Context, ts *topo.Server, sourceKeyspace, reason string, routes map[string]string) error {
-	err := topotools.SaveKeyspaceRoutingRulesLocked(ctx, ts, reason,
-		func(ctx context.Context) error {
-			rules, err := topotools.GetKeyspaceRoutingRules(ctx, ts)
-			if err != nil {
-				return err
-			}
-			if rules == nil {
-				rules = make(map[string]string)
-			}
+	err := topotools.UpdateKeyspaceRoutingRules(ctx, ts, reason,
+		func(ctx context.Context, rules *map[string]string) error {
 			for fromKeyspace, toKeyspace := range routes {
-				rules[fromKeyspace] = toKeyspace
-			}
-			if err := topotools.SaveKeyspaceRoutingRules(ctx, ts, rules); err != nil {
-				return err
+				(*rules)[fromKeyspace] = toKeyspace
 			}
 			return nil
 		})

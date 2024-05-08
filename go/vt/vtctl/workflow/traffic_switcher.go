@@ -445,17 +445,10 @@ func (ts *trafficSwitcher) deleteKeyspaceRoutingRules(ctx context.Context) error
 	}
 	log.Infof("deleteKeyspaceRoutingRules: workflow %s.%s", ts.targetKeyspace, ts.workflow)
 	name := fmt.Sprintf("Deleting %s", ts.SourceKeyspaceName())
-	return topotools.SaveKeyspaceRoutingRulesLocked(ctx, ts.TopoServer(), name,
-		func(ctx context.Context) error {
-			krr, err := topotools.GetKeyspaceRoutingRules(ctx, ts.TopoServer())
-			if err != nil {
-				return err
-			}
+	return topotools.UpdateKeyspaceRoutingRules(ctx, ts.TopoServer(), name,
+		func(ctx context.Context, rules *map[string]string) error {
 			for _, suffix := range tabletTypeSuffixes {
-				delete(krr, ts.SourceKeyspaceName()+suffix)
-			}
-			if err := topotools.SaveKeyspaceRoutingRules(ctx, ts.TopoServer(), krr); err != nil {
-				return err
+				delete(*rules, ts.SourceKeyspaceName()+suffix)
 			}
 			return nil
 		})
