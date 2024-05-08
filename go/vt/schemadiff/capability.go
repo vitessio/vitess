@@ -152,6 +152,9 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 		}
 		if isGenerated, _ := isGeneratedColumn(col); isGenerated {
 			// supported by all 8.0 versions
+			// Note: according to the docs dropping a STORED generated column is not INSTANT-able,
+			// but in practice this is supported. This is why we don't test for STORED here, like
+			// we did for `AddColumns`.
 			return capableOf(capabilities.InstantAddDropVirtualColumnFlavorCapability)
 		}
 		return capableOf(capabilities.InstantAddDropColumnFlavorCapability)
