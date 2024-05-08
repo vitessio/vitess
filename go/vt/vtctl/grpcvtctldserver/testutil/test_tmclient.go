@@ -1092,7 +1092,7 @@ func (fake *TabletManagerClient) RunHealthCheck(ctx context.Context, tablet *top
 }
 
 // SetReplicationSource is part of the tmclient.TabletManagerClient interface.
-func (fake *TabletManagerClient) SetReplicationSource(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync bool) error {
+func (fake *TabletManagerClient) SetReplicationSource(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync bool, heartbeatInterval float64) error {
 	if fake.SetReplicationSourceResults == nil {
 		return assert.AnError
 	}

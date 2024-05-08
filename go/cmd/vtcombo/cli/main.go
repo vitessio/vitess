@@ -363,7 +363,7 @@ type vtcomboMysqld struct {
 }
 
 // SetReplicationSource implements the MysqlDaemon interface
-func (mysqld *vtcomboMysqld) SetReplicationSource(ctx context.Context, host string, port int32, stopReplicationBefore bool, startReplicationAfter bool) error {
+func (mysqld *vtcomboMysqld) SetReplicationSource(ctx context.Context, host string, port int32, heartbeatInterval float64, stopReplicationBefore bool, startReplicationAfter bool) error {
 	return nil
 }
 

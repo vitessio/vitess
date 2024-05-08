@@ -19,6 +19,7 @@ package utils
 import (
 	"context"
 	"fmt"
+	"math"
 	"os"
 	"testing"
 	"time"
@@ -212,7 +213,7 @@ func TestReplicationStatus(t *testing.T) {
 	require.NoError(t, err)
 	host := "localhost"
 
-	q := conn.SetReplicationSourceCommand(&mysqlParams, host, port, int(port))
+	q := conn.SetReplicationSourceCommand(&mysqlParams, host, port, 0, int(port))
 	res := Exec(t, conn, q)
 	require.NotNil(t, res)
 
@@ -232,6 +233,17 @@ func TestPrimaryStatus(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.True(t, res.Position.Equal(r.Position), "primary replication status should be same as replication status here")
+}
+
+func TestReplicationConfiguration(t *testing.T) {
+	require.NotNil(t, mysqld)
+
+	replConfig, err := mysqld.ReplicationConfiguration(context.Background())
+	assert.NoError(t, err)
+
+	require.NotNil(t, replConfig)
+	// For a properly configured mysql, the heartbeat interval is half of the replication net timeout.
+	require.EqualValues(t, math.Round(replConfig.HeartbeatInterval*2), replConfig.ReplicaNetTimeout)
 }
 
 func TestGTID(t *testing.T) {
@@ -287,13 +299,18 @@ func TestSetAndResetReplication(t *testing.T) {
 	require.NoError(t, err)
 	host := "localhost"
 
-	err = mysqld.SetReplicationSource(context.Background(), host, port, true, true)
+	var heartbeatInterval float64 = 5.4
+	err = mysqld.SetReplicationSource(context.Background(), host, port, heartbeatInterval, true, true)
 	assert.NoError(t, err)
 
 	r, err := mysqld.ReplicationStatus(context.Background())
 	assert.NoError(t, err)
 	assert.Equal(t, port, r.SourcePort)
 	assert.Equal(t, host, r.SourceHost)
+
+	replConfig, err := mysqld.ReplicationConfiguration(context.Background())
+	require.NoError(t, err)
+	assert.EqualValues(t, heartbeatInterval, replConfig.HeartbeatInterval)
 
 	err = mysqld.ResetReplication(context.Background())
 	assert.NoError(t, err)
@@ -303,7 +320,7 @@ func TestSetAndResetReplication(t *testing.T) {
 	assert.Equal(t, "", r.SourceHost)
 	assert.Equal(t, int32(0), r.SourcePort)
 
-	err = mysqld.SetReplicationSource(context.Background(), host, port, true, true)
+	err = mysqld.SetReplicationSource(context.Background(), host, port, 0, true, true)
 	assert.NoError(t, err)
 
 	r, err = mysqld.ReplicationStatus(context.Background())
@@ -442,7 +459,7 @@ func TestWaitForReplicationStart(t *testing.T) {
 	require.NoError(t, err)
 	host := "localhost"
 
-	err = mysqld.SetReplicationSource(context.Background(), host, port, true, true)
+	err = mysqld.SetReplicationSource(context.Background(), host, port, 0, true, true)
 	assert.NoError(t, err)
 
 	err = mysqlctl.WaitForReplicationStart(context.Background(), mysqld, 1)
@@ -465,7 +482,7 @@ func TestStartReplication(t *testing.T) {
 	host := "localhost"
 
 	// Set startReplicationAfter to false as we want to test StartReplication here
-	err = mysqld.SetReplicationSource(context.Background(), host, port, true, false)
+	err = mysqld.SetReplicationSource(context.Background(), host, port, 0, true, false)
 	assert.NoError(t, err)
 
 	err = mysqld.StartReplication(context.Background(), map[string]string{})
@@ -484,7 +501,7 @@ func TestStopReplication(t *testing.T) {
 	require.NoError(t, err)
 	host := "localhost"
 
-	err = mysqld.SetReplicationSource(context.Background(), host, port, true, true)
+	err = mysqld.SetReplicationSource(context.Background(), host, port, 0, true, true)
 	assert.NoError(t, err)
 
 	r, err := mysqld.ReplicationStatus(context.Background())
@@ -510,7 +527,7 @@ func TestStopSQLThread(t *testing.T) {
 	require.NoError(t, err)
 	host := "localhost"
 
-	err = mysqld.SetReplicationSource(context.Background(), host, port, true, true)
+	err = mysqld.SetReplicationSource(context.Background(), host, port, 0, true, true)
 	assert.NoError(t, err)
 
 	r, err := mysqld.ReplicationStatus(context.Background())

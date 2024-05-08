@@ -26360,6 +26360,9 @@ export namespace tabletmanagerdata {
 
         /** SetReplicationSourceRequest semiSync */
         semiSync?: (boolean|null);
+
+        /** SetReplicationSourceRequest heartbeat_interval */
+        heartbeat_interval?: (number|null);
     }
 
     /** Represents a SetReplicationSourceRequest. */
@@ -26385,6 +26388,9 @@ export namespace tabletmanagerdata {
 
         /** SetReplicationSourceRequest semiSync. */
         public semiSync: boolean;
+
+        /** SetReplicationSourceRequest heartbeat_interval. */
+        public heartbeat_interval: number;
 
         /**
          * Creates a new SetReplicationSourceRequest instance using the specified properties.
@@ -42333,6 +42339,109 @@ export namespace replicationdata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of a Configuration. */
+    interface IConfiguration {
+
+        /** Configuration heartbeat_interval */
+        heartbeat_interval?: (number|null);
+
+        /** Configuration replica_net_timeout */
+        replica_net_timeout?: (number|null);
+    }
+
+    /** Represents a Configuration. */
+    class Configuration implements IConfiguration {
+
+        /**
+         * Constructs a new Configuration.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: replicationdata.IConfiguration);
+
+        /** Configuration heartbeat_interval. */
+        public heartbeat_interval: number;
+
+        /** Configuration replica_net_timeout. */
+        public replica_net_timeout: number;
+
+        /**
+         * Creates a new Configuration instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns Configuration instance
+         */
+        public static create(properties?: replicationdata.IConfiguration): replicationdata.Configuration;
+
+        /**
+         * Encodes the specified Configuration message. Does not implicitly {@link replicationdata.Configuration.verify|verify} messages.
+         * @param message Configuration message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: replicationdata.IConfiguration, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified Configuration message, length delimited. Does not implicitly {@link replicationdata.Configuration.verify|verify} messages.
+         * @param message Configuration message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: replicationdata.IConfiguration, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a Configuration message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns Configuration
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): replicationdata.Configuration;
+
+        /**
+         * Decodes a Configuration message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns Configuration
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): replicationdata.Configuration;
+
+        /**
+         * Verifies a Configuration message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a Configuration message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns Configuration
+         */
+        public static fromObject(object: { [k: string]: any }): replicationdata.Configuration;
+
+        /**
+         * Creates a plain object from a Configuration message. Also converts values to other types if specified.
+         * @param message Configuration
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: replicationdata.Configuration, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this Configuration to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Configuration
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Properties of a StopReplicationStatus. */
     interface IStopReplicationStatus {
 
@@ -42610,6 +42719,9 @@ export namespace replicationdata {
 
         /** FullStatus super_read_only */
         super_read_only?: (boolean|null);
+
+        /** FullStatus replication_configuration */
+        replication_configuration?: (replicationdata.IConfiguration|null);
     }
 
     /** Represents a FullStatus. */
@@ -42683,6 +42795,9 @@ export namespace replicationdata {
 
         /** FullStatus super_read_only. */
         public super_read_only: boolean;
+
+        /** FullStatus replication_configuration. */
+        public replication_configuration?: (replicationdata.IConfiguration|null);
 
         /**
          * Creates a new FullStatus instance using the specified properties.

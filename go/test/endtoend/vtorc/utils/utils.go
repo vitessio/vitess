@@ -692,10 +692,11 @@ func ResetPrimaryLogs(t *testing.T, curPrimary *cluster.Vttablet) {
 
 // CheckSourcePort is used to check that the replica has the given source port set in its MySQL instance
 func CheckSourcePort(t *testing.T, replica *cluster.Vttablet, source *cluster.Vttablet, timeToWait time.Duration) {
-	timeout := time.After(timeToWait)
+	ctx, cancel := context.WithTimeout(context.Background(), timeToWait)
+	defer cancel()
 	for {
 		select {
-		case <-timeout:
+		case <-ctx.Done():
 			t.Fatal("timedout waiting for correct primary to be setup")
 			return
 		default:
@@ -717,6 +718,41 @@ func CheckSourcePort(t *testing.T, replica *cluster.Vttablet, source *cluster.Vt
 				}
 			}
 			log.Warningf("source port not set correctly yet, will retry")
+		}
+		time.Sleep(300 * time.Millisecond)
+	}
+}
+
+// CheckHeartbeatInterval is used to check that the replica has the given heartbeat interval set in its MySQL instance
+func CheckHeartbeatInterval(t *testing.T, replica *cluster.Vttablet, heartbeatInterval float64, timeToWait time.Duration) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeToWait)
+	defer cancel()
+	for {
+		select {
+		case <-ctx.Done():
+			t.Fatal("timed out waiting for correct heartbeat interval to be setup")
+			return
+		default:
+			res, err := RunSQL(t, "select * from performance_schema.replication_connection_configuration", replica, "")
+			require.NoError(t, err)
+
+			if len(res.Rows) != 1 {
+				log.Warningf("no replication configuration yet, will retry")
+				break
+			}
+
+			for idx, field := range res.Fields {
+				if strings.EqualFold(field.Name, "HEARTBEAT_INTERVAL") {
+					readVal, err := res.Rows[0][idx].ToFloat64()
+					require.NoError(t, err)
+					if readVal == heartbeatInterval {
+						return
+					} else {
+						log.Warningf("heartbeat interval set to - %v", readVal)
+					}
+				}
+			}
+			log.Warningf("heartbeat interval not set correctly yet, will retry")
 		}
 		time.Sleep(300 * time.Millisecond)
 	}
