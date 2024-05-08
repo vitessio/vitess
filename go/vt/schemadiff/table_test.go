@@ -1879,6 +1879,11 @@ func TestCreateTableDiff(t *testing.T) {
 			cdiff: "ALTER TABLE `t` COLLATE utf8mb4_0900_bin",
 		},
 		{
+			name: "ignore identical implicit charset",
+			from: "create table t (id int primary key, v varchar(64) character set utf8mb3 collate utf8mb3_bin)",
+			to:   "create table t (id int primary key, v varchar(64) collate utf8mb3_bin)",
+		},
+		{
 			name:  "normalized unsigned attribute",
 			from:  "create table t1 (id int primary key)",
 			to:    "create table t1 (id int unsigned primary key)",
@@ -2888,6 +2893,11 @@ func TestNormalize(t *testing.T) {
 			name: "drops existing collation if it matches table default at column level for non default charset",
 			from: "create table t (id int signed primary key, v varchar(255) charset utf8mb3 collate utf8_unicode_ci) charset utf8mb3 collate utf8_unicode_ci",
 			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`v` varchar(255),\n\tPRIMARY KEY (`id`)\n) CHARSET utf8mb3,\n  COLLATE utf8mb3_unicode_ci",
+		},
+		{
+			name: "remove column charset if collation is explicit and implies specified charset",
+			from: "create table t (id int primary key, v varchar(255) charset utf8mb4 collate utf8mb4_german2_ci)",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`v` varchar(255) COLLATE utf8mb4_german2_ci,\n\tPRIMARY KEY (`id`)\n)",
 		},
 		{
 			name: "correct case table options for engine",
