@@ -32,8 +32,6 @@ func TestKeyspaceRoutingRulesLock(t *testing.T) {
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "zone1")
 	defer ts.Close()
-	conn := ts.GetGlobalCell()
-	require.NotNil(t, conn)
 
 	currentTopoLockTimeout := topo.LockTimeout
 	topo.LockTimeout = testLockTimeout

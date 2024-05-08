@@ -353,10 +353,6 @@ func (ts *Server) Close() {
 	ts.cellConns = make(map[string]cellConn)
 }
 
-func (ts *Server) GetGlobalCell() Conn {
-	return ts.globalCell
-}
-
 func (ts *Server) clearCellAliasesCache() {
 	cellsAliases.mu.Lock()
 	defer cellsAliases.mu.Unlock()

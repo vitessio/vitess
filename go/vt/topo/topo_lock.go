@@ -19,6 +19,7 @@ package topo
 import (
 	"context"
 	"fmt"
+	"path"
 
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
@@ -148,4 +149,28 @@ func (tl TopoLock) Lock(ctx context.Context) (context.Context, func(*error), err
 		}
 		delete(i.info, tl.Path)
 	}, nil
+}
+
+/*
+EnsureKeyExists creates the specified  key by creating a sentinel (dummy) child key under it.
+Vitess expects a key to exist, and to have a child key (it imposes a directory-like structure), before locking it.
+Without this we get an error when trying to lock :node doesn't exist: /vitess/global/<keyPath>/.
+*/
+func (ts *Server) EnsureKeyExists(ctx context.Context, name, keyPath string) error {
+	sentinelPath := path.Join(keyPath, "sentinel")
+	_, _, err := ts.globalCell.Get(ctx, sentinelPath)
+	if IsErrType(err, NoNode) {
+		_, err = ts.globalCell.Create(ctx, sentinelPath,
+			[]byte(fmt.Sprintf("force creation of %s root key", name)))
+		if IsErrType(err, NodeExists) {
+			// Another process created the file, which is fine.
+			return nil
+		}
+		if err != nil {
+			log.Errorf(fmt.Sprintf("Failed to create sentinel file %s: %v", sentinelPath, err))
+		} else {
+			log.Infof(fmt.Sprintf("Successfully created sentinel file %s", sentinelPath))
+		}
+	}
+	return err
 }

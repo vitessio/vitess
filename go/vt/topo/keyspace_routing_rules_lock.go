@@ -19,7 +19,6 @@ package topo
 import (
 	"context"
 	"fmt"
-	"path"
 
 	"vitess.io/vitess/go/vt/log"
 )
@@ -29,31 +28,8 @@ type KeyspaceRoutingRulesLock struct {
 	*TopoLock
 }
 
-/*
-createTopoDirIfNeeded creates the keyspace routing rules key by creating a sentinel (dummy) child key under it.
-Vitess expects a key to exist, and to have a child key (it imposes a directory-like structure), before locking it.
-Without this we get an error when trying to lock :node doesn't exist: /vitess/global/KeyspaceRoutingRules/.
-*/
-func createTopoDirIfNeeded(ctx context.Context, ts *Server) error {
-	sentinelPath := path.Join(KeyspaceRoutingRulesFile, "sentinel")
-	_, _, err := ts.GetGlobalCell().Get(ctx, sentinelPath)
-	if IsErrType(err, NoNode) {
-		_, err = ts.globalCell.Create(ctx, sentinelPath, []byte("force creation of the keyspace routing rules root key"))
-		if IsErrType(err, NodeExists) {
-			// Another process created the file, which is fine.
-			return nil
-		}
-		if err != nil {
-			log.Errorf("Failed to create keyspace routing rules sentinel file: %v", err)
-		} else {
-			log.Infof("Successfully created keyspace routing rules sentinel file %s", sentinelPath)
-		}
-	}
-	return err
-}
-
 func NewKeyspaceRoutingRulesLock(ctx context.Context, ts *Server, name string) (*KeyspaceRoutingRulesLock, error) {
-	if err := createTopoDirIfNeeded(ctx, ts); err != nil {
+	if err := ts.EnsureKeyExists(ctx, "Keyspace Routing Rules", KeyspaceRoutingRulesFile); err != nil {
 		log.Errorf("Failed to create keyspace routing rules lock file: %v", err)
 		return nil, err
 	}

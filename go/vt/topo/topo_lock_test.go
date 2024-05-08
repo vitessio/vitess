@@ -36,12 +36,8 @@ func TestTopoLockTimeout(t *testing.T) {
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "zone1")
 	defer ts.Close()
-	conn := ts.GetGlobalCell()
-	require.NotNil(t, conn)
-	_, err := conn.Create(ctx, "root/key1", []byte("value"))
-	if err != nil {
-		return
-	}
+	err := ts.EnsureKeyExists(ctx, "test", "root/key1")
+	require.NoError(t, err)
 
 	currentTopoLockTimeout := topo.LockTimeout
 	topo.LockTimeout = testLockTimeout
@@ -67,12 +63,8 @@ func TestTopoLockBasic(t *testing.T) {
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "zone1")
 	defer ts.Close()
-	conn := ts.GetGlobalCell()
-	require.NotNil(t, conn)
-	_, err := conn.Create(ctx, "root/key1", []byte("value"))
-	if err != nil {
-		return
-	}
+	err := ts.EnsureKeyExists(ctx, "test", "root/key1")
+	require.NoError(t, err)
 
 	origCtx := ctx
 	tl1 := ts.NewTopoLock("root/key1", "name")
@@ -90,10 +82,8 @@ func TestTopoLockBasic(t *testing.T) {
 	defer unlock(&err)
 
 	// locking another key should work
-	_, err = conn.Create(ctx, "root/key2", []byte("value"))
-	if err != nil {
-		return
-	}
+	err = ts.EnsureKeyExists(ctx, "test", "root/key2")
+	require.NoError(t, err)
 	tl2 := ts.NewTopoLock("root/key2", "name")
 	_, unlock2, err := tl2.Lock(ctx)
 	require.NoError(t, err)
