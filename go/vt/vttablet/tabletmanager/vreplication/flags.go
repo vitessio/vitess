@@ -59,10 +59,6 @@ func registerVReplicationFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&vreplicationStoreCompressedGTID, "vreplication_store_compressed_gtid", vreplicationStoreCompressedGTID, "Store compressed gtids in the pos column of the sidecar database's vreplication table")
 
 	fs.IntVar(&vreplicationParallelInsertWorkers, "vreplication-parallel-insert-workers", vreplicationParallelInsertWorkers, "Number of parallel insertion workers to use during copy phase. Set <= 1 to disable parallelism, or > 1 to enable concurrent insertion during copy phase.")
-
-	// Deprecated and ignored in v19.
-	fs.String("vreplication_tablet_type", tabletTypesStr, "Comma-separated list of tablet types used as a source.")
-	fs.MarkDeprecated("vreplication_tablet_type", "As of v19 this is ignored and will be removed in a future release.")
 }
 
 func init() {
