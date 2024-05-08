@@ -692,10 +692,11 @@ func ResetPrimaryLogs(t *testing.T, curPrimary *cluster.Vttablet) {
 
 // CheckSourcePort is used to check that the replica has the given source port set in its MySQL instance
 func CheckSourcePort(t *testing.T, replica *cluster.Vttablet, source *cluster.Vttablet, timeToWait time.Duration) {
-	timeout := time.After(timeToWait)
+	ctx, cancel := context.WithTimeout(context.Background(), timeToWait)
+	defer cancel()
 	for {
 		select {
-		case <-timeout:
+		case <-ctx.Done():
 			t.Fatal("timedout waiting for correct primary to be setup")
 			return
 		default:
@@ -724,10 +725,11 @@ func CheckSourcePort(t *testing.T, replica *cluster.Vttablet, source *cluster.Vt
 
 // CheckHeartbeatInterval is used to check that the replica has the given heartbeat interval set in its MySQL instance
 func CheckHeartbeatInterval(t *testing.T, replica *cluster.Vttablet, heartbeatInterval float64, timeToWait time.Duration) {
-	timeout := time.After(timeToWait)
+	ctx, cancel := context.WithTimeout(context.Background(), timeToWait)
+	defer cancel()
 	for {
 		select {
-		case <-timeout:
+		case <-ctx.Done():
 			t.Fatal("timed out waiting for correct heartbeat interval to be setup")
 			return
 		default:
