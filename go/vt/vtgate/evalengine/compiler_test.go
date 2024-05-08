@@ -699,6 +699,30 @@ func TestCompilerSingle(t *testing.T) {
 			result:     `DATETIME("2023-10-24 12:00:00.000000")`,
 			typeWanted: evalengine.NewTypeEx(sqltypes.Datetime, collations.CollationBinaryID, false, 6, 0, nil),
 		},
+		{
+			expression: `convert(0xFF using utf16)`,
+			result:     `VARCHAR("ÿ")`,
+		},
+		{
+			expression: `_utf16 0xFF`,
+			result:     `VARCHAR("ÿ")`,
+		},
+		{
+			expression: `convert(0xFF using utf32)`,
+			result:     `NULL`,
+		},
+		{
+			expression: `cast(_utf32 0xFF as binary)`,
+			result:     `VARBINARY("\x00\x00\x00\xff")`,
+		},
+		{
+			expression: `cast(_utf32 0x00FF as binary)`,
+			result:     `VARBINARY("\x00\x00\x00\xff")`,
+		},
+		{
+			expression: `cast(_utf32 0x0000FF as binary)`,
+			result:     `VARBINARY("\x00\x00\x00\xff")`,
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")
