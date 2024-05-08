@@ -857,14 +857,14 @@ func changeKeyspaceRouting(ctx context.Context, ts *topo.Server, tabletTypes []t
 		suffix := getTabletTypeSuffix(tabletType)
 		routes[sourceKeyspace+suffix] = targetKeyspace
 	}
-	if err := updateKeyspaceRoutingRule(ctx, ts, sourceKeyspace, reason, routes); err != nil {
+	if err := updateKeyspaceRoutingRules(ctx, ts, sourceKeyspace, reason, routes); err != nil {
 		return err
 	}
 	return ts.RebuildSrvVSchema(ctx, nil)
 }
 
-// updateKeyspaceRoutingRule updates the keyspace routing rule for the (effective) source keyspace to the target keyspace.
-func updateKeyspaceRoutingRule(ctx context.Context, ts *topo.Server, sourceKeyspace, reason string, routes map[string]string) error {
+// updateKeyspaceRoutingRules updates the keyspace routing rule for the (effective) source keyspace to the target keyspace.
+func updateKeyspaceRoutingRules(ctx context.Context, ts *topo.Server, sourceKeyspace, reason string, routes map[string]string) error {
 	err := topotools.SaveKeyspaceRoutingRulesLocked(ctx, ts, reason,
 		func(ctx context.Context) error {
 			rules, err := topotools.GetKeyspaceRoutingRules(ctx, ts)
