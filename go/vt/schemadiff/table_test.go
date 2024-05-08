@@ -1142,6 +1142,15 @@ func TestCreateTableDiff(t *testing.T) {
 			to:   "create table t (id int primary key, v varchar(64) collate utf8mb3_bin)",
 		},
 		{
+			name: "ignore identical implicit charset",
+			from: "create table t (id int primary key, v varchar(64) character set utf8mb3 collate utf8mb3_bin)",
+			to:   "create table t (id int primary key, v varchar(64) collate utf8mb3_bin)",
+		},
+		{
+			from: "create table t (id int primary key, v varchar(64) character set utf8 collate utf8_bin)",
+			to:   "create table t (id int primary key, v varchar(64) character set utf8mb3 collate utf8mb3_bin)",
+		},
+		{
 			name:  "normalized unsigned attribute",
 			from:  "create table t1 (id int primary key)",
 			to:    "create table t1 (id int unsigned primary key)",
