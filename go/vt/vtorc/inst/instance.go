@@ -45,6 +45,8 @@ type Instance struct {
 	SourceUUID                   string
 	AncestryUUID                 string
 
+	ReplicaNetTimeout          int32
+	HeartbeatInterval          float64
 	ReplicationSQLThreadRuning bool
 	ReplicationIOThreadRuning  bool
 	ReplicationSQLThreadState  ReplicationThreadState
