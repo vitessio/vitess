@@ -74,6 +74,18 @@ func TestAlterTableCapableOfInstantDDL(t *testing.T) {
 			expectCapableOfInstantDDL: false,
 		},
 		{
+			name:                      "add virtual column",
+			create:                    "create table t(id int, i1 int not null, primary key(id))",
+			alter:                     "alter table t add column i2 int generated always as (i1 + 1) virtual",
+			expectCapableOfInstantDDL: true,
+		},
+		{
+			name:                      "add stored column",
+			create:                    "create table t(id int, i1 int not null, primary key(id))",
+			alter:                     "alter table t add column i2 int generated always as (i1 + 1) stored",
+			expectCapableOfInstantDDL: false,
+		},
+		{
 			name:                      "drop virtual column",
 			create:                    "create table t(id int, i1 int not null, i2 int generated always as (i1 + 1) virtual, primary key(id))",
 			alter:                     "alter table t drop column i2",
