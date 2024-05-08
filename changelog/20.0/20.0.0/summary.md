@@ -8,6 +8,7 @@
     - [vitess/base and vitess/k8s Docker images](#base-k8s-images)
     - [`gh-ost` binary and endtoend tests](#gh-ost-binary-tests-removal)
   - **[Breaking changes](#breaking-changes)**
+    - [ENUM and SET column handling in VTGate VStream API](#enum-set-vstream)
     - [`shutdown_grace_period` Default Change](#shutdown-grace-period-default)
     - [New `unmanaged` Flag and `disable_active_reparents` deprecation](#unmanaged-flag)
     - [`recovery-period-block-duration` Flag deprecation](#recovery-block-deprecation)
@@ -92,6 +93,14 @@ Vitess 20.0 drops support for `gh-ost` DDL strategy.
 Vitess' endtoend tests no longer use nor test `gh-ost` migrations.
 
 ### <a id="breaking-changes"/>Breaking Changes
+
+#### <a id="enum-set-vstream"/>ENUM and SET column handling in VTGate VStream API
+
+The [VTGate VStream API](https://vitess.io/docs/reference/vreplication/vstream/) now returns [`ENUM`](https://dev.mysql.com/doc/refman/en/enum.html) and [`SET`](https://dev.mysql.com/doc/refman/en/set.html) column type values in [`VEvent`](https://pkg.go.dev/vitess.io/vitess/go/vt/proto/binlogdata#VEvent) messages (in the embedded [`RowChange`](https://pkg.go.dev/vitess.io/vitess/go/vt/proto/binlogdata#RowChange) messages) as their string values instead of the integer based ones — in both the copy/snapshot phase and the streaming phase. This change was done to make the `VStream` API more user-friendly, intuitive, and to align the behavior across both phases. Before [this change](https://github.com/vitessio/vitess/pull/15723) the values for [`ENUM`](https://dev.mysql.com/doc/refman/en/enum.html) and [`SET`](https://dev.mysql.com/doc/refman/en/set.html) columns were string values in the copy phase but integer values in the Streaming Phase. This inconsistency led to various [challenges and issues](https://github.com/vitessio/vitess/issues/15750) for each `VStream` client/consumer (e.g. the [`Debezium` Vitess connector](https://debezium.io/documentation/reference/stable/connectors/vitess.html) failed to properly perform a snapshot for tables containing these column types). Now the behavior is intuitive — clients need the string values as the eventual sink is often not MySQL so each consumer needed to perform the mappings themselves — and consistent. While this is a breaking change — as any consumer that has a hardcoded assumption that the values will be integer based and the mapping must be done (as the [`Debezium` Vitess connector](https://debezium.io/documentation/reference/stable/connectors/vitess.html) does in versions older than 2.7) will break when string values are sent in the running phase (they were already string values in the copy phase) — a new boolean field has been added to the [`FieldEvent`](https://pkg.go.dev/vitess.io/vitess/go/vt/proto/binlogdata#FieldEvent) message called `EnumSetStringValues`. When that value is `false` then the consumer will need to perform the mappings as before (in Vitess v19 and older), but when this field is `true` then no mapping is required. This will help transition all consumers over time and we can eventually deprecate this new field.
+
+If you're using the [`Debezium` Vitess connector](https://debezium.io/documentation/reference/stable/connectors/vitess.html), you should upgrade your connector to 2.7 (the next release) — which should contain [the relevant necessary changes](https://issues.redhat.com/browse/DBZ-7792) — *prior to upgrading Vitess* to v20.0.1 or later. If you're using any of the PlanetScale connectors ([`AirByte`](https://github.com/planetscale/airbyte-source/), [`FiveTran`](https://github.com/planetscale/fivetran-source), or [`singer-tap`](https://github.com/planetscale/singer-tap)) then no actions are required.
+
+If you're using a custom `VStream` client/consumer, then you will need to build a new client with the updated [binlogdata protos](https://github.com/vitessio/vitess/blob/main/proto/binlogdata.proto) in `main` or the `release-20.0` branch before needing to support Vitess v20.0.1 or later. Your client will then be able to handle old and new messages, with older messages always having this new field set to `false`.
 
 #### <a id="shutdown-grace-period-default"/>`shutdown_grace_period` Default Change
 
