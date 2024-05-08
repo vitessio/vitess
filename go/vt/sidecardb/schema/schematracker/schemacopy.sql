@@ -25,4 +25,4 @@ CREATE TABLE IF NOT EXISTS schemacopy
     `data_type`             varchar(64) CHARACTER SET utf8mb3 COLLATE utf8mb3_bin         NOT NULL,
     `column_key`            varchar(3)  CHARACTER SET utf8mb3 COLLATE utf8mb3_bin         NOT NULL,
     PRIMARY KEY (`table_schema`, `table_name`, `ordinal_position`)
-) ENGINE = InnoDB
+) ENGINE = InnoDB, CHARACTER SET = utf8mb3
