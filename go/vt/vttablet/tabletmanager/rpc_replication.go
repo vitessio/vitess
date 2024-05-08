@@ -145,6 +145,11 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 	// Semi sync settings - "show status like 'rpl_semi_sync_%'
 	semiSyncTimeout, semiSyncNumReplicas := tm.MysqlDaemon.SemiSyncSettings(ctx)
 
+	replConfiguration, err := tm.MysqlDaemon.ReplicationConfiguration(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	return &replicationdatapb.FullStatus{
 		ServerId:                    serverID,
 		ServerUuid:                  serverUUID,
@@ -167,6 +172,7 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 		SemiSyncPrimaryTimeout:      semiSyncTimeout,
 		SemiSyncWaitForReplicaCount: semiSyncNumReplicas,
 		SuperReadOnly:               superReadOnly,
+		ReplicationConfiguration:    replConfiguration,
 	}, nil
 }
 

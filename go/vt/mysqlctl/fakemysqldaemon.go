@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
+	"vitess.io/vitess/go/vt/proto/replicationdata"
 
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -328,6 +329,10 @@ func (fmd *FakeMysqlDaemon) PrimaryStatus(ctx context.Context) (replication.Prim
 		Position:     fmd.CurrentPrimaryPosition,
 		FilePosition: fmd.CurrentSourceFilePosition,
 	}, nil
+}
+
+func (fmd *FakeMysqlDaemon) ReplicationConfiguration(ctx context.Context) (*replicationdata.Configuration, error) {
+	return nil, nil
 }
 
 // GetGTIDPurged is part of the MysqlDaemon interface.

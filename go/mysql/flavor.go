@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/proto/replicationdata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -129,6 +130,11 @@ type flavor interface {
 	// primaryStatus returns the result of 'SHOW MASTER STATUS',
 	// with parsed executed position.
 	primaryStatus(c *Conn) (replication.PrimaryStatus, error)
+
+	// replicationConfiguration reads the right global variables and performance schema information.
+	replicationConfiguration(c *Conn) (*replicationdata.Configuration, error)
+
+	replicationNetTimeout(c *Conn) (int32, error)
 
 	// waitUntilPosition waits until the given position is reached or
 	// until the context expires. It returns an error if we did not
@@ -398,6 +404,22 @@ func (c *Conn) ShowReplicationStatus() (replication.ReplicationStatus, error) {
 // and returns a parsed executed Position, as well as file based Position.
 func (c *Conn) ShowPrimaryStatus() (replication.PrimaryStatus, error) {
 	return c.flavor.primaryStatus(c)
+}
+
+// ReplicationConfiguration reads the right global variables and performance schema information.
+func (c *Conn) ReplicationConfiguration() (*replicationdata.Configuration, error) {
+	replConfiguration, err := c.flavor.replicationConfiguration(c)
+	// We don't want to fail this call if it called on a primary tablet.
+	// There just isn't any replication configuration to return since it is a primary tablet.
+	if err == ErrNotReplica {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	replNetTimeout, err := c.flavor.replicationNetTimeout(c)
+	replConfiguration.ReplicaNetTimeout = replNetTimeout
+	return replConfiguration, err
 }
 
 // WaitUntilPosition waits until the given position is reached or until the

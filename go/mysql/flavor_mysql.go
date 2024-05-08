@@ -20,12 +20,14 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"time"
 
 	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/vt/proto/replicationdata"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -298,6 +300,56 @@ func (mysqlFlavor) primaryStatus(c *Conn) (replication.PrimaryStatus, error) {
 	}
 
 	return replication.ParseMysqlPrimaryStatus(resultMap)
+}
+
+// replicationConfiguration is part of the Flavor interface.
+func (mysqlFlavor) replicationConfiguration(c *Conn) (*replicationdata.Configuration, error) {
+	qr, err := c.ExecuteFetch(readReplicationConnectionConfiguration, 100, true /* wantfields */)
+	if err != nil {
+		return nil, err
+	}
+	if len(qr.Rows) == 0 {
+		// The query returned no data. This is not a replica.
+		return nil, ErrNotReplica
+	}
+
+	resultMap, err := resultToMap(qr)
+	if err != nil {
+		return nil, err
+	}
+
+	heartbeatInterval, err := strconv.ParseFloat(resultMap["HEARTBEAT_INTERVAL"], 64)
+	if err != nil {
+		return nil, err
+	}
+
+	return &replicationdata.Configuration{
+		HeartbeatInterval: heartbeatInterval,
+	}, nil
+}
+
+// replicationNetTimeout is part of the Flavor interface.
+func (mysqlFlavor) replicationNetTimeout(c *Conn) (int32, error) {
+	qr, err := c.ExecuteFetch(readSlaveNetTimeout, 1, false)
+	if err != nil {
+		return 0, err
+	}
+	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result format for slave_net_timeout: %#v", qr)
+	}
+	return qr.Rows[0][0].ToInt32()
+}
+
+// replicationNetTimeout is part of the Flavor interface.
+func (mysqlFlavor8) replicationNetTimeout(c *Conn) (int32, error) {
+	qr, err := c.ExecuteFetch(readReplicaNetTimeout, 1, false)
+	if err != nil {
+		return 0, err
+	}
+	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result format for replica_net_timeout: %#v", qr)
+	}
+	return qr.Rows[0][0].ToInt32()
 }
 
 // status is part of the Flavor interface.

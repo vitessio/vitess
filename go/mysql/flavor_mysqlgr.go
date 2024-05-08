@@ -244,6 +244,11 @@ func (mysqlGRFlavor) primaryStatus(c *Conn) (replication.PrimaryStatus, error) {
 	return mysqlFlavor{}.primaryStatus(c)
 }
 
+// replicationNetTimeout is part of the Flavor interface.
+func (mysqlGRFlavor) replicationNetTimeout(c *Conn) (int32, error) {
+	return mysqlFlavor8{}.replicationNetTimeout(c)
+}
+
 func (mysqlGRFlavor) baseShowTables() string {
 	return mysqlFlavor{}.baseShowTables()
 }

@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/proto/replicationdata"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -394,6 +395,16 @@ func (mysqld *Mysqld) PrimaryStatus(ctx context.Context) (replication.PrimarySta
 	defer conn.Recycle()
 
 	return conn.Conn.ShowPrimaryStatus()
+}
+
+func (mysqld *Mysqld) ReplicationConfiguration(ctx context.Context) (*replicationdata.Configuration, error) {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Recycle()
+
+	return conn.Conn.ReplicationConfiguration()
 }
 
 // GetGTIDPurged returns the gtid purged statuses

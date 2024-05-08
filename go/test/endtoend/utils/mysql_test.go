@@ -19,6 +19,7 @@ package utils
 import (
 	"context"
 	"fmt"
+	"math"
 	"os"
 	"testing"
 	"time"
@@ -232,6 +233,17 @@ func TestPrimaryStatus(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.True(t, res.Position.Equal(r.Position), "primary replication status should be same as replication status here")
+}
+
+func TestReplicationConfiguration(t *testing.T) {
+	require.NotNil(t, mysqld)
+
+	replConfig, err := mysqld.ReplicationConfiguration(context.Background())
+	assert.NoError(t, err)
+
+	require.NotNil(t, replConfig)
+	// For a properly configured mysql, the heartbeat interval is half of the replication net timeout.
+	require.EqualValues(t, math.Round(replConfig.HeartbeatInterval*2), replConfig.ReplicaNetTimeout)
 }
 
 func TestGTID(t *testing.T) {

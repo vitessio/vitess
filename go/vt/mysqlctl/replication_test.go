@@ -19,6 +19,7 @@ package mysqlctl
 import (
 	"context"
 	"fmt"
+	"math"
 	"net"
 	"testing"
 	"time"
@@ -298,6 +299,33 @@ func TestPrimaryStatus(t *testing.T) {
 	db.AddQuery("SHOW MASTER STATUS", &sqltypes.Result{})
 	_, err = testMysqld.PrimaryStatus(ctx)
 	assert.ErrorContains(t, err, "no master status")
+}
+
+func TestReplicationConfiguration(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+	db.AddQuery("SELECT * FROM performance_schema.replication_connection_configuration", sqltypes.MakeTestResult(sqltypes.MakeTestFields("test_field|HEARTBEAT_INTERVAL|field2", "varchar|float64|varchar"), "test_status|4.5000|test"))
+	db.AddQuery("select @@global.replica_net_timeout", sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global.replica_net_timeout", "int64"), "9"))
+
+	testMysqld := NewMysqld(dbc)
+	defer testMysqld.Close()
+
+	ctx := context.Background()
+	replConfig, err := testMysqld.ReplicationConfiguration(ctx)
+	assert.NoError(t, err)
+	assert.NotNil(t, replConfig)
+	require.EqualValues(t, math.Round(replConfig.HeartbeatInterval*2), replConfig.ReplicaNetTimeout)
+
+	db.AddQuery("SELECT * FROM performance_schema.replication_connection_configuration", sqltypes.MakeTestResult(sqltypes.MakeTestFields("test_field|HEARTBEAT_INTERVAL|field2", "varchar|float64|varchar")))
+	replConfig, err = testMysqld.ReplicationConfiguration(ctx)
+	assert.NoError(t, err)
+	assert.Nil(t, replConfig)
 }
 
 func TestGetGTIDPurged(t *testing.T) {

@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/vt/proto/replicationdata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -269,6 +270,14 @@ func (flv *filePosFlavor) primaryStatus(c *Conn) (replication.PrimaryStatus, err
 	}
 
 	return replication.ParseFilePosPrimaryStatus(resultMap)
+}
+
+func (flv *filePosFlavor) replicationConfiguration(c *Conn) (*replicationdata.Configuration, error) {
+	return nil, nil
+}
+
+func (flv *filePosFlavor) replicationNetTimeout(c *Conn) (int32, error) {
+	return 0, nil
 }
 
 // waitUntilPosition is part of the Flavor interface.
