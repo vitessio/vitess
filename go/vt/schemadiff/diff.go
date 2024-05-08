@@ -24,6 +24,36 @@ func AllSubsequent(diff EntityDiff) (diffs []EntityDiff) {
 	return diffs
 }
 
+// AtomicDiffs attempts to break a given diff statement into its smallest components.
+// This isn't necessarily the _correct_ thing to do, as MySQL goes, but it assists in
+// identifying the distinct changes that are being made.
+// Currently, the only implementation is to break up `ALTER TABLE ... DROP PARTITION` statements.
+func AtomicDiffs(diff EntityDiff) []EntityDiff {
+	if diff == nil || diff.IsEmpty() {
+		return nil
+	}
+	trivial := func() []EntityDiff {
+		return []EntityDiff{diff}
+	}
+	switch diff := diff.(type) {
+	case *AlterTableEntityDiff:
+		alterTable := diff.alterTable
+		// Examine the scenario where we have e.g. `ALTER TABLE ... DROP PARTITION p1, p2, p3`
+		// and explode it into separate diffs
+		if alterTable.PartitionSpec != nil && alterTable.PartitionSpec.Action == sqlparser.DropAction && len(alterTable.PartitionSpec.Names) > 1 {
+			var distinctDiffs []EntityDiff
+			for i := range alterTable.PartitionSpec.Names {
+				clone := diff.Clone()
+				cloneAlterTableEntityDiff := clone.(*AlterTableEntityDiff)
+				cloneAlterTableEntityDiff.alterTable.PartitionSpec.Names = cloneAlterTableEntityDiff.alterTable.PartitionSpec.Names[i : i+1]
+				distinctDiffs = append(distinctDiffs, clone)
+			}
+			return distinctDiffs
+		}
+	}
+	return trivial()
+}
+
 // DiffCreateTablesQueries compares two `CREATE TABLE ...` queries (in string form) and returns the diff from table1 to table2.
 // Either or both of the queries can be empty. Based on this, the diff could be
 // nil, CreateTable, DropTable or AlterTable

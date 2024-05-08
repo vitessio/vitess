@@ -196,6 +196,15 @@ func TestCreateViewDiff(t *testing.T) {
 						require.NoError(t, err)
 						assert.True(t, appliedDiff.IsEmpty(), "expected empty diff, found changes: %v", appliedDiff.CanonicalStatementString())
 					}
+					// Validate Clone() works
+					{
+						clone := alter.Clone()
+						alterClone, ok := clone.(*AlterViewEntityDiff)
+						require.True(t, ok)
+						assert.Equal(t, eFrom.Create().CanonicalStatementString(), alterClone.from.Create().CanonicalStatementString())
+						alterClone.from.CreateView.ViewName.Name = sqlparser.NewIdentifierCS("something_else")
+						assert.NotEqual(t, eFrom.Create().CanonicalStatementString(), alterClone.from.Create().CanonicalStatementString())
+					}
 				}
 				{
 					cdiff := alter.CanonicalStatementString()

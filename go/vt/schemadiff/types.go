@@ -69,7 +69,8 @@ type EntityDiff interface {
 	SetSubsequentDiff(EntityDiff)
 	// InstantDDLCapability returns the ability of this diff to run with ALGORITHM=INSTANT
 	InstantDDLCapability() InstantDDLCapability
-
+	// Clone returns a deep copy of the entity diff, and of all referenced entities.
+	Clone() EntityDiff
 	Annotated() (from *TextualAnnotations, to *TextualAnnotations, unified *TextualAnnotations)
 }
 
