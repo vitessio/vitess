@@ -102,8 +102,16 @@ func (u *Update) ShortDescription() string {
 func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update) Operator {
 	tableInfo, qt := createQueryTableForDML(ctx, updStmt.TableExprs[0], updStmt.Where)
 
-	vindexTable, routing := buildVindexTableForDML(ctx, tableInfo, qt, "update")
+	vindexTable, routing := buildVindexTableForDML(ctx, tableInfo, qt, updStmt, "update")
 
+	if tableInfo.GetVindexTable().GetTableName() != vindexTable.GetTableName() {
+		name := vindexTable.Name.String()
+		refTable := sqlparser.NewIdentifierCS(name)
+		if !qt.Alias.As.IsEmpty() {
+			qt.Alias.As = refTable
+		}
+		qt.Table.Name = refTable
+	}
 	updClone := sqlparser.CloneRefOfUpdate(updStmt)
 	updOp := createUpdateOperator(ctx, updStmt, vindexTable, qt, routing)
 

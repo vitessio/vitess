@@ -80,15 +80,25 @@ func buildVindexTableForDML(
 	ctx *plancontext.PlanningContext,
 	tableInfo semantics.TableInfo,
 	table *QueryTable,
+	stmt sqlparser.Statement,
 	dmlType string,
 ) (*vindexes.Table, Routing) {
 	vindexTable := tableInfo.GetVindexTable()
-	if vindexTable.Source != nil {
+	if tableInfo.GetVindexTable().Type == vindexes.TypeReference && vindexTable.Source != nil {
 		sourceTable, _, _, _, _, err := ctx.VSchema.FindTableOrVindex(vindexTable.Source.TableName)
 		if err != nil {
 			panic(err)
 		}
 		vindexTable = sourceTable
+		refTbl := sqlparser.NewAliasedTableExpr(vindexTable.GetTableName(), "")
+		switch stmt := stmt.(type) {
+		case *sqlparser.Update:
+			stmt.TableExprs[0] = refTbl
+		case *sqlparser.Insert:
+			stmt.Table = refTbl
+		default:
+			panic("unsupported DML type in buildVindexTableForDML")
+		}
 	}
 
 	if !vindexTable.Keyspace.Sharded {
