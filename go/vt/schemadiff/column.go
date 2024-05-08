@@ -19,6 +19,7 @@ package schemadiff
 import (
 	"strings"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -81,12 +82,81 @@ func NewColumnDefinitionEntity(c *sqlparser.ColumnDefinition) *ColumnDefinitionE
 // change this table to look like the other table.
 // It returns an AlterTable statement if changes are found, or nil if not.
 // the other table may be of different name; its name is ignored.
-func (c *ColumnDefinitionEntity) ColumnDiff(other *ColumnDefinitionEntity, _ *DiffHints) *ModifyColumnDiff {
-	if sqlparser.Equals.RefOfColumnDefinition(c.columnDefinition, other.columnDefinition) {
-		return nil
+func (c *ColumnDefinitionEntity) ColumnDiff(
+	other *ColumnDefinitionEntity,
+	_ *DiffHints,
+	t1cc *charsetCollate,
+	t2cc *charsetCollate,
+) (*ModifyColumnDiff, error) {
+	if c.IsTextual() || other.IsTextual() {
+		// We will now denormalize the columns charset & collate as needed (if empty, populate from table.)
+
+		if c.columnDefinition.Type.Charset.Name == "" && c.columnDefinition.Type.Options.Collate != "" {
+			// Column has explicit collation but no charset. We can infer the charset from the collation.
+			collationID := collationEnv.LookupByName(c.columnDefinition.Type.Options.Collate)
+			charset := collationEnv.LookupCharsetName(collationID)
+			if charset == "" {
+				return nil, &UnknownColumnCollationCharsetError{Column: c.columnDefinition.Name.String(), Collation: c.columnDefinition.Type.Options.Collate}
+			}
+			defer func() {
+				c.columnDefinition.Type.Charset.Name = ""
+			}()
+			c.columnDefinition.Type.Charset.Name = charset
+		}
+		if c.columnDefinition.Type.Charset.Name == "" {
+			defer func() {
+				c.columnDefinition.Type.Charset.Name = ""
+				c.columnDefinition.Type.Options.Collate = ""
+			}()
+			c.columnDefinition.Type.Charset.Name = t1cc.charset
+			if c.columnDefinition.Type.Options.Collate == "" {
+				defer func() {
+					c.columnDefinition.Type.Options.Collate = ""
+				}()
+				c.columnDefinition.Type.Options.Collate = t1cc.collate
+			}
+			if c.columnDefinition.Type.Options.Collate = t1cc.collate; c.columnDefinition.Type.Options.Collate == "" {
+				collation := collationEnv.DefaultCollationForCharset(t1cc.charset)
+				if collation == collations.Unknown {
+					return nil, &UnknownColumnCharsetCollationError{Column: c.columnDefinition.Name.String(), Charset: t1cc.charset}
+				}
+				c.columnDefinition.Type.Options.Collate = collationEnv.LookupName(collation)
+			}
+		}
+		if other.columnDefinition.Type.Charset.Name == "" && other.columnDefinition.Type.Options.Collate != "" {
+			// Column has explicit collation but no charset. We can infer the charset from the collation.
+			collationID := collationEnv.LookupByName(other.columnDefinition.Type.Options.Collate)
+			charset := collationEnv.LookupCharsetName(collationID)
+			if charset == "" {
+				return nil, &UnknownColumnCollationCharsetError{Column: other.columnDefinition.Name.String(), Collation: other.columnDefinition.Type.Options.Collate}
+			}
+			defer func() {
+				other.columnDefinition.Type.Charset.Name = ""
+			}()
+			other.columnDefinition.Type.Charset.Name = charset
+		}
+
+		if other.columnDefinition.Type.Charset.Name == "" {
+			defer func() {
+				other.columnDefinition.Type.Charset.Name = ""
+				other.columnDefinition.Type.Options.Collate = ""
+			}()
+			other.columnDefinition.Type.Charset.Name = t2cc.charset
+			if other.columnDefinition.Type.Options.Collate = t2cc.collate; other.columnDefinition.Type.Options.Collate == "" {
+				collation := collationEnv.DefaultCollationForCharset(t2cc.charset)
+				if collation == collations.Unknown {
+					return nil, &UnknownColumnCharsetCollationError{Column: other.columnDefinition.Name.String(), Charset: t2cc.charset}
+				}
+				other.columnDefinition.Type.Options.Collate = collationEnv.LookupName(collation)
+			}
+		}
 	}
 
-	return NewModifyColumnDiffByDefinition(other.columnDefinition)
+	if sqlparser.Equals.RefOfColumnDefinition(c.columnDefinition, other.columnDefinition) {
+		return nil, nil
+	}
+
+	return NewModifyColumnDiffByDefinition(other.columnDefinition), nil
 }
 
 // IsTextual returns true when this column is of textual type, and is capable of having a character set property

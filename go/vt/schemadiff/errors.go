@@ -402,3 +402,21 @@ type EntityNotFoundError struct {
 func (e *EntityNotFoundError) Error() string {
 	return fmt.Sprintf("entity %s not found", sqlescape.EscapeID(e.Name))
 }
+
+type UnknownColumnCharsetCollationError struct {
+	Column  string
+	Charset string
+}
+
+func (e *UnknownColumnCharsetCollationError) Error() string {
+	return fmt.Sprintf("unable to determine collation for column %s with charset %q", sqlescape.EscapeID(e.Column), e.Charset)
+}
+
+type UnknownColumnCollationCharsetError struct {
+	Column    string
+	Collation string
+}
+
+func (e *UnknownColumnCollationCharsetError) Error() string {
+	return fmt.Sprintf("unable to determine charset for column %s with collation %q", sqlescape.EscapeID(e.Column), e.Collation)
+}
