@@ -100,6 +100,23 @@ func (d *AlterViewEntityDiff) InstantDDLCapability() InstantDDLCapability {
 	return InstantDDLCapabilityIrrelevant
 }
 
+// Clone implements EntityDiff
+func (d *AlterViewEntityDiff) Clone() EntityDiff {
+	if d == nil {
+		return nil
+	}
+	clone := &AlterViewEntityDiff{
+		alterView: sqlparser.CloneRefOfAlterView(d.alterView),
+	}
+	if d.from != nil {
+		clone.from = d.from.Clone().(*CreateViewEntity)
+	}
+	if d.to != nil {
+		clone.to = d.to.Clone().(*CreateViewEntity)
+	}
+	return clone
+}
+
 type CreateViewEntityDiff struct {
 	createView *sqlparser.CreateView
 
@@ -177,6 +194,16 @@ func (d *CreateViewEntityDiff) InstantDDLCapability() InstantDDLCapability {
 	return InstantDDLCapabilityIrrelevant
 }
 
+// Clone implements EntityDiff
+func (d *CreateViewEntityDiff) Clone() EntityDiff {
+	if d == nil {
+		return nil
+	}
+	return &CreateViewEntityDiff{
+		createView: sqlparser.CloneRefOfCreateView(d.createView),
+	}
+}
+
 type DropViewEntityDiff struct {
 	from     *CreateViewEntity
 	dropView *sqlparser.DropView
@@ -252,6 +279,20 @@ func (d *DropViewEntityDiff) SetSubsequentDiff(EntityDiff) {
 // InstantDDLCapability implements EntityDiff
 func (d *DropViewEntityDiff) InstantDDLCapability() InstantDDLCapability {
 	return InstantDDLCapabilityIrrelevant
+}
+
+// Clone implements EntityDiff
+func (d *DropViewEntityDiff) Clone() EntityDiff {
+	if d == nil {
+		return nil
+	}
+	clone := &DropViewEntityDiff{
+		dropView: sqlparser.CloneRefOfDropView(d.dropView),
+	}
+	if d.from != nil {
+		clone.from = d.from.Clone().(*CreateViewEntity)
+	}
+	return clone
 }
 
 // CreateViewEntity stands for a VIEW construct. It contains the view's CREATE statement.

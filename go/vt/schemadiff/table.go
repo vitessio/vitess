@@ -139,6 +139,29 @@ func (d *AlterTableEntityDiff) InstantDDLCapability() InstantDDLCapability {
 	return d.instantDDLCapability
 }
 
+// Clone implements EntityDiff
+func (d *AlterTableEntityDiff) Clone() EntityDiff {
+	if d == nil {
+		return nil
+	}
+	ann := *d.annotations
+	clone := &AlterTableEntityDiff{
+		alterTable:           sqlparser.CloneRefOfAlterTable(d.alterTable),
+		instantDDLCapability: d.instantDDLCapability,
+		annotations:          &ann,
+	}
+	if d.from != nil {
+		clone.from = d.from.Clone().(*CreateTableEntity)
+	}
+	if d.to != nil {
+		clone.to = d.to.Clone().(*CreateTableEntity)
+	}
+	if d.subsequentDiff != nil {
+		clone.subsequentDiff = d.subsequentDiff.Clone().(*AlterTableEntityDiff)
+	}
+	return clone
+}
+
 type CreateTableEntityDiff struct {
 	to          *CreateTableEntity
 	createTable *sqlparser.CreateTable
@@ -214,6 +237,20 @@ func (d *CreateTableEntityDiff) SetSubsequentDiff(EntityDiff) {
 // InstantDDLCapability implements EntityDiff
 func (d *CreateTableEntityDiff) InstantDDLCapability() InstantDDLCapability {
 	return InstantDDLCapabilityIrrelevant
+}
+
+// Clone implements EntityDiff
+func (d *CreateTableEntityDiff) Clone() EntityDiff {
+	if d == nil {
+		return nil
+	}
+	clone := &CreateTableEntityDiff{
+		createTable: sqlparser.CloneRefOfCreateTable(d.createTable),
+	}
+	if d.to != nil {
+		clone.to = d.to.Clone().(*CreateTableEntity)
+	}
+	return clone
 }
 
 type DropTableEntityDiff struct {
@@ -293,6 +330,20 @@ func (d *DropTableEntityDiff) InstantDDLCapability() InstantDDLCapability {
 	return InstantDDLCapabilityIrrelevant
 }
 
+// Clone implements EntityDiff
+func (d *DropTableEntityDiff) Clone() EntityDiff {
+	if d == nil {
+		return nil
+	}
+	clone := &DropTableEntityDiff{
+		dropTable: sqlparser.CloneRefOfDropTable(d.dropTable),
+	}
+	if d.from != nil {
+		clone.from = d.from.Clone().(*CreateTableEntity)
+	}
+	return clone
+}
+
 type RenameTableEntityDiff struct {
 	from        *CreateTableEntity
 	to          *CreateTableEntity
@@ -369,6 +420,23 @@ func (d *RenameTableEntityDiff) SetSubsequentDiff(EntityDiff) {
 // InstantDDLCapability implements EntityDiff
 func (d *RenameTableEntityDiff) InstantDDLCapability() InstantDDLCapability {
 	return InstantDDLCapabilityIrrelevant
+}
+
+// Clone implements EntityDiff
+func (d *RenameTableEntityDiff) Clone() EntityDiff {
+	if d == nil {
+		return nil
+	}
+	clone := &RenameTableEntityDiff{
+		renameTable: sqlparser.CloneRefOfRenameTable(d.renameTable),
+	}
+	if d.from != nil {
+		clone.from = d.from.Clone().(*CreateTableEntity)
+	}
+	if d.to != nil {
+		clone.to = d.to.Clone().(*CreateTableEntity)
+	}
+	return clone
 }
 
 // CreateTableEntity stands for a TABLE construct. It contains the table's CREATE statement.
