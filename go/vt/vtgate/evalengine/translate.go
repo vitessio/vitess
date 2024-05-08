@@ -361,7 +361,7 @@ func (ast *astCompiler) translateIntroducerExpr(introduced *sqlparser.Introducer
 		case collations.CollationBinaryID:
 			lit.inner = evalToBinary(lit.inner)
 		default:
-			lit.inner, err = evalToVarchar(lit.inner, collation, false)
+			lit.inner, err = introducerCast(lit.inner, collation)
 			if err != nil {
 				return nil, err
 			}

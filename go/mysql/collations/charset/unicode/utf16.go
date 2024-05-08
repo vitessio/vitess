@@ -67,7 +67,7 @@ func (Charset_utf16be) EncodeRune(dst []byte, r rune) int {
 
 func (Charset_utf16be) DecodeRune(b []byte) (rune, int) {
 	if len(b) < 2 {
-		return utf8.RuneError, 0
+		return utf8.RuneError, len(b)
 	}
 
 	r1 := uint16(b[1]) | uint16(b[0])<<8
@@ -129,7 +129,7 @@ func (Charset_utf16le) EncodeRune(dst []byte, r rune) int {
 
 func (Charset_utf16le) DecodeRune(b []byte) (rune, int) {
 	if len(b) < 2 {
-		return utf8.RuneError, 0
+		return utf8.RuneError, len(b)
 	}
 
 	r1 := uint16(b[0]) | uint16(b[1])<<8
@@ -185,7 +185,7 @@ func (Charset_ucs2) EncodeRune(dst []byte, r rune) int {
 
 func (Charset_ucs2) DecodeRune(p []byte) (rune, int) {
 	if len(p) < 2 {
-		return utf8.RuneError, 0
+		return utf8.RuneError, len(p)
 	}
 	return rune(p[0])<<8 | rune(p[1]), 2
 }

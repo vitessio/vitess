@@ -18,6 +18,7 @@ package evalengine
 
 import (
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -210,15 +211,45 @@ func (ca *collationAggregation) result() collations.TypedCollation {
 
 var _ Expr = (*IntroducerExpr)(nil)
 
+func introducerCast(e eval, col collations.ID) (*evalBytes, error) {
+	if col == collations.CollationBinaryID {
+		return evalToBinary(e), nil
+	}
+
+	var bytes []byte
+	if b, ok := e.(*evalBytes); !ok {
+		bytes = b.ToRawBytes()
+	} else {
+		cs := col.Get().Charset()
+		bytes = b.bytes
+		// We only need to pad here for encodings that have a minimum
+		// character byte width larger than 1, which is all UTF-16
+		// variations and UTF-32.
+		switch cs.(type) {
+		case charset.Charset_utf16, charset.Charset_utf16le, charset.Charset_ucs2:
+			if len(bytes)%2 != 0 {
+				bytes = append([]byte{0}, bytes...)
+			}
+		case charset.Charset_utf32:
+			if mod := len(bytes) % 4; mod != 0 {
+				bytes = append(make([]byte, 4-mod), bytes...)
+			}
+		}
+	}
+	typedcol := collations.TypedCollation{
+		Collation:    col,
+		Coercibility: collations.CoerceCoercible,
+		Repertoire:   collations.RepertoireASCII,
+	}
+	return newEvalText(bytes, typedcol), nil
+}
+
 func (expr *IntroducerExpr) eval(env *ExpressionEnv) (eval, error) {
 	e, err := expr.Inner.eval(env)
 	if err != nil {
 		return nil, err
 	}
-	if expr.TypedCollation.Collation == collations.CollationBinaryID {
-		return evalToBinary(e), nil
-	}
-	return evalToVarchar(e, expr.TypedCollation.Collation, false)
+	return introducerCast(e, expr.TypedCollation.Collation)
 }
 
 func (expr *IntroducerExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {

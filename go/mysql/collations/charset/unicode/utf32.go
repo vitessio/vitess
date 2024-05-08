@@ -49,7 +49,7 @@ func (Charset_utf32) EncodeRune(dst []byte, r rune) int {
 
 func (Charset_utf32) DecodeRune(p []byte) (rune, int) {
 	if len(p) < 4 {
-		return utf8.RuneError, 0
+		return utf8.RuneError, len(p)
 	}
 	return (rune(p[0]) << 24) | (rune(p[1]) << 16) | (rune(p[2]) << 8) | rune(p[3]), 4
 }

@@ -4253,7 +4253,8 @@ func (asm *assembler) Fn_UUID_TO_BIN1() {
 
 func (asm *assembler) Introduce(offset int, t sqltypes.Type, col collations.TypedCollation) {
 	asm.emit(func(env *ExpressionEnv) int {
-		arg := evalToBinary(env.vm.stack[env.vm.sp-offset])
+		var arg *evalBytes
+		arg, env.vm.err = introducerCast(env.vm.stack[env.vm.sp-offset], col.Collation)
 		arg.tt = int16(t)
 		arg.col = col
 		env.vm.stack[env.vm.sp-offset] = arg
