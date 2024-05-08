@@ -18,6 +18,7 @@ package inst
 
 import (
 	"fmt"
+	"math"
 	"time"
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
@@ -87,6 +88,8 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		MIN(primary_instance.alias) IS NULL AS is_invalid,
 		MIN(primary_instance.binary_log_file) AS binary_log_file,
 		MIN(primary_instance.binary_log_pos) AS binary_log_pos,
+		MIN(primary_instance.replica_net_timeout) AS replica_net_timeout,
+		MIN(primary_instance.heartbeat_interval) AS heartbeat_interval,
 		MIN(primary_tablet.info) AS primary_tablet_info,
 		MIN(
 			IFNULL(
@@ -360,6 +363,8 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 
 		a.CountDelayedReplicas = m.GetUint("count_delayed_replicas")
 		a.CountLaggingReplicas = m.GetUint("count_lagging_replicas")
+		a.ReplicaNetTimeout = m.GetInt32("replica_net_timeout")
+		a.HeartbeatInterval = m.GetFloat64("heartbeat_interval")
 
 		a.IsReadOnly = m.GetUint("read_only") == 1
 
@@ -485,6 +490,10 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			a.Description = "Replica semi-sync must not be set"
 			//
 			// TODO(sougou): Events below here are either ignored or not possible.
+		} else if topo.IsReplicaType(a.TabletType) && !a.IsPrimary && math.Round(a.HeartbeatInterval*2) != float64(a.ReplicaNetTimeout) {
+			a.Analysis = ReplicaMisconfigured
+			a.Description = "Replica has been misconfigured"
+			//
 		} else if a.IsPrimary && !a.LastCheckValid && a.CountLaggingReplicas == a.CountReplicas && a.CountDelayedReplicas < a.CountReplicas && a.CountValidReplicatingReplicas > 0 {
 			a.Analysis = UnreachablePrimaryWithLaggingReplicas
 			a.Description = "Primary cannot be reached by vtorc and all of its replicas are lagging"

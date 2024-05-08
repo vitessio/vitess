@@ -48,6 +48,8 @@ type InfoForRecoveryAnalysis struct {
 	LogPos                                    uint32
 	IsStaleBinlogCoordinates                  int
 	GTIDMode                                  string
+	ReplicaNetTimeout                         int32
+	HeartbeatInterval                         float64
 	ErrantGTID                                string
 	LastCheckValid                            int
 	LastCheckPartialSuccess                   int
@@ -122,6 +124,8 @@ func (info *InfoForRecoveryAnalysis) ConvertToRowMap() sqlutils.RowMap {
 	rowMap["shard"] = sqlutils.CellData{String: info.Shard, Valid: true}
 	rowMap["shard_primary_term_timestamp"] = sqlutils.CellData{String: info.ShardPrimaryTermTimestamp, Valid: true}
 	rowMap["last_check_partial_success"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.LastCheckPartialSuccess), Valid: true}
+	rowMap["replica_net_timeout"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.ReplicaNetTimeout), Valid: true}
+	rowMap["heartbeat_interval"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.HeartbeatInterval), Valid: true}
 	rowMap["max_replica_gtid_errant"] = sqlutils.CellData{String: info.MaxReplicaGTIDErrant, Valid: true}
 	rowMap["max_replica_gtid_mode"] = sqlutils.CellData{String: info.MaxReplicaGTIDMode, Valid: true}
 	rowMap["min_replica_gtid_mode"] = sqlutils.CellData{String: info.MinReplicaGTIDMode, Valid: true}
