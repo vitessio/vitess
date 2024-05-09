@@ -21,23 +21,26 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
-
-	"vitess.io/vitess/go/mysql/replication"
-	"vitess.io/vitess/go/vt/log"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	"github.com/stretchr/testify/require"
 
 	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 var (
@@ -152,6 +155,22 @@ func expectLog(ctx context.Context, t *testing.T, input any, ch <-chan []*binlog
 	defer timer.Stop()
 	for _, wantset := range output {
 		var evs []*binlogdatapb.VEvent
+		inCopyPhase := false
+		haveEnumOrSetField := func(fields []*querypb.Field) bool {
+			return slices.ContainsFunc(fields, func(f *querypb.Field) bool {
+				// We can't simply use querypb.Type_ENUM or querypb.Type_SET here
+				// because if a binary collation is used then the field Type will
+				// be BINARY. And we don't have the binlog event metadata from the
+				// original event any longer that we could use to get the MySQL type
+				// (which would still be ENUM or SET). So we instead look at the column
+				// type string value which will be e.g enum('s','m','l').
+				colTypeStr := strings.ToLower(f.GetColumnType())
+				if strings.HasPrefix(colTypeStr, "enum(") || strings.HasPrefix(colTypeStr, "set(") {
+					return true
+				}
+				return false
+			})
+		}
 		for {
 			select {
 			case allevs, ok := <-ch:
@@ -160,18 +179,27 @@ func expectLog(ctx context.Context, t *testing.T, input any, ch <-chan []*binlog
 				}
 				for _, ev := range allevs {
 					// Ignore spurious heartbeats that can happen on slow machines.
-					if ev.Type == binlogdatapb.VEventType_HEARTBEAT {
+					if ev.Throttled || ev.Type == binlogdatapb.VEventType_HEARTBEAT {
 						continue
 					}
-					if ev.Throttled {
-						continue
+					switch ev.Type {
+					case binlogdatapb.VEventType_OTHER:
+						if strings.Contains(ev.Gtid, copyPhaseStart) {
+							inCopyPhase = true
+						}
+					case binlogdatapb.VEventType_COPY_COMPLETED:
+						inCopyPhase = false
+					case binlogdatapb.VEventType_FIELD:
+						// This is always set in the copy phase. It's also set in the
+						// running phase when the table has an ENUM or SET field.
+						ev.FieldEvent.EnumSetStringValues = inCopyPhase || haveEnumOrSetField(ev.FieldEvent.Fields)
 					}
 					evs = append(evs, ev)
 				}
 			case <-ctx.Done():
-				t.Fatalf("expectLog: Done(), stream ended early")
+				require.Fail(t, "expectLog: Done(), stream ended early")
 			case <-timer.C:
-				t.Fatalf("expectLog: timed out waiting for events: %v", wantset)
+				require.Fail(t, "expectLog: timed out waiting for events: %v", wantset)
 			}
 			if len(evs) != 0 {
 				break
