@@ -467,6 +467,16 @@ func (vttablet *VttabletProcess) SemiSyncExtensionLoaded() (mysql.SemiSyncType, 
 	return conn.SemiSyncExtensionLoaded()
 }
 
+// SemiSyncExtensionLoaded returns what type of semi-sync extension is loaded
+func (vttablet *VttabletProcess) ResetBinaryLogsCommand() (string, error) {
+	conn, err := vttablet.TabletConn("", false)
+	if err != nil {
+		return "", err
+	}
+	defer conn.Close()
+	return conn.ResetBinaryLogsCommand(), nil
+}
+
 // QueryTabletMultiple lets you execute multiple queries -- without any
 // results -- against the tablet.
 func (vttablet *VttabletProcess) QueryTabletMultiple(queries []string, keyspace string, useDb bool) error {

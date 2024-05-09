@@ -351,13 +351,9 @@ func ensureRestoredGTIDPurgedMatchesManifest(ctx context.Context, manifest *Back
 	}
 	params.Logger.Infof("Restore: @@gtid_purged does not equal manifest's GTID position. Setting @@gtid_purged to %v", gtid)
 	// This is not good. We want to apply a new @@gtid_purged value.
-	query := "RESET MASTER" // required dialect in 5.7
-	if _, err := params.Mysqld.FetchSuperQuery(ctx, query); err != nil {
-		return vterrors.Wrapf(err, "error issuing %v", query)
-	}
-	query = fmt.Sprintf("SET GLOBAL gtid_purged='%s'", gtid)
-	if _, err := params.Mysqld.FetchSuperQuery(ctx, query); err != nil {
-		return vterrors.Wrapf(err, "failed to apply `%s` after restore", query)
+	err = params.Mysqld.SetReplicationPosition(ctx, manifest.Position)
+	if err != nil {
+		return vterrors.Wrap(err, "error setting replication position")
 	}
 	return nil
 }

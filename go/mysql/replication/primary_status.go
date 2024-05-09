@@ -24,7 +24,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-// PrimaryStatus holds replication information from SHOW MASTER STATUS.
+// PrimaryStatus holds replication information from SHOW BINARY LOG STATUS.
 type PrimaryStatus struct {
 	// Position represents the server's GTID based position.
 	Position Position
@@ -52,7 +52,7 @@ func ParseMysqlPrimaryStatus(resultMap map[string]string) (PrimaryStatus, error)
 	return status, nil
 }
 
-// ParsePrimaryStatus parses the common fields of SHOW MASTER STATUS.
+// ParsePrimaryStatus parses the common fields of SHOW BINARY LOG STATUS.
 func ParsePrimaryStatus(fields map[string]string) PrimaryStatus {
 	status := PrimaryStatus{}
 

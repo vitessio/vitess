@@ -417,7 +417,7 @@ func (x *StopReplicationStatus) GetAfter() *Status {
 	return nil
 }
 
-// PrimaryStatus is the replication status for a MySQL primary (returned by 'show master status').
+// PrimaryStatus is the replication status for a MySQL primary (returned by 'show binary log status').
 type PrimaryStatus struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache

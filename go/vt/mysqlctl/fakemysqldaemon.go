@@ -470,7 +470,8 @@ func (fmd *FakeMysqlDaemon) SetReplicationPosition(ctx context.Context, pos repl
 		return fmt.Errorf("wrong pos for SetReplicationPosition: expected %v got %v", fmd.SetReplicationPositionPos, pos)
 	}
 	return fmd.ExecuteSuperQueryList(ctx, []string{
-		"FAKE SET REPLICA POSITION",
+		"FAKE RESET BINARY LOGS AND GTIDS",
+		"FAKE SET GLOBAL gtid_purged",
 	})
 }
 

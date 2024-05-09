@@ -70,7 +70,8 @@ func TestInitShardPrimary(t *testing.T) {
 		"START REPLICA",
 		// These come from InitShardPrimary
 		"FAKE RESET ALL REPLICATION",
-		"FAKE SET REPLICA POSITION",
+		"FAKE RESET BINARY LOGS AND GTIDS",
+		"FAKE SET GLOBAL gtid_purged",
 		"FAKE SET SOURCE",
 		"START REPLICA",
 	}
@@ -81,7 +82,8 @@ func TestInitShardPrimary(t *testing.T) {
 		"FAKE SET SOURCE",
 		"START REPLICA",
 		"FAKE RESET ALL REPLICATION",
-		"FAKE SET REPLICA POSITION",
+		"FAKE RESET BINARY LOGS AND GTIDS",
+		"FAKE SET GLOBAL gtid_purged",
 		"FAKE SET SOURCE",
 		"START REPLICA",
 	}
@@ -128,7 +130,8 @@ func TestInitShardPrimaryNoFormerPrimary(t *testing.T) {
 
 	tablet2.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"FAKE RESET ALL REPLICATION",
-		"FAKE SET REPLICA POSITION",
+		"FAKE RESET BINARY LOGS AND GTIDS",
+		"FAKE SET GLOBAL gtid_purged",
 		"FAKE SET SOURCE",
 		"START REPLICA",
 	}
@@ -136,7 +139,8 @@ func TestInitShardPrimaryNoFormerPrimary(t *testing.T) {
 
 	tablet3.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"FAKE RESET ALL REPLICATION",
-		"FAKE SET REPLICA POSITION",
+		"FAKE RESET BINARY LOGS AND GTIDS",
+		"FAKE SET GLOBAL gtid_purged",
 		"FAKE SET SOURCE",
 		"START REPLICA",
 	}

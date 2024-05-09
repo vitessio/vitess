@@ -231,8 +231,10 @@ func reparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProcessClus
 	_, gtID := cluster.GetPrimaryPosition(t, *tablets[1], utils.Hostname)
 
 	// tablets[0] will now be a replica of tablets[1
+	resetCmd, err := tablets[0].VttabletProcess.ResetBinaryLogsCommand()
+	require.NoError(t, err)
 	changeReplicationSourceCommands := []string{
-		"RESET MASTER",
+		resetCmd,
 		"RESET REPLICA",
 		fmt.Sprintf("SET GLOBAL gtid_purged = '%s'", gtID),
 		fmt.Sprintf("CHANGE REPLICATION SOURCE TO SOURCE_HOST='%s', SOURCE_PORT=%d, SOURCE_USER='vt_repl', SOURCE_AUTO_POSITION = 1", utils.Hostname, tablets[1].MySQLPort),
@@ -243,9 +245,11 @@ func reparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProcessClus
 	baseTime := time.Now().UnixNano() / 1000000000
 
 	// tablets[2 will be a replica of tablets[1
+	resetCmd, err = tablets[2].VttabletProcess.ResetBinaryLogsCommand()
+	require.NoError(t, err)
 	changeReplicationSourceCommands = []string{
 		"STOP REPLICA",
-		"RESET MASTER",
+		resetCmd,
 		fmt.Sprintf("SET GLOBAL gtid_purged = '%s'", gtID),
 		fmt.Sprintf("CHANGE REPLICATION SOURCE TO SOURCE_HOST='%s', SOURCE_PORT=%d, SOURCE_USER='vt_repl', SOURCE_AUTO_POSITION = 1", utils.Hostname, tablets[1].MySQLPort),
 		"START REPLICA",
@@ -262,7 +266,7 @@ func reparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProcessClus
 	}
 
 	// update topology with the new server
-	err := clusterInstance.VtctldClientProcess.ExecuteCommand("TabletExternallyReparented",
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("TabletExternallyReparented",
 		tablets[1].Alias)
 	require.NoError(t, err)
 
