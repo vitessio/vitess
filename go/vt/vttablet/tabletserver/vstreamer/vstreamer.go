@@ -21,6 +21,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -35,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	vtschema "vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet"
@@ -45,7 +47,6 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	vtschema "vitess.io/vitess/go/vt/schema"
 )
 
 const (
@@ -750,6 +751,9 @@ func (vs *vstreamer) buildTablePlan(id uint64, tm *mysql.TableMap) (*binlogdatap
 		vs.plans[id] = nil
 		return nil, nil
 	}
+	if err := addEnumAndSetMappingstoPlan(plan, cols, tm.Metadata); err != nil {
+		return nil, vterrors.Wrapf(err, "failed to build ENUM and SET column integer to string mappings")
+	}
 	vs.plans[id] = &streamerPlan{
 		Plan:     plan,
 		TableMap: tm,
@@ -761,6 +765,9 @@ func (vs *vstreamer) buildTablePlan(id uint64, tm *mysql.TableMap) (*binlogdatap
 			Fields:    plan.fields(),
 			Keyspace:  vs.vse.keyspace,
 			Shard:     vs.vse.shard,
+			// This mapping will be done, if needed, in the vstreamer when we process
+			// and build ROW events.
+			EnumSetStringValues: len(plan.EnumSetValuesMap) > 0,
 		},
 	}, nil
 }
@@ -828,7 +835,7 @@ func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, er
 	// initially using collations for the column types based on the *connection
 	// collation* and not the actual *column collation*.
 	// But because we now get the correct collation for the actual column from
-	// mysqld in getExtColsInfo we know this is the correct one for the vstream
+	// mysqld in getExtColInfos we know this is the correct one for the vstream
 	// target and we use that rather than any that were in the binlog events,
 	// which were for the source and which can be using a different collation
 	// than the target.
@@ -836,7 +843,6 @@ func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, er
 	if err != nil {
 		return nil, err
 	}
-
 	return fieldsCopy, nil
 }
 
@@ -1047,6 +1053,30 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 		}
 		pos += l
 
+		if !value.IsNull() { // ENUMs and SETs require no special handling if they are NULL
+			// If the column is a CHAR based type with a binary collation (e.g. utf8mb4_bin) then the
+			// actual column type is included in the second byte of the event metadata while the
+			// event's type for the field is BINARY. This is true for ENUM and SET types.
+			var mysqlType uint16
+			if sqltypes.IsQuoted(plan.Table.Fields[colNum].Type) {
+				mysqlType = plan.TableMap.Metadata[colNum] >> 8
+			}
+			// Convert the integer values in the binlog event for any SET and ENUM fields into their
+			// string representations.
+			if plan.Table.Fields[colNum].Type == querypb.Type_ENUM || mysqlType == mysqlbinlog.TypeEnum {
+				value, err = buildEnumStringValue(plan, colNum, value)
+				if err != nil {
+					return false, nil, false, vterrors.Wrapf(err, "failed to perform ENUM column integer to string value mapping")
+				}
+			}
+			if plan.Table.Fields[colNum].Type == querypb.Type_SET || mysqlType == mysqlbinlog.TypeSet {
+				value, err = buildSetStringValue(plan, colNum, value)
+				if err != nil {
+					return false, nil, false, vterrors.Wrapf(err, "failed to perform SET column integer to string value mapping")
+				}
+			}
+		}
+
 		charsets[colNum] = collations.ID(plan.Table.Fields[colNum].Charset)
 		values[colNum] = value
 		valueIndex++
@@ -1054,6 +1084,109 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 	filtered := make([]sqltypes.Value, len(plan.ColExprs))
 	ok, err := plan.filter(values, filtered, charsets)
 	return ok, filtered, partial, err
+}
+
+// addEnumAndSetMappingstoPlan sets up any necessary ENUM and SET integer to string mappings.
+func addEnumAndSetMappingstoPlan(plan *Plan, cols []*querypb.Field, metadata []uint16) error {
+	plan.EnumSetValuesMap = make(map[int]map[int]string)
+	for i, col := range cols {
+		// If the column is a CHAR based type with a binary collation (e.g. utf8mb4_bin) then
+		// the actual column type is included in the second byte of the event metadata while
+		// the event's type for the field is BINARY. This is true for ENUM and SET types.
+		var mysqlType uint16
+		if sqltypes.IsQuoted(col.Type) {
+			mysqlType = metadata[i] >> 8
+		}
+		if col.Type == querypb.Type_ENUM || mysqlType == mysqlbinlog.TypeEnum ||
+			col.Type == querypb.Type_SET || mysqlType == mysqlbinlog.TypeSet {
+			// Strip the enum() / set() parts out.
+			begin := strings.Index(col.ColumnType, "(")
+			end := strings.LastIndex(col.ColumnType, ")")
+			if begin == -1 || end == -1 {
+				return fmt.Errorf("enum or set column %s does not have valid string values: %s",
+					col.Name, col.ColumnType)
+			}
+			plan.EnumSetValuesMap[i] = vtschema.ParseEnumOrSetTokensMap(col.ColumnType[begin+1 : end])
+		}
+	}
+	return nil
+}
+
+// buildEnumStringValue takes the integer value of an ENUM column and returns the string value.
+func buildEnumStringValue(plan *streamerPlan, colNum int, value sqltypes.Value) (sqltypes.Value, error) {
+	if value.IsNull() { // No work is needed
+		return value, nil
+	}
+	// Add the mappings just-in-time in case we haven't properly received and processed a
+	// table map event to initialize it.
+	if plan.EnumSetValuesMap == nil {
+		if err := addEnumAndSetMappingstoPlan(plan.Plan, plan.Table.Fields, plan.TableMap.Metadata); err != nil {
+			return sqltypes.Value{}, err
+		}
+	}
+	// ENUM columns are stored as an unsigned 16-bit integer as they can contain a maximum
+	// of 65,535 elements (https://dev.mysql.com/doc/refman/en/enum.html) with the 0 element
+	// reserved for any integer value that has no string mapping.
+	iv, err := value.ToUint16()
+	if err != nil {
+		return sqltypes.Value{}, fmt.Errorf("no valid integer value found for column %s in table %s, bytes: %b",
+			plan.Table.Fields[colNum].Name, plan.Table.Name, iv)
+	}
+	var strVal string
+	// Match the MySQL behavior of returning an empty string for invalid ENUM values.
+	// This is what the 0 position in an ENUM is reserved for.
+	if iv != 0 {
+		var ok bool
+		strVal, ok = plan.EnumSetValuesMap[colNum][int(iv)]
+		if !ok {
+			// The integer value was NOT 0 yet we found no mapping. This should never happen.
+			return sqltypes.Value{}, fmt.Errorf("no string value found for ENUM column %s in table %s -- with available values being: %v -- using the found integer value: %d",
+				plan.Table.Fields[colNum].Name, plan.Table.Name, plan.EnumSetValuesMap[colNum], iv)
+		}
+	}
+	return sqltypes.MakeTrusted(plan.Table.Fields[colNum].Type, []byte(strVal)), nil
+}
+
+// buildSetStringValue takes the integer value of a SET column and returns the string value.
+func buildSetStringValue(plan *streamerPlan, colNum int, value sqltypes.Value) (sqltypes.Value, error) {
+	if value.IsNull() { // No work is needed
+		return value, nil
+	}
+	// Add the mappings just-in-time in case we haven't properly received and processed a
+	// table map event to initialize it.
+	if plan.EnumSetValuesMap == nil {
+		if err := addEnumAndSetMappingstoPlan(plan.Plan, plan.Table.Fields, plan.TableMap.Metadata); err != nil {
+			return sqltypes.Value{}, err
+		}
+	}
+	// A SET column can have 64 unique values: https://dev.mysql.com/doc/refman/en/set.html
+	// For this reason the binlog event contains the values encoded as an unsigned 64-bit
+	// integer which is really a bitmap.
+	val := bytes.Buffer{}
+	iv, err := value.ToUint64()
+	if err != nil {
+		return value, fmt.Errorf("no valid integer value found for column %s in table %s, bytes: %b",
+			plan.Table.Fields[colNum].Name, plan.Table.Name, iv)
+	}
+	idx := 1
+	// See what bits are set in the bitmap using bitmasks.
+	for b := uint64(1); b < 1<<63; b <<= 1 {
+		if iv&b > 0 { // This bit is set and the SET's string value needs to be provided.
+			strVal, ok := plan.EnumSetValuesMap[colNum][idx]
+			// When you insert values not found in the SET (which requires disabling STRICT mode) then
+			// they are effectively pruned and ignored (not actually saved). So this should never happen.
+			if !ok {
+				return sqltypes.Value{}, fmt.Errorf("no valid integer value found for SET column %s in table %s, bytes: %b",
+					plan.Table.Fields[colNum].Name, plan.Table.Name, iv)
+			}
+			if val.Len() > 0 {
+				val.WriteByte(',')
+			}
+			val.WriteString(strVal)
+		}
+		idx++
+	}
+	return sqltypes.MakeTrusted(plan.Table.Fields[colNum].Type, val.Bytes()), nil
 }
 
 func wrapError(err error, stopPos replication.Position, vse *Engine) error {
