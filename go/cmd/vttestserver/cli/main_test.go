@@ -464,7 +464,7 @@ func assertGetKeyspaces(ctx context.Context, t *testing.T, cluster vttest.LocalC
 		},
 		30*time.Second,
 	)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	resp, err := consumeEventStream(stream)
 	require.NoError(t, err)
