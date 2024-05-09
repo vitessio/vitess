@@ -97,3 +97,26 @@ func TestQueryTimeoutWithTables(t *testing.T) {
 	assert.Contains(t, err.Error(), "context deadline exceeded")
 	assert.Contains(t, err.Error(), "(errno 1317) (sqlstate 70100)")
 }
+
+// TestQueryTimeoutWithShardTargeting tests the query timeout with shard targeting.
+func TestQueryTimeoutWithShardTargeting(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	queries := []string{
+		"insert /*vt+ QUERY_TIMEOUT_MS=1 */ into t1(id1, id2) values (1,2)",
+		"update /*vt+ QUERY_TIMEOUT_MS=1 */ t1 set id2 = 5",
+		"delete /*vt+ QUERY_TIMEOUT_MS=1 */ from t1 where id2 = 5",
+		"select /*vt+ QUERY_TIMEOUT_MS=1 */ 1 from t1 where sleep(100)",
+	}
+
+	// shard targeting to -80 shard.
+	utils.Exec(t, mcmp.VtConn, "use `ks_misc/-80`")
+
+	for _, query := range queries {
+		t.Run(query, func(t *testing.T) {
+			_, err := utils.ExecAllowError(t, mcmp.VtConn, query)
+			assert.ErrorContains(t, err, "context deadline exceeded (errno 1317) (sqlstate 70100)")
+		})
+	}
+}
