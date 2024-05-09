@@ -386,18 +386,24 @@ func (fbk *FilterByKeyspace) IsIncluded(tablet *topodata.Tablet) bool {
 	return exist
 }
 
-// TODO:
+// FilterByTabletTags is a filter that filters tablets by tablet tag key/values.
 type FilterByTabletTags struct {
 	tags map[string]string
 }
 
+// NewFilterByTabletTags creates a new FilterByTabletTags. All tablets that match
+// all tablet tags will be forwarded to the TopologyWatcher's consumer.
 func NewFilterByTabletTags(tabletTags map[string]string) *FilterByTabletTags {
-	return &FilterByTabletTags{tags: tabletTags}
+	return &FilterByTabletTags{
+		tags: tabletTags,
+	}
 }
 
 // IsIncluded returns true if the tablet's tags match what we expect.
 func (fbtg *FilterByTabletTags) IsIncluded(tablet *topodata.Tablet) bool {
-	if tablet.Tags == nil {
+	if fbtg.tags == nil {
+		return true
+	} else if tablet.Tags == nil {
 		return false
 	}
 	for key, val := range fbtg.tags {

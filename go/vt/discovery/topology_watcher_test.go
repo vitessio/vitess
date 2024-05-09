@@ -579,11 +579,16 @@ func TestFilterByKeyspaceSkipsIgnoredTablets(t *testing.T) {
 }
 
 func TestNewFilterByTabletTags(t *testing.T) {
+	// no required tags == true
+	filter := NewFilterByTabletTags(nil)
+	assert.True(t, filter.IsIncluded(&topodatapb.Tablet{}))
+
 	tags := map[string]string{
 		"instance_type": "i3.xlarge",
 		"some_key":      "some_value",
 	}
-	filter := NewFilterByTabletTags(tags)
+	filter = NewFilterByTabletTags(tags)
+
 	assert.False(t, filter.IsIncluded(&topodatapb.Tablet{
 		Tags: nil,
 	}))
