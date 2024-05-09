@@ -272,7 +272,7 @@ func TestApplyThrottlerConfig(t *testing.T) {
 	defer cancel()
 	throttler := newTestThrottler()
 	throttlerConfig := &topodatapb.ThrottlerConfig{
-		Enabled:   true,
+		Enabled:   false,
 		Threshold: 14,
 		AppCheckedMetrics: map[string]*topodatapb.ThrottlerConfig_MetricNames{
 			"app1":                              {Names: []string{"lag", "threads_running"}},
@@ -283,12 +283,12 @@ func TestApplyThrottlerConfig(t *testing.T) {
 	throttler.appCheckedMetrics.Set("app1", base.MetricNames{base.ThreadsRunningMetricName}, cache.DefaultExpiration)
 	throttler.appCheckedMetrics.Set("app2", base.MetricNames{base.ThreadsRunningMetricName}, cache.DefaultExpiration)
 	throttler.appCheckedMetrics.Set("app3", base.MetricNames{base.ThreadsRunningMetricName}, cache.DefaultExpiration)
-	runThrottler(t, ctx, throttler, time.Minute, func(t *testing.T, ctx context.Context) {
-		<-runSerialFunction(t, context.Background(), throttler, func(ctx context.Context) {
-			throttler.applyThrottlerConfig(ctx, throttlerConfig)
-		})
+	runThrottler(t, ctx, throttler, 10*time.Second, func(t *testing.T, ctx context.Context) {
+		assert.True(t, throttler.IsEnabled())
+		throttler.applyThrottlerConfig(ctx, throttlerConfig)
 		cancel() // end test early
 	})
+	assert.False(t, throttler.IsEnabled())
 	assert.Equal(t, float64(14), throttler.GetMetricsThreshold())
 	assert.Equal(t, 2, throttler.appCheckedMetrics.ItemCount())
 	{
