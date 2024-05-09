@@ -83,7 +83,7 @@ var (
 	// tabletFilters are the keyspace|shard or keyrange filters to apply to the full set of tablets.
 	tabletFilters []string
 
-	// tabletFilterTags are the key/values filters to apply to the full set of tablets.
+	// tabletFilterTags are the tablet tag filters (as key:value pairs) to apply to the full set of tablets.
 	tabletFilterTags flagutil.StringMapValue
 
 	// refreshInterval is the interval at which healthcheck refreshes its list of tablets from topo.
