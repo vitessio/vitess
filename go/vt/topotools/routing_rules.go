@@ -160,8 +160,8 @@ func saveKeyspaceRoutingRulesLocked(ctx context.Context, ts *topo.Server, rules 
 
 func UpdateKeyspaceRoutingRules(ctx context.Context, ts *topo.Server, reason string,
 	update func(ctx context.Context, rules *map[string]string) error) (err error) {
-	var lock *topo.KeyspaceRoutingRulesLock
-	lock, err = topo.NewKeyspaceRoutingRulesLock(ctx, ts, reason)
+	var lock *topo.RoutingRulesLock
+	lock, err = topo.NewRoutingRulesLock(ctx, ts, reason)
 	if err != nil {
 		return err
 	}

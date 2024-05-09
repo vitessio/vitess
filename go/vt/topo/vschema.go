@@ -159,10 +159,6 @@ func (ts *Server) GetShardRoutingRules(ctx context.Context) (*vschemapb.ShardRou
 	return srr, nil
 }
 
-func getKeyspaceRoutingRulesFile() string {
-	return path.Join(KeyspaceRoutingRulesPath, KeyspaceRoutingRulesFile)
-}
-
 func (ts *Server) SaveKeyspaceRoutingRules(ctx context.Context, rules *vschemapb.KeyspaceRoutingRules) error {
 	data, err := rules.MarshalVT()
 	if err != nil {
@@ -170,18 +166,18 @@ func (ts *Server) SaveKeyspaceRoutingRules(ctx context.Context, rules *vschemapb
 	}
 	if len(data) == 0 {
 		// No rules, remove it.
-		if err := ts.globalCell.Delete(ctx, getKeyspaceRoutingRulesFile(), nil); err != nil && !IsErrType(err, NoNode) {
+		if err := ts.globalCell.Delete(ctx, ts.GetKeyspaceRoutingRulesPath(), nil); err != nil && !IsErrType(err, NoNode) {
 			return err
 		}
 		return nil
 	}
-	_, err = ts.globalCell.Update(ctx, getKeyspaceRoutingRulesFile(), data, nil)
+	_, err = ts.globalCell.Update(ctx, ts.GetKeyspaceRoutingRulesPath(), data, nil)
 	return err
 }
 
 func (ts *Server) GetKeyspaceRoutingRules(ctx context.Context) (*vschemapb.KeyspaceRoutingRules, error) {
 	rules := &vschemapb.KeyspaceRoutingRules{}
-	data, _, err := ts.globalCell.Get(ctx, getKeyspaceRoutingRulesFile())
+	data, _, err := ts.globalCell.Get(ctx, ts.GetKeyspaceRoutingRulesPath())
 	if err != nil {
 		if IsErrType(err, NoNode) {
 			return nil, nil

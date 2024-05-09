@@ -161,7 +161,7 @@ func (ts *Server) EnsureKeyExists(ctx context.Context, name, keyPath string) err
 	_, _, err := ts.globalCell.Get(ctx, sentinelPath)
 	if IsErrType(err, NoNode) {
 		_, err = ts.globalCell.Create(ctx, sentinelPath,
-			[]byte(fmt.Sprintf("force creation of %s root key", name)))
+			[]byte(fmt.Sprintf("ensure creation of %s root key: %s", name, keyPath)))
 		if IsErrType(err, NodeExists) {
 			// Another process created the file, which is fine.
 			return nil

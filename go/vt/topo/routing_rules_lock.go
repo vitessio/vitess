@@ -23,21 +23,21 @@ import (
 	"vitess.io/vitess/go/vt/log"
 )
 
-// KeyspaceRoutingRulesLock is a wrapper over TopoLock, to serialize updates to the keyspace routing rules.
-type KeyspaceRoutingRulesLock struct {
+// RoutingRulesLock is a wrapper over TopoLock, to serialize updates to routing rules.
+type RoutingRulesLock struct {
 	*TopoLock
 }
 
-func NewKeyspaceRoutingRulesLock(ctx context.Context, ts *Server, name string) (*KeyspaceRoutingRulesLock, error) {
-	if err := ts.EnsureKeyExists(ctx, "Keyspace Routing Rules", KeyspaceRoutingRulesFile); err != nil {
-		log.Errorf("Failed to create keyspace routing rules lock file: %v", err)
+func NewRoutingRulesLock(ctx context.Context, ts *Server, name string) (*RoutingRulesLock, error) {
+	if err := ts.EnsureKeyExists(ctx, "Routing Rules", RoutingRulesPath); err != nil {
+		log.Errorf("Failed to create routing rules lock file: %v", err)
 		return nil, err
 	}
 
-	return &KeyspaceRoutingRulesLock{
+	return &RoutingRulesLock{
 		TopoLock: &TopoLock{
-			Path: KeyspaceRoutingRulesFile,
-			Name: fmt.Sprintf("KeyspaceRoutingRules::%s", name),
+			Path: RoutingRulesPath,
+			Name: fmt.Sprintf("RoutingRules::%s", name),
 			ts:   ts,
 		},
 	}, nil

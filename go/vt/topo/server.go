@@ -45,6 +45,7 @@ package topo
 import (
 	"context"
 	"fmt"
+	"path"
 	"sync"
 
 	"github.com/spf13/pflag"
@@ -67,19 +68,19 @@ const (
 
 // Filenames for all object types.
 const (
-	CellInfoFile             = "CellInfo"
-	CellsAliasFile           = "CellsAlias"
-	KeyspaceFile             = "Keyspace"
-	ShardFile                = "Shard"
-	VSchemaFile              = "VSchema"
-	ShardReplicationFile     = "ShardReplication"
-	TabletFile               = "Tablet"
-	SrvVSchemaFile           = "SrvVSchema"
-	SrvKeyspaceFile          = "SrvKeyspace"
-	RoutingRulesFile         = "RoutingRules"
-	ExternalClustersFile     = "ExternalClusters"
-	ShardRoutingRulesFile    = "ShardRoutingRules"
-	KeyspaceRoutingRulesFile = "KeyspaceRoutingRules"
+	CellInfoFile           = "CellInfo"
+	CellsAliasFile         = "CellsAlias"
+	KeyspaceFile           = "Keyspace"
+	ShardFile              = "Shard"
+	VSchemaFile            = "VSchema"
+	ShardReplicationFile   = "ShardReplication"
+	TabletFile             = "Tablet"
+	SrvVSchemaFile         = "SrvVSchema"
+	SrvKeyspaceFile        = "SrvKeyspace"
+	RoutingRulesFile       = "RoutingRules"
+	ExternalClustersFile   = "ExternalClusters"
+	ShardRoutingRulesFile  = "ShardRoutingRules"
+	CommonRoutingRulesFile = "Rules"
 )
 
 // Path for all object types.
@@ -91,7 +92,8 @@ const (
 	TabletsPath              = "tablets"
 	MetadataPath             = "metadata"
 	ExternalClusterVitess    = "vitess"
-	KeyspaceRoutingRulesPath = "KeyspaceRoutingRules"
+	RoutingRulesPath         = "routing_rules"
+	KeyspaceRoutingRulesPath = "keyspace"
 )
 
 // Factory is a factory interface to create Conn objects.
@@ -419,4 +421,8 @@ func (ts *Server) IsReadOnly() (bool, error) {
 	}
 
 	return true, nil
+}
+
+func (ts *Server) GetKeyspaceRoutingRulesPath() string {
+	return path.Join(RoutingRulesPath, KeyspaceRoutingRulesPath, CommonRoutingRulesFile)
 }
