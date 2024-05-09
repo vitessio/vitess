@@ -146,5 +146,26 @@
         "user.music"
       ]
     }
+  },
+  {
+    "comment": "describe info_schema table",
+    "query": "describe information_schema.administrable_role_authorizations",
+    "plan": {
+      "QueryType": "EXPLAIN",
+      "Original": "describe information_schema.administrable_role_authorizations",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AnyShard()",
+        "Query": "explain information_schema.administrable_role_authorizations",
+        "SingleShardOnly": true
+      },
+      "TablesUsed": [
+        "main.administrable_role_authorizations"
+      ]
+    }
   }
 ]
