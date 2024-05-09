@@ -385,6 +385,12 @@ message ThrottlerConfig {
 
   // ThrottledApps is a map of rules for app-specific throttling
   map<string, ThrottledAppRule> throttled_apps = 5;
+
+  message MetricNames {
+    repeated string names = 1;
+  }
+  // AppMetrics maps app names to the list of metrics that should be checked for that app
+  map <string, MetricNames> app_metrics = 6;
 }
 
 // SrvKeyspace is a rollup node for the keyspace itself.
