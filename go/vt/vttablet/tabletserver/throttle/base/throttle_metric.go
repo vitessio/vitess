@@ -25,6 +25,15 @@ type MetricName string
 
 type MetricNames []MetricName
 
+func (names MetricNames) Contains(name MetricName) bool {
+	for _, n := range names {
+		if n == name {
+			return true
+		}
+	}
+	return false
+}
+
 const (
 	DefaultMetricName        MetricName = "default"
 	LagMetricName            MetricName = "lag"
@@ -37,7 +46,7 @@ func (metric MetricName) String() string {
 	return string(metric)
 }
 
-var KnownMetricNames = []MetricName{
+var KnownMetricNames = MetricNames{
 	DefaultMetricName,
 	LagMetricName,
 	ThreadsRunningMetricName,
