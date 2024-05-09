@@ -41,7 +41,7 @@ func Validate(charset Charset, input []byte) bool {
 	}
 	for len(input) > 0 {
 		r, size := charset.DecodeRune(input)
-		if r == RuneError && size < 2 {
+		if r == RuneError {
 			return false
 		}
 		input = input[size:]

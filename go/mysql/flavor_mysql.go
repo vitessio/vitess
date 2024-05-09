@@ -20,12 +20,14 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"time"
 
 	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/vt/proto/replicationdata"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -300,6 +302,56 @@ func (mysqlFlavor) primaryStatus(c *Conn) (replication.PrimaryStatus, error) {
 	return replication.ParseMysqlPrimaryStatus(resultMap)
 }
 
+// replicationConfiguration is part of the Flavor interface.
+func (mysqlFlavor) replicationConfiguration(c *Conn) (*replicationdata.Configuration, error) {
+	qr, err := c.ExecuteFetch(readReplicationConnectionConfiguration, 100, true /* wantfields */)
+	if err != nil {
+		return nil, err
+	}
+	if len(qr.Rows) == 0 {
+		// The query returned no data. This is not a replica.
+		return nil, ErrNotReplica
+	}
+
+	resultMap, err := resultToMap(qr)
+	if err != nil {
+		return nil, err
+	}
+
+	heartbeatInterval, err := strconv.ParseFloat(resultMap["HEARTBEAT_INTERVAL"], 64)
+	if err != nil {
+		return nil, err
+	}
+
+	return &replicationdata.Configuration{
+		HeartbeatInterval: heartbeatInterval,
+	}, nil
+}
+
+// replicationNetTimeout is part of the Flavor interface.
+func (mysqlFlavor) replicationNetTimeout(c *Conn) (int32, error) {
+	qr, err := c.ExecuteFetch(readSlaveNetTimeout, 1, false)
+	if err != nil {
+		return 0, err
+	}
+	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result format for slave_net_timeout: %#v", qr)
+	}
+	return qr.Rows[0][0].ToInt32()
+}
+
+// replicationNetTimeout is part of the Flavor interface.
+func (mysqlFlavor8) replicationNetTimeout(c *Conn) (int32, error) {
+	qr, err := c.ExecuteFetch(readReplicaNetTimeout, 1, false)
+	if err != nil {
+		return 0, err
+	}
+	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result format for replica_net_timeout: %#v", qr)
+	}
+	return qr.Rows[0][0].ToInt32()
+}
+
 // status is part of the Flavor interface.
 func (mysqlFlavor8) status(c *Conn) (replication.ReplicationStatus, error) {
 	qr, err := c.ExecuteFetch("SHOW REPLICA STATUS", 100, true /* wantfields */)
@@ -482,7 +534,7 @@ func (f mysqlFlavor8) supportsCapability(capability capabilities.FlavorCapabilit
 	return capabilities.MySQLVersionHasCapability(f.serverVersion, capability)
 }
 
-func (mysqlFlavor) setReplicationSourceCommand(params *ConnParams, host string, port int32, connectRetry int) string {
+func (mysqlFlavor) setReplicationSourceCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int) string {
 	args := []string{
 		fmt.Sprintf("MASTER_HOST = '%s'", host),
 		fmt.Sprintf("MASTER_PORT = %d", port),
@@ -505,11 +557,14 @@ func (mysqlFlavor) setReplicationSourceCommand(params *ConnParams, host string, 
 	if params.SslKey != "" {
 		args = append(args, fmt.Sprintf("MASTER_SSL_KEY = '%s'", params.SslKey))
 	}
+	if heartbeatInterval != 0 {
+		args = append(args, fmt.Sprintf("MASTER_HEARTBEAT_PERIOD = %v", heartbeatInterval))
+	}
 	args = append(args, "MASTER_AUTO_POSITION = 1")
 	return "CHANGE MASTER TO\n  " + strings.Join(args, ",\n  ")
 }
 
-func (mysqlFlavor8) setReplicationSourceCommand(params *ConnParams, host string, port int32, connectRetry int) string {
+func (mysqlFlavor8) setReplicationSourceCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int) string {
 	args := []string{
 		fmt.Sprintf("SOURCE_HOST = '%s'", host),
 		fmt.Sprintf("SOURCE_PORT = %d", port),
@@ -531,6 +586,9 @@ func (mysqlFlavor8) setReplicationSourceCommand(params *ConnParams, host string,
 	}
 	if params.SslKey != "" {
 		args = append(args, fmt.Sprintf("SOURCE_SSL_KEY = '%s'", params.SslKey))
+	}
+	if heartbeatInterval != 0 {
+		args = append(args, fmt.Sprintf("SOURCE_HEARTBEAT_PERIOD = %v", heartbeatInterval))
 	}
 	args = append(args, "SOURCE_AUTO_POSITION = 1")
 	return "CHANGE REPLICATION SOURCE TO\n  " + strings.Join(args, ",\n  ")

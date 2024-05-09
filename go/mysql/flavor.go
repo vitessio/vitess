@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/proto/replicationdata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -120,7 +121,7 @@ type flavor interface {
 
 	// setReplicationSourceCommand returns the command to use the provided host/port
 	// as the new replication source (without changing any GTID position).
-	setReplicationSourceCommand(params *ConnParams, host string, port int32, connectRetry int) string
+	setReplicationSourceCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int) string
 
 	// status returns the result of the appropriate status command,
 	// with parsed replication position.
@@ -129,6 +130,11 @@ type flavor interface {
 	// primaryStatus returns the result of 'SHOW MASTER STATUS',
 	// with parsed executed position.
 	primaryStatus(c *Conn) (replication.PrimaryStatus, error)
+
+	// replicationConfiguration reads the right global variables and performance schema information.
+	replicationConfiguration(c *Conn) (*replicationdata.Configuration, error)
+
+	replicationNetTimeout(c *Conn) (int32, error)
 
 	// waitUntilPosition waits until the given position is reached or
 	// until the context expires. It returns an error if we did not
@@ -364,8 +370,8 @@ func (c *Conn) SetReplicationPositionCommands(pos replication.Position) []string
 // as the new replication source (without changing any GTID position).
 // It is guaranteed to be called with replication stopped.
 // It should not start or stop replication.
-func (c *Conn) SetReplicationSourceCommand(params *ConnParams, host string, port int32, connectRetry int) string {
-	return c.flavor.setReplicationSourceCommand(params, host, port, connectRetry)
+func (c *Conn) SetReplicationSourceCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int) string {
+	return c.flavor.setReplicationSourceCommand(params, host, port, heartbeatInterval, connectRetry)
 }
 
 // resultToMap is a helper function used by ShowReplicationStatus.
@@ -398,6 +404,22 @@ func (c *Conn) ShowReplicationStatus() (replication.ReplicationStatus, error) {
 // and returns a parsed executed Position, as well as file based Position.
 func (c *Conn) ShowPrimaryStatus() (replication.PrimaryStatus, error) {
 	return c.flavor.primaryStatus(c)
+}
+
+// ReplicationConfiguration reads the right global variables and performance schema information.
+func (c *Conn) ReplicationConfiguration() (*replicationdata.Configuration, error) {
+	replConfiguration, err := c.flavor.replicationConfiguration(c)
+	// We don't want to fail this call if it called on a primary tablet.
+	// There just isn't any replication configuration to return since it is a primary tablet.
+	if err == ErrNotReplica {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	replNetTimeout, err := c.flavor.replicationNetTimeout(c)
+	replConfiguration.ReplicaNetTimeout = replNetTimeout
+	return replConfiguration, err
 }
 
 // WaitUntilPosition waits until the given position is reached or until the

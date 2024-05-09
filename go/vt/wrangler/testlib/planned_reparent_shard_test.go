@@ -879,7 +879,7 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 	// After the first call to PRS has failed, we don't know whether `SetReplicationSource` RPC has succeeded on the oldPrimary or not.
 	// This causes the test to become non-deterministic. To prevent this, we call `SetReplicationSource` on the oldPrimary again, and make sure it has succeeded.
 	// We also wait until the oldPrimary has demoted itself to a replica type.
-	err = wr.TabletManagerClient().SetReplicationSource(context.Background(), oldPrimary.Tablet, newPrimary.Tablet.Alias, 0, "", false, false)
+	err = wr.TabletManagerClient().SetReplicationSource(context.Background(), oldPrimary.Tablet, newPrimary.Tablet.Alias, 0, "", false, false, 0)
 	require.NoError(t, err)
 	waitForTabletType(t, wr, oldPrimary.Tablet.Alias, topodatapb.TabletType_REPLICA)
 

@@ -107,7 +107,7 @@ func (i *Insert) Statement() sqlparser.Statement {
 func createOperatorFromInsert(ctx *plancontext.PlanningContext, ins *sqlparser.Insert) Operator {
 	tableInfo, qt := createQueryTableForDML(ctx, ins.Table, nil)
 
-	vTbl, routing := buildVindexTableForDML(ctx, tableInfo, qt, "insert")
+	vTbl, routing := buildVindexTableForDML(ctx, tableInfo, qt, ins, "insert")
 
 	deleteBeforeInsert := false
 	if ins.Action == sqlparser.ReplaceAct &&

@@ -102,6 +102,8 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	assert.False(t, primaryInstance.HasReplicationCredentials)
 	assert.Equal(t, primaryInstance.ReplicationIOThreadState, inst.ReplicationThreadStateNoThread)
 	assert.Equal(t, primaryInstance.ReplicationSQLThreadState, inst.ReplicationThreadStateNoThread)
+	assert.EqualValues(t, 0, primaryInstance.HeartbeatInterval)
+	assert.EqualValues(t, 0, primaryInstance.ReplicaNetTimeout)
 
 	// Insert an errant GTID in the replica.
 	// The way to do this is to disable global recoveries, stop replication and inject an errant GTID.
@@ -169,4 +171,6 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	assert.False(t, replicaInstance.HasReplicationFilters)
 	assert.LessOrEqual(t, int(replicaInstance.SecondsBehindPrimary.Int64), 1)
 	assert.False(t, replicaInstance.AllowTLS)
+	assert.EqualValues(t, 4.0, replicaInstance.HeartbeatInterval)
+	assert.EqualValues(t, 8, replicaInstance.ReplicaNetTimeout)
 }

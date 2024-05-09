@@ -3784,6 +3784,9 @@ var (
 		input:  "SELECT time, subject, VARIANCE(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
 		output: "select `time`, subject, variance(val) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
 	}, {
+		input:  "SELECT id, coalesce( (SELECT Json_arrayagg(Json_array(id)) FROM (SELECT *, Row_number() over (ORDER BY users.order ASC) FROM unsharded as users WHERE users.purchaseorderid = orders.id) users), json_array()) AS users, coalesce( (SELECT json_arrayagg(json_array(id)) FROM (SELECT *, row_number() over (ORDER BY tests.order ASC) FROM unsharded as tests WHERE tests.purchaseorderid = orders.id) tests), json_array()) AS tests FROM unsharded as orders WHERE orders.id = 'xxx'",
+		output: "select id, coalesce((select Json_arrayagg(json_array(id)) from (select *, row_number() over ( order by users.`order` asc) from unsharded as users where users.purchaseorderid = orders.id) as users), json_array()) as users, coalesce((select json_arrayagg(json_array(id)) from (select *, row_number() over ( order by tests.`order` asc) from unsharded as tests where tests.purchaseorderid = orders.id) as tests), json_array()) as tests from unsharded as orders where orders.id = 'xxx'",
+	}, {
 		input: `kill connection 18446744073709551615`,
 	}, {
 		input: `kill query 18446744073709551615`,

@@ -72,7 +72,7 @@ func convertSlow(dst []byte, dstCharset Charset, src []byte, srcCharset Charset)
 
 	for len(src) > 0 {
 		cp, width := srcCharset.DecodeRune(src)
-		if cp == utf8.RuneError && width < 3 {
+		if cp == utf8.RuneError {
 			failed++
 			cp = '?'
 		}

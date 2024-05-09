@@ -15,6 +15,7 @@ This is an alphabetical list of known adopters of Vitess. Some have already gone
 * [Pinterest](https://pinterest.com)
 * [Pixel Federation](https://pixelfederation.com)
 * [Quiz of Kings](https://quizofkings.com)
+* [Shopify](https://www.shopify.com)
 * [Slack](https://slack.com)
 * [Square](https://square.com)
 * [Stitch Labs](https://stitchlabs.com)

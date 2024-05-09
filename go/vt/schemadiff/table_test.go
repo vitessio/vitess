@@ -48,6 +48,7 @@ func TestCreateTableDiff(t *testing.T) {
 		enumreorder int
 		subsequent  int
 		textdiffs   []string
+		atomicdiffs []string
 	}{
 		{
 			name: "identical",
@@ -1365,6 +1366,10 @@ func TestCreateTableDiff(t *testing.T) {
 				"-(PARTITION `p1` VALUES LESS THAN (10),",
 				"- PARTITION `p2` VALUES LESS THAN (20),",
 			},
+			atomicdiffs: []string{
+				"ALTER TABLE `t1` DROP PARTITION `p1`",
+				"ALTER TABLE `t1` DROP PARTITION `p2`",
+			},
 		},
 		{
 			name:     "change partitioning range: statements, multiple adds",
@@ -1503,6 +1508,10 @@ func TestCreateTableDiff(t *testing.T) {
 				"+ PARTITION `p3` VALUES LESS THAN (35),",
 				"+ PARTITION `p4` VALUES LESS THAN (40))",
 			},
+			atomicdiffs: []string{
+				"ALTER TABLE `t1` DROP PARTITION `p1`",
+				"ALTER TABLE `t1` DROP PARTITION `p3`",
+			},
 		},
 		{
 			name:     "change partitioning range: complex rotate 2, ignore",
@@ -1522,6 +1531,10 @@ func TestCreateTableDiff(t *testing.T) {
 				"- PARTITION `p3` VALUES LESS THAN (30))",
 				"+ PARTITION `pX` VALUES LESS THAN (30),",
 				"+ PARTITION `p4` VALUES LESS THAN (40))",
+			},
+			atomicdiffs: []string{
+				"ALTER TABLE `t1` DROP PARTITION `p1`",
+				"ALTER TABLE `t1` DROP PARTITION `p3`",
 			},
 		},
 		{
@@ -1879,6 +1892,11 @@ func TestCreateTableDiff(t *testing.T) {
 			cdiff: "ALTER TABLE `t` COLLATE utf8mb4_0900_bin",
 		},
 		{
+			name: "ignore identical implicit charset",
+			from: "create table t (id int primary key, v varchar(64) character set utf8mb3 collate utf8mb3_bin)",
+			to:   "create table t (id int primary key, v varchar(64) collate utf8mb3_bin)",
+		},
+		{
 			name:  "normalized unsigned attribute",
 			from:  "create table t1 (id int primary key)",
 			to:    "create table t1 (id int unsigned primary key)",
@@ -2072,6 +2090,7 @@ func TestCreateTableDiff(t *testing.T) {
 					t.Logf("other: %v", sqlparser.CanonicalString(other.CreateTable))
 				}
 				assert.Empty(t, ts.textdiffs)
+				assert.Empty(t, AtomicDiffs(alter))
 				return
 			}
 
@@ -2125,6 +2144,18 @@ func TestCreateTableDiff(t *testing.T) {
 						applied.Create().CanonicalStatementString(),
 					)
 				}
+				// Validate atomic diffs
+				atomicDiffs := AtomicDiffs(alter)
+				if len(ts.atomicdiffs) > 0 {
+					assert.Equal(t, len(ts.atomicdiffs), len(atomicDiffs), "%+v", atomicDiffs)
+					for i := range ts.atomicdiffs {
+						assert.Equal(t, ts.atomicdiffs[i], atomicDiffs[i].CanonicalStatementString())
+					}
+				} else {
+					assert.Equal(t, 1, len(atomicDiffs))
+					assert.Equal(t, alter.CanonicalStatementString(), atomicDiffs[0].CanonicalStatementString())
+				}
+
 				{ // Validate annotations
 					alterEntityDiff, ok := alter.(*AlterTableEntityDiff)
 					require.True(t, ok)
@@ -2888,6 +2919,11 @@ func TestNormalize(t *testing.T) {
 			name: "drops existing collation if it matches table default at column level for non default charset",
 			from: "create table t (id int signed primary key, v varchar(255) charset utf8mb3 collate utf8_unicode_ci) charset utf8mb3 collate utf8_unicode_ci",
 			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`v` varchar(255),\n\tPRIMARY KEY (`id`)\n) CHARSET utf8mb3,\n  COLLATE utf8mb3_unicode_ci",
+		},
+		{
+			name: "remove column charset if collation is explicit and implies specified charset",
+			from: "create table t (id int primary key, v varchar(255) charset utf8mb4 collate utf8mb4_german2_ci)",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`v` varchar(255) COLLATE utf8mb4_german2_ci,\n\tPRIMARY KEY (`id`)\n)",
 		},
 		{
 			name: "correct case table options for engine",
