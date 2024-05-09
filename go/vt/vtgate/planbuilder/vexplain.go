@@ -23,6 +23,8 @@ import (
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -63,22 +65,35 @@ func buildVExplainPlan(ctx context.Context, vexplainStmt *sqlparser.VExplainStmt
 }
 
 func explainTabPlan(explain *sqlparser.ExplainTab, vschema plancontext.VSchema) (*planResult, error) {
-	_, _, ks, _, destination, err := vschema.FindTableOrVindex(explain.Table)
-	if err != nil {
-		return nil, err
+	var keyspace *vindexes.Keyspace
+	var destination key.Destination
+
+	if sqlparser.SystemSchema(explain.Table.Qualifier.String()) {
+		var err error
+		keyspace, err = vschema.AnyKeyspace()
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		var err error
+		var ks string
+		_, _, ks, _, destination, err = vschema.FindTableOrVindex(explain.Table)
+		if err != nil {
+			return nil, err
+		}
+		explain.Table.Qualifier = sqlparser.NewIdentifierCS("")
+
+		keyspace, err = vschema.FindKeyspace(ks)
+		if err != nil {
+			return nil, err
+		}
+		if keyspace == nil {
+			return nil, vterrors.VT14004(ks)
+		}
 	}
-	explain.Table.Qualifier = sqlparser.NewIdentifierCS("")
 
 	if destination == nil {
 		destination = key.DestinationAnyShard{}
-	}
-
-	keyspace, err := vschema.FindKeyspace(ks)
-	if err != nil {
-		return nil, err
-	}
-	if keyspace == nil {
-		return nil, vterrors.VT14004(ks)
 	}
 
 	return newPlanResult(&engine.Send{
