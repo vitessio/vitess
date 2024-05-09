@@ -5172,12 +5172,18 @@ func (s *VtctldServer) ApplyKeyspaceRoutingRules(ctx context.Context, req *vtctl
 
 	span.Annotate("skip_rebuild", req.SkipRebuild)
 	span.Annotate("rebuild_cells", strings.Join(req.RebuildCells, ","))
-	// if err := topotools.SaveKeyspaceRoutingRulesLocked(ctx, s.ts, "ApplyKeyspaceRoutingRules",
-	// 	func(ctx context.Context) error {
-	// 		return s.ts.SaveKeyspaceRoutingRules(ctx, req.KeyspaceRoutingRules)
-	// 	}); err != nil {
-	// 	return nil, err
-	// }
+	if err := topotools.UpdateKeyspaceRoutingRules(ctx, s.ts, "ApplyKeyspaceRoutingRules",
+		func(ctx context.Context, rules *map[string]string) error {
+			for k := range *rules {
+				delete(*rules, k)
+			}
+			for _, rule := range req.GetKeyspaceRoutingRules().Rules {
+				(*rules)[rule.FromKeyspace] = rule.ToKeyspace
+			}
+			return nil
+		}); err != nil {
+		return nil, err
+	}
 
 	resp := &vtctldatapb.ApplyKeyspaceRoutingRulesResponse{}
 

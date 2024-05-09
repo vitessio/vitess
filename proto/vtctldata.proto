@@ -335,6 +335,10 @@ message ApplyKeyspaceRoutingRulesRequest {
 }
 
 message ApplyKeyspaceRoutingRulesResponse {
+  // OldKeyspaceRoutingRules has the keyspace routing rules that were in place before the change.
+  vschema.KeyspaceRoutingRules old_keyspace_routing_rules = 1;
+  // NewKeyspaceRoutingRules has the keyspace routing rules that were applied.
+  vschema.KeyspaceRoutingRules new_keyspace_routing_rules = 2;
 }
 
 message ApplyRoutingRulesRequest {

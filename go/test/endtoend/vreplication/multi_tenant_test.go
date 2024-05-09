@@ -193,6 +193,7 @@ func TestMultiTenantSimple(t *testing.T) {
 	}
 
 	require.Zero(t, len(getKeyspaceRoutingRules(t, vc).Rules))
+
 	mt.Create()
 	confirmKeyspacesRoutedTo(t, sourceKeyspace, "s1", "t1", nil)
 	validateKeyspaceRoutingRules(t, vc, initialRules)
@@ -223,6 +224,55 @@ func TestMultiTenantSimple(t *testing.T) {
 	log.Infof("Migration completed, total rows in target: %d", actualRowsInserted)
 	require.Equal(t, lastIndex, int64(actualRowsInserted))
 
+	t.Run("Test ApplyKeyspaceRoutingRules", func(t *testing.T) {
+		// First set of rules
+		applyKeyspaceRoutingRules(t, nil, initialRules)
+
+		updatedRules := &vschemapb.KeyspaceRoutingRules{
+			Rules: []*vschemapb.KeyspaceRoutingRule{
+				{FromKeyspace: "s1", ToKeyspace: "mt"},
+				{FromKeyspace: "s1@rdonly", ToKeyspace: "mt"},
+				{FromKeyspace: "s1@replica", ToKeyspace: "mt"},
+			},
+		}
+		// Update the rules
+		applyKeyspaceRoutingRules(t, initialRules, updatedRules)
+		// Update with the same rules
+		applyKeyspaceRoutingRules(t, updatedRules, updatedRules)
+		// Remove the rules
+		emptyRules := &vschemapb.KeyspaceRoutingRules{
+			Rules: []*vschemapb.KeyspaceRoutingRule{},
+		}
+		applyKeyspaceRoutingRules(t, updatedRules, emptyRules)
+		applyKeyspaceRoutingRules(t, emptyRules, emptyRules)
+	})
+}
+
+func applyKeyspaceRoutingRules(t *testing.T, oldRules, newRules *vschemapb.KeyspaceRoutingRules) {
+	var rulesJSON []byte
+	var err error
+	if newRules != nil {
+		rulesJSON, err = json.Marshal(newRules)
+		require.NoError(t, err)
+	} else {
+		rulesJSON = []byte("{}")
+	}
+	output, err := vc.VtctldClient.ExecuteCommandWithOutput("ApplyKeyspaceRoutingRules", "--rules", string(rulesJSON))
+	require.NoError(t, err)
+
+	response := &vtctldata.ApplyKeyspaceRoutingRulesResponse{}
+	err = json.Unmarshal([]byte(output), response)
+	require.NoError(t, err)
+	if oldRules == nil || len(oldRules.Rules) == 0 {
+		require.Nil(t, response.GetOldKeyspaceRoutingRules())
+	} else {
+		require.ElementsMatch(t, oldRules.Rules, response.GetOldKeyspaceRoutingRules().Rules)
+	}
+	if newRules == nil || len(newRules.Rules) == 0 {
+		require.Nil(t, response.GetNewKeyspaceRoutingRules())
+	} else {
+		require.ElementsMatch(t, newRules.Rules, response.GetNewKeyspaceRoutingRules().Rules)
+	}
 }
 
 func confirmOnlyReadsSwitched(t *testing.T) {
