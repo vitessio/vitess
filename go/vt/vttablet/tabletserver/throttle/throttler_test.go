@@ -306,32 +306,62 @@ func TestApplyThrottlerConfig(t *testing.T) {
 }
 
 func TestIsAppThrottled(t *testing.T) {
+	plusOneHour := time.Now().Add(time.Hour)
 	throttler := Throttler{
 		throttledApps:   cache.New(cache.NoExpiration, 0),
 		heartbeatWriter: &FakeHeartbeatWriter{},
 	}
-	assert.False(t, throttler.IsAppThrottled("app1"))
-	assert.False(t, throttler.IsAppThrottled("app2"))
-	assert.False(t, throttler.IsAppThrottled("app3"))
-	assert.False(t, throttler.IsAppThrottled("app4"))
+	t.Run("initial", func(t *testing.T) {
+		assert.False(t, throttler.IsAppThrottled("app1"))
+		assert.False(t, throttler.IsAppThrottled("app2"))
+		assert.False(t, throttler.IsAppThrottled("app3"))
+		assert.False(t, throttler.IsAppThrottled("app4"))
+	})
 	//
-	throttler.ThrottleApp("app1", time.Now().Add(time.Hour), DefaultThrottleRatio, true)
-	throttler.ThrottleApp("app2", time.Now(), DefaultThrottleRatio, false)
-	throttler.ThrottleApp("app3", time.Now().Add(time.Hour), DefaultThrottleRatio, false)
-	throttler.ThrottleApp("app4", time.Now().Add(time.Hour), 0, false)
-	assert.False(t, throttler.IsAppThrottled("app1")) // exempted
-	assert.False(t, throttler.IsAppThrottled("app2")) // expired
-	assert.True(t, throttler.IsAppThrottled("app3"))
-	assert.False(t, throttler.IsAppThrottled("app4")) // ratio is zero
+	t.Run("set some rules", func(t *testing.T) {
+		throttler.ThrottleApp("app1", plusOneHour, DefaultThrottleRatio, true)
+		throttler.ThrottleApp("app2", time.Now(), DefaultThrottleRatio, false)
+		throttler.ThrottleApp("app3", plusOneHour, DefaultThrottleRatio, false)
+		throttler.ThrottleApp("app4", plusOneHour, 0, false)
+		assert.False(t, throttler.IsAppThrottled("app1")) // exempted
+		assert.False(t, throttler.IsAppThrottled("app2")) // expired
+		assert.True(t, throttler.IsAppThrottled("app3"))
+		assert.False(t, throttler.IsAppThrottled("app4"))      // ratio is zero
+		assert.False(t, throttler.IsAppThrottled("app_other")) // not specified
+	})
+	t.Run("all", func(t *testing.T) {
+		// throttle "all", see how it affects app
+		throttler.ThrottleApp(throttlerapp.AllName.String(), plusOneHour, DefaultThrottleRatio, false)
+		defer throttler.UnthrottleApp(throttlerapp.AllName.String())
+		assert.True(t, throttler.IsAppThrottled("all"))   //
+		assert.False(t, throttler.IsAppThrottled("app1")) // exempted
+		assert.True(t, throttler.IsAppThrottled("app2"))  // expired, so falls under "all"
+		assert.True(t, throttler.IsAppThrottled("app3"))
+		assert.False(t, throttler.IsAppThrottled("app4"))     // ratio is zero, there is a specific instruction for this app, so it doesn't fall under "all"
+		assert.True(t, throttler.IsAppThrottled("app_other")) // falls under "all"
+	})
 	//
-	throttler.UnthrottleApp("app1")
-	throttler.UnthrottleApp("app2")
-	throttler.UnthrottleApp("app3")
-	throttler.UnthrottleApp("app4")
-	assert.False(t, throttler.IsAppThrottled("app1"))
-	assert.False(t, throttler.IsAppThrottled("app2"))
-	assert.False(t, throttler.IsAppThrottled("app3"))
-	assert.False(t, throttler.IsAppThrottled("app4"))
+	t.Run("unthrottle", func(t *testing.T) {
+		throttler.UnthrottleApp("app1")
+		throttler.UnthrottleApp("app2")
+		throttler.UnthrottleApp("app3")
+		throttler.UnthrottleApp("app4")
+		assert.False(t, throttler.IsAppThrottled("app1"))
+		assert.False(t, throttler.IsAppThrottled("app2"))
+		assert.False(t, throttler.IsAppThrottled("app3"))
+		assert.False(t, throttler.IsAppThrottled("app4"))
+	})
+	t.Run("all again", func(t *testing.T) {
+		// throttle "all", see how it affects app
+		throttler.ThrottleApp(throttlerapp.AllName.String(), plusOneHour, DefaultThrottleRatio, false)
+		defer throttler.UnthrottleApp(throttlerapp.AllName.String())
+		assert.True(t, throttler.IsAppThrottled("all"))
+		assert.True(t, throttler.IsAppThrottled("app1"))
+		assert.True(t, throttler.IsAppThrottled("app2"))
+		assert.True(t, throttler.IsAppThrottled("app3"))
+		assert.True(t, throttler.IsAppThrottled("app4"))
+		assert.True(t, throttler.IsAppThrottled("app_other"))
+	})
 }
 
 func TestIsAppExempted(t *testing.T) {

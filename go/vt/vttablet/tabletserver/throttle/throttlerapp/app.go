@@ -42,8 +42,13 @@ func (n Name) Concatenate(other Name) Name {
 
 const (
 	// DefaultName is the app name used by vitess when app doesn't indicate its name
-	DefaultName             Name = "default"
-	VitessName              Name = "vitess"
+	DefaultName Name = "default"
+	// AllName is a special catch-all name for all apps
+	AllName Name = "all"
+	// VitessName is used by vitess tablets when communicating between themselves,
+	// as well as for self checks
+	VitessName Name = "vitess"
+	// ThrottlerStimulatorName is used by a replica tablet to stimulate the throttler on the Primary tablet
 	ThrottlerStimulatorName Name = "throttler-stimulator"
 
 	TableGCName   Name = "tablegc"

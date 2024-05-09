@@ -1301,6 +1301,7 @@ func (throttler *Throttler) UnthrottleApp(appName string) (appThrottle *base.App
 // Assuming an app is throttled to some extend, it will randomize the result based
 // on the throttle ratio
 func (throttler *Throttler) IsAppThrottled(appName string) bool {
+	appFound := false
 	isSingleAppNameThrottled := func(singleAppName string) bool {
 		object, found := throttler.throttledApps.Get(singleAppName)
 		if !found {
@@ -1308,9 +1309,12 @@ func (throttler *Throttler) IsAppThrottled(appName string) bool {
 		}
 		appThrottle := object.(*base.AppThrottle)
 		if !appThrottle.ExpireAt.After(time.Now()) {
-			// throttling cleanup hasn't purged yet, but it is expired
+			// throttling cleanup hasn't purged yet, but it is expired.
 			return false
 		}
+		// From this point on, we condier that this app has some throttling configuration
+		// of any sort.
+		appFound = true
 		if appThrottle.Exempt {
 			return false
 		}
@@ -1330,6 +1334,17 @@ func (throttler *Throttler) IsAppThrottled(appName string) bool {
 		if isSingleAppNameThrottled(singleAppName) {
 			return true
 		}
+	}
+	// If app was found then there was some explicit throttle instruction for the app, and the app
+	// passed the test.
+	if appFound {
+		return false
+	}
+	// If the app was not found, ie no specific throttle instruction was found for the app, then
+	// the app should also consider the case where the "all" app is throttled.
+	if isSingleAppNameThrottled(throttlerapp.AllName.String()) {
+		// Means the "all" app is throttled. This is a special case, and it means "all apps are throttled"
+		return true
 	}
 	return false
 }
