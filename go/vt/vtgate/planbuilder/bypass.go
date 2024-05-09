@@ -49,13 +49,21 @@ func buildPlanForBypass(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vsc
 		}
 	}
 
+	hints := &queryHints{}
+	if comments, ok := stmt.(sqlparser.Commented); ok {
+		if qh := getHints(comments.GetParsedComments()); qh != nil {
+			hints = qh
+		}
+	}
+
 	send := &engine.Send{
 		Keyspace:             keyspace,
 		TargetDestination:    vschema.Destination(),
 		Query:                sqlparser.String(stmt),
 		IsDML:                sqlparser.IsDMLStatement(stmt),
 		SingleShardOnly:      false,
-		MultishardAutocommit: sqlparser.MultiShardAutocommitDirective(stmt),
+		MultishardAutocommit: hints.multiShardAutocommit,
+		QueryTimeout:         hints.queryTimeout,
 	}
 	return newPlanResult(send), nil
 }
