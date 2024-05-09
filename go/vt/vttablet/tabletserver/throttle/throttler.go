@@ -431,6 +431,25 @@ func (throttler *Throttler) applyThrottlerConfig(ctx context.Context, throttlerC
 	for _, appRule := range throttlerConfig.ThrottledApps {
 		throttler.ThrottleApp(appRule.Name, protoutil.TimeFromProto(appRule.ExpiresAt).UTC(), appRule.Ratio, appRule.Exempt)
 	}
+	{
+		// throttler.appCheckedMetrics needs to reflect throttlerConfig.AppCheckedMetrics
+		configuredApps := make(map[string]bool)
+		for app, metrics := range throttlerConfig.AppCheckedMetrics {
+			configuredApps[app] = true
+			metricNames := base.MetricNames{}
+			for _, name := range metrics.Names {
+				metricName := base.MetricName(name)
+				metricNames = append(metricNames, metricName)
+			}
+			throttler.appCheckedMetrics.Set(app, metricNames, cache.DefaultExpiration)
+		}
+		for app := range throttler.appCheckedMetrics.Items() {
+			if _, ok := configuredApps[app]; !ok {
+				// app not indicated in the throttler config, therefore should be removed from the map
+				throttler.appCheckedMetrics.Delete(app)
+			}
+		}
+	}
 	if throttlerConfig.Enabled {
 		go throttler.Enable()
 	} else {

@@ -267,6 +267,44 @@ func runSerialFunction(t *testing.T, ctx context.Context, throttler *Throttler, 
 	return done
 }
 
+func TestApplyThrottlerConfig(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	throttler := newTestThrottler()
+	throttlerConfig := &topodatapb.ThrottlerConfig{
+		Enabled:   true,
+		Threshold: 14,
+		AppCheckedMetrics: map[string]*topodatapb.ThrottlerConfig_MetricNames{
+			"app1":                              {Names: []string{"lag", "threads_running"}},
+			throttlerapp.OnlineDDLName.String(): {Names: []string{"loadavg"}},
+		},
+	}
+	assert.Equal(t, 0.75, throttler.GetMetricsThreshold())
+	throttler.appCheckedMetrics.Set("app1", base.MetricNames{base.ThreadsRunningMetricName}, cache.DefaultExpiration)
+	throttler.appCheckedMetrics.Set("app2", base.MetricNames{base.ThreadsRunningMetricName}, cache.DefaultExpiration)
+	throttler.appCheckedMetrics.Set("app3", base.MetricNames{base.ThreadsRunningMetricName}, cache.DefaultExpiration)
+	runThrottler(t, ctx, throttler, time.Minute, func(t *testing.T, ctx context.Context) {
+		<-runSerialFunction(t, context.Background(), throttler, func(ctx context.Context) {
+			throttler.applyThrottlerConfig(ctx, throttlerConfig)
+		})
+		cancel() // end test early
+	})
+	assert.Equal(t, float64(14), throttler.GetMetricsThreshold())
+	assert.Equal(t, 2, throttler.appCheckedMetrics.ItemCount())
+	{
+		value, ok := throttler.appCheckedMetrics.Get("app1")
+		assert.True(t, ok)
+		names := value.(base.MetricNames)
+		assert.Equal(t, base.MetricNames{base.LagMetricName, base.ThreadsRunningMetricName}, names)
+	}
+	{
+		value, ok := throttler.appCheckedMetrics.Get(throttlerapp.OnlineDDLName.String())
+		assert.True(t, ok)
+		names := value.(base.MetricNames)
+		assert.Equal(t, base.MetricNames{base.LoadAvgMetricName}, names)
+	}
+}
+
 func TestIsAppThrottled(t *testing.T) {
 	throttler := Throttler{
 		throttledApps:   cache.New(cache.NoExpiration, 0),
