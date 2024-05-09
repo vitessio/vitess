@@ -123,6 +123,7 @@
     }
   },
   {
+    "comment": "load data from s3 'x.txt' into table x",
     "query": "load data from s3 'x.txt' into table x",
     "plan": {
       "QueryType": "OTHER",
@@ -141,6 +142,7 @@
     }
   },
   {
+    "comment": "load data from s3 'x.txt'",
     "query": "load data from s3 'x.txt'",
     "plan": {
       "QueryType": "OTHER",
@@ -172,6 +174,81 @@
         },
         "TargetDestination": "Shard(-80)",
         "Query": "create /* test */ table t1(id bigint, primary key(id)) /* comments */"
+      }
+    }
+  },
+  {
+    "comment": "select bypass with query timeout hint",
+    "query": "select /*vt+ QUERY_TIMEOUT_MS=100 */ count(*), col from user",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select /*vt+ QUERY_TIMEOUT_MS=100 */ count(*), col from user",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "Shard(-80)",
+        "Query": "select /*vt+ QUERY_TIMEOUT_MS=100 */ count(*), col from `user`",
+        "QueryTimeout": 100
+      }
+    }
+  },
+  {
+    "comment": "update bypass with query timeout hint",
+    "query": "update /*vt+ QUERY_TIMEOUT_MS=100 */ user set val = 1 where id = 1",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update /*vt+ QUERY_TIMEOUT_MS=100 */ user set val = 1 where id = 1",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "Shard(-80)",
+        "IsDML": true,
+        "Query": "update /*vt+ QUERY_TIMEOUT_MS=100 */ `user` set val = 1 where id = 1",
+        "QueryTimeout": 100
+      }
+    }
+  },
+  {
+    "comment": "delete bypass with query timeout hint",
+    "query": "DELETE /*vt+ QUERY_TIMEOUT_MS=100 */ FROM USER WHERE ID = 42",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "DELETE /*vt+ QUERY_TIMEOUT_MS=100 */ FROM USER WHERE ID = 42",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "Shard(-80)",
+        "IsDML": true,
+        "Query": "delete /*vt+ QUERY_TIMEOUT_MS=100 */ from `USER` where ID = 42",
+        "QueryTimeout": 100
+      }
+    }
+  },
+  {
+    "comment": "insert bypass with query timeout hint",
+    "query": "INSERT /*vt+ QUERY_TIMEOUT_MS=100 */ INTO USER (ID, NAME) VALUES (42, 'ms X')",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "INSERT /*vt+ QUERY_TIMEOUT_MS=100 */ INTO USER (ID, NAME) VALUES (42, 'ms X')",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "Shard(-80)",
+        "IsDML": true,
+        "Query": "insert /*vt+ QUERY_TIMEOUT_MS=100 */ into `USER`(ID, `NAME`) values (42, 'ms X')",
+        "QueryTimeout": 100
       }
     }
   }
