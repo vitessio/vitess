@@ -380,12 +380,12 @@ func (m *ThrottlerConfig) CloneVT() *ThrottlerConfig {
 		}
 		r.ThrottledApps = tmpContainer
 	}
-	if rhs := m.AppMetrics; rhs != nil {
+	if rhs := m.AppCheckedMetrics; rhs != nil {
 		tmpContainer := make(map[string]*ThrottlerConfig_MetricNames, len(rhs))
 		for k, v := range rhs {
 			tmpContainer[k] = v.CloneVT()
 		}
-		r.AppMetrics = tmpContainer
+		r.AppCheckedMetrics = tmpContainer
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -1496,9 +1496,9 @@ func (m *ThrottlerConfig) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if len(m.AppMetrics) > 0 {
-		for k := range m.AppMetrics {
-			v := m.AppMetrics[k]
+	if len(m.AppCheckedMetrics) > 0 {
+		for k := range m.AppCheckedMetrics {
+			v := m.AppCheckedMetrics[k]
 			baseI := i
 			size, err := v.MarshalToSizedBufferVT(dAtA[:i])
 			if err != nil {
@@ -2324,8 +2324,8 @@ func (m *ThrottlerConfig) SizeVT() (n int) {
 			n += mapEntrySize + 1 + sov(uint64(mapEntrySize))
 		}
 	}
-	if len(m.AppMetrics) > 0 {
-		for k, v := range m.AppMetrics {
+	if len(m.AppCheckedMetrics) > 0 {
+		for k, v := range m.AppCheckedMetrics {
 			_ = k
 			_ = v
 			l = 0
@@ -5168,7 +5168,7 @@ func (m *ThrottlerConfig) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 6:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field AppMetrics", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field AppCheckedMetrics", wireType)
 			}
 			var msglen int
 			for shift := uint(0); ; shift += 7 {
@@ -5195,8 +5195,8 @@ func (m *ThrottlerConfig) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if m.AppMetrics == nil {
-				m.AppMetrics = make(map[string]*ThrottlerConfig_MetricNames)
+			if m.AppCheckedMetrics == nil {
+				m.AppCheckedMetrics = make(map[string]*ThrottlerConfig_MetricNames)
 			}
 			var mapkey string
 			var mapvalue *ThrottlerConfig_MetricNames
@@ -5293,7 +5293,7 @@ func (m *ThrottlerConfig) UnmarshalVT(dAtA []byte) error {
 					iNdEx += skippy
 				}
 			}
-			m.AppMetrics[mapkey] = mapvalue
+			m.AppCheckedMetrics[mapkey] = mapvalue
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
