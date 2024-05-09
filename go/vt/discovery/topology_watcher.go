@@ -66,7 +66,7 @@ type TopologyWatcher struct {
 	// set at construction time
 	topoServer          *topo.Server
 	healthcheck         HealthCheck
-	tabletFilter        TabletFilter
+	tabletFilters       []TabletFilter
 	cell                string
 	refreshInterval     time.Duration
 	refreshKnownTablets bool
@@ -92,11 +92,11 @@ type TopologyWatcher struct {
 
 // NewTopologyWatcher returns a TopologyWatcher that monitors all
 // the tablets in a cell, and reloads them as needed.
-func NewTopologyWatcher(ctx context.Context, topoServer *topo.Server, hc HealthCheck, f TabletFilter, cell string, refreshInterval time.Duration, refreshKnownTablets bool, topoReadConcurrency int) *TopologyWatcher {
+func NewTopologyWatcher(ctx context.Context, topoServer *topo.Server, hc HealthCheck, f []TabletFilter, cell string, refreshInterval time.Duration, refreshKnownTablets bool, topoReadConcurrency int) *TopologyWatcher {
 	tw := &TopologyWatcher{
 		topoServer:          topoServer,
 		healthcheck:         hc,
-		tabletFilter:        f,
+		tabletFilters:       f,
 		cell:                cell,
 		refreshInterval:     refreshInterval,
 		refreshKnownTablets: refreshKnownTablets,
@@ -139,6 +139,16 @@ func (tw *TopologyWatcher) Stop() {
 	tw.cancelFunc()
 	// wait for watch goroutine to finish.
 	tw.wg.Wait()
+}
+
+// hasTabletFiltersMatch returns true if a tablet matches all tablet filters.
+func (tw *TopologyWatcher) hasTabletFiltersMatch(tablet *topodata.Tablet) bool {
+	for _, tabletFilter := range tw.tabletFilters {
+		if !tabletFilter.IsIncluded(tablet) {
+			return false
+		}
+	}
+	return true
 }
 
 func (tw *TopologyWatcher) loadTablets() {
@@ -198,7 +208,7 @@ func (tw *TopologyWatcher) loadTablets() {
 	}
 
 	for alias, newVal := range newTablets {
-		if tw.tabletFilter != nil && !tw.tabletFilter.IsIncluded(newVal.tablet) {
+		if tw.tabletFilters != nil && !tw.hasTabletFiltersMatch(newVal.tablet) {
 			continue
 		}
 
@@ -221,7 +231,7 @@ func (tw *TopologyWatcher) loadTablets() {
 	}
 
 	for _, val := range tw.tablets {
-		if tw.tabletFilter != nil && !tw.tabletFilter.IsIncluded(val.tablet) {
+		if tw.tabletFilters != nil && !tw.hasTabletFiltersMatch(val.tablet) {
 			continue
 		}
 
@@ -374,4 +384,26 @@ func NewFilterByKeyspace(selectedKeyspaces []string) *FilterByKeyspace {
 func (fbk *FilterByKeyspace) IsIncluded(tablet *topodata.Tablet) bool {
 	_, exist := fbk.keyspaces[tablet.Keyspace]
 	return exist
+}
+
+// TODO:
+type FilterByTabletTags struct {
+	tags map[string]string
+}
+
+func NewFilterByTabletTags(tabletTags map[string]string) *FilterByTabletTags {
+	return &FilterByTabletTags{tags: tabletTags}
+}
+
+// IsIncluded returns true if the tablet's tags match what we expect.
+func (fbtg *FilterByTabletTags) IsIncluded(tablet *topodata.Tablet) bool {
+	if tablet.Tags == nil {
+		return false
+	}
+	for key, val := range fbtg.tags {
+		if tabletVal, found := tablet.Tags[key]; !found || tabletVal != val {
+			return false
+		}
+	}
+	return true
 }

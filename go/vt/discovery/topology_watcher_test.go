@@ -393,7 +393,7 @@ func TestFilterByKeyspace(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 
 	hc := NewFakeHealthCheck(nil)
-	f := NewFilterByKeyspace(testKeyspacesToWatch)
+	f := []TabletFilter{NewFilterByKeyspace(testKeyspacesToWatch)}
 	ts := memorytopo.NewServer(ctx, testCell)
 	defer ts.Close()
 	tw := NewTopologyWatcher(context.Background(), ts, hc, f, testCell, 10*time.Minute, true, 5)
@@ -414,7 +414,7 @@ func TestFilterByKeyspace(t *testing.T) {
 			Shard:    testShard,
 		}
 
-		assert.Equal(t, test.expected, f.IsIncluded(tablet))
+		assert.Equal(t, test.expected, tw.hasTabletFiltersMatch(tablet))
 
 		// Make this fatal because there is no point continuing if CreateTablet fails
 		require.NoError(t, ts.CreateTablet(context.Background(), tablet))
@@ -443,7 +443,7 @@ func TestFilterByKeyspace(t *testing.T) {
 			Keyspace: test.keyspace,
 			Shard:    testShard,
 		}
-		assert.Equal(t, test.expected, f.IsIncluded(tabletReplacement))
+		assert.Equal(t, test.expected, tw.hasTabletFiltersMatch(tabletReplacement))
 		require.NoError(t, ts.CreateTablet(context.Background(), tabletReplacement))
 
 		tw.loadTablets()
@@ -476,7 +476,7 @@ func TestFilterByKeyspaceSkipsIgnoredTablets(t *testing.T) {
 	defer fhc.Close()
 	topologyWatcherOperations.ZeroAll()
 	counts := topologyWatcherOperations.Counts()
-	f := NewFilterByKeyspace(testKeyspacesToWatch)
+	f := []TabletFilter{NewFilterByKeyspace(testKeyspacesToWatch)}
 	tw := NewTopologyWatcher(context.Background(), ts, fhc, f, "aa", 10*time.Minute, false /*refreshKnownTablets*/, 5)
 
 	counts = checkOpCounts(t, counts, map[string]int64{})
@@ -576,6 +576,23 @@ func TestFilterByKeyspaceSkipsIgnoredTablets(t *testing.T) {
 	assert.Empty(t, fhc.GetAllTablets())
 
 	tw.Stop()
+}
+
+func TestNewFilterByTabletTags(t *testing.T) {
+	tags := map[string]string{
+		"instance_type": "i3.xlarge",
+		"some_key":      "some_value",
+	}
+	filter := NewFilterByTabletTags(tags)
+	assert.False(t, filter.IsIncluded(&topodatapb.Tablet{
+		Tags: nil,
+	}))
+	assert.False(t, filter.IsIncluded(&topodatapb.Tablet{
+		Tags: map[string]string{},
+	}))
+	assert.True(t, filter.IsIncluded(&topodatapb.Tablet{
+		Tags: tags,
+	}))
 }
 
 func TestGetTabletErrorDoesNotRemoveFromHealthcheck(t *testing.T) {
