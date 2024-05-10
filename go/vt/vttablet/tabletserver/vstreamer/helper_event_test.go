@@ -552,7 +552,7 @@ func (ts *TestSpec) getFieldEvent(table *schemadiff.CreateTableEntity) *TestFiel
 			tc.len = lengthJSON
 			tc.collationID = collations.CollationBinaryID
 		default:
-			ts.t.Fatalf("unknown sqlTypeString %s", tc.dataTypeLowered)
+			require.FailNowf(ts.t, "unknown sqlTypeString %s", tc.dataTypeLowered)
 		}
 		tfe.cols = append(tfe.cols, &tc)
 	}
@@ -603,7 +603,7 @@ func (ts *TestSpec) getRowEvent(table string, bv map[string]string, fe *TestFiel
 			}
 		case "json":
 			sval := strings.Trim(string(val), "'")
-			sval = strings.Replace(sval, "\\", "", -1)
+			sval = strings.ReplaceAll(sval, "\\", "")
 			val = []byte(sval)
 			l = int64(len(val))
 		}
