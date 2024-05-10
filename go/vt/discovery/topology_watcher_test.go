@@ -476,7 +476,7 @@ func TestFilterByKeyspaceSkipsIgnoredTablets(t *testing.T) {
 	defer fhc.Close()
 	topologyWatcherOperations.ZeroAll()
 	counts := topologyWatcherOperations.Counts()
-	f := []TabletFilter{NewFilterByKeyspace(testKeyspacesToWatch)}
+	f := TabletFilters{NewFilterByKeyspace(testKeyspacesToWatch)}
 	tw := NewTopologyWatcher(context.Background(), ts, fhc, f, "aa", 10*time.Minute, false /*refreshKnownTablets*/, 5)
 
 	counts = checkOpCounts(t, counts, map[string]int64{})
