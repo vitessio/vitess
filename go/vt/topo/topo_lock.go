@@ -107,7 +107,6 @@ func (tl TopoLock) Lock(ctx context.Context) (context.Context, func(*error), err
 	}
 	i.mu.Lock()
 	defer i.mu.Unlock()
-
 	// check that we are not already locked
 	if _, ok := i.info[tl.Path]; ok {
 		return nil, nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "lock for %v is already held", tl.Path)
@@ -149,6 +148,25 @@ func (tl TopoLock) Lock(ctx context.Context) (context.Context, func(*error), err
 		}
 		delete(i.info, tl.Path)
 	}, nil
+}
+
+func CheckLocked(ctx context.Context, keyPath string) error {
+	// extract the locksInfo pointer
+	i, ok := ctx.Value(locksKey).(*locksInfo)
+	if !ok {
+		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "%s is not locked (no locksInfo)", keyPath)
+	}
+	i.mu.Lock()
+	defer i.mu.Unlock()
+
+	// find the individual entry
+	_, ok = i.info[keyPath]
+	if !ok {
+		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "%s is not locked (no lockInfo in map)", keyPath)
+	}
+
+	// and we're good for now.
+	return nil
 }
 
 /*

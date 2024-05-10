@@ -127,6 +127,7 @@ func SaveShardRoutingRules(ctx context.Context, ts *topo.Server, srr map[string]
 
 // region keyspace routing rules
 
+// GetKeyspaceRoutingRulesMap returns a map of fromKeyspace=>toKeyspace from a vschemapb.KeyspaceRoutingRules
 func GetKeyspaceRoutingRulesMap(rules *vschemapb.KeyspaceRoutingRules) map[string]string {
 	if rules == nil {
 		return make(map[string]string)
@@ -138,6 +139,8 @@ func GetKeyspaceRoutingRulesMap(rules *vschemapb.KeyspaceRoutingRules) map[strin
 	return rulesMap
 }
 
+// GetKeyspaceRoutingRules fetches keyspace routing rules from the topology server and returns a
+// map of fromKeyspace=>toKeyspace.
 func GetKeyspaceRoutingRules(ctx context.Context, ts *topo.Server) (map[string]string, error) {
 	keyspaceRoutingRules, err := ts.GetKeyspaceRoutingRules(ctx)
 	if err != nil {
@@ -147,7 +150,12 @@ func GetKeyspaceRoutingRules(ctx context.Context, ts *topo.Server) (map[string]s
 	return rules, nil
 }
 
+// saveKeyspaceRoutingRulesLocked saves the keyspace routing rules in the topo server. It expects the caller to
+// have acquired a RoutingRulesLock.
 func saveKeyspaceRoutingRulesLocked(ctx context.Context, ts *topo.Server, rules map[string]string) error {
+	if err := topo.CheckLocked(ctx, topo.RoutingRulesPath); err != nil {
+		return err
+	}
 	keyspaceRoutingRules := &vschemapb.KeyspaceRoutingRules{Rules: make([]*vschemapb.KeyspaceRoutingRule, 0, len(rules))}
 	for from, to := range rules {
 		keyspaceRoutingRules.Rules = append(keyspaceRoutingRules.Rules, &vschemapb.KeyspaceRoutingRule{
@@ -158,6 +166,10 @@ func saveKeyspaceRoutingRulesLocked(ctx context.Context, ts *topo.Server, rules 
 	return ts.SaveKeyspaceRoutingRules(ctx, keyspaceRoutingRules)
 }
 
+// UpdateKeyspaceRoutingRules updates the keyspace routing rules in the topo server. It initially acquires a
+// RoutingRulesLock and then calls the update function to modify the rules in-place.
+// If the update function returns an error, the rules are not saved and the lock is released.
+// If the update function is successful, the rules are saved to the topo and the lock is released.
 func UpdateKeyspaceRoutingRules(ctx context.Context, ts *topo.Server, reason string,
 	update func(ctx context.Context, rules *map[string]string) error) (err error) {
 	var lock *topo.RoutingRulesLock
