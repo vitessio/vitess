@@ -671,7 +671,9 @@ func (se *Engine) RegisterVersionEvent() error {
 }
 
 // GetTableForPos returns a best-effort schema for a specific gtid. If it cannot get
-// the table schema for the gtid, it returns the latest table schema available.
+// the table schema for the gtid, it returns the latest table schema available in the
+// cache. If the table is not found in the cache, it will reload the cache from the
+// database in case the table was created after the last schema reload.
 func (se *Engine) GetTableForPos(ctx context.Context, tableName sqlparser.IdentifierCS, gtid string) (*binlogdatapb.MinimalTable, error) {
 	mt, err := se.historian.GetTableForPos(tableName, gtid)
 	if err != nil {
@@ -684,32 +686,35 @@ func (se *Engine) GetTableForPos(ctx context.Context, tableName sqlparser.Identi
 	se.mu.Lock()
 	defer se.mu.Unlock()
 	tableNameStr := tableName.String()
-	st, ok := se.tables[tableNameStr]
-	if !ok {
-		// We got nothing from the historian, which generally means that it's not enabled.
-		// We also don't currently have the table in the cache. This can happen when a table
-		// was created after the last schema reload (which happens at least every
-		// --queryserver-config-schema-reload-time).
-		// Whatever the reason, we should ensure that our cache is able to get the latest
-		// table schema for the "current" position IF the table exists in the database.
-		// In order to ensure this, we need to reload the latest schema so that our cache
-		// is up to date. This effectively turns our in-memory cache into a read-through
-		// cache for VReplication related needs (this function is only used by vstreamers).
-		// This adds an additional cost, but for VReplication it should be rare that we are
-		// trying to replicate a table that doesn't actually exist.
-		if se.conns != nil { // Test Engines (NewEngineForTests()) don't have a conns pool
-			if err := se.reload(ctx, true); err != nil {
-				return nil, err
-			}
+	if st, ok := se.tables[tableNameStr]; ok {
+		return newMinimalTable(st), nil
+	}
+	// We got nothing from the historian, which generally means that it's not enabled.
+	// We also don't currently have the table in the cache. This can happen when a table
+	// was created after the last schema reload (which happens at least every
+	// --queryserver-config-schema-reload-time).
+	// Whatever the reason, we should ensure that our cache is able to get the latest
+	// table schema for the "current" position IF the table exists in the database.
+	// In order to ensure this, we need to reload the latest schema so that our cache
+	// is up to date. This effectively turns our in-memory cache into a read-through
+	// cache for VReplication related needs (this function is only used by vstreamers).
+	// This adds an additional cost, but for VReplication it should be rare that we are
+	// trying to replicate a table that doesn't actually exist.
+	if se.conns != nil { // Test Engines (NewEngineForTests()) don't have a conns pool
+		if err := se.reload(ctx, true); err != nil {
+			return nil, err
 		}
-		if schema.IsInternalOperationTableName(tableNameStr) {
-			log.Infof("internal table %v found in vttablet schema: skipping for GTID search", tableNameStr)
-		} else {
-			log.Infof("table %v not found in vttablet schema, current tables: %v", tableNameStr, se.tables)
-			return nil, fmt.Errorf("table %v not found in vttablet schema", tableNameStr)
+		if st, ok := se.tables[tableNameStr]; ok {
+			return newMinimalTable(st), nil
 		}
 	}
-	return newMinimalTable(st), nil
+	if schema.IsInternalOperationTableName(tableNameStr) {
+		log.Infof("internal table %v found in vttablet schema: skipping for GTID search", tableNameStr)
+		return nil, nil
+	} else {
+		log.Infof("table %v not found in vttablet schema, current tables: %v", tableNameStr, se.tables)
+		return nil, fmt.Errorf("table %v not found in vttablet schema", tableNameStr)
+	}
 }
 
 // RegisterNotifier registers the function for schema change notification.
