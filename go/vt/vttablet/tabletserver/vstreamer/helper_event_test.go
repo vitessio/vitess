@@ -66,8 +66,7 @@ const (
 	// This is the expected length of the only SET column using a binary collation
 	// in the test schema.
 	lengthSetBinary = 428
-	lengthSet  = 56
-	lengthJSON = 4294967295
+	lengthJSON      = 4294967295
 )
 
 var (
