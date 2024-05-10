@@ -279,9 +279,6 @@ type TabletFilters []TabletFilter
 
 // IsIncluded returns true if a tablet passes all filters.
 func (tf TabletFilters) IsIncluded(tablet *topodata.Tablet) bool {
-	if tablet.Type == topodata.TabletType_PRIMARY {
-		return true
-	}
 	for _, filter := range tf {
 		if !filter.IsIncluded(tablet) {
 			return false
