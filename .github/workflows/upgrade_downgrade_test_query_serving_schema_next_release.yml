@@ -15,7 +15,7 @@ permissions: read-all
 jobs:
   upgrade_downgrade_test:
     name: Run Upgrade Downgrade Test - Query Serving (Schema) Next Release
-    runs-on: gh-hosted-runners-16cores-1
+    runs-on: ubuntu-22.04
 
     steps:
     - name: Skip CI

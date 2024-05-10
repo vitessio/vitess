@@ -16,7 +16,7 @@ env:
 jobs:
   build:
     name: Run endtoend tests on Cluster (vstream_stoponreshard_false)
-    runs-on: gh-hosted-runners-4cores-1
+    runs-on: ubuntu-22.04
 
     steps:
     - name: Skip CI
