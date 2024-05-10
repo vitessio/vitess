@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/vtenv"
 
 	"vitess.io/vitess/go/acl"
@@ -43,7 +44,6 @@ import (
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
-	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -674,14 +674,9 @@ func (se *Engine) RegisterVersionEvent() error {
 // the table schema for the gtid, it returns the latest table schema available in the
 // database (updating the cache entry). If the table is not found in the cache, it will
 // reload the cache from the database in case the table was created after the last schema
-// reload. This function makes the schema cache a read-through cache for VReplication
-// purposes.
+// reload or the cache has not yet been initialized. This function makes the schema
+// cache a read-through cache for VReplication purposes.
 func (se *Engine) GetTableForPos(ctx context.Context, tableName sqlparser.IdentifierCS, gtid string) (*binlogdatapb.MinimalTable, error) {
-	tableNameStr := tableName.String()
-	if schema.IsInternalOperationTableName(tableNameStr) { // Internal tables should be ignored by VReplication
-		log.Infof("internal table %v found in vttablet schema: skipping for GTID search", tableNameStr)
-		return nil, nil
-	}
 	mt, err := se.historian.GetTableForPos(tableName, gtid)
 	if err != nil {
 		log.Infof("GetTableForPos returned error: %s", err.Error())
@@ -693,7 +688,14 @@ func (se *Engine) GetTableForPos(ctx context.Context, tableName sqlparser.Identi
 	// We got nothing from the historian, which generally means that it's not enabled.
 	se.mu.Lock()
 	defer se.mu.Unlock()
-	if st, ok := se.tables[tableNameStr]; ok {
+	tableNameStr := tableName.String()
+	if st, ok := se.tables[tableNameStr]; ok && tableNameStr != "dual" { // No need to refresh dual
+		// Test Engines (NewEngineForTests()) don't have a conns pool and are not
+		// supposed to talk to the database, so don't update the cache entry in that
+		// case.
+		if se.conns == nil {
+			return newMinimalTable(st), nil
+		}
 		// We have the table in our cache. Let's be sure that our table definition is
 		// up-to-date for the "current" position.
 		conn, err := se.conns.Get(ctx, nil)
@@ -701,10 +703,18 @@ func (se *Engine) GetTableForPos(ctx context.Context, tableName sqlparser.Identi
 			return nil, err
 		}
 		defer conn.Recycle()
-		if err := fetchColumns(st, conn, se.cp.DBName(), tableNameStr); err != nil {
+		cst := *st // Make a copy
+		if err := fetchColumns(&cst, conn, se.cp.DBName(), tableNameStr); err != nil {
 			return nil, err
 		}
-		return newMinimalTable(st), nil
+		se.tables[tableNameStr] = &cst
+		return newMinimalTable(&cst), nil
+	}
+	// It's expected that internal tables are not found within VReplication workflows.
+	// No need to refresh the cache for internal tables.
+	if schema.IsInternalOperationTableName(tableNameStr) {
+		log.Infof("internal table %v found in vttablet schema: skipping for GTID search", tableNameStr)
+		return nil, nil
 	}
 	// We don't currently have the table in the cache. This can happen when a table
 	// was created after the last schema reload (which happens at least every
