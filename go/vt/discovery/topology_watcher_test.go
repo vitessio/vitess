@@ -393,7 +393,7 @@ func TestFilterByKeyspace(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 
 	hc := NewFakeHealthCheck(nil)
-	f := []TabletFilter{NewFilterByKeyspace(testKeyspacesToWatch)}
+	f := TabletFilters{NewFilterByKeyspace(testKeyspacesToWatch)}
 	ts := memorytopo.NewServer(ctx, testCell)
 	defer ts.Close()
 	tw := NewTopologyWatcher(context.Background(), ts, hc, f, testCell, 10*time.Minute, true, 5)
@@ -414,7 +414,7 @@ func TestFilterByKeyspace(t *testing.T) {
 			Shard:    testShard,
 		}
 
-		assert.Equal(t, test.expected, tw.hasTabletFiltersMatch(tablet))
+		assert.Equal(t, test.expected, f.IsIncluded(tablet))
 
 		// Make this fatal because there is no point continuing if CreateTablet fails
 		require.NoError(t, ts.CreateTablet(context.Background(), tablet))
@@ -443,7 +443,7 @@ func TestFilterByKeyspace(t *testing.T) {
 			Keyspace: test.keyspace,
 			Shard:    testShard,
 		}
-		assert.Equal(t, test.expected, tw.hasTabletFiltersMatch(tabletReplacement))
+		assert.Equal(t, test.expected, f.IsIncluded(tabletReplacement))
 		require.NoError(t, ts.CreateTablet(context.Background(), tabletReplacement))
 
 		tw.loadTablets()

@@ -342,7 +342,7 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 		loadTabletsTrigger: make(chan struct{}),
 	}
 	var topoWatchers []*TopologyWatcher
-	var filters []TabletFilter
+	filters := make(TabletFilters, 0)
 	cells := strings.Split(cellsToWatch, ",")
 	if cellsToWatch == "" {
 		cells = append(cells, localCell)
@@ -362,9 +362,9 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 			if err != nil {
 				log.Exitf("Cannot parse tablet_filters parameter: %v", err)
 			}
-			filters = []TabletFilter{fbs}
+			filters = TabletFilters{fbs}
 		} else if len(KeyspacesToWatch) > 0 {
-			filters = []TabletFilter{NewFilterByKeyspace(KeyspacesToWatch)}
+			filters = TabletFilters{NewFilterByKeyspace(KeyspacesToWatch)}
 		}
 		if len(tabletFilterTags) > 0 {
 			filters = append(filters, NewFilterByTabletTags(tabletFilterTags))

@@ -66,7 +66,7 @@ type TopologyWatcher struct {
 	// set at construction time
 	topoServer          *topo.Server
 	healthcheck         HealthCheck
-	tabletFilters       []TabletFilter
+	tabletFilters       TabletFilters
 	cell                string
 	refreshInterval     time.Duration
 	refreshKnownTablets bool
@@ -92,7 +92,7 @@ type TopologyWatcher struct {
 
 // NewTopologyWatcher returns a TopologyWatcher that monitors all
 // the tablets in a cell, and reloads them as needed.
-func NewTopologyWatcher(ctx context.Context, topoServer *topo.Server, hc HealthCheck, f []TabletFilter, cell string, refreshInterval time.Duration, refreshKnownTablets bool, topoReadConcurrency int) *TopologyWatcher {
+func NewTopologyWatcher(ctx context.Context, topoServer *topo.Server, hc HealthCheck, f TabletFilters, cell string, refreshInterval time.Duration, refreshKnownTablets bool, topoReadConcurrency int) *TopologyWatcher {
 	tw := &TopologyWatcher{
 		topoServer:          topoServer,
 		healthcheck:         hc,
@@ -139,16 +139,6 @@ func (tw *TopologyWatcher) Stop() {
 	tw.cancelFunc()
 	// wait for watch goroutine to finish.
 	tw.wg.Wait()
-}
-
-// hasTabletFiltersMatch returns true if a tablet matches all tablet filters.
-func (tw *TopologyWatcher) hasTabletFiltersMatch(tablet *topodata.Tablet) bool {
-	for _, tabletFilter := range tw.tabletFilters {
-		if !tabletFilter.IsIncluded(tablet) {
-			return false
-		}
-	}
-	return true
 }
 
 func (tw *TopologyWatcher) loadTablets() {
@@ -208,7 +198,7 @@ func (tw *TopologyWatcher) loadTablets() {
 	}
 
 	for alias, newVal := range newTablets {
-		if tw.tabletFilters != nil && !tw.hasTabletFiltersMatch(newVal.tablet) {
+		if tw.tabletFilters != nil && !tw.tabletFilters.IsIncluded(newVal.tablet) {
 			continue
 		}
 
@@ -231,7 +221,7 @@ func (tw *TopologyWatcher) loadTablets() {
 	}
 
 	for _, val := range tw.tablets {
-		if tw.tabletFilters != nil && !tw.hasTabletFiltersMatch(val.tablet) {
+		if tw.tabletFilters != nil && !tw.tabletFilters.IsIncluded(val.tablet) {
 			continue
 		}
 
@@ -282,6 +272,19 @@ func (tw *TopologyWatcher) TopoChecksum() uint32 {
 type TabletFilter interface {
 	// IsIncluded returns whether tablet is included in this filter
 	IsIncluded(tablet *topodata.Tablet) bool
+}
+
+// TabletFilters contains filters for tablets.
+type TabletFilters []TabletFilter
+
+// IsIncluded returns true if a tablet passes all filters.
+func (tf TabletFilters) IsIncluded(tablet *topodata.Tablet) bool {
+	for _, filter := range tf {
+		if !filter.IsIncluded(tablet) {
+			return false
+		}
+	}
+	return true
 }
 
 // FilterByShard is a filter that filters tablets by
