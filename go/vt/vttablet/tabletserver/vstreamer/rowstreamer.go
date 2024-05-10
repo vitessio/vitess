@@ -163,7 +163,6 @@ func (rs *rowStreamer) buildPlan() error {
 	// This is because the row format of a read is identical
 	// to the row format of a binlog event. So, the same
 	// filtering will work.
-	log.Errorf("DEBUG: rowStreamer building table plan for %v", rs.query)
 	rs.plan, err = buildTablePlan(rs.se.Environment(), ti, rs.vschema, rs.query)
 	if err != nil {
 		log.Errorf("%s", err.Error())
