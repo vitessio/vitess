@@ -66,7 +66,7 @@ type TopologyWatcher struct {
 	// set at construction time
 	topoServer          *topo.Server
 	healthcheck         HealthCheck
-	tabletFilters       TabletFilters
+	tabletFilter        TabletFilter
 	cell                string
 	refreshInterval     time.Duration
 	refreshKnownTablets bool
@@ -92,11 +92,11 @@ type TopologyWatcher struct {
 
 // NewTopologyWatcher returns a TopologyWatcher that monitors all
 // the tablets in a cell, and reloads them as needed.
-func NewTopologyWatcher(ctx context.Context, topoServer *topo.Server, hc HealthCheck, f TabletFilters, cell string, refreshInterval time.Duration, refreshKnownTablets bool, topoReadConcurrency int) *TopologyWatcher {
+func NewTopologyWatcher(ctx context.Context, topoServer *topo.Server, hc HealthCheck, f TabletFilter, cell string, refreshInterval time.Duration, refreshKnownTablets bool, topoReadConcurrency int) *TopologyWatcher {
 	tw := &TopologyWatcher{
 		topoServer:          topoServer,
 		healthcheck:         hc,
-		tabletFilters:       f,
+		tabletFilter:        f,
 		cell:                cell,
 		refreshInterval:     refreshInterval,
 		refreshKnownTablets: refreshKnownTablets,
@@ -198,7 +198,7 @@ func (tw *TopologyWatcher) loadTablets() {
 	}
 
 	for alias, newVal := range newTablets {
-		if tw.tabletFilters != nil && !tw.tabletFilters.IsIncluded(newVal.tablet) {
+		if tw.tabletFilter != nil && !tw.tabletFilter.IsIncluded(newVal.tablet) {
 			continue
 		}
 
@@ -221,7 +221,7 @@ func (tw *TopologyWatcher) loadTablets() {
 	}
 
 	for _, val := range tw.tablets {
-		if tw.tabletFilters != nil && !tw.tabletFilters.IsIncluded(val.tablet) {
+		if tw.tabletFilter != nil && !tw.tabletFilter.IsIncluded(val.tablet) {
 			continue
 		}
 
