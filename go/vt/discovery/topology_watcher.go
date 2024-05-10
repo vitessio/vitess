@@ -404,7 +404,7 @@ func NewFilterByTabletTags(tabletTags map[string]string) *FilterByTabletTags {
 
 // IsIncluded returns true if the tablet's tags match what we expect.
 func (fbtg *FilterByTabletTags) IsIncluded(tablet *topodata.Tablet) bool {
-	if fbtg.tags == nil {
+	if fbtg.tags == nil || tablet.Type == topodata.TabletType_PRIMARY {
 		return true
 	} else if tablet.Tags == nil {
 		return false
