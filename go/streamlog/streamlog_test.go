@@ -267,15 +267,18 @@ func TestFile(t *testing.T) {
 func TestShouldEmitLog(t *testing.T) {
 	origQueryLogFilterTag := queryLogFilterTag
 	origQueryLogRowThreshold := queryLogRowThreshold
+	origQueryLogSampleRate := queryLogSampleRate
 	defer func() {
 		SetQueryLogFilterTag(origQueryLogFilterTag)
 		SetQueryLogRowThreshold(origQueryLogRowThreshold)
+		SetQueryLogSampleRate(origQueryLogSampleRate)
 	}()
 
 	tests := []struct {
 		sql              string
 		qLogFilterTag    string
 		qLogRowThreshold uint64
+		qLogSampleRate   float64
 		rowsAffected     uint64
 		rowsReturned     uint64
 		ok               bool
@@ -284,6 +287,7 @@ func TestShouldEmitLog(t *testing.T) {
 			sql:              "queryLogThreshold smaller than affected and returned",
 			qLogFilterTag:    "",
 			qLogRowThreshold: 2,
+			qLogSampleRate:   0.0,
 			rowsAffected:     7,
 			rowsReturned:     7,
 			ok:               true,
@@ -292,6 +296,7 @@ func TestShouldEmitLog(t *testing.T) {
 			sql:              "queryLogThreshold greater than affected and returned",
 			qLogFilterTag:    "",
 			qLogRowThreshold: 27,
+			qLogSampleRate:   0.0,
 			rowsAffected:     7,
 			rowsReturned:     17,
 			ok:               false,
@@ -300,6 +305,7 @@ func TestShouldEmitLog(t *testing.T) {
 			sql:              "this doesn't contains queryFilterTag: TAG",
 			qLogFilterTag:    "special tag",
 			qLogRowThreshold: 10,
+			qLogSampleRate:   0.0,
 			rowsAffected:     7,
 			rowsReturned:     17,
 			ok:               false,
@@ -308,6 +314,34 @@ func TestShouldEmitLog(t *testing.T) {
 			sql:              "this contains queryFilterTag: TAG",
 			qLogFilterTag:    "TAG",
 			qLogRowThreshold: 0,
+			qLogSampleRate:   0.0,
+			rowsAffected:     7,
+			rowsReturned:     17,
+			ok:               true,
+		},
+		{
+			sql:              "this contains querySampleRate: 1.0",
+			qLogFilterTag:    "",
+			qLogRowThreshold: 0,
+			qLogSampleRate:   1.0,
+			rowsAffected:     7,
+			rowsReturned:     17,
+			ok:               true,
+		},
+		{
+			sql:              "this contains out-of-bounds querySampleRate: 123.0",
+			qLogFilterTag:    "",
+			qLogRowThreshold: 0,
+			qLogSampleRate:   123.0,
+			rowsAffected:     7,
+			rowsReturned:     17,
+			ok:               true,
+		},
+		{
+			sql:              "this contains querySampleRate: 1.0 without expected queryFilterTag",
+			qLogFilterTag:    "TAG",
+			qLogRowThreshold: 0,
+			qLogSampleRate:   1.0,
 			rowsAffected:     7,
 			rowsReturned:     17,
 			ok:               true,
@@ -318,6 +352,7 @@ func TestShouldEmitLog(t *testing.T) {
 		t.Run(tt.sql, func(t *testing.T) {
 			SetQueryLogFilterTag(tt.qLogFilterTag)
 			SetQueryLogRowThreshold(tt.qLogRowThreshold)
+			SetQueryLogSampleRate(tt.qLogSampleRate)
 
 			require.Equal(t, tt.ok, ShouldEmitLog(tt.sql, tt.rowsAffected, tt.rowsReturned))
 		})
