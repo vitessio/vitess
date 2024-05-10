@@ -14,7 +14,7 @@ env:
 jobs:
   build:
     name: Run endtoend tests on {{.Name}}
-    runs-on: {{if .Cores16}}gh-hosted-runners-16cores-1{{else}}gh-hosted-runners-4cores-1{{end}}
+    runs-on: ubuntu-22.04
 
     steps:
     - name: Skip CI
