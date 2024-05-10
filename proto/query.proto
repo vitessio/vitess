@@ -325,6 +325,10 @@ message ExecuteOptions {
   // if the user has created temp tables, Vitess will not reuse plans created for this session in other sessions.
   // The current session can still use other sessions cached plans.
   bool has_created_temp_tables = 12;
+
+  // WorkloadName specifies the name of the workload as indicated in query directives. This is used for instrumentation
+  // in metrics and tracing spans.
+  string WorkloadName = 15;
 }
 
 // Field describes a single column returned by a query

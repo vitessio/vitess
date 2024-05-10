@@ -104,7 +104,7 @@ jobs:
 
         {{if .InstallXtraBackup}}
 
-        sudo apt-get install percona-xtrabackup-80 lz4
+        sudo apt-get install -y percona-xtrabackup-80 lz4
 
         {{end}}
 

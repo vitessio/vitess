@@ -143,4 +143,20 @@ jobs:
         max_attempts: 3
         retry_on: error
         command: |
+          set -exo pipefail
+          # We set the VTDATAROOT to the /tmp folder to reduce the file path of mysql.sock file
+          # which musn't be more than 107 characters long.
+          export VTDATAROOT="/tmp/"
+
+          export NOVTADMINBUILD=1
           eatmydata -- make unit_test
+
+    - name: Print test output and Record test result in launchable
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true' && always()
+      run: |
+        # send recorded tests to launchable
+        launchable record tests --build "$GITHUB_RUN_ID" go-test . || true
+
+        # print test output
+        cat output.txt
+>>>>>>> ffb2410bd3 (CI: Misc test improvements to limit failures with various runners (#13825))

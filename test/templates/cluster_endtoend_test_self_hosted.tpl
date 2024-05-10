@@ -57,7 +57,12 @@ jobs:
           timeout_minutes: 30
           max_attempts: 3
           retry_on: error
-          command: docker run --name "{{.ImageName}}_$GITHUB_SHA" {{.ImageName}}:$GITHUB_SHA /bin/bash -c 'source build.env && go run test.go -keep-data=true -docker=false -print-log -follow -shard {{.Shard}} -- -- --keep-data=true'
+          command: |
+            # We set the VTDATAROOT to the /tmp folder to reduce the file path of mysql.sock file
+            # which musn't be more than 107 characters long.
+            export VTDATAROOT="/tmp/"
+
+            docker run --name "{{.ImageName}}_$GITHUB_SHA" {{.ImageName}}:$GITHUB_SHA /bin/bash -c 'source build.env && go run test.go -keep-data=true -docker=false -print-log -follow -shard {{.Shard}} -- -- --keep-data=true'
 
       - name: Print Volume Used
         if: always() && steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'

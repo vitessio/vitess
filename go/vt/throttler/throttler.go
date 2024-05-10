@@ -130,19 +130,31 @@ func NewThrottler(name, unit string, threadCount int, maxRate, maxReplicationLag
 	return newThrottler(GlobalManager, name, unit, threadCount, maxRate, maxReplicationLag, time.Now)
 }
 
+func NewThrottlerFromConfig(name, unit string, threadCount int, maxRateModuleMaxRate int64, maxReplicationLagModuleConfig MaxReplicationLagModuleConfig, nowFunc func() time.Time) (*Throttler, error) {
+	return newThrottlerFromConfig(GlobalManager, name, unit, threadCount, maxRateModuleMaxRate, maxReplicationLagModuleConfig, nowFunc)
+}
+
 func newThrottler(manager *managerImpl, name, unit string, threadCount int, maxRate, maxReplicationLag int64, nowFunc func() time.Time) (*Throttler, error) {
-	// Verify input parameters.
-	if maxRate < 0 {
-		return nil, fmt.Errorf("maxRate must be >= 0: %v", maxRate)
+	config := NewMaxReplicationLagModuleConfig(maxReplicationLag)
+	config.MaxReplicationLagSec = maxReplicationLag
+
+	return newThrottlerFromConfig(manager, name, unit, threadCount, maxRate, config, nowFunc)
+
+}
+
+func newThrottlerFromConfig(manager *managerImpl, name, unit string, threadCount int, maxRateModuleMaxRate int64, maxReplicationLagModuleConfig MaxReplicationLagModuleConfig, nowFunc func() time.Time) (*Throttler, error) {
+	err := maxReplicationLagModuleConfig.Verify()
+	if err != nil {
+		return nil, fmt.Errorf("invalid max replication lag config: %w", err)
 	}
-	if maxReplicationLag < 0 {
-		return nil, fmt.Errorf("maxReplicationLag must be >= 0: %v", maxReplicationLag)
+	if maxRateModuleMaxRate < 0 {
+		return nil, fmt.Errorf("maxRate must be >= 0: %v", maxRateModuleMaxRate)
 	}
 
 	// Enable the configured modules.
-	maxRateModule := NewMaxRateModule(maxRate)
+	maxRateModule := NewMaxRateModule(maxRateModuleMaxRate)
 	actualRateHistory := newAggregatedIntervalHistory(1024, 1*time.Second, threadCount)
-	maxReplicationLagModule, err := NewMaxReplicationLagModule(NewMaxReplicationLagModuleConfig(maxReplicationLag), actualRateHistory, nowFunc)
+	maxReplicationLagModule, err := NewMaxReplicationLagModule(maxReplicationLagModuleConfig, actualRateHistory, nowFunc)
 	if err != nil {
 		return nil, err
 	}

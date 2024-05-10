@@ -89,7 +89,7 @@ jobs:
         # install JUnit report formatter
         go install github.com/vitessio/go-junit-report@HEAD
 
-        sudo apt-get install percona-xtrabackup-80 lz4
+        sudo apt-get install -y percona-xtrabackup-80 lz4
 
     - name: Run cluster endtoend test
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'

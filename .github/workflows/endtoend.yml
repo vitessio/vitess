@@ -81,4 +81,8 @@ jobs:
         max_attempts: 3
         retry_on: error
         command: |
+          # We set the VTDATAROOT to the /tmp folder to reduce the file path of mysql.sock file
+          # which musn't be more than 107 characters long.
+          export VTDATAROOT="/tmp/"
+
           eatmydata -- tools/e2e_test_runner.sh

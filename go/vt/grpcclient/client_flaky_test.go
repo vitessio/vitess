@@ -43,7 +43,7 @@ func TestDialErrors(t *testing.T) {
 			t.Fatal(err)
 		}
 		vtg := vtgateservicepb.NewVitessClient(gconn)
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		_, err = vtg.Execute(ctx, &vtgatepb.ExecuteRequest{})
 		cancel()
 		gconn.Close()
