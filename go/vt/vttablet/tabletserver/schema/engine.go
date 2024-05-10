@@ -671,7 +671,7 @@ func (se *Engine) RegisterVersionEvent() error {
 }
 
 // GetTableForPos returns a best-effort schema for a specific gtid
-func (se *Engine) GetTableForPos(tableName sqlparser.IdentifierCS, gtid string) (*binlogdatapb.MinimalTable, error) {
+func (se *Engine) GetTableForPos(ctx context.Context, tableName sqlparser.IdentifierCS, gtid string) (*binlogdatapb.MinimalTable, error) {
 	mt, err := se.historian.GetTableForPos(tableName, gtid)
 	if err != nil {
 		log.Infof("GetTableForPos returned error: %s", err.Error())
@@ -680,8 +680,15 @@ func (se *Engine) GetTableForPos(tableName sqlparser.IdentifierCS, gtid string) 
 	if mt != nil {
 		return mt, nil
 	}
+	// We got nothing from the historian, which generally means that it's not enabled.
+	// Whatever the reason, we should get the latest schema for the "current" position.
+	// In order to ensure this, we need to reload the latest schema first so that our
+	// cache is up to date and we do in fact return the latest/current table schema.
 	se.mu.Lock()
 	defer se.mu.Unlock()
+	if err := se.reload(ctx, true); err != nil {
+		return nil, err
+	}
 	tableNameStr := tableName.String()
 	st, ok := se.tables[tableNameStr]
 	if !ok {
