@@ -244,6 +244,7 @@ func TestMultiTenantSimple(t *testing.T) {
 			Rules: []*vschemapb.KeyspaceRoutingRule{},
 		}
 		applyKeyspaceRoutingRules(t, updatedRules, emptyRules)
+		// Test setting empty rules again
 		applyKeyspaceRoutingRules(t, emptyRules, emptyRules)
 	})
 }

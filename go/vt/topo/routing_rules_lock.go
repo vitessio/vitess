@@ -29,7 +29,7 @@ type RoutingRulesLock struct {
 }
 
 func NewRoutingRulesLock(ctx context.Context, ts *Server, name string) (*RoutingRulesLock, error) {
-	if err := ts.EnsureKeyExists(ctx, "Routing Rules", RoutingRulesPath); err != nil {
+	if err := ts.EnsureTopoPathExists(ctx, "Routing Rules", RoutingRulesPath); err != nil {
 		log.Errorf("Failed to create routing rules lock file: %v", err)
 		return nil, err
 	}

@@ -152,11 +152,11 @@ func (tl TopoLock) Lock(ctx context.Context) (context.Context, func(*error), err
 }
 
 /*
-EnsureKeyExists creates the specified  key by creating a sentinel (dummy) child key under it.
+EnsureTopoPathExists creates the specified  key by creating a sentinel (dummy) child key under it.
 Vitess expects a key to exist, and to have a child key (it imposes a directory-like structure), before locking it.
 Without this we get an error when trying to lock :node doesn't exist: /vitess/global/<keyPath>/.
 */
-func (ts *Server) EnsureKeyExists(ctx context.Context, name, keyPath string) error {
+func (ts *Server) EnsureTopoPathExists(ctx context.Context, name, keyPath string) error {
 	sentinelPath := path.Join(keyPath, "sentinel")
 	_, _, err := ts.globalCell.Get(ctx, sentinelPath)
 	if IsErrType(err, NoNode) {

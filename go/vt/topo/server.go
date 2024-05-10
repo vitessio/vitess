@@ -423,6 +423,7 @@ func (ts *Server) IsReadOnly() (bool, error) {
 	return true, nil
 }
 
+// GetKeyspaceRoutingRulesPath returns the path to the keyspace routing rules file in the topo.
 func (ts *Server) GetKeyspaceRoutingRulesPath() string {
 	return path.Join(RoutingRulesPath, KeyspaceRoutingRulesPath, CommonRoutingRulesFile)
 }
