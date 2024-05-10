@@ -672,9 +672,16 @@ func (se *Engine) RegisterVersionEvent() error {
 
 // GetTableForPos returns a best-effort schema for a specific gtid. If it cannot get
 // the table schema for the gtid, it returns the latest table schema available in the
-// cache. If the table is not found in the cache, it will reload the cache from the
-// database in case the table was created after the last schema reload.
+// database (updating the cache entry). If the table is not found in the cache, it will
+// reload the cache from the database in case the table was created after the last schema
+// reload. This function makes the schema cache a read-through cache for VReplication
+// purposes.
 func (se *Engine) GetTableForPos(ctx context.Context, tableName sqlparser.IdentifierCS, gtid string) (*binlogdatapb.MinimalTable, error) {
+	tableNameStr := tableName.String()
+	if schema.IsInternalOperationTableName(tableNameStr) { // Internal tables should be ignored by VReplication
+		log.Infof("internal table %v found in vttablet schema: skipping for GTID search", tableNameStr)
+		return nil, nil
+	}
 	mt, err := se.historian.GetTableForPos(tableName, gtid)
 	if err != nil {
 		log.Infof("GetTableForPos returned error: %s", err.Error())
@@ -683,14 +690,23 @@ func (se *Engine) GetTableForPos(ctx context.Context, tableName sqlparser.Identi
 	if mt != nil {
 		return mt, nil
 	}
+	// We got nothing from the historian, which generally means that it's not enabled.
 	se.mu.Lock()
 	defer se.mu.Unlock()
-	tableNameStr := tableName.String()
 	if st, ok := se.tables[tableNameStr]; ok {
+		// We have the table in our cache. Let's be sure that our table definition is
+		// up-to-date for the "current" position.
+		conn, err := se.conns.Get(ctx, nil)
+		if err != nil {
+			return nil, err
+		}
+		defer conn.Recycle()
+		if err := fetchColumns(st, conn, se.cp.DBName(), tableNameStr); err != nil {
+			return nil, err
+		}
 		return newMinimalTable(st), nil
 	}
-	// We got nothing from the historian, which generally means that it's not enabled.
-	// We also don't currently have the table in the cache. This can happen when a table
+	// We don't currently have the table in the cache. This can happen when a table
 	// was created after the last schema reload (which happens at least every
 	// --queryserver-config-schema-reload-time).
 	// Whatever the reason, we should ensure that our cache is able to get the latest
@@ -708,13 +724,9 @@ func (se *Engine) GetTableForPos(ctx context.Context, tableName sqlparser.Identi
 			return newMinimalTable(st), nil
 		}
 	}
-	if schema.IsInternalOperationTableName(tableNameStr) {
-		log.Infof("internal table %v found in vttablet schema: skipping for GTID search", tableNameStr)
-		return nil, nil
-	} else {
-		log.Infof("table %v not found in vttablet schema, current tables: %v", tableNameStr, se.tables)
-		return nil, fmt.Errorf("table %v not found in vttablet schema", tableNameStr)
-	}
+
+	log.Infof("table %v not found in vttablet schema, current tables: %v", tableNameStr, se.tables)
+	return nil, fmt.Errorf("table %v not found in vttablet schema", tableNameStr)
 }
 
 // RegisterNotifier registers the function for schema change notification.

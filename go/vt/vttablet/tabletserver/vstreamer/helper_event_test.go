@@ -35,7 +35,6 @@ package vstreamer
 // The test framework will not work if the queries use double quotes for string literals at the moment.
 
 import (
-	"context"
 	"fmt"
 	"slices"
 	"strings"
@@ -315,7 +314,6 @@ func (ts *TestSpec) Init() {
 		}
 		ts.pkColumns[t.Name()] = pkColumns
 	}
-	engine.se.Reload(context.Background())
 }
 
 // Close() should be called (via defer) at the end of the test to clean up the tables created in the test.
@@ -372,7 +370,6 @@ func (ts *TestSpec) getBindVarsForUpdate(stmt sqlparser.Statement) (string, map[
 
 // Run() runs the test. It first initializes the test, then runs the queries and validates the events.
 func (ts *TestSpec) Run() {
-	require.NoError(ts.t, engine.se.Reload(context.Background()))
 	if !ts.inited {
 		ts.Init()
 	}
@@ -469,20 +466,6 @@ func (ts *TestSpec) getDDLEvent(query string) string {
 		Statement: query,
 	}
 	return ddlEvent.String()
-}
-
-func (ts *TestSpec) reloadSchema() {
-	engine.se.Reload(context.Background())
-	var ddls []string
-	for _, table := range ts.tables {
-		showCreateTableDDL := fmt.Sprintf("show create table %s", table)
-		qr, err := env.Mysqld.FetchSuperQuery(context.Background(), showCreateTableDDL)
-		require.NoError(ts.t, err)
-		ddls = append(ddls, qr.Rows[0][1].ToString())
-	}
-	var err error
-	ts.schema, err = schemadiff.NewSchemaFromQueries(schemadiff.NewTestEnv(), ddls)
-	require.NoError(ts.t, err)
 }
 
 func (ts *TestSpec) getFieldEvent(table *schemadiff.CreateTableEntity) *TestFieldEvent {
