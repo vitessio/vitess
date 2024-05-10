@@ -596,10 +596,6 @@ func TestNewFilterByTabletTags(t *testing.T) {
 		Tags: map[string]string{},
 	}))
 	assert.True(t, filter.IsIncluded(&topodatapb.Tablet{
-		Type: topodatapb.TabletType_PRIMARY,
-		Tags: map[string]string{},
-	}))
-	assert.True(t, filter.IsIncluded(&topodatapb.Tablet{
 		Tags: tags,
 	}))
 }
