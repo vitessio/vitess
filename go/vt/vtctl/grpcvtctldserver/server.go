@@ -5174,9 +5174,7 @@ func (s *VtctldServer) ApplyKeyspaceRoutingRules(ctx context.Context, req *vtctl
 	span.Annotate("rebuild_cells", strings.Join(req.RebuildCells, ","))
 	if err := topotools.UpdateKeyspaceRoutingRules(ctx, s.ts, "ApplyKeyspaceRoutingRules",
 		func(ctx context.Context, rules *map[string]string) error {
-			for k := range *rules {
-				delete(*rules, k)
-			}
+			clear(*rules)
 			for _, rule := range req.GetKeyspaceRoutingRules().Rules {
 				(*rules)[rule.FromKeyspace] = rule.ToKeyspace
 			}
