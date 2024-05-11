@@ -108,12 +108,6 @@ func commandApplyKeyspaceRoutingRules(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Get current keyspace routing rules to include in the response.
-	currentRules, err := client.GetKeyspaceRoutingRules(commandCtx, &vtctldatapb.GetKeyspaceRoutingRulesRequest{})
-	if err != nil {
-		return err
-	}
-
 	resp, err := client.ApplyKeyspaceRoutingRules(commandCtx, &vtctldatapb.ApplyKeyspaceRoutingRulesRequest{
 		KeyspaceRoutingRules: krr,
 		SkipRebuild:          opts.SkipRebuild,
@@ -122,15 +116,6 @@ func commandApplyKeyspaceRoutingRules(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-
-	resp.OldKeyspaceRoutingRules = currentRules.KeyspaceRoutingRules
-
-	// Get the new keyspace routing rules to include in the response.
-	newRules, err := client.GetKeyspaceRoutingRules(commandCtx, &vtctldatapb.GetKeyspaceRoutingRulesRequest{})
-	if err != nil {
-		return err
-	}
-	resp.NewKeyspaceRoutingRules = newRules.KeyspaceRoutingRules
 
 	respJSON, err := cli.MarshalJSON(resp)
 	if err != nil {
