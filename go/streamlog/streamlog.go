@@ -259,13 +259,12 @@ func GetFormatter[T any](logger *StreamLogger[T]) LogFormatter {
 
 // shouldSampleQuery returns true if a query should be sampled based on queryLogSampleRate
 func shouldSampleQuery() bool {
-	sampleRate := queryLogSampleRate
-	if sampleRate <= 0 {
+	if queryLogSampleRate <= 0 {
 		return false
-	} else if sampleRate > 1.0 {
-		sampleRate = 1.0
+	} else if queryLogSampleRate >= 1.0 {
+		return true
 	}
-	return rand.Float64() <= sampleRate
+	return rand.Float64() <= queryLogSampleRate
 }
 
 // ShouldEmitLog returns whether the log with the given SQL query
