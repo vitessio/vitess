@@ -272,6 +272,10 @@ func TestShouldSampleQuery(t *testing.T) {
 	queryLogSampleRate = 0
 	assert.False(t, shouldSampleQuery())
 
+	// for test coverage, can't test a random result
+	queryLogSampleRate = 0.5
+	shouldSampleQuery()
+
 	queryLogSampleRate = 1.0
 	assert.True(t, shouldSampleQuery())
 
