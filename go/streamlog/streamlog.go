@@ -103,7 +103,7 @@ func registerStreamLogFlags(fs *pflag.FlagSet) {
 	fs.Uint64Var(&queryLogRowThreshold, "querylog-row-threshold", queryLogRowThreshold, "Number of rows a query has to return or affect before being logged; not useful for streaming queries. 0 means all queries will be logged.")
 
 	// QueryLogSampleRate causes a sample of queries to be logged
-	fs.Float64Var(&queryLogSampleRate, "querylog-sample-rate", queryLogSampleRate, "Sample rate for logging queries. Value must be between 0.01 (1% of queries) and 1.0 (all queries)")
+	fs.Float64Var(&queryLogSampleRate, "querylog-sample-rate", queryLogSampleRate, "Sample rate for logging queries. Value must be between 0.0 (no logging) and 1.0 (all queries)")
 }
 
 const (
