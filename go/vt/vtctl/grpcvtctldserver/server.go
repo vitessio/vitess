@@ -5183,15 +5183,26 @@ func (s *VtctldServer) ApplyKeyspaceRoutingRules(ctx context.Context, req *vtctl
 	}
 	resp.OldKeyspaceRoutingRules = currentRules
 
-	if err := topotools.UpdateKeyspaceRoutingRules(ctx, s.ts, "ApplyKeyspaceRoutingRules",
-		func(ctx context.Context, rules *map[string]string) error {
-			clear(*rules)
-			for _, rule := range req.GetKeyspaceRoutingRules().Rules {
-				(*rules)[rule.FromKeyspace] = rule.ToKeyspace
-			}
-			return nil
-		}); err != nil {
-		return nil, err
+	update := func() error {
+		return topotools.UpdateKeyspaceRoutingRules(ctx, s.ts, "ApplyKeyspaceRoutingRules",
+			func(ctx context.Context, rules *map[string]string) error {
+				clear(*rules)
+				for _, rule := range req.GetKeyspaceRoutingRules().Rules {
+					(*rules)[rule.FromKeyspace] = rule.ToKeyspace
+				}
+				return nil
+			})
+	}
+	err = update()
+	if err != nil {
+		// If we were racing with another caller to create the initial routing rules, then
+		// we can immediately retry the operation.
+		if !topo.IsErrType(err, topo.NodeExists) {
+			return nil, err
+		}
+		if err = update(); err != nil {
+			return nil, err
+		}
 	}
 
 	newRules, err := s.ts.GetKeyspaceRoutingRules(ctx)

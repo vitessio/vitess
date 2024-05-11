@@ -19,8 +19,6 @@ package topo
 import (
 	"context"
 	"fmt"
-
-	"vitess.io/vitess/go/vt/log"
 )
 
 // RoutingRulesLock is a wrapper over TopoLock, to serialize updates to routing rules.
@@ -29,11 +27,6 @@ type RoutingRulesLock struct {
 }
 
 func NewRoutingRulesLock(ctx context.Context, ts *Server, name string) (*RoutingRulesLock, error) {
-	if err := ts.EnsureTopoPathExists(ctx, "Routing Rules", RoutingRulesPath); err != nil {
-		log.Errorf("Failed to create routing rules lock file: %v", err)
-		return nil, err
-	}
-
 	return &RoutingRulesLock{
 		TopoLock: &TopoLock{
 			Path: RoutingRulesPath,

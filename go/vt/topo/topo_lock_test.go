@@ -25,6 +25,8 @@ import (
 
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
 // lower the lock timeout for testing
@@ -36,7 +38,10 @@ func TestTopoLockTimeout(t *testing.T) {
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "zone1")
 	defer ts.Close()
-	err := ts.EnsureTopoPathExists(ctx, "test", "root/key1")
+
+	err := ts.CreateKeyspaceRoutingRules(ctx, &vschemapb.KeyspaceRoutingRules{})
+	require.NoError(t, err)
+	lock, err := topo.NewRoutingRulesLock(ctx, ts, "ks1")
 	require.NoError(t, err)
 
 	currentTopoLockTimeout := topo.LockTimeout
@@ -47,13 +52,12 @@ func TestTopoLockTimeout(t *testing.T) {
 
 	// acquire the lock
 	origCtx := ctx
-	tl1 := ts.NewTopoLock("root", "name")
-	_, unlock, err := tl1.Lock(origCtx)
+	_, unlock, err := lock.Lock(origCtx)
 	require.NoError(t, err)
 	defer unlock(&err)
 
 	// re-acquiring the lock should fail
-	_, _, err2 := tl1.Lock(origCtx)
+	_, _, err2 := lock.Lock(origCtx)
 	require.Errorf(t, err2, "deadline exceeded")
 }
 
@@ -63,29 +67,23 @@ func TestTopoLockBasic(t *testing.T) {
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "zone1")
 	defer ts.Close()
-	err := ts.EnsureTopoPathExists(ctx, "test", "root/key1")
+
+	err := ts.CreateKeyspaceRoutingRules(ctx, &vschemapb.KeyspaceRoutingRules{})
+	require.NoError(t, err)
+	lock, err := topo.NewRoutingRulesLock(ctx, ts, "ks1")
 	require.NoError(t, err)
 
 	origCtx := ctx
-	tl1 := ts.NewTopoLock("root/key1", "name")
-	ctx, unlock, err := tl1.Lock(origCtx)
+	ctx, unlock, err := lock.Lock(origCtx)
 	require.NoError(t, err)
 
 	// locking the same key again, without unlocking, should return an error
-	_, _, err2 := tl1.Lock(ctx)
+	_, _, err2 := lock.Lock(ctx)
 	require.ErrorContains(t, err2, "already held")
 
 	// confirm that the lock can be re-acquired after unlocking
 	unlock(&err)
-	ctx, unlock, err = tl1.Lock(origCtx)
+	_, unlock, err = lock.Lock(origCtx)
 	require.NoError(t, err)
 	defer unlock(&err)
-
-	// locking another key should work
-	err = ts.EnsureTopoPathExists(ctx, "test", "root/key2")
-	require.NoError(t, err)
-	tl2 := ts.NewTopoLock("root/key2", "name")
-	_, unlock2, err := tl2.Lock(ctx)
-	require.NoError(t, err)
-	defer unlock2(&err)
 }

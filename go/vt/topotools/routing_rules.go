@@ -150,26 +150,34 @@ func GetKeyspaceRoutingRules(ctx context.Context, ts *topo.Server) (map[string]s
 	return rules, nil
 }
 
+// buildKeyspaceRoutingRules builds a vschemapb.KeyspaceRoutingRules struct from a map of
+// fromKeyspace=>toKeyspace values.
+func buildKeyspaceRoutingRules(rules *map[string]string) *vschemapb.KeyspaceRoutingRules {
+	keyspaceRoutingRules := &vschemapb.KeyspaceRoutingRules{Rules: make([]*vschemapb.KeyspaceRoutingRule, 0, len(*rules))}
+	for from, to := range *rules {
+		keyspaceRoutingRules.Rules = append(keyspaceRoutingRules.Rules, &vschemapb.KeyspaceRoutingRule{
+			FromKeyspace: from,
+			ToKeyspace:   to,
+		})
+	}
+	return keyspaceRoutingRules
+}
+
 // saveKeyspaceRoutingRulesLocked saves the keyspace routing rules in the topo server. It expects the caller to
 // have acquired a RoutingRulesLock.
 func saveKeyspaceRoutingRulesLocked(ctx context.Context, ts *topo.Server, rules map[string]string) error {
 	if err := topo.CheckLocked(ctx, topo.RoutingRulesPath); err != nil {
 		return err
 	}
-	keyspaceRoutingRules := &vschemapb.KeyspaceRoutingRules{Rules: make([]*vschemapb.KeyspaceRoutingRule, 0, len(rules))}
-	for from, to := range rules {
-		keyspaceRoutingRules.Rules = append(keyspaceRoutingRules.Rules, &vschemapb.KeyspaceRoutingRule{
-			FromKeyspace: from,
-			ToKeyspace:   to,
-		})
-	}
-	return ts.SaveKeyspaceRoutingRules(ctx, keyspaceRoutingRules)
+	return ts.SaveKeyspaceRoutingRules(ctx, buildKeyspaceRoutingRules(&rules))
 }
 
-// UpdateKeyspaceRoutingRules updates the keyspace routing rules in the topo server. It initially acquires a
-// RoutingRulesLock and then calls the update function to modify the rules in-place.
-// If the update function returns an error, the rules are not saved and the lock is released.
-// If the update function is successful, the rules are saved to the topo and the lock is released.
+// UpdateKeyspaceRoutingRules updates the keyspace routing rules in the topo server.
+// If the keyspace routing rules do not yet exist, it will create them. If multiple callers
+// are racing to create the initial keyspace routing rules then the first writer will win
+// and the other callers can immediately retry when getting the resulting topo.NodeExists
+// error. When the routing rules already exist, it will acquire a RoutingRulesLock and
+// then modify the keyspace routing rules in-place.
 func UpdateKeyspaceRoutingRules(ctx context.Context, ts *topo.Server, reason string,
 	update func(ctx context.Context, rules *map[string]string) error) (err error) {
 	var lock *topo.RoutingRulesLock
@@ -179,12 +187,26 @@ func UpdateKeyspaceRoutingRules(ctx context.Context, ts *topo.Server, reason str
 	}
 	lockCtx, unlock, lockErr := lock.Lock(ctx)
 	if lockErr != nil {
-		return lockErr
+		// If the key does not yet exist then let's create it.
+		if !topo.IsErrType(lockErr, topo.NoNode) {
+			return lockErr
+		}
+		rules := make(map[string]string)
+		if err := update(ctx, &rules); err != nil {
+			return err
+		}
+		// This will fail if the key already exists and thus avoids any races here. The first
+		// writer will win and the others will have to retry. This situation should be very
+		// rare as we are typically only updating the rules from here on out.
+		if err := ts.CreateKeyspaceRoutingRules(ctx, buildKeyspaceRoutingRules(&rules)); err != nil {
+			return err
+		}
+		return nil
 	}
 	defer unlock(&err)
-	rules, _ := GetKeyspaceRoutingRules(lockCtx, ts)
-	if rules == nil {
-		rules = make(map[string]string)
+	rules, err := GetKeyspaceRoutingRules(lockCtx, ts)
+	if err != nil {
+		return err
 	}
 	if err := update(lockCtx, &rules); err != nil {
 		return err

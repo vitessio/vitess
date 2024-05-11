@@ -24,6 +24,8 @@ import (
 
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
 // TestKeyspaceRoutingRulesLock tests that the lock is acquired and released correctly.
@@ -38,6 +40,9 @@ func TestKeyspaceRoutingRulesLock(t *testing.T) {
 	defer func() {
 		topo.LockTimeout = currentTopoLockTimeout
 	}()
+
+	err := ts.CreateKeyspaceRoutingRules(ctx, &vschemapb.KeyspaceRoutingRules{})
+	require.NoError(t, err)
 
 	lock, err := topo.NewRoutingRulesLock(ctx, ts, "ks1")
 	require.NoError(t, err)

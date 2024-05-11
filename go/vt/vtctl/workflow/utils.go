@@ -863,19 +863,28 @@ func changeKeyspaceRouting(ctx context.Context, ts *topo.Server, tabletTypes []t
 	return ts.RebuildSrvVSchema(ctx, nil)
 }
 
-// updateKeyspaceRoutingRules updates the keyspace routing rule for the (effective) source keyspace to the target keyspace.
+// updateKeyspaceRoutingRules updates the keyspace routing rules for the (effective) source
+// keyspace to the target keyspace.
 func updateKeyspaceRoutingRules(ctx context.Context, ts *topo.Server, sourceKeyspace, reason string, routes map[string]string) error {
-	err := topotools.UpdateKeyspaceRoutingRules(ctx, ts, reason,
-		func(ctx context.Context, rules *map[string]string) error {
-			for fromKeyspace, toKeyspace := range routes {
-				(*rules)[fromKeyspace] = toKeyspace
-			}
-			return nil
-		})
-	if err != nil {
-		log.Errorf("Failed to update keyspace routing rules for keyspace %s: %v", sourceKeyspace, err)
+	update := func() error {
+		return topotools.UpdateKeyspaceRoutingRules(ctx, ts, reason,
+			func(ctx context.Context, rules *map[string]string) error {
+				for fromKeyspace, toKeyspace := range routes {
+					(*rules)[fromKeyspace] = toKeyspace
+				}
+				return nil
+			})
 	}
-	return err
+	err := update()
+	if err == nil {
+		return nil
+	}
+	// If we were racing with another caller to create the initial routing rules, then
+	// we can immediately retry the operation.
+	if !topo.IsErrType(err, topo.NodeExists) {
+		return err
+	}
+	return update()
 }
 
 func validateTenantId(dataType querypb.Type, value string) error {

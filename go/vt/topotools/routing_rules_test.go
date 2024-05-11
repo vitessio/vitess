@@ -128,6 +128,22 @@ func TestSaveKeyspaceRoutingRulesLocked(t *testing.T) {
 		"ks1": "ks2",
 		"ks4": "ks5",
 	}
+
+	t.Run("unlocked, doesn't exist", func(t *testing.T) {
+		err := saveKeyspaceRoutingRulesLocked(ctx, ts, rulesMap)
+		require.Errorf(t, err, "node doesn't exist: routing_rules")
+	})
+
+	t.Run("create", func(t *testing.T) {
+		err := ts.CreateKeyspaceRoutingRules(ctx, buildKeyspaceRoutingRules(&rulesMap))
+		require.NoError(t, err)
+	})
+
+	t.Run("create again", func(t *testing.T) {
+		err := ts.CreateKeyspaceRoutingRules(ctx, buildKeyspaceRoutingRules(&rulesMap))
+		require.True(t, topo.IsErrType(err, topo.NodeExists))
+	})
+
 	t.Run("unlocked", func(t *testing.T) {
 		err := saveKeyspaceRoutingRulesLocked(ctx, ts, rulesMap)
 		require.Errorf(t, err, "routing_rules is not locked (no locksInfo)")
@@ -140,12 +156,12 @@ func TestSaveKeyspaceRoutingRulesLocked(t *testing.T) {
 	require.NoError(t, err)
 	defer unlock(&err)
 
-	t.Run("locked, unlocked ctx", func(t *testing.T) {
-		err = saveKeyspaceRoutingRulesLocked(ctx, ts, rulesMap)
-		require.Errorf(t, err, "routing_rules is not locked (no locksInfo)")
-	})
 	t.Run("locked, locked ctx", func(t *testing.T) {
 		err = saveKeyspaceRoutingRulesLocked(lockCtx, ts, rulesMap)
 		require.NoError(t, err)
+	})
+	t.Run("locked, unlocked ctx", func(t *testing.T) {
+		err = saveKeyspaceRoutingRulesLocked(ctx, ts, rulesMap)
+		require.Errorf(t, err, "routing_rules is not locked (no locksInfo)")
 	})
 }

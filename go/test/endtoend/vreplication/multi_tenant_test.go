@@ -71,6 +71,8 @@ var (
 	chNotSetup, chNotCreated, chInProgress, chSwitched, chCompleted chan int64
 	// counters to keep track of the number of tenants in each state
 	numSetup, numInProgress, numSwitched, numCompleted atomic.Int64
+
+	emptyKeyspaceRoutingRules = &vschemapb.KeyspaceRoutingRules{}
 )
 
 // multiTenantMigration manages the migration of multiple tenants to a single target keyspace.
@@ -226,7 +228,7 @@ func TestMultiTenantSimple(t *testing.T) {
 
 	t.Run("Test ApplyKeyspaceRoutingRules", func(t *testing.T) {
 		// First set of rules
-		applyKeyspaceRoutingRules(t, nil, initialRules)
+		applyKeyspaceRoutingRules(t, emptyKeyspaceRoutingRules, initialRules)
 
 		updatedRules := &vschemapb.KeyspaceRoutingRules{
 			Rules: []*vschemapb.KeyspaceRoutingRule{
@@ -240,12 +242,9 @@ func TestMultiTenantSimple(t *testing.T) {
 		// Update with the same rules
 		applyKeyspaceRoutingRules(t, updatedRules, updatedRules)
 		// Remove the rules
-		emptyRules := &vschemapb.KeyspaceRoutingRules{
-			Rules: []*vschemapb.KeyspaceRoutingRule{},
-		}
-		applyKeyspaceRoutingRules(t, updatedRules, emptyRules)
+		applyKeyspaceRoutingRules(t, updatedRules, emptyKeyspaceRoutingRules)
 		// Test setting empty rules again
-		applyKeyspaceRoutingRules(t, emptyRules, emptyRules)
+		applyKeyspaceRoutingRules(t, emptyKeyspaceRoutingRules, emptyKeyspaceRoutingRules)
 	})
 }
 
@@ -265,12 +264,12 @@ func applyKeyspaceRoutingRules(t *testing.T, oldRules, newRules *vschemapb.Keysp
 	err = json.Unmarshal([]byte(output), response)
 	require.NoError(t, err)
 	if oldRules == nil || len(oldRules.Rules) == 0 {
-		require.Nil(t, response.GetOldKeyspaceRoutingRules())
+		require.Empty(t, response.GetOldKeyspaceRoutingRules().String())
 	} else {
 		require.ElementsMatch(t, oldRules.Rules, response.GetOldKeyspaceRoutingRules().Rules)
 	}
 	if newRules == nil || len(newRules.Rules) == 0 {
-		require.Nil(t, response.GetNewKeyspaceRoutingRules())
+		require.Empty(t, response.GetNewKeyspaceRoutingRules().String())
 	} else {
 		require.ElementsMatch(t, newRules.Rules, response.GetNewKeyspaceRoutingRules().Rules)
 	}
