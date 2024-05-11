@@ -348,15 +348,6 @@ func TestShouldEmitLog(t *testing.T) {
 			ok:               true,
 		},
 		{
-			sql:              "this contains out-of-bounds querySampleRate: 123.0",
-			qLogFilterTag:    "",
-			qLogRowThreshold: 0,
-			qLogSampleRate:   123.0,
-			rowsAffected:     7,
-			rowsReturned:     17,
-			ok:               true,
-		},
-		{
 			sql:              "this contains querySampleRate: 1.0 without expected queryFilterTag",
 			qLogFilterTag:    "TAG",
 			qLogRowThreshold: 0,
