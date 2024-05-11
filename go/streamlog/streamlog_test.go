@@ -30,6 +30,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/servenv"
@@ -262,6 +263,20 @@ func TestFile(t *testing.T) {
 	if want != string(got) {
 		t.Errorf("streamlog file: want %q got %q", want, got)
 	}
+}
+
+func TestShouldSampleQuery(t *testing.T) {
+	queryLogSampleRate = -1
+	assert.False(t, shouldSampleQuery())
+
+	queryLogSampleRate = 0
+	assert.False(t, shouldSampleQuery())
+
+	queryLogSampleRate = 1.0
+	assert.True(t, shouldSampleQuery())
+
+	queryLogSampleRate = 100.0
+	assert.True(t, shouldSampleQuery())
 }
 
 func TestShouldEmitLog(t *testing.T) {
