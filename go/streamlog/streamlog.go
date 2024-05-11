@@ -265,8 +265,7 @@ func shouldSampleQuery() bool {
 	} else if sampleRate > 1.0 {
 		sampleRate = 1.0
 	}
-	randMax := int(sampleRate * 100)
-	return rand.IntN(randMax) <= randMax
+	return rand.IntN(100) <= int(sampleRate * 100)
 }
 
 // ShouldEmitLog returns whether the log with the given SQL query
