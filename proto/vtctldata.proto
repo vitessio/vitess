@@ -492,7 +492,9 @@ message ChangeTabletTypeResponse {
 }
 
 message CheckThrottlerRequest {
-  string app_name = 1;
+  topodata.TabletAlias tablet_alias = 1;
+
+  string app_name = 2;
 }
 
 message CheckThrottlerResponse {

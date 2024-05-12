@@ -49255,6 +49255,9 @@ export namespace vtctldata {
     /** Properties of a CheckThrottlerRequest. */
     interface ICheckThrottlerRequest {
 
+        /** CheckThrottlerRequest tablet_alias */
+        tablet_alias?: (topodata.ITabletAlias|null);
+
         /** CheckThrottlerRequest app_name */
         app_name?: (string|null);
     }
@@ -49267,6 +49270,9 @@ export namespace vtctldata {
          * @param [properties] Properties to set
          */
         constructor(properties?: vtctldata.ICheckThrottlerRequest);
+
+        /** CheckThrottlerRequest tablet_alias. */
+        public tablet_alias?: (topodata.ITabletAlias|null);
 
         /** CheckThrottlerRequest app_name. */
         public app_name: string;
