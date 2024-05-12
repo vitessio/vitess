@@ -95,8 +95,11 @@ func commandCheckThrottler(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	resp, err := client.CheckThrottler(commandCtx, &vtctldatapb.CheckThrottlerRequest{
-		TabletAlias: alias,
-		AppName:     checkThrottlerOptions.AppName,
+		TabletAlias:           alias,
+		AppName:               checkThrottlerOptions.AppName,
+		SkipRequestHeartbeats: checkThrottlerOptions.SkipRequestHeartbeats,
+		LowPriority:           checkThrottlerOptions.LowPriority,
+		OkIfNotExists:         checkThrottlerOptions.OkIfNotExists,
 	})
 	if err != nil {
 		return err
@@ -130,5 +133,8 @@ func init() {
 	Root.AddCommand(UpdateThrottlerConfig)
 	// Check Throttler
 	CheckThrottler.Flags().StringVar(&checkThrottlerOptions.AppName, "app-name", throttlerapp.VitessName.String(), "app to identify as")
+	CheckThrottler.Flags().BoolVar(&checkThrottlerOptions.LowPriority, "low-priority", false, "give precedence to normal requests if busy")
+	CheckThrottler.Flags().BoolVar(&checkThrottlerOptions.SkipRequestHeartbeats, "skip-heartbeat", false, "skip renewing heartbeat lease")
+	CheckThrottler.Flags().BoolVar(&checkThrottlerOptions.OkIfNotExists, "ok-if-not-exists", false, "return OK even if metric does not exist")
 	Root.AddCommand(CheckThrottler)
 }
