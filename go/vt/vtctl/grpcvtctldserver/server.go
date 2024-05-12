@@ -680,6 +680,50 @@ func (s *VtctldServer) ChangeTabletType(ctx context.Context, req *vtctldatapb.Ch
 	}, nil
 }
 
+// CheckThrottler is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) CheckThrottler(ctx context.Context, req *vtctldatapb.CheckThrottlerRequest) (resp *vtctldatapb.CheckThrottlerResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.CheckThrottler")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+	span.Annotate("app_name", req.AppName)
+
+	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return nil, err
+	}
+
+	r, err := s.tmc.CheckThrottler(ctx, ti.Tablet, &tabletmanagerdatapb.CheckThrottlerRequest{
+		AppName: req.AppName,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	resp = &vtctldatapb.CheckThrottlerResponse{
+		StatusCode:      r.StatusCode,
+		Value:           r.Value,
+		Threshold:       r.Threshold,
+		Error:           r.Error,
+		Message:         r.Message,
+		RecentlyChecked: r.RecentlyChecked,
+		Metrics:         make(map[string]*vtctldatapb.CheckThrottlerResponse_Metric),
+	}
+	for k, m := range r.Metrics {
+		resp.Metrics[k] = &vtctldatapb.CheckThrottlerResponse_Metric{
+			Name:       m.Name,
+			StatusCode: m.StatusCode,
+			Value:      m.Value,
+			Threshold:  m.Threshold,
+			Error:      m.Error,
+			Message:    m.Message,
+		}
+	}
+	return resp, nil
+}
+
 // CleanupSchemaMigration is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) CleanupSchemaMigration(ctx context.Context, req *vtctldatapb.CleanupSchemaMigrationRequest) (resp *vtctldatapb.CleanupSchemaMigrationResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.CleanupSchemaMigration")

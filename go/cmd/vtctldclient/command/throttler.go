@@ -27,7 +27,9 @@ import (
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
 
 var (
@@ -39,6 +41,14 @@ var (
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandUpdateThrottlerConfig,
 	}
+	CheckThrottler = &cobra.Command{
+		Use:                   "CheckThrottler [--app-name <name>] <tablet alias>",
+		Short:                 "check the throttler status for the given tablet",
+		Example:               "CheckThrottler --app-name online-ddl zone1-0000000101",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandCheckThrottler,
+	}
 )
 
 var (
@@ -46,6 +56,8 @@ var (
 	throttledAppRule             topodatapb.ThrottledAppRule
 	unthrottledAppRule           topodatapb.ThrottledAppRule
 	throttledAppDuration         time.Duration
+
+	checkThrottlerOptions vtctldatapb.CheckThrottlerRequest
 )
 
 func commandUpdateThrottlerConfig(cmd *cobra.Command, args []string) error {
@@ -74,7 +86,34 @@ func commandUpdateThrottlerConfig(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func commandCheckThrottler(cmd *cobra.Command, args []string) error {
+	alias, err := topoproto.ParseTabletAlias(cmd.Flags().Arg(0))
+	if err != nil {
+		return err
+	}
+
+	cli.FinishedParsing(cmd)
+
+	resp, err := client.CheckThrottler(commandCtx, &vtctldatapb.CheckThrottlerRequest{
+		TabletAlias: alias,
+		AppName:     checkThrottlerOptions.AppName,
+	})
+	if err != nil {
+		return err
+	}
+
+	data, err := cli.MarshalJSON(resp)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
+
+	return nil
+}
+
 func init() {
+	// UpdateThrottlerConfig
 	UpdateThrottlerConfig.Flags().BoolVar(&updateThrottlerConfigOptions.Enable, "enable", false, "Enable the throttler")
 	UpdateThrottlerConfig.Flags().BoolVar(&updateThrottlerConfigOptions.Disable, "disable", false, "Disable the throttler")
 	UpdateThrottlerConfig.Flags().Float64Var(&updateThrottlerConfigOptions.Threshold, "threshold", 0, "threshold for the either default check (replication lag seconds) or custom check")
@@ -89,4 +128,7 @@ func init() {
 	UpdateThrottlerConfig.Flags().BoolVar(&throttledAppRule.Exempt, "throttle-app-exempt", throttledAppRule.Exempt, "exempt this app from being at all throttled. WARNING: use with extreme care, as this is likely to push metrics beyond the throttler's threshold, and starve other apps")
 
 	Root.AddCommand(UpdateThrottlerConfig)
+	// Check Throttler
+	CheckThrottler.Flags().StringVar(&checkThrottlerOptions.AppName, "app-name", throttlerapp.VitessName.String(), "app to identify as")
+	Root.AddCommand(CheckThrottler)
 }
