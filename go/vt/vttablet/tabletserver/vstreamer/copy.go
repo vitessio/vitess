@@ -258,6 +258,13 @@ func (uvs *uvstreamer) copyTable(ctx context.Context, tableName string) error {
 				Fields:    uvs.fields,
 				Keyspace:  uvs.vse.keyspace,
 				Shard:     uvs.vse.shard,
+				// In the copy phase the values for ENUM and SET fields are always strings.
+				// We are including this extra uint8 in the message even though there may
+				// not be an ENUM or SET column in the table because we only have one field
+				// event for each batch of ROWs being copied so it's negligible overhead
+				// and less costly and intrusive than iterating over the fields to see if
+				// we do indeed have any ENUM or SET columns in the table.
+				EnumSetStringValues: true,
 			}
 			if err := uvs.sendFieldEvent(ctx, rows.Gtid, fieldEvent); err != nil {
 				log.Infof("sendFieldEvent returned error %v", err)

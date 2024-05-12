@@ -1824,7 +1824,7 @@ type ColumnType struct {
 	// Text field options
 	Charset ColumnCharset
 
-	// Enum values
+	// Enum and Set column definition values
 	EnumValues []string
 }
 
