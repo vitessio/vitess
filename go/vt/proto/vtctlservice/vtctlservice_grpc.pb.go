@@ -169,6 +169,8 @@ type VtctldClient interface {
 	//
 	// NOTE: This command automatically updates the serving graph.
 	ChangeTabletType(ctx context.Context, in *vtctldata.ChangeTabletTypeRequest, opts ...grpc.CallOption) (*vtctldata.ChangeTabletTypeResponse, error)
+	// CheckThrottler issues a 'check' on a tablet's throttler
+	CheckThrottler(ctx context.Context, in *vtctldata.CheckThrottlerRequest, opts ...grpc.CallOption) (*vtctldata.CheckThrottlerResponse, error)
 	// CleanupSchemaMigration marks a schema migration as ready for artifact cleanup.
 	CleanupSchemaMigration(ctx context.Context, in *vtctldata.CleanupSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.CleanupSchemaMigrationResponse, error)
 	// CompleteSchemaMigration completes one or all migrations executed with --postpone-completion.
@@ -609,6 +611,15 @@ func (c *vtctldClient) CancelSchemaMigration(ctx context.Context, in *vtctldata.
 func (c *vtctldClient) ChangeTabletType(ctx context.Context, in *vtctldata.ChangeTabletTypeRequest, opts ...grpc.CallOption) (*vtctldata.ChangeTabletTypeResponse, error) {
 	out := new(vtctldata.ChangeTabletTypeResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ChangeTabletType", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) CheckThrottler(ctx context.Context, in *vtctldata.CheckThrottlerRequest, opts ...grpc.CallOption) (*vtctldata.CheckThrottlerResponse, error) {
+	out := new(vtctldata.CheckThrottlerResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/CheckThrottler", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1611,6 +1622,8 @@ type VtctldServer interface {
 	//
 	// NOTE: This command automatically updates the serving graph.
 	ChangeTabletType(context.Context, *vtctldata.ChangeTabletTypeRequest) (*vtctldata.ChangeTabletTypeResponse, error)
+	// CheckThrottler issues a 'check' on a tablet's throttler
+	CheckThrottler(context.Context, *vtctldata.CheckThrottlerRequest) (*vtctldata.CheckThrottlerResponse, error)
 	// CleanupSchemaMigration marks a schema migration as ready for artifact cleanup.
 	CleanupSchemaMigration(context.Context, *vtctldata.CleanupSchemaMigrationRequest) (*vtctldata.CleanupSchemaMigrationResponse, error)
 	// CompleteSchemaMigration completes one or all migrations executed with --postpone-completion.
@@ -1941,6 +1954,9 @@ func (UnimplementedVtctldServer) CancelSchemaMigration(context.Context, *vtctlda
 }
 func (UnimplementedVtctldServer) ChangeTabletType(context.Context, *vtctldata.ChangeTabletTypeRequest) (*vtctldata.ChangeTabletTypeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ChangeTabletType not implemented")
+}
+func (UnimplementedVtctldServer) CheckThrottler(context.Context, *vtctldata.CheckThrottlerRequest) (*vtctldata.CheckThrottlerResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CheckThrottler not implemented")
 }
 func (UnimplementedVtctldServer) CleanupSchemaMigration(context.Context, *vtctldata.CleanupSchemaMigrationRequest) (*vtctldata.CleanupSchemaMigrationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CleanupSchemaMigration not implemented")
@@ -2467,6 +2483,24 @@ func _Vtctld_ChangeTabletType_Handler(srv interface{}, ctx context.Context, dec 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).ChangeTabletType(ctx, req.(*vtctldata.ChangeTabletTypeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_CheckThrottler_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.CheckThrottlerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).CheckThrottler(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/CheckThrottler",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).CheckThrottler(ctx, req.(*vtctldata.CheckThrottlerRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -4388,6 +4422,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ChangeTabletType",
 			Handler:    _Vtctld_ChangeTabletType_Handler,
+		},
+		{
+			MethodName: "CheckThrottler",
+			Handler:    _Vtctld_CheckThrottler_Handler,
 		},
 		{
 			MethodName: "CleanupSchemaMigration",

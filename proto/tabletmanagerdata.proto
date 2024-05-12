@@ -729,7 +729,7 @@ message CheckThrottlerResponse {
   double threshold = 3;
   // Error indicates an error retrieving the value
   string error = 4;
-  // Message 
+  // Message
   string message = 5;
   // RecentlyChecked indicates that the tablet has been hit with a user-facing check, which can then imply
   // that heartbeats lease should be renwed.
