@@ -56,7 +56,6 @@ func lastSuccessfulThrottleKey(appName throttlerapp.Name, metricNames base.Metri
 type Client struct {
 	throttler *Throttler
 	appName   throttlerapp.Name
-	checkType ThrottleCheckType
 	flags     CheckFlags
 
 	lastSuccessfulThrottleMu sync.Mutex
@@ -72,8 +71,8 @@ func NewProductionClient(throttler *Throttler, appName throttlerapp.Name, checkT
 	return &Client{
 		throttler: throttler,
 		appName:   appName,
-		checkType: checkType,
 		flags: CheckFlags{
+			CheckType:   checkType,
 			LowPriority: false,
 		},
 		lastSuccessfulThrottle: make(map[string]int64),
@@ -87,8 +86,8 @@ func NewBackgroundClient(throttler *Throttler, appName throttlerapp.Name, checkT
 	return &Client{
 		throttler: throttler,
 		appName:   appName,
-		checkType: checkType,
 		flags: CheckFlags{
+			CheckType:   checkType,
 			LowPriority: true,
 		},
 		lastSuccessfulThrottle: make(map[string]int64),
@@ -127,7 +126,7 @@ func (c *Client) ThrottleCheckOK(ctx context.Context, overrideAppName throttlera
 		return true
 	}
 	// It's time to run a throttler check
-	checkResult := c.throttler.CheckByType(ctx, checkApp.String(), nil, &c.flags, c.checkType)
+	checkResult := c.throttler.Check(ctx, checkApp.String(), nil, &c.flags)
 	if checkResult.StatusCode != http.StatusOK {
 		return false
 	}

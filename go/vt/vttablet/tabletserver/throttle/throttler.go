@@ -1516,8 +1516,12 @@ func (throttler *Throttler) checkSelf(ctx context.Context, appName string, metri
 	return throttler.checkStore(ctx, appName, selfStoreName, metricNames, flags)
 }
 
-// CheckByType runs a check by requested check type
-func (throttler *Throttler) CheckByType(ctx context.Context, appName string, metricNames base.MetricNames, flags *CheckFlags, checkType ThrottleCheckType) (checkResult *CheckResult) {
+// Check runs a check by requested check type
+func (throttler *Throttler) Check(ctx context.Context, appName string, metricNames base.MetricNames, flags *CheckFlags) (checkResult *CheckResult) {
+	checkType := ThrottleCheckSelf
+	if flags != nil {
+		checkType = flags.CheckType
+	}
 	switch checkType {
 	case ThrottleCheckSelf:
 		return throttler.checkSelf(ctx, appName, metricNames, flags)

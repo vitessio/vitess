@@ -65,6 +65,7 @@ var (
 
 // CheckFlags provide hints for a check
 type CheckFlags struct {
+	CheckType             ThrottleCheckType
 	ReadCheck             bool
 	OverrideThreshold     float64
 	LowPriority           bool

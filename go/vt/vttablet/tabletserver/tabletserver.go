@@ -1778,7 +1778,8 @@ func (tsv *TabletServer) TopoServer() *topo.Server {
 
 // CheckThrottler issues a self check
 func (tsv *TabletServer) CheckThrottler(ctx context.Context, appName string, flags *throttle.CheckFlags) *throttle.CheckResult {
-	r := tsv.lagThrottler.CheckByType(ctx, appName, base.KnownMetricNames, flags, throttle.ThrottleCheckSelf)
+	flags.CheckType = throttle.ThrottleCheckSelf
+	r := tsv.lagThrottler.Check(ctx, appName, base.KnownMetricNames, flags)
 	return r
 }
 
@@ -1892,11 +1893,12 @@ func (tsv *TabletServer) registerThrottlerCheckHandlers() {
 				appName = throttlerapp.DefaultName.String()
 			}
 			flags := &throttle.CheckFlags{
+				CheckType:             checkType,
 				LowPriority:           (r.URL.Query().Get("p") == "low"),
 				SkipRequestHeartbeats: (r.URL.Query().Get("s") == "true"),
 			}
 			metricNames := tsv.lagThrottler.MetricNames(r.URL.Query()["m"])
-			checkResult := tsv.lagThrottler.CheckByType(ctx, appName, metricNames, flags, checkType)
+			checkResult := tsv.lagThrottler.Check(ctx, appName, metricNames, flags)
 			if checkResult.StatusCode == http.StatusNotFound && flags.OKIfNotExists {
 				checkResult.StatusCode = http.StatusOK // 200
 			}
