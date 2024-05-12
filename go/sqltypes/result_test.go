@@ -19,6 +19,7 @@ package sqltypes
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/test/utils"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -344,4 +345,166 @@ func TestAppendResult(t *testing.T) {
 	if !result.Equal(want) {
 		t.Errorf("Got:\n%#v, want:\n%#v", result, want)
 	}
+}
+
+func TestReplaceKeyspace(t *testing.T) {
+	result := &Result{
+		Fields: []*querypb.Field{{
+			Type:     Int64,
+			Database: "vttest",
+		}, {
+			Type:     VarChar,
+			Database: "vttest",
+		}, {
+			Type: VarBinary,
+		}},
+	}
+
+	result.ReplaceKeyspace("keyspace-name")
+	assert.Equal(t, "keyspace-name", result.Fields[0].Database)
+	assert.Equal(t, "keyspace-name", result.Fields[1].Database)
+	// Expect empty database identifiers to remain empty
+	assert.Equal(t, "", result.Fields[2].Database)
+}
+
+func TestShallowCopy(t *testing.T) {
+	result := &Result{
+		Fields: []*querypb.Field{{
+			Type:     Int64,
+			Database: "vttest",
+		}, {
+			Type:     VarChar,
+			Database: "vttest",
+		}},
+		Rows: [][]Value{
+			{
+				MakeTrusted(querypb.Type_INT32, []byte("10")),
+				MakeTrusted(querypb.Type_VARCHAR, []byte("name")),
+			},
+		},
+	}
+
+	res := result.ShallowCopy()
+	assert.Equal(t, result, res)
+}
+
+func TestMetadata(t *testing.T) {
+	result := &Result{
+		Fields: []*querypb.Field{{
+			Type:     Int64,
+			Database: "vttest",
+		}, {
+			Type:     VarChar,
+			Database: "vttest",
+		}},
+		Rows: [][]Value{
+			{
+				MakeTrusted(querypb.Type_INT32, []byte("10")),
+				MakeTrusted(querypb.Type_VARCHAR, []byte("name")),
+			},
+		},
+	}
+
+	res := result.Metadata()
+	assert.Nil(t, res.Rows)
+	assert.Equal(t, result.Fields, res.Fields)
+}
+
+func TestResultsEqualUnordered(t *testing.T) {
+	result1 := &Result{
+		Fields: []*querypb.Field{{
+			Type:     Int64,
+			Database: "vttest",
+		}, {
+			Type:     VarChar,
+			Database: "vttest",
+		}},
+		Rows: [][]Value{
+			{
+				MakeTrusted(querypb.Type_INT32, []byte("24")),
+				MakeTrusted(querypb.Type_VARCHAR, []byte("test-name1")),
+			},
+		},
+		RowsAffected: 2,
+	}
+
+	result2 := &Result{
+		Fields: []*querypb.Field{{
+			Type:     Int64,
+			Database: "vttest",
+		}, {
+			Type:     VarChar,
+			Database: "vttest",
+		}},
+		Rows: [][]Value{
+			{
+				MakeTrusted(querypb.Type_INT32, []byte("10")),
+				MakeTrusted(querypb.Type_VARCHAR, []byte("test-name2")),
+			},
+		},
+		RowsAffected: 2,
+	}
+
+	result3 := &Result{
+		Fields: []*querypb.Field{{
+			Type:     Int64,
+			Database: "vttest",
+		}, {
+			Type:     VarChar,
+			Database: "vttest",
+		}},
+		Rows: [][]Value{
+			{
+				MakeTrusted(querypb.Type_INT32, []byte("10")),
+				MakeTrusted(querypb.Type_VARCHAR, []byte("test-name2")),
+			},
+			{
+				MakeTrusted(querypb.Type_INT32, []byte("24")),
+				MakeTrusted(querypb.Type_VARCHAR, []byte("test-name1")),
+			},
+		},
+		RowsAffected: 3,
+	}
+
+	eq := ResultsEqualUnordered([]Result{*result1, *result2}, []Result{*result2, *result1})
+	assert.True(t, eq)
+
+	eq = ResultsEqualUnordered([]Result{*result1}, []Result{*result2, *result1})
+	assert.False(t, eq)
+
+	eq = ResultsEqualUnordered([]Result{*result1}, []Result{*result2})
+	assert.False(t, eq)
+
+	eq = ResultsEqualUnordered([]Result{*result1, *result3}, []Result{*result2, *result1})
+	assert.False(t, eq)
+}
+
+func TestStatusFlags(t *testing.T) {
+	result := &Result{
+		Fields: []*querypb.Field{{
+			Type:     Int64,
+			Database: "vttest",
+		}, {
+			Type:     VarChar,
+			Database: "vttest",
+		}},
+		StatusFlags: ServerMoreResultsExists,
+	}
+
+	assert.True(t, result.IsMoreResultsExists())
+	assert.False(t, result.IsInTransaction())
+
+	result.StatusFlags = ServerStatusInTrans
+
+	assert.False(t, result.IsMoreResultsExists())
+	assert.True(t, result.IsInTransaction())
+}
+
+func TestIncludeFieldsOrDefault(t *testing.T) {
+	// Should return default if nil is passed
+	r := IncludeFieldsOrDefault(nil)
+	assert.Equal(t, querypb.ExecuteOptions_TYPE_AND_NAME, r)
+
+	r = IncludeFieldsOrDefault(&querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_TYPE_ONLY})
+	assert.Equal(t, querypb.ExecuteOptions_TYPE_ONLY, r)
 }
