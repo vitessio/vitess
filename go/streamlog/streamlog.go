@@ -264,7 +264,7 @@ func shouldSampleQuery() bool {
 	} else if queryLogSampleRate >= 1 {
 		return true
 	}
-	return rand.Float64() < queryLogSampleRate
+	return rand.Float64() <= queryLogSampleRate
 }
 
 // ShouldEmitLog returns whether the log with the given SQL query
