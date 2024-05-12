@@ -176,6 +176,11 @@ func (client *localVtctldClient) ChangeTabletType(ctx context.Context, in *vtctl
 	return client.s.ChangeTabletType(ctx, in)
 }
 
+// CheckThrottler is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) CheckThrottler(ctx context.Context, in *vtctldatapb.CheckThrottlerRequest, opts ...grpc.CallOption) (*vtctldatapb.CheckThrottlerResponse, error) {
+	return client.s.CheckThrottler(ctx, in)
+}
+
 // CleanupSchemaMigration is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) CleanupSchemaMigration(ctx context.Context, in *vtctldatapb.CleanupSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldatapb.CleanupSchemaMigrationResponse, error) {
 	return client.s.CleanupSchemaMigration(ctx, in)
