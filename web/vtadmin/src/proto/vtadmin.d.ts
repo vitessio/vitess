@@ -30314,6 +30314,15 @@ export namespace tabletmanagerdata {
 
         /** CheckThrottlerRequest app_name */
         app_name?: (string|null);
+
+        /** CheckThrottlerRequest low_priority */
+        low_priority?: (boolean|null);
+
+        /** CheckThrottlerRequest skip_request_heartbeats */
+        skip_request_heartbeats?: (boolean|null);
+
+        /** CheckThrottlerRequest ok_if_not_exists */
+        ok_if_not_exists?: (boolean|null);
     }
 
     /** Represents a CheckThrottlerRequest. */
@@ -30327,6 +30336,15 @@ export namespace tabletmanagerdata {
 
         /** CheckThrottlerRequest app_name. */
         public app_name: string;
+
+        /** CheckThrottlerRequest low_priority. */
+        public low_priority: boolean;
+
+        /** CheckThrottlerRequest skip_request_heartbeats. */
+        public skip_request_heartbeats: boolean;
+
+        /** CheckThrottlerRequest ok_if_not_exists. */
+        public ok_if_not_exists: boolean;
 
         /**
          * Creates a new CheckThrottlerRequest instance using the specified properties.
@@ -49260,6 +49278,15 @@ export namespace vtctldata {
 
         /** CheckThrottlerRequest app_name */
         app_name?: (string|null);
+
+        /** CheckThrottlerRequest low_priority */
+        low_priority?: (boolean|null);
+
+        /** CheckThrottlerRequest skip_request_heartbeats */
+        skip_request_heartbeats?: (boolean|null);
+
+        /** CheckThrottlerRequest ok_if_not_exists */
+        ok_if_not_exists?: (boolean|null);
     }
 
     /** Represents a CheckThrottlerRequest. */
@@ -49276,6 +49303,15 @@ export namespace vtctldata {
 
         /** CheckThrottlerRequest app_name. */
         public app_name: string;
+
+        /** CheckThrottlerRequest low_priority. */
+        public low_priority: boolean;
+
+        /** CheckThrottlerRequest skip_request_heartbeats. */
+        public skip_request_heartbeats: boolean;
+
+        /** CheckThrottlerRequest ok_if_not_exists. */
+        public ok_if_not_exists: boolean;
 
         /**
          * Creates a new CheckThrottlerRequest instance using the specified properties.

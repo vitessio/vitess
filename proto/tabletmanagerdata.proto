@@ -717,6 +717,12 @@ message ResetSequencesResponse {
 
 message CheckThrottlerRequest {
   string app_name = 1;
+  // LowPriority gives precendence to other checks
+  bool low_priority = 2;
+  // SkipRequestHeartbeats ensures this check does not renew heartbeat lease
+  bool skip_request_heartbeats = 3;
+	// OKIfNotExists asks the throttler to return OK even if the metric does not exist
+  bool ok_if_not_exists = 4;
 }
 
 

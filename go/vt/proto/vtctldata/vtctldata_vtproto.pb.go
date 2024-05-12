@@ -965,8 +965,11 @@ func (m *CheckThrottlerRequest) CloneVT() *CheckThrottlerRequest {
 		return (*CheckThrottlerRequest)(nil)
 	}
 	r := &CheckThrottlerRequest{
-		TabletAlias: m.TabletAlias.CloneVT(),
-		AppName:     m.AppName,
+		TabletAlias:           m.TabletAlias.CloneVT(),
+		AppName:               m.AppName,
+		LowPriority:           m.LowPriority,
+		SkipRequestHeartbeats: m.SkipRequestHeartbeats,
+		OkIfNotExists:         m.OkIfNotExists,
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -8568,6 +8571,36 @@ func (m *CheckThrottlerRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error)
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.OkIfNotExists {
+		i--
+		if m.OkIfNotExists {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x28
+	}
+	if m.SkipRequestHeartbeats {
+		i--
+		if m.SkipRequestHeartbeats {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x20
+	}
+	if m.LowPriority {
+		i--
+		if m.LowPriority {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x18
 	}
 	if len(m.AppName) > 0 {
 		i -= len(m.AppName)
@@ -21703,6 +21736,15 @@ func (m *CheckThrottlerRequest) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
+	if m.LowPriority {
+		n += 2
+	}
+	if m.SkipRequestHeartbeats {
+		n += 2
+	}
+	if m.OkIfNotExists {
+		n += 2
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -34113,6 +34155,66 @@ func (m *CheckThrottlerRequest) UnmarshalVT(dAtA []byte) error {
 			}
 			m.AppName = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field LowPriority", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.LowPriority = bool(v != 0)
+		case 4:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field SkipRequestHeartbeats", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.SkipRequestHeartbeats = bool(v != 0)
+		case 5:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field OkIfNotExists", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.OkIfNotExists = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
