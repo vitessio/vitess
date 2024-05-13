@@ -495,12 +495,14 @@ message CheckThrottlerRequest {
   topodata.TabletAlias tablet_alias = 1;
 
   string app_name = 2;
+
+  string scope = 3;
   // LowPriority gives precendence to other checks
-  bool low_priority = 3;
+  bool low_priority = 4;
   // SkipRequestHeartbeats ensures this check does not renew heartbeat lease
-  bool skip_request_heartbeats = 4;
+  bool skip_request_heartbeats = 5;
 	// OKIfNotExists asks the throttler to return OK even if the metric does not exist
-  bool ok_if_not_exists = 5;
+  bool ok_if_not_exists = 6;
 }
 
 message CheckThrottlerResponse {

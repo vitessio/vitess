@@ -967,6 +967,7 @@ func (m *CheckThrottlerRequest) CloneVT() *CheckThrottlerRequest {
 	r := &CheckThrottlerRequest{
 		TabletAlias:           m.TabletAlias.CloneVT(),
 		AppName:               m.AppName,
+		Scope:                 m.Scope,
 		LowPriority:           m.LowPriority,
 		SkipRequestHeartbeats: m.SkipRequestHeartbeats,
 		OkIfNotExists:         m.OkIfNotExists,
@@ -8580,7 +8581,7 @@ func (m *CheckThrottlerRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error)
 			dAtA[i] = 0
 		}
 		i--
-		dAtA[i] = 0x28
+		dAtA[i] = 0x30
 	}
 	if m.SkipRequestHeartbeats {
 		i--
@@ -8590,7 +8591,7 @@ func (m *CheckThrottlerRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error)
 			dAtA[i] = 0
 		}
 		i--
-		dAtA[i] = 0x20
+		dAtA[i] = 0x28
 	}
 	if m.LowPriority {
 		i--
@@ -8600,7 +8601,14 @@ func (m *CheckThrottlerRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error)
 			dAtA[i] = 0
 		}
 		i--
-		dAtA[i] = 0x18
+		dAtA[i] = 0x20
+	}
+	if len(m.Scope) > 0 {
+		i -= len(m.Scope)
+		copy(dAtA[i:], m.Scope)
+		i = encodeVarint(dAtA, i, uint64(len(m.Scope)))
+		i--
+		dAtA[i] = 0x1a
 	}
 	if len(m.AppName) > 0 {
 		i -= len(m.AppName)
@@ -21736,6 +21744,10 @@ func (m *CheckThrottlerRequest) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
+	l = len(m.Scope)
+	if l > 0 {
+		n += 1 + l + sov(uint64(l))
+	}
 	if m.LowPriority {
 		n += 2
 	}
@@ -34156,6 +34168,38 @@ func (m *CheckThrottlerRequest) UnmarshalVT(dAtA []byte) error {
 			m.AppName = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Scope", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Scope = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 4:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field LowPriority", wireType)
 			}
@@ -34175,7 +34219,7 @@ func (m *CheckThrottlerRequest) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.LowPriority = bool(v != 0)
-		case 4:
+		case 5:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field SkipRequestHeartbeats", wireType)
 			}
@@ -34195,7 +34239,7 @@ func (m *CheckThrottlerRequest) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.SkipRequestHeartbeats = bool(v != 0)
-		case 5:
+		case 6:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field OkIfNotExists", wireType)
 			}

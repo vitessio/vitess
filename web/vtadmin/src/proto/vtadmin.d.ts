@@ -30315,6 +30315,9 @@ export namespace tabletmanagerdata {
         /** CheckThrottlerRequest app_name */
         app_name?: (string|null);
 
+        /** CheckThrottlerRequest scope */
+        scope?: (string|null);
+
         /** CheckThrottlerRequest low_priority */
         low_priority?: (boolean|null);
 
@@ -30336,6 +30339,9 @@ export namespace tabletmanagerdata {
 
         /** CheckThrottlerRequest app_name. */
         public app_name: string;
+
+        /** CheckThrottlerRequest scope. */
+        public scope: string;
 
         /** CheckThrottlerRequest low_priority. */
         public low_priority: boolean;
@@ -49279,6 +49285,9 @@ export namespace vtctldata {
         /** CheckThrottlerRequest app_name */
         app_name?: (string|null);
 
+        /** CheckThrottlerRequest scope */
+        scope?: (string|null);
+
         /** CheckThrottlerRequest low_priority */
         low_priority?: (boolean|null);
 
@@ -49303,6 +49312,9 @@ export namespace vtctldata {
 
         /** CheckThrottlerRequest app_name. */
         public app_name: string;
+
+        /** CheckThrottlerRequest scope. */
+        public scope: string;
 
         /** CheckThrottlerRequest low_priority. */
         public low_priority: boolean;
