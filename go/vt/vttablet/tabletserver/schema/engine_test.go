@@ -1316,9 +1316,19 @@ func TestGetTableForPos(t *testing.T) {
 	cfg.DB = newDBConfigs(fakedb)
 	table := sqlparser.NewIdentifierCS("t1")
 	column := "col1"
-	tableSchema := "create table t1 (col1 varchar(50), primary key(col1))"
+	tableSchema := fmt.Sprintf("create table %s (%s varchar(50), primary key(col1))", table.String(), column)
+	tableMt := &binlogdatapb.MinimalTable{
+		Name: table.String(),
+		Fields: []*querypb.Field{
+			{
+				Name: column,
+				Type: sqltypes.VarChar,
+			},
+		},
+		PKColumns: []int64{0}, // First column: col1
+	}
 
-	// Don't do any auto cache refreshes.
+	// Don't do any automatic / TTL based cache refreshes.
 	se := newEngine(1*time.Hour, 1*time.Hour, 0, fakedb)
 	se.conns.Open(se.cp, se.cp, se.cp)
 	se.isOpen = true
@@ -1333,7 +1343,8 @@ func TestGetTableForPos(t *testing.T) {
 			fmt.Sprintf("%d", time.Now().Unix()),
 		))
 		db.AddQuery(fmt.Sprintf(detectViewChange, sidecar.GetIdentifier()), sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name", "varchar")))
-		db.AddQuery(fmt.Sprintf(readTableCreateTimes, sidecar.GetIdentifier()), sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name|create_time", "varchar|int64")))
+		db.AddQuery(fmt.Sprintf(readTableCreateTimes, sidecar.GetIdentifier()),
+			sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name|create_time", "varchar|int64")))
 		db.AddQuery(fmt.Sprintf(detectUdfChange, sidecar.GetIdentifier()), &sqltypes.Result{})
 		db.AddQueryPattern(baseShowTablesPattern,
 			&sqltypes.Result{
@@ -1362,11 +1373,13 @@ func TestGetTableForPos(t *testing.T) {
 		})
 		db.AddQueryPattern(fmt.Sprintf(mysql.GetColumnNamesQueryPatternForTable, table.String()),
 			sqltypes.MakeTestResult(sqltypes.MakeTestFields("column_name", "varchar"), column))
-		db.AddQuery(fmt.Sprintf("SELECT `%s` FROM `fakesqldb`.`%v` WHERE 1 != 1", column, table.String()), sqltypes.MakeTestResult(sqltypes.MakeTestFields(column, "varchar")))
+		db.AddQuery(fmt.Sprintf("SELECT `%s` FROM `fakesqldb`.`%v` WHERE 1 != 1", column, table.String()),
+			sqltypes.MakeTestResult(sqltypes.MakeTestFields(column, "varchar")))
 		db.AddQuery(fmt.Sprintf(`show create table %s`, table.String()),
 			sqltypes.MakeTestResult(sqltypes.MakeTestFields("Table|Create Table", "varchar|varchar"), table.String(), tableSchema))
 		db.AddQuery("begin", &sqltypes.Result{})
-		db.AddQuery(fmt.Sprintf("delete from %s.`tables` where TABLE_SCHEMA = database() and TABLE_NAME in ('%s')", sidecar.GetIdentifier(), table.String()), &sqltypes.Result{})
+		db.AddQuery(fmt.Sprintf("delete from %s.`tables` where TABLE_SCHEMA = database() and TABLE_NAME in ('%s')",
+			sidecar.GetIdentifier(), table.String()), &sqltypes.Result{})
 		db.AddQuery(fmt.Sprintf("insert into %s.`tables`(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, CREATE_TIME) values (database(), '%s', '%s', %d)",
 			sidecar.GetIdentifier(), table.String(), tableSchema, time.Now().Unix()), &sqltypes.Result{RowsAffected: 1})
 		db.AddQuery("rollback", &sqltypes.Result{})
@@ -1389,7 +1402,7 @@ func TestGetTableForPos(t *testing.T) {
 			expectFunc: func() {
 				tbl, err := se.GetTableForPos(ctx, table, "")
 				require.NoError(t, err)
-				require.NotNil(t, tbl)
+				require.Equal(t, tableMt, tbl)
 			},
 		},
 		{
@@ -1415,7 +1428,7 @@ func TestGetTableForPos(t *testing.T) {
 			expectFunc: func() {
 				tbl, err := se.GetTableForPos(ctx, table, "")
 				require.NoError(t, err)
-				require.NotNil(t, tbl)
+				require.Equal(t, tableMt, tbl)
 			},
 		},
 		{
@@ -1424,7 +1437,7 @@ func TestGetTableForPos(t *testing.T) {
 			expectedQueriesFunc: func(db *fakesqldb.DB) {
 				// We only reload the column and PK info for the table in our cache. A new column
 				// called col2 has been added to the table schema and it is the new PK.
-				newTableSchema := "create table t1 (id int, col2 varchar, primary key(col2))"
+				newTableSchema := fmt.Sprintf("create table %s (%s varchar(50), col2 varchar(50), primary key(col2))", table.String(), column)
 				db.AddQuery(mysql.BaseShowPrimary, &sqltypes.Result{
 					Fields: mysql.ShowPrimaryFields,
 					Rows: [][]sqltypes.Value{
@@ -1438,7 +1451,8 @@ func TestGetTableForPos(t *testing.T) {
 				db.AddQuery(fmt.Sprintf(`show create table %s`, table.String()),
 					sqltypes.MakeTestResult(sqltypes.MakeTestFields("Table|Create Table", "varchar|varchar"), table.String(), newTableSchema))
 				db.AddQuery("begin", &sqltypes.Result{})
-				db.AddQuery(fmt.Sprintf("delete from %s.`tables` where TABLE_SCHEMA = database() and TABLE_NAME in ('%s')", sidecar.GetIdentifier(), table.String()), &sqltypes.Result{})
+				db.AddQuery(fmt.Sprintf("delete from %s.`tables` where TABLE_SCHEMA = database() and TABLE_NAME in ('%s')",
+					sidecar.GetIdentifier(), table.String()), &sqltypes.Result{})
 				db.AddQuery(fmt.Sprintf("insert into %s.`tables`(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, CREATE_TIME) values (database(), '%s', '%s', %d)",
 					sidecar.GetIdentifier(), table.String(), newTableSchema, time.Now().Unix()), &sqltypes.Result{})
 				db.AddQuery("rollback", &sqltypes.Result{})

@@ -39,7 +39,10 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-const appendEntry = -1
+const (
+	appendEntry = -1
+	useQuery    = "use `fakesqldb`"
+)
 
 // DB is a fake database and all its methods are thread safe.  It
 // creates a mysql.Listener and implements the mysql.Handler
@@ -201,7 +204,7 @@ func New(t testing.TB) *DB {
 		db.listener.Accept()
 	}()
 
-	db.AddQuery("use `fakesqldb`", &sqltypes.Result{})
+	db.AddQuery(useQuery, &sqltypes.Result{})
 	// Return the db.
 	return db
 }
@@ -628,9 +631,7 @@ func (db *DB) DeleteAllQueries() {
 	clear(db.patternData)
 	clear(db.queryCalled)
 	// Use is always expected to be present.
-	useQuery := "use `fakesqldb`"
 	db.data[useQuery] = &ExpectedResult{&sqltypes.Result{}, nil}
-	db.queryCalled[useQuery] = 0
 }
 
 // AddRejectedQuery adds a query which will be rejected at execution time.
