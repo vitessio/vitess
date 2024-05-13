@@ -57065,6 +57065,9 @@ export namespace vtctldata {
 
         /** GetTopologyPathRequest path */
         path?: (string|null);
+
+        /** GetTopologyPathRequest version */
+        version?: (number|Long|null);
     }
 
     /** Represents a GetTopologyPathRequest. */
@@ -57078,6 +57081,9 @@ export namespace vtctldata {
 
         /** GetTopologyPathRequest path. */
         public path: string;
+
+        /** GetTopologyPathRequest version. */
+        public version: (number|Long);
 
         /**
          * Creates a new GetTopologyPathRequest instance using the specified properties.
@@ -57268,6 +57274,9 @@ export namespace vtctldata {
 
         /** TopologyCell children */
         children?: (string[]|null);
+
+        /** TopologyCell version */
+        version?: (number|Long|null);
     }
 
     /** Represents a TopologyCell. */
@@ -57290,6 +57299,9 @@ export namespace vtctldata {
 
         /** TopologyCell children. */
         public children: string[];
+
+        /** TopologyCell version. */
+        public version: (number|Long);
 
         /**
          * Creates a new TopologyCell instance using the specified properties.

@@ -1047,6 +1047,7 @@ message GetTabletsResponse {
 
 message GetTopologyPathRequest {
   string path = 1;
+  int64 version = 2;
 }
 
 message GetTopologyPathResponse {
@@ -1060,6 +1061,7 @@ message TopologyCell {
   // It is only populated if the cell is a terminal node.
   string data = 3;
   repeated string children = 4;
+  int64 version = 5;
 }
 
 message GetVSchemaRequest {

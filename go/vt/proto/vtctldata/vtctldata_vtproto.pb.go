@@ -2570,7 +2570,8 @@ func (m *GetTopologyPathRequest) CloneVT() *GetTopologyPathRequest {
 		return (*GetTopologyPathRequest)(nil)
 	}
 	r := &GetTopologyPathRequest{
-		Path: m.Path,
+		Path:    m.Path,
+		Version: m.Version,
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -2606,9 +2607,10 @@ func (m *TopologyCell) CloneVT() *TopologyCell {
 		return (*TopologyCell)(nil)
 	}
 	r := &TopologyCell{
-		Name: m.Name,
-		Path: m.Path,
-		Data: m.Data,
+		Name:    m.Name,
+		Path:    m.Path,
+		Data:    m.Data,
+		Version: m.Version,
 	}
 	if rhs := m.Children; rhs != nil {
 		tmpContainer := make([]string, len(rhs))
@@ -12456,6 +12458,11 @@ func (m *GetTopologyPathRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.Version != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.Version))
+		i--
+		dAtA[i] = 0x10
+	}
 	if len(m.Path) > 0 {
 		i -= len(m.Path)
 		copy(dAtA[i:], m.Path)
@@ -12538,6 +12545,11 @@ func (m *TopologyCell) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.Version != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.Version))
+		i--
+		dAtA[i] = 0x28
 	}
 	if len(m.Children) > 0 {
 		for iNdEx := len(m.Children) - 1; iNdEx >= 0; iNdEx-- {
@@ -22834,6 +22846,9 @@ func (m *GetTopologyPathRequest) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
+	if m.Version != 0 {
+		n += 1 + sov(uint64(m.Version))
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -22875,6 +22890,9 @@ func (m *TopologyCell) SizeVT() (n int) {
 			l = len(s)
 			n += 1 + l + sov(uint64(l))
 		}
+	}
+	if m.Version != 0 {
+		n += 1 + sov(uint64(m.Version))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -42750,6 +42768,25 @@ func (m *GetTopologyPathRequest) UnmarshalVT(dAtA []byte) error {
 			}
 			m.Path = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Version", wireType)
+			}
+			m.Version = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Version |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
@@ -43016,6 +43053,25 @@ func (m *TopologyCell) UnmarshalVT(dAtA []byte) error {
 			}
 			m.Children = append(m.Children, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
+		case 5:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Version", wireType)
+			}
+			m.Version = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Version |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])

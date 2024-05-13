@@ -253,6 +253,11 @@ func (f *FakeConn) Get(ctx context.Context, filePath string) ([]byte, topo.Versi
 	return res.contents, memorytopo.NodeVersion(res.version), nil
 }
 
+// GetVersion is part of topo.Conn interface.
+func (f *FakeConn) GetVersion(ctx context.Context, filePath string, version topo.Version) ([]byte, error) {
+	return nil, topo.NewError(topo.NoImplementation, "GetVersion not supported in fake topo")
+}
+
 // List is part of the topo.Conn interface.
 func (f *FakeConn) List(ctx context.Context, filePathPrefix string) ([]topo.KVInfo, error) {
 	return nil, topo.NewError(topo.NoImplementation, "List not supported in fake topo")

@@ -88,6 +88,21 @@ func (s *Server) Get(ctx context.Context, filePath string) ([]byte, topo.Version
 	return resp.Kvs[0].Value, EtcdVersion(resp.Kvs[0].ModRevision), nil
 }
 
+// GetVersion is part of the topo.Conn interface.
+func (s *Server) GetVersion(ctx context.Context, filePath string, version topo.Version) ([]byte, error) {
+	nodePath := path.Join(s.root, filePath)
+
+	resp, err := s.cli.Get(ctx, nodePath, clientv3.WithRev(int64(version.(EtcdVersion))))
+	if err != nil {
+		return nil, convertError(err, nodePath)
+	}
+	if len(resp.Kvs) != 1 {
+		return nil, topo.NewError(topo.NoNode, nodePath)
+	}
+
+	return resp.Kvs[0].Value, nil
+}
+
 // List is part of the topo.Conn interface.
 func (s *Server) List(ctx context.Context, filePathPrefix string) ([]topo.KVInfo, error) {
 	nodePathPrefix := path.Join(s.root, filePathPrefix)

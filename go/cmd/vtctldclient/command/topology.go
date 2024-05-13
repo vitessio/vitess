@@ -35,6 +35,10 @@ var (
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandGetTopologyPath,
 	}
+
+	// The version of the key/path to get. If not specified, the latest/current
+	// version is returned.
+	version int64 = 0
 )
 
 func commandGetTopologyPath(cmd *cobra.Command, args []string) error {
@@ -43,7 +47,8 @@ func commandGetTopologyPath(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	resp, err := client.GetTopologyPath(commandCtx, &vtctldatapb.GetTopologyPathRequest{
-		Path: path,
+		Path:    path,
+		Version: version,
 	})
 	if err != nil {
 		return err
@@ -60,5 +65,6 @@ func commandGetTopologyPath(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
+	GetTopologyPath.Flags().Int64Var(&version, "version", version, "The version of the path's key to get. If not specified, the latest version is returned.")
 	Root.AddCommand(GetTopologyPath)
 }

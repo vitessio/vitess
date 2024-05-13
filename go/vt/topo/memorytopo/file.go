@@ -190,6 +190,11 @@ func (c *Conn) Get(ctx context.Context, filePath string) ([]byte, topo.Version, 
 	return n.contents, NodeVersion(n.version), nil
 }
 
+// GetVersion is part of topo.Conn interface.
+func (c *Conn) GetVersion(ctx context.Context, filePath string, version topo.Version) ([]byte, error) {
+	return nil, topo.NewError(topo.NoImplementation, "GetVersion not supported in memory topo")
+}
+
 // List is part of the topo.Conn interface.
 func (c *Conn) List(ctx context.Context, filePathPrefix string) ([]topo.KVInfo, error) {
 	c.factory.callstats.Add([]string{"List"}, 1)
