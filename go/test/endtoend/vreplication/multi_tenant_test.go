@@ -37,14 +37,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 
-	"github.com/stretchr/testify/require"
-
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/proto/vtctldata"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
-	"vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 type tenantMigrationStatus int
@@ -260,11 +260,7 @@ func applyKeyspaceRoutingRules(t *testing.T, newRules *vschemapb.KeyspaceRouting
 	response := &vtctldata.ApplyKeyspaceRoutingRulesResponse{}
 	err = json.Unmarshal([]byte(output), response)
 	require.NoError(t, err)
-	if newRules == nil || newRules.Rules == nil || len(newRules.Rules) == 0 {
-		require.Nil(t, response.GetKeyspaceRoutingRules())
-	} else {
-		require.ElementsMatch(t, newRules.Rules, response.GetKeyspaceRoutingRules().Rules)
-	}
+	require.ElementsMatch(t, newRules.Rules, response.GetKeyspaceRoutingRules().Rules)
 }
 
 func confirmOnlyReadsSwitched(t *testing.T) {
