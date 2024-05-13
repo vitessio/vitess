@@ -702,15 +702,16 @@ func (se *Engine) GetTableForPos(ctx context.Context, tableName sqlparser.Identi
 			return nil, err
 		}
 		defer conn.Recycle()
-		cst := *st // Make a copy
+		cst := *st       // Make a copy
+		cst.Fields = nil // We're going to refresh the columns/fields
 		if err := fetchColumns(&cst, conn, se.cp.DBName(), tableNameStr); err != nil {
 			return nil, err
 		}
-		// Update the PK columns for the table as well as that may have changed.
+		// Update the PK columns for the table as well as they may have changed.
+		cst.PKColumns = nil // We're going to repopulate the PK columns
 		if err := se.populatePrimaryKeys(ctx, conn.Conn, map[string]*Table{tableNameStr: &cst}); err != nil {
 			return nil, err
 		}
-		log.Errorf("DEBUG: updating cache entry for table %v, pk column(s): %v", tableNameStr, cst.PKColumns)
 		se.tables[tableNameStr] = &cst
 		return newMinimalTable(&cst), nil
 	}

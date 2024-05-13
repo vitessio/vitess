@@ -1422,8 +1422,8 @@ func TestGetTableForPos(t *testing.T) {
 			name:              "GetTableForPos with cache initialized, table found",
 			initialCacheState: map[string]*Table{table.String(): {Name: table}},
 			expectedQueriesFunc: func(db *fakesqldb.DB) {
-				// We only reload the columns for the table in our cache. A new column called
-				// col2 has been added to the table schema and it is the new PK.
+				// We only reload the column and PK info for the table in our cache. A new column
+				// called col2 has been added to the table schema and it is the new PK.
 				newTableSchema := "create table t1 (id int, col2 varchar, primary key(col2))"
 				db.AddQuery(mysql.BaseShowPrimary, &sqltypes.Result{
 					Fields: mysql.ShowPrimaryFields,
