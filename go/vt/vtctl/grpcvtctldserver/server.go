@@ -5175,14 +5175,6 @@ func (s *VtctldServer) ApplyKeyspaceRoutingRules(ctx context.Context, req *vtctl
 
 	resp := &vtctldatapb.ApplyKeyspaceRoutingRulesResponse{}
 
-	// We send both the old and new rules back in the response, so that we have a backup of the rules
-	// in case we need to revert them or for audit purposes.
-	currentRules, err := s.ts.GetKeyspaceRoutingRules(ctx)
-	if err != nil {
-		return nil, err
-	}
-	resp.OldKeyspaceRoutingRules = currentRules
-
 	update := func() error {
 		return topotools.UpdateKeyspaceRoutingRules(ctx, s.ts, "ApplyKeyspaceRoutingRules",
 			func(ctx context.Context, rules *map[string]string) error {
@@ -5193,7 +5185,7 @@ func (s *VtctldServer) ApplyKeyspaceRoutingRules(ctx context.Context, req *vtctl
 				return nil
 			})
 	}
-	err = update()
+	err := update()
 	if err != nil {
 		// If we were racing with another caller to create the initial routing rules, then
 		// we can immediately retry the operation.
@@ -5209,7 +5201,7 @@ func (s *VtctldServer) ApplyKeyspaceRoutingRules(ctx context.Context, req *vtctl
 	if err != nil {
 		return nil, err
 	}
-	resp.NewKeyspaceRoutingRules = newRules
+	resp.KeyspaceRoutingRules = newRules
 
 	if req.SkipRebuild {
 		return resp, nil

@@ -586,8 +586,7 @@ func (m *ApplyKeyspaceRoutingRulesResponse) CloneVT() *ApplyKeyspaceRoutingRules
 		return (*ApplyKeyspaceRoutingRulesResponse)(nil)
 	}
 	r := &ApplyKeyspaceRoutingRulesResponse{
-		OldKeyspaceRoutingRules: m.OldKeyspaceRoutingRules.CloneVT(),
-		NewKeyspaceRoutingRules: m.NewKeyspaceRoutingRules.CloneVT(),
+		KeyspaceRoutingRules: m.KeyspaceRoutingRules.CloneVT(),
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -7479,18 +7478,8 @@ func (m *ApplyKeyspaceRoutingRulesResponse) MarshalToSizedBufferVT(dAtA []byte) 
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.NewKeyspaceRoutingRules != nil {
-		size, err := m.NewKeyspaceRoutingRules.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
-		}
-		i -= size
-		i = encodeVarint(dAtA, i, uint64(size))
-		i--
-		dAtA[i] = 0x12
-	}
-	if m.OldKeyspaceRoutingRules != nil {
-		size, err := m.OldKeyspaceRoutingRules.MarshalToSizedBufferVT(dAtA[:i])
+	if m.KeyspaceRoutingRules != nil {
+		size, err := m.KeyspaceRoutingRules.MarshalToSizedBufferVT(dAtA[:i])
 		if err != nil {
 			return 0, err
 		}
@@ -21043,12 +21032,8 @@ func (m *ApplyKeyspaceRoutingRulesResponse) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
-	if m.OldKeyspaceRoutingRules != nil {
-		l = m.OldKeyspaceRoutingRules.SizeVT()
-		n += 1 + l + sov(uint64(l))
-	}
-	if m.NewKeyspaceRoutingRules != nil {
-		l = m.NewKeyspaceRoutingRules.SizeVT()
+	if m.KeyspaceRoutingRules != nil {
+		l = m.KeyspaceRoutingRules.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -31107,7 +31092,7 @@ func (m *ApplyKeyspaceRoutingRulesResponse) UnmarshalVT(dAtA []byte) error {
 		switch fieldNum {
 		case 1:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field OldKeyspaceRoutingRules", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field KeyspaceRoutingRules", wireType)
 			}
 			var msglen int
 			for shift := uint(0); ; shift += 7 {
@@ -31134,46 +31119,10 @@ func (m *ApplyKeyspaceRoutingRulesResponse) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if m.OldKeyspaceRoutingRules == nil {
-				m.OldKeyspaceRoutingRules = &vschema.KeyspaceRoutingRules{}
+			if m.KeyspaceRoutingRules == nil {
+				m.KeyspaceRoutingRules = &vschema.KeyspaceRoutingRules{}
 			}
-			if err := m.OldKeyspaceRoutingRules.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
-			}
-			iNdEx = postIndex
-		case 2:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field NewKeyspaceRoutingRules", wireType)
-			}
-			var msglen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				msglen |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if msglen < 0 {
-				return ErrInvalidLength
-			}
-			postIndex := iNdEx + msglen
-			if postIndex < 0 {
-				return ErrInvalidLength
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			if m.NewKeyspaceRoutingRules == nil {
-				m.NewKeyspaceRoutingRules = &vschema.KeyspaceRoutingRules{}
-			}
-			if err := m.NewKeyspaceRoutingRules.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+			if err := m.KeyspaceRoutingRules.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex

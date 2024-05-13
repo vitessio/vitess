@@ -228,7 +228,7 @@ func TestMultiTenantSimple(t *testing.T) {
 
 	t.Run("Test ApplyKeyspaceRoutingRules", func(t *testing.T) {
 		// First set of rules
-		applyKeyspaceRoutingRules(t, emptyKeyspaceRoutingRules, initialRules)
+		applyKeyspaceRoutingRules(t, initialRules)
 
 		updatedRules := &vschemapb.KeyspaceRoutingRules{
 			Rules: []*vschemapb.KeyspaceRoutingRule{
@@ -238,40 +238,32 @@ func TestMultiTenantSimple(t *testing.T) {
 			},
 		}
 		// Update the rules
-		applyKeyspaceRoutingRules(t, initialRules, updatedRules)
+		applyKeyspaceRoutingRules(t, updatedRules)
 		// Update with the same rules
-		applyKeyspaceRoutingRules(t, updatedRules, updatedRules)
+		applyKeyspaceRoutingRules(t, updatedRules)
 		// Remove the rules
-		applyKeyspaceRoutingRules(t, updatedRules, emptyKeyspaceRoutingRules)
+		applyKeyspaceRoutingRules(t, emptyKeyspaceRoutingRules)
 		// Test setting empty rules again
-		applyKeyspaceRoutingRules(t, emptyKeyspaceRoutingRules, emptyKeyspaceRoutingRules)
+		applyKeyspaceRoutingRules(t, emptyKeyspaceRoutingRules)
 	})
 }
 
-func applyKeyspaceRoutingRules(t *testing.T, oldRules, newRules *vschemapb.KeyspaceRoutingRules) {
+func applyKeyspaceRoutingRules(t *testing.T, newRules *vschemapb.KeyspaceRoutingRules) {
 	var rulesJSON []byte
 	var err error
-	if newRules != nil {
-		rulesJSON, err = json.Marshal(newRules)
-		require.NoError(t, err)
-	} else {
-		rulesJSON = []byte("{}")
-	}
+	require.NotNil(t, newRules)
+	rulesJSON, err = json.Marshal(newRules)
+	require.NoError(t, err)
 	output, err := vc.VtctldClient.ExecuteCommandWithOutput("ApplyKeyspaceRoutingRules", "--rules", string(rulesJSON))
 	require.NoError(t, err)
 
 	response := &vtctldata.ApplyKeyspaceRoutingRulesResponse{}
 	err = json.Unmarshal([]byte(output), response)
 	require.NoError(t, err)
-	if oldRules == nil || len(oldRules.Rules) == 0 {
-		require.Empty(t, response.GetOldKeyspaceRoutingRules().String())
+	if newRules == nil || newRules.Rules == nil || len(newRules.Rules) == 0 {
+		require.Nil(t, response.GetKeyspaceRoutingRules())
 	} else {
-		require.ElementsMatch(t, oldRules.Rules, response.GetOldKeyspaceRoutingRules().Rules)
-	}
-	if newRules == nil || len(newRules.Rules) == 0 {
-		require.Empty(t, response.GetNewKeyspaceRoutingRules().String())
-	} else {
-		require.ElementsMatch(t, newRules.Rules, response.GetNewKeyspaceRoutingRules().Rules)
+		require.ElementsMatch(t, newRules.Rules, response.GetKeyspaceRoutingRules().Rules)
 	}
 }
 
