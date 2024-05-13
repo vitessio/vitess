@@ -1048,6 +1048,7 @@ message GetTabletsResponse {
 message GetTopologyPathRequest {
   string path = 1;
   int64 version = 2;
+  bool as_json = 3;
 }
 
 message GetTopologyPathResponse {

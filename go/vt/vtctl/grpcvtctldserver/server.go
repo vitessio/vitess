@@ -2284,7 +2284,7 @@ func (s *VtctldServer) GetTopologyPath(ctx context.Context, req *vtctldatapb.Get
 		// Getting specific versions is only supported with the etcd2topo today.
 		version = etcd2topo.EtcdVersion(req.GetVersion())
 	}
-	cell, err := s.getTopologyCell(ctx, req.GetPath(), version)
+	cell, err := s.getTopologyCell(ctx, req.GetPath(), version, req.GetAsJson())
 	if err != nil {
 		return nil, err
 	}
@@ -5071,7 +5071,7 @@ func StartServer(s *grpc.Server, env *vtenv.Environment, ts *topo.Server) {
 }
 
 // getTopologyKey is a helper method that returns a topology key given its path.
-func (s *VtctldServer) getTopologyCell(ctx context.Context, cellPath string, version topo.Version) (*vtctldatapb.TopologyCell, error) {
+func (s *VtctldServer) getTopologyCell(ctx context.Context, cellPath string, version topo.Version, asJSON bool) (*vtctldatapb.TopologyCell, error) {
 	// extract cell and relative path
 	parts := strings.Split(cellPath, "/")
 	if parts[0] != "" || len(parts) < 2 {
@@ -5090,7 +5090,7 @@ func (s *VtctldServer) getTopologyCell(ctx context.Context, cellPath string, ver
 
 	if version != nil {
 		if data, err := conn.GetVersion(ctx, relativePath, version); err == nil {
-			result, err := topo.DecodeContent(relativePath, data, false)
+			result, err := topo.DecodeContent(relativePath, data, asJSON)
 			if err != nil {
 				err := vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "error decoding file content for cell %s (version: %s): %v", cellPath, version, err)
 				return nil, err
@@ -5103,7 +5103,7 @@ func (s *VtctldServer) getTopologyCell(ctx context.Context, cellPath string, ver
 		}
 	} else {
 		if data, curVersion, err := conn.Get(ctx, relativePath); err == nil {
-			result, err := topo.DecodeContent(relativePath, data, false)
+			result, err := topo.DecodeContent(relativePath, data, asJSON)
 			if err != nil {
 				err := vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "error decoding file content for cell %s: %v", cellPath, err)
 				return nil, err

@@ -39,6 +39,8 @@ var (
 	// The version of the key/path to get. If not specified, the latest/current
 	// version is returned.
 	version int64 = 0
+	// If true, the data is output in JSON format. Otherwise, it is in prototext format.
+	asJSON bool = false
 )
 
 func commandGetTopologyPath(cmd *cobra.Command, args []string) error {
@@ -49,6 +51,7 @@ func commandGetTopologyPath(cmd *cobra.Command, args []string) error {
 	resp, err := client.GetTopologyPath(commandCtx, &vtctldatapb.GetTopologyPathRequest{
 		Path:    path,
 		Version: version,
+		AsJson:  asJSON,
 	})
 	if err != nil {
 		return err
@@ -66,5 +69,6 @@ func commandGetTopologyPath(cmd *cobra.Command, args []string) error {
 
 func init() {
 	GetTopologyPath.Flags().Int64Var(&version, "version", version, "The version of the path's key to get. If not specified, the latest version is returned.")
+	GetTopologyPath.Flags().BoolVar(&asJSON, "json", asJSON, "If true, the data is output in JSON format. Otherwise, it is in prototext format.")
 	Root.AddCommand(GetTopologyPath)
 }

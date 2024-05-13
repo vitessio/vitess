@@ -57068,6 +57068,9 @@ export namespace vtctldata {
 
         /** GetTopologyPathRequest version */
         version?: (number|Long|null);
+
+        /** GetTopologyPathRequest as_json */
+        as_json?: (boolean|null);
     }
 
     /** Represents a GetTopologyPathRequest. */
@@ -57084,6 +57087,9 @@ export namespace vtctldata {
 
         /** GetTopologyPathRequest version. */
         public version: (number|Long);
+
+        /** GetTopologyPathRequest as_json. */
+        public as_json: boolean;
 
         /**
          * Creates a new GetTopologyPathRequest instance using the specified properties.
