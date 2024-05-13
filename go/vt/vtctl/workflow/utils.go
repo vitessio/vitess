@@ -857,7 +857,7 @@ func changeKeyspaceRouting(ctx context.Context, ts *topo.Server, tabletTypes []t
 		suffix := getTabletTypeSuffix(tabletType)
 		routes[sourceKeyspace+suffix] = targetKeyspace
 	}
-	if err := updateKeyspaceRoutingRules(ctx, ts, sourceKeyspace, reason, routes); err != nil {
+	if err := updateKeyspaceRoutingRules(ctx, ts, reason, routes); err != nil {
 		return err
 	}
 	return ts.RebuildSrvVSchema(ctx, nil)
@@ -865,7 +865,7 @@ func changeKeyspaceRouting(ctx context.Context, ts *topo.Server, tabletTypes []t
 
 // updateKeyspaceRoutingRules updates the keyspace routing rules for the (effective) source
 // keyspace to the target keyspace.
-func updateKeyspaceRoutingRules(ctx context.Context, ts *topo.Server, sourceKeyspace, reason string, routes map[string]string) error {
+func updateKeyspaceRoutingRules(ctx context.Context, ts *topo.Server, reason string, routes map[string]string) error {
 	update := func() error {
 		return topotools.UpdateKeyspaceRoutingRules(ctx, ts, reason,
 			func(ctx context.Context, rules *map[string]string) error {
