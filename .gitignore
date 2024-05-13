@@ -86,3 +86,10 @@ report
 
 # plan test output
 /go/vt/vtgate/planbuilder/testdata/plan_test*
+<<<<<<< HEAD
+=======
+/go/vt/vtgate/planbuilder/testdata/expected
+
+# mise files
+.mise.toml
+>>>>>>> eb22cfb0db (test: Cleaner plan tests output (#15922))
