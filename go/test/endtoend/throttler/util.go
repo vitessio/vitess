@@ -67,6 +67,12 @@ func CheckThrottlerRaw(vtctldProcess *cluster.VtctldClientProcess, tablet *clust
 			Scope: base.SelfScope,
 		}
 	}
+	if appName != "" {
+		args = append(args, "--app-name", appName)
+	}
+	if flags.Scope != base.UndefinedScope {
+		args = append(args, "--scope", flags.Scope.String())
+	}
 	if flags.LowPriority {
 		args = append(args, "--low-priority")
 	}
