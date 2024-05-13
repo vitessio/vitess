@@ -18,6 +18,7 @@ package base
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 )
 
@@ -67,12 +68,71 @@ func (metric MetricName) String() string {
 	return string(metric)
 }
 
+// AggregatedName returns the string representation of this metric in the given scope, e.g.:
+// - "self/loadavg"
+// - "shard/lag"
+func (metric MetricName) AggregatedName(scope Scope) string {
+	if metric == DefaultMetricName {
+		// backwards (v19) compatibility
+		return scope.String()
+	}
+	if scope == UndefinedScope {
+		scope = metric.DefaultScope()
+	}
+	return fmt.Sprintf("%s/%s", scope.String(), metric.String())
+}
+
 var KnownMetricNames = MetricNames{
 	DefaultMetricName,
 	LagMetricName,
 	ThreadsRunningMetricName,
 	CustomMetricName,
 	LoadAvgMetricName,
+}
+
+type AggregatedMetricName struct {
+	Scope  Scope
+	Metric MetricName
+}
+
+var (
+	// aggregatedMetricNames precomputes the aggregated metric names for all known metric names,
+	// mapped to their breakdowns. e.g. "self/loadavg" -> {SelfScope, LoadAvgMetricName}
+	// This means:
+	// - no textual parsing is needed in the critical path
+	// - we can easily check if a metric name is valid
+	aggregatedMetricNames map[string]AggregatedMetricName
+)
+
+func init() {
+	aggregatedMetricNames = make(map[string]AggregatedMetricName)
+	for _, metricName := range KnownMetricNames {
+		aggregatedMetricNames[metricName.String()] = AggregatedMetricName{
+			Scope:  metricName.DefaultScope(),
+			Metric: metricName,
+		}
+		for _, scope := range []Scope{ShardScope, SelfScope} {
+			aggregatedName := metricName.AggregatedName(scope)
+			aggregatedMetricNames[aggregatedName] = AggregatedMetricName{
+				Scope:  scope,
+				Metric: metricName,
+			}
+		}
+	}
+}
+
+// splitMetricTokens splits a metric name into its scope name and metric name
+// aggregated metric name could be in the form:
+// - self
+// - self/threads_running
+// - shard
+// - shard/lag
+func DisaggregateMetricName(aggregatedMetricName string) (scope Scope, metricName MetricName, err error) {
+	breakdown, ok := aggregatedMetricNames[aggregatedMetricName]
+	if !ok {
+		return UndefinedScope, DefaultMetricName, ErrNoSuchMetric
+	}
+	return breakdown.Scope, breakdown.Metric, nil
 }
 
 // MetricResult is what we expect our probes to return. This can be a numeric result, or

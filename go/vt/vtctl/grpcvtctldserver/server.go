@@ -697,6 +697,7 @@ func (s *VtctldServer) CheckThrottler(ctx context.Context, req *vtctldatapb.Chec
 
 	r, err := s.tmc.CheckThrottler(ctx, ti.Tablet, &tabletmanagerdatapb.CheckThrottlerRequest{
 		AppName:               req.AppName,
+		Scope:                 req.Scope,
 		LowPriority:           req.LowPriority,
 		SkipRequestHeartbeats: req.SkipRequestHeartbeats,
 		OkIfNotExists:         req.OkIfNotExists,

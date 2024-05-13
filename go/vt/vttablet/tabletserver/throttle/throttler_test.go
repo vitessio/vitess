@@ -86,7 +86,7 @@ var (
 		},
 		base.LoadAvgMetricName.String(): {
 			StatusCode: http.StatusOK,
-			Value:      0.8,
+			Value:      5.1,
 		},
 	}
 )
@@ -109,7 +109,7 @@ func (c *fakeTMClient) Close() {
 func (c *fakeTMClient) CheckThrottler(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.CheckThrottlerRequest) (*tabletmanagerdatapb.CheckThrottlerResponse, error) {
 	resp := &tabletmanagerdatapb.CheckThrottlerResponse{
 		StatusCode:      http.StatusOK,
-		Value:           0.139,
+		Value:           0.339,
 		Threshold:       1,
 		RecentlyChecked: false,
 	}
@@ -191,9 +191,9 @@ func init() {
 }
 
 func TestGetAggregatedMetricName(t *testing.T) {
-	assert.Equal(t, "self", getAggregatedMetricName("self", base.DefaultMetricName))
-	assert.Equal(t, "self/lag", getAggregatedMetricName("self", base.LagMetricName))
-	assert.Equal(t, "shard/loadavg", getAggregatedMetricName("shard", base.LoadAvgMetricName))
+	assert.Equal(t, "self", base.DefaultMetricName.AggregatedName(base.SelfScope))
+	assert.Equal(t, "self/lag", base.LagMetricName.AggregatedName(base.SelfScope))
+	assert.Equal(t, "shard/loadavg", base.LoadAvgMetricName.AggregatedName(base.ShardScope))
 }
 
 func newTestThrottler() *Throttler {
@@ -544,39 +544,39 @@ func TestProbesWhileOperating(t *testing.T) {
 				val, err := metricResult.Get()
 				assert.NoErrorf(t, err, "aggregatedMetricName: %v", aggregatedMetricName)
 				assert.NotEmpty(t, aggregatedMetricName)
-				scopeName, metricName, err := splitMetricTokens(aggregatedMetricName)
+				scope, metricName, err := base.DisaggregateMetricName(aggregatedMetricName)
 				assert.NotEmpty(t, metricName)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
-				switch base.Scope(scopeName) {
+				switch scope {
 				case base.UndefinedScope, base.SelfScope:
 					switch metricName {
 					case base.DefaultMetricName:
-						assert.Equalf(t, float64(0.3), val, "scope=%v, metricName=%v", scopeName, metricName) // same value as "lag"
+						assert.Equalf(t, float64(0.3), val, "scope=%v, metricName=%v", scope, metricName) // same value as "lag"
 					case base.LagMetricName:
-						assert.Equalf(t, float64(0.3), val, "scope=%v, metricName=%v", scopeName, metricName)
+						assert.Equalf(t, float64(0.3), val, "scope=%v, metricName=%v", scope, metricName)
 					case base.ThreadsRunningMetricName:
-						assert.Equalf(t, float64(26), val, "scope=%v, metricName=%v", scopeName, metricName)
+						assert.Equalf(t, float64(26), val, "scope=%v, metricName=%v", scope, metricName)
 					case base.CustomMetricName:
-						assert.Equalf(t, float64(17), val, "scope=%v, metricName=%v", scopeName, metricName)
+						assert.Equalf(t, float64(17), val, "scope=%v, metricName=%v", scope, metricName)
 					case base.LoadAvgMetricName:
-						assert.Equalf(t, float64(2.718), val, "scope=%v, metricName=%v", scopeName, metricName)
+						assert.Equalf(t, float64(2.718), val, "scope=%v, metricName=%v", scope, metricName)
 					}
 				case base.ShardScope:
 					switch metricName {
 					case base.DefaultMetricName:
-						assert.Equalf(t, float64(0.9), val, "scope=%v, metricName=%v", scopeName, metricName) // same value as "lag"
+						assert.Equalf(t, float64(0.9), val, "scope=%v, metricName=%v", scope, metricName) // same value as "lag"
 					case base.LagMetricName:
-						assert.Equalf(t, float64(0.9), val, "scope=%v, metricName=%v", scopeName, metricName)
+						assert.Equalf(t, float64(0.9), val, "scope=%v, metricName=%v", scope, metricName)
 					case base.ThreadsRunningMetricName:
-						assert.Equalf(t, float64(13), val, "scope=%v, metricName=%v", scopeName, metricName)
+						assert.Equalf(t, float64(26), val, "scope=%v, metricName=%v", scope, metricName)
 					case base.CustomMetricName:
-						assert.Equalf(t, float64(14), val, "scope=%v, metricName=%v", scopeName, metricName)
+						assert.Equalf(t, float64(17), val, "scope=%v, metricName=%v", scope, metricName)
 					case base.LoadAvgMetricName:
-						assert.Equalf(t, float64(0.8), val, "scope=%v, metricName=%v", scopeName, metricName)
+						assert.Equalf(t, float64(5.1), val, "scope=%v, metricName=%v", scope, metricName)
 					}
 				default:
-					assert.Failf(t, "unknown scope", "scope=%v", scopeName)
+					assert.Failf(t, "unknown scope", "scope=%v", scope)
 				}
 			}
 			assert.NotEmpty(t, tmClient.AppNames())
@@ -647,39 +647,39 @@ func TestProbesWhileOperating(t *testing.T) {
 				val, err := metricResult.Get()
 				assert.NoErrorf(t, err, "aggregatedMetricName: %v", aggregatedMetricName)
 				assert.NotEmpty(t, aggregatedMetricName)
-				scopeName, metricName, err := splitMetricTokens(aggregatedMetricName)
+				scope, metricName, err := base.DisaggregateMetricName(aggregatedMetricName)
 				assert.NotEmpty(t, metricName)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
-				switch base.Scope(scopeName) {
+				switch scope {
 				case base.UndefinedScope, base.SelfScope:
 					switch metricName {
 					case base.DefaultMetricName:
-						assert.Equalf(t, float64(17), val, "scope=%v, metricName=%v", scopeName, metricName) // same value as "custom"
+						assert.Equalf(t, float64(17), val, "scope=%v, metricName=%v", scope, metricName) // same value as "custom"
 					case base.LagMetricName:
-						assert.Equalf(t, float64(0.3), val, "scope=%v, metricName=%v", scopeName, metricName)
+						assert.Equalf(t, float64(0.3), val, "scope=%v, metricName=%v", scope, metricName)
 					case base.ThreadsRunningMetricName:
-						assert.Equalf(t, float64(26), val, "scope=%v, metricName=%v", scopeName, metricName)
+						assert.Equalf(t, float64(26), val, "scope=%v, metricName=%v", scope, metricName)
 					case base.CustomMetricName:
-						assert.Equalf(t, float64(17), val, "scope=%v, metricName=%v", scopeName, metricName)
+						assert.Equalf(t, float64(17), val, "scope=%v, metricName=%v", scope, metricName)
 					case base.LoadAvgMetricName:
-						assert.Equalf(t, float64(2.718), val, "scope=%v, metricName=%v", scopeName, metricName)
+						assert.Equalf(t, float64(2.718), val, "scope=%v, metricName=%v", scope, metricName)
 					}
 				case base.ShardScope:
 					switch metricName {
 					case base.DefaultMetricName:
-						assert.Equalf(t, float64(14), val, "scope=%v, metricName=%v", scopeName, metricName) // same value as "custom"
+						assert.Equalf(t, float64(17), val, "scope=%v, metricName=%v", scope, metricName) // same value as "custom"
 					case base.LagMetricName:
-						assert.Equalf(t, float64(0.9), val, "scope=%v, metricName=%v", scopeName, metricName)
+						assert.Equalf(t, float64(0.9), val, "scope=%v, metricName=%v", scope, metricName)
 					case base.ThreadsRunningMetricName:
-						assert.Equalf(t, float64(13), val, "scope=%v, metricName=%v", scopeName, metricName)
+						assert.Equalf(t, float64(26), val, "scope=%v, metricName=%v", scope, metricName)
 					case base.CustomMetricName:
-						assert.Equalf(t, float64(14), val, "scope=%v, metricName=%v", scopeName, metricName)
+						assert.Equalf(t, float64(17), val, "scope=%v, metricName=%v", scope, metricName)
 					case base.LoadAvgMetricName:
-						assert.Equalf(t, float64(0.8), val, "scope=%v, metricName=%v", scopeName, metricName)
+						assert.Equalf(t, float64(5.1), val, "scope=%v, metricName=%v", scope, metricName)
 					}
 				default:
-					assert.Failf(t, "unknown scope", "scope=%v", scopeName)
+					assert.Failf(t, "unknown scope", "scope=%v", scope)
 				}
 			}
 
@@ -706,8 +706,18 @@ func TestProbesWhileOperating(t *testing.T) {
 						assert.False(t, checkOK) // 0.95 still too low for custom query
 					}
 				})
-				t.Run("adjust threshold", func(t *testing.T) {
+				t.Run("adjust threshold, still too low", func(t *testing.T) {
 					throttler.MetricsThreshold.Store(math.Float64bits(15))
+					<-runSerialFunction(t, ctx, throttler, func(ctx context.Context) {
+						throttler.refreshMySQLInventory(ctx)
+					})
+					{
+						checkOK := client.ThrottleCheckOK(ctx, "")
+						assert.False(t, checkOK) // 15 still too low for custom query because primary has 17
+					}
+				})
+				t.Run("adjust threshold", func(t *testing.T) {
+					throttler.MetricsThreshold.Store(math.Float64bits(18))
 					<-runSerialFunction(t, ctx, throttler, func(ctx context.Context) {
 						throttler.refreshMySQLInventory(ctx)
 					})
@@ -754,9 +764,9 @@ func TestProbesWithV19Replicas(t *testing.T) {
 			assert.Equal(t, 2*len(base.KnownMetricNames), throttler.aggregatedMetrics.ItemCount()) // flushed upon Disable()
 			for aggregatedMetricName, metricResult := range aggr {
 				assert.NotEmpty(t, aggregatedMetricName)
-				scope, metricName, err := splitMetricTokens(aggregatedMetricName)
+				scope, metricName, err := base.DisaggregateMetricName(aggregatedMetricName)
 				assert.NotEmpty(t, metricName)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				val, metricResultErr := metricResult.Get()
 				expectMetricNotCollectedYet := false
@@ -779,9 +789,9 @@ func TestProbesWithV19Replicas(t *testing.T) {
 					// produce the single v19 metric (which we call "default", though they don't advertise it under the name "base.DefaultMetricName")
 					switch metricName {
 					case base.DefaultMetricName:
-						assert.Equalf(t, float64(0.139), val, "scope=%v, metricName=%v", scope, metricName) // same value as "lag"
+						assert.Equalf(t, float64(0.339), val, "scope=%v, metricName=%v", scope, metricName) // same value as "lag"
 					case base.LagMetricName:
-						assert.Equalf(t, float64(0.139), val, "scope=%v, metricName=%v", scope, metricName) //
+						assert.Equalf(t, float64(0.339), val, "scope=%v, metricName=%v", scope, metricName) //
 					default:
 						assert.Zero(t, val, "scope=%v, metricName=%v", scope, metricName)
 						expectMetricNotCollectedYet = true
@@ -899,6 +909,123 @@ func TestDormant(t *testing.T) {
 			}
 			cancel() // end test early
 		}()
+	})
+}
+
+func TestChecks(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	throttler := newTestThrottler()
+	throttler.dormantPeriod = time.Minute
+
+	tmClient, ok := throttler.overrideTmClient.(*fakeTMClient)
+	require.True(t, ok)
+	assert.Empty(t, tmClient.AppNames())
+
+	validateAppNames := func(t *testing.T) {
+		t.Run("app names", func(t *testing.T) {
+			assert.NotEmpty(t, tmClient.AppNames())
+			// The throttler here emulates a PRIMARY tablet, and therefore should probe the replicas using
+			// the "vitess" app name.
+			uniqueNames := map[string]int{}
+			for _, appName := range tmClient.AppNames() {
+				uniqueNames[appName]++
+			}
+			// PRIMARY throttler probes replicas with empty app name, which is then
+			// interpreted as "vitess" name.
+			_, ok := uniqueNames[""]
+			assert.Truef(t, ok, "%+v", uniqueNames)
+			assert.Equalf(t, 1, len(uniqueNames), "%+v", uniqueNames)
+		})
+	}
+
+	runThrottler(t, ctx, throttler, time.Minute, func(t *testing.T, ctx context.Context) {
+		assert.Equal(t, base.LagMetricName, throttler.metricNameUsedAsDefault())
+		aggr := throttler.aggregatedMetricsSnapshot()
+		assert.Equalf(t, 2*len(base.KnownMetricNames), len(aggr), "aggregated: %+v", aggr)     // "self" and "shard", per known metric
+		assert.Equal(t, 2*len(base.KnownMetricNames), throttler.aggregatedMetrics.ItemCount()) // flushed upon Disable()
+
+		validateAppNames(t)
+		t.Run("checks, self scope", func(t *testing.T) {
+			flags := &CheckFlags{
+				Scope: base.SelfScope,
+			}
+			t.Run("implicit names", func(t *testing.T) {
+				checkResult := throttler.Check(ctx, throttlerapp.VitessName.String(), nil, flags)
+				require.NotNil(t, checkResult)
+				assert.EqualValues(t, 0.3, checkResult.Value) // self lag value
+				assert.EqualValues(t, http.StatusOK, checkResult.StatusCode)
+				assert.Equal(t, 1, len(checkResult.Metrics))
+			})
+			t.Run("explicit names", func(t *testing.T) {
+				checkResult := throttler.Check(ctx, throttlerapp.VitessName.String(), base.KnownMetricNames, flags)
+				require.NotNil(t, checkResult)
+				assert.EqualValues(t, 0.3, checkResult.Value) // self lag value
+				assert.EqualValues(t, http.StatusOK, checkResult.StatusCode)
+				assert.Equal(t, len(base.KnownMetricNames), len(checkResult.Metrics))
+
+				assert.EqualValues(t, 0.3, checkResult.Metrics[base.LagMetricName.String()].Value)           // self lag value
+				assert.EqualValues(t, 26, checkResult.Metrics[base.ThreadsRunningMetricName.String()].Value) // self value
+				assert.EqualValues(t, 17, checkResult.Metrics[base.CustomMetricName.String()].Value)         // self value
+				assert.EqualValues(t, 2.718, checkResult.Metrics[base.LoadAvgMetricName.String()].Value)     // self value
+			})
+		})
+		t.Run("checks, shard scope", func(t *testing.T) {
+			flags := &CheckFlags{
+				Scope: base.ShardScope,
+			}
+			t.Run("implicit names", func(t *testing.T) {
+				checkResult := throttler.Check(ctx, throttlerapp.VitessName.String(), nil, flags)
+				require.NotNil(t, checkResult)
+				assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
+				assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode)
+				assert.ErrorIs(t, checkResult.Error, base.ErrThresholdExceeded)
+				assert.Equal(t, 1, len(checkResult.Metrics))
+			})
+			t.Run("explicit names", func(t *testing.T) {
+				checkResult := throttler.Check(ctx, throttlerapp.VitessName.String(), base.KnownMetricNames, flags)
+				require.NotNil(t, checkResult)
+				assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
+				assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode)
+				assert.ErrorIs(t, checkResult.Error, base.ErrThresholdExceeded)
+				assert.Equal(t, len(base.KnownMetricNames), len(checkResult.Metrics))
+
+				assert.EqualValues(t, 0.9, checkResult.Metrics[base.LagMetricName.String()].Value)           // shard lag value
+				assert.EqualValues(t, 26, checkResult.Metrics[base.ThreadsRunningMetricName.String()].Value) // shard value
+				assert.EqualValues(t, 17, checkResult.Metrics[base.CustomMetricName.String()].Value)         // shard value
+				assert.EqualValues(t, 5.1, checkResult.Metrics[base.LoadAvgMetricName.String()].Value)       // shard value
+			})
+		})
+		t.Run("checks, undefined scope", func(t *testing.T) {
+			flags := &CheckFlags{
+				// Leaving scope undefined, so that each metrics picks its own scope
+			}
+			t.Run("implicit names", func(t *testing.T) {
+				checkResult := throttler.Check(ctx, throttlerapp.VitessName.String(), nil, flags)
+				require.NotNil(t, checkResult)
+				assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
+				assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode)
+				assert.ErrorIs(t, checkResult.Error, base.ErrThresholdExceeded)
+				assert.Equal(t, 1, len(checkResult.Metrics))
+			})
+			t.Run("explicit names", func(t *testing.T) {
+				checkResult := throttler.Check(ctx, throttlerapp.VitessName.String(), base.KnownMetricNames, flags)
+				require.NotNil(t, checkResult)
+				assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
+				assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode)
+				assert.ErrorIs(t, checkResult.Error, base.ErrThresholdExceeded)
+				assert.Equal(t, len(base.KnownMetricNames), len(checkResult.Metrics))
+
+				assert.EqualValues(t, 0.9, checkResult.Metrics[base.LagMetricName.String()].Value)           // shard lag value
+				assert.EqualValues(t, 26, checkResult.Metrics[base.ThreadsRunningMetricName.String()].Value) // self value
+				assert.EqualValues(t, 17, checkResult.Metrics[base.CustomMetricName.String()].Value)         // self value
+				assert.EqualValues(t, 2.718, checkResult.Metrics[base.LoadAvgMetricName.String()].Value)     // self value
+			})
+		})
+
+		// done
+		cancel() // end test early
 	})
 }
 

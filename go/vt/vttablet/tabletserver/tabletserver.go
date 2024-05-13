@@ -1778,7 +1778,6 @@ func (tsv *TabletServer) TopoServer() *topo.Server {
 
 // CheckThrottler issues a self check
 func (tsv *TabletServer) CheckThrottler(ctx context.Context, appName string, flags *throttle.CheckFlags) *throttle.CheckResult {
-	flags.Scope = base.SelfScope
 	r := tsv.lagThrottler.Check(ctx, appName, base.KnownMetricNames, flags)
 	return r
 }
@@ -1885,7 +1884,7 @@ func (tsv *TabletServer) registerMigrationStatusHandler() {
 
 // registerThrottlerCheckHandlers registers throttler "check" requests
 func (tsv *TabletServer) registerThrottlerCheckHandlers() {
-	handle := func(path string, store base.Scope) {
+	handle := func(path string, scope base.Scope) {
 		tsv.exporter.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
 			ctx := tabletenv.LocalContext()
 			appName := r.URL.Query().Get("app")
@@ -1893,7 +1892,7 @@ func (tsv *TabletServer) registerThrottlerCheckHandlers() {
 				appName = throttlerapp.DefaultName.String()
 			}
 			flags := &throttle.CheckFlags{
-				Scope:                 store,
+				Scope:                 scope,
 				LowPriority:           (r.URL.Query().Get("p") == "low"),
 				SkipRequestHeartbeats: (r.URL.Query().Get("s") == "true"),
 			}

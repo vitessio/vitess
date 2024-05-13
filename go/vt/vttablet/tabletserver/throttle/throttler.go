@@ -1160,14 +1160,6 @@ func (throttler *Throttler) metricNameUsedAsDefault() base.MetricName {
 	return base.CustomMetricName
 }
 
-func getAggregatedMetricName(scope base.Scope, metricName base.MetricName) string {
-	if metricName == base.DefaultMetricName {
-		// backwards compatibility
-		return scope.String()
-	}
-	return fmt.Sprintf("%s/%s", scope.String(), metricName.String())
-}
-
 // synchronous aggregation of collected data
 func (throttler *Throttler) aggregateMySQLMetrics(ctx context.Context) error {
 	metricNameUsedAsDefault := throttler.metricNameUsedAsDefault()
@@ -1177,10 +1169,10 @@ func (throttler *Throttler) aggregateMySQLMetrics(ctx context.Context) error {
 		ignoreDialTCPErrors := throttler.configSettings.MySQLStore.IgnoreDialTCPErrors
 
 		aggregatedMetric := aggregateMySQLProbes(ctx, metricName, tabletResultsMap, ignoreHostsCount, ignoreDialTCPErrors, ignoreHostsThreshold)
-		aggregatedMetricName := getAggregatedMetricName(scope, metricName)
+		aggregatedMetricName := metricName.AggregatedName(scope)
 		throttler.aggregatedMetrics.Set(aggregatedMetricName, aggregatedMetric, cache.DefaultExpiration)
 		if metricName == metricNameUsedAsDefault {
-			throttler.aggregatedMetrics.Set(getAggregatedMetricName(scope, base.DefaultMetricName), aggregatedMetric, cache.DefaultExpiration)
+			throttler.aggregatedMetrics.Set(base.DefaultMetricName.AggregatedName(scope), aggregatedMetric, cache.DefaultExpiration)
 		}
 	}
 	for _, metricName := range base.KnownMetricNames {
@@ -1210,7 +1202,7 @@ func (throttler *Throttler) getMySQLStoreMetric(ctx context.Context, scope base.
 		return base.NoSuchMetric, 0
 	}
 	threshold, _ := thresholdVal.(float64)
-	aggregatedName := getAggregatedMetricName(scope, metricName)
+	aggregatedName := metricName.AggregatedName(scope)
 	return throttler.getAggregatedMetric(aggregatedName), threshold
 }
 
@@ -1493,17 +1485,14 @@ func (throttler *Throttler) checkScope(ctx context.Context, appName string, scop
 
 // Check runs a check by requested check type
 func (throttler *Throttler) Check(ctx context.Context, appName string, metricNames base.MetricNames, flags *CheckFlags) (checkResult *CheckResult) {
-	store := base.SelfScope
+	scope := base.UndefinedScope
 	if flags != nil {
-		store = flags.Scope
+		scope = flags.Scope
 	}
-	if store == base.UndefinedScope {
-		store = base.SelfScope
+	if scope == base.ShardScope && throttler.checkAsCheckSelf.Load() {
+		scope = base.SelfScope
 	}
-	if throttler.checkAsCheckSelf.Load() {
-		store = base.SelfScope
-	}
-	return throttler.checkScope(ctx, appName, store, metricNames, flags)
+	return throttler.checkScope(ctx, appName, scope, metricNames, flags)
 }
 
 func (throttler *Throttler) MetricName(s string) base.MetricName {
