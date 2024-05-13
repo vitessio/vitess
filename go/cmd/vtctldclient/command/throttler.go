@@ -98,6 +98,7 @@ func commandCheckThrottler(cmd *cobra.Command, args []string) error {
 	resp, err := client.CheckThrottler(commandCtx, &vtctldatapb.CheckThrottlerRequest{
 		TabletAlias:           alias,
 		AppName:               checkThrottlerOptions.AppName,
+		Scope:                 checkThrottlerOptions.Scope,
 		SkipRequestHeartbeats: checkThrottlerOptions.SkipRequestHeartbeats,
 		LowPriority:           checkThrottlerOptions.LowPriority,
 		OkIfNotExists:         checkThrottlerOptions.OkIfNotExists,
