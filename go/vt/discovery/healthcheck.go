@@ -362,9 +362,9 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 			if err != nil {
 				log.Exitf("Cannot parse tablet_filters parameter: %v", err)
 			}
-			filters = TabletFilters{fbs}
+			filters = append(filters, fbs)
 		} else if len(KeyspacesToWatch) > 0 {
-			filters = TabletFilters{NewFilterByKeyspace(KeyspacesToWatch)}
+			filters = append(filters, NewFilterByKeyspace(KeyspacesToWatch))
 		}
 		if len(tabletFilterTags) > 0 {
 			filters = append(filters, NewFilterByTabletTags(tabletFilterTags))
