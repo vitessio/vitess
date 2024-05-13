@@ -48,15 +48,14 @@ import (
 // TabletResultMap maps a tablet to a result
 type TabletResultMap map[string]base.MetricResultMap
 
-func (m TabletResultMap) Split(alias string) (withAlias TabletResultMap, withoutAlias TabletResultMap) {
+func (m TabletResultMap) Split(alias string) (withAlias TabletResultMap, all TabletResultMap) {
 	withAlias = make(TabletResultMap)
-	withoutAlias = make(TabletResultMap)
+	all = make(TabletResultMap)
 	for key, value := range m {
 		if key == alias {
 			withAlias[key] = value
-		} else {
-			withoutAlias[key] = value
 		}
+		all[key] = value
 	}
 	return
 }

@@ -32,18 +32,18 @@ func TestTabletResultMapSplit(t *testing.T) {
 		"c": make(base.MetricResultMap),
 	}
 	{
-		withAlias, withoutAlias := tabletResultMap.Split("b")
+		withAlias, all := tabletResultMap.Split("b")
 
 		assert.Equal(t, 1, len(withAlias))
 		assert.EqualValues(t, maps.Keys(withAlias), []string{"b"})
-		assert.Equal(t, 2, len(withoutAlias))
-		assert.ElementsMatch(t, maps.Keys(withoutAlias), []string{"a", "c"})
+		assert.Equal(t, 3, len(all))
+		assert.ElementsMatch(t, maps.Keys(all), []string{"a", "b", "c"})
 	}
 	{
-		withAlias, withoutAlias := tabletResultMap.Split("x")
+		withAlias, all := tabletResultMap.Split("x")
 
 		assert.Equal(t, 0, len(withAlias))
-		assert.Equal(t, 3, len(withoutAlias))
-		assert.ElementsMatch(t, maps.Keys(withoutAlias), []string{"a", "b", "c"})
+		assert.Equal(t, 3, len(all))
+		assert.ElementsMatch(t, maps.Keys(all), []string{"a", "b", "c"})
 	}
 }
