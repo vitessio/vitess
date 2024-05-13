@@ -643,6 +643,7 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemawrapper.VS
 	opts := jsondiff.DefaultConsoleOptions()
 
 	t.Run(filename, func(t *testing.T) {
+		failed := false
 		var expected []planTest
 		for _, tcase := range readJSONTests(filename) {
 			testName := tcase.Comment
@@ -664,6 +665,11 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemawrapper.VS
 			// - produces a different plan than expected
 			// - fails to produce a plan
 			t.Run(testName, func(t *testing.T) {
+				defer func() {
+					if t.Failed() {
+						failed = true
+					}
+				}()
 				compare, s := jsondiff.Compare(tcase.Plan, []byte(out), &opts)
 				if compare != jsondiff.FullMatch {
 					message := fmt.Sprintf("%s\nDiff:\n%s\n[%s] \n[%s]", filename, s, tcase.Plan, out)
@@ -679,7 +685,7 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemawrapper.VS
 			})
 			expected = append(expected, current)
 		}
-		if tempDir != "" {
+		if tempDir != "" && failed {
 			name := strings.TrimSuffix(filename, filepath.Ext(filename))
 			name = filepath.Join(tempDir, name+".json")
 			file, err := os.Create(name)
