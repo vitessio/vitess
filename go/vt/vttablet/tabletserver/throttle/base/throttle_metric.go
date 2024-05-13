@@ -21,15 +21,15 @@ import (
 	"strings"
 )
 
-type Store string
+type Scope string
 
 const (
-	UndefinedStore Store = ""
-	ShardStore     Store = "shard"
-	SelfStore      Store = "self"
+	UndefinedScope Scope = ""
+	ShardScope     Scope = "shard"
+	SelfScope      Scope = "self"
 )
 
-func (s Store) String() string {
+func (s Scope) String() string {
 	return string(s)
 }
 
@@ -53,6 +53,15 @@ const (
 	CustomMetricName         MetricName = "custom"
 	LoadAvgMetricName        MetricName = "loadavg"
 )
+
+func (metric MetricName) DefaultScope() Scope {
+	switch metric {
+	case LagMetricName:
+		return ShardScope
+	default:
+		return SelfScope
+	}
+}
 
 func (metric MetricName) String() string {
 	return string(metric)

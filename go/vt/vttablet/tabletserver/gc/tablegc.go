@@ -139,7 +139,7 @@ type Status struct {
 // NewTableGC creates a table collector
 func NewTableGC(env tabletenv.Env, ts *topo.Server, lagThrottler *throttle.Throttler) *TableGC {
 	collector := &TableGC{
-		throttlerClient: throttle.NewBackgroundClient(lagThrottler, throttlerapp.TableGCName, base.ShardStore),
+		throttlerClient: throttle.NewBackgroundClient(lagThrottler, throttlerapp.TableGCName, base.ShardScope),
 		isOpen:          0,
 
 		env: env,

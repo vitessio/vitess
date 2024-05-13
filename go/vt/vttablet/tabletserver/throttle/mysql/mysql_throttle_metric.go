@@ -112,7 +112,7 @@ func GetMetricsQueryType(query string) MetricsQueryType {
 // MySQLThrottleMetric has the probed metric for a tablet
 type MySQLThrottleMetric struct { // nolint:revive
 	Name  base.MetricName
-	Store base.Store
+	Scope base.Scope
 	Alias string
 	Value float64
 	Err   error

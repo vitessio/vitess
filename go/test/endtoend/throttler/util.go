@@ -64,7 +64,7 @@ func CheckThrottlerRaw(vtctldProcess *cluster.VtctldClientProcess, tablet *clust
 	args = append(args, "CheckThrottler")
 	if flags == nil {
 		flags = &throttle.CheckFlags{
-			Store: base.SelfStore,
+			Scope: base.SelfScope,
 		}
 	}
 	if flags.LowPriority {

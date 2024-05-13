@@ -1778,7 +1778,7 @@ func (tsv *TabletServer) TopoServer() *topo.Server {
 
 // CheckThrottler issues a self check
 func (tsv *TabletServer) CheckThrottler(ctx context.Context, appName string, flags *throttle.CheckFlags) *throttle.CheckResult {
-	flags.Store = base.SelfStore
+	flags.Scope = base.SelfScope
 	r := tsv.lagThrottler.Check(ctx, appName, base.KnownMetricNames, flags)
 	return r
 }
@@ -1885,7 +1885,7 @@ func (tsv *TabletServer) registerMigrationStatusHandler() {
 
 // registerThrottlerCheckHandlers registers throttler "check" requests
 func (tsv *TabletServer) registerThrottlerCheckHandlers() {
-	handle := func(path string, store base.Store) {
+	handle := func(path string, store base.Scope) {
 		tsv.exporter.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
 			ctx := tabletenv.LocalContext()
 			appName := r.URL.Query().Get("app")
@@ -1893,7 +1893,7 @@ func (tsv *TabletServer) registerThrottlerCheckHandlers() {
 				appName = throttlerapp.DefaultName.String()
 			}
 			flags := &throttle.CheckFlags{
-				Store:                 store,
+				Scope:                 store,
 				LowPriority:           (r.URL.Query().Get("p") == "low"),
 				SkipRequestHeartbeats: (r.URL.Query().Get("s") == "true"),
 			}
@@ -1912,8 +1912,8 @@ func (tsv *TabletServer) registerThrottlerCheckHandlers() {
 			}
 		})
 	}
-	handle("/throttler/check", base.ShardStore)
-	handle("/throttler/check-self", base.SelfStore)
+	handle("/throttler/check", base.ShardScope)
+	handle("/throttler/check-self", base.SelfScope)
 }
 
 // registerThrottlerStatusHandler registers a throttler "status" request

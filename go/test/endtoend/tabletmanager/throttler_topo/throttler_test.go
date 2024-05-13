@@ -178,7 +178,7 @@ func throttledApps(tablet *cluster.Vttablet) (resp *http.Response, respBody stri
 
 func throttleCheck(tablet *cluster.Vttablet, skipRequestHeartbeats bool) (*vtctldata.CheckThrottlerResponse, error) {
 	flags := &throttle.CheckFlags{
-		Store:                 base.ShardStore,
+		Scope:                 base.ShardScope,
 		SkipRequestHeartbeats: skipRequestHeartbeats,
 	}
 	resp, err := throttler.CheckThrottler(clusterInstance, tablet, testAppName, flags)
@@ -187,7 +187,7 @@ func throttleCheck(tablet *cluster.Vttablet, skipRequestHeartbeats bool) (*vtctl
 
 func throttleCheckSelf(tablet *cluster.Vttablet) (*vtctldata.CheckThrottlerResponse, error) {
 	flags := &throttle.CheckFlags{
-		Store: base.SelfStore,
+		Scope: base.SelfScope,
 	}
 	resp, err := throttler.CheckThrottler(clusterInstance, tablet, testAppName, flags)
 	return resp, err

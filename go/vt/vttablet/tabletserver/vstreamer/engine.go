@@ -116,7 +116,7 @@ func NewEngine(env tabletenv.Env, ts srvtopo.Server, se *schema.Engine, lagThrot
 		ts:              ts,
 		se:              se,
 		cell:            cell,
-		throttlerClient: throttle.NewBackgroundClient(lagThrottler, throttlerapp.VStreamerName, base.SelfStore),
+		throttlerClient: throttle.NewBackgroundClient(lagThrottler, throttlerapp.VStreamerName, base.SelfScope),
 
 		streamers:       make(map[int]*uvstreamer),
 		rowStreamers:    make(map[int]*rowStreamer),

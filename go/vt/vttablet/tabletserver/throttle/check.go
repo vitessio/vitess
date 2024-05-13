@@ -65,7 +65,7 @@ var (
 
 // CheckFlags provide hints for a check
 type CheckFlags struct {
-	Store                 base.Store
+	Scope                 base.Scope
 	ReadCheck             bool
 	OverrideThreshold     float64
 	LowPriority           bool
@@ -89,11 +89,11 @@ func NewThrottlerCheck(throttler *Throttler) *ThrottlerCheck {
 }
 
 // checkAppMetricResult allows an app to check on a metric
-func (check *ThrottlerCheck) checkAppMetricResult(ctx context.Context, appName string, store base.Store, metricResultFunc base.MetricResultFunc, flags *CheckFlags) (checkResult *CheckResult) {
+func (check *ThrottlerCheck) checkAppMetricResult(ctx context.Context, appName string, scope base.Scope, metricResultFunc base.MetricResultFunc, flags *CheckFlags) (checkResult *CheckResult) {
 	// Handle deprioritized app logic
 	denyApp := false
 	if flags.LowPriority {
-		if _, exists := check.throttler.nonLowPriorityAppRequestsThrottled.Get(store.String()); exists {
+		if _, exists := check.throttler.nonLowPriorityAppRequestsThrottled.Get(scope.String()); exists {
 			// a non-deprioritized app, ie a "normal" app, has recently been throttled.
 			// This is now a deprioritized app. Deny access to this request.
 			denyApp = true
@@ -128,7 +128,7 @@ func (check *ThrottlerCheck) checkAppMetricResult(ctx context.Context, appName s
 
 		if !flags.LowPriority && !flags.ReadCheck && throttlerapp.VitessName.Equals(appName) {
 			// low priority requests will henceforth be denied
-			go check.throttler.nonLowPriorityAppRequestsThrottled.SetDefault(store.String(), true)
+			go check.throttler.nonLowPriorityAppRequestsThrottled.SetDefault(scope.String(), true)
 		}
 	default:
 		// all good!
@@ -138,7 +138,7 @@ func (check *ThrottlerCheck) checkAppMetricResult(ctx context.Context, appName s
 }
 
 // Check is the core function that runs when a user wants to check a metric
-func (check *ThrottlerCheck) Check(ctx context.Context, appName string, store base.Store, metricNames base.MetricNames, flags *CheckFlags) (checkResult *CheckResult) {
+func (check *ThrottlerCheck) Check(ctx context.Context, appName string, scope base.Scope, metricNames base.MetricNames, flags *CheckFlags) (checkResult *CheckResult) {
 	checkResult = &CheckResult{
 		StatusCode: http.StatusOK,
 		Metrics:    make(map[string]*MetricResult),
@@ -148,19 +148,19 @@ func (check *ThrottlerCheck) Check(ctx context.Context, appName string, store ba
 	}
 	for _, metricName := range metricNames {
 		metricResultFunc := func() (metricResult base.MetricResult, threshold float64) {
-			return check.throttler.getMySQLStoreMetric(ctx, store, metricName)
+			return check.throttler.getMySQLStoreMetric(ctx, scope, metricName)
 		}
 
-		metricCheckResult := check.checkAppMetricResult(ctx, appName, store, metricResultFunc, flags)
+		metricCheckResult := check.checkAppMetricResult(ctx, appName, scope, metricResultFunc, flags)
 		check.throttler.markRecentApp(appName)
 		if !throttlerapp.VitessName.Equals(appName) {
 			go func(statusCode int) {
 				statsThrottlerCheckAnyTotal.Add(1)
-				stats.GetOrNewCounter(fmt.Sprintf("ThrottlerCheckAny%sTotal", textutil.SingleWordCamel(store.String())), "").Add(1)
+				stats.GetOrNewCounter(fmt.Sprintf("ThrottlerCheckAny%sTotal", textutil.SingleWordCamel(scope.String())), "").Add(1)
 
 				if statusCode != http.StatusOK {
 					statsThrottlerCheckAnyError.Add(1)
-					stats.GetOrNewCounter(fmt.Sprintf("ThrottlerCheckAny%sError", textutil.SingleWordCamel(store.String())), "").Add(1)
+					stats.GetOrNewCounter(fmt.Sprintf("ThrottlerCheckAny%sError", textutil.SingleWordCamel(scope.String())), "").Add(1)
 				}
 			}(metricCheckResult.StatusCode)
 		}
@@ -183,54 +183,54 @@ func (check *ThrottlerCheck) Check(ctx context.Context, appName string, store ba
 	return checkResult
 }
 
-// splitMetricTokens splits a metric name into its store name and metric name
+// splitMetricTokens splits a metric name into its scope name and metric name
 // aggregated metric name could be in the form:
 // - self
 // - self/threads_running
 // - shard
 // - shard/lag
-func splitMetricTokens(aggregatedMetricName string) (storeName string, metricName base.MetricName, err error) {
+func splitMetricTokens(aggregatedMetricName string) (scopeName string, metricName base.MetricName, err error) {
 	if aggregatedMetricName == "" {
-		return storeName, base.DefaultMetricName, base.ErrNoSuchMetric
+		return scopeName, base.DefaultMetricName, base.ErrNoSuchMetric
 	}
 	metricTokens := strings.Split(aggregatedMetricName, "/")
-	storeName = metricTokens[0]
+	scopeName = metricTokens[0]
 	metricName = base.DefaultMetricName
 	if len(metricTokens) > 1 {
 		metricName = base.MetricName(metricTokens[1])
 	}
 	if len(metricTokens) > 2 {
-		return storeName, base.DefaultMetricName, base.ErrNoSuchMetric
+		return scopeName, base.DefaultMetricName, base.ErrNoSuchMetric
 	}
 
-	return storeName, metricName, nil
+	return scopeName, metricName, nil
 }
 
 // localCheck
 func (check *ThrottlerCheck) localCheck(ctx context.Context, aggregatedMetricName string) (checkResult *CheckResult) {
-	storeName, metricName, err := splitMetricTokens(aggregatedMetricName)
+	scopeName, metricName, err := splitMetricTokens(aggregatedMetricName)
 	if err != nil {
 		return NoSuchMetricCheckResult
 	}
-	checkResult = check.Check(ctx, throttlerapp.VitessName.String(), base.Store(storeName), base.MetricNames{metricName}, StandardCheckFlags)
+	checkResult = check.Check(ctx, throttlerapp.VitessName.String(), base.Scope(scopeName), base.MetricNames{metricName}, StandardCheckFlags)
 
 	if checkResult.StatusCode == http.StatusOK {
 		check.throttler.markMetricHealthy(aggregatedMetricName)
 	}
 	if timeSinceHealthy, found := check.throttler.timeSinceMetricHealthy(aggregatedMetricName); found {
-		stats.GetOrNewGauge(fmt.Sprintf("ThrottlerCheck%sSecondsSinceHealthy", textutil.SingleWordCamel(storeName)), fmt.Sprintf("seconds since last healthy check for %s", storeName)).Set(int64(timeSinceHealthy.Seconds()))
+		stats.GetOrNewGauge(fmt.Sprintf("ThrottlerCheck%sSecondsSinceHealthy", textutil.SingleWordCamel(scopeName)), fmt.Sprintf("seconds since last healthy check for %s", scopeName)).Set(int64(timeSinceHealthy.Seconds()))
 	}
 
 	return checkResult
 }
 
 func (check *ThrottlerCheck) reportAggregated(aggregatedMetricName string, metricResult base.MetricResult) {
-	storeName, metricName, err := splitMetricTokens(aggregatedMetricName)
+	scopeName, metricName, err := splitMetricTokens(aggregatedMetricName)
 	if err != nil {
 		return
 	}
 	if value, err := metricResult.Get(); err == nil {
-		stats.GetOrNewGaugeFloat64(fmt.Sprintf("ThrottlerAggregated%s%s", textutil.SingleWordCamel(storeName), textutil.SingleWordCamel(metricName.String())), fmt.Sprintf("aggregated value for %s", storeName)).Set(value)
+		stats.GetOrNewGaugeFloat64(fmt.Sprintf("ThrottlerAggregated%s%s", textutil.SingleWordCamel(scopeName), textutil.SingleWordCamel(metricName.String())), fmt.Sprintf("aggregated value for %s", scopeName)).Set(value)
 	}
 }
 
