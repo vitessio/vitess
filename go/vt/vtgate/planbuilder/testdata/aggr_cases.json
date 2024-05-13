@@ -540,6 +540,28 @@
     }
   },
   {
+    "comment": "WITH ROLLUP on unsharded keyspaces",
+    "query": "select a, b, count(*) from unsharded group by a, b with rollup",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select a, b, count(*) from unsharded group by a, b with rollup",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select a, b, count(*) from unsharded where 1 != 1 group by a, b with rollup",
+        "Query": "select a, b, count(*) from unsharded group by a, b with rollup",
+        "Table": "unsharded"
+      },
+      "TablesUsed": [
+        "main.unsharded"
+      ]
+    }
+  },
+  {
     "comment": "count with distinct no unique vindex, count expression aliased",
     "query": "select col1, count(distinct col2) c2 from user group by col1",
     "plan": {

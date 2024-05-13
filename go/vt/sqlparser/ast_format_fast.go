@@ -2577,12 +2577,18 @@ func (node *When) FormatFast(buf *TrackedBuffer) {
 }
 
 // FormatFast formats the node.
-func (node GroupBy) FormatFast(buf *TrackedBuffer) {
+func (node *GroupBy) FormatFast(buf *TrackedBuffer) {
+	if node == nil {
+		return
+	}
 	prefix := " group by "
-	for _, n := range node {
+	for _, n := range node.Exprs {
 		buf.WriteString(prefix)
 		n.FormatFast(buf)
 		prefix = ", "
+	}
+	if node.WithRollup {
+		buf.WriteString(" with rollup")
 	}
 }
 

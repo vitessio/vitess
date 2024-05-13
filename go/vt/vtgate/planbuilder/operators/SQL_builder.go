@@ -116,7 +116,7 @@ func (qb *queryBuilder) addPredicate(expr sqlparser.Expr) {
 
 func (qb *queryBuilder) addGroupBy(original sqlparser.Expr) {
 	sel := qb.stmt.(*sqlparser.Select)
-	sel.GroupBy = append(sel.GroupBy, original)
+	sel.AddGroupBy(original)
 }
 
 func (qb *queryBuilder) addProjection(projection sqlparser.SelectExpr) {

@@ -37,6 +37,7 @@ type (
 		Source  Operator
 		Columns []*sqlparser.AliasedExpr
 
+		WithRollup   bool
 		Grouping     []GroupBy
 		Aggregations []Aggr
 

@@ -162,6 +162,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
   selectExprs   SelectExprs
   tableOptions     TableOptions
   starExpr      StarExpr
+  groupBy	*GroupBy
 
   colKeyOpt     ColumnKeyOption
   referenceAction ReferenceAction
@@ -375,7 +376,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> ST_Area ST_Centroid ST_ExteriorRing ST_InteriorRingN ST_NumInteriorRings ST_NumGeometries ST_GeometryN ST_LongFromGeoHash ST_PointFromGeoHash ST_LatFromGeoHash ST_GeoHash ST_AsGeoJSON ST_GeomFromGeoJSON
 
 // Match
-%token <str> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION WITHOUT VALIDATION
+%token <str> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION WITHOUT VALIDATION ROLLUP
 
 // MySQL reserved words that are unused by this grammar will map to this token.
 %token <str> UNUSED ARRAY BYTE CUME_DIST DESCRIPTION DENSE_RANK EMPTY EXCEPT FIRST_VALUE GROUPING GROUPS JSON_TABLE LAG LAST_VALUE LATERAL LEAD
@@ -511,7 +512,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <whens> when_expression_list
 %type <when> when_expression
 %type <expr> expression_opt else_expression_opt default_with_comma_opt
-%type <exprs> group_by_opt
+%type <groupBy> group_by_opt
 %type <expr> having_opt
 %type <orderBy> order_by_opt order_list order_by_clause
 %type <order> order
@@ -549,7 +550,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <str> charset
 %type <scope> set_session_or_global
 %type <convertType> convert_type returning_type_opt convert_type_weight_string
-%type <boolean> array_opt
+%type <boolean> array_opt rollup_opt
 %type <columnType> column_type
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
 %type <literal> partition_comment partition_data_directory partition_index_directory
@@ -906,11 +907,11 @@ query_primary:
 //  1         2            3              4                    5             6                7           8            9           10
   SELECT comment_opt select_options_opt select_expression_list into_clause from_opt where_expression_opt group_by_opt having_opt named_windows_list_opt
   {
-    $$ = NewSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, $5/*into*/, $6/*from*/, NewWhere(WhereClause, $7), GroupBy($8), NewWhere(HavingClause, $9), $10)
+    $$ = NewSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, $5/*into*/, $6/*from*/, NewWhere(WhereClause, $7), $8, NewWhere(HavingClause, $9), $10)
   }
 | SELECT comment_opt select_options_opt select_expression_list from_opt where_expression_opt group_by_opt having_opt named_windows_list_opt
   {
-    $$ = NewSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, nil, $5/*from*/, NewWhere(WhereClause, $6), GroupBy($7), NewWhere(HavingClause, $8), $9)
+    $$ = NewSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, nil, $5/*from*/, NewWhere(WhereClause, $6), $7, NewWhere(HavingClause, $8), $9)
   }
 
 insert_statement:
@@ -7264,10 +7265,20 @@ group_by_opt:
   {
     $$ = nil
   }
-| GROUP BY expression_list
+| GROUP BY expression_list rollup_opt
   {
-    $$ = $3
+    $$ = &GroupBy{Exprs: $3, WithRollup: $4}
   }
+
+rollup_opt:
+  {
+    $$ = false
+  }
+| WITH ROLLUP
+  {
+    $$ = true
+  }
+
 
 having_opt:
   {

@@ -537,12 +537,12 @@ func (tpb *tablePlanBuilder) addCol(ident sqlparser.IdentifierCI) {
 	})
 }
 
-func (tpb *tablePlanBuilder) analyzeGroupBy(groupBy sqlparser.GroupBy) error {
+func (tpb *tablePlanBuilder) analyzeGroupBy(groupBy *sqlparser.GroupBy) error {
 	if groupBy == nil {
 		// If there's no grouping, the it's an insertNormal.
 		return nil
 	}
-	for _, expr := range groupBy {
+	for _, expr := range groupBy.Exprs {
 		colname, ok := expr.(*sqlparser.ColName)
 		if !ok {
 			return fmt.Errorf("unsupported non-column name or alias in group by clause: %v", sqlparser.String(expr))
