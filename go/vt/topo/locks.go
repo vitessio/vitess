@@ -339,7 +339,7 @@ func (ts *Server) internalLockShard(ctx context.Context, keyspace, shard, action
 	l := newLock(action)
 	var lockDescriptor LockDescriptor
 	var err error
-	lockDescriptor, err = l.internalLockShard(ctx, ts, keyspace, shard, isBlocking)
+	ctx, lockDescriptor, err = l.internalLockShard(ctx, ts, keyspace, shard, isBlocking)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -397,7 +397,7 @@ func CheckShardLocked(ctx context.Context, keyspace, shard string) error {
 	return li.lockDescriptor.Check(ctx)
 }
 
-func (l *Lock) internalLockShard(ctx context.Context, ts *Server, keyspace, shard string, isBlocking bool) (LockDescriptor, error) {
+func (l *Lock) internalLockShard(ctx context.Context, ts *Server, keyspace, shard string, isBlocking bool) (context.Context, LockDescriptor, error) {
 	log.Infof("Locking shard %v/%v for action %v", keyspace, shard, l.Action)
 
 	ctx, cancel := context.WithTimeout(ctx, getLockTimeout())
@@ -412,12 +412,15 @@ func (l *Lock) internalLockShard(ctx context.Context, ts *Server, keyspace, shar
 	shardPath := path.Join(KeyspacesPath, keyspace, ShardsPath, shard)
 	j, err := l.ToJSON()
 	if err != nil {
-		return nil, err
+		return ctx, nil, err
 	}
+	var ld LockDescriptor
 	if isBlocking {
-		return ts.globalCell.Lock(ctx, shardPath, j)
+		ld, err = ts.globalCell.Lock(ctx, shardPath, j)
+	} else {
+		ld, err = ts.globalCell.TryLock(ctx, shardPath, j)
 	}
-	return ts.globalCell.TryLock(ctx, shardPath, j)
+	return ctx, ld, err
 }
 
 // unlockShard unlocks a previously locked shard.
