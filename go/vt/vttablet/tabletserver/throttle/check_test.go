@@ -63,20 +63,20 @@ func TestSplitMetricTokens(t *testing.T) {
 	}
 	for _, tcase := range tcases {
 		t.Run(tcase.aggregatedName, func(t *testing.T) {
-			storeName, metricName, err := splitMetricTokens(tcase.aggregatedName)
+			store, metricName, err := splitMetricTokens(tcase.aggregatedName)
 			if tcase.expectErr != "" {
 				assert.ErrorContains(t, err, tcase.expectErr)
 				return
 			}
 			require.NoError(t, err)
-			assert.Equal(t, tcase.storeName, storeName)
+			assert.Equal(t, tcase.storeName, store)
 			assert.Equal(t, tcase.metricName, metricName)
 
 			if tcase.metricName != base.DefaultMetricName {
 				// Run the reverse.
 				// Remember that for backwards compatibility, we do not add "default" to the aggregated name,
 				// and we therefore skip tests that would fail because of this.
-				aggregatedName := getAggregatedMetricName(storeName, metricName)
+				aggregatedName := getAggregatedMetricName(base.Store(store), metricName)
 				assert.Equal(t, tcase.aggregatedName, aggregatedName)
 			}
 		})

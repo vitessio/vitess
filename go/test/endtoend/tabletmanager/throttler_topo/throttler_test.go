@@ -31,9 +31,12 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/throttler"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtctldata "vitess.io/vitess/go/vt/proto/vtctldata"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -173,13 +176,21 @@ func throttledApps(tablet *cluster.Vttablet) (resp *http.Response, respBody stri
 	return resp, respBody, err
 }
 
-func throttleCheck(tablet *cluster.Vttablet, skipRequestHeartbeats bool) (*http.Response, error) {
-	resp, err := httpClient.Get(fmt.Sprintf("http://localhost:%d/%s?app=%s&s=%t", tablet.HTTPPort, checkAPIPath, testAppName, skipRequestHeartbeats))
+func throttleCheck(tablet *cluster.Vttablet, skipRequestHeartbeats bool) (*vtctldata.CheckThrottlerResponse, error) {
+	flags := &throttle.CheckFlags{
+		Store:                 base.ShardStore,
+		SkipRequestHeartbeats: skipRequestHeartbeats,
+	}
+	resp, err := throttler.CheckThrottler(clusterInstance, tablet, testAppName, flags)
 	return resp, err
 }
 
-func throttleCheckSelf(tablet *cluster.Vttablet) (*http.Response, error) {
-	return httpClient.Get(fmt.Sprintf("http://localhost:%d/%s?app=%s", tablet.HTTPPort, checkSelfAPIPath, testAppName))
+func throttleCheckSelf(tablet *cluster.Vttablet) (*vtctldata.CheckThrottlerResponse, error) {
+	flags := &throttle.CheckFlags{
+		Store: base.SelfStore,
+	}
+	resp, err := throttler.CheckThrottler(clusterInstance, tablet, testAppName, flags)
+	return resp, err
 }
 
 func throttleStatus(t *testing.T, tablet *cluster.Vttablet) string {
@@ -197,10 +208,9 @@ func warmUpHeartbeat(t *testing.T) (respStatus int) {
 	// Let's warm it up.
 	resp, err := throttleCheck(primaryTablet, false)
 	require.NoError(t, err)
-	defer resp.Body.Close()
 
 	time.Sleep(time.Second)
-	return resp.StatusCode
+	return int(resp.StatusCode)
 }
 
 // waitForThrottleCheckStatus waits for the tablet to return the provided HTTP code in a throttle check
@@ -209,27 +219,22 @@ func waitForThrottleCheckStatus(t *testing.T, tablet *cluster.Vttablet, wantCode
 	ctx, cancel := context.WithTimeout(context.Background(), onDemandHeartbeatDuration*4)
 	defer cancel()
 
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
 	for {
 		resp, err := throttleCheck(tablet, true)
 		require.NoError(t, err)
 
-		if wantCode == resp.StatusCode {
+		if wantCode == int(resp.StatusCode) {
 			// Wait for any cached check values to be cleared and the new
 			// status value to be in effect everywhere before returning.
-			resp.Body.Close()
 			return
 		}
 		select {
 		case <-ctx.Done():
-			b, err := io.ReadAll(resp.Body)
-			require.NoError(t, err)
-			resp.Body.Close()
-
-			assert.Equalf(t, wantCode, resp.StatusCode, "body: %s", string(b))
+			assert.EqualValues(t, wantCode, resp.StatusCode, "response: %+v", resp)
 			return
-		default:
-			resp.Body.Close()
-			time.Sleep(time.Second)
+		case <-ticker.C:
 		}
 	}
 }
@@ -329,8 +334,7 @@ func TestInitialThrottler(t *testing.T) {
 		cluster.ValidateReplicationIsHealthy(t, replicaTablet)
 		resp, err := throttleCheck(primaryTablet, false)
 		require.NoError(t, err)
-		defer resp.Body.Close()
-		if !assert.Equalf(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %s", getResponseBody(resp)) {
+		if !assert.EqualValues(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %+v", resp) {
 			rs, err := replicaTablet.VttabletProcess.QueryTablet("show replica status", keyspaceName, false)
 			assert.NoError(t, err)
 			t.Logf("Seconds_Behind_Source: %s", rs.Named().Row()["Seconds_Behind_Source"].ToString())
@@ -344,8 +348,7 @@ func TestInitialThrottler(t *testing.T) {
 		cluster.ValidateReplicationIsHealthy(t, replicaTablet)
 		resp, err := throttleCheck(primaryTablet, false)
 		require.NoError(t, err)
-		defer resp.Body.Close()
-		if !assert.Equalf(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %s", getResponseBody(resp)) {
+		if !assert.EqualValues(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %+v", resp) {
 			rs, err := replicaTablet.VttabletProcess.QueryTablet("show replica status", keyspaceName, false)
 			assert.NoError(t, err)
 			t.Logf("Seconds_Behind_Source: %s", rs.Named().Row()["Seconds_Behind_Source"].ToString())
@@ -377,14 +380,12 @@ func TestThrottlerAfterMetricsCollected(t *testing.T) {
 	t.Run("validating primary check self", func(t *testing.T) {
 		resp, err := throttleCheckSelf(primaryTablet)
 		require.NoError(t, err)
-		defer resp.Body.Close()
-		assert.Equalf(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %s", getResponseBody(resp))
+		assert.EqualValues(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %+v", resp)
 	})
 	t.Run("validating replica check self", func(t *testing.T) {
 		resp, err := throttleCheckSelf(replicaTablet)
 		require.NoError(t, err)
-		defer resp.Body.Close()
-		assert.Equalf(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %s", getResponseBody(resp))
+		assert.EqualValues(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %+v", resp)
 	})
 }
 
@@ -411,15 +412,13 @@ func TestLag(t *testing.T) {
 	t.Run("expecting throttler push back", func(t *testing.T) {
 		resp, err := throttleCheck(primaryTablet, false)
 		require.NoError(t, err)
-		defer resp.Body.Close()
-		assert.Equalf(t, http.StatusTooManyRequests, resp.StatusCode, "Unexpected response from throttler: %s", getResponseBody(resp))
+		assert.EqualValues(t, http.StatusTooManyRequests, resp.StatusCode, "Unexpected response from throttler: %+v", resp)
 	})
 	t.Run("primary self-check should still be fine", func(t *testing.T) {
 		resp, err := throttleCheckSelf(primaryTablet)
 		require.NoError(t, err)
-		defer resp.Body.Close()
 		// self (on primary) is unaffected by replication lag
-		if !assert.Equalf(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %s", getResponseBody(resp)) {
+		if !assert.EqualValues(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %+v", resp) {
 			t.Logf("throttler primary status: %+v", throttleStatus(t, primaryTablet))
 			t.Logf("throttler replica status: %+v", throttleStatus(t, replicaTablet))
 		}
@@ -427,8 +426,7 @@ func TestLag(t *testing.T) {
 	t.Run("replica self-check should show error", func(t *testing.T) {
 		resp, err := throttleCheckSelf(replicaTablet)
 		require.NoError(t, err)
-		defer resp.Body.Close()
-		assert.Equalf(t, http.StatusTooManyRequests, resp.StatusCode, "Unexpected response from throttler: %s", getResponseBody(resp))
+		assert.EqualValues(t, http.StatusTooManyRequests, resp.StatusCode, "Unexpected response from throttler: %+v", resp)
 	})
 	t.Run("exempting test app", func(t *testing.T) {
 		appRule := &topodatapb.ThrottledAppRule{
@@ -460,15 +458,13 @@ func TestLag(t *testing.T) {
 	t.Run("primary self-check should be fine", func(t *testing.T) {
 		resp, err := throttleCheckSelf(primaryTablet)
 		require.NoError(t, err)
-		defer resp.Body.Close()
 		// self (on primary) is unaffected by replication lag
-		assert.Equalf(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %s", getResponseBody(resp))
+		assert.EqualValues(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %+v", resp)
 	})
 	t.Run("replica self-check should be fine", func(t *testing.T) {
 		resp, err := throttleCheckSelf(replicaTablet)
 		require.NoError(t, err)
-		defer resp.Body.Close()
-		assert.Equalf(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %s", getResponseBody(resp))
+		assert.EqualValues(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %+v", resp)
 	})
 }
 
@@ -511,8 +507,7 @@ func TestCustomQuery(t *testing.T) {
 		throttler.WaitForValidData(t, primaryTablet, throttlerEnabledTimeout)
 		resp, err := throttleCheck(primaryTablet, false)
 		require.NoError(t, err)
-		defer resp.Body.Close()
-		assert.Equalf(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %s", getResponseBody(resp))
+		assert.EqualValues(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %+v", resp)
 	})
 	t.Run("test threads running", func(t *testing.T) {
 		sleepDuration := 20 * time.Second
@@ -538,8 +533,7 @@ func TestCustomQuery(t *testing.T) {
 			{
 				resp, err := throttleCheckSelf(primaryTablet)
 				require.NoError(t, err)
-				defer resp.Body.Close()
-				assert.Equalf(t, http.StatusTooManyRequests, resp.StatusCode, "Unexpected response from throttler: %s", getResponseBody(resp))
+				assert.EqualValues(t, http.StatusTooManyRequests, resp.StatusCode, "Unexpected response from throttler: %+v", resp)
 			}
 		})
 		t.Run("wait for queries to terminate", func(t *testing.T) {
@@ -550,8 +544,7 @@ func TestCustomQuery(t *testing.T) {
 			{
 				resp, err := throttleCheckSelf(primaryTablet)
 				require.NoError(t, err)
-				defer resp.Body.Close()
-				assert.Equalf(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %s", getResponseBody(resp))
+				assert.EqualValues(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %+v", resp)
 			}
 		})
 	})
@@ -573,8 +566,7 @@ func TestRestoreDefaultQuery(t *testing.T) {
 	t.Run("validating OK response from throttler with default threshold, heartbeats running", func(t *testing.T) {
 		resp, err := throttleCheck(primaryTablet, false)
 		require.NoError(t, err)
-		defer resp.Body.Close()
-		assert.Equalf(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %s", getResponseBody(resp))
+		assert.EqualValues(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %+v", resp)
 	})
 	t.Run("validating pushback response from throttler on default threshold once heartbeats go stale", func(t *testing.T) {
 		time.Sleep(2 * onDemandHeartbeatDuration) // just... really wait long enough, make sure on-demand stops

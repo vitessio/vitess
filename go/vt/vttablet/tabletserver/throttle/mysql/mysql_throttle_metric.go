@@ -111,11 +111,11 @@ func GetMetricsQueryType(query string) MetricsQueryType {
 
 // MySQLThrottleMetric has the probed metric for a tablet
 type MySQLThrottleMetric struct { // nolint:revive
-	Name      base.MetricName
-	StoreName string
-	Alias     string
-	Value     float64
-	Err       error
+	Name  base.MetricName
+	Store base.Store
+	Alias string
+	Value float64
+	Err   error
 }
 
 type MySQLThrottleMetrics map[base.MetricName]*MySQLThrottleMetric // nolint:revive
@@ -143,7 +143,7 @@ func (metric *MySQLThrottleMetric) WithError(err error) *MySQLThrottleMetric {
 
 // ReadThrottleMetrics returns a metric for the given probe. Either by explicit query
 // or via SHOW REPLICA STATUS
-func ReadThrottleMetrics(ctx context.Context, probe *Probe, clusterName string, metricsFunc func(context.Context) MySQLThrottleMetrics) MySQLThrottleMetrics {
+func ReadThrottleMetrics(ctx context.Context, probe *Probe, metricsFunc func(context.Context) MySQLThrottleMetrics) MySQLThrottleMetrics {
 	if metrics := getCachedMySQLThrottleMetrics(probe); metrics != nil {
 		return metrics
 	}

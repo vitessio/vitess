@@ -47,28 +47,28 @@ import (
 var (
 	selfMetrics = mysql.MySQLThrottleMetrics{
 		base.LagMetricName: &mysql.MySQLThrottleMetric{
-			StoreName: selfStoreName,
-			Alias:     "",
-			Value:     0.3,
-			Err:       nil,
+			Store: base.SelfStore,
+			Alias: "",
+			Value: 0.3,
+			Err:   nil,
 		},
 		base.ThreadsRunningMetricName: &mysql.MySQLThrottleMetric{
-			StoreName: selfStoreName,
-			Alias:     "",
-			Value:     26,
-			Err:       nil,
+			Store: base.SelfStore,
+			Alias: "",
+			Value: 26,
+			Err:   nil,
 		},
 		base.CustomMetricName: &mysql.MySQLThrottleMetric{
-			StoreName: selfStoreName,
-			Alias:     "",
-			Value:     17,
-			Err:       nil,
+			Store: base.SelfStore,
+			Alias: "",
+			Value: 17,
+			Err:   nil,
 		},
 		base.LoadAvgMetricName: &mysql.MySQLThrottleMetric{
-			StoreName: selfStoreName,
-			Alias:     "",
-			Value:     2.718,
-			Err:       nil,
+			Store: base.SelfStore,
+			Alias: "",
+			Value: 2.718,
+			Err:   nil,
 		},
 	}
 	replicaMetrics = map[string]*MetricResult{
@@ -544,39 +544,39 @@ func TestProbesWhileOperating(t *testing.T) {
 				val, err := metricResult.Get()
 				assert.NoErrorf(t, err, "aggregatedMetricName: %v", aggregatedMetricName)
 				assert.NotEmpty(t, aggregatedMetricName)
-				storeName, metricName, err := splitMetricTokens(aggregatedMetricName)
+				store, metricName, err := splitMetricTokens(aggregatedMetricName)
 				assert.NotEmpty(t, metricName)
 				assert.NoError(t, err)
 
-				switch storeName {
-				case selfStoreName:
+				switch base.Store(store) {
+				case base.SelfStore:
 					switch metricName {
 					case base.DefaultMetricName:
-						assert.Equalf(t, float64(0.3), val, "storeName=%v, metricName=%v", storeName, metricName) // same value as "lag"
+						assert.Equalf(t, float64(0.3), val, "storeName=%v, metricName=%v", store, metricName) // same value as "lag"
 					case base.LagMetricName:
-						assert.Equalf(t, float64(0.3), val, "storeName=%v, metricName=%v", storeName, metricName)
+						assert.Equalf(t, float64(0.3), val, "storeName=%v, metricName=%v", store, metricName)
 					case base.ThreadsRunningMetricName:
-						assert.Equalf(t, float64(26), val, "storeName=%v, metricName=%v", storeName, metricName)
+						assert.Equalf(t, float64(26), val, "storeName=%v, metricName=%v", store, metricName)
 					case base.CustomMetricName:
-						assert.Equalf(t, float64(17), val, "storeName=%v, metricName=%v", storeName, metricName)
+						assert.Equalf(t, float64(17), val, "storeName=%v, metricName=%v", store, metricName)
 					case base.LoadAvgMetricName:
-						assert.Equalf(t, float64(2.718), val, "storeName=%v, metricName=%v", storeName, metricName)
+						assert.Equalf(t, float64(2.718), val, "storeName=%v, metricName=%v", store, metricName)
 					}
-				case shardStoreName:
+				case base.ShardStore:
 					switch metricName {
 					case base.DefaultMetricName:
-						assert.Equalf(t, float64(0.9), val, "storeName=%v, metricName=%v", storeName, metricName) // same value as "lag"
+						assert.Equalf(t, float64(0.9), val, "storeName=%v, metricName=%v", store, metricName) // same value as "lag"
 					case base.LagMetricName:
-						assert.Equalf(t, float64(0.9), val, "storeName=%v, metricName=%v", storeName, metricName)
+						assert.Equalf(t, float64(0.9), val, "storeName=%v, metricName=%v", store, metricName)
 					case base.ThreadsRunningMetricName:
-						assert.Equalf(t, float64(13), val, "storeName=%v, metricName=%v", storeName, metricName)
+						assert.Equalf(t, float64(13), val, "storeName=%v, metricName=%v", store, metricName)
 					case base.CustomMetricName:
-						assert.Equalf(t, float64(14), val, "storeName=%v, metricName=%v", storeName, metricName)
+						assert.Equalf(t, float64(14), val, "storeName=%v, metricName=%v", store, metricName)
 					case base.LoadAvgMetricName:
-						assert.Equalf(t, float64(0.8), val, "storeName=%v, metricName=%v", storeName, metricName)
+						assert.Equalf(t, float64(0.8), val, "storeName=%v, metricName=%v", store, metricName)
 					}
 				default:
-					assert.Failf(t, "unknown storeName", "storeName=%v", storeName)
+					assert.Failf(t, "unknown storeName", "storeName=%v", store)
 				}
 			}
 			assert.NotEmpty(t, tmClient.AppNames())
@@ -594,7 +594,7 @@ func TestProbesWhileOperating(t *testing.T) {
 			assert.Equalf(t, 1, len(uniqueNames), "%+v", uniqueNames)
 
 			t.Run("client, shard", func(t *testing.T) {
-				client := NewProductionClient(throttler, "test", ThrottleCheckPrimaryWrite)
+				client := NewProductionClient(throttler, "test", base.ShardStore)
 				t.Run("threshold exceeded", func(t *testing.T) {
 					<-runSerialFunction(t, ctx, throttler, func(ctx context.Context) {
 						throttler.refreshMySQLInventory(ctx)
@@ -647,44 +647,44 @@ func TestProbesWhileOperating(t *testing.T) {
 				val, err := metricResult.Get()
 				assert.NoErrorf(t, err, "aggregatedMetricName: %v", aggregatedMetricName)
 				assert.NotEmpty(t, aggregatedMetricName)
-				storeName, metricName, err := splitMetricTokens(aggregatedMetricName)
+				store, metricName, err := splitMetricTokens(aggregatedMetricName)
 				assert.NotEmpty(t, metricName)
 				assert.NoError(t, err)
 
-				switch storeName {
-				case selfStoreName:
+				switch base.Store(store) {
+				case base.SelfStore:
 					switch metricName {
 					case base.DefaultMetricName:
-						assert.Equalf(t, float64(17), val, "storeName=%v, metricName=%v", storeName, metricName) // same value as "custom"
+						assert.Equalf(t, float64(17), val, "storeName=%v, metricName=%v", store, metricName) // same value as "custom"
 					case base.LagMetricName:
-						assert.Equalf(t, float64(0.3), val, "storeName=%v, metricName=%v", storeName, metricName)
+						assert.Equalf(t, float64(0.3), val, "storeName=%v, metricName=%v", store, metricName)
 					case base.ThreadsRunningMetricName:
-						assert.Equalf(t, float64(26), val, "storeName=%v, metricName=%v", storeName, metricName)
+						assert.Equalf(t, float64(26), val, "storeName=%v, metricName=%v", store, metricName)
 					case base.CustomMetricName:
-						assert.Equalf(t, float64(17), val, "storeName=%v, metricName=%v", storeName, metricName)
+						assert.Equalf(t, float64(17), val, "storeName=%v, metricName=%v", store, metricName)
 					case base.LoadAvgMetricName:
-						assert.Equalf(t, float64(2.718), val, "storeName=%v, metricName=%v", storeName, metricName)
+						assert.Equalf(t, float64(2.718), val, "storeName=%v, metricName=%v", store, metricName)
 					}
-				case shardStoreName:
+				case base.ShardStore:
 					switch metricName {
 					case base.DefaultMetricName:
-						assert.Equalf(t, float64(14), val, "storeName=%v, metricName=%v", storeName, metricName) // same value as "custom"
+						assert.Equalf(t, float64(14), val, "storeName=%v, metricName=%v", store, metricName) // same value as "custom"
 					case base.LagMetricName:
-						assert.Equalf(t, float64(0.9), val, "storeName=%v, metricName=%v", storeName, metricName)
+						assert.Equalf(t, float64(0.9), val, "storeName=%v, metricName=%v", store, metricName)
 					case base.ThreadsRunningMetricName:
-						assert.Equalf(t, float64(13), val, "storeName=%v, metricName=%v", storeName, metricName)
+						assert.Equalf(t, float64(13), val, "storeName=%v, metricName=%v", store, metricName)
 					case base.CustomMetricName:
-						assert.Equalf(t, float64(14), val, "storeName=%v, metricName=%v", storeName, metricName)
+						assert.Equalf(t, float64(14), val, "storeName=%v, metricName=%v", store, metricName)
 					case base.LoadAvgMetricName:
-						assert.Equalf(t, float64(0.8), val, "storeName=%v, metricName=%v", storeName, metricName)
+						assert.Equalf(t, float64(0.8), val, "storeName=%v, metricName=%v", store, metricName)
 					}
 				default:
-					assert.Failf(t, "unknown storeName", "storeName=%v", storeName)
+					assert.Failf(t, "unknown storeName", "storeName=%v", store)
 				}
 			}
 
 			t.Run("client, shard", func(t *testing.T) {
-				client := NewProductionClient(throttler, "test", ThrottleCheckPrimaryWrite)
+				client := NewProductionClient(throttler, "test", base.ShardStore)
 				t.Run("threshold exceeded", func(t *testing.T) {
 					<-runSerialFunction(t, ctx, throttler, func(ctx context.Context) {
 						throttler.refreshMySQLInventory(ctx)
@@ -760,8 +760,8 @@ func TestProbesWithV19Replicas(t *testing.T) {
 
 				val, metricResultErr := metricResult.Get()
 				expectMetricNotCollectedYet := false
-				switch storeName {
-				case selfStoreName:
+				switch base.Store(storeName) {
+				case base.SelfStore:
 					switch metricName {
 					case base.DefaultMetricName:
 						assert.Equalf(t, float64(0.3), val, "storeName=%v, metricName=%v", storeName, metricName) // same value as "lag"
@@ -774,7 +774,7 @@ func TestProbesWithV19Replicas(t *testing.T) {
 					case base.LoadAvgMetricName:
 						assert.Equalf(t, float64(2.718), val, "storeName=%v, metricName=%v", storeName, metricName)
 					}
-				case shardStoreName:
+				case base.ShardStore:
 					// Replicas will nto report named metrics, since they now assume v19 behavior. They will only
 					// produce the single v19 metric (which we call "default", though they don't advertise it under the name "base.DefaultMetricName")
 					switch metricName {
@@ -862,7 +862,7 @@ func TestDormant(t *testing.T) {
 		assert.True(t, throttler.isDormant())
 		assert.EqualValues(t, 1, heartbeatWriter.Requests()) // once upon Enable()
 		flags := &CheckFlags{
-			CheckType: ThrottleCheckSelf,
+			Store: base.SelfStore,
 		}
 		throttler.Check(ctx, throttlerapp.VitessName.String(), nil, flags)
 		go func() {
@@ -917,7 +917,7 @@ func TestReplica(t *testing.T) {
 	runThrottler(t, ctx, throttler, time.Minute, func(t *testing.T, ctx context.Context) {
 		assert.Empty(t, tmClient.AppNames())
 		flags := &CheckFlags{
-			CheckType: ThrottleCheckSelf,
+			Store: base.SelfStore,
 		}
 		checkResult := throttler.Check(ctx, throttlerapp.VitessName.String(), nil, flags)
 		assert.NotNil(t, checkResult)
@@ -961,26 +961,26 @@ func TestReplica(t *testing.T) {
 				for metricName, metricResult := range checkResult.Metrics {
 					val := metricResult.Value
 					threshold := metricResult.Threshold
-					storeName := selfStoreName
+					store := base.SelfStore
 					switch base.MetricName(metricName) {
 					case base.DefaultMetricName:
 						assert.NoError(t, metricResult.Error, "metricName=%v, value=%v, threshold=%v", metricName, metricResult.Value, metricResult.Threshold)
-						assert.Equalf(t, float64(0.3), val, "storeName=%v, metricName=%v", storeName, metricName) // same value as "lag"
-						assert.Equalf(t, float64(0.75), threshold, "storeName=%v, metricName=%v", storeName, metricName)
+						assert.Equalf(t, float64(0.3), val, "storeName=%v, metricName=%v", store, metricName) // same value as "lag"
+						assert.Equalf(t, float64(0.75), threshold, "storeName=%v, metricName=%v", store, metricName)
 					case base.LagMetricName:
 						assert.NoError(t, metricResult.Error, "metricName=%v, value=%v, threshold=%v", metricName, metricResult.Value, metricResult.Threshold)
-						assert.Equalf(t, float64(0.3), val, "storeName=%v, metricName=%v", storeName, metricName)
-						assert.Equalf(t, float64(0.75), threshold, "storeName=%v, metricName=%v", storeName, metricName) // default threshold
+						assert.Equalf(t, float64(0.3), val, "storeName=%v, metricName=%v", store, metricName)
+						assert.Equalf(t, float64(0.75), threshold, "storeName=%v, metricName=%v", store, metricName) // default threshold
 					case base.ThreadsRunningMetricName:
 						assert.NoError(t, metricResult.Error, "metricName=%v, value=%v, threshold=%v", metricName, metricResult.Value, metricResult.Threshold)
-						assert.Equalf(t, float64(26), val, "storeName=%v, metricName=%v", storeName, metricName)
-						assert.Equalf(t, float64(100), threshold, "storeName=%v, metricName=%v", storeName, metricName)
+						assert.Equalf(t, float64(26), val, "storeName=%v, metricName=%v", store, metricName)
+						assert.Equalf(t, float64(100), threshold, "storeName=%v, metricName=%v", store, metricName)
 					case base.CustomMetricName:
 						assert.ErrorIs(t, metricResult.Error, base.ErrThresholdExceeded)
-						assert.Equalf(t, float64(0), threshold, "storeName=%v, metricName=%v", storeName, metricName)
+						assert.Equalf(t, float64(0), threshold, "storeName=%v, metricName=%v", store, metricName)
 					case base.LoadAvgMetricName:
 						assert.ErrorIs(t, metricResult.Error, base.ErrThresholdExceeded)
-						assert.Equalf(t, float64(1), threshold, "storeName=%v, metricName=%v", storeName, metricName)
+						assert.Equalf(t, float64(1), threshold, "storeName=%v, metricName=%v", store, metricName)
 					}
 				}
 			})
@@ -993,11 +993,11 @@ func TestReplica(t *testing.T) {
 					assert.Equal(t, base.LagMetricName.String(), metricName)
 					val := metricResult.Value
 					threshold := metricResult.Threshold
-					storeName := selfStoreName
+					store := base.SelfStore
 
 					assert.NoError(t, metricResult.Error, "metricName=%v, value=%v, threshold=%v", metricName, metricResult.Value, metricResult.Threshold)
-					assert.Equalf(t, float64(0.3), val, "storeName=%v, metricName=%v", storeName, metricName)
-					assert.Equalf(t, float64(0.75), threshold, "storeName=%v, metricName=%v", storeName, metricName) // default threshold
+					assert.Equalf(t, float64(0.3), val, "storeName=%v, metricName=%v", store, metricName)
+					assert.Equalf(t, float64(0.75), threshold, "storeName=%v, metricName=%v", store, metricName) // default threshold
 				}
 			})
 			t.Run("metrics names mapped", func(t *testing.T) {
@@ -1008,7 +1008,7 @@ func TestReplica(t *testing.T) {
 				assert.Equal(t, 3, len(checkResult.Metrics))
 			})
 			t.Run("client, OK", func(t *testing.T) {
-				client := NewProductionClient(throttler, throttlerapp.TestingName, ThrottleCheckSelf)
+				client := NewProductionClient(throttler, throttlerapp.TestingName, base.SelfStore)
 				checkOK := client.ThrottleCheckOK(ctx, "")
 				assert.True(t, checkOK)
 			})
@@ -1016,7 +1016,7 @@ func TestReplica(t *testing.T) {
 				// Specified metrics do not exceed threshold, therefore overall result should be OK.
 				throttler.appCheckedMetrics.Set(throttlerapp.TestingName.String(), base.MetricNames{base.LagMetricName, base.ThreadsRunningMetricName}, cache.DefaultExpiration)
 				defer throttler.appCheckedMetrics.Delete(throttlerapp.TestingName.String())
-				client := NewProductionClient(throttler, throttlerapp.TestingName, ThrottleCheckSelf)
+				client := NewProductionClient(throttler, throttlerapp.TestingName, base.SelfStore)
 				checkOK := client.ThrottleCheckOK(ctx, "")
 				assert.True(t, checkOK)
 			})
@@ -1024,7 +1024,7 @@ func TestReplica(t *testing.T) {
 				// LoadAvgMetricName metric exceeds threshold, therefore overall check should be in error.
 				throttler.appCheckedMetrics.Set(throttlerapp.TestingName.String(), base.MetricNames{base.LagMetricName, base.LoadAvgMetricName, base.ThreadsRunningMetricName}, cache.DefaultExpiration)
 				defer throttler.appCheckedMetrics.Delete(throttlerapp.TestingName.String())
-				client := NewProductionClient(throttler, throttlerapp.TestingName, ThrottleCheckSelf)
+				client := NewProductionClient(throttler, throttlerapp.TestingName, base.SelfStore)
 				checkOK := client.ThrottleCheckOK(ctx, "")
 				assert.False(t, checkOK)
 			})
@@ -1058,7 +1058,7 @@ func TestReplica(t *testing.T) {
 				}
 			})
 			t.Run("client, not OK", func(t *testing.T) {
-				client := NewProductionClient(throttler, throttlerapp.TestingName, ThrottleCheckSelf)
+				client := NewProductionClient(throttler, throttlerapp.TestingName, base.SelfStore)
 				checkOK := client.ThrottleCheckOK(ctx, "")
 				assert.False(t, checkOK)
 			})

@@ -21,6 +21,18 @@ import (
 	"strings"
 )
 
+type Store string
+
+const (
+	UndefinedStore Store = ""
+	ShardStore     Store = "shard"
+	SelfStore      Store = "self"
+)
+
+func (s Store) String() string {
+	return string(s)
+}
+
 type MetricName string
 
 type MetricNames []MetricName

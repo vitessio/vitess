@@ -34,10 +34,12 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtctldata "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 type Config struct {
@@ -54,6 +56,30 @@ const (
 var DefaultConfig = &Config{
 	Query:     DefaultQuery,
 	Threshold: DefaultThreshold.Seconds(),
+}
+
+// CheckThrottlerRaw runs vtctlclient CheckThrottler
+func CheckThrottlerRaw(vtctldProcess *cluster.VtctldClientProcess, tablet *cluster.Vttablet, appName string, flags *throttle.CheckFlags) (result string, err error) {
+	args := []string{}
+	args = append(args, "CheckThrottler")
+	if flags == nil {
+		flags = &throttle.CheckFlags{
+			Store: base.SelfStore,
+		}
+	}
+	if flags.LowPriority {
+		args = append(args, "--low-priority")
+	}
+	if flags.OKIfNotExists {
+		args = append(args, "--ok-if-not-exists")
+	}
+	if flags.SkipRequestHeartbeats {
+		args = append(args, "--skip-heartbeats")
+	}
+	args = append(args, tablet.Alias)
+
+	result, err = vtctldProcess.ExecuteCommandWithOutput(args...)
+	return result, err
 }
 
 // UpdateThrottlerTopoConfig runs vtctlclient UpdateThrottlerConfig.
@@ -105,6 +131,19 @@ func UpdateThrottlerTopoConfigRaw(vtctldProcess *cluster.VtctldClientProcess, ke
 		case <-ticker.C:
 		}
 	}
+}
+
+// CheckThrottler runs vtctldclient CheckThrottler.
+func CheckThrottler(clusterInstance *cluster.LocalProcessCluster, tablet *cluster.Vttablet, appName string, flags *throttle.CheckFlags) (*vtctldata.CheckThrottlerResponse, error) {
+	output, err := CheckThrottlerRaw(&clusterInstance.VtctldClientProcess, tablet, appName, flags)
+	if err != nil {
+		return nil, err
+	}
+	var resp vtctldata.CheckThrottlerResponse
+	if err := json.Unmarshal([]byte(output), &resp); err != nil {
+		return nil, err
+	}
+	return &resp, err
 }
 
 // UpdateThrottlerTopoConfig runs vtctlclient UpdateThrottlerConfig.

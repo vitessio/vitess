@@ -65,7 +65,7 @@ var (
 
 // CheckFlags provide hints for a check
 type CheckFlags struct {
-	CheckType             ThrottleCheckType
+	Store                 base.Store
 	ReadCheck             bool
 	OverrideThreshold     float64
 	LowPriority           bool
@@ -89,11 +89,11 @@ func NewThrottlerCheck(throttler *Throttler) *ThrottlerCheck {
 }
 
 // checkAppMetricResult allows an app to check on a metric
-func (check *ThrottlerCheck) checkAppMetricResult(ctx context.Context, appName string, storeName string, metricResultFunc base.MetricResultFunc, flags *CheckFlags) (checkResult *CheckResult) {
+func (check *ThrottlerCheck) checkAppMetricResult(ctx context.Context, appName string, store base.Store, metricResultFunc base.MetricResultFunc, flags *CheckFlags) (checkResult *CheckResult) {
 	// Handle deprioritized app logic
 	denyApp := false
 	if flags.LowPriority {
-		if _, exists := check.throttler.nonLowPriorityAppRequestsThrottled.Get(storeName); exists {
+		if _, exists := check.throttler.nonLowPriorityAppRequestsThrottled.Get(store.String()); exists {
 			// a non-deprioritized app, ie a "normal" app, has recently been throttled.
 			// This is now a deprioritized app. Deny access to this request.
 			denyApp = true
@@ -128,7 +128,7 @@ func (check *ThrottlerCheck) checkAppMetricResult(ctx context.Context, appName s
 
 		if !flags.LowPriority && !flags.ReadCheck && throttlerapp.VitessName.Equals(appName) {
 			// low priority requests will henceforth be denied
-			go check.throttler.nonLowPriorityAppRequestsThrottled.SetDefault(storeName, true)
+			go check.throttler.nonLowPriorityAppRequestsThrottled.SetDefault(store.String(), true)
 		}
 	default:
 		// all good!
@@ -138,7 +138,7 @@ func (check *ThrottlerCheck) checkAppMetricResult(ctx context.Context, appName s
 }
 
 // Check is the core function that runs when a user wants to check a metric
-func (check *ThrottlerCheck) Check(ctx context.Context, appName string, storeName string, metricNames base.MetricNames, flags *CheckFlags) (checkResult *CheckResult) {
+func (check *ThrottlerCheck) Check(ctx context.Context, appName string, store base.Store, metricNames base.MetricNames, flags *CheckFlags) (checkResult *CheckResult) {
 	checkResult = &CheckResult{
 		StatusCode: http.StatusOK,
 		Metrics:    make(map[string]*MetricResult),
@@ -148,19 +148,19 @@ func (check *ThrottlerCheck) Check(ctx context.Context, appName string, storeNam
 	}
 	for _, metricName := range metricNames {
 		metricResultFunc := func() (metricResult base.MetricResult, threshold float64) {
-			return check.throttler.getMySQLStoreMetric(ctx, storeName, metricName)
+			return check.throttler.getMySQLStoreMetric(ctx, store, metricName)
 		}
 
-		metricCheckResult := check.checkAppMetricResult(ctx, appName, storeName, metricResultFunc, flags)
+		metricCheckResult := check.checkAppMetricResult(ctx, appName, store, metricResultFunc, flags)
 		check.throttler.markRecentApp(appName)
 		if !throttlerapp.VitessName.Equals(appName) {
 			go func(statusCode int) {
 				statsThrottlerCheckAnyTotal.Add(1)
-				stats.GetOrNewCounter(fmt.Sprintf("ThrottlerCheckAny%sTotal", textutil.SingleWordCamel(storeName)), "").Add(1)
+				stats.GetOrNewCounter(fmt.Sprintf("ThrottlerCheckAny%sTotal", textutil.SingleWordCamel(store.String())), "").Add(1)
 
 				if statusCode != http.StatusOK {
 					statsThrottlerCheckAnyError.Add(1)
-					stats.GetOrNewCounter(fmt.Sprintf("ThrottlerCheckAny%sError", textutil.SingleWordCamel(storeName)), "").Add(1)
+					stats.GetOrNewCounter(fmt.Sprintf("ThrottlerCheckAny%sError", textutil.SingleWordCamel(store.String())), "").Add(1)
 				}
 			}(metricCheckResult.StatusCode)
 		}
@@ -212,7 +212,7 @@ func (check *ThrottlerCheck) localCheck(ctx context.Context, aggregatedMetricNam
 	if err != nil {
 		return NoSuchMetricCheckResult
 	}
-	checkResult = check.Check(ctx, throttlerapp.VitessName.String(), storeName, base.MetricNames{metricName}, StandardCheckFlags)
+	checkResult = check.Check(ctx, throttlerapp.VitessName.String(), base.Store(storeName), base.MetricNames{metricName}, StandardCheckFlags)
 
 	if checkResult.StatusCode == http.StatusOK {
 		check.throttler.markMetricHealthy(aggregatedMetricName)
