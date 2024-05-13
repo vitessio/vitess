@@ -28,14 +28,11 @@ import (
 
 	"golang.org/x/exp/maps"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/constants/sidecar"
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/vt/schema"
-	"vitess.io/vitess/go/vt/vtenv"
-
-	"vitess.io/vitess/go/acl"
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/timer"
@@ -44,9 +41,11 @@ import (
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -532,7 +531,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 
 	dropped := se.getDroppedTables(curTables, changedViews, mismatchTables)
 
-	// Populate PKColumns for changed tables.
+	// Populate PK Columns for changed tables.
 	if err := se.populatePrimaryKeys(ctx, conn.Conn, changedTables); err != nil {
 		return err
 	}
@@ -707,6 +706,11 @@ func (se *Engine) GetTableForPos(ctx context.Context, tableName sqlparser.Identi
 		if err := fetchColumns(&cst, conn, se.cp.DBName(), tableNameStr); err != nil {
 			return nil, err
 		}
+		// Update the PK columns for the table as well as that may have changed.
+		if err := se.populatePrimaryKeys(ctx, conn.Conn, map[string]*Table{tableNameStr: &cst}); err != nil {
+			return nil, err
+		}
+		log.Errorf("DEBUG: updating cache entry for table %v, pk column(s): %v", tableNameStr, cst.PKColumns)
 		se.tables[tableNameStr] = &cst
 		return newMinimalTable(&cst), nil
 	}

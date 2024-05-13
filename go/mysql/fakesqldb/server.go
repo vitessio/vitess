@@ -33,9 +33,10 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 const appendEntry = -1
@@ -598,6 +599,8 @@ func (db *DB) RejectQueryPattern(queryPattern, error string) {
 
 // ClearQueryPattern removes all query patterns set up
 func (db *DB) ClearQueryPattern() {
+	db.mu.Lock()
+	defer db.mu.Unlock()
 	db.patternData = make(map[string]exprResult)
 }
 
@@ -615,6 +618,19 @@ func (db *DB) DeleteQuery(query string) {
 	key := strings.ToLower(query)
 	delete(db.data, key)
 	delete(db.queryCalled, key)
+}
+
+// DeleteAllQueries deletes all expected queries from the fake DB.
+func (db *DB) DeleteAllQueries() {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	clear(db.data)
+	clear(db.patternData)
+	clear(db.queryCalled)
+	// Use is always expected to be present.
+	useQuery := "use `fakesqldb`"
+	db.data[useQuery] = &ExpectedResult{&sqltypes.Result{}, nil}
+	db.queryCalled[useQuery] = 0
 }
 
 // AddRejectedQuery adds a query which will be rejected at execution time.
