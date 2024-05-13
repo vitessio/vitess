@@ -20,6 +20,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/test"
 )
@@ -31,4 +33,18 @@ func TestMemoryTopo(t *testing.T) {
 	test.TopoServerTestSuite(t, ctx, func() *topo.Server {
 		return NewServer(ctx, test.LocalCellName)
 	}, []string{"checkTryLock", "checkShardWithLock"})
+}
+
+func TestLockShardContextHasDeadline(t *testing.T) {
+	cell := "cell-1"
+	ks := "ks"
+	shard := "-"
+	ts := NewServer(context.Background(), cell)
+	_, err := ts.GetOrCreateShard(context.Background(), ks, shard)
+	require.NoError(t, err)
+	ctx, unlock, err := ts.LockShard(context.Background(), ks, shard, "action")
+	require.NoError(t, err)
+	defer unlock(&err)
+	_, hasDeadline := ctx.Deadline()
+	require.True(t, hasDeadline)
 }
