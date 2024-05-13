@@ -35,6 +35,7 @@ func (tm *TabletManager) CheckThrottler(ctx context.Context, req *tabletmanagerd
 		req.AppName = throttlerapp.VitessName.String()
 	}
 	flags := &throttle.CheckFlags{
+		Scope:                 base.Scope(req.Scope),
 		LowPriority:           req.LowPriority,
 		SkipRequestHeartbeats: req.SkipRequestHeartbeats,
 		OKIfNotExists:         req.OkIfNotExists,
