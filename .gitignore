@@ -86,3 +86,4 @@ report
 
 # plan test output
 /go/vt/vtgate/planbuilder/testdata/plan_test*
+/go/vt/vtgate/planbuilder/testdata/expected
