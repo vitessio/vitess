@@ -338,8 +338,9 @@ func (ts *Server) internalLockShard(ctx context.Context, keyspace, shard, action
 	// lock
 	l := newLock(action)
 	var lockDescriptor LockDescriptor
+	var cancel context.CancelFunc
 	var err error
-	ctx, lockDescriptor, err = l.internalLockShard(ctx, ts, keyspace, shard, isBlocking)
+	ctx, cancel, lockDescriptor, err = l.internalLockShard(ctx, ts, keyspace, shard, isBlocking)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -352,6 +353,7 @@ func (ts *Server) internalLockShard(ctx context.Context, keyspace, shard, action
 	return ctx, func(finalErr *error) {
 		i.mu.Lock()
 		defer i.mu.Unlock()
+		cancel()
 
 		if _, ok := i.info[mapKey]; !ok {
 			if *finalErr != nil {
@@ -397,11 +399,10 @@ func CheckShardLocked(ctx context.Context, keyspace, shard string) error {
 	return li.lockDescriptor.Check(ctx)
 }
 
-func (l *Lock) internalLockShard(ctx context.Context, ts *Server, keyspace, shard string, isBlocking bool) (context.Context, LockDescriptor, error) {
+func (l *Lock) internalLockShard(ctx context.Context, ts *Server, keyspace, shard string, isBlocking bool) (context.Context, context.CancelFunc, LockDescriptor, error) {
 	log.Infof("Locking shard %v/%v for action %v", keyspace, shard, l.Action)
 
 	ctx, cancel := context.WithTimeout(ctx, getLockTimeout())
-	defer cancel()
 
 	span, ctx := trace.NewSpan(ctx, "TopoServer.LockShardForAction")
 	span.Annotate("action", l.Action)
@@ -412,7 +413,7 @@ func (l *Lock) internalLockShard(ctx context.Context, ts *Server, keyspace, shar
 	shardPath := path.Join(KeyspacesPath, keyspace, ShardsPath, shard)
 	j, err := l.ToJSON()
 	if err != nil {
-		return ctx, nil, err
+		return ctx, cancel, nil, err
 	}
 	var ld LockDescriptor
 	if isBlocking {
@@ -420,7 +421,7 @@ func (l *Lock) internalLockShard(ctx context.Context, ts *Server, keyspace, shar
 	} else {
 		ld, err = ts.globalCell.TryLock(ctx, shardPath, j)
 	}
-	return ctx, ld, err
+	return ctx, cancel, ld, err
 }
 
 // unlockShard unlocks a previously locked shard.
