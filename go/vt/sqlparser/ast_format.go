@@ -54,7 +54,8 @@ func (node *Select) Format(buf *TrackedBuffer) {
 
 	buf.astPrintf(node, "%v%v%v",
 		node.Where,
-		node.GroupBy, node.Having)
+		node.GroupBy,
+		node.Having)
 
 	if node.Windows != nil {
 		buf.astPrintf(node, " %v", node.Windows)
@@ -1923,7 +1924,7 @@ func (node *When) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *GroupBy) Format(buf *TrackedBuffer) {
-	if node == nil {
+	if node == nil || len(node.Exprs) == 0 {
 		return
 	}
 	prefix := " group by "

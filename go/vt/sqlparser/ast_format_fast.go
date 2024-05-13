@@ -2578,7 +2578,7 @@ func (node *When) FormatFast(buf *TrackedBuffer) {
 
 // FormatFast formats the node.
 func (node *GroupBy) FormatFast(buf *TrackedBuffer) {
-	if node == nil {
+	if node == nil || len(node.Exprs) == 0 {
 		return
 	}
 	prefix := " group by "
