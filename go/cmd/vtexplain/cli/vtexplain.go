@@ -139,10 +139,10 @@ func run(cmd *cobra.Command, args []string) error {
 	defer logutil.Flush()
 
 	servenv.Init()
-	return parseAndRun()
+	return parseAndRun(cmd.Context())
 }
 
-func parseAndRun() error {
+func parseAndRun(ctx context.Context) error {
 	plannerVersion, _ := plancontext.PlannerNameToVersion(plannerVersionStr)
 	if plannerVersionStr != "" && plannerVersion != querypb.ExecuteOptions_Gen4 {
 		return fmt.Errorf("invalid value specified for planner-version of '%s' -- valid value is Gen4 or an empty value to use the default planner", plannerVersionStr)
@@ -185,7 +185,6 @@ func parseAndRun() error {
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
 	ts := memorytopo.NewServer(ctx, vtexplain.Cell)
 	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
 	vte, err := vtexplain.Init(ctx, env, ts, vschema, schema, ksShardMap, opts, srvTopoCounts)

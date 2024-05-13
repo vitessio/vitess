@@ -47,7 +47,7 @@ func init() {
 	Main.Flags().DurationVar(&schemaChangeReplicasTimeout, "schema_change_replicas_timeout", schemaChangeReplicasTimeout, "How long to wait for replicas to receive a schema change.")
 }
 
-func initSchema() {
+func initSchema(ctx context.Context) {
 	// Start schema manager service if needed.
 	if schemaChangeDir != "" {
 		interval := schemaChangeCheckInterval
@@ -70,7 +70,6 @@ func initSchema() {
 				log.Errorf("failed to get controller, error: %v", err)
 				return
 			}
-			ctx := context.Background()
 			wr := wrangler.New(env, logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 			_, err = schemamanager.Run(
 				ctx,

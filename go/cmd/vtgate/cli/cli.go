@@ -146,7 +146,9 @@ func run(cmd *cobra.Command, args []string) error {
 	ts := topo.Open()
 	defer ts.Close()
 
-	resilientServer = srvtopo.NewResilientServer(context.Background(), ts, srvTopoCounts)
+	ctx, cancel := context.WithCancel(cmd.Context())
+	defer cancel()
+	resilientServer = srvtopo.NewResilientServer(ctx, ts, srvTopoCounts)
 
 	tabletTypes := make([]topodatapb.TabletType, 0, 1)
 	for _, tt := range tabletTypesToWait {
@@ -159,7 +161,7 @@ func run(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("tablet_types_to_wait must contain at least one serving tablet type")
 	}
 
-	err := CheckCellFlags(context.Background(), resilientServer, cell, vtgate.CellsToWatch)
+	err := CheckCellFlags(ctx, resilientServer, cell, vtgate.CellsToWatch)
 	if err != nil {
 		return fmt.Errorf("cells_to_watch validation failed: %v", err)
 	}
@@ -176,7 +178,7 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	// pass nil for HealthCheck and it will be created
-	vtg := vtgate.Init(context.Background(), env, nil, resilientServer, cell, tabletTypes, plannerVersion)
+	vtg := vtgate.Init(ctx, env, nil, resilientServer, cell, tabletTypes, plannerVersion)
 
 	servenv.OnRun(func() {
 		// Flags are parsed now. Parse the template using the actual flag value and overwrite the current template.
@@ -184,7 +186,7 @@ func run(cmd *cobra.Command, args []string) error {
 		addStatusParts(vtg)
 	})
 	servenv.OnClose(func() {
-		_ = vtg.Gateway().Close(context.Background())
+		_ = vtg.Gateway().Close(ctx)
 	})
 	servenv.RunDefault()
 
