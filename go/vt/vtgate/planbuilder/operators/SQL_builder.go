@@ -119,6 +119,11 @@ func (qb *queryBuilder) addGroupBy(original sqlparser.Expr) {
 	sel.AddGroupBy(original)
 }
 
+func (qb *queryBuilder) setWithRollup() {
+	sel := qb.stmt.(*sqlparser.Select)
+	sel.GroupBy.WithRollup = true
+}
+
 func (qb *queryBuilder) addProjection(projection sqlparser.SelectExpr) {
 	switch stmt := qb.stmt.(type) {
 	case *sqlparser.Select:
@@ -457,6 +462,9 @@ func buildAggregation(op *Aggregator, qb *queryBuilder) {
 		if by.WSOffset != -1 {
 			qb.addGroupBy(weightStringFor(simplified))
 		}
+	}
+	if op.WithRollup {
+		qb.setWithRollup()
 	}
 }
 

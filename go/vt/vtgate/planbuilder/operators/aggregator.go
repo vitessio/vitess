@@ -324,8 +324,18 @@ func (a *Aggregator) ShortDescription() string {
 	for _, gb := range a.Grouping {
 		grouping = append(grouping, sqlparser.String(gb.Inner))
 	}
+	var rollUp string
+	if a.WithRollup {
+		rollUp = " with rollup"
+	}
 
-	return fmt.Sprintf("%s%s group by %s", org, strings.Join(columns, ", "), strings.Join(grouping, ","))
+	return fmt.Sprintf(
+		"%s%s group by %s%s",
+		org,
+		strings.Join(columns, ", "),
+		strings.Join(grouping, ","),
+		rollUp,
+	)
 }
 
 func (a *Aggregator) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {

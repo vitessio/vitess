@@ -562,6 +562,28 @@
     }
   },
   {
+    "comment": "WITH ROLLUP that is pushed to single shard",
+    "query": "select id, user_id, count(*) from music group by id, user_id with rollup",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select id, user_id, count(*) from music group by id, user_id with rollup",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id, user_id, count(*) from music where 1 != 1 group by id, user_id with rollup",
+        "Query": "select id, user_id, count(*) from music group by id, user_id with rollup",
+        "Table": "music"
+      },
+      "TablesUsed": [
+        "user.music"
+      ]
+    }
+  },
+  {
     "comment": "count with distinct no unique vindex, count expression aliased",
     "query": "select col1, count(distinct col2) c2 from user group by col1",
     "plan": {
