@@ -149,6 +149,11 @@ jobs:
         run: |
           make minimaltools
 
+      - name: check_go_versions
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
+        run:
+          tools/check_go_versions.sh || exit 1
+
       - name: check_make_parser
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && (steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.go_files == 'true')
         run: |
