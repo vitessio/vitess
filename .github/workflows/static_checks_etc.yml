@@ -150,7 +150,7 @@ jobs:
           make minimaltools
 
       - name: check_go_versions
-        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
+        if: steps.skip-workflow.outputs.skip-workflow == 'false'
         run:
           tools/check_go_versions.sh || exit 1
 
