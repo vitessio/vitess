@@ -1,6 +1,6 @@
 name: vtadmin-web unit tests
 
-# In specifying the 'paths' property, we need to include the path to this workflow .yml file. 
+# In specifying the 'paths' property, we need to include the path to this workflow .yml file.
 # See https://github.community/t/trigger-a-workflow-on-change-to-the-yml-file-itself/17792/4)
 on:
   push:
@@ -16,7 +16,7 @@ permissions: read-all
 
 jobs:
   unit-tests:
-    runs-on: gh-hosted-runners-4cores-1
+    runs-on: ubuntu-22.04
     steps:
       - name: Skip CI
         run: |
@@ -29,7 +29,7 @@ jobs:
         id: skip-workflow
         run: |
           skip='false'
-          if [[ "${{github.event.pull_request}}" ==  "" ]] && [[ "${{github.ref}}" != "refs/heads/main" ]] && [[ ! "${{github.ref}}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "${{github.ref}}" =~ "refs/tags/.*" ]]; then
+          if [[ "${{github.event.pull_request}}" ==  "" ]]; then
           skip='true'
           fi
           echo Skip ${skip}
@@ -51,8 +51,8 @@ jobs:
       - name: Run unit tests
         if: steps.skip-workflow.outputs.skip-workflow == 'false'
         run: cd ./web/vtadmin && CI=true npm run test
-        
+
     # Cancel pending and in-progress runs of this workflow if a newer ref is pushed to CI.
-    concurrency: 
+    concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}
       cancel-in-progress: true

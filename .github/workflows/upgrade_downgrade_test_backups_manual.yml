@@ -10,12 +10,11 @@ concurrency:
 permissions: read-all
 
 jobs:
-
   # This job usually execute in ± 20 minutes
   upgrade_downgrade_test_manual:
     timeout-minutes: 40
     name: Run Upgrade Downgrade Test - Backups - Manual
-    runs-on: gh-hosted-runners-16cores-1
+    runs-on: ubuntu-22.04
 
     steps:
     - name: Skip CI
@@ -29,7 +28,7 @@ jobs:
       id: skip-workflow
       run: |
         skip='false'
-        if [[ "${{github.event.pull_request}}" ==  "" ]] && [[ "${{github.ref}}" != "refs/heads/main" ]] && [[ ! "${{github.ref}}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "${{github.ref}}" =~ "refs/tags/.*" ]]; then
+        if [[ "${{github.event.pull_request}}" ==  "" ]]; then
           skip='true'
         fi
         echo Skip ${skip}
@@ -46,7 +45,7 @@ jobs:
       id: output-previous-release-ref
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
       run: |
-        previous_release_ref=$(./tools/get_previous_release.sh ${{github.base_ref}} ${{github.ref}})
+        previous_release_ref=$(./tools/get_previous_release_shopify.sh)
         echo $previous_release_ref
         echo "previous_release_ref=${previous_release_ref}" >> $GITHUB_OUTPUT
 

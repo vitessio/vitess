@@ -10,10 +10,30 @@ concurrency:
 permissions: read-all
 
 jobs:
+  get_previous_release:
+    if: always()
+    name: Get Previous Release - Backups - E2E
+    runs-on: ubuntu-22.04
+    outputs:
+      previous_release: ${{ steps.output-previous-release-ref.outputs.previous_release_ref }}
+
+    steps:
+      - name: Check out to HEAD
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Set output with latest release branch
+        id: output-previous-release-ref
+        run: |
+          previous_release_ref=$(./tools/get_previous_release_shopify.sh)
+          echo $previous_release_ref
+          echo "previous_release_ref=${previous_release_ref}" >> $GITHUB_OUTPUT
+
   upgrade_downgrade_test_e2e:
     timeout-minutes: 60
     name: Run Upgrade Downgrade Test - Backups - E2E
-    runs-on: gh-hosted-runners-16cores-1
+    runs-on: ubuntu-22.04
 
     steps:
     - name: Skip CI
@@ -27,7 +47,7 @@ jobs:
       id: skip-workflow
       run: |
         skip='false'
-        if [[ "${{github.event.pull_request}}" ==  "" ]] && [[ "${{github.ref}}" != "refs/heads/main" ]] && [[ ! "${{github.ref}}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "${{github.ref}}" =~ "refs/tags/.*" ]]; then
+        if [[ "${{github.event.pull_request}}" ==  "" ]]; then
         skip='true'
         fi
         echo Skip ${skip}
@@ -43,7 +63,7 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
       id: output-previous-release-ref
       run: |
-        previous_release_ref=$(./tools/get_previous_release.sh ${{github.base_ref}} ${{github.ref}})
+        previous_release_ref=$(./tools/get_previous_release_shopify.sh)
         echo $previous_release_ref
         echo "previous_release_ref=${previous_release_ref}" >> $GITHUB_OUTPUT
 

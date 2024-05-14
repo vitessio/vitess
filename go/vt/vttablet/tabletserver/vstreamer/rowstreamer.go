@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/vttablet"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
@@ -134,6 +136,12 @@ func (rs *rowStreamer) Stream() error {
 		rs.conn = conn
 		defer rs.conn.Close()
 		if _, err := rs.conn.ExecuteFetch("set names 'binary'", 1, false); err != nil {
+			return err
+		}
+		if _, err := rs.conn.ExecuteFetch(fmt.Sprintf("set @@session.net_read_timeout = %v", vttablet.VReplicationNetReadTimeout), 1, false); err != nil {
+			return err
+		}
+		if _, err := rs.conn.ExecuteFetch(fmt.Sprintf("set @@session.net_write_timeout = %v", vttablet.VReplicationNetWriteTimeout), 1, false); err != nil {
 			return err
 		}
 	}

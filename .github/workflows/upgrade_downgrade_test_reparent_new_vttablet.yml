@@ -13,10 +13,9 @@ permissions: read-all
 # (vtctl, vttablet, etc) built on different versions.
 
 jobs:
-
   upgrade_downgrade_test:
     name: Run Upgrade Downgrade Test - Reparent New VTTablet
-    runs-on: gh-hosted-runners-16cores-1
+    runs-on: ubuntu-22.04
 
     steps:
     - name: Skip CI
@@ -34,7 +33,7 @@ jobs:
     - name: Set output with latest release branch
       id: output-next-release-ref
       run: |
-        next_release_ref=$(./tools/get_next_release.sh ${{github.base_ref}} ${{github.ref}})
+        next_release_ref=$(./tools/get_next_release_shopify.sh ${{github.base_ref}} ${{github.ref}})
         echo $next_release_ref
         echo "next_release_ref=${next_release_ref}" >> $GITHUB_OUTPUT
 
@@ -42,7 +41,7 @@ jobs:
       id: skip-workflow
       run: |
         skip='false'
-        if [[ "${{github.event.pull_request}}" ==  "" ]] && [[ "${{github.ref}}" != "refs/heads/main" ]] && [[ ! "${{github.ref}}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "${{github.ref}}" =~ "refs/tags/.*" ]]; then
+        if [[ "${{github.event.pull_request}}" ==  "" ]]; then
           skip='true'
         fi
         if [[ "${{steps.output-next-release-ref.outputs.next_release_ref}}" == "" ]]; then
