@@ -382,19 +382,17 @@ func (b *binder) searchInSelectExpressions(colName *sqlparser.ColName, deps depe
 			return dependency{certain: true, direct: direct, recursive: recursive, typ: typ}
 		}
 	}
-	if stmt.GroupBy != nil {
-		for _, gb := range stmt.GroupBy.Exprs {
-			selectCol, ok := gb.(*sqlparser.ColName)
-			if !ok || !selectCol.Name.Equal(colName.Name) {
-				continue
-			}
+	for _, gb := range stmt.GroupByExprs() {
+		selectCol, ok := gb.(*sqlparser.ColName)
+		if !ok || !selectCol.Name.Equal(colName.Name) {
+			continue
+		}
 
-			_, direct, _ := b.org.depsForExpr(selectCol)
-			if deps.direct == direct {
-				// we have found the ColName in the GROUP BY expressions, so it's safe to use here
-				direct, recursive, typ := b.org.depsForExpr(gb)
-				return dependency{certain: true, direct: direct, recursive: recursive, typ: typ}
-			}
+		_, direct, _ := b.org.depsForExpr(selectCol)
+		if deps.direct == direct {
+			// we have found the ColName in the GROUP BY expressions, so it's safe to use here
+			direct, recursive, typ := b.org.depsForExpr(gb)
+			return dependency{certain: true, direct: direct, recursive: recursive, typ: typ}
 		}
 	}
 	return dependency{}
