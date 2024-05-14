@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"os"
 	"os/exec"
 	"sync"
 	"testing"
@@ -41,6 +42,14 @@ func TestUpdateKeyspaceRoutingRule(t *testing.T) {
 // TestConcurrentKeyspaceRoutingRulesUpdates runs multiple keyspace routing rules updates concurrently to test
 // the locking mechanism.
 func TestConcurrentKeyspaceRoutingRulesUpdates(t *testing.T) {
+	if os.Getenv("GOCOVERDIR") != "" {
+		// While running this test in CI along with all other tests in for code coverage this test hangs very often.
+		// Possibly due to some resource constraints, since this test is one of the last.
+		// However just running this package by itself with code coverage works fine in CI.
+		t.Logf("Skipping TestConcurrentKeyspaceRoutingRulesUpdates test in code coverage mode")
+		t.Skip()
+	}
+
 	ctx := context.Background()
 
 	ts := memorytopo.NewServer(ctx, "zone1")
