@@ -159,25 +159,47 @@ func (ts *Server) GetShardRoutingRules(ctx context.Context) (*vschemapb.ShardRou
 	return srr, nil
 }
 
+// CreateKeyspaceRoutingRules wraps the underlying Conn.Create.
+func (ts *Server) CreateKeyspaceRoutingRules(ctx context.Context, value *vschemapb.KeyspaceRoutingRules) error {
+	data, err := value.MarshalVT()
+	if err != nil {
+		return err
+	}
+	if _, err := ts.globalCell.Create(ctx, ts.GetKeyspaceRoutingRulesPath(), data); err != nil {
+		return err
+	}
+	return nil
+}
+
+// SaveKeyspaceRoutingRules saves the given routing rules proto in the topo at
+// the defined path.
+// It does NOT delete the file if you have requested to save empty routing rules
+// (effectively deleting all routing rules in the file). This makes it different
+// from the other routing rules (table and shard) save functions today. This is
+// done as it simplifies the interactions with this key/file so that the typical
+// access pattern is:
+//   - If the file exists, we can lock it, read it, modify it, and save it back.
+//   - If the file does not exist, we can create it and save the new rules.
+//   - If multiple callers are racing to create the file, only one will succeed
+//     and all other callers can simply retry once as the file will now exist.
+//
+// We can revisit this in the future and align things as we add locking and other
+// topo server features to the other types of routing rules. We may then apply
+// this new model used for keyspace routing rules to the other routing rules, or
+// we may come up with a better model and apply it to the keyspace routing rules
+// as well.
 func (ts *Server) SaveKeyspaceRoutingRules(ctx context.Context, rules *vschemapb.KeyspaceRoutingRules) error {
 	data, err := rules.MarshalVT()
 	if err != nil {
 		return err
 	}
-	if len(data) == 0 {
-		// No rules, remove it.
-		if err := ts.globalCell.Delete(ctx, KeyspaceRoutingRulesFile, nil); err != nil && !IsErrType(err, NoNode) {
-			return err
-		}
-		return nil
-	}
-	_, err = ts.globalCell.Update(ctx, KeyspaceRoutingRulesFile, data, nil)
+	_, err = ts.globalCell.Update(ctx, ts.GetKeyspaceRoutingRulesPath(), data, nil)
 	return err
 }
 
 func (ts *Server) GetKeyspaceRoutingRules(ctx context.Context) (*vschemapb.KeyspaceRoutingRules, error) {
 	rules := &vschemapb.KeyspaceRoutingRules{}
-	data, _, err := ts.globalCell.Get(ctx, KeyspaceRoutingRulesFile)
+	data, _, err := ts.globalCell.Get(ctx, ts.GetKeyspaceRoutingRulesPath())
 	if err != nil {
 		if IsErrType(err, NoNode) {
 			return nil, nil

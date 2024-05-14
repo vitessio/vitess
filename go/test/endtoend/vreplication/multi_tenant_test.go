@@ -37,14 +37,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 
-	"github.com/stretchr/testify/require"
-
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/proto/vtctldata"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
-	"vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 type tenantMigrationStatus int
@@ -71,6 +71,8 @@ var (
 	chNotSetup, chNotCreated, chInProgress, chSwitched, chCompleted chan int64
 	// counters to keep track of the number of tenants in each state
 	numSetup, numInProgress, numSwitched, numCompleted atomic.Int64
+
+	emptyKeyspaceRoutingRules = &vschemapb.KeyspaceRoutingRules{}
 )
 
 // multiTenantMigration manages the migration of multiple tenants to a single target keyspace.
@@ -193,6 +195,7 @@ func TestMultiTenantSimple(t *testing.T) {
 	}
 
 	require.Zero(t, len(getKeyspaceRoutingRules(t, vc).Rules))
+
 	mt.Create()
 	confirmKeyspacesRoutedTo(t, sourceKeyspace, "s1", "t1", nil)
 	validateKeyspaceRoutingRules(t, vc, initialRules)
@@ -223,6 +226,41 @@ func TestMultiTenantSimple(t *testing.T) {
 	log.Infof("Migration completed, total rows in target: %d", actualRowsInserted)
 	require.Equal(t, lastIndex, int64(actualRowsInserted))
 
+	t.Run("Test ApplyKeyspaceRoutingRules", func(t *testing.T) {
+		// First set of rules
+		applyKeyspaceRoutingRules(t, initialRules)
+
+		updatedRules := &vschemapb.KeyspaceRoutingRules{
+			Rules: []*vschemapb.KeyspaceRoutingRule{
+				{FromKeyspace: "s1", ToKeyspace: "mt"},
+				{FromKeyspace: "s1@rdonly", ToKeyspace: "mt"},
+				{FromKeyspace: "s1@replica", ToKeyspace: "mt"},
+			},
+		}
+		// Update the rules
+		applyKeyspaceRoutingRules(t, updatedRules)
+		// Update with the same rules
+		applyKeyspaceRoutingRules(t, updatedRules)
+		// Remove the rules
+		applyKeyspaceRoutingRules(t, emptyKeyspaceRoutingRules)
+		// Test setting empty rules again
+		applyKeyspaceRoutingRules(t, emptyKeyspaceRoutingRules)
+	})
+}
+
+func applyKeyspaceRoutingRules(t *testing.T, newRules *vschemapb.KeyspaceRoutingRules) {
+	var rulesJSON []byte
+	var err error
+	require.NotNil(t, newRules)
+	rulesJSON, err = json.Marshal(newRules)
+	require.NoError(t, err)
+	output, err := vc.VtctldClient.ExecuteCommandWithOutput("ApplyKeyspaceRoutingRules", "--rules", string(rulesJSON))
+	require.NoError(t, err)
+
+	response := &vtctldata.ApplyKeyspaceRoutingRulesResponse{}
+	err = json.Unmarshal([]byte(output), response)
+	require.NoError(t, err)
+	require.ElementsMatch(t, newRules.Rules, response.GetKeyspaceRoutingRules().Rules)
 }
 
 func confirmOnlyReadsSwitched(t *testing.T) {
@@ -251,10 +289,10 @@ func confirmOnlyWritesSwitched(t *testing.T) {
 	validateKeyspaceRoutingRules(t, vc, rules)
 }
 
-// TestMultiTenantSimpleSharded tests a single tenant migration to a sharded target. The aim is to test
+// TestMultiTenantSharded tests a single tenant migration to a sharded target. The aim is to test
 // the specification of the target shards in all the MoveTables subcommands, including creating only one stream
 // for a tenant on the shard to which this tenant id will be routed, using the specified Vindex.
-func TestMultiTenantSimpleSharded(t *testing.T) {
+func TestMultiTenantSharded(t *testing.T) {
 	setSidecarDBName("_vt")
 	// Don't create RDONLY tablets to reduce number of tablets created to reduce resource requirements for the test.
 	origDefaultRdonly := defaultRdonly

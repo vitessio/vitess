@@ -70,7 +70,6 @@ var applyKeyspaceRoutingRulesOptions = struct {
 func commandApplyKeyspaceRoutingRules(cmd *cobra.Command, args []string) error {
 	opts := applyKeyspaceRoutingRulesOptions
 	cli.FinishedParsing(cmd)
-
 	var rulesBytes []byte
 	if opts.RulesFilePath != "" {
 		data, err := os.ReadFile(opts.RulesFilePath)
@@ -86,13 +85,14 @@ func commandApplyKeyspaceRoutingRules(cmd *cobra.Command, args []string) error {
 	if err := json2.Unmarshal(rulesBytes, &krr); err != nil {
 		return err
 	}
-	// Round-trip so that when we display the result it's readable.
-	data, err := cli.MarshalJSON(krr)
-	if err != nil {
-		return err
-	}
 
 	if opts.DryRun {
+		// Round-trip so that when we display the result it's readable.
+		data, err := cli.MarshalJSON(krr)
+		if err != nil {
+			return err
+		}
+
 		fmt.Printf("[DRY RUN] Would have saved new KeyspaceRoutingRules object:\n%s\n", data)
 
 		if opts.SkipRebuild {
@@ -105,11 +105,10 @@ func commandApplyKeyspaceRoutingRules(cmd *cobra.Command, args []string) error {
 				fmt.Printf(" in the following cells: %s.\n", strings.Join(applyKeyspaceRoutingRulesOptions.Cells, ", "))
 			}
 		}
-
 		return nil
 	}
 
-	_, err = client.ApplyKeyspaceRoutingRules(commandCtx, &vtctldatapb.ApplyKeyspaceRoutingRulesRequest{
+	resp, err := client.ApplyKeyspaceRoutingRules(commandCtx, &vtctldatapb.ApplyKeyspaceRoutingRulesRequest{
 		KeyspaceRoutingRules: krr,
 		SkipRebuild:          opts.SkipRebuild,
 		RebuildCells:         opts.Cells,
@@ -118,12 +117,11 @@ func commandApplyKeyspaceRoutingRules(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Printf("New KeyspaceRoutingRules object:\n%s\nIf this is not what you expected, check the input data (as JSON parsing will skip unexpected fields).\n", data)
-
-	if opts.SkipRebuild {
-		fmt.Println("Skipping rebuild of VSchema graph as requested, you will need to run RebuildVSchemaGraph for the changes to take effect.")
+	respJSON, err := cli.MarshalJSON(resp)
+	if err != nil {
+		return err
 	}
-
+	fmt.Printf("%s\n", respJSON)
 	return nil
 }
 
