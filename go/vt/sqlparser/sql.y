@@ -711,11 +711,11 @@ load_statement:
 with_clause:
   WITH with_list
   {
-	$$ = &With{CTEs: $2, Recursive: false}
+    $$ = &With{CTEs: $2, Recursive: false}
   }
 | WITH RECURSIVE with_list
   {
-	$$ = &With{CTEs: $3, Recursive: true}
+    $$ = &With{CTEs: $3, Recursive: true}
   }
 
 with_clause_opt:
@@ -724,33 +724,33 @@ with_clause_opt:
   }
  | with_clause
  {
- 	$$ = $1
+    $$ = $1
  }
 
 with_list:
   with_list ',' common_table_expr
   {
-	$$ = append($1, $3)
+    $$ = append($1, $3)
   }
 | common_table_expr
   {
-	$$ = []*CommonTableExpr{$1}
+    $$ = []*CommonTableExpr{$1}
   }
 
 common_table_expr:
   table_id column_list_opt AS subquery
   {
-	$$ = &CommonTableExpr{ID: $1, Columns: $2, Subquery: $4}
+    $$ = &CommonTableExpr{ID: $1, Columns: $2, Subquery: $4}
   }
 
 query_expression_parens:
   openb query_expression_parens closeb
   {
-  	$$ = $2
+    $$ = $2
   }
 | openb query_expression closeb
   {
-     $$ = $2
+    $$ = $2
   }
 | openb query_expression locking_clause closeb
   {
@@ -777,117 +777,117 @@ query_expression_parens:
 query_expression:
  query_expression_body order_by_opt limit_opt
   {
-	$1.SetOrderBy($2)
-	$1.SetLimit($3)
-	$$ = $1
+    $1.SetOrderBy($2)
+    $1.SetLimit($3)
+    $$ = $1
   }
 | query_expression_parens limit_clause
   {
-	$1.SetLimit($2)
-	$$ = $1
+    $1.SetLimit($2)
+    $$ = $1
   }
 | query_expression_parens order_by_clause limit_opt
   {
-	$1.SetOrderBy($2)
-	$1.SetLimit($3)
-	$$ = $1
+    $1.SetOrderBy($2)
+    $1.SetLimit($3)
+    $$ = $1
   }
 | with_clause query_expression_body order_by_opt limit_opt
   {
-  		$2.SetWith($1)
-		$2.SetOrderBy($3)
-		$2.SetLimit($4)
-		$$ = $2
+    $2.SetWith($1)
+	      $2.SetOrderBy($3)
+	      $2.SetLimit($4)
+	      $$ = $2
   }
 | with_clause query_expression_parens limit_clause
   {
-  		$2.SetWith($1)
-		$2.SetLimit($3)
-		$$ = $2
+    $2.SetWith($1)
+    $2.SetLimit($3)
+    $$ = $2
   }
 | with_clause query_expression_parens order_by_clause limit_opt
   {
-  		$2.SetWith($1)
-		$2.SetOrderBy($3)
-		$2.SetLimit($4)
-		$$ = $2
+    $2.SetWith($1)
+    $2.SetOrderBy($3)
+    $2.SetLimit($4)
+    $$ = $2
   }
 | with_clause query_expression_parens
   {
-	$2.SetWith($1)
+    $2.SetWith($1)
   }
 | SELECT comment_opt cache_opt NEXT num_val for_from table_name
   {
-	$$ = NewSelect(Comments($2), SelectExprs{&Nextval{Expr: $5}}, []string{$3}/*options*/, nil, TableExprs{&AliasedTableExpr{Expr: $7}}, nil/*where*/, nil/*groupBy*/, nil/*having*/, nil)
+    $$ = NewSelect(Comments($2), SelectExprs{&Nextval{Expr: $5}}, []string{$3}/*options*/, nil, TableExprs{&AliasedTableExpr{Expr: $7}}, nil/*where*/, nil/*groupBy*/, nil/*having*/, nil)
   }
 
 query_expression_body:
  query_primary
   {
-	$$ = $1
+    $$ = $1
   }
 | query_expression_body union_op query_primary
   {
- 	$$ = &Union{Left: $1, Distinct: $2, Right: $3}
+    $$ = &Union{Left: $1, Distinct: $2, Right: $3}
   }
 | query_expression_parens union_op query_primary
   {
-	$$ = &Union{Left: $1, Distinct: $2, Right: $3}
+    $$ = &Union{Left: $1, Distinct: $2, Right: $3}
   }
 | query_expression_body union_op query_expression_parens
   {
-  	$$ = &Union{Left: $1, Distinct: $2, Right: $3}
+    $$ = &Union{Left: $1, Distinct: $2, Right: $3}
   }
 | query_expression_parens union_op query_expression_parens
   {
-	$$ = &Union{Left: $1, Distinct: $2, Right: $3}
+    $$ = &Union{Left: $1, Distinct: $2, Right: $3}
   }
 
 select_statement:
 query_expression
   {
-	$$ = $1
+    $$ = $1
   }
 | query_expression locking_clause
   {
 	setLockInSelect($1, $2)
-	$$ = $1
+    $$ = $1
   }
 | query_expression_parens
   {
-	$$ = $1
+    $$ = $1
   }
 | select_stmt_with_into
   {
-	$$ = $1
+    $$ = $1
   }
 
 select_stmt_with_into:
   openb select_stmt_with_into closeb
   {
-	$$ = $2;
+    $$ = $2
   }
 | query_expression into_clause
   {
-	$1.SetInto($2)
-	$$ = $1
+    $1.SetInto($2)
+    $$ = $1
   }
 | query_expression into_clause locking_clause
   {
-	$1.SetInto($2)
-	$1.SetLock($3)
-	$$ = $1
+    $1.SetInto($2)
+    $1.SetLock($3)
+    $$ = $1
   }
 | query_expression locking_clause into_clause
   {
-	$1.SetInto($3)
-	$1.SetLock($2)
-	$$ = $1
+    $1.SetInto($3)
+    $1.SetLock($2)
+    $$ = $1
   }
 | query_expression_parens into_clause
   {
- 	$1.SetInto($2)
-	$$ = $1
+    $1.SetInto($2)
+    $$ = $1
   }
 
 stream_statement:
@@ -1012,7 +1012,7 @@ opt_partition_clause:
   }
 | PARTITION openb partition_list closeb
   {
-  $$ = $3
+    $$ = $3
   }
 
 set_statement:
@@ -1439,7 +1439,7 @@ column_definition:
   {
     $2.Options = $4
     if $2.Options.Collate == "" {
-    	$2.Options.Collate = $3
+        $2.Options.Collate = $3
     }
     $2.Options.Reference = $5
     $$ = &ColumnDefinition{Name: $1, Type: $2}
@@ -1482,8 +1482,8 @@ column_attribute_list_opt:
   }
 | column_attribute_list_opt DEFAULT openb expression closeb
   {
-	$1.Default = $4
-	$$ = $1
+    $1.Default = $4
+    $$ = $1
   }
 | column_attribute_list_opt DEFAULT now_or_signed_literal
   {
@@ -1551,25 +1551,25 @@ column_attribute_list_opt:
 column_format:
   FIXED
 {
-  $$ = FixedFormat
+    $$ = FixedFormat
 }
 | DYNAMIC
 {
-  $$ = DynamicFormat
+    $$ = DynamicFormat
 }
 | DEFAULT
 {
-  $$ = DefaultFormat
+    $$ = DefaultFormat
 }
 
 column_storage:
   VIRTUAL
 {
-  $$ = VirtualStorage
+    $$ = VirtualStorage
 }
 | STORED
 {
-  $$ = StoredStorage
+    $$ = StoredStorage
 }
 
 generated_column_attribute_list_opt:
@@ -1615,7 +1615,7 @@ generated_column_attribute_list_opt:
 now_or_signed_literal:
 now
   {
-  	$$ = $1
+    $$ = $1
   }
 | signed_literal_or_null
 
@@ -1659,41 +1659,41 @@ NULL
  literal
 | '+' NUM_literal
    {
- 	$$= $2
+    $$= $2
    }
 | '-' NUM_literal
    {
-   	$$ = &UnaryExpr{Operator: UMinusOp, Expr: $2}
+    $$ = &UnaryExpr{Operator: UMinusOp, Expr: $2}
    }
 
 literal:
 text_literal %prec MULTIPLE_TEXT_LITERAL
   {
-   $$= $1
+    $$= $1
   }
 | NUM_literal
   {
-  	$$= $1
+    $$= $1
   }
 | boolean_value
   {
-  	$$ = $1
+    $$ = $1
   }
 | HEX
   {
-	$$ = NewHexLiteral($1)
+    $$ = NewHexLiteral($1)
   }
 | HEXNUM
   {
-  	$$ = NewHexNumLiteral($1)
+    $$ = NewHexNumLiteral($1)
   }
 | BITNUM
   {
-  	$$ = NewBitLiteral($1)
+    $$ = NewBitLiteral($1)
   }
 | BIT_LITERAL
   {
-	$$ = NewBitLiteral("0b" + $1)
+    $$ = NewBitLiteral("0b" + $1)
   }
 | VALUE_ARG
   {
@@ -1701,19 +1701,19 @@ text_literal %prec MULTIPLE_TEXT_LITERAL
   }
 | underscore_charsets BIT_LITERAL %prec UNARY
   {
-  	$$ = &IntroducerExpr{CharacterSet: $1, Expr: NewBitLiteral("0b" + $2)}
+    $$ = &IntroducerExpr{CharacterSet: $1, Expr: NewBitLiteral("0b" + $2)}
   }
 | underscore_charsets HEXNUM %prec UNARY
   {
-  	$$ = &IntroducerExpr{CharacterSet: $1, Expr: NewHexNumLiteral($2)}
+    $$ = &IntroducerExpr{CharacterSet: $1, Expr: NewHexNumLiteral($2)}
   }
 | underscore_charsets BITNUM %prec UNARY
   {
-  	$$ = &IntroducerExpr{CharacterSet: $1, Expr: NewBitLiteral($2)}
+    $$ = &IntroducerExpr{CharacterSet: $1, Expr: NewBitLiteral($2)}
   }
 | underscore_charsets HEX %prec UNARY
   {
-   	$$ = &IntroducerExpr{CharacterSet: $1, Expr: NewHexLiteral($2)}
+    $$ = &IntroducerExpr{CharacterSet: $1, Expr: NewHexLiteral($2)}
   }
 | underscore_charsets column_name_or_offset %prec UNARY
   {
@@ -1726,15 +1726,15 @@ text_literal %prec MULTIPLE_TEXT_LITERAL
   }
 | DATE STRING
   {
-  $$ = NewDateLiteral($2)
+    $$ = NewDateLiteral($2)
   }
 | TIME STRING
   {
-  $$ = NewTimeLiteral($2)
+    $$ = NewTimeLiteral($2)
   }
 | TIMESTAMP STRING
   {
-  $$ = NewTimestampLiteral($2)
+    $$ = NewTimestampLiteral($2)
   }
 
 underscore_charsets:
@@ -1928,25 +1928,25 @@ INTEGRAL
 text_literal:
 text_start
   {
-  	$$ = $1
+    $$ = $1
   }
 | text_literal STRING
   {
-  	$$ = AppendString($1, $2)
+    $$ = AppendString($1, $2)
   }
 
 text_start:
 STRING
   {
-	$$ = NewStrLiteral($1)
+    $$ = NewStrLiteral($1)
   }
 | NCHAR_STRING
   {
-	$$ = &UnaryExpr{Operator: NStringOp, Expr: NewStrLiteral($1)}
+    $$ = &UnaryExpr{Operator: NStringOp, Expr: NewStrLiteral($1)}
   }
  | underscore_charsets STRING %prec UNARY
    {
-   	$$ = &IntroducerExpr{CharacterSet: $1, Expr: NewStrLiteral($2)}
+    $$ = &IntroducerExpr{CharacterSet: $1, Expr: NewStrLiteral($2)}
    }
 
 text_literal_or_arg:
@@ -3008,7 +3008,7 @@ alter_option:
   }
 | ALTER column_opt column_name SET DEFAULT openb expression closeb
   {
-	$$ = &AlterColumn{Column: $3, DropDefault:false, DefaultVal:$7}
+    $$ = &AlterColumn{Column: $3, DropDefault:false, DefaultVal:$7}
   }
 | ALTER column_opt column_name SET VISIBLE
   {
@@ -3112,43 +3112,43 @@ alter_commands_modifier_list:
 alter_commands_modifier:
   ALGORITHM equal_opt DEFAULT
     {
-      $$ = AlgorithmValue(string($3))
+    $$ = AlgorithmValue(string($3))
     }
   | ALGORITHM equal_opt INPLACE
     {
-      $$ = AlgorithmValue(string($3))
+    $$ = AlgorithmValue(string($3))
     }
   | ALGORITHM equal_opt COPY
     {
-      $$ = AlgorithmValue(string($3))
+    $$ = AlgorithmValue(string($3))
     }
   | ALGORITHM equal_opt INSTANT
     {
-      $$ = AlgorithmValue(string($3))
+    $$ = AlgorithmValue(string($3))
     }
   | LOCK equal_opt DEFAULT
     {
-      $$ = &LockOption{Type:DefaultType}
+    $$ = &LockOption{Type:DefaultType}
     }
   | LOCK equal_opt NONE
     {
-      $$ = &LockOption{Type:NoneType}
+    $$ = &LockOption{Type:NoneType}
     }
   | LOCK equal_opt SHARED
     {
-      $$ = &LockOption{Type:SharedType}
+    $$ = &LockOption{Type:SharedType}
     }
   | LOCK equal_opt EXCLUSIVE
     {
-      $$ = &LockOption{Type:ExclusiveType}
+    $$ = &LockOption{Type:ExclusiveType}
     }
   | WITH VALIDATION
     {
-      $$ = &Validation{With:true}
+    $$ = &Validation{With:true}
     }
   | WITHOUT VALIDATION
     {
-      $$ = &Validation{With:false}
+    $$ = &Validation{With:false}
     }
 
 alter_statement:
@@ -3393,16 +3393,16 @@ partitions_options_opt:
   }
 | PARTITION BY partitions_options_beginning partitions_opt subpartition_opt partition_definitions_opt
     {
-      $3.Partitions = $4
-      $3.SubPartition = $5
-      $3.Definitions = $6
-      $$ = $3
+    $3.Partitions = $4
+    $3.SubPartition = $5
+    $3.Definitions = $6
+    $$ = $3
     }
 
 partitions_options_beginning:
   linear_opt HASH '(' expression ')'
     {
-      $$ = &PartitionOption {
+    $$ = &PartitionOption {
         IsLinear: $1,
         Type: HashType,
         Expr: $4,
@@ -3410,7 +3410,7 @@ partitions_options_beginning:
     }
 | linear_opt KEY algorithm_opt '(' column_list_empty ')'
     {
-      $$ = &PartitionOption {
+    $$ = &PartitionOption {
         IsLinear: $1,
         Type: KeyType,
         KeyAlgorithm: $3,
@@ -3419,7 +3419,7 @@ partitions_options_beginning:
     }
 | range_or_list '(' expression ')'
     {
-      $$ = &PartitionOption {
+    $$ = &PartitionOption {
         Type: $1,
         Expr: $3,
       }
@@ -3956,9 +3956,9 @@ drop_statement:
   {
     // Change this to an alter statement
     if $4.Lowered() == "primary" {
-      $$ = &AlterTable{FullyParsed:true, Table: $6,AlterOptions: append([]AlterOption{&DropKey{Type:PrimaryKeyType}},$7...)}
+    $$ = &AlterTable{FullyParsed:true, Table: $6,AlterOptions: append([]AlterOption{&DropKey{Type:PrimaryKeyType}},$7...)}
     } else {
-      $$ = &AlterTable{FullyParsed: true, Table: $6,AlterOptions: append([]AlterOption{&DropKey{Type:NormalKeyType, Name:$4}},$7...)}
+    $$ = &AlterTable{FullyParsed: true, Table: $6,AlterOptions: append([]AlterOption{&DropKey{Type:NormalKeyType, Name:$4}},$7...)}
     }
   }
 | DROP comment_opt VIEW exists_opt view_name_list restrict_or_cascade_opt
@@ -4236,11 +4236,11 @@ full_opt:
 columns_or_fields:
   COLUMNS
   {
-      $$ = string($1)
+    $$ = string($1)
   }
 | FIELDS
   {
-      $$ = string($1)
+    $$ = string($1)
   }
 
 from_database_opt:
@@ -4274,11 +4274,11 @@ like_or_where_opt:
 like_opt:
   /* empty */
     {
-      $$ = nil
+    $$ = nil
     }
   | LIKE STRING
     {
-      $$ = &ShowFilter{Like:string($2)}
+    $$ = &ShowFilter{Like:string($2)}
     }
 
 session_or_local_opt:
@@ -4725,15 +4725,15 @@ union_op:
 
 cache_opt:
 {
-  $$ = ""
+    $$ = ""
 }
 | SQL_NO_CACHE
 {
-  $$ = SQLNoCacheStr
+    $$ = SQLNoCacheStr
 }
 | SQL_CACHE
 {
-  $$ = SQLCacheStr
+    $$ = SQLCacheStr
 }
 
 distinct_opt:
@@ -4891,7 +4891,7 @@ from_opt:
   }
   | from_clause
   {
-  	$$ = $1
+    $$ = $1
   }
 
 from_clause:
@@ -5132,9 +5132,9 @@ natural_join:
 | NATURAL outer_join
   {
     if $2 == LeftJoinType {
-      $$ = NaturalLeftJoinType
+    $$ = NaturalLeftJoinType
     } else {
-      $$ = NaturalRightJoinType
+    $$ = NaturalRightJoinType
     }
   }
 
@@ -5240,19 +5240,19 @@ where_expression_opt:
 expression:
   expression OR expression %prec OR
   {
-	$$ = &OrExpr{Left: $1, Right: $3}
+    $$ = &OrExpr{Left: $1, Right: $3}
   }
 | expression XOR expression %prec XOR
   {
-	$$ = &XorExpr{Left: $1, Right: $3}
+    $$ = &XorExpr{Left: $1, Right: $3}
   }
 | expression AND expression %prec AND
   {
-	$$ = &AndExpr{Left: $1, Right: $3}
+    $$ = &AndExpr{Left: $1, Right: $3}
   }
 | NOT expression %prec NOT
   {
-	  $$ = &NotExpr{Expr: $2}
+	    $$ = &NotExpr{Expr: $2}
   }
 | bool_pri IS is_suffix %prec IS
   {
@@ -5260,11 +5260,11 @@ expression:
   }
 | bool_pri %prec EXPRESSION_PREC_SETTER
   {
-	$$ = $1
+    $$ = $1
   }
 | user_defined_variable ASSIGNMENT_OPT expression %prec ASSIGNMENT_OPT
  {
-  $$ = &AssignmentExpr{Left: $1, Right: $3}
+    $$ = &AssignmentExpr{Left: $1, Right: $3}
  }
 | expression MEMBER OF openb expression closeb
   {
@@ -5286,25 +5286,25 @@ bool_pri IS null_or_unknown %prec IS
   }
 | bool_pri IS NOT null_or_unknown %prec IS
   {
-  	$$ = &IsExpr{Left: $1, Right: IsNotNullOp}
+    $$ = &IsExpr{Left: $1, Right: IsNotNullOp}
   }
 | bool_pri compare predicate
   {
-	$$ = &ComparisonExpr{Left: $1, Operator: $2, Right: $3}
+    $$ = &ComparisonExpr{Left: $1, Operator: $2, Right: $3}
   }
 | predicate %prec EXPRESSION_PREC_SETTER
   {
-	$$ = $1
+    $$ = $1
   }
 
 predicate:
 bit_expr IN col_tuple
   {
-	$$ = &ComparisonExpr{Left: $1, Operator: InOp, Right: $3}
+    $$ = &ComparisonExpr{Left: $1, Operator: InOp, Right: $3}
   }
 | bit_expr NOT IN col_tuple
   {
-	$$ = &ComparisonExpr{Left: $1, Operator: NotInOp, Right: $4}
+    $$ = &ComparisonExpr{Left: $1, Operator: NotInOp, Right: $4}
   }
 | bit_expr BETWEEN bit_expr AND predicate
   {
@@ -5312,27 +5312,27 @@ bit_expr IN col_tuple
   }
 | bit_expr NOT BETWEEN bit_expr AND predicate
   {
-	$$ = &BetweenExpr{Left: $1, IsBetween: false, From: $4, To: $6}
+    $$ = &BetweenExpr{Left: $1, IsBetween: false, From: $4, To: $6}
   }
 | bit_expr LIKE simple_expr
   {
-	  $$ = &ComparisonExpr{Left: $1, Operator: LikeOp, Right: $3}
+	    $$ = &ComparisonExpr{Left: $1, Operator: LikeOp, Right: $3}
   }
 | bit_expr NOT LIKE simple_expr
   {
-	$$ = &ComparisonExpr{Left: $1, Operator: NotLikeOp, Right: $4}
+    $$ = &ComparisonExpr{Left: $1, Operator: NotLikeOp, Right: $4}
   }
 | bit_expr LIKE simple_expr ESCAPE simple_expr %prec LIKE
   {
-	  $$ = &ComparisonExpr{Left: $1, Operator: LikeOp, Right: $3, Escape: $5}
+	    $$ = &ComparisonExpr{Left: $1, Operator: LikeOp, Right: $3, Escape: $5}
   }
 | bit_expr NOT LIKE simple_expr ESCAPE simple_expr %prec LIKE
   {
-	$$ = &ComparisonExpr{Left: $1, Operator: NotLikeOp, Right: $4, Escape: $6}
+    $$ = &ComparisonExpr{Left: $1, Operator: NotLikeOp, Right: $4, Escape: $6}
   }
 | bit_expr regexp_symbol bit_expr
   {
-	$$ = &ComparisonExpr{Left: $1, Operator: RegexpOp, Right: $3}
+    $$ = &ComparisonExpr{Left: $1, Operator: RegexpOp, Right: $3}
   }
 | bit_expr NOT regexp_symbol bit_expr
   {
@@ -5340,7 +5340,7 @@ bit_expr IN col_tuple
   }
 | bit_expr %prec EXPRESSION_PREC_SETTER
  {
-	$$ = $1
+    $$ = $1
  }
 
 regexp_symbol:
@@ -5355,109 +5355,109 @@ regexp_symbol:
 bit_expr:
 bit_expr '|' bit_expr %prec '|'
   {
-	  $$ = &BinaryExpr{Left: $1, Operator: BitOrOp, Right: $3}
+	    $$ = &BinaryExpr{Left: $1, Operator: BitOrOp, Right: $3}
   }
 | bit_expr '&' bit_expr %prec '&'
   {
-	  $$ = &BinaryExpr{Left: $1, Operator: BitAndOp, Right: $3}
+	    $$ = &BinaryExpr{Left: $1, Operator: BitAndOp, Right: $3}
   }
 | bit_expr SHIFT_LEFT bit_expr %prec SHIFT_LEFT
   {
-	  $$ = &BinaryExpr{Left: $1, Operator: ShiftLeftOp, Right: $3}
+	    $$ = &BinaryExpr{Left: $1, Operator: ShiftLeftOp, Right: $3}
   }
 | bit_expr SHIFT_RIGHT bit_expr %prec SHIFT_RIGHT
   {
-	  $$ = &BinaryExpr{Left: $1, Operator: ShiftRightOp, Right: $3}
+	    $$ = &BinaryExpr{Left: $1, Operator: ShiftRightOp, Right: $3}
   }
 | bit_expr '+' bit_expr %prec '+'
   {
-	  $$ = &BinaryExpr{Left: $1, Operator: PlusOp, Right: $3}
+	    $$ = &BinaryExpr{Left: $1, Operator: PlusOp, Right: $3}
   }
 | bit_expr '-' bit_expr %prec '-'
   {
-	  $$ = &BinaryExpr{Left: $1, Operator: MinusOp, Right: $3}
+	    $$ = &BinaryExpr{Left: $1, Operator: MinusOp, Right: $3}
   }
 | bit_expr '+' INTERVAL bit_expr interval %prec '+'
   {
-	  $$ = &IntervalDateExpr{Syntax: IntervalDateExprBinaryAdd, Date: $1, Unit: $5, Interval: $4}
+	    $$ = &IntervalDateExpr{Syntax: IntervalDateExprBinaryAdd, Date: $1, Unit: $5, Interval: $4}
   }
 | bit_expr '-' INTERVAL bit_expr interval %prec '-'
   {
-	  $$ = &IntervalDateExpr{Syntax: IntervalDateExprBinarySub, Date: $1, Unit: $5, Interval: $4}
+	    $$ = &IntervalDateExpr{Syntax: IntervalDateExprBinarySub, Date: $1, Unit: $5, Interval: $4}
   }
 | bit_expr '*' bit_expr %prec '*'
   {
-	  $$ = &BinaryExpr{Left: $1, Operator: MultOp, Right: $3}
+	    $$ = &BinaryExpr{Left: $1, Operator: MultOp, Right: $3}
   }
 | bit_expr '/' bit_expr %prec '/'
   {
-	  $$ = &BinaryExpr{Left: $1, Operator: DivOp, Right: $3}
+	    $$ = &BinaryExpr{Left: $1, Operator: DivOp, Right: $3}
   }
 | bit_expr '%' bit_expr %prec '%'
   {
-	  $$ = &BinaryExpr{Left: $1, Operator: ModOp, Right: $3}
+	    $$ = &BinaryExpr{Left: $1, Operator: ModOp, Right: $3}
   }
 | bit_expr DIV bit_expr %prec DIV
   {
-	  $$ = &BinaryExpr{Left: $1, Operator: IntDivOp, Right: $3}
+	    $$ = &BinaryExpr{Left: $1, Operator: IntDivOp, Right: $3}
   }
 | bit_expr MOD bit_expr %prec MOD
   {
-	  $$ = &BinaryExpr{Left: $1, Operator: ModOp, Right: $3}
+	    $$ = &BinaryExpr{Left: $1, Operator: ModOp, Right: $3}
   }
 | bit_expr '^' bit_expr %prec '^'
   {
-	  $$ = &BinaryExpr{Left: $1, Operator: BitXorOp, Right: $3}
+	    $$ = &BinaryExpr{Left: $1, Operator: BitXorOp, Right: $3}
   }
 | simple_expr %prec EXPRESSION_PREC_SETTER
   {
-	$$ = $1
+    $$ = $1
   }
 
 simple_expr:
 function_call_keyword
   {
-  	$$ = $1
+    $$ = $1
   }
 | function_call_nonkeyword
   {
-  	$$ = $1
+    $$ = $1
   }
 | function_call_generic
   {
-  	$$ = $1
+    $$ = $1
   }
 | function_call_conflict
   {
-  	$$ = $1
+    $$ = $1
   }
 | simple_expr COLLATE charset %prec UNARY
   {
-	$$ = &CollateExpr{Expr: $1, Collation: $3}
+    $$ = &CollateExpr{Expr: $1, Collation: $3}
   }
 | literal_or_null
   {
-  	$$ = $1
+    $$ = $1
   }
 | column_name_or_offset
   {
-  	$$ = $1
+    $$ = $1
   }
 | variable_expr
   {
-  	$$ = $1
+    $$ = $1
   }
 | '+' simple_expr %prec UNARY
   {
-	$$= $2; // TODO: do we really want to ignore unary '+' before any kind of literals?
+    $$ = $2 // TODO: do we really want to ignore unary '+' before any kind of literals?
   }
 | '-' simple_expr %prec UNARY
   {
-	$$ = &UnaryExpr{Operator: UMinusOp, Expr: $2}
+    $$ = &UnaryExpr{Operator: UMinusOp, Expr: $2}
   }
 | '~' simple_expr %prec UNARY
   {
-	$$ = &UnaryExpr{Operator: TildaOp, Expr: $2}
+    $$ = &UnaryExpr{Operator: TildaOp, Expr: $2}
   }
 | '!' simple_expr %prec UNARY
   {
@@ -5465,19 +5465,19 @@ function_call_keyword
   }
 | subquery
   {
-	$$= $1
+    $$= $1
   }
 | tuple_expression
   {
-	$$ = $1
+    $$ = $1
   }
 | EXISTS subquery
   {
-	$$ = &ExistsExpr{Subquery: $2}
+    $$ = &ExistsExpr{Subquery: $2}
   }
 | MATCH column_names_opt_paren AGAINST openb bit_expr match_option closeb
   {
-  $$ = &MatchExpr{Columns: $2, Expr: $5, Option: $6}
+    $$ = &MatchExpr{Columns: $2, Expr: $5, Option: $6}
   }
 | CAST openb expression AS convert_type array_opt closeb
   {
@@ -5505,7 +5505,7 @@ function_call_keyword
   }
 | INTERVAL bit_expr interval '+' bit_expr %prec INTERVAL
   {
-	  $$ = &IntervalDateExpr{Syntax: IntervalDateExprBinaryAddLeft, Date: $5, Unit: $3, Interval: $2}
+	    $$ = &IntervalDateExpr{Syntax: IntervalDateExprBinaryAddLeft, Date: $5, Unit: $3, Interval: $2}
   }
 | INTERVAL openb expression ',' expression_list closeb
   {
@@ -5513,11 +5513,11 @@ function_call_keyword
   }
 | column_name_or_offset JSON_EXTRACT_OP text_literal_or_arg
   {
-	$$ = &BinaryExpr{Left: $1, Operator: JSONExtractOp, Right: $3}
+    $$ = &BinaryExpr{Left: $1, Operator: JSONExtractOp, Right: $3}
   }
 | column_name_or_offset JSON_UNQUOTE_EXTRACT_OP text_literal_or_arg
   {
-	$$ = &BinaryExpr{Left: $1, Operator: JSONUnquoteExtractOp, Right: $3}
+    $$ = &BinaryExpr{Left: $1, Operator: JSONUnquoteExtractOp, Right: $3}
   }
 
 column_names_opt_paren:
@@ -5679,7 +5679,6 @@ over_clause_opt:
   {
     $$ = nil
   }
-;
 
 null_treatment_clause_opt:
   {
@@ -5848,7 +5847,7 @@ col_tuple:
 subquery:
   query_expression_parens %prec SUBQUERY_AS_EXPR
   {
-  	$$ = &Subquery{$1}
+    $$ = &Subquery{$1}
   }
 
 expression_list:
@@ -5902,11 +5901,11 @@ function_call_keyword:
   }
 | SUBSTRING openb expression FROM expression FOR expression closeb
   {
-  	$$ = &SubstrExpr{Name: $3, From: $5, To: $7}
+    $$ = &SubstrExpr{Name: $3, From: $5, To: $7}
   }
 | SUBSTRING openb expression FROM expression closeb
   {
-  	$$ = &SubstrExpr{Name: $3, From: $5}
+    $$ = &SubstrExpr{Name: $3, From: $5}
   }
 | CASE expression_opt when_expression_list else_expression_opt END
   {
@@ -5937,7 +5936,7 @@ UTC_DATE func_paren_opt
   }
 | now
   {
-  	$$ = $1
+    $$ = $1
   }
   // curdate
 /* doesn't support fsp */
@@ -5997,35 +5996,35 @@ UTC_DATE func_paren_opt
   }
 | BIT_XOR openb expression closeb over_clause_opt
    {
-     $$ = &BitXor{Arg:$3, OverClause: $5}
+    $$ = &BitXor{Arg:$3, OverClause: $5}
    }
 | STD openb expression closeb over_clause_opt
     {
-      $$ = &Std{Arg:$3, OverClause: $5}
+    $$ = &Std{Arg:$3, OverClause: $5}
     }
 | STDDEV openb expression closeb over_clause_opt
     {
-      $$ = &StdDev{Arg:$3, OverClause: $5}
+    $$ = &StdDev{Arg:$3, OverClause: $5}
     }
 | STDDEV_POP openb expression closeb over_clause_opt
     {
-      $$ = &StdPop{Arg:$3, OverClause: $5}
+    $$ = &StdPop{Arg:$3, OverClause: $5}
     }
 | STDDEV_SAMP openb expression closeb over_clause_opt
     {
-      $$ = &StdSamp{Arg:$3, OverClause: $5}
+    $$ = &StdSamp{Arg:$3, OverClause: $5}
     }
 | VAR_POP openb expression closeb over_clause_opt
      {
-       $$ = &VarPop{Arg:$3, OverClause: $5}
+    $$ = &VarPop{Arg:$3, OverClause: $5}
      }
 | VAR_SAMP openb expression closeb over_clause_opt
      {
-       $$ = &VarSamp{Arg:$3, OverClause: $5}
+    $$ = &VarSamp{Arg:$3, OverClause: $5}
      }
 | VARIANCE openb expression closeb over_clause_opt
      {
-       $$ = &Variance{Arg:$3, OverClause: $5}
+    $$ = &Variance{Arg:$3, OverClause: $5}
      }
 | GROUP_CONCAT openb distinct_opt expression_list order_by_opt separator_opt limit_opt closeb
   {
@@ -6425,31 +6424,31 @@ UTC_DATE func_paren_opt
   }
 | ST_Area openb expression closeb
  {
-   $$ = &PolygonPropertyFuncExpr{ Property: Area, Polygon: $3 }
+    $$ = &PolygonPropertyFuncExpr{ Property: Area, Polygon: $3 }
  }
 | ST_Centroid openb expression closeb
  {
-   $$ = &PolygonPropertyFuncExpr{ Property: Centroid, Polygon: $3 }
+    $$ = &PolygonPropertyFuncExpr{ Property: Centroid, Polygon: $3 }
  }
 | ST_ExteriorRing openb expression closeb
  {
-   $$ = &PolygonPropertyFuncExpr{ Property: ExteriorRing, Polygon: $3 }
+    $$ = &PolygonPropertyFuncExpr{ Property: ExteriorRing, Polygon: $3 }
  }
 | ST_InteriorRingN openb expression ',' expression closeb
  {
-   $$ = &PolygonPropertyFuncExpr{ Property: InteriorRingN, Polygon: $3, PropertyDefArg: $5 }
+    $$ = &PolygonPropertyFuncExpr{ Property: InteriorRingN, Polygon: $3, PropertyDefArg: $5 }
  }
 | ST_NumInteriorRings openb expression closeb
  {
-   $$ = &PolygonPropertyFuncExpr{ Property: NumInteriorRings, Polygon: $3 }
+    $$ = &PolygonPropertyFuncExpr{ Property: NumInteriorRings, Polygon: $3 }
  }
 | ST_GeometryN openb expression ',' expression closeb
  {
-   $$ = &GeomCollPropertyFuncExpr{ Property: GeometryN, GeomColl: $3, PropertyDefArg: $5 }
+    $$ = &GeomCollPropertyFuncExpr{ Property: GeometryN, GeomColl: $3, PropertyDefArg: $5 }
  }
 | ST_NumGeometries openb expression closeb
  {
-   $$ = &GeomCollPropertyFuncExpr{ Property: NumGeometries, GeomColl: $3 }
+    $$ = &GeomCollPropertyFuncExpr{ Property: NumGeometries, GeomColl: $3 }
  }
 | ST_GeoHash openb expression ',' expression ',' expression closeb
   {
@@ -6850,83 +6849,83 @@ returning_type_opt:
 interval:
   DAY_HOUR
   {
-	$$=IntervalDayHour
+    $$=IntervalDayHour
   }
 | DAY_MICROSECOND
   {
-	$$=IntervalDayMicrosecond
+    $$=IntervalDayMicrosecond
   }
 | DAY_MINUTE
   {
-	$$=IntervalDayMinute
+    $$=IntervalDayMinute
   }
 | DAY_SECOND
   {
-	$$=IntervalDaySecond
+    $$=IntervalDaySecond
   }
 | HOUR_MICROSECOND
   {
-	$$=IntervalHourMicrosecond
+    $$=IntervalHourMicrosecond
   }
 | HOUR_MINUTE
   {
-	$$=IntervalHourMinute
+    $$=IntervalHourMinute
   }
 | HOUR_SECOND
   {
-	$$=IntervalHourSecond
+    $$=IntervalHourSecond
   }
 | MINUTE_MICROSECOND
   {
-	$$=IntervalMinuteMicrosecond
+    $$=IntervalMinuteMicrosecond
   }
 | MINUTE_SECOND
   {
-	$$=IntervalMinuteSecond
+    $$=IntervalMinuteSecond
   }
 | SECOND_MICROSECOND
   {
-	$$=IntervalSecondMicrosecond
+    $$=IntervalSecondMicrosecond
   }
 | YEAR_MONTH
   {
-	$$=IntervalYearMonth
+    $$=IntervalYearMonth
   }
 | DAY
   {
- 	$$=IntervalDay
+    $$=IntervalDay
   }
 | WEEK
   {
-  	$$=IntervalWeek
+    $$=IntervalWeek
   }
 | HOUR
   {
- 	$$=IntervalHour
+    $$=IntervalHour
   }
 | MINUTE
   {
- 	$$=IntervalMinute
+    $$=IntervalMinute
   }
 | MONTH
   {
-	$$=IntervalMonth
+    $$=IntervalMonth
   }
 | QUARTER
   {
-	$$=IntervalQuarter
+    $$=IntervalQuarter
   }
 | SECOND
   {
-	$$=IntervalSecond
+    $$=IntervalSecond
   }
 | MICROSECOND
   {
-	$$=IntervalMicrosecond
+    $$=IntervalMicrosecond
   }
 | YEAR
   {
-	$$=IntervalYear
+    $$=IntervalYear
   }
 
 timestampadd_interval:
@@ -7010,7 +7009,7 @@ func_paren_opt:
 func_datetime_precision:
   /* empty */
   {
-  	$$ = 0
+    $$ = 0
   }
 | openb closeb
   {
@@ -7018,7 +7017,7 @@ func_datetime_precision:
   }
 | openb INTEGRAL closeb
   {
-      $$ = convertStringToInt($2)
+    $$ = convertStringToInt($2)
   }
 
 /*
@@ -7320,7 +7319,7 @@ order_by_opt:
   }
  | order_by_clause
  {
- 	$$ = $1
+    $$ = $1
  }
 
 order_by_clause:
@@ -7364,7 +7363,7 @@ limit_opt:
   }
  | limit_clause
  {
- 	$$ = $1
+    $$ = $1
  }
 
 limit_clause:
@@ -7387,19 +7386,19 @@ algorithm_lock_opt:
   }
 | lock_index algorithm_index
   {
-     $$ = []AlterOption{$1,$2}
+    $$ = []AlterOption{$1,$2}
   }
 | algorithm_index lock_index
   {
-     $$ = []AlterOption{$1,$2}
+    $$ = []AlterOption{$1,$2}
   }
 | algorithm_index
   {
-     $$ = []AlterOption{$1}
+    $$ = []AlterOption{$1}
   }
 | lock_index
   {
-     $$ = []AlterOption{$1}
+    $$ = []AlterOption{$1}
   }
 
 
@@ -7579,15 +7578,15 @@ FOR UPDATE
 into_clause:
 INTO OUTFILE S3 STRING charset_opt format_opt export_options manifest_opt overwrite_opt
 {
-$$ = &SelectInto{Type:IntoOutfileS3, FileName:encodeSQLString($4), Charset:$5, FormatOption:$6, ExportOption:$7, Manifest:$8, Overwrite:$9}
+    $$ = &SelectInto{Type:IntoOutfileS3, FileName:encodeSQLString($4), Charset:$5, FormatOption:$6, ExportOption:$7, Manifest:$8, Overwrite:$9}
 }
 | INTO DUMPFILE STRING
 {
-$$ = &SelectInto{Type:IntoDumpfile, FileName:encodeSQLString($3), Charset:ColumnCharset{}, FormatOption:"", ExportOption:"", Manifest:"", Overwrite:""}
+    $$ = &SelectInto{Type:IntoDumpfile, FileName:encodeSQLString($3), Charset:ColumnCharset{}, FormatOption:"", ExportOption:"", Manifest:"", Overwrite:""}
 }
 | INTO OUTFILE STRING charset_opt export_options
 {
-$$ = &SelectInto{Type:IntoOutfile, FileName:encodeSQLString($3), Charset:$4, FormatOption:"", ExportOption:$5, Manifest:"", Overwrite:""}
+    $$ = &SelectInto{Type:IntoOutfile, FileName:encodeSQLString($3), Charset:$4, FormatOption:"", ExportOption:$5, Manifest:"", Overwrite:""}
 }
 
 format_opt:
@@ -7817,9 +7816,9 @@ tuple_expression:
  row_tuple
   {
     if len($1) == 1 {
-      $$ = $1[0]
+    $$ = $1[0]
     } else {
-      $$ = $1
+    $$ = $1
     }
   }
 
