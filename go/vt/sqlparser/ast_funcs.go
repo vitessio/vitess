@@ -1190,6 +1190,14 @@ func (node *Select) AddGroupBy(expr Expr) {
 	node.GroupBy.Exprs = append(node.GroupBy.Exprs, expr)
 }
 
+// GroupByExprs returns the group by expressions
+func (node *Select) GroupByExprs() []Expr {
+	if node.GroupBy == nil {
+		return nil
+	}
+	return node.GroupBy.Exprs
+}
+
 // AddWhere adds the boolean expression to the
 // WHERE clause as an AND condition.
 func (node *Update) AddWhere(expr Expr) {
