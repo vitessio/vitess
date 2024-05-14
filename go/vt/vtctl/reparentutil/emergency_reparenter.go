@@ -458,7 +458,7 @@ func (erp *EmergencyReparenter) promoteIntermediateSource(
 
 	// we reparent all the other valid tablets to start replication from our new source
 	// we wait for all the replicas so that we can choose a better candidate from the ones that started replication later
-	reachableTablets, err := erp.reparentReplicas(ctx, ev, source, validTabletMap, statusMap, opts, true /* waitForAllReplicas */, false /* populateReparentJournal */)
+	reachableTablets, err := erp.reparentReplicas(ctx, ev, source, validTabletMap, statusMap, opts, true /* intermediateReparent */)
 	if err != nil {
 		return nil, err
 	}
@@ -487,8 +487,7 @@ func (erp *EmergencyReparenter) reparentReplicas(
 	tabletMap map[string]*topo.TabletInfo,
 	statusMap map[string]*replicationdatapb.StopReplicationStatus,
 	opts EmergencyReparentOptions,
-	waitForAllReplicas bool,
-	populateReparentJournal bool,
+	intermediateReparent bool,
 ) ([]*topodatapb.Tablet, error) {
 
 	var (
@@ -518,13 +517,26 @@ func (erp *EmergencyReparenter) reparentReplicas(
 	rec := concurrency.AllErrorRecorder{}
 
 	handlePrimary := func(alias string, tablet *topodatapb.Tablet) error {
-		position, err := erp.tmc.PrimaryPosition(replCtx, tablet)
-		if err != nil {
-			return err
-		}
-		if populateReparentJournal {
+		if !intermediateReparent {
+			var position string
+			var err error
+			if ev.ShardInfo.PrimaryAlias == nil {
+				erp.logger.Infof("setting up %v as new primary for an uninitialized cluster", alias)
+				// we call InitPrimary when the PrimaryAlias in the ShardInfo is empty. This happens when we have an uninitialized cluster.
+				position, err = erp.tmc.InitPrimary(replCtx, tablet, SemiSyncAckers(opts.durability, tablet) > 0)
+			} else {
+				erp.logger.Infof("starting promotion for the new primary - %v", alias)
+				// we call PromoteReplica which changes the tablet type, fixes the semi-sync, set the primary to read-write and flushes the binlogs
+				position, err = erp.tmc.PromoteReplica(replCtx, tablet, SemiSyncAckers(opts.durability, tablet) > 0)
+			}
+			if err != nil {
+				return vterrors.Wrapf(err, "primary-elect tablet %v failed to be upgraded to primary: %v", alias, err)
+			}
 			erp.logger.Infof("populating reparent journal on new primary %v", alias)
-			return erp.tmc.PopulateReparentJournal(replCtx, tablet, now, opts.lockAction, newPrimaryTablet.Alias, position)
+			err = erp.tmc.PopulateReparentJournal(replCtx, tablet, now, opts.lockAction, tablet.Alias, position)
+			if err != nil {
+				return vterrors.Wrapf(err, "failed to PopulateReparentJournal on primary: %v", err)
+			}
 		}
 		return nil
 	}
@@ -559,8 +571,8 @@ func (erp *EmergencyReparenter) reparentReplicas(
 		replicaMutex.Unlock()
 
 		// Signal that at least one goroutine succeeded to SetReplicationSource.
-		// We do this only when we do not want to wait for all the replicas
-		if !waitForAllReplicas {
+		// We do this only when we do not want to wait for all the replicas.
+		if !intermediateReparent {
 			replSuccessCancel()
 		}
 	}
@@ -594,10 +606,10 @@ func (erp *EmergencyReparenter) reparentReplicas(
 
 	primaryErr := handlePrimary(topoproto.TabletAliasString(newPrimaryTablet.Alias), newPrimaryTablet)
 	if primaryErr != nil {
-		erp.logger.Warningf("primary failed to PopulateReparentJournal")
+		erp.logger.Warningf("primary failed to promote the new primary")
 		replCancel()
 
-		return nil, vterrors.Wrapf(primaryErr, "failed to PopulateReparentJournal on primary: %v", primaryErr)
+		return nil, vterrors.Wrapf(primaryErr, "failed to promote the new primary: %v", primaryErr)
 	}
 
 	// We should only cancel the context that all the replicas are using when they are done.
@@ -717,26 +729,10 @@ func (erp *EmergencyReparenter) promoteNewPrimary(
 	tabletMap map[string]*topo.TabletInfo,
 	statusMap map[string]*replicationdatapb.StopReplicationStatus,
 ) error {
-	var err error
-	if ev.ShardInfo.PrimaryAlias == nil {
-		erp.logger.Infof("setting up %v as new primary for an uninitialized cluster", newPrimary.Alias)
-		// we call InitPrimary when the PrimaryAlias in the ShardInfo is empty. This happens when we have an uninitialized cluster.
-		_, err = erp.tmc.InitPrimary(ctx, newPrimary, SemiSyncAckers(opts.durability, newPrimary) > 0)
-	} else {
-		erp.logger.Infof("starting promotion for the new primary - %v", newPrimary.Alias)
-		// we call PromoteReplica which changes the tablet type, fixes the semi-sync, set the primary to read-write and flushes the binlogs
-		_, err = erp.tmc.PromoteReplica(ctx, newPrimary, SemiSyncAckers(opts.durability, newPrimary) > 0)
-	}
-	if err != nil {
-		return vterrors.Wrapf(err, "primary-elect tablet %v failed to be upgraded to primary: %v", newPrimary.Alias, err)
-	}
-	// we now reparent all the replicas to the new primary we have promoted.
+	// we now reparent all the replicas to the new primary and we promote it.
 	// Here we do not need to wait for all the replicas, We can finish early when even 1 succeeds.
-	_, err = erp.reparentReplicas(ctx, ev, newPrimary, tabletMap, statusMap, opts, false /* waitForAllReplicas */, true /* populateReparentJournal */)
-	if err != nil {
-		return err
-	}
-	return nil
+	_, err := erp.reparentReplicas(ctx, ev, newPrimary, tabletMap, statusMap, opts, false /* intermediateReparent */)
+	return err
 }
 
 // filterValidCandidates filters valid tablets, keeping only the ones which can successfully be promoted without any constraint failures and can make forward progress on being promoted

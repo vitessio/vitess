@@ -141,14 +141,6 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 						Error:  nil,
 					},
 				},
-				PrimaryPositionResults: map[string]struct {
-					Position string
-					Error    error
-				}{
-					"zone1-0000000102": {
-						Error: nil,
-					},
-				},
 				SetReplicationSourceResults: map[string]error{
 					"zone1-0000000100": nil,
 					"zone1-0000000101": nil,
@@ -256,14 +248,6 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					"zone1-0000000102": {
 						Result: "ok",
 						Error:  nil,
-					},
-				},
-				PrimaryPositionResults: map[string]struct {
-					Position string
-					Error    error
-				}{
-					"zone1-0000000102": {
-						Error: nil,
 					},
 				},
 				SetReplicationSourceResults: map[string]error{
@@ -394,14 +378,6 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000101": nil,
 				},
-				PrimaryPositionResults: map[string]struct {
-					Position string
-					Error    error
-				}{
-					"zone1-0000000101": {
-						Error: nil,
-					},
-				},
 				PromoteReplicaResults: map[string]struct {
 					Result string
 					Error  error
@@ -515,14 +491,6 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 						Status: &replicationdatapb.PrimaryStatus{
 							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
 						},
-					},
-				},
-				PrimaryPositionResults: map[string]struct {
-					Position string
-					Error    error
-				}{
-					"zone1-0000000102": {
-						Error: nil,
 					},
 				},
 				PopulateReparentJournalResults: map[string]error{
@@ -1064,9 +1032,6 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
 						Error:    nil,
 					},
-					"zone1-0000000102": {
-						Error: nil,
-					},
 				},
 				StopReplicationAndGetStatusResults: map[string]struct {
 					StopStatus *replicationdatapb.StopReplicationStatus
@@ -1168,14 +1133,6 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 				}{
 					"zone1-0000000102": {
 						Error: assert.AnError,
-					},
-				},
-				PrimaryPositionResults: map[string]struct {
-					Position string
-					Error    error
-				}{
-					"zone1-0000000102": {
-						Error: nil,
 					},
 				},
 				PopulateReparentJournalResults: map[string]error{
@@ -1292,14 +1249,6 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 						Error:  nil,
 					},
 				},
-				PrimaryPositionResults: map[string]struct {
-					Position string
-					Error    error
-				}{
-					"zone1-0000000102": {
-						Error: nil,
-					},
-				},
 				SetReplicationSourceResults: map[string]error{
 					"zone1-0000000100": nil,
 					"zone1-0000000101": nil,
@@ -1412,14 +1361,6 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 						Error:  nil,
 					},
 				},
-				PrimaryPositionResults: map[string]struct {
-					Position string
-					Error    error
-				}{
-					"zone1-0000000102": {
-						Error: nil,
-					},
-				},
 				SetReplicationSourceResults: map[string]error{
 					"zone1-0000000100": nil,
 					"zone1-0000000101": nil,
@@ -1525,14 +1466,6 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					"zone1-0000000102": {
 						Result: "ok",
 						Error:  nil,
-					},
-				},
-				PrimaryPositionResults: map[string]struct {
-					Position string
-					Error    error
-				}{
-					"zone1-0000000102": {
-						Error: nil,
 					},
 				},
 				SetReplicationSourceResults: map[string]error{
@@ -1660,14 +1593,6 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 						Error:  nil,
 					},
 				},
-				PrimaryPositionResults: map[string]struct {
-					Position string
-					Error    error
-				}{
-					"zone1-0000000102": {
-						Error: nil,
-					},
-				},
 				SetReplicationSourceResults: map[string]error{
 					"zone1-0000000100": nil,
 					"zone1-0000000101": nil,
@@ -1790,14 +1715,6 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					"zone1-0000000102": {
 						Result: "ok",
 						Error:  nil,
-					},
-				},
-				PrimaryPositionResults: map[string]struct {
-					Position string
-					Error    error
-				}{
-					"zone1-0000000102": {
-						Error: nil,
 					},
 				},
 				SetReplicationSourceResults: map[string]error{
@@ -1968,14 +1885,6 @@ func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": nil,
 				},
-				PrimaryPositionResults: map[string]struct {
-					Position string
-					Error    error
-				}{
-					"zone1-0000000100": {
-						Error: nil,
-					},
-				},
 				PromoteReplicaResults: map[string]struct {
 					Result string
 					Error  error
@@ -2047,17 +1956,9 @@ func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
 			shouldErr: false,
 		},
 		{
-			name:                 "PrimaryPosition error",
+			name:                 "PromoteReplica error",
 			emergencyReparentOps: EmergencyReparentOptions{},
 			tmc: &testutil.TabletManagerClient{
-				PrimaryPositionResults: map[string]struct {
-					Position string
-					Error    error
-				}{
-					"zone1-0000000100": {
-						Error: fmt.Errorf("primary position error"),
-					},
-				},
 				PromoteReplicaResults: map[string]struct {
 					Result string
 					Error  error
@@ -2099,14 +2000,6 @@ func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": assert.AnError,
 				},
-				PrimaryPositionResults: map[string]struct {
-					Position string
-					Error    error
-				}{
-					"zone1-0000000100": {
-						Error: nil,
-					},
-				},
 				PromoteReplicaResults: map[string]struct {
 					Result string
 					Error  error
@@ -2147,14 +2040,6 @@ func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
 			tmc: &testutil.TabletManagerClient{
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": nil,
-				},
-				PrimaryPositionResults: map[string]struct {
-					Position string
-					Error    error
-				}{
-					"zone1-0000000100": {
-						Error: nil,
-					},
 				},
 				PromoteReplicaResults: map[string]struct {
 					Result string
@@ -2210,14 +2095,6 @@ func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
 			tmc: &testutil.TabletManagerClient{
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": nil,
-				},
-				PrimaryPositionResults: map[string]struct {
-					Position string
-					Error    error
-				}{
-					"zone1-0000000100": {
-						Error: nil,
-					},
 				},
 				PromoteReplicaResults: map[string]struct {
 					Result string
@@ -2278,14 +2155,6 @@ func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": nil,
 				},
-				PrimaryPositionResults: map[string]struct {
-					Position string
-					Error    error
-				}{
-					"zone1-0000000100": {
-						Error: nil,
-					},
-				},
 				PromoteReplicaResults: map[string]struct {
 					Result string
 					Error  error
@@ -2338,14 +2207,6 @@ func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
 			tmc: &testutil.TabletManagerClient{
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": nil,
-				},
-				PrimaryPositionResults: map[string]struct {
-					Position string
-					Error    error
-				}{
-					"zone1-0000000100": {
-						Error: nil,
-					},
 				},
 				InitPrimaryResults: map[string]struct {
 					Result string
@@ -2742,14 +2603,6 @@ func TestEmergencyReparenterStats(t *testing.T) {
 			"zone1-0000000102": {
 				Result: "ok",
 				Error:  nil,
-			},
-		},
-		PrimaryPositionResults: map[string]struct {
-			Position string
-			Error    error
-		}{
-			"zone1-0000000102": {
-				Error: nil,
 			},
 		},
 		SetReplicationSourceResults: map[string]error{
@@ -3172,9 +3025,9 @@ func TestEmergencyReparenter_reparentReplicas(t *testing.T) {
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": nil,
 				},
-				PrimaryPositionResults: map[string]struct {
-					Position string
-					Error    error
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
 				}{
 					"zone1-0000000100": {
 						Error: nil,
@@ -3243,12 +3096,12 @@ func TestEmergencyReparenter_reparentReplicas(t *testing.T) {
 			shouldErr: false,
 		},
 		{
-			name:                 "PrimaryPosition error",
+			name:                 "PromoteReplica error",
 			emergencyReparentOps: EmergencyReparentOptions{},
 			tmc: &testutil.TabletManagerClient{
-				PrimaryPositionResults: map[string]struct {
-					Position string
-					Error    error
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
 				}{
 					"zone1-0000000100": {
 						Error: fmt.Errorf("primary position error"),
@@ -3287,9 +3140,9 @@ func TestEmergencyReparenter_reparentReplicas(t *testing.T) {
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": assert.AnError,
 				},
-				PrimaryPositionResults: map[string]struct {
-					Position string
-					Error    error
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
 				}{
 					"zone1-0000000100": {
 						Error: nil,
@@ -3328,9 +3181,9 @@ func TestEmergencyReparenter_reparentReplicas(t *testing.T) {
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": nil,
 				},
-				PrimaryPositionResults: map[string]struct {
-					Position string
-					Error    error
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
 				}{
 					"zone1-0000000100": {
 						Error: nil,
@@ -3383,9 +3236,9 @@ func TestEmergencyReparenter_reparentReplicas(t *testing.T) {
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": nil,
 				},
-				PrimaryPositionResults: map[string]struct {
-					Position string
-					Error    error
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
 				}{
 					"zone1-0000000100": {
 						Error: nil,
@@ -3441,9 +3294,9 @@ func TestEmergencyReparenter_reparentReplicas(t *testing.T) {
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": nil,
 				},
-				PrimaryPositionResults: map[string]struct {
-					Position string
-					Error    error
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
 				}{
 					"zone1-0000000100": {
 						Error: nil,
@@ -3492,9 +3345,9 @@ func TestEmergencyReparenter_reparentReplicas(t *testing.T) {
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": nil,
 				},
-				PrimaryPositionResults: map[string]struct {
-					Position string
-					Error    error
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
 				}{
 					"zone1-0000000100": {
 						Error: nil,
@@ -3536,7 +3389,16 @@ func TestEmergencyReparenter_reparentReplicas(t *testing.T) {
 			t.Parallel()
 
 			logger := logutil.NewMemoryLogger()
-			ev := &events.Reparent{}
+			ev := &events.Reparent{
+				ShardInfo: topo.ShardInfo{
+					Shard: &topodatapb.Shard{
+						PrimaryAlias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  000,
+						},
+					},
+				},
+			}
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -3567,7 +3429,7 @@ func TestEmergencyReparenter_reparentReplicas(t *testing.T) {
 			tt.emergencyReparentOps.durability = durability
 
 			erp := NewEmergencyReparenter(ts, tt.tmc, logger)
-			_, err := erp.reparentReplicas(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, tt.emergencyReparentOps, false /* waitForAllReplicas */, true /* populateReparentJournal */)
+			_, err := erp.reparentReplicas(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, tt.emergencyReparentOps, false /* intermediateReparent */)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), tt.errShouldContain)
@@ -3604,14 +3466,6 @@ func TestEmergencyReparenter_promoteIntermediateSource(t *testing.T) {
 			tmc: &testutil.TabletManagerClient{
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": nil,
-				},
-				PrimaryPositionResults: map[string]struct {
-					Position string
-					Error    error
-				}{
-					"zone1-0000000100": {
-						Error: nil,
-					},
 				},
 				SetReplicationSourceResults: map[string]error{
 					"zone1-0000000101": nil,
@@ -3730,14 +3584,6 @@ func TestEmergencyReparenter_promoteIntermediateSource(t *testing.T) {
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": nil,
 				},
-				PrimaryPositionResults: map[string]struct {
-					Position string
-					Error    error
-				}{
-					"zone1-0000000100": {
-						Error: nil,
-					},
-				},
 				SetReplicationSourceResults: map[string]error{
 					"zone1-0000000101": nil,
 				},
@@ -3826,14 +3672,6 @@ func TestEmergencyReparenter_promoteIntermediateSource(t *testing.T) {
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": nil,
 				},
-				PrimaryPositionResults: map[string]struct {
-					Position string
-					Error    error
-				}{
-					"zone1-0000000100": {
-						Error: nil,
-					},
-				},
 				SetReplicationSourceResults: map[string]error{
 					"zone1-0000000101": fmt.Errorf("An error"),
 				},
@@ -3902,15 +3740,6 @@ func TestEmergencyReparenter_promoteIntermediateSource(t *testing.T) {
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": nil,
 				},
-				PrimaryPositionResults: map[string]struct {
-					Position string
-					Error    error
-				}{
-					"zone1-0000000100": {
-						Error: nil,
-					},
-				},
-
 				SetReplicationSourceResults: map[string]error{
 					// everyone fails, we all fail
 					"zone1-0000000101": assert.AnError,
@@ -3977,14 +3806,6 @@ func TestEmergencyReparenter_promoteIntermediateSource(t *testing.T) {
 			tmc: &testutil.TabletManagerClient{
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": nil,
-				},
-				PrimaryPositionResults: map[string]struct {
-					Position string
-					Error    error
-				}{
-					"zone1-0000000100": {
-						Error: nil,
-					},
 				},
 				SetReplicationSourceResults: map[string]error{
 					"zone1-0000000101": nil, // this one succeeds, so we're good
@@ -4063,14 +3884,6 @@ func TestEmergencyReparenter_promoteIntermediateSource(t *testing.T) {
 			tmc: &testutil.TabletManagerClient{
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": nil,
-				},
-				PrimaryPositionResults: map[string]struct {
-					Position string
-					Error    error
-				}{
-					"zone1-0000000100": {
-						Error: nil,
-					},
 				},
 				SetReplicationSourceResults: map[string]error{
 					"zone1-0000000101": nil,
@@ -4423,14 +4236,6 @@ func TestParentContextCancelled(t *testing.T) {
 	emergencyReparentOps := EmergencyReparentOptions{IgnoreReplicas: sets.New[string]("zone1-0000000404"), WaitReplicasTimeout: time.Minute, durability: durability}
 	// Make the replica tablet return its results after 3 seconds
 	tmc := &testutil.TabletManagerClient{
-		PrimaryPositionResults: map[string]struct {
-			Position string
-			Error    error
-		}{
-			"zone1-0000000100": {
-				Error: nil,
-			},
-		},
 		SetReplicationSourceResults: map[string]error{
 			"zone1-0000000101": nil,
 		},
@@ -4490,7 +4295,7 @@ func TestParentContextCancelled(t *testing.T) {
 		time.Sleep(time.Second)
 		cancel()
 	}()
-	_, err = erp.reparentReplicas(ctx, ev, tabletMap[newPrimaryTabletAlias].Tablet, tabletMap, statusMap, emergencyReparentOps, false, false)
+	_, err = erp.reparentReplicas(ctx, ev, tabletMap[newPrimaryTabletAlias].Tablet, tabletMap, statusMap, emergencyReparentOps, true)
 	require.NoError(t, err)
 }
 
