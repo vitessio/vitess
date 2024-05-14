@@ -549,3 +549,23 @@ func TestReplicationStopped(t *testing.T) {
 	// Confirm that tablets[2] which had replication stopped initially still has its replication stopped
 	utils.CheckReplicationStatus(context.Background(), t, tablets[2], false, false)
 }
+
+// TestERSWithWriteInPromoteReplica tests that ERS doesn't fail even if there is a
+// write than happens when PromoteReplica is called.
+func TestERSWithWriteInPromoteReplica(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
+	defer utils.TeardownCluster(clusterInstance)
+	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
+
+	// Drop a table so that when sidecardb changes are checked, we run a DML query.
+	utils.RunSQLs(context.Background(), t, []string{
+		"set sql_log_bin=0",
+		`SET @@global.super_read_only=0`,
+		`DROP TABLE _vt.heartbeat`,
+		"set sql_log_bin=1",
+	}, tablets[3])
+	_, err := utils.Ers(clusterInstance, tablets[3], "60s", "30s")
+	require.NoError(t, err, "ERS should not fail even if there is a sidecard db change")
+}
