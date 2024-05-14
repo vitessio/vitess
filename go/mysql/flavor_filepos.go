@@ -233,6 +233,11 @@ func (flv *filePosFlavor) setReplicationSourceCommand(params *ConnParams, host s
 	return "unsupported"
 }
 
+// resetBinaryLogsCommand is part of the Flavor interface.
+func (flv *filePosFlavor) resetBinaryLogsCommand() string {
+	return "unsupported"
+}
+
 // status is part of the Flavor interface.
 func (flv *filePosFlavor) status(c *Conn) (replication.ReplicationStatus, error) {
 	qr, err := c.ExecuteFetch("SHOW SLAVE STATUS", 100, true /* wantfields */)
