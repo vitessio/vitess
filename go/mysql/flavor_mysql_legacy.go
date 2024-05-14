@@ -1,5 +1,5 @@
 /*
-Copyright 2019 The Vitess Authors.
+Copyright 2024 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -25,13 +25,23 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-// mysqlFlavor implements the Flavor interface for Mysql.
+// mysqlFlavorLegacy implements the Flavor interface for Mysql for
+// older versions. This applies to MySQL 5.7 and early 8.0 versions from
+// before the replication terminology deprecation.
 type mysqlFlavorLegacy struct {
 	mysqlFlavor
 }
+
+// mysqlFlavor57 is the explicit flavor for MySQL 5.7. It's basically
+// the same as the legacy flavor, but it has a separate name here to
+// be explicit about the version.
 type mysqlFlavor57 struct {
 	mysqlFlavorLegacy
 }
+
+// mysqlFlavor8 is the explicit flavor for MySQL 8.0. It's similarly to
+// 5.7 the same as the legacy flavor, but has an explicit name to be
+// clear it's used for early MySQL 8.0 versions.
 type mysqlFlavor8Legacy struct {
 	mysqlFlavorLegacy
 }

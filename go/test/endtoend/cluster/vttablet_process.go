@@ -467,7 +467,7 @@ func (vttablet *VttabletProcess) SemiSyncExtensionLoaded() (mysql.SemiSyncType, 
 	return conn.SemiSyncExtensionLoaded()
 }
 
-// SemiSyncExtensionLoaded returns what type of semi-sync extension is loaded
+// ResetBinaryLogsCommand returns the commands to reset binary logs
 func (vttablet *VttabletProcess) ResetBinaryLogsCommand() (string, error) {
 	conn, err := vttablet.TabletConn("", false)
 	if err != nil {

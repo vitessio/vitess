@@ -33,15 +33,24 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-// mysqlFlavor implements the Flavor interface for Mysql.
+// mysqlFlavor implements the Flavor interface for Mysql. This is
+// the most up to date / recent flavor and uses the most modern
+// replication commands and semantics.
 type mysqlFlavor struct {
 	serverVersion string
 }
 
+// mysqlFlavor8 is for later MySQL 8.0 versions. It's the same as
+// the modern flavor, but overrides some specific commands that
+// are only available on MySQL 8.2.0 and later. This is specifically
+// commands like SHOW BINARY LOG STATUS.
 type mysqlFlavor8 struct {
 	mysqlFlavor
 }
 
+// mysqlFlavor82 is for MySQL 8.2.0 and later. It's the most modern
+// flavor but has an explicit name so that it's clear it's explicitly
+// for MySQL 8.2.0 and later.
 type mysqlFlavor82 struct {
 	mysqlFlavor
 }
