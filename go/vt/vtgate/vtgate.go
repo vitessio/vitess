@@ -676,14 +676,15 @@ func (vtg *VTGate) HandlePanic(err *error) {
 
 func newVTGate(executor *Executor, resolver *Resolver, vsm *vstreamManager, tc *TxConn, gw *TabletGateway) *VTGate {
 	return &VTGate{
-		executor:     executor,
-		resolver:     resolver,
-		vsm:          vsm,
-		txConn:       tc,
-		gw:           gw,
-		timings:      timings,
-		rowsReturned: rowsReturned,
-		rowsAffected: rowsAffected,
+		executor:      executor,
+		resolver:      resolver,
+		vsm:           vsm,
+		txConn:        tc,
+		gw:            gw,
+		timings:       timings,
+		rowsReturned:  rowsReturned,
+		rowsAffected:  rowsAffected,
+		sqlTextCounts: sqlTextCounts,
 
 		logExecute:       logutil.NewThrottledLogger("Execute", 5*time.Second),
 		logPrepare:       logutil.NewThrottledLogger("Prepare", 5*time.Second),
