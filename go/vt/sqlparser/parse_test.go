@@ -382,6 +382,18 @@ var (
 			input: "select a from (select 1 as a from tbl1 union select 2 from tbl2) as t (a, b)",
 		},
 		{
+			input:  "select a from (values (1, 2), ('a', 'b')) as t (a, b)",
+			output: "select a from (values row(1, 2), row('a', 'b')) as t (a, b)",
+		},
+		{
+			input:  "select a from (values (1, 2), row('a', 'b')) as t (a, b)",
+			output: "select a from (values row(1, 2), row('a', 'b')) as t (a, b)",
+		},
+		{
+			input:  "select a from (values row(1, 2), ('a', 'b')) as t (a, b)",
+			output: "select a from (values row(1, 2), row('a', 'b')) as t (a, b)",
+		},
+		{
 			input: "select a from (values row(1, 2), row('a', 'b')) as t (a, b)",
 		},
 		{
@@ -1206,10 +1218,36 @@ var (
 		}, {
 			input:  "insert into a(a, b) value (1, ifnull(null, default(b)))",
 			output: "insert into a(a, b) values (1, ifnull(null, default(b)))",
-		}, {
+		},
+		{
 			input:  "insert into a value (1, ifnull(null, default(b)))",
 			output: "insert into a values (1, ifnull(null, default(b)))",
-		}, {
+		},
+		{
+			input:  "insert into xy values row (1, 1)",
+			output: "insert into xy values (1, 1)",
+		},
+		{
+			input:  "insert into xy values row (1, 1), row (2, 2)",
+			output: "insert into xy values (1, 1), (2, 2)",
+		},
+		{
+			input:  "insert into xy values (1, 1), row (2, 2)",
+			output: "insert into xy values (1, 1), (2, 2)",
+		},
+		{
+			input:  "insert into xy values row (1, 1), (2, 2)",
+			output: "insert into xy values (1, 1), (2, 2)",
+		},
+		{
+			input:  "insert into xy ((( values row (1, 1), row (2, 2) )))",
+			output: "insert into xy values (1, 1), (2, 2)",
+		},
+		{
+			input:  "insert into xy values row()",
+			output: "insert into xy values ()",
+		},
+		{
 			input: "insert /* qualified column list */ into a(a, b) values (1, 2)",
 		}, {
 			input:  "insert /* qualified columns */ into t (t.a, t.b) values (1, 2)",
@@ -3320,13 +3358,28 @@ var (
 		}, {
 			input:  "SELECT now() WHERE now() > '2019-04-04 13:25:44' INTO @late",
 			output: "select now() where now() > '2019-04-04 13:25:44' into @late",
-		}, {
+		},
+		{
 			input:  "SELECT * FROM (VALUES ROW(2,4,8)) AS t INTO @x,@y,@z",
 			output: "select * from (values row(2, 4, 8)) as t into @x, @y, @z",
-		}, {
+		},
+		{
 			input:  "SELECT * FROM (VALUES ROW(2,4,8)) AS t(a,b,c) INTO @x,@y,@z",
 			output: "select * from (values row(2, 4, 8)) as t (a, b, c) into @x, @y, @z",
-		}, {
+		},
+		{
+			input:  "SELECT * FROM (VALUES (2,4,8)) AS t INTO @x,@y,@z",
+			output: "select * from (values row(2, 4, 8)) as t into @x, @y, @z",
+		},
+		{
+			input:  "SELECT * FROM (VALUES (2,4,8)) AS t(a,b,c) INTO @x,@y,@z",
+			output: "select * from (values row(2, 4, 8)) as t (a, b, c) into @x, @y, @z",
+		},
+		{
+			input:  "SELECT * FROM (VALUES (1, 2, 3), (4, 5, 6), (7, 8, 9)) t",
+			output: "select * from (values row(1, 2, 3), row(4, 5, 6), row(7, 8, 9)) as t",
+		},
+		{
 			input:  "SELECT id FROM mytable ORDER BY id DESC LIMIT 1 INTO @myvar",
 			output: "select id from mytable order by id desc limit 1 into @myvar",
 		}, {

@@ -949,6 +949,19 @@ insert_statement:
     ins.With = $1
     $$ = ins
   }
+| with_clause_opt insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause insert_data_select on_dup_opt
+  {
+    // insert_data returns a *Insert pre-filled with Columns & Values
+    ins := $7
+    ins.Action = $2
+    ins.Comments = $3
+    ins.Ignore = $4
+    ins.Table = $5
+    ins.Partitions = $6
+    ins.OnDup = OnDup($8)
+    ins.With = $1
+    $$ = ins
+  }
 | with_clause_opt insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause SET assignment_list on_dup_opt
   {
     cols := make(Columns, 0, len($8))
@@ -6559,7 +6572,6 @@ table_factor:
 | table_function
 | json_table
 
-
 values_statement:
   VALUES row_list
   {
@@ -6567,14 +6579,19 @@ values_statement:
   }
 
 row_list:
-  ROW row_tuple
+  row_opt row_tuple
   {
     $$ = Values{$2}
   }
-| row_list ',' ROW row_tuple
+| row_list ',' row_opt row_tuple
   {
     $$ = append($$, $4)
   }
+
+row_opt:
+  {}
+| ROW
+  {}
 
 aliased_table_name:
   table_name aliased_table_options
@@ -8365,7 +8382,7 @@ insert_data_alias:
   {
     $$ = $1
   }
-| insert_data_values as_opt table_alias column_list_opt
+| insert_data as_opt table_alias column_list_opt
   {
     $$ = $1
     // Rows is guarenteed to be an *AliasedValues here.
@@ -8385,13 +8402,19 @@ insert_data_alias:
 // Because the rules are together, the parser can keep shifting
 // the tokens until it disambiguates a as sql_id and select as keyword.
 insert_data:
-  insert_data_select
+  insert_data_values
   {
     $$ = $1
   }
-| insert_data_values
+| openb closeb insert_data_values
   {
-    $$ = $1
+    $3.Columns = []ColIdent{}
+    $$ = $3
+  }
+| openb ins_column_list closeb insert_data_values
+  {
+    $4.Columns = $2
+    $$ = $4
   }
 
 insert_data_select:
@@ -8419,14 +8442,9 @@ insert_data_values:
   {
     $$ = &Insert{Rows: &AliasedValues{Values: $2}}
   }
-| openb closeb value_or_values tuple_list
+| openb insert_data_values closeb
   {
-    $$ = &Insert{Columns: []ColIdent{}, Rows: &AliasedValues{Values: $4}}
-  }
-
-| openb ins_column_list closeb value_or_values tuple_list
-  {
-    $$ = &Insert{Columns: $2, Rows: &AliasedValues{Values: $5}}
+    $$ = $2
   }
 
 value_or_values:
@@ -8498,11 +8516,11 @@ tuple_list:
   }
 
 tuple_or_empty:
-  row_tuple
+  row_opt row_tuple
   {
-    $$ = $1
+    $$ = $2
   }
-| openb closeb
+| row_opt openb closeb
   {
     $$ = ValTuple{}
   }
