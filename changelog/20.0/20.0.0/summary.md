@@ -107,6 +107,8 @@ These counters are replaced by the following stats _(introduced in Vitess 18.0)_
 - `emergency_reparent_counts` - Number of times `EmergencyReparentShard` has been run. It is further subdivided by the keyspace, shard and the result of the operation.
 - `planned_reparent_counts` - Number of times `PlannedReparentShard` has been run. It is further subdivided by the keyspace, shard and the result of the operation.
 
+Also, the `reparent_shard_operation_timings` stat was added to provide per-operation timings of reparent operations.
+
 ### <a id="breaking-changes"/>Breaking Changes
 
 #### <a id="shutdown-grace-period-default"/>`shutdown_grace_period` Default Change
