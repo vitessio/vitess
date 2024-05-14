@@ -423,7 +423,7 @@ func (sg *selectGenerator) createGroupBy(tables []tableT) (grouping []column) {
 		if col.typ == "date" && !testFailingQueries {
 			continue
 		}
-		sg.sel.GroupBy = append(sg.sel.GroupBy, col.getASTExpr())
+		sg.sel.AddGroupBy(col.getASTExpr())
 
 		// add to select
 		if rand.IntN(2) < 1 {
@@ -478,8 +478,10 @@ func (sg *selectGenerator) createAggregations(tables []tableT) (aggregates []col
 // orders on all grouping expressions and on random SelectExprs
 func (sg *selectGenerator) createOrderBy() {
 	// always order on grouping expressions
-	for _, expr := range sg.sel.GroupBy {
-		sg.sel.OrderBy = append(sg.sel.OrderBy, sqlparser.NewOrder(expr, getRandomOrderDirection()))
+	if sg.sel.GroupBy != nil {
+		for _, expr := range sg.sel.GroupBy.Exprs {
+			sg.sel.OrderBy = append(sg.sel.OrderBy, sqlparser.NewOrder(expr, getRandomOrderDirection()))
+		}
 	}
 
 	// randomly order on SelectExprs

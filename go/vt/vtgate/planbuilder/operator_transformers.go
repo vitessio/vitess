@@ -273,6 +273,9 @@ func transformFkVerify(ctx *plancontext.PlanningContext, fkv *operators.FkVerify
 }
 
 func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggregator) (logicalPlan, error) {
+	if op.WithRollup {
+		return nil, vterrors.VT12001("GROUP BY WITH ROLLUP not supported for sharded queries")
+	}
 	plan, err := transformToLogicalPlan(ctx, op.Source)
 	if err != nil {
 		return nil, err

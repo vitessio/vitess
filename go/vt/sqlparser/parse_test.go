@@ -1152,6 +1152,8 @@ var (
 	}, {
 		input: "select /* order by asc */ 1 from t order by a asc",
 	}, {
+		input: "select a, b, c, count(*), sum(foo) from t group by a, b, c with rollup",
+	}, {
 		input: "select /* order by desc */ 1 from t order by a desc",
 	}, {
 		input: "select /* order by null */ 1 from t order by null",
