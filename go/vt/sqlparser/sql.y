@@ -8440,6 +8440,7 @@ non_reserved_keyword:
 | REUSE
 | ROLE
 | ROLLBACK
+| ROLLUP
 | ROW_FORMAT
 | RTRIM %prec FUNCTION_CALL_NON_KEYWORD
 | S3
