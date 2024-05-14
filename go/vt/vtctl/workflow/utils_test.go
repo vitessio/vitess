@@ -63,7 +63,7 @@ func TestConcurrentKeyspaceRoutingRulesUpdates(t *testing.T) {
 
 func testConcurrentKeyspaceRoutingRulesUpdates(t *testing.T, ctx context.Context, ts *topo.Server) {
 	concurrency := 100
-	duration := 3 * time.Second
+	duration := 10 * time.Second
 
 	var wg sync.WaitGroup
 	wg.Add(concurrency)
@@ -130,18 +130,14 @@ func startEtcd(t *testing.T) string {
 		"-initial-cluster", initialCluster,
 		"-data-dir", dataDir)
 	err := cmd.Start()
-	if err != nil {
-		t.Fatalf("failed to start etcd: %v", err)
-	}
+	require.NoError(t, err, "failed to start etcd")
 
 	// Create a client to connect to the created etcd.
 	cli, err := clientv3.New(clientv3.Config{
 		Endpoints:   []string{clientAddr},
 		DialTimeout: 5 * time.Second,
 	})
-	if err != nil {
-		t.Fatalf("newCellClient(%v) failed: %v", clientAddr, err)
-	}
+	require.NoError(t, err, "newCellClient(%v) failed", clientAddr)
 	defer cli.Close()
 
 	// Wait until we can list "/", or timeout.
@@ -153,7 +149,7 @@ func startEtcd(t *testing.T) string {
 			break
 		}
 		if time.Since(start) > 10*time.Second {
-			t.Fatalf("Failed to start etcd daemon in time")
+			require.FailNow(t, "Failed to start etcd daemon in time")
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
