@@ -109,7 +109,8 @@ func TestGroupBy(t *testing.T) {
 		// test ordering and group by int column
 		mcmp.AssertMatches("select id6, id7, count(*) k from t3 group by id6, id7 order by k", `[[INT64(3) INT64(6) INT64(1)] [INT64(2) INT64(4) INT64(2)] [INT64(1) INT64(2) INT64(3)]]`)
 		mcmp.AssertMatches("select id6+id7, count(*) k from t3 group by id6+id7 order by k", `[[INT64(9) INT64(1)] [INT64(6) INT64(2)] [INT64(3) INT64(3)]]`)
-		if utils.BinaryIsAtLeastAtVersion(20, "vtgate") {
+		if utils.BinaryIsAtLeastAtVersion(20, "vtgate") &&
+			utils.BinaryIsAtLeastAtVersion(20, "vttablet") {
 			mcmp.Exec("select id6, id7, count(*) k from t3 group by id6, id7 with rollup")
 		}
 	}
