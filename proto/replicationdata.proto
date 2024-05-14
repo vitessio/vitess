@@ -73,7 +73,7 @@ enum StopReplicationMode {
   IOTHREADONLY = 1;
 }
 
-// PrimaryStatus is the replication status for a MySQL primary (returned by 'show master status').
+// PrimaryStatus is the replication status for a MySQL primary (returned by 'show binary log status').
 message PrimaryStatus {
   string position = 1;
   string file_position = 2;

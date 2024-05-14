@@ -72,9 +72,11 @@ func failoverExternalReparenting(t *testing.T, clusterInstance *cluster.LocalPro
 
 	// Use 'localhost' as hostname because Travis CI worker hostnames
 	// are too long for MySQL replication.
+	resetCmd, err := oldPrimary.VttabletProcess.ResetBinaryLogsCommand()
+	require.NoError(t, err)
 	changeSourceCommands := []string{
 		"STOP REPLICA",
-		"RESET MASTER",
+		resetCmd,
 		fmt.Sprintf("SET GLOBAL gtid_purged = '%s'", gtID),
 		fmt.Sprintf("CHANGE REPLICATION SOURCE TO SOURCE_HOST='%s', SOURCE_PORT=%d, SOURCE_USER='vt_repl', SOURCE_AUTO_POSITION = 1", "localhost", newPrimary.MySQLPort),
 		"START REPLICA",
