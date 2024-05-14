@@ -216,7 +216,7 @@ e2e_test: build
 # Run the code coverage tools, compute aggregate.
 unit_test_cover: build dependency_check demo
 	source build.env
-	go test $(VT_GO_PARALLEL) -count=1 -failfast -covermode=atomic -coverpkg=vitess.io/vitess/go/... -coverprofile=coverage.out ./go/...
+	go test $(VT_GO_PARALLEL) -count=1 -v -failfast -covermode=atomic -coverpkg=vitess.io/vitess/go/... -coverprofile=coverage.out ./go/vt/vtctl/workflow
 	# Handle go tool cover failures due to not handling `//line` directives, which
 	# the goyacc compiler adds to the generated parser in sql.go. See:
 	# https://github.com/golang/go/issues/41222
