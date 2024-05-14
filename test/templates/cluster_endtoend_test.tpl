@@ -15,9 +15,6 @@ jobs:
       id: skip-workflow
       run: |
         skip='false'
-        if [[ "{{"${{github.event.pull_request}}"}}" ==  "" ]] && [[ "{{"${{github.ref}}"}}" != "refs/heads/main" ]] && [[ ! "{{"${{github.ref}}"}}" =~ ^refs/heads/slack-vitess-r[0-9]+\.[0-9]$ ]] && [[ ! "{{"${{github.ref}}"}}" =~ "refs/tags/.*" ]]; then
-          skip='true'
-        fi
         echo Skip ${skip}
         echo "skip-workflow=${skip}" >> $GITHUB_OUTPUT
 
