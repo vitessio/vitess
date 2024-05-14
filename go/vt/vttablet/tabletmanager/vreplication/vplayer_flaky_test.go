@@ -28,17 +28,15 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/mysql/replication"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
-
-	"vitess.io/vitess/go/vt/vttablet"
-
 	"github.com/nsf/jsondiff"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vttablet"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	qh "vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication/queryhistory"
@@ -120,7 +118,7 @@ func TestPlayerGeneratedInvisiblePrimaryKey(t *testing.T) {
 	for _, tcases := range testcases {
 		execStatements(t, []string{tcases.input})
 		output := qh.Expect(tcases.output)
-		expectNontxQueries(t, output)
+		expectNontxQueries(t, output, recvTimeout)
 		if tcases.table != "" {
 			expectData(t, tcases.table, tcases.data)
 		}
@@ -184,7 +182,7 @@ func TestPlayerInvisibleColumns(t *testing.T) {
 	for _, tcases := range testcases {
 		execStatements(t, []string{tcases.input})
 		output := qh.Expect(tcases.output)
-		expectNontxQueries(t, output)
+		expectNontxQueries(t, output, recvTimeout)
 		time.Sleep(1 * time.Second)
 		if tcases.table != "" {
 			expectData(t, tcases.table, tcases.data)
@@ -275,7 +273,7 @@ func TestVReplicationTimeUpdated(t *testing.T) {
 		require.NoError(t, err)
 		return timeUpdated, transactionTimestamp, timeHeartbeat
 	}
-	expectNontxQueries(t, qh.Expect("insert into t1(id,val) values (1,'aaa')"))
+	expectNontxQueries(t, qh.Expect("insert into t1(id,val) values (1,'aaa')"), recvTimeout)
 	time.Sleep(1 * time.Second)
 	timeUpdated1, transactionTimestamp1, timeHeartbeat1 := getTimestamps()
 	time.Sleep(2 * time.Second)
@@ -2880,7 +2878,7 @@ func TestGeneratedColumns(t *testing.T) {
 	for _, tcases := range testcases {
 		execStatements(t, []string{tcases.input})
 		output := qh.Expect(tcases.output)
-		expectNontxQueries(t, output)
+		expectNontxQueries(t, output, recvTimeout)
 		if tcases.table != "" {
 			expectData(t, tcases.table, tcases.data)
 		}
@@ -2951,7 +2949,7 @@ func TestPlayerInvalidDates(t *testing.T) {
 	for _, tcases := range testcases {
 		execStatements(t, []string{tcases.input})
 		output := qh.Expect(tcases.output)
-		expectNontxQueries(t, output)
+		expectNontxQueries(t, output, recvTimeout)
 
 		if tcases.table != "" {
 			expectData(t, tcases.table, tcases.data)
@@ -3090,7 +3088,7 @@ func TestPlayerNoBlob(t *testing.T) {
 	for _, tcases := range testcases {
 		execStatements(t, []string{tcases.input})
 		output := qh.Expect(tcases.output)
-		expectNontxQueries(t, output)
+		expectNontxQueries(t, output, recvTimeout)
 		time.Sleep(1 * time.Second)
 		if tcases.table != "" {
 			expectData(t, tcases.table, tcases.data)
@@ -3328,7 +3326,7 @@ func TestPlayerBatchMode(t *testing.T) {
 			for _, stmt := range tcase.output {
 				require.LessOrEqual(t, len(stmt), maxBatchSize, "expected output statement is longer than the max batch size (%d): %s", maxBatchSize, stmt)
 			}
-			expectNontxQueries(t, output)
+			expectNontxQueries(t, output, recvTimeout)
 			time.Sleep(1 * time.Second)
 			if tcase.table != "" {
 				expectData(t, tcase.table, tcase.data)
@@ -3354,6 +3352,65 @@ func TestPlayerBatchMode(t *testing.T) {
 	}
 }
 
+func TestPlayerStalls(t *testing.T) {
+	ogrlpt := relayLogProgressTimeout
+	orlmi := relayLogMaxItems
+	ord := retryDelay
+	defer func() {
+		relayLogProgressTimeout = ogrlpt
+		relayLogMaxItems = orlmi
+		retryDelay = ord
+	}()
+
+	// Shorten the timeout for the test.
+	relayLogProgressTimeout = 10 * time.Second
+	// So each relay log batch will be a single statement transaction.
+	relayLogMaxItems = 1
+	// Don't retry the workflow if it goes into the error state.
+	retryDelay = 5 * time.Minute
+	testTimeout := relayLogProgressTimeout * 3
+
+	defer deleteTablet(addTablet(100))
+	execStatements(t, []string{
+		"create table t1(id bigint, val1 varchar(1000), primary key(id))",
+		fmt.Sprintf("create table %s.t1(id bigint, val1 varchar(1000), primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+		fmt.Sprintf("drop table %s.t1", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	vrcancel, _ := startVReplication(t, bls, "")
+	defer vrcancel()
+
+	stallSimulator := fmt.Sprintf("update t1 set val1 = concat(sleep (%d), val1) where id = 1", int64(testTimeout.Seconds()))
+
+	input := []string{
+		"set @@session.binlog_format='STATEMENT'",                            // As we are using the sleep function in the query to simulate a stall
+		"insert into t1(id, val1) values (1, 'aaa'), (2, 'bbb'), (3, 'ccc')", // This should be the only query that gets replicated
+		stallSimulator, // This will cause a stall in the vplayer
+		"insert into t1(id, val1) values (4, 'ddd'), (5, 'eee'), (6, 'fff')",
+		"update t1 set val1 = 'zzz' where id = 1",
+	}
+	output := qh.Expect(
+		"insert into t1(id, val1) values (1, 'aaa'), (2, 'bbb'), (3, 'ccc')",
+		// This is what we want in the end, our improved error message.
+		// This is also the same message that gets logged.
+		"/update _vt.vreplication set message='relay log progress stalled.*",
+	)
+
+	execStatements(t, input)
+	expectNontxQueries(t, output, testTimeout)
+}
+
 func expectJSON(t *testing.T, table string, values [][]string, id int, exec func(ctx context.Context, query string) (*sqltypes.Result, error)) {
 	t.Helper()
 
@@ -3364,26 +3421,16 @@ func expectJSON(t *testing.T, table string, values [][]string, id int, exec func
 		query = fmt.Sprintf("select * from %s where id=%d", table, id)
 	}
 	qr, err := exec(context.Background(), query)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	if len(values) != len(qr.Rows) {
 		t.Fatalf("row counts don't match: %d, want %d", len(qr.Rows), len(values))
 	}
 	for i, row := range values {
-		if len(row) != len(qr.Rows[i]) {
-			t.Fatalf("Too few columns, \nrow: %d, \nresult: %d:%v, \nwant: %d:%v", i, len(qr.Rows[i]), qr.Rows[i], len(row), row)
-		}
-		if qr.Rows[i][0].ToString() != row[0] {
-			t.Fatalf("Id mismatch: want %s, got %s", qr.Rows[i][0].ToString(), row[0])
-		}
-
+		require.Len(t, row, len(qr.Rows[i]), "Too few columns, \nrow: %d, \nresult: %d:%v, \nwant: %d:%v", i, len(qr.Rows[i]), qr.Rows[i], len(row), row)
+		require.Equal(t, qr.Rows[i][0].ToString(), row[0], "Id mismatch: want %s, got %s", qr.Rows[i][0].ToString(), row[0])
 		opts := jsondiff.DefaultConsoleOptions()
 		compare, s := jsondiff.Compare(qr.Rows[i][1].Raw(), []byte(row[1]), &opts)
-		if compare != jsondiff.FullMatch {
-			t.Errorf("Diff:\n%s\n", s)
-		}
+		require.Equal(t, compare, jsondiff.FullMatch, "Diff:\n%s\n", s)
 	}
 }
 
@@ -3396,9 +3443,7 @@ func startVReplication(t *testing.T, bls *binlogdatapb.BinlogSource, pos string)
 	// fake workflow type as MoveTables so that we can test with "noblob" binlog row image
 	query := binlogplayer.CreateVReplication("test", bls, pos, 9223372036854775807, 9223372036854775807, 0, vrepldb, binlogdatapb.VReplicationWorkflowType_MoveTables, 0, false)
 	qr, err := playerEngine.Exec(query)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	expectDBClientQueries(t, qh.Expect(
 		"/insert into _vt.vreplication",
 		"/update _vt.vreplication set message='Picked source tablet.*",
@@ -3409,9 +3454,8 @@ func startVReplication(t *testing.T, bls *binlogdatapb.BinlogSource, pos string)
 		t.Helper()
 		once.Do(func() {
 			query := fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
-			if _, err := playerEngine.Exec(query); err != nil {
-				t.Fatal(err)
-			}
+			_, err := playerEngine.Exec(query)
+			require.NoError(t, err)
 			expectDeleteQueries(t)
 		})
 	}, int(qr.InsertID)

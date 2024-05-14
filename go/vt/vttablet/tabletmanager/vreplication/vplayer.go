@@ -31,7 +31,6 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vttablet"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -439,7 +438,7 @@ func (vp *vplayer) recordHeartbeat() error {
 // current position to be saved.
 //
 // In order to handle the above use cases, we use an implicit transaction scheme:
-// A BEGIN does not really start a transaction. Ony a ROW event does. With this
+// A BEGIN does not really start a transaction. Only a ROW event does. With this
 // approach, no transaction gets started if an empty one arrives. If a we receive
 // a commit, and a we are not in a transaction, we infer that the transaction was
 // empty, and remember it as an unsaved event. The next GTID event will reset the
@@ -499,18 +498,8 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 			}
 		}
 
-		// The parent context is a cancelable context. We create a new one here with a timeout
-		// to unblock the case where we're never able to complete applying the current vstream
-		// packet last read from the relay log.
-		iCtx, iCancel := context.WithTimeout(ctx, tabletenv.NewCurrentConfig().Oltp.TxTimeout)
-		defer iCancel()
 		for i, events := range items {
 			for j, event := range events {
-				select {
-				case <-iCtx.Done():
-					return errors.New("timed out replaying events from the relay log")
-				default:
-				}
 				if event.Timestamp != 0 {
 					vp.lastTimestampNs = event.Timestamp * 1e9
 					vp.timeOffsetNs = time.Now().UnixNano() - event.CurrentTime
@@ -535,10 +524,19 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 						continue
 					}
 				}
-				if err := vp.applyEvent(iCtx, event, mustSave); err != nil {
+				if err := vp.applyEvent(ctx, event, mustSave); err != nil {
 					if err != io.EOF {
 						vp.vr.stats.ErrorCounts.Add([]string{"Apply"}, 1)
-						log.Errorf("Error applying event: %s", err.Error())
+						var table string
+						switch {
+						case event.GetFieldEvent().TableName != "":
+							table = event.GetFieldEvent().TableName
+						case event.GetRowEvent().TableName != "":
+							table = event.GetRowEvent().TableName
+						default:
+							table = "unknown"
+						}
+						log.Errorf("Error applying event for table %s: %s", table, err.Error())
 					}
 					return err
 				}

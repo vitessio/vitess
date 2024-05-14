@@ -74,6 +74,7 @@ var (
 	testForeignKeyQueries    = false
 	testSetForeignKeyQueries = false
 	doNotLogDBQueries        = false
+	recvTimeout              = 5 * time.Second
 )
 
 type LogExpectation struct {
@@ -521,7 +522,7 @@ func expectDeleteQueries(t *testing.T) {
 		"/delete from _vt.vreplication",
 		"/delete from _vt.copy_state",
 		"/delete from _vt.post_copy_action",
-	))
+	), recvTimeout)
 }
 
 func deleteAllVReplicationStreams(t *testing.T) {
@@ -638,7 +639,7 @@ func expectDBClientQueries(t *testing.T, expectations qh.ExpectationSequence, sk
 				))
 			}
 		case <-time.After(5 * time.Second):
-			t.Fatalf("no query received")
+			require.FailNow(t, "no query received")
 			failed = true
 		}
 	}
@@ -659,7 +660,7 @@ func expectDBClientQueries(t *testing.T, expectations qh.ExpectationSequence, sk
 
 // expectNontxQueries disregards transactional statements like begin and commit.
 // It also disregards updates to _vt.vreplication.
-func expectNontxQueries(t *testing.T, expectations qh.ExpectationSequence) {
+func expectNontxQueries(t *testing.T, expectations qh.ExpectationSequence, recvTimeout time.Duration) {
 	t.Helper()
 	if doNotLogDBQueries {
 		return
@@ -687,8 +688,8 @@ func expectNontxQueries(t *testing.T, expectations qh.ExpectationSequence) {
 				"query:%q\nmessage:%s\nexpectation:%s\nmatched:%t\nerror:%v\nhistory:%s",
 				got, result.Message, result.Expectation, result.Matched, result.Error, validator.History(),
 			))
-		case <-time.After(5 * time.Second):
-			t.Fatalf("no query received")
+		case <-time.After(recvTimeout):
+			require.FailNow(t, "no query received")
 			failed = true
 		}
 	}
