@@ -283,8 +283,8 @@ func removeTable(clone sqlparser.SelectStatement, searchedTS semantics.TableSet,
 			simplified = removeTableinWhere(node, shouldKeepExpr, simplified)
 		case sqlparser.SelectExprs:
 			simplified = removeTableinSelectExprs(node, cursor, shouldKeepExpr, simplified)
-		case sqlparser.GroupBy:
-			simplified = removeTableinGroupBy(node, cursor, shouldKeepExpr, simplified)
+		case *sqlparser.GroupBy:
+			simplified = removeTableInGroupBy(node, cursor, shouldKeepExpr, simplified)
 		case sqlparser.OrderBy:
 			simplified = removeTableinOrderBy(node, cursor, shouldKeepExpr, simplified)
 		}
@@ -376,16 +376,20 @@ func removeTableinSelectExprs(node sqlparser.SelectExprs, cursor *sqlparser.Curs
 	return simplified
 }
 
-func removeTableinGroupBy(node sqlparser.GroupBy, cursor *sqlparser.Cursor, shouldKeepExpr func(sqlparser.Expr) bool, simplified bool) bool {
-	var newExprs sqlparser.GroupBy
-	for _, expr := range node {
+func removeTableInGroupBy(node *sqlparser.GroupBy, cursor *sqlparser.Cursor, shouldKeepExpr func(sqlparser.Expr) bool, simplified bool) bool {
+	var newExprs []sqlparser.Expr
+	for _, expr := range node.Exprs {
 		if shouldKeepExpr(expr) {
 			newExprs = append(newExprs, expr)
 		} else {
 			simplified = true
 		}
 	}
-	cursor.Replace(newExprs)
+	if len(newExprs) == 0 {
+		cursor.Replace(nil)
+	} else {
+		cursor.Replace(&sqlparser.GroupBy{Exprs: newExprs})
+	}
 
 	return simplified
 }
@@ -437,8 +441,10 @@ func visitAllExpressionsInAST(clone sqlparser.SelectStatement, visit func(expres
 			return visitWhere(node, visit)
 		case *sqlparser.JoinCondition:
 			return visitJoinCondition(node, cursor, visit)
-		case sqlparser.GroupBy:
-			return visitGroupBy(node, cursor, visit)
+		case *sqlparser.Select:
+			if node.GroupBy != nil {
+				return visitGroupBy(node, visit)
+			}
 		case sqlparser.OrderBy:
 			return visitOrderBy(node, cursor, visit)
 		case *sqlparser.Limit:
@@ -540,12 +546,15 @@ func visitJoinCondition(node *sqlparser.JoinCondition, cursor *sqlparser.Cursor,
 	return visitExpressions(exprs, set, visit, minExprs)
 }
 
-func visitGroupBy(node sqlparser.GroupBy, cursor *sqlparser.Cursor, visit func(expressionCursor) bool) bool {
+func visitGroupBy(node *sqlparser.Select, visit func(expressionCursor) bool) bool {
 	set := func(input []sqlparser.Expr) {
-		node = input
-		cursor.Replace(node)
+		if len(input) == 0 {
+			node.GroupBy = nil
+		} else {
+			node.GroupBy = &sqlparser.GroupBy{Exprs: input}
+		}
 	}
-	return visitExpressions(node, set, visit, 0)
+	return visitExpressions(node.GroupBy.Exprs, set, visit, 0)
 }
 
 func visitOrderBy(node sqlparser.OrderBy, cursor *sqlparser.Cursor, visit func(expressionCursor) bool) bool {

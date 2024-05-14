@@ -553,6 +553,7 @@ var keywords = []keyword{
 	{"right", RIGHT},
 	{"rlike", RLIKE},
 	{"rollback", ROLLBACK},
+	{"rollup", ROLLUP},
 	{"row", ROW},
 	{"row_format", ROW_FORMAT},
 	{"row_number", ROW_NUMBER},

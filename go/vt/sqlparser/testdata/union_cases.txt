@@ -109,8 +109,8 @@ END
 INPUT
 SELECT a, SUM(a), SUM(a)+1 FROM (SELECT a FROM t1 UNION select 2) d   GROUP BY a WITH ROLLUP;
 END
-ERROR
-syntax error at position 86 near 'WITH'
+OUTPUT
+select a, sum(a), sum(a) + 1 from (select a from t1 union select 2 from dual) as d group by a with rollup
 END
 INPUT
 SELECT * FROM t1 UNION ALL SELECT * FROM t2 ORDER BY a LIMIT 5 OFFSET 6;
@@ -374,7 +374,7 @@ INPUT
 SELECT product, country_id , year, SUM(profit) FROM t1 GROUP BY product, country_id, year WITH CUBE UNION ALL SELECT product, country_id , year, SUM(profit) FROM t1 GROUP BY product, country_id, year WITH ROLLUP;
 END
 ERROR
-syntax error at position 95 near 'WITH'
+syntax error at position 100 near 'CUBE'
 END
 INPUT
 select   (with recursive dt as     (select t1.a as a union select a+1 from dt where a<10)    select dt1.a from dt dt1 where dt1.a=t1.a   ) as subq from t1;
@@ -493,8 +493,8 @@ END
 INPUT
 SELECT a, SUM(a), SUM(a)+1 FROM (SELECT 1 a UNION select 2) d   GROUP BY a WITH ROLLUP;
 END
-ERROR
-syntax error at position 80 near 'WITH'
+OUTPUT
+select a, sum(a), sum(a) + 1 from (select 1 as a from dual union select 2 from dual) as d group by a with rollup
 END
 INPUT
 SELECT LOCATION FROM T1 WHERE EVENT_ID=2 UNION ALL  SELECT LOCATION FROM T1 WHERE EVENT_ID=3;
@@ -619,8 +619,8 @@ END
 INPUT
 SELECT a, SUM(a), SUM(a)+1, CONCAT(SUM(a),'x'), SUM(a)+SUM(a), SUM(a)   FROM (SELECT 1 a, 2 b UNION SELECT 2,3 UNION SELECT 5,6 ) d     GROUP BY a WITH ROLLUP;
 END
-ERROR
-syntax error at position 152 near 'WITH'
+OUTPUT
+select a, sum(a), sum(a) + 1, CONCAT(sum(a), 'x'), sum(a) + sum(a), sum(a) from (select 1 as a, 2 as b from dual union select 2, 3 from dual union select 5, 6 from dual) as d group by a with rollup
 END
 INPUT
 select st_equals(st_union(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')),                   st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
@@ -889,8 +889,8 @@ END
 INPUT
 SELECT a, SUM(a), SUM(a)+1, CONCAT(SUM(a),'x'), SUM(a)+SUM(a), SUM(a)   FROM (SELECT 1 a, 2 b UNION SELECT 2,3 UNION SELECT 5,6 ) d       GROUP BY a WITH ROLLUP ORDER BY GROUPING(a),a;
 END
-ERROR
-syntax error at position 154 near 'WITH'
+OUTPUT
+select a, sum(a), sum(a) + 1, CONCAT(sum(a), 'x'), sum(a) + sum(a), sum(a) from (select 1 as a, 2 as b from dual union select 2, 3 from dual union select 5, 6 from dual) as d group by a with rollup order by GROUPING(a) asc, a asc
 END
 INPUT
 SELECT ST_ASTEXT(ST_UNION(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION())'),                           ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(GEOMETRYCOLLECTION())))'))) as geom;
@@ -1087,8 +1087,8 @@ END
 INPUT
 SELECT a, SUM(a), SUM(a)+1, CONCAT(SUM(a),'x'), SUM(a)+SUM(a), SUM(a)   FROM (SELECT 1 a, 2 b UNION SELECT 2,3 UNION SELECT 5,6 ) d       GROUP BY a WITH ROLLUP ORDER BY SUM(a);
 END
-ERROR
-syntax error at position 154 near 'WITH'
+OUTPUT
+select a, sum(a), sum(a) + 1, CONCAT(sum(a), 'x'), sum(a) + sum(a), sum(a) from (select 1 as a, 2 as b from dual union select 2, 3 from dual union select 5, 6 from dual) as d group by a with rollup order by sum(a) asc
 END
 INPUT
 select 'a' union select concat('a', -0.0);

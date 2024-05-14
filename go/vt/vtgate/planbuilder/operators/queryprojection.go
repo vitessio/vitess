@@ -44,6 +44,7 @@ type (
 		SelectExprs  []SelectExpr
 		HasAggr      bool
 		Distinct     bool
+		WithRollup   bool
 		groupByExprs []GroupBy
 		OrderExprs   []OrderBy
 
@@ -321,9 +322,13 @@ func (qp *QueryProjection) calculateDistinct(ctx *plancontext.PlanningContext) {
 	qp.Distinct = false
 }
 
-func (qp *QueryProjection) addGroupBy(ctx *plancontext.PlanningContext, groupBy sqlparser.GroupBy) {
+func (qp *QueryProjection) addGroupBy(ctx *plancontext.PlanningContext, groupBy *sqlparser.GroupBy) {
+	if groupBy == nil {
+		return
+	}
+	qp.WithRollup = groupBy.WithRollup
 	es := &expressionSet{}
-	for _, grouping := range groupBy {
+	for _, grouping := range groupBy.Exprs {
 		selectExprIdx := qp.FindSelectExprIndexForExpr(ctx, grouping)
 		checkForInvalidGroupingExpressions(ctx, grouping)
 

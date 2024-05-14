@@ -352,7 +352,7 @@ func (b *binder) resolveColumnInHaving(colName *sqlparser.ColName, current *scop
 		return selDeps, nil
 	}
 
-	if !current.inHavingAggr && len(sel.GroupBy) == 0 {
+	if !current.inHavingAggr && sel.GroupBy == nil {
 		// if we are not inside an aggregation, and there is no GROUP BY, we consider the FROM clause before failing
 		if deps.direct.NotEmpty() || (err != nil && !isColumnNotFound(err)) {
 			return deps, err
@@ -382,18 +382,19 @@ func (b *binder) searchInSelectExpressions(colName *sqlparser.ColName, deps depe
 			return dependency{certain: true, direct: direct, recursive: recursive, typ: typ}
 		}
 	}
+	if stmt.GroupBy != nil {
+		for _, gb := range stmt.GroupBy.Exprs {
+			selectCol, ok := gb.(*sqlparser.ColName)
+			if !ok || !selectCol.Name.Equal(colName.Name) {
+				continue
+			}
 
-	for _, gb := range stmt.GroupBy {
-		selectCol, ok := gb.(*sqlparser.ColName)
-		if !ok || !selectCol.Name.Equal(colName.Name) {
-			continue
-		}
-
-		_, direct, _ := b.org.depsForExpr(selectCol)
-		if deps.direct == direct {
-			// we have found the ColName in the GROUP BY expressions, so it's safe to use here
-			direct, recursive, typ := b.org.depsForExpr(gb)
-			return dependency{certain: true, direct: direct, recursive: recursive, typ: typ}
+			_, direct, _ := b.org.depsForExpr(selectCol)
+			if deps.direct == direct {
+				// we have found the ColName in the GROUP BY expressions, so it's safe to use here
+				direct, recursive, typ := b.org.depsForExpr(gb)
+				return dependency{certain: true, direct: direct, recursive: recursive, typ: typ}
+			}
 		}
 	}
 	return dependency{}
