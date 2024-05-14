@@ -110,6 +110,10 @@ func init() {
 func run(cmd *cobra.Command, args []string) error {
 	servenv.Init()
 
+	// Ensure we open the topo before we start the context, so that the
+	// defer that closes the topo runs after cancelling the context.
+	// This ensures that we've properly closed things like the watchers
+	// at that point.
 	ts := topo.Open()
 	defer ts.Close()
 
