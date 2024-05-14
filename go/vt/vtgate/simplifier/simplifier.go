@@ -441,8 +441,10 @@ func visitAllExpressionsInAST(clone sqlparser.SelectStatement, visit func(expres
 			return visitWhere(node, visit)
 		case *sqlparser.JoinCondition:
 			return visitJoinCondition(node, cursor, visit)
-		case *sqlparser.GroupBy:
-			return visitGroupBy(node, cursor, visit)
+		case *sqlparser.Select:
+			if node.GroupBy != nil {
+				return visitGroupBy(node, visit)
+			}
 		case sqlparser.OrderBy:
 			return visitOrderBy(node, cursor, visit)
 		case *sqlparser.Limit:
@@ -544,15 +546,15 @@ func visitJoinCondition(node *sqlparser.JoinCondition, cursor *sqlparser.Cursor,
 	return visitExpressions(exprs, set, visit, minExprs)
 }
 
-func visitGroupBy(node *sqlparser.GroupBy, cursor *sqlparser.Cursor, visit func(expressionCursor) bool) bool {
+func visitGroupBy(node *sqlparser.Select, visit func(expressionCursor) bool) bool {
 	set := func(input []sqlparser.Expr) {
 		if len(input) == 0 {
-			cursor.Replace(nil)
+			node.GroupBy = nil
 		} else {
-			cursor.Replace(&sqlparser.GroupBy{Exprs: input})
+			node.GroupBy = &sqlparser.GroupBy{Exprs: input}
 		}
 	}
-	return visitExpressions(node.Exprs, set, visit, 0)
+	return visitExpressions(node.GroupBy.Exprs, set, visit, 0)
 }
 
 func visitOrderBy(node sqlparser.OrderBy, cursor *sqlparser.Cursor, visit func(expressionCursor) bool) bool {
