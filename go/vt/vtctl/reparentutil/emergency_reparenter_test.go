@@ -2725,9 +2725,6 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 
 func TestEmergencyReparenterStats(t *testing.T) {
 	ersCounter.ResetAll()
-	legacyERSCounter.Reset()
-	legacyERSSuccessCounter.Reset()
-	legacyERSFailureCounter.Reset()
 	reparentShardOpTimings.Reset()
 
 	emergencyReparentOps := EmergencyReparentOptions{}
@@ -2860,11 +2857,6 @@ func TestEmergencyReparenterStats(t *testing.T) {
 	require.EqualValues(t, map[string]int64{"testkeyspace.-.success": 1}, ersCounter.Counts())
 	require.EqualValues(t, map[string]int64{"All": 1, "EmergencyReparentShard": 1}, reparentShardOpTimings.Counts())
 
-	// check the legacy counter values
-	require.EqualValues(t, 1, legacyERSCounter.Get())
-	require.EqualValues(t, 1, legacyERSSuccessCounter.Get())
-	require.EqualValues(t, 0, legacyERSFailureCounter.Get())
-
 	// set emergencyReparentOps to request a non existent tablet
 	emergencyReparentOps.NewPrimaryAlias = &topodatapb.TabletAlias{
 		Cell: "bogus",
@@ -2878,11 +2870,6 @@ func TestEmergencyReparenterStats(t *testing.T) {
 	// check the counter values
 	require.EqualValues(t, map[string]int64{"testkeyspace.-.success": 1, "testkeyspace.-.failure": 1}, ersCounter.Counts())
 	require.EqualValues(t, map[string]int64{"All": 2, "EmergencyReparentShard": 2}, reparentShardOpTimings.Counts())
-
-	// check the legacy counter values
-	require.EqualValues(t, 2, legacyERSCounter.Get())
-	require.EqualValues(t, 1, legacyERSSuccessCounter.Get())
-	require.EqualValues(t, 1, legacyERSFailureCounter.Get())
 }
 
 func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {

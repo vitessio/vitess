@@ -7,6 +7,7 @@
     - [MySQL binaries in the vitess/lite Docker images](#vitess-lite)
     - [vitess/base and vitess/k8s Docker images](#base-k8s-images)
     - [`gh-ost` binary and endtoend tests](#gh-ost-binary-tests-removal)
+    - [Legacy `EmergencyReparentShard` stats](#legacy-emergencyshardreparent-stats)
   - **[Breaking changes](#breaking-changes)**
     - [`shutdown_grace_period` Default Change](#shutdown-grace-period-default)
     - [New `unmanaged` Flag and `disable_active_reparents` deprecation](#unmanaged-flag)
@@ -94,6 +95,17 @@ Vitess 20.0 drops support for `gh-ost` DDL strategy.
 `vttablet` binary no longer embeds a `gh-ost` binary. Users of `gh-ost` DDL strategy will need to supply a `gh-ost` binary on the `vttablet` host or pod. Vitess will look for the `gh-ost` binary in the system `PATH`; otherwise the user should supply `vttablet --gh-ost-path`.
 
 Vitess' endtoend tests no longer use nor test `gh-ost` migrations.
+
+#### <a id="legacy-emergencyshardreparent-stats"/>Legacy `EmergencyReparentShard` stats
+
+The following `EmergencyReparentShard` stats were deprecated in Vitess 18.0 and are removed in Vitess 20.0:
+- `ers_counter`
+- `ers_success_counter`
+- `ers_failure_counter`
+
+These counters are replaced by the following stats _(introduced in Vitess 18.0)_:
+- `emergency_reparent_counts` - Number of times `EmergencyReparentShard` has been run. It is further subdivided by the keyspace, shard and the result of the operation.
+- `planned_reparent_counts` - Number of times `PlannedReparentShard` has been run. It is further subdivided by the keyspace, shard and the result of the operation.
 
 ### <a id="breaking-changes"/>Breaking Changes
 
