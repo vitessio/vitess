@@ -94,7 +94,9 @@ func commandCheckThrottler(cmd *cobra.Command, args []string) error {
 	}
 
 	cli.FinishedParsing(cmd)
-
+	if _, err := base.ScopeFromString(checkThrottlerOptions.Scope); err != nil {
+		return err
+	}
 	resp, err := client.CheckThrottler(commandCtx, &vtctldatapb.CheckThrottlerRequest{
 		TabletAlias:           alias,
 		AppName:               checkThrottlerOptions.AppName,

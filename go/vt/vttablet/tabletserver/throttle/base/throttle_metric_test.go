@@ -117,3 +117,29 @@ func TestAggregateName(t *testing.T) {
 		})
 	}
 }
+
+func TestScopeFromString(t *testing.T) {
+	{
+		scope, err := ScopeFromString("")
+		assert.NoError(t, err)
+		assert.Equal(t, UndefinedScope, scope)
+	}
+	{
+		scope, err := ScopeFromString("self")
+		assert.NoError(t, err)
+		assert.Equal(t, SelfScope, scope)
+	}
+	{
+		scope, err := ScopeFromString("shard")
+		assert.NoError(t, err)
+		assert.Equal(t, ShardScope, scope)
+	}
+	{
+		_, err := ScopeFromString("something")
+		assert.ErrorContains(t, err, "unknown scope")
+	}
+	{
+		_, err := ScopeFromString("self/lag")
+		assert.ErrorContains(t, err, "unknown scope")
+	}
+}

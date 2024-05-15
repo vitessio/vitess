@@ -34,6 +34,15 @@ func (s Scope) String() string {
 	return string(s)
 }
 
+func ScopeFromString(s string) (Scope, error) {
+	switch scope := Scope(s); scope {
+	case UndefinedScope, ShardScope, SelfScope:
+		return scope, nil
+	default:
+		return "", fmt.Errorf("unknown scope: %s", s)
+	}
+}
+
 type MetricName string
 
 type MetricNames []MetricName
