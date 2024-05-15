@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -99,4 +100,19 @@ func TestResetReplicationParameters(t *testing.T) {
 	res, err = tablet.VttabletProcess.QueryTablet("show replica status", keyspaceName, false)
 	require.NoError(t, err)
 	require.Len(t, res.Rows, 0)
+}
+
+// TestUptime tests the Uptime RPC
+func TestUptime(t *testing.T) {
+	ctx := context.Background()
+	uptimeInitial, err := tmcUptime(ctx, replicaTablet.GrpcPort)
+	require.NoError(t, err)
+	require.Greater(t, uptimeInitial, uint64(0))
+	time.Sleep(1500 * time.Millisecond)
+	uptimeFinal, err := tmcUptime(ctx, replicaTablet.GrpcPort)
+	require.NoError(t, err)
+	require.Greater(t, uptimeFinal, uint64(0))
+	uptimeDiff := uptimeFinal - uptimeInitial
+	require.LessOrEqual(t, uptimeDiff, uint64(2))
+	require.GreaterOrEqual(t, uptimeDiff, uint64(1))
 }

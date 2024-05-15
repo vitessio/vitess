@@ -79,6 +79,9 @@ type RPCTM interface {
 
 	ExecuteFetchAsApp(ctx context.Context, req *tabletmanagerdatapb.ExecuteFetchAsAppRequest) (*querypb.QueryResult, error)
 
+	// Uptime returns the uptime of the tablet.
+	Uptime(ctx context.Context) (uint64, error)
+
 	// Replication related methods
 	PrimaryStatus(ctx context.Context) (*replicationdatapb.PrimaryStatus, error)
 

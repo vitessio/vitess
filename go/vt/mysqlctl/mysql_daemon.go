@@ -53,6 +53,9 @@ type MysqlDaemon interface {
 	// GetServerUUID returns the servers UUID
 	GetServerUUID(ctx context.Context) (string, error)
 
+	// Uptime gets the uptime for the server
+	Uptime(ctx context.Context) (uint64, error)
+
 	// replication related methods
 	StartReplication(ctx context.Context, hookExtraEnv map[string]string) error
 	RestartReplication(ctx context.Context, hookExtraEnv map[string]string) error

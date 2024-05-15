@@ -149,6 +149,9 @@ type TabletManagerClient interface {
 	// PrimaryStatus returns the tablet's mysql primary status.
 	PrimaryStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error)
 
+	// Uptime returns the uptime of the tablet.
+	Uptime(ctx context.Context, tablet *topodatapb.Tablet) (uint64, error)
+
 	// ReplicationStatus returns the tablet's mysql replication status.
 	ReplicationStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.Status, error)
 

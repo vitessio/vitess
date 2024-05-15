@@ -292,6 +292,11 @@ func (fmd *FakeMysqlDaemon) GetServerUUID(ctx context.Context) (string, error) {
 	return "000000", nil
 }
 
+// Uptime is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) Uptime(ctx context.Context) (uint64, error) {
+	return 100, nil
+}
+
 // CurrentPrimaryPositionLocked is thread-safe.
 func (fmd *FakeMysqlDaemon) CurrentPrimaryPositionLocked(pos replication.Position) {
 	fmd.mu.Lock()

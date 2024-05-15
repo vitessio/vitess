@@ -165,6 +165,11 @@ func tmcUnlockTables(ctx context.Context, tabletGrpcPort int) error {
 	return tmClient.UnlockTables(ctx, vtablet)
 }
 
+func tmcUptime(ctx context.Context, tabletGrpcPort int) (uint64, error) {
+	vtablet := getTablet(tabletGrpcPort)
+	return tmClient.Uptime(ctx, vtablet)
+}
+
 func tmcStopReplication(ctx context.Context, tabletGrpcPort int) error {
 	vtablet := getTablet(tabletGrpcPort)
 	return tmClient.StopReplication(ctx, vtablet)

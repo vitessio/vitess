@@ -188,6 +188,14 @@ func (tm *TabletManager) PrimaryStatus(ctx context.Context) (*replicationdatapb.
 	return replication.PrimaryStatusToProto(status), nil
 }
 
+// Uptime returns the uptime for the tablet.
+func (tm *TabletManager) Uptime(ctx context.Context) (uint64, error) {
+	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
+		return 0, err
+	}
+	return tm.MysqlDaemon.Uptime(ctx)
+}
+
 // PrimaryPosition returns the position of a primary database
 func (tm *TabletManager) PrimaryPosition(ctx context.Context) (string, error) {
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {

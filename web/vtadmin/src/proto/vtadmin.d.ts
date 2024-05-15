@@ -22911,6 +22911,194 @@ export namespace tabletmanagerdata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of an UptimeRequest. */
+    interface IUptimeRequest {
+    }
+
+    /** Represents an UptimeRequest. */
+    class UptimeRequest implements IUptimeRequest {
+
+        /**
+         * Constructs a new UptimeRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IUptimeRequest);
+
+        /**
+         * Creates a new UptimeRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns UptimeRequest instance
+         */
+        public static create(properties?: tabletmanagerdata.IUptimeRequest): tabletmanagerdata.UptimeRequest;
+
+        /**
+         * Encodes the specified UptimeRequest message. Does not implicitly {@link tabletmanagerdata.UptimeRequest.verify|verify} messages.
+         * @param message UptimeRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IUptimeRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified UptimeRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.UptimeRequest.verify|verify} messages.
+         * @param message UptimeRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IUptimeRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an UptimeRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns UptimeRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.UptimeRequest;
+
+        /**
+         * Decodes an UptimeRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns UptimeRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.UptimeRequest;
+
+        /**
+         * Verifies an UptimeRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an UptimeRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns UptimeRequest
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.UptimeRequest;
+
+        /**
+         * Creates a plain object from an UptimeRequest message. Also converts values to other types if specified.
+         * @param message UptimeRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.UptimeRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this UptimeRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for UptimeRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of an UptimeResponse. */
+    interface IUptimeResponse {
+
+        /** UptimeResponse uptime */
+        uptime?: (number|Long|null);
+    }
+
+    /** Represents an UptimeResponse. */
+    class UptimeResponse implements IUptimeResponse {
+
+        /**
+         * Constructs a new UptimeResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IUptimeResponse);
+
+        /** UptimeResponse uptime. */
+        public uptime: (number|Long);
+
+        /**
+         * Creates a new UptimeResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns UptimeResponse instance
+         */
+        public static create(properties?: tabletmanagerdata.IUptimeResponse): tabletmanagerdata.UptimeResponse;
+
+        /**
+         * Encodes the specified UptimeResponse message. Does not implicitly {@link tabletmanagerdata.UptimeResponse.verify|verify} messages.
+         * @param message UptimeResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IUptimeResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified UptimeResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.UptimeResponse.verify|verify} messages.
+         * @param message UptimeResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IUptimeResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an UptimeResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns UptimeResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.UptimeResponse;
+
+        /**
+         * Decodes an UptimeResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns UptimeResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.UptimeResponse;
+
+        /**
+         * Verifies an UptimeResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an UptimeResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns UptimeResponse
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.UptimeResponse;
+
+        /**
+         * Creates a plain object from an UptimeResponse message. Also converts values to other types if specified.
+         * @param message UptimeResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.UptimeResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this UptimeResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for UptimeResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Properties of a PrimaryPositionRequest. */
     interface IPrimaryPositionRequest {
     }

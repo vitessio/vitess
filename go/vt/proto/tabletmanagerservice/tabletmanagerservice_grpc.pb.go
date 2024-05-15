@@ -54,6 +54,8 @@ type TabletManagerClient interface {
 	ReplicationStatus(ctx context.Context, in *tabletmanagerdata.ReplicationStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReplicationStatusResponse, error)
 	// PrimaryStatus returns the current primary status.
 	PrimaryStatus(ctx context.Context, in *tabletmanagerdata.PrimaryStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PrimaryStatusResponse, error)
+	// Uptime returns the current uptime.
+	Uptime(ctx context.Context, in *tabletmanagerdata.UptimeRequest, opts ...grpc.CallOption) (*tabletmanagerdata.UptimeResponse, error)
 	// PrimaryPosition returns the current primary position
 	PrimaryPosition(ctx context.Context, in *tabletmanagerdata.PrimaryPositionRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PrimaryPositionResponse, error)
 	// WaitForPosition waits for the position to be reached
@@ -326,6 +328,15 @@ func (c *tabletManagerClient) ReplicationStatus(ctx context.Context, in *tabletm
 func (c *tabletManagerClient) PrimaryStatus(ctx context.Context, in *tabletmanagerdata.PrimaryStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PrimaryStatusResponse, error) {
 	out := new(tabletmanagerdata.PrimaryStatusResponse)
 	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/PrimaryStatus", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) Uptime(ctx context.Context, in *tabletmanagerdata.UptimeRequest, opts ...grpc.CallOption) (*tabletmanagerdata.UptimeResponse, error) {
+	out := new(tabletmanagerdata.UptimeResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/Uptime", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -710,6 +721,8 @@ type TabletManagerServer interface {
 	ReplicationStatus(context.Context, *tabletmanagerdata.ReplicationStatusRequest) (*tabletmanagerdata.ReplicationStatusResponse, error)
 	// PrimaryStatus returns the current primary status.
 	PrimaryStatus(context.Context, *tabletmanagerdata.PrimaryStatusRequest) (*tabletmanagerdata.PrimaryStatusResponse, error)
+	// Uptime returns the current uptime.
+	Uptime(context.Context, *tabletmanagerdata.UptimeRequest) (*tabletmanagerdata.UptimeResponse, error)
 	// PrimaryPosition returns the current primary position
 	PrimaryPosition(context.Context, *tabletmanagerdata.PrimaryPositionRequest) (*tabletmanagerdata.PrimaryPositionResponse, error)
 	// WaitForPosition waits for the position to be reached
@@ -846,6 +859,9 @@ func (UnimplementedTabletManagerServer) ReplicationStatus(context.Context, *tabl
 }
 func (UnimplementedTabletManagerServer) PrimaryStatus(context.Context, *tabletmanagerdata.PrimaryStatusRequest) (*tabletmanagerdata.PrimaryStatusResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PrimaryStatus not implemented")
+}
+func (UnimplementedTabletManagerServer) Uptime(context.Context, *tabletmanagerdata.UptimeRequest) (*tabletmanagerdata.UptimeResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Uptime not implemented")
 }
 func (UnimplementedTabletManagerServer) PrimaryPosition(context.Context, *tabletmanagerdata.PrimaryPositionRequest) (*tabletmanagerdata.PrimaryPositionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PrimaryPosition not implemented")
@@ -1369,6 +1385,24 @@ func _TabletManager_PrimaryStatus_Handler(srv interface{}, ctx context.Context, 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(TabletManagerServer).PrimaryStatus(ctx, req.(*tabletmanagerdata.PrimaryStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TabletManager_Uptime_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.UptimeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TabletManagerServer).Uptime(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/Uptime",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).Uptime(ctx, req.(*tabletmanagerdata.UptimeRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2071,6 +2105,10 @@ var TabletManager_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "PrimaryStatus",
 			Handler:    _TabletManager_PrimaryStatus_Handler,
+		},
+		{
+			MethodName: "Uptime",
+			Handler:    _TabletManager_Uptime_Handler,
 		},
 		{
 			MethodName: "PrimaryPosition",

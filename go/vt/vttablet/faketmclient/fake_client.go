@@ -236,6 +236,11 @@ func (client *FakeTabletManagerClient) PrimaryStatus(ctx context.Context, tablet
 	return &replicationdatapb.PrimaryStatus{}, nil
 }
 
+// Uptime is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) Uptime(ctx context.Context, tablet *topodatapb.Tablet) (uint64, error) {
+	return 0, nil
+}
+
 // StartReplication is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) StartReplication(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) error {
 	return nil

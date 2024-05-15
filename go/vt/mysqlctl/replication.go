@@ -228,6 +228,18 @@ func (mysqld *Mysqld) GetServerUUID(ctx context.Context) (string, error) {
 	return conn.Conn.GetServerUUID()
 }
 
+// Uptime returns the uptime for the server
+func (mysqld *Mysqld) Uptime(ctx context.Context) (uint64, error) {
+	qr, err := mysqld.FetchSuperQuery(ctx, "SHOW STATUS LIKE 'uptime'")
+	if err != nil {
+		return 0, err
+	}
+	if len(qr.Rows) != 1 {
+		return 0, nil
+	}
+	return qr.Rows[0][1].ToCastUint64()
+}
+
 // IsReadOnly return true if the instance is read only
 func (mysqld *Mysqld) IsReadOnly(ctx context.Context) (bool, error) {
 	qr, err := mysqld.FetchSuperQuery(ctx, "SHOW VARIABLES LIKE 'read_only'")

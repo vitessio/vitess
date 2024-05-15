@@ -794,11 +794,30 @@ var testFullStatus = &replicationdatapb.FullStatus{
 
 var testPrimaryStatus = &replicationdatapb.PrimaryStatus{Position: "MariaDB/1-345-789"}
 
+var testUptime uint64 = 64
+
 func (fra *fakeRPCTM) PrimaryStatus(ctx context.Context) (*replicationdatapb.PrimaryStatus, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
 	return testPrimaryStatus, nil
+}
+
+func (fra *fakeRPCTM) Uptime(ctx context.Context) (uint64, error) {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	return testUptime, nil
+}
+
+func tmRPCTestUptime(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	rs, err := client.Uptime(ctx, tablet)
+	compareError(t, "Uptime", err, rs, testUptime)
+}
+
+func tmRPCTestUptimePanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	_, err := client.Uptime(ctx, tablet)
+	expectHandleRPCPanic(t, "Uptime", false /*verbose*/, err)
 }
 
 func (fra *fakeRPCTM) ReplicationStatus(ctx context.Context) (*replicationdatapb.Status, error) {
@@ -1408,6 +1427,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	// Replication related methods
 	tmRPCTestPrimaryPosition(ctx, t, client, tablet)
 
+	tmRPCTestUptime(ctx, t, client, tablet)
 	tmRPCTestReplicationStatus(ctx, t, client, tablet)
 	tmRPCTestFullStatus(ctx, t, client, tablet)
 	tmRPCTestPrimaryPosition(ctx, t, client, tablet)
@@ -1452,6 +1472,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	tmRPCTestPingPanic(ctx, t, client, tablet)
 	tmRPCTestGetSchemaPanic(ctx, t, client, tablet)
 	tmRPCTestGetPermissionsPanic(ctx, t, client, tablet)
+	tmRPCTestUptimePanic(ctx, t, client, tablet)
 
 	// Various read-write methods
 	tmRPCTestSetReadOnlyPanic(ctx, t, client, tablet)

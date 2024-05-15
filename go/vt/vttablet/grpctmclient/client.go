@@ -708,6 +708,20 @@ func (client *Client) PrimaryStatus(ctx context.Context, tablet *topodatapb.Tabl
 	return response.Status, nil
 }
 
+// Uptime is part of the tmclient.TabletManagerClient interface.
+func (client *Client) Uptime(ctx context.Context, tablet *topodatapb.Tablet) (uint64, error) {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return 0, err
+	}
+	defer closer.Close()
+	response, err := c.Uptime(ctx, &tabletmanagerdatapb.UptimeRequest{})
+	if err != nil {
+		return 0, err
+	}
+	return response.Uptime, nil
+}
+
 // PrimaryPosition is part of the tmclient.TabletManagerClient interface.
 func (client *Client) PrimaryPosition(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)

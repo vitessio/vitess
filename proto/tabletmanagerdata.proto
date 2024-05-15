@@ -315,6 +315,13 @@ message PrimaryStatusResponse {
   replicationdata.PrimaryStatus status = 1;
 }
 
+message UptimeRequest {
+}
+
+message UptimeResponse {
+  uint64 uptime = 1;
+}
+
 message PrimaryPositionRequest {
 }
 

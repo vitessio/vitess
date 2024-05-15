@@ -301,6 +301,17 @@ func (s *server) PrimaryStatus(ctx context.Context, request *tabletmanagerdatapb
 	return response, err
 }
 
+func (s *server) Uptime(ctx context.Context, request *tabletmanagerdatapb.UptimeRequest) (response *tabletmanagerdatapb.UptimeResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "Uptime", request, response, true /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.UptimeResponse{}
+	uptime, err := s.tm.Uptime(ctx)
+	if err == nil {
+		response.Uptime = uptime
+	}
+	return response, err
+}
+
 func (s *server) PrimaryPosition(ctx context.Context, request *tabletmanagerdatapb.PrimaryPositionRequest) (response *tabletmanagerdatapb.PrimaryPositionResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "PrimaryPosition", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)

@@ -857,6 +857,10 @@ func (itmc *internalTabletManagerClient) PrimaryStatus(context.Context, *topodat
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
+func (itmc *internalTabletManagerClient) Uptime(context.Context, *topodatapb.Tablet) (uint64, error) {
+	return 0, fmt.Errorf("not implemented in vtcombo")
+}
+
 func (itmc *internalTabletManagerClient) PrimaryPosition(context.Context, *topodatapb.Tablet) (string, error) {
 	return "", fmt.Errorf("not implemented in vtcombo")
 }

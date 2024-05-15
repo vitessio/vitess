@@ -92,6 +92,9 @@ service TabletManager {
   // PrimaryStatus returns the current primary status.
   rpc PrimaryStatus(tabletmanagerdata.PrimaryStatusRequest) returns (tabletmanagerdata.PrimaryStatusResponse) {};
 
+  // Uptime returns the current uptime.
+  rpc Uptime(tabletmanagerdata.UptimeRequest) returns (tabletmanagerdata.UptimeResponse) {};
+
   // PrimaryPosition returns the current primary position
   rpc PrimaryPosition(tabletmanagerdata.PrimaryPositionRequest) returns (tabletmanagerdata.PrimaryPositionResponse) {};
 

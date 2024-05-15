@@ -300,6 +300,10 @@ type TabletManagerClient struct {
 		Status *replicationdatapb.PrimaryStatus
 		Error  error
 	}
+	UptimeResults map[string]struct {
+		Uptime uint64
+		Error  error
+	}
 	RestoreFromBackupResults map[string]struct {
 		Events        []*logutilpb.Event
 		EventInterval time.Duration
@@ -965,6 +969,20 @@ func (fake *TabletManagerClient) PrimaryStatus(ctx context.Context, tablet *topo
 	}
 
 	return nil, assert.AnError
+}
+
+// Uptime is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) Uptime(ctx context.Context, tablet *topodatapb.Tablet) (uint64, error) {
+	if fake.UptimeResults == nil {
+		return 0, assert.AnError
+	}
+
+	key := topoproto.TabletAliasString(tablet.Alias)
+	if result, ok := fake.UptimeResults[key]; ok {
+		return result.Uptime, result.Error
+	}
+
+	return 0, assert.AnError
 }
 
 type backupRestoreStreamAdapter struct {
