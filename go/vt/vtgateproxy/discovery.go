@@ -88,6 +88,7 @@ type JSONGateResolverBuilder struct {
 }
 
 type targetHost struct {
+	Hostname string
 	Addr     string
 	PoolType string
 	Affinity string
@@ -244,6 +245,7 @@ func (b *JSONGateResolverBuilder) parse() (bool, error) {
 
 	var targets = map[string][]targetHost{}
 	for _, host := range hosts {
+		hostname, hasHostname := host["host"]
 		address, hasAddress := host[b.addressField]
 		port, hasPort := host[b.portField]
 		poolType, hasPoolType := host[b.poolTypeField]
@@ -255,6 +257,10 @@ func (b *JSONGateResolverBuilder) parse() (bool, error) {
 
 		if !hasPort {
 			return false, fmt.Errorf("error parsing JSON discovery file %s: port field %s not present", b.jsonPath, b.portField)
+		}
+
+		if !hasHostname {
+			hostname = address
 		}
 
 		if b.poolTypeField != "" && !hasPoolType {
@@ -283,7 +289,7 @@ func (b *JSONGateResolverBuilder) parse() (bool, error) {
 			return false, fmt.Errorf("error parsing JSON discovery file %s: port field %s has invalid value %v", b.jsonPath, b.portField, port)
 		}
 
-		target := targetHost{fmt.Sprintf("%s:%s", address, port), poolType.(string), affinity.(string)}
+		target := targetHost{hostname.(string), fmt.Sprintf("%s:%s", address, port), poolType.(string), affinity.(string)}
 		targets[target.PoolType] = append(targets[target.PoolType], target)
 	}
 
@@ -423,10 +429,11 @@ const (
 </style>
 <table>
 {{range $i, $p := .Pools}}  <tr>
-    <th colspan="2">{{$p}}</th>
+    <th colspan="3">{{$p}}</th>
   </tr>
 {{range index $.Targets $p}}  <tr>
-    <td>{{.Addr}}</td>
+	<td>{{.Hostname}}</td>
+	<td>{{.Addr}}</td>
     <td>{{.Affinity}}</td>
   </tr>{{end}}
 {{end}}
