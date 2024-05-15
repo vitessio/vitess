@@ -43,7 +43,7 @@ var (
 		Args:                  cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cli.FinishedParsing(cmd)
-			return runLegacyCommand(args)
+			return runLegacyCommand(cmd.Context(), args)
 		},
 		Long: strings.TrimSpace(`
 LegacyVtctlCommand uses the legacy vtctl grpc client to make an ExecuteVtctlCommand
@@ -76,11 +76,11 @@ LegacyVtctlCommand -- AddCellInfo --server_address "localhost:5678" --root "/vit
 	}
 )
 
-func runLegacyCommand(args []string) error {
+func runLegacyCommand(ctx context.Context, args []string) error {
 	// Duplicated (mostly) from go/cmd/vtctlclient/main.go.
 	logger := logutil.NewConsoleLogger()
 
-	ctx, cancel := context.WithTimeout(context.Background(), actionTimeout)
+	ctx, cancel := context.WithTimeout(ctx, actionTimeout)
 	defer cancel()
 
 	err := vtctlclient.RunCommandAndWait(ctx, server, args, func(e *logutilpb.Event) {
