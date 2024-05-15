@@ -5971,8 +5971,24 @@ func TestFunctionCalls(t *testing.T) {
 			output: "select CAST(foo as DOUBLE)",
 		},
 		{
+			input:  "SELECT CAST(foo AS DOUBLE PRECISION)",
+			output: "select CAST(foo as DOUBLE)",
+		},
+		{
+			input:  "SELECT CAST(foo AS REAL)",
+			output: "select CAST(foo as REAL)",
+		},
+		{
 			input:  "SELECT CAST(foo AS FLOAT)",
 			output: "select CAST(foo as FLOAT)",
+		},
+		{
+			input:  "SELECT CAST(foo AS CHARACTER)",
+			output: "select CAST(foo as CHAR)",
+		},
+		{
+			input:  "SELECT CAST(foo AS CHARACTER(100))",
+			output: "select CAST(foo as CHAR(100))",
 		},
 		{
 			input:  "SELECT POSITION('abc' in 'xyz')",

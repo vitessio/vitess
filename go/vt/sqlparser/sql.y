@@ -439,6 +439,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <declareHandlerConditions> declare_handler_condition_list
 %type <declareHandlerAction> declare_handler_action
 %type <bytes> signal_condition_value
+%type <bytes> char_or_character
 %type <str> trigger_time trigger_event
 %type <boolean> with_or_without
 %type <statement> alter_statement alter_table_statement alter_database_statement alter_event_statement alter_user_statement
@@ -3265,19 +3266,11 @@ time_type:
   }
 
 char_type:
-  CHAR char_length_opt
+  char_or_character char_length_opt
   {
     $$ = ColumnType{Type: string($1), Length: $2}
   }
-| CHARACTER char_length_opt
-  {
-    $$ = ColumnType{Type: string($1), Length: $2}
-  }
-| NATIONAL CHAR char_length_opt
-  {
-    $$ = ColumnType{Type: string($1) + " " + string($2), Length: $3}
-  }
-| NATIONAL CHARACTER char_length_opt
+| NATIONAL char_or_character char_length_opt
   {
     $$ = ColumnType{Type: string($1) + " " + string($2), Length: $3}
   }
@@ -3313,11 +3306,7 @@ char_type:
   {
     $$ = ColumnType{Type: string($1) + " " + string($2), Length: $3}
   }
-| NATIONAL CHAR VARYING char_length_opt
-  {
-    $$ = ColumnType{Type: string($1) + " " + string($2) + " " + string($3), Length: $4}
-  }
-| NATIONAL CHARACTER VARYING char_length_opt
+| NATIONAL char_or_character VARYING char_length_opt
   {
     $$ = ColumnType{Type: string($1) + " " + string($2) + " " + string($3), Length: $4}
   }
@@ -8043,6 +8032,14 @@ convert_type:
   {
     $$ = &ConvertType{Type: string($1), Length: $2, Charset: string($3)}
   }
+| CHARACTER length_opt charset_opt
+  {
+    $$ = &ConvertType{Type: "CHAR", Length: $2, Charset: $3, Operator: CharacterSetStr}
+  }
+| CHARACTER length_opt ID
+  {
+    $$ = &ConvertType{Type: "CHAR", Length: $2, Charset: string($3)}
+  }
 | DATE
   {
     $$ = &ConvertType{Type: string($1)}
@@ -8058,6 +8055,14 @@ convert_type:
     $$.Scale = $2.Scale
   }
 | DOUBLE
+  {
+    $$ = &ConvertType{Type: string($1)}
+  }
+| DOUBLE PRECISION
+  {
+    $$ = &ConvertType{Type: string($1)}
+  }
+| REAL
   {
     $$ = &ConvertType{Type: string($1)}
   }
@@ -8096,6 +8101,16 @@ convert_type:
 | YEAR
   {
     $$ = &ConvertType{Type: string($1)}
+  }
+
+char_or_character:
+  CHAR
+  {
+    $$ = $1
+  }
+| CHARACTER
+  {
+    $$ = $1
   }
 
 expression_opt:
