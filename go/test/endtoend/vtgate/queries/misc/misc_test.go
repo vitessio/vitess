@@ -454,6 +454,7 @@ func TestStraightJoin(t *testing.T) {
 }
 
 func TestColumnAliases(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 20, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 
