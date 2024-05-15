@@ -30585,6 +30585,9 @@ export namespace tabletmanagerdata {
 
             /** Metric message */
             message?: (string|null);
+
+            /** Metric scope */
+            scope?: (string|null);
         }
 
         /** Represents a Metric. */
@@ -30613,6 +30616,9 @@ export namespace tabletmanagerdata {
 
             /** Metric message. */
             public message: string;
+
+            /** Metric scope. */
+            public scope: string;
 
             /**
              * Creates a new Metric instance using the specified properties.
@@ -49564,6 +49570,9 @@ export namespace vtctldata {
 
             /** Metric message */
             message?: (string|null);
+
+            /** Metric scope */
+            scope?: (string|null);
         }
 
         /** Represents a Metric. */
@@ -49592,6 +49601,9 @@ export namespace vtctldata {
 
             /** Metric message. */
             public message: string;
+
+            /** Metric scope. */
+            public scope: string;
 
             /**
              * Creates a new Metric instance using the specified properties.
