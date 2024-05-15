@@ -453,6 +453,14 @@ func TestStraightJoin(t *testing.T) {
 	require.Contains(t, fmt.Sprintf("%v", res.Rows), "t1_tbl")
 }
 
+func TestColumnAliases(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into t1(id1, id2) values (0,0), (1,1)")
+	mcmp.ExecWithColumnCompare(`select a as k from (select count(*) as a from t1) t`)
+}
+
 func TestEnumSetVals(t *testing.T) {
 	utils.SkipIfBinaryIsBelowVersion(t, 20, "vtgate")
 
