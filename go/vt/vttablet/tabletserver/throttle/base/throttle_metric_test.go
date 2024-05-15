@@ -92,11 +92,18 @@ func TestAggregateName(t *testing.T) {
 	for _, tcase := range tcases {
 		t.Run(tcase.aggregatedName, func(t *testing.T) {
 			scope, metricName, err := DisaggregateMetricName(tcase.aggregatedName)
+			{
+				scope2, metricName2, err2 := MetricName(tcase.aggregatedName).Disaggregated()
+				assert.Equal(t, scope, scope2)
+				assert.Equal(t, metricName, metricName2)
+				assert.Equal(t, err, err2)
+			}
 			if tcase.expectErr != "" {
 				assert.ErrorContains(t, err, tcase.expectErr)
 				return
 			}
 			assert.NoError(t, err)
+			assert.NotEqual(t, UndefinedScope, scope)
 			assert.Equal(t, tcase.scope, scope)
 			assert.Equal(t, tcase.metricName, metricName)
 

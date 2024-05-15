@@ -1023,6 +1023,55 @@ func TestChecks(t *testing.T) {
 				assert.EqualValues(t, 2.718, checkResult.Metrics[base.LoadAvgMetricName.String()].Value)     // self value
 			})
 		})
+		t.Run("checks, defined scope masks explicit scope metrics", func(t *testing.T) {
+			flags := &CheckFlags{
+				Scope: base.ShardScope,
+			}
+			t.Run("explicit names", func(t *testing.T) {
+				metricNames := base.MetricNames{
+					base.MetricName("self/lag"),
+					base.MetricName("self/threads_running"),
+					base.MetricName("custom"),
+					base.MetricName("shard/loadavg"),
+					base.MetricName("default"),
+				}
+				checkResult := throttler.Check(ctx, throttlerapp.VitessName.String(), metricNames, flags)
+
+				require.NotNil(t, checkResult)
+				assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
+				assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode)
+				assert.ErrorIs(t, checkResult.Error, base.ErrThresholdExceeded)
+				assert.Equal(t, len(metricNames), len(checkResult.Metrics))
+
+				assert.EqualValues(t, 0.9, checkResult.Metrics[base.LagMetricName.String()].Value)           // shard lag value
+				assert.EqualValues(t, 26, checkResult.Metrics[base.ThreadsRunningMetricName.String()].Value) // shard value
+				assert.EqualValues(t, 17, checkResult.Metrics[base.CustomMetricName.String()].Value)         // shard value
+				assert.EqualValues(t, 5.1, checkResult.Metrics[base.LoadAvgMetricName.String()].Value)       // shard value
+			})
+		})
+		t.Run("checks, undefined scope and explicit scope metrics", func(t *testing.T) {
+			flags := &CheckFlags{
+				// Leaving scope undefined
+			}
+			t.Run("explicit names", func(t *testing.T) {
+				metricNames := base.MetricNames{
+					base.MetricName("self/lag"),
+					base.MetricName("self/threads_running"),
+					base.MetricName("custom"),
+					base.MetricName("shard/loadavg"),
+				}
+				checkResult := throttler.Check(ctx, throttlerapp.VitessName.String(), metricNames, flags)
+				require.NotNil(t, checkResult)
+				assert.EqualValues(t, 0.3, checkResult.Value) // explicitly set self lag value
+				assert.EqualValues(t, http.StatusOK, checkResult.StatusCode)
+				assert.Equal(t, len(metricNames), len(checkResult.Metrics))
+
+				assert.EqualValues(t, 0.3, checkResult.Metrics[base.LagMetricName.String()].Value)           // shard lag value
+				assert.EqualValues(t, 26, checkResult.Metrics[base.ThreadsRunningMetricName.String()].Value) // self value
+				assert.EqualValues(t, 17, checkResult.Metrics[base.CustomMetricName.String()].Value)         // self value
+				assert.EqualValues(t, 5.1, checkResult.Metrics[base.LoadAvgMetricName.String()].Value)       // self value
+			})
+		})
 
 		// done
 		cancel() // end test early

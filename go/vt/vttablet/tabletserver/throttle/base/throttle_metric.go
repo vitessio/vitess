@@ -82,6 +82,11 @@ func (metric MetricName) AggregatedName(scope Scope) string {
 	return fmt.Sprintf("%s/%s", scope.String(), metric.String())
 }
 
+// Disaggregated returns a breakdown of this metric into scope + name.
+func (metric MetricName) Disaggregated() (scope Scope, metricName MetricName, err error) {
+	return DisaggregateMetricName(metric.String())
+}
+
 var KnownMetricNames = MetricNames{
 	DefaultMetricName,
 	LagMetricName,

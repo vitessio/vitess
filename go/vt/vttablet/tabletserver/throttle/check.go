@@ -146,24 +146,38 @@ func (check *ThrottlerCheck) Check(ctx context.Context, appName string, scope ba
 		metricNames = base.MetricNames{check.throttler.metricNameUsedAsDefault()}
 	}
 	for _, metricName := range metricNames {
+		// Make sure not to modify the given scope. We create a new scope variable to work with.
+		metricScope := scope
+		// It's possible that the metric name looks like "shard/loadavg". This means the the check is meant to
+		// check the "loadavg" metric for the "shard" scope (while normally "loadavg" is a "self" scope metric).
+		// So we first need to find out what the underlying metric name is ("loadavg" in this case), and then
+		// see whether we need to change the scope.
+		// It's also possible that the metric name is just "loadavg", in which case we extract the default
+		// scope for this metric.
+		// If given scope is defined, then it overrides any metric scope.
+		// Noteworthy that self checks will always have a defined scope, because those are based on aggregated metrics.
+		if disaggregatedScope, disaggregatedName, err := metricName.Disaggregated(); err == nil {
+			if metricScope == base.UndefinedScope {
+				// Client has not indicated any specific scope, so we use the disaggregated scope
+				metricScope = disaggregatedScope
+			}
+			metricName = disaggregatedName
+		}
+
 		metricResultFunc := func() (metricResult base.MetricResult, threshold float64) {
-			return check.throttler.getMySQLStoreMetric(ctx, scope, metricName)
+			return check.throttler.getMySQLStoreMetric(ctx, metricScope, metricName)
 		}
 
 		metricCheckResult := check.checkAppMetricResult(ctx, appName, metricResultFunc, flags)
 		check.throttler.markRecentApp(appName)
 		if !throttlerapp.VitessName.Equals(appName) {
 			go func(statusCode int) {
-				reportScope := scope
-				if reportScope == base.UndefinedScope {
-					reportScope = metricName.DefaultScope()
-				}
 				statsThrottlerCheckAnyTotal.Add(1)
-				stats.GetOrNewCounter(fmt.Sprintf("ThrottlerCheckAny%sTotal", textutil.SingleWordCamel(reportScope.String())), "").Add(1)
+				stats.GetOrNewCounter(fmt.Sprintf("ThrottlerCheckAny%sTotal", textutil.SingleWordCamel(metricScope.String())), "").Add(1)
 
 				if statusCode != http.StatusOK {
 					statsThrottlerCheckAnyError.Add(1)
-					stats.GetOrNewCounter(fmt.Sprintf("ThrottlerCheckAny%sError", textutil.SingleWordCamel(reportScope.String())), "").Add(1)
+					stats.GetOrNewCounter(fmt.Sprintf("ThrottlerCheckAny%sError", textutil.SingleWordCamel(metricScope.String())), "").Add(1)
 				}
 			}(metricCheckResult.StatusCode)
 		}
