@@ -25,9 +25,9 @@ import (
 	"time"
 
 	"github.com/patrickmn/go-cache"
-	"github.com/rcrowley/go-metrics"
 	"github.com/sjmudd/stopwatch"
 
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtorc/collection"
@@ -50,11 +50,11 @@ var snapshotDiscoveryKeys chan string
 var snapshotDiscoveryKeysMutex sync.Mutex
 var hasReceivedSIGTERM int32
 
-var discoveriesCounter = metrics.NewCounter()
-var failedDiscoveriesCounter = metrics.NewCounter()
-var instancePollSecondsExceededCounter = metrics.NewCounter()
-var discoveryQueueLengthGauge = metrics.NewGauge()
-var discoveryRecentCountGauge = metrics.NewGauge()
+var discoveriesCounter = stats.NewCounter("discoveries.attempt", "Number of discoveries attempted")
+var failedDiscoveriesCounter = stats.NewCounter("discoveries.fail", "Number of failed discoveries")
+var instancePollSecondsExceededCounter = stats.NewCounter("discoveries.instance_poll_seconds_exceeded", "Number of instances that took longer than InstancePollSeconds to poll")
+var discoveryQueueLengthGauge = stats.NewGauge("discoveries.queue_length", "Length of the discovery queue")
+var discoveryRecentCountGauge = stats.NewGauge("discoveries.recent_count", "Number of recent discoveries")
 var discoveryMetrics = collection.CreateOrReturnCollection(DiscoveryMetricsName)
 
 var recentDiscoveryOperationKeys *cache.Cache
@@ -62,20 +62,14 @@ var recentDiscoveryOperationKeys *cache.Cache
 func init() {
 	snapshotDiscoveryKeys = make(chan string, 10)
 
-	_ = metrics.Register("discoveries.attempt", discoveriesCounter)
-	_ = metrics.Register("discoveries.fail", failedDiscoveriesCounter)
-	_ = metrics.Register("discoveries.instance_poll_seconds_exceeded", instancePollSecondsExceededCounter)
-	_ = metrics.Register("discoveries.queue_length", discoveryQueueLengthGauge)
-	_ = metrics.Register("discoveries.recent_count", discoveryRecentCountGauge)
-
 	ometrics.OnMetricsTick(func() {
-		discoveryQueueLengthGauge.Update(int64(discoveryQueue.QueueLen()))
+		discoveryQueueLengthGauge.Set(int64(discoveryQueue.QueueLen()))
 	})
 	ometrics.OnMetricsTick(func() {
 		if recentDiscoveryOperationKeys == nil {
 			return
 		}
-		discoveryRecentCountGauge.Update(int64(recentDiscoveryOperationKeys.ItemCount()))
+		discoveryRecentCountGauge.Set(int64(recentDiscoveryOperationKeys.ItemCount()))
 	})
 }
 
@@ -168,7 +162,7 @@ func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
 		latency.Stop("total")
 		discoveryTime := latency.Elapsed("total")
 		if discoveryTime > instancePollSecondsDuration() {
-			instancePollSecondsExceededCounter.Inc(1)
+			instancePollSecondsExceededCounter.Add(1)
 			log.Warningf("discoverInstance exceeded InstancePollSeconds for %+v, took %.4fs", tabletAlias, discoveryTime.Seconds())
 			if metric != nil {
 				metric.InstancePollSecondsDurationCount = 1
@@ -196,7 +190,7 @@ func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
 		return
 	}
 
-	discoveriesCounter.Inc(1)
+	discoveriesCounter.Add(1)
 
 	// First we've ever heard of this instance. Continue investigation:
 	instance, err := inst.ReadTopologyInstanceBufferable(tabletAlias, latency)
@@ -211,7 +205,7 @@ func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
 	}
 
 	if instance == nil {
-		failedDiscoveriesCounter.Inc(1)
+		failedDiscoveriesCounter.Add(1)
 		metric = &discovery.Metric{
 			Timestamp:       time.Now(),
 			TabletAlias:     tabletAlias,
