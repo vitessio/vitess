@@ -114,7 +114,7 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	// Start or Init mysqld as needed.
-	ctx, cancel := context.WithTimeout(context.Background(), waitTime)
+	ctx, cancel := context.WithTimeout(cmd.Context(), waitTime)
 	mycnfFile := mysqlctl.MycnfFile(tabletUID)
 	if _, statErr := os.Stat(mycnfFile); os.IsNotExist(statErr) {
 		// Generate my.cnf from scratch and use it to find mysqld.
@@ -167,7 +167,7 @@ func run(cmd *cobra.Command, args []string) error {
 	// Take mysqld down with us on SIGTERM before entering lame duck.
 	servenv.OnTermSync(func() {
 		log.Infof("mysqlctl received SIGTERM, shutting down mysqld first")
-		ctx, cancel := context.WithTimeout(context.Background(), shutdownWaitTime+10*time.Second)
+		ctx, cancel := context.WithTimeout(cmd.Context(), shutdownWaitTime+10*time.Second)
 		defer cancel()
 		if err := mysqld.Shutdown(ctx, cnf, true, shutdownWaitTime); err != nil {
 			log.Errorf("failed to shutdown mysqld: %v", err)

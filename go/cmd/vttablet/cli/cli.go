@@ -110,6 +110,16 @@ func init() {
 func run(cmd *cobra.Command, args []string) error {
 	servenv.Init()
 
+	// Ensure we open the topo before we start the context, so that the
+	// defer that closes the topo runs after cancelling the context.
+	// This ensures that we've properly closed things like the watchers
+	// at that point.
+	ts := topo.Open()
+	defer ts.Close()
+
+	ctx, cancel := context.WithCancel(cmd.Context())
+	defer cancel()
+
 	tabletAlias, err := topoproto.ParseTabletAlias(tabletPath)
 	if err != nil {
 		return fmt.Errorf("failed to parse --tablet-path: %w", err)
@@ -131,8 +141,7 @@ func run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	ts := topo.Open()
-	qsc, err := createTabletServer(context.Background(), env, config, ts, tabletAlias, srvTopoCounts)
+	qsc, err := createTabletServer(ctx, env, config, ts, tabletAlias, srvTopoCounts)
 	if err != nil {
 		ts.Close()
 		return err
@@ -151,7 +160,7 @@ func run(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to parse --tablet-path: %w", err)
 	}
 	tm = &tabletmanager.TabletManager{
-		BatchCtx:            context.Background(),
+		BatchCtx:            ctx,
 		Env:                 env,
 		TopoServer:          ts,
 		Cnf:                 mycnf,
@@ -170,9 +179,6 @@ func run(cmd *cobra.Command, args []string) error {
 		// Close the tm so that our topo entry gets pruned properly and any
 		// background goroutines that use the topo connection are stopped.
 		tm.Close()
-
-		// tm uses ts. So, it should be closed after tm.
-		ts.Close()
 	})
 
 	servenv.RunDefault()

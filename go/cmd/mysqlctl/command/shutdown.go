@@ -50,7 +50,7 @@ func commandShutdown(cmd *cobra.Command, args []string) error {
 	}
 	defer mysqld.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), shutdownArgs.WaitTime+10*time.Second)
+	ctx, cancel := context.WithTimeout(cmd.Context(), shutdownArgs.WaitTime+10*time.Second)
 	defer cancel()
 	if err := mysqld.Shutdown(ctx, cnf, true, shutdownArgs.WaitTime); err != nil {
 		return fmt.Errorf("failed shutdown mysql: %v", err)
