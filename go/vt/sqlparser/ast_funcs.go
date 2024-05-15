@@ -788,10 +788,19 @@ func NewLimitWithoutOffset(rowCount int) *Limit {
 }
 
 // NewSelect is used to create a select statement
-func NewSelect(comments Comments, exprs SelectExprs, selectOptions []string, into *SelectInto, from TableExprs, where *Where, groupBy GroupBy, having *Where, windows NamedWindows) *Select {
+func NewSelect(
+	comments Comments,
+	exprs SelectExprs,
+	selectOptions []string,
+	into *SelectInto,
+	from TableExprs,
+	where *Where,
+	groupBy *GroupBy,
+	having *Where,
+	windows NamedWindows,
+) *Select {
 	var cache *bool
 	var distinct, straightJoinHint, sqlFoundRows bool
-
 	for _, option := range selectOptions {
 		switch strings.ToLower(option) {
 		case DistinctStr:
@@ -1168,13 +1177,25 @@ func (node *Select) AddHaving(expr Expr) {
 
 // AddGroupBy adds a grouping expression, unless it's already present
 func (node *Select) AddGroupBy(expr Expr) {
-	for _, gb := range node.GroupBy {
+	if node.GroupBy == nil {
+		node.GroupBy = &GroupBy{Exprs: []Expr{expr}}
+		return
+	}
+	for _, gb := range node.GroupBy.Exprs {
 		if Equals.Expr(gb, expr) {
 			// group by columns are sets - duplicates don't add anything, so we can just skip these
 			return
 		}
 	}
-	node.GroupBy = append(node.GroupBy, expr)
+	node.GroupBy.Exprs = append(node.GroupBy.Exprs, expr)
+}
+
+// GroupByExprs returns the group by expressions
+func (node *Select) GroupByExprs() []Expr {
+	if node.GroupBy == nil {
+		return nil
+	}
+	return node.GroupBy.Exprs
 }
 
 // AddWhere adds the boolean expression to the

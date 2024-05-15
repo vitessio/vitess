@@ -101,14 +101,19 @@ func TestGroupBy(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
 	mcmp.Exec("insert into t3(id5, id6, id7) values(1,1,2), (2,2,4), (3,2,4), (4,1,2), (5,1,2), (6,3,6)")
-	// test ordering and group by int column
-	mcmp.AssertMatches("select id6, id7, count(*) k from t3 group by id6, id7 order by k", `[[INT64(3) INT64(6) INT64(1)] [INT64(2) INT64(4) INT64(2)] [INT64(1) INT64(2) INT64(3)]]`)
-	mcmp.AssertMatches("select id6+id7, count(*) k from t3 group by id6+id7 order by k", `[[INT64(9) INT64(1)] [INT64(6) INT64(2)] [INT64(3) INT64(3)]]`)
 
-	// Test the same queries in streaming mode
-	utils.Exec(t, mcmp.VtConn, "set workload = olap")
-	mcmp.AssertMatches("select id6, id7, count(*) k from t3 group by id6, id7 order by k", `[[INT64(3) INT64(6) INT64(1)] [INT64(2) INT64(4) INT64(2)] [INT64(1) INT64(2) INT64(3)]]`)
-	mcmp.AssertMatches("select id6+id7, count(*) k from t3 group by id6+id7 order by k", `[[INT64(9) INT64(1)] [INT64(6) INT64(2)] [INT64(3) INT64(3)]]`)
+	// run queries in both workloads
+	workloads := []string{"oltp", "olap"}
+	for _, workload := range workloads {
+		utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = %s", workload))
+		// test ordering and group by int column
+		mcmp.AssertMatches("select id6, id7, count(*) k from t3 group by id6, id7 order by k", `[[INT64(3) INT64(6) INT64(1)] [INT64(2) INT64(4) INT64(2)] [INT64(1) INT64(2) INT64(3)]]`)
+		mcmp.AssertMatches("select id6+id7, count(*) k from t3 group by id6+id7 order by k", `[[INT64(9) INT64(1)] [INT64(6) INT64(2)] [INT64(3) INT64(3)]]`)
+		if utils.BinaryIsAtLeastAtVersion(20, "vtgate") &&
+			utils.BinaryIsAtLeastAtVersion(20, "vttablet") {
+			mcmp.Exec("select id6, id7, count(*) k from t3 group by id6, id7 with rollup")
+		}
+	}
 }
 
 func TestEqualFilterOnScatter(t *testing.T) {

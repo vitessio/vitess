@@ -47428,6 +47428,9 @@ export namespace vtctldata {
 
     /** Properties of an ApplyKeyspaceRoutingRulesResponse. */
     interface IApplyKeyspaceRoutingRulesResponse {
+
+        /** ApplyKeyspaceRoutingRulesResponse keyspace_routing_rules */
+        keyspace_routing_rules?: (vschema.IKeyspaceRoutingRules|null);
     }
 
     /** Represents an ApplyKeyspaceRoutingRulesResponse. */
@@ -47438,6 +47441,9 @@ export namespace vtctldata {
          * @param [properties] Properties to set
          */
         constructor(properties?: vtctldata.IApplyKeyspaceRoutingRulesResponse);
+
+        /** ApplyKeyspaceRoutingRulesResponse keyspace_routing_rules. */
+        public keyspace_routing_rules?: (vschema.IKeyspaceRoutingRules|null);
 
         /**
          * Creates a new ApplyKeyspaceRoutingRulesResponse instance using the specified properties.

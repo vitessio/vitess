@@ -204,8 +204,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfGeomFromWKBExpr(in, f)
 	case *GeomPropertyFuncExpr:
 		return VisitRefOfGeomPropertyFuncExpr(in, f)
-	case GroupBy:
-		return VisitGroupBy(in, f)
+	case *GroupBy:
+		return VisitRefOfGroupBy(in, f)
 	case *GroupConcatExpr:
 		return VisitRefOfGroupConcatExpr(in, f)
 	case IdentifierCI:
@@ -1882,14 +1882,14 @@ func VisitRefOfGeomPropertyFuncExpr(in *GeomPropertyFuncExpr, f Visit) error {
 	}
 	return nil
 }
-func VisitGroupBy(in GroupBy, f Visit) error {
+func VisitRefOfGroupBy(in *GroupBy, f Visit) error {
 	if in == nil {
 		return nil
 	}
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	for _, el := range in {
+	for _, el := range in.Exprs {
 		if err := VisitExpr(el, f); err != nil {
 			return err
 		}
@@ -3497,7 +3497,7 @@ func VisitRefOfSelect(in *Select, f Visit) error {
 	if err := VisitRefOfWhere(in.Where, f); err != nil {
 		return err
 	}
-	if err := VisitGroupBy(in.GroupBy, f); err != nil {
+	if err := VisitRefOfGroupBy(in.GroupBy, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfWhere(in.Having, f); err != nil {

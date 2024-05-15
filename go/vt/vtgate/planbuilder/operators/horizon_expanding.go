@@ -175,6 +175,7 @@ func createProjectionWithAggr(ctx *plancontext.PlanningContext, qp *QueryProject
 		Original:     true,
 		QP:           qp,
 		Grouping:     qp.GetGrouping(),
+		WithRollup:   qp.WithRollup,
 		Aggregations: aggregations,
 		DT:           dt,
 	}

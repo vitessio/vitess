@@ -440,21 +440,18 @@ func (ts *trafficSwitcher) deleteShardRoutingRules(ctx context.Context) error {
 }
 
 func (ts *trafficSwitcher) deleteKeyspaceRoutingRules(ctx context.Context) error {
-	log.Infof("deleteKeyspaceRoutingRules: workflow %s.%s", ts.targetKeyspace, ts.workflow)
 	if !ts.IsMultiTenantMigration() {
 		return nil
 	}
-	krr, err := topotools.GetKeyspaceRoutingRules(ctx, ts.TopoServer())
-	if err != nil {
-		return err
-	}
-	for _, suffix := range tabletTypeSuffixes {
-		delete(krr, ts.SourceKeyspaceName()+suffix)
-	}
-	if err := topotools.SaveKeyspaceRoutingRules(ctx, ts.TopoServer(), krr); err != nil {
-		return err
-	}
-	return nil
+	log.Infof("deleteKeyspaceRoutingRules: workflow %s.%s", ts.targetKeyspace, ts.workflow)
+	reason := fmt.Sprintf("Deleting rules for %s", ts.SourceKeyspaceName())
+	return topotools.UpdateKeyspaceRoutingRules(ctx, ts.TopoServer(), reason,
+		func(ctx context.Context, rules *map[string]string) error {
+			for _, suffix := range tabletTypeSuffixes {
+				delete(*rules, ts.SourceKeyspaceName()+suffix)
+			}
+			return nil
+		})
 }
 
 func (ts *trafficSwitcher) dropSourceDeniedTables(ctx context.Context) error {
@@ -738,7 +735,7 @@ func (ts *trafficSwitcher) changeWriteRoute(ctx context.Context) error {
 		// For multi-tenant migrations, we can only move forward and not backwards.
 		ts.Logger().Infof("Pointing keyspace routing rules for primary to %s for workflow %s", ts.TargetKeyspaceName(), ts.workflow)
 		if err := changeKeyspaceRouting(ctx, ts.TopoServer(), []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
-			ts.SourceKeyspaceName() /* from */, ts.TargetKeyspaceName() /* to */); err != nil {
+			ts.SourceKeyspaceName() /* from */, ts.TargetKeyspaceName() /* to */, "SwitchWrites"); err != nil {
 			return err
 		}
 	} else if ts.isPartialMigration {

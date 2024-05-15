@@ -3935,7 +3935,7 @@ type DemotePrimaryResponse struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// PrimaryStatus represents the response from calling `SHOW MASTER STATUS` on a primary that has been demoted.
+	// PrimaryStatus represents the response from calling `SHOW BINARY LOG STATUS` on a primary that has been demoted.
 	PrimaryStatus *replicationdata.PrimaryStatus `protobuf:"bytes,2,opt,name=primary_status,json=primaryStatus,proto3" json:"primary_status,omitempty"`
 }
 

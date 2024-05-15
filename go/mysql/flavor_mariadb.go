@@ -219,6 +219,10 @@ func (mariadbFlavor) setReplicationSourceCommand(params *ConnParams, host string
 	return "CHANGE MASTER TO\n  " + strings.Join(args, ",\n  ")
 }
 
+func (mariadbFlavor) resetBinaryLogsCommand() string {
+	return "RESET MASTER"
+}
+
 // status is part of the Flavor interface.
 func (mariadbFlavor) status(c *Conn) (replication.ReplicationStatus, error) {
 	qr, err := c.ExecuteFetch("SHOW ALL SLAVES STATUS", 100, true /* wantfields */)
@@ -288,7 +292,7 @@ func (mariadbFlavor) replicationConfiguration(c *Conn) (*replicationdata.Configu
 
 // replicationNetTimeout is part of the Flavor interface.
 func (mariadbFlavor) replicationNetTimeout(c *Conn) (int32, error) {
-	qr, err := c.ExecuteFetch(readSlaveNetTimeout, 1, false)
+	qr, err := c.ExecuteFetch("select @@global.slave_net_timeout", 1, false)
 	if err != nil {
 		return 0, err
 	}

@@ -453,7 +453,7 @@ func (er *astRewriter) unnestSubQueries(cursor *Cursor, subquery *Subquery) {
 
 	if len(sel.SelectExprs) != 1 ||
 		len(sel.OrderBy) != 0 ||
-		len(sel.GroupBy) != 0 ||
+		sel.GroupBy != nil ||
 		len(sel.From) != 1 ||
 		sel.Where != nil ||
 		sel.Having != nil ||
@@ -516,7 +516,7 @@ func (er *astRewriter) existsRewrite(cursor *Cursor, node *ExistsExpr) {
 		return
 	}
 
-	if len(sel.GroupBy) == 0 && sel.SelectExprs.AllAggregation() {
+	if sel.GroupBy == nil && sel.SelectExprs.AllAggregation() {
 		// in these situations, we are guaranteed to always get a non-empty result,
 		// so we can replace the EXISTS with a literal true
 		cursor.Replace(BoolVal(true))

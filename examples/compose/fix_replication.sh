@@ -26,15 +26,15 @@ cd "$(dirname "${BASH_SOURCE[0]}")"
 
 function get_replication_status() {
     # Get replication status
-    STATUS_LINE=$(mysql -u$DB_USER -p$DB_PASS -h 127.0.0.1 -e "SHOW SLAVE STATUS\G")
+    STATUS_LINE=$(mysql -u$DB_USER -p$DB_PASS -h 127.0.0.1 -e "SHOW REPLICA STATUS\G")
     LAST_ERRNO=$(grep "Last_IO_Errno:" <<< "$STATUS_LINE" | awk '{ print $2 }')
-    SLAVE_SQL_RUNNING=$(grep "Slave_SQL_Running:" <<< "$STATUS_LINE" | awk '{ print $2 }')
-    SLAVE_IO_RUNNING=$(grep "Slave_IO_Running:" <<< "$STATUS_LINE" | awk '{ print $2 }')
-    MASTER_HOST=$(grep "Master_Host:" <<< "$STATUS_LINE" | awk '{ print $2 }')
-    MASTER_PORT=$(grep "Master_Port:" <<< "$STATUS_LINE" | awk '{ print $2 }')
+    REPLICA_SQL_RUNNING=$(grep "Replica_SQL_Running:" <<< "$STATUS_LINE" | awk '{ print $2 }')
+    REPLICA_IO_RUNNING=$(grep "Replica_IO_Running:" <<< "$STATUS_LINE" | awk '{ print $2 }')
+    SOURCE_HOST=$(grep "Source_Host:" <<< "$STATUS_LINE" | awk '{ print $2 }')
+    SOURCE_PORT=$(grep "Source_Port:" <<< "$STATUS_LINE" | awk '{ print $2 }')
 
-    echo "Slave_SQL_Running: $SLAVE_SQL_RUNNING"
-    echo "Slave_IO_Running: $SLAVE_IO_RUNNING"
+    echo "Replica_SQL_Running: $REPLICA_SQL_RUNNING"
+    echo "Replica_IO_Running: $REPLICA_IO_RUNNING"
     echo "Last_IO_Errno: $LAST_ERRNO"
 }
 
@@ -54,7 +54,7 @@ get_replication_status
 [ ${1:-''} != 'status' ] || exit 0;
 
 # Check if IO_Thread is running
-if [[ $SLAVE_IO_RUNNING = "No" && $LAST_ERRNO = 1236 ]]; then
+if [[ $REPLICA_IO_RUNNING = "No" && $LAST_ERRNO = 1236 ]]; then
     
     echo "Primary has purged bin logs that replica requires. Sync will require restore from mysqldump"
     if [[ -f $KEYSPACE.sql ]] ; then
@@ -64,7 +64,7 @@ if [[ $SLAVE_IO_RUNNING = "No" && $LAST_ERRNO = 1236 ]]; then
     else
         echo "Starting mysqldump. This may take a while.."
         # Modify flags to user's requirements
-        if mysqldump -h $MASTER_HOST -P $MASTER_PORT -u$DB_USER -p$DB_PASS --databases $KEYSPACE \
+        if mysqldump -h $SOURCE_HOST -P $SOURCE_PORT -u$DB_USER -p$DB_PASS --databases $KEYSPACE \
             --triggers --routines --events --hex-blob  --master-data=1 --quick --order-by-primary \
             --no-autocommit --skip-comments --skip-add-drop-table --skip-add-locks \
             --skip-disable-keys --single-transaction --set-gtid-purged=on --verbose > $KEYSPACE.sql; then
