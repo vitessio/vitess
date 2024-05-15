@@ -29,7 +29,9 @@ import (
 	"github.com/patrickmn/go-cache"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/maps"
 
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
@@ -270,10 +272,30 @@ func runSerialFunction(t *testing.T, ctx context.Context, throttler *Throttler, 
 func TestApplyThrottlerConfig(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	timeNow := time.Now()
 	throttler := newTestThrottler()
 	throttlerConfig := &topodatapb.ThrottlerConfig{
 		Enabled:   false,
 		Threshold: 14,
+		ThrottledApps: map[string]*topodatapb.ThrottledAppRule{
+			throttlerapp.OnlineDDLName.String(): {
+				Name:      throttlerapp.OnlineDDLName.String(),
+				Ratio:     0.5,
+				ExpiresAt: protoutil.TimeToProto(timeNow.Add(time.Hour)),
+				Exempt:    false,
+			},
+			throttlerapp.TableGCName.String(): {
+				Name:      throttlerapp.TableGCName.String(),
+				ExpiresAt: protoutil.TimeToProto(timeNow.Add(time.Hour)),
+				Exempt:    true,
+			},
+			throttlerapp.VPlayerName.String(): {
+				Name:      throttlerapp.VPlayerName.String(),
+				Ratio:     DefaultThrottleRatio,
+				ExpiresAt: protoutil.TimeToProto(timeNow), // instantly expires
+				Exempt:    false,
+			},
+		},
 		AppCheckedMetrics: map[string]*topodatapb.ThrottlerConfig_MetricNames{
 			"app1":                              {Names: []string{"lag", "threads_running"}},
 			throttlerapp.OnlineDDLName.String(): {Names: []string{"loadavg"}},
@@ -285,9 +307,12 @@ func TestApplyThrottlerConfig(t *testing.T) {
 	throttler.appCheckedMetrics.Set("app3", base.MetricNames{base.ThreadsRunningMetricName}, cache.DefaultExpiration)
 	runThrottler(t, ctx, throttler, 10*time.Second, func(t *testing.T, ctx context.Context) {
 		assert.True(t, throttler.IsEnabled())
+		assert.Equal(t, 1, throttler.throttledApps.ItemCount(), "expecting always-throttled-app: %v", maps.Keys(throttler.throttledApps.Items()))
 		throttler.applyThrottlerConfig(ctx, throttlerConfig)
 		cancel() // end test early
 	})
+
+	assert.Equal(t, 3, throttler.throttledApps.ItemCount(), "expecting online-ddl, tablegc, and always-throttled-app: %v", maps.Keys(throttler.throttledApps.Items()))
 	assert.False(t, throttler.IsEnabled())
 	assert.Equal(t, float64(14), throttler.GetMetricsThreshold())
 	assert.Equal(t, 2, throttler.appCheckedMetrics.ItemCount())
@@ -316,11 +341,13 @@ func TestIsAppThrottled(t *testing.T) {
 		assert.False(t, throttler.IsAppThrottled("app2"))
 		assert.False(t, throttler.IsAppThrottled("app3"))
 		assert.False(t, throttler.IsAppThrottled("app4"))
+
+		assert.Equal(t, 0, throttler.throttledApps.ItemCount())
 	})
 	//
 	t.Run("set some rules", func(t *testing.T) {
 		throttler.ThrottleApp("app1", plusOneHour, DefaultThrottleRatio, true)
-		throttler.ThrottleApp("app2", time.Now(), DefaultThrottleRatio, false)
+		throttler.ThrottleApp("app2", time.Now(), DefaultThrottleRatio, false) // instantly expire
 		throttler.ThrottleApp("app3", plusOneHour, DefaultThrottleRatio, false)
 		throttler.ThrottleApp("app4", plusOneHour, 0, false)
 		assert.False(t, throttler.IsAppThrottled("app1")) // exempted
@@ -328,6 +355,8 @@ func TestIsAppThrottled(t *testing.T) {
 		assert.True(t, throttler.IsAppThrottled("app3"))
 		assert.False(t, throttler.IsAppThrottled("app4"))      // ratio is zero
 		assert.False(t, throttler.IsAppThrottled("app_other")) // not specified
+
+		assert.Equal(t, 3, throttler.throttledApps.ItemCount())
 	})
 	t.Run("all", func(t *testing.T) {
 		// throttle "all", see how it affects app
@@ -339,6 +368,9 @@ func TestIsAppThrottled(t *testing.T) {
 		assert.True(t, throttler.IsAppThrottled("app3"))
 		assert.False(t, throttler.IsAppThrottled("app4"))     // ratio is zero, there is a specific instruction for this app, so it doesn't fall under "all"
 		assert.True(t, throttler.IsAppThrottled("app_other")) // falls under "all"
+
+		// continuing previous test, we had 3 throttled apps. "all" is a new app being throttled.
+		assert.Equal(t, 4, throttler.throttledApps.ItemCount())
 	})
 	//
 	t.Run("unthrottle", func(t *testing.T) {
@@ -350,6 +382,9 @@ func TestIsAppThrottled(t *testing.T) {
 		assert.False(t, throttler.IsAppThrottled("app2"))
 		assert.False(t, throttler.IsAppThrottled("app3"))
 		assert.False(t, throttler.IsAppThrottled("app4"))
+
+		// we've manually unthrottled everything
+		assert.Equal(t, 0, throttler.throttledApps.ItemCount())
 	})
 	t.Run("all again", func(t *testing.T) {
 		// throttle "all", see how it affects app
@@ -361,6 +396,9 @@ func TestIsAppThrottled(t *testing.T) {
 		assert.True(t, throttler.IsAppThrottled("app3"))
 		assert.True(t, throttler.IsAppThrottled("app4"))
 		assert.True(t, throttler.IsAppThrottled("app_other"))
+
+		// one rule, for "all" app
+		assert.Equal(t, 1, throttler.throttledApps.ItemCount())
 	})
 	t.Run("exempt all", func(t *testing.T) {
 		// throttle "all", see how it affects app
@@ -373,6 +411,8 @@ func TestIsAppThrottled(t *testing.T) {
 		assert.True(t, throttler.IsAppThrottled("app3"))
 		assert.False(t, throttler.IsAppThrottled("app4"))
 		assert.False(t, throttler.IsAppThrottled("app_other"))
+
+		assert.Equal(t, 2, throttler.throttledApps.ItemCount())
 	})
 }
 

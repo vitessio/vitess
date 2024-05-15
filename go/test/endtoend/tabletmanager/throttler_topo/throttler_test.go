@@ -464,6 +464,44 @@ func TestLag(t *testing.T) {
 		assert.NoError(t, err)
 		waitForThrottleCheckStatus(t, primaryTablet, http.StatusTooManyRequests)
 	})
+	t.Run("exempting all apps", func(t *testing.T) {
+		appRule := &topodatapb.ThrottledAppRule{
+			Name:      throttlerapp.AllName.String(),
+			ExpiresAt: protoutil.TimeToProto(time.Now().Add(time.Hour)),
+			Exempt:    true,
+		}
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, false, false, throttler.DefaultThreshold.Seconds(), useDefaultQuery, appRule)
+		assert.NoError(t, err)
+		waitForThrottleCheckStatus(t, primaryTablet, http.StatusOK)
+	})
+	t.Run("throttling test app", func(t *testing.T) {
+		appRule := &topodatapb.ThrottledAppRule{
+			Name:      testAppName,
+			Ratio:     throttle.DefaultThrottleRatio,
+			ExpiresAt: protoutil.TimeToProto(time.Now().Add(time.Hour)),
+		}
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, false, false, throttler.DefaultThreshold.Seconds(), useDefaultQuery, appRule)
+		assert.NoError(t, err)
+		waitForThrottleCheckStatus(t, primaryTablet, http.StatusExpectationFailed)
+	})
+	t.Run("unthrottling test app", func(t *testing.T) {
+		appRule := &topodatapb.ThrottledAppRule{
+			Name:      testAppName,
+			ExpiresAt: protoutil.TimeToProto(time.Now()),
+		}
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, false, false, throttler.DefaultThreshold.Seconds(), useDefaultQuery, appRule)
+		assert.NoError(t, err)
+		waitForThrottleCheckStatus(t, primaryTablet, http.StatusOK)
+	})
+	t.Run("unexempting all apps", func(t *testing.T) {
+		appRule := &topodatapb.ThrottledAppRule{
+			Name:      throttlerapp.AllName.String(),
+			ExpiresAt: protoutil.TimeToProto(time.Now()),
+		}
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, false, false, throttler.DefaultThreshold.Seconds(), useDefaultQuery, appRule)
+		assert.NoError(t, err)
+		waitForThrottleCheckStatus(t, primaryTablet, http.StatusTooManyRequests)
+	})
 
 	t.Run("starting replication", func(t *testing.T) {
 		err := clusterInstance.VtctldClientProcess.ExecuteCommand("StartReplication", replicaTablet.Alias)

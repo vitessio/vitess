@@ -224,6 +224,7 @@ type ThrottlerStatus struct {
 	AggregatedMetrics map[string]base.MetricResult
 	MetricsThresholds map[string]float64
 	MetricsHealth     base.MetricHealthMap
+	ThrottledApps     []base.AppThrottle
 }
 
 // NewThrottler creates a Throttler
@@ -415,8 +416,24 @@ func (throttler *Throttler) applyThrottlerConfig(ctx context.Context, throttlerC
 	throttler.customMetricsQuery.Store(throttlerConfig.CustomQuery)
 	throttler.StoreMetricsThreshold(throttlerConfig.Threshold)
 	throttler.checkAsCheckSelf.Store(throttlerConfig.CheckAsCheckSelf)
-	for _, appRule := range throttlerConfig.ThrottledApps {
-		throttler.ThrottleApp(appRule.Name, protoutil.TimeFromProto(appRule.ExpiresAt).UTC(), appRule.Ratio, appRule.Exempt)
+	{
+		// Throttled apps/rules
+		throttledAppsToRemove := map[string]bool{}
+		for app := range throttler.throttledApps.Items() {
+			throttledAppsToRemove[app] = true
+		}
+		for _, appRule := range throttlerConfig.ThrottledApps {
+			throttler.ThrottleApp(appRule.Name, protoutil.TimeFromProto(appRule.ExpiresAt).UTC(), appRule.Ratio, appRule.Exempt)
+			delete(throttledAppsToRemove, appRule.Name)
+		}
+		for app := range throttledAppsToRemove {
+			if app == throttlerapp.TestingAlwaysThrottlerName.String() {
+				// Never remove this app
+				continue
+			}
+			// This app was not listed in the config, so we should unthrottle it
+			throttler.UnthrottleApp(app)
+		}
 	}
 	{
 		// throttler.appCheckedMetrics needs to reflect throttlerConfig.AppCheckedMetrics
@@ -1228,7 +1245,7 @@ func (throttler *Throttler) expireThrottledApps() {
 	now := time.Now()
 	for appName, item := range throttler.throttledApps.Items() {
 		appThrottle := item.Object.(*base.AppThrottle)
-		if appThrottle.ExpireAt.Before(now) {
+		if !appThrottle.ExpireAt.After(now) {
 			throttler.UnthrottleApp(appName)
 		}
 	}
@@ -1258,7 +1275,7 @@ func (throttler *Throttler) ThrottleApp(appName string, expireAt time.Time, rati
 		}
 		appThrottle = base.NewAppThrottle(appName, expireAt, ratio, exempt)
 	}
-	if now.Before(appThrottle.ExpireAt) {
+	if appThrottle.ExpireAt.After(now) {
 		throttler.throttledApps.Set(appName, appThrottle, cache.DefaultExpiration)
 	} else {
 		throttler.UnthrottleApp(appName)
@@ -1357,6 +1374,11 @@ func (throttler *Throttler) IsAppExempted(appName string) bool {
 			return true
 		}
 	}
+
+	if isSingleAppNameExempted(throttlerapp.AllName.String()) && !throttler.IsAppThrottled(appName) {
+		return true
+	}
+
 	return false
 }
 
@@ -1532,5 +1554,6 @@ func (throttler *Throttler) Status() *ThrottlerStatus {
 		AggregatedMetrics: throttler.aggregatedMetricsSnapshot(),
 		MetricsThresholds: throttler.mysqlMetricThresholdsSnapshot(),
 		MetricsHealth:     throttler.metricsHealthSnapshot(),
+		ThrottledApps:     throttler.ThrottledApps(),
 	}
 }

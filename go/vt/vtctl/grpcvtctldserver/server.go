@@ -2009,7 +2009,12 @@ func (s *VtctldServer) UpdateThrottlerConfig(ctx context.Context, req *vtctldata
 			throttlerConfig.CheckAsCheckSelf = false
 		}
 		if req.ThrottledApp != nil && req.ThrottledApp.Name != "" {
-			throttlerConfig.ThrottledApps[req.ThrottledApp.Name] = req.ThrottledApp
+			timeNow := time.Now()
+			if protoutil.TimeFromProto(req.ThrottledApp.ExpiresAt).After(timeNow) {
+				throttlerConfig.ThrottledApps[req.ThrottledApp.Name] = req.ThrottledApp
+			} else {
+				delete(throttlerConfig.ThrottledApps, req.ThrottledApp.Name)
+			}
 		}
 		return throttlerConfig
 	}
