@@ -362,6 +362,18 @@ func TestIsAppThrottled(t *testing.T) {
 		assert.True(t, throttler.IsAppThrottled("app4"))
 		assert.True(t, throttler.IsAppThrottled("app_other"))
 	})
+	t.Run("exempt all", func(t *testing.T) {
+		// throttle "all", see how it affects app
+		throttler.ThrottleApp("app3", plusOneHour, DefaultThrottleRatio, false)
+		throttler.ThrottleApp(throttlerapp.AllName.String(), plusOneHour, DefaultThrottleRatio, true)
+		defer throttler.UnthrottleApp(throttlerapp.AllName.String())
+		assert.False(t, throttler.IsAppThrottled("all"))
+		assert.False(t, throttler.IsAppThrottled("app1"))
+		assert.False(t, throttler.IsAppThrottled("app2"))
+		assert.True(t, throttler.IsAppThrottled("app3"))
+		assert.False(t, throttler.IsAppThrottled("app4"))
+		assert.False(t, throttler.IsAppThrottled("app_other"))
+	})
 }
 
 func TestIsAppExempted(t *testing.T) {
