@@ -123,6 +123,7 @@ func init() {
 
 // splitMetricTokens splits a metric name into its scope name and metric name
 // aggregated metric name could be in the form:
+// - loadavg
 // - self
 // - self/threads_running
 // - shard

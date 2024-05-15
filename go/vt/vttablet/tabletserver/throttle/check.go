@@ -88,11 +88,11 @@ func NewThrottlerCheck(throttler *Throttler) *ThrottlerCheck {
 }
 
 // checkAppMetricResult allows an app to check on a metric
-func (check *ThrottlerCheck) checkAppMetricResult(ctx context.Context, appName string, scope base.Scope, metricResultFunc base.MetricResultFunc, flags *CheckFlags) (checkResult *CheckResult) {
+func (check *ThrottlerCheck) checkAppMetricResult(ctx context.Context, appName string, metricResultFunc base.MetricResultFunc, flags *CheckFlags) (checkResult *CheckResult) {
 	// Handle deprioritized app logic
 	denyApp := false
 	if flags.LowPriority {
-		if _, exists := check.throttler.nonLowPriorityAppRequestsThrottled.Get(scope.String()); exists {
+		if _, exists := check.throttler.nonLowPriorityAppRequestsThrottled.Get(""); exists {
 			// a non-deprioritized app, ie a "normal" app, has recently been throttled.
 			// This is now a deprioritized app. Deny access to this request.
 			denyApp = true
@@ -127,7 +127,7 @@ func (check *ThrottlerCheck) checkAppMetricResult(ctx context.Context, appName s
 
 		if !flags.LowPriority && !flags.ReadCheck && throttlerapp.VitessName.Equals(appName) {
 			// low priority requests will henceforth be denied
-			go check.throttler.nonLowPriorityAppRequestsThrottled.SetDefault(scope.String(), true)
+			go check.throttler.nonLowPriorityAppRequestsThrottled.SetDefault("", true)
 		}
 	default:
 		// all good!
@@ -150,7 +150,7 @@ func (check *ThrottlerCheck) Check(ctx context.Context, appName string, scope ba
 			return check.throttler.getMySQLStoreMetric(ctx, scope, metricName)
 		}
 
-		metricCheckResult := check.checkAppMetricResult(ctx, appName, scope, metricResultFunc, flags)
+		metricCheckResult := check.checkAppMetricResult(ctx, appName, metricResultFunc, flags)
 		check.throttler.markRecentApp(appName)
 		if !throttlerapp.VitessName.Equals(appName) {
 			go func(statusCode int) {
