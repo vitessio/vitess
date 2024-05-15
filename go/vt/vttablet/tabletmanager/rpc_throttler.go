@@ -55,6 +55,7 @@ func (tm *TabletManager) CheckThrottler(ctx context.Context, req *tabletmanagerd
 	for name, metric := range checkResult.Metrics {
 		resp.Metrics[name] = &tabletmanagerdatapb.CheckThrottlerResponse_Metric{
 			Name:       name,
+			Scope:      metric.Scope,
 			StatusCode: int32(metric.StatusCode),
 			Value:      metric.Value,
 			Threshold:  metric.Threshold,

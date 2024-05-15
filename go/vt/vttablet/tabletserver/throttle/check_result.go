@@ -49,6 +49,7 @@ import (
 
 type MetricResult struct {
 	StatusCode int     `json:"StatusCode"`
+	Scope      string  `json:"Scope"`
 	Value      float64 `json:"Value"`
 	Threshold  float64 `json:"Threshold"`
 	Error      error   `json:"-"`

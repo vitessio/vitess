@@ -718,6 +718,7 @@ func (s *VtctldServer) CheckThrottler(ctx context.Context, req *vtctldatapb.Chec
 	for k, m := range r.Metrics {
 		resp.Metrics[k] = &vtctldatapb.CheckThrottlerResponse_Metric{
 			Name:       m.Name,
+			Scope:      m.Scope,
 			StatusCode: m.StatusCode,
 			Value:      m.Value,
 			Threshold:  m.Threshold,

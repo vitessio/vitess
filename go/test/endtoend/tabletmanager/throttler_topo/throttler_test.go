@@ -176,20 +176,30 @@ func throttledApps(tablet *cluster.Vttablet) (resp *http.Response, respBody stri
 	return resp, respBody, err
 }
 
-func throttleCheck(tablet *cluster.Vttablet, skipRequestHeartbeats bool) (*vtctldata.CheckThrottlerResponse, error) {
+func throttleCheck(t *testing.T, tablet *cluster.Vttablet, skipRequestHeartbeats bool) (*vtctldata.CheckThrottlerResponse, error) {
 	flags := &throttle.CheckFlags{
 		Scope:                 base.ShardScope,
 		SkipRequestHeartbeats: skipRequestHeartbeats,
 	}
 	resp, err := throttler.CheckThrottler(clusterInstance, tablet, testAppName, flags)
+	if resp != nil {
+		for _, metrics := range resp.Metrics {
+			assert.Equal(t, base.ShardScope.String(), metrics.Scope)
+		}
+	}
 	return resp, err
 }
 
-func throttleCheckSelf(tablet *cluster.Vttablet) (*vtctldata.CheckThrottlerResponse, error) {
+func throttleCheckSelf(t *testing.T, tablet *cluster.Vttablet) (*vtctldata.CheckThrottlerResponse, error) {
 	flags := &throttle.CheckFlags{
 		Scope: base.SelfScope,
 	}
 	resp, err := throttler.CheckThrottler(clusterInstance, tablet, testAppName, flags)
+	if resp != nil {
+		for _, metrics := range resp.Metrics {
+			assert.Equal(t, base.SelfScope.String(), metrics.Scope)
+		}
+	}
 	return resp, err
 }
 
@@ -206,7 +216,7 @@ func throttleStatus(t *testing.T, tablet *cluster.Vttablet) string {
 func warmUpHeartbeat(t *testing.T) (respStatus int) {
 	//  because we run with -heartbeat_on_demand_duration=5s, the heartbeat is "cold" right now.
 	// Let's warm it up.
-	resp, err := throttleCheck(primaryTablet, false)
+	resp, err := throttleCheck(t, primaryTablet, false)
 	require.NoError(t, err)
 
 	time.Sleep(time.Second)
@@ -222,7 +232,7 @@ func waitForThrottleCheckStatus(t *testing.T, tablet *cluster.Vttablet, wantCode
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	for {
-		resp, err := throttleCheck(tablet, true)
+		resp, err := throttleCheck(t, tablet, true)
 		require.NoError(t, err)
 
 		if wantCode == int(resp.StatusCode) {
@@ -332,7 +342,7 @@ func TestInitialThrottler(t *testing.T) {
 	t.Run("validating OK response from throttler with low threshold, heartbeats running", func(t *testing.T) {
 		time.Sleep(1 * time.Second)
 		cluster.ValidateReplicationIsHealthy(t, replicaTablet)
-		resp, err := throttleCheck(primaryTablet, false)
+		resp, err := throttleCheck(t, primaryTablet, false)
 		require.NoError(t, err)
 		if !assert.EqualValues(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %+v", resp) {
 			rs, err := replicaTablet.VttabletProcess.QueryTablet("show replica status", keyspaceName, false)
@@ -346,7 +356,7 @@ func TestInitialThrottler(t *testing.T) {
 	t.Run("validating OK response from throttler with low threshold, heartbeats running still", func(t *testing.T) {
 		time.Sleep(1 * time.Second)
 		cluster.ValidateReplicationIsHealthy(t, replicaTablet)
-		resp, err := throttleCheck(primaryTablet, false)
+		resp, err := throttleCheck(t, primaryTablet, false)
 		require.NoError(t, err)
 		if !assert.EqualValues(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %+v", resp) {
 			rs, err := replicaTablet.VttabletProcess.QueryTablet("show replica status", keyspaceName, false)
@@ -378,12 +388,12 @@ func TestThrottlerAfterMetricsCollected(t *testing.T) {
 		assert.Contains(t, body, throttlerapp.TestingAlwaysThrottlerName)
 	})
 	t.Run("validating primary check self", func(t *testing.T) {
-		resp, err := throttleCheckSelf(primaryTablet)
+		resp, err := throttleCheckSelf(t, primaryTablet)
 		require.NoError(t, err)
 		assert.EqualValues(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %+v", resp)
 	})
 	t.Run("validating replica check self", func(t *testing.T) {
-		resp, err := throttleCheckSelf(replicaTablet)
+		resp, err := throttleCheckSelf(t, replicaTablet)
 		require.NoError(t, err)
 		assert.EqualValues(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %+v", resp)
 	})
@@ -410,12 +420,12 @@ func TestLag(t *testing.T) {
 	})
 
 	t.Run("expecting throttler push back", func(t *testing.T) {
-		resp, err := throttleCheck(primaryTablet, false)
+		resp, err := throttleCheck(t, primaryTablet, false)
 		require.NoError(t, err)
 		assert.EqualValues(t, http.StatusTooManyRequests, resp.StatusCode, "Unexpected response from throttler: %+v", resp)
 	})
 	t.Run("primary self-check should still be fine", func(t *testing.T) {
-		resp, err := throttleCheckSelf(primaryTablet)
+		resp, err := throttleCheckSelf(t, primaryTablet)
 		require.NoError(t, err)
 		// self (on primary) is unaffected by replication lag
 		if !assert.EqualValues(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %+v", resp) {
@@ -424,7 +434,7 @@ func TestLag(t *testing.T) {
 		}
 	})
 	t.Run("replica self-check should show error", func(t *testing.T) {
-		resp, err := throttleCheckSelf(replicaTablet)
+		resp, err := throttleCheckSelf(t, replicaTablet)
 		require.NoError(t, err)
 		assert.EqualValues(t, http.StatusTooManyRequests, resp.StatusCode, "Unexpected response from throttler: %+v", resp)
 	})
@@ -456,13 +466,13 @@ func TestLag(t *testing.T) {
 		waitForThrottleCheckStatus(t, primaryTablet, http.StatusOK)
 	})
 	t.Run("primary self-check should be fine", func(t *testing.T) {
-		resp, err := throttleCheckSelf(primaryTablet)
+		resp, err := throttleCheckSelf(t, primaryTablet)
 		require.NoError(t, err)
 		// self (on primary) is unaffected by replication lag
 		assert.EqualValues(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %+v", resp)
 	})
 	t.Run("replica self-check should be fine", func(t *testing.T) {
-		resp, err := throttleCheckSelf(replicaTablet)
+		resp, err := throttleCheckSelf(t, replicaTablet)
 		require.NoError(t, err)
 		assert.EqualValues(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %+v", resp)
 	})
@@ -505,7 +515,7 @@ func TestCustomQuery(t *testing.T) {
 	})
 	t.Run("validating OK response from throttler with custom query", func(t *testing.T) {
 		throttler.WaitForValidData(t, primaryTablet, throttlerEnabledTimeout)
-		resp, err := throttleCheck(primaryTablet, false)
+		resp, err := throttleCheck(t, primaryTablet, false)
 		require.NoError(t, err)
 		assert.EqualValues(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %+v", resp)
 	})
@@ -531,7 +541,7 @@ func TestCustomQuery(t *testing.T) {
 			// {"StatusCode":429,"Value":6,"Threshold":5,"Message":"Threshold exceeded"}
 			waitForThrottleCheckStatus(t, primaryTablet, http.StatusTooManyRequests)
 			{
-				resp, err := throttleCheckSelf(primaryTablet)
+				resp, err := throttleCheckSelf(t, primaryTablet)
 				require.NoError(t, err)
 				assert.EqualValues(t, http.StatusTooManyRequests, resp.StatusCode, "Unexpected response from throttler: %+v", resp)
 			}
@@ -542,7 +552,7 @@ func TestCustomQuery(t *testing.T) {
 		t.Run("restored below threshold", func(t *testing.T) {
 			waitForThrottleCheckStatus(t, primaryTablet, http.StatusOK)
 			{
-				resp, err := throttleCheckSelf(primaryTablet)
+				resp, err := throttleCheckSelf(t, primaryTablet)
 				require.NoError(t, err)
 				assert.EqualValues(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %+v", resp)
 			}
@@ -564,7 +574,7 @@ func TestRestoreDefaultQuery(t *testing.T) {
 		}
 	})
 	t.Run("validating OK response from throttler with default threshold, heartbeats running", func(t *testing.T) {
-		resp, err := throttleCheck(primaryTablet, false)
+		resp, err := throttleCheck(t, primaryTablet, false)
 		require.NoError(t, err)
 		assert.EqualValues(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %+v", resp)
 	})

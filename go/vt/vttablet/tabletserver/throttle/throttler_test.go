@@ -969,6 +969,9 @@ func TestChecks(t *testing.T) {
 				assert.EqualValues(t, 26, checkResult.Metrics[base.ThreadsRunningMetricName.String()].Value) // self value, because flags.Scope is set
 				assert.EqualValues(t, 17, checkResult.Metrics[base.CustomMetricName.String()].Value)         // self value, because flags.Scope is set
 				assert.EqualValues(t, 2.718, checkResult.Metrics[base.LoadAvgMetricName.String()].Value)     // self value, because flags.Scope is set
+				for _, metric := range checkResult.Metrics {
+					assert.EqualValues(t, base.SelfScope.String(), metric.Scope)
+				}
 			})
 		})
 		t.Run("checks, shard scope", func(t *testing.T) {
@@ -995,6 +998,9 @@ func TestChecks(t *testing.T) {
 				assert.EqualValues(t, 26, checkResult.Metrics[base.ThreadsRunningMetricName.String()].Value) // shard value, because flags.Scope is set
 				assert.EqualValues(t, 17, checkResult.Metrics[base.CustomMetricName.String()].Value)         // shard value, because flags.Scope is set
 				assert.EqualValues(t, 5.1, checkResult.Metrics[base.LoadAvgMetricName.String()].Value)       // shard value, because flags.Scope is set
+				for _, metric := range checkResult.Metrics {
+					assert.EqualValues(t, base.ShardScope.String(), metric.Scope)
+				}
 			})
 		})
 		t.Run("checks, undefined scope", func(t *testing.T) {
@@ -1021,6 +1027,10 @@ func TestChecks(t *testing.T) {
 				assert.EqualValues(t, 26, checkResult.Metrics[base.ThreadsRunningMetricName.String()].Value) // self value, because "self" is the default scope for threads_running
 				assert.EqualValues(t, 17, checkResult.Metrics[base.CustomMetricName.String()].Value)         // self value, because "self" is the default scope for custom
 				assert.EqualValues(t, 2.718, checkResult.Metrics[base.LoadAvgMetricName.String()].Value)     // self value, because "self" is the default scope for loadavg
+				assert.EqualValues(t, base.ShardScope.String(), checkResult.Metrics[base.LagMetricName.String()].Scope)
+				assert.EqualValues(t, base.SelfScope.String(), checkResult.Metrics[base.ThreadsRunningMetricName.String()].Scope)
+				assert.EqualValues(t, base.SelfScope.String(), checkResult.Metrics[base.CustomMetricName.String()].Scope)
+				assert.EqualValues(t, base.SelfScope.String(), checkResult.Metrics[base.LoadAvgMetricName.String()].Scope)
 			})
 		})
 		t.Run("checks, defined scope masks explicit scope metrics", func(t *testing.T) {
@@ -1047,6 +1057,9 @@ func TestChecks(t *testing.T) {
 				assert.EqualValues(t, 26, checkResult.Metrics[base.ThreadsRunningMetricName.String()].Value) // shard value, even though scope name is in metric name
 				assert.EqualValues(t, 17, checkResult.Metrics[base.CustomMetricName.String()].Value)         // shard value because flags.Scope is set
 				assert.EqualValues(t, 5.1, checkResult.Metrics[base.LoadAvgMetricName.String()].Value)       // shard value, not because scope name is in metric name but because flags.Scope is set
+				for _, metric := range checkResult.Metrics {
+					assert.EqualValues(t, base.ShardScope.String(), metric.Scope)
+				}
 			})
 		})
 		t.Run("checks, undefined scope and explicit scope metrics", func(t *testing.T) {
@@ -1070,6 +1083,10 @@ func TestChecks(t *testing.T) {
 				assert.EqualValues(t, 26, checkResult.Metrics[base.ThreadsRunningMetricName.String()].Value) // self value, because scope name is in metric name
 				assert.EqualValues(t, 17, checkResult.Metrics[base.CustomMetricName.String()].Value)         // self value, because that's the default...
 				assert.EqualValues(t, 5.1, checkResult.Metrics[base.LoadAvgMetricName.String()].Value)       // shard value, because scope name is in metric name
+				assert.EqualValues(t, base.SelfScope.String(), checkResult.Metrics[base.LagMetricName.String()].Scope)
+				assert.EqualValues(t, base.SelfScope.String(), checkResult.Metrics[base.ThreadsRunningMetricName.String()].Scope)
+				assert.EqualValues(t, base.SelfScope.String(), checkResult.Metrics[base.CustomMetricName.String()].Scope)
+				assert.EqualValues(t, base.ShardScope.String(), checkResult.Metrics[base.LoadAvgMetricName.String()].Scope)
 			})
 		})
 
