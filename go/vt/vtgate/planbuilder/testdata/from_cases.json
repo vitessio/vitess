@@ -2857,20 +2857,31 @@
       "QueryType": "SELECT",
       "Original": "select a as k from (select count(*) as a from user) t",
       "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Scalar",
-        "Aggregates": "sum_count_star(0) AS a",
+        "OperatorType": "SimpleProjection",
+        "ColumnNames": [
+          "k"
+        ],
+        "Columns": [
+          0
+        ],
         "Inputs": [
           {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select count(*) as a from `user` where 1 != 1",
-            "Query": "select count(*) as a from `user`",
-            "Table": "`user`"
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "sum_count_star(0) AS a",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select count(*) as a from `user` where 1 != 1",
+                "Query": "select count(*) as a from `user`",
+                "Table": "`user`"
+              }
+            ]
           }
         ]
       },

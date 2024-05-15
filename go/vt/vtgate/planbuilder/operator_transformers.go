@@ -253,7 +253,11 @@ func transformProjection(ctx *plancontext.PlanningContext, op *operators.Project
 	if cols := op.AllOffsets(); cols != nil {
 		// if all this op is doing is passing through columns from the input, we
 		// can use the faster SimpleProjection
+<<<<<<< HEAD
 		return useSimpleProjection(ctx, op, cols, src)
+=======
+		return useSimpleProjection(cols, colNames, src)
+>>>>>>> 951f2732f3 (Fix aliasing in queries by keeping required projections (#15943))
 	}
 
 	ap, err := op.GetAliasedProjections()
@@ -302,6 +306,7 @@ func getEvalEngingeExpr(ctx *plancontext.PlanningContext, pe *operators.ProjExpr
 
 // useSimpleProjection uses nothing at all if the output is already correct,
 // or SimpleProjection when we have to reorder or truncate the columns
+<<<<<<< HEAD
 func useSimpleProjection(ctx *plancontext.PlanningContext, op *operators.Projection, cols []int, src logicalPlan) (logicalPlan, error) {
 	columns, err := op.Source.GetColumns(ctx)
 	if err != nil {
@@ -311,6 +316,9 @@ func useSimpleProjection(ctx *plancontext.PlanningContext, op *operators.Project
 		// the columns are already in the right order. we don't need anything at all here
 		return src, nil
 	}
+=======
+func useSimpleProjection(cols []int, colNames []string, src logicalPlan) (logicalPlan, error) {
+>>>>>>> 951f2732f3 (Fix aliasing in queries by keeping required projections (#15943))
 	return &simpleProjection{
 		logicalPlanCommon: newBuilderCommon(src),
 		eSimpleProj: &engine.SimpleProjection{
