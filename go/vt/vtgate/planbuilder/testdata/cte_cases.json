@@ -272,35 +272,46 @@
             "Count": "10",
             "Inputs": [
               {
-                "OperatorType": "Join",
-                "Variant": "LeftJoin",
-                "JoinColumnIndexes": "R:0",
-                "JoinVars": {
-                  "user_id": 0
-                },
-                "TableName": "`user`_user_extra",
+                "OperatorType": "SimpleProjection",
+                "ColumnNames": [
+                  "col"
+                ],
+                "Columns": [
+                  0
+                ],
                 "Inputs": [
                   {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
+                    "OperatorType": "Join",
+                    "Variant": "LeftJoin",
+                    "JoinColumnIndexes": "R:0",
+                    "JoinVars": {
+                      "user_id": 0
                     },
-                    "FieldQuery": "select `user`.id from `user` where 1 != 1",
-                    "Query": "select `user`.id from `user`",
-                    "Table": "`user`"
-                  },
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
-                    "Query": "select user_extra.col from user_extra where user_extra.id = :user_id",
-                    "Table": "user_extra"
+                    "TableName": "`user`_user_extra",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select `user`.id from `user` where 1 != 1",
+                        "Query": "select `user`.id from `user`",
+                        "Table": "`user`"
+                      },
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
+                        "Query": "select user_extra.col from user_extra where user_extra.id = :user_id",
+                        "Table": "user_extra"
+                      }
+                    ]
                   }
                 ]
               }
@@ -1334,20 +1345,31 @@
       "QueryType": "SELECT",
       "Original": "with t as (select count(*) as a from user) select a as k from t",
       "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Scalar",
-        "Aggregates": "sum_count_star(0) AS a",
+        "OperatorType": "SimpleProjection",
+        "ColumnNames": [
+          "k"
+        ],
+        "Columns": [
+          0
+        ],
         "Inputs": [
           {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select count(*) as a from `user` where 1 != 1",
-            "Query": "select count(*) as a from `user`",
-            "Table": "`user`"
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "sum_count_star(0) AS a",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select count(*) as a from `user` where 1 != 1",
+                "Query": "select count(*) as a from `user`",
+                "Table": "`user`"
+              }
+            ]
           }
         ]
       },
