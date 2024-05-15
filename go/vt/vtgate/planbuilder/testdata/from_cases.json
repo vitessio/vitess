@@ -4921,6 +4921,12 @@
       "Original": "select a as k from (select count(*) as a from user) t",
       "Instructions": {
         "OperatorType": "SimpleProjection",
+<<<<<<< HEAD
+=======
+        "ColumnNames": [
+          "k"
+        ],
+>>>>>>> 951f2732f3 (Fix aliasing in queries by keeping required projections (#15943))
         "Columns": [
           0
         ],
@@ -4928,6 +4934,7 @@
           {
             "OperatorType": "Aggregate",
             "Variant": "Scalar",
+<<<<<<< HEAD
             "Aggregates": "sum_count(0) AS count",
             "Inputs": [
               {
@@ -4958,6 +4965,8 @@
           {
             "OperatorType": "Aggregate",
             "Variant": "Scalar",
+=======
+>>>>>>> 951f2732f3 (Fix aliasing in queries by keeping required projections (#15943))
             "Aggregates": "sum_count_star(0) AS a",
             "Inputs": [
               {

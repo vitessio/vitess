@@ -4829,8 +4829,18 @@
             ],
             "Inputs": [
               {
+<<<<<<< HEAD
                 "OperatorType": "Limit",
                 "Count": "INT64(10)",
+=======
+                "OperatorType": "SimpleProjection",
+                "ColumnNames": [
+                  "col"
+                ],
+                "Columns": [
+                  0
+                ],
+>>>>>>> 951f2732f3 (Fix aliasing in queries by keeping required projections (#15943))
                 "Inputs": [
                   {
                     "OperatorType": "Join",
@@ -4859,8 +4869,13 @@
                           "Name": "user",
                           "Sharded": true
                         },
+<<<<<<< HEAD
                         "FieldQuery": "select user_extra.col as col from user_extra where 1 != 1",
                         "Query": "select user_extra.col as col from user_extra where user_extra.id = :user_id",
+=======
+                        "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
+                        "Query": "select user_extra.col from user_extra where user_extra.id = :user_id",
+>>>>>>> 951f2732f3 (Fix aliasing in queries by keeping required projections (#15943))
                         "Table": "user_extra"
                       }
                     ]
