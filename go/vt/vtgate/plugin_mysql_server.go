@@ -75,6 +75,7 @@ var (
 
 	mysqlDefaultWorkloadName = "OLTP"
 	mysqlDefaultWorkload     int32
+	mysqlDrainOnTerm         bool
 
 	mysqlServerFlushDelay = 100 * time.Millisecond
 )
@@ -102,6 +103,7 @@ func registerPluginFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&mysqlKeepAlivePeriod, "mysql-server-keepalive-period", mysqlKeepAlivePeriod, "TCP period between keep-alives")
 	fs.DurationVar(&mysqlServerFlushDelay, "mysql_server_flush_delay", mysqlServerFlushDelay, "Delay after which buffered response will be flushed to the client.")
 	fs.StringVar(&mysqlDefaultWorkloadName, "mysql_default_workload", mysqlDefaultWorkloadName, "Default session workload (OLTP, OLAP, DBA)")
+	fs.BoolVar(&mysqlDrainOnTerm, "mysql_server_drain_onterm", mysqlDrainOnTerm, "If set, the server waits for --onterm_timeout for connected clients to drain")
 }
 
 // vtgateHandler implements the Listener interface.
@@ -631,6 +633,26 @@ func (srv *mysqlServer) shutdownMysqlProtocolAndDrain() {
 	}
 	if srv.sigChan != nil {
 		signal.Stop(srv.sigChan)
+	}
+
+	if mysqlDrainOnTerm {
+		// We wait for connected clients to drain, instead of just
+		// active (in transaction) clients
+		if srv.vtgateHandle == nil {
+			// server never started properly?
+			return
+		}
+
+		log.Infof("Starting drain loop, waiting for all clients to disconnect")
+		reported := time.Now()
+		for srv.vtgateHandle.numConnections() > 0 {
+			if time.Since(reported) > 5*time.Second {
+				log.Infof("Still waiting for client connections to drain (%d connected)...", srv.vtgateHandle.numConnections())
+				reported = time.Now()
+			}
+			time.Sleep(1000 * time.Millisecond)
+		}
+		return
 	}
 
 	if busy := srv.vtgateHandle.busyConnections.Load(); busy > 0 {
