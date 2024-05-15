@@ -18,7 +18,6 @@ package throttle
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"sync"
 	"sync/atomic"
@@ -46,10 +45,6 @@ func initThrottleTicker() {
 			}
 		}()
 	})
-}
-
-func lastSuccessfulThrottleKey(appName throttlerapp.Name, metricNames base.MetricNames) string {
-	return fmt.Sprintf("%s:%v", appName, metricNames)
 }
 
 // Client construct is used by apps who wish to consult with a throttler. It encapsulates the check/throttling/backoff logic

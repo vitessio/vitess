@@ -140,7 +140,7 @@ func NewEngine(env *vtenv.Environment, config *tabletenv.TabletConfig, ts *topo.
 		mysqld:          mysqld,
 		journaler:       make(map[string]*journalEvent),
 		ec:              newExternalConnector(env, config.ExternalConnections),
-		throttlerClient: throttle.NewBackgroundClient(lagThrottler, throttlerapp.VReplicationName, base.ShardScope),
+		throttlerClient: throttle.NewBackgroundClient(lagThrottler, throttlerapp.VReplicationName, base.UndefinedScope),
 	}
 
 	return vre
