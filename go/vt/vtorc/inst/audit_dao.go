@@ -54,9 +54,10 @@ func AuditOperation(auditType string, instanceKey *InstanceKey, message string) 
 	if instanceKey == nil {
 		instanceKey = &InstanceKey{}
 	}
-	clusterName := ""
+	keyspace := ""
+	shard := ""
 	if instanceKey.Hostname != "" {
-		clusterName, _ = GetClusterName(instanceKey)
+		keyspace, shard, _ = GetKeyspaceShardName(instanceKey)
 	}
 
 	auditWrittenToFile := false
@@ -70,7 +71,7 @@ func AuditOperation(auditType string, instanceKey *InstanceKey, message string) 
 			}
 
 			defer f.Close()
-			text := fmt.Sprintf("%s\t%s\t%s\t%d\t[%s]\t%s\t\n", time.Now().Format("2006-01-02 15:04:05"), auditType, instanceKey.Hostname, instanceKey.Port, clusterName, message)
+			text := fmt.Sprintf("%s\t%s\t%s\t%d\t[%s:%s]\t%s\t\n", time.Now().Format("2006-01-02 15:04:05"), auditType, instanceKey.Hostname, instanceKey.Port, keyspace, shard, message)
 			if _, err = f.WriteString(text); err != nil {
 				log.Error(err)
 			}
@@ -80,15 +81,16 @@ func AuditOperation(auditType string, instanceKey *InstanceKey, message string) 
 		_, err := db.ExecVTOrc(`
 			insert
 				into audit (
-					audit_timestamp, audit_type, hostname, port, cluster_name, message
+					audit_timestamp, audit_type, hostname, port, keyspace, shard, message
 				) VALUES (
-					NOW(), ?, ?, ?, ?, ?
+					NOW(), ?, ?, ?, ?, ?, ?
 				)
 			`,
 			auditType,
 			instanceKey.Hostname,
 			instanceKey.Port,
-			clusterName,
+			keyspace,
+			shard,
 			message,
 		)
 		if err != nil {
@@ -96,7 +98,7 @@ func AuditOperation(auditType string, instanceKey *InstanceKey, message string) 
 			return err
 		}
 	}
-	logMessage := fmt.Sprintf("auditType:%s instance:%s cluster:%s message:%s", auditType, instanceKey.DisplayString(), clusterName, message)
+	logMessage := fmt.Sprintf("auditType:%s instance:%s keyspace:%s shard:%s message:%s", auditType, instanceKey.DisplayString(), keyspace, shard, message)
 	if syslogWriter != nil {
 		auditWrittenToFile = true
 		go func() {

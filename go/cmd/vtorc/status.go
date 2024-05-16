@@ -24,7 +24,7 @@ import (
 // addStatusParts adds UI parts to the /debug/status page of VTOrc
 func addStatusParts() {
 	servenv.AddStatusPart("Recent Recoveries", logic.TopologyRecoveriesTemplate, func() any {
-		recoveries, _ := logic.ReadRecentRecoveries("", false, 0)
+		recoveries, _ := logic.ReadRecentRecoveries(false, 0)
 		return recoveries
 	})
 }

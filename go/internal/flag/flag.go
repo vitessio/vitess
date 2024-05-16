@@ -70,6 +70,17 @@ func Parse(fs *flag.FlagSet) {
 	flag.Parse()
 }
 
+// IsFlagProvided returns if the given flag has been provided by the user explicitly or not
+func IsFlagProvided(name string) bool {
+	found := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == name {
+			found = true
+		}
+	})
+	return found
+}
+
 // TrickGlog tricks glog into understanding that flags have been parsed.
 //
 // N.B. Do not delete this function. `glog` is a persnickity package and wants

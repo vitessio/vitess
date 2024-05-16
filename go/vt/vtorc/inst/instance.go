@@ -74,7 +74,6 @@ type Instance struct {
 	primaryExecutedGtidSet string // Not exported
 
 	ReplicationLagSeconds              sql.NullInt64
-	ClusterName                        string
 	DataCenter                         string
 	Region                             string
 	PhysicalEnvironment                string

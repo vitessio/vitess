@@ -187,21 +187,6 @@ func TestUpdateConfigValuesFromFlags(t *testing.T) {
 		require.Equal(t, testConfig, Config)
 	})
 
-	t.Run("override lockShardTimeout", func(t *testing.T) {
-		oldLockShardTimeout := lockShardTimeout
-		lockShardTimeout = 3 * time.Hour
-		// Restore the changes we make
-		defer func() {
-			Config = newConfiguration()
-			lockShardTimeout = oldLockShardTimeout
-		}()
-
-		testConfig := newConfiguration()
-		testConfig.LockShardTimeoutSeconds = 10800
-		UpdateConfigValuesFromFlags()
-		require.Equal(t, testConfig, Config)
-	})
-
 	t.Run("override waitReplicasTimeout", func(t *testing.T) {
 		oldWaitReplicasTimeout := waitReplicasTimeout
 		waitReplicasTimeout = 3*time.Minute + 4*time.Second

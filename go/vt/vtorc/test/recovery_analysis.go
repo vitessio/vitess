@@ -35,6 +35,7 @@ type InfoForRecoveryAnalysis struct {
 	Shard                                     string
 	KeyspaceType                              int
 	DurabilityPolicy                          string
+	IsInvalid                                 int
 	IsPrimary                                 int
 	IsCoPrimary                               int
 	Hostname                                  string
@@ -47,8 +48,6 @@ type InfoForRecoveryAnalysis struct {
 	LogFile                                   string
 	LogPos                                    int64
 	IsStaleBinlogCoordinates                  int
-	ClusterName                               string
-	ClusterDomain                             string
 	GTIDMode                                  string
 	LastCheckValid                            int
 	LastCheckPartialSuccess                   int
@@ -90,8 +89,6 @@ func (info *InfoForRecoveryAnalysis) ConvertToRowMap() sqlutils.RowMap {
 	rowMap := make(sqlutils.RowMap)
 	rowMap["binary_log_file"] = sqlutils.CellData{String: info.LogFile, Valid: true}
 	rowMap["binary_log_pos"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.LogPos), Valid: true}
-	rowMap["cluster_domain"] = sqlutils.CellData{String: info.ClusterDomain, Valid: true}
-	rowMap["cluster_name"] = sqlutils.CellData{String: info.ClusterName, Valid: true}
 	rowMap["count_binlog_server_replicas"] = sqlutils.CellData{Valid: false}
 	rowMap["count_co_primary_replicas"] = sqlutils.CellData{Valid: false}
 	rowMap["count_delayed_replicas"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.CountDelayedReplicas), Valid: true}
@@ -122,6 +119,7 @@ func (info *InfoForRecoveryAnalysis) ConvertToRowMap() sqlutils.RowMap {
 	rowMap["is_co_primary"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.IsCoPrimary), Valid: true}
 	rowMap["is_downtimed"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.IsDowntimed), Valid: true}
 	rowMap["is_failing_to_connect_to_primary"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.IsFailingToConnectToPrimary), Valid: true}
+	rowMap["is_invalid"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.IsInvalid), Valid: true}
 	rowMap["is_last_check_valid"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.LastCheckValid), Valid: true}
 	rowMap["is_primary"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.IsPrimary), Valid: true}
 	rowMap["is_stale_binlog_coordinates"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.IsStaleBinlogCoordinates), Valid: true}
@@ -163,6 +161,4 @@ func (info *InfoForRecoveryAnalysis) SetValuesFromTabletInfo() {
 	info.DataCenter = info.TabletInfo.Alias.Cell
 	info.Keyspace = info.TabletInfo.Keyspace
 	info.Shard = info.TabletInfo.Shard
-	info.ClusterName = fmt.Sprintf("%v:%v", info.TabletInfo.Keyspace, info.TabletInfo.Shard)
-	info.ClusterDomain = fmt.Sprintf("%v:%d", info.TabletInfo.MysqlHostname, info.TabletInfo.MysqlPort)
 }
