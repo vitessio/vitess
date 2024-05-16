@@ -1987,14 +1987,14 @@ func (s *VtctldServer) UpdateThrottlerConfig(ctx context.Context, req *vtctldata
 	if len(req.AppCheckedMetrics) > 0 {
 		specifiedMetrics := map[base.MetricName]bool{}
 		for _, metricName := range req.AppCheckedMetrics {
-			_, metricName, err := base.DisaggregateMetricName(metricName)
+			_, knownMetric, err := base.DisaggregateMetricName(metricName)
 			if err != nil {
 				return nil, fmt.Errorf("invalid metric name: %s", metricName)
 			}
-			if _, ok := specifiedMetrics[metricName]; ok {
-				return nil, fmt.Errorf("duplicate metric name: %s", metricName)
+			if _, ok := specifiedMetrics[knownMetric]; ok {
+				return nil, fmt.Errorf("duplicate metric name: %s", knownMetric)
 			}
-			specifiedMetrics[metricName] = true
+			specifiedMetrics[knownMetric] = true
 		}
 	}
 
