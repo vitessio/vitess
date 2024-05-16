@@ -17045,6 +17045,9 @@ export namespace topodata {
 
         /** ThrottlerConfig app_checked_metrics */
         app_checked_metrics?: ({ [k: string]: topodata.ThrottlerConfig.IMetricNames }|null);
+
+        /** ThrottlerConfig metric_thresholds */
+        metric_thresholds?: ({ [k: string]: number }|null);
     }
 
     /** Represents a ThrottlerConfig. */
@@ -17073,6 +17076,9 @@ export namespace topodata {
 
         /** ThrottlerConfig app_checked_metrics. */
         public app_checked_metrics: { [k: string]: topodata.ThrottlerConfig.IMetricNames };
+
+        /** ThrottlerConfig metric_thresholds. */
+        public metric_thresholds: { [k: string]: number };
 
         /**
          * Creates a new ThrottlerConfig instance using the specified properties.
@@ -56721,6 +56727,9 @@ export namespace vtctldata {
 
         /** UpdateThrottlerConfigRequest throttled_app */
         throttled_app?: (topodata.IThrottledAppRule|null);
+
+        /** UpdateThrottlerConfigRequest metric_name */
+        metric_name?: (string|null);
     }
 
     /** Represents an UpdateThrottlerConfigRequest. */
@@ -56758,6 +56767,9 @@ export namespace vtctldata {
 
         /** UpdateThrottlerConfigRequest throttled_app. */
         public throttled_app?: (topodata.IThrottledAppRule|null);
+
+        /** UpdateThrottlerConfigRequest metric_name. */
+        public metric_name: string;
 
         /**
          * Creates a new UpdateThrottlerConfigRequest instance using the specified properties.

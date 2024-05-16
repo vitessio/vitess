@@ -1036,6 +1036,8 @@ message UpdateThrottlerConfigRequest {
   bool check_as_check_shard = 8;
   // ThrottledApp indicates a single throttled app rule (ignored if name is empty)
   topodata.ThrottledAppRule throttled_app = 9;
+  // MetricName is the name of the metric for which we apply a new threshold
+  string metric_name = 10;
 }
 
 message UpdateThrottlerConfigResponse {

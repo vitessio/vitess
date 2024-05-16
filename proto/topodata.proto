@@ -391,6 +391,9 @@ message ThrottlerConfig {
   }
   // AppCheckedMetrics maps app names to the list of metrics that should be checked for that app
   map <string, MetricNames> app_checked_metrics = 6;
+
+  // MetricThresholds maps metric names to the threshold values that should be used for that metric
+  map <string, double> metric_thresholds = 7;
 }
 
 // SrvKeyspace is a rollup node for the keyspace itself.
