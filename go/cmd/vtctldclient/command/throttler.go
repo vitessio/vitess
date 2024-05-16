@@ -72,6 +72,12 @@ func commandUpdateThrottlerConfig(cmd *cobra.Command, args []string) error {
 	if updateThrottlerConfigOptions.MetricName != "" && !cmd.Flags().Changed("threshold") {
 		return fmt.Errorf("--metric-name flag requires --threshold flag. Set threshold to 0 to disable the metric threshold configuration")
 	}
+	if cmd.Flags().Changed("app-name") != cmd.Flags().Changed("app-metrics") {
+		return fmt.Errorf("--app-name and --app-metrics must be set together")
+	}
+	if cmd.Flags().Changed("app-name") && updateThrottlerConfigOptions.AppName == "" {
+		return fmt.Errorf("--app-name must not be empty")
+	}
 
 	updateThrottlerConfigOptions.CustomQuerySet = cmd.Flags().Changed("custom-query")
 	updateThrottlerConfigOptions.Keyspace = keyspace
@@ -127,7 +133,7 @@ func init() {
 	// UpdateThrottlerConfig
 	UpdateThrottlerConfig.Flags().BoolVar(&updateThrottlerConfigOptions.Enable, "enable", false, "Enable the throttler")
 	UpdateThrottlerConfig.Flags().BoolVar(&updateThrottlerConfigOptions.Disable, "disable", false, "Disable the throttler")
-	UpdateThrottlerConfig.Flags().StringVar(&updateThrottlerConfigOptions.MetricName, "metric-name", "", "name of the metric for which we apply a new threshold (leave empty for v19 default metric/threshold)")
+	UpdateThrottlerConfig.Flags().StringVar(&updateThrottlerConfigOptions.MetricName, "metric-name", "", "name of the metric for which we apply a new threshold (requires ==threshold). Leave empty for v19 default metric/threshold")
 	UpdateThrottlerConfig.Flags().Float64Var(&updateThrottlerConfigOptions.Threshold, "threshold", 0, "threshold for the either default check (replication lag seconds) or custom check")
 	UpdateThrottlerConfig.Flags().StringVar(&updateThrottlerConfigOptions.CustomQuery, "custom-query", "", "custom throttler check query")
 	UpdateThrottlerConfig.Flags().BoolVar(&updateThrottlerConfigOptions.CheckAsCheckSelf, "check-as-check-self", false, "/throttler/check requests behave as is /throttler/check-self was called")
@@ -138,6 +144,9 @@ func init() {
 	UpdateThrottlerConfig.Flags().Float64Var(&throttledAppRule.Ratio, "throttle-app-ratio", throttle.DefaultThrottleRatio, "ratio to throttle app (app specififed in --throttled-app)")
 	UpdateThrottlerConfig.Flags().DurationVar(&throttledAppDuration, "throttle-app-duration", throttle.DefaultAppThrottleDuration, "duration after which throttled app rule expires (app specififed in --throttled-app)")
 	UpdateThrottlerConfig.Flags().BoolVar(&throttledAppRule.Exempt, "throttle-app-exempt", throttledAppRule.Exempt, "exempt this app from being at all throttled. WARNING: use with extreme care, as this is likely to push metrics beyond the throttler's threshold, and starve other apps")
+
+	UpdateThrottlerConfig.Flags().StringVar(&updateThrottlerConfigOptions.AppName, "app-name", "", "app name for which to assign metrics (requires --app-metrics)")
+	UpdateThrottlerConfig.Flags().StringSliceVar(&updateThrottlerConfigOptions.AppCheckedMetrics, "app-metrics", nil, "metrics to be used when checking the throttler for the app (requires --app-name). Empty to restore to default metrics")
 
 	Root.AddCommand(UpdateThrottlerConfig)
 	// Check Throttler

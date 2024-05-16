@@ -1984,12 +1984,29 @@ func (s *VtctldServer) UpdateThrottlerConfig(ctx context.Context, req *vtctldata
 		return nil, fmt.Errorf("unknown metric name: %s", req.MetricName)
 	}
 
+	if len(req.AppCheckedMetrics) > 0 {
+		specifiedMetrics := map[base.MetricName]bool{}
+		for _, metricName := range req.AppCheckedMetrics {
+			_, metricName, err := base.DisaggregateMetricName(metricName)
+			if err != nil {
+				return nil, fmt.Errorf("invalid metric name: %s", metricName)
+			}
+			if _, ok := specifiedMetrics[metricName]; ok {
+				return nil, fmt.Errorf("duplicate metric name: %s", metricName)
+			}
+			specifiedMetrics[metricName] = true
+		}
+	}
+
 	update := func(throttlerConfig *topodatapb.ThrottlerConfig) *topodatapb.ThrottlerConfig {
 		if throttlerConfig == nil {
 			throttlerConfig = &topodatapb.ThrottlerConfig{}
 		}
 		if throttlerConfig.ThrottledApps == nil {
 			throttlerConfig.ThrottledApps = make(map[string]*topodatapb.ThrottledAppRule)
+		}
+		if throttlerConfig.AppCheckedMetrics == nil {
+			throttlerConfig.AppCheckedMetrics = make(map[string]*topodatapb.ThrottlerConfig_MetricNames)
 		}
 		if throttlerConfig.MetricThresholds == nil {
 			throttlerConfig.MetricThresholds = make(map[string]float64)
@@ -2012,6 +2029,11 @@ func (s *VtctldServer) UpdateThrottlerConfig(ctx context.Context, req *vtctldata
 				throttlerConfig.MetricThresholds[req.MetricName] = req.Threshold
 			} else {
 				delete(throttlerConfig.MetricThresholds, req.MetricName)
+			}
+		}
+		if req.AppName != "" {
+			throttlerConfig.AppCheckedMetrics[req.AppName] = &topodatapb.ThrottlerConfig_MetricNames{
+				Names: req.AppCheckedMetrics,
 			}
 		}
 		if req.Enable {
