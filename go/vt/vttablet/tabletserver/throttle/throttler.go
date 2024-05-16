@@ -520,7 +520,6 @@ func (throttler *Throttler) Disable() bool {
 		return false
 	}
 	log.Infof("Throttler: disabling")
-	// _ = throttler.updateConfig(ctx, false, throttler.MetricsThreshold.Get()) // TODO(shlomi)
 
 	throttler.cancelEnableContext()
 	return true
