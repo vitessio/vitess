@@ -527,16 +527,17 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 				if err := vp.applyEvent(ctx, event, mustSave); err != nil {
 					if err != io.EOF {
 						vp.vr.stats.ErrorCounts.Add([]string{"Apply"}, 1)
-						var table string
+						var table, tableLogMsg string
 						switch {
-						case event.GetFieldEvent().TableName != "":
+						case event.GetFieldEvent() != nil:
 							table = event.GetFieldEvent().TableName
-						case event.GetRowEvent().TableName != "":
+						case event.GetRowEvent() != nil:
 							table = event.GetRowEvent().TableName
-						default:
-							table = "unknown"
 						}
-						log.Errorf("Error applying event for table %s: %s", table, err.Error())
+						if table != "" {
+							tableLogMsg = fmt.Sprintf(" for table %s", table)
+						}
+						log.Errorf("Error applying event%s: %s", tableLogMsg, err.Error())
 					}
 					return err
 				}
