@@ -114,16 +114,13 @@ func TestDerivedTablesWithLimit(t *testing.T) {
 		`[[INT64(1) INT64(1)] [INT64(5) INT64(2)] [INT64(1) INT64(3)] [INT64(2) INT64(4)] [INT64(3) INT64(5)] [INT64(5) INT64(7)] [INT64(4) INT64(6)] [INT64(6) NULL]]`)
 }
 
+// TestDerivedTableColumnAliasWithJoin tests the derived table having alias column and using it in the join condition
 func TestDerivedTableColumnAliasWithJoin(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
 
-	mcmp.AssertMatches(`SELECT user.id FROM user join (SELECT id as uid FROM user) t on t.uid = user.id`,
-		`[[INT64(5)] [INT64(4)] [INT64(3)] [INT64(2)] [INT64(1)]]`)
-	mcmp.AssertMatches(`SELECT user.id FROM user left join (SELECT id as uid FROM user) t on t.uid = user.id`,
-		`[[INT64(5)] [INT64(4)] [INT64(3)] [INT64(2)] [INT64(1)]]`)
-	mcmp.AssertMatches(`SELECT user.id FROM user join (SELECT id FROM user) t(uid) on t.uid = user.id`,
-		`[[INT64(5)] [INT64(4)] [INT64(3)] [INT64(2)] [INT64(1)]]`)
-	mcmp.AssertMatches(`SELECT user.id FROM user left join (SELECT id FROM user) t(uid) on t.uid = user.id`,
-		`[[INT64(5)] [INT64(4)] [INT64(3)] [INT64(2)] [INT64(1)]]`)
+	mcmp.Exec(`SELECT user.id FROM user join (SELECT id as uid FROM user) t on t.uid = user.id`)
+	mcmp.Exec(`SELECT user.id FROM user left join (SELECT id as uid FROM user) t on t.uid = user.id`)
+	mcmp.Exec(`SELECT user.id FROM user join (SELECT id FROM user) t(uid) on t.uid = user.id`)
+	mcmp.Exec(`SELECT user.id FROM user left join (SELECT id FROM user) t(uid) on t.uid = user.id`)
 }
