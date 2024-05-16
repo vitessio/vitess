@@ -39,7 +39,7 @@ var (
 	// hit the configured max relay log items / size until the binlog dump connection
 	// gets terminated by mysqld due to hitting replica_net_timeout as once the relay
 	// log is full we cannot perform any more reads from the mysqld binlog stream.
-	relayLogProgressTimeout = 5 * time.Minute
+	relayLogProgressTimeout = 2 * time.Minute
 
 	// The error to return when we haven't made progress for the timeout.
 	ErrRelayLogTimeout = fmt.Errorf("relay log progress stalled; vplayer was likely unable to replicate the previous log content's transaction in a timely manner; examine the target mysqld instance health and the replicated queries' EXPLAIN output to see why queries are taking unusually long")
