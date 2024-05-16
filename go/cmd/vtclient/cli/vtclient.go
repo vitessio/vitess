@@ -197,7 +197,7 @@ func _run(cmd *cobra.Command, args []string) (*results, error) {
 
 	log.Infof("Sending the query...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(cmd.Context(), timeout)
 	defer cancel()
 	return execMulti(ctx, db, cmd.Flags().Arg(0))
 }

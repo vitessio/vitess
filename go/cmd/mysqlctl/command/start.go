@@ -51,7 +51,7 @@ func commandStart(cmd *cobra.Command, args []string) error {
 	}
 	defer mysqld.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), startArgs.WaitTime)
+	ctx, cancel := context.WithTimeout(cmd.Context(), startArgs.WaitTime)
 	defer cancel()
 	if err := mysqld.Start(ctx, cnf, startArgs.MySQLdArgs...); err != nil {
 		return fmt.Errorf("failed start mysql: %v", err)
