@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"context"
@@ -28,17 +29,17 @@ import (
 )
 
 var (
-	// At what point should we consider IO to the relay log to be stalled
-	// and return an error. This stall can happen if vplayer is stuck in a
+	// At what point should we consider IO to the relay log to be stalled and
+	// return an error. This stall can happen e.g. if vplayer is stuck in a
 	// loop trying to process the previous relay log contents. This can happen
 	// e.g. if the queries it's executing are doing table scans and it thus
 	// cannot finish the transaction wrapping the previous contents before
 	// thus blocking further relay log writes until the binlog dump connection
 	// gets terminated by mysqld due to hitting slave_net_timeout.
-	relayLogProgressTimeout = 1 * time.Minute
+	relayLogProgressTimeout = 5 * time.Minute
 
 	// The error to return when we haven't made progress for the timeout.
-	ErrRelayLogTimeout = fmt.Errorf("relay log progress stalled; vplayer was not able to replicate the previous log content's transaction in a timely manner; examine the replicated queries' EXPLAIN output to see why they are taking longer than usual")
+	ErrRelayLogTimeout = fmt.Errorf("relay log progress stalled; vplayer was likely unable to replicate the previous log content's transaction in a timely manner; examine the replicated queries' EXPLAIN output to see why they are taking unusually long")
 )
 
 type relayLog struct {
@@ -62,7 +63,7 @@ type relayLog struct {
 	// hits the progressTimeout then we end the relay log work and return an error.
 	progressTimer *time.Timer
 	// lastError is set if the we encountered an error that should end the relay log work.
-	lastError error
+	lastError atomic.Pointer[error]
 }
 
 func newRelayLog(ctx context.Context, maxItems, maxSize int) *relayLog {
@@ -82,7 +83,7 @@ func newRelayLog(ctx context.Context, maxItems, maxSize int) *relayLog {
 		select {
 		case <-ctx.Done():
 		case <-rl.progressTimer.C:
-			rl.lastError = ErrRelayLogTimeout
+			rl.lastError.Store(&ErrRelayLogTimeout)
 		}
 		rl.mu.Lock()
 		defer rl.mu.Unlock()
@@ -143,8 +144,8 @@ func (rl *relayLog) checkDone() error {
 	case <-rl.ctx.Done():
 		return io.EOF
 	default:
-		if rl.lastError != nil {
-			return rl.lastError
+		if rl.lastError.Load() != nil {
+			return *rl.lastError.Load()
 		}
 	}
 	return nil
