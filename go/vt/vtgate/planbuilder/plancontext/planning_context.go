@@ -28,9 +28,6 @@ type PlanningContext struct {
 	SemTable     *semantics.SemTable
 	VSchema      VSchema
 
-	// JoinPredInProgress is used to track the current join predicate being processed.
-	JoinPredInProgress sqlparser.Expr
-
 	// joinPredicates maps each original join predicate (key) to a slice of
 	// variations of the RHS predicates (value). This map is used to handle
 	// different scenarios in join planning, where the RHS predicates are
@@ -194,8 +191,13 @@ func (ctx *PlanningContext) execOnJoinPredicateEqual(joinPred sqlparser.Expr, fn
 
 func (ctx *PlanningContext) RewriteDerivedTableExpression(expr sqlparser.Expr, tableInfo semantics.TableInfo) sqlparser.Expr {
 	modifiedExpr := semantics.RewriteDerivedTableExpression(expr, tableInfo)
-	if ctx.JoinPredInProgress != nil {
-		ctx.AddJoinPredicates(ctx.JoinPredInProgress, modifiedExpr)
+	for key, exprs := range ctx.joinPredicates {
+		for _, rhsExpr := range exprs {
+			if ctx.SemTable.EqualsExpr(expr, rhsExpr) {
+				ctx.joinPredicates[key] = append(ctx.joinPredicates[key], modifiedExpr)
+				return modifiedExpr
+			}
+		}
 	}
 	return modifiedExpr
 }
