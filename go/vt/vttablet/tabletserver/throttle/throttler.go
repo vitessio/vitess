@@ -228,6 +228,7 @@ type ThrottlerStatus struct {
 	MetricsThresholds map[string]float64
 	MetricsHealth     base.MetricHealthMap
 	ThrottledApps     []base.AppThrottle
+	AppCheckedMetrics map[string]string
 }
 
 // NewThrottler creates a Throttler
@@ -461,18 +462,21 @@ func (throttler *Throttler) applyThrottlerConfig(ctx context.Context, throttlerC
 	}
 	{
 		// throttler.appCheckedMetrics needs to reflect throttlerConfig.AppCheckedMetrics
-		configuredApps := make(map[string]bool)
 		for app, metrics := range throttlerConfig.AppCheckedMetrics {
-			configuredApps[app] = true
 			metricNames := base.MetricNames{}
-			for _, name := range metrics.Names {
-				metricName := base.MetricName(name)
-				metricNames = append(metricNames, metricName)
+			if len(metrics.Names) > 0 {
+				for _, name := range metrics.Names {
+					metricName := base.MetricName(name)
+					metricNames = append(metricNames, metricName)
+				}
+				throttler.appCheckedMetrics.Set(app, metricNames, cache.DefaultExpiration)
+			} else {
+				// Empty list of metrics means we should use the default metrics
+				throttler.appCheckedMetrics.Delete(app)
 			}
-			throttler.appCheckedMetrics.Set(app, metricNames, cache.DefaultExpiration)
 		}
-		for app := range throttler.appCheckedMetrics.Items() {
-			if _, ok := configuredApps[app]; !ok {
+		for app := range throttler.appCheckedMetricsSnapshot() {
+			if _, ok := throttlerConfig.AppCheckedMetrics[app]; !ok {
 				// app not indicated in the throttler config, therefore should be removed from the map
 				throttler.appCheckedMetrics.Delete(app)
 			}
@@ -1269,6 +1273,21 @@ func (throttler *Throttler) mysqlMetricThresholdsSnapshot() map[string]float64 {
 	return snapshot
 }
 
+func (throttler *Throttler) appCheckedMetricsSnapshot() map[string]string {
+	snapshot := make(map[string]string)
+	for key, item := range throttler.appCheckedMetrics.Items() {
+		var metricNames base.MetricNames
+		switch val := item.Object.(type) {
+		case base.MetricNames:
+			metricNames = val
+		case []base.MetricName:
+			metricNames = val
+		}
+		snapshot[key] = metricNames.String()
+	}
+	return snapshot
+}
+
 func (throttler *Throttler) aggregatedMetricsSnapshot() map[string]base.MetricResult {
 	snapshot := make(map[string]base.MetricResult)
 	for key, value := range throttler.aggregatedMetrics.Items() {
@@ -1592,5 +1611,6 @@ func (throttler *Throttler) Status() *ThrottlerStatus {
 		MetricsThresholds: throttler.mysqlMetricThresholdsSnapshot(),
 		MetricsHealth:     throttler.metricsHealthSnapshot(),
 		ThrottledApps:     throttler.ThrottledApps(),
+		AppCheckedMetrics: throttler.appCheckedMetricsSnapshot(),
 	}
 }
