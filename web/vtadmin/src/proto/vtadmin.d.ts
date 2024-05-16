@@ -56734,8 +56734,8 @@ export namespace vtctldata {
         /** UpdateThrottlerConfigRequest app_name */
         app_name?: (string|null);
 
-        /** UpdateThrottlerConfigRequest app_metrics */
-        app_metrics?: (string[]|null);
+        /** UpdateThrottlerConfigRequest app_checked_metrics */
+        app_checked_metrics?: (string[]|null);
     }
 
     /** Represents an UpdateThrottlerConfigRequest. */
@@ -56780,8 +56780,8 @@ export namespace vtctldata {
         /** UpdateThrottlerConfigRequest app_name. */
         public app_name: string;
 
-        /** UpdateThrottlerConfigRequest app_metrics. */
-        public app_metrics: string[];
+        /** UpdateThrottlerConfigRequest app_checked_metrics. */
+        public app_checked_metrics: string[];
 
         /**
          * Creates a new UpdateThrottlerConfigRequest instance using the specified properties.

@@ -1040,9 +1040,9 @@ message UpdateThrottlerConfigRequest {
   string metric_name = 10;
   // AppName is the name of the app for which we assign metrics
   string app_name = 11;
-  // AppMetrics are the metrics to be checked got the given AppName. These can be scoped. For example:
+  // AppCheckedMetrics are the metrics to be checked got the given AppName. These can be scoped. For example:
   // ["lag", "self/loadvg", "shard/threads_running"]
-  repeated string app_metrics = 12;
+  repeated string app_checked_metrics = 12;
 }
 
 message UpdateThrottlerConfigResponse {
