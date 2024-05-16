@@ -1860,7 +1860,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 	}
 }
 
-func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
+func TestEmergencyReparenter_promotionOfNewPrimary(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -2328,7 +2328,7 @@ func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
 			tt.emergencyReparentOps.durability = durability
 
 			erp := NewEmergencyReparenter(ts, tt.tmc, logger)
-			err := erp.promoteNewPrimary(ctx, ev, tabletInfo.Tablet, tt.emergencyReparentOps, tt.tabletMap, tt.statusMap)
+			_, err := erp.reparentReplicas(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, tt.emergencyReparentOps, false)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), tt.errShouldContain)
@@ -3017,6 +3017,7 @@ func TestEmergencyReparenter_reparentReplicas(t *testing.T) {
 		statusMap             map[string]*replicationdatapb.StopReplicationStatus
 		shouldErr             bool
 		errShouldContain      string
+		remoteOpTimeout       time.Duration
 	}{
 		{
 			name:                 "success",
@@ -3381,12 +3382,99 @@ func TestEmergencyReparenter_reparentReplicas(t *testing.T) {
 			shard:     "-",
 			shouldErr: false,
 		},
+		{
+			name:                 "primary promotion gets infinitely stuck",
+			emergencyReparentOps: EmergencyReparentOptions{},
+			tmc: &testutil.TabletManagerClient{
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000100": {
+						Error: nil,
+					},
+				},
+				PromoteReplicaDelays: map[string]time.Duration{
+					"zone1-0000000100": 500 * time.Hour,
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000101": nil,
+					"zone1-0000000102": nil,
+				},
+			},
+			remoteOpTimeout:       100 * time.Millisecond,
+			newPrimaryTabletAlias: "zone1-0000000100",
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Hostname: "primary-elect",
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+				"zone1-0000000102": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+						Hostname: "requires force start",
+					},
+				},
+				"zone1-0000000404": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  404,
+						},
+						Hostname: "ignored tablet",
+					},
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"zone1-0000000101": { // forceStart = false
+					Before: &replicationdatapb.Status{
+						IoState:  int32(replication.ReplicationStateStopped),
+						SqlState: int32(replication.ReplicationStateStopped),
+					},
+				},
+				"zone1-0000000102": { // forceStart = true
+					Before: &replicationdatapb.Status{
+						IoState:  int32(replication.ReplicationStateRunning),
+						SqlState: int32(replication.ReplicationStateRunning),
+					},
+				},
+			},
+			keyspace:         "testkeyspace",
+			shard:            "-",
+			shouldErr:        true,
+			errShouldContain: "failed to promote zone1-0000000100 to primary: context deadline exceeded",
+		},
 	}
 
 	durability, _ := GetDurabilityPolicy("none")
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
+			if tt.remoteOpTimeout != 0 {
+				oldTimeout := topo.RemoteOperationTimeout
+				topo.RemoteOperationTimeout = tt.remoteOpTimeout
+				defer func() {
+					topo.RemoteOperationTimeout = oldTimeout
+				}()
+			}
 
 			logger := logutil.NewMemoryLogger()
 			ev := &events.Reparent{

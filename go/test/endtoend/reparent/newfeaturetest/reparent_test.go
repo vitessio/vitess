@@ -159,7 +159,7 @@ func TestChangeTypeWithoutSemiSync(t *testing.T) {
 }
 
 // TestERSWithWriteInPromoteReplica tests that ERS doesn't fail even if there is a
-// write than happens when PromoteReplica is called.
+// write that happens when PromoteReplica is called.
 func TestERSWithWriteInPromoteReplica(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")

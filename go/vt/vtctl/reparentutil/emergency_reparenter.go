@@ -308,7 +308,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	// Since the new primary tablet belongs to the validCandidateTablets list, we no longer need any additional constraint checks
 
 	// Final step is to promote our primary candidate
-	err = erp.promoteNewPrimary(ctx, ev, newPrimary, opts, tabletMap, stoppedReplicationSnapshot.statusMap)
+	_, err = erp.reparentReplicas(ctx, ev, newPrimary, tabletMap, stoppedReplicationSnapshot.statusMap, opts, false /* intermediateReparent */)
 	if err != nil {
 		return err
 	}
@@ -496,6 +496,8 @@ func (erp *EmergencyReparenter) reparentReplicas(
 	)
 
 	replCtx, replCancel := context.WithTimeout(context.Background(), opts.WaitReplicasTimeout)
+	primaryCtx, primaryCancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
+	defer primaryCancel()
 
 	event.DispatchUpdate(ev, "reparenting all tablets")
 
@@ -523,17 +525,17 @@ func (erp *EmergencyReparenter) reparentReplicas(
 			if ev.ShardInfo.PrimaryAlias == nil {
 				erp.logger.Infof("setting up %v as new primary for an uninitialized cluster", alias)
 				// we call InitPrimary when the PrimaryAlias in the ShardInfo is empty. This happens when we have an uninitialized cluster.
-				position, err = erp.tmc.InitPrimary(replCtx, tablet, SemiSyncAckers(opts.durability, tablet) > 0)
+				position, err = erp.tmc.InitPrimary(primaryCtx, tablet, SemiSyncAckers(opts.durability, tablet) > 0)
 			} else {
 				erp.logger.Infof("starting promotion for the new primary - %v", alias)
 				// we call PromoteReplica which changes the tablet type, fixes the semi-sync, set the primary to read-write and flushes the binlogs
-				position, err = erp.tmc.PromoteReplica(replCtx, tablet, SemiSyncAckers(opts.durability, tablet) > 0)
+				position, err = erp.tmc.PromoteReplica(primaryCtx, tablet, SemiSyncAckers(opts.durability, tablet) > 0)
 			}
 			if err != nil {
 				return vterrors.Wrapf(err, "primary-elect tablet %v failed to be upgraded to primary: %v", alias, err)
 			}
 			erp.logger.Infof("populating reparent journal on new primary %v", alias)
-			err = erp.tmc.PopulateReparentJournal(replCtx, tablet, now, opts.lockAction, tablet.Alias, position)
+			err = erp.tmc.PopulateReparentJournal(primaryCtx, tablet, now, opts.lockAction, tablet.Alias, position)
 			if err != nil {
 				return vterrors.Wrapf(err, "failed to PopulateReparentJournal on primary: %v", err)
 			}
@@ -606,10 +608,10 @@ func (erp *EmergencyReparenter) reparentReplicas(
 
 	primaryErr := handlePrimary(topoproto.TabletAliasString(newPrimaryTablet.Alias), newPrimaryTablet)
 	if primaryErr != nil {
-		erp.logger.Warningf("primary failed to promote the new primary")
+		erp.logger.Errorf("failed to promote %s to primary", topoproto.TabletAliasString(newPrimaryTablet.Alias))
 		replCancel()
 
-		return nil, vterrors.Wrapf(primaryErr, "failed to promote the new primary: %v", primaryErr)
+		return nil, vterrors.Wrapf(primaryErr, "failed to promote %v to primary: %v", topoproto.TabletAliasString(newPrimaryTablet.Alias), primaryErr)
 	}
 
 	// We should only cancel the context that all the replicas are using when they are done.
@@ -719,20 +721,6 @@ func (erp *EmergencyReparenter) identifyPrimaryCandidate(
 	// We should have found at least 1 tablet in the valid list.
 	// If the list is empty, then we should have errored out much sooner.
 	return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unreachable - did not find a valid primary candidate even though the valid candidate list was non-empty")
-}
-
-func (erp *EmergencyReparenter) promoteNewPrimary(
-	ctx context.Context,
-	ev *events.Reparent,
-	newPrimary *topodatapb.Tablet,
-	opts EmergencyReparentOptions,
-	tabletMap map[string]*topo.TabletInfo,
-	statusMap map[string]*replicationdatapb.StopReplicationStatus,
-) error {
-	// we now reparent all the replicas to the new primary and we promote it.
-	// Here we do not need to wait for all the replicas, We can finish early when even 1 succeeds.
-	_, err := erp.reparentReplicas(ctx, ev, newPrimary, tabletMap, statusMap, opts, false /* intermediateReparent */)
-	return err
 }
 
 // filterValidCandidates filters valid tablets, keeping only the ones which can successfully be promoted without any constraint failures and can make forward progress on being promoted
