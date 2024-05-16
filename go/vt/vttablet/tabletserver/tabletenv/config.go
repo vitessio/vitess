@@ -30,9 +30,16 @@ import (
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/throttler"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	throttlerdatapb "vitess.io/vitess/go/vt/proto/throttlerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // These constants represent values for various config parameters.
@@ -82,6 +89,24 @@ var (
 	queryLogHandler = "/debug/querylog"
 	txLogHandler    = "/debug/txlog"
 )
+
+type TxThrottlerConfigFlag struct {
+	*throttlerdatapb.Configuration
+}
+
+func NewTxThrottlerConfigFlag() *TxThrottlerConfigFlag {
+	return &TxThrottlerConfigFlag{&throttlerdatapb.Configuration{}}
+}
+
+func (t *TxThrottlerConfigFlag) Get() *throttlerdatapb.Configuration {
+	return t.Configuration
+}
+
+func (t *TxThrottlerConfigFlag) Set(arg string) error {
+	return prototext.Unmarshal([]byte(arg), t.Configuration)
+}
+
+func (t *TxThrottlerConfigFlag) Type() string { return "string" }
 
 // RegisterTabletEnvFlags is a public API to register tabletenv flags for use by test cases that expect
 // some flags to be set with default values
@@ -136,9 +161,12 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&currentConfig.TwoPCEnable, "twopc_enable", defaultConfig.TwoPCEnable, "if the flag is on, 2pc is enabled. Other 2pc flags must be supplied.")
 	fs.StringVar(&currentConfig.TwoPCCoordinatorAddress, "twopc_coordinator_address", defaultConfig.TwoPCCoordinatorAddress, "address of the (VTGate) process(es) that will be used to notify of abandoned transactions.")
 	SecondsVar(fs, &currentConfig.TwoPCAbandonAge, "twopc_abandon_age", defaultConfig.TwoPCAbandonAge, "time in seconds. Any unresolved transaction older than this time will be sent to the coordinator to be resolved.")
+	// Tx throttler config
 	flagutil.DualFormatBoolVar(fs, &currentConfig.EnableTxThrottler, "enable_tx_throttler", defaultConfig.EnableTxThrottler, "If true replication-lag-based throttling on transactions will be enabled.")
-	flagutil.DualFormatStringVar(fs, &currentConfig.TxThrottlerConfig, "tx_throttler_config", defaultConfig.TxThrottlerConfig, "The configuration of the transaction throttler as a text formatted throttlerdata.Configuration protocol buffer message")
+	flagutil.DualFormatVar(fs, currentConfig.TxThrottlerConfig, "tx_throttler_config", "The configuration of the transaction throttler as a text-formatted throttlerdata.Configuration protocol buffer message.")
 	flagutil.DualFormatStringListVar(fs, &currentConfig.TxThrottlerHealthCheckCells, "tx_throttler_healthcheck_cells", defaultConfig.TxThrottlerHealthCheckCells, "A comma-separated list of cells. Only tabletservers running in these cells will be monitored for replication lag by the transaction throttler.")
+	fs.IntVar(&currentConfig.TxThrottlerDefaultPriority, "tx-throttler-default-priority", defaultConfig.TxThrottlerDefaultPriority, "Default priority assigned to queries that lack priority information")
+	fs.Var(currentConfig.TxThrottlerTabletTypes, "tx-throttler-tablet-types", "A comma-separated list of tablet types. Only tablets of this type are monitored for replication lag by the transaction throttler. Supported types are replica and/or rdonly.")
 
 	fs.BoolVar(&enableHotRowProtection, "enable_hot_row_protection", false, "If true, incoming transactions for the same row (range) will be queued and cannot consume all txpool slots.")
 	fs.BoolVar(&enableHotRowProtectionDryRun, "enable_hot_row_protection_dry_run", false, "If true, hot row protection is not enforced but logs if transactions would have been queued.")
@@ -307,9 +335,11 @@ type TabletConfig struct {
 	TwoPCCoordinatorAddress string  `json:"-"`
 	TwoPCAbandonAge         Seconds `json:"-"`
 
-	EnableTxThrottler           bool     `json:"-"`
-	TxThrottlerConfig           string   `json:"-"`
-	TxThrottlerHealthCheckCells []string `json:"-"`
+	EnableTxThrottler           bool                          `json:"-"`
+	TxThrottlerConfig           *TxThrottlerConfigFlag        `json:"-"`
+	TxThrottlerHealthCheckCells []string                      `json:"-"`
+	TxThrottlerDefaultPriority  int                           `json:"-"`
+	TxThrottlerTabletTypes      *topoproto.TabletTypeListFlag `json:"-"`
 
 	EnableLagThrottler bool `json:"-"`
 
@@ -445,6 +475,9 @@ func (c *TabletConfig) Verify() error {
 	if err := c.verifyTransactionLimitConfig(); err != nil {
 		return err
 	}
+	if err := c.verifyTxThrottlerConfig(); err != nil {
+		return err
+	}
 	if v := c.HotRowProtection.MaxQueueSize; v <= 0 {
 		return fmt.Errorf("-hot_row_protection_max_queue_size must be > 0 (specified value: %v)", v)
 	}
@@ -487,6 +520,39 @@ func (c *TabletConfig) verifyTransactionLimitConfig() error {
 	if limit := int(c.TransactionLimitPerUser * float64(c.TxPool.Size)); limit == 0 {
 		return fmt.Errorf("effective transaction limit per user is 0 due to rounding, increase -transaction_limit_per_user")
 	}
+	return nil
+}
+
+// verifyTxThrottlerConfig checks the TxThrottler related config for sanity.
+func (c *TabletConfig) verifyTxThrottlerConfig() error {
+	if !c.EnableTxThrottler {
+		return nil
+	}
+
+	err := throttler.MaxReplicationLagModuleConfig{Configuration: c.TxThrottlerConfig.Get()}.Verify()
+	if err != nil {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "failed to parse throttlerdatapb.Configuration config: %v", err)
+	}
+
+	if len(c.TxThrottlerHealthCheckCells) == 0 {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "empty healthCheckCells given: %+v", c.TxThrottlerHealthCheckCells)
+	}
+	if v := c.TxThrottlerDefaultPriority; v > sqlparser.MaxPriorityValue || v < 0 {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "--tx-throttler-default-priority must be > 0 and < 100 (specified value: %d)", v)
+	}
+
+	if c.TxThrottlerTabletTypes == nil || len(*c.TxThrottlerTabletTypes) == 0 {
+		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "--tx-throttler-tablet-types must be defined when transaction throttler is enabled")
+	}
+	for _, tabletType := range *c.TxThrottlerTabletTypes {
+		switch tabletType {
+		case topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY:
+			continue
+		default:
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported tablet type %q", tabletType)
+		}
+	}
+
 	return nil
 }
 
@@ -556,6 +622,8 @@ var defaultConfig = TabletConfig{
 	EnableTxThrottler:           false,
 	TxThrottlerConfig:           defaultTxThrottlerConfig(),
 	TxThrottlerHealthCheckCells: []string{},
+	TxThrottlerDefaultPriority:  sqlparser.MaxPriorityValue, // This leads to all queries being candidates to throttle
+	TxThrottlerTabletTypes:      &topoproto.TabletTypeListFlag{topodatapb.TabletType_REPLICA},
 
 	EnableLagThrottler: false, // Feature flag; to switch to 'true' at some stage in the future
 
@@ -572,17 +640,16 @@ var defaultConfig = TabletConfig{
 	EnablePerWorkloadTableMetrics: false,
 }
 
-// defaultTxThrottlerConfig formats the default throttlerdata.Configuration
-// object in text format. It uses the object returned by
-// throttler.DefaultMaxReplicationLagModuleConfig().Configuration and overrides some of its
-// fields. It panics on error.
-func defaultTxThrottlerConfig() string {
+// defaultTxThrottlerConfig returns the default TxThrottlerConfigFlag object based on
+// a throttler.DefaultMaxReplicationLagModuleConfig().Configuration and overrides some of
+// its fields. It panics on error.
+func defaultTxThrottlerConfig() *TxThrottlerConfigFlag {
 	// Take throttler.DefaultMaxReplicationLagModuleConfig and override some fields.
 	config := throttler.DefaultMaxReplicationLagModuleConfig().Configuration
 	// TODO(erez): Make DefaultMaxReplicationLagModuleConfig() return a MaxReplicationLagSec of 10
 	// and remove this line.
 	config.MaxReplicationLagSec = 10
-	return prototext.Format(config)
+	return &TxThrottlerConfigFlag{config}
 }
 
 func defaultTransactionLimitConfig() TransactionLimitConfig {

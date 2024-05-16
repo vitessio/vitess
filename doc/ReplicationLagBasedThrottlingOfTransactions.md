@@ -30,7 +30,13 @@ If this is not specified a [default](https://github.com/vitessio/vitess/tree/mai
 * *tx-throttler-healthcheck-cells*
 
 A comma separated list of datacenter cells. The throttler will only monitor
-the non-RDONLY replicas found in these cells for replication lag.
+the replicas found in these cells for replication lag.
+
+* *tx-throttler-tablet-types*
+
+A comma separated list of tablet types. The throttler will only monitor tablets
+with these types. Only `replica` and/or `rdonly` types are supported. The default
+is `replica`.
 
 # Caveats and Known Issues
 * The throttler keeps trying to explore the maximum rate possible while keeping
@@ -39,4 +45,3 @@ lag limit may occasionally be slightly violated.
 
 * Transactions are considered homogeneous. There is currently no support
 for specifying how `expensive` a transaction is.
-

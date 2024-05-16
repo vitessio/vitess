@@ -17,16 +17,13 @@ limitations under the License.
 package tabletserver
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"math/rand"
 	"reflect"
 	"strings"
 	"testing"
-
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
-
-	"context"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -44,6 +41,8 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/txthrottler"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tableaclpb "vitess.io/vitess/go/vt/proto/tableacl"
@@ -81,6 +80,10 @@ func TestQueryExecutorPlans(t *testing.T) {
 		// inTxWant is the query log we expect if we're in a transation.
 		// If empty, then we should expect the same as logWant.
 		inTxWant string
+		// errorWant is the error we expect to get, if any, and should be nil if no error should be returned
+		errorWant error
+		// TxThrottler allows the test case to override the transaction throttler
+		txThrottler txthrottler.TxThrottler
 	}{{
 		input: "select * from t",
 		dbResponses: []dbResponse{{
@@ -267,7 +270,25 @@ func TestQueryExecutorPlans(t *testing.T) {
 		resultWant: emptyResult,
 		planWant:   "Show",
 		logWant:    "show create table mysql.`user`",
-	}}
+	}, {
+		input: "update test_table set a=1",
+		dbResponses: []dbResponse{{
+			query:  "update test_table set a = 1 limit 10001",
+			result: dmlResult,
+		}},
+		errorWant:   errTxThrottled,
+		txThrottler: &mockTxThrottler{true},
+	}, {
+		input:       "update test_table set a=1",
+		passThrough: true,
+		dbResponses: []dbResponse{{
+			query:  "update test_table set a = 1 limit 10001",
+			result: dmlResult,
+		}},
+		errorWant:   errTxThrottled,
+		txThrottler: &mockTxThrottler{true},
+	},
+	}
 	for _, tcase := range testcases {
 		t.Run(tcase.input, func(t *testing.T) {
 			db := setUpQueryExecutorTest(t)
@@ -277,6 +298,9 @@ func TestQueryExecutorPlans(t *testing.T) {
 			}
 			ctx := context.Background()
 			tsv := newTestTabletServer(ctx, noFlags, db)
+			if tcase.txThrottler != nil {
+				tsv.txThrottler = tcase.txThrottler
+			}
 			tsv.config.DB.DBName = "ks"
 			defer tsv.StopService()
 
@@ -285,32 +309,39 @@ func TestQueryExecutorPlans(t *testing.T) {
 			// Test outside a transaction.
 			qre := newTestQueryExecutor(ctx, tsv, tcase.input, 0)
 			got, err := qre.Execute()
-			require.NoError(t, err, tcase.input)
-			assert.Equal(t, tcase.resultWant, got, tcase.input)
-			assert.Equal(t, tcase.planWant, qre.logStats.PlanType, tcase.input)
-			assert.Equal(t, tcase.logWant, qre.logStats.RewrittenSQL(), tcase.input)
-
+			if tcase.errorWant == nil {
+				require.NoError(t, err, tcase.input)
+				assert.Equal(t, tcase.resultWant, got, tcase.input)
+				assert.Equal(t, tcase.planWant, qre.logStats.PlanType, tcase.input)
+				assert.Equal(t, tcase.logWant, qre.logStats.RewrittenSQL(), tcase.input)
+			} else {
+				assert.True(t, vterrors.Equals(err, tcase.errorWant))
+			}
 			// Wait for the existing query to be processed by the cache
 			tsv.QueryPlanCacheWait()
 
 			// Test inside a transaction.
 			target := tsv.sm.Target()
 			state, err := tsv.Begin(ctx, target, nil)
-			require.NoError(t, err)
-			require.NotNil(t, state.TabletAlias, "alias should not be nil")
-			assert.Equal(t, tsv.alias, state.TabletAlias, "Wrong alias returned by Begin")
-			defer tsv.Commit(ctx, target, state.TransactionID)
+			if tcase.errorWant == nil {
+				require.NoError(t, err)
+				require.NotNil(t, state.TabletAlias, "alias should not be nil")
+				assert.Equal(t, tsv.alias, state.TabletAlias, "Wrong alias returned by Begin")
+				defer tsv.Commit(ctx, target, state.TransactionID)
 
-			qre = newTestQueryExecutor(ctx, tsv, tcase.input, state.TransactionID)
-			got, err = qre.Execute()
-			require.NoError(t, err, tcase.input)
-			assert.Equal(t, tcase.resultWant, got, "in tx: %v", tcase.input)
-			assert.Equal(t, tcase.planWant, qre.logStats.PlanType, "in tx: %v", tcase.input)
-			want := tcase.logWant
-			if tcase.inTxWant != "" {
-				want = tcase.inTxWant
+				qre = newTestQueryExecutor(ctx, tsv, tcase.input, state.TransactionID)
+				got, err = qre.Execute()
+				require.NoError(t, err, tcase.input)
+				assert.Equal(t, tcase.resultWant, got, "in tx: %v", tcase.input)
+				assert.Equal(t, tcase.planWant, qre.logStats.PlanType, "in tx: %v", tcase.input)
+				want := tcase.logWant
+				if tcase.inTxWant != "" {
+					want = tcase.inTxWant
+				}
+				assert.Equal(t, want, qre.logStats.RewrittenSQL(), "in tx: %v", tcase.input)
+			} else {
+				assert.True(t, vterrors.Equals(err, tcase.errorWant))
 			}
-			assert.Equal(t, want, qre.logStats.RewrittenSQL(), "in tx: %v", tcase.input)
 		})
 	}
 }
@@ -1539,4 +1570,23 @@ func addQueryExecutorSupportedQueries(db *fakesqldb.DB) {
 			Type: sqltypes.Int64,
 		}},
 	})
+}
+
+type mockTxThrottler struct {
+	throttle bool
+}
+
+func (m mockTxThrottler) InitDBConfig(target *querypb.Target) {
+	panic("implement me")
+}
+
+func (m mockTxThrottler) Open() (err error) {
+	return nil
+}
+
+func (m mockTxThrottler) Close() {
+}
+
+func (m mockTxThrottler) Throttle(priority int) (result bool) {
+	return m.throttle
 }
