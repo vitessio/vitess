@@ -29,17 +29,20 @@ import (
 )
 
 var (
-	// At what point should we consider IO to the relay log to be stalled and
-	// return an error. This stall can happen e.g. if vplayer is stuck in a
-	// loop trying to process the previous relay log contents. This can happen
-	// e.g. if the queries it's executing are doing table scans and it thus
-	// cannot finish the transaction wrapping the previous contents before
-	// thus blocking further relay log writes until the binlog dump connection
-	// gets terminated by mysqld due to hitting slave_net_timeout.
+	// At what point should we consider IO to the relay log to be stalled and return
+	// an error. This stall can happen e.g. if vplayer is stuck in a loop trying to
+	// process the previous relay log contents. This can happen e.g. if the queries
+	// it's executing are doing table scans and it thus cannot complete the transaction
+	// wrapping the previous log contents -- which includes updating the pos field in
+	// the vreplication record to mark the new GTIDs that we've replicated in this
+	// latest batch -- thus eventually blocking further relay log writes once we've
+	// hit the configured max relay log items / size until the binlog dump connection
+	// gets terminated by mysqld due to hitting replica_net_timeout as once the relay
+	// log is full we cannot perform any more reads from the mysqld binlog stream.
 	relayLogProgressTimeout = 5 * time.Minute
 
 	// The error to return when we haven't made progress for the timeout.
-	ErrRelayLogTimeout = fmt.Errorf("relay log progress stalled; vplayer was likely unable to replicate the previous log content's transaction in a timely manner; examine the replicated queries' EXPLAIN output to see why they are taking unusually long")
+	ErrRelayLogTimeout = fmt.Errorf("relay log progress stalled; vplayer was likely unable to replicate the previous log content's transaction in a timely manner; examine the target mysqld instance health and the replicated queries' EXPLAIN output to see why queries are taking unusually long")
 )
 
 type relayLog struct {
@@ -59,8 +62,8 @@ type relayLog struct {
 	// hasItems is true if len(items)>0, ctx is not Done, and interuptFetch is false.
 	hasItems sync.Cond
 
-	// This is reset every time that we've made progress with the relay log. If this
-	// hits the progressTimeout then we end the relay log work and return an error.
+	// progressTimer is reset every time that we've made progress with the relay log. If
+	// this hits the progressTimeout then we end the relay log work and return an error.
 	progressTimer *time.Timer
 	// lastError is set if the we encountered an error that should end the relay log work.
 	lastError atomic.Pointer[error]
@@ -104,7 +107,7 @@ func (rl *relayLog) Send(events []*binlogdatapb.VEvent) error {
 	for rl.curSize > rl.maxSize || len(rl.items) >= rl.maxItems {
 		rl.canAccept.Wait()
 		rl.progressTimer.Reset(relayLogProgressTimeout)
-		// Be sure that the vplayer contex is not done.
+		// See if we should exit.
 		if err := rl.checkDone(); err != nil {
 			return err
 		}
@@ -127,6 +130,7 @@ func (rl *relayLog) Fetch() ([][]*binlogdatapb.VEvent, error) {
 	defer cancelTimer()
 	for len(rl.items) == 0 && !rl.timedout {
 		rl.hasItems.Wait()
+		// See if we should exit.
 		if err := rl.checkDone(); err != nil {
 			return nil, err
 		}
@@ -139,6 +143,8 @@ func (rl *relayLog) Fetch() ([][]*binlogdatapb.VEvent, error) {
 	return items, nil
 }
 
+// checkDone checks to see if we've encounterd a fatal error and should thus end our
+// work and return the error back to the vplayer.
 func (rl *relayLog) checkDone() error {
 	select {
 	case <-rl.ctx.Done():

@@ -3352,6 +3352,9 @@ func TestPlayerBatchMode(t *testing.T) {
 	}
 }
 
+// TestPlayerStalls confirms that the vplayer will detect a relay log IO stall
+// and generate a meaningful error -- which is stored in the vreplication record
+// and the vreplication_log table, as well as being logged -- when it does.
 func TestPlayerStalls(t *testing.T) {
 	ogrlpt := relayLogProgressTimeout
 	orlmi := relayLogMaxItems
@@ -3367,7 +3370,7 @@ func TestPlayerStalls(t *testing.T) {
 	// So each relay log batch will be a single statement transaction.
 	relayLogMaxItems = 1
 	// Don't retry the workflow if it goes into the error state.
-	retryDelay = 5 * time.Minute
+	retryDelay = 10 * time.Minute
 	testTimeout := relayLogProgressTimeout * 3
 
 	defer deleteTablet(addTablet(100))
@@ -3388,10 +3391,10 @@ func TestPlayerStalls(t *testing.T) {
 		Filter:   filter,
 		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
 	}
-	vrcancel, _ := startVReplication(t, bls, "")
-	defer vrcancel()
+	cancel, vrID := startVReplication(t, bls, "")
+	defer cancel()
 
-	stallSimulator := fmt.Sprintf("update t1 set val1 = concat(sleep (%d), val1) where id = 1", int64(testTimeout.Seconds()))
+	stallSimulator := fmt.Sprintf("update t1 set val1 = concat(sleep (%d), val1) where id = %d", int64(testTimeout.Seconds()), vrID)
 
 	input := []string{
 		"set @@session.binlog_format='STATEMENT'",                            // As we are using the sleep function in the query to simulate a stall
