@@ -100,6 +100,9 @@ func (h *Horizon) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.
 	}
 
 	newExpr := semantics.RewriteDerivedTableExpression(expr, tableInfo)
+	if ctx.JoinPredInProgress != nil {
+		ctx.AddJoinPredicates(ctx.JoinPredInProgress, newExpr)
+	}
 	if ContainsAggr(ctx, newExpr) {
 		return newFilter(h, expr)
 	}

@@ -163,7 +163,9 @@ func (aj *ApplyJoin) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sql
 		col := breakExpressionInLHSandRHSForApplyJoin(ctx, pred, TableID(aj.LHS))
 		aj.JoinPredicates.add(col)
 		ctx.AddJoinPredicates(pred, col.RHSExpr)
+		ctx.JoinPredInProgress = pred
 		rhs = rhs.AddPredicate(ctx, col.RHSExpr)
+		ctx.JoinPredInProgress = nil
 	}
 	aj.RHS = rhs
 }

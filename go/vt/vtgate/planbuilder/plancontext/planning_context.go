@@ -28,6 +28,7 @@ type PlanningContext struct {
 	SemTable     *semantics.SemTable
 	VSchema      VSchema
 
+	JoinPredInProgress sqlparser.Expr
 	// joinPredicates maps each original join predicate (key) to a slice of
 	// variations of the RHS predicates (value). This map is used to handle
 	// different scenarios in join planning, where the RHS predicates are

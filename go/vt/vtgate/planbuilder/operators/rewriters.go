@@ -218,6 +218,9 @@ func bottomUp(
 			childID = childID.Merge(resolveID(oldInputs[0]))
 		}
 		in, changed := bottomUp(operator, childID, resolveID, rewriter, shouldVisit, false)
+		if DebugOperatorTree && changed.Changed() {
+			fmt.Println(ToTree(in))
+		}
 		anythingChanged = anythingChanged.Merge(changed)
 		newInputs[i] = in
 	}
