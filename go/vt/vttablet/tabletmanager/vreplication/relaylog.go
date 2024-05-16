@@ -17,32 +17,13 @@ limitations under the License.
 package vreplication
 
 import (
-	"fmt"
 	"io"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"context"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-)
-
-var (
-	// At what point should we consider IO to the relay log to be stalled and return
-	// an error. This stall can happen e.g. if vplayer is stuck in a loop trying to
-	// process the previous relay log contents. This can happen e.g. if the queries
-	// it's executing are doing table scans and it thus cannot complete the transaction
-	// wrapping the previous log contents -- which includes updating the pos field in
-	// the vreplication record to mark the new GTIDs that we've replicated in this
-	// latest batch -- thus eventually blocking further relay log writes once we've
-	// hit the configured max relay log items / size until the binlog dump connection
-	// gets terminated by mysqld due to hitting replica_net_timeout as once the relay
-	// log is full we cannot perform any more reads from the mysqld binlog stream.
-	relayLogProgressTimeout = 2 * time.Minute
-
-	// The error to return when we haven't made progress for the timeout.
-	ErrRelayLogTimeout = fmt.Errorf("relay log progress stalled; vplayer was likely unable to replicate the previous log content's transaction in a timely manner; examine the target mysqld instance health and the replicated queries' EXPLAIN output to see why queries are taking unusually long")
 )
 
 type relayLog struct {
@@ -61,12 +42,6 @@ type relayLog struct {
 	canAccept sync.Cond
 	// hasItems is true if len(items)>0, ctx is not Done, and interuptFetch is false.
 	hasItems sync.Cond
-
-	// progressTimer is reset every time that we've made progress with the relay log. If
-	// this hits the progressTimeout then we end the relay log work and return an error.
-	progressTimer *time.Timer
-	// lastError is set if the we encountered an error that should end the relay log work.
-	lastError atomic.Pointer[error]
 }
 
 func newRelayLog(ctx context.Context, maxItems, maxSize int) *relayLog {
@@ -78,16 +53,9 @@ func newRelayLog(ctx context.Context, maxItems, maxSize int) *relayLog {
 	rl.canAccept.L = &rl.mu
 	rl.hasItems.L = &rl.mu
 
-	rl.progressTimer = time.NewTimer(relayLogProgressTimeout)
-
-	// Any time the context is done or progress has stalled, wake up all waiters to
-	// make them exit.
+	// Any time the context is done wake up all waiters to make them exit.
 	go func() {
-		select {
-		case <-ctx.Done():
-		case <-rl.progressTimer.C:
-			rl.lastError.Store(&ErrRelayLogTimeout)
-		}
+		<-ctx.Done()
 		rl.mu.Lock()
 		defer rl.mu.Unlock()
 		rl.canAccept.Broadcast()
@@ -106,14 +74,14 @@ func (rl *relayLog) Send(events []*binlogdatapb.VEvent) error {
 	}
 	for rl.curSize > rl.maxSize || len(rl.items) >= rl.maxItems {
 		rl.canAccept.Wait()
-		rl.progressTimer.Reset(relayLogProgressTimeout)
 		// See if we should exit.
 		if err := rl.checkDone(); err != nil {
 			return err
 		}
 	}
 	rl.items = append(rl.items, events)
-	rl.curSize += eventsSize(events)
+	evsize := eventsSize(events)
+	rl.curSize += evsize
 	rl.hasItems.Broadcast()
 	return nil
 }
@@ -150,9 +118,6 @@ func (rl *relayLog) checkDone() error {
 	case <-rl.ctx.Done():
 		return io.EOF
 	default:
-		if rl.lastError.Load() != nil {
-			return *rl.lastError.Load()
-		}
 	}
 	return nil
 }

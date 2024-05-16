@@ -3356,25 +3356,30 @@ func TestPlayerBatchMode(t *testing.T) {
 // and generate a meaningful error -- which is stored in the vreplication record
 // and the vreplication_log table, as well as being logged -- when it does.
 func TestPlayerStalls(t *testing.T) {
-	ogrlpt := relayLogProgressTimeout
+	defer deleteTablet(addTablet(100))
+
+	ogvpt := vplayerProgressTimeout
 	orlmi := relayLogMaxItems
 	ord := retryDelay
 	defer func() {
-		relayLogProgressTimeout = ogrlpt
+		vplayerProgressTimeout = ogvpt
 		relayLogMaxItems = orlmi
 		retryDelay = ord
 	}()
 
-	// Shorten the timeout for the test.
-	relayLogProgressTimeout = 10 * time.Second
+	// Shorten the timeout for the test. With the default time the test would
+	// take 5+ minutes to run.
+	vplayerProgressTimeout = 10 * time.Second
 	// So each relay log batch will be a single statement transaction.
 	relayLogMaxItems = 1
 	// Don't retry the workflow if it goes into the error state.
 	retryDelay = 10 * time.Minute
-	testTimeout := relayLogProgressTimeout * 3
+	maxTimeToRetryError = 0
 
-	defer deleteTablet(addTablet(100))
+	testTimeout := vplayerProgressTimeout * 3
+
 	execStatements(t, []string{
+		"set @@global.binlog_format='STATEMENT'", // As we are using the sleep function in the query to simulate a stall
 		"create table t1(id bigint, val1 varchar(1000), primary key(id))",
 		fmt.Sprintf("create table %s.t1(id bigint, val1 varchar(1000), primary key(id))", vrepldb),
 	})
@@ -3391,10 +3396,11 @@ func TestPlayerStalls(t *testing.T) {
 		Filter:   filter,
 		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
 	}
-	cancel, vrID := startVReplication(t, bls, "")
+	cancel, _ := startVReplication(t, bls, "")
 	defer cancel()
 
-	stallSimulator := fmt.Sprintf("update t1 set val1 = concat(sleep (%d), val1) where id = %d", int64(testTimeout.Seconds()), vrID)
+	//stallSimulator := fmt.Sprintf("update t1 set val1 = concat(sleep (%d), val1)", int64(testTimeout.Seconds()))
+	stallSimulator := "update t1 set val1 = concat(sleep (5), val1)"
 
 	input := []string{
 		"set @@session.binlog_format='STATEMENT'",                            // As we are using the sleep function in the query to simulate a stall
@@ -3407,7 +3413,7 @@ func TestPlayerStalls(t *testing.T) {
 		"insert into t1(id, val1) values (1, 'aaa'), (2, 'bbb'), (3, 'ccc')",
 		// This is what we want in the end, our improved error message.
 		// This is also the same message that gets logged.
-		"/update _vt.vreplication set message='relay log progress stalled.*",
+		"/update _vt.vreplication set message=.*progress stalled.*",
 	)
 
 	execStatements(t, input)
