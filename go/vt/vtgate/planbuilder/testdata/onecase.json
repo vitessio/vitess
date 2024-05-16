@@ -1,7 +1,7 @@
 [
   {
     "comment": "Add your test case here for debugging and run go test -run=One.",
-    "query": "",
+    "query": "select 1 from user join (select id as uid from user) as t where t.uid = user.id",
     "plan": {
 
     }

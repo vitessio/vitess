@@ -116,6 +116,7 @@ func TestDerivedTablesWithLimit(t *testing.T) {
 
 // TestDerivedTableColumnAliasWithJoin tests the derived table having alias column and using it in the join condition
 func TestDerivedTableColumnAliasWithJoin(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 20, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 
