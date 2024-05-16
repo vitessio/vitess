@@ -103,6 +103,9 @@ const (
 
 	defaultReplicationLagQuery = "select unix_timestamp(now(6))-max(ts/1000000000) as replication_lag from %s.heartbeat"
 	threadsRunningQuery        = "show global status like 'threads_running'"
+
+	inventoryPrefix       = "inventory/"
+	throttlerConfigPrefix = "config/"
 )
 
 var (
@@ -369,6 +372,12 @@ func (throttler *Throttler) normalizeThrottlerConfig(throttlerConfig *topodatapb
 	if throttlerConfig.ThrottledApps == nil {
 		throttlerConfig.ThrottledApps = make(map[string]*topodatapb.ThrottledAppRule)
 	}
+	if throttlerConfig.AppCheckedMetrics == nil {
+		throttlerConfig.AppCheckedMetrics = make(map[string]*topodatapb.ThrottlerConfig_MetricNames)
+	}
+	if throttlerConfig.MetricThresholds == nil {
+		throttlerConfig.MetricThresholds = make(map[string]float64)
+	}
 	if throttlerConfig.CustomQuery == "" {
 		// no custom query; we check replication lag
 		if throttlerConfig.Threshold == 0 {
@@ -403,6 +412,24 @@ func (throttler *Throttler) WatchSrvKeyspaceCallback(srvks *topodatapb.SrvKeyspa
 	return true
 }
 
+// convergeMetricThresholds looks at metric thresholds as defined by:
+//   - inventory (also includes changes to throttler.MetricsThreshold). This always includes all known metrics
+//     ie lag, threads_running, etc...
+//   - throttler config. This can be a list of zero or more entries. These metrics override the inventory.
+func (throttler *Throttler) convergeMetricThresholds() {
+	for _, metricName := range base.KnownMetricNames {
+		if val, ok := throttler.mysqlMetricThresholds.Get(throttlerConfigPrefix + metricName.String()); ok {
+			// Value supplied by throttler config takes precendence
+			throttler.mysqlMetricThresholds.Set(metricName.String(), val, cache.DefaultExpiration)
+			continue
+		}
+		// metric not indicated in the throttler config, therefore we should use the default threshold for that metric
+		if val, ok := throttler.mysqlMetricThresholds.Get(inventoryPrefix + metricName.String()); ok {
+			throttler.mysqlMetricThresholds.Set(metricName.String(), val, cache.DefaultExpiration)
+		}
+	}
+}
+
 // applyThrottlerConfig receives a Throttlerconfig as read from SrvKeyspace, and applies the configuration.
 // This may cause the throttler to be enabled/disabled, and of course it affects the throttling query/threshold.
 // Note: you should be holding the initMutex when calling this function.
@@ -418,21 +445,18 @@ func (throttler *Throttler) applyThrottlerConfig(ctx context.Context, throttlerC
 	throttler.checkAsCheckSelf.Store(throttlerConfig.CheckAsCheckSelf)
 	{
 		// Throttled apps/rules
-		throttledAppsToRemove := map[string]bool{}
-		for app := range throttler.throttledApps.Items() {
-			throttledAppsToRemove[app] = true
-		}
 		for _, appRule := range throttlerConfig.ThrottledApps {
 			throttler.ThrottleApp(appRule.Name, protoutil.TimeFromProto(appRule.ExpiresAt).UTC(), appRule.Ratio, appRule.Exempt)
-			delete(throttledAppsToRemove, appRule.Name)
 		}
-		for app := range throttledAppsToRemove {
+		for app := range throttler.throttledAppsSnapshot() {
 			if app == throttlerapp.TestingAlwaysThrottlerName.String() {
 				// Never remove this app
 				continue
 			}
-			// This app was not listed in the config, so we should unthrottle it
-			throttler.UnthrottleApp(app)
+			if _, ok := throttlerConfig.ThrottledApps[app]; !ok {
+				// app not indicated in the throttler config, therefore should be removed from the map
+				throttler.UnthrottleApp(app)
+			}
 		}
 	}
 	{
@@ -453,6 +477,20 @@ func (throttler *Throttler) applyThrottlerConfig(ctx context.Context, throttlerC
 				throttler.appCheckedMetrics.Delete(app)
 			}
 		}
+	}
+	{
+		// Metric thresholds
+		for metricName, threshold := range throttlerConfig.MetricThresholds {
+			throttler.mysqlMetricThresholds.Set(throttlerConfigPrefix+metricName, threshold, cache.DefaultExpiration)
+		}
+		for metricName := range throttler.mysqlMetricThresholds.Items() {
+			if _, ok := throttlerConfig.MetricThresholds[metricName]; !ok {
+				// metric not indicated in the throttler config, therefore should be removed from the map
+				// so that we know to apply the inventory default threshold
+				throttler.mysqlMetricThresholds.Delete(throttlerConfigPrefix + metricName)
+			}
+		}
+		throttler.convergeMetricThresholds()
 	}
 	if throttlerConfig.Enabled {
 		go throttler.Enable()
@@ -1110,9 +1148,9 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 			// backwards compatibility to v19:
 			threshold = metricsThreshold
 		}
-		throttler.mysqlMetricThresholds.Set(metricName.String(), math.Float64frombits(threshold), cache.DefaultExpiration)
+		throttler.mysqlMetricThresholds.Set(inventoryPrefix+metricName.String(), math.Float64frombits(threshold), cache.DefaultExpiration)
 	}
-
+	throttler.convergeMetricThresholds()
 	clusterSettingsCopy := *mysqlSettings
 	// config may dynamically change, but internal structure (config.Settings().MySQLStore.Clusters in our case)
 	// is immutable and can only be _replaced_. Hence, it's safe to read in a goroutine:

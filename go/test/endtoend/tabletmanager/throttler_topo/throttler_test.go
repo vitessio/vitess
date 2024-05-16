@@ -264,7 +264,7 @@ func TestInitialThrottler(t *testing.T) {
 		waitForThrottleCheckStatus(t, primaryTablet, http.StatusOK)
 	})
 	t.Run("enabling throttler with very low threshold", func(t *testing.T) {
-		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, true, false, unreasonablyLowThreshold.Seconds(), useDefaultQuery, nil)
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, true, false, "", unreasonablyLowThreshold.Seconds(), useDefaultQuery, nil)
 		assert.NoError(t, err)
 
 		// Wait for the throttler to be enabled everywhere with the new config.
@@ -276,7 +276,7 @@ func TestInitialThrottler(t *testing.T) {
 		waitForThrottleCheckStatus(t, primaryTablet, http.StatusTooManyRequests)
 	})
 	t.Run("disabling throttler", func(t *testing.T) {
-		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, false, true, unreasonablyLowThreshold.Seconds(), useDefaultQuery, nil)
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, false, true, "", unreasonablyLowThreshold.Seconds(), useDefaultQuery, nil)
 		assert.NoError(t, err)
 
 		// Wait for the throttler to be disabled everywhere.
@@ -290,7 +290,7 @@ func TestInitialThrottler(t *testing.T) {
 	t.Run("enabling throttler, again", func(t *testing.T) {
 		// Enable the throttler again with the default query which also moves us back
 		// to the default threshold.
-		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, true, false, 0, useDefaultQuery, nil)
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, true, false, "", 0, useDefaultQuery, nil)
 		assert.NoError(t, err)
 
 		// Wait for the throttler to be enabled everywhere again with the default config.
@@ -302,7 +302,7 @@ func TestInitialThrottler(t *testing.T) {
 		waitForThrottleCheckStatus(t, primaryTablet, http.StatusTooManyRequests)
 	})
 	t.Run("setting high threshold", func(t *testing.T) {
-		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, false, false, extremelyHighThreshold.Seconds(), useDefaultQuery, nil)
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, false, false, "", extremelyHighThreshold.Seconds(), useDefaultQuery, nil)
 		assert.NoError(t, err)
 
 		// Wait for the throttler to be enabled everywhere with new config.
@@ -314,7 +314,7 @@ func TestInitialThrottler(t *testing.T) {
 		waitForThrottleCheckStatus(t, primaryTablet, http.StatusOK)
 	})
 	t.Run("setting low threshold", func(t *testing.T) {
-		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, false, false, throttler.DefaultThreshold.Seconds(), useDefaultQuery, nil)
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, false, false, "", throttler.DefaultThreshold.Seconds(), useDefaultQuery, nil)
 		assert.NoError(t, err)
 
 		// Wait for the throttler to be enabled everywhere with new config.
@@ -451,7 +451,7 @@ func TestLag(t *testing.T) {
 			ExpiresAt: protoutil.TimeToProto(time.Now().Add(time.Hour)),
 			Exempt:    true,
 		}
-		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, false, false, throttler.DefaultThreshold.Seconds(), useDefaultQuery, appRule)
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, false, false, "", throttler.DefaultThreshold.Seconds(), useDefaultQuery, appRule)
 		assert.NoError(t, err)
 		waitForThrottleCheckStatus(t, primaryTablet, http.StatusOK)
 	})
@@ -460,7 +460,7 @@ func TestLag(t *testing.T) {
 			Name:      testAppName,
 			ExpiresAt: protoutil.TimeToProto(time.Now()),
 		}
-		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, false, false, throttler.DefaultThreshold.Seconds(), useDefaultQuery, appRule)
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, false, false, "", throttler.DefaultThreshold.Seconds(), useDefaultQuery, appRule)
 		assert.NoError(t, err)
 		waitForThrottleCheckStatus(t, primaryTablet, http.StatusTooManyRequests)
 	})
@@ -470,7 +470,7 @@ func TestLag(t *testing.T) {
 			ExpiresAt: protoutil.TimeToProto(time.Now().Add(time.Hour)),
 			Exempt:    true,
 		}
-		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, false, false, throttler.DefaultThreshold.Seconds(), useDefaultQuery, appRule)
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, false, false, "", throttler.DefaultThreshold.Seconds(), useDefaultQuery, appRule)
 		assert.NoError(t, err)
 		waitForThrottleCheckStatus(t, primaryTablet, http.StatusOK)
 	})
@@ -480,7 +480,7 @@ func TestLag(t *testing.T) {
 			Ratio:     throttle.DefaultThrottleRatio,
 			ExpiresAt: protoutil.TimeToProto(time.Now().Add(time.Hour)),
 		}
-		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, false, false, throttler.DefaultThreshold.Seconds(), useDefaultQuery, appRule)
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, false, false, "", throttler.DefaultThreshold.Seconds(), useDefaultQuery, appRule)
 		assert.NoError(t, err)
 		waitForThrottleCheckStatus(t, primaryTablet, http.StatusExpectationFailed)
 	})
@@ -489,7 +489,7 @@ func TestLag(t *testing.T) {
 			Name:      testAppName,
 			ExpiresAt: protoutil.TimeToProto(time.Now()),
 		}
-		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, false, false, throttler.DefaultThreshold.Seconds(), useDefaultQuery, appRule)
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, false, false, "", throttler.DefaultThreshold.Seconds(), useDefaultQuery, appRule)
 		assert.NoError(t, err)
 		waitForThrottleCheckStatus(t, primaryTablet, http.StatusOK)
 	})
@@ -498,7 +498,7 @@ func TestLag(t *testing.T) {
 			Name:      throttlerapp.AllName.String(),
 			ExpiresAt: protoutil.TimeToProto(time.Now()),
 		}
-		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, false, false, throttler.DefaultThreshold.Seconds(), useDefaultQuery, appRule)
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, false, false, "", throttler.DefaultThreshold.Seconds(), useDefaultQuery, appRule)
 		assert.NoError(t, err)
 		waitForThrottleCheckStatus(t, primaryTablet, http.StatusTooManyRequests)
 	})
@@ -545,7 +545,7 @@ func TestCustomQuery(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
 	t.Run("enabling throttler with custom query and threshold", func(t *testing.T) {
-		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, true, false, customThreshold, customQuery, nil)
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, true, false, "", customThreshold, customQuery, nil)
 		assert.NoError(t, err)
 
 		// Wait for the throttler to be enabled everywhere with new custom config.
@@ -610,7 +610,7 @@ func TestRestoreDefaultQuery(t *testing.T) {
 
 	// Validate going back from custom-query to default-query (replication lag) still works.
 	t.Run("enabling throttler with default query and threshold", func(t *testing.T) {
-		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, true, false, throttler.DefaultThreshold.Seconds(), useDefaultQuery, nil)
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, true, false, "", throttler.DefaultThreshold.Seconds(), useDefaultQuery, nil)
 		assert.NoError(t, err)
 
 		// Wait for the throttler to be up and running everywhere again with the default config.
@@ -625,6 +625,52 @@ func TestRestoreDefaultQuery(t *testing.T) {
 	})
 	t.Run("validating pushback response from throttler on default threshold once heartbeats go stale", func(t *testing.T) {
 		time.Sleep(2 * onDemandHeartbeatDuration) // just... really wait long enough, make sure on-demand stops
+		waitForThrottleCheckStatus(t, primaryTablet, http.StatusTooManyRequests)
+	})
+}
+
+func TestUpdateMetricThresholds(t *testing.T) {
+	t.Run("validating pushback from throttler", func(t *testing.T) {
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, false, false, "", throttler.DefaultThreshold.Seconds(), useDefaultQuery, nil)
+		assert.NoError(t, err)
+		// Wait for the throttler to be enabled everywhere with new config.
+		for _, tablet := range []cluster.Vttablet{*primaryTablet, *replicaTablet} {
+			throttler.WaitForThrottlerStatusEnabled(t, &tablet, true, &throttler.Config{Query: throttler.DefaultQuery, Threshold: throttler.DefaultThreshold.Seconds()}, throttlerEnabledTimeout)
+		}
+		waitForThrottleCheckStatus(t, primaryTablet, http.StatusTooManyRequests)
+	})
+	t.Run("setting low general threshold, and high threshold for 'lag' metric", func(t *testing.T) {
+		{
+			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, false, false, "lag", extremelyHighThreshold.Seconds(), useDefaultQuery, nil)
+			assert.NoError(t, err)
+		}
+		{
+			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, false, false, "", unreasonablyLowThreshold.Seconds(), useDefaultQuery, nil)
+			assert.NoError(t, err)
+		}
+		// Wait for the throttler to be enabled everywhere with new config.
+		for _, tablet := range []cluster.Vttablet{*primaryTablet, *replicaTablet} {
+			throttler.WaitForThrottlerStatusEnabled(t, &tablet, true, &throttler.Config{Query: throttler.DefaultQuery, Threshold: unreasonablyLowThreshold.Seconds()}, throttlerEnabledTimeout)
+		}
+	})
+	t.Run("validating OK response from throttler thanks to high 'lag' threshold", func(t *testing.T) {
+		// Note that the default threshold is extremely low, but gets overriden.
+		waitForThrottleCheckStatus(t, primaryTablet, http.StatusOK)
+	})
+	t.Run("removing explicit 'lag' threshold", func(t *testing.T) {
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, false, false, "lag", 0, useDefaultQuery, nil)
+		assert.NoError(t, err)
+	})
+	t.Run("validating pushback from throttler again", func(t *testing.T) {
+		waitForThrottleCheckStatus(t, primaryTablet, http.StatusTooManyRequests)
+	})
+	t.Run("restoring standard threshold", func(t *testing.T) {
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, false, false, "", throttler.DefaultThreshold.Seconds(), useDefaultQuery, nil)
+		assert.NoError(t, err)
+		// Wait for the throttler to be enabled everywhere with new config.
+		for _, tablet := range []cluster.Vttablet{*primaryTablet, *replicaTablet} {
+			throttler.WaitForThrottlerStatusEnabled(t, &tablet, true, &throttler.Config{Query: throttler.DefaultQuery, Threshold: throttler.DefaultThreshold.Seconds()}, throttlerEnabledTimeout)
+		}
 		waitForThrottleCheckStatus(t, primaryTablet, http.StatusTooManyRequests)
 	})
 }

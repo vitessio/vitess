@@ -247,7 +247,7 @@ func TestSchemaChange(t *testing.T) {
 		}
 	})
 	t.Run("updating throttler config", func(t *testing.T) {
-		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, true, false, customThreshold, noCustomQuery, nil)
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, true, false, "", customThreshold, noCustomQuery, nil)
 		require.NoError(t, err)
 	})
 

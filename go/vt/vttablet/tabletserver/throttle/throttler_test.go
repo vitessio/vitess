@@ -300,6 +300,9 @@ func TestApplyThrottlerConfig(t *testing.T) {
 			"app1":                              {Names: []string{"lag", "threads_running"}},
 			throttlerapp.OnlineDDLName.String(): {Names: []string{"loadavg"}},
 		},
+		MetricThresholds: map[string]float64{
+			"threads_running": 3.0,
+		},
 	}
 	assert.Equal(t, 0.75, throttler.GetMetricsThreshold())
 	throttler.appCheckedMetrics.Set("app1", base.MetricNames{base.ThreadsRunningMetricName}, cache.DefaultExpiration)
@@ -316,18 +319,126 @@ func TestApplyThrottlerConfig(t *testing.T) {
 	assert.False(t, throttler.IsEnabled())
 	assert.Equal(t, float64(14), throttler.GetMetricsThreshold())
 	assert.Equal(t, 2, throttler.appCheckedMetrics.ItemCount())
-	{
-		value, ok := throttler.appCheckedMetrics.Get("app1")
-		assert.True(t, ok)
-		names := value.(base.MetricNames)
-		assert.Equal(t, base.MetricNames{base.LagMetricName, base.ThreadsRunningMetricName}, names)
-	}
-	{
-		value, ok := throttler.appCheckedMetrics.Get(throttlerapp.OnlineDDLName.String())
-		assert.True(t, ok)
-		names := value.(base.MetricNames)
-		assert.Equal(t, base.MetricNames{base.LoadAvgMetricName}, names)
-	}
+	t.Run("checked metrics", func(t *testing.T) {
+		{
+			value, ok := throttler.appCheckedMetrics.Get("app1")
+			assert.True(t, ok)
+			names := value.(base.MetricNames)
+			assert.Equal(t, base.MetricNames{base.LagMetricName, base.ThreadsRunningMetricName}, names)
+		}
+		{
+			value, ok := throttler.appCheckedMetrics.Get(throttlerapp.OnlineDDLName.String())
+			assert.True(t, ok)
+			names := value.(base.MetricNames)
+			assert.Equal(t, base.MetricNames{base.LoadAvgMetricName}, names)
+		}
+	})
+	t.Run("metric thresholds", func(t *testing.T) {
+		{
+			val, ok := throttler.mysqlMetricThresholds.Get("lag")
+			require.True(t, ok)
+			assert.Equal(t, float64(0.75), val)
+		}
+		{
+			val, ok := throttler.mysqlMetricThresholds.Get("threads_running")
+			require.True(t, ok)
+			assert.Equal(t, float64(3.0), val)
+		}
+		{
+			val, ok := throttler.mysqlMetricThresholds.Get("loadavg")
+			require.True(t, ok)
+			assert.Equal(t, float64(1.0), val)
+		}
+	})
+}
+
+func TestApplyThrottlerConfigMetricThresholds(t *testing.T) {
+	// This test applies a specific 'lag' metric threshold, and validates that it overrides
+	// the default threshold.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	throttler := newTestThrottler()
+	runThrottler(t, ctx, throttler, 10*time.Second, func(t *testing.T, ctx context.Context) {
+		assert.True(t, throttler.IsEnabled())
+
+		flags := &CheckFlags{
+			Scope:                 base.SelfScope,
+			SkipRequestHeartbeats: true,
+		}
+		t.Run("check before apply", func(t *testing.T) {
+			checkResult := throttler.Check(ctx, throttlerapp.VitessName.String(), nil, flags)
+			require.NotNil(t, checkResult)
+			assert.EqualValues(t, 0.3, checkResult.Value) // self lag value
+			assert.EqualValues(t, http.StatusOK, checkResult.StatusCode)
+			assert.Equal(t, 1, len(checkResult.Metrics))
+		})
+		t.Run("apply low threshold", func(t *testing.T) {
+			assert.Equal(t, 0.75, throttler.GetMetricsThreshold())
+			throttlerConfig := &topodatapb.ThrottlerConfig{
+				Enabled:   true,
+				Threshold: 0.0033,
+			}
+			throttler.applyThrottlerConfig(ctx, throttlerConfig)
+			assert.Equal(t, 0.0033, throttler.GetMetricsThreshold())
+		})
+		t.Run("check low threshold", func(t *testing.T) {
+			time.Sleep(time.Second)
+			{
+				_, ok := throttler.mysqlMetricThresholds.Get("config/lag")
+				assert.False(t, ok)
+			}
+			assert.Equal(t, float64(0.0033), throttler.GetMetricsThreshold())
+			checkResult := throttler.Check(ctx, throttlerapp.VitessName.String(), nil, flags)
+			require.NotNil(t, checkResult)
+			assert.EqualValues(t, 0.3, checkResult.Value, "unexpected result: %+v", checkResult) // self lag value
+			assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
+			assert.Equal(t, 1, len(checkResult.Metrics))
+		})
+		t.Run("apply low threshold but high 'lag' override", func(t *testing.T) {
+			throttlerConfig := &topodatapb.ThrottlerConfig{
+				Enabled:   true,
+				Threshold: 0.0033,
+				MetricThresholds: map[string]float64{
+					"lag": 4444.0,
+				},
+			}
+			throttler.applyThrottlerConfig(ctx, throttlerConfig)
+		})
+		t.Run("check with high 'lag' threshold", func(t *testing.T) {
+			time.Sleep(time.Second)
+			{
+				val, ok := throttler.mysqlMetricThresholds.Get("config/lag")
+				require.True(t, ok)
+				assert.Equal(t, float64(4444), val)
+			}
+			checkResult := throttler.Check(ctx, throttlerapp.VitessName.String(), nil, flags)
+			require.NotNil(t, checkResult)
+			assert.EqualValues(t, 0.3, checkResult.Value, "unexpected result: %+v", checkResult) // self lag value
+			assert.EqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
+			assert.Equal(t, 1, len(checkResult.Metrics))
+		})
+		cancel() // end test early
+	})
+
+	assert.False(t, throttler.IsEnabled())
+	assert.Equal(t, float64(0.0033), throttler.GetMetricsThreshold())
+	t.Run("metric thresholds", func(t *testing.T) {
+		{
+			val, ok := throttler.mysqlMetricThresholds.Get("config/lag")
+			require.True(t, ok)
+			assert.Equal(t, float64(4444), val)
+		}
+		{
+			val, ok := throttler.mysqlMetricThresholds.Get("inventory/lag")
+			require.True(t, ok)
+			assert.Equal(t, float64(0.0033), val)
+		}
+		{
+			val, ok := throttler.mysqlMetricThresholds.Get("lag")
+			require.True(t, ok)
+			assert.Equal(t, float64(4444), val)
+		}
+	})
 }
 
 func TestIsAppThrottled(t *testing.T) {
