@@ -28,17 +28,16 @@ import (
 	"sync/atomic"
 	"time"
 
-	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/mysqlctl"
-	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -557,7 +556,7 @@ func (vse *Engine) getInnoDBTrxHistoryLen(ctx context.Context, db dbconfigs.Conn
 	return histLen
 }
 
-// getMySQLReplicationLag attempts to get the seconds_behind_master value.
+// getMySQLReplicationLag attempts to get the seconds_behind_source value.
 // If the value cannot be determined for any reason then -1 is returned, which
 // means "unknown" or "irrelevant" (meaning it's not actively replicating).
 func (vse *Engine) getMySQLReplicationLag(ctx context.Context, db dbconfigs.Connector) int64 {
@@ -568,12 +567,11 @@ func (vse *Engine) getMySQLReplicationLag(ctx context.Context, db dbconfigs.Conn
 	}
 	defer conn.Close()
 
-	res, err := conn.ExecuteFetch(replicaLagQuery, 1, true)
-	if err != nil || len(res.Rows) != 1 || res.Rows[0] == nil {
+	status, err := conn.ShowReplicationStatus()
+	if err != nil {
 		return lagSecs
 	}
-	row := res.Named().Row()
-	return row.AsInt64("Seconds_Behind_Master", -1)
+	return int64(status.ReplicationLagSeconds)
 }
 
 // getMySQLEndpoint returns the host:port value for the vstreamer (MySQL) instance

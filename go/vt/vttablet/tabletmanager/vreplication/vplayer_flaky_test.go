@@ -3352,12 +3352,13 @@ func TestPlayerBatchMode(t *testing.T) {
 	}
 }
 
-// TestPlayerStalls confirms that the vplayer will detect a relay log IO stall
-// and generate a meaningful error -- which is stored in the vreplication record
-// and the vreplication_log table, as well as being logged -- when it does.
+// TestPlayerStalls confirms that the vplayer will detect a stall and generate
+// a meaningful error -- which is stored in the vreplication record and the
+// vreplication_log table as well as being logged -- when it does.
 func TestPlayerStalls(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
+	debugMode.Store(true)
 	ogvpt := vplayerProgressTimeout
 	orlmi := relayLogMaxItems
 	ord := retryDelay
@@ -3365,21 +3366,21 @@ func TestPlayerStalls(t *testing.T) {
 		vplayerProgressTimeout = ogvpt
 		relayLogMaxItems = orlmi
 		retryDelay = ord
+		debugMode.Store(false)
 	}()
 
-	// Shorten the timeout for the test. With the default time the test would
-	// take 5+ minutes to run.
-	vplayerProgressTimeout = 10 * time.Second
+	// Shorten the timeout for the test.
+	vplayerProgressTimeout = 5 * time.Second
 	// So each relay log batch will be a single statement transaction.
 	relayLogMaxItems = 1
+
 	// Don't retry the workflow if it goes into the error state.
 	retryDelay = 10 * time.Minute
-	maxTimeToRetryError = 0
+	maxTimeToRetryError = 1 * time.Second
 
-	testTimeout := vplayerProgressTimeout * 3
+	testTimeout := vplayerProgressTimeout * 100
 
 	execStatements(t, []string{
-		"set @@global.binlog_format='STATEMENT'", // As we are using the sleep function in the query to simulate a stall
 		"create table t1(id bigint, val1 varchar(1000), primary key(id))",
 		fmt.Sprintf("create table %s.t1(id bigint, val1 varchar(1000), primary key(id))", vrepldb),
 	})
@@ -3399,25 +3400,72 @@ func TestPlayerStalls(t *testing.T) {
 	cancel, _ := startVReplication(t, bls, "")
 	defer cancel()
 
-	//stallSimulator := fmt.Sprintf("update t1 set val1 = concat(sleep (%d), val1)", int64(testTimeout.Seconds()))
-	stallSimulator := "update t1 set val1 = concat(sleep (5), val1)"
-
-	input := []string{
-		"set @@session.binlog_format='STATEMENT'",                            // As we are using the sleep function in the query to simulate a stall
-		"insert into t1(id, val1) values (1, 'aaa'), (2, 'bbb'), (3, 'ccc')", // This should be the only query that gets replicated
-		stallSimulator, // This will cause a stall in the vplayer
-		"insert into t1(id, val1) values (4, 'ddd'), (5, 'eee'), (6, 'fff')",
-		"update t1 set val1 = 'zzz' where id = 1",
+	testcases := []struct {
+		name     string
+		input    []string
+		output   qh.ExpectationSequencer
+		preFunc  func() // This is run in a goroutine
+		postFunc func()
+	}{
+		{
+			name: "stall in vplayer with statements",
+			input: []string{
+				"set @@session.binlog_format='STATEMENT'",                            // As we are using the sleep function in the query to simulate a stall
+				"insert into t1(id, val1) values (1, 'aaa'), (2, 'bbb'), (3, 'ccc')", // This should be the only query that gets replicated
+				// This will cause a stall in the vplayer.
+				fmt.Sprintf("update t1 set val1 = concat(sleep (%d), val1)", int64(vplayerProgressTimeout.Seconds()+5)),
+				"insert into t1(id, val1) values (4, 'ddd'), (5, 'eee'), (6, 'fff')",
+				"update t1 set val1 = 'zzz' where id = 1",
+			},
+			output: qh.Expect(
+				"insert into t1(id, val1) values (1, 'aaa'), (2, 'bbb'), (3, 'ccc')",
+				// This will cause a stall to be detected in the vplayer. This is
+				// what we want in the end, our improved error message. This is also
+				// the same message that gets logged.
+				fmt.Sprintf("update t1 set val1 = concat(sleep (%d), val1)", int64(vplayerProgressTimeout.Seconds()+5)),
+				"/update _vt.vreplication set message=.*progress stalled.*",
+			),
+			postFunc: func() {
+				execStatements(t, []string{"set @@session.binlog_format='ROW'"})
+			},
+		},
+		/* TODO: get this working
+		{
+			name: "stall in vplayer with rows",
+			input: []string{
+				"insert into t1(id, val1) values (10, 'mmm'), (11, 'nnn'), (12, 'ooo')",
+				"update t1 set val1 = 'yyy' where id = 10",
+			},
+			preFunc: func() {
+				dbc, err := env.Mysqld.GetAllPrivsConnection(context.Background())
+				require.NoError(t, err)
+				defer dbc.Close()
+				stmt := fmt.Sprintf("lock table %s.t1 read; select sleep(%d); unlock tables",
+					vrepldb, int64(vplayerProgressTimeout.Seconds()+5))
+				_, _, err = dbc.ExecuteFetchMulti(stmt, 1, false)
+				require.NoError(t, err)
+			},
+			output: qh.Expect(
+				// Nothing should get replicated because of the table level lock held
+				// in the other connection from our preFunc.
+				"/update _vt.vreplication set message=.*progress stalled.*",
+			),
+		},
+		*/
 	}
-	output := qh.Expect(
-		"insert into t1(id, val1) values (1, 'aaa'), (2, 'bbb'), (3, 'ccc')",
-		// This is what we want in the end, our improved error message.
-		// This is also the same message that gets logged.
-		"/update _vt.vreplication set message=.*progress stalled.*",
-	)
 
-	execStatements(t, input)
-	expectNontxQueries(t, output, testTimeout)
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			execStatements(t, tc.input)
+			if tc.preFunc != nil {
+				go tc.preFunc()
+			}
+			expectNontxQueries(t, tc.output, testTimeout)
+			if tc.postFunc != nil {
+				tc.postFunc()
+			}
+		})
+	}
 }
 
 func expectJSON(t *testing.T, table string, values [][]string, id int, exec func(ctx context.Context, query string) (*sqltypes.Result, error)) {

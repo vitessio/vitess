@@ -53,7 +53,7 @@ func newRelayLog(ctx context.Context, maxItems, maxSize int) *relayLog {
 	rl.canAccept.L = &rl.mu
 	rl.hasItems.L = &rl.mu
 
-	// Any time the context is done wake up all waiters to make them exit.
+	// Any time context is done, wake up all waiters to make them exit.
 	go func() {
 		<-ctx.Done()
 		rl.mu.Lock()
@@ -64,7 +64,7 @@ func newRelayLog(ctx context.Context, maxItems, maxSize int) *relayLog {
 	return rl
 }
 
-// Send writes events to the relay log.
+// Send writes events to the relay log
 func (rl *relayLog) Send(events []*binlogdatapb.VEvent) error {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
@@ -74,19 +74,17 @@ func (rl *relayLog) Send(events []*binlogdatapb.VEvent) error {
 	}
 	for rl.curSize > rl.maxSize || len(rl.items) >= rl.maxItems {
 		rl.canAccept.Wait()
-		// See if we should exit.
 		if err := rl.checkDone(); err != nil {
 			return err
 		}
 	}
 	rl.items = append(rl.items, events)
-	evsize := eventsSize(events)
-	rl.curSize += evsize
+	rl.curSize += eventsSize(events)
 	rl.hasItems.Broadcast()
 	return nil
 }
 
-// Fetch returns all existing items in the relay log, and empties the log.
+// Fetch returns all existing items in the relay log, and empties the log
 func (rl *relayLog) Fetch() ([][]*binlogdatapb.VEvent, error) {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
@@ -98,7 +96,6 @@ func (rl *relayLog) Fetch() ([][]*binlogdatapb.VEvent, error) {
 	defer cancelTimer()
 	for len(rl.items) == 0 && !rl.timedout {
 		rl.hasItems.Wait()
-		// See if we should exit.
 		if err := rl.checkDone(); err != nil {
 			return nil, err
 		}
@@ -111,8 +108,6 @@ func (rl *relayLog) Fetch() ([][]*binlogdatapb.VEvent, error) {
 	return items, nil
 }
 
-// checkDone checks to see if we've encounterd a fatal error and should thus end our
-// work and return the error back to the vplayer.
 func (rl *relayLog) checkDone() error {
 	select {
 	case <-rl.ctx.Done():
