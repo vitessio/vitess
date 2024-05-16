@@ -69,6 +69,10 @@ func commandUpdateThrottlerConfig(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("throttle-app and unthrottle-app are mutually exclusive")
 	}
 
+	if updateThrottlerConfigOptions.MetricName != "" && !cmd.Flags().Changed("threshold") {
+		return fmt.Errorf("--metric-name flag requires --threshold flag. Set threshold to 0 to disable the metric threshold configuration")
+	}
+
 	updateThrottlerConfigOptions.CustomQuerySet = cmd.Flags().Changed("custom-query")
 	updateThrottlerConfigOptions.Keyspace = keyspace
 
