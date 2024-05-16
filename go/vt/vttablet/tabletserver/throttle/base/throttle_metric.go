@@ -56,6 +56,14 @@ func (names MetricNames) Contains(name MetricName) bool {
 	return false
 }
 
+func (names MetricNames) String() string {
+	s := make([]string, len(names))
+	for i, name := range names {
+		s[i] = name.String()
+	}
+	return strings.Join(s, ",")
+}
+
 const (
 	DefaultMetricName        MetricName = "default"
 	LagMetricName            MetricName = "lag"
