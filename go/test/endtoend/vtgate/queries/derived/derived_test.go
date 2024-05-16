@@ -113,3 +113,15 @@ func TestDerivedTablesWithLimit(t *testing.T) {
                 (SELECT id, user_id FROM music LIMIT 10) as m on u.id = m.user_id`,
 		`[[INT64(1) INT64(1)] [INT64(5) INT64(2)] [INT64(1) INT64(3)] [INT64(2) INT64(4)] [INT64(3) INT64(5)] [INT64(5) INT64(7)] [INT64(4) INT64(6)] [INT64(6) NULL]]`)
 }
+
+// TestDerivedTableColumnAliasWithJoin tests the derived table having alias column and using it in the join condition
+func TestDerivedTableColumnAliasWithJoin(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec(`SELECT user.id FROM user join (SELECT id as uid FROM user) t on t.uid = user.id`)
+	mcmp.Exec(`SELECT user.id FROM user left join (SELECT id as uid FROM user) t on t.uid = user.id`)
+	mcmp.Exec(`SELECT user.id FROM user join (SELECT id FROM user) t(uid) on t.uid = user.id`)
+	mcmp.Exec(`SELECT user.id FROM user left join (SELECT id FROM user) t(uid) on t.uid = user.id`)
+}

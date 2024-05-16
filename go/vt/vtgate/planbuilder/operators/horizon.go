@@ -99,7 +99,7 @@ func (h *Horizon) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.
 		panic(err)
 	}
 
-	newExpr := semantics.RewriteDerivedTableExpression(expr, tableInfo)
+	newExpr := ctx.RewriteDerivedTableExpression(expr, tableInfo)
 	if sqlparser.ContainsAggregation(newExpr) {
 		return newFilter(h, expr)
 	}
