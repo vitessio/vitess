@@ -52,6 +52,7 @@ func TestToNamedResult(t *testing.T) {
 	for i := range in.Rows {
 		require.Equal(t, in.Rows[i][0], named.Rows[i]["id"])
 		require.Equal(t, int64(i), named.Rows[i].AsInt64("id", 0))
+		require.Equal(t, int32(i), named.Rows[i].AsInt32("id", 0))
 
 		require.Equal(t, in.Rows[i][1], named.Rows[i]["status"])
 		require.Equal(t, fmt.Sprintf("s%d", i), named.Rows[i].AsString("status", "notfound"))
@@ -172,4 +173,50 @@ func TestRow(t *testing.T) {
 			assert.Equal(t, tt.expectedRow, tt.res.Row())
 		})
 	}
+}
+
+func TestAsBool(t *testing.T) {
+	row := RowNamedValues{
+		"testFalse": MakeTrusted(Int64, []byte("0")),
+		"testTrue":  MakeTrusted(Int64, []byte("1")),
+	}
+
+	r := row.AsBool("testFalse", true)
+	assert.False(t, r)
+
+	r = row.AsBool("testTrue", false)
+	assert.True(t, r)
+
+	r = row.AsBool("invalidField", true)
+	assert.True(t, r)
+}
+
+func TestAsBytes(t *testing.T) {
+	row := RowNamedValues{
+		"testField": MakeTrusted(Int64, []byte("1002")),
+	}
+
+	r := row.AsBytes("testField", []byte("default"))
+	assert.Equal(t, []byte("1002"), r)
+
+	r = row.AsBytes("invalidField", []byte("default"))
+	assert.Equal(t, []byte("default"), r)
+
+}
+
+func TestAsFloat64(t *testing.T) {
+	row := RowNamedValues{
+		"testField":  MakeTrusted(Int64, []byte("1002")),
+		"testField2": MakeTrusted(Float64, []byte("10.02")),
+	}
+
+	r := row.AsFloat64("testField", 23.12)
+	assert.Equal(t, float64(1002), r)
+
+	r = row.AsFloat64("testField2", 23.12)
+	assert.Equal(t, 10.02, r)
+
+	r = row.AsFloat64("invalidField", 23.12)
+	assert.Equal(t, 23.12, r)
+
 }
