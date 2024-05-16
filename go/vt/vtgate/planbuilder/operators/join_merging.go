@@ -27,17 +27,24 @@ import (
 // mergeJoinInputs checks whether two operators can be merged into a single one.
 // If they can be merged, a new operator with the merged routing is returned
 // If they cannot be merged, nil is returned.
-func mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredicates []sqlparser.Expr, m merger) *Route {
+func mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredicates []sqlparser.Expr, m *joinMerger) *Route {
 	lhsRoute, rhsRoute, routingA, routingB, a, b, sameKeyspace := prepareInputRoutes(lhs, rhs)
 	if lhsRoute == nil {
 		return nil
 	}
 
 	switch {
-	// if either side is a dual query, we can always merge them together
 	case a == dual:
+		// If a dual is on the left side and it is a left join, then we can only merge if the right side is a single sharded routing.
+		if m.joinType.IsLeft() && !routingB.OpCode().IsSingleShard() {
+			return nil
+		}
 		return m.merge(ctx, lhsRoute, rhsRoute, routingB)
 	case b == dual:
+		// If a dual is on the right side and it is a right join, then we can only merge if the left side is a single sharded routing.
+		if m.joinType.IsRight() && !routingA.OpCode().IsSingleShard() {
+			return nil
+		}
 		return m.merge(ctx, lhsRoute, rhsRoute, routingA)
 
 	// an unsharded/reference route can be merged with anything going to that keyspace
@@ -74,12 +81,6 @@ func prepareInputRoutes(lhs Operator, rhs Operator) (*Route, *Route, Routing, Ro
 	lhsRoute, rhsRoute, routingA, routingB, sameKeyspace := getRoutesOrAlternates(lhsRoute, rhsRoute)
 
 	a, b := getRoutingType(routingA), getRoutingType(routingB)
-	if getTypeName(routingA) < getTypeName(routingB) {
-		// while deciding if two routes can be merged, the LHS/RHS order of the routes is not important.
-		// for the actual merging, we still need to remember which side was inner and which was outer for subqueries
-		a, b = b, a
-		routingA, routingB = routingB, routingA
-	}
 
 	return lhsRoute, rhsRoute, routingA, routingB, a, b, sameKeyspace
 }
@@ -178,7 +179,7 @@ func getRoutingType(r Routing) routingType {
 	panic(fmt.Sprintf("switch should be exhaustive, got %T", r))
 }
 
-func newJoinMerge(predicates []sqlparser.Expr, joinType sqlparser.JoinType) merger {
+func newJoinMerge(predicates []sqlparser.Expr, joinType sqlparser.JoinType) *joinMerger {
 	return &joinMerger{
 		predicates: predicates,
 		joinType:   joinType,
