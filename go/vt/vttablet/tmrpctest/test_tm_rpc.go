@@ -817,7 +817,7 @@ func tmRPCTestUptime(ctx context.Context, t *testing.T, client tmclient.TabletMa
 
 func tmRPCTestUptimePanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	_, err := client.Uptime(ctx, tablet)
-	expectHandleRPCPanic(t, "Uptime", false /*verbose*/, err)
+	expectHandleRPCPanic(t, "Uptime", true /*verbose*/, err)
 }
 
 func (fra *fakeRPCTM) ReplicationStatus(ctx context.Context) (*replicationdatapb.Status, error) {
