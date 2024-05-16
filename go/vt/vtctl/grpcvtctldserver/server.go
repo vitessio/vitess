@@ -63,6 +63,7 @@ import (
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
@@ -1979,6 +1980,10 @@ func (s *VtctldServer) UpdateThrottlerConfig(ctx context.Context, req *vtctldata
 		return nil, fmt.Errorf("--check-as-check-self and --check-as-check-shard are mutually exclusive")
 	}
 
+	if req.MetricName != "" && !base.KnownMetricNames.Contains(base.MetricName(req.MetricName)) {
+		return nil, fmt.Errorf("unknown metric name: %s", req.MetricName)
+	}
+
 	update := func(throttlerConfig *topodatapb.ThrottlerConfig) *topodatapb.ThrottlerConfig {
 		if throttlerConfig == nil {
 			throttlerConfig = &topodatapb.ThrottlerConfig{}
@@ -1986,14 +1991,27 @@ func (s *VtctldServer) UpdateThrottlerConfig(ctx context.Context, req *vtctldata
 		if throttlerConfig.ThrottledApps == nil {
 			throttlerConfig.ThrottledApps = make(map[string]*topodatapb.ThrottledAppRule)
 		}
-		if req.CustomQuerySet {
-			// custom query provided
-			throttlerConfig.CustomQuery = req.CustomQuery
-			throttlerConfig.Threshold = req.Threshold // allowed to be zero/negative because who knows what kind of custom query this is
+		if throttlerConfig.MetricThresholds == nil {
+			throttlerConfig.MetricThresholds = make(map[string]float64)
+		}
+		if req.MetricName == "" {
+			// v19 behavior
+			if req.CustomQuerySet {
+				// custom query provided
+				throttlerConfig.CustomQuery = req.CustomQuery
+				throttlerConfig.Threshold = req.Threshold // allowed to be zero/negative because who knows what kind of custom query this is
+			} else {
+				// no custom query, throttler works by querying replication lag. We only allow positive values
+				if req.Threshold > 0 {
+					throttlerConfig.Threshold = req.Threshold
+				}
+			}
 		} else {
-			// no custom query, throttler works by querying replication lag. We only allow positive values
+			// --metric-name specified. We apply the threshold to the metric
 			if req.Threshold > 0 {
-				throttlerConfig.Threshold = req.Threshold
+				throttlerConfig.MetricThresholds[req.MetricName] = req.Threshold
+			} else {
+				delete(throttlerConfig.MetricThresholds, req.MetricName)
 			}
 		}
 		if req.Enable {
