@@ -1038,6 +1038,11 @@ message UpdateThrottlerConfigRequest {
   topodata.ThrottledAppRule throttled_app = 9;
   // MetricName is the name of the metric for which we apply a new threshold
   string metric_name = 10;
+  // AppName is the name of the app for which we assign metrics
+  string app_name = 11;
+  // AppMetrics are the metrics to be checked got the given AppName. These can be scoped. For example:
+  // ["lag", "self/loadvg", "shard/threads_running"]
+  repeated string app_metrics = 12;
 }
 
 message UpdateThrottlerConfigResponse {
