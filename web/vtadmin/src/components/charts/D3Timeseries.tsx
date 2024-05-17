@@ -27,13 +27,15 @@ type LineChartProps = {
   timeseriesMap: TimeseriesMap;
 };
 
+const timeFormat = d3.timeParse("%H:%M");
+
 export const D3Timeseries = ({ isLoading, timeseriesMap }: LineChartProps) => {
   // bounds = area inside the graph axis = calculated by substracting the margins
   const axesRef = useRef(null);
   const boundsWidth = width - MARGIN.right - MARGIN.left;
   const boundsHeight = height - MARGIN.top - MARGIN.bottom;
 
-  const [xRanges, [yMin, yMax]] = axisMinsAndMaxes(timeseriesMap, boundsWidth)
+  const [xRanges, [_yMin, yMax]] = axisMinsAndMaxes(timeseriesMap, boundsWidth)
   const yScale = useMemo(() => {
     return d3
       .scaleLinear()
@@ -50,20 +52,21 @@ export const D3Timeseries = ({ isLoading, timeseriesMap }: LineChartProps) => {
   useEffect(() => {
     const svgElement = d3.select(axesRef.current);
     svgElement.selectAll("*").remove();
-    const xAxisGenerator = d3.axisBottom(xScale);
+    const xAxisGenerator = d3.axisBottom<Date>(xScale)
+    xAxisGenerator.tickFormat(d3.timeFormat("%H:%M"))
     svgElement
         .append("g")
         .attr("transform", "translate(0," + boundsHeight + ")")
         .call(xAxisGenerator)
         .selectAll("text")
-        .attr("class", "fill-gray-500")
+        .attr("class", "fill-gray-500 font-mono text-medium");
 
     const yAxisGenerator = d3.axisLeft(yScale);
     svgElement
         .append("g")
         .call(yAxisGenerator)
         .selectAll("text")
-        .attr("class", "fill-gray-500");
+        .attr("class", "fill-gray-500 font-mono text-medium");
     svgElement
         .selectAll("path")
         .attr("class", "!stroke-gray-200")
