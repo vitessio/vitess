@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -5096,7 +5097,10 @@ func (s *VtctldServer) getTopologyCell(ctx context.Context, cellPath string, ver
 				return nil, err
 			}
 			topoCell.Data = result
-			topoCell.Version = int64(version.(etcd2topo.EtcdVersion))
+			topoCell.Version, err = strconv.ParseInt(version.String(), 10, 64)
+			if err != nil {
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "error decoding file version for cell %s (version: %s): %v", cellPath, version, err)
+			}
 			// since there is data at this cell, it cannot be a directory cell
 			// so we can early return the topocell
 			return &topoCell, nil
@@ -5109,7 +5113,11 @@ func (s *VtctldServer) getTopologyCell(ctx context.Context, cellPath string, ver
 				return nil, err
 			}
 			topoCell.Data = result
-			topoCell.Version = int64(curVersion.(etcd2topo.EtcdVersion))
+			topoCell.Version, err = strconv.ParseInt(curVersion.String(), 10, 64)
+			if err != nil {
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "error decoding file version for cell %s (version: %s): %v", cellPath, version, err)
+			}
+
 			// since there is data at this cell, it cannot be a directory cell
 			// so we can early return the topocell
 			return &topoCell, nil

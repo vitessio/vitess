@@ -7857,6 +7857,11 @@ func TestGetTopologyPath(t *testing.T) {
 				return
 			}
 
+			if resp.GetCell() != nil {
+				// We cannot compare versions as the value is non-deterministic.
+				resp.Cell.Version = 0
+			}
+
 			assert.NoError(t, err)
 			utils.MustMatch(t, tt.expected, resp)
 		})
