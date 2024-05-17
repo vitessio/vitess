@@ -56,7 +56,7 @@ func TestSimpleInsertSelect(t *testing.T) {
 
 // TestInsertOnDup test the insert on duplicate key update feature with argument and list argument.
 func TestInsertOnDup(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 20, "vtgate")
+	utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
 
 	mcmp, closer := start(t)
 	defer closer()
