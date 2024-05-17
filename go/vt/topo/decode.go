@@ -53,6 +53,11 @@ func DecodeContent(filename string, data []byte, json bool) (string, error) {
 		p = new(topodatapb.SrvKeyspace)
 	case RoutingRulesFile:
 		p = new(vschemapb.RoutingRules)
+	case CommonRoutingRulesFile:
+		switch path.Base(dir) {
+		case "keyspace":
+			p = new(vschemapb.KeyspaceRoutingRules)
+		}
 	default:
 		switch dir {
 		case "/" + GetExternalVitessClusterDir():
