@@ -369,9 +369,8 @@ func TestInsertShardWithONDuplicateKey(t *testing.T) {
 	vc := newDMLTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
 
-	tupleVar, _ := sqltypes.BuildBindVariable([]int{1, 2})
 	_, err := ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{
-		"_id_1": tupleVar,
+		"_id_1": sqltypes.TestBindVariable([]int{1, 2}),
 	}, false)
 	if err != nil {
 		t.Fatal(err)
