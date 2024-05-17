@@ -379,6 +379,15 @@ func TestNormalize(t *testing.T) {
 			"v1": sqltypes.HexValBindVariable([]byte("x'31'")),
 			"v2": sqltypes.Int64BindVariable(31),
 		},
+	}, {
+		// list in on duplicate key update
+		in:      "insert into t(a, b) values (1, 2) on duplicate key update b = if(values(b) in (1, 2), b, values(b))",
+		outstmt: "insert into t(a, b) values (:bv1 /* INT64 */, :bv2 /* INT64 */) on duplicate key update b = if(values(b) in ::bv3, b, values(b))",
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.Int64BindVariable(1),
+			"bv2": sqltypes.Int64BindVariable(2),
+			"bv3": sqltypes.TestBindVariable([]any{1, 2}),
+		},
 	}}
 	for _, tc := range testcases {
 		t.Run(tc.in, func(t *testing.T) {
