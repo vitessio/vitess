@@ -3429,20 +3429,27 @@ func TestPlayerStalls(t *testing.T) {
 				execStatements(t, []string{"set @@session.binlog_format='ROW'"})
 			},
 		},
-		/* TODO: get this working
+		/* TODO: get this test case working
 		{
 			name: "stall in vplayer with rows",
 			input: []string{
+				fmt.Sprintf("set @@session.innodb_lock_wait_timeout=%d", int64(vplayerProgressTimeout.Seconds()+5)),
 				"insert into t1(id, val1) values (10, 'mmm'), (11, 'nnn'), (12, 'ooo')",
 				"update t1 set val1 = 'yyy' where id = 10",
 			},
 			preFunc: func() {
+				relayLogMaxItems = 4
 				dbc, err := env.Mysqld.GetAllPrivsConnection(context.Background())
 				require.NoError(t, err)
 				defer dbc.Close()
-				stmt := fmt.Sprintf("lock table %s.t1 read; select sleep(%d); unlock tables",
-					vrepldb, int64(vplayerProgressTimeout.Seconds()+5))
-				_, _, err = dbc.ExecuteFetchMulti(stmt, 1, false)
+				_, err = dbc.ExecuteFetch("begin", 1, false)
+				require.NoError(t, err)
+				// The gap lock for this will block our INSERT until the innodb_lock_wait
+				// timeout.
+				_, err = dbc.ExecuteFetch("select * from t1 where id > 6 for update", 1000, false)
+				require.NoError(t, err)
+				time.Sleep(testTimeout)
+				_, err = dbc.ExecuteFetch("rollback", 1, false)
 				require.NoError(t, err)
 			},
 			output: qh.Expect(
