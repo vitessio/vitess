@@ -57,6 +57,9 @@ type Send struct {
 	MultishardAutocommit bool
 
 	ReservedConnectionNeeded bool
+
+	// QueryTimeout contains the optional timeout (in milliseconds) to apply to this query
+	QueryTimeout int
 }
 
 // ShardName as key for setting shard name in bind variables map
@@ -88,7 +91,7 @@ func (s *Send) GetTableName() string {
 
 // TryExecute implements Primitive interface
 func (s *Send) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	ctx, cancelFunc := addQueryTimeout(ctx, vcursor, 0)
+	ctx, cancelFunc := addQueryTimeout(ctx, vcursor, s.QueryTimeout)
 	defer cancelFunc()
 
 	rss, err := s.checkAndReturnShards(ctx, vcursor)
@@ -192,6 +195,7 @@ func (s *Send) description() PrimitiveDescription {
 		"ShardNameNeeded":          s.ShardNameNeeded,
 		"MultishardAutocommit":     s.MultishardAutocommit,
 		"ReservedConnectionNeeded": s.ReservedConnectionNeeded,
+		"QueryTimeout":             s.QueryTimeout,
 	}
 	return PrimitiveDescription{
 		OperatorType:      "Send",

@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 
@@ -67,10 +68,12 @@ func testCancel(t *testing.T) {
 	mt.SwitchReadsAndWrites()
 	checkDenyList(targetKeyspace, false)
 	checkDenyList(sourceKeyspace, true)
+	time.Sleep(loadTestBufferingWindowDuration + 1*time.Second)
 
 	mt.ReverseReadsAndWrites()
 	checkDenyList(targetKeyspace, true)
 	checkDenyList(sourceKeyspace, false)
+	time.Sleep(loadTestBufferingWindowDuration + 1*time.Second)
 
 	mt.Cancel()
 	checkDenyList(targetKeyspace, false)
@@ -123,6 +126,7 @@ func testPartialMoveTablesBasic(t *testing.T, flavor workflowFlavor) {
 	catchup(t, targetTab80Dash, workflowName, "MoveTables")
 	vdiff(t, targetKeyspace, workflowName, defaultCellName, false, true, nil)
 	mt.SwitchReadsAndWrites()
+	time.Sleep(loadTestBufferingWindowDuration + 1*time.Second)
 	mt.Complete()
 
 	emptyGlobalRoutingRules := "{}\n"
@@ -246,6 +250,7 @@ func testPartialMoveTablesBasic(t *testing.T, flavor workflowFlavor) {
 
 	// Switch all traffic for the shard
 	mt80Dash.SwitchReadsAndWrites()
+	time.Sleep(loadTestBufferingWindowDuration + 1*time.Second)
 
 	// Confirm global routing rules -- everything should still be routed
 	// to the source side, customer, globally.
@@ -331,6 +336,7 @@ func testPartialMoveTablesBasic(t *testing.T, flavor workflowFlavor) {
 	catchup(t, targetTabDash80, workflowName, "MoveTables")
 	vdiff(t, targetKeyspace, workflowName, defaultCellName, false, true, nil)
 	mtDash80.SwitchReadsAndWrites()
+	time.Sleep(loadTestBufferingWindowDuration + 1*time.Second)
 
 	// Confirm global routing rules: everything should still be routed
 	// to the source side, customer, globally.

@@ -327,10 +327,12 @@ func cleanAndStartVttablet(t *testing.T, clusterInfo *VTOrcClusterInfo, vttablet
 	_, err = RunSQL(t, "DROP DATABASE IF EXISTS _vt", vttablet, "")
 	require.NoError(t, err)
 	// stop the replication
-	_, err = RunSQL(t, "STOP SLAVE", vttablet, "")
+	_, err = RunSQL(t, "STOP REPLICA", vttablet, "")
 	require.NoError(t, err)
 	// reset the binlog
-	_, err = RunSQL(t, "RESET MASTER", vttablet, "")
+	resetCmd, err := vttablet.VttabletProcess.ResetBinaryLogsCommand()
+	require.NoError(t, err)
+	_, err = RunSQL(t, resetCmd, vttablet, "")
 	require.NoError(t, err)
 	// set read-only to true
 	_, err = RunSQL(t, "SET GLOBAL read_only = ON", vttablet, "")
@@ -502,7 +504,7 @@ func WaitForReplicationToStop(t *testing.T, vttablet *cluster.Vttablet) error {
 		case <-timeout:
 			return fmt.Errorf("timedout: waiting for primary to stop replication")
 		default:
-			res, err := RunSQL(t, "SHOW SLAVE STATUS", vttablet, "")
+			res, err := RunSQL(t, "SHOW REPLICA STATUS", vttablet, "")
 			if err != nil {
 				return err
 			}
@@ -692,14 +694,15 @@ func ResetPrimaryLogs(t *testing.T, curPrimary *cluster.Vttablet) {
 
 // CheckSourcePort is used to check that the replica has the given source port set in its MySQL instance
 func CheckSourcePort(t *testing.T, replica *cluster.Vttablet, source *cluster.Vttablet, timeToWait time.Duration) {
-	timeout := time.After(timeToWait)
+	ctx, cancel := context.WithTimeout(context.Background(), timeToWait)
+	defer cancel()
 	for {
 		select {
-		case <-timeout:
+		case <-ctx.Done():
 			t.Fatal("timedout waiting for correct primary to be setup")
 			return
 		default:
-			res, err := RunSQL(t, "SHOW SLAVE STATUS", replica, "")
+			res, err := RunSQL(t, "SHOW REPLICA STATUS", replica, "")
 			require.NoError(t, err)
 
 			if len(res.Rows) != 1 {
@@ -708,7 +711,7 @@ func CheckSourcePort(t *testing.T, replica *cluster.Vttablet, source *cluster.Vt
 			}
 
 			for idx, field := range res.Fields {
-				if strings.EqualFold(field.Name, "MASTER_PORT") || strings.EqualFold(field.Name, "SOURCE_PORT") {
+				if strings.EqualFold(field.Name, "SOURCE_PORT") {
 					port, err := res.Rows[0][idx].ToInt64()
 					require.NoError(t, err)
 					if port == int64(source.MySQLPort) {
@@ -717,6 +720,41 @@ func CheckSourcePort(t *testing.T, replica *cluster.Vttablet, source *cluster.Vt
 				}
 			}
 			log.Warningf("source port not set correctly yet, will retry")
+		}
+		time.Sleep(300 * time.Millisecond)
+	}
+}
+
+// CheckHeartbeatInterval is used to check that the replica has the given heartbeat interval set in its MySQL instance
+func CheckHeartbeatInterval(t *testing.T, replica *cluster.Vttablet, heartbeatInterval float64, timeToWait time.Duration) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeToWait)
+	defer cancel()
+	for {
+		select {
+		case <-ctx.Done():
+			t.Fatal("timed out waiting for correct heartbeat interval to be setup")
+			return
+		default:
+			res, err := RunSQL(t, "select * from performance_schema.replication_connection_configuration", replica, "")
+			require.NoError(t, err)
+
+			if len(res.Rows) != 1 {
+				log.Warningf("no replication configuration yet, will retry")
+				break
+			}
+
+			for idx, field := range res.Fields {
+				if strings.EqualFold(field.Name, "HEARTBEAT_INTERVAL") {
+					readVal, err := res.Rows[0][idx].ToFloat64()
+					require.NoError(t, err)
+					if readVal == heartbeatInterval {
+						return
+					} else {
+						log.Warningf("heartbeat interval set to - %v", readVal)
+					}
+				}
+			}
+			log.Warningf("heartbeat interval not set correctly yet, will retry")
 		}
 		time.Sleep(300 * time.Millisecond)
 	}
@@ -896,16 +934,40 @@ func AddSemiSyncKeyspace(t *testing.T, clusterInfo *VTOrcClusterInfo) {
 
 // IsSemiSyncSetupCorrectly checks that the semi-sync is setup correctly on the given vttablet
 func IsSemiSyncSetupCorrectly(t *testing.T, tablet *cluster.Vttablet, semiSyncVal string) bool {
-	dbVar, err := tablet.VttabletProcess.GetDBVar("rpl_semi_sync_slave_enabled", "")
+	semisyncType, err := tablet.VttabletProcess.SemiSyncExtensionLoaded()
 	require.NoError(t, err)
-	return semiSyncVal == dbVar
+	switch semisyncType {
+	case mysql.SemiSyncTypeSource:
+		dbVar, err := tablet.VttabletProcess.GetDBVar("rpl_semi_sync_replica_enabled", "")
+		require.NoError(t, err)
+		return semiSyncVal == dbVar
+	case mysql.SemiSyncTypeMaster:
+		dbVar, err := tablet.VttabletProcess.GetDBVar("rpl_semi_sync_slave_enabled", "")
+		require.NoError(t, err)
+		return semiSyncVal == dbVar
+	default:
+		assert.Fail(t, "semisync extension not loaded")
+		return false
+	}
 }
 
 // IsPrimarySemiSyncSetupCorrectly checks that the priamry side semi-sync is setup correctly on the given vttablet
 func IsPrimarySemiSyncSetupCorrectly(t *testing.T, tablet *cluster.Vttablet, semiSyncVal string) bool {
-	dbVar, err := tablet.VttabletProcess.GetDBVar("rpl_semi_sync_master_enabled", "")
+	semisyncType, err := tablet.VttabletProcess.SemiSyncExtensionLoaded()
 	require.NoError(t, err)
-	return semiSyncVal == dbVar
+	switch semisyncType {
+	case mysql.SemiSyncTypeSource:
+		dbVar, err := tablet.VttabletProcess.GetDBVar("rpl_semi_sync_source_enabled", "")
+		require.NoError(t, err)
+		return semiSyncVal == dbVar
+	case mysql.SemiSyncTypeMaster:
+		dbVar, err := tablet.VttabletProcess.GetDBVar("rpl_semi_sync_master_enabled", "")
+		require.NoError(t, err)
+		return semiSyncVal == dbVar
+	default:
+		assert.Fail(t, "semisync extension not loaded")
+		return false
+	}
 }
 
 // WaitForReadOnlyValue waits for the read_only global variable to reach the provided value
@@ -1113,4 +1175,17 @@ func DisableGlobalRecoveries(t *testing.T, vtorc *cluster.VTOrcProcess) {
 	require.NoError(t, err)
 	assert.Equal(t, 200, status)
 	assert.Equal(t, "Global recoveries disabled\n", resp)
+}
+
+// SemiSyncExtensionLoaded is used to check which semisync extension is loaded.
+func SemiSyncExtensionLoaded(t *testing.T, tablet *cluster.Vttablet) (mysql.SemiSyncType, error) {
+	// Get Connection
+	tabletParams := getMysqlConnParam(tablet, "")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	conn, err := mysql.Connect(ctx, &tabletParams)
+	require.Nil(t, err)
+	defer conn.Close()
+
+	return conn.SemiSyncExtensionLoaded()
 }

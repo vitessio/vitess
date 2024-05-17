@@ -850,22 +850,41 @@ func getTenantClause(vrOptions *vtctldatapb.WorkflowOptions,
 	return &sel.Where.Expr, nil
 }
 
-// updateKeyspaceRoutingRule updates the keyspace routing rule for the (effective) source keyspace to the target keyspace.
-func updateKeyspaceRoutingRule(ctx context.Context, ts *topo.Server, routes map[string]string) error {
-	rules, err := topotools.GetKeyspaceRoutingRules(ctx, ts)
-	if err != nil {
+func changeKeyspaceRouting(ctx context.Context, ts *topo.Server, tabletTypes []topodatapb.TabletType,
+	sourceKeyspace, targetKeyspace, reason string) error {
+	routes := make(map[string]string)
+	for _, tabletType := range tabletTypes {
+		suffix := getTabletTypeSuffix(tabletType)
+		routes[sourceKeyspace+suffix] = targetKeyspace
+	}
+	if err := updateKeyspaceRoutingRules(ctx, ts, reason, routes); err != nil {
 		return err
 	}
-	if rules == nil {
-		rules = make(map[string]string)
+	return ts.RebuildSrvVSchema(ctx, nil)
+}
+
+// updateKeyspaceRoutingRules updates the keyspace routing rules for the (effective) source
+// keyspace to the target keyspace.
+func updateKeyspaceRoutingRules(ctx context.Context, ts *topo.Server, reason string, routes map[string]string) error {
+	update := func() error {
+		return topotools.UpdateKeyspaceRoutingRules(ctx, ts, reason,
+			func(ctx context.Context, rules *map[string]string) error {
+				for fromKeyspace, toKeyspace := range routes {
+					(*rules)[fromKeyspace] = toKeyspace
+				}
+				return nil
+			})
 	}
-	for fromKeyspace, toKeyspace := range routes {
-		rules[fromKeyspace] = toKeyspace
+	err := update()
+	if err == nil {
+		return nil
 	}
-	if err := topotools.SaveKeyspaceRoutingRules(ctx, ts, rules); err != nil {
+	// If we were racing with another caller to create the initial routing rules, then
+	// we can immediately retry the operation.
+	if !topo.IsErrType(err, topo.NodeExists) {
 		return err
 	}
-	return nil
+	return update()
 }
 
 func validateTenantId(dataType querypb.Type, value string) error {
@@ -881,4 +900,52 @@ func validateTenantId(dataType querypb.Type, value string) error {
 		return fmt.Errorf("unsupported data type: %s", dataType)
 	}
 	return nil
+}
+
+func updateKeyspaceRoutingState(ctx context.Context, ts *topo.Server, sourceKeyspace, targetKeyspace string, state *State) error {
+	// For multi-tenant migrations, we only support switching traffic to all cells at once
+	cells, err := ts.GetCellInfoNames(ctx)
+	if err != nil {
+		return err
+	}
+
+	rules, err := topotools.GetKeyspaceRoutingRules(ctx, ts)
+	if err != nil {
+		return err
+	}
+	hasSwitched := func(tabletTypePrefix string) bool {
+		ks, ok := rules[sourceKeyspace+tabletTypePrefix]
+		return ok && ks == targetKeyspace
+	}
+	rdonlySwitched := hasSwitched(rdonlyTabletSuffix)
+	replicaSwitched := hasSwitched(replicaTabletSuffix)
+	primarySwitched := hasSwitched(primaryTabletSuffix)
+	if rdonlySwitched {
+		state.RdonlyCellsSwitched = cells
+		state.RdonlyCellsNotSwitched = nil
+	} else {
+		state.RdonlyCellsNotSwitched = cells
+		state.RdonlyCellsSwitched = nil
+	}
+	if replicaSwitched {
+		state.ReplicaCellsSwitched = cells
+		state.ReplicaCellsNotSwitched = nil
+	} else {
+		state.ReplicaCellsNotSwitched = cells
+		state.ReplicaCellsSwitched = nil
+	}
+	state.WritesSwitched = primarySwitched
+	return nil
+}
+
+func getTabletTypeSuffix(tabletType topodatapb.TabletType) string {
+	switch tabletType {
+	case topodatapb.TabletType_REPLICA:
+		return replicaTabletSuffix
+	case topodatapb.TabletType_RDONLY:
+		return rdonlyTabletSuffix
+	case topodatapb.TabletType_PRIMARY:
+		return primaryTabletSuffix
+	}
+	return ""
 }

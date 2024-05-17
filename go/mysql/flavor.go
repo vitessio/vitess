@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/proto/replicationdata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -46,17 +47,16 @@ const (
 	mariaDBReplicationHackPrefix = "5.5.5-"
 	// mariaDBVersionString is present in
 	mariaDBVersionString = "MariaDB"
-	// mysql57VersionPrefix is the prefix for 5.7 mysql version, such as 5.7.31-log
-	mysql57VersionPrefix = "5.7."
-	// mysql80VersionPrefix is the prefix for 8.0 mysql version, such as 8.0.19
-	mysql80VersionPrefix = "8.0."
+	// mysql8VersionPrefix is the prefix for 8.x mysql version, such as 8.0.19,
+	// but also newer ones like 8.4.0.
+	mysql8VersionPrefix = "8."
 )
 
 // flavor is the abstract interface for a flavor.
 // Flavors are auto-detected upon connection using the server version.
 // We have two major implementations (the main difference is the GTID
 // handling):
-// 1. Oracle MySQL 5.6, 5.7, 8.0, ...
+// 1. Oracle MySQL 5.7, 8.0, ...
 // 2. MariaDB 10.X
 type flavor interface {
 	// primaryGTIDSet returns the current GTIDSet of a server.
@@ -88,6 +88,9 @@ type flavor interface {
 	// stopReplicationCommand returns the command to stop the replication.
 	stopReplicationCommand() string
 
+	// resetReplicationCommand returns the command to reset the replication.
+	resetReplicationCommand() string
+
 	// stopIOThreadCommand returns the command to stop the replica's IO thread only.
 	stopIOThreadCommand() string
 
@@ -116,22 +119,35 @@ type flavor interface {
 	// replication position at which the replica will resume.
 	setReplicationPositionCommands(pos replication.Position) []string
 
-	// changeReplicationSourceArg returns the specific parameter to add to
-	// a "change primary" command.
-	changeReplicationSourceArg() string
+	// setReplicationSourceCommand returns the command to use the provided host/port
+	// as the new replication source (without changing any GTID position).
+	setReplicationSourceCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int) string
+
+	// resetBinaryLogsCommand returns the command to reset the binary logs.
+	resetBinaryLogsCommand() string
 
 	// status returns the result of the appropriate status command,
 	// with parsed replication position.
 	status(c *Conn) (replication.ReplicationStatus, error)
 
-	// primaryStatus returns the result of 'SHOW MASTER STATUS',
+	// primaryStatus returns the result of 'SHOW BINARY LOG STATUS',
 	// with parsed executed position.
 	primaryStatus(c *Conn) (replication.PrimaryStatus, error)
+
+	// replicationConfiguration reads the right global variables and performance schema information.
+	replicationConfiguration(c *Conn) (*replicationdata.Configuration, error)
+
+	replicationNetTimeout(c *Conn) (int32, error)
 
 	// waitUntilPosition waits until the given position is reached or
 	// until the context expires. It returns an error if we did not
 	// succeed.
 	waitUntilPosition(ctx context.Context, c *Conn, pos replication.Position) error
+	// catchupToGTIDCommands returns the command to catch up to a given GTID.
+	catchupToGTIDCommands(params *ConnParams, pos replication.Position) []string
+
+	// binlogReplicatedUpdates returns the field to use to check replica updates.
+	binlogReplicatedUpdates() string
 
 	baseShowTables() string
 	baseShowTablesWithSizes() string
@@ -171,13 +187,17 @@ func GetFlavor(serverVersion string, flavorFunc func() flavor) (f flavor, capabl
 		} else {
 			f = mariadbFlavor102{mariadbFlavor{serverVersion: fmt.Sprintf("%f", mariadbVersion)}}
 		}
-	case strings.HasPrefix(serverVersion, mysql57VersionPrefix):
-		f = mysqlFlavor57{mysqlFlavor{serverVersion: serverVersion}}
-	case strings.HasPrefix(serverVersion, mysql80VersionPrefix):
-		f = mysqlFlavor80{mysqlFlavor{serverVersion: serverVersion}}
+	case strings.HasPrefix(serverVersion, mysql8VersionPrefix):
+		if latest, _ := capabilities.ServerVersionAtLeast(serverVersion, 8, 2, 0); latest {
+			f = mysqlFlavor82{mysqlFlavor{serverVersion: serverVersion}}
+		} else if recent, _ := capabilities.MySQLVersionHasCapability(serverVersion, capabilities.ReplicaTerminologyCapability); recent {
+			f = mysqlFlavor8{mysqlFlavor{serverVersion: serverVersion}}
+		} else {
+			f = mysqlFlavor8Legacy{mysqlFlavorLegacy{mysqlFlavor{serverVersion: serverVersion}}}
+		}
 	default:
-		// If unknown, return the most basic flavor: MySQL 56.
-		f = mysqlFlavor56{mysqlFlavor{serverVersion: serverVersion}}
+		// If unknown, return the most basic flavor: MySQL 57.
+		f = mysqlFlavor57{mysqlFlavorLegacy{mysqlFlavor{serverVersion: serverVersion}}}
 	}
 	return f, f.supportsCapability, canonicalVersion
 }
@@ -299,6 +319,10 @@ func (c *Conn) StopReplicationCommand() string {
 	return c.flavor.stopReplicationCommand()
 }
 
+func (c *Conn) ResetReplicationCommand() string {
+	return c.flavor.resetReplicationCommand()
+}
+
 // StopIOThreadCommand returns the command to stop the replica's io thread.
 func (c *Conn) StopIOThreadCommand() string {
 	return c.flavor.stopIOThreadCommand()
@@ -350,31 +374,8 @@ func (c *Conn) SetReplicationPositionCommands(pos replication.Position) []string
 // as the new replication source (without changing any GTID position).
 // It is guaranteed to be called with replication stopped.
 // It should not start or stop replication.
-func (c *Conn) SetReplicationSourceCommand(params *ConnParams, host string, port int32, connectRetry int) string {
-	args := []string{
-		fmt.Sprintf("MASTER_HOST = '%s'", host),
-		fmt.Sprintf("MASTER_PORT = %d", port),
-		fmt.Sprintf("MASTER_USER = '%s'", params.Uname),
-		fmt.Sprintf("MASTER_PASSWORD = '%s'", params.Pass),
-		fmt.Sprintf("MASTER_CONNECT_RETRY = %d", connectRetry),
-	}
-	if params.SslEnabled() {
-		args = append(args, "MASTER_SSL = 1")
-	}
-	if params.SslCa != "" {
-		args = append(args, fmt.Sprintf("MASTER_SSL_CA = '%s'", params.SslCa))
-	}
-	if params.SslCaPath != "" {
-		args = append(args, fmt.Sprintf("MASTER_SSL_CAPATH = '%s'", params.SslCaPath))
-	}
-	if params.SslCert != "" {
-		args = append(args, fmt.Sprintf("MASTER_SSL_CERT = '%s'", params.SslCert))
-	}
-	if params.SslKey != "" {
-		args = append(args, fmt.Sprintf("MASTER_SSL_KEY = '%s'", params.SslKey))
-	}
-	args = append(args, c.flavor.changeReplicationSourceArg())
-	return "CHANGE MASTER TO\n  " + strings.Join(args, ",\n  ")
+func (c *Conn) SetReplicationSourceCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int) string {
+	return c.flavor.setReplicationSourceCommand(params, host, port, heartbeatInterval, connectRetry)
 }
 
 // resultToMap is a helper function used by ShowReplicationStatus.
@@ -403,16 +404,36 @@ func (c *Conn) ShowReplicationStatus() (replication.ReplicationStatus, error) {
 	return c.flavor.status(c)
 }
 
-// ShowPrimaryStatus executes the right SHOW MASTER STATUS command,
+// ShowPrimaryStatus executes the right SHOW BINARY LOG STATUS command,
 // and returns a parsed executed Position, as well as file based Position.
 func (c *Conn) ShowPrimaryStatus() (replication.PrimaryStatus, error) {
 	return c.flavor.primaryStatus(c)
+}
+
+// ReplicationConfiguration reads the right global variables and performance schema information.
+func (c *Conn) ReplicationConfiguration() (*replicationdata.Configuration, error) {
+	replConfiguration, err := c.flavor.replicationConfiguration(c)
+	// We don't want to fail this call if it called on a primary tablet.
+	// There just isn't any replication configuration to return since it is a primary tablet.
+	if err == ErrNotReplica {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	replNetTimeout, err := c.flavor.replicationNetTimeout(c)
+	replConfiguration.ReplicaNetTimeout = replNetTimeout
+	return replConfiguration, err
 }
 
 // WaitUntilPosition waits until the given position is reached or until the
 // context expires. It returns an error if we did not succeed.
 func (c *Conn) WaitUntilPosition(ctx context.Context, pos replication.Position) error {
 	return c.flavor.waitUntilPosition(ctx, c, pos)
+}
+
+func (c *Conn) CatchupToGTIDCommands(params *ConnParams, pos replication.Position) []string {
+	return c.flavor.catchupToGTIDCommands(params, pos)
 }
 
 // WaitUntilFilePosition waits until the given position is reached or until

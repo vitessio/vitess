@@ -424,7 +424,7 @@ message DemotePrimaryResponse {
   //string deprecated_position = 1 [deprecated = true];
   reserved 1;
 
-  // PrimaryStatus represents the response from calling `SHOW MASTER STATUS` on a primary that has been demoted.
+  // PrimaryStatus represents the response from calling `SHOW BINARY LOG STATUS` on a primary that has been demoted.
   replicationdata.PrimaryStatus primary_status = 2;
 }
 
@@ -460,6 +460,7 @@ message SetReplicationSourceRequest {
   bool force_start_replication = 3;
   string wait_position = 4;
   bool semiSync = 5;
+  double heartbeat_interval = 6;
 }
 
 message SetReplicationSourceResponse {

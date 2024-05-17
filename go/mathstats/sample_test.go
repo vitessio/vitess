@@ -168,6 +168,28 @@ func TestSampleClear(t *testing.T) {
 	assert.False(t, s.Sorted, "Sorting status should be false after clearing")
 }
 
+func TestIQR(t *testing.T) {
+	tt := []struct {
+		sample   Sample
+		expected float64
+	}{
+		{Sample{Xs: []float64{15, 20, 35, 40, 50}}, 24.999999999999996},
+		{Sample{Xs: []float64{}, Sorted: false}, math.NaN()},
+		{Sample{Xs: []float64{15, 0, 0, 40, 50}}, 43.33333333333333},
+		{Sample{Xs: []float64{10, 2, 1, 0, 23}}, 13.666666666666663},
+	}
+
+	for _, tc := range tt {
+		iqr := tc.sample.IQR()
+
+		if math.IsNaN(tc.expected) {
+			assert.True(t, math.IsNaN(iqr))
+		} else {
+			assert.Equal(t, tc.expected, iqr)
+		}
+	}
+}
+
 func TestSampleSort(t *testing.T) {
 	tt := []struct {
 		sample   Sample

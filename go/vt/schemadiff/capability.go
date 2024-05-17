@@ -7,9 +7,21 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
+const (
+	maxColumnsForInstantAddColumn = 1022
+)
+
 // alterOptionAvailableViaInstantDDL checks if the specific alter option is eligible to run via ALGORITHM=INSTANT
 // reference: https://dev.mysql.com/doc/refman/8.0/en/innodb-online-ddl-operations.html
 func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTable *sqlparser.CreateTable, capableOf capabilities.CapableOf) (bool, error) {
+	// A table with FULLTEXT index won't support adding/removing columns instantly.
+	tableHasFulltextIndex := false
+	for _, key := range createTable.TableSpec.Indexes {
+		if key.Info.Type == sqlparser.IndexTypeFullText {
+			tableHasFulltextIndex = true
+			break
+		}
+	}
 	findColumn := func(colName string) *sqlparser.ColumnDefinition {
 		if createTable == nil {
 			return nil
@@ -42,18 +54,24 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 		}
 		return nil
 	}
-	isVirtualColumn := func(colName string) bool {
-		col := findColumn(colName)
+	tableIsCompressed := false
+	if opt := findTableOption("ROW_FORMAT"); opt != nil {
+		if strings.EqualFold(opt.String, "COMPRESSED") {
+			tableIsCompressed = true
+		}
+	}
+
+	isGeneratedColumn := func(col *sqlparser.ColumnDefinition) (bool, sqlparser.ColumnStorage) {
 		if col == nil {
-			return false
+			return false, 0
 		}
 		if col.Type.Options == nil {
-			return false
+			return false, 0
 		}
 		if col.Type.Options.As == nil {
-			return false
+			return false, 0
 		}
-		return col.Type.Options.Storage == sqlparser.VirtualStorage
+		return true, col.Type.Options.Storage
 	}
 	colStringStrippedDown := func(col *sqlparser.ColumnDefinition, stripDefault bool, stripEnum bool) string {
 		strippedCol := sqlparser.CloneRefOfColumnDefinition(col)
@@ -87,6 +105,22 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 		//    in another table. Which is a bit too much to compute here.
 		return false, nil
 	case *sqlparser.AddColumns:
+		if tableHasFulltextIndex {
+			// not supported if the table has a FULLTEXT index
+			return false, nil
+		}
+		// Not supported in COMPRESSED tables
+		if tableIsCompressed {
+			return false, nil
+		}
+		for _, column := range opt.Columns {
+			if isGenerated, storage := isGeneratedColumn(column); isGenerated {
+				if storage == sqlparser.StoredStorage {
+					// Adding a generated "STORED" column is unsupported
+					return false, nil
+				}
+			}
+		}
 		if opt.First || opt.After != nil {
 			// not a "last" column. Only supported as of 8.0.29
 			return capableOf(capabilities.InstantAddDropColumnFlavorCapability)
@@ -94,18 +128,28 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 		// Adding a *last* column is supported in 8.0
 		return capableOf(capabilities.InstantAddLastColumnFlavorCapability)
 	case *sqlparser.DropColumn:
+		col := findColumn(opt.Name.Name.String())
+		if col == nil {
+			// column not found
+			return false, nil
+		}
+		if tableHasFulltextIndex {
+			// not supported if the table has a FULLTEXT index
+			return false, nil
+		}
 		// Not supported in COMPRESSED tables
-		if opt := findTableOption("ROW_FORMAT"); opt != nil {
-			if strings.EqualFold(opt.String, "COMPRESSED") {
-				return false, nil
-			}
+		if tableIsCompressed {
+			return false, nil
 		}
 		if findIndexCoveringColumn(opt.Name.Name.String()) != nil {
 			// not supported if the column is part of an index
 			return false, nil
 		}
-		if isVirtualColumn(opt.Name.Name.String()) {
+		if isGenerated, _ := isGeneratedColumn(col); isGenerated {
 			// supported by all 8.0 versions
+			// Note: according to the docs dropping a STORED generated column is not INSTANT-able,
+			// but in practice this is supported. This is why we don't test for STORED here, like
+			// we did for `AddColumns`.
 			return capableOf(capabilities.InstantAddDropVirtualColumnFlavorCapability)
 		}
 		return capableOf(capabilities.InstantAddDropColumnFlavorCapability)
@@ -178,6 +222,7 @@ func AlterTableCapableOfInstantDDL(alterTable *sqlparser.AlterTable, createTable
 		return false, nil
 	}
 	// For the ALTER statement to qualify for ALGORITHM=INSTANT, all alter options must each qualify.
+	numAddedColumns := 0
 	for _, alterOption := range alterTable.AlterOptions {
 		instantOK, err := alterOptionCapableOfInstantDDL(alterOption, createTable, capableOf)
 		if err != nil {
@@ -186,6 +231,15 @@ func AlterTableCapableOfInstantDDL(alterTable *sqlparser.AlterTable, createTable
 		if !instantOK {
 			return false, nil
 		}
+		switch opt := alterOption.(type) {
+		case *sqlparser.AddColumns:
+			numAddedColumns += len(opt.Columns)
+		}
+	}
+	if len(createTable.TableSpec.Columns)+numAddedColumns > maxColumnsForInstantAddColumn {
+		// Per MySQL docs:
+		// > The maximum number of columns in the internal representation of the table cannot exceed 1022 after column addition with the INSTANT algorithm
+		return false, nil
 	}
 	return true, nil
 }

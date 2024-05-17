@@ -50,7 +50,7 @@ func (p Phase) String() string {
 	case initialPlanning:
 		return "initial horizon planning optimization"
 	case pullDistinctFromUnion:
-		return "pull distinct from UNION1"
+		return "pull distinct from UNION"
 	case delegateAggregation:
 		return "split aggregation between vtgate and mysql"
 	case addAggrOrdering:
@@ -147,10 +147,10 @@ func createDMLWithInput(ctx *plancontext.PlanningContext, op, src Operator, in *
 	dm.cols = make([][]*sqlparser.ColName, 1)
 	for _, col := range in.Target.VTable.PrimaryKey {
 		colName := sqlparser.NewColNameWithQualifier(col.String(), in.Target.Name)
+		ctx.SemTable.Recursive[colName] = in.Target.ID
 		proj.AddColumn(ctx, true, false, aeWrap(colName))
 		dm.cols[0] = append(dm.cols[0], colName)
 		leftComp = append(leftComp, colName)
-		ctx.SemTable.Recursive[colName] = in.Target.ID
 	}
 
 	dm.Source = proj

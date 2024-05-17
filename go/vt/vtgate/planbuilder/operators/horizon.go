@@ -99,7 +99,7 @@ func (h *Horizon) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.
 		panic(err)
 	}
 
-	newExpr := semantics.RewriteDerivedTableExpression(expr, tableInfo)
+	newExpr := ctx.RewriteDerivedTableExpression(expr, tableInfo)
 	if ContainsAggr(ctx, newExpr) {
 		return newFilter(h, expr)
 	}
@@ -120,6 +120,10 @@ func (h *Horizon) AddColumn(ctx *plancontext.PlanningContext, reuse bool, _ bool
 		panic(errNoNewColumns)
 	}
 	return offset
+}
+
+func (h *Horizon) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
+	panic(errNoNewColumns)
 }
 
 var errNoNewColumns = vterrors.VT13001("can't add new columns to Horizon")

@@ -65,25 +65,27 @@ func TestInitShardPrimary(t *testing.T) {
 
 	tablet2.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		// These come from tablet startup
-		"STOP SLAVE",
-		"FAKE SET MASTER",
-		"START SLAVE",
+		"STOP REPLICA",
+		"FAKE SET SOURCE",
+		"START REPLICA",
 		// These come from InitShardPrimary
 		"FAKE RESET ALL REPLICATION",
-		"FAKE SET SLAVE POSITION",
-		"FAKE SET MASTER",
-		"START SLAVE",
+		"FAKE RESET BINARY LOGS AND GTIDS",
+		"FAKE SET GLOBAL gtid_purged",
+		"FAKE SET SOURCE",
+		"START REPLICA",
 	}
 	tablet2.FakeMysqlDaemon.SetReplicationSourceInputs = append(tablet2.FakeMysqlDaemon.SetReplicationSourceInputs, fmt.Sprintf("%v:%v", tablet1.Tablet.Hostname, tablet1.Tablet.MysqlPort))
 
 	tablet3.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		"STOP SLAVE",
-		"FAKE SET MASTER",
-		"START SLAVE",
+		"STOP REPLICA",
+		"FAKE SET SOURCE",
+		"START REPLICA",
 		"FAKE RESET ALL REPLICATION",
-		"FAKE SET SLAVE POSITION",
-		"FAKE SET MASTER",
-		"START SLAVE",
+		"FAKE RESET BINARY LOGS AND GTIDS",
+		"FAKE SET GLOBAL gtid_purged",
+		"FAKE SET SOURCE",
+		"START REPLICA",
 	}
 	tablet3.FakeMysqlDaemon.SetReplicationSourceInputs = append(tablet3.FakeMysqlDaemon.SetReplicationSourceInputs, fmt.Sprintf("%v:%v", tablet1.Tablet.Hostname, tablet1.Tablet.MysqlPort))
 
@@ -128,17 +130,19 @@ func TestInitShardPrimaryNoFormerPrimary(t *testing.T) {
 
 	tablet2.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"FAKE RESET ALL REPLICATION",
-		"FAKE SET SLAVE POSITION",
-		"FAKE SET MASTER",
-		"START SLAVE",
+		"FAKE RESET BINARY LOGS AND GTIDS",
+		"FAKE SET GLOBAL gtid_purged",
+		"FAKE SET SOURCE",
+		"START REPLICA",
 	}
 	tablet2.FakeMysqlDaemon.SetReplicationSourceInputs = append(tablet2.FakeMysqlDaemon.SetReplicationSourceInputs, fmt.Sprintf("%v:%v", tablet1.Tablet.Hostname, tablet1.Tablet.MysqlPort))
 
 	tablet3.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"FAKE RESET ALL REPLICATION",
-		"FAKE SET SLAVE POSITION",
-		"FAKE SET MASTER",
-		"START SLAVE",
+		"FAKE RESET BINARY LOGS AND GTIDS",
+		"FAKE SET GLOBAL gtid_purged",
+		"FAKE SET SOURCE",
+		"START REPLICA",
 	}
 	tablet3.FakeMysqlDaemon.SetReplicationSourceInputs = append(tablet3.FakeMysqlDaemon.SetReplicationSourceInputs, fmt.Sprintf("%v:%v", tablet1.Tablet.Hostname, tablet1.Tablet.MysqlPort))
 

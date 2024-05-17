@@ -79,7 +79,7 @@ func run(cmd *cobra.Command, args []string) error {
 	vtctld.RegisterDebugHealthHandler(ts)
 
 	// Start schema manager service.
-	initSchema()
+	initSchema(cmd.Context())
 
 	// And run the server.
 	servenv.RunDefault()

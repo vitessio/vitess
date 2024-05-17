@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/vt/proto/replicationdata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -89,6 +90,10 @@ func (flv *filePosFlavor) serverUUID(c *Conn) (string, error) {
 }
 
 func (flv *filePosFlavor) startReplicationCommand() string {
+	return "unsupported"
+}
+
+func (flv *filePosFlavor) resetReplicationCommand() string {
 	return "unsupported"
 }
 
@@ -223,8 +228,13 @@ func (flv *filePosFlavor) setReplicationPositionCommands(pos replication.Positio
 	}
 }
 
-// setReplicationPositionCommands is part of the Flavor interface.
-func (flv *filePosFlavor) changeReplicationSourceArg() string {
+// setReplicationSourceCommand is part of the Flavor interface.
+func (flv *filePosFlavor) setReplicationSourceCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int) string {
+	return "unsupported"
+}
+
+// resetBinaryLogsCommand is part of the Flavor interface.
+func (flv *filePosFlavor) resetBinaryLogsCommand() string {
 	return "unsupported"
 }
 
@@ -265,6 +275,14 @@ func (flv *filePosFlavor) primaryStatus(c *Conn) (replication.PrimaryStatus, err
 	}
 
 	return replication.ParseFilePosPrimaryStatus(resultMap)
+}
+
+func (flv *filePosFlavor) replicationConfiguration(c *Conn) (*replicationdata.Configuration, error) {
+	return nil, nil
+}
+
+func (flv *filePosFlavor) replicationNetTimeout(c *Conn) (int32, error) {
+	return 0, nil
 }
 
 // waitUntilPosition is part of the Flavor interface.
@@ -341,4 +359,12 @@ func (*filePosFlavor) supportsCapability(capability capabilities.FlavorCapabilit
 	default:
 		return false, nil
 	}
+}
+
+func (*filePosFlavor) catchupToGTIDCommands(_ *ConnParams, _ replication.Position) []string {
+	return []string{"unsupported"}
+}
+
+func (*filePosFlavor) binlogReplicatedUpdates() string {
+	return "@@global.log_slave_updates"
 }

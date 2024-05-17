@@ -87,7 +87,7 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-go@v5
       with:
-        go-version: 1.22.2
+        go-version: 1.22.3
 
     - name: Set up python
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -183,7 +183,7 @@ jobs:
         {{if .LimitResourceUsage}}
         # Increase our open file descriptor limit as we could hit this
         ulimit -n 65536
-        cat <<-EOF>>./config/mycnf/mysql80.cnf
+        cat <<-EOF>>./config/mycnf/mysql8026.cnf
         innodb_buffer_pool_dump_at_shutdown=OFF
         innodb_buffer_pool_in_core_file=OFF
         innodb_buffer_pool_load_at_startup=OFF
@@ -201,7 +201,7 @@ jobs:
         {{end}}
 
         {{if .EnableBinlogTransactionCompression}}
-        cat <<-EOF>>./config/mycnf/mysql80.cnf
+        cat <<-EOF>>./config/mycnf/mysql8026.cnf
         binlog-transaction-compression=ON
         EOF
         {{end}}

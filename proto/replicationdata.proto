@@ -52,6 +52,14 @@ message Status {
   bool replication_lag_unknown = 24;
 }
 
+// Configuration holds replication configuration information gathered from performance_schema and global variables.
+message Configuration {
+  // HeartbeatInterval controls the heartbeat interval that the primary sends to the replica
+  double heartbeat_interval = 1;
+  // ReplicaNetTimeout specifies the number of seconds to wait for more data or a heartbeat signal from the source before the replica considers the connection broken
+  int32 replica_net_timeout = 2;
+}
+
 // StopReplicationStatus represents the replication status before calling StopReplication, and the replication status collected immediately after
 // calling StopReplication.
 message StopReplicationStatus {
@@ -65,7 +73,7 @@ enum StopReplicationMode {
   IOTHREADONLY = 1;
 }
 
-// PrimaryStatus is the replication status for a MySQL primary (returned by 'show master status').
+// PrimaryStatus is the replication status for a MySQL primary (returned by 'show binary log status').
 message PrimaryStatus {
   string position = 1;
   string file_position = 2;
@@ -94,4 +102,5 @@ message FullStatus {
   uint64 semi_sync_primary_timeout = 19;
   uint32 semi_sync_wait_for_replica_count = 20;
   bool super_read_only = 21;
+  replicationdata.Configuration replication_configuration = 22;
 }

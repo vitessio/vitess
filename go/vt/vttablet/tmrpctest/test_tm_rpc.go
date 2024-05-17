@@ -1178,8 +1178,9 @@ func tmRPCTestResetReplicationParametersPanic(ctx context.Context, t *testing.T,
 
 var testSetReplicationSourceCalled = false
 var testForceStartReplica = true
+var testHeartbeatInterval float64 = 4.2
 
-func (fra *fakeRPCTM) SetReplicationSource(ctx context.Context, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplica bool, semiSync bool) error {
+func (fra *fakeRPCTM) SetReplicationSource(ctx context.Context, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplica bool, semiSync bool, heartbeatInterval float64) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -1187,17 +1188,18 @@ func (fra *fakeRPCTM) SetReplicationSource(ctx context.Context, parent *topodata
 	compare(fra.t, "SetReplicationSource timeCreatedNS", timeCreatedNS, testTimeCreatedNS)
 	compare(fra.t, "SetReplicationSource waitPosition", waitPosition, testWaitPosition)
 	compare(fra.t, "SetReplicationSource forceStartReplica", forceStartReplica, testForceStartReplica)
+	compare(fra.t, "SetReplicationSource heartbeatInterval", heartbeatInterval, testHeartbeatInterval)
 	testSetReplicationSourceCalled = true
 	return nil
 }
 
 func tmRPCTestSetReplicationSource(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	err := client.SetReplicationSource(ctx, tablet, testPrimaryAlias, testTimeCreatedNS, testWaitPosition, testForceStartReplica, false)
+	err := client.SetReplicationSource(ctx, tablet, testPrimaryAlias, testTimeCreatedNS, testWaitPosition, testForceStartReplica, false, testHeartbeatInterval)
 	compareError(t, "SetReplicationSource", err, true, testSetReplicationSourceCalled)
 }
 
 func tmRPCTestSetReplicationSourcePanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	err := client.SetReplicationSource(ctx, tablet, testPrimaryAlias, testTimeCreatedNS, testWaitPosition, testForceStartReplica, false)
+	err := client.SetReplicationSource(ctx, tablet, testPrimaryAlias, testTimeCreatedNS, testWaitPosition, testForceStartReplica, false, 0)
 	expectHandleRPCPanic(t, "SetReplicationSource", true /*verbose*/, err)
 }
 

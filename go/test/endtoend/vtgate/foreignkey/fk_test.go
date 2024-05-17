@@ -902,7 +902,7 @@ func TestFkScenarios(t *testing.T) {
 				}
 
 				// Run the DML query that needs to be tested and verify output with MySQL.
-				_, err := mcmp.ExecAllowAndCompareError(tt.dmlQuery)
+				_, err := mcmp.ExecAllowAndCompareError(tt.dmlQuery, utils.CompareOptions{})
 				if tt.dmlShouldErr {
 					assert.Error(t, err)
 				} else {
@@ -948,7 +948,7 @@ func TestFkScenarios(t *testing.T) {
 			mcmp.Exec("SELECT * FROM fk_t13 ORDER BY id")
 
 			// Update that fails
-			_, err := mcmp.ExecAllowAndCompareError("UPDATE fk_t10 SET col = 15 WHERE id = 1")
+			_, err := mcmp.ExecAllowAndCompareError("UPDATE fk_t10 SET col = 15 WHERE id = 1", utils.CompareOptions{})
 			require.Error(t, err)
 
 			// Verify the results
@@ -1006,6 +1006,7 @@ func TestFkQueries(t *testing.T) {
 	testcases := []struct {
 		name    string
 		queries []string
+		opts    utils.CompareOptions
 	}{
 		{
 			name: "Non-literal update",
@@ -1135,6 +1136,17 @@ func TestFkQueries(t *testing.T) {
 				"delete fk_t11 from fk_t11 join fk_t12 using (id) where fk_t11.id = 4",
 			},
 		},
+		{
+			name: "Multi table delete where MySQL and Vitess report different rows affected",
+			queries: []string{
+				"insert /*+ SET_VAR(foreign_key_checks=0) */ into fk_t11 (id, col) values (4, '1'), (5, '3'), (7, '22'), (8, '5'), (9, NULL), (10, '3')",
+				"insert /*+ SET_VAR(foreign_key_checks=0) */ into fk_t12 (id, col) values (4, '1'), (5, '3'), (7, '22'), (8, '5'), (9, NULL), (10, '3')",
+				"delete fk_t11, fk_t12 from fk_t11 join fk_t12 using (id) where fk_t11.id = 5",
+			},
+			opts: utils.CompareOptions{
+				IgnoreRowsAffected: true,
+			},
+		},
 	}
 
 	for _, tt := range testcases {
@@ -1153,7 +1165,7 @@ func TestFkQueries(t *testing.T) {
 				ensureDatabaseState(t, mcmp.MySQLConn, true)
 
 				for _, query := range tt.queries {
-					_, _ = mcmp.ExecAllowAndCompareError(query)
+					_, _ = mcmp.ExecAllowAndCompareError(query, tt.opts)
 					if t.Failed() {
 						break
 					}
@@ -1212,7 +1224,7 @@ func TestFkOneCase(t *testing.T) {
 			log.Errorf("Query %v, Result - %v", query, res.Rows)
 			continue
 		}
-		_, _ = mcmp.ExecAllowAndCompareError(query)
+		_, _ = mcmp.ExecAllowAndCompareError(query, utils.CompareOptions{})
 		if t.Failed() {
 			log.Errorf("Query failed - %v", query)
 			break
@@ -1490,5 +1502,5 @@ create table temp2(id bigint auto_increment primary key, col varchar(20) not nul
 	mcmp.Exec(`set foreign_key_checks = on`)
 	mcmp.Exec(`insert into temp2(col) values('a'), ('b'), ('c') `)
 	mcmp.Exec(`insert into temp1(col) values('a') `)
-	mcmp.ExecAllowAndCompareError(`insert into temp1(col) values('d') `)
+	mcmp.ExecAllowAndCompareError(`insert into temp1(col) values('d') `, utils.CompareOptions{})
 }

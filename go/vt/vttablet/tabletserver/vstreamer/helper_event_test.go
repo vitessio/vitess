@@ -38,7 +38,6 @@ import (
 	"context"
 	"fmt"
 	"slices"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -47,7 +46,6 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/schemadiff"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -60,7 +58,15 @@ const (
 	lengthInt  = 11
 	lengthBlob = 65535
 	lengthText = 262140
-	lengthSet  = 56
+
+	// We have to hardcode the set lengths as we don't yet have an encoded way
+	// to calculate the length for the TableMap event,
+	// This is the expected length of the only SET column in the test schema.
+	lengthSet = 204
+	// This is the expected length of the only SET column using a binary collation
+	// in the test schema.
+	lengthSetBinary = 428
+	lengthJSON      = 4294967295
 )
 
 var (
@@ -80,14 +86,16 @@ type TestColumn struct {
 
 // TestFieldEvent has all the attributes of a table required for creating a field event.
 type TestFieldEvent struct {
-	table, db string
-	cols      []*TestColumn
+	table, db      string
+	cols           []*TestColumn
+	enumSetStrings bool
 }
 
 func (tfe *TestFieldEvent) String() string {
 	var fe binlogdatapb.FieldEvent
 	var field *query.Field
 	fe.TableName = tfe.table
+	fe.EnumSetStringValues = tfe.enumSetStrings
 	for _, col := range tfe.cols {
 		if col.skip {
 			continue
@@ -157,14 +165,33 @@ func (s *TestRowEventSpec) String() string {
 			if c.before != nil && len(c.before) > 0 {
 				rowChange.Before = &query.Row{}
 				for _, val := range c.before {
+					if val == sqltypes.NullStr {
+						val = ""
+					}
 					rowChange.Before.Lengths = append(rowChange.Before.Lengths, int64(len(val)))
 					rowChange.Before.Values = append(rowChange.Before.Values, []byte(val)...)
 				}
 			}
 			if c.after != nil && len(c.after) > 0 {
 				rowChange.After = &query.Row{}
-				for _, val := range c.after {
-					rowChange.After.Lengths = append(rowChange.After.Lengths, int64(len(val)))
+				for i, val := range c.after {
+					if val == sqltypes.NullStr {
+						val = ""
+					}
+					l := int64(len(val))
+					if strings.HasPrefix(val, "\x00") {
+						// The null byte hex representation is used when printing NULL ENUM/SET values.
+						// The length is 0, however, rather than the string representation of those
+						// null bytes.
+						l = 0
+						// The previous column's length increases by 1 for some reason. No idea why MySQL
+						// does this, but it does. It may be including the backslash, for example:
+						// row_changes:{after:{lengths:1 lengths:4 lengths:0 lengths:0 values:\"5mmm\\x00\"}}}"
+						if i > 0 {
+							rowChange.After.Lengths[i-1]++
+						}
+					}
+					rowChange.After.Lengths = append(rowChange.After.Lengths, l)
 					rowChange.After.Values = append(rowChange.After.Values, []byte(val)...)
 				}
 			}
@@ -312,10 +339,8 @@ func (ts *TestSpec) getBindVarsForInsert(stmt sqlparser.Statement) (string, map[
 			v.Format(bufV)
 			s := bufV.String()
 			switch fe.cols[i].dataTypeLowered {
-			case "varchar", "char", "binary", "varbinary", "blob", "text":
+			case "varchar", "char", "binary", "varbinary", "blob", "text", "enum", "set":
 				s = strings.Trim(s, "'")
-			case "set", "enum":
-				s = ts.getMetadataMap(table, fe.cols[i], s)
 			}
 			bv[fe.cols[i].name] = s
 		}
@@ -404,6 +429,7 @@ func (ts *TestSpec) Run() {
 					isRowEvent = true
 					del := stmt.(*sqlparser.Delete)
 					table = del.TableExprs[0].(*sqlparser.AliasedTableExpr).As.String()
+				case *sqlparser.Set:
 				default:
 					_, ok := stmt.(sqlparser.DDLStatement)
 					if !ok {
@@ -504,15 +530,29 @@ func (ts *TestSpec) getFieldEvent(table *schemadiff.CreateTableEntity) *TestFiel
 			tc.len = lengthText
 			tc.colType = "text"
 		case "set":
-			tc.len = lengthSet
+			if collation.IsBinary() {
+				tc.len = lengthSetBinary
+				tc.dataType = "BINARY"
+			} else {
+				tc.len = lengthSet
+			}
 			tc.colType = fmt.Sprintf("%s(%s)", tc.dataTypeLowered, strings.Join(col.Type.EnumValues, ","))
 			ts.metadata[getMetadataKey(table.Name(), tc.name)] = col.Type.EnumValues
+			tfe.enumSetStrings = true
 		case "enum":
 			tc.len = int64(len(col.Type.EnumValues) + 1)
+			if collation.IsBinary() {
+				tc.dataType = "BINARY"
+			}
 			tc.colType = fmt.Sprintf("%s(%s)", tc.dataTypeLowered, strings.Join(col.Type.EnumValues, ","))
 			ts.metadata[getMetadataKey(table.Name(), tc.name)] = col.Type.EnumValues
+			tfe.enumSetStrings = true
+		case "json":
+			tc.colType = "json"
+			tc.len = lengthJSON
+			tc.collationID = collations.CollationBinaryID
 		default:
-			log.Infof(fmt.Sprintf("unknown sqlTypeString %s", tc.dataTypeLowered))
+			require.FailNowf(ts.t, "unknown sqlTypeString %s", tc.dataTypeLowered)
 		}
 		tfe.cols = append(tfe.cols, &tc)
 	}
@@ -528,28 +568,6 @@ func (ts *TestSpec) setMetadataMap(table, col, value string) {
 	valuesReversed := slices.Clone(values)
 	slices.Reverse(valuesReversed)
 	ts.metadata[getMetadataKey(table, col)] = valuesReversed
-}
-
-func (ts *TestSpec) getMetadataMap(table string, col *TestColumn, value string) string {
-	var bits int64
-	value = strings.Trim(value, "'")
-	meta := ts.metadata[getMetadataKey(table, col.name)]
-	values := strings.Split(value, ",")
-	for _, v := range values {
-		v2 := strings.Trim(v, "'")
-		for i, m := range meta {
-			m2 := strings.Trim(m, "'")
-			if m2 == v2 {
-				switch col.dataTypeLowered {
-				case "set":
-					bits |= 1 << uint(i)
-				case "enum":
-					bits = int64(i) + 1
-				}
-			}
-		}
-	}
-	return strconv.FormatInt(bits, 10)
 }
 
 func (ts *TestSpec) getRowEvent(table string, bv map[string]string, fe *TestFieldEvent, stmt sqlparser.Statement, flags uint32) string {
@@ -577,14 +595,24 @@ func (ts *TestSpec) getRowEvent(table string, bv map[string]string, fe *TestFiel
 		}
 		val := []byte(bv[col.name])
 		l := int64(len(val))
-		if col.dataTypeLowered == "binary" {
+		switch col.dataTypeLowered {
+		case "binary":
 			for l < col.len {
 				val = append(val, "\x00"...)
 				l++
 			}
+		case "json":
+			sval := strings.Trim(string(val), "'")
+			sval = strings.ReplaceAll(sval, "\\", "")
+			val = []byte(sval)
+			l = int64(len(val))
 		}
-		row.Values = append(row.Values, val...)
+		if slices.Equal(val, sqltypes.NullBytes) {
+			l = -1
+			val = []byte{}
+		}
 		row.Lengths = append(row.Lengths, l)
+		row.Values = append(row.Values, val...)
 	}
 	ev.RowChanges = ts.getRowChanges(table, stmt, &row)
 	vEvent := &binlogdatapb.VEvent{
@@ -767,6 +795,8 @@ func getQueryType(strType string) query.Type {
 		return query.Type_ENUM
 	case "SET":
 		return query.Type_SET
+	case "JSON":
+		return query.Type_JSON
 	default:
 		panic("unknown type " + strType)
 	}

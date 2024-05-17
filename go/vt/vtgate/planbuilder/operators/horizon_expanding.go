@@ -175,6 +175,7 @@ func createProjectionWithAggr(ctx *plancontext.PlanningContext, qp *QueryProject
 		Original:     true,
 		QP:           qp,
 		Grouping:     qp.GetGrouping(),
+		WithRollup:   qp.WithRollup,
 		Aggregations: aggregations,
 		DT:           dt,
 	}
@@ -235,6 +236,9 @@ outer:
 func createProjectionForComplexAggregation(a *Aggregator, qp *QueryProjection) Operator {
 	p := newAliasedProjection(a)
 	p.DT = a.DT
+	// We don't want to keep the derived table in both Aggregator and Projection.
+	// If we do, then we end up re-writing the same column twice.
+	a.DT = nil
 	for _, expr := range qp.SelectExprs {
 		ae, err := expr.GetAliasedExpr()
 		if err != nil {

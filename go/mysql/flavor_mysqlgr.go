@@ -75,6 +75,10 @@ func (mysqlGRFlavor) stopReplicationCommand() string {
 	return ""
 }
 
+func (mysqlGRFlavor) resetReplicationCommand() string {
+	return ""
+}
+
 // stopIOThreadCommand is disabled in mysqlGRFlavor
 func (mysqlGRFlavor) stopIOThreadCommand() string {
 	return ""
@@ -234,10 +238,15 @@ func fetchStatusForGroupReplication(c *Conn, query string, onResult func([]sqlty
 	return onResult(qr.Rows[0])
 }
 
-// primaryStatus returns the result of 'SHOW MASTER STATUS',
+// primaryStatus returns the result of 'SHOW BINARY LOG STATUS',
 // with parsed executed position.
 func (mysqlGRFlavor) primaryStatus(c *Conn) (replication.PrimaryStatus, error) {
 	return mysqlFlavor{}.primaryStatus(c)
+}
+
+// replicationNetTimeout is part of the Flavor interface.
+func (mysqlGRFlavor) replicationNetTimeout(c *Conn) (int32, error) {
+	return mysqlFlavor8{}.replicationNetTimeout(c)
 }
 
 func (mysqlGRFlavor) baseShowTables() string {

@@ -49,18 +49,8 @@ func TestServerVersionCapableOf(t *testing.T) {
 			isCapable:  false,
 		},
 		{
-			version:    "5.6.7",
-			capability: capabilities.InstantDDLFlavorCapability,
-			isCapable:  false,
-		},
-		{
 			version:    "5.7.29",
 			capability: capabilities.TransactionalGtidExecutedFlavorCapability,
-			isCapable:  false,
-		},
-		{
-			version:    "5.6.7",
-			capability: capabilities.MySQLJSONFlavorCapability,
 			isCapable:  false,
 		},
 		{
@@ -119,16 +109,10 @@ func TestServerVersionCapableOf(t *testing.T) {
 			isCapable:  true,
 		},
 		{
-			// What happens if server version is unspecified
-			version:    "",
-			capability: capabilities.CheckConstraintsCapability,
-			isCapable:  false,
-		},
-		{
 			// Some ridiculous version
 			version:    "5914.234.17",
 			capability: capabilities.CheckConstraintsCapability,
-			isCapable:  false,
+			isCapable:  true,
 		},
 	}
 	for _, tc := range testcases {

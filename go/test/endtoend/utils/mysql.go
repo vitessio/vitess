@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"regexp"
+	"strconv"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -168,7 +170,12 @@ func prepareMySQLWithSchema(params mysql.ConnParams, sql string) error {
 	return nil
 }
 
-func compareVitessAndMySQLResults(t TestingT, query string, vtConn *mysql.Conn, vtQr, mysqlQr *sqltypes.Result, compareColumnNames bool) error {
+type CompareOptions struct {
+	CompareColumnNames bool
+	IgnoreRowsAffected bool
+}
+
+func compareVitessAndMySQLResults(t TestingT, query string, vtConn *mysql.Conn, vtQr, mysqlQr *sqltypes.Result, opts CompareOptions) error {
 	t.Helper()
 
 	if vtQr == nil && mysqlQr == nil {
@@ -201,7 +208,7 @@ func compareVitessAndMySQLResults(t TestingT, query string, vtConn *mysql.Conn, 
 			myCols = append(myCols, myField.Name)
 		}
 
-		if compareColumnNames && !assert.Equal(t, myCols, vtCols, "column names do not match - the expected values are what mysql produced") {
+		if opts.CompareColumnNames && !assert.Equal(t, myCols, vtCols, "column names do not match - the expected values are what mysql produced") {
 			t.Errorf("column names do not match - the expected values are what mysql produced\nNot equal: \nexpected: %v\nactual: %v\n", myCols, vtCols)
 		}
 	}
@@ -214,6 +221,11 @@ func compareVitessAndMySQLResults(t TestingT, query string, vtConn *mysql.Conn, 
 	orderBy := false
 	if selStmt, isSelStmt := stmt.(sqlparser.SelectStatement); isSelStmt {
 		orderBy = selStmt.GetOrderBy() != nil
+	}
+
+	if opts.IgnoreRowsAffected {
+		vtQr.RowsAffected = 0
+		mysqlQr.RowsAffected = 0
 	}
 
 	if (orderBy && sqltypes.ResultsEqual([]sqltypes.Result{*vtQr}, []sqltypes.Result{*mysqlQr})) || sqltypes.ResultsEqualUnordered([]sqltypes.Result{*vtQr}, []sqltypes.Result{*mysqlQr}) {
@@ -240,10 +252,42 @@ func compareVitessAndMySQLResults(t TestingT, query string, vtConn *mysql.Conn, 
 	return errors.New(errStr)
 }
 
+// Parse the string representation of a type (i.e. "INT64") into a three elements slice.
+// First element of the slice will contain the full expression, second element contains the
+// type "INT" and the third element contains the size if there is any "64" or empty if we use
+// "TIMESTAMP" for instance.
+var checkFieldsRegExpr = regexp.MustCompile(`([a-zA-Z]*)(\d*)`)
+
 func checkFields(t TestingT, columnName string, vtField, myField *querypb.Field) {
 	t.Helper()
-	if vtField.Type != myField.Type {
+
+	fail := func() {
 		t.Errorf("for column %s field types do not match\nNot equal: \nMySQL: %v\nVitess: %v\n", columnName, myField.Type.String(), vtField.Type.String())
+	}
+
+	if vtField.Type != myField.Type {
+		vtMatches := checkFieldsRegExpr.FindStringSubmatch(vtField.Type.String())
+		myMatches := checkFieldsRegExpr.FindStringSubmatch(myField.Type.String())
+
+		// Here we want to fail if we have totally different types for instance: "INT64" vs "TIMESTAMP"
+		// We do this by checking the length of the regexp slices and checking the second item of the slices (the real type i.e. "INT")
+		if len(vtMatches) != 3 || len(vtMatches) != len(myMatches) || vtMatches[1] != myMatches[1] {
+			fail()
+			return
+		}
+		vtVal, vtErr := strconv.Atoi(vtMatches[2])
+		myVal, myErr := strconv.Atoi(myMatches[2])
+		if vtErr != nil || myErr != nil {
+			fail()
+			return
+		}
+
+		// Types the same now, however, if the size of the type is smaller on Vitess compared to MySQL
+		// we need to fail. We can allow superset but not the opposite.
+		if vtVal < myVal {
+			fail()
+			return
+		}
 	}
 
 	// starting in Vitess 20, decimal types are properly sized in their field information

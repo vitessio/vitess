@@ -21,11 +21,14 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strconv"
+	"strings"
 	"time"
 
 	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/vt/proto/replicationdata"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -97,6 +100,10 @@ func (mariadbFlavor) stopReplicationCommand() string {
 	return "STOP SLAVE"
 }
 
+func (mariadbFlavor) resetReplicationCommand() string {
+	return "RESET SLAVE ALL"
+}
+
 func (mariadbFlavor) stopIOThreadCommand() string {
 	return "STOP SLAVE IO_THREAD"
 }
@@ -144,7 +151,8 @@ func (mariadbFlavor) resetReplicationCommands(c *Conn) []string {
 		"RESET MASTER",
 		"SET GLOBAL gtid_slave_pos = ''",
 	}
-	if c.SemiSyncExtensionLoaded() {
+	semisyncType, _ := c.SemiSyncExtensionLoaded()
+	if semisyncType == SemiSyncTypeMaster {
 		resetCommands = append(resetCommands, "SET GLOBAL rpl_semi_sync_master_enabled = false, GLOBAL rpl_semi_sync_slave_enabled = false") // semi-sync will be enabled if needed when replica is started.
 	}
 	return resetCommands
@@ -181,9 +189,38 @@ func (mariadbFlavor) setReplicationPositionCommands(pos replication.Position) []
 	}
 }
 
-// setReplicationPositionCommands is part of the Flavor interface.
-func (mariadbFlavor) changeReplicationSourceArg() string {
-	return "MASTER_USE_GTID = current_pos"
+func (mariadbFlavor) setReplicationSourceCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int) string {
+	args := []string{
+		fmt.Sprintf("MASTER_HOST = '%s'", host),
+		fmt.Sprintf("MASTER_PORT = %d", port),
+		fmt.Sprintf("MASTER_USER = '%s'", params.Uname),
+		fmt.Sprintf("MASTER_PASSWORD = '%s'", params.Pass),
+		fmt.Sprintf("MASTER_CONNECT_RETRY = %d", connectRetry),
+	}
+	if params.SslEnabled() {
+		args = append(args, "MASTER_SSL = 1")
+	}
+	if params.SslCa != "" {
+		args = append(args, fmt.Sprintf("MASTER_SSL_CA = '%s'", params.SslCa))
+	}
+	if params.SslCaPath != "" {
+		args = append(args, fmt.Sprintf("MASTER_SSL_CAPATH = '%s'", params.SslCaPath))
+	}
+	if params.SslCert != "" {
+		args = append(args, fmt.Sprintf("MASTER_SSL_CERT = '%s'", params.SslCert))
+	}
+	if params.SslKey != "" {
+		args = append(args, fmt.Sprintf("MASTER_SSL_KEY = '%s'", params.SslKey))
+	}
+	if heartbeatInterval != 0 {
+		args = append(args, fmt.Sprintf("MASTER_HEARTBEAT_PERIOD = %v", heartbeatInterval))
+	}
+	args = append(args, "MASTER_USE_GTID = current_pos")
+	return "CHANGE MASTER TO\n  " + strings.Join(args, ",\n  ")
+}
+
+func (mariadbFlavor) resetBinaryLogsCommand() string {
+	return "RESET MASTER"
 }
 
 // status is part of the Flavor interface.
@@ -225,6 +262,44 @@ func (m mariadbFlavor) primaryStatus(c *Conn) (replication.PrimaryStatus, error)
 	status := replication.ParsePrimaryStatus(resultMap)
 	status.Position.GTIDSet, err = m.primaryGTIDSet(c)
 	return status, err
+}
+
+// replicationConfiguration is part of the Flavor interface.
+func (mariadbFlavor) replicationConfiguration(c *Conn) (*replicationdata.Configuration, error) {
+	qr, err := c.ExecuteFetch(readReplicationConnectionConfiguration, 100, true /* wantfields */)
+	if err != nil {
+		return nil, err
+	}
+	if len(qr.Rows) == 0 {
+		// The query returned no data. This is not a replica.
+		return nil, ErrNotReplica
+	}
+
+	resultMap, err := resultToMap(qr)
+	if err != nil {
+		return nil, err
+	}
+
+	heartbeatInterval, err := strconv.ParseFloat(resultMap["HEARTBEAT_INTERVAL"], 64)
+	if err != nil {
+		return nil, err
+	}
+
+	return &replicationdata.Configuration{
+		HeartbeatInterval: heartbeatInterval,
+	}, nil
+}
+
+// replicationNetTimeout is part of the Flavor interface.
+func (mariadbFlavor) replicationNetTimeout(c *Conn) (int32, error) {
+	qr, err := c.ExecuteFetch("select @@global.slave_net_timeout", 1, false)
+	if err != nil {
+		return 0, err
+	}
+	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result format for slave_net_timeout: %#v", qr)
+	}
+	return qr.Rows[0][0].ToInt32()
 }
 
 // waitUntilPosition is part of the Flavor interface.
@@ -294,4 +369,12 @@ func (mariadbFlavor) supportsCapability(capability capabilities.FlavorCapability
 	default:
 		return false, nil
 	}
+}
+
+func (mariadbFlavor) catchupToGTIDCommands(_ *ConnParams, _ replication.Position) []string {
+	return []string{"unsupported"}
+}
+
+func (mariadbFlavor) binlogReplicatedUpdates() string {
+	return "@@global.log_slave_updates"
 }

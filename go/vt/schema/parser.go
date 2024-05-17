@@ -19,7 +19,6 @@ package schema
 import (
 	"fmt"
 	"regexp"
-	"strconv"
 	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -171,12 +170,13 @@ func parseEnumOrSetTokens(enumOrSetValues string) []string {
 }
 
 // ParseEnumOrSetTokensMap parses the comma delimited part of an enum column definition
-// and returns a map where ["1"] is the first token, and ["<n>"] is th elast token
-func ParseEnumOrSetTokensMap(enumOrSetValues string) map[string]string {
+// and returns a map where [1] is the first token, and [<n>] is the last.
+func ParseEnumOrSetTokensMap(enumOrSetValues string) map[int]string {
 	tokens := parseEnumOrSetTokens(enumOrSetValues)
-	tokensMap := map[string]string{}
+	tokensMap := map[int]string{}
 	for i, token := range tokens {
-		tokensMap[strconv.Itoa(i+1)] = token
+		// SET and ENUM values are 1 indexed.
+		tokensMap[i+1] = token
 	}
 	return tokensMap
 }

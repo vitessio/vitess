@@ -211,6 +211,9 @@ message WorkflowOptions {
   // Remove auto_increment clauses on tables when moving them to a sharded
   // keyspace.
   bool strip_sharded_auto_increment = 2;
+  // Shards on which vreplication streams in the target keyspace are created for this workflow and to which the data
+  // from the source will be vreplicated.
+  repeated string shards = 3;
 }
 
 // TODO: comment the hell out of this.
@@ -332,6 +335,8 @@ message ApplyKeyspaceRoutingRulesRequest {
 }
 
 message ApplyKeyspaceRoutingRulesResponse {
+  // KeyspaceRoutingRules returns the current set of rules.
+  vschema.KeyspaceRoutingRules keyspace_routing_rules = 1;
 }
 
 message ApplyRoutingRulesRequest {

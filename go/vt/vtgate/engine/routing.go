@@ -192,22 +192,21 @@ func (rp *RoutingParameters) routeInfoSchemaQuery(ctx context.Context, vcursor V
 
 	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
 	var specifiedKS string
-	for _, tableSchema := range rp.SysTableTableSchema {
+	for idx, tableSchema := range rp.SysTableTableSchema {
 		result, err := env.Evaluate(tableSchema)
 		if err != nil {
 			return nil, err
 		}
 		ks := result.Value(vcursor.ConnCollation()).ToString()
-		if specifiedKS == "" {
+		switch {
+		case idx == 0:
 			specifiedKS = ks
-		}
-		if specifiedKS != ks {
+		case specifiedKS != ks:
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "specifying two different database in the query is not supported")
 		}
 	}
-	if specifiedKS != "" {
-		bindVars[sqltypes.BvSchemaName] = sqltypes.StringBindVariable(specifiedKS)
-	}
+
+	bindVars[sqltypes.BvSchemaName] = sqltypes.StringBindVariable(specifiedKS)
 
 	tableNames := map[string]string{}
 	for tblBvName, sysTableName := range rp.SysTableTableName {

@@ -118,6 +118,8 @@ type Mysqld struct {
 	mutex         sync.Mutex
 	onTermFuncs   []func()
 	cancelWaitCmd chan struct{}
+
+	semiSyncType mysql.SemiSyncType
 }
 
 func init() {
@@ -928,7 +930,13 @@ func (mysqld *Mysqld) getMycnfTemplate() string {
 				log.Infof("this version of Vitess does not include built-in support for %v %v", mysqld.capabilities.flavor, mysqld.capabilities.version)
 			}
 		case 8:
-			versionConfig = config.MycnfMySQL80
+			if mysqld.capabilities.version.Minor >= 4 {
+				versionConfig = config.MycnfMySQL84
+			} else if mysqld.capabilities.version.Minor >= 1 || mysqld.capabilities.version.Patch >= 26 {
+				versionConfig = config.MycnfMySQL8026
+			} else {
+				versionConfig = config.MycnfMySQL80
+			}
 		default:
 			log.Infof("this version of Vitess does not include built-in support for %v %v", mysqld.capabilities.flavor, mysqld.capabilities.version)
 		}
@@ -1375,7 +1383,7 @@ func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, req *mysqlctlpb.Apply
 		// parameters.  We do it blindly, since this will fail on MariaDB, which doesn't
 		// have super_read_only This is safe, since we're restarting MySQL after the restore anyway
 		log.Infof("ApplyBinlogFile: disabling super_read_only")
-		resetFunc, err := mysqld.SetSuperReadOnly(false)
+		resetFunc, err := mysqld.SetSuperReadOnly(ctx, false)
 		if err != nil {
 			if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
 				log.Warningf("ApplyBinlogFile: server does not know about super_read_only, continuing anyway...")

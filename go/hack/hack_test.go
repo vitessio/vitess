@@ -20,21 +20,30 @@ package hack
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestByteToString(t *testing.T) {
 	v1 := []byte("1234")
-	if s := String(v1); s != "1234" {
-		t.Errorf("String(\"1234\"): %q, want 1234", s)
-	}
+	s := String(v1)
+	assert.Equal(t, "1234", s)
 
 	v1 = []byte("")
-	if s := String(v1); s != "" {
-		t.Errorf("String(\"\"): %q, want empty", s)
-	}
+	s = String(v1)
+	assert.Equal(t, "", s)
 
 	v1 = nil
-	if s := String(v1); s != "" {
-		t.Errorf("String(\"\"): %q, want empty", s)
-	}
+	s = String(v1)
+	assert.Equal(t, "", s)
+}
+
+func TestStringToByte(t *testing.T) {
+	s := "1234"
+	b := StringBytes(s)
+	assert.Equal(t, []byte("1234"), b)
+
+	s = ""
+	b = StringBytes(s)
+	assert.Nil(t, b)
 }

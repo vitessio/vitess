@@ -31,9 +31,8 @@ import (
 type specialAlterOperation string
 
 const (
-	instantDDLSpecialOperation         specialAlterOperation = "instant-ddl"
-	dropRangePartitionSpecialOperation specialAlterOperation = "drop-range-partition"
-	addRangePartitionSpecialOperation  specialAlterOperation = "add-range-partition"
+	instantDDLSpecialOperation     specialAlterOperation = "instant-ddl"
+	rangePartitionSpecialOperation specialAlterOperation = "range-partition"
 )
 
 type SpecialAlterPlan struct {
@@ -86,95 +85,6 @@ func (e *Executor) getCreateTableStatement(ctx context.Context, tableName string
 	return createTable, nil
 }
 
-// analyzeDropRangePartition sees if the online DDL drops a single partition in a range partitioned table
-func analyzeDropRangePartition(alterTable *sqlparser.AlterTable, createTable *sqlparser.CreateTable) (*SpecialAlterPlan, error) {
-	// we are looking for a `ALTER TABLE <table> DROP PARTITION <name>` statement with nothing else
-	if len(alterTable.AlterOptions) > 0 {
-		return nil, nil
-	}
-	if alterTable.PartitionOption != nil {
-		return nil, nil
-	}
-	spec := alterTable.PartitionSpec
-	if spec == nil {
-		return nil, nil
-	}
-	if spec.Action != sqlparser.DropAction {
-		return nil, nil
-	}
-	if len(spec.Names) != 1 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vitess only supports dropping a single partition per query: %v", sqlparser.CanonicalString(alterTable))
-	}
-	partitionName := spec.Names[0].String()
-	// OK then!
-
-	// Now, is this query dropping the first partition in a RANGE partitioned table?
-	part := createTable.TableSpec.PartitionOption
-	if part.Type != sqlparser.RangeType {
-		return nil, nil
-	}
-	if len(part.Definitions) == 0 {
-		return nil, nil
-	}
-	var partitionDefinition *sqlparser.PartitionDefinition
-	var nextPartitionName string
-	for i, p := range part.Definitions {
-		if p.Name.String() == partitionName {
-			partitionDefinition = p
-			if i+1 < len(part.Definitions) {
-				nextPartitionName = part.Definitions[i+1].Name.String()
-			}
-			break
-		}
-	}
-	if partitionDefinition == nil {
-		// dropping a nonexistent partition. We'll let the "standard" migration execution flow deal with that.
-		return nil, nil
-	}
-	op := NewSpecialAlterOperation(dropRangePartitionSpecialOperation, alterTable, createTable)
-	op.SetDetail("partition_name", partitionName)
-	op.SetDetail("partition_definition", sqlparser.CanonicalString(partitionDefinition))
-	op.SetDetail("next_partition_name", nextPartitionName)
-	return op, nil
-}
-
-// analyzeAddRangePartition sees if the online DDL adds a partition in a range partitioned table
-func analyzeAddRangePartition(alterTable *sqlparser.AlterTable, createTable *sqlparser.CreateTable) *SpecialAlterPlan {
-	// we are looking for a `ALTER TABLE <table> ADD PARTITION (PARTITION ...)` statement with nothing else
-	if len(alterTable.AlterOptions) > 0 {
-		return nil
-	}
-	if alterTable.PartitionOption != nil {
-		return nil
-	}
-	spec := alterTable.PartitionSpec
-	if spec == nil {
-		return nil
-	}
-	if spec.Action != sqlparser.AddAction {
-		return nil
-	}
-	if len(spec.Definitions) != 1 {
-		return nil
-	}
-	partitionDefinition := spec.Definitions[0]
-	partitionName := partitionDefinition.Name.String()
-	// OK then!
-
-	// Now, is this query adding a partition in a RANGE partitioned table?
-	part := createTable.TableSpec.PartitionOption
-	if part.Type != sqlparser.RangeType {
-		return nil
-	}
-	if len(part.Definitions) == 0 {
-		return nil
-	}
-	op := NewSpecialAlterOperation(addRangePartitionSpecialOperation, alterTable, createTable)
-	op.SetDetail("partition_name", partitionName)
-	op.SetDetail("partition_definition", sqlparser.CanonicalString(partitionDefinition))
-	return op
-}
-
 // analyzeInstantDDL takes declarative CreateTable and AlterTable, as well as a server version, and checks whether it is possible to run the ALTER
 // using ALGORITHM=INSTANT for that version.
 func analyzeInstantDDL(alterTable *sqlparser.AlterTable, createTable *sqlparser.CreateTable, capableOf capabilities.CapableOf) (*SpecialAlterPlan, error) {
@@ -208,19 +118,28 @@ func (e *Executor) analyzeSpecialAlterPlan(ctx context.Context, onlineDDL *schem
 	}
 
 	// special plans which support reverts are trivially desired:
-	// special plans which do not support reverts are flag protected:
-	if onlineDDL.StrategySetting().IsFastRangeRotationFlag() {
-		op, err := analyzeDropRangePartition(alterTable, createTable)
+	//
+	// - nothing here thus far
+	//
+	// special plans that do not support revert, but are always desired over Online DDL,
+	// hence not flag protected:
+	{
+		// Dropping a range partition has to run directly. It is incorrect to run with Online DDL
+		// because the table copy will make the second-oldest partition "adopt" the rows which
+		// we really want purged from the oldest partition.
+		// Adding a range partition _can_ technically run with Online DDL, but it is wasteful
+		// and pointless. The user fully expects the operation to run immediately and without
+		// any copy of data.
+		isRangeRotation, err := schemadiff.AlterTableRotatesRangePartition(createTable, alterTable)
 		if err != nil {
 			return nil, err
 		}
-		if op != nil {
-			return op, nil
-		}
-		if op := analyzeAddRangePartition(alterTable, createTable); op != nil {
+		if isRangeRotation {
+			op := NewSpecialAlterOperation(rangePartitionSpecialOperation, alterTable, createTable)
 			return op, nil
 		}
 	}
+	// special plans which do not support reverts are flag protected:
 	if onlineDDL.StrategySetting().IsPreferInstantDDL() {
 		op, err := analyzeInstantDDL(alterTable, createTable, capableOf)
 		if err != nil {

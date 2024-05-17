@@ -205,8 +205,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfGeomFromWKBExpr(in)
 	case *GeomPropertyFuncExpr:
 		return CloneRefOfGeomPropertyFuncExpr(in)
-	case GroupBy:
-		return CloneGroupBy(in)
+	case *GroupBy:
+		return CloneRefOfGroupBy(in)
 	case *GroupConcatExpr:
 		return CloneRefOfGroupConcatExpr(in)
 	case IdentifierCI:
@@ -1544,16 +1544,14 @@ func CloneRefOfGeomPropertyFuncExpr(n *GeomPropertyFuncExpr) *GeomPropertyFuncEx
 	return &out
 }
 
-// CloneGroupBy creates a deep clone of the input.
-func CloneGroupBy(n GroupBy) GroupBy {
+// CloneRefOfGroupBy creates a deep clone of the input.
+func CloneRefOfGroupBy(n *GroupBy) *GroupBy {
 	if n == nil {
 		return nil
 	}
-	res := make(GroupBy, len(n))
-	for i, x := range n {
-		res[i] = CloneExpr(x)
-	}
-	return res
+	out := *n
+	out.Exprs = CloneSliceOfExpr(n.Exprs)
+	return &out
 }
 
 // CloneRefOfGroupConcatExpr creates a deep clone of the input.
@@ -1634,8 +1632,8 @@ func CloneRefOfInsert(n *Insert) *Insert {
 	out.Partitions = ClonePartitions(n.Partitions)
 	out.Columns = CloneColumns(n.Columns)
 	out.Rows = CloneInsertRows(n.Rows)
-	out.OnDup = CloneOnDup(n.OnDup)
 	out.RowAlias = CloneRefOfRowAlias(n.RowAlias)
+	out.OnDup = CloneOnDup(n.OnDup)
 	return &out
 }
 
@@ -2738,7 +2736,7 @@ func CloneRefOfSelect(n *Select) *Select {
 	out.Comments = CloneRefOfParsedComments(n.Comments)
 	out.SelectExprs = CloneSelectExprs(n.SelectExprs)
 	out.Where = CloneRefOfWhere(n.Where)
-	out.GroupBy = CloneGroupBy(n.GroupBy)
+	out.GroupBy = CloneRefOfGroupBy(n.GroupBy)
 	out.Having = CloneRefOfWhere(n.Having)
 	out.Windows = CloneNamedWindows(n.Windows)
 	out.OrderBy = CloneOrderBy(n.OrderBy)
@@ -4412,6 +4410,18 @@ func CloneSliceOfRefOfVariable(n []*Variable) []*Variable {
 	return res
 }
 
+// CloneSliceOfExpr creates a deep clone of the input.
+func CloneSliceOfExpr(n []Expr) []Expr {
+	if n == nil {
+		return nil
+	}
+	res := make([]Expr, len(n))
+	for i, x := range n {
+		res[i] = CloneExpr(x)
+	}
+	return res
+}
+
 // CloneRefOfIdentifierCI creates a deep clone of the input.
 func CloneRefOfIdentifierCI(n *IdentifierCI) *IdentifierCI {
 	if n == nil {
@@ -4450,18 +4460,6 @@ func CloneSliceOfRefOfIndexOption(n []*IndexOption) []*IndexOption {
 	res := make([]*IndexOption, len(n))
 	for i, x := range n {
 		res[i] = CloneRefOfIndexOption(x)
-	}
-	return res
-}
-
-// CloneSliceOfExpr creates a deep clone of the input.
-func CloneSliceOfExpr(n []Expr) []Expr {
-	if n == nil {
-		return nil
-	}
-	res := make([]Expr, len(n))
-	for i, x := range n {
-		res[i] = CloneExpr(x)
 	}
 	return res
 }

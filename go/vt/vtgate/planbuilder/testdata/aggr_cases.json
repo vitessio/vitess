@@ -540,6 +540,50 @@
     }
   },
   {
+    "comment": "WITH ROLLUP on unsharded keyspaces",
+    "query": "select a, b, count(*) from unsharded group by a, b with rollup",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select a, b, count(*) from unsharded group by a, b with rollup",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select a, b, count(*) from unsharded where 1 != 1 group by a, b with rollup",
+        "Query": "select a, b, count(*) from unsharded group by a, b with rollup",
+        "Table": "unsharded"
+      },
+      "TablesUsed": [
+        "main.unsharded"
+      ]
+    }
+  },
+  {
+    "comment": "WITH ROLLUP that is pushed to single shard",
+    "query": "select id, user_id, count(*) from music group by id, user_id with rollup",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select id, user_id, count(*) from music group by id, user_id with rollup",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id, user_id, count(*) from music where 1 != 1 group by id, user_id with rollup",
+        "Query": "select id, user_id, count(*) from music group by id, user_id with rollup",
+        "Table": "music"
+      },
+      "TablesUsed": [
+        "user.music"
+      ]
+    }
+  },
+  {
     "comment": "count with distinct no unique vindex, count expression aliased",
     "query": "select col1, count(distinct col2) c2 from user group by col1",
     "plan": {
@@ -2853,8 +2897,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select sum(col), 32 from (select `user`.col as col, 32 from `user` where 1 != 1) as t where 1 != 1",
-                    "Query": "select sum(col), 32 from (select `user`.col as col, 32 from `user`) as t",
+                    "FieldQuery": "select sum(col) from (select `user`.col as col, 32 from `user` where 1 != 1) as t where 1 != 1",
+                    "Query": "select sum(col) from (select `user`.col as col, 32 from `user`) as t",
                     "Table": "`user`"
                   },
                   {
@@ -3459,35 +3503,46 @@
             "Count": "10",
             "Inputs": [
               {
-                "OperatorType": "Join",
-                "Variant": "LeftJoin",
-                "JoinColumnIndexes": "R:0",
-                "JoinVars": {
-                  "user_id": 0
-                },
-                "TableName": "`user`_user_extra",
+                "OperatorType": "SimpleProjection",
+                "ColumnNames": [
+                  "col"
+                ],
+                "Columns": [
+                  0
+                ],
                 "Inputs": [
                   {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
+                    "OperatorType": "Join",
+                    "Variant": "LeftJoin",
+                    "JoinColumnIndexes": "R:0",
+                    "JoinVars": {
+                      "user_id": 0
                     },
-                    "FieldQuery": "select `user`.id from `user` where 1 != 1",
-                    "Query": "select `user`.id from `user`",
-                    "Table": "`user`"
-                  },
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
-                    "Query": "select user_extra.col from user_extra where user_extra.id = :user_id",
-                    "Table": "user_extra"
+                    "TableName": "`user`_user_extra",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select `user`.id from `user` where 1 != 1",
+                        "Query": "select `user`.id from `user`",
+                        "Table": "`user`"
+                      },
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
+                        "Query": "select user_extra.col from user_extra where user_extra.id = :user_id",
+                        "Table": "user_extra"
+                      }
+                    ]
                   }
                 ]
               }

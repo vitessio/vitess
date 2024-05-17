@@ -159,6 +159,10 @@ func (u *Union) GetSelectFor(source int) *sqlparser.Select {
 	}
 }
 
+func (u *Union) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
+	return u.addWeightStringToOffset(ctx, offset)
+}
+
 func (u *Union) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) int {
 	if reuse {
 		offset := u.FindCol(ctx, expr.Expr, false)
@@ -188,21 +192,32 @@ func (u *Union) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool,
 			panic(vterrors.VT13001(fmt.Sprintf("could not find the argument to the weight_string function: %s", sqlparser.String(wsArg))))
 		}
 
-		return u.addWeightStringToOffset(ctx, argIdx, gb)
+		return u.addWeightStringToOffset(ctx, argIdx)
+	case *sqlparser.Literal, *sqlparser.Argument:
+		return u.addConstantToUnion(ctx, expr)
 	default:
 		panic(vterrors.VT13001(fmt.Sprintf("only weight_string function is expected - got %s", sqlparser.String(expr))))
 	}
 }
 
-func (u *Union) addWeightStringToOffset(ctx *plancontext.PlanningContext, argIdx int, addToGroupBy bool) (outputOffset int) {
+func (u *Union) addConstantToUnion(ctx *plancontext.PlanningContext, aexpr *sqlparser.AliasedExpr) (outputOffset int) {
 	for i, src := range u.Sources {
-		exprs := u.Selects[i]
-		selectExpr := exprs[argIdx]
-		ae, ok := selectExpr.(*sqlparser.AliasedExpr)
-		if !ok {
-			panic(vterrors.VT09015())
+		thisOffset := src.AddColumn(ctx, true, false, aexpr)
+		// all offsets for the newly added ws need to line up
+		if i == 0 {
+			outputOffset = thisOffset
+		} else {
+			if thisOffset != outputOffset {
+				panic(vterrors.VT12001("argument offsets did not line up for UNION"))
+			}
 		}
-		thisOffset := src.AddColumn(ctx, false, addToGroupBy, aeWrap(weightStringFor(ae.Expr)))
+	}
+	return
+}
+
+func (u *Union) addWeightStringToOffset(ctx *plancontext.PlanningContext, argIdx int) (outputOffset int) {
+	for i, src := range u.Sources {
+		thisOffset := src.AddWSColumn(ctx, argIdx, false)
 
 		// all offsets for the newly added ws need to line up
 		if i == 0 {

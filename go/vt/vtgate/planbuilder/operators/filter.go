@@ -95,6 +95,10 @@ func (f *Filter) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, 
 	return f.Source.FindCol(ctx, expr, underRoute)
 }
 
+func (f *Filter) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
+	return f.Source.AddWSColumn(ctx, offset, underRoute)
+}
+
 func (f *Filter) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
 	return f.Source.GetColumns(ctx)
 }

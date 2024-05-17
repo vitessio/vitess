@@ -111,7 +111,7 @@ connect directly to the topo server(s).`, useInternalVtctld),
 			client, err = getClientForCommand(cmd)
 			ctx := cmd.Context()
 			if ctx == nil {
-				ctx = context.Background()
+				ctx = cmd.Context()
 			}
 			commandCtx, commandCancel = context.WithTimeout(ctx, actionTimeout)
 			if compactOutput {

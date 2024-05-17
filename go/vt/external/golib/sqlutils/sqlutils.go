@@ -88,6 +88,11 @@ func (this *RowMap) GetInt64(key string) int64 {
 	return res
 }
 
+func (this *RowMap) GetFloat64(key string) float64 {
+	res, _ := strconv.ParseFloat(this.GetString(key), 64)
+	return res
+}
+
 func (this *RowMap) GetInt32(key string) int32 {
 	res, _ := strconv.ParseInt(this.GetString(key), 10, 32)
 	return int32(res)

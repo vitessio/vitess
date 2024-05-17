@@ -71,10 +71,11 @@ type (
 	//     so they can be used for the result of this expression that is using data from both sides.
 	//     All fields will be used for these
 	applyJoinColumn struct {
-		Original sqlparser.Expr // this is the original expression being passed through
-		LHSExprs []BindVarExpr
-		RHSExpr  sqlparser.Expr
-		GroupBy  bool // if this is true, we need to push this down to our inputs with addToGroupBy set to true
+		Original  sqlparser.Expr     // this is the original expression being passed through
+		LHSExprs  []BindVarExpr      // These are the expressions we are pushing to the left hand side which we'll receive as bind variables
+		RHSExpr   sqlparser.Expr     // This the expression that we'll evaluate on the right hand side. This is nil, if the right hand side has nothing.
+		DTColName *sqlparser.ColName // This is the output column name that the parent of JOIN will be seeing. If this is unset, then the colname is the String(Original). We set this when we push Projections with derived tables underneath a Join.
+		GroupBy   bool               // if this is true, we need to push this down to our inputs with addToGroupBy set to true
 	}
 
 	// BindVarExpr is an expression needed from one side of a join/subquery, and the argument name for it.
@@ -211,7 +212,8 @@ func (aj *ApplyJoin) getJoinColumnFor(ctx *plancontext.PlanningContext, orig *sq
 
 func applyJoinCompare(ctx *plancontext.PlanningContext, expr sqlparser.Expr) func(e applyJoinColumn) bool {
 	return func(e applyJoinColumn) bool {
-		return ctx.SemTable.EqualsExprWithDeps(e.Original, expr)
+		// e.DTColName is how the outside world will be using this expression. So we should check for an equality with that too.
+		return ctx.SemTable.EqualsExprWithDeps(e.Original, expr) || ctx.SemTable.EqualsExprWithDeps(e.DTColName, expr)
 	}
 }
 
@@ -237,22 +239,52 @@ func (aj *ApplyJoin) AddColumn(
 	return offset
 }
 
+func (aj *ApplyJoin) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
+	if len(aj.Columns) == 0 {
+		aj.planOffsets(ctx)
+	}
+
+	if len(aj.Columns) <= offset {
+		panic(vterrors.VT13001("offset out of range"))
+	}
+
+	wsExpr := weightStringFor(aj.JoinColumns.columns[offset].Original)
+	if index := aj.FindCol(ctx, wsExpr, false); index != -1 {
+		// nice, we already have this column. no need to add anything
+		return index
+	}
+
+	i := aj.Columns[offset]
+	out := 0
+	if i < 0 {
+		out = aj.LHS.AddWSColumn(ctx, FromLeftOffset(i), underRoute)
+		out = ToLeftOffset(out)
+		aj.JoinColumns.addLeft(wsExpr)
+	} else {
+		out = aj.RHS.AddWSColumn(ctx, FromRightOffset(i), underRoute)
+		out = ToRightOffset(out)
+		aj.JoinColumns.addRight(wsExpr)
+	}
+
+	if out >= 0 {
+		aj.addOffset(out)
+	} else {
+		col := aj.getJoinColumnFor(ctx, aeWrap(wsExpr), wsExpr, !ContainsAggr(ctx, wsExpr))
+		aj.JoinColumns.add(col)
+		aj.planOffsetFor(ctx, col)
+	}
+
+	return len(aj.Columns) - 1
+}
+
 func (aj *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) Operator {
+	if len(aj.Columns) > 0 {
+		// we've already done offset planning
+		return aj
+	}
 	for _, col := range aj.JoinColumns.columns {
 		// Read the type description for applyJoinColumn to understand the following code
-		for _, lhsExpr := range col.LHSExprs {
-			offset := aj.LHS.AddColumn(ctx, true, col.GroupBy, aeWrap(lhsExpr.Expr))
-			if col.RHSExpr == nil {
-				// if we don't have an RHS expr, it means that this is a pure LHS expression
-				aj.addOffset(-offset - 1)
-			} else {
-				aj.Vars[lhsExpr.Name] = offset
-			}
-		}
-		if col.RHSExpr != nil {
-			offset := aj.RHS.AddColumn(ctx, true, col.GroupBy, aeWrap(col.RHSExpr))
-			aj.addOffset(offset + 1)
-		}
+		aj.planOffsetFor(ctx, col)
 	}
 
 	for _, col := range aj.JoinPredicates.columns {
@@ -268,6 +300,38 @@ func (aj *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	}
 
 	return nil
+}
+
+func (aj *ApplyJoin) planOffsetFor(ctx *plancontext.PlanningContext, col applyJoinColumn) {
+	if col.DTColName != nil {
+		// If DTColName is set, then we already pushed the parts of the expression down while planning.
+		// We need to use this name and ask the correct side of the join for it. Nothing else is required.
+		if col.IsPureLeft() {
+			offset := aj.LHS.AddColumn(ctx, true, col.GroupBy, aeWrap(col.DTColName))
+			aj.addOffset(ToLeftOffset(offset))
+		} else {
+			for _, lhsExpr := range col.LHSExprs {
+				offset := aj.LHS.AddColumn(ctx, true, col.GroupBy, aeWrap(lhsExpr.Expr))
+				aj.Vars[lhsExpr.Name] = offset
+			}
+			offset := aj.RHS.AddColumn(ctx, true, col.GroupBy, aeWrap(col.DTColName))
+			aj.addOffset(ToRightOffset(offset))
+		}
+		return
+	}
+	for _, lhsExpr := range col.LHSExprs {
+		offset := aj.LHS.AddColumn(ctx, true, col.GroupBy, aeWrap(lhsExpr.Expr))
+		if col.RHSExpr == nil {
+			// if we don't have an RHS expr, it means that this is a pure LHS expression
+			aj.addOffset(ToLeftOffset(offset))
+		} else {
+			aj.Vars[lhsExpr.Name] = offset
+		}
+	}
+	if col.RHSExpr != nil {
+		offset := aj.RHS.AddColumn(ctx, true, col.GroupBy, aeWrap(col.RHSExpr))
+		aj.addOffset(ToRightOffset(offset))
+	}
 }
 
 func (aj *ApplyJoin) addOffset(offset int) {

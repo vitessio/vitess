@@ -1152,6 +1152,8 @@ var (
 	}, {
 		input: "select /* order by asc */ 1 from t order by a asc",
 	}, {
+		input: "select a, b, c, count(*), sum(foo) from t group by a, b, c with rollup",
+	}, {
 		input: "select /* order by desc */ 1 from t order by a desc",
 	}, {
 		input: "select /* order by null */ 1 from t order by null",
@@ -3784,6 +3786,9 @@ var (
 		input:  "SELECT time, subject, VARIANCE(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
 		output: "select `time`, subject, variance(val) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
 	}, {
+		input:  "SELECT id, coalesce( (SELECT Json_arrayagg(Json_array(id)) FROM (SELECT *, Row_number() over (ORDER BY users.order ASC) FROM unsharded as users WHERE users.purchaseorderid = orders.id) users), json_array()) AS users, coalesce( (SELECT json_arrayagg(json_array(id)) FROM (SELECT *, row_number() over (ORDER BY tests.order ASC) FROM unsharded as tests WHERE tests.purchaseorderid = orders.id) tests), json_array()) AS tests FROM unsharded as orders WHERE orders.id = 'xxx'",
+		output: "select id, coalesce((select Json_arrayagg(json_array(id)) from (select *, row_number() over ( order by users.`order` asc) from unsharded as users where users.purchaseorderid = orders.id) as users), json_array()) as users, coalesce((select json_arrayagg(json_array(id)) from (select *, row_number() over ( order by tests.`order` asc) from unsharded as tests where tests.purchaseorderid = orders.id) as tests), json_array()) as tests from unsharded as orders where orders.id = 'xxx'",
+	}, {
 		input: `kill connection 18446744073709551615`,
 	}, {
 		input: `kill query 18446744073709551615`,
@@ -6081,6 +6086,18 @@ var (
 		input:        "create table 2t.3t2 (c1 bigint not null, c2 text, primary key(c1))",
 		output:       "syntax error at position 18 near '.3'",
 		excludeMulti: true,
+	}, {
+		input:  "ALTER TABLE t ADD PARTITION (PARTITION p10 VALUES LESS THAN (10)), ADD PARTITION (PARTITION p20 VALUES LESS THAN (20))",
+		output: "syntax error at position 67",
+	}, {
+		input:  "ALTER TABLE t DROP PARTITION p1, DROP PARTITION p2",
+		output: "syntax error at position 38 near 'DROP'",
+	}, {
+		input:  "ALTER TABLE t DROP PARTITION p1, ADD COLUMN c INT",
+		output: "syntax error at position 37 near 'ADD'",
+	}, {
+		input:  "ALTER TABLE t ADD COLUMN c INT, DROP PARTITION p1",
+		output: "syntax error at position 47 near 'PARTITION'",
 	}, {
 		input:  "execute stmt1 using a, @b",
 		output: "syntax error at position 22 near 'a'",

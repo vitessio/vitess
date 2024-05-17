@@ -1406,8 +1406,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select id1 from (select `user`.id as id1 from `user` where 1 != 1) as t where 1 != 1",
-            "Query": "select id1 from (select `user`.id as id1 from `user`) as t",
+            "FieldQuery": "select t.id1 from (select `user`.id as id1 from `user` where 1 != 1) as t where 1 != 1",
+            "Query": "select t.id1 from (select `user`.id as id1 from `user`) as t",
             "Table": "`user`"
           },
           {
@@ -1417,8 +1417,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select id2 from (select user_extra.id as id2 from user_extra where 1 != 1) as t where 1 != 1",
-            "Query": "select id2 from (select user_extra.id as id2 from user_extra) as t",
+            "FieldQuery": "select t.id2 from (select user_extra.id as id2 from user_extra where 1 != 1) as t where 1 != 1",
+            "Query": "select t.id2 from (select user_extra.id as id2 from user_extra) as t",
             "Table": "user_extra"
           }
         ]
@@ -5219,6 +5219,28 @@
       },
       "TablesUsed": [
         "main.unsharded_a"
+      ]
+    }
+  },
+  {
+    "comment": "join with derived table with alias and join condition - merge into route",
+    "query": "select 1 from user join (select id as uid from user) as t where t.uid = user.id",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 1 from user join (select id as uid from user) as t where t.uid = user.id",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from (select id as uid from `user` where 1 != 1) as t, `user` where 1 != 1",
+        "Query": "select 1 from (select id as uid from `user`) as t, `user` where t.uid = `user`.id",
+        "Table": "`user`"
+      },
+      "TablesUsed": [
+        "user.user"
       ]
     }
   }

@@ -17,11 +17,10 @@ limitations under the License.
 package operators
 
 import (
+	"fmt"
 	"slices"
-	"strconv"
 
 	"vitess.io/vitess/go/slice"
-	"vitess.io/vitess/go/test/dbg"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -50,8 +49,7 @@ func (p *projector) add(pe *ProjExpr, alias string) {
 func (p *projector) get(ctx *plancontext.PlanningContext, expr sqlparser.Expr) sqlparser.Expr {
 	for _, column := range p.columns {
 		if ctx.SemTable.EqualsExprWithDeps(expr, column.ColExpr) {
-			alias := p.claimUnusedAlias(column.Original)
-			out := sqlparser.NewColName(alias)
+			out := sqlparser.NewColName(column.Original.ColumnName())
 			out.Qualifier = p.tableName
 
 			ctx.SemTable.CopySemanticInfo(expr, out)
@@ -71,16 +69,6 @@ func (p *projector) get(ctx *plancontext.PlanningContext, expr sqlparser.Expr) s
 	ctx.SemTable.CopySemanticInfo(expr, out)
 
 	return out
-}
-
-// claimUnusedAlias generates a unique alias based on the provided expression, ensuring no duplication in the projector
-func (p *projector) claimUnusedAlias(ae *sqlparser.AliasedExpr) string {
-	bare := ae.ColumnName()
-	alias := bare
-	for i := int64(0); slices.Index(p.columnAliases, alias) > -1; i++ {
-		alias = bare + strconv.FormatInt(i, 10)
-	}
-	return alias
 }
 
 // tryPushProjection attempts to optimize a projection by pushing it down in the query plan
@@ -204,10 +192,27 @@ func pushProjectionToOuterContainer(ctx *plancontext.PlanningContext, p *Project
 	return src, Rewrote("push projection into outer side of subquery container")
 }
 
-// pushProjectionInApplyJoin pushes down a projection operation into an ApplyJoin operation.
-// It processes each input column and creates new JoinPredicates for the ApplyJoin operation based on
-// the input column's expression. It also creates new Projection operators for the left and right
-// children of the ApplyJoin operation, if needed.
+// pushProjectionInApplyJoin optimizes the ApplyJoin operation by pushing down the projection operation into it. This function works as follows:
+//
+// 1. It traverses each input column of the projection operation.
+// 2. For each column, it generates new JoinPredicates for the ApplyJoin operation. These predicates are derived from the column's expression.
+/*
+Here's an ASCII representation of the transformation:
+  Before:
+   Projection[L.colX, R.colY]
+ 	    |
+ 	ApplyJoin
+ 	 /   \
+ 	LHS  RHS
+  After:
+ 	             ApplyJoin
+ 	            /         \
+  Projection[L.colX] Projection[R.colY]
+ 	     |                   |
+ 	     LHS                 RHS
+*/
+// In the transformed state, if necessary, new Projection operators are created for the left and right children of the ApplyJoin operation.
+// These Projections can then hopefully be pushed down under a Route or Limit operation.
 func pushProjectionInApplyJoin(
 	ctx *plancontext.PlanningContext,
 	p *Projection,
@@ -224,8 +229,18 @@ func pushProjectionInApplyJoin(
 		rhs.explicitColumnAliases = true
 	}
 
+	// We store the original join columns to reuse them.
+	originalJoinColumns := src.JoinColumns
 	src.JoinColumns = &applyJoinColumns{}
 	for idx, pe := range ap {
+		// First we check if we have already done the work to find how to push this expression.
+		// If we find it then we can directly use it. This is not just a performance improvement, but
+		// is also required for pushing a projection that is just an alias.
+		foundIdx := slices.IndexFunc(originalJoinColumns.columns, applyJoinCompare(ctx, pe.ColExpr))
+		if foundIdx != -1 {
+			src.JoinColumns.add(originalJoinColumns.columns[foundIdx])
+			continue
+		}
 		var alias string
 		if p.DT != nil && len(p.DT.Columns) > 0 {
 			if len(p.DT.Columns) <= idx {
@@ -233,7 +248,7 @@ func pushProjectionInApplyJoin(
 			}
 			alias = p.DT.Columns[idx].String()
 		}
-		splitProjectionAcrossJoin(ctx, src, lhs, rhs, pe, alias)
+		splitProjectionAcrossJoin(ctx, src, lhs, rhs, pe, alias, p.DT)
 	}
 
 	if p.isDerived() {
@@ -255,23 +270,16 @@ func splitProjectionAcrossJoin(
 	lhs, rhs *projector,
 	pe *ProjExpr,
 	colAlias string,
+	dt *DerivedTable,
 ) {
-
-	// Check if the current expression can reuse an existing column in the ApplyJoin.
-	if _, found := canReuseColumn(ctx, join.JoinColumns.columns, pe.EvalExpr, joinColumnToExpr); found {
-		return
-	}
-
 	switch pe.Info.(type) {
-	case nil:
-		join.JoinColumns.add(splitUnexploredExpression(ctx, join, lhs, rhs, pe, colAlias))
-	case Offset:
+	case Offset, nil:
 		// for offsets, we'll just treat the expression as unexplored, and later stages will handle the new offset
-		join.JoinColumns.add(splitUnexploredExpression(ctx, join, lhs, rhs, pe, colAlias))
+		join.JoinColumns.add(splitUnexploredExpression(ctx, join, lhs, rhs, pe, colAlias, dt))
 	case SubQueryExpression:
 		join.JoinColumns.add(splitSubqueryExpression(ctx, join, lhs, rhs, pe, colAlias))
 	default:
-		panic(dbg.S(pe.Info))
+		panic(vterrors.VT13001(fmt.Sprintf("unknown projection type %T", pe.Info)))
 	}
 }
 
@@ -292,9 +300,23 @@ func splitUnexploredExpression(
 	lhs, rhs *projector,
 	pe *ProjExpr,
 	alias string,
+	dt *DerivedTable,
 ) applyJoinColumn {
+	original := sqlparser.CloneRefOfAliasedExpr(pe.Original)
+	expr := pe.ColExpr
+
+	var colName *sqlparser.ColName
+	if dt != nil {
+		if !pe.isSameInAndOut(ctx) {
+			panic(vterrors.VT13001("derived table columns must be the same in and out"))
+		}
+		colName = sqlparser.NewColNameWithQualifier(pe.Original.ColumnName(), sqlparser.NewTableName(dt.Alias))
+		ctx.SemTable.CopySemanticInfo(expr, colName)
+	}
+
 	// Get a applyJoinColumn for the current expression.
-	col := join.getJoinColumnFor(ctx, pe.Original, pe.ColExpr, false)
+	col := join.getJoinColumnFor(ctx, original, expr, false)
+	col.DTColName = colName
 
 	return pushDownSplitJoinCol(col, lhs, pe, alias, rhs)
 }
@@ -349,8 +371,7 @@ func exposeColumnsThroughDerivedTable(ctx *plancontext.PlanningContext, p *Proje
 
 	lhsIDs := TableID(src.LHS)
 	rhsIDs := TableID(src.RHS)
-	rewriteColumnsForJoin(ctx, src.JoinPredicates.columns, lhsIDs, rhsIDs, lhs, rhs, false)
-	rewriteColumnsForJoin(ctx, src.JoinColumns.columns, lhsIDs, rhsIDs, lhs, rhs, true)
+	rewriteColumnsForJoin(ctx, src.JoinPredicates.columns, lhsIDs, rhsIDs, lhs, rhs)
 }
 
 func rewriteColumnsForJoin(
@@ -358,8 +379,6 @@ func rewriteColumnsForJoin(
 	columns []applyJoinColumn,
 	lhsIDs, rhsIDs semantics.TableSet,
 	lhs, rhs *projector,
-	exposeRHS bool, // we only want to expose the returned columns from the RHS.
-	// For predicates, we don't need to expose the RHS columns
 ) {
 	for colIdx, column := range columns {
 		for lhsIdx, bve := range column.LHSExprs {
@@ -370,30 +389,32 @@ func rewriteColumnsForJoin(
 			continue
 		}
 
-		// now we need to go over the predicate and find
+		// The RHSExprs are the expressions on the RHS of the join, and these have already been pushed down on the RHS
+		// of the ApplyJoin. These expressions don't need to be exposed through the derived table, they are just
+		// receiving the expressions from the LHS of the join using parameters.
+
 		var rewriteTo sqlparser.Expr
 
 		pre := func(node, _ sqlparser.SQLNode) bool {
-			_, isSQ := node.(*sqlparser.Subquery)
-			if isSQ {
+			// We are looking for ColNames that belong to either the RHS or LHS of the join
+			// We'll replace these with columns being passed through the derived table
+			var col *sqlparser.ColName
+			switch node := node.(type) {
+			case *sqlparser.ColName:
+				col = node
+			case *sqlparser.Subquery:
 				return false
-			}
-			expr, ok := node.(sqlparser.Expr)
-			if !ok {
+			default:
 				return true
 			}
-			deps := ctx.SemTable.RecursiveDeps(expr)
+
+			deps := ctx.SemTable.RecursiveDeps(col)
 
 			switch {
-			case deps.IsEmpty():
-				return true
 			case deps.IsSolvedBy(lhsIDs):
-				rewriteTo = lhs.get(ctx, expr)
+				rewriteTo = lhs.get(ctx, col)
 				return false
 			case deps.IsSolvedBy(rhsIDs):
-				if exposeRHS {
-					rewriteTo = rhs.get(ctx, expr)
-				}
 				return false
 			default:
 				return true

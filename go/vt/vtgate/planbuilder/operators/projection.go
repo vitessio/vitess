@@ -293,6 +293,40 @@ func (p *Projection) addColumnsWithoutPushing(ctx *plancontext.PlanningContext, 
 	return offsets
 }
 
+func (p *Projection) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
+	cols, aliased := p.Columns.(AliasedProjections)
+	if !aliased {
+		panic(vterrors.VT09015())
+	}
+
+	if offset >= len(cols) || offset < 0 {
+		panic(vterrors.VT13001(fmt.Sprintf("offset [%d] out of range [%d]", offset, len(cols))))
+	}
+
+	expr := cols[offset].EvalExpr
+	ws := weightStringFor(expr)
+	if offset := p.FindCol(ctx, ws, underRoute); offset >= 0 {
+		// if we already have this column, we can just return the offset
+		return offset
+	}
+
+	aeWs := aeWrap(ws)
+	pe := newProjExprWithInner(aeWs, ws)
+	if underRoute {
+		return p.addProjExpr(pe)
+	}
+
+	// we need to push down this column to our input
+	offsetOnInput := p.Source.FindCol(ctx, expr, false)
+	if offsetOnInput >= 0 {
+		// if we are not getting this from the source, we can solve this at offset planning time
+		inputOffset := p.Source.AddWSColumn(ctx, offsetOnInput, false)
+		pe.Info = Offset(inputOffset)
+	}
+
+	return p.addProjExpr(pe)
+}
+
 func (p *Projection) AddColumn(ctx *plancontext.PlanningContext, reuse bool, addToGroupBy bool, ae *sqlparser.AliasedExpr) int {
 	return p.addColumn(ctx, reuse, addToGroupBy, ae, true)
 }

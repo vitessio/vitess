@@ -252,7 +252,7 @@ func TestDeleteWithSubquery(t *testing.T) {
 		`[[INT64(1) INT64(1) INT64(4)] [INT64(1) INT64(2) INT64(2)] [INT64(2) INT64(3) INT64(5)]]`)
 
 	// delete with subquery from same table (fails on mysql) - subquery get's merged so fails for vitess
-	_, err := mcmp.ExecAllowAndCompareError(`delete from s_tbl where id in (select id from s_tbl)`)
+	_, err := mcmp.ExecAllowAndCompareError(`delete from s_tbl where id in (select id from s_tbl)`, utils.CompareOptions{})
 	require.ErrorContains(t, err, "You can't specify target table 's_tbl' for update in FROM clause (errno 1093) (sqlstate HY000)")
 
 	// delete with subquery from same table (fails on mysql) - subquery not merged so passes for vitess

@@ -20,10 +20,12 @@ import (
 	"context"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
+	"vitess.io/vitess/go/vt/proto/replicationdata"
 
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -52,21 +54,22 @@ type MysqlDaemon interface {
 	GetServerUUID(ctx context.Context) (string, error)
 
 	// replication related methods
-	StartReplication(hookExtraEnv map[string]string) error
-	RestartReplication(hookExtraEnv map[string]string) error
+	StartReplication(ctx context.Context, hookExtraEnv map[string]string) error
+	RestartReplication(ctx context.Context, hookExtraEnv map[string]string) error
 	StartReplicationUntilAfter(ctx context.Context, pos replication.Position) error
-	StopReplication(hookExtraEnv map[string]string) error
+	StopReplication(ctx context.Context, hookExtraEnv map[string]string) error
 	StopIOThread(ctx context.Context) error
-	ReplicationStatus() (replication.ReplicationStatus, error)
+	ReplicationStatus(ctx context.Context) (replication.ReplicationStatus, error)
 	PrimaryStatus(ctx context.Context) (replication.PrimaryStatus, error)
+	ReplicationConfiguration(ctx context.Context) (*replicationdata.Configuration, error)
 	GetGTIDPurged(ctx context.Context) (replication.Position, error)
-	SetSemiSyncEnabled(source, replica bool) error
-	SemiSyncEnabled() (source, replica bool)
-	SemiSyncExtensionLoaded() (bool, error)
-	SemiSyncStatus() (source, replica bool)
-	SemiSyncClients() (count uint32)
-	SemiSyncSettings() (timeout uint64, numReplicas uint32)
-	SemiSyncReplicationStatus() (bool, error)
+	SetSemiSyncEnabled(ctx context.Context, source, replica bool) error
+	SemiSyncEnabled(ctx context.Context) (source, replica bool)
+	SemiSyncExtensionLoaded(ctx context.Context) (mysql.SemiSyncType, error)
+	SemiSyncStatus(ctx context.Context) (source, replica bool)
+	SemiSyncClients(ctx context.Context) (count uint32)
+	SemiSyncSettings(ctx context.Context) (timeout uint64, numReplicas uint32)
+	SemiSyncReplicationStatus(ctx context.Context) (bool, error)
 	ResetReplicationParameters(ctx context.Context) error
 	GetBinlogInformation(ctx context.Context) (binlogFormat string, logEnabled bool, logReplicaUpdate bool, binlogRowImage string, err error)
 	GetGTIDMode(ctx context.Context) (gtidMode string, err error)
@@ -76,20 +79,21 @@ type MysqlDaemon interface {
 
 	// reparenting related methods
 	ResetReplication(ctx context.Context) error
-	PrimaryPosition() (replication.Position, error)
-	IsReadOnly() (bool, error)
-	IsSuperReadOnly() (bool, error)
-	SetReadOnly(on bool) error
-	SetSuperReadOnly(on bool) (ResetSuperReadOnlyFunc, error)
+	PrimaryPosition(ctx context.Context) (replication.Position, error)
+	IsReadOnly(ctx context.Context) (bool, error)
+	IsSuperReadOnly(ctx context.Context) (bool, error)
+	SetReadOnly(ctx context.Context, on bool) error
+	SetSuperReadOnly(ctx context.Context, on bool) (ResetSuperReadOnlyFunc, error)
 	SetReplicationPosition(ctx context.Context, pos replication.Position) error
-	SetReplicationSource(ctx context.Context, host string, port int32, stopReplicationBefore bool, startReplicationAfter bool) error
+	SetReplicationSource(ctx context.Context, host string, port int32, heartbeatInterval float64, stopReplicationBefore bool, startReplicationAfter bool) error
 	WaitForReparentJournal(ctx context.Context, timeCreatedNS int64) error
 
 	WaitSourcePos(context.Context, replication.Position) error
+	CatchupToGTID(context.Context, replication.Position) error
 
 	// Promote makes the current server the primary. It will not change
 	// the read_only state of the server.
-	Promote(map[string]string) (replication.Position, error)
+	Promote(context.Context, map[string]string) (replication.Position, error)
 
 	// Schema related methods
 	GetSchema(ctx context.Context, dbName string, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error)

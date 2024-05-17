@@ -2,6 +2,7 @@ package vreplication
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -33,8 +34,12 @@ func TestMoveTablesBuffering(t *testing.T) {
 	catchup(t, targetTab2, workflowName, "MoveTables")
 	vdiffSideBySide(t, ksWorkflow, "")
 	waitForLowLag(t, "customer", workflowName)
-	tstWorkflowSwitchReads(t, "", "")
-	tstWorkflowSwitchWrites(t)
+	for i := 0; i < 10; i++ {
+		tstWorkflowSwitchReadsAndWrites(t)
+		time.Sleep(loadTestBufferingWindowDuration + 1*time.Second)
+		tstWorkflowReverseReadsAndWrites(t)
+		time.Sleep(loadTestBufferingWindowDuration + 1*time.Second)
+	}
 	log.Infof("SwitchWrites done")
 	lg.stop()
 

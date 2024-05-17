@@ -64,7 +64,7 @@ func TestSimplifyResultsMismatchedQuery(t *testing.T) {
 			mcmp, closer := start(t)
 			defer closer()
 
-			mcmp.ExecAllowAndCompareError(simplified)
+			mcmp.ExecAllowAndCompareError(simplified, utils.CompareOptions{})
 		})
 
 		fmt.Printf("final simplified query: %s\n", simplified)
@@ -77,7 +77,7 @@ func simplifyResultsMismatchedQuery(t *testing.T, query string) string {
 	mcmp, closer := start(t)
 	defer closer()
 
-	_, err := mcmp.ExecAllowAndCompareError(query)
+	_, err := mcmp.ExecAllowAndCompareError(query, utils.CompareOptions{})
 	if err == nil {
 		t.Fatalf("query (%s) does not error", query)
 	} else if !strings.Contains(err.Error(), "mismatched") {
@@ -105,7 +105,7 @@ func simplifyResultsMismatchedQuery(t *testing.T, query string) string {
 		vSchemaWrapper,
 		func(statement sqlparser.SelectStatement) bool {
 			q := sqlparser.String(statement)
-			_, newErr := mcmp.ExecAllowAndCompareError(q)
+			_, newErr := mcmp.ExecAllowAndCompareError(q, utils.CompareOptions{})
 			if newErr == nil {
 				return false
 			} else {

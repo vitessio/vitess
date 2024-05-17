@@ -42,11 +42,11 @@ func isMergeable(ctx *plancontext.PlanningContext, query sqlparser.SelectStateme
 
 	switch node := query.(type) {
 	case *sqlparser.Select:
-		if len(node.GroupBy) > 0 {
+		if node.GroupBy != nil && len(node.GroupBy.Exprs) > 0 {
 			// iff we are grouping, we need to check that we can perform the grouping inside a single shard, and we check that
 			// by checking that one of the grouping expressions used is a unique single column vindex.
 			// TODO: we could also support the case where all the columns of a multi-column vindex are used in the grouping
-			for _, gb := range node.GroupBy {
+			for _, gb := range node.GroupBy.Exprs {
 				if validVindex(gb) {
 					return true
 				}

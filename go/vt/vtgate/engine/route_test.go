@@ -130,7 +130,7 @@ func TestInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T) {
 		expectedLog: []string{
 			"FindTable(tableName)",
 			"ResolveDestinations routedKeyspace [] Destinations:DestinationAnyShard()",
-			"ExecuteMultiShard routedKeyspace.1: dummy_select {table_name: type:VARCHAR value:\"routedTable\"} false false"},
+			"ExecuteMultiShard routedKeyspace.1: dummy_select {__vtschemaname: type:VARCHAR table_name: type:VARCHAR value:\"routedTable\"} false false"},
 	}, {
 		testName:  "table name predicate - not routed",
 		tableName: map[string]evalengine.Expr{"table_name": evalengine.NewLiteralString([]byte("tableName"), collations.SystemCollation)},
@@ -138,7 +138,7 @@ func TestInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T) {
 		expectedLog: []string{
 			"FindTable(tableName)",
 			"ResolveDestinations ks [] Destinations:DestinationAnyShard()",
-			"ExecuteMultiShard ks.1: dummy_select {table_name: type:VARCHAR value:\"tableName\"} false false"},
+			"ExecuteMultiShard ks.1: dummy_select {__vtschemaname: type:VARCHAR table_name: type:VARCHAR value:\"tableName\"} false false"},
 	}, {
 		testName:    "schema predicate",
 		tableSchema: []string{"myKeyspace"},

@@ -91,8 +91,8 @@ func connectForReplication(cp dbconfigs.Connector) (*mysql.Conn, error) {
 	}
 	// Tell the server that we understand the format of events
 	// that will be used if binlog_checksum is enabled on the server.
-	if _, err := conn.ExecuteFetch("SET @master_binlog_checksum=@@global.binlog_checksum", 0, false); err != nil {
-		return nil, fmt.Errorf("failed to set @master_binlog_checksum=@@global.binlog_checksum: %v", err)
+	if _, err := conn.ExecuteFetch("SET @source_binlog_checksum = @@global.binlog_checksum, @master_binlog_checksum=@@global.binlog_checksum", 0, false); err != nil {
+		return nil, fmt.Errorf("failed to set @source_binlog_checksum=@@global.binlog_checksum: %v", err)
 	}
 
 	return conn, nil

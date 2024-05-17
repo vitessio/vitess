@@ -90,7 +90,7 @@ func run(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("Cannot open 'to' topo %v: %w", toImplementation, err)
 	}
 
-	ctx := context.Background()
+	ctx := cmd.Context()
 
 	if compare {
 		return compareTopos(ctx, fromTS, toTS)

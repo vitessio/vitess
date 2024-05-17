@@ -295,6 +295,18 @@ func TestSchemaDiff(t *testing.T) {
 			instantCapability: InstantDDLCapabilityPossible,
 		},
 		{
+			name: "two identical tables, one with explicit charset, one without",
+			fromQueries: []string{
+				"create table foobar (id int primary key, foo varchar(64) character set utf8mb3 collate utf8mb3_bin)",
+			},
+			toQueries: []string{
+				"create table foobar (id int primary key, foo varchar(64) collate utf8mb3_bin)",
+			},
+			entityOrder:       []string{},
+			instantCapability: InstantDDLCapabilityIrrelevant,
+		},
+
+		{
 			name: "instant DDL possible on 8.0.32",
 			toQueries: []string{
 				"create table t1 (id int primary key, ts timestamp, info int not null);",

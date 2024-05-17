@@ -572,12 +572,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfGeomPropertyFuncExpr(a, b)
-	case GroupBy:
-		b, ok := inB.(GroupBy)
+	case *GroupBy:
+		b, ok := inB.(*GroupBy)
 		if !ok {
 			return false
 		}
-		return cmp.GroupBy(a, b)
+		return cmp.RefOfGroupBy(a, b)
 	case *GroupConcatExpr:
 		b, ok := inB.(*GroupConcatExpr)
 		if !ok {
@@ -2792,17 +2792,16 @@ func (cmp *Comparator) RefOfGeomPropertyFuncExpr(a, b *GeomPropertyFuncExpr) boo
 		cmp.Expr(a.Geom, b.Geom)
 }
 
-// GroupBy does deep equals between the two objects.
-func (cmp *Comparator) GroupBy(a, b GroupBy) bool {
-	if len(a) != len(b) {
+// RefOfGroupBy does deep equals between the two objects.
+func (cmp *Comparator) RefOfGroupBy(a, b *GroupBy) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
 		return false
 	}
-	for i := 0; i < len(a); i++ {
-		if !cmp.Expr(a[i], b[i]) {
-			return false
-		}
-	}
-	return true
+	return a.WithRollup == b.WithRollup &&
+		cmp.SliceOfExpr(a.Exprs, b.Exprs)
 }
 
 // RefOfGroupConcatExpr does deep equals between the two objects.
@@ -2898,8 +2897,8 @@ func (cmp *Comparator) RefOfInsert(a, b *Insert) bool {
 		cmp.Partitions(a.Partitions, b.Partitions) &&
 		cmp.Columns(a.Columns, b.Columns) &&
 		cmp.InsertRows(a.Rows, b.Rows) &&
-		cmp.OnDup(a.OnDup, b.OnDup) &&
-		cmp.RefOfRowAlias(a.RowAlias, b.RowAlias)
+		cmp.RefOfRowAlias(a.RowAlias, b.RowAlias) &&
+		cmp.OnDup(a.OnDup, b.OnDup)
 }
 
 // RefOfInsertExpr does deep equals between the two objects.
@@ -4155,7 +4154,7 @@ func (cmp *Comparator) RefOfSelect(a, b *Select) bool {
 		cmp.RefOfParsedComments(a.Comments, b.Comments) &&
 		cmp.SelectExprs(a.SelectExprs, b.SelectExprs) &&
 		cmp.RefOfWhere(a.Where, b.Where) &&
-		cmp.GroupBy(a.GroupBy, b.GroupBy) &&
+		cmp.RefOfGroupBy(a.GroupBy, b.GroupBy) &&
 		cmp.RefOfWhere(a.Having, b.Having) &&
 		cmp.NamedWindows(a.Windows, b.Windows) &&
 		cmp.OrderBy(a.OrderBy, b.OrderBy) &&
@@ -7265,6 +7264,19 @@ func (cmp *Comparator) SliceOfRefOfVariable(a, b []*Variable) bool {
 	return true
 }
 
+// SliceOfExpr does deep equals between the two objects.
+func (cmp *Comparator) SliceOfExpr(a, b []Expr) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !cmp.Expr(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
 // RefOfIdentifierCI does deep equals between the two objects.
 func (cmp *Comparator) RefOfIdentifierCI(a, b *IdentifierCI) bool {
 	if a == b {
@@ -7308,19 +7320,6 @@ func (cmp *Comparator) SliceOfRefOfIndexOption(a, b []*IndexOption) bool {
 	}
 	for i := 0; i < len(a); i++ {
 		if !cmp.RefOfIndexOption(a[i], b[i]) {
-			return false
-		}
-	}
-	return true
-}
-
-// SliceOfExpr does deep equals between the two objects.
-func (cmp *Comparator) SliceOfExpr(a, b []Expr) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := 0; i < len(a); i++ {
-		if !cmp.Expr(a[i], b[i]) {
 			return false
 		}
 	}

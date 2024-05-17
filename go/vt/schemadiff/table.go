@@ -19,6 +19,7 @@ package schemadiff
 import (
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -138,6 +139,29 @@ func (d *AlterTableEntityDiff) InstantDDLCapability() InstantDDLCapability {
 	return d.instantDDLCapability
 }
 
+// Clone implements EntityDiff
+func (d *AlterTableEntityDiff) Clone() EntityDiff {
+	if d == nil {
+		return nil
+	}
+	ann := *d.annotations
+	clone := &AlterTableEntityDiff{
+		alterTable:           sqlparser.CloneRefOfAlterTable(d.alterTable),
+		instantDDLCapability: d.instantDDLCapability,
+		annotations:          &ann,
+	}
+	if d.from != nil {
+		clone.from = d.from.Clone().(*CreateTableEntity)
+	}
+	if d.to != nil {
+		clone.to = d.to.Clone().(*CreateTableEntity)
+	}
+	if d.subsequentDiff != nil {
+		clone.subsequentDiff = d.subsequentDiff.Clone().(*AlterTableEntityDiff)
+	}
+	return clone
+}
+
 type CreateTableEntityDiff struct {
 	to          *CreateTableEntity
 	createTable *sqlparser.CreateTable
@@ -213,6 +237,20 @@ func (d *CreateTableEntityDiff) SetSubsequentDiff(EntityDiff) {
 // InstantDDLCapability implements EntityDiff
 func (d *CreateTableEntityDiff) InstantDDLCapability() InstantDDLCapability {
 	return InstantDDLCapabilityIrrelevant
+}
+
+// Clone implements EntityDiff
+func (d *CreateTableEntityDiff) Clone() EntityDiff {
+	if d == nil {
+		return nil
+	}
+	clone := &CreateTableEntityDiff{
+		createTable: sqlparser.CloneRefOfCreateTable(d.createTable),
+	}
+	if d.to != nil {
+		clone.to = d.to.Clone().(*CreateTableEntity)
+	}
+	return clone
 }
 
 type DropTableEntityDiff struct {
@@ -292,6 +330,20 @@ func (d *DropTableEntityDiff) InstantDDLCapability() InstantDDLCapability {
 	return InstantDDLCapabilityIrrelevant
 }
 
+// Clone implements EntityDiff
+func (d *DropTableEntityDiff) Clone() EntityDiff {
+	if d == nil {
+		return nil
+	}
+	clone := &DropTableEntityDiff{
+		dropTable: sqlparser.CloneRefOfDropTable(d.dropTable),
+	}
+	if d.from != nil {
+		clone.from = d.from.Clone().(*CreateTableEntity)
+	}
+	return clone
+}
+
 type RenameTableEntityDiff struct {
 	from        *CreateTableEntity
 	to          *CreateTableEntity
@@ -368,6 +420,23 @@ func (d *RenameTableEntityDiff) SetSubsequentDiff(EntityDiff) {
 // InstantDDLCapability implements EntityDiff
 func (d *RenameTableEntityDiff) InstantDDLCapability() InstantDDLCapability {
 	return InstantDDLCapabilityIrrelevant
+}
+
+// Clone implements EntityDiff
+func (d *RenameTableEntityDiff) Clone() EntityDiff {
+	if d == nil {
+		return nil
+	}
+	clone := &RenameTableEntityDiff{
+		renameTable: sqlparser.CloneRefOfRenameTable(d.renameTable),
+	}
+	if d.from != nil {
+		clone.from = d.from.Clone().(*CreateTableEntity)
+	}
+	if d.to != nil {
+		clone.to = d.to.Clone().(*CreateTableEntity)
+	}
+	return clone
 }
 
 // CreateTableEntity stands for a TABLE construct. It contains the table's CREATE statement.
@@ -1203,52 +1272,64 @@ func (c *CreateTableEntity) isRangePartitionsRotation(
 	if t1Partitions.Type != sqlparser.RangeType {
 		return false, nil, nil
 	}
-	definitions1 := t1Partitions.Definitions
+	definitions1 := slices.Clone(t1Partitions.Definitions)
 	definitions2 := t2Partitions.Definitions
-	// there has to be a non-empty shared list, therefore both definitions must be non-empty:
 	if len(definitions1) == 0 {
 		return false, nil, nil
 	}
 	if len(definitions2) == 0 {
 		return false, nil, nil
 	}
-	var droppedPartitions1 []*sqlparser.PartitionDefinition
-	// It's OK for prefix of t1 partitions to be nonexistent in t2 (as they may have been rotated away in t2)
-	for len(definitions1) > 0 && !sqlparser.Equals.RefOfPartitionDefinition(definitions1[0], definitions2[0]) {
-		droppedPartitions1 = append(droppedPartitions1, definitions1[0])
-		definitions1 = definitions1[1:]
+	definitions2map := make(map[string]*sqlparser.PartitionDefinition, len(definitions2))
+	for _, definition := range definitions2 {
+		definitions2map[sqlparser.CanonicalString(definition)] = definition
 	}
+	// Find dropped partitions:
+	var droppedPartitions1 []*sqlparser.PartitionDefinition
+	for i := len(definitions1) - 1; i >= 0; i-- {
+		definition := definitions1[i]
+		if _, ok := definitions2map[sqlparser.CanonicalString(definition)]; !ok {
+			// In range partitioning, it's allowed to drop any partition, whether it's the first, somewhere in the middle, or last.
+			droppedPartitions1 = append(droppedPartitions1, definition)
+			// We remove the definition from the list, so that we can then compare the remaining definitions
+			definitions1 = append(definitions1[:i], definitions1[i+1:]...)
+		}
+	}
+	slices.Reverse(droppedPartitions1)
 	if len(definitions1) == 0 {
-		// We've exhausted definition1 trying to find a shared partition with definitions2. Nothing found.
-		// so there is no shared sequence between the two tables.
+		// Nothing shared between the two partition lists.
 		return false, nil, nil
 	}
+	// In range partitioning, it's only allowed to ADD one partition at the end of the range.
+	// We allow multiple here, and the diff mechanism will later split them to subsequent diffs.
+
+	// Let's now validate that any added partitions in t2Partitions are strictly a suffix of t1Partitions
 	if len(definitions1) > len(definitions2) {
 		return false, nil, nil
 	}
-	// To save computation, and because we've already shown that sqlparser.EqualsRefOfPartitionDefinition(definitions1[0], definitions2[0]), nil,
-	// we can skip one element
-	definitions1 = definitions1[1:]
-	definitions2 = definitions2[1:]
-	// Now let's ensure that whatever is remaining in definitions1 is an exact match for a prefix of definitions2
-	// It's ok if we end up with leftover elements in definition2
-	for len(definitions1) > 0 {
-		if !sqlparser.Equals.RefOfPartitionDefinition(definitions1[0], definitions2[0]) {
+	for i := range definitions1 {
+		if !sqlparser.Equals.RefOfPartitionDefinition(definitions1[i], definitions2[i]) {
+			// Not a suffix
 			return false, nil, nil
 		}
-		definitions1 = definitions1[1:]
-		definitions2 = definitions2[1:]
 	}
-	addedPartitions2 := definitions2
-	partitionSpecs := make([]*sqlparser.PartitionSpec, 0, len(droppedPartitions1)+len(addedPartitions2))
-	for _, p := range droppedPartitions1 {
+	// And the suffix is any remaining definitions
+	addedPartitions2 := definitions2[len(definitions1):]
+
+	var partitionSpecs []*sqlparser.PartitionSpec
+	// Dropped partitions:
+	if len(droppedPartitions1) > 0 {
+		// A single DROP PARTITION clause can specify multiple partition names
 		partitionSpec := &sqlparser.PartitionSpec{
 			Action: sqlparser.DropAction,
-			Names:  []sqlparser.IdentifierCI{p.Name},
+		}
+		for _, p := range droppedPartitions1 {
+			partitionSpec.Names = append(partitionSpec.Names, p.Name)
+			annotations.MarkRemoved(sqlparser.CanonicalString(p))
 		}
 		partitionSpecs = append(partitionSpecs, partitionSpec)
-		annotations.MarkRemoved(sqlparser.CanonicalString(p))
 	}
+	// Added partitions:
 	for _, p := range addedPartitions2 {
 		partitionSpec := &sqlparser.PartitionSpec{
 			Action:      sqlparser.AddAction,

@@ -151,7 +151,7 @@ func Init(ctx context.Context) (*Env, error) {
 	}
 	te.TabletEnv = tabletenv.NewEnv(vtenv, conf, "VStreamerTest")
 	te.Mysqld = mysqlctl.NewMysqld(te.Dbcfgs)
-	pos, _ := te.Mysqld.PrimaryPosition()
+	pos, _ := te.Mysqld.PrimaryPosition(ctx)
 	if strings.HasPrefix(strings.ToLower(pos.GTIDSet.Flavor()), string(mysqlctl.FlavorMariaDB)) {
 		te.DBType = string(mysqlctl.FlavorMariaDB)
 	} else {

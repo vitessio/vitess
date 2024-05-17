@@ -181,24 +181,22 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 	}
 	sourceTablet.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		// These 3 statements come from tablet startup
-		"STOP SLAVE",
-		"FAKE SET MASTER",
-		"START SLAVE",
+		"STOP REPLICA",
+		"FAKE SET SOURCE",
+		"START REPLICA",
 		// This first set of STOP and START commands come from
 		// the builtinBackupEngine implementation which stops the replication
 		// while taking the backup
-		"STOP SLAVE",
-		"START SLAVE",
+		"STOP REPLICA",
+		"START REPLICA",
 		// These commands come from SetReplicationSource RPC called
 		// to set the correct primary and semi-sync after Backup has concluded.
 		// Since the primary hasn't changed, we only restart replication after fixing semi-sync.
-		"STOP SLAVE",
-		"START SLAVE",
+		"STOP REPLICA",
+		"START REPLICA",
 	}
 	sourceTablet.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
-		"SHOW DATABASES":         {},
-		"RESET MASTER":           {},
-		"SET GLOBAL gtid_purged": {},
+		"SHOW DATABASES": {},
 	}
 	sourceTablet.StartActionLoop(t, wr)
 	defer sourceTablet.StopActionLoop(t)
@@ -234,20 +232,21 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 	}
 	destTablet.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		// These 3 statements come from tablet startup
-		"STOP SLAVE",
-		"FAKE SET MASTER",
-		"START SLAVE",
-		"STOP SLAVE",
-		"RESET SLAVE ALL",
-		"FAKE SET SLAVE POSITION",
-		"STOP SLAVE",
-		"FAKE SET MASTER",
-		"START SLAVE",
+		"STOP REPLICA",
+		"FAKE SET SOURCE",
+		"START REPLICA",
+		"FAKE RESET BINARY LOGS AND GTIDS",
+		"FAKE SET GLOBAL gtid_purged",
+		"STOP REPLICA",
+		"FAKE RESET REPLICA ALL",
+		"FAKE RESET BINARY LOGS AND GTIDS",
+		"FAKE SET GLOBAL gtid_purged",
+		"STOP REPLICA",
+		"FAKE SET SOURCE",
+		"START REPLICA",
 	}
 	destTablet.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
-		"SHOW DATABASES":         {},
-		"RESET MASTER":           {},
-		"SET GLOBAL gtid_purged": {},
+		"SHOW DATABASES": {},
 	}
 	destTablet.FakeMysqlDaemon.SetReplicationPositionPos = sourceTablet.FakeMysqlDaemon.CurrentPrimaryPosition
 	destTablet.FakeMysqlDaemon.SetReplicationSourceInputs = append(destTablet.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(primary.Tablet))
@@ -289,16 +288,17 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 	}
 
 	primary.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
-		"SHOW DATABASES":         {},
-		"RESET MASTER":           {},
-		"SET GLOBAL gtid_purged": {},
+		"SHOW DATABASES": {},
 	}
 	primary.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		"STOP SLAVE",
-		"RESET SLAVE ALL",
-		"FAKE SET SLAVE POSITION",
-		"FAKE SET MASTER",
-		"START SLAVE",
+		"FAKE RESET BINARY LOGS AND GTIDS",
+		"FAKE SET GLOBAL gtid_purged",
+		"STOP REPLICA",
+		"FAKE RESET REPLICA ALL",
+		"FAKE RESET BINARY LOGS AND GTIDS",
+		"FAKE SET GLOBAL gtid_purged",
+		"FAKE SET SOURCE",
+		"START REPLICA",
 	}
 
 	primary.FakeMysqlDaemon.SetReplicationPositionPos = primary.FakeMysqlDaemon.CurrentPrimaryPosition
@@ -419,19 +419,19 @@ func TestBackupRestoreLagged(t *testing.T) {
 	sourceTablet.FakeMysqlDaemon.SetReplicationSourceInputs = []string{fmt.Sprintf("%s:%d", primary.Tablet.MysqlHostname, primary.Tablet.MysqlPort)}
 	sourceTablet.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		// These 3 statements come from tablet startup
-		"STOP SLAVE",
-		"FAKE SET MASTER",
-		"START SLAVE",
+		"STOP REPLICA",
+		"FAKE SET SOURCE",
+		"START REPLICA",
 		// This first set of STOP and START commands come from
 		// the builtinBackupEngine implementation which stops the replication
 		// while taking the backup
-		"STOP SLAVE",
-		"START SLAVE",
+		"STOP REPLICA",
+		"START REPLICA",
 		// These commands come from SetReplicationSource RPC called
 		// to set the correct primary and semi-sync after Backup has concluded.
 		// Since the primary hasn't changed, we only restart replication after fixing semi-sync.
-		"STOP SLAVE",
-		"START SLAVE",
+		"STOP REPLICA",
+		"START REPLICA",
 	}
 	sourceTablet.StartActionLoop(t, wr)
 	defer sourceTablet.StopActionLoop(t)
@@ -488,20 +488,21 @@ func TestBackupRestoreLagged(t *testing.T) {
 	}
 	destTablet.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		// These 3 statements come from tablet startup
-		"STOP SLAVE",
-		"FAKE SET MASTER",
-		"START SLAVE",
-		"STOP SLAVE",
-		"RESET SLAVE ALL",
-		"FAKE SET SLAVE POSITION",
-		"STOP SLAVE",
-		"FAKE SET MASTER",
-		"START SLAVE",
+		"STOP REPLICA",
+		"FAKE SET SOURCE",
+		"START REPLICA",
+		"FAKE RESET BINARY LOGS AND GTIDS",
+		"FAKE SET GLOBAL gtid_purged",
+		"STOP REPLICA",
+		"FAKE RESET REPLICA ALL",
+		"FAKE RESET BINARY LOGS AND GTIDS",
+		"FAKE SET GLOBAL gtid_purged",
+		"STOP REPLICA",
+		"FAKE SET SOURCE",
+		"START REPLICA",
 	}
 	destTablet.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
-		"SHOW DATABASES":         {},
-		"RESET MASTER":           {},
-		"SET GLOBAL gtid_purged": {},
+		"SHOW DATABASES": {},
 	}
 	destTablet.FakeMysqlDaemon.SetReplicationPositionPos = destTablet.FakeMysqlDaemon.CurrentPrimaryPosition
 	destTablet.FakeMysqlDaemon.SetReplicationSourceInputs = append(destTablet.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(primary.Tablet))
@@ -637,19 +638,19 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 	sourceTablet.FakeMysqlDaemon.SetReplicationSourceInputs = []string{fmt.Sprintf("%s:%d", primary.Tablet.MysqlHostname, primary.Tablet.MysqlPort)}
 	sourceTablet.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		// These 3 statements come from tablet startup
-		"STOP SLAVE",
-		"FAKE SET MASTER",
-		"START SLAVE",
+		"STOP REPLICA",
+		"FAKE SET SOURCE",
+		"START REPLICA",
 		// This first set of STOP and START commands come from
 		// the builtinBackupEngine implementation which stops the replication
 		// while taking the backup
-		"STOP SLAVE",
-		"START SLAVE",
+		"STOP REPLICA",
+		"START REPLICA",
 		// These commands come from SetReplicationSource RPC called
 		// to set the correct primary and semi-sync after Backup has concluded.
 		// Since the primary hasn't changed, we only restart replication after fixing semi-sync.
-		"STOP SLAVE",
-		"START SLAVE",
+		"STOP REPLICA",
+		"START REPLICA",
 	}
 	sourceTablet.StartActionLoop(t, wr)
 	defer sourceTablet.StopActionLoop(t)
@@ -678,20 +679,21 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 	}
 	destTablet.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		// These 3 statements come from tablet startup
-		"STOP SLAVE",
-		"FAKE SET MASTER",
-		"START SLAVE",
-		"STOP SLAVE",
-		"RESET SLAVE ALL",
-		"FAKE SET SLAVE POSITION",
-		"STOP SLAVE",
-		"FAKE SET MASTER",
-		"START SLAVE",
+		"STOP REPLICA",
+		"FAKE SET SOURCE",
+		"START REPLICA",
+		"FAKE RESET BINARY LOGS AND GTIDS",
+		"FAKE SET GLOBAL gtid_purged",
+		"STOP REPLICA",
+		"FAKE RESET REPLICA ALL",
+		"FAKE RESET BINARY LOGS AND GTIDS",
+		"FAKE SET GLOBAL gtid_purged",
+		"STOP REPLICA",
+		"FAKE SET SOURCE",
+		"START REPLICA",
 	}
 	destTablet.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
-		"SHOW DATABASES":         {},
-		"RESET MASTER":           {},
-		"SET GLOBAL gtid_purged": {},
+		"SHOW DATABASES": {},
 	}
 	destTablet.FakeMysqlDaemon.SetReplicationPositionPos = sourceTablet.FakeMysqlDaemon.CurrentPrimaryPosition
 	destTablet.FakeMysqlDaemon.SetReplicationSourceInputs = append(destTablet.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(primary.Tablet))
@@ -811,7 +813,7 @@ func TestDisableActiveReparents(t *testing.T) {
 		},
 	}
 	sourceTablet.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		"STOP SLAVE",
+		"STOP REPLICA",
 	}
 	sourceTablet.StartActionLoop(t, wr)
 	defer sourceTablet.StopActionLoop(t)
@@ -844,14 +846,15 @@ func TestDisableActiveReparents(t *testing.T) {
 		},
 	}
 	destTablet.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		"STOP SLAVE",
-		"RESET SLAVE ALL",
-		"FAKE SET SLAVE POSITION",
+		"FAKE RESET BINARY LOGS AND GTIDS",
+		"FAKE SET GLOBAL gtid_purged",
+		"STOP REPLICA",
+		"FAKE RESET REPLICA ALL",
+		"FAKE RESET BINARY LOGS AND GTIDS",
+		"FAKE SET GLOBAL gtid_purged",
 	}
 	destTablet.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
-		"SHOW DATABASES":         {},
-		"RESET MASTER":           {},
-		"SET GLOBAL gtid_purged": {},
+		"SHOW DATABASES": {},
 	}
 	destTablet.FakeMysqlDaemon.SetReplicationPositionPos = sourceTablet.FakeMysqlDaemon.CurrentPrimaryPosition
 	destTablet.FakeMysqlDaemon.SetReplicationSourceInputs = append(destTablet.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(primary.Tablet))

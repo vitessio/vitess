@@ -235,12 +235,10 @@ func (client *grpcClient) dialDedicatedPool(ctx context.Context, dialPoolGroup D
 	invalidator := func() {
 		client.mu.Lock()
 		defer client.mu.Unlock()
-		if tm, ok := m[addr]; ok {
-			if tm != nil && tm.cc != nil {
-				tm.cc.Close()
-			}
-			delete(m, addr)
+		if tm := m[addr]; tm != nil && tm.cc != nil {
+			tm.cc.Close()
 		}
+		delete(m, addr)
 	}
 	return m[addr].client, invalidator, nil
 }
@@ -1056,7 +1054,7 @@ func (client *Client) ResetReplicationParameters(ctx context.Context, tablet *to
 }
 
 // SetReplicationSource is part of the tmclient.TabletManagerClient interface.
-func (client *Client) SetReplicationSource(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync bool) error {
+func (client *Client) SetReplicationSource(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync bool, heartbeatInterval float64) error {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return err
@@ -1069,6 +1067,7 @@ func (client *Client) SetReplicationSource(ctx context.Context, tablet *topodata
 		WaitPosition:          waitPosition,
 		ForceStartReplication: forceStartReplication,
 		SemiSync:              semiSync,
+		HeartbeatInterval:     heartbeatInterval,
 	})
 	return err
 }

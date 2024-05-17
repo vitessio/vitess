@@ -2133,7 +2133,6 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 			if req.Strict {
 				return nil, err
 			}
-
 			log.Warningf("GetTablets encountered non-fatal error %s; continuing because Strict=false", err)
 		default:
 			return nil, err
@@ -3258,7 +3257,7 @@ func (s *VtctldServer) ReparentTablet(ctx context.Context, req *vtctldatapb.Repa
 		return nil, err
 	}
 
-	if err = s.tmc.SetReplicationSource(ctx, tablet.Tablet, shard.PrimaryAlias, 0, "", false, reparentutil.IsReplicaSemiSync(durability, shardPrimary.Tablet, tablet.Tablet)); err != nil {
+	if err = s.tmc.SetReplicationSource(ctx, tablet.Tablet, shard.PrimaryAlias, 0, "", false, reparentutil.IsReplicaSemiSync(durability, shardPrimary.Tablet, tablet.Tablet), 0); err != nil {
 		return nil, err
 	}
 
@@ -5174,11 +5173,35 @@ func (s *VtctldServer) ApplyKeyspaceRoutingRules(ctx context.Context, req *vtctl
 	span.Annotate("skip_rebuild", req.SkipRebuild)
 	span.Annotate("rebuild_cells", strings.Join(req.RebuildCells, ","))
 
-	if err := s.ts.SaveKeyspaceRoutingRules(ctx, req.KeyspaceRoutingRules); err != nil {
-		return nil, err
+	resp := &vtctldatapb.ApplyKeyspaceRoutingRulesResponse{}
+
+	update := func() error {
+		return topotools.UpdateKeyspaceRoutingRules(ctx, s.ts, "ApplyKeyspaceRoutingRules",
+			func(ctx context.Context, rules *map[string]string) error {
+				clear(*rules)
+				for _, rule := range req.GetKeyspaceRoutingRules().Rules {
+					(*rules)[rule.FromKeyspace] = rule.ToKeyspace
+				}
+				return nil
+			})
+	}
+	err := update()
+	if err != nil {
+		// If we were racing with another caller to create the initial routing rules, then
+		// we can immediately retry the operation.
+		if !topo.IsErrType(err, topo.NodeExists) {
+			return nil, err
+		}
+		if err = update(); err != nil {
+			return nil, err
+		}
 	}
 
-	resp := &vtctldatapb.ApplyKeyspaceRoutingRulesResponse{}
+	newRules, err := s.ts.GetKeyspaceRoutingRules(ctx)
+	if err != nil {
+		return nil, err
+	}
+	resp.KeyspaceRoutingRules = newRules
 
 	if req.SkipRebuild {
 		return resp, nil

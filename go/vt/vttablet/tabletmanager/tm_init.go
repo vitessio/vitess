@@ -974,12 +974,12 @@ func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType t
 
 	tablet.Type = tabletType
 
-	semiSyncAction, err := tm.convertBoolToSemiSyncAction(reparentutil.IsReplicaSemiSync(durability, currentPrimary.Tablet, tablet))
+	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, reparentutil.IsReplicaSemiSync(durability, currentPrimary.Tablet, tablet))
 	if err != nil {
 		return nil, err
 	}
 
-	if err := tm.fixSemiSync(tabletType, semiSyncAction); err != nil {
+	if err := tm.fixSemiSync(ctx, tabletType, semiSyncAction); err != nil {
 		return nil, err
 	}
 
@@ -988,7 +988,7 @@ func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType t
 		log.Warningf("primary tablet in the shard record does not have mysql hostname specified, possibly because that tablet has been shut down.")
 		return nil, nil
 	}
-	if err := tm.MysqlDaemon.SetReplicationSource(ctx, currentPrimary.Tablet.MysqlHostname, currentPrimary.Tablet.MysqlPort, true /* stopReplicationBefore */, true /* startReplicationAfter */); err != nil {
+	if err := tm.MysqlDaemon.SetReplicationSource(ctx, currentPrimary.Tablet.MysqlHostname, currentPrimary.Tablet.MysqlPort, 0, true, true); err != nil {
 		return nil, vterrors.Wrap(err, "MysqlDaemon.SetReplicationSource failed")
 	}
 

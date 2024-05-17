@@ -106,11 +106,11 @@ func TestInvalidDateTimeTimestampVals(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
 
-	_, err := mcmp.ExecAllowAndCompareError(`select date'2022'`)
+	_, err := mcmp.ExecAllowAndCompareError(`select date'2022'`, utils.CompareOptions{})
 	require.Error(t, err)
-	_, err = mcmp.ExecAllowAndCompareError(`select time'12:34:56:78'`)
+	_, err = mcmp.ExecAllowAndCompareError(`select time'12:34:56:78'`, utils.CompareOptions{})
 	require.Error(t, err)
-	_, err = mcmp.ExecAllowAndCompareError(`select timestamp'2022'`)
+	_, err = mcmp.ExecAllowAndCompareError(`select timestamp'2022'`, utils.CompareOptions{})
 	require.Error(t, err)
 }
 
@@ -257,12 +257,12 @@ func TestPrepareStatements(t *testing.T) {
 	mcmp.AssertMatchesNoOrder(`execute prep_in_pk using @id1, @id2`, `[[INT64(0) INT64(0)] [INT64(1) INT64(0)]]`)
 
 	// Fail by providing wrong number of arguments
-	_, err := mcmp.ExecAllowAndCompareError(`execute prep_in_pk using @id1, @id1, @id`)
+	_, err := mcmp.ExecAllowAndCompareError(`execute prep_in_pk using @id1, @id1, @id`, utils.CompareOptions{})
 	incorrectCount := "VT03025: Incorrect arguments to EXECUTE"
 	assert.ErrorContains(t, err, incorrectCount)
-	_, err = mcmp.ExecAllowAndCompareError(`execute prep_in_pk using @id1`)
+	_, err = mcmp.ExecAllowAndCompareError(`execute prep_in_pk using @id1`, utils.CompareOptions{})
 	assert.ErrorContains(t, err, incorrectCount)
-	_, err = mcmp.ExecAllowAndCompareError(`execute prep_in_pk`)
+	_, err = mcmp.ExecAllowAndCompareError(`execute prep_in_pk`, utils.CompareOptions{})
 	assert.ErrorContains(t, err, incorrectCount)
 
 	mcmp.Exec(`prepare prep_art from 'select 1+?, 10/?'`)
@@ -282,10 +282,10 @@ func TestPrepareStatements(t *testing.T) {
 	mcmp.Exec(`select 1+9999999999999999999999999999, 10/9999999999999999999999999999 from t1 limit 1`)
 
 	mcmp.Exec("deallocate prepare prep_art")
-	_, err = mcmp.ExecAllowAndCompareError(`execute prep_art using @id1, @id1`)
+	_, err = mcmp.ExecAllowAndCompareError(`execute prep_art using @id1, @id1`, utils.CompareOptions{})
 	assert.ErrorContains(t, err, "VT09011: Unknown prepared statement handler (prep_art) given to EXECUTE")
 
-	_, err = mcmp.ExecAllowAndCompareError("deallocate prepare prep_art")
+	_, err = mcmp.ExecAllowAndCompareError("deallocate prepare prep_art", utils.CompareOptions{})
 	assert.ErrorContains(t, err, "VT09011: Unknown prepared statement handler (prep_art) given to DEALLOCATE PREPARE")
 }
 
@@ -451,6 +451,15 @@ func TestStraightJoin(t *testing.T) {
 	res, err = mcmp.VtConn.ExecuteFetch("vexplain plan select tbl.unq_col, tbl.nonunq_col, t1.id2 from t1 straight_join tbl where t1.id1 = tbl.nonunq_col", 100, false)
 	require.NoError(t, err)
 	require.Contains(t, fmt.Sprintf("%v", res.Rows), "t1_tbl")
+}
+
+func TestColumnAliases(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 20, "vtgate")
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into t1(id1, id2) values (0,0), (1,1)")
+	mcmp.ExecWithColumnCompare(`select a as k from (select count(*) as a from t1) t`)
 }
 
 func TestEnumSetVals(t *testing.T) {

@@ -735,7 +735,7 @@ func TestGroupByBinding(t *testing.T) {
 		t.Run(tc.sql, func(t *testing.T) {
 			stmt, semTable := parseAndAnalyze(t, tc.sql, "d")
 			sel, _ := stmt.(*sqlparser.Select)
-			grp := sel.GroupBy[0]
+			grp := sel.GroupBy.Exprs[0]
 			d := semTable.RecursiveDeps(grp)
 			require.Equal(t, tc.deps, d, tc.sql)
 		})
@@ -1290,6 +1290,16 @@ func parseAndAnalyze(t *testing.T, query, dbName string) (sqlparser.Statement, *
 	return parse, semTable
 }
 
+func parseAndAnalyzeStrict(t *testing.T, query, dbName string) (sqlparser.Statement, *SemTable) {
+	t.Helper()
+	parse, err := sqlparser.NewTestParser().Parse(query)
+	require.NoError(t, err)
+
+	semTable, err := AnalyzeStrict(parse, dbName, fakeSchemaInfo())
+	require.NoError(t, err)
+	return parse, semTable
+}
+
 func TestSingleUnshardedKeyspace(t *testing.T) {
 	tests := []struct {
 		query     string
@@ -1393,6 +1403,7 @@ func fakeSchemaInfo() *FakeSI {
 			"t":  tableT(),
 			"t1": tableT1(),
 			"t2": tableT2(),
+			"t3": tableT3(),
 		},
 	}
 	return si
@@ -1432,6 +1443,31 @@ func tableT2() *vindexes.Table {
 			Name:          sqlparser.NewIdentifierCI("textcol"),
 			Type:          querypb.Type_VARCHAR,
 			CollationName: "big5_bin",
+		}},
+		ColumnListAuthoritative: true,
+		Keyspace:                ks3,
+	}
+}
+
+func tableT3() *vindexes.Table {
+	return &vindexes.Table{
+		Name: sqlparser.NewIdentifierCS("t3"),
+		Columns: []vindexes.Column{{
+			Name: sqlparser.NewIdentifierCI("uid"),
+			Type: querypb.Type_INT64,
+		}, {
+			Name:          sqlparser.NewIdentifierCI("name"),
+			Type:          querypb.Type_VARCHAR,
+			CollationName: "utf8_bin",
+		}, {
+			Name:          sqlparser.NewIdentifierCI("textcol"),
+			Type:          querypb.Type_VARCHAR,
+			CollationName: "big5_bin",
+		}, {
+			Name:          sqlparser.NewIdentifierCI("invcol"),
+			Type:          querypb.Type_VARCHAR,
+			CollationName: "big5_bin",
+			Invisible:     true,
 		}},
 		ColumnListAuthoritative: true,
 		Keyspace:                ks3,

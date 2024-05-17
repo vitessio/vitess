@@ -69,6 +69,7 @@ const (
 	bulkInsertQuery  = "insert into %s (id%d1, id%d2) values "
 	insertQuery      = "insert into %s (id%d1, id%d2) values (%d, %d)"
 	numInitialRows   = 10
+	copyPhaseStart   = "Copy Start"
 )
 
 type TestState struct {
@@ -206,7 +207,7 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 	}
 
 	// Test event called after t1 copy is complete
-	callbacks["OTHER.*Copy Start t2"] = func() {
+	callbacks[fmt.Sprintf("OTHER.*%s t2", copyPhaseStart)] = func() {
 		conn, err := env.Mysqld.GetDbaConnection(ctx)
 		require.NoError(t, err)
 		defer conn.Close()
@@ -220,7 +221,7 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 
 	}
 
-	callbacks["OTHER.*Copy Start t3"] = func() {
+	callbacks[fmt.Sprintf("OTHER.*%s t3", copyPhaseStart)] = func() {
 		conn, err := env.Mysqld.GetDbaConnection(ctx)
 		require.NoError(t, err)
 		defer conn.Close()
@@ -298,18 +299,29 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 }
 
 func validateReceivedEvents(t *testing.T) {
+	inCopyPhase := false
 	for i, ev := range allEvents {
 		ev.Timestamp = 0
-		if ev.Type == binlogdatapb.VEventType_FIELD {
+		switch ev.Type {
+		case binlogdatapb.VEventType_OTHER:
+			if strings.Contains(ev.Gtid, copyPhaseStart) {
+				inCopyPhase = true
+			}
+		case binlogdatapb.VEventType_FIELD:
 			for j := range ev.FieldEvent.Fields {
 				ev.FieldEvent.Fields[j].Flags = 0
 				ev.FieldEvent.Keyspace = ""
 				ev.FieldEvent.Shard = ""
+				// We always set this in the copy phase. In the
+				// running phase we only set it IF the table has
+				// an ENUM or SET column.
+				ev.FieldEvent.EnumSetStringValues = inCopyPhase
 			}
-		}
-		if ev.Type == binlogdatapb.VEventType_ROW {
+		case binlogdatapb.VEventType_ROW:
 			ev.RowEvent.Keyspace = ""
 			ev.RowEvent.Shard = ""
+		case binlogdatapb.VEventType_COPY_COMPLETED:
+			inCopyPhase = false
 		}
 		got := ev.String()
 		want := env.RemoveAnyDeprecatedDisplayWidths(expectedEvents[i])
@@ -469,9 +481,9 @@ func startVStreamCopy(ctx context.Context, t *testing.T, filter *binlogdatapb.Fi
 }
 
 var expectedEvents = []string{
-	"type:OTHER gtid:\"Copy Start t1\"",
+	fmt.Sprintf("type:OTHER gtid:\"%s t1\"", copyPhaseStart),
 	"type:BEGIN",
-	"type:FIELD field_event:{table_name:\"t1\" fields:{name:\"id11\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id11\" column_length:11 charset:63 column_type:\"int(11)\"} fields:{name:\"id12\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id12\" column_length:11 charset:63 column_type:\"int(11)\"}}",
+	"type:FIELD field_event:{table_name:\"t1\" fields:{name:\"id11\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id11\" column_length:11 charset:63 column_type:\"int(11)\"} fields:{name:\"id12\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id12\" column_length:11 charset:63 column_type:\"int(11)\"} enum_set_string_values:true}",
 	"type:GTID",
 	"type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:1 lengths:2 values:\"110\"}}}",
 	"type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:1 lengths:2 values:\"220\"}}}",
@@ -489,18 +501,18 @@ var expectedEvents = []string{
 	"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t1\"} completed:true}",
 	"type:COMMIT",
 	"type:BEGIN",
-	"type:FIELD field_event:{table_name:\"t1\" fields:{name:\"id11\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id11\" column_length:11 charset:63 column_type:\"int(11)\"} fields:{name:\"id12\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id12\" column_length:11 charset:63 column_type:\"int(11)\"}}",
+	"type:FIELD field_event:{table_name:\"t1\" fields:{name:\"id11\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id11\" column_length:11 charset:63 column_type:\"int(11)\"} fields:{name:\"id12\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id12\" column_length:11 charset:63 column_type:\"int(11)\"} enum_set_string_values:true}",
 	"type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:2 lengths:3 values:\"11110\"}}}",
 	"type:GTID",
 	"type:COMMIT", //insert for t2 done along with t1 does not generate an event since t2 is not yet copied
-	"type:OTHER gtid:\"Copy Start t2\"",
+	fmt.Sprintf("type:OTHER gtid:\"%s t2\"", copyPhaseStart),
 	"type:BEGIN",
-	"type:FIELD field_event:{table_name:\"t1\" fields:{name:\"id11\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id11\" column_length:11 charset:63 column_type:\"int(11)\"} fields:{name:\"id12\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id12\" column_length:11 charset:63 column_type:\"int(11)\"}}",
+	"type:FIELD field_event:{table_name:\"t1\" fields:{name:\"id11\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id11\" column_length:11 charset:63 column_type:\"int(11)\"} fields:{name:\"id12\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id12\" column_length:11 charset:63 column_type:\"int(11)\"} enum_set_string_values:true}",
 	"type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:2 lengths:3 values:\"12120\"}}}",
 	"type:GTID",
 	"type:COMMIT",
 	"type:BEGIN",
-	"type:FIELD field_event:{table_name:\"t2\" fields:{name:\"id21\" type:INT32 table:\"t2\" org_table:\"t2\" database:\"vttest\" org_name:\"id21\" column_length:11 charset:63 column_type:\"int(11)\"} fields:{name:\"id22\" type:INT32 table:\"t2\" org_table:\"t2\" database:\"vttest\" org_name:\"id22\" column_length:11 charset:63 column_type:\"int(11)\"}}",
+	"type:FIELD field_event:{table_name:\"t2\" fields:{name:\"id21\" type:INT32 table:\"t2\" org_table:\"t2\" database:\"vttest\" org_name:\"id21\" column_length:11 charset:63 column_type:\"int(11)\"} fields:{name:\"id22\" type:INT32 table:\"t2\" org_table:\"t2\" database:\"vttest\" org_name:\"id22\" column_length:11 charset:63 column_type:\"int(11)\"} enum_set_string_values:true}",
 	"type:ROW row_event:{table_name:\"t2\" row_changes:{after:{lengths:1 lengths:2 values:\"120\"}}}",
 	"type:ROW row_event:{table_name:\"t2\" row_changes:{after:{lengths:1 lengths:2 values:\"240\"}}}",
 	"type:ROW row_event:{table_name:\"t2\" row_changes:{after:{lengths:1 lengths:2 values:\"360\"}}}",
@@ -517,19 +529,19 @@ var expectedEvents = []string{
 	"type:BEGIN",
 	"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t2\"} completed:true}",
 	"type:COMMIT",
-	"type:OTHER gtid:\"Copy Start t3\"",
+	fmt.Sprintf("type:OTHER gtid:\"%s t3\"", copyPhaseStart),
 	"type:BEGIN",
-	"type:FIELD field_event:{table_name:\"t1\" fields:{name:\"id11\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id11\" column_length:11 charset:63 column_type:\"int(11)\"} fields:{name:\"id12\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id12\" column_length:11 charset:63 column_type:\"int(11)\"}}",
+	"type:FIELD field_event:{table_name:\"t1\" fields:{name:\"id11\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id11\" column_length:11 charset:63 column_type:\"int(11)\"} fields:{name:\"id12\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id12\" column_length:11 charset:63 column_type:\"int(11)\"} enum_set_string_values:true}",
 	"type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:2 lengths:3 values:\"13130\"}}}",
 	"type:GTID",
 	"type:COMMIT",
 	"type:BEGIN",
-	"type:FIELD field_event:{table_name:\"t2\" fields:{name:\"id21\" type:INT32 table:\"t2\" org_table:\"t2\" database:\"vttest\" org_name:\"id21\" column_length:11 charset:63 column_type:\"int(11)\"} fields:{name:\"id22\" type:INT32 table:\"t2\" org_table:\"t2\" database:\"vttest\" org_name:\"id22\" column_length:11 charset:63 column_type:\"int(11)\"}}",
+	"type:FIELD field_event:{table_name:\"t2\" fields:{name:\"id21\" type:INT32 table:\"t2\" org_table:\"t2\" database:\"vttest\" org_name:\"id21\" column_length:11 charset:63 column_type:\"int(11)\"} fields:{name:\"id22\" type:INT32 table:\"t2\" org_table:\"t2\" database:\"vttest\" org_name:\"id22\" column_length:11 charset:63 column_type:\"int(11)\"} enum_set_string_values:true}",
 	"type:ROW row_event:{table_name:\"t2\" row_changes:{after:{lengths:2 lengths:3 values:\"12240\"}}}",
 	"type:GTID",
 	"type:COMMIT",
 	"type:BEGIN",
-	"type:FIELD field_event:{table_name:\"t3\" fields:{name:\"id31\" type:INT32 table:\"t3\" org_table:\"t3\" database:\"vttest\" org_name:\"id31\" column_length:11 charset:63 column_type:\"int(11)\"} fields:{name:\"id32\" type:INT32 table:\"t3\" org_table:\"t3\" database:\"vttest\" org_name:\"id32\" column_length:11 charset:63 column_type:\"int(11)\"}}",
+	"type:FIELD field_event:{table_name:\"t3\" fields:{name:\"id31\" type:INT32 table:\"t3\" org_table:\"t3\" database:\"vttest\" org_name:\"id31\" column_length:11 charset:63 column_type:\"int(11)\"} fields:{name:\"id32\" type:INT32 table:\"t3\" org_table:\"t3\" database:\"vttest\" org_name:\"id32\" column_length:11 charset:63 column_type:\"int(11)\"} enum_set_string_values:true}",
 	"type:ROW row_event:{table_name:\"t3\" row_changes:{after:{lengths:1 lengths:2 values:\"130\"}}}",
 	"type:ROW row_event:{table_name:\"t3\" row_changes:{after:{lengths:1 lengths:2 values:\"260\"}}}",
 	"type:ROW row_event:{table_name:\"t3\" row_changes:{after:{lengths:1 lengths:2 values:\"390\"}}}",

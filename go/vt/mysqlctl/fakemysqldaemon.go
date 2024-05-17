@@ -26,12 +26,14 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
+	"vitess.io/vitess/go/vt/proto/replicationdata"
 
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -171,9 +173,9 @@ type FakeMysqlDaemon struct {
 	// FetchSuperQueryResults is used by FetchSuperQuery.
 	FetchSuperQueryMap map[string]*sqltypes.Result
 
-	// SemiSyncPrimaryEnabled represents the state of rpl_semi_sync_master_enabled.
+	// SemiSyncPrimaryEnabled represents the state of rpl_semi_sync_source_enabled.
 	SemiSyncPrimaryEnabled bool
-	// SemiSyncReplicaEnabled represents the state of rpl_semi_sync_slave_enabled.
+	// SemiSyncReplicaEnabled represents the state of rpl_semi_sync_replica_enabled.
 	SemiSyncReplicaEnabled bool
 
 	// TimeoutHook is a func that can be called at the beginning of
@@ -298,7 +300,7 @@ func (fmd *FakeMysqlDaemon) CurrentPrimaryPositionLocked(pos replication.Positio
 }
 
 // ReplicationStatus is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) ReplicationStatus() (replication.ReplicationStatus, error) {
+func (fmd *FakeMysqlDaemon) ReplicationStatus(ctx context.Context) (replication.ReplicationStatus, error) {
 	if fmd.ReplicationStatusError != nil {
 		return replication.ReplicationStatus{}, fmd.ReplicationStatusError
 	}
@@ -327,6 +329,10 @@ func (fmd *FakeMysqlDaemon) PrimaryStatus(ctx context.Context) (replication.Prim
 		Position:     fmd.CurrentPrimaryPosition,
 		FilePosition: fmd.CurrentSourceFilePosition,
 	}, nil
+}
+
+func (fmd *FakeMysqlDaemon) ReplicationConfiguration(ctx context.Context) (*replicationdata.Configuration, error) {
+	return nil, nil
 }
 
 // GetGTIDPurged is part of the MysqlDaemon interface.
@@ -384,49 +390,49 @@ func (fmd *FakeMysqlDaemon) GetPreviousGTIDs(ctx context.Context, binlog string)
 }
 
 // PrimaryPosition is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) PrimaryPosition() (replication.Position, error) {
+func (fmd *FakeMysqlDaemon) PrimaryPosition(ctx context.Context) (replication.Position, error) {
 	return fmd.CurrentPrimaryPosition, nil
 }
 
 // IsReadOnly is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) IsReadOnly() (bool, error) {
+func (fmd *FakeMysqlDaemon) IsReadOnly(ctx context.Context) (bool, error) {
 	return fmd.ReadOnly, nil
 }
 
 // IsSuperReadOnly is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) IsSuperReadOnly() (bool, error) {
+func (fmd *FakeMysqlDaemon) IsSuperReadOnly(ctx context.Context) (bool, error) {
 	return fmd.SuperReadOnly.Load(), nil
 }
 
 // SetReadOnly is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) SetReadOnly(on bool) error {
+func (fmd *FakeMysqlDaemon) SetReadOnly(ctx context.Context, on bool) error {
 	fmd.ReadOnly = on
 	return nil
 }
 
 // SetSuperReadOnly is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) SetSuperReadOnly(on bool) (ResetSuperReadOnlyFunc, error) {
+func (fmd *FakeMysqlDaemon) SetSuperReadOnly(ctx context.Context, on bool) (ResetSuperReadOnlyFunc, error) {
 	fmd.SuperReadOnly.Store(on)
 	fmd.ReadOnly = on
 	return nil, nil
 }
 
 // StartReplication is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) StartReplication(hookExtraEnv map[string]string) error {
+func (fmd *FakeMysqlDaemon) StartReplication(ctx context.Context, hookExtraEnv map[string]string) error {
 	if fmd.StartReplicationError != nil {
 		return fmd.StartReplicationError
 	}
-	return fmd.ExecuteSuperQueryList(context.Background(), []string{
-		"START SLAVE",
+	return fmd.ExecuteSuperQueryList(ctx, []string{
+		"START REPLICA",
 	})
 }
 
 // RestartReplication is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) RestartReplication(hookExtraEnv map[string]string) error {
-	return fmd.ExecuteSuperQueryList(context.Background(), []string{
-		"STOP SLAVE",
-		"RESET SLAVE",
-		"START SLAVE",
+func (fmd *FakeMysqlDaemon) RestartReplication(ctx context.Context, hookExtraEnv map[string]string) error {
+	return fmd.ExecuteSuperQueryList(ctx, []string{
+		"STOP REPLICA",
+		"RESET REPLICA",
+		"START REPLICA",
 	})
 }
 
@@ -436,25 +442,25 @@ func (fmd *FakeMysqlDaemon) StartReplicationUntilAfter(ctx context.Context, pos 
 		return fmt.Errorf("wrong pos for StartReplicationUntilAfter: expected %v got %v", fmd.SetReplicationPositionPos, pos)
 	}
 
-	return fmd.ExecuteSuperQueryList(context.Background(), []string{
-		"START SLAVE UNTIL AFTER",
+	return fmd.ExecuteSuperQueryList(ctx, []string{
+		"START REPLICA UNTIL AFTER",
 	})
 }
 
 // StopReplication is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) StopReplication(hookExtraEnv map[string]string) error {
+func (fmd *FakeMysqlDaemon) StopReplication(ctx context.Context, hookExtraEnv map[string]string) error {
 	if fmd.StopReplicationError != nil {
 		return fmd.StopReplicationError
 	}
-	return fmd.ExecuteSuperQueryList(context.Background(), []string{
-		"STOP SLAVE",
+	return fmd.ExecuteSuperQueryList(ctx, []string{
+		"STOP REPLICA",
 	})
 }
 
 // StopIOThread is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) StopIOThread(ctx context.Context) error {
-	return fmd.ExecuteSuperQueryList(context.Background(), []string{
-		"STOP SLAVE IO_THREAD",
+	return fmd.ExecuteSuperQueryList(ctx, []string{
+		"STOP REPLICA IO_THREAD",
 	})
 }
 
@@ -464,12 +470,13 @@ func (fmd *FakeMysqlDaemon) SetReplicationPosition(ctx context.Context, pos repl
 		return fmt.Errorf("wrong pos for SetReplicationPosition: expected %v got %v", fmd.SetReplicationPositionPos, pos)
 	}
 	return fmd.ExecuteSuperQueryList(ctx, []string{
-		"FAKE SET SLAVE POSITION",
+		"FAKE RESET BINARY LOGS AND GTIDS",
+		"FAKE SET GLOBAL gtid_purged",
 	})
 }
 
 // SetReplicationSource is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) SetReplicationSource(ctx context.Context, host string, port int32, stopReplicationBefore bool, startReplicationAfter bool) error {
+func (fmd *FakeMysqlDaemon) SetReplicationSource(ctx context.Context, host string, port int32, heartbeatInterval float64, stopReplicationBefore bool, startReplicationAfter bool) error {
 	input := fmt.Sprintf("%v:%v", host, port)
 	found := false
 	for _, sourceInput := range fmd.SetReplicationSourceInputs {
@@ -485,11 +492,11 @@ func (fmd *FakeMysqlDaemon) SetReplicationSource(ctx context.Context, host strin
 	}
 	cmds := []string{}
 	if stopReplicationBefore {
-		cmds = append(cmds, "STOP SLAVE")
+		cmds = append(cmds, "STOP REPLICA")
 	}
-	cmds = append(cmds, "FAKE SET MASTER")
+	cmds = append(cmds, "FAKE SET SOURCE")
 	if startReplicationAfter {
-		cmds = append(cmds, "START SLAVE")
+		cmds = append(cmds, "START REPLICA")
 	}
 	fmd.CurrentSourceHost = host
 	fmd.CurrentSourcePort = port
@@ -514,8 +521,13 @@ func (fmd *FakeMysqlDaemon) WaitSourcePos(_ context.Context, pos replication.Pos
 	return fmt.Errorf("wrong input for WaitSourcePos: expected a value in %v got %v", fmd.WaitPrimaryPositions, pos)
 }
 
+// CatchupToGTID is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) CatchupToGTID(_ context.Context, pos replication.Position) error {
+	return nil
+}
+
 // Promote is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) Promote(hookExtraEnv map[string]string) (replication.Position, error) {
+func (fmd *FakeMysqlDaemon) Promote(ctx context.Context, hookExtraEnv map[string]string) (replication.Position, error) {
 	if fmd.PromoteLag > 0 {
 		time.Sleep(fmd.PromoteLag)
 	}
@@ -550,9 +562,9 @@ func (fmd *FakeMysqlDaemon) ExecuteSuperQueryList(ctx context.Context, queryList
 
 		// Intercept some queries to update our status.
 		switch query {
-		case "START SLAVE":
+		case "START REPLICA":
 			fmd.Replicating = true
-		case "STOP SLAVE":
+		case "STOP REPLICA":
 			fmd.Replicating = false
 		}
 	}
@@ -667,19 +679,19 @@ func (fmd *FakeMysqlDaemon) GetAllPrivsConnection(ctx context.Context) (*dbconnp
 }
 
 // SetSemiSyncEnabled is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) SetSemiSyncEnabled(primary, replica bool) error {
+func (fmd *FakeMysqlDaemon) SetSemiSyncEnabled(ctx context.Context, primary, replica bool) error {
 	fmd.SemiSyncPrimaryEnabled = primary
 	fmd.SemiSyncReplicaEnabled = replica
 	return nil
 }
 
 // SemiSyncEnabled is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) SemiSyncEnabled() (primary, replica bool) {
+func (fmd *FakeMysqlDaemon) SemiSyncEnabled(ctx context.Context) (primary, replica bool) {
 	return fmd.SemiSyncPrimaryEnabled, fmd.SemiSyncReplicaEnabled
 }
 
 // SemiSyncStatus is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) SemiSyncStatus() (bool, bool) {
+func (fmd *FakeMysqlDaemon) SemiSyncStatus(ctx context.Context) (bool, bool) {
 	// The fake assumes the status worked.
 	if fmd.SemiSyncPrimaryEnabled {
 		return true, false
@@ -688,22 +700,22 @@ func (fmd *FakeMysqlDaemon) SemiSyncStatus() (bool, bool) {
 }
 
 // SemiSyncClients is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) SemiSyncClients() uint32 {
+func (fmd *FakeMysqlDaemon) SemiSyncClients(ctx context.Context) uint32 {
 	return 0
 }
 
 // SemiSyncExtensionLoaded is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) SemiSyncExtensionLoaded() (bool, error) {
-	return true, nil
+func (fmd *FakeMysqlDaemon) SemiSyncExtensionLoaded(ctx context.Context) (mysql.SemiSyncType, error) {
+	return mysql.SemiSyncTypeSource, nil
 }
 
 // SemiSyncSettings is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) SemiSyncSettings() (timeout uint64, numReplicas uint32) {
+func (fmd *FakeMysqlDaemon) SemiSyncSettings(ctx context.Context) (timeout uint64, numReplicas uint32) {
 	return 10000000, 1
 }
 
 // SemiSyncReplicationStatus is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) SemiSyncReplicationStatus() (bool, error) {
+func (fmd *FakeMysqlDaemon) SemiSyncReplicationStatus(ctx context.Context) (bool, error) {
 	// The fake assumes the status worked.
 	return fmd.SemiSyncReplicaEnabled, nil
 }

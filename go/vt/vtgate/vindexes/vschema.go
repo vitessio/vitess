@@ -1132,13 +1132,33 @@ func (vschema *VSchema) FirstKeyspace() *Keyspace {
 	return ks.Keyspace
 }
 
+// findRoutedKeyspace checks if there is a keyspace routing rule for the given keyspace and tablet type.
+func (vschema *VSchema) findRoutedKeyspace(keyspace string, tabletType topodatapb.TabletType) string {
+	if len(vschema.KeyspaceRoutingRules) == 0 {
+		return keyspace
+	}
+	tabletTypeSuffix := TabletTypeSuffix[tabletType]
+	if tabletTypeSuffix == "@primary" {
+		tabletTypeSuffix = ""
+	}
+	routedKeyspace, ok := vschema.KeyspaceRoutingRules[keyspace+tabletTypeSuffix]
+	if ok {
+		return routedKeyspace
+	} else {
+		if tabletTypeSuffix != "" {
+			// if it was @replica or @rdonly and had no route, default to the route for @primary
+			routedKeyspace, ok = vschema.KeyspaceRoutingRules[keyspace]
+			if ok {
+				return routedKeyspace
+			}
+		}
+	}
+	return keyspace
+}
+
 // FindRoutedTable finds a table checking the routing rules.
 func (vschema *VSchema) FindRoutedTable(keyspace, tablename string, tabletType topodatapb.TabletType) (*Table, error) {
-	routedKeyspace, ok := vschema.KeyspaceRoutingRules[keyspace]
-	if ok {
-		keyspace = routedKeyspace
-	}
-
+	keyspace = vschema.findRoutedKeyspace(keyspace, tabletType)
 	qualified := tablename
 	if keyspace != "" {
 		qualified = keyspace + "." + tablename
