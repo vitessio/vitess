@@ -24,10 +24,9 @@ import (
 
 func TestConvertToSnakeCase(t *testing.T) {
 	tests := []struct {
-		name    string
-		val     any
-		want    any
-		wantErr bool
+		name string
+		val  any
+		want any
 	}{
 		{
 			name: "string",
@@ -35,7 +34,12 @@ func TestConvertToSnakeCase(t *testing.T) {
 			want: "my_val_is_not_cool",
 		},
 		{
-			name: "string slice",
+			name: "map[string]bool",
+			val:  map[string]any{"MyValIsNotCool": true},
+			want: map[string]any{"my_val_is_not_cool": true},
+		},
+		{
+			name: "[]string",
 			val: []string{
 				"MyValIsNotCool",
 				"NeitherIsYours",
@@ -46,7 +50,7 @@ func TestConvertToSnakeCase(t *testing.T) {
 			},
 		},
 		{
-			name: "string map",
+			name: "map[string][any]",
 			val: map[string]any{
 				"MyValIsNotCool": "val1",
 				"NeitherIsYours": "val2",
@@ -57,18 +61,7 @@ func TestConvertToSnakeCase(t *testing.T) {
 			},
 		},
 		{
-			name: "string map of slices",
-			val: map[string]any{
-				"MyValIsNotCool": []string{"val1", "val2"},
-				"NeitherIsYours": []string{"val3", "val4"},
-			},
-			want: map[string]any{
-				"my_val_is_not_cool": []string{"val1", "val2"},
-				"neither_is_yours":   []string{"val3", "val4"},
-			},
-		},
-		{
-			name: "string map of slices of string maps",
+			name: "map[any]any",
 			val: map[any]any{
 				"MyValIsNotCool": []any{
 					0: map[any]any{
@@ -114,14 +107,22 @@ func TestConvertToSnakeCase(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "map[any][]any",
+			val: map[any]any{
+				"MyValIsNotCool": []any{"val1", "val2"},
+				"NeitherIsYours": []any{"val3", "val4"},
+			},
+			want: map[any]any{
+				"my_val_is_not_cool": []any{"val1", "val2"},
+				"neither_is_yours":   []any{"val3", "val4"},
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := ConvertToSnakeCase(tt.val)
-			if (err != nil) != tt.wantErr {
-				require.Fail(t, "unexpted error value", "ConvertToSnakeCase() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
+			require.NoError(t, err, "ConvertToSnakeCase() error = %v", err)
 			require.EqualValues(t, tt.want, got, "ConvertToSnakeCase() = %v, want %v", got, tt.want)
 		})
 	}

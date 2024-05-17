@@ -21,10 +21,9 @@ import (
 	"fmt"
 
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/stats"
-
-	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -81,15 +80,15 @@ func MarshalJSONPretty(obj any) ([]byte, error) {
 	return MarshalJSON(obj, marshalOptions)
 }
 
-// ConvertToSnakeCase converts a string to snake_case or the keys of a
-// map to snake_case. This is useful when converting generic JSON data
-// marshalled to a map[string]interface{} for printing.
+// ConvertToSnakeCase converts strings to snake_case. This is useful when converting
+// generic JSON data marshalled to a map[string]interface{} for printing so that we
+// retain the snake_case used with protobufs and protojson.
 func ConvertToSnakeCase(val any) (any, error) {
 	switch val := val.(type) {
 	case string:
 		skval := stats.GetSnakeName(val)
 		return skval, nil
-	case map[string]interface{}:
+	case map[string]any:
 		for k, v := range val {
 			sk := stats.GetSnakeName(k)
 			// We need to recurse into the map to convert nested maps
@@ -102,7 +101,7 @@ func ConvertToSnakeCase(val any) (any, error) {
 			val[sk] = sv
 		}
 		return val, nil
-	case map[any]interface{}:
+	case map[any]any:
 		for k, v := range val {
 			// We need to recurse into the key to support more complex
 			// key types.
@@ -110,7 +109,7 @@ func ConvertToSnakeCase(val any) (any, error) {
 			if err != nil {
 				return nil, err
 			}
-			// We need to recurse into the map to convert nested maps
+			// We need to recurse into the map to convert nested types
 			// to snake_case.
 			sv, err := ConvertToSnakeCase(v)
 			if err != nil {
@@ -120,23 +119,23 @@ func ConvertToSnakeCase(val any) (any, error) {
 			val[sk] = sv
 		}
 		return val, nil
-	case []interface{}:
-		for i, v := range val {
-			// We need to recurse into the slice to convert nested maps
-			// to snake_case.
-			sv, err := ConvertToSnakeCase(v)
-			if err != nil {
-				return nil, err
-			}
-			val[i] = sv
-		}
-		return val, nil
 	case []string:
 		for i, v := range val {
 			// We need to recurse into the slice to convert nested maps
 			// to snake_case.
 			sk := stats.GetSnakeName(v)
 			val[i] = sk
+		}
+		return val, nil
+	case []any:
+		for i, v := range val {
+			// We need to recurse into the slice to convert complex types
+			// to snake_case.
+			sv, err := ConvertToSnakeCase(v)
+			if err != nil {
+				return nil, err
+			}
+			val[i] = sv
 		}
 		return val, nil
 	default:
