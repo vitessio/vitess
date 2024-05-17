@@ -3397,8 +3397,6 @@ func TestPlayerStalls(t *testing.T) {
 		Filter:   filter,
 		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
 	}
-	cancel, _ := startVReplication(t, bls, "")
-	defer cancel()
 
 	testcases := []struct {
 		name     string
@@ -3463,6 +3461,8 @@ func TestPlayerStalls(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
+			cancel, _ := startVReplication(t, bls, "")
+			defer cancel()
 			execStatements(t, tc.input)
 			if tc.preFunc != nil {
 				go tc.preFunc()

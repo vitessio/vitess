@@ -297,6 +297,7 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 
 	applyErr := make(chan error, 1)
 	vp.stallHandler.fireChan = applyErr
+	defer vp.stallHandler.stopTimer()
 	go func() {
 		applyErr <- vp.applyEvents(ctx, relay)
 	}()
