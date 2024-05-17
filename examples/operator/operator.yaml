@@ -1,4 +1,3 @@
----
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -386,6 +385,167 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.11.3
   creationTimestamp: null
+  name: vitessbackupschedules.planetscale.com
+spec:
+  group: planetscale.com
+  names:
+    kind: VitessBackupSchedule
+    listKind: VitessBackupScheduleList
+    plural: vitessbackupschedules
+    singular: vitessbackupschedule
+  scope: Namespaced
+  versions:
+    - name: v2
+      schema:
+        openAPIV3Schema:
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              properties:
+                allowedMissedRun:
+                  minimum: 0
+                  type: integer
+                concurrencyPolicy:
+                  enum:
+                    - Allow
+                    - Forbid
+                    - Replace
+                  example: Forbid
+                  type: string
+                failedJobsHistoryLimit:
+                  format: int32
+                  minimum: 0
+                  type: integer
+                image:
+                  type: string
+                imagePullPolicy:
+                  type: string
+                jobTimeoutMinute:
+                  format: int32
+                  minimum: 0
+                  type: integer
+                name:
+                  example: every-minute
+                  minLength: 1
+                  pattern: ^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?$
+                  type: string
+                resources:
+                  properties:
+                    claims:
+                      items:
+                        properties:
+                          name:
+                            type: string
+                        required:
+                          - name
+                        type: object
+                      type: array
+                      x-kubernetes-list-map-keys:
+                        - name
+                      x-kubernetes-list-type: map
+                    limits:
+                      additionalProperties:
+                        anyOf:
+                          - type: integer
+                          - type: string
+                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                        x-kubernetes-int-or-string: true
+                      type: object
+                    requests:
+                      additionalProperties:
+                        anyOf:
+                          - type: integer
+                          - type: string
+                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                        x-kubernetes-int-or-string: true
+                      type: object
+                  type: object
+                schedule:
+                  example: '* * * * *'
+                  minLength: 0
+                  type: string
+                startingDeadlineSeconds:
+                  format: int64
+                  minimum: 0
+                  type: integer
+                strategies:
+                  items:
+                    properties:
+                      extraFlags:
+                        additionalProperties:
+                          type: string
+                        type: object
+                      keyspaceShard:
+                        example: commerce/-
+                        type: string
+                      name:
+                        enum:
+                          - BackupTablet
+                          - BackupShard
+                        type: string
+                      tabletAlias:
+                        example: zone1-0000000102
+                        type: string
+                    required:
+                      - name
+                    type: object
+                  minItems: 1
+                  type: array
+                successfulJobsHistoryLimit:
+                  format: int32
+                  minimum: 0
+                  type: integer
+                suspend:
+                  type: boolean
+              required:
+                - name
+                - resources
+                - schedule
+                - strategies
+              type: object
+            status:
+              properties:
+                active:
+                  items:
+                    properties:
+                      apiVersion:
+                        type: string
+                      fieldPath:
+                        type: string
+                      kind:
+                        type: string
+                      name:
+                        type: string
+                      namespace:
+                        type: string
+                      resourceVersion:
+                        type: string
+                      uid:
+                        type: string
+                    type: object
+                    x-kubernetes-map-type: atomic
+                  type: array
+                lastScheduledTime:
+                  format: date-time
+                  type: string
+              type: object
+          type: object
+      served: true
+      storage: true
+      subresources:
+        status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.11.3
+  creationTimestamp: null
   name: vitessbackupstorages.planetscale.com
 spec:
   group: planetscale.com
@@ -705,6 +865,109 @@ spec:
                       x-kubernetes-preserve-unknown-fields: true
                     initContainers:
                       x-kubernetes-preserve-unknown-fields: true
+                    lifecycle:
+                      properties:
+                        postStart:
+                          properties:
+                            exec:
+                              properties:
+                                command:
+                                  items:
+                                    type: string
+                                  type: array
+                              type: object
+                            httpGet:
+                              properties:
+                                host:
+                                  type: string
+                                httpHeaders:
+                                  items:
+                                    properties:
+                                      name:
+                                        type: string
+                                      value:
+                                        type: string
+                                    required:
+                                      - name
+                                      - value
+                                    type: object
+                                  type: array
+                                path:
+                                  type: string
+                                port:
+                                  anyOf:
+                                    - type: integer
+                                    - type: string
+                                  x-kubernetes-int-or-string: true
+                                scheme:
+                                  type: string
+                              required:
+                                - port
+                              type: object
+                            tcpSocket:
+                              properties:
+                                host:
+                                  type: string
+                                port:
+                                  anyOf:
+                                    - type: integer
+                                    - type: string
+                                  x-kubernetes-int-or-string: true
+                              required:
+                                - port
+                              type: object
+                          type: object
+                        preStop:
+                          properties:
+                            exec:
+                              properties:
+                                command:
+                                  items:
+                                    type: string
+                                  type: array
+                              type: object
+                            httpGet:
+                              properties:
+                                host:
+                                  type: string
+                                httpHeaders:
+                                  items:
+                                    properties:
+                                      name:
+                                        type: string
+                                      value:
+                                        type: string
+                                    required:
+                                      - name
+                                      - value
+                                    type: object
+                                  type: array
+                                path:
+                                  type: string
+                                port:
+                                  anyOf:
+                                    - type: integer
+                                    - type: string
+                                  x-kubernetes-int-or-string: true
+                                scheme:
+                                  type: string
+                              required:
+                                - port
+                              type: object
+                            tcpSocket:
+                              properties:
+                                host:
+                                  type: string
+                                port:
+                                  anyOf:
+                                    - type: integer
+                                    - type: string
+                                  x-kubernetes-int-or-string: true
+                              required:
+                                - port
+                              type: object
+                          type: object
+                      type: object
                     replicas:
                       format: int32
                       minimum: 0
@@ -792,6 +1055,9 @@ spec:
                       type: object
                     sidecarContainers:
                       x-kubernetes-preserve-unknown-fields: true
+                    terminationGracePeriodSeconds:
+                      format: int64
+                      type: integer
                     tolerations:
                       x-kubernetes-preserve-unknown-fields: true
                     topologySpreadConstraints:
@@ -1364,6 +1630,107 @@ spec:
                         type: object
                       minItems: 1
                       type: array
+                    schedules:
+                      items:
+                        properties:
+                          allowedMissedRun:
+                            minimum: 0
+                            type: integer
+                          concurrencyPolicy:
+                            enum:
+                              - Allow
+                              - Forbid
+                              - Replace
+                            example: Forbid
+                            type: string
+                          failedJobsHistoryLimit:
+                            format: int32
+                            minimum: 0
+                            type: integer
+                          jobTimeoutMinute:
+                            format: int32
+                            minimum: 0
+                            type: integer
+                          name:
+                            example: every-minute
+                            minLength: 1
+                            pattern: ^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?$
+                            type: string
+                          resources:
+                            properties:
+                              claims:
+                                items:
+                                  properties:
+                                    name:
+                                      type: string
+                                  required:
+                                    - name
+                                  type: object
+                                type: array
+                                x-kubernetes-list-map-keys:
+                                  - name
+                                x-kubernetes-list-type: map
+                              limits:
+                                additionalProperties:
+                                  anyOf:
+                                    - type: integer
+                                    - type: string
+                                  pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                  x-kubernetes-int-or-string: true
+                                type: object
+                              requests:
+                                additionalProperties:
+                                  anyOf:
+                                    - type: integer
+                                    - type: string
+                                  pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                  x-kubernetes-int-or-string: true
+                                type: object
+                            type: object
+                          schedule:
+                            example: '* * * * *'
+                            minLength: 0
+                            type: string
+                          startingDeadlineSeconds:
+                            format: int64
+                            minimum: 0
+                            type: integer
+                          strategies:
+                            items:
+                              properties:
+                                extraFlags:
+                                  additionalProperties:
+                                    type: string
+                                  type: object
+                                keyspaceShard:
+                                  example: commerce/-
+                                  type: string
+                                name:
+                                  enum:
+                                    - BackupTablet
+                                    - BackupShard
+                                  type: string
+                                tabletAlias:
+                                  example: zone1-0000000102
+                                  type: string
+                              required:
+                                - name
+                              type: object
+                            minItems: 1
+                            type: array
+                          successfulJobsHistoryLimit:
+                            format: int32
+                            minimum: 0
+                            type: integer
+                          suspend:
+                            type: boolean
+                        required:
+                          - name
+                          - resources
+                          - schedule
+                          - strategies
+                        type: object
+                      type: array
                     subcontroller:
                       properties:
                         serviceAccountName:
@@ -1496,6 +1863,109 @@ spec:
                             x-kubernetes-preserve-unknown-fields: true
                           initContainers:
                             x-kubernetes-preserve-unknown-fields: true
+                          lifecycle:
+                            properties:
+                              postStart:
+                                properties:
+                                  exec:
+                                    properties:
+                                      command:
+                                        items:
+                                          type: string
+                                        type: array
+                                    type: object
+                                  httpGet:
+                                    properties:
+                                      host:
+                                        type: string
+                                      httpHeaders:
+                                        items:
+                                          properties:
+                                            name:
+                                              type: string
+                                            value:
+                                              type: string
+                                          required:
+                                            - name
+                                            - value
+                                          type: object
+                                        type: array
+                                      path:
+                                        type: string
+                                      port:
+                                        anyOf:
+                                          - type: integer
+                                          - type: string
+                                        x-kubernetes-int-or-string: true
+                                      scheme:
+                                        type: string
+                                    required:
+                                      - port
+                                    type: object
+                                  tcpSocket:
+                                    properties:
+                                      host:
+                                        type: string
+                                      port:
+                                        anyOf:
+                                          - type: integer
+                                          - type: string
+                                        x-kubernetes-int-or-string: true
+                                    required:
+                                      - port
+                                    type: object
+                                type: object
+                              preStop:
+                                properties:
+                                  exec:
+                                    properties:
+                                      command:
+                                        items:
+                                          type: string
+                                        type: array
+                                    type: object
+                                  httpGet:
+                                    properties:
+                                      host:
+                                        type: string
+                                      httpHeaders:
+                                        items:
+                                          properties:
+                                            name:
+                                              type: string
+                                            value:
+                                              type: string
+                                          required:
+                                            - name
+                                            - value
+                                          type: object
+                                        type: array
+                                      path:
+                                        type: string
+                                      port:
+                                        anyOf:
+                                          - type: integer
+                                          - type: string
+                                        x-kubernetes-int-or-string: true
+                                      scheme:
+                                        type: string
+                                    required:
+                                      - port
+                                    type: object
+                                  tcpSocket:
+                                    properties:
+                                      host:
+                                        type: string
+                                      port:
+                                        anyOf:
+                                          - type: integer
+                                          - type: string
+                                        x-kubernetes-int-or-string: true
+                                    required:
+                                      - port
+                                    type: object
+                                type: object
+                            type: object
                           replicas:
                             format: int32
                             minimum: 0
@@ -1583,6 +2053,9 @@ spec:
                             type: object
                           sidecarContainers:
                             x-kubernetes-preserve-unknown-fields: true
+                          terminationGracePeriodSeconds:
+                            format: int64
+                            type: integer
                           tolerations:
                             x-kubernetes-preserve-unknown-fields: true
                           topologySpreadConstraints:
@@ -2278,6 +2751,16 @@ spec:
                         type: string
                       durabilityPolicy:
                         type: string
+                      images:
+                        properties:
+                          mysqld:
+                            properties:
+                              mysql56Compatible:
+                                type: string
+                              mysql80Compatible:
+                                type: string
+                            type: object
+                        type: object
                       name:
                         maxLength: 63
                         minLength: 1
@@ -2607,6 +3090,45 @@ spec:
                                               required:
                                                 - resources
                                               type: object
+                                            mysqldExporter:
+                                              properties:
+                                                resources:
+                                                  properties:
+                                                    claims:
+                                                      items:
+                                                        properties:
+                                                          name:
+                                                            type: string
+                                                        required:
+                                                          - name
+                                                        type: object
+                                                      type: array
+                                                      x-kubernetes-list-map-keys:
+                                                        - name
+                                                      x-kubernetes-list-type: map
+                                                    limits:
+                                                      additionalProperties:
+                                                        anyOf:
+                                                          - type: integer
+                                                          - type: string
+                                                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                                        x-kubernetes-int-or-string: true
+                                                      type: object
+                                                    requests:
+                                                      additionalProperties:
+                                                        anyOf:
+                                                          - type: integer
+                                                          - type: string
+                                                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                                        x-kubernetes-int-or-string: true
+                                                      type: object
+                                                  type: object
+                                              required:
+                                                - resources
+                                              type: object
+                                            name:
+                                              default: ""
+                                              type: string
                                             replicas:
                                               format: int32
                                               minimum: 0
@@ -2664,6 +3186,9 @@ spec:
                                                         x-kubernetes-int-or-string: true
                                                       type: object
                                                   type: object
+                                                terminationGracePeriodSeconds:
+                                                  format: int64
+                                                  type: integer
                                               required:
                                                 - resources
                                               type: object
@@ -2677,6 +3202,7 @@ spec:
                                         x-kubernetes-list-map-keys:
                                           - type
                                           - cell
+                                          - name
                                         x-kubernetes-list-type: map
                                     required:
                                       - databaseInitScriptSecret
@@ -3002,6 +3528,45 @@ spec:
                                             required:
                                               - resources
                                             type: object
+                                          mysqldExporter:
+                                            properties:
+                                              resources:
+                                                properties:
+                                                  claims:
+                                                    items:
+                                                      properties:
+                                                        name:
+                                                          type: string
+                                                      required:
+                                                        - name
+                                                      type: object
+                                                    type: array
+                                                    x-kubernetes-list-map-keys:
+                                                      - name
+                                                    x-kubernetes-list-type: map
+                                                  limits:
+                                                    additionalProperties:
+                                                      anyOf:
+                                                        - type: integer
+                                                        - type: string
+                                                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                                      x-kubernetes-int-or-string: true
+                                                    type: object
+                                                  requests:
+                                                    additionalProperties:
+                                                      anyOf:
+                                                        - type: integer
+                                                        - type: string
+                                                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                                      x-kubernetes-int-or-string: true
+                                                    type: object
+                                                type: object
+                                            required:
+                                              - resources
+                                            type: object
+                                          name:
+                                            default: ""
+                                            type: string
                                           replicas:
                                             format: int32
                                             minimum: 0
@@ -3059,6 +3624,9 @@ spec:
                                                       x-kubernetes-int-or-string: true
                                                     type: object
                                                 type: object
+                                              terminationGracePeriodSeconds:
+                                                format: int64
+                                                type: integer
                                             required:
                                               - resources
                                             type: object
@@ -3072,6 +3640,7 @@ spec:
                                       x-kubernetes-list-map-keys:
                                         - type
                                         - cell
+                                        - name
                                       x-kubernetes-list-type: map
                                   required:
                                     - databaseInitScriptSecret
@@ -4309,6 +4878,45 @@ spec:
                                         required:
                                           - resources
                                         type: object
+                                      mysqldExporter:
+                                        properties:
+                                          resources:
+                                            properties:
+                                              claims:
+                                                items:
+                                                  properties:
+                                                    name:
+                                                      type: string
+                                                  required:
+                                                    - name
+                                                  type: object
+                                                type: array
+                                                x-kubernetes-list-map-keys:
+                                                  - name
+                                                x-kubernetes-list-type: map
+                                              limits:
+                                                additionalProperties:
+                                                  anyOf:
+                                                    - type: integer
+                                                    - type: string
+                                                  pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                                  x-kubernetes-int-or-string: true
+                                                type: object
+                                              requests:
+                                                additionalProperties:
+                                                  anyOf:
+                                                    - type: integer
+                                                    - type: string
+                                                  pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                                  x-kubernetes-int-or-string: true
+                                                type: object
+                                            type: object
+                                        required:
+                                          - resources
+                                        type: object
+                                      name:
+                                        default: ""
+                                        type: string
                                       replicas:
                                         format: int32
                                         minimum: 0
@@ -4366,6 +4974,9 @@ spec:
                                                   x-kubernetes-int-or-string: true
                                                 type: object
                                             type: object
+                                          terminationGracePeriodSeconds:
+                                            format: int64
+                                            type: integer
                                         required:
                                           - resources
                                         type: object
@@ -4379,6 +4990,7 @@ spec:
                                   x-kubernetes-list-map-keys:
                                     - type
                                     - cell
+                                    - name
                                   x-kubernetes-list-type: map
                               required:
                                 - databaseInitScriptSecret
@@ -4704,6 +5316,45 @@ spec:
                                       required:
                                         - resources
                                       type: object
+                                    mysqldExporter:
+                                      properties:
+                                        resources:
+                                          properties:
+                                            claims:
+                                              items:
+                                                properties:
+                                                  name:
+                                                    type: string
+                                                required:
+                                                  - name
+                                                type: object
+                                              type: array
+                                              x-kubernetes-list-map-keys:
+                                                - name
+                                              x-kubernetes-list-type: map
+                                            limits:
+                                              additionalProperties:
+                                                anyOf:
+                                                  - type: integer
+                                                  - type: string
+                                                pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                                x-kubernetes-int-or-string: true
+                                              type: object
+                                            requests:
+                                              additionalProperties:
+                                                anyOf:
+                                                  - type: integer
+                                                  - type: string
+                                                pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                                x-kubernetes-int-or-string: true
+                                              type: object
+                                          type: object
+                                      required:
+                                        - resources
+                                      type: object
+                                    name:
+                                      default: ""
+                                      type: string
                                     replicas:
                                       format: int32
                                       minimum: 0
@@ -4761,6 +5412,9 @@ spec:
                                                 x-kubernetes-int-or-string: true
                                               type: object
                                           type: object
+                                        terminationGracePeriodSeconds:
+                                          format: int64
+                                          type: integer
                                       required:
                                         - resources
                                       type: object
@@ -4774,6 +5428,7 @@ spec:
                                 x-kubernetes-list-map-keys:
                                   - type
                                   - cell
+                                  - name
                                 x-kubernetes-list-type: map
                             required:
                               - databaseInitScriptSecret
@@ -5641,6 +6296,45 @@ spec:
                         required:
                           - resources
                         type: object
+                      mysqldExporter:
+                        properties:
+                          resources:
+                            properties:
+                              claims:
+                                items:
+                                  properties:
+                                    name:
+                                      type: string
+                                  required:
+                                    - name
+                                  type: object
+                                type: array
+                                x-kubernetes-list-map-keys:
+                                  - name
+                                x-kubernetes-list-type: map
+                              limits:
+                                additionalProperties:
+                                  anyOf:
+                                    - type: integer
+                                    - type: string
+                                  pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                  x-kubernetes-int-or-string: true
+                                type: object
+                              requests:
+                                additionalProperties:
+                                  anyOf:
+                                    - type: integer
+                                    - type: string
+                                  pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                  x-kubernetes-int-or-string: true
+                                type: object
+                            type: object
+                        required:
+                          - resources
+                        type: object
+                      name:
+                        default: ""
+                        type: string
                       replicas:
                         format: int32
                         minimum: 0
@@ -5698,6 +6392,9 @@ spec:
                                   x-kubernetes-int-or-string: true
                                 type: object
                             type: object
+                          terminationGracePeriodSeconds:
+                            format: int64
+                            type: integer
                         required:
                           - resources
                         type: object
@@ -5711,6 +6408,7 @@ spec:
                   x-kubernetes-list-map-keys:
                     - type
                     - cell
+                    - name
                   x-kubernetes-list-type: map
                 topologyReconciliation:
                   properties:
@@ -6091,6 +6789,15 @@ rules:
       - vitessbackupstorages
       - vitessbackupstorages/status
       - vitessbackupstorages/finalizers
+      - vitessbackupschedules
+      - vitessbackupschedules/status
+      - vitessbackupschedules/finalizers
+    verbs:
+      - '*'
+  - apiGroups:
+      - batch
+    resources:
+      - jobs
     verbs:
       - '*'
 ---
@@ -6105,6 +6812,22 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: vitess-operator
+---
+apiVersion: scheduling.k8s.io/v1
+description: Vitess components (vttablet, vtgate, vtctld, etcd)
+globalDefault: false
+kind: PriorityClass
+metadata:
+  name: vitess
+value: 1000
+---
+apiVersion: scheduling.k8s.io/v1
+description: The vitess-operator control plane.
+globalDefault: false
+kind: PriorityClass
+metadata:
+  name: vitess-operator-control-plane
+value: 5000
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -6145,7 +6868,7 @@ spec:
                   fieldPath: metadata.name
             - name: OPERATOR_NAME
               value: vitess-operator
-          image: planetscale/vitess-operator:latest
+          image: frouioui/vitess-operator:latest
           name: vitess-operator
           resources:
             limits:
@@ -6155,19 +6878,3 @@ spec:
               memory: 128Mi
       priorityClassName: vitess-operator-control-plane
       serviceAccountName: vitess-operator
----
-apiVersion: scheduling.k8s.io/v1
-description: The vitess-operator control plane.
-globalDefault: false
-kind: PriorityClass
-metadata:
-  name: vitess-operator-control-plane
-value: 5000
----
-apiVersion: scheduling.k8s.io/v1
-description: Vitess components (vttablet, vtgate, vtctld, etcd)
-globalDefault: false
-kind: PriorityClass
-metadata:
-  name: vitess
-value: 1000
