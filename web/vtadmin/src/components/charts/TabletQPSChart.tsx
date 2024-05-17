@@ -21,6 +21,7 @@ import { useExperimentalTabletDebugVars } from '../../hooks/api';
 import { getQPSTimeseries, QPS_REFETCH_INTERVAL } from '../../util/tabletDebugVars';
 import { mergeOptions } from './chartOptions';
 import { Timeseries } from './Timeseries';
+import { D3Timeseries } from './D3Timeseries';
 
 interface Props {
     alias: string;
@@ -48,5 +49,14 @@ export const TabletQPSChart = ({ alias, clusterID }: Props) => {
         return mergeOptions({ series });
     }, [debugVars, query.dataUpdatedAt]);
 
-    return <Timeseries isLoading={query.isLoading} options={options} />;
+    const tsdata = useMemo(() => {
+        const tsdata = getQPSTimeseries(debugVars?.data, query.dataUpdatedAt);
+        return tsdata
+    }, [debugVars, query.dataUpdatedAt])
+    return (
+        <>
+            <Timeseries isLoading={query.isLoading} options={options} />
+            <D3Timeseries isLoading={query.isLoading} timeseriesMap={tsdata}/>
+        </>
+    )
 };
