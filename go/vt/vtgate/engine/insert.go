@@ -265,13 +265,20 @@ func (ins *Insert) getInsertShardedQueries(
 			index, _ := strconv.ParseInt(string(indexValue.Value), 0, 64)
 			if keyspaceIDs[index] != nil {
 				walkFunc := func(node sqlparser.SQLNode) (kontinue bool, err error) {
-					if arg, ok := node.(*sqlparser.Argument); ok {
-						bv, exists := bindVars[arg.Name]
-						if !exists {
-							return false, vterrors.VT03026(arg.Name)
-						}
-						shardBindVars[arg.Name] = bv
+					var arg string
+					switch argType := node.(type) {
+					case *sqlparser.Argument:
+						arg = argType.Name
+					case sqlparser.ListArg:
+						arg = string(argType)
+					default:
+						return true, nil
 					}
+					bv, exists := bindVars[arg]
+					if !exists {
+						return false, vterrors.VT03026(arg)
+					}
+					shardBindVars[arg] = bv
 					return true, nil
 				}
 				mids = append(mids, sqlparser.String(ins.Mid[index]))
