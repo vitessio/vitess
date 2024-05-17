@@ -359,10 +359,10 @@ func TestInsertShardWithONDuplicateKey(t *testing.T) {
 			&sqlparser.UpdateExpr{Name: sqlparser.NewColName("suffix1"), Expr: &sqlparser.Argument{Name: "_id_0", Type: sqltypes.Int64}},
 			&sqlparser.UpdateExpr{Name: sqlparser.NewColName("suffix2"), Expr: &sqlparser.FuncExpr{
 				Name: sqlparser.NewIdentifierCI("if"),
-				Exprs: sqlparser.Exprs{
-					sqlparser.NewComparisonExpr(sqlparser.InOp, &sqlparser.ValuesFuncExpr{Name: sqlparser.NewColName("col")}, sqlparser.ListArg("_id_1"), nil),
-					sqlparser.NewColName("col"),
-					&sqlparser.ValuesFuncExpr{Name: sqlparser.NewColName("col")},
+				Exprs: sqlparser.SelectExprs{
+					sqlparser.NewAliasedExpr(sqlparser.NewComparisonExpr(sqlparser.InOp, &sqlparser.ValuesFuncExpr{Name: sqlparser.NewColName("col")}, sqlparser.ListArg("_id_1"), nil), ""),
+					sqlparser.NewAliasedExpr(sqlparser.NewColName("col"), ""),
+					sqlparser.NewAliasedExpr(&sqlparser.ValuesFuncExpr{Name: sqlparser.NewColName("col")}, ""),
 				},
 			}}},
 	)
