@@ -17,8 +17,10 @@ limitations under the License.
 package command
 
 import (
+	"encoding/json"
 	"fmt"
 
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
@@ -39,8 +41,8 @@ var (
 	// The version of the key/path to get. If not specified, the latest/current
 	// version is returned.
 	version int64 = 0
-	// If true, the data is output in JSON format. Otherwise, it is in prototext format.
-	asJSON bool = false
+	// If true, only the data is output and it is in JSON format rather than prototext.
+	dataAsJSON bool = false
 )
 
 func commandGetTopologyPath(cmd *cobra.Command, args []string) error {
@@ -51,13 +53,26 @@ func commandGetTopologyPath(cmd *cobra.Command, args []string) error {
 	resp, err := client.GetTopologyPath(commandCtx, &vtctldatapb.GetTopologyPathRequest{
 		Path:    path,
 		Version: version,
-		AsJson:  asJSON,
+		AsJson:  dataAsJSON,
 	})
 	if err != nil {
 		return err
 	}
 
-	data, err := cli.MarshalJSON(resp.Cell)
+	if dataAsJSON {
+		m := make(map[string]any)
+		if err := json.Unmarshal([]byte(resp.Cell.Data), &m); err != nil {
+			return errors.Wrap(err, "failed to unmarshal node data as JSON")
+		}
+		js, err := json.MarshalIndent(m, "", "  ")
+		if err != nil {
+			return errors.Wrap(err, "failed to marshal JSON data")
+		}
+		fmt.Println(string(js))
+		return nil
+	}
+
+	data, err := cli.MarshalJSONPretty(resp.Cell)
 	if err != nil {
 		return err
 	}
@@ -69,6 +84,6 @@ func commandGetTopologyPath(cmd *cobra.Command, args []string) error {
 
 func init() {
 	GetTopologyPath.Flags().Int64Var(&version, "version", version, "The version of the path's key to get. If not specified, the latest version is returned.")
-	GetTopologyPath.Flags().BoolVar(&asJSON, "json", asJSON, "If true, the data is output in JSON format. Otherwise, it is in prototext format.")
+	GetTopologyPath.Flags().BoolVar(&dataAsJSON, "data-as-json", dataAsJSON, "If true, only the data is output and it is in JSON format rather than prototext.")
 	Root.AddCommand(GetTopologyPath)
 }
