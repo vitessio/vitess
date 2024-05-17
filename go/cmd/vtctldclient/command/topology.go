@@ -64,7 +64,11 @@ func commandGetTopologyPath(cmd *cobra.Command, args []string) error {
 		if err := json.Unmarshal([]byte(resp.Cell.Data), &m); err != nil {
 			return errors.Wrap(err, "failed to unmarshal node data as JSON")
 		}
-		js, err := json.MarshalIndent(m, "", "  ")
+		skm, err := cli.ConvertToSnakeCase(m)
+		if err != nil {
+			return errors.Wrap(err, "failed to convert names to snake case")
+		}
+		js, err := json.MarshalIndent(skm, "", "  ")
 		if err != nil {
 			return errors.Wrap(err, "failed to marshal JSON data")
 		}

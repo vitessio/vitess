@@ -22,6 +22,8 @@ import (
 
 	"google.golang.org/protobuf/encoding/protojson"
 
+	"vitess.io/vitess/go/stats"
+
 	"google.golang.org/protobuf/proto"
 )
 
@@ -77,4 +79,38 @@ func MarshalJSONPretty(obj any) ([]byte, error) {
 	marshalOptions := DefaultMarshalOptions
 	marshalOptions.UseEnumNumbers = false
 	return MarshalJSON(obj, marshalOptions)
+}
+
+// ConvertToSnakeCase converts a string to snake_case or the keys of a
+// map to snake_case.
+func ConvertToSnakeCase(val any) (any, error) {
+	switch val := val.(type) {
+	case string:
+		skval := stats.GetSnakeName(val)
+		return skval, nil
+	case map[string]interface{}:
+		for k, v := range val {
+			sk := stats.GetSnakeName(k)
+			// We need to recurse into the map to convert nested maps
+			// to snake_case.
+			sv, err := ConvertToSnakeCase(v)
+			if err != nil {
+				return nil, err
+			}
+			delete(val, k)
+			val[sk] = sv
+		}
+		return val, nil
+	case []interface{}:
+		for i, v := range val {
+			sv, err := ConvertToSnakeCase(v)
+			if err != nil {
+				return nil, err
+			}
+			val[i] = sv
+		}
+		return val, nil
+	default:
+		return nil, fmt.Errorf("unsupported type %T", val)
+	}
 }
