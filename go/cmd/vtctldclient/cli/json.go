@@ -82,7 +82,8 @@ func MarshalJSONPretty(obj any) ([]byte, error) {
 }
 
 // ConvertToSnakeCase converts a string to snake_case or the keys of a
-// map to snake_case.
+// map to snake_case. This is useful when converting generic JSON data
+// marshalled to a map[string]interface{} for printing.
 func ConvertToSnakeCase(val any) (any, error) {
 	switch val := val.(type) {
 	case string:
@@ -101,8 +102,28 @@ func ConvertToSnakeCase(val any) (any, error) {
 			val[sk] = sv
 		}
 		return val, nil
+	case map[any]interface{}:
+		for k, v := range val {
+			// We need to recurse into the key to support more complex
+			// key types.
+			sk, err := ConvertToSnakeCase(k)
+			if err != nil {
+				return nil, err
+			}
+			// We need to recurse into the map to convert nested maps
+			// to snake_case.
+			sv, err := ConvertToSnakeCase(v)
+			if err != nil {
+				return nil, err
+			}
+			delete(val, k)
+			val[sk] = sv
+		}
+		return val, nil
 	case []interface{}:
 		for i, v := range val {
+			// We need to recurse into the slice to convert nested maps
+			// to snake_case.
 			sv, err := ConvertToSnakeCase(v)
 			if err != nil {
 				return nil, err
@@ -110,7 +131,16 @@ func ConvertToSnakeCase(val any) (any, error) {
 			val[i] = sv
 		}
 		return val, nil
+	case []string:
+		for i, v := range val {
+			// We need to recurse into the slice to convert nested maps
+			// to snake_case.
+			sk := stats.GetSnakeName(v)
+			val[i] = sk
+		}
+		return val, nil
 	default:
-		return nil, fmt.Errorf("unsupported type %T", val)
+		// No need to do any conversion for things like bool.
+		return val, nil
 	}
 }
