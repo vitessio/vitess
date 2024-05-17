@@ -426,6 +426,7 @@ spec:
                 imagePullPolicy:
                   type: string
                 jobTimeoutMinute:
+                  default: 10
                   format: int32
                   minimum: 0
                   type: integer
@@ -1648,6 +1649,7 @@ spec:
                             minimum: 0
                             type: integer
                           jobTimeoutMinute:
+                            default: 10
                             format: int32
                             minimum: 0
                             type: integer
@@ -6868,7 +6870,7 @@ spec:
                   fieldPath: metadata.name
             - name: OPERATOR_NAME
               value: vitess-operator
-          image: frouioui/vitess-operator:latest
+          image: planetscale/vitess-operator:latest
           name: vitess-operator
           resources:
             limits:
