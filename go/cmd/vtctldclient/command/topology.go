@@ -17,10 +17,8 @@ limitations under the License.
 package command
 
 import (
-	"encoding/json"
 	"fmt"
 
-	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
@@ -63,19 +61,7 @@ func commandGetTopologyPath(cmd *cobra.Command, args []string) error {
 		if resp.GetCell() == nil || resp.GetCell().GetData() == "" {
 			return fmt.Errorf("no data found for path %s", path)
 		}
-		m := make(map[string]any)
-		if err := json.Unmarshal([]byte(resp.GetCell().GetData()), &m); err != nil {
-			return errors.Wrap(err, "failed to unmarshal node data as JSON")
-		}
-		skm, err := cli.ConvertToSnakeCase(m)
-		if err != nil {
-			return errors.Wrap(err, "failed to convert names to snake case")
-		}
-		js, err := json.MarshalIndent(skm, "", "  ")
-		if err != nil {
-			return errors.Wrap(err, "failed to marshal JSON data")
-		}
-		fmt.Println(string(js))
+		fmt.Println(resp.GetCell().GetData())
 		return nil
 	}
 

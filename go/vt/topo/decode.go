@@ -79,7 +79,14 @@ func DecodeContent(filename string, data []byte, json bool) (string, error) {
 	var marshalled []byte
 	var err error
 	if json {
-		marshalled, err = protojson.Marshal(p)
+		// Maintain snake_case for the JSON output as this keeps the output consistent across
+		// vtctldclient commands and it is needed if the returned value is used as input to
+		// vtctldclient, e.g. for ApplyRoutingRules.
+		pm := protojson.MarshalOptions{
+			Indent:        "  ",
+			UseProtoNames: true,
+		}
+		marshalled, err = pm.Marshal(p)
 	} else {
 		marshalled, err = prototext.Marshal(p)
 	}

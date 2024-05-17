@@ -7859,7 +7859,7 @@ func TestGetTopologyPath(t *testing.T) {
 				Cell: &vtctldatapb.TopologyCell{
 					Name: "Tablet",
 					Path: "/cell1/tablets/cell1-0000000100/Tablet",
-					Data: `{"alias":{"cell":"cell1","uid":100},"hostname":"localhost","keyspace":"keyspace1","mysqlHostname":"localhost","mysqlPort":17100}`,
+					Data: "{\n  \"alias\": {\n    \"cell\": \"cell1\",\n    \"uid\": 100\n  },\n  \"hostname\": \"localhost\",\n  \"keyspace\": \"keyspace1\",\n  \"mysql_hostname\": \"localhost\",\n  \"mysql_port\": 17100\n}",
 				},
 			},
 		},
