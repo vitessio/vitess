@@ -54,6 +54,27 @@ func TestSimpleInsertSelect(t *testing.T) {
 	utils.AssertMatches(t, mcmp.VtConn, `select num from num_vdx_tbl order by num`, `[[INT64(2)] [INT64(4)] [INT64(40)] [INT64(42)] [INT64(80)] [INT64(84)]]`)
 }
 
+// TestInsertOnDup test the insert on duplicate key update feature with argument and list argument.
+func TestInsertOnDup(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
+
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into order_tbl(oid, region_id, cust_no) values (1,2,3),(3,4,5)")
+
+	for _, mode := range []string{"oltp", "olap"} {
+		mcmp.Run(mode, func(mcmp *utils.MySQLCompare) {
+			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = %s", mode))
+
+			mcmp.Exec(`insert into order_tbl(oid, region_id, cust_no) values (2,2,3),(4,4,5) on duplicate key update cust_no = if(values(cust_no) in (1, 2, 3), region_id, values(cust_no))`)
+			mcmp.Exec(`select oid, region_id, cust_no from order_tbl order by oid, region_id`)
+			mcmp.Exec(`insert into order_tbl(oid, region_id, cust_no) values (7,2,2) on duplicate key update cust_no = 10 + values(cust_no)`)
+			mcmp.Exec(`select oid, region_id, cust_no from order_tbl order by oid, region_id`)
+		})
+	}
+}
+
 func TestFailureInsertSelect(t *testing.T) {
 	if clusterInstance.HasPartialKeyspaces {
 		t.Skip("don't run on partial keyspaces")
