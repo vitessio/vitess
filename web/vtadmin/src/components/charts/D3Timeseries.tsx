@@ -52,12 +52,24 @@ export const D3Timeseries = ({ isLoading, timeseriesMap }: LineChartProps) => {
     svgElement.selectAll("*").remove();
     const xAxisGenerator = d3.axisBottom(xScale);
     svgElement
-      .append("g")
-      .attr("transform", "translate(0," + boundsHeight + ")")
-      .call(xAxisGenerator);
+        .append("g")
+        .attr("transform", "translate(0," + boundsHeight + ")")
+        .call(xAxisGenerator)
+        .selectAll("text")
+        .attr("class", "fill-gray-500")
 
     const yAxisGenerator = d3.axisLeft(yScale);
-    svgElement.append("g").call(yAxisGenerator);
+    svgElement
+        .append("g")
+        .call(yAxisGenerator)
+        .selectAll("text")
+        .attr("class", "fill-gray-500");
+    svgElement
+        .selectAll("path")
+        .attr("class", "!stroke-gray-200")
+    svgElement
+        .selectAll("line")
+        .attr("class", "!stroke-gray-200 z-10")
   }, [xScale, yScale, boundsHeight]);
 
     // Build the line
@@ -105,6 +117,7 @@ const Line: React.FC<LineProps> = ({ timeseriesPoints, lineBuilder }) => {
             stroke="#9a6fb0"
             fill="none"
             strokeWidth={2}
+            className="z-100"
         />
     )
 }
