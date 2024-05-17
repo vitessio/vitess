@@ -123,11 +123,14 @@ type flavor interface {
 	// as the new replication source (without changing any GTID position).
 	setReplicationSourceCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int) string
 
+	// resetBinaryLogsCommand returns the command to reset the binary logs.
+	resetBinaryLogsCommand() string
+
 	// status returns the result of the appropriate status command,
 	// with parsed replication position.
 	status(c *Conn) (replication.ReplicationStatus, error)
 
-	// primaryStatus returns the result of 'SHOW MASTER STATUS',
+	// primaryStatus returns the result of 'SHOW BINARY LOG STATUS',
 	// with parsed executed position.
 	primaryStatus(c *Conn) (replication.PrimaryStatus, error)
 
@@ -185,15 +188,16 @@ func GetFlavor(serverVersion string, flavorFunc func() flavor) (f flavor, capabl
 			f = mariadbFlavor102{mariadbFlavor{serverVersion: fmt.Sprintf("%f", mariadbVersion)}}
 		}
 	case strings.HasPrefix(serverVersion, mysql8VersionPrefix):
-		recent, _ := capabilities.MySQLVersionHasCapability(serverVersion, capabilities.ReplicaTerminologyCapability)
-		if recent {
+		if latest, _ := capabilities.ServerVersionAtLeast(serverVersion, 8, 2, 0); latest {
+			f = mysqlFlavor82{mysqlFlavor{serverVersion: serverVersion}}
+		} else if recent, _ := capabilities.MySQLVersionHasCapability(serverVersion, capabilities.ReplicaTerminologyCapability); recent {
 			f = mysqlFlavor8{mysqlFlavor{serverVersion: serverVersion}}
 		} else {
-			f = mysqlFlavor8Legacy{mysqlFlavor{serverVersion: serverVersion}}
+			f = mysqlFlavor8Legacy{mysqlFlavorLegacy{mysqlFlavor{serverVersion: serverVersion}}}
 		}
 	default:
 		// If unknown, return the most basic flavor: MySQL 57.
-		f = mysqlFlavor57{mysqlFlavor{serverVersion: serverVersion}}
+		f = mysqlFlavor57{mysqlFlavorLegacy{mysqlFlavor{serverVersion: serverVersion}}}
 	}
 	return f, f.supportsCapability, canonicalVersion
 }
@@ -400,7 +404,7 @@ func (c *Conn) ShowReplicationStatus() (replication.ReplicationStatus, error) {
 	return c.flavor.status(c)
 }
 
-// ShowPrimaryStatus executes the right SHOW MASTER STATUS command,
+// ShowPrimaryStatus executes the right SHOW BINARY LOG STATUS command,
 // and returns a parsed executed Position, as well as file based Position.
 func (c *Conn) ShowPrimaryStatus() (replication.PrimaryStatus, error) {
 	return c.flavor.primaryStatus(c)

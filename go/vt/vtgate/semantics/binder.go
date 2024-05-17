@@ -352,7 +352,7 @@ func (b *binder) resolveColumnInHaving(colName *sqlparser.ColName, current *scop
 		return selDeps, nil
 	}
 
-	if !current.inHavingAggr && len(sel.GroupBy) == 0 {
+	if !current.inHavingAggr && sel.GroupBy == nil {
 		// if we are not inside an aggregation, and there is no GROUP BY, we consider the FROM clause before failing
 		if deps.direct.NotEmpty() || (err != nil && !isColumnNotFound(err)) {
 			return deps, err
@@ -382,8 +382,7 @@ func (b *binder) searchInSelectExpressions(colName *sqlparser.ColName, deps depe
 			return dependency{certain: true, direct: direct, recursive: recursive, typ: typ}
 		}
 	}
-
-	for _, gb := range stmt.GroupBy {
+	for _, gb := range stmt.GroupByExprs() {
 		selectCol, ok := gb.(*sqlparser.ColName)
 		if !ok || !selectCol.Name.Equal(colName.Name) {
 			continue

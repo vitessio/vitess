@@ -1576,7 +1576,8 @@ func (s *Server) setupInitialRoutingRules(ctx context.Context, req *vtctldatapb.
 		for _, tt := range tabletTypeSuffixes {
 			routes[sourceKeyspace+tt] = sourceKeyspace
 		}
-		if err := updateKeyspaceRoutingRule(ctx, s.ts, routes); err != nil {
+
+		if err := updateKeyspaceRoutingRules(ctx, s.ts, "Create", routes); err != nil {
 			return err
 		}
 		return nil
@@ -2695,6 +2696,9 @@ func (s *Server) dropRelatedArtifacts(ctx context.Context, keepRoutingRules bool
 			return err
 		}
 		if err := sw.deleteShardRoutingRules(ctx); err != nil {
+			return err
+		}
+		if err := sw.deleteKeyspaceRoutingRules(ctx); err != nil {
 			return err
 		}
 	}

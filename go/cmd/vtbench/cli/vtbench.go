@@ -212,7 +212,7 @@ func run(cmd *cobra.Command, args []string) error {
 
 	b := vtbench.NewBench(threads, count, connParams, sql)
 
-	ctx, cancel := context.WithTimeout(context.Background(), deadline)
+	ctx, cancel := context.WithTimeout(cmd.Context(), deadline)
 	defer cancel()
 
 	fmt.Printf("Initializing test with %s protocol / %d threads / %d iterations\n",

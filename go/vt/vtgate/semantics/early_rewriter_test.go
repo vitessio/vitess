@@ -378,7 +378,7 @@ func TestGroupByColumnName(t *testing.T) {
 				require.NoError(t, err)
 				assert.Equal(t, tcase.expSQL, sqlparser.String(selectStatement))
 				gb := selectStatement.GroupBy
-				deps := st.RecursiveDeps(gb[0])
+				deps := st.RecursiveDeps(gb.Exprs[0])
 				assert.Equal(t, tcase.expDeps, deps)
 				assert.Equal(t, tcase.warning, st.Warning)
 			} else {
@@ -423,7 +423,7 @@ func TestGroupByLiteral(t *testing.T) {
 				require.NoError(t, err)
 				assert.Equal(t, tcase.expSQL, sqlparser.String(selectStatement))
 				gb := selectStatement.GroupBy
-				deps := st.RecursiveDeps(gb[0])
+				deps := st.RecursiveDeps(gb.Exprs[0])
 				assert.Equal(t, tcase.expDeps, deps)
 			} else {
 				require.EqualError(t, err, tcase.expErr)

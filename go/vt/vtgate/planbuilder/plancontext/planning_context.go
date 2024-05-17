@@ -188,3 +188,16 @@ func (ctx *PlanningContext) execOnJoinPredicateEqual(joinPred sqlparser.Expr, fn
 	}
 	return false
 }
+
+func (ctx *PlanningContext) RewriteDerivedTableExpression(expr sqlparser.Expr, tableInfo semantics.TableInfo) sqlparser.Expr {
+	modifiedExpr := semantics.RewriteDerivedTableExpression(expr, tableInfo)
+	for key, exprs := range ctx.joinPredicates {
+		for _, rhsExpr := range exprs {
+			if ctx.SemTable.EqualsExpr(expr, rhsExpr) {
+				ctx.joinPredicates[key] = append(ctx.joinPredicates[key], modifiedExpr)
+				return modifiedExpr
+			}
+		}
+	}
+	return modifiedExpr
+}

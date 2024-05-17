@@ -221,10 +221,10 @@ func init() {
 	collationEnv = collations.NewEnvironment(servenv.MySQLServerVersion())
 }
 
-func run(_ *cobra.Command, args []string) error {
+func run(cc *cobra.Command, args []string) error {
 	servenv.Init()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(cc.Context())
 	servenv.OnClose(func() {
 		cancel()
 	})
@@ -282,7 +282,7 @@ func run(_ *cobra.Command, args []string) error {
 		return fmt.Errorf("Can't take backup: %w", err)
 	}
 	if doBackup {
-		if err := takeBackup(ctx, topoServer, backupStorage); err != nil {
+		if err := takeBackup(ctx, cc.Context(), topoServer, backupStorage); err != nil {
 			return fmt.Errorf("Failed to take backup: %w", err)
 		}
 	}
@@ -304,7 +304,7 @@ func run(_ *cobra.Command, args []string) error {
 	return nil
 }
 
-func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage backupstorage.BackupStorage) error {
+func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, backupStorage backupstorage.BackupStorage) error {
 	// This is an imaginary tablet alias. The value doesn't matter for anything,
 	// except that we generate a random UID to ensure the target backup
 	// directory is unique if multiple vtbackup instances are launched for the
@@ -344,9 +344,9 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	deprecatedDurationByPhase.Set("InitMySQLd", int64(time.Since(initMysqldAt).Seconds()))
 	// Shut down mysqld when we're done.
 	defer func() {
-		// Be careful not to use the original context, because we don't want to
-		// skip shutdown just because we timed out waiting for other things.
-		mysqlShutdownCtx, mysqlShutdownCancel := context.WithTimeout(context.Background(), mysqlShutdownTimeout+10*time.Second)
+		// Be careful use the background context, not the init one, because we don't want to
+		// skip shutdown just because we timed out waiting for init.
+		mysqlShutdownCtx, mysqlShutdownCancel := context.WithTimeout(backgroundCtx, mysqlShutdownTimeout+10*time.Second)
 		defer mysqlShutdownCancel()
 		if err := mysqld.Shutdown(mysqlShutdownCtx, mycnf, false, mysqlShutdownTimeout); err != nil {
 			log.Errorf("failed to shutdown mysqld: %v", err)

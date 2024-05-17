@@ -76,7 +76,7 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 		replicationStatusProto = replication.ReplicationStatusToProto(replicationStatus)
 	}
 
-	// Primary status - "SHOW MASTER STATUS"
+	// Primary status - "SHOW BINARY LOG STATUS"
 	primaryStatus, err := tm.MysqlDaemon.PrimaryStatus(ctx)
 	var primaryStatusProto *replicationdatapb.PrimaryStatus
 	if err != nil && err != mysql.ErrNoPrimaryStatus {

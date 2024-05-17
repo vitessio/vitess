@@ -269,7 +269,7 @@ type (
 		Comments    *ParsedComments
 		SelectExprs SelectExprs
 		Where       *Where
-		GroupBy     GroupBy
+		GroupBy     *GroupBy
 		Having      *Where
 		Windows     NamedWindows
 		OrderBy     OrderBy
@@ -3451,7 +3451,10 @@ type ConvertType struct {
 }
 
 // GroupBy represents a GROUP BY clause.
-type GroupBy []Expr
+type GroupBy struct {
+	Exprs      []Expr
+	WithRollup bool
+}
 
 // OrderBy represents an ORDER By clause.
 type OrderBy []*Order

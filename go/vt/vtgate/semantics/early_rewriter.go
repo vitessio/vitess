@@ -74,10 +74,10 @@ func (r *earlyRewriter) up(cursor *sqlparser.Cursor) error {
 		// this rewriting is done in the `up` phase, because we need the vindex hints to have been
 		// processed while collecting the tables.
 		return removeVindexHints(node)
-	case sqlparser.GroupBy:
+	case *sqlparser.GroupBy:
 		r.clause = "group clause"
 		iter := &exprIterator{
-			node: node,
+			node: node.Exprs,
 			idx:  -1,
 		}
 		return r.handleGroupBy(cursor.Parent(), iter)

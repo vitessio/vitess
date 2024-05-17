@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 
 	"vitess.io/vitess/go/mysql"
@@ -46,15 +47,6 @@ func connectForReplication(t *testing.T, rbr bool) (*mysql.Conn, mysql.BinlogFor
 		t.Fatal(err)
 	}
 
-	// We need to know if this is MariaDB, to set the right flag.
-	if conn.IsMariaDB() {
-		// This flag is required to get GTIDs from MariaDB.
-		t.Log("MariaDB: sensing SET @mariadb_slave_capability=4")
-		if _, err := conn.ExecuteFetch("SET @mariadb_slave_capability=4", 0, false); err != nil {
-			t.Fatalf("failed to set @mariadb_slave_capability=4: %v", err)
-		}
-	}
-
 	// Switch server to RBR if needed.
 	if rbr {
 		if _, err := conn.ExecuteFetch("SET GLOBAL binlog_format='ROW'", 0, false); err != nil {
@@ -63,25 +55,21 @@ func connectForReplication(t *testing.T, rbr bool) (*mysql.Conn, mysql.BinlogFor
 	}
 
 	// First we get the current binlog position.
-	result, err := conn.ExecuteFetch("SHOW MASTER STATUS", 1, true)
-	require.NoError(t, err, "SHOW MASTER STATUS failed: %v", err)
+	status, err := conn.ShowPrimaryStatus()
+	require.NoError(t, err, "retrieving primary status failed: %v", err)
 
-	if len(result.Fields) < 2 || result.Fields[0].Name != "File" || result.Fields[1].Name != "Position" ||
-		len(result.Rows) != 1 {
-		t.Fatalf("SHOW MASTER STATUS returned unexpected result: %v", result)
-	}
-	file := result.Rows[0][0].ToString()
-	position, err := result.Rows[0][1].ToCastUint64()
-	require.NoError(t, err, "SHOW MASTER STATUS returned invalid position: %v", result.Rows[0][1])
+	filePos := status.FilePosition.GTIDSet.(replication.FilePosGTID)
+	file := filePos.File
+	position := filePos.Pos
 
 	// Tell the server that we understand the format of events
 	// that will be used if binlog_checksum is enabled on the server.
-	if _, err := conn.ExecuteFetch("SET @master_binlog_checksum=@@global.binlog_checksum", 0, false); err != nil {
-		t.Fatalf("failed to set @master_binlog_checksum=@@global.binlog_checksum: %v", err)
+	if _, err := conn.ExecuteFetch("SET @source_binlog_checksum = @@global.binlog_checksum, @master_binlog_checksum=@@global.binlog_checksum", 0, false); err != nil {
+		t.Fatalf("failed to set @source_binlog_checksum=@@global.binlog_checksum: %v", err)
 	}
 
 	// Write ComBinlogDump packet with to start streaming events from here.
-	if err := conn.WriteComBinlogDump(1, file, uint32(position), 0); err != nil {
+	if err := conn.WriteComBinlogDump(1, file, position, 0); err != nil {
 		t.Fatalf("WriteComBinlogDump failed: %v", err)
 	}
 

@@ -330,7 +330,9 @@ func cleanAndStartVttablet(t *testing.T, clusterInfo *VTOrcClusterInfo, vttablet
 	_, err = RunSQL(t, "STOP REPLICA", vttablet, "")
 	require.NoError(t, err)
 	// reset the binlog
-	_, err = RunSQL(t, "RESET MASTER", vttablet, "")
+	resetCmd, err := vttablet.VttabletProcess.ResetBinaryLogsCommand()
+	require.NoError(t, err)
+	_, err = RunSQL(t, resetCmd, vttablet, "")
 	require.NoError(t, err)
 	// set read-only to true
 	_, err = RunSQL(t, "SET GLOBAL read_only = ON", vttablet, "")

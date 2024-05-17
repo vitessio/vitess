@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/patrickmn/go-cache"
-	"github.com/rcrowley/go-metrics"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
@@ -906,7 +905,7 @@ func TestAuditInstanceAnalysisInChangelog(t *testing.T) {
 			oldAnalysisChangeWriteCounter := analysisChangeWriteCounter
 
 			recentInstantAnalysis = cache.New(tt.cacheExpiration, 100*time.Millisecond)
-			analysisChangeWriteCounter = metrics.NewCounter()
+			before := analysisChangeWriteCounter.Get()
 
 			defer func() {
 				// Set the old values back.
@@ -919,7 +918,7 @@ func TestAuditInstanceAnalysisInChangelog(t *testing.T) {
 			updates := []struct {
 				tabletAlias             string
 				analysisCode            AnalysisCode
-				writeCounterExpectation int
+				writeCounterExpectation int64
 				wantErr                 string
 			}{
 				{
@@ -950,7 +949,7 @@ func TestAuditInstanceAnalysisInChangelog(t *testing.T) {
 					continue
 				}
 				require.NoError(t, err)
-				require.EqualValues(t, upd.writeCounterExpectation, analysisChangeWriteCounter.Count())
+				require.EqualValues(t, upd.writeCounterExpectation, analysisChangeWriteCounter.Get()-before)
 			}
 		})
 	}

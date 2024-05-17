@@ -851,34 +851,40 @@ func getTenantClause(vrOptions *vtctldatapb.WorkflowOptions,
 }
 
 func changeKeyspaceRouting(ctx context.Context, ts *topo.Server, tabletTypes []topodatapb.TabletType,
-	sourceKeyspace string, targetKeyspace string) error {
+	sourceKeyspace, targetKeyspace, reason string) error {
 	routes := make(map[string]string)
 	for _, tabletType := range tabletTypes {
 		suffix := getTabletTypeSuffix(tabletType)
 		routes[sourceKeyspace+suffix] = targetKeyspace
 	}
-	if err := updateKeyspaceRoutingRule(ctx, ts, routes); err != nil {
+	if err := updateKeyspaceRoutingRules(ctx, ts, reason, routes); err != nil {
 		return err
 	}
 	return ts.RebuildSrvVSchema(ctx, nil)
 }
 
-// updateKeyspaceRoutingRule updates the keyspace routing rule for the (effective) source keyspace to the target keyspace.
-func updateKeyspaceRoutingRule(ctx context.Context, ts *topo.Server, routes map[string]string) error {
-	rules, err := topotools.GetKeyspaceRoutingRules(ctx, ts)
-	if err != nil {
+// updateKeyspaceRoutingRules updates the keyspace routing rules for the (effective) source
+// keyspace to the target keyspace.
+func updateKeyspaceRoutingRules(ctx context.Context, ts *topo.Server, reason string, routes map[string]string) error {
+	update := func() error {
+		return topotools.UpdateKeyspaceRoutingRules(ctx, ts, reason,
+			func(ctx context.Context, rules *map[string]string) error {
+				for fromKeyspace, toKeyspace := range routes {
+					(*rules)[fromKeyspace] = toKeyspace
+				}
+				return nil
+			})
+	}
+	err := update()
+	if err == nil {
+		return nil
+	}
+	// If we were racing with another caller to create the initial routing rules, then
+	// we can immediately retry the operation.
+	if !topo.IsErrType(err, topo.NodeExists) {
 		return err
 	}
-	if rules == nil {
-		rules = make(map[string]string)
-	}
-	for fromKeyspace, toKeyspace := range routes {
-		rules[fromKeyspace] = toKeyspace
-	}
-	if err := topotools.SaveKeyspaceRoutingRules(ctx, ts, rules); err != nil {
-		return err
-	}
-	return nil
+	return update()
 }
 
 func validateTenantId(dataType querypb.Type, value string) error {
