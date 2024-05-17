@@ -296,7 +296,7 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 	}()
 
 	applyErr := make(chan error, 1)
-	vp.stallHandler.fireChan = applyErr
+	vp.stallHandler.fire = applyErr
 	defer vp.stallHandler.stopTimer()
 	go func() {
 		applyErr <- vp.applyEvents(ctx, relay)
@@ -848,17 +848,17 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 }
 
 type stallHandler struct {
-	timer    *time.Timer
-	timeout  time.Duration
-	fireChan chan error
-	stopChan chan struct{}
+	timer   atomic.Pointer[time.Timer]
+	timeout time.Duration
+	fire    chan error
+	stop    chan struct{}
 }
 
 func newStallHandler(to time.Duration, ch chan error) *stallHandler {
 	return &stallHandler{
-		timeout:  to,
-		fireChan: ch,
-		stopChan: make(chan struct{}, 1),
+		timeout: to,
+		fire:    ch,
+		stop:    make(chan struct{}),
 	}
 }
 
@@ -872,12 +872,16 @@ func (sh *stallHandler) startTimer() error {
 	if debugMode.Load() {
 		log.Errorf("Starting progress timer at %v", time.Now())
 	}
-	sh.timer = time.NewTimer(sh.timeout)
+	// If the timer has not been initialed yet, then do so.
+	if swapped := sh.timer.CompareAndSwap(nil, time.NewTimer(sh.timeout)); !swapped {
+		// Otherwise, reset the timer.
+		sh.timer.Load().Reset(sh.timeout)
+	}
 	go func() {
 		select {
-		case <-sh.timer.C:
-			sh.fireChan <- ErrVPlayerProgressTimeout
-		case <-sh.stopChan:
+		case <-sh.timer.Load().C: // The timer expired
+			sh.fire <- ErrVPlayerProgressTimeout
+		case <-sh.stop: // The timer was stopped
 		}
 	}()
 	return nil
@@ -890,7 +894,7 @@ func (sh *stallHandler) stopTimer() error {
 		}
 		return fmt.Errorf("stallHandler is nil")
 	}
-	if sh.timer == nil {
+	if sh.timer.Load() == nil {
 		if debugMode.Load() {
 			log.Errorf("stallHandler.timer is nil in stopTimer")
 		}
@@ -899,7 +903,9 @@ func (sh *stallHandler) stopTimer() error {
 	if debugMode.Load() {
 		log.Errorf("Stopping progress timer at %v", time.Now())
 	}
-	sh.timer.Stop()
-	sh.stopChan <- struct{}{}
+	if sh.timer.Load().Stop() {
+		// It was running, so signal the goroutine to stop.
+		sh.stop <- struct{}{}
+	}
 	return nil
 }
