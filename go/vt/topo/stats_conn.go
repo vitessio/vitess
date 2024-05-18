@@ -116,7 +116,7 @@ func (st *StatsConn) Get(ctx context.Context, filePath string) ([]byte, Version,
 }
 
 // GetVersion is part of the Conn interface.
-func (st *StatsConn) GetVersion(ctx context.Context, filePath string, version Version) ([]byte, error) {
+func (st *StatsConn) GetVersion(ctx context.Context, filePath string, version int64) ([]byte, error) {
 	startTime := time.Now()
 	statsKey := []string{"GetVersion", st.cell}
 	defer topoStatsConnTimings.Record(statsKey, startTime)

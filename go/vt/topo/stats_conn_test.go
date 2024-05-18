@@ -74,7 +74,7 @@ func (st *fakeConn) Get(ctx context.Context, filePath string) (bytes []byte, ver
 }
 
 // GetVersion is part of the Conn interface
-func (st *fakeConn) GetVersion(ctx context.Context, filePath string, version Version) (bytes []byte, err error) {
+func (st *fakeConn) GetVersion(ctx context.Context, filePath string, version int64) (bytes []byte, err error) {
 	if filePath == "error" {
 		return bytes, fmt.Errorf("Dummy error")
 

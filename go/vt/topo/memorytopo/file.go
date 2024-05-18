@@ -191,7 +191,7 @@ func (c *Conn) Get(ctx context.Context, filePath string) ([]byte, topo.Version, 
 }
 
 // GetVersion is part of topo.Conn interface.
-func (c *Conn) GetVersion(ctx context.Context, filePath string, version topo.Version) ([]byte, error) {
+func (c *Conn) GetVersion(ctx context.Context, filePath string, version int64) ([]byte, error) {
 	return nil, topo.NewError(topo.NoImplementation, "GetVersion not supported in memory topo")
 }
 

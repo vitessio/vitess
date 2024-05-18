@@ -89,10 +89,10 @@ func (s *Server) Get(ctx context.Context, filePath string) ([]byte, topo.Version
 }
 
 // GetVersion is part of the topo.Conn interface.
-func (s *Server) GetVersion(ctx context.Context, filePath string, version topo.Version) ([]byte, error) {
+func (s *Server) GetVersion(ctx context.Context, filePath string, version int64) ([]byte, error) {
 	nodePath := path.Join(s.root, filePath)
 
-	resp, err := s.cli.Get(ctx, nodePath, clientv3.WithRev(int64(version.(EtcdVersion))))
+	resp, err := s.cli.Get(ctx, nodePath, clientv3.WithRev(version))
 	if err != nil {
 		return nil, convertError(err, nodePath)
 	}

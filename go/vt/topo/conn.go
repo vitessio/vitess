@@ -76,7 +76,7 @@ type Conn interface {
 	// filePath is a path relative to the root directory of the cell.
 	// Can return ErrNoNode if the file doesn't exist and ErrNoVersion
 	// if the version doesn't exist.
-	GetVersion(ctx context.Context, filePath string, version Version) ([]byte, error)
+	GetVersion(ctx context.Context, filePath string, version int64) ([]byte, error)
 
 	// List returns KV pairs, along with metadata like the version, for
 	// entries where the key contains the specified prefix.

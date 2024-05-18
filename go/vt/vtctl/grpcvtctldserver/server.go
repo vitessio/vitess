@@ -55,7 +55,6 @@ import (
 	"vitess.io/vitess/go/vt/schemamanager"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/etcd2topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/topotools/events"
@@ -2280,12 +2279,7 @@ func (s *VtctldServer) GetTopologyPath(ctx context.Context, req *vtctldatapb.Get
 	}
 
 	// Otherwise, delegate to getTopologyCell to parse the path and return the cell there.
-	var version topo.Version
-	if req.GetVersion() != 0 {
-		// Getting specific versions is only supported with the etcd2topo today.
-		version = etcd2topo.EtcdVersion(req.GetVersion())
-	}
-	cell, err := s.getTopologyCell(ctx, req.GetPath(), version, req.GetAsJson())
+	cell, err := s.getTopologyCell(ctx, req.GetPath(), req.GetVersion(), req.GetAsJson())
 	if err != nil {
 		return nil, err
 	}
@@ -5072,7 +5066,7 @@ func StartServer(s *grpc.Server, env *vtenv.Environment, ts *topo.Server) {
 }
 
 // getTopologyKey is a helper method that returns a topology key given its path.
-func (s *VtctldServer) getTopologyCell(ctx context.Context, cellPath string, version topo.Version, asJSON bool) (*vtctldatapb.TopologyCell, error) {
+func (s *VtctldServer) getTopologyCell(ctx context.Context, cellPath string, version int64, asJSON bool) (*vtctldatapb.TopologyCell, error) {
 	// extract cell and relative path
 	parts := strings.Split(cellPath, "/")
 	if parts[0] != "" || len(parts) < 2 {
@@ -5089,37 +5083,39 @@ func (s *VtctldServer) getTopologyCell(ctx context.Context, cellPath string, ver
 		return nil, err
 	}
 
-	if version != nil {
-		if data, err := conn.GetVersion(ctx, relativePath, version); err == nil {
+	if version != 0 {
+		data, err := conn.GetVersion(ctx, relativePath, version)
+		if err == nil {
 			result, err := topo.DecodeContent(relativePath, data, asJSON)
 			if err != nil {
-				err := vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "error decoding file content for cell %s (version: %s): %v", cellPath, version, err)
-				return nil, err
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "error decoding file content for cell %s (version: %d): %v", cellPath, version, err)
 			}
 			topoCell.Data = result
-			topoCell.Version, err = strconv.ParseInt(version.String(), 10, 64)
-			if err != nil {
-				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "error decoding file version for cell %s (version: %s): %v", cellPath, version, err)
-			}
-			// since there is data at this cell, it cannot be a directory cell
-			// so we can early return the topocell
+			topoCell.Version = version
+			// Since there is data at this cell, it cannot be a directory cell
+			// so we can early return the topocell.
 			return &topoCell, nil
 		}
+		if topo.IsErrType(err, topo.NoImplementation) {
+			// The topo server does not support GetVersion.
+			return nil, err
+		}
+		// Otherwise this may be a "directory" with children at this path so
+		// we carry on.
 	} else {
 		if data, curVersion, err := conn.Get(ctx, relativePath); err == nil {
 			result, err := topo.DecodeContent(relativePath, data, asJSON)
 			if err != nil {
-				err := vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "error decoding file content for cell %s: %v", cellPath, err)
-				return nil, err
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "error decoding file content for cell %s: %v", cellPath, err)
 			}
 			topoCell.Data = result
 			topoCell.Version, err = strconv.ParseInt(curVersion.String(), 10, 64)
 			if err != nil {
-				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "error decoding file version for cell %s (version: %s): %v", cellPath, version, err)
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "error decoding file version for cell %s (version: %d): %v", cellPath, version, err)
 			}
 
-			// since there is data at this cell, it cannot be a directory cell
-			// so we can early return the topocell
+			// Since there is data at this cell, it cannot be a directory cell
+			// so we can early return the topocell.
 			return &topoCell, nil
 		}
 	}

@@ -254,7 +254,7 @@ func (f *FakeConn) Get(ctx context.Context, filePath string) ([]byte, topo.Versi
 }
 
 // GetVersion is part of topo.Conn interface.
-func (f *FakeConn) GetVersion(ctx context.Context, filePath string, version topo.Version) ([]byte, error) {
+func (f *FakeConn) GetVersion(ctx context.Context, filePath string, version int64) ([]byte, error) {
 	return nil, topo.NewError(topo.NoImplementation, "GetVersion not supported in fake topo")
 }
 
