@@ -352,7 +352,7 @@ Flags:
       --tablet_refresh_interval duration                                 Tablet refresh interval. (default 1m0s)
       --tablet_refresh_known_tablets                                     Whether to reload the tablet's address/port map from topo in case they change. (default true)
       --tablet_types_to_wait strings                                     Wait till connected for specified tablet types during Gateway initialization. Should be provided as a comma-separated set of tablet types.
-      --tablet_url_template string                                       Format string describing debug tablet url formatting. See getTabletDebugURL() for how to customize this. (default "http://{{.GetTabletHostPort}}")
+      --tablet_url_template string                                       Format string describing debug tablet url formatting. See getTabletDebugURL() for how to customize this. (default "http://{{ "{{.GetTabletHostPort}}" }}")
       --throttle_tablet_types string                                     Comma separated VTTablet types to be considered by the throttler. default: 'replica'. example: 'replica,rdonly'. 'replica' always implicitly included (default "replica")
       --topo_consul_lock_delay duration                                  LockDelay for consul session. (default 15s)
       --topo_consul_lock_session_checks string                           List of checks for consul session. (default "serfHealth")

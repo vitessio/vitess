@@ -3356,9 +3356,11 @@ func TestPlayerBatchMode(t *testing.T) {
 // a meaningful error -- which is stored in the vreplication record and the
 // vreplication_log table as well as being logged -- when it does.
 func TestPlayerStalls(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	defer deleteTablet(addTablet(100))
 
-	debugMode.Store(true)
+	//debugMode.Store(true)
 	ogvpt := vplayerProgressTimeout
 	orlmi := relayLogMaxItems
 	ord := retryDelay
@@ -3371,12 +3373,17 @@ func TestPlayerStalls(t *testing.T) {
 
 	// Shorten the timeout for the test.
 	vplayerProgressTimeout = 5 * time.Second
+	// Shorten the time for a required heartbeat recording for the test.
+	vreplicationMinimumHeartbeatUpdateInterval = 5
 	// So each relay log batch will be a single statement transaction.
 	relayLogMaxItems = 1
 
 	// Don't retry the workflow if it goes into the error state.
 	retryDelay = 10 * time.Minute
 	maxTimeToRetryError = 1 * time.Second
+
+	// A channel to communicate across goroutines.
+	done := make(chan struct{})
 
 	testTimeout := vplayerProgressTimeout * 100
 
@@ -3388,7 +3395,7 @@ func TestPlayerStalls(t *testing.T) {
 		"drop table t1",
 		fmt.Sprintf("drop table %s.t1", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
+	env.SchemaEngine.Reload(ctx)
 
 	filter := &binlogdatapb.Filter{}
 	bls := &binlogdatapb.BinlogSource{
@@ -3399,11 +3406,12 @@ func TestPlayerStalls(t *testing.T) {
 	}
 
 	testcases := []struct {
-		name     string
-		input    []string
-		output   qh.ExpectationSequencer
-		preFunc  func() // This is run in a goroutine
-		postFunc func()
+		name          string
+		input         []string
+		output        qh.ExpectationSequencer
+		preFunc       func() // This is run in a goroutine
+		postFunc      func()
+		expectQueries bool
 	}{
 		{
 			name: "stall in vplayer with statements",
@@ -3415,6 +3423,7 @@ func TestPlayerStalls(t *testing.T) {
 				"insert into t1(id, val1) values (4, 'ddd'), (5, 'eee'), (6, 'fff')",
 				"update t1 set val1 = 'zzz' where id = 1",
 			},
+			expectQueries: true,
 			output: qh.Expect(
 				"insert into t1(id, val1) values (1, 'aaa'), (2, 'bbb'), (3, 'ccc')",
 				// This will cause a stall to be detected in the vplayer. This is
@@ -3427,35 +3436,46 @@ func TestPlayerStalls(t *testing.T) {
 				execStatements(t, []string{"set @@session.binlog_format='ROW'"})
 			},
 		},
-		/*
-			{
-				name: "stall in vplayer with rows",
-				input: []string{
-					fmt.Sprintf("set @@session.innodb_lock_wait_timeout=%d", int64(vplayerProgressTimeout.Seconds()+5)),
-					"insert into t1(id, val1) values (10, 'mmm'), (11, 'nnn'), (12, 'ooo')",
-					"update t1 set val1 = 'yyy' where id = 10",
-				},
-				preFunc: func() {
-					dbc, err := env.Mysqld.GetAllPrivsConnection(context.Background())
-					require.NoError(t, err)
-					defer dbc.Close()
-					_, err = dbc.ExecuteFetch("begin", 1, false)
-					require.NoError(t, err)
-					// The gap lock for this will block our INSERT until the innodb_lock_wait
-					// timeout.
-					_, err = dbc.ExecuteFetch("select * from t1 where id > 6 for update", 1000, false)
-					require.NoError(t, err)
-					time.Sleep(testTimeout)
-					_, err = dbc.ExecuteFetch("rollback", 1, false)
-					require.NoError(t, err)
-				},
-				output: qh.Expect(
-					// Nothing should get replicated because of the table level lock held
-					// in the other connection from our preFunc.
-					"/update _vt.vreplication set message=.*progress stalled.*",
-				),
+		{
+			name: "stall in vplayer with rows",
+			input: []string{
+				fmt.Sprintf("set @@session.innodb_lock_wait_timeout=%d", int64(vplayerProgressTimeout.Seconds()+5)),
+				"insert into t1(id, val1) values (10, 'mmm'), (11, 'nnn'), (12, 'ooo')",
+				"update t1 set val1 = 'yyy' where id = 10",
 			},
-		*/
+			preFunc: func() {
+				dbc, err := env.Mysqld.GetAllPrivsConnection(context.Background())
+				require.NoError(t, err)
+				_, err = dbc.ExecuteFetch("begin", 1, false)
+				require.NoError(t, err)
+				// The row lock for this will block us from recording the heartbeats.
+				_, err = dbc.ExecuteFetch("select * from _vt.vreplication for update", 1000, false)
+				require.NoError(t, err)
+				go func() {
+					defer func() {
+						_, err = dbc.ExecuteFetch("rollback", 1, false)
+						require.NoError(t, err)
+						dbc.Close()
+					}()
+					to := time.Duration(vreplicationMinimumHeartbeatUpdateInterval * 2 * 1000) // Milliseconds
+					time.Sleep(to)
+
+					select {
+					case <-done:
+					case <-ctx.Done():
+					}
+				}()
+			},
+			postFunc: func() {
+				//to := time.Duration(int64(float64(vreplicationMinimumHeartbeatUpdateInterval) * float64(1.5) * float64(1000))) // Milliseconds
+				//time.Sleep(to)
+				// Stop the test. If we haven't received any non-expected queries
+				// yet then the test has passed.
+				done <- struct{}{}
+			},
+			// Nothing should get replicated because of the exclusing row lock
+			// held in the other connection from our preFunc.
+		},
 	}
 
 	for _, tc := range testcases {
@@ -3464,9 +3484,11 @@ func TestPlayerStalls(t *testing.T) {
 			defer cancel()
 			execStatements(t, tc.input)
 			if tc.preFunc != nil {
-				go tc.preFunc()
+				tc.preFunc()
 			}
-			expectNontxQueries(t, tc.output, testTimeout)
+			if tc.expectQueries {
+				expectNontxQueries(t, tc.output, testTimeout)
+			}
 			if tc.postFunc != nil {
 				tc.postFunc()
 			}
