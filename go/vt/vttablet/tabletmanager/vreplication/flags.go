@@ -61,7 +61,7 @@ func registerVReplicationFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&vreplicationParallelInsertWorkers, "vreplication-parallel-insert-workers", vreplicationParallelInsertWorkers, "Number of parallel insertion workers to use during copy phase. Set <= 1 to disable parallelism, or > 1 to enable concurrent insertion during copy phase.")
 
 	// At what point should we consider a vplayer stream to be stuck, produce an error, and retry?
-	fs.DurationVar(&vplayerProgressTimeout, "vplayer-progress-timeout", vplayerProgressTimeout, "At what point, without having been able successfully replicate a pending batch of events, should we consider the vplayer stalled; then producing an error and log message and restarting the player. A value of 0s disables this feature.")
+	fs.DurationVar(&vplayerProgressTimeout, "vplayer-progress-timeout", vplayerProgressTimeout, "At what point, without having been able successfully replicate a pending batch of events, should we consider the vplayer stalled; then producing an error and log message and restarting the player. A value of 0 disables this feature.")
 }
 
 func init() {

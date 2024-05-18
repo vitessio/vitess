@@ -40,7 +40,7 @@ import (
 
 var (
 	// At what point should we consider the vplayer to be stalled and return an error.
-	vplayerProgressTimeout = 2 * time.Minute
+	vplayerProgressTimeout = time.Duration(0) // Disabled by default.
 
 	// The error to return when we have detected a stall in the vplayer.
 	ErrVPlayerProgressTimeout = fmt.Errorf("progress stalled; vplayer was likely unable to replicate the previous log content's transaction in a timely manner; examine the target mysqld instance health and the replicated queries' EXPLAIN output to see why queries are taking unusually long")
