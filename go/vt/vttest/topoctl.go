@@ -31,6 +31,7 @@ func (ctl *Topoctl) Setup() error {
 	if err != nil {
 		return err
 	}
+	defer topoServer.Close()
 
 	log.Infof("Creating cells if they don't exist in the provided topo server %s %s %s", ctl.TopoImplementation, ctl.TopoGlobalServerAddress, ctl.TopoGlobalRoot)
 	// Create cells if it doesn't exist to be idempotent. Should work when we share the same topo server across multiple local clusters.

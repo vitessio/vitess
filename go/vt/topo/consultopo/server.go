@@ -165,9 +165,13 @@ func parseConsulLockSessionChecks(s string) []string {
 }
 
 // Close implements topo.Server.Close.
-// It will nil out the global and cells fields, so any attempt to
-// re-use this server will panic.
+// It will close idle http connections and nil out the global
+// and cells fields, so any attempt to re-use this server
+// will panic.
 func (s *Server) Close() {
+	if consulConfig.Transport != nil {
+		consulConfig.Transport.CloseIdleConnections()
+	}
 	s.client = nil
 	s.kv = nil
 	s.mu.Lock()
