@@ -74,8 +74,9 @@ type Conn interface {
 
 	// GetVersion returns the content of a file at the given version.
 	// filePath is a path relative to the root directory of the cell.
-	// Can return ErrNoNode if the file doesn't exist and ErrNoVersion
-	// if the version doesn't exist.
+	// Can return ErrNoNode if the file doesn't exist at the given
+	// version or ErrNoImplementation if the topo server does not
+	// support storing multiple versions and retrieving a specific one.
 	GetVersion(ctx context.Context, filePath string, version int64) ([]byte, error)
 
 	// List returns KV pairs, along with metadata like the version, for
