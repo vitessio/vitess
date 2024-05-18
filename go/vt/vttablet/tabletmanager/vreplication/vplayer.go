@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
@@ -402,11 +403,11 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 
 // updatePos should get called at a minimum of vreplicationMinimumHeartbeatUpdateInterval.
 func (vp *vplayer) updatePos(ctx context.Context, ts int64) (posReached bool, err error) {
-	vp.numAccumulatedHeartbeats = 0
 	update := binlogplayer.GenerateUpdatePos(vp.vr.id, vp.pos, time.Now().Unix(), ts, vp.vr.stats.CopyRowCount.Get(), vreplicationStoreCompressedGTID)
 	if _, err := vp.query(ctx, update); err != nil {
 		return false, fmt.Errorf("error %v updating position", err)
 	}
+	vp.numAccumulatedHeartbeats = 0
 	vp.unsavedEvent = nil
 	vp.timeLastSaved = time.Now()
 	vp.vr.stats.SetLastPosition(vp.pos)
@@ -433,8 +434,16 @@ func (vp *vplayer) recordHeartbeat() error {
 	if !vp.mustUpdateHeartbeat() {
 		return nil
 	}
+	if err := vp.vr.updateHeartbeatTime(tm); err != nil {
+		return vterrors.Wrapf(ErrVPlayerProgressTimeout, "failed to record heartbeat: %v", err)
+	}
+	// Only reset the pending heartbeat count if the update was successful.
+	// Otherwise the vplayer may not actually be making progress and nobody
+	// is aware of it -- resulting in the com_binlog_dump connection on the
+	// source that is managed by the binlog_player getting closed by mysqld
+	// when the source_net_timeout is hit.
 	vp.numAccumulatedHeartbeats = 0
-	return vp.vr.updateHeartbeatTime(tm)
+	return nil
 }
 
 // applyEvents is the main thread that applies the events. It has the following use
@@ -606,6 +615,9 @@ func hasAnotherCommit(items [][]*binlogdatapb.VEvent, i, j int) bool {
 
 func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, mustSave bool) error {
 	stats := NewVrLogStats(event.Type.String())
+	if debugMode.Load() {
+		log.Errorf("applying event: %v", event)
+	}
 	switch event.Type {
 	case binlogdatapb.VEventType_GTID:
 		pos, err := binlogplayer.DecodePosition(event.Gtid)
@@ -848,6 +860,10 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 	return nil
 }
 
+// stallHandler is used to monitor for vplayer stalls and trigger an error
+// when detected. This is used today to detect when a vplayer is not able
+// to commit/complete a replicated user transaction within a configured
+// period of time.
 type stallHandler struct {
 	timer   atomic.Pointer[time.Timer]
 	timeout time.Duration
@@ -878,7 +894,8 @@ func (sh *stallHandler) startTimer() error {
 	go func() {
 		select {
 		case <-sh.timer.Load().C: // The timer expired
-			sh.fire <- ErrVPlayerProgressTimeout
+			sh.fire <- vterrors.Wrapf(ErrVPlayerProgressTimeout,
+				"failed to commit transaction batch before the configured --vplayer-progress-timeout of %v", vplayerProgressTimeout)
 		case <-sh.stop: // The timer was stopped
 		}
 	}()
@@ -886,13 +903,7 @@ func (sh *stallHandler) startTimer() error {
 }
 
 func (sh *stallHandler) stopTimer() error {
-	if sh == nil || sh.timeout == 0 { // Stall handling is disabled
-		return nil
-	}
-	if sh.timer.Load() == nil {
-		if debugMode.Load() {
-			log.Errorf("stallHandler.timer is nil in stopTimer")
-		}
+	if sh == nil || sh.timeout == 0 || sh.timer.Load() == nil { // Stall handling is currently disabled
 		return nil
 	}
 	if debugMode.Load() {
