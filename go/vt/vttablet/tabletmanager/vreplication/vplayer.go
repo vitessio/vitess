@@ -44,6 +44,7 @@ var (
 	// The error to return when we have detected a stall in the vplayer.
 	ErrVPlayerProgressTimeout = fmt.Errorf("progress stalled; vplayer was likely unable to replicate the previous log content's transaction in a timely manner; examine the target mysqld instance health and the replicated queries' EXPLAIN output to see why queries are taking unusually long")
 
+	// If you want to enable debug logging.
 	debugMode atomic.Bool
 )
 
@@ -863,11 +864,8 @@ func newStallHandler(to time.Duration, ch chan error) *stallHandler {
 }
 
 func (sh *stallHandler) startTimer() error {
-	if sh == nil {
-		if debugMode.Load() {
-			log.Errorf("stallHandler is nil in startTimer")
-		}
-		return fmt.Errorf("stallHandler is nil")
+	if sh == nil || sh.timeout == 0 { // Stall handling is disabled
+		return nil
 	}
 	if debugMode.Load() {
 		log.Errorf("Starting progress timer at %v", time.Now())
@@ -888,11 +886,8 @@ func (sh *stallHandler) startTimer() error {
 }
 
 func (sh *stallHandler) stopTimer() error {
-	if sh == nil {
-		if debugMode.Load() {
-			log.Errorf("stallHandler is nil in stopTimer")
-		}
-		return fmt.Errorf("stallHandler is nil")
+	if sh == nil || sh.timeout == 0 { // Stall handling is disabled
+		return nil
 	}
 	if sh.timer.Load() == nil {
 		if debugMode.Load() {

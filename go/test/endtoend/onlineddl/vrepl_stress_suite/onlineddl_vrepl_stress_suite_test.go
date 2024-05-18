@@ -439,6 +439,7 @@ func TestMain(m *testing.M) {
 			// Test VPlayer batching mode.
 			fmt.Sprintf("--vreplication_experimental_flags=%d",
 				vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage|vttablet.VReplicationExperimentalFlagOptimizeInserts|vttablet.VReplicationExperimentalFlagVPlayerBatching),
+			"--vplayer-progress-timeout", "30s",
 		}
 		clusterInstance.VtGateExtraArgs = []string{
 			"--ddl_strategy", "online",
