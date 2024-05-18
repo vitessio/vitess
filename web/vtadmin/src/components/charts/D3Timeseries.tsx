@@ -35,6 +35,8 @@ export const D3Timeseries = ({ isLoading, timeseriesMap }: LineChartProps) => {
   const boundsWidth = width - MARGIN.right - MARGIN.left;
   const boundsHeight = height - MARGIN.top - MARGIN.bottom;
 
+  const numSeries = Object.keys(timeseriesMap).length
+
   const [xRanges, [_yMin, yMax]] = axisMinsAndMaxes(timeseriesMap, boundsWidth)
   const yScale = useMemo(() => {
     return d3
@@ -81,6 +83,8 @@ export const D3Timeseries = ({ isLoading, timeseriesMap }: LineChartProps) => {
     .x((d) => xScale(d.x))
     .y((d) => yScale(d.y));
 
+    const colors = d3.scaleOrdinal(d3.schemePiYG[11])
+
   return (
     <div>
       <svg width={width} height={height}>
@@ -89,7 +93,7 @@ export const D3Timeseries = ({ isLoading, timeseriesMap }: LineChartProps) => {
           height={boundsHeight}
           transform={`translate(${[MARGIN.left, MARGIN.top].join(",")})`}
         >
-          {Object.values(timeseriesMap).map(ts => <Line timeseriesPoints={ts} lineBuilder={lineBuilder} />)}
+          {Object.entries(timeseriesMap).map(([name, ts], i) => <Line color={colors(name)} key={name} timeseriesPoints={ts} lineBuilder={lineBuilder} />)}
         </g>
         <g
           width={boundsWidth}
@@ -98,16 +102,31 @@ export const D3Timeseries = ({ isLoading, timeseriesMap }: LineChartProps) => {
           transform={`translate(${[MARGIN.left, MARGIN.top].join(",")})`}
         />
       </svg>
+      <Legend colors={colors} names={Object.keys(timeseriesMap)} />
     </div>
   );
 };
 
+const Legend: React.FC<{ names: string[], colors: d3.ScaleOrdinal<string, string, never> }> = ({ names, colors }) => {
+    return (
+        <div className="width-full flex items-center justify-center">
+            {names.map(name => (
+                <div className="mr-6 font-mono text-sm flex items-center justify-center" key={`${name}_legend`}>
+                    <div className="h-5 w-5 mr-2" style={{ backgroundColor: colors(name) }} />
+                    {name}
+                </div>
+            ))}
+        </div>
+    )
+}
+
 type LineProps = {
+    color: string
     timeseriesPoints: TimeseriesPoint[]
     lineBuilder: d3.Line<TimeseriesPoint>
 }
 
-const Line: React.FC<LineProps> = ({ timeseriesPoints, lineBuilder }) => {
+const Line: React.FC<LineProps> = ({ color, timeseriesPoints, lineBuilder }) => {
     const linePath = lineBuilder(timeseriesPoints);
     if (!linePath) {
       return null;
@@ -117,7 +136,7 @@ const Line: React.FC<LineProps> = ({ timeseriesPoints, lineBuilder }) => {
         <path
             d={linePath}
             opacity={1}
-            stroke="#9a6fb0"
+            stroke={color}
             fill="none"
             strokeWidth={2}
             className="z-100"
