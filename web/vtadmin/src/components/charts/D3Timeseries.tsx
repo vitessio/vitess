@@ -35,8 +35,6 @@ export const D3Timeseries = ({ isLoading, timeseriesMap }: LineChartProps) => {
   const boundsWidth = width - MARGIN.right - MARGIN.left;
   const boundsHeight = height - MARGIN.top - MARGIN.bottom;
 
-  const numSeries = Object.keys(timeseriesMap).length
-
   const [xRanges, [_yMin, yMax]] = axisMinsAndMaxes(timeseriesMap, boundsWidth)
   const yScale = useMemo(() => {
     return d3
@@ -54,6 +52,8 @@ export const D3Timeseries = ({ isLoading, timeseriesMap }: LineChartProps) => {
   useEffect(() => {
     const svgElement = d3.select(axesRef.current);
     svgElement.selectAll("*").remove();
+
+    // Render X Axis
     const xAxisGenerator = d3.axisBottom<Date>(xScale)
     xAxisGenerator.tickFormat(d3.timeFormat("%H:%M"))
     svgElement
@@ -63,6 +63,7 @@ export const D3Timeseries = ({ isLoading, timeseriesMap }: LineChartProps) => {
         .selectAll("text")
         .attr("class", "fill-gray-500 font-mono text-medium");
 
+    // Render Y Axis
     const yAxisGenerator = d3.axisLeft(yScale);
     svgElement
         .append("g")
@@ -75,6 +76,8 @@ export const D3Timeseries = ({ isLoading, timeseriesMap }: LineChartProps) => {
     svgElement
         .selectAll("line")
         .attr("class", "!stroke-gray-200 z-10")
+    
+    // Tooltip
   }, [xScale, yScale, boundsHeight]);
 
     // Build the line
