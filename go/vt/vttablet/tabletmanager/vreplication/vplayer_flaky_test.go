@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/vttablet"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
 
@@ -3360,11 +3361,21 @@ func TestPlayerStalls(t *testing.T) {
 	defer cancel()
 	defer deleteTablet(addTablet(100))
 
+	// Uncomment this if you want to debug tests locally.
+	// In which case you'll probably also want to disable
+	// usage of the memory logger.
 	//debugMode.Store(true)
+
+	// We want to check for the expected log messages.
+	ole := log.Errorf
+	logger := logutil.NewMemoryLogger()
+	log.Errorf = logger.Errorf
+
 	ogvpt := vplayerProgressTimeout
 	orlmi := relayLogMaxItems
 	ord := retryDelay
 	defer func() {
+		log.Errorf = ole
 		vplayerProgressTimeout = ogvpt
 		relayLogMaxItems = orlmi
 		retryDelay = ord
@@ -3433,6 +3444,7 @@ func TestPlayerStalls(t *testing.T) {
 				"/update _vt.vreplication set message=.*progress stalled.*",
 			),
 			postFunc: func() {
+				require.Contains(t, logger.String(), "failed to commit transaction batch before the configured", "expected log message not found")
 				execStatements(t, []string{"set @@session.binlog_format='ROW'"})
 			},
 		},
@@ -3453,13 +3465,8 @@ func TestPlayerStalls(t *testing.T) {
 				require.NoError(t, err)
 				go func() {
 					defer func() {
-						_, err = dbc.ExecuteFetch("rollback", 1, false)
-						require.NoError(t, err)
 						dbc.Close()
 					}()
-					to := time.Duration(vreplicationMinimumHeartbeatUpdateInterval * 2 * 1000) // Milliseconds
-					time.Sleep(to)
-
 					select {
 					case <-done:
 					case <-ctx.Done():
@@ -3467,21 +3474,22 @@ func TestPlayerStalls(t *testing.T) {
 				}()
 			},
 			postFunc: func() {
-				//to := time.Duration(int64(float64(vreplicationMinimumHeartbeatUpdateInterval) * float64(1.5) * float64(1000))) // Milliseconds
-				//time.Sleep(to)
-				// Stop the test. If we haven't received any non-expected queries
-				// yet then the test has passed.
+				// Sleep long enough that we fail to record the heartbeat.
+				to := time.Duration(int64(vreplicationMinimumHeartbeatUpdateInterval*2) * int64(time.Second))
+				time.Sleep(to)
+				// Signal the preFunc goroutine to close the connection holding the row locks.
 				done <- struct{}{}
+				require.Contains(t, logger.String(), "failed to record heartbeat", "expected log message not found")
 			},
-			// Nothing should get replicated because of the exclusing row lock
+			// Nothing should get replicated because of the exclusing row locks
 			// held in the other connection from our preFunc.
 		},
 	}
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			cancel, _ := startVReplication(t, bls, "")
-			defer cancel()
+			vrcancel, _ := startVReplication(t, bls, "")
+			defer vrcancel()
 			execStatements(t, tc.input)
 			if tc.preFunc != nil {
 				tc.preFunc()
@@ -3492,6 +3500,7 @@ func TestPlayerStalls(t *testing.T) {
 			if tc.postFunc != nil {
 				tc.postFunc()
 			}
+			logger.Clear()
 		})
 	}
 }

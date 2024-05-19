@@ -43,7 +43,7 @@ var (
 	vplayerProgressTimeout = time.Duration(0) // Disabled by default.
 
 	// The error to return when we have detected a stall in the vplayer.
-	ErrVPlayerProgressTimeout = fmt.Errorf("progress stalled; vplayer was likely unable to replicate the previous log content's transaction in a timely manner; examine the target mysqld instance health and the replicated queries' EXPLAIN output to see why queries are taking unusually long")
+	ErrVPlayerStalled = fmt.Errorf("progress stalled; vplayer was likely unable to replicate the previous log content's transaction in a timely manner; examine the target mysqld instance health and the replicated queries' EXPLAIN output to see why queries are taking unusually long")
 
 	// If you want to enable debug logging.
 	debugMode atomic.Bool
@@ -435,7 +435,7 @@ func (vp *vplayer) recordHeartbeat() error {
 		return nil
 	}
 	if err := vp.vr.updateHeartbeatTime(tm); err != nil {
-		return vterrors.Wrapf(ErrVPlayerProgressTimeout, "failed to record heartbeat: %v", err)
+		return vterrors.Wrapf(ErrVPlayerStalled, "failed to record heartbeat: %v", err)
 	}
 	// Only reset the pending heartbeat count if the update was successful.
 	// Otherwise the vplayer may not actually be making progress and nobody
@@ -894,7 +894,7 @@ func (sh *stallHandler) startTimer() error {
 	go func() {
 		select {
 		case <-sh.timer.Load().C: // The timer expired
-			sh.fire <- vterrors.Wrapf(ErrVPlayerProgressTimeout,
+			sh.fire <- vterrors.Wrapf(ErrVPlayerStalled,
 				"failed to commit transaction batch before the configured --vplayer-progress-timeout of %v", vplayerProgressTimeout)
 		case <-sh.stop: // The timer was stopped
 		}
