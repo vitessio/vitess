@@ -40,7 +40,7 @@ import (
 
 var (
 	// At what point should we consider the vplayer to be stalled and return an error.
-	vplayerProgressTimeout = time.Duration(0) // Disabled by default.
+	vplayerProgressDeadline = time.Duration(0) // Disabled by default.
 
 	// The error to return when we have detected a stall in the vplayer.
 	ErrVPlayerStalled = fmt.Errorf("progress stalled; vplayer was likely unable to replicate the previous log content's transaction in a timely manner; examine the target mysqld instance health and the replicated queries' EXPLAIN output to see why queries are taking unusually long")
@@ -134,7 +134,7 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 	queryFunc := func(ctx context.Context, sql string) (*sqltypes.Result, error) {
 		return vr.dbClient.ExecuteWithRetry(ctx, sql)
 	}
-	stallHandler := newStallHandler(vplayerProgressTimeout, nil)
+	stallHandler := newStallHandler(vplayerProgressDeadline, nil)
 	commitFunc := func() error {
 		// Explicit commits are only done when we are processing a batch of replicated
 		// queries and NOT for heartbeats or when simply updating the position. So we
@@ -895,7 +895,7 @@ func (sh *stallHandler) startTimer() error {
 		select {
 		case <-sh.timer.Load().C: // The timer expired
 			sh.fire <- vterrors.Wrapf(ErrVPlayerStalled,
-				"failed to commit transaction batch before the configured --vplayer-progress-timeout of %v", vplayerProgressTimeout)
+				"failed to commit transaction batch before the configured --vplayer-progress-deadline of %v", vplayerProgressDeadline)
 		case <-sh.stop: // The timer was stopped
 		}
 	}()

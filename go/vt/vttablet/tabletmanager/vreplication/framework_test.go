@@ -32,8 +32,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/vt/sqlparser"
-
 	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
@@ -46,6 +44,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
@@ -496,14 +495,14 @@ func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Resu
 	return qr, err
 }
 
-func (dc *realDBClient) ExecuteFetchMulti(query string, maxrows int) ([]*sqltypes.Result, error) {
+func (dbc *realDBClient) ExecuteFetchMulti(query string, maxrows int) ([]*sqltypes.Result, error) {
 	queries, err := sqlparser.NewTestParser().SplitStatementToPieces(query)
 	if err != nil {
 		return nil, err
 	}
 	results := make([]*sqltypes.Result, 0, len(queries))
 	for _, query := range queries {
-		qr, err := dc.ExecuteFetch(query, maxrows)
+		qr, err := dbc.ExecuteFetch(query, maxrows)
 		if err != nil {
 			return nil, err
 		}

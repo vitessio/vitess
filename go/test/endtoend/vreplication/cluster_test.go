@@ -62,7 +62,7 @@ var (
 	extraVtctldArgs = []string{"--remote_operation_timeout", "600s", "--topo_etcd_lease_ttl", "120"}
 	// This variable can be used within specific tests to alter vttablet behavior
 	extraVTTabletArgs = []string{
-		"--vplayer-progress-timeout", "30s",
+		"--vplayer-progress-deadline", "30s",
 	}
 
 	parallelInsertWorkers = "--vreplication-parallel-insert-workers=4"
