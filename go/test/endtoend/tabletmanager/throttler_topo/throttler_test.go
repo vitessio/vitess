@@ -91,8 +91,6 @@ var (
 
 	httpClient           = base.SetupHTTPClient(time.Second)
 	throttledAppsAPIPath = "throttler/throttled-apps"
-	checkAPIPath         = "throttler/check"
-	checkSelfAPIPath     = "throttler/check-self"
 	statusAPIPath        = "throttler/status"
 	getResponseBody      = func(resp *http.Response) string {
 		body, _ := io.ReadAll(resp.Body)
@@ -214,7 +212,7 @@ func warmUpHeartbeat(t *testing.T) (respStatus int) {
 }
 
 // waitForThrottleCheckStatus waits for the tablet to return the provided HTTP code in a throttle check
-func waitForThrottleCheckStatus(t *testing.T, tablet *cluster.Vttablet, wantCode int) {
+func waitForThrottleCheckStatus(t *testing.T, tablet *cluster.Vttablet, wantCode int) bool {
 	_ = warmUpHeartbeat(t)
 	ctx, cancel := context.WithTimeout(context.Background(), onDemandHeartbeatDuration*4)
 	defer cancel()
@@ -228,12 +226,11 @@ func waitForThrottleCheckStatus(t *testing.T, tablet *cluster.Vttablet, wantCode
 		if wantCode == int(resp.StatusCode) {
 			// Wait for any cached check values to be cleared and the new
 			// status value to be in effect everywhere before returning.
-			return
+			return true
 		}
 		select {
 		case <-ctx.Done():
-			assert.EqualValues(t, wantCode, resp.StatusCode, "response: %+v", resp)
-			return
+			return assert.EqualValues(t, wantCode, resp.StatusCode, "response: %+v", resp)
 		case <-ticker.C:
 		}
 	}
@@ -690,5 +687,101 @@ func TestUpdateMetricThresholds(t *testing.T) {
 			throttler.WaitForThrottlerStatusEnabled(t, &tablet, true, &throttler.Config{Query: throttler.DefaultQuery, Threshold: throttler.DefaultThreshold.Seconds()}, throttlerEnabledTimeout)
 		}
 		waitForThrottleCheckStatus(t, primaryTablet, http.StatusTooManyRequests)
+	})
+}
+
+func TestUpdateAppCheckedMetrics(t *testing.T) {
+	t.Run("ensure replica is not dormant", func(t *testing.T) {
+		_, err := throttleCheck(replicaTablet, false)
+		require.NoError(t, err)
+	})
+	t.Run("validating pushback from throttler", func(t *testing.T) {
+		req := &vtctldatapb.UpdateThrottlerConfigRequest{Threshold: throttler.DefaultThreshold.Seconds()}
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
+		assert.NoError(t, err)
+		// Wait for the throttler to be enabled everywhere with new config.
+		for _, tablet := range []cluster.Vttablet{*primaryTablet, *replicaTablet} {
+			throttler.WaitForThrottlerStatusEnabled(t, &tablet, true, &throttler.Config{Query: throttler.DefaultQuery, Threshold: throttler.DefaultThreshold.Seconds()}, throttlerEnabledTimeout)
+		}
+		waitForThrottleCheckStatus(t, primaryTablet, http.StatusTooManyRequests)
+	})
+	t.Run("assigning 'loadavg' metrics to 'test' app", func(t *testing.T) {
+		{
+			req := &vtctldatapb.UpdateThrottlerConfigRequest{MetricName: "loadavg", Threshold: 7777}
+			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
+			assert.NoError(t, err)
+		}
+		{
+			req := &vtctldatapb.UpdateThrottlerConfigRequest{}
+			appCheckedMetrics := map[string]*topodatapb.ThrottlerConfig_MetricNames{
+				testAppName: {Names: []string{"loadavg"}},
+			}
+			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, appCheckedMetrics)
+			assert.NoError(t, err)
+		}
+		{
+			req := &vtctldatapb.UpdateThrottlerConfigRequest{Threshold: unreasonablyLowThreshold.Seconds()}
+			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
+			assert.NoError(t, err)
+		}
+		// Wait for the throttler to be enabled everywhere with new config.
+		for _, tablet := range []cluster.Vttablet{*primaryTablet, *replicaTablet} {
+			throttler.WaitForThrottlerStatusEnabled(t, &tablet, true, &throttler.Config{Query: throttler.DefaultQuery, Threshold: unreasonablyLowThreshold.Seconds()}, throttlerEnabledTimeout)
+		}
+		t.Run("validating OK response from throttler since it's checking loadavg", func(t *testing.T) {
+			if !waitForThrottleCheckStatus(t, primaryTablet, http.StatusOK) {
+				t.Logf("throttler primary status: %+v", throttleStatus(t, primaryTablet))
+				t.Logf("throttler replica status: %+v", throttleStatus(t, replicaTablet))
+			}
+		})
+	})
+	t.Run("assigning 'loadavg,lag' metrics to 'test' app", func(t *testing.T) {
+		{
+			req := &vtctldatapb.UpdateThrottlerConfigRequest{}
+			appCheckedMetrics := map[string]*topodatapb.ThrottlerConfig_MetricNames{
+				testAppName: {Names: []string{"loadavg,lag"}},
+			}
+			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, appCheckedMetrics)
+			assert.NoError(t, err)
+		}
+		{
+			req := &vtctldatapb.UpdateThrottlerConfigRequest{Threshold: unreasonablyLowThreshold.Seconds()}
+			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
+			assert.NoError(t, err)
+		}
+		// Wait for the throttler to be enabled everywhere with new config.
+		for _, tablet := range []cluster.Vttablet{*primaryTablet, *replicaTablet} {
+			throttler.WaitForThrottlerStatusEnabled(t, &tablet, true, &throttler.Config{Query: throttler.DefaultQuery, Threshold: unreasonablyLowThreshold.Seconds()}, throttlerEnabledTimeout)
+		}
+		t.Run("validating pushback from throttler since lag is above threshold", func(t *testing.T) {
+			waitForThrottleCheckStatus(t, primaryTablet, http.StatusTooManyRequests)
+		})
+	})
+	t.Run("removing assignment from 'test' app and restoring defaults", func(t *testing.T) {
+		{
+			req := &vtctldatapb.UpdateThrottlerConfigRequest{MetricName: "loadavg", Threshold: 0}
+			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
+			assert.NoError(t, err)
+		}
+		{
+			req := &vtctldatapb.UpdateThrottlerConfigRequest{}
+			appCheckedMetrics := map[string]*topodatapb.ThrottlerConfig_MetricNames{
+				testAppName: {Names: []string{}},
+			}
+			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, appCheckedMetrics)
+			assert.NoError(t, err)
+		}
+		{
+			req := &vtctldatapb.UpdateThrottlerConfigRequest{Threshold: throttler.DefaultThreshold.Seconds()}
+			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
+			assert.NoError(t, err)
+		}
+		// Wait for the throttler to be enabled everywhere with new config.
+		for _, tablet := range []cluster.Vttablet{*primaryTablet, *replicaTablet} {
+			throttler.WaitForThrottlerStatusEnabled(t, &tablet, true, &throttler.Config{Query: throttler.DefaultQuery, Threshold: throttler.DefaultThreshold.Seconds()}, throttlerEnabledTimeout)
+		}
+		t.Run("validating error response from throttler since lag is still high", func(t *testing.T) {
+			waitForThrottleCheckStatus(t, primaryTablet, http.StatusTooManyRequests)
+		})
 	})
 }
