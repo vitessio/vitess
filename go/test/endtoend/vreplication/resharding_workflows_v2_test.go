@@ -749,7 +749,7 @@ func testRestOfWorkflow(t *testing.T) {
 		Threshold:   throttlerConfig.Threshold * 5,
 		CustomQuery: throttlerConfig.Query,
 	}
-	res, err := throttler.UpdateThrottlerTopoConfigRaw(vc.VtctldClient, "customer", req, nil)
+	res, err := throttler.UpdateThrottlerTopoConfigRaw(vc.VtctldClient, "customer", req, nil, nil)
 	require.NoError(t, err, res)
 
 	testPartialSwitches(t)

@@ -265,7 +265,7 @@ func TestInitialThrottler(t *testing.T) {
 	})
 	t.Run("enabling throttler with very low threshold", func(t *testing.T) {
 		req := &vtctldatapb.UpdateThrottlerConfigRequest{Enable: true, Threshold: unreasonablyLowThreshold.Seconds()}
-		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil)
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
 		assert.NoError(t, err)
 
 		// Wait for the throttler to be enabled everywhere with the new config.
@@ -278,7 +278,7 @@ func TestInitialThrottler(t *testing.T) {
 	})
 	t.Run("disabling throttler", func(t *testing.T) {
 		req := &vtctldatapb.UpdateThrottlerConfigRequest{Disable: true, Threshold: unreasonablyLowThreshold.Seconds()}
-		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil)
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
 		assert.NoError(t, err)
 
 		// Wait for the throttler to be disabled everywhere.
@@ -293,7 +293,7 @@ func TestInitialThrottler(t *testing.T) {
 		// Enable the throttler again with the default query which also moves us back
 		// to the default threshold.
 		req := &vtctldatapb.UpdateThrottlerConfigRequest{Enable: true}
-		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil)
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
 		assert.NoError(t, err)
 
 		// Wait for the throttler to be enabled everywhere again with the default config.
@@ -306,7 +306,7 @@ func TestInitialThrottler(t *testing.T) {
 	})
 	t.Run("setting high threshold", func(t *testing.T) {
 		req := &vtctldatapb.UpdateThrottlerConfigRequest{Threshold: extremelyHighThreshold.Seconds()}
-		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil)
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
 		assert.NoError(t, err)
 
 		// Wait for the throttler to be enabled everywhere with new config.
@@ -319,7 +319,7 @@ func TestInitialThrottler(t *testing.T) {
 	})
 	t.Run("setting low threshold", func(t *testing.T) {
 		req := &vtctldatapb.UpdateThrottlerConfigRequest{Threshold: throttler.DefaultThreshold.Seconds()}
-		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil)
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
 		assert.NoError(t, err)
 
 		// Wait for the throttler to be enabled everywhere with new config.
@@ -457,7 +457,7 @@ func TestLag(t *testing.T) {
 			Exempt:    true,
 		}
 		req := &vtctldatapb.UpdateThrottlerConfigRequest{Threshold: throttler.DefaultThreshold.Seconds()}
-		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, appRule)
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, appRule, nil)
 		assert.NoError(t, err)
 		waitForThrottleCheckStatus(t, primaryTablet, http.StatusOK)
 	})
@@ -467,7 +467,7 @@ func TestLag(t *testing.T) {
 			ExpiresAt: protoutil.TimeToProto(time.Now()),
 		}
 		req := &vtctldatapb.UpdateThrottlerConfigRequest{Threshold: throttler.DefaultThreshold.Seconds()}
-		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, appRule)
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, appRule, nil)
 		assert.NoError(t, err)
 		waitForThrottleCheckStatus(t, primaryTablet, http.StatusTooManyRequests)
 	})
@@ -478,7 +478,7 @@ func TestLag(t *testing.T) {
 			Exempt:    true,
 		}
 		req := &vtctldatapb.UpdateThrottlerConfigRequest{Threshold: throttler.DefaultThreshold.Seconds()}
-		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, appRule)
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, appRule, nil)
 		assert.NoError(t, err)
 		waitForThrottleCheckStatus(t, primaryTablet, http.StatusOK)
 	})
@@ -489,7 +489,7 @@ func TestLag(t *testing.T) {
 			ExpiresAt: protoutil.TimeToProto(time.Now().Add(time.Hour)),
 		}
 		req := &vtctldatapb.UpdateThrottlerConfigRequest{Threshold: throttler.DefaultThreshold.Seconds()}
-		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, appRule)
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, appRule, nil)
 		assert.NoError(t, err)
 		waitForThrottleCheckStatus(t, primaryTablet, http.StatusExpectationFailed)
 	})
@@ -499,7 +499,7 @@ func TestLag(t *testing.T) {
 			ExpiresAt: protoutil.TimeToProto(time.Now()),
 		}
 		req := &vtctldatapb.UpdateThrottlerConfigRequest{Threshold: throttler.DefaultThreshold.Seconds()}
-		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, appRule)
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, appRule, nil)
 		assert.NoError(t, err)
 		waitForThrottleCheckStatus(t, primaryTablet, http.StatusOK)
 	})
@@ -509,7 +509,7 @@ func TestLag(t *testing.T) {
 			ExpiresAt: protoutil.TimeToProto(time.Now()),
 		}
 		req := &vtctldatapb.UpdateThrottlerConfigRequest{Threshold: throttler.DefaultThreshold.Seconds()}
-		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, appRule)
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, appRule, nil)
 		assert.NoError(t, err)
 		waitForThrottleCheckStatus(t, primaryTablet, http.StatusTooManyRequests)
 	})
@@ -557,7 +557,7 @@ func TestCustomQuery(t *testing.T) {
 
 	t.Run("enabling throttler with custom query and threshold", func(t *testing.T) {
 		req := &vtctldatapb.UpdateThrottlerConfigRequest{Enable: true, Threshold: customThreshold, CustomQuery: customQuery}
-		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil)
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
 		assert.NoError(t, err)
 
 		// Wait for the throttler to be enabled everywhere with new custom config.
@@ -623,7 +623,7 @@ func TestRestoreDefaultQuery(t *testing.T) {
 	// Validate going back from custom-query to default-query (replication lag) still works.
 	t.Run("enabling throttler with default query and threshold", func(t *testing.T) {
 		req := &vtctldatapb.UpdateThrottlerConfigRequest{Enable: true, Threshold: throttler.DefaultThreshold.Seconds()}
-		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil)
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
 		assert.NoError(t, err)
 
 		// Wait for the throttler to be up and running everywhere again with the default config.
@@ -645,7 +645,7 @@ func TestRestoreDefaultQuery(t *testing.T) {
 func TestUpdateMetricThresholds(t *testing.T) {
 	t.Run("validating pushback from throttler", func(t *testing.T) {
 		req := &vtctldatapb.UpdateThrottlerConfigRequest{Threshold: throttler.DefaultThreshold.Seconds()}
-		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil)
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
 		assert.NoError(t, err)
 		// Wait for the throttler to be enabled everywhere with new config.
 		for _, tablet := range []cluster.Vttablet{*primaryTablet, *replicaTablet} {
@@ -656,12 +656,12 @@ func TestUpdateMetricThresholds(t *testing.T) {
 	t.Run("setting low general threshold, and high threshold for 'lag' metric", func(t *testing.T) {
 		{
 			req := &vtctldatapb.UpdateThrottlerConfigRequest{MetricName: "lag", Threshold: extremelyHighThreshold.Seconds()}
-			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil)
+			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
 			assert.NoError(t, err)
 		}
 		{
 			req := &vtctldatapb.UpdateThrottlerConfigRequest{Threshold: unreasonablyLowThreshold.Seconds()}
-			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil)
+			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
 			assert.NoError(t, err)
 		}
 		// Wait for the throttler to be enabled everywhere with new config.
@@ -675,7 +675,7 @@ func TestUpdateMetricThresholds(t *testing.T) {
 	})
 	t.Run("removing explicit 'lag' threshold", func(t *testing.T) {
 		req := &vtctldatapb.UpdateThrottlerConfigRequest{MetricName: "lag", Threshold: 0}
-		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil)
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
 		assert.NoError(t, err)
 	})
 	t.Run("validating pushback from throttler again", func(t *testing.T) {
@@ -683,7 +683,7 @@ func TestUpdateMetricThresholds(t *testing.T) {
 	})
 	t.Run("restoring standard threshold", func(t *testing.T) {
 		req := &vtctldatapb.UpdateThrottlerConfigRequest{Threshold: throttler.DefaultThreshold.Seconds()}
-		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil)
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
 		assert.NoError(t, err)
 		// Wait for the throttler to be enabled everywhere with new config.
 		for _, tablet := range []cluster.Vttablet{*primaryTablet, *replicaTablet} {

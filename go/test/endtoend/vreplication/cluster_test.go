@@ -477,7 +477,7 @@ func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string,
 
 	log.Infof("Applying throttler config for keyspace %s", keyspace.Name)
 	req := &vtctldatapb.UpdateThrottlerConfigRequest{Enable: true, Threshold: throttlerConfig.Threshold, CustomQuery: throttlerConfig.Query}
-	res, err := throttler.UpdateThrottlerTopoConfigRaw(vc.VtctldClient, keyspace.Name, req, nil)
+	res, err := throttler.UpdateThrottlerTopoConfigRaw(vc.VtctldClient, keyspace.Name, req, nil, nil)
 	require.NoError(t, err, res)
 
 	cellsToWatch := ""

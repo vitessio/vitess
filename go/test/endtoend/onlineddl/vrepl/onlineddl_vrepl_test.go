@@ -249,7 +249,7 @@ func TestSchemaChange(t *testing.T) {
 	})
 	t.Run("updating throttler config", func(t *testing.T) {
 		req := &vtctldatapb.UpdateThrottlerConfigRequest{Enable: true, Threshold: customThreshold}
-		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil)
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
 		require.NoError(t, err)
 	})
 

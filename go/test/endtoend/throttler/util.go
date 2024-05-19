@@ -97,6 +97,7 @@ func UpdateThrottlerTopoConfigRaw(
 	keyspaceName string,
 	opts *vtctldatapb.UpdateThrottlerConfigRequest,
 	appRule *topodatapb.ThrottledAppRule,
+	appCheckedMetrics map[string]*topodatapb.ThrottlerConfig_MetricNames,
 ) (result string, err error) {
 	args := []string{}
 	args = append(args, "UpdateThrottlerConfig")
@@ -124,6 +125,15 @@ func UpdateThrottlerTopoConfigRaw(
 		args = append(args, "--throttle-app-ratio", fmt.Sprintf("%f", appRule.Ratio))
 		if appRule.Exempt {
 			args = append(args, "--throttle-app-exempt")
+		}
+	}
+	if appCheckedMetrics != nil {
+		if len(appCheckedMetrics) != 1 {
+			return "", fmt.Errorf("appCheckedMetrics must either be nil or have exactly one entry")
+		}
+		for app, metrics := range appCheckedMetrics {
+			args = append(args, "--app-name", app)
+			args = append(args, "--app-metrics", strings.Join(metrics.Names, ","))
 		}
 	}
 	args = append(args, keyspaceName)
@@ -168,6 +178,7 @@ func UpdateThrottlerTopoConfig(
 	clusterInstance *cluster.LocalProcessCluster,
 	opts *vtctldatapb.UpdateThrottlerConfigRequest,
 	appRule *topodatapb.ThrottledAppRule,
+	appCheckedMetrics map[string]*topodatapb.ThrottlerConfig_MetricNames,
 ) (string, error) {
 	rec := concurrency.AllErrorRecorder{}
 	var (
@@ -175,7 +186,7 @@ func UpdateThrottlerTopoConfig(
 		res strings.Builder
 	)
 	for _, ks := range clusterInstance.Keyspaces {
-		ires, err := UpdateThrottlerTopoConfigRaw(&clusterInstance.VtctldClientProcess, ks.Name, opts, appRule)
+		ires, err := UpdateThrottlerTopoConfigRaw(&clusterInstance.VtctldClientProcess, ks.Name, opts, appRule, appCheckedMetrics)
 		if err != nil {
 			rec.RecordError(err)
 		}
@@ -404,7 +415,7 @@ func WaitForThrottledApp(t *testing.T, tablet *cluster.Vttablet, throttlerApp th
 // to be running on all tablets.
 func EnableLagThrottlerAndWaitForStatus(t *testing.T, clusterInstance *cluster.LocalProcessCluster, lag time.Duration) {
 	req := &vtctldatapb.UpdateThrottlerConfigRequest{Enable: true, Threshold: lag.Seconds()}
-	_, err := UpdateThrottlerTopoConfig(clusterInstance, req, nil)
+	_, err := UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
 	require.NoError(t, err)
 
 	for _, ks := range clusterInstance.Keyspaces {
