@@ -192,6 +192,10 @@ func init() {
 	}
 }
 
+func sleepTillThresholdApplies() {
+	time.Sleep(time.Second)
+}
+
 func TestGetAggregatedMetricName(t *testing.T) {
 	assert.Equal(t, "self", base.DefaultMetricName.AggregatedName(base.SelfScope))
 	assert.Equal(t, "self/lag", base.LagMetricName.AggregatedName(base.SelfScope))
@@ -382,7 +386,7 @@ func TestApplyThrottlerConfigMetricThresholds(t *testing.T) {
 			assert.Equal(t, 0.0033, throttler.GetMetricsThreshold())
 		})
 		t.Run("check low threshold", func(t *testing.T) {
-			time.Sleep(time.Second)
+			sleepTillThresholdApplies()
 			{
 				_, ok := throttler.mysqlMetricThresholds.Get("config/lag")
 				assert.False(t, ok)
@@ -405,7 +409,7 @@ func TestApplyThrottlerConfigMetricThresholds(t *testing.T) {
 			throttler.applyThrottlerConfig(ctx, throttlerConfig)
 		})
 		t.Run("check with high 'lag' threshold", func(t *testing.T) {
-			time.Sleep(time.Second)
+			sleepTillThresholdApplies()
 			{
 				val, ok := throttler.mysqlMetricThresholds.Get("config/lag")
 				require.True(t, ok)
@@ -438,6 +442,228 @@ func TestApplyThrottlerConfigMetricThresholds(t *testing.T) {
 			require.True(t, ok)
 			assert.Equal(t, float64(4444), val)
 		}
+	})
+}
+
+func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
+	// This test applies different metrics to the "test" app and checks the result
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	throttler := newTestThrottler()
+	runThrottler(t, ctx, throttler, 10*time.Second, func(t *testing.T, ctx context.Context) {
+		assert.True(t, throttler.IsEnabled())
+		aggr := throttler.aggregatedMetricsSnapshot()
+		assert.Equalf(t, 2*len(base.KnownMetricNames), len(aggr), "aggregated: %+v", aggr)     // "self" and "shard", per known metric
+		assert.Equal(t, 2*len(base.KnownMetricNames), throttler.aggregatedMetrics.ItemCount()) // flushed upon Disable()
+		for _, metric := range []string{"self", "shard", "self/lag", "shard/lag", "self/loadavg", "shard/loadavg"} {
+			_, ok := aggr[metric]
+			assert.True(t, ok, "missing metric: %s", metric)
+		}
+		flags := &CheckFlags{
+			SkipRequestHeartbeats: true,
+		}
+		t.Run("check before apply", func(t *testing.T) {
+			checkResult := throttler.Check(ctx, "test", nil, flags)
+			require.NotNil(t, checkResult)
+			assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
+			assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode)
+			assert.Equal(t, 1, len(checkResult.Metrics))
+		})
+		t.Run("apply high lag threshold", func(t *testing.T) {
+			throttlerConfig := &topodatapb.ThrottlerConfig{
+				Enabled:   true,
+				Threshold: 4444.0,
+				MetricThresholds: map[string]float64{
+					"lag": 4444.0,
+				},
+			}
+			throttler.applyThrottlerConfig(ctx, throttlerConfig)
+
+			t.Run("check after apply, no impact", func(t *testing.T) {
+				sleepTillThresholdApplies()
+				// "test" not supposed to check "loadavg"
+				checkResult := throttler.Check(ctx, "test", nil, flags)
+				require.NotNil(t, checkResult)
+				assert.EqualValues(t, 0.9, checkResult.Value) // self lag value
+				assert.EqualValues(t, http.StatusOK, checkResult.StatusCode)
+				assert.Equal(t, 1, len(checkResult.Metrics))
+			})
+		})
+		t.Run("apply low 'loadavg' threshold", func(t *testing.T) {
+			throttlerConfig := &topodatapb.ThrottlerConfig{
+				Enabled: true,
+				MetricThresholds: map[string]float64{
+					"loadavg": 0.0077,
+				},
+			}
+			throttler.applyThrottlerConfig(ctx, throttlerConfig)
+
+			t.Run("check after apply, no impact", func(t *testing.T) {
+				// "test" not supposed to check "loadavg"
+				checkResult := throttler.Check(ctx, "test", nil, flags)
+				require.NotNil(t, checkResult)
+				assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
+				assert.EqualValues(t, http.StatusOK, checkResult.StatusCode)
+				assert.Equal(t, 1, len(checkResult.Metrics))
+			})
+		})
+		t.Run("assign 'loadavg' to test app", func(t *testing.T) {
+			throttlerConfig := &topodatapb.ThrottlerConfig{
+				Enabled: true,
+				AppCheckedMetrics: map[string]*topodatapb.ThrottlerConfig_MetricNames{
+					"test": {Names: []string{"loadavg"}},
+				},
+			}
+			throttler.applyThrottlerConfig(ctx, throttlerConfig)
+
+			t.Run("check after assignment", func(t *testing.T) {
+				// "test" now checks "loadavg"
+				appCheckedMetrics := throttler.appCheckedMetricsSnapshot()
+				metrics, ok := appCheckedMetrics["test"]
+				require.True(t, ok)
+				assert.Equal(t, "loadavg", metrics)
+
+				checkResult := throttler.Check(ctx, "test", nil, flags)
+				require.NotNil(t, checkResult)
+				assert.EqualValues(t, 2.718, checkResult.Value) // self loadavg value
+				assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
+				assert.Equal(t, 1, len(checkResult.Metrics))
+			})
+		})
+		t.Run("assign 'shard/loadavg' to test app", func(t *testing.T) {
+			throttlerConfig := &topodatapb.ThrottlerConfig{
+				Enabled: true,
+				AppCheckedMetrics: map[string]*topodatapb.ThrottlerConfig_MetricNames{
+					"test": {Names: []string{"shard/loadavg"}},
+				},
+			}
+			throttler.applyThrottlerConfig(ctx, throttlerConfig)
+
+			t.Run("check after assignment", func(t *testing.T) {
+				// "test" now checks "loadavg"
+				appCheckedMetrics := throttler.appCheckedMetricsSnapshot()
+				metrics, ok := appCheckedMetrics["test"]
+				require.True(t, ok)
+				assert.Equal(t, "shard/loadavg", metrics)
+
+				checkResult := throttler.Check(ctx, "test", nil, flags)
+				require.NotNil(t, checkResult)
+				assert.EqualValues(t, 5.1, checkResult.Value) // shard loadavg value
+				assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
+				assert.Equal(t, 1, len(checkResult.Metrics))
+			})
+		})
+		t.Run("assign 'lag,loadavg' to test app", func(t *testing.T) {
+			throttlerConfig := &topodatapb.ThrottlerConfig{
+				Enabled: true,
+				AppCheckedMetrics: map[string]*topodatapb.ThrottlerConfig_MetricNames{
+					"test": {Names: []string{"lag", "loadavg"}},
+				},
+			}
+			throttler.applyThrottlerConfig(ctx, throttlerConfig)
+			t.Run("check after assignment", func(t *testing.T) {
+				// "test" now checks both lag and loadavg
+				appCheckedMetrics := throttler.appCheckedMetricsSnapshot()
+				metrics, ok := appCheckedMetrics["test"]
+				require.True(t, ok)
+				assert.Equal(t, "lag,loadavg", metrics)
+
+				checkResult := throttler.Check(ctx, "test", nil, flags)
+				require.NotNil(t, checkResult)
+				assert.EqualValues(t, 2.718, checkResult.Value) // self loadavg value
+				assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
+				assert.Equal(t, 2, len(checkResult.Metrics))
+			})
+		})
+		t.Run("assign 'lag,shard/loadavg' to test app", func(t *testing.T) {
+			throttlerConfig := &topodatapb.ThrottlerConfig{
+				Enabled: true,
+				AppCheckedMetrics: map[string]*topodatapb.ThrottlerConfig_MetricNames{
+					"test": {Names: []string{"lag", "shard/loadavg"}},
+				},
+			}
+			throttler.applyThrottlerConfig(ctx, throttlerConfig)
+			t.Run("check after assignment", func(t *testing.T) {
+				// "test" now checks both lag and loadavg
+				appCheckedMetrics := throttler.appCheckedMetricsSnapshot()
+				metrics, ok := appCheckedMetrics["test"]
+				require.True(t, ok)
+				assert.Equal(t, "lag,shard/loadavg", metrics)
+
+				checkResult := throttler.Check(ctx, "test", nil, flags)
+				require.NotNil(t, checkResult)
+				assert.EqualValues(t, 5.1, checkResult.Value) // shard loadavg value
+				assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
+				assert.Equal(t, 2, len(checkResult.Metrics))
+			})
+		})
+		t.Run("clear 'loadavg' threshold", func(t *testing.T) {
+			throttlerConfig := &topodatapb.ThrottlerConfig{
+				Enabled: true,
+				MetricThresholds: map[string]float64{
+					"loadavg": 0,
+				},
+			}
+			throttler.applyThrottlerConfig(ctx, throttlerConfig)
+			t.Run("check after apply, clear", func(t *testing.T) {
+				// "test" still checks both lag and loadavg
+				appCheckedMetrics := throttler.appCheckedMetricsSnapshot()
+				_, ok := appCheckedMetrics["test"]
+				require.False(t, ok)
+
+				checkResult := throttler.Check(ctx, "test", nil, flags)
+				require.NotNil(t, checkResult)
+				assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
+				assert.EqualValues(t, http.StatusOK, checkResult.StatusCode)
+				assert.Equal(t, 1, len(checkResult.Metrics))
+			})
+		})
+		t.Run("assign 'lag,threads_running' to test app", func(t *testing.T) {
+			throttlerConfig := &topodatapb.ThrottlerConfig{
+				Enabled: true,
+				AppCheckedMetrics: map[string]*topodatapb.ThrottlerConfig_MetricNames{
+					"test": {Names: []string{"lag", "threads_running"}},
+				},
+			}
+			throttler.applyThrottlerConfig(ctx, throttlerConfig)
+			t.Run("check after assignment", func(t *testing.T) {
+				// "test" now checks both lag and loadavg
+				appCheckedMetrics := throttler.appCheckedMetricsSnapshot()
+				metrics, ok := appCheckedMetrics["test"]
+				require.True(t, ok)
+				assert.Equal(t, "lag,threads_running", metrics)
+
+				checkResult := throttler.Check(ctx, "test", nil, flags)
+				require.NotNil(t, checkResult)
+				assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
+				assert.EqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
+				assert.Equal(t, 2, len(checkResult.Metrics))
+			})
+		})
+
+		t.Run("deassign metrics from test app", func(t *testing.T) {
+			throttlerConfig := &topodatapb.ThrottlerConfig{
+				Enabled: true,
+				AppCheckedMetrics: map[string]*topodatapb.ThrottlerConfig_MetricNames{
+					"test": {Names: []string{}},
+				},
+			}
+			throttler.applyThrottlerConfig(ctx, throttlerConfig)
+			t.Run("check after deassign, clear", func(t *testing.T) {
+				// "test" still checks both lag and loadavg
+				appCheckedMetrics := throttler.appCheckedMetricsSnapshot()
+				_, ok := appCheckedMetrics["test"]
+				require.False(t, ok)
+
+				checkResult := throttler.Check(ctx, "test", nil, flags)
+				require.NotNil(t, checkResult)
+				assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
+				assert.EqualValues(t, http.StatusOK, checkResult.StatusCode)
+				assert.Equal(t, 1, len(checkResult.Metrics))
+			})
+		})
+
+		cancel() // end test early
 	})
 }
 
