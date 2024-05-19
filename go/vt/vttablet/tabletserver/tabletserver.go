@@ -1778,7 +1778,7 @@ func (tsv *TabletServer) TopoServer() *topo.Server {
 
 // CheckThrottler issues a self check
 func (tsv *TabletServer) CheckThrottler(ctx context.Context, appName string, flags *throttle.CheckFlags) *throttle.CheckResult {
-	r := tsv.lagThrottler.Check(ctx, appName, base.KnownMetricNames, flags)
+	r := tsv.lagThrottler.Check(ctx, appName, nil, flags)
 	return r
 }
 
