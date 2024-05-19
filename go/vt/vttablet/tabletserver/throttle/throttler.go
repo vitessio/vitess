@@ -1528,9 +1528,10 @@ func (throttler *Throttler) checkScope(ctx context.Context, appName string, scop
 		metricNames = base.MetricNames{throttler.metricNameUsedAsDefault()}
 	}
 	checkResult = throttler.check.Check(ctx, appName, scope, metricNames, flags)
-	if metric, ok := checkResult.Metrics[throttler.metricNameUsedAsDefault().String()]; ok {
+	if metric, ok := checkResult.Metrics[throttler.metricNameUsedAsDefault().String()]; ok && checkResult.IsOK() {
 		// v19 compatibility: if this v20 server is a replica, reporting to a v19 primary,
 		// then we must supply the v19-flavor check result.
+		// If checkResult is not OK, then we will have populated these fields already by the failing metric.
 		checkResult.StatusCode = metric.StatusCode
 		checkResult.Value = metric.Value
 		checkResult.Threshold = metric.Threshold
