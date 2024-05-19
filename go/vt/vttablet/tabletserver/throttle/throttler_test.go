@@ -1330,6 +1330,24 @@ func TestChecks(t *testing.T) {
 	}
 
 	runThrottler(t, ctx, throttler, time.Minute, func(t *testing.T, ctx context.Context) {
+
+		t.Run("apply high thresholds", func(t *testing.T) {
+			// We apply high thresholds because if a value exceeds a threshold, as is the case
+			// designed in the original values (load average 2.718 > 1) then the check result is
+			// an error and indicates the errored value. Which is something we already test in
+			// TestApplyThrottlerConfigAppCheckedMetrics.
+			// In this test, we specifically look for how "lag" is used as the default metric.
+			// We this mute other metrics by setting their thresholds to be high.
+			throttlerConfig := &topodatapb.ThrottlerConfig{
+				Enabled: true,
+				MetricThresholds: map[string]float64{
+					"loadavg": 7777,
+					"custom":  7778,
+				},
+			}
+			throttler.applyThrottlerConfig(ctx, throttlerConfig)
+		})
+
 		assert.Equal(t, base.LagMetricName, throttler.metricNameUsedAsDefault())
 		aggr := throttler.aggregatedMetricsSnapshot()
 		assert.Equalf(t, 2*len(base.KnownMetricNames), len(aggr), "aggregated: %+v", aggr)     // "self" and "shard", per known metric
@@ -1501,8 +1519,10 @@ func TestReplica(t *testing.T) {
 		flags := &CheckFlags{
 			Scope: base.SelfScope,
 		}
-		checkResult := throttler.Check(ctx, throttlerapp.VitessName.String(), nil, flags)
-		assert.NotNil(t, checkResult)
+		{
+			checkResult := throttler.Check(ctx, throttlerapp.VitessName.String(), nil, flags)
+			assert.NotNil(t, checkResult)
+		}
 		go func() {
 			t.Run("checks", func(t *testing.T) {
 				select {
@@ -1536,7 +1556,7 @@ func TestReplica(t *testing.T) {
 
 			t.Run("metrics", func(t *testing.T) {
 				// See which metrics are available
-				checkResult = throttler.Check(ctx, throttlerapp.VitessName.String(), base.KnownMetricNames, flags)
+				checkResult := throttler.Check(ctx, throttlerapp.VitessName.String(), base.KnownMetricNames, flags)
 				require.NotNil(t, checkResult)
 				assert.Equal(t, len(base.KnownMetricNames), len(checkResult.Metrics))
 
@@ -1567,7 +1587,7 @@ func TestReplica(t *testing.T) {
 				}
 			})
 			t.Run("metrics not named", func(t *testing.T) {
-				checkResult = throttler.Check(ctx, throttlerapp.VitessName.String(), nil, flags)
+				checkResult := throttler.Check(ctx, throttlerapp.VitessName.String(), nil, flags)
 				require.NotNil(t, checkResult)
 				assert.Equal(t, 1, len(checkResult.Metrics))
 				for metricName, metricResult := range checkResult.Metrics {
@@ -1585,7 +1605,7 @@ func TestReplica(t *testing.T) {
 			t.Run("metrics names mapped", func(t *testing.T) {
 				throttler.appCheckedMetrics.Set(throttlerapp.VitessName.String(), base.MetricNames{base.LoadAvgMetricName, base.LagMetricName, base.ThreadsRunningMetricName}, cache.DefaultExpiration)
 				defer throttler.appCheckedMetrics.Delete(throttlerapp.VitessName.String())
-				checkResult = throttler.Check(ctx, throttlerapp.VitessName.String(), nil, flags)
+				checkResult := throttler.Check(ctx, throttlerapp.VitessName.String(), nil, flags)
 				require.NotNil(t, checkResult)
 				assert.Equal(t, 3, len(checkResult.Metrics))
 			})
@@ -1613,6 +1633,7 @@ func TestReplica(t *testing.T) {
 
 			t.Run("custom query, metrics", func(t *testing.T) {
 				// For v19 backwards compatibility, we also report the standard metric/value in CheckResult:
+				checkResult := throttler.Check(ctx, throttlerapp.VitessName.String(), nil, flags)
 				assert.NoError(t, checkResult.Error, "value=%v, threshold=%v", checkResult.Value, checkResult.Threshold)
 				assert.Equal(t, float64(0.3), checkResult.Value)
 				// Change custom threshold
