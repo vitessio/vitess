@@ -1523,8 +1523,20 @@ func (throttler *Throttler) checkScope(ctx context.Context, appName string, scop
 			}
 		}
 	}
+	if len(metricNames) == 0 && !throttlerapp.AllName.Equals(appName) {
+		// No specific metrics mapped to this app. Are there specific metrics
+		// mapped to the "all" app?
+		if val, found := throttler.appCheckedMetrics.Get(throttlerapp.AllName.String()); found {
+			switch val := val.(type) {
+			case base.MetricNames:
+				metricNames = val
+			case []base.MetricName:
+				metricNames = val
+			}
+		}
+	}
 	if throttlerapp.VitessName.Equals(appName) {
-		// "vitess" always checks all metrics
+		// "vitess" always checks all metrics, irrespective of what is mapped.
 		metricNames = base.KnownMetricNames
 	}
 	if len(metricNames) == 0 {

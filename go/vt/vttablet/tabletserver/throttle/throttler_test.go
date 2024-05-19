@@ -607,7 +607,6 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 			}
 			throttler.applyThrottlerConfig(ctx, throttlerConfig)
 			t.Run("check after apply, clear", func(t *testing.T) {
-				// "test" still checks both lag and loadavg
 				appCheckedMetrics := throttler.appCheckedMetricsSnapshot()
 				_, ok := appCheckedMetrics[testAppName.String()]
 				require.False(t, ok)
@@ -641,6 +640,102 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 				assert.Equal(t, 2, len(checkResult.Metrics))
 			})
 		})
+		t.Run("assign 'custom,loadavg' to 'all' app", func(t *testing.T) {
+			throttlerConfig := &topodatapb.ThrottlerConfig{
+				Enabled: true,
+				AppCheckedMetrics: map[string]*topodatapb.ThrottlerConfig_MetricNames{
+					testAppName.String():          {Names: []string{"lag", "threads_running"}},
+					throttlerapp.AllName.String(): {Names: []string{"custom", "loadavg"}},
+				},
+			}
+			throttler.applyThrottlerConfig(ctx, throttlerConfig)
+			t.Run("check 'all' after assignment", func(t *testing.T) {
+				appCheckedMetrics := throttler.appCheckedMetricsSnapshot()
+				metrics, ok := appCheckedMetrics[throttlerapp.AllName.String()]
+				require.True(t, ok)
+				assert.Equal(t, "custom,loadavg", metrics)
+
+				checkResult := throttler.Check(ctx, throttlerapp.AllName.String(), nil, flags)
+				require.NotNil(t, checkResult)
+				assert.EqualValues(t, 2.718, checkResult.Value) // loadavg self value exceeds threshold
+				assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
+				assert.Equal(t, 2, len(checkResult.Metrics))
+			})
+			t.Run("check 'test' after assignment", func(t *testing.T) {
+				// "test" app unaffected by 'all' assignment, because it has
+				// explicit metrics assignment.
+				appCheckedMetrics := throttler.appCheckedMetricsSnapshot()
+				metrics, ok := appCheckedMetrics[testAppName.String()]
+				require.True(t, ok)
+				assert.Equal(t, "lag,threads_running", metrics)
+
+				checkResult := throttler.Check(ctx, testAppName.String(), nil, flags)
+				require.NotNil(t, checkResult)
+				assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
+				assert.EqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
+				assert.Equal(t, 2, len(checkResult.Metrics))
+			})
+			t.Run("'online-ddl' app affected by 'all'", func(t *testing.T) {
+				// "online-ddl" app is affected by 'all' assignment, because it has
+				// no explicit metrics assignment.
+				appCheckedMetrics := throttler.appCheckedMetricsSnapshot()
+				_, ok := appCheckedMetrics[throttlerapp.OnlineDDLName.String()]
+				require.False(t, ok)
+
+				checkResult := throttler.Check(ctx, throttlerapp.OnlineDDLName.String(), nil, flags)
+				require.NotNil(t, checkResult)
+				assert.EqualValues(t, 2.718, checkResult.Value) // loadavg self value exceeds threshold
+				assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
+				assert.Equal(t, 2, len(checkResult.Metrics))
+			})
+		})
+		t.Run("deassign metrics from 'all' app", func(t *testing.T) {
+			throttlerConfig := &topodatapb.ThrottlerConfig{
+				Enabled: true,
+				AppCheckedMetrics: map[string]*topodatapb.ThrottlerConfig_MetricNames{
+					testAppName.String(): {Names: []string{"lag", "threads_running"}},
+				},
+			}
+			throttler.applyThrottlerConfig(ctx, throttlerConfig)
+			t.Run("check 'all' after assignment", func(t *testing.T) {
+				appCheckedMetrics := throttler.appCheckedMetricsSnapshot()
+				_, ok := appCheckedMetrics[throttlerapp.AllName.String()]
+				require.False(t, ok)
+
+				checkResult := throttler.Check(ctx, throttlerapp.AllName.String(), nil, flags)
+				require.NotNil(t, checkResult)
+				assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
+				assert.EqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
+				assert.Equal(t, 1, len(checkResult.Metrics))
+			})
+			t.Run("check 'test' after assignment", func(t *testing.T) {
+				// "test" app unaffected by the entire 'all' assignment, because it has
+				// explicit metrics assignment.
+				appCheckedMetrics := throttler.appCheckedMetricsSnapshot()
+				metrics, ok := appCheckedMetrics[testAppName.String()]
+				require.True(t, ok)
+				assert.Equal(t, "lag,threads_running", metrics)
+
+				checkResult := throttler.Check(ctx, testAppName.String(), nil, flags)
+				require.NotNil(t, checkResult)
+				assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
+				assert.EqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
+				assert.Equal(t, 2, len(checkResult.Metrics))
+			})
+			t.Run("'online-ddl' no longer has 'all' impact", func(t *testing.T) {
+				// "online-ddl" app is affected by 'all' assignment, because it has
+				// no explicit metrics assignment.
+				appCheckedMetrics := throttler.appCheckedMetricsSnapshot()
+				_, ok := appCheckedMetrics[throttlerapp.OnlineDDLName.String()]
+				require.False(t, ok)
+
+				checkResult := throttler.Check(ctx, throttlerapp.OnlineDDLName.String(), nil, flags)
+				require.NotNil(t, checkResult)
+				assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
+				assert.EqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
+				assert.Equal(t, 1, len(checkResult.Metrics))
+			})
+		})
 
 		t.Run("deassign metrics from test app", func(t *testing.T) {
 			throttlerConfig := &topodatapb.ThrottlerConfig{
@@ -651,7 +746,6 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 			}
 			throttler.applyThrottlerConfig(ctx, throttlerConfig)
 			t.Run("check after deassign, clear", func(t *testing.T) {
-				// "test" still checks both lag and loadavg
 				appCheckedMetrics := throttler.appCheckedMetricsSnapshot()
 				_, ok := appCheckedMetrics[testAppName.String()]
 				require.False(t, ok)
