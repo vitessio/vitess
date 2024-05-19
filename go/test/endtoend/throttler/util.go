@@ -39,7 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtctldata "vitess.io/vitess/go/vt/proto/vtctldata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 type Config struct {
@@ -92,23 +92,28 @@ func CheckThrottlerRaw(vtctldProcess *cluster.VtctldClientProcess, tablet *clust
 // This retries the command until it succeeds or times out as the
 // SrvKeyspace record may not yet exist for a newly created
 // Keyspace that is still initializing before it becomes serving.
-func UpdateThrottlerTopoConfigRaw(vtctldProcess *cluster.VtctldClientProcess, keyspaceName string, enable bool, disable bool, metricName string, threshold float64, metricsQuery string, appRule *topodatapb.ThrottledAppRule) (result string, err error) {
+func UpdateThrottlerTopoConfigRaw(
+	vtctldProcess *cluster.VtctldClientProcess,
+	keyspaceName string,
+	opts *vtctldatapb.UpdateThrottlerConfigRequest,
+	appRule *topodatapb.ThrottledAppRule,
+) (result string, err error) {
 	args := []string{}
 	args = append(args, "UpdateThrottlerConfig")
-	if enable {
+	if opts.Enable {
 		args = append(args, "--enable")
 	}
-	if disable {
+	if opts.Disable {
 		args = append(args, "--disable")
 	}
-	if metricName != "" {
-		args = append(args, "--metric-name", metricName)
+	if opts.MetricName != "" {
+		args = append(args, "--metric-name", opts.MetricName)
 	}
-	if threshold > 0 {
-		args = append(args, "--threshold", fmt.Sprintf("%f", threshold))
+	if opts.Threshold > 0 || opts.MetricName != "" {
+		args = append(args, "--threshold", fmt.Sprintf("%f", opts.Threshold))
 	}
-	args = append(args, "--custom-query", metricsQuery)
-	if metricsQuery != "" {
+	args = append(args, "--custom-query", opts.CustomQuery)
+	if opts.CustomQuery != "" {
 		args = append(args, "--check-as-check-self")
 	} else {
 		args = append(args, "--check-as-check-shard")
@@ -143,12 +148,12 @@ func UpdateThrottlerTopoConfigRaw(vtctldProcess *cluster.VtctldClientProcess, ke
 }
 
 // CheckThrottler runs vtctldclient CheckThrottler.
-func CheckThrottler(clusterInstance *cluster.LocalProcessCluster, tablet *cluster.Vttablet, appName string, flags *throttle.CheckFlags) (*vtctldata.CheckThrottlerResponse, error) {
+func CheckThrottler(clusterInstance *cluster.LocalProcessCluster, tablet *cluster.Vttablet, appName string, flags *throttle.CheckFlags) (*vtctldatapb.CheckThrottlerResponse, error) {
 	output, err := CheckThrottlerRaw(&clusterInstance.VtctldClientProcess, tablet, appName, flags)
 	if err != nil {
 		return nil, err
 	}
-	var resp vtctldata.CheckThrottlerResponse
+	var resp vtctldatapb.CheckThrottlerResponse
 	if err := json.Unmarshal([]byte(output), &resp); err != nil {
 		return nil, err
 	}
@@ -159,14 +164,18 @@ func CheckThrottler(clusterInstance *cluster.LocalProcessCluster, tablet *cluste
 // This retries the command until it succeeds or times out as the
 // SrvKeyspace record may not yet exist for a newly created
 // Keyspace that is still initializing before it becomes serving.
-func UpdateThrottlerTopoConfig(clusterInstance *cluster.LocalProcessCluster, enable bool, disable bool, metricName string, threshold float64, metricsQuery string, appRule *topodatapb.ThrottledAppRule) (string, error) {
+func UpdateThrottlerTopoConfig(
+	clusterInstance *cluster.LocalProcessCluster,
+	opts *vtctldatapb.UpdateThrottlerConfigRequest,
+	appRule *topodatapb.ThrottledAppRule,
+) (string, error) {
 	rec := concurrency.AllErrorRecorder{}
 	var (
 		err error
 		res strings.Builder
 	)
 	for _, ks := range clusterInstance.Keyspaces {
-		ires, err := UpdateThrottlerTopoConfigRaw(&clusterInstance.VtctldClientProcess, ks.Name, enable, disable, metricName, threshold, metricsQuery, appRule)
+		ires, err := UpdateThrottlerTopoConfigRaw(&clusterInstance.VtctldClientProcess, ks.Name, opts, appRule)
 		if err != nil {
 			rec.RecordError(err)
 		}
@@ -394,7 +403,8 @@ func WaitForThrottledApp(t *testing.T, tablet *cluster.Vttablet, throttlerApp th
 // The throttler is configued to use the standard replication lag metric. The function waits until the throttler is confirmed
 // to be running on all tablets.
 func EnableLagThrottlerAndWaitForStatus(t *testing.T, clusterInstance *cluster.LocalProcessCluster, lag time.Duration) {
-	_, err := UpdateThrottlerTopoConfig(clusterInstance, true, false, "", lag.Seconds(), "", nil)
+	req := &vtctldatapb.UpdateThrottlerConfigRequest{Enable: true, Threshold: lag.Seconds()}
+	_, err := UpdateThrottlerTopoConfig(clusterInstance, req, nil)
 	require.NoError(t, err)
 
 	for _, ks := range clusterInstance.Keyspaces {

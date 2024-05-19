@@ -38,6 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 var (
@@ -247,7 +248,8 @@ func TestSchemaChange(t *testing.T) {
 		}
 	})
 	t.Run("updating throttler config", func(t *testing.T) {
-		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, true, false, "", customThreshold, noCustomQuery, nil)
+		req := &vtctldatapb.UpdateThrottlerConfigRequest{Enable: true, Threshold: customThreshold}
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil)
 		require.NoError(t, err)
 	})
 
