@@ -420,7 +420,7 @@ func (throttler *Throttler) WatchSrvKeyspaceCallback(srvks *topodatapb.SrvKeyspa
 func (throttler *Throttler) convergeMetricThresholds() {
 	for _, metricName := range base.KnownMetricNames {
 		if val, ok := throttler.mysqlMetricThresholds.Get(throttlerConfigPrefix + metricName.String()); ok {
-			// Value supplied by throttler config takes precendence
+			// Value supplied by throttler config takes precedence
 			throttler.mysqlMetricThresholds.Set(metricName.String(), val, cache.DefaultExpiration)
 			continue
 		}

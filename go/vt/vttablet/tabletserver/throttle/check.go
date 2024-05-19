@@ -183,6 +183,8 @@ func (check *ThrottlerCheck) Check(ctx context.Context, appName string, scope ba
 		}
 		if !metricCheckResult.IsOK() {
 			checkResult.StatusCode = metricCheckResult.StatusCode
+			checkResult.Value = metricCheckResult.Value
+			checkResult.Threshold = metricCheckResult.Threshold
 			checkResult.Message = metricCheckResult.Message
 			checkResult.Error = metricCheckResult.Error
 		}
