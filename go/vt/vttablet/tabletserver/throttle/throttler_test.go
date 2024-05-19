@@ -1383,15 +1383,23 @@ func TestChecks(t *testing.T) {
 			})
 		})
 		t.Run("checks, self scope, vitess app", func(t *testing.T) {
+			// "vitess" app always checks all known metrics.
 			flags := &CheckFlags{
-				Scope: base.SelfScope,
+				// scope not important for this test
 			}
-			t.Run("implicit names", func(t *testing.T) {
+			t.Run("implicit names, always all known", func(t *testing.T) {
 				checkResult := throttler.Check(ctx, throttlerapp.VitessName.String(), nil, flags)
-				require.NotNil(t, checkResult)
-				assert.EqualValues(t, 0.3, checkResult.Value) // self lag value
-				assert.EqualValues(t, http.StatusOK, checkResult.StatusCode)
 				// "vitess" app always checks all known metrics:
+				assert.Equal(t, len(base.KnownMetricNames), len(checkResult.Metrics))
+			})
+			t.Run("explicit names, irrelevant, always all known", func(t *testing.T) {
+				metricNames := base.MetricNames{
+					base.MetricName("self/threads_running"),
+					base.MetricName("custom"),
+				}
+
+				checkResult := throttler.Check(ctx, throttlerapp.VitessName.String(), metricNames, flags)
+				require.NotNil(t, checkResult)
 				assert.Equal(t, len(base.KnownMetricNames), len(checkResult.Metrics))
 			})
 		})
