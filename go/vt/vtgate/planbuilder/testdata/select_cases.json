@@ -1090,6 +1090,37 @@
     }
   },
   {
+    "comment": "sharded limit offset with arguments",
+    "query": "select user_id from music order by user_id limit :limit, :offset",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select user_id from music order by user_id limit :limit, :offset",
+      "Instructions": {
+        "OperatorType": "Limit",
+        "Count": ":offset",
+        "Offset": ":limit",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select user_id, weight_string(user_id) from music where 1 != 1",
+            "OrderBy": "(0|1) ASC",
+            "Query": "select user_id, weight_string(user_id) from music order by music.user_id asc",
+            "ResultColumns": 1,
+            "Table": "music"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music"
+      ]
+    }
+  },
+  {
     "comment": "Sharding Key Condition in Parenthesis",
     "query": "select * from user where name ='abc' AND (id = 4) limit 5",
     "plan": {

@@ -260,7 +260,12 @@ func createPushedLimit(ctx *plancontext.PlanningContext, src Operator, orig *Lim
 			Left:     pushedLimit.Rowcount,
 			Right:    pushedLimit.Offset,
 		}
-		pushedLimit.Rowcount = simplifyLiteralExpression(ctx, plus)
+		expr, isLiteral := simplifyLiteralExpression(ctx, plus)
+		if !isLiteral {
+			// MySQL doesn't allow non-literal expressions in LIMIT, so we can't push this down
+			return src
+		}
+		pushedLimit.Rowcount = expr
 		pushedLimit.Offset = nil
 	}
 	return &Limit{
@@ -270,15 +275,17 @@ func createPushedLimit(ctx *plancontext.PlanningContext, src Operator, orig *Lim
 }
 
 // simplify is a helper function to simplify an expression using the evalengine
-func simplifyLiteralExpression(ctx *plancontext.PlanningContext, expr sqlparser.Expr) evalengine.Expr {
+// the boolean returned indicates if the expression is a literal
+func simplifyLiteralExpression(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (sqlparser.Expr, bool) {
 	cfg := evalengine.Config{
 		Environment: ctx.VSchema.Environment(),
 	}
-	translate, err := evalengine.Translate(expr, &cfg)
+	translated, err := evalengine.Translate(expr, &cfg)
 	if err != nil {
 		panic(vterrors.VT13001("failed to translate expression: " + err.Error()))
 	}
-	return translate
+	_, isLit := translated.(*evalengine.Literal)
+	return translated, isLit
 }
 
 func tryPushingDownLimitInRoute(ctx *plancontext.PlanningContext, in *Limit, src *Route) (Operator, *ApplyResult) {
@@ -302,7 +309,7 @@ func tryPushingDownLimitInRoute(ctx *plancontext.PlanningContext, in *Limit, src
 	src.Source = createPushedLimit(ctx, src.Source, in)
 	in.Pushed = true
 
-	return in, Rewrote("pushed top limit under route")
+	return in, Rewrote("pushed limit under route")
 }
 
 func setUpperLimit(in *Limit) (Operator, *ApplyResult) {
