@@ -229,19 +229,21 @@ func tryPushLimit(ctx *plancontext.PlanningContext, in *Limit) (Operator, *Apply
 			// This is the Top limit, and it's already pushed down
 			return in, NoRewrite
 		}
+		side := "RHS"
 		src.RHS = createPushedLimit(ctx, src.RHS, in)
 		if IsOuter(src) {
 			// for outer joins, we are guaranteed that all rows from the LHS will be returned,
 			// so we can push down the LIMIT to the LHS
 			src.LHS = createPushedLimit(ctx, src.LHS, in)
+			side = "RHS and LHS"
 		}
 
 		if in.Top {
 			in.Pushed = true
-			return in, Rewrote("add limit to RHS of apply join")
+			return in, Rewrote(fmt.Sprintf("add limit to %s of apply join", side))
 		}
 
-		return src, Rewrote("push limit to RHS of apply join")
+		return src, Rewrote(fmt.Sprintf("push limit to %s of apply join", side))
 	default:
 		return setUpperLimit(in)
 	}
