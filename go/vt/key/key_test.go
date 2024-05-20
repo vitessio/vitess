@@ -333,25 +333,18 @@ func TestEvenShardsKeyRange(t *testing.T) {
 
 	for _, tc := range testCases {
 		got, err := EvenShardsKeyRange(tc.i, tc.n)
-		if err != nil {
-			t.Fatalf("EvenShardsKeyRange(%v, %v) returned unexpected error: %v", tc.i, tc.n, err)
-		}
-		if !proto.Equal(got, tc.want) {
-			t.Errorf("EvenShardsKeyRange(%v, %v) = (%x, %x), want = (%x, %x)", tc.i, tc.n, got.Start, got.End, tc.want.Start, tc.want.End)
-		}
+		require.NoError(t, err)
+		assert.True(t, proto.Equal(got, tc.want), "got=(%x, %x), want=(%x, %x)", got.Start, got.End, tc.want.Start, tc.want.End)
 
 		// Check if the string representation is equal as well.
-		if gotStr, want := KeyRangeString(got), tc.wantSpec; gotStr != want {
-			t.Errorf("EvenShardsKeyRange(%v) = %v, want = %v", got, gotStr, want)
-		}
+		gotStr := KeyRangeString(got)
+		assert.Equal(t, tc.wantSpec, gotStr)
 
 		// Now verify that ParseKeyRangeParts() produces the same KeyRange object as
 		// we do.
 		parts := strings.Split(tc.wantSpec, "-")
 		kr, _ := ParseKeyRangeParts(parts[0], parts[1])
-		if !proto.Equal(got, kr) {
-			t.Errorf("EvenShardsKeyRange(%v, %v) != ParseKeyRangeParts(%v, %v): (%x, %x) != (%x, %x)", tc.i, tc.n, parts[0], parts[1], got.Start, got.End, kr.Start, kr.End)
-		}
+		assert.True(t, proto.Equal(got, kr), "EvenShardsKeyRange(%v, %v) != ParseKeyRangeParts(%v, %v): (%x, %x) != (%x, %x)", tc.i, tc.n, parts[0], parts[1], got.Start, got.End, kr.Start, kr.End)
 	}
 }
 
@@ -477,9 +470,7 @@ func TestKeyRangeEndEqual(t *testing.T) {
 		first := stringToKeyRange(tcase.first)
 		second := stringToKeyRange(tcase.second)
 		out := KeyRangeEndEqual(first, second)
-		if out != tcase.out {
-			t.Fatalf("KeyRangeEndEqual(%q, %q) expected %t, got %t", tcase.first, tcase.second, tcase.out, out)
-		}
+		require.Equal(t, tcase.out, out)
 	}
 }
 
@@ -518,9 +509,7 @@ func TestKeyRangeStartEqual(t *testing.T) {
 		first := stringToKeyRange(tcase.first)
 		second := stringToKeyRange(tcase.second)
 		out := KeyRangeStartEqual(first, second)
-		if out != tcase.out {
-			t.Fatalf("KeyRangeStartEqual(%q, %q) expected %t, got %t", tcase.first, tcase.second, tcase.out, out)
-		}
+		require.Equal(t, tcase.out, out)
 	}
 }
 
@@ -555,9 +544,7 @@ func TestKeyRangeEqual(t *testing.T) {
 		first := stringToKeyRange(tcase.first)
 		second := stringToKeyRange(tcase.second)
 		out := KeyRangeEqual(first, second)
-		if out != tcase.out {
-			t.Fatalf("KeyRangeEqual(%q, %q) expected %t, got %t", tcase.first, tcase.second, tcase.out, out)
-		}
+		require.Equal(t, tcase.out, out)
 	}
 }
 
@@ -600,9 +587,7 @@ func TestKeyRangeContiguous(t *testing.T) {
 		first := stringToKeyRange(tcase.first)
 		second := stringToKeyRange(tcase.second)
 		out := KeyRangeContiguous(first, second)
-		if out != tcase.out {
-			t.Fatalf("KeyRangeContiguous(%q, %q) expected %t, got %t", tcase.first, tcase.second, tcase.out, out)
-		}
+		require.Equal(t, tcase.out, out)
 	}
 }
 
@@ -626,10 +611,8 @@ func TestEvenShardsKeyRange_Error(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		kr, err := EvenShardsKeyRange(tc.i, tc.n)
-		if err == nil || !strings.Contains(err.Error(), tc.wantError) {
-			t.Fatalf("EvenShardsKeyRange(%v, %v) = (%v, %v) want error = %v", tc.i, tc.n, kr, err, tc.wantError)
-		}
+		_, err := EvenShardsKeyRange(tc.i, tc.n)
+		require.ErrorContains(t, err, tc.wantError)
 	}
 }
 
@@ -653,25 +636,17 @@ func TestParseShardingSpec(t *testing.T) {
 	}
 	for key, wanted := range goodTable {
 		r, err := ParseShardingSpec(key)
-		if err != nil {
-			t.Errorf("Unexpected error: %v.", err)
-		}
-		if len(r) != len(wanted) {
-			t.Errorf("Wrong result: wanted %v, got %v", wanted, r)
+		assert.NoError(t, err)
+		if !assert.Len(t, r, len(wanted)) {
 			continue
 		}
 		for i, w := range wanted {
-			if !proto.Equal(r[i], w) {
-				t.Errorf("Wrong result: wanted %v, got %v", w, r[i])
-				break
-			}
+			require.Truef(t, proto.Equal(r[i], w), "wanted %v, got %v", w, r[i])
 		}
 	}
 	for _, bad := range badTable {
 		_, err := ParseShardingSpec(bad)
-		if err == nil {
-			t.Errorf("Didn't get expected error for %v.", bad)
-		}
+		assert.Error(t, err)
 	}
 }
 
@@ -1081,27 +1056,19 @@ func TestKeyRangeContains(t *testing.T) {
 
 	for _, el := range table {
 		s, err := hex.DecodeString(el.start)
-		if err != nil {
-			t.Errorf("Unexpected error: %v", err)
-		}
+		assert.NoError(t, err)
 		e, err := hex.DecodeString(el.end)
-		if err != nil {
-			t.Errorf("Unexpected error: %v", err)
-		}
+		assert.NoError(t, err)
 		kr := &topodatapb.KeyRange{
 			Start: s,
 			End:   e,
 		}
 		k, err := hex.DecodeString(el.kid)
-		if err != nil {
-			t.Errorf("Unexpected error: %v", err)
-		}
-		if c := KeyRangeContains(kr, k); c != el.contained {
-			t.Errorf("Unexpected result: contains for %v and (%v-%v) yields %v.", el.kid, el.start, el.end, c)
-		}
-		if !KeyRangeContains(nil, k) {
-			t.Errorf("KeyRangeContains(nil, x) should always be true")
-		}
+		assert.NoError(t, err)
+		c := KeyRangeContains(kr, k)
+		assert.Equal(t, el.contained, c)
+
+		assert.True(t, KeyRangeContains(nil, k), "KeyRangeContains(nil, x) should always be true")
 	}
 }
 
@@ -1600,4 +1567,25 @@ func stringToKeyRange(spec string) *topodatapb.KeyRange {
 		panic(err)
 	}
 	return kr
+}
+
+func TestKeyRangeIsPartial(t *testing.T) {
+	testCases := []struct {
+		name     string
+		keyRange *topodatapb.KeyRange
+		want     bool
+	}{
+		{"nil key range", nil, false},
+		{"empty start and end", &topodatapb.KeyRange{}, false},
+		{"empty end", &topodatapb.KeyRange{Start: []byte("12")}, true},
+		{"empty start", &topodatapb.KeyRange{End: []byte("13")}, true},
+		{"non-empty start and end", &topodatapb.KeyRange{Start: []byte("12"), End: []byte("13")}, true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			isPartial := KeyRangeIsPartial(tc.keyRange)
+			assert.Equal(t, tc.want, isPartial)
+		})
+	}
 }

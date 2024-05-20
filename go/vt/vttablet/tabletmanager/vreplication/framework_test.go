@@ -256,7 +256,6 @@ func addTablet(id int) *topodatapb.Tablet {
 	if err := env.TopoServ.CreateTablet(context.Background(), tablet); err != nil {
 		panic(err)
 	}
-	env.SchemaEngine.Reload(context.Background())
 	return tablet
 }
 
@@ -277,7 +276,6 @@ func addOtherTablet(id int, keyspace, shard string) *topodatapb.Tablet {
 	if err := env.TopoServ.CreateTablet(context.Background(), tablet); err != nil {
 		panic(err)
 	}
-	env.SchemaEngine.Reload(context.Background())
 	return tablet
 }
 
@@ -285,7 +283,6 @@ func deleteTablet(tablet *topodatapb.Tablet) {
 	env.TopoServ.DeleteTablet(context.Background(), tablet.Alias)
 	// This is not automatically removed from shard replication, which results in log spam.
 	topo.DeleteTabletReplicationData(context.Background(), env.TopoServ, tablet)
-	env.SchemaEngine.Reload(context.Background())
 }
 
 // fakeTabletConn implement TabletConn interface. We only care about the
