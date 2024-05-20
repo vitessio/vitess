@@ -199,3 +199,41 @@ func TestVDiffCreate(t *testing.T) {
 		})
 	}
 }
+
+func TestWorkflowDelete(t *testing.T) {
+	ctx := context.Background()
+	ksName := "ks1"
+	wfName := "wf1"
+	cellName := "cell1"
+
+	ts := memorytopo.NewServer(ctx, cellName)
+	tmc := &fakeTMC{}
+	s := NewServer(vtenv.NewTestEnv(), ts, tmc)
+	err := s.ts.CreateKeyspace(ctx, ksName, &topodatapb.Keyspace{})
+	require.NoError(t, err)
+
+	testcases := []struct {
+		name    string
+		req     *vtctldatapb.WorkflowDeleteRequest
+		want    *vtctldatapb.WorkflowDeleteResponse
+		wantErr bool
+	}{
+		{
+			name: "no values",
+			req: &vtctldatapb.WorkflowDeleteRequest{
+				Keyspace: ksName,
+				Workflow: wfName,
+			},
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := s.WorkflowDelete(ctx, tc.req)
+			if (err != nil) != tc.wantErr {
+				t.Errorf("Server.WorkflowDelete() error = %v, wantErr %v", err, tc.wantErr)
+				return
+			}
+			require.Equal(t, got, tc.want, "Server.WorkflowDelete() = %v, want %v", got, tc.want)
+		})
+	}
+}
