@@ -702,6 +702,7 @@ func (s *VtctldServer) CheckThrottler(ctx context.Context, req *vtctldatapb.Chec
 		LowPriority:           req.LowPriority,
 		SkipRequestHeartbeats: req.SkipRequestHeartbeats,
 		OkIfNotExists:         req.OkIfNotExists,
+		MultiMetricsEnabled:   true,
 	})
 	if err != nil {
 		return nil, err

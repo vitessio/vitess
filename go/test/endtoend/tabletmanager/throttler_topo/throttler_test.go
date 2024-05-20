@@ -178,6 +178,7 @@ func throttleCheck(tablet *cluster.Vttablet, skipRequestHeartbeats bool) (*vtctl
 	flags := &throttle.CheckFlags{
 		Scope:                 base.ShardScope,
 		SkipRequestHeartbeats: skipRequestHeartbeats,
+		MultiMetricsEnabled:   true,
 	}
 	resp, err := throttler.CheckThrottler(clusterInstance, tablet, testAppName, flags)
 	return resp, err
@@ -185,7 +186,8 @@ func throttleCheck(tablet *cluster.Vttablet, skipRequestHeartbeats bool) (*vtctl
 
 func throttleCheckSelf(tablet *cluster.Vttablet) (*vtctldatapb.CheckThrottlerResponse, error) {
 	flags := &throttle.CheckFlags{
-		Scope: base.SelfScope,
+		Scope:               base.SelfScope,
+		MultiMetricsEnabled: true,
 	}
 	resp, err := throttler.CheckThrottler(clusterInstance, tablet, testAppName, flags)
 	return resp, err
