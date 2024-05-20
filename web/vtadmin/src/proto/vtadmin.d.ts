@@ -30332,6 +30332,9 @@ export namespace tabletmanagerdata {
 
         /** CheckThrottlerRequest ok_if_not_exists */
         ok_if_not_exists?: (boolean|null);
+
+        /** CheckThrottlerRequest multi_metrics_enabled */
+        multi_metrics_enabled?: (boolean|null);
     }
 
     /** Represents a CheckThrottlerRequest. */
@@ -30357,6 +30360,9 @@ export namespace tabletmanagerdata {
 
         /** CheckThrottlerRequest ok_if_not_exists. */
         public ok_if_not_exists: boolean;
+
+        /** CheckThrottlerRequest multi_metrics_enabled. */
+        public multi_metrics_enabled: boolean;
 
         /**
          * Creates a new CheckThrottlerRequest instance using the specified properties.
