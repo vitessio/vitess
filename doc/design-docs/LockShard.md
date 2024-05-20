@@ -27,3 +27,9 @@ The Check function of etcd, is unique in the sense that apart from just checking
 In ZooKeeper, locks are implemented by creating ephemeral files. The ephemeral files are present until the connection is alive. So there doesn't look like a timeout on the shard lock, unless the connection/process dies.
 
 The Check function doesn't do anything in ZooKeeper. The implementation just returns nil. To implement the Check functionality, we just need to check that the connection isn't broken and the ephemeral node exists.
+
+### Consul
+
+In Consul, the timeout for the lock is controlled by the `--topo_consul_lock_session_ttl` flag. 
+
+The Check function works properly and checks if the lock still exists.
