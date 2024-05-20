@@ -193,6 +193,32 @@ func init() {
 	}
 }
 
+func waitForMetricsToBeCollected(t *testing.T, ctx context.Context, throttler *Throttler) {
+	ticker := time.NewTicker(100 * time.Millisecond)
+	for {
+		foundAll := true
+		aggr := throttler.aggregatedMetricsSnapshot()
+		for _, metric := range base.KnownMetricNames {
+			if _, ok := aggr[metric.AggregatedName(base.SelfScope)]; !ok {
+				foundAll = false
+				break
+			}
+			if _, ok := aggr[metric.AggregatedName(base.ShardScope)]; !ok {
+				foundAll = false
+				break
+			}
+		}
+		if foundAll {
+			return
+		}
+		select {
+		case <-ctx.Done():
+			t.Error("timed out waiting for metrics to be collected")
+			return
+		case <-ticker.C:
+		}
+	}
+}
 func sleepTillThresholdApplies() {
 	time.Sleep(time.Second)
 }
@@ -314,12 +340,13 @@ func TestApplyThrottlerConfig(t *testing.T) {
 	throttler.appCheckedMetrics.Set("app2", base.MetricNames{base.ThreadsRunningMetricName}, cache.DefaultExpiration)
 	throttler.appCheckedMetrics.Set("app3", base.MetricNames{base.ThreadsRunningMetricName}, cache.DefaultExpiration)
 	runThrottler(t, ctx, throttler, 10*time.Second, func(t *testing.T, ctx context.Context) {
+		defer cancel() // early termination
 		assert.True(t, throttler.IsEnabled())
 		assert.Equal(t, 1, throttler.throttledApps.ItemCount(), "expecting always-throttled-app: %v", maps.Keys(throttler.throttledApps.Items()))
 		throttler.applyThrottlerConfig(ctx, throttlerConfig)
-		cancel() // end test early
 	})
 
+	sleepTillThresholdApplies()
 	assert.Equal(t, 3, throttler.throttledApps.ItemCount(), "expecting online-ddl, tablegc, and always-throttled-app: %v", maps.Keys(throttler.throttledApps.Items()))
 	assert.False(t, throttler.IsEnabled())
 	assert.Equal(t, float64(14), throttler.GetMetricsThreshold())
@@ -364,11 +391,13 @@ func TestApplyThrottlerConfigMetricThresholds(t *testing.T) {
 	defer cancel()
 	throttler := newTestThrottler()
 	runThrottler(t, ctx, throttler, 10*time.Second, func(t *testing.T, ctx context.Context) {
+		defer cancel() // early termination
 		assert.True(t, throttler.IsEnabled())
 
 		flags := &CheckFlags{
 			Scope:                 base.SelfScope,
 			SkipRequestHeartbeats: true,
+			MultiMetricsEnabled:   true,
 		}
 		t.Run("check before apply", func(t *testing.T) {
 			checkResult := throttler.Check(ctx, testAppName.String(), nil, flags)
@@ -422,7 +451,6 @@ func TestApplyThrottlerConfigMetricThresholds(t *testing.T) {
 			assert.EqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
 			assert.Equal(t, 1, len(checkResult.Metrics))
 		})
-		cancel() // end test early
 	})
 
 	assert.False(t, throttler.IsEnabled())
@@ -452,6 +480,8 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 	defer cancel()
 	throttler := newTestThrottler()
 	runThrottler(t, ctx, throttler, 10*time.Second, func(t *testing.T, ctx context.Context) {
+		defer cancel() // early termination
+
 		assert.True(t, throttler.IsEnabled())
 		aggr := throttler.aggregatedMetricsSnapshot()
 		assert.Equalf(t, 2*len(base.KnownMetricNames), len(aggr), "aggregated: %+v", aggr)     // "self" and "shard", per known metric
@@ -462,6 +492,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 		}
 		flags := &CheckFlags{
 			SkipRequestHeartbeats: true,
+			MultiMetricsEnabled:   true,
 		}
 		throttlerConfig := &topodatapb.ThrottlerConfig{
 			Enabled:           true,
@@ -707,8 +738,6 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 				assert.Equal(t, 1, len(checkResult.Metrics))
 			})
 		})
-
-		cancel() // end test early
 	})
 }
 
@@ -937,6 +966,7 @@ func runThrottler(t *testing.T, ctx context.Context, throttler *Throttler, timeo
 		case <-ctx.Done():
 			return
 		case <-time.After(sleepTime):
+			waitForMetricsToBeCollected(t, ctx, throttler)
 			f(t, ctx)
 		}
 	}
@@ -969,6 +999,7 @@ func TestProbesWhileOperating(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	runThrottler(t, ctx, throttler, time.Minute, func(t *testing.T, ctx context.Context) {
+		defer cancel() // early termination
 		t.Run("aggregated", func(t *testing.T) {
 			assert.Equal(t, base.LagMetricName, throttler.metricNameUsedAsDefault())
 			aggr := throttler.aggregatedMetricsSnapshot()
@@ -1173,7 +1204,6 @@ func TestProbesWhileOperating(t *testing.T) {
 				})
 			})
 		})
-		cancel() // end test early
 	})
 }
 
@@ -1192,6 +1222,7 @@ func TestProbesWithV19Replicas(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	runThrottler(t, ctx, throttler, time.Minute, func(t *testing.T, ctx context.Context) {
+		defer cancel() // early termination
 		t.Run("aggregated", func(t *testing.T) {
 			aggr := throttler.aggregatedMetricsSnapshot()
 			assert.Equalf(t, 2*len(base.KnownMetricNames), len(aggr), "aggregated: %+v", aggr)     // "self" and "shard", per known metric
@@ -1253,7 +1284,6 @@ func TestProbesWithV19Replicas(t *testing.T) {
 			// And that's the only app we expect to see.
 			assert.Equalf(t, 1, len(uniqueNames), "%+v", uniqueNames)
 		})
-		cancel() // end test early
 	})
 }
 
@@ -1306,10 +1336,13 @@ func TestDormant(t *testing.T) {
 		assert.True(t, throttler.isDormant())
 		assert.EqualValues(t, 1, heartbeatWriter.Requests()) // once upon Enable()
 		flags := &CheckFlags{
-			Scope: base.SelfScope,
+			Scope:               base.SelfScope,
+			MultiMetricsEnabled: true,
 		}
 		throttler.Check(ctx, throttlerapp.VitessName.String(), nil, flags)
 		go func() {
+			defer cancel() // early termination
+
 			select {
 			case <-ctx.Done():
 				require.FailNow(t, "context expired before testing completed")
@@ -1341,7 +1374,6 @@ func TestDormant(t *testing.T) {
 			case <-time.After(throttler.dormantPeriod):
 				assert.True(t, throttler.isDormant())
 			}
-			cancel() // end test early
 		}()
 	})
 }
@@ -1375,6 +1407,12 @@ func TestChecks(t *testing.T) {
 	}
 
 	runThrottler(t, ctx, throttler, time.Minute, func(t *testing.T, ctx context.Context) {
+		defer cancel()
+		throttlerConfig := &topodatapb.ThrottlerConfig{
+			Enabled:           true,
+			MetricThresholds:  map[string]float64{},
+			AppCheckedMetrics: map[string]*topodatapb.ThrottlerConfig_MetricNames{},
+		}
 
 		t.Run("apply high thresholds", func(t *testing.T) {
 			// We apply high thresholds because if a value exceeds a threshold, as is the case
@@ -1383,15 +1421,11 @@ func TestChecks(t *testing.T) {
 			// TestApplyThrottlerConfigAppCheckedMetrics.
 			// In this test, we specifically look for how "lag" is used as the default metric.
 			// We this mute other metrics by setting their thresholds to be high.
-			throttlerConfig := &topodatapb.ThrottlerConfig{
-				Enabled: true,
-				MetricThresholds: map[string]float64{
-					"loadavg": 7777,
-					"custom":  7778,
-				},
-			}
+			throttlerConfig.MetricThresholds["loadavg"] = 7777
+			throttlerConfig.MetricThresholds["custom"] = 7778
 			throttler.applyThrottlerConfig(ctx, throttlerConfig)
 		})
+		sleepTillThresholdApplies()
 
 		assert.Equal(t, base.LagMetricName, throttler.metricNameUsedAsDefault())
 		aggr := throttler.aggregatedMetricsSnapshot()
@@ -1401,7 +1435,8 @@ func TestChecks(t *testing.T) {
 		validateAppNames(t)
 		t.Run("checks, self scope", func(t *testing.T) {
 			flags := &CheckFlags{
-				Scope: base.SelfScope,
+				Scope:               base.SelfScope,
+				MultiMetricsEnabled: true,
 			}
 			t.Run("implicit names", func(t *testing.T) {
 				checkResult := throttler.Check(ctx, testAppName.String(), nil, flags)
@@ -1413,8 +1448,12 @@ func TestChecks(t *testing.T) {
 			t.Run("explicit names", func(t *testing.T) {
 				checkResult := throttler.Check(ctx, testAppName.String(), base.KnownMetricNames, flags)
 				require.NotNil(t, checkResult)
-				assert.EqualValues(t, 0.3, checkResult.Value) // self lag value
-				assert.EqualValues(t, http.StatusOK, checkResult.StatusCode)
+				assert.EqualValues(t, 0.3, checkResult.Value, "unexpected result: %+v", checkResult) // self lag value
+				if !assert.EqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult) {
+					for k, v := range checkResult.Metrics {
+						t.Logf("%s: %+v", k, v)
+					}
+				}
 				assert.Equal(t, len(base.KnownMetricNames), len(checkResult.Metrics))
 
 				assert.EqualValues(t, 0.3, checkResult.Metrics[base.LagMetricName.String()].Value)           // self lag value, because flags.Scope is set
@@ -1430,6 +1469,7 @@ func TestChecks(t *testing.T) {
 			// "vitess" app always checks all known metrics.
 			flags := &CheckFlags{
 				// scope not important for this test
+				MultiMetricsEnabled: true,
 			}
 			t.Run("implicit names, always all known", func(t *testing.T) {
 				checkResult := throttler.Check(ctx, throttlerapp.VitessName.String(), nil, flags)
@@ -1450,7 +1490,8 @@ func TestChecks(t *testing.T) {
 
 		t.Run("checks, shard scope", func(t *testing.T) {
 			flags := &CheckFlags{
-				Scope: base.ShardScope,
+				Scope:               base.ShardScope,
+				MultiMetricsEnabled: true,
 			}
 			t.Run("implicit names", func(t *testing.T) {
 				checkResult := throttler.Check(ctx, testAppName.String(), nil, flags)
@@ -1480,6 +1521,7 @@ func TestChecks(t *testing.T) {
 		t.Run("checks, undefined scope", func(t *testing.T) {
 			flags := &CheckFlags{
 				// Leaving scope undefined, so that each metrics picks its own scope
+				MultiMetricsEnabled: true,
 			}
 			t.Run("implicit names", func(t *testing.T) {
 				checkResult := throttler.Check(ctx, testAppName.String(), nil, flags)
@@ -1509,7 +1551,8 @@ func TestChecks(t *testing.T) {
 		})
 		t.Run("checks, defined scope masks explicit scope metrics", func(t *testing.T) {
 			flags := &CheckFlags{
-				Scope: base.ShardScope,
+				Scope:               base.ShardScope,
+				MultiMetricsEnabled: true,
 			}
 			t.Run("explicit names", func(t *testing.T) {
 				metricNames := base.MetricNames{
@@ -1539,6 +1582,7 @@ func TestChecks(t *testing.T) {
 		t.Run("checks, undefined scope and explicit scope metrics", func(t *testing.T) {
 			flags := &CheckFlags{
 				// Leaving scope undefined
+				MultiMetricsEnabled: true,
 			}
 			t.Run("explicit names", func(t *testing.T) {
 				metricNames := base.MetricNames{
@@ -1563,9 +1607,7 @@ func TestChecks(t *testing.T) {
 				assert.EqualValues(t, base.ShardScope.String(), checkResult.Metrics[base.LoadAvgMetricName.String()].Scope)
 			})
 		})
-
 		// done
-		cancel() // end test early
 	})
 }
 
@@ -1584,13 +1626,15 @@ func TestReplica(t *testing.T) {
 	runThrottler(t, ctx, throttler, time.Minute, func(t *testing.T, ctx context.Context) {
 		assert.Empty(t, tmClient.AppNames())
 		flags := &CheckFlags{
-			Scope: base.SelfScope,
+			Scope:               base.SelfScope,
+			MultiMetricsEnabled: true,
 		}
 		{
 			checkResult := throttler.Check(ctx, throttlerapp.VitessName.String(), nil, flags)
 			assert.NotNil(t, checkResult)
 		}
 		go func() {
+			defer cancel() // early termination
 			t.Run("checks", func(t *testing.T) {
 				select {
 				case <-ctx.Done():
@@ -1598,27 +1642,63 @@ func TestReplica(t *testing.T) {
 				case <-time.After(time.Second):
 					assert.Empty(t, tmClient.AppNames())
 				}
-				checkResult := throttler.Check(ctx, throttlerapp.OnlineDDLName.String(), nil, flags)
-				assert.NotNil(t, checkResult)
-				select {
-				case <-ctx.Done():
-					require.FailNow(t, "context expired before testing completed")
-				case <-time.After(time.Second):
-					appNames := tmClient.AppNames()
-					// The replica reports to the primary that it had been checked, by issuing a CheckThrottler
-					// on the primary using the ThrottlerStimulatorName app.
-					assert.Equal(t, []string{throttlerapp.ThrottlerStimulatorName.String()}, appNames)
-				}
-				checkResult = throttler.Check(ctx, throttlerapp.OnlineDDLName.String(), nil, flags)
-				assert.NotNil(t, checkResult)
-				select {
-				case <-ctx.Done():
-					require.FailNow(t, "context expired before testing completed")
-				case <-time.After(time.Second):
-					// Due to stimulation rate limiting, we shouldn't see a 2nd CheckThrottler request.
-					appNames := tmClient.AppNames()
-					assert.Equal(t, []string{throttlerapp.ThrottlerStimulatorName.String()}, appNames)
-				}
+				t.Run("validate stimulator", func(t *testing.T) {
+					checkResult := throttler.Check(ctx, throttlerapp.OnlineDDLName.String(), nil, flags)
+					require.NotNil(t, checkResult)
+					assert.EqualValues(t, 0.3, checkResult.Value) // self lag value
+					assert.EqualValues(t, http.StatusOK, checkResult.StatusCode)
+					assert.Equal(t, 1, len(checkResult.Metrics))
+					select {
+					case <-ctx.Done():
+						require.FailNow(t, "context expired before testing completed")
+					case <-time.After(time.Second):
+						appNames := tmClient.AppNames()
+						// The replica reports to the primary that it had been checked, by issuing a CheckThrottler
+						// on the primary using the ThrottlerStimulatorName app.
+						assert.Equal(t, []string{throttlerapp.ThrottlerStimulatorName.String()}, appNames)
+					}
+				})
+				t.Run("validate stimulator", func(t *testing.T) {
+					checkResult := throttler.Check(ctx, throttlerapp.OnlineDDLName.String(), nil, flags)
+					require.NotNil(t, checkResult)
+					assert.EqualValues(t, 0.3, checkResult.Value) // self lag value
+					assert.EqualValues(t, http.StatusOK, checkResult.StatusCode)
+					assert.Equal(t, 1, len(checkResult.Metrics))
+					select {
+					case <-ctx.Done():
+						require.FailNow(t, "context expired before testing completed")
+					case <-time.After(time.Second):
+						// Due to stimulation rate limiting, we shouldn't see a 2nd CheckThrottler request.
+						appNames := tmClient.AppNames()
+						assert.Equal(t, []string{throttlerapp.ThrottlerStimulatorName.String()}, appNames)
+					}
+				})
+				t.Run("validate multi-metric results", func(t *testing.T) {
+					checkResult := throttler.Check(ctx, throttlerapp.VitessName.String(), nil, flags)
+					require.NotNil(t, checkResult)
+					// loadavg value exceeds threshold. This will show up in the check result as an error.
+					assert.EqualValues(t, 2.718, checkResult.Value, "unexpected result: %+v", checkResult) // self lag value
+					assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
+					assert.Equal(t, len(base.KnownMetricNames), len(checkResult.Metrics))
+				})
+				t.Run("validate v19 non-multi-metric results", func(t *testing.T) {
+					flags := &CheckFlags{
+						Scope:               base.SelfScope,
+						MultiMetricsEnabled: false,
+					}
+					checkResult := throttler.Check(ctx, throttlerapp.VitessName.String(), nil, flags)
+					require.NotNil(t, checkResult)
+					// loadavg value exceeds threshold. But since "MultiMetricsEnabled: false", the
+					// throttler, acting as a replica, assumes it's being probed by a v19 primary, and
+					// therefore does not report any of the multi-metric errors back. It only ever
+					// reports the default metric.
+					assert.EqualValues(t, 0.3, checkResult.Value) // self lag value
+					assert.EqualValues(t, http.StatusOK, checkResult.StatusCode)
+					assert.EqualValues(t, 0.75, checkResult.Threshold)
+					// The replica will still report the multi-metrics, and that's fine. As long
+					// as it does not reflect any of their values in the checkResult.Value/StatusCode/Threshold/Error/Message.
+					assert.Equal(t, len(base.KnownMetricNames), len(checkResult.Metrics))
+				})
 			})
 
 			t.Run("metrics", func(t *testing.T) {
@@ -1732,9 +1812,6 @@ func TestReplica(t *testing.T) {
 				checkOK := client.ThrottleCheckOK(ctx, "")
 				assert.False(t, checkOK)
 			})
-
-			// done
-			cancel() // end test early
 		}()
 	})
 }

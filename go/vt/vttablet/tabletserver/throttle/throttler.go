@@ -998,7 +998,7 @@ func (throttler *Throttler) generateTabletProbeFunction(scope base.Scope, tmClie
 		}
 		metrics := make(mysql.MySQLThrottleMetrics)
 
-		req := &tabletmanagerdatapb.CheckThrottlerRequest{} // We leave AppName empty; it will default to VitessName anyway, and we can save some proto space
+		req := &tabletmanagerdatapb.CheckThrottlerRequest{MultiMetricsEnabled: true} // We leave AppName empty; it will default to VitessName anyway, and we can save some proto space
 		resp, gRPCErr := tmClient.CheckThrottler(ctx, probe.Tablet, req)
 		if gRPCErr != nil {
 			return metricsWithError(fmt.Errorf("gRPC error accessing tablet %v. Err=%v", probe.Alias, gRPCErr))
@@ -1544,16 +1544,6 @@ func (throttler *Throttler) checkScope(ctx context.Context, appName string, scop
 		metricNames = base.MetricNames{throttler.metricNameUsedAsDefault()}
 	}
 	checkResult = throttler.check.Check(ctx, appName, scope, metricNames, flags)
-	if metric, ok := checkResult.Metrics[throttler.metricNameUsedAsDefault().String()]; ok && checkResult.IsOK() {
-		// v19 compatibility: if this v20 server is a replica, reporting to a v19 primary,
-		// then we must supply the v19-flavor check result.
-		// If checkResult is not OK, then we will have populated these fields already by the failing metric.
-		checkResult.StatusCode = metric.StatusCode
-		checkResult.Value = metric.Value
-		checkResult.Threshold = metric.Threshold
-		checkResult.Error = metric.Error
-		checkResult.Message = metric.Message
-	}
 
 	shouldRequestHeartbeats := !flags.SkipRequestHeartbeats
 	if throttlerapp.VitessName.Equals(appName) {

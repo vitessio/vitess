@@ -70,10 +70,13 @@ type CheckFlags struct {
 	LowPriority           bool
 	OKIfNotExists         bool
 	SkipRequestHeartbeats bool
+	MultiMetricsEnabled   bool
 }
 
 // StandardCheckFlags have no special hints
-var StandardCheckFlags = &CheckFlags{}
+var StandardCheckFlags = &CheckFlags{
+	MultiMetricsEnabled: true,
+}
 
 // ThrottlerCheck provides methods for an app checking on metrics
 type ThrottlerCheck struct {
@@ -145,6 +148,13 @@ func (check *ThrottlerCheck) Check(ctx context.Context, appName string, scope ba
 	if len(metricNames) == 0 {
 		metricNames = base.MetricNames{check.throttler.metricNameUsedAsDefault()}
 	}
+	applyMetricToCheckResult := func(metric *MetricResult) {
+		checkResult.StatusCode = metric.StatusCode
+		checkResult.Value = metric.Value
+		checkResult.Threshold = metric.Threshold
+		checkResult.Error = metric.Error
+		checkResult.Message = metric.Message
+	}
 	for _, metricName := range metricNames {
 		// Make sure not to modify the given scope. We create a new scope variable to work with.
 		metricScope := scope
@@ -172,6 +182,12 @@ func (check *ThrottlerCheck) Check(ctx context.Context, appName string, scope ba
 		check.throttler.markRecentApp(appName)
 		if !throttlerapp.VitessName.Equals(appName) {
 			go func(statusCode int) {
+				if metricScope == base.UndefinedScope {
+					// While we should never get here, the following code will panic if we do
+					// because it will attempt to recreate ThrottlerCheckAnyTotal.
+					// Out of abundance of caution, we will protect against such a scenario.
+					return
+				}
 				statsThrottlerCheckAnyTotal.Add(1)
 				stats.GetOrNewCounter(fmt.Sprintf("ThrottlerCheckAny%sTotal", textutil.SingleWordCamel(metricScope.String())), "").Add(1)
 
@@ -181,24 +197,32 @@ func (check *ThrottlerCheck) Check(ctx context.Context, appName string, scope ba
 				}
 			}(metricCheckResult.StatusCode)
 		}
-		if !metricCheckResult.IsOK() {
-			checkResult.StatusCode = metricCheckResult.StatusCode
-			checkResult.Value = metricCheckResult.Value
-			checkResult.Threshold = metricCheckResult.Threshold
-			checkResult.Message = metricCheckResult.Message
-			checkResult.Error = metricCheckResult.Error
-		}
 		if metricCheckResult.RecentlyChecked {
 			checkResult.RecentlyChecked = true
 		}
-		checkResult.Metrics[metricName.String()] = &MetricResult{
+		metric := &MetricResult{
 			StatusCode: metricCheckResult.StatusCode,
-			Scope:      metricScope.String(),
 			Value:      metricCheckResult.Value,
 			Threshold:  metricCheckResult.Threshold,
 			Error:      metricCheckResult.Error,
 			Message:    metricCheckResult.Message,
+			Scope:      metricScope.String(), // This reports back the actual scope used for the check
 		}
+		checkResult.Metrics[metricName.String()] = metric
+		if flags.MultiMetricsEnabled && !metricCheckResult.IsOK() && metricName != base.DefaultMetricName {
+			// If we're checking multiple metrics, and one of them fails, we should return any of the failing metric.
+			// For backwards compatibility, if flags.MultiMetricsEnabled is not set, we do not report back failing
+			// metrics, because a v19 primary would not know how to deal with it, and is not expecting any of those
+			// metrics.
+			// The only metric we ever report back is the default metric, see below.
+			applyMetricToCheckResult(metric)
+		}
+	}
+	if metric, ok := checkResult.Metrics[check.throttler.metricNameUsedAsDefault().String()]; ok && checkResult.IsOK() {
+		// v19 compatibility: if this v20 server is a replica, reporting to a v19 primary,
+		// then we must supply the v19-flavor check result.
+		// If checkResult is not OK, then we will have populated these fields already by the failing metric.
+		applyMetricToCheckResult(metric)
 	}
 	return checkResult
 }
@@ -215,7 +239,7 @@ func (check *ThrottlerCheck) localCheck(ctx context.Context, aggregatedMetricNam
 		check.throttler.markMetricHealthy(aggregatedMetricName)
 	}
 	if timeSinceHealthy, found := check.throttler.timeSinceMetricHealthy(aggregatedMetricName); found {
-		stats.GetOrNewGauge(fmt.Sprintf("ThrottlerCheck%sSecondsSinceHealthy", textutil.SingleWordCamel(scope.String())), fmt.Sprintf("seconds since last healthy check for %v", scope)).Set(int64(timeSinceHealthy.Seconds()))
+		go stats.GetOrNewGauge(fmt.Sprintf("ThrottlerCheck%sSecondsSinceHealthy", textutil.SingleWordCamel(scope.String())), fmt.Sprintf("seconds since last healthy check for %v", scope)).Set(int64(timeSinceHealthy.Seconds()))
 	}
 
 	return checkResult
@@ -234,11 +258,6 @@ func (check *ThrottlerCheck) reportAggregated(aggregatedMetricName string, metri
 // AggregatedMetrics is a convenience access method into throttler's `aggregatedMetricsSnapshot`
 func (check *ThrottlerCheck) AggregatedMetrics(ctx context.Context) map[string]base.MetricResult {
 	return check.throttler.aggregatedMetricsSnapshot()
-}
-
-// MetricsHealth is a convenience access method into throttler's `metricsHealthSnapshot`
-func (check *ThrottlerCheck) MetricsHealth() map[string](*base.MetricHealth) {
-	return check.throttler.metricsHealthSnapshot()
 }
 
 // SelfChecks runs checks on all known metrics as if we were an app.
