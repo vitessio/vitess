@@ -252,6 +252,9 @@ func tryPushLimit(ctx *plancontext.PlanningContext, in *Limit) (Operator, *Apply
 func createPushedLimit(ctx *plancontext.PlanningContext, src Operator, orig *Limit) Operator {
 	pushedLimit := sqlparser.CloneRefOfLimit(orig.AST)
 	if pushedLimit.Offset != nil {
+		// we can't push down an offset, so we need to convert it to a rowcount
+		// by adding it to the already existing rowcount, and then let the LIMIT running on the vtgate do the rest
+		// this way we can still limit the number of rows that are returned
 		plus := &sqlparser.BinaryExpr{
 			Operator: sqlparser.PlusOp,
 			Left:     pushedLimit.Rowcount,
