@@ -17,8 +17,11 @@ limitations under the License.
 package key
 
 import (
-	"reflect"
+	"encoding/hex"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -51,9 +54,7 @@ func initShardArray(t *testing.T, shardingSpec string) []*topodatapb.ShardRefere
 	}
 
 	shardKrArray, err := ParseShardingSpec(shardingSpec)
-	if err != nil {
-		t.Fatalf("ParseShardingSpec failed: %v", err)
-	}
+	require.NoError(t, err, "ParseShardingSpec failed")
 
 	result := make([]*topodatapb.ShardReference, len(shardKrArray))
 	for i, kr := range shardKrArray {
@@ -137,9 +138,7 @@ func TestDestinationExactKeyRange(t *testing.T) {
 			keyRange = &topodatapb.KeyRange{}
 		} else {
 			krArray, err := ParseShardingSpec(testCase.keyRange)
-			if err != nil {
-				t.Errorf("Got error while parsing sharding spec %v", err)
-			}
+			assert.NoError(t, err, "Got error while parsing sharding spec")
 			keyRange = krArray[0]
 		}
 		dkr := DestinationExactKeyRange{KeyRange: keyRange}
@@ -148,12 +147,10 @@ func TestDestinationExactKeyRange(t *testing.T) {
 			gotShards = append(gotShards, shard)
 			return nil
 		})
-		if err != nil && err.Error() != testCase.err {
-			t.Errorf("gotShards: %v, want %s", err, testCase.err)
+		if testCase.err != "" {
+			assert.ErrorContains(t, err, testCase.err)
 		}
-		if !reflect.DeepEqual(testCase.shards, gotShards) {
-			t.Errorf("want \n%#v, got \n%#v", testCase.shards, gotShards)
-		}
+		assert.Equal(t, testCase.shards, gotShards)
 	}
 }
 
@@ -241,21 +238,202 @@ func TestDestinationKeyRange(t *testing.T) {
 			keyRange = &topodatapb.KeyRange{}
 		} else {
 			krArray, err := ParseShardingSpec(testCase.keyRange)
-			if err != nil {
-				t.Errorf("Got error while parsing sharding spec %v", err)
-			}
+			assert.NoError(t, err, "Got error while parsing sharding spec")
 			keyRange = krArray[0]
 		}
 		dkr := DestinationKeyRange{KeyRange: keyRange}
 		var gotShards []string
-		if err := dkr.Resolve(allShards, func(shard string) error {
+		err := dkr.Resolve(allShards, func(shard string) error {
 			gotShards = append(gotShards, shard)
 			return nil
-		}); err != nil {
-			t.Errorf("want nil, got %v", err)
-		}
-		if !reflect.DeepEqual(testCase.shards, gotShards) {
-			t.Errorf("want \n%#v, got \n%#v", testCase.shards, gotShards)
-		}
+		})
+		assert.NoError(t, err)
+		assert.Equal(t, testCase.shards, gotShards)
 	}
+}
+
+func TestDestinationsString(t *testing.T) {
+	kr2040 := &topodatapb.KeyRange{
+		Start: []byte{0x20},
+		End:   []byte{0x40},
+	}
+
+	got := DestinationsString([]Destination{
+		DestinationShard("2"),
+		DestinationShards{"2", "3"},
+		DestinationExactKeyRange{KeyRange: kr2040},
+		DestinationKeyRange{KeyRange: kr2040},
+		DestinationKeyspaceID{1, 2},
+		DestinationKeyspaceIDs{
+			{1, 2},
+			{2, 3},
+		},
+		DestinationAllShards{},
+		DestinationNone{},
+		DestinationAnyShard{},
+	})
+	want := "Destinations:DestinationShard(2),DestinationShards(2,3),DestinationExactKeyRange(20-40),DestinationKeyRange(20-40),DestinationKeyspaceID(0102),DestinationKeyspaceIDs(0102,0203),DestinationAllShards(),DestinationNone(),DestinationAnyShard()"
+	assert.Equal(t, want, got)
+}
+
+func TestDestinationShardResolve(t *testing.T) {
+	allShards := initShardArray(t, "")
+
+	ds := DestinationShard("test-destination-shard")
+
+	var calledVar string
+	err := ds.Resolve(allShards, func(shard string) error {
+		calledVar = shard
+		return nil
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, "test-destination-shard", calledVar)
+}
+
+func TestDestinationShardsResolve(t *testing.T) {
+	allShards := initShardArray(t, "")
+
+	ds := DestinationShards{"ds1", "ds2"}
+
+	var calledVar []string
+	err := ds.Resolve(allShards, func(shard string) error {
+		calledVar = append(calledVar, shard)
+		return nil
+	})
+	assert.NoError(t, err)
+
+	want := []string{"ds1", "ds2"}
+	assert.ElementsMatch(t, want, calledVar)
+}
+
+func TestDestinationKeyspaceIDResolve(t *testing.T) {
+	allShards := initShardArray(t, "60-80-90")
+
+	testCases := []struct {
+		keyspaceID string
+		want       string
+		err        string
+	}{
+		{"59", "", "KeyspaceId 59 didn't match any shards"},
+		// Should include start limit of keyRange
+		{"60", "60-80", ""},
+		{"79", "60-80", ""},
+		{"80", "80-90", ""},
+		{"89", "80-90", ""},
+		// Shouldn't include end limit of keyRange
+		{"90", "", "KeyspaceId 90 didn't match any shards"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.keyspaceID, func(t *testing.T) {
+			k, err := hex.DecodeString(tc.keyspaceID)
+			assert.NoError(t, err)
+
+			ds := DestinationKeyspaceID(k)
+
+			var calledVar string
+			addShard := func(shard string) error {
+				calledVar = shard
+				return nil
+			}
+
+			err = ds.Resolve(allShards, addShard)
+			if tc.err != "" {
+				assert.ErrorContains(t, err, tc.err)
+				return
+			}
+
+			assert.Equal(t, tc.want, calledVar)
+		})
+	}
+
+	// Expect error when allShards is empty
+	ds := DestinationKeyspaceID("80")
+	err := ds.Resolve([]*topodatapb.ShardReference{}, func(_ string) error {
+		return nil
+	})
+	assert.ErrorContains(t, err, "no shard in keyspace")
+}
+
+func TestDestinationKeyspaceIDsResolve(t *testing.T) {
+	allShards := initShardArray(t, "60-80-90")
+
+	k1, err := hex.DecodeString("82")
+	assert.NoError(t, err)
+
+	k2, err := hex.DecodeString("61")
+	assert.NoError(t, err)
+
+	k3, err := hex.DecodeString("89")
+	assert.NoError(t, err)
+
+	ds := DestinationKeyspaceIDs{k1, k2, k3}
+
+	var calledVar []string
+	addShard := func(shard string) error {
+		calledVar = append(calledVar, shard)
+		return nil
+	}
+
+	err = ds.Resolve(allShards, addShard)
+	assert.NoError(t, err)
+
+	want := []string{"80-90", "60-80", "80-90"}
+	assert.Equal(t, want, calledVar)
+}
+
+func TestDestinationAllShardsResolve(t *testing.T) {
+	allShards := initShardArray(t, "60-80-90")
+
+	ds := DestinationAllShards{}
+
+	var calledVar []string
+	addShard := func(shard string) error {
+		calledVar = append(calledVar, shard)
+		return nil
+	}
+
+	err := ds.Resolve(allShards, addShard)
+	assert.NoError(t, err)
+
+	want := []string{"60-80", "80-90"}
+	assert.ElementsMatch(t, want, calledVar)
+}
+
+func TestDestinationNoneResolve(t *testing.T) {
+	allShards := initShardArray(t, "60-80-90")
+
+	ds := DestinationNone{}
+
+	var called bool
+	addShard := func(shard string) error {
+		called = true
+		return nil
+	}
+
+	err := ds.Resolve(allShards, addShard)
+	assert.NoError(t, err)
+	assert.False(t, called, "addShard shouldn't be called in the case of DestinationNone")
+}
+
+func TestDestinationAnyShardResolve(t *testing.T) {
+	allShards := initShardArray(t, "custom")
+
+	ds := DestinationAnyShard{}
+
+	var calledVar string
+	addShard := func(shard string) error {
+		calledVar = shard
+		return nil
+	}
+
+	err := ds.Resolve(allShards, addShard)
+	assert.NoError(t, err)
+
+	possibleShards := []string{"0", "1"}
+	assert.Contains(t, possibleShards, calledVar)
+
+	// Expect error when allShards is empty
+	err = ds.Resolve([]*topodatapb.ShardReference{}, addShard)
+	assert.ErrorContains(t, err, "no shard in keyspace")
 }
