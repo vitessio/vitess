@@ -71,7 +71,7 @@ func (dml *DMLWithInput) TryExecute(ctx context.Context, vcursor VCursor, bindVa
 	var res *sqltypes.Result
 	for idx, prim := range dml.DMLs {
 		var qr *sqltypes.Result
-		if len(dml.BVList[idx]) == 0 {
+		if len(dml.BVList) == 0 || len(dml.BVList[idx]) == 0 {
 			qr, err = executeLiteralUpdate(ctx, vcursor, bindVars, prim, inputRes, dml.OutputCols[idx])
 		} else {
 			qr, err = executeNonLiteralUpdate(ctx, vcursor, bindVars, prim, inputRes, dml.OutputCols[idx], dml.BVList[idx])
