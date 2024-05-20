@@ -3371,11 +3371,13 @@ func TestPlayerStalls(t *testing.T) {
 	logger := logutil.NewMemoryLogger()
 	log.Errorf = logger.Errorf
 
+	ovmhu := vreplicationMinimumHeartbeatUpdateInterval
 	ogvpt := vplayerProgressDeadline
 	orlmi := relayLogMaxItems
 	ord := retryDelay
 	defer func() {
 		log.Errorf = ole
+		vreplicationMinimumHeartbeatUpdateInterval = ovmhu
 		vplayerProgressDeadline = ogvpt
 		relayLogMaxItems = orlmi
 		retryDelay = ord
