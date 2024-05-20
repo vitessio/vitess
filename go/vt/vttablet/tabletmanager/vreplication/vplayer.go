@@ -43,10 +43,7 @@ var (
 	vplayerProgressDeadline = time.Duration(0) // Disabled by default.
 
 	// The error to return when we have detected a stall in the vplayer.
-	ErrVPlayerStalled = fmt.Errorf("progress stalled; vplayer was likely unable to replicate the previous log content's transaction in a timely manner; examine the target mysqld instance health and the replicated queries' EXPLAIN output to see why queries are taking unusually long")
-
-	// If you want to enable debug logging.
-	debugMode atomic.Bool
+	ErrVPlayerStalled = fmt.Errorf("progress stalled; vplayer was unable to replicate the previous transaction in a timely manner; examine the target mysqld instance health and the replicated queries' EXPLAIN output to see why queries are taking unusually long")
 )
 
 // vplayer replays binlog events by pulling them from a vstreamer.
@@ -615,9 +612,6 @@ func hasAnotherCommit(items [][]*binlogdatapb.VEvent, i, j int) bool {
 
 func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, mustSave bool) error {
 	stats := NewVrLogStats(event.Type.String())
-	if debugMode.Load() {
-		log.Errorf("applying event: %v", event)
-	}
 	switch event.Type {
 	case binlogdatapb.VEventType_GTID:
 		pos, err := binlogplayer.DecodePosition(event.Gtid)
@@ -634,9 +628,6 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		// No-op: begin is called as needed.
 	case binlogdatapb.VEventType_COMMIT:
 		if mustSave {
-			if debugMode.Load() {
-				log.Errorf("Starting transaction (commit)")
-			}
 			if err := vp.vr.dbClient.Begin(); err != nil {
 				return err
 			}
@@ -661,9 +652,6 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			return io.EOF
 		}
 	case binlogdatapb.VEventType_FIELD:
-		if debugMode.Load() {
-			log.Errorf("Starting transaction (field event)")
-		}
 		if err := vp.vr.dbClient.Begin(); err != nil {
 			return err
 		}
@@ -687,17 +675,11 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		// If the event is for one of the AWS RDS "special" or pt-table-checksum tables, we skip
 		if !strings.Contains(sql, " mysql.rds_") && !strings.Contains(sql, " percona.checksums") {
 			// This is a player using statement based replication
-			if debugMode.Load() {
-				log.Errorf("starting transaction (statement)")
-			}
 			if err := vp.vr.dbClient.Begin(); err != nil {
 				return err
 			}
 			if err := vp.stallHandler.startTimer(); err != nil {
 				return err
-			}
-			if debugMode.Load() {
-				log.Errorf("executing statement: %s", sql)
 			}
 			if err := vp.applyStmtEvent(ctx, event); err != nil {
 				return err
@@ -706,9 +688,6 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		}
 	case binlogdatapb.VEventType_ROW:
 		// This player is configured for row based replication
-		if debugMode.Load() {
-			log.Errorf("starting transaction (row)")
-		}
 		if err := vp.vr.dbClient.Begin(); err != nil {
 			return err
 		}
@@ -865,31 +844,35 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 // to commit/complete a replicated user transaction within a configured
 // period of time.
 type stallHandler struct {
-	timer   atomic.Pointer[time.Timer]
-	timeout time.Duration
-	fire    chan error
-	stop    chan struct{}
+	timer    atomic.Pointer[time.Timer]
+	deadline time.Duration
+	fire     chan error
+	stop     chan struct{}
 }
 
-func newStallHandler(to time.Duration, ch chan error) *stallHandler {
+func newStallHandler(dl time.Duration, ch chan error) *stallHandler {
 	return &stallHandler{
-		timeout: to,
-		fire:    ch,
-		stop:    make(chan struct{}),
+		deadline: dl,
+		fire:     ch,
+		stop:     make(chan struct{}),
 	}
 }
 
 func (sh *stallHandler) startTimer() error {
-	if sh == nil || sh.timeout == 0 { // Stall handling is disabled
+	if sh == nil || sh.deadline == 0 { // Stall handling is disabled
 		return nil
 	}
-	if debugMode.Load() {
-		log.Errorf("Starting progress timer at %v", time.Now())
-	}
-	// If the timer has not been initialed yet, then do so.
-	if swapped := sh.timer.CompareAndSwap(nil, time.NewTimer(sh.timeout)); !swapped {
+	// If the timer has not been initializeded yet, then do so.
+	if swapped := sh.timer.CompareAndSwap(nil, time.NewTimer(sh.deadline)); !swapped {
 		// Otherwise, reset the timer.
-		sh.timer.Load().Reset(sh.timeout)
+		if sh.timer.Load().Reset(sh.deadline) {
+			// The timer was already running, so be sure the channel is drained.
+			select {
+			case <-sh.timer.Load().C:
+			default:
+			}
+
+		}
 	}
 	go func() {
 		select {
@@ -903,15 +886,17 @@ func (sh *stallHandler) startTimer() error {
 }
 
 func (sh *stallHandler) stopTimer() error {
-	if sh == nil || sh.timeout == 0 || sh.timer.Load() == nil { // Stall handling is currently disabled
+	if sh == nil || sh.deadline == 0 || sh.timer.Load() == nil { // Stall handling is currently disabled
 		return nil
-	}
-	if debugMode.Load() {
-		log.Errorf("Stopping progress timer at %v", time.Now())
 	}
 	if sh.timer.Load().Stop() {
 		// It was running, so signal the goroutine to stop.
 		sh.stop <- struct{}{}
+	} else {
+		select {
+		case <-sh.timer.Load().C: // Drain the channel
+		default:
+		}
 	}
 	return nil
 }

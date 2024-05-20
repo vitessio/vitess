@@ -3361,11 +3361,6 @@ func TestPlayerStalls(t *testing.T) {
 	defer cancel()
 	defer deleteTablet(addTablet(100))
 
-	// Uncomment this if you want to debug tests locally.
-	// In which case you'll probably also want to disable
-	// usage of the memory logger.
-	//debugMode.Store(true)
-
 	// We want to check for the expected log messages.
 	ole := log.Errorf
 	logger := logutil.NewMemoryLogger()
@@ -3381,10 +3376,9 @@ func TestPlayerStalls(t *testing.T) {
 		vplayerProgressDeadline = ogvpt
 		relayLogMaxItems = orlmi
 		retryDelay = ord
-		debugMode.Store(false)
 	}()
 
-	// Shorten the timeout for the test.
+	// Shorten the deadline for the test.
 	vplayerProgressDeadline = 5 * time.Second
 	// Shorten the time for a required heartbeat recording for the test.
 	vreplicationMinimumHeartbeatUpdateInterval = 5
@@ -3422,7 +3416,7 @@ func TestPlayerStalls(t *testing.T) {
 		name          string
 		input         []string
 		output        qh.ExpectationSequencer
-		preFunc       func() // This is run in a goroutine
+		preFunc       func()
 		postFunc      func()
 		expectQueries bool
 	}{
@@ -3438,8 +3432,8 @@ func TestPlayerStalls(t *testing.T) {
 			output: qh.Expect(
 				"insert into t1(id, val1) values (1, 'aaa'), (2, 'bbb'), (3, 'ccc')",
 				// This will cause a stall to be detected in the vplayer. This is
-				// what we want in the end, our improved error message. This is also
-				// the same message that gets logged.
+				// what we want in the end, our improved error message (which also
+				// gets logged).
 				fmt.Sprintf("update t1 set val1 = concat(sleep (%d), val1)", int64(vplayerProgressDeadline.Seconds()+5)),
 				"/update _vt.vreplication set message=.*progress stalled.*",
 			),
@@ -3462,7 +3456,7 @@ func TestPlayerStalls(t *testing.T) {
 				require.NoError(t, err)
 				_, err = dbc.ExecuteFetch("begin", 1, false)
 				require.NoError(t, err)
-				// The row lock for this will block us from recording the heartbeats.
+				// The row locks held for this will block us from recording the heartbeats.
 				_, err = dbc.ExecuteFetch("select * from _vt.vreplication for update", 1000, false)
 				require.NoError(t, err)
 				go func() {
