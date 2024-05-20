@@ -3365,7 +3365,6 @@ func TestPlayerStalls(t *testing.T) {
 		"drop table t1",
 		fmt.Sprintf("drop table %s.t1", vrepldb),
 	})
-	env.SchemaEngine.Reload(ctx)
 
 	filter := &binlogdatapb.Filter{}
 	bls := &binlogdatapb.BinlogSource{
