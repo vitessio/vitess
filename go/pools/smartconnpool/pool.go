@@ -38,7 +38,10 @@ var (
 	ErrCtxTimeout = vterrors.New(vtrpcpb.Code_DEADLINE_EXCEEDED, "resource pool context already expired")
 
 	// ErrShutdown is returned when trying to get a connection from a closed conn pool
-	ErrShutdown = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "connection pool is closed")
+	ErrConnPoolClosed = vterrors.New(vtrpcpb.Code_INTERNAL, "connection pool is closed")
+
+	// PoolCloseTimeout is how long to wait for all connections to be returned to the pool during close
+	PoolCloseTimeout = 10 * time.Second
 )
 
 type Metrics struct {
@@ -122,8 +125,9 @@ type ConnPool[C Connection] struct {
 	capacity atomic.Int64
 
 	// workers is a waitgroup for all the currently running worker goroutines
-	workers sync.WaitGroup
-	close   chan struct{}
+	workers    sync.WaitGroup
+	close      chan struct{}
+	capacityMu sync.Mutex
 
 	config struct {
 		// connect is the callback to create a new connection for the pool
@@ -145,6 +149,7 @@ type ConnPool[C Connection] struct {
 	}
 
 	Metrics Metrics
+	Name    string
 }
 
 // NewPool creates a new connection pool with the given Config.
@@ -239,29 +244,46 @@ func (pool *ConnPool[C]) Open(connect Connector[C], refresh RefreshCheck) *ConnP
 
 // Close shuts down the pool. No connections will be returned from ConnPool.Get after calling this,
 // but calling ConnPool.Put is still allowed. This function will not return until all of the pool's
-// connections have been returned.
+// connections have been returned or the default PoolCloseTimeout has elapsed
 func (pool *ConnPool[C]) Close() {
-	if pool.close == nil {
+	ctx, cancel := context.WithTimeout(context.Background(), PoolCloseTimeout)
+	defer cancel()
+
+	if err := pool.CloseWithContext(ctx); err != nil {
+		log.Errorf("failed to close pool %q: %v", pool.Name, err)
+	}
+}
+
+// CloseWithContext behaves like Close but allows passing in a Context to time out the
+// pool closing operation
+func (pool *ConnPool[C]) CloseWithContext(ctx context.Context) error {
+	pool.capacityMu.Lock()
+	defer pool.capacityMu.Unlock()
+
+	if pool.close == nil || pool.capacity.Load() == 0 {
 		// already closed
-		return
+		return nil
 	}
 
-	pool.SetCapacity(0)
+	err := pool.setCapacity(ctx, 0)
 
 	close(pool.close)
 	pool.workers.Wait()
 	pool.close = nil
+	return err
 }
 
 func (pool *ConnPool[C]) reopen() {
+	pool.capacityMu.Lock()
+	defer pool.capacityMu.Unlock()
+
 	capacity := pool.capacity.Load()
 	if capacity == 0 {
 		return
 	}
 
-	pool.Close()
-	pool.open()
-	pool.SetCapacity(capacity)
+	_ = pool.setCapacity(context.Background(), 0)
+	_ = pool.setCapacity(context.Background(), capacity)
 }
 
 // IsOpen returns whether the pool is open
@@ -288,7 +310,6 @@ func (pool *ConnPool[C]) InUse() int64 {
 // Available returns the number of connections that the pool can immediately lend out to
 // clients without blocking.
 func (pool *ConnPool[C]) Available() int64 {
-	// TODO@vmg: this can underflow
 	return pool.capacity.Load() - pool.borrowed.Load()
 }
 
@@ -326,7 +347,7 @@ func (pool *ConnPool[C]) Get(ctx context.Context, setting *Setting) (*Pooled[C],
 		return nil, ErrCtxTimeout
 	}
 	if pool.capacity.Load() == 0 {
-		return nil, ErrShutdown
+		return nil, ErrConnPoolClosed
 	}
 	if setting == nil {
 		return pool.get(ctx)
@@ -575,39 +596,55 @@ func (pool *ConnPool[C]) getWithSetting(ctx context.Context, setting *Setting) (
 // If the capacity is smaller than the number of connections that there are
 // currently open, we'll close enough connections before returning, even if
 // that means waiting for clients to return connections to the pool.
-func (pool *ConnPool[C]) SetCapacity(newcap int64) {
+// If the given context times out before we've managed to close enough connections
+// an error will be returned.
+func (pool *ConnPool[C]) SetCapacity(ctx context.Context, newcap int64) error {
+	pool.capacityMu.Lock()
+	defer pool.capacityMu.Unlock()
+	return pool.setCapacity(ctx, newcap)
+}
+
+// setCapacity is the internal implementation for SetCapacity; it must be called
+// with pool.capacityMu being held
+func (pool *ConnPool[C]) setCapacity(ctx context.Context, newcap int64) error {
 	if newcap < 0 {
 		panic("negative capacity")
 	}
 
 	oldcap := pool.capacity.Swap(newcap)
 	if oldcap == newcap {
-		return
+		return nil
 	}
 
-	backoff := 1 * time.Millisecond
+	const delay = 10 * time.Millisecond
 
 	// close connections until we're under capacity
 	for pool.active.Load() > newcap {
+		if err := ctx.Err(); err != nil {
+			return vterrors.Errorf(vtrpcpb.Code_ABORTED,
+				"timed out while waiting for connections to be returned to the pool (capacity=%d, active=%d, borrowed=%d)",
+				pool.capacity.Load(), pool.active.Load(), pool.borrowed.Load())
+		}
+		// if we're closing down the pool, make sure there's no clients waiting
+		// for connections because they won't be returned in the future
+		if newcap == 0 {
+			pool.wait.expire(true)
+		}
+
 		// try closing from connections which are currently idle in the stacks
 		conn := pool.getFromSettingsStack(nil)
 		if conn == nil {
 			conn, _ = pool.clean.Pop()
 		}
 		if conn == nil {
-			time.Sleep(backoff)
-			backoff += 1 * time.Millisecond
+			time.Sleep(delay)
 			continue
 		}
 		conn.Close()
 		pool.closedConn()
 	}
 
-	// if we're closing down the pool, wake up any blocked waiters because no connections
-	// are going to be returned in the future
-	if newcap == 0 {
-		pool.wait.expire(true)
-	}
+	return nil
 }
 
 func (pool *ConnPool[C]) closeIdleResources(now time.Time) {
@@ -662,6 +699,8 @@ func (pool *ConnPool[C]) RegisterStats(stats *servenv.Exporter, name string) {
 	if stats == nil || name == "" {
 		return
 	}
+
+	pool.Name = name
 
 	stats.NewGaugeFunc(name+"Capacity", "Tablet server conn pool capacity", func() int64 {
 		return pool.Capacity()

@@ -2000,7 +2000,7 @@ func (tsv *TabletServer) SetPoolSize(val int) {
 	if val <= 0 {
 		return
 	}
-	tsv.qe.conns.SetCapacity(int64(val))
+	_ = tsv.qe.conns.SetCapacity(context.Background(), int64(val))
 }
 
 // PoolSize returns the pool size.
@@ -2010,7 +2010,7 @@ func (tsv *TabletServer) PoolSize() int {
 
 // SetStreamPoolSize changes the pool size to the specified value.
 func (tsv *TabletServer) SetStreamPoolSize(val int) {
-	tsv.qe.streamConns.SetCapacity(int64(val))
+	_ = tsv.qe.streamConns.SetCapacity(context.Background(), int64(val))
 }
 
 // SetStreamConsolidationBlocking sets whether the stream consolidator should wait for slow clients
@@ -2025,7 +2025,7 @@ func (tsv *TabletServer) StreamPoolSize() int {
 
 // SetTxPoolSize changes the tx pool size to the specified value.
 func (tsv *TabletServer) SetTxPoolSize(val int) {
-	tsv.te.txPool.scp.conns.SetCapacity(int64(val))
+	_ = tsv.te.txPool.scp.conns.SetCapacity(context.Background(), int64(val))
 }
 
 // TxPoolSize returns the tx pool size.
