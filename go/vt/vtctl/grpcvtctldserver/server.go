@@ -2033,8 +2033,12 @@ func (s *VtctldServer) UpdateThrottlerConfig(ctx context.Context, req *vtctldata
 			}
 		}
 		if req.AppName != "" {
-			throttlerConfig.AppCheckedMetrics[req.AppName] = &topodatapb.ThrottlerConfig_MetricNames{
-				Names: req.AppCheckedMetrics,
+			if len(req.AppCheckedMetrics) > 0 {
+				throttlerConfig.AppCheckedMetrics[req.AppName] = &topodatapb.ThrottlerConfig_MetricNames{
+					Names: req.AppCheckedMetrics,
+				}
+			} else {
+				delete(throttlerConfig.AppCheckedMetrics, req.AppName)
 			}
 		}
 		if req.Enable {
