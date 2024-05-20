@@ -22,9 +22,9 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-// breakExpressionInLHSandRHSForApplyJoin takes an expression and
+// breakExpressionInLHSandRHS takes an expression and
 // extracts the parts that are coming from one of the sides into `ColName`s that are needed
-func breakExpressionInLHSandRHSForApplyJoin(
+func breakExpressionInLHSandRHS(
 	ctx *plancontext.PlanningContext,
 	expr sqlparser.Expr,
 	lhs semantics.TableSet,

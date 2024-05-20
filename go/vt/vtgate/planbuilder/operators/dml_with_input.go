@@ -32,8 +32,8 @@ type DMLWithInput struct {
 	cols    [][]*sqlparser.ColName
 	Offsets [][]int
 
-	uList  []updList
-	BvList []map[string]int
+	updList []updList
+	BvList  []map[string]int
 
 	noColumns
 	noPredicates
@@ -89,6 +89,7 @@ func (d *DMLWithInput) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
 }
 
 func (d *DMLWithInput) planOffsets(ctx *plancontext.PlanningContext) Operator {
+	// go through the primary key columns to get offset from the input
 	offsets := make([][]int, len(d.cols))
 	for idx, columns := range d.cols {
 		for _, col := range columns {
@@ -98,8 +99,9 @@ func (d *DMLWithInput) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	}
 	d.Offsets = offsets
 
-	bvList := make([]map[string]int, len(d.uList))
-	for idx, ul := range d.uList {
+	// go through the update list and get offset for input columns
+	bvList := make([]map[string]int, len(d.updList))
+	for idx, ul := range d.updList {
 		vars := make(map[string]int)
 		for _, updCol := range ul {
 			for _, bvExpr := range updCol.jc.LHSExprs {

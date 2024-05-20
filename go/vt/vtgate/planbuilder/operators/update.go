@@ -167,11 +167,15 @@ func createUpdateWithInputOp(ctx *plancontext.PlanningContext, upd *sqlparser.Up
 	updClone := ctx.SemTable.Clone(upd).(*sqlparser.Update)
 	upd.Limit = nil
 
+	// Prepare the update expressions list
+	// Any update expression requiring column value from any other table is rewritten to take it as bindvar column.
+	// E.g. UPDATE t1 join t2 on t1.col = t2.col SET t1.col = t2.col + 1 where t2.col = 10;
+	// SET t1.col = t2.col + 1 -> SET t1.col = :t2_col + 1 (t2_col is the bindvar column which will be provided from the input)
 	ueMap := make(map[semantics.TableSet]updList)
 	for _, ue := range upd.Exprs {
 		target := ctx.SemTable.DirectDeps(ue.Name)
 		exprDeps := ctx.SemTable.RecursiveDeps(ue.Expr)
-		jc := breakExpressionInLHSandRHSForApplyJoin(ctx, ue.Expr, exprDeps.Remove(target))
+		jc := breakExpressionInLHSandRHS(ctx, ue.Expr, exprDeps.Remove(target))
 		ueMap[target] = append(ueMap[target], updColumn{ue.Name, jc})
 	}
 
@@ -204,10 +208,10 @@ func createUpdateWithInputOp(ctx *plancontext.PlanningContext, upd *sqlparser.Up
 	})
 
 	op = &DMLWithInput{
-		DML:    dmls,
-		Source: createOperatorFromSelect(ctx, selectStmt),
-		cols:   colsList,
-		uList:  uList,
+		DML:     dmls,
+		Source:  createOperatorFromSelect(ctx, selectStmt),
+		cols:    colsList,
+		updList: uList,
 	}
 
 	if upd.Comments != nil {
@@ -265,10 +269,10 @@ func createUpdateOpWithTarget(ctx *plancontext.PlanningContext, updStmt *sqlpars
 		OrderBy:    updStmt.OrderBy,
 	}
 	return dmlOp{
-		createOperatorFromUpdate(ctx, upd),
-		vTbl,
-		cols,
-		uList,
+		op:      createOperatorFromUpdate(ctx, upd),
+		vTbl:    vTbl,
+		cols:    cols,
+		updList: uList,
 	}
 }
 
