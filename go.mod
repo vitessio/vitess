@@ -117,6 +117,7 @@ require (
 
 require (
 	github.com/bndr/gotabulate v1.1.2
+	github.com/hashicorp/go-cleanhttp v0.5.1
 	github.com/hashicorp/go-version v1.6.0
 	github.com/planetscale/log v0.0.0-20221118170849-fb599bc35c50
 	github.com/slok/noglog v0.2.0
@@ -147,7 +148,6 @@ require (
 	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e // indirect
 	github.com/google/gofuzz v1.1.0 // indirect
 	github.com/googleapis/gax-go/v2 v2.0.5 // indirect
-	github.com/hashicorp/go-cleanhttp v0.5.1 // indirect
 	github.com/hashicorp/go-hclog v0.12.0 // indirect
 	github.com/hashicorp/go-rootcerts v1.0.2 // indirect
 	github.com/hashicorp/golang-lru v0.5.1 // indirect

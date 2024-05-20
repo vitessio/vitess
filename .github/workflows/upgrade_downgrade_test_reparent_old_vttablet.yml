@@ -188,4 +188,8 @@ jobs:
           mkdir -p /tmp/vtdataroot
 
           source build.env
+
+          # skip TestCrossCellDurability test on v14 (as previous). It doesn't setup semi-sync the way this test (from v16) expects
+          export SKIPTESTCROSSCELLDURABILITY=1
+
           eatmydata -- go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_reparent

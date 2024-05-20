@@ -102,6 +102,7 @@ type Exporter struct {
 	name, label string
 	handleFuncs map[string]*handleFunc
 	sp          *statusPage
+	mu          sync.Mutex
 }
 
 // NewExporter creates a new Exporter with name as namespace.
@@ -154,6 +155,8 @@ func (e *Exporter) URLPrefix() string {
 // url remapped from /path to /name/path. If name is empty, the request
 // is passed through to http.HandleFunc.
 func (e *Exporter) HandleFunc(url string, f func(w http.ResponseWriter, r *http.Request)) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	if e.name == "" {
 		http.HandleFunc(url, f)
 		return

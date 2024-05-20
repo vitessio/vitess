@@ -308,7 +308,7 @@ Usage of vttablet:
       --topo_consul_lock_delay duration                                  LockDelay for consul session. (default 15s)
       --topo_consul_lock_session_checks string                           List of checks for consul session. (default "serfHealth")
       --topo_consul_lock_session_ttl string                              TTL for consul session.
-      --topo_consul_max_conns_per_host int                               Maximum number of consul connections per host.
+      --topo_consul_max_conns_per_host int                               Maximum number of consul connections per host. (default 250)
       --topo_consul_max_idle_conns int                                   Maximum number of idle consul connections. (default 100)
       --topo_consul_watch_poll_duration duration                         time of the long poll for watch queries. (default 30s)
       --topo_etcd_lease_ttl int                                          Lease TTL for locks and leader election. The client will use KeepAlive to keep the lease going. (default 30)
