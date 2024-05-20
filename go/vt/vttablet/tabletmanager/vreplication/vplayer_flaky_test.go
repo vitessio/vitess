@@ -66,7 +66,6 @@ func TestPlayerGeneratedInvisiblePrimaryKey(t *testing.T) {
 		"drop table t2",
 		fmt.Sprintf("drop table %s.t2", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -144,7 +143,6 @@ func TestPlayerInvisibleColumns(t *testing.T) {
 		"drop table t1",
 		fmt.Sprintf("drop table %s.t1", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -241,7 +239,6 @@ func TestVReplicationTimeUpdated(t *testing.T) {
 		"drop table t1",
 		fmt.Sprintf("drop table %s.t1", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -308,7 +305,6 @@ func TestCharPK(t *testing.T) {
 		"drop table t4",
 		fmt.Sprintf("drop table %s.t4", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -423,7 +419,6 @@ func TestRollup(t *testing.T) {
 		"drop table t1",
 		fmt.Sprintf("drop table %s.t1", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -480,7 +475,6 @@ func TestPlayerSavepoint(t *testing.T) {
 		"drop table t1",
 		fmt.Sprintf("drop table %s.t1", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -548,8 +542,6 @@ func TestPlayerForeignKeyCheck(t *testing.T) {
 		fmt.Sprintf("drop table %s.parent", vrepldb),
 	})
 
-	env.SchemaEngine.Reload(context.Background())
-
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
 			Match: "/.*",
@@ -593,7 +585,6 @@ func TestPlayerStatementModeWithFilter(t *testing.T) {
 	defer execStatements(t, []string{
 		"drop table src1",
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -638,7 +629,6 @@ func TestPlayerStatementMode(t *testing.T) {
 		"drop table src1",
 		fmt.Sprintf("drop table %s.src1", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -713,7 +703,6 @@ func TestPlayerFilters(t *testing.T) {
 		"drop table src_charset",
 		fmt.Sprintf("drop table %s.dst_charset", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -1030,7 +1019,6 @@ func TestPlayerKeywordNames(t *testing.T) {
 		"drop table `commit`",
 		fmt.Sprintf("drop table %s.`commit`", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -1216,7 +1204,6 @@ func TestPlayerKeyspaceID(t *testing.T) {
 		"drop table src1",
 		fmt.Sprintf("drop table %s.dst1", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	if err := env.SetVSchema(shardedVSchema); err != nil {
 		t.Fatal(err)
@@ -1278,7 +1265,6 @@ func TestUnicode(t *testing.T) {
 		"drop table src1",
 		fmt.Sprintf("drop table %s.dst1", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -1351,7 +1337,6 @@ func TestPlayerUpdates(t *testing.T) {
 		"drop table t1",
 		fmt.Sprintf("drop table %s.t1", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -1467,7 +1452,6 @@ func TestPlayerRowMove(t *testing.T) {
 		"drop table src",
 		fmt.Sprintf("drop table %s.dst", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -1560,8 +1544,6 @@ func TestPlayerTypes(t *testing.T) {
 		"drop table vitess_json",
 		fmt.Sprintf("drop table %s.vitess_json", vrepldb),
 	})
-
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -1689,7 +1671,6 @@ func TestPlayerDDL(t *testing.T) {
 		"drop table t1",
 		fmt.Sprintf("drop table %s.t1", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -1880,7 +1861,6 @@ func TestPlayerStopPos(t *testing.T) {
 		fmt.Sprintf("drop table %s.yes", vrepldb),
 		"drop table no",
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -1980,7 +1960,6 @@ func TestPlayerStopAtOther(t *testing.T) {
 		"drop table t1",
 		fmt.Sprintf("drop table %s.t1", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	// Insert a source row.
 	execStatements(t, []string{
@@ -2090,7 +2069,6 @@ func TestPlayerIdleUpdate(t *testing.T) {
 		"drop table t1",
 		fmt.Sprintf("drop table %s.t1", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -2144,7 +2122,6 @@ func TestPlayerSplitTransaction(t *testing.T) {
 		"drop table t1",
 		fmt.Sprintf("drop table %s.t1", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -2188,7 +2165,6 @@ func TestPlayerLockErrors(t *testing.T) {
 		"drop table t1",
 		fmt.Sprintf("drop table %s.t1", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -2268,7 +2244,6 @@ func TestPlayerCancelOnLock(t *testing.T) {
 		"drop table t1",
 		fmt.Sprintf("drop table %s.t1", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -2346,7 +2321,6 @@ func TestPlayerTransactions(t *testing.T) {
 		"drop table t1",
 		fmt.Sprintf("drop table %s.t1", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -2452,7 +2426,6 @@ func TestPlayerRelayLogMaxSize(t *testing.T) {
 				"drop table t1",
 				fmt.Sprintf("drop table %s.t1", vrepldb),
 			})
-			env.SchemaEngine.Reload(context.Background())
 
 			filter := &binlogdatapb.Filter{
 				Rules: []*binlogdatapb.Rule{{
@@ -2547,7 +2520,6 @@ func TestRestartOnVStreamEnd(t *testing.T) {
 		"drop table t1",
 		fmt.Sprintf("drop table %s.t1", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -2602,7 +2574,6 @@ func TestTimestamp(t *testing.T) {
 		"drop table t1",
 		fmt.Sprintf("drop table %s.t1", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -2654,8 +2625,6 @@ func TestPlayerJSONDocs(t *testing.T) {
 		"drop table vitess_json",
 		fmt.Sprintf("drop table %s.vitess_json", vrepldb),
 	})
-
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -2729,8 +2698,6 @@ func TestPlayerJSONTwoColumns(t *testing.T) {
 		"drop table vitess_json2",
 		fmt.Sprintf("drop table %s.vitess_json2", vrepldb),
 	})
-
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -2823,7 +2790,6 @@ func TestGeneratedColumns(t *testing.T) {
 		"drop table t2",
 		fmt.Sprintf("drop table %s.t2", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -2900,7 +2866,6 @@ func TestPlayerInvalidDates(t *testing.T) {
 	})
 	pos := primaryPosition(t)
 	execStatements(t, []string{"set sql_mode=''", "insert into src1 values(1, '0000-00-00')", "set sql_mode='STRICT_TRANS_TABLES'"})
-	env.SchemaEngine.Reload(context.Background())
 
 	// default mysql flavor allows invalid dates: so disallow explicitly for this test
 	if err := env.Mysqld.ExecuteSuperQuery(context.Background(), "SET @@global.sql_mode=REPLACE(REPLACE(@@session.sql_mode, 'NO_ZERO_DATE', ''), 'NO_ZERO_IN_DATE', '')"); err != nil {
@@ -2986,7 +2951,6 @@ func TestPlayerNoBlob(t *testing.T) {
 		"drop table t2",
 		fmt.Sprintf("drop table %s.t2", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -3124,7 +3088,6 @@ func TestPlayerBatchMode(t *testing.T) {
 		"drop table t1",
 		fmt.Sprintf("drop table %s.t1", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{

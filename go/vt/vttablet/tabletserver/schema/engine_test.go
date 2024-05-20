@@ -21,6 +21,7 @@ import (
 	"errors"
 	"expvar"
 	"fmt"
+	"math/rand/v2"
 	"net/http"
 	"net/http/httptest"
 	"sort"
@@ -41,12 +42,14 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/dbconfigs"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema/schematest"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 const baseShowTablesPattern = `SELECT t\.table_name.*`
@@ -1298,4 +1301,193 @@ func TestEngineReload(t *testing.T) {
 	err = se.reload(context.Background(), false)
 	require.NoError(t, err)
 	require.NoError(t, db.LastError())
+}
+
+// TestEngineReload tests the vreplication specific GetTableForPos function to ensure
+// that it conforms to the intended/expected behavior in various scenarios.
+// This more specifically tests the behavior of the function when the historian is
+// disabled or otherwise unable to get a table schema for the given position. When it
+// CAN, that is tested indepenently in the historian tests.
+func TestGetTableForPos(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	fakedb := fakesqldb.New(t)
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.DB = newDBConfigs(fakedb)
+	table := sqlparser.NewIdentifierCS("t1")
+	column := "col1"
+	tableSchema := fmt.Sprintf("create table %s (%s varchar(50), primary key(col1))", table.String(), column)
+	tableMt := &binlogdatapb.MinimalTable{
+		Name: table.String(),
+		Fields: []*querypb.Field{
+			{
+				Name: column,
+				Type: sqltypes.VarChar,
+			},
+		},
+		PKColumns: []int64{0}, // First column: col1
+	}
+
+	// Don't do any automatic / TTL based cache refreshes.
+	se := newEngine(1*time.Hour, 1*time.Hour, 0, fakedb)
+	se.conns.Open(se.cp, se.cp, se.cp)
+	se.isOpen = true
+	se.notifiers = make(map[string]notifier)
+	se.MakePrimary(true)
+	se.historian.enabled = false
+
+	addExpectedReloadQueries := func(db *fakesqldb.DB) {
+		db.AddQuery("SELECT UNIX_TIMESTAMP()", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			"UNIX_TIMESTAMP()",
+			"int64"),
+			fmt.Sprintf("%d", time.Now().Unix()),
+		))
+		db.AddQuery(fmt.Sprintf(detectViewChange, sidecar.GetIdentifier()), sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name", "varchar")))
+		db.AddQuery(fmt.Sprintf(readTableCreateTimes, sidecar.GetIdentifier()),
+			sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name|create_time", "varchar|int64")))
+		db.AddQuery(fmt.Sprintf(detectUdfChange, sidecar.GetIdentifier()), &sqltypes.Result{})
+		db.AddQueryPattern(baseShowTablesPattern,
+			&sqltypes.Result{
+				Fields:       mysql.BaseShowTablesFields,
+				RowsAffected: 0,
+				InsertID:     0,
+				Rows: [][]sqltypes.Value{
+					{
+						sqltypes.MakeTrusted(sqltypes.VarChar, []byte(table.String())),                          // table_name
+						sqltypes.MakeTrusted(sqltypes.VarChar, []byte("BASE TABLE")),                            // table_type
+						sqltypes.MakeTrusted(sqltypes.Int64, []byte(fmt.Sprintf("%d", time.Now().Unix()-1000))), // unix_timestamp(t.create_time)
+						sqltypes.MakeTrusted(sqltypes.VarChar, []byte("")),                                      // table_comment
+						sqltypes.MakeTrusted(sqltypes.Int64, []byte("128")),                                     // file_size
+						sqltypes.MakeTrusted(sqltypes.Int64, []byte("256")),                                     // allocated_size
+					},
+				},
+				SessionStateChanges: "",
+				StatusFlags:         0,
+			},
+		)
+		db.AddQuery(mysql.BaseShowPrimary, &sqltypes.Result{
+			Fields: mysql.ShowPrimaryFields,
+			Rows: [][]sqltypes.Value{
+				mysql.ShowPrimaryRow(table.String(), column),
+			},
+		})
+		db.AddQueryPattern(fmt.Sprintf(mysql.GetColumnNamesQueryPatternForTable, table.String()),
+			sqltypes.MakeTestResult(sqltypes.MakeTestFields("column_name", "varchar"), column))
+		db.AddQuery(fmt.Sprintf("SELECT `%s` FROM `fakesqldb`.`%v` WHERE 1 != 1", column, table.String()),
+			sqltypes.MakeTestResult(sqltypes.MakeTestFields(column, "varchar")))
+		db.AddQuery(fmt.Sprintf(`show create table %s`, table.String()),
+			sqltypes.MakeTestResult(sqltypes.MakeTestFields("Table|Create Table", "varchar|varchar"), table.String(), tableSchema))
+		db.AddQuery("begin", &sqltypes.Result{})
+		db.AddQuery(fmt.Sprintf("delete from %s.`tables` where TABLE_SCHEMA = database() and TABLE_NAME in ('%s')",
+			sidecar.GetIdentifier(), table.String()), &sqltypes.Result{})
+		db.AddQuery(fmt.Sprintf("insert into %s.`tables`(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, CREATE_TIME) values (database(), '%s', '%s', %d)",
+			sidecar.GetIdentifier(), table.String(), tableSchema, time.Now().Unix()), &sqltypes.Result{RowsAffected: 1})
+		db.AddQuery("rollback", &sqltypes.Result{})
+	}
+
+	type testcase struct {
+		name                string
+		initialCacheState   map[string]*Table
+		expectedQueriesFunc func(db *fakesqldb.DB)
+		expectFunc          func()
+	}
+	tests := []testcase{
+		{
+			name:              "GetTableForPos with cache uninitialized",
+			initialCacheState: make(map[string]*Table), // empty
+			expectedQueriesFunc: func(db *fakesqldb.DB) {
+				// We do a reload to initialize the cache.
+				addExpectedReloadQueries(db)
+			},
+			expectFunc: func() {
+				tbl, err := se.GetTableForPos(ctx, table, "")
+				require.NoError(t, err)
+				require.Equal(t, tableMt, tbl)
+			},
+		},
+		{
+			name:              "GetTableForPos with cache uninitialized, table not found",
+			initialCacheState: make(map[string]*Table), // empty
+			expectedQueriesFunc: func(db *fakesqldb.DB) {
+				// We do a reload to initialize the cache and in doing so get the missing table.
+				addExpectedReloadQueries(db)
+			},
+			expectFunc: func() {
+				tbl, err := se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("nobueno"), "")
+				require.EqualError(t, err, "table nobueno not found in vttablet schema")
+				require.Nil(t, tbl)
+			},
+		},
+		{
+			name:              "GetTableForPos with cache initialized, table not found",
+			initialCacheState: map[string]*Table{"t2": {Name: sqlparser.NewIdentifierCS("t2")}},
+			expectedQueriesFunc: func(db *fakesqldb.DB) {
+				// We do a reload to try and get this missing table and any other recently created ones.
+				addExpectedReloadQueries(db)
+			},
+			expectFunc: func() {
+				tbl, err := se.GetTableForPos(ctx, table, "")
+				require.NoError(t, err)
+				require.Equal(t, tableMt, tbl)
+			},
+		},
+		{
+			name:              "GetTableForPos with cache initialized, table found",
+			initialCacheState: map[string]*Table{table.String(): {Name: table}},
+			expectedQueriesFunc: func(db *fakesqldb.DB) {
+				// We only reload the column and PK info for the table in our cache. A new column
+				// called col2 has been added to the table schema and it is the new PK.
+				newTableSchema := fmt.Sprintf("create table %s (%s varchar(50), col2 varchar(50), primary key(col2))", table.String(), column)
+				db.AddQuery(mysql.BaseShowPrimary, &sqltypes.Result{
+					Fields: mysql.ShowPrimaryFields,
+					Rows: [][]sqltypes.Value{
+						mysql.ShowPrimaryRow(table.String(), "col2"),
+					},
+				})
+				db.AddQueryPattern(fmt.Sprintf(mysql.GetColumnNamesQueryPatternForTable, table.String()),
+					sqltypes.MakeTestResult(sqltypes.MakeTestFields("column_name", "varchar"), column, "col2"))
+				db.AddQuery(fmt.Sprintf("SELECT `%s`, `%s` FROM `fakesqldb`.`%v` WHERE 1 != 1",
+					column, "col2", table.String()), sqltypes.MakeTestResult(sqltypes.MakeTestFields(fmt.Sprintf("%s|%s", column, "col2"), "varchar|varchar")))
+				db.AddQuery(fmt.Sprintf(`show create table %s`, table.String()),
+					sqltypes.MakeTestResult(sqltypes.MakeTestFields("Table|Create Table", "varchar|varchar"), table.String(), newTableSchema))
+				db.AddQuery("begin", &sqltypes.Result{})
+				db.AddQuery(fmt.Sprintf("delete from %s.`tables` where TABLE_SCHEMA = database() and TABLE_NAME in ('%s')",
+					sidecar.GetIdentifier(), table.String()), &sqltypes.Result{})
+				db.AddQuery(fmt.Sprintf("insert into %s.`tables`(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, CREATE_TIME) values (database(), '%s', '%s', %d)",
+					sidecar.GetIdentifier(), table.String(), newTableSchema, time.Now().Unix()), &sqltypes.Result{})
+				db.AddQuery("rollback", &sqltypes.Result{})
+			},
+			expectFunc: func() {
+				tbl, err := se.GetTableForPos(ctx, table, "MySQL56/1497ddb0-7cb9-11ed-a1eb-0242ac120002:1-891")
+				require.NoError(t, err)
+				require.NotNil(t, tbl)
+				require.Equal(t, &binlogdatapb.MinimalTable{
+					Name: table.String(),
+					Fields: []*querypb.Field{
+						{
+							Name: column,
+							Type: sqltypes.VarChar,
+						},
+						{
+							Name: "col2",
+							Type: sqltypes.VarChar,
+						},
+					},
+					PKColumns: []int64{1}, // Second column: col2
+				}, tbl)
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			fakedb.DeleteAllQueries()
+			AddFakeInnoDBReadRowsResult(fakedb, int(rand.Int32N(1000000)))
+			tc.expectedQueriesFunc(fakedb)
+			se.tables = tc.initialCacheState
+			tc.expectFunc()
+			fakedb.VerifyAllExecutedOrFail()
+			require.NoError(t, fakedb.LastError())
+		})
+	}
 }
