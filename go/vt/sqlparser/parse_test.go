@@ -4022,6 +4022,55 @@ var (
 				"\ti int\n" +
 				") insert_method last",
 		},
+
+		// Date, Time, and Timestamp literals
+		{
+			input:  "select date '2020-10-01'",
+			output: "select '2020-10-01'",
+		},
+		{
+			input:  "select time '2020-10-01'",
+			output: "select '2020-10-01'",
+		},
+		{
+			input:  "select timestamp '2020-10-01'",
+			output: "select '2020-10-01'",
+		},
+
+		{
+			input:  "select date'2020-10-01'",
+			output: "select '2020-10-01'",
+		},
+		{
+			input:  "select time'2020-10-01'",
+			output: "select '2020-10-01'",
+		},
+		{
+			input:  "select timestamp'2020-10-01'",
+			output: "select '2020-10-01'",
+		},
+
+		{
+			input:  "select (date '2020-10-01')",
+			output: "select ('2020-10-01')",
+		},
+		{
+			input:  "select (time '2020-10-01')",
+			output: "select ('2020-10-01')",
+		},
+		{
+			input:  "select (timestamp '2020-10-01')",
+			output: "select ('2020-10-01')",
+		},
+
+		{
+			input:  "insert into t values (date '2020-10-01'), (time '2020-10-01'), (timestamp '2020-10-01')",
+			output: "insert into t values ('2020-10-01'), ('2020-10-01'), ('2020-10-01')",
+		},
+		{
+			input:  "select * from (values row(date '2020-10-01', time '12:34:56', timestamp '2001-02-03 12:34:56')) t;",
+			output: "select * from (values row('2020-10-01', '12:34:56', '2001-02-03 12:34:56')) as t",
+		},
 	}
 
 	// Any tests that contain multiple statements within the body (such as BEGIN/END blocks) should go here.
@@ -5012,6 +5061,7 @@ func TestInvalid(t *testing.T) {
 	invalidSQL := []struct {
 		input string
 		err   string
+		skip  bool
 	}{
 		{
 			input: "SET @foo = `o` `ne`;",
@@ -5181,6 +5231,15 @@ func TestInvalid(t *testing.T) {
 		{
 			// TODO: should work
 			input: "select * from tbl into outfile 'outfile.txt' lines starting by 'd' terminated by 'e' starting by 'd' terminated by 'e'",
+			err:   "syntax error",
+		},
+
+		{
+			input: "select date 20010203",
+			err:   "syntax error",
+		},
+		{
+			input: "select date concat('2001-', '02-', '03')",
 			err:   "syntax error",
 		},
 	}

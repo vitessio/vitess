@@ -209,6 +209,20 @@ func yySpecialCommentMode(yylex interface{}) bool {
   srsAttr *SrsAttribute
 }
 
+// These precedence rules are there to handle shift-reduce conflicts.
+
+// STRING_TYPE_PREFIX_NON_KEYWORD is used to resolve shift-reduce conflicts occuring due to column_name symbol and
+// being able to use keywords like DATE and TIME as prefixes to strings to denote their type. The shift-reduce conflict occurrs because
+// after seeing one of these non-reserved keywords, if we see a STRING, then we can either shift to use the STRING typed rule in literal or
+// reduce the non-reserved keyword into column_name and eventually use a rule from simple_expr.
+// The way to fix this conflict is to give shifting higher precedence than reducing.
+// Adding no precedence also works, since shifting is the default, but it reports some conflicts
+// Precedence is also assined to shifting on STRING.
+// We also need to add a lower precedence to reducing the grammar symbol to non-reserved keywords.
+// In order to ensure lower precedence of reduction, this rule has to come before the precedence declaration of STRING.
+// This precedence should not be used anywhere else other than with non-reserved-keywords that are also used for type-casting a STRING.
+%nonassoc <str> STRING_TYPE_PREFIX_NON_KEYWORD
+
 %token LEX_ERROR
 
 // Special tokens
@@ -229,7 +243,8 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %left <bytes> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE FORCE
 %left <bytes> ON USING
 %token <empty> '(' ',' ')' '@' ':'
-%token <bytes> ID HEX STRING INTEGRAL FLOAT HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL
+%nonassoc <bytes> STRING
+%token <bytes> ID HEX INTEGRAL FLOAT HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL
 %token <bytes> NULL TRUE FALSE OFF
 %right <bytes> INTO
 
@@ -787,7 +802,6 @@ intersect_stmt:
     $$ = &SetOp{Type: $2, Left: $1, Right: $3}
   }
 
-// TODO: add (VALUES ROW(...), ROW(...), ...) support
 // base_select is either a simple SELECT or a SELECT wrapped in parentheses
 base_select:
   base_select_no_cte
@@ -8223,6 +8237,18 @@ value:
   {
     $$ = NewStrVal($1)
   }
+| DATE STRING
+  {
+    $$ = NewStrVal($2)
+  }
+| TIME STRING
+  {
+    $$ = NewStrVal($2)
+  }
+| TIMESTAMP STRING
+  {
+    $$ = NewStrVal($2)
+  }
 | HEX
   {
     $$ = NewHexVal($1)
@@ -9589,7 +9615,7 @@ non_reserved_keyword:
 | CURRENT
 | CURSOR_NAME
 | DATA
-| DATE
+| DATE %prec STRING_TYPE_PREFIX_NON_KEYWORD
 | DATETIME
 | DAY
 | DEALLOCATE
@@ -9802,8 +9828,8 @@ non_reserved_keyword:
 | THAN
 | THREAD_PRIORITY
 | TIES
-| TIME
-| TIMESTAMP
+| TIME %prec STRING_TYPE_PREFIX_NON_KEYWORD
+| TIMESTAMP %prec STRING_TYPE_PREFIX_NON_KEYWORD
 | TRANSACTION
 | TRIGGERS
 | TRUNCATE

@@ -5448,6 +5448,10 @@ func NewBitVal(in []byte) *SQLVal {
 	return &SQLVal{Type: BitVal, Val: in}
 }
 
+// TODO: implement a NewDateVal()
+// TODO: implement a NewTimeVal()
+// TODO: implement a NewTimestampVal()
+
 // NewValArg builds a new ValArg.
 func NewValArg(in []byte) *SQLVal {
 	return &SQLVal{Type: ValArg, Val: in}
