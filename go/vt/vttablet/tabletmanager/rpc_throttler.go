@@ -39,6 +39,7 @@ func (tm *TabletManager) CheckThrottler(ctx context.Context, req *tabletmanagerd
 		LowPriority:           req.LowPriority,
 		SkipRequestHeartbeats: req.SkipRequestHeartbeats,
 		OKIfNotExists:         req.OkIfNotExists,
+		MultiMetricsEnabled:   req.MultiMetricsEnabled,
 	}
 	checkResult := tm.QueryServiceControl.CheckThrottler(ctx, req.AppName, flags)
 	if checkResult == nil {
