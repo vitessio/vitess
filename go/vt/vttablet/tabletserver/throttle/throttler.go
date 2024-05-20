@@ -1382,7 +1382,7 @@ func (throttler *Throttler) IsAppThrottled(appName string) bool {
 	if isSingleAppNameThrottled(appName) {
 		return true
 	}
-	for _, singleAppName := range strings.Split(appName, ":") {
+	for _, singleAppName := range throttlerapp.Name(appName).SplitStrings() {
 		if singleAppName == "" {
 			continue
 		}
@@ -1427,7 +1427,7 @@ func (throttler *Throttler) IsAppExempted(appName string) bool {
 	if isSingleAppNameExempted(appName) {
 		return true
 	}
-	for _, singleAppName := range strings.Split(appName, ":") {
+	for _, singleAppName := range throttlerapp.Name(appName).SplitStrings() {
 		if singleAppName == "" {
 			continue
 		}
@@ -1517,14 +1517,16 @@ func (throttler *Throttler) checkScope(ctx context.Context, appName string, scop
 	if len(metricNames) == 0 {
 		// No explicit metrics requested.
 		// Get the metric names mappd to the given app
-		if val, found := throttler.appCheckedMetrics.Get(appName); found {
-			// Due to golang type system, it's possible that we put in a base.MetricNames and get back a []base.MetricName.
-			// We allow both forms, which are technically the same type.
-			switch val := val.(type) {
-			case base.MetricNames:
-				metricNames = val
-			case []base.MetricName:
-				metricNames = val
+		for _, appToken := range throttlerapp.Name(appName).SplitStrings() {
+			if val, found := throttler.appCheckedMetrics.Get(appToken); found {
+				// Due to golang type system, it's possible that we put in a base.MetricNames and get back a []base.MetricName.
+				// We allow both forms, which are technically the same type.
+				switch val := val.(type) {
+				case base.MetricNames:
+					metricNames = append(metricNames, val...)
+				case []base.MetricName:
+					metricNames = append(metricNames, val...)
+				}
 			}
 		}
 	}

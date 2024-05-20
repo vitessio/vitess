@@ -680,6 +680,24 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 				assert.Equal(t, 2, len(checkResult.Metrics))
 			})
 		})
+		t.Run("'vreplication:online-ddl:12345' app affected by 'all'", func(t *testing.T) {
+			// "vreplication:online-ddl:12345" app is affected by 'all' assignment, because it has
+			// no explicit metrics assignment.
+			checkResult := throttler.Check(ctx, "vreplication:online-ddl:12345", nil, flags)
+			require.NotNil(t, checkResult)
+			assert.EqualValues(t, 2.718, checkResult.Value) // loadavg self value exceeds threshold
+			assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
+			assert.Equal(t, 2, len(checkResult.Metrics))
+		})
+		t.Run("'vreplication:online-ddl:test' app affected by 'test' and not by 'all'", func(t *testing.T) {
+			// "vreplication:online-ddl:test" app is affected by 'test' assignment, because it has
+			// the split name "test" has explicit metrics assignment.
+			checkResult := throttler.Check(ctx, "vreplication:online-ddl:test", nil, flags)
+			require.NotNil(t, checkResult)
+			assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
+			assert.EqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
+			assert.Equal(t, 2, len(checkResult.Metrics))
+		})
 		t.Run("deassign metrics from 'all' app", func(t *testing.T) {
 			delete(throttlerConfig.AppCheckedMetrics, throttlerapp.AllName.String())
 			throttler.applyThrottlerConfig(ctx, throttlerConfig)

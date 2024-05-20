@@ -73,8 +73,8 @@ type CheckFlags struct {
 	MultiMetricsEnabled   bool
 }
 
-// StandardCheckFlags have no special hints
-var StandardCheckFlags = &CheckFlags{
+// selfCheckFlags have no special hints
+var selfCheckFlags = &CheckFlags{
 	MultiMetricsEnabled: true,
 }
 
@@ -148,6 +148,17 @@ func (check *ThrottlerCheck) Check(ctx context.Context, appName string, scope ba
 	if len(metricNames) == 0 {
 		metricNames = base.MetricNames{check.throttler.metricNameUsedAsDefault()}
 	}
+	{
+		uniqueMetricNamesMap := map[base.MetricName]bool{}
+		uniqueMetricNames := base.MetricNames{}
+		for _, metricName := range metricNames {
+			if _, ok := uniqueMetricNamesMap[metricName]; !ok {
+				uniqueMetricNames = append(uniqueMetricNames, metricName)
+				uniqueMetricNamesMap[metricName] = true
+			}
+		}
+		metricNames = uniqueMetricNames
+	}
 	applyMetricToCheckResult := func(metric *MetricResult) {
 		checkResult.StatusCode = metric.StatusCode
 		checkResult.Value = metric.Value
@@ -188,12 +199,9 @@ func (check *ThrottlerCheck) Check(ctx context.Context, appName string, scope ba
 					// Out of abundance of caution, we will protect against such a scenario.
 					return
 				}
-				statsThrottlerCheckAnyTotal.Add(1)
-				stats.GetOrNewCounter(fmt.Sprintf("ThrottlerCheckAny%sTotal", textutil.SingleWordCamel(metricScope.String())), "").Add(1)
-
+				stats.GetOrNewCounter(fmt.Sprintf("ThrottlerCheck%s%sTotal", textutil.SingleWordCamel(metricScope.String()), textutil.SingleWordCamel(metricName.String())), "").Add(1)
 				if statusCode != http.StatusOK {
-					statsThrottlerCheckAnyError.Add(1)
-					stats.GetOrNewCounter(fmt.Sprintf("ThrottlerCheckAny%sError", textutil.SingleWordCamel(metricScope.String())), "").Add(1)
+					stats.GetOrNewCounter(fmt.Sprintf("ThrottlerCheck%s%sError", textutil.SingleWordCamel(metricScope.String()), textutil.SingleWordCamel(metricName.String())), "").Add(1)
 				}
 			}(metricCheckResult.StatusCode)
 		}
@@ -224,6 +232,12 @@ func (check *ThrottlerCheck) Check(ctx context.Context, appName string, scope ba
 		// If checkResult is not OK, then we will have populated these fields already by the failing metric.
 		applyMetricToCheckResult(metric)
 	}
+	go func(statusCode int) {
+		statsThrottlerCheckAnyTotal.Add(1)
+		if statusCode != http.StatusOK {
+			statsThrottlerCheckAnyError.Add(1)
+		}
+	}(checkResult.StatusCode)
 	return checkResult
 }
 
@@ -233,7 +247,7 @@ func (check *ThrottlerCheck) localCheck(ctx context.Context, aggregatedMetricNam
 	if err != nil {
 		return NoSuchMetricCheckResult
 	}
-	checkResult = check.Check(ctx, throttlerapp.VitessName.String(), scope, base.MetricNames{metricName}, StandardCheckFlags)
+	checkResult = check.Check(ctx, throttlerapp.VitessName.String(), scope, base.MetricNames{metricName}, selfCheckFlags)
 
 	if checkResult.StatusCode == http.StatusOK {
 		check.throttler.markMetricHealthy(aggregatedMetricName)

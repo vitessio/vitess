@@ -39,6 +39,9 @@ func (n Name) ConcatenateString(s string) string {
 func (n Name) Concatenate(other Name) Name {
 	return Name(n.ConcatenateString(other.String()))
 }
+func (n Name) SplitStrings() []string {
+	return strings.Split(n.String(), ":")
+}
 
 const (
 	// DefaultName is the app name used by vitess when app doesn't indicate its name
