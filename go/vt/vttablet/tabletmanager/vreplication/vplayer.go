@@ -43,7 +43,7 @@ var (
 	vplayerProgressDeadline = time.Duration(0) // Disabled by default.
 
 	// The error to return when we have detected a stall in the vplayer.
-	ErrVPlayerStalled = fmt.Errorf("progress stalled; vplayer was unable to replicate the previous transaction in a timely manner; examine the target mysqld instance health and the replicated queries' EXPLAIN output to see why queries are taking unusually long")
+	ErrVPlayerStalled = fmt.Errorf("progress stalled; vplayer was unable to replicate the transaction in a timely manner; examine the target mysqld instance health and the replicated queries' EXPLAIN output to see why queries are taking unusually long")
 )
 
 // vplayer replays binlog events by pulling them from a vstreamer.
@@ -892,11 +892,12 @@ func (sh *stallHandler) stopTimer() error {
 	if sh.timer.Load().Stop() {
 		// It was running, so signal the goroutine to stop.
 		sh.stop <- struct{}{}
-	} else {
-		select {
-		case <-sh.timer.Load().C: // Drain the channel
-		default:
-		}
+		return nil
+	}
+	// It wasn't running, so be sure that the channel is drained.
+	select {
+	case <-sh.timer.Load().C:
+	default:
 	}
 	return nil
 }
