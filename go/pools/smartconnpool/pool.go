@@ -282,8 +282,16 @@ func (pool *ConnPool[C]) reopen() {
 		return
 	}
 
-	_ = pool.setCapacity(context.Background(), 0)
-	_ = pool.setCapacity(context.Background(), capacity)
+	ctx, cancel := context.WithTimeout(context.Background(), PoolCloseTimeout)
+	defer cancel()
+
+	if err := pool.setCapacity(ctx, 0); err != nil {
+		log.Errorf("failed to reopen pool %q: %v", pool.Name, err)
+	}
+
+	// the second call to setCapacity cannot fail because it's only increasing the number
+	// of connections and doesn't need to shut down any
+	_ = pool.setCapacity(ctx, capacity)
 }
 
 // IsOpen returns whether the pool is open
