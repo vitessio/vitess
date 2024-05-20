@@ -5896,6 +5896,105 @@
     }
   },
   {
+    "comment": "update with multi table join with multi target having dependent column update",
+    "query": "update user, user_extra ue set user.name = ue.id + 'foo', ue.bar = user.baz where user.id = ue.id and user.id = 1",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user, user_extra ue set user.name = ue.id + 'foo', ue.bar = user.baz where user.id = ue.id and user.id = 1",
+      "Instructions": {
+        "OperatorType": "DMLWithInput",
+        "TargetTabletType": "PRIMARY",
+        "BindVars": [
+          "0:map[ue_id:1]",
+          "1:map[user_baz:3]"
+        ],
+        "Offset": [
+          "0:[0]",
+          "1:[1 2]"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "L:0,R:0,R:1,L:1",
+            "JoinVars": {
+              "user_id": 0
+            },
+            "TableName": "`user`_user_extra",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `user`.id, `user`.baz from `user` where 1 != 1",
+                "Query": "select `user`.id, `user`.baz from `user` where `user`.id = 1 for update",
+                "Table": "`user`",
+                "Values": [
+                  "1"
+                ],
+                "Vindex": "user_index"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select ue.id, ue.user_id from user_extra as ue where 1 != 1",
+                "Query": "select ue.id, ue.user_id from user_extra as ue where ue.id = :user_id for update",
+                "Table": "user_extra"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Update",
+            "Variant": "IN",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "TargetTabletType": "PRIMARY",
+            "ChangedVindexValues": [
+              "name_user_map:3"
+            ],
+            "KsidLength": 1,
+            "KsidVindex": "user_index",
+            "OwnedVindexQuery": "select Id, `Name`, Costly, `user`.`name` = :ue_id + 'foo' from `user` where `user`.id in ::dml_vals for update",
+            "Query": "update `user` set `user`.`name` = :ue_id + 'foo' where `user`.id in ::dml_vals",
+            "Table": "user",
+            "Values": [
+              "::dml_vals"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Update",
+            "Variant": "MultiEqual",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "TargetTabletType": "PRIMARY",
+            "Query": "update user_extra as ue set ue.bar = :user_baz where (ue.id, ue.user_id) in ::dml_vals",
+            "Table": "user_extra",
+            "Values": [
+              "dml_vals:1"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
     "comment": "update with multi table reference with multi target update on a derived table",
     "query": "update ignore (select foo, col, bar from user) u, music m set u.foo = 21, u.bar = 'abc' where u.col = m.col",
     "plan": "VT03032: the target table (select foo, col, bar from `user`) as u of the UPDATE is not updatable"

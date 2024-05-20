@@ -70,18 +70,16 @@ func (dml *DMLWithInput) TryExecute(ctx context.Context, vcursor VCursor, bindVa
 
 	var res *sqltypes.Result
 	for idx, prim := range dml.DMLs {
-		var bv *querypb.BindVariable
-		if len(dml.OutputCols[idx]) == 1 {
-			bv = getBVSingle(inputRes, dml.OutputCols[idx][0])
+		var qr *sqltypes.Result
+		if len(dml.BVList[idx]) == 0 {
+			qr, err = executeLiteralUpdate(ctx, vcursor, bindVars, prim, inputRes, dml.OutputCols[idx])
 		} else {
-			bv = getBVMulti(inputRes, dml.OutputCols[idx])
+			qr, err = executeNonLiteralUpdate(ctx, vcursor, bindVars, prim, inputRes, dml.OutputCols[idx], dml.BVList[idx])
 		}
-
-		bindVars[DmlVals] = bv
-		qr, err := vcursor.ExecutePrimitive(ctx, prim, bindVars, false)
 		if err != nil {
 			return nil, err
 		}
+
 		if res == nil {
 			res = qr
 		} else {
@@ -91,18 +89,30 @@ func (dml *DMLWithInput) TryExecute(ctx context.Context, vcursor VCursor, bindVa
 	return res, nil
 }
 
-func getBVSingle(res *sqltypes.Result, offset int) *querypb.BindVariable {
+func executeLiteralUpdate(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, prim Primitive, inputRes *sqltypes.Result, outputCols []int) (*sqltypes.Result, error) {
+	var bv *querypb.BindVariable
+	if len(outputCols) == 1 {
+		bv = getBVSingle(inputRes.Rows, outputCols[0])
+	} else {
+		bv = getBVMulti(inputRes.Rows, outputCols)
+	}
+
+	bindVars[DmlVals] = bv
+	return vcursor.ExecutePrimitive(ctx, prim, bindVars, false)
+}
+
+func getBVSingle(rows []sqltypes.Row, offset int) *querypb.BindVariable {
 	bv := &querypb.BindVariable{Type: querypb.Type_TUPLE}
-	for _, row := range res.Rows {
+	for _, row := range rows {
 		bv.Values = append(bv.Values, sqltypes.ValueToProto(row[offset]))
 	}
 	return bv
 }
 
-func getBVMulti(res *sqltypes.Result, offsets []int) *querypb.BindVariable {
+func getBVMulti(rows []sqltypes.Row, offsets []int) *querypb.BindVariable {
 	bv := &querypb.BindVariable{Type: querypb.Type_TUPLE}
 	outputVals := make([]sqltypes.Value, 0, len(offsets))
-	for _, row := range res.Rows {
+	for _, row := range rows {
 		for _, offset := range offsets {
 			outputVals = append(outputVals, row[offset])
 		}
@@ -110,6 +120,32 @@ func getBVMulti(res *sqltypes.Result, offsets []int) *querypb.BindVariable {
 		outputVals = outputVals[:0]
 	}
 	return bv
+}
+
+func executeNonLiteralUpdate(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, prim Primitive, inputRes *sqltypes.Result, outputCols []int, vars map[string]int) (qr *sqltypes.Result, err error) {
+	var res *sqltypes.Result
+	for _, row := range inputRes.Rows {
+		var bv *querypb.BindVariable
+		if len(outputCols) == 1 {
+			bv = getBVSingle([]sqltypes.Row{row}, outputCols[0])
+		} else {
+			bv = getBVMulti([]sqltypes.Row{row}, outputCols)
+		}
+		bindVars[DmlVals] = bv
+		for k, v := range vars {
+			bindVars[k] = sqltypes.ValueBindVariable(row[v])
+		}
+		qr, err = vcursor.ExecutePrimitive(ctx, prim, bindVars, false)
+		if err != nil {
+			return nil, err
+		}
+		if res == nil {
+			res = qr
+		} else {
+			res.RowsAffected += res.RowsAffected
+		}
+	}
+	return res, nil
 }
 
 // TryStreamExecute performs a streaming exec.
