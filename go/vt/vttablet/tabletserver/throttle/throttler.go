@@ -487,11 +487,11 @@ func (throttler *Throttler) applyThrottlerConfig(ctx context.Context, throttlerC
 		for metricName, threshold := range throttlerConfig.MetricThresholds {
 			throttler.mysqlMetricThresholds.Set(throttlerConfigPrefix+metricName, threshold, cache.DefaultExpiration)
 		}
-		for metricName := range throttler.mysqlMetricThresholds.Items() {
-			if _, ok := throttlerConfig.MetricThresholds[metricName]; !ok {
+		for _, metricName := range base.KnownMetricNames {
+			if _, ok := throttlerConfig.MetricThresholds[metricName.String()]; !ok {
 				// metric not indicated in the throttler config, therefore should be removed from the map
 				// so that we know to apply the inventory default threshold
-				throttler.mysqlMetricThresholds.Delete(throttlerConfigPrefix + metricName)
+				throttler.mysqlMetricThresholds.Delete(throttlerConfigPrefix + metricName.String())
 			}
 		}
 		throttler.convergeMetricThresholds()
