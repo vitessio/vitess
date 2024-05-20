@@ -36,6 +36,9 @@ var (
 
 	// ErrCtxTimeout is returned if a ctx is already expired by the time the connection pool is used
 	ErrCtxTimeout = vterrors.New(vtrpcpb.Code_DEADLINE_EXCEEDED, "resource pool context already expired")
+
+	// ErrShutdown is returned when trying to get a connection from a closed conn pool
+	ErrShutdown = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "connection pool is closed")
 )
 
 type Metrics struct {
@@ -285,6 +288,7 @@ func (pool *ConnPool[C]) InUse() int64 {
 // Available returns the number of connections that the pool can immediately lend out to
 // clients without blocking.
 func (pool *ConnPool[C]) Available() int64 {
+	// TODO@vmg: this can underflow
 	return pool.capacity.Load() - pool.borrowed.Load()
 }
 
@@ -322,7 +326,7 @@ func (pool *ConnPool[C]) Get(ctx context.Context, setting *Setting) (*Pooled[C],
 		return nil, ErrCtxTimeout
 	}
 	if pool.capacity.Load() == 0 {
-		return nil, ErrTimeout
+		return nil, ErrShutdown
 	}
 	if setting == nil {
 		return pool.get(ctx)
