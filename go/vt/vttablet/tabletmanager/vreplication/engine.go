@@ -790,8 +790,10 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int32, pos string) error {
 			}
 		case len(qr.Rows) == 0:
 			return fmt.Errorf("vreplication stream %d not found", id)
-		case len(qr.Rows) > 1 || len(qr.Rows[0]) != 3:
-			return fmt.Errorf("unexpected result: %v", qr)
+		case len(qr.Rows) > 1:
+			return fmt.Errorf("vreplication stream received more rows than expected, got %v instead of 1", len(qr.Rows))
+		case len(qr.Rows[0]) != 3:
+			return fmt.Errorf("vreplication stream received an unexpected number of columns, got %v instead of 3", len(qr.Rows[0]))
 		}
 
 		// When err is not nil then we got a retryable error and will loop again.
