@@ -463,6 +463,12 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 		flags := &CheckFlags{
 			SkipRequestHeartbeats: true,
 		}
+		throttlerConfig := &topodatapb.ThrottlerConfig{
+			Enabled:           true,
+			MetricThresholds:  map[string]float64{},
+			AppCheckedMetrics: map[string]*topodatapb.ThrottlerConfig_MetricNames{},
+		}
+
 		t.Run("check before apply", func(t *testing.T) {
 			checkResult := throttler.Check(ctx, testAppName.String(), nil, flags)
 			require.NotNil(t, checkResult)
@@ -471,13 +477,8 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 			assert.Equal(t, 1, len(checkResult.Metrics))
 		})
 		t.Run("apply high lag threshold", func(t *testing.T) {
-			throttlerConfig := &topodatapb.ThrottlerConfig{
-				Enabled:   true,
-				Threshold: 4444.0,
-				MetricThresholds: map[string]float64{
-					"lag": 4444.0,
-				},
-			}
+			throttlerConfig.Threshold = 4444.0
+			throttlerConfig.MetricThresholds["lag"] = 4444.0
 			throttler.applyThrottlerConfig(ctx, throttlerConfig)
 
 			t.Run("check after apply, no impact", func(t *testing.T) {
@@ -491,15 +492,11 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 			})
 		})
 		t.Run("apply low 'loadavg' threshold", func(t *testing.T) {
-			throttlerConfig := &topodatapb.ThrottlerConfig{
-				Enabled: true,
-				MetricThresholds: map[string]float64{
-					"loadavg": 0.0077,
-				},
-			}
+			throttlerConfig.MetricThresholds["loadavg"] = 0.0077
 			throttler.applyThrottlerConfig(ctx, throttlerConfig)
 
 			t.Run("check after apply, no impact", func(t *testing.T) {
+				sleepTillThresholdApplies()
 				// "test" not supposed to check "loadavg"
 				checkResult := throttler.Check(ctx, testAppName.String(), nil, flags)
 				require.NotNil(t, checkResult)
@@ -509,12 +506,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 			})
 		})
 		t.Run("assign 'loadavg' to test app", func(t *testing.T) {
-			throttlerConfig := &topodatapb.ThrottlerConfig{
-				Enabled: true,
-				AppCheckedMetrics: map[string]*topodatapb.ThrottlerConfig_MetricNames{
-					testAppName.String(): {Names: []string{"loadavg"}},
-				},
-			}
+			throttlerConfig.AppCheckedMetrics[testAppName.String()] = &topodatapb.ThrottlerConfig_MetricNames{Names: []string{"loadavg"}}
 			throttler.applyThrottlerConfig(ctx, throttlerConfig)
 
 			t.Run("check after assignment", func(t *testing.T) {
@@ -532,12 +524,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 			})
 		})
 		t.Run("assign 'shard/loadavg' to test app", func(t *testing.T) {
-			throttlerConfig := &topodatapb.ThrottlerConfig{
-				Enabled: true,
-				AppCheckedMetrics: map[string]*topodatapb.ThrottlerConfig_MetricNames{
-					testAppName.String(): {Names: []string{"shard/loadavg"}},
-				},
-			}
+			throttlerConfig.AppCheckedMetrics[testAppName.String()] = &topodatapb.ThrottlerConfig_MetricNames{Names: []string{"shard/loadavg"}}
 			throttler.applyThrottlerConfig(ctx, throttlerConfig)
 
 			t.Run("check after assignment", func(t *testing.T) {
@@ -555,12 +542,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 			})
 		})
 		t.Run("assign 'lag,loadavg' to test app", func(t *testing.T) {
-			throttlerConfig := &topodatapb.ThrottlerConfig{
-				Enabled: true,
-				AppCheckedMetrics: map[string]*topodatapb.ThrottlerConfig_MetricNames{
-					testAppName.String(): {Names: []string{"lag", "loadavg"}},
-				},
-			}
+			throttlerConfig.AppCheckedMetrics[testAppName.String()] = &topodatapb.ThrottlerConfig_MetricNames{Names: []string{"lag", "loadavg"}}
 			throttler.applyThrottlerConfig(ctx, throttlerConfig)
 			t.Run("check after assignment", func(t *testing.T) {
 				// "test" now checks both lag and loadavg
@@ -577,12 +559,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 			})
 		})
 		t.Run("assign 'lag,shard/loadavg' to test app", func(t *testing.T) {
-			throttlerConfig := &topodatapb.ThrottlerConfig{
-				Enabled: true,
-				AppCheckedMetrics: map[string]*topodatapb.ThrottlerConfig_MetricNames{
-					testAppName.String(): {Names: []string{"lag", "shard/loadavg"}},
-				},
-			}
+			throttlerConfig.AppCheckedMetrics[testAppName.String()] = &topodatapb.ThrottlerConfig_MetricNames{Names: []string{"lag", "shard/loadavg"}}
 			throttler.applyThrottlerConfig(ctx, throttlerConfig)
 			t.Run("check after assignment", func(t *testing.T) {
 				// "test" now checks both lag and loadavg
@@ -599,32 +576,20 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 			})
 		})
 		t.Run("clear 'loadavg' threshold", func(t *testing.T) {
-			throttlerConfig := &topodatapb.ThrottlerConfig{
-				Enabled: true,
-				MetricThresholds: map[string]float64{
-					"loadavg": 0,
-				},
-			}
+			throttlerConfig.AppCheckedMetrics[testAppName.String()] = &topodatapb.ThrottlerConfig_MetricNames{Names: []string{"lag"}}
 			throttler.applyThrottlerConfig(ctx, throttlerConfig)
 			t.Run("check after apply, clear", func(t *testing.T) {
-				appCheckedMetrics := throttler.appCheckedMetricsSnapshot()
-				_, ok := appCheckedMetrics[testAppName.String()]
-				require.False(t, ok)
+				sleepTillThresholdApplies()
 
 				checkResult := throttler.Check(ctx, testAppName.String(), nil, flags)
 				require.NotNil(t, checkResult)
 				assert.EqualValues(t, 0.9, checkResult.Value) // shard lag value
-				assert.EqualValues(t, http.StatusOK, checkResult.StatusCode)
-				assert.Equal(t, 1, len(checkResult.Metrics))
+				assert.EqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
+				assert.Equal(t, 1, len(checkResult.Metrics), "unexpected metrics: %+v", checkResult.Metrics)
 			})
 		})
 		t.Run("assign 'lag,threads_running' to test app", func(t *testing.T) {
-			throttlerConfig := &topodatapb.ThrottlerConfig{
-				Enabled: true,
-				AppCheckedMetrics: map[string]*topodatapb.ThrottlerConfig_MetricNames{
-					testAppName.String(): {Names: []string{"lag", "threads_running"}},
-				},
-			}
+			throttlerConfig.AppCheckedMetrics[testAppName.String()] = &topodatapb.ThrottlerConfig_MetricNames{Names: []string{"lag", "threads_running"}}
 			throttler.applyThrottlerConfig(ctx, throttlerConfig)
 			t.Run("check after assignment", func(t *testing.T) {
 				// "test" now checks both lag and loadavg
@@ -641,13 +606,8 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 			})
 		})
 		t.Run("assign 'custom,loadavg' to 'all' app", func(t *testing.T) {
-			throttlerConfig := &topodatapb.ThrottlerConfig{
-				Enabled: true,
-				AppCheckedMetrics: map[string]*topodatapb.ThrottlerConfig_MetricNames{
-					testAppName.String():          {Names: []string{"lag", "threads_running"}},
-					throttlerapp.AllName.String(): {Names: []string{"custom", "loadavg"}},
-				},
-			}
+			throttlerConfig.AppCheckedMetrics[testAppName.String()] = &topodatapb.ThrottlerConfig_MetricNames{Names: []string{"lag", "threads_running"}}
+			throttlerConfig.AppCheckedMetrics[throttlerapp.AllName.String()] = &topodatapb.ThrottlerConfig_MetricNames{Names: []string{"custom", "loadavg"}}
 			throttler.applyThrottlerConfig(ctx, throttlerConfig)
 			t.Run("check 'all' after assignment", func(t *testing.T) {
 				appCheckedMetrics := throttler.appCheckedMetricsSnapshot()
@@ -690,12 +650,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 			})
 		})
 		t.Run("deassign metrics from 'all' app", func(t *testing.T) {
-			throttlerConfig := &topodatapb.ThrottlerConfig{
-				Enabled: true,
-				AppCheckedMetrics: map[string]*topodatapb.ThrottlerConfig_MetricNames{
-					testAppName.String(): {Names: []string{"lag", "threads_running"}},
-				},
-			}
+			delete(throttlerConfig.AppCheckedMetrics, throttlerapp.AllName.String())
 			throttler.applyThrottlerConfig(ctx, throttlerConfig)
 			t.Run("check 'all' after assignment", func(t *testing.T) {
 				appCheckedMetrics := throttler.appCheckedMetricsSnapshot()
@@ -738,12 +693,7 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 		})
 
 		t.Run("deassign metrics from test app", func(t *testing.T) {
-			throttlerConfig := &topodatapb.ThrottlerConfig{
-				Enabled: true,
-				AppCheckedMetrics: map[string]*topodatapb.ThrottlerConfig_MetricNames{
-					testAppName.String(): {Names: []string{}},
-				},
-			}
+			delete(throttlerConfig.AppCheckedMetrics, testAppName.String())
 			throttler.applyThrottlerConfig(ctx, throttlerConfig)
 			t.Run("check after deassign, clear", func(t *testing.T) {
 				appCheckedMetrics := throttler.appCheckedMetricsSnapshot()
