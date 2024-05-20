@@ -20,6 +20,9 @@ import (
 	"fmt"
 	"io"
 
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -226,11 +229,11 @@ func tryPushLimit(ctx *plancontext.PlanningContext, in *Limit) (Operator, *Apply
 			// This is the Top limit, and it's already pushed down
 			return in, NoRewrite
 		}
-		src.RHS = createPushedLimit(src.RHS, in)
+		src.RHS = createPushedLimit(ctx, src.RHS, in)
 		if IsOuter(src) {
 			// for outer joins, we are guaranteed that all rows from the LHS will be returned,
 			// so we can push down the LIMIT to the LHS
-			src.LHS = createPushedLimit(src.LHS, in)
+			src.LHS = createPushedLimit(ctx, src.LHS, in)
 		}
 
 		if in.Top {
@@ -244,20 +247,33 @@ func tryPushLimit(ctx *plancontext.PlanningContext, in *Limit) (Operator, *Apply
 	}
 }
 
-func createPushedLimit(src Operator, orig *Limit) Operator {
+func createPushedLimit(ctx *plancontext.PlanningContext, src Operator, orig *Limit) Operator {
 	pushedLimit := sqlparser.CloneRefOfLimit(orig.AST)
 	if pushedLimit.Offset != nil {
-		pushedLimit.Rowcount = &sqlparser.BinaryExpr{
+		plus := &sqlparser.BinaryExpr{
 			Operator: sqlparser.PlusOp,
 			Left:     pushedLimit.Rowcount,
 			Right:    pushedLimit.Offset,
 		}
+		pushedLimit.Rowcount = simplifyLiteralExpression(ctx, plus)
 		pushedLimit.Offset = nil
 	}
 	return &Limit{
 		Source: src,
 		AST:    pushedLimit,
 	}
+}
+
+// simplify is a helper function to simplify an expression using the evalengine
+func simplifyLiteralExpression(ctx *plancontext.PlanningContext, expr sqlparser.Expr) evalengine.Expr {
+	cfg := evalengine.Config{
+		Environment: ctx.VSchema.Environment(),
+	}
+	translate, err := evalengine.Translate(expr, &cfg)
+	if err != nil {
+		panic(vterrors.VT13001("failed to translate expression: " + err.Error()))
+	}
+	return translate
 }
 
 func tryPushingDownLimitInRoute(ctx *plancontext.PlanningContext, in *Limit, src *Route) (Operator, *ApplyResult) {
@@ -278,7 +294,7 @@ func tryPushingDownLimitInRoute(ctx *plancontext.PlanningContext, in *Limit, src
 	// we leave a LIMIT on top of the Route, and push a LIMIT under the Route
 	// This way we can still limit the number of rows that are returned
 	// from the Route and that way minimize unneeded processing
-	src.Source = createPushedLimit(src.Source, in)
+	src.Source = createPushedLimit(ctx, src.Source, in)
 	in.Pushed = true
 
 	return in, Rewrote("pushed top limit under route")
