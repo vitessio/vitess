@@ -415,13 +415,16 @@ func replaceGoVersionInCodebase(old, new *version.Version, workflowUpdate bool) 
 	}
 
 	if !isSameMajorMinorVersion(old, new) {
-		err = replaceInFile(
-			[]*regexp.Regexp{regexp.MustCompile(regexpReplaceGoModGoVersion)},
-			[]string{fmt.Sprintf("go %d.%d", new.Segments()[0], new.Segments()[1])},
-			"./go.mod",
-		)
-		if err != nil {
-			return err
+		goModFiles := []string{"./go.mod", "./vitess-mixin/go.mod"}
+		for _, file := range goModFiles {
+			err = replaceInFile(
+				[]*regexp.Regexp{regexp.MustCompile(regexpReplaceGoModGoVersion)},
+				[]string{fmt.Sprintf("go %d.%d", new.Segments()[0], new.Segments()[1])},
+				file,
+			)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil
