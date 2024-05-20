@@ -109,9 +109,15 @@ const (
 )
 
 var (
-	// flag vars
-	defaultThrottleLagThreshold = 5 * time.Second
-	throttleTabletTypes         = "replica"
+	throttleTabletTypes = "replica"
+
+	defaultThresholds = map[base.MetricName]float64{
+		base.DefaultMetricName:        5 * time.Second.Seconds(),
+		base.LagMetricName:            5 * time.Second.Seconds(),
+		base.ThreadsRunningMetricName: 100,
+		base.CustomMetricName:         0,
+		base.LoadAvgMetricName:        1.0,
+	}
 )
 
 var (
@@ -273,7 +279,7 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 	throttler.dormantPeriod = dormantPeriod
 	throttler.recentCheckDormantDiff = int64(throttler.dormantPeriod / recentCheckRateLimiterInterval)
 
-	throttler.StoreMetricsThreshold(defaultThrottleLagThreshold.Seconds()) //default
+	throttler.StoreMetricsThreshold(defaultThresholds[base.LagMetricName])
 	throttler.readSelfThrottleMetrics = func(ctx context.Context) mysql.MySQLThrottleMetrics {
 		return throttler.readSelfThrottleMetricsInternal(ctx)
 	}
@@ -338,7 +344,6 @@ func (throttler *Throttler) initConfig() {
 			Name: metricsName,
 		}
 	}
-	// TODO (shlomi)
 	metrics[base.DefaultMetricName].CustomQuery = ""
 	metrics[base.DefaultMetricName].Threshold.Store(throttler.MetricsThreshold.Load())
 
@@ -346,12 +351,12 @@ func (throttler *Throttler) initConfig() {
 	metrics[base.LagMetricName].Threshold.Store(throttler.MetricsThreshold.Load())
 
 	metrics[base.ThreadsRunningMetricName].CustomQuery = threadsRunningQuery
-	metrics[base.ThreadsRunningMetricName].Threshold.Store(math.Float64bits(100))
+	metrics[base.ThreadsRunningMetricName].Threshold.Store(math.Float64bits(defaultThresholds[base.ThreadsRunningMetricName]))
 
 	metrics[base.CustomMetricName].CustomQuery = ""
-	metrics[base.CustomMetricName].Threshold.Store(math.Float64bits(0))
+	metrics[base.CustomMetricName].Threshold.Store(math.Float64bits(defaultThresholds[base.CustomMetricName]))
 
-	metrics[base.LoadAvgMetricName].Threshold.Store(math.Float64bits(1.0))
+	metrics[base.LoadAvgMetricName].Threshold.Store(math.Float64bits(defaultThresholds[base.LoadAvgMetricName]))
 
 	throttler.configSettings.MySQLStore.Metrics = metrics
 }
@@ -382,7 +387,7 @@ func (throttler *Throttler) normalizeThrottlerConfig(throttlerConfig *topodatapb
 	if throttlerConfig.CustomQuery == "" {
 		// no custom query; we check replication lag
 		if throttlerConfig.Threshold == 0 {
-			throttlerConfig.Threshold = defaultThrottleLagThreshold.Seconds()
+			throttlerConfig.Threshold = defaultThresholds[base.LagMetricName]
 		}
 	}
 	return throttlerConfig
