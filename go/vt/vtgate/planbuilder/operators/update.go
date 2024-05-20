@@ -151,17 +151,33 @@ func isMultiTargetUpdate(ctx *plancontext.PlanningContext, updateStmt *sqlparser
 	var targetTS semantics.TableSet
 	for _, ue := range updateStmt.Exprs {
 		targetTS = targetTS.Merge(ctx.SemTable.DirectDeps(ue.Name))
+		targetTS = targetTS.Merge(ctx.SemTable.RecursiveDeps(ue.Expr))
 	}
 	return targetTS.NumberOfTables() > 1
 }
+
+type updColumn struct {
+	updCol *sqlparser.ColName
+	jc     applyJoinColumn
+}
+
+type updList []updColumn
 
 func createUpdateWithInputOp(ctx *plancontext.PlanningContext, upd *sqlparser.Update) (op Operator) {
 	updClone := ctx.SemTable.Clone(upd).(*sqlparser.Update)
 	upd.Limit = nil
 
+	ueMap := make(map[semantics.TableSet]updList)
+	for _, ue := range upd.Exprs {
+		target := ctx.SemTable.DirectDeps(ue.Name)
+		exprDeps := ctx.SemTable.RecursiveDeps(ue.Expr)
+		jc := breakExpressionInLHSandRHSForApplyJoin(ctx, ue.Expr, exprDeps.Remove(target))
+		ueMap[target] = append(ueMap[target], updColumn{ue.Name, jc})
+	}
+
 	var updOps []dmlOp
 	for _, target := range ctx.SemTable.Targets.Constituents() {
-		op := createUpdateOpWithTarget(ctx, target, upd)
+		op := createUpdateOpWithTarget(ctx, upd, target, ueMap[target])
 		updOps = append(updOps, op)
 	}
 
@@ -175,10 +191,12 @@ func createUpdateWithInputOp(ctx *plancontext.PlanningContext, upd *sqlparser.Up
 		Lock:    sqlparser.ForUpdateLock,
 	}
 
-	// now map the operator and column list.
+	// now map the operator, column list and update list
 	var colsList [][]*sqlparser.ColName
+	var uList []updList
 	dmls := slice.Map(updOps, func(from dmlOp) Operator {
 		colsList = append(colsList, from.cols)
+		uList = append(uList, from.updList)
 		for _, col := range from.cols {
 			selectStmt.SelectExprs = append(selectStmt.SelectExprs, aeWrap(col))
 		}
@@ -189,6 +207,7 @@ func createUpdateWithInputOp(ctx *plancontext.PlanningContext, upd *sqlparser.Up
 		DML:    dmls,
 		Source: createOperatorFromSelect(ctx, selectStmt),
 		cols:   colsList,
+		uList:  uList,
 	}
 
 	if upd.Comments != nil {
@@ -200,15 +219,8 @@ func createUpdateWithInputOp(ctx *plancontext.PlanningContext, upd *sqlparser.Up
 	return op
 }
 
-func createUpdateOpWithTarget(ctx *plancontext.PlanningContext, target semantics.TableSet, updStmt *sqlparser.Update) dmlOp {
-	var updExprs sqlparser.UpdateExprs
-	for _, ue := range updStmt.Exprs {
-		if ctx.SemTable.DirectDeps(ue.Name) == target {
-			updExprs = append(updExprs, ue)
-		}
-	}
-
-	if len(updExprs) == 0 {
+func createUpdateOpWithTarget(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update, target semantics.TableSet, uList updList) dmlOp {
+	if len(uList) == 0 {
 		panic(vterrors.VT13001("no update expression for the target"))
 	}
 
@@ -237,6 +249,14 @@ func createUpdateOpWithTarget(ctx *plancontext.PlanningContext, target semantics
 	}
 	compExpr := sqlparser.NewComparisonExpr(sqlparser.InOp, lhs, sqlparser.ListArg(engine.DmlVals), nil)
 
+	var updExprs sqlparser.UpdateExprs
+	for _, expr := range uList {
+		ue := &sqlparser.UpdateExpr{
+			Name: expr.updCol,
+			Expr: expr.jc.RHSExpr,
+		}
+		updExprs = append(updExprs, ue)
+	}
 	upd := &sqlparser.Update{
 		Ignore:     updStmt.Ignore,
 		TableExprs: sqlparser.TableExprs{ti.GetAliasedTableExpr()},
@@ -248,6 +268,7 @@ func createUpdateOpWithTarget(ctx *plancontext.PlanningContext, target semantics
 		createOperatorFromUpdate(ctx, upd),
 		vTbl,
 		cols,
+		uList,
 	}
 }
 

@@ -32,6 +32,9 @@ type DMLWithInput struct {
 	cols    [][]*sqlparser.ColName
 	Offsets [][]int
 
+	uList  []updList
+	BvList []map[string]int
+
 	noColumns
 	noPredicates
 }
@@ -94,6 +97,21 @@ func (d *DMLWithInput) planOffsets(ctx *plancontext.PlanningContext) Operator {
 		}
 	}
 	d.Offsets = offsets
+
+	bvList := make([]map[string]int, len(d.uList))
+	for idx, ul := range d.uList {
+		vars := make(map[string]int)
+		for _, updCol := range ul {
+			for _, bvExpr := range updCol.jc.LHSExprs {
+				offset := d.Source.AddColumn(ctx, true, false, aeWrap(bvExpr.Expr))
+				vars[bvExpr.Name] = offset
+			}
+		}
+		if len(vars) > 0 {
+			bvList[idx] = vars
+		}
+	}
+	d.BvList = bvList
 	return d
 }
 

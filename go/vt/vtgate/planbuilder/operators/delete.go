@@ -210,6 +210,7 @@ func createDeleteOpWithTarget(ctx *plancontext.PlanningContext, target semantics
 		createOperatorFromDelete(ctx, del),
 		vTbl,
 		cols,
+		nil,
 	}
 }
 

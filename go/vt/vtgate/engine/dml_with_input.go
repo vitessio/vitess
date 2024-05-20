@@ -39,6 +39,7 @@ type DMLWithInput struct {
 
 	DMLs       []Primitive
 	OutputCols [][]int
+	BVList     []map[string]int
 }
 
 func (dml *DMLWithInput) RouteType() string {
@@ -132,6 +133,16 @@ func (dml *DMLWithInput) description() PrimitiveDescription {
 	}
 	other := map[string]any{
 		"Offset": offsets,
+	}
+	var bvList []string
+	for idx, vars := range dml.BVList {
+		if len(vars) == 0 {
+			continue
+		}
+		bvList = append(bvList, fmt.Sprintf("%d:%v", idx, vars))
+	}
+	if len(bvList) > 0 {
+		other["BindVars"] = bvList
 	}
 	return PrimitiveDescription{
 		OperatorType:     "DMLWithInput",
