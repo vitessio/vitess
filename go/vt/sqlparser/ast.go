@@ -7486,16 +7486,16 @@ func (node *SrsAttribute) Format(buf *TrackedBuffer) {
 	buf.Myprintf("description '%s'", node.Description)
 }
 
-// InjectableExpression is an expression that can accept a set of analyzed/resolved children. Used within InjectedExpr.
-type InjectableExpression interface {
+// Injectable is an expression that can accept a set of analyzed/resolved children. Used within InjectedExpr.
+type Injectable interface {
 	WithResolvedChildren(children []any) (any, error)
 }
 
 // InjectedExpr allows bypassing AST analysis. This is used by projects that rely on Vitess, but may not implement
 // MySQL's dialect.
 type InjectedExpr struct {
-	Expression InjectableExpression
-	Children   []Expr
+	Expression Injectable
+	Children   Exprs
 }
 
 var _ Expr = InjectedExpr{}
@@ -7514,5 +7514,26 @@ func (d InjectedExpr) Format(buf *TrackedBuffer) {
 		buf.WriteString(stringer.String())
 	} else {
 		buf.WriteString("InjectedExpr")
+	}
+}
+
+// InjectedStatement allows bypassing AST analysis. This is used by projects that rely on Vitess, but may not implement
+// MySQL's dialect.
+type InjectedStatement struct {
+	Statement  Injectable
+	Children   Exprs
+}
+
+var _ Statement = InjectedStatement{}
+
+// iStatement implements the Statement interface.
+func (d InjectedStatement) iStatement() {}
+
+// Format implements the Statement interface.
+func (d InjectedStatement) Format(buf *TrackedBuffer) {
+	if stringer, ok := d.Statement.(fmt.Stringer); ok {
+		buf.WriteString(stringer.String())
+	} else {
+		buf.WriteString("InjectedStatement")
 	}
 }
