@@ -31369,6 +31369,12 @@ export namespace replicationdata {
         /** Status position */
         position?: (string|null);
 
+        /** Status io_thread_running */
+        io_thread_running?: (boolean|null);
+
+        /** Status sql_thread_running */
+        sql_thread_running?: (boolean|null);
+
         /** Status replication_lag_seconds */
         replication_lag_seconds?: (number|null);
 
@@ -31444,6 +31450,12 @@ export namespace replicationdata {
 
         /** Status position. */
         public position: string;
+
+        /** Status io_thread_running. */
+        public io_thread_running: boolean;
+
+        /** Status sql_thread_running. */
+        public sql_thread_running: boolean;
 
         /** Status replication_lag_seconds. */
         public replication_lag_seconds: number;

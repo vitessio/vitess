@@ -214,6 +214,26 @@ func (m *Status) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i--
 		dAtA[i] = 0x20
 	}
+	if m.SqlThreadRunning {
+		i--
+		if m.SqlThreadRunning {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x18
+	}
+	if m.IoThreadRunning {
+		i--
+		if m.IoThreadRunning {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x10
+	}
 	if len(m.Position) > 0 {
 		i -= len(m.Position)
 		copy(dAtA[i:], m.Position)
@@ -547,6 +567,12 @@ func (m *Status) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
+	if m.IoThreadRunning {
+		n += 2
+	}
+	if m.SqlThreadRunning {
+		n += 2
+	}
 	if m.ReplicationLagSeconds != 0 {
 		n += 1 + sov(uint64(m.ReplicationLagSeconds))
 	}
@@ -813,6 +839,46 @@ func (m *Status) UnmarshalVT(dAtA []byte) error {
 			}
 			m.Position = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field IoThreadRunning", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.IoThreadRunning = bool(v != 0)
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field SqlThreadRunning", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.SqlThreadRunning = bool(v != 0)
 		case 4:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field ReplicationLagSeconds", wireType)

@@ -75,13 +75,13 @@ func SetMinNumTablets(numTablets int) {
 	minNumTablets = numTablets
 }
 
-// IsReplicationLagHigh verifies that the given LegacytabletHealth refers to a tablet with high
+// IsReplicationLagHigh verifies that the given TabletHealth refers to a tablet with high
 // replication lag, i.e. higher than the configured discovery_low_replication_lag flag.
 func IsReplicationLagHigh(tabletHealth *TabletHealth) bool {
 	return float64(tabletHealth.Stats.ReplicationLagSeconds) > lowReplicationLag.Seconds()
 }
 
-// IsReplicationLagVeryHigh verifies that the given LegacytabletHealth refers to a tablet with very high
+// IsReplicationLagVeryHigh verifies that the given TabletHealth refers to a tablet with very high
 // replication lag, i.e. higher than the configured discovery_high_replication_lag_minimum_serving flag.
 func IsReplicationLagVeryHigh(tabletHealth *TabletHealth) bool {
 	return float64(tabletHealth.Stats.ReplicationLagSeconds) > highReplicationLagMinServing.Seconds()
@@ -117,7 +117,7 @@ func FilterStatsByReplicationLag(tabletHealthList []*TabletHealth) []*TabletHeal
 		return filterStatsByLag(tabletHealthList)
 	}
 	res := filterStatsByLagWithLegacyAlgorithm(tabletHealthList)
-	// run the filter again if exactly one tablet is removed,
+	// Run the filter again if exactly one tablet is removed,
 	// and we have spare tablets.
 	if len(res) > minNumTablets && len(res) == len(tabletHealthList)-1 {
 		res = filterStatsByLagWithLegacyAlgorithm(res)
@@ -128,12 +128,12 @@ func FilterStatsByReplicationLag(tabletHealthList []*TabletHealth) []*TabletHeal
 
 func filterStatsByLag(tabletHealthList []*TabletHealth) []*TabletHealth {
 	list := make([]tabletLagSnapshot, 0, len(tabletHealthList))
-	// filter non-serving tablets and those with very high replication lag
+	// Filter out non-serving tablets and those with very high replication lag.
 	for _, ts := range tabletHealthList {
 		if !ts.Serving || ts.LastError != nil || ts.Stats == nil || IsReplicationLagVeryHigh(ts) {
 			continue
 		}
-		// Pull the current replication lag for a stable sort later.
+		// Save the current replication lag for a stable sort later.
 		list = append(list, tabletLagSnapshot{
 			ts:     ts,
 			replag: ts.Stats.ReplicationLagSeconds})
@@ -142,7 +142,7 @@ func filterStatsByLag(tabletHealthList []*TabletHealth) []*TabletHealth {
 	// Sort by replication lag.
 	sort.Sort(tabletLagSnapshotList(list))
 
-	// Pick those with low replication lag, but at least minNumTablets tablets regardless.
+	// Pick tablets with low replication lag, but at least minNumTablets tablets regardless.
 	res := make([]*TabletHealth, 0, len(list))
 	for i := 0; i < len(list); i++ {
 		if !IsReplicationLagHigh(list[i].ts) || i < minNumTablets {
@@ -154,7 +154,7 @@ func filterStatsByLag(tabletHealthList []*TabletHealth) []*TabletHealth {
 
 func filterStatsByLagWithLegacyAlgorithm(tabletHealthList []*TabletHealth) []*TabletHealth {
 	list := make([]*TabletHealth, 0, len(tabletHealthList))
-	// filter non-serving tablets
+	// Filter out non-serving tablets.
 	for _, ts := range tabletHealthList {
 		if !ts.Serving || ts.LastError != nil || ts.Stats == nil {
 			continue
@@ -164,7 +164,7 @@ func filterStatsByLagWithLegacyAlgorithm(tabletHealthList []*TabletHealth) []*Ta
 	if len(list) <= 1 {
 		return list
 	}
-	// if all have low replication lag (<=30s), return all tablets.
+	// If all tablets have low replication lag (<=30s), return all of them.
 	allLowLag := true
 	for _, ts := range list {
 		if IsReplicationLagHigh(ts) {
@@ -175,12 +175,12 @@ func filterStatsByLagWithLegacyAlgorithm(tabletHealthList []*TabletHealth) []*Ta
 	if allLowLag {
 		return list
 	}
-	// filter those affecting "mean" lag significantly
-	// calculate mean for all tablets
+	// We want to filter out tablets that are affecting "mean" lag significantly.
+	// We first calculate the mean across all tablets.
 	res := make([]*TabletHealth, 0, len(list))
 	m, _ := mean(list, -1)
 	for i, ts := range list {
-		// calculate mean by excluding ith tablet
+		// Now we calculate the mean by excluding ith tablet
 		mi, _ := mean(list, i)
 		if float64(mi) > float64(m)*0.7 {
 			res = append(res, ts)
@@ -189,9 +189,11 @@ func filterStatsByLagWithLegacyAlgorithm(tabletHealthList []*TabletHealth) []*Ta
 	if len(res) >= minNumTablets {
 		return res
 	}
-	// return at least minNumTablets tablets to avoid over loading,
-	// if there is enough tablets with replication lag < highReplicationLagMinServing.
-	// Pull the current replication lag for a stable sort.
+
+	// We want to return at least minNumTablets tablets to avoid overloading,
+	// as long as there are enough tablets with replication lag < highReplicationLagMinServing.
+
+	// Save the current replication lag for a stable sort.
 	snapshots := make([]tabletLagSnapshot, 0, len(list))
 	for _, ts := range list {
 		if !IsReplicationLagVeryHigh(ts) {
