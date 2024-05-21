@@ -128,7 +128,8 @@ func TestConnPoolSetCapacity(t *testing.T) {
 	assert.Panics(t, func() {
 		_ = connPool.SetCapacity(context.Background(), -10)
 	})
-	_ = connPool.SetCapacity(context.Background(), 10)
+	err := connPool.SetCapacity(context.Background(), 10)
+	assert.NoError(t, err)
 	if connPool.Capacity() != 10 {
 		t.Fatalf("capacity should be 10")
 	}

@@ -32,12 +32,12 @@ import (
 
 var (
 	// ErrTimeout is returned if a connection get times out.
-	ErrTimeout = vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, "resource pool timed out")
+	ErrTimeout = vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, "connection pool timed out")
 
 	// ErrCtxTimeout is returned if a ctx is already expired by the time the connection pool is used
-	ErrCtxTimeout = vterrors.New(vtrpcpb.Code_DEADLINE_EXCEEDED, "resource pool context already expired")
+	ErrCtxTimeout = vterrors.New(vtrpcpb.Code_DEADLINE_EXCEEDED, "connection pool context already expired")
 
-	// ErrShutdown is returned when trying to get a connection from a closed conn pool
+	// ErrConnPoolClosed is returned when trying to get a connection from a closed conn pool
 	ErrConnPoolClosed = vterrors.New(vtrpcpb.Code_INTERNAL, "connection pool is closed")
 
 	// PoolCloseTimeout is how long to wait for all connections to be returned to the pool during close
@@ -265,6 +265,9 @@ func (pool *ConnPool[C]) CloseWithContext(ctx context.Context) error {
 		return nil
 	}
 
+	// close all the connections in the pool; if we time out while waiting for
+	// users to return our connections, we still want to finish the shutdown
+	// for the pool
 	err := pool.setCapacity(ctx, 0)
 
 	close(pool.close)
@@ -285,6 +288,9 @@ func (pool *ConnPool[C]) reopen() {
 	ctx, cancel := context.WithTimeout(context.Background(), PoolCloseTimeout)
 	defer cancel()
 
+	// to re-open the connection pool, first set the capacity to 0 so we close
+	// all the existing connections, as they're now connected to a stale MySQL
+	// instance.
 	if err := pool.setCapacity(ctx, 0); err != nil {
 		log.Errorf("failed to reopen pool %q: %v", pool.Name, err)
 	}
