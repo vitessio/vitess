@@ -211,6 +211,18 @@ func TestWorkflowDelete(t *testing.T) {
 	s := NewServer(vtenv.NewTestEnv(), ts, tmc)
 	err := s.ts.CreateKeyspace(ctx, ksName, &topodatapb.Keyspace{})
 	require.NoError(t, err)
+	err = s.ts.CreateShard(ctx, ksName, "0")
+	require.NoError(t, err)
+	err = s.ts.CreateTablet(ctx, &topodatapb.Tablet{
+		Hostname: "host1",
+		Keyspace: ksName,
+		Shard:    "0",
+		Alias: &topodatapb.TabletAlias{
+			Cell: cellName,
+			Uid:  100,
+		},
+	})
+	require.NoError(t, err)
 
 	testcases := []struct {
 		name    string
@@ -228,6 +240,13 @@ func TestWorkflowDelete(t *testing.T) {
 	}
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
+			res, err := s.MoveTablesCreate(ctx, &vtctldatapb.MoveTablesCreateRequest{
+				TargetKeyspace: ksName,
+				Workflow:       wfName,
+				AllTables:      true,
+			})
+			require.NoError(t, err)
+			require.NotNil(t, res)
 			got, err := s.WorkflowDelete(ctx, tc.req)
 			if (err != nil) != tc.wantErr {
 				t.Errorf("Server.WorkflowDelete() error = %v, wantErr %v", err, tc.wantErr)

@@ -2005,7 +2005,9 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 		s.optimizeCopyStateTable(tablet.Tablet)
 		return res.Result, err
 	}
-	res, err := vx.CallbackContext(ctx, callback)
+	delCtx, delCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout*2)
+	defer delCancel()
+	res, err := vx.CallbackContext(delCtx, callback)
 	if err != nil {
 		return nil, err
 	}
@@ -2015,7 +2017,7 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 	}
 
 	// Cleanup related data and artifacts.
-	if _, err := s.DropTargets(ctx, ts, req.GetKeepData(), req.GetKeepRoutingRules(), false); err != nil {
+	if _, err := s.DropTargets(delCtx, ts, req.GetKeepData(), req.GetKeepRoutingRules(), false); err != nil {
 		if topo.IsErrType(err, topo.NoNode) {
 			return nil, vterrors.Wrapf(err, "%s keyspace does not exist", req.Keyspace)
 		}
@@ -2289,7 +2291,9 @@ func (s *Server) WorkflowUpdate(ctx context.Context, req *vtctldatapb.WorkflowUp
 		}
 		return res.Result, err
 	}
-	res, err := vx.CallbackContext(ctx, callback)
+	updCtx, updCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout*2)
+	defer updCancel()
+	res, err := vx.CallbackContext(updCtx, callback)
 	if err != nil {
 		if topo.IsErrType(err, topo.NoNode) {
 			return nil, vterrors.Wrapf(err, "%s keyspace does not exist", req.Keyspace)
