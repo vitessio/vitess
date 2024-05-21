@@ -1895,7 +1895,7 @@ func (tsv *TabletServer) registerThrottlerCheckHandlers() {
 			ctx := tabletenv.LocalContext()
 			appName := r.URL.Query().Get("app")
 			if appName == "" {
-				appName = throttlerapp.DefaultName.String()
+				appName = throttlerapp.VitessName.String()
 			}
 			flags := &throttle.CheckFlags{
 				Scope:                 scope,

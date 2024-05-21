@@ -44,12 +44,11 @@ func (n Name) SplitStrings() []string {
 }
 
 const (
-	// DefaultName is the app name used by vitess when app doesn't indicate its name
-	DefaultName Name = "default"
 	// AllName is a special catch-all name for all apps
 	AllName Name = "all"
 	// VitessName is used by vitess tablets when communicating between themselves,
-	// as well as for self checks
+	// as well as for self checks.
+	// It is also the name used by checks that do not identify by any app name.
 	VitessName Name = "vitess"
 	// ThrottlerStimulatorName is used by a replica tablet to stimulate the throttler on the Primary tablet
 	ThrottlerStimulatorName Name = "throttler-stimulator"
