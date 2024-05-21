@@ -1146,7 +1146,7 @@ message GetThrottlerStatusResponse {
 
   message MetricHealth {
     vttime.Time last_healthy_at = 1;
-    int32 seconds_since_last_healthy = 2;
+    int64 seconds_since_last_healthy = 2;
   }
   // MetricsHealth is a map of metric names to their health status.
   map<string, MetricHealth> metrics_health = 14;

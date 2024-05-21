@@ -44958,7 +44958,7 @@ func (m *GetThrottlerStatusResponse_MetricHealth) UnmarshalVT(dAtA []byte) error
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.SecondsSinceLastHealthy |= int32(b&0x7F) << shift
+				m.SecondsSinceLastHealthy |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}

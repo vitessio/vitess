@@ -31101,7 +31101,7 @@ export namespace tabletmanagerdata {
             last_healthy_at?: (vttime.ITime|null);
 
             /** MetricHealth seconds_since_last_healthy */
-            seconds_since_last_healthy?: (number|null);
+            seconds_since_last_healthy?: (number|Long|null);
         }
 
         /** Represents a MetricHealth. */
@@ -31117,7 +31117,7 @@ export namespace tabletmanagerdata {
             public last_healthy_at?: (vttime.ITime|null);
 
             /** MetricHealth seconds_since_last_healthy. */
-            public seconds_since_last_healthy: number;
+            public seconds_since_last_healthy: (number|Long);
 
             /**
              * Creates a new MetricHealth instance using the specified properties.
@@ -58647,7 +58647,7 @@ export namespace vtctldata {
             last_healthy_at?: (vttime.ITime|null);
 
             /** MetricHealth seconds_since_last_healthy */
-            seconds_since_last_healthy?: (number|null);
+            seconds_since_last_healthy?: (number|Long|null);
         }
 
         /** Represents a MetricHealth. */
@@ -58663,7 +58663,7 @@ export namespace vtctldata {
             public last_healthy_at?: (vttime.ITime|null);
 
             /** MetricHealth seconds_since_last_healthy. */
-            public seconds_since_last_healthy: number;
+            public seconds_since_last_healthy: (number|Long);
 
             /**
              * Creates a new MetricHealth instance using the specified properties.
