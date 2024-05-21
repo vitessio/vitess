@@ -68476,8 +68476,8 @@ export namespace vtctldata {
     /** Properties of a ThrottlerStatusRequest. */
     interface IThrottlerStatusRequest {
 
-        /** ThrottlerStatusRequest tablet */
-        tablet?: (topodata.ITabletAlias|null);
+        /** ThrottlerStatusRequest tablet_alias */
+        tablet_alias?: (topodata.ITabletAlias|null);
     }
 
     /** Represents a ThrottlerStatusRequest. */
@@ -68489,8 +68489,8 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.IThrottlerStatusRequest);
 
-        /** ThrottlerStatusRequest tablet. */
-        public tablet?: (topodata.ITabletAlias|null);
+        /** ThrottlerStatusRequest tablet_alias. */
+        public tablet_alias?: (topodata.ITabletAlias|null);
 
         /**
          * Creates a new ThrottlerStatusRequest instance using the specified properties.
@@ -68573,8 +68573,8 @@ export namespace vtctldata {
     /** Properties of a ThrottlerStatusResponse. */
     interface IThrottlerStatusResponse {
 
-        /** ThrottlerStatusResponse tablet */
-        tablet?: (string|null);
+        /** ThrottlerStatusResponse tablet_alias */
+        tablet_alias?: (string|null);
 
         /** ThrottlerStatusResponse keyspace */
         keyspace?: (string|null);
@@ -68631,8 +68631,8 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.IThrottlerStatusResponse);
 
-        /** ThrottlerStatusResponse tablet. */
-        public tablet: string;
+        /** ThrottlerStatusResponse tablet_alias. */
+        public tablet_alias: string;
 
         /** ThrottlerStatusResponse keyspace. */
         public keyspace: string;

@@ -4676,7 +4676,7 @@ func (m *ThrottlerStatusRequest) CloneVT() *ThrottlerStatusRequest {
 		return (*ThrottlerStatusRequest)(nil)
 	}
 	r := &ThrottlerStatusRequest{
-		Tablet: m.Tablet.CloneVT(),
+		TabletAlias: m.TabletAlias.CloneVT(),
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -4732,7 +4732,7 @@ func (m *ThrottlerStatusResponse) CloneVT() *ThrottlerStatusResponse {
 		return (*ThrottlerStatusResponse)(nil)
 	}
 	r := &ThrottlerStatusResponse{
-		Tablet:                  m.Tablet,
+		TabletAlias:             m.TabletAlias,
 		Keyspace:                m.Keyspace,
 		Shard:                   m.Shard,
 		IsLeader:                m.IsLeader,
@@ -18219,8 +18219,8 @@ func (m *ThrottlerStatusRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.Tablet != nil {
-		size, err := m.Tablet.MarshalToSizedBufferVT(dAtA[:i])
+	if m.TabletAlias != nil {
+		size, err := m.TabletAlias.MarshalToSizedBufferVT(dAtA[:i])
 		if err != nil {
 			return 0, err
 		}
@@ -18542,10 +18542,10 @@ func (m *ThrottlerStatusResponse) MarshalToSizedBufferVT(dAtA []byte) (int, erro
 		i--
 		dAtA[i] = 0x12
 	}
-	if len(m.Tablet) > 0 {
-		i -= len(m.Tablet)
-		copy(dAtA[i:], m.Tablet)
-		i = encodeVarint(dAtA, i, uint64(len(m.Tablet)))
+	if len(m.TabletAlias) > 0 {
+		i -= len(m.TabletAlias)
+		copy(dAtA[i:], m.TabletAlias)
+		i = encodeVarint(dAtA, i, uint64(len(m.TabletAlias)))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -25758,8 +25758,8 @@ func (m *ThrottlerStatusRequest) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
-	if m.Tablet != nil {
-		l = m.Tablet.SizeVT()
+	if m.TabletAlias != nil {
+		l = m.TabletAlias.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -25806,7 +25806,7 @@ func (m *ThrottlerStatusResponse) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
-	l = len(m.Tablet)
+	l = len(m.TabletAlias)
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
@@ -57111,7 +57111,7 @@ func (m *ThrottlerStatusRequest) UnmarshalVT(dAtA []byte) error {
 		switch fieldNum {
 		case 1:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Tablet", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field TabletAlias", wireType)
 			}
 			var msglen int
 			for shift := uint(0); ; shift += 7 {
@@ -57138,10 +57138,10 @@ func (m *ThrottlerStatusRequest) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if m.Tablet == nil {
-				m.Tablet = &topodata.TabletAlias{}
+			if m.TabletAlias == nil {
+				m.TabletAlias = &topodata.TabletAlias{}
 			}
-			if err := m.Tablet.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+			if err := m.TabletAlias.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex
@@ -57398,7 +57398,7 @@ func (m *ThrottlerStatusResponse) UnmarshalVT(dAtA []byte) error {
 		switch fieldNum {
 		case 1:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Tablet", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field TabletAlias", wireType)
 			}
 			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
@@ -57426,7 +57426,7 @@ func (m *ThrottlerStatusResponse) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Tablet = string(dAtA[iNdEx:postIndex])
+			m.TabletAlias = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 2:
 			if wireType != 2 {

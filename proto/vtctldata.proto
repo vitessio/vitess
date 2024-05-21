@@ -1759,13 +1759,13 @@ message TabletExternallyReparentedRequest {
 }
 
 message ThrottlerStatusRequest {
-  // Tablet is the alias of the tablet to probe
-  topodata.TabletAlias tablet = 1;
+  // TabletAlias is the alias of the tablet to probe
+  topodata.TabletAlias tablet_alias = 1;
 }
 
 message ThrottlerStatusResponse {
-  // Tablet is the alias of probed tablet
-  string tablet = 1;
+  // TabletAlias is the alias of probed tablet
+  string tablet_alias = 1;
   string keyspace = 2;
   string shard = 3;
 
