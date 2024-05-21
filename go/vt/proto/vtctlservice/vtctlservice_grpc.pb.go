@@ -270,6 +270,8 @@ type VtctldClient interface {
 	GetTablet(ctx context.Context, in *vtctldata.GetTabletRequest, opts ...grpc.CallOption) (*vtctldata.GetTabletResponse, error)
 	// GetTablets returns tablets, optionally filtered by keyspace and shard.
 	GetTablets(ctx context.Context, in *vtctldata.GetTabletsRequest, opts ...grpc.CallOption) (*vtctldata.GetTabletsResponse, error)
+	// GetThrottlerStatus gets the status of a tablet throttler
+	GetThrottlerStatus(ctx context.Context, in *vtctldata.ThrottlerStatusRequest, opts ...grpc.CallOption) (*vtctldata.ThrottlerStatusResponse, error)
 	// GetTopologyPath returns the topology cell at a given path.
 	GetTopologyPath(ctx context.Context, in *vtctldata.GetTopologyPathRequest, opts ...grpc.CallOption) (*vtctldata.GetTopologyPathResponse, error)
 	// GetVersion returns the version of a tablet from its debug vars.
@@ -425,8 +427,6 @@ type VtctldClient interface {
 	// See the Reparenting guide for more information:
 	// https://vitess.io/docs/user-guides/configuration-advanced/reparenting/#external-reparenting.
 	TabletExternallyReparented(ctx context.Context, in *vtctldata.TabletExternallyReparentedRequest, opts ...grpc.CallOption) (*vtctldata.TabletExternallyReparentedResponse, error)
-	// ThrottlerStatus gets the status of a tablet throttler
-	ThrottlerStatus(ctx context.Context, in *vtctldata.ThrottlerStatusRequest, opts ...grpc.CallOption) (*vtctldata.ThrottlerStatusResponse, error)
 	// UpdateCellInfo updates the content of a CellInfo with the provided
 	// parameters. Empty values are ignored. If the cell does not exist, the
 	// CellInfo will be created.
@@ -979,6 +979,15 @@ func (c *vtctldClient) GetTablets(ctx context.Context, in *vtctldata.GetTabletsR
 	return out, nil
 }
 
+func (c *vtctldClient) GetThrottlerStatus(ctx context.Context, in *vtctldata.ThrottlerStatusRequest, opts ...grpc.CallOption) (*vtctldata.ThrottlerStatusResponse, error) {
+	out := new(vtctldata.ThrottlerStatusResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetThrottlerStatus", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) GetTopologyPath(ctx context.Context, in *vtctldata.GetTopologyPathRequest, opts ...grpc.CallOption) (*vtctldata.GetTopologyPathResponse, error) {
 	out := new(vtctldata.GetTopologyPathResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetTopologyPath", in, out, opts...)
@@ -1425,15 +1434,6 @@ func (c *vtctldClient) TabletExternallyReparented(ctx context.Context, in *vtctl
 	return out, nil
 }
 
-func (c *vtctldClient) ThrottlerStatus(ctx context.Context, in *vtctldata.ThrottlerStatusRequest, opts ...grpc.CallOption) (*vtctldata.ThrottlerStatusResponse, error) {
-	out := new(vtctldata.ThrottlerStatusResponse)
-	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ThrottlerStatus", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *vtctldClient) UpdateCellInfo(ctx context.Context, in *vtctldata.UpdateCellInfoRequest, opts ...grpc.CallOption) (*vtctldata.UpdateCellInfoResponse, error) {
 	out := new(vtctldata.UpdateCellInfoResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/UpdateCellInfo", in, out, opts...)
@@ -1734,6 +1734,8 @@ type VtctldServer interface {
 	GetTablet(context.Context, *vtctldata.GetTabletRequest) (*vtctldata.GetTabletResponse, error)
 	// GetTablets returns tablets, optionally filtered by keyspace and shard.
 	GetTablets(context.Context, *vtctldata.GetTabletsRequest) (*vtctldata.GetTabletsResponse, error)
+	// GetThrottlerStatus gets the status of a tablet throttler
+	GetThrottlerStatus(context.Context, *vtctldata.ThrottlerStatusRequest) (*vtctldata.ThrottlerStatusResponse, error)
 	// GetTopologyPath returns the topology cell at a given path.
 	GetTopologyPath(context.Context, *vtctldata.GetTopologyPathRequest) (*vtctldata.GetTopologyPathResponse, error)
 	// GetVersion returns the version of a tablet from its debug vars.
@@ -1889,8 +1891,6 @@ type VtctldServer interface {
 	// See the Reparenting guide for more information:
 	// https://vitess.io/docs/user-guides/configuration-advanced/reparenting/#external-reparenting.
 	TabletExternallyReparented(context.Context, *vtctldata.TabletExternallyReparentedRequest) (*vtctldata.TabletExternallyReparentedResponse, error)
-	// ThrottlerStatus gets the status of a tablet throttler
-	ThrottlerStatus(context.Context, *vtctldata.ThrottlerStatusRequest) (*vtctldata.ThrottlerStatusResponse, error)
 	// UpdateCellInfo updates the content of a CellInfo with the provided
 	// parameters. Empty values are ignored. If the cell does not exist, the
 	// CellInfo will be created.
@@ -2088,6 +2088,9 @@ func (UnimplementedVtctldServer) GetTablet(context.Context, *vtctldata.GetTablet
 func (UnimplementedVtctldServer) GetTablets(context.Context, *vtctldata.GetTabletsRequest) (*vtctldata.GetTabletsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetTablets not implemented")
 }
+func (UnimplementedVtctldServer) GetThrottlerStatus(context.Context, *vtctldata.ThrottlerStatusRequest) (*vtctldata.ThrottlerStatusResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetThrottlerStatus not implemented")
+}
 func (UnimplementedVtctldServer) GetTopologyPath(context.Context, *vtctldata.GetTopologyPathRequest) (*vtctldata.GetTopologyPathResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetTopologyPath not implemented")
 }
@@ -2228,9 +2231,6 @@ func (UnimplementedVtctldServer) StopReplication(context.Context, *vtctldata.Sto
 }
 func (UnimplementedVtctldServer) TabletExternallyReparented(context.Context, *vtctldata.TabletExternallyReparentedRequest) (*vtctldata.TabletExternallyReparentedResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method TabletExternallyReparented not implemented")
-}
-func (UnimplementedVtctldServer) ThrottlerStatus(context.Context, *vtctldata.ThrottlerStatusRequest) (*vtctldata.ThrottlerStatusResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ThrottlerStatus not implemented")
 }
 func (UnimplementedVtctldServer) UpdateCellInfo(context.Context, *vtctldata.UpdateCellInfoRequest) (*vtctldata.UpdateCellInfoResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpdateCellInfo not implemented")
@@ -3223,6 +3223,24 @@ func _Vtctld_GetTablets_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_GetThrottlerStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.ThrottlerStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).GetThrottlerStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/GetThrottlerStatus",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).GetThrottlerStatus(ctx, req.(*vtctldata.ThrottlerStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_GetTopologyPath_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.GetTopologyPathRequest)
 	if err := dec(in); err != nil {
@@ -4072,24 +4090,6 @@ func _Vtctld_TabletExternallyReparented_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_ThrottlerStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(vtctldata.ThrottlerStatusRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(VtctldServer).ThrottlerStatus(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/vtctlservice.Vtctld/ThrottlerStatus",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VtctldServer).ThrottlerStatus(ctx, req.(*vtctldata.ThrottlerStatusRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _Vtctld_UpdateCellInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.UpdateCellInfoRequest)
 	if err := dec(in); err != nil {
@@ -4618,6 +4618,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Vtctld_GetTablets_Handler,
 		},
 		{
+			MethodName: "GetThrottlerStatus",
+			Handler:    _Vtctld_GetThrottlerStatus_Handler,
+		},
+		{
 			MethodName: "GetTopologyPath",
 			Handler:    _Vtctld_GetTopologyPath_Handler,
 		},
@@ -4800,10 +4804,6 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "TabletExternallyReparented",
 			Handler:    _Vtctld_TabletExternallyReparented_Handler,
-		},
-		{
-			MethodName: "ThrottlerStatus",
-			Handler:    _Vtctld_ThrottlerStatus_Handler,
 		},
 		{
 			MethodName: "UpdateCellInfo",

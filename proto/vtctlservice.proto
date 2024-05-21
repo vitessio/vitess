@@ -165,6 +165,8 @@ service Vtctld {
   rpc GetTablet(vtctldata.GetTabletRequest) returns (vtctldata.GetTabletResponse) {};
   // GetTablets returns tablets, optionally filtered by keyspace and shard.
   rpc GetTablets(vtctldata.GetTabletsRequest) returns (vtctldata.GetTabletsResponse) {};
+  // GetThrottlerStatus gets the status of a tablet throttler
+  rpc GetThrottlerStatus(vtctldata.ThrottlerStatusRequest) returns (vtctldata.ThrottlerStatusResponse) {};
   // GetTopologyPath returns the topology cell at a given path.
   rpc GetTopologyPath(vtctldata.GetTopologyPathRequest) returns (vtctldata.GetTopologyPathResponse) {};
   // GetVersion returns the version of a tablet from its debug vars.
@@ -325,8 +327,6 @@ service Vtctld {
   // See the Reparenting guide for more information:
   // https://vitess.io/docs/user-guides/configuration-advanced/reparenting/#external-reparenting.
   rpc TabletExternallyReparented(vtctldata.TabletExternallyReparentedRequest) returns (vtctldata.TabletExternallyReparentedResponse) {};
-  // ThrottlerStatus gets the status of a tablet throttler
-  rpc ThrottlerStatus(vtctldata.ThrottlerStatusRequest) returns (vtctldata.ThrottlerStatusResponse) {};
   // UpdateCellInfo updates the content of a CellInfo with the provided
   // parameters. Empty values are ignored. If the cell does not exist, the
   // CellInfo will be created.
