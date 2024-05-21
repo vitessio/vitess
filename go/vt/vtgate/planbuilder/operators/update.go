@@ -168,16 +168,7 @@ func createUpdateWithInputOp(ctx *plancontext.PlanningContext, upd *sqlparser.Up
 	upd.Limit = nil
 
 	// Prepare the update expressions list
-	// Any update expression requiring column value from any other table is rewritten to take it as bindvar column.
-	// E.g. UPDATE t1 join t2 on t1.col = t2.col SET t1.col = t2.col + 1 where t2.col = 10;
-	// SET t1.col = t2.col + 1 -> SET t1.col = :t2_col + 1 (t2_col is the bindvar column which will be provided from the input)
-	ueMap := make(map[semantics.TableSet]updList)
-	for _, ue := range upd.Exprs {
-		target := ctx.SemTable.DirectDeps(ue.Name)
-		exprDeps := ctx.SemTable.RecursiveDeps(ue.Expr)
-		jc := breakExpressionInLHSandRHS(ctx, ue.Expr, exprDeps.Remove(target))
-		ueMap[target] = append(ueMap[target], updColumn{ue.Name, jc})
-	}
+	ueMap := prepareUpdateExpressionList(ctx, upd)
 
 	var updOps []dmlOp
 	for _, target := range ctx.SemTable.Targets.Constituents() {
@@ -221,6 +212,42 @@ func createUpdateWithInputOp(ctx *plancontext.PlanningContext, upd *sqlparser.Up
 		}
 	}
 	return op
+}
+
+func prepareUpdateExpressionList(ctx *plancontext.PlanningContext, upd *sqlparser.Update) map[semantics.TableSet]updList {
+	// Any update expression requiring column value from any other table is rewritten to take it as bindvar column.
+	// E.g. UPDATE t1 join t2 on t1.col = t2.col SET t1.col = t2.col + 1 where t2.col = 10;
+	// SET t1.col = t2.col + 1 -> SET t1.col = :t2_col + 1 (t2_col is the bindvar column which will be provided from the input)
+	ueMap := make(map[semantics.TableSet]updList)
+	var dependentCols updList
+	for _, ue := range upd.Exprs {
+		target := ctx.SemTable.DirectDeps(ue.Name)
+		exprDeps := ctx.SemTable.RecursiveDeps(ue.Expr)
+		jc := breakExpressionInLHSandRHS(ctx, ue.Expr, exprDeps.Remove(target))
+		updCol := updColumn{ue.Name, jc}
+		ueMap[target] = append(ueMap[target], updCol)
+		dependentCols = append(dependentCols, updCol)
+	}
+
+	// Check if any of the dependent columns are updated in the same query.
+	// This can result in a mismatch of rows on how MySQL interprets it and how Vitess would have updated those rows.
+	// It is safe to fail for those cases.
+	errIfDependentColumnUpdated(ctx, upd, dependentCols)
+
+	return ueMap
+}
+
+func errIfDependentColumnUpdated(ctx *plancontext.PlanningContext, upd *sqlparser.Update, dependentCols updList) {
+	for _, ue := range upd.Exprs {
+		for _, dc := range dependentCols {
+			for _, bvExpr := range dc.jc.LHSExprs {
+				if ctx.SemTable.EqualsExprWithDeps(ue.Name, bvExpr.Expr) {
+					panic(vterrors.VT12001(
+						fmt.Sprintf("'%s' column referenced in update expression '%s' is itself updated", sqlparser.String(ue.Name), sqlparser.String(dc.jc.Original))))
+				}
+			}
+		}
+	}
 }
 
 func createUpdateOpWithTarget(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update, target semantics.TableSet, uList updList) dmlOp {
