@@ -487,7 +487,10 @@ func (erp *EmergencyReparenter) reparentReplicas(
 	tabletMap map[string]*topo.TabletInfo,
 	statusMap map[string]*replicationdatapb.StopReplicationStatus,
 	opts EmergencyReparentOptions,
-	intermediateReparent bool,
+	intermediateReparent bool, // intermediateReparent represents whether the reparenting of the replicas is the final reparent or not.
+	// Since ERS can sometimes promote a tablet, which isn't a candidate for promotion, if it is the most advanced, we don't want to
+	// call PromoteReplica on it. We just want to get all replicas to replicate from it to get caught up, after which we'll promote the primary
+	// candidate separately. During the final promotion, we call `PromoteReplica` and `PopulateReparentJournal`.
 ) ([]*topodatapb.Tablet, error) {
 
 	var (
@@ -611,7 +614,7 @@ func (erp *EmergencyReparenter) reparentReplicas(
 		erp.logger.Errorf("failed to promote %s to primary", topoproto.TabletAliasString(newPrimaryTablet.Alias))
 		replCancel()
 
-		return nil, vterrors.Wrapf(primaryErr, "failed to promote %v to primary: %v", topoproto.TabletAliasString(newPrimaryTablet.Alias), primaryErr)
+		return nil, vterrors.Wrapf(primaryErr, "failed to promote %v to primary", topoproto.TabletAliasString(newPrimaryTablet.Alias))
 	}
 
 	// We should only cancel the context that all the replicas are using when they are done.

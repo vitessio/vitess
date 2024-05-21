@@ -175,5 +175,5 @@ func TestERSWithWriteInPromoteReplica(t *testing.T) {
 		"set sql_log_bin=1",
 	}, tablets[3])
 	_, err := utils.Ers(clusterInstance, tablets[3], "60s", "30s")
-	require.NoError(t, err, "ERS should not fail even if there is a sidecard db change")
+	require.NoError(t, err, "ERS should not fail even if there is a sidecardb change")
 }
