@@ -3461,7 +3461,7 @@ func TestEmergencyReparenter_reparentReplicas(t *testing.T) {
 			keyspace:         "testkeyspace",
 			shard:            "-",
 			shouldErr:        true,
-			errShouldContain: "failed to promote zone1-0000000100 to primary: context deadline exceeded",
+			errShouldContain: "failed to promote zone1-0000000100 to primary: primary-elect tablet zone1-0000000100 failed to be upgraded to primary: context deadline exceeded",
 		},
 	}
 
