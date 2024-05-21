@@ -949,6 +949,10 @@ func (itmc *internalTabletManagerClient) CheckThrottler(context.Context, *topoda
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
+func (itmc *internalTabletManagerClient) GetThrottlerStatus(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.GetThrottlerStatusRequest) (*tabletmanagerdatapb.GetThrottlerStatusResponse, error) {
+	return nil, fmt.Errorf("not implemented in vtcombo")
+}
+
 func (itmc *internalTabletManagerClient) Close() {
 }
 

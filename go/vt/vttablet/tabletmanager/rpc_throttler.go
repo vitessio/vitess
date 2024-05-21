@@ -19,9 +19,12 @@ package tabletmanager
 import (
 	"context"
 
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/stats"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
@@ -75,6 +78,57 @@ func (tm *TabletManager) CheckThrottler(ctx context.Context, req *tabletmanagerd
 	}
 	if checkResult.Error != nil {
 		resp.Error = checkResult.Error.Error()
+	}
+	return resp, nil
+}
+
+// CheckThrottler executes a throttler check
+func (tm *TabletManager) GetThrottlerStatus(ctx context.Context, req *tabletmanagerdatapb.GetThrottlerStatusRequest) (*tabletmanagerdatapb.GetThrottlerStatusResponse, error) {
+	go stats.GetOrNewCounter("GetThrottlerStatusRequest", "GetThrottlerStatus requests").Add(1)
+	status := tm.QueryServiceControl.GetThrottlerStatus(ctx)
+	if status == nil {
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "nil status")
+	}
+	resp := &tabletmanagerdatapb.GetThrottlerStatusResponse{
+		TabletAlias:             topoproto.TabletAliasString(tm.Tablet().Alias),
+		Keyspace:                status.Keyspace,
+		Shard:                   status.Shard,
+		IsLeader:                status.IsLeader,
+		IsOpen:                  status.IsOpen,
+		IsEnabled:               status.IsEnabled,
+		IsDormant:               status.IsDormant,
+		LagMetricQuery:          status.Query,
+		CustomMetricQuery:       status.CustomQuery,
+		DefaultThreshold:        status.Threshold,
+		MetricNameUsedAsDefault: status.MetricNameUsedAsDefault,
+		AggregatedMetrics:       make(map[string]*tabletmanagerdatapb.GetThrottlerStatusResponse_MetricResult),
+		MetricThresholds:        status.MetricsThresholds,
+		MetricsHealth:           make(map[string]*tabletmanagerdatapb.GetThrottlerStatusResponse_MetricHealth),
+		ThrottledApps:           make(map[string]*topodatapb.ThrottledAppRule),
+		AppCheckedMetrics:       status.AppCheckedMetrics,
+	}
+	for k, m := range status.AggregatedMetrics {
+		val, err := m.Get()
+		resp.AggregatedMetrics[k] = &tabletmanagerdatapb.GetThrottlerStatusResponse_MetricResult{
+			Value: val,
+		}
+		if err != nil {
+			resp.AggregatedMetrics[k].Error = err.Error()
+		}
+	}
+	for k, m := range status.MetricsHealth {
+		resp.MetricsHealth[k] = &tabletmanagerdatapb.GetThrottlerStatusResponse_MetricHealth{
+			LastHealthyAt:           protoutil.TimeToProto(m.LastHealthyAt),
+			SecondsSinceLastHealthy: m.SecondsSinceLastHealthy,
+		}
+	}
+	for _, app := range status.ThrottledApps {
+		resp.ThrottledApps[app.AppName] = &topodatapb.ThrottledAppRule{
+			Name:      app.AppName,
+			Ratio:     app.Ratio,
+			ExpiresAt: protoutil.TimeToProto(app.ExpireAt),
+			Exempt:    app.Exempt,
+		}
 	}
 	return resp, nil
 }

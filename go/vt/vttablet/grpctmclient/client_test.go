@@ -80,6 +80,14 @@ func TestDialDedicatedPool(t *testing.T) {
 		_, err := client.CheckThrottler(ctx, tablet, req)
 		assert.Error(t, err)
 	})
+	t.Run("GetThrottlerStatus", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(ctx, time.Second)
+		defer cancel()
+
+		req := &tabletmanagerdatapb.GetThrottlerStatusRequest{}
+		_, err := client.GetThrottlerStatus(ctx, tablet, req)
+		assert.Error(t, err)
+	})
 	t.Run("empty map", func(t *testing.T) {
 		rpcClient, ok := client.dialer.(*grpcClient)
 		require.True(t, ok)

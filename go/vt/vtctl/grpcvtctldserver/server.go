@@ -731,6 +731,57 @@ func (s *VtctldServer) CheckThrottler(ctx context.Context, req *vtctldatapb.Chec
 	return resp, nil
 }
 
+// GetThrottlerStatus is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetThrottlerStatus(ctx context.Context, req *vtctldatapb.GetThrottlerStatusRequest) (resp *vtctldatapb.GetThrottlerStatusResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetThrottlerStatus")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+
+	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return nil, err
+	}
+
+	r, err := s.tmc.GetThrottlerStatus(ctx, ti.Tablet, &tabletmanagerdatapb.GetThrottlerStatusRequest{})
+	if err != nil {
+		return nil, err
+	}
+	resp = &vtctldatapb.GetThrottlerStatusResponse{
+		TabletAlias:             topoproto.TabletAliasString(req.TabletAlias),
+		Keyspace:                ti.Keyspace,
+		Shard:                   ti.Shard,
+		IsLeader:                r.IsLeader,
+		IsOpen:                  r.IsOpen,
+		IsEnabled:               r.IsEnabled,
+		IsDormant:               r.IsDormant,
+		LagMetricQuery:          r.LagMetricQuery,
+		CustomMetricQuery:       r.CustomMetricQuery,
+		DefaultThreshold:        r.DefaultThreshold,
+		MetricNameUsedAsDefault: r.MetricNameUsedAsDefault,
+		AggregatedMetrics:       make(map[string]*vtctldatapb.GetThrottlerStatusResponse_MetricResult),
+		MetricThresholds:        r.MetricThresholds,
+		MetricsHealth:           make(map[string]*vtctldatapb.GetThrottlerStatusResponse_MetricHealth),
+		ThrottledApps:           r.ThrottledApps,
+		AppCheckedMetrics:       r.AppCheckedMetrics,
+	}
+	for k, m := range r.AggregatedMetrics {
+		resp.AggregatedMetrics[k] = &vtctldatapb.GetThrottlerStatusResponse_MetricResult{
+			Value: m.Value,
+			Error: m.Error,
+		}
+	}
+	for k, m := range r.MetricsHealth {
+		resp.MetricsHealth[k] = &vtctldatapb.GetThrottlerStatusResponse_MetricHealth{
+			LastHealthyAt:           m.LastHealthyAt,
+			SecondsSinceLastHealthy: m.SecondsSinceLastHealthy,
+		}
+	}
+	return resp, nil
+}
+
 // CleanupSchemaMigration is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) CleanupSchemaMigration(ctx context.Context, req *vtctldatapb.CleanupSchemaMigrationRequest) (resp *vtctldatapb.CleanupSchemaMigrationResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.CleanupSchemaMigration")

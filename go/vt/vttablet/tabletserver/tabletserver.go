@@ -1782,6 +1782,12 @@ func (tsv *TabletServer) CheckThrottler(ctx context.Context, appName string, fla
 	return r
 }
 
+// GetThrottlerStatus gets the status of the table throttler
+func (tsv *TabletServer) GetThrottlerStatus(ctx context.Context) *throttle.ThrottlerStatus {
+	r := tsv.lagThrottler.Status()
+	return r
+}
+
 // HandlePanic is part of the queryservice.QueryService interface
 func (tsv *TabletServer) HandlePanic(err *error) {
 	if x := recover(); x != nil {

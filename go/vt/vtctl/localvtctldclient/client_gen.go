@@ -371,6 +371,11 @@ func (client *localVtctldClient) GetTablets(ctx context.Context, in *vtctldatapb
 	return client.s.GetTablets(ctx, in)
 }
 
+// GetThrottlerStatus is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) GetThrottlerStatus(ctx context.Context, in *vtctldatapb.GetThrottlerStatusRequest, opts ...grpc.CallOption) (*vtctldatapb.GetThrottlerStatusResponse, error) {
+	return client.s.GetThrottlerStatus(ctx, in)
+}
+
 // GetTopologyPath is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) GetTopologyPath(ctx context.Context, in *vtctldatapb.GetTopologyPathRequest, opts ...grpc.CallOption) (*vtctldatapb.GetTopologyPathResponse, error) {
 	return client.s.GetTopologyPath(ctx, in)

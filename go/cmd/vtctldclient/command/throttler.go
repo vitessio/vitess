@@ -44,11 +44,20 @@ var (
 	}
 	CheckThrottler = &cobra.Command{
 		Use:                   "CheckThrottler [--app-name <name>] <tablet alias>",
-		Short:                 "check the throttler status for the given tablet",
+		Short:                 "check the throttler on the given tablet",
 		Example:               "CheckThrottler --app-name online-ddl zone1-0000000101",
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandCheckThrottler,
+	}
+
+	GetThrottlerStatus = &cobra.Command{
+		Use:                   "GetThrottlerStatus <tablet alias>",
+		Short:                 "get the throttler status for the given tablet",
+		Example:               "GetThrottlerStatus zone1-0000000101",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandGetThrottlerStatus,
 	}
 )
 
@@ -129,6 +138,31 @@ func commandCheckThrottler(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func commandGetThrottlerStatus(cmd *cobra.Command, args []string) error {
+	alias, err := topoproto.ParseTabletAlias(cmd.Flags().Arg(0))
+	if err != nil {
+		return err
+	}
+
+	cli.FinishedParsing(cmd)
+
+	resp, err := client.GetThrottlerStatus(commandCtx, &vtctldatapb.GetThrottlerStatusRequest{
+		TabletAlias: alias,
+	})
+	if err != nil {
+		return err
+	}
+
+	data, err := cli.MarshalJSON(resp)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
+
+	return nil
+}
+
 func init() {
 	// UpdateThrottlerConfig
 	UpdateThrottlerConfig.Flags().BoolVar(&updateThrottlerConfigOptions.Enable, "enable", false, "Enable the throttler")
@@ -156,4 +190,7 @@ func init() {
 	CheckThrottler.Flags().BoolVar(&checkThrottlerOptions.SkipRequestHeartbeats, "skip-heartbeats", false, "skip renewing heartbeat lease")
 	CheckThrottler.Flags().BoolVar(&checkThrottlerOptions.OkIfNotExists, "ok-if-not-exists", false, "return OK even if metric does not exist")
 	Root.AddCommand(CheckThrottler)
+
+	// GetThrottlerStatus
+	Root.AddCommand(GetThrottlerStatus)
 }
