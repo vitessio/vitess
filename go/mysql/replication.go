@@ -197,3 +197,9 @@ func (c *Conn) BinlogInformation() (string, bool, bool, string, error) {
 	}
 	return binlogFormat, logBin == 1, logReplicaUpdates == 1, binlogRowImage, nil
 }
+
+// ResetBinaryLogsCommand returns the command used to reset the
+// binary logs on the server.
+func (c *Conn) ResetBinaryLogsCommand() string {
+	return c.flavor.resetBinaryLogsCommand()
+}
