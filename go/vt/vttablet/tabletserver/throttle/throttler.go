@@ -826,6 +826,9 @@ func (throttler *Throttler) ThrottledApps() (result []base.AppThrottle) {
 // Instead of measuring actual time, we use the fact recentCheckRateLimiter ticks every second, and take
 // a logical diff, counting the number of ticks since the last check. This is a good enough approximation.
 func (throttler *Throttler) isDormant() bool {
+	if throttler.recentCheckRateLimiter == nil {
+		return false
+	}
 	return throttler.recentCheckRateLimiter.Diff() > throttler.recentCheckDormantDiff
 }
 
