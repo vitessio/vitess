@@ -499,7 +499,7 @@ func (erp *EmergencyReparenter) reparentReplicas(
 	)
 
 	replCtx, replCancel := context.WithTimeout(context.Background(), opts.WaitReplicasTimeout)
-	primaryCtx, primaryCancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
+	primaryCtx, primaryCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer primaryCancel()
 
 	event.DispatchUpdate(ev, "reparenting all tablets")
