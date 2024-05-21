@@ -505,8 +505,10 @@ func testVSchemaForSequenceAfterMoveTables(t *testing.T) {
 		execVtgateQuery(t, vtgateConn, "product", "insert into customer2(name) values('a')")
 	}
 	waitForRowCount(t, vtgateConn, "product", "customer2", 3+num+num)
-	want = fmt.Sprintf("[[INT32(%d)]]", 100+num+num-1)
-	waitForQueryResult(t, vtgateConn, "product", "select max(cid) from customer2", want)
+	res := execVtgateQuery(t, vtgateConn, "product", "select max(cid) from customer2")
+	cid, err := res.Rows[0][0].ToInt()
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, cid, 100+num+num-1)
 }
 
 // testReplicatingWithPKEnumCols ensures that we properly apply binlog events

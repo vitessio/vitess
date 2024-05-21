@@ -51,8 +51,6 @@ func TestTableStreamer(t *testing.T) {
 		"drop table t4",
 	})
 
-	engine.se.Reload(context.Background())
-
 	wantStream := []string{
 		"table_name:\"t1\" fields:{name:\"id\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id\" column_length:11 charset:63 flags:53251} fields:{name:\"val\" type:VARBINARY table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"val\" column_length:128 charset:63 flags:128} pkfields:{name:\"id\" type:INT32 charset:63 flags:53251}",
 		"table_name:\"t1\" rows:{lengths:1 lengths:3 values:\"1aaa\"} rows:{lengths:1 lengths:3 values:\"2bbb\"} lastpk:{lengths:1 values:\"2\"}",
