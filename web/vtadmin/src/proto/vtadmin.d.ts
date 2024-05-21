@@ -30710,493 +30710,6 @@ export namespace tabletmanagerdata {
             public static getTypeUrl(typeUrlPrefix?: string): string;
         }
     }
-
-    /** Properties of a ThrottlerStatusRequest. */
-    interface IThrottlerStatusRequest {
-    }
-
-    /** Represents a ThrottlerStatusRequest. */
-    class ThrottlerStatusRequest implements IThrottlerStatusRequest {
-
-        /**
-         * Constructs a new ThrottlerStatusRequest.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: tabletmanagerdata.IThrottlerStatusRequest);
-
-        /**
-         * Creates a new ThrottlerStatusRequest instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns ThrottlerStatusRequest instance
-         */
-        public static create(properties?: tabletmanagerdata.IThrottlerStatusRequest): tabletmanagerdata.ThrottlerStatusRequest;
-
-        /**
-         * Encodes the specified ThrottlerStatusRequest message. Does not implicitly {@link tabletmanagerdata.ThrottlerStatusRequest.verify|verify} messages.
-         * @param message ThrottlerStatusRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: tabletmanagerdata.IThrottlerStatusRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified ThrottlerStatusRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.ThrottlerStatusRequest.verify|verify} messages.
-         * @param message ThrottlerStatusRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: tabletmanagerdata.IThrottlerStatusRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a ThrottlerStatusRequest message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns ThrottlerStatusRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.ThrottlerStatusRequest;
-
-        /**
-         * Decodes a ThrottlerStatusRequest message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns ThrottlerStatusRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.ThrottlerStatusRequest;
-
-        /**
-         * Verifies a ThrottlerStatusRequest message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a ThrottlerStatusRequest message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns ThrottlerStatusRequest
-         */
-        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.ThrottlerStatusRequest;
-
-        /**
-         * Creates a plain object from a ThrottlerStatusRequest message. Also converts values to other types if specified.
-         * @param message ThrottlerStatusRequest
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: tabletmanagerdata.ThrottlerStatusRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this ThrottlerStatusRequest to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for ThrottlerStatusRequest
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a ThrottlerStatusResponse. */
-    interface IThrottlerStatusResponse {
-
-        /** ThrottlerStatusResponse tablet_alias */
-        tablet_alias?: (string|null);
-
-        /** ThrottlerStatusResponse keyspace */
-        keyspace?: (string|null);
-
-        /** ThrottlerStatusResponse shard */
-        shard?: (string|null);
-
-        /** ThrottlerStatusResponse is_leader */
-        is_leader?: (boolean|null);
-
-        /** ThrottlerStatusResponse is_open */
-        is_open?: (boolean|null);
-
-        /** ThrottlerStatusResponse is_enabled */
-        is_enabled?: (boolean|null);
-
-        /** ThrottlerStatusResponse is_dormant */
-        is_dormant?: (boolean|null);
-
-        /** ThrottlerStatusResponse lag_metric_query */
-        lag_metric_query?: (string|null);
-
-        /** ThrottlerStatusResponse custom_metric_query */
-        custom_metric_query?: (string|null);
-
-        /** ThrottlerStatusResponse default_threshold */
-        default_threshold?: (number|null);
-
-        /** ThrottlerStatusResponse metric_name_used_as_default */
-        metric_name_used_as_default?: (string|null);
-
-        /** ThrottlerStatusResponse aggregated_metrics */
-        aggregated_metrics?: ({ [k: string]: tabletmanagerdata.ThrottlerStatusResponse.IMetricResult }|null);
-
-        /** ThrottlerStatusResponse metric_thresholds */
-        metric_thresholds?: ({ [k: string]: number }|null);
-
-        /** ThrottlerStatusResponse metrics_health */
-        metrics_health?: ({ [k: string]: tabletmanagerdata.ThrottlerStatusResponse.IMetricHealth }|null);
-
-        /** ThrottlerStatusResponse throttled_apps */
-        throttled_apps?: ({ [k: string]: topodata.IThrottledAppRule }|null);
-
-        /** ThrottlerStatusResponse app_checked_metrics */
-        app_checked_metrics?: ({ [k: string]: string }|null);
-    }
-
-    /** Represents a ThrottlerStatusResponse. */
-    class ThrottlerStatusResponse implements IThrottlerStatusResponse {
-
-        /**
-         * Constructs a new ThrottlerStatusResponse.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: tabletmanagerdata.IThrottlerStatusResponse);
-
-        /** ThrottlerStatusResponse tablet_alias. */
-        public tablet_alias: string;
-
-        /** ThrottlerStatusResponse keyspace. */
-        public keyspace: string;
-
-        /** ThrottlerStatusResponse shard. */
-        public shard: string;
-
-        /** ThrottlerStatusResponse is_leader. */
-        public is_leader: boolean;
-
-        /** ThrottlerStatusResponse is_open. */
-        public is_open: boolean;
-
-        /** ThrottlerStatusResponse is_enabled. */
-        public is_enabled: boolean;
-
-        /** ThrottlerStatusResponse is_dormant. */
-        public is_dormant: boolean;
-
-        /** ThrottlerStatusResponse lag_metric_query. */
-        public lag_metric_query: string;
-
-        /** ThrottlerStatusResponse custom_metric_query. */
-        public custom_metric_query: string;
-
-        /** ThrottlerStatusResponse default_threshold. */
-        public default_threshold: number;
-
-        /** ThrottlerStatusResponse metric_name_used_as_default. */
-        public metric_name_used_as_default: string;
-
-        /** ThrottlerStatusResponse aggregated_metrics. */
-        public aggregated_metrics: { [k: string]: tabletmanagerdata.ThrottlerStatusResponse.IMetricResult };
-
-        /** ThrottlerStatusResponse metric_thresholds. */
-        public metric_thresholds: { [k: string]: number };
-
-        /** ThrottlerStatusResponse metrics_health. */
-        public metrics_health: { [k: string]: tabletmanagerdata.ThrottlerStatusResponse.IMetricHealth };
-
-        /** ThrottlerStatusResponse throttled_apps. */
-        public throttled_apps: { [k: string]: topodata.IThrottledAppRule };
-
-        /** ThrottlerStatusResponse app_checked_metrics. */
-        public app_checked_metrics: { [k: string]: string };
-
-        /**
-         * Creates a new ThrottlerStatusResponse instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns ThrottlerStatusResponse instance
-         */
-        public static create(properties?: tabletmanagerdata.IThrottlerStatusResponse): tabletmanagerdata.ThrottlerStatusResponse;
-
-        /**
-         * Encodes the specified ThrottlerStatusResponse message. Does not implicitly {@link tabletmanagerdata.ThrottlerStatusResponse.verify|verify} messages.
-         * @param message ThrottlerStatusResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: tabletmanagerdata.IThrottlerStatusResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified ThrottlerStatusResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.ThrottlerStatusResponse.verify|verify} messages.
-         * @param message ThrottlerStatusResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: tabletmanagerdata.IThrottlerStatusResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a ThrottlerStatusResponse message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns ThrottlerStatusResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.ThrottlerStatusResponse;
-
-        /**
-         * Decodes a ThrottlerStatusResponse message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns ThrottlerStatusResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.ThrottlerStatusResponse;
-
-        /**
-         * Verifies a ThrottlerStatusResponse message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a ThrottlerStatusResponse message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns ThrottlerStatusResponse
-         */
-        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.ThrottlerStatusResponse;
-
-        /**
-         * Creates a plain object from a ThrottlerStatusResponse message. Also converts values to other types if specified.
-         * @param message ThrottlerStatusResponse
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: tabletmanagerdata.ThrottlerStatusResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this ThrottlerStatusResponse to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for ThrottlerStatusResponse
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    namespace ThrottlerStatusResponse {
-
-        /** Properties of a MetricResult. */
-        interface IMetricResult {
-
-            /** MetricResult value */
-            value?: (number|null);
-
-            /** MetricResult error */
-            error?: (string|null);
-        }
-
-        /** Represents a MetricResult. */
-        class MetricResult implements IMetricResult {
-
-            /**
-             * Constructs a new MetricResult.
-             * @param [properties] Properties to set
-             */
-            constructor(properties?: tabletmanagerdata.ThrottlerStatusResponse.IMetricResult);
-
-            /** MetricResult value. */
-            public value: number;
-
-            /** MetricResult error. */
-            public error: string;
-
-            /**
-             * Creates a new MetricResult instance using the specified properties.
-             * @param [properties] Properties to set
-             * @returns MetricResult instance
-             */
-            public static create(properties?: tabletmanagerdata.ThrottlerStatusResponse.IMetricResult): tabletmanagerdata.ThrottlerStatusResponse.MetricResult;
-
-            /**
-             * Encodes the specified MetricResult message. Does not implicitly {@link tabletmanagerdata.ThrottlerStatusResponse.MetricResult.verify|verify} messages.
-             * @param message MetricResult message or plain object to encode
-             * @param [writer] Writer to encode to
-             * @returns Writer
-             */
-            public static encode(message: tabletmanagerdata.ThrottlerStatusResponse.IMetricResult, writer?: $protobuf.Writer): $protobuf.Writer;
-
-            /**
-             * Encodes the specified MetricResult message, length delimited. Does not implicitly {@link tabletmanagerdata.ThrottlerStatusResponse.MetricResult.verify|verify} messages.
-             * @param message MetricResult message or plain object to encode
-             * @param [writer] Writer to encode to
-             * @returns Writer
-             */
-            public static encodeDelimited(message: tabletmanagerdata.ThrottlerStatusResponse.IMetricResult, writer?: $protobuf.Writer): $protobuf.Writer;
-
-            /**
-             * Decodes a MetricResult message from the specified reader or buffer.
-             * @param reader Reader or buffer to decode from
-             * @param [length] Message length if known beforehand
-             * @returns MetricResult
-             * @throws {Error} If the payload is not a reader or valid buffer
-             * @throws {$protobuf.util.ProtocolError} If required fields are missing
-             */
-            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.ThrottlerStatusResponse.MetricResult;
-
-            /**
-             * Decodes a MetricResult message from the specified reader or buffer, length delimited.
-             * @param reader Reader or buffer to decode from
-             * @returns MetricResult
-             * @throws {Error} If the payload is not a reader or valid buffer
-             * @throws {$protobuf.util.ProtocolError} If required fields are missing
-             */
-            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.ThrottlerStatusResponse.MetricResult;
-
-            /**
-             * Verifies a MetricResult message.
-             * @param message Plain object to verify
-             * @returns `null` if valid, otherwise the reason why it is not
-             */
-            public static verify(message: { [k: string]: any }): (string|null);
-
-            /**
-             * Creates a MetricResult message from a plain object. Also converts values to their respective internal types.
-             * @param object Plain object
-             * @returns MetricResult
-             */
-            public static fromObject(object: { [k: string]: any }): tabletmanagerdata.ThrottlerStatusResponse.MetricResult;
-
-            /**
-             * Creates a plain object from a MetricResult message. Also converts values to other types if specified.
-             * @param message MetricResult
-             * @param [options] Conversion options
-             * @returns Plain object
-             */
-            public static toObject(message: tabletmanagerdata.ThrottlerStatusResponse.MetricResult, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-            /**
-             * Converts this MetricResult to JSON.
-             * @returns JSON object
-             */
-            public toJSON(): { [k: string]: any };
-
-            /**
-             * Gets the default type url for MetricResult
-             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-             * @returns The default type url
-             */
-            public static getTypeUrl(typeUrlPrefix?: string): string;
-        }
-
-        /** Properties of a MetricHealth. */
-        interface IMetricHealth {
-
-            /** MetricHealth last_healthy_at */
-            last_healthy_at?: (vttime.ITime|null);
-
-            /** MetricHealth seconds_since_last_healthy */
-            seconds_since_last_healthy?: (number|null);
-        }
-
-        /** Represents a MetricHealth. */
-        class MetricHealth implements IMetricHealth {
-
-            /**
-             * Constructs a new MetricHealth.
-             * @param [properties] Properties to set
-             */
-            constructor(properties?: tabletmanagerdata.ThrottlerStatusResponse.IMetricHealth);
-
-            /** MetricHealth last_healthy_at. */
-            public last_healthy_at?: (vttime.ITime|null);
-
-            /** MetricHealth seconds_since_last_healthy. */
-            public seconds_since_last_healthy: number;
-
-            /**
-             * Creates a new MetricHealth instance using the specified properties.
-             * @param [properties] Properties to set
-             * @returns MetricHealth instance
-             */
-            public static create(properties?: tabletmanagerdata.ThrottlerStatusResponse.IMetricHealth): tabletmanagerdata.ThrottlerStatusResponse.MetricHealth;
-
-            /**
-             * Encodes the specified MetricHealth message. Does not implicitly {@link tabletmanagerdata.ThrottlerStatusResponse.MetricHealth.verify|verify} messages.
-             * @param message MetricHealth message or plain object to encode
-             * @param [writer] Writer to encode to
-             * @returns Writer
-             */
-            public static encode(message: tabletmanagerdata.ThrottlerStatusResponse.IMetricHealth, writer?: $protobuf.Writer): $protobuf.Writer;
-
-            /**
-             * Encodes the specified MetricHealth message, length delimited. Does not implicitly {@link tabletmanagerdata.ThrottlerStatusResponse.MetricHealth.verify|verify} messages.
-             * @param message MetricHealth message or plain object to encode
-             * @param [writer] Writer to encode to
-             * @returns Writer
-             */
-            public static encodeDelimited(message: tabletmanagerdata.ThrottlerStatusResponse.IMetricHealth, writer?: $protobuf.Writer): $protobuf.Writer;
-
-            /**
-             * Decodes a MetricHealth message from the specified reader or buffer.
-             * @param reader Reader or buffer to decode from
-             * @param [length] Message length if known beforehand
-             * @returns MetricHealth
-             * @throws {Error} If the payload is not a reader or valid buffer
-             * @throws {$protobuf.util.ProtocolError} If required fields are missing
-             */
-            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.ThrottlerStatusResponse.MetricHealth;
-
-            /**
-             * Decodes a MetricHealth message from the specified reader or buffer, length delimited.
-             * @param reader Reader or buffer to decode from
-             * @returns MetricHealth
-             * @throws {Error} If the payload is not a reader or valid buffer
-             * @throws {$protobuf.util.ProtocolError} If required fields are missing
-             */
-            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.ThrottlerStatusResponse.MetricHealth;
-
-            /**
-             * Verifies a MetricHealth message.
-             * @param message Plain object to verify
-             * @returns `null` if valid, otherwise the reason why it is not
-             */
-            public static verify(message: { [k: string]: any }): (string|null);
-
-            /**
-             * Creates a MetricHealth message from a plain object. Also converts values to their respective internal types.
-             * @param object Plain object
-             * @returns MetricHealth
-             */
-            public static fromObject(object: { [k: string]: any }): tabletmanagerdata.ThrottlerStatusResponse.MetricHealth;
-
-            /**
-             * Creates a plain object from a MetricHealth message. Also converts values to other types if specified.
-             * @param message MetricHealth
-             * @param [options] Conversion options
-             * @returns Plain object
-             */
-            public static toObject(message: tabletmanagerdata.ThrottlerStatusResponse.MetricHealth, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-            /**
-             * Converts this MetricHealth to JSON.
-             * @returns JSON object
-             */
-            public toJSON(): { [k: string]: any };
-
-            /**
-             * Gets the default type url for MetricHealth
-             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-             * @returns The default type url
-             */
-            public static getTypeUrl(typeUrlPrefix?: string): string;
-        }
-    }
 }
 
 /** Namespace binlogdata. */
@@ -68471,6 +67984,499 @@ export namespace vtctldata {
          * @returns The default type url
          */
         public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ThrottlerStatusRequest. */
+    interface IThrottlerStatusRequest {
+
+        /** ThrottlerStatusRequest tablet */
+        tablet?: (topodata.ITabletAlias|null);
+    }
+
+    /** Represents a ThrottlerStatusRequest. */
+    class ThrottlerStatusRequest implements IThrottlerStatusRequest {
+
+        /**
+         * Constructs a new ThrottlerStatusRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IThrottlerStatusRequest);
+
+        /** ThrottlerStatusRequest tablet. */
+        public tablet?: (topodata.ITabletAlias|null);
+
+        /**
+         * Creates a new ThrottlerStatusRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ThrottlerStatusRequest instance
+         */
+        public static create(properties?: vtctldata.IThrottlerStatusRequest): vtctldata.ThrottlerStatusRequest;
+
+        /**
+         * Encodes the specified ThrottlerStatusRequest message. Does not implicitly {@link vtctldata.ThrottlerStatusRequest.verify|verify} messages.
+         * @param message ThrottlerStatusRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IThrottlerStatusRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ThrottlerStatusRequest message, length delimited. Does not implicitly {@link vtctldata.ThrottlerStatusRequest.verify|verify} messages.
+         * @param message ThrottlerStatusRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IThrottlerStatusRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ThrottlerStatusRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ThrottlerStatusRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ThrottlerStatusRequest;
+
+        /**
+         * Decodes a ThrottlerStatusRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ThrottlerStatusRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ThrottlerStatusRequest;
+
+        /**
+         * Verifies a ThrottlerStatusRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ThrottlerStatusRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ThrottlerStatusRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ThrottlerStatusRequest;
+
+        /**
+         * Creates a plain object from a ThrottlerStatusRequest message. Also converts values to other types if specified.
+         * @param message ThrottlerStatusRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ThrottlerStatusRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ThrottlerStatusRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ThrottlerStatusRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ThrottlerStatusResponse. */
+    interface IThrottlerStatusResponse {
+
+        /** ThrottlerStatusResponse tablet */
+        tablet?: (string|null);
+
+        /** ThrottlerStatusResponse keyspace */
+        keyspace?: (string|null);
+
+        /** ThrottlerStatusResponse shard */
+        shard?: (string|null);
+
+        /** ThrottlerStatusResponse is_leader */
+        is_leader?: (boolean|null);
+
+        /** ThrottlerStatusResponse is_open */
+        is_open?: (boolean|null);
+
+        /** ThrottlerStatusResponse is_enabled */
+        is_enabled?: (boolean|null);
+
+        /** ThrottlerStatusResponse is_dormant */
+        is_dormant?: (boolean|null);
+
+        /** ThrottlerStatusResponse lag_metric_query */
+        lag_metric_query?: (string|null);
+
+        /** ThrottlerStatusResponse custom_metric_query */
+        custom_metric_query?: (string|null);
+
+        /** ThrottlerStatusResponse default_threshold */
+        default_threshold?: (number|null);
+
+        /** ThrottlerStatusResponse metric_name_used_as_default */
+        metric_name_used_as_default?: (string|null);
+
+        /** ThrottlerStatusResponse aggregated_metrics */
+        aggregated_metrics?: ({ [k: string]: vtctldata.ThrottlerStatusResponse.IMetricResult }|null);
+
+        /** ThrottlerStatusResponse metric_thresholds */
+        metric_thresholds?: ({ [k: string]: number }|null);
+
+        /** ThrottlerStatusResponse metrics_health */
+        metrics_health?: ({ [k: string]: vtctldata.ThrottlerStatusResponse.IMetricHealth }|null);
+
+        /** ThrottlerStatusResponse throttled_apps */
+        throttled_apps?: ({ [k: string]: topodata.IThrottledAppRule }|null);
+
+        /** ThrottlerStatusResponse app_checked_metrics */
+        app_checked_metrics?: ({ [k: string]: string }|null);
+    }
+
+    /** Represents a ThrottlerStatusResponse. */
+    class ThrottlerStatusResponse implements IThrottlerStatusResponse {
+
+        /**
+         * Constructs a new ThrottlerStatusResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IThrottlerStatusResponse);
+
+        /** ThrottlerStatusResponse tablet. */
+        public tablet: string;
+
+        /** ThrottlerStatusResponse keyspace. */
+        public keyspace: string;
+
+        /** ThrottlerStatusResponse shard. */
+        public shard: string;
+
+        /** ThrottlerStatusResponse is_leader. */
+        public is_leader: boolean;
+
+        /** ThrottlerStatusResponse is_open. */
+        public is_open: boolean;
+
+        /** ThrottlerStatusResponse is_enabled. */
+        public is_enabled: boolean;
+
+        /** ThrottlerStatusResponse is_dormant. */
+        public is_dormant: boolean;
+
+        /** ThrottlerStatusResponse lag_metric_query. */
+        public lag_metric_query: string;
+
+        /** ThrottlerStatusResponse custom_metric_query. */
+        public custom_metric_query: string;
+
+        /** ThrottlerStatusResponse default_threshold. */
+        public default_threshold: number;
+
+        /** ThrottlerStatusResponse metric_name_used_as_default. */
+        public metric_name_used_as_default: string;
+
+        /** ThrottlerStatusResponse aggregated_metrics. */
+        public aggregated_metrics: { [k: string]: vtctldata.ThrottlerStatusResponse.IMetricResult };
+
+        /** ThrottlerStatusResponse metric_thresholds. */
+        public metric_thresholds: { [k: string]: number };
+
+        /** ThrottlerStatusResponse metrics_health. */
+        public metrics_health: { [k: string]: vtctldata.ThrottlerStatusResponse.IMetricHealth };
+
+        /** ThrottlerStatusResponse throttled_apps. */
+        public throttled_apps: { [k: string]: topodata.IThrottledAppRule };
+
+        /** ThrottlerStatusResponse app_checked_metrics. */
+        public app_checked_metrics: { [k: string]: string };
+
+        /**
+         * Creates a new ThrottlerStatusResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ThrottlerStatusResponse instance
+         */
+        public static create(properties?: vtctldata.IThrottlerStatusResponse): vtctldata.ThrottlerStatusResponse;
+
+        /**
+         * Encodes the specified ThrottlerStatusResponse message. Does not implicitly {@link vtctldata.ThrottlerStatusResponse.verify|verify} messages.
+         * @param message ThrottlerStatusResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IThrottlerStatusResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ThrottlerStatusResponse message, length delimited. Does not implicitly {@link vtctldata.ThrottlerStatusResponse.verify|verify} messages.
+         * @param message ThrottlerStatusResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IThrottlerStatusResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ThrottlerStatusResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ThrottlerStatusResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ThrottlerStatusResponse;
+
+        /**
+         * Decodes a ThrottlerStatusResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ThrottlerStatusResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ThrottlerStatusResponse;
+
+        /**
+         * Verifies a ThrottlerStatusResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ThrottlerStatusResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ThrottlerStatusResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ThrottlerStatusResponse;
+
+        /**
+         * Creates a plain object from a ThrottlerStatusResponse message. Also converts values to other types if specified.
+         * @param message ThrottlerStatusResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ThrottlerStatusResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ThrottlerStatusResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ThrottlerStatusResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    namespace ThrottlerStatusResponse {
+
+        /** Properties of a MetricResult. */
+        interface IMetricResult {
+
+            /** MetricResult value */
+            value?: (number|null);
+
+            /** MetricResult error */
+            error?: (string|null);
+        }
+
+        /** Represents a MetricResult. */
+        class MetricResult implements IMetricResult {
+
+            /**
+             * Constructs a new MetricResult.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: vtctldata.ThrottlerStatusResponse.IMetricResult);
+
+            /** MetricResult value. */
+            public value: number;
+
+            /** MetricResult error. */
+            public error: string;
+
+            /**
+             * Creates a new MetricResult instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns MetricResult instance
+             */
+            public static create(properties?: vtctldata.ThrottlerStatusResponse.IMetricResult): vtctldata.ThrottlerStatusResponse.MetricResult;
+
+            /**
+             * Encodes the specified MetricResult message. Does not implicitly {@link vtctldata.ThrottlerStatusResponse.MetricResult.verify|verify} messages.
+             * @param message MetricResult message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: vtctldata.ThrottlerStatusResponse.IMetricResult, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Encodes the specified MetricResult message, length delimited. Does not implicitly {@link vtctldata.ThrottlerStatusResponse.MetricResult.verify|verify} messages.
+             * @param message MetricResult message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encodeDelimited(message: vtctldata.ThrottlerStatusResponse.IMetricResult, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a MetricResult message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns MetricResult
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ThrottlerStatusResponse.MetricResult;
+
+            /**
+             * Decodes a MetricResult message from the specified reader or buffer, length delimited.
+             * @param reader Reader or buffer to decode from
+             * @returns MetricResult
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ThrottlerStatusResponse.MetricResult;
+
+            /**
+             * Verifies a MetricResult message.
+             * @param message Plain object to verify
+             * @returns `null` if valid, otherwise the reason why it is not
+             */
+            public static verify(message: { [k: string]: any }): (string|null);
+
+            /**
+             * Creates a MetricResult message from a plain object. Also converts values to their respective internal types.
+             * @param object Plain object
+             * @returns MetricResult
+             */
+            public static fromObject(object: { [k: string]: any }): vtctldata.ThrottlerStatusResponse.MetricResult;
+
+            /**
+             * Creates a plain object from a MetricResult message. Also converts values to other types if specified.
+             * @param message MetricResult
+             * @param [options] Conversion options
+             * @returns Plain object
+             */
+            public static toObject(message: vtctldata.ThrottlerStatusResponse.MetricResult, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+            /**
+             * Converts this MetricResult to JSON.
+             * @returns JSON object
+             */
+            public toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the default type url for MetricResult
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of a MetricHealth. */
+        interface IMetricHealth {
+
+            /** MetricHealth last_healthy_at */
+            last_healthy_at?: (vttime.ITime|null);
+
+            /** MetricHealth seconds_since_last_healthy */
+            seconds_since_last_healthy?: (number|null);
+        }
+
+        /** Represents a MetricHealth. */
+        class MetricHealth implements IMetricHealth {
+
+            /**
+             * Constructs a new MetricHealth.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: vtctldata.ThrottlerStatusResponse.IMetricHealth);
+
+            /** MetricHealth last_healthy_at. */
+            public last_healthy_at?: (vttime.ITime|null);
+
+            /** MetricHealth seconds_since_last_healthy. */
+            public seconds_since_last_healthy: number;
+
+            /**
+             * Creates a new MetricHealth instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns MetricHealth instance
+             */
+            public static create(properties?: vtctldata.ThrottlerStatusResponse.IMetricHealth): vtctldata.ThrottlerStatusResponse.MetricHealth;
+
+            /**
+             * Encodes the specified MetricHealth message. Does not implicitly {@link vtctldata.ThrottlerStatusResponse.MetricHealth.verify|verify} messages.
+             * @param message MetricHealth message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: vtctldata.ThrottlerStatusResponse.IMetricHealth, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Encodes the specified MetricHealth message, length delimited. Does not implicitly {@link vtctldata.ThrottlerStatusResponse.MetricHealth.verify|verify} messages.
+             * @param message MetricHealth message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encodeDelimited(message: vtctldata.ThrottlerStatusResponse.IMetricHealth, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a MetricHealth message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns MetricHealth
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ThrottlerStatusResponse.MetricHealth;
+
+            /**
+             * Decodes a MetricHealth message from the specified reader or buffer, length delimited.
+             * @param reader Reader or buffer to decode from
+             * @returns MetricHealth
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ThrottlerStatusResponse.MetricHealth;
+
+            /**
+             * Verifies a MetricHealth message.
+             * @param message Plain object to verify
+             * @returns `null` if valid, otherwise the reason why it is not
+             */
+            public static verify(message: { [k: string]: any }): (string|null);
+
+            /**
+             * Creates a MetricHealth message from a plain object. Also converts values to their respective internal types.
+             * @param object Plain object
+             * @returns MetricHealth
+             */
+            public static fromObject(object: { [k: string]: any }): vtctldata.ThrottlerStatusResponse.MetricHealth;
+
+            /**
+             * Creates a plain object from a MetricHealth message. Also converts values to other types if specified.
+             * @param message MetricHealth
+             * @param [options] Conversion options
+             * @returns Plain object
+             */
+            public static toObject(message: vtctldata.ThrottlerStatusResponse.MetricHealth, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+            /**
+             * Converts this MetricHealth to JSON.
+             * @returns JSON object
+             */
+            public toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the default type url for MetricHealth
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
     }
 
     /** Properties of a TabletExternallyReparentedResponse. */

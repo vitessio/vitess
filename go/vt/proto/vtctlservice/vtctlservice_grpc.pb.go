@@ -425,6 +425,8 @@ type VtctldClient interface {
 	// See the Reparenting guide for more information:
 	// https://vitess.io/docs/user-guides/configuration-advanced/reparenting/#external-reparenting.
 	TabletExternallyReparented(ctx context.Context, in *vtctldata.TabletExternallyReparentedRequest, opts ...grpc.CallOption) (*vtctldata.TabletExternallyReparentedResponse, error)
+	// ThrottlerStatus gets the status of a tablet throttler
+	ThrottlerStatus(ctx context.Context, in *vtctldata.ThrottlerStatusRequest, opts ...grpc.CallOption) (*vtctldata.ThrottlerStatusResponse, error)
 	// UpdateCellInfo updates the content of a CellInfo with the provided
 	// parameters. Empty values are ignored. If the cell does not exist, the
 	// CellInfo will be created.
@@ -1423,6 +1425,15 @@ func (c *vtctldClient) TabletExternallyReparented(ctx context.Context, in *vtctl
 	return out, nil
 }
 
+func (c *vtctldClient) ThrottlerStatus(ctx context.Context, in *vtctldata.ThrottlerStatusRequest, opts ...grpc.CallOption) (*vtctldata.ThrottlerStatusResponse, error) {
+	out := new(vtctldata.ThrottlerStatusResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ThrottlerStatus", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) UpdateCellInfo(ctx context.Context, in *vtctldata.UpdateCellInfoRequest, opts ...grpc.CallOption) (*vtctldata.UpdateCellInfoResponse, error) {
 	out := new(vtctldata.UpdateCellInfoResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/UpdateCellInfo", in, out, opts...)
@@ -1878,6 +1889,8 @@ type VtctldServer interface {
 	// See the Reparenting guide for more information:
 	// https://vitess.io/docs/user-guides/configuration-advanced/reparenting/#external-reparenting.
 	TabletExternallyReparented(context.Context, *vtctldata.TabletExternallyReparentedRequest) (*vtctldata.TabletExternallyReparentedResponse, error)
+	// ThrottlerStatus gets the status of a tablet throttler
+	ThrottlerStatus(context.Context, *vtctldata.ThrottlerStatusRequest) (*vtctldata.ThrottlerStatusResponse, error)
 	// UpdateCellInfo updates the content of a CellInfo with the provided
 	// parameters. Empty values are ignored. If the cell does not exist, the
 	// CellInfo will be created.
@@ -2215,6 +2228,9 @@ func (UnimplementedVtctldServer) StopReplication(context.Context, *vtctldata.Sto
 }
 func (UnimplementedVtctldServer) TabletExternallyReparented(context.Context, *vtctldata.TabletExternallyReparentedRequest) (*vtctldata.TabletExternallyReparentedResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method TabletExternallyReparented not implemented")
+}
+func (UnimplementedVtctldServer) ThrottlerStatus(context.Context, *vtctldata.ThrottlerStatusRequest) (*vtctldata.ThrottlerStatusResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ThrottlerStatus not implemented")
 }
 func (UnimplementedVtctldServer) UpdateCellInfo(context.Context, *vtctldata.UpdateCellInfoRequest) (*vtctldata.UpdateCellInfoResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpdateCellInfo not implemented")
@@ -4056,6 +4072,24 @@ func _Vtctld_TabletExternallyReparented_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_ThrottlerStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.ThrottlerStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).ThrottlerStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/ThrottlerStatus",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).ThrottlerStatus(ctx, req.(*vtctldata.ThrottlerStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_UpdateCellInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.UpdateCellInfoRequest)
 	if err := dec(in); err != nil {
@@ -4766,6 +4800,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "TabletExternallyReparented",
 			Handler:    _Vtctld_TabletExternallyReparented_Handler,
+		},
+		{
+			MethodName: "ThrottlerStatus",
+			Handler:    _Vtctld_ThrottlerStatus_Handler,
 		},
 		{
 			MethodName: "UpdateCellInfo",
