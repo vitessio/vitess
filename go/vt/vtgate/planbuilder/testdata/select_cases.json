@@ -1109,7 +1109,7 @@
             },
             "FieldQuery": "select user_id, weight_string(user_id) from music where 1 != 1",
             "OrderBy": "(0|1) ASC",
-            "Query": "select user_id, weight_string(user_id) from music order by music.user_id asc",
+            "Query": "select user_id, weight_string(user_id) from music order by music.user_id asc limit :__upper_limit",
             "ResultColumns": 1,
             "Table": "music"
           }

@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"io"
 
+	"vitess.io/vitess/go/vt/vtgate/engine"
+
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
@@ -260,11 +262,7 @@ func createPushedLimit(ctx *plancontext.PlanningContext, src Operator, orig *Lim
 			Left:     pushedLimit.Rowcount,
 			Right:    pushedLimit.Offset,
 		}
-		expr, isLiteral := simplifyLiteralExpression(ctx, plus)
-		if !isLiteral {
-			// MySQL doesn't allow non-literal expressions in LIMIT, so we can't push this down
-			return src
-		}
+		expr := simplifyLiteralExpression(ctx, plus)
 		pushedLimit.Rowcount = expr
 		pushedLimit.Offset = nil
 	}
@@ -276,7 +274,7 @@ func createPushedLimit(ctx *plancontext.PlanningContext, src Operator, orig *Lim
 
 // simplify is a helper function to simplify an expression using the evalengine
 // the boolean returned indicates if the expression is a literal
-func simplifyLiteralExpression(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (sqlparser.Expr, bool) {
+func simplifyLiteralExpression(ctx *plancontext.PlanningContext, expr sqlparser.Expr) sqlparser.Expr {
 	cfg := evalengine.Config{
 		Environment: ctx.VSchema.Environment(),
 	}
@@ -285,7 +283,13 @@ func simplifyLiteralExpression(ctx *plancontext.PlanningContext, expr sqlparser.
 		panic(vterrors.VT13001("failed to translate expression: " + err.Error()))
 	}
 	_, isLit := translated.(*evalengine.Literal)
-	return translated, isLit
+	if isLit {
+		return translated
+	}
+
+	// we were not able to calculate the expression, so we can't push it down
+	// the LIMIT above us will set an argument for us that we can use here
+	return sqlparser.NewArgument(engine.UpperLimitStr)
 }
 
 func tryPushingDownLimitInRoute(ctx *plancontext.PlanningContext, in *Limit, src *Route) (Operator, *ApplyResult) {
@@ -329,7 +333,7 @@ func setUpperLimit(in *Limit) (Operator, *ApplyResult) {
 		case *Route:
 			newSrc := &Limit{
 				Source: op.Source,
-				AST:    &sqlparser.Limit{Rowcount: sqlparser.NewArgument("__upper_limit")},
+				AST:    &sqlparser.Limit{Rowcount: sqlparser.NewArgument(engine.UpperLimitStr)},
 			}
 			op.Source = newSrc
 			result = result.Merge(Rewrote("push upper limit under route"))

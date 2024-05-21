@@ -40,6 +40,8 @@ type Limit struct {
 	Input  Primitive
 }
 
+var UpperLimitStr = "__upper_limit"
+
 // RouteType returns a description of the query routing type used by the primitive
 func (l *Limit) RouteType() string {
 	return l.Input.RouteType()
@@ -63,7 +65,8 @@ func (l *Limit) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[st
 	}
 	// When offset is present, we hijack the limit value so we can calculate
 	// the offset in memory from the result of the scatter query with count + offset.
-	bindVars["__upper_limit"] = sqltypes.Int64BindVariable(int64(count + offset))
+
+	bindVars[UpperLimitStr] = sqltypes.Int64BindVariable(int64(count + offset))
 
 	result, err := vcursor.ExecutePrimitive(ctx, l.Input, bindVars, wantfields)
 	if err != nil {
@@ -96,7 +99,7 @@ func (l *Limit) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars 
 
 	// When offset is present, we hijack the limit value so we can calculate
 	// the offset in memory from the result of the scatter query with count + offset.
-	bindVars["__upper_limit"] = sqltypes.Int64BindVariable(int64(count + offset))
+	bindVars[UpperLimitStr] = sqltypes.Int64BindVariable(int64(count + offset))
 
 	var mu sync.Mutex
 	err = vcursor.StreamExecutePrimitive(ctx, l.Input, bindVars, wantfields, func(qr *sqltypes.Result) error {
