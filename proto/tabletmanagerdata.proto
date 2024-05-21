@@ -765,10 +765,10 @@ message CheckThrottlerResponse {
   map<string, Metric> metrics = 7;
 }
 
-message ThrottlerStatusRequest {
+message GetThrottlerStatusRequest {
 }
 
-message ThrottlerStatusResponse {
+message GetThrottlerStatusResponse {
   // TabletAlias of probed tablet
   string tablet_alias = 1;
   string keyspace = 2;

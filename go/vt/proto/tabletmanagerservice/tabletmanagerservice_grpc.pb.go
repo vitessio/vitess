@@ -116,7 +116,7 @@ type TabletManagerClient interface {
 	// CheckThrottler issues a 'check' on a tablet's throttler
 	CheckThrottler(ctx context.Context, in *tabletmanagerdata.CheckThrottlerRequest, opts ...grpc.CallOption) (*tabletmanagerdata.CheckThrottlerResponse, error)
 	// GetThrottlerStatus gets the status of a tablet throttler
-	GetThrottlerStatus(ctx context.Context, in *tabletmanagerdata.ThrottlerStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ThrottlerStatusResponse, error)
+	GetThrottlerStatus(ctx context.Context, in *tabletmanagerdata.GetThrottlerStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.GetThrottlerStatusResponse, error)
 }
 
 type tabletManagerClient struct {
@@ -677,8 +677,8 @@ func (c *tabletManagerClient) CheckThrottler(ctx context.Context, in *tabletmana
 	return out, nil
 }
 
-func (c *tabletManagerClient) GetThrottlerStatus(ctx context.Context, in *tabletmanagerdata.ThrottlerStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ThrottlerStatusResponse, error) {
-	out := new(tabletmanagerdata.ThrottlerStatusResponse)
+func (c *tabletManagerClient) GetThrottlerStatus(ctx context.Context, in *tabletmanagerdata.GetThrottlerStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.GetThrottlerStatusResponse, error) {
+	out := new(tabletmanagerdata.GetThrottlerStatusResponse)
 	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/GetThrottlerStatus", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -783,7 +783,7 @@ type TabletManagerServer interface {
 	// CheckThrottler issues a 'check' on a tablet's throttler
 	CheckThrottler(context.Context, *tabletmanagerdata.CheckThrottlerRequest) (*tabletmanagerdata.CheckThrottlerResponse, error)
 	// GetThrottlerStatus gets the status of a tablet throttler
-	GetThrottlerStatus(context.Context, *tabletmanagerdata.ThrottlerStatusRequest) (*tabletmanagerdata.ThrottlerStatusResponse, error)
+	GetThrottlerStatus(context.Context, *tabletmanagerdata.GetThrottlerStatusRequest) (*tabletmanagerdata.GetThrottlerStatusResponse, error)
 	mustEmbedUnimplementedTabletManagerServer()
 }
 
@@ -959,7 +959,7 @@ func (UnimplementedTabletManagerServer) RestoreFromBackup(*tabletmanagerdata.Res
 func (UnimplementedTabletManagerServer) CheckThrottler(context.Context, *tabletmanagerdata.CheckThrottlerRequest) (*tabletmanagerdata.CheckThrottlerResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CheckThrottler not implemented")
 }
-func (UnimplementedTabletManagerServer) GetThrottlerStatus(context.Context, *tabletmanagerdata.ThrottlerStatusRequest) (*tabletmanagerdata.ThrottlerStatusResponse, error) {
+func (UnimplementedTabletManagerServer) GetThrottlerStatus(context.Context, *tabletmanagerdata.GetThrottlerStatusRequest) (*tabletmanagerdata.GetThrottlerStatusResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetThrottlerStatus not implemented")
 }
 func (UnimplementedTabletManagerServer) mustEmbedUnimplementedTabletManagerServer() {}
@@ -1990,7 +1990,7 @@ func _TabletManager_CheckThrottler_Handler(srv interface{}, ctx context.Context,
 }
 
 func _TabletManager_GetThrottlerStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(tabletmanagerdata.ThrottlerStatusRequest)
+	in := new(tabletmanagerdata.GetThrottlerStatusRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -2002,7 +2002,7 @@ func _TabletManager_GetThrottlerStatus_Handler(srv interface{}, ctx context.Cont
 		FullMethod: "/tabletmanagerservice.TabletManager/GetThrottlerStatus",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TabletManagerServer).GetThrottlerStatus(ctx, req.(*tabletmanagerdata.ThrottlerStatusRequest))
+		return srv.(TabletManagerServer).GetThrottlerStatus(ctx, req.(*tabletmanagerdata.GetThrottlerStatusRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }

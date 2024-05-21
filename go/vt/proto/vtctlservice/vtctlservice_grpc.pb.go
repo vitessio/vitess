@@ -271,7 +271,7 @@ type VtctldClient interface {
 	// GetTablets returns tablets, optionally filtered by keyspace and shard.
 	GetTablets(ctx context.Context, in *vtctldata.GetTabletsRequest, opts ...grpc.CallOption) (*vtctldata.GetTabletsResponse, error)
 	// GetThrottlerStatus gets the status of a tablet throttler
-	GetThrottlerStatus(ctx context.Context, in *vtctldata.ThrottlerStatusRequest, opts ...grpc.CallOption) (*vtctldata.ThrottlerStatusResponse, error)
+	GetThrottlerStatus(ctx context.Context, in *vtctldata.GetThrottlerStatusRequest, opts ...grpc.CallOption) (*vtctldata.GetThrottlerStatusResponse, error)
 	// GetTopologyPath returns the topology cell at a given path.
 	GetTopologyPath(ctx context.Context, in *vtctldata.GetTopologyPathRequest, opts ...grpc.CallOption) (*vtctldata.GetTopologyPathResponse, error)
 	// GetVersion returns the version of a tablet from its debug vars.
@@ -979,8 +979,8 @@ func (c *vtctldClient) GetTablets(ctx context.Context, in *vtctldata.GetTabletsR
 	return out, nil
 }
 
-func (c *vtctldClient) GetThrottlerStatus(ctx context.Context, in *vtctldata.ThrottlerStatusRequest, opts ...grpc.CallOption) (*vtctldata.ThrottlerStatusResponse, error) {
-	out := new(vtctldata.ThrottlerStatusResponse)
+func (c *vtctldClient) GetThrottlerStatus(ctx context.Context, in *vtctldata.GetThrottlerStatusRequest, opts ...grpc.CallOption) (*vtctldata.GetThrottlerStatusResponse, error) {
+	out := new(vtctldata.GetThrottlerStatusResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetThrottlerStatus", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -1735,7 +1735,7 @@ type VtctldServer interface {
 	// GetTablets returns tablets, optionally filtered by keyspace and shard.
 	GetTablets(context.Context, *vtctldata.GetTabletsRequest) (*vtctldata.GetTabletsResponse, error)
 	// GetThrottlerStatus gets the status of a tablet throttler
-	GetThrottlerStatus(context.Context, *vtctldata.ThrottlerStatusRequest) (*vtctldata.ThrottlerStatusResponse, error)
+	GetThrottlerStatus(context.Context, *vtctldata.GetThrottlerStatusRequest) (*vtctldata.GetThrottlerStatusResponse, error)
 	// GetTopologyPath returns the topology cell at a given path.
 	GetTopologyPath(context.Context, *vtctldata.GetTopologyPathRequest) (*vtctldata.GetTopologyPathResponse, error)
 	// GetVersion returns the version of a tablet from its debug vars.
@@ -2088,7 +2088,7 @@ func (UnimplementedVtctldServer) GetTablet(context.Context, *vtctldata.GetTablet
 func (UnimplementedVtctldServer) GetTablets(context.Context, *vtctldata.GetTabletsRequest) (*vtctldata.GetTabletsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetTablets not implemented")
 }
-func (UnimplementedVtctldServer) GetThrottlerStatus(context.Context, *vtctldata.ThrottlerStatusRequest) (*vtctldata.ThrottlerStatusResponse, error) {
+func (UnimplementedVtctldServer) GetThrottlerStatus(context.Context, *vtctldata.GetThrottlerStatusRequest) (*vtctldata.GetThrottlerStatusResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetThrottlerStatus not implemented")
 }
 func (UnimplementedVtctldServer) GetTopologyPath(context.Context, *vtctldata.GetTopologyPathRequest) (*vtctldata.GetTopologyPathResponse, error) {
@@ -3224,7 +3224,7 @@ func _Vtctld_GetTablets_Handler(srv interface{}, ctx context.Context, dec func(i
 }
 
 func _Vtctld_GetThrottlerStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(vtctldata.ThrottlerStatusRequest)
+	in := new(vtctldata.GetThrottlerStatusRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -3236,7 +3236,7 @@ func _Vtctld_GetThrottlerStatus_Handler(srv interface{}, ctx context.Context, de
 		FullMethod: "/vtctlservice.Vtctld/GetThrottlerStatus",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VtctldServer).GetThrottlerStatus(ctx, req.(*vtctldata.ThrottlerStatusRequest))
+		return srv.(VtctldServer).GetThrottlerStatus(ctx, req.(*vtctldata.GetThrottlerStatusRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }

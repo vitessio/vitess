@@ -2505,11 +2505,11 @@ func (m *CheckThrottlerResponse) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
-func (m *ThrottlerStatusRequest) CloneVT() *ThrottlerStatusRequest {
+func (m *GetThrottlerStatusRequest) CloneVT() *GetThrottlerStatusRequest {
 	if m == nil {
-		return (*ThrottlerStatusRequest)(nil)
+		return (*GetThrottlerStatusRequest)(nil)
 	}
-	r := &ThrottlerStatusRequest{}
+	r := &GetThrottlerStatusRequest{}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -2517,15 +2517,15 @@ func (m *ThrottlerStatusRequest) CloneVT() *ThrottlerStatusRequest {
 	return r
 }
 
-func (m *ThrottlerStatusRequest) CloneMessageVT() proto.Message {
+func (m *GetThrottlerStatusRequest) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
-func (m *ThrottlerStatusResponse_MetricResult) CloneVT() *ThrottlerStatusResponse_MetricResult {
+func (m *GetThrottlerStatusResponse_MetricResult) CloneVT() *GetThrottlerStatusResponse_MetricResult {
 	if m == nil {
-		return (*ThrottlerStatusResponse_MetricResult)(nil)
+		return (*GetThrottlerStatusResponse_MetricResult)(nil)
 	}
-	r := &ThrottlerStatusResponse_MetricResult{
+	r := &GetThrottlerStatusResponse_MetricResult{
 		Value: m.Value,
 		Error: m.Error,
 	}
@@ -2536,15 +2536,15 @@ func (m *ThrottlerStatusResponse_MetricResult) CloneVT() *ThrottlerStatusRespons
 	return r
 }
 
-func (m *ThrottlerStatusResponse_MetricResult) CloneMessageVT() proto.Message {
+func (m *GetThrottlerStatusResponse_MetricResult) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
-func (m *ThrottlerStatusResponse_MetricHealth) CloneVT() *ThrottlerStatusResponse_MetricHealth {
+func (m *GetThrottlerStatusResponse_MetricHealth) CloneVT() *GetThrottlerStatusResponse_MetricHealth {
 	if m == nil {
-		return (*ThrottlerStatusResponse_MetricHealth)(nil)
+		return (*GetThrottlerStatusResponse_MetricHealth)(nil)
 	}
-	r := &ThrottlerStatusResponse_MetricHealth{
+	r := &GetThrottlerStatusResponse_MetricHealth{
 		LastHealthyAt:           m.LastHealthyAt.CloneVT(),
 		SecondsSinceLastHealthy: m.SecondsSinceLastHealthy,
 	}
@@ -2555,15 +2555,15 @@ func (m *ThrottlerStatusResponse_MetricHealth) CloneVT() *ThrottlerStatusRespons
 	return r
 }
 
-func (m *ThrottlerStatusResponse_MetricHealth) CloneMessageVT() proto.Message {
+func (m *GetThrottlerStatusResponse_MetricHealth) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
-func (m *ThrottlerStatusResponse) CloneVT() *ThrottlerStatusResponse {
+func (m *GetThrottlerStatusResponse) CloneVT() *GetThrottlerStatusResponse {
 	if m == nil {
-		return (*ThrottlerStatusResponse)(nil)
+		return (*GetThrottlerStatusResponse)(nil)
 	}
-	r := &ThrottlerStatusResponse{
+	r := &GetThrottlerStatusResponse{
 		TabletAlias:             m.TabletAlias,
 		Keyspace:                m.Keyspace,
 		Shard:                   m.Shard,
@@ -2577,7 +2577,7 @@ func (m *ThrottlerStatusResponse) CloneVT() *ThrottlerStatusResponse {
 		MetricNameUsedAsDefault: m.MetricNameUsedAsDefault,
 	}
 	if rhs := m.AggregatedMetrics; rhs != nil {
-		tmpContainer := make(map[string]*ThrottlerStatusResponse_MetricResult, len(rhs))
+		tmpContainer := make(map[string]*GetThrottlerStatusResponse_MetricResult, len(rhs))
 		for k, v := range rhs {
 			tmpContainer[k] = v.CloneVT()
 		}
@@ -2591,7 +2591,7 @@ func (m *ThrottlerStatusResponse) CloneVT() *ThrottlerStatusResponse {
 		r.MetricThresholds = tmpContainer
 	}
 	if rhs := m.MetricsHealth; rhs != nil {
-		tmpContainer := make(map[string]*ThrottlerStatusResponse_MetricHealth, len(rhs))
+		tmpContainer := make(map[string]*GetThrottlerStatusResponse_MetricHealth, len(rhs))
 		for k, v := range rhs {
 			tmpContainer[k] = v.CloneVT()
 		}
@@ -2618,7 +2618,7 @@ func (m *ThrottlerStatusResponse) CloneVT() *ThrottlerStatusResponse {
 	return r
 }
 
-func (m *ThrottlerStatusResponse) CloneMessageVT() proto.Message {
+func (m *GetThrottlerStatusResponse) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
@@ -8745,7 +8745,7 @@ func (m *CheckThrottlerResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error
 	return len(dAtA) - i, nil
 }
 
-func (m *ThrottlerStatusRequest) MarshalVT() (dAtA []byte, err error) {
+func (m *GetThrottlerStatusRequest) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -8758,12 +8758,12 @@ func (m *ThrottlerStatusRequest) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *ThrottlerStatusRequest) MarshalToVT(dAtA []byte) (int, error) {
+func (m *GetThrottlerStatusRequest) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *ThrottlerStatusRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *GetThrottlerStatusRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -8778,7 +8778,7 @@ func (m *ThrottlerStatusRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error
 	return len(dAtA) - i, nil
 }
 
-func (m *ThrottlerStatusResponse_MetricResult) MarshalVT() (dAtA []byte, err error) {
+func (m *GetThrottlerStatusResponse_MetricResult) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -8791,12 +8791,12 @@ func (m *ThrottlerStatusResponse_MetricResult) MarshalVT() (dAtA []byte, err err
 	return dAtA[:n], nil
 }
 
-func (m *ThrottlerStatusResponse_MetricResult) MarshalToVT(dAtA []byte) (int, error) {
+func (m *GetThrottlerStatusResponse_MetricResult) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *ThrottlerStatusResponse_MetricResult) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *GetThrottlerStatusResponse_MetricResult) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -8824,7 +8824,7 @@ func (m *ThrottlerStatusResponse_MetricResult) MarshalToSizedBufferVT(dAtA []byt
 	return len(dAtA) - i, nil
 }
 
-func (m *ThrottlerStatusResponse_MetricHealth) MarshalVT() (dAtA []byte, err error) {
+func (m *GetThrottlerStatusResponse_MetricHealth) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -8837,12 +8837,12 @@ func (m *ThrottlerStatusResponse_MetricHealth) MarshalVT() (dAtA []byte, err err
 	return dAtA[:n], nil
 }
 
-func (m *ThrottlerStatusResponse_MetricHealth) MarshalToVT(dAtA []byte) (int, error) {
+func (m *GetThrottlerStatusResponse_MetricHealth) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *ThrottlerStatusResponse_MetricHealth) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *GetThrottlerStatusResponse_MetricHealth) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -8872,7 +8872,7 @@ func (m *ThrottlerStatusResponse_MetricHealth) MarshalToSizedBufferVT(dAtA []byt
 	return len(dAtA) - i, nil
 }
 
-func (m *ThrottlerStatusResponse) MarshalVT() (dAtA []byte, err error) {
+func (m *GetThrottlerStatusResponse) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -8885,12 +8885,12 @@ func (m *ThrottlerStatusResponse) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *ThrottlerStatusResponse) MarshalToVT(dAtA []byte) (int, error) {
+func (m *GetThrottlerStatusResponse) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *ThrottlerStatusResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *GetThrottlerStatusResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -11301,7 +11301,7 @@ func (m *CheckThrottlerResponse) SizeVT() (n int) {
 	return n
 }
 
-func (m *ThrottlerStatusRequest) SizeVT() (n int) {
+func (m *GetThrottlerStatusRequest) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -11311,7 +11311,7 @@ func (m *ThrottlerStatusRequest) SizeVT() (n int) {
 	return n
 }
 
-func (m *ThrottlerStatusResponse_MetricResult) SizeVT() (n int) {
+func (m *GetThrottlerStatusResponse_MetricResult) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -11328,7 +11328,7 @@ func (m *ThrottlerStatusResponse_MetricResult) SizeVT() (n int) {
 	return n
 }
 
-func (m *ThrottlerStatusResponse_MetricHealth) SizeVT() (n int) {
+func (m *GetThrottlerStatusResponse_MetricHealth) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -11345,7 +11345,7 @@ func (m *ThrottlerStatusResponse_MetricHealth) SizeVT() (n int) {
 	return n
 }
 
-func (m *ThrottlerStatusResponse) SizeVT() (n int) {
+func (m *GetThrottlerStatusResponse) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -25073,7 +25073,7 @@ func (m *CheckThrottlerResponse) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *ThrottlerStatusRequest) UnmarshalVT(dAtA []byte) error {
+func (m *GetThrottlerStatusRequest) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -25096,10 +25096,10 @@ func (m *ThrottlerStatusRequest) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: ThrottlerStatusRequest: wiretype end group for non-group")
+			return fmt.Errorf("proto: GetThrottlerStatusRequest: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: ThrottlerStatusRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: GetThrottlerStatusRequest: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		default:
@@ -25124,7 +25124,7 @@ func (m *ThrottlerStatusRequest) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *ThrottlerStatusResponse_MetricResult) UnmarshalVT(dAtA []byte) error {
+func (m *GetThrottlerStatusResponse_MetricResult) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -25147,10 +25147,10 @@ func (m *ThrottlerStatusResponse_MetricResult) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: ThrottlerStatusResponse_MetricResult: wiretype end group for non-group")
+			return fmt.Errorf("proto: GetThrottlerStatusResponse_MetricResult: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: ThrottlerStatusResponse_MetricResult: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: GetThrottlerStatusResponse_MetricResult: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -25218,7 +25218,7 @@ func (m *ThrottlerStatusResponse_MetricResult) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *ThrottlerStatusResponse_MetricHealth) UnmarshalVT(dAtA []byte) error {
+func (m *GetThrottlerStatusResponse_MetricHealth) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -25241,10 +25241,10 @@ func (m *ThrottlerStatusResponse_MetricHealth) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: ThrottlerStatusResponse_MetricHealth: wiretype end group for non-group")
+			return fmt.Errorf("proto: GetThrottlerStatusResponse_MetricHealth: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: ThrottlerStatusResponse_MetricHealth: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: GetThrottlerStatusResponse_MetricHealth: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -25324,7 +25324,7 @@ func (m *ThrottlerStatusResponse_MetricHealth) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *ThrottlerStatusResponse) UnmarshalVT(dAtA []byte) error {
+func (m *GetThrottlerStatusResponse) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -25347,10 +25347,10 @@ func (m *ThrottlerStatusResponse) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: ThrottlerStatusResponse: wiretype end group for non-group")
+			return fmt.Errorf("proto: GetThrottlerStatusResponse: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: ThrottlerStatusResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: GetThrottlerStatusResponse: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -25666,10 +25666,10 @@ func (m *ThrottlerStatusResponse) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if m.AggregatedMetrics == nil {
-				m.AggregatedMetrics = make(map[string]*ThrottlerStatusResponse_MetricResult)
+				m.AggregatedMetrics = make(map[string]*GetThrottlerStatusResponse_MetricResult)
 			}
 			var mapkey string
-			var mapvalue *ThrottlerStatusResponse_MetricResult
+			var mapvalue *GetThrottlerStatusResponse_MetricResult
 			for iNdEx < postIndex {
 				entryPreIndex := iNdEx
 				var wire uint64
@@ -25743,7 +25743,7 @@ func (m *ThrottlerStatusResponse) UnmarshalVT(dAtA []byte) error {
 					if postmsgIndex > l {
 						return io.ErrUnexpectedEOF
 					}
-					mapvalue = &ThrottlerStatusResponse_MetricResult{}
+					mapvalue = &GetThrottlerStatusResponse_MetricResult{}
 					if err := mapvalue.UnmarshalVT(dAtA[iNdEx:postmsgIndex]); err != nil {
 						return err
 					}
@@ -25901,10 +25901,10 @@ func (m *ThrottlerStatusResponse) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if m.MetricsHealth == nil {
-				m.MetricsHealth = make(map[string]*ThrottlerStatusResponse_MetricHealth)
+				m.MetricsHealth = make(map[string]*GetThrottlerStatusResponse_MetricHealth)
 			}
 			var mapkey string
-			var mapvalue *ThrottlerStatusResponse_MetricHealth
+			var mapvalue *GetThrottlerStatusResponse_MetricHealth
 			for iNdEx < postIndex {
 				entryPreIndex := iNdEx
 				var wire uint64
@@ -25978,7 +25978,7 @@ func (m *ThrottlerStatusResponse) UnmarshalVT(dAtA []byte) error {
 					if postmsgIndex > l {
 						return io.ErrUnexpectedEOF
 					}
-					mapvalue = &ThrottlerStatusResponse_MetricHealth{}
+					mapvalue = &GetThrottlerStatusResponse_MetricHealth{}
 					if err := mapvalue.UnmarshalVT(dAtA[iNdEx:postmsgIndex]); err != nil {
 						return err
 					}

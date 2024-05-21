@@ -191,5 +191,5 @@ service TabletManager {
   rpc CheckThrottler(tabletmanagerdata.CheckThrottlerRequest) returns (tabletmanagerdata.CheckThrottlerResponse) {};
 
   // GetThrottlerStatus gets the status of a tablet throttler
-  rpc GetThrottlerStatus(tabletmanagerdata.ThrottlerStatusRequest) returns (tabletmanagerdata.ThrottlerStatusResponse) {};
+  rpc GetThrottlerStatus(tabletmanagerdata.GetThrottlerStatusRequest) returns (tabletmanagerdata.GetThrottlerStatusResponse) {};
 }
