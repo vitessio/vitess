@@ -67,7 +67,7 @@ func TestConnPoolTimeout(t *testing.T) {
 	require.NoError(t, err)
 	defer dbConn.Recycle()
 	_, err = connPool.Get(context.Background(), nil)
-	assert.EqualError(t, err, "resource pool timed out")
+	assert.EqualError(t, err, "connection pool timed out")
 }
 
 func TestConnPoolGetEmptyDebugConfig(t *testing.T) {

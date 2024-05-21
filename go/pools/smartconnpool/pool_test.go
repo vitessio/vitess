@@ -870,7 +870,7 @@ func TestTimeout(t *testing.T) {
 		newctx, cancel := context.WithTimeout(ctx, 10*time.Millisecond)
 		_, err = p.Get(newctx, setting)
 		cancel()
-		assert.EqualError(t, err, "resource pool timed out")
+		assert.EqualError(t, err, "connection pool timed out")
 
 	}
 
@@ -894,7 +894,7 @@ func TestExpired(t *testing.T) {
 		ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-1*time.Second))
 		_, err := p.Get(ctx, setting)
 		cancel()
-		require.EqualError(t, err, "resource pool context already expired")
+		require.EqualError(t, err, "connection pool context already expired")
 	}
 }
 
