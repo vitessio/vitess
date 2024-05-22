@@ -1558,15 +1558,22 @@ func (s *Server) setupInitialDeniedTables(ctx context.Context, req *vtctldatapb.
 	if err != nil {
 		return err
 	}
+	sw := &switcher{s: s, ts: ts}
+	lockCtx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "SetupInitialDeniedTables")
+	if lockErr != nil {
+		ts.Logger().Errorf("Locking target keyspace %s failed: %v", ts.TargetKeyspaceName(), lockErr)
+		return lockErr
+	}
+	defer targetUnlock(&err)
 	err = ts.ForAllTargets(func(target *MigrationTarget) error {
-		if _, err := ts.TopoServer().UpdateShardFields(ctx, ts.TargetKeyspaceName(), target.GetShard().ShardName(), func(si *topo.ShardInfo) error {
-			return si.UpdateDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, false, ts.Tables())
+		if _, err := ts.TopoServer().UpdateShardFields(lockCtx, ts.TargetKeyspaceName(), target.GetShard().ShardName(), func(si *topo.ShardInfo) error {
+			return si.UpdateDeniedTables(lockCtx, topodatapb.TabletType_PRIMARY, nil, false, ts.Tables())
 		}); err != nil {
 			return err
 		}
-		ctx, cancel := context.WithTimeout(ctx, shardTabletRefreshTimeout)
+		strCtx, cancel := context.WithTimeout(lockCtx, shardTabletRefreshTimeout)
 		defer cancel()
-		_, _, err := topotools.RefreshTabletsByShard(ctx, ts.TopoServer(), ts.TabletManagerClient(), target.GetShard(), nil, ts.Logger())
+		_, _, err := topotools.RefreshTabletsByShard(strCtx, ts.TopoServer(), ts.TabletManagerClient(), target.GetShard(), nil, ts.Logger())
 		return err
 	})
 	return err
