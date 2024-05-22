@@ -107,8 +107,9 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 						},
 					},
 				},
-				PopulateReparentJournalDelays: map[string]time.Duration{
-					"zone1-0000000200": time.Second * 29,
+				SetReplicationSourceDelays: map[string]time.Duration{
+					"zone1-0000000100": time.Second * 29,
+					"zone1-0000000101": time.Second * 29,
 				},
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000200": nil,
@@ -224,8 +225,9 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 						},
 					},
 				},
-				PopulateReparentJournalDelays: map[string]time.Duration{
-					"zone1-0000000200": time.Second * 31,
+				SetReplicationSourceDelays: map[string]time.Duration{
+					"zone1-0000000100": time.Second * 31,
+					"zone1-0000000101": time.Second * 31,
 				},
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000200": nil,
