@@ -89,10 +89,11 @@ func execQueryWithRetry(t *testing.T, conn *mysql.Conn, query string, timeout ti
 		if err == nil {
 			return qr
 		}
+		log.Infof("Error executing query (will retry): %s: %v", query, err)
 		select {
 		case <-ctx.Done():
 			require.FailNow(t, fmt.Sprintf("query %q did not succeed before the timeout of %s; last seen result: %v",
-				query, timeout, qr.Rows))
+				query, timeout, qr))
 		case <-ticker.C:
 			log.Infof("query %q failed with error %v, retrying in %ds", query, err, defaultTick)
 		}
@@ -143,19 +144,6 @@ func execQueryWithDatabase(t *testing.T, conn *mysql.Conn, database string, quer
 	}
 	execQuery(t, conn, "begin")
 	qr := execQuery(t, conn, query)
-	execQuery(t, conn, "commit")
-	return qr
-}
-
-func execVtgateQueryWithRetry(t *testing.T, conn *mysql.Conn, database string, query string, timeout time.Duration) *sqltypes.Result {
-	if strings.TrimSpace(query) == "" {
-		return nil
-	}
-	if database != "" {
-		execQuery(t, conn, "use `"+database+"`;")
-	}
-	execQuery(t, conn, "begin")
-	qr := execQueryWithRetry(t, conn, query, timeout)
 	execQuery(t, conn, "commit")
 	return qr
 }

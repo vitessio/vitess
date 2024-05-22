@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"path"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -476,7 +477,12 @@ func (si *ShardInfo) updatePrimaryTabletControl(tc *topodatapb.Shard_TabletContr
 		return nil
 	}
 	if len(newTables) != len(tables) {
-		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, dlTablesAlreadyPresent)
+		// Some of the tables already existed in the denied list so we don't need to add them.
+		log.Warningf("%s:%s", dlTablesNotPresent, strings.Join(newTables, ","))
+		// We do need to merge the two lists, however.
+		tables = append(tables, newTables...)
+		// And be sure to remove any duplicates.
+		tables = slices.Compact(tables)
 	}
 	tc.DeniedTables = append(tc.DeniedTables, tables...)
 	return nil

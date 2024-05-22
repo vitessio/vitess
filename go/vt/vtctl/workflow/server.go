@@ -1452,16 +1452,31 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		return nil, err
 	}
 
+	isStandardMoveTables := func() bool {
+		return !mz.IsMultiTenantMigration() && !mz.isPartial
+	}
+
+	ts, err := s.buildTrafficSwitcher(ctx, req.GetTargetKeyspace(), req.GetWorkflow())
+	if err != nil {
+		return nil, err
+	}
+	sw := &switcher{s: s, ts: ts}
+	lockCtx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "MoveTablesCreate")
+	if lockErr != nil {
+		ts.Logger().Errorf("Locking target keyspace %s failed: %v", ts.TargetKeyspaceName(), lockErr)
+		return nil, lockErr
+	}
+	defer targetUnlock(&err)
+	ctx = lockCtx
+
 	// If we get an error after this point, where the vreplication streams/records
 	// have been created, then we clean up the workflow's artifacts.
 	defer func() {
 		if err != nil {
-			ts, cerr := s.buildTrafficSwitcher(ctx, ms.TargetKeyspace, ms.Workflow)
-			if cerr != nil {
-				err = vterrors.Wrapf(err, "failed to cleanup workflow artifacts: %v", cerr)
-			}
-			if cerr = ts.dropTargetDeniedTables(ctx); cerr != nil {
-				err = vterrors.Wrapf(err, "failed to cleanup denied table entries: %v", cerr)
+			if isStandardMoveTables() { // Non-standard ones do not use shard scoped mechanisms
+				if cerr := ts.dropTargetDeniedTables(ctx); cerr != nil {
+					err = vterrors.Wrapf(err, "failed to cleanup denied table entries: %v", cerr)
+				}
 			}
 			if cerr := s.dropArtifacts(ctx, false, &switcher{s: s, ts: ts}); cerr != nil {
 				err = vterrors.Wrapf(err, "failed to cleanup workflow artifacts: %v", cerr)
@@ -1487,8 +1502,10 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 			return nil, err
 		}
 	}
-	if err := s.setupInitialDeniedTables(ctx, req); err != nil {
-		return nil, vterrors.Wrapf(err, "failed to put initial denied tables entries in place on the target shards")
+	if isStandardMoveTables() { // Non-standard ones do not use shard scoped mechanisms
+		if err := s.setupInitialDeniedTables(ctx, req, ts); err != nil {
+			return nil, vterrors.Wrapf(err, "failed to put initial denied tables entries in place on the target shards")
+		}
 	}
 	if err := s.ts.RebuildSrvVSchema(ctx, nil); err != nil {
 		return nil, err
@@ -1553,25 +1570,14 @@ func (s *Server) validateRoutingRuleFlags(req *vtctldatapb.MoveTablesCreateReque
 	return nil
 }
 
-func (s *Server) setupInitialDeniedTables(ctx context.Context, req *vtctldatapb.MoveTablesCreateRequest) error {
-	ts, err := s.buildTrafficSwitcher(ctx, req.GetTargetKeyspace(), req.GetWorkflow())
-	if err != nil {
-		return err
-	}
-	sw := &switcher{s: s, ts: ts}
-	lockCtx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "SetupInitialDeniedTables")
-	if lockErr != nil {
-		ts.Logger().Errorf("Locking target keyspace %s failed: %v", ts.TargetKeyspaceName(), lockErr)
-		return lockErr
-	}
-	defer targetUnlock(&err)
-	err = ts.ForAllTargets(func(target *MigrationTarget) error {
-		if _, err := ts.TopoServer().UpdateShardFields(lockCtx, ts.TargetKeyspaceName(), target.GetShard().ShardName(), func(si *topo.ShardInfo) error {
-			return si.UpdateDeniedTables(lockCtx, topodatapb.TabletType_PRIMARY, nil, false, ts.Tables())
+func (s *Server) setupInitialDeniedTables(ctx context.Context, req *vtctldatapb.MoveTablesCreateRequest, ts *trafficSwitcher) error {
+	err := ts.ForAllTargets(func(target *MigrationTarget) error {
+		if _, err := ts.TopoServer().UpdateShardFields(ctx, ts.TargetKeyspaceName(), target.GetShard().ShardName(), func(si *topo.ShardInfo) error {
+			return si.UpdateDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, false, ts.Tables())
 		}); err != nil {
 			return err
 		}
-		strCtx, cancel := context.WithTimeout(lockCtx, shardTabletRefreshTimeout)
+		strCtx, cancel := context.WithTimeout(ctx, shardTabletRefreshTimeout)
 		defer cancel()
 		_, _, err := topotools.RefreshTabletsByShard(strCtx, ts.TopoServer(), ts.TabletManagerClient(), target.GetShard(), nil, ts.Logger())
 		return err
