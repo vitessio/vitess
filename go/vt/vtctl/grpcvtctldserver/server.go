@@ -757,6 +757,7 @@ func (s *VtctldServer) GetThrottlerStatus(ctx context.Context, req *vtctldatapb.
 		IsOpen:                  r.IsOpen,
 		IsEnabled:               r.IsEnabled,
 		IsDormant:               r.IsDormant,
+		RecentlyChecked:         r.RecentlyChecked,
 		LagMetricQuery:          r.LagMetricQuery,
 		CustomMetricQuery:       r.CustomMetricQuery,
 		DefaultThreshold:        r.DefaultThreshold,

@@ -97,6 +97,7 @@ func (tm *TabletManager) GetThrottlerStatus(ctx context.Context, req *tabletmana
 		IsOpen:                  status.IsOpen,
 		IsEnabled:               status.IsEnabled,
 		IsDormant:               status.IsDormant,
+		RecentlyChecked:         status.RecentlyChecked,
 		LagMetricQuery:          status.Query,
 		CustomMetricQuery:       status.CustomQuery,
 		DefaultThreshold:        status.Threshold,

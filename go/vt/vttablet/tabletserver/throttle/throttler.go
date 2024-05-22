@@ -220,10 +220,11 @@ type ThrottlerStatus struct {
 	Keyspace string
 	Shard    string
 
-	IsLeader  bool
-	IsOpen    bool
-	IsEnabled bool
-	IsDormant bool
+	IsLeader        bool
+	IsOpen          bool
+	IsEnabled       bool
+	IsDormant       bool
+	RecentlyChecked bool
 
 	Query                   string
 	CustomQuery             string
@@ -842,6 +843,13 @@ func (throttler *Throttler) isDormant() bool {
 	return throttler.recentCheckRateLimiter.Diff() > throttler.recentCheckDormantDiff
 }
 
+func (throttler *Throttler) recentlyChecked() bool {
+	if throttler.recentCheckRateLimiter == nil {
+		return false
+	}
+	return throttler.recentCheckRateLimiter.Diff() <= 1
+}
+
 // Operate is the main entry point for the throttler operation and logic. It will
 // run the probes, collect metrics, refresh inventory, etc.
 func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
@@ -927,7 +935,7 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 						throttler.collectShardMySQLMetrics(ctx, tmClient)
 					}
 					//
-					if throttler.recentCheckRateLimiter.Diff() <= 1 { // recently checked
+					if throttler.recentlyChecked() {
 						if !throttler.isLeader.Load() {
 							// This is a replica, and has just recently been checked.
 							// We want to proactively "stimulate" the primary throttler to renew the heartbeat lease.
@@ -1576,6 +1584,7 @@ func (throttler *Throttler) checkScope(ctx context.Context, appName string, scop
 		shouldRequestHeartbeats = true
 	}
 
+	checkResult.RecentlyChecked = throttler.recentlyChecked()
 	if shouldRequestHeartbeats {
 		throttler.requestHeartbeats()
 		throttler.recentCheckRateLimiter.DoEmpty()
@@ -1625,10 +1634,11 @@ func (throttler *Throttler) Status() *ThrottlerStatus {
 		Keyspace: throttler.keyspace,
 		Shard:    throttler.shard,
 
-		IsLeader:  throttler.isLeader.Load(),
-		IsOpen:    throttler.isOpen.Load(),
-		IsEnabled: throttler.isEnabled.Load(),
-		IsDormant: throttler.isDormant(),
+		IsLeader:        throttler.isLeader.Load(),
+		IsOpen:          throttler.isOpen.Load(),
+		IsEnabled:       throttler.isEnabled.Load(),
+		IsDormant:       throttler.isDormant(),
+		RecentlyChecked: throttler.recentlyChecked(),
 
 		Query:                   throttler.GetMetricsQuery(),
 		CustomQuery:             throttler.GetCustomMetricsQuery(),
