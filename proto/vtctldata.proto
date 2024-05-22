@@ -1154,6 +1154,8 @@ message GetThrottlerStatusResponse {
   map<string, topodata.ThrottledAppRule> throttled_apps = 15;
   // AppCheckedMetrics is a map of app names to their assigned metrics
   map<string, string> app_checked_metrics = 16;
+
+  bool recently_checked = 17;
 }
 
 message GetTopologyPathRequest {

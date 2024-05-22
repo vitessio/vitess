@@ -30852,6 +30852,9 @@ export namespace tabletmanagerdata {
 
         /** GetThrottlerStatusResponse app_checked_metrics */
         app_checked_metrics?: ({ [k: string]: string }|null);
+
+        /** GetThrottlerStatusResponse recently_checked */
+        recently_checked?: (boolean|null);
     }
 
     /** Represents a GetThrottlerStatusResponse. */
@@ -30910,6 +30913,9 @@ export namespace tabletmanagerdata {
 
         /** GetThrottlerStatusResponse app_checked_metrics. */
         public app_checked_metrics: { [k: string]: string };
+
+        /** GetThrottlerStatusResponse recently_checked. */
+        public recently_checked: boolean;
 
         /**
          * Creates a new GetThrottlerStatusResponse instance using the specified properties.
@@ -58398,6 +58404,9 @@ export namespace vtctldata {
 
         /** GetThrottlerStatusResponse app_checked_metrics */
         app_checked_metrics?: ({ [k: string]: string }|null);
+
+        /** GetThrottlerStatusResponse recently_checked */
+        recently_checked?: (boolean|null);
     }
 
     /** Represents a GetThrottlerStatusResponse. */
@@ -58456,6 +58465,9 @@ export namespace vtctldata {
 
         /** GetThrottlerStatusResponse app_checked_metrics. */
         public app_checked_metrics: { [k: string]: string };
+
+        /** GetThrottlerStatusResponse recently_checked. */
+        public recently_checked: boolean;
 
         /**
          * Creates a new GetThrottlerStatusResponse instance using the specified properties.

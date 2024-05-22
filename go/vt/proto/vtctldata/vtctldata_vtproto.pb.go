@@ -2723,6 +2723,7 @@ func (m *GetThrottlerStatusResponse) CloneVT() *GetThrottlerStatusResponse {
 		CustomMetricQuery:       m.CustomMetricQuery,
 		DefaultThreshold:        m.DefaultThreshold,
 		MetricNameUsedAsDefault: m.MetricNameUsedAsDefault,
+		RecentlyChecked:         m.RecentlyChecked,
 	}
 	if rhs := m.AggregatedMetrics; rhs != nil {
 		tmpContainer := make(map[string]*GetThrottlerStatusResponse_MetricResult, len(rhs))
@@ -13091,6 +13092,18 @@ func (m *GetThrottlerStatusResponse) MarshalToSizedBufferVT(dAtA []byte) (int, e
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.RecentlyChecked {
+		i--
+		if m.RecentlyChecked {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0x88
 	}
 	if len(m.AppCheckedMetrics) > 0 {
 		for k := range m.AppCheckedMetrics {
@@ -23960,6 +23973,9 @@ func (m *GetThrottlerStatusResponse) SizeVT() (n int) {
 			mapEntrySize := 1 + len(k) + sov(uint64(len(k))) + 1 + len(v) + sov(uint64(len(v)))
 			n += mapEntrySize + 2 + sov(uint64(mapEntrySize))
 		}
+	}
+	if m.RecentlyChecked {
+		n += 3
 	}
 	n += len(m.unknownFields)
 	return n
@@ -45917,6 +45933,26 @@ func (m *GetThrottlerStatusResponse) UnmarshalVT(dAtA []byte) error {
 			}
 			m.AppCheckedMetrics[mapkey] = mapvalue
 			iNdEx = postIndex
+		case 17:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field RecentlyChecked", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.RecentlyChecked = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
