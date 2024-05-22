@@ -85,6 +85,7 @@ deletesAttempts=%d, deletesFailures=%d, deletesNoops=%d, deletes=%d,
 
 var (
 	clusterInstance *cluster.LocalProcessCluster
+	primaryTablet   *cluster.Vttablet
 	shards          []cluster.Shard
 	vtParams        mysql.ConnParams
 	mysqlVersion    string
@@ -188,7 +189,7 @@ func TestMain(m *testing.M) {
 			Host: clusterInstance.Hostname,
 			Port: clusterInstance.VtgateMySQLPort,
 		}
-
+		primaryTablet = clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
 		return m.Run(), nil
 	}()
 	if err != nil {
@@ -205,7 +206,7 @@ func TestSchemaChange(t *testing.T) {
 	shards = clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
 
-	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance, time.Second)
+	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance)
 
 	t.Run("revertible", testRevertible)
 	t.Run("revert", testRevert)
@@ -410,7 +411,16 @@ func testRevertible(t *testing.T) {
 				// This is the migration we will test, and see whether it is revertible or not (and why not).
 				toStatement := fmt.Sprintf(createTableWrapper, testcase.toSchema)
 				uuid = testOnlineDDLStatement(t, toStatement, ddlStrategy, "vtgate", tableName, "")
-				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+				if !onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete) {
+					resp, err := throttler.CheckThrottler(clusterInstance, primaryTablet, "test", nil)
+					assert.NoError(t, err)
+					fmt.Println("Throttler check response: ", resp)
+
+					output, err := throttler.GetThrottlerStatusRaw(&clusterInstance.VtctldClientProcess, primaryTablet)
+					assert.NoError(t, err)
+					fmt.Println("Throttler status response: ", output)
+				}
+
 				checkTable(t, tableName, true)
 			})
 			t.Run("check migration", func(t *testing.T) {
@@ -557,7 +567,7 @@ func testRevert(t *testing.T) {
 		onlineddl.VtgateExecQuery(t, &vtParams, populatePartitionedTableStatement, "")
 	}
 
-	mysqlVersion = onlineddl.GetMySQLVersion(t, clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet())
+	mysqlVersion = onlineddl.GetMySQLVersion(t, primaryTablet)
 	require.NotEmpty(t, mysqlVersion)
 
 	capableOf := mysql.ServerVersionCapableOf(mysqlVersion)

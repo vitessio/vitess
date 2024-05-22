@@ -64,7 +64,8 @@ func CheckThrottlerRaw(vtctldProcess *cluster.VtctldClientProcess, tablet *clust
 	args = append(args, "CheckThrottler")
 	if flags == nil {
 		flags = &throttle.CheckFlags{
-			Scope: base.SelfScope,
+			Scope:               base.SelfScope,
+			MultiMetricsEnabled: true,
 		}
 	}
 	if appName != "" {
@@ -82,6 +83,16 @@ func CheckThrottlerRaw(vtctldProcess *cluster.VtctldClientProcess, tablet *clust
 	if flags.SkipRequestHeartbeats {
 		args = append(args, "--skip-heartbeats")
 	}
+	args = append(args, tablet.Alias)
+
+	result, err = vtctldProcess.ExecuteCommandWithOutput(args...)
+	return result, err
+}
+
+// GetThrottlerStatusRaw runs vtctlclient GetThrottlerStatus
+func GetThrottlerStatusRaw(vtctldProcess *cluster.VtctldClientProcess, tablet *cluster.Vttablet) (result string, err error) {
+	args := []string{}
+	args = append(args, "GetThrottlerStatus")
 	args = append(args, tablet.Alias)
 
 	result, err = vtctldProcess.ExecuteCommandWithOutput(args...)
@@ -164,6 +175,19 @@ func CheckThrottler(clusterInstance *cluster.LocalProcessCluster, tablet *cluste
 		return nil, err
 	}
 	var resp vtctldatapb.CheckThrottlerResponse
+	if err := json.Unmarshal([]byte(output), &resp); err != nil {
+		return nil, err
+	}
+	return &resp, err
+}
+
+// GetThrottlerStatus runs vtctldclient CheckThrottler.
+func GetThrottlerStatus(clusterInstance *cluster.LocalProcessCluster, tablet *cluster.Vttablet) (*vtctldatapb.GetThrottlerStatusResponse, error) {
+	output, err := GetThrottlerStatusRaw(&clusterInstance.VtctldClientProcess, tablet)
+	if err != nil {
+		return nil, err
+	}
+	var resp vtctldatapb.GetThrottlerStatusResponse
 	if err := json.Unmarshal([]byte(output), &resp); err != nil {
 		return nil, err
 	}
@@ -413,8 +437,8 @@ func WaitForThrottledApp(t *testing.T, tablet *cluster.Vttablet, throttlerApp th
 // EnableLagThrottlerAndWaitForStatus is a utility function to enable the throttler at the beginning of an endtoend test.
 // The throttler is configued to use the standard replication lag metric. The function waits until the throttler is confirmed
 // to be running on all tablets.
-func EnableLagThrottlerAndWaitForStatus(t *testing.T, clusterInstance *cluster.LocalProcessCluster, lag time.Duration) {
-	req := &vtctldatapb.UpdateThrottlerConfigRequest{Enable: true, Threshold: lag.Seconds()}
+func EnableLagThrottlerAndWaitForStatus(t *testing.T, clusterInstance *cluster.LocalProcessCluster) {
+	req := &vtctldatapb.UpdateThrottlerConfigRequest{Enable: true}
 	_, err := UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
 	require.NoError(t, err)
 

@@ -291,7 +291,7 @@ func TestMain(m *testing.M) {
 
 func TestSchemaChange(t *testing.T) {
 
-	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance, time.Second)
+	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance)
 
 	t.Run("scheduler", testScheduler)
 	t.Run("singleton", testSingleton)
