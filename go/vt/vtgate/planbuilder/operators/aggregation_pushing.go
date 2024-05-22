@@ -513,7 +513,7 @@ func splitGroupingToLeftAndRight(
 			rhs.addGrouping(ctx, groupBy)
 			columns.addRight(groupBy.Inner)
 		case deps.IsSolvedBy(lhs.tableID.Merge(rhs.tableID)):
-			jc := breakExpressionInLHSandRHSForApplyJoin(ctx, groupBy.Inner, lhs.tableID)
+			jc := breakExpressionInLHSandRHS(ctx, groupBy.Inner, lhs.tableID)
 			for _, lhsExpr := range jc.LHSExprs {
 				e := lhsExpr.Expr
 				lhs.addGrouping(ctx, NewGroupBy(e))

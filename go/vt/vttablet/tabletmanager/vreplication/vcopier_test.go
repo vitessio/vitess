@@ -116,7 +116,6 @@ func testPlayerCopyCharPK(t *testing.T) {
 		"drop table src",
 		fmt.Sprintf("drop table %s.dst", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	count := 0
 	vstreamRowsSendHook = func(ctx context.Context) {
@@ -223,7 +222,6 @@ func testPlayerCopyVarcharPKCaseInsensitive(t *testing.T) {
 		"drop table src",
 		fmt.Sprintf("drop table %s.dst", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	count := 0
 	vstreamRowsSendHook = func(ctx context.Context) {
@@ -453,7 +451,6 @@ func testPlayerCopyTablesWithFK(t *testing.T) {
 		"drop table src2",
 		fmt.Sprintf("drop table %s.dst2", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -581,7 +578,6 @@ func testPlayerCopyTables(t *testing.T) {
 		fmt.Sprintf("drop table %s.yes", vrepldb),
 		"drop table no",
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -708,7 +704,6 @@ func testPlayerCopyBigTable(t *testing.T) {
 		"drop table src",
 		fmt.Sprintf("drop table %s.dst", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	count := 0
 	vstreamRowsSendHook = func(ctx context.Context) {
@@ -839,7 +834,6 @@ func testPlayerCopyWildcardRule(t *testing.T) {
 		"drop table src",
 		fmt.Sprintf("drop table %s.src", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	count := 0
 	vstreamRowsSendHook = func(ctx context.Context) {
@@ -968,7 +962,6 @@ func testPlayerCopyTableContinuation(t *testing.T) {
 		"drop table src1",
 		fmt.Sprintf("drop table %s.dst1", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -1135,7 +1128,6 @@ func testPlayerCopyWildcardTableContinuation(t *testing.T) {
 		"drop table src",
 		fmt.Sprintf("drop table %s.dst", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -1232,7 +1224,6 @@ func TestPlayerCopyWildcardTableContinuationWithOptimizeInserts(t *testing.T) {
 		"drop table src",
 		fmt.Sprintf("drop table %s.dst", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -1358,7 +1349,6 @@ func testPlayerCopyTablesStopAfterCopy(t *testing.T) {
 		"drop table src1",
 		fmt.Sprintf("drop table %s.dst1", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -1444,7 +1434,6 @@ func testPlayerCopyTablesGIPK(t *testing.T) {
 		"drop table src2",
 		fmt.Sprintf("drop table %s.dst2", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -1535,7 +1524,6 @@ func testPlayerCopyTableCancel(t *testing.T) {
 		"drop table src1",
 		fmt.Sprintf("drop table %s.dst1", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	saveTimeout := vttablet.CopyPhaseDuration
 	vttablet.CopyPhaseDuration = 1 * time.Millisecond
@@ -1626,7 +1614,6 @@ func testPlayerCopyTablesWithGeneratedColumn(t *testing.T) {
 		"drop table src2",
 		fmt.Sprintf("drop table %s.dst2", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -1714,7 +1701,6 @@ func testCopyTablesWithInvalidDates(t *testing.T) {
 		"drop table src1",
 		fmt.Sprintf("drop table %s.dst1", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
