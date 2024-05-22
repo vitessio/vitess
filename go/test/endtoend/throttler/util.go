@@ -451,6 +451,25 @@ func EnableLagThrottlerAndWaitForStatus(t *testing.T, clusterInstance *cluster.L
 	}
 }
 
+func WaitForCheckThrottlerResult(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tablet *cluster.Vttablet, appName string, flags *throttle.CheckFlags, expect int32, timeout time.Duration) (*vtctldatapb.CheckThrottlerResponse, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	for {
+		resp, err := CheckThrottler(clusterInstance, tablet, appName, flags)
+		require.NoError(t, err)
+		if resp.StatusCode == expect {
+			return resp, nil
+		}
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("timed out waiting for %s tablet's throttler to return a valid result after %v", tablet.Alias, timeout)
+		case <-ticker.C:
+		}
+	}
+}
+
 func getHTTPBody(url string) string {
 	resp, err := http.Get(url)
 	if err != nil {

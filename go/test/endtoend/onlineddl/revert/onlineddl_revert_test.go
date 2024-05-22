@@ -21,6 +21,7 @@ import (
 	"flag"
 	"fmt"
 	"math/rand/v2"
+	"net/http"
 	"os"
 	"path"
 	"strings"
@@ -207,6 +208,7 @@ func TestSchemaChange(t *testing.T) {
 	require.Equal(t, 1, len(shards))
 
 	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance)
+	throttler.WaitForCheckThrottlerResult(t, clusterInstance, primaryTablet, "test", nil, http.StatusOK, time.Minute)
 
 	t.Run("revertible", testRevertible)
 	t.Run("revert", testRevert)
