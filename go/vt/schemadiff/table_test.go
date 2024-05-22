@@ -1897,6 +1897,26 @@ func TestCreateTableDiff(t *testing.T) {
 			to:   "create table t (id int primary key, v varchar(64) collate utf8mb3_bin)",
 		},
 		{
+			name: "ignore identical implicit ascii charset",
+			from: "create table t (id int primary key, v varchar(64) character set ascii collate ascii_general_ci)",
+			to:   "create table t (id int primary key, v varchar(64) collate ascii_general_ci)",
+		},
+		{
+			name: "ignore identical implicit collation",
+			from: "create table t (id int primary key, v varchar(64) character set utf8mb3 collate utf8mb3_general_ci)",
+			to:   "create table t (id int primary key, v varchar(64) character set utf8mb3)",
+		},
+		{
+			name: "ignore identical implicit collation, reverse",
+			from: "create table t (id int primary key, v varchar(64) character set utf8mb3)",
+			to:   "create table t (id int primary key, v varchar(64) character set utf8mb3 collate utf8mb3_general_ci)",
+		},
+		{
+			name: "ignore identical implicit ascii collation",
+			from: "create table t (id int primary key, v varchar(64) character set ascii collate ascii_general_ci)",
+			to:   "create table t (id int primary key, v varchar(64) character set ascii)",
+		},
+		{
 			name:  "normalized unsigned attribute",
 			from:  "create table t1 (id int primary key)",
 			to:    "create table t1 (id int unsigned primary key)",
@@ -2924,6 +2944,11 @@ func TestNormalize(t *testing.T) {
 			name: "remove column charset if collation is explicit and implies specified charset",
 			from: "create table t (id int primary key, v varchar(255) charset utf8mb4 collate utf8mb4_german2_ci)",
 			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`v` varchar(255) COLLATE utf8mb4_german2_ci,\n\tPRIMARY KEY (`id`)\n)",
+		},
+		{
+			name: "ascii charset and collation",
+			from: "create table t (id int primary key, v varchar(255) charset ascii collate ascii_general_ci) charset utf8mb3 collate utf8_general_ci",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`v` varchar(255) CHARACTER SET ascii COLLATE ascii_general_ci,\n\tPRIMARY KEY (`id`)\n) CHARSET utf8mb3,\n  COLLATE utf8mb3_general_ci",
 		},
 		{
 			name: "correct case table options for engine",

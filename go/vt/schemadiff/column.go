@@ -104,7 +104,13 @@ func (c *ColumnDefinitionEntity) ColumnDiff(
 ) (*ModifyColumnDiff, error) {
 	if c.IsTextual() || other.IsTextual() {
 		// We will now denormalize the columns charset & collate as needed (if empty, populate from table.)
-
+		if c.columnDefinition.Type.Charset.Name != "" && c.columnDefinition.Type.Options.Collate == "" {
+			collation := env.CollationEnv().DefaultCollationForCharset(c.columnDefinition.Type.Charset.Name)
+			if collation == collations.Unknown {
+				return nil, &UnknownColumnCharsetCollationError{Column: c.columnDefinition.Name.String(), Charset: t1cc.charset}
+			}
+			c.columnDefinition.Type.Options.Collate = env.CollationEnv().LookupName(collation)
+		}
 		if c.columnDefinition.Type.Charset.Name == "" && c.columnDefinition.Type.Options.Collate != "" {
 			// Column has explicit collation but no charset. We can infer the charset from the collation.
 			collationID := env.CollationEnv().LookupByName(c.columnDefinition.Type.Options.Collate)
@@ -136,6 +142,13 @@ func (c *ColumnDefinitionEntity) ColumnDiff(
 				}
 				c.columnDefinition.Type.Options.Collate = env.CollationEnv().LookupName(collation)
 			}
+		}
+		if other.columnDefinition.Type.Charset.Name != "" && other.columnDefinition.Type.Options.Collate == "" {
+			collation := env.CollationEnv().DefaultCollationForCharset(other.columnDefinition.Type.Charset.Name)
+			if collation == collations.Unknown {
+				return nil, &UnknownColumnCharsetCollationError{Column: other.columnDefinition.Name.String(), Charset: t1cc.charset}
+			}
+			other.columnDefinition.Type.Options.Collate = env.CollationEnv().LookupName(collation)
 		}
 		if other.columnDefinition.Type.Charset.Name == "" && other.columnDefinition.Type.Options.Collate != "" {
 			// Column has explicit collation but no charset. We can infer the charset from the collation.
