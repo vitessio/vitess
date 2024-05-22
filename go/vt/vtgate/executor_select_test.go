@@ -2894,10 +2894,8 @@ func TestCrossShardSubquery(t *testing.T) {
 	}}
 	utils.MustMatch(t, wantQueries, sbc2.Queries)
 
-	wantResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int32"), "1")
-	if !result.Equal(wantResult) {
-		t.Errorf("result: %+v, want %+v", result, wantResult)
-	}
+	wantResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields("id1", "int32"), "1")
+	assert.Equal(t, wantResult, result)
 }
 
 func TestSubQueryAndQueryWithLimit(t *testing.T) {
@@ -2971,15 +2969,13 @@ func TestCrossShardSubqueryStream(t *testing.T) {
 
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
-			{Name: "id", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
+			{Name: "id1", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
 		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt32(1),
 		}},
 	}
-	if !result.Equal(wantResult) {
-		t.Errorf("result: %+v, want %+v", result, wantResult)
-	}
+	assert.Equal(t, wantResult, result)
 }
 
 func TestCrossShardSubqueryGetFields(t *testing.T) {
@@ -3015,12 +3011,10 @@ func TestCrossShardSubqueryGetFields(t *testing.T) {
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{Name: "col", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
-			{Name: "id", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
+			{Name: "id1", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
 		},
 	}
-	if !result.Equal(wantResult) {
-		t.Errorf("result: %+v, want %+v", result, wantResult)
-	}
+	assert.Equal(t, wantResult, result)
 }
 
 func TestSelectBindvarswithPrepare(t *testing.T) {
@@ -3042,9 +3036,7 @@ func TestSelectBindvarswithPrepare(t *testing.T) {
 		BindVariables: map[string]*querypb.BindVariable{"id": sqltypes.Int64BindVariable(1)},
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
-	if sbc2.Queries != nil {
-		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
-	}
+	assert.Empty(t, sbc2.Queries)
 }
 
 func TestSelectDatabasePrepare(t *testing.T) {
