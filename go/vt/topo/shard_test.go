@@ -155,11 +155,14 @@ func TestUpdateSourceDeniedTables(t *testing.T) {
 		wantTabletControl *topodatapb.Shard_TabletControl
 	}
 
+	// These tests update the state of the shard tablet controls, so subsequent tests
+	// depend on the cumulative state from the previous tests.
 	testCases := []testCase{
 		{
 			name:       "enforce keyspace lock",
 			ctx:        ctx,
 			tabletType: topodatapb.TabletType_RDONLY,
+			cells:      []string{"first"},
 
 			wantError: "keyspace ks is not locked (no locksInfo)",
 		},
@@ -221,6 +224,40 @@ func TestUpdateSourceDeniedTables(t *testing.T) {
 				DeniedTables: []string{"t1", "t2"},
 			},
 		},
+		{
+			name:       "add replica tablet type",
+			tabletType: topodatapb.TabletType_REPLICA,
+			cells:      []string{"first"},
+			tables:     []string{"t1", "t2"},
+			wantTabletControl: &topodatapb.Shard_TabletControl{
+				TabletType:   topodatapb.TabletType_REPLICA,
+				Cells:        []string{"first"},
+				DeniedTables: []string{"t1", "t2"},
+			},
+		},
+		{
+			name:       "confirm rdonly still stays the same, after replica was added",
+			tabletType: topodatapb.TabletType_RDONLY,
+			wantTabletControl: &topodatapb.Shard_TabletControl{
+				TabletType:   topodatapb.TabletType_RDONLY,
+				Cells:        []string{"first", "third"},
+				DeniedTables: []string{"t1", "t2"},
+			},
+		},
+		{
+			name:       "remove rdonly entry",
+			tabletType: topodatapb.TabletType_RDONLY,
+			cells:      []string{"first", "third"},
+			remove:     true,
+			tables:     []string{"t1", "t2"},
+		},
+		{
+			name:       "remove replica entry",
+			tabletType: topodatapb.TabletType_REPLICA,
+			cells:      []string{"first", "third"},
+			remove:     true,
+			tables:     []string{"t1", "t2"},
+		},
 	}
 
 	for _, tcase := range testCases {
@@ -228,8 +265,10 @@ func TestUpdateSourceDeniedTables(t *testing.T) {
 			if tcase.ctx == nil {
 				tcase.ctx = ctxWithLock
 			}
-
-			err := si.UpdateDeniedTables(tcase.ctx, tcase.tabletType, tcase.cells, tcase.remove, tcase.tables)
+			var err error
+			if tcase.tables != nil || tcase.cells != nil {
+				err = si.UpdateDeniedTables(tcase.ctx, tcase.tabletType, tcase.cells, tcase.remove, tcase.tables)
+			}
 			if tcase.wantError != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tcase.wantError)
@@ -244,51 +283,6 @@ func TestUpdateSourceDeniedTables(t *testing.T) {
 			}
 		})
 	}
-	/*
-
-
-
-		// re-add a cell, then another with different table list to
-		// make sure it fails
-		if err := si.UpdateDeniedTables(ctx, topodatapb.TabletType_RDONLY, []string{"first"}, false, []string{"t1", "t2"}); err != nil {
-			t.Fatalf("one cell add failed: %v", si)
-		}
-		if err := si.UpdateDeniedTables(ctx, topodatapb.TabletType_RDONLY, []string{"second"}, false, []string{"t2", "t3"}); err == nil || err.Error() != "trying to use two different sets of denied tables for shard ks/sh: [t1 t2] and [t2 t3]" {
-			t.Fatalf("different table list should fail: %v", err)
-		}
-		// add another cell, see the list grow
-		if err := si.UpdateDeniedTables(ctx, topodatapb.TabletType_RDONLY, []string{"second"}, false, []string{"t1", "t2"}); err != nil || !reflect.DeepEqual(si.TabletControls, []*topodatapb.Shard_TabletControl{
-			{
-				TabletType:   topodatapb.TabletType_RDONLY,
-				Cells:        []string{"first", "second"},
-				DeniedTables: []string{"t1", "t2"},
-			},
-		}) {
-			t.Fatalf("second cell add failed: %v", si)
-		}
-
-		// add all cells, see the list grow to all
-		if err := si.UpdateDeniedTables(ctx, topodatapb.TabletType_RDONLY, []string{"first", "second", "third"}, false, []string{"t1", "t2"}); err != nil || !reflect.DeepEqual(si.TabletControls, []*topodatapb.Shard_TabletControl{
-			{
-				TabletType:   topodatapb.TabletType_RDONLY,
-				Cells:        []string{"first", "second", "third"},
-				DeniedTables: []string{"t1", "t2"},
-			},
-		}) {
-			t.Fatalf("all cells add failed: %v", si)
-		}
-
-		// remove one cell from the full list
-		if err := si.UpdateDeniedTables(ctx, topodatapb.TabletType_RDONLY, []string{"second"}, true, []string{"t1", "t2"}); err != nil || !reflect.DeepEqual(si.TabletControls, []*topodatapb.Shard_TabletControl{
-			{
-				TabletType:   topodatapb.TabletType_RDONLY,
-				Cells:        []string{"first", "third"},
-				DeniedTables: []string{"t1", "t2"},
-			},
-		}) {
-			t.Fatalf("one cell removal from all failed: %v", si)
-		}
-	*/
 }
 
 func TestValidateShardName(t *testing.T) {
