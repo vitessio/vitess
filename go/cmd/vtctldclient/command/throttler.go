@@ -44,7 +44,7 @@ var (
 	}
 	CheckThrottler = &cobra.Command{
 		Use:                   "CheckThrottler [--app-name <name>] <tablet alias>",
-		Short:                 "check the throttler on the given tablet",
+		Short:                 "Issue a throttler check on the given tablet.",
 		Example:               "CheckThrottler --app-name online-ddl zone1-0000000101",
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(1),
@@ -53,7 +53,7 @@ var (
 
 	GetThrottlerStatus = &cobra.Command{
 		Use:                   "GetThrottlerStatus <tablet alias>",
-		Short:                 "get the throttler status for the given tablet",
+		Short:                 "Get the throttler status for the given tablet.",
 		Example:               "GetThrottlerStatus zone1-0000000101",
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(1),
