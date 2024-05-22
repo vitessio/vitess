@@ -447,7 +447,17 @@ func (throttler *Throttler) applyThrottlerConfig(ctx context.Context, throttlerC
 		throttler.metricsQuery.Store(throttlerConfig.CustomQuery)
 	}
 	throttler.customMetricsQuery.Store(throttlerConfig.CustomQuery)
-	throttler.StoreMetricsThreshold(throttlerConfig.Threshold)
+	if throttlerConfig.Threshold > 0 || throttlerConfig.CustomQuery != "" {
+		// We do not allow Threshold=0, unless there is a custom query.
+		// Without a custom query, the theshold applies to replication lag,
+		// which does not make sense to have as zero.
+		// This is already validated in VtctldServer.UpdateThrottlerConfig() in grpcvtctldserver/server.go,
+		// but worth validating again.
+		// Once transition to multi-metrics is complete (1 or 2 versions after first shipping it),
+		// this legacy behavior can be removed. We won't be using `Threadhold` anymore, and we will
+		// require per-metric threshold.
+		throttler.StoreMetricsThreshold(throttlerConfig.Threshold)
+	}
 	throttler.checkAsCheckSelf.Store(throttlerConfig.CheckAsCheckSelf)
 	{
 		// Throttled apps/rules
@@ -1114,7 +1124,6 @@ func (throttler *Throttler) collectShardMySQLMetrics(ctx context.Context, tmClie
 // refreshMySQLInventory will re-structure the inventory based on reading config settings
 func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 	// distribute the query/threshold from the throttler down to the cluster settings and from there to the probes
-	metricsThreshold := throttler.MetricsThreshold.Load()
 	addProbe := func(alias string, tablet *topodatapb.Tablet, scope base.Scope, mysqlSettings *config.MySQLConfigurationSettings, probes mysql.Probes) bool {
 		for _, ignore := range mysqlSettings.IgnoreHosts {
 			if strings.Contains(alias, ignore) {
@@ -1151,6 +1160,7 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 		}
 	}
 
+	metricsThreshold := throttler.MetricsThreshold.Load()
 	metricNameUsedAsDefault := throttler.metricNameUsedAsDefault()
 	mysqlSettings := &throttler.configSettings.MySQLStore
 	mysqlSettings.Metrics[base.DefaultMetricName].Threshold.Store(metricsThreshold)
@@ -1160,6 +1170,7 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 			// backwards compatibility to v19:
 			threshold = metricsThreshold
 		}
+
 		throttler.mysqlMetricThresholds.Set(inventoryPrefix+metricName.String(), math.Float64frombits(threshold), cache.DefaultExpiration)
 	}
 	throttler.convergeMetricThresholds()
