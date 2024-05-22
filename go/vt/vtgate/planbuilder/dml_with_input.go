@@ -25,6 +25,7 @@ type dmlWithInput struct {
 	dmls  []logicalPlan
 
 	outputCols [][]int
+	bvList     []map[string]int
 }
 
 var _ logicalPlan = (*dmlWithInput)(nil)
@@ -40,5 +41,6 @@ func (d *dmlWithInput) Primitive() engine.Primitive {
 		DMLs:       dels,
 		Input:      inp,
 		OutputCols: d.outputCols,
+		BVList:     d.bvList,
 	}
 }

@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 
 	"vitess.io/vitess/go/tools/graphviz"
 	"vitess.io/vitess/go/vt/key"
@@ -265,4 +266,12 @@ func (m orderedMap) MarshalJSON() ([]byte, error) {
 
 	buf.WriteString("}")
 	return buf.Bytes(), nil
+}
+
+func (m orderedMap) String() string {
+	var output []string
+	for _, val := range m {
+		output = append(output, fmt.Sprintf("%s:%v", val.key, val.val))
+	}
+	return strings.Join(output, " ")
 }

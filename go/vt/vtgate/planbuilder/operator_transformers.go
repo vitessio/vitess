@@ -100,6 +100,7 @@ func transformDMLWithInput(ctx *plancontext.PlanningContext, op *operators.DMLWi
 		input:      input,
 		dmls:       dmls,
 		outputCols: op.Offsets,
+		bvList:     op.BvList,
 	}, nil
 }
 
