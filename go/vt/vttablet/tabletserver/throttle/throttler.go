@@ -1584,7 +1584,6 @@ func (throttler *Throttler) checkScope(ctx context.Context, appName string, scop
 		shouldRequestHeartbeats = true
 	}
 
-	checkResult.RecentlyChecked = throttler.recentlyChecked()
 	if shouldRequestHeartbeats {
 		throttler.requestHeartbeats()
 		throttler.recentCheckRateLimiter.DoEmpty()
@@ -1593,6 +1592,9 @@ func (throttler *Throttler) checkScope(ctx context.Context, appName string, scop
 		// to the PRIMARY so that it knows it must renew the heartbeat lease.
 		checkResult.RecentlyChecked = true
 		statsThrottlerRecentlyChecked.Add(1)
+	}
+	if !checkResult.RecentlyChecked {
+		checkResult.RecentlyChecked = throttler.recentlyChecked()
 	}
 
 	return checkResult
