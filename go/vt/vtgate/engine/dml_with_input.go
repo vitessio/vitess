@@ -89,6 +89,8 @@ func (dml *DMLWithInput) TryExecute(ctx context.Context, vcursor VCursor, bindVa
 	return res, nil
 }
 
+// executeLiteralUpdate executes the primitive that can be executed with a single bind variable from the input result.
+// The column updated have same value for all rows in the input result.
 func executeLiteralUpdate(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, prim Primitive, inputRes *sqltypes.Result, outputCols []int) (*sqltypes.Result, error) {
 	var bv *querypb.BindVariable
 	if len(outputCols) == 1 {
@@ -122,6 +124,8 @@ func getBVMulti(rows []sqltypes.Row, offsets []int) *querypb.BindVariable {
 	return bv
 }
 
+// executeNonLiteralUpdate executes the primitive that needs to be executed per row from the input result.
+// The column updated might have different value for each row in the input result.
 func executeNonLiteralUpdate(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, prim Primitive, inputRes *sqltypes.Result, outputCols []int, vars map[string]int) (qr *sqltypes.Result, err error) {
 	var res *sqltypes.Result
 	for _, row := range inputRes.Rows {
@@ -175,7 +179,7 @@ func (dml *DMLWithInput) description() PrimitiveDescription {
 		if len(vars) == 0 {
 			continue
 		}
-		bvList = append(bvList, fmt.Sprintf("%d:%v", idx, vars))
+		bvList = append(bvList, fmt.Sprintf("%d:[%s]", idx, orderedStringIntMap(vars)))
 	}
 	if len(bvList) > 0 {
 		other["BindVars"] = bvList

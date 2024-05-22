@@ -219,31 +219,30 @@ func prepareUpdateExpressionList(ctx *plancontext.PlanningContext, upd *sqlparse
 	// E.g. UPDATE t1 join t2 on t1.col = t2.col SET t1.col = t2.col + 1 where t2.col = 10;
 	// SET t1.col = t2.col + 1 -> SET t1.col = :t2_col + 1 (t2_col is the bindvar column which will be provided from the input)
 	ueMap := make(map[semantics.TableSet]updList)
-	var dependentCols updList
 	for _, ue := range upd.Exprs {
 		target := ctx.SemTable.DirectDeps(ue.Name)
 		exprDeps := ctx.SemTable.RecursiveDeps(ue.Expr)
 		jc := breakExpressionInLHSandRHS(ctx, ue.Expr, exprDeps.Remove(target))
-		updCol := updColumn{ue.Name, jc}
-		ueMap[target] = append(ueMap[target], updCol)
-		dependentCols = append(dependentCols, updCol)
+		ueMap[target] = append(ueMap[target], updColumn{ue.Name, jc})
 	}
 
 	// Check if any of the dependent columns are updated in the same query.
 	// This can result in a mismatch of rows on how MySQL interprets it and how Vitess would have updated those rows.
 	// It is safe to fail for those cases.
-	errIfDependentColumnUpdated(ctx, upd, dependentCols)
+	errIfDependentColumnUpdated(ctx, upd, ueMap)
 
 	return ueMap
 }
 
-func errIfDependentColumnUpdated(ctx *plancontext.PlanningContext, upd *sqlparser.Update, dependentCols updList) {
+func errIfDependentColumnUpdated(ctx *plancontext.PlanningContext, upd *sqlparser.Update, ueMap map[semantics.TableSet]updList) {
 	for _, ue := range upd.Exprs {
-		for _, dc := range dependentCols {
-			for _, bvExpr := range dc.jc.LHSExprs {
-				if ctx.SemTable.EqualsExprWithDeps(ue.Name, bvExpr.Expr) {
-					panic(vterrors.VT12001(
-						fmt.Sprintf("'%s' column referenced in update expression '%s' is itself updated", sqlparser.String(ue.Name), sqlparser.String(dc.jc.Original))))
+		for _, list := range ueMap {
+			for _, dc := range list {
+				for _, bvExpr := range dc.jc.LHSExprs {
+					if ctx.SemTable.EqualsExprWithDeps(ue.Name, bvExpr.Expr) {
+						panic(vterrors.VT12001(
+							fmt.Sprintf("'%s' column referenced in update expression '%s' is itself updated", sqlparser.String(ue.Name), sqlparser.String(dc.jc.Original))))
+					}
 				}
 			}
 		}
