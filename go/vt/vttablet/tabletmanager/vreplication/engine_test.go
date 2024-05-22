@@ -426,7 +426,8 @@ func TestWaitForPosError(t *testing.T) {
 
 	dbClient.ExpectRequest("select pos, state, message from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{}}}, nil)
 	err = vre.WaitForPos(context.Background(), 1, "MariaDB/0-1-1084")
-	want = "unexpected result: &{[] 0 0 [[]]  0 }"
+	want = "vreplication stream received an unexpected number of columns, got 0 instead of 3"
+
 	assert.EqualError(t, err, want, "WaitForPos:")
 
 	dbClient.ExpectRequest("select pos, state, message from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
@@ -435,7 +436,7 @@ func TestWaitForPosError(t *testing.T) {
 		sqltypes.NewVarBinary("MariaDB/0-1-1083"),
 	}}}, nil)
 	err = vre.WaitForPos(context.Background(), 1, "MariaDB/0-1-1084")
-	want = `unexpected result: &{[] 0 0 [[VARBINARY("MariaDB/0-1-1083")] [VARBINARY("MariaDB/0-1-1083")]]  0 }`
+	want = "vreplication stream received more rows than expected, got 2 instead of 1"
 	assert.EqualError(t, err, want, "WaitForPos:")
 }
 
