@@ -505,7 +505,7 @@ func testVSchemaForSequenceAfterMoveTables(t *testing.T) {
 		execQueryWithDatabase(t, vtgateConn, "product", "insert into customer2(name) values('a')")
 	}
 	waitForRowCount(t, vtgateConn, "product", "customer2", 3+num+num)
-	res := execVtgateQuery(t, vtgateConn, "product", "select max(cid) from customer2")
+	res := execQueryWithDatabase(t, vtgateConn, "product", "select max(cid) from customer2")
 	cid, err := res.Rows[0][0].ToInt()
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, cid, 100+num+num-1)
