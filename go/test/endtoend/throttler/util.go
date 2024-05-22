@@ -48,9 +48,10 @@ type Config struct {
 }
 
 const (
-	DefaultQuery     = "select unix_timestamp(now(6))-max(ts/1000000000) as replication_lag from _vt.heartbeat"
-	DefaultThreshold = 5 * time.Second
-	ConfigTimeout    = 60 * time.Second
+	DefaultQuery      = "select unix_timestamp(now(6))-max(ts/1000000000) as replication_lag from _vt.heartbeat"
+	DefaultThreshold  = 5 * time.Second
+	RelaxedThreashold = 10 * time.Second
+	ConfigTimeout     = 60 * time.Second
 )
 
 var DefaultConfig = &Config{
@@ -437,8 +438,11 @@ func WaitForThrottledApp(t *testing.T, tablet *cluster.Vttablet, throttlerApp th
 // EnableLagThrottlerAndWaitForStatus is a utility function to enable the throttler at the beginning of an endtoend test.
 // The throttler is configued to use the standard replication lag metric. The function waits until the throttler is confirmed
 // to be running on all tablets.
-func EnableLagThrottlerAndWaitForStatus(t *testing.T, clusterInstance *cluster.LocalProcessCluster) {
-	req := &vtctldatapb.UpdateThrottlerConfigRequest{Enable: true}
+func EnableLagThrottlerAndWaitForStatus(t *testing.T, clusterInstance *cluster.LocalProcessCluster, lagThreshold time.Duration) {
+	if lagThreshold == 0 {
+		lagThreshold = DefaultThreshold
+	}
+	req := &vtctldatapb.UpdateThrottlerConfigRequest{Enable: true, Threshold: lagThreshold.Seconds()}
 	_, err := UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
 	require.NoError(t, err)
 
