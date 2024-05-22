@@ -132,7 +132,7 @@ func TestSchemaChange(t *testing.T) {
 	shards := clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
 
-	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance, throttler.RelaxedThreashold)
+	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance)
 
 	fkOnlineDDLPossible := false
 	t.Run("check 'rename_table_preserve_foreign_key' variable", func(t *testing.T) {

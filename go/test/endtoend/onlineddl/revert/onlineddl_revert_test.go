@@ -206,7 +206,7 @@ func TestSchemaChange(t *testing.T) {
 	shards = clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
 
-	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance, throttler.RelaxedThreashold)
+	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance)
 
 	t.Run("revertible", testRevertible)
 	t.Run("revert", testRevert)
