@@ -524,14 +524,14 @@ func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType T
 			query := fmt.Sprintf("drop table %s.%s", primaryDbName, tableNameEscaped)
 			if removalType == DropTable {
 				ts.Logger().Infof("%s: Dropping table %s.%s\n",
-					topoproto.TabletAliasString(source.GetPrimary().Alias), source.GetPrimary().DbName(), tableName)
+					topoproto.TabletAliasString(source.GetPrimary().GetAlias()), source.GetPrimary().DbName(), tableName)
 			} else {
 				renameName, err := sqlescape.EnsureEscaped(getRenameFileName(tableName))
 				if err != nil {
 					return err
 				}
 				ts.Logger().Infof("%s: Renaming table %s.%s to %s.%s\n",
-					topoproto.TabletAliasString(source.GetPrimary().Alias), source.GetPrimary().DbName(), tableName, source.GetPrimary().DbName(), renameName)
+					topoproto.TabletAliasString(source.GetPrimary().GetAlias()), source.GetPrimary().DbName(), tableName, source.GetPrimary().DbName(), renameName)
 				query = fmt.Sprintf("rename table %s.%s TO %s.%s", primaryDbName, tableNameEscaped, primaryDbName, renameName)
 			}
 			_, err = ts.ws.tmc.ExecuteFetchAsDba(ctx, source.GetPrimary().Tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
@@ -542,13 +542,13 @@ func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType T
 			})
 			if err != nil {
 				if mysqlErr, ok := err.(*sqlerror.SQLError); ok && mysqlErr.Num == sqlerror.ERNoSuchTable {
-					ts.Logger().Warningf("%s: Table %s did not exist when attempting to remove it", topoproto.TabletAliasString(source.GetPrimary().Alias), tableName)
+					ts.Logger().Warningf("%s: Table %s did not exist when attempting to remove it", topoproto.TabletAliasString(source.GetPrimary().GetAlias()), tableName)
 					return nil
 				}
-				ts.Logger().Errorf("%s: Error removing table %s: %v", topoproto.TabletAliasString(source.GetPrimary().Alias), tableName, err)
+				ts.Logger().Errorf("%s: Error removing table %s: %v", topoproto.TabletAliasString(source.GetPrimary().GetAlias()), tableName, err)
 				return err
 			}
-			ts.Logger().Infof("%s: Removed table %s.%s\n", topoproto.TabletAliasString(source.GetPrimary().Alias), source.GetPrimary().DbName(), tableName)
+			ts.Logger().Infof("%s: Removed table %s.%s\n", topoproto.TabletAliasString(source.GetPrimary().GetAlias()), source.GetPrimary().DbName(), tableName)
 
 		}
 		return nil
@@ -647,7 +647,7 @@ func (ts *trafficSwitcher) startReverseVReplication(ctx context.Context) error {
 	return ts.ForAllSources(func(source *MigrationSource) error {
 		query := fmt.Sprintf("update _vt.vreplication set state='Running', message='' where db_name=%s and workflow=%s",
 			encodeString(source.GetPrimary().DbName()), encodeString(ts.ReverseWorkflowName()))
-		_, err := ts.VReplicationExec(ctx, source.GetPrimary().Alias, query)
+		_, err := ts.VReplicationExec(ctx, source.GetPrimary().GetAlias(), query)
 		return err
 	})
 }
@@ -935,8 +935,8 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 			})
 		}
 		log.Infof("Creating reverse workflow vreplication stream on tablet %s: workflow %s, startPos %s",
-			source.GetPrimary().Alias, ts.ReverseWorkflowName(), target.Position)
-		_, err = ts.VReplicationExec(ctx, source.GetPrimary().Alias,
+			source.GetPrimary().GetAlias(), ts.ReverseWorkflowName(), target.Position)
+		_, err = ts.VReplicationExec(ctx, source.GetPrimary().GetAlias(),
 			binlogplayer.CreateVReplicationState(ts.ReverseWorkflowName(), reverseBls, target.Position,
 				binlogdatapb.VReplicationWorkflowState_Stopped, source.GetPrimary().DbName(), ts.workflowType, ts.workflowSubType))
 		if err != nil {
@@ -948,11 +948,11 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 		if err != nil {
 			return err
 		}
-		updateQuery := ts.getReverseVReplicationUpdateQuery(target.GetPrimary().Alias.Cell,
-			source.GetPrimary().Alias.Cell, source.GetPrimary().DbName(), string(optionsJSON))
+		updateQuery := ts.getReverseVReplicationUpdateQuery(target.GetPrimary().GetAlias().GetCell(),
+			source.GetPrimary().GetAlias().GetCell(), source.GetPrimary().DbName(), string(optionsJSON))
 		if updateQuery != "" {
-			log.Infof("Updating vreplication stream entry on %s with: %s", source.GetPrimary().Alias, updateQuery)
-			_, err = ts.VReplicationExec(ctx, source.GetPrimary().Alias, updateQuery)
+			log.Infof("Updating vreplication stream entry on %s with: %s", source.GetPrimary().GetAlias(), updateQuery)
+			_, err = ts.VReplicationExec(ctx, source.GetPrimary().GetAlias(), updateQuery)
 			return err
 		}
 		return nil
@@ -993,7 +993,7 @@ func (ts *trafficSwitcher) waitForCatchup(ctx context.Context, filteredReplicati
 	// Source writes have been stopped, wait for all streams on targets to catch up.
 	if err := ts.ForAllUIDs(func(target *MigrationTarget, uid int32) error {
 		ts.Logger().Infof("Before Catchup: uid: %d, target primary %s, target position %s, shard %s", uid,
-			target.GetPrimary().AliasString(), target.Position, target.GetShard().String())
+			topoproto.TabletAliasString(target.GetPrimary().GetAlias()), target.Position, target.GetShard().String())
 		bls := target.Sources[uid]
 		source := ts.Sources()[bls.Shard]
 		ts.Logger().Infof("Before Catchup: waiting for keyspace:shard: %v:%v to reach source position %v, uid %d",
@@ -1006,7 +1006,7 @@ func (ts *trafficSwitcher) waitForCatchup(ctx context.Context, filteredReplicati
 		ts.Logger().Infof("After catchup: position for keyspace:shard: %v:%v reached, uid %d",
 			ts.TargetKeyspaceName(), target.GetShard().ShardName(), uid)
 		if _, err := ts.TabletManagerClient().VReplicationExec(ctx, target.GetPrimary().Tablet, binlogplayer.StopVReplication(uid, "stopped for cutover")); err != nil {
-			log.Infof("Error marking stopped for cutover on %s, uid %d", target.GetPrimary().AliasString(), uid)
+			log.Infof("Error marking stopped for cutover on %s, uid %d", topoproto.TabletAliasString(target.GetPrimary().GetAlias()), uid)
 			return err
 		}
 		return nil
@@ -1017,7 +1017,7 @@ func (ts *trafficSwitcher) waitForCatchup(ctx context.Context, filteredReplicati
 	return ts.ForAllTargets(func(target *MigrationTarget) error {
 		var err error
 		target.Position, err = ts.TabletManagerClient().PrimaryPosition(ctx, target.GetPrimary().Tablet)
-		ts.Logger().Infof("After catchup, position for target primary %s, %v", target.GetPrimary().AliasString(), target.Position)
+		ts.Logger().Infof("After catchup, position for target primary %s, %v", topoproto.TabletAliasString(target.GetPrimary().GetAlias()), target.Position)
 		return err
 	})
 }
@@ -1158,7 +1158,7 @@ func (ts *trafficSwitcher) removeTargetTables(ctx context.Context) error {
 			}
 			query := fmt.Sprintf("drop table %s.%s", primaryDbName, tableName)
 			ts.Logger().Infof("%s: Dropping table %s.%s\n",
-				topoproto.TabletAliasString(target.GetPrimary().Alias), target.GetPrimary().DbName(), tableName)
+				topoproto.TabletAliasString(target.GetPrimary().GetAlias()), target.GetPrimary().DbName(), tableName)
 			res, err := ts.ws.tmc.ExecuteFetchAsDba(ctx, target.GetPrimary().Tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
 				Query:                   []byte(query),
 				MaxRows:                 1,
@@ -1169,14 +1169,14 @@ func (ts *trafficSwitcher) removeTargetTables(ctx context.Context) error {
 			if err != nil {
 				if mysqlErr, ok := err.(*sqlerror.SQLError); ok && mysqlErr.Num == sqlerror.ERNoSuchTable {
 					// The table was already gone, so we can ignore the error.
-					ts.Logger().Warningf("%s: Table %s did not exist when attempting to remove it", topoproto.TabletAliasString(target.GetPrimary().Alias), tableName)
+					ts.Logger().Warningf("%s: Table %s did not exist when attempting to remove it", topoproto.TabletAliasString(target.GetPrimary().GetAlias()), tableName)
 					return nil
 				}
-				ts.Logger().Errorf("%s: Error removing table %s: %v", topoproto.TabletAliasString(target.GetPrimary().Alias), tableName, err)
+				ts.Logger().Errorf("%s: Error removing table %s: %v", topoproto.TabletAliasString(target.GetPrimary().GetAlias()), tableName, err)
 				return err
 			}
 			ts.Logger().Infof("%s: Removed table %s.%s\n",
-				topoproto.TabletAliasString(target.GetPrimary().Alias), target.GetPrimary().DbName(), tableName)
+				topoproto.TabletAliasString(target.GetPrimary().GetAlias()), target.GetPrimary().DbName(), tableName)
 
 		}
 		return nil
@@ -1641,7 +1641,7 @@ func (ts *trafficSwitcher) resetSequences(ctx context.Context) error {
 	}
 	return ts.ForAllSources(func(source *MigrationSource) error {
 		ts.Logger().Infof("Resetting sequences for source shard %s.%s on tablet %s",
-			source.GetShard().Keyspace(), source.GetShard().ShardName(), topoproto.TabletAliasString(source.GetPrimary().Alias))
+			source.GetShard().Keyspace(), source.GetShard().ShardName(), topoproto.TabletAliasString(source.GetPrimary().GetAlias()))
 		return ts.TabletManagerClient().ResetSequences(ctx, source.GetPrimary().Tablet, ts.Tables())
 	})
 }
