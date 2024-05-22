@@ -151,6 +151,23 @@ func (ts *tableSettings) String() string {
 	return string(tsj)
 }
 
+func handleJoin(stmt sqlparser.Statement) (tables []string, err error) {
+	err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch node := node.(type) {
+		case *sqlparser.AliasedTableExpr:
+			if tableName, ok := node.Expr.(sqlparser.TableName); ok {
+				tables = append(tables, tableName.Name.String())
+			}
+		}
+		return true, nil
+	}, stmt)
+	if err != nil {
+		return nil, err
+	}
+
+	return tables, nil
+}
+
 func (ts *tableSettings) Set(v string) error {
 	ts.val = make([]*vtctldatapb.TableMaterializeSettings, 0)
 	err := json.Unmarshal([]byte(v), &ts.val)
@@ -161,34 +178,51 @@ func (ts *tableSettings) Set(v string) error {
 		return fmt.Errorf("empty table-settings")
 	}
 
-	// Validate the provided queries.
-	seenSourceTables := make(map[string]bool)
-	for _, tms := range ts.val {
-		if tms.TargetTable == "" || tms.SourceExpression == "" {
-			return fmt.Errorf("missing target_table or source_expression")
-		}
-		// Validate that the query is valid.
-		stmt, err := ts.parser.Parse(tms.SourceExpression)
+	isMaterializeView := false
+	if len(ts.val) == 1 {
+		stmt, err := ts.parser.Parse(ts.val[0].SourceExpression)
 		if err != nil {
-			return fmt.Errorf("invalid source_expression: %q", tms.SourceExpression)
+			return fmt.Errorf("invalid source_expression: %q", ts.val[0].SourceExpression)
 		}
-		// Validate that each source-expression uses a different table.
-		// If any of them query the same table the materialize workflow
-		// will fail.
-		err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-			switch node := node.(type) {
-			case sqlparser.TableName:
-				if node.Name.NotEmpty() {
-					if seenSourceTables[node.Name.String()] {
-						return false, fmt.Errorf("multiple source_expression queries use the same table: %q", node.Name.String())
-					}
-					seenSourceTables[node.Name.String()] = true
-				}
+		tables, err := handleJoin(stmt)
+		if err != nil {
+			return fmt.Errorf("error parsing join query: %v", err)
+		}
+		if len(tables) > 1 {
+			isMaterializeView = true
+		}
+	}
+	if !isMaterializeView {
+		// Validate the provided queries.
+		seenSourceTables := make(map[string]bool)
+		for _, tms := range ts.val {
+			if tms.TargetTable == "" || tms.SourceExpression == "" {
+				return fmt.Errorf("missing target_table or source_expression")
 			}
-			return true, nil
-		}, stmt)
-		if err != nil {
-			return err
+			// Validate that the query is valid.
+			stmt, err := ts.parser.Parse(tms.SourceExpression)
+			if err != nil {
+				return fmt.Errorf("invalid source_expression: %q", tms.SourceExpression)
+			}
+
+			// Validate that each source-expression uses a different table.
+			// If any of them query the same table the materialize workflow
+			// will fail.
+			err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+				switch node := node.(type) {
+				case sqlparser.TableName:
+					if node.Name.NotEmpty() {
+						if seenSourceTables[node.Name.String()] {
+							return false, fmt.Errorf("multiple source_expression queries use the same table: %q", node.Name.String())
+						}
+						seenSourceTables[node.Name.String()] = true
+					}
+				}
+				return true, nil
+			}, stmt)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
