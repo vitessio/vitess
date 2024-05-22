@@ -157,3 +157,23 @@ func TestChangeTypeWithoutSemiSync(t *testing.T) {
 	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", replica.Alias, "replica")
 	require.NoError(t, err)
 }
+
+// TestERSWithWriteInPromoteReplica tests that ERS doesn't fail even if there is a
+// write that happens when PromoteReplica is called.
+func TestERSWithWriteInPromoteReplica(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
+	defer utils.TeardownCluster(clusterInstance)
+	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
+
+	// Drop a table so that when sidecardb changes are checked, we run a DML query.
+	utils.RunSQLs(context.Background(), t, []string{
+		"set sql_log_bin=0",
+		`SET @@global.super_read_only=0`,
+		`DROP TABLE _vt.heartbeat`,
+		"set sql_log_bin=1",
+	}, tablets[3])
+	_, err := utils.Ers(clusterInstance, tablets[3], "60s", "30s")
+	require.NoError(t, err, "ERS should not fail even if there is a sidecardb change")
+}
