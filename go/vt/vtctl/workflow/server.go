@@ -1971,7 +1971,7 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 
 	ts, state, err := s.getWorkflowState(ctx, req.GetKeyspace(), req.GetWorkflow())
 	if err != nil {
-		log.Errorf("Failed to get VReplication workflow state for %s.%s: %v", req.GetKeyspace(), req.GetWorkflow(), err)
+		log.Errorf("failed to get VReplication workflow state for %s.%s: %v", req.GetKeyspace(), req.GetWorkflow(), err)
 		return nil, err
 	}
 
@@ -2019,7 +2019,7 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 	// Cleanup related data and artifacts.
 	if _, err := s.DropTargets(delCtx, ts, req.GetKeepData(), req.GetKeepRoutingRules(), false); err != nil {
 		if topo.IsErrType(err, topo.NoNode) {
-			return nil, vterrors.Wrapf(err, "%s keyspace does not exist", req.Keyspace)
+			return nil, vterrors.Wrapf(err, "%s keyspace does not exist", req.GetKeyspace())
 		}
 		return nil, err
 	}
@@ -2807,8 +2807,8 @@ func (s *Server) DeleteShard(ctx context.Context, keyspace, shard string, recurs
 	shardInfo, err := s.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		if topo.IsErrType(err, topo.NoNode) {
-			log.Infof("Shard %v/%v doesn't seem to exist, cleaning up any potential leftover", keyspace, shard)
-			return s.ts.DeleteShard(ctx, keyspace, shard)
+			log.Warningf("Shard %v/%v did not exist when attempting to remove it", keyspace, shard)
+			return nil
 		}
 		return err
 	}

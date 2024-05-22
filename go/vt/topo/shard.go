@@ -451,7 +451,8 @@ func (si *ShardInfo) updatePrimaryTabletControl(tc *topodatapb.Shard_TabletContr
 	}
 	if remove {
 		if len(newTables) != 0 {
-			return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, dlTablesNotPresent)
+			// These tables did not exist in the denied list so we don't need to remove them.
+			log.Warningf("%s:%s", dlTablesNotPresent, strings.Join(newTables, ","))
 		}
 		var newDenyList []string
 		if len(tables) != 0 { // legacy uses
