@@ -3002,8 +3002,6 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 }
 
 func TestEmergencyReparenter_reparentReplicas(t *testing.T) {
-	t.Parallel()
-
 	tests := []struct {
 		name                  string
 		emergencyReparentOps  EmergencyReparentOptions
