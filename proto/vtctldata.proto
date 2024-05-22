@@ -1959,3 +1959,38 @@ message WorkflowUpdateResponse {
   string summary = 1;
   repeated TabletInfo details = 2;
 }
+
+message ApplyMirrorRulesRequest {
+  vschema.MirrorRules mirror_rules = 1;
+  // SkipRebuild, if set, will cause ApplyRoutingRules to skip rebuilding the
+  // SrvVSchema objects in each cell in RebuildCells.
+  bool skip_rebuild = 2;
+  // RebuildCells limits the SrvVSchema rebuild to the specified cells. If not
+  // provided the SrvVSchema will be rebuilt in every cell in the topology.
+  //
+  // Ignored if SkipRebuild is set.
+  repeated string rebuild_cells = 3;
+}
+
+message ApplyMirrorRulesResponse {
+}
+
+message GetMirrorRulesRequest {
+}
+
+message GetMirrorRulesResponse {
+  vschema.MirrorRules mirror_rules = 1;
+}
+
+message WorkflowMirrorTrafficRequest {
+  string keyspace = 1;
+  string workflow = 2;
+  repeated topodata.TabletType tablet_types = 3;
+  float percent = 4;
+}
+
+message WorkflowMirrorTrafficResponse {
+  string summary = 1;
+  string start_state = 2;
+  string current_state = 3;
+}

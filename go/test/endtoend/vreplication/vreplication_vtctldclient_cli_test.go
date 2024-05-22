@@ -390,6 +390,25 @@ func checkTablesExist(t *testing.T, tabletAlias string, tables []string) bool {
 	return true
 }
 
+func getMirrorRules(t *testing.T) *vschemapb.MirrorRules {
+	mirrorRules, err := vc.VtctldClient.ExecuteCommandWithOutput("GetMirrorRules")
+	require.NoError(t, err)
+	var mirrorRulesResponse vschemapb.MirrorRules
+	err = protojson.Unmarshal([]byte(mirrorRules), &mirrorRulesResponse)
+	require.NoError(t, err)
+	return &mirrorRulesResponse
+}
+
+func confirmNoMirrorRules(t *testing.T) {
+	mirrorRulesResponse := getMirrorRules(t)
+	require.Zero(t, len(mirrorRulesResponse.Rules))
+}
+
+func confirmMirrorRulesExist(t *testing.T) {
+	mirrorRulesResponse := getMirrorRules(t)
+	require.NotZero(t, len(mirrorRulesResponse.Rules))
+}
+
 func getRoutingRules(t *testing.T) *vschemapb.RoutingRules {
 	routingRules, err := vc.VtctldClient.ExecuteCommandWithOutput("GetRoutingRules")
 	require.NoError(t, err)

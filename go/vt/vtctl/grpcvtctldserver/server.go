@@ -5057,6 +5057,67 @@ func (s *VtctldServer) WorkflowUpdate(ctx context.Context, req *vtctldatapb.Work
 	return resp, err
 }
 
+// ApplyMirrorRules is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ApplyMirrorRules(ctx context.Context, req *vtctldatapb.ApplyMirrorRulesRequest) (resp *vtctldatapb.ApplyMirrorRulesResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ApplyMirrorRules")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("skip_rebuild", req.SkipRebuild)
+	span.Annotate("rebuild_cells", strings.Join(req.RebuildCells, ","))
+
+	if err = s.ts.SaveMirrorRules(ctx, req.MirrorRules); err != nil {
+		return nil, err
+	}
+
+	resp = &vtctldatapb.ApplyMirrorRulesResponse{}
+
+	if req.SkipRebuild {
+		log.Warningf("Skipping rebuild of SrvVSchema, will need to run RebuildVSchemaGraph for changes to take effect")
+		return resp, nil
+	}
+
+	if err = s.ts.RebuildSrvVSchema(ctx, req.RebuildCells); err != nil {
+		err = vterrors.Wrapf(err, "RebuildSrvVSchema(%v) failed: %v", req.RebuildCells, err)
+		return nil, err
+	}
+
+	return resp, nil
+}
+
+// GetMirrorRules is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetMirrorRules(ctx context.Context, req *vtctldatapb.GetMirrorRulesRequest) (resp *vtctldatapb.GetMirrorRulesResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetMirrorRules")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	mr, err := s.ts.GetMirrorRules(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.GetMirrorRulesResponse{
+		MirrorRules: mr,
+	}, nil
+}
+
+// WorkflowMirrorTraffic is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) WorkflowMirrorTraffic(ctx context.Context, req *vtctldatapb.WorkflowMirrorTrafficRequest) (resp *vtctldatapb.WorkflowMirrorTrafficResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.WorkflowMirrorTraffic")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("workflow", req.Workflow)
+	span.Annotate("percent", req.Percent)
+
+	resp, err = s.ws.WorkflowMirrorTraffic(ctx, req)
+	return resp, err
+}
+
 // StartServer registers a VtctldServer for RPCs on the given gRPC server.
 func StartServer(s *grpc.Server, env *vtenv.Environment, ts *topo.Server) {
 	vtctlservicepb.RegisterVtctldServer(s, NewVtctldServer(env, ts))

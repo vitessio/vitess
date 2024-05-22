@@ -29,6 +29,7 @@ import (
 
 func TestRebuildVSchema(t *testing.T) {
 	emptySrvVSchema := &vschemapb.SrvVSchema{
+		MirrorRules:       &vschemapb.MirrorRules{},
 		RoutingRules:      &vschemapb.RoutingRules{},
 		ShardRoutingRules: &vschemapb.ShardRoutingRules{},
 	}
@@ -52,6 +53,7 @@ func TestRebuildVSchema(t *testing.T) {
 
 	// create a keyspace, rebuild, should see an empty entry
 	emptyKs1SrvVSchema := &vschemapb.SrvVSchema{
+		MirrorRules:       &vschemapb.MirrorRules{},
 		RoutingRules:      &vschemapb.RoutingRules{},
 		ShardRoutingRules: &vschemapb.ShardRoutingRules{},
 		Keyspaces: map[string]*vschemapb.Keyspace{
@@ -81,6 +83,7 @@ func TestRebuildVSchema(t *testing.T) {
 		t.Errorf("RebuildVSchema failed: %v", err)
 	}
 	wanted1 := &vschemapb.SrvVSchema{
+		MirrorRules:       &vschemapb.MirrorRules{},
 		RoutingRules:      &vschemapb.RoutingRules{},
 		ShardRoutingRules: &vschemapb.ShardRoutingRules{},
 		Keyspaces: map[string]*vschemapb.Keyspace{
@@ -122,6 +125,7 @@ func TestRebuildVSchema(t *testing.T) {
 		t.Errorf("RebuildVSchema failed: %v", err)
 	}
 	wanted2 := &vschemapb.SrvVSchema{
+		MirrorRules:       &vschemapb.MirrorRules{},
 		RoutingRules:      &vschemapb.RoutingRules{},
 		ShardRoutingRules: &vschemapb.ShardRoutingRules{},
 		Keyspaces: map[string]*vschemapb.Keyspace{
@@ -160,6 +164,7 @@ func TestRebuildVSchema(t *testing.T) {
 		t.Errorf("RebuildVSchema failed: %v", err)
 	}
 	wanted3 := &vschemapb.SrvVSchema{
+		MirrorRules:       &vschemapb.MirrorRules{},
 		RoutingRules:      rr,
 		ShardRoutingRules: &vschemapb.ShardRoutingRules{},
 		Keyspaces: map[string]*vschemapb.Keyspace{

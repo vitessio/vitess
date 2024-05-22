@@ -161,3 +161,7 @@ func (r *switcher) resetSequences(ctx context.Context) error {
 func (r *switcher) initializeTargetSequences(ctx context.Context, sequencesByBackingTable map[string]*sequenceMetadata) error {
 	return r.ts.initializeTargetSequences(ctx, sequencesByBackingTable)
 }
+
+func (r *switcher) mirrorTableTraffic(ctx context.Context, types []topodatapb.TabletType, percent float32) error {
+	return r.ts.mirrorTableTraffic(ctx, types, percent)
+}

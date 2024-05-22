@@ -26,6 +26,7 @@
     - [Delete with Multi Target Support](#delete-multi-target)
     - [User Defined Functions Support](#udf-support)
     - [Insert Row Alias Support](#insert-row-alias-support)
+  - **[Traffic Mirroring](#traffic-mirroring)**
   - **[Query Timeout](#query-timeout)**
   - **[Flag changes](#flag-changes)**
     - [`pprof-http` default change](#pprof-http-default)
@@ -288,6 +289,40 @@ Example:
 - `insert into user(id, name, email) valies (100, 'Alice', 'alice@mail.com') as new(m, n, p) on duplicate key update name = n, email = p`
 
 More details about how it works is available in [MySQL Docs](https://dev.mysql.com/doc/refman/8.0/en/insert-on-duplicate.html)
+
+### <a id="traffic-mirroring"/>Traffic Mirroring
+
+Traffic mirroring is intended to help reduce some of the uncertainty inherent to `MoveTables SwitchTraffic`. When traffic mirroring is enabled, VTGate will mirror a percentage of traffic from one keyspace to another.
+
+Mirror rules may be enabled through `vtctldclient` in two ways:
+
+  * With `ApplyMirrorRules`.
+  * With `MoveTables MirrorTraffic`, which uses `ApplyMirrorRules` under the hood.
+
+Example with `ApplyMirrorRules`:
+
+```bash
+$ vtctldclient --server :15999 ApplyMirrorRules --rules "$(cat <<EOF
+{
+  "rules": [
+    {
+      "from_table": "commerce.corders",
+      "to_table": "customer.corders",
+      "percent": 5.0
+    }
+  ]
+}
+EOF
+)"
+```
+
+Example with `MoveTables MirrorTraffic`:
+
+```bash
+$ vtctldclient --server :15999 MoveTables --target-keyspace customer --workflow commerce2customer MirrorTraffic --percent 5.0
+```
+
+Mirror rules can be inspected with `GetMirrorRules`.
 
 ### <a id="query-timeout"/>Query Timeout
 On a query timeout, Vitess closed the connection using the `kill connection` statement. This leads to connection churn 

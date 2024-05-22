@@ -665,6 +665,9 @@ func TestApplyVSchema(t *testing.T) {
 							Sharded: false,
 						},
 					},
+					MirrorRules: &vschemapb.MirrorRules{
+						Rules: []*vschemapb.MirrorRule{},
+					},
 					RoutingRules: &vschemapb.RoutingRules{
 						Rules: []*vschemapb.RoutingRule{},
 					},
