@@ -5065,7 +5065,7 @@ func StartServer(s *grpc.Server, env *vtenv.Environment, ts *topo.Server) {
 	vtctlservicepb.RegisterVtctldServer(s, NewVtctldServer(env, ts))
 }
 
-// getTopologyKey is a helper method that returns a topology key given its path.
+// getTopologyCell is a helper method that returns a topology cell given its path.
 func (s *VtctldServer) getTopologyCell(ctx context.Context, cellPath string, version int64, asJSON bool) (*vtctldatapb.TopologyCell, error) {
 	// extract cell and relative path
 	parts := strings.Split(cellPath, "/")
@@ -5075,7 +5075,7 @@ func (s *VtctldServer) getTopologyCell(ctx context.Context, cellPath string, ver
 	}
 	cell := parts[1]
 	relativePath := cellPath[len(cell)+1:]
-	topoCell := vtctldatapb.TopologyCell{Name: parts[len(parts)-1], Path: cellPath}
+	topoCell := &vtctldatapb.TopologyCell{Name: parts[len(parts)-1], Path: cellPath}
 
 	conn, err := s.ts.ConnForCell(ctx, cell)
 	if err != nil {
@@ -5083,55 +5083,44 @@ func (s *VtctldServer) getTopologyCell(ctx context.Context, cellPath string, ver
 		return nil, err
 	}
 
-	if version != 0 {
-		data, err := conn.GetVersion(ctx, relativePath, version)
-		if err == nil {
-			result, err := topo.DecodeContent(relativePath, data, asJSON)
-			if err != nil {
-				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "error decoding file content for cell %s (version: %d): %v", cellPath, version, err)
-			}
-			topoCell.Data = result
-			topoCell.Version = version
-			// Since there is data at this cell, it cannot be a directory cell
-			// so we can early return the topocell.
-			return &topoCell, nil
-		}
-		if topo.IsErrType(err, topo.NoImplementation) {
-			// The topo server does not support GetVersion.
+	// If we got a topo.NoNode error then we know that the cell had no data in it but we
+	// want to see if it's a "directory" (key prefix) with children (keys with this shared
+	// prefix). For any other errors we simply return the error.
+	handleGetError := func(err error) (*vtctldatapb.TopologyCell, error) {
+		if !topo.IsErrType(err, topo.NoNode) {
 			return nil, err
 		}
-		// Otherwise this may be a "directory" with children at this path so
-		// we carry on.
-	} else {
-		if data, curVersion, err := conn.Get(ctx, relativePath); err == nil {
-			result, err := topo.DecodeContent(relativePath, data, asJSON)
-			if err != nil {
-				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "error decoding file content for cell %s: %v", cellPath, err)
-			}
-			topoCell.Data = result
-			topoCell.Version, err = strconv.ParseInt(curVersion.String(), 10, 64)
-			if err != nil {
-				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "error decoding file version for cell %s (version: %d): %v", cellPath, version, err)
-			}
+		children, err := conn.ListDir(ctx, relativePath, false /*full*/)
+		if err != nil {
+			err := vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cell %s with path %s has no file contents and no children: %v", cell, cellPath, err)
+			return nil, err
+		}
+		topoCell.Children = make([]string, len(children))
+		for i, c := range children {
+			topoCell.Children[i] = c.Name
+		}
+		return topoCell, nil
+	}
 
-			// Since there is data at this cell, it cannot be a directory cell
-			// so we can early return the topocell.
-			return &topoCell, nil
+	var data []byte
+	if version != 0 {
+		if data, err = conn.GetVersion(ctx, relativePath, version); err != nil {
+			return handleGetError(err)
+		}
+		topoCell.Version = version
+	} else {
+		var curVersion topo.Version
+		if data, curVersion, err = conn.Get(ctx, relativePath); err != nil {
+			return handleGetError(err)
+		}
+		if topoCell.Version, err = strconv.ParseInt(curVersion.String(), 10, 64); err != nil {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "error decoding file version for cell %s (version: %d): %v", cellPath, version, err)
 		}
 	}
-
-	children, err := conn.ListDir(ctx, relativePath, false /*full*/)
-	if err != nil {
-		err := vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cell %s with path %s has no file contents and no children: %v", cell, cellPath, err)
-		return nil, err
+	if topoCell.Data, err = topo.DecodeContent(relativePath, data, asJSON); err != nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "error decoding file content for cell %s: %v", cellPath, err)
 	}
-
-	topoCell.Children = make([]string, len(children))
-	for i, c := range children {
-		topoCell.Children[i] = c.Name
-	}
-
-	return &topoCell, nil
+	return topoCell, nil
 }
 
 // Helper function to get version of a tablet from its debug vars
