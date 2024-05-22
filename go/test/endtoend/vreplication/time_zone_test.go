@@ -190,7 +190,7 @@ func TestMoveTablesTZ(t *testing.T) {
 	}
 
 	// inserts to test date conversions in reverse replication
-	execVtgateQuery(t, vtgateConn, "customer", "insert into datze(id, dt2) values (13, '2022-01-01 18:20:30')")
-	execVtgateQuery(t, vtgateConn, "customer", "insert into datze(id, dt2) values (14, '2022-04-01 12:06:07')")
+	execQueryWithDatabase(t, vtgateConn, "customer", "insert into datze(id, dt2) values (13, '2022-01-01 18:20:30')")
+	execQueryWithDatabase(t, vtgateConn, "customer", "insert into datze(id, dt2) values (14, '2022-04-01 12:06:07')")
 	vdiffSideBySide(t, ksReverseWorkflow, "")
 }

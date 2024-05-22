@@ -72,7 +72,7 @@ func execMultipleQueries(t *testing.T, conn *mysql.Conn, database string, lines 
 		if strings.HasPrefix(query, "--") {
 			continue
 		}
-		execVtgateQuery(t, conn, database, string(query))
+		execQueryWithDatabase(t, conn, database, string(query))
 	}
 }
 
@@ -134,7 +134,7 @@ func getConnection(t *testing.T, hostname string, port int) *mysql.Conn {
 	return conn
 }
 
-func execVtgateQuery(t *testing.T, conn *mysql.Conn, database string, query string) *sqltypes.Result {
+func execQueryWithDatabase(t *testing.T, conn *mysql.Conn, database string, query string) *sqltypes.Result {
 	if strings.TrimSpace(query) == "" {
 		return nil
 	}
@@ -171,7 +171,7 @@ func waitForQueryResult(t *testing.T, conn *mysql.Conn, database string, query s
 	timer := time.NewTimer(defaultTimeout)
 	defer timer.Stop()
 	for {
-		qr := execVtgateQuery(t, conn, database, query)
+		qr := execQueryWithDatabase(t, conn, database, query)
 		require.NotNil(t, qr)
 		if want == fmt.Sprintf("%v", qr.Rows) {
 			return
@@ -245,7 +245,7 @@ func waitForNoWorkflowLag(t *testing.T, vc *VitessCluster, keyspace, worfklow st
 // verifyNoInternalTables can e.g. be used to confirm that no internal tables were
 // copied from a source to a target during a MoveTables or Reshard operation.
 func verifyNoInternalTables(t *testing.T, conn *mysql.Conn, keyspaceShard string) {
-	qr := execVtgateQuery(t, conn, keyspaceShard, "show tables")
+	qr := execQueryWithDatabase(t, conn, keyspaceShard, "show tables")
 	require.NotNil(t, qr)
 	require.NotNil(t, qr.Rows)
 	for _, row := range qr.Rows {
@@ -260,7 +260,7 @@ func waitForRowCount(t *testing.T, conn *mysql.Conn, database string, table stri
 	timer := time.NewTimer(defaultTimeout)
 	defer timer.Stop()
 	for {
-		qr := execVtgateQuery(t, conn, database, query)
+		qr := execQueryWithDatabase(t, conn, database, query)
 		require.NotNil(t, qr)
 		if wantRes == fmt.Sprintf("%v", qr.Rows) {
 			return
@@ -332,7 +332,7 @@ func executeOnTablet(t *testing.T, conn *mysql.Conn, tablet *cluster.VttabletPro
 
 	count0, body0 := getQueryCount(t, queryStatsURL, matchQuery)
 
-	qr := execVtgateQuery(t, conn, ksName, query)
+	qr := execQueryWithDatabase(t, conn, ksName, query)
 	require.NotNil(t, qr)
 
 	count1, body1 := getQueryCount(t, queryStatsURL, matchQuery)
@@ -602,12 +602,17 @@ func expectNumberOfStreams(t *testing.T, vtgateConn *mysql.Conn, name string, wo
 	waitForQueryResult(t, vtgateConn, database, query, fmt.Sprintf(`[[INT64(%d)]]`, want))
 }
 
-// confirmAllStreamsRunning confirms that all of the migrated streams are running
-// after a Reshard.
-func confirmAllStreamsRunning(t *testing.T, vtgateConn *mysql.Conn, database string) {
+// confirmAllStreamsRunning confirms that all of migrated streams are running
+// for a workflow.
+func confirmAllStreamsRunning(t *testing.T, keyspace, shard string) {
 	query := sqlparser.BuildParsedQuery("select count(*) from %s.vreplication where state != '%s'",
 		sidecarDBIdentifier, binlogdatapb.VReplicationWorkflowState_Running.String()).Query
-	waitForQueryResult(t, vtgateConn, database, query, `[[INT64(0)]]`)
+	tablet := vc.getPrimaryTablet(t, keyspace, shard)
+	// Query the tablet's mysqld directly as the target may have denied table entries.
+	dbc, err := tablet.TabletConn(keyspace, true)
+	require.NoError(t, err)
+	defer dbc.Close()
+	waitForQueryResult(t, dbc, sidecarDBName, query, `[[INT64(0)]]`)
 }
 
 func printShardPositions(vc *VitessCluster, ksShards []string) {
@@ -801,7 +806,7 @@ func isBinlogRowImageNoBlob(t *testing.T, tablet *cluster.VttabletProcess) bool 
 
 func getRowCount(t *testing.T, vtgateConn *mysql.Conn, table string) int {
 	query := fmt.Sprintf("select count(*) from %s", table)
-	qr := execVtgateQuery(t, vtgateConn, "", query)
+	qr := execQuery(t, vtgateConn, query)
 	numRows, _ := qr.Rows[0][0].ToInt()
 	return numRows
 }
@@ -1009,7 +1014,7 @@ func vexplain(t *testing.T, database, query string) *VExplainPlan {
 	vtgateConn := vc.GetVTGateConn(t)
 	defer vtgateConn.Close()
 
-	qr := execVtgateQuery(t, vtgateConn, database, fmt.Sprintf("vexplain %s", query))
+	qr := execQueryWithDatabase(t, vtgateConn, database, fmt.Sprintf("vexplain %s", query))
 	require.NotNil(t, qr)
 	require.Equal(t, 1, len(qr.Rows))
 	json := qr.Rows[0][0].ToString()

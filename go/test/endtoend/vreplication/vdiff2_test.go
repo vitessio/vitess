@@ -164,13 +164,13 @@ func TestVDiff2(t *testing.T) {
 	// Insert null and empty enum values for testing vdiff comparisons for those values.
 	// If we add this to the initial data list, the counts in several other tests will need to change
 	query := `insert into customer(cid, name, typ, sport) values(1001, null, 'soho','')`
-	execVtgateQuery(t, vtgateConn, fmt.Sprintf("%s:%s", sourceKs, sourceShards[0]), query)
+	execQueryWithDatabase(t, vtgateConn, fmt.Sprintf("%s:%s", sourceKs, sourceShards[0]), query)
 
 	generateMoreCustomers(t, sourceKs, 1000)
 
 	// Create rows in the nopk table using the customer names and random ages between 20 and 100.
 	query = "insert into nopk(name, age) select name, floor(rand()*80)+20 from customer"
-	execVtgateQuery(t, vtgateConn, fmt.Sprintf("%s:%s", sourceKs, sourceShards[0]), query)
+	execQueryWithDatabase(t, vtgateConn, fmt.Sprintf("%s:%s", sourceKs, sourceShards[0]), query)
 
 	// The primary tablet is only added in the first cell.
 	// We ONLY add primary tablets in this test.
@@ -502,7 +502,7 @@ func testResume(t *testing.T, tc *testCase, cells string) {
 
 		expectedNewRows := int64(0)
 		if tc.resumeInsert != "" {
-			res := execVtgateQuery(t, vtgateConn, tc.sourceKs, tc.resumeInsert)
+			res := execQueryWithDatabase(t, vtgateConn, tc.sourceKs, tc.resumeInsert)
 			expectedNewRows = int64(res.RowsAffected)
 		}
 		expectedRows := rowsCompared + expectedNewRows
@@ -549,7 +549,7 @@ func testAutoRetryError(t *testing.T, tc *testCase, cells string) {
 		// compared is cumulative.
 		expectedNewRows := int64(0)
 		if tc.retryInsert != "" {
-			res := execVtgateQuery(t, vtgateConn, tc.sourceKs, tc.retryInsert)
+			res := execQueryWithDatabase(t, vtgateConn, tc.sourceKs, tc.retryInsert)
 			expectedNewRows = int64(res.RowsAffected)
 		}
 		expectedRows := rowsCompared + expectedNewRows
