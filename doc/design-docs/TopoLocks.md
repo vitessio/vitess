@@ -1,4 +1,4 @@
-Shard Locking
+Locking Using Topology Servers
 =====================
 
 This doc describes the working of shard locking that Vitess does using the topo servers.
@@ -9,9 +9,9 @@ There are 2 variants of shard locking, `LockShard` which is a blocking call, and
 
 ### Working of LockShard
 
-`getLockTimeout` gets the amount of time we have to acquire a shard lock. It is not the amount of time that we acquire the shard lock for. It is currently misadvertised. LockShard returns a context, but that context doesn't have a timeout on it. When the shard lock expires, the context doesn't expire, because it doesn't have a timeout. To check whether the shard is locked or not, we have `CheckShardLocked`.
+`getLockTimeout` gets the amount of time we have to acquire a shard lock. It is not the amount of time that we acquire the shard lock for. It is currently misadvertised. `LockShard` returns a context, but that context doesn't have a timeout on it. When the shard lock expires, the context doesn't expire, because it doesn't have a timeout. To check whether the shard is locked or not, we have `CheckShardLocked`.
 
-The implementations of LockShard and CheckShardLocked differ slightly for all the different topology servers. We'll look at each of them separately.
+The implementations of `LockShard` and `CheckShardLocked` differ slightly for all the different topology servers. We'll look at each of them separately.
 
 ### Etcd
 
