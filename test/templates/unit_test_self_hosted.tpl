@@ -8,6 +8,9 @@ jobs:
   test:
     runs-on:
       group: vitess-ubuntu20
+    env:
+      GOPRIVATE: github.com/slackhq/vitess-addons
+      GH_ACCESS_TOKEN: {{"${{ secrets.GH_ACCESS_TOKEN }}"}}
 
     steps:
       - name: Check if workflow needs to be skipped

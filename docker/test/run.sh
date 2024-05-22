@@ -181,6 +181,10 @@ bashcmd=$(append_cmd "$bashcmd" "rm -rf /vt/bin; ln -s /vt/src/vitess.io/vitess/
 bashcmd=$(append_cmd "$bashcmd" "rm -rf /vt/lib; ln -s /vt/src/vitess.io/vitess/lib /vt/lib")
 bashcmd=$(append_cmd "$bashcmd" "rm -rf /vt/vthook; ln -s /vt/src/vitess.io/vitess/vthook /vt/vthook")
 
+# Setup git for private go modules
+bashcmd=$(append_cmd "$bashcmd" "export GOPRIVATE=$GOPRIVATE")
+bashcmd=$(append_cmd "$bashcmd" "git config --global url.https://$GH_ACCESS_TOKEN@github.com/.insteadOf https://github.com/")
+
 # Maven was setup in /vt/dist, may need to reinstall it.
 bashcmd=$(append_cmd "$bashcmd" "echo 'Checking if mvn needs installing...'; if [[ ! \$(command -v mvn) ]]; then echo 'install maven'; curl -sL --connect-timeout 10 --retry 3 http://www-us.apache.org/dist/maven/maven-3/3.3.9/binaries/apache-maven-3.3.9-bin.tar.gz | tar -xz && mv apache-maven-3.3.9 /vt/dist/maven; fi; echo 'mvn check done'")
 

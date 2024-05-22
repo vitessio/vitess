@@ -268,7 +268,7 @@ func TestDurabilityTest(t *testing.T) {
 
 	for _, testcase := range testcases {
 		t.Run(topoproto.TabletAliasString(testcase.tablet.Alias), func(t *testing.T) {
-			rule := durabilityRules.promotionRule(testcase.tablet)
+			rule := durabilityRules.PromotionRule(testcase.tablet)
 			assert.Equal(t, testcase.promotionRule, rule)
 		})
 	}
