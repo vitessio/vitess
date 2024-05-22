@@ -227,6 +227,9 @@ func (check *ThrottlerCheck) Check(ctx context.Context, appName string, scope ba
 		}
 	}
 	if metric, ok := checkResult.Metrics[check.throttler.metricNameUsedAsDefault().String()]; ok && checkResult.IsOK() {
+		applyMetricToCheckResult(metric)
+	}
+	if metric, ok := checkResult.Metrics[base.DefaultMetricName.String()]; ok && checkResult.IsOK() {
 		// v19 compatibility: if this v20 server is a replica, reporting to a v19 primary,
 		// then we must supply the v19-flavor check result.
 		// If checkResult is not OK, then we will have populated these fields already by the failing metric.
