@@ -1938,26 +1938,6 @@ func (joinType JoinType) IsCommutative() bool {
 	}
 }
 
-// IsLeft returns whether the join type is left join type or not.
-func (joinType JoinType) IsLeft() bool {
-	switch joinType {
-	case LeftJoinType, NaturalLeftJoinType:
-		return true
-	default:
-		return false
-	}
-}
-
-// IsRight returns whether the join type is right join type or not.
-func (joinType JoinType) IsRight() bool {
-	switch joinType {
-	case RightJoinType, NaturalRightJoinType:
-		return true
-	default:
-		return false
-	}
-}
-
 // IsInner returns whether the join type is an inner join or not.
 func (joinType JoinType) IsInner() bool {
 	switch joinType {

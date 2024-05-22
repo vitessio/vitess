@@ -35,16 +35,13 @@ func mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPr
 
 	switch {
 	case a == dual:
-		// If a dual is on the left side and it is a left join, then we can only merge if the right side is a single sharded routing.
-		if m.joinType.IsLeft() && !routingB.OpCode().IsSingleShard() {
+		// If a dual is on the left side and it is a left join (all right joins are changed to left joins), then we can only merge if the right side is a single sharded routing.
+		if !m.joinType.IsInner() && !routingB.OpCode().IsSingleShard() {
 			return nil
 		}
 		return m.merge(ctx, lhsRoute, rhsRoute, routingB)
 	case b == dual:
-		// If a dual is on the right side and it is a right join, then we can only merge if the left side is a single sharded routing.
-		if m.joinType.IsRight() && !routingA.OpCode().IsSingleShard() {
-			return nil
-		}
+		// If a dual is on the right side.
 		return m.merge(ctx, lhsRoute, rhsRoute, routingA)
 
 	// an unsharded/reference route can be merged with anything going to that keyspace
