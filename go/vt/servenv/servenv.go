@@ -106,6 +106,11 @@ func Init() {
 	mu.Lock()
 	defer mu.Unlock()
 
+	// Uptime metric
+	_ = stats.NewGaugeFunc("Uptime", "Uptime in nanoseconds", func() int64 {
+		return int64(time.Since(serverStart).Nanoseconds())
+	})
+
 	// Ignore SIGPIPE if specified
 	// The Go runtime catches SIGPIPE for us on all fds except stdout/stderr
 	// See https://golang.org/pkg/os/signal/#hdr-SIGPIPE

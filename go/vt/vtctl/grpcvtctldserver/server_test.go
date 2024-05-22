@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"sync"
 	"testing"
 	"time"
 
@@ -11322,7 +11323,7 @@ func TestValidateVersionShard(t *testing.T) {
 		name      string
 		req       *vtctldatapb.ValidateVersionShardRequest
 		expected  *vtctldatapb.ValidateVersionShardResponse
-		setup     func()
+		setup     func(*sync.Mutex)
 		shouldErr bool
 	}{
 		{
@@ -11334,7 +11335,9 @@ func TestValidateVersionShard(t *testing.T) {
 			expected: &vtctldatapb.ValidateVersionShardResponse{
 				Results: []string{},
 			},
-			setup: func() {
+			setup: func(testSetupMu *sync.Mutex) {
+				testSetupMu.Lock()
+				defer testSetupMu.Unlock()
 				addrVersionMap := map[string]string{
 					"primary:0": "version1",
 					"replica:0": "version1",
@@ -11352,7 +11355,9 @@ func TestValidateVersionShard(t *testing.T) {
 			expected: &vtctldatapb.ValidateVersionShardResponse{
 				Results: []string{"primary zone1-0000000100 version version1 is different than replica zone1-0000000101 version version:\"version2\""},
 			},
-			setup: func() {
+			setup: func(testSetupMu *sync.Mutex) {
+				testSetupMu.Lock()
+				defer testSetupMu.Unlock()
 				addrVersionMap := map[string]string{
 					"primary:0": "version1",
 					"replica:0": "version2",
@@ -11363,12 +11368,13 @@ func TestValidateVersionShard(t *testing.T) {
 		},
 	}
 
+	var testSetupMu sync.Mutex
 	for _, tt := range tests {
 		curT := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			curT.setup()
+			curT.setup(&testSetupMu)
 			resp, err := vtctld.ValidateVersionShard(ctx, curT.req)
 			if curT.shouldErr {
 				assert.Error(t, err)
