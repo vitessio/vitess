@@ -1460,6 +1460,9 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 			if cerr != nil {
 				err = vterrors.Wrapf(err, "failed to cleanup workflow artifacts: %v", cerr)
 			}
+			if cerr = ts.dropTargetDeniedTables(ctx); cerr != nil {
+				err = vterrors.Wrapf(err, "failed to cleanup denied table entries: %v", cerr)
+			}
 			if cerr := s.dropArtifacts(ctx, false, &switcher{s: s, ts: ts}); cerr != nil {
 				err = vterrors.Wrapf(err, "failed to cleanup workflow artifacts: %v", cerr)
 			}
@@ -1473,9 +1476,9 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	}()
 
 	// Now that the streams have been successfully created, let's put the associated
-	// routing rules in place.
+	// routing rules and denied tables entries in place.
 	if externalTopo == nil {
-		if err := s.setupInitialRoutingRules(ctx, req, mz, tables, vschema); err != nil {
+		if err := s.setupInitialRoutingRules(ctx, req, mz, tables); err != nil {
 			return nil, err
 		}
 
@@ -1483,6 +1486,9 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		if err := s.ts.SaveVSchema(ctx, targetKeyspace, vschema); err != nil {
 			return nil, err
 		}
+	}
+	if err := s.setupInitialDeniedTables(ctx, req); err != nil {
+		return nil, vterrors.Wrapf(err, "failed to put initial denied tables entries in place on the target shards")
 	}
 	if err := s.ts.RebuildSrvVSchema(ctx, nil); err != nil {
 		return nil, err
@@ -1547,7 +1553,26 @@ func (s *Server) validateRoutingRuleFlags(req *vtctldatapb.MoveTablesCreateReque
 	return nil
 }
 
-func (s *Server) setupInitialRoutingRules(ctx context.Context, req *vtctldatapb.MoveTablesCreateRequest, mz *materializer, tables []string, vschema *vschemapb.Keyspace) error {
+func (s *Server) setupInitialDeniedTables(ctx context.Context, req *vtctldatapb.MoveTablesCreateRequest) error {
+	ts, err := s.buildTrafficSwitcher(ctx, req.GetTargetKeyspace(), req.GetWorkflow())
+	if err != nil {
+		return err
+	}
+	err = ts.ForAllTargets(func(target *MigrationTarget) error {
+		if _, err := ts.TopoServer().UpdateShardFields(ctx, ts.TargetKeyspaceName(), target.GetShard().ShardName(), func(si *topo.ShardInfo) error {
+			return si.UpdateDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, false, ts.Tables())
+		}); err != nil {
+			return err
+		}
+		ctx, cancel := context.WithTimeout(ctx, shardTabletRefreshTimeout)
+		defer cancel()
+		_, _, err := topotools.RefreshTabletsByShard(ctx, ts.TopoServer(), ts.TabletManagerClient(), target.GetShard(), nil, ts.Logger())
+		return err
+	})
+	return err
+}
+
+func (s *Server) setupInitialRoutingRules(ctx context.Context, req *vtctldatapb.MoveTablesCreateRequest, mz *materializer, tables []string) error {
 	if err := s.validateRoutingRuleFlags(req, mz); err != nil {
 		return err
 	}

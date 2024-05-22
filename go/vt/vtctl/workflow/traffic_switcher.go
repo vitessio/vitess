@@ -731,6 +731,22 @@ func (ts *trafficSwitcher) allowTableTargetWrites(ctx context.Context) error {
 	})
 }
 
+// preventTableTargetWrites puts denied table entries in place for the given tables on the
+// target tablets. This should be used when a MoveTables workflow is initially created.
+func (ts *trafficSwitcher) preventTableTargetWrites(ctx context.Context) error {
+	return ts.ForAllTargets(func(target *MigrationTarget) error {
+		if _, err := ts.TopoServer().UpdateShardFields(ctx, ts.TargetKeyspaceName(), target.GetShard().ShardName(), func(si *topo.ShardInfo) error {
+			return si.UpdateDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, false, ts.Tables())
+		}); err != nil {
+			return err
+		}
+		rtbsCtx, cancel := context.WithTimeout(ctx, shardTabletRefreshTimeout)
+		defer cancel()
+		_, _, err := topotools.RefreshTabletsByShard(rtbsCtx, ts.TopoServer(), ts.TabletManagerClient(), target.GetShard(), nil, ts.Logger())
+		return err
+	})
+}
+
 func (ts *trafficSwitcher) changeRouting(ctx context.Context) error {
 	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
 		return ts.changeWriteRoute(ctx)
