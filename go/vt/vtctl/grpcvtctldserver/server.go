@@ -5113,10 +5113,6 @@ func (s *VtctldServer) getTopologyCell(ctx context.Context, cellPath string, ver
 		if data, curVersion, err = conn.Get(ctx, relativePath); err != nil {
 			return handleGetError(err)
 		}
-		// etcd uses int64 for its mvccpb.KeyValue.Revision value, ZooKeeper uses int32 for its
-		// zk.Stat.Version value, and consul uses uint64 for its api.KVPair.ModifyIndex value.
-		// We use uint64 to capture all potential valid values as we only care about values >= 0
-		// anyway.
 		if topoCell.Version, err = strconv.ParseInt(curVersion.String(), 10, 64); err != nil {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "error decoding file version for cell %s (version: %d): %v", cellPath, version, err)
 		}

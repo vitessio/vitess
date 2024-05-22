@@ -180,8 +180,8 @@ func (c *Conn) Get(ctx context.Context, filePath string) ([]byte, topo.Version, 
 
 	// Get the node.
 	n := c.factory.nodeByPath(c.cell, filePath)
-	// This matches the other topo implementations of returning topo.NoNode when using
-	// a key prefix or "directory".
+	// This matches the other topo implementations of returning topo.NoNode when calling
+	// Get() with a key prefix or "directory".
 	if n == nil || n.contents == nil {
 		return nil, nil, topo.NewError(topo.NoNode, filePath)
 	}
