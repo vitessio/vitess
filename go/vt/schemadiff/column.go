@@ -104,11 +104,15 @@ func (c *ColumnDefinitionEntity) ColumnDiff(
 ) (*ModifyColumnDiff, error) {
 	if c.IsTextual() || other.IsTextual() {
 		// We will now denormalize the columns charset & collate as needed (if empty, populate from table.)
+		// This column definition
 		if c.columnDefinition.Type.Charset.Name != "" && c.columnDefinition.Type.Options.Collate == "" {
 			collation := env.CollationEnv().DefaultCollationForCharset(c.columnDefinition.Type.Charset.Name)
 			if collation == collations.Unknown {
 				return nil, &UnknownColumnCharsetCollationError{Column: c.columnDefinition.Name.String(), Charset: t1cc.charset}
 			}
+			defer func() {
+				c.columnDefinition.Type.Options.Collate = ""
+			}()
 			c.columnDefinition.Type.Options.Collate = env.CollationEnv().LookupName(collation)
 		}
 		if c.columnDefinition.Type.Charset.Name == "" && c.columnDefinition.Type.Options.Collate != "" {
@@ -143,11 +147,15 @@ func (c *ColumnDefinitionEntity) ColumnDiff(
 				c.columnDefinition.Type.Options.Collate = env.CollationEnv().LookupName(collation)
 			}
 		}
+		// other column definition
 		if other.columnDefinition.Type.Charset.Name != "" && other.columnDefinition.Type.Options.Collate == "" {
 			collation := env.CollationEnv().DefaultCollationForCharset(other.columnDefinition.Type.Charset.Name)
 			if collation == collations.Unknown {
-				return nil, &UnknownColumnCharsetCollationError{Column: other.columnDefinition.Name.String(), Charset: t1cc.charset}
+				return nil, &UnknownColumnCharsetCollationError{Column: other.columnDefinition.Name.String(), Charset: t2cc.charset}
 			}
+			defer func() {
+				other.columnDefinition.Type.Options.Collate = ""
+			}()
 			other.columnDefinition.Type.Options.Collate = env.CollationEnv().LookupName(collation)
 		}
 		if other.columnDefinition.Type.Charset.Name == "" && other.columnDefinition.Type.Options.Collate != "" {
