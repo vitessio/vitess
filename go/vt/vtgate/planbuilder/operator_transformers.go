@@ -421,7 +421,6 @@ func getEvalEngingeExpr(ctx *plancontext.PlanningContext, pe *operators.ProjExpr
 
 // newSimpleProjection creates a simple projections
 func newSimpleProjection(cols []int, colNames []string, src logicalPlan) (logicalPlan, error) {
-
 	return &simpleProjection{
 		logicalPlanCommon: newBuilderCommon(src),
 		eSimpleProj: &engine.SimpleProjection{
