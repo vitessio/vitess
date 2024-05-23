@@ -2944,7 +2944,7 @@ func TestCrossShardSubqueryStream(t *testing.T) {
 	executor, sbc1, sbc2, _, ctx := createExecutorEnv(t)
 	result1 := []*sqltypes.Result{{
 		Fields: []*querypb.Field{
-			{Name: "id", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
+			{Name: "id1", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
 			{Name: "col", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
 		},
 		InsertID: 0,
