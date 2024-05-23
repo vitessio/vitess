@@ -185,7 +185,6 @@ func GetThrottlerStatus(vtctldProcess *cluster.VtctldClientProcess, tablet *clus
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("GetThrottlerStatusRaw output: %v", output)
 	var resp vtctldatapb.GetThrottlerStatusResponse
 	if err := protojson.Unmarshal([]byte(output), &resp); err != nil {
 		return nil, err
