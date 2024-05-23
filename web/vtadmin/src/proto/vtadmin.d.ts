@@ -30855,6 +30855,9 @@ export namespace tabletmanagerdata {
 
         /** GetThrottlerStatusResponse recently_checked */
         recently_checked?: (boolean|null);
+
+        /** GetThrottlerStatusResponse recent_apps */
+        recent_apps?: ({ [k: string]: tabletmanagerdata.GetThrottlerStatusResponse.IRecentApp }|null);
     }
 
     /** Represents a GetThrottlerStatusResponse. */
@@ -30916,6 +30919,9 @@ export namespace tabletmanagerdata {
 
         /** GetThrottlerStatusResponse recently_checked. */
         public recently_checked: boolean;
+
+        /** GetThrottlerStatusResponse recent_apps. */
+        public recent_apps: { [k: string]: tabletmanagerdata.GetThrottlerStatusResponse.IRecentApp };
 
         /**
          * Creates a new GetThrottlerStatusResponse instance using the specified properties.
@@ -31197,6 +31203,109 @@ export namespace tabletmanagerdata {
 
             /**
              * Gets the default type url for MetricHealth
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of a RecentApp. */
+        interface IRecentApp {
+
+            /** RecentApp checked_at */
+            checked_at?: (vttime.ITime|null);
+
+            /** RecentApp status_code */
+            status_code?: (number|null);
+        }
+
+        /** Represents a RecentApp. */
+        class RecentApp implements IRecentApp {
+
+            /**
+             * Constructs a new RecentApp.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: tabletmanagerdata.GetThrottlerStatusResponse.IRecentApp);
+
+            /** RecentApp checked_at. */
+            public checked_at?: (vttime.ITime|null);
+
+            /** RecentApp status_code. */
+            public status_code: number;
+
+            /**
+             * Creates a new RecentApp instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns RecentApp instance
+             */
+            public static create(properties?: tabletmanagerdata.GetThrottlerStatusResponse.IRecentApp): tabletmanagerdata.GetThrottlerStatusResponse.RecentApp;
+
+            /**
+             * Encodes the specified RecentApp message. Does not implicitly {@link tabletmanagerdata.GetThrottlerStatusResponse.RecentApp.verify|verify} messages.
+             * @param message RecentApp message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: tabletmanagerdata.GetThrottlerStatusResponse.IRecentApp, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Encodes the specified RecentApp message, length delimited. Does not implicitly {@link tabletmanagerdata.GetThrottlerStatusResponse.RecentApp.verify|verify} messages.
+             * @param message RecentApp message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encodeDelimited(message: tabletmanagerdata.GetThrottlerStatusResponse.IRecentApp, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a RecentApp message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns RecentApp
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.GetThrottlerStatusResponse.RecentApp;
+
+            /**
+             * Decodes a RecentApp message from the specified reader or buffer, length delimited.
+             * @param reader Reader or buffer to decode from
+             * @returns RecentApp
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.GetThrottlerStatusResponse.RecentApp;
+
+            /**
+             * Verifies a RecentApp message.
+             * @param message Plain object to verify
+             * @returns `null` if valid, otherwise the reason why it is not
+             */
+            public static verify(message: { [k: string]: any }): (string|null);
+
+            /**
+             * Creates a RecentApp message from a plain object. Also converts values to their respective internal types.
+             * @param object Plain object
+             * @returns RecentApp
+             */
+            public static fromObject(object: { [k: string]: any }): tabletmanagerdata.GetThrottlerStatusResponse.RecentApp;
+
+            /**
+             * Creates a plain object from a RecentApp message. Also converts values to other types if specified.
+             * @param message RecentApp
+             * @param [options] Conversion options
+             * @returns Plain object
+             */
+            public static toObject(message: tabletmanagerdata.GetThrottlerStatusResponse.RecentApp, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+            /**
+             * Converts this RecentApp to JSON.
+             * @returns JSON object
+             */
+            public toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the default type url for RecentApp
              * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
              * @returns The default type url
              */
@@ -58407,6 +58516,9 @@ export namespace vtctldata {
 
         /** GetThrottlerStatusResponse recently_checked */
         recently_checked?: (boolean|null);
+
+        /** GetThrottlerStatusResponse recent_apps */
+        recent_apps?: ({ [k: string]: vtctldata.GetThrottlerStatusResponse.IRecentApp }|null);
     }
 
     /** Represents a GetThrottlerStatusResponse. */
@@ -58468,6 +58580,9 @@ export namespace vtctldata {
 
         /** GetThrottlerStatusResponse recently_checked. */
         public recently_checked: boolean;
+
+        /** GetThrottlerStatusResponse recent_apps. */
+        public recent_apps: { [k: string]: vtctldata.GetThrottlerStatusResponse.IRecentApp };
 
         /**
          * Creates a new GetThrottlerStatusResponse instance using the specified properties.
@@ -58749,6 +58864,109 @@ export namespace vtctldata {
 
             /**
              * Gets the default type url for MetricHealth
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of a RecentApp. */
+        interface IRecentApp {
+
+            /** RecentApp checked_at */
+            checked_at?: (vttime.ITime|null);
+
+            /** RecentApp status_code */
+            status_code?: (number|null);
+        }
+
+        /** Represents a RecentApp. */
+        class RecentApp implements IRecentApp {
+
+            /**
+             * Constructs a new RecentApp.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: vtctldata.GetThrottlerStatusResponse.IRecentApp);
+
+            /** RecentApp checked_at. */
+            public checked_at?: (vttime.ITime|null);
+
+            /** RecentApp status_code. */
+            public status_code: number;
+
+            /**
+             * Creates a new RecentApp instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns RecentApp instance
+             */
+            public static create(properties?: vtctldata.GetThrottlerStatusResponse.IRecentApp): vtctldata.GetThrottlerStatusResponse.RecentApp;
+
+            /**
+             * Encodes the specified RecentApp message. Does not implicitly {@link vtctldata.GetThrottlerStatusResponse.RecentApp.verify|verify} messages.
+             * @param message RecentApp message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: vtctldata.GetThrottlerStatusResponse.IRecentApp, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Encodes the specified RecentApp message, length delimited. Does not implicitly {@link vtctldata.GetThrottlerStatusResponse.RecentApp.verify|verify} messages.
+             * @param message RecentApp message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encodeDelimited(message: vtctldata.GetThrottlerStatusResponse.IRecentApp, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a RecentApp message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns RecentApp
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.GetThrottlerStatusResponse.RecentApp;
+
+            /**
+             * Decodes a RecentApp message from the specified reader or buffer, length delimited.
+             * @param reader Reader or buffer to decode from
+             * @returns RecentApp
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.GetThrottlerStatusResponse.RecentApp;
+
+            /**
+             * Verifies a RecentApp message.
+             * @param message Plain object to verify
+             * @returns `null` if valid, otherwise the reason why it is not
+             */
+            public static verify(message: { [k: string]: any }): (string|null);
+
+            /**
+             * Creates a RecentApp message from a plain object. Also converts values to their respective internal types.
+             * @param object Plain object
+             * @returns RecentApp
+             */
+            public static fromObject(object: { [k: string]: any }): vtctldata.GetThrottlerStatusResponse.RecentApp;
+
+            /**
+             * Creates a plain object from a RecentApp message. Also converts values to other types if specified.
+             * @param message RecentApp
+             * @param [options] Conversion options
+             * @returns Plain object
+             */
+            public static toObject(message: vtctldata.GetThrottlerStatusResponse.RecentApp, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+            /**
+             * Converts this RecentApp to JSON.
+             * @returns JSON object
+             */
+            public toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the default type url for RecentApp
              * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
              * @returns The default type url
              */

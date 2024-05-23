@@ -817,4 +817,11 @@ message GetThrottlerStatusResponse {
   map<string, string> app_checked_metrics = 16;
 
   bool recently_checked = 17;
+
+  message RecentApp {
+    vttime.Time checked_at = 1;
+    int32 status_code = 2;
+  }
+  // RecentApps is a map of app names to their recent check status
+  map<string, RecentApp> recent_apps = 18;
 }
