@@ -30324,9 +30324,6 @@ export namespace tabletmanagerdata {
         /** CheckThrottlerRequest scope */
         scope?: (string|null);
 
-        /** CheckThrottlerRequest low_priority */
-        low_priority?: (boolean|null);
-
         /** CheckThrottlerRequest skip_request_heartbeats */
         skip_request_heartbeats?: (boolean|null);
 
@@ -30351,9 +30348,6 @@ export namespace tabletmanagerdata {
 
         /** CheckThrottlerRequest scope. */
         public scope: string;
-
-        /** CheckThrottlerRequest low_priority. */
-        public low_priority: boolean;
 
         /** CheckThrottlerRequest skip_request_heartbeats. */
         public skip_request_heartbeats: boolean;
@@ -49914,9 +49908,6 @@ export namespace vtctldata {
         /** CheckThrottlerRequest scope */
         scope?: (string|null);
 
-        /** CheckThrottlerRequest low_priority */
-        low_priority?: (boolean|null);
-
         /** CheckThrottlerRequest skip_request_heartbeats */
         skip_request_heartbeats?: (boolean|null);
 
@@ -49941,9 +49932,6 @@ export namespace vtctldata {
 
         /** CheckThrottlerRequest scope. */
         public scope: string;
-
-        /** CheckThrottlerRequest low_priority. */
-        public low_priority: boolean;
 
         /** CheckThrottlerRequest skip_request_heartbeats. */
         public skip_request_heartbeats: boolean;

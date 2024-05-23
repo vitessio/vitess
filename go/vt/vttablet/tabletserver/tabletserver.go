@@ -1899,7 +1899,6 @@ func (tsv *TabletServer) registerThrottlerCheckHandlers() {
 			}
 			flags := &throttle.CheckFlags{
 				Scope:                 scope,
-				LowPriority:           (r.URL.Query().Get("p") == "low"),
 				SkipRequestHeartbeats: (r.URL.Query().Get("s") == "true"),
 				MultiMetricsEnabled:   true,
 			}

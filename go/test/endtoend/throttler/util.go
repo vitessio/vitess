@@ -75,9 +75,6 @@ func CheckThrottlerRaw(vtctldProcess *cluster.VtctldClientProcess, tablet *clust
 	if flags.Scope != base.UndefinedScope {
 		args = append(args, "--scope", flags.Scope.String())
 	}
-	if flags.LowPriority {
-		args = append(args, "--low-priority")
-	}
 	if flags.OKIfNotExists {
 		args = append(args, "--ok-if-not-exists")
 	}

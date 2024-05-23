@@ -60,21 +60,6 @@ type Client struct {
 	lastSuccessfulThrottle map[string]int64
 }
 
-// NewProductionClient creates a client suitable for foreground/production jobs, which have normal priority.
-func NewProductionClient(throttler *Throttler, appName throttlerapp.Name, scope base.Scope) *Client {
-	initThrottleTicker()
-	return &Client{
-		throttler: throttler,
-		appName:   appName,
-		flags: CheckFlags{
-			Scope:               scope,
-			LowPriority:         false,
-			MultiMetricsEnabled: true,
-		},
-		lastSuccessfulThrottle: make(map[string]int64),
-	}
-}
-
 // NewBackgroundClient creates a client suitable for background jobs, which have low priority over production traffic,
 // e.g. migration, table pruning, vreplication
 func NewBackgroundClient(throttler *Throttler, appName throttlerapp.Name, scope base.Scope) *Client {
@@ -84,7 +69,6 @@ func NewBackgroundClient(throttler *Throttler, appName throttlerapp.Name, scope 
 		appName:   appName,
 		flags: CheckFlags{
 			Scope:               scope,
-			LowPriority:         true,
 			MultiMetricsEnabled: true,
 		},
 		lastSuccessfulThrottle: make(map[string]int64),

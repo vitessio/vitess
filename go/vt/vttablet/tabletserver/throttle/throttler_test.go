@@ -258,7 +258,6 @@ func newTestThrottler() *Throttler {
 	throttler.recentApps = cache.New(recentAppsExpiration, 0)
 	throttler.metricsHealth = cache.New(cache.NoExpiration, 0)
 	throttler.appCheckedMetrics = cache.New(cache.NoExpiration, 0)
-	throttler.nonLowPriorityAppRequestsThrottled = cache.New(nonDeprioritizedAppMapExpiration, 0)
 	throttler.initThrottleTabletTypes()
 	throttler.check = NewThrottlerCheck(throttler)
 
@@ -1085,7 +1084,7 @@ func TestProbesWhileOperating(t *testing.T) {
 			assert.Equalf(t, 1, len(uniqueNames), "%+v", uniqueNames)
 
 			t.Run("client, shard", func(t *testing.T) {
-				client := NewProductionClient(throttler, testAppName, base.UndefinedScope)
+				client := NewBackgroundClient(throttler, testAppName, base.UndefinedScope)
 				t.Run("threshold exceeded", func(t *testing.T) {
 					<-runSerialFunction(t, ctx, throttler, func(ctx context.Context) {
 						throttler.refreshMySQLInventory(ctx)
@@ -1175,7 +1174,7 @@ func TestProbesWhileOperating(t *testing.T) {
 			}
 
 			t.Run("client, shard", func(t *testing.T) {
-				client := NewProductionClient(throttler, testAppName, base.UndefinedScope)
+				client := NewBackgroundClient(throttler, testAppName, base.UndefinedScope)
 				t.Run("threshold exceeded", func(t *testing.T) {
 					<-runSerialFunction(t, ctx, throttler, func(ctx context.Context) {
 						throttler.refreshMySQLInventory(ctx)
@@ -1814,7 +1813,7 @@ func TestReplica(t *testing.T) {
 				assert.Equal(t, 3, len(checkResult.Metrics))
 			})
 			t.Run("client, OK", func(t *testing.T) {
-				client := NewProductionClient(throttler, throttlerapp.TestingName, base.UndefinedScope)
+				client := NewBackgroundClient(throttler, throttlerapp.TestingName, base.UndefinedScope)
 				checkOK := client.ThrottleCheckOK(ctx, "")
 				assert.True(t, checkOK)
 			})
@@ -1822,7 +1821,7 @@ func TestReplica(t *testing.T) {
 				// Specified metrics do not exceed threshold, therefore overall result should be OK.
 				throttler.appCheckedMetrics.Set(throttlerapp.TestingName.String(), base.MetricNames{base.LagMetricName, base.ThreadsRunningMetricName}, cache.DefaultExpiration)
 				defer throttler.appCheckedMetrics.Delete(throttlerapp.TestingName.String())
-				client := NewProductionClient(throttler, throttlerapp.TestingName, base.UndefinedScope)
+				client := NewBackgroundClient(throttler, throttlerapp.TestingName, base.UndefinedScope)
 				checkOK := client.ThrottleCheckOK(ctx, "")
 				assert.True(t, checkOK)
 			})
@@ -1830,7 +1829,7 @@ func TestReplica(t *testing.T) {
 				// LoadAvgMetricName metric exceeds threshold, therefore overall check should be in error.
 				throttler.appCheckedMetrics.Set(throttlerapp.TestingName.String(), base.MetricNames{base.LagMetricName, base.LoadAvgMetricName, base.ThreadsRunningMetricName}, cache.DefaultExpiration)
 				defer throttler.appCheckedMetrics.Delete(throttlerapp.TestingName.String())
-				client := NewProductionClient(throttler, throttlerapp.TestingName, base.UndefinedScope)
+				client := NewBackgroundClient(throttler, throttlerapp.TestingName, base.UndefinedScope)
 				checkOK := client.ThrottleCheckOK(ctx, "")
 				assert.False(t, checkOK)
 			})
@@ -1865,7 +1864,7 @@ func TestReplica(t *testing.T) {
 				}
 			})
 			t.Run("client, not OK", func(t *testing.T) {
-				client := NewProductionClient(throttler, throttlerapp.TestingName, base.SelfScope)
+				client := NewBackgroundClient(throttler, throttlerapp.TestingName, base.SelfScope)
 				checkOK := client.ThrottleCheckOK(ctx, "")
 				assert.False(t, checkOK)
 			})

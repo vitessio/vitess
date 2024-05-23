@@ -970,7 +970,6 @@ func (m *CheckThrottlerRequest) CloneVT() *CheckThrottlerRequest {
 		TabletAlias:           m.TabletAlias.CloneVT(),
 		AppName:               m.AppName,
 		Scope:                 m.Scope,
-		LowPriority:           m.LowPriority,
 		SkipRequestHeartbeats: m.SkipRequestHeartbeats,
 		OkIfNotExists:         m.OkIfNotExists,
 	}
@@ -8747,21 +8746,11 @@ func (m *CheckThrottlerRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error)
 			dAtA[i] = 0
 		}
 		i--
-		dAtA[i] = 0x30
+		dAtA[i] = 0x28
 	}
 	if m.SkipRequestHeartbeats {
 		i--
 		if m.SkipRequestHeartbeats {
-			dAtA[i] = 1
-		} else {
-			dAtA[i] = 0
-		}
-		i--
-		dAtA[i] = 0x28
-	}
-	if m.LowPriority {
-		i--
-		if m.LowPriority {
 			dAtA[i] = 1
 		} else {
 			dAtA[i] = 0
@@ -22395,9 +22384,6 @@ func (m *CheckThrottlerRequest) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
-	if m.LowPriority {
-		n += 2
-	}
 	if m.SkipRequestHeartbeats {
 		n += 2
 	}
@@ -35087,26 +35073,6 @@ func (m *CheckThrottlerRequest) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 4:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field LowPriority", wireType)
-			}
-			var v int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				v |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			m.LowPriority = bool(v != 0)
-		case 5:
-			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field SkipRequestHeartbeats", wireType)
 			}
 			var v int
@@ -35125,7 +35091,7 @@ func (m *CheckThrottlerRequest) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.SkipRequestHeartbeats = bool(v != 0)
-		case 6:
+		case 5:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field OkIfNotExists", wireType)
 			}

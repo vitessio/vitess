@@ -696,14 +696,14 @@ func (s *VtctldServer) CheckThrottler(ctx context.Context, req *vtctldatapb.Chec
 		return nil, err
 	}
 
-	r, err := s.tmc.CheckThrottler(ctx, ti.Tablet, &tabletmanagerdatapb.CheckThrottlerRequest{
+	tmReq := &tabletmanagerdatapb.CheckThrottlerRequest{
 		AppName:               req.AppName,
 		Scope:                 req.Scope,
-		LowPriority:           req.LowPriority,
 		SkipRequestHeartbeats: req.SkipRequestHeartbeats,
 		OkIfNotExists:         req.OkIfNotExists,
 		MultiMetricsEnabled:   true,
-	})
+	}
+	r, err := s.tmc.CheckThrottler(ctx, ti.Tablet, tmReq)
 	if err != nil {
 		return nil, err
 	}

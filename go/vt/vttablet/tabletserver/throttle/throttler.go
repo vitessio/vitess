@@ -95,8 +95,6 @@ const (
 	aggregatedMetricsExpiration = 5 * time.Second
 	recentAppsExpiration        = time.Hour
 
-	nonDeprioritizedAppMapExpiration = time.Second
-
 	dormantPeriod              = time.Minute // How long since last check to be considered dormant
 	DefaultAppThrottleDuration = time.Hour
 	DefaultThrottleRatio       = 1.0
@@ -210,8 +208,7 @@ type Throttler struct {
 
 	readSelfThrottleMetrics func(context.Context) mysql.MySQLThrottleMetrics // overwritten by unit test
 
-	nonLowPriorityAppRequestsThrottled *cache.Cache
-	httpClient                         *http.Client
+	httpClient *http.Client
 
 	hostCpuCoreCount atomic.Int32
 }
@@ -267,7 +264,6 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 	throttler.recentApps = cache.New(recentAppsExpiration, recentAppsExpiration)
 	throttler.metricsHealth = cache.New(cache.NoExpiration, 0)
 	throttler.appCheckedMetrics = cache.New(cache.NoExpiration, 0)
-	throttler.nonLowPriorityAppRequestsThrottled = cache.New(nonDeprioritizedAppMapExpiration, 0)
 
 	throttler.httpClient = base.SetupHTTPClient(2 * mysqlCollectInterval)
 	throttler.initThrottleTabletTypes()
@@ -881,7 +877,6 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 			primaryStimulatorRateLimiter.Stop()
 			throttler.aggregatedMetrics.Flush()
 			throttler.recentApps.Flush()
-			throttler.nonLowPriorityAppRequestsThrottled.Flush()
 			wg.Done()
 		}()
 		// we do not flush throttler.throttledApps because this is data submitted by the user; the user expects the data to survive a disable+enable

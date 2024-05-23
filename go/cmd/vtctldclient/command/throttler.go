@@ -121,7 +121,6 @@ func commandCheckThrottler(cmd *cobra.Command, args []string) error {
 		AppName:               checkThrottlerOptions.AppName,
 		Scope:                 checkThrottlerOptions.Scope,
 		SkipRequestHeartbeats: checkThrottlerOptions.SkipRequestHeartbeats,
-		LowPriority:           checkThrottlerOptions.LowPriority,
 		OkIfNotExists:         checkThrottlerOptions.OkIfNotExists,
 	})
 	if err != nil {
@@ -186,7 +185,6 @@ func init() {
 	// Check Throttler
 	CheckThrottler.Flags().StringVar(&checkThrottlerOptions.AppName, "app-name", throttlerapp.VitessName.String(), "app to identify as")
 	CheckThrottler.Flags().StringVar(&checkThrottlerOptions.Scope, "scope", base.UndefinedScope.String(), "check scope ('shard', 'self' or leave empty for per-metric defaults)")
-	CheckThrottler.Flags().BoolVar(&checkThrottlerOptions.LowPriority, "low-priority", false, "give precedence to normal requests if busy")
 	CheckThrottler.Flags().BoolVar(&checkThrottlerOptions.SkipRequestHeartbeats, "skip-heartbeats", false, "skip renewing heartbeat lease")
 	CheckThrottler.Flags().BoolVar(&checkThrottlerOptions.OkIfNotExists, "ok-if-not-exists", false, "return OK even if metric does not exist")
 	Root.AddCommand(CheckThrottler)
