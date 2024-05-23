@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -175,20 +176,21 @@ func CheckThrottler(clusterInstance *cluster.LocalProcessCluster, tablet *cluste
 		return nil, err
 	}
 	var resp vtctldatapb.CheckThrottlerResponse
-	if err := json.Unmarshal([]byte(output), &resp); err != nil {
+	if err := protojson.Unmarshal([]byte(output), &resp); err != nil {
 		return nil, err
 	}
 	return &resp, err
 }
 
 // GetThrottlerStatus runs vtctldclient CheckThrottler.
-func GetThrottlerStatus(clusterInstance *cluster.LocalProcessCluster, tablet *cluster.Vttablet) (*vtctldatapb.GetThrottlerStatusResponse, error) {
-	output, err := GetThrottlerStatusRaw(&clusterInstance.VtctldClientProcess, tablet)
+func GetThrottlerStatus(vtctldProcess *cluster.VtctldClientProcess, tablet *cluster.Vttablet) (*vtctldatapb.GetThrottlerStatusResponse, error) {
+	output, err := GetThrottlerStatusRaw(vtctldProcess, tablet)
 	if err != nil {
 		return nil, err
 	}
+	log.Infof("GetThrottlerStatusRaw output: %v", output)
 	var resp vtctldatapb.GetThrottlerStatusResponse
-	if err := json.Unmarshal([]byte(output), &resp); err != nil {
+	if err := protojson.Unmarshal([]byte(output), &resp); err != nil {
 		return nil, err
 	}
 	return &resp, err
@@ -344,30 +346,15 @@ func UnthrottleAppAndWaitUntilTabletsConfirm(t *testing.T, clusterInstance *clus
 
 // WaitForThrottlerStatusEnabled waits for a tablet to report its throttler status as
 // enabled/disabled and have the provided config (if any) until the specified timeout.
-func WaitForThrottlerStatusEnabled(t *testing.T, tablet *cluster.Vttablet, enabled bool, config *Config, timeout time.Duration) {
-	enabledJSONPath := "IsEnabled"
-	queryJSONPath := "Query"
-	thresholdJSONPath := "Threshold"
-	throttlerURL := fmt.Sprintf("http://localhost:%d/throttler/status", tablet.HTTPPort)
-	tabletURL := fmt.Sprintf("http://localhost:%d/debug/status_details", tablet.HTTPPort)
+func WaitForThrottlerStatusEnabled(t *testing.T, vtctldProcess *cluster.VtctldClientProcess, tablet *cluster.Vttablet, enabled bool, config *Config, timeout time.Duration) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
+	tabletURL := fmt.Sprintf("http://localhost:%d/debug/status_details", tablet.HTTPPort)
+
 	for {
-		throttlerBody := getHTTPBody(throttlerURL)
-		isEnabled := gjson.Get(throttlerBody, enabledJSONPath).Bool()
-		if isEnabled == enabled {
-			if config == nil {
-				return
-			}
-			query := gjson.Get(throttlerBody, queryJSONPath).String()
-			threshold := gjson.Get(throttlerBody, thresholdJSONPath).Float()
-			if query == config.Query && threshold == config.Threshold {
-				return
-			}
-		}
 		// If the tablet is Not Serving due to e.g. being involved in a
 		// Reshard where its QueryService is explicitly disabled, then
 		// we should not fail the test as the throttler will not be Open.
@@ -378,10 +365,24 @@ func WaitForThrottlerStatusEnabled(t *testing.T, tablet *cluster.Vttablet, enabl
 			log.Infof("tablet %s is Not Serving, so ignoring throttler status as the throttler will not be Opened", tablet.Alias)
 			return
 		}
+
+		status, err := GetThrottlerStatus(vtctldProcess, tablet)
+		if err == nil {
+			if status.IsEnabled == enabled {
+				if config == nil {
+					return
+				}
+				if status.LagMetricQuery == config.Query && status.DefaultThreshold == config.Threshold {
+					return
+				}
+			}
+		} else {
+			log.Errorf("GetThrottlerStatus failed: %v", err)
+		}
 		select {
 		case <-ctx.Done():
-			t.Errorf("timed out waiting for the %s tablet's throttler status enabled to be %t with the correct config after %v; last seen value: %s",
-				tablet.Alias, enabled, timeout, throttlerBody)
+			t.Errorf("timed out waiting for the %s tablet's throttler status enabled to be %t with the correct config after %v; last seen status: %+v",
+				tablet.Alias, enabled, timeout, status)
 			return
 		case <-ticker.C:
 		}
@@ -445,7 +446,7 @@ func EnableLagThrottlerAndWaitForStatus(t *testing.T, clusterInstance *cluster.L
 	for _, ks := range clusterInstance.Keyspaces {
 		for _, shard := range ks.Shards {
 			for _, tablet := range shard.Vttablets {
-				WaitForThrottlerStatusEnabled(t, tablet, true, nil, time.Minute)
+				WaitForThrottlerStatusEnabled(t, &clusterInstance.VtctldClientProcess, tablet, true, nil, time.Minute)
 			}
 		}
 	}

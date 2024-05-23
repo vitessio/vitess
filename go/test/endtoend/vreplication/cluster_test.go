@@ -743,7 +743,7 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 				HTTPPort: tablet.Vttablet.Port,
 			}
 			log.Infof("+ Waiting for throttler config to be applied on %s, type=%v", tablet.Name, tablet.Vttablet.TabletType)
-			throttler.WaitForThrottlerStatusEnabled(t, clusterTablet, true, nil, time.Minute)
+			throttler.WaitForThrottlerStatusEnabled(t, vc.VtctldClient, clusterTablet, true, nil, time.Minute)
 		}
 	}
 	log.Infof("Throttler config applied on all shards")

@@ -260,7 +260,7 @@ func TestSchemaChange(t *testing.T) {
 					t.Run(shard.Name, func(t *testing.T) {
 						for _, tablet := range shard.Vttablets {
 							t.Run(tablet.Alias, func(t *testing.T) {
-								throttler.WaitForThrottlerStatusEnabled(t, tablet, true, &throttler.Config{Query: throttler.DefaultQuery, Threshold: customThreshold}, throttlerEnabledTimeout)
+								throttler.WaitForThrottlerStatusEnabled(t, &clusterInstance.VtctldClientProcess, tablet, true, &throttler.Config{Query: throttler.DefaultQuery, Threshold: customThreshold}, throttlerEnabledTimeout)
 							})
 						}
 					})

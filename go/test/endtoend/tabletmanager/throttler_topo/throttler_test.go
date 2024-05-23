@@ -269,7 +269,7 @@ func TestInitialThrottler(t *testing.T) {
 
 		// Wait for the throttler to be enabled everywhere with the new config.
 		for _, tablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets {
-			throttler.WaitForThrottlerStatusEnabled(t, tablet, true, &throttler.Config{Query: throttler.DefaultQuery, Threshold: unreasonablyLowThreshold.Seconds()}, throttlerEnabledTimeout)
+			throttler.WaitForThrottlerStatusEnabled(t, &clusterInstance.VtctldClientProcess, tablet, true, &throttler.Config{Query: throttler.DefaultQuery, Threshold: unreasonablyLowThreshold.Seconds()}, throttlerEnabledTimeout)
 		}
 	})
 	t.Run("validating pushback response from throttler", func(t *testing.T) {
@@ -282,7 +282,7 @@ func TestInitialThrottler(t *testing.T) {
 
 		// Wait for the throttler to be disabled everywhere.
 		for _, tablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets {
-			throttler.WaitForThrottlerStatusEnabled(t, tablet, false, nil, throttlerEnabledTimeout)
+			throttler.WaitForThrottlerStatusEnabled(t, &clusterInstance.VtctldClientProcess, tablet, false, nil, throttlerEnabledTimeout)
 		}
 	})
 	t.Run("validating OK response from disabled throttler, again", func(t *testing.T) {
@@ -297,7 +297,7 @@ func TestInitialThrottler(t *testing.T) {
 
 		// Wait for the throttler to be enabled everywhere again with the default config.
 		for _, tablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets {
-			throttler.WaitForThrottlerStatusEnabled(t, tablet, true, throttler.DefaultConfig, throttlerEnabledTimeout)
+			throttler.WaitForThrottlerStatusEnabled(t, &clusterInstance.VtctldClientProcess, tablet, true, throttler.DefaultConfig, throttlerEnabledTimeout)
 		}
 	})
 	t.Run("validating pushback response from throttler, again", func(t *testing.T) {
@@ -310,7 +310,7 @@ func TestInitialThrottler(t *testing.T) {
 
 		// Wait for the throttler to be enabled everywhere with new config.
 		for _, tablet := range []cluster.Vttablet{*primaryTablet, *replicaTablet} {
-			throttler.WaitForThrottlerStatusEnabled(t, &tablet, true, &throttler.Config{Query: throttler.DefaultQuery, Threshold: extremelyHighThreshold.Seconds()}, throttlerEnabledTimeout)
+			throttler.WaitForThrottlerStatusEnabled(t, &clusterInstance.VtctldClientProcess, &tablet, true, &throttler.Config{Query: throttler.DefaultQuery, Threshold: extremelyHighThreshold.Seconds()}, throttlerEnabledTimeout)
 		}
 	})
 	t.Run("validating OK response from throttler with high threshold", func(t *testing.T) {
@@ -323,7 +323,7 @@ func TestInitialThrottler(t *testing.T) {
 
 		// Wait for the throttler to be enabled everywhere with new config.
 		for _, tablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets {
-			throttler.WaitForThrottlerStatusEnabled(t, tablet, true, throttler.DefaultConfig, throttlerEnabledTimeout)
+			throttler.WaitForThrottlerStatusEnabled(t, &clusterInstance.VtctldClientProcess, tablet, true, throttler.DefaultConfig, throttlerEnabledTimeout)
 		}
 	})
 	t.Run("validating pushback response from throttler on low threshold", func(t *testing.T) {
@@ -564,7 +564,7 @@ func TestCustomQuery(t *testing.T) {
 		for _, ks := range clusterInstance.Keyspaces {
 			for _, shard := range ks.Shards {
 				for _, tablet := range shard.Vttablets {
-					throttler.WaitForThrottlerStatusEnabled(t, tablet, true, expectConfig, throttlerEnabledTimeout)
+					throttler.WaitForThrottlerStatusEnabled(t, &clusterInstance.VtctldClientProcess, tablet, true, expectConfig, throttlerEnabledTimeout)
 				}
 			}
 		}
@@ -627,7 +627,7 @@ func TestRestoreDefaultQuery(t *testing.T) {
 
 		// Wait for the throttler to be up and running everywhere again with the default config.
 		for _, tablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets {
-			throttler.WaitForThrottlerStatusEnabled(t, tablet, true, throttler.DefaultConfig, throttlerEnabledTimeout)
+			throttler.WaitForThrottlerStatusEnabled(t, &clusterInstance.VtctldClientProcess, tablet, true, throttler.DefaultConfig, throttlerEnabledTimeout)
 		}
 	})
 	t.Run("validating OK response from throttler with default threshold, heartbeats running", func(t *testing.T) {
@@ -648,7 +648,7 @@ func TestUpdateMetricThresholds(t *testing.T) {
 		assert.NoError(t, err)
 		// Wait for the throttler to be enabled everywhere with new config.
 		for _, tablet := range []cluster.Vttablet{*primaryTablet, *replicaTablet} {
-			throttler.WaitForThrottlerStatusEnabled(t, &tablet, true, &throttler.Config{Query: throttler.DefaultQuery, Threshold: throttler.DefaultThreshold.Seconds()}, throttlerEnabledTimeout)
+			throttler.WaitForThrottlerStatusEnabled(t, &clusterInstance.VtctldClientProcess, &tablet, true, &throttler.Config{Query: throttler.DefaultQuery, Threshold: throttler.DefaultThreshold.Seconds()}, throttlerEnabledTimeout)
 		}
 		waitForThrottleCheckStatus(t, primaryTablet, http.StatusTooManyRequests)
 	})
@@ -665,7 +665,7 @@ func TestUpdateMetricThresholds(t *testing.T) {
 		}
 		// Wait for the throttler to be enabled everywhere with new config.
 		for _, tablet := range []cluster.Vttablet{*primaryTablet, *replicaTablet} {
-			throttler.WaitForThrottlerStatusEnabled(t, &tablet, true, &throttler.Config{Query: throttler.DefaultQuery, Threshold: unreasonablyLowThreshold.Seconds()}, throttlerEnabledTimeout)
+			throttler.WaitForThrottlerStatusEnabled(t, &clusterInstance.VtctldClientProcess, &tablet, true, &throttler.Config{Query: throttler.DefaultQuery, Threshold: unreasonablyLowThreshold.Seconds()}, throttlerEnabledTimeout)
 		}
 	})
 	t.Run("validating OK response from throttler thanks to high 'lag' threshold", func(t *testing.T) {
@@ -686,7 +686,7 @@ func TestUpdateMetricThresholds(t *testing.T) {
 		assert.NoError(t, err)
 		// Wait for the throttler to be enabled everywhere with new config.
 		for _, tablet := range []cluster.Vttablet{*primaryTablet, *replicaTablet} {
-			throttler.WaitForThrottlerStatusEnabled(t, &tablet, true, &throttler.Config{Query: throttler.DefaultQuery, Threshold: throttler.DefaultThreshold.Seconds()}, throttlerEnabledTimeout)
+			throttler.WaitForThrottlerStatusEnabled(t, &clusterInstance.VtctldClientProcess, &tablet, true, &throttler.Config{Query: throttler.DefaultQuery, Threshold: throttler.DefaultThreshold.Seconds()}, throttlerEnabledTimeout)
 		}
 		waitForThrottleCheckStatus(t, primaryTablet, http.StatusTooManyRequests)
 	})
@@ -703,7 +703,7 @@ func TestUpdateAppCheckedMetrics(t *testing.T) {
 		assert.NoError(t, err)
 		// Wait for the throttler to be enabled everywhere with new config.
 		for _, tablet := range []cluster.Vttablet{*primaryTablet, *replicaTablet} {
-			throttler.WaitForThrottlerStatusEnabled(t, &tablet, true, &throttler.Config{Query: throttler.DefaultQuery, Threshold: throttler.DefaultThreshold.Seconds()}, throttlerEnabledTimeout)
+			throttler.WaitForThrottlerStatusEnabled(t, &clusterInstance.VtctldClientProcess, &tablet, true, &throttler.Config{Query: throttler.DefaultQuery, Threshold: throttler.DefaultThreshold.Seconds()}, throttlerEnabledTimeout)
 		}
 		waitForThrottleCheckStatus(t, primaryTablet, http.StatusTooManyRequests)
 	})
@@ -728,7 +728,7 @@ func TestUpdateAppCheckedMetrics(t *testing.T) {
 		}
 		// Wait for the throttler to be enabled everywhere with new config.
 		for _, tablet := range []cluster.Vttablet{*primaryTablet, *replicaTablet} {
-			throttler.WaitForThrottlerStatusEnabled(t, &tablet, true, &throttler.Config{Query: throttler.DefaultQuery, Threshold: unreasonablyLowThreshold.Seconds()}, throttlerEnabledTimeout)
+			throttler.WaitForThrottlerStatusEnabled(t, &clusterInstance.VtctldClientProcess, &tablet, true, &throttler.Config{Query: throttler.DefaultQuery, Threshold: unreasonablyLowThreshold.Seconds()}, throttlerEnabledTimeout)
 		}
 		t.Run("validating OK response from throttler since it's checking loadavg", func(t *testing.T) {
 			if !waitForThrottleCheckStatus(t, primaryTablet, http.StatusOK) {
@@ -753,7 +753,7 @@ func TestUpdateAppCheckedMetrics(t *testing.T) {
 		}
 		// Wait for the throttler to be enabled everywhere with new config.
 		for _, tablet := range []cluster.Vttablet{*primaryTablet, *replicaTablet} {
-			throttler.WaitForThrottlerStatusEnabled(t, &tablet, true, &throttler.Config{Query: throttler.DefaultQuery, Threshold: unreasonablyLowThreshold.Seconds()}, throttlerEnabledTimeout)
+			throttler.WaitForThrottlerStatusEnabled(t, &clusterInstance.VtctldClientProcess, &tablet, true, &throttler.Config{Query: throttler.DefaultQuery, Threshold: unreasonablyLowThreshold.Seconds()}, throttlerEnabledTimeout)
 		}
 		t.Run("validating pushback from throttler since lag is above threshold", func(t *testing.T) {
 			waitForThrottleCheckStatus(t, primaryTablet, http.StatusTooManyRequests)
@@ -780,7 +780,7 @@ func TestUpdateAppCheckedMetrics(t *testing.T) {
 		}
 		// Wait for the throttler to be enabled everywhere with new config.
 		for _, tablet := range []cluster.Vttablet{*primaryTablet, *replicaTablet} {
-			throttler.WaitForThrottlerStatusEnabled(t, &tablet, true, &throttler.Config{Query: throttler.DefaultQuery, Threshold: throttler.DefaultThreshold.Seconds()}, throttlerEnabledTimeout)
+			throttler.WaitForThrottlerStatusEnabled(t, &clusterInstance.VtctldClientProcess, &tablet, true, &throttler.Config{Query: throttler.DefaultQuery, Threshold: throttler.DefaultThreshold.Seconds()}, throttlerEnabledTimeout)
 		}
 		t.Run("validating error response from throttler since lag is still high", func(t *testing.T) {
 			waitForThrottleCheckStatus(t, primaryTablet, http.StatusTooManyRequests)
