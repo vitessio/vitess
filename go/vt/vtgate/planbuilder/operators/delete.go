@@ -207,9 +207,9 @@ func createDeleteOpWithTarget(ctx *plancontext.PlanningContext, target semantics
 		Where:      sqlparser.NewWhere(sqlparser.WhereClause, compExpr),
 	}
 	return dmlOp{
-		createOperatorFromDelete(ctx, del),
-		vTbl,
-		cols,
+		op:   createOperatorFromDelete(ctx, del),
+		vTbl: vTbl,
+		cols: cols,
 	}
 }
 
