@@ -151,18 +151,18 @@ func TestNewGaugeWithDeprecatedName(t *testing.T) {
 		shouldPanic    bool
 	}{
 		{
-			name:           "new_name",
-			deprecatedName: "deprecatedName",
+			name:           "gauge_new_name",
+			deprecatedName: "gauge_deprecatedName",
 			shouldPanic:    true,
 		},
 		{
-			name:           "metricName_test",
-			deprecatedName: "metric.name-test",
+			name:           "gauge-metricName_test",
+			deprecatedName: "gauge_metric.name-test",
 			shouldPanic:    false,
 		},
 		{
-			name:           "MetricNameTesting",
-			deprecatedName: "metric.name.testing",
+			name:           "GaugeMetricNameTesting",
+			deprecatedName: "gauge.metric.name.testing",
 			shouldPanic:    false,
 		},
 	}
