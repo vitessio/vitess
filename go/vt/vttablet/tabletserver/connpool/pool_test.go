@@ -67,7 +67,7 @@ func TestConnPoolTimeout(t *testing.T) {
 	require.NoError(t, err)
 	defer dbConn.Recycle()
 	_, err = connPool.Get(context.Background(), nil)
-	assert.EqualError(t, err, "resource pool timed out")
+	assert.EqualError(t, err, "connection pool timed out")
 }
 
 func TestConnPoolGetEmptyDebugConfig(t *testing.T) {
@@ -126,9 +126,10 @@ func TestConnPoolSetCapacity(t *testing.T) {
 	defer connPool.Close()
 
 	assert.Panics(t, func() {
-		connPool.SetCapacity(-10)
+		_ = connPool.SetCapacity(context.Background(), -10)
 	})
-	connPool.SetCapacity(10)
+	err := connPool.SetCapacity(context.Background(), 10)
+	assert.NoError(t, err)
 	if connPool.Capacity() != 10 {
 		t.Fatalf("capacity should be 10")
 	}

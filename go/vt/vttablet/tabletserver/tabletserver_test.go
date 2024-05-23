@@ -2100,7 +2100,9 @@ func TestConfigChanges(t *testing.T) {
 	newSize := 10
 	newDuration := time.Duration(10 * time.Millisecond)
 
-	tsv.SetPoolSize(newSize)
+	err := tsv.SetPoolSize(context.Background(), newSize)
+	require.NoError(t, err)
+
 	if val := tsv.PoolSize(); val != newSize {
 		t.Errorf("PoolSize: %d, want %d", val, newSize)
 	}
@@ -2108,7 +2110,9 @@ func TestConfigChanges(t *testing.T) {
 		t.Errorf("tsv.qe.connPool.Capacity: %d, want %d", val, newSize)
 	}
 
-	tsv.SetStreamPoolSize(newSize)
+	err = tsv.SetStreamPoolSize(context.Background(), newSize)
+	require.NoError(t, err)
+
 	if val := tsv.StreamPoolSize(); val != newSize {
 		t.Errorf("StreamPoolSize: %d, want %d", val, newSize)
 	}
@@ -2116,7 +2120,9 @@ func TestConfigChanges(t *testing.T) {
 		t.Errorf("tsv.qe.streamConnPool.Capacity: %d, want %d", val, newSize)
 	}
 
-	tsv.SetTxPoolSize(newSize)
+	err = tsv.SetTxPoolSize(context.Background(), newSize)
+	require.NoError(t, err)
+
 	if val := tsv.TxPoolSize(); val != newSize {
 		t.Errorf("TxPoolSize: %d, want %d", val, newSize)
 	}
