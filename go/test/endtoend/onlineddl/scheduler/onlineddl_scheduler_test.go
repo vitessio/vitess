@@ -220,8 +220,8 @@ func waitForMessage(t *testing.T, uuid string, messageSubstring string) {
 		select {
 		case <-ticker.C:
 		case <-ctx.Done():
+			t.Errorf("timeout waiting for message: %s", messageSubstring)
 		}
-		require.NoError(t, ctx.Err())
 	}
 }
 
