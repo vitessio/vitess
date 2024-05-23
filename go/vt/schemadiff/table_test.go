@@ -1912,8 +1912,18 @@ func TestCreateTableDiff(t *testing.T) {
 			to:   "create table t (id int primary key, v varchar(64) character set utf8mb3 collate utf8mb3_general_ci)",
 		},
 		{
+			name: "implicit charset and implciit collation",
+			from: "create table t (id int primary key, v varchar(64) character set utf8mb3)",
+			to:   "create table t (id int primary key, v varchar(64) collate utf8mb3_general_ci)",
+		},
+		{
 			name: "ignore identical implicit ascii collation",
 			from: "create table t (id int primary key, v varchar(64) character set ascii collate ascii_general_ci)",
+			to:   "create table t (id int primary key, v varchar(64) character set ascii)",
+		},
+		{
+			name: "implicit charset and implciit collation, ascii",
+			from: "create table t (id int primary key, v varchar(64) collate ascii_general_ci)",
 			to:   "create table t (id int primary key, v varchar(64) character set ascii)",
 		},
 		{
