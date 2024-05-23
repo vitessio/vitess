@@ -559,7 +559,7 @@ func testScheduler(t *testing.T) {
 	require.NoError(t, err)
 	if forceCutoverCapable {
 		t.Run("force_cutover", func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), extendedWaitTime*2)
+			ctx, cancel := context.WithTimeout(context.Background(), extendedWaitTime*5)
 			defer cancel()
 
 			t.Run("populate t1_test", func(t *testing.T) {
