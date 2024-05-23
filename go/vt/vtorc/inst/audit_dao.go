@@ -27,7 +27,8 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/db"
 )
 
-var auditOperationCounter = stats.NewCounter("audit.write", "Number of audit operations performed")
+// The metric is registered with a deprecated name. The old metric name can be removed in v21.
+var auditOperationCounter = stats.NewCounterWithDeprecatedName("AuditWrite", "audit.write", "Number of audit operations performed")
 
 // AuditOperation creates and writes a new audit entry by given params
 func AuditOperation(auditType string, tabletAlias string, message string) error {

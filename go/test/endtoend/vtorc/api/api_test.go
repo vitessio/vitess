@@ -109,6 +109,41 @@ func TestAPIEndpoints(t *testing.T) {
 	},`)
 	})
 
+	t.Run("Check Vars and Metrics", func(t *testing.T) {
+		// These are vars that will be deprecated in v21.
+		utils.CheckVarExists(t, vtorc, "analysis.change.write")
+		utils.CheckVarExists(t, vtorc, "audit.write")
+		utils.CheckVarExists(t, vtorc, "discoveries.attempt")
+		utils.CheckVarExists(t, vtorc, "discoveries.fail")
+		utils.CheckVarExists(t, vtorc, "discoveries.instance_poll_seconds_exceeded")
+		utils.CheckVarExists(t, vtorc, "discoveries.queue_length")
+		utils.CheckVarExists(t, vtorc, "discoveries.recent_count")
+		utils.CheckVarExists(t, vtorc, "instance.read")
+		utils.CheckVarExists(t, vtorc, "instance.read_topology")
+
+		// Newly added vars.
+		utils.CheckVarExists(t, vtorc, "AnalysisChangeWrite")
+		utils.CheckVarExists(t, vtorc, "AuditWrite")
+		utils.CheckVarExists(t, vtorc, "DiscoveriesAttempt")
+		utils.CheckVarExists(t, vtorc, "DiscoveriesFail")
+		utils.CheckVarExists(t, vtorc, "DiscoveriesInstancePollSecondsExceeded")
+		utils.CheckVarExists(t, vtorc, "DiscoveriesQueueLength")
+		utils.CheckVarExists(t, vtorc, "DiscoveriesRecentCount")
+		utils.CheckVarExists(t, vtorc, "InstanceRead")
+		utils.CheckVarExists(t, vtorc, "InstanceReadTopology")
+
+		// Metrics registered in prometheus
+		utils.CheckMetricExists(t, vtorc, "vtorc_analysis_change_write")
+		utils.CheckMetricExists(t, vtorc, "vtorc_audit_write")
+		utils.CheckMetricExists(t, vtorc, "vtorc_discoveries_attempt")
+		utils.CheckMetricExists(t, vtorc, "vtorc_discoveries_fail")
+		utils.CheckMetricExists(t, vtorc, "vtorc_discoveries_instance_poll_seconds_exceeded")
+		utils.CheckMetricExists(t, vtorc, "vtorc_discoveries_queue_length")
+		utils.CheckMetricExists(t, vtorc, "vtorc_discoveries_recent_count")
+		utils.CheckMetricExists(t, vtorc, "vtorc_instance_read")
+		utils.CheckMetricExists(t, vtorc, "vtorc_instance_read_topology")
+	})
+
 	t.Run("Disable Recoveries API", func(t *testing.T) {
 		// Disable recoveries of VTOrc
 		status, resp, err := utils.MakeAPICall(t, vtorc, "/api/disable-global-recoveries")
