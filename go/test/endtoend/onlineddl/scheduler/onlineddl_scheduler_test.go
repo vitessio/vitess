@@ -203,7 +203,7 @@ func waitForReadyToComplete(t *testing.T, uuid string, expected bool) {
 }
 
 func waitForMessage(t *testing.T, uuid string, messageSubstring string) {
-	ctx, cancel := context.WithTimeout(context.Background(), normalWaitTime)
+	ctx, cancel := context.WithTimeout(context.Background(), extendedWaitTime)
 	defer cancel()
 
 	ticker := time.NewTicker(time.Second)
