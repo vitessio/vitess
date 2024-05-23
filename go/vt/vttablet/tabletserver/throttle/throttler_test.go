@@ -1648,7 +1648,10 @@ func TestReplica(t *testing.T) {
 	tmClient, ok := throttler.overrideTmClient.(*fakeTMClient)
 	require.True(t, ok)
 	assert.Empty(t, tmClient.AppNames())
-
+	{
+		_, ok := throttler.recentApps.Get(throttlerapp.VitessName.String())
+		assert.False(t, ok)
+	}
 	runThrottler(t, ctx, throttler, time.Minute, func(t *testing.T, ctx context.Context) {
 		assert.Empty(t, tmClient.AppNames())
 		flags := &CheckFlags{
@@ -1660,6 +1663,10 @@ func TestReplica(t *testing.T) {
 			assert.NotNil(t, checkResult)
 			assert.False(t, checkResult.RecentlyChecked) // "vitess" app does not mark the throttler as recently checked
 			assert.False(t, throttler.recentlyChecked()) // "vitess" app does not mark the throttler as recently checked
+			{
+				_, ok := throttler.recentApps.Get(throttlerapp.VitessName.String())
+				assert.True(t, ok)
+			}
 		}
 		go func() {
 			defer cancel() // early termination
@@ -1695,11 +1702,24 @@ func TestReplica(t *testing.T) {
 						assert.Equal(t, 1, len(checkResult.Metrics))
 						assert.True(t, checkResult.RecentlyChecked)
 						assert.True(t, throttler.recentlyChecked())
+						{
+							recentApp, ok := throttler.recentAppsSnapshot()[throttlerapp.OnlineDDLName.String()]
+							require.True(t, ok)
+							assert.EqualValues(t, http.StatusOK, recentApp.StatusCode)
+						}
 					}
 					{
+						{
+							_, ok := throttler.recentApps.Get(throttlerapp.VitessName.String())
+							assert.True(t, ok)
+						}
 						checkResult := throttler.Check(ctx, throttlerapp.VitessName.String(), nil, flags)
 						assert.True(t, checkResult.RecentlyChecked) // due to previous "online-ddl" check
 						assert.True(t, throttler.recentlyChecked()) // due to previous "online-ddl" check
+						{
+							_, ok := throttler.recentAppsSnapshot()[throttlerapp.VitessName.String()]
+							assert.True(t, ok)
+						}
 					}
 					select {
 					case <-ctx.Done():

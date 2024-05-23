@@ -54,8 +54,9 @@ type RecentApp struct {
 // NewRecentApp creates a RecentApp
 func NewRecentApp(appName string, statusCode int) *RecentApp {
 	result := &RecentApp{
-		AppName:   appName,
-		CheckedAt: time.Now(),
+		AppName:    appName,
+		CheckedAt:  time.Now(),
+		StatusCode: statusCode,
 	}
 	return result
 }
