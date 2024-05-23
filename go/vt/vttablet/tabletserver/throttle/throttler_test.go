@@ -185,6 +185,13 @@ func newTestThrottler() *Throttler {
 	return throttler
 }
 
+func TestInitThrottler(t *testing.T) {
+	throttler := newTestThrottler()
+	assert.Equal(t, 5*time.Second, throttler.dormantPeriod)
+	assert.EqualValues(t, 5, throttler.recentCheckDormantDiff)
+	assert.EqualValues(t, 3, throttler.recentCheckDiff)
+}
+
 func TestIsAppThrottled(t *testing.T) {
 	throttler := Throttler{
 		throttledApps:   cache.New(cache.NoExpiration, 0),

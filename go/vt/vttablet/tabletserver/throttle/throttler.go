@@ -271,6 +271,9 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 	throttler.dormantPeriod = dormantPeriod
 	throttler.recentCheckDormantDiff = int64(throttler.dormantPeriod / recentCheckRateLimiterInterval)
 	throttler.recentCheckDiff = int64(1 * time.Second / recentCheckRateLimiterInterval)
+	if throttler.recentCheckDiff < 1 {
+		throttler.recentCheckDiff = 1
+	}
 
 	throttler.StoreMetricsThreshold(defaultThrottleLagThreshold.Seconds()) //default
 	throttler.readSelfThrottleMetric = func(ctx context.Context, p *mysql.Probe) *mysql.MySQLThrottleMetric {
