@@ -262,8 +262,7 @@ func createPushedLimit(ctx *plancontext.PlanningContext, src Operator, orig *Lim
 			Left:     pushedLimit.Rowcount,
 			Right:    pushedLimit.Offset,
 		}
-		expr := simplifyLiteralExpression(ctx, plus)
-		pushedLimit.Rowcount = expr
+		pushedLimit.Rowcount = getLimitExpression(ctx, plus)
 		pushedLimit.Offset = nil
 	}
 	return &Limit{
@@ -272,9 +271,9 @@ func createPushedLimit(ctx *plancontext.PlanningContext, src Operator, orig *Lim
 	}
 }
 
-// simplify is a helper function to simplify an expression using the evalengine
-// the boolean returned indicates if the expression is a literal
-func simplifyLiteralExpression(ctx *plancontext.PlanningContext, expr sqlparser.Expr) sqlparser.Expr {
+// getLimitExpression is a helper function to simplify an expression using the evalengine
+// if it's not able to simplify the expression to a literal, it will return an argument expression for :__upper_limit
+func getLimitExpression(ctx *plancontext.PlanningContext, expr sqlparser.Expr) sqlparser.Expr {
 	cfg := evalengine.Config{
 		Environment: ctx.VSchema.Environment(),
 	}
