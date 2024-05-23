@@ -17,7 +17,6 @@ limitations under the License.
 package topo
 
 import (
-	"context"
 	"fmt"
 )
 
@@ -26,12 +25,12 @@ type RoutingRulesLock struct {
 	*TopoLock
 }
 
-func NewRoutingRulesLock(ctx context.Context, ts *Server, name string) (*RoutingRulesLock, error) {
+func NewRoutingRulesLock(ts *Server, name string) *RoutingRulesLock {
 	return &RoutingRulesLock{
 		TopoLock: &TopoLock{
 			Path: RoutingRulesPath,
 			Name: fmt.Sprintf("RoutingRules::%s", name),
 			ts:   ts,
 		},
-	}, nil
+	}
 }

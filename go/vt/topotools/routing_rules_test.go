@@ -150,9 +150,7 @@ func TestSaveKeyspaceRoutingRulesLocked(t *testing.T) {
 	})
 
 	// declare and acquire lock
-	lock, err := topo.NewRoutingRulesLock(ctx, ts, "test")
-	require.NoError(t, err)
-	lockCtx, unlock, err := lock.Lock(ctx)
+	lockCtx, unlock, err := topo.NewRoutingRulesLock(ts, "test").Lock(ctx)
 	require.NoError(t, err)
 	defer unlock(&err)
 

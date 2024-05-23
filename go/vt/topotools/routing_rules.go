@@ -180,12 +180,7 @@ func saveKeyspaceRoutingRulesLocked(ctx context.Context, ts *topo.Server, rules 
 // then modify the keyspace routing rules in-place.
 func UpdateKeyspaceRoutingRules(ctx context.Context, ts *topo.Server, reason string,
 	update func(ctx context.Context, rules *map[string]string) error) (err error) {
-	var lock *topo.RoutingRulesLock
-	lock, err = topo.NewRoutingRulesLock(ctx, ts, reason)
-	if err != nil {
-		return err
-	}
-	lockCtx, unlock, lockErr := lock.Lock(ctx)
+	lockCtx, unlock, lockErr := topo.NewRoutingRulesLock(ts, reason).Lock(ctx)
 	if lockErr != nil {
 		// If the key does not yet exist then let's create it.
 		if !topo.IsErrType(lockErr, topo.NoNode) {

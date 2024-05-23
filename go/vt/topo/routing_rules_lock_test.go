@@ -44,8 +44,7 @@ func TestKeyspaceRoutingRulesLock(t *testing.T) {
 	err := ts.CreateKeyspaceRoutingRules(ctx, &vschemapb.KeyspaceRoutingRules{})
 	require.NoError(t, err)
 
-	lock, err := topo.NewRoutingRulesLock(ctx, ts, "ks1")
-	require.NoError(t, err)
+	lock := topo.NewRoutingRulesLock(ts, "ks1")
 	_, unlock, err := lock.Lock(ctx)
 	require.NoError(t, err)
 
