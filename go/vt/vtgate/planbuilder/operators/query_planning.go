@@ -676,7 +676,7 @@ func colNamesAlign(expected, actual sqlparser.SelectExprs) bool {
 	for i, seE := range expected {
 		switch se := seE.(type) {
 		case *sqlparser.AliasedExpr:
-			if !areColumnNamesAligned(se.As, actual[i]) {
+			if !areColumnNamesAligned(se, actual[i]) {
 				return false
 			}
 		case *sqlparser.StarExpr:
@@ -692,8 +692,9 @@ func colNamesAlign(expected, actual sqlparser.SelectExprs) bool {
 	return true
 }
 
-func areColumnNamesAligned(expectation sqlparser.IdentifierCI, actual sqlparser.SelectExpr) bool {
-	if expectation.IsEmpty() {
+func areColumnNamesAligned(expectation *sqlparser.AliasedExpr, actual sqlparser.SelectExpr) bool {
+	_, isCol := expectation.Expr.(*sqlparser.ColName)
+	if expectation.As.IsEmpty() && !isCol {
 		// is the user didn't specify a name, we don't care
 		return true
 	}
@@ -701,7 +702,7 @@ func areColumnNamesAligned(expectation sqlparser.IdentifierCI, actual sqlparser.
 	if !isAe {
 		panic(vterrors.VT13001("used star expression when user did not"))
 	}
-	return expectation.EqualString(actualAE.ColumnName())
+	return expectation.ColumnName() == actualAE.ColumnName()
 }
 
 func stopAtRoute(operator Operator) VisitRule {

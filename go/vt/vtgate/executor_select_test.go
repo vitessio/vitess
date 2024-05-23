@@ -2863,11 +2863,11 @@ func TestEmptyJoinRecursiveStream(t *testing.T) {
 	}
 }
 
-func TestCrossShardSubquery(t *testing.T) {
+func TestCrossShardDerivedTable(t *testing.T) {
 	executor, sbc1, sbc2, _, ctx := createExecutorEnv(t)
 	result1 := []*sqltypes.Result{{
 		Fields: []*querypb.Field{
-			{Name: "id", Type: sqltypes.Int32},
+			{Name: "id1", Type: sqltypes.Int32},
 			{Name: "col", Type: sqltypes.Int32},
 		},
 		InsertID: 0,
@@ -2944,7 +2944,7 @@ func TestCrossShardSubqueryStream(t *testing.T) {
 	executor, sbc1, sbc2, _, ctx := createExecutorEnv(t)
 	result1 := []*sqltypes.Result{{
 		Fields: []*querypb.Field{
-			{Name: "id", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
+			{Name: "id1", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
 			{Name: "col", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
 		},
 		InsertID: 0,
@@ -2978,7 +2978,7 @@ func TestCrossShardSubqueryStream(t *testing.T) {
 	assert.Equal(t, wantResult, result)
 }
 
-func TestCrossShardSubqueryGetFields(t *testing.T) {
+func TestCrossShardDerivedTableGetFields(t *testing.T) {
 	executor, sbc1, _, sbclookup, ctx := createExecutorEnv(t)
 	sbclookup.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
@@ -2987,7 +2987,7 @@ func TestCrossShardSubqueryGetFields(t *testing.T) {
 	}})
 	result1 := []*sqltypes.Result{{
 		Fields: []*querypb.Field{
-			{Name: "id", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
+			{Name: "id1", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
 			{Name: "col", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
 		},
 	}}

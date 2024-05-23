@@ -725,6 +725,11 @@ func (ae *AliasedExpr) SetAlias(alias string) {
 	ae.As = NewIdentifierCI(alias)
 }
 
+func (ae *AliasedExpr) IsColumn() bool {
+	_, ok := ae.Expr.(*ColName)
+	return ok
+}
+
 // NewOrder makes a new Order
 func NewOrder(expr Expr, direction OrderDirection) *Order {
 	return &Order{
