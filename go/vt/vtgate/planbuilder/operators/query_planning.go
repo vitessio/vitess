@@ -701,7 +701,7 @@ func areColumnNamesAligned(expectation sqlparser.IdentifierCI, actual sqlparser.
 	if !isAe {
 		panic(vterrors.VT13001("used star expression when user did not"))
 	}
-	return expectation.Equal(actualAE.As)
+	return expectation.EqualString(actualAE.ColumnName())
 }
 
 func stopAtRoute(operator Operator) VisitRule {
