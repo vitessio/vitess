@@ -271,6 +271,7 @@ func newTestThrottler() *Throttler {
 	throttler.throttledAppsSnapshotInterval = 10 * time.Millisecond
 	throttler.dormantPeriod = 5 * time.Second
 	throttler.recentCheckDormantDiff = int64(throttler.dormantPeriod / recentCheckRateLimiterInterval)
+	throttler.recentCheckDiff = int64(3 * time.Second / recentCheckRateLimiterInterval)
 
 	throttler.readSelfThrottleMetrics = func(ctx context.Context) mysql.MySQLThrottleMetrics {
 		for _, metric := range selfMetrics {
@@ -298,6 +299,13 @@ func runSerialFunction(t *testing.T, ctx context.Context, throttler *Throttler, 
 		assert.FailNow(t, ctx.Err().Error(), "waiting in runSerialFunction")
 	}
 	return done
+}
+
+func TestInitThrottler(t *testing.T) {
+	throttler := newTestThrottler()
+	assert.Equal(t, 5*time.Second, throttler.dormantPeriod)
+	assert.EqualValues(t, 5, throttler.recentCheckDormantDiff)
+	assert.EqualValues(t, 3, throttler.recentCheckDiff)
 }
 
 func TestApplyThrottlerConfig(t *testing.T) {
@@ -1650,6 +1658,8 @@ func TestReplica(t *testing.T) {
 		{
 			checkResult := throttler.Check(ctx, throttlerapp.VitessName.String(), nil, flags)
 			assert.NotNil(t, checkResult)
+			assert.False(t, checkResult.RecentlyChecked) // "vitess" app does not mark the throttler as recently checked
+			assert.False(t, throttler.recentlyChecked()) // "vitess" app does not mark the throttler as recently checked
 		}
 		go func() {
 			defer cancel() // early termination
@@ -1677,11 +1687,20 @@ func TestReplica(t *testing.T) {
 					}
 				})
 				t.Run("validate stimulator", func(t *testing.T) {
-					checkResult := throttler.Check(ctx, throttlerapp.OnlineDDLName.String(), nil, flags)
-					require.NotNil(t, checkResult)
-					assert.EqualValues(t, 0.3, checkResult.Value) // self lag value
-					assert.EqualValues(t, http.StatusOK, checkResult.StatusCode)
-					assert.Equal(t, 1, len(checkResult.Metrics))
+					{
+						checkResult := throttler.Check(ctx, throttlerapp.OnlineDDLName.String(), nil, flags)
+						require.NotNil(t, checkResult)
+						assert.EqualValues(t, 0.3, checkResult.Value) // self lag value
+						assert.EqualValues(t, http.StatusOK, checkResult.StatusCode)
+						assert.Equal(t, 1, len(checkResult.Metrics))
+						assert.True(t, checkResult.RecentlyChecked)
+						assert.True(t, throttler.recentlyChecked())
+					}
+					{
+						checkResult := throttler.Check(ctx, throttlerapp.VitessName.String(), nil, flags)
+						assert.True(t, checkResult.RecentlyChecked) // due to previous "online-ddl" check
+						assert.True(t, throttler.recentlyChecked()) // due to previous "online-ddl" check
+					}
 					select {
 					case <-ctx.Done():
 						require.FailNow(t, "context expired before testing completed")

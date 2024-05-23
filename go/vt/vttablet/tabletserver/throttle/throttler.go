@@ -179,6 +179,7 @@ type Throttler struct {
 
 	recentCheckRateLimiter *timer.RateLimiter
 	recentCheckDormantDiff int64
+	recentCheckDiff        int64
 
 	throttleTabletTypesMap map[topodatapb.TabletType]bool
 
@@ -279,6 +280,10 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 	throttler.throttledAppsSnapshotInterval = throttledAppsSnapshotInterval
 	throttler.dormantPeriod = dormantPeriod
 	throttler.recentCheckDormantDiff = int64(throttler.dormantPeriod / recentCheckRateLimiterInterval)
+	throttler.recentCheckDiff = int64(1 * time.Second / recentCheckRateLimiterInterval)
+	if throttler.recentCheckDiff < 1 {
+		throttler.recentCheckDiff = 1
+	}
 
 	throttler.StoreMetricsThreshold(defaultThresholds[base.LagMetricName])
 	throttler.readSelfThrottleMetrics = func(ctx context.Context) mysql.MySQLThrottleMetrics {
@@ -847,7 +852,7 @@ func (throttler *Throttler) recentlyChecked() bool {
 	if throttler.recentCheckRateLimiter == nil {
 		return false
 	}
-	return throttler.recentCheckRateLimiter.Diff() <= 1
+	return throttler.recentCheckRateLimiter.Diff() <= throttler.recentCheckDiff
 }
 
 // Operate is the main entry point for the throttler operation and logic. It will
