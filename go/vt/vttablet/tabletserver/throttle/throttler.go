@@ -93,7 +93,7 @@ const (
 	recentCheckRateLimiterInterval = 1 * time.Second // Ticker assisting in determining when the throttler was last checked
 
 	aggregatedMetricsExpiration = 5 * time.Second
-	recentAppsExpiration        = time.Hour * 24
+	recentAppsExpiration        = time.Hour
 
 	nonDeprioritizedAppMapExpiration = time.Second
 
@@ -237,6 +237,7 @@ type ThrottlerStatus struct {
 	MetricsHealth     base.MetricHealthMap
 	ThrottledApps     []base.AppThrottle
 	AppCheckedMetrics map[string]string
+	RecentApps        map[string](*base.RecentApp)
 }
 
 // NewThrottler creates a Throttler
@@ -263,7 +264,7 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 	throttler.throttledApps = cache.New(cache.NoExpiration, 0)
 	throttler.mysqlMetricThresholds = cache.New(cache.NoExpiration, 0)
 	throttler.aggregatedMetrics = cache.New(aggregatedMetricsExpiration, 0)
-	throttler.recentApps = cache.New(recentAppsExpiration, 0)
+	throttler.recentApps = cache.New(recentAppsExpiration, recentAppsExpiration)
 	throttler.metricsHealth = cache.New(cache.NoExpiration, 0)
 	throttler.appCheckedMetrics = cache.New(cache.NoExpiration, 0)
 	throttler.nonLowPriorityAppRequestsThrottled = cache.New(nonDeprioritizedAppMapExpiration, 0)
@@ -1482,16 +1483,17 @@ func (throttler *Throttler) ThrottledAppsMap() (result map[string](*base.AppThro
 }
 
 // markRecentApp takes note that an app has just asked about throttling, making it "recent"
-func (throttler *Throttler) markRecentApp(appName string) {
-	throttler.recentApps.Set(appName, time.Now(), cache.DefaultExpiration)
+func (throttler *Throttler) markRecentApp(appName string, statusCode int) {
+	recentApp := base.NewRecentApp(appName, statusCode)
+	throttler.recentApps.Set(appName, recentApp, cache.DefaultExpiration)
 }
 
-// RecentAppsMap returns a (copy) map of apps which checked for throttling recently
-func (throttler *Throttler) RecentAppsMap() (result map[string](*base.RecentApp)) {
+// recentAppsSnapshot returns a (copy) map of apps which checked for throttling recently
+func (throttler *Throttler) recentAppsSnapshot() (result map[string](*base.RecentApp)) {
 	result = make(map[string](*base.RecentApp))
 
 	for recentAppKey, item := range throttler.recentApps.Items() {
-		recentApp := base.NewRecentApp(item.Object.(time.Time))
+		recentApp := item.Object.(*base.RecentApp)
 		result[recentAppKey] = recentApp
 	}
 	return result
@@ -1657,5 +1659,6 @@ func (throttler *Throttler) Status() *ThrottlerStatus {
 		MetricsHealth:     throttler.metricsHealthSnapshot(),
 		ThrottledApps:     throttler.ThrottledApps(),
 		AppCheckedMetrics: throttler.appCheckedMetricsSnapshot(),
+		RecentApps:        throttler.recentAppsSnapshot(),
 	}
 }

@@ -190,7 +190,6 @@ func (check *ThrottlerCheck) Check(ctx context.Context, appName string, scope ba
 		}
 
 		metricCheckResult := check.checkAppMetricResult(ctx, appName, metricResultFunc, flags)
-		check.throttler.markRecentApp(appName)
 		if !throttlerapp.VitessName.Equals(appName) {
 			go func(statusCode int) {
 				if metricScope == base.UndefinedScope {
@@ -241,6 +240,7 @@ func (check *ThrottlerCheck) Check(ctx context.Context, appName string, scope ba
 			statsThrottlerCheckAnyError.Add(1)
 		}
 	}(checkResult.StatusCode)
+	go check.throttler.markRecentApp(appName, checkResult.StatusCode)
 	return checkResult
 }
 

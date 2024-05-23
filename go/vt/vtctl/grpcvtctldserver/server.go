@@ -767,6 +767,7 @@ func (s *VtctldServer) GetThrottlerStatus(ctx context.Context, req *vtctldatapb.
 		MetricsHealth:           make(map[string]*vtctldatapb.GetThrottlerStatusResponse_MetricHealth),
 		ThrottledApps:           r.ThrottledApps,
 		AppCheckedMetrics:       r.AppCheckedMetrics,
+		RecentApps:              make(map[string]*vtctldatapb.GetThrottlerStatusResponse_RecentApp),
 	}
 	for k, m := range r.AggregatedMetrics {
 		resp.AggregatedMetrics[k] = &vtctldatapb.GetThrottlerStatusResponse_MetricResult{
@@ -778,6 +779,12 @@ func (s *VtctldServer) GetThrottlerStatus(ctx context.Context, req *vtctldatapb.
 		resp.MetricsHealth[k] = &vtctldatapb.GetThrottlerStatusResponse_MetricHealth{
 			LastHealthyAt:           m.LastHealthyAt,
 			SecondsSinceLastHealthy: m.SecondsSinceLastHealthy,
+		}
+	}
+	for k, a := range r.RecentApps {
+		resp.RecentApps[k] = &vtctldatapb.GetThrottlerStatusResponse_RecentApp{
+			CheckedAt:  a.CheckedAt,
+			StatusCode: a.StatusCode,
 		}
 	}
 	return resp, nil

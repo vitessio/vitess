@@ -107,6 +107,7 @@ func (tm *TabletManager) GetThrottlerStatus(ctx context.Context, req *tabletmana
 		MetricsHealth:           make(map[string]*tabletmanagerdatapb.GetThrottlerStatusResponse_MetricHealth),
 		ThrottledApps:           make(map[string]*topodatapb.ThrottledAppRule),
 		AppCheckedMetrics:       status.AppCheckedMetrics,
+		RecentApps:              make(map[string]*tabletmanagerdatapb.GetThrottlerStatusResponse_RecentApp),
 	}
 	for k, m := range status.AggregatedMetrics {
 		val, err := m.Get()
@@ -129,6 +130,12 @@ func (tm *TabletManager) GetThrottlerStatus(ctx context.Context, req *tabletmana
 			Ratio:     app.Ratio,
 			ExpiresAt: protoutil.TimeToProto(app.ExpireAt),
 			Exempt:    app.Exempt,
+		}
+	}
+	for _, recentApp := range status.RecentApps {
+		resp.RecentApps[recentApp.AppName] = &tabletmanagerdatapb.GetThrottlerStatusResponse_RecentApp{
+			CheckedAt:  protoutil.TimeToProto(recentApp.CheckedAt),
+			StatusCode: int32(recentApp.StatusCode),
 		}
 	}
 	return resp, nil
