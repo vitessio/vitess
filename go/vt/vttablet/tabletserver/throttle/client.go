@@ -67,8 +67,9 @@ func NewProductionClient(throttler *Throttler, appName throttlerapp.Name, scope 
 		throttler: throttler,
 		appName:   appName,
 		flags: CheckFlags{
-			Scope:       scope,
-			LowPriority: false,
+			Scope:               scope,
+			LowPriority:         false,
+			MultiMetricsEnabled: true,
 		},
 		lastSuccessfulThrottle: make(map[string]int64),
 	}
@@ -82,8 +83,9 @@ func NewBackgroundClient(throttler *Throttler, appName throttlerapp.Name, scope 
 		throttler: throttler,
 		appName:   appName,
 		flags: CheckFlags{
-			Scope:       scope,
-			LowPriority: true,
+			Scope:               scope,
+			LowPriority:         true,
+			MultiMetricsEnabled: true,
 		},
 		lastSuccessfulThrottle: make(map[string]int64),
 	}
