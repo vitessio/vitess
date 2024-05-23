@@ -138,7 +138,90 @@ func (rs *rowStreamer) Stream() error {
 	return rs.streamQuery(rs.send)
 }
 
+func (rs *rowStreamer) buildPlanForJoin() error {
+	log.Infof("Building plan for join query: %v\n", rs.query)
+	parser := rs.se.Environment().Parser()
+	statement, err := parser.Parse(rs.query)
+	if err != nil {
+		return err
+	}
+	sel, ok := statement.(*sqlparser.Select)
+	_ = sel
+	if !ok {
+		return fmt.Errorf("unsupported: %v", sqlparser.String(statement))
+	}
+
+	var tables []string
+	err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch node := node.(type) {
+		case *sqlparser.AliasedTableExpr:
+			if tableName, ok := node.Expr.(sqlparser.TableName); ok {
+				tables = append(tables, tableName.Name.String())
+			}
+		}
+		return true, nil
+	}, statement)
+	if err != nil {
+		return err
+	}
+
+	var view string
+	directives := sel.Comments.Directives()
+	if s, found := directives.GetString("view", ""); found {
+		view = s
+	}
+	log.Infof("Building plan for join query: %v, tables: %v, directives %v,  view: %v\n", rs.query, tables, directives, view)
+	if view == "" {
+		return fmt.Errorf("unsupported: %v", sqlparser.String(statement))
+	}
+
+	conn, err := rs.cp.Connect(rs.ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	res, err := conn.ExecuteFetch(rs.query+" limit 1", 1, true)
+	if err != nil {
+		return err
+	}
+	log.Infof("Building plan for join query: %v, res: %v, fields: %+v\n",
+		rs.query, res, res.Fields)
+
+	ti := &Table{
+		Name: view,
+	}
+	for _, fld := range res.Fields {
+		ti.Fields = append(ti.Fields, &querypb.Field{
+			Name: fld.Name,
+			Type: fld.Type,
+		})
+	}
+	plan := &Plan{
+		Table: ti,
+		env:   rs.se.Environment(),
+	}
+	plan.ColExprs = make([]ColExpr, len(ti.Fields))
+	for i, col := range ti.Fields {
+		plan.ColExprs[i].ColNum = i
+		plan.ColExprs[i].Field = col
+	}
+	rs.plan = plan
+	rs.pkColumns = []int{0}
+	rs.sendQuery = rs.query
+	log.Infof("Plan: %v\n", rs.plan)
+	return nil
+}
+
 func (rs *rowStreamer) buildPlan() error {
+	log.Infof("Building plan for query: %v\n", rs.query)
+	isJoin, err := vttablet.IsJoin(rs.se.Environment().Parser(), rs.query)
+	if err != nil {
+		return err
+	}
+	if isJoin {
+		return rs.buildPlanForJoin()
+	}
 	// This pre-parsing is required to extract the table name
 	// and create its metadata.
 	sel, fromTable, err := analyzeSelect(rs.query, rs.se.Environment().Parser())
