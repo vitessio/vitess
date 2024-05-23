@@ -179,6 +179,7 @@ type Throttler struct {
 
 	recentCheckRateLimiter *timer.RateLimiter
 	recentCheckDormantDiff int64
+	recentCheckDiff        int64
 
 	throttleTabletTypesMap map[topodatapb.TabletType]bool
 
@@ -216,10 +217,11 @@ type ThrottlerStatus struct {
 	Keyspace string
 	Shard    string
 
-	IsLeader  bool
-	IsOpen    bool
-	IsEnabled bool
-	IsDormant bool
+	IsLeader          bool
+	IsOpen            bool
+	IsEnabled         bool
+	IsDormant         bool
+	IsRecentlyChecked bool
 
 	Query     string
 	Threshold float64
@@ -268,6 +270,7 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 	throttler.throttledAppsSnapshotInterval = throttledAppsSnapshotInterval
 	throttler.dormantPeriod = dormantPeriod
 	throttler.recentCheckDormantDiff = int64(throttler.dormantPeriod / recentCheckRateLimiterInterval)
+	throttler.recentCheckDiff = int64(1 * time.Second / recentCheckRateLimiterInterval)
 
 	throttler.StoreMetricsThreshold(defaultThrottleLagThreshold.Seconds()) //default
 	throttler.readSelfThrottleMetric = func(ctx context.Context, p *mysql.Probe) *mysql.MySQLThrottleMetric {
@@ -683,7 +686,18 @@ func (throttler *Throttler) ThrottledApps() (result []base.AppThrottle) {
 // Instead of measuring actual time, we use the fact recentCheckRateLimiter ticks every second, and take
 // a logical diff, counting the number of ticks since the last check. This is a good enough approximation.
 func (throttler *Throttler) isDormant() bool {
+	if throttler.recentCheckRateLimiter == nil {
+		return false
+	}
 	return throttler.recentCheckRateLimiter.Diff() > throttler.recentCheckDormantDiff
+}
+
+// recentlyChecked returns true when this throttler was checked "just now" (whereabouts of once second or two)
+func (throttler *Throttler) recentlyChecked() bool {
+	if throttler.recentCheckRateLimiter == nil {
+		return false
+	}
+	return throttler.recentCheckRateLimiter.Diff() <= throttler.recentCheckDiff
 }
 
 // Operate is the main entry point for the throttler operation and logic. It will
@@ -775,7 +789,7 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 						})
 					}
 					//
-					if throttler.recentCheckRateLimiter.Diff() <= 1 { // recently checked
+					if throttler.recentlyChecked() {
 						if !throttler.isLeader.Load() {
 							// This is a replica, and has just recently been checked.
 							// We want to proactively "stimulate" the primary throttler to renew the heartbeat lease.
@@ -1264,6 +1278,9 @@ func (throttler *Throttler) checkStore(ctx context.Context, appName string, stor
 		checkResult.RecentlyChecked = true
 		statsThrottlerRecentlyChecked.Add(1)
 	}
+	if !checkResult.RecentlyChecked {
+		checkResult.RecentlyChecked = throttler.recentlyChecked()
+	}
 
 	return checkResult
 }
@@ -1299,10 +1316,11 @@ func (throttler *Throttler) Status() *ThrottlerStatus {
 		Keyspace: throttler.keyspace,
 		Shard:    throttler.shard,
 
-		IsLeader:  throttler.isLeader.Load(),
-		IsOpen:    throttler.isOpen.Load(),
-		IsEnabled: throttler.isEnabled.Load(),
-		IsDormant: throttler.isDormant(),
+		IsLeader:          throttler.isLeader.Load(),
+		IsOpen:            throttler.isOpen.Load(),
+		IsEnabled:         throttler.isEnabled.Load(),
+		IsDormant:         throttler.isDormant(),
+		IsRecentlyChecked: throttler.recentlyChecked(),
 
 		Query:     throttler.GetMetricsQuery(),
 		Threshold: throttler.GetMetricsThreshold(),
