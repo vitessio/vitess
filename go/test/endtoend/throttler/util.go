@@ -367,17 +367,28 @@ func WaitForThrottlerStatusEnabled(t *testing.T, vtctldProcess *cluster.VtctldCl
 		}
 
 		status, err := GetThrottlerStatus(vtctldProcess, tablet)
-		if err == nil {
-			if status.IsEnabled == enabled {
-				if config == nil {
-					return
-				}
-				if status.LagMetricQuery == config.Query && status.DefaultThreshold == config.Threshold {
-					return
-				}
+		good := func() bool {
+			if err != nil {
+				log.Errorf("GetThrottlerStatus failed: %v", err)
+				return false
 			}
-		} else {
-			log.Errorf("GetThrottlerStatus failed: %v", err)
+			if status.IsEnabled != enabled {
+				return false
+			}
+			if status.IsEnabled && len(status.MetricsHealth) == 0 {
+				// throttler is enabled, but no metrics collected yet. Wait for something to be collected.
+				return false
+			}
+			if config == nil {
+				return true
+			}
+			if status.LagMetricQuery == config.Query && status.DefaultThreshold == config.Threshold {
+				return true
+			}
+			return false
+		}
+		if good() {
+			return
 		}
 		select {
 		case <-ctx.Done():
