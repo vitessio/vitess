@@ -664,16 +664,44 @@ func addTruncationOrProjectionToReturnOutput(ctx *plancontext.PlanningContext, s
 	}
 
 	cols := output.GetSelectExprs(ctx)
-	if len(selExprs) == len(cols) {
+	sizeCorrect := len(selExprs) == len(cols) || tryTruncateColumnsAt(output, len(selExprs))
+	if sizeCorrect && colNamesAlign(selExprs, cols) {
 		return output
 	}
 
-	if tryTruncateColumnsAt(output, len(selExprs)) {
-		return output
-	}
+	return createSimpleProjection(ctx, selExprs, output)
+}
 
-	proj := createSimpleProjection(ctx, selExprs, output)
-	return proj
+func colNamesAlign(expected, actual sqlparser.SelectExprs) bool {
+	for i, seE := range expected {
+		switch se := seE.(type) {
+		case *sqlparser.AliasedExpr:
+			if !areColumnNamesAligned(se.As, actual[i]) {
+				return false
+			}
+		case *sqlparser.StarExpr:
+			actualStar, isStar := actual[i].(*sqlparser.StarExpr)
+			if !isStar {
+				panic("I DONT THINK THIS CAN HAPPEN")
+			}
+			if !sqlparser.Equals.RefOfStarExpr(se, actualStar) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func areColumnNamesAligned(expectation sqlparser.IdentifierCI, actual sqlparser.SelectExpr) bool {
+	if expectation.IsEmpty() {
+		// is the user didn't specify a name, we don't care
+		return true
+	}
+	actualAE, isAe := actual.(*sqlparser.AliasedExpr)
+	if !isAe {
+		panic(vterrors.VT13001("used star expression when user did not"))
+	}
+	return expectation.Equal(actualAE.As)
 }
 
 func stopAtRoute(operator Operator) VisitRule {

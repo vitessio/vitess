@@ -291,37 +291,62 @@
       "QueryType": "SELECT",
       "Original": "SELECT kcu.constraint_name constraint_name, kcu.column_name column_name, kcu.referenced_table_name referenced_table_name, kcu.referenced_column_name referenced_column_name, kcu.ordinal_position ordinal_position, kcu.table_name table_name, rc.delete_rule delete_rule, rc.update_rule update_rule FROM information_schema.key_column_usage AS kcu INNER JOIN information_schema.referential_constraints AS rc ON kcu.constraint_name = rc.constraint_name WHERE kcu.table_schema = ? AND rc.constraint_schema = ? AND kcu.referenced_column_name IS NOT NULL ORDER BY ordinal_position",
       "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "L:0,L:1,L:2,L:3,L:4,L:5,R:0,R:1",
-        "JoinVars": {
-          "kcu_constraint_name": 0
-        },
-        "TableName": "information_schema.key_column_usage_information_schema.referential_constraints",
+        "OperatorType": "SimpleProjection",
+        "ColumnNames": [
+          "constraint_name",
+          "column_name",
+          "referenced_table_name",
+          "referenced_column_name",
+          "ordinal_position",
+          "table_name",
+          "delete_rule",
+          "update_rule"
+        ],
+        "Columns": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ],
         "Inputs": [
           {
-            "OperatorType": "Route",
-            "Variant": "DBA",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "L:0,L:1,L:2,L:3,L:4,L:5,R:0,R:1",
+            "JoinVars": {
+              "kcu_constraint_name": 0
             },
-            "FieldQuery": "select kcu.constraint_name as constraint_name, kcu.column_name as column_name, kcu.referenced_table_name as referenced_table_name, kcu.referenced_column_name as referenced_column_name, kcu.ordinal_position as ordinal_position, kcu.table_name as table_name from information_schema.key_column_usage as kcu where 1 != 1",
-            "Query": "select kcu.constraint_name as constraint_name, kcu.column_name as column_name, kcu.referenced_table_name as referenced_table_name, kcu.referenced_column_name as referenced_column_name, kcu.ordinal_position as ordinal_position, kcu.table_name as table_name from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname /* VARCHAR */ and kcu.referenced_column_name is not null order by kcu.ordinal_position asc",
-            "SysTableTableSchema": "[:v1]",
-            "Table": "information_schema.key_column_usage"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "DBA",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select rc.delete_rule as delete_rule, rc.update_rule as update_rule from information_schema.referential_constraints as rc where 1 != 1",
-            "Query": "select rc.delete_rule as delete_rule, rc.update_rule as update_rule from information_schema.referential_constraints as rc where rc.constraint_schema = :__vtschemaname /* VARCHAR */ and rc.constraint_name = :kcu_constraint_name",
-            "SysTableTableSchema": "[:v2]",
-            "Table": "information_schema.referential_constraints"
+            "TableName": "information_schema.key_column_usage_information_schema.referential_constraints",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "DBA",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select kcu.constraint_name as constraint_name, kcu.column_name as column_name, kcu.referenced_table_name as referenced_table_name, kcu.referenced_column_name as referenced_column_name, kcu.ordinal_position as ordinal_position, kcu.table_name as table_name from information_schema.key_column_usage as kcu where 1 != 1",
+                "Query": "select kcu.constraint_name as constraint_name, kcu.column_name as column_name, kcu.referenced_table_name as referenced_table_name, kcu.referenced_column_name as referenced_column_name, kcu.ordinal_position as ordinal_position, kcu.table_name as table_name from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname /* VARCHAR */ and kcu.referenced_column_name is not null order by kcu.ordinal_position asc",
+                "SysTableTableSchema": "[:v1]",
+                "Table": "information_schema.key_column_usage"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "DBA",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select rc.delete_rule as delete_rule, rc.update_rule as update_rule from information_schema.referential_constraints as rc where 1 != 1",
+                "Query": "select rc.delete_rule as delete_rule, rc.update_rule as update_rule from information_schema.referential_constraints as rc where rc.constraint_schema = :__vtschemaname /* VARCHAR */ and rc.constraint_name = :kcu_constraint_name",
+                "SysTableTableSchema": "[:v2]",
+                "Table": "information_schema.referential_constraints"
+              }
+            ]
           }
         ]
       }
@@ -416,39 +441,52 @@
       "QueryType": "SELECT",
       "Original": "SELECT cc.constraint_name AS 'name', cc.check_clause AS 'expression' FROM information_schema.check_constraints cc JOIN information_schema.table_constraints tc USING (constraint_schema, constraint_name) WHERE tc.table_schema = 'table_schema' AND tc.table_name = 'table_name' AND cc.constraint_schema = 'constraint_schema'",
       "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "L:0,L:1",
-        "JoinVars": {
-          "cc_constraint_name": 0,
-          "cc_constraint_schema": 2
-        },
-        "TableName": "information_schema.check_constraints_information_schema.table_constraints",
+        "OperatorType": "SimpleProjection",
+        "ColumnNames": [
+          "name",
+          "expression"
+        ],
+        "Columns": [
+          0,
+          1
+        ],
         "Inputs": [
           {
-            "OperatorType": "Route",
-            "Variant": "DBA",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "L:0,L:1",
+            "JoinVars": {
+              "cc_constraint_name": 0,
+              "cc_constraint_schema": 2
             },
-            "FieldQuery": "select cc.constraint_name as `name`, cc.check_clause as expression, cc.constraint_schema from information_schema.check_constraints as cc where 1 != 1",
-            "Query": "select cc.constraint_name as `name`, cc.check_clause as expression, cc.constraint_schema from information_schema.check_constraints as cc where cc.constraint_schema = :__vtschemaname /* VARCHAR */",
-            "SysTableTableSchema": "['constraint_schema']",
-            "Table": "information_schema.check_constraints"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "DBA",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select 1 from information_schema.table_constraints as tc where 1 != 1",
-            "Query": "select 1 from information_schema.table_constraints as tc where tc.table_schema = :__vtschemaname /* VARCHAR */ and tc.table_name = :tc_table_name /* VARCHAR */ and tc.constraint_name = :cc_constraint_name and tc.constraint_schema = :__vtschemaname /* VARCHAR */",
-            "SysTableTableName": "[tc_table_name:'table_name']",
-            "SysTableTableSchema": "['table_schema', :cc_constraint_schema]",
-            "Table": "information_schema.table_constraints"
+            "TableName": "information_schema.check_constraints_information_schema.table_constraints",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "DBA",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select cc.constraint_name as `name`, cc.check_clause as expression, cc.constraint_schema from information_schema.check_constraints as cc where 1 != 1",
+                "Query": "select cc.constraint_name as `name`, cc.check_clause as expression, cc.constraint_schema from information_schema.check_constraints as cc where cc.constraint_schema = :__vtschemaname /* VARCHAR */",
+                "SysTableTableSchema": "['constraint_schema']",
+                "Table": "information_schema.check_constraints"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "DBA",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select 1 from information_schema.table_constraints as tc where 1 != 1",
+                "Query": "select 1 from information_schema.table_constraints as tc where tc.table_schema = :__vtschemaname /* VARCHAR */ and tc.table_name = :tc_table_name /* VARCHAR */ and tc.constraint_name = :cc_constraint_name and tc.constraint_schema = :__vtschemaname /* VARCHAR */",
+                "SysTableTableName": "[tc_table_name:'table_name']",
+                "SysTableTableSchema": "['table_schema', :cc_constraint_schema]",
+                "Table": "information_schema.table_constraints"
+              }
+            ]
           }
         ]
       }
@@ -929,31 +967,42 @@
       "QueryType": "SELECT",
       "Original": "select 1 as found from information_schema.`tables` where table_schema = 'music' and table_schema = 'Music' union all (select 1 as found from information_schema.views where table_schema = 'music' and table_schema = 'user' limit 1)",
       "Instructions": {
-        "OperatorType": "Concatenate",
+        "OperatorType": "SimpleProjection",
+        "ColumnNames": [
+          "found"
+        ],
+        "Columns": [
+          0
+        ],
         "Inputs": [
           {
-            "OperatorType": "Route",
-            "Variant": "DBA",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select 1 as found from information_schema.`tables` where 1 != 1",
-            "Query": "select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */ and table_schema = :__vtschemaname /* VARCHAR */",
-            "SysTableTableSchema": "['music', 'Music']",
-            "Table": "information_schema.`tables`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "DBA",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select 1 as found from information_schema.views where 1 != 1",
-            "Query": "select 1 as found from information_schema.views where table_schema = :__vtschemaname /* VARCHAR */ and table_schema = :__vtschemaname /* VARCHAR */ limit 1",
-            "SysTableTableSchema": "['music', 'user']",
-            "Table": "information_schema.views"
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "DBA",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select 1 as found from information_schema.`tables` where 1 != 1",
+                "Query": "select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */ and table_schema = :__vtschemaname /* VARCHAR */",
+                "SysTableTableSchema": "['music', 'Music']",
+                "Table": "information_schema.`tables`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "DBA",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select 1 as found from information_schema.views where 1 != 1",
+                "Query": "select 1 as found from information_schema.views where table_schema = :__vtschemaname /* VARCHAR */ and table_schema = :__vtschemaname /* VARCHAR */ limit 1",
+                "SysTableTableSchema": "['music', 'user']",
+                "Table": "information_schema.views"
+              }
+            ]
           }
         ]
       }
@@ -966,31 +1015,42 @@
       "QueryType": "SELECT",
       "Original": "select 1 as found from information_schema.`tables` where table_schema = 'music' and table_schema = 'Music' union all (select 1 as found from information_schema.views where table_schema = 'music' and table_schema = 'user' limit 1)",
       "Instructions": {
-        "OperatorType": "Concatenate",
+        "OperatorType": "SimpleProjection",
+        "ColumnNames": [
+          "found"
+        ],
+        "Columns": [
+          0
+        ],
         "Inputs": [
           {
-            "OperatorType": "Route",
-            "Variant": "DBA",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select 1 as found from information_schema.`tables` where 1 != 1",
-            "Query": "select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */ and table_schema = :__vtschemaname /* VARCHAR */",
-            "SysTableTableSchema": "['music', 'Music']",
-            "Table": "information_schema.`tables`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "DBA",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select 1 as found from information_schema.views where 1 != 1",
-            "Query": "select 1 as found from information_schema.views where table_schema = :__vtschemaname /* VARCHAR */ and table_schema = :__vtschemaname /* VARCHAR */ limit 1",
-            "SysTableTableSchema": "['music', 'user']",
-            "Table": "information_schema.views"
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "DBA",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select 1 as found from information_schema.`tables` where 1 != 1",
+                "Query": "select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */ and table_schema = :__vtschemaname /* VARCHAR */",
+                "SysTableTableSchema": "['music', 'Music']",
+                "Table": "information_schema.`tables`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "DBA",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select 1 as found from information_schema.views where 1 != 1",
+                "Query": "select 1 as found from information_schema.views where table_schema = :__vtschemaname /* VARCHAR */ and table_schema = :__vtschemaname /* VARCHAR */ limit 1",
+                "SysTableTableSchema": "['music', 'user']",
+                "Table": "information_schema.views"
+              }
+            ]
           }
         ]
       }

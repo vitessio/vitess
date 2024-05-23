@@ -2799,39 +2799,52 @@
       "QueryType": "SELECT",
       "Original": "SELECT u.id as uid, ue.id as ueid FROM user u join user_extra ue where u.id = ue.id",
       "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "R:0,L:0",
-        "JoinVars": {
-          "ue_id": 0
-        },
-        "TableName": "user_extra_`user`",
+        "OperatorType": "SimpleProjection",
+        "ColumnNames": [
+          "uid",
+          "ueid"
+        ],
+        "Columns": [
+          0,
+          1
+        ],
         "Inputs": [
           {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "R:0,L:0",
+            "JoinVars": {
+              "ue_id": 0
             },
-            "FieldQuery": "select ue.id as ueid from user_extra as ue where 1 != 1",
-            "Query": "select ue.id as ueid from user_extra as ue",
-            "Table": "user_extra"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "EqualUnique",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select u.id as uid from `user` as u where 1 != 1",
-            "Query": "select u.id as uid from `user` as u where u.id = :ue_id",
-            "Table": "`user`",
-            "Values": [
-              ":ue_id"
-            ],
-            "Vindex": "user_index"
+            "TableName": "user_extra_`user`",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select ue.id as ueid from user_extra as ue where 1 != 1",
+                "Query": "select ue.id as ueid from user_extra as ue",
+                "Table": "user_extra"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select u.id as uid from `user` as u where 1 != 1",
+                "Query": "select u.id as uid from `user` as u where u.id = :ue_id",
+                "Table": "`user`",
+                "Values": [
+                  ":ue_id"
+                ],
+                "Vindex": "user_index"
+              }
+            ]
           }
         ]
       },
