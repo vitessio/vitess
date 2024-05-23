@@ -214,8 +214,15 @@ func primeTxPoolWithConnection(t *testing.T, ctx context.Context) (*fakesqldb.DB
 	db := fakesqldb.New(t)
 	txPool, _ := newTxPool()
 	// Set the capacity to 1 to ensure that the db connection is reused.
+<<<<<<< HEAD
 	txPool.scp.conns.SetCapacity(1)
 	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+=======
+	err := txPool.scp.conns.SetCapacity(context.Background(), 1)
+	require.NoError(t, err)
+	params := dbconfigs.New(db.ConnParams())
+	txPool.Open(params, params, params)
+>>>>>>> afbce6aa87 (connpool: Allow time out during shutdown (#15979))
 
 	// Run a query to trigger a database connection. That connection will be
 	// reused by subsequent transactions.

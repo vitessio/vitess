@@ -772,6 +772,7 @@ func (qre *QueryExecutor) getConn() (*connpool.DBConn, error) {
 	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.getConn")
 	defer span.Finish()
 
+<<<<<<< HEAD
 	start := time.Now()
 	conn, err := qre.tsv.qe.conns.Get(ctx, qre.setting)
 
@@ -783,12 +784,19 @@ func (qre *QueryExecutor) getConn() (*connpool.DBConn, error) {
 		return nil, err
 	}
 	return nil, err
+=======
+	defer func(start time.Time) {
+		qre.logStats.WaitingForConnection += time.Since(start)
+	}(time.Now())
+	return qre.tsv.qe.conns.Get(ctx, qre.setting)
+>>>>>>> afbce6aa87 (connpool: Allow time out during shutdown (#15979))
 }
 
 func (qre *QueryExecutor) getStreamConn() (*connpool.DBConn, error) {
 	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.getStreamConn")
 	defer span.Finish()
 
+<<<<<<< HEAD
 	start := time.Now()
 	conn, err := qre.tsv.qe.streamConns.Get(ctx, qre.setting)
 	switch err {
@@ -799,6 +807,12 @@ func (qre *QueryExecutor) getStreamConn() (*connpool.DBConn, error) {
 		return nil, err
 	}
 	return nil, err
+=======
+	defer func(start time.Time) {
+		qre.logStats.WaitingForConnection += time.Since(start)
+	}(time.Now())
+	return qre.tsv.qe.streamConns.Get(ctx, qre.setting)
+>>>>>>> afbce6aa87 (connpool: Allow time out during shutdown (#15979))
 }
 
 // txFetch fetches from a TxConnection.
