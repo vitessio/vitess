@@ -221,6 +221,7 @@ func waitForMessage(t *testing.T, uuid string, messageSubstring string) {
 		case <-ticker.C:
 		case <-ctx.Done():
 			t.Errorf("timeout waiting for message: %s", messageSubstring)
+			return
 		}
 	}
 }
