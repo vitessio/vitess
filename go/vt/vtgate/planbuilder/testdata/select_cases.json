@@ -1735,7 +1735,7 @@
       "Instructions": {
         "OperatorType": "SimpleProjection",
         "ColumnNames": [
-          "avg_col"
+          "0:avg_col"
         ],
         "Columns": [
           0
@@ -2282,7 +2282,7 @@
       "Instructions": {
         "OperatorType": "SimpleProjection",
         "ColumnNames": [
-          "a"
+          "0:a"
         ],
         "Columns": [
           1
@@ -2386,10 +2386,7 @@
       "Instructions": {
         "OperatorType": "SimpleProjection",
         "ColumnNames": [
-          "amount"
-        ],
-        "Columns": [
-          0
+          "0:amount"
         ],
         "Inputs": [
           {
@@ -5116,12 +5113,7 @@
       "Instructions": {
         "OperatorType": "SimpleProjection",
         "ColumnNames": [
-          "",
-          "apa"
-        ],
-        "Columns": [
-          0,
-          1
+          "1:apa"
         ],
         "Inputs": [
           {
@@ -5217,8 +5209,8 @@
       "Instructions": {
         "OperatorType": "SimpleProjection",
         "ColumnNames": [
-          "t0",
-          "t1"
+          "0:t0",
+          "1:t1"
         ],
         "Columns": [
           0,

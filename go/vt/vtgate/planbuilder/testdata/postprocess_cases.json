@@ -77,14 +77,7 @@
       "Instructions": {
         "OperatorType": "SimpleProjection",
         "ColumnNames": [
-          "a",
-          "",
-          ""
-        ],
-        "Columns": [
-          0,
-          1,
-          2
+          "0:a"
         ],
         "Inputs": [
           {
@@ -537,14 +530,7 @@
       "Instructions": {
         "OperatorType": "SimpleProjection",
         "ColumnNames": [
-          "a",
-          "",
-          ""
-        ],
-        "Columns": [
-          0,
-          1,
-          2
+          "0:a"
         ],
         "Inputs": [
           {
@@ -605,14 +591,7 @@
       "Instructions": {
         "OperatorType": "SimpleProjection",
         "ColumnNames": [
-          "a",
-          "",
-          ""
-        ],
-        "Columns": [
-          0,
-          1,
-          2
+          "0:a"
         ],
         "Inputs": [
           {
@@ -673,14 +652,7 @@
       "Instructions": {
         "OperatorType": "SimpleProjection",
         "ColumnNames": [
-          "a",
-          "",
-          ""
-        ],
-        "Columns": [
-          0,
-          1,
-          2
+          "0:a"
         ],
         "Inputs": [
           {
@@ -808,14 +780,7 @@
       "Instructions": {
         "OperatorType": "SimpleProjection",
         "ColumnNames": [
-          "a",
-          "",
-          ""
-        ],
-        "Columns": [
-          0,
-          1,
-          2
+          "0:a"
         ],
         "Inputs": [
           {

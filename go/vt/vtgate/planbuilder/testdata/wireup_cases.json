@@ -8,14 +8,8 @@
       "Instructions": {
         "OperatorType": "SimpleProjection",
         "ColumnNames": [
-          "",
-          "uid",
-          "eid"
-        ],
-        "Columns": [
-          0,
-          1,
-          2
+          "1:uid",
+          "2:eid"
         ],
         "Inputs": [
           {
@@ -72,14 +66,8 @@
       "Instructions": {
         "OperatorType": "SimpleProjection",
         "ColumnNames": [
-          "",
-          "uid",
-          "eid"
-        ],
-        "Columns": [
-          0,
-          1,
-          2
+          "1:uid",
+          "2:eid"
         ],
         "Inputs": [
           {

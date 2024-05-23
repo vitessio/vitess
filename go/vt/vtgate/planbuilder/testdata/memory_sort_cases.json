@@ -290,9 +290,9 @@
       "Instructions": {
         "OperatorType": "SimpleProjection",
         "ColumnNames": [
-          "a",
-          "b",
-          "c"
+          "0:a",
+          "1:b",
+          "2:c"
         ],
         "Columns": [
           0,
@@ -366,9 +366,7 @@
       "Instructions": {
         "OperatorType": "SimpleProjection",
         "ColumnNames": [
-          "a",
-          "",
-          ""
+          "0:a"
         ],
         "Columns": [
           0,

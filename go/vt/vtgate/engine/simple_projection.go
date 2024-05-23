@@ -18,6 +18,7 @@ package engine
 
 import (
 	"context"
+	"fmt"
 
 	"google.golang.org/protobuf/proto"
 
@@ -143,16 +144,17 @@ func (sc *SimpleProjection) description() PrimitiveDescription {
 	if !sc.namesOnly() {
 		other["Columns"] = sc.Cols
 	}
-	emptyColNames := true
-	for _, cName := range sc.ColNames {
+
+	var colNames []string
+	for idx, cName := range sc.ColNames {
 		if cName != "" {
-			emptyColNames = false
-			break
+			colNames = append(colNames, fmt.Sprintf("%d:%s", idx, cName))
 		}
 	}
-	if !emptyColNames {
-		other["ColumnNames"] = sc.ColNames
+	if colNames != nil {
+		other["ColumnNames"] = colNames
 	}
+
 	return PrimitiveDescription{
 		OperatorType: "SimpleProjection",
 		Other:        other,

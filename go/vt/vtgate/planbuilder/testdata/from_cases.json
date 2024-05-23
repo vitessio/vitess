@@ -2801,12 +2801,8 @@
       "Instructions": {
         "OperatorType": "SimpleProjection",
         "ColumnNames": [
-          "uid",
-          "ueid"
-        ],
-        "Columns": [
-          0,
-          1
+          "0:uid",
+          "1:ueid"
         ],
         "Inputs": [
           {
@@ -2863,10 +2859,7 @@
       "Instructions": {
         "OperatorType": "SimpleProjection",
         "ColumnNames": [
-          "k"
-        ],
-        "Columns": [
-          0
+          "0:k"
         ],
         "Inputs": [
           {

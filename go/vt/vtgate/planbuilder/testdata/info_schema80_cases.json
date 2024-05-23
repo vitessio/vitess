@@ -418,12 +418,8 @@
       "Instructions": {
         "OperatorType": "SimpleProjection",
         "ColumnNames": [
-          "name",
-          "expression"
-        ],
-        "Columns": [
-          0,
-          1
+          "0:name",
+          "1:expression"
         ],
         "Inputs": [
           {
