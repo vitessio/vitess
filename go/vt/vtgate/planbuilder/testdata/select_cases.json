@@ -1737,9 +1737,7 @@
         "ColumnNames": [
           "0:avg_col"
         ],
-        "Columns": [
-          0
-        ],
+        "Columns": "0",
         "Inputs": [
           {
             "OperatorType": "Projection",
@@ -2284,9 +2282,7 @@
         "ColumnNames": [
           "0:a"
         ],
-        "Columns": [
-          1
-        ],
+        "Columns": "1",
         "Inputs": [
           {
             "OperatorType": "Join",
@@ -2384,43 +2380,35 @@
       "QueryType": "SELECT",
       "Original": "select user.id * user_id as amount from user, user_extra",
       "Instructions": {
-        "OperatorType": "SimpleProjection",
-        "ColumnNames": [
-          "0:amount"
-        ],
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "R:0",
+        "JoinVars": {
+          "user_id": 0
+        },
+        "TableName": "`user`_user_extra",
         "Inputs": [
           {
-            "OperatorType": "Join",
-            "Variant": "Join",
-            "JoinColumnIndexes": "R:0",
-            "JoinVars": {
-              "user_id": 0
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
             },
-            "TableName": "`user`_user_extra",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select `user`.id from `user` where 1 != 1",
-                "Query": "select `user`.id from `user`",
-                "Table": "`user`"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select :user_id * user_id as amount from user_extra where 1 != 1",
-                "Query": "select :user_id * user_id as amount from user_extra",
-                "Table": "user_extra"
-              }
-            ]
+            "FieldQuery": "select `user`.id from `user` where 1 != 1",
+            "Query": "select `user`.id from `user`",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select :user_id * user_id as amount from user_extra where 1 != 1",
+            "Query": "select :user_id * user_id as amount from user_extra",
+            "Table": "user_extra"
           }
         ]
       },
@@ -2506,9 +2494,10 @@
       "Original": "select col from user where exists(select user_id from user_extra where user_id = 3 and user_id < user.id)",
       "Instructions": {
         "OperatorType": "SimpleProjection",
-        "Columns": [
-          0
+        "ColumnNames": [
+          "0:col"
         ],
+        "Columns": "0",
         "Inputs": [
           {
             "OperatorType": "SemiJoin",
@@ -2563,9 +2552,10 @@
       "Original": "select col from user where exists(select user_id from user_extra where user_id = 3 and user_id < user.id) order by col",
       "Instructions": {
         "OperatorType": "SimpleProjection",
-        "Columns": [
-          0
+        "ColumnNames": [
+          "0:col"
         ],
+        "Columns": "0",
         "Inputs": [
           {
             "OperatorType": "SemiJoin",
@@ -2688,9 +2678,7 @@
       "Original": "select 1 from user u where exists (select 1 from user_extra ue where ue.col = u.col and u.col = ue.col2)",
       "Instructions": {
         "OperatorType": "SimpleProjection",
-        "Columns": [
-          0
-        ],
+        "Columns": "0",
         "Inputs": [
           {
             "OperatorType": "SemiJoin",
@@ -4563,10 +4551,7 @@
         "Inputs": [
           {
             "OperatorType": "SimpleProjection",
-            "Columns": [
-              1,
-              0
-            ],
+            "Columns": "1,0",
             "Inputs": [
               {
                 "OperatorType": "Aggregate",
@@ -5111,41 +5096,33 @@
       "QueryType": "SELECT",
       "Original": "select u.foo, ue.foo as apa from user u, user_extra ue order by foo ",
       "Instructions": {
-        "OperatorType": "SimpleProjection",
-        "ColumnNames": [
-          "1:apa"
-        ],
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0,R:0",
+        "TableName": "`user`_user_extra",
         "Inputs": [
           {
-            "OperatorType": "Join",
-            "Variant": "Join",
-            "JoinColumnIndexes": "L:0,R:0",
-            "TableName": "`user`_user_extra",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select u.foo, weight_string(u.foo) from `user` as u where 1 != 1",
-                "OrderBy": "(0|1) ASC",
-                "Query": "select u.foo, weight_string(u.foo) from `user` as u order by u.foo asc",
-                "Table": "`user`"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select ue.foo as apa from user_extra as ue where 1 != 1",
-                "Query": "select ue.foo as apa from user_extra as ue",
-                "Table": "user_extra"
-              }
-            ]
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select u.foo, weight_string(u.foo) from `user` as u where 1 != 1",
+            "OrderBy": "(0|1) ASC",
+            "Query": "select u.foo, weight_string(u.foo) from `user` as u order by u.foo asc",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select ue.foo as apa from user_extra as ue where 1 != 1",
+            "Query": "select ue.foo as apa from user_extra as ue",
+            "Table": "user_extra"
           }
         ]
       },
@@ -5212,10 +5189,7 @@
           "0:t0",
           "1:t1"
         ],
-        "Columns": [
-          0,
-          0
-        ],
+        "Columns": "0,0",
         "Inputs": [
           {
             "OperatorType": "Join",

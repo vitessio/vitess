@@ -108,9 +108,10 @@
       "Original": "(SELECT id FROM user ORDER BY id DESC LIMIT 1) UNION ALL (SELECT id FROM music ORDER BY id DESC LIMIT 1)",
       "Instructions": {
         "OperatorType": "SimpleProjection",
-        "Columns": [
-          0
+        "ColumnNames": [
+          "0:id"
         ],
+        "Columns": "0",
         "Inputs": [
           {
             "OperatorType": "Concatenate",
@@ -238,9 +239,10 @@
       "Original": "(select id from user order by id limit 5) union all (select id from music order by id desc limit 5)",
       "Instructions": {
         "OperatorType": "SimpleProjection",
-        "Columns": [
-          0
+        "ColumnNames": [
+          "0:id"
         ],
+        "Columns": "0",
         "Inputs": [
           {
             "OperatorType": "Concatenate",

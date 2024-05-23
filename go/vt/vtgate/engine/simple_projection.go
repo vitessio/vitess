@@ -19,9 +19,12 @@ package engine
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
 
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -142,7 +145,7 @@ func (sc *SimpleProjection) renameFields(fields []*querypb.Field) {
 func (sc *SimpleProjection) description() PrimitiveDescription {
 	other := map[string]any{}
 	if !sc.namesOnly() {
-		other["Columns"] = sc.Cols
+		other["Columns"] = strings.Join(slice.Map(sc.Cols, strconv.Itoa), ",")
 	}
 
 	var colNames []string

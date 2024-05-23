@@ -416,48 +416,39 @@
       "QueryType": "SELECT",
       "Original": "SELECT cc.constraint_name AS 'name', cc.check_clause AS 'expression' FROM information_schema.check_constraints cc JOIN information_schema.table_constraints tc USING (constraint_schema, constraint_name) WHERE tc.table_schema = 'table_schema' AND tc.table_name = 'table_name' AND cc.constraint_schema = 'constraint_schema'",
       "Instructions": {
-        "OperatorType": "SimpleProjection",
-        "ColumnNames": [
-          "0:name",
-          "1:expression"
-        ],
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0,L:1",
+        "JoinVars": {
+          "cc_constraint_name": 0,
+          "cc_constraint_schema": 2
+        },
+        "TableName": "information_schema.check_constraints_information_schema.table_constraints",
         "Inputs": [
           {
-            "OperatorType": "Join",
-            "Variant": "Join",
-            "JoinColumnIndexes": "L:0,L:1",
-            "JoinVars": {
-              "cc_constraint_name": 0,
-              "cc_constraint_schema": 2
+            "OperatorType": "Route",
+            "Variant": "DBA",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
             },
-            "TableName": "information_schema.check_constraints_information_schema.table_constraints",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "DBA",
-                "Keyspace": {
-                  "Name": "main",
-                  "Sharded": false
-                },
-                "FieldQuery": "select cc.constraint_name as `name`, cc.check_clause as expression, cc.constraint_schema from information_schema.check_constraints as cc where 1 != 1",
-                "Query": "select cc.constraint_name as `name`, cc.check_clause as expression, cc.constraint_schema from information_schema.check_constraints as cc where cc.constraint_schema = :__vtschemaname /* VARCHAR */",
-                "SysTableTableSchema": "['constraint_schema']",
-                "Table": "information_schema.check_constraints"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "DBA",
-                "Keyspace": {
-                  "Name": "main",
-                  "Sharded": false
-                },
-                "FieldQuery": "select 1 from information_schema.table_constraints as tc where 1 != 1",
-                "Query": "select 1 from information_schema.table_constraints as tc where tc.table_schema = :__vtschemaname /* VARCHAR */ and tc.table_name = :tc_table_name /* VARCHAR */ and tc.constraint_name = :cc_constraint_name and tc.constraint_schema = :__vtschemaname /* VARCHAR */",
-                "SysTableTableName": "[tc_table_name:'table_name']",
-                "SysTableTableSchema": "['table_schema', :cc_constraint_schema]",
-                "Table": "information_schema.table_constraints"
-              }
-            ]
+            "FieldQuery": "select cc.constraint_name as `name`, cc.check_clause as expression, cc.constraint_schema from information_schema.check_constraints as cc where 1 != 1",
+            "Query": "select cc.constraint_name as `name`, cc.check_clause as expression, cc.constraint_schema from information_schema.check_constraints as cc where cc.constraint_schema = :__vtschemaname /* VARCHAR */",
+            "SysTableTableSchema": "['constraint_schema']",
+            "Table": "information_schema.check_constraints"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "DBA",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select 1 from information_schema.table_constraints as tc where 1 != 1",
+            "Query": "select 1 from information_schema.table_constraints as tc where tc.table_schema = :__vtschemaname /* VARCHAR */ and tc.table_name = :tc_table_name /* VARCHAR */ and tc.constraint_name = :cc_constraint_name and tc.constraint_schema = :__vtschemaname /* VARCHAR */",
+            "SysTableTableName": "[tc_table_name:'table_name']",
+            "SysTableTableSchema": "['table_schema', :cc_constraint_schema]",
+            "Table": "information_schema.table_constraints"
           }
         ]
       }

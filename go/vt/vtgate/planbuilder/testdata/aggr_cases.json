@@ -3414,9 +3414,7 @@
         "Inputs": [
           {
             "OperatorType": "SimpleProjection",
-            "Columns": [
-              2
-            ],
+            "Columns": "2",
             "Inputs": [
               {
                 "OperatorType": "Limit",
@@ -3457,9 +3455,7 @@
         "Inputs": [
           {
             "OperatorType": "SimpleProjection",
-            "Columns": [
-              3
-            ],
+            "Columns": "3",
             "Inputs": [
               {
                 "OperatorType": "Limit",
@@ -3572,11 +3568,7 @@
         "Inputs": [
           {
             "OperatorType": "SimpleProjection",
-            "Columns": [
-              1,
-              2,
-              3
-            ],
+            "Columns": "1,2,3",
             "Inputs": [
               {
                 "OperatorType": "Limit",
@@ -5523,11 +5515,7 @@
                 "Inputs": [
                   {
                     "OperatorType": "SimpleProjection",
-                    "Columns": [
-                      1,
-                      0,
-                      2
-                    ],
+                    "Columns": "1,0,2",
                     "Inputs": [
                       {
                         "OperatorType": "Aggregate",
@@ -5878,10 +5866,7 @@
         "Inputs": [
           {
             "OperatorType": "SimpleProjection",
-            "Columns": [
-              1,
-              1
-            ],
+            "Columns": "1,1",
             "Inputs": [
               {
                 "OperatorType": "Limit",
@@ -5951,10 +5936,7 @@
                     "Inputs": [
                       {
                         "OperatorType": "SimpleProjection",
-                        "Columns": [
-                          2,
-                          1
-                        ],
+                        "Columns": "2,1",
                         "Inputs": [
                           {
                             "OperatorType": "Aggregate",
@@ -6532,12 +6514,7 @@
                         "Inputs": [
                           {
                             "OperatorType": "SimpleProjection",
-                            "Columns": [
-                              2,
-                              0,
-                              1,
-                              3
-                            ],
+                            "Columns": "2,0,1,3",
                             "Inputs": [
                               {
                                 "OperatorType": "Sort",
