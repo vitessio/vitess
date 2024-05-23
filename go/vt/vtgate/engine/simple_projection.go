@@ -90,6 +90,10 @@ func (sc *SimpleProjection) Inputs() ([]Primitive, []map[string]any) {
 // buildResult builds a new result by pulling the necessary columns from
 // the input in the requested order.
 func (sc *SimpleProjection) buildResult(inner *sqltypes.Result) *sqltypes.Result {
+	if sc.namesOnly() {
+		sc.renameFields(inner.Fields)
+		return inner
+	}
 	result := &sqltypes.Result{Fields: sc.buildFields(inner)}
 	result.Rows = make([][]sqltypes.Value, 0, len(inner.Rows))
 	for _, innerRow := range inner.Rows {
@@ -101,6 +105,10 @@ func (sc *SimpleProjection) buildResult(inner *sqltypes.Result) *sqltypes.Result
 	}
 	result.RowsAffected = inner.RowsAffected
 	return result
+}
+
+func (sc *SimpleProjection) namesOnly() bool {
+	return sc.Cols == nil
 }
 
 func (sc *SimpleProjection) buildFields(inner *sqltypes.Result) []*querypb.Field {
@@ -119,9 +127,21 @@ func (sc *SimpleProjection) buildFields(inner *sqltypes.Result) []*querypb.Field
 	return fields
 }
 
+func (sc *SimpleProjection) renameFields(fields []*querypb.Field) {
+	if len(fields) == 0 {
+		return
+	}
+	for idx, name := range sc.ColNames {
+		if sc.ColNames[idx] != "" {
+			fields[idx].Name = name
+		}
+	}
+}
+
 func (sc *SimpleProjection) description() PrimitiveDescription {
-	other := map[string]any{
-		"Columns": sc.Cols,
+	other := map[string]any{}
+	if !sc.namesOnly() {
+		other["Columns"] = sc.Cols
 	}
 	emptyColNames := true
 	for _, cName := range sc.ColNames {
