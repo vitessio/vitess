@@ -11,7 +11,6 @@ import (
 // select oid, c.cid, p.pid, mname, qty, price, name, description from orders o join customer c on o.cid = c.cid join product p on p.pid = o.pid;
 const mvSchema = `
 	CREATE TABLE orders_view (
-	    id bigint NOT NULL AUTO_INCREMENT,
 		oid bigint NOT NULL,
 		cid bigint NOT NULL,
 		pid bigint NOT NULL,
@@ -20,11 +19,9 @@ const mvSchema = `
 		price decimal(10,2) NOT NULL,
 		name varchar(128) NOT NULL,
 		description varchar(128) NOT NULL,
-		PRIMARY KEY (id)
+		PRIMARY KEY (oid)
 	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 `
-
-const materializeViewSpec = `{"workflow": "wf1", "source_keyspace": "ks1", "target_keyspace": "ks2", "table_settings": [ {"target_table": "tx", "source_expression": "select * from tx where typ>=2 and val > 'abc'"  }] }`
 
 func TestMaterializeView(t *testing.T) {
 	setSidecarDBName("_vt")

@@ -22,6 +22,8 @@ import (
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
@@ -198,8 +200,35 @@ func MatchTable(tableName string, filter *binlogdatapb.Filter) (*binlogdatapb.Ru
 	return nil, nil
 }
 
+func buildTablePlanForJoin(tableName string, rule *binlogdatapb.Rule, colInfos []*ColumnInfo, lastpk *sqltypes.Result,
+	stats *binlogplayer.Stats, source *binlogdatapb.BinlogSource, collationEnv *collations.Environment, parser *sqlparser.Parser) (*TablePlan, error) {
+	comments := fmt.Sprintf("/*vt+ view=%s */", rule.Match)
+	filter := strings.Replace(rule.Filter, "select", "select "+comments, 1)
+	sendRule := &binlogdatapb.Rule{
+		Filter: filter,
+	}
+	tablePlan := &TablePlan{
+		TargetName:       tableName,
+		SendRule:         sendRule,
+		Lastpk:           lastpk,
+		Stats:            stats,
+		ConvertCharset:   rule.ConvertCharset,
+		ConvertIntToEnum: rule.ConvertIntToEnum,
+		CollationEnv:     collationEnv,
+	}
+	return tablePlan, nil
+}
+
 func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*ColumnInfo, lastpk *sqltypes.Result,
 	stats *binlogplayer.Stats, source *binlogdatapb.BinlogSource, collationEnv *collations.Environment, parser *sqlparser.Parser) (*TablePlan, error) {
+
+	isJoin, err := vttablet.IsJoin(parser, rule.Filter)
+	if err != nil {
+		return nil, err
+	}
+	if isJoin {
+		return buildTablePlanForJoin(tableName, rule, colInfos, lastpk, stats, source, collationEnv, parser)
+	}
 
 	planError := func(err error, query string) error {
 		// Use the error string here to ensure things are uniform across
@@ -393,9 +422,8 @@ func analyzeSelectFrom(query string, parser *sqlparser.Parser) (sel *sqlparser.S
 	if sel.Distinct {
 		return nil, "", fmt.Errorf("unsupported distinct clause")
 	}
-	if len(sel.From) > 1 {
-		return nil, "", fmt.Errorf("unsupported multi-table usage")
-	}
+	log.Infof("sel.From: %+v", sel.From)
+
 	node, ok := sel.From[0].(*sqlparser.AliasedTableExpr)
 	if !ok {
 		return nil, "", fmt.Errorf("unsupported from expression (%T)", sel.From[0])
@@ -426,10 +454,10 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 	as := aliased.As
 	if as.IsEmpty() {
 		// Require all non-trivial expressions to have an alias.
-		if colAs, ok := aliased.Expr.(*sqlparser.ColName); ok && colAs.Qualifier.IsEmpty() {
+		if colAs, ok := aliased.Expr.(*sqlparser.ColName); ok /* FIXME/Rohit removed for joins? && colAs.Qualifier.IsEmpty() */ {
 			as = colAs.Name
 		} else {
-			return nil, fmt.Errorf("expression needs an alias: %v", sqlparser.String(aliased))
+			return nil, fmt.Errorf("expression needs an alias: %v, expr %v %q %+v", sqlparser.String(aliased), aliased.Expr, aliased.Expr, aliased.Expr)
 		}
 	}
 	cexpr := &colExpr{
@@ -447,7 +475,7 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 			switch node := node.(type) {
 			case *sqlparser.ColName:
 				if !node.Qualifier.IsEmpty() {
-					return false, fmt.Errorf("unsupported qualifier for column: %v", sqlparser.String(node))
+					// return false, fmt.Errorf("unsupported qualifier for column: %v", sqlparser.String(node))
 				}
 				colName = node.Name
 			}
@@ -511,7 +539,7 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 		switch node := node.(type) {
 		case *sqlparser.ColName:
 			if !node.Qualifier.IsEmpty() {
-				return false, fmt.Errorf("unsupported qualifier for column: %v", sqlparser.String(node))
+				// return false, fmt.Errorf("unsupported qualifier for column: %v", sqlparser.String(node))
 			}
 			tpb.addCol(node.Name)
 			cexpr.references[node.Name.String()] = true
