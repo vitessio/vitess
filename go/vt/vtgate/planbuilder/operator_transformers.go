@@ -135,7 +135,7 @@ func transformOneUpsert(ctx *plancontext.PlanningContext, source operators.Upser
 }
 
 func transformSequential(ctx *plancontext.PlanningContext, op *operators.Sequential) (logicalPlan, error) {
-	var lps []logicalPlan
+	var lps []engine.Primitive
 	for _, source := range op.Sources {
 		lp, err := transformToLogicalPlan(ctx, source)
 		if err != nil {
@@ -148,11 +148,10 @@ func transformSequential(ctx *plancontext.PlanningContext, op *operators.Sequent
 				ins.PreventAutoCommit = true
 			}
 		}
-		lps = append(lps, lp)
+		lps = append(lps, lp.Primitive())
 	}
-	return &sequential{
-		sources: lps,
-	}, nil
+
+	return &primitiveWrapper{prim: engine.NewSequential(lps)}, nil
 }
 
 func transformInsertionSelection(ctx *plancontext.PlanningContext, op *operators.InsertSelection) (logicalPlan, error) {
@@ -402,7 +401,7 @@ func transformProjection(ctx *plancontext.PlanningContext, op *operators.Project
 		if len(op.Source.GetColumns(ctx)) == len(cols) && offsetInInputOrder(cols) {
 			cols = nil
 		}
-		return newSimpleProjection(cols, colNames, src)
+		return newSimpleProjection(cols, colNames, src.Primitive())
 	}
 
 	ap, err := op.GetAliasedProjections()
@@ -452,14 +451,12 @@ func getEvalEngineExpr(ctx *plancontext.PlanningContext, pe *operators.ProjExpr)
 }
 
 // newSimpleProjection creates a simple projections
-func newSimpleProjection(cols []int, colNames []string, src logicalPlan) (logicalPlan, error) {
-	return &simpleProjection{
-		logicalPlanCommon: newBuilderCommon(src),
-		eSimpleProj: &engine.SimpleProjection{
-			Cols:     cols,
-			ColNames: colNames,
-		},
-	}, nil
+func newSimpleProjection(cols []int, colNames []string, src engine.Primitive) (logicalPlan, error) {
+	return &primitiveWrapper{prim: &engine.SimpleProjection{
+		Input:    src,
+		Cols:     cols,
+		ColNames: colNames,
+	}}, nil
 }
 
 // elementsMatchIndices checks if the elements of the input slice match

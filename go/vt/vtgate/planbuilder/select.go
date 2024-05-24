@@ -169,7 +169,19 @@ func buildSQLCalcFoundRowsPlan(
 	if err != nil {
 		return nil, nil, err
 	}
-	return &sqlCalcFoundRows{LimitQuery: limitPlan, CountQuery: countPlan}, tablesUsed, nil
+
+	countPrim := countPlan.Primitive()
+	rb, ok := countPrim.(*engine.Route)
+	if ok {
+		// if our count query is an aggregation, we want the no-match result to still return a zero
+		rb.NoRoutesSpecialHandling = true
+	}
+	lp := &primitiveWrapper{&engine.SQLCalcFoundRows{
+		LimitPrimitive: limitPlan.Primitive(),
+		CountPrimitive: countPrim,
+	}}
+
+	return lp, tablesUsed, nil
 }
 
 func gen4PredicateRewrite(stmt sqlparser.Statement, getPlan func(selStatement sqlparser.SelectStatement) (logicalPlan, []string, error)) (logicalPlan, []string) {

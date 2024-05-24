@@ -26,20 +26,3 @@ type logicalPlan interface {
 	// Primitive returns the underlying primitive.
 	Primitive() engine.Primitive
 }
-
-// -------------------------------------------------------------------------
-
-// logicalPlanCommon implements some common functionality of builders.
-// Make sure to override in case behavior needs to be changed.
-type logicalPlanCommon struct {
-	order int
-	input logicalPlan
-}
-
-func newBuilderCommon(input logicalPlan) logicalPlanCommon {
-	return logicalPlanCommon{input: input}
-}
-
-func (bc *logicalPlanCommon) Order() int {
-	return bc.order
-}
