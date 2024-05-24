@@ -106,16 +106,15 @@ func transformDMLWithInput(ctx *plancontext.PlanningContext, op *operators.DMLWi
 }
 
 func transformUpsert(ctx *plancontext.PlanningContext, op *operators.Upsert) (logicalPlan, error) {
-	u := &upsert{}
+	u := &engine.Upsert{}
 	for _, source := range op.Sources {
 		iLp, uLp, err := transformOneUpsert(ctx, source)
 		if err != nil {
 			return nil, err
 		}
-		u.insert = append(u.insert, iLp)
-		u.update = append(u.update, uLp)
+		u.AddUpsert(iLp.Primitive(), uLp.Primitive())
 	}
-	return u, nil
+	return &primitiveWrapper{prim: u}, nil
 }
 
 func transformOneUpsert(ctx *plancontext.PlanningContext, source operators.UpsertSource) (iLp, uLp logicalPlan, err error) {
@@ -252,7 +251,13 @@ func transformSubQuery(ctx *plancontext.PlanningContext, op *operators.SubQuery)
 	}
 	if len(cols) == 0 {
 		// no correlation, so uncorrelated it is
-		return newUncorrelatedSubquery(op.FilterType, op.SubqueryValueName, op.HasValuesName, inner, outer), nil
+		return &primitiveWrapper{prim: &engine.UncorrelatedSubquery{
+			Opcode:         op.FilterType,
+			SubqueryResult: op.SubqueryValueName,
+			HasValues:      op.HasValuesName,
+			Subquery:       inner.Primitive(),
+			Outer:          outer.Primitive(),
+		}}, nil
 	}
 
 	return &primitiveWrapper{prim: &engine.SemiJoin{
@@ -959,6 +964,38 @@ func transformHashJoin(ctx *plancontext.PlanningContext, op *operators.HashJoin)
 			Values:         comparisonType.Values(),
 		},
 	}, nil
+}
+
+func transformVindexPlan(ctx *plancontext.PlanningContext, op *operators.Vindex) (logicalPlan, error) {
+	single, ok := op.Vindex.(vindexes.SingleColumn)
+	if !ok {
+		return nil, vterrors.VT12001("multi-column vindexes not supported")
+	}
+
+	expr, err := evalengine.Translate(op.Value, &evalengine.Config{
+		Collation:   ctx.SemTable.Collation,
+		ResolveType: ctx.SemTable.TypeForExpr,
+		Environment: ctx.VSchema.Environment(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	prim := &engine.VindexFunc{
+		Opcode: op.OpCode,
+		Vindex: single,
+		Value:  expr,
+	}
+
+	for _, col := range op.Columns {
+		err := SupplyProjection(prim, &sqlparser.AliasedExpr{
+			Expr: col,
+			As:   sqlparser.IdentifierCI{},
+		}, false)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return &primitiveWrapper{prim: prim}, nil
 }
 
 func generateQuery(statement sqlparser.Statement) string {
