@@ -17,20 +17,31 @@ limitations under the License.
 package topo
 
 import (
-	"fmt"
+	"context"
 )
 
-// RoutingRulesLock is a wrapper over TopoLock, to serialize updates to routing rules.
-type RoutingRulesLock struct {
-	*TopoLock
+type routingRulesType struct{}
+
+var _ lockType = (*routingRulesType)(nil)
+
+func (s *routingRulesType) Type() string {
+	return "routing_rules"
 }
 
-func NewRoutingRulesLock(ts *Server, name string) *RoutingRulesLock {
-	return &RoutingRulesLock{
-		TopoLock: &TopoLock{
-			Path: RoutingRulesPath,
-			Name: fmt.Sprintf("RoutingRules::%s", name),
-			ts:   ts,
-		},
-	}
+func (s *routingRulesType) ResourceName() string {
+	return RoutingRulesPath
+}
+
+func (s *routingRulesType) Path() string {
+	return RoutingRulesPath
+}
+
+// LockRoutingRules acquires a lock for routing rules.
+func (ts *Server) LockRoutingRules(ctx context.Context, action string) (context.Context, func(*error), error) {
+	return ts.internalLock(ctx, &routingRulesType{}, action, true)
+}
+
+// CheckRoutingRulesLocked checks if a lock for routing rules is still possessed.
+func CheckRoutingRulesLocked(ctx context.Context) error {
+	return checkLocked(ctx, &routingRulesType{})
 }

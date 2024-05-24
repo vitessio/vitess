@@ -166,7 +166,7 @@ func buildKeyspaceRoutingRules(rules *map[string]string) *vschemapb.KeyspaceRout
 // saveKeyspaceRoutingRulesLocked saves the keyspace routing rules in the topo server. It expects the caller to
 // have acquired a RoutingRulesLock.
 func saveKeyspaceRoutingRulesLocked(ctx context.Context, ts *topo.Server, rules map[string]string) error {
-	if err := topo.CheckLocked(ctx, topo.RoutingRulesPath); err != nil {
+	if err := topo.CheckRoutingRulesLocked(ctx); err != nil {
 		return err
 	}
 	return ts.SaveKeyspaceRoutingRules(ctx, buildKeyspaceRoutingRules(&rules))
@@ -180,7 +180,7 @@ func saveKeyspaceRoutingRulesLocked(ctx context.Context, ts *topo.Server, rules 
 // then modify the keyspace routing rules in-place.
 func UpdateKeyspaceRoutingRules(ctx context.Context, ts *topo.Server, reason string,
 	update func(ctx context.Context, rules *map[string]string) error) (err error) {
-	lockCtx, unlock, lockErr := topo.NewRoutingRulesLock(ts, reason).Lock(ctx)
+	lockCtx, unlock, lockErr := ts.LockRoutingRules(ctx, reason)
 	if lockErr != nil {
 		// If the key does not yet exist then let's create it.
 		if !topo.IsErrType(lockErr, topo.NoNode) {

@@ -339,11 +339,7 @@ func (ts *Server) internalLockShard(ctx context.Context, keyspace, shard, action
 	l := newLock(action)
 	var lockDescriptor LockDescriptor
 	var err error
-	if isBlocking {
-		lockDescriptor, err = l.lockShard(ctx, ts, keyspace, shard)
-	} else {
-		lockDescriptor, err = l.tryLockShard(ctx, ts, keyspace, shard)
-	}
+	lockDescriptor, err = l.internalLockShard(ctx, ts, keyspace, shard, isBlocking)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -399,18 +395,6 @@ func CheckShardLocked(ctx context.Context, keyspace, shard string) error {
 
 	// Check the lock server implementation still holds the lock.
 	return li.lockDescriptor.Check(ctx)
-}
-
-// lockShard will lock the shard in the topology server.
-// UnlockShard should be called if this returns no error.
-func (l *Lock) lockShard(ctx context.Context, ts *Server, keyspace, shard string) (LockDescriptor, error) {
-	return l.internalLockShard(ctx, ts, keyspace, shard, true)
-}
-
-// tryLockShard will lock the shard in the topology server but unlike `lockShard` it fail-fast if not able to get lock
-// UnlockShard should be called if this returns no error.
-func (l *Lock) tryLockShard(ctx context.Context, ts *Server, keyspace, shard string) (LockDescriptor, error) {
-	return l.internalLockShard(ctx, ts, keyspace, shard, false)
 }
 
 func (l *Lock) internalLockShard(ctx context.Context, ts *Server, keyspace, shard string, isBlocking bool) (LockDescriptor, error) {
