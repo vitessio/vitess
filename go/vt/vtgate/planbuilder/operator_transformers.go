@@ -455,20 +455,16 @@ func transformFilter(ctx *plancontext.PlanningContext, op *operators.Filter) (lo
 	}
 
 	predicate := op.PredicateWithOffsets
-	ast := ctx.SemTable.AndExpressions(op.Predicates...)
-
 	if predicate == nil {
 		panic("this should have already been done")
 	}
 
-	return &filter{
-		logicalPlanCommon: newBuilderCommon(plan),
-		efilter: &engine.Filter{
-			Predicate:    predicate,
-			ASTPredicate: ast,
-			Truncate:     op.Truncate,
-		},
-	}, nil
+	return &primitiveWrapper{prim: &engine.Filter{
+		Input:        plan.Primitive(),
+		Predicate:    predicate,
+		ASTPredicate: ctx.SemTable.AndExpressions(op.Predicates...),
+		Truncate:     op.Truncate,
+	}}, nil
 }
 
 func transformApplyJoinPlan(ctx *plancontext.PlanningContext, n *operators.ApplyJoin) (logicalPlan, error) {
