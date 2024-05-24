@@ -37,7 +37,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-func transformToLogicalPlan(ctx *plancontext.PlanningContext, op operators.Operator) (logicalPlan, error) {
+func transformToLogicalPlan(ctx *plancontext.PlanningContext, op operators.Operator) (engine.Primitive, error) {
 	switch op := op.(type) {
 	case *operators.Route:
 		return transformRoutePlan(ctx, op)
@@ -82,7 +82,7 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op operators.Opera
 	return nil, vterrors.VT13001(fmt.Sprintf("unknown type encountered: %T (transformToLogicalPlan)", op))
 }
 
-func transformDMLWithInput(ctx *plancontext.PlanningContext, op *operators.DMLWithInput) (logicalPlan, error) {
+func transformDMLWithInput(ctx *plancontext.PlanningContext, op *operators.DMLWithInput) (engine.Primitive, error) {
 	input, err := transformToLogicalPlan(ctx, op.Source)
 	if err != nil {
 		return nil, err
@@ -94,66 +94,61 @@ func transformDMLWithInput(ctx *plancontext.PlanningContext, op *operators.DMLWi
 		if err != nil {
 			return nil, err
 		}
-		dmls = append(dmls, del.Primitive())
+		dmls = append(dmls, del)
 	}
 
-	return &primitiveWrapper{prim: &engine.DMLWithInput{
+	return &engine.DMLWithInput{
 		DMLs:       dmls,
-		Input:      input.Primitive(),
+		Input:      input,
 		OutputCols: op.Offsets,
 		BVList:     op.BvList,
-	}}, nil
+	}, nil
 }
 
-func transformUpsert(ctx *plancontext.PlanningContext, op *operators.Upsert) (logicalPlan, error) {
-	u := &engine.Upsert{}
+func transformUpsert(ctx *plancontext.PlanningContext, op *operators.Upsert) (engine.Primitive, error) {
+	upsert := &engine.Upsert{}
 	for _, source := range op.Sources {
 		iLp, uLp, err := transformOneUpsert(ctx, source)
 		if err != nil {
 			return nil, err
 		}
-		u.AddUpsert(iLp.Primitive(), uLp.Primitive())
+		upsert.AddUpsert(iLp, uLp)
 	}
-	return &primitiveWrapper{prim: u}, nil
+	return upsert, nil
 }
 
-func transformOneUpsert(ctx *plancontext.PlanningContext, source operators.UpsertSource) (iLp, uLp logicalPlan, err error) {
+func transformOneUpsert(ctx *plancontext.PlanningContext, source operators.UpsertSource) (iLp, uLp engine.Primitive, err error) {
 	iLp, err = transformToLogicalPlan(ctx, source.Insert)
 	if err != nil {
 		return
 	}
-	wrap, ok := iLp.(*primitiveWrapper)
+	ins, ok := iLp.(*engine.Insert)
 	if ok {
-		ins, ok := wrap.prim.(*engine.Insert)
-		if ok {
-			ins.PreventAutoCommit = true
-		}
+		ins.PreventAutoCommit = true
 	}
 	uLp, err = transformToLogicalPlan(ctx, source.Update)
 	return
 }
 
-func transformSequential(ctx *plancontext.PlanningContext, op *operators.Sequential) (logicalPlan, error) {
-	var lps []engine.Primitive
+func transformSequential(ctx *plancontext.PlanningContext, op *operators.Sequential) (engine.Primitive, error) {
+	var prims []engine.Primitive
 	for _, source := range op.Sources {
-		lp, err := transformToLogicalPlan(ctx, source)
+		prim, err := transformToLogicalPlan(ctx, source)
 		if err != nil {
 			return nil, err
 		}
-		wrap, ok := lp.(*primitiveWrapper)
+		ins, ok := prim.(*engine.Insert)
 		if ok {
-			ins, ok := wrap.prim.(*engine.Insert)
-			if ok {
-				ins.PreventAutoCommit = true
-			}
+			ins.PreventAutoCommit = true
 		}
-		lps = append(lps, lp.Primitive())
+
+		prims = append(prims, prim)
 	}
 
-	return &primitiveWrapper{prim: engine.NewSequential(lps)}, nil
+	return engine.NewSequential(prims), nil
 }
 
-func transformInsertionSelection(ctx *plancontext.PlanningContext, op *operators.InsertSelection) (logicalPlan, error) {
+func transformInsertionSelection(ctx *plancontext.PlanningContext, op *operators.InsertSelection) (engine.Primitive, error) {
 	rb, isRoute := op.Insert.(*operators.Route)
 	if !isRoute {
 		return nil, vterrors.VT13001(fmt.Sprintf("Incorrect type encountered: %T (transformInsertionSelection)", op.Insert))
@@ -188,12 +183,12 @@ func transformInsertionSelection(ctx *plancontext.PlanningContext, op *operators
 		return nil, err
 	}
 
-	eins.Input = selectionPlan.Primitive()
-	return &primitiveWrapper{prim: eins}, nil
+	eins.Input = selectionPlan
+	return eins, nil
 }
 
 // transformFkCascade transforms a FkCascade operator into a logical plan.
-func transformFkCascade(ctx *plancontext.PlanningContext, fkc *operators.FkCascade) (logicalPlan, error) {
+func transformFkCascade(ctx *plancontext.PlanningContext, fkc *operators.FkCascade) (engine.Primitive, error) {
 	// We convert the parent operator to a logical plan.
 	parentLP, err := transformToLogicalPlan(ctx, fkc.Parent)
 	if err != nil {
@@ -216,7 +211,7 @@ func transformFkCascade(ctx *plancontext.PlanningContext, fkc *operators.FkCasca
 			return nil, err
 		}
 
-		childEngine := childLP.Primitive()
+		childEngine := childLP
 		children = append(children, &engine.FkChild{
 			BVName:         child.BVName,
 			Cols:           child.Cols,
@@ -225,16 +220,14 @@ func transformFkCascade(ctx *plancontext.PlanningContext, fkc *operators.FkCasca
 		})
 	}
 
-	return &primitiveWrapper{
-		prim: &engine.FkCascade{
-			Selection: selLP.Primitive(),
-			Children:  children,
-			Parent:    parentLP.Primitive(),
-		},
+	return &engine.FkCascade{
+		Selection: selLP,
+		Children:  children,
+		Parent:    parentLP,
 	}, nil
 }
 
-func transformSubQuery(ctx *plancontext.PlanningContext, op *operators.SubQuery) (logicalPlan, error) {
+func transformSubQuery(ctx *plancontext.PlanningContext, op *operators.SubQuery) (engine.Primitive, error) {
 	outer, err := transformToLogicalPlan(ctx, op.Outer)
 	if err != nil {
 		return nil, err
@@ -251,24 +244,24 @@ func transformSubQuery(ctx *plancontext.PlanningContext, op *operators.SubQuery)
 	}
 	if len(cols) == 0 {
 		// no correlation, so uncorrelated it is
-		return &primitiveWrapper{prim: &engine.UncorrelatedSubquery{
+		return &engine.UncorrelatedSubquery{
 			Opcode:         op.FilterType,
 			SubqueryResult: op.SubqueryValueName,
 			HasValues:      op.HasValuesName,
-			Subquery:       inner.Primitive(),
-			Outer:          outer.Primitive(),
-		}}, nil
+			Subquery:       inner,
+			Outer:          outer,
+		}, nil
 	}
 
-	return &primitiveWrapper{prim: &engine.SemiJoin{
-		Left:  outer.Primitive(),
-		Right: inner.Primitive(),
+	return &engine.SemiJoin{
+		Left:  outer,
+		Right: inner,
 		Vars:  op.Vars,
-	}}, nil
+	}, nil
 }
 
 // transformFkVerify transforms a FkVerify operator into a logical plan.
-func transformFkVerify(ctx *plancontext.PlanningContext, fkv *operators.FkVerify) (logicalPlan, error) {
+func transformFkVerify(ctx *plancontext.PlanningContext, fkv *operators.FkVerify) (engine.Primitive, error) {
 	inputLP, err := transformToLogicalPlan(ctx, fkv.Input)
 	if err != nil {
 		return nil, err
@@ -286,21 +279,19 @@ func transformFkVerify(ctx *plancontext.PlanningContext, fkv *operators.FkVerify
 			return nil, err
 		}
 		verify = append(verify, &engine.Verify{
-			Exec: lp.Primitive(),
+			Exec: lp,
 			Typ:  v.Typ,
 		})
 	}
 
-	return &primitiveWrapper{
-		prim: &engine.FkVerify{
-			Verify: verify,
-			Exec:   inputLP.Primitive(),
-		},
+	return &engine.FkVerify{
+		Verify: verify,
+		Exec:   inputLP,
 	}, nil
 
 }
 
-func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggregator) (logicalPlan, error) {
+func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggregator) (engine.Primitive, error) {
 	if op.WithRollup {
 		return nil, vterrors.VT12001("GROUP BY WITH ROLLUP not supported for sharded queries")
 	}
@@ -337,35 +328,35 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 	}
 
 	if len(groupByKeys) == 0 {
-		return &primitiveWrapper{prim: &engine.ScalarAggregate{
+		return &engine.ScalarAggregate{
 			Aggregates:          aggregates,
 			TruncateColumnCount: op.ResultColumns,
-			Input:               src.Primitive(),
-		}}, nil
+			Input:               src,
+		}, nil
 	}
 
-	return &primitiveWrapper{&engine.OrderedAggregate{
+	return &engine.OrderedAggregate{
 		Aggregates:          aggregates,
 		GroupByKeys:         groupByKeys,
 		TruncateColumnCount: op.ResultColumns,
-		Input:               src.Primitive(),
-	}}, nil
+		Input:               src,
+	}, nil
 }
 
-func transformDistinct(ctx *plancontext.PlanningContext, op *operators.Distinct) (logicalPlan, error) {
+func transformDistinct(ctx *plancontext.PlanningContext, op *operators.Distinct) (engine.Primitive, error) {
 	src, err := transformToLogicalPlan(ctx, op.Source)
 	if err != nil {
 		return nil, err
 	}
 
-	return &primitiveWrapper{prim: &engine.Distinct{
-		Source:    src.Primitive(),
+	return &engine.Distinct{
+		Source:    src,
 		CheckCols: op.Columns,
 		Truncate:  op.Truncate,
-	}}, nil
+	}, nil
 }
 
-func transformOrdering(ctx *plancontext.PlanningContext, op *operators.Ordering) (logicalPlan, error) {
+func transformOrdering(ctx *plancontext.PlanningContext, op *operators.Ordering) (engine.Primitive, error) {
 	plan, err := transformToLogicalPlan(ctx, op.Source)
 	if err != nil {
 		return nil, err
@@ -374,9 +365,9 @@ func transformOrdering(ctx *plancontext.PlanningContext, op *operators.Ordering)
 	return createMemorySort(ctx, plan, op)
 }
 
-func createMemorySort(ctx *plancontext.PlanningContext, src logicalPlan, ordering *operators.Ordering) (logicalPlan, error) {
+func createMemorySort(ctx *plancontext.PlanningContext, src engine.Primitive, ordering *operators.Ordering) (engine.Primitive, error) {
 	prim := &engine.MemorySort{
-		Input:               src.Primitive(),
+		Input:               src,
 		TruncateColumnCount: ordering.ResultColumns,
 	}
 
@@ -391,10 +382,10 @@ func createMemorySort(ctx *plancontext.PlanningContext, src logicalPlan, orderin
 		})
 	}
 
-	return &primitiveWrapper{prim}, nil
+	return prim, nil
 }
 
-func transformProjection(ctx *plancontext.PlanningContext, op *operators.Projection) (logicalPlan, error) {
+func transformProjection(ctx *plancontext.PlanningContext, op *operators.Projection) (engine.Primitive, error) {
 	src, err := transformToLogicalPlan(ctx, op.Source)
 	if err != nil {
 		return nil, err
@@ -406,7 +397,7 @@ func transformProjection(ctx *plancontext.PlanningContext, op *operators.Project
 		if len(op.Source.GetColumns(ctx)) == len(cols) && offsetInInputOrder(cols) {
 			cols = nil
 		}
-		return newSimpleProjection(cols, colNames, src.Primitive())
+		return newSimpleProjection(cols, colNames, src), nil
 	}
 
 	ap, err := op.GetAliasedProjections()
@@ -425,11 +416,11 @@ func transformProjection(ctx *plancontext.PlanningContext, op *operators.Project
 		columnNames = append(columnNames, pe.Original.ColumnName())
 	}
 
-	return &primitiveWrapper{prim: &engine.Projection{
-		Input: src.Primitive(),
+	return &engine.Projection{
+		Input: src,
 		Cols:  columnNames,
 		Exprs: evalengineExprs,
-	}}, nil
+	}, nil
 }
 
 // offsetInInputOrder returns true if the columns are in the same order as the input
@@ -456,28 +447,16 @@ func getEvalEngineExpr(ctx *plancontext.PlanningContext, pe *operators.ProjExpr)
 }
 
 // newSimpleProjection creates a simple projections
-func newSimpleProjection(cols []int, colNames []string, src engine.Primitive) (logicalPlan, error) {
-	return &primitiveWrapper{prim: &engine.SimpleProjection{
+func newSimpleProjection(cols []int, colNames []string, src engine.Primitive) engine.Primitive {
+	return &engine.SimpleProjection{
 		Input:    src,
 		Cols:     cols,
 		ColNames: colNames,
-	}}, nil
-}
-
-// elementsMatchIndices checks if the elements of the input slice match
-// their corresponding index values. It returns true if all elements match
-// their indices, and false otherwise.
-func elementsMatchIndices(in []int) bool {
-	for idx, val := range in {
-		if val != idx {
-			return false
-		}
 	}
-	return true
 }
 
-func transformFilter(ctx *plancontext.PlanningContext, op *operators.Filter) (logicalPlan, error) {
-	plan, err := transformToLogicalPlan(ctx, op.Source)
+func transformFilter(ctx *plancontext.PlanningContext, op *operators.Filter) (engine.Primitive, error) {
+	src, err := transformToLogicalPlan(ctx, op.Source)
 	if err != nil {
 		return nil, err
 	}
@@ -487,15 +466,15 @@ func transformFilter(ctx *plancontext.PlanningContext, op *operators.Filter) (lo
 		panic("this should have already been done")
 	}
 
-	return &primitiveWrapper{prim: &engine.Filter{
-		Input:        plan.Primitive(),
+	return &engine.Filter{
+		Input:        src,
 		Predicate:    predicate,
 		ASTPredicate: ctx.SemTable.AndExpressions(op.Predicates...),
 		Truncate:     op.Truncate,
-	}}, nil
+	}, nil
 }
 
-func transformApplyJoinPlan(ctx *plancontext.PlanningContext, n *operators.ApplyJoin) (logicalPlan, error) {
+func transformApplyJoinPlan(ctx *plancontext.PlanningContext, n *operators.ApplyJoin) (engine.Primitive, error) {
 	lhs, err := transformToLogicalPlan(ctx, n.LHS)
 	if err != nil {
 		return nil, err
@@ -509,13 +488,13 @@ func transformApplyJoinPlan(ctx *plancontext.PlanningContext, n *operators.Apply
 		opCode = engine.LeftJoin
 	}
 
-	return &primitiveWrapper{prim: &engine.Join{
+	return &engine.Join{
 		Opcode: opCode,
-		Left:   lhs.Primitive(),
-		Right:  rhs.Primitive(),
+		Left:   lhs,
+		Right:  rhs,
 		Cols:   n.Columns,
 		Vars:   n.Vars,
-	}}, nil
+	}, nil
 }
 
 func routeToEngineRoute(ctx *plancontext.PlanningContext, op *operators.Route, hints *queryHints) (*engine.Route, error) {
@@ -573,7 +552,7 @@ func getHints(cmt *sqlparser.ParsedComments) *queryHints {
 	}
 }
 
-func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (logicalPlan, error) {
+func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (engine.Primitive, error) {
 	stmt, dmlOp, err := operators.ToSQL(ctx, op.Source)
 	if err != nil {
 		return nil, err
@@ -602,7 +581,7 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 	}
 }
 
-func buildRouteLogicalPlan(ctx *plancontext.PlanningContext, op *operators.Route, stmt sqlparser.SelectStatement, hints *queryHints) (logicalPlan, error) {
+func buildRouteLogicalPlan(ctx *plancontext.PlanningContext, op *operators.Route, stmt sqlparser.SelectStatement, hints *queryHints) (engine.Primitive, error) {
 	_ = updateSelectedVindexPredicate(op.Routing)
 
 	eroute, err := routeToEngineRoute(ctx, op, hints)
@@ -628,13 +607,13 @@ func buildRouteLogicalPlan(ctx *plancontext.PlanningContext, op *operators.Route
 		return nil, err
 	}
 
-	return &primitiveWrapper{prim: res}, nil
+	return res, nil
 }
 
 func buildInsertLogicalPlan(
 	rb *operators.Route, op operators.Operator, stmt *sqlparser.Insert,
 	hints *queryHints,
-) (logicalPlan, error) {
+) (engine.Primitive, error) {
 	ins := op.(*operators.Insert)
 
 	ic := engine.InsertCommon{
@@ -665,7 +644,7 @@ func buildInsertLogicalPlan(
 	}
 
 	eins.Query = generateQuery(stmt)
-	return &primitiveWrapper{prim: eins}, nil
+	return eins, nil
 }
 
 func mapToInsertOpCode(code engine.Opcode) engine.InsertOpcode {
@@ -732,7 +711,7 @@ func buildUpdateLogicalPlan(
 	dmlOp operators.Operator,
 	stmt *sqlparser.Update,
 	hints *queryHints,
-) (logicalPlan, error) {
+) (engine.Primitive, error) {
 	upd := dmlOp.(*operators.Update)
 	var vindexes []*vindexes.ColumnVindex
 	vQuery := ""
@@ -751,13 +730,13 @@ func buildUpdateLogicalPlan(
 	_ = updateSelectedVindexPredicate(rb.Routing)
 	edml := createDMLPrimitive(ctx, rb, hints, upd.Target.VTable, generateQuery(stmt), vindexes, vQuery)
 
-	return &primitiveWrapper{prim: &engine.Update{
+	return &engine.Update{
 		DML:                 edml,
 		ChangedVindexValues: upd.ChangedVindexValues,
-	}}, nil
+	}, nil
 }
 
-func buildDeleteLogicalPlan(ctx *plancontext.PlanningContext, rb *operators.Route, dmlOp operators.Operator, stmt *sqlparser.Delete, hints *queryHints) (logicalPlan, error) {
+func buildDeleteLogicalPlan(ctx *plancontext.PlanningContext, rb *operators.Route, dmlOp operators.Operator, stmt *sqlparser.Delete, hints *queryHints) (engine.Primitive, error) {
 	del := dmlOp.(*operators.Delete)
 
 	var vindexes []*vindexes.ColumnVindex
@@ -771,7 +750,7 @@ func buildDeleteLogicalPlan(ctx *plancontext.PlanningContext, rb *operators.Rout
 	_ = updateSelectedVindexPredicate(rb.Routing)
 	edml := createDMLPrimitive(ctx, rb, hints, del.Target.VTable, generateQuery(stmt), vindexes, vQuery)
 
-	return &primitiveWrapper{prim: &engine.Delete{DML: edml}}, nil
+	return &engine.Delete{DML: edml}, nil
 }
 
 func createDMLPrimitive(ctx *plancontext.PlanningContext, rb *operators.Route, hints *queryHints, vTbl *vindexes.Table, query string, colVindexes []*vindexes.ColumnVindex, vindexQuery string) *engine.DML {
@@ -855,28 +834,26 @@ func getAllTableNames(op *operators.Route) ([]string, error) {
 	return tableNames, nil
 }
 
-func transformUnionPlan(ctx *plancontext.PlanningContext, op *operators.Union) (logicalPlan, error) {
+func transformUnionPlan(ctx *plancontext.PlanningContext, op *operators.Union) (engine.Primitive, error) {
 	sources, err := slice.MapWithError(op.Sources, func(src operators.Operator) (engine.Primitive, error) {
-		plan, err := transformToLogicalPlan(ctx, src)
+		primitive, err := transformToLogicalPlan(ctx, src)
 		if err != nil {
 			return nil, err
 		}
-		return plan.Primitive(), nil
+		return primitive, nil
 	})
 	if err != nil {
 		return nil, err
 	}
 
 	if len(sources) == 1 {
-		return &primitiveWrapper{prim: sources[0]}, nil
+		return sources[0], nil
 	}
 
-	return &primitiveWrapper{
-		prim: engine.NewConcatenate(sources, nil),
-	}, nil
+	return engine.NewConcatenate(sources, nil), nil
 }
 
-func transformLimit(ctx *plancontext.PlanningContext, op *operators.Limit) (logicalPlan, error) {
+func transformLimit(ctx *plancontext.PlanningContext, op *operators.Limit) (engine.Primitive, error) {
 	plan, err := transformToLogicalPlan(ctx, op.Source)
 	if err != nil {
 		return nil, err
@@ -885,7 +862,7 @@ func transformLimit(ctx *plancontext.PlanningContext, op *operators.Limit) (logi
 	return createLimit(plan, op.AST, ctx.VSchema.Environment(), ctx.VSchema.ConnCollation())
 }
 
-func createLimit(input logicalPlan, limit *sqlparser.Limit, env *vtenv.Environment, coll collations.ID) (logicalPlan, error) {
+func createLimit(input engine.Primitive, limit *sqlparser.Limit, env *vtenv.Environment, coll collations.ID) (engine.Primitive, error) {
 	cfg := &evalengine.Config{
 		Collation:   coll,
 		Environment: env,
@@ -902,14 +879,14 @@ func createLimit(input logicalPlan, limit *sqlparser.Limit, env *vtenv.Environme
 		}
 	}
 
-	return &primitiveWrapper{prim: &engine.Limit{
+	return &engine.Limit{
+		Input:  input,
 		Count:  count,
 		Offset: offset,
-		Input:  input.Primitive(),
-	}}, nil
+	}, nil
 }
 
-func transformHashJoin(ctx *plancontext.PlanningContext, op *operators.HashJoin) (logicalPlan, error) {
+func transformHashJoin(ctx *plancontext.PlanningContext, op *operators.HashJoin) (engine.Primitive, error) {
 	lhs, err := transformToLogicalPlan(ctx, op.LHS)
 	if err != nil {
 		return nil, err
@@ -949,24 +926,22 @@ func transformHashJoin(ctx *plancontext.PlanningContext, op *operators.HashJoin)
 		return nil, err
 	}
 
-	return &primitiveWrapper{
-		prim: &engine.HashJoin{
-			Left:           lhs.Primitive(),
-			Right:          rhs.Primitive(),
-			Opcode:         joinOp,
-			Cols:           op.ColumnOffsets,
-			LHSKey:         op.LHSKeys[0],
-			RHSKey:         op.RHSKeys[0],
-			ASTPred:        op.JoinPredicate(),
-			Collation:      comparisonType.Collation(),
-			ComparisonType: comparisonType.Type(),
-			CollationEnv:   ctx.VSchema.Environment().CollationEnv(),
-			Values:         comparisonType.Values(),
-		},
+	return &engine.HashJoin{
+		Left:           lhs,
+		Right:          rhs,
+		Opcode:         joinOp,
+		Cols:           op.ColumnOffsets,
+		LHSKey:         op.LHSKeys[0],
+		RHSKey:         op.RHSKeys[0],
+		ASTPred:        op.JoinPredicate(),
+		Collation:      comparisonType.Collation(),
+		ComparisonType: comparisonType.Type(),
+		CollationEnv:   ctx.VSchema.Environment().CollationEnv(),
+		Values:         comparisonType.Values(),
 	}, nil
 }
 
-func transformVindexPlan(ctx *plancontext.PlanningContext, op *operators.Vindex) (logicalPlan, error) {
+func transformVindexPlan(ctx *plancontext.PlanningContext, op *operators.Vindex) (engine.Primitive, error) {
 	single, ok := op.Vindex.(vindexes.SingleColumn)
 	if !ok {
 		return nil, vterrors.VT12001("multi-column vindexes not supported")
@@ -995,7 +970,7 @@ func transformVindexPlan(ctx *plancontext.PlanningContext, op *operators.Vindex)
 			return nil, err
 		}
 	}
-	return &primitiveWrapper{prim: prim}, nil
+	return prim, nil
 }
 
 func generateQuery(statement sqlparser.Statement) string {

@@ -45,7 +45,7 @@ func gen4Planner(query string, plannerVersion querypb.ExecuteOptions_PlannerVers
 }
 
 // setCommentDirectivesOnPlan adds comments to queries
-func setCommentDirectivesOnPlan(plan logicalPlan, stmt sqlparser.Statement) {
+func setCommentDirectivesOnPlan(plan engine.Primitive, stmt sqlparser.Statement) {
 	var directives *sqlparser.CommentDirectives
 	cmt, ok := stmt.(sqlparser.Commented)
 	if !ok {
@@ -57,10 +57,7 @@ func setCommentDirectivesOnPlan(plan logicalPlan, stmt sqlparser.Statement) {
 	timeout := queryTimeout(directives)
 	multiShardAutoCommit := directives.IsSet(sqlparser.DirectiveMultiShardAutocommit)
 
-	switch plan := plan.(type) {
-	case *primitiveWrapper:
-		setDirective(plan.prim, multiShardAutoCommit, timeout, scatterAsWarns)
-	}
+	setDirective(plan, multiShardAutoCommit, timeout, scatterAsWarns)
 }
 
 func setDirective(prim engine.Primitive, msac bool, timeout int, scatterAsWarns bool) {
