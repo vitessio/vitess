@@ -827,25 +827,24 @@ func getAllTableNames(op *operators.Route) ([]string, error) {
 }
 
 func transformUnionPlan(ctx *plancontext.PlanningContext, op *operators.Union) (logicalPlan, error) {
-	sources, err := slice.MapWithError(op.Sources, func(src operators.Operator) (logicalPlan, error) {
+	sources, err := slice.MapWithError(op.Sources, func(src operators.Operator) (engine.Primitive, error) {
 		plan, err := transformToLogicalPlan(ctx, src)
 		if err != nil {
 			return nil, err
 		}
-		return plan, nil
+		return plan.Primitive(), nil
 	})
 	if err != nil {
 		return nil, err
 	}
 
 	if len(sources) == 1 {
-		return sources[0], nil
+		return &primitiveWrapper{prim: sources[0]}, nil
 	}
-	return &concatenate{
-		sources:           sources,
-		noNeedToTypeCheck: nil,
-	}, nil
 
+	return &primitiveWrapper{
+		prim: engine.NewConcatenate(sources, nil),
+	}, nil
 }
 
 func transformLimit(ctx *plancontext.PlanningContext, op *operators.Limit) (logicalPlan, error) {
