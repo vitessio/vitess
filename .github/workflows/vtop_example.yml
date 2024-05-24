@@ -45,7 +45,7 @@ jobs:
         with:
           token: ''
           filters: |
-            examples:
+            end_to_end:
               - 'go/**/*.go'
               - 'test.go'
               - 'Makefile'
