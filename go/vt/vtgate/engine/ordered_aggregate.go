@@ -94,11 +94,6 @@ func (oa *OrderedAggregate) GetTableName() string {
 	return oa.Input.GetTableName()
 }
 
-// SetTruncateColumnCount sets the truncate column count.
-func (oa *OrderedAggregate) SetTruncateColumnCount(count int) {
-	oa.TruncateColumnCount = count
-}
-
 // TryExecute is a Primitive function.
 func (oa *OrderedAggregate) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
 	qr, err := oa.execute(ctx, vcursor, bindVars)

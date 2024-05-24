@@ -47,10 +47,6 @@ var (
 )
 
 type (
-	truncater interface {
-		SetTruncateColumnCount(int)
-	}
-
 	planResult struct {
 		primitive engine.Primitive
 		tables    []string
