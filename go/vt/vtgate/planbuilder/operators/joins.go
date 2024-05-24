@@ -33,6 +33,10 @@ type JoinOp interface {
 	AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr)
 }
 
+func IsOuter(outer JoinOp) bool {
+	return !outer.IsInner()
+}
+
 func AddPredicate(
 	ctx *plancontext.PlanningContext,
 	join JoinOp,
@@ -50,11 +54,11 @@ func AddPredicate(
 	case deps.IsSolvedBy(TableID(join.GetRHS())):
 		// if we are dealing with an outer join, always start by checking if this predicate can turn
 		// the join into an inner join
-		if !joinPredicates && !join.IsInner() && canConvertToInner(ctx, expr, TableID(join.GetRHS())) {
+		if !joinPredicates && IsOuter(join) && canConvertToInner(ctx, expr, TableID(join.GetRHS())) {
 			join.MakeInner()
 		}
 
-		if !joinPredicates && !join.IsInner() {
+		if !joinPredicates && IsOuter(join) {
 			// if we still are dealing with an outer join
 			// we need to filter after the join has been evaluated
 			return newFilter(join, expr)
@@ -68,11 +72,11 @@ func AddPredicate(
 	case deps.IsSolvedBy(TableID(join)):
 		// if we are dealing with an outer join, always start by checking if this predicate can turn
 		// the join into an inner join
-		if !joinPredicates && !join.IsInner() && canConvertToInner(ctx, expr, TableID(join.GetRHS())) {
+		if !joinPredicates && IsOuter(join) && canConvertToInner(ctx, expr, TableID(join.GetRHS())) {
 			join.MakeInner()
 		}
 
-		if !joinPredicates && !join.IsInner() {
+		if !joinPredicates && IsOuter(join) {
 			// if we still are dealing with an outer join
 			// we need to filter after the join has been evaluated
 			return newFilter(join, expr)

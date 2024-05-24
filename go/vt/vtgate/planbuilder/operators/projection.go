@@ -189,6 +189,17 @@ func createSimpleProjection(ctx *plancontext.PlanningContext, selExprs []sqlpars
 		if !isAe {
 			panic(vterrors.VT09015())
 		}
+
+		if ae.As.IsEmpty() {
+			// if we don't have an alias, we can use the column name as the alias
+			// the expectation is that when users use columns without aliases, they want the column name as the alias
+			// for more complex expressions, we just assume they'll use column offsets instead of column names
+			col, ok := ae.Expr.(*sqlparser.ColName)
+			if ok {
+				ae.As = col.Name
+			}
+		}
+
 		offset := p.Source.AddColumn(ctx, true, false, ae)
 		expr := newProjExpr(ae)
 		expr.Info = Offset(offset)
