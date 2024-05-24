@@ -123,8 +123,12 @@ func transformOneUpsert(ctx *plancontext.PlanningContext, source operators.Upser
 	if err != nil {
 		return
 	}
-	if ins, ok := iLp.(*insert); ok {
-		ins.eInsert.PreventAutoCommit = true
+	wrap, ok := iLp.(*primitiveWrapper)
+	if ok {
+		ins, ok := wrap.prim.(*engine.Insert)
+		if ok {
+			ins.PreventAutoCommit = true
+		}
 	}
 	uLp, err = transformToLogicalPlan(ctx, source.Update)
 	return
@@ -137,8 +141,12 @@ func transformSequential(ctx *plancontext.PlanningContext, op *operators.Sequent
 		if err != nil {
 			return nil, err
 		}
-		if ins, ok := lp.(*insert); ok {
-			ins.eInsert.PreventAutoCommit = true
+		wrap, ok := lp.(*primitiveWrapper)
+		if ok {
+			ins, ok := wrap.prim.(*engine.Insert)
+			if ok {
+				ins.PreventAutoCommit = true
+			}
 		}
 		lps = append(lps, lp)
 	}
@@ -174,7 +182,6 @@ func transformInsertionSelection(ctx *plancontext.PlanningContext, op *operators
 		},
 		VindexValueOffset: ins.VindexValueOffset,
 	}
-	lp := &insert{eInsertSelect: eins}
 
 	eins.Prefix, _, eins.Suffix = generateInsertShardedQuery(ins.AST)
 
@@ -182,9 +189,9 @@ func transformInsertionSelection(ctx *plancontext.PlanningContext, op *operators
 	if err != nil {
 		return nil, err
 	}
-	lp.source = selectionPlan
 
-	return lp, nil
+	eins.Input = selectionPlan.Primitive()
+	return &primitiveWrapper{prim: eins}, nil
 }
 
 // transformFkCascade transforms a FkCascade operator into a logical plan.
@@ -220,7 +227,13 @@ func transformFkCascade(ctx *plancontext.PlanningContext, fkc *operators.FkCasca
 		})
 	}
 
-	return newFkCascade(parentLP, selLP, children), nil
+	return &primitiveWrapper{
+		prim: &engine.FkCascade{
+			Selection: selLP.Primitive(),
+			Children:  children,
+			Parent:    parentLP.Primitive(),
+		},
+	}, nil
 }
 
 func transformSubQuery(ctx *plancontext.PlanningContext, op *operators.SubQuery) (logicalPlan, error) {
@@ -259,19 +272,25 @@ func transformFkVerify(ctx *plancontext.PlanningContext, fkv *operators.FkVerify
 	ctx.SemTable = nil
 
 	// Go over the children and convert them to Primitives too.
-	var verify []*verifyLP
+	var verify []*engine.Verify
 	for _, v := range fkv.Verify {
 		lp, err := transformToLogicalPlan(ctx, v.Op)
 		if err != nil {
 			return nil, err
 		}
-		verify = append(verify, &verifyLP{
-			verify: lp,
-			typ:    v.Typ,
+		verify = append(verify, &engine.Verify{
+			Exec: lp.Primitive(),
+			Typ:  v.Typ,
 		})
 	}
 
-	return newFkVerify(inputLP, verify), nil
+	return &primitiveWrapper{
+		prim: &engine.FkVerify{
+			Verify: verify,
+			Exec:   inputLP.Primitive(),
+		},
+	}, nil
+
 }
 
 func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggregator) (logicalPlan, error) {
@@ -626,7 +645,6 @@ func buildInsertLogicalPlan(
 		InsertCommon: ic,
 		VindexValues: ins.VindexValues,
 	}
-	lp := &insert{eInsert: eins}
 
 	// we would need to generate the query on the fly. The only exception here is
 	// when unsharded query with autoincrement for that there is no input operator.
@@ -638,7 +656,7 @@ func buildInsertLogicalPlan(
 	}
 
 	eins.Query = generateQuery(stmt)
-	return lp, nil
+	return &primitiveWrapper{prim: eins}, nil
 }
 
 func mapToInsertOpCode(code engine.Opcode) engine.InsertOpcode {

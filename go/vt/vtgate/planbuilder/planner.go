@@ -60,8 +60,6 @@ func setCommentDirectivesOnPlan(plan logicalPlan, stmt sqlparser.Statement) {
 	switch plan := plan.(type) {
 	case *primitiveWrapper:
 		setDirective(plan.prim, multiShardAutoCommit, timeout, scatterAsWarns)
-	case *insert:
-		setDirective(plan.eInsert, multiShardAutoCommit, timeout, scatterAsWarns)
 	}
 }
 

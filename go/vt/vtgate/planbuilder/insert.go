@@ -99,22 +99,5 @@ func insertUnshardedShortcut(stmt *sqlparser.Insert, ks *vindexes.Keyspace, tabl
 		},
 	}
 	eIns.Query = generateQuery(stmt)
-	return &insert{eInsert: eIns}
-}
-
-type insert struct {
-	eInsert       *engine.Insert
-	eInsertSelect *engine.InsertSelect
-	source        logicalPlan
-}
-
-var _ logicalPlan = (*insert)(nil)
-
-func (i *insert) Primitive() engine.Primitive {
-	if i.source == nil {
-		return i.eInsert
-	}
-	input := i.source.Primitive()
-	i.eInsertSelect.Input = input
-	return i.eInsertSelect
+	return &primitiveWrapper{prim: eIns}
 }
