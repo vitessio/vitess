@@ -18,11 +18,12 @@ package workflow
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
+
+	"google.golang.org/protobuf/encoding/protojson"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
@@ -52,6 +53,8 @@ const (
 	createDDLAsCopyDropConstraint  = "copy:drop_constraint"
 	createDDLAsCopyDropForeignKeys = "copy:drop_foreign_keys"
 )
+
+var jsonMarshaler = protojson.MarshalOptions{UseProtoNames: true}
 
 type materializer struct {
 	ctx      context.Context
@@ -102,7 +105,7 @@ func (mz *materializer) getOptionsJSON() (string, error) {
 	if mz.ms.WorkflowOptions == nil {
 		return defaultJSON, nil
 	}
-	optionsJSON, err := json.Marshal(mz.ms.WorkflowOptions)
+	optionsJSON, err := jsonMarshaler.Marshal(mz.ms.WorkflowOptions)
 	if err != nil || optionsJSON == nil {
 		return defaultJSON, err
 	}

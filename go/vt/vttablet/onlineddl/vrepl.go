@@ -158,6 +158,7 @@ func NewVRepl(
 	vreplShowCreateTable string,
 	alterQuery string,
 	analyzeTable bool,
+	workflowOptions *vtctldatapb.WorkflowOptions,
 ) *VRepl {
 	return &VRepl{
 		env:                     env,
@@ -175,6 +176,7 @@ func NewVRepl(
 		enumToTextMap:           map[string]string{},
 		intToEnumMap:            map[string]bool{},
 		convertCharset:          map[string](*binlogdatapb.CharsetConversion){},
+		workflowOptions:         workflowOptions,
 	}
 }
 

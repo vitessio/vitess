@@ -18,7 +18,6 @@ package workflow
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -935,7 +934,7 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 		}
 
 		// if user has defined the cell/tablet_types parameters in the forward workflow, update the reverse workflow as well
-		optionsJSON, err := json.Marshal(ts.options)
+		optionsJSON, err := jsonMarshaler.Marshal(ts.options)
 		if err != nil {
 			return err
 		}

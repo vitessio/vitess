@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"golang.org/x/exp/maps"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/constants/sidecar"
@@ -38,6 +39,7 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
@@ -53,9 +55,9 @@ const (
 	// Delete VReplication records for the given workflow.
 	sqlDeleteVReplicationWorkflow = "delete from %s.vreplication where workflow = %a and db_name = %a"
 	// Retrieve the current configuration values for a workflow's vreplication stream(s).
-	sqlSelectVReplicationWorkflowConfig = "select id, source, cell, tablet_types, state, message from %s.vreplication where workflow = %a"
+	sqlSelectVReplicationWorkflowConfig = "select id, source, cell, tablet_types, options, state, message from %s.vreplication where workflow = %a"
 	// Update the configuration values for a workflow's vreplication stream.
-	sqlUpdateVReplicationWorkflowStreamConfig = "update %s.vreplication set state = %a, source = %a, cell = %a, tablet_types = %a where id = %a"
+	sqlUpdateVReplicationWorkflowStreamConfig = "update %s.vreplication set state = %a, source = %a, cell = %a, tablet_types = %a, options = %a where id = %a"
 	// Update field values for multiple workflows. The final format specifier is
 	// used to optionally add any additional predicates to the query.
 	sqlUpdateVReplicationWorkflows = "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ %s.vreplication set%s where db_name = '%s'%s"
@@ -64,6 +66,7 @@ const (
 var (
 	errNoFieldsToUpdate               = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "no field values provided to update")
 	errAllWithIncludeExcludeWorkflows = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot specify all workflows along with either of include or exclude workflows")
+	jsonMarshaler                     = protojson.MarshalOptions{UseProtoNames: true}
 )
 
 func (tm *TabletManager) CreateVReplicationWorkflow(ctx context.Context, req *tabletmanagerdatapb.CreateVReplicationWorkflowRequest) (*tabletmanagerdatapb.CreateVReplicationWorkflowResponse, error) {
@@ -96,7 +99,7 @@ func (tm *TabletManager) CreateVReplicationWorkflow(ctx context.Context, req *ta
 			"workflowType":       sqltypes.Int64BindVariable(int64(req.WorkflowType)),
 			"workflowSubType":    sqltypes.Int64BindVariable(int64(req.WorkflowSubType)),
 			"deferSecondaryKeys": sqltypes.BoolBindVariable(req.DeferSecondaryKeys),
-			"options":            sqltypes.StringBindVariable(req.Options),
+			"options":            sqltypes.StringBindVariable(req.GetOptions()),
 		}
 		parsed := sqlparser.BuildParsedQuery(sqlCreateVReplicationWorkflow, sidecar.GetIdentifier(),
 			":workflow", ":source", ":cells", ":tabletTypes", ":state", ":dbname", ":workflowType", ":workflowSubType",
@@ -390,7 +393,7 @@ func (tm *TabletManager) ReadVReplicationWorkflow(ctx context.Context, req *tabl
 // restart the workflow stream via the update.
 func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *tabletmanagerdatapb.UpdateVReplicationWorkflowRequest) (*tabletmanagerdatapb.UpdateVReplicationWorkflowResponse, error) {
 	bindVars := map[string]*querypb.BindVariable{
-		"wf": sqltypes.StringBindVariable(req.Workflow),
+		"wf": sqltypes.StringBindVariable(req.GetWorkflow()),
 	}
 	parsed := sqlparser.BuildParsedQuery(sqlSelectVReplicationWorkflowConfig, sidecar.GetIdentifier(), ":wf")
 	stmt, err := parsed.GenerateQuery(bindVars, nil)
@@ -418,12 +421,19 @@ func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *ta
 		}
 		tabletTypes, inorder, err := discovery.ParseTabletTypesAndOrder(row.AsString("tablet_types", ""))
 		if err != nil {
-			return nil, err
+			return &tabletmanagerdatapb.UpdateVReplicationWorkflowResponse{Result: nil},
+				vterrors.Wrapf(err, "invalid tablet_types data (%s) found in record", row.AsString("tablet_types", ""))
 		}
 		bls := &binlogdatapb.BinlogSource{}
 		source := row.AsBytes("source", []byte{})
 		state := row.AsString("state", "")
 		message := row.AsString("message", "")
+		optionsStr := row.AsString("options", "{}")
+		var options vtctldatapb.WorkflowOptions
+		if err := protojson.Unmarshal([]byte(optionsStr), &options); err != nil {
+			return &tabletmanagerdatapb.UpdateVReplicationWorkflowResponse{Result: nil},
+				vterrors.Wrapf(err, "invalid options data (%s) found in record", optionsStr)
+		}
 		if req.State == binlogdatapb.VReplicationWorkflowState_Running && strings.ToUpper(message) == workflow.Frozen {
 			return &tabletmanagerdatapb.UpdateVReplicationWorkflowResponse{Result: nil},
 				vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "cannot start a workflow when it is frozen")
@@ -431,11 +441,11 @@ func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *ta
 		// For the string based values, we use NULL to differentiate
 		// from an empty string. The NULL value indicates that we
 		// should keep the existing value.
-		if !textutil.ValueIsSimulatedNull(req.Cells) {
-			cells = req.Cells
+		if !textutil.ValueIsSimulatedNull(req.GetCells()) {
+			cells = req.GetCells()
 		}
-		if !textutil.ValueIsSimulatedNull(req.TabletTypes) {
-			tabletTypes = req.TabletTypes
+		if !textutil.ValueIsSimulatedNull(req.GetTabletTypes()) {
+			tabletTypes = req.GetTabletTypes()
 		}
 		tabletTypesStr := topoproto.MakeStringTypeCSV(tabletTypes)
 		if (inorder && req.TabletSelectionPreference == tabletmanagerdatapb.TabletSelectionPreference_UNKNOWN) ||
@@ -447,24 +457,31 @@ func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *ta
 		}
 		// If we don't want to update the existing value then pass
 		// the simulated NULL value of -1.
-		if !textutil.ValueIsSimulatedNull(req.OnDdl) {
-			bls.OnDdl = req.OnDdl
+		if !textutil.ValueIsSimulatedNull(req.GetOnDdl()) {
+			bls.OnDdl = req.GetOnDdl()
 		}
 		source, err = prototext.Marshal(bls)
 		if err != nil {
 			return nil, err
 		}
-		if !textutil.ValueIsSimulatedNull(req.State) {
-			state = binlogdatapb.VReplicationWorkflowState_name[int32(req.State)]
+		if !textutil.ValueIsSimulatedNull(req.GetState()) {
+			state = binlogdatapb.VReplicationWorkflowState_name[int32(req.GetState())]
 		}
+		// If we don't want to update the existing value then pass
+		// the simulated NULL value of -1.
+		if !textutil.ValueIsSimulatedNull(req.GetProgressDeadline().GetSeconds()) {
+			options.ProgressDeadline = req.GetProgressDeadline()
+		}
+		optionsPJ, _ := jsonMarshaler.Marshal(&options) // We already know it's valid
 		bindVars = map[string]*querypb.BindVariable{
 			"st": sqltypes.StringBindVariable(state),
 			"sc": sqltypes.StringBindVariable(string(source)),
 			"cl": sqltypes.StringBindVariable(strings.Join(cells, ",")),
 			"tt": sqltypes.StringBindVariable(tabletTypesStr),
+			"op": sqltypes.StringBindVariable(string(optionsPJ)),
 			"id": sqltypes.Int64BindVariable(id),
 		}
-		parsed = sqlparser.BuildParsedQuery(sqlUpdateVReplicationWorkflowStreamConfig, sidecar.GetIdentifier(), ":st", ":sc", ":cl", ":tt", ":id")
+		parsed = sqlparser.BuildParsedQuery(sqlUpdateVReplicationWorkflowStreamConfig, sidecar.GetIdentifier(), ":st", ":sc", ":cl", ":tt", ":op", ":id")
 		stmt, err = parsed.GenerateQuery(bindVars, nil)
 		if err != nil {
 			return nil, err

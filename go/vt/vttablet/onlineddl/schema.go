@@ -569,7 +569,8 @@ const (
 			component_throttled,
 			state,
 			message,
-			rows_copied
+			rows_copied,
+			options
 		FROM _vt.vreplication
 		WHERE
 			workflow=%a

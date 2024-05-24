@@ -89,7 +89,7 @@ func registerCommands(root *cobra.Command) {
 	update.Flags().BoolVar(&updateOptions.TabletTypesInPreferenceOrder, "tablet-types-in-order", true, "When performing source tablet selection, look for candidates in the type order as they are listed in the tablet-types flag.")
 	update.Flags().StringVar(&updateOptions.OnDDL, "on-ddl", "", "New instruction on what to do when DDL is encountered in the VReplication stream. Possible values are IGNORE, STOP, EXEC, and EXEC_IGNORE.")
 	// At what point should we consider a vplayer to be stuck, produce an error, and retry?
-	update.Flags().DurationVar(&updateOptions.ProgressDeadline, "progress-deadline", 0, "At what point, without having been able to successfully replicate a pending batch of events, should we consider replication to be stalled; producing an error and log message and restarting the replication.")
+	update.Flags().Var((*topoproto.VTTimeDurationFlag)(updateOptions.ProgressDeadline), "progress-deadline", "At what point, without having been able to successfully replicate a pending batch of events, should we consider replication to be stalled; producing an error and log message and restarting the replication.")
 	common.AddShardSubsetFlag(update, &baseOptions.Shards)
 	base.AddCommand(update)
 }

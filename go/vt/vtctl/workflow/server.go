@@ -536,7 +536,7 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 			for i := range cells {
 				cells[i] = strings.TrimSpace(cells[i])
 			}
-			options := res.Options
+			options := res.GetOptions()
 			if options != "" {
 				if err := json.Unmarshal([]byte(options), &workflow.Options); err != nil {
 					return err
@@ -1342,13 +1342,13 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	}
 
 	if workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables &&
-		req.GetWorkflowOptions().GetTenantId() != "" {
+		req.GetWorkflowOptions() != nil && req.GetWorkflowOptions().GetTenantId() != "" {
 		multiTenantSpec := vschema.MultiTenantSpec
 		if multiTenantSpec == nil {
 			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "multi-tenant spec not found for target keyspace %s", targetKeyspace)
 		}
 		// Validate that the tenant id matches the data type of the column provided in the multi-tenant spec of the vschema.
-		if err := validateTenantId(multiTenantSpec.TenantIdColumnType, req.WorkflowOptions.TenantId); err != nil {
+		if err := validateTenantId(multiTenantSpec.TenantIdColumnType, req.GetWorkflowOptions().GetTenantId()); err != nil {
 			return nil, err
 		}
 	}
@@ -1409,7 +1409,7 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		OnDdl:                     req.OnDdl,
 		DeferSecondaryKeys:        req.DeferSecondaryKeys,
 		AtomicCopy:                req.AtomicCopy,
-		WorkflowOptions:           req.WorkflowOptions,
+		WorkflowOptions:           req.GetWorkflowOptions(),
 	}
 	if req.SourceTimeZone != "" {
 		ms.SourceTimeZone = req.SourceTimeZone
@@ -1438,6 +1438,10 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		workflowType: workflowType,
 		env:          s.env,
 	}
+	options, err := jsonMarshaler.Marshal(ms.WorkflowOptions)
+	if err != nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "invalid workflow options")
+	}
 	err = mz.createWorkflowStreams(&tabletmanagerdatapb.CreateVReplicationWorkflowRequest{
 		Workflow:                  req.Workflow,
 		Cells:                     req.Cells,
@@ -1447,6 +1451,7 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		DeferSecondaryKeys:        req.DeferSecondaryKeys,
 		AutoStart:                 req.AutoStart,
 		StopAfterCopy:             req.StopAfterCopy,
+		Options:                   string(options),
 	})
 	if err != nil {
 		return nil, err

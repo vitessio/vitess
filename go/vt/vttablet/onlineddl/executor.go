@@ -1446,7 +1446,7 @@ func (e *Executor) createDuplicateTableLike(ctx context.Context, newTableName st
 // - create the vrepl table
 // - modify the vrepl table
 // - Create and return a VRepl instance
-func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, conn *dbconnpool.DBConnection) (v *VRepl, err error) {
+func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, workflowOptions *vtctldatapb.WorkflowOptions, conn *dbconnpool.DBConnection) (v *VRepl, err error) {
 	restoreSQLModeFunc, err := e.initMigrationSQLMode(ctx, onlineDDL, conn)
 	defer restoreSQLModeFunc()
 	if err != nil {
@@ -1494,7 +1494,8 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 		return v, err
 	}
 
-	v = NewVRepl(e.env.Environment(), onlineDDL.UUID, e.keyspace, e.shard, e.dbName, onlineDDL.Table, vreplTableName, originalShowCreateTable, vreplShowCreateTable, onlineDDL.SQL, onlineDDL.StrategySetting().IsAnalyzeTableFlag())
+	v = NewVRepl(e.env.Environment(), onlineDDL.UUID, e.keyspace, e.shard, e.dbName, onlineDDL.Table, vreplTableName, originalShowCreateTable,
+		vreplShowCreateTable, onlineDDL.SQL, onlineDDL.StrategySetting().IsAnalyzeTableFlag(), workflowOptions)
 	return v, nil
 }
 
@@ -1525,7 +1526,7 @@ func (e *Executor) postInitVreplicationOriginalMigration(ctx context.Context, on
 	return nil
 }
 
-func (e *Executor) initVreplicationRevertMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, revertMigration *schema.OnlineDDL) (v *VRepl, err error) {
+func (e *Executor) initVreplicationRevertMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, workflowOptions *vtctldatapb.WorkflowOptions, revertMigration *schema.OnlineDDL) (v *VRepl, err error) {
 	// Getting here we've already validated that migration is revertible
 
 	// Validation: vreplication still exists for reverted migration
@@ -1548,13 +1549,13 @@ func (e *Executor) initVreplicationRevertMigration(ctx context.Context, onlineDD
 	if err := e.updateArtifacts(ctx, onlineDDL.UUID, vreplTableName); err != nil {
 		return v, err
 	}
-	v = NewVRepl(e.env.Environment(), onlineDDL.UUID, e.keyspace, e.shard, e.dbName, onlineDDL.Table, vreplTableName, "", "", "", false)
+	v = NewVRepl(e.env.Environment(), onlineDDL.UUID, e.keyspace, e.shard, e.dbName, onlineDDL.Table, vreplTableName, "", "", "", false, workflowOptions)
 	v.pos = revertStream.pos
 	return v, nil
 }
 
 // ExecuteWithVReplication sets up the grounds for a vreplication schema migration
-func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schema.OnlineDDL, revertMigration *schema.OnlineDDL) error {
+func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schema.OnlineDDL, workflowOptions *vtctldatapb.WorkflowOptions, revertMigration *schema.OnlineDDL) error {
 	// make sure there's no vreplication workflow running under same name
 	_ = e.terminateVReplMigration(ctx, onlineDDL.UUID)
 
@@ -1576,10 +1577,10 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 	var v *VRepl
 	if revertMigration == nil {
 		// Original ALTER TABLE request for vreplication
-		v, err = e.initVreplicationOriginalMigration(ctx, onlineDDL, conn)
+		v, err = e.initVreplicationOriginalMigration(ctx, onlineDDL, workflowOptions, conn)
 	} else {
 		// this is a revert request
-		v, err = e.initVreplicationRevertMigration(ctx, onlineDDL, revertMigration)
+		v, err = e.initVreplicationRevertMigration(ctx, onlineDDL, workflowOptions, revertMigration)
 	}
 	if err != nil {
 		return err
@@ -2645,7 +2646,7 @@ func (e *Executor) validateMigrationRevertible(ctx context.Context, revertMigrat
 // - figure out whether the revert is valid: can we really revert requested migration?
 // - what type of migration we're reverting? (CREATE/DROP/ALTER)
 // - revert appropriately to the type of migration
-func (e *Executor) executeRevert(ctx context.Context, onlineDDL *schema.OnlineDDL) (err error) {
+func (e *Executor) executeRevert(ctx context.Context, onlineDDL *schema.OnlineDDL, workflowOptions *vtctldatapb.WorkflowOptions) (err error) {
 	revertUUID, err := onlineDDL.GetRevertUUID(e.env.Environment().Parser())
 	if err != nil {
 		return fmt.Errorf("cannot run a revert migration %v: %+v", onlineDDL.UUID, err)
@@ -2742,7 +2743,7 @@ func (e *Executor) executeRevert(ctx context.Context, onlineDDL *schema.OnlineDD
 				return nil
 			}
 			// Real table
-			if err := e.ExecuteWithVReplication(ctx, onlineDDL, revertMigration); err != nil {
+			if err := e.ExecuteWithVReplication(ctx, onlineDDL, workflowOptions, revertMigration); err != nil {
 				return err
 			}
 		}
@@ -3220,7 +3221,7 @@ func (e *Executor) executeAlterDDLActionMigration(ctx context.Context, onlineDDL
 	// OK, nothing special about this ALTER. Let's go ahead and execute it.
 	switch onlineDDL.Strategy {
 	case schema.DDLStrategyOnline, schema.DDLStrategyVitess:
-		if err := e.ExecuteWithVReplication(ctx, onlineDDL, nil); err != nil {
+		if err := e.ExecuteWithVReplication(ctx, onlineDDL, nil, nil); err != nil {
 			return failMigration(err)
 		}
 	case schema.DDLStrategyGhost:
@@ -3249,7 +3250,7 @@ func (e *Executor) executeAlterDDLActionMigration(ctx context.Context, onlineDDL
 // - it is a Revert request?
 // - what's the migration strategy?
 // The function invokes the appropriate handlers for each of those cases.
-func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
+func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, workflowOptions *vtctldatapb.WorkflowOptions) error {
 	defer e.triggerNextCheckInterval()
 	failMigration := func(err error) error {
 		return e.failMigration(ctx, onlineDDL, err)
@@ -3379,7 +3380,7 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 	case sqlparser.AlterDDLAction:
 		return e.executeAlterDDLActionMigration(ctx, onlineDDL)
 	case sqlparser.RevertDDLAction:
-		if err := e.executeRevert(ctx, onlineDDL); err != nil {
+		if err := e.executeRevert(ctx, onlineDDL, nil); err != nil {
 			failMigration(err)
 		}
 	}
@@ -3464,7 +3465,7 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 		}
 	}
 	log.Infof("Executor.runNextMigration: migration %s is non conflicting and will be executed next", onlineDDL.UUID)
-	e.executeMigration(ctx, onlineDDL)
+	e.executeMigration(ctx, onlineDDL, nil)
 	return nil
 }
 

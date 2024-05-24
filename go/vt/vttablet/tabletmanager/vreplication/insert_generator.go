@@ -31,6 +31,8 @@ import (
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
+var jsonMarshaler = protojson.MarshalOptions{UseProtoNames: true}
+
 // InsertGenerator generates a vreplication insert statement.
 type InsertGenerator struct {
 	buf    *strings.Builder
@@ -65,7 +67,7 @@ func (ig *InsertGenerator) AddRowWithOptions(workflow string, bls *binlogdatapb.
 	workflowType binlogdatapb.VReplicationWorkflowType, workflowSubType binlogdatapb.VReplicationWorkflowSubType,
 	deferSecondaryKeys bool, workflowOptions *vtctldatapb.WorkflowOptions) {
 	protoutil.SortBinlogSourceTables(bls)
-	ob, err := protojson.Marshal(workflowOptions)
+	ob, err := jsonMarshaler.Marshal(workflowOptions)
 	if err != nil || ob == nil {
 		log.Errorf("Error marshaling workflow options: %v, value will be ignored\n", err)
 		ob = []byte("{}")
