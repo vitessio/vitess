@@ -479,13 +479,13 @@ func transformApplyJoinPlan(ctx *plancontext.PlanningContext, n *operators.Apply
 		opCode = engine.LeftJoin
 	}
 
-	return &join{
-		Left:   lhs,
-		Right:  rhs,
+	return &primitiveWrapper{prim: &engine.Join{
+		Opcode: opCode,
+		Left:   lhs.Primitive(),
+		Right:  rhs.Primitive(),
 		Cols:   n.Columns,
 		Vars:   n.Vars,
-		Opcode: opCode,
-	}, nil
+	}}, nil
 }
 
 func routeToEngineRoute(ctx *plancontext.PlanningContext, op *operators.Route, hints *queryHints) (*engine.Route, error) {
@@ -919,10 +919,10 @@ func transformHashJoin(ctx *plancontext.PlanningContext, op *operators.HashJoin)
 		return nil, err
 	}
 
-	return &hashJoin{
-		lhs: lhs,
-		rhs: rhs,
-		inner: &engine.HashJoin{
+	return &primitiveWrapper{
+		prim: &engine.HashJoin{
+			Left:           lhs.Primitive(),
+			Right:          rhs.Primitive(),
 			Opcode:         joinOp,
 			Cols:           op.ColumnOffsets,
 			LHSKey:         op.LHSKeys[0],
