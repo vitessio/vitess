@@ -18,18 +18,24 @@ package vreplication
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
+	"vitess.io/vitess/go/protoutil"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 func TestInsertGenerator(t *testing.T) {
 	ig := NewInsertGenerator(binlogdatapb.VReplicationWorkflowState_Stopped, "a")
 	ig.now = 111
-	ig.AddRow("b", &binlogdatapb.BinlogSource{Keyspace: "c"}, "d", "e", "f", binlogdatapb.VReplicationWorkflowType_Materialize, binlogdatapb.VReplicationWorkflowSubType_None, false)
+	workflowOptions := &vtctldatapb.WorkflowOptions{
+		ProgressDeadline: protoutil.DurationToProto(15 * time.Second),
+	}
+	ig.AddRowWithOptions("b", &binlogdatapb.BinlogSource{Keyspace: "c"}, "d", "e", "f", binlogdatapb.VReplicationWorkflowType_Materialize, binlogdatapb.VReplicationWorkflowSubType_None, false, workflowOptions)
 	want := `insert into _vt.vreplication(workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys, options) values ` +
-		`('b', 'keyspace:\"c\"', 'd', 9223372036854775807, 9223372036854775807, 'e', 'f', 111, 0, 'Stopped', 'a', 0, 0, false, '{}')`
+		`('b', 'keyspace:\"c\"', 'd', 9223372036854775807, 9223372036854775807, 'e', 'f', 111, 0, 'Stopped', 'a', 0, 0, false, '{"progress_deadline":"15s"}')`
 	assert.Equal(t, ig.String(), want)
 
 	ig.AddRow("g", &binlogdatapb.BinlogSource{Keyspace: "h"}, "i", "j", "k", binlogdatapb.VReplicationWorkflowType_Reshard, binlogdatapb.VReplicationWorkflowSubType_Partial, true)

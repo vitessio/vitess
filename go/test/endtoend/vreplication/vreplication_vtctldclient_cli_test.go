@@ -22,6 +22,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/maps"
@@ -94,7 +95,7 @@ func testMoveTablesFlags1(t *testing.T, mt *iMoveTables, sourceKeyspace, targetK
 	createFlags := []string{"--auto-start=false", "--defer-secondary-keys=false", "--stop-after-copy",
 		"--no-routing-rules", "--on-ddl", "STOP", "--exclude-tables", "customer2",
 		"--tablet-types", "primary,rdonly", "--tablet-types-in-preference-order=true",
-		"--all-cells",
+		"--progress-deadline", time.Duration(15 * time.Second).String(), "--all-cells",
 	}
 	completeFlags := []string{"--keep-routing-rules", "--keep-data"}
 	switchFlags := []string{}
@@ -422,6 +423,7 @@ func validateMoveTablesWorkflow(t *testing.T, workflows []*vtctldatapb.Workflow)
 	require.Equal(t, "product", wf.Source.Keyspace)
 	require.Equal(t, 1, len(wf.Source.Shards))
 	require.False(t, wf.DeferSecondaryKeys)
+	require.EqualValues(t, time.Duration(15*time.Second), wf.Options.ProgressDeadline)
 
 	require.GreaterOrEqual(t, len(wf.ShardStreams), int(1))
 	oneStream := maps.Values(wf.ShardStreams)[0]

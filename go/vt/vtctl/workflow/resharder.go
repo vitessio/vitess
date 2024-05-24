@@ -38,6 +38,7 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
@@ -58,6 +59,7 @@ type resharder struct {
 	stopAfterCopy      bool
 	onDDL              string
 	deferSecondaryKeys bool
+	options            *vtctldatapb.WorkflowOptions
 }
 
 type refStream struct {
@@ -67,6 +69,7 @@ type refStream struct {
 	tabletTypes     string
 	workflowType    binlogdatapb.VReplicationWorkflowType
 	workflowSubType binlogdatapb.VReplicationWorkflowSubType
+	workflowOptions *vtctldatapb.WorkflowOptions
 }
 
 func (s *Server) buildResharder(ctx context.Context, keyspace, workflow string, sources, targets []string, cell, tabletTypes string) (*resharder, error) {
@@ -297,17 +300,19 @@ func (rs *resharder) createStreams(ctx context.Context) error {
 				StopAfterCopy: rs.stopAfterCopy,
 				OnDdl:         binlogdatapb.OnDDLAction(binlogdatapb.OnDDLAction_value[rs.onDDL]),
 			}
-			ig.AddRow(rs.workflow, bls, "", rs.cell, rs.tabletTypes,
+			ig.AddRowWithOptions(rs.workflow, bls, "", rs.cell, rs.tabletTypes,
 				binlogdatapb.VReplicationWorkflowType_Reshard,
 				binlogdatapb.VReplicationWorkflowSubType_None,
-				rs.deferSecondaryKeys)
+				rs.deferSecondaryKeys,
+				rs.options)
 		}
 
 		for _, rstream := range rs.refStreams {
-			ig.AddRow(rstream.workflow, rstream.bls, "", rstream.cell, rstream.tabletTypes,
+			ig.AddRowWithOptions(rstream.workflow, rstream.bls, "", rstream.cell, rstream.tabletTypes,
 				rstream.workflowType,
 				rstream.workflowSubType,
-				rs.deferSecondaryKeys)
+				rs.deferSecondaryKeys,
+				rs.options)
 		}
 		query := ig.String()
 		if _, err := rs.s.tmc.VReplicationExec(ctx, targetPrimary.Tablet, query); err != nil {

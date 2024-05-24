@@ -20,11 +20,13 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/textutil"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -39,6 +41,7 @@ var (
 		TabletTypes                  []topodatapb.TabletType
 		TabletTypesInPreferenceOrder bool
 		OnDDL                        string
+		ProgressDeadline             time.Duration
 	}{}
 
 	// update makes a WorkflowUpdate gRPC call to a vtctld.
@@ -112,6 +115,7 @@ func commandUpdate(cmd *cobra.Command, args []string) error {
 			TabletSelectionPreference: tsp,
 			OnDdl:                     binlogdatapb.OnDDLAction(onddl),
 			State:                     binlogdatapb.VReplicationWorkflowState(textutil.SimulatedNullInt), // We don't allow changing this in the client command
+			ProgressDeadline:          protoutil.DurationToProto(updateOptions.ProgressDeadline),
 		},
 	}
 

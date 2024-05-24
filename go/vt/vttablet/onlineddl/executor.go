@@ -34,6 +34,7 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/constants/sidecar"
@@ -52,6 +53,7 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/schemadiff"
@@ -3551,6 +3553,14 @@ func (e *Executor) readVReplStream(ctx context.Context, uuid string, okIfMissing
 	if row == nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "Cannot find unique workflow for UUID: %+v", uuid)
 	}
+	var workflowOptions vtctldatapb.WorkflowOptions
+	ob, err := row.ToBytes("options")
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse options column: %v", err)
+	}
+	if err := protojson.Unmarshal(ob, &workflowOptions); err != nil {
+		return nil, fmt.Errorf("options column contains invalid data: %v ; value: %s", err, string(ob))
+	}
 	s := &VReplStream{
 		id:                   row.AsInt32("id", 0),
 		workflow:             row.AsString("workflow", ""),
@@ -3565,6 +3575,7 @@ func (e *Executor) readVReplStream(ctx context.Context, uuid string, okIfMissing
 		message:              row.AsString("message", ""),
 		rowsCopied:           row.AsInt64("rows_copied", 0),
 		bls:                  &binlogdatapb.BinlogSource{},
+		options:              &workflowOptions,
 	}
 	if err := prototext.Unmarshal([]byte(s.source), s.bls); err != nil {
 		return nil, err

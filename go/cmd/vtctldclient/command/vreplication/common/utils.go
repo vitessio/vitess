@@ -67,6 +67,7 @@ var (
 		MySQLServerVersion           string
 		TruncateUILen                int
 		TruncateErrLen               int
+		VPlayerProgressDeadline      time.Duration
 	}{}
 )
 
@@ -222,6 +223,8 @@ func AddCommonCreateFlags(cmd *cobra.Command) {
 	cmd.Flags().BoolVar(&CreateOptions.DeferSecondaryKeys, "defer-secondary-keys", false, "Defer secondary index creation for a table until after it has been copied.")
 	cmd.Flags().BoolVar(&CreateOptions.AutoStart, "auto-start", true, "Start the workflow after creating it.")
 	cmd.Flags().BoolVar(&CreateOptions.StopAfterCopy, "stop-after-copy", false, "Stop the workflow after it's finished copying the existing rows and before it starts replicating changes.")
+	// At what point should we consider a vplayer to be stuck, produce an error, and retry?
+	cmd.Flags().DurationVar(&CreateOptions.VPlayerProgressDeadline, "progress-deadline", 0, "At what point, without having been able to successfully replicate a pending batch of events, should we consider replication to be stalled; producing an error and log message and restarting the replication.")
 }
 
 var SwitchTrafficOptions = struct {

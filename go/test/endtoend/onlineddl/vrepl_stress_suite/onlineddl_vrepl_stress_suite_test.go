@@ -45,6 +45,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/onlineddl"
 	"vitess.io/vitess/go/test/endtoend/throttler"
@@ -52,6 +53,8 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/vttablet"
+
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 type testcase struct {
@@ -91,6 +94,9 @@ var (
 		`DROP TABLE IF EXISTS stress_test`,
 		`DROP TABLE IF EXISTS stress_test_before`,
 		`DROP TABLE IF EXISTS stress_test_after`,
+	}
+	vreplWorkflowOptions = &vtctldatapb.WorkflowOptions{
+		ProgressDeadline: protoutil.DurationToProto(15 * time.Second),
 	}
 	createStatement = `
 		CREATE TABLE stress_test (
@@ -439,7 +445,6 @@ func TestMain(m *testing.M) {
 			// Test VPlayer batching mode.
 			fmt.Sprintf("--vreplication_experimental_flags=%d",
 				vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage|vttablet.VReplicationExperimentalFlagOptimizeInserts|vttablet.VReplicationExperimentalFlagVPlayerBatching),
-			"--vplayer-progress-deadline", "15s",
 		}
 		clusterInstance.VtGateExtraArgs = []string{
 			"--ddl_strategy", "online",
@@ -573,7 +578,11 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 		}
 	} else {
 		var err error
-		uuid, err = clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, alterStatement, cluster.ApplySchemaParams{DDLStrategy: ddlStrategy})
+		progressDeadline, _, _ := protoutil.DurationFromProto(vreplWorkflowOptions.GetProgressDeadline())
+		uuid, err = clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, alterStatement, cluster.ApplySchemaParams{
+			DDLStrategy:      ddlStrategy,
+			ProgressDeadline: progressDeadline,
+		})
 		assert.NoError(t, err)
 	}
 	uuid = strings.TrimSpace(uuid)

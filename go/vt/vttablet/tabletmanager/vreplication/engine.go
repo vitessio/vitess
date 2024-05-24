@@ -27,6 +27,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"google.golang.org/protobuf/encoding/protojson"
+
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
@@ -44,6 +46,7 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/proto/vtctldata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
@@ -688,9 +691,16 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 		workflowType, _ := strconv.ParseInt(params["workflow_type"], 10, 32)
 		workflowSubType, _ := strconv.ParseInt(params["workflow_sub_type"], 10, 32)
 		deferSecondaryKeys, _ := strconv.ParseBool(params["defer_secondary_keys"])
+		ob := []byte(params["options"])
+		var options vtctldata.WorkflowOptions
+		err := protojson.Unmarshal(ob, &options)
+		if err != nil {
+			log.Errorf("transitionJournal: %v", err)
+			return
+		}
 		ig := NewInsertGenerator(binlogdatapb.VReplicationWorkflowState_Running, vre.dbName)
-		ig.AddRow(params["workflow"], bls, sgtid.Gtid, params["cell"], params["tablet_types"],
-			binlogdatapb.VReplicationWorkflowType(workflowType), binlogdatapb.VReplicationWorkflowSubType(workflowSubType), deferSecondaryKeys)
+		ig.AddRowWithOptions(params["workflow"], bls, sgtid.Gtid, params["cell"], params["tablet_types"],
+			binlogdatapb.VReplicationWorkflowType(workflowType), binlogdatapb.VReplicationWorkflowSubType(workflowSubType), deferSecondaryKeys, &options)
 		qr, err := dbClient.ExecuteFetch(ig.String(), maxRows)
 		if err != nil {
 			log.Errorf("transitionJournal: %v", err)

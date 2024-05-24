@@ -29587,6 +29587,9 @@ export namespace tabletmanagerdata {
 
         /** UpdateVReplicationWorkflowRequest state */
         state?: (binlogdata.VReplicationWorkflowState|null);
+
+        /** UpdateVReplicationWorkflowRequest progress_deadline */
+        progress_deadline?: (vttime.IDuration|null);
     }
 
     /** Represents an UpdateVReplicationWorkflowRequest. */
@@ -29615,6 +29618,9 @@ export namespace tabletmanagerdata {
 
         /** UpdateVReplicationWorkflowRequest state. */
         public state: binlogdata.VReplicationWorkflowState;
+
+        /** UpdateVReplicationWorkflowRequest progress_deadline. */
+        public progress_deadline?: (vttime.IDuration|null);
 
         /**
          * Creates a new UpdateVReplicationWorkflowRequest instance using the specified properties.
@@ -45634,6 +45640,9 @@ export namespace vtctldata {
 
         /** WorkflowOptions shards */
         shards?: (string[]|null);
+
+        /** WorkflowOptions progress_deadline */
+        progress_deadline?: (vttime.IDuration|null);
     }
 
     /** Represents a WorkflowOptions. */
@@ -45653,6 +45662,9 @@ export namespace vtctldata {
 
         /** WorkflowOptions shards. */
         public shards: string[];
+
+        /** WorkflowOptions progress_deadline. */
+        public progress_deadline?: (vttime.IDuration|null);
 
         /**
          * Creates a new WorkflowOptions instance using the specified properties.

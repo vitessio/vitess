@@ -40,6 +40,9 @@ const (
 )
 
 var (
+	onlineDDLOptions = struct {
+		ProgressDeadline time.Duration
+	}{}
 	OnlineDDL = &cobra.Command{
 		Use:                   "OnlineDDL <cmd> <keyspace> [args]",
 		Short:                 "Operates on online DDL (schema migrations).",
@@ -433,5 +436,8 @@ func init() {
 	OnlineDDLShow.Flags().Uint64Var(&onlineDDLShowArgs.Skip, "skip", 0, "Skip specified number of rows returned in output.")
 
 	OnlineDDL.AddCommand(OnlineDDLShow)
+
+	// At what point should we consider a vplayer to be stuck, produce an error, and retry?
+	OnlineDDL.Flags().DurationVar(&onlineDDLOptions.ProgressDeadline, "progress-deadline", 0, "At what point, without having been able to successfully replicate a pending batch of events, should we consider replication to be stalled; producing an error and log message and restarting the replication.")
 	Root.AddCommand(OnlineDDL)
 }

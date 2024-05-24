@@ -46,6 +46,8 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	"vitess.io/vitess/go/vt/proto/vtctldata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
@@ -64,6 +66,7 @@ type VReplStream struct {
 	message              string
 	rowsCopied           int64
 	bls                  *binlogdatapb.BinlogSource
+	options              *vtctldatapb.WorkflowOptions
 }
 
 // livenessTimeIndicator returns a time indicator for last known healthy state.
@@ -98,15 +101,16 @@ func (v *VReplStream) hasError() (isTerminal bool, vreplError error) {
 
 // VRepl is an online DDL helper for VReplication based migrations (ddl_strategy="online")
 type VRepl struct {
-	workflow    string
-	keyspace    string
-	shard       string
-	dbName      string
-	sourceTable string
-	targetTable string
-	pos         string
-	alterQuery  string
-	tableRows   int64
+	workflow        string
+	keyspace        string
+	shard           string
+	dbName          string
+	sourceTable     string
+	targetTable     string
+	pos             string
+	alterQuery      string
+	tableRows       int64
+	workflowOptions *vtctldata.WorkflowOptions
 
 	originalShowCreateTable string
 	vreplShowCreateTable    string
@@ -667,8 +671,8 @@ func (v *VRepl) analyze(ctx context.Context, conn *dbconnpool.DBConnection) erro
 // generateInsertStatement generates the INSERT INTO _vt.replication statement that creates the vreplication workflow
 func (v *VRepl) generateInsertStatement(ctx context.Context) (string, error) {
 	ig := vreplication.NewInsertGenerator(binlogdatapb.VReplicationWorkflowState_Stopped, v.dbName)
-	ig.AddRow(v.workflow, v.bls, v.pos, "", "in_order:REPLICA,PRIMARY",
-		binlogdatapb.VReplicationWorkflowType_OnlineDDL, binlogdatapb.VReplicationWorkflowSubType_None, false)
+	ig.AddRowWithOptions(v.workflow, v.bls, v.pos, "", "in_order:REPLICA,PRIMARY",
+		binlogdatapb.VReplicationWorkflowType_OnlineDDL, binlogdatapb.VReplicationWorkflowSubType_None, false, v.workflowOptions)
 
 	return ig.String(), nil
 }
