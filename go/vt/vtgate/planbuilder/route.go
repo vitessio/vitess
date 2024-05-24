@@ -115,12 +115,9 @@ func (rb *route) prepareTheAST() {
 			}
 		case *sqlparser.ComparisonExpr:
 			// 42 = colName -> colName = 42
-			b := node.Operator == sqlparser.EqualOp
-			value := sqlparser.IsValue(node.Left)
-			name := sqlparser.IsColName(node.Right)
-			if b &&
-				value &&
-				name {
+			if node.Operator.IsCommutative() &&
+				!sqlparser.IsColName(node.Left) &&
+				sqlparser.IsColName(node.Right) {
 				node.Left, node.Right = node.Right, node.Left
 			}
 		}
