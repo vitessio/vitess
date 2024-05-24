@@ -319,7 +319,12 @@ func transformDistinct(ctx *plancontext.PlanningContext, op *operators.Distinct)
 	if err != nil {
 		return nil, err
 	}
-	return newDistinct(src, op.Columns, op.Truncate), nil
+
+	return &primitiveWrapper{prim: &engine.Distinct{
+		Source:    src.Primitive(),
+		CheckCols: op.Columns,
+		Truncate:  op.Truncate,
+	}}, nil
 }
 
 func transformOrdering(ctx *plancontext.PlanningContext, op *operators.Ordering) (logicalPlan, error) {
