@@ -46,21 +46,18 @@ func selectUnshardedShortcut(ctx *plancontext.PlanningContext, stmt sqlparser.Se
 	if err != nil {
 		return nil, nil, err
 	}
-	plan := &route{
-		eroute: &engine.Route{
-			RoutingParameters: &engine.RoutingParameters{
-				Opcode:   engine.Unsharded,
-				Keyspace: ks,
-			},
-			TableName: strings.Join(escapedTableNames(tableNames), ", "),
+	eroute := &engine.Route{
+		RoutingParameters: &engine.RoutingParameters{
+			Opcode:   engine.Unsharded,
+			Keyspace: ks,
 		},
-		Select: stmt,
+		TableName: strings.Join(escapedTableNames(tableNames), ", "),
 	}
-
-	if err := plan.Wireup(ctx); err != nil {
+	prim, err := WireupRoute(ctx, eroute, stmt)
+	if err != nil {
 		return nil, nil, err
 	}
-	return plan, operators.QualifiedTableNames(ks, tableNames), nil
+	return &primitiveWrapper{prim: prim}, operators.QualifiedTableNames(ks, tableNames), nil
 }
 
 func escapedTableNames(tableNames []sqlparser.TableName) []string {

@@ -58,27 +58,27 @@ func setCommentDirectivesOnPlan(plan logicalPlan, stmt sqlparser.Statement) {
 	multiShardAutoCommit := directives.IsSet(sqlparser.DirectiveMultiShardAutocommit)
 
 	switch plan := plan.(type) {
-	case *route:
-		plan.eroute.ScatterErrorsAsWarnings = scatterAsWarns
-		plan.eroute.QueryTimeout = timeout
 	case *primitiveWrapper:
-		setDirective(plan.prim, multiShardAutoCommit, timeout)
+		setDirective(plan.prim, multiShardAutoCommit, timeout, scatterAsWarns)
 	case *insert:
-		setDirective(plan.eInsert, multiShardAutoCommit, timeout)
+		setDirective(plan.eInsert, multiShardAutoCommit, timeout, scatterAsWarns)
 	}
 }
 
-func setDirective(prim engine.Primitive, msac bool, timeout int) {
-	switch edml := prim.(type) {
+func setDirective(prim engine.Primitive, msac bool, timeout int, scatterAsWarns bool) {
+	switch prim := prim.(type) {
 	case *engine.Insert:
-		edml.MultiShardAutocommit = msac
-		edml.QueryTimeout = timeout
+		prim.MultiShardAutocommit = msac
+		prim.QueryTimeout = timeout
 	case *engine.Update:
-		edml.MultiShardAutocommit = msac
-		edml.QueryTimeout = timeout
+		prim.MultiShardAutocommit = msac
+		prim.QueryTimeout = timeout
 	case *engine.Delete:
-		edml.MultiShardAutocommit = msac
-		edml.QueryTimeout = timeout
+		prim.MultiShardAutocommit = msac
+		prim.QueryTimeout = timeout
+	case *engine.Route:
+		prim.ScatterErrorsAsWarnings = scatterAsWarns
+		prim.QueryTimeout = timeout
 	}
 }
 

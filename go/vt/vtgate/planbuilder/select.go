@@ -258,10 +258,6 @@ func shouldRetryAfterPredicateRewriting(plan logicalPlan) bool {
 	var sysTableTableSchema []evalengine.Expr
 
 	switch routePlan := plan.(type) {
-	case *route:
-		opcode = routePlan.eroute.Opcode
-		sysTableTableName = routePlan.eroute.SysTableTableName
-		sysTableTableSchema = routePlan.eroute.SysTableTableSchema
 	case *primitiveWrapper:
 		eroute, ok := routePlan.prim.(*engine.Route)
 		if !ok {
