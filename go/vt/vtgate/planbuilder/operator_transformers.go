@@ -88,20 +88,21 @@ func transformDMLWithInput(ctx *plancontext.PlanningContext, op *operators.DMLWi
 		return nil, err
 	}
 
-	var dmls []logicalPlan
+	var dmls []engine.Primitive
 	for _, dml := range op.DML {
 		del, err := transformToLogicalPlan(ctx, dml)
 		if err != nil {
 			return nil, err
 		}
-		dmls = append(dmls, del)
+		dmls = append(dmls, del.Primitive())
 	}
-	return &dmlWithInput{
-		input:      input,
-		dmls:       dmls,
-		outputCols: op.Offsets,
-		bvList:     op.BvList,
-	}, nil
+
+	return &primitiveWrapper{prim: &engine.DMLWithInput{
+		DMLs:       dmls,
+		Input:      input.Primitive(),
+		OutputCols: op.Offsets,
+		BVList:     op.BvList,
+	}}, nil
 }
 
 func transformUpsert(ctx *plancontext.PlanningContext, op *operators.Upsert) (logicalPlan, error) {
