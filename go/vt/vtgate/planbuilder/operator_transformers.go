@@ -297,15 +297,13 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 	if op.WithRollup {
 		return nil, vterrors.VT12001("GROUP BY WITH ROLLUP not supported for sharded queries")
 	}
-	plan, err := transformToLogicalPlan(ctx, op.Source)
+	src, err := transformToLogicalPlan(ctx, op.Source)
 	if err != nil {
 		return nil, err
 	}
 
-	oa := &orderedAggregate{
-		resultsBuilder: newResultsBuilder(plan, nil),
-		collationEnv:   ctx.VSchema.Environment().CollationEnv(),
-	}
+	var aggregates []*engine.AggregateParams
+	var groupByKeys []*engine.GroupByParams
 
 	for _, aggr := range op.Aggregations {
 		if aggr.OpCode == opcode.AggregateUnassigned {
@@ -317,11 +315,12 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 		aggrParam.OrigOpcode = aggr.OriginalOpCode
 		aggrParam.WCol = aggr.WSOffset
 		aggrParam.Type = aggr.GetTypeCollation(ctx)
-		oa.aggregates = append(oa.aggregates, aggrParam)
+		aggregates = append(aggregates, aggrParam)
 	}
+
 	for _, groupBy := range op.Grouping {
 		typ, _ := ctx.SemTable.TypeForExpr(groupBy.Inner)
-		oa.groupByKeys = append(oa.groupByKeys, &engine.GroupByParams{
+		groupByKeys = append(groupByKeys, &engine.GroupByParams{
 			KeyCol:          groupBy.ColOffset,
 			WeightStringCol: groupBy.WSOffset,
 			Expr:            groupBy.Inner,
@@ -330,8 +329,21 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 		})
 	}
 
-	oa.truncateColumnCount = op.ResultColumns
-	return oa, nil
+	if len(groupByKeys) == 0 {
+		return &primitiveWrapper{prim: &engine.ScalarAggregate{
+			Aggregates:          aggregates,
+			TruncateColumnCount: op.ResultColumns,
+			Input:               src.Primitive(),
+		}}, nil
+	}
+
+	return &primitiveWrapper{&engine.OrderedAggregate{
+		Aggregates:          aggregates,
+		GroupByKeys:         groupByKeys,
+		TruncateColumnCount: op.ResultColumns,
+		Input:               src.Primitive(),
+		CollationEnv:        ctx.VSchema.Environment().CollationEnv(),
+	}}, nil
 }
 
 func transformDistinct(ctx *plancontext.PlanningContext, op *operators.Distinct) (logicalPlan, error) {
@@ -357,17 +369,14 @@ func transformOrdering(ctx *plancontext.PlanningContext, op *operators.Ordering)
 }
 
 func createMemorySort(ctx *plancontext.PlanningContext, src logicalPlan, ordering *operators.Ordering) (logicalPlan, error) {
-	primitive := &engine.MemorySort{
+	prim := &engine.MemorySort{
+		Input:               src.Primitive(),
 		TruncateColumnCount: ordering.ResultColumns,
-	}
-	ms := &memorySort{
-		resultsBuilder: newResultsBuilder(src, primitive),
-		eMemorySort:    primitive,
 	}
 
 	for idx, order := range ordering.Order {
 		typ, _ := ctx.SemTable.TypeForExpr(order.SimplifiedExpr)
-		ms.eMemorySort.OrderBy = append(ms.eMemorySort.OrderBy, evalengine.OrderByParams{
+		prim.OrderBy = append(prim.OrderBy, evalengine.OrderByParams{
 			Col:             ordering.Offset[idx],
 			WeightStringCol: ordering.WOffset[idx],
 			Desc:            order.Inner.Direction == sqlparser.DescOrder,
@@ -376,7 +385,7 @@ func createMemorySort(ctx *plancontext.PlanningContext, src logicalPlan, orderin
 		})
 	}
 
-	return ms, nil
+	return &primitiveWrapper{prim}, nil
 }
 
 func transformProjection(ctx *plancontext.PlanningContext, op *operators.Projection) (logicalPlan, error) {
@@ -877,26 +886,27 @@ func transformLimit(ctx *plancontext.PlanningContext, op *operators.Limit) (logi
 }
 
 func createLimit(input logicalPlan, limit *sqlparser.Limit, env *vtenv.Environment, coll collations.ID) (logicalPlan, error) {
-	plan := newLimit(input)
 	cfg := &evalengine.Config{
 		Collation:   coll,
 		Environment: env,
 	}
-	pv, err := evalengine.Translate(limit.Rowcount, cfg)
+	count, err := evalengine.Translate(limit.Rowcount, cfg)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "unexpected expression in LIMIT")
 	}
-	plan.elimit.Count = pv
-
+	var offset evalengine.Expr
 	if limit.Offset != nil {
-		pv, err = evalengine.Translate(limit.Offset, cfg)
+		offset, err = evalengine.Translate(limit.Offset, cfg)
 		if err != nil {
 			return nil, vterrors.Wrap(err, "unexpected expression in OFFSET")
 		}
-		plan.elimit.Offset = pv
 	}
 
-	return plan, nil
+	return &primitiveWrapper{prim: &engine.Limit{
+		Count:  count,
+		Offset: offset,
+		Input:  input.Primitive(),
+	}}, nil
 }
 
 func transformHashJoin(ctx *plancontext.PlanningContext, op *operators.HashJoin) (logicalPlan, error) {
