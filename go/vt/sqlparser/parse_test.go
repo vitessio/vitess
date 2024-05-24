@@ -2891,6 +2891,9 @@ var (
 			input:  "CREATE USER UserName@localhost ATTRIBUTE '{\"attr\": \"attr_text\"}'",
 			output: "create user `UserName`@`localhost` attribute '{\"attr\": \"attr_text\"}'",
 		}, {
+			input:  "CREATE USER 'UserName'@'%' IDENTIFIED WITH 'caching_sha2_password' AS 'xyz0123'",
+			output: "create user `UserName`@`%` identified with caching_sha2_password as 'xyz0123'",
+		}, {
 			input:  "ALTER USER IF EXISTS foo@bar IDENTIFIED BY 'password1';",
 			output: "alter user if exists `foo`@`bar` identified by 'password1'",
 		}, {
