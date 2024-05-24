@@ -43,19 +43,3 @@ func newBuilderCommon(input logicalPlan) logicalPlanCommon {
 func (bc *logicalPlanCommon) Order() int {
 	return bc.order
 }
-
-// -------------------------------------------------------------------------
-
-// resultsBuilder is a superset of logicalPlanCommon. It also handles
-// resultsColumn functionality.
-type resultsBuilder struct {
-	logicalPlanCommon
-	truncater truncater
-}
-
-func newResultsBuilder(input logicalPlan, truncater truncater) resultsBuilder {
-	return resultsBuilder{
-		logicalPlanCommon: newBuilderCommon(input),
-		truncater:         truncater,
-	}
-}

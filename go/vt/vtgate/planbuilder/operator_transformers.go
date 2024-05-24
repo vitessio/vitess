@@ -256,8 +256,11 @@ func transformSubQuery(ctx *plancontext.PlanningContext, op *operators.SubQuery)
 		return newUncorrelatedSubquery(op.FilterType, op.SubqueryValueName, op.HasValuesName, inner, outer), nil
 	}
 
-	lhsCols := op.OuterExpressionsNeeded(ctx, op.Outer)
-	return newSemiJoin(outer, inner, op.Vars, lhsCols), nil
+	return &primitiveWrapper{prim: &engine.SemiJoin{
+		Left:  outer.Primitive(),
+		Right: inner.Primitive(),
+		Vars:  op.Vars,
+	}}, nil
 }
 
 // transformFkVerify transforms a FkVerify operator into a logical plan.
@@ -410,7 +413,7 @@ func transformProjection(ctx *plancontext.PlanningContext, op *operators.Project
 	var evalengineExprs []evalengine.Expr
 	var columnNames []string
 	for _, pe := range ap {
-		ee, err := getEvalEngingeExpr(ctx, pe)
+		ee, err := getEvalEngineExpr(ctx, pe)
 		if err != nil {
 			return nil, err
 		}
@@ -418,15 +421,11 @@ func transformProjection(ctx *plancontext.PlanningContext, op *operators.Project
 		columnNames = append(columnNames, pe.Original.ColumnName())
 	}
 
-	primitive := &engine.Projection{
+	return &primitiveWrapper{prim: &engine.Projection{
+		Input: src.Primitive(),
 		Cols:  columnNames,
 		Exprs: evalengineExprs,
-	}
-
-	return &projection{
-		source:    src,
-		primitive: primitive,
-	}, nil
+	}}, nil
 }
 
 // offsetInInputOrder returns true if the columns are in the same order as the input
@@ -439,7 +438,7 @@ func offsetInInputOrder(cols []int) bool {
 	return true
 }
 
-func getEvalEngingeExpr(ctx *plancontext.PlanningContext, pe *operators.ProjExpr) (evalengine.Expr, error) {
+func getEvalEngineExpr(ctx *plancontext.PlanningContext, pe *operators.ProjExpr) (evalengine.Expr, error) {
 	switch e := pe.Info.(type) {
 	case *operators.EvalEngine:
 		return e.EExpr, nil
