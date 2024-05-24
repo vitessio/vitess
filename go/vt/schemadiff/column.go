@@ -104,8 +104,9 @@ func (c *ColumnDefinitionEntity) ColumnDiff(
 ) (*ModifyColumnDiff, error) {
 	if c.IsTextual() || other.IsTextual() {
 		// We will now denormalize the columns charset & collate as needed (if empty, populate from table.)
-		// This column definition
+		// Normalizing _this_ column definition:
 		if c.columnDefinition.Type.Charset.Name != "" && c.columnDefinition.Type.Options.Collate == "" {
+			// Charset defined without collation. Assign the default collation for that charset.
 			collation := env.CollationEnv().DefaultCollationForCharset(c.columnDefinition.Type.Charset.Name)
 			if collation == collations.Unknown {
 				return nil, &UnknownColumnCharsetCollationError{Column: c.columnDefinition.Name.String(), Charset: t1cc.charset}
@@ -128,6 +129,7 @@ func (c *ColumnDefinitionEntity) ColumnDiff(
 			c.columnDefinition.Type.Charset.Name = charset
 		}
 		if c.columnDefinition.Type.Charset.Name == "" {
+			// Still nothing? Assign the table's charset/collation.
 			defer func() {
 				c.columnDefinition.Type.Charset.Name = ""
 				c.columnDefinition.Type.Options.Collate = ""
@@ -147,8 +149,9 @@ func (c *ColumnDefinitionEntity) ColumnDiff(
 				c.columnDefinition.Type.Options.Collate = env.CollationEnv().LookupName(collation)
 			}
 		}
-		// other column definition
+		// Normalizing _the other_ column definition:
 		if other.columnDefinition.Type.Charset.Name != "" && other.columnDefinition.Type.Options.Collate == "" {
+			// Charset defined without collation. Assign the default collation for that charset.
 			collation := env.CollationEnv().DefaultCollationForCharset(other.columnDefinition.Type.Charset.Name)
 			if collation == collations.Unknown {
 				return nil, &UnknownColumnCharsetCollationError{Column: other.columnDefinition.Name.String(), Charset: t2cc.charset}
@@ -172,6 +175,7 @@ func (c *ColumnDefinitionEntity) ColumnDiff(
 		}
 
 		if other.columnDefinition.Type.Charset.Name == "" {
+			// Still nothing? Assign the table's charset/collation.
 			defer func() {
 				other.columnDefinition.Type.Charset.Name = ""
 				other.columnDefinition.Type.Options.Collate = ""
