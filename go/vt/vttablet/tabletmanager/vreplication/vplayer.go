@@ -866,12 +866,9 @@ func (sh *stallHandler) startTimer() error {
 	if swapped := sh.timer.CompareAndSwap(nil, time.NewTimer(sh.deadline)); !swapped {
 		// Otherwise, reset the timer.
 		if sh.timer.Load().Reset(sh.deadline) {
-			// The timer was already running, so be sure the channel is drained.
-			select {
-			case <-sh.timer.Load().C:
-			default:
-			}
-
+			// The timer gorouting was already running, so now that we've reset the timer
+			// it's using we're done.
+			return nil
 		}
 	}
 	go func() {
