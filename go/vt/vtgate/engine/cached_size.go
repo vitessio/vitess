@@ -793,8 +793,6 @@ func (cached *OrderedAggregate) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.Input.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
-	// field CollationEnv *vitess.io/vitess/go/mysql/collations.Environment
-	size += cached.CollationEnv.CachedSize(true)
 	return size
 }
 func (cached *Plan) CachedSize(alloc bool) int64 {

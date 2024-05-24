@@ -342,7 +342,6 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 		GroupByKeys:         groupByKeys,
 		TruncateColumnCount: op.ResultColumns,
 		Input:               src.Primitive(),
-		CollationEnv:        ctx.VSchema.Environment().CollationEnv(),
 	}}, nil
 }
 
