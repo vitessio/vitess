@@ -2186,6 +2186,10 @@ authentication:
   {
     $$ = &Authentication{Plugin: string($3), Identity: string($5)}
   }
+| IDENTIFIED WITH STRING AS STRING
+  {
+    $$ = &Authentication{Plugin: string($3), Identity: string($5)}
+  }
 
 authentication_initial:
   IDENTIFIED BY RANDOM PASSWORD
