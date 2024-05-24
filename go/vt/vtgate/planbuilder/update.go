@@ -74,7 +74,7 @@ func gen4UpdateStmtPlanner(
 		return nil, err
 	}
 
-	plan, err := transformToLogicalPlan(ctx, op)
+	plan, err := transformToPrimitive(ctx, op)
 	if err != nil {
 		return nil, err
 	}
