@@ -262,6 +262,14 @@ func shouldRetryAfterPredicateRewriting(plan logicalPlan) bool {
 		opcode = routePlan.eroute.Opcode
 		sysTableTableName = routePlan.eroute.SysTableTableName
 		sysTableTableSchema = routePlan.eroute.SysTableTableSchema
+	case *primitiveWrapper:
+		eroute, ok := routePlan.prim.(*engine.Route)
+		if !ok {
+			return false
+		}
+		opcode = eroute.Opcode
+		sysTableTableName = eroute.SysTableTableName
+		sysTableTableSchema = eroute.SysTableTableSchema
 	default:
 		return false
 	}

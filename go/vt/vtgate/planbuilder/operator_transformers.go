@@ -576,6 +576,10 @@ func buildRouteLogicalPlan(ctx *plancontext.PlanningContext, op *operators.Route
 	_ = updateSelectedVindexPredicate(op.Routing)
 
 	eroute, err := routeToEngineRoute(ctx, op, hints)
+	if err != nil {
+		return nil, err
+	}
+
 	for _, order := range op.Ordering {
 		typ, _ := ctx.SemTable.TypeForExpr(order.AST)
 		eroute.OrderBy = append(eroute.OrderBy, evalengine.OrderByParams{
@@ -586,19 +590,15 @@ func buildRouteLogicalPlan(ctx *plancontext.PlanningContext, op *operators.Route
 			CollationEnv:    ctx.VSchema.Environment().CollationEnv(),
 		})
 	}
+
+	prepareTheAST(stmt)
+
+	res, err := WireupRoute(ctx, eroute, stmt)
 	if err != nil {
 		return nil, err
 	}
-	r := &route{
-		eroute: eroute,
-		Select: stmt,
-		tables: operators.TableID(op),
-	}
 
-	if err = r.Wireup(ctx); err != nil {
-		return nil, err
-	}
-	return r, nil
+	return &primitiveWrapper{prim: res}, nil
 }
 
 func buildInsertLogicalPlan(
