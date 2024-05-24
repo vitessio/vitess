@@ -26,7 +26,6 @@ import (
 
 	"github.com/spf13/pflag"
 
-	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -120,18 +119,6 @@ type locksInfo struct {
 type locksKeyType int
 
 var locksKey locksKeyType
-
-// getLockTimeout is shim code used for backward compatibility with v15
-// This code can be removed in v17+ and LockTimeout can be used directly
-func getLockTimeout() time.Duration {
-	if _flag.IsFlagProvided("lock-timeout") {
-		return LockTimeout
-	}
-	if _flag.IsFlagProvided("remote_operation_timeout") {
-		return RemoteOperationTimeout
-	}
-	return LockTimeout
-}
 
 // lockType is the interface for knowing the resource that is being locked.
 // It allows for better controlling nuances for different lock types and log messages.
