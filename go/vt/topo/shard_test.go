@@ -77,12 +77,29 @@ func TestRemoveCellsFromList(t *testing.T) {
 	}
 }
 
+// fakeLockDescriptor implements the topo.LockDescriptor interface
+type fakeLockDescriptor struct{}
+
+// Check implements the topo.LockDescriptor interface
+func (f fakeLockDescriptor) Check(ctx context.Context) error {
+	return nil
+}
+
+// Unlock implements the topo.LockDescriptor interface
+func (f fakeLockDescriptor) Unlock(ctx context.Context) error {
+	return nil
+}
+
+var _ LockDescriptor = (*fakeLockDescriptor)(nil)
+
 func lockedKeyspaceContext(keyspace string) context.Context {
 	ctx := context.Background()
 	return context.WithValue(ctx, locksKey, &locksInfo{
 		info: map[string]*lockInfo{
 			// An empty entry is good enough for this.
-			keyspace: {},
+			keyspace: {
+				lockDescriptor: fakeLockDescriptor{},
+			},
 		},
 	})
 }
