@@ -46,8 +46,6 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	"vitess.io/vitess/go/vt/proto/vtctldata"
-	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
@@ -66,7 +64,6 @@ type VReplStream struct {
 	message              string
 	rowsCopied           int64
 	bls                  *binlogdatapb.BinlogSource
-	options              *vtctldatapb.WorkflowOptions
 }
 
 // livenessTimeIndicator returns a time indicator for last known healthy state.
@@ -101,16 +98,15 @@ func (v *VReplStream) hasError() (isTerminal bool, vreplError error) {
 
 // VRepl is an online DDL helper for VReplication based migrations (ddl_strategy="online")
 type VRepl struct {
-	workflow        string
-	keyspace        string
-	shard           string
-	dbName          string
-	sourceTable     string
-	targetTable     string
-	pos             string
-	alterQuery      string
-	tableRows       int64
-	workflowOptions *vtctldata.WorkflowOptions
+	workflow    string
+	keyspace    string
+	shard       string
+	dbName      string
+	sourceTable string
+	targetTable string
+	pos         string
+	alterQuery  string
+	tableRows   int64
 
 	originalShowCreateTable string
 	vreplShowCreateTable    string
@@ -158,7 +154,6 @@ func NewVRepl(
 	vreplShowCreateTable string,
 	alterQuery string,
 	analyzeTable bool,
-	workflowOptions *vtctldatapb.WorkflowOptions,
 ) *VRepl {
 	return &VRepl{
 		env:                     env,
@@ -176,7 +171,6 @@ func NewVRepl(
 		enumToTextMap:           map[string]string{},
 		intToEnumMap:            map[string]bool{},
 		convertCharset:          map[string](*binlogdatapb.CharsetConversion){},
-		workflowOptions:         workflowOptions,
 	}
 }
 
@@ -673,8 +667,8 @@ func (v *VRepl) analyze(ctx context.Context, conn *dbconnpool.DBConnection) erro
 // generateInsertStatement generates the INSERT INTO _vt.replication statement that creates the vreplication workflow
 func (v *VRepl) generateInsertStatement(ctx context.Context) (string, error) {
 	ig := vreplication.NewInsertGenerator(binlogdatapb.VReplicationWorkflowState_Stopped, v.dbName)
-	ig.AddRowWithOptions(v.workflow, v.bls, v.pos, "", "in_order:REPLICA,PRIMARY",
-		binlogdatapb.VReplicationWorkflowType_OnlineDDL, binlogdatapb.VReplicationWorkflowSubType_None, false, v.workflowOptions)
+	ig.AddRow(v.workflow, v.bls, v.pos, "", "in_order:REPLICA,PRIMARY",
+		binlogdatapb.VReplicationWorkflowType_OnlineDDL, binlogdatapb.VReplicationWorkflowSubType_None, false)
 
 	return ig.String(), nil
 }

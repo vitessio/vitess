@@ -24,7 +24,6 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 // VReplicationStream represents a single stream of a vreplication workflow.
@@ -36,7 +35,6 @@ type VReplicationStream struct {
 	WorkflowType       binlogdatapb.VReplicationWorkflowType
 	WorkflowSubType    binlogdatapb.VReplicationWorkflowSubType
 	DeferSecondaryKeys bool
-	Options            *vtctldatapb.WorkflowOptions
 }
 
 // VReplicationStreams wraps a slice of VReplicationStream objects to provide

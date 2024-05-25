@@ -21,12 +21,10 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"google.golang.org/protobuf/encoding/protojson"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
 
-	"vitess.io/vitess/go/vt/log"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
@@ -41,6 +39,7 @@ var (
 		SourceTimeZone      string
 		NoRoutingRules      bool
 		AtomicCopy          bool
+		WorkflowOptions     vtctldatapb.WorkflowOptions
 	}{}
 
 	// create makes a MoveTablesCreate gRPC call to a vtctld.
@@ -80,17 +79,13 @@ var (
 				return err
 			}
 
-			tenantId := common.CreateOptions.WorkflowOptions.GetTenantId()
-			if len(common.CreateOptions.WorkflowOptions.GetShards()) > 0 && tenantId == "" {
+			tenantId := createOptions.WorkflowOptions.GetTenantId()
+			if len(createOptions.WorkflowOptions.GetShards()) > 0 && tenantId == "" {
 				return fmt.Errorf("--shards specified, but not --tenant-id: you can only specify target shards for multi-tenant migrations")
 			}
 			if tenantId != "" && len(createOptions.SourceShards) > 0 {
 				return fmt.Errorf("cannot specify both --tenant-id (i.e. a multi-tenant migration) and --source-shards (i.e. a shard-by-shard migration)")
 			}
-
-			jsonMarshaler := protojson.MarshalOptions{UseProtoNames: true}
-			wo, _ := jsonMarshaler.Marshal(common.CreateOptions.WorkflowOptions)
-			log.Errorf("DEBUG: WorkflowOptions: %v", string(wo))
 
 			return nil
 		},
@@ -124,9 +119,8 @@ func commandCreate(cmd *cobra.Command, args []string) error {
 		StopAfterCopy:             common.CreateOptions.StopAfterCopy,
 		NoRoutingRules:            createOptions.NoRoutingRules,
 		AtomicCopy:                createOptions.AtomicCopy,
-		WorkflowOptions:           common.CreateOptions.WorkflowOptions,
+		WorkflowOptions:           &createOptions.WorkflowOptions,
 	}
-	log.Errorf("DEBUG: MoveTablesCreateRequest.WorkflowOptions: %v", req.GetWorkflowOptions())
 
 	resp, err := common.GetClient().MoveTablesCreate(common.GetCommandCtx(), req)
 	if err != nil {

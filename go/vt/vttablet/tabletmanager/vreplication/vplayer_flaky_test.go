@@ -32,7 +32,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/replication"
-	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
@@ -41,7 +40,6 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	qh "vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication/queryhistory"
 )
 
@@ -3331,22 +3329,20 @@ func TestPlayerStalls(t *testing.T) {
 	logger := logutil.NewMemoryLogger()
 	log.Errorf = logger.Errorf
 
-	workflowOptions := &vtctldatapb.WorkflowOptions{
-		ProgressDeadline: protoutil.DurationToProto(5 * time.Second),
-	}
-
 	ovmhu := vreplicationMinimumHeartbeatUpdateInterval
+	ogvpt := vplayerProgressDeadline
 	orlmi := relayLogMaxItems
 	ord := retryDelay
 	defer func() {
 		log.Errorf = ole
 		vreplicationMinimumHeartbeatUpdateInterval = ovmhu
+		vplayerProgressDeadline = ogvpt
 		relayLogMaxItems = orlmi
 		retryDelay = ord
 	}()
 
 	// Shorten the deadline for the test.
-	vplayerProgressDeadline := 5 * time.Second
+	vplayerProgressDeadline = 5 * time.Second
 	// Shorten the time for a required heartbeat recording for the test.
 	vreplicationMinimumHeartbeatUpdateInterval = 5
 	// So each relay log batch will be a single statement transaction.
@@ -3451,7 +3447,7 @@ func TestPlayerStalls(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			vrcancel, _ := startVReplicationWithOptions(t, bls, "", workflowOptions)
+			vrcancel, _ := startVReplication(t, bls, "")
 			defer vrcancel()
 			execStatements(t, tc.input)
 			if tc.preFunc != nil {
@@ -3498,34 +3494,7 @@ func startVReplication(t *testing.T, bls *binlogdatapb.BinlogSource, pos string)
 		pos = primaryPosition(t)
 	}
 	// fake workflow type as MoveTables so that we can test with "noblob" binlog row image
-	query := binlogplayer.CreateVReplication("test", bls, pos, 9223372036854775807, 9223372036854775807, 0, vrepldb, binlogdatapb.VReplicationWorkflowType_MoveTables, 0, false, nil)
-	qr, err := playerEngine.Exec(query)
-	require.NoError(t, err)
-	expectDBClientQueries(t, qh.Expect(
-		"/insert into _vt.vreplication",
-		"/update _vt.vreplication set message='Picked source tablet.*",
-		"/update _vt.vreplication set state='Running'",
-	))
-	var once sync.Once
-	return func() {
-		t.Helper()
-		once.Do(func() {
-			query := fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
-			_, err := playerEngine.Exec(query)
-			require.NoError(t, err)
-			expectDeleteQueries(t)
-		})
-	}, int(qr.InsertID)
-}
-
-func startVReplicationWithOptions(t *testing.T, bls *binlogdatapb.BinlogSource, pos string, options *vtctldatapb.WorkflowOptions) (cancelFunc func(), id int) {
-	t.Helper()
-
-	if pos == "" {
-		pos = primaryPosition(t)
-	}
-	// fake workflow type as MoveTables so that we can test with "noblob" binlog row image
-	query := binlogplayer.CreateVReplication("test", bls, pos, 9223372036854775807, 9223372036854775807, 0, vrepldb, binlogdatapb.VReplicationWorkflowType_MoveTables, 0, false, options)
+	query := binlogplayer.CreateVReplication("test", bls, pos, 9223372036854775807, 9223372036854775807, 0, vrepldb, binlogdatapb.VReplicationWorkflowType_MoveTables, 0, false)
 	qr, err := playerEngine.Exec(query)
 	require.NoError(t, err)
 	expectDBClientQueries(t, qh.Expect(

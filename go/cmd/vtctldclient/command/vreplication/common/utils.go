@@ -35,7 +35,6 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
-	"vitess.io/vitess/go/vt/proto/vttime"
 )
 
 var (
@@ -68,12 +67,7 @@ var (
 		MySQLServerVersion           string
 		TruncateUILen                int
 		TruncateErrLen               int
-		WorkflowOptions              *vtctldatapb.WorkflowOptions
-	}{
-		WorkflowOptions: &vtctldatapb.WorkflowOptions{
-			ProgressDeadline: &vttime.Duration{},
-		},
-	}
+	}{}
 )
 
 var commandHandlers = make(map[string]func(cmd *cobra.Command))
@@ -146,7 +140,7 @@ func ParseTabletTypes(cmd *cobra.Command) error {
 	return nil
 }
 
-func validateOnDDL(*cobra.Command) error {
+func validateOnDDL(cmd *cobra.Command) error {
 	if _, ok := binlogdatapb.OnDDLAction_value[strings.ToUpper(CreateOptions.OnDDL)]; !ok {
 		return fmt.Errorf("invalid on-ddl value: %s", CreateOptions.OnDDL)
 	}
@@ -228,8 +222,6 @@ func AddCommonCreateFlags(cmd *cobra.Command) {
 	cmd.Flags().BoolVar(&CreateOptions.DeferSecondaryKeys, "defer-secondary-keys", false, "Defer secondary index creation for a table until after it has been copied.")
 	cmd.Flags().BoolVar(&CreateOptions.AutoStart, "auto-start", true, "Start the workflow after creating it.")
 	cmd.Flags().BoolVar(&CreateOptions.StopAfterCopy, "stop-after-copy", false, "Stop the workflow after it's finished copying the existing rows and before it starts replicating changes.")
-	// At what point should we consider a vplayer to be stuck, produce an error, and retry?
-	cmd.Flags().Var((*topoproto.VTTimeDurationFlag)(CreateOptions.WorkflowOptions.ProgressDeadline), "progress-deadline", "At what point, without having been able to successfully replicate a pending batch of events, should we consider replication to be stalled; producing an error and log message and restarting the replication.")
 }
 
 var SwitchTrafficOptions = struct {

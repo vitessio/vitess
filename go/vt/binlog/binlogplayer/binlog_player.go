@@ -34,7 +34,6 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
-	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/history"
@@ -52,8 +51,6 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/proto/vtctldata"
-	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 var (
@@ -562,12 +559,11 @@ type VRSettings struct {
 	WorkflowSubType    binlogdatapb.VReplicationWorkflowSubType
 	WorkflowName       string
 	DeferSecondaryKeys bool
-	ProgressDeadline   time.Duration
 }
 
 // ReadVRSettings retrieves the settings for a vreplication stream.
 func ReadVRSettings(dbClient DBClient, uid int32) (VRSettings, error) {
-	query := fmt.Sprintf("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys, options from _vt.vreplication where id=%v", uid)
+	query := fmt.Sprintf("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys from _vt.vreplication where id=%v", uid)
 	qr, err := dbClient.ExecuteFetch(query, 1)
 	if err != nil {
 		return VRSettings{}, fmt.Errorf("error %v in selecting vreplication settings %v", err, query)
@@ -606,18 +602,6 @@ func ReadVRSettings(dbClient DBClient, uid int32) (VRSettings, error) {
 	if err != nil {
 		return VRSettings{}, fmt.Errorf("failed to parse defer_secondary_keys column: %v", err)
 	}
-	var workflowOptions vtctldatapb.WorkflowOptions
-	ob, err := vrRow.ToBytes("options")
-	if err != nil {
-		return VRSettings{}, fmt.Errorf("failed to parse options column: %v", err)
-	}
-	if err := protojson.Unmarshal(ob, &workflowOptions); err != nil {
-		return VRSettings{}, fmt.Errorf("options column contains invalid data: %v ; value: %s", err, string(ob))
-	}
-	vpd, _, err := protoutil.DurationFromProto(workflowOptions.ProgressDeadline)
-	if err != nil {
-		return VRSettings{}, fmt.Errorf("options column contains invalid value for the ProgressDeadline: %v ; value: %v", err, workflowOptions.ProgressDeadline)
-	}
 	return VRSettings{
 		StartPos:           startPos,
 		StopPos:            stopPos,
@@ -628,22 +612,20 @@ func ReadVRSettings(dbClient DBClient, uid int32) (VRSettings, error) {
 		WorkflowName:       vrRow.AsString("workflow", ""),
 		WorkflowSubType:    binlogdatapb.VReplicationWorkflowSubType(workflowSubType),
 		DeferSecondaryKeys: deferSecondaryKeys,
-		ProgressDeadline:   vpd,
 	}, nil
 }
 
 // CreateVReplication returns a statement to populate the first value into
-// the _vt.vreplication table. This should ONLY be used in unit tests.
+// the _vt.vreplication table.
 func CreateVReplication(workflow string, source *binlogdatapb.BinlogSource, position string, maxTPS, maxReplicationLag, timeUpdated int64, dbName string,
-	workflowType binlogdatapb.VReplicationWorkflowType, workflowSubType binlogdatapb.VReplicationWorkflowSubType, deferSecondaryKeys bool, options *vtctldata.WorkflowOptions) string {
+	workflowType binlogdatapb.VReplicationWorkflowType, workflowSubType binlogdatapb.VReplicationWorkflowSubType, deferSecondaryKeys bool) string {
 	protoutil.SortBinlogSourceTables(source)
-	optionsStr, _ := protojson.Marshal(options)
 	return fmt.Sprintf("insert into _vt.vreplication "+
 		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys, options) "+
-		"values (%v, %v, %v, %v, %v, %v, 0, '%v', %v, %d, %d, %v, '%s')",
+		"values (%v, %v, %v, %v, %v, %v, 0, '%v', %v, %d, %d, %v, %s)",
 		encodeString(workflow), encodeString(source.String()), encodeString(position), maxTPS, maxReplicationLag,
 		timeUpdated, binlogdatapb.VReplicationWorkflowState_Running.String(), encodeString(dbName), workflowType,
-		workflowSubType, deferSecondaryKeys, optionsStr)
+		workflowSubType, deferSecondaryKeys, encodeString("{}"))
 }
 
 // CreateVReplicationState returns a statement to create a stopped vreplication.

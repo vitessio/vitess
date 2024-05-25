@@ -39,6 +39,8 @@ import (
 )
 
 var (
+	// At what point should we consider the vplayer to be stalled and return an error.
+	vplayerProgressDeadline = time.Duration(0) // Disabled by default.
 
 	// The error to return when we have detected a stall in the vplayer.
 	ErrVPlayerStalled = fmt.Errorf("progress stalled; vplayer was unable to replicate the transaction in a timely manner; examine the target mysqld instance health and the replicated queries' EXPLAIN output to see why queries are taking unusually long")
@@ -129,7 +131,7 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 	queryFunc := func(ctx context.Context, sql string) (*sqltypes.Result, error) {
 		return vr.dbClient.ExecuteWithRetry(ctx, sql)
 	}
-	stallHandler := newStallHandler(settings.ProgressDeadline, nil)
+	stallHandler := newStallHandler(vplayerProgressDeadline, nil)
 	commitFunc := func() error {
 		// Explicit commits are only done when we are processing a batch of replicated
 		// queries and NOT for heartbeats or when simply updating the position. So we
@@ -862,14 +864,10 @@ func (sh *stallHandler) startTimer() error {
 	}
 	// If the timer has not been initializeded yet, then do so.
 	if swapped := sh.timer.CompareAndSwap(nil, time.NewTimer(sh.deadline)); !swapped {
-		// Otherwise, reset the timer's deadline.
+		// Otherwise, reset the timer.
 		if sh.timer.Load().Reset(sh.deadline) {
-			select {
-			case <-sh.timer.Load().C:
-			default:
-			}
-			// The timer goroutine was already running, so now that we've reset the
-			// timer's deadline we're done.
+			// The timer gorouting was already running, so now that we've reset the timer
+			// it's using we're done.
 			return nil
 		}
 	}
@@ -877,7 +875,7 @@ func (sh *stallHandler) startTimer() error {
 		select {
 		case <-sh.timer.Load().C: // The timer expired
 			sh.fire <- vterrors.Wrapf(ErrVPlayerStalled,
-				"failed to commit transaction batch before the configured progress deadline of %v", sh.deadline)
+				"failed to commit transaction batch before the configured --vplayer-progress-deadline of %v", vplayerProgressDeadline)
 		case <-sh.stop: // The timer was stopped
 		}
 	}()

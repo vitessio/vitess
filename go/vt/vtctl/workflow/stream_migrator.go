@@ -1000,8 +1000,8 @@ func (sm *StreamMigrator) createTargetStreams(ctx context.Context, tmpl []*VRepl
 				rule.Filter = buf.String()
 			}
 
-			ig.AddRowWithOptions(vrs.Workflow, vrs.BinlogSource, replication.EncodePosition(vrs.Position), "", "",
-				vrs.WorkflowType, vrs.WorkflowSubType, vrs.DeferSecondaryKeys, vrs.Options)
+			ig.AddRow(vrs.Workflow, vrs.BinlogSource, replication.EncodePosition(vrs.Position), "", "",
+				vrs.WorkflowType, vrs.WorkflowSubType, vrs.DeferSecondaryKeys)
 			return nil
 		}
 

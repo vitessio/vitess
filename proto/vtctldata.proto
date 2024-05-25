@@ -214,9 +214,6 @@ message WorkflowOptions {
   // Shards on which vreplication streams in the target keyspace are created for this workflow and to which the data
   // from the source will be vreplicated.
   repeated string shards = 3;
-  // A deadline for vplayer to make progress on the workflow. If the deadline is exceeded, the vplayer will return
-  // an error which is logged and saved in the _vt.vreplication.message field.
-  vttime.Duration progress_deadline = 4;
 }
 
 // TODO: comment the hell out of this.

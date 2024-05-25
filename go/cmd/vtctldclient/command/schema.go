@@ -33,7 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
 
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var (
@@ -103,7 +103,6 @@ var applySchemaOptions = struct {
 	SkipPreflight           bool
 	CallerID                string
 	BatchSize               int64
-	ProgressDeadline        time.Duration
 }{}
 
 func commandApplySchema(cmd *cobra.Command, args []string) error {
@@ -130,9 +129,9 @@ func commandApplySchema(cmd *cobra.Command, args []string) error {
 
 	cli.FinishedParsing(cmd)
 
-	var cid *vtrpcpb.CallerID
+	var cid *vtrpc.CallerID
 	if applySchemaOptions.CallerID != "" {
-		cid = &vtrpcpb.CallerID{Principal: applySchemaOptions.CallerID}
+		cid = &vtrpc.CallerID{Principal: applySchemaOptions.CallerID}
 	}
 
 	ks := cmd.Flags().Arg(0)
@@ -294,8 +293,6 @@ func init() {
 	ApplySchema.Flags().StringArrayVar(&applySchemaOptions.SQL, "sql", nil, "Semicolon-delimited, repeatable SQL commands to apply. Exactly one of --sql|--sql-file is required.")
 	ApplySchema.Flags().StringVar(&applySchemaOptions.SQLFile, "sql-file", "", "Path to a file containing semicolon-delimited SQL commands to apply. Exactly one of --sql|--sql-file is required.")
 	ApplySchema.Flags().Int64Var(&applySchemaOptions.BatchSize, "batch-size", 0, "How many queries to batch together. Only applicable when all queries are CREATE TABLE|VIEW")
-	// At what point should we consider a vplayer to be stuck, produce an error, and retry?
-	ApplySchema.Flags().DurationVar(&applySchemaOptions.ProgressDeadline, "progress-deadline", 0, "(vitess OnlineDDL only) At what point, without having been able to successfully replicate a pending batch of events, should we consider replication to be stalled; producing an error and log message and restarting the replication.")
 
 	Root.AddCommand(ApplySchema)
 

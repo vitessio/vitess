@@ -143,8 +143,6 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 				args = append(args, "--defer-secondary-keys")
 			}
 		}
-		// Test new experimental --progress-deadline flag
-		args = append(args, "--progress-deadline=15s")
 	default:
 		if options.shardSubset != "" {
 			args = append(args, "--shards", options.shardSubset)

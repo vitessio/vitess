@@ -21,17 +21,11 @@ import (
 	"strings"
 	"time"
 
-	"google.golang.org/protobuf/encoding/protojson"
-
 	"vitess.io/vitess/go/protoutil"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/throttler"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
-
-var jsonMarshaler = protojson.MarshalOptions{UseProtoNames: true}
 
 // InsertGenerator generates a vreplication insert statement.
 type InsertGenerator struct {
@@ -55,23 +49,10 @@ func NewInsertGenerator(state binlogdatapb.VReplicationWorkflowState, dbname str
 	}
 }
 
-// AddRow adds a row to the insert statement. You should use AddRowWithOptions in new code
-// if you cannot avoid using this function (you should instead use the new tabletmanager
-// RPCs instead whenever possible).
+// AddRow adds a row to the insert statement.
 func (ig *InsertGenerator) AddRow(workflow string, bls *binlogdatapb.BinlogSource, pos, cell, tabletTypes string,
-	workflowType binlogdatapb.VReplicationWorkflowType, workflowSubType binlogdatapb.VReplicationWorkflowSubType,
-	deferSecondaryKeys bool) {
-	ig.AddRowWithOptions(workflow, bls, pos, cell, tabletTypes, workflowType, workflowSubType, deferSecondaryKeys, nil)
-}
-func (ig *InsertGenerator) AddRowWithOptions(workflow string, bls *binlogdatapb.BinlogSource, pos, cell, tabletTypes string,
-	workflowType binlogdatapb.VReplicationWorkflowType, workflowSubType binlogdatapb.VReplicationWorkflowSubType,
-	deferSecondaryKeys bool, workflowOptions *vtctldatapb.WorkflowOptions) {
+	workflowType binlogdatapb.VReplicationWorkflowType, workflowSubType binlogdatapb.VReplicationWorkflowSubType, deferSecondaryKeys bool) {
 	protoutil.SortBinlogSourceTables(bls)
-	ob, err := jsonMarshaler.Marshal(workflowOptions)
-	if err != nil || ob == nil {
-		log.Errorf("Error marshaling workflow options: %v, value will be ignored\n", err)
-		ob = []byte("{}")
-	}
 	fmt.Fprintf(ig.buf, "%s(%v, %v, %v, %v, %v, %v, %v, %v, 0, '%v', %v, %d, %d, %v, %v)",
 		ig.prefix,
 		encodeString(workflow),
@@ -87,7 +68,7 @@ func (ig *InsertGenerator) AddRowWithOptions(workflow string, bls *binlogdatapb.
 		workflowType,
 		workflowSubType,
 		deferSecondaryKeys,
-		fmt.Sprintf("'%s'", string(ob)),
+		"'{}'",
 	)
 	ig.prefix = ", "
 }

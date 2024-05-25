@@ -18,13 +18,8 @@ package topoproto
 
 import (
 	"strings"
-	"time"
 
-	"github.com/pkg/errors"
-
-	"vitess.io/vitess/go/protoutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/proto/vttime"
 )
 
 // TabletTypeListFlag implements the pflag.Value interface, for parsing a command-line comma-separated
@@ -64,31 +59,3 @@ func (ttf *TabletTypeFlag) Set(v string) error {
 
 // Type is part of the pflag.Value interface.
 func (*TabletTypeFlag) Type() string { return "topodatapb.TabletType" }
-
-// VTTimeDurationFlag is a custom pflag.Value for working with vttime.Duration.
-type VTTimeDurationFlag vttime.Duration
-
-// String is part of the pflag.Value interfaces.
-func (vdf *VTTimeDurationFlag) String() string {
-	if vdf == nil {
-		return ""
-	}
-	d, _, _ := protoutil.DurationFromProto((*vttime.Duration)(vdf))
-	return d.String()
-}
-
-// Set is part of the pflag.Value interfaces.
-func (vdf *VTTimeDurationFlag) Set(v string) error {
-	d, err := time.ParseDuration(v)
-	if err != nil {
-		return errors.Wrap(err, "failed to parse duration")
-	}
-	if vdf == nil {
-		vdf = new(VTTimeDurationFlag)
-	}
-	*vdf = VTTimeDurationFlag(vttime.Duration{Seconds: int64(d.Seconds())})
-	return err
-}
-
-// Type is part of the pflag.Value interface.
-func (vdf *VTTimeDurationFlag) Type() string { return "duration" }

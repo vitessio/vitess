@@ -31,7 +31,6 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
-	"vitess.io/vitess/go/vt/proto/vttime"
 )
 
 var (
@@ -40,7 +39,6 @@ var (
 		TabletTypes                  []topodatapb.TabletType
 		TabletTypesInPreferenceOrder bool
 		OnDDL                        string
-		ProgressDeadline             *vttime.Duration
 	}{}
 
 	// update makes a WorkflowUpdate gRPC call to a vtctld.
@@ -75,9 +73,6 @@ var (
 					return fmt.Errorf("invalid on-ddl value: %s", updateOptions.OnDDL)
 				}
 			} // Simulated NULL will need to be handled in command
-			if cmd.Flags().Lookup("progress-deadline").Changed {
-				changes = true
-			}
 			if !changes {
 				return fmt.Errorf("no configuration options specified to update")
 			}
@@ -117,7 +112,6 @@ func commandUpdate(cmd *cobra.Command, args []string) error {
 			TabletSelectionPreference: tsp,
 			OnDdl:                     binlogdatapb.OnDDLAction(onddl),
 			State:                     binlogdatapb.VReplicationWorkflowState(textutil.SimulatedNullInt), // We don't allow changing this in the client command
-			ProgressDeadline:          updateOptions.ProgressDeadline,
 		},
 	}
 

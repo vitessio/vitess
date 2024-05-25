@@ -112,7 +112,6 @@ type ApplySchemaParams struct {
 	UUIDs            string
 	CallerID         string
 	BatchSize        int
-	ProgressDeadline time.Duration
 }
 
 // ApplySchemaWithOutput applies SQL schema to the keyspace
@@ -135,9 +134,6 @@ func (vtctldclient *VtctldClientProcess) ApplySchemaWithOutput(keyspace string, 
 	}
 	if params.CallerID != "" {
 		args = append(args, "--caller-id", params.CallerID)
-	}
-	if params.ProgressDeadline != 0 {
-		args = append(args, "--progress-deadline", params.ProgressDeadline.String())
 	}
 	args = append(args, keyspace)
 	return vtctldclient.ExecuteCommandWithOutput(args...)
