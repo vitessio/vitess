@@ -81,6 +81,9 @@ func ensureNoGoroutines() error {
 		goleak.IgnoreTopFunction("vitess.io/vitess/go/vt/logutil.(*ThrottledLogger).log.func1"),
 		goleak.IgnoreTopFunction("vitess.io/vitess/go/vt/vttablet/tabletserver/throttle.initThrottleTicker.func1.1"),
 		goleak.IgnoreTopFunction("vitess.io/vitess/go/vt/vttablet/tabletserver/throttle.NewBackgroundClient.initThrottleTicker.func1.1"),
+		goleak.IgnoreTopFunction("vitess.io/vitess/go/pools/smartconnpool.(*ConnPool[...]).runWorker.func1"),
+		goleak.IgnoreTopFunction("vitess.io/vitess/go/stats.(*Rates).track"),
+		goleak.IgnoreTopFunction("vitess.io/vitess/go/timer.(*Timer).run"),
 		goleak.IgnoreTopFunction("testing.tRunner.func1"),
 	}
 

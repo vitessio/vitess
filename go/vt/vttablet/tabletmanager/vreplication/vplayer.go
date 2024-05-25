@@ -840,9 +840,13 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 }
 
 // stallHandler is used to monitor for vplayer stalls and trigger an error
-// when detected. This is used today to detect when a vplayer is not able
-// to commit/complete a replicated user transaction within a configured
-// period of time.
+// when detected. This is used today to detect when a vplayer is not able to
+// commit/complete a replicated user transaction within a configured period of
+// time. It offers a lock-free implementation that is idempotent; you can call
+// startTimer()/stopTimer() as many times as you like and in any order -- it
+// will ensure that there's only ever 0 or 1 timers/goroutines running at a
+// time. When it is already running, calls to startTimer() will only reset
+// the timer's deadline.
 type stallHandler struct {
 	timer    atomic.Pointer[time.Timer]
 	deadline time.Duration
@@ -850,6 +854,8 @@ type stallHandler struct {
 	stop     chan struct{}
 }
 
+// newStallHandler initializes a stall handler. You should call stopTimer()
+// in a defer from the same function where you initalize a new stallHandler.
 func newStallHandler(dl time.Duration, ch chan error) *stallHandler {
 	return &stallHandler{
 		deadline: dl,
@@ -858,11 +864,13 @@ func newStallHandler(dl time.Duration, ch chan error) *stallHandler {
 	}
 }
 
+// startTimer starts the timer if it's not already running and it otherwise
+// resets the timer's deadline when it it is already running.
 func (sh *stallHandler) startTimer() error {
 	if sh == nil || sh.deadline == 0 { // Stall handling is disabled
 		return nil
 	}
-	// If the timer has not been initializeded yet, then do so.
+	// If the timer has not been initialized yet, then do so.
 	if swapped := sh.timer.CompareAndSwap(nil, time.NewTimer(sh.deadline)); !swapped {
 		// Otherwise, reset the timer's deadline.
 		if sh.timer.Load().Reset(sh.deadline) {
@@ -887,6 +895,7 @@ func (sh *stallHandler) startTimer() error {
 	return nil
 }
 
+// stopTimer stops the timer if it's currently running.
 func (sh *stallHandler) stopTimer() error {
 	if sh == nil || sh.deadline == 0 || sh.timer.Load() == nil { // Stall handling is currently disabled
 		return nil
