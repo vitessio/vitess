@@ -224,6 +224,15 @@ func waitForMessage(t *testing.T, uuid string, messageSubstring string) {
 		case <-ticker.C:
 		case <-ctx.Done():
 			require.Failf(t, "timeout waiting for message", "expected: %s. Last seen: %s", messageSubstring, lastMessage)
+			{
+				resp, err := throttler.CheckThrottler(clusterInstance, primaryTablet, "test", nil)
+				assert.NoError(t, err)
+				fmt.Println("Throttler check response: ", resp)
+
+				output, err := throttler.GetThrottlerStatusRaw(&clusterInstance.VtctldClientProcess, primaryTablet)
+				assert.NoError(t, err)
+				fmt.Println("Throttler status response: ", output)
+			}
 			return
 		}
 	}
