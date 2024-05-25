@@ -864,10 +864,14 @@ func (sh *stallHandler) startTimer() error {
 	}
 	// If the timer has not been initializeded yet, then do so.
 	if swapped := sh.timer.CompareAndSwap(nil, time.NewTimer(sh.deadline)); !swapped {
-		// Otherwise, reset the timer.
+		// Otherwise, reset the timer's deadline.
 		if sh.timer.Load().Reset(sh.deadline) {
-			// The timer gorouting was already running, so now that we've reset the timer
-			// it's using we're done.
+			select {
+			case <-sh.timer.Load().C:
+			default:
+			}
+			// The timer goroutine was already running, so now that we've reset the
+			// timer's deadline we're done.
 			return nil
 		}
 	}
