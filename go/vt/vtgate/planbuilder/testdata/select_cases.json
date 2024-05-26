@@ -136,7 +136,7 @@
               "Sharded": true
             },
             "FieldQuery": "select * from `user` where 1 != 1",
-            "Query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from `user` limit :__upper_limit",
+            "Query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from `user` limit 10",
             "QueryTimeout": 1000,
             "Table": "`user`"
           }
@@ -271,7 +271,7 @@
               "Sharded": true
             },
             "FieldQuery": "select * from `user` where 1 != 1",
-            "Query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from `user` limit :__upper_limit",
+            "Query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from `user` limit 10",
             "ScatterErrorsAsWarnings": true,
             "Table": "`user`"
           }
@@ -1078,6 +1078,37 @@
             },
             "FieldQuery": "select user_id, weight_string(user_id) from music where 1 != 1",
             "OrderBy": "(0|1) ASC",
+            "Query": "select user_id, weight_string(user_id) from music order by music.user_id asc limit 30",
+            "ResultColumns": 1,
+            "Table": "music"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music"
+      ]
+    }
+  },
+  {
+    "comment": "sharded limit offset with arguments",
+    "query": "select user_id from music order by user_id limit :limit, :offset",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select user_id from music order by user_id limit :limit, :offset",
+      "Instructions": {
+        "OperatorType": "Limit",
+        "Count": ":offset",
+        "Offset": ":limit",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select user_id, weight_string(user_id) from music where 1 != 1",
+            "OrderBy": "(0|1) ASC",
             "Query": "select user_id, weight_string(user_id) from music order by music.user_id asc limit :__upper_limit",
             "ResultColumns": 1,
             "Table": "music"
@@ -1704,11 +1735,9 @@
       "Instructions": {
         "OperatorType": "SimpleProjection",
         "ColumnNames": [
-          "avg_col"
+          "0:avg_col"
         ],
-        "Columns": [
-          0
-        ],
+        "Columns": "0",
         "Inputs": [
           {
             "OperatorType": "Projection",
@@ -1838,7 +1867,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select * from music where 1 != 1",
-                "Query": "select * from music limit :__upper_limit",
+                "Query": "select * from music limit 100",
                 "Table": "music"
               }
             ]
@@ -1936,7 +1965,7 @@
                 },
                 "FieldQuery": "select user_id, count(id), weight_string(user_id) from music where 1 != 1 group by user_id",
                 "OrderBy": "(0|2) ASC",
-                "Query": "select user_id, count(id), weight_string(user_id) from music group by user_id having count(user_id) = 1 order by music.user_id asc limit :__upper_limit",
+                "Query": "select user_id, count(id), weight_string(user_id) from music group by user_id having count(user_id) = 1 order by music.user_id asc limit 2",
                 "ResultColumns": 2,
                 "Table": "music"
               }
@@ -2204,7 +2233,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select col from `user` where 1 != 1",
-                    "Query": "select col from `user` limit :__upper_limit",
+                    "Query": "select col from `user` limit 1",
                     "Table": "`user`"
                   }
                 ]
@@ -2249,61 +2278,70 @@
       "QueryType": "SELECT",
       "Original": "select (select col from user limit 1) as a from user join user_extra order by a",
       "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "L:0",
-        "TableName": "`user`_user_extra",
+        "OperatorType": "SimpleProjection",
+        "ColumnNames": [
+          "0:a"
+        ],
+        "Columns": "1",
         "Inputs": [
           {
-            "OperatorType": "UncorrelatedSubquery",
-            "Variant": "PulloutValue",
-            "PulloutVars": [
-              "__sq1"
-            ],
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "L:0",
+            "TableName": "`user`_user_extra",
             "Inputs": [
               {
-                "InputName": "SubQuery",
-                "OperatorType": "Limit",
-                "Count": "1",
+                "OperatorType": "UncorrelatedSubquery",
+                "Variant": "PulloutValue",
+                "PulloutVars": [
+                  "__sq1"
+                ],
                 "Inputs": [
                   {
+                    "InputName": "SubQuery",
+                    "OperatorType": "Limit",
+                    "Count": "1",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select col from `user` where 1 != 1",
+                        "Query": "select col from `user` limit 1",
+                        "Table": "`user`"
+                      }
+                    ]
+                  },
+                  {
+                    "InputName": "Outer",
                     "OperatorType": "Route",
                     "Variant": "Scatter",
                     "Keyspace": {
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select col from `user` where 1 != 1",
-                    "Query": "select col from `user` limit :__upper_limit",
+                    "FieldQuery": "select :__sq1 as __sq1, weight_string(:__sq1) from `user` where 1 != 1",
+                    "OrderBy": "(0|1) ASC",
+                    "Query": "select :__sq1 as __sq1, weight_string(:__sq1) from `user` order by __sq1 asc",
                     "Table": "`user`"
                   }
                 ]
               },
               {
-                "InputName": "Outer",
                 "OperatorType": "Route",
                 "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select :__sq1 as __sq1, weight_string(:__sq1) from `user` where 1 != 1",
-                "OrderBy": "(0|1) ASC",
-                "Query": "select :__sq1 as __sq1, weight_string(:__sq1) from `user` order by __sq1 asc",
-                "Table": "`user`"
+                "FieldQuery": "select 1 from user_extra where 1 != 1",
+                "Query": "select 1 from user_extra",
+                "Table": "user_extra"
               }
             ]
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from user_extra where 1 != 1",
-            "Query": "select 1 from user_extra",
-            "Table": "user_extra"
           }
         ]
       },
@@ -2456,9 +2494,10 @@
       "Original": "select col from user where exists(select user_id from user_extra where user_id = 3 and user_id < user.id)",
       "Instructions": {
         "OperatorType": "SimpleProjection",
-        "Columns": [
-          0
+        "ColumnNames": [
+          "0:col"
         ],
+        "Columns": "0",
         "Inputs": [
           {
             "OperatorType": "SemiJoin",
@@ -2513,9 +2552,10 @@
       "Original": "select col from user where exists(select user_id from user_extra where user_id = 3 and user_id < user.id) order by col",
       "Instructions": {
         "OperatorType": "SimpleProjection",
-        "Columns": [
-          0
+        "ColumnNames": [
+          "0:col"
         ],
+        "Columns": "0",
         "Inputs": [
           {
             "OperatorType": "SemiJoin",
@@ -2638,9 +2678,7 @@
       "Original": "select 1 from user u where exists (select 1 from user_extra ue where ue.col = u.col and u.col = ue.col2)",
       "Instructions": {
         "OperatorType": "SimpleProjection",
-        "Columns": [
-          0
-        ],
+        "Columns": "0",
         "Inputs": [
           {
             "OperatorType": "SemiJoin",
@@ -2984,7 +3022,7 @@
                 },
                 "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
                 "OrderBy": "(0|1) ASC",
-                "Query": "select id, weight_string(id) from `user` order by `user`.id asc limit :__upper_limit",
+                "Query": "select id, weight_string(id) from `user` order by `user`.id asc limit 1",
                 "Table": "`user`"
               }
             ]
@@ -3474,7 +3512,7 @@
                     },
                     "FieldQuery": "select id, `name`, weight_string(id) from `user` where 1 != 1",
                     "OrderBy": "(0|2) ASC",
-                    "Query": "select id, `name`, weight_string(id) from `user` where `name` = 'aa' order by `user`.id asc limit :__upper_limit",
+                    "Query": "select id, `name`, weight_string(id) from `user` where `name` = 'aa' order by `user`.id asc limit 2",
                     "ResultColumns": 2,
                     "Table": "`user`"
                   }
@@ -3884,7 +3922,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select music.id from music where 1 != 1",
-                "Query": "select music.id from music where music.genre = 'pop' limit :__upper_limit",
+                "Query": "select music.id from music where music.genre = 'pop' limit 10",
                 "Table": "music"
               }
             ]
@@ -4210,7 +4248,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select id from (select id from (select music.id from music where 1 != 1) as subquery_for_limit where 1 != 1) as subquery_for_limit where 1 != 1",
-                "Query": "select id from (select id from (select music.id from music where music.user_id in ::__vals) as subquery_for_limit limit :__upper_limit) as subquery_for_limit",
+                "Query": "select id from (select id from (select music.id from music where music.user_id in ::__vals) as subquery_for_limit limit 10) as subquery_for_limit",
                 "Table": "music",
                 "Values": [
                   "(5, 6)"
@@ -4269,7 +4307,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select id from (select id from (select music.id from music where 1 != 1) as subquery_for_limit where 1 != 1) as subquery_for_limit where 1 != 1",
-                "Query": "select id from (select id from (select music.id from music) as subquery_for_limit limit :__upper_limit) as subquery_for_limit",
+                "Query": "select id from (select id from (select music.id from music) as subquery_for_limit limit 10) as subquery_for_limit",
                 "Table": "music"
               }
             ]
@@ -4468,7 +4506,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select ue.user_id from (select user_id from user_extra where 1 != 1) as ue where 1 != 1",
-                "Query": "select ue.user_id from (select user_id from user_extra) as ue limit :__upper_limit",
+                "Query": "select ue.user_id from (select user_id from user_extra) as ue limit 10",
                 "Table": "user_extra"
               }
             ]
@@ -4513,10 +4551,7 @@
         "Inputs": [
           {
             "OperatorType": "SimpleProjection",
-            "Columns": [
-              1,
-              0
-            ],
+            "Columns": "1,0",
             "Inputs": [
               {
                 "OperatorType": "Aggregate",
@@ -5151,20 +5186,17 @@
       "Instructions": {
         "OperatorType": "SimpleProjection",
         "ColumnNames": [
-          "t0",
-          "t1"
+          "0:t0",
+          "1:t1"
         ],
-        "Columns": [
-          0,
-          0
-        ],
+        "Columns": "0,0",
         "Inputs": [
           {
             "OperatorType": "Join",
             "Variant": "LeftJoin",
-            "JoinColumnIndexes": "L:0",
+            "JoinColumnIndexes": "L:0,L:0",
             "JoinVars": {
-              "user_cola": 1
+              "user_cola": 2
             },
             "TableName": "`user`_user_extra",
             "Inputs": [
@@ -5175,8 +5207,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select `name`, `user`.cola from `user` where 1 != 1",
-                "Query": "select `name`, `user`.cola from `user`",
+                "FieldQuery": "select `name` as t0, `name` as t1, `user`.cola from `user` where 1 != 1",
+                "Query": "select `name` as t0, `name` as t1, `user`.cola from `user`",
                 "Table": "`user`"
               },
               {

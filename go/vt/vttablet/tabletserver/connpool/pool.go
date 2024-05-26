@@ -31,14 +31,8 @@ import (
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
-
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
-
-// ErrConnPoolClosed is returned when the connection pool is closed.
-var ErrConnPoolClosed = vterrors.New(vtrpcpb.Code_INTERNAL, "internal error: unexpected: conn pool is closed")
 
 const (
 	getWithoutS = "GetWithoutSettings"
