@@ -176,6 +176,11 @@ func (client *localVtctldClient) ChangeTabletType(ctx context.Context, in *vtctl
 	return client.s.ChangeTabletType(ctx, in)
 }
 
+// CheckThrottler is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) CheckThrottler(ctx context.Context, in *vtctldatapb.CheckThrottlerRequest, opts ...grpc.CallOption) (*vtctldatapb.CheckThrottlerResponse, error) {
+	return client.s.CheckThrottler(ctx, in)
+}
+
 // CleanupSchemaMigration is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) CleanupSchemaMigration(ctx context.Context, in *vtctldatapb.CleanupSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldatapb.CleanupSchemaMigrationResponse, error) {
 	return client.s.CleanupSchemaMigration(ctx, in)
@@ -364,6 +369,11 @@ func (client *localVtctldClient) GetTablet(ctx context.Context, in *vtctldatapb.
 // GetTablets is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) GetTablets(ctx context.Context, in *vtctldatapb.GetTabletsRequest, opts ...grpc.CallOption) (*vtctldatapb.GetTabletsResponse, error) {
 	return client.s.GetTablets(ctx, in)
+}
+
+// GetThrottlerStatus is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) GetThrottlerStatus(ctx context.Context, in *vtctldatapb.GetThrottlerStatusRequest, opts ...grpc.CallOption) (*vtctldatapb.GetThrottlerStatusResponse, error) {
+	return client.s.GetThrottlerStatus(ctx, in)
 }
 
 // GetTopologyPath is part of the vtctlservicepb.VtctldClient interface.

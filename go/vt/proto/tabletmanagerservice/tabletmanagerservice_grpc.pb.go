@@ -115,6 +115,8 @@ type TabletManagerClient interface {
 	RestoreFromBackup(ctx context.Context, in *tabletmanagerdata.RestoreFromBackupRequest, opts ...grpc.CallOption) (TabletManager_RestoreFromBackupClient, error)
 	// CheckThrottler issues a 'check' on a tablet's throttler
 	CheckThrottler(ctx context.Context, in *tabletmanagerdata.CheckThrottlerRequest, opts ...grpc.CallOption) (*tabletmanagerdata.CheckThrottlerResponse, error)
+	// GetThrottlerStatus gets the status of a tablet throttler
+	GetThrottlerStatus(ctx context.Context, in *tabletmanagerdata.GetThrottlerStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.GetThrottlerStatusResponse, error)
 }
 
 type tabletManagerClient struct {
@@ -675,6 +677,15 @@ func (c *tabletManagerClient) CheckThrottler(ctx context.Context, in *tabletmana
 	return out, nil
 }
 
+func (c *tabletManagerClient) GetThrottlerStatus(ctx context.Context, in *tabletmanagerdata.GetThrottlerStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.GetThrottlerStatusResponse, error) {
+	out := new(tabletmanagerdata.GetThrottlerStatusResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/GetThrottlerStatus", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TabletManagerServer is the server API for TabletManager service.
 // All implementations must embed UnimplementedTabletManagerServer
 // for forward compatibility
@@ -771,6 +782,8 @@ type TabletManagerServer interface {
 	RestoreFromBackup(*tabletmanagerdata.RestoreFromBackupRequest, TabletManager_RestoreFromBackupServer) error
 	// CheckThrottler issues a 'check' on a tablet's throttler
 	CheckThrottler(context.Context, *tabletmanagerdata.CheckThrottlerRequest) (*tabletmanagerdata.CheckThrottlerResponse, error)
+	// GetThrottlerStatus gets the status of a tablet throttler
+	GetThrottlerStatus(context.Context, *tabletmanagerdata.GetThrottlerStatusRequest) (*tabletmanagerdata.GetThrottlerStatusResponse, error)
 	mustEmbedUnimplementedTabletManagerServer()
 }
 
@@ -945,6 +958,9 @@ func (UnimplementedTabletManagerServer) RestoreFromBackup(*tabletmanagerdata.Res
 }
 func (UnimplementedTabletManagerServer) CheckThrottler(context.Context, *tabletmanagerdata.CheckThrottlerRequest) (*tabletmanagerdata.CheckThrottlerResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CheckThrottler not implemented")
+}
+func (UnimplementedTabletManagerServer) GetThrottlerStatus(context.Context, *tabletmanagerdata.GetThrottlerStatusRequest) (*tabletmanagerdata.GetThrottlerStatusResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetThrottlerStatus not implemented")
 }
 func (UnimplementedTabletManagerServer) mustEmbedUnimplementedTabletManagerServer() {}
 
@@ -1973,6 +1989,24 @@ func _TabletManager_CheckThrottler_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TabletManager_GetThrottlerStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.GetThrottlerStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TabletManagerServer).GetThrottlerStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/GetThrottlerStatus",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).GetThrottlerStatus(ctx, req.(*tabletmanagerdata.GetThrottlerStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // TabletManager_ServiceDesc is the grpc.ServiceDesc for TabletManager service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -2195,6 +2229,10 @@ var TabletManager_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CheckThrottler",
 			Handler:    _TabletManager_CheckThrottler_Handler,
+		},
+		{
+			MethodName: "GetThrottlerStatus",
+			Handler:    _TabletManager_GetThrottlerStatus_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
