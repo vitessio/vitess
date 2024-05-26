@@ -22,6 +22,8 @@ import (
 	"strings"
 )
 
+// Scope defines the tablet range from which a metric is collected. This can be the local tablet
+// ("self") or the entire shard ("shard")
 type Scope string
 
 const (
@@ -43,8 +45,13 @@ func ScopeFromString(s string) (Scope, error) {
 	}
 }
 
+// MetricName is a formalized name for a metric, such as "lag" or "threads_running". A metric name
+// may include a scope, such as "self/lag" or "shard/threads_running". It is possible to add a
+// scope to a name, or to parse the scope out of a name, and there is also always a default scope
+// associated with a metric name.
 type MetricName string
 
+// MetricNames is a formalized list of metric names
 type MetricNames []MetricName
 
 func (names MetricNames) Contains(name MetricName) bool {
