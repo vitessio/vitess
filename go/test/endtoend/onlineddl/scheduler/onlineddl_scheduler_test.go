@@ -567,6 +567,14 @@ func testScheduler(t *testing.T) {
 				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
 				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 			})
+			t.Run("wait for t1 ready to complete", func(t *testing.T) {
+				// Waiting for 'running', above, is not enough. We want to let vreplication a chance to start running, or else
+				// we attempt the cut-over too early. Specifically in this test, we're going to lock rows FOR UPDATE, which,
+				// if vreplication does not get the chance to start, will prevent it from doing anything at all.
+				// ready_to_complete is a great signal for us that vreplication is healthy and up to date.
+				waitForReadyToComplete(t, t1uuid, true)
+			})
+
 			commitTransactionChan := make(chan any)
 			transactionErrorChan := make(chan error)
 			t.Run("locking table rows", func(t *testing.T) {
