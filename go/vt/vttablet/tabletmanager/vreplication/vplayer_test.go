@@ -34,11 +34,6 @@ func TestStallHandler(t *testing.T) {
 	ctx, cancel := context.WithTimeout(lctx, tme)
 	defer cancel()
 
-	ovpd := vplayerProgressDeadline
-	vplayerProgressDeadline = tme / 10
-	defer func() {
-		vplayerProgressDeadline = ovpd
-	}()
 	concurrency := 10000
 	dl := time.Duration(10 * time.Second)
 
