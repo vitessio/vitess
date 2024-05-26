@@ -14,37 +14,149 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// This codebase originates from https://github.com/github/freno, See https://github.com/github/freno/blob/master/LICENSE
-/*
-	MIT License
-
-	Copyright (c) 2017 GitHub
-
-	Permission is hereby granted, free of charge, to any person obtaining a copy
-	of this software and associated documentation files (the "Software"), to deal
-	in the Software without restriction, including without limitation the rights
-	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-	copies of the Software, and to permit persons to whom the Software is
-	furnished to do so, subject to the following conditions:
-
-	The above copyright notice and this permission notice shall be included in all
-	copies or substantial portions of the Software.
-
-	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-	SOFTWARE.
-*/
-
 package base
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 )
+
+type Scope string
+
+const (
+	UndefinedScope Scope = ""
+	ShardScope     Scope = "shard"
+	SelfScope      Scope = "self"
+)
+
+func (s Scope) String() string {
+	return string(s)
+}
+
+func ScopeFromString(s string) (Scope, error) {
+	switch scope := Scope(s); scope {
+	case UndefinedScope, ShardScope, SelfScope:
+		return scope, nil
+	default:
+		return "", fmt.Errorf("unknown scope: %s", s)
+	}
+}
+
+type MetricName string
+
+type MetricNames []MetricName
+
+func (names MetricNames) Contains(name MetricName) bool {
+	for _, n := range names {
+		if n == name {
+			return true
+		}
+	}
+	return false
+}
+
+func (names MetricNames) String() string {
+	s := make([]string, len(names))
+	for i, name := range names {
+		s[i] = name.String()
+	}
+	return strings.Join(s, ",")
+}
+
+const (
+	DefaultMetricName        MetricName = "default"
+	LagMetricName            MetricName = "lag"
+	ThreadsRunningMetricName MetricName = "threads_running"
+	CustomMetricName         MetricName = "custom"
+	LoadAvgMetricName        MetricName = "loadavg"
+)
+
+func (metric MetricName) DefaultScope() Scope {
+	switch metric {
+	case LagMetricName:
+		return ShardScope
+	default:
+		return SelfScope
+	}
+}
+
+func (metric MetricName) String() string {
+	return string(metric)
+}
+
+// AggregatedName returns the string representation of this metric in the given scope, e.g.:
+// - "self/loadavg"
+// - "shard/lag"
+func (metric MetricName) AggregatedName(scope Scope) string {
+	if metric == DefaultMetricName {
+		// backwards (v19) compatibility
+		return scope.String()
+	}
+	if scope == UndefinedScope {
+		scope = metric.DefaultScope()
+	}
+	return fmt.Sprintf("%s/%s", scope.String(), metric.String())
+}
+
+// Disaggregated returns a breakdown of this metric into scope + name.
+func (metric MetricName) Disaggregated() (scope Scope, metricName MetricName, err error) {
+	return DisaggregateMetricName(metric.String())
+}
+
+var KnownMetricNames = MetricNames{
+	DefaultMetricName,
+	LagMetricName,
+	ThreadsRunningMetricName,
+	CustomMetricName,
+	LoadAvgMetricName,
+}
+
+type AggregatedMetricName struct {
+	Scope  Scope
+	Metric MetricName
+}
+
+var (
+	// aggregatedMetricNames precomputes the aggregated metric names for all known metric names,
+	// mapped to their breakdowns. e.g. "self/loadavg" -> {SelfScope, LoadAvgMetricName}
+	// This means:
+	// - no textual parsing is needed in the critical path
+	// - we can easily check if a metric name is valid
+	aggregatedMetricNames map[string]AggregatedMetricName
+)
+
+func init() {
+	aggregatedMetricNames = make(map[string]AggregatedMetricName)
+	for _, metricName := range KnownMetricNames {
+		aggregatedMetricNames[metricName.String()] = AggregatedMetricName{
+			Scope:  metricName.DefaultScope(),
+			Metric: metricName,
+		}
+		for _, scope := range []Scope{ShardScope, SelfScope} {
+			aggregatedName := metricName.AggregatedName(scope)
+			aggregatedMetricNames[aggregatedName] = AggregatedMetricName{
+				Scope:  scope,
+				Metric: metricName,
+			}
+		}
+	}
+}
+
+// splitMetricTokens splits a metric name into its scope name and metric name
+// aggregated metric name could be in the form:
+// - loadavg
+// - self
+// - self/threads_running
+// - shard
+// - shard/lag
+func DisaggregateMetricName(aggregatedMetricName string) (scope Scope, metricName MetricName, err error) {
+	breakdown, ok := aggregatedMetricNames[aggregatedMetricName]
+	if !ok {
+		return UndefinedScope, DefaultMetricName, ErrNoSuchMetric
+	}
+	return breakdown.Scope, breakdown.Metric, nil
+}
 
 // MetricResult is what we expect our probes to return. This can be a numeric result, or
 // a special type of result indicating more meta-information
@@ -55,15 +167,25 @@ type MetricResult interface {
 // MetricResultFunc is a function that returns a metric result
 type MetricResultFunc func() (metricResult MetricResult, threshold float64)
 
+type MetricResultMap map[MetricName]MetricResult
+
+func NewMetricResultMap() MetricResultMap {
+	result := make(MetricResultMap)
+	for _, metricName := range KnownMetricNames {
+		result[metricName] = nil
+	}
+	return result
+}
+
 // ErrThresholdExceeded is the common error one may get checking on metric result
-var ErrThresholdExceeded = errors.New("Threshold exceeded")
-var errNoResultYet = errors.New("Metric not collected yet")
+var ErrThresholdExceeded = errors.New("threshold exceeded")
+var ErrNoResultYet = errors.New("metric not collected yet")
 
 // ErrNoSuchMetric is for when a user requests a metric by an unknown metric name
-var ErrNoSuchMetric = errors.New("No such metric")
+var ErrNoSuchMetric = errors.New("no such metric")
 
 // ErrInvalidCheckType is an internal error indicating an unknown check type
-var ErrInvalidCheckType = errors.New("Unknown throttler check type")
+var ErrInvalidCheckType = errors.New("unknown throttler check type")
 
 // IsDialTCPError sees if the given error indicates a TCP issue
 func IsDialTCPError(e error) bool {
@@ -87,7 +209,7 @@ type noMetricResultYet struct{}
 
 // Get implements MetricResult
 func (metricResult *noMetricResultYet) Get() (float64, error) {
-	return 0, errNoResultYet
+	return 0, ErrNoResultYet
 }
 
 // NoMetricResultYet is a result indicating "no data"
