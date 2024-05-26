@@ -204,7 +204,7 @@ func waitForReadyToComplete(t *testing.T, uuid string, expected bool) {
 }
 
 func waitForMessage(t *testing.T, uuid string, messageSubstring string) {
-	ctx, cancel := context.WithTimeout(context.Background(), extendedWaitTime*2)
+	ctx, cancel := context.WithTimeout(context.Background(), normalWaitTime)
 	defer cancel()
 
 	ticker := time.NewTicker(time.Second)
@@ -261,6 +261,7 @@ func TestMain(m *testing.M) {
 		clusterInstance.VtTabletExtraArgs = []string{
 			"--heartbeat_interval", "250ms",
 			"--heartbeat_on_demand_duration", "5s",
+			"--migration_check_interval", "5s",
 			"--watch_replication_stream",
 		}
 		clusterInstance.VtGateExtraArgs = []string{}
