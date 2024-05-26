@@ -148,8 +148,9 @@ type throttlerTopoService interface {
 	GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error)
 }
 
-// Throttler is the main entity in the throttling mechanism. This service runs, probes, collects data,
-// aggregates, reads inventory, provides information, etc.
+// Throttler is the main entity in the tablet throttling mechanism.
+// It collectes (multi) metrics, reads configuration from topo, and throttles requests based on the
+// identity of the requesting apps and of collected metrics
 type Throttler struct {
 	keyspace string
 	shard    string
