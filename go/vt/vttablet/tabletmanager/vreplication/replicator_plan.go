@@ -22,6 +22,8 @@ import (
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
@@ -61,6 +63,12 @@ type ReplicatorPlan struct {
 	stats         *binlogplayer.Stats
 	Source        *binlogdatapb.BinlogSource
 	collationEnv  *collations.Environment
+
+	joinPlan *JoinPlan
+}
+
+type JoinPlan struct {
+	Tables []string
 }
 
 // buildExecution plan uses the field info as input and the partially built
@@ -360,6 +368,7 @@ func (tp *TablePlan) bindFieldVal(field *querypb.Field, val *sqltypes.Value) (*q
 
 func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
 	// MakeRowTrusted is needed here because Proto3ToResult is not convenient.
+	log.Infof("applyChange called for %v", rowChange)
 	var before, after bool
 	bindvars := make(map[string]*querypb.BindVariable, len(tp.Fields))
 	if rowChange.Before != nil {
@@ -579,6 +588,7 @@ func execParsedQuery(pq *sqlparser.ParsedQuery, bindvars map[string]*querypb.Bin
 	if err != nil {
 		return nil, err
 	}
+	log.Infof("Will execute query: %v", query)
 	return executor(query)
 }
 

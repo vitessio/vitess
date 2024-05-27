@@ -64,6 +64,7 @@ type tablePlanBuilder struct {
 	pkIndices         []bool
 
 	collationEnv *collations.Environment
+	viewMode     bool
 }
 
 // colExpr describes the processing to be performed to
@@ -117,22 +118,6 @@ const (
 	insertIgnore
 )
 
-// buildReplicatorPlan builds a ReplicatorPlan for the tables that match the filter.
-// The filter is matched against the target schema. For every table matched,
-// a table-specific rule is built to be sent to the source. We don't send the
-// original rule to the source because it may not match the same tables as the
-// target.
-// colInfoMap specifies the list of primary key columns for each table.
-// copyState is a map of tables that have not been fully copied yet.
-// If a table is not present in copyState, then it has been fully copied. If so,
-// all replication events are applied. The table still has to match a Filter.Rule.
-// If it has a non-nil entry, then the value is the last primary key (lastpk)
-// that was copied.  If so, only replication events < lastpk are applied.
-// If the entry is nil, then copying of the table has not started yet. If so,
-// no events are applied.
-// The TablePlan built is a partial plan. The full plan for a table is built
-// when we receive field information from events or rows sent by the source.
-// buildExecutionPlan is the function that builds the full plan.
 func buildReplicatorPlan(source *binlogdatapb.BinlogSource, colInfoMap map[string][]*ColumnInfo, copyState map[string]*sqltypes.Result, stats *binlogplayer.Stats, collationEnv *collations.Environment, parser *sqlparser.Parser) (*ReplicatorPlan, error) {
 	filter := source.Filter
 	plan := &ReplicatorPlan{
@@ -170,6 +155,7 @@ func buildReplicatorPlan(source *binlogdatapb.BinlogSource, colInfoMap map[strin
 			continue
 		}
 		if dup, ok := plan.TablePlans[tablePlan.SendRule.Match]; ok {
+			log.Infof("more than one target for source table %s: %s and %s", tablePlan.SendRule.Match, dup.TargetName, tableName)
 			return nil, fmt.Errorf("more than one target for source table %s: %s and %s", tablePlan.SendRule.Match, dup.TargetName, tableName)
 		}
 		plan.VStreamFilter.Rules = append(plan.VStreamFilter.Rules, tablePlan.SendRule)
@@ -177,6 +163,113 @@ func buildReplicatorPlan(source *binlogdatapb.BinlogSource, colInfoMap map[strin
 		plan.TablePlans[tablePlan.SendRule.Match] = tablePlan
 	}
 	return plan, nil
+}
+
+/*
+Need to create insert for target table
+*/
+func buildReplicatorPlanForJoin(source *binlogdatapb.BinlogSource, colInfoMap map[string][]*ColumnInfo,
+	copyState map[string]*sqltypes.Result, stats *binlogplayer.Stats, collationEnv *collations.Environment,
+	parser *sqlparser.Parser, tables []string) (*ReplicatorPlan, error) {
+
+	filter := source.Filter
+	joinPlan := &JoinPlan{
+		Tables: tables,
+	}
+	plan := &ReplicatorPlan{
+		VStreamFilter: &binlogdatapb.Filter{FieldEventMode: filter.FieldEventMode},
+		TargetTables:  make(map[string]*TablePlan),
+		TablePlans:    make(map[string]*TablePlan),
+		ColInfoMap:    colInfoMap,
+		stats:         stats,
+		Source:        source,
+		collationEnv:  collationEnv,
+		joinPlan:      joinPlan,
+	}
+	// FIXME: check copy state?
+
+	plan.VStreamFilter = source.Filter
+	view := source.Filter.Rules[0].Match
+	query := source.Filter.Rules[0].Filter
+	log.Infof("View, query %s %s", view, query)
+	tablePlan := &TablePlan{
+		TargetName: view,
+		SendRule:   source.Filter.Rules[0],
+	}
+	colInfos, ok := colInfoMap[view]
+	if !ok {
+		return nil, fmt.Errorf("table %s not found in schema", view)
+	}
+
+	statement, err := parser.Parse(query)
+	if err != nil {
+		return nil, err
+	}
+	sel, ok := statement.(*sqlparser.Select)
+	if !ok {
+		return nil, fmt.Errorf("unsupported non-select statement")
+	}
+
+	tpb := &tablePlanBuilder{
+		name: sqlparser.NewIdentifierCS(view),
+		sendSelect: &sqlparser.Select{
+			From:  sel.From,
+			Where: sel.Where,
+		},
+		lastpk:       nil,
+		colInfos:     colInfos,
+		stats:        stats,
+		source:       source,
+		collationEnv: collationEnv,
+		viewMode:     true,
+	}
+	err = tpb.analyzeExprs(sel.SelectExprs)
+	if err != nil {
+		return nil, err
+	}
+	tpb.pkCols = append(tpb.pkCols, tpb.colExprs[0])
+	insert := tpb.generateInsertStatement()
+	tablePlan.Insert = insert
+	tablePlan.PKReferences = []string{tpb.colExprs[0].colName.String()}
+	plan.TablePlans[view] = tablePlan
+
+	tableColumns := make(map[string][]*ViewColumn)
+
+	for _, selExpr := range sel.SelectExprs {
+		aliasExpr, ok := selExpr.(*sqlparser.AliasedExpr)
+		if !ok {
+			return nil, fmt.Errorf("unsupported expression %s", sqlparser.String(selExpr))
+		}
+		colName, ok := aliasExpr.Expr.(*sqlparser.ColName)
+		if !ok {
+			return nil, fmt.Errorf("unsupported expression %s", sqlparser.String(aliasExpr.Expr))
+		}
+		log.Infof("SelExpr %s, qualifier %scolName %s, alias %s", sqlparser.String(selExpr), colName.Name, aliasExpr.As)
+		if colName.Qualifier.IsEmpty() {
+			return nil, fmt.Errorf("every column needs to have a table qualifier %s", colName)
+		}
+		tableName := colName.Qualifier.Name.String()
+		columnName := colName.Name.String()
+		aliasName := aliasExpr.As.String()
+		tableColumns[tableName] = append(tableColumns[tableName], &ViewColumn{
+			SourceColumnName: columnName,
+			ViewColumnName:   aliasName,
+		})
+	}
+	for table, cols := range tableColumns {
+		log.Infof("table %s, column %v", table, cols)
+	}
+
+	return plan, nil
+}
+
+type ViewColumn struct {
+	SourceColumnName string
+	ViewColumnName   string
+}
+
+func (vc *ViewColumn) String() string {
+	return fmt.Sprintf("SourceColumnName %s, ViewColumnName %s", vc.SourceColumnName, vc.ViewColumnName)
 }
 
 // MatchTable is similar to tableMatches and buildPlan defined in vstreamer/planbuilder.go.
@@ -200,35 +293,8 @@ func MatchTable(tableName string, filter *binlogdatapb.Filter) (*binlogdatapb.Ru
 	return nil, nil
 }
 
-func buildTablePlanForJoin(tableName string, rule *binlogdatapb.Rule, colInfos []*ColumnInfo, lastpk *sqltypes.Result,
-	stats *binlogplayer.Stats, source *binlogdatapb.BinlogSource, collationEnv *collations.Environment, parser *sqlparser.Parser) (*TablePlan, error) {
-	comments := fmt.Sprintf("/*vt+ view=%s */", rule.Match)
-	filter := strings.Replace(rule.Filter, "select", "select "+comments, 1)
-	sendRule := &binlogdatapb.Rule{
-		Filter: filter,
-	}
-	tablePlan := &TablePlan{
-		TargetName:       tableName,
-		SendRule:         sendRule,
-		Lastpk:           lastpk,
-		Stats:            stats,
-		ConvertCharset:   rule.ConvertCharset,
-		ConvertIntToEnum: rule.ConvertIntToEnum,
-		CollationEnv:     collationEnv,
-	}
-	return tablePlan, nil
-}
-
 func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*ColumnInfo, lastpk *sqltypes.Result,
 	stats *binlogplayer.Stats, source *binlogdatapb.BinlogSource, collationEnv *collations.Environment, parser *sqlparser.Parser) (*TablePlan, error) {
-
-	isJoin, err := vttablet.IsJoin(parser, rule.Filter)
-	if err != nil {
-		return nil, err
-	}
-	if isJoin {
-		return buildTablePlanForJoin(tableName, rule, colInfos, lastpk, stats, source, collationEnv, parser)
-	}
 
 	planError := func(err error, query string) error {
 		// Use the error string here to ensure things are uniform across
@@ -422,11 +488,10 @@ func analyzeSelectFrom(query string, parser *sqlparser.Parser) (sel *sqlparser.S
 	if sel.Distinct {
 		return nil, "", fmt.Errorf("unsupported distinct clause")
 	}
-	log.Infof("sel.From: %+v", sel.From)
 
 	node, ok := sel.From[0].(*sqlparser.AliasedTableExpr)
 	if !ok {
-		return nil, "", fmt.Errorf("unsupported from expression (%T)", sel.From[0])
+		return nil, "", fmt.Errorf("unsupported from expression2 (%T)", sel.From[0])
 	}
 	fromTable := sqlparser.GetTableName(node.Expr)
 	if fromTable.IsEmpty() {
@@ -554,7 +619,20 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 		return nil, err
 	}
 	cexpr.expr = aliased.Expr
+	if tpb.viewMode && !as.IsEmpty() {
+		colName := sqlparser.NewColName(as.String())
+		aliasedExpr := colNameToExpr(colName)
+		aliasedExpr.As = as
+		cexpr.expr = aliasedExpr.Expr
+	}
 	return cexpr, nil
+}
+
+func colNameToExpr(c *sqlparser.ColName) *sqlparser.AliasedExpr {
+	return &sqlparser.AliasedExpr{
+		Expr: c,
+		As:   sqlparser.IdentifierCI{},
+	}
 }
 
 // addCol adds the specified column to the send query
@@ -717,6 +795,7 @@ func (tpb *tablePlanBuilder) generateInsertPart(buf *sqlparser.TrackedBuffer) *s
 	}
 	separator := ""
 	for _, cexpr := range tpb.colExprs {
+		log.Infof(">>> generateInsertPart %v %v", cexpr.colName, cexpr)
 		if tpb.isColumnGenerated(cexpr.colName) {
 			continue
 		}

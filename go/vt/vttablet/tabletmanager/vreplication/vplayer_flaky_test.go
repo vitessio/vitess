@@ -43,6 +43,73 @@ import (
 	qh "vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication/queryhistory"
 )
 
+func TestJoin(t *testing.T) {
+	defer deleteTablet(addTablet(100))
+
+	execStatements(t, []string{
+		"create table t1(id int, tname varbinary(128), primary key(id))",
+		fmt.Sprintf("create table %s.t1(id int, tname varbinary(128), primary key(id))", vrepldb),
+		"create table t2(id int, company varbinary(128), primary key(id))",
+		fmt.Sprintf("create table %s.t2(id int, company varbinary(128), primary key(id))", vrepldb),
+		"create table t12(t1id int, t2id int, tname varbinary(128), company varbinary(128), primary key(t1id))",
+		fmt.Sprintf("create table %s.t12(t1id int, t2id int, tname varbinary(128), company varbinary(128), primary key(t1id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+		fmt.Sprintf("drop table %s.t1", vrepldb),
+		"drop table t2",
+		fmt.Sprintf("drop table %s.t2", vrepldb),
+		"drop table t12",
+		fmt.Sprintf("drop table %s.t12", vrepldb),
+	})
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "orders_view",
+			Filter: "select t1.id t1id, t2.id t2id, t1.tname, t2.company from t1 join t2 on t1.id = t2.id",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+	}
+	execStatements(t, []string{
+		"insert into t2(id, company) values(1, 'company1')",
+	})
+	position := primaryPosition(t)
+	cancel, _ := startVReplication(t, bls, position)
+	defer cancel()
+
+	testcases := []struct {
+		input       string
+		output      string
+		table       string
+		data        [][]string
+		query       string
+		queryResult [][]string
+	}{{
+		input:  "insert into t1(id,tname) values (1,'name1')",
+		output: "insert into t12(t1id,t2id,tname,company) values (1,1,'name1','company1')",
+		table:  "t1",
+		data: [][]string{
+			{"1", "1", "name1", "company1"},
+		},
+	}}
+
+	for _, tcases := range testcases {
+		execStatements(t, []string{tcases.input})
+		output := qh.Expect(tcases.output)
+		expectNontxQueries(t, output)
+		if tcases.table != "" {
+			expectData(t, tcases.table, tcases.data)
+		}
+		if tcases.query != "" {
+			expectQueryResult(t, tcases.query, tcases.queryResult)
+		}
+	}
+}
+
 // TestPlayerGeneratedInvisiblePrimaryKey confirms that the gipk column is replicated by vplayer, both for target
 // tables that have a gipk column and those that make it visible.
 func TestPlayerGeneratedInvisiblePrimaryKey(t *testing.T) {
@@ -334,7 +401,7 @@ func TestCharPK(t *testing.T) {
 		output string
 		table  string
 		data   [][]string
-	}{{ //binary(2)
+	}{{ // binary(2)
 		input:  "insert into t1 values(1, 'a')",
 		output: "insert into t1(id,val) values (1,'a\\0')",
 		table:  "t1",
@@ -348,7 +415,7 @@ func TestCharPK(t *testing.T) {
 		data: [][]string{
 			{"2", "a\000"},
 		},
-	}, { //char(2)
+	}, { // char(2)
 		input:  "insert into t2 values(1, 'a')",
 		output: "insert into t2(id,val) values (1,'a')",
 		table:  "t2",
@@ -362,7 +429,7 @@ func TestCharPK(t *testing.T) {
 		data: [][]string{
 			{"2", "a"},
 		},
-	}, { //varbinary(2)
+	}, { // varbinary(2)
 		input:  "insert into t3 values(1, 'a')",
 		output: "insert into t3(id,val) values (1,'a')",
 		table:  "t3",
@@ -376,7 +443,7 @@ func TestCharPK(t *testing.T) {
 		data: [][]string{
 			{"2", "a"},
 		},
-	}, { //varchar(2)
+	}, { // varchar(2)
 		input:  "insert into t4 values(1, 'a')",
 		output: "insert into t4(id,val) values (1,'a')",
 		table:  "t4",
@@ -1709,7 +1776,7 @@ func TestPlayerDDL(t *testing.T) {
 		OnDdl:    binlogdatapb.OnDDLAction_STOP,
 	}
 	cancel, id := startVReplication(t, bls, "")
-	pos0 := primaryPosition(t) //For debugging only
+	pos0 := primaryPosition(t) // For debugging only
 	execStatements(t, []string{"alter table t1 add column val varchar(128)"})
 	pos1 := primaryPosition(t)
 	// The stop position must be the GTID of the first DDL
@@ -1723,7 +1790,7 @@ func TestPlayerDDL(t *testing.T) {
 	execStatements(t, []string{"alter table t1 drop column val"})
 	pos2 := primaryPosition(t)
 	log.Errorf("Expected log:: TestPlayerDDL Positions are: before first alter %v, after first alter %v, before second alter %v, after second alter %v",
-		pos0, pos1, pos2b, pos2) //For debugging only: to check what are the positions when test works and if/when it fails
+		pos0, pos1, pos2b, pos2) // For debugging only: to check what are the positions when test works and if/when it fails
 	// Restart vreplication
 	if _, err := playerEngine.Exec(fmt.Sprintf(`update _vt.vreplication set state = 'Running', message='' where id=%d`, id)); err != nil {
 		t.Fatal(err)
