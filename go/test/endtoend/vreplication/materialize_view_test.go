@@ -45,7 +45,7 @@ func TestMaterializeView(t *testing.T) {
 	tableSettings := "[ {\"target_table\": \"orders_view\", \"source_expression\": \"select oid, c.cid, p.pid, mname, qty, price, name, description from orders o join customer c on o.cid = c.cid join product p on p.pid = o.pid;\"  }]"
 
 	output, err := vc.VtctldClient.ExecuteCommandWithOutput("materialize", "--workflow", workflow, "--target-keyspace", targetKeyspace,
-		"create", "--source-keyspace", sourceKeyspace, "--table-settings", tableSettings, "--stop-after-copy=true")
+		"create", "--source-keyspace", sourceKeyspace, "--table-settings", tableSettings, "--stop-after-copy=false")
 	log.Infof("materialize output: %s", output)
 	require.NoError(t, err, "Materialize")
 
