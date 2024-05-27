@@ -39,7 +39,6 @@ func TestWriteHeartbeat(t *testing.T) {
 
 	now := time.Now()
 	tw := newSimpleTestWriter(db, &now)
-	defer tw.stop()
 
 	upsert := fmt.Sprintf("INSERT INTO %s.heartbeat (ts, tabletUid, keyspaceShard) VALUES (%d, %d, '%s') ON DUPLICATE KEY UPDATE ts=VALUES(ts), tabletUid=VALUES(tabletUid)",
 		"_vt", now.UnixNano(), tw.tabletAlias.Uid, tw.keyspaceShard)
@@ -61,7 +60,6 @@ func TestWriteHeartbeatOpen(t *testing.T) {
 	defer db.Close()
 
 	tw := newSimpleTestWriter(db, nil)
-	defer tw.stop()
 
 	assert.Zero(t, tw.onDemandDuration)
 
@@ -79,8 +77,17 @@ func TestWriteHeartbeatOpen(t *testing.T) {
 		<-time.After(3 * time.Second)
 		assert.EqualValues(t, 1, writes.Get())
 	})
+
+	{
+		rateLimiter := tw.safeOnDemandRequestsRateLimiter()
+		assert.Nil(t, rateLimiter)
+	}
 	tw.Open()
 	defer tw.Close()
+	{
+		rateLimiter := tw.safeOnDemandRequestsRateLimiter()
+		assert.Nil(t, rateLimiter)
+	}
 	t.Run("open, heartbeats", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
@@ -109,7 +116,6 @@ func TestWriteHeartbeatDisabled(t *testing.T) {
 	defer db.Close()
 
 	tw := newTestWriter(db, nil, tabletenv.Disable, 0)
-	defer tw.stop()
 
 	// Even though disabled, the writer will have an on-demand duration set.
 	assert.Equal(t, defaultOnDemandDuration, tw.onDemandDuration)
@@ -128,8 +134,16 @@ func TestWriteHeartbeatDisabled(t *testing.T) {
 		<-time.After(3 * time.Second)
 		assert.EqualValues(t, 1, writes.Get())
 	})
+	{
+		rateLimiter := tw.safeOnDemandRequestsRateLimiter()
+		assert.Nil(t, rateLimiter)
+	}
 	tw.Open()
 	defer tw.Close()
+	{
+		rateLimiter := tw.safeOnDemandRequestsRateLimiter()
+		assert.NotNil(t, rateLimiter)
+	}
 	t.Run("open, no heartbeats", func(t *testing.T) {
 		<-time.After(3 * time.Second)
 		assert.EqualValues(t, 1, writes.Get())
@@ -158,6 +172,11 @@ func TestWriteHeartbeatDisabled(t *testing.T) {
 		<-time.After(3 * time.Second)
 		assert.EqualValues(t, currentWrites, writes.Get())
 	})
+	tw.Close()
+	{
+		rateLimiter := tw.safeOnDemandRequestsRateLimiter()
+		assert.Nil(t, rateLimiter)
+	}
 }
 
 // TestWriteHeartbeatOnDemand tests that the heartbeat writer initiates leased heartbeats once opened,
@@ -170,7 +189,6 @@ func TestWriteHeartbeatOnDemand(t *testing.T) {
 	defer db.Close()
 
 	tw := newTestWriter(db, nil, tabletenv.Heartbeat, onDemandDuration)
-	defer tw.stop()
 
 	assert.Equal(t, onDemandDuration, tw.onDemandDuration)
 
@@ -188,8 +206,16 @@ func TestWriteHeartbeatOnDemand(t *testing.T) {
 		<-time.After(3 * time.Second)
 		assert.EqualValues(t, 1, writes.Get())
 	})
+	{
+		rateLimiter := tw.safeOnDemandRequestsRateLimiter()
+		assert.Nil(t, rateLimiter)
+	}
 	tw.Open()
 	defer tw.Close()
+	{
+		rateLimiter := tw.safeOnDemandRequestsRateLimiter()
+		assert.NotNil(t, rateLimiter)
+	}
 	t.Run("open, initial heartbeats", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), tw.onDemandDuration-time.Second)
 		defer cancel()
@@ -225,6 +251,11 @@ func TestWriteHeartbeatOnDemand(t *testing.T) {
 		<-time.After(3 * time.Second)
 		assert.EqualValues(t, currentWrites, writes.Get())
 	})
+	tw.Close()
+	{
+		rateLimiter := tw.safeOnDemandRequestsRateLimiter()
+		assert.Nil(t, rateLimiter)
+	}
 }
 
 func TestWriteHeartbeatError(t *testing.T) {
@@ -233,7 +264,6 @@ func TestWriteHeartbeatError(t *testing.T) {
 
 	now := time.Now()
 	tw := newSimpleTestWriter(db, &now)
-	defer tw.stop()
 
 	writes.Reset()
 	writeErrors.Reset()
@@ -247,7 +277,6 @@ func TestWriteHeartbeatError(t *testing.T) {
 func TestCloseWhileStuckWriting(t *testing.T) {
 	db := fakesqldb.New(t)
 	tw := newSimpleTestWriter(db, nil)
-	defer tw.stop()
 
 	tw.isOpen = true
 
