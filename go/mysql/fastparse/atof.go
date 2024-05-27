@@ -262,5 +262,13 @@ func Atof64(s string) (f float64, n int, err error) {
 			return f, n, nil
 		}
 	}
-	return f, n, strconv.ErrRange
+
+	// Eisel-Lemire is incapable of parsing this float accurately; we need to
+	// fall back to the slow path. Fortunately, we now know how many actual
+	// characters the float has (it's the value of `n`), so we can simply fall
+	// back to the standard library, which will do the slow parsing and will
+	// not return an error for trailing characters after the float, because
+	// we have truncated it.
+	f, err = strconv.ParseFloat(s[:n], 64)
+	return f, n, err
 }
