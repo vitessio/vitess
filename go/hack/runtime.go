@@ -40,9 +40,3 @@ func roundupsize(size uintptr) uintptr
 func RuntimeAllocSize(size int64) int64 {
 	return int64(roundupsize(uintptr(size)))
 }
-
-//go:linkname Atof64 strconv.atof64
-func Atof64(s string) (float64, int, error)
-
-//go:linkname Atof32 strconv.atof32
-func Atof32(s string) (float32, int, error)

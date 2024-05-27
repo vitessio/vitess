@@ -46,11 +46,6 @@ func RuntimeStrhash(str string, hash uint64) uint64 {
 	return hash
 }
 
-// ParseFloatPrefix exposes the internal strconv method from the standard library
-//
-//go:linkname ParseFloatPrefix strconv.parseFloatPrefix
-func ParseFloatPrefix(s string, bitSize int) (float64, int, error)
-
 // RuntimeAllocSize is a no-op when Vitess is not compiled with GC
 func RuntimeAllocSize(size int64) int64 {
 	return size
