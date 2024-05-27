@@ -1482,6 +1482,46 @@ func TestBestEffortNameInFieldEvent(t *testing.T) {
 	runCases(t, filter, testcases, position, nil)
 }
 
+func TestJoin(t *testing.T) {
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "/\\b(t1|t2)\\b",
+			Filter: "select t1.id t1id, t2.id t2id, t1.name, t2.company from t1 join t2 on t1.t2id = t2.id",
+		}},
+	}
+	execStatements(t, []string{
+		"create table t1(id int, name varbinary(128), t2id int, primary key(id))",
+		"create table t2(id int, company varbinary(128), primary key(id))",
+		"create table t12(t1id int, t2id int, name varbinary(128), company varbinary(128), primary key(t1id))",
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+		"drop table t2",
+		"drop table t12",
+	})
+	position := primaryPosition(t)
+	testcases := []testcase{{
+		input: []string{
+			"insert into t2 values(1, 'company1')",
+			"insert into t1 values(1, 'name1', 1)",
+		},
+		output: [][]string{{
+			`begin`,
+			`type:FIELD field_event:{table_name:"t2" fields:{name:"id" type:INT32 table:"t2" org_table:"t2" database:"vttest" org_name:"id" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"company" type:VARBINARY table:"t2" org_table:"t2" database:"vttest" org_name:"company" column_length:128 charset:63 column_type:"varbinary(128)"}}`,
+			`type:ROW row_event:{table_name:"t2" row_changes:{after:{lengths:1 lengths:8 values:"1company1"}}}`,
+			`gtid`,
+			`commit`,
+		}, {
+			`begin`,
+			`type:FIELD field_event:{table_name:"t1" fields:{name:"id" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"name" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"name" column_length:128 charset:63 column_type:"varbinary(128)"} fields:{name:"t2id" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"t2id" column_length:11 charset:63 column_type:"int(11)"}}`,
+			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:5 lengths:1 values:"1name11"}}}`,
+			`gtid`,
+			`commit`,
+		}},
+	}}
+	runCases(t, filter, testcases, position, nil)
+}
+
 // todo: migrate to new framework
 // test that vstreamer ignores tables created by OnlineDDL
 func TestInternalTables(t *testing.T) {

@@ -208,6 +208,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		curSize        int
 	)
 
+	log.Infof("parseEvents called")
 	// Only the following patterns are possible:
 	// BEGIN->ROWs or Statements->GTID->COMMIT. In the case of large transactions, this can be broken into chunks.
 	// BEGIN->JOURNAL->GTID->COMMIT
@@ -224,6 +225,9 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	bufferAndTransmit := func(vevent *binlogdatapb.VEvent) error {
 		vevent.Keyspace = vs.vse.keyspace
 		vevent.Shard = vs.vse.shard
+		if vevent.Type == binlogdatapb.VEventType_FIELD || vevent.Type == binlogdatapb.VEventType_ROW {
+			log.Infof("bufferAndTransmit for vevent: %v", vevent)
+		}
 
 		switch vevent.Type {
 		case binlogdatapb.VEventType_GTID, binlogdatapb.VEventType_BEGIN, binlogdatapb.VEventType_FIELD,
@@ -602,6 +606,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			vs.vse.errorCounts.Add("TablePlan", 1)
 			return nil, err
 		}
+		log.Infof("Sending field event for table %s: %v", tm.Name, vevent)
 		if vevent != nil {
 			vevents = append(vevents, vevent)
 		}
@@ -742,6 +747,7 @@ func (vs *vstreamer) buildVersionPlan(id uint64, tm *mysql.TableMap) error {
 }
 
 func (vs *vstreamer) buildTablePlan(id uint64, tm *mysql.TableMap) (*binlogdatapb.VEvent, error) {
+	log.Infof("Building table plan for %s", tm.Name)
 	cols, err := vs.buildTableColumns(tm)
 	if err != nil {
 		return nil, err
