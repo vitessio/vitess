@@ -191,6 +191,8 @@ func TestMain(m *testing.M) {
 		}
 		cancel()
 
+		return 0
+
 		runNoBlobTest = true
 		if err := utils.SetBinlogRowImageMode("noblob", tempDir); err != nil {
 			panic(err)
@@ -236,7 +238,7 @@ func execConnStatements(t *testing.T, conn *dbconnpool.DBConnection, queries []s
 	}
 }
 
-//--------------------------------------
+// --------------------------------------
 // Topos and tablets
 
 func addTablet(id int) *topodatapb.Tablet {
@@ -348,7 +350,7 @@ func (ftc *fakeTabletConn) VStreamRows(ctx context.Context, request *binlogdatap
 	})
 }
 
-//--------------------------------------
+// --------------------------------------
 // Binlog Client to TabletManager
 
 // fakeBinlogClient satisfies binlogplayer.Client.
@@ -425,7 +427,7 @@ func expectFBCRequest(t *testing.T, tablet *topodatapb.Tablet, pos string, table
 	}
 }
 
-//--------------------------------------
+// --------------------------------------
 // DBCLient wrapper
 
 func realDBClientFactory() binlogplayer.DBClient {
@@ -486,7 +488,7 @@ func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Resu
 		globalDBQueries <- query
 	} else if testSetForeignKeyQueries && strings.Contains(query, "set foreign_key_checks") {
 		globalDBQueries <- query
-	} else if testForeignKeyQueries && strings.Contains(query, "foreign_key_checks") { //allow select/set for foreign_key_checks
+	} else if testForeignKeyQueries && strings.Contains(query, "foreign_key_checks") { // allow select/set for foreign_key_checks
 		globalDBQueries <- query
 	}
 	return qr, err

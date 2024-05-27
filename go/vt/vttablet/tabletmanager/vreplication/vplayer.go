@@ -179,8 +179,18 @@ func (vp *vplayer) play(ctx context.Context) error {
 		}
 		return nil
 	}
-
-	plan, err := buildReplicatorPlan(vp.vr.source, vp.vr.colInfoMap, vp.copyState, vp.vr.stats, vp.vr.vre.env.CollationEnv(), vp.vr.vre.env.Parser())
+	log.Infof("rules for filter are %v", vp.vr.source.Filter.Rules)
+	tables, err := vttablet.GetJoinTables(vp.vr.vre.env.Parser(), vp.vr.source.Filter.Rules[0].Filter)
+	if err != nil {
+		return err
+	}
+	var plan *ReplicatorPlan
+	if len(tables) > 1 {
+		plan, err = buildReplicatorPlanForJoin(vp.vr.source, vp.vr.colInfoMap, vp.copyState, vp.vr.stats, vp.vr.vre.env.CollationEnv(), vp.vr.vre.env.Parser(), tables)
+	} else {
+		plan, err = buildReplicatorPlan(vp.vr.source, vp.vr.colInfoMap, vp.copyState, vp.vr.stats, vp.vr.vre.env.CollationEnv(), vp.vr.vre.env.Parser())
+	}
+	log.Infof("new rules for filter are %v", vp.vr.source.Filter.Rules)
 	if err != nil {
 		vp.vr.stats.ErrorCounts.Add([]string{"Plan"}, 1)
 		return err
@@ -260,6 +270,7 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 
 	streamErr := make(chan error, 1)
 	go func() {
+		log.Infof("Starting VReplication vstream id: %v, startPos: %v, stop: %v, filter: %v", vp.vr.id, vp.startPos, vp.stopPos, vp.replicatorPlan.VStreamFilter)
 		streamErr <- vp.vr.sourceVStreamer.VStream(ctx, replication.EncodePosition(vp.startPos), nil, vp.replicatorPlan.VStreamFilter, func(events []*binlogdatapb.VEvent) error {
 			return relay.Send(events)
 		})
@@ -359,8 +370,28 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 	}
 
 	for _, change := range rowEvent.RowChanges {
-		if _, err := tplan.applyChange(change, applyFunc); err != nil {
-			return err
+		if vp.replicatorPlan.joinPlan != nil {
+			switch {
+			case change.Before != nil && change.After != nil:
+				log.Infof("Update row change: %v", change)
+			case change.Before != nil && change.After == nil:
+				log.Infof("Delete row change: %v", change)
+			case change.Before == nil && change.After != nil:
+				vals := sqltypes.MakeRowTrusted(tplan.Fields, change.After)
+				val, err := vals[0].ToInt64()
+				if err != nil {
+					log.Infof("Error converting id to int %v", err)
+				}
+				log.Infof("Insert row change for table %v, id %v, query %s", tplan.TargetName, val, tplan.Insert.Query)
+			default:
+				log.Infof("Unknown row change: %v", change)
+			}
+			return nil
+		} else {
+			log.Infof("Applying row change, no JOIN: %v", change)
+			if _, err := tplan.applyChange(change, applyFunc); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -598,6 +629,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			return io.EOF
 		}
 	case binlogdatapb.VEventType_FIELD:
+		log.Infof("Applying event: %v", event)
 		if err := vp.vr.dbClient.Begin(); err != nil {
 			return err
 		}
@@ -627,6 +659,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			stats.Send(sql)
 		}
 	case binlogdatapb.VEventType_ROW:
+		log.Infof("Applying event: %v", event)
 		// This player is configured for row based replication
 		if err := vp.vr.dbClient.Begin(); err != nil {
 			return err
@@ -635,7 +668,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			log.Infof("Error applying row event: %s", err.Error())
 			return err
 		}
-		//Row event is logged AFTER RowChanges are applied so as to calculate the total elapsed time for the Row event
+		// Row event is logged AFTER RowChanges are applied so as to calculate the total elapsed time for the Row event
 		stats.Send(fmt.Sprintf("%v", event.RowEvent))
 	case binlogdatapb.VEventType_OTHER:
 		if vp.vr.dbClient.InTransaction {
