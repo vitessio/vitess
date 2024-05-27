@@ -282,8 +282,13 @@ func (w *heartbeatWriter) disableWrites() {
 	// and no write is in progress.
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
+		defer cancel()
+		w.mu.Lock()
+		defer w.mu.Unlock()
+		if !w.isOpen {
+			return
+		}
 		w.ticks.Stop()
-		cancel()
 	}()
 	w.killWritesUntilStopped(ctx)
 
