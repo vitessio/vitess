@@ -23,6 +23,8 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vttablet"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
@@ -352,9 +354,35 @@ func tableMatches(table sqlparser.TableName, dbname string, filter *binlogdatapb
 	return ruleMatches(table.Name.String(), filter)
 }
 
+func buildJoinPlan(env *vtenv.Environment, ti *Table, vschema *localVSchema, query string) (*Plan, error) {
+	log.Infof("buildJoinPlan: %v, table %v", query, ti.Name)
+	tables, err := vttablet.GetJoinTables(env.Parser(), query)
+	if err != nil {
+		return nil, err
+	}
+	match := false
+	for _, tbl := range tables {
+		if ti.Name == tbl {
+			match = true
+		}
+	}
+	log.Infof("buildJoinPlan: %v, tables %v, table %v, match %v", query, tables, ti.Name, match)
+	if !match {
+		return nil, nil
+	} else {
+		return buildTablePlan(env, ti, vschema, "select * from "+ti.Name)
+	}
+}
+
 func buildPlan(env *vtenv.Environment, ti *Table, vschema *localVSchema, filter *binlogdatapb.Filter) (*Plan, error) {
 	for _, rule := range filter.Rules {
+		isJoin, err := vttablet.IsJoin(env.Parser(), rule.Filter)
+		if err != nil {
+			return nil, err
+		}
 		switch {
+		case isJoin:
+			return buildJoinPlan(env, ti, vschema, rule.Filter)
 		case strings.HasPrefix(rule.Match, "/"):
 			expr := strings.Trim(rule.Match, "/")
 			result, err := regexp.MatchString(expr, ti.Name)
@@ -419,6 +447,7 @@ func buildREPlan(env *vtenv.Environment, ti *Table, vschema *localVSchema, filte
 // BuildTablePlan handles cases where a specific table name is specified.
 // The filter must be a select statement.
 func buildTablePlan(env *vtenv.Environment, ti *Table, vschema *localVSchema, query string) (*Plan, error) {
+	log.Infof("buildTablePlan: %v, table %v", query, ti.Name)
 	sel, fromTable, err := analyzeSelect(query, env.Parser())
 	if err != nil {
 		log.Errorf("%s", err.Error())
@@ -445,7 +474,7 @@ func buildTablePlan(env *vtenv.Environment, ti *Table, vschema *localVSchema, qu
 	if sel.Where == nil {
 		return plan, nil
 	}
-
+	log.Infof("buildTablePlan: %v, table %v, plan %v", query, ti.Name, plan)
 	return plan, nil
 }
 
