@@ -68,6 +68,8 @@ function checkPodStatusWithTimeout() {
     sleep 1
   done
   echo -e "ERROR: checkPodStatusWithTimeout timeout to find pod matching:\ngot:\n$out\nfor regex: $regex"
+  vttabletPod=$(kubectl get pods | grep -E "vttablet" | head -n 1 | awk '{print $1}')
+  kubectl describe pod $vttabletPod
   exit 1
 }
 
