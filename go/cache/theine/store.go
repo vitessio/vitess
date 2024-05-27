@@ -18,6 +18,7 @@ limitations under the License.
 package theine
 
 import (
+	"hash/maphash"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -26,7 +27,6 @@ import (
 	"github.com/gammazero/deque"
 
 	"vitess.io/vitess/go/cache/theine/bf"
-	"vitess.io/vitess/go/hack"
 )
 
 const (
@@ -138,10 +138,12 @@ func (h HashKey256) Hash2() (uint64, uint64) {
 	return h0, h1
 }
 
+var cacheStringHashSeed = maphash.MakeSeed()
+
 type StringKey string
 
 func (h StringKey) Hash() uint64 {
-	return hack.RuntimeStrhash(string(h), 13850135847636357301)
+	return maphash.String(cacheStringHashSeed, string(h))
 }
 
 func (h StringKey) Hash2() (uint64, uint64) {

@@ -27,26 +27,3 @@ func String(b []byte) (s string) {
 func StringBytes(s string) []byte {
 	return []byte(s)
 }
-
-// RuntimeMemhash is a slow hash function for bytes, implemented for compatibility.
-func RuntimeMemhash(b []byte, hash uint64) uint64 {
-	for i := 0; i < len(b); i++ {
-		hash *= 1099511628211
-		hash ^= uint64(b[i])
-	}
-	return hash
-}
-
-// RuntimeStrhash is a slow hash function for bytes, implemented for compatibility.
-func RuntimeStrhash(str string, hash uint64) uint64 {
-	for i := 0; i < len(str); i++ {
-		hash *= 1099511628211
-		hash ^= uint64(str[i])
-	}
-	return hash
-}
-
-// RuntimeAllocSize is a no-op when Vitess is not compiled with GC
-func RuntimeAllocSize(size int64) int64 {
-	return size
-}
