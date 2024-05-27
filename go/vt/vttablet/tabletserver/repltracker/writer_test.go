@@ -38,7 +38,9 @@ func TestWriteHeartbeat(t *testing.T) {
 	defer db.Close()
 
 	now := time.Now()
-	tw := newTestWriter(db, &now)
+	tw := newSimpleTestWriter(db, &now)
+	defer tw.stop()
+
 	upsert := fmt.Sprintf("INSERT INTO %s.heartbeat (ts, tabletUid, keyspaceShard) VALUES (%d, %d, '%s') ON DUPLICATE KEY UPDATE ts=VALUES(ts), tabletUid=VALUES(tabletUid)",
 		"_vt", now.UnixNano(), tw.tabletAlias.Uid, tw.keyspaceShard)
 	db.AddQuery(upsert, &sqltypes.Result{})
@@ -47,8 +49,176 @@ func TestWriteHeartbeat(t *testing.T) {
 	writeErrors.Reset()
 
 	tw.writeHeartbeat()
-	assert.Equal(t, int64(1), writes.Get())
-	assert.Equal(t, int64(0), writeErrors.Get())
+	assert.EqualValues(t, 1, writes.Get())
+	assert.EqualValues(t, 0, writeErrors.Get())
+}
+
+func TestWriteHeartbeatOpen(t *testing.T) {
+	defaultOnDemandDuration = 3 * time.Second
+
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	tw := newSimpleTestWriter(db, nil)
+	defer tw.stop()
+
+	assert.Zero(t, tw.onDemandDuration)
+
+	db.AddQueryPattern("^INSERT INTO.*", &sqltypes.Result{})
+
+	writes.Reset()
+	writeErrors.Reset()
+
+	tw.writeHeartbeat()
+	lastWrites := writes.Get()
+	assert.EqualValues(t, 1, lastWrites)
+	assert.EqualValues(t, 0, writeErrors.Get())
+
+	t.Run("closed, no heartbeats", func(t *testing.T) {
+		<-time.After(3 * time.Second)
+		assert.EqualValues(t, 1, writes.Get())
+	})
+	tw.Open()
+	defer tw.Close()
+	t.Run("open, heartbeats", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				assert.EqualValues(t, 0, writeErrors.Get())
+				currentWrites := writes.Get()
+				assert.Greater(t, currentWrites, lastWrites)
+				lastWrites = currentWrites
+			}
+		}
+	})
+}
+
+func TestWriteHeartbeatDisabled(t *testing.T) {
+	defaultOnDemandDuration = 3 * time.Second
+
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	tw := newTestWriter(db, nil, tabletenv.Disable, 0)
+	defer tw.stop()
+
+	assert.Equal(t, defaultOnDemandDuration, tw.onDemandDuration)
+
+	db.AddQueryPattern("^INSERT INTO.*", &sqltypes.Result{})
+
+	writes.Reset()
+	writeErrors.Reset()
+
+	tw.writeHeartbeat()
+	lastWrites := writes.Get()
+	assert.EqualValues(t, 1, lastWrites)
+	assert.EqualValues(t, 0, writeErrors.Get())
+
+	t.Run("closed, no heartbeats", func(t *testing.T) {
+		<-time.After(3 * time.Second)
+		assert.EqualValues(t, 1, writes.Get())
+	})
+	tw.Open()
+	defer tw.Close()
+	t.Run("open, no heartbeats", func(t *testing.T) {
+		<-time.After(3 * time.Second)
+		assert.EqualValues(t, 1, writes.Get())
+	})
+	t.Run("request heartbeats, heartbeats", func(t *testing.T) {
+		tw.RequestHeartbeats()
+		ctx, cancel := context.WithTimeout(context.Background(), tw.onDemandDuration-time.Second)
+		defer cancel()
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				assert.EqualValues(t, 0, writeErrors.Get())
+				currentWrites := writes.Get()
+				assert.Greater(t, currentWrites, lastWrites)
+				lastWrites = currentWrites
+			}
+		}
+	})
+	t.Run("exhaust lease, no heartbeats", func(t *testing.T) {
+		<-time.After(tw.onDemandDuration)
+		currentWrites := writes.Get()
+		<-time.After(3 * time.Second)
+		assert.EqualValues(t, currentWrites, writes.Get())
+	})
+}
+
+func TestWriteHeartbeatOnDemand(t *testing.T) {
+	defaultOnDemandDuration = 7 * time.Second
+	onDemandDuration := 3 * time.Second
+
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	tw := newTestWriter(db, nil, tabletenv.Heartbeat, onDemandDuration)
+	defer tw.stop()
+
+	assert.Equal(t, onDemandDuration, tw.onDemandDuration)
+
+	db.AddQueryPattern("^INSERT INTO.*", &sqltypes.Result{})
+
+	writes.Reset()
+	writeErrors.Reset()
+
+	tw.writeHeartbeat()
+	lastWrites := writes.Get()
+	assert.EqualValues(t, 1, lastWrites)
+	assert.EqualValues(t, 0, writeErrors.Get())
+
+	t.Run("closed, no heartbeats", func(t *testing.T) {
+		<-time.After(3 * time.Second)
+		assert.EqualValues(t, 1, writes.Get())
+	})
+	tw.Open()
+	defer tw.Close()
+	t.Run("open, initial heartbeats", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), tw.onDemandDuration-time.Second)
+		defer cancel()
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				assert.EqualValues(t, 0, writeErrors.Get())
+				currentWrites := writes.Get()
+				assert.Greater(t, currentWrites, lastWrites)
+				lastWrites = currentWrites
+			}
+		}
+	})
+	t.Run("exhaust lease, no heartbeats", func(t *testing.T) {
+		<-time.After(tw.onDemandDuration)
+		currentWrites := writes.Get()
+		<-time.After(3 * time.Second)
+		assert.EqualValues(t, currentWrites, writes.Get())
+	})
+	t.Run("request heartbeats, heartbeats", func(t *testing.T) {
+		tw.RequestHeartbeats()
+		lastWrites := writes.Get()
+		<-time.After(tw.onDemandDuration)
+		assert.Greater(t, writes.Get(), lastWrites)
+	})
+	t.Run("exhaust lease, no heartbeats", func(t *testing.T) {
+		<-time.After(tw.onDemandDuration)
+		currentWrites := writes.Get()
+		<-time.After(3 * time.Second)
+		assert.EqualValues(t, currentWrites, writes.Get())
+	})
 }
 
 func TestWriteHeartbeatError(t *testing.T) {
@@ -56,7 +226,8 @@ func TestWriteHeartbeatError(t *testing.T) {
 	defer db.Close()
 
 	now := time.Now()
-	tw := newTestWriter(db, &now)
+	tw := newSimpleTestWriter(db, &now)
+	defer tw.stop()
 
 	writes.Reset()
 	writeErrors.Reset()
@@ -69,7 +240,9 @@ func TestWriteHeartbeatError(t *testing.T) {
 // TestCloseWhileStuckWriting tests that Close shouldn't get stuck even if the heartbeat writer is stuck waiting for a semi-sync ACK.
 func TestCloseWhileStuckWriting(t *testing.T) {
 	db := fakesqldb.New(t)
-	tw := newTestWriter(db, nil)
+	tw := newSimpleTestWriter(db, nil)
+	defer tw.stop()
+
 	tw.isOpen = true
 
 	killWg := sync.WaitGroup{}
@@ -90,14 +263,14 @@ func TestCloseWhileStuckWriting(t *testing.T) {
 	})
 
 	// Now we enable writes, but the first write will get blocked.
-	tw.enableWrites(true)
+	tw.enableWrites()
 	// We wait until the write has blocked to ensure we only call Close after we are stuck writing.
 	startedWaitWg.Wait()
 	// Even if the write is blocked, we should be able to disable writes without waiting indefinitely.
 	// This is what we call, when we try to Close the heartbeat writer.
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
-		tw.enableWrites(false)
+		tw.disableWrites()
 		cancel()
 	}()
 	select {
@@ -108,17 +281,22 @@ func TestCloseWhileStuckWriting(t *testing.T) {
 	}
 }
 
-func newTestWriter(db *fakesqldb.DB, frozenTime *time.Time) *heartbeatWriter {
+func newSimpleTestWriter(db *fakesqldb.DB, frozenTime *time.Time) *heartbeatWriter {
+	return newTestWriter(db, frozenTime, tabletenv.Heartbeat, 0)
+}
+
+func newTestWriter(db *fakesqldb.DB, frozenTime *time.Time, replTrackerMode string, onDemandInterval time.Duration) *heartbeatWriter {
 	cfg := tabletenv.NewDefaultConfig()
-	cfg.ReplicationTracker.Mode = tabletenv.Heartbeat
-	cfg.ReplicationTracker.HeartbeatInterval = time.Second
+	cfg.ReplicationTracker.Mode = replTrackerMode
+	cfg.ReplicationTracker.HeartbeatOnDemand = onDemandInterval
+	cfg.ReplicationTracker.HeartbeatInterval = 250 * time.Millisecond // oversampling our 1*time.Second unit test interval in various functions
 
 	params := db.ConnParams()
 	cp := *params
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "")
 
 	tw := newHeartbeatWriter(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "WriterTest"), &topodatapb.TabletAlias{Cell: "test", Uid: 1111})
-	tw.keyspaceShard = "test:0"
+	tw.keyspaceShard = testKeyspaceShard
 
 	if frozenTime != nil {
 		tw.now = func() time.Time {

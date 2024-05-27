@@ -50,49 +50,91 @@ func TestReplTracker(t *testing.T) {
 	target := &querypb.Target{}
 	mysqld := mysqlctl.NewFakeMysqlDaemon(nil)
 
-	rt := NewReplTracker(env, alias)
-	rt.InitDBConfig(target, mysqld)
-	assert.Equal(t, tabletenv.Heartbeat, rt.mode)
-	assert.True(t, rt.hw.enabled)
-	assert.True(t, rt.hr.enabled)
+	t.Run("always-on heartbeat", func(t *testing.T) {
+		rt := NewReplTracker(env, alias)
+		rt.InitDBConfig(target, mysqld)
+		assert.Equal(t, tabletenv.Heartbeat, rt.mode)
+		assert.Equal(t, HeartbeatConfigTypeAlways, rt.hw.configType)
+		assert.Zero(t, rt.hw.onDemandDuration)
+		assert.Zero(t, rt.hw.onDemandDuration)
+		assert.True(t, rt.hr.enabled)
 
-	rt.MakePrimary()
-	assert.True(t, rt.hw.isOpen)
-	assert.False(t, rt.hr.isOpen)
-	assert.True(t, rt.isPrimary)
+		rt.MakePrimary()
+		assert.True(t, rt.hw.isOpen)
+		assert.False(t, rt.hr.isOpen)
+		assert.True(t, rt.isPrimary)
 
-	lag, err := rt.Status()
-	assert.NoError(t, err)
-	assert.Equal(t, time.Duration(0), lag)
+		lag, err := rt.Status()
+		assert.NoError(t, err)
+		assert.Equal(t, time.Duration(0), lag)
 
-	rt.MakeNonPrimary()
-	assert.False(t, rt.hw.isOpen)
-	assert.True(t, rt.hr.isOpen)
-	assert.False(t, rt.isPrimary)
+		rt.MakeNonPrimary()
+		assert.False(t, rt.hw.isOpen)
+		assert.True(t, rt.hr.isOpen)
+		assert.False(t, rt.isPrimary)
 
-	rt.hr.lastKnownLag = 1 * time.Second
-	lag, err = rt.Status()
-	assert.NoError(t, err)
-	assert.Equal(t, 1*time.Second, lag)
+		rt.hr.lastKnownLag = 1 * time.Second
+		lag, err = rt.Status()
+		assert.NoError(t, err)
+		assert.Equal(t, 1*time.Second, lag)
 
-	rt.Close()
-	assert.False(t, rt.hw.isOpen)
-	assert.False(t, rt.hr.isOpen)
+		rt.Close()
+		assert.False(t, rt.hw.isOpen)
+		assert.False(t, rt.hr.isOpen)
+	})
+	t.Run("disabled heartbeat", func(t *testing.T) {
+		cfg.ReplicationTracker.Mode = tabletenv.Polling
+		rt := NewReplTracker(env, alias)
+		rt.InitDBConfig(target, mysqld)
+		assert.Equal(t, tabletenv.Polling, rt.mode)
+		assert.Equal(t, mysqld, rt.poller.mysqld)
+		assert.Equal(t, HeartbeatConfigTypeNone, rt.hw.configType)
+		assert.Equal(t, defaultOnDemandDuration, rt.hw.onDemandDuration)
+		assert.NotZero(t, rt.hw.onDemandDuration)
+		assert.False(t, rt.hr.enabled)
 
-	cfg.ReplicationTracker.Mode = tabletenv.Polling
-	rt = NewReplTracker(env, alias)
-	rt.InitDBConfig(target, mysqld)
-	assert.Equal(t, tabletenv.Polling, rt.mode)
-	assert.Equal(t, mysqld, rt.poller.mysqld)
-	assert.False(t, rt.hw.enabled)
-	assert.False(t, rt.hr.enabled)
+		rt.MakeNonPrimary()
+		assert.False(t, rt.hw.isOpen)
+		assert.False(t, rt.hr.isOpen)
+		assert.False(t, rt.isPrimary)
 
-	rt.MakeNonPrimary()
-	assert.False(t, rt.hw.isOpen)
-	assert.False(t, rt.hr.isOpen)
-	assert.False(t, rt.isPrimary)
+		mysqld.ReplicationStatusError = errors.New("err")
+		_, err := rt.Status()
+		assert.Equal(t, "err", err.Error())
+	})
+	t.Run("on-demand heartbeat", func(t *testing.T) {
+		cfg.ReplicationTracker.Mode = tabletenv.Heartbeat
+		cfg.ReplicationTracker.HeartbeatOnDemand = time.Second
 
-	mysqld.ReplicationStatusError = errors.New("err")
-	_, err = rt.Status()
-	assert.Equal(t, "err", err.Error())
+		rt := NewReplTracker(env, alias)
+		rt.InitDBConfig(target, mysqld)
+		assert.Equal(t, tabletenv.Heartbeat, rt.mode)
+		assert.Equal(t, HeartbeatConfigTypeOnDemand, rt.hw.configType)
+		assert.Equal(t, time.Second, rt.hw.onDemandDuration)
+		assert.NotZero(t, rt.hw.onDemandDuration)
+		assert.True(t, rt.hr.enabled)
+
+		rt.MakePrimary()
+		assert.True(t, rt.hw.isOpen)
+		assert.False(t, rt.hr.isOpen)
+		assert.True(t, rt.isPrimary)
+
+		lag, err := rt.Status()
+		assert.NoError(t, err)
+		assert.Equal(t, time.Duration(0), lag)
+
+		rt.MakeNonPrimary()
+		assert.False(t, rt.hw.isOpen)
+		assert.True(t, rt.hr.isOpen)
+		assert.False(t, rt.isPrimary)
+
+		rt.hr.lastKnownLag = 1 * time.Second
+		lag, err = rt.Status()
+		assert.NoError(t, err)
+		assert.Equal(t, 1*time.Second, lag)
+
+		rt.Close()
+		assert.False(t, rt.hw.isOpen)
+		assert.False(t, rt.hr.isOpen)
+	})
 }
