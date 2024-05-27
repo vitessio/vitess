@@ -53,6 +53,7 @@ func TestWriteHeartbeat(t *testing.T) {
 	assert.EqualValues(t, 0, writeErrors.Get())
 }
 
+// TestWriteHeartbeatOpen tests that the heartbeat writer writes heartbeats when the writer is open.
 func TestWriteHeartbeatOpen(t *testing.T) {
 	defaultOnDemandDuration = 3 * time.Second
 
@@ -99,6 +100,8 @@ func TestWriteHeartbeatOpen(t *testing.T) {
 	})
 }
 
+// TestWriteHeartbeatDisabled tests that the heartbeat writer doesn't write heartbeats when the writer is disabled,
+// but that it does respond to RequestHeartbeats(), and generates heartbeats on a lease.
 func TestWriteHeartbeatDisabled(t *testing.T) {
 	defaultOnDemandDuration = 3 * time.Second
 
@@ -108,6 +111,7 @@ func TestWriteHeartbeatDisabled(t *testing.T) {
 	tw := newTestWriter(db, nil, tabletenv.Disable, 0)
 	defer tw.stop()
 
+	// Even though disabled, the writer will have an on-demand duration set.
 	assert.Equal(t, defaultOnDemandDuration, tw.onDemandDuration)
 
 	db.AddQueryPattern("^INSERT INTO.*", &sqltypes.Result{})
@@ -156,6 +160,8 @@ func TestWriteHeartbeatDisabled(t *testing.T) {
 	})
 }
 
+// TestWriteHeartbeatOnDemand tests that the heartbeat writer initiates leased heartbeats once opened,
+// and then upon RequestHeartbeats().
 func TestWriteHeartbeatOnDemand(t *testing.T) {
 	defaultOnDemandDuration = 7 * time.Second
 	onDemandDuration := 3 * time.Second
