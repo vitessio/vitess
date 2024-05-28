@@ -150,6 +150,9 @@ func run(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("failed to refresh config: %w", err)
 		}
 
+		printFile(cnf.Path)
+		printFile(cnf.Path + ".previous")
+
 		// check if we were interrupted during a previous restore
 		if !mysqlctl.RestoreWasInterrupted(cnf) {
 			if err := mysqld.Start(ctx, cnf); err != nil {
@@ -189,4 +192,10 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+func printFile(path string) {
+	log.Errorf("Printing file - %v", path)
+	bytes, err := os.ReadFile(path)
+	log.Errorf("Read - %v, %v", string(bytes), err)
 }
