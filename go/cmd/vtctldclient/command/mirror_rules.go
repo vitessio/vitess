@@ -81,13 +81,13 @@ func commandApplyMirrorRules(cmd *cobra.Command, args []string) error {
 		rulesBytes = []byte(applyMirrorRulesOptions.Rules)
 	}
 
-	rr := &vschemapb.MirrorRules{}
-	if err := json2.Unmarshal(rulesBytes, &rr); err != nil {
+	mr := &vschemapb.MirrorRules{}
+	if err := json2.Unmarshal(rulesBytes, &mr); err != nil {
 		return err
 	}
 
 	// Round-trip so when we display the result it's readable.
-	data, err := cli.MarshalJSON(rr)
+	data, err := cli.MarshalJSON(mr)
 	if err != nil {
 		return err
 	}
@@ -110,7 +110,7 @@ func commandApplyMirrorRules(cmd *cobra.Command, args []string) error {
 	}
 
 	_, err = client.ApplyMirrorRules(commandCtx, &vtctldatapb.ApplyMirrorRulesRequest{
-		MirrorRules:  rr,
+		MirrorRules:  mr,
 		SkipRebuild:  applyMirrorRulesOptions.SkipRebuild,
 		RebuildCells: applyMirrorRulesOptions.Cells,
 	})

@@ -34,6 +34,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 // TestVtctldclientCLI tests the vreplication vtctldclient CLI commands, primarily to check that non-standard flags
@@ -407,6 +408,29 @@ func confirmNoMirrorRules(t *testing.T) {
 func confirmMirrorRulesExist(t *testing.T) {
 	mirrorRulesResponse := getMirrorRules(t)
 	require.NotZero(t, len(mirrorRulesResponse.Rules))
+}
+
+func expectMirrorRules(t *testing.T, sourceKeyspace, targetKeyspace string, tables []string, tabletTypes []topodatapb.TabletType, percent float32) {
+	t.Helper()
+
+	// Each table should have a mirror rule for each serving type.
+	mirrorRules := getMirrorRules(t)
+	require.Len(t, mirrorRules.Rules, len(tables)*len(tabletTypes))
+	fromTableToRule := make(map[string]*vschemapb.MirrorRule)
+	for _, rule := range mirrorRules.Rules {
+		fromTableToRule[rule.FromTable] = rule
+	}
+	for _, table := range tables {
+		for _, tabletType := range tabletTypes {
+			fromTable := fmt.Sprintf("%s.%s", sourceKeyspace, table)
+			if tabletType != topodatapb.TabletType_PRIMARY {
+				fromTable = fmt.Sprintf("%s@%s", fromTable, topoproto.TabletTypeLString(tabletType))
+			}
+			require.Contains(t, fromTableToRule, fromTable)
+			require.Equal(t, fmt.Sprintf("%s.%s", targetKeyspace, table), fromTableToRule[fromTable].ToTable)
+			require.Equal(t, percent, fromTableToRule[fromTable].Percent)
+		}
+	}
 }
 
 func getRoutingRules(t *testing.T) *vschemapb.RoutingRules {

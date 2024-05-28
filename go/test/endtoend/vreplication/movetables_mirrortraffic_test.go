@@ -1,5 +1,5 @@
 /*
-Copyright 2022 The Vitess Authors.
+Copyright 2024 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,15 +17,10 @@ limitations under the License.
 package vreplication
 
 import (
-	"fmt"
 	"testing"
-
-	"github.com/stretchr/testify/require"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
-	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 func testMoveTablesMirrorTraffic(t *testing.T, flavor workflowFlavor) {
@@ -36,6 +31,7 @@ func testMoveTablesMirrorTraffic(t *testing.T, flavor workflowFlavor) {
 	sourceKeyspace := "product"
 	targetKeyspace := "customer"
 	workflowName := "wf1"
+	tables := []string{"customer", "loadtest", "customer2"}
 
 	_ = setupMinimalCustomerKeyspace(t)
 
@@ -58,28 +54,11 @@ func testMoveTablesMirrorTraffic(t *testing.T, flavor workflowFlavor) {
 	mt.MirrorTraffic()
 	confirmMirrorRulesExist(t)
 
-	// Each table should have a mirror rule for each serving type.
-	mirrorRules := getMirrorRules(t)
-	require.Len(t, mirrorRules.Rules, 9)
-	fromTableToRule := make(map[string]*vschemapb.MirrorRule)
-	for _, rule := range mirrorRules.Rules {
-		fromTableToRule[rule.FromTable] = rule
-	}
-	for _, table := range []string{"customer", "loadtest", "customer2"} {
-		for _, tabletType := range []topodatapb.TabletType{
-			topodatapb.TabletType_PRIMARY,
-			topodatapb.TabletType_REPLICA,
-			topodatapb.TabletType_RDONLY,
-		} {
-			fromTable := fmt.Sprintf("%s.%s", sourceKeyspace, table)
-			if tabletType != topodatapb.TabletType_PRIMARY {
-				fromTable = fmt.Sprintf("%s@%s", fromTable, topoproto.TabletTypeLString(tabletType))
-			}
-			require.Contains(t, fromTableToRule, fromTable)
-			require.Equal(t, fmt.Sprintf("%s.%s", targetKeyspace, table), fromTableToRule[fromTable].ToTable)
-			require.Equal(t, float32(25), fromTableToRule[fromTable].Percent)
-		}
-	}
+	expectMirrorRules(t, sourceKeyspace, targetKeyspace, tables, []topodatapb.TabletType{
+		topodatapb.TabletType_PRIMARY,
+		topodatapb.TabletType_REPLICA,
+		topodatapb.TabletType_RDONLY,
+	}, 25)
 
 	lg := newLoadGenerator(t, vc)
 	go func() {
@@ -90,19 +69,9 @@ func testMoveTablesMirrorTraffic(t *testing.T, flavor workflowFlavor) {
 	mt.SwitchReads()
 	confirmMirrorRulesExist(t)
 
-	// Each table should only have a mirror rule for primary serving type.
-	mirrorRules = getMirrorRules(t)
-	require.Len(t, mirrorRules.Rules, 3)
-	fromTableToRule = make(map[string]*vschemapb.MirrorRule)
-	for _, rule := range mirrorRules.Rules {
-		fromTableToRule[rule.FromTable] = rule
-	}
-	for _, table := range []string{"customer", "loadtest", "customer2"} {
-		fromTable := fmt.Sprintf("%s.%s", sourceKeyspace, table)
-		require.Contains(t, fromTableToRule, fromTable)
-		require.Equal(t, fmt.Sprintf("%s.%s", targetKeyspace, table), fromTableToRule[fromTable].ToTable)
-		require.Equal(t, float32(25), fromTableToRule[fromTable].Percent)
-	}
+	expectMirrorRules(t, sourceKeyspace, targetKeyspace, tables, []topodatapb.TabletType{
+		topodatapb.TabletType_PRIMARY,
+	}, 25)
 
 	mt.SwitchWrites()
 	confirmNoMirrorRules(t)
