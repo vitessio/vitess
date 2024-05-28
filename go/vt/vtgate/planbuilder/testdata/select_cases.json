@@ -2044,11 +2044,34 @@
     }
   },
   {
-    "comment": "left join with a dual table on left",
+    "comment": "left join with a dual table on left - merge-able",
     "query": "select t.title, user.col from (select 'hello' as title) as t left join user on user.id=1",
     "plan": {
       "QueryType": "SELECT",
       "Original": "select t.title, user.col from (select 'hello' as title) as t left join user on user.id=1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select t.title, `user`.col from (select 'hello' as title from dual where 1 != 1) as t left join `user` on `user`.id = 1 where 1 != 1",
+        "Query": "select t.title, `user`.col from (select 'hello' as title from dual) as t left join `user` on `user`.id = 1",
+        "Table": "`user`, dual"
+      },
+      "TablesUsed": [
+        "main.dual",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "left join with a dual table on left - non-merge-able",
+    "query": "select t.title, user.col from (select 'hello' as title) as t left join user on user.id <= 4",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select t.title, user.col from (select 'hello' as title) as t left join user on user.id <= 4",
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "LeftJoin",
@@ -2068,18 +2091,14 @@
           },
           {
             "OperatorType": "Route",
-            "Variant": "EqualUnique",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
             },
             "FieldQuery": "select `user`.col from `user` where 1 != 1",
-            "Query": "select `user`.col from `user` where `user`.id = 1",
-            "Table": "`user`",
-            "Values": [
-              "1"
-            ],
-            "Vindex": "user_index"
+            "Query": "select `user`.col from `user` where `user`.id <= 4",
+            "Table": "`user`"
           }
         ]
       },
@@ -2091,10 +2110,10 @@
   },
   {
     "comment": "right join with a dual table on left",
-    "query": "select t.title, user.col from (select 'hello' as title) as t right join user on user.id=1",
+    "query": "select t.title, user.col from (select 'hello' as title) as t right join user on user.id<=4",
     "plan": {
       "QueryType": "SELECT",
-      "Original": "select t.title, user.col from (select 'hello' as title) as t right join user on user.id=1",
+      "Original": "select t.title, user.col from (select 'hello' as title) as t right join user on user.id<=4",
       "Instructions": {
         "OperatorType": "Route",
         "Variant": "Scatter",
@@ -2102,8 +2121,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select t.title, `user`.col from `user` left join (select 'hello' as title from dual where 1 != 1) as t on `user`.id = 1 where 1 != 1",
-        "Query": "select t.title, `user`.col from `user` left join (select 'hello' as title from dual) as t on `user`.id = 1",
+        "FieldQuery": "select t.title, `user`.col from `user` left join (select 'hello' as title from dual where 1 != 1) as t on `user`.id <= 4 where 1 != 1",
+        "Query": "select t.title, `user`.col from `user` left join (select 'hello' as title from dual) as t on `user`.id <= 4",
         "Table": "`user`, dual"
       },
       "TablesUsed": [
@@ -2113,11 +2132,34 @@
     }
   },
   {
-    "comment": "right join with a dual table on right",
+    "comment": "right join with a dual table on right - merge-able",
     "query": "select t.title, user.col from user right join (select 'hello' as title) as t on user.id=1",
     "plan": {
       "QueryType": "SELECT",
       "Original": "select t.title, user.col from user right join (select 'hello' as title) as t on user.id=1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select t.title, `user`.col from (select 'hello' as title from dual where 1 != 1) as t left join `user` on `user`.id = 1 where 1 != 1",
+        "Query": "select t.title, `user`.col from (select 'hello' as title from dual) as t left join `user` on `user`.id = 1",
+        "Table": "`user`, dual"
+      },
+      "TablesUsed": [
+        "main.dual",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "right join with a dual table on right - non-merge-able",
+    "query": "select t.title, user.col from user right join (select 'hello' as title) as t on user.id>=4",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select t.title, user.col from user right join (select 'hello' as title) as t on user.id>=4",
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "LeftJoin",
@@ -2137,18 +2179,14 @@
           },
           {
             "OperatorType": "Route",
-            "Variant": "EqualUnique",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
             },
             "FieldQuery": "select `user`.col from `user` where 1 != 1",
-            "Query": "select `user`.col from `user` where `user`.id = 1",
-            "Table": "`user`",
-            "Values": [
-              "1"
-            ],
-            "Vindex": "user_index"
+            "Query": "select `user`.col from `user` where `user`.id >= 4",
+            "Table": "`user`"
           }
         ]
       },
