@@ -24,7 +24,6 @@ import (
 	"math"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"vitess.io/vitess/go/mysql/replication"
@@ -39,9 +38,6 @@ import (
 )
 
 var (
-	// At what point should we consider the vplayer to be stalled and return an error.
-	vplayerProgressDeadline = time.Duration(0) // Disabled by default.
-
 	// The error to return when we have detected a stall in the vplayer.
 	ErrVPlayerStalled = fmt.Errorf("progress stalled; vplayer was unable to replicate the transaction in a timely manner; examine the target mysqld instance health and the replicated queries' EXPLAIN output to see why queries are taking unusually long")
 )
@@ -96,11 +92,6 @@ type vplayer struct {
 	// foreignKeyChecksStateInitialized is set to true once we have initialized the foreignKeyChecksEnabled.
 	// The initialization is done on the first row event that this vplayer sees.
 	foreignKeyChecksStateInitialized bool
-
-	// stallHandler is used to detect stalls when applying replicated user
-	// transactions and break out of the stall with a meaningful user error
-	// and log message, allowing for another retry attempt.
-	stallHandler *stallHandler
 }
 
 // NoForeignKeyCheckFlagBitmask is the bitmask for the 2nd bit (least significant) of the flags in a binlog row event.
@@ -131,15 +122,8 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 	queryFunc := func(ctx context.Context, sql string) (*sqltypes.Result, error) {
 		return vr.dbClient.ExecuteWithRetry(ctx, sql)
 	}
-	stallHandler := newStallHandler(vplayerProgressDeadline, nil)
 	commitFunc := func() error {
-		// Explicit commits are only done when we are processing a batch of replicated
-		// queries and NOT for heartbeats or when simply updating the position. So we
-		// stop the timer here.
-		if err := vr.dbClient.Commit(); err != nil {
-			return err
-		}
-		return stallHandler.stopTimer()
+		return vr.dbClient.Commit()
 	}
 	batchMode := false
 	if vttablet.VReplicationExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerBatching != 0 {
@@ -170,13 +154,7 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 			return nil, vr.dbClient.AddQueryToTrxBatch(sql) // Should become part of the trx batch
 		}
 		commitFunc = func() error {
-			// Explicit commits are only done when we are processing a batch of replicated
-			// queries and NOT for heartbeats or when simply updating the position. So we
-			// stop timer here.
-			if err := vr.dbClient.CommitTrxQueryBatch(); err != nil { // Commit the current trx batch
-				return err
-			}
-			return stallHandler.stopTimer()
+			return vr.dbClient.CommitTrxQueryBatch()
 		}
 		vr.dbClient.maxBatchSize = maxAllowedPacket
 	}
@@ -195,7 +173,6 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		query:            queryFunc,
 		commit:           commitFunc,
 		batchMode:        batchMode,
-		stallHandler:     stallHandler,
 	}
 }
 
@@ -295,8 +272,6 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 	}()
 
 	applyErr := make(chan error, 1)
-	vp.stallHandler.fire = applyErr
-	defer vp.stallHandler.stopTimer()
 	go func() {
 		applyErr <- vp.applyEvents(ctx, relay)
 	}()
@@ -631,9 +606,6 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			if err := vp.vr.dbClient.Begin(); err != nil {
 				return err
 			}
-			if err := vp.stallHandler.startTimer(); err != nil {
-				return err
-			}
 		}
 
 		if !vp.vr.dbClient.InTransaction {
@@ -653,9 +625,6 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		}
 	case binlogdatapb.VEventType_FIELD:
 		if err := vp.vr.dbClient.Begin(); err != nil {
-			return err
-		}
-		if err := vp.stallHandler.startTimer(); err != nil {
 			return err
 		}
 		tplan, err := vp.replicatorPlan.buildExecutionPlan(event.FieldEvent)
@@ -678,9 +647,6 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			if err := vp.vr.dbClient.Begin(); err != nil {
 				return err
 			}
-			if err := vp.stallHandler.startTimer(); err != nil {
-				return err
-			}
 			if err := vp.applyStmtEvent(ctx, event); err != nil {
 				return err
 			}
@@ -689,9 +655,6 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 	case binlogdatapb.VEventType_ROW:
 		// This player is configured for row based replication
 		if err := vp.vr.dbClient.Begin(); err != nil {
-			return err
-		}
-		if err := vp.stallHandler.startTimer(); err != nil {
 			return err
 		}
 		if err := vp.applyRowEvent(ctx, event.RowEvent); err != nil {
@@ -836,79 +799,5 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		}
 	}
 
-	return nil
-}
-
-// stallHandler is used to monitor for vplayer stalls and trigger an error
-// when detected. This is used today to detect when a vplayer is not able to
-// commit/complete a replicated user transaction within a configured period of
-// time. It offers a lock-free implementation that is idempotent; you can call
-// startTimer()/stopTimer() as many times as you like and in any order -- it
-// will ensure that there's only ever 0 or 1 timers/goroutines running at a
-// time. When it is already running, calls to startTimer() will only reset
-// the timer's deadline.
-type stallHandler struct {
-	timer    atomic.Pointer[time.Timer]
-	deadline time.Duration
-	fire     chan error
-	stop     chan struct{}
-}
-
-// newStallHandler initializes a stall handler. You should call stopTimer()
-// in a defer from the same function where you initalize a new stallHandler.
-func newStallHandler(dl time.Duration, ch chan error) *stallHandler {
-	return &stallHandler{
-		deadline: dl,
-		fire:     ch,
-		stop:     make(chan struct{}),
-	}
-}
-
-// startTimer starts the timer if it's not already running and it otherwise
-// resets the timer's deadline when it it is already running.
-func (sh *stallHandler) startTimer() error {
-	if sh == nil || sh.deadline == 0 { // Stall handling is disabled
-		return nil
-	}
-	// If the timer has not been initialized yet, then do so.
-	if swapped := sh.timer.CompareAndSwap(nil, time.NewTimer(sh.deadline)); !swapped {
-		// Otherwise, reset the timer's deadline.
-		if sh.timer.Load().Reset(sh.deadline) {
-			// The timer was already running, so be sure the channel is drained.
-			select {
-			case <-sh.timer.Load().C:
-			default:
-			}
-			// The timer goroutine was already running, so now that we've reset the
-			// timer's deadline we're done.
-			return nil
-		}
-	}
-	go func() {
-		select {
-		case <-sh.timer.Load().C: // The timer expired
-			sh.fire <- vterrors.Wrapf(ErrVPlayerStalled,
-				"failed to commit transaction batch before the configured --vplayer-progress-deadline of %v", vplayerProgressDeadline)
-		case <-sh.stop: // The timer was stopped
-		}
-	}()
-	return nil
-}
-
-// stopTimer stops the timer if it's currently running.
-func (sh *stallHandler) stopTimer() error {
-	if sh == nil || sh.deadline == 0 || sh.timer.Load() == nil { // Stall handling is currently disabled
-		return nil
-	}
-	if sh.timer.Load().Stop() {
-		// It was running, so signal the goroutine to stop.
-		sh.stop <- struct{}{}
-		return nil
-	}
-	// It wasn't running, so be sure that the channel is drained.
-	select {
-	case <-sh.timer.Load().C:
-	default:
-	}
 	return nil
 }
