@@ -161,7 +161,7 @@ func rewriteNotExpr(cursor *sqlparser.Cursor, node *sqlparser.NotExpr) {
 	if cmp.Operator == sqlparser.NullSafeEqualOp {
 		return
 	}
-	cmp.Operator = sqlparser.Inverse(cmp.Operator)
+	cmp.Operator = cmp.Operator.Inverse()
 	cursor.Replace(cmp)
 }
 

@@ -63,7 +63,7 @@ func gen4DeleteStmtPlanner(
 	if ks, tables := ctx.SemTable.SingleUnshardedKeyspace(); ks != nil {
 		if !ctx.SemTable.ForeignKeysPresent() {
 			plan := deleteUnshardedShortcut(deleteStmt, ks, tables)
-			return newPlanResult(plan.Primitive(), operators.QualifiedTables(ks, tables)...), nil
+			return newPlanResult(plan, operators.QualifiedTables(ks, tables)...), nil
 		}
 	}
 
@@ -78,12 +78,12 @@ func gen4DeleteStmtPlanner(
 		return nil, err
 	}
 
-	plan, err := transformToLogicalPlan(ctx, op)
+	plan, err := transformToPrimitive(ctx, op)
 	if err != nil {
 		return nil, err
 	}
 
-	return newPlanResult(plan.Primitive(), operators.TablesUsed(op)...), nil
+	return newPlanResult(plan, operators.TablesUsed(op)...), nil
 }
 
 func rewriteSingleTbl(del *sqlparser.Delete) (*sqlparser.Delete, error) {
@@ -123,7 +123,7 @@ func rewriteSingleTbl(del *sqlparser.Delete) (*sqlparser.Delete, error) {
 	return del, nil
 }
 
-func deleteUnshardedShortcut(stmt *sqlparser.Delete, ks *vindexes.Keyspace, tables []*vindexes.Table) logicalPlan {
+func deleteUnshardedShortcut(stmt *sqlparser.Delete, ks *vindexes.Keyspace, tables []*vindexes.Table) engine.Primitive {
 	edml := engine.NewDML()
 	edml.Keyspace = ks
 	edml.Opcode = engine.Unsharded
@@ -131,5 +131,5 @@ func deleteUnshardedShortcut(stmt *sqlparser.Delete, ks *vindexes.Keyspace, tabl
 	for _, tbl := range tables {
 		edml.TableNames = append(edml.TableNames, tbl.Name.String())
 	}
-	return &primitiveWrapper{prim: &engine.Delete{DML: edml}}
+	return &engine.Delete{DML: edml}
 }
