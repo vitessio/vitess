@@ -74,6 +74,7 @@ var (
 	warnPayloadSize int
 
 	noScatter          bool
+	noVstreamCopy      bool
 	enableShardRouting bool
 
 	// TODO(deepthi): change these two vars to unexported and move to healthcheck.go when LegacyHealthcheck is removed
@@ -116,6 +117,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&defaultDDLStrategy, "ddl_strategy", defaultDDLStrategy, "Set default strategy for DDL statements. Override with @@ddl_strategy session variable")
 	fs.StringVar(&dbDDLPlugin, "dbddl_plugin", dbDDLPlugin, "controls how to handle CREATE/DROP DATABASE. use it if you are using your own database provisioning service")
 	fs.BoolVar(&noScatter, "no_scatter", noScatter, "when set to true, the planner will fail instead of producing a plan that includes scatter queries")
+	fs.BoolVar(&noVstreamCopy, "no_vstream_copy", noVstreamCopy, "when set to true, vstream copy will not be allowed - temporary until we can properly support RDONLY for this")
 	fs.BoolVar(&enableShardRouting, "enable-partial-keyspace-migration", enableShardRouting, "(Experimental) Follow shard routing rules: enable only while migrating a keyspace shard by shard. See documentation on Partial MoveTables for more. (default false)")
 	fs.DurationVar(&healthCheckRetryDelay, "healthcheck_retry_delay", healthCheckRetryDelay, "health check retry delay")
 	fs.DurationVar(&healthCheckTimeout, "healthcheck_timeout", healthCheckTimeout, "the health check timeout period")
@@ -246,7 +248,7 @@ func Init(
 	sc := NewScatterConn("VttabletCall", tc, gw)
 	srvResolver := srvtopo.NewResolver(serv, gw, cell)
 	resolver := NewResolver(srvResolver, serv, cell, sc)
-	vsm := newVStreamManager(srvResolver, serv, cell)
+	vsm := newVStreamManager(srvResolver, serv, cell, !noVstreamCopy)
 
 	var si SchemaInfo // default nil
 	var st *vtschema.Tracker
@@ -274,6 +276,7 @@ func Init(
 		si,
 		noScatter,
 		pv,
+		noVstreamCopy,
 	)
 
 	// connect the schema tracker with the vschema manager

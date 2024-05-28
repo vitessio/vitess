@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -27,6 +28,7 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/discovery"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 
@@ -47,6 +49,9 @@ type vstreamManager struct {
 	resolver *srvtopo.Resolver
 	toposerv srvtopo.Server
 	cell     string
+	// allowVstreamCopy will fail on vstream copy if false and no GTID provided for the stream.
+	// This is temporary until RDONLYs are properly supported for bootstrapping.
+	allowVstreamCopy bool
 
 	vstreamsCreated *stats.CountersWithMultiLabels
 	vstreamsLag     *stats.GaugesWithMultiLabels
@@ -106,6 +111,9 @@ type vstream struct {
 	// the timestamp of the most recent event, keyed by streamId. streamId is of the form <keyspace>.<shard>
 	timestamps map[string]int64
 
+	// the shard map tracking the copy completion, keyed by streamId. streamId is of the form <keyspace>.<shard>
+	copyCompletedShard map[string]struct{}
+
 	vsm *vstreamManager
 
 	eventCh           chan []*binlogdatapb.VEvent
@@ -119,12 +127,13 @@ type journalEvent struct {
 	done         chan struct{}
 }
 
-func newVStreamManager(resolver *srvtopo.Resolver, serv srvtopo.Server, cell string) *vstreamManager {
+func newVStreamManager(resolver *srvtopo.Resolver, serv srvtopo.Server, cell string, allowVstreamCopy bool) *vstreamManager {
 	exporter := servenv.NewExporter(cell, "VStreamManager")
 	return &vstreamManager{
-		resolver: resolver,
-		toposerv: serv,
-		cell:     cell,
+		resolver:         resolver,
+		toposerv:         serv,
+		cell:             cell,
+		allowVstreamCopy: allowVstreamCopy,
 		vstreamsCreated: exporter.NewCountersWithMultiLabels(
 			"VStreamsCreated",
 			"Number of vstreams created",
@@ -166,6 +175,7 @@ func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.Ta
 		eventCh:            make(chan []*binlogdatapb.VEvent),
 		heartbeatInterval:  flags.GetHeartbeatInterval(),
 		ts:                 ts,
+		copyCompletedShard: make(map[string]struct{}),
 	}
 	return vs.stream(ctx)
 }
@@ -189,31 +199,51 @@ func (vsm *vstreamManager) resolveParams(ctx context.Context, tabletType topodat
 		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "vgtid must have at least one value with a starting position")
 	}
 	// To fetch from all keyspaces, the input must contain a single ShardGtid
-	// that has an empty keyspace, and the Gtid must be "current". In the
-	// future, we'll allow the Gtid to be empty which will also support
-	// copying of existing data.
-	if len(vgtid.ShardGtids) == 1 && vgtid.ShardGtids[0].Keyspace == "" {
-		if vgtid.ShardGtids[0].Gtid != "current" {
-			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "for an empty keyspace, the Gtid value must be 'current': %v", vgtid)
+	// that has an empty keyspace, and the Gtid must be "current".
+	// Or the input must contain a single ShardGtid that has keyspace wildcards.
+	if len(vgtid.ShardGtids) == 1 {
+		inputKeyspace := vgtid.ShardGtids[0].Keyspace
+		isEmpty := inputKeyspace == ""
+		isRegexp := strings.HasPrefix(inputKeyspace, "/")
+		if isEmpty || isRegexp {
+			newvgtid := &binlogdatapb.VGtid{}
+			keyspaces, err := vsm.toposerv.GetSrvKeyspaceNames(ctx, vsm.cell, false)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+
+			if isEmpty {
+				if vgtid.ShardGtids[0].Gtid != "current" {
+					return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "for an empty keyspace, the Gtid value must be 'current': %v", vgtid)
+				}
+				for _, keyspace := range keyspaces {
+					newvgtid.ShardGtids = append(newvgtid.ShardGtids, &binlogdatapb.ShardGtid{
+						Keyspace: keyspace,
+						Gtid:     "current",
+					})
+				}
+			} else {
+				re, err := regexp.Compile(strings.Trim(inputKeyspace, "/"))
+				if err != nil {
+					return nil, nil, nil, err
+				}
+				for _, keyspace := range keyspaces {
+					if re.MatchString(keyspace) {
+						newvgtid.ShardGtids = append(newvgtid.ShardGtids, &binlogdatapb.ShardGtid{
+							Keyspace: keyspace,
+							Gtid:     vgtid.ShardGtids[0].Gtid,
+						})
+					}
+				}
+			}
+			vgtid = newvgtid
 		}
-		keyspaces, err := vsm.toposerv.GetSrvKeyspaceNames(ctx, vsm.cell, false)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		newvgtid := &binlogdatapb.VGtid{}
-		for _, keyspace := range keyspaces {
-			newvgtid.ShardGtids = append(newvgtid.ShardGtids, &binlogdatapb.ShardGtid{
-				Keyspace: keyspace,
-				Gtid:     "current",
-			})
-		}
-		vgtid = newvgtid
 	}
 	newvgtid := &binlogdatapb.VGtid{}
 	for _, sgtid := range vgtid.ShardGtids {
 		if sgtid.Shard == "" {
-			if sgtid.Gtid != "current" {
-				return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "if shards are unspecified, the Gtid value must be 'current': %v", vgtid)
+			if sgtid.Gtid != "current" && sgtid.Gtid != "" {
+				return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "if shards are unspecified, the Gtid value must be 'current' or empty; got: %v", vgtid)
 			}
 			// TODO(sougou): this should work with the new Migrate workflow
 			_, _, allShards, err := vsm.resolver.GetKeyspaceShards(ctx, sgtid.Keyspace, tabletType)
@@ -518,6 +548,12 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 			TableLastPKs: sgtid.TablePKs,
 		}
 		var vstreamCreatedOnce sync.Once
+
+		if !vs.vsm.allowVstreamCopy && (sgtid.Gtid == "" || len(sgtid.TablePKs) > 0) {
+			// We are attempting a vstream copy, but are not allowed (temporary until we can properly support RDONLYs for bootstrapping)
+			return vterrors.NewErrorf(vtrpc.Code_UNIMPLEMENTED, vterrors.NotSupportedYet, "vstream copy is not currently supported")
+		}
+
 		err = tabletConn.VStream(ctx, req, func(events []*binlogdatapb.VEvent) error {
 			// We received a valid event. Reset error count.
 			errCount = 0
@@ -559,6 +595,22 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 					sendevents = append(sendevents, ev)
 				case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_DDL, binlogdatapb.VEventType_OTHER:
 					sendevents = append(sendevents, event)
+					eventss = append(eventss, sendevents)
+
+					if err := vs.alignStreams(ctx, event, sgtid.Keyspace, sgtid.Shard); err != nil {
+						return err
+					}
+
+					if err := vs.sendAll(ctx, sgtid, eventss); err != nil {
+						return err
+					}
+					eventss = nil
+					sendevents = nil
+				case binlogdatapb.VEventType_COPY_COMPLETED:
+					sendevents = append(sendevents, event)
+					if fullyCopied, doneEvent := vs.isCopyFullyCompleted(ctx, sgtid, event); fullyCopied {
+						sendevents = append(sendevents, doneEvent)
+					}
 					eventss = append(eventss, sendevents)
 
 					if err := vs.alignStreams(ctx, event, sgtid.Keyspace, sgtid.Shard); err != nil {
@@ -698,6 +750,25 @@ func (vs *vstream) sendAll(ctx context.Context, sgtid *binlogdatapb.ShardGtid, e
 		}
 	}
 	return nil
+}
+
+// isCopyFullyCompleted returns true if all stream has received a copy_completed event.
+// If true, it will also return a new copy_completed event that needs to be sent.
+// This new event represents the completion of all the copy operations.
+func (vs *vstream) isCopyFullyCompleted(ctx context.Context, sgtid *binlogdatapb.ShardGtid, event *binlogdatapb.VEvent) (bool, *binlogdatapb.VEvent) {
+	vs.mu.Lock()
+	defer vs.mu.Unlock()
+
+	vs.copyCompletedShard[fmt.Sprintf("%s/%s", event.Keyspace, event.Shard)] = struct{}{}
+
+	for _, shard := range vs.vgtid.ShardGtids {
+		if _, ok := vs.copyCompletedShard[fmt.Sprintf("%s/%s", shard.Keyspace, shard.Shard)]; !ok {
+			return false, nil
+		}
+	}
+	return true, &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_COPY_COMPLETED,
+	}
 }
 
 func (vs *vstream) getError() error {

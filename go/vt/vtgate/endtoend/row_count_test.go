@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
 func TestRowCount(t *testing.T) {
@@ -31,6 +32,7 @@ func TestRowCount(t *testing.T) {
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
+	utils.Exec(t, conn, "use ks")
 	type tc struct {
 		query    string
 		expected int

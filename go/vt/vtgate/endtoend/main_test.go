@@ -46,6 +46,24 @@ create table t1(
 	primary key(id1)
 ) Engine=InnoDB;
 
+create table t1_copy_basic(
+	id1 bigint,
+	id2 bigint,
+	primary key(id1)
+) Engine=InnoDB;
+
+create table t1_copy_all(
+	id1 bigint,
+	id2 bigint,
+	primary key(id1)
+) Engine=InnoDB;
+
+create table t1_copy_resume(
+	id1 bigint,
+	id2 bigint,
+	primary key(id1)
+) Engine=InnoDB;
+
 create table t1_id2_idx(
 	id2 bigint,
 	keyspace_id varbinary(10),
@@ -134,6 +152,24 @@ create table t1_sharded(
 					Name:   "t1_id2_vdx",
 				}},
 			},
+			"t1_copy_basic": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "id1",
+					Name:   "hash",
+				}},
+			},
+			"t1_copy_all": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "id1",
+					Name:   "hash",
+				}},
+			},
+			"t1_copy_resume": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "id1",
+					Name:   "hash",
+				}},
+			},
 			"t1_sharded": {
 				ColumnVindexes: []*vschemapb.ColumnVindex{{
 					Column: "id1",
@@ -195,6 +231,31 @@ create table t1_sharded(
 			},
 		},
 	}
+
+	schema2 = `
+create table t1_copy_all_ks2(
+	id1 bigint,
+	id2 bigint,
+	primary key(id1)
+) Engine=InnoDB;
+`
+
+	vschema2 = &vschemapb.Keyspace{
+		Sharded: true,
+		Vindexes: map[string]*vschemapb.Vindex{
+			"hash": {
+				Type: "hash",
+			},
+		},
+		Tables: map[string]*vschemapb.Table{
+			"t1_copy_all_ks2": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "id1",
+					Name:   "hash",
+				}},
+			},
+		},
+	}
 )
 
 func TestMain(m *testing.M) {
@@ -203,14 +264,24 @@ func TestMain(m *testing.M) {
 	exitCode := func() int {
 		var cfg vttest.Config
 		cfg.Topology = &vttestpb.VTTestTopology{
-			Keyspaces: []*vttestpb.Keyspace{{
-				Name: "ks",
-				Shards: []*vttestpb.Shard{{
-					Name: "-80",
-				}, {
-					Name: "80-",
-				}},
-			}},
+			Keyspaces: []*vttestpb.Keyspace{
+				{
+					Name: "ks",
+					Shards: []*vttestpb.Shard{{
+						Name: "-80",
+					}, {
+						Name: "80-",
+					}},
+				},
+				{
+					Name: "ks2",
+					Shards: []*vttestpb.Shard{{
+						Name: "-80",
+					}, {
+						Name: "80-",
+					}},
+				},
+			},
 		}
 		if err := cfg.InitSchemas("ks", schema, vschema); err != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
@@ -218,6 +289,11 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 		defer os.RemoveAll(cfg.SchemaDir)
+		if err := cfg.InitSchemas("ks2", schema2, vschema2); err != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+			os.RemoveAll(cfg.SchemaDir)
+			return 1
+		}
 
 		cfg.TabletHostName = *tabletHostName
 

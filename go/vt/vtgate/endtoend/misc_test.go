@@ -19,6 +19,7 @@ package endtoend
 import (
 	"context"
 	"fmt"
+	osExec "os/exec"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -54,6 +55,16 @@ func TestCreateAndDropDatabase(t *testing.T) {
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
+
+	// cleanup the keyspace from the topology.
+	defer func() {
+		// the corresponding database needs to be created in advance.
+		// a subsequent DeleteKeyspace command returns the error of 'node doesn't exist' without it.
+		_ = exec(t, conn, "create database testitest")
+
+		_, err := osExec.Command("vtctldclient", "--server", grpcAddress, "DeleteKeyspace", "--recursive", "--force", "testitest").CombinedOutput()
+		require.NoError(t, err)
+	}()
 
 	// run it 3 times.
 	for count := 0; count < 3; count++ {

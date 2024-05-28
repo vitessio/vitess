@@ -52015,7 +52015,8 @@ export namespace binlogdata {
         JOURNAL = 16,
         VERSION = 17,
         LASTPK = 18,
-        SAVEPOINT = 19
+        SAVEPOINT = 19,
+        COPY_COMPLETED = 20
     }
 
     /** Properties of a RowChange. */
