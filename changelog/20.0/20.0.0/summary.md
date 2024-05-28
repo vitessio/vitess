@@ -10,6 +10,7 @@
     - [vitess/base and vitess/k8s Docker images](#base-k8s-images)
     - [`gh-ost` binary and endtoend tests](#gh-ost-binary-tests-removal)
   - **[Breaking changes](#breaking-changes)**
+    - [Metric Name Changes in VTOrc](#metric-change-vtorc)
     - [ENUM and SET column handling in VTGate VStream API](#enum-set-vstream)
     - [`shutdown_grace_period` Default Change](#shutdown-grace-period-default)
     - [New `unmanaged` Flag and `disable_active_reparents` deprecation](#unmanaged-flag)
@@ -107,6 +108,24 @@ Vitess 20.0 drops support for `gh-ost` DDL strategy.
 Vitess' endtoend tests no longer use nor test `gh-ost` migrations.
 
 ### <a id="breaking-changes"/>Breaking Changes
+
+#### <a id="metric-change-vtorc"/>Metric Name Changes in VTOrc
+
+The following metric names have been changed in VTOrc. The old metrics are still available in `/debug/vars` for this release, but will be removed in later releases. The new metric names and the deprecated metric names resolve to the same metric name on prometheus, so there is no change there.
+
+|               Old Metric Name                |             New Metric Name              |                 Name in Prometheus                 |
+|:--------------------------------------------:|:----------------------------------------:|:--------------------------------------------------:|
+|           `analysis.change.write`            |          `AnalysisChangeWrite`           |           `vtorc_analysis_change_write`            |  
+|                `audit.write`                 |               `AuditWrite`               |                `vtorc_audit_write`                 |  
+|            `discoveries.attempt`             |           `DiscoveriesAttempt`           |            `vtorc_discoveries_attempt`             |  
+|              `discoveries.fail`              |            `DiscoveriesFail`             |              `vtorc_discoveries_fail`              |  
+| `discoveries.instance_poll_seconds_exceeded` | `DiscoveriesInstancePollSecondsExceeded` | `vtorc_discoveries_instance_poll_seconds_exceeded` |  
+|          `discoveries.queue_length`          |         `DiscoveriesQueueLength`         |          `vtorc_discoveries_queue_length`          |  
+|          `discoveries.recent_count`          |         `DiscoveriesRecentCount`         |          `vtorc_discoveries_recent_count`          |  
+|               `instance.read`                |              `InstanceRead`              |               `vtorc_instance_read`                |  
+|           `instance.read_topology`           |          `InstanceReadTopology`          |           `vtorc_instance_read_topology`           |
+		
+		
 
 #### <a id="enum-set-vstream"/>ENUM and SET column handling in VTGate VStream API
 
