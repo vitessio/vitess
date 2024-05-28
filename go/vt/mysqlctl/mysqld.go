@@ -532,6 +532,9 @@ func (mysqld *Mysqld) WaitForDBAGrants(ctx context.Context, waitTime time.Durati
 	defer cancel()
 	for {
 		conn, connErr := mysql.Connect(ctx, params)
+		if connErr != nil {
+			log.Errorf("Error connecting to mysql - %v", connErr)
+		}
 		if connErr == nil {
 			res, fetchErr := conn.ExecuteFetch("SHOW GRANTS", 1000, false)
 			conn.Close()

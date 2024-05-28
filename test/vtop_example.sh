@@ -71,6 +71,7 @@ function checkPodStatusWithTimeout() {
   vttabletPod=$(kubectl get pods | grep -E "vttablet" | head -n 1 | awk '{print $1}')
   kubectl describe pod $vttabletPod
   kubectl logs $vttabletPod -c vttablet
+  kubectl logs $vttabletPod -c mysqld
   exit 1
 }
 
