@@ -143,7 +143,6 @@ func run(cmd *cobra.Command, args []string) error {
 
 	qsc, err := createTabletServer(ctx, env, config, ts, tabletAlias, srvTopoCounts)
 	if err != nil {
-		ts.Close()
 		return err
 	}
 
@@ -172,7 +171,6 @@ func run(cmd *cobra.Command, args []string) error {
 		VDiffEngine:         vdiff.NewEngine(ts, tablet, env.CollationEnv(), env.Parser()),
 	}
 	if err := tm.Start(tablet, config); err != nil {
-		ts.Close()
 		return fmt.Errorf("failed to parse --tablet-path or initialize DB credentials: %w", err)
 	}
 	servenv.OnClose(func() {
