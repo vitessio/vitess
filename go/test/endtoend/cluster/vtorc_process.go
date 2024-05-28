@@ -214,6 +214,22 @@ func (orc *VTOrcProcess) GetVars() map[string]any {
 	return nil
 }
 
+// GetMetrics gets the metrics exported on the /metrics page of VTOrc
+func (orc *VTOrcProcess) GetMetrics() string {
+	varsURL := fmt.Sprintf("http://localhost:%d/metrics", orc.Port)
+	resp, err := http.Get(varsURL)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 200 {
+		respByte, _ := io.ReadAll(resp.Body)
+		return string(respByte)
+	}
+	return ""
+}
+
 // MakeAPICall makes an API call on the given endpoint of VTOrc
 func (orc *VTOrcProcess) MakeAPICall(endpoint string) (status int, response string, err error) {
 	url := fmt.Sprintf("http://localhost:%d/%s", orc.Port, endpoint)
