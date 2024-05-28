@@ -538,6 +538,7 @@ func (mysqld *Mysqld) WaitForDBAGrants(ctx context.Context, waitTime time.Durati
 			if fetchErr != nil {
 				log.Errorf("Error running SHOW GRANTS - %v", fetchErr)
 			}
+			log.Errorf("SHOW GRANTS output - %v", res.Rows)
 			if fetchErr == nil && res != nil && len(res.Rows) > 0 && len(res.Rows[0]) > 0 {
 				privileges := res.Rows[0][0].ToString()
 				// In MySQL 8.0, all the privileges are listed out explicitly, so we can search for SUPER in the output.
