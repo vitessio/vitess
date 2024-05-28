@@ -95,3 +95,76 @@ func TestReplTracker(t *testing.T) {
 	_, err = rt.Status()
 	assert.Equal(t, "err", err.Error())
 }
+
+func TestStatusHeartbeatFallBack(t *testing.T) {
+	t.Parallel()
+
+	heartbeatErr := errors.New("some error reading heartbeat")
+	mysqlErr := errors.New("some mysql error")
+	testCases := []struct {
+		name           string
+		heartbeatLag   tabletenv.Seconds
+		heartbeatError error
+		mysqldLag      uint
+		mysqldErr      error
+		expectedError  error
+		expectedLag    time.Duration
+	}{
+		{
+			name:           "Heartbeat successful",
+			heartbeatLag:   tabletenv.Seconds(5.0),
+			heartbeatError: nil,
+			expectedLag:    5 * time.Second,
+		},
+		{
+			name:           "Heartbeat failed, mysqld lag successful",
+			heartbeatError: heartbeatErr,
+			mysqldLag:      8,
+			expectedLag:    8 * time.Second,
+		},
+		{
+			name:           "Heartbeat & mysqld lag failed",
+			heartbeatError: heartbeatErr,
+			mysqldErr:      mysqlErr,
+			expectedError:  errFallback,
+		},
+	}
+
+	for _, testCase := range testCases {
+		theCase := testCase
+
+		t.Run(theCase.name, func(t *testing.T) {
+			t.Parallel()
+			config := tabletenv.NewDefaultConfig()
+			config.ReplicationTracker.Mode = tabletenv.Heartbeat
+			config.ReplicationTracker.HeartbeatIntervalSeconds = theCase.heartbeatLag
+			env := tabletenv.NewEnv(config, "ReplTrackerTest")
+			alias := &topodatapb.TabletAlias{
+				Cell: "cell",
+				Uid:  1,
+			}
+			mysqld := fakemysqldaemon.NewFakeMysqlDaemon(nil)
+			mysqld.ReplicationLagSeconds = theCase.mysqldLag
+			mysqld.Replicating = true
+			mysqld.ReplicationStatusError = theCase.mysqldErr
+			target := &querypb.Target{}
+
+			rt := NewReplTracker(env, alias)
+
+			rt.hr.lastKnownLag = time.Duration(theCase.heartbeatLag) * time.Second
+			rt.hr.lastKnownError = theCase.heartbeatError
+			rt.InitDBConfig(target, mysqld)
+
+			lag, err := rt.Status()
+
+			if theCase.expectedError == nil {
+				assert.NoError(t, err)
+				assert.Equal(t, theCase.expectedLag, lag)
+			} else {
+				assert.ErrorIs(t, err, theCase.expectedError)
+			}
+
+		})
+	}
+
+}

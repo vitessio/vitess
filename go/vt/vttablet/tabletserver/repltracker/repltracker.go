@@ -17,6 +17,8 @@ limitations under the License.
 package repltracker
 
 import (
+	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -47,6 +49,8 @@ var (
 	heartbeatLagNsHistogram = stats.NewGenericHistogram("HeartbeatLagNsHistogram",
 		"Histogram of lag values in nanoseconds", []int64{0, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11, 1e12},
 		[]string{"0", "1ms", "10ms", "100ms", "1s", "10s", "100s", "1000s", ">1000s"}, "Count", "Total")
+
+	errFallback = errors.New("failed to obtain replication lag from poller after attempting to use it as fall-back for heartbeat")
 )
 
 // ReplTracker tracks replication lag.
@@ -133,14 +137,29 @@ func (rt *ReplTracker) Status() (time.Duration, error) {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
 
+	fallbackToPoller := false
+	var heartbeatLag, mysqlLag time.Duration
+	var heartbeatErr, mysqlErr error
+
 	switch {
 	case rt.isPrimary || rt.mode == tabletenv.Disable:
 		return 0, nil
 	case rt.mode == tabletenv.Heartbeat:
-		return rt.hr.Status()
+		// This should allow us to migrate safely to using vttablet heartbeat. If using heartbeat fails (e.g. because
+		// the shard's primary does not yet have them and therefore, either the heartbeat table is missing or it's
+		// empty), fall back to the poller. Otherwise, use what the heartbeat says.
+		if heartbeatLag, heartbeatErr = rt.hr.Status(); heartbeatErr == nil {
+			return heartbeatLag, heartbeatErr
+		}
+		fallbackToPoller = true
 	}
-	// rt.mode == tabletenv.Poller
-	return rt.poller.Status()
+	// rt.mode == tabletenv.Poller or fallback after heartbeat error
+	mysqlLag, mysqlErr = rt.poller.Status()
+	if fallbackToPoller && mysqlErr != nil {
+		return 0, fmt.Errorf("%w: %s", errFallback, mysqlErr)
+	}
+
+	return mysqlLag, mysqlErr
 }
 
 // EnableHeartbeat enables or disables writes of heartbeat. This functionality
