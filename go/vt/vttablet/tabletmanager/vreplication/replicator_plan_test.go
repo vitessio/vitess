@@ -38,18 +38,24 @@ type TestReplicatorPlan struct {
 	TablePlans    map[string]*TestTablePlan
 }
 
+type TestTableJoinPlan struct {
+	Insert  string
+	Updates map[string]string
+	Deletes map[string]string
+}
 type TestTablePlan struct {
-	TargetName   string            `json:",omitempty"`
-	SendRule     string            `json:",omitempty"`
-	InsertFront  string            `json:",omitempty"`
-	InsertValues string            `json:",omitempty"`
-	InsertOnDup  string            `json:",omitempty"`
-	Insert       string            `json:",omitempty"`
-	Update       string            `json:",omitempty"`
-	Delete       string            `json:",omitempty"`
-	Updates      map[string]string `json:",omitempty"`
-	Deletes      map[string]string `json:",omitempty"`
-	PKReferences []string          `json:",omitempty"`
+	TargetName    string             `json:",omitempty"`
+	SendRule      string             `json:",omitempty"`
+	InsertFront   string             `json:",omitempty"`
+	InsertValues  string             `json:",omitempty"`
+	InsertOnDup   string             `json:",omitempty"`
+	Insert        string             `json:",omitempty"`
+	Update        string             `json:",omitempty"`
+	Delete        string             `json:",omitempty"`
+	Updates       map[string]string  `json:",omitempty"`
+	Deletes       map[string]string  `json:",omitempty"`
+	PKReferences  []string           `json:",omitempty"`
+	TableJoinPlan *TestTableJoinPlan `json:",omitempty"`
 }
 
 func TestBuildPlayerJoinPlan(t *testing.T) {
@@ -80,15 +86,16 @@ func TestBuildPlayerJoinPlan(t *testing.T) {
 					TargetName:   "t12",
 					SendRule:     "select t1.id t1id, t1.name, t2.id t2id, t2.company from t1 join t2 on t1.id = t2.id",
 					PKReferences: []string{"t1id"},
-					Insert:       "insert into t12(t1id,`name`,t2id,company) values (:a_t1id,:a_name,:a_t2id,:a_company)",
-					// Updates: map[string]string{
-					// 	"t1id": "update t12 set name=:a_name where t1id=:b_t1id",
-					// 	"t2id": "update t12 set company=:a_company where t2id=:b_t2id",
-					// },
-					// Deletes: map[string]string{
-					// 	"t1id": "delete from t12 where t1id=:b_t1id",
-					// 	"t2id": "delete from t12 where t2id=:b_t2id",
-					// },
+					TableJoinPlan: &TestTableJoinPlan{
+						Insert: "insert into t12(t1id,`name`,t2id,company) values (:a_t1id,:a_name,:a_t2id,:a_company)",
+						Updates: map[string]string{
+							"t1": "update t12 set name = :a_name where t1id = :a_t1id",
+							"t2": "update t12 set company = :a_company where t2id = :a_t2id",
+						}},
+					Deletes: map[string]string{
+						"t1id": "delete from t12 where t1id = :a_t1id",
+						"t2id": "delete from t12 where t2id = :a_t2id",
+					},
 				},
 			},
 		},
@@ -123,7 +130,11 @@ func TestBuildPlayerJoinPlan(t *testing.T) {
 		assert.Equal(t, wantTablePlan.TargetName, gotTablePlan.TargetName)
 		assert.Equal(t, wantTablePlan.SendRule, gotTablePlan.SendRule.Filter)
 		assert.Equal(t, wantTablePlan.PKReferences, gotTablePlan.PKReferences)
-		assert.Equal(t, wantTablePlan.Insert, gotTablePlan.Insert.Query)
+		assert.Equal(t, wantTablePlan.TableJoinPlan.Insert, gotTablePlan.JoinPlan.Insert.Query)
+		for k, v := range wantTablePlan.TableJoinPlan.Updates {
+			require.NotNil(t, gotTablePlan.JoinPlan.Updates[k])
+			assert.Equal(t, v, gotTablePlan.JoinPlan.Updates[k].Query)
+		}
 	}
 }
 

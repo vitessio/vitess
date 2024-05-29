@@ -173,7 +173,7 @@ func buildReplicatorPlanForJoin(source *binlogdatapb.BinlogSource, colInfoMap ma
 	parser *sqlparser.Parser, tables []string) (*ReplicatorPlan, error) {
 
 	filter := source.Filter
-	joinPlan := &JoinPlan{
+	joinPlan := &ReplicatorJoinPlan{
 		Tables: tables,
 	}
 	plan := &ReplicatorPlan{
@@ -229,7 +229,6 @@ func buildReplicatorPlanForJoin(source *binlogdatapb.BinlogSource, colInfoMap ma
 	}
 	tpb.pkCols = append(tpb.pkCols, tpb.colExprs[0])
 	insert := tpb.generateInsertStatement()
-	tablePlan.Insert = insert
 	tablePlan.PKReferences = []string{tpb.colExprs[0].colName.String()}
 	plan.TablePlans[view] = tablePlan
 
@@ -244,13 +243,17 @@ func buildReplicatorPlanForJoin(source *binlogdatapb.BinlogSource, colInfoMap ma
 		if !ok {
 			return nil, fmt.Errorf("unsupported expression %s", sqlparser.String(aliasExpr.Expr))
 		}
-		log.Infof("SelExpr %s, qualifier %scolName %s, alias %s", sqlparser.String(selExpr), colName.Name, aliasExpr.As)
+		log.Infof("SelExpr %s, qualifier %s, colName %s, alias %v", sqlparser.String(selExpr), colName.Qualifier, colName.Name, aliasExpr.As)
 		if colName.Qualifier.IsEmpty() {
 			return nil, fmt.Errorf("every column needs to have a table qualifier %s", colName)
 		}
 		tableName := colName.Qualifier.Name.String()
 		columnName := colName.Name.String()
-		aliasName := aliasExpr.As.String()
+		aliasName := columnName
+		if !aliasExpr.As.IsEmpty() {
+			aliasName = aliasExpr.As.String()
+		}
+
 		tableColumns[tableName] = append(tableColumns[tableName], &ViewColumn{
 			SourceColumnName: columnName,
 			ViewColumnName:   aliasName,
@@ -260,12 +263,56 @@ func buildReplicatorPlanForJoin(source *binlogdatapb.BinlogSource, colInfoMap ma
 		log.Infof("table %s, column %v", table, cols)
 	}
 
+	updates := generateUpdatesForJoin(view, tableColumns)
+	tablePlan.JoinPlan = &TableJoinPlan{
+		Insert:  insert,
+		Updates: updates,
+	}
+	log.Infof("Updates %+q", updates)
 	return plan, nil
 }
 
 type ViewColumn struct {
 	SourceColumnName string
 	ViewColumnName   string
+}
+
+func generateUpdatesForJoin(view string, viewColumns map[string][]*ViewColumn) map[string]*sqlparser.ParsedQuery {
+	updates := map[string]*sqlparser.ParsedQuery{}
+	for table, cols := range viewColumns {
+		buf := sqlparser.NewTrackedBuffer(nil)
+		buf.Myprintf("update %v set ", sqlparser.NewIdentifierCS(view))
+		separator := ""
+		for i, col := range cols {
+			if i == 0 {
+				continue
+			}
+			buf.Myprintf("%s%s = :a_%s", separator, sqlparser.NewIdentifierCI(col.ViewColumnName).CompliantName(), col.ViewColumnName)
+			separator = ", "
+		}
+		col := cols[0]
+		buf.Myprintf(" where %s = :a_%s", sqlparser.NewIdentifierCI(col.ViewColumnName).String(), col.ViewColumnName)
+		updates[table] = buf.ParsedQuery()
+	}
+	return updates
+}
+
+func generateDeletesForJoin(view string, viewColumns map[string][]*ViewColumn) map[string]*sqlparser.ParsedQuery {
+	deletes := map[string]*sqlparser.ParsedQuery{}
+	for table, cols := range viewColumns {
+		buf := sqlparser.NewTrackedBuffer(nil)
+		buf.Myprintf("delete from %v where ", sqlparser.NewIdentifierCS(view))
+		separator := ""
+		for i, col := range cols {
+			if i == 0 {
+				continue
+			}
+			buf.Myprintf("%s%s = :a_%s", separator, sqlparser.NewIdentifierCI(col.ViewColumnName).CompliantName(), col.ViewColumnName)
+			separator = ", "
+		}
+		deletes[table] = buf.ParsedQuery()
+	}
+	return deletes
 }
 
 func (vc *ViewColumn) String() string {
