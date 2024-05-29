@@ -565,7 +565,6 @@ func buildShowVGtidPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) 
 		},
 		TruncateColumnCount: 2,
 		Input:               send,
-		CollationEnv:        vschema.Environment().CollationEnv(),
 	}, nil
 }
 
