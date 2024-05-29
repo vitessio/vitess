@@ -98,6 +98,17 @@ func (s *server) GetPermissions(ctx context.Context, request *tabletmanagerdatap
 	return response, err
 }
 
+func (s *server) GetServerStatus(ctx context.Context, request *tabletmanagerdatapb.GetServerStatusRequest) (response *tabletmanagerdatapb.GetServerStatusResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "GetServerStatus", request, response, false /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.GetServerStatusResponse{}
+	serverStatuses, err := s.tm.GetServerStatus(ctx, request.Statuses)
+	if err == nil {
+		response.StatusValues = serverStatuses
+	}
+	return response, err
+}
+
 //
 // Various read-write methods
 //

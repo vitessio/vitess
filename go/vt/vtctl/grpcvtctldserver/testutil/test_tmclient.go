@@ -250,6 +250,10 @@ type TabletManagerClient struct {
 		Schema *tabletmanagerdatapb.SchemaDefinition
 		Error  error
 	}
+	GetServerStatusResults map[string]struct {
+		Statuses []string
+		Error    error
+	}
 	// keyed by tablet alias.
 	InitPrimaryDelays map[string]time.Duration
 	// keyed by tablet alias. injects a sleep to the end of the function
@@ -729,6 +733,20 @@ func (fake *TabletManagerClient) GetSchema(ctx context.Context, tablet *topodata
 	}
 
 	return nil, fmt.Errorf("%w: no schemas for %s", assert.AnError, key)
+}
+
+// GetServerStatus is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) GetServerStatus(ctx context.Context, tablet *topodatapb.Tablet, statuses []string) ([]string, error) {
+	if fake.GetServerStatusResults == nil {
+		return nil, assert.AnError
+	}
+
+	key := topoproto.TabletAliasString(tablet.Alias)
+	if result, ok := fake.GetServerStatusResults[key]; ok {
+		return result.Statuses, result.Error
+	}
+
+	return nil, assert.AnError
 }
 
 // InitPrimary is part of the tmclient.TabletManagerClient interface.

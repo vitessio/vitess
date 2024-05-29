@@ -19,6 +19,7 @@ package tabletmanager
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -99,4 +100,15 @@ func TestResetReplicationParameters(t *testing.T) {
 	res, err = tablet.VttabletProcess.QueryTablet("show replica status", keyspaceName, false)
 	require.NoError(t, err)
 	require.Len(t, res.Rows, 0)
+}
+
+// TestGetServerStatus tests the GetServerStatus RPC
+func TestGetServerStatus(t *testing.T) {
+	ctx := context.Background()
+	statusValues, err := tmcGetServerStatus(ctx, replicaTablet.GrpcPort, []string{"Innodb_buffer_pool_pages_data"})
+	require.NoError(t, err)
+	require.Len(t, statusValues, 1)
+	bufPoolVal, err := strconv.Atoi(statusValues[0])
+	require.NoError(t, err)
+	require.Greater(t, bufPoolVal, 0)
 }

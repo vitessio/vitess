@@ -53,6 +53,9 @@ type MysqlDaemon interface {
 	// GetServerUUID returns the servers UUID
 	GetServerUUID(ctx context.Context) (string, error)
 
+	// GetServerStatus returns the server statuses asked for.
+	GetServerStatus(ctx context.Context, statuses []string) ([]string, error)
+
 	// replication related methods
 	StartReplication(ctx context.Context, hookExtraEnv map[string]string) error
 	RestartReplication(ctx context.Context, hookExtraEnv map[string]string) error

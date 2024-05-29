@@ -74,6 +74,9 @@ type TabletManagerClient interface {
 	// GetPermissions asks the remote tablet for its permissions list
 	GetPermissions(ctx context.Context, tablet *topodatapb.Tablet) (*tabletmanagerdatapb.Permissions, error)
 
+	// GetServerStatus gets server statuses that are requested.
+	GetServerStatus(ctx context.Context, tablet *topodatapb.Tablet, statuses []string) ([]string, error)
+
 	//
 	// Various read-write methods
 	//

@@ -228,6 +228,27 @@ func (mysqld *Mysqld) GetServerUUID(ctx context.Context) (string, error) {
 	return conn.Conn.GetServerUUID()
 }
 
+// GetServerStatus returns the server statuses asked for.
+func (mysqld *Mysqld) GetServerStatus(ctx context.Context, statuses []string) ([]string, error) {
+	query := `SELECT variable_value FROM performance_schema.global_status WHERE variable_name IN (`
+	for _, status := range statuses {
+		query += `"` + status + `"`
+	}
+	query += ");"
+	qr, err := mysqld.FetchSuperQuery(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	if len(qr.Rows) != len(statuses) {
+		return nil, errors.New("unknown variables asked for")
+	}
+	var finalRes []string
+	for _, row := range qr.Rows {
+		finalRes = append(finalRes, row[0].ToString())
+	}
+	return finalRes, nil
+}
+
 // IsReadOnly return true if the instance is read only
 func (mysqld *Mysqld) IsReadOnly(ctx context.Context) (bool, error) {
 	qr, err := mysqld.FetchSuperQuery(ctx, "SHOW VARIABLES LIKE 'read_only'")

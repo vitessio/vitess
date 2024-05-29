@@ -128,6 +128,11 @@ func (client *FakeTabletManagerClient) GetPermissions(ctx context.Context, table
 	return &tabletmanagerdatapb.Permissions{}, nil
 }
 
+// GetServerStatus is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) GetServerStatus(ctx context.Context, tablet *topodatapb.Tablet, statuses []string) ([]string, error) {
+	return make([]string, len(statuses)), nil
+}
+
 // LockTables is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) LockTables(ctx context.Context, tablet *topodatapb.Tablet) error {
 	return nil

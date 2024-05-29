@@ -19553,6 +19553,200 @@ export namespace tabletmanagerdata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of a GetServerStatusRequest. */
+    interface IGetServerStatusRequest {
+
+        /** GetServerStatusRequest statuses */
+        statuses?: (string[]|null);
+    }
+
+    /** Represents a GetServerStatusRequest. */
+    class GetServerStatusRequest implements IGetServerStatusRequest {
+
+        /**
+         * Constructs a new GetServerStatusRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IGetServerStatusRequest);
+
+        /** GetServerStatusRequest statuses. */
+        public statuses: string[];
+
+        /**
+         * Creates a new GetServerStatusRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetServerStatusRequest instance
+         */
+        public static create(properties?: tabletmanagerdata.IGetServerStatusRequest): tabletmanagerdata.GetServerStatusRequest;
+
+        /**
+         * Encodes the specified GetServerStatusRequest message. Does not implicitly {@link tabletmanagerdata.GetServerStatusRequest.verify|verify} messages.
+         * @param message GetServerStatusRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IGetServerStatusRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetServerStatusRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.GetServerStatusRequest.verify|verify} messages.
+         * @param message GetServerStatusRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IGetServerStatusRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetServerStatusRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetServerStatusRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.GetServerStatusRequest;
+
+        /**
+         * Decodes a GetServerStatusRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetServerStatusRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.GetServerStatusRequest;
+
+        /**
+         * Verifies a GetServerStatusRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetServerStatusRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetServerStatusRequest
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.GetServerStatusRequest;
+
+        /**
+         * Creates a plain object from a GetServerStatusRequest message. Also converts values to other types if specified.
+         * @param message GetServerStatusRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.GetServerStatusRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetServerStatusRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetServerStatusRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a GetServerStatusResponse. */
+    interface IGetServerStatusResponse {
+
+        /** GetServerStatusResponse status_values */
+        status_values?: (string[]|null);
+    }
+
+    /** Represents a GetServerStatusResponse. */
+    class GetServerStatusResponse implements IGetServerStatusResponse {
+
+        /**
+         * Constructs a new GetServerStatusResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IGetServerStatusResponse);
+
+        /** GetServerStatusResponse status_values. */
+        public status_values: string[];
+
+        /**
+         * Creates a new GetServerStatusResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetServerStatusResponse instance
+         */
+        public static create(properties?: tabletmanagerdata.IGetServerStatusResponse): tabletmanagerdata.GetServerStatusResponse;
+
+        /**
+         * Encodes the specified GetServerStatusResponse message. Does not implicitly {@link tabletmanagerdata.GetServerStatusResponse.verify|verify} messages.
+         * @param message GetServerStatusResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IGetServerStatusResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetServerStatusResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.GetServerStatusResponse.verify|verify} messages.
+         * @param message GetServerStatusResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IGetServerStatusResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetServerStatusResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetServerStatusResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.GetServerStatusResponse;
+
+        /**
+         * Decodes a GetServerStatusResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetServerStatusResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.GetServerStatusResponse;
+
+        /**
+         * Verifies a GetServerStatusResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetServerStatusResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetServerStatusResponse
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.GetServerStatusResponse;
+
+        /**
+         * Creates a plain object from a GetServerStatusResponse message. Also converts values to other types if specified.
+         * @param message GetServerStatusResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.GetServerStatusResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetServerStatusResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetServerStatusResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Properties of a SetReadOnlyRequest. */
     interface ISetReadOnlyRequest {
     }

@@ -43,6 +43,9 @@ type RPCTM interface {
 
 	GetPermissions(ctx context.Context) (*tabletmanagerdatapb.Permissions, error)
 
+	// GetServerStatus gets server statuses that are requested.
+	GetServerStatus(ctx context.Context, statuses []string) ([]string, error)
+
 	// Various read-write methods
 
 	SetReadOnly(ctx context.Context, rdonly bool) error

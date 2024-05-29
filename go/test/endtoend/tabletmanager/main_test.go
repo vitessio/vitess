@@ -185,6 +185,11 @@ func tmcPrimaryPosition(ctx context.Context, tabletGrpcPort int) (string, error)
 	return tmClient.PrimaryPosition(ctx, vtablet)
 }
 
+func tmcGetServerStatus(ctx context.Context, tabletGrpcPort int, statuses []string) ([]string, error) {
+	vtablet := getTablet(tabletGrpcPort)
+	return tmClient.GetServerStatus(ctx, vtablet, statuses)
+}
+
 func tmcStartReplicationUntilAfter(ctx context.Context, tabletGrpcPort int, positon string, waittime time.Duration) error {
 	vtablet := getTablet(tabletGrpcPort)
 	return tmClient.StartReplicationUntilAfter(ctx, vtablet, positon, waittime)

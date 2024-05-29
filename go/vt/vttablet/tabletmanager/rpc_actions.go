@@ -66,6 +66,11 @@ func (tm *TabletManager) GetPermissions(ctx context.Context) (*tabletmanagerdata
 	return mysqlctl.GetPermissions(tm.MysqlDaemon)
 }
 
+// GetServerStatus returns the server statuses asked for.
+func (tm *TabletManager) GetServerStatus(ctx context.Context, statuses []string) ([]string, error) {
+	return tm.MysqlDaemon.GetServerStatus(ctx, statuses)
+}
+
 // SetReadOnly makes the mysql instance read-only or read-write.
 func (tm *TabletManager) SetReadOnly(ctx context.Context, rdonly bool) error {
 	if err := tm.lock(ctx); err != nil {

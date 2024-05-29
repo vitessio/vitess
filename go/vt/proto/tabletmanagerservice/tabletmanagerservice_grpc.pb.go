@@ -33,6 +33,8 @@ type TabletManagerClient interface {
 	GetSchema(ctx context.Context, in *tabletmanagerdata.GetSchemaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.GetSchemaResponse, error)
 	// GetPermissions asks the tablet for its permissions
 	GetPermissions(ctx context.Context, in *tabletmanagerdata.GetPermissionsRequest, opts ...grpc.CallOption) (*tabletmanagerdata.GetPermissionsResponse, error)
+	// GetServerStatus gets server statuses that are requested.
+	GetServerStatus(ctx context.Context, in *tabletmanagerdata.GetServerStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.GetServerStatusResponse, error)
 	SetReadOnly(ctx context.Context, in *tabletmanagerdata.SetReadOnlyRequest, opts ...grpc.CallOption) (*tabletmanagerdata.SetReadOnlyResponse, error)
 	SetReadWrite(ctx context.Context, in *tabletmanagerdata.SetReadWriteRequest, opts ...grpc.CallOption) (*tabletmanagerdata.SetReadWriteResponse, error)
 	// ChangeType asks the remote tablet to change its type
@@ -164,6 +166,15 @@ func (c *tabletManagerClient) GetSchema(ctx context.Context, in *tabletmanagerda
 func (c *tabletManagerClient) GetPermissions(ctx context.Context, in *tabletmanagerdata.GetPermissionsRequest, opts ...grpc.CallOption) (*tabletmanagerdata.GetPermissionsResponse, error) {
 	out := new(tabletmanagerdata.GetPermissionsResponse)
 	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/GetPermissions", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) GetServerStatus(ctx context.Context, in *tabletmanagerdata.GetServerStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.GetServerStatusResponse, error) {
+	out := new(tabletmanagerdata.GetServerStatusResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/GetServerStatus", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -689,6 +700,8 @@ type TabletManagerServer interface {
 	GetSchema(context.Context, *tabletmanagerdata.GetSchemaRequest) (*tabletmanagerdata.GetSchemaResponse, error)
 	// GetPermissions asks the tablet for its permissions
 	GetPermissions(context.Context, *tabletmanagerdata.GetPermissionsRequest) (*tabletmanagerdata.GetPermissionsResponse, error)
+	// GetServerStatus gets server statuses that are requested.
+	GetServerStatus(context.Context, *tabletmanagerdata.GetServerStatusRequest) (*tabletmanagerdata.GetServerStatusResponse, error)
 	SetReadOnly(context.Context, *tabletmanagerdata.SetReadOnlyRequest) (*tabletmanagerdata.SetReadOnlyResponse, error)
 	SetReadWrite(context.Context, *tabletmanagerdata.SetReadWriteRequest) (*tabletmanagerdata.SetReadWriteResponse, error)
 	// ChangeType asks the remote tablet to change its type
@@ -792,6 +805,9 @@ func (UnimplementedTabletManagerServer) GetSchema(context.Context, *tabletmanage
 }
 func (UnimplementedTabletManagerServer) GetPermissions(context.Context, *tabletmanagerdata.GetPermissionsRequest) (*tabletmanagerdata.GetPermissionsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetPermissions not implemented")
+}
+func (UnimplementedTabletManagerServer) GetServerStatus(context.Context, *tabletmanagerdata.GetServerStatusRequest) (*tabletmanagerdata.GetServerStatusResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetServerStatus not implemented")
 }
 func (UnimplementedTabletManagerServer) SetReadOnly(context.Context, *tabletmanagerdata.SetReadOnlyRequest) (*tabletmanagerdata.SetReadOnlyResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetReadOnly not implemented")
@@ -1045,6 +1061,24 @@ func _TabletManager_GetPermissions_Handler(srv interface{}, ctx context.Context,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(TabletManagerServer).GetPermissions(ctx, req.(*tabletmanagerdata.GetPermissionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TabletManager_GetServerStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.GetServerStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TabletManagerServer).GetServerStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/GetServerStatus",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).GetServerStatus(ctx, req.(*tabletmanagerdata.GetServerStatusRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1999,6 +2033,10 @@ var TabletManager_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetPermissions",
 			Handler:    _TabletManager_GetPermissions_Handler,
+		},
+		{
+			MethodName: "GetServerStatus",
+			Handler:    _TabletManager_GetServerStatus_Handler,
 		},
 		{
 			MethodName: "SetReadOnly",
