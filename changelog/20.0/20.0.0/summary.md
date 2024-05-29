@@ -33,6 +33,7 @@
     - [New `healthcheck-dial-concurrency` flag](#healthcheck-dial-concurrency-flag)
     - [New minimum for `--buffer_min_time_between_failovers`](#buffer_min_time_between_failovers-flag)
     - [New `track-udfs` vtgate flag](#vtgate-track-udfs-flag)
+    - [Documentation fix for `--lock-timeout`](#documentation-lock-timeout)
 - **[Minor Changes](#minor-changes)**
   - **[New Stats](#new-stats)**
     - [VTTablet Query Cache Hits and Misses](#vttablet-query-cache-hits-and-misses)
@@ -332,6 +333,10 @@ The `--buffer_min_time_between_failovers` `vttablet` flag now has a minimum valu
 #### <a id="vtgate-track-udfs-flag"/>New `--track-udfs` vtgate flag
 
 The new `--track-udfs` flag enables VTGate to track user defined functions for better planning.
+
+#### <a id="documentation-lock-timeout"/>Documentation fix for `--lock-timeout`
+
+The documentation for the flag `--lock-timeout` was noticed to be incorrect. We were documenting it as a flag that controlled the duration for which the shard lock was acquired for. It is actually the duration for which we wait while acquiring a lock from the topology server.
 
 ## <a id="minor-changes"/>Minor Changes
 

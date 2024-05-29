@@ -189,7 +189,7 @@ Flags:
       --keep_logs_by_mtime duration                                      keep logs for this long (using mtime) (zero to keep forever)
       --keyspaces_to_watch strings                                       Specifies which keyspaces this vtgate should have access to while routing queries or accessing the vschema.
       --lameduck-period duration                                         keep running at least this long after SIGTERM before stopping (default 50ms)
-      --lock-timeout duration                                            Maximum time for which a shard/keyspace lock can be acquired for (default 45s)
+      --lock-timeout duration                                            Maximum time to wait for while acquiring a lock from the topo server (default 45s)
       --lock_heartbeat_time duration                                     If there is lock function used. This will keep the lock connection active by using this heartbeat (default 5s)
       --lock_tables_timeout duration                                     How long to keep the table locked before timing out (default 1m0s)
       --log_backtrace_at traceLocations                                  when logging hits line file:N, emit a stack trace
