@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	topoUtils "vitess.io/vitess/go/test/endtoend/topotest/utils"
+	topoutils "vitess.io/vitess/go/test/endtoend/topotest/utils"
 	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/topo"
 
@@ -159,7 +159,7 @@ func TestShardLocking(t *testing.T) {
 	require.ErrorContains(t, err, "shard customer/0 is not locked (no lockInfo in map)")
 
 	// Wait to see that the second thread was able to acquire the shard lock.
-	topoUtils.WaitForBoolValue(t, &secondThreadLockAcquired, true)
+	topoutils.WaitForBoolValue(t, &secondThreadLockAcquired, true)
 }
 
 // TestKeyspaceLocking tests that keyspace locking works as intended.
@@ -198,7 +198,7 @@ func TestKeyspaceLocking(t *testing.T) {
 	require.ErrorContains(t, err, "keyspace customer is not locked (no lockInfo in map)")
 
 	// Wait to see that the second thread was able to acquire the shard lock.
-	topoUtils.WaitForBoolValue(t, &secondThreadLockAcquired, true)
+	topoutils.WaitForBoolValue(t, &secondThreadLockAcquired, true)
 }
 
 func execMulti(t *testing.T, conn *mysql.Conn, query string) []*sqltypes.Result {

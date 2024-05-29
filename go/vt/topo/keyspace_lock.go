@@ -21,21 +21,21 @@ import (
 	"path"
 )
 
-type keyspaceLockType struct {
+type keyspaceLock struct {
 	keyspace string
 }
 
-var _ lockType = (*keyspaceLockType)(nil)
+var _ iTopoLock = (*keyspaceLock)(nil)
 
-func (s *keyspaceLockType) Type() string {
+func (s *keyspaceLock) Type() string {
 	return "keyspace"
 }
 
-func (s *keyspaceLockType) ResourceName() string {
+func (s *keyspaceLock) ResourceName() string {
 	return s.keyspace
 }
 
-func (s *keyspaceLockType) Path() string {
+func (s *keyspaceLock) Path() string {
 	return path.Join(KeyspacesPath, s.keyspace)
 }
 
@@ -44,7 +44,7 @@ func (s *keyspaceLockType) Path() string {
 // - an unlock method
 // - an error if anything failed.
 func (ts *Server) LockKeyspace(ctx context.Context, keyspace, action string) (context.Context, func(*error), error) {
-	return ts.internalLock(ctx, &keyspaceLockType{
+	return ts.internalLock(ctx, &keyspaceLock{
 		keyspace: keyspace,
 	}, action, true)
 }
@@ -52,7 +52,7 @@ func (ts *Server) LockKeyspace(ctx context.Context, keyspace, action string) (co
 // CheckKeyspaceLocked can be called on a context to make sure we have the lock
 // for a given keyspace.
 func CheckKeyspaceLocked(ctx context.Context, keyspace string) error {
-	return checkLocked(ctx, &keyspaceLockType{
+	return checkLocked(ctx, &keyspaceLock{
 		keyspace: keyspace,
 	})
 }

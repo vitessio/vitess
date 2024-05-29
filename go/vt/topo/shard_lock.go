@@ -21,21 +21,21 @@ import (
 	"path"
 )
 
-type shardLockType struct {
+type shardLock struct {
 	keyspace, shard string
 }
 
-var _ lockType = (*shardLockType)(nil)
+var _ iTopoLock = (*shardLock)(nil)
 
-func (s *shardLockType) Type() string {
+func (s *shardLock) Type() string {
 	return "shard"
 }
 
-func (s *shardLockType) ResourceName() string {
+func (s *shardLock) ResourceName() string {
 	return s.keyspace + "/" + s.shard
 }
 
-func (s *shardLockType) Path() string {
+func (s *shardLock) Path() string {
 	return path.Join(KeyspacesPath, s.keyspace, ShardsPath, s.shard)
 }
 
@@ -60,7 +60,7 @@ func (s *shardLockType) Path() string {
 // * operations that we don't want to conflict with re-parenting:
 //   - DeleteTablet when it's the shard's current primary
 func (ts *Server) LockShard(ctx context.Context, keyspace, shard, action string) (context.Context, func(*error), error) {
-	return ts.internalLock(ctx, &shardLockType{
+	return ts.internalLock(ctx, &shardLock{
 		keyspace: keyspace,
 		shard:    shard,
 	}, action, true)
@@ -82,7 +82,7 @@ func (ts *Server) LockShard(ctx context.Context, keyspace, shard, action string)
 //
 // We are currently using `TryLockShard` during tablet discovery in Vtorc recovery
 func (ts *Server) TryLockShard(ctx context.Context, keyspace, shard, action string) (context.Context, func(*error), error) {
-	return ts.internalLock(ctx, &shardLockType{
+	return ts.internalLock(ctx, &shardLock{
 		keyspace: keyspace,
 		shard:    shard,
 	}, action, false)
@@ -91,7 +91,7 @@ func (ts *Server) TryLockShard(ctx context.Context, keyspace, shard, action stri
 // CheckShardLocked can be called on a context to make sure we have the lock
 // for a given shard.
 func CheckShardLocked(ctx context.Context, keyspace, shard string) error {
-	return checkLocked(ctx, &shardLockType{
+	return checkLocked(ctx, &shardLock{
 		keyspace: keyspace,
 		shard:    shard,
 	})

@@ -20,28 +20,28 @@ import (
 	"context"
 )
 
-type routingRulesType struct{}
+type routingRules struct{}
 
-var _ lockType = (*routingRulesType)(nil)
+var _ iTopoLock = (*routingRules)(nil)
 
-func (s *routingRulesType) Type() string {
+func (s *routingRules) Type() string {
 	return "routing_rules"
 }
 
-func (s *routingRulesType) ResourceName() string {
+func (s *routingRules) ResourceName() string {
 	return RoutingRulesPath
 }
 
-func (s *routingRulesType) Path() string {
+func (s *routingRules) Path() string {
 	return RoutingRulesPath
 }
 
 // LockRoutingRules acquires a lock for routing rules.
 func (ts *Server) LockRoutingRules(ctx context.Context, action string) (context.Context, func(*error), error) {
-	return ts.internalLock(ctx, &routingRulesType{}, action, true)
+	return ts.internalLock(ctx, &routingRules{}, action, true)
 }
 
 // CheckRoutingRulesLocked checks if a lock for routing rules is still possessed.
 func CheckRoutingRulesLocked(ctx context.Context) error {
-	return checkLocked(ctx, &routingRulesType{})
+	return checkLocked(ctx, &routingRules{})
 }

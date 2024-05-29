@@ -120,16 +120,16 @@ type locksKeyType int
 
 var locksKey locksKeyType
 
-// lockType is the interface for knowing the resource that is being locked.
+// iTopoLock is the interface for knowing the resource that is being locked.
 // It allows for better controlling nuances for different lock types and log messages.
-type lockType interface {
+type iTopoLock interface {
 	Type() string
 	ResourceName() string
 	Path() string
 }
 
 // perform the topo lock operation
-func (l *Lock) lock(ctx context.Context, ts *Server, lt lockType, isBlocking bool) (LockDescriptor, error) {
+func (l *Lock) lock(ctx context.Context, ts *Server, lt iTopoLock, isBlocking bool) (LockDescriptor, error) {
 	log.Infof("Locking %v %v for action %v", lt.Type(), lt.ResourceName(), l.Action)
 
 	ctx, cancel := context.WithTimeout(ctx, LockTimeout)
@@ -150,7 +150,7 @@ func (l *Lock) lock(ctx context.Context, ts *Server, lt lockType, isBlocking boo
 }
 
 // unlock unlocks a previously locked key.
-func (l *Lock) unlock(ctx context.Context, lt lockType, lockDescriptor LockDescriptor, actionError error) error {
+func (l *Lock) unlock(ctx context.Context, lt iTopoLock, lockDescriptor LockDescriptor, actionError error) error {
 	// Detach from the parent timeout, but copy the trace span.
 	// We need to still release the lock even if the parent
 	// context timed out.
@@ -174,7 +174,7 @@ func (l *Lock) unlock(ctx context.Context, lt lockType, lockDescriptor LockDescr
 	return lockDescriptor.Unlock(ctx)
 }
 
-func (ts *Server) internalLock(ctx context.Context, lt lockType, action string, isBlocking bool) (context.Context, func(*error), error) {
+func (ts *Server) internalLock(ctx context.Context, lt iTopoLock, action string, isBlocking bool) (context.Context, func(*error), error) {
 	i, ok := ctx.Value(locksKey).(*locksInfo)
 	if !ok {
 		i = &locksInfo{
@@ -228,7 +228,7 @@ func (ts *Server) internalLock(ctx context.Context, lt lockType, action string, 
 }
 
 // checkLocked checks that the given resource is locked.
-func checkLocked(ctx context.Context, lt lockType) error {
+func checkLocked(ctx context.Context, lt iTopoLock) error {
 	// extract the locksInfo pointer
 	i, ok := ctx.Value(locksKey).(*locksInfo)
 	if !ok {
