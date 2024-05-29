@@ -218,7 +218,7 @@ func (td *tableDiffer) selectTablets(ctx context.Context, cell, tabletTypes stri
 	go func() {
 		defer wg.Done()
 		err1 = td.forEachSource(func(source *migrationSource) error {
-			tablet, err := pickTablet(ctx, sourceTopoServer, cell, ct.sourceKeyspace, source.shard, tabletTypes)
+			tablet, err := pickTablet(ctx, sourceTopoServer, cell, ct.vde.thisTablet.Alias.Cell, ct.sourceKeyspace, source.shard, tabletTypes)
 			if err != nil {
 				return err
 			}
@@ -230,7 +230,7 @@ func (td *tableDiffer) selectTablets(ctx context.Context, cell, tabletTypes stri
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		tablet, err2 := pickTablet(ctx, ct.ts, td.wd.opts.PickerOptions.TargetCell, ct.vde.thisTablet.Keyspace,
+		tablet, err2 := pickTablet(ctx, ct.ts, td.wd.opts.PickerOptions.TargetCell, ct.vde.thisTablet.Alias.Cell, ct.vde.thisTablet.Keyspace,
 			ct.vde.thisTablet.Shard, td.wd.opts.PickerOptions.TabletTypes)
 		if err2 != nil {
 			return
@@ -248,8 +248,8 @@ func (td *tableDiffer) selectTablets(ctx context.Context, cell, tabletTypes stri
 	return err2
 }
 
-func pickTablet(ctx context.Context, ts *topo.Server, cell, keyspace, shard, tabletTypes string) (*topodata.Tablet, error) {
-	tp, err := discovery.NewTabletPicker(ts, []string{cell}, keyspace, shard, tabletTypes)
+func pickTablet(ctx context.Context, ts *topo.Server, cell, localCell, keyspace, shard, tabletTypes string) (*topodata.Tablet, error) {
+	tp, err := discovery.NewTabletPicker(ctx, ts, []string{cell}, localCell, keyspace, shard, tabletTypes, discovery.TabletPickerOptions{})
 	if err != nil {
 		return nil, err
 	}
