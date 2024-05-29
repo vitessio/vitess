@@ -64,11 +64,17 @@ type ReplicatorPlan struct {
 	Source        *binlogdatapb.BinlogSource
 	collationEnv  *collations.Environment
 
-	joinPlan *JoinPlan
+	joinPlan *ReplicatorJoinPlan
 }
 
-type JoinPlan struct {
+type ReplicatorJoinPlan struct {
 	Tables []string
+}
+
+type TableJoinPlan struct {
+	Insert  *sqlparser.ParsedQuery
+	Updates map[string]*sqlparser.ParsedQuery
+	Deletes map[string]*sqlparser.ParsedQuery
 }
 
 // buildExecution plan uses the field info as input and the partially built
@@ -229,6 +235,8 @@ type TablePlan struct {
 	PartialUpdates map[string]*sqlparser.ParsedQuery
 
 	CollationEnv *collations.Environment
+
+	JoinPlan *TableJoinPlan
 }
 
 // MarshalJSON performs a custom JSON Marshalling.
