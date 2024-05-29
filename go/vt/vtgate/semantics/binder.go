@@ -184,22 +184,26 @@ func (b *binder) findDependentTableSet(current *scope, target sqlparser.TableNam
 
 func (b *binder) bindCountStar(node *sqlparser.CountStar) error {
 	scope := b.scoper.currentScope()
+	if scopeContainsOnlyVTableInfo(scope) {
+		// if we are in a vTableInfo scope, we need to look in the parent scope to
+		// know which tables are being referenced
+		scope = scope.parent
+	}
 	var ts TableSet
 	for _, tbl := range scope.tables {
-		switch tbl := tbl.(type) {
-		case *vTableInfo:
-			for _, col := range tbl.cols {
-				if sqlparser.Equals.Expr(node, col) {
-					ts = ts.Merge(b.recursive[col])
-				}
-			}
-		default:
-			ts = ts.Merge(tbl.getTableSet(b.org))
-		}
+		ts = ts.Merge(tbl.getTableSet(b.org))
 	}
 	b.recursive[node] = ts
 	b.direct[node] = ts
 	return nil
+}
+
+func scopeContainsOnlyVTableInfo(s *scope) bool {
+	if len(s.tables) != 1 {
+		return false
+	}
+	_, ok := s.tables[0].(*vTableInfo)
+	return ok
 }
 
 func (b *binder) rewriteJoinUsingColName(deps dependency, node *sqlparser.ColName, currentScope *scope) (dependency, error) {
