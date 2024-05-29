@@ -154,7 +154,7 @@ func TestBuildBindVariable(t *testing.T) {
 			in: time.Time{},
 			out: &querypb.BindVariable{
 				Type:  querypb.Type_TIMESTAMP,
-				Value: []byte("0001-01-01 00:00:00 +0000 UTC"),
+				Value: []byte("0001-01-01 00:00:00.000000"),
 			},
 		},
 		{
