@@ -467,6 +467,7 @@ func tryMergeSubqueryWithOuter(ctx *plancontext.PlanningContext, subQuery *SubQu
 		return outer, NoRewrite
 	}
 	exprs := subQuery.GetMergePredicates()
+	sqlparser.RemoveKeyspace(subQuery.Original)
 	merger := &subqueryRouteMerger{
 		outer:    outer,
 		original: subQuery.Original,
