@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"reflect"
 	"slices"
 	"sort"
 	"strings"
@@ -2013,14 +2012,11 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 		return nil, err
 	}
 
-	// There is nothing to drop for a LookupVindex workflow.
-	if ts.workflowType == binlogdatapb.VReplicationWorkflowType_CreateLookupIndex {
-		return nil, nil
-	}
-
-	// Return an error if the workflow traffic is partially switched.
-	if state.WritesSwitched || len(state.ReplicaCellsSwitched) > 0 || len(state.RdonlyCellsSwitched) > 0 {
-		return nil, ErrWorkflowPartiallySwitched
+	if ts.workflowType != binlogdatapb.VReplicationWorkflowType_CreateLookupIndex {
+		// Return an error if the workflow traffic is partially switched.
+		if state.WritesSwitched || len(state.ReplicaCellsSwitched) > 0 || len(state.RdonlyCellsSwitched) > 0 {
+			return nil, ErrWorkflowPartiallySwitched
+		}
 	}
 
 	if state.WorkflowType == TypeMigrate {
@@ -2054,12 +2050,14 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "the %s workflow does not exist in the %s keyspace", req.Workflow, req.Keyspace)
 	}
 
-	// Cleanup related data and artifacts.
-	if _, err := s.DropTargets(delCtx, ts, req.GetKeepData(), req.GetKeepRoutingRules(), false); err != nil {
-		if topo.IsErrType(err, topo.NoNode) {
-			return nil, vterrors.Wrapf(err, "%s keyspace does not exist", req.GetKeyspace())
+	// Cleanup related data and artifacts. There are none for a LookupVindex workflow.
+	if ts.workflowType != binlogdatapb.VReplicationWorkflowType_CreateLookupIndex {
+		if _, err := s.DropTargets(delCtx, ts, req.GetKeepData(), req.GetKeepRoutingRules(), false); err != nil {
+			if topo.IsErrType(err, topo.NoNode) {
+				return nil, vterrors.Wrapf(err, "%s keyspace does not exist", req.GetKeyspace())
+			}
+			return nil, err
 		}
-		return nil, err
 	}
 
 	response := &vtctldatapb.WorkflowDeleteResponse{}
@@ -2671,7 +2669,7 @@ func (s *Server) buildTrafficSwitcher(ctx context.Context, targetKeyspace, workf
 					tables = append(tables, rule.Match)
 				}
 				sort.Strings(tables)
-				if !reflect.DeepEqual(ts.tables, tables) {
+				if !slices.Equal(ts.tables, tables) {
 					return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "table lists are mismatched across streams: %v vs %v", ts.tables, tables)
 				}
 			}
