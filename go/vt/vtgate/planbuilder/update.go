@@ -36,7 +36,7 @@ func gen4UpdateStmtPlanner(
 		return nil, vterrors.VT12001("WITH expression in UPDATE statement")
 	}
 
-	ctx, err := plancontext.CreatePlanningContext(updStmt, reservedVars, vschema, version)
+	ctx, err := plancontext.CreatePlanningContext(updStmt, reservedVars, vschema, version, nil)
 	if err != nil {
 		return nil, err
 	}

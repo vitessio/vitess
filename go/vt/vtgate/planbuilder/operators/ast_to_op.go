@@ -163,7 +163,7 @@ func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.U
 //  2. fkToIgnore: The foreign key constraint to specifically ignore while planning the statement. This field is used in UPDATE CASCADE planning, wherein while planning the child update
 //     query, we need to ignore the parent foreign key constraint that caused the cascade in question.
 func createOpFromStmt(inCtx *plancontext.PlanningContext, stmt sqlparser.Statement, verifyAllFKs bool, fkToIgnore string) Operator {
-	ctx, err := plancontext.CreatePlanningContext(stmt, inCtx.ReservedVars, inCtx.VSchema, inCtx.PlannerVersion)
+	ctx, err := plancontext.CreatePlanningContext(stmt, inCtx.ReservedVars, inCtx.VSchema, inCtx.PlannerVersion, inCtx.SemTable.Tables)
 	if err != nil {
 		panic(err)
 	}
@@ -202,8 +202,9 @@ func createOpFromStmt(inCtx *plancontext.PlanningContext, stmt sqlparser.Stateme
 		panic(err)
 	}
 
-	// need to remember which predicates have been broken up during join planning
-	inCtx.KeepPredicateInfo(ctx)
+	// need to remember which predicates have been broken up during join planning, the table infos,
+	// and the dependencies of the expressions for the offset planning phase.
+	inCtx.MergePlanningContext(ctx)
 
 	return op
 }
@@ -362,14 +363,27 @@ func createSelectionOp(
 	limit *sqlparser.Limit,
 	lock sqlparser.Lock,
 ) Operator {
-	selectionStmt := &sqlparser.Select{
+	selectionStmt := cloneColNames(&sqlparser.Select{
 		SelectExprs: selectExprs,
 		From:        tableExprs,
 		Where:       where,
 		OrderBy:     orderBy,
 		Limit:       limit,
 		Lock:        lock,
-	}
+	}).(*sqlparser.Select)
 	// There are no foreign keys to check for a select query, so we can pass anything for verifyAllFKs and fkToIgnore.
 	return createOpFromStmt(ctx, selectionStmt, false /* verifyAllFKs */, "" /* fkToIgnore */)
+}
+
+// cloneColNames is used to clone the node which has ColName inside. The ColNames need to be cloned
+// because we are going to run a new semantic analysis and the reference for these ColNames should be different.
+func cloneColNames(node sqlparser.SQLNode) sqlparser.SQLNode {
+	return sqlparser.CopyOnRewrite(node, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
+		colName, isColName := cursor.Node().(*sqlparser.ColName)
+		if !isColName {
+			return
+		}
+		newColName := *colName
+		cursor.Replace(&newColName)
+	}, nil)
 }

@@ -95,7 +95,7 @@ func prepTest(t *testing.T, sql string) (*semantics.SemTable, *sqlparser.Reserve
 	require.True(t, isSelectStatement, "analyzer expects a select statement")
 
 	reservedVars := sqlparser.NewReservedVars("vtg", vars)
-	semTable, err := semantics.Analyze(sel, "", &semantics.FakeSI{})
+	semTable, err := semantics.Analyze(sel, "", &semantics.FakeSI{}, nil)
 	require.NoError(t, err)
 
 	return semTable, reservedVars, sel

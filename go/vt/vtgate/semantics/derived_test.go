@@ -116,7 +116,7 @@ func TestScopingWDerivedTables(t *testing.T) {
 				Tables: map[string]*vindexes.Table{
 					"t": {Name: sqlparser.NewIdentifierCS("t"), Keyspace: ks2},
 				},
-			})
+			}, nil)
 
 			switch {
 			case query.errorMessage != "" && err != nil:
@@ -181,7 +181,7 @@ func TestDerivedTablesOrderClause(t *testing.T) {
 			parse, err := sqlparser.NewTestParser().Parse(query.query)
 			require.NoError(t, err)
 
-			st, err := Analyze(parse, "user", si)
+			st, err := Analyze(parse, "user", si, nil)
 			require.NoError(t, err)
 
 			sel := parse.(*sqlparser.Select)
@@ -218,7 +218,7 @@ func TestScopingWComplexDerivedTables(t *testing.T) {
 				Tables: map[string]*vindexes.Table{
 					"t": {Name: sqlparser.NewIdentifierCS("t")},
 				},
-			})
+			}, nil)
 			if query.errorMessage != "" {
 				require.EqualError(t, err, query.errorMessage)
 			} else {
@@ -259,7 +259,7 @@ func BenchmarkAnalyzeDerivedTableQueries(b *testing.B) {
 			parse, err := sqlparser.NewTestParser().Parse(query)
 			require.NoError(b, err)
 
-			_, _ = Analyze(parse, "d", fakeSchemaInfo())
+			_, _ = Analyze(parse, "d", fakeSchemaInfo(), nil)
 		}
 	}
 }

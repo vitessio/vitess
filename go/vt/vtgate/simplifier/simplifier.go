@@ -212,7 +212,7 @@ func tryRemoveTable(tables []semantics.TableInfo, in sqlparser.SelectStatement, 
 func getTables(in sqlparser.SelectStatement, currentDB string, si semantics.SchemaInformation) ([]semantics.TableInfo, error) {
 	// Since our semantic analysis changes the AST, we clone it first, so we have a pristine AST to play with
 	clone := sqlparser.CloneSelectStatement(in)
-	semTable, err := semantics.Analyze(clone, currentDB, si)
+	semTable, err := semantics.Analyze(clone, currentDB, si, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -255,7 +255,7 @@ func simplifyStarExpr(in sqlparser.SelectStatement, test func(sqlparser.SelectSt
 // removeTable removes the table with the given index from the select statement, which includes the FROM clause
 // but also all expressions and predicates that depend on the table
 func removeTable(clone sqlparser.SelectStatement, searchedTS semantics.TableSet, db string, si semantics.SchemaInformation) bool {
-	semTable, err := semantics.Analyze(clone, db, si)
+	semTable, err := semantics.Analyze(clone, db, si, nil)
 	if err != nil {
 		panic(err)
 	}

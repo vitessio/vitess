@@ -132,7 +132,7 @@ func buildExplainStmtPlan(stmt sqlparser.Statement, reservedVars *sqlparser.Rese
 }
 
 func explainPlan(explain *sqlparser.ExplainStmt, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
-	ctx, err := plancontext.CreatePlanningContext(explain.Statement, reservedVars, vschema, Gen4)
+	ctx, err := plancontext.CreatePlanningContext(explain.Statement, reservedVars, vschema, Gen4, nil)
 	if err != nil {
 		return nil, err
 	}

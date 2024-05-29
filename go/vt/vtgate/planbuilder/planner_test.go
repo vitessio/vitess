@@ -68,7 +68,7 @@ func TestBindingSubquery(t *testing.T) {
 					"tabl": {Name: sqlparser.NewIdentifierCS("tabl")},
 					"foo":  {Name: sqlparser.NewIdentifierCS("foo")},
 				},
-			})
+			}, nil)
 			ctx := &plancontext.PlanningContext{
 				ReservedVars: sqlparser.NewReservedVars("vt", make(sqlparser.BindVars)),
 				SemTable:     semTable,

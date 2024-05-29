@@ -63,17 +63,13 @@ type PlanningContext struct {
 // It analyzes the SQL statement within the given virtual schema context,
 // handling default keyspace settings and semantic analysis.
 // Returns an error if semantic analysis fails.
-func CreatePlanningContext(stmt sqlparser.Statement,
-	reservedVars *sqlparser.ReservedVars,
-	vschema VSchema,
-	version querypb.ExecuteOptions_PlannerVersion,
-) (*PlanningContext, error) {
+func CreatePlanningContext(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema VSchema, version querypb.ExecuteOptions_PlannerVersion, tables []semantics.TableInfo) (*PlanningContext, error) {
 	ksName := ""
 	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
 		ksName = ks.Name
 	}
 
-	semTable, err := semantics.Analyze(stmt, ksName, vschema)
+	semTable, err := semantics.Analyze(stmt, ksName, vschema, tables)
 	if err != nil {
 		return nil, err
 	}
@@ -154,14 +150,24 @@ func (ctx *PlanningContext) SkipJoinPredicates(joinPred sqlparser.Expr) error {
 	return vterrors.VT13001("predicate does not exist: " + sqlparser.String(joinPred))
 }
 
-// KeepPredicateInfo transfers join predicate information from another context.
+// MergePlanningContext transfers join predicate information from another context.
 // This is useful when nesting queries, ensuring consistent predicate handling across contexts.
-func (ctx *PlanningContext) KeepPredicateInfo(other *PlanningContext) {
-	for k, v := range other.joinPredicates {
+func (ctx *PlanningContext) MergePlanningContext(from *PlanningContext) {
+	for k, v := range from.joinPredicates {
 		ctx.AddJoinPredicates(k, v...)
 	}
-	for expr := range other.skipPredicates {
+	for expr := range from.skipPredicates {
 		ctx.skipThesePredicates(expr)
+	}
+	ctx.SemTable.Tables = from.SemTable.Tables
+	for expr, set := range from.SemTable.Direct {
+		ctx.SemTable.Direct[expr] = set
+	}
+	for expr, set := range from.SemTable.Recursive {
+		ctx.SemTable.Recursive[expr] = set
+	}
+	for expr, ty := range from.SemTable.ExprTypes {
+		ctx.SemTable.ExprTypes[expr] = ty
 	}
 }
 

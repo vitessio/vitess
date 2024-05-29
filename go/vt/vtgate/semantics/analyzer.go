@@ -51,12 +51,12 @@ type analyzer struct {
 }
 
 // newAnalyzer create the semantic analyzer
-func newAnalyzer(dbName string, si SchemaInformation, fullAnalysis bool) *analyzer {
+func newAnalyzer(dbName string, si SchemaInformation, fullAnalysis bool, tables []TableInfo) *analyzer {
 	// TODO  dependencies between these components are a little tangled. We should try to clean up
 	s := newScoper(si)
 	a := &analyzer{
 		scoper:       s,
-		earlyTables:  newEarlyTableCollector(si, dbName),
+		earlyTables:  newEarlyTableCollector(si, dbName, tables),
 		typer:        newTyper(si.Environment().CollationEnv()),
 		si:           si,
 		currentDb:    dbName,
@@ -89,12 +89,12 @@ func (a *analyzer) lateInit() {
 }
 
 // Analyze analyzes the parsed query.
-func Analyze(statement sqlparser.Statement, currentDb string, si SchemaInformation) (*SemTable, error) {
-	return analyseAndGetSemTable(statement, currentDb, si, false)
+func Analyze(statement sqlparser.Statement, currentDb string, si SchemaInformation, tables []TableInfo) (*SemTable, error) {
+	return analyseAndGetSemTable(statement, currentDb, si, false, tables)
 }
 
-func analyseAndGetSemTable(statement sqlparser.Statement, currentDb string, si SchemaInformation, fullAnalysis bool) (*SemTable, error) {
-	analyzer := newAnalyzer(currentDb, newSchemaInfo(si), fullAnalysis)
+func analyseAndGetSemTable(statement sqlparser.Statement, currentDb string, si SchemaInformation, fullAnalysis bool, tables []TableInfo) (*SemTable, error) {
+	analyzer := newAnalyzer(currentDb, newSchemaInfo(si), fullAnalysis, tables)
 
 	// Analysis for initial scope
 	err := analyzer.analyze(statement)
@@ -108,7 +108,7 @@ func analyseAndGetSemTable(statement sqlparser.Statement, currentDb string, si S
 
 // AnalyzeStrict analyzes the parsed query, and fails the analysis for any possible errors
 func AnalyzeStrict(statement sqlparser.Statement, currentDb string, si SchemaInformation) (*SemTable, error) {
-	st, err := analyseAndGetSemTable(statement, currentDb, si, true)
+	st, err := analyseAndGetSemTable(statement, currentDb, si, true, nil)
 	if err != nil {
 		return nil, err
 	}

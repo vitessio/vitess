@@ -36,7 +36,7 @@ func FuzzAnalyse(data []byte) int {
 	}
 	switch stmt := tree.(type) {
 	case *sqlparser.Select:
-		semTable, err := semantics.Analyze(stmt, "", &semantics.FakeSI{})
+		semTable, err := semantics.Analyze(stmt, "", &semantics.FakeSI{}, nil)
 		if err != nil {
 			return 0
 		}

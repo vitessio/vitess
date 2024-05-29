@@ -47,7 +47,7 @@ func TestNormalizerAndSemanticAnalysisIntegration(t *testing.T) {
 			err = sqlparser.Normalize(parse, sqlparser.NewReservedVars("bv", sqlparser.BindVars{}), map[string]*querypb.BindVariable{})
 			require.NoError(t, err)
 
-			st, err := Analyze(parse, "d", fakeSchemaInfo())
+			st, err := Analyze(parse, "d", fakeSchemaInfo(), nil)
 			require.NoError(t, err)
 			bv := parse.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr.(*sqlparser.Argument)
 			typ, found := st.ExprTypes[bv]
@@ -74,7 +74,7 @@ func TestColumnCollations(t *testing.T) {
 			err = sqlparser.Normalize(parse, sqlparser.NewReservedVars("bv", sqlparser.BindVars{}), map[string]*querypb.BindVariable{})
 			require.NoError(t, err)
 
-			st, err := Analyze(parse, "d", fakeSchemaInfo())
+			st, err := Analyze(parse, "d", fakeSchemaInfo(), nil)
 			require.NoError(t, err)
 			col := extract(parse.(*sqlparser.Select), 0)
 			typ, found := st.TypeForExpr(col)

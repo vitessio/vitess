@@ -50,12 +50,13 @@ type earlyTableCollector struct {
 	withTables map[sqlparser.IdentifierCS]any
 }
 
-func newEarlyTableCollector(si SchemaInformation, currentDb string) *earlyTableCollector {
+func newEarlyTableCollector(si SchemaInformation, currentDb string, tables []TableInfo) *earlyTableCollector {
 	return &earlyTableCollector{
 		si:         si,
 		currentDb:  currentDb,
 		done:       map[*sqlparser.AliasedTableExpr]TableInfo{},
 		withTables: map[sqlparser.IdentifierCS]any{},
+		Tables:     tables,
 	}
 }
 

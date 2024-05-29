@@ -809,7 +809,7 @@ func exerciseAnalyzer(query, database string, s semantics.SchemaInformation) {
 		return
 	}
 
-	_, _ = semantics.Analyze(sel, database, s)
+	_, _ = semantics.Analyze(sel, database, s, nil)
 }
 
 func BenchmarkSelectVsDML(b *testing.B) {

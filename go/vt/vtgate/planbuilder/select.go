@@ -104,7 +104,7 @@ func gen4planSQLCalcFoundRows(vschema plancontext.VSchema, sel *sqlparser.Select
 	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
 		ksName = ks.Name
 	}
-	semTable, err := semantics.Analyze(sel, ksName, vschema)
+	semTable, err := semantics.Analyze(sel, ksName, vschema, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -200,7 +200,7 @@ func newBuildSelectPlan(
 	vschema plancontext.VSchema,
 	version querypb.ExecuteOptions_PlannerVersion,
 ) (plan engine.Primitive, tablesUsed []string, err error) {
-	ctx, err := plancontext.CreatePlanningContext(selStmt, reservedVars, vschema, version)
+	ctx, err := plancontext.CreatePlanningContext(selStmt, reservedVars, vschema, version, nil)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -48,7 +48,7 @@ func TestBindingAndExprEquality(t *testing.T) {
 		t.Run(test.expressions, func(t *testing.T) {
 			parse, err := sqlparser.NewTestParser().Parse(fmt.Sprintf("select %s from t1, t2", test.expressions))
 			require.NoError(t, err)
-			st, err := Analyze(parse, "db", fakeSchemaInfoTest())
+			st, err := Analyze(parse, "db", fakeSchemaInfoTest(), nil)
 			require.NoError(t, err)
 			exprs := parse.(*sqlparser.Select).SelectExprs
 			a := exprs[0].(*sqlparser.AliasedExpr).Expr
@@ -855,7 +855,7 @@ func TestIsFkDependentColumnUpdated(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			stmt, err := sqlparser.NewTestParser().Parse(tt.query)
 			require.NoError(t, err)
-			semTable, err := Analyze(stmt, keyspaceName, tt.fakeSi)
+			semTable, err := Analyze(stmt, keyspaceName, tt.fakeSi, nil)
 			require.NoError(t, err)
 			got := semTable.ErrIfFkDependentColumnUpdated(stmt.(*sqlparser.Update).Exprs)
 			if tt.updatedErr == "" {
@@ -972,7 +972,7 @@ func TestHasNonLiteralForeignKeyUpdate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			stmt, err := sqlparser.NewTestParser().Parse(tt.query)
 			require.NoError(t, err)
-			semTable, err := Analyze(stmt, keyspaceName, tt.fakeSi)
+			semTable, err := Analyze(stmt, keyspaceName, tt.fakeSi, nil)
 			require.NoError(t, err)
 			got := semTable.HasNonLiteralForeignKeyUpdate(stmt.(*sqlparser.Update).Exprs)
 			require.EqualValues(t, tt.hasNonLiteral, got)

@@ -191,7 +191,7 @@ func TestExpandStar(t *testing.T) {
 			require.NoError(t, err)
 			selectStatement, isSelectStatement := ast.(*sqlparser.Select)
 			require.True(t, isSelectStatement, "analyzer expects a select statement")
-			st, err := Analyze(selectStatement, cDB, schemaInfo)
+			st, err := Analyze(selectStatement, cDB, schemaInfo, nil)
 			if tcase.expErr == "" {
 				require.NoError(t, err)
 				require.NoError(t, st.NotUnshardedErr)
@@ -292,7 +292,7 @@ func TestRewriteJoinUsingColumns(t *testing.T) {
 			require.NoError(t, err)
 			selectStatement, isSelectStatement := ast.(*sqlparser.Select)
 			require.True(t, isSelectStatement, "analyzer expects a select statement")
-			_, err = Analyze(selectStatement, cDB, schemaInfo)
+			_, err = Analyze(selectStatement, cDB, schemaInfo, nil)
 			if tcase.expErr == "" {
 				require.NoError(t, err)
 				assert.Equal(t, tcase.expSQL, sqlparser.String(selectStatement))
@@ -418,7 +418,7 @@ func TestGroupByLiteral(t *testing.T) {
 			ast, err := sqlparser.NewTestParser().Parse(tcase.sql)
 			require.NoError(t, err)
 			selectStatement := ast.(*sqlparser.Select)
-			st, err := Analyze(selectStatement, cDB, schemaInfo)
+			st, err := Analyze(selectStatement, cDB, schemaInfo, nil)
 			if tcase.expErr == "" {
 				require.NoError(t, err)
 				assert.Equal(t, tcase.expSQL, sqlparser.String(selectStatement))
@@ -501,7 +501,7 @@ func TestOrderByLiteral(t *testing.T) {
 			ast, err := sqlparser.NewTestParser().Parse(tcase.sql)
 			require.NoError(t, err)
 			selectStatement := ast.(sqlparser.SelectStatement)
-			st, err := Analyze(selectStatement, cDB, schemaInfo)
+			st, err := Analyze(selectStatement, cDB, schemaInfo, nil)
 			if tcase.expErr == "" {
 				require.NoError(t, err)
 				assert.Equal(t, tcase.expSQL, sqlparser.String(selectStatement))
@@ -784,7 +784,7 @@ func TestSemTableDependenciesAfterExpandStar(t *testing.T) {
 			require.NoError(t, err)
 			selectStatement, isSelectStatement := ast.(*sqlparser.Select)
 			require.True(t, isSelectStatement, "analyzer expects a select statement")
-			semTable, err := Analyze(selectStatement, "", schemaInfo)
+			semTable, err := Analyze(selectStatement, "", schemaInfo, nil)
 			require.NoError(t, err)
 			assert.Equal(t, tcase.expSQL, sqlparser.String(selectStatement))
 			if tcase.otherTbl != -1 {
@@ -844,7 +844,7 @@ func TestRewriteNot(t *testing.T) {
 			require.NoError(t, err)
 			selectStatement, isSelectStatement := ast.(*sqlparser.Select)
 			require.True(t, isSelectStatement, "analyzer expects a select statement")
-			st, err := Analyze(selectStatement, cDB, schemaInfo)
+			st, err := Analyze(selectStatement, cDB, schemaInfo, nil)
 
 			require.NoError(t, err)
 			require.NoError(t, st.NotUnshardedErr)
@@ -894,7 +894,7 @@ func TestConstantFolding(t *testing.T) {
 		t.Run(tcase.sql, func(t *testing.T) {
 			ast, err := sqlparser.NewTestParser().Parse(tcase.sql)
 			require.NoError(t, err)
-			_, err = Analyze(ast, cDB, schemaInfo)
+			_, err = Analyze(ast, cDB, schemaInfo, nil)
 			require.NoError(t, err)
 			require.Equal(t, tcase.expSQL, sqlparser.String(ast))
 		})
@@ -921,7 +921,7 @@ func TestCTEToDerivedTableRewrite(t *testing.T) {
 		t.Run(tcase.sql, func(t *testing.T) {
 			ast, err := sqlparser.NewTestParser().Parse(tcase.sql)
 			require.NoError(t, err)
-			_, err = Analyze(ast, cDB, fakeSchemaInfo())
+			_, err = Analyze(ast, cDB, fakeSchemaInfo(), nil)
 			require.NoError(t, err)
 			require.Equal(t, tcase.expSQL, sqlparser.String(ast))
 		})
@@ -951,7 +951,7 @@ func TestDeleteTargetTableRewrite(t *testing.T) {
 		t.Run(tcase.sql, func(t *testing.T) {
 			ast, err := sqlparser.NewTestParser().Parse(tcase.sql)
 			require.NoError(t, err)
-			_, err = Analyze(ast, cDB, fakeSchemaInfo())
+			_, err = Analyze(ast, cDB, fakeSchemaInfo(), nil)
 			require.NoError(t, err)
 			require.Equal(t, tcase.target, sqlparser.String(ast.(*sqlparser.Delete).Targets))
 		})

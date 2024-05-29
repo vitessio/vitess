@@ -44,7 +44,7 @@ func gen4DeleteStmtPlanner(
 		}
 	}
 
-	ctx, err := plancontext.CreatePlanningContext(deleteStmt, reservedVars, vschema, version)
+	ctx, err := plancontext.CreatePlanningContext(deleteStmt, reservedVars, vschema, version, nil)
 	if err != nil {
 		return nil, err
 	}

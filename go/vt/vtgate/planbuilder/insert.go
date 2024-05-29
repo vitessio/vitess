@@ -28,7 +28,7 @@ import (
 )
 
 func gen4InsertStmtPlanner(version querypb.ExecuteOptions_PlannerVersion, insStmt *sqlparser.Insert, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
-	ctx, err := plancontext.CreatePlanningContext(insStmt, reservedVars, vschema, version)
+	ctx, err := plancontext.CreatePlanningContext(insStmt, reservedVars, vschema, version, nil)
 	if err != nil {
 		return nil, err
 	}
