@@ -19,6 +19,8 @@ package utils
 import (
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 // WaitForBoolValue takes a pointer to a boolean and waits for it to reach a certain value.
@@ -27,7 +29,7 @@ func WaitForBoolValue(t *testing.T, val *bool, waitFor bool) {
 	for {
 		select {
 		case <-timeout:
-			t.Fatalf("Timed out waiting for the boolean to become %v", waitFor)
+			require.Failf(t, "Failed waiting for bool value", "Timed out waiting for the boolean to become %v", waitFor)
 			return
 		default:
 			if *val == waitFor {

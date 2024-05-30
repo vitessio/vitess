@@ -186,7 +186,7 @@ func (ts *Server) internalLock(ctx context.Context, lt iTopoLock, action string,
 	defer i.mu.Unlock()
 	// check that we are not already locked
 	if _, ok := i.info[lt.ResourceName()]; ok {
-		return nil, nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "lock for %v %v is already held", lt.Type(), lt.ResourceName())
+		return nil, nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "lock for %v %v is already held", lt.Type(), lt.ResourceName())
 	}
 
 	// lock it
@@ -208,7 +208,7 @@ func (ts *Server) internalLock(ctx context.Context, lt iTopoLock, action string,
 			if *finalErr != nil {
 				log.Errorf("trying to unlock %v %v multiple times", lt.Type(), lt.ResourceName())
 			} else {
-				*finalErr = vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "trying to unlock %v %v multiple times", lt.Type(), lt.ResourceName())
+				*finalErr = vterrors.Errorf(vtrpc.Code_INTERNAL, "trying to unlock %v %v multiple times", lt.Type(), lt.ResourceName())
 			}
 			return
 		}
@@ -218,7 +218,7 @@ func (ts *Server) internalLock(ctx context.Context, lt iTopoLock, action string,
 		if *finalErr != nil {
 			if err != nil {
 				// both error are set, just log the unlock error
-				log.Errorf("unlock %v %v failed: %v", lt.Type(), lt.ResourceName(), err)
+				log.Warningf("unlock %v %v failed: %v", lt.Type(), lt.ResourceName(), err)
 			}
 		} else {
 			*finalErr = err
@@ -232,7 +232,7 @@ func checkLocked(ctx context.Context, lt iTopoLock) error {
 	// extract the locksInfo pointer
 	i, ok := ctx.Value(locksKey).(*locksInfo)
 	if !ok {
-		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "%v %v is not locked (no locksInfo)", lt.Type(), lt.ResourceName())
+		return vterrors.Errorf(vtrpc.Code_INTERNAL, "%v %v is not locked (no locksInfo)", lt.Type(), lt.ResourceName())
 	}
 	i.mu.Lock()
 	defer i.mu.Unlock()
@@ -240,7 +240,7 @@ func checkLocked(ctx context.Context, lt iTopoLock) error {
 	// find the individual entry
 	li, ok := i.info[lt.ResourceName()]
 	if !ok {
-		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "%v %v is not locked (no lockInfo in map)", lt.Type(), lt.ResourceName())
+		return vterrors.Errorf(vtrpc.Code_INTERNAL, "%v %v is not locked (no lockInfo in map)", lt.Type(), lt.ResourceName())
 	}
 
 	// Check the lock server implementation still holds the lock.

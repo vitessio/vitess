@@ -25,7 +25,7 @@ type routingRules struct{}
 var _ iTopoLock = (*routingRules)(nil)
 
 func (s *routingRules) Type() string {
-	return "routing_rules"
+	return RoutingRulesPath
 }
 
 func (s *routingRules) ResourceName() string {
