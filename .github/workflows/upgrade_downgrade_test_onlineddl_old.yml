@@ -139,7 +139,7 @@ jobs:
       timeout-minutes: 10
       run: |
         source build.env
-        NOVTADMINBUILD=1 make build
+        NOVTADMINBUILD=1 SKIP_VTADMIN=1 make build
         mkdir -p /tmp/vitess-build-other/
         cp -R bin /tmp/vitess-build-other/
         rm -Rf bin/*
@@ -159,7 +159,7 @@ jobs:
       timeout-minutes: 10
       run: |
         source build.env
-        NOVTADMINBUILD=1 make build
+        NOVTADMINBUILD=1 SKIP_VTADMIN=1 make build
         mkdir -p /tmp/vitess-build-current/
         cp -R bin /tmp/vitess-build-current/
 
@@ -184,4 +184,4 @@ jobs:
         mkdir -p /tmp/vtdataroot
 
         source build.env
-        eatmydata -- go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_reparent
+        eatmydata -- go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_onlineddl
