@@ -4,18 +4,18 @@ on:
   pull_request:
 
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Upgrade Downgrade Testing Reparent Old VTTablet')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Upgrade Downgrade Testing Online DDL')
   cancel-in-progress: true
 
 permissions: read-all
 
-# This test ensures that our end-to-end tests work using Vitess components
-# (vtctl, vttablet, etc) built on different versions.
+# This test ensures that our Online DDL + VReplication + throttler components
+# work using primary and replica vttablets built on different versions.
 
 jobs:
 
   upgrade_downgrade_test:
-    name: Run Upgrade Downgrade Test - Reparent Old VTTablet
+    name: Run Upgrade Downgrade Test - Online DDL
     runs-on: gh-hosted-runners-16cores-1
 
     steps:
@@ -49,6 +49,13 @@ jobs:
         previous_release_ref=$(./tools/get_previous_release.sh ${{github.base_ref}} ${{github.ref}})
         echo $previous_release_ref
         echo "previous_release_ref=${previous_release_ref}" >> $GITHUB_OUTPUT
+
+    - name: Set output with next release branch
+      id: output-next-release-ref
+      run: |
+        next_release_ref=$(./tools/get_next_release.sh ${{github.base_ref}} ${{github.ref}})
+        echo $next_release_ref
+        echo "next_release_ref=${next_release_ref}" >> $GITHUB_OUTPUT
 
     - name: Check for changes in relevant files
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
@@ -123,7 +130,7 @@ jobs:
         sudo apt-get install -y percona-xtrabackup-24
 
     # Checkout to the last release of Vitess
-    - name: Check out other version's code (${{ steps.output-previous-release-ref.outputs.previous_release_ref }})
+    - name: Check out last version's code (${{ steps.output-previous-release-ref.outputs.previous_release_ref }})
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       uses: actions/checkout@v4
       with:
@@ -140,8 +147,30 @@ jobs:
       run: |
         source build.env
         NOVTADMINBUILD=1 SKIP_VTADMIN=1 make build
-        mkdir -p /tmp/vitess-build-other/
-        cp -R bin /tmp/vitess-build-other/
+        mkdir -p /tmp/vitess-build-last/
+        cp -R bin /tmp/vitess-build-last/
+        rm -Rf bin/*
+
+    # Checkout to the next release of Vitess
+    - name: Check out next version's code (${{ steps.output-next-release-ref.outputs.next_release_ref }})
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ steps.output-next-release-ref.outputs.next_release_ref }}
+
+    - name: Get dependencies for the next release
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      run: |
+        go mod download
+
+    - name: Building next release's binaries
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      timeout-minutes: 10
+      run: |
+        source build.env
+        NOVTADMINBUILD=1 make build
+        mkdir -p /tmp/vitess-build-next/
+        cp -R bin /tmp/vitess-build-next/
         rm -Rf bin/*
 
     # Checkout to this build's commit
@@ -169,15 +198,17 @@ jobs:
       run: |
         source build.env
 
-        rm -f $PWD/bin/vttablet $PWD/bin/mysqlctl $PWD/bin/mysqlctld
-        cp /tmp/vitess-build-other/bin/vttablet $PWD/bin/vttablet
-        cp /tmp/vitess-build-other/bin/mysqlctl $PWD/bin/mysqlctl
-        cp /tmp/vitess-build-other/bin/mysqlctld $PWD/bin/mysqlctld
+        cp /tmp/vitess-build-last/bin/vttablet $PWD/bin/vttablet-last
+        cp /tmp/vitess-build-last/bin/mysqlctl $PWD/bin/mysqlctl-last
+        cp /tmp/vitess-build-last/bin/mysqlctld $PWD/bin/mysqlctld-last
+        cp /tmp/vitess-build-next/bin/vttablet $PWD/bin/vttablet-next
+        cp /tmp/vitess-build-next/bin/mysqlctl $PWD/bin/mysqlctl-next
+        cp /tmp/vitess-build-next/bin/mysqlctld $PWD/bin/mysqlctld-next
         vtctl --version
         vttablet --version
 
     # Running a test with vtctl at version n and vttablet at version n-1
-    - name: Run reparent tests (vtctl=N, vttablet=N-1)
+    - name: Run Online DDL tests (primary=N, replica=N-1)
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
         rm -rf /tmp/vtdataroot
