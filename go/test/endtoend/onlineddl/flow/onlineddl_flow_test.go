@@ -143,7 +143,7 @@ func TestMain(m *testing.M) {
 		clusterInstance.VtTabletExtraArgs = []string{
 			"--heartbeat_interval", "250ms",
 			"--heartbeat_on_demand_duration", "5s",
-			"--migration_check_interval", "5s",
+			"--migration_check_interval", "2s",
 			"--watch_replication_stream",
 			// Test VPlayer batching mode.
 			fmt.Sprintf("--vreplication_experimental_flags=%d",
@@ -226,6 +226,9 @@ func TestSchemaChange(t *testing.T) {
 			ctx, cancel := context.WithCancel(ctx)
 			defer cancel()
 
+			workloadCtx, cancelWorkload := context.WithCancel(ctx)
+			defer cancelWorkload()
+
 			t.Run("routine throttler check", func(t *testing.T) {
 				go func() {
 					ticker := time.NewTicker(500 * time.Millisecond)
@@ -238,7 +241,7 @@ func TestSchemaChange(t *testing.T) {
 						fmt.Println("throttleWorkload: ", throttleWorkload.Load())
 						select {
 						case <-ticker.C:
-						case <-ctx.Done():
+						case <-workloadCtx.Done():
 							t.Logf("Terminating routine throttler check")
 							return
 						}
@@ -252,9 +255,10 @@ func TestSchemaChange(t *testing.T) {
 				// This workload will consider throttling state and avoid generating DMLs if throttled.
 				wg.Add(1)
 				go func() {
+					defer cancel()
 					defer t.Logf("Terminating workload")
 					defer wg.Done()
-					runMultipleConnections(ctx, t)
+					runMultipleConnections(workloadCtx, t)
 				}()
 			})
 			appliedDMLStart := totalAppliedDML.Load()
@@ -310,13 +314,48 @@ func TestSchemaChange(t *testing.T) {
 			t.Run("attempt to complete", func(t *testing.T) {
 				onlineddl.CheckCompleteMigration(t, &vtParams, shards, uuid, true)
 			})
+			isComplete := false
+			t.Run("optimistic wait for migration completion", func(t *testing.T) {
+				select {
+				case <-time.After(10 * time.Second):
+				case <-ctx.Done():
+					require.Fail(t, "context cancelled")
+				}
 
-			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
-			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
-			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
-			checkMigratedTable(t, tableName, hint)
+				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusRunning, schema.OnlineDDLStatusComplete)
+				isComplete = (status == schema.OnlineDDLStatusComplete)
+				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			})
+			if !isComplete {
+				t.Run("force complete cut-over", func(t *testing.T) {
+					onlineddl.CheckForceMigrationCutOver(t, &vtParams, shards, uuid, true)
+				})
+				t.Run("another optimistic wait for migration completion", func(t *testing.T) {
+					status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusRunning, schema.OnlineDDLStatusComplete)
+					isComplete = (status == schema.OnlineDDLStatusComplete)
+					fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+				})
+			}
+			if !isComplete {
+				t.Run("terminate workload", func(t *testing.T) {
+					// Seems like workload is too high and preventing migration from completing.
+					// We can't go on forever. It's nice to have normal completion under workload,
+					// but it's not strictly what this test is designed for. We terminate the
+					// workload so as to allow the migration to complete.
+					cancelWorkload()
+				})
+			}
+			t.Run("wait for migration completion", func(t *testing.T) {
+				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
+				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+			})
+			t.Run("validate table schema", func(t *testing.T) {
+				checkMigratedTable(t, tableName, hint)
+			})
 
-			cancel() // Now that the migration is complete, we can stop the workload.
+			cancelWorkload() // Early break
+			cancel()         // Early break
 			wg.Wait()
 		})
 	})
