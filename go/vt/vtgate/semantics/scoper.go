@@ -227,7 +227,7 @@ func (s *scoper) up(cursor *sqlparser.Cursor) error {
 	case *sqlparser.Select, *sqlparser.GroupBy, *sqlparser.Update, *sqlparser.Insert, *sqlparser.Union, *sqlparser.Delete:
 		id := EmptyTableSet()
 		for _, tableInfo := range s.currentScope().tables {
-			set := tableInfo.getTableSet(s.org)
+			_, set := tableInfo.getTableSets()
 			id = id.Merge(set)
 		}
 		s.statementIDs[s.currentScope().stmt] = id

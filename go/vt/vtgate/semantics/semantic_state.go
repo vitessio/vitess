@@ -62,7 +62,8 @@ type (
 
 		dependencies(colName string, org originable) (dependencies, error)
 		getExprFor(s string) (sqlparser.Expr, error)
-		getTableSet(org originable) TableSet
+		setTableId(set TableSet)
+		getTableSets() (direct, recursive TableSet)
 	}
 
 	// ColumnInfo contains information about columns

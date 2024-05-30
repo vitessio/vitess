@@ -17,6 +17,7 @@ limitations under the License.
 package semantics
 
 import (
+	"fmt"
 	"strings"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -139,6 +140,7 @@ func (b *binder) bindColName(col *sqlparser.ColName) error {
 	}
 	b.recursive[col] = deps.recursive
 	b.direct[col] = deps.direct
+	fmt.Printf("%v, %v, %v\n", sqlparser.String(col), deps.direct, deps.recursive)
 	if deps.typ.Valid() {
 		b.typer.setTypeFor(col, deps.typ)
 	}
@@ -191,10 +193,11 @@ func (b *binder) bindCountStar(node *sqlparser.CountStar) error {
 	}
 	var ts TableSet
 	for _, tbl := range scope.tables {
-		ts = ts.Merge(tbl.getTableSet(b.org))
+		_, rec := tbl.getTableSets()
+		ts = ts.Merge(rec)
 	}
 	b.recursive[node] = ts
-	b.direct[node] = ts
+	b.direct[node] = EmptyTableSet()
 	return nil
 }
 
@@ -248,19 +251,19 @@ func (b *binder) canRewriteUsingJoin(deps dependency, node *sqlparser.ColName) b
 func (b *binder) setSubQueryDependencies(subq *sqlparser.Subquery) error {
 	currScope := b.scoper.currentScope()
 	subqRecursiveDeps := b.recursive.dependencies(subq)
-	subqDirectDeps := b.direct.dependencies(subq)
 
 	tablesToKeep := EmptyTableSet()
 	sco := currScope
 	for sco != nil {
 		for _, table := range sco.tables {
-			tablesToKeep = tablesToKeep.Merge(table.getTableSet(b.org))
+			_, rec := table.getTableSets()
+			tablesToKeep = tablesToKeep.Merge(rec)
 		}
 		sco = sco.parent
 	}
 
 	b.recursive[subq] = subqRecursiveDeps.KeepOnly(tablesToKeep)
-	b.direct[subq] = subqDirectDeps.KeepOnly(tablesToKeep)
+	b.direct[subq] = EmptyTableSet()
 	return nil
 }
 

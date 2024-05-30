@@ -118,9 +118,14 @@ func (v *vTableInfo) hasStar() bool {
 	return v.tables.NotEmpty()
 }
 
-// GetTables implements the TableInfo interface
-func (v *vTableInfo) getTableSet(_ originable) TableSet {
-	return v.tables
+// setTableId implements the TableInfo interface
+func (v *vTableInfo) setTableId(set TableSet) {
+	panic("vTableInfo shouldn't have a set table id")
+}
+
+// getTableSets implements the TableInfo interface
+func (v *vTableInfo) getTableSets() (direct, recursive TableSet) {
+	return EmptyTableSet(), v.tables
 }
 
 // GetExprFor implements the TableInfo interface
@@ -166,7 +171,8 @@ func selectExprsToInfos(
 			}
 		case *sqlparser.StarExpr:
 			for _, table := range tables {
-				ts = ts.Merge(table.getTableSet(org))
+				_, rec := table.getTableSets()
+				ts = ts.Merge(rec)
 				if !table.authoritative() {
 					isAuthoritative = false
 				}

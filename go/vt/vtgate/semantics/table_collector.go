@@ -107,7 +107,17 @@ func (etc *earlyTableCollector) handleTableName(tbl sqlparser.TableName, aet *sq
 	}
 
 	etc.done[aet] = tableInfo
-	etc.Tables = append(etc.Tables, tableInfo)
+	etc.addTableInfo(tableInfo)
+}
+
+func (etc *earlyTableCollector) addTableInfo(ti TableInfo) {
+	ti.setTableId(SingleTableSet(len(etc.Tables)))
+	etc.Tables = append(etc.Tables, ti)
+}
+
+func (tc *tableCollector) addTableInfo(ti TableInfo) {
+	ti.setTableId(SingleTableSet(len(tc.Tables)))
+	tc.Tables = append(tc.Tables, ti)
 }
 
 func (tc *tableCollector) up(cursor *sqlparser.Cursor) error {
@@ -188,7 +198,7 @@ func (tc *tableCollector) visitRowAlias(ins *sqlparser.Insert, rowAlias *sqlpars
 	}
 
 	derivedTable := buildDerivedTable(colNames, rowAlias, types)
-	tc.Tables = append(tc.Tables, derivedTable)
+	tc.addTableInfo(derivedTable)
 	current := tc.scoper.currentScope()
 	return current.addTable(derivedTable)
 }
@@ -293,8 +303,8 @@ func buildDerivedTable(colNames []string, rowAlias *sqlparser.RowAlias, types []
 			Expr: sqlparser.NewTableName(rowAlias.TableName.String()),
 		},
 		columnNames:     colNames,
-		tables:          SingleTableSet(0),
-		recursive:       deps,
+		recursive:       SingleTableSet(0),
+		recursiveCol:    deps,
 		isAuthoritative: true,
 		types:           types,
 	}
@@ -311,7 +321,7 @@ func (tc *tableCollector) handleTableName(node *sqlparser.AliasedTableExpr, t sq
 		if err != nil {
 			return err
 		}
-		tc.Tables = append(tc.Tables, tableInfo)
+		tc.addTableInfo(tableInfo)
 	}
 
 	scope := tc.scoper.currentScope()
@@ -378,7 +388,7 @@ func (tc *tableCollector) addSelectDerivedTable(
 	tableInfo.ASTNode = tableExpr
 	tableInfo.tableName = alias.String()
 
-	tc.Tables = append(tc.Tables, tableInfo)
+	tc.addTableInfo(tableInfo)
 	scope := tc.scoper.currentScope()
 	return scope.addTable(tableInfo)
 }
@@ -398,7 +408,7 @@ func (tc *tableCollector) addUnionDerivedTable(union *sqlparser.Union, node *sql
 	tableInfo.ASTNode = node
 	tableInfo.tableName = alias.String()
 
-	tc.Tables = append(tc.Tables, tableInfo)
+	tc.addTableInfo(tableInfo)
 	scope := tc.scoper.currentScope()
 	return scope.addTable(tableInfo)
 }

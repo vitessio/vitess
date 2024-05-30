@@ -28,15 +28,17 @@ import (
 
 // DerivedTable contains the information about the projection, tables involved in derived table.
 type DerivedTable struct {
+	id              TableSet
+	recursive       TableSet
 	tableName       string
 	ASTNode         *sqlparser.AliasedTableExpr
-	columnNames     []string
-	cols            []sqlparser.Expr
-	tables          TableSet
 	isAuthoritative bool
 
-	recursive []TableSet
-	types     []evalengine.Type
+	// Column specific information.
+	columnNames  []string
+	cols         []sqlparser.Expr
+	recursiveCol []TableSet
+	types        []evalengine.Type
 }
 
 type unionInfo struct {
@@ -57,7 +59,7 @@ func createDerivedTableForExpressions(
 	recursiveDeps []TableSet,
 	types []evalengine.Type,
 ) *DerivedTable {
-	vTbl := &DerivedTable{isAuthoritative: expanded, recursive: recursiveDeps, types: types}
+	vTbl := &DerivedTable{isAuthoritative: expanded, recursiveCol: recursiveDeps, types: types}
 	for i, selectExpr := range expressions {
 		switch expr := selectExpr.(type) {
 		case *sqlparser.AliasedExpr:
@@ -91,27 +93,28 @@ func handleAliasedExpr(vTbl *DerivedTable, expr *sqlparser.AliasedExpr, cols sql
 	}
 }
 
-func handleUnexpandedStarExpression(tables []TableInfo, vTbl *DerivedTable, org originable) {
+func handleUnexpandedStarExpression(tables []TableInfo, dt *DerivedTable, org originable) {
 	for _, table := range tables {
-		vTbl.tables = vTbl.tables.Merge(table.getTableSet(org))
+		_, rec := table.getTableSets()
+		dt.recursive = dt.recursive.Merge(rec)
 		if !table.authoritative() {
-			vTbl.isAuthoritative = false
+			dt.isAuthoritative = false
 		}
 	}
 }
 
 // dependencies implements the TableInfo interface
 func (dt *DerivedTable) dependencies(colName string, org originable) (dependencies, error) {
-	directDeps := org.tableSetFor(dt.ASTNode)
+	directDeps := dt.id
 	for i, name := range dt.columnNames {
 		if !strings.EqualFold(name, colName) {
 			continue
 		}
-		if len(dt.recursive) == 0 {
+		if len(dt.recursiveCol) == 0 {
 			// we have unexpanded columns and can't figure this out
 			return nil, ShardedError{Inner: vterrors.VT09015()}
 		}
-		recursiveDeps, qt := dt.recursive[i], dt.types[i]
+		recursiveDeps, qt := dt.recursiveCol[i], dt.types[i]
 
 		return createCertain(directDeps, recursiveDeps, qt), nil
 	}
@@ -120,7 +123,7 @@ func (dt *DerivedTable) dependencies(colName string, org originable) (dependenci
 		return &nothing{}, nil
 	}
 
-	return createUncertain(directDeps, dt.tables), nil
+	return createUncertain(directDeps, dt.recursive), nil
 }
 
 // IsInfSchema implements the TableInfo interface
@@ -164,9 +167,14 @@ func (dt *DerivedTable) getColumns(bool) []ColumnInfo {
 	return cols
 }
 
-// GetTables implements the TableInfo interface
-func (dt *DerivedTable) getTableSet(_ originable) TableSet {
-	return dt.tables
+// setTableId implements the TableInfo interface
+func (dt *DerivedTable) setTableId(set TableSet) {
+	dt.id = set
+}
+
+// getTableSets implements the TableInfo interface
+func (dt *DerivedTable) getTableSets() (direct, recursive TableSet) {
+	return dt.id, dt.recursive
 }
 
 // GetExprFor implements the TableInfo interface

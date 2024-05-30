@@ -1179,7 +1179,7 @@ func (e *expanderState) processColumnsFor(tbl TableInfo) error {
 	if err != nil {
 		return err
 	}
-	currTable := tbl.getTableSet(e.org)
+	currTable, _ := tbl.getTableSets()
 	usingCols := e.joinUsing[currTable]
 	if usingCols == nil {
 		usingCols = map[string]TableSet{}

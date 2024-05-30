@@ -28,6 +28,7 @@ import (
 
 // RealTable contains the alias table expr and vindex table
 type RealTable struct {
+	id                TableSet
 	dbName, tableName string
 	ASTNode           *sqlparser.AliasedTableExpr
 	Table             *vindexes.Table
@@ -53,9 +54,14 @@ func (r *RealTable) dependencies(colName string, org originable) (dependencies, 
 	return createUncertain(ts, ts), nil
 }
 
-// GetTables implements the TableInfo interface
-func (r *RealTable) getTableSet(org originable) TableSet {
-	return org.tableSetFor(r.ASTNode)
+// setTableId implements the TableInfo interface
+func (r *RealTable) setTableId(ts TableSet) {
+	r.id = ts
+}
+
+// getTableSets implements the TableInfo interface
+func (r *RealTable) getTableSets() (direct, recursive TableSet) {
+	return r.id, r.id
 }
 
 // GetExprFor implements the TableInfo interface

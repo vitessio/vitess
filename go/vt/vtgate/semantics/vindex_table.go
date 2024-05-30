@@ -36,9 +36,14 @@ func (v *VindexTable) dependencies(colName string, org originable) (dependencies
 	return v.Table.dependencies(colName, org)
 }
 
-// GetTables implements the TableInfo interface
-func (v *VindexTable) getTableSet(org originable) TableSet {
-	return v.Table.getTableSet(org)
+// setTableId implements the TableInfo interface
+func (v *VindexTable) setTableId(set TableSet) {
+	v.Table.setTableId(set)
+}
+
+// getTableSets implements the TableInfo interface
+func (v *VindexTable) getTableSets() (direct, recursive TableSet) {
+	return v.Table.getTableSets()
 }
 
 // GetExprFor implements the TableInfo interface
