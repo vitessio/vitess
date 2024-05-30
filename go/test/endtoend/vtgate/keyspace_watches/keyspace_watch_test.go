@@ -48,7 +48,7 @@ var (
 		PRIMARY KEY (id)
 	) Engine=InnoDB;`
 	vschemaDDL      = "alter vschema create vindex test_vdx using hash"
-	vschemaDDLError = fmt.Sprintf("Error 1105: cannot perform Update on keyspaces/%s/VSchema as the topology server connection is read-only",
+	vschemaDDLError = fmt.Sprintf("Error 1105 (HY000): cannot perform Update on keyspaces/%s/VSchema as the topology server connection is read-only",
 		keyspaceUnshardedName)
 )
 
