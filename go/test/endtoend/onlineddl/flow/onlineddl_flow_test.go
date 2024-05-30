@@ -237,8 +237,6 @@ func TestSchemaChange(t *testing.T) {
 						_, statusCode, err := throttlerCheck(primaryTablet.VttabletProcess, throttlerapp.OnlineDDLName)
 						assert.NoError(t, err)
 						throttleWorkload.Store(statusCode != http.StatusOK)
-						t.Logf("throttleWorkload: %v", throttleWorkload.Load())
-						fmt.Println("throttleWorkload: ", throttleWorkload.Load())
 						select {
 						case <-ticker.C:
 						case <-workloadCtx.Done():
