@@ -117,8 +117,21 @@ func TestBuildPlayerJoinPlan(t *testing.T) {
 		),
 	}
 	_ = copyState
+	dbClient := binlogplayer.NewMockDBClient(t)
+	defer dbClient.Close()
+	vdbClient2 := newVDBClient(dbClient, binlogplayer.NewStats())
+	defer vdbClient2.Close()
+	dbClient.AddInvariant("select * from t12", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"t1id|name|t2id|company",
+			"int64|varchar|int64|varchar",
+		),
+		"1|name1|1|company1",
+	))
+
 	for _, tcase := range testcases {
-		plan, err := buildReplicatorPlanForJoin(getSource(tcase.input), PrimaryKeyInfos, nil, binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser(), tcase.tables)
+		plan, err := buildReplicatorPlanForJoin(getSource(tcase.input), PrimaryKeyInfos, nil,
+			binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser(), vdbClient2, tcase.tables)
 		gotErr := ""
 		if err != nil {
 			gotErr = err.Error()

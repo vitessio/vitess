@@ -30,10 +30,16 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+)
+
+var (
+	// The error to return when we have detected a stall in the vplayer.
+	ErrVPlayerStalled = fmt.Errorf("progress stalled; vplayer was unable to replicate the transaction in a timely manner; examine the target mysqld instance health and the replicated queries' EXPLAIN output to see why queries are taking unusually long")
 )
 
 // vplayer replays binlog events by pulling them from a vstreamer.
@@ -148,7 +154,7 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 			return nil, vr.dbClient.AddQueryToTrxBatch(sql) // Should become part of the trx batch
 		}
 		commitFunc = func() error {
-			return vr.dbClient.CommitTrxQueryBatch() // Commit the current trx batch
+			return vr.dbClient.CommitTrxQueryBatch()
 		}
 		vr.dbClient.maxBatchSize = maxAllowedPacket
 	}
@@ -179,18 +185,20 @@ func (vp *vplayer) play(ctx context.Context) error {
 		}
 		return nil
 	}
-	log.Infof("rules for filter are %v", vp.vr.source.Filter.Rules)
-	tables, err := vttablet.GetJoinTables(vp.vr.vre.env.Parser(), vp.vr.source.Filter.Rules[0].Filter)
+
+	joinTables, err := vttablet.GetJoinTables(vp.vr.vre.env.Parser(), vp.vr.source.Filter.Rules[0].Filter)
 	if err != nil {
 		return err
 	}
 	var plan *ReplicatorPlan
-	if len(tables) > 1 {
-		plan, err = buildReplicatorPlanForJoin(vp.vr.source, vp.vr.colInfoMap, vp.copyState, vp.vr.stats, vp.vr.vre.env.CollationEnv(), vp.vr.vre.env.Parser(), tables)
-	} else {
+	if len(joinTables) == 0 {
 		plan, err = buildReplicatorPlan(vp.vr.source, vp.vr.colInfoMap, vp.copyState, vp.vr.stats, vp.vr.vre.env.CollationEnv(), vp.vr.vre.env.Parser())
+	} else {
+		plan, err = buildReplicatorPlanForJoin(vp.vr.source, vp.vr.colInfoMap, vp.copyState, vp.vr.stats, vp.vr.vre.env.CollationEnv(), vp.vr.vre.env.Parser(), vp.vr.dbClient, joinTables)
+		for tableName, tablePlan := range plan.TablePlans {
+			vp.tablePlans[tableName] = tablePlan
+		}
 	}
-	log.Infof("new rules for filter are %v", vp.vr.source.Filter.Rules)
 	if err != nil {
 		vp.vr.stats.ErrorCounts.Add([]string{"Plan"}, 1)
 		return err
@@ -270,7 +278,6 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 
 	streamErr := make(chan error, 1)
 	go func() {
-		log.Infof("Starting VReplication vstream id: %v, startPos: %v, stop: %v, filter: %v", vp.vr.id, vp.startPos, vp.stopPos, vp.replicatorPlan.VStreamFilter)
 		streamErr <- vp.vr.sourceVStreamer.VStream(ctx, replication.EncodePosition(vp.startPos), nil, vp.replicatorPlan.VStreamFilter, func(events []*binlogdatapb.VEvent) error {
 			return relay.Send(events)
 		})
@@ -334,7 +341,46 @@ func (vp *vplayer) applyStmtEvent(ctx context.Context, event *binlogdatapb.VEven
 	return fmt.Errorf("filter rules are not supported for SBR replication: %v", vp.vr.source.Filter.GetRules())
 }
 
+func (vp *vplayer) applyRowEventForJoin(ctx context.Context, rowEvent *binlogdatapb.RowEvent) error {
+	tplan := vp.tablePlans[vp.replicatorPlan.joinPlan.TableName]
+	if tplan == nil {
+		log.Infof("No table plan found for join table %s", vp.replicatorPlan.joinPlan.TableName)
+		log.Infof("Tables plans are %q", vp.tablePlans)
+		return fmt.Errorf("unexpected event on table %s", vp.replicatorPlan.joinPlan.TableName)
+	}
+	applyFunc := func(sql string) (*sqltypes.Result, error) {
+		stats := NewVrLogStats("ROWCHANGE")
+		start := time.Now()
+		qr, err := vp.query(ctx, sql)
+		log.Infof("Applying row change for table %s, sql is %s, result is %q, error %v",
+			rowEvent.TableName, sql, qr, err)
+		vp.vr.stats.QueryCount.Add(vp.phase, 1)
+		vp.vr.stats.QueryTimings.Record(vp.phase, start)
+		stats.Send(sql)
+		return qr, err
+	}
+	for _, change := range rowEvent.RowChanges {
+		log.Infof("Applying row change for table %s, table plans are %q", rowEvent.TableName, vp.tablePlans)
+		if _, err := tplan.applyChangeForJoin(rowEvent.TableName, vp.tablePlans[rowEvent.TableName], change, applyFunc); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.RowEvent) error {
+	if vp.replicatorPlan.joinPlan != nil {
+		if rowEvent.TableName == vp.replicatorPlan.joinPlan.MainTableName {
+			log.Infof("Join plan detected for table %s, main table %s", rowEvent.TableName, vp.replicatorPlan.joinPlan.MainTableName)
+			return vp.applyRowEventForJoin(ctx, rowEvent)
+		} else {
+			log.Infof("Ignoring row event for table %s, main table %s", rowEvent.TableName, vp.replicatorPlan.joinPlan.MainTableName)
+
+			return nil
+		}
+	}
+
 	if err := vp.updateFKCheck(ctx, rowEvent.Flags); err != nil {
 		return err
 	}
@@ -370,40 +416,21 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 	}
 
 	for _, change := range rowEvent.RowChanges {
-		if vp.replicatorPlan.joinPlan != nil {
-			switch {
-			case change.Before != nil && change.After != nil:
-				log.Infof("Update row change: %v", change)
-			case change.Before != nil && change.After == nil:
-				log.Infof("Delete row change: %v", change)
-			case change.Before == nil && change.After != nil:
-				vals := sqltypes.MakeRowTrusted(tplan.Fields, change.After)
-				val, err := vals[0].ToInt64()
-				if err != nil {
-					log.Infof("Error converting id to int %v", err)
-				}
-				log.Infof("Insert row change for table %v, id %v, query %s", tplan.TargetName, val, tplan.Insert.Query)
-			default:
-				log.Infof("Unknown row change: %v", change)
-			}
-			return nil
-		} else {
-			log.Infof("Applying row change, no JOIN: %v", change)
-			if _, err := tplan.applyChange(change, applyFunc); err != nil {
-				return err
-			}
+		if _, err := tplan.applyChange(change, applyFunc); err != nil {
+			return err
 		}
 	}
 
 	return nil
 }
 
+// updatePos should get called at a minimum of vreplicationMinimumHeartbeatUpdateInterval.
 func (vp *vplayer) updatePos(ctx context.Context, ts int64) (posReached bool, err error) {
-	vp.numAccumulatedHeartbeats = 0
 	update := binlogplayer.GenerateUpdatePos(vp.vr.id, vp.pos, time.Now().Unix(), ts, vp.vr.stats.CopyRowCount.Get(), vreplicationStoreCompressedGTID)
 	if _, err := vp.query(ctx, update); err != nil {
 		return false, fmt.Errorf("error %v updating position", err)
 	}
+	vp.numAccumulatedHeartbeats = 0
 	vp.unsavedEvent = nil
 	vp.timeLastSaved = time.Now()
 	vp.vr.stats.SetLastPosition(vp.pos)
@@ -430,8 +457,16 @@ func (vp *vplayer) recordHeartbeat() error {
 	if !vp.mustUpdateHeartbeat() {
 		return nil
 	}
+	if err := vp.vr.updateHeartbeatTime(tm); err != nil {
+		return vterrors.Wrapf(ErrVPlayerStalled, "failed to record heartbeat: %v", err)
+	}
+	// Only reset the pending heartbeat count if the update was successful.
+	// Otherwise the vplayer may not actually be making progress and nobody
+	// is aware of it -- resulting in the com_binlog_dump connection on the
+	// source that is managed by the binlog_player getting closed by mysqld
+	// when the source_net_timeout is hit.
 	vp.numAccumulatedHeartbeats = 0
-	return vp.vr.updateHeartbeatTime(tm)
+	return nil
 }
 
 // applyEvents is the main thread that applies the events. It has the following use
@@ -469,7 +504,7 @@ func (vp *vplayer) recordHeartbeat() error {
 // current position to be saved.
 //
 // In order to handle the above use cases, we use an implicit transaction scheme:
-// A BEGIN does not really start a transaction. Ony a ROW event does. With this
+// A BEGIN does not really start a transaction. Only a ROW event does. With this
 // approach, no transaction gets started if an empty one arrives. If a we receive
 // a commit, and a we are not in a transaction, we infer that the transaction was
 // empty, and remember it as an unsaved event. The next GTID event will reset the
@@ -528,6 +563,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 				return nil
 			}
 		}
+
 		for i, events := range items {
 			for j, event := range events {
 				if event.Timestamp != 0 {
@@ -557,7 +593,17 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 				if err := vp.applyEvent(ctx, event, mustSave); err != nil {
 					if err != io.EOF {
 						vp.vr.stats.ErrorCounts.Add([]string{"Apply"}, 1)
-						log.Errorf("Error applying event: %s", err.Error())
+						var table, tableLogMsg string
+						switch {
+						case event.GetFieldEvent() != nil:
+							table = event.GetFieldEvent().TableName
+						case event.GetRowEvent() != nil:
+							table = event.GetRowEvent().TableName
+						}
+						if table != "" {
+							tableLogMsg = fmt.Sprintf(" for table %s", table)
+						}
+						log.Errorf("Error applying event%s: %s", tableLogMsg, err.Error())
 					}
 					return err
 				}
@@ -629,7 +675,6 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			return io.EOF
 		}
 	case binlogdatapb.VEventType_FIELD:
-		log.Infof("Applying event: %v", event)
 		if err := vp.vr.dbClient.Begin(); err != nil {
 			return err
 		}
@@ -659,7 +704,6 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			stats.Send(sql)
 		}
 	case binlogdatapb.VEventType_ROW:
-		log.Infof("Applying event: %v", event)
 		// This player is configured for row based replication
 		if err := vp.vr.dbClient.Begin(); err != nil {
 			return err
@@ -668,7 +712,8 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			log.Infof("Error applying row event: %s", err.Error())
 			return err
 		}
-		// Row event is logged AFTER RowChanges are applied so as to calculate the total elapsed time for the Row event
+		// Row event is logged AFTER RowChanges are applied so as to calculate the total elapsed
+		// time for the Row event.
 		stats.Send(fmt.Sprintf("%v", event.RowEvent))
 	case binlogdatapb.VEventType_OTHER:
 		if vp.vr.dbClient.InTransaction {

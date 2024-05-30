@@ -725,7 +725,7 @@ func expectQueryResult(t *testing.T, query string, values [][]string) {
 func customExpectData(t *testing.T, table string, values [][]string, exec func(ctx context.Context, query string) (*sqltypes.Result, error)) {
 	t.Helper()
 
-	const timeout = 30 * time.Second
+	const timeout = 1 * time.Second
 	const tick = 100 * time.Millisecond
 
 	var query string
@@ -752,7 +752,7 @@ func customExpectData(t *testing.T, table string, values [][]string, exec func(c
 			if err == nil {
 				return
 			}
-			log.Errorf("data mismatch: %v, retrying", err)
+			// log.Errorf("data mismatch: %v, retrying", err)
 			time.Sleep(tick)
 		}
 	}

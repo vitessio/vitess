@@ -119,6 +119,7 @@ const (
 )
 
 func buildReplicatorPlan(source *binlogdatapb.BinlogSource, colInfoMap map[string][]*ColumnInfo, copyState map[string]*sqltypes.Result, stats *binlogplayer.Stats, collationEnv *collations.Environment, parser *sqlparser.Parser) (*ReplicatorPlan, error) {
+	log.Infof("In buildReplicatorPlan")
 	filter := source.Filter
 	plan := &ReplicatorPlan{
 		VStreamFilter: &binlogdatapb.Filter{FieldEventMode: filter.FieldEventMode},
@@ -170,8 +171,9 @@ Need to create insert for target table
 */
 func buildReplicatorPlanForJoin(source *binlogdatapb.BinlogSource, colInfoMap map[string][]*ColumnInfo,
 	copyState map[string]*sqltypes.Result, stats *binlogplayer.Stats, collationEnv *collations.Environment,
-	parser *sqlparser.Parser, tables []string) (*ReplicatorPlan, error) {
+	parser *sqlparser.Parser, dbClient *vdbClient, tables []string) (*ReplicatorPlan, error) {
 
+	log.Infof("In buildReplicatorPlanForJoin")
 	filter := source.Filter
 	joinPlan := &ReplicatorJoinPlan{
 		Tables: tables,
@@ -190,6 +192,8 @@ func buildReplicatorPlanForJoin(source *binlogdatapb.BinlogSource, colInfoMap ma
 
 	plan.VStreamFilter = source.Filter
 	view := source.Filter.Rules[0].Match
+	joinPlan.TableName = view
+	joinPlan.MainTableName = tables[0]
 	query := source.Filter.Rules[0].Filter
 	log.Infof("View, query %s %s", view, query)
 	tablePlan := &TablePlan{
@@ -228,9 +232,7 @@ func buildReplicatorPlanForJoin(source *binlogdatapb.BinlogSource, colInfoMap ma
 		return nil, err
 	}
 	tpb.pkCols = append(tpb.pkCols, tpb.colExprs[0])
-	insert := tpb.generateInsertStatement()
 	tablePlan.PKReferences = []string{tpb.colExprs[0].colName.String()}
-	plan.TablePlans[view] = tablePlan
 
 	tableColumns := make(map[string][]*ViewColumn)
 
@@ -263,18 +265,51 @@ func buildReplicatorPlanForJoin(source *binlogdatapb.BinlogSource, colInfoMap ma
 		log.Infof("table %s, column %v", table, cols)
 	}
 
+	qr, err := dbClient.ExecuteFetch("select * from "+view, 1)
+	tablePlan.Fields = qr.Fields
+	insert := generateInsertForJoin(view, query, tablePlan.Fields)
+	log.Infof("Insert for Join is %+q", insert)
 	updates := generateUpdatesForJoin(view, tableColumns)
 	tablePlan.JoinPlan = &TableJoinPlan{
-		Insert:  insert,
-		Updates: updates,
+		MainTable:    tables[0],
+		TableColumns: &tableColumns,
+		Insert:       insert,
+		Updates:      updates,
 	}
+	plan.VStreamFilter.Rules[0].Match = fmt.Sprintf("/\\b(%s)\\b", strings.Join(plan.joinPlan.Tables, "|"))
 	log.Infof("Updates %+q", updates)
+	plan.TablePlans[view] = tablePlan
+	log.Infof("Added table plan for view %s", view)
+	for _, tableName := range tables {
+		rule := &binlogdatapb.Rule{
+			Match: tableName,
+		}
+		tablePlan, err := buildTablePlan(tableName, rule, colInfos, nil, stats, source, collationEnv, parser)
+		if err != nil {
+			return nil, err
+		}
+		plan.TablePlans[tableName] = tablePlan
+	}
 	return plan, nil
 }
 
 type ViewColumn struct {
 	SourceColumnName string
 	ViewColumnName   string
+}
+
+func generateInsertForJoin(view string, viewQuery string, fields []*querypb.Field) *sqlparser.ParsedQuery {
+	buf := sqlparser.NewTrackedBuffer(nil)
+	buf.Myprintf("insert into %v (", sqlparser.NewIdentifierCS(view))
+	separator := ""
+	for _, field := range fields {
+		buf.Myprintf("%s%v", separator, sqlparser.NewIdentifierCI(field.Name))
+		separator = ","
+	}
+	buf.Myprintf(") ")
+	buf.Myprintf("%s", viewQuery)
+	return buf.ParsedQuery()
+
 }
 
 func generateUpdatesForJoin(view string, viewColumns map[string][]*ViewColumn) map[string]*sqlparser.ParsedQuery {
