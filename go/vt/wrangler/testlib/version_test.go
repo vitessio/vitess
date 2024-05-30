@@ -27,10 +27,11 @@ import (
 
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
-	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/wrangler"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -70,8 +71,8 @@ func TestVersion(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
-	vp := NewVtctlPipe(t, ts)
+	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
+	vp := NewVtctlPipe(ctx, t, ts)
 	defer vp.Close()
 
 	// couple tablets is enough
@@ -93,9 +94,9 @@ func TestVersion(t *testing.T) {
 	sourceReplica.FakeMysqlDaemon.SetReplicationSourceInputs = append(sourceReplica.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(sourcePrimary.Tablet))
 	sourceReplica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		// These 3 statements come from tablet startup
-		"STOP SLAVE",
-		"FAKE SET MASTER",
-		"START SLAVE",
+		"STOP REPLICA",
+		"FAKE SET SOURCE",
+		"START REPLICA",
 	}
 	sourceReplica.StartActionLoop(t, wr)
 	sourceReplica.HTTPServer.Handler.(*http.ServeMux).HandleFunc("/debug/vars", expvarHandler(&sourceReplicaGitRev))

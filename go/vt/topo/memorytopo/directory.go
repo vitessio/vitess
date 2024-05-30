@@ -27,6 +27,8 @@ import (
 
 // ListDir is part of the topo.Conn interface.
 func (c *Conn) ListDir(ctx context.Context, dirPath string, full bool) ([]topo.DirEntry, error) {
+	c.factory.callstats.Add([]string{"ListDir"}, 1)
+
 	if err := c.dial(ctx); err != nil {
 		return nil, err
 	}
@@ -36,6 +38,9 @@ func (c *Conn) ListDir(ctx context.Context, dirPath string, full bool) ([]topo.D
 
 	if c.factory.err != nil {
 		return nil, c.factory.err
+	}
+	if err := c.factory.getOperationError(ListDir, dirPath); err != nil {
+		return nil, err
 	}
 
 	isRoot := false

@@ -198,6 +198,7 @@ func TestParseDDLStrategy(t *testing.T) {
 		allowForeignKeys     bool
 		analyzeTable         bool
 		cutOverThreshold     time.Duration
+		forceCutOverAfter    time.Duration
 		expireArtifacts      time.Duration
 		runtimeOptions       string
 		expectError          string
@@ -321,6 +322,25 @@ func TestParseDDLStrategy(t *testing.T) {
 			cutOverThreshold: 5 * time.Minute,
 		},
 		{
+			strategyVariable:  "vitess --force-cut-over-after=3m",
+			strategy:          DDLStrategyVitess,
+			options:           "--force-cut-over-after=3m",
+			runtimeOptions:    "",
+			forceCutOverAfter: 3 * time.Minute,
+		},
+		{
+			strategyVariable: "vitess --force-cut-over-after=r3m",
+			strategy:         DDLStrategyVitess,
+			runtimeOptions:   "",
+			expectError:      "time: invalid duration",
+		},
+		{
+			strategyVariable: "gh-ost --force-cut-over-after=3m",
+			strategy:         DDLStrategyVitess,
+			runtimeOptions:   "",
+			expectError:      "--force-cut-over-after is only valid in 'vitess' strategy",
+		},
+		{
 			strategyVariable: "vitess --retain-artifacts=4m",
 			strategy:         DDLStrategyVitess,
 			options:          "--retain-artifacts=4m",
@@ -338,14 +358,12 @@ func TestParseDDLStrategy(t *testing.T) {
 		{
 			strategyVariable: "vitess --alow-concrrnt", // intentional typo
 			strategy:         DDLStrategyVitess,
-			options:          "",
 			runtimeOptions:   "",
 			expectError:      "invalid flags",
 		},
 		{
 			strategyVariable: "vitess --declarative --max-load=Threads_running=100",
 			strategy:         DDLStrategyVitess,
-			options:          "--declarative --max-load=Threads_running=100",
 			runtimeOptions:   "--max-load=Threads_running=100",
 			expectError:      "invalid flags",
 		},
@@ -366,12 +384,14 @@ func TestParseDDLStrategy(t *testing.T) {
 			assert.Equal(t, ts.isPostponeLaunch, setting.IsPostponeLaunch())
 			assert.Equal(t, ts.isAllowConcurrent, setting.IsAllowConcurrent())
 			assert.Equal(t, ts.fastOverRevertible, setting.IsPreferInstantDDL())
-			assert.Equal(t, ts.fastRangeRotation, setting.IsFastRangeRotationFlag())
 			assert.Equal(t, ts.allowForeignKeys, setting.IsAllowForeignKeysFlag())
 			assert.Equal(t, ts.analyzeTable, setting.IsAnalyzeTableFlag())
 			cutOverThreshold, err := setting.CutOverThreshold()
 			assert.NoError(t, err)
 			assert.Equal(t, ts.cutOverThreshold, cutOverThreshold)
+			forceCutOverAfter, err := setting.ForceCutOverAfter()
+			assert.NoError(t, err)
+			assert.Equal(t, ts.forceCutOverAfter, forceCutOverAfter)
 
 			runtimeOptions := strings.Join(setting.RuntimeOptions(), " ")
 			assert.Equal(t, ts.runtimeOptions, runtimeOptions)

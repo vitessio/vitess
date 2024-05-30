@@ -19,7 +19,9 @@ package vtgate
 import (
 	"context"
 	"io"
+	"runtime/debug"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
@@ -186,7 +188,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 				}
 			}
 
-			qs, err = getQueryService(rs, info, session, false)
+			qs, err = getQueryService(ctx, rs, info, session, false)
 			if err != nil {
 				return nil, err
 			}
@@ -298,11 +300,11 @@ func checkAndResetShardSession(info *shardActionInfo, err error, session *SafeSe
 	return retry
 }
 
-func getQueryService(rs *srvtopo.ResolvedShard, info *shardActionInfo, session *SafeSession, skipReset bool) (queryservice.QueryService, error) {
+func getQueryService(ctx context.Context, rs *srvtopo.ResolvedShard, info *shardActionInfo, session *SafeSession, skipReset bool) (queryservice.QueryService, error) {
 	if info.alias == nil {
 		return rs.Gateway, nil
 	}
-	qs, err := rs.Gateway.QueryServiceByAlias(info.alias, rs.Target)
+	qs, err := rs.Gateway.QueryServiceByAlias(ctx, info.alias, rs.Target)
 	if err == nil || skipReset {
 		return qs, err
 	}
@@ -384,7 +386,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 				}
 			}
 
-			qs, err = getQueryService(rs, info, session, false)
+			qs, err = getQueryService(ctx, rs, info, session, false)
 			if err != nil {
 				return nil, err
 			}
@@ -603,6 +605,12 @@ func (stc *ScatterConn) multiGo(
 	return allErrors
 }
 
+// panicData is used to capture panics during parallel execution.
+type panicData struct {
+	p     any
+	trace []byte
+}
+
 // multiGoTransaction performs the requested 'action' on the specified
 // ResolvedShards in parallel. For each shard, if the requested
 // session is in a transaction, it opens a new transactions on the connection,
@@ -660,15 +668,28 @@ func (stc *ScatterConn) multiGoTransaction(
 			oneShard(rs, i)
 		}
 	} else {
+		var panicRecord atomic.Value
 		var wg sync.WaitGroup
 		for i, rs := range rss {
 			wg.Add(1)
 			go func(rs *srvtopo.ResolvedShard, i int) {
 				defer wg.Done()
+				defer func() {
+					if r := recover(); r != nil {
+						panicRecord.Store(&panicData{
+							p:     r,
+							trace: debug.Stack(),
+						})
+					}
+				}()
 				oneShard(rs, i)
 			}(rs, i)
 		}
 		wg.Wait()
+		if pr, ok := panicRecord.Load().(*panicData); ok {
+			log.Errorf("caught a panic during parallel execution:\n%s", string(pr.trace))
+			panic(pr.p) // rethrow the captured panic in the main thread
+		}
 	}
 
 	if session.MustRollback() {
@@ -711,7 +732,7 @@ func (stc *ScatterConn) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedSha
 		_ = stc.txConn.ReleaseLock(ctx, session)
 		return nil, vterrors.Wrap(err, "Any previous held locks are released")
 	}
-	qs, err := getQueryService(rs, info, nil, true)
+	qs, err := getQueryService(ctx, rs, info, nil, true)
 	if err != nil {
 		return nil, err
 	}

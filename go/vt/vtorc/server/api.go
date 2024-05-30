@@ -45,6 +45,7 @@ const (
 	disableGlobalRecoveriesAPI    = "/api/disable-global-recoveries"
 	enableGlobalRecoveriesAPI     = "/api/enable-global-recoveries"
 	replicationAnalysisAPI        = "/api/replication-analysis"
+	databaseStateAPI              = "/api/database-state"
 	healthAPI                     = "/debug/health"
 	AggregatedDiscoveryMetricsAPI = "/api/aggregated-discovery-metrics"
 
@@ -60,6 +61,7 @@ var (
 		disableGlobalRecoveriesAPI,
 		enableGlobalRecoveriesAPI,
 		replicationAnalysisAPI,
+		databaseStateAPI,
 		healthAPI,
 		AggregatedDiscoveryMetricsAPI,
 	}
@@ -86,6 +88,8 @@ func (v *vtorcAPI) ServeHTTP(response http.ResponseWriter, request *http.Request
 		errantGTIDsAPIHandler(response, request)
 	case replicationAnalysisAPI:
 		replicationAnalysisAPIHandler(response, request)
+	case databaseStateAPI:
+		databaseStateAPIHandler(response)
 	case AggregatedDiscoveryMetricsAPI:
 		AggregatedDiscoveryMetricsAPIHandler(response, request)
 	default:
@@ -104,7 +108,7 @@ func getACLPermissionLevelForAPI(apiEndpoint string) string {
 		return acl.ADMIN
 	case replicationAnalysisAPI:
 		return acl.MONITORING
-	case healthAPI:
+	case healthAPI, databaseStateAPI:
 		return acl.MONITORING
 	}
 	return acl.ADMIN
@@ -117,7 +121,7 @@ func RegisterVTOrcAPIEndpoints() {
 	}
 }
 
-// returnAsJSON returns the argument received on the resposeWriter as a json object
+// returnAsJSON returns the argument received on the responseWriter as a json object
 func returnAsJSON(response http.ResponseWriter, code int, stuff any) {
 	response.Header().Set("Content-Type", "application/json; charset=utf-8")
 	response.WriteHeader(code)
@@ -164,6 +168,16 @@ func errantGTIDsAPIHandler(response http.ResponseWriter, request *http.Request) 
 		return
 	}
 	returnAsJSON(response, http.StatusOK, instances)
+}
+
+// databaseStateAPIHandler is the handler for the databaseStateAPI endpoint
+func databaseStateAPIHandler(response http.ResponseWriter) {
+	ds, err := inst.GetDatabaseState()
+	if err != nil {
+		http.Error(response, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writePlainTextResponse(response, ds, http.StatusOK)
 }
 
 // AggregatedDiscoveryMetricsAPIHandler is the handler for the discovery metrics endpoint
@@ -233,14 +247,10 @@ func replicationAnalysisAPIHandler(response http.ResponseWriter, request *http.R
 
 // healthAPIHandler is the handler for the healthAPI endpoint
 func healthAPIHandler(response http.ResponseWriter, request *http.Request) {
-	health, err := process.HealthTest()
-	if err != nil {
-		http.Error(response, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	health, discoveredOnce := process.HealthTest()
 	code := http.StatusOK
 	// If the process isn't healthy, or if the first discovery cycle hasn't completed, we return an internal server error.
-	if !health.Healthy || !health.DiscoveredOnce {
+	if !health.Healthy || !discoveredOnce {
 		code = http.StatusInternalServerError
 	}
 	returnAsJSON(response, code, health)

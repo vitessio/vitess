@@ -1,4 +1,4 @@
-name: Upgrade Downgrade Testing - Backups - Manual
+name: Backups - Manual - Upgrade Downgrade Testing
 on:
   push:
   pull_request:
@@ -10,34 +10,12 @@ concurrency:
 permissions: read-all
 
 jobs:
-  get_previous_release:
-    if: always()
-    name: Get Previous Release - Backups - Manual
-    runs-on: gh-hosted-runners-16cores-1
-    outputs:
-      previous_release: ${{ steps.output-previous-release-ref.outputs.previous_release_ref }}
-
-    steps:
-      - name: Check out to HEAD
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - name: Set output with latest release branch
-        id: output-previous-release-ref
-        run: |
-          previous_release_ref=$(./tools/get_previous_release.sh ${{github.base_ref}} ${{github.ref}})
-          echo $previous_release_ref
-          echo "previous_release_ref=${previous_release_ref}" >> $GITHUB_OUTPUT
 
   # This job usually execute in ± 20 minutes
   upgrade_downgrade_test_manual:
     timeout-minutes: 40
-    if: always() && (needs.get_previous_release.result == 'success')
     name: Run Upgrade Downgrade Test - Backups - Manual
     runs-on: gh-hosted-runners-16cores-1
-    needs:
-      - get_previous_release
 
     steps:
     - name: Skip CI
@@ -60,11 +38,21 @@ jobs:
     # Checkout to this build's commit
     - name: Checkout to commit's code
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set output with latest release branch
+      id: output-previous-release-ref
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      run: |
+        previous_release_ref=$(./tools/get_previous_release.sh ${{github.base_ref}} ${{github.ref}})
+        echo $previous_release_ref
+        echo "previous_release_ref=${previous_release_ref}" >> $GITHUB_OUTPUT
 
     - name: Check for changes in relevant files
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
-      uses: frouioui/paths-filter@main
+      uses: dorny/paths-filter@v3.0.1
       id: changes
       with:
         token: ''
@@ -82,16 +70,17 @@ jobs:
             - 'config/**'
             - 'bootstrap.sh'
             - '.github/workflows/upgrade_downgrade_test_backups_manual.yml'
+            - 'examples/**'
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v5
       with:
-        go-version: 1.21.3
+        go-version: 1.22.3
 
     - name: Set up python
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
 
     - name: Tune the OS
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -112,8 +101,8 @@ jobs:
         sudo rm -rf /etc/mysql
 
         # Install MySQL 8.0
-        sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 467B942D3A79BD29
-        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.24-1_all.deb
+        sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A8D3785C
+        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.29-1_all.deb
         echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
         sudo apt-get update
@@ -137,11 +126,11 @@ jobs:
         sudo apt-get install -y percona-xtrabackup-24
 
     # Checkout to the last release of Vitess
-    - name: Checkout to the other version's code (${{ needs.get_previous_release.outputs.previous_release }})
+    - name: Checkout to the other version's code (${{ steps.output-previous-release-ref.outputs.previous_release_ref }})
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
-        ref: ${{ needs.get_previous_release.outputs.previous_release }}
+        ref: ${{ steps.output-previous-release-ref.outputs.previous_release_ref }}
 
     - name: Get dependencies for the last release
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -161,7 +150,7 @@ jobs:
     # Checkout to this build's commit
     - name: Checkout to commit's code
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Get dependencies for this commit
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'

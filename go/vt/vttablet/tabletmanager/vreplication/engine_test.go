@@ -277,23 +277,7 @@ func TestEngineExec(t *testing.T) {
 		t.Errorf("stats are mismatched: %v, want %v", globalStats.controllers, vre.controllers)
 	}
 
-	// Test Delete of multiple rows
-
-	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
-	dbClient.ExpectRequest("select id from _vt.vreplication where id > 1", testSelectorResponse2, nil)
-	dbClient.ExpectRequest("begin", nil, nil)
-	dbClient.ExpectRequest("delete from _vt.vreplication where id in (1, 2)", testDMLResponse, nil)
-	dbClient.ExpectRequest("delete from _vt.copy_state where vrepl_id in (1, 2)", nil, nil)
-	dbClient.ExpectRequest("delete from _vt.post_copy_action where vrepl_id in (1, 2)", nil, nil)
-	dbClient.ExpectRequest("commit", nil, nil)
-
-	_, err = vre.Exec("delete from _vt.vreplication where id > 1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	dbClient.Wait()
-
-	// Test no delete
+	// Test simple delete.
 	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
 	dbClient.ExpectRequest("select id from _vt.vreplication where id = 3", &sqltypes.Result{}, nil)
 	_, err = vre.Exec("delete from _vt.vreplication where id = 3")
@@ -301,6 +285,21 @@ func TestEngineExec(t *testing.T) {
 		t.Fatal(err)
 	}
 	dbClient.Wait()
+
+	// Test unsafe writes of multiple rows, which we want to prevent.
+	unsafeQueries := []string{
+		"delete from _vt.vreplication",
+		"delete from _vt.vreplication where id > 1",
+		"delete from _vt.vreplication where message != 'FROZEN'",
+		"update _vt.vreplication set workflow = 'bad'",
+		"update _vt.vreplication set state = 'Stopped' where id > 1",
+		"update _vt.vreplication set message = '' where state == 'Running'",
+	}
+	for _, unsafeQuery := range unsafeQueries {
+		_, err = vre.Exec(unsafeQuery)
+		require.Error(t, err, "%s should fail", unsafeQuery)
+		dbClient.Wait()
+	}
 }
 
 func TestEngineBadInsert(t *testing.T) {
@@ -427,7 +426,8 @@ func TestWaitForPosError(t *testing.T) {
 
 	dbClient.ExpectRequest("select pos, state, message from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{}}}, nil)
 	err = vre.WaitForPos(context.Background(), 1, "MariaDB/0-1-1084")
-	want = "unexpected result: &{[] 0 0 [[]]  0 }"
+	want = "vreplication stream received an unexpected number of columns, got 0 instead of 3"
+
 	assert.EqualError(t, err, want, "WaitForPos:")
 
 	dbClient.ExpectRequest("select pos, state, message from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
@@ -436,7 +436,7 @@ func TestWaitForPosError(t *testing.T) {
 		sqltypes.NewVarBinary("MariaDB/0-1-1083"),
 	}}}, nil)
 	err = vre.WaitForPos(context.Background(), 1, "MariaDB/0-1-1084")
-	want = `unexpected result: &{[] 0 0 [[VARBINARY("MariaDB/0-1-1083")] [VARBINARY("MariaDB/0-1-1083")]]  0 }`
+	want = "vreplication stream received more rows than expected, got 2 instead of 1"
 	assert.EqualError(t, err, want, "WaitForPos:")
 }
 

@@ -21,6 +21,7 @@ import (
 	"sync"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -31,10 +32,11 @@ var _ Primitive = (*Projection)(nil)
 
 // Projection can evaluate expressions and project the results
 type Projection struct {
+	noTxNeeded
+
 	Cols  []string
 	Exprs []evalengine.Expr
 	Input Primitive
-	noTxNeeded
 }
 
 // RouteType implements the Primitive interface
@@ -74,7 +76,7 @@ func (p *Projection) TryExecute(ctx context.Context, vcursor VCursor, bindVars m
 		resultRows = append(resultRows, resultRow)
 	}
 	if wantfields {
-		result.Fields, err = p.evalFields(env, result.Fields)
+		result.Fields, err = p.evalFields(env, result.Fields, vcursor.ConnCollation())
 		if err != nil {
 			return nil, err
 		}
@@ -88,11 +90,14 @@ func (p *Projection) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
 	var once sync.Once
 	var fields []*querypb.Field
+	var mu sync.Mutex
 	return vcursor.StreamExecutePrimitive(ctx, p.Input, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		var err error
+		mu.Lock()
+		defer mu.Unlock()
 		if wantfields {
 			once.Do(func() {
-				fields, err = p.evalFields(env, qr.Fields)
+				fields, err = p.evalFields(env, qr.Fields, vcursor.ConnCollation())
 				if err != nil {
 					return
 				}
@@ -131,14 +136,14 @@ func (p *Projection) GetFields(ctx context.Context, vcursor VCursor, bindVars ma
 		return nil, err
 	}
 	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
-	qr.Fields, err = p.evalFields(env, qr.Fields)
+	qr.Fields, err = p.evalFields(env, qr.Fields, vcursor.ConnCollation())
 	if err != nil {
 		return nil, err
 	}
 	return qr, nil
 }
 
-func (p *Projection) evalFields(env *evalengine.ExpressionEnv, infields []*querypb.Field) ([]*querypb.Field, error) {
+func (p *Projection) evalFields(env *evalengine.ExpressionEnv, infields []*querypb.Field, coll collations.ID) ([]*querypb.Field, error) {
 	// TODO: once the evalengine becomes smart enough, we should be able to remove the
 	// dependency on these fields altogether
 	env.Fields = infields
@@ -149,15 +154,22 @@ func (p *Projection) evalFields(env *evalengine.ExpressionEnv, infields []*query
 		if err != nil {
 			return nil, err
 		}
-		fl := mysql.FlagsForColumn(typ.Type, typ.Coll)
-		if !sqltypes.IsNull(typ.Type) && !typ.Nullable {
+		fl := mysql.FlagsForColumn(typ.Type(), typ.Collation())
+		if !sqltypes.IsNull(typ.Type()) && !typ.Nullable() {
 			fl |= uint32(querypb.MySqlFlag_NOT_NULL_FLAG)
 		}
+		typCol := typ.Collation()
+		if sqltypes.IsTextOrBinary(typ.Type()) && typCol != collations.CollationBinaryID {
+			typCol = coll
+		}
+
 		fields = append(fields, &querypb.Field{
-			Name:    col,
-			Type:    typ.Type,
-			Charset: uint32(typ.Coll),
-			Flags:   fl,
+			Name:         col,
+			Type:         typ.Type(),
+			Charset:      uint32(typCol),
+			ColumnLength: uint32(typ.Size()),
+			Decimals:     uint32(typ.Scale()),
+			Flags:        fl,
 		})
 	}
 	return fields, nil

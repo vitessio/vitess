@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path"
 	"strconv"
 	"strings"
 	"syscall"
@@ -47,13 +48,14 @@ type topoFlags struct {
 }
 
 var (
-	basePort  int
-	config    vttest.Config
-	doSeed    bool
-	mycnf     string
-	protoTopo string
-	seed      vttest.SeedConfig
-	topo      topoFlags
+	basePort        int
+	config          vttest.Config
+	doSeed          bool
+	mycnf           string
+	protoTopo       string
+	seed            vttest.SeedConfig
+	topo            topoFlags
+	doCreateTCPUser bool
 )
 
 func (t *topoFlags) buildTopology() (*vttestpb.VTTestTopology, error) {
@@ -104,6 +106,7 @@ func New() (cmd *cobra.Command) {
 		Short:   "vttestserver allows users to spawn a self-contained Vitess server for local testing/CI.",
 		Args:    cobra.NoArgs,
 		PreRunE: servenv.CobraPreRunE,
+		Version: servenv.AppVersion.String(),
 		RunE:    run,
 	}
 
@@ -177,6 +180,9 @@ func New() (cmd *cobra.Command) {
 	cmd.Flags().StringVar(&config.MySQLBindHost, "mysql_bind_host", "localhost",
 		"which host to bind vtgate mysql listener to")
 
+	cmd.Flags().StringVar(&config.VtComboBindAddress, "vtcombo-bind-host", "localhost",
+		"which host to bind vtcombo servenv listener to")
+
 	cmd.Flags().StringVar(&mycnf, "extra_my_cnf", "",
 		"extra files to add to the config, separated by ':'")
 
@@ -216,24 +222,45 @@ func New() (cmd *cobra.Command) {
 	cmd.Flags().StringVar(&config.ExternalTopoGlobalRoot, "external_topo_global_root", "", "the path of the global topology data in the global topology server for vtcombo process")
 
 	cmd.Flags().DurationVar(&config.VtgateTabletRefreshInterval, "tablet_refresh_interval", 10*time.Second, "Interval at which vtgate refreshes tablet information from topology server.")
+
+	cmd.Flags().BoolVar(&doCreateTCPUser, "initialize-with-vt-dba-tcp", false, "If this flag is enabled, MySQL will be initialized with an additional user named vt_dba_tcp, who will have access via TCP/IP connection.")
+
+	cmd.Flags().BoolVar(&config.NoScatter, "no_scatter", false, "when set to true, the planner will fail instead of producing a plan that includes scatter queries")
 	acl.RegisterFlags(cmd.Flags())
 
 	return cmd
 }
 
-func newEnv() (env vttest.Environment, err error) {
-	if basePort != 0 {
+func newEnv() (env *vttest.LocalTestEnv, err error) {
+	if basePort == 0 {
+		env, err = vttest.NewLocalTestEnv(0)
+	} else {
 		if config.DataDir == "" {
 			env, err = vttest.NewLocalTestEnv(basePort)
-			if err != nil {
-				return
-			}
 		} else {
 			env, err = vttest.NewLocalTestEnvWithDirectory(basePort, config.DataDir)
-			if err != nil {
-				return
-			}
 		}
+	}
+	if err != nil {
+		return
+	}
+
+	if doCreateTCPUser {
+		// The original initFile does not have any users who can access through TCP/IP connection.
+		// Here we update the init file to create the user.
+		mysqlInitFile := env.InitDBFile
+		createUserCmd := `
+			# Admin user for TCP/IP connection with all privileges.
+			CREATE USER 'vt_dba_tcp'@'%';
+			GRANT ALL ON *.* TO 'vt_dba_tcp'@'%';
+			GRANT GRANT OPTION ON *.* TO 'vt_dba_tcp'@'%';
+		`
+		newInitFile := path.Join(env.Directory(), "init_db_with_vt_dba_tcp.sql")
+		err = vttest.WriteInitDBFile(mysqlInitFile, createUserCmd, newInitFile)
+		if err != nil {
+			return
+		}
+		env.InitDBFile = newInitFile
 	}
 
 	if protoTopo == "" {

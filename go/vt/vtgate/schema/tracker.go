@@ -19,10 +19,12 @@ package schema
 import (
 	"context"
 	"maps"
+	"slices"
 	"strings"
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -44,12 +46,15 @@ type (
 		mu     sync.Mutex
 		tables *tableMap
 		views  *viewMap
+		udfs   map[keyspaceStr][]string
 		ctx    context.Context
 		signal func() // a function that we'll call whenever we have new schema data
 
 		// map of keyspace currently tracked
 		tracked      map[keyspaceStr]*updateController
 		consumeDelay time.Duration
+
+		parser *sqlparser.Parser
 	}
 )
 
@@ -57,17 +62,21 @@ type (
 const defaultConsumeDelay = 1 * time.Second
 
 // NewTracker creates the tracker object.
-func NewTracker(ch chan *discovery.TabletHealth, enableViews bool) *Tracker {
+func NewTracker(ch chan *discovery.TabletHealth, enableViews, enableUDFs bool, parser *sqlparser.Parser) *Tracker {
 	t := &Tracker{
 		ctx:          context.Background(),
 		ch:           ch,
 		tables:       &tableMap{m: make(map[keyspaceStr]map[tableNameStr]*vindexes.TableInfo)},
 		tracked:      map[keyspaceStr]*updateController{},
 		consumeDelay: defaultConsumeDelay,
+		parser:       parser,
 	}
 
 	if enableViews {
-		t.views = &viewMap{m: map[keyspaceStr]map[viewNameStr]sqlparser.SelectStatement{}}
+		t.views = &viewMap{m: map[keyspaceStr]map[viewNameStr]sqlparser.SelectStatement{}, parser: parser}
+	}
+	if enableUDFs {
+		t.udfs = map[keyspaceStr][]string{}
 	}
 	return t
 }
@@ -79,6 +88,10 @@ func (t *Tracker) LoadKeyspace(conn queryservice.QueryService, target *querypb.T
 		return err
 	}
 	err = t.loadViews(conn, target)
+	if err != nil {
+		return err
+	}
+	err = t.loadUDFs(conn, target)
 	if err != nil {
 		return err
 	}
@@ -139,6 +152,34 @@ func (t *Tracker) loadViews(conn queryservice.QueryService, target *querypb.Targ
 		return err
 	}
 	log.Infof("finished loading views for keyspace %s. Found %d views", target.Keyspace, numViews)
+	return nil
+}
+
+func (t *Tracker) loadUDFs(conn queryservice.QueryService, target *querypb.Target) error {
+	if t.udfs == nil {
+		// This happens only when UDFs are not enabled.
+		return nil
+	}
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	var udfs []string
+	err := conn.GetSchema(t.ctx, target, querypb.SchemaTableType_UDFS, nil, func(schemaRes *querypb.GetSchemaResponse) error {
+		for _, udf := range schemaRes.Udfs {
+			if !udf.Aggregating {
+				continue
+			}
+			udfs = append(udfs, udf.Name)
+		}
+		return nil
+	})
+	if err != nil {
+		log.Errorf("error fetching new UDFs for %v: %w", target.Keyspace, err)
+		return err
+	}
+	t.udfs[target.Keyspace] = udfs
+	log.Infof("finished loading %d UDFs for keyspace %s", len(udfs), target.Keyspace)
 	return nil
 }
 
@@ -204,6 +245,9 @@ func (t *Tracker) GetColumns(ks string, tbl string) []vindexes.Column {
 	defer t.mu.Unlock()
 
 	tblInfo := t.tables.get(ks, tbl)
+	if tblInfo == nil {
+		return nil
+	}
 	return tblInfo.Columns
 }
 
@@ -214,6 +258,15 @@ func (t *Tracker) GetForeignKeys(ks string, tbl string) []*sqlparser.ForeignKeyD
 
 	tblInfo := t.tables.get(ks, tbl)
 	return tblInfo.ForeignKeys
+}
+
+// GetIndexes returns the indexes for table in the given keyspace.
+func (t *Tracker) GetIndexes(ks string, tbl string) []*sqlparser.IndexDefinition {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	tblInfo := t.tables.get(ks, tbl)
+	return tblInfo.Indexes
 }
 
 // Tables returns a map with the columns for all known tables in the keyspace
@@ -231,15 +284,26 @@ func (t *Tracker) Tables(ks string) map[string]*vindexes.TableInfo {
 
 // Views returns all known views in the keyspace with their definition.
 func (t *Tracker) Views(ks string) map[string]sqlparser.SelectStatement {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
 	if t.views == nil {
 		return nil
 	}
 
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	m := t.views.m[ks]
 	return maps.Clone(m)
+}
+
+func (t *Tracker) UDFs(ks string) []string {
+	if t.udfs == nil {
+		return nil
+	}
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	return slices.Clone(t.udfs[ks])
 }
 
 func (t *Tracker) updateSchema(th *discovery.TabletHealth) bool {
@@ -247,11 +311,20 @@ func (t *Tracker) updateSchema(th *discovery.TabletHealth) bool {
 	if th.Stats.TableSchemaChanged != nil {
 		success = t.updatedTableSchema(th)
 	}
-	if !success || th.Stats.ViewSchemaChanged == nil {
+	if !success {
+		return false
+	}
+
+	// there is view definition change in the tablet
+	if th.Stats.ViewSchemaChanged != nil {
+		success = t.updatedViewSchema(th)
+	}
+
+	if !success || !th.Stats.UdfsChanged {
 		return success
 	}
-	// there is view definition change in the tablet
-	return t.updatedViewSchema(th)
+
+	return t.loadUDFs(th.Conn, th.Target) == nil
 }
 
 func (t *Tracker) updatedTableSchema(th *discovery.TabletHealth) bool {
@@ -280,7 +353,7 @@ func (t *Tracker) updatedTableSchema(th *discovery.TabletHealth) bool {
 
 func (t *Tracker) updateTables(keyspace string, res map[string]string) {
 	for tableName, tableDef := range res {
-		stmt, err := sqlparser.Parse(tableDef)
+		stmt, err := t.parser.Parse(tableDef)
 		if err != nil {
 			log.Warningf("error parsing table definition for %s: %v", tableName, err)
 			continue
@@ -293,7 +366,7 @@ func (t *Tracker) updateTables(keyspace string, res map[string]string) {
 
 		cols := getColumns(ddl.TableSpec)
 		fks := getForeignKeys(ddl.TableSpec)
-		t.tables.set(keyspace, tableName, cols, fks)
+		t.tables.set(keyspace, tableName, cols, fks, ddl.TableSpec.Indexes)
 	}
 }
 
@@ -302,12 +375,20 @@ func getColumns(tblSpec *sqlparser.TableSpec) []vindexes.Column {
 	cols := make([]vindexes.Column, 0, len(tblSpec.Columns))
 	for _, column := range tblSpec.Columns {
 		colCollation := getColumnCollation(tblCollation, column)
+		size := ptr.Unwrap(column.Type.Length, 0)
+		scale := ptr.Unwrap(column.Type.Scale, 0)
+		nullable := ptr.Unwrap(column.Type.Options.Null, true)
 		cols = append(cols,
 			vindexes.Column{
 				Name:          column.Name,
 				Type:          column.Type.SQLType(),
 				CollationName: colCollation,
+				Default:       column.Type.Options.Default,
 				Invisible:     column.Type.Invisible(),
+				Size:          int32(size),
+				Scale:         int32(scale),
+				Nullable:      nullable,
+				Values:        column.Type.EnumValues,
 			})
 	}
 	return cols
@@ -343,7 +424,13 @@ func getTableCollation(tblSpec *sqlparser.TableSpec) string {
 
 func getColumnCollation(defaultCollation string, column *sqlparser.ColumnDefinition) string {
 	if column.Type.Options == nil || column.Type.Options.Collate == "" {
-		return defaultCollation
+		switch strings.ToLower(column.Type.Type) {
+		case "enum", "set", "text", "tinytext", "mediumtext", "longtext", "varchar", "char":
+			return defaultCollation
+		case "json":
+			return "utf8mb4_bin"
+		}
+		return "binary"
 	}
 	return column.Type.Options.Collate
 }
@@ -403,13 +490,13 @@ type tableMap struct {
 	m map[keyspaceStr]map[tableNameStr]*vindexes.TableInfo
 }
 
-func (tm *tableMap) set(ks, tbl string, cols []vindexes.Column, fks []*sqlparser.ForeignKeyDefinition) {
+func (tm *tableMap) set(ks, tbl string, cols []vindexes.Column, fks []*sqlparser.ForeignKeyDefinition, indexes []*sqlparser.IndexDefinition) {
 	m := tm.m[ks]
 	if m == nil {
 		m = make(map[tableNameStr]*vindexes.TableInfo)
 		tm.m[ks] = m
 	}
-	m[tbl] = &vindexes.TableInfo{Columns: cols, ForeignKeys: fks}
+	m[tbl] = &vindexes.TableInfo{Columns: cols, ForeignKeys: fks, Indexes: indexes}
 }
 
 func (tm *tableMap) get(ks, tbl string) *vindexes.TableInfo {
@@ -438,7 +525,8 @@ func (t *Tracker) clearKeyspaceTables(ks string) {
 }
 
 type viewMap struct {
-	m map[keyspaceStr]map[viewNameStr]sqlparser.SelectStatement
+	m      map[keyspaceStr]map[viewNameStr]sqlparser.SelectStatement
+	parser *sqlparser.Parser
 }
 
 func (vm *viewMap) set(ks, tbl, sql string) {
@@ -447,7 +535,7 @@ func (vm *viewMap) set(ks, tbl, sql string) {
 		m = make(map[tableNameStr]sqlparser.SelectStatement)
 		vm.m[ks] = m
 	}
-	stmt, err := sqlparser.Parse(sql)
+	stmt, err := vm.parser.Parse(sql)
 	if err != nil {
 		log.Warningf("ignoring view '%s', parsing error in view definition: '%s'", tbl, sql)
 		return

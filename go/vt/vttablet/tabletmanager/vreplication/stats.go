@@ -59,10 +59,12 @@ type vrStats struct {
 	mu          sync.Mutex
 	isOpen      bool
 	controllers map[int32]*controller
+
+	ThrottledCount *stats.Counter
 }
 
 func (st *vrStats) register() {
-
+	st.ThrottledCount = stats.NewCounter("", "")
 	stats.NewGaugeFunc("VReplicationStreamCount", "Number of vreplication streams", st.numControllers)
 	stats.NewGaugeFunc("VReplicationLagSecondsMax", "Max vreplication seconds behind primary", st.maxReplicationLagSeconds)
 	stats.NewStringMapFuncWithMultiLabels(
@@ -255,6 +257,39 @@ func (st *vrStats) register() {
 		})
 
 	stats.NewGaugesFuncWithMultiLabels(
+		"VReplicationBulkQueryCount",
+		"vreplication vplayer queries with consolidated row events counts per DML type per stream",
+		[]string{"source_keyspace", "source_shard", "workflow", "counts", "dml_type"},
+		func() map[string]int64 {
+			st.mu.Lock()
+			defer st.mu.Unlock()
+			result := make(map[string]int64, len(st.controllers))
+			for _, ct := range st.controllers {
+				for label, count := range ct.blpStats.BulkQueryCount.Counts() {
+					if label == "" {
+						continue
+					}
+					result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)+"."+label] = count
+				}
+			}
+			return result
+		})
+	stats.NewCounterFunc(
+		"VReplicationBulkQueryCountTotal",
+		"vreplication vplayer queries with consolidated row events counts aggregated across all streams",
+		func() int64 {
+			st.mu.Lock()
+			defer st.mu.Unlock()
+			result := int64(0)
+			for _, ct := range st.controllers {
+				for _, count := range ct.blpStats.BulkQueryCount.Counts() {
+					result += count
+				}
+			}
+			return result
+		})
+
+	stats.NewGaugesFuncWithMultiLabels(
 		"VReplicationNoopQueryCount",
 		"vreplication noop query counts per stream",
 		[]string{"source_keyspace", "source_shard", "workflow", "counts", "phase"},
@@ -287,6 +322,41 @@ func (st *vrStats) register() {
 			}
 			return result
 		})
+
+	stats.NewGaugesFuncWithMultiLabels(
+		"VReplicationTrxQueryBatchCount",
+		"vreplication vplayer transaction query batch counts per type per stream",
+		[]string{"source_keyspace", "source_shard", "workflow", "counts", "commit_or_not"},
+		func() map[string]int64 {
+			st.mu.Lock()
+			defer st.mu.Unlock()
+			result := make(map[string]int64, len(st.controllers))
+			for _, ct := range st.controllers {
+				for label, count := range ct.blpStats.TrxQueryBatchCount.Counts() {
+					if label == "" {
+						continue
+					}
+					result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)+"."+label] = count
+				}
+			}
+			return result
+		})
+
+	stats.NewCounterFunc(
+		"VReplicationTrxQueryBatchCountTotal",
+		"vreplication vplayer transaction query batch counts aggregated across all streams",
+		func() int64 {
+			st.mu.Lock()
+			defer st.mu.Unlock()
+			result := int64(0)
+			for _, ct := range st.controllers {
+				for _, count := range ct.blpStats.TrxQueryBatchCount.Counts() {
+					result += count
+				}
+			}
+			return result
+		})
+
 	stats.NewGaugesFuncWithMultiLabels(
 		"VReplicationCopyRowCount",
 		"vreplication rows copied in copy phase per stream",
@@ -434,6 +504,45 @@ func (st *vrStats) register() {
 			return result
 		})
 
+	stats.NewCounterFunc(
+		"VReplicationThrottledCountTotal",
+		"The total number of times that vreplication has been throttled",
+		func() int64 {
+			st.mu.Lock()
+			defer st.mu.Unlock()
+			return st.ThrottledCount.Get()
+		})
+	stats.NewCountersFuncWithMultiLabels(
+		"VReplicationThrottledCounts",
+		"The number of times vreplication was throttled by workflow, id, throttler (trx or tablet), and the sub-component that was throttled",
+		[]string{"workflow", "id", "throttler", "component"},
+		func() map[string]int64 {
+			st.mu.Lock()
+			defer st.mu.Unlock()
+			result := make(map[string]int64)
+			for _, ct := range st.controllers {
+				for key, val := range ct.blpStats.ThrottledCounts.Counts() {
+					result[fmt.Sprintf("%s.%d.%s", ct.workflow, ct.id, key)] = val
+				}
+			}
+			return result
+		})
+
+	stats.NewCountersFuncWithMultiLabels(
+		"VReplicationDDLActions",
+		"vreplication DDL processing actions per stream",
+		[]string{"workflow", "action"},
+		func() map[string]int64 {
+			st.mu.Lock()
+			defer st.mu.Unlock()
+			result := make(map[string]int64, len(st.controllers))
+			for _, ct := range st.controllers {
+				for key, val := range ct.blpStats.DDLEventActions.Counts() {
+					result[fmt.Sprintf("%s.%d.%s", ct.workflow, ct.id, key)] = val
+				}
+			}
+			return result
+		})
 }
 
 func (st *vrStats) numControllers() int64 {
@@ -476,6 +585,8 @@ func (st *vrStats) status() *EngineStatus {
 			SourceTablet:          ct.sourceTablet.Load().(*topodatapb.TabletAlias),
 			Messages:              ct.blpStats.MessageHistory(),
 			QueryCounts:           ct.blpStats.QueryCount.Counts(),
+			BulkQueryCounts:       ct.blpStats.BulkQueryCount.Counts(),
+			TrxQueryBatchCounts:   ct.blpStats.TrxQueryBatchCount.Counts(),
 			PhaseTimings:          ct.blpStats.PhaseTimings.Counts(),
 			CopyRowCount:          ct.blpStats.CopyRowCount.Get(),
 			CopyLoopCount:         ct.blpStats.CopyLoopCount.Get(),
@@ -514,6 +625,8 @@ type ControllerStatus struct {
 	SourceTablet          *topodatapb.TabletAlias
 	Messages              []string
 	QueryCounts           map[string]int64
+	BulkQueryCounts       map[string]int64
+	TrxQueryBatchCounts   map[string]int64
 	PhaseTimings          map[string]int64
 	CopyRowCount          int64
 	CopyLoopCount         int64

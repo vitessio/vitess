@@ -4,7 +4,7 @@
     "hash": {
       "type": "hash"
     },
-    "unicode_loose_xxhash" : {
+    "unicode_loose_xxhash": {
       "type": "unicode_loose_xxhash"
     },
     "t1_id2_idx": {
@@ -37,6 +37,14 @@
         {
           "column": "id2",
           "name": "t1_id2_idx"
+        }
+      ]
+    },
+    "t2": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "hash"
         }
       ]
     },

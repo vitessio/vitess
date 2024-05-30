@@ -16,7 +16,7 @@ limitations under the License.
 
 package datetime
 
-// mysqlDayNumber converts a date into an absolute day number.
+// MysqlDayNumber converts a date into an absolute day number.
 // This is an algorithm that has been reverse engineered from MySQL;
 // the tables used as a reference can be found in `testdata/year_to_daynr.json`.
 // It is worth noting that this absolute day number does not match the
@@ -29,7 +29,7 @@ package datetime
 // This API should only be used when performing datetime calculations (addition
 // and subtraction), so that the results match MySQL's. All other date handling
 // operations must use our helpers based on Go's standard library.
-func mysqlDayNumber(year, month, day int) int {
+func MysqlDayNumber(year, month, day int) int {
 	if year == 0 && month == 0 {
 		return 0
 	}
@@ -49,8 +49,8 @@ func mysqlDayNumber(year, month, day int) int {
 // mysqlDateFromDayNumber converts an absolute day number into a date (a year, month, day triplet).
 // This is an algorithm that has been reverse engineered from MySQL;
 // the tables used as a reference can be found in `testdata/daynr_to_date.json`.
-// See the warning from mysqlDayNumber: the day number used as an argument to
-// this function must come from mysqlDayNumber or the results won't be correct.
+// See the warning from MysqlDayNumber: the day number used as an argument to
+// this function must come from MysqlDayNumber or the results won't be correct.
 // This API should only be used when performing datetime calculations (addition
 // and subtraction), so that the results match MySQL's. All other date handling
 // operations must use our helpers based on Go's standard library.
@@ -80,4 +80,12 @@ func mysqlDateFromDayNumber(daynr int) (uint16, uint8, uint8) {
 	}
 
 	panic("unreachable: yday is too large?")
+}
+
+// DateFromDayNumber converts an absolute day number into a Date.
+// Returns zero date if day number exceeds 3652499 or is less than 366.
+func DateFromDayNumber(daynr int) Date {
+	var d Date
+	d.year, d.month, d.day = mysqlDateFromDayNumber(daynr)
+	return d
 }

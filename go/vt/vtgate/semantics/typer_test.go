@@ -21,6 +21,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations/colldata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -40,7 +41,7 @@ func TestNormalizerAndSemanticAnalysisIntegration(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
-			parse, err := sqlparser.Parse(test.query)
+			parse, err := sqlparser.NewTestParser().Parse(test.query)
 			require.NoError(t, err)
 
 			err = sqlparser.Normalize(parse, sqlparser.NewReservedVars("bv", sqlparser.BindVars{}), map[string]*querypb.BindVariable{})
@@ -51,8 +52,43 @@ func TestNormalizerAndSemanticAnalysisIntegration(t *testing.T) {
 			bv := parse.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr.(*sqlparser.Argument)
 			typ, found := st.ExprTypes[bv]
 			require.True(t, found, "bindvar was not typed")
-			require.Equal(t, test.typ, typ.Type.String())
+			require.Equal(t, test.typ, typ.Type().String())
 		})
 	}
+}
 
+// Tests that the types correctly picks up and sets the collation on columns
+func TestColumnCollations(t *testing.T) {
+	tests := []struct {
+		query, collation string
+	}{
+		{query: "select textcol from t2"},
+		{query: "select name from t2", collation: "utf8mb3_bin"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.query, func(t *testing.T) {
+			parse, err := sqlparser.NewTestParser().Parse(test.query)
+			require.NoError(t, err)
+
+			err = sqlparser.Normalize(parse, sqlparser.NewReservedVars("bv", sqlparser.BindVars{}), map[string]*querypb.BindVariable{})
+			require.NoError(t, err)
+
+			st, err := Analyze(parse, "d", fakeSchemaInfo())
+			require.NoError(t, err)
+			col := extract(parse.(*sqlparser.Select), 0)
+			typ, found := st.TypeForExpr(col)
+			require.True(t, found, "column was not typed")
+
+			require.Equal(t, "VARCHAR", typ.Type().String())
+			collation := colldata.Lookup(typ.Collation())
+			if test.collation != "" {
+				collation := colldata.Lookup(typ.Collation())
+				require.NotNil(t, collation)
+				require.Equal(t, test.collation, collation.Name())
+			} else {
+				require.Nil(t, collation)
+			}
+		})
+	}
 }

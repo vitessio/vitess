@@ -27,28 +27,27 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
-	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
 )
 
-func startVschemaWatcher(vschemaPersistenceDir string, keyspaces []*vttestpb.Keyspace, ts *topo.Server) {
+func startVschemaWatcher(ctx context.Context, vschemaPersistenceDir string, ts *topo.Server) {
 	// Create the directory if it doesn't exist.
 	if err := createDirectoryIfNotExists(vschemaPersistenceDir); err != nil {
 		log.Fatalf("Unable to create vschema persistence directory %v: %v", vschemaPersistenceDir, err)
 	}
 
 	// If there are keyspace files, load them.
-	loadKeyspacesFromDir(vschemaPersistenceDir, keyspaces, ts)
+	loadKeyspacesFromDir(ctx, vschemaPersistenceDir, ts)
 
 	// Rebuild the SrvVSchema object in case we loaded vschema from file
-	if err := ts.RebuildSrvVSchema(context.Background(), tpb.Cells); err != nil {
+	if err := ts.RebuildSrvVSchema(ctx, tpb.Cells); err != nil {
 		log.Fatalf("RebuildSrvVSchema failed: %v", err)
 	}
 
 	// Now watch for changes in the SrvVSchema object and persist them to disk.
-	go watchSrvVSchema(context.Background(), ts, tpb.Cells[0])
+	go watchSrvVSchema(ctx, ts, tpb.Cells[0])
 }
 
-func loadKeyspacesFromDir(dir string, keyspaces []*vttestpb.Keyspace, ts *topo.Server) {
+func loadKeyspacesFromDir(ctx context.Context, dir string, ts *topo.Server) {
 	for _, ks := range tpb.Keyspaces {
 		ksFile := path.Join(dir, ks.Name+".json")
 		if _, err := os.Stat(ksFile); err == nil {
@@ -63,18 +62,18 @@ func loadKeyspacesFromDir(dir string, keyspaces []*vttestpb.Keyspace, ts *topo.S
 				log.Fatalf("Unable to parse keyspace file %v: %v", ksFile, err)
 			}
 
-			_, err = vindexes.BuildKeyspace(keyspace)
+			_, err = vindexes.BuildKeyspace(keyspace, env.Parser())
 			if err != nil {
 				log.Fatalf("Invalid keyspace definition: %v", err)
 			}
-			ts.SaveVSchema(context.Background(), ks.Name, keyspace)
+			ts.SaveVSchema(ctx, ks.Name, keyspace)
 			log.Infof("Loaded keyspace %v from %v\n", ks.Name, ksFile)
 		}
 	}
 }
 
 func watchSrvVSchema(ctx context.Context, ts *topo.Server, cell string) {
-	data, ch, err := ts.WatchSrvVSchema(context.Background(), tpb.Cells[0])
+	data, ch, err := ts.WatchSrvVSchema(ctx, tpb.Cells[0])
 	if err != nil {
 		log.Fatalf("WatchSrvVSchema failed: %v", err)
 	}

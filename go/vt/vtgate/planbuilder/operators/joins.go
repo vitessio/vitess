@@ -18,20 +18,23 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type JoinOp interface {
-	ops.Operator
-	GetLHS() ops.Operator
-	GetRHS() ops.Operator
-	SetLHS(ops.Operator)
-	SetRHS(ops.Operator)
+	Operator
+	GetLHS() Operator
+	GetRHS() Operator
+	SetLHS(Operator)
+	SetRHS(Operator)
 	MakeInner()
 	IsInner() bool
-	AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error
+	AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr)
+}
+
+func IsOuter(outer JoinOp) bool {
+	return !outer.IsInner()
 }
 
 func AddPredicate(
@@ -39,8 +42,8 @@ func AddPredicate(
 	join JoinOp,
 	expr sqlparser.Expr,
 	joinPredicates bool,
-	newFilter func(ops.Operator, sqlparser.Expr) ops.Operator,
-) ops.Operator {
+	newFilter func(Operator, sqlparser.Expr) Operator,
+) Operator {
 	deps := ctx.SemTable.RecursiveDeps(expr)
 	switch {
 	case deps.IsSolvedBy(TableID(join.GetLHS())):
@@ -51,11 +54,11 @@ func AddPredicate(
 	case deps.IsSolvedBy(TableID(join.GetRHS())):
 		// if we are dealing with an outer join, always start by checking if this predicate can turn
 		// the join into an inner join
-		if !joinPredicates && !join.IsInner() && canConvertToInner(ctx, expr, TableID(join.GetRHS())) {
+		if !joinPredicates && IsOuter(join) && canConvertToInner(ctx, expr, TableID(join.GetRHS())) {
 			join.MakeInner()
 		}
 
-		if !joinPredicates && !join.IsInner() {
+		if !joinPredicates && IsOuter(join) {
 			// if we still are dealing with an outer join
 			// we need to filter after the join has been evaluated
 			return newFilter(join, expr)
@@ -69,20 +72,17 @@ func AddPredicate(
 	case deps.IsSolvedBy(TableID(join)):
 		// if we are dealing with an outer join, always start by checking if this predicate can turn
 		// the join into an inner join
-		if !joinPredicates && !join.IsInner() && canConvertToInner(ctx, expr, TableID(join.GetRHS())) {
+		if !joinPredicates && IsOuter(join) && canConvertToInner(ctx, expr, TableID(join.GetRHS())) {
 			join.MakeInner()
 		}
 
-		if !joinPredicates && !join.IsInner() {
+		if !joinPredicates && IsOuter(join) {
 			// if we still are dealing with an outer join
 			// we need to filter after the join has been evaluated
 			return newFilter(join, expr)
 		}
 
-		err := join.AddJoinPredicate(ctx, expr)
-		if err != nil {
-			panic(err)
-		}
+		join.AddJoinPredicate(ctx, expr)
 
 		return join
 	}

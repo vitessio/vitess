@@ -181,6 +181,11 @@ func (ln *LookupNonUnique) MarshalJSON() ([]byte, error) {
 	return json.Marshal(ln.lkp)
 }
 
+// IsBackfilling implements the LookupBackfill interface
+func (ln *LookupNonUnique) IsBackfilling() bool {
+	return ln.writeOnly
+}
+
 // Query implements the LookupPlanable interface
 func (ln *LookupNonUnique) Query() (selQuery string, arguments []string) {
 	return ln.lkp.query()

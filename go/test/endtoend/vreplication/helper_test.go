@@ -18,16 +18,18 @@ package vreplication
 
 import (
 	"context"
-	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
+	"os"
 	"os/exec"
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -37,6 +39,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 
+	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqlescape"
@@ -45,9 +48,11 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 const (
@@ -55,6 +60,11 @@ const (
 	defaultTimeout       = 60 * time.Second
 	workflowStateTimeout = 90 * time.Second
 )
+
+func setSidecarDBName(dbName string) {
+	sidecarDBName = dbName
+	sidecarDBIdentifier = sqlparser.String(sqlparser.NewIdentifierCS(sidecarDBName))
+}
 
 func execMultipleQueries(t *testing.T, conn *mysql.Conn, database string, lines string) {
 	queries := strings.Split(lines, "\n")
@@ -65,13 +75,39 @@ func execMultipleQueries(t *testing.T, conn *mysql.Conn, database string, lines 
 		execVtgateQuery(t, conn, database, string(query))
 	}
 }
+
+func execQueryWithRetry(t *testing.T, conn *mysql.Conn, query string, timeout time.Duration) *sqltypes.Result {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	ticker := time.NewTicker(defaultTick)
+	defer ticker.Stop()
+
+	var qr *sqltypes.Result
+	var err error
+	for {
+		qr, err = conn.ExecuteFetch(query, 1000, false)
+		if err == nil {
+			return qr
+		}
+		select {
+		case <-ctx.Done():
+			require.FailNow(t, fmt.Sprintf("query %q did not succeed before the timeout of %s; last seen result: %v",
+				query, timeout, qr.Rows))
+		case <-ticker.C:
+			log.Infof("query %q failed with error %v, retrying in %ds", query, err, defaultTick)
+		}
+	}
+}
+
 func execQuery(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	qr, err := conn.ExecuteFetch(query, 1000, false)
+	if err != nil {
+		log.Errorf("Error executing query: %s: %v", query, err)
+	}
 	require.NoError(t, err)
 	return qr
 }
-
-func getConnection(t *testing.T, hostname string, port int) *mysql.Conn {
+func getConnectionNoError(t *testing.T, hostname string, port int) *mysql.Conn {
 	vtParams := mysql.ConnParams{
 		Host:  hostname,
 		Port:  port,
@@ -79,7 +115,22 @@ func getConnection(t *testing.T, hostname string, port int) *mysql.Conn {
 	}
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
+	if err != nil {
+		return nil
+	}
+	return conn
+}
+
+func getConnection(t *testing.T, hostname string, port int) *mysql.Conn {
+	vtParams := mysql.ConnParams{
+		Host:             hostname,
+		Port:             port,
+		Uname:            "vt_dba",
+		ConnectTimeoutMs: 1000,
+	}
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoErrorf(t, err, "error connecting to vtgate on %s:%d", hostname, port)
 	return conn
 }
 
@@ -92,6 +143,19 @@ func execVtgateQuery(t *testing.T, conn *mysql.Conn, database string, query stri
 	}
 	execQuery(t, conn, "begin")
 	qr := execQuery(t, conn, query)
+	execQuery(t, conn, "commit")
+	return qr
+}
+
+func execVtgateQueryWithRetry(t *testing.T, conn *mysql.Conn, database string, query string, timeout time.Duration) *sqltypes.Result {
+	if strings.TrimSpace(query) == "" {
+		return nil
+	}
+	if database != "" {
+		execQuery(t, conn, "use `"+database+"`;")
+	}
+	execQuery(t, conn, "begin")
+	qr := execQueryWithRetry(t, conn, query, timeout)
 	execQuery(t, conn, "commit")
 	return qr
 }
@@ -221,6 +285,7 @@ func waitForRowCountInTablet(t *testing.T, vttablet *cluster.VttabletProcess, da
 		require.NoError(t, err)
 		require.NotNil(t, qr)
 		if wantRes == fmt.Sprintf("%v", qr.Rows) {
+			log.Infof("waitForRowCountInTablet: found %d rows in table %s on tablet %s", want, table, vttablet.Name)
 			return
 		}
 		select {
@@ -286,6 +351,13 @@ func assertQueryDoesNotExecutesOnTablet(t *testing.T, conn *mysql.Conn, tablet *
 	assert.Equalf(t, count0, count1, "query %q executed in target;\ntried to match %q\nbefore:\n%s\n\nafter:\n%s\n\n", query, matchQuery, body0, body1)
 }
 
+func waitForWorkflowToBeCreated(t *testing.T, vc *VitessCluster, ksWorkflow string) {
+	require.NoError(t, waitForCondition("workflow to be created", func() bool {
+		_, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", ksWorkflow, "show")
+		return err == nil
+	}, defaultTimeout))
+}
+
 // waitForWorkflowState waits for all of the given workflow's
 // streams to reach the provided state. You can pass optional
 // key value pairs of the form "key==value" to also wait for
@@ -297,7 +369,7 @@ func waitForWorkflowState(t *testing.T, vc *VitessCluster, ksWorkflow string, wa
 	log.Infof("Waiting for workflow %q to fully reach %q state", ksWorkflow, wantState)
 	for {
 		output, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", ksWorkflow, "show")
-		require.NoError(t, err)
+		require.NoError(t, err, output)
 		done = true
 		state := ""
 		result := gjson.Get(output, "ShardStatuses")
@@ -317,6 +389,9 @@ func waitForWorkflowState(t *testing.T, vc *VitessCluster, ksWorkflow string, wa
 										done = false
 									}
 								}
+							}
+							if wantState == binlogdatapb.VReplicationWorkflowState_Running.String() && attributeValue.Get("Pos").String() == "" {
+								done = false
 							}
 						} else {
 							done = false
@@ -351,7 +426,7 @@ func waitForWorkflowState(t *testing.T, vc *VitessCluster, ksWorkflow string, wa
 // as a CSV have secondary keys. This is useful when testing the
 // --defer-secondary-keys flag to confirm that the secondary keys
 // were re-added by the time the workflow hits the running phase.
-// For a Reshard workflow, where no tables are specififed, pass
+// For a Reshard workflow, where no tables are specified, pass
 // an empty string for the tables and all tables in the target
 // keyspace will be checked.
 func confirmTablesHaveSecondaryKeys(t *testing.T, tablets []*cluster.VttabletProcess, ksName string, tables string) {
@@ -371,6 +446,12 @@ func confirmTablesHaveSecondaryKeys(t *testing.T, tablets []*cluster.VttabletPro
 		}
 	}
 	for _, tablet := range tablets {
+		// Be sure that the schema is up to date.
+		err := vc.VtctldClient.ExecuteCommand("ReloadSchema", topoproto.TabletAliasString(&topodatapb.TabletAlias{
+			Cell: tablet.Cell,
+			Uid:  uint32(tablet.TabletUID),
+		}))
+		require.NoError(t, err)
 		for _, table := range tableArr {
 			if schema.IsInternalOperationTableName(table) {
 				continue
@@ -382,7 +463,7 @@ func confirmTablesHaveSecondaryKeys(t *testing.T, tablets []*cluster.VttabletPro
 			require.NotNil(t, res)
 			row := res.Named().Row()
 			tableSchema := row["Create Table"].ToString()
-			parsedDDL, err := sqlparser.ParseStrictDDL(tableSchema)
+			parsedDDL, err := sqlparser.NewTestParser().ParseStrictDDL(tableSchema)
 			require.NoError(t, err)
 			createTable, ok := parsedDDL.(*sqlparser.CreateTable)
 			require.True(t, ok)
@@ -452,7 +533,6 @@ func validateDryRunResults(t *testing.T, output string, want []string) {
 			w = strings.TrimSpace(w[1:])
 			result := strings.HasPrefix(g, w)
 			match = result
-			//t.Logf("Partial match |%v|%v|%v\n", w, g, match)
 		} else {
 			match = g == w
 		}
@@ -509,9 +589,25 @@ func isTableInDenyList(t *testing.T, vc *VitessCluster, ksShard string, table st
 	return found, nil
 }
 
-func expectNumberOfStreams(t *testing.T, vtgateConn *mysql.Conn, name string, workflow string, database string, want int) {
-	query := sqlparser.BuildParsedQuery("select count(*) from %s.vreplication where workflow='%s'", sidecarDBIdentifier, workflow).Query
+// expectNumberOfStreams waits for the given number of streams to be present and
+// by default RUNNING. If you want to wait for different states, then you can
+// pass in the state(s) you want to wait for.
+func expectNumberOfStreams(t *testing.T, vtgateConn *mysql.Conn, name string, workflow string, database string, want int, states ...string) {
+	var query string
+	if len(states) == 0 {
+		states = append(states, binlogdatapb.VReplicationWorkflowState_Running.String())
+	}
+	query = sqlparser.BuildParsedQuery("select count(*) from %s.vreplication where workflow='%s' and state in ('%s')",
+		sidecarDBIdentifier, workflow, strings.Join(states, "','")).Query
 	waitForQueryResult(t, vtgateConn, database, query, fmt.Sprintf(`[[INT64(%d)]]`, want))
+}
+
+// confirmAllStreamsRunning confirms that all of the migrated streams are running
+// after a Reshard.
+func confirmAllStreamsRunning(t *testing.T, vtgateConn *mysql.Conn, database string) {
+	query := sqlparser.BuildParsedQuery("select count(*) from %s.vreplication where state != '%s'",
+		sidecarDBIdentifier, binlogdatapb.VReplicationWorkflowState_Running.String()).Query
+	waitForQueryResult(t, vtgateConn, database, query, `[[INT64(0)]]`)
 }
 
 func printShardPositions(vc *VitessCluster, ksShards []string) {
@@ -703,95 +799,119 @@ func isBinlogRowImageNoBlob(t *testing.T, tablet *cluster.VttabletProcess) bool 
 	return mode == "noblob"
 }
 
+func getRowCount(t *testing.T, vtgateConn *mysql.Conn, table string) int {
+	query := fmt.Sprintf("select count(*) from %s", table)
+	qr := execVtgateQuery(t, vtgateConn, "", query)
+	numRows, _ := qr.Rows[0][0].ToInt()
+	return numRows
+}
+
 const (
-	loadTestBufferingWindowDurationStr = "30s"
-	loadTestPostBufferingInsertWindow  = 60 * time.Second // should be greater than loadTestBufferingWindowDurationStr
-	loadTestWaitForCancel              = 30 * time.Second
-	loadTestWaitBetweenQueries         = 2 * time.Millisecond
+	loadTestBufferingWindowDuration = 10 * time.Second
+	loadTestAvgWaitBetweenQueries   = 500 * time.Microsecond
+	loadTestDefaultConnections      = 100
 )
 
 type loadGenerator struct {
-	t      *testing.T
-	vc     *VitessCluster
-	ctx    context.Context
-	cancel context.CancelFunc
+	t           *testing.T
+	vc          *VitessCluster
+	ctx         context.Context
+	cancel      context.CancelFunc
+	connections int
+	wg          sync.WaitGroup
 }
 
 func newLoadGenerator(t *testing.T, vc *VitessCluster) *loadGenerator {
 	return &loadGenerator{
-		t:  t,
-		vc: vc,
+		t:           t,
+		vc:          vc,
+		connections: loadTestDefaultConnections,
 	}
 }
 
 func (lg *loadGenerator) stop() {
-	time.Sleep(loadTestPostBufferingInsertWindow) // wait for buffering to stop and additional records to be inserted by startLoad after traffic is switched
+	// Wait for buffering to stop and additional records to be inserted by start
+	// after traffic is switched.
+	time.Sleep(loadTestBufferingWindowDuration * 2)
 	log.Infof("Canceling load")
 	lg.cancel()
-	time.Sleep(loadTestWaitForCancel) // wait for cancel to take effect
-	log.Flush()
-
+	lg.wg.Wait()
 }
 
 func (lg *loadGenerator) start() {
 	t := lg.t
 	lg.ctx, lg.cancel = context.WithCancel(context.Background())
+	var connectionCount atomic.Int64
 
 	var id int64
-	log.Infof("startLoad: starting")
+	log.Infof("loadGenerator: starting")
 	queryTemplate := "insert into loadtest(id, name) values (%d, 'name-%d')"
 	var totalQueries, successfulQueries int64
 	var deniedErrors, ambiguousErrors, reshardedErrors, tableNotFoundErrors, otherErrors int64
+	lg.wg.Add(1)
 	defer func() {
-
-		log.Infof("startLoad: totalQueries: %d, successfulQueries: %d, deniedErrors: %d, ambiguousErrors: %d, reshardedErrors: %d, tableNotFoundErrors: %d, otherErrors: %d",
+		defer lg.wg.Done()
+		log.Infof("loadGenerator: totalQueries: %d, successfulQueries: %d, deniedErrors: %d, ambiguousErrors: %d, reshardedErrors: %d, tableNotFoundErrors: %d, otherErrors: %d",
 			totalQueries, successfulQueries, deniedErrors, ambiguousErrors, reshardedErrors, tableNotFoundErrors, otherErrors)
 	}()
-	logOnce := true
 	for {
 		select {
 		case <-lg.ctx.Done():
-			log.Infof("startLoad: context cancelled")
-			log.Infof("startLoad: deniedErrors: %d, ambiguousErrors: %d, reshardedErrors: %d, tableNotFoundErrors: %d, otherErrors: %d",
+			log.Infof("loadGenerator: context cancelled")
+			log.Infof("loadGenerator: deniedErrors: %d, ambiguousErrors: %d, reshardedErrors: %d, tableNotFoundErrors: %d, otherErrors: %d",
 				deniedErrors, ambiguousErrors, reshardedErrors, tableNotFoundErrors, otherErrors)
 			require.Equal(t, int64(0), deniedErrors)
 			require.Equal(t, int64(0), otherErrors)
+			require.Equal(t, int64(0), reshardedErrors)
 			require.Equal(t, totalQueries, successfulQueries)
 			return
 		default:
-			go func() {
-				conn := vc.GetVTGateConn(t)
-				defer conn.Close()
-				atomic.AddInt64(&id, 1)
-				query := fmt.Sprintf(queryTemplate, id, id)
-				_, err := conn.ExecuteFetch(query, 1, false)
-				atomic.AddInt64(&totalQueries, 1)
-				if err != nil {
-					sqlErr := err.(*sqlerror.SQLError)
-					if strings.Contains(strings.ToLower(err.Error()), "denied tables") {
-						log.Infof("startLoad: denied tables error executing query: %d:%v", sqlErr.Number(), err)
-						atomic.AddInt64(&deniedErrors, 1)
-					} else if strings.Contains(strings.ToLower(err.Error()), "ambiguous") {
-						// this can happen when a second keyspace is setup with the same tables, but there are no routing rules
-						// set yet by MoveTables. So we ignore these errors.
-						atomic.AddInt64(&ambiguousErrors, 1)
-					} else if strings.Contains(strings.ToLower(err.Error()), "current keyspace is being resharded") {
-						atomic.AddInt64(&reshardedErrors, 1)
-					} else if strings.Contains(strings.ToLower(err.Error()), "not found") {
-						atomic.AddInt64(&tableNotFoundErrors, 1)
-					} else {
-						if logOnce {
-							log.Infof("startLoad: error executing query: %d:%v", sqlErr.Number(), err)
-							logOnce = false
+			if int(connectionCount.Load()) < lg.connections {
+				connectionCount.Add(1)
+				lg.wg.Add(1)
+				go func() {
+					defer lg.wg.Done()
+					defer connectionCount.Add(-1)
+					conn := vc.GetVTGateConn(t)
+					defer conn.Close()
+					for {
+						select {
+						case <-lg.ctx.Done():
+							return
+						default:
 						}
-						atomic.AddInt64(&otherErrors, 1)
+						newID := atomic.AddInt64(&id, 1)
+						query := fmt.Sprintf(queryTemplate, newID, newID)
+						_, err := conn.ExecuteFetch(query, 1, false)
+						atomic.AddInt64(&totalQueries, 1)
+						if err != nil {
+							sqlErr := err.(*sqlerror.SQLError)
+							if strings.Contains(strings.ToLower(err.Error()), "denied tables") {
+								if debugMode {
+									t.Logf("loadGenerator: denied tables error executing query: %d:%v", sqlErr.Number(), err)
+								}
+								atomic.AddInt64(&deniedErrors, 1)
+							} else if strings.Contains(strings.ToLower(err.Error()), "ambiguous") {
+								// This can happen when a second keyspace is setup with the same tables, but
+								// there are no routing rules set yet by MoveTables. So we ignore these errors.
+								atomic.AddInt64(&ambiguousErrors, 1)
+							} else if strings.Contains(strings.ToLower(err.Error()), "current keyspace is being resharded") {
+								atomic.AddInt64(&reshardedErrors, 1)
+							} else if strings.Contains(strings.ToLower(err.Error()), "not found") {
+								atomic.AddInt64(&tableNotFoundErrors, 1)
+							} else {
+								if debugMode {
+									t.Logf("loadGenerator: error executing query: %d:%v", sqlErr.Number(), err)
+								}
+								atomic.AddInt64(&otherErrors, 1)
+							}
+						} else {
+							atomic.AddInt64(&successfulQueries, 1)
+						}
+						time.Sleep(time.Duration(int64(float64(loadTestAvgWaitBetweenQueries.Microseconds()) * rand.Float64())))
 					}
-					time.Sleep(loadTestWaitBetweenQueries)
-				} else {
-					atomic.AddInt64(&successfulQueries, 1)
-				}
-			}()
-			time.Sleep(loadTestWaitBetweenQueries)
+				}()
+			}
 		}
 	}
 }
@@ -818,5 +938,95 @@ func (lg *loadGenerator) waitForCount(want int64) {
 		default:
 			time.Sleep(defaultTick)
 		}
+	}
+}
+
+// appendToQueryLog is useful when debugging tests.
+func appendToQueryLog(msg string) {
+	file, err := os.OpenFile(queryLog, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Errorf("Error opening query log file: %v", err)
+		return
+	}
+	defer file.Close()
+	if _, err := file.WriteString(msg + "\n"); err != nil {
+		log.Errorf("Error writing to query log file: %v", err)
+	}
+}
+
+func waitForCondition(name string, condition func() bool, timeout time.Duration) error {
+	if condition() {
+		return nil
+	}
+
+	ticker := time.NewTicker(tickInterval)
+	defer ticker.Stop()
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	for {
+		select {
+		case <-ticker.C:
+			if condition() {
+				return nil
+			}
+		case <-ctx.Done():
+			return fmt.Errorf("%s: waiting for %s", ctx.Err(), name)
+		}
+	}
+}
+
+func getCellNames(cells []*Cell) string {
+	var cellNames []string
+	if cells == nil {
+		cells = []*Cell{}
+		for _, cell := range vc.Cells {
+			cells = append(cells, cell)
+		}
+	}
+	for _, cell := range cells {
+		cellNames = append(cellNames, cell.Name)
+	}
+	return strings.Join(cellNames, ",")
+}
+
+// VExplainPlan is the struct that represents the json output of a vexplain query.
+type VExplainPlan struct {
+	OperatorType string
+	Variant      string
+	Keyspace     VExplainKeyspace
+	FieldQuery   string
+	Query        string
+	Table        string
+}
+
+type VExplainKeyspace struct {
+	Name    string
+	Sharded bool
+}
+
+// vexplain runs vexplain on the given query and returns the plan. Useful for validating routing rules.
+func vexplain(t *testing.T, database, query string) *VExplainPlan {
+	vtgateConn := vc.GetVTGateConn(t)
+	defer vtgateConn.Close()
+
+	qr := execVtgateQuery(t, vtgateConn, database, fmt.Sprintf("vexplain %s", query))
+	require.NotNil(t, qr)
+	require.Equal(t, 1, len(qr.Rows))
+	json := qr.Rows[0][0].ToString()
+
+	var plan VExplainPlan
+	require.NoError(t, json2.Unmarshal([]byte(json), &plan))
+	return &plan
+}
+
+// confirmKeyspacesRoutedTo confirms that the given keyspaces are routed as expected for the given tablet types, using vexplain.
+func confirmKeyspacesRoutedTo(t *testing.T, keyspace string, routedKeyspace, table string, tabletTypes []string) {
+	if len(tabletTypes) == 0 {
+		tabletTypes = []string{"primary", "replica", "rdonly"}
+	}
+	for _, tt := range tabletTypes {
+		database := fmt.Sprintf("%s@%s", keyspace, tt)
+		plan := vexplain(t, database, fmt.Sprintf("select * from %s.%s", keyspace, table))
+		require.Equalf(t, routedKeyspace, plan.Keyspace.Name, "for database %s, keyspace %v, tabletType %s", database, keyspace, tt)
 	}
 }

@@ -23,7 +23,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -60,6 +59,9 @@ func TestMain(m *testing.M) {
 			Name:      keyspaceName,
 			SchemaSQL: schemaSQL,
 		}
+		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
+			"--shutdown_grace_period=0s",
+		)
 		err = clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false)
 		if err != nil {
 			return 1
@@ -110,5 +112,4 @@ func TestStreamTxRestart(t *testing.T) {
 	// query should return connection error
 	_, err = utils.ExecAllowError(t, conn, "select connection_id()")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "broken pipe (errno 2006) (sqlstate HY000)")
 }

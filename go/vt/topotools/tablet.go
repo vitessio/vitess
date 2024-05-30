@@ -45,7 +45,6 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/proto/vttime"
@@ -127,7 +126,7 @@ func DoCellsHaveRdonlyTablets(ctx context.Context, ts *topo.Server, cells []stri
 	}
 
 	for _, cell := range cells {
-		tablets, err := ts.GetTabletsByCell(ctx, cell)
+		tablets, err := ts.GetTabletsByCell(ctx, cell, nil)
 		if err != nil {
 			return false, err
 		}
@@ -239,11 +238,6 @@ func TabletIdent(tablet *topodatapb.Tablet) string {
 	}
 
 	return fmt.Sprintf("%s-%d (%s%s)", tablet.Alias.Cell, tablet.Alias.Uid, tablet.Hostname, tagStr)
-}
-
-// TargetIdent returns a concise string representation of a query target
-func TargetIdent(target *querypb.Target) string {
-	return fmt.Sprintf("%s/%s (%s)", target.Keyspace, target.Shard, target.TabletType)
 }
 
 // TabletEquality returns true iff two Tablets are identical for testing purposes

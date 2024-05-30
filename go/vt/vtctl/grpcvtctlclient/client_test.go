@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctlserver"
 	"vitess.io/vitess/go/vt/vtctl/vtctlclienttest"
+	"vitess.io/vitess/go/vt/vtenv"
 
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 )
@@ -52,11 +53,11 @@ func TestVtctlServer(t *testing.T) {
 
 	// Create a gRPC server and listen on the port
 	server := grpc.NewServer()
-	vtctlservicepb.RegisterVtctlServer(server, grpcvtctlserver.NewVtctlServer(ts))
+	vtctlservicepb.RegisterVtctlServer(server, grpcvtctlserver.NewVtctlServer(vtenv.NewTestEnv(), ts))
 	go server.Serve(listener)
 
 	// Create a VtctlClient gRPC client to talk to the fake server
-	client, err := gRPCVtctlClientFactory(fmt.Sprintf("localhost:%v", port))
+	client, err := gRPCVtctlClientFactory(ctx, fmt.Sprintf("localhost:%v", port))
 	if err != nil {
 		t.Fatalf("Cannot create client: %v", err)
 	}
@@ -86,7 +87,7 @@ func TestVtctlAuthClient(t *testing.T) {
 	opts = append(opts, grpc.UnaryInterceptor(servenv.FakeAuthUnaryInterceptor))
 	server := grpc.NewServer(opts...)
 
-	vtctlservicepb.RegisterVtctlServer(server, grpcvtctlserver.NewVtctlServer(ts))
+	vtctlservicepb.RegisterVtctlServer(server, grpcvtctlserver.NewVtctlServer(vtenv.NewTestEnv(), ts))
 	go server.Serve(listener)
 
 	authJSON := `{
@@ -116,7 +117,7 @@ func TestVtctlAuthClient(t *testing.T) {
 	require.NoError(t, err, "failed to set `--grpc_auth_static_client_creds=%s`", f.Name())
 
 	// Create a VtctlClient gRPC client to talk to the fake server
-	client, err := gRPCVtctlClientFactory(fmt.Sprintf("localhost:%v", port))
+	client, err := gRPCVtctlClientFactory(ctx, fmt.Sprintf("localhost:%v", port))
 	if err != nil {
 		t.Fatalf("Cannot create client: %v", err)
 	}

@@ -50,6 +50,7 @@ type VtProcess struct {
 	Binary       string
 	ExtraArgs    []string
 	Env          []string
+	BindAddress  string
 	Port         int
 	PortGrpc     int
 	HealthCheck  HealthChecker
@@ -91,7 +92,7 @@ func (vtp *VtProcess) IsHealthy() bool {
 // Address returns the main address for this Vitess process.
 // This is usually the main HTTP endpoint for the service.
 func (vtp *VtProcess) Address() string {
-	return fmt.Sprintf("localhost:%d", vtp.Port)
+	return fmt.Sprintf("%s:%d", vtp.BindAddress, vtp.Port)
 }
 
 // WaitTerminate attempts to gracefully shutdown the Vitess process by sending
@@ -128,7 +129,7 @@ func (vtp *VtProcess) WaitStart() (err error) {
 	vtp.proc = exec.Command(
 		vtp.Binary,
 		"--port", fmt.Sprintf("%d", vtp.Port),
-		"--bind-address", "127.0.0.1",
+		"--bind-address", vtp.BindAddress,
 		"--log_dir", vtp.LogDirectory,
 		"--alsologtostderr",
 	)
@@ -141,8 +142,7 @@ func (vtp *VtProcess) WaitStart() (err error) {
 	vtp.proc.Args = append(vtp.proc.Args, vtp.ExtraArgs...)
 	vtp.proc.Env = append(vtp.proc.Env, os.Environ()...)
 	vtp.proc.Env = append(vtp.proc.Env, vtp.Env...)
-
-	if testing.Verbose() {
+	if !testing.Testing() || testing.Verbose() {
 		vtp.proc.Stderr = os.Stderr
 		vtp.proc.Stdout = os.Stdout
 	}
@@ -184,23 +184,28 @@ const (
 // QueryServerArgs are the default arguments passed to all Vitess query servers
 var QueryServerArgs = []string{
 	"--queryserver-config-pool-size", "4",
-	"--queryserver-config-query-timeout", "300",
-	"--queryserver-config-schema-reload-time", "60",
+	"--queryserver-config-query-timeout", "300s",
+	"--queryserver-config-schema-reload-time", "60s",
 	"--queryserver-config-stream-pool-size", "4",
 	"--queryserver-config-transaction-cap", "4",
-	"--queryserver-config-transaction-timeout", "300",
-	"--queryserver-config-txpool-timeout", "300",
+	"--queryserver-config-transaction-timeout", "300s",
+	"--queryserver-config-txpool-timeout", "300s",
 }
 
 // VtcomboProcess returns a VtProcess handle for a local `vtcombo` service,
 // configured with the given Config.
 // The process must be manually started by calling WaitStart()
 func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (*VtProcess, error) {
+	vtcomboBindAddress := "127.0.0.1"
+	if args.VtComboBindAddress != "" {
+		vtcomboBindAddress = args.VtComboBindAddress
+	}
 	vt := &VtProcess{
 		Name:         "vtcombo",
 		Directory:    environment.Directory(),
 		LogDirectory: environment.LogDirectory(),
 		Binary:       environment.BinaryPath("vtcombo"),
+		BindAddress:  vtcomboBindAddress,
 		Port:         environment.PortForProtocol("vtcombo", ""),
 		PortGrpc:     environment.PortForProtocol("vtcombo", "grpc"),
 		HealthCheck:  environment.ProcessHealthCheck("vtcombo"),
@@ -230,6 +235,7 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 		fmt.Sprintf("--enable_online_ddl=%t", args.EnableOnlineDDL),
 		fmt.Sprintf("--enable_direct_ddl=%t", args.EnableDirectDDL),
 		fmt.Sprintf("--enable_system_settings=%t", args.EnableSystemSettings),
+		fmt.Sprintf("--no_scatter=%t", args.NoScatter),
 	}...)
 
 	// If topo tablet refresh interval is not defined then we will give it value of 10s. Please note

@@ -19,7 +19,6 @@ package operators
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -32,7 +31,7 @@ type SubQueryBuilder struct {
 	outerID semantics.TableSet
 }
 
-func (sqb *SubQueryBuilder) getRootOperator(op ops.Operator, decorator func(operator ops.Operator) ops.Operator) ops.Operator {
+func (sqb *SubQueryBuilder) getRootOperator(op Operator, decorator func(operator Operator) Operator) Operator {
 	if len(sqb.Inner) == 0 {
 		return op
 	}
@@ -53,19 +52,16 @@ func (sqb *SubQueryBuilder) handleSubquery(
 	ctx *plancontext.PlanningContext,
 	expr sqlparser.Expr,
 	outerID semantics.TableSet,
-) (*SubQuery, error) {
+) *SubQuery {
 	subq, parentExpr := getSubQuery(expr)
 	if subq == nil {
-		return nil, nil
+		return nil
 	}
 	argName := ctx.GetReservedArgumentFor(subq)
-	sqInner, err := createSubqueryOp(ctx, parentExpr, expr, subq, outerID, argName)
-	if err != nil {
-		return nil, err
-	}
+	sqInner := createSubqueryOp(ctx, parentExpr, expr, subq, outerID, argName)
 	sqb.Inner = append(sqb.Inner, sqInner)
 
-	return sqInner, nil
+	return sqInner
 }
 
 func getSubQuery(expr sqlparser.Expr) (subqueryExprExists *sqlparser.Subquery, parentExpr sqlparser.Expr) {
@@ -99,7 +95,7 @@ func createSubqueryOp(
 	subq *sqlparser.Subquery,
 	outerID semantics.TableSet,
 	name string,
-) (*SubQuery, error) {
+) *SubQuery {
 	switch parent := parent.(type) {
 	case *sqlparser.NotExpr:
 		switch parent.Expr.(type) {
@@ -120,20 +116,14 @@ func createSubqueryOp(
 // and extracts subqueries into operators
 func (sqb *SubQueryBuilder) inspectStatement(ctx *plancontext.PlanningContext,
 	stmt sqlparser.SelectStatement,
-) (sqlparser.Exprs, []JoinColumn, error) {
+) (sqlparser.Exprs, []applyJoinColumn) {
 	switch stmt := stmt.(type) {
 	case *sqlparser.Select:
 		return sqb.inspectSelect(ctx, stmt)
 	case *sqlparser.Union:
-		exprs1, cols1, err := sqb.inspectStatement(ctx, stmt.Left)
-		if err != nil {
-			return nil, nil, err
-		}
-		exprs2, cols2, err := sqb.inspectStatement(ctx, stmt.Right)
-		if err != nil {
-			return nil, nil, err
-		}
-		return append(exprs1, exprs2...), append(cols1, cols2...), nil
+		exprs1, cols1 := sqb.inspectStatement(ctx, stmt.Left)
+		exprs2, cols2 := sqb.inspectStatement(ctx, stmt.Right)
+		return append(exprs1, exprs2...), append(cols1, cols2...)
 	}
 	panic("unknown type")
 }
@@ -144,22 +134,12 @@ func (sqb *SubQueryBuilder) inspectStatement(ctx *plancontext.PlanningContext,
 func (sqb *SubQueryBuilder) inspectSelect(
 	ctx *plancontext.PlanningContext,
 	sel *sqlparser.Select,
-) (sqlparser.Exprs, []JoinColumn, error) {
+) (sqlparser.Exprs, []applyJoinColumn) {
 	// first we need to go through all the places where one can find predicates
 	// and search for subqueries
-	newWhere, wherePreds, whereJoinCols, err := sqb.inspectWhere(ctx, sel.Where)
-	if err != nil {
-		return nil, nil, err
-	}
-	newHaving, havingPreds, havingJoinCols, err := sqb.inspectWhere(ctx, sel.Having)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	newFrom, onPreds, onJoinCols, err := sqb.inspectOnExpr(ctx, sel.From)
-	if err != nil {
-		return nil, nil, err
-	}
+	newWhere, wherePreds, whereJoinCols := sqb.inspectWhere(ctx, sel.Where)
+	newHaving, havingPreds, havingJoinCols := sqb.inspectWhere(ctx, sel.Having)
+	newFrom, onPreds, onJoinCols := sqb.inspectOnExpr(ctx, sel.From)
 
 	// then we use the updated AST structs to build the operator
 	// these AST elements have any subqueries replace by arguments
@@ -168,8 +148,7 @@ func (sqb *SubQueryBuilder) inspectSelect(
 	sel.From = newFrom
 
 	return append(append(wherePreds, havingPreds...), onPreds...),
-		append(append(whereJoinCols, havingJoinCols...), onJoinCols...),
-		nil
+		append(append(whereJoinCols, havingJoinCols...), onJoinCols...)
 }
 
 func createSubquery(
@@ -181,7 +160,7 @@ func createSubquery(
 	argName string,
 	filterType opcode.PulloutOpcode,
 	isProjection bool,
-) (*SubQuery, error) {
+) *SubQuery {
 	topLevel := ctx.SemTable.EqualsExpr(original, parent)
 	original = cloneASTAndSemState(ctx, original)
 	originalSq := cloneASTAndSemState(ctx, subq)
@@ -189,20 +168,10 @@ func createSubquery(
 	totalID := subqID.Merge(outerID)
 	sqc := &SubQueryBuilder{totalID: totalID, subqID: subqID, outerID: outerID}
 
-	predicates, joinCols, err := sqc.inspectStatement(ctx, subq.Select)
-	if err != nil {
-		return nil, err
-	}
+	predicates, joinCols := sqc.inspectStatement(ctx, subq.Select)
+	correlated := !ctx.SemTable.RecursiveDeps(subq).IsEmpty()
 
-	stmt := rewriteRemainingColumns(ctx, subq.Select, subqID)
-
-	// TODO: this should not be needed. We are using CopyOnRewrite above, but somehow this is not getting copied
-	ctx.SemTable.CopySemanticInfo(subq.Select, stmt)
-
-	opInner, err := translateQueryToOp(ctx, stmt)
-	if err != nil {
-		return nil, err
-	}
+	opInner := translateQueryToOp(ctx, subq.Select)
 
 	opInner = sqc.getRootOperator(opInner, nil)
 	return &SubQuery{
@@ -215,15 +184,16 @@ func createSubquery(
 		IsProjection:     isProjection,
 		TopLevel:         topLevel,
 		JoinColumns:      joinCols,
-	}, nil
+		correlated:       correlated,
+	}
 }
 
 func (sqb *SubQueryBuilder) inspectWhere(
 	ctx *plancontext.PlanningContext,
 	in *sqlparser.Where,
-) (*sqlparser.Where, sqlparser.Exprs, []JoinColumn, error) {
+) (*sqlparser.Where, sqlparser.Exprs, []applyJoinColumn) {
 	if in == nil {
-		return nil, nil, nil, nil
+		return nil, nil, nil
 	}
 	jpc := &joinPredicateCollector{
 		totalID: sqb.totalID,
@@ -231,17 +201,12 @@ func (sqb *SubQueryBuilder) inspectWhere(
 		outerID: sqb.outerID,
 	}
 	for _, predicate := range sqlparser.SplitAndExpression(nil, in.Expr) {
-		sqlparser.RemoveKeyspaceFromColName(predicate)
-		subq, err := sqb.handleSubquery(ctx, predicate, sqb.totalID)
-		if err != nil {
-			return nil, nil, nil, err
-		}
+		sqlparser.RemoveKeyspaceInCol(predicate)
+		subq := sqb.handleSubquery(ctx, predicate, sqb.totalID)
 		if subq != nil {
 			continue
 		}
-		if err = jpc.inspectPredicate(ctx, predicate); err != nil {
-			return nil, nil, nil, err
-		}
+		jpc.inspectPredicate(ctx, predicate)
 	}
 
 	if len(jpc.remainingPredicates) == 0 {
@@ -250,13 +215,13 @@ func (sqb *SubQueryBuilder) inspectWhere(
 		in.Expr = sqlparser.AndExpressions(jpc.remainingPredicates...)
 	}
 
-	return in, jpc.predicates, jpc.joinColumns, nil
+	return in, jpc.predicates, jpc.joinColumns
 }
 
 func (sqb *SubQueryBuilder) inspectOnExpr(
 	ctx *plancontext.PlanningContext,
 	from []sqlparser.TableExpr,
-) (newFrom []sqlparser.TableExpr, onPreds sqlparser.Exprs, onJoinCols []JoinColumn, err error) {
+) (newFrom []sqlparser.TableExpr, onPreds sqlparser.Exprs, onJoinCols []applyJoinColumn) {
 	for _, tbl := range from {
 		tbl := sqlparser.CopyOnRewrite(tbl, dontEnterSubqueries, func(cursor *sqlparser.CopyOnWriteCursor) {
 			cond, ok := cursor.Node().(*sqlparser.JoinCondition)
@@ -271,20 +236,11 @@ func (sqb *SubQueryBuilder) inspectOnExpr(
 			}
 
 			for _, pred := range sqlparser.SplitAndExpression(nil, cond.On) {
-				subq, innerErr := sqb.handleSubquery(ctx, pred, sqb.totalID)
-				if err != nil {
-					err = innerErr
-					cursor.StopTreeWalk()
-					return
-				}
+				subq := sqb.handleSubquery(ctx, pred, sqb.totalID)
 				if subq != nil {
 					continue
 				}
-				if err = jpc.inspectPredicate(ctx, pred); err != nil {
-					err = innerErr
-					cursor.StopTreeWalk()
-					return
-				}
+				jpc.inspectPredicate(ctx, pred)
 			}
 			if len(jpc.remainingPredicates) == 0 {
 				cond.On = nil
@@ -294,9 +250,6 @@ func (sqb *SubQueryBuilder) inspectOnExpr(
 			onPreds = append(onPreds, jpc.predicates...)
 			onJoinCols = append(onJoinCols, jpc.joinColumns...)
 		}, ctx.SemTable.CopySemanticInfo)
-		if err != nil {
-			return
-		}
 		newFrom = append(newFrom, tbl.(sqlparser.TableExpr))
 	}
 	return
@@ -309,7 +262,7 @@ func createComparisonSubQuery(
 	subFromOutside *sqlparser.Subquery,
 	outerID semantics.TableSet,
 	name string,
-) (*SubQuery, error) {
+) *SubQuery {
 	subq, outside := semantics.GetSubqueryAndOtherSide(parent)
 	if outside == nil || subq != subFromOutside {
 		panic("uh oh")
@@ -323,10 +276,7 @@ func createComparisonSubQuery(
 		filterType = opcode.PulloutNotIn
 	}
 
-	subquery, err := createSubquery(ctx, original, subq, outerID, parent, name, filterType, false)
-	if err != nil {
-		return nil, err
-	}
+	subquery := createSubquery(ctx, original, subq, outerID, parent, name, filterType, false)
 
 	// if we are comparing with a column from the inner subquery,
 	// we add this extra predicate to check if the two sides are mergable or not
@@ -338,7 +288,7 @@ func createComparisonSubQuery(
 		}
 	}
 
-	return subquery, err
+	return subquery
 }
 
 func (sqb *SubQueryBuilder) pullOutValueSubqueries(
@@ -346,25 +296,22 @@ func (sqb *SubQueryBuilder) pullOutValueSubqueries(
 	expr sqlparser.Expr,
 	outerID semantics.TableSet,
 	isDML bool,
-) (sqlparser.Expr, []*SubQuery, error) {
+) (sqlparser.Expr, []*SubQuery) {
 	original := sqlparser.CloneExpr(expr)
 	sqe := extractSubQueries(ctx, expr, isDML)
 	if sqe == nil {
-		return nil, nil, nil
+		return nil, nil
 	}
 	var newSubqs []*SubQuery
 
 	for idx, subq := range sqe.subq {
-		sqInner, err := createSubquery(ctx, original, subq, outerID, original, sqe.cols[idx], sqe.pullOutCode[idx], true)
-		if err != nil {
-			return nil, nil, err
-		}
+		sqInner := createSubquery(ctx, original, subq, outerID, original, sqe.cols[idx], sqe.pullOutCode[idx], true)
 		newSubqs = append(newSubqs, sqInner)
 	}
 
 	sqb.Inner = append(sqb.Inner, newSubqs...)
 
-	return sqe.new, newSubqs, nil
+	return sqe.new, newSubqs
 }
 
 type subqueryExtraction struct {

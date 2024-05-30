@@ -42,15 +42,36 @@ func (v *vTableInfo) dependencies(colName string, org originable) (dependencies,
 		if name != colName {
 			continue
 		}
-		directDeps, recursiveDeps, qt := org.depsForExpr(v.cols[i])
-
-		newDeps := createCertain(directDeps, recursiveDeps, qt)
-		deps = deps.merge(newDeps, false)
+		deps = deps.merge(v.createCertainForCol(org, i), false)
 	}
 	if deps.empty() && v.hasStar() {
 		return createUncertain(v.tables, v.tables), nil
 	}
 	return deps, nil
+}
+
+func (v *vTableInfo) dependenciesInGroupBy(colName string, org originable) (dependencies, error) {
+	// this method is consciously very similar to vTableInfo.dependencies and should remain so
+	var deps dependencies = &nothing{}
+	for i, name := range v.columnNames {
+		if name != colName {
+			continue
+		}
+		if sqlparser.ContainsAggregation(v.cols[i]) {
+			return nil, &CantGroupOn{name}
+		}
+		deps = deps.merge(v.createCertainForCol(org, i), false)
+	}
+	if deps.empty() && v.hasStar() {
+		return createUncertain(v.tables, v.tables), nil
+	}
+	return deps, nil
+}
+
+func (v *vTableInfo) createCertainForCol(org originable, i int) *certain {
+	directDeps, recursiveDeps, qt := org.depsForExpr(v.cols[i])
+	newDeps := createCertain(directDeps, recursiveDeps, qt)
+	return newDeps
 }
 
 // IsInfSchema implements the TableInfo interface
@@ -70,7 +91,7 @@ func (v *vTableInfo) Name() (sqlparser.TableName, error) {
 	return sqlparser.TableName{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "oh noes")
 }
 
-func (v *vTableInfo) getAliasedTableExpr() *sqlparser.AliasedTableExpr {
+func (v *vTableInfo) GetAliasedTableExpr() *sqlparser.AliasedTableExpr {
 	return nil
 }
 
@@ -83,7 +104,7 @@ func (v *vTableInfo) GetVindexTable() *vindexes.Table {
 	return nil
 }
 
-func (v *vTableInfo) getColumns() []ColumnInfo {
+func (v *vTableInfo) getColumns(bool) []ColumnInfo {
 	cols := make([]ColumnInfo, 0, len(v.columnNames))
 	for _, col := range v.columnNames {
 		cols = append(cols, ColumnInfo{
@@ -94,7 +115,7 @@ func (v *vTableInfo) getColumns() []ColumnInfo {
 }
 
 func (v *vTableInfo) hasStar() bool {
-	return v.tables.NonEmpty()
+	return v.tables.NotEmpty()
 }
 
 // GetTables implements the TableInfo interface

@@ -43,7 +43,7 @@ var (
 	unknownParamsLoggedDryRunVSchema string
 )
 
-// TestApplyVSchema tests the the MoveTables client command
+// TestApplyVSchema tests the MoveTables client command
 // via the commandVRApplyVSchema() cmd handler.
 func TestApplyVSchema(t *testing.T) {
 	shard := "0"
@@ -89,9 +89,9 @@ func TestApplyVSchema(t *testing.T) {
 }
 If this is not what you expected, check the input data \(as JSON parsing will skip unexpected fields\)\.
 
-.*W.* .* vtctl.go:.* Unknown param in vindex binary_vdx: hello
-W.* .* vtctl.go:.* Unknown param in vindex hash_vdx: foo
-W.* .* vtctl.go:.* Unknown param in vindex hash_vdx: hello`,
+.*W.* .* vtctl.go:.* Unknown parameter in vindex binary_vdx: hello
+W.* .* vtctl.go:.* Unknown parameter in vindex hash_vdx: foo
+W.* .* vtctl.go:.* Unknown parameter in vindex hash_vdx: hello`,
 		},
 		{
 			name: "UnknownParamsLoggedWithDryRun",
@@ -117,9 +117,9 @@ W.* .* vtctl.go:.* Unknown param in vindex hash_vdx: hello`,
 }
 If this is not what you expected, check the input data \(as JSON parsing will skip unexpected fields\)\.
 
-.*W.* .* vtctl.go:.* Unknown param in vindex binary_vdx: hello
-W.* .* vtctl.go:.* Unknown param in vindex hash_vdx: foo
-W.* .* vtctl.go:.* Unknown param in vindex hash_vdx: hello
+.*W.* .* vtctl.go:.* Unknown parameter in vindex binary_vdx: hello
+W.* .* vtctl.go:.* Unknown parameter in vindex hash_vdx: foo
+W.* .* vtctl.go:.* Unknown parameter in vindex hash_vdx: hello
 Dry run: Skipping update of VSchema`,
 		},
 	}
@@ -139,7 +139,7 @@ Dry run: Skipping update of VSchema`,
 	}
 }
 
-// TestMoveTables tests the the MoveTables client command
+// TestMoveTables tests the MoveTables client command
 // via the commandVReplicationWorkflow() cmd handler.
 // This currently only tests the Progress action (which is
 // a parent of the Show action) but it can be used to test
@@ -149,7 +149,8 @@ func TestMoveTables(t *testing.T) {
 	shard := "0"
 	sourceKs := "sourceks"
 	targetKs := "targetks"
-	table := "customer"
+	table1 := "customer"
+	table2 := "customer_order"
 	wf := "testwf"
 	ksWf := fmt.Sprintf("%s.%s", targetKs, wf)
 	minTableSize := 16384 // a single 16KiB InnoDB page
@@ -159,16 +160,22 @@ func TestMoveTables(t *testing.T) {
 	defer env.close()
 	source := env.addTablet(100, sourceKs, shard, &topodatapb.KeyRange{}, topodatapb.TabletType_PRIMARY)
 	target := env.addTablet(200, targetKs, shard, &topodatapb.KeyRange{}, topodatapb.TabletType_PRIMARY)
-	sourceCol := fmt.Sprintf(`keyspace:"%s" shard:"%s" filter:{rules:{match:"%s" filter:"select * from %s"}}`,
-		sourceKs, shard, table, table)
+	sourceCol := fmt.Sprintf(`keyspace:"%s" shard:"%s" filter:{rules:{match:"%s" filter:"select * from %s"} rules:{match:"%s" filter:"select * from %s"}}`,
+		sourceKs, shard, table1, table1, table2, table2)
 	bls := &binlogdatapb.BinlogSource{
 		Keyspace: sourceKs,
 		Shard:    shard,
 		Filter: &binlogdatapb.Filter{
-			Rules: []*binlogdatapb.Rule{{
-				Match:  table,
-				Filter: fmt.Sprintf("select * from %s", table),
-			}},
+			Rules: []*binlogdatapb.Rule{
+				{
+					Match:  table1,
+					Filter: fmt.Sprintf("select * from %s", table1),
+				},
+				{
+					Match:  table2,
+					Filter: fmt.Sprintf("select * from %s", table2),
+				},
+			},
 		},
 	}
 	now := time.Now().UTC().Unix()
@@ -200,12 +207,13 @@ func TestMoveTables(t *testing.T) {
 			expectResults: func() {
 				env.tmc.setVRResults(
 					target.tablet,
-					fmt.Sprintf("select table_name, lastpk from _vt.copy_state where vrepl_id = %d and id in (select max(id) from _vt.copy_state where vrepl_id = %d group by vrepl_id, table_name)",
+					fmt.Sprintf("select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (%d) and id in (select max(id) from _vt.copy_state where vrepl_id in (%d) group by vrepl_id, table_name)",
 						vrID, vrID),
 					sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-						"table_name|lastpk",
-						"varchar|varbinary"),
-						fmt.Sprintf("%s|", table),
+						"vrepl_id|table_name|lastpk",
+						"int64|varchar|varbinary"),
+						fmt.Sprintf("%d|%s|", vrID, table1),
+						fmt.Sprintf("%d|%s|", vrID, table2),
 					),
 				)
 				env.tmc.setDBAResults(
@@ -215,7 +223,8 @@ func TestMoveTables(t *testing.T) {
 					sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 						"table_name",
 						"varchar"),
-						table,
+						table1,
+						table2,
 					),
 				)
 				env.tmc.setVRResults(
@@ -231,26 +240,28 @@ func TestMoveTables(t *testing.T) {
 				)
 				env.tmc.setDBAResults(
 					target.tablet,
-					fmt.Sprintf("select table_name, table_rows, data_length from information_schema.tables where table_schema = 'vt_%s' and table_name in ('%s')",
-						targetKs, table),
+					fmt.Sprintf("select table_name, table_rows, data_length from information_schema.tables where table_schema = 'vt_%s' and table_name in ('%s','%s')",
+						targetKs, table1, table2),
 					sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 						"table_name|table_rows|data_length",
 						"varchar|int64|int64"),
-						fmt.Sprintf("%s|0|%d", table, minTableSize),
+						fmt.Sprintf("%s|0|%d", table1, minTableSize),
+						fmt.Sprintf("%s|0|%d", table2, minTableSize),
 					),
 				)
 				env.tmc.setDBAResults(
 					source.tablet,
-					fmt.Sprintf("select table_name, table_rows, data_length from information_schema.tables where table_schema = 'vt_%s' and table_name in ('%s')",
-						sourceKs, table),
+					fmt.Sprintf("select table_name, table_rows, data_length from information_schema.tables where table_schema = 'vt_%s' and table_name in ('%s','%s')",
+						sourceKs, table1, table2),
 					sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 						"table_name|table_rows|data_length",
 						"varchar|int64|int64"),
-						fmt.Sprintf("%s|10|%d", table, minTableSize),
+						fmt.Sprintf("%s|10|%d", table1, minTableSize),
+						fmt.Sprintf("%s|10|%d", table2, minTableSize),
 					),
 				)
 			},
-			want: fmt.Sprintf("\nCopy Progress (approx):\n\n\ncustomer: rows copied 0/10 (0%%), size copied 16384/16384 (100%%)\n\n\n\nThe following vreplication streams exist for workflow %s:\n\nid=%d on %s/%s-0000000%d: Status: Copying. VStream has not started.\n\n\n",
+			want: fmt.Sprintf("\nCopy Progress (approx):\n\n\ncustomer: rows copied 0/10 (0%%), size copied 16384/16384 (100%%)\ncustomer_order: rows copied 0/10 (0%%), size copied 16384/16384 (100%%)\n\n\n\nThe following vreplication streams exist for workflow %s:\n\nid=%d on %s/%s-0000000%d: Status: Copying. VStream has not started.\n\n\n",
 				ksWf, vrID, shard, env.cell, target.tablet.Alias.Uid),
 		},
 		{
@@ -260,12 +271,13 @@ func TestMoveTables(t *testing.T) {
 			expectResults: func() {
 				env.tmc.setVRResults(
 					target.tablet,
-					fmt.Sprintf("select table_name, lastpk from _vt.copy_state where vrepl_id = %d and id in (select max(id) from _vt.copy_state where vrepl_id = %d group by vrepl_id, table_name)",
+					fmt.Sprintf("select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (%d) and id in (select max(id) from _vt.copy_state where vrepl_id in (%d) group by vrepl_id, table_name)",
 						vrID, vrID),
 					sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-						"table_name|lastpk",
-						"varchar|varbinary"),
-						fmt.Sprintf("%s|", table),
+						"vrepl_id|table_name|lastpk",
+						"int64|varchar|varbinary"),
+						fmt.Sprintf("%d|%s|", vrID, table1),
+						fmt.Sprintf("%d|%s|", vrID, table2),
 					),
 				)
 				env.tmc.setDBAResults(
@@ -275,7 +287,8 @@ func TestMoveTables(t *testing.T) {
 					sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 						"table_name",
 						"varchar"),
-						table,
+						table1,
+						table2,
 					),
 				)
 				env.tmc.setVRResults(
@@ -291,26 +304,28 @@ func TestMoveTables(t *testing.T) {
 				)
 				env.tmc.setDBAResults(
 					target.tablet,
-					fmt.Sprintf("select table_name, table_rows, data_length from information_schema.tables where table_schema = 'vt_%s' and table_name in ('%s')",
-						targetKs, table),
+					fmt.Sprintf("select table_name, table_rows, data_length from information_schema.tables where table_schema = 'vt_%s' and table_name in ('%s','%s')",
+						targetKs, table1, table2),
 					sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 						"table_name|table_rows|data_length",
 						"varchar|int64|int64"),
-						fmt.Sprintf("%s|5|%d", table, minTableSize),
+						fmt.Sprintf("%s|5|%d", table1, minTableSize),
+						fmt.Sprintf("%s|5|%d", table2, minTableSize),
 					),
 				)
 				env.tmc.setDBAResults(
 					source.tablet,
-					fmt.Sprintf("select table_name, table_rows, data_length from information_schema.tables where table_schema = 'vt_%s' and table_name in ('%s')",
-						sourceKs, table),
+					fmt.Sprintf("select table_name, table_rows, data_length from information_schema.tables where table_schema = 'vt_%s' and table_name in ('%s','%s')",
+						sourceKs, table1, table2),
 					sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 						"table_name|table_rows|data_length",
 						"varchar|int64|int64"),
-						fmt.Sprintf("%s|10|%d", table, minTableSize),
+						fmt.Sprintf("%s|10|%d", table1, minTableSize),
+						fmt.Sprintf("%s|10|%d", table2, minTableSize),
 					),
 				)
 			},
-			want: fmt.Sprintf("\nCopy Progress (approx):\n\n\ncustomer: rows copied 5/10 (50%%), size copied 16384/16384 (100%%)\n\n\n\nThe following vreplication streams exist for workflow %s:\n\nid=%d on %s/%s-0000000%d: Status: Error: Duplicate entry '6' for key 'customer.PRIMARY' (errno 1062) (sqlstate 23000) during query: insert into customer(customer_id,email) values (6,'mlord@planetscale.com').\n\n\n",
+			want: fmt.Sprintf("\nCopy Progress (approx):\n\n\ncustomer: rows copied 5/10 (50%%), size copied 16384/16384 (100%%)\ncustomer_order: rows copied 5/10 (50%%), size copied 16384/16384 (100%%)\n\n\n\nThe following vreplication streams exist for workflow %s:\n\nid=%d on %s/%s-0000000%d: Status: Error: Duplicate entry '6' for key 'customer.PRIMARY' (errno 1062) (sqlstate 23000) during query: insert into customer(customer_id,email) values (6,'mlord@planetscale.com').\n\n\n",
 				ksWf, vrID, shard, env.cell, target.tablet.Alias.Uid),
 		},
 		{
@@ -320,7 +335,7 @@ func TestMoveTables(t *testing.T) {
 			expectResults: func() {
 				env.tmc.setVRResults(
 					target.tablet,
-					fmt.Sprintf("select table_name, lastpk from _vt.copy_state where vrepl_id = %d and id in (select max(id) from _vt.copy_state where vrepl_id = %d group by vrepl_id, table_name)",
+					fmt.Sprintf("select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (%d) and id in (select max(id) from _vt.copy_state where vrepl_id in (%d) group by vrepl_id, table_name)",
 						vrID, vrID),
 					&sqltypes.Result{},
 				)

@@ -33,6 +33,7 @@ var (
 	buildTime             = ""
 	buildGitRev           = ""
 	buildGitBranch        = ""
+	statsBuildVersion     *stats.String
 	jenkinsBuildNumberStr = ""
 
 	// version registers the command line flag to expose build info.
@@ -121,6 +122,8 @@ func init() {
 	stats.NewString("BuildHost").Set(AppVersion.buildHost)
 	stats.NewString("BuildUser").Set(AppVersion.buildUser)
 	stats.NewGauge("BuildTimestamp", "build timestamp").Set(AppVersion.buildTime)
+	statsBuildVersion = stats.NewString("BuildVersion")
+	statsBuildVersion.Set(AppVersion.version)
 	stats.NewString("BuildGitRev").Set(AppVersion.buildGitRev)
 	stats.NewString("BuildGitBranch").Set(AppVersion.buildGitBranch)
 	stats.NewGauge("BuildNumber", "build number").Set(AppVersion.jenkinsBuildNumber)

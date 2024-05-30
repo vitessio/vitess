@@ -15,17 +15,17 @@ jobs:
       pull-requests: write
     strategy:
       matrix:
-        branch: [ main, release-18.0, release-17.0, release-16.0, release-15.0 ]
+        branch: [ main, release-19.0, release-18.0, release-17.0, release-16.0 ]
     name: Update Golang Version
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
-          go-version: 1.21.3
+          go-version: 1.22.3
 
       - name: Check out code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: ${{ matrix.branch }}
 
@@ -66,10 +66,12 @@ jobs:
         if: steps.detect-and-update.outputs.create-pr == 'true'
         uses: peter-evans/create-pull-request@v4
         with:
+          token: ${{ secrets.CREATE_PR_VITESS_BOT }}
           branch: "upgrade-go-to-${{steps.detect-and-update.outputs.go-version}}-on-${{ matrix.branch }}"
           commit-message: "bump go version to go${{steps.detect-and-update.outputs.go-version}}"
           signoff: true
           delete-branch: true
+          team-reviewers: Release
           title: "[${{ matrix.branch }}] Upgrade the Golang version to `go${{steps.detect-and-update.outputs.go-version}}`"
           body: |
             This Pull Request bumps the Golang version to `go${{steps.detect-and-update.outputs.go-version}}` and the bootstrap version to `${{steps.detect-and-update.outputs.bootstrap-version}}`.
@@ -81,6 +83,8 @@ jobs:
               - [ ] Build and Push the bootstrap images to Docker Hub, the bot cannot handle that.
               - [ ] Update the `./.github/workflows/*.yml` files with the newer Golang version, the bot cannot handle that due to permissions.
                 - To accomplish this, run the following: `go run ./go/tools/go-upgrade/go-upgrade.go upgrade workflows --go-to=${{steps.detect-and-update.outputs.go-version}}`
+            
+            cc @vitessio/release
           base: ${{ matrix.branch }}
           labels: |
             Skip CI

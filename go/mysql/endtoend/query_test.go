@@ -19,7 +19,7 @@ package endtoend
 import (
 	"context"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"strings"
 	"testing"
 
@@ -151,7 +151,7 @@ func TestLargeQueries(t *testing.T) {
 	randString := func(n int) string {
 		b := make([]byte, n)
 		for i := range b {
-			b[i] = letterBytes[rand.Intn(len(letterBytes))]
+			b[i] = letterBytes[rand.IntN(len(letterBytes))]
 		}
 		return string(b)
 	}
@@ -322,6 +322,6 @@ func TestSysInfo(t *testing.T) {
 }
 
 func getDefaultCollationID() collations.ID {
-	collationHandler := collations.Local()
+	collationHandler := collations.MySQL8()
 	return collationHandler.DefaultCollationForCharset(charsetName)
 }

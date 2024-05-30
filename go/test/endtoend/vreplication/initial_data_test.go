@@ -18,7 +18,7 @@ package vreplication
 
 import (
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"testing"
 
@@ -27,6 +27,8 @@ import (
 
 func insertInitialData(t *testing.T) {
 	t.Run("insertInitialData", func(t *testing.T) {
+		vtgateConn, closeConn := getVTGateConn()
+		defer closeConn()
 		log.Infof("Inserting initial data")
 		lines, _ := os.ReadFile("unsharded_init_data.sql")
 		execMultipleQueries(t, vtgateConn, "product:0", string(lines))
@@ -48,6 +50,8 @@ const NumJSONRows = 100
 
 func insertJSONValues(t *testing.T) {
 	// insert null value combinations
+	vtgateConn, closeConn := getVTGateConn()
+	defer closeConn()
 	execVtgateQuery(t, vtgateConn, "product:0", "insert into json_tbl(id, j3) values(1, \"{}\")")
 	execVtgateQuery(t, vtgateConn, "product:0", "insert into json_tbl(id, j1, j3) values(2, \"{}\", \"{}\")")
 	execVtgateQuery(t, vtgateConn, "product:0", "insert into json_tbl(id, j2, j3) values(3, \"{}\", \"{}\")")
@@ -61,8 +65,8 @@ func insertJSONValues(t *testing.T) {
 	numJsonValues := len(jsonValues)
 	for id <= NumJSONRows {
 		id++
-		j1 := rand.Intn(numJsonValues)
-		j2 := rand.Intn(numJsonValues)
+		j1 := rand.IntN(numJsonValues)
+		j2 := rand.IntN(numJsonValues)
 		query := fmt.Sprintf(q, id, jsonValues[j1], jsonValues[j2])
 		execVtgateQuery(t, vtgateConn, "product:0", query)
 	}
@@ -76,6 +80,8 @@ func insertMoreCustomers(t *testing.T, numCustomers int) {
 	// the number of customer records we are going to
 	// create. The value we get back is the max value
 	// that we reserved.
+	vtgateConn, closeConn := getVTGateConn()
+	defer closeConn()
 	maxID := waitForSequenceValue(t, vtgateConn, "product", "customer_seq", numCustomers)
 	// So we need to calculate the first value we reserved
 	// from the max.
@@ -95,16 +101,22 @@ func insertMoreCustomers(t *testing.T, numCustomers int) {
 }
 
 func insertMoreProducts(t *testing.T) {
+	vtgateConn, closeConn := getVTGateConn()
+	defer closeConn()
 	sql := "insert into product(pid, description) values(3, 'cpu'),(4, 'camera'),(5, 'mouse');"
 	execVtgateQuery(t, vtgateConn, "product", sql)
 }
 
 func insertMoreProductsForSourceThrottler(t *testing.T) {
+	vtgateConn, closeConn := getVTGateConn()
+	defer closeConn()
 	sql := "insert into product(pid, description) values(103, 'new-cpu'),(104, 'new-camera'),(105, 'new-mouse');"
 	execVtgateQuery(t, vtgateConn, "product", sql)
 }
 
 func insertMoreProductsForTargetThrottler(t *testing.T) {
+	vtgateConn, closeConn := getVTGateConn()
+	defer closeConn()
 	sql := "insert into product(pid, description) values(203, 'new-cpu'),(204, 'new-camera'),(205, 'new-mouse');"
 	execVtgateQuery(t, vtgateConn, "product", sql)
 }
@@ -122,6 +134,8 @@ var blobTableQueries = []string{
 }
 
 func insertIntoBlobTable(t *testing.T) {
+	vtgateConn, closeConn := getVTGateConn()
+	defer closeConn()
 	for _, query := range blobTableQueries {
 		execVtgateQuery(t, vtgateConn, "product:0", query)
 	}

@@ -19,7 +19,7 @@ package vtgate
 import (
 	"context"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"runtime/debug"
 	"sort"
 	"sync"
@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
@@ -49,17 +50,16 @@ var (
 	// CellsToWatch is the list of cells the healthcheck operates over. If it is empty, only the local cell is watched
 	CellsToWatch string
 
-	bufferImplementation = "keyspace_events"
 	initialTabletTimeout = 30 * time.Second
 	// retryCount is the number of times a query will be retried on error
 	retryCount = 2
+
+	logCollations = logutil.NewThrottledLogger("CollationInconsistent", 1*time.Minute)
 )
 
 func init() {
 	servenv.OnParseFor("vtgate", func(fs *pflag.FlagSet) {
 		fs.StringVar(&CellsToWatch, "cells_to_watch", "", "comma-separated list of cells for watching tablets")
-		fs.StringVar(&bufferImplementation, "buffer_implementation", "keyspace_events", "Allowed values: healthcheck (legacy implementation), keyspace_events (default)")
-		fs.MarkDeprecated("buffer_implementation", "The 'healthcheck' buffer implementation has been removed in v18 and this option will be removed in v19")
 		fs.DurationVar(&initialTabletTimeout, "gateway_initial_tablet_timeout", 30*time.Second, "At startup, the tabletGateway will wait up to this duration to get at least one tablet per keyspace/shard/tablet type")
 		fs.IntVar(&retryCount, "retry-count", 2, "retry count")
 	})
@@ -74,7 +74,7 @@ type TabletGateway struct {
 	srvTopoServer        srvtopo.Server
 	localCell            string
 	retryCount           int
-	defaultConnCollation uint32
+	defaultConnCollation atomic.Uint32
 
 	// mu protects the fields of this group.
 	mu sync.Mutex
@@ -92,7 +92,7 @@ func createHealthCheck(ctx context.Context, retryDelay, timeout time.Duration, t
 
 // NewTabletGateway creates and returns a new TabletGateway
 func NewTabletGateway(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, localCell string) *TabletGateway {
-	// hack to accomodate various users of gateway + tests
+	// hack to accommodate various users of gateway + tests
 	if hc == nil {
 		var topoServer *topo.Server
 		if serv != nil {
@@ -146,8 +146,8 @@ func (gw *TabletGateway) setupBuffering(ctx context.Context) {
 }
 
 // QueryServiceByAlias satisfies the Gateway interface
-func (gw *TabletGateway) QueryServiceByAlias(alias *topodatapb.TabletAlias, target *querypb.Target) (queryservice.QueryService, error) {
-	qs, err := gw.hc.TabletConnection(alias, target)
+func (gw *TabletGateway) QueryServiceByAlias(ctx context.Context, alias *topodatapb.TabletAlias, target *querypb.Target) (queryservice.QueryService, error) {
+	qs, err := gw.hc.TabletConnection(ctx, alias, target)
 	return queryservice.Wrap(qs, gw.withShardError), NewShardError(err, target)
 }
 
@@ -191,7 +191,7 @@ func (gw *TabletGateway) WaitForTablets(ctx context.Context, tabletTypesToWait [
 	}
 
 	// Finds the targets to look for.
-	targets, err := srvtopo.FindAllTargets(ctx, gw.srvTopoServer, gw.localCell, tabletTypesToWait)
+	targets, err := srvtopo.FindAllTargets(ctx, gw.srvTopoServer, gw.localCell, discovery.KeyspacesToWatch, tabletTypesToWait)
 	if err != nil {
 		return err
 	}
@@ -377,50 +377,25 @@ func (gw *TabletGateway) getStatsAggregator(target *querypb.Target) *TabletStatu
 }
 
 func (gw *TabletGateway) shuffleTablets(cell string, tablets []*discovery.TabletHealth) {
-	sameCell, diffCell, sameCellMax := 0, 0, -1
-	length := len(tablets)
 
-	// move all same cell tablets to the front, this is O(n)
-	for {
-		sameCellMax = diffCell - 1
-		sameCell = gw.nextTablet(cell, tablets, sameCell, length, true)
-		diffCell = gw.nextTablet(cell, tablets, diffCell, length, false)
-		// either no more diffs or no more same cells should stop the iteration
-		if sameCell < 0 || diffCell < 0 {
-			break
-		}
+	// Randomly shuffle the list of tablets, putting the same-cell hosts at the front
+	// of the list and the other-cell hosts at the back
+	//
+	// Only need to do n-1 swaps since the last tablet is always in the right place.
+	n := len(tablets)
+	head := 0
+	tail := n - 1
+	for i := 0; i < n-1; i++ {
+		j := head + rand.IntN(tail-head+1)
 
-		if sameCell < diffCell {
-			// fast forward the `sameCell` lookup to `diffCell + 1`, `diffCell` unchanged
-			sameCell = diffCell + 1
+		if tablets[j].Tablet.Alias.Cell == cell {
+			tablets[head], tablets[j] = tablets[j], tablets[head]
+			head++
 		} else {
-			// sameCell > diffCell, swap needed
-			tablets[sameCell], tablets[diffCell] = tablets[diffCell], tablets[sameCell]
-			sameCell++
-			diffCell++
+			tablets[tail], tablets[j] = tablets[j], tablets[tail]
+			tail--
 		}
 	}
-
-	// shuffle in same cell tablets
-	for i := sameCellMax; i > 0; i-- {
-		swap := rand.Intn(i + 1)
-		tablets[i], tablets[swap] = tablets[swap], tablets[i]
-	}
-
-	// shuffle in diff cell tablets
-	for i, diffCellMin := length-1, sameCellMax+1; i > diffCellMin; i-- {
-		swap := rand.Intn(i-sameCellMax) + diffCellMin
-		tablets[i], tablets[swap] = tablets[swap], tablets[i]
-	}
-}
-
-func (gw *TabletGateway) nextTablet(cell string, tablets []*discovery.TabletHealth, offset, length int, sameCell bool) int {
-	for ; offset < length; offset++ {
-		if (tablets[offset].Tablet.Alias.Cell == cell) == sameCell {
-			return offset
-		}
-	}
-	return -1
 }
 
 // TabletsCacheStatus returns a displayable version of the health check cache.
@@ -428,18 +403,23 @@ func (gw *TabletGateway) TabletsCacheStatus() discovery.TabletsCacheStatusList {
 	return gw.hc.CacheStatus()
 }
 
+// TabletsHealthyStatus returns a displayable version of the health check healthy list.
+func (gw *TabletGateway) TabletsHealthyStatus() discovery.TabletsCacheStatusList {
+	return gw.hc.HealthyStatus()
+}
+
 func (gw *TabletGateway) updateDefaultConnCollation(tablet *topodatapb.Tablet) {
-	if atomic.CompareAndSwapUint32(&gw.defaultConnCollation, 0, tablet.DefaultConnCollation) {
+	if gw.defaultConnCollation.CompareAndSwap(0, tablet.DefaultConnCollation) {
 		return
 	}
-	if atomic.LoadUint32(&gw.defaultConnCollation) != tablet.DefaultConnCollation {
-		log.Warning("this Vitess cluster has tablets with different default connection collations")
+	if gw.defaultConnCollation.Load() != tablet.DefaultConnCollation {
+		logCollations.Warningf("this Vitess cluster has tablets with different default connection collations")
 	}
 }
 
 // DefaultConnCollation returns the default connection collation of this TabletGateway
 func (gw *TabletGateway) DefaultConnCollation() collations.ID {
-	return collations.ID(atomic.LoadUint32(&gw.defaultConnCollation))
+	return collations.ID(gw.defaultConnCollation.Load())
 }
 
 // NewShardError returns a new error with the shard info amended.

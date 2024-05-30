@@ -124,7 +124,7 @@ func ApplyVSchemaDDL(ksName string, ks *vschemapb.Keyspace, alterVschema *sqlpar
 		//    already exists.
 		spec := alterVschema.VindexSpec
 		name := spec.Name.String()
-		if !spec.Type.IsEmpty() {
+		if spec.Type.NotEmpty() {
 			owner, params := spec.ParseParams()
 			if vindex, ok := ks.Vindexes[name]; ok {
 				if vindex.Type != spec.Type.String() {

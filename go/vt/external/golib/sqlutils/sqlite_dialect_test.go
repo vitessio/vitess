@@ -25,6 +25,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -242,5 +243,72 @@ func TestToSqlite3GeneralConversions(t *testing.T) {
 		statement := "select group_concat( 'abc' , 'def') as s"
 		result := ToSqlite3Dialect(statement)
 		require.Equal(t, result, "select group_concat( 'abc' , 'def') as s")
+	}
+}
+
+func TestIsCreateIndex(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected bool
+	}{
+		{"create index my_index on my_table(column);", true},
+		{"CREATE INDEX my_index ON my_table(column);", true},
+		{"create unique index my_index on my_table(column);", true},
+		{"CREATE UNIQUE INDEX my_index ON my_table(column);", true},
+		{"create index my_index on my_table(column) where condition;", true},
+		{"create unique index my_index on my_table(column) where condition;", true},
+		{"create table my_table(column);", false},
+		{"drop index my_index on my_table;", false},
+		{"alter table my_table add index my_index (column);", false},
+		{"", false},
+	}
+
+	for _, test := range tests {
+		t.Run(test.input, func(t *testing.T) {
+			result := IsCreateIndex(test.input)
+			assert.Equal(t, test.expected, result)
+		})
+	}
+}
+
+func TestIsDropIndex(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected bool
+	}{
+		{"drop index my_index on my_table;", true},
+		{"DROP INDEX my_index ON my_table;", true},
+		{"drop index if exists my_index on my_table;", true},
+		{"DROP INDEX IF EXISTS my_index ON my_table;", true},
+		{"drop table my_table;", false},
+		{"create index my_index on my_table(column);", false},
+		{"alter table my_table add index my_index (column);", false},
+		{"", false},
+	}
+
+	for _, test := range tests {
+		t.Run(test.input, func(t *testing.T) {
+			result := IsDropIndex(test.input)
+			assert.Equal(t, test.expected, result)
+		})
+	}
+}
+
+func TestToSqlite3Dialect(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"create table my_table(id int);", "create table my_table(id int);"},
+		{"alter table my_table add column new_col int;", "alter table my_table add column new_col int;"},
+		{"insert into my_table values (1);", "insert into my_table values (1);"},
+		{"", ""},
+	}
+
+	for _, test := range tests {
+		t.Run(test.input, func(t *testing.T) {
+			result := ToSqlite3Dialect(test.input)
+			assert.Equal(t, test.expected, result)
+		})
 	}
 }

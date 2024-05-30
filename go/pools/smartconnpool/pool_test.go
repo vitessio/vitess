@@ -149,7 +149,7 @@ func TestOpen(t *testing.T) {
 	}
 
 	// Test that Get waits
-	ch := make(chan bool)
+	done := make(chan struct{})
 	go func() {
 		for i := 0; i < 5; i++ {
 			if i%2 == 0 {
@@ -163,14 +163,16 @@ func TestOpen(t *testing.T) {
 		for i := 0; i < 5; i++ {
 			p.put(resources[i])
 		}
-		ch <- true
+		close(done)
 	}()
 	for i := 0; i < 5; i++ {
-		// Sleep to ensure the goroutine waits
-		time.Sleep(10 * time.Millisecond)
+		// block until we have a client wait for a connection, then offer it
+		for p.wait.waiting() == 0 {
+			time.Sleep(time.Millisecond)
+		}
 		p.put(resources[i])
 	}
-	<-ch
+	<-done
 	assert.EqualValues(t, 5, p.Metrics.WaitCount())
 	assert.Equal(t, 5, len(state.waits))
 	// verify start times are monotonic increasing
@@ -206,13 +208,15 @@ func TestOpen(t *testing.T) {
 	assert.EqualValues(t, 6, state.lastID.Load())
 
 	// SetCapacity
-	p.SetCapacity(3)
+	err = p.SetCapacity(ctx, 3)
+	require.NoError(t, err)
 	assert.EqualValues(t, 3, state.open.Load())
 	assert.EqualValues(t, 6, state.lastID.Load())
 	assert.EqualValues(t, 3, p.Capacity())
 	assert.EqualValues(t, 3, p.Available())
 
-	p.SetCapacity(6)
+	err = p.SetCapacity(ctx, 6)
+	require.NoError(t, err)
 	assert.EqualValues(t, 6, p.Capacity())
 	assert.EqualValues(t, 6, p.Available())
 
@@ -263,7 +267,9 @@ func TestShrinking(t *testing.T) {
 	}
 	done := make(chan bool)
 	go func() {
-		p.SetCapacity(3)
+		err := p.SetCapacity(ctx, 3)
+		require.NoError(t, err)
+
 		done <- true
 	}()
 	expected := map[string]any{
@@ -333,7 +339,8 @@ func TestShrinking(t *testing.T) {
 
 	// This will also wait
 	go func() {
-		p.SetCapacity(2)
+		err := p.SetCapacity(ctx, 2)
+		require.NoError(t, err)
 		done <- true
 	}()
 	time.Sleep(10 * time.Millisecond)
@@ -351,7 +358,8 @@ func TestShrinking(t *testing.T) {
 	assert.EqualValues(t, 2, state.open.Load())
 
 	// Test race condition of SetCapacity with itself
-	p.SetCapacity(3)
+	err = p.SetCapacity(ctx, 3)
+	require.NoError(t, err)
 	for i := 0; i < 3; i++ {
 		var r *Pooled[*TestConn]
 		var err error
@@ -373,9 +381,15 @@ func TestShrinking(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	// This will wait till we Put
-	go p.SetCapacity(2)
+	go func() {
+		err := p.SetCapacity(ctx, 2)
+		require.NoError(t, err)
+	}()
 	time.Sleep(10 * time.Millisecond)
-	go p.SetCapacity(4)
+	go func() {
+		err := p.SetCapacity(ctx, 4)
+		require.NoError(t, err)
+	}()
 	time.Sleep(10 * time.Millisecond)
 
 	// This should not hang
@@ -385,7 +399,7 @@ func TestShrinking(t *testing.T) {
 	<-done
 
 	assert.Panics(t, func() {
-		p.SetCapacity(-1)
+		_ = p.SetCapacity(ctx, -1)
 	})
 
 	assert.EqualValues(t, 4, p.Capacity())
@@ -526,6 +540,46 @@ func TestReopen(t *testing.T) {
 	assert.Equal(t, expected, stats)
 	assert.EqualValues(t, 5, state.lastID.Load())
 	assert.EqualValues(t, 0, state.open.Load())
+}
+
+func TestUserClosing(t *testing.T) {
+	var state TestState
+
+	ctx := context.Background()
+	p := NewPool(&Config[*TestConn]{
+		Capacity:    5,
+		IdleTimeout: time.Second,
+		LogWait:     state.LogWait,
+	}).Open(newConnector(&state), nil)
+
+	var resources [5]*Pooled[*TestConn]
+	for i := 0; i < 5; i++ {
+		var err error
+		resources[i], err = p.Get(ctx, nil)
+		require.NoError(t, err)
+	}
+
+	for _, r := range resources[:4] {
+		r.Recycle()
+	}
+
+	ch := make(chan error)
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		defer cancel()
+
+		err := p.CloseWithContext(ctx)
+		ch <- err
+		close(ch)
+	}()
+
+	select {
+	case <-time.After(5 * time.Second):
+		t.Fatalf("Pool did not shutdown after 5s")
+	case err := <-ch:
+		require.Error(t, err)
+		t.Logf("Shutdown error: %v", err)
+	}
 }
 
 func TestIdleTimeout(t *testing.T) {
@@ -816,7 +870,7 @@ func TestTimeout(t *testing.T) {
 		newctx, cancel := context.WithTimeout(ctx, 10*time.Millisecond)
 		_, err = p.Get(newctx, setting)
 		cancel()
-		assert.EqualError(t, err, "resource pool timed out")
+		assert.EqualError(t, err, "connection pool timed out")
 
 	}
 
@@ -840,7 +894,7 @@ func TestExpired(t *testing.T) {
 		ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-1*time.Second))
 		_, err := p.Get(ctx, setting)
 		cancel()
-		require.EqualError(t, err, "resource pool context already expired")
+		require.EqualError(t, err, "connection pool context already expired")
 	}
 }
 

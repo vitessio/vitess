@@ -22,7 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"sort"
 	"sync"
@@ -174,7 +174,7 @@ func _run(cmd *cobra.Command, args []string) (*results, error) {
 		go func() {
 			if useRandom {
 				for {
-					seqChan <- rand.Intn(maxSeqID-minSeqID) + minSeqID
+					seqChan <- rand.IntN(maxSeqID-minSeqID) + minSeqID
 				}
 			} else {
 				for i := minSeqID; i < maxSeqID; i++ {
@@ -197,7 +197,7 @@ func _run(cmd *cobra.Command, args []string) (*results, error) {
 
 	log.Infof("Sending the query...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(cmd.Context(), timeout)
 	defer cancel()
 	return execMulti(ctx, db, cmd.Flags().Arg(0))
 }

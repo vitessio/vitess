@@ -24,18 +24,16 @@ import (
 	"sync/atomic"
 	"time"
 
-	"vitess.io/vitess/go/vt/vttablet"
-
 	"google.golang.org/protobuf/encoding/prototext"
-
-	"vitess.io/vitess/go/vt/discovery"
-	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -49,7 +47,7 @@ const (
 )
 
 // controller is created by Engine. Members are initialized upfront.
-// There is no mutex within a controller becaust its members are
+// There is no mutex within a controller because its members are
 // either read-only or self-synchronized.
 type controller struct {
 	vre             *Engine
@@ -74,7 +72,7 @@ type controller struct {
 
 // newController creates a new controller. Unless a stream is explicitly 'Stopped',
 // this function launches a goroutine to perform continuous vreplication.
-func newController(ctx context.Context, params map[string]string, dbClientFactory func() binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon, ts *topo.Server, cell, tabletTypesStr string, blpStats *binlogplayer.Stats, vre *Engine) (*controller, error) {
+func newController(ctx context.Context, params map[string]string, dbClientFactory func() binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon, ts *topo.Server, cell, tabletTypesStr string, blpStats *binlogplayer.Stats, vre *Engine, tpo discovery.TabletPickerOptions) (*controller, error) {
 	if blpStats == nil {
 		blpStats = binlogplayer.NewStats()
 	}
@@ -131,7 +129,7 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 				return nil, err
 			}
 		}
-		tp, err := discovery.NewTabletPicker(ctx, sourceTopo, cells, ct.vre.cell, ct.source.Keyspace, ct.source.Shard, tabletTypesStr, discovery.TabletPickerOptions{})
+		tp, err := discovery.NewTabletPicker(ctx, sourceTopo, cells, ct.vre.cell, ct.source.Keyspace, ct.source.Shard, tabletTypesStr, tpo)
 		if err != nil {
 			return nil, err
 		}

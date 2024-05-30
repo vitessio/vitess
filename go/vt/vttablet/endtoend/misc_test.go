@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"math"
 	"net/http"
 	"reflect"
 	"strings"
@@ -28,20 +27,17 @@ import (
 	"testing"
 	"time"
 
-	"google.golang.org/protobuf/proto"
-
-	"vitess.io/vitess/go/test/utils"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
 )
 
@@ -265,8 +261,10 @@ func TestSidecarTables(t *testing.T) {
 }
 
 func TestConsolidation(t *testing.T) {
-	defer framework.Server.SetPoolSize(framework.Server.PoolSize())
-	framework.Server.SetPoolSize(1)
+	defer framework.Server.SetPoolSize(context.Background(), framework.Server.PoolSize())
+
+	err := framework.Server.SetPoolSize(context.Background(), 1)
+	require.NoError(t, err)
 
 	const tag = "Waits/Histograms/Consolidations/Count"
 
@@ -628,66 +626,6 @@ func (tl *testLogger) getLog(i int) string {
 	return fmt.Sprintf("ERROR: log %d/%d does not exist", i, len(tl.logs))
 }
 
-func TestLogTruncation(t *testing.T) {
-	client := framework.NewClient()
-	tl := newTestLogger()
-	defer tl.Close()
-
-	// Test that a long error string is not truncated by default
-	_, err := client.Execute(
-		"insert into vitess_test values(123, null, :data, null)",
-		map[string]*querypb.BindVariable{"data": sqltypes.StringBindVariable("THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED")},
-	)
-	wantLog := `Data too long for column 'charval' at row 1 (errno 1406) (sqlstate 22001) (CallerID: dev): Sql: "insert into vitess_test values(123, null, :data, null)", BindVars: {data: "type:VARCHAR value:\"THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED\""}`
-	wantErr := wantLog
-	if err == nil {
-		t.Errorf("query unexpectedly succeeded")
-	}
-	if tl.getLog(0) != wantLog {
-		t.Errorf("log was unexpectedly truncated: got\n'%s', want\n'%s'", tl.getLog(0), wantLog)
-	}
-
-	if err.Error() != wantErr {
-		t.Errorf("error was unexpectedly truncated: got\n'%s', want\n'%s'", err.Error(), wantErr)
-	}
-
-	// Test that the data too long error is truncated once the option is set
-	sqlparser.SetTruncateErrLen(30)
-	_, err = client.Execute(
-		"insert into vitess_test values(123, null, :data, null)",
-		map[string]*querypb.BindVariable{"data": sqltypes.StringBindVariable("THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED")},
-	)
-	wantLog = `Data too long for column 'charval' at row 1 (errno 1406) (sqlstate 22001) (CallerID: dev): Sql: "insert into vitess [TRUNCATED]", BindVars: {data: " [TRUNCATED]`
-	wantErr = `Data too long for column 'charval' at row 1 (errno 1406) (sqlstate 22001) (CallerID: dev): Sql: "insert into vitess_test values(123, null, :data, null)", BindVars: {data: "type:VARCHAR value:\"THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED\""}`
-	if err == nil {
-		t.Errorf("query unexpectedly succeeded")
-	}
-	if tl.getLog(1) != wantLog {
-		t.Errorf("log was not truncated properly: got\n'%s', want\n'%s'", tl.getLog(1), wantLog)
-	}
-	if err.Error() != wantErr {
-		t.Errorf("error was unexpectedly truncated: got\n'%s', want\n'%s'", err.Error(), wantErr)
-	}
-
-	// Test that trailing comments are preserved data too long error is truncated once the option is set
-	sqlparser.SetTruncateErrLen(30)
-	_, err = client.Execute(
-		"insert into vitess_test values(123, null, :data, null) /* KEEP ME */",
-		map[string]*querypb.BindVariable{"data": sqltypes.StringBindVariable("THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED")},
-	)
-	wantLog = `Data too long for column 'charval' at row 1 (errno 1406) (sqlstate 22001) (CallerID: dev): Sql: "insert into vitess [TRUNCATED] /* KEEP ME */", BindVars: {data: " [TRUNCATED]`
-	wantErr = `Data too long for column 'charval' at row 1 (errno 1406) (sqlstate 22001) (CallerID: dev): Sql: "insert into vitess_test values(123, null, :data, null) /* KEEP ME */", BindVars: {data: "type:VARCHAR value:\"THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED\""}`
-	if err == nil {
-		t.Errorf("query unexpectedly succeeded")
-	}
-	if tl.getLog(2) != wantLog {
-		t.Errorf("log was not truncated properly: got\n'%s', want\n'%s'", tl.getLog(2), wantLog)
-	}
-	if err.Error() != wantErr {
-		t.Errorf("error was unexpectedly truncated: got\n'%s', want\n'%s'", err.Error(), wantErr)
-	}
-}
-
 func TestClientFoundRows(t *testing.T) {
 	client := framework.NewClient()
 	if _, err := client.Execute("insert into vitess_test(intval, charval) values(124, 'aa')", nil); err != nil {
@@ -970,28 +908,91 @@ func TestShowTablesWithSizes(t *testing.T) {
 		_, err := conn.ExecuteFetch(query, 1, false)
 		require.NoError(t, err)
 	}
-	expectTables := map[string]([]string){ // TABLE_TYPE, TABLE_COMMENT
-		"show_tables_with_sizes_t1":        {"BASE TABLE", ""},
-		"show_tables_with_sizes_v1":        {"VIEW", "VIEW"},
-		"show_tables_with_sizes_employees": {"BASE TABLE", ""},
-	}
 
-	rs, err := conn.ExecuteFetch(conn.BaseShowTablesWithSizes(), math.MaxInt, false)
+	expectedTables := []string{
+		"show_tables_with_sizes_t1",
+		"show_tables_with_sizes_v1",
+		"show_tables_with_sizes_employees",
+	}
+	actualTables := []string{}
+
+	rs, err := conn.ExecuteFetch(conn.BaseShowTablesWithSizes(), -1, false)
 	require.NoError(t, err)
 	require.NotEmpty(t, rs.Rows)
 
-	assert.GreaterOrEqual(t, len(rs.Rows), len(expectTables))
-	matchedTables := map[string]bool{}
+	assert.GreaterOrEqual(t, len(rs.Rows), len(expectedTables))
+
 	for _, row := range rs.Rows {
+		assert.Equal(t, 6, len(row))
+
 		tableName := row[0].ToString()
-		vals, ok := expectTables[tableName]
-		if ok {
-			assert.Equal(t, vals[0], row[1].ToString()) // TABLE_TYPE
-			assert.Equal(t, vals[1], row[3].ToString()) // TABLE_COMMENT
-			matchedTables[tableName] = true
+		if tableName == "show_tables_with_sizes_t1" {
+			// TABLE_TYPE
+			assert.Equal(t, "BASE TABLE", row[1].ToString())
+
+			assert.True(t, row[2].IsIntegral())
+			createTime, err := row[2].ToCastInt64()
+			assert.NoError(t, err)
+			assert.Greater(t, createTime, int64(0))
+
+			// TABLE_COMMENT
+			assert.Equal(t, "", row[3].ToString())
+
+			assert.True(t, row[4].IsDecimal())
+			fileSize, err := row[4].ToCastInt64()
+			assert.NoError(t, err)
+			assert.Greater(t, fileSize, int64(0))
+
+			assert.True(t, row[4].IsDecimal())
+			allocatedSize, err := row[5].ToCastInt64()
+			assert.NoError(t, err)
+			assert.Greater(t, allocatedSize, int64(0))
+
+			actualTables = append(actualTables, tableName)
+		} else if tableName == "show_tables_with_sizes_v1" {
+			// TABLE_TYPE
+			assert.Equal(t, "VIEW", row[1].ToString())
+
+			assert.True(t, row[2].IsIntegral())
+			createTime, err := row[2].ToCastInt64()
+			assert.NoError(t, err)
+			assert.Greater(t, createTime, int64(0))
+
+			// TABLE_COMMENT
+			assert.Equal(t, "VIEW", row[3].ToString())
+
+			assert.True(t, row[4].IsNull())
+			assert.True(t, row[5].IsNull())
+
+			actualTables = append(actualTables, tableName)
+		} else if tableName == "show_tables_with_sizes_employees" {
+			// TABLE_TYPE
+			assert.Equal(t, "BASE TABLE", row[1].ToString())
+
+			assert.True(t, row[2].IsIntegral())
+			createTime, err := row[2].ToCastInt64()
+			assert.NoError(t, err)
+			assert.Greater(t, createTime, int64(0))
+
+			// TABLE_COMMENT
+			assert.Equal(t, "", row[3].ToString())
+
+			assert.True(t, row[4].IsDecimal())
+			fileSize, err := row[4].ToCastInt64()
+			assert.NoError(t, err)
+			assert.Greater(t, fileSize, int64(0))
+
+			assert.True(t, row[5].IsDecimal())
+			allocatedSize, err := row[5].ToCastInt64()
+			assert.NoError(t, err)
+			assert.Greater(t, allocatedSize, int64(0))
+
+			actualTables = append(actualTables, tableName)
 		}
 	}
-	assert.Equalf(t, len(expectTables), len(matchedTables), "%v", matchedTables)
+
+	assert.Equal(t, len(expectedTables), len(actualTables))
+	assert.ElementsMatch(t, expectedTables, actualTables)
 }
 
 // TestTuple tests that bind variables having tuple values work with vttablet.

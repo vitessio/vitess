@@ -37,9 +37,9 @@ var numSidecarDBTables int
 var ddls1, ddls2 []string
 
 func init() {
-	sidecarDBTables = []string{"copy_state", "dt_participant", "dt_state", "heartbeat", "post_copy_action", "redo_state",
-		"redo_statement", "reparent_journal", "resharding_journal", "schema_migrations", "schema_version", "schemacopy", "tables",
-		"vdiff", "vdiff_log", "vdiff_table", "views", "vreplication", "vreplication_log"}
+	sidecarDBTables = []string{"copy_state", "dt_participant", "dt_state", "heartbeat", "post_copy_action",
+		"redo_state", "redo_statement", "reparent_journal", "resharding_journal", "schema_migrations", "schema_version",
+		"tables", "udfs", "vdiff", "vdiff_log", "vdiff_table", "views", "vreplication", "vreplication_log"}
 	numSidecarDBTables = len(sidecarDBTables)
 	ddls1 = []string{
 		"drop table _vt.vreplication_log",
@@ -58,15 +58,8 @@ func prs(t *testing.T, keyspace, shard string) {
 // TestSidecarDB launches a Vitess cluster and ensures that the expected sidecar tables are created. We also drop/alter
 // tables and ensure the next tablet init will recreate the sidecar database to the desired schema.
 func TestSidecarDB(t *testing.T) {
-	cells := []string{"zone1"}
-
-	vc = NewVitessCluster(t, "TestSidecarDB", cells, mainClusterConfig)
-	require.NotNil(t, vc)
-	allCellNames = "zone1"
-	defaultCellName := "zone1"
-	defaultCell = vc.Cells[defaultCellName]
-
-	defer vc.TearDown(t)
+	vc = NewVitessCluster(t, nil)
+	defer vc.TearDown()
 
 	keyspace := "product"
 	shard := "0"
@@ -74,7 +67,7 @@ func TestSidecarDB(t *testing.T) {
 	cell1 := vc.Cells[defaultCellName]
 	tablet100 := fmt.Sprintf("%s-100", defaultCellName)
 	tablet101 := fmt.Sprintf("%s-101", defaultCellName)
-	vc.AddKeyspace(t, []*Cell{cell1}, keyspace, shard, initialProductVSchema, initialProductSchema, 1, 0, 100, sourceKsOpts)
+	vc.AddKeyspace(t, []*Cell{cell1}, keyspace, "0", initialProductVSchema, initialProductSchema, 1, 0, 100, sourceKsOpts)
 	shard0 := vc.Cells[defaultCellName].Keyspaces[keyspace].Shards[shard]
 	tablet100Port := shard0.Tablets[tablet100].Vttablet.Port
 	tablet101Port := shard0.Tablets[tablet101].Vttablet.Port

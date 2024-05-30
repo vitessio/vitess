@@ -38,6 +38,22 @@ import (
 type VtctldClient struct {
 	vtctldclient.VtctldClient
 
+	ApplySchemaResults map[string]struct {
+		Response *vtctldatapb.ApplySchemaResponse
+		Error    error
+	}
+	CancelSchemaMigrationResults map[string]struct {
+		Response *vtctldatapb.CancelSchemaMigrationResponse
+		Error    error
+	}
+	CleanupSchemaMigrationResults map[string]struct {
+		Response *vtctldatapb.CleanupSchemaMigrationResponse
+		Error    error
+	}
+	CompleteSchemaMigrationResults map[string]struct {
+		Response *vtctldatapb.CompleteSchemaMigrationResponse
+		Error    error
+	}
 	CreateKeyspaceShouldErr bool
 	CreateShardShouldErr    bool
 	DeleteKeyspaceShouldErr bool
@@ -77,6 +93,10 @@ type VtctldClient struct {
 		Keyspaces []*vtctldatapb.Keyspace
 		Error     error
 	}
+	GetSchemaMigrationsResults map[string]struct {
+		Response *vtctldatapb.GetSchemaMigrationsResponse
+		Error    error
+	}
 	GetSchemaResults map[string]struct {
 		Response *vtctldatapb.GetSchemaResponse
 		Error    error
@@ -91,6 +111,10 @@ type VtctldClient struct {
 	}
 	GetWorkflowsResults map[string]struct {
 		Response *vtctldatapb.GetWorkflowsResponse
+		Error    error
+	}
+	LaunchSchemaMigrationResults map[string]struct {
+		Response *vtctldatapb.LaunchSchemaMigrationResponse
 		Error    error
 	}
 	PingTabletResults           map[string]error
@@ -113,6 +137,10 @@ type VtctldClient struct {
 	}
 	ReparentTabletResults map[string]struct {
 		Response *vtctldatapb.ReparentTabletResponse
+		Error    error
+	}
+	RetrySchemaMigrationResults map[string]struct {
+		Response *vtctldatapb.RetrySchemaMigrationResponse
 		Error    error
 	}
 	RunHealthCheckResults            map[string]error
@@ -152,6 +180,66 @@ var _ vtctldclient.VtctldClient = (*VtctldClient)(nil)
 // Close is part of the vtctldclient.VtctldClient interface.
 func (fake *VtctldClient) Close() error { return nil }
 
+// ApplySchema is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) ApplySchema(ctx context.Context, req *vtctldatapb.ApplySchemaRequest, opts ...grpc.CallOption) (*vtctldatapb.ApplySchemaResponse, error) {
+	if fake.ApplySchemaResults == nil {
+		return nil, fmt.Errorf("%w: ApplySchemaResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	key := req.Keyspace
+
+	if resp, ok := fake.ApplySchemaResults[key]; ok {
+		return resp.Response, resp.Error
+	}
+
+	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
+}
+
+// CancelSchemaMigration is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) CancelSchemaMigration(ctx context.Context, req *vtctldatapb.CancelSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldatapb.CancelSchemaMigrationResponse, error) {
+	if fake.CancelSchemaMigrationResults == nil {
+		return nil, fmt.Errorf("%w: CancelSchemaMigrationResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	key := req.Keyspace
+
+	if resp, ok := fake.CancelSchemaMigrationResults[key]; ok {
+		return resp.Response, resp.Error
+	}
+
+	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
+}
+
+// CleanupSchemaMigration is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) CleanupSchemaMigration(ctx context.Context, req *vtctldatapb.CleanupSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldatapb.CleanupSchemaMigrationResponse, error) {
+	if fake.CleanupSchemaMigrationResults == nil {
+		return nil, fmt.Errorf("%w: CleanupSchemaMigrationResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	key := req.Keyspace
+
+	if resp, ok := fake.CleanupSchemaMigrationResults[key]; ok {
+		return resp.Response, resp.Error
+	}
+
+	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
+}
+
+// CompleteSchemaMigration is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) CompleteSchemaMigration(ctx context.Context, req *vtctldatapb.CompleteSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldatapb.CompleteSchemaMigrationResponse, error) {
+	if fake.CompleteSchemaMigrationResults == nil {
+		return nil, fmt.Errorf("%w: CompleteSchemaMigrationResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	key := req.Keyspace
+
+	if resp, ok := fake.CompleteSchemaMigrationResults[key]; ok {
+		return resp.Response, resp.Error
+	}
+
+	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
+}
+
 // CreateKeyspace is part of the vtctldclient.VtctldClient interface.
 func (fake *VtctldClient) CreateKeyspace(ctx context.Context, req *vtctldatapb.CreateKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.CreateKeyspaceResponse, error) {
 	if fake.CreateKeyspaceShouldErr {
@@ -159,7 +247,6 @@ func (fake *VtctldClient) CreateKeyspace(ctx context.Context, req *vtctldatapb.C
 	}
 
 	ks := &topodatapb.Keyspace{
-		ServedFroms:  req.ServedFroms,
 		KeyspaceType: req.Type,
 		BaseKeyspace: req.BaseKeyspace,
 		SnapshotTime: req.SnapshotTime,
@@ -346,6 +433,20 @@ func (fake *VtctldClient) GetKeyspaces(ctx context.Context, req *vtctldatapb.Get
 	}, nil
 }
 
+// GetSchemaMigrations is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) GetSchemaMigrations(ctx context.Context, req *vtctldatapb.GetSchemaMigrationsRequest, opts ...grpc.CallOption) (*vtctldatapb.GetSchemaMigrationsResponse, error) {
+	if fake.GetSchemaMigrationsResults == nil {
+		return nil, fmt.Errorf("%w: GetSchemaMigrationsResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	key := req.Keyspace
+	if result, ok := fake.GetSchemaMigrationsResults[key]; ok {
+		return result.Response, result.Error
+	}
+
+	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
+}
+
 // GetSchema is part of the vtctldclient.VtctldClient interface.
 func (fake *VtctldClient) GetSchema(ctx context.Context, req *vtctldatapb.GetSchemaRequest, opts ...grpc.CallOption) (*vtctldatapb.GetSchemaResponse, error) {
 	if fake.GetSchemaResults == nil {
@@ -427,6 +528,21 @@ func (fake *VtctldClient) GetWorkflows(ctx context.Context, req *vtctldatapb.Get
 	}
 
 	return nil, fmt.Errorf("%w: no result set for keyspace %s", assert.AnError, req.Keyspace)
+}
+
+// LaunchSchemaMigration is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) LaunchSchemaMigration(ctx context.Context, req *vtctldatapb.LaunchSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldatapb.LaunchSchemaMigrationResponse, error) {
+	if fake.LaunchSchemaMigrationResults == nil {
+		return nil, fmt.Errorf("%w: LaunchSchemaMigrationResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	key := req.Keyspace
+
+	if resp, ok := fake.LaunchSchemaMigrationResults[key]; ok {
+		return resp.Response, resp.Error
+	}
+
+	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
 }
 
 // PingTablet is part of the vtctldclient.VtctldClient interface.
@@ -529,6 +645,21 @@ func (fake *VtctldClient) ReparentTablet(ctx context.Context, req *vtctldatapb.R
 	key := topoproto.TabletAliasString(req.Tablet)
 	if result, ok := fake.ReparentTabletResults[key]; ok {
 		return result.Response, result.Error
+	}
+
+	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
+}
+
+// RetrySchemaMigration is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) RetrySchemaMigration(ctx context.Context, req *vtctldatapb.RetrySchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldatapb.RetrySchemaMigrationResponse, error) {
+	if fake.RetrySchemaMigrationResults == nil {
+		return nil, fmt.Errorf("%w: RetrySchemaMigrationResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	key := req.Keyspace
+
+	if resp, ok := fake.RetrySchemaMigrationResults[key]; ok {
+		return resp.Response, resp.Error
 	}
 
 	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)

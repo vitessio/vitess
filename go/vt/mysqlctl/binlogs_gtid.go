@@ -104,8 +104,7 @@ func ChooseBinlogsForIncrementalBackup(
 		// The other thing to validate, is that we can't allow a situation where the backup-GTIDs have entries not covered
 		// by our binary log's Previous-GTIDs (padded with purged GTIDs). Because that means we can't possibly restore to
 		// such position.
-		prevGTIDsUnionPurged := prevGTIDsUnion.Union(purgedGTIDSet)
-		if !prevGTIDsUnionPurged.Contains(backupFromGTIDSet) {
+		if prevGTIDsUnionPurged := prevGTIDsUnion.Union(purgedGTIDSet); !prevGTIDsUnionPurged.Contains(backupFromGTIDSet) {
 			return nil, "", "", vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
 				"Mismatching GTID entries. Requested backup pos has entries not found in the binary logs, and binary logs have entries not found in the requested backup pos. Neither fully contains the other.\n- Requested pos=%v\n- binlog pos=%v\n- purgedGTIDSet=%v\n- union=%v\n- union purged=%v",
 				backupFromGTIDSet, previousGTIDsPos.GTIDSet, purgedGTIDSet, prevGTIDsUnion, prevGTIDsUnionPurged)
@@ -133,7 +132,16 @@ func ChooseBinlogsForIncrementalBackup(
 		}
 		return binaryLogsToBackup, incrementalBackupFromGTID, incrementalBackupToGTID, nil
 	}
-	return nil, "", "", vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no binary logs to backup (increment is empty)")
+	if prevGTIDsUnion.Union(purgedGTIDSet).Equal(backupFromGTIDSet) {
+		// This means we've iterated over all binary logs, and as it turns out, the backup pos is
+		// identical to the Previous-GTIDs of the last binary log. But, we also know that we ourselves
+		// have flushed the binary logs so as to generate the new (now last) binary log.
+		// Which means, from the Pos of the backup till the time we issued FLUSH BINARY LOGS, there
+		// were no new GTID entries. The database was performed no writes during that period,
+		// so we have no entries to backup and the backup is therefore empty.
+		return nil, "", "", nil
+	}
+	return nil, "", "", vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot find binary logs that cover requested GTID range. backupFromGTIDSet=%v, prevGTIDsUnion=%v", backupFromGTIDSet.String(), prevGTIDsUnion.String())
 }
 
 // IsValidIncrementalBakcup determines whether the given manifest can be used to extend a backup

@@ -42,8 +42,9 @@ func (n Name) Concatenate(other Name) Name {
 
 const (
 	// DefaultName is the app name used by vitess when app doesn't indicate its name
-	DefaultName Name = "default"
-	VitessName  Name = "vitess"
+	DefaultName             Name = "default"
+	VitessName              Name = "vitess"
+	ThrottlerStimulatorName Name = "throttler-stimulator"
 
 	TableGCName   Name = "tablegc"
 	OnlineDDLName Name = "online-ddl"
@@ -73,7 +74,7 @@ var (
 )
 
 // ExemptFromChecks returns 'true' for apps that should skip the throttler checks. The throttler should
-// always repsond with automated "OK" to those apps, without delay. These apps also do not cause a heartbeat renewal.
+// always respond with automated "OK" to those apps, without delay. These apps also do not cause a heartbeat renewal.
 func ExemptFromChecks(appName string) bool {
 	return exemptFromChecks[appName]
 }

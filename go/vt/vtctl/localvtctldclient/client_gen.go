@@ -39,6 +39,11 @@ func (client *localVtctldClient) AddCellsAlias(ctx context.Context, in *vtctldat
 	return client.s.AddCellsAlias(ctx, in)
 }
 
+// ApplyKeyspaceRoutingRules is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ApplyKeyspaceRoutingRules(ctx context.Context, in *vtctldatapb.ApplyKeyspaceRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldatapb.ApplyKeyspaceRoutingRulesResponse, error) {
+	return client.s.ApplyKeyspaceRoutingRules(ctx, in)
+}
+
 // ApplyRoutingRules is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) ApplyRoutingRules(ctx context.Context, in *vtctldatapb.ApplyRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldatapb.ApplyRoutingRulesResponse, error) {
 	return client.s.ApplyRoutingRules(ctx, in)
@@ -241,9 +246,19 @@ func (client *localVtctldClient) ExecuteHook(ctx context.Context, in *vtctldatap
 	return client.s.ExecuteHook(ctx, in)
 }
 
+// ExecuteMultiFetchAsDBA is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ExecuteMultiFetchAsDBA(ctx context.Context, in *vtctldatapb.ExecuteMultiFetchAsDBARequest, opts ...grpc.CallOption) (*vtctldatapb.ExecuteMultiFetchAsDBAResponse, error) {
+	return client.s.ExecuteMultiFetchAsDBA(ctx, in)
+}
+
 // FindAllShardsInKeyspace is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) FindAllShardsInKeyspace(ctx context.Context, in *vtctldatapb.FindAllShardsInKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.FindAllShardsInKeyspaceResponse, error) {
 	return client.s.FindAllShardsInKeyspace(ctx, in)
+}
+
+// ForceCutOverSchemaMigration is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ForceCutOverSchemaMigration(ctx context.Context, in *vtctldatapb.ForceCutOverSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldatapb.ForceCutOverSchemaMigrationResponse, error) {
+	return client.s.ForceCutOverSchemaMigration(ctx, in)
 }
 
 // GetBackups is part of the vtctlservicepb.VtctldClient interface.
@@ -276,6 +291,11 @@ func (client *localVtctldClient) GetKeyspace(ctx context.Context, in *vtctldatap
 	return client.s.GetKeyspace(ctx, in)
 }
 
+// GetKeyspaceRoutingRules is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) GetKeyspaceRoutingRules(ctx context.Context, in *vtctldatapb.GetKeyspaceRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldatapb.GetKeyspaceRoutingRulesResponse, error) {
+	return client.s.GetKeyspaceRoutingRules(ctx, in)
+}
+
 // GetKeyspaces is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) GetKeyspaces(ctx context.Context, in *vtctldatapb.GetKeyspacesRequest, opts ...grpc.CallOption) (*vtctldatapb.GetKeyspacesResponse, error) {
 	return client.s.GetKeyspaces(ctx, in)
@@ -304,6 +324,11 @@ func (client *localVtctldClient) GetSchemaMigrations(ctx context.Context, in *vt
 // GetShard is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) GetShard(ctx context.Context, in *vtctldatapb.GetShardRequest, opts ...grpc.CallOption) (*vtctldatapb.GetShardResponse, error) {
 	return client.s.GetShard(ctx, in)
+}
+
+// GetShardReplication is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) GetShardReplication(ctx context.Context, in *vtctldatapb.GetShardReplicationRequest, opts ...grpc.CallOption) (*vtctldatapb.GetShardReplicationResponse, error) {
+	return client.s.GetShardReplication(ctx, in)
 }
 
 // GetShardRoutingRules is part of the vtctlservicepb.VtctldClient interface.

@@ -8,7 +8,7 @@ RUN cd /tmp && \
 	curl -OL https://dev.mysql.com/get/Downloads/MySQL-8.0/mysql-${MYSQL_VERSION}.tar.gz && \
 	tar zxvf mysql-${MYSQL_VERSION}.tar.gz
 
-ADD colldump.cc /tmp/mysql-${MYSQL_VERSION}/strings/colldump.cc
+ADD https://gist.githubusercontent.com/vmg/11625faa79574a4d389fb3c04bdd0582/raw/b46389f1d431392cc64d920d4a30306970cff21f/colldump.cc /tmp/mysql-${MYSQL_VERSION}/strings/colldump.cc
 RUN echo "MYSQL_ADD_EXECUTABLE(colldump colldump.cc SKIP_INSTALL)\nTARGET_LINK_LIBRARIES(colldump strings)\n" >> /tmp/mysql-${MYSQL_VERSION}/strings/CMakeLists.txt
 
 RUN cd /tmp/mysql-${MYSQL_VERSION} && \

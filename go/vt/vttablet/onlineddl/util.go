@@ -26,13 +26,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"vitess.io/vitess/go/vt/log"
-)
-
-const (
-	readableTimeFormat = "20060102150405"
 )
 
 // execCmd searches the PATH for a command and runs it, logging the output.
@@ -88,18 +83,4 @@ func RandomHash() string {
 	hasher := sha256.New()
 	hasher.Write(rb)
 	return hex.EncodeToString(hasher.Sum(nil))
-}
-
-// ToReadableTimestamp returns a timestamp, in seconds resolution, that is human readable
-// (as opposed to unix timestamp which is just a number)
-// Example: for Aug 25 2020, 16:04:25 we return "20200825160425"
-func ToReadableTimestamp(t time.Time) string {
-	return t.Format(readableTimeFormat)
-}
-
-// ReadableTimestamp returns a timestamp, in seconds resolution, that is human readable
-// (as opposed to unix timestamp which is just a number), and which corresponds to the time now.
-// Example: for Aug 25 2020, 16:04:25 we return "20200825160425"
-func ReadableTimestamp() string {
-	return ToReadableTimestamp(time.Now())
 }

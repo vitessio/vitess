@@ -25,16 +25,14 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/replication"
-
-	"vitess.io/vitess/go/vt/vtctl/reparentutil/reparenttestutil"
-
 	"vitess.io/vitess/go/vt/discovery"
-	"vitess.io/vitess/go/vt/vtctl/reparentutil"
-
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/reparenttestutil"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/wrangler"
 
@@ -51,7 +49,7 @@ func TestShardReplicationStatuses(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
+	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 	// create shard and tablets
 	if _, err := ts.GetOrCreateShard(ctx, "test_keyspace", "0"); err != nil {
@@ -96,9 +94,9 @@ func TestShardReplicationStatuses(t *testing.T) {
 	replica.FakeMysqlDaemon.SetReplicationSourceInputs = append(replica.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(primary.Tablet))
 	replica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		// These 3 statements come from tablet startup
-		"STOP SLAVE",
-		"FAKE SET MASTER",
-		"START SLAVE",
+		"STOP REPLICA",
+		"FAKE SET SOURCE",
+		"START REPLICA",
 	}
 	replica.StartActionLoop(t, wr)
 	defer replica.StopActionLoop(t)
@@ -135,7 +133,7 @@ func TestReparentTablet(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
+	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 	// create shard and tablets
 	if _, err := ts.GetOrCreateShard(ctx, "test_keyspace", "0"); err != nil {
@@ -166,11 +164,11 @@ func TestReparentTablet(t *testing.T) {
 	replica.FakeMysqlDaemon.SetReplicationSourceInputs = append(replica.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(primary.Tablet))
 	replica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		// These 3 statements come from tablet startup
-		"STOP SLAVE",
-		"FAKE SET MASTER",
-		"START SLAVE",
-		"STOP SLAVE",
-		"START SLAVE",
+		"STOP REPLICA",
+		"FAKE SET SOURCE",
+		"START REPLICA",
+		"STOP REPLICA",
+		"START REPLICA",
 	}
 	replica.StartActionLoop(t, wr)
 	defer replica.StopActionLoop(t)
@@ -192,7 +190,7 @@ func TestSetReplicationSource(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
+	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 	// create shard and tablets
 	_, err := ts.GetOrCreateShard(ctx, "test_keyspace", "0")
@@ -224,14 +222,14 @@ func TestSetReplicationSource(t *testing.T) {
 		replica.FakeMysqlDaemon.SetReplicationSourceInputs = append(replica.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(primary.Tablet))
 		replica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 			// These 3 statements come from tablet startup
-			"STOP SLAVE",
-			"FAKE SET MASTER",
-			"START SLAVE",
+			"STOP REPLICA",
+			"FAKE SET SOURCE",
+			"START REPLICA",
 			// We stop and reset the replication parameters because of relay log issues.
-			"STOP SLAVE",
-			"STOP SLAVE",
-			"RESET SLAVE",
-			"START SLAVE",
+			"STOP REPLICA",
+			"STOP REPLICA",
+			"RESET REPLICA",
+			"START REPLICA",
 		}
 		replica.StartActionLoop(t, wr)
 		defer replica.StopActionLoop(t)
@@ -257,9 +255,9 @@ func TestSetReplicationSource(t *testing.T) {
 		replica.FakeMysqlDaemon.SetReplicationSourceInputs = append(replica.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(primary.Tablet))
 		replica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 			// These 3 statements come from tablet startup
-			"STOP SLAVE",
-			"FAKE SET MASTER",
-			"START SLAVE",
+			"STOP REPLICA",
+			"FAKE SET SOURCE",
+			"START REPLICA",
 			// For the SetReplicationSource call, we shouldn't get any queries at all!
 		}
 		replica.StartActionLoop(t, wr)

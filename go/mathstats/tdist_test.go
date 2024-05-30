@@ -4,7 +4,12 @@
 
 package mathstats
 
-import "testing"
+import (
+	"math"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
 
 func TestT(t *testing.T) {
 	testFunc(t, "PDF(%v|v=1)", TDist{1}.PDF, map[float64]float64{
@@ -92,4 +97,18 @@ func TestT(t *testing.T) {
 		7:   0.99954162624280074,
 		8:   0.99975354666971372,
 		9:   0.9998586600128780})
+}
+func TestCDFNan(t *testing.T) {
+	tDist := TDist{V: 1}
+
+	result := tDist.CDF(math.NaN())
+	assert.True(t, math.IsNaN(result), "CDF(NaN) = %v, expected NaN", result)
+}
+
+func TestBounds_tdist(t *testing.T) {
+	tDist := TDist{V: 1}
+
+	lower, upper := tDist.Bounds()
+	assert.Equal(t, -4.0, lower, "Lower bound should be -4")
+	assert.Equal(t, 4.0, upper, "Upper bound should be 4")
 }

@@ -20,7 +20,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"path"
 	"runtime"
@@ -138,7 +138,8 @@ var (
 	clusterInstance *cluster.LocalProcessCluster
 	shards          []cluster.Shard
 	primary         *cluster.Vttablet
-	replica         *cluster.Vttablet
+	replicaNoFK     *cluster.Vttablet
+	replicaFK       *cluster.Vttablet
 	vtParams        mysql.ConnParams
 
 	onlineDDLStrategy     = "vitess --unsafe-allow-foreign-keys --cut-over-threshold=15s"
@@ -333,7 +334,6 @@ func TestMain(m *testing.M) {
 			"--heartbeat_on_demand_duration", "5s",
 			"--migration_check_interval", "5s",
 			"--watch_replication_stream",
-			"--vreplication_tablet_type", "primary",
 		}
 		clusterInstance.VtGateExtraArgs = []string{}
 
@@ -351,7 +351,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// We will use a replica to confirm that vtgate's cascading works correctly.
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"1"}, 1, false); err != nil {
+		if err := clusterInstance.StartKeyspace(*keyspace, []string{"1"}, 2, false); err != nil {
 			return 1, err
 		}
 
@@ -392,12 +392,21 @@ func tabletTestName(t *testing.T, tablet *cluster.Vttablet) string {
 	switch tablet {
 	case primary:
 		return "primary"
-	case replica:
-		return "replica"
+	case replicaNoFK:
+		return "replicaNoFK"
+	case replicaFK:
+		return "replicaFK"
 	default:
 		assert.FailNowf(t, "unknown tablet", "%v, type=%v", tablet.Alias, tablet.Type)
 	}
 	return ""
+}
+
+func validateReplicationIsHealthy(t *testing.T, tablet *cluster.Vttablet) (result bool) {
+	t.Run(tabletTestName(t, tablet), func(t *testing.T) {
+		result = cluster.ValidateReplicationIsHealthy(t, tablet)
+	})
+	return result
 }
 
 func getTabletPosition(t *testing.T, tablet *cluster.Vttablet) replication.Position {
@@ -406,22 +415,19 @@ func getTabletPosition(t *testing.T, tablet *cluster.Vttablet) replication.Posit
 	require.NotNil(t, row)
 	gtidExecuted := row.AsString("gtid_executed", "")
 	require.NotEmpty(t, gtidExecuted)
-	pos, err := replication.DecodePositionDefaultFlavor(gtidExecuted, replication.Mysql56FlavorID)
+	pos, _, err := replication.DecodePositionMySQL56(gtidExecuted)
 	assert.NoError(t, err)
 	return pos
 }
 
-func waitForReplicaCatchup(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-	primaryPos := getTabletPosition(t, primary)
+func waitForReplicaCatchup(t *testing.T, ctx context.Context, replica *cluster.Vttablet, pos replication.Position) {
 	for {
 		replicaPos := getTabletPosition(t, replica)
-		if replicaPos.GTIDSet.Contains(primaryPos.GTIDSet) {
+		if replicaPos.GTIDSet.Contains(pos.GTIDSet) {
 			// success
 			return
 		}
-		if !cluster.ValidateReplicationIsHealthy(t, replica) {
+		if !validateReplicationIsHealthy(t, replica) {
 			assert.FailNow(t, "replication is broken; not waiting for catchup")
 			return
 		}
@@ -435,21 +441,41 @@ func waitForReplicaCatchup(t *testing.T) {
 	}
 }
 
+func waitForReplicationCatchup(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	primaryPos := getTabletPosition(t, primary)
+	var wg sync.WaitGroup
+	for _, replica := range []*cluster.Vttablet{replicaNoFK, replicaFK} {
+		replica := replica
+		wg.Add(1)
+		go func() {
+			waitForReplicaCatchup(t, ctx, replica, primaryPos)
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+}
+
 func validateMetrics(t *testing.T, tcase *testCase) {
 	for _, workloadTable := range tableNames {
 		t.Run(workloadTable, func(t *testing.T) {
 			t.Run("fk errors", func(t *testing.T) {
 				testSelectTableFKErrors(t, workloadTable, tcase)
 			})
-			var primaryRows, replicaRows int64
+			var primaryRows, replicaNoFKRows, replicaFKRows int64
 			t.Run(tabletTestName(t, primary), func(t *testing.T) {
 				primaryRows = testSelectTableMetrics(t, primary, workloadTable, tcase)
 			})
-			t.Run(tabletTestName(t, replica), func(t *testing.T) {
-				replicaRows = testSelectTableMetrics(t, replica, workloadTable, tcase)
+			t.Run(tabletTestName(t, replicaNoFK), func(t *testing.T) {
+				replicaNoFKRows = testSelectTableMetrics(t, replicaNoFK, workloadTable, tcase)
 			})
-			t.Run("compare primary and replica", func(t *testing.T) {
-				assert.Equal(t, primaryRows, replicaRows)
+			t.Run(tabletTestName(t, replicaFK), func(t *testing.T) {
+				replicaFKRows = testSelectTableMetrics(t, replicaFK, workloadTable, tcase)
+			})
+			t.Run("compare primary and replicas", func(t *testing.T) {
+				assert.Equal(t, primaryRows, replicaNoFKRows)
+				assert.Equal(t, primaryRows, replicaFKRows)
 			})
 		})
 	}
@@ -458,12 +484,16 @@ func validateMetrics(t *testing.T, tcase *testCase) {
 func TestInitialSetup(t *testing.T) {
 	shards = clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
-	require.Equal(t, 2, len(shards[0].Vttablets))
+	require.Equal(t, 3, len(shards[0].Vttablets)) // primary, no-fk replica, fk replica
 	primary = shards[0].Vttablets[0]
 	require.NotNil(t, primary)
-	replica = shards[0].Vttablets[1]
-	require.NotNil(t, replica)
-	require.NotEqual(t, primary.Alias, replica.Alias)
+	replicaNoFK = shards[0].Vttablets[1]
+	require.NotNil(t, replicaNoFK)
+	require.NotEqual(t, primary.Alias, replicaNoFK.Alias)
+	replicaFK = shards[0].Vttablets[2]
+	require.NotNil(t, replicaFK)
+	require.NotEqual(t, primary.Alias, replicaFK.Alias)
+	require.NotEqual(t, replicaNoFK.Alias, replicaFK.Alias)
 
 	reverseTableNames = slices.Clone(tableNames)
 	slices.Reverse(reverseTableNames)
@@ -498,7 +528,8 @@ func ExecuteFKTest(t *testing.T, tcase *testCase) {
 		workloadName = "workload"
 	}
 	testName := fmt.Sprintf("%s/del=%s/upd=%s", workloadName, referenceActionMap[tcase.onDeleteAction], referenceActionMap[tcase.onUpdateAction])
-	if tcase.onlineDDLTable != "" {
+	testOnlineDDL := (tcase.onlineDDLTable != "")
+	if testOnlineDDL {
 		testName = fmt.Sprintf("%s/ddl=%s", testName, tcase.onlineDDLTable)
 	}
 	if tcase.notes != "" {
@@ -525,7 +556,7 @@ func ExecuteFKTest(t *testing.T, tcase *testCase) {
 				baseSleepInterval := 15 * time.Millisecond
 				singleConnectionSleepIntervalNanoseconds := float64(baseSleepInterval.Nanoseconds()) * sleepModifier
 				sleepInterval := time.Duration(int64(singleConnectionSleepIntervalNanoseconds))
-				if tcase.onlineDDLTable != "" {
+				if testOnlineDDL {
 					sleepInterval = sleepInterval * 2
 					maxConcurrency = max(1, maxConcurrency/2)
 				}
@@ -544,7 +575,7 @@ func ExecuteFKTest(t *testing.T, tcase *testCase) {
 					}()
 				}
 
-				if tcase.onlineDDLTable != "" {
+				if testOnlineDDL {
 					t.Run("migrating", func(t *testing.T) {
 						// This only works on patched MySQL
 						hint := tcase.createTableHint
@@ -566,7 +597,7 @@ func ExecuteFKTest(t *testing.T, tcase *testCase) {
 							artifacts := textutil.SplitDelimitedList(row.AsString("artifacts", ""))
 							for _, artifact := range artifacts {
 								t.Run(artifact, func(t *testing.T) {
-									err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, "drop table if exists "+artifact)
+									err := clusterInstance.VtctldClientProcess.ApplySchema(keyspaceName, "drop table if exists "+artifact)
 									require.NoError(t, err)
 								})
 							}
@@ -576,18 +607,21 @@ func ExecuteFKTest(t *testing.T, tcase *testCase) {
 				wg.Wait()
 			})
 		}
-		t.Run("wait for replica", func(t *testing.T) {
-			waitForReplicaCatchup(t)
+		t.Run("wait for replicas", func(t *testing.T) {
+			waitForReplicationCatchup(t)
 		})
+		validateTableDefinitions(t, testOnlineDDL)
 		t.Run("validate metrics", func(t *testing.T) {
 			validateMetrics(t, tcase)
 		})
 		t.Run("validate replication health", func(t *testing.T) {
-			cluster.ValidateReplicationIsHealthy(t, replica)
+			validateReplicationIsHealthy(t, replicaNoFK)
+			validateReplicationIsHealthy(t, replicaFK)
 		})
 		t.Run("validate fk", func(t *testing.T) {
 			testFKIntegrity(t, primary, tcase)
-			testFKIntegrity(t, replica, tcase)
+			testFKIntegrity(t, replicaNoFK, tcase)
+			testFKIntegrity(t, replicaFK, tcase)
 		})
 	})
 }
@@ -596,19 +630,25 @@ func TestStressFK(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
 	t.Run("validate replication health", func(t *testing.T) {
-		cluster.ValidateReplicationIsHealthy(t, replica)
+		validateReplicationIsHealthy(t, replicaNoFK)
+		validateReplicationIsHealthy(t, replicaFK)
 	})
 
 	runOnlineDDL := false
 	t.Run("check 'rename_table_preserve_foreign_key' variable", func(t *testing.T) {
 		// Online DDL is not possible on vanilla MySQL 8.0 for reasons described in https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/.
-		// However, Online DDL is made possible in via these changes: https://github.com/planetscale/mysql-server/commit/bb777e3e86387571c044fb4a2beb4f8c60462ced
-		// as part of https://github.com/planetscale/mysql-server/releases/tag/8.0.34-ps1.
-		// Said changes introduce a new global/session boolean variable named 'rename_table_preserve_foreign_key'. It defaults 'false'/0 for backwards compatibility.
-		// When enabled, a `RENAME TABLE` to a FK parent "pins" the children's foreign keys to the table name rather than the table pointer. Which means after the RENAME,
+		// However, Online DDL is made possible in via these changes:
+		// - https://github.com/planetscale/mysql-server/commit/bb777e3e86387571c044fb4a2beb4f8c60462ced
+		// - https://github.com/planetscale/mysql-server/commit/c2f1344a6863518d749f2eb01a4c74ca08a5b889
+		// as part of https://github.com/planetscale/mysql-server/releases/tag/8.0.34-ps3.
+		// Said changes introduce a new behavior for `RENAME TABLE`. When at least two tables are being renamed in the statement,
+		// and when at least one table uses internal vitess naming, then a `RENAME TABLE` to a FK parent "pins" the children's
+		// foreign keys to the table name rather than the table pointer. Which means after the RENAME,
 		// the children will point to the newly instated table rather than the original, renamed table.
-		// (Note: this applies to a particular type of RENAME where we swap tables, see the above blog post).
 		// For FK children, the MySQL changes simply ignore any Vitess-internal table.
+		//
+		// The variable 'rename_table_preserve_foreign_key' serves as an indicator to the functionality's availability,
+		// and at this time changing its value does not change any behavior.
 		//
 		// In this stress test, we enable Online DDL if the variable 'rename_table_preserve_foreign_key' is present. The Online DDL mechanism will in turn
 		// query for this variable, and manipulate it, when starting the migration and when cutting over.
@@ -691,6 +731,47 @@ func TestStressFK(t *testing.T) {
 	}
 }
 
+func validateTableDefinitions(t *testing.T, afterOnlineDDL bool) {
+	t.Run("validate definitions", func(t *testing.T) {
+		for _, tableName := range []string{childTableName, child2TableName, grandchildTableName} {
+			t.Run(tableName, func(t *testing.T) {
+				childFKFollowedParentRenameMsg := "found traces of internal vitess table name, suggesting Online DDL on parent table caused this child table to follow the renames parent. 'rename_table_preserve_foreign_key' should have prevented this"
+				var primaryStmt string
+				t.Run(tabletTestName(t, primary), func(t *testing.T) {
+					primaryStmt = getCreateTableStatement(t, primary, tableName)
+					assert.NotEmpty(t, primaryStmt)
+					assert.Contains(t, primaryStmt, "CONSTRAINT")
+					assert.NotContainsf(t, primaryStmt, "_vrepl", childFKFollowedParentRenameMsg)
+					assert.NotContainsf(t, primaryStmt, "_vrp_", childFKFollowedParentRenameMsg)
+				})
+				t.Run(tabletTestName(t, replicaFK), func(t *testing.T) {
+					stmt := getCreateTableStatement(t, replicaFK, tableName)
+					assert.Contains(t, stmt, "CONSTRAINT")
+					assert.Equal(t, primaryStmt, stmt)
+					assert.NotContainsf(t, stmt, "_vrepl", childFKFollowedParentRenameMsg)
+					assert.NotContainsf(t, stmt, "_vrp_", childFKFollowedParentRenameMsg)
+				})
+				t.Run(tabletTestName(t, replicaNoFK), func(t *testing.T) {
+					stmt := getCreateTableStatement(t, replicaNoFK, tableName)
+					// replicaNoFK does not have foreign keys, for the purpose of testing VTGate's cascading
+					// of foreign key rules.
+					// However, if we run Online DDL, the table will be swapped at the end of the migration.
+					// We're not sure here exactly which table has been migrated. Was it this table's parent?
+					// Or this table itself? Or an unrelated table? In case of Online DDL we don't want to
+					// validate this replicas' schema, because it could be any one of several outcomes. And
+					// we don't even care how this replica's schema looks like after the migration. Ths
+					// schema was inconsistent with the Primary to begin with. We've already tested replicaFK
+					// for correctness of the schema.
+					if !afterOnlineDDL {
+						assert.NotContains(t, stmt, "CONSTRAINT")
+						assert.NotEqual(t, primaryStmt, stmt)
+					}
+				})
+			})
+		}
+	})
+}
+
 // createInitialSchema creates the tables from scratch, and drops the foreign key constraints on the replica.
 func createInitialSchema(t *testing.T, tcase *testCase) {
 	ctx := context.Background()
@@ -700,8 +781,13 @@ func createInitialSchema(t *testing.T, tcase *testCase) {
 
 	t.Run("dropping tables", func(t *testing.T) {
 		for _, tableName := range reverseTableNames {
-			err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, "drop table if exists "+tableName)
+			err := clusterInstance.VtctldClientProcess.ApplySchema(keyspaceName, "drop table if exists "+tableName)
 			require.NoError(t, err)
+		}
+	})
+	t.Run("waiting for vschema deletions to apply", func(t *testing.T) {
+		for _, tableName := range tableNames {
+			utils.WaitForTableDeletions(t, clusterInstance.VtgateProcess, keyspaceName, tableName)
 		}
 	})
 	t.Run("creating tables", func(t *testing.T) {
@@ -720,7 +806,7 @@ func createInitialSchema(t *testing.T, tcase *testCase) {
 			}
 			b.WriteString(";")
 		}
-		err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, b.String())
+		err := clusterInstance.VtctldClientProcess.ApplySchema(keyspaceName, b.String())
 		require.NoError(t, err)
 	})
 	if tcase.preStatement != "" {
@@ -729,8 +815,8 @@ func createInitialSchema(t *testing.T, tcase *testCase) {
 			require.Nil(t, err)
 		})
 	}
-	t.Run("wait for replica", func(t *testing.T) {
-		waitForReplicaCatchup(t)
+	t.Run("wait for replication", func(t *testing.T) {
+		waitForReplicationCatchup(t)
 	})
 	t.Run("validating tables: vttablet", func(t *testing.T) {
 		// Check if table is created. Checked on tablets.
@@ -757,25 +843,12 @@ func createInitialSchema(t *testing.T, tcase *testCase) {
 
 	t.Run("dropping foreign keys on replica", func(t *testing.T) {
 		for _, statement := range dropConstraintsStatements {
-			_ = queryTablet(t, replica, "set global super_read_only=0", "")
-			_ = queryTablet(t, replica, statement, "")
-			_ = queryTablet(t, replica, "set global super_read_only=1", "")
+			_ = queryTablet(t, replicaNoFK, "set global super_read_only=0", "")
+			_ = queryTablet(t, replicaNoFK, statement, "")
+			_ = queryTablet(t, replicaNoFK, "set global super_read_only=1", "")
 		}
 	})
-	t.Run("validate definitions", func(t *testing.T) {
-		for _, tableName := range []string{childTableName, child2TableName, grandchildTableName} {
-			t.Run(tableName, func(t *testing.T) {
-				t.Run(tabletTestName(t, primary), func(t *testing.T) {
-					stmt := getCreateTableStatement(t, primary, tableName)
-					assert.Contains(t, stmt, "CONSTRAINT")
-				})
-				t.Run(tabletTestName(t, replica), func(t *testing.T) {
-					stmt := getCreateTableStatement(t, replica, tableName)
-					assert.NotContains(t, stmt, "CONSTRAINT")
-				})
-			})
-		}
-	})
+	validateTableDefinitions(t, false)
 }
 
 // testOnlineDDLStatement runs an online DDL, ALTER statement
@@ -787,7 +860,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 		}
 	} else {
 		var err error
-		uuid, err = clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, alterStatement, cluster.VtctlClientParams{DDLStrategy: ddlStrategy})
+		uuid, err = clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, alterStatement, cluster.ApplySchemaParams{DDLStrategy: ddlStrategy})
 		assert.NoError(t, err)
 	}
 	uuid = strings.TrimSpace(uuid)
@@ -804,7 +877,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 	}
 
 	if expectHint != "" {
-		stmt, err := sqlparser.Parse(alterStatement)
+		stmt, err := sqlparser.NewTestParser().Parse(alterStatement)
 		require.NoError(t, err)
 		ddlStmt, ok := stmt.(sqlparser.DDLStatement)
 		require.True(t, ok)
@@ -915,6 +988,8 @@ func isFKError(err error) bool {
 		return false
 	case sqlerror.ERLockDeadlock:
 		return false // bummer, but deadlocks can happen, it's a legit error.
+	case sqlerror.ERLockNowait:
+		return false // For some queries we use NOWAIT. Bummer, but this can happen, it's a legit error.
 	case sqlerror.ERNoReferencedRow,
 		sqlerror.ERRowIsReferenced,
 		sqlerror.ERRowIsReferenced2,
@@ -930,8 +1005,8 @@ func isFKError(err error) bool {
 }
 
 func generateInsert(t *testing.T, tableName string, conn *mysql.Conn) error {
-	id := rand.Int31n(int32(maxTableRows))
-	parentId := rand.Int31n(int32(maxTableRows))
+	id := rand.Int32N(int32(maxTableRows))
+	parentId := rand.Int32N(int32(maxTableRows))
 	query := fmt.Sprintf(insertRowStatement, tableName, id, parentId)
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 
@@ -961,11 +1036,11 @@ func generateInsert(t *testing.T, tableName string, conn *mysql.Conn) error {
 func generateUpdate(t *testing.T, tableName string, conn *mysql.Conn) error {
 	// Most of the UPDATEs we run are "normal" updates, but the minority will actually change the
 	// `id` column itself, which is the FOREIGN KEY parent column for some of the tables.
-	id := rand.Int31n(int32(maxTableRows))
+	id := rand.Int32N(int32(maxTableRows))
 	query := fmt.Sprintf(updateRowStatement, tableName, id)
 	if tableName == parentTableName || tableName == childTableName {
-		if rand.Intn(4) == 0 {
-			updatedId := rand.Int31n(int32(maxTableRows))
+		if rand.IntN(4) == 0 {
+			updatedId := rand.Int32N(int32(maxTableRows))
 			query = fmt.Sprintf(updateRowIdStatement, tableName, updatedId, id)
 		}
 	}
@@ -995,7 +1070,7 @@ func generateUpdate(t *testing.T, tableName string, conn *mysql.Conn) error {
 }
 
 func generateDelete(t *testing.T, tableName string, conn *mysql.Conn) error {
-	id := rand.Int31n(int32(maxTableRows))
+	id := rand.Int32N(int32(maxTableRows))
 	query := fmt.Sprintf(deleteRowStatement, tableName, id)
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 
@@ -1034,7 +1109,7 @@ func runSingleConnection(ctx context.Context, t *testing.T, tableName string, sl
 	require.Nil(t, err)
 
 	for {
-		switch rand.Int31n(3) {
+		switch rand.Int32N(3) {
 		case 0:
 			_ = generateInsert(t, tableName, conn)
 		case 1:

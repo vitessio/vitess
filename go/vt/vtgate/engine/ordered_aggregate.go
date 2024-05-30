@@ -28,13 +28,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
-var (
-	// Some predefined values
-	countZero = sqltypes.MakeTrusted(sqltypes.Int64, []byte("0"))
-	countOne  = sqltypes.MakeTrusted(sqltypes.Int64, []byte("1"))
-	sumZero   = sqltypes.MakeTrusted(sqltypes.Decimal, []byte("0"))
-)
-
 var _ Primitive = (*OrderedAggregate)(nil)
 
 // OrderedAggregate is a primitive that expects the underlying primitive
@@ -67,6 +60,7 @@ type GroupByParams struct {
 	Expr            sqlparser.Expr
 	FromGroupBy     bool
 	Type            evalengine.Type
+	CollationEnv    *collations.Environment
 }
 
 // String returns a string. Used for plan descriptions
@@ -78,8 +72,8 @@ func (gbp GroupByParams) String() string {
 		out = fmt.Sprintf("(%d|%d)", gbp.KeyCol, gbp.WeightStringCol)
 	}
 
-	if sqltypes.IsText(gbp.Type.Type) && gbp.Type.Coll != collations.Unknown {
-		out += " COLLATE " + collations.Local().LookupName(gbp.Type.Coll)
+	if sqltypes.IsText(gbp.Type.Type()) && gbp.Type.Collation() != collations.Unknown {
+		out += " COLLATE " + gbp.CollationEnv.LookupName(gbp.Type.Collation())
 	}
 
 	return out
@@ -98,11 +92,6 @@ func (oa *OrderedAggregate) GetKeyspaceName() string {
 // GetTableName specifies the table that this primitive routes to.
 func (oa *OrderedAggregate) GetTableName() string {
 	return oa.Input.GetTableName()
-}
-
-// SetTruncateColumnCount sets the truncate column count.
-func (oa *OrderedAggregate) SetTruncateColumnCount(count int) {
-	oa.TruncateColumnCount = count
 }
 
 // TryExecute is a Primitive function.
@@ -348,14 +337,14 @@ func (oa *OrderedAggregate) nextGroupBy(currentKey, nextRow []sqltypes.Value) (n
 			return nextRow, true, nil
 		}
 
-		cmp, err := evalengine.NullsafeCompare(v1, v2, gb.Type.Coll)
+		cmp, err := evalengine.NullsafeCompare(v1, v2, gb.CollationEnv, gb.Type.Collation(), gb.Type.Values())
 		if err != nil {
 			_, isCollationErr := err.(evalengine.UnsupportedCollationError)
 			if !isCollationErr || gb.WeightStringCol == -1 {
 				return nil, false, err
 			}
 			gb.KeyCol = gb.WeightStringCol
-			cmp, err = evalengine.NullsafeCompare(currentKey[gb.WeightStringCol], nextRow[gb.WeightStringCol], gb.Type.Coll)
+			cmp, err = evalengine.NullsafeCompare(currentKey[gb.WeightStringCol], nextRow[gb.WeightStringCol], gb.CollationEnv, gb.Type.Collation(), gb.Type.Values())
 			if err != nil {
 				return nil, false, err
 			}

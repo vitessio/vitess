@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"runtime"
 	"runtime/pprof"
@@ -28,7 +27,6 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
-	"syscall"
 
 	"github.com/spf13/pflag"
 
@@ -37,6 +35,7 @@ import (
 
 var (
 	pprofFlag []string
+	httpPprof bool
 )
 
 type profmode string
@@ -298,47 +297,9 @@ func (prof *profile) init() (start func(), stop func()) {
 	}
 }
 
-func pprofInit() {
-	prof, err := parseProfileFlag(pprofFlag)
-	if err != nil {
-		log.Fatal(err)
-	}
-	if prof != nil {
-		start, stop := prof.init()
-		startSignal := make(chan os.Signal, 1)
-		stopSignal := make(chan os.Signal, 1)
-
-		if prof.waitSig {
-			signal.Notify(startSignal, syscall.SIGUSR1)
-		} else {
-			start()
-			signal.Notify(stopSignal, syscall.SIGUSR1)
-		}
-
-		go func() {
-			for {
-				<-startSignal
-				start()
-				signal.Reset(syscall.SIGUSR1)
-				signal.Notify(stopSignal, syscall.SIGUSR1)
-			}
-		}()
-
-		go func() {
-			for {
-				<-stopSignal
-				stop()
-				signal.Reset(syscall.SIGUSR1)
-				signal.Notify(startSignal, syscall.SIGUSR1)
-			}
-		}()
-
-		OnTerm(stop)
-	}
-}
-
 func init() {
 	OnParse(func(fs *pflag.FlagSet) {
+		fs.BoolVar(&httpPprof, "pprof-http", httpPprof, "enable pprof http endpoints")
 		fs.StringSliceVar(&pprofFlag, "pprof", pprofFlag, "enable profiling")
 	})
 	OnInit(pprofInit)

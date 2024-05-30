@@ -16,13 +16,15 @@ limitations under the License.
 package mysql
 
 import (
+	"fmt"
 	"testing"
 
-	"gotest.tools/assert"
+	"github.com/stretchr/testify/assert"
 
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/replication"
-
 	"vitess.io/vitess/go/sqltypes"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -52,4 +54,131 @@ func TestMysqlGRReplicationApplierLagParse(t *testing.T) {
 	}
 	parseReplicationApplierLag(&res, row)
 	assert.Equal(t, uint32(100), res.ReplicationLagSeconds)
+}
+
+func TestMysqlGRSupportCapability(t *testing.T) {
+	testcases := []struct {
+		version     string
+		capability  capabilities.FlavorCapability
+		isCapable   bool
+		expectError error
+	}{
+		{
+			version:    "8.0.14",
+			capability: capabilities.InstantDDLFlavorCapability,
+			isCapable:  true,
+		},
+		{
+			version:    "8.0.20",
+			capability: capabilities.TransactionalGtidExecutedFlavorCapability,
+			isCapable:  true,
+		},
+		{
+			version:    "8.0.0",
+			capability: capabilities.InstantAddLastColumnFlavorCapability,
+			isCapable:  true,
+		},
+		{
+			version:    "8.0.0",
+			capability: capabilities.InstantAddDropColumnFlavorCapability,
+			isCapable:  false,
+		},
+		{
+			version:    "5.6.7",
+			capability: capabilities.InstantDDLFlavorCapability,
+			isCapable:  false,
+		},
+		{
+			version:    "5.7.29",
+			capability: capabilities.TransactionalGtidExecutedFlavorCapability,
+			isCapable:  false,
+		},
+		{
+			version:    "5.6.7",
+			capability: capabilities.MySQLJSONFlavorCapability,
+			isCapable:  false,
+		},
+		{
+			version:    "5.7.29",
+			capability: capabilities.MySQLJSONFlavorCapability,
+			isCapable:  true,
+		},
+		{
+			version:    "8.0.30",
+			capability: capabilities.DynamicRedoLogCapacityFlavorCapability,
+			isCapable:  true,
+		},
+		{
+			version:    "8.0.29",
+			capability: capabilities.DynamicRedoLogCapacityFlavorCapability,
+			isCapable:  false,
+		},
+		{
+			version:    "5.7.38",
+			capability: capabilities.DynamicRedoLogCapacityFlavorCapability,
+			isCapable:  false,
+		},
+		{
+			version:    "8.0.21",
+			capability: capabilities.DisableRedoLogFlavorCapability,
+			isCapable:  true,
+		},
+		{
+			version:    "8.0.20",
+			capability: capabilities.DisableRedoLogFlavorCapability,
+			isCapable:  false,
+		},
+		{
+			version:    "8.0.15",
+			capability: capabilities.CheckConstraintsCapability,
+			isCapable:  false,
+		},
+		{
+			version:    "8.0.20",
+			capability: capabilities.CheckConstraintsCapability,
+			isCapable:  true,
+		},
+		{
+			version:    "8.0.20-log",
+			capability: capabilities.CheckConstraintsCapability,
+			isCapable:  true,
+		},
+		{
+			version:    "5.7.38",
+			capability: capabilities.PerformanceSchemaDataLocksTableCapability,
+			isCapable:  false,
+		},
+		{
+			version:    "8.0.20",
+			capability: capabilities.PerformanceSchemaDataLocksTableCapability,
+			isCapable:  true,
+		},
+		{
+			// What happens if server version is unspecified
+			version:     "",
+			capability:  capabilities.CheckConstraintsCapability,
+			isCapable:   false,
+			expectError: capabilities.ErrUnspecifiedServerVersion,
+		},
+		{
+			// Some ridiculous version. But seeing that we force the flavor to be mysqlGR,
+			// then this far futuristic version should actually work.
+			version:    "5914.234.17",
+			capability: capabilities.CheckConstraintsCapability,
+			isCapable:  true,
+		},
+	}
+	for _, tc := range testcases {
+		name := fmt.Sprintf("%s %v", tc.version, tc.capability)
+		t.Run(name, func(t *testing.T) {
+			flavor := &mysqlGRFlavor{mysqlFlavor{serverVersion: tc.version}}
+			isCapable, err := flavor.supportsCapability(tc.capability)
+			if tc.expectError != nil {
+				assert.ErrorContains(t, err, tc.expectError.Error())
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tc.isCapable, isCapable)
+		})
+	}
 }

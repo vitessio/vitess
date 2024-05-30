@@ -1,11 +1,10 @@
-
 {
   "sharded": true,
   "vindexes": {
-    "unicode_loose_xxhash" : {
+    "unicode_loose_xxhash": {
       "type": "unicode_loose_xxhash"
     },
-    "unicode_loose_md5" : {
+    "unicode_loose_md5": {
       "type": "unicode_loose_md5"
     },
     "hash": {
@@ -159,7 +158,10 @@
           "name": "hash"
         },
         {
-          "columns": ["id2", "id1"],
+          "columns": [
+            "id2",
+            "id1"
+          ],
           "name": "t4_id2_vdx"
         }
       ]
@@ -179,7 +181,10 @@
           "name": "hash"
         },
         {
-          "columns": ["id2", "id1"],
+          "columns": [
+            "id2",
+            "id1"
+          ],
           "name": "t6_id2_vdx"
         }
       ]
@@ -298,6 +303,14 @@
       "column_vindexes": [
         {
           "column": "id",
+          "name": "hash"
+        }
+      ]
+    },
+    "t11": {
+      "column_vindexes": [
+        {
+          "column": "sharding_key",
           "name": "hash"
         }
       ]

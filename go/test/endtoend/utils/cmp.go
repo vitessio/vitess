@@ -29,12 +29,17 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 )
 
+type TestingT interface {
+	require.TestingT
+	Helper()
+}
+
 type MySQLCompare struct {
-	t                 *testing.T
+	t                 TestingT
 	MySQLConn, VtConn *mysql.Conn
 }
 
-func NewMySQLCompare(t *testing.T, vtParams, mysqlParams mysql.ConnParams) (MySQLCompare, error) {
+func NewMySQLCompare(t TestingT, vtParams, mysqlParams mysql.ConnParams) (MySQLCompare, error) {
 	ctx := context.Background()
 	vtConn, err := mysql.Connect(ctx, &vtParams)
 	if err != nil {
@@ -53,6 +58,10 @@ func NewMySQLCompare(t *testing.T, vtParams, mysqlParams mysql.ConnParams) (MySQ
 	}, nil
 }
 
+func (mcmp *MySQLCompare) AsT() *testing.T {
+	return mcmp.t.(*testing.T)
+}
+
 func (mcmp *MySQLCompare) Close() {
 	mcmp.VtConn.Close()
 	mcmp.MySQLConn.Close()
@@ -68,6 +77,12 @@ func (mcmp *MySQLCompare) AssertMatches(query, expected string) {
 	if diff != "" {
 		mcmp.t.Errorf("Query: %s (-want +got):\n%s\nGot:%s", query, diff, got)
 	}
+}
+
+// SkipIfBinaryIsBelowVersion should be used instead of using utils.SkipIfBinaryIsBelowVersion(t,
+// This is because we might be inside a Run block that has a different `t` variable
+func (mcmp *MySQLCompare) SkipIfBinaryIsBelowVersion(majorVersion int, binary string) {
+	SkipIfBinaryIsBelowVersion(mcmp.t.(*testing.T), majorVersion, binary)
 }
 
 // AssertMatchesAny ensures the given query produces any one of the expected results.
@@ -121,7 +136,7 @@ func (mcmp *MySQLCompare) AssertMatchesAnyNoCompare(query string, expected ...st
 // Both clients need to return an error. The error of Vitess must be matching the given expectation.
 func (mcmp *MySQLCompare) AssertContainsError(query, expected string) {
 	mcmp.t.Helper()
-	_, err := mcmp.ExecAllowAndCompareError(query)
+	_, err := mcmp.ExecAllowAndCompareError(query, CompareOptions{})
 	require.Error(mcmp.t, err)
 	assert.Contains(mcmp.t, err.Error(), expected, "actual error: %s", err.Error())
 }
@@ -196,7 +211,7 @@ func (mcmp *MySQLCompare) Exec(query string) *sqltypes.Result {
 
 	mysqlQr, err := mcmp.MySQLConn.ExecuteFetch(query, 1000, true)
 	require.NoError(mcmp.t, err, "[MySQL Error] for query: "+query)
-	compareVitessAndMySQLResults(mcmp.t, query, mcmp.VtConn, vtQr, mysqlQr, false)
+	compareVitessAndMySQLResults(mcmp.t, query, mcmp.VtConn, vtQr, mysqlQr, CompareOptions{})
 	return vtQr
 }
 
@@ -223,7 +238,7 @@ func (mcmp *MySQLCompare) ExecWithColumnCompare(query string) *sqltypes.Result {
 
 	mysqlQr, err := mcmp.MySQLConn.ExecuteFetch(query, 1000, true)
 	require.NoError(mcmp.t, err, "[MySQL Error] for query: "+query)
-	compareVitessAndMySQLResults(mcmp.t, query, mcmp.VtConn, vtQr, mysqlQr, true)
+	compareVitessAndMySQLResults(mcmp.t, query, mcmp.VtConn, vtQr, mysqlQr, CompareOptions{CompareColumnNames: true})
 	return vtQr
 }
 
@@ -235,7 +250,7 @@ func (mcmp *MySQLCompare) ExecWithColumnCompare(query string) *sqltypes.Result {
 // The result set and error produced by Vitess are returned to the caller.
 // If the Vitess and MySQL error are both nil, but the results do not match,
 // the mismatched results are instead returned as an error, as well as the Vitess result set
-func (mcmp *MySQLCompare) ExecAllowAndCompareError(query string) (*sqltypes.Result, error) {
+func (mcmp *MySQLCompare) ExecAllowAndCompareError(query string, opts CompareOptions) (*sqltypes.Result, error) {
 	mcmp.t.Helper()
 	vtQr, vtErr := mcmp.VtConn.ExecuteFetch(query, 1000, true)
 	mysqlQr, mysqlErr := mcmp.MySQLConn.ExecuteFetch(query, 1000, true)
@@ -244,7 +259,7 @@ func (mcmp *MySQLCompare) ExecAllowAndCompareError(query string) (*sqltypes.Resu
 	// Since we allow errors, we don't want to compare results if one of the client failed.
 	// Vitess and MySQL should always be agreeing whether the query returns an error or not.
 	if vtErr == nil && mysqlErr == nil {
-		vtErr = compareVitessAndMySQLResults(mcmp.t, query, mcmp.VtConn, vtQr, mysqlQr, false)
+		vtErr = compareVitessAndMySQLResults(mcmp.t, query, mcmp.VtConn, vtQr, mysqlQr, opts)
 	}
 	return vtQr, vtErr
 }
@@ -257,8 +272,8 @@ func (mcmp *MySQLCompare) ExecAndIgnore(query string) (*sqltypes.Result, error) 
 	return mcmp.VtConn.ExecuteFetch(query, 1000, true)
 }
 
-func (mcmp *MySQLCompare) Run(query string, f func(mcmp *MySQLCompare)) {
-	mcmp.t.Run(query, func(t *testing.T) {
+func (mcmp *MySQLCompare) Run(name string, f func(mcmp *MySQLCompare)) {
+	mcmp.AsT().Run(name, func(t *testing.T) {
 		inner := &MySQLCompare{
 			t:         t,
 			MySQLConn: mcmp.MySQLConn,
@@ -282,7 +297,7 @@ func (mcmp *MySQLCompare) ExecAllowError(query string) (*sqltypes.Result, error)
 	// Since we allow errors, we don't want to compare results if one of the client failed.
 	// Vitess and MySQL should always be agreeing whether the query returns an error or not.
 	if mysqlErr == nil {
-		vtErr = compareVitessAndMySQLResults(mcmp.t, query, mcmp.VtConn, vtQr, mysqlQr, false)
+		vtErr = compareVitessAndMySQLResults(mcmp.t, query, mcmp.VtConn, vtQr, mysqlQr, CompareOptions{})
 	}
 	return vtQr, vtErr
 }

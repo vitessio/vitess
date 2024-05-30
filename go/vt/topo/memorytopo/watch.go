@@ -25,7 +25,9 @@ import (
 
 // Watch is part of the topo.Conn interface.
 func (c *Conn) Watch(ctx context.Context, filePath string) (*topo.WatchData, <-chan *topo.WatchData, error) {
-	if c.closed {
+	c.factory.callstats.Add([]string{"Watch"}, 1)
+
+	if c.closed.Load() {
 		return nil, nil, ErrConnectionClosed
 	}
 
@@ -34,6 +36,9 @@ func (c *Conn) Watch(ctx context.Context, filePath string) (*topo.WatchData, <-c
 
 	if c.factory.err != nil {
 		return nil, nil, c.factory.err
+	}
+	if err := c.factory.getOperationError(Watch, filePath); err != nil {
+		return nil, nil, err
 	}
 
 	n := c.factory.nodeByPath(c.cell, filePath)
@@ -75,7 +80,9 @@ func (c *Conn) Watch(ctx context.Context, filePath string) (*topo.WatchData, <-c
 
 // WatchRecursive is part of the topo.Conn interface.
 func (c *Conn) WatchRecursive(ctx context.Context, dirpath string) ([]*topo.WatchDataRecursive, <-chan *topo.WatchDataRecursive, error) {
-	if c.closed {
+	c.factory.callstats.Add([]string{"WatchRecursive"}, 1)
+
+	if c.closed.Load() {
 		return nil, nil, ErrConnectionClosed
 	}
 
@@ -84,6 +91,9 @@ func (c *Conn) WatchRecursive(ctx context.Context, dirpath string) ([]*topo.Watc
 
 	if c.factory.err != nil {
 		return nil, nil, c.factory.err
+	}
+	if err := c.factory.getOperationError(WatchRecursive, dirpath); err != nil {
+		return nil, nil, err
 	}
 
 	n := c.factory.getOrCreatePath(c.cell, dirpath)

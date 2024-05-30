@@ -17,7 +17,7 @@ limitations under the License.
 package pools
 
 import (
-	"math/rand"
+	"math/rand/v2"
 	"strings"
 	"testing"
 
@@ -45,7 +45,7 @@ func TestNumberedGeneral(t *testing.T) {
 
 	p.Put(id)
 	_, err = p.Get(1, "test2")
-	assert.Contains(t, "not found", err.Error())
+	assert.ErrorContains(t, err, "not found (potential transaction timeout)")
 	p.Unregister(1, "test") // Should not fail
 	p.Unregister(0, "test")
 	// p is now empty
@@ -99,7 +99,7 @@ func BenchmarkRegisterUnregisterParallel(b *testing.B) {
 	b.SetParallelism(200)
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			id := rand.Int63()
+			id := rand.Int64()
 			p.Register(id, val)
 			p.Unregister(id, "some reason")
 		}

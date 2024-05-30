@@ -30,10 +30,8 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/logic"
 	"vitess.io/vitess/go/vt/vtorc/server"
 
-	_ "github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	_ "modernc.org/sqlite"
 )
 
 func TestReadTopologyInstanceBufferable(t *testing.T) {
@@ -104,17 +102,19 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	assert.False(t, primaryInstance.HasReplicationCredentials)
 	assert.Equal(t, primaryInstance.ReplicationIOThreadState, inst.ReplicationThreadStateNoThread)
 	assert.Equal(t, primaryInstance.ReplicationSQLThreadState, inst.ReplicationThreadStateNoThread)
+	assert.EqualValues(t, 0, primaryInstance.HeartbeatInterval)
+	assert.EqualValues(t, 0, primaryInstance.ReplicaNetTimeout)
 
 	// Insert an errant GTID in the replica.
 	// The way to do this is to disable global recoveries, stop replication and inject an errant GTID.
 	// After this we restart the replication and enable the recoveries again.
 	err = logic.DisableRecovery()
 	require.NoError(t, err)
-	err = utils.RunSQLs(t, []string{`STOP SLAVE;`,
+	err = utils.RunSQLs(t, []string{`STOP REPLICA;`,
 		`SET GTID_NEXT="12345678-1234-1234-1234-123456789012:1";`,
 		`BEGIN;`, `COMMIT;`,
 		`SET GTID_NEXT="AUTOMATIC";`,
-		`START SLAVE;`,
+		`START REPLICA;`,
 	}, replica, "")
 	require.NoError(t, err)
 	err = logic.EnableRecovery()
@@ -171,4 +171,6 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	assert.False(t, replicaInstance.HasReplicationFilters)
 	assert.LessOrEqual(t, int(replicaInstance.SecondsBehindPrimary.Int64), 1)
 	assert.False(t, replicaInstance.AllowTLS)
+	assert.EqualValues(t, 4.0, replicaInstance.HeartbeatInterval)
+	assert.EqualValues(t, 8, replicaInstance.ReplicaNetTimeout)
 }

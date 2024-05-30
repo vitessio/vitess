@@ -174,3 +174,154 @@ func TestEquivalenceRelation(t *testing.T) {
 		})
 	}
 }
+
+func TestEquivalenceRelationError(t *testing.T) {
+	type ttError struct {
+		name        string
+		element1    string
+		element2    string
+		expectedErr string
+	}
+
+	testsRelateErrorCases := []ttError{
+		{
+			name:        "UnknownElementError",
+			element1:    "x",
+			element2:    "b",
+			expectedErr: "unknown element x",
+		},
+		{
+			name:        "UnknownClassError",
+			element1:    "a",
+			element2:    "y",
+			expectedErr: "unknown element y",
+		},
+	}
+
+	for _, tc := range testsRelateErrorCases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := NewEquivalenceRelation()
+			r.AddAll([]string{"a", "b", "c"})
+
+			_, err := r.Relate(tc.element1, tc.element2)
+			assert.Error(t, err)
+			assert.EqualError(t, err, tc.expectedErr)
+		})
+	}
+}
+
+func TestUnknownElementError(t *testing.T) {
+	err := &UnknownElementError{element: "test_element"}
+
+	assert.EqualError(t, err, "unknown element test_element")
+}
+
+func TestUnknownClassError(t *testing.T) {
+	err := &UnknownClassError{class: 42}
+
+	assert.EqualError(t, err, "unknown class 42")
+}
+
+func TestAdd(t *testing.T) {
+	r := NewEquivalenceRelation()
+	initialElements := []string{"a", "b", "c"}
+
+	for _, element := range initialElements {
+		r.Add(element)
+	}
+
+	for _, element := range initialElements {
+		class, err := r.ElementClass(element)
+		require.NoError(t, err)
+		assert.Contains(t, r.classElementsMap[class], element)
+	}
+
+	classCounter := r.classCounter
+	r.Add("a")
+	assert.Equal(t, classCounter, r.classCounter)
+}
+
+func TestElementClass(t *testing.T) {
+	r := NewEquivalenceRelation()
+	element := "test_element"
+
+	_, err := r.ElementClass(element)
+	assert.Error(t, err)
+
+	r.Add(element)
+	class, err := r.ElementClass(element)
+	require.NoError(t, err)
+	assert.Greater(t, class, -1)
+}
+
+func TestRelated(t *testing.T) {
+	type tt struct {
+		name      string
+		relations []string
+		element1  string
+		element2  string
+		expect    bool
+		err       error
+	}
+
+	tests := []tt{
+		{
+			name:      "related, same class",
+			relations: []string{"ab"},
+			element1:  "a",
+			element2:  "b",
+			expect:    true,
+			err:       nil,
+		},
+		{
+			name:      "related, different classes",
+			relations: []string{"ab, cd"},
+			element1:  "a",
+			element2:  "c",
+			expect:    false,
+			err:       nil,
+		},
+		{
+			name:      "related, unknown element",
+			relations: []string{"ab"},
+			element1:  "x",
+			element2:  "b",
+			expect:    false,
+			err:       &UnknownElementError{element: "x"},
+		},
+		{
+			name:      "related, unknown element 2",
+			relations: []string{"ab"},
+			element1:  "a",
+			element2:  "y",
+			expect:    false,
+			err:       &UnknownElementError{element: "y"},
+		},
+		{
+			name:      "related, both elements unknown",
+			relations: []string{"ab"},
+			element1:  "x",
+			element2:  "y",
+			expect:    false,
+			err:       &UnknownElementError{element: "x"},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			r := NewEquivalenceRelation()
+			r.AddAll([]string{"a", "b", "c", "d"})
+			for _, relation := range tc.relations {
+				_, err := r.Relate(relation[0:1], relation[1:2])
+				require.NoError(t, err)
+			}
+
+			result, err := r.Related(tc.element1, tc.element2)
+			if tc.err != nil {
+				assert.EqualError(t, err, tc.err.Error())
+			} else {
+				assert.Equal(t, tc.expect, result)
+			}
+		})
+	}
+}

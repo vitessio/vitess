@@ -25,15 +25,16 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql/replication"
-
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/reparenttestutil"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/wrangler"
 
@@ -50,8 +51,8 @@ func TestEmergencyReparentShard(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
-	vp := NewVtctlPipe(t, ts)
+	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
+	vp := NewVtctlPipe(ctx, t, ts)
 	defer vp.Close()
 
 	// Create a primary, a couple good replicas
@@ -94,7 +95,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 	}
 	newPrimary.FakeMysqlDaemon.WaitPrimaryPositions = append(newPrimary.FakeMysqlDaemon.WaitPrimaryPositions, newPrimary.FakeMysqlDaemon.CurrentSourceFilePosition)
 	newPrimary.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		"STOP SLAVE IO_THREAD",
+		"STOP REPLICA IO_THREAD",
 		"SUBINSERT INTO _vt.reparent_journal (time_created_ns, action_name, primary_alias, replication_position) VALUES",
 	}
 	newPrimary.FakeMysqlDaemon.PromoteResult = replication.Position{
@@ -114,7 +115,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 	oldPrimary.FakeMysqlDaemon.ReplicationStatusError = mysql.ErrNotReplica
 	oldPrimary.FakeMysqlDaemon.SetReplicationSourceInputs = append(oldPrimary.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet))
 	oldPrimary.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		"STOP SLAVE",
+		"STOP REPLICA",
 	}
 	oldPrimary.StartActionLoop(t, wr)
 	defer oldPrimary.StopActionLoop(t)
@@ -139,13 +140,13 @@ func TestEmergencyReparentShard(t *testing.T) {
 	goodReplica1.FakeMysqlDaemon.SetReplicationSourceInputs = append(goodReplica1.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet), topoproto.MysqlAddr(oldPrimary.Tablet))
 	goodReplica1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		// These 3 statements come from tablet startup
-		"STOP SLAVE",
-		"FAKE SET MASTER",
-		"START SLAVE",
-		"STOP SLAVE IO_THREAD",
-		"STOP SLAVE",
-		"FAKE SET MASTER",
-		"START SLAVE",
+		"STOP REPLICA",
+		"FAKE SET SOURCE",
+		"START REPLICA",
+		"STOP REPLICA IO_THREAD",
+		"STOP REPLICA",
+		"FAKE SET SOURCE",
+		"START REPLICA",
 	}
 	goodReplica1.StartActionLoop(t, wr)
 	defer goodReplica1.StopActionLoop(t)
@@ -170,10 +171,10 @@ func TestEmergencyReparentShard(t *testing.T) {
 	goodReplica2.FakeMysqlDaemon.SetReplicationSourceInputs = append(goodReplica2.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet), topoproto.MysqlAddr(oldPrimary.Tablet))
 	goodReplica2.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		// These 3 statements come from tablet startup
-		"STOP SLAVE",
-		"FAKE SET MASTER",
-		"START SLAVE",
-		"FAKE SET MASTER",
+		"STOP REPLICA",
+		"FAKE SET SOURCE",
+		"START REPLICA",
+		"FAKE SET SOURCE",
 	}
 	goodReplica2.StartActionLoop(t, wr)
 	defer goodReplica2.StopActionLoop(t)
@@ -204,7 +205,7 @@ func TestEmergencyReparentShardPrimaryElectNotBest(t *testing.T) {
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
+	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 	// Create a primary, a couple good replicas
 	oldPrimary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, nil)
@@ -232,10 +233,10 @@ func TestEmergencyReparentShardPrimaryElectNotBest(t *testing.T) {
 	newPrimary.FakeMysqlDaemon.WaitPrimaryPositions = append(newPrimary.FakeMysqlDaemon.WaitPrimaryPositions, newPrimary.FakeMysqlDaemon.CurrentSourceFilePosition)
 	newPrimary.FakeMysqlDaemon.SetReplicationSourceInputs = append(newPrimary.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(moreAdvancedReplica.Tablet))
 	newPrimary.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		"STOP SLAVE IO_THREAD",
-		"STOP SLAVE",
-		"FAKE SET MASTER",
-		"START SLAVE",
+		"STOP REPLICA IO_THREAD",
+		"STOP REPLICA",
+		"FAKE SET SOURCE",
+		"START REPLICA",
 		"SUBINSERT INTO _vt.reparent_journal (time_created_ns, action_name, primary_alias, replication_position) VALUES",
 	}
 	newPrimary.StartActionLoop(t, wr)
@@ -267,19 +268,25 @@ func TestEmergencyReparentShardPrimaryElectNotBest(t *testing.T) {
 	newPrimary.FakeMysqlDaemon.WaitPrimaryPositions = append(newPrimary.FakeMysqlDaemon.WaitPrimaryPositions, moreAdvancedReplica.FakeMysqlDaemon.CurrentPrimaryPosition)
 	moreAdvancedReplica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		// These 3 statements come from tablet startup
-		"STOP SLAVE",
-		"FAKE SET MASTER",
-		"START SLAVE",
-		"STOP SLAVE IO_THREAD",
-		"STOP SLAVE",
-		"FAKE SET MASTER",
-		"START SLAVE",
+		"STOP REPLICA",
+		"FAKE SET SOURCE",
+		"START REPLICA",
+		"STOP REPLICA IO_THREAD",
+		"STOP REPLICA",
+		"FAKE SET SOURCE",
+		"START REPLICA",
 	}
 	moreAdvancedReplica.StartActionLoop(t, wr)
 	defer moreAdvancedReplica.StopActionLoop(t)
 
 	// run EmergencyReparentShard
-	err := wr.EmergencyReparentShard(ctx, newPrimary.Tablet.Keyspace, newPrimary.Tablet.Shard, newPrimary.Tablet.Alias, 10*time.Second, sets.New[string](), false, false)
+	err := wr.EmergencyReparentShard(ctx, newPrimary.Tablet.Keyspace, newPrimary.Tablet.Shard, reparentutil.EmergencyReparentOptions{
+		NewPrimaryAlias:           newPrimary.Tablet.Alias,
+		WaitAllTablets:            false,
+		WaitReplicasTimeout:       10 * time.Second,
+		IgnoreReplicas:            sets.New[string](),
+		PreventCrossCellPromotion: false,
+	})
 	cancel()
 
 	assert.NoError(t, err)

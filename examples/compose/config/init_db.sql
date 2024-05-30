@@ -12,10 +12,8 @@ SET GLOBAL super_read_only='OFF';
 # Changes during the init db should not make it to the binlog.
 # They could potentially create errant transactions on replicas.
 SET sql_log_bin = 0;
-# Remove anonymous users.
-DELETE FROM mysql.user WHERE User = '';
-# Disable remote root access (only allow UNIX socket).
-DELETE FROM mysql.user WHERE User = 'root' AND Host != 'localhost';
+# Remove anonymous users & disable remote root access (only allow UNIX socket).
+DROP USER IF EXISTS ''@'%', ''@'localhost', 'root'@'%';
 # Remove test database.
 DROP DATABASE IF EXISTS test;
 ###############################################################################
@@ -70,9 +68,6 @@ GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS, FILE,
   LOCK TABLES, EXECUTE, REPLICATION SLAVE, REPLICATION CLIENT, CREATE VIEW,
   SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER
   ON *.* TO 'vt_filtered'@'localhost';
-FLUSH PRIVILEGES;
-RESET SLAVE ALL;
-RESET MASTER;
 
 # custom sql is used to add custom scripts like creating users/passwords. We use it in our tests
 # {{custom_sql}}

@@ -23,21 +23,22 @@ import (
 
 	"vitess.io/vitess/go/acl"
 	vtcmd "vitess.io/vitess/go/cmd"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
 )
 
 var (
-	mysqlPort   = 3306
-	tabletUID   = uint32(41983)
-	mysqlSocket string
+	mysqlPort    = 3306
+	tabletUID    = uint32(41983)
+	mysqlSocket  string
+	collationEnv *collations.Environment
 
 	Root = &cobra.Command{
 		Use:   "mysqlctl",
 		Short: "mysqlctl initializes and controls mysqld with Vitess-specific configuration.",
 		Long: "`mysqlctl` is a command-line client used for managing `mysqld` instances.\n\n" +
-
 			"It is responsible for bootstrapping tasks such as generating a configuration file for `mysqld` and initializing the instance and its data directory.\n" +
 			"The `mysqld_safe` watchdog is utilized when present.\n" +
 			"This helps ensure that `mysqld` is automatically restarted after failures.",
@@ -74,4 +75,6 @@ func init() {
 	Root.PersistentFlags().StringVar(&mysqlSocket, "mysql_socket", mysqlSocket, "Path to the mysqld socket file.")
 
 	acl.RegisterFlags(Root.PersistentFlags())
+
+	collationEnv = collations.NewEnvironment(servenv.MySQLServerVersion())
 }

@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
@@ -38,7 +39,10 @@ func TestMultiply(t *testing.T) {
 		Left:     &sqlparser.Offset{V: 0},
 		Right:    &sqlparser.Offset{V: 1},
 	}
-	evalExpr, err := evalengine.Translate(expr, nil)
+	evalExpr, err := evalengine.Translate(expr, &evalengine.Config{
+		Environment: vtenv.NewTestEnv(),
+		Collation:   collations.MySQL8().DefaultConnectionCharset(),
+	})
 	require.NoError(t, err)
 	fp := &fakePrimitive{
 		results: []*sqltypes.Result{sqltypes.MakeTestResult(
@@ -72,13 +76,62 @@ func TestMultiply(t *testing.T) {
 	assert.Equal(t, "[[UINT64(6)] [UINT64(0)] [UINT64(2)]]", fmt.Sprintf("%v", qr.Rows))
 }
 
+func TestProjectionStreaming(t *testing.T) {
+	expr := &sqlparser.BinaryExpr{
+		Operator: sqlparser.MultOp,
+		Left:     &sqlparser.Offset{V: 0},
+		Right:    &sqlparser.Offset{V: 1},
+	}
+	evalExpr, err := evalengine.Translate(expr, &evalengine.Config{
+		Environment: vtenv.NewTestEnv(),
+		Collation:   collations.MySQL8().DefaultConnectionCharset(),
+	})
+	require.NoError(t, err)
+	fp := &fakePrimitive{
+		results: sqltypes.MakeTestStreamingResults(
+			sqltypes.MakeTestFields("a|b", "uint64|uint64"),
+			"3|2",
+			"1|0",
+			"6|2",
+			"---",
+			"3|2",
+			"---",
+			"1|0",
+			"---",
+			"1|2",
+			"4|2",
+			"---",
+			"5|5",
+			"4|10",
+		),
+		async: true,
+	}
+	proj := &Projection{
+		Cols:  []string{"apa"},
+		Exprs: []evalengine.Expr{evalExpr},
+		Input: fp,
+	}
+
+	qr := &sqltypes.Result{}
+	err = proj.TryStreamExecute(context.Background(), &noopVCursor{}, nil, true, func(result *sqltypes.Result) error {
+		qr.Rows = append(qr.Rows, result.Rows...)
+		return nil
+	})
+	require.NoError(t, err)
+	require.NoError(t, sqltypes.RowsEqualsStr(`[[UINT64(25)] [UINT64(40)] [UINT64(6)] [UINT64(2)] [UINT64(8)] [UINT64(0)] [UINT64(6)] [UINT64(0)] [UINT64(12)]]`,
+		qr.Rows))
+}
+
 func TestEmptyInput(t *testing.T) {
 	expr := &sqlparser.BinaryExpr{
 		Operator: sqlparser.MultOp,
 		Left:     &sqlparser.Offset{V: 0},
 		Right:    &sqlparser.Offset{V: 1},
 	}
-	evalExpr, err := evalengine.Translate(expr, nil)
+	evalExpr, err := evalengine.Translate(expr, &evalengine.Config{
+		Environment: vtenv.NewTestEnv(),
+		Collation:   collations.MySQL8().DefaultConnectionCharset(),
+	})
 	require.NoError(t, err)
 	fp := &fakePrimitive{
 		results: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("a|b", "uint64|uint64"))},
@@ -93,22 +146,25 @@ func TestEmptyInput(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "[]", fmt.Sprintf("%v", qr.Rows))
 
-	//fp = &fakePrimitive{
+	// fp = &fakePrimitive{
 	//	results: []*sqltypes.Result{sqltypes.MakeTestResult(
 	//		sqltypes.MakeTestFields("a|b", "uint64|uint64"),
 	//		"3|2",
 	//		"1|0",
 	//		"1|2",
 	//	)},
-	//}
-	//proj.Input = fp
-	//qr, err = wrapStreamExecute(proj, newNoopVCursor(context.Background()), nil, true)
-	//require.NoError(t, err)
-	//assert.Equal(t, "[[UINT64(6)] [UINT64(0)] [UINT64(2)]]", fmt.Sprintf("%v", qr.Rows))
+	// }
+	// proj.Input = fp
+	// qr, err = wrapStreamExecute(proj, newNoopVCursor(context.Background()), nil, true)
+	// require.NoError(t, err)
+	// assert.Equal(t, "[[UINT64(6)] [UINT64(0)] [UINT64(2)]]", fmt.Sprintf("%v", qr.Rows))
 }
 
 func TestHexAndBinaryArgument(t *testing.T) {
-	hexExpr, err := evalengine.Translate(sqlparser.NewArgument("vtg1"), nil)
+	hexExpr, err := evalengine.Translate(sqlparser.NewArgument("vtg1"), &evalengine.Config{
+		Environment: vtenv.NewTestEnv(),
+		Collation:   collations.MySQL8().DefaultConnectionCharset(),
+	})
 	require.NoError(t, err)
 	proj := &Projection{
 		Cols:       []string{"hex"},
@@ -140,7 +196,7 @@ func TestFields(t *testing.T) {
 			name:      `string`,
 			bindVar:   sqltypes.StringBindVariable("test"),
 			typ:       querypb.Type_VARCHAR,
-			collation: collations.Default(),
+			collation: collations.MySQL8().DefaultConnectionCharset(),
 		},
 		{
 			name:      `binary`,
@@ -152,7 +208,10 @@ func TestFields(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			bindExpr, err := evalengine.Translate(sqlparser.NewArgument("vtg1"), nil)
+			bindExpr, err := evalengine.Translate(sqlparser.NewArgument("vtg1"), &evalengine.Config{
+				Environment: vtenv.NewTestEnv(),
+				Collation:   collations.MySQL8().DefaultConnectionCharset(),
+			})
 			require.NoError(t, err)
 			proj := &Projection{
 				Cols:       []string{"col"},
@@ -163,6 +222,44 @@ func TestFields(t *testing.T) {
 			qr, err := proj.TryExecute(context.Background(), &noopVCursor{}, map[string]*querypb.BindVariable{
 				"vtg1": testCase.bindVar,
 			}, true)
+			require.NoError(t, err)
+			assert.Equal(t, testCase.typ, qr.Fields[0].Type)
+			assert.Equal(t, testCase.collation, collations.ID(qr.Fields[0].Charset))
+		})
+	}
+}
+
+func TestFieldConversion(t *testing.T) {
+	var testCases = []struct {
+		name      string
+		expr      string
+		typ       querypb.Type
+		collation collations.ID
+	}{
+		{
+			name:      `convert different charset`,
+			expr:      `_latin1 0xFF`,
+			typ:       sqltypes.VarChar,
+			collation: collations.MySQL8().DefaultConnectionCharset(),
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			arg, err := sqlparser.NewTestParser().ParseExpr(testCase.expr)
+			require.NoError(t, err)
+			bindExpr, err := evalengine.Translate(arg, &evalengine.Config{
+				Environment: vtenv.NewTestEnv(),
+				Collation:   collations.MySQL8().DefaultConnectionCharset(),
+			})
+			require.NoError(t, err)
+			proj := &Projection{
+				Cols:       []string{"col"},
+				Exprs:      []evalengine.Expr{bindExpr},
+				Input:      &SingleRow{},
+				noTxNeeded: noTxNeeded{},
+			}
+			qr, err := proj.TryExecute(context.Background(), &noopVCursor{}, nil, true)
 			require.NoError(t, err)
 			assert.Equal(t, testCase.typ, qr.Fields[0].Type)
 			assert.Equal(t, testCase.collation, collations.ID(qr.Fields[0].Charset))

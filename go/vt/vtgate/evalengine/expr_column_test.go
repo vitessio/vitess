@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -28,8 +29,9 @@ func TestTypeOf(t *testing.T) {
 	t.Skipf("TODO: these tests are not green")
 
 	env := &ExpressionEnv{
-		BindVars: make(map[string]*querypb.BindVariable),
-		now:      time.Now(),
+		BindVars:     make(map[string]*querypb.BindVariable),
+		now:          time.Now(),
+		collationEnv: collations.MySQL8(),
 	}
 	c := &Column{
 		Type: sqltypes.Unknown,

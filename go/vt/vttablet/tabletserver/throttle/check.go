@@ -1,7 +1,42 @@
 /*
- Copyright 2017 GitHub Inc.
+Copyright 2023 The Vitess Authors.
 
- Licensed under MIT License. See https://github.com/github/freno/blob/master/LICENSE
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+// This codebase originates from https://github.com/github/freno, See https://github.com/github/freno/blob/master/LICENSE
+/*
+	MIT License
+
+	Copyright (c) 2017 GitHub
+
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
 */
 
 package throttle
@@ -11,7 +46,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"vitess.io/vitess/go/stats"
@@ -22,6 +56,11 @@ import (
 
 const (
 	selfCheckInterval = 250 * time.Millisecond
+)
+
+var (
+	statsThrottlerCheckAnyTotal = stats.NewCounter("ThrottlerCheckAnyTotal", "total number of checks")
+	statsThrottlerCheckAnyError = stats.GetOrNewCounter("ThrottlerCheckAnyError", "total number of failed checks")
 )
 
 // CheckFlags provide hints for a check
@@ -114,20 +153,18 @@ func (check *ThrottlerCheck) Check(ctx context.Context, appName string, storeTyp
 	}
 
 	checkResult = check.checkAppMetricResult(ctx, appName, storeType, storeName, metricResultFunc, flags)
-	atomic.StoreInt64(&check.throttler.lastCheckTimeNano, time.Now().UnixNano())
+	check.throttler.markRecentApp(appName, remoteAddr)
+	if !throttlerapp.VitessName.Equals(appName) {
+		go func(statusCode int) {
+			statsThrottlerCheckAnyTotal.Add(1)
+			stats.GetOrNewCounter(fmt.Sprintf("ThrottlerCheckAny%s%sTotal", textutil.SingleWordCamel(storeType), textutil.SingleWordCamel(storeName)), "").Add(1)
 
-	go func(statusCode int) {
-		stats.GetOrNewCounter("ThrottlerCheckAnyTotal", "total number of checks").Add(1)
-		stats.GetOrNewCounter(fmt.Sprintf("ThrottlerCheckAny%s%sTotal", textutil.SingleWordCamel(storeType), textutil.SingleWordCamel(storeName)), "").Add(1)
-
-		if statusCode != http.StatusOK {
-			stats.GetOrNewCounter("ThrottlerCheckAnyError", "total number of failed checks").Add(1)
-			stats.GetOrNewCounter(fmt.Sprintf("ThrottlerCheckAny%s%sError", textutil.SingleWordCamel(storeType), textutil.SingleWordCamel(storeName)), "").Add(1)
-		}
-
-		check.throttler.markRecentApp(appName, remoteAddr)
-	}(checkResult.StatusCode)
-
+			if statusCode != http.StatusOK {
+				statsThrottlerCheckAnyError.Add(1)
+				stats.GetOrNewCounter(fmt.Sprintf("ThrottlerCheckAny%s%sError", textutil.SingleWordCamel(storeType), textutil.SingleWordCamel(storeName)), "").Add(1)
+			}
+		}(checkResult.StatusCode)
+	}
 	return checkResult
 }
 
@@ -193,6 +230,7 @@ func (check *ThrottlerCheck) SelfChecks(ctx context.Context) {
 				for metricName, metricResult := range check.AggregatedMetrics(ctx) {
 					metricName := metricName
 					metricResult := metricResult
+
 					go check.localCheck(ctx, metricName)
 					go check.reportAggregated(metricName, metricResult)
 				}

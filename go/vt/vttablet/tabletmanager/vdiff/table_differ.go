@@ -49,8 +49,24 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
+type tableDiffPhase string
+
+const (
+	initializing           = tableDiffPhase("initializing")
+	pickingTablets         = tableDiffPhase("picking_streaming_tablets")
+	syncingSources         = tableDiffPhase("syncing_source_streams")
+	syncingTargets         = tableDiffPhase("syncing_target_streams")
+	startingSources        = tableDiffPhase("starting_source_data_streams")
+	startingTargets        = tableDiffPhase("starting_target_data_streams")
+	restartingVreplication = tableDiffPhase("restarting_vreplication_streams")
+	diffingTable           = tableDiffPhase("diffing_table")
+)
+
 // how long to wait for background operations to complete
 var BackgroundOperationTimeout = topo.RemoteOperationTimeout * 4
+
+var ErrMaxDiffDurationExceeded = vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "table diff was stopped due to exceeding the max-diff-duration time")
+var ErrVDiffStoppedByUser = vterrors.Errorf(vtrpcpb.Code_CANCELED, "vdiff was stopped by user")
 
 // compareColInfo contains the metadata for a column of the table being diffed
 type compareColInfo struct {
@@ -87,6 +103,7 @@ func newTableDiffer(wd *workflowDiffer, table *tabletmanagerdatapb.TableDefiniti
 
 // initialize
 func (td *tableDiffer) initialize(ctx context.Context) error {
+	defer td.wd.ct.TableDiffPhaseTimings.Record(fmt.Sprintf("%s.%s", td.table.Name, initializing), time.Now())
 	vdiffEngine := td.wd.ct.vde
 	vdiffEngine.snapshotMu.Lock()
 	defer vdiffEngine.snapshotMu.Unlock()
@@ -109,7 +126,7 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 	defer func() {
 		unlock(&err)
 		if err != nil {
-			log.Errorf("UnlockKeyspace %s failed: %v", targetKeyspace, lockErr)
+			log.Errorf("UnlockKeyspace %s failed: %v", targetKeyspace, err)
 		}
 	}()
 
@@ -209,6 +226,7 @@ func (td *tableDiffer) forEachSource(cb func(source *migrationSource) error) err
 }
 
 func (td *tableDiffer) selectTablets(ctx context.Context) error {
+	defer td.wd.ct.TableDiffPhaseTimings.Record(fmt.Sprintf("%s.%s", td.table.Name, pickingTablets), time.Now())
 	var (
 		wg                   sync.WaitGroup
 		sourceErr, targetErr error
@@ -284,6 +302,7 @@ func (td *tableDiffer) pickTablet(ctx context.Context, ts *topo.Server, cells []
 }
 
 func (td *tableDiffer) syncSourceStreams(ctx context.Context) error {
+	defer td.wd.ct.TableDiffPhaseTimings.Record(fmt.Sprintf("%s.%s", td.table.Name, syncingSources), time.Now())
 	// source can be replica, wait for them to at least reach max gtid of all target streams
 	ct := td.wd.ct
 	waitCtx, cancel := context.WithTimeout(ctx, time.Duration(ct.options.CoreOptions.TimeoutSeconds*int64(time.Second)))
@@ -302,6 +321,7 @@ func (td *tableDiffer) syncSourceStreams(ctx context.Context) error {
 }
 
 func (td *tableDiffer) syncTargetStreams(ctx context.Context) error {
+	defer td.wd.ct.TableDiffPhaseTimings.Record(fmt.Sprintf("%s.%s", td.table.Name, syncingTargets), time.Now())
 	ct := td.wd.ct
 	waitCtx, cancel := context.WithTimeout(ctx, time.Duration(ct.options.CoreOptions.TimeoutSeconds*int64(time.Second)))
 	defer cancel()
@@ -324,6 +344,7 @@ func (td *tableDiffer) syncTargetStreams(ctx context.Context) error {
 }
 
 func (td *tableDiffer) startTargetDataStream(ctx context.Context) error {
+	defer td.wd.ct.TableDiffPhaseTimings.Record(fmt.Sprintf("%s.%s", td.table.Name, startingTargets), time.Now())
 	ct := td.wd.ct
 	gtidch := make(chan string, 1)
 	ct.targetShardStreamer.result = make(chan *sqltypes.Result, 1)
@@ -338,6 +359,7 @@ func (td *tableDiffer) startTargetDataStream(ctx context.Context) error {
 }
 
 func (td *tableDiffer) startSourceDataStreams(ctx context.Context) error {
+	defer td.wd.ct.TableDiffPhaseTimings.Record(fmt.Sprintf("%s.%s", td.table.Name, startingSources), time.Now())
 	if err := td.forEachSource(func(source *migrationSource) error {
 		gtidch := make(chan string, 1)
 		source.result = make(chan *sqltypes.Result, 1)
@@ -356,6 +378,7 @@ func (td *tableDiffer) startSourceDataStreams(ctx context.Context) error {
 }
 
 func (td *tableDiffer) restartTargetVReplicationStreams(ctx context.Context) error {
+	defer td.wd.ct.TableDiffPhaseTimings.Record(fmt.Sprintf("%s.%s", td.table.Name, restartingVreplication), time.Now())
 	ct := td.wd.ct
 	query := fmt.Sprintf("update _vt.vreplication set state='Running', message='', stop_pos='' where db_name=%s and workflow=%s",
 		encodeString(ct.vde.dbName), encodeString(ct.workflow))
@@ -383,7 +406,7 @@ func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStr
 		td.wgShardStreamers.Done()
 	}()
 	participant.err = func() error {
-		conn, err := tabletconn.GetDialer()(participant.tablet, false)
+		conn, err := tabletconn.GetDialer()(ctx, participant.tablet, false)
 		if err != nil {
 			return err
 		}
@@ -431,7 +454,7 @@ func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStr
 			case <-ctx.Done():
 				return vterrors.Wrap(ctx.Err(), "VStreamRows")
 			case <-td.wd.ct.done:
-				return vterrors.Errorf(vtrpcpb.Code_CANCELED, "vdiff was stopped")
+				return ErrVDiffStoppedByUser
 			}
 			return nil
 		})
@@ -444,25 +467,26 @@ func (td *tableDiffer) setupRowSorters() {
 	for shard, source := range td.wd.ct.sources {
 		sources[shard] = source.shardStreamer
 	}
-	td.sourcePrimitive = newMergeSorter(sources, td.tablePlan.comparePKs)
+	td.sourcePrimitive = newMergeSorter(sources, td.tablePlan.comparePKs, td.wd.collationEnv)
 
 	// Create a merge sorter for the target.
 	targets := make(map[string]*shardStreamer)
 	targets[td.wd.ct.targetShardStreamer.shard] = td.wd.ct.targetShardStreamer
-	td.targetPrimitive = newMergeSorter(targets, td.tablePlan.comparePKs)
+	td.targetPrimitive = newMergeSorter(targets, td.tablePlan.comparePKs, td.wd.collationEnv)
 
 	// If there were aggregate expressions, we have to re-aggregate
 	// the results, which engine.OrderedAggregate can do.
 	if len(td.tablePlan.aggregates) != 0 {
 		td.sourcePrimitive = &engine.OrderedAggregate{
 			Aggregates:  td.tablePlan.aggregates,
-			GroupByKeys: pkColsToGroupByParams(td.tablePlan.pkCols),
+			GroupByKeys: pkColsToGroupByParams(td.tablePlan.pkCols, td.wd.collationEnv),
 			Input:       td.sourcePrimitive,
 		}
 	}
 }
 
-func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onlyPks bool, maxExtraRowsToCompare int64) (*DiffReport, error) {
+func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onlyPks bool, maxExtraRowsToCompare int64, maxReportSampleRows int64, stop <-chan time.Time) (*DiffReport, error) {
+	defer td.wd.ct.TableDiffPhaseTimings.Record(fmt.Sprintf("%s.%s", td.table.Name, diffingTable), time.Now())
 	dbClient := td.wd.ct.dbClientFactory()
 	if err := dbClient.Connect(); err != nil {
 		return nil, err
@@ -506,11 +530,12 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onl
 	advanceSource := true
 	advanceTarget := true
 
-	// Save our progress when we finish the run
+	// Save our progress when we finish the run.
 	defer func() {
 		if err := td.updateTableProgress(dbClient, dr, lastProcessedRow); err != nil {
 			log.Errorf("Failed to update vdiff progress on %s table: %v", td.table.Name, err)
 		}
+		globalStats.RowsDiffedCount.Add(dr.ProcessedRows)
 	}()
 
 	for {
@@ -520,7 +545,10 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onl
 		case <-ctx.Done():
 			return nil, vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
 		case <-td.wd.ct.done:
-			return nil, vterrors.Errorf(vtrpcpb.Code_CANCELED, "vdiff was stopped")
+			return nil, ErrVDiffStoppedByUser
+		case <-stop:
+			globalStats.RestartedTableDiffs.Add(td.table.Name, 1)
+			return nil, ErrMaxDiffDurationExceeded
 		default:
 		}
 
@@ -533,7 +561,7 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onl
 		}
 		rowsToCompare--
 		if rowsToCompare < 0 {
-			log.Infof("Stopping vdiff, specified limit reached")
+			log.Infof("Stopping vdiff, specified row limit reached")
 			return dr, nil
 		}
 		if advanceSource {
@@ -564,7 +592,7 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onl
 			}
 			dr.ExtraRowsTargetDiffs = append(dr.ExtraRowsTargetDiffs, diffRow)
 
-			// drain target, update count
+			// Drain target, update count.
 			count, err := targetExecutor.drain(ctx)
 			if err != nil {
 				return nil, err
@@ -574,8 +602,8 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onl
 			return dr, nil
 		}
 		if targetRow == nil {
-			// no more rows from the target
-			// we know we have rows from source, drain, update count
+			// No more rows from the target but we know we have more rows from
+			// source, so drain them and update the counts.
 			diffRow, err := td.genRowDiff(td.tablePlan.sourceQuery, sourceRow, debug, onlyPks)
 			if err != nil {
 				return nil, vterrors.Wrap(err, "unexpected error generating diff")
@@ -628,8 +656,8 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onl
 		case err != nil:
 			return nil, err
 		case c != 0:
-			// We don't do a second pass to compare mismatched rows so we can cap the slice here
-			if dr.MismatchedRows < maxVDiffReportSampleRows {
+			// We don't do a second pass to compare mismatched rows so we can cap the slice here.
+			if maxReportSampleRows == 0 || dr.MismatchedRows < maxReportSampleRows {
 				sourceDiffRow, err := td.genRowDiff(td.tablePlan.targetQuery, sourceRow, debug, onlyPks)
 				if err != nil {
 					return nil, vterrors.Wrap(err, "unexpected error generating diff")
@@ -672,7 +700,7 @@ func (td *tableDiffer) compare(sourceRow, targetRow []sqltypes.Value, cols []com
 		if collationID == collations.Unknown {
 			collationID = collations.CollationBinaryID
 		}
-		c, err = evalengine.NullsafeCompare(sourceRow[compareIndex], targetRow[compareIndex], collationID)
+		c, err = evalengine.NullsafeCompare(sourceRow[compareIndex], targetRow[compareIndex], td.wd.collationEnv, collationID, nil)
 		if err != nil {
 			return 0, err
 		}
@@ -700,6 +728,16 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
 			return err
 		}
 
+		if td.wd.opts.CoreOptions.MaxDiffSeconds > 0 {
+			// Update the in-memory lastPK as well so that we can restart the table
+			// diff if needed.
+			lastpkpb := &querypb.QueryResult{}
+			if err := prototext.Unmarshal(lastPK, lastpkpb); err != nil {
+				return err
+			}
+			td.lastPK = lastpkpb
+		}
+
 		query, err = sqlparser.ParseAndBind(sqlUpdateTableProgress,
 			sqltypes.Int64BindVariable(dr.ProcessedRows),
 			sqltypes.StringBindVariable(string(lastPK)),
@@ -724,6 +762,7 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
 	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 		return err
 	}
+	td.wd.ct.TableDiffRowCounts.Add(td.table.Name, dr.ProcessedRows)
 	return nil
 }
 
@@ -824,10 +863,10 @@ func (td *tableDiffer) adjustForSourceTimeZone(targetSelectExprs sqlparser.Selec
 				if fieldType == querypb.Type_DATETIME {
 					convertTZFuncExpr = &sqlparser.FuncExpr{
 						Name: sqlparser.NewIdentifierCI("convert_tz"),
-						Exprs: sqlparser.SelectExprs{
-							expr,
-							&sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(td.wd.ct.targetTimeZone)},
-							&sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(td.wd.ct.sourceTimeZone)},
+						Exprs: sqlparser.Exprs{
+							selExpr.Expr,
+							sqlparser.NewStrLiteral(td.wd.ct.targetTimeZone),
+							sqlparser.NewStrLiteral(td.wd.ct.sourceTimeZone),
 						},
 					}
 					log.Infof("converting datetime column %s using convert_tz()", colName)

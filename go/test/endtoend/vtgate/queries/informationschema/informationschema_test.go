@@ -21,14 +21,12 @@ import (
 	"fmt"
 	"testing"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
-
 	"github.com/stretchr/testify/assert"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
 func start(t *testing.T) (utils.MySQLCompare, func()) {
@@ -203,6 +201,10 @@ func TestMultipleSchemaPredicates(t *testing.T) {
 	_, err := mcmp.VtConn.ExecuteFetch(query, 1000, true)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "specifying two different database in the query is not supported")
+
+	if utils.BinaryIsAtLeastAtVersion(20, "vtgate") {
+		_, _ = mcmp.ExecNoCompare("select * from information_schema.columns where table_schema = '' limit 1")
+	}
 }
 
 func TestInfrSchemaAndUnionAll(t *testing.T) {
@@ -222,7 +224,28 @@ func TestInfrSchemaAndUnionAll(t *testing.T) {
 	}
 }
 
+func TestInfoschemaTypes(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
+
+	require.NoError(t,
+		utils.WaitForAuthoritative(t, "ks", "t1", clusterInstance.VtgateProcess.ReadVSchema))
+
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec(`
+	SELECT ORDINAL_POSITION
+		FROM INFORMATION_SCHEMA.COLUMNS
+	WHERE TABLE_SCHEMA = 'ks' AND TABLE_NAME = 't1'
+	UNION
+	SELECT ORDINAL_POSITION
+		FROM INFORMATION_SCHEMA.COLUMNS
+	WHERE TABLE_SCHEMA = 'ks' AND TABLE_NAME = 't2';
+	`)
+}
+
 func TestTypeORMQuery(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
 	// This test checks that we can run queries similar to the ones that the TypeORM framework uses
 
 	require.NoError(t,
@@ -231,7 +254,7 @@ func TestTypeORMQuery(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
 
-	query := `SELECT kcu.TABLE_NAME, kcu.COLUMN_NAME, cols.DATA_TYPE
+	utils.AssertMatchesAny(t, mcmp.VtConn, `SELECT kcu.TABLE_NAME, kcu.COLUMN_NAME, cols.DATA_TYPE
 FROM (SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME
       FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
       WHERE kcu.TABLE_SCHEMA = 'ks'
@@ -251,9 +274,51 @@ FROM (SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME
                      WHERE cols.TABLE_SCHEMA = 'ks'
                        AND cols.TABLE_NAME = 't7_xxhash') cols
                     ON kcu.TABLE_SCHEMA = cols.TABLE_SCHEMA AND kcu.TABLE_NAME = cols.TABLE_NAME AND
-                       kcu.COLUMN_NAME = cols.COLUMN_NAME`
-	utils.AssertMatchesAny(t, mcmp.VtConn, query,
+                       kcu.COLUMN_NAME = cols.COLUMN_NAME`,
 		`[[VARBINARY("t1") VARCHAR("id1") BLOB("bigint")] [VARBINARY("t7_xxhash") VARCHAR("uid") BLOB("varchar")]]`,
 		`[[VARCHAR("t1") VARCHAR("id1") BLOB("bigint")] [VARCHAR("t7_xxhash") VARCHAR("uid") BLOB("varchar")]]`,
 	)
+
+	utils.AssertMatchesAny(t, mcmp.VtConn, `
+SELECT *
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_SCHEMA = 'ks' AND TABLE_NAME = 't1'
+UNION
+SELECT *
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_SCHEMA = 'ks' AND TABLE_NAME = 't2';
+`,
+		`[[VARBINARY("def") VARBINARY("vt_ks") VARBINARY("t1") VARCHAR("id1") UINT32(1) NULL VARCHAR("NO") BLOB("bigint") NULL NULL UINT64(19) UINT64(0) NULL NULL NULL BLOB("bigint") VARBINARY("PRI") VARCHAR("") VARCHAR("select,insert,update,references") BLOB("") BLOB("") NULL] [VARBINARY("def") VARBINARY("vt_ks") VARBINARY("t1") VARCHAR("id2") UINT32(2) NULL VARCHAR("YES") BLOB("bigint") NULL NULL UINT64(19) UINT64(0) NULL NULL NULL BLOB("bigint") VARBINARY("") VARCHAR("") VARCHAR("select,insert,update,references") BLOB("") BLOB("") NULL] [VARBINARY("def") VARBINARY("vt_ks") VARBINARY("t2") VARCHAR("id") UINT32(1) NULL VARCHAR("NO") BLOB("bigint") NULL NULL UINT64(19) UINT64(0) NULL NULL NULL BLOB("bigint") VARBINARY("PRI") VARCHAR("") VARCHAR("select,insert,update,references") BLOB("") BLOB("") NULL] [VARBINARY("def") VARBINARY("vt_ks") VARBINARY("t2") VARCHAR("value") UINT32(2) NULL VARCHAR("YES") BLOB("bigint") NULL NULL UINT64(19) UINT64(0) NULL NULL NULL BLOB("bigint") VARBINARY("") VARCHAR("") VARCHAR("select,insert,update,references") BLOB("") BLOB("") NULL]]`,
+		`[[VARCHAR("def") VARCHAR("vt_ks") VARCHAR("t1") VARCHAR("id1") UINT32(1) NULL VARCHAR("NO") BLOB("bigint") NULL NULL UINT64(19) UINT64(0) NULL NULL NULL BLOB("bigint") VARBINARY("PRI") VARCHAR("") VARCHAR("select,insert,update,references") BLOB("") BLOB("") NULL] [VARCHAR("def") VARCHAR("vt_ks") VARCHAR("t1") VARCHAR("id2") UINT32(2) NULL VARCHAR("YES") BLOB("bigint") NULL NULL UINT64(19) UINT64(0) NULL NULL NULL BLOB("bigint") VARBINARY("") VARCHAR("") VARCHAR("select,insert,update,references") BLOB("") BLOB("") NULL] [VARCHAR("def") VARCHAR("vt_ks") VARCHAR("t2") VARCHAR("id") UINT32(1) NULL VARCHAR("NO") BLOB("bigint") NULL NULL UINT64(19) UINT64(0) NULL NULL NULL BLOB("bigint") VARBINARY("PRI") VARCHAR("") VARCHAR("select,insert,update,references") BLOB("") BLOB("") NULL] [VARCHAR("def") VARCHAR("vt_ks") VARCHAR("t2") VARCHAR("value") UINT32(2) NULL VARCHAR("YES") BLOB("bigint") NULL NULL UINT64(19) UINT64(0) NULL NULL NULL BLOB("bigint") VARBINARY("") VARCHAR("") VARCHAR("select,insert,update,references") BLOB("") BLOB("") NULL]]`,
+	)
+}
+
+func TestJoinWithSingleShardQueryOnRHS(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
+	// This test checks that we can run queries like this, where the RHS is a single shard query
+	mcmp, closer := start(t)
+	defer closer()
+
+	query := `SELECT
+        c.column_name as column_name,
+        c.data_type as data_type,
+        c.table_name as table_name,
+        c.table_schema as table_schema
+FROM
+        information_schema.columns c
+        JOIN (
+          SELECT
+            table_name
+          FROM
+            information_schema.tables
+          WHERE
+            table_schema != 'information_schema'
+          LIMIT
+            1
+        ) AS tables ON tables.table_name = c.table_name
+ORDER BY
+        c.table_name`
+
+	res := utils.Exec(t, mcmp.VtConn, query)
+	require.NotEmpty(t, res.Rows)
 }

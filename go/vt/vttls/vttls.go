@@ -283,7 +283,7 @@ func loadTLSCertificate(cert, key string) (*[]tls.Certificate, error) {
 	result, ok := tlsCertificates.Load(tlsIdentifier)
 
 	if !ok {
-		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "Cannot find loaded tls certificate with cert: %s, key%s", cert, key)
+		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "Cannot find loaded tls certificate with cert: %s, key: %s", cert, key)
 	}
 
 	return result.(*[]tls.Certificate), nil

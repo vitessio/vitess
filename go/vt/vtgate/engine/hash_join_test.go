@@ -22,126 +22,153 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
-func TestHashJoinExecuteSameType(t *testing.T) {
-	leftPrim := &fakePrimitive{
-		results: []*sqltypes.Result{
-			sqltypes.MakeTestResult(
-				sqltypes.MakeTestFields(
-					"col1|col2|col3",
-					"int64|varchar|varchar",
+func TestHashJoinVariations(t *testing.T) {
+	// This test tries the different variations of hash-joins:
+	// comparing values of same type and different types, and both left and right outer joins
+	lhs := func() Primitive {
+		return &fakePrimitive{
+			results: []*sqltypes.Result{
+				sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields(
+						"col1|col2",
+						"int64|varchar",
+					),
+					"1|1",
+					"2|2",
+					"3|b",
+					"null|b",
 				),
-				"1|a|aa",
-				"2|b|bb",
-				"3|c|cc",
-			),
-		},
+			},
+		}
 	}
-	rightPrim := &fakePrimitive{
-		results: []*sqltypes.Result{
-			sqltypes.MakeTestResult(
-				sqltypes.MakeTestFields(
-					"col4|col5|col6",
-					"int64|varchar|varchar",
+	rhs := func() Primitive {
+		return &fakePrimitive{
+			results: []*sqltypes.Result{
+				sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields(
+						"col4|col5",
+						"int64|varchar",
+					),
+					"1|1",
+					"3|2",
+					"5|null",
+					"4|b",
 				),
-				"1|d|dd",
-				"3|e|ee",
-				"4|f|ff",
-				"3|g|gg",
-			),
-		},
+			},
+		}
 	}
 
-	// Normal join
-	jn := &HashJoin{
-		Opcode: InnerJoin,
-		Left:   leftPrim,
-		Right:  rightPrim,
-		Cols:   []int{-1, -2, 1, 2},
-		LHSKey: 0,
-		RHSKey: 0,
+	rows := func(r ...string) []string { return r }
+
+	tests := []struct {
+		name     string
+		typ      JoinOpcode
+		lhs, rhs int
+		expected []string
+		reverse  bool
+	}{{
+		name:     "inner join, same type",
+		typ:      InnerJoin,
+		lhs:      0,
+		rhs:      0,
+		expected: rows("1|1|1|1", "3|b|3|2"),
+	}, {
+		name:     "inner join, coercion",
+		typ:      InnerJoin,
+		lhs:      0,
+		rhs:      1,
+		expected: rows("1|1|1|1", "2|2|3|2"),
+	}, {
+		name:     "left join, same type",
+		typ:      LeftJoin,
+		lhs:      0,
+		rhs:      0,
+		expected: rows("1|1|1|1", "3|b|3|2", "2|2|null|null", "null|b|null|null"),
+	}, {
+		name:     "left join, coercion",
+		typ:      LeftJoin,
+		lhs:      0,
+		rhs:      1,
+		expected: rows("1|1|1|1", "2|2|3|2", "3|b|null|null", "null|b|null|null"),
+	}, {
+		name:     "right join, same type",
+		typ:      LeftJoin,
+		lhs:      0,
+		rhs:      0,
+		expected: rows("1|1|1|1", "3|2|3|b", "4|b|null|null", "5|null|null|null"),
+		reverse:  true,
+	}, {
+		name:     "right join, coercion",
+		typ:      LeftJoin,
+		lhs:      0,
+		rhs:      1,
+		reverse:  true,
+		expected: rows("1|1|1|1", "3|2|null|null", "4|b|null|null", "5|null|null|null"),
+	}}
+
+	for _, tc := range tests {
+
+		var fields []*querypb.Field
+		var first, last func() Primitive
+		if tc.reverse {
+			first, last = rhs, lhs
+			fields = sqltypes.MakeTestFields(
+				"col4|col5|col1|col2",
+				"int64|varchar|int64|varchar",
+			)
+		} else {
+			first, last = lhs, rhs
+			fields = sqltypes.MakeTestFields(
+				"col1|col2|col4|col5",
+				"int64|varchar|int64|varchar",
+			)
+		}
+
+		expected := sqltypes.MakeTestResult(fields, tc.expected...)
+
+		typ, err := evalengine.CoerceTypes(typeForOffset(tc.lhs), typeForOffset(tc.rhs), collations.MySQL8())
+		require.NoError(t, err)
+
+		jn := &HashJoin{
+			Opcode:         tc.typ,
+			Cols:           []int{-1, -2, 1, 2},
+			LHSKey:         tc.lhs,
+			RHSKey:         tc.rhs,
+			Collation:      typ.Collation(),
+			ComparisonType: typ.Type(),
+			CollationEnv:   collations.MySQL8(),
+		}
+
+		t.Run(tc.name, func(t *testing.T) {
+			jn.Left = first()
+			jn.Right = last()
+			r, err := jn.TryExecute(context.Background(), &noopVCursor{}, map[string]*querypb.BindVariable{}, true)
+			require.NoError(t, err)
+			expectResultAnyOrder(t, r, expected)
+		})
+		t.Run("Streaming "+tc.name, func(t *testing.T) {
+			jn.Left = first()
+			jn.Right = last()
+			r, err := wrapStreamExecute(jn, &noopVCursor{}, map[string]*querypb.BindVariable{}, true)
+			require.NoError(t, err)
+			expectResultAnyOrder(t, r, expected)
+		})
 	}
-	r, err := jn.TryExecute(context.Background(), &noopVCursor{}, map[string]*querypb.BindVariable{}, true)
-	require.NoError(t, err)
-	leftPrim.ExpectLog(t, []string{
-		`Execute  true`,
-	})
-	rightPrim.ExpectLog(t, []string{
-		`Execute  true`,
-	})
-	expectResult(t, "jn.Execute", r, sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields(
-			"col1|col2|col4|col5",
-			"int64|varchar|int64|varchar",
-		),
-		"1|a|1|d",
-		"3|c|3|e",
-		"3|c|3|g",
-	))
 }
 
-func TestHashJoinExecuteDifferentType(t *testing.T) {
-	leftPrim := &fakePrimitive{
-		results: []*sqltypes.Result{
-			sqltypes.MakeTestResult(
-				sqltypes.MakeTestFields(
-					"col1|col2|col3",
-					"int64|varchar|varchar",
-				),
-				"1|a|aa",
-				"2|b|bb",
-				"3|c|cc",
-				"5|c|cc",
-			),
-		},
+func typeForOffset(i int) evalengine.Type {
+	switch i {
+	case 0:
+		return evalengine.NewType(sqltypes.Int64, collations.CollationBinaryID)
+	case 1:
+		return evalengine.NewType(sqltypes.VarChar, collations.MySQL8().DefaultConnectionCharset())
+	default:
+		panic(i)
 	}
-	rightPrim := &fakePrimitive{
-		results: []*sqltypes.Result{
-			sqltypes.MakeTestResult(
-				sqltypes.MakeTestFields(
-					"col4|col5|col6",
-					"varchar|varchar|varchar",
-				),
-				"1.00|d|dd",
-				"3|e|ee",
-				"2.89|z|zz",
-				"4|f|ff",
-				"3|g|gg",
-				" 5.0toto|g|gg",
-				"w|ww|www",
-			),
-		},
-	}
-
-	// Normal join
-	jn := &HashJoin{
-		Opcode:         InnerJoin,
-		Left:           leftPrim,
-		Right:          rightPrim,
-		Cols:           []int{-1, -2, 1, 2},
-		LHSKey:         0,
-		RHSKey:         0,
-		ComparisonType: querypb.Type_FLOAT64,
-	}
-	r, err := jn.TryExecute(context.Background(), &noopVCursor{}, map[string]*querypb.BindVariable{}, true)
-	require.NoError(t, err)
-	leftPrim.ExpectLog(t, []string{
-		`Execute  true`,
-	})
-	rightPrim.ExpectLog(t, []string{
-		`Execute  true`,
-	})
-	expectResult(t, "jn.Execute", r, sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields(
-			"col1|col2|col4|col5",
-			"int64|varchar|varchar|varchar",
-		),
-		"1|a|1.00|d",
-		"3|c|3|e",
-		"3|c|3|g",
-		"5|c| 5.0toto|g",
-	))
 }

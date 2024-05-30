@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
@@ -106,8 +107,9 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 						},
 					},
 				},
-				PopulateReparentJournalDelays: map[string]time.Duration{
-					"zone1-0000000200": time.Second * 29,
+				SetReplicationSourceDelays: map[string]time.Duration{
+					"zone1-0000000100": time.Second * 29,
+					"zone1-0000000101": time.Second * 29,
 				},
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000200": nil,
@@ -223,8 +225,9 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 						},
 					},
 				},
-				PopulateReparentJournalDelays: map[string]time.Duration{
-					"zone1-0000000200": time.Second * 31,
+				SetReplicationSourceDelays: map[string]time.Duration{
+					"zone1-0000000100": time.Second * 31,
+					"zone1-0000000101": time.Second * 31,
 				},
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000200": nil,
@@ -290,8 +293,6 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -310,7 +311,7 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 			}, tt.tablets...)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(vtenv.NewTestEnv(), ts)
 			})
 			resp, err := vtctld.EmergencyReparentShard(ctx, tt.req)
 
@@ -592,8 +593,6 @@ func TestPlannedReparentShardSlow(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -608,7 +607,7 @@ func TestPlannedReparentShardSlow(t *testing.T) {
 			}, tt.tablets...)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(vtenv.NewTestEnv(), ts)
 			})
 			resp, err := vtctld.PlannedReparentShard(ctx, tt.req)
 
@@ -738,7 +737,7 @@ func TestSleepTablet(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(vtenv.NewTestEnv(), ts)
 			})
 
 			start := time.Now()

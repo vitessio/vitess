@@ -45,7 +45,8 @@ func convertError(err error, nodePath string) error {
 		return nil
 	}
 
-	if typeErr, ok := err.(rpctypes.EtcdError); ok {
+	var typeErr rpctypes.EtcdError
+	if errors.As(err, &typeErr) {
 		switch typeErr.Code() {
 		case codes.NotFound:
 			return topo.NewError(topo.NoNode, nodePath)
@@ -61,6 +62,8 @@ func convertError(err error, nodePath string) error {
 			// etcd primary election is failing, so timeout
 			// also sounds reasonable there.
 			return topo.NewError(topo.Timeout, nodePath)
+		case codes.ResourceExhausted:
+			return topo.NewError(topo.ResourceExhausted, nodePath)
 		}
 		return err
 	}
@@ -74,15 +77,17 @@ func convertError(err error, nodePath string) error {
 			return topo.NewError(topo.Interrupted, nodePath)
 		case codes.DeadlineExceeded:
 			return topo.NewError(topo.Timeout, nodePath)
+		case codes.ResourceExhausted:
+			return topo.NewError(topo.ResourceExhausted, nodePath)
 		default:
 			return err
 		}
 	}
 
-	switch err {
-	case context.Canceled:
+	switch {
+	case errors.Is(err, context.Canceled):
 		return topo.NewError(topo.Interrupted, nodePath)
-	case context.DeadlineExceeded:
+	case errors.Is(err, context.DeadlineExceeded):
 		return topo.NewError(topo.Timeout, nodePath)
 	default:
 		return err

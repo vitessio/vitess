@@ -27,15 +27,10 @@ import (
 	"vitess.io/vitess/go/vt/log"
 )
 
-const (
-	LostInRecoveryDowntimeSeconds int = 60 * 60 * 24 * 365
-)
-
 var configurationLoaded = make(chan bool)
 
 const (
 	HealthPollSeconds                     = 1
-	ActiveNodeExpireSeconds               = 5
 	AuditPageSize                         = 20
 	DebugMetricsIntervalSeconds           = 10
 	StaleInstanceCoordinatesExpireSeconds = 60
@@ -44,7 +39,6 @@ const (
 	DiscoveryQueueMaxStatisticsSize       = 120
 	DiscoveryCollectionRetentionSeconds   = 120
 	UnseenInstanceForgetHours             = 240 // Number of hours after which an unseen instance is forgotten
-	FailureDetectionPeriodBlockMinutes    = 60  // The time for which an instance's failure discovery is kept "active", so as to avoid concurrent "discoveries" of the instance's failure; this preceeds any recovery process, if any.
 )
 
 var (
@@ -59,6 +53,7 @@ var (
 	recoveryPeriodBlockDuration    = 30 * time.Second
 	preventCrossCellFailover       = false
 	waitReplicasTimeout            = 30 * time.Second
+	tolerableReplicationLag        = 0 * time.Second
 	topoInformationRefreshDuration = 15 * time.Second
 	recoveryPollDuration           = 1 * time.Second
 	ersEnabled                     = true
@@ -76,8 +71,10 @@ func RegisterFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&auditToSyslog, "audit-to-syslog", auditToSyslog, "Whether to store the audit log in the syslog")
 	fs.DurationVar(&auditPurgeDuration, "audit-purge-duration", auditPurgeDuration, "Duration for which audit logs are held before being purged. Should be in multiples of days")
 	fs.DurationVar(&recoveryPeriodBlockDuration, "recovery-period-block-duration", recoveryPeriodBlockDuration, "Duration for which a new recovery is blocked on an instance after running a recovery")
+	fs.MarkDeprecated("recovery-period-block-duration", "As of v20 this is ignored and will be removed in a future release.")
 	fs.BoolVar(&preventCrossCellFailover, "prevent-cross-cell-failover", preventCrossCellFailover, "Prevent VTOrc from promoting a primary in a different cell than the current primary in case of a failover")
 	fs.DurationVar(&waitReplicasTimeout, "wait-replicas-timeout", waitReplicasTimeout, "Duration for which to wait for replica's to respond when issuing RPCs")
+	fs.DurationVar(&tolerableReplicationLag, "tolerable-replication-lag", tolerableReplicationLag, "Amount of replication lag that is considered acceptable for a tablet to be eligible for promotion when Vitess makes the choice of a new primary in PRS")
 	fs.DurationVar(&topoInformationRefreshDuration, "topo-information-refresh-duration", topoInformationRefreshDuration, "Timer duration on which VTOrc refreshes the keyspace and vttablet records from the topology server")
 	fs.DurationVar(&recoveryPollDuration, "recovery-poll-duration", recoveryPollDuration, "Timer duration on which VTOrc polls its database to run a recovery")
 	fs.BoolVar(&ersEnabled, "allow-emergency-reparent", ersEnabled, "Whether VTOrc should be allowed to run emergency reparent operation when it detects a dead primary")
@@ -85,7 +82,7 @@ func RegisterFlags(fs *pflag.FlagSet) {
 }
 
 // Configuration makes for vtorc configuration input, which can be provided by user via JSON formatted file.
-// Some of the parameteres have reasonable default values, and some (like database credentials) are
+// Some of the parameters have reasonable default values, and some (like database credentials) are
 // strictly expected from user.
 // TODO(sougou): change this to yaml parsing, and possible merge with tabletenv.
 type Configuration struct {
@@ -100,6 +97,7 @@ type Configuration struct {
 	RecoveryPeriodBlockSeconds            int    // (overrides `RecoveryPeriodBlockMinutes`) The time for which an instance's recovery is kept "active", so as to avoid concurrent recoveries on smae instance as well as flapping
 	PreventCrossDataCenterPrimaryFailover bool   // When true (default: false), cross-DC primary failover are not allowed, vtorc will do all it can to only fail over within same DC, or else not fail over at all.
 	WaitReplicasTimeoutSeconds            int    // Timeout on amount of time to wait for the replicas in case of ERS. Should be a small value because we should fail-fast. Should not be larger than LockTimeout since that is the total time we use for an ERS.
+	TolerableReplicationLagSeconds        int    // Amount of replication lag that is considered acceptable for a tablet to be eligible for promotion when Vitess makes the choice of a new primary in PRS.
 	TopoInformationRefreshSeconds         int    // Timer duration on which VTOrc refreshes the keyspace and vttablet records from the topo-server.
 	RecoveryPollSeconds                   int    // Timer duration on which VTOrc recovery analysis runs
 }
@@ -129,6 +127,7 @@ func UpdateConfigValuesFromFlags() {
 	Config.RecoveryPeriodBlockSeconds = int(recoveryPeriodBlockDuration / time.Second)
 	Config.PreventCrossDataCenterPrimaryFailover = preventCrossCellFailover
 	Config.WaitReplicasTimeoutSeconds = int(waitReplicasTimeout / time.Second)
+	Config.TolerableReplicationLagSeconds = int(tolerableReplicationLag / time.Second)
 	Config.TopoInformationRefreshSeconds = int(topoInformationRefreshDuration / time.Second)
 	Config.RecoveryPollSeconds = int(recoveryPollDuration / time.Second)
 }

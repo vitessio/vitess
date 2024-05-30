@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -37,7 +37,10 @@ func addStatusParts(vtg *vtgate.VTGate) {
 	servenv.AddStatusPart("Gateway Status", vtgate.StatusTemplate, func() any {
 		return vtg.GetGatewayCacheStatus()
 	})
-	servenv.AddStatusPart("Health Check Cache", discovery.HealthCheckTemplate, func() any {
+	servenv.AddStatusPart("Health Check - Cache", discovery.HealthCheckCacheTemplate, func() any {
 		return vtg.Gateway().TabletsCacheStatus()
+	})
+	servenv.AddStatusPart("Health Check - Healthy Tablets", discovery.HealthCheckHealthyTemplate, func() any {
+		return vtg.Gateway().TabletsHealthyStatus()
 	})
 }

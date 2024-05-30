@@ -91,7 +91,7 @@ func position(val *evalInt64, limit int64, f string) (int64, error) {
 	return pos, nil
 }
 
-func evalRegexpCollation(input, pat eval, f string) (eval, eval, collations.TypedCollation, icuregex.RegexpFlag, error) {
+func evalRegexpCollation(env *collations.Environment, input, pat eval, f string) (eval, eval, collations.TypedCollation, icuregex.RegexpFlag, error) {
 	var typedCol collations.TypedCollation
 	var err error
 
@@ -101,7 +101,6 @@ func evalRegexpCollation(input, pat eval, f string) (eval, eval, collations.Type
 			patCol := patBytes.col.Collation
 			if (inputCol == collations.CollationBinaryID && patCol != collations.CollationBinaryID) ||
 				(inputCol != collations.CollationBinaryID && patCol == collations.CollationBinaryID) {
-				env := collations.Local()
 				inputColName := env.LookupName(inputCol)
 				patColName := env.LookupName(patCol)
 				return nil, nil, typedCol, 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.CharacterSetMismatch, "Character set '%s' cannot be used in conjunction with '%s' in call to %s.", inputColName, patColName, f)
@@ -109,13 +108,13 @@ func evalRegexpCollation(input, pat eval, f string) (eval, eval, collations.Type
 		}
 	}
 
-	input, pat, typedCol, err = mergeAndCoerceCollations(input, pat)
+	input, pat, typedCol, err = mergeAndCoerceCollations(input, pat, env)
 	if err != nil {
 		return nil, nil, collations.TypedCollation{}, 0, err
 	}
 
 	var flags icuregex.RegexpFlag
-	var collation = collations.Local().LookupName(typedCol.Collation)
+	collation := env.LookupName(typedCol.Collation)
 	if strings.Contains(collation, "_ci") {
 		flags |= icuregex.CaseInsensitive
 	}
@@ -123,11 +122,10 @@ func evalRegexpCollation(input, pat eval, f string) (eval, eval, collations.Type
 	return input, pat, typedCol, flags, nil
 }
 
-func compileRegexpCollation(input, pat ctype, f string) (collations.TypedCollation, icuregex.RegexpFlag, error) {
+func compileRegexpCollation(env *collations.Environment, input, pat ctype, f string) (collations.TypedCollation, icuregex.RegexpFlag, error) {
 	var merged collations.TypedCollation
 	var err error
 
-	env := collations.Local()
 	if input.isTextual() && pat.isTextual() {
 		inputCol := input.Col.Collation
 		patCol := pat.Col.Collation
@@ -140,7 +138,7 @@ func compileRegexpCollation(input, pat ctype, f string) (collations.TypedCollati
 	}
 
 	if input.Col.Collation != pat.Col.Collation {
-		merged, _, _, err = mergeCollations(input.Col, pat.Col, input.Type, pat.Type)
+		merged, _, _, err = mergeCollations(input.Col, pat.Col, input.Type, pat.Type, env)
 	} else {
 		merged = input.Col
 	}
@@ -212,13 +210,15 @@ func compileRegex(pat eval, c colldata.Charset, flags icuregex.RegexpFlag) (*icu
 	return nil, err
 }
 
+var errNonConstantRegexp = errors.New("non-constant regexp")
+
 func compileConstantRegex(c *compiler, args TupleExpr, pat, mt int, cs collations.TypedCollation, flags icuregex.RegexpFlag, f string) (*icuregex.Pattern, error) {
 	pattern := args[pat]
 	if !pattern.constant() {
-		return nil, c.unsupported(pattern)
+		return nil, errNonConstantRegexp
 	}
 	var err error
-	staticEnv := EmptyExpressionEnv()
+	staticEnv := EmptyExpressionEnv(c.env)
 	pattern, err = simplifyExpr(staticEnv, pattern)
 	if err != nil {
 		return nil, err
@@ -227,7 +227,7 @@ func compileConstantRegex(c *compiler, args TupleExpr, pat, mt int, cs collation
 	if len(args) > mt {
 		fl := args[mt]
 		if !fl.constant() {
-			return nil, c.unsupported(fl)
+			return nil, errNonConstantRegexp
 		}
 		fl, err = simplifyExpr(staticEnv, fl)
 		if err != nil {
@@ -240,7 +240,7 @@ func compileConstantRegex(c *compiler, args TupleExpr, pat, mt int, cs collation
 	}
 
 	if pattern.(*Literal).inner == nil {
-		return nil, c.unsupported(pattern)
+		return nil, errNonConstantRegexp
 	}
 
 	innerPat, err := evalToVarchar(pattern.(*Literal).inner, cs.Collation, true)
@@ -278,7 +278,7 @@ func (r *builtinRegexpLike) eval(env *ExpressionEnv) (eval, error) {
 		return nil, err
 	}
 
-	input, pat, typedCol, flags, err := evalRegexpCollation(input, pat, "regexp_like")
+	input, pat, typedCol, flags, err := evalRegexpCollation(env.collationEnv, input, pat, "regexp_like")
 	if err != nil {
 		return nil, err
 	}
@@ -348,7 +348,7 @@ func (r *builtinRegexpLike) compile(c *compiler) (ctype, error) {
 		skips = append(skips, c.compileNullCheckArg(f, 2))
 	}
 
-	merged, flags, err := compileRegexpCollation(input, pat, "regexp_like")
+	merged, flags, err := compileRegexpCollation(c.env.CollationEnv(), input, pat, "regexp_like")
 	if err != nil {
 		return ctype{}, err
 	}
@@ -387,7 +387,7 @@ func (r *builtinRegexpInstr) eval(env *ExpressionEnv) (eval, error) {
 		return nil, err
 	}
 
-	input, pat, typedCol, flags, err := evalRegexpCollation(input, pat, "regexp_instr")
+	input, pat, typedCol, flags, err := evalRegexpCollation(env.collationEnv, input, pat, "regexp_instr")
 	if err != nil {
 		return nil, err
 	}
@@ -551,11 +551,11 @@ func (r *builtinRegexpInstr) compile(c *compiler) (ctype, error) {
 		switch {
 		case matchType.isTextual():
 		default:
-			c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)
+			c.asm.Convert_xb(1, sqltypes.VarBinary, nil)
 		}
 	}
 
-	merged, flags, err := compileRegexpCollation(input, pat, "regexp_instr")
+	merged, flags, err := compileRegexpCollation(c.env.CollationEnv(), input, pat, "regexp_instr")
 	if err != nil {
 		return ctype{}, err
 	}
@@ -594,7 +594,7 @@ func (r *builtinRegexpSubstr) eval(env *ExpressionEnv) (eval, error) {
 		return nil, err
 	}
 
-	input, pat, typedCol, flags, err := evalRegexpCollation(input, pat, "regexp_substr")
+	input, pat, typedCol, flags, err := evalRegexpCollation(env.collationEnv, input, pat, "regexp_substr")
 	if err != nil {
 		return nil, err
 	}
@@ -728,11 +728,11 @@ func (r *builtinRegexpSubstr) compile(c *compiler) (ctype, error) {
 		switch {
 		case matchType.isTextual():
 		default:
-			c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)
+			c.asm.Convert_xb(1, sqltypes.VarBinary, nil)
 		}
 	}
 
-	merged, flags, err := compileRegexpCollation(input, pat, "regexp_substr")
+	merged, flags, err := compileRegexpCollation(c.env.CollationEnv(), input, pat, "regexp_substr")
 	if err != nil {
 		return ctype{}, err
 	}
@@ -828,7 +828,7 @@ func (r *builtinRegexpReplace) eval(env *ExpressionEnv) (eval, error) {
 		return nil, err
 	}
 
-	input, pat, typedCol, flags, err := evalRegexpCollation(input, pat, "regexp_replace")
+	input, pat, typedCol, flags, err := evalRegexpCollation(env.collationEnv, input, pat, "regexp_replace")
 	if err != nil {
 		return nil, err
 	}
@@ -968,11 +968,11 @@ func (r *builtinRegexpReplace) compile(c *compiler) (ctype, error) {
 		switch {
 		case matchType.isTextual():
 		default:
-			c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)
+			c.asm.Convert_xb(1, sqltypes.VarBinary, nil)
 		}
 	}
 
-	merged, flags, err := compileRegexpCollation(input, pat, "regexp_replace")
+	merged, flags, err := compileRegexpCollation(c.env.CollationEnv(), input, pat, "regexp_replace")
 	if err != nil {
 		return ctype{}, err
 	}

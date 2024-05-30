@@ -18,6 +18,7 @@ package workflow
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -25,10 +26,12 @@ import (
 	"sync"
 	"time"
 
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+
+	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/json2"
-	"vitess.io/vitess/go/maps2"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -38,6 +41,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -173,6 +177,7 @@ type TargetInfo struct {
 	OptTabletTypes  string
 	WorkflowType    binlogdatapb.VReplicationWorkflowType
 	WorkflowSubType binlogdatapb.VReplicationWorkflowSubType
+	Options         *vtctldatapb.WorkflowOptions
 }
 
 // MigrationSource contains the metadata for each migration source.
@@ -233,6 +238,7 @@ type trafficSwitcher struct {
 	targetTimeZone   string
 	workflowType     binlogdatapb.VReplicationWorkflowType
 	workflowSubType  binlogdatapb.VReplicationWorkflowSubType
+	options          *vtctldatapb.WorkflowOptions
 }
 
 func (ts *trafficSwitcher) TopoServer() *topo.Server                          { return ts.ws.ts }
@@ -380,9 +386,6 @@ func (ts *trafficSwitcher) addParticipatingTablesToKeyspace(ctx context.Context,
 		if err := json2.Unmarshal([]byte(wrap), ks); err != nil {
 			return err
 		}
-		if err != nil {
-			return err
-		}
 		for table, vtab := range ks.Tables {
 			vschema.Tables[table] = vtab
 		}
@@ -434,6 +437,21 @@ func (ts *trafficSwitcher) deleteShardRoutingRules(ctx context.Context) error {
 		return err
 	}
 	return nil
+}
+
+func (ts *trafficSwitcher) deleteKeyspaceRoutingRules(ctx context.Context) error {
+	if !ts.IsMultiTenantMigration() {
+		return nil
+	}
+	log.Infof("deleteKeyspaceRoutingRules: workflow %s.%s", ts.targetKeyspace, ts.workflow)
+	reason := fmt.Sprintf("Deleting rules for %s", ts.SourceKeyspaceName())
+	return topotools.UpdateKeyspaceRoutingRules(ctx, ts.TopoServer(), reason,
+		func(ctx context.Context, rules *map[string]string) error {
+			for _, suffix := range tabletTypeSuffixes {
+				delete(*rules, ts.SourceKeyspaceName()+suffix)
+			}
+			return nil
+		})
 }
 
 func (ts *trafficSwitcher) dropSourceDeniedTables(ctx context.Context) error {
@@ -490,26 +508,33 @@ func (ts *trafficSwitcher) dropParticipatingTablesFromKeyspace(ctx context.Conte
 func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType TableRemovalType) error {
 	err := ts.ForAllSources(func(source *MigrationSource) error {
 		for _, tableName := range ts.Tables() {
-			query := fmt.Sprintf("drop table %s.%s",
-				sqlescape.EscapeID(sqlescape.UnescapeID(source.GetPrimary().DbName())),
-				sqlescape.EscapeID(sqlescape.UnescapeID(tableName)))
+			primaryDbName, err := sqlescape.EnsureEscaped(source.GetPrimary().DbName())
+			if err != nil {
+				return err
+			}
+			tableNameEscaped, err := sqlescape.EnsureEscaped(tableName)
+			if err != nil {
+				return err
+			}
+
+			query := fmt.Sprintf("drop table %s.%s", primaryDbName, tableNameEscaped)
 			if removalType == DropTable {
 				ts.Logger().Infof("%s: Dropping table %s.%s\n",
 					source.GetPrimary().String(), source.GetPrimary().DbName(), tableName)
 			} else {
-				renameName := getRenameFileName(tableName)
+				renameName, err := sqlescape.EnsureEscaped(getRenameFileName(tableName))
+				if err != nil {
+					return err
+				}
 				ts.Logger().Infof("%s: Renaming table %s.%s to %s.%s\n",
 					source.GetPrimary().String(), source.GetPrimary().DbName(), tableName, source.GetPrimary().DbName(), renameName)
-				query = fmt.Sprintf("rename table %s.%s TO %s.%s",
-					sqlescape.EscapeID(sqlescape.UnescapeID(source.GetPrimary().DbName())),
-					sqlescape.EscapeID(sqlescape.UnescapeID(tableName)),
-					sqlescape.EscapeID(sqlescape.UnescapeID(source.GetPrimary().DbName())),
-					sqlescape.EscapeID(sqlescape.UnescapeID(renameName)))
+				query = fmt.Sprintf("rename table %s.%s TO %s.%s", primaryDbName, tableNameEscaped, primaryDbName, renameName)
 			}
-			_, err := ts.ws.tmc.ExecuteFetchAsDba(ctx, source.GetPrimary().Tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
-				Query:        []byte(query),
-				MaxRows:      1,
-				ReloadSchema: true,
+			_, err = ts.ws.tmc.ExecuteFetchAsDba(ctx, source.GetPrimary().Tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+				Query:                   []byte(query),
+				MaxRows:                 1,
+				ReloadSchema:            true,
+				DisableForeignKeyChecks: true,
 			})
 			if err != nil {
 				ts.Logger().Errorf("%s: Error removing table %s: %v", source.GetPrimary().String(), tableName, err)
@@ -542,15 +567,12 @@ func (ts *trafficSwitcher) dropSourceShards(ctx context.Context) error {
 }
 
 func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection) error {
-	var fromShards, toShards []*topo.ShardInfo
-	if direction == DirectionForward {
-		fromShards, toShards = ts.SourceShards(), ts.TargetShards()
-	} else {
-		fromShards, toShards = ts.TargetShards(), ts.SourceShards()
-	}
-	if err := ts.TopoServer().ValidateSrvKeyspace(ctx, ts.TargetKeyspaceName(), strings.Join(cells, ",")); err != nil {
+	cellsStr := strings.Join(cells, ",")
+	log.Infof("switchShardReads: cells: %s, tablet types: %+v, direction %d", cellsStr, servedTypes, direction)
+	fromShards, toShards := ts.SourceShards(), ts.TargetShards()
+	if err := ts.TopoServer().ValidateSrvKeyspace(ctx, ts.TargetKeyspaceName(), cellsStr); err != nil {
 		err2 := vterrors.Wrapf(err, "Before switching shard reads, found SrvKeyspace for %s is corrupt in cell %s",
-			ts.TargetKeyspaceName(), strings.Join(cells, ","))
+			ts.TargetKeyspaceName(), cellsStr)
 		log.Errorf("%w", err2)
 		return err2
 	}
@@ -566,17 +588,17 @@ func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string,
 			return err
 		}
 	}
-	if err := ts.TopoServer().ValidateSrvKeyspace(ctx, ts.TargetKeyspaceName(), strings.Join(cells, ",")); err != nil {
+	if err := ts.TopoServer().ValidateSrvKeyspace(ctx, ts.TargetKeyspaceName(), cellsStr); err != nil {
 		err2 := vterrors.Wrapf(err, "after switching shard reads, found SrvKeyspace for %s is corrupt in cell %s",
-			ts.TargetKeyspaceName(), strings.Join(cells, ","))
+			ts.TargetKeyspaceName(), cellsStr)
 		log.Errorf("%w", err2)
 		return err2
 	}
 	return nil
 }
 
-func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection) error {
-	log.Infof("switchTableReads: servedTypes: %+v, direction %t", servedTypes, direction)
+func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, rebuildSrvVSchema bool, direction TrafficSwitchDirection) error {
+	log.Infof("switchTableReads: cells: %s, tablet types: %+v, direction %d", strings.Join(cells, ","), servedTypes, direction)
 	rules, err := topotools.GetRoutingRules(ctx, ts.TopoServer())
 	if err != nil {
 		return err
@@ -607,12 +629,16 @@ func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string,
 	if err := topotools.SaveRoutingRules(ctx, ts.TopoServer(), rules); err != nil {
 		return err
 	}
-	return ts.TopoServer().RebuildSrvVSchema(ctx, cells)
+	if rebuildSrvVSchema {
+		return ts.TopoServer().RebuildSrvVSchema(ctx, cells)
+	}
+	return nil
 }
 
 func (ts *trafficSwitcher) startReverseVReplication(ctx context.Context) error {
 	return ts.ForAllSources(func(source *MigrationSource) error {
-		query := fmt.Sprintf("update _vt.vreplication set state='Running', message='' where db_name=%s", encodeString(source.GetPrimary().DbName()))
+		query := fmt.Sprintf("update _vt.vreplication set state='Running', message='' where db_name=%s and workflow=%s",
+			encodeString(source.GetPrimary().DbName()), encodeString(ts.ReverseWorkflowName()))
 		_, err := ts.VReplicationExec(ctx, source.GetPrimary().Alias, query)
 		return err
 	})
@@ -705,7 +731,14 @@ func (ts *trafficSwitcher) changeRouting(ctx context.Context) error {
 }
 
 func (ts *trafficSwitcher) changeWriteRoute(ctx context.Context) error {
-	if ts.isPartialMigration {
+	if ts.IsMultiTenantMigration() {
+		// For multi-tenant migrations, we can only move forward and not backwards.
+		ts.Logger().Infof("Pointing keyspace routing rules for primary to %s for workflow %s", ts.TargetKeyspaceName(), ts.workflow)
+		if err := changeKeyspaceRouting(ctx, ts.TopoServer(), []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
+			ts.SourceKeyspaceName() /* from */, ts.TargetKeyspaceName() /* to */, "SwitchWrites"); err != nil {
+			return err
+		}
+	} else if ts.isPartialMigration {
 		srr, err := topotools.GetShardRoutingRules(ctx, ts.TopoServer())
 		if err != nil {
 			return err
@@ -779,7 +812,7 @@ func (ts *trafficSwitcher) changeShardRouting(ctx context.Context) error {
 	return nil
 }
 
-func (ts *trafficSwitcher) getReverseVReplicationUpdateQuery(targetCell string, sourceCell string, dbname string) string {
+func (ts *trafficSwitcher) getReverseVReplicationUpdateQuery(targetCell string, sourceCell string, dbname string, options string) string {
 	// we try to be clever to understand what user intends:
 	// if target's cell is present in cells but not source's cell we replace it
 	// with the source's cell.
@@ -789,8 +822,8 @@ func (ts *trafficSwitcher) getReverseVReplicationUpdateQuery(targetCell string, 
 	}
 
 	if ts.optCells != "" || ts.optTabletTypes != "" {
-		query := fmt.Sprintf("update _vt.vreplication set cell = '%s', tablet_types = '%s' where workflow = '%s' and db_name = '%s'",
-			ts.optCells, ts.optTabletTypes, ts.ReverseWorkflowName(), dbname)
+		query := fmt.Sprintf("update _vt.vreplication set cell = '%s', tablet_types = '%s', options = '%s' where workflow = '%s' and db_name = '%s'",
+			ts.optCells, ts.optTabletTypes, options, ts.ReverseWorkflowName(), dbname)
 		return query
 	}
 	return ""
@@ -843,7 +876,7 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 			SourceTimeZone: bls.TargetTimeZone,
 			TargetTimeZone: bls.SourceTimeZone,
 		}
-
+		var err error
 		for _, rule := range bls.Filter.Rules {
 			if rule.Filter == "exclude" {
 				reverseBls.Filter.Rules = append(reverseBls.Filter.Rules, rule)
@@ -880,6 +913,12 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 					}
 				}
 				filter = fmt.Sprintf("select * from %s%s", sqlescape.EscapeID(rule.Match), inKeyrange)
+				if ts.IsMultiTenantMigration() {
+					filter, err = ts.addTenantFilter(ctx, filter)
+					if err != nil {
+						return err
+					}
+				}
 			}
 			reverseBls.Filter.Rules = append(reverseBls.Filter.Rules, &binlogdatapb.Rule{
 				Match:  rule.Match,
@@ -888,7 +927,7 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 		}
 		log.Infof("Creating reverse workflow vreplication stream on tablet %s: workflow %s, startPos %s",
 			source.GetPrimary().Alias, ts.ReverseWorkflowName(), target.Position)
-		_, err := ts.VReplicationExec(ctx, source.GetPrimary().Alias,
+		_, err = ts.VReplicationExec(ctx, source.GetPrimary().Alias,
 			binlogplayer.CreateVReplicationState(ts.ReverseWorkflowName(), reverseBls, target.Position,
 				binlogdatapb.VReplicationWorkflowState_Stopped, source.GetPrimary().DbName(), ts.workflowType, ts.workflowSubType))
 		if err != nil {
@@ -896,7 +935,12 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 		}
 
 		// if user has defined the cell/tablet_types parameters in the forward workflow, update the reverse workflow as well
-		updateQuery := ts.getReverseVReplicationUpdateQuery(target.GetPrimary().Alias.Cell, source.GetPrimary().Alias.Cell, source.GetPrimary().DbName())
+		optionsJSON, err := json.Marshal(ts.options)
+		if err != nil {
+			return err
+		}
+		updateQuery := ts.getReverseVReplicationUpdateQuery(target.GetPrimary().Alias.Cell,
+			source.GetPrimary().Alias.Cell, source.GetPrimary().DbName(), string(optionsJSON))
 		if updateQuery != "" {
 			log.Infof("Updating vreplication stream entry on %s with: %s", source.GetPrimary().Alias, updateQuery)
 			_, err = ts.VReplicationExec(ctx, source.GetPrimary().Alias, updateQuery)
@@ -905,6 +949,33 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 		return nil
 	})
 	return err
+}
+
+func (ts *trafficSwitcher) addTenantFilter(ctx context.Context, filter string) (string, error) {
+	parser := ts.ws.env.Parser()
+	vschema, err := ts.TopoServer().GetVSchema(ctx, ts.targetKeyspace)
+	if err != nil {
+		return "", err
+	}
+	targetVSchema, err := vindexes.BuildKeyspaceSchema(vschema, ts.targetKeyspace, parser)
+	if err != nil {
+		return "", err
+	}
+	tenantClause, err := getTenantClause(ts.options, targetVSchema, parser)
+	if err != nil {
+		return "", err
+	}
+	stmt, err := parser.Parse(filter)
+	if err != nil {
+		return "", err
+	}
+	sel, ok := stmt.(*sqlparser.Select)
+	if !ok {
+		return "", fmt.Errorf("unrecognized statement: %s", filter)
+	}
+	addFilter(sel, *tenantClause)
+	filter = sqlparser.String(sel)
+	return filter, nil
 }
 
 func (ts *trafficSwitcher) waitForCatchup(ctx context.Context, filteredReplicationWaitTime time.Duration) error {
@@ -933,7 +1004,7 @@ func (ts *trafficSwitcher) waitForCatchup(ctx context.Context, filteredReplicati
 	}); err != nil {
 		return err
 	}
-	// all targets have caught up, record their positions for setting up reverse workflows
+	// All targets have caught up, record their positions for setting up reverse workflows.
 	return ts.ForAllTargets(func(target *MigrationTarget) error {
 		var err error
 		target.Position, err = ts.TabletManagerClient().PrimaryPosition(ctx, target.GetPrimary().Tablet)
@@ -999,10 +1070,10 @@ func (ts *trafficSwitcher) cancelMigration(ctx context.Context, sm *StreamMigrat
 		err = ts.changeShardsAccess(ctx, ts.SourceKeyspaceName(), ts.SourceShards(), allowWrites)
 	}
 	if err != nil {
-		ts.Logger().Errorf("Cancel migration failed:", err)
+		ts.Logger().Errorf("Cancel migration failed: %v", err)
 	}
 
-	sm.CancelMigration(ctx)
+	sm.CancelStreamMigrations(ctx)
 
 	err = ts.ForAllTargets(func(target *MigrationTarget) error {
 		query := fmt.Sprintf("update _vt.vreplication set state='Running', message='' where db_name=%s and workflow=%s",
@@ -1063,22 +1134,27 @@ func (ts *trafficSwitcher) dropSourceReverseVReplicationStreams(ctx context.Cont
 }
 
 func (ts *trafficSwitcher) removeTargetTables(ctx context.Context) error {
-	log.Flush()
 	err := ts.ForAllTargets(func(target *MigrationTarget) error {
 		log.Infof("ForAllTargets: %+v", target)
 		for _, tableName := range ts.Tables() {
-			query := fmt.Sprintf("drop table %s.%s",
-				sqlescape.EscapeID(sqlescape.UnescapeID(target.GetPrimary().DbName())),
-				sqlescape.EscapeID(sqlescape.UnescapeID(tableName)))
+			primaryDbName, err := sqlescape.EnsureEscaped(target.GetPrimary().DbName())
+			if err != nil {
+				return err
+			}
+			tableName, err := sqlescape.EnsureEscaped(tableName)
+			if err != nil {
+				return err
+			}
+			query := fmt.Sprintf("drop table %s.%s", primaryDbName, tableName)
 			ts.Logger().Infof("%s: Dropping table %s.%s\n",
 				target.GetPrimary().String(), target.GetPrimary().DbName(), tableName)
 			res, err := ts.ws.tmc.ExecuteFetchAsDba(ctx, target.GetPrimary().Tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
-				Query:        []byte(query),
-				MaxRows:      1,
-				ReloadSchema: true,
+				Query:                   []byte(query),
+				MaxRows:                 1,
+				ReloadSchema:            true,
+				DisableForeignKeyChecks: true,
 			})
 			log.Infof("Removed target table with result: %+v", res)
-			log.Flush()
 			if err != nil {
 				ts.Logger().Errorf("%s: Error removing table %s: %v",
 					target.GetPrimary().String(), tableName, err)
@@ -1112,7 +1188,8 @@ func (ts *trafficSwitcher) dropTargetShards(ctx context.Context) error {
 
 func (ts *trafficSwitcher) validate(ctx context.Context) error {
 	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
-		if ts.isPartialMigration {
+		if ts.isPartialMigration ||
+			(ts.IsMultiTenantMigration() && len(ts.options.GetShards()) > 0) {
 			return nil
 		}
 		sourceTopo := ts.ws.ts
@@ -1349,7 +1426,7 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 // error if any is seen.
 func (ts *trafficSwitcher) findSequenceUsageInKeyspace(vschema *vschemapb.Keyspace) (map[string]*sequenceMetadata, bool, error) {
 	allFullyQualified := true
-	targets := maps2.Values(ts.Targets())
+	targets := maps.Values(ts.Targets())
 	if len(targets) == 0 || targets[0].GetPrimary() == nil { // This should never happen
 		return nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "no primary tablet found for target keyspace %s", ts.targetKeyspace)
 	}
@@ -1358,7 +1435,7 @@ func (ts *trafficSwitcher) findSequenceUsageInKeyspace(vschema *vschemapb.Keyspa
 
 	for _, table := range ts.Tables() {
 		vs, ok := vschema.Tables[table]
-		if !ok || vs == nil || vs.AutoIncrement == nil || vs.AutoIncrement.Sequence == "" {
+		if !ok || vs.GetAutoIncrement().GetSequence() == "" {
 			continue
 		}
 		sm := &sequenceMetadata{
@@ -1400,7 +1477,7 @@ func (ts *trafficSwitcher) findSequenceUsageInKeyspace(vschema *vschemapb.Keyspa
 // the primary tablet serving the sequence to refresh/reset its cache to
 // be sure that it does not provide a value that is less than the current max.
 func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequencesByBackingTable map[string]*sequenceMetadata) error {
-	initSequenceTable := func(ictx context.Context, sequenceTableName string, sequenceMetadata *sequenceMetadata) error {
+	initSequenceTable := func(ictx context.Context, sequenceMetadata *sequenceMetadata) error {
 		// Now we need to run this query on the target shards in order
 		// to get the max value and set the next id for the sequence to
 		// a higher value.
@@ -1422,13 +1499,17 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 				MaxRows: 1,
 			})
 			if terr != nil || len(qr.Rows) != 1 {
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the max used sequence value for target table %s.%s in order to initialize the backing sequence table: %v",
-					ts.targetKeyspace, sequenceMetadata.usingTableName, terr)
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the max used sequence value for target table %s.%s on tablet %s in order to initialize the backing sequence table: %v",
+					ts.targetKeyspace, sequenceMetadata.usingTableName, topoproto.TabletAliasString(primary.Alias), terr)
 			}
-			maxID, terr := sqltypes.Proto3ToResult(qr).Rows[0][0].ToInt64()
-			if terr != nil {
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the max used sequence value for target table %s.%s in order to initialize the backing sequence table: %v",
-					ts.targetKeyspace, sequenceMetadata.usingTableName, terr)
+			rawVal := sqltypes.Proto3ToResult(qr).Rows[0][0]
+			maxID := int64(0)
+			if !rawVal.IsNull() { // If it's NULL then there are no rows and 0 remains the max
+				maxID, terr = rawVal.ToInt64()
+				if terr != nil {
+					return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the max used sequence value for target table %s.%s on tablet %s in order to initialize the backing sequence table: %v",
+						ts.targetKeyspace, sequenceMetadata.usingTableName, topoproto.TabletAliasString(primary.Alias), terr)
+				}
 			}
 			srMu.Lock()
 			defer srMu.Unlock()
@@ -1442,6 +1523,10 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 		case <-ictx.Done():
 			return ictx.Err()
 		default:
+		}
+		if len(shardResults) == 0 { // This should never happen
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "did not get any results for the max used sequence value for target table %s.%s in order to initialize the backing sequence table",
+				ts.targetKeyspace, sequenceMetadata.usingTableName)
 		}
 		// Sort the values to find the max value across all shards.
 		sort.Slice(shardResults, func(i, j int) bool {
@@ -1477,12 +1562,7 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 		)
 		// Now execute this on the primary tablet of the unsharded keyspace
 		// housing the backing table.
-		primaryTablet, ierr := ts.TopoServer().GetTablet(ictx, sequenceShard.PrimaryAlias)
-		if ierr != nil {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the primary tablet for %s.%s using alias %s: %v",
-				sequenceShard.Keyspace(), sequenceShard.ShardName(), sequenceShard.PrimaryAlias, ierr)
-		}
-		qr, ierr := ts.ws.tmc.ExecuteFetchAsApp(ictx, primaryTablet.Tablet, true, &tabletmanagerdatapb.ExecuteFetchAsAppRequest{
+		qr, ierr := ts.ws.tmc.ExecuteFetchAsApp(ictx, sequenceTablet.Tablet, true, &tabletmanagerdatapb.ExecuteFetchAsAppRequest{
 			Query:   []byte(query.Query),
 			MaxRows: 1,
 		})
@@ -1517,10 +1597,9 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 	}
 
 	initGroup, gctx := errgroup.WithContext(ctx)
-	for sequenceTableName, sequenceMetadata := range sequencesByBackingTable {
-		sequenceTableName, sequenceMetadata := sequenceTableName, sequenceMetadata // https://golang.org/doc/faq#closures_and_goroutines
+	for _, sequenceMetadata := range sequencesByBackingTable {
 		initGroup.Go(func() error {
-			return initSequenceTable(gctx, sequenceTableName, sequenceMetadata)
+			return initSequenceTable(gctx, sequenceMetadata)
 		})
 	}
 	return initGroup.Wait()
@@ -1550,4 +1629,11 @@ func (ts *trafficSwitcher) resetSequences(ctx context.Context) error {
 			source.GetShard().Keyspace(), source.GetShard().ShardName(), source.GetPrimary().String())
 		return ts.TabletManagerClient().ResetSequences(ctx, source.GetPrimary().Tablet, ts.Tables())
 	})
+}
+
+func (ts *trafficSwitcher) IsMultiTenantMigration() bool {
+	if ts.options != nil && ts.options.TenantId != "" {
+		return true
+	}
+	return false
 }

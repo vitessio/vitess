@@ -86,6 +86,8 @@ var (
 	// backupCompressBlocks is the number of blocks that are processed
 	// once before the writer blocks
 	backupCompressBlocks = 2
+
+	EmptyBackupMessage = "no new data to backup, skipping it"
 )
 
 func init() {
@@ -168,14 +170,20 @@ func Backup(ctx context.Context, params BackupParams) error {
 	}
 
 	// Take the backup, and either AbortBackup or EndBackup.
-	usable, err := be.ExecuteBackup(ctx, beParams, bh)
+	backupResult, err := be.ExecuteBackup(ctx, beParams, bh)
 	logger := params.Logger
 	var finishErr error
-	if usable {
-		finishErr = bh.EndBackup(ctx)
-	} else {
+	switch backupResult {
+	case BackupUnusable:
 		logger.Errorf2(err, "backup is not usable, aborting it")
 		finishErr = bh.AbortBackup(ctx)
+	case BackupEmpty:
+		logger.Infof(EmptyBackupMessage)
+		// While an empty backup is considered "successful", it should leave no trace.
+		// We therefore ensire to clean up an backup files/directories/entries.
+		finishErr = bh.AbortBackup(ctx)
+	case BackupUsable:
+		finishErr = bh.EndBackup(ctx)
 	}
 	if err != nil {
 		if finishErr != nil {
@@ -310,6 +318,10 @@ func ShouldRestore(ctx context.Context, params RestoreParams) (bool, error) {
 	if err := params.Mysqld.Wait(ctx, params.Cnf); err != nil {
 		return false, err
 	}
+	if err := params.Mysqld.WaitForDBAGrants(ctx, DbaGrantWaitTime); err != nil {
+		params.Logger.Errorf("error waiting for the grants: %v", err)
+		return false, err
+	}
 	return checkNoDB(ctx, params.Mysqld, params.DbName)
 }
 
@@ -339,13 +351,9 @@ func ensureRestoredGTIDPurgedMatchesManifest(ctx context.Context, manifest *Back
 	}
 	params.Logger.Infof("Restore: @@gtid_purged does not equal manifest's GTID position. Setting @@gtid_purged to %v", gtid)
 	// This is not good. We want to apply a new @@gtid_purged value.
-	query := "RESET MASTER" // required dialect in 5.7
-	if _, err := params.Mysqld.FetchSuperQuery(ctx, query); err != nil {
-		return vterrors.Wrapf(err, "error issuing %v", query)
-	}
-	query = fmt.Sprintf("SET GLOBAL gtid_purged='%s'", gtid)
-	if _, err := params.Mysqld.FetchSuperQuery(ctx, query); err != nil {
-		return vterrors.Wrapf(err, "failed to apply `%s` after restore", query)
+	err = params.Mysqld.SetReplicationPosition(ctx, manifest.Position)
+	if err != nil {
+		return vterrors.Wrap(err, "error setting replication position")
 	}
 	return nil
 }
@@ -393,6 +401,10 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		// Wait for mysqld to be ready, in case it was launched in parallel with us.
 		if err = params.Mysqld.Wait(ctx, params.Cnf); err != nil {
 			params.Logger.Errorf("mysqld is not running: %v", err)
+			return nil, err
+		}
+		if err = params.Mysqld.WaitForDBAGrants(ctx, DbaGrantWaitTime); err != nil {
+			params.Logger.Errorf("error waiting for the grants: %v", err)
 			return nil, err
 		}
 		// Since this is an empty database make sure we start replication at the beginning
@@ -453,7 +465,7 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 	// The MySQL manual recommends restarting mysqld after running mysql_upgrade,
 	// so that any changes made to system tables take effect.
 	params.Logger.Infof("Restore: restarting mysqld after mysql_upgrade")
-	if err := params.Mysqld.Shutdown(context.Background(), params.Cnf, true); err != nil {
+	if err := params.Mysqld.Shutdown(context.Background(), params.Cnf, true, params.MysqlShutdownTimeout); err != nil {
 		return nil, err
 	}
 	if err := params.Mysqld.Start(context.Background(), params.Cnf); err != nil {

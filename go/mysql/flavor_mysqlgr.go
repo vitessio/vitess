@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math"
 
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 
@@ -71,6 +72,10 @@ func (mysqlGRFlavor) startSQLThreadUntilAfter(pos replication.Position) string {
 // we return empty here since `STOP GROUP_REPLICATION` should be called by
 // the external orchestrator
 func (mysqlGRFlavor) stopReplicationCommand() string {
+	return ""
+}
+
+func (mysqlGRFlavor) resetReplicationCommand() string {
 	return ""
 }
 
@@ -233,10 +238,15 @@ func fetchStatusForGroupReplication(c *Conn, query string, onResult func([]sqlty
 	return onResult(qr.Rows[0])
 }
 
-// primaryStatus returns the result of 'SHOW MASTER STATUS',
+// primaryStatus returns the result of 'SHOW BINARY LOG STATUS',
 // with parsed executed position.
 func (mysqlGRFlavor) primaryStatus(c *Conn) (replication.PrimaryStatus, error) {
 	return mysqlFlavor{}.primaryStatus(c)
+}
+
+// replicationNetTimeout is part of the Flavor interface.
+func (mysqlGRFlavor) replicationNetTimeout(c *Conn) (int32, error) {
+	return mysqlFlavor8{}.replicationNetTimeout(c)
 }
 
 func (mysqlGRFlavor) baseShowTables() string {
@@ -248,31 +258,10 @@ func (mysqlGRFlavor) baseShowTablesWithSizes() string {
 }
 
 // supportsCapability is part of the Flavor interface.
-func (mysqlGRFlavor) supportsCapability(serverVersion string, capability FlavorCapability) (bool, error) {
-	switch capability {
-	case InstantDDLFlavorCapability,
-		InstantExpandEnumCapability,
-		InstantAddLastColumnFlavorCapability,
-		InstantAddDropVirtualColumnFlavorCapability,
-		InstantChangeColumnDefaultFlavorCapability:
-		return ServerVersionAtLeast(serverVersion, 8, 0, 0)
-	case InstantAddDropColumnFlavorCapability:
-		return ServerVersionAtLeast(serverVersion, 8, 0, 29)
-	case TransactionalGtidExecutedFlavorCapability:
-		return ServerVersionAtLeast(serverVersion, 8, 0, 17)
-	case FastDropTableFlavorCapability:
-		return ServerVersionAtLeast(serverVersion, 8, 0, 23)
-	case MySQLJSONFlavorCapability:
-		return ServerVersionAtLeast(serverVersion, 5, 7, 0)
-	case MySQLUpgradeInServerFlavorCapability:
-		return ServerVersionAtLeast(serverVersion, 8, 0, 16)
-	case DynamicRedoLogCapacityFlavorCapability:
-		return ServerVersionAtLeast(serverVersion, 8, 0, 30)
-	default:
-		return false, nil
-	}
+func (f mysqlGRFlavor) supportsCapability(capability capabilities.FlavorCapability) (bool, error) {
+	return capabilities.MySQLVersionHasCapability(f.serverVersion, capability)
 }
 
 func init() {
-	flavors[GRFlavorID] = newMysqlGRFlavor
+	flavorFuncs[GRFlavorID] = newMysqlGRFlavor
 }

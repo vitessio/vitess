@@ -18,28 +18,31 @@ package vdiff
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
-
-	"google.golang.org/protobuf/encoding/prototext"
-
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/binlog/binlogplayer"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	"time"
 
 	"vitess.io/vitess/go/vt/schema"
 
+	"google.golang.org/protobuf/encoding/prototext"
+
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtctl/schematools"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtctl/schematools"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 )
 
 // workflowDiffer has metadata and state for the vdiff of a single workflow on this tablet
@@ -49,13 +52,16 @@ type workflowDiffer struct {
 
 	tableDiffers map[string]*tableDiffer // key is table name
 	opts         *tabletmanagerdatapb.VDiffOptions
+
+	collationEnv *collations.Environment
 }
 
-func newWorkflowDiffer(ct *controller, opts *tabletmanagerdatapb.VDiffOptions) (*workflowDiffer, error) {
+func newWorkflowDiffer(ct *controller, opts *tabletmanagerdatapb.VDiffOptions, collationEnv *collations.Environment) (*workflowDiffer, error) {
 	wd := &workflowDiffer{
 		ct:           ct,
 		opts:         opts,
 		tableDiffers: make(map[string]*tableDiffer, 1),
+		collationEnv: collationEnv,
 	}
 	return wd, nil
 }
@@ -64,7 +70,7 @@ func newWorkflowDiffer(ct *controller, opts *tabletmanagerdatapb.VDiffOptions) (
 // by MySQL on each side then we'll have the same number of extras on
 // both sides. If that's the case, then let's see if the extra rows on
 // both sides are actually different.
-func (wd *workflowDiffer) reconcileExtraRows(dr *DiffReport, maxExtraRowsToCompare int64) error {
+func (wd *workflowDiffer) reconcileExtraRows(dr *DiffReport, maxExtraRowsToCompare int64, maxReportSampleRows int64) error {
 	if dr.MismatchedRows == 0 {
 		// Get the VSchema on the target and source keyspaces. We can then use this
 		// for handling additional edge cases, such as adjusting results for reference
@@ -122,69 +128,121 @@ func (wd *workflowDiffer) reconcileExtraRows(dr *DiffReport, maxExtraRowsToCompa
 			}
 		}
 	}
-	// We can now trim the extra rows diffs on both sides to the maxVDiffReportSampleRows value
-	if len(dr.ExtraRowsSourceDiffs) > maxVDiffReportSampleRows {
-		dr.ExtraRowsSourceDiffs = dr.ExtraRowsSourceDiffs[:maxVDiffReportSampleRows-1]
+	// We can now trim the extra rows diffs on both sides to the maxReportSampleRows value
+	if int64(len(dr.ExtraRowsSourceDiffs)) > maxReportSampleRows && maxReportSampleRows > 0 {
+		dr.ExtraRowsSourceDiffs = dr.ExtraRowsSourceDiffs[:maxReportSampleRows-1]
 	}
-	if len(dr.ExtraRowsTargetDiffs) > maxVDiffReportSampleRows {
-		dr.ExtraRowsTargetDiffs = dr.ExtraRowsTargetDiffs[:maxVDiffReportSampleRows-1]
+	if int64(len(dr.ExtraRowsTargetDiffs)) > maxReportSampleRows && maxReportSampleRows > 0 {
+		dr.ExtraRowsTargetDiffs = dr.ExtraRowsTargetDiffs[:maxReportSampleRows-1]
 	}
 
 	return nil
 }
 
 func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.DBClient, td *tableDiffer) error {
-	defer func() {
+	cancelShardStreams := func() {
 		if td.shardStreamsCancel != nil {
 			td.shardStreamsCancel()
 		}
 		// Wait for all the shard streams to finish before returning.
 		td.wgShardStreamers.Wait()
+	}
+	defer func() {
+		cancelShardStreams()
 	}()
 
-	select {
-	case <-ctx.Done():
-		return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
-	case <-wd.ct.done:
-		return vterrors.Errorf(vtrpcpb.Code_CANCELED, "vdiff was stopped")
-	default:
+	var (
+		diffTimer  *time.Timer
+		diffReport *DiffReport
+		diffErr    error
+	)
+	defer func() {
+		if diffTimer != nil {
+			if !diffTimer.Stop() {
+				select {
+				case <-diffTimer.C:
+				default:
+				}
+			}
+		}
+	}()
+
+	maxDiffRuntime := time.Duration(24 * time.Hour * 365) // 1 year (effectively forever)
+	if wd.ct.options.CoreOptions.MaxDiffSeconds > 0 {
+		// Restart the diff if it takes longer than the specified max diff time.
+		maxDiffRuntime = time.Duration(wd.ct.options.CoreOptions.MaxDiffSeconds) * time.Second
 	}
 
 	log.Infof("Starting differ on table %s for vdiff %s", td.table.Name, wd.ct.uuid)
 	if err := td.updateTableState(ctx, dbClient, StartedState); err != nil {
 		return err
 	}
-	if err := td.initialize(ctx); err != nil {
-		return err
+
+	for {
+		select {
+		case <-ctx.Done():
+			return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
+		case <-wd.ct.done:
+			return ErrVDiffStoppedByUser
+		default:
+		}
+
+		if diffTimer != nil { // We're restarting the diff
+			if !diffTimer.Stop() {
+				select {
+				case <-diffTimer.C:
+				default:
+				}
+			}
+			diffTimer = nil
+			cancelShardStreams()
+			// Give the underlying resources (mainly MySQL) a moment to catch up
+			// before we pick up where we left off (but with new database snapshots).
+			time.Sleep(30 * time.Second)
+		}
+		if err := td.initialize(ctx); err != nil { // Setup the consistent snapshots
+			return err
+		}
+		log.Infof("Table initialization done on table %s for vdiff %s", td.table.Name, wd.ct.uuid)
+		diffTimer = time.NewTimer(maxDiffRuntime)
+		diffReport, diffErr = td.diff(ctx, wd.opts.CoreOptions.MaxRows, wd.opts.ReportOptions.DebugQuery, wd.opts.ReportOptions.OnlyPks, wd.opts.CoreOptions.MaxExtraRowsToCompare, wd.opts.ReportOptions.MaxSampleRows, diffTimer.C)
+		if diffErr == nil { // We finished the diff successfully
+			break
+		}
+		log.Errorf("Encountered an error diffing table %s for vdiff %s: %v", td.table.Name, wd.ct.uuid, diffErr)
+		if !errors.Is(diffErr, ErrMaxDiffDurationExceeded) { // We only want to retry if we hit the max-diff-duration
+			return diffErr
+		}
 	}
-	log.Infof("Table initialization done on table %s for vdiff %s", td.table.Name, wd.ct.uuid)
-	dr, err := td.diff(ctx, wd.opts.CoreOptions.MaxRows, wd.opts.ReportOptions.DebugQuery, wd.opts.ReportOptions.OnlyPks, wd.opts.CoreOptions.MaxExtraRowsToCompare)
-	if err != nil {
-		log.Errorf("Encountered an error diffing table %s for vdiff %s: %v", td.table.Name, wd.ct.uuid, err)
-		return err
-	}
-	log.Infof("Table diff done on table %s for vdiff %s with report: %+v", td.table.Name, wd.ct.uuid, dr)
-	if dr.ExtraRowsSource > 0 || dr.ExtraRowsTarget > 0 {
-		if err := wd.reconcileExtraRows(dr, wd.opts.CoreOptions.MaxExtraRowsToCompare); err != nil {
+	log.Infof("Table diff done on table %s for vdiff %s with report: %+v", td.table.Name, wd.ct.uuid, diffReport)
+
+	if diffReport.ExtraRowsSource > 0 || diffReport.ExtraRowsTarget > 0 {
+		if err := wd.reconcileExtraRows(diffReport, wd.opts.CoreOptions.MaxExtraRowsToCompare, wd.opts.ReportOptions.MaxSampleRows); err != nil {
 			log.Errorf("Encountered an error reconciling extra rows found for table %s for vdiff %s: %v", td.table.Name, wd.ct.uuid, err)
 			return vterrors.Wrap(err, "failed to reconcile extra rows")
 		}
 	}
 
-	if dr.MismatchedRows > 0 || dr.ExtraRowsTarget > 0 || dr.ExtraRowsSource > 0 {
+	if diffReport.MismatchedRows > 0 || diffReport.ExtraRowsTarget > 0 || diffReport.ExtraRowsSource > 0 {
 		if err := updateTableMismatch(dbClient, wd.ct.id, td.table.Name); err != nil {
 			return err
 		}
 	}
 
-	log.Infof("Completed reconciliation on table %s for vdiff %s with updated report: %+v", td.table.Name, wd.ct.uuid, dr)
-	if err := td.updateTableStateAndReport(ctx, dbClient, CompletedState, dr); err != nil {
+	log.Infof("Completed reconciliation on table %s for vdiff %s with updated report: %+v", td.table.Name, wd.ct.uuid, diffReport)
+	if err := td.updateTableStateAndReport(ctx, dbClient, CompletedState, diffReport); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (wd *workflowDiffer) diff(ctx context.Context) error {
+func (wd *workflowDiffer) diff(ctx context.Context) (err error) {
+	defer func() {
+		if err != nil {
+			globalStats.ErrorCount.Add(1)
+			wd.ct.Errors.Add(err.Error(), 1)
+		}
+	}()
 	dbClient := wd.ct.dbClientFactory()
 	if err := dbClient.Connect(); err != nil {
 		return err
@@ -195,7 +253,7 @@ func (wd *workflowDiffer) diff(ctx context.Context) error {
 	case <-ctx.Done():
 		return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
 	case <-wd.ct.done:
-		return vterrors.Errorf(vtrpcpb.Code_CANCELED, "vdiff was stopped")
+		return ErrVDiffStoppedByUser
 	default:
 	}
 
@@ -216,7 +274,7 @@ func (wd *workflowDiffer) diff(ctx context.Context) error {
 		case <-ctx.Done():
 			return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
 		case <-wd.ct.done:
-			return vterrors.Errorf(vtrpcpb.Code_CANCELED, "vdiff was stopped")
+			return ErrVDiffStoppedByUser
 		default:
 		}
 		query, err := sqlparser.ParseAndBind(sqlGetVDiffTable,
@@ -286,7 +344,7 @@ func (wd *workflowDiffer) buildPlan(dbClient binlogplayer.DBClient, filter *binl
 		if len(specifiedTables) != 0 && !stringListContains(specifiedTables, table.Name) {
 			continue
 		}
-		if schema.IsInternalOperationTableName(table.Name) {
+		if schema.IsInternalOperationTableName(table.Name) && !schema.IsOnlineDDLTableName(table.Name) {
 			continue
 		}
 		rule, err := vreplication.MatchTable(table.Name, filter)
@@ -315,7 +373,7 @@ func (wd *workflowDiffer) buildPlan(dbClient binlogplayer.DBClient, filter *binl
 		}
 		td.lastPK = lastpkpb
 		wd.tableDiffers[table.Name] = td
-		if _, err := td.buildTablePlan(dbClient, wd.ct.vde.dbName); err != nil {
+		if _, err := td.buildTablePlan(dbClient, wd.ct.vde.dbName, wd.collationEnv); err != nil {
 			return err
 		}
 	}

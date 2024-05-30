@@ -18,7 +18,9 @@ package foreignkey
 
 import (
 	"context"
+	"fmt"
 	"io"
+	"strings"
 	"testing"
 	"time"
 
@@ -27,6 +29,7 @@ import (
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
@@ -166,6 +169,14 @@ func TestUpdateWithFK(t *testing.T) {
 	assert.EqualValues(t, 0, qr.RowsAffected)
 	// Verify the result in u_t2 and u_t3 as well.
 	utils.AssertMatches(t, conn, `select * from u_t2 order by id`, `[[INT64(19) INT64(1234)] [INT64(342) NULL]]`)
+	utils.AssertMatches(t, conn, `select * from u_t3 order by id`, `[[INT64(1) INT64(12)] [INT64(32) INT64(13)]]`)
+
+	// Update with a subquery inside, such that the update is on a foreign key related column.
+	qr = utils.Exec(t, conn, `update u_t2 set col2 = (select col1 from u_t1 where id = 100) where id = 342`)
+	assert.EqualValues(t, 1, qr.RowsAffected)
+	// Verify the result in u_t1, u_t2 and u_t3.
+	utils.AssertMatches(t, conn, `select * from u_t1 order by id`, `[[INT64(1) INT64(13)] [INT64(10) INT64(12)] [INT64(100) INT64(13)] [INT64(1000) INT64(1234)]]`)
+	utils.AssertMatches(t, conn, `select * from u_t2 order by id`, `[[INT64(19) INT64(1234)] [INT64(342) INT64(13)]]`)
 	utils.AssertMatches(t, conn, `select * from u_t3 order by id`, `[[INT64(1) INT64(12)] [INT64(32) INT64(13)]]`)
 }
 
@@ -368,6 +379,8 @@ func TestFkScenarios(t *testing.T) {
 		name             string
 		dataQueries      []string
 		dmlQuery         string
+		dmlShouldErr     bool
+		skipShardScoped  bool
 		assertionQueries []string
 	}{
 		{
@@ -375,7 +388,8 @@ func TestFkScenarios(t *testing.T) {
 			dataQueries: []string{
 				"insert into fk_t1(id, col) values (1, 5)",
 			},
-			dmlQuery: "insert into t2(id, col) values (1, 7)",
+			dmlQuery:     "insert into t2(id, col) values (1, 7)",
+			dmlShouldErr: true,
 			assertionQueries: []string{
 				"select * from fk_t1 order by id",
 				"select * from fk_t2 order by id",
@@ -396,7 +410,8 @@ func TestFkScenarios(t *testing.T) {
 				"insert into fk_t1(id, col) values (1, 7)",
 				"insert into fk_t2(id, col) values (1, 7)",
 			},
-			dmlQuery: "update fk_t1 set col = 5 where id = 1",
+			dmlShouldErr: true,
+			dmlQuery:     "update fk_t1 set col = 5 where id = 1",
 			assertionQueries: []string{
 				"select * from fk_t1 order by id",
 				"select * from fk_t2 order by id",
@@ -407,7 +422,8 @@ func TestFkScenarios(t *testing.T) {
 				"insert into fk_t1(id, col) values (1, 7), (2, 9)",
 				"insert into fk_t2(id, col) values (1, 7)",
 			},
-			dmlQuery: "update fk_t1 set col = 5 where id = 2",
+			dmlQuery:        "update fk_t1 set col = 5 where id = 2",
+			skipShardScoped: true,
 			assertionQueries: []string{
 				"select * from fk_t1 order by id",
 				"select * from fk_t2 order by id",
@@ -418,7 +434,8 @@ func TestFkScenarios(t *testing.T) {
 				"insert into fk_t1(id, col) values (1, 7)",
 				"insert into fk_t2(id, col) values (1, 7)",
 			},
-			dmlQuery: "delete from fk_t1 where id = 1",
+			dmlQuery:     "delete from fk_t1 where id = 1",
+			dmlShouldErr: true,
 			assertionQueries: []string{
 				"select * from fk_t1 order by id",
 				"select * from fk_t2 order by id",
@@ -439,10 +456,11 @@ func TestFkScenarios(t *testing.T) {
 			dataQueries: []string{
 				"insert into fk_t1(id, col) values (1, 7), (2, 9)",
 				"insert into fk_t2(id, col) values (1, 7), (2, 9)",
-				"insert into fk_t3(id, col) values (1, 7), (2, 9)",
+				"insert into fk_t3(id, col) values (1, 7)",
 				"insert into fk_t6(id, col) values (1, 7)",
 			},
-			dmlQuery: "update fk_t3 set col = 9 where id = 1",
+			dmlQuery:        "update fk_t3 set col = 9 where id = 1",
+			skipShardScoped: true,
 			assertionQueries: []string{
 				"select * from fk_t1 order by id",
 				"select * from fk_t2 order by id",
@@ -458,7 +476,8 @@ func TestFkScenarios(t *testing.T) {
 				"insert into fk_t4(id, col) values (1, 7)",
 				"insert into fk_t5(id, col) values (1, 7)",
 			},
-			dmlQuery: "update fk_t3 set col = 9 where id = 1",
+			dmlQuery:     "update fk_t3 set col = 9 where id = 1",
+			dmlShouldErr: true,
 			assertionQueries: []string{
 				"select * from fk_t1 order by id",
 				"select * from fk_t2 order by id",
@@ -475,7 +494,8 @@ func TestFkScenarios(t *testing.T) {
 				"insert into fk_t4(id, col) values (1, 7), (2, 9)",
 				"insert into fk_t6(id, col) values (1, 7), (2, 9)",
 			},
-			dmlQuery: "update fk_t2 set col = 9 where id = 1",
+			dmlQuery:        "update fk_t2 set col = 9 where id = 1",
+			skipShardScoped: true,
 			assertionQueries: []string{
 				"select * from fk_t1 order by id",
 				"select * from fk_t2 order by id",
@@ -491,7 +511,8 @@ func TestFkScenarios(t *testing.T) {
 				"insert into fk_t3(id, col) values (1, 7), (2, 9)",
 				"insert into fk_t6(id, col) values (1, 7)",
 			},
-			dmlQuery: "delete from fk_t3 where id = 1",
+			dmlQuery:        "delete from fk_t3 where id = 1",
+			skipShardScoped: true,
 			assertionQueries: []string{
 				"select * from fk_t1 order by id",
 				"select * from fk_t2 order by id",
@@ -507,7 +528,8 @@ func TestFkScenarios(t *testing.T) {
 				"insert into fk_t4(id, col) values (1, 7)",
 				"insert into fk_t5(id, col) values (1, 7)",
 			},
-			dmlQuery: "delete from fk_t3 where id = 1",
+			dmlQuery:     "delete from fk_t3 where id = 1",
+			dmlShouldErr: true,
 			assertionQueries: []string{
 				"select * from fk_t1 order by id",
 				"select * from fk_t2 order by id",
@@ -524,7 +546,8 @@ func TestFkScenarios(t *testing.T) {
 				"insert into fk_t4(id, col) values (1, 7), (2, 9)",
 				"insert into fk_t6(id, col) values (1, 7), (2, 9)",
 			},
-			dmlQuery: "delete from fk_t2 where id = 1",
+			dmlQuery:        "delete from fk_t2 where id = 1",
+			skipShardScoped: true,
 			assertionQueries: []string{
 				"select * from fk_t1 order by id",
 				"select * from fk_t2 order by id",
@@ -538,7 +561,8 @@ func TestFkScenarios(t *testing.T) {
 				"insert into fk_t10(id, col) values (1, 7), (2, 9)",
 				"insert into fk_t11(id, col) values (1, 7)",
 			},
-			dmlQuery: "update fk_t10 set col = 5 where id = 1",
+			dmlQuery:        "update fk_t10 set col = 5 where id = 1",
+			skipShardScoped: true,
 			assertionQueries: []string{
 				"select * from fk_t10 order by id",
 				"select * from fk_t11 order by id",
@@ -550,7 +574,8 @@ func TestFkScenarios(t *testing.T) {
 				"insert into fk_t11(id, col) values (1, 7)",
 				"insert into fk_t13(id, col) values (1, 7)",
 			},
-			dmlQuery: "update fk_t10 set col = 5 where id = 1",
+			dmlQuery:     "update fk_t10 set col = 5 where id = 1",
+			dmlShouldErr: true,
 			assertionQueries: []string{
 				"select * from fk_t10 order by id",
 				"select * from fk_t11 order by id",
@@ -563,7 +588,8 @@ func TestFkScenarios(t *testing.T) {
 				"insert into fk_t11(id, col) values (1, 7)",
 				"insert into fk_t12(id, col) values (1, 7)",
 			},
-			dmlQuery: "update fk_t10 set col = 5 where id = 1",
+			dmlQuery:        "update fk_t10 set col = 5 where id = 1",
+			skipShardScoped: true,
 			assertionQueries: []string{
 				"select * from fk_t10 order by id",
 				"select * from fk_t11 order by id",
@@ -587,7 +613,8 @@ func TestFkScenarios(t *testing.T) {
 				"insert into fk_t11(id, col) values (1, 7)",
 				"insert into fk_t13(id, col) values (1, 7)",
 			},
-			dmlQuery: "delete from fk_t10 where id = 1",
+			dmlQuery:     "delete from fk_t10 where id = 1",
+			dmlShouldErr: true,
 			assertionQueries: []string{
 				"select * from fk_t10 order by id",
 				"select * from fk_t11 order by id",
@@ -609,54 +636,58 @@ func TestFkScenarios(t *testing.T) {
 		}, {
 			name: "Delete success with set null to an update cascade foreign key",
 			dataQueries: []string{
-				"insert into fk_t15(id, col) values (1, 7), (2, 9)",
-				"insert into fk_t16(id, col) values (1, 7), (2, 9)",
-				"insert into fk_t17(id, col) values (1, 7)",
-				"insert into fk_t18(id, col) values (1, 7)",
+				"insert into fk_multicol_t15(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
+				"insert into fk_multicol_t16(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
+				"insert into fk_multicol_t17(id, cola, colb) values (1, 7, 1)",
+				"insert into fk_multicol_t18(id, cola, colb) values (1, 7, 1)",
 			},
-			dmlQuery: "delete from fk_t16 where id = 1",
+			dmlQuery:        "delete from fk_multicol_t16 where id = 1",
+			skipShardScoped: true,
 			assertionQueries: []string{
-				"select * from fk_t15 order by id",
-				"select * from fk_t16 order by id",
-				"select * from fk_t17 order by id",
-				"select * from fk_t18 order by id",
+				"select * from fk_multicol_t15 order by id",
+				"select * from fk_multicol_t16 order by id",
+				"select * from fk_multicol_t17 order by id",
+				"select * from fk_multicol_t18 order by id",
 			},
 		}, {
 			name: "Delete success with cascade to delete with set null to an update set null foreign key",
 			dataQueries: []string{
-				"insert into fk_t15(id, col) values (1, 7), (2, 9)",
-				"insert into fk_t16(id, col) values (1, 7), (2, 9)",
-				"insert into fk_t17(id, col) values (1, 7)",
-				"insert into fk_t19(id, col) values (1, 7)",
+				"insert into fk_multicol_t15(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
+				"insert into fk_multicol_t16(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
+				"insert into fk_multicol_t17(id, cola, colb) values (1, 7, 1)",
+				"insert into fk_multicol_t18(id, cola, colb) values (1, 7, 1)",
 			},
-			dmlQuery: "delete from fk_t15 where id = 1",
+			dmlQuery:        "delete from fk_multicol_t15 where id = 1",
+			skipShardScoped: true,
 			assertionQueries: []string{
-				"select * from fk_t15 order by id",
-				"select * from fk_t16 order by id",
-				"select * from fk_t17 order by id",
-				"select * from fk_t19 order by id",
+				"select * from fk_multicol_t15 order by id",
+				"select * from fk_multicol_t16 order by id",
+				"select * from fk_multicol_t17 order by id",
+				"select * from fk_multicol_t18 order by id",
 			},
 		}, {
 			name: "Update success with cascade to an update set null to an update cascade foreign key",
 			dataQueries: []string{
-				"insert into fk_t15(id, col) values (1, 7), (2, 9)",
-				"insert into fk_t16(id, col) values (1, 7), (2, 9)",
-				"insert into fk_t17(id, col) values (1, 7)",
-				"insert into fk_t18(id, col) values (1, 7)",
+				"insert into fk_multicol_t15(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
+				"insert into fk_multicol_t16(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
+				"insert into fk_multicol_t17(id, cola, colb) values (1, 7, 1)",
+				"insert into fk_multicol_t18(id, cola, colb) values (1, 7, 1)",
 			},
-			dmlQuery: "update fk_t15 set col = 3 where id = 1",
+			dmlQuery:        "update fk_multicol_t15 set cola = 3 where id = 1",
+			skipShardScoped: true,
 			assertionQueries: []string{
-				"select * from fk_t15 order by id",
-				"select * from fk_t16 order by id",
-				"select * from fk_t17 order by id",
-				"select * from fk_t18 order by id",
+				"select * from fk_multicol_t15 order by id",
+				"select * from fk_multicol_t16 order by id",
+				"select * from fk_multicol_t17 order by id",
+				"select * from fk_multicol_t18 order by id",
 			},
 		}, {
 			name: "Insert success for self-referenced foreign key",
 			dataQueries: []string{
 				"insert into fk_t20(id, col, col2) values (1, 7, NULL)",
 			},
-			dmlQuery: "insert into fk_t20(id, col, col2) values (2, 9, 7), (3, 10, 9)",
+			skipShardScoped: true,
+			dmlQuery:        "insert into fk_t20(id, col, col2) values (2, 9, 7), (3, 10, 9)",
 			assertionQueries: []string{
 				"select * from fk_t20 order by id",
 			},
@@ -665,25 +696,205 @@ func TestFkScenarios(t *testing.T) {
 			dataQueries: []string{
 				"insert into fk_t20(id, col, col2) values (5, 7, NULL)",
 			},
-			dmlQuery: "insert into fk_t20(id, col, col2) values (6, 9, 6)",
+			skipShardScoped: true,
+			dmlQuery:        "insert into fk_t20(id, col, col2) values (6, 9, 6)",
+			dmlShouldErr:    true,
 			assertionQueries: []string{
 				"select * from fk_t20 order by id",
+			},
+		}, {
+			name: "Multi Table Delete success",
+			dataQueries: []string{
+				"insert into fk_multicol_t15(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
+				"insert into fk_multicol_t16(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
+				"insert into fk_multicol_t17(id, cola, colb) values (1, 7, 1)",
+				"insert into fk_multicol_t19(id, cola, colb) values (1, 7, 1)",
+			},
+			skipShardScoped: true,
+			dmlQuery:        "delete fk_multicol_t15 from fk_multicol_t15 join fk_multicol_t17 where fk_multicol_t15.id = fk_multicol_t17.id",
+			assertionQueries: []string{
+				"select * from fk_multicol_t15 order by id",
+				"select * from fk_multicol_t16 order by id",
+				"select * from fk_multicol_t17 order by id",
+				"select * from fk_multicol_t19 order by id",
+			},
+		}, {
+			name: "Multi Target Delete success",
+			dataQueries: []string{
+				"insert into fk_multicol_t15(id, cola, colb) values (1, 7, 1), (2, 9, 1), (3, 11, 1), (4, 13, 1)",
+				"insert into fk_multicol_t16(id, cola, colb) values (1, 7, 1), (2, 9, 1), (3, 11, 1), (4, 13, 1)",
+				"insert into fk_multicol_t17(id, cola, colb) values (1, 7, 1), (2, 9, 1), (3, 11, 1)",
+				"insert into fk_multicol_t18(id, cola, colb) values (1, 7, 1), (3, 11, 1)",
+				"insert into fk_multicol_t19(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
+			},
+			skipShardScoped: true,
+			dmlQuery:        "delete fk_multicol_t15, fk_multicol_t17 from fk_multicol_t15 join fk_multicol_t17 where fk_multicol_t15.id = fk_multicol_t17.id",
+			assertionQueries: []string{
+				"select * from fk_multicol_t15 order by id",
+				"select * from fk_multicol_t16 order by id",
+				"select * from fk_multicol_t17 order by id",
+				"select * from fk_multicol_t19 order by id",
+			},
+		}, {
+			name: "Delete with limit success",
+			dataQueries: []string{
+				"insert into fk_multicol_t15(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
+				"insert into fk_multicol_t16(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
+				"insert into fk_multicol_t17(id, cola, colb) values (1, 7, 1)",
+				"insert into fk_multicol_t19(id, cola, colb) values (1, 7, 1)",
+			},
+			skipShardScoped: true,
+			dmlQuery:        "delete from fk_multicol_t15 order by id limit 1",
+			assertionQueries: []string{
+				"select * from fk_multicol_t15 order by id",
+				"select * from fk_multicol_t16 order by id",
+				"select * from fk_multicol_t17 order by id",
+				"select * from fk_multicol_t19 order by id",
+			},
+		}, {
+			name:            "Delete with limit 0 success",
+			skipShardScoped: true,
+			dataQueries: []string{
+				"insert into fk_multicol_t15(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
+				"insert into fk_multicol_t16(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
+				"insert into fk_multicol_t17(id, cola, colb) values (1, 7, 1)",
+				"insert into fk_multicol_t19(id, cola, colb) values (1, 7, 1)",
+			},
+			dmlQuery: "delete from fk_multicol_t15 order by id limit 0",
+			assertionQueries: []string{
+				"select * from fk_multicol_t15 order by id",
+				"select * from fk_multicol_t16 order by id",
+				"select * from fk_multicol_t17 order by id",
+				"select * from fk_multicol_t19 order by id",
+			},
+		}, {
+			name:            "Update with limit success",
+			skipShardScoped: true,
+			dataQueries: []string{
+				"insert into fk_multicol_t15(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
+				"insert into fk_multicol_t16(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
+				"insert into fk_multicol_t17(id, cola, colb) values (1, 7, 1)",
+				"insert into fk_multicol_t19(id, cola, colb) values (1, 7, 1)",
+			},
+			dmlQuery: "update fk_multicol_t15 set cola = '2' order by id limit 1",
+			assertionQueries: []string{
+				"select * from fk_multicol_t15 order by id",
+				"select * from fk_multicol_t16 order by id",
+				"select * from fk_multicol_t17 order by id",
+				"select * from fk_multicol_t19 order by id",
+			},
+		}, {
+			name:            "Update with limit 0 success",
+			skipShardScoped: true,
+			dataQueries: []string{
+				"insert into fk_multicol_t15(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
+				"insert into fk_multicol_t16(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
+				"insert into fk_multicol_t17(id, cola, colb) values (1, 7, 1)",
+				"insert into fk_multicol_t19(id, cola, colb) values (1, 7, 1)",
+			},
+			dmlQuery: "update fk_multicol_t15 set cola = '8' order by id limit 0",
+			assertionQueries: []string{
+				"select * from fk_multicol_t15 order by id",
+				"select * from fk_multicol_t16 order by id",
+				"select * from fk_multicol_t17 order by id",
+				"select * from fk_multicol_t19 order by id",
+			},
+		}, {
+			name:            "Update with non-literal update and limit success",
+			skipShardScoped: true,
+			dataQueries: []string{
+				"insert into fk_multicol_t15(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
+				"insert into fk_multicol_t16(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
+				"insert into fk_multicol_t17(id, cola, colb) values (1, 7, 1)",
+				"insert into fk_multicol_t19(id, cola, colb) values (1, 7, 1)",
+			},
+			dmlQuery: "update fk_multicol_t15 set cola = id + 3 order by id limit 1",
+			assertionQueries: []string{
+				"select * from fk_multicol_t15 order by id",
+				"select * from fk_multicol_t16 order by id",
+				"select * from fk_multicol_t17 order by id",
+				"select * from fk_multicol_t19 order by id",
+			},
+		}, {
+			name:            "Update with non-literal update order by and limit - multiple update",
+			skipShardScoped: true,
+			dataQueries: []string{
+				"insert into fk_multicol_t15(id, cola, colb) values (1, 7, 1), (2, 9, 1), (3, 12, 1)",
+				"insert into fk_multicol_t16(id, cola, colb) values (1, 7, 1), (2, 9, 1), (3, 12, 1)",
+				"insert into fk_multicol_t17(id, cola, colb) values (1, 7, 1)",
+				"insert into fk_multicol_t19(id, cola, colb) values (1, 7, 1)",
+			},
+			dmlQuery: "update fk_multicol_t15 set cola = id + 8 order by id asc limit 2",
+			assertionQueries: []string{
+				"select * from fk_multicol_t15 order by id",
+				"select * from fk_multicol_t16 order by id",
+				"select * from fk_multicol_t17 order by id",
+				"select * from fk_multicol_t19 order by id",
+			},
+		}, {
+			name:            "Update with non-literal update order by and limit - single update",
+			skipShardScoped: true,
+			dataQueries: []string{
+				"insert into fk_multicol_t15(id, cola, colb) values (1, 7, 1), (2, 9, 1), (3, 12, 1)",
+				"insert into fk_multicol_t16(id, cola, colb) values (1, 7, 1), (2, 9, 1), (3, 12, 1)",
+				"insert into fk_multicol_t17(id, cola, colb) values (1, 7, 1)",
+				"insert into fk_multicol_t19(id, cola, colb) values (1, 7, 1)",
+			},
+			dmlQuery: "update fk_multicol_t15 set cola = id + 8 where id < 3 order by id desc limit 2",
+			assertionQueries: []string{
+				"select * from fk_multicol_t15 order by id",
+				"select * from fk_multicol_t16 order by id",
+				"select * from fk_multicol_t17 order by id",
+				"select * from fk_multicol_t19 order by id",
+			},
+		}, {
+			name:            "Multi Table Update with non-literal update",
+			skipShardScoped: true,
+			dataQueries: []string{
+				"insert into fk_multicol_t15(id, cola, colb) values (1, 7, 1), (2, 9, 1), (3, 12, 1)",
+				"insert into fk_multicol_t16(id, cola, colb) values (1, 7, 1), (2, 9, 1), (3, 12, 1)",
+				"insert into fk_multicol_t17(id, cola, colb) values (1, 7, 1)",
+				"insert into fk_multicol_t19(id, cola, colb) values (1, 7, 1)",
+			},
+			dmlQuery: "update fk_multicol_t15 m1 join fk_multicol_t17 on m1.id = fk_multicol_t17.id set m1.cola = m1.id + 8 where m1.id < 3",
+			assertionQueries: []string{
+				"select * from fk_multicol_t15 order by id",
+				"select * from fk_multicol_t16 order by id",
+				"select * from fk_multicol_t17 order by id",
+				"select * from fk_multicol_t19 order by id",
+			},
+		}, {
+			name:            "Multi Target Update with non-literal update",
+			skipShardScoped: true,
+			dataQueries: []string{
+				"insert into fk_multicol_t15(id, cola, colb) values (1, 7, 1), (2, 9, 1), (3, 12, 1)",
+				"insert into fk_multicol_t16(id, cola, colb) values (1, 7, 1), (2, 9, 1), (3, 12, 1)",
+				"insert into fk_multicol_t17(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
+				"insert into fk_multicol_t19(id, cola, colb) values (1, 7, 1)",
+			},
+			dmlQuery: "update fk_multicol_t15 m1 join fk_multicol_t17 on m1.id = fk_multicol_t17.id set m1.cola = m1.id + 8, fk_multicol_t17.colb = 32 where m1.id < 3",
+			assertionQueries: []string{
+				"select * from fk_multicol_t15 order by id",
+				"select * from fk_multicol_t16 order by id",
+				"select * from fk_multicol_t17 order by id",
+				"select * from fk_multicol_t19 order by id",
 			},
 		},
 	}
 
 	for _, tt := range testcases {
-		for _, testSharded := range []bool{false, true} {
-			t.Run(getTestName(tt.name, testSharded), func(t *testing.T) {
+		for _, keyspace := range []string{unshardedKs, shardedKs, shardScopedKs} {
+			t.Run(getTestName(tt.name, keyspace), func(t *testing.T) {
 				mcmp, closer := start(t)
 				defer closer()
-				// Set the correct keyspace to use from VtGates.
-				if testSharded {
+				if keyspace == shardedKs {
 					t.Skip("Skip test since we don't have sharded foreign key support yet")
-					_ = utils.Exec(t, mcmp.VtConn, "use `ks`")
-				} else {
-					_ = utils.Exec(t, mcmp.VtConn, "use `uks`")
 				}
+				if keyspace == shardScopedKs && tt.skipShardScoped {
+					t.Skip("Skip test since we don't support updates in primary vindex columns")
+				}
+				// Set the correct keyspace to use from VtGates.
+				_ = utils.Exec(t, mcmp.VtConn, fmt.Sprintf("use `%v`", keyspace))
 
 				// Insert all the data required for running the test.
 				for _, query := range tt.dataQueries {
@@ -691,7 +902,12 @@ func TestFkScenarios(t *testing.T) {
 				}
 
 				// Run the DML query that needs to be tested and verify output with MySQL.
-				_, _ = mcmp.ExecAllowAndCompareError(tt.dmlQuery)
+				_, err := mcmp.ExecAllowAndCompareError(tt.dmlQuery, utils.CompareOptions{})
+				if tt.dmlShouldErr {
+					assert.Error(t, err)
+				} else {
+					assert.NoError(t, err)
+				}
 
 				// Run the assertion queries and verify we get the expected outputs.
 				for _, query := range tt.assertionQueries {
@@ -701,17 +917,15 @@ func TestFkScenarios(t *testing.T) {
 		}
 	}
 
-	for _, testSharded := range []bool{false, true} {
-		t.Run(getTestName("Transactions with intermediate failure", testSharded), func(t *testing.T) {
+	for _, keyspace := range []string{unshardedKs, shardedKs} {
+		t.Run(getTestName("Transactions with intermediate failure", keyspace), func(t *testing.T) {
 			mcmp, closer := start(t)
 			defer closer()
-			// Set the correct keyspace to use from VtGates.
-			if testSharded {
+			if keyspace == shardedKs {
 				t.Skip("Skip test since we don't have sharded foreign key support yet")
-				_ = utils.Exec(t, mcmp.VtConn, "use `ks`")
-			} else {
-				_ = utils.Exec(t, mcmp.VtConn, "use `uks`")
 			}
+			// Set the correct keyspace to use from VtGates.
+			_ = utils.Exec(t, mcmp.VtConn, fmt.Sprintf("use `%v`", keyspace))
 
 			// Insert some rows
 			mcmp.Exec("INSERT INTO fk_t10(id, col) VALUES (1, 7), (2, 9), (3, 5)")
@@ -734,7 +948,7 @@ func TestFkScenarios(t *testing.T) {
 			mcmp.Exec("SELECT * FROM fk_t13 ORDER BY id")
 
 			// Update that fails
-			_, err := mcmp.ExecAllowAndCompareError("UPDATE fk_t10 SET col = 15 WHERE id = 1")
+			_, err := mcmp.ExecAllowAndCompareError("UPDATE fk_t10 SET col = 15 WHERE id = 1", utils.CompareOptions{})
 			require.Error(t, err)
 
 			// Verify the results
@@ -775,6 +989,258 @@ func TestFkScenarios(t *testing.T) {
 	}
 }
 
+// TestFkQueries is for testing a specific set of queries one after the other.
+func TestFkQueries(t *testing.T) {
+	// Wait for schema-tracking to be complete.
+	waitForSchemaTrackingForFkTables(t)
+	// Remove all the foreign key constraints for all the replicas.
+	// We can then verify that the replica, and the primary have the same data, to ensure
+	// that none of the queries ever lead to cascades/updates on MySQL level.
+	for _, ks := range []string{shardedKs, unshardedKs} {
+		replicas := getReplicaTablets(ks)
+		for _, replica := range replicas {
+			removeAllForeignKeyConstraints(t, replica, ks)
+		}
+	}
+
+	testcases := []struct {
+		name    string
+		queries []string
+		opts    utils.CompareOptions
+	}{
+		{
+			name: "Non-literal update",
+			queries: []string{
+				"insert into fk_t10 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"insert into fk_t11 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"update fk_t10 set col = id + 3",
+			},
+		}, {
+			name: "Non-literal update with order by",
+			queries: []string{
+				"insert into fk_t10 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"insert into fk_t11 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"update fk_t10 set col = id + 3 order by id desc",
+			},
+		}, {
+			name: "Non-literal update with order by that require parent and child foreign keys verification - success",
+			queries: []string{
+				"insert into fk_t10 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8)",
+				"insert into fk_t11 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"insert into fk_t12 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"insert into fk_t13 (id, col) values (1,1),(2,2)",
+				"update fk_t11 set col = id + 3 where id >= 3",
+			},
+		}, {
+			name: "Non-literal update with order by that require parent and child foreign keys verification - parent fails",
+			queries: []string{
+				"insert into fk_t10 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"insert into fk_t11 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"insert into fk_t12 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"update fk_t11 set col = id + 3",
+			},
+		}, {
+			name: "Non-literal update with order by that require parent and child foreign keys verification - child fails",
+			queries: []string{
+				"insert into fk_t10 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8)",
+				"insert into fk_t11 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"insert into fk_t12 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"insert into fk_t13 (id, col) values (1,1),(2,2)",
+				"update fk_t11 set col = id + 3",
+			},
+		}, {
+			name: "Single column update in a multi-col table - success",
+			queries: []string{
+				"insert into fk_multicol_t1 (id, cola, colb) values (1, 1, 1), (2, 2, 2)",
+				"insert into fk_multicol_t2 (id, cola, colb) values (1, 1, 1)",
+				"update fk_multicol_t1 set colb = 4 + (colb) where id = 2",
+			},
+		}, {
+			name: "Single column update in a multi-col table - restrict failure",
+			queries: []string{
+				"insert into fk_multicol_t1 (id, cola, colb) values (1, 1, 1), (2, 2, 2)",
+				"insert into fk_multicol_t2 (id, cola, colb) values (1, 1, 1)",
+				"update fk_multicol_t1 set colb = 4 + (colb) where id = 1",
+			},
+		}, {
+			name: "Single column update in multi-col table - cascade and set null",
+			queries: []string{
+				"insert into fk_multicol_t15 (id, cola, colb) values (1, 1, 1), (2, 2, 2)",
+				"insert into fk_multicol_t16 (id, cola, colb) values (1, 1, 1), (2, 2, 2)",
+				"insert into fk_multicol_t17 (id, cola, colb) values (1, 1, 1), (2, 2, 2)",
+				"update fk_multicol_t15 set colb = 4 + (colb) where id = 1",
+			},
+		}, {
+			name: "Non literal update that evaluates to NULL - restricted",
+			queries: []string{
+				"insert into fk_t10 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"insert into fk_t11 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"insert into fk_t13 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"update fk_t10 set col = id + null where id = 1",
+			},
+		}, {
+			name: "Non literal update that evaluates to NULL - success",
+			queries: []string{
+				"insert into fk_t10 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"insert into fk_t11 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"insert into fk_t12 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",
+				"update fk_t10 set col = id + null where id = 1",
+			},
+		}, {
+			name: "Multi column foreign key update with one literal and one non-literal update",
+			queries: []string{
+				"insert into fk_multicol_t15 (id, cola, colb) values (1,1,1),(2,2,2)",
+				"insert into fk_multicol_t16 (id, cola, colb) values (1,1,1),(2,2,2)",
+				"update fk_multicol_t15 set cola = 3, colb = (id * 2) - 2",
+			},
+		}, {
+			name: "Update that sets to 0 and -0 values",
+			queries: []string{
+				"insert into fk_t15 (id, col) values (1,'-0'), (2, '0'), (3, '5'), (4, '-5')",
+				"insert into fk_t16 (id, col) values (1,'-0'), (2, '0'), (3, '5'), (4, '-5')",
+				"update fk_t15 set col = col * (col - (col))",
+			},
+		},
+		{
+			name: "Update a child table which doesn't cause an update, but parent doesn't have that value",
+			queries: []string{
+				"insert into fk_t10 (id, col) values (1,1),(2,2)",
+				"insert /*+ SET_VAR(foreign_key_checks=0) */ into fk_t11 (id, col) values (1,1),(2,2),(5,5)",
+				"update fk_t11 set col = id where id in (1, 5)",
+			},
+		},
+		{
+			name: "Update a child table from a null to a value that parent doesn't have",
+			queries: []string{
+				"insert into fk_t10 (id, col) values (1,1),(2,2)",
+				"insert into fk_t11 (id, col) values (1,1),(2,2),(5,NULL)",
+				"update fk_t11 set col = id where id in (1, 5)",
+			},
+		},
+		{
+			name: "Update on child to 0 when parent has -0",
+			queries: []string{
+				"insert into fk_t15 (id, col) values (2, '-0')",
+				"insert /*+ SET_VAR(foreign_key_checks=0) */ into fk_t16 (id, col) values (3, '5'), (4, '-5')",
+				"update fk_t16 set col = col * (col - (col)) where id = 3",
+				"update fk_t16 set col = col * (col - (col)) where id = 4",
+			},
+		},
+		{
+			name: "Multi table delete that uses two tables related by foreign keys",
+			queries: []string{
+				"insert /*+ SET_VAR(foreign_key_checks=0) */ into fk_t10 (id, col) values (1, '5'), (2, NULL), (3, NULL), (4, '4'), (6, '1'), (7, '2')",
+				"insert /*+ SET_VAR(foreign_key_checks=0) */ into fk_t11 (id, col) values (4, '1'), (5, '3'), (7, '22'), (8, '5'), (9, NULL), (10, '3')",
+				"insert /*+ SET_VAR(foreign_key_checks=0) */ into fk_t12 (id, col) values (2, NULL), (3, NULL), (4, '1'), (6, '6'), (8, NULL), (10, '1')",
+				"insert /*+ SET_VAR(foreign_key_checks=0) */ into fk_t13 (id, col) values (2, '1'), (5, '5'), (7, '5')",
+				"delete fk_t11 from fk_t11 join fk_t12 using (id) where fk_t11.id = 4",
+			},
+		},
+		{
+			name: "Multi table delete where MySQL and Vitess report different rows affected",
+			queries: []string{
+				"insert /*+ SET_VAR(foreign_key_checks=0) */ into fk_t11 (id, col) values (4, '1'), (5, '3'), (7, '22'), (8, '5'), (9, NULL), (10, '3')",
+				"insert /*+ SET_VAR(foreign_key_checks=0) */ into fk_t12 (id, col) values (4, '1'), (5, '3'), (7, '22'), (8, '5'), (9, NULL), (10, '3')",
+				"delete fk_t11, fk_t12 from fk_t11 join fk_t12 using (id) where fk_t11.id = 5",
+			},
+			opts: utils.CompareOptions{
+				IgnoreRowsAffected: true,
+			},
+		},
+	}
+
+	for _, tt := range testcases {
+		for _, keyspace := range []string{unshardedKs, shardedKs} {
+			t.Run(getTestName(tt.name, keyspace), func(t *testing.T) {
+				mcmp, closer := start(t)
+				defer closer()
+				if keyspace == shardedKs {
+					t.Skip("Skip test since we don't have sharded foreign key support yet")
+				}
+				// Set the correct keyspace to use from VtGates.
+				_ = utils.Exec(t, mcmp.VtConn, fmt.Sprintf("use `%v`", keyspace))
+
+				// Ensure that the Vitess database is originally empty
+				ensureDatabaseState(t, mcmp.VtConn, true)
+				ensureDatabaseState(t, mcmp.MySQLConn, true)
+
+				for _, query := range tt.queries {
+					_, _ = mcmp.ExecAllowAndCompareError(query, tt.opts)
+					if t.Failed() {
+						break
+					}
+				}
+
+				// ensure Vitess database has some data. This ensures not all the commands failed.
+				ensureDatabaseState(t, mcmp.VtConn, false)
+				// Verify the consistency of the data.
+				verifyDataIsCorrect(t, mcmp, 1)
+			})
+		}
+	}
+}
+
+// TestShowVschemaKeyspaces verifies the show vschema keyspaces query output for the keyspaces where the foreign keys are
+func TestShowVschemaKeyspaces(t *testing.T) {
+	mcmp, closer := start(t)
+	conn := mcmp.VtConn
+	defer closer()
+
+	res := utils.Exec(t, conn, "SHOW VSCHEMA KEYSPACES")
+	resStr := fmt.Sprintf("%v", res.Rows)
+	require.Contains(t, resStr, `[VARCHAR("uks") VARCHAR("false") VARCHAR("managed") VARCHAR("")]`)
+	require.Contains(t, resStr, `[VARCHAR("ks") VARCHAR("true") VARCHAR("managed") VARCHAR("")]`)
+}
+
+// TestFkOneCase is for testing a specific set of queries. On the CI this test won't run since we'll keep the queries empty.
+func TestFkOneCase(t *testing.T) {
+	queries := []string{}
+	if len(queries) == 0 {
+		t.Skip("No queries to test")
+	}
+	// Wait for schema-tracking to be complete.
+	waitForSchemaTrackingForFkTables(t)
+	// Remove all the foreign key constraints for all the replicas.
+	// We can then verify that the replica, and the primary have the same data, to ensure
+	// that none of the queries ever lead to cascades/updates on MySQL level.
+	for _, ks := range []string{shardedKs, unshardedKs} {
+		replicas := getReplicaTablets(ks)
+		for _, replica := range replicas {
+			removeAllForeignKeyConstraints(t, replica, ks)
+		}
+	}
+
+	mcmp, closer := start(t)
+	defer closer()
+	_ = utils.Exec(t, mcmp.VtConn, "use `uks`")
+
+	// Ensure that the Vitess database is originally empty
+	ensureDatabaseState(t, mcmp.VtConn, true)
+	ensureDatabaseState(t, mcmp.MySQLConn, true)
+
+	for _, query := range queries {
+		if strings.HasPrefix(query, "vexplain") {
+			res := utils.Exec(t, mcmp.VtConn, query)
+			log.Errorf("Query %v, Result - %v", query, res.Rows)
+			continue
+		}
+		_, _ = mcmp.ExecAllowAndCompareError(query, utils.CompareOptions{})
+		if t.Failed() {
+			log.Errorf("Query failed - %v", query)
+			break
+		}
+	}
+	vitessData := collectFkTablesState(mcmp.VtConn)
+	for idx, table := range fkTables {
+		log.Errorf("Vitess data for %v -\n%v", table, vitessData[idx].Rows)
+	}
+
+	// ensure Vitess database has some data. This ensures not all the commands failed.
+	ensureDatabaseState(t, mcmp.VtConn, false)
+	// Verify the consistency of the data.
+	verifyDataIsCorrect(t, mcmp, 1)
+}
+
 func TestCyclicFks(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
@@ -782,18 +1248,259 @@ func TestCyclicFks(t *testing.T) {
 
 	// Create a cyclic foreign key constraint.
 	utils.Exec(t, mcmp.VtConn, "alter table fk_t10 add constraint test_cyclic_fks foreign key (col) references fk_t12 (col) on delete cascade on update cascade")
-	defer func() {
-		utils.Exec(t, mcmp.VtConn, "alter table fk_t10 drop foreign key test_cyclic_fks")
-	}()
 
 	// Wait for schema-tracking to be complete.
-	ksErr := utils.WaitForKsError(t, clusterInstance.VtgateProcess, unshardedKs)
-	// Make sure Vschema has the error for cyclic foreign keys.
-	assert.Contains(t, ksErr, "VT09019: uks has cyclic foreign keys")
+	errString := utils.WaitForKsError(t, clusterInstance.VtgateProcess, unshardedKs)
+	assert.Contains(t, errString, "VT09019: keyspace 'uks' has cyclic foreign keys")
 
 	// Ensure that the Vitess database is originally empty
 	ensureDatabaseState(t, mcmp.VtConn, true)
 
 	_, err := utils.ExecAllowError(t, mcmp.VtConn, "insert into fk_t10(id, col) values (1, 1)")
-	require.ErrorContains(t, err, "VT09019: uks has cyclic foreign keys")
+	require.ErrorContains(t, err, "VT09019: keyspace 'uks' has cyclic foreign keys")
+
+	// Drop the cyclic foreign key constraint.
+	utils.Exec(t, mcmp.VtConn, "alter table fk_t10 drop foreign key test_cyclic_fks")
+
+	// Let's clean out the cycle so that the other tests don't fail
+	utils.WaitForVschemaCondition(t, clusterInstance.VtgateProcess, unshardedKs, func(t *testing.T, keyspace map[string]any) bool {
+		_, fieldPresent := keyspace["error"]
+		return !fieldPresent
+	}, "wait for error to disappear")
+}
+
+func TestReplace(t *testing.T) {
+	t.Skip("replace engine marked for failure, hence skipping this.")
+	// Wait for schema-tracking to be complete.
+	waitForSchemaTrackingForFkTables(t)
+	// Remove all the foreign key constraints for all the replicas.
+	// We can then verify that the replica, and the primary have the same data, to ensure
+	// that none of the queries ever lead to cascades/updates on MySQL level.
+	for _, ks := range []string{shardedKs, unshardedKs} {
+		replicas := getReplicaTablets(ks)
+		for _, replica := range replicas {
+			removeAllForeignKeyConstraints(t, replica, ks)
+		}
+	}
+
+	mcmp1, _ := start(t)
+	//	defer closer1()
+	_ = utils.Exec(t, mcmp1.VtConn, "use `uks`")
+
+	mcmp2, _ := start(t)
+	//	defer closer2()
+	_ = utils.Exec(t, mcmp2.VtConn, "use `uks`")
+
+	_ = utils.Exec(t, mcmp1.VtConn, "insert into fk_t2 values(1,5), (2,5)")
+
+	done := false
+	go func() {
+		number := 1
+		for !done {
+			query := fmt.Sprintf("replace /* g1q1 - %d */ into fk_t2 values(5,5)", number)
+			_, _ = utils.ExecAllowError(t, mcmp1.VtConn, query)
+			number++
+		}
+	}()
+
+	go func() {
+		number := 1
+		for !done {
+			query := fmt.Sprintf("replace /* q1 - %d */ into fk_t3 values(3,5)", number)
+			_, _ = utils.ExecAllowError(t, mcmp2.VtConn, query)
+
+			query = fmt.Sprintf("replace /* q2 - %d */ into fk_t3 values(4,5)", number)
+			_, _ = utils.ExecAllowError(t, mcmp2.VtConn, query)
+			number++
+		}
+	}()
+
+	totalTime := time.After(1 * time.Minute)
+	for !done {
+		select {
+		case <-totalTime:
+			done = true
+		case <-time.After(10 * time.Millisecond):
+			validateReplication(t)
+		}
+	}
+}
+
+func TestReplaceExplicit(t *testing.T) {
+	t.Skip("explicit delete-insert in transaction fails, hence skipping")
+	// Wait for schema-tracking to be complete.
+	waitForSchemaTrackingForFkTables(t)
+	// Remove all the foreign key constraints for all the replicas.
+	// We can then verify that the replica, and the primary have the same data, to ensure
+	// that none of the queries ever lead to cascades/updates on MySQL level.
+	for _, ks := range []string{shardedKs, unshardedKs} {
+		replicas := getReplicaTablets(ks)
+		for _, replica := range replicas {
+			removeAllForeignKeyConstraints(t, replica, ks)
+		}
+	}
+
+	mcmp1, _ := start(t)
+	//	defer closer1()
+	_ = utils.Exec(t, mcmp1.VtConn, "use `uks`")
+
+	mcmp2, _ := start(t)
+	//	defer closer2()
+	_ = utils.Exec(t, mcmp2.VtConn, "use `uks`")
+
+	_ = utils.Exec(t, mcmp1.VtConn, "insert into fk_t2 values(1,5), (2,5)")
+
+	done := false
+	go func() {
+		number := 0
+		for !done {
+			number++
+			_, _ = utils.ExecAllowError(t, mcmp1.VtConn, "begin")
+			query := fmt.Sprintf("delete /* g1q1 - %d */ from fk_t2 where id = 5", number)
+			_, err := utils.ExecAllowError(t, mcmp1.VtConn, query)
+			if err != nil {
+				_, _ = utils.ExecAllowError(t, mcmp1.VtConn, "rollback")
+				continue
+			}
+			query = fmt.Sprintf("insert /* g1q1 - %d */ into fk_t2 values(5,5)", number)
+			_, err = utils.ExecAllowError(t, mcmp1.VtConn, query)
+			if err != nil {
+				_, _ = utils.ExecAllowError(t, mcmp1.VtConn, "rollback")
+				continue
+			}
+			_, _ = utils.ExecAllowError(t, mcmp1.VtConn, "commit")
+		}
+	}()
+
+	go func() {
+		number := 0
+		for !done {
+			number++
+			_, _ = utils.ExecAllowError(t, mcmp2.VtConn, "begin")
+			query := fmt.Sprintf("delete /* g1q1 - %d */ from fk_t3 where id = 3 or col = 5", number)
+			_, err := utils.ExecAllowError(t, mcmp2.VtConn, query)
+			if err != nil {
+				_, _ = utils.ExecAllowError(t, mcmp2.VtConn, "rollback")
+			} else {
+				query = fmt.Sprintf("insert /* g1q1 - %d */ into fk_t3 values(3,5)", number)
+				_, err = utils.ExecAllowError(t, mcmp2.VtConn, query)
+				if err != nil {
+					_, _ = utils.ExecAllowError(t, mcmp2.VtConn, "rollback")
+				} else {
+					_, _ = utils.ExecAllowError(t, mcmp2.VtConn, "commit")
+				}
+			}
+
+			_, _ = utils.ExecAllowError(t, mcmp2.VtConn, "begin")
+			query = fmt.Sprintf("delete /* g1q1 - %d */ from fk_t3 where id = 4 or col = 5", number)
+			_, err = utils.ExecAllowError(t, mcmp2.VtConn, query)
+			if err != nil {
+				_, _ = utils.ExecAllowError(t, mcmp2.VtConn, "rollback")
+				continue
+			}
+			query = fmt.Sprintf("insert /* g1q1 - %d */ into fk_t3 values(4,5)", number)
+			_, err = utils.ExecAllowError(t, mcmp2.VtConn, query)
+			if err != nil {
+				_, _ = utils.ExecAllowError(t, mcmp2.VtConn, "rollback")
+				continue
+			}
+			_, _ = utils.ExecAllowError(t, mcmp2.VtConn, "commit")
+		}
+	}()
+
+	totalTime := time.After(1 * time.Minute)
+	for !done {
+		select {
+		case <-totalTime:
+			done = true
+		case <-time.After(10 * time.Millisecond):
+			validateReplication(t)
+		}
+	}
+}
+
+// TestReplaceWithFK tests that replace into work as expected when foreign key management is enabled in Vitess.
+func TestReplaceWithFK(t *testing.T) {
+	mcmp, closer := start(t)
+	conn := mcmp.VtConn
+	defer closer()
+
+	// replace some data.
+	_, err := utils.ExecAllowError(t, conn, `replace into t1(id, col) values (1, 1)`)
+	require.ErrorContains(t, err, "VT12001: unsupported: REPLACE INTO with sharded keyspace (errno 1235) (sqlstate 42000)")
+
+	_ = utils.Exec(t, conn, `use uks`)
+
+	_ = utils.Exec(t, conn, `replace into u_t1(id, col1) values (1, 1), (2, 1)`)
+	// u_t1: (1,1) (2,1)
+
+	_ = utils.Exec(t, conn, `replace into u_t2(id, col2) values (1, 1), (2, 1)`)
+	// u_t1: (1,1) (2,1)
+	// u_t2: (1,1) (2,1)
+
+	_ = utils.Exec(t, conn, `replace into u_t1(id, col1) values (2, 2)`)
+	// u_t1: (1,1) (2,2)
+	// u_t2: (1,null) (2,null)
+
+	utils.AssertMatches(t, conn, `select * from u_t1`, `[[INT64(1) INT64(1)] [INT64(2) INT64(2)]]`)
+	utils.AssertMatches(t, conn, `select * from u_t2`, `[[INT64(1) NULL] [INT64(2) NULL]]`)
+}
+
+// TestInsertWithFKOnDup tests that insertion with on duplicate key update works as expected.
+func TestInsertWithFKOnDup(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	utils.Exec(t, mcmp.VtConn, "use `uks`")
+
+	// insert some data.
+	mcmp.Exec(`insert into u_t1(id, col1) values (100, 1), (200, 2), (300, 3), (400, 4)`)
+	mcmp.Exec(`insert into u_t2(id, col2) values (1000, 1), (2000, 2), (3000, 3), (4000, 4)`)
+
+	// updating child to an existing value in parent.
+	mcmp.Exec(`insert into u_t2(id, col2) values (4000, 50) on duplicate key update col2 = 1`)
+	mcmp.AssertMatches(`select * from u_t2 order by id`, `[[INT64(1000) INT64(1)] [INT64(2000) INT64(2)] [INT64(3000) INT64(3)] [INT64(4000) INT64(1)]]`)
+
+	// updating parent, value not referred in child.
+	mcmp.Exec(`insert into u_t1(id, col1) values (400, 50) on duplicate key update col1 = values(col1)`)
+	mcmp.AssertMatches(`select * from u_t1 order by id`, `[[INT64(100) INT64(1)] [INT64(200) INT64(2)] [INT64(300) INT64(3)] [INT64(400) INT64(50)]]`)
+	mcmp.AssertMatches(`select * from u_t2 order by id`, `[[INT64(1000) INT64(1)] [INT64(2000) INT64(2)] [INT64(3000) INT64(3)] [INT64(4000) INT64(1)]]`)
+
+	// updating parent, child updated to null.
+	mcmp.Exec(`insert into u_t1(id, col1) values (100, 75) on duplicate key update col1 = values(col1)`)
+	mcmp.AssertMatches(`select * from u_t1 order by id`, `[[INT64(100) INT64(75)] [INT64(200) INT64(2)] [INT64(300) INT64(3)] [INT64(400) INT64(50)]]`)
+	mcmp.AssertMatches(`select * from u_t2 order by id`, `[[INT64(1000) NULL] [INT64(2000) INT64(2)] [INT64(3000) INT64(3)] [INT64(4000) NULL]]`)
+
+	// inserting multiple rows in parent, some child rows updated to null.
+	mcmp.Exec(`insert into u_t1(id, col1) values (100, 42),(600, 2),(300, 24),(200, 2) on duplicate key update col1 = values(col1)`)
+	mcmp.AssertMatches(`select * from u_t1 order by id`, `[[INT64(100) INT64(42)] [INT64(200) INT64(2)] [INT64(300) INT64(24)] [INT64(400) INT64(50)] [INT64(600) INT64(2)]]`)
+	mcmp.AssertMatches(`select * from u_t2 order by id`, `[[INT64(1000) NULL] [INT64(2000) INT64(2)] [INT64(3000) NULL] [INT64(4000) NULL]]`)
+}
+
+// TestDDLFk tests that table is created with fk constraint when foreign_key_checks is off.
+func TestDDLFk(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	utils.Exec(t, mcmp.VtConn, `use uks`)
+
+	createTableDDLTemp1 := `
+create table temp1(id bigint auto_increment primary key, col varchar(20) not null,
+foreign key (col) references temp2(col))
+`
+	mcmp.Exec(`set foreign_key_checks = off`)
+	// should be able to create `temp1` table without a `temp2`
+	mcmp.Exec(createTableDDLTemp1)
+
+	createTableDDLTemp2 := `
+create table temp2(id bigint auto_increment primary key, col varchar(20) not null, key (col))
+`
+	// now create `temp2`
+	mcmp.Exec(createTableDDLTemp2)
+
+	// inserting some data with fk constraints on.
+	mcmp.Exec(`set foreign_key_checks = on`)
+	mcmp.Exec(`insert into temp2(col) values('a'), ('b'), ('c') `)
+	mcmp.Exec(`insert into temp1(col) values('a') `)
+	mcmp.ExecAllowAndCompareError(`insert into temp1(col) values('d') `, utils.CompareOptions{})
 }

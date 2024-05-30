@@ -23,6 +23,8 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/vt/vtenv"
+
 	"vitess.io/vitess/go/vt/servenv"
 
 	"vitess.io/vitess/go/acl"
@@ -48,8 +50,8 @@ func registerVtctldFlags(fs *pflag.FlagSet) {
 }
 
 // InitVtctld initializes all the vtctld functionality.
-func InitVtctld(ts *topo.Server) error {
-	actionRepo := NewActionRepository(ts)
+func InitVtctld(env *vtenv.Environment, ts *topo.Server) error {
+	actionRepo := NewActionRepository(env, ts)
 
 	// keyspace actions
 	actionRepo.RegisterKeyspaceAction("ValidateKeyspace",

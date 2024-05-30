@@ -19,6 +19,9 @@ package json2
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
@@ -29,11 +32,21 @@ func TestMarshalPB(t *testing.T) {
 		Type: querypb.Type_VARCHAR,
 	}
 	b, err := MarshalPB(col)
-	if err != nil {
-		t.Fatal(err)
-	}
+
+	require.NoErrorf(t, err, "MarshalPB(%+v) error", col)
 	want := "{\"name\":\"c1\",\"type\":\"VARCHAR\"}"
-	if string(b) != want {
-		t.Errorf("MarshalPB(col): %q, want %q", b, want)
+	assert.Equalf(t, want, string(b), "MarshalPB(%+v)", col)
+}
+
+func TestMarshalIndentPB(t *testing.T) {
+	col := &vschemapb.Column{
+		Name: "c1",
+		Type: querypb.Type_VARCHAR,
 	}
+	indent := "  "
+	b, err := MarshalIndentPB(col, indent)
+
+	require.NoErrorf(t, err, "MarshalIndentPB(%+v, %q) error", col, indent)
+	want := "{\n  \"name\": \"c1\",\n  \"type\": \"VARCHAR\"\n}"
+	assert.Equal(t, want, string(b), "MarshalIndentPB(%+v, %q)", col, indent)
 }

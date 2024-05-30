@@ -45,6 +45,7 @@ package topo
 import (
 	"context"
 	"fmt"
+	"path"
 	"sync"
 
 	"github.com/spf13/pflag"
@@ -67,29 +68,32 @@ const (
 
 // Filenames for all object types.
 const (
-	CellInfoFile          = "CellInfo"
-	CellsAliasFile        = "CellsAlias"
-	KeyspaceFile          = "Keyspace"
-	ShardFile             = "Shard"
-	VSchemaFile           = "VSchema"
-	ShardReplicationFile  = "ShardReplication"
-	TabletFile            = "Tablet"
-	SrvVSchemaFile        = "SrvVSchema"
-	SrvKeyspaceFile       = "SrvKeyspace"
-	RoutingRulesFile      = "RoutingRules"
-	ExternalClustersFile  = "ExternalClusters"
-	ShardRoutingRulesFile = "ShardRoutingRules"
+	CellInfoFile           = "CellInfo"
+	CellsAliasFile         = "CellsAlias"
+	KeyspaceFile           = "Keyspace"
+	ShardFile              = "Shard"
+	VSchemaFile            = "VSchema"
+	ShardReplicationFile   = "ShardReplication"
+	TabletFile             = "Tablet"
+	SrvVSchemaFile         = "SrvVSchema"
+	SrvKeyspaceFile        = "SrvKeyspace"
+	RoutingRulesFile       = "RoutingRules"
+	ExternalClustersFile   = "ExternalClusters"
+	ShardRoutingRulesFile  = "ShardRoutingRules"
+	CommonRoutingRulesFile = "Rules"
 )
 
 // Path for all object types.
 const (
-	CellsPath             = "cells"
-	CellsAliasesPath      = "cells_aliases"
-	KeyspacesPath         = "keyspaces"
-	ShardsPath            = "shards"
-	TabletsPath           = "tablets"
-	MetadataPath          = "metadata"
-	ExternalClusterVitess = "vitess"
+	CellsPath                = "cells"
+	CellsAliasesPath         = "cells_aliases"
+	KeyspacesPath            = "keyspaces"
+	ShardsPath               = "shards"
+	TabletsPath              = "tablets"
+	MetadataPath             = "metadata"
+	ExternalClusterVitess    = "vitess"
+	RoutingRulesPath         = "routing_rules"
+	KeyspaceRoutingRulesPath = "keyspace"
 )
 
 // Factory is a factory interface to create Conn objects.
@@ -417,4 +421,9 @@ func (ts *Server) IsReadOnly() (bool, error) {
 	}
 
 	return true, nil
+}
+
+// GetKeyspaceRoutingRulesPath returns the path to the keyspace routing rules file in the topo.
+func (ts *Server) GetKeyspaceRoutingRulesPath() string {
+	return path.Join(RoutingRulesPath, KeyspaceRoutingRulesPath, CommonRoutingRulesFile)
 }

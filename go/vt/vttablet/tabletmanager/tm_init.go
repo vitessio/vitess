@@ -36,8 +36,9 @@ package tabletmanager
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"regexp"
 	"strings"
 	"sync"
@@ -67,14 +68,18 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
-// Query rules from denylist
-const denyListQueryList string = "DenyListQueryRules"
+const (
+	// Query rules from denylist
+	denyListQueryList string = "DenyListQueryRules"
+)
 
 var (
 	// The following flags initialize the tablet record.
@@ -86,8 +91,8 @@ var (
 	skipBuildInfoTags  = "/.*/"
 	initTags           flagutil.StringMapValue
 
-	initPopulateMetadata bool
 	initTimeout          = 1 * time.Minute
+	mysqlShutdownTimeout = mysqlctl.DefaultShutdownTimeout
 )
 
 func registerInitFlags(fs *pflag.FlagSet) {
@@ -99,6 +104,7 @@ func registerInitFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&skipBuildInfoTags, "vttablet_skip_buildinfo_tags", skipBuildInfoTags, "comma-separated list of buildinfo tags to skip from merging with --init_tags. each tag is either an exact match or a regular expression of the form '/regexp/'.")
 	fs.Var(&initTags, "init_tags", "(init parameter) comma separated list of key:value pairs used to tag the tablet")
 	fs.DurationVar(&initTimeout, "init_timeout", initTimeout, "(init parameter) timeout to use for the init phase.")
+	fs.DurationVar(&mysqlShutdownTimeout, "mysql-shutdown-timeout", mysqlShutdownTimeout, "timeout to use when MySQL is being shut down.")
 }
 
 var (
@@ -149,6 +155,7 @@ type TabletManager struct {
 	UpdateStream        binlog.UpdateStreamControl
 	VREngine            *vreplication.Engine
 	VDiffEngine         *vdiff.Engine
+	Env                 *vtenv.Environment
 
 	// tmState manages the TabletManager state.
 	tmState *tmState
@@ -169,6 +176,10 @@ type TabletManager struct {
 	// mutex protects all the following fields (that start with '_'),
 	// only hold the mutex to update the fields, nothing else.
 	mutex sync.Mutex
+
+	// _waitForGrantsComplete is a channel for waiting until the grants for all the mysql
+	// users have been verified.
+	_waitForGrantsComplete chan struct{}
 
 	// _shardSyncChan is a channel for informing the shard sync goroutine that
 	// it should wake up and recheck the tablet state, to make sure it and the
@@ -200,7 +211,7 @@ type TabletManager struct {
 }
 
 // BuildTabletFromInput builds a tablet record from input parameters.
-func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, db *dbconfigs.DBConfigs) (*topodatapb.Tablet, error) {
+func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, db *dbconfigs.DBConfigs, collationEnv *collations.Environment) (*topodatapb.Tablet, error) {
 	hostname := tabletHostname
 	if hostname == "" {
 		var err error
@@ -238,14 +249,14 @@ func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, d
 		return nil, err
 	}
 
-	var charset uint8
+	var charset collations.ID
 	if db != nil && db.Charset != "" {
-		charset, err = collations.Local().ParseConnectionCharset(db.Charset)
+		charset, err = collationEnv.ParseConnectionCharset(db.Charset)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		charset = collations.Local().DefaultConnectionCharset()
+		charset = collationEnv.DefaultConnectionCharset()
 	}
 
 	return &topodatapb.Tablet{
@@ -333,7 +344,7 @@ func mergeTags(a, b map[string]string) map[string]string {
 }
 
 // Start starts the TabletManager.
-func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval time.Duration) error {
+func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.TabletConfig) error {
 	defer func() {
 		log.Infof("TabletManager Start took ~%d ms", time.Since(servenv.GetInitStartTime()).Milliseconds())
 	}()
@@ -342,6 +353,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval ti
 	tm.tabletAlias = tablet.Alias
 	tm.tmState = newTMState(tm, tablet)
 	tm.actionSema = semaphore.NewWeighted(1)
+	tm._waitForGrantsComplete = make(chan struct{})
 
 	tm.baseTabletType = tablet.Type
 
@@ -393,7 +405,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval ti
 	tm.exportStats()
 	servenv.OnRun(tm.registerTabletManager)
 
-	restoring, err := tm.handleRestore(tm.BatchCtx)
+	restoring, err := tm.handleRestore(tm.BatchCtx, config)
 	if err != nil {
 		return err
 	}
@@ -406,8 +418,17 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval ti
 	// We shouldn't use the base tablet type directly, since the type could have changed to PRIMARY
 	// earlier in tm.checkPrimaryShip code.
 	_, err = tm.initializeReplication(ctx, tm.Tablet().Type)
+	if err != nil {
+		return err
+	}
+
+	// Make sure we have the correct privileges for the DBA user before we start the state manager.
+	err = tm.waitForDBAGrants(config, mysqlctl.DbaGrantWaitTime)
+	if err != nil {
+		return err
+	}
 	tm.tmState.Open()
-	return err
+	return nil
 }
 
 // Close prepares a tablet for shutdown. First we check our tablet ownership and
@@ -444,7 +465,7 @@ func (tm *TabletManager) Close() {
 // Stop shuts down the tm. Normally this is not necessary, since we use
 // servenv OnTerm and OnClose hooks to coordinate shutdown automatically,
 // while taking lameduck into account. However, this may be useful for tests,
-// when you want to clean up an tm immediately.
+// when you want to clean up a tm immediately.
 func (tm *TabletManager) Stop() {
 	// Stop the shard sync loop and wait for it to exit. This needs to be done
 	// here in addition to in Close() because tests do not call Close().
@@ -536,7 +557,7 @@ func (tm *TabletManager) createKeyspaceShard(ctx context.Context) (*topo.ShardIn
 		tm._rebuildKeyspaceDone = make(chan struct{})
 		go tm.rebuildKeyspace(rebuildKsCtx, tm._rebuildKeyspaceDone, tablet.Keyspace, rebuildKeyspaceRetryInterval)
 	default:
-		return nil, vterrors.Wrap(err, "initeKeyspaceShardTopo: failed to read SrvKeyspace")
+		return nil, vterrors.Wrap(err, "initKeyspaceShardTopo: failed to read SrvKeyspace")
 	}
 
 	// Rebuild vschema graph if this is the first tablet in this keyspace/cell.
@@ -546,16 +567,16 @@ func (tm *TabletManager) createKeyspaceShard(ctx context.Context) (*topo.ShardIn
 		// Check if vschema was rebuilt after the initial creation of the keyspace.
 		if _, keyspaceExists := srvVSchema.GetKeyspaces()[tablet.Keyspace]; !keyspaceExists {
 			if err := tm.TopoServer.RebuildSrvVSchema(ctx, []string{tm.tabletAlias.Cell}); err != nil {
-				return nil, vterrors.Wrap(err, "initeKeyspaceShardTopo: failed to RebuildSrvVSchema")
+				return nil, vterrors.Wrap(err, "initKeyspaceShardTopo: failed to RebuildSrvVSchema")
 			}
 		}
 	case topo.IsErrType(err, topo.NoNode):
 		// There is no SrvSchema in this cell at all, so we definitely need to rebuild.
 		if err := tm.TopoServer.RebuildSrvVSchema(ctx, []string{tm.tabletAlias.Cell}); err != nil {
-			return nil, vterrors.Wrap(err, "initeKeyspaceShardTopo: failed to RebuildSrvVSchema")
+			return nil, vterrors.Wrap(err, "initKeyspaceShardTopo: failed to RebuildSrvVSchema")
 		}
 	default:
-		return nil, vterrors.Wrap(err, "initeKeyspaceShardTopo: failed to read SrvVSchema")
+		return nil, vterrors.Wrap(err, "initKeyspaceShardTopo: failed to read SrvVSchema")
 	}
 	return shardInfo, nil
 }
@@ -696,7 +717,7 @@ func (tm *TabletManager) checkMysql(ctx context.Context) error {
 		tm.tmState.UpdateTablet(func(tablet *topodatapb.Tablet) {
 			tablet.MysqlHostname = tablet.Hostname
 		})
-		mysqlPort, err := tm.MysqlDaemon.GetMysqlPort()
+		mysqlPort, err := tm.MysqlDaemon.GetMysqlPort(ctx)
 		if err != nil {
 			log.Warningf("Cannot get current mysql port, will keep retrying every %v: %v", mysqlPortRetryInterval, err)
 			go tm.findMysqlPort(mysqlPortRetryInterval)
@@ -709,10 +730,18 @@ func (tm *TabletManager) checkMysql(ctx context.Context) error {
 	return nil
 }
 
+const portCheckTimeout = 5 * time.Second
+
+func (tm *TabletManager) getMysqlPort() (int32, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), portCheckTimeout)
+	defer cancel()
+	return tm.MysqlDaemon.GetMysqlPort(ctx)
+}
+
 func (tm *TabletManager) findMysqlPort(retryInterval time.Duration) {
 	for {
 		time.Sleep(retryInterval)
-		mport, err := tm.MysqlDaemon.GetMysqlPort()
+		mport, err := tm.getMysqlPort()
 		if err != nil || mport == 0 {
 			continue
 		}
@@ -762,7 +791,7 @@ func (tm *TabletManager) initTablet(ctx context.Context) error {
 	return nil
 }
 
-func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
+func (tm *TabletManager) handleRestore(ctx context.Context, config *tabletenv.TabletConfig) (bool, error) {
 	// Sanity check for inconsistent flags
 	if tm.Cnf == nil && restoreFromBackup {
 		return false, fmt.Errorf("you cannot enable --restore_from_backup without a my.cnf file")
@@ -774,9 +803,6 @@ func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
 	// Restore in the background
 	if restoreFromBackup {
 		go func() {
-			// Open the state manager after restore is done.
-			defer tm.tmState.Open()
-
 			// Zero date will cause us to use the latest, which is the default
 			backupTime := time.Time{}
 			// Or if a backup timestamp was specified then we use the last backup taken at or before that time
@@ -798,14 +824,39 @@ func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
 			}
 			// restoreFromBackup will just be a regular action
 			// (same as if it was triggered remotely)
-			if err := tm.RestoreData(ctx, logutil.NewConsoleLogger(), waitForBackupInterval, false /* deleteBeforeRestore */, backupTime, restoreToTimestamp, restoreToPos); err != nil {
+			if err := tm.RestoreData(ctx, logutil.NewConsoleLogger(), waitForBackupInterval, false /* deleteBeforeRestore */, backupTime, restoreToTimestamp, restoreToPos, mysqlShutdownTimeout); err != nil {
 				log.Exitf("RestoreFromBackup failed: %v", err)
 			}
+
+			// Make sure we have the correct privileges for the DBA user before we start the state manager.
+			err := tm.waitForDBAGrants(config, mysqlctl.DbaGrantWaitTime)
+			if err != nil {
+				log.Exitf("Failed waiting for DBA grants: %v", err)
+			}
+
+			// Open the state manager after restore is done.
+			tm.tmState.Open()
 		}()
 		return true, nil
 	}
 
 	return false, nil
+}
+
+// waitForDBAGrants waits for DBA user to have the required privileges to function properly.
+func (tm *TabletManager) waitForDBAGrants(config *tabletenv.TabletConfig, waitTime time.Duration) (err error) {
+	// We should close the _waitForGrantsComplete channel in the end to signify that the wait for dba grants has completed.
+	defer func() {
+		if err == nil {
+			close(tm._waitForGrantsComplete)
+		}
+	}()
+	// We don't wait for grants if the tablet is externally managed. Permissions
+	// are then the responsibility of the DBA.
+	if config == nil || config.DB.HasGlobalSettings() || waitTime == 0 {
+		return nil
+	}
+	return tm.MysqlDaemon.WaitForDBAGrants(context.Background(), waitTime)
 }
 
 func (tm *TabletManager) exportStats() {
@@ -830,7 +881,7 @@ func (tm *TabletManager) withRetry(ctx context.Context, description string, work
 	backoff := 1 * time.Second
 	for {
 		err := work()
-		if err == nil || err == context.Canceled || err == context.DeadlineExceeded {
+		if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return err
 		}
 
@@ -842,8 +893,7 @@ func (tm *TabletManager) withRetry(ctx context.Context, description string, work
 			// Exponential backoff with 1.3 as a factor,
 			// and randomized down by at most 20
 			// percent. The generated time series looks
-			// good.  Also note rand.Seed is called at
-			// init() time in binlog_players.go.
+			// good.
 			f := float64(backoff) * 1.3
 			f -= f * 0.2 * rand.Float64()
 			backoff = time.Duration(f)
@@ -924,12 +974,12 @@ func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType t
 
 	tablet.Type = tabletType
 
-	semiSyncAction, err := tm.convertBoolToSemiSyncAction(reparentutil.IsReplicaSemiSync(durability, currentPrimary.Tablet, tablet))
+	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, reparentutil.IsReplicaSemiSync(durability, currentPrimary.Tablet, tablet))
 	if err != nil {
 		return nil, err
 	}
 
-	if err := tm.fixSemiSync(tabletType, semiSyncAction); err != nil {
+	if err := tm.fixSemiSync(ctx, tabletType, semiSyncAction); err != nil {
 		return nil, err
 	}
 
@@ -938,7 +988,7 @@ func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType t
 		log.Warningf("primary tablet in the shard record does not have mysql hostname specified, possibly because that tablet has been shut down.")
 		return nil, nil
 	}
-	if err := tm.MysqlDaemon.SetReplicationSource(ctx, currentPrimary.Tablet.MysqlHostname, currentPrimary.Tablet.MysqlPort, true /* stopReplicationBefore */, true /* startReplicationAfter */); err != nil {
+	if err := tm.MysqlDaemon.SetReplicationSource(ctx, currentPrimary.Tablet.MysqlHostname, currentPrimary.Tablet.MysqlPort, 0, true, true); err != nil {
 		return nil, vterrors.Wrap(err, "MysqlDaemon.SetReplicationSource failed")
 	}
 

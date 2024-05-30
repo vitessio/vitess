@@ -17,6 +17,7 @@ limitations under the License.
 package datetime
 
 import (
+	"strings"
 	"time"
 )
 
@@ -245,7 +246,7 @@ func daysIn(m time.Month, year int) int {
 }
 
 func isLeap(year int) bool {
-	return year%4 == 0 && (year%100 != 0 || year%400 == 0)
+	return year%4 == 0 && (year%100 != 0 || year%400 == 0) && (year != 0)
 }
 
 func daysInYear(year int) int {
@@ -285,7 +286,14 @@ func parseNanoseconds[bytes []byte | string](value bytes, nbytes int) (ns int, l
 }
 
 const (
-	secondsPerMinute = 60
-	secondsPerHour   = 60 * secondsPerMinute
-	secondsPerDay    = 24 * secondsPerHour
+	durationPerDay = 24 * time.Hour
 )
+
+// SizeAndScaleFromString
+func SizeFromString(s string) int32 {
+	idx := strings.LastIndex(s, ".")
+	if idx == -1 {
+		return 0
+	}
+	return int32(len(s[idx+1:]))
+}

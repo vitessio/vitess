@@ -18,9 +18,10 @@
 
 ## Checklist
 
--   [ ] "Backport to:" labels have been added if this change should be back-ported
+-   [ ] "Backport to:" labels have been added if this change should be back-ported to release branches
+-   [ ] If this change is to be back-ported to previous releases, a justification is included in the PR description
 -   [ ] Tests were added or are not required
--   [ ] Did the new or modified tests pass consistently locally and on the CI
+-   [ ] Did the new or modified tests pass consistently locally and on CI?
 -   [ ] Documentation was added or is not required
 
 ## Deployment Notes

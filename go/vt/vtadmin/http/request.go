@@ -77,6 +77,25 @@ func (r Request) ParseQueryParamAsUint32(name string, defaultVal uint32) (uint32
 	return defaultVal, nil
 }
 
+// ParseQueryParamAsInt32 attempts to parse the query parameter of the given
+// name into a uint32 value. If the parameter is not set, the provided default
+// value is returned.
+func (r Request) ParseQueryParamAsInt32(name string, defaultVal int32) (int32, error) {
+	if param := r.URL.Query().Get(name); param != "" {
+		val, err := strconv.ParseInt(param, 10, 32)
+		if err != nil {
+			return defaultVal, &errors.BadRequest{
+				Err:        err,
+				ErrDetails: fmt.Sprintf("could not parse query parameter %s (= %v) into int32 value", name, param),
+			}
+		}
+
+		return int32(val), nil
+	}
+
+	return defaultVal, nil
+}
+
 // Vars is a mapping of the route variable values in a given request.
 //
 // See (gorilla/mux).Vars for details. We define a type here to add some

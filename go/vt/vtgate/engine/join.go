@@ -17,6 +17,7 @@ limitations under the License.
 package engine
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"strings"
@@ -61,7 +62,7 @@ func (jn *Join) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[st
 	result := &sqltypes.Result{}
 	if len(lresult.Rows) == 0 && wantfields {
 		for k, col := range jn.Vars {
-			joinVars[k] = bindvarForType(lresult.Fields[col].Type)
+			joinVars[k] = bindvarForType(lresult.Fields[col])
 		}
 		rresult, err := jn.Right.GetFields(ctx, vcursor, combineVars(bindVars, joinVars))
 		if err != nil {
@@ -95,19 +96,21 @@ func (jn *Join) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[st
 	return result, nil
 }
 
-func bindvarForType(t querypb.Type) *querypb.BindVariable {
+func bindvarForType(field *querypb.Field) *querypb.BindVariable {
 	bv := &querypb.BindVariable{
-		Type:  t,
+		Type:  field.Type,
 		Value: nil,
 	}
-	switch t {
+	switch field.Type {
 	case querypb.Type_INT8, querypb.Type_UINT8, querypb.Type_INT16, querypb.Type_UINT16,
 		querypb.Type_INT32, querypb.Type_UINT32, querypb.Type_INT64, querypb.Type_UINT64:
 		bv.Value = []byte("0")
 	case querypb.Type_FLOAT32, querypb.Type_FLOAT64:
 		bv.Value = []byte("0e0")
 	case querypb.Type_DECIMAL:
-		bv.Value = []byte("0.0")
+		size := max(1, int(field.ColumnLength-field.Decimals))
+		scale := max(1, int(field.Decimals))
+		bv.Value = append(append(bytes.Repeat([]byte{'0'}, size), byte('.')), bytes.Repeat([]byte{'0'}, scale)...)
 	default:
 		return sqltypes.NullBindVariable
 	}
@@ -225,7 +228,7 @@ func joinFields(lfields, rfields []*querypb.Field, cols []int) []*querypb.Field 
 	return fields
 }
 
-func joinRows(lrow, rrow []sqltypes.Value, cols []int) []sqltypes.Value {
+func joinRows(lrow, rrow sqltypes.Row, cols []int) sqltypes.Row {
 	row := make([]sqltypes.Value, len(cols))
 	for i, index := range cols {
 		if index < 0 {

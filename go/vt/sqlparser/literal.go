@@ -87,8 +87,8 @@ func LiteralToValue(lit *Literal) (sqltypes.Value, error) {
 		buf := datetime.Date_YYYY_MM_DD.Format(datetime.DateTime{Date: d}, 0)
 		return sqltypes.NewDate(hack.String(buf)), nil
 	case TimeVal:
-		t, l, ok := datetime.ParseTime(lit.Val, -1)
-		if !ok {
+		t, l, state := datetime.ParseTime(lit.Val, -1)
+		if state != datetime.TimeOK {
 			return sqltypes.Value{}, fmt.Errorf("invalid time literal: %v", lit.Val)
 		}
 		buf := datetime.Time_hh_mm_ss.Format(datetime.DateTime{Time: t}, uint8(l))

@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"sort"
 	"strings"
 	"sync"
@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -74,6 +75,16 @@ var (
 		"inorder": TabletPickerTabletOrder_InOrder,
 	}
 )
+
+// BuildTabletTypesString is a helper to build a serialized string representation of
+// the tablet type(s) and optional in order clause for later use with the TabletPicker.
+func BuildTabletTypesString(tabletTypes []topodatapb.TabletType, tabletSelectionPreference tabletmanagerdatapb.TabletSelectionPreference) string {
+	tabletTypesStr := topoproto.MakeStringTypeCSV(tabletTypes)
+	if tabletSelectionPreference == tabletmanagerdatapb.TabletSelectionPreference_INORDER {
+		tabletTypesStr = InOrderHint + tabletTypesStr
+	}
+	return tabletTypesStr
+}
 
 // GetTabletPickerRetryDelay synchronizes changes to tabletPickerRetryDelay. Used in tests only at the moment
 func GetTabletPickerRetryDelay() time.Duration {
@@ -287,7 +298,7 @@ func (tp *TabletPicker) orderByTabletType(candidates []*topo.TabletInfo) []*topo
 	sort.Slice(candidates, func(i, j int) bool {
 		if orderMap[candidates[i].Type] == orderMap[candidates[j].Type] {
 			// identical tablet types: randomize order of tablets for this type
-			return rand.Intn(2) == 0 // 50% chance
+			return rand.IntN(2) == 0 // 50% chance
 		}
 		return orderMap[candidates[i].Type] < orderMap[candidates[j].Type]
 	})
@@ -428,7 +439,7 @@ func (tp *TabletPicker) GetMatchingTablets(ctx context.Context) []*topo.TabletIn
 
 	shortCtx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancel()
-	tabletMap, err := tp.ts.GetTabletMap(shortCtx, aliases)
+	tabletMap, err := tp.ts.GetTabletMap(shortCtx, aliases, nil)
 	if err != nil {
 		log.Warningf("Error fetching tablets from topo: %v", err)
 		// If we get a partial result we can still use it, otherwise return.
@@ -446,7 +457,7 @@ func (tp *TabletPicker) GetMatchingTablets(ctx context.Context) []*topo.TabletIn
 			log.Warningf("Tablet picker failed to load tablet %v", tabletAlias)
 		} else if topoproto.IsTypeInList(tabletInfo.Type, tp.tabletTypes) {
 			// Try to connect to the tablet and confirm that it's usable.
-			if conn, err := tabletconn.GetDialer()(tabletInfo.Tablet, grpcclient.FailFast(true)); err == nil {
+			if conn, err := tabletconn.GetDialer()(ctx, tabletInfo.Tablet, grpcclient.FailFast(true)); err == nil {
 				// Ensure that the tablet is healthy and serving.
 				shortCtx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 				defer cancel()

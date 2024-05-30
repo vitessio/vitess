@@ -204,8 +204,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfGeomFromWKBExpr(in, f)
 	case *GeomPropertyFuncExpr:
 		return VisitRefOfGeomPropertyFuncExpr(in, f)
-	case GroupBy:
-		return VisitGroupBy(in, f)
+	case *GroupBy:
+		return VisitRefOfGroupBy(in, f)
 	case *GroupConcatExpr:
 		return VisitRefOfGroupConcatExpr(in, f)
 	case IdentifierCI:
@@ -422,6 +422,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfRollback(in, f)
 	case RootNode:
 		return VisitRootNode(in, f)
+	case *RowAlias:
+		return VisitRefOfRowAlias(in, f)
 	case *SRollback:
 		return VisitRefOfSRollback(in, f)
 	case *Savepoint:
@@ -884,6 +886,9 @@ func VisitRefOfAvg(in *Avg, f Visit) error {
 	if err := VisitExpr(in.Arg, f); err != nil {
 		return err
 	}
+	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
+		return err
+	}
 	return nil
 }
 func VisitRefOfBegin(in *Begin, f Visit) error {
@@ -938,6 +943,9 @@ func VisitRefOfBitAnd(in *BitAnd, f Visit) error {
 	if err := VisitExpr(in.Arg, f); err != nil {
 		return err
 	}
+	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
+		return err
+	}
 	return nil
 }
 func VisitRefOfBitOr(in *BitOr, f Visit) error {
@@ -950,6 +958,9 @@ func VisitRefOfBitOr(in *BitOr, f Visit) error {
 	if err := VisitExpr(in.Arg, f); err != nil {
 		return err
 	}
+	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
+		return err
+	}
 	return nil
 }
 func VisitRefOfBitXor(in *BitXor, f Visit) error {
@@ -960,6 +971,9 @@ func VisitRefOfBitXor(in *BitXor, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.Arg, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
 		return err
 	}
 	return nil
@@ -1105,12 +1119,6 @@ func VisitRefOfColumnType(in *ColumnType, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitRefOfLiteral(in.Length, f); err != nil {
-		return err
-	}
-	if err := VisitRefOfLiteral(in.Scale, f); err != nil {
-		return err
-	}
 	return nil
 }
 func VisitColumns(in Columns, f Visit) error {
@@ -1218,12 +1226,6 @@ func VisitRefOfConvertType(in *ConvertType, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitRefOfLiteral(in.Length, f); err != nil {
-		return err
-	}
-	if err := VisitRefOfLiteral(in.Scale, f); err != nil {
-		return err
-	}
 	return nil
 }
 func VisitRefOfConvertUsingExpr(in *ConvertUsingExpr, f Visit) error {
@@ -1248,6 +1250,9 @@ func VisitRefOfCount(in *Count, f Visit) error {
 	if err := VisitExprs(in.Args, f); err != nil {
 		return err
 	}
+	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
+		return err
+	}
 	return nil
 }
 func VisitRefOfCountStar(in *CountStar, f Visit) error {
@@ -1255,6 +1260,9 @@ func VisitRefOfCountStar(in *CountStar, f Visit) error {
 		return nil
 	}
 	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
 		return err
 	}
 	return nil
@@ -1377,10 +1385,12 @@ func VisitRefOfDelete(in *Delete, f Visit) error {
 	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
 		return err
 	}
-	if err := VisitTableNames(in.Targets, f); err != nil {
-		return err
+	for _, el := range in.TableExprs {
+		if err := VisitTableExpr(el, f); err != nil {
+			return err
+		}
 	}
-	if err := VisitTableExprs(in.TableExprs, f); err != nil {
+	if err := VisitTableNames(in.Targets, f); err != nil {
 		return err
 	}
 	if err := VisitPartitions(in.Partitions, f); err != nil {
@@ -1684,7 +1694,7 @@ func VisitRefOfFuncExpr(in *FuncExpr, f Visit) error {
 	if err := VisitIdentifierCI(in.Name, f); err != nil {
 		return err
 	}
-	if err := VisitSelectExprs(in.Exprs, f); err != nil {
+	if err := VisitExprs(in.Exprs, f); err != nil {
 		return err
 	}
 	return nil
@@ -1872,14 +1882,14 @@ func VisitRefOfGeomPropertyFuncExpr(in *GeomPropertyFuncExpr, f Visit) error {
 	}
 	return nil
 }
-func VisitGroupBy(in GroupBy, f Visit) error {
+func VisitRefOfGroupBy(in *GroupBy, f Visit) error {
 	if in == nil {
 		return nil
 	}
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	for _, el := range in {
+	for _, el := range in.Exprs {
 		if err := VisitExpr(el, f); err != nil {
 			return err
 		}
@@ -1991,6 +2001,9 @@ func VisitRefOfInsert(in *Insert, f Visit) error {
 		return err
 	}
 	if err := VisitInsertRows(in.Rows, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfRowAlias(in.RowAlias, f); err != nil {
 		return err
 	}
 	if err := VisitOnDup(in.OnDup, f); err != nil {
@@ -2660,6 +2673,9 @@ func VisitRefOfMax(in *Max, f Visit) error {
 	if err := VisitExpr(in.Arg, f); err != nil {
 		return err
 	}
+	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
+		return err
+	}
 	return nil
 }
 func VisitRefOfMemberOfExpr(in *MemberOfExpr, f Visit) error {
@@ -2685,6 +2701,9 @@ func VisitRefOfMin(in *Min, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.Arg, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
 		return err
 	}
 	return nil
@@ -3415,6 +3434,21 @@ func VisitRootNode(in RootNode, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfRowAlias(in *RowAlias, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitIdentifierCS(in.TableName, f); err != nil {
+		return err
+	}
+	if err := VisitColumns(in.Columns, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfSRollback(in *SRollback, f Visit) error {
 	if in == nil {
 		return nil
@@ -3463,7 +3497,7 @@ func VisitRefOfSelect(in *Select, f Visit) error {
 	if err := VisitRefOfWhere(in.Where, f); err != nil {
 		return err
 	}
-	if err := VisitGroupBy(in.GroupBy, f); err != nil {
+	if err := VisitRefOfGroupBy(in.GroupBy, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfWhere(in.Having, f); err != nil {
@@ -3665,6 +3699,9 @@ func VisitRefOfStd(in *Std, f Visit) error {
 	if err := VisitExpr(in.Arg, f); err != nil {
 		return err
 	}
+	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
+		return err
+	}
 	return nil
 }
 func VisitRefOfStdDev(in *StdDev, f Visit) error {
@@ -3675,6 +3712,9 @@ func VisitRefOfStdDev(in *StdDev, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.Arg, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
 		return err
 	}
 	return nil
@@ -3689,6 +3729,9 @@ func VisitRefOfStdPop(in *StdPop, f Visit) error {
 	if err := VisitExpr(in.Arg, f); err != nil {
 		return err
 	}
+	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
+		return err
+	}
 	return nil
 }
 func VisitRefOfStdSamp(in *StdSamp, f Visit) error {
@@ -3699,6 +3742,9 @@ func VisitRefOfStdSamp(in *StdSamp, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.Arg, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
 		return err
 	}
 	return nil
@@ -3824,6 +3870,9 @@ func VisitRefOfSum(in *Sum, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.Arg, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
 		return err
 	}
 	return nil
@@ -4014,8 +4063,10 @@ func VisitRefOfUpdate(in *Update, f Visit) error {
 	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
 		return err
 	}
-	if err := VisitTableExprs(in.TableExprs, f); err != nil {
-		return err
+	for _, el := range in.TableExprs {
+		if err := VisitTableExpr(el, f); err != nil {
+			return err
+		}
 	}
 	if err := VisitUpdateExprs(in.Exprs, f); err != nil {
 		return err
@@ -4188,6 +4239,9 @@ func VisitRefOfVarPop(in *VarPop, f Visit) error {
 	if err := VisitExpr(in.Arg, f); err != nil {
 		return err
 	}
+	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
+		return err
+	}
 	return nil
 }
 func VisitRefOfVarSamp(in *VarSamp, f Visit) error {
@@ -4198,6 +4252,9 @@ func VisitRefOfVarSamp(in *VarSamp, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.Arg, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
 		return err
 	}
 	return nil
@@ -4222,6 +4279,9 @@ func VisitRefOfVariance(in *Variance, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.Arg, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
 		return err
 	}
 	return nil

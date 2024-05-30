@@ -31,6 +31,8 @@ import (
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/ptr"
+	"vitess.io/vitess/go/vt/vtenv"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
@@ -92,6 +94,7 @@ type RowDiff struct {
 
 // vdiff contains the metadata for performing vdiff for one workflow.
 type vdiff struct {
+	env            *vtenv.Environment
 	ts             *trafficSwitcher
 	sourceCell     string
 	targetCell     string
@@ -114,9 +117,10 @@ type vdiff struct {
 
 // compareColInfo contains the metadata for a column of the table being diffed
 type compareColInfo struct {
-	colIndex  int           // index of the column in the filter's select
-	collation collations.ID // is the collation of the column, if any
-	isPK      bool          // is this column part of the primary key
+	colIndex  int                       // index of the column in the filter's select
+	collation collations.ID             // is the collation of the column, if any
+	values    *evalengine.EnumSetValues // is the list of enum or set values for the column, if any
+	isPK      bool                      // is this column part of the primary key
 }
 
 // tableDiffer performs a diff for one table in the workflow.
@@ -142,6 +146,9 @@ type tableDiffer struct {
 	// source Primitive and targetPrimitive are used for streaming
 	sourcePrimitive engine.Primitive
 	targetPrimitive engine.Primitive
+
+	collationEnv *collations.Environment
+	parser       *sqlparser.Parser
 }
 
 // shardStreamer streams rows from one shard. This works for
@@ -207,6 +214,7 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 	}
 	// Initialize vdiff
 	df := &vdiff{
+		env:            wr.env,
 		ts:             ts,
 		sourceCell:     sourceCell,
 		targetCell:     targetCell,
@@ -241,7 +249,7 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 	if err != nil {
 		return nil, vterrors.Wrap(err, "GetSchema")
 	}
-	if err = df.buildVDiffPlan(ctx, oneFilter, schm, df.tables); err != nil {
+	if err = df.buildVDiffPlan(oneFilter, schm, df.tables); err != nil {
 		return nil, vterrors.Wrap(err, "buildVDiffPlan")
 	}
 
@@ -369,11 +377,11 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 		diffReports[table] = dr
 	}
 	if format == "json" {
-		json, err := json.MarshalIndent(diffReports, "", "")
+		j, err := json.MarshalIndent(diffReports, "", "")
 		if err != nil {
 			wr.Logger().Printf("Error converting report to json: %v", err.Error())
 		}
-		jsonOutput += string(json)
+		jsonOutput += string(j)
 		wr.logger.Printf("%s", jsonOutput)
 	} else {
 		for table, dr := range diffReports {
@@ -443,7 +451,7 @@ func (df *vdiff) diffTable(ctx context.Context, wr *Wrangler, table string, td *
 }
 
 // buildVDiffPlan builds all the differs.
-func (df *vdiff) buildVDiffPlan(ctx context.Context, filter *binlogdatapb.Filter, schm *tabletmanagerdatapb.SchemaDefinition, tablesToInclude []string) error {
+func (df *vdiff) buildVDiffPlan(filter *binlogdatapb.Filter, schm *tabletmanagerdatapb.SchemaDefinition, tablesToInclude []string) error {
 	df.differs = make(map[string]*tableDiffer)
 	for _, table := range schm.TableDefinitions {
 		rule, err := vreplication.MatchTable(table.Name, filter)
@@ -485,8 +493,8 @@ func (df *vdiff) buildVDiffPlan(ctx context.Context, filter *binlogdatapb.Filter
 
 // findPKs identifies PKs, determines any collations to be used for
 // them, and removes them from the columns used for data comparison.
-func findPKs(table *tabletmanagerdatapb.TableDefinition, targetSelect *sqlparser.Select, td *tableDiffer) (sqlparser.OrderBy, error) {
-	columnCollations, err := getColumnCollations(table)
+func findPKs(env *vtenv.Environment, table *tabletmanagerdatapb.TableDefinition, targetSelect *sqlparser.Select, td *tableDiffer) (sqlparser.OrderBy, error) {
+	columnCollations, columnValues, err := getColumnCollations(env, table)
 	if err != nil {
 		return nil, err
 	}
@@ -507,6 +515,7 @@ func findPKs(table *tabletmanagerdatapb.TableDefinition, targetSelect *sqlparser
 			if strings.EqualFold(pk, colname) {
 				td.compareCols[i].isPK = true
 				td.compareCols[i].collation = columnCollations[strings.ToLower(colname)]
+				td.compareCols[i].values = columnValues[strings.ToLower(colname)]
 				td.comparePKs = append(td.comparePKs, td.compareCols[i])
 				td.selectPks = append(td.selectPks, i)
 				// We'll be comparing pks separately. So, remove them from compareCols.
@@ -528,51 +537,52 @@ func findPKs(table *tabletmanagerdatapb.TableDefinition, targetSelect *sqlparser
 }
 
 // getColumnCollations determines the proper collation to use for each
-// column in the table definition leveraging MySQL's collation inheritence
+// column in the table definition leveraging MySQL's collation inheritance
 // rules.
-func getColumnCollations(table *tabletmanagerdatapb.TableDefinition) (map[string]collations.ID, error) {
-	collationEnv := collations.Local()
-	createstmt, err := sqlparser.Parse(table.Schema)
+func getColumnCollations(venv *vtenv.Environment, table *tabletmanagerdatapb.TableDefinition) (map[string]collations.ID, map[string]*evalengine.EnumSetValues, error) {
+	createstmt, err := venv.Parser().Parse(table.Schema)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	createtable, ok := createstmt.(*sqlparser.CreateTable)
 	if !ok {
-		return nil, vterrors.Wrapf(err, "invalid table schema %s for table %s", table.Schema, table.Name)
+		return nil, nil, vterrors.Wrapf(err, "invalid table schema %s for table %s", table.Schema, table.Name)
 	}
-	tableschema, err := schemadiff.NewCreateTableEntity(createtable)
+	env := schemadiff.NewEnv(venv, venv.CollationEnv().DefaultConnectionCharset())
+	tableschema, err := schemadiff.NewCreateTableEntity(env, createtable)
 	if err != nil {
-		return nil, vterrors.Wrapf(err, "invalid table schema %s for table %s", table.Schema, table.Name)
+		return nil, nil, vterrors.Wrapf(err, "invalid table schema %s for table %s", table.Schema, table.Name)
 	}
 	tableCharset := tableschema.GetCharset()
 	tableCollation := tableschema.GetCollation()
 	// If no explicit collation is specified for the column then we need
-	// to walk the inheritence tree.
+	// to walk the inheritance tree.
 	getColumnCollation := func(column *sqlparser.ColumnDefinition) collations.ID {
 		// If there's an explicit collation listed then use that.
 		if column.Type.Options.Collate != "" {
-			return collationEnv.LookupByName(strings.ToLower(column.Type.Options.Collate))
+			return env.CollationEnv().LookupByName(strings.ToLower(column.Type.Options.Collate))
 		}
 		// If the column has a charset listed then the default collation
 		// for that charset is used.
 		if column.Type.Charset.Name != "" {
-			return collationEnv.DefaultCollationForCharset(strings.ToLower(column.Type.Charset.Name))
+			return env.CollationEnv().DefaultCollationForCharset(strings.ToLower(column.Type.Charset.Name))
 		}
 		// If the table has an explicit collation listed then use that.
 		if tableCollation != "" {
-			return collationEnv.LookupByName(strings.ToLower(tableCollation))
+			return env.CollationEnv().LookupByName(strings.ToLower(tableCollation))
 		}
 		// If the table has a charset listed then use the default collation
 		// for that charset.
 		if tableCharset != "" {
-			return collationEnv.DefaultCollationForCharset(strings.ToLower(tableCharset))
+			return env.CollationEnv().DefaultCollationForCharset(strings.ToLower(tableCharset))
 		}
 		// The table is using the global default charset and collation and
-		// we inherite that.
-		return collations.Default()
+		// we inherit that.
+		return env.CollationEnv().DefaultConnectionCharset()
 	}
 
 	columnCollations := make(map[string]collations.ID)
+	columnValues := make(map[string]*evalengine.EnumSetValues)
 	for _, column := range tableschema.TableSpec.Columns {
 		// If it's not a character based type then no collation is used.
 		if !sqltypes.IsQuoted(column.Type.SQLType()) {
@@ -580,8 +590,12 @@ func getColumnCollations(table *tabletmanagerdatapb.TableDefinition) (map[string
 			continue
 		}
 		columnCollations[column.Name.Lowered()] = getColumnCollation(column)
+		if len(column.Type.EnumValues) == 0 {
+			continue
+		}
+		columnValues[column.Name.Lowered()] = ptr.Of(evalengine.EnumSetValues(column.Type.EnumValues))
 	}
-	return columnCollations, nil
+	return columnCollations, columnValues, nil
 }
 
 // If SourceTimeZone is defined in the BinlogSource, the VReplication workflow would have converted the datetime
@@ -605,10 +619,10 @@ func (df *vdiff) adjustForSourceTimeZone(targetSelectExprs sqlparser.SelectExprs
 				if fieldType == querypb.Type_DATETIME {
 					convertTZFuncExpr = &sqlparser.FuncExpr{
 						Name: sqlparser.NewIdentifierCI("convert_tz"),
-						Exprs: sqlparser.SelectExprs{
-							expr,
-							&sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(df.targetTimeZone)},
-							&sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(df.sourceTimeZone)},
+						Exprs: sqlparser.Exprs{
+							colAs,
+							sqlparser.NewStrLiteral(df.targetTimeZone),
+							sqlparser.NewStrLiteral(df.sourceTimeZone),
 						},
 					}
 					log.Infof("converting datetime column %s using convert_tz()", colName)
@@ -646,7 +660,7 @@ func getColumnNameForSelectExpr(selectExpression sqlparser.SelectExpr) (string, 
 
 // buildTablePlan builds one tableDiffer.
 func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, query string) (*tableDiffer, error) {
-	statement, err := sqlparser.Parse(query)
+	statement, err := df.env.Parser().Parse(query)
 	if err != nil {
 		return nil, err
 	}
@@ -655,7 +669,9 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 		return nil, fmt.Errorf("unexpected: %v", sqlparser.String(statement))
 	}
 	td := &tableDiffer{
-		targetTable: table.Name,
+		targetTable:  table.Name,
+		collationEnv: df.env.CollationEnv(),
+		parser:       df.env.Parser(),
 	}
 	sourceSelect := &sqlparser.Select{}
 	targetSelect := &sqlparser.Select{}
@@ -672,14 +688,14 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 			}
 		case *sqlparser.AliasedExpr:
 			var targetCol *sqlparser.ColName
-			if !selExpr.As.IsEmpty() {
-				targetCol = &sqlparser.ColName{Name: selExpr.As}
-			} else {
+			if selExpr.As.IsEmpty() {
 				if colAs, ok := selExpr.Expr.(*sqlparser.ColName); ok {
 					targetCol = colAs
 				} else {
 					return nil, fmt.Errorf("expression needs an alias: %v", sqlparser.String(selExpr))
 				}
+			} else {
+				targetCol = &sqlparser.ColName{Name: selExpr.As}
 			}
 			// If the input was "select a as b", then source will use "a" and target will use "b".
 			sourceSelect.SelectExprs = append(sourceSelect.SelectExprs, selExpr)
@@ -696,7 +712,7 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 					aggregates = append(aggregates, engine.NewAggregateParam(
 						/*opcode*/ opcode.AggregateSum,
 						/*offset*/ len(sourceSelect.SelectExprs)-1,
-						/*alias*/ ""))
+						/*alias*/ "", df.env.CollationEnv()))
 				}
 			}
 		default:
@@ -735,7 +751,7 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 		},
 	}
 
-	orderby, err := findPKs(table, targetSelect, td)
+	orderby, err := findPKs(df.env, table, targetSelect, td)
 	if err != nil {
 		return nil, err
 	}
@@ -751,14 +767,14 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 	td.sourceExpression = sqlparser.String(sourceSelect)
 	td.targetExpression = sqlparser.String(targetSelect)
 
-	td.sourcePrimitive = newMergeSorter(df.sources, td.comparePKs)
-	td.targetPrimitive = newMergeSorter(df.targets, td.comparePKs)
+	td.sourcePrimitive = newMergeSorter(df.sources, td.comparePKs, df.env.CollationEnv())
+	td.targetPrimitive = newMergeSorter(df.targets, td.comparePKs, df.env.CollationEnv())
 	// If there were aggregate expressions, we have to re-aggregate
 	// the results, which engine.OrderedAggregate can do.
 	if len(aggregates) != 0 {
 		td.sourcePrimitive = &engine.OrderedAggregate{
 			Aggregates:  aggregates,
-			GroupByKeys: pkColsToGroupByParams(td.pkCols),
+			GroupByKeys: pkColsToGroupByParams(td.pkCols, td.collationEnv),
 			Input:       td.sourcePrimitive,
 		}
 	}
@@ -766,16 +782,16 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 	return td, nil
 }
 
-func pkColsToGroupByParams(pkCols []int) []*engine.GroupByParams {
+func pkColsToGroupByParams(pkCols []int, collationEnv *collations.Environment) []*engine.GroupByParams {
 	var res []*engine.GroupByParams
 	for _, col := range pkCols {
-		res = append(res, &engine.GroupByParams{KeyCol: col, WeightStringCol: -1, Type: evalengine.UnknownType()})
+		res = append(res, &engine.GroupByParams{KeyCol: col, WeightStringCol: -1, Type: evalengine.Type{}, CollationEnv: collationEnv})
 	}
 	return res
 }
 
 // newMergeSorter creates an engine.MergeSort based on the shard streamers and pk columns.
-func newMergeSorter(participants map[string]*shardStreamer, comparePKs []compareColInfo) *engine.MergeSort {
+func newMergeSorter(participants map[string]*shardStreamer, comparePKs []compareColInfo, collationEnv *collations.Environment) *engine.MergeSort {
 	prims := make([]engine.StreamExecutor, 0, len(participants))
 	for _, participant := range participants {
 		prims = append(prims, participant)
@@ -784,11 +800,11 @@ func newMergeSorter(participants map[string]*shardStreamer, comparePKs []compare
 	for _, cpk := range comparePKs {
 		weightStringCol := -1
 		// if the collation is nil or unknown, use binary collation to compare as bytes
-		t := evalengine.Type{Type: sqltypes.Unknown, Coll: collations.CollationBinaryID}
+		var collation collations.ID = collations.CollationBinaryID
 		if cpk.collation != collations.Unknown {
-			t.Coll = cpk.collation
+			collation = cpk.collation
 		}
-		ob = append(ob, evalengine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol, Type: t})
+		ob = append(ob, evalengine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol, Type: evalengine.NewType(sqltypes.Unknown, collation), CollationEnv: collationEnv})
 	}
 	return &engine.MergeSort{
 		Primitives: prims,
@@ -960,7 +976,7 @@ func (df *vdiff) streamOne(ctx context.Context, keyspace, shard string, particip
 	// Wrap the streaming in a separate function so we can capture the error.
 	// This shows that the error will be set before the channels are closed.
 	participant.err = func() error {
-		conn, err := tabletconn.GetDialer()(participant.tablet, grpcclient.FailFast(false))
+		conn, err := tabletconn.GetDialer()(ctx, participant.tablet, grpcclient.FailFast(false))
 		if err != nil {
 			return err
 		}
@@ -996,7 +1012,7 @@ func (df *vdiff) streamOne(ctx context.Context, keyspace, shard string, particip
 	}()
 }
 
-// syncTargets fast-forwards the vreplication to the source snapshot positons
+// syncTargets fast-forwards the vreplication to the source snapshot positions
 // and waits for the selected tablets to catch up to that point.
 func (df *vdiff) syncTargets(ctx context.Context, filteredReplicationWaitTime time.Duration) error {
 	waitCtx, cancel := context.WithTimeout(ctx, filteredReplicationWaitTime)
@@ -1309,7 +1325,7 @@ func (td *tableDiffer) compare(sourceRow, targetRow []sqltypes.Value, cols []com
 		if col.collation == collations.Unknown {
 			collationID = collations.CollationBinaryID
 		}
-		c, err = evalengine.NullsafeCompare(sourceRow[compareIndex], targetRow[compareIndex], collationID)
+		c, err = evalengine.NullsafeCompare(sourceRow[compareIndex], targetRow[compareIndex], td.collationEnv, collationID, col.values)
 		if err != nil {
 			return 0, err
 		}
@@ -1323,7 +1339,7 @@ func (td *tableDiffer) compare(sourceRow, targetRow []sqltypes.Value, cols []com
 func (td *tableDiffer) genRowDiff(queryStmt string, row []sqltypes.Value, debug, onlyPks bool) (*RowDiff, error) {
 	drp := &RowDiff{}
 	drp.Row = make(map[string]sqltypes.Value)
-	statement, err := sqlparser.Parse(queryStmt)
+	statement, err := td.parser.Parse(queryStmt)
 	if err != nil {
 		return nil, err
 	}

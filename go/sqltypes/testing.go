@@ -17,12 +17,11 @@ limitations under the License.
 package sqltypes
 
 import (
-	"bytes"
 	crand "crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"strconv"
 	"strings"
 	"time"
@@ -77,7 +76,7 @@ func MakeTestResult(fields []*querypb.Field, rows ...string) *Result {
 	for i, row := range rows {
 		result.Rows[i] = make([]Value, len(fields))
 		for j, col := range split(row) {
-			if col == "null" {
+			if strings.ToLower(col) == "null" {
 				result.Rows[i][j] = NULL
 				continue
 			}
@@ -155,13 +154,13 @@ func TestTuple(vals ...Value) Value {
 // PrintResults prints []*Results into a string.
 // This function should only be used for testing.
 func PrintResults(results []*Result) string {
-	b := new(bytes.Buffer)
+	var b strings.Builder
 	for i, r := range results {
 		if i == 0 {
-			fmt.Fprintf(b, "%v", r)
+			fmt.Fprintf(&b, "%v", r)
 			continue
 		}
-		fmt.Fprintf(b, ", %v", r)
+		fmt.Fprintf(&b, ", %v", r)
 	}
 	return b.String()
 }
@@ -182,7 +181,7 @@ func TestRandomValues() (Value, Value) {
 }
 
 func randomNumericType(i int) Value {
-	r := rand.Intn(len(numericTypes))
+	r := rand.IntN(len(numericTypes))
 	return numericTypes[r](i)
 }
 
@@ -202,7 +201,7 @@ var numericTypes = []func(int) Value{
 type RandomGenerator func() Value
 
 func randomBytes() []byte {
-	b := make([]byte, rand.Intn(128))
+	b := make([]byte, rand.IntN(128))
 	_, _ = crand.Read(b)
 	return b
 }
@@ -212,13 +211,13 @@ var RandomGenerators = map[Type]RandomGenerator{
 		return NULL
 	},
 	Int8: func() Value {
-		return NewInt8(int8(rand.Intn(255)))
+		return NewInt8(int8(rand.IntN(255)))
 	},
 	Int32: func() Value {
-		return NewInt32(rand.Int31())
+		return NewInt32(rand.Int32())
 	},
 	Int64: func() Value {
-		return NewInt64(rand.Int63())
+		return NewInt64(rand.Int64())
 	},
 	Uint32: func() Value {
 		return NewUint32(rand.Uint32())
@@ -230,7 +229,7 @@ var RandomGenerators = map[Type]RandomGenerator{
 		return NewFloat64(rand.ExpFloat64())
 	},
 	Decimal: func() Value {
-		dec := fmt.Sprintf("%d.%d", rand.Intn(9999999999), rand.Intn(9999999999))
+		dec := fmt.Sprintf("%d.%d", rand.IntN(999999999), rand.IntN(999999999))
 		if rand.Int()&0x1 == 1 {
 			dec = "-" + dec
 		}
@@ -256,11 +255,11 @@ var RandomGenerators = map[Type]RandomGenerator{
 	},
 	TypeJSON: func() Value {
 		var j string
-		switch rand.Intn(6) {
+		switch rand.IntN(6) {
 		case 0:
 			j = "null"
 		case 1:
-			i := rand.Int63()
+			i := rand.Int64()
 			if rand.Int()&0x1 == 1 {
 				i = -i
 			}
@@ -280,6 +279,12 @@ var RandomGenerators = map[Type]RandomGenerator{
 		}
 		return v
 	},
+	Enum: func() Value {
+		return MakeTrusted(Enum, randEnum())
+	},
+	Set: func() Value {
+		return MakeTrusted(Set, randSet())
+	},
 }
 
 func randTime() time.Time {
@@ -287,6 +292,36 @@ func randTime() time.Time {
 	max := time.Date(2070, 1, 0, 0, 0, 0, 0, time.UTC).Unix()
 	delta := max - min
 
-	sec := rand.Int63n(delta) + min
+	sec := rand.Int64N(delta) + min
 	return time.Unix(sec, 0)
+}
+
+func randEnum() []byte {
+	enums := []string{
+		"xxsmall",
+		"xsmall",
+		"small",
+		"medium",
+		"large",
+		"xlarge",
+		"xxlarge",
+	}
+	return []byte(enums[rand.IntN(len(enums))])
+}
+
+func randSet() []byte {
+	set := []string{
+		"a",
+		"b",
+		"c",
+		"d",
+		"e",
+		"f",
+		"g",
+	}
+	rand.Shuffle(len(set), func(i, j int) {
+		set[i], set[j] = set[j], set[i]
+	})
+	set = set[:rand.IntN(len(set))]
+	return []byte(strings.Join(set, ","))
 }

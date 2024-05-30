@@ -31,14 +31,8 @@ import (
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
-
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
-
-// ErrConnPoolClosed is returned when the connection pool is closed.
-var ErrConnPoolClosed = vterrors.New(vtrpcpb.Code_INTERNAL, "internal error: unexpected: conn pool is closed")
 
 const (
 	getWithoutS = "GetWithoutSettings"
@@ -68,14 +62,14 @@ type Pool struct {
 // to publish stats only.
 func NewPool(env tabletenv.Env, name string, cfg tabletenv.ConnPoolConfig) *Pool {
 	cp := &Pool{
-		timeout: cfg.TimeoutSeconds.Get(),
+		timeout: cfg.Timeout,
 		env:     env,
 	}
 
 	config := smartconnpool.Config[*Conn]{
 		Capacity:        int64(cfg.Size),
-		IdleTimeout:     cfg.IdleTimeoutSeconds.Get(),
-		MaxLifetime:     cfg.MaxLifetimeSeconds.Get(),
+		IdleTimeout:     cfg.IdleTimeout,
+		MaxLifetime:     cfg.MaxLifetime,
 		RefreshInterval: mysqlctl.PoolDynamicHostnameResolution,
 	}
 
@@ -126,7 +120,7 @@ func (cp *Pool) Get(ctx context.Context, setting *smartconnpool.Setting) (*Poole
 	defer span.Finish()
 
 	if cp.isCallerIDAppDebug(ctx) {
-		conn, err := NewConn(ctx, cp.appDebugParams, cp.dbaPool, setting)
+		conn, err := NewConn(ctx, cp.appDebugParams, cp.dbaPool, setting, cp.env)
 		if err != nil {
 			return nil, err
 		}

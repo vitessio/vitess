@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
@@ -40,16 +41,20 @@ func TestConversion(t *testing.T) {
 		expressionsOut: e(evalengine.NewLiteralInt(1)),
 	}, {
 		expressionsIn:  "@@foo",
-		expressionsOut: e(evalengine.NewColumn(0, evalengine.UnknownType(), nil)),
+		expressionsOut: e(evalengine.NewColumn(0, evalengine.Type{}, nil)),
 	}}
 
+	venv := vtenv.NewTestEnv()
 	for _, tc := range queries {
 		t.Run(tc.expressionsIn, func(t *testing.T) {
-			statement, err := sqlparser.Parse("select " + tc.expressionsIn)
+			statement, err := sqlparser.NewTestParser().Parse("select " + tc.expressionsIn)
 			require.NoError(t, err)
 			slct := statement.(*sqlparser.Select)
 			exprs := extract(slct.SelectExprs)
-			ec := &expressionConverter{}
+			ec := &expressionConverter{
+				env:       venv,
+				collation: venv.CollationEnv().DefaultConnectionCharset(),
+			}
 			var result []evalengine.Expr
 			for _, expr := range exprs {
 				evalExpr, err := ec.convert(expr, false, false)

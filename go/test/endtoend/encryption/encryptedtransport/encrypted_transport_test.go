@@ -177,7 +177,7 @@ func TestSecureTransport(t *testing.T) {
 	setCreds(t, "vtgate-client-1", "vtgate-server")
 	ctx := context.Background()
 	request := getRequest("select * from vt_insert_test")
-	vc, err := getVitessClient(grpcAddress)
+	vc, err := getVitessClient(ctx, grpcAddress)
 	require.NoError(t, err)
 
 	qr, err := vc.Execute(ctx, request)
@@ -188,7 +188,7 @@ func TestSecureTransport(t *testing.T) {
 	// 'vtgate client 2' is not authorized to access vt_insert_test
 	setCreds(t, "vtgate-client-2", "vtgate-server")
 	request = getRequest("select * from vt_insert_test")
-	vc, err = getVitessClient(grpcAddress)
+	vc, err = getVitessClient(ctx, grpcAddress)
 	require.NoError(t, err)
 	qr, err = vc.Execute(ctx, request)
 	require.NoError(t, err)
@@ -217,7 +217,7 @@ func useEffectiveCallerID(ctx context.Context, t *testing.T) {
 	setSSLInfoEmpty()
 
 	// get vitess client
-	vc, err := getVitessClient(grpcAddress)
+	vc, err := getVitessClient(ctx, grpcAddress)
 	require.NoError(t, err)
 
 	// test with empty effective caller Id
@@ -266,7 +266,7 @@ func useEffectiveGroups(ctx context.Context, t *testing.T) {
 	setSSLInfoEmpty()
 
 	// get vitess client
-	vc, err := getVitessClient(grpcAddress)
+	vc, err := getVitessClient(ctx, grpcAddress)
 	require.NoError(t, err)
 
 	// test with empty effective caller Id
@@ -452,12 +452,12 @@ func tabletConnExtraArgs(name string) []string {
 	return args
 }
 
-func getVitessClient(addr string) (vtgateservicepb.VitessClient, error) {
+func getVitessClient(ctx context.Context, addr string) (vtgateservicepb.VitessClient, error) {
 	opt, err := grpcclient.SecureDialOption(grpcCert, grpcKey, grpcCa, "", grpcName)
 	if err != nil {
 		return nil, err
 	}
-	cc, err := grpcclient.Dial(addr, grpcclient.FailFast(false), opt)
+	cc, err := grpcclient.DialContext(ctx, addr, grpcclient.FailFast(false), opt)
 	if err != nil {
 		return nil, err
 	}

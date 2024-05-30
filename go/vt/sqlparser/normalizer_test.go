@@ -17,12 +17,12 @@ limitations under the License.
 package sqlparser
 
 import (
-	"bytes"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"reflect"
 	"regexp"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -75,14 +75,28 @@ func TestNormalize(t *testing.T) {
 	}, {
 		// float val
 		in:      "select * from t where foobar = 1.2",
-		outstmt: "select * from t where foobar = :foobar /* DECIMAL */",
+		outstmt: "select * from t where foobar = :foobar /* DECIMAL(2,1) */",
 		outbv: map[string]*querypb.BindVariable{
 			"foobar": sqltypes.DecimalBindVariable("1.2"),
 		},
 	}, {
+		// datetime val
+		in:      "select * from t where foobar = timestamp'2012-02-29 12:34:56.123456'",
+		outstmt: "select * from t where foobar = :foobar /* DATETIME(6) */",
+		outbv: map[string]*querypb.BindVariable{
+			"foobar": sqltypes.ValueBindVariable(sqltypes.NewDatetime("2012-02-29 12:34:56.123456")),
+		},
+	}, {
+		// time val
+		in:      "select * from t where foobar = time'12:34:56.123456'",
+		outstmt: "select * from t where foobar = :foobar /* TIME(6) */",
+		outbv: map[string]*querypb.BindVariable{
+			"foobar": sqltypes.ValueBindVariable(sqltypes.NewTime("12:34:56.123456")),
+		},
+	}, {
 		// multiple vals
 		in:      "select * from t where foo = 1.2 and bar = 2",
-		outstmt: "select * from t where foo = :foo /* DECIMAL */ and bar = :bar /* INT64 */",
+		outstmt: "select * from t where foo = :foo /* DECIMAL(2,1) */ and bar = :bar /* INT64 */",
 		outbv: map[string]*querypb.BindVariable{
 			"foo": sqltypes.DecimalBindVariable("1.2"),
 			"bar": sqltypes.Int64BindVariable(2),
@@ -379,10 +393,29 @@ func TestNormalize(t *testing.T) {
 			"v1": sqltypes.HexValBindVariable([]byte("x'31'")),
 			"v2": sqltypes.Int64BindVariable(31),
 		},
+	}, {
+		// ORDER BY and GROUP BY variable
+		in:      "select a, b from t group by 1, field(a,1,2,3) order by 1 asc, field(a,1,2,3)",
+		outstmt: "select a, b from t group by 1, field(a, :bv1 /* INT64 */, :bv2 /* INT64 */, :bv3 /* INT64 */) order by 1 asc, field(a, :bv1 /* INT64 */, :bv2 /* INT64 */, :bv3 /* INT64 */) asc",
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.Int64BindVariable(1),
+			"bv2": sqltypes.Int64BindVariable(2),
+			"bv3": sqltypes.Int64BindVariable(3),
+		},
+	}, {
+		// list in on duplicate key update
+		in:      "insert into t(a, b) values (1, 2) on duplicate key update b = if(values(b) in (1, 2), b, values(b))",
+		outstmt: "insert into t(a, b) values (:bv1 /* INT64 */, :bv2 /* INT64 */) on duplicate key update b = if(values(b) in ::bv3, b, values(b))",
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.Int64BindVariable(1),
+			"bv2": sqltypes.Int64BindVariable(2),
+			"bv3": sqltypes.TestBindVariable([]any{1, 2}),
+		},
 	}}
+	parser := NewTestParser()
 	for _, tc := range testcases {
 		t.Run(tc.in, func(t *testing.T) {
-			stmt, err := Parse(tc.in)
+			stmt, err := parser.Parse(tc.in)
 			require.NoError(t, err)
 			known := GetBindvars(stmt)
 			bv := make(map[string]*querypb.BindVariable)
@@ -407,9 +440,10 @@ func TestNormalizeInvalidDates(t *testing.T) {
 		in:  "select timestamp'foo'",
 		err: vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "Incorrect DATETIME value: '%s'", "foo"),
 	}}
+	parser := NewTestParser()
 	for _, tc := range testcases {
 		t.Run(tc.in, func(t *testing.T) {
-			stmt, err := Parse(tc.in)
+			stmt, err := parser.Parse(tc.in)
 			require.NoError(t, err)
 			known := GetBindvars(stmt)
 			bv := make(map[string]*querypb.BindVariable)
@@ -419,12 +453,13 @@ func TestNormalizeInvalidDates(t *testing.T) {
 }
 
 func TestNormalizeValidSQL(t *testing.T) {
+	parser := NewTestParser()
 	for _, tcase := range validSQL {
 		t.Run(tcase.input, func(t *testing.T) {
 			if tcase.partialDDL || tcase.ignoreNormalizerTest {
 				return
 			}
-			tree, err := Parse(tcase.input)
+			tree, err := parser.Parse(tcase.input)
 			require.NoError(t, err, tcase.input)
 			// Skip the test for the queries that do not run the normalizer
 			if !CanNormalize(tree) {
@@ -438,7 +473,7 @@ func TestNormalizeValidSQL(t *testing.T) {
 			if normalizerOutput == "otheradmin" || normalizerOutput == "otherread" {
 				return
 			}
-			_, err = Parse(normalizerOutput)
+			_, err = parser.Parse(normalizerOutput)
 			require.NoError(t, err, normalizerOutput)
 		})
 	}
@@ -454,7 +489,8 @@ func TestNormalizeOneCasae(t *testing.T) {
 	if testOne.input == "" {
 		t.Skip("empty test case")
 	}
-	tree, err := Parse(testOne.input)
+	parser := NewTestParser()
+	tree, err := parser.Parse(testOne.input)
 	require.NoError(t, err, testOne.input)
 	// Skip the test for the queries that do not run the normalizer
 	if !CanNormalize(tree) {
@@ -468,12 +504,13 @@ func TestNormalizeOneCasae(t *testing.T) {
 	if normalizerOutput == "otheradmin" || normalizerOutput == "otherread" {
 		return
 	}
-	_, err = Parse(normalizerOutput)
+	_, err = parser.Parse(normalizerOutput)
 	require.NoError(t, err, normalizerOutput)
 }
 
 func TestGetBindVars(t *testing.T) {
-	stmt, err := Parse("select * from t where :v1 = :v2 and :v2 = :v3 and :v4 in ::v5")
+	parser := NewTestParser()
+	stmt, err := parser.Parse("select * from t where :v1 = :v2 and :v2 = :v3 and :v4 in ::v5")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -497,8 +534,9 @@ Prior to skip:
 BenchmarkNormalize-8      500000              3620 ns/op            1461 B/op         55 allocs/op
 */
 func BenchmarkNormalize(b *testing.B) {
+	parser := NewTestParser()
 	sql := "select 'abcd', 20, 30.0, eid from a where 1=eid and name='3'"
-	ast, reservedVars, err := Parse2(sql)
+	ast, reservedVars, err := parser.Parse2(sql)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -508,6 +546,7 @@ func BenchmarkNormalize(b *testing.B) {
 }
 
 func BenchmarkNormalizeTraces(b *testing.B) {
+	parser := NewTestParser()
 	for _, trace := range []string{"django_queries.txt", "lobsters.sql.gz"} {
 		b.Run(trace, func(b *testing.B) {
 			queries := loadQueries(b, trace)
@@ -518,7 +557,7 @@ func BenchmarkNormalizeTraces(b *testing.B) {
 			parsed := make([]Statement, 0, len(queries))
 			reservedVars := make([]BindVars, 0, len(queries))
 			for _, q := range queries {
-				pp, kb, err := Parse2(q)
+				pp, kb, err := parser.Parse2(q)
 				if err != nil {
 					b.Fatal(err)
 				}
@@ -540,6 +579,7 @@ func BenchmarkNormalizeTraces(b *testing.B) {
 
 func BenchmarkNormalizeVTGate(b *testing.B) {
 	const keyspace = "main_keyspace"
+	parser := NewTestParser()
 
 	queries := loadQueries(b, "lobsters.sql.gz")
 	if len(queries) > 10000 {
@@ -551,7 +591,7 @@ func BenchmarkNormalizeVTGate(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		for _, sql := range queries {
-			stmt, reservedVars, err := Parse2(sql)
+			stmt, reservedVars, err := parser.Parse2(sql)
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -573,6 +613,7 @@ func BenchmarkNormalizeVTGate(b *testing.B) {
 					SQLSelectLimitUnset,
 					"",
 					nil, /*sysvars*/
+					nil,
 					nil, /*views*/
 				)
 				if err != nil {
@@ -598,9 +639,9 @@ func randtmpl(template string) string {
 	for i, c := range result {
 		switch c {
 		case '#':
-			result[i] = numberBytes[rand.Intn(len(numberBytes))]
+			result[i] = numberBytes[rand.IntN(len(numberBytes))]
 		case '@':
-			result[i] = letterBytes[rand.Intn(len(letterBytes))]
+			result[i] = letterBytes[rand.IntN(len(letterBytes))]
 		}
 	}
 	return string(result)
@@ -610,7 +651,7 @@ func randString(n int) string {
 	const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 	b := make([]byte, n)
 	for i := range b {
-		b[i] = letterBytes[rand.Intn(len(letterBytes))]
+		b[i] = letterBytes[rand.IntN(len(letterBytes))]
 	}
 	return string(b)
 }
@@ -625,19 +666,19 @@ values
 
 func BenchmarkNormalizeTPCCInsert(b *testing.B) {
 	generateInsert := func(rows int) string {
-		var query bytes.Buffer
+		var query strings.Builder
 		query.WriteString("INSERT IGNORE INTO customer0 (c_id, c_d_id, c_w_id, c_first, c_middle, c_last, c_street_1, c_street_2, c_city, c_state, c_zip, c_phone, c_since, c_credit, c_credit_lim, c_discount, c_balance, c_ytd_payment, c_payment_cnt, c_delivery_cnt, c_data) values ")
 		for i := 0; i < rows; i++ {
 			fmt.Fprintf(&query, "(%d, %d, %d, '%s','OE','%s','%s', '%s', '%s', '%s', '%s','%s',NOW(),'%s',50000,%f,-10,10,1,0,'%s' )",
 				rand.Int(), rand.Int(), rand.Int(),
-				"first-"+randString(rand.Intn(10)),
+				"first-"+randString(rand.IntN(10)),
 				randtmpl("last-@@@@"),
 				randtmpl("street1-@@@@@@@@@@@@"),
 				randtmpl("street2-@@@@@@@@@@@@"),
 				randtmpl("city-@@@@@@@@@@@@"),
 				randtmpl("@@"), randtmpl("zip-#####"),
 				randtmpl("################"),
-				"GC", rand.Float64(), randString(300+rand.Intn(200)),
+				"GC", rand.Float64(), randString(300+rand.IntN(200)),
 			)
 			if i < rows-1 {
 				query.WriteString(", ")
@@ -846,9 +887,10 @@ func benchmarkNormalization(b *testing.B, sqls []string) {
 	b.Helper()
 	b.ReportAllocs()
 	b.ResetTimer()
+	parser := NewTestParser()
 	for i := 0; i < b.N; i++ {
 		for _, sql := range sqls {
-			stmt, reserved, err := Parse2(sql)
+			stmt, reserved, err := parser.Parse2(sql)
 			if err != nil {
 				b.Fatalf("%v: %q", err, sql)
 			}
@@ -862,6 +904,7 @@ func benchmarkNormalization(b *testing.B, sqls []string) {
 				"keyspace0",
 				SQLSelectLimitUnset,
 				"",
+				nil,
 				nil,
 				nil,
 			)

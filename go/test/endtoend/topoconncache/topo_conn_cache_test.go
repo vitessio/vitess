@@ -51,7 +51,7 @@ func TestVtctldListAllTablets(t *testing.T) {
 
 func testListAllTablets(t *testing.T) {
 	// first w/o any filters, aside from cell
-	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ListAllTablets")
+	result, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetTablets")
 	require.NoError(t, err)
 
 	tablets := getAllTablets()
@@ -74,7 +74,7 @@ func deleteCell(t *testing.T) {
 	deleteTablet(t, shard2Rdonly)
 
 	// Delete cell2 info from topo
-	res, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("DeleteCellInfo", "--", "--force", cell2)
+	res, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("DeleteCellInfo", "--force", cell2)
 	t.Log(res)
 	require.NoError(t, err)
 
@@ -84,7 +84,7 @@ func deleteCell(t *testing.T) {
 	clusterInstance.Keyspaces[0].Shards = []cluster.Shard{shard1, shard2}
 
 	// Now list all tablets
-	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ListAllTablets")
+	result, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetTablets")
 	require.NoError(t, err)
 
 	tablets := getAllTablets()
@@ -111,7 +111,7 @@ func deleteTablet(t *testing.T, tablet *cluster.Vttablet) {
 	}(tablet)
 	wg.Wait()
 
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", tablet.Alias)
+	err := clusterInstance.VtctldClientProcess.ExecuteCommand("DeleteTablets", tablet.Alias)
 	require.NoError(t, err)
 }
 
@@ -184,7 +184,7 @@ func addCellback(t *testing.T) {
 	shard2.Vttablets = append(shard2.Vttablets, shard2Replica)
 	shard2.Vttablets = append(shard2.Vttablets, shard1Rdonly)
 
-	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ListAllTablets")
+	result, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetTablets")
 	require.NoError(t, err)
 
 	tablets := getAllTablets()

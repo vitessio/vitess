@@ -18,6 +18,7 @@ package healthcheck
 
 import (
 	"flag"
+	"fmt"
 	"os"
 	"testing"
 
@@ -26,11 +27,12 @@ import (
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
-	vtParams        mysql.ConnParams
-	keyspaceName    = "commerce"
-	cell            = "zone1"
-	sqlSchema       = `create table product( 
+	clusterInstance   *cluster.LocalProcessCluster
+	vtParams          mysql.ConnParams
+	keyspaceName      = "commerce"
+	vtgateGrpcAddress string
+	cell              = "zone1"
+	sqlSchema         = `create table product( 
 		sku varbinary(128),
 			description varbinary(128),
 			price bigint,
@@ -64,7 +66,7 @@ func TestMain(m *testing.M) {
 
 	exitCode := func() int {
 		clusterInstance = cluster.NewCluster(cell, "localhost")
-		clusterInstance.VtTabletExtraArgs = []string{"--health_check_interval", "1s"}
+		clusterInstance.VtTabletExtraArgs = []string{"--health_check_interval", "1s", "--shutdown_grace_period", "3s"}
 		defer clusterInstance.Teardown()
 
 		// Start topo server
@@ -96,6 +98,7 @@ func TestMain(m *testing.M) {
 			Host: clusterInstance.Hostname,
 			Port: clusterInstance.VtgateMySQLPort,
 		}
+		vtgateGrpcAddress = fmt.Sprintf("%s:%d", clusterInstance.Hostname, clusterInstance.VtgateGrpcPort)
 		return m.Run()
 	}()
 	os.Exit(exitCode)

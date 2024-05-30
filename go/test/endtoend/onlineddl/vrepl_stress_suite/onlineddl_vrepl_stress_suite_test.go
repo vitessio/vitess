@@ -31,7 +31,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"path"
 	"strings"
@@ -40,18 +40,18 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/timer"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/schema"
-
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/onlineddl"
 	"vitess.io/vitess/go/test/endtoend/throttler"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/timer"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/vttablet"
 )
 
 type testcase struct {
@@ -436,6 +436,9 @@ func TestMain(m *testing.M) {
 			"--migration_check_interval", "5s",
 			"--vstream_packet_size", "4096", // Keep this value small and below 10k to ensure multilple vstream iterations
 			"--watch_replication_stream",
+			// Test VPlayer batching mode.
+			fmt.Sprintf("--vreplication_experimental_flags=%d",
+				vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage|vttablet.VReplicationExperimentalFlagOptimizeInserts|vttablet.VReplicationExperimentalFlagVPlayerBatching),
 		}
 		clusterInstance.VtGateExtraArgs = []string{
 			"--ddl_strategy", "online",
@@ -512,7 +515,7 @@ func TestSchemaChange(t *testing.T) {
 			t.Run("migrate", func(t *testing.T) {
 				require.NotEmpty(t, testcase.alterStatement)
 
-				hintText := fmt.Sprintf("hint-after-alter-%d", rand.Int31n(int32(maxTableRows)))
+				hintText := fmt.Sprintf("hint-after-alter-%d", rand.Int32N(int32(maxTableRows)))
 				hintStatement := fmt.Sprintf(alterHintStatement, hintText)
 				fullStatement := fmt.Sprintf("%s, %s", hintStatement, testcase.alterStatement)
 
@@ -550,10 +553,10 @@ func TestSchemaChange(t *testing.T) {
 func testWithInitialSchema(t *testing.T) {
 	// Create the stress table
 	for _, statement := range cleanupStatements {
-		err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, statement)
+		err := clusterInstance.VtctldClientProcess.ApplySchema(keyspaceName, statement)
 		require.Nil(t, err)
 	}
-	err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, createStatement)
+	err := clusterInstance.VtctldClientProcess.ApplySchema(keyspaceName, createStatement)
 	require.Nil(t, err)
 
 	// Check if table is created
@@ -569,7 +572,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 		}
 	} else {
 		var err error
-		uuid, err = clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, alterStatement, cluster.VtctlClientParams{DDLStrategy: ddlStrategy})
+		uuid, err = clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, alterStatement, cluster.ApplySchemaParams{DDLStrategy: ddlStrategy})
 		assert.NoError(t, err)
 	}
 	uuid = strings.TrimSpace(uuid)
@@ -641,10 +644,10 @@ func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName s
 }
 
 func generateInsert(t *testing.T, conn *mysql.Conn, autoIncInsert bool) error {
-	id := rand.Int31n(int32(maxTableRows))
+	id := rand.Int32N(int32(maxTableRows))
 	query := fmt.Sprintf(insertRowStatement, id, -id, id, id, nextOpOrder())
 	if autoIncInsert {
-		id = rand.Int31()
+		id = rand.Int32()
 		query = fmt.Sprintf(insertRowAutoIncStatement, -id, id, id, nextOpOrder())
 	}
 	qr, err := conn.ExecuteFetch(query, 1000, true)
@@ -655,7 +658,7 @@ func generateInsert(t *testing.T, conn *mysql.Conn, autoIncInsert bool) error {
 }
 
 func generateUpdate(t *testing.T, conn *mysql.Conn) error {
-	id := rand.Int31n(int32(maxTableRows))
+	id := rand.Int32N(int32(maxTableRows))
 	query := fmt.Sprintf(updateRowStatement, nextOpOrder(), id)
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 	if err == nil && qr != nil {
@@ -665,7 +668,7 @@ func generateUpdate(t *testing.T, conn *mysql.Conn) error {
 }
 
 func generateDelete(t *testing.T, conn *mysql.Conn) error {
-	id := rand.Int31n(int32(maxTableRows))
+	id := rand.Int32N(int32(maxTableRows))
 	query := fmt.Sprintf(deleteRowStatement, id)
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 	if err == nil && qr != nil {
@@ -694,7 +697,7 @@ func runSingleConnection(ctx context.Context, t *testing.T, autoIncInsert bool, 
 			log.Infof("Terminating single connection")
 			return
 		}
-		switch rand.Int31n(3) {
+		switch rand.Int32N(3) {
 		case 0:
 			err = generateInsert(t, conn, autoIncInsert)
 		case 1:

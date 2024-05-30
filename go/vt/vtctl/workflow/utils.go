@@ -19,12 +19,18 @@ package workflow
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"hash/fnv"
 	"math"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
+
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	"google.golang.org/protobuf/encoding/prototext"
 
@@ -86,7 +92,7 @@ func getTablesInKeyspace(ctx context.Context, ts *topo.Server, tmc tmclient.Tabl
 // validateNewWorkflow ensures that the specified workflow doesn't already exist
 // in the keyspace.
 func validateNewWorkflow(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, keyspace, workflow string) error {
-	allshards, err := ts.FindAllShardsInKeyspace(ctx, keyspace)
+	allshards, err := ts.FindAllShardsInKeyspace(ctx, keyspace, nil)
 	if err != nil {
 		return err
 	}
@@ -106,25 +112,18 @@ func validateNewWorkflow(ctx context.Context, ts *topo.Server, tmc tmclient.Tabl
 				allErrors.RecordError(vterrors.Wrap(err, "validateWorkflowName.GetTablet"))
 				return
 			}
-			validations := []struct {
-				query string
-				msg   string
-			}{{
-				fmt.Sprintf("select 1 from _vt.vreplication where db_name=%s and workflow=%s", encodeString(primary.DbName()), encodeString(workflow)),
-				fmt.Sprintf("workflow %s already exists in keyspace %s on tablet %v", workflow, keyspace, primary.Alias),
-			}, {
-				fmt.Sprintf("select 1 from _vt.vreplication where db_name=%s and message='FROZEN' and workflow_sub_type != %d", encodeString(primary.DbName()), binlogdatapb.VReplicationWorkflowSubType_Partial),
-				fmt.Sprintf("found previous frozen workflow on tablet %v, please review and delete it first before creating a new workflow",
-					primary.Alias),
-			}}
-			for _, validation := range validations {
-				p3qr, err := tmc.VReplicationExec(ctx, primary.Tablet, validation.query)
-				if err != nil {
-					allErrors.RecordError(vterrors.Wrap(err, "validateWorkflowName.VReplicationExec"))
-					return
-				}
-				if p3qr != nil && len(p3qr.Rows) != 0 {
-					allErrors.RecordError(vterrors.Wrap(fmt.Errorf(validation.msg), "validateWorkflowName.VReplicationExec"))
+			res, err := tmc.ReadVReplicationWorkflows(ctx, primary.Tablet, &tabletmanagerdatapb.ReadVReplicationWorkflowsRequest{})
+			if err != nil {
+				allErrors.RecordError(vterrors.Wrap(err, "validateWorkflowName.ReadVReplicationWorkflows"))
+				return
+			}
+			if res == nil {
+				// There are no workflows on this tablet.
+				return
+			}
+			for _, wf := range res.Workflows {
+				if wf.Workflow == workflow {
+					allErrors.RecordError(fmt.Errorf("workflow %s already exists in keyspace %s on tablet %v", workflow, keyspace, primary.Alias))
 					return
 				}
 			}
@@ -167,8 +166,8 @@ func createDefaultShardRoutingRules(ctx context.Context, ms *vtctldatapb.Materia
 	return nil
 }
 
-func stripTableConstraints(ddl string) (string, error) {
-	ast, err := sqlparser.ParseStrictDDL(ddl)
+func stripTableConstraints(ddl string, parser *sqlparser.Parser) (string, error) {
+	ast, err := parser.ParseStrictDDL(ddl)
 	if err != nil {
 		return "", err
 	}
@@ -189,8 +188,8 @@ func stripTableConstraints(ddl string) (string, error) {
 	return newDDL, nil
 }
 
-func stripTableForeignKeys(ddl string) (string, error) {
-	ast, err := sqlparser.ParseStrictDDL(ddl)
+func stripTableForeignKeys(ddl string, parser *sqlparser.Parser) (string, error) {
+	ast, err := parser.ParseStrictDDL(ddl)
 	if err != nil {
 		return "", err
 	}
@@ -216,6 +215,25 @@ func stripTableForeignKeys(ddl string) (string, error) {
 	noFKConstraintAST := sqlparser.Rewrite(ast, stripFKConstraints, nil)
 	newDDL := sqlparser.String(noFKConstraintAST)
 	return newDDL, nil
+}
+
+func stripAutoIncrement(ddl string, parser *sqlparser.Parser) (string, error) {
+	newDDL, err := parser.ParseStrictDDL(ddl)
+	if err != nil {
+		return "", err
+	}
+
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch node := node.(type) {
+		case *sqlparser.ColumnDefinition:
+			if node.Type.Options.Autoincrement {
+				node.Type.Options.Autoincrement = false
+			}
+		}
+		return true, nil
+	}, newDDL)
+
+	return sqlparser.String(newDDL), nil
 }
 
 func getSourceTableDDLs(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, shards []*topo.ShardInfo) (map[string]string, error) {
@@ -326,7 +344,7 @@ func getMigrationID(targetKeyspace string, shardTablets []string) (int64, error)
 //
 // It returns ErrNoStreams if there are no targets found for the workflow.
 func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, targetKeyspace string, workflow string) (*TargetInfo, error) {
-	targetShards, err := ts.GetShardNames(ctx, targetKeyspace)
+	targetShards, err := ts.FindAllShardsInKeyspace(ctx, targetKeyspace, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -338,24 +356,20 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 		targets         = make(map[string]*MigrationTarget, len(targetShards))
 		workflowType    binlogdatapb.VReplicationWorkflowType
 		workflowSubType binlogdatapb.VReplicationWorkflowSubType
+		options         vtctldatapb.WorkflowOptions
 	)
 
 	// We check all shards in the target keyspace. Not all of them may have a
 	// stream. For example, if we're splitting -80 to [-40,40-80], only those
 	// two target shards will have vreplication streams, and the other shards in
 	// the target keyspace will not.
-	for _, targetShard := range targetShards {
-		si, err := ts.GetShard(ctx, targetKeyspace, targetShard)
-		if err != nil {
-			return nil, err
-		}
-
-		if si.PrimaryAlias == nil {
+	for targetShardName, targetShard := range targetShards {
+		if targetShard.PrimaryAlias == nil {
 			// This can happen if bad inputs are given.
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "shard %v/%v doesn't have a primary set", targetKeyspace, targetShard)
 		}
 
-		primary, err := ts.GetTablet(ctx, si.PrimaryAlias)
+		primary, err := ts.GetTablet(ctx, targetShard.PrimaryAlias)
 		if err != nil {
 			return nil, err
 		}
@@ -367,12 +381,12 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 			return nil, err
 		}
 
-		if len(wf.Streams) < 1 {
+		if wf == nil || len(wf.Streams) < 1 {
 			continue
 		}
 
 		target := &MigrationTarget{
-			si:      si,
+			si:      targetShard,
 			primary: primary,
 			Sources: make(map[int32]*binlogdatapb.BinlogSource),
 		}
@@ -381,6 +395,13 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 		optTabletTypes = topoproto.MakeStringTypeCSV(wf.TabletTypes)
 		workflowType = wf.WorkflowType
 		workflowSubType = wf.WorkflowSubType
+		optionsJSON := wf.GetOptions()
+		if optionsJSON != "" {
+			if err := json.Unmarshal([]byte(optionsJSON), &options); err != nil {
+				log.Errorf("failed to unmarshal options: %v %s", err, optionsJSON)
+				return nil, err
+			}
+		}
 
 		for _, stream := range wf.Streams {
 			if stream.Message == Frozen {
@@ -389,7 +410,7 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 			target.Sources[stream.Id] = stream.Bls
 		}
 
-		targets[targetShard] = target
+		targets[targetShardName] = target
 	}
 
 	if len(targets) == 0 {
@@ -403,6 +424,7 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 		OptTabletTypes:  optTabletTypes,
 		WorkflowType:    workflowType,
 		WorkflowSubType: workflowSubType,
+		Options:         &options,
 	}, nil
 }
 
@@ -531,12 +553,20 @@ func doValidateWorkflowHasCompleted(ctx context.Context, ts *trafficSwitcher) er
 	} else {
 		_ = ts.ForAllTargets(func(target *MigrationTarget) error {
 			wg.Add(1)
-			query := fmt.Sprintf("select 1 from _vt.vreplication where db_name='%s' and workflow='%s' and message!='FROZEN'", target.GetPrimary().DbName(), ts.WorkflowName())
-			rs, _ := ts.VReplicationExec(ctx, target.GetPrimary().Alias, query)
-			if len(rs.Rows) > 0 {
-				rec.RecordError(fmt.Errorf("vreplication streams are not frozen on tablet %d", target.GetPrimary().Alias.Uid))
+			defer wg.Done()
+			res, err := ts.ws.tmc.ReadVReplicationWorkflow(ctx, target.GetPrimary().Tablet, &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{
+				Workflow: ts.WorkflowName(),
+			})
+			if err != nil {
+				rec.RecordError(err)
+				return nil
 			}
-			wg.Done()
+			for _, stream := range res.Streams {
+				if stream.Message != Frozen {
+					rec.RecordError(fmt.Errorf("vreplication streams are not frozen on tablet %d", target.GetPrimary().Alias.Uid))
+					return nil
+				}
+			}
 			return nil
 		})
 	}
@@ -657,11 +687,8 @@ func areTabletsAvailableToStreamFrom(ctx context.Context, req *vtctldatapb.Workf
 // New callers should instead use the new BuildTargets function.
 //
 // It returns ErrNoStreams if there are no targets found for the workflow.
-func LegacyBuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, targetKeyspace string, workflow string) (*TargetInfo, error) {
-	targetShards, err := ts.GetShardNames(ctx, targetKeyspace)
-	if err != nil {
-		return nil, err
-	}
+func LegacyBuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, targetKeyspace string, workflow string,
+	targetShards []string) (*TargetInfo, error) {
 
 	var (
 		frozen          bool
@@ -765,4 +792,160 @@ func LegacyBuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.Table
 		WorkflowType:    workflowType,
 		WorkflowSubType: workflowSubType,
 	}, nil
+}
+
+func addFilter(sel *sqlparser.Select, filter sqlparser.Expr) {
+	if sel.Where != nil {
+		sel.Where = &sqlparser.Where{
+			Type: sqlparser.WhereClause,
+			Expr: &sqlparser.AndExpr{
+				Left:  filter,
+				Right: sel.Where.Expr,
+			},
+		}
+	} else {
+		sel.Where = &sqlparser.Where{
+			Type: sqlparser.WhereClause,
+			Expr: filter,
+		}
+	}
+}
+
+func getTenantClause(vrOptions *vtctldatapb.WorkflowOptions,
+	targetVSchema *vindexes.KeyspaceSchema, parser *sqlparser.Parser) (*sqlparser.Expr, error) {
+	if vrOptions.TenantId == "" {
+		return nil, nil
+	}
+	if targetVSchema == nil || targetVSchema.MultiTenantSpec == nil {
+		return nil, fmt.Errorf("target keyspace not defined, or it does not have multi-tenant spec")
+	}
+	tenantColumnName := targetVSchema.MultiTenantSpec.TenantIdColumnName
+	tenantColumnType := targetVSchema.MultiTenantSpec.TenantIdColumnType
+	if tenantColumnName == "" {
+		return nil, fmt.Errorf("tenant column name not defined in multi-tenant spec")
+	}
+
+	var tenantId string
+	switch tenantColumnType {
+	case querypb.Type_INT64:
+		_, err := strconv.Atoi(vrOptions.TenantId)
+		if err != nil {
+			return nil, fmt.Errorf("tenant id is not a valid int: %s", vrOptions.TenantId)
+		}
+		tenantId = vrOptions.TenantId
+	case querypb.Type_VARCHAR:
+		tenantId = fmt.Sprintf("'%s'", vrOptions.TenantId)
+	default:
+		return nil, fmt.Errorf("unsupported tenant column type: %s", tenantColumnType)
+	}
+
+	stmt, err := parser.Parse(fmt.Sprintf("select * from t where %s = %s", tenantColumnName, tenantId))
+	if err != nil {
+		return nil, err
+	}
+	sel, ok := stmt.(*sqlparser.Select)
+	if !ok {
+		return nil, fmt.Errorf("error getting select: %s", tenantId)
+	}
+	return &sel.Where.Expr, nil
+}
+
+func changeKeyspaceRouting(ctx context.Context, ts *topo.Server, tabletTypes []topodatapb.TabletType,
+	sourceKeyspace, targetKeyspace, reason string) error {
+	routes := make(map[string]string)
+	for _, tabletType := range tabletTypes {
+		suffix := getTabletTypeSuffix(tabletType)
+		routes[sourceKeyspace+suffix] = targetKeyspace
+	}
+	if err := updateKeyspaceRoutingRules(ctx, ts, reason, routes); err != nil {
+		return err
+	}
+	return ts.RebuildSrvVSchema(ctx, nil)
+}
+
+// updateKeyspaceRoutingRules updates the keyspace routing rules for the (effective) source
+// keyspace to the target keyspace.
+func updateKeyspaceRoutingRules(ctx context.Context, ts *topo.Server, reason string, routes map[string]string) error {
+	update := func() error {
+		return topotools.UpdateKeyspaceRoutingRules(ctx, ts, reason,
+			func(ctx context.Context, rules *map[string]string) error {
+				for fromKeyspace, toKeyspace := range routes {
+					(*rules)[fromKeyspace] = toKeyspace
+				}
+				return nil
+			})
+	}
+	err := update()
+	if err == nil {
+		return nil
+	}
+	// If we were racing with another caller to create the initial routing rules, then
+	// we can immediately retry the operation.
+	if !topo.IsErrType(err, topo.NodeExists) {
+		return err
+	}
+	return update()
+}
+
+func validateTenantId(dataType querypb.Type, value string) error {
+	switch dataType {
+	case querypb.Type_INT64:
+		_, err := strconv.Atoi(value)
+		if err != nil {
+			return fmt.Errorf("value %s is not a valid int", value)
+		}
+	case querypb.Type_VARCHAR:
+	// no validation needed
+	default:
+		return fmt.Errorf("unsupported data type: %s", dataType)
+	}
+	return nil
+}
+
+func updateKeyspaceRoutingState(ctx context.Context, ts *topo.Server, sourceKeyspace, targetKeyspace string, state *State) error {
+	// For multi-tenant migrations, we only support switching traffic to all cells at once
+	cells, err := ts.GetCellInfoNames(ctx)
+	if err != nil {
+		return err
+	}
+
+	rules, err := topotools.GetKeyspaceRoutingRules(ctx, ts)
+	if err != nil {
+		return err
+	}
+	hasSwitched := func(tabletTypePrefix string) bool {
+		ks, ok := rules[sourceKeyspace+tabletTypePrefix]
+		return ok && ks == targetKeyspace
+	}
+	rdonlySwitched := hasSwitched(rdonlyTabletSuffix)
+	replicaSwitched := hasSwitched(replicaTabletSuffix)
+	primarySwitched := hasSwitched(primaryTabletSuffix)
+	if rdonlySwitched {
+		state.RdonlyCellsSwitched = cells
+		state.RdonlyCellsNotSwitched = nil
+	} else {
+		state.RdonlyCellsNotSwitched = cells
+		state.RdonlyCellsSwitched = nil
+	}
+	if replicaSwitched {
+		state.ReplicaCellsSwitched = cells
+		state.ReplicaCellsNotSwitched = nil
+	} else {
+		state.ReplicaCellsNotSwitched = cells
+		state.ReplicaCellsSwitched = nil
+	}
+	state.WritesSwitched = primarySwitched
+	return nil
+}
+
+func getTabletTypeSuffix(tabletType topodatapb.TabletType) string {
+	switch tabletType {
+	case topodatapb.TabletType_REPLICA:
+		return replicaTabletSuffix
+	case topodatapb.TabletType_RDONLY:
+		return rdonlyTabletSuffix
+	case topodatapb.TabletType_PRIMARY:
+		return primaryTabletSuffix
+	}
+	return ""
 }

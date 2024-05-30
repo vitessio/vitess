@@ -17,6 +17,7 @@ limitations under the License.
 package localvtctldclient
 
 import (
+	"context"
 	"errors"
 	"sync"
 
@@ -58,7 +59,7 @@ func SetServer(s vtctlservicepb.VtctldServer) {
 	server = s
 }
 
-func localVtctldClientFactory(addr string) (vtctldclient.VtctldClient, error) {
+func localVtctldClientFactory(ctx context.Context, addr string) (vtctldclient.VtctldClient, error) {
 	m.Lock()
 	defer m.Unlock()
 

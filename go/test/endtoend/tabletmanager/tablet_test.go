@@ -47,7 +47,7 @@ func TestEnsureDB(t *testing.T) {
 	require.NoError(t, err)
 
 	// Make it the primary.
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("TabletExternallyReparented", tablet.Alias)
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("TabletExternallyReparented", tablet.Alias)
 	require.EqualError(t, err, "exit status 1")
 
 	// It is still NOT_SERVING because the db is read-only.
@@ -56,8 +56,8 @@ func TestEnsureDB(t *testing.T) {
 	assert.Contains(t, status, "read-only")
 
 	// Switch to read-write and verify that we go serving.
-	// Note: for TabletExternallyReparented, we expect SetReadWrite to be called by the user
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SetReadWrite", tablet.Alias)
+	// Note: for TabletExternallyReparented, we expect SetWritable to be called by the user
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("SetWritable", tablet.Alias, "true")
 	require.NoError(t, err)
 	err = tablet.VttabletProcess.WaitForTabletStatus("SERVING")
 	require.NoError(t, err)
@@ -82,11 +82,11 @@ func TestResetReplicationParameters(t *testing.T) {
 	require.NoError(t, err)
 
 	// Set a replication source on the tablet and start replication
-	_, err = tablet.VttabletProcess.QueryTablet("stop slave;change master to master_host = 'localhost', master_port = 123;start slave;", keyspaceName, false)
+	err = tablet.VttabletProcess.QueryTabletMultiple([]string{"stop replica", "change replication source to source_host = 'localhost', source_port = 123", "start replica"}, keyspaceName, false)
 	require.NoError(t, err)
 
 	// Check the replica status.
-	res, err := tablet.VttabletProcess.QueryTablet("show slave status", keyspaceName, false)
+	res, err := tablet.VttabletProcess.QueryTablet("show replica status", keyspaceName, false)
 	require.NoError(t, err)
 	// This is expected to return 1 row result
 	require.Len(t, res.Rows, 1)
@@ -96,7 +96,7 @@ func TestResetReplicationParameters(t *testing.T) {
 	require.NoError(t, err)
 
 	// Recheck the replica status and this time is should be empty
-	res, err = tablet.VttabletProcess.QueryTablet("show slave status", keyspaceName, false)
+	res, err = tablet.VttabletProcess.QueryTablet("show replica status", keyspaceName, false)
 	require.NoError(t, err)
 	require.Len(t, res.Rows, 0)
 }

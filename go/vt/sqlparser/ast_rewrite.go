@@ -204,8 +204,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfGeomFromWKBExpr(parent, node, replacer)
 	case *GeomPropertyFuncExpr:
 		return a.rewriteRefOfGeomPropertyFuncExpr(parent, node, replacer)
-	case GroupBy:
-		return a.rewriteGroupBy(parent, node, replacer)
+	case *GroupBy:
+		return a.rewriteRefOfGroupBy(parent, node, replacer)
 	case *GroupConcatExpr:
 		return a.rewriteRefOfGroupConcatExpr(parent, node, replacer)
 	case IdentifierCI:
@@ -422,6 +422,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfRollback(parent, node, replacer)
 	case RootNode:
 		return a.rewriteRootNode(parent, node, replacer)
+	case *RowAlias:
+		return a.rewriteRefOfRowAlias(parent, node, replacer)
 	case *SRollback:
 		return a.rewriteRefOfSRollback(parent, node, replacer)
 	case *Savepoint:
@@ -1284,6 +1286,11 @@ func (a *application) rewriteRefOfAvg(parent SQLNode, node *Avg, replacer replac
 	}) {
 		return false
 	}
+	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
+		parent.(*Avg).OverClause = newNode.(*OverClause)
+	}) {
+		return false
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -1419,6 +1426,11 @@ func (a *application) rewriteRefOfBitAnd(parent SQLNode, node *BitAnd, replacer 
 	}) {
 		return false
 	}
+	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
+		parent.(*BitAnd).OverClause = newNode.(*OverClause)
+	}) {
+		return false
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -1451,6 +1463,11 @@ func (a *application) rewriteRefOfBitOr(parent SQLNode, node *BitOr, replacer re
 	}) {
 		return false
 	}
+	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
+		parent.(*BitOr).OverClause = newNode.(*OverClause)
+	}) {
+		return false
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -1480,6 +1497,11 @@ func (a *application) rewriteRefOfBitXor(parent SQLNode, node *BitXor, replacer 
 	}
 	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
 		parent.(*BitXor).Arg = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
+		parent.(*BitXor).OverClause = newNode.(*OverClause)
 	}) {
 		return false
 	}
@@ -1817,20 +1839,12 @@ func (a *application) rewriteRefOfColumnType(parent SQLNode, node *ColumnType, r
 			return true
 		}
 	}
-	if !a.rewriteRefOfLiteral(node, node.Length, func(newNode, parent SQLNode) {
-		parent.(*ColumnType).Length = newNode.(*Literal)
-	}) {
-		return false
-	}
-	if !a.rewriteRefOfLiteral(node, node.Scale, func(newNode, parent SQLNode) {
-		parent.(*ColumnType).Scale = newNode.(*Literal)
-	}) {
-		return false
-	}
 	if a.post != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
 		if !a.post(&a.cur) {
 			return false
 		}
@@ -2082,20 +2096,12 @@ func (a *application) rewriteRefOfConvertType(parent SQLNode, node *ConvertType,
 			return true
 		}
 	}
-	if !a.rewriteRefOfLiteral(node, node.Length, func(newNode, parent SQLNode) {
-		parent.(*ConvertType).Length = newNode.(*Literal)
-	}) {
-		return false
-	}
-	if !a.rewriteRefOfLiteral(node, node.Scale, func(newNode, parent SQLNode) {
-		parent.(*ConvertType).Scale = newNode.(*Literal)
-	}) {
-		return false
-	}
 	if a.post != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
 		if !a.post(&a.cur) {
 			return false
 		}
@@ -2156,6 +2162,11 @@ func (a *application) rewriteRefOfCount(parent SQLNode, node *Count, replacer re
 	}) {
 		return false
 	}
+	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
+		parent.(*Count).OverClause = newNode.(*OverClause)
+	}) {
+		return false
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -2183,12 +2194,15 @@ func (a *application) rewriteRefOfCountStar(parent SQLNode, node *CountStar, rep
 			return true
 		}
 	}
+	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
+		parent.(*CountStar).OverClause = newNode.(*OverClause)
+	}) {
+		return false
+	}
 	if a.post != nil {
-		if a.pre == nil {
-			a.cur.replacer = replacer
-			a.cur.parent = parent
-			a.cur.node = node
-		}
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
 		if !a.post(&a.cur) {
 			return false
 		}
@@ -2455,13 +2469,17 @@ func (a *application) rewriteRefOfDelete(parent SQLNode, node *Delete, replacer 
 	}) {
 		return false
 	}
+	for x, el := range node.TableExprs {
+		if !a.rewriteTableExpr(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*Delete).TableExprs[idx] = newNode.(TableExpr)
+			}
+		}(x)) {
+			return false
+		}
+	}
 	if !a.rewriteTableNames(node, node.Targets, func(newNode, parent SQLNode) {
 		parent.(*Delete).Targets = newNode.(TableNames)
-	}) {
-		return false
-	}
-	if !a.rewriteTableExprs(node, node.TableExprs, func(newNode, parent SQLNode) {
-		parent.(*Delete).TableExprs = newNode.(TableExprs)
 	}) {
 		return false
 	}
@@ -3150,8 +3168,8 @@ func (a *application) rewriteRefOfFuncExpr(parent SQLNode, node *FuncExpr, repla
 	}) {
 		return false
 	}
-	if !a.rewriteSelectExprs(node, node.Exprs, func(newNode, parent SQLNode) {
-		parent.(*FuncExpr).Exprs = newNode.(SelectExprs)
+	if !a.rewriteExprs(node, node.Exprs, func(newNode, parent SQLNode) {
+		parent.(*FuncExpr).Exprs = newNode.(Exprs)
 	}) {
 		return false
 	}
@@ -3602,7 +3620,7 @@ func (a *application) rewriteRefOfGeomPropertyFuncExpr(parent SQLNode, node *Geo
 	}
 	return true
 }
-func (a *application) rewriteGroupBy(parent SQLNode, node GroupBy, replacer replacerFunc) bool {
+func (a *application) rewriteRefOfGroupBy(parent SQLNode, node *GroupBy, replacer replacerFunc) bool {
 	if node == nil {
 		return true
 	}
@@ -3610,20 +3628,14 @@ func (a *application) rewriteGroupBy(parent SQLNode, node GroupBy, replacer repl
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		kontinue := !a.pre(&a.cur)
-		if a.cur.revisit {
-			node = a.cur.node.(GroupBy)
-			a.cur.revisit = false
-			return a.rewriteGroupBy(parent, node, replacer)
-		}
-		if kontinue {
+		if !a.pre(&a.cur) {
 			return true
 		}
 	}
-	for x, el := range node {
+	for x, el := range node.Exprs {
 		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
-				parent.(GroupBy)[idx] = newNode.(Expr)
+				parent.(*GroupBy).Exprs[idx] = newNode.(Expr)
 			}
 		}(x)) {
 			return false
@@ -3884,6 +3896,11 @@ func (a *application) rewriteRefOfInsert(parent SQLNode, node *Insert, replacer 
 	}
 	if !a.rewriteInsertRows(node, node.Rows, func(newNode, parent SQLNode) {
 		parent.(*Insert).Rows = newNode.(InsertRows)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfRowAlias(node, node.RowAlias, func(newNode, parent SQLNode) {
+		parent.(*Insert).RowAlias = newNode.(*RowAlias)
 	}) {
 		return false
 	}
@@ -5498,6 +5515,11 @@ func (a *application) rewriteRefOfMax(parent SQLNode, node *Max, replacer replac
 	}) {
 		return false
 	}
+	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
+		parent.(*Max).OverClause = newNode.(*OverClause)
+	}) {
+		return false
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -5564,6 +5586,11 @@ func (a *application) rewriteRefOfMin(parent SQLNode, node *Min, replacer replac
 	}
 	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
 		parent.(*Min).Arg = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
+		parent.(*Min).OverClause = newNode.(*OverClause)
 	}) {
 		return false
 	}
@@ -7278,6 +7305,38 @@ func (a *application) rewriteRootNode(parent SQLNode, node RootNode, replacer re
 	}
 	return true
 }
+func (a *application) rewriteRefOfRowAlias(parent SQLNode, node *RowAlias, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteIdentifierCS(node, node.TableName, func(newNode, parent SQLNode) {
+		parent.(*RowAlias).TableName = newNode.(IdentifierCS)
+	}) {
+		return false
+	}
+	if !a.rewriteColumns(node, node.Columns, func(newNode, parent SQLNode) {
+		parent.(*RowAlias).Columns = newNode.(Columns)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfSRollback(parent SQLNode, node *SRollback, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7373,8 +7432,8 @@ func (a *application) rewriteRefOfSelect(parent SQLNode, node *Select, replacer 
 	}) {
 		return false
 	}
-	if !a.rewriteGroupBy(node, node.GroupBy, func(newNode, parent SQLNode) {
-		parent.(*Select).GroupBy = newNode.(GroupBy)
+	if !a.rewriteRefOfGroupBy(node, node.GroupBy, func(newNode, parent SQLNode) {
+		parent.(*Select).GroupBy = newNode.(*GroupBy)
 	}) {
 		return false
 	}
@@ -7841,6 +7900,11 @@ func (a *application) rewriteRefOfStd(parent SQLNode, node *Std, replacer replac
 	}) {
 		return false
 	}
+	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
+		parent.(*Std).OverClause = newNode.(*OverClause)
+	}) {
+		return false
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -7870,6 +7934,11 @@ func (a *application) rewriteRefOfStdDev(parent SQLNode, node *StdDev, replacer 
 	}
 	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
 		parent.(*StdDev).Arg = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
+		parent.(*StdDev).OverClause = newNode.(*OverClause)
 	}) {
 		return false
 	}
@@ -7905,6 +7974,11 @@ func (a *application) rewriteRefOfStdPop(parent SQLNode, node *StdPop, replacer 
 	}) {
 		return false
 	}
+	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
+		parent.(*StdPop).OverClause = newNode.(*OverClause)
+	}) {
+		return false
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -7934,6 +8008,11 @@ func (a *application) rewriteRefOfStdSamp(parent SQLNode, node *StdSamp, replace
 	}
 	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
 		parent.(*StdSamp).Arg = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
+		parent.(*StdSamp).OverClause = newNode.(*OverClause)
 	}) {
 		return false
 	}
@@ -8220,6 +8299,11 @@ func (a *application) rewriteRefOfSum(parent SQLNode, node *Sum, replacer replac
 	}
 	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
 		parent.(*Sum).Arg = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
+		parent.(*Sum).OverClause = newNode.(*OverClause)
 	}) {
 		return false
 	}
@@ -8680,10 +8764,14 @@ func (a *application) rewriteRefOfUpdate(parent SQLNode, node *Update, replacer 
 	}) {
 		return false
 	}
-	if !a.rewriteTableExprs(node, node.TableExprs, func(newNode, parent SQLNode) {
-		parent.(*Update).TableExprs = newNode.(TableExprs)
-	}) {
-		return false
+	for x, el := range node.TableExprs {
+		if !a.rewriteTableExpr(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*Update).TableExprs[idx] = newNode.(TableExpr)
+			}
+		}(x)) {
+			return false
+		}
 	}
 	if !a.rewriteUpdateExprs(node, node.Exprs, func(newNode, parent SQLNode) {
 		parent.(*Update).Exprs = newNode.(UpdateExprs)
@@ -9084,6 +9172,11 @@ func (a *application) rewriteRefOfVarPop(parent SQLNode, node *VarPop, replacer 
 	}) {
 		return false
 	}
+	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
+		parent.(*VarPop).OverClause = newNode.(*OverClause)
+	}) {
+		return false
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -9113,6 +9206,11 @@ func (a *application) rewriteRefOfVarSamp(parent SQLNode, node *VarSamp, replace
 	}
 	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
 		parent.(*VarSamp).Arg = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
+		parent.(*VarSamp).OverClause = newNode.(*OverClause)
 	}) {
 		return false
 	}
@@ -9177,6 +9275,11 @@ func (a *application) rewriteRefOfVariance(parent SQLNode, node *Variance, repla
 	}
 	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
 		parent.(*Variance).Arg = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
+		parent.(*Variance).OverClause = newNode.(*OverClause)
 	}) {
 		return false
 	}

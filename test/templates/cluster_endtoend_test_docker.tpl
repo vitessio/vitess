@@ -28,17 +28,19 @@ jobs:
 
     - name: Check out code
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Check for changes in relevant files
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
-      uses: frouioui/paths-filter@main
+      uses: dorny/paths-filter@v3.0.1
       id: changes
       with:
         token: ''
         filters: |
           end_to_end:
             - 'go/**/*.go'
+            - 'go/vt/sidecardb/**/*.sql'
+            - 'go/test/endtoend/onlineddl/vrepl_suite/**'
             - 'test.go'
             - 'Makefile'
             - 'build.env'
@@ -52,9 +54,9 @@ jobs:
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v5
       with:
-        go-version: 1.21.3
+        go-version: 1.22.3
 
     - name: Tune the OS
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'

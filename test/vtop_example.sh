@@ -36,7 +36,7 @@ unset VTROOT # ensure that the examples can run without VTROOT now.
 function checkSemiSyncSetup() {
   for vttablet in $(kubectl get pods --no-headers -o custom-columns=":metadata.name" | grep "vttablet") ; do
     echo "Checking semi-sync in $vttablet"
-    kubectl exec "$vttablet" -c mysqld -- mysql -S "/vt/socket/mysql.sock" -u root -e "show variables like 'rpl_semi_sync_slave_enabled'" | grep "OFF"
+    kubectl exec "$vttablet" -c mysqld -- mysql -S "/vt/socket/mysql.sock" -u root -e "show variables like 'rpl_semi_sync_replica_enabled'" | grep "OFF"
     if [ $? -ne 0 ]; then
       echo "Semi Sync setup on $vttablet"
       exit 1
@@ -486,9 +486,7 @@ EOF
 # Build the docker image for vitess/lite using the local code
 docker build -f docker/lite/Dockerfile -t vitess/lite:pr .
 # Build the docker image for vitess/vtadmin using the local code
-docker build -f docker/base/Dockerfile -t vitess/base:pr .
-docker build -f docker/k8s/Dockerfile --build-arg VT_BASE_VER=pr -t vitess/k8s:pr .
-docker build -f docker/k8s/vtadmin/Dockerfile --build-arg VT_BASE_VER=pr -t vitess/vtadmin:pr .
+docker build -f docker/binaries/vtadmin/Dockerfile --build-arg VT_BASE_VER=pr -t vitess/vtadmin:pr .
 
 # Print the docker images available
 docker image ls

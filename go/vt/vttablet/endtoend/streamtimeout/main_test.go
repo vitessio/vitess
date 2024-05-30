@@ -84,7 +84,7 @@ func TestMain(m *testing.M) {
 		connParams := cluster.MySQLConnParams()
 		connAppDebugParams := cluster.MySQLAppDebugConnParams()
 		config = tabletenv.NewDefaultConfig()
-		_ = config.SchemaReloadIntervalSeconds.Set("2100ms")
+		config.SchemaReloadInterval = (2 * time.Second) + (100 * time.Millisecond)
 		config.SchemaChangeReloadTimeout = 10 * time.Second
 		config.SignalWhenSchemaChange = true
 

@@ -36,6 +36,8 @@ import (
 
 // DML contains the common elements between Update and Delete plans
 type DML struct {
+	txNeeded
+
 	// Query specifies the query to be executed.
 	Query string
 
@@ -61,10 +63,10 @@ type DML struct {
 	// QueryTimeout contains the optional timeout (in milliseconds) to apply to this query
 	QueryTimeout int
 
+	PreventAutoCommit bool
+
 	// RoutingParameters parameters required for query routing.
 	*RoutingParameters
-
-	txNeeded
 }
 
 // NewDML returns and empty initialized DML struct.
@@ -73,10 +75,11 @@ func NewDML() *DML {
 }
 
 func (dml *DML) execUnsharded(ctx context.Context, primitive Primitive, vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard) (*sqltypes.Result, error) {
-	return execShard(ctx, primitive, vcursor, dml.Query, bindVars, rss[0], true /* rollbackOnError */, true /* canAutocommit */)
+	return execShard(ctx, primitive, vcursor, dml.Query, bindVars, rss[0], true /* rollbackOnError */, !dml.PreventAutoCommit /* canAutocommit */)
 }
 
-func (dml *DML) execMultiDestination(ctx context.Context, primitive Primitive, vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard, dmlSpecialFunc func(context.Context, VCursor, map[string]*querypb.BindVariable, []*srvtopo.ResolvedShard) error) (*sqltypes.Result, error) {
+func (dml *DML) execMultiDestination(ctx context.Context, primitive Primitive, vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard, dmlSpecialFunc func(context.Context, VCursor,
+	map[string]*querypb.BindVariable, []*srvtopo.ResolvedShard) error, bvs []map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	if len(rss) == 0 {
 		return &sqltypes.Result{}, nil
 	}
@@ -88,7 +91,7 @@ func (dml *DML) execMultiDestination(ctx context.Context, primitive Primitive, v
 	for i := range rss {
 		queries[i] = &querypb.BoundQuery{
 			Sql:           dml.Query,
-			BindVariables: bindVars,
+			BindVariables: bvs[i],
 		}
 	}
 	return execMultiShard(ctx, primitive, vcursor, rss, queries, dml.MultiShardAutocommit)

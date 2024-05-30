@@ -28,9 +28,9 @@ import (
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
-
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vttablet"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -46,6 +46,14 @@ type vplayer struct {
 
 	replicatorPlan *ReplicatorPlan
 	tablePlans     map[string]*TablePlan
+
+	// These are set when creating the VPlayer based on whether the VPlayer
+	// is in batch (stmt and trx) execution mode or not.
+	query  func(ctx context.Context, sql string) (*sqltypes.Result, error)
+	commit func() error
+	// If the VPlayer is in batch mode, we accumulate each transaction's statements
+	// that are then sent as a single multi-statement protocol request to the database.
+	batchMode bool
 
 	pos replication.Position
 	// unsavedEvent is set any time we skip an event without
@@ -104,6 +112,47 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		settings.StopPos = pausePos
 		saveStop = false
 	}
+
+	queryFunc := func(ctx context.Context, sql string) (*sqltypes.Result, error) {
+		return vr.dbClient.ExecuteWithRetry(ctx, sql)
+	}
+	commitFunc := func() error {
+		return vr.dbClient.Commit()
+	}
+	batchMode := false
+	if vttablet.VReplicationExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerBatching != 0 {
+		batchMode = true
+	}
+	if batchMode {
+		// relayLogMaxSize is effectively the limit used when not batching.
+		maxAllowedPacket := int64(relayLogMaxSize)
+		// We explicitly do NOT want to batch this, we want to send it down the wire
+		// immediately so we use ExecuteFetch directly.
+		res, err := vr.dbClient.ExecuteFetch("select @@session.max_allowed_packet as max_allowed_packet", 1)
+		if err != nil {
+			log.Errorf("Error getting max_allowed_packet, will use the relay_log_max_size value of %d bytes: %v", relayLogMaxSize, err)
+		} else {
+			if maxAllowedPacket, err = res.Rows[0][0].ToInt64(); err != nil {
+				log.Errorf("Error getting max_allowed_packet, will use the relay_log_max_size value of %d bytes: %v", relayLogMaxSize, err)
+			}
+		}
+		// Leave 64 bytes of room for the commit to be sure that we have a more than
+		// ample buffer left. The default value of max_allowed_packet is 4MiB in 5.7
+		// and 64MiB in 8.0 -- and the default for max_relay_log_size is 250000
+		// bytes -- so we have plenty of room.
+		maxAllowedPacket -= 64
+		queryFunc = func(ctx context.Context, sql string) (*sqltypes.Result, error) {
+			if !vr.dbClient.InTransaction { // Should be sent down the wire immediately
+				return vr.dbClient.Execute(sql)
+			}
+			return nil, vr.dbClient.AddQueryToTrxBatch(sql) // Should become part of the trx batch
+		}
+		commitFunc = func() error {
+			return vr.dbClient.CommitTrxQueryBatch() // Commit the current trx batch
+		}
+		vr.dbClient.maxBatchSize = maxAllowedPacket
+	}
+
 	return &vplayer{
 		vr:               vr,
 		startPos:         settings.StartPos,
@@ -115,6 +164,9 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		tablePlans:       make(map[string]*TablePlan),
 		phase:            phase,
 		throttlerAppName: throttlerapp.VCopierName.ConcatenateString(vr.throttlerAppName()),
+		query:            queryFunc,
+		commit:           commitFunc,
+		batchMode:        batchMode,
 	}
 }
 
@@ -128,7 +180,7 @@ func (vp *vplayer) play(ctx context.Context) error {
 		return nil
 	}
 
-	plan, err := buildReplicatorPlan(vp.vr.source, vp.vr.colInfoMap, vp.copyState, vp.vr.stats)
+	plan, err := buildReplicatorPlan(vp.vr.source, vp.vr.colInfoMap, vp.copyState, vp.vr.stats, vp.vr.vre.env.CollationEnv(), vp.vr.vre.env.Parser())
 	if err != nil {
 		vp.vr.stats.ErrorCounts.Add([]string{"Plan"}, 1)
 		return err
@@ -152,8 +204,21 @@ func (vp *vplayer) play(ctx context.Context) error {
 // The foreign_key_checks value for a transaction is determined by the 2nd bit (least significant) of the flags:
 // - If set (1), foreign key checks are disabled.
 // - If unset (0), foreign key checks are enabled.
-// updateFKCheck also updates the state for the first row event that this vplayer and hence the connection sees.
+// updateFKCheck also updates the state for the first row event that this vplayer, and hence the db connection, sees.
 func (vp *vplayer) updateFKCheck(ctx context.Context, flags2 uint32) error {
+	mustUpdate := false
+	if vp.vr.WorkflowSubType == int32(binlogdatapb.VReplicationWorkflowSubType_AtomicCopy) {
+		// If this is an atomic copy, we must update the foreign_key_checks state even when the vplayer runs during
+		// the copy phase, i.e., for catchup and fastforward.
+		mustUpdate = true
+	} else if vp.vr.state == binlogdatapb.VReplicationWorkflowState_Running {
+		// If the vreplication workflow is in Running state, we must update the foreign_key_checks
+		// state for all workflow types.
+		mustUpdate = true
+	}
+	if !mustUpdate {
+		return nil
+	}
 	dbForeignKeyChecksEnabled := true
 	if flags2&NoForeignKeyCheckFlagBitmask == NoForeignKeyCheckFlagBitmask {
 		dbForeignKeyChecksEnabled = false
@@ -164,7 +229,7 @@ func (vp *vplayer) updateFKCheck(ctx context.Context, flags2 uint32) error {
 		return nil
 	}
 	log.Infof("Setting this session's foreign_key_checks to %s", strconv.FormatBool(dbForeignKeyChecksEnabled))
-	if _, err := vp.vr.dbClient.ExecuteWithRetry(ctx, "set @@session.foreign_key_checks="+strconv.FormatBool(dbForeignKeyChecksEnabled)); err != nil {
+	if _, err := vp.query(ctx, "set @@session.foreign_key_checks="+strconv.FormatBool(dbForeignKeyChecksEnabled)); err != nil {
 		return fmt.Errorf("failed to set session foreign_key_checks: %w", err)
 	}
 	vp.foreignKeyChecksEnabled = dbForeignKeyChecksEnabled
@@ -250,7 +315,7 @@ func (vp *vplayer) applyStmtEvent(ctx context.Context, event *binlogdatapb.VEven
 	}
 	if event.Type == binlogdatapb.VEventType_SAVEPOINT || vp.canAcceptStmtEvents {
 		start := time.Now()
-		_, err := vp.vr.dbClient.ExecuteWithRetry(ctx, sql)
+		_, err := vp.query(ctx, sql)
 		vp.vr.stats.QueryTimings.Record(vp.phase, start)
 		vp.vr.stats.QueryCount.Add(vp.phase, 1)
 		return err
@@ -266,27 +331,46 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 	if tplan == nil {
 		return fmt.Errorf("unexpected event on table %s", rowEvent.TableName)
 	}
-	for _, change := range rowEvent.RowChanges {
-		_, err := tplan.applyChange(change, func(sql string) (*sqltypes.Result, error) {
-			stats := NewVrLogStats("ROWCHANGE")
-			start := time.Now()
-			qr, err := vp.vr.dbClient.ExecuteWithRetry(ctx, sql)
-			vp.vr.stats.QueryCount.Add(vp.phase, 1)
-			vp.vr.stats.QueryTimings.Record(vp.phase, start)
-			stats.Send(sql)
-			return qr, err
-		})
-		if err != nil {
+	applyFunc := func(sql string) (*sqltypes.Result, error) {
+		stats := NewVrLogStats("ROWCHANGE")
+		start := time.Now()
+		qr, err := vp.query(ctx, sql)
+		vp.vr.stats.QueryCount.Add(vp.phase, 1)
+		vp.vr.stats.QueryTimings.Record(vp.phase, start)
+		stats.Send(sql)
+		return qr, err
+	}
+
+	if vp.batchMode && len(rowEvent.RowChanges) > 1 {
+		// If we have multiple delete row events for a table with a single PK column
+		// then we can perform a simple bulk DELETE using an IN clause.
+		if (rowEvent.RowChanges[0].Before != nil && rowEvent.RowChanges[0].After == nil) &&
+			tplan.MultiDelete != nil {
+			_, err := tplan.applyBulkDeleteChanges(rowEvent.RowChanges, applyFunc, vp.vr.dbClient.maxBatchSize)
+			return err
+		}
+		// If we're done with the copy phase then we will be replicating all INSERTS
+		// regardless of the PK value and can use a single INSERT statment with
+		// multiple VALUES clauses.
+		if len(vp.copyState) == 0 && (rowEvent.RowChanges[0].Before == nil && rowEvent.RowChanges[0].After != nil) {
+			_, err := tplan.applyBulkInsertChanges(rowEvent.RowChanges, applyFunc, vp.vr.dbClient.maxBatchSize)
 			return err
 		}
 	}
+
+	for _, change := range rowEvent.RowChanges {
+		if _, err := tplan.applyChange(change, applyFunc); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
-func (vp *vplayer) updatePos(ts int64) (posReached bool, err error) {
+func (vp *vplayer) updatePos(ctx context.Context, ts int64) (posReached bool, err error) {
 	vp.numAccumulatedHeartbeats = 0
 	update := binlogplayer.GenerateUpdatePos(vp.vr.id, vp.pos, time.Now().Unix(), ts, vp.vr.stats.CopyRowCount.Get(), vreplicationStoreCompressedGTID)
-	if _, err := vp.vr.dbClient.Execute(update); err != nil {
+	if _, err := vp.query(ctx, update); err != nil {
 		return false, fmt.Errorf("error %v updating position", err)
 	}
 	vp.unsavedEvent = nil
@@ -346,8 +430,8 @@ func (vp *vplayer) recordHeartbeat() error {
 //     of transactions come in, with the last one being partial. In this case, all transactions
 //     up to the last one have to be committed, and the final one must be partially applied.
 //
-// Of the above events, the saveable ones are COMMIT, DDL, and OTHER. Eventhough
-// A GTID comes as a separate event, it's not saveable until a subsequent saveable
+// Of the above events, the saveable ones are COMMIT, DDL, and OTHER. Even though
+// a GTID comes as a separate event, it's not saveable until a subsequent saveable
 // event occurs. VStreamer currently sequences the GTID to be sent just before
 // a saveable event, but we do not rely on this. To handle this, we only remember
 // the position when a GTID is encountered. The next saveable event causes the
@@ -380,7 +464,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		// check throttler.
+		// Check throttler.
 		if !vp.vr.vre.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, throttlerapp.Name(vp.throttlerAppName)) {
 			_ = vp.vr.updateTimeThrottled(throttlerapp.VPlayerName)
 			continue
@@ -404,7 +488,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 		// In both cases, now > timeLastSaved. If so, the GTID of the last unsavedEvent
 		// must be saved.
 		if time.Since(vp.timeLastSaved) >= idleTimeout && vp.unsavedEvent != nil {
-			posReached, err := vp.updatePos(vp.unsavedEvent.Timestamp)
+			posReached, err := vp.updatePos(ctx, vp.unsavedEvent.Timestamp)
 			if err != nil {
 				return err
 			}
@@ -503,11 +587,11 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			vp.unsavedEvent = event
 			return nil
 		}
-		posReached, err := vp.updatePos(event.Timestamp)
+		posReached, err := vp.updatePos(ctx, event.Timestamp)
 		if err != nil {
 			return err
 		}
-		if err := vp.vr.dbClient.Commit(); err != nil {
+		if err := vp.commit(); err != nil {
 			return err
 		}
 		if posReached {
@@ -560,7 +644,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			return fmt.Errorf("internal error: vplayer is in a transaction on event: %v", event)
 		}
 		// Just update the position.
-		posReached, err := vp.updatePos(event.Timestamp)
+		posReached, err := vp.updatePos(ctx, event.Timestamp)
 		if err != nil {
 			return err
 		}
@@ -573,10 +657,11 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			log.Errorf("internal error: vplayer is in a transaction on event: %v", event)
 			return fmt.Errorf("internal error: vplayer is in a transaction on event: %v", event)
 		}
+		vp.vr.stats.DDLEventActions.Add(vp.vr.source.OnDdl.String(), 1) // Record the DDL handling
 		switch vp.vr.source.OnDdl {
 		case binlogdatapb.OnDDLAction_IGNORE:
 			// We still have to update the position.
-			posReached, err := vp.updatePos(event.Timestamp)
+			posReached, err := vp.updatePos(ctx, event.Timestamp)
 			if err != nil {
 				return err
 			}
@@ -587,13 +672,13 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			if err := vp.vr.dbClient.Begin(); err != nil {
 				return err
 			}
-			if _, err := vp.updatePos(event.Timestamp); err != nil {
+			if _, err := vp.updatePos(ctx, event.Timestamp); err != nil {
 				return err
 			}
 			if err := vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, fmt.Sprintf("Stopped at DDL %s", event.Statement)); err != nil {
 				return err
 			}
-			if err := vp.vr.dbClient.Commit(); err != nil {
+			if err := vp.commit(); err != nil {
 				return err
 			}
 			return io.EOF
@@ -602,11 +687,11 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			// So, we apply the DDL first, and then save the position.
 			// Manual intervention may be needed if there is a partial
 			// failure here.
-			if _, err := vp.vr.dbClient.ExecuteWithRetry(ctx, event.Statement); err != nil {
+			if _, err := vp.query(ctx, event.Statement); err != nil {
 				return err
 			}
 			stats.Send(fmt.Sprintf("%v", event.Statement))
-			posReached, err := vp.updatePos(event.Timestamp)
+			posReached, err := vp.updatePos(ctx, event.Timestamp)
 			if err != nil {
 				return err
 			}
@@ -614,11 +699,11 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 				return io.EOF
 			}
 		case binlogdatapb.OnDDLAction_EXEC_IGNORE:
-			if _, err := vp.vr.dbClient.ExecuteWithRetry(ctx, event.Statement); err != nil {
+			if _, err := vp.query(ctx, event.Statement); err != nil {
 				log.Infof("Ignoring error: %v for DDL: %s", err, event.Statement)
 			}
 			stats.Send(fmt.Sprintf("%v", event.Statement))
-			posReached, err := vp.updatePos(event.Timestamp)
+			posReached, err := vp.updatePos(ctx, event.Timestamp)
 			if err != nil {
 				return err
 			}

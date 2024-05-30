@@ -21,13 +21,13 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
+	"golang.org/x/exp/maps"
 	"google.golang.org/protobuf/encoding/prototext"
-
-	"vitess.io/vitess/go/vt/vttablet"
 
 	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/mysql/replication"
@@ -35,12 +35,14 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
 
 type vcopier struct {
@@ -219,7 +221,7 @@ func newVCopierCopyWorker(
 func (vc *vcopier) initTablesForCopy(ctx context.Context) error {
 	defer vc.vr.dbClient.Rollback()
 
-	plan, err := buildReplicatorPlan(vc.vr.source, vc.vr.colInfoMap, nil, vc.vr.stats)
+	plan, err := buildReplicatorPlan(vc.vr.source, vc.vr.colInfoMap, nil, vc.vr.stats, vc.vr.vre.env.CollationEnv(), vc.vr.vre.env.Parser())
 	if err != nil {
 		return err
 	}
@@ -230,9 +232,12 @@ func (vc *vcopier) initTablesForCopy(ctx context.Context) error {
 	if len(plan.TargetTables) != 0 {
 		var buf strings.Builder
 		buf.WriteString("insert into _vt.copy_state(vrepl_id, table_name) values ")
+		// Sort the tables by name to ensure a consistent order.
+		tableNames := maps.Keys(plan.TargetTables)
+		slices.Sort(tableNames)
 		prefix := ""
-		for name := range plan.TargetTables {
-			fmt.Fprintf(&buf, "%s(%d, %s)", prefix, vc.vr.id, encodeString(name))
+		for _, tableName := range tableNames {
+			fmt.Fprintf(&buf, "%s(%d, %s)", prefix, vc.vr.id, encodeString(tableName))
 			prefix = ", "
 		}
 		if _, err := vc.vr.dbClient.Execute(buf.String()); err != nil {
@@ -241,10 +246,7 @@ func (vc *vcopier) initTablesForCopy(ctx context.Context) error {
 		if err := vc.vr.setState(binlogdatapb.VReplicationWorkflowState_Copying, ""); err != nil {
 			return err
 		}
-		if err := vc.vr.insertLog(LogCopyStart, fmt.Sprintf("Copy phase started for %d table(s)",
-			len(plan.TargetTables))); err != nil {
-			return err
-		}
+		vc.vr.insertLog(LogCopyStart, fmt.Sprintf("Copy phase started for %d table(s)", len(plan.TargetTables)))
 
 		if vc.vr.supportsDeferredSecondaryKeys() {
 			settings, err := binlogplayer.ReadVRSettings(vc.vr.dbClient, vc.vr.id)
@@ -252,20 +254,15 @@ func (vc *vcopier) initTablesForCopy(ctx context.Context) error {
 				return err
 			}
 			if settings.DeferSecondaryKeys {
-				if err := vc.vr.insertLog(LogCopyStart, fmt.Sprintf("Copy phase temporarily dropping secondary keys for %d table(s)",
-					len(plan.TargetTables))); err != nil {
-					return err
-				}
-				for name := range plan.TargetTables {
-					if err := vc.vr.stashSecondaryKeys(ctx, name); err != nil {
+				vc.vr.insertLog(LogCopyStart, fmt.Sprintf("Copy phase temporarily dropping secondary keys for %d table(s)", len(plan.TargetTables)))
+				for _, tableName := range tableNames {
+					if err := vc.vr.stashSecondaryKeys(ctx, tableName); err != nil {
 						return err
 					}
 				}
-				if err := vc.vr.insertLog(LogCopyStart,
+				vc.vr.insertLog(LogCopyStart,
 					fmt.Sprintf("Copy phase finished dropping secondary keys and saving post copy actions to restore them for %d table(s)",
-						len(plan.TargetTables))); err != nil {
-					return err
-				}
+						len(plan.TargetTables)))
 			}
 		}
 	} else {
@@ -294,7 +291,7 @@ func (vc *vcopier) initTablesForCopy(ctx context.Context) error {
 // primary key that was copied. A nil Result means that nothing has been copied.
 // A table that was fully copied is removed from copyState.
 func (vc *vcopier) copyNext(ctx context.Context, settings binlogplayer.VRSettings) error {
-	qr, err := vc.vr.dbClient.Execute(fmt.Sprintf("select table_name, lastpk from _vt.copy_state where vrepl_id = %d and id in (select max(id) from _vt.copy_state group by vrepl_id, table_name)", vc.vr.id))
+	qr, err := vc.vr.dbClient.Execute(fmt.Sprintf("select table_name, lastpk from _vt.copy_state where vrepl_id = %d and id in (select max(id) from _vt.copy_state group by vrepl_id, table_name) order by table_name", vc.vr.id))
 	if err != nil {
 		return err
 	}
@@ -385,7 +382,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 
 	log.Infof("Copying table %s, lastpk: %v", tableName, copyState[tableName])
 
-	plan, err := buildReplicatorPlan(vc.vr.source, vc.vr.colInfoMap, nil, vc.vr.stats)
+	plan, err := buildReplicatorPlan(vc.vr.source, vc.vr.colInfoMap, nil, vc.vr.stats, vc.vr.vre.env.CollationEnv(), vc.vr.vre.env.Parser())
 	if err != nil {
 		return err
 	}
@@ -612,7 +609,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		case result := <-resultCh:
 			switch result.state {
 			case vcopierCopyTaskCancel:
-				// A task cancelation probably indicates an expired context due
+				// A task cancellation probably indicates an expired context due
 				// to a PlannedReparentShard or elapsed copy phase duration,
 				// neither of which are error conditions.
 			case vcopierCopyTaskComplete:
@@ -833,7 +830,7 @@ func (vtl *vcopierCopyTaskLifecycle) after(state vcopierCopyTaskState) *vcopierC
 }
 
 // before returns a vcopierCopyTaskHooks that can be used to register callbacks
-// to be triggered before the the specified vcopierCopyTaskState.
+// to be triggered before the specified vcopierCopyTaskState.
 func (vtl *vcopierCopyTaskLifecycle) before(state vcopierCopyTaskState) *vcopierCopyTaskHooks {
 	key := "before:" + state.String()
 	if _, ok := vtl.hooks[key]; !ok {
@@ -1087,7 +1084,7 @@ func (vbc *vcopierCopyWorker) execute(ctx context.Context, task *vcopierCopyTask
 			advanceFn = func(context.Context, *vcopierCopyTaskArgs) error {
 				// Commit.
 				if err := vbc.vdbClient.Commit(); err != nil {
-					return vterrors.Wrapf(err, "error commiting transaction")
+					return vterrors.Wrapf(err, "error committing transaction")
 				}
 				return nil
 			}

@@ -33,19 +33,13 @@ import (
 
 const clientCertUsername = "Client Cert"
 
-func init() {
-	// These tests do not invoke the servenv.Parse codepaths, so this default
-	// does not get set by the OnParseFor hook.
-	clientcertAuthMethod = string(MysqlClearPassword)
-}
-
 func TestValidCert(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := newAuthServerClientCert()
+	authServer := newAuthServerClientCert(string(MysqlClearPassword))
 
 	// Create the listener, so we can get its host.
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0)
 	require.NoError(t, err, "NewListener failed: %v", err)
 	defer l.Close()
 	host := l.Addr().(*net.TCPAddr).IP.String()
@@ -111,10 +105,10 @@ func TestValidCert(t *testing.T) {
 func TestNoCert(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := newAuthServerClientCert()
+	authServer := newAuthServerClientCert(string(MysqlClearPassword))
 
 	// Create the listener, so we can get its host.
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0)
 	require.NoError(t, err, "NewListener failed: %v", err)
 	defer l.Close()
 	host := l.Addr().(*net.TCPAddr).IP.String()

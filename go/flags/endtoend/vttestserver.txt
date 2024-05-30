@@ -13,6 +13,7 @@ Flags:
       --backup_storage_number_blocks int                                 if backup_storage_compress is true, backup_storage_number_blocks sets the number of blocks that can be processed, in parallel, before the writer blocks, during compression (default is 2). It should be equal to the number of CPUs available for compression. (default 2)
       --builtinbackup-file-read-buffer-size uint                         read files using an IO buffer of this many bytes. Golang defaults are used when set to 0.
       --builtinbackup-file-write-buffer-size uint                        write files using an IO buffer of this many bytes. Golang defaults are used when set to 0. (default 2097152)
+      --builtinbackup-incremental-restore-path string                    the directory where incremental restore files, namely binlog files, are extracted to. In k8s environments, this should be set to a directory that is shared between the vttablet and mysqld pods. The path should exist. When empty, the default OS temp dir is assumed.
       --builtinbackup_mysqld_timeout duration                            how long to wait for mysqld to shutdown at the start of the backup. (default 10m0s)
       --builtinbackup_progress duration                                  how often to send progress updates when backing up large files. (default 5s)
       --catch-sigpipe                                                    catch and ignore SIGPIPE on stdout and stderr if specified
@@ -31,7 +32,6 @@ Flags:
       --dba_idle_timeout duration                                        Idle timeout for dba connections (default 1m0s)
       --dba_pool_size int                                                Size of the connection pool for dba connections (default 20)
       --default_schema_dir string                                        Default directory for initial schema files. If no schema is found in schema_dir, default to this location.
-      --disable_active_reparents                                         if set, do not allow active reparents. Use this to protect a cluster using external reparents.
       --enable_direct_ddl                                                Allow users to submit direct DDL statements (default true)
       --enable_online_ddl                                                Allow users to submit, review and control Online DDL (default true)
       --enable_system_settings                                           This will enable the system settings to be changed per session at the database connection level (default true)
@@ -69,13 +69,16 @@ Flags:
       --grpc_server_initial_window_size int                              gRPC server initial window size
       --grpc_server_keepalive_enforcement_policy_min_time duration       gRPC server minimum keepalive time (default 10s)
       --grpc_server_keepalive_enforcement_policy_permit_without_stream   gRPC server permit client keepalive pings even when there are no active streams (RPCs)
+      --grpc_server_keepalive_time duration                              After a duration of this time, if the server doesn't see any activity, it pings the client to see if the transport is still alive. (default 10s)
+      --grpc_server_keepalive_timeout duration                           After having pinged for keepalive check, the server waits for a duration of Timeout and if no activity is seen even after that the connection is closed. (default 10s)
   -h, --help                                                             help for vttestserver
+      --initialize-with-vt-dba-tcp                                       If this flag is enabled, MySQL will be initialized with an additional user named vt_dba_tcp, who will have access via TCP/IP connection.
       --initialize_with_random_data                                      If this flag is each table-shard will be initialized with random data. See also the 'rng_seed' and 'min_shard_size' and 'max_shard_size' flags.
       --keep_logs duration                                               keep logs for this long (using ctime) (zero to keep forever)
       --keep_logs_by_mtime duration                                      keep logs for this long (using mtime) (zero to keep forever)
       --keyspaces strings                                                Comma separated list of keyspaces (default [test_keyspace])
       --lameduck-period duration                                         keep running at least this long after SIGTERM before stopping (default 50ms)
-      --log_backtrace_at traceLocation                                   when logging hits line file:N, emit a stack trace (default :0)
+      --log_backtrace_at traceLocations                                  when logging hits line file:N, emit a stack trace
       --log_dir string                                                   If non-empty, write log files in this directory
       --log_err_stacks                                                   log stack traces for errors
       --log_rotate_max_size uint                                         size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
@@ -89,6 +92,7 @@ Flags:
       --mysql_server_version string                                      MySQL server version to advertise. (default "8.0.30-Vitess")
       --mysqlctl_mycnf_template string                                   template file to use for generating the my.cnf file during server init
       --mysqlctl_socket string                                           socket file to use for remote mysqlctl actions (empty for local actions)
+      --no_scatter                                                       when set to true, the planner will fail instead of producing a plan that includes scatter queries
       --null_probability float                                           The probability to initialize a field with 'NULL'  if --initialize_with_random_data is true. Only applies to fields that can contain NULL values. (default 0.1)
       --num_shards strings                                               Comma separated shard count (one per keyspace) (default [2])
       --onclose_timeout duration                                         wait no more than this for OnClose handlers before stopping (default 10s)
@@ -99,6 +103,7 @@ Flags:
       --pool_hostname_resolve_interval duration                          if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled)
       --port int                                                         Port to use for vtcombo. If this is 0, a random port will be chosen.
       --pprof strings                                                    enable profiling
+      --pprof-http                                                       enable pprof http endpoints
       --proto_topo string                                                Define the fake cluster topology as a compact text format encoded vttest proto. See vttest.proto for more information.
       --purge_logs_interval duration                                     how often try to remove old logs (default 1h0m0s)
       --queryserver-config-transaction-timeout float                     query server transaction timeout (in seconds), a transaction will be killed if it takes longer than this value
@@ -112,13 +117,13 @@ Flags:
       --snapshot_file string                                             A MySQL DB snapshot file
       --sql-max-length-errors int                                        truncate queries in error logs to the given length (default unlimited)
       --sql-max-length-ui int                                            truncate queries in debug UIs to the given length (default 512) (default 512)
-      --stderrthreshold severity                                         logs at or above this threshold go to stderr (default 1)
+      --stderrthreshold severityFlag                                     logs at or above this threshold go to stderr (default 1)
       --table-refresh-interval int                                       interval in milliseconds to refresh tables in status page with refreshRequired class
       --tablet_dir string                                                The directory within the vtdataroot to store vttablet/mysql files. Defaults to being generated by the tablet uid.
       --tablet_hostname string                                           The hostname to use for the tablet otherwise it will be derived from OS' hostname (default "localhost")
       --tablet_manager_grpc_ca string                                    the server ca to use to validate servers when connecting
       --tablet_manager_grpc_cert string                                  the cert to use to connect
-      --tablet_manager_grpc_concurrency int                              concurrency to use to talk to a vttablet server for performance-sensitive RPCs (like ExecuteFetchAs{Dba,AllPrivs,App}) (default 8)
+      --tablet_manager_grpc_concurrency int                              concurrency to use to talk to a vttablet server for performance-sensitive RPCs (like ExecuteFetchAs{Dba,App}, CheckThrottler and FullStatus) (default 8)
       --tablet_manager_grpc_connpool_size int                            number of tablets to keep tmclient connections open to (default 100)
       --tablet_manager_grpc_crl string                                   the server crl to use to validate server certificates when connecting
       --tablet_manager_grpc_key string                                   the key to use to connect
@@ -138,8 +143,9 @@ Flags:
       --transaction_mode string                                          Transaction mode MULTI (default), SINGLE or TWOPC  (default "MULTI")
       --v Level                                                          log level for V logs
   -v, --version                                                          print binary version
-      --vmodule moduleSpec                                               comma-separated list of pattern=N settings for file-filtered logging
+      --vmodule vModuleFlag                                              comma-separated list of pattern=N settings for file-filtered logging
       --vschema_ddl_authorized_users string                              Comma separated list of users authorized to execute vschema ddl operations via vtgate
+      --vtcombo-bind-host string                                         which host to bind vtcombo servenv listener to (default "localhost")
       --vtctl_client_protocol string                                     Protocol to use to talk to the vtctl server. (default "grpc")
       --vtctld_grpc_ca string                                            the server ca to use to validate servers when connecting
       --vtctld_grpc_cert string                                          the cert to use to connect

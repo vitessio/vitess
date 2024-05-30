@@ -26,7 +26,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -40,23 +39,13 @@ func TestVSchemaChangesUnderLoad(t *testing.T) {
 
 	extendedTimeout := defaultTimeout * 4
 
-	defaultCellName := "zone1"
-	allCells := []string{"zone1"}
-	allCellNames = "zone1"
-	vc = NewVitessCluster(t, "TestVSchemaChanges", allCells, mainClusterConfig)
+	vc = NewVitessCluster(t, nil)
+	defer vc.TearDown()
 
-	require.NotNil(t, vc)
-
-	defer vc.TearDown(t)
-
-	defaultCell = vc.Cells[defaultCellName]
+	defaultCell := vc.Cells[vc.CellNames[0]]
 	vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, 1, 0, 100, sourceKsOpts)
-	vtgate = defaultCell.Vtgates[0]
-	require.NotNil(t, vtgate)
-	err := cluster.WaitForHealthyShard(vc.VtctldClient, "product", "0")
-	require.NoError(t, err)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "product", "0"), 1, 30*time.Second)
-	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+
+	vtgateConn := vc.GetVTGateConn(t)
 	defer vtgateConn.Close()
 
 	// ch is used to signal that there is significant data inserted into the tables and when a lot of vschema changes have been applied

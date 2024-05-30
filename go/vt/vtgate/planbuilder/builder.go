@@ -22,8 +22,8 @@ import (
 	"sort"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/vschemawrapper"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -47,10 +47,6 @@ var (
 )
 
 type (
-	truncater interface {
-		SetTruncateColumnCount(int)
-	}
-
 	planResult struct {
 		primitive engine.Primitive
 		tables    []string
@@ -70,11 +66,24 @@ func singleTable(ks, tbl string) string {
 // TestBuilder builds a plan for a query based on the specified vschema.
 // This method is only used from tests
 func TestBuilder(query string, vschema plancontext.VSchema, keyspace string) (*engine.Plan, error) {
-	stmt, reserved, err := sqlparser.Parse2(query)
+	stmt, reserved, err := vschema.Environment().Parser().Parse2(query)
 	if err != nil {
 		return nil, err
 	}
-	result, err := sqlparser.RewriteAST(stmt, keyspace, sqlparser.SQLSelectLimitUnset, "", nil, vschema)
+	// Store the foreign key mode like we do for vcursor.
+	vw, isVw := vschema.(*vschemawrapper.VSchemaWrapper)
+	if isVw {
+		fkState := sqlparser.ForeignKeyChecksState(stmt)
+		if fkState != nil {
+			// Restore the old volue of ForeignKeyChecksState to not interfere with the next test cases.
+			oldVal := vw.ForeignKeyChecksState
+			vw.ForeignKeyChecksState = fkState
+			defer func() {
+				vw.ForeignKeyChecksState = oldVal
+			}()
+		}
+	}
+	result, err := sqlparser.RewriteAST(stmt, keyspace, sqlparser.SQLSelectLimitUnset, "", nil, vschema.GetForeignKeyChecksState(), vschema)
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +125,6 @@ func getConfiguredPlanner(vschema plancontext.VSchema, stmt sqlparser.Statement,
 	case Gen4Left2Right, Gen4GreedyOnly, Gen4:
 	default:
 		// default is gen4 plan
-		log.Infof("Using Gen4 planner instead of %s", planner.String())
 		planner = Gen4
 	}
 	return gen4Planner(query, planner), nil
@@ -145,25 +153,7 @@ func buildRoutePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVa
 
 func createInstructionFor(ctx context.Context, query string, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
 	switch stmt := stmt.(type) {
-	case *sqlparser.Select:
-		configuredPlanner, err := getConfiguredPlanner(vschema, stmt, query)
-		if err != nil {
-			return nil, err
-		}
-		return buildRoutePlan(stmt, reservedVars, vschema, configuredPlanner)
-	case *sqlparser.Insert:
-		configuredPlanner, err := getConfiguredPlanner(vschema, stmt, query)
-		if err != nil {
-			return nil, err
-		}
-		return buildRoutePlan(stmt, reservedVars, vschema, configuredPlanner)
-	case *sqlparser.Update:
-		configuredPlanner, err := getConfiguredPlanner(vschema, stmt, query)
-		if err != nil {
-			return nil, err
-		}
-		return buildRoutePlan(stmt, reservedVars, vschema, configuredPlanner)
-	case *sqlparser.Delete:
+	case *sqlparser.Select, *sqlparser.Insert, *sqlparser.Update, *sqlparser.Delete:
 		configuredPlanner, err := getConfiguredPlanner(vschema, stmt, query)
 		if err != nil {
 			return nil, err
@@ -191,8 +181,10 @@ func createInstructionFor(ctx context.Context, query string, stmt sqlparser.Stat
 		return buildVSchemaDDLPlan(stmt, vschema)
 	case *sqlparser.Use:
 		return buildUsePlan(stmt)
-	case sqlparser.Explain:
-		return buildExplainPlan(ctx, stmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+	case *sqlparser.ExplainTab:
+		return explainTabPlan(stmt, vschema)
+	case *sqlparser.ExplainStmt:
+		return buildRoutePlan(stmt, reservedVars, vschema, buildExplainStmtPlan)
 	case *sqlparser.VExplainStmt:
 		return buildVExplainPlan(ctx, stmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	case *sqlparser.OtherAdmin:
@@ -246,7 +238,7 @@ func buildAnalyzePlan(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vsche
 	var err error
 	dest := key.Destination(key.DestinationAllShards{})
 
-	if !analyzeStmt.Table.Qualifier.IsEmpty() && sqlparser.SystemSchema(analyzeStmt.Table.Qualifier.String()) {
+	if analyzeStmt.Table.Qualifier.NotEmpty() && sqlparser.SystemSchema(analyzeStmt.Table.Qualifier.String()) {
 		ks, err = vschema.AnyKeyspace()
 		if err != nil {
 			return nil, err
@@ -370,18 +362,12 @@ func buildFlushOptions(stmt *sqlparser.Flush, vschema plancontext.VSchema) (*pla
 		dest = key.DestinationAllShards{}
 	}
 
-	tc := &tableCollector{}
-	for _, tbl := range stmt.TableNames {
-		tc.addASTTable(keyspace.Name, tbl)
-	}
-
 	return newPlanResult(&engine.Send{
-		Keyspace:          keyspace,
-		TargetDestination: dest,
-		Query:             sqlparser.String(stmt),
-		IsDML:             false,
-		SingleShardOnly:   false,
-	}, tc.getTables()...), nil
+		Keyspace:                 keyspace,
+		TargetDestination:        dest,
+		Query:                    sqlparser.String(stmt),
+		ReservedConnectionNeeded: stmt.WithLock,
+	}), nil
 }
 
 func buildFlushTables(stmt *sqlparser.Flush, vschema plancontext.VSchema) (*planResult, error) {
@@ -429,9 +415,10 @@ func buildFlushTables(stmt *sqlparser.Flush, vschema plancontext.VSchema) (*plan
 	if len(tablesMap) == 1 {
 		for sendDest, tables := range tablesMap {
 			return newPlanResult(&engine.Send{
-				Keyspace:          sendDest.ks,
-				TargetDestination: sendDest.dest,
-				Query:             sqlparser.String(newFlushStmt(stmt, tables)),
+				Keyspace:                 sendDest.ks,
+				TargetDestination:        sendDest.dest,
+				Query:                    sqlparser.String(newFlushStmt(stmt, tables)),
+				ReservedConnectionNeeded: stmt.WithLock,
 			}, tc.getTables()...), nil
 		}
 	}
@@ -443,9 +430,10 @@ func buildFlushTables(stmt *sqlparser.Flush, vschema plancontext.VSchema) (*plan
 	var sources []engine.Primitive
 	for _, sendDest := range keys {
 		plan := &engine.Send{
-			Keyspace:          sendDest.ks,
-			TargetDestination: sendDest.dest,
-			Query:             sqlparser.String(newFlushStmt(stmt, tablesMap[sendDest])),
+			Keyspace:                 sendDest.ks,
+			TargetDestination:        sendDest.dest,
+			Query:                    sqlparser.String(newFlushStmt(stmt, tablesMap[sendDest])),
+			ReservedConnectionNeeded: stmt.WithLock,
 		}
 		sources = append(sources, plan)
 	}

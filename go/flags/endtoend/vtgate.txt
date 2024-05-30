@@ -93,7 +93,10 @@ Flags:
       --grpc_server_initial_window_size int                              gRPC server initial window size
       --grpc_server_keepalive_enforcement_policy_min_time duration       gRPC server minimum keepalive time (default 10s)
       --grpc_server_keepalive_enforcement_policy_permit_without_stream   gRPC server permit client keepalive pings even when there are no active streams (RPCs)
+      --grpc_server_keepalive_time duration                              After a duration of this time, if the server doesn't see any activity, it pings the client to see if the transport is still alive. (default 10s)
+      --grpc_server_keepalive_timeout duration                           After having pinged for keepalive check, the server waits for a duration of Timeout and if no activity is seen even after that the connection is closed. (default 10s)
       --grpc_use_effective_callerid                                      If set, and SSL is not used, will set the immediate caller id from the effective caller id's principal.
+      --healthcheck-dial-concurrency int                                 Maximum concurrency of new healthcheck connections. This should be less than the golang max thread limit of 10000. (default 1024)
       --healthcheck_retry_delay duration                                 health check retry delay (default 2ms)
       --healthcheck_timeout duration                                     the health check timeout period (default 1m0s)
   -h, --help                                                             help for vtgate
@@ -105,7 +108,7 @@ Flags:
       --legacy_replication_lag_algorithm                                 Use the legacy algorithm when selecting vttablets for serving. (default true)
       --lock-timeout duration                                            Maximum time for which a shard/keyspace lock can be acquired for (default 45s)
       --lock_heartbeat_time duration                                     If there is lock function used. This will keep the lock connection active by using this heartbeat (default 5s)
-      --log_backtrace_at traceLocation                                   when logging hits line file:N, emit a stack trace (default :0)
+      --log_backtrace_at traceLocations                                  when logging hits line file:N, emit a stack trace
       --log_dir string                                                   If non-empty, write log files in this directory
       --log_err_stacks                                                   log stack traces for errors
       --log_queries_to_file string                                       Enable query logging to the specified file
@@ -163,6 +166,7 @@ Flags:
       --planner-version string                                           Sets the default planner to use when the session has not changed it. Valid values are: Gen4, Gen4Greedy, Gen4Left2Right
       --port int                                                         port for the server
       --pprof strings                                                    enable profiling
+      --pprof-http                                                       enable pprof http endpoints
       --proxy_protocol                                                   Enable HAProxy PROXY protocol on MySQL listener socket
       --purge_logs_interval duration                                     how often try to remove old logs (default 1h0m0s)
       --query-timeout int                                                Sets the default query timeout (in ms). Can be overridden by session variable (query_timeout) or comment directive (QUERY_TIMEOUT_MS)
@@ -188,7 +192,7 @@ Flags:
       --stats_emit_period duration                                       Interval between emitting stats to all registered backends (default 1m0s)
       --statsd_address string                                            Address for statsd client
       --statsd_sample_rate float                                         Sample rate for statsd metrics (default 1)
-      --stderrthreshold severity                                         logs at or above this threshold go to stderr (default 1)
+      --stderrthreshold severityFlag                                     logs at or above this threshold go to stderr (default 1)
       --stream_buffer_size int                                           the number of bytes sent from vtgate for each stream call. It's recommended to keep this value in sync with vttablet's query-server-config-stream-buffer-size. (default 32768)
       --table-refresh-interval int                                       interval in milliseconds to refresh tables in status page with refreshRequired class
       --tablet_filters strings                                           Specifies a comma-separated list of 'keyspace|shard_name or keyrange' values to filter the tablets to watch.
@@ -224,11 +228,12 @@ Flags:
       --tracing-enable-logging                                           whether to enable logging in the tracing service
       --tracing-sampling-rate float                                      sampling rate for the probabilistic jaeger sampler (default 0.1)
       --tracing-sampling-type string                                     sampling strategy to use for jaeger. possible values are 'const', 'probabilistic', 'rateLimiting', or 'remote' (default "const")
+      --track-udfs                                                       Track UDFs in vtgate.
       --transaction_mode string                                          SINGLE: disallow multi-db transactions, MULTI: allow multi-db transactions with best effort commit, TWOPC: allow multi-db transactions with 2pc commit (default "MULTI")
       --truncate-error-len int                                           truncate errors sent to client if they are longer than this value (0 means do not truncate)
       --v Level                                                          log level for V logs
   -v, --version                                                          print binary version
-      --vmodule moduleSpec                                               comma-separated list of pattern=N settings for file-filtered logging
+      --vmodule vModuleFlag                                              comma-separated list of pattern=N settings for file-filtered logging
       --vschema_ddl_authorized_users string                              List of users authorized to execute vschema ddl operations, or '%' to allow all users.
       --vtgate-config-terse-errors                                       prevent bind vars from escaping in returned errors
       --warming-reads-concurrency int                                    Number of concurrent warming reads allowed (default 500)

@@ -22,7 +22,6 @@ import (
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -35,7 +34,7 @@ import (
 // Project/Aggregate/Sort/Limit operations, some which can be pushed down,
 // and some that have to be evaluated at the vtgate level.
 type Horizon struct {
-	Source ops.Operator
+	Source Operator
 
 	// If this is a derived table, the two following fields will contain the tableID and name of it
 	TableId       *semantics.TableSet
@@ -52,12 +51,12 @@ type Horizon struct {
 	ColumnsOffset []int
 }
 
-func newHorizon(src ops.Operator, query sqlparser.SelectStatement) *Horizon {
+func newHorizon(src Operator, query sqlparser.SelectStatement) *Horizon {
 	return &Horizon{Source: src, Query: query}
 }
 
 // Clone implements the Operator interface
-func (h *Horizon) Clone(inputs []ops.Operator) ops.Operator {
+func (h *Horizon) Clone(inputs []Operator) Operator {
 	klone := *h
 	klone.Source = inputs[0]
 	klone.ColumnAliases = sqlparser.CloneColumns(h.ColumnAliases)
@@ -77,16 +76,16 @@ func (h *Horizon) IsMergeable(ctx *plancontext.PlanningContext) bool {
 }
 
 // Inputs implements the Operator interface
-func (h *Horizon) Inputs() []ops.Operator {
-	return []ops.Operator{h.Source}
+func (h *Horizon) Inputs() []Operator {
+	return []Operator{h.Source}
 }
 
 // SetInputs implements the Operator interface
-func (h *Horizon) SetInputs(ops []ops.Operator) {
+func (h *Horizon) SetInputs(ops []Operator) {
 	h.Source = ops[0]
 }
 
-func (h *Horizon) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
+func (h *Horizon) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
 	if _, isUNion := h.Source.(*Union); isUNion {
 		// If we have a derived table on top of a UNION, we can let the UNION do the expression rewriting
 		h.Source = h.Source.AddPredicate(ctx, expr)
@@ -95,17 +94,14 @@ func (h *Horizon) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.
 	tableInfo, err := ctx.SemTable.TableInfoForExpr(expr)
 	if err != nil {
 		if errors.Is(err, semantics.ErrNotSingleTable) {
-			return &Filter{
-				Source:     h,
-				Predicates: []sqlparser.Expr{expr},
-			}
+			return newFilter(h, expr)
 		}
 		panic(err)
 	}
 
-	newExpr := semantics.RewriteDerivedTableExpression(expr, tableInfo)
-	if sqlparser.ContainsAggregation(newExpr) {
-		return &Filter{Source: h, Predicates: []sqlparser.Expr{expr}}
+	newExpr := ctx.RewriteDerivedTableExpression(expr, tableInfo)
+	if ContainsAggr(ctx, newExpr) {
+		return newFilter(h, expr)
 	}
 	h.Source = h.Source.AddPredicate(ctx, newExpr)
 	return h
@@ -124,6 +120,10 @@ func (h *Horizon) AddColumn(ctx *plancontext.PlanningContext, reuse bool, _ bool
 		panic(errNoNewColumns)
 	}
 	return offset
+}
+
+func (h *Horizon) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
+	panic(errNoNewColumns)
 }
 
 var errNoNewColumns = vterrors.VT13001("can't add new columns to Horizon")
@@ -145,7 +145,13 @@ func canReuseColumn[T any](
 	return
 }
 
-func (h *Horizon) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, _ bool) int {
+func (h *Horizon) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
+	if underRoute && h.IsDerived() {
+		// We don't want to use columns on this operator if it's a derived table under a route.
+		// In this case, we need to add a Projection on top of this operator to make the column available
+		return -1
+	}
+
 	for idx, se := range sqlparser.GetFirstSelect(h.Query).SelectExprs {
 		ae, ok := se.(*sqlparser.AliasedExpr)
 		if !ok {
@@ -175,12 +181,9 @@ func (h *Horizon) GetSelectExprs(*plancontext.PlanningContext) sqlparser.SelectE
 	return sqlparser.GetFirstSelect(h.Query).SelectExprs
 }
 
-func (h *Horizon) GetOrdering(ctx *plancontext.PlanningContext) []ops.OrderBy {
+func (h *Horizon) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
 	if h.QP == nil {
-		_, err := h.getQP(ctx)
-		if err != nil {
-			panic(err)
-		}
+		h.getQP(ctx)
 	}
 	return h.QP.OrderExprs
 }
@@ -190,20 +193,15 @@ func (h *Horizon) selectStatement() sqlparser.SelectStatement {
 	return h.Query
 }
 
-func (h *Horizon) src() ops.Operator {
+func (h *Horizon) src() Operator {
 	return h.Source
 }
 
-func (h *Horizon) getQP(ctx *plancontext.PlanningContext) (*QueryProjection, error) {
-	if h.QP != nil {
-		return h.QP, nil
+func (h *Horizon) getQP(ctx *plancontext.PlanningContext) *QueryProjection {
+	if h.QP == nil {
+		h.QP = CreateQPFromSelectStatement(ctx, h.Query)
 	}
-	qp, err := CreateQPFromSelectStatement(ctx, h.Query)
-	if err != nil {
-		return nil, err
-	}
-	h.QP = qp
-	return h.QP, nil
+	return h.QP
 }
 
 func (h *Horizon) ShortDescription() string {

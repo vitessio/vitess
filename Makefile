@@ -139,7 +139,7 @@ endif
 install: build
 	# binaries
 	mkdir -p "$${PREFIX}/bin"
-	cp "$${VTROOTBIN}/"{mysqlctl,mysqlctld,vtorc,vtadmin,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtbackup} "$${PREFIX}/bin/"
+	cp "$${VTROOTBIN}/"{mysqlctl,mysqlctld,vtorc,vtadmin,vtctl,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtbackup,vtexplain} "$${PREFIX}/bin/"
 
 # Will only work inside the docker bootstrap for now
 cross-install: cross-build
@@ -214,10 +214,14 @@ e2e_test: build
 	go test $(VT_GO_PARALLEL) ./go/.../endtoend/...
 
 # Run the code coverage tools, compute aggregate.
-# If you want to improve in a directory, run:
-#   go test -coverprofile=coverage.out && go tool cover -html=coverage.out
-unit_test_cover: build
-	go test $(VT_GO_PARALLEL) -cover ./go/... | misc/parse_cover.py
+unit_test_cover: build dependency_check demo
+	source build.env
+	go test $(VT_GO_PARALLEL) -count=1 -failfast -covermode=atomic -coverpkg=vitess.io/vitess/go/... -coverprofile=coverage.out ./go/...
+	# Handle go tool cover failures due to not handling `//line` directives, which
+	# the goyacc compiler adds to the generated parser in sql.go. See:
+	# https://github.com/golang/go/issues/41222
+	sed -i'' -e '/^vitess.io\/vitess\/go\/vt\/sqlparser\/yaccpar/d' coverage.out
+	go tool $(VT_GO_PARALLEL) cover -html=coverage.out
 
 unit_test_race: build dependency_check
 	tools/unit_test_race.sh
@@ -253,7 +257,7 @@ PROTO_SRCS = $(wildcard proto/*.proto)
 PROTO_SRC_NAMES = $(basename $(notdir $(PROTO_SRCS)))
 PROTO_GO_OUTS = $(foreach name, $(PROTO_SRC_NAMES), go/vt/proto/$(name)/$(name).pb.go)
 # This rule rebuilds all the go files from the proto definitions for gRPC.
-proto: $(PROTO_GO_OUTS) vtadmin_web_proto_types
+proto: $(PROTO_GO_OUTS) vtadmin_web_proto_types vtctldclient
 
 ifndef NOBANNER
 	echo $$(date): Compiling proto definitions
@@ -278,7 +282,7 @@ $(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
 # This rule builds the bootstrap images for all flavors.
 DOCKER_IMAGES_FOR_TEST = mysql57 mysql80 percona57 percona80
 DOCKER_IMAGES = common $(DOCKER_IMAGES_FOR_TEST)
-BOOTSTRAP_VERSION=24
+BOOTSTRAP_VERSION=32
 ensure_bootstrap_version:
 	find docker/ -type f -exec sed -i "s/^\(ARG bootstrap_version\)=.*/\1=${BOOTSTRAP_VERSION}/" {} \;
 	sed -i 's/\(^.*flag.String(\"bootstrap-version\",\) *\"[^\"]\+\"/\1 \"${BOOTSTRAP_VERSION}\"/' test.go
@@ -314,35 +318,12 @@ define build_docker_image
 	fi
 endef
 
-docker_base:
-	${call build_docker_image,docker/base/Dockerfile,vitess/base}
-
-DOCKER_BASE_SUFFIX = mysql80 percona57 percona80
-DOCKER_BASE_TARGETS = $(addprefix docker_base_, $(DOCKER_BASE_SUFFIX))
-$(DOCKER_BASE_TARGETS): docker_base_%:
-	${call build_docker_image,docker/base/Dockerfile.$*,vitess/base:$*}
-
-docker_base_all: docker_base $(DOCKER_BASE_TARGETS)
-
-DOCKER_MYSQL_VERSIONS = 8.0.30 8.0.34
-docker_mysql:
-	for i in $(DOCKER_MYSQL_VERSIONS); do echo "building vitess/mysql:$$i"; ${call build_docker_image,docker/mysql/Dockerfile.$$i,vitess/mysql:$$i} || exit 1; done
-
-docker_mysql_push:
-	for i in $(DOCKER_MYSQL_VERSIONS); do echo "pushing vitess/mysql:$$i"; docker push vitess/mysql:$$i || exit 1; done
-
 docker_lite:
 	${call build_docker_image,docker/lite/Dockerfile,vitess/lite}
 
-DOCKER_LITE_SUFFIX = mysql57 ubi7.mysql57 mysql80 ubi7.mysql80 percona57 ubi7.percona57 percona80 ubi7.percona80 testing ubi8.mysql80 ubi8.arm64.mysql80
-DOCKER_LITE_TARGETS = $(addprefix docker_lite_,$(DOCKER_LITE_SUFFIX))
-$(DOCKER_LITE_TARGETS): docker_lite_%:
-	${call build_docker_image,docker/lite/Dockerfile.$*,vitess/lite:$*}
-
 docker_lite_push:
-	for i in $(DOCKER_LITE_SUFFIX); do echo "pushing lite image: $$i"; docker push vitess/lite:$$i || exit 1; done
-
-docker_lite_all: docker_lite $(DOCKER_LITE_TARGETS)
+	echo "pushing lite image: latest"
+	docker push vitess/lite:latest
 
 docker_local:
 	${call build_docker_image,docker/local/Dockerfile,vitess/local}
@@ -367,20 +348,6 @@ docker_test:
 
 docker_unit_test:
 	go run test.go -flavor $(flavor) unit
-
-# Release a version.
-# This will generate a tar.gz file into the releases folder with the current source
-release: docker_base
-	@if [ -z "$VERSION" ]; then \
-		echo "Set the env var VERSION with the release version"; exit 1;\
-	fi
-	mkdir -p releases
-	docker build -f docker/Dockerfile.release -t vitess/release .
-	docker run -v ${PWD}/releases:/vt/releases --env VERSION=$(VERSION) vitess/release
-	git tag -m Version\ $(VERSION) v$(VERSION)
-	echo "A git tag was created, you can push it with:"
-	echo "git push origin v$(VERSION)"
-	echo "Also, don't forget the upload releases/v$(VERSION).tar.gz file to GitHub releases"
 
 create_release:
 	./tools/create_release.sh

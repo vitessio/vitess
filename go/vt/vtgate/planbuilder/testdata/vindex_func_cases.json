@@ -73,11 +73,12 @@
       "Original": "select id, keyspace_id, id from user_index where id = :id",
       "Instructions": {
         "OperatorType": "SimpleProjection",
-        "Columns": [
-          0,
-          1,
-          0
+        "ColumnNames": [
+          "0:id",
+          "1:keyspace_id",
+          "2:id"
         ],
+        "Columns": "0,1,0",
         "Inputs": [
           {
             "OperatorType": "VindexFunc",
@@ -113,11 +114,12 @@
       "Original": "select id, keyspace_id, id from second_user.hash_dup where id = :id",
       "Instructions": {
         "OperatorType": "SimpleProjection",
-        "Columns": [
-          0,
-          1,
-          0
+        "ColumnNames": [
+          "0:id",
+          "1:keyspace_id",
+          "2:id"
         ],
+        "Columns": "0,1,0",
         "Inputs": [
           {
             "OperatorType": "VindexFunc",

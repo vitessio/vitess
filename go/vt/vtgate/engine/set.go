@@ -17,7 +17,6 @@ limitations under the License.
 package engine
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -46,10 +45,10 @@ import (
 type (
 	// Set contains the instructions to perform set.
 	Set struct {
+		noTxNeeded
+
 		Ops   []SetOp
 		Input Primitive
-
-		noTxNeeded
 	}
 
 	// SetOp is an interface that different type of set operations implements.
@@ -181,7 +180,6 @@ func (u *UserDefinedVariable) MarshalJSON() ([]byte, error) {
 		Name: u.Name,
 		Expr: sqlparser.String(u.Expr),
 	})
-
 }
 
 // VariableName implements the SetOp interface method.
@@ -209,7 +207,6 @@ func (svi *SysVarIgnore) MarshalJSON() ([]byte, error) {
 		Type:         "SysVarIgnore",
 		SysVarIgnore: *svi,
 	})
-
 }
 
 // VariableName implements the SetOp interface method.
@@ -219,7 +216,6 @@ func (svi *SysVarIgnore) VariableName() string {
 
 // Execute implements the SetOp interface method.
 func (svi *SysVarIgnore) Execute(context.Context, VCursor, *evalengine.ExpressionEnv) error {
-	log.Infof("Ignored inapplicable SET %v = %v", svi.Name, svi.Expr)
 	return nil
 }
 
@@ -234,7 +230,6 @@ func (svci *SysVarCheckAndIgnore) MarshalJSON() ([]byte, error) {
 		Type:                 "SysVarCheckAndIgnore",
 		SysVarCheckAndIgnore: *svci,
 	})
-
 }
 
 // VariableName implements the SetOp interface method
@@ -253,16 +248,13 @@ func (svci *SysVarCheckAndIgnore) Execute(ctx context.Context, vcursor VCursor, 
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unexpected error, DestinationKeyspaceID mapping to multiple shards: %v", svci.TargetDestination)
 	}
 	checkSysVarQuery := fmt.Sprintf("select 1 from dual where @@%s = %s", svci.Name, svci.Expr)
-	result, err := execShard(ctx, nil, vcursor, checkSysVarQuery, env.BindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */)
+	_, err = execShard(ctx, nil, vcursor, checkSysVarQuery, env.BindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */)
 	if err != nil {
 		// Rather than returning the error, we will just log the error
 		// as the intention for executing the query it to validate the current setting and eventually ignore it anyways.
 		// There is no benefit of returning the error back to client.
 		log.Warningf("unable to validate the current settings for '%s': %s", svci.Name, err.Error())
 		return nil
-	}
-	if len(result.Rows) == 0 {
-		log.Infof("Ignored inapplicable SET %v = %v", svci.Name, svci.Expr)
 	}
 	return nil
 }
@@ -278,7 +270,6 @@ func (svs *SysVarReservedConn) MarshalJSON() ([]byte, error) {
 		Type:               "SysVarSet",
 		SysVarReservedConn: *svs,
 	})
-
 }
 
 // VariableName implements the SetOp interface method
@@ -363,8 +354,8 @@ func (svs *SysVarReservedConn) checkAndUpdateSysVar(ctx context.Context, vcursor
 	} else {
 		value = qr.Rows[0][0]
 	}
-	buf := new(bytes.Buffer)
-	value.EncodeSQL(buf)
+	var buf strings.Builder
+	value.EncodeSQL(&buf)
 	s := buf.String()
 	vcursor.Session().SetSysVar(svs.Name, s)
 

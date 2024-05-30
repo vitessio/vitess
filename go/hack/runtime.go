@@ -23,19 +23,8 @@ import (
 )
 
 //go:noescape
-//go:linkname memhash runtime.memhash
-func memhash(p unsafe.Pointer, h, s uintptr) uintptr
-
-//go:noescape
 //go:linkname strhash runtime.strhash
 func strhash(p unsafe.Pointer, h uintptr) uintptr
-
-// RuntimeMemhash provides access to the Go runtime's default hash function for arbitrary bytes.
-// This is an optimal hash function which takes an input seed and is potentially implemented in hardware
-// for most architectures. This is the same hash function that the language's `map` uses.
-func RuntimeMemhash(b []byte, seed uint64) uint64 {
-	return uint64(memhash(unsafe.Pointer(unsafe.SliceData(b)), uintptr(seed), uintptr(len(b))))
-}
 
 // RuntimeStrhash provides access to the Go runtime's default hash function for strings.
 // This is an optimal hash function which takes an input seed and is potentially implemented in hardware
@@ -57,6 +46,3 @@ func Atof64(s string) (float64, int, error)
 
 //go:linkname Atof32 strconv.atof32
 func Atof32(s string) (float32, int, error)
-
-//go:linkname FastRand runtime.fastrand
-func FastRand() uint32

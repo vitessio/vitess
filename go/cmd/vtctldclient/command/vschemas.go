@@ -40,7 +40,7 @@ var (
 	}
 	// ApplyVSchema makes an ApplyVSchema gRPC call to a vtctld.
 	ApplyVSchema = &cobra.Command{
-		Use:                   "ApplyVSchema {--vschema=<vschema> || --vschema-file=<vschema file> || --sql=<sql> || --sql-file=<sql file>} [--cells=c1,c2,...] [--skip-rebuild] [--dry-run] <keyspace>",
+		Use:                   "ApplyVSchema {--vschema=<vschema> || --vschema-file=<vschema file> || --sql=<sql> || --sql-file=<sql file>} [--cells=c1,c2,...] [--skip-rebuild] [--dry-run] [--strict] <keyspace>",
 		Short:                 "Applies the VTGate routing schema to the provided keyspace. Shows the result after application.",
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(1),
@@ -56,6 +56,7 @@ var applyVSchemaOptions = struct {
 	DryRun      bool
 	SkipRebuild bool
 	Cells       []string
+	Strict      bool
 }{}
 
 func commandApplyVSchema(cmd *cobra.Command, args []string) error {
@@ -75,6 +76,7 @@ func commandApplyVSchema(cmd *cobra.Command, args []string) error {
 		SkipRebuild: applyVSchemaOptions.SkipRebuild,
 		Cells:       applyVSchemaOptions.Cells,
 		DryRun:      applyVSchemaOptions.DryRun,
+		Strict:      applyVSchemaOptions.Strict,
 	}
 
 	var err error
@@ -113,11 +115,16 @@ func commandApplyVSchema(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	data, err := cli.MarshalJSON(res.VSchema)
+	vsData, err := cli.MarshalJSON(res.VSchema)
 	if err != nil {
 		return err
 	}
-	fmt.Printf("New VSchema object:\n%s\nIf this is not what you expected, check the input data (as JSON parsing will skip unexpected fields).\n", data)
+	fmt.Printf("New VSchema object:\n%s\nIf this is not what you expected, check the input data (as JSON parsing will skip unexpected fields).\n", vsData)
+	for vdxName, ups := range res.UnknownVindexParams {
+		for _, param := range ups.Params {
+			fmt.Printf("Unknown parameter in vindex %s: %s\n", vdxName, param)
+		}
+	}
 	return nil
 }
 
@@ -151,6 +158,7 @@ func init() {
 	ApplyVSchema.Flags().BoolVar(&applyVSchemaOptions.DryRun, "dry-run", false, "If set, do not save the altered vschema, simply echo to console.")
 	ApplyVSchema.Flags().BoolVar(&applyVSchemaOptions.SkipRebuild, "skip-rebuild", false, "Skip rebuilding the SrvSchema objects.")
 	ApplyVSchema.Flags().StringSliceVar(&applyVSchemaOptions.Cells, "cells", nil, "Limits the rebuild to the specified cells, after application. Ignored if --skip-rebuild is set.")
+	ApplyVSchema.Flags().BoolVar(&applyVSchemaOptions.Strict, "strict", false, "If set, treat unknown vindex params as errors.")
 	Root.AddCommand(ApplyVSchema)
 
 	Root.AddCommand(GetVSchema)

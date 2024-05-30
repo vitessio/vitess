@@ -18,23 +18,21 @@ package sqlparser
 
 import (
 	"bufio"
-	"bytes"
 	"compress/gzip"
 	"fmt"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"path"
 	"strings"
 	"sync"
 	"testing"
 
-	"vitess.io/vitess/go/test/utils"
-
 	"github.com/google/go-cmp/cmp"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/test/utils"
 )
 
 var (
@@ -508,6 +506,9 @@ var (
 		input:  "WITH topsales2003 AS (SELECT salesRepEmployeeNumber employeeNumber, SUM(quantityOrdered * priceEach) sales FROM orders INNER JOIN orderdetails USING (orderNumber) INNER JOIN customers USING (customerNumber) WHERE YEAR(shippedDate) = 2003 AND status = 'Shipped' GROUP BY salesRepEmployeeNumber ORDER BY sales DESC LIMIT 5)SELECT employeeNumber, firstName, lastName, sales FROM employees JOIN topsales2003 USING (employeeNumber)",
 		output: "with topsales2003 as (select salesRepEmployeeNumber as employeeNumber, sum(quantityOrdered * priceEach) as sales from orders join orderdetails using (orderNumber) join customers using (customerNumber) where YEAR(shippedDate) = 2003 and `status` = 'Shipped' group by salesRepEmployeeNumber order by sales desc limit 5) select employeeNumber, firstName, lastName, sales from employees join topsales2003 using (employeeNumber)",
 	}, {
+		input:  "WITH count_a AS (SELECT COUNT(`id`) AS `num` FROM `tbl_a`), count_b AS (SELECT COUNT(`id`) AS `num` FROM tbl_b) SELECT 'a', `num` FROM `count_a` UNION SELECT 'b', `num` FROM `count_b`",
+		output: "with count_a as (select count(id) as num from tbl_a) , count_b as (select count(id) as num from tbl_b) select 'a', num from count_a union select 'b', num from count_b",
+	}, {
 		input: "select 1 from t",
 	}, {
 		input:  "select * from (select 1) as x(user)",
@@ -694,7 +695,17 @@ var (
 	}, {
 		input: "select /* straight_join */ straight_join 1 from t",
 	}, {
+		input: "select /* for share */ 1 from t for share",
+	}, {
+		input: "select /* for share */ 1 from t for share nowait",
+	}, {
+		input: "select /* for share */ 1 from t for share skip locked",
+	}, {
 		input: "select /* for update */ 1 from t for update",
+	}, {
+		input: "select /* for update */ 1 from t for update nowait",
+	}, {
+		input: "select /* for update */ 1 from t for update skip locked",
 	}, {
 		input: "select /* lock in share mode */ 1 from t lock in share mode",
 	}, {
@@ -1141,6 +1152,8 @@ var (
 	}, {
 		input: "select /* order by asc */ 1 from t order by a asc",
 	}, {
+		input: "select a, b, c, count(*), sum(foo) from t group by a, b, c with rollup",
+	}, {
 		input: "select /* order by desc */ 1 from t order by a desc",
 	}, {
 		input: "select /* order by null */ 1 from t order by null",
@@ -1288,6 +1301,12 @@ var (
 	}, {
 		input: "insert /* bool in on duplicate */ into a values (1, 2, 3) on duplicate key update b = values(a.b), c = d",
 	}, {
+		input:  "insert into a values (1, 2, 3) as `a_values`",
+		output: "insert into a values (1, 2, 3) as a_values",
+	}, {
+		input:  "insert into a values (1, 2, 3) as `a_values` (`foo`, bar, baz)",
+		output: "insert into a values (1, 2, 3) as a_values (foo, bar, baz)",
+	}, {
 		input: "insert /* bool expression on duplicate */ into a values (1, 2) on duplicate key update b = func(a), c = a > d",
 	}, {
 		input: "insert into `user`(username, `status`) values ('Chuck', default(`status`))",
@@ -1351,7 +1370,7 @@ var (
 		input: "delete /* limit */ from a limit b",
 	}, {
 		input:  "delete /* alias where */ t.* from a as t where t.id = 2",
-		output: "delete /* alias where */ t from a as t where t.id = 2",
+		output: "delete /* alias where */ from a as t where t.id = 2",
 	}, {
 		input:  "delete t.* from t, t1",
 		output: "delete t from t, t1",
@@ -1756,6 +1775,24 @@ var (
 	}, {
 		input:  "alter schema d collate = 'utf8_bin' character set = geostd8 character set = geostd8",
 		output: "alter database d collate 'utf8_bin' character set geostd8 character set geostd8",
+	}, {
+		input:  `DROP INDEX Indexes ON mydb.mytable`,
+		output: "alter table mydb.mytable drop key `Indexes`",
+	}, {
+		input:  `create index Indexes on b (col1)`,
+		output: "alter table b add key `Indexes` (col1)",
+	}, {
+		input:  `create fulltext index Indexes on b (col1)`,
+		output: "alter table b add fulltext key `Indexes` (col1)",
+	}, {
+		input:  `create spatial index Indexes on b (col1)`,
+		output: "alter table b add spatial key `Indexes` (col1)",
+	}, {
+		input:  "alter table a alter index indexes visible, alter index indexes invisible",
+		output: "alter table a alter index `indexes` visible, alter index `indexes` invisible",
+	}, {
+		input:  "alter table a add spatial key indexes (column1)",
+		output: "alter table a add spatial key `indexes` (column1)",
 	}, {
 		input:      "create table a",
 		partialDDL: true,
@@ -2370,6 +2407,8 @@ var (
 	}, {
 		input: "show vschema tables",
 	}, {
+		input: "show vschema keyspaces",
+	}, {
 		input: "show vschema vindexes",
 	}, {
 		input: "show vschema vindexes from t",
@@ -2411,6 +2450,13 @@ var (
 	}, {
 		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' cancel",
 	}, {
+		input: "alter vitess_migration force_cutover all",
+	}, {
+		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' force_cutover",
+	}, {
+		input:  "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' FORCE_CUTOVER",
+		output: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' force_cutover",
+	}, {
 		input: "alter vitess_migration cancel all",
 	}, {
 		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' throttle",
@@ -2447,6 +2493,10 @@ var (
 	}, {
 		input:  "show foobar like select * from table where syntax is 'ignored'",
 		output: "show foobar",
+	}, {
+		// Making sure "force_cutover" is not a keyword
+		input:  "select force_cutover from t",
+		output: "select `force_cutover` from t",
 	}, {
 		input:  "use db",
 		output: "use db",
@@ -2502,16 +2552,6 @@ var (
 		input: "explain format = tree select * from t",
 	}, {
 		input: "explain format = json select * from t",
-	}, {
-		input: "explain format = vtexplain select * from t",
-	}, {
-		input: "explain format = vitess select * from t",
-	}, {
-		input:  "describe format = vitess select * from t",
-		output: "explain format = vitess select * from t",
-	}, {
-		input:  "describe format = vtexplain select * from t",
-		output: "explain format = vtexplain select * from t",
 	}, {
 		input: "explain delete from t",
 	}, {
@@ -2648,6 +2688,20 @@ var (
 	}, {
 		input:  "SELECT id FROM blog_posts USE INDEX (PRIMARY) WHERE id = 10",
 		output: "select id from blog_posts use index (`PRIMARY`) where id = 10",
+	}, {
+		input: "select * from payment_pulls ignore vindex (lookup_vindex_name) where customer_id in (1, 10) and payment_id = 5",
+	}, {
+		input:  "select * from payment_pulls ignore vindex (lookup_vindex_name, x, t) order by id",
+		output: "select * from payment_pulls ignore vindex (lookup_vindex_name, x, t) order by id asc",
+	}, {
+		input: "select * from payment_pulls use vindex (lookup_vindex_name) where customer_id in (1, 10) and payment_id = 5",
+	}, {
+		input:  "select * from payment_pulls use vindex (lookup_vindex_name, x, t) order by id",
+		output: "select * from payment_pulls use vindex (lookup_vindex_name, x, t) order by id asc",
+	}, {
+		input: "select * from payment_pulls use vindex (lookup_vindex_name, x, t) ignore vindex (x, t)",
+	}, {
+		input: "select * from payment_pulls use vindex (lookup_vindex_name, x, t) ignore vindex (x, t) join tab ignore vindex (y)",
 	}, {
 		input:  "select name, group_concat(score) from t group by name",
 		output: "select `name`, group_concat(score) from t group by `name`",
@@ -3669,22 +3723,92 @@ var (
 		input:  `select * from t1 where col1 like 'ks\_' and col2 = 'ks\_' and col1 like 'ks_' and col2 = 'ks_'`,
 		output: `select * from t1 where col1 like 'ks\_' and col2 = 'ks\_' and col1 like 'ks_' and col2 = 'ks_'`,
 	}, {
+		input:  "select 1 from dual where 'bac' = 'b' 'a' 'c'",
+		output: "select 1 from dual where 'bac' = 'bac'",
+	}, {
+		input:  "select 'b' 'a' 'c'",
+		output: "select 'bac' from dual",
+	}, {
+		input:  "select 1 where 'bac' = N'b' 'a' 'c'",
+		output: "select 1 from dual where 'bac' = N'bac'",
+		/*We need to ignore this test because, after the normalizer, we change the produced NChar
+		string into an introducer expression, so the vttablet will never see a NChar string */
+		ignoreNormalizerTest: true,
+	}, {
+		input:  "select _ascii 'b' 'a' 'c'",
+		output: "select _ascii 'bac' from dual",
+	}, {
+		input:  "SELECT time, subject, AVG(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
+		output: "select `time`, subject, avg(val) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
+	}, {
+		input:  "SELECT time, subject, BIT_AND(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
+		output: "select `time`, subject, bit_and(val) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
+	}, {
+		input:  "SELECT time, subject, BIT_OR(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
+		output: "select `time`, subject, bit_or(val) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
+	}, {
+		input:  "SELECT time, subject, BIT_XOR(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
+		output: "select `time`, subject, bit_xor(val) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
+	}, {
+		input:  "SELECT time, subject, COUNT(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
+		output: "select `time`, subject, count(val) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
+	}, {
+		input:  "SELECT time, subject, COUNT(*) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
+		output: "select `time`, subject, count(*) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
+	}, {
+		input:  "SELECT time, subject, MAX(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
+		output: "select `time`, subject, max(val) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
+	}, {
+		input:  "SELECT time, subject, MIN(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
+		output: "select `time`, subject, min(val) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
+	}, {
+		input:  "SELECT time, subject, STD(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
+		output: "select `time`, subject, std(val) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
+	}, {
+		input:  "SELECT time, subject, STDDEV(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
+		output: "select `time`, subject, stddev(val) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
+	}, {
+		input:  "SELECT time, subject, STDDEV_POP(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
+		output: "select `time`, subject, stddev_pop(val) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
+	}, {
+		input:  "SELECT time, subject, STDDEV_SAMP(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
+		output: "select `time`, subject, stddev_samp(val) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
+	}, {
+		input:  "SELECT time, subject, SUM(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
+		output: "select `time`, subject, sum(val) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
+	}, {
+		input:  "SELECT time, subject, VAR_POP(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
+		output: "select `time`, subject, var_pop(val) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
+	}, {
+		input:  "SELECT time, subject, VAR_SAMP(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
+		output: "select `time`, subject, var_samp(val) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
+	}, {
+		input:  "SELECT time, subject, VARIANCE(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
+		output: "select `time`, subject, variance(val) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
+	}, {
+		input:  "SELECT id, coalesce( (SELECT Json_arrayagg(Json_array(id)) FROM (SELECT *, Row_number() over (ORDER BY users.order ASC) FROM unsharded as users WHERE users.purchaseorderid = orders.id) users), json_array()) AS users, coalesce( (SELECT json_arrayagg(json_array(id)) FROM (SELECT *, row_number() over (ORDER BY tests.order ASC) FROM unsharded as tests WHERE tests.purchaseorderid = orders.id) tests), json_array()) AS tests FROM unsharded as orders WHERE orders.id = 'xxx'",
+		output: "select id, coalesce((select Json_arrayagg(json_array(id)) from (select *, row_number() over ( order by users.`order` asc) from unsharded as users where users.purchaseorderid = orders.id) as users), json_array()) as users, coalesce((select json_arrayagg(json_array(id)) from (select *, row_number() over ( order by tests.`order` asc) from unsharded as tests where tests.purchaseorderid = orders.id) as tests), json_array()) as tests from unsharded as orders where orders.id = 'xxx'",
+	}, {
 		input: `kill connection 18446744073709551615`,
 	}, {
 		input: `kill query 18446744073709551615`,
 	}, {
 		input:  `kill 18446744073709551615`,
 		output: `kill connection 18446744073709551615`,
+	}, {
+		input:  `select * from tbl where foo is unknown or bar is not unknown`,
+		output: `select * from tbl where foo is null or bar is not null`,
 	}}
 )
 
 func TestValid(t *testing.T) {
+	parser := NewTestParser()
 	for _, tcase := range validSQL {
 		t.Run(tcase.input, func(t *testing.T) {
 			if tcase.output == "" {
 				tcase.output = tcase.input
 			}
-			tree, err := Parse(tcase.input)
+			tree, err := parser.Parse(tcase.input)
 			require.NoError(t, err, tcase.input)
 			out := String(tree)
 			assert.Equal(t, tcase.output, out)
@@ -3716,15 +3840,16 @@ func TestParallelValid(t *testing.T) {
 
 	wg := sync.WaitGroup{}
 	wg.Add(parallelism)
+	parser := NewTestParser()
 	for i := 0; i < parallelism; i++ {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < numIters; j++ {
-				tcase := validSQL[rand.Intn(len(validSQL))]
+				tcase := validSQL[rand.IntN(len(validSQL))]
 				if tcase.output == "" {
 					tcase.output = tcase.input
 				}
-				tree, err := Parse(tcase.input)
+				tree, err := parser.Parse(tcase.input)
 				if err != nil {
 					t.Errorf("Parse(%q) err: %v, want nil", tcase.input, err)
 					continue
@@ -3923,9 +4048,10 @@ func TestInvalid(t *testing.T) {
 	},
 	}
 
+	parser := NewTestParser()
 	for _, tcase := range invalidSQL {
 		t.Run(tcase.input, func(t *testing.T) {
-			_, err := Parse(tcase.input)
+			_, err := parser.Parse(tcase.input)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), tcase.err)
 		})
@@ -4063,12 +4189,13 @@ func TestIntroducers(t *testing.T) {
 		input:  "select _utf8mb3 'x'",
 		output: "select _utf8mb3 'x' from dual",
 	}}
+	parser := NewTestParser()
 	for _, tcase := range validSQL {
 		t.Run(tcase.input, func(t *testing.T) {
 			if tcase.output == "" {
 				tcase.output = tcase.input
 			}
-			tree, err := Parse(tcase.input)
+			tree, err := parser.Parse(tcase.input)
 			assert.NoError(t, err)
 			out := String(tree)
 			assert.Equal(t, tcase.output, out)
@@ -4157,11 +4284,12 @@ func TestCaseSensitivity(t *testing.T) {
 	}, {
 		input: "select /* use */ 1 from t1 use index (A) where b = 1",
 	}}
+	parser := NewTestParser()
 	for _, tcase := range validSQL {
 		if tcase.output == "" {
 			tcase.output = tcase.input
 		}
-		tree, err := Parse(tcase.input)
+		tree, err := parser.Parse(tcase.input)
 		if err != nil {
 			t.Errorf("input: %s, err: %v", tcase.input, err)
 			continue
@@ -4256,11 +4384,12 @@ func TestKeywords(t *testing.T) {
 		output: "select current_user(), current_user() from dual",
 	}}
 
+	parser := NewTestParser()
 	for _, tcase := range validSQL {
 		if tcase.output == "" {
 			tcase.output = tcase.input
 		}
-		tree, err := Parse(tcase.input)
+		tree, err := parser.Parse(tcase.input)
 		if err != nil {
 			t.Errorf("input: %s, err: %v", tcase.input, err)
 			continue
@@ -4333,11 +4462,12 @@ func TestConvert(t *testing.T) {
 		input: "select cast(json_keys(c) as char(64) array) from t",
 	}}
 
+	parser := NewTestParser()
 	for _, tcase := range validSQL {
 		if tcase.output == "" {
 			tcase.output = tcase.input
 		}
-		tree, err := Parse(tcase.input)
+		tree, err := parser.Parse(tcase.input)
 		if err != nil {
 			t.Errorf("input: %s, err: %v", tcase.input, err)
 			continue
@@ -4381,7 +4511,7 @@ func TestConvert(t *testing.T) {
 	}}
 
 	for _, tcase := range invalidSQL {
-		_, err := Parse(tcase.input)
+		_, err := parser.Parse(tcase.input)
 		if err == nil || err.Error() != tcase.output {
 			t.Errorf("%s: %v, want %s", tcase.input, err, tcase.output)
 		}
@@ -4419,12 +4549,13 @@ func TestSelectInto(t *testing.T) {
 		output: "alter vschema create vindex my_vdx using `hash`",
 	}}
 
+	parser := NewTestParser()
 	for _, tcase := range validSQL {
 		t.Run(tcase.input, func(t *testing.T) {
 			if tcase.output == "" {
 				tcase.output = tcase.input
 			}
-			tree, err := Parse(tcase.input)
+			tree, err := parser.Parse(tcase.input)
 			require.NoError(t, err)
 			out := String(tree)
 			assert.Equal(t, tcase.output, out)
@@ -4443,7 +4574,7 @@ func TestSelectInto(t *testing.T) {
 	}}
 
 	for _, tcase := range invalidSQL {
-		_, err := Parse(tcase.input)
+		_, err := parser.Parse(tcase.input)
 		if err == nil || err.Error() != tcase.output {
 			t.Errorf("%s: %v, want %s", tcase.input, err, tcase.output)
 		}
@@ -4480,8 +4611,9 @@ func TestPositionedErr(t *testing.T) {
 		output: PositionedErr{"syntax error", 34, ""},
 	}}
 
+	parser := NewTestParser()
 	for _, tcase := range invalidSQL {
-		tkn := NewStringTokenizer(tcase.input)
+		tkn := parser.NewStringTokenizer(tcase.input)
 		_, err := ParseNext(tkn)
 
 		if posErr, ok := err.(PositionedErr); !ok {
@@ -4530,11 +4662,12 @@ func TestSubStr(t *testing.T) {
 		output: `select substr(substr('foo', 1), 2) from t`,
 	}}
 
+	parser := NewTestParser()
 	for _, tcase := range validSQL {
 		if tcase.output == "" {
 			tcase.output = tcase.input
 		}
-		tree, err := Parse(tcase.input)
+		tree, err := parser.Parse(tcase.input)
 		if err != nil {
 			t.Errorf("input: %s, err: %v", tcase.input, err)
 			continue
@@ -4554,8 +4687,9 @@ func TestLoadData(t *testing.T) {
 		"load data infile 'x.txt' into table 'c'",
 		"load data from s3 'x.txt' into table x"}
 
+	parser := NewTestParser()
 	for _, tcase := range validSQL {
-		_, err := Parse(tcase)
+		_, err := parser.Parse(tcase)
 		require.NoError(t, err)
 	}
 }
@@ -4662,6 +4796,7 @@ func TestCreateTable(t *testing.T) {
 	primary key (id),
 	spatial key geom (geom),
 	fulltext key fts (full_name),
+	fulltext key indexes (full_name),
 	unique key by_username (username),
 	unique key by_username2 (username),
 	unique key by_username3 (username),
@@ -4678,6 +4813,7 @@ func TestCreateTable(t *testing.T) {
 	primary key (id),
 	spatial key geom (geom),
 	fulltext key fts (full_name),
+	fulltext key ` + "`indexes`" + ` (full_name),
 	unique key by_username (username),
 	unique key by_username2 (username),
 	unique key by_username3 (username),
@@ -4862,6 +4998,7 @@ func TestCreateTable(t *testing.T) {
 	primary key (id, username),
 	key by_email (email(10), username),
 	constraint second_ibfk_1 foreign key (k, j) references t2 (a, b),
+	constraint indexes foreign key (k, j) references t2 (a, b),
 	constraint second_ibfk_1 foreign key (k, j) references t2 (a, b) on delete restrict,
 	constraint second_ibfk_1 foreign key (k, j) references t2 (a, b) on delete no action,
 	constraint second_ibfk_1 foreign key (k, j) references t2 (a, b) on delete cascade on update set default,
@@ -4898,6 +5035,7 @@ func TestCreateTable(t *testing.T) {
 	primary key (id, username),
 	key by_email (email(10), username),
 	constraint second_ibfk_1 foreign key (k, j) references t2 (a, b),
+	constraint ` + "`indexes`" + ` foreign key (k, j) references t2 (a, b),
 	constraint second_ibfk_1 foreign key (k, j) references t2 (a, b) on delete restrict,
 	constraint second_ibfk_1 foreign key (k, j) references t2 (a, b) on delete no action,
 	constraint second_ibfk_1 foreign key (k, j) references t2 (a, b) on delete cascade on update set default,
@@ -5732,10 +5870,11 @@ partition by range (YEAR(purchased)) subpartition by hash (TO_DAYS(purchased))
 			output: "create table t (\n\tid int,\n\tinfo JSON,\n\tkey zips ((cast(info -> '$.field' as unsigned array)))\n)",
 		},
 	}
+	parser := NewTestParser()
 	for _, test := range createTableQueries {
 		sql := strings.TrimSpace(test.input)
 		t.Run(sql, func(t *testing.T) {
-			tree, err := ParseStrictDDL(sql)
+			tree, err := parser.ParseStrictDDL(sql)
 			require.NoError(t, err)
 			got := String(tree)
 			expected := test.output
@@ -5758,7 +5897,8 @@ func TestOne(t *testing.T) {
 		return
 	}
 	sql := strings.TrimSpace(testOne.input)
-	tree, err := Parse(sql)
+	parser := NewTestParser()
+	tree, err := parser.Parse(sql)
 	require.NoError(t, err)
 	got := String(tree)
 	expected := testOne.output
@@ -5787,8 +5927,9 @@ func TestCreateTableLike(t *testing.T) {
 			"create table ks.a like unsharded_ks.b",
 		},
 	}
+	parser := NewTestParser()
 	for _, tcase := range testCases {
-		tree, err := ParseStrictDDL(tcase.input)
+		tree, err := parser.ParseStrictDDL(tcase.input)
 		if err != nil {
 			t.Errorf("input: %s, err: %v", tcase.input, err)
 			continue
@@ -5817,8 +5958,9 @@ func TestCreateTableEscaped(t *testing.T) {
 			"\tprimary key (`delete`)\n" +
 			")",
 	}}
+	parser := NewTestParser()
 	for _, tcase := range testCases {
-		tree, err := ParseStrictDDL(tcase.input)
+		tree, err := parser.ParseStrictDDL(tcase.input)
 		if err != nil {
 			t.Errorf("input: %s, err: %v", tcase.input, err)
 			continue
@@ -5945,6 +6087,18 @@ var (
 		output:       "syntax error at position 18 near '.3'",
 		excludeMulti: true,
 	}, {
+		input:  "ALTER TABLE t ADD PARTITION (PARTITION p10 VALUES LESS THAN (10)), ADD PARTITION (PARTITION p20 VALUES LESS THAN (20))",
+		output: "syntax error at position 67",
+	}, {
+		input:  "ALTER TABLE t DROP PARTITION p1, DROP PARTITION p2",
+		output: "syntax error at position 38 near 'DROP'",
+	}, {
+		input:  "ALTER TABLE t DROP PARTITION p1, ADD COLUMN c INT",
+		output: "syntax error at position 37 near 'ADD'",
+	}, {
+		input:  "ALTER TABLE t ADD COLUMN c INT, DROP PARTITION p1",
+		output: "syntax error at position 47 near 'PARTITION'",
+	}, {
 		input:  "execute stmt1 using a, @b",
 		output: "syntax error at position 22 near 'a'",
 	}, {
@@ -5963,9 +6117,10 @@ var (
 )
 
 func TestErrors(t *testing.T) {
+	parser := NewTestParser()
 	for _, tcase := range invalidSQL {
 		t.Run(tcase.input, func(t *testing.T) {
-			_, err := ParseStrictDDL(tcase.input)
+			_, err := parser.ParseStrictDDL(tcase.input)
 			require.Error(t, err, tcase.output)
 			require.Equal(t, tcase.output, err.Error())
 		})
@@ -5998,8 +6153,9 @@ func TestSkipToEnd(t *testing.T) {
 		input:  "create table a bb 'a;'; select * from t",
 		output: "extra characters encountered after end of DDL: 'select'",
 	}}
+	parser := NewTestParser()
 	for _, tcase := range testcases {
-		_, err := Parse(tcase.input)
+		_, err := parser.Parse(tcase.input)
 		if err == nil || err.Error() != tcase.output {
 			t.Errorf("%s: %v, want %s", tcase.input, err, tcase.output)
 		}
@@ -6031,8 +6187,9 @@ func loadQueries(t testing.TB, filename string) (queries []string) {
 }
 
 func TestParseDjangoQueries(t *testing.T) {
+	parser := NewTestParser()
 	for _, query := range loadQueries(t, "django_queries.txt") {
-		_, err := Parse(query)
+		_, err := parser.Parse(query)
 		if err != nil {
 			t.Errorf("failed to parse %q: %v", query, err)
 		}
@@ -6040,8 +6197,9 @@ func TestParseDjangoQueries(t *testing.T) {
 }
 
 func TestParseLobstersQueries(t *testing.T) {
+	parser := NewTestParser()
 	for _, query := range loadQueries(t, "lobsters.sql.gz") {
-		_, err := Parse(query)
+		_, err := parser.Parse(query)
 		if err != nil {
 			t.Errorf("failed to parse %q: %v", query, err)
 		}
@@ -6056,14 +6214,14 @@ func TestParseVersionedComments(t *testing.T) {
 	}{
 		{
 			input:        `CREATE TABLE table1 (id int) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 /*!50900 PARTITION BY RANGE (id) (PARTITION x VALUES LESS THAN (5) ENGINE = InnoDB, PARTITION t VALUES LESS THAN (20) ENGINE = InnoDB) */`,
-			mysqlVersion: "50401",
+			mysqlVersion: "5.4.1",
 			output: `create table table1 (
 	id int
 ) ENGINE InnoDB,
   CHARSET utf8mb4`,
 		}, {
 			input:        `CREATE TABLE table1 (id int) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 /*!50900 PARTITION BY RANGE (id) (PARTITION x VALUES LESS THAN (5) ENGINE = InnoDB, PARTITION t VALUES LESS THAN (20) ENGINE = InnoDB) */`,
-			mysqlVersion: "80001",
+			mysqlVersion: "8.0.1",
 			output: `create table table1 (
 	id int
 ) ENGINE InnoDB,
@@ -6076,10 +6234,9 @@ partition by range (id)
 
 	for _, testcase := range testcases {
 		t.Run(testcase.input+":"+testcase.mysqlVersion, func(t *testing.T) {
-			oldMySQLVersion := mySQLParserVersion
-			defer func() { mySQLParserVersion = oldMySQLVersion }()
-			mySQLParserVersion = testcase.mysqlVersion
-			tree, err := Parse(testcase.input)
+			parser, err := New(Options{MySQLServerVersion: testcase.mysqlVersion})
+			require.NoError(t, err)
+			tree, err := parser.Parse(testcase.input)
 			require.NoError(t, err, testcase.input)
 			out := String(tree)
 			require.Equal(t, testcase.output, out)
@@ -6088,6 +6245,7 @@ partition by range (id)
 }
 
 func BenchmarkParseTraces(b *testing.B) {
+	parser := NewTestParser()
 	for _, trace := range []string{"django_queries.txt", "lobsters.sql.gz"} {
 		b.Run(trace, func(b *testing.B) {
 			queries := loadQueries(b, trace)
@@ -6099,7 +6257,7 @@ func BenchmarkParseTraces(b *testing.B) {
 
 			for i := 0; i < b.N; i++ {
 				for _, query := range queries {
-					_, err := Parse(query)
+					_, err := parser.Parse(query)
 					if err != nil {
 						b.Fatal(err)
 					}
@@ -6116,16 +6274,17 @@ func BenchmarkParseStress(b *testing.B) {
 		sql2 = "select aaaa, bbb, ccc, ddd, eeee, ffff, gggg, hhhh, iiii from tttt, ttt1, ttt3 where aaaa = bbbb and bbbb = cccc and dddd+1 = eeee group by fff, gggg having hhhh = iiii and iiii = jjjj order by kkkk, llll limit 3, 4"
 	)
 
+	parser := NewTestParser()
 	for i, sql := range []string{sql1, sql2} {
 		b.Run(fmt.Sprintf("sql%d", i), func(b *testing.B) {
-			var buf bytes.Buffer
+			var buf strings.Builder
 			buf.WriteString(sql)
 			querySQL := buf.String()
 			b.ReportAllocs()
 			b.ResetTimer()
 
 			for i := 0; i < b.N; i++ {
-				_, err := Parse(querySQL)
+				_, err := parser.Parse(querySQL)
 				if err != nil {
 					b.Fatal(err)
 				}
@@ -6143,7 +6302,7 @@ func BenchmarkParse3(b *testing.B) {
 
 		// Size of value is 1/10 size of query. Then we add
 		// 10 such values to the where clause.
-		var baseval bytes.Buffer
+		var baseval strings.Builder
 		for i := 0; i < benchQuerySize/100; i++ {
 			// Add an escape character: This will force the upcoming
 			// tokenizer improvement to still create a copy of the string.
@@ -6155,7 +6314,7 @@ func BenchmarkParse3(b *testing.B) {
 			}
 		}
 
-		var buf bytes.Buffer
+		var buf strings.Builder
 		buf.WriteString("select a from t1 where v = 1")
 		for i := 0; i < 10; i++ {
 			fmt.Fprintf(&buf, " and v%d = \"%d%s\"", i, i, baseval.String())
@@ -6164,8 +6323,9 @@ func BenchmarkParse3(b *testing.B) {
 		b.ResetTimer()
 		b.ReportAllocs()
 
+		parser := NewTestParser()
 		for i := 0; i < b.N; i++ {
-			if _, err := Parse(benchQuery); err != nil {
+			if _, err := parser.Parse(benchQuery); err != nil {
 				b.Fatal(err)
 			}
 		}
@@ -6216,6 +6376,7 @@ func escapeNewLines(in string) string {
 }
 
 func testFile(t *testing.T, filename, tempDir string) {
+	parser := NewTestParser()
 	t.Run(filename, func(t *testing.T) {
 		fail := false
 		expected := strings.Builder{}
@@ -6225,7 +6386,7 @@ func testFile(t *testing.T, filename, tempDir string) {
 					tcase.output = tcase.input
 				}
 				expected.WriteString(fmt.Sprintf("%sINPUT\n%s\nEND\n", tcase.comments, escapeNewLines(tcase.input)))
-				tree, err := Parse(tcase.input)
+				tree, err := parser.Parse(tcase.input)
 				if tcase.errStr != "" {
 					errPresent := ""
 					if err != nil {
@@ -6328,7 +6489,7 @@ func parsePartial(r *bufio.Reader, readType []string, lineno int, fileName strin
 		if returnTypeNumber != -1 {
 			break
 		}
-		panic(fmt.Errorf("error reading file %s: line %d: %s - Expected keyword", fileName, lineno, err.Error()))
+		panic(fmt.Errorf("error reading file %s: line %d: Expected keyword", fileName, lineno))
 	}
 	input := ""
 	for {

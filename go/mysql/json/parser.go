@@ -669,6 +669,14 @@ type Value struct {
 	n NumberType
 }
 
+func (v *Value) Size() int32 {
+	return 0
+}
+
+func (v *Value) Scale() int32 {
+	return 0
+}
+
 func (v *Value) MarshalDate() string {
 	if d, ok := v.Date(); ok {
 		return d.ToStdTime(time.Local).Format("2006-01-02")
@@ -941,8 +949,8 @@ func (v *Value) Time() (datetime.Time, bool) {
 	if v.t != TypeTime {
 		return datetime.Time{}, false
 	}
-	t, _, ok := datetime.ParseTime(v.s, datetime.DefaultPrecision)
-	return t, ok
+	t, _, state := datetime.ParseTime(v.s, datetime.DefaultPrecision)
+	return t, state == datetime.TimeOK
 }
 
 // Object returns the underlying JSON object for the v.

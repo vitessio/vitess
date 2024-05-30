@@ -97,6 +97,7 @@ message MaterializeSettings {
   bool defer_secondary_keys = 14;
   tabletmanagerdata.TabletSelectionPreference tablet_selection_preference = 15;
   bool atomic_copy = 16;
+  WorkflowOptions workflow_options = 17;
 }
 
 /* Data types for VtctldServer */
@@ -205,6 +206,16 @@ message Shard {
   topodata.Shard shard = 3;
 }
 
+message WorkflowOptions {
+  string tenant_id = 1;
+  // Remove auto_increment clauses on tables when moving them to a sharded
+  // keyspace.
+  bool strip_sharded_auto_increment = 2;
+  // Shards on which vreplication streams in the target keyspace are created for this workflow and to which the data
+  // from the source will be vreplicated.
+  repeated string shards = 3;
+}
+
 // TODO: comment the hell out of this.
 message Workflow {
   string name = 1;
@@ -222,6 +233,9 @@ message Workflow {
   int64 max_v_replication_transaction_lag = 8;
   // This specifies whether to defer the creation of secondary keys.
   bool defer_secondary_keys = 9;
+  // These are additional (optional) settings for vreplication workflows. Previously we used to add it to the
+  // binlogdata.BinlogSource proto object. More details in go/vt/sidecardb/schema/vreplication.sql.
+  WorkflowOptions options = 10;
 
   message ReplicationLocation {
     string keyspace = 1;
@@ -260,10 +274,14 @@ message Workflow {
     repeated string tags = 15;
     int64 rows_copied = 16;
     ThrottlerStatus throttler_status = 17;
+    repeated topodata.TabletType tablet_types = 18;
+    tabletmanagerdata.TabletSelectionPreference tablet_selection_preference = 19;
+    repeated string cells = 20;
 
     message CopyState {
       string table = 1;
       string last_pk = 2;
+      int64 stream_id = 3;
     }
 
     message Log {
@@ -303,6 +321,24 @@ message AddCellsAliasRequest {
 message AddCellsAliasResponse {
 }
 
+
+message ApplyKeyspaceRoutingRulesRequest {
+  vschema.KeyspaceRoutingRules keyspace_routing_rules = 1;
+  // SkipRebuild, if set, will cause ApplyKeyspaceRoutingRules to skip rebuilding the
+  // SrvVSchema objects in each cell in RebuildCells.
+  bool skip_rebuild = 2;
+  // RebuildCells limits the SrvVSchema rebuild to the specified cells. If not
+  // provided the SrvVSchema will be rebuilt in every cell in the topology.
+  //
+  // Ignored if SkipRebuild is set.
+  repeated string rebuild_cells = 3;
+}
+
+message ApplyKeyspaceRoutingRulesResponse {
+  // KeyspaceRoutingRules returns the current set of rules.
+  vschema.KeyspaceRoutingRules keyspace_routing_rules = 1;
+}
+
 message ApplyRoutingRulesRequest {
   vschema.RoutingRules routing_rules = 1;
   // SkipRebuild, if set, will cause ApplyRoutingRules to skip rebuilding the
@@ -332,6 +368,8 @@ message ApplyShardRoutingRulesRequest {
 
 message ApplyShardRoutingRulesResponse {
 }
+
+
 
 message ApplySchemaRequest {
   string keyspace = 1;
@@ -370,10 +408,25 @@ message ApplyVSchemaRequest {
   repeated string cells = 4;
   vschema.Keyspace v_schema = 5;
   string sql = 6;
+  // Strict returns an error if there are unknown vindex params.
+  bool strict = 7;
 }
 
 message ApplyVSchemaResponse {
   vschema.Keyspace v_schema = 1;
+  // UnknownVindexParams is a map of vindex name to params that were not recognized by the vindex
+  // type. E.g.:
+  //
+  // {
+  //   "lookup_vdx": {
+  //     "params": ["raed_lock", "not_verify"]
+  //   }
+  // }
+  map<string, ParamList> unknown_vindex_params = 2;
+
+  message ParamList {
+    repeated string params = 1;
+  }
 }
 
 message BackupRequest {
@@ -385,7 +438,7 @@ message BackupRequest {
   bool allow_primary = 2;
   // Concurrency specifies the number of compression/checksum jobs to run
   // simultaneously.
-  uint64 concurrency = 3;
+  int32 concurrency = 3;
   // IncrementalFromPos indicates a position of a previous backup. When this value is non-empty
   // then the backup becomes incremental and applies as of given position.
   string incremental_from_pos = 4;
@@ -410,7 +463,7 @@ message BackupShardRequest {
   bool allow_primary = 3;
   // Concurrency specifies the number of compression/checksum jobs to run
   // simultaneously.
-  uint64 concurrency = 4;
+  int32 concurrency = 4;
   // UpgradeSafe indicates if the backup should be taken with innodb_fast_shutdown=0
   // so that it's a backup that can be used for an upgrade.
   bool upgrade_safe = 5;
@@ -449,7 +502,6 @@ message CleanupSchemaMigrationResponse {
   map<string, uint64> rows_affected_by_shard = 1;
 }
 
-
 message CompleteSchemaMigrationRequest {
   string keyspace = 1;
   string uuid = 2;
@@ -473,9 +525,8 @@ message CreateKeyspaceRequest {
   // OBSOLETE topodata.KeyspaceIdType sharding_column_type = 5;
   reserved 5;
 
-  // ServedFroms specifies a set of db_type:keyspace pairs used to serve
-  // traffic for the keyspace.
-  repeated topodata.Keyspace.ServedFrom served_froms = 6;
+  // OBSOLETE: repeated topodata.Keyspace.ServedFrom served_froms = 6;
+  reserved 6;
 
   // Type is the type of the keyspace to create.
   topodata.KeyspaceType type = 7;
@@ -675,12 +726,44 @@ message ExecuteHookResponse {
   tabletmanagerdata.ExecuteHookResponse hook_result = 1;
 }
 
+message ExecuteMultiFetchAsDBARequest {
+  topodata.TabletAlias tablet_alias = 1;
+  // SQL could have potentially multiple queries separated by semicolons.
+  string sql = 2;
+  // MaxRows is an optional parameter to limit the number of rows read into the
+  // QueryResult. Note that this does not apply a LIMIT to a query, just how
+  // many rows are read from the MySQL server on the tablet side.
+  //
+  // This field is optional. Specifying a non-positive value will use whatever
+  // default is configured in the VtctldService.
+  int64 max_rows = 3;
+  // DisableBinlogs instructs the tablet not to use binary logging when
+  // executing the query.
+  bool disable_binlogs = 4;
+  // ReloadSchema instructs the tablet to reload its schema after executing the
+  // query.
+  bool reload_schema = 5;
+}
+
+message ExecuteMultiFetchAsDBAResponse {
+  repeated query.QueryResult results = 1;
+}
+
 message FindAllShardsInKeyspaceRequest {
   string keyspace = 1;
 }
 
 message FindAllShardsInKeyspaceResponse {
   map<string, Shard> shards = 1;
+}
+
+message ForceCutOverSchemaMigrationRequest {
+  string keyspace = 1;
+  string uuid = 2;
+}
+
+message ForceCutOverSchemaMigrationResponse {
+  map<string, uint64> rows_affected_by_shard = 1;
 }
 
 message GetBackupsRequest {
@@ -759,6 +842,13 @@ message GetPermissionsResponse {
   tabletmanagerdata.Permissions permissions = 1;
 }
 
+message GetKeyspaceRoutingRulesRequest {
+}
+
+message GetKeyspaceRoutingRulesResponse {
+  vschema.KeyspaceRoutingRules keyspace_routing_rules = 1;
+}
+
 message GetRoutingRulesRequest {
 }
 
@@ -825,6 +915,18 @@ message GetSchemaMigrationsRequest {
 
 message GetSchemaMigrationsResponse {
   repeated SchemaMigration migrations = 1;
+}
+
+message GetShardReplicationRequest {
+  string keyspace = 1;
+  string shard = 2;
+  // Cells is the list of cells to fetch data for. Omit to fetch data from all
+  // cells.
+  repeated string cells = 3;
+}
+
+message GetShardReplicationResponse {
+  map<string, topodata.ShardReplication> shard_replication_by_cell = 1;
 }
 
 message GetShardRequest {
@@ -985,6 +1087,7 @@ message GetWorkflowsRequest {
   // If you only want a specific workflow then set this field.
   string workflow = 4;
   bool include_logs = 5;
+  repeated string shards = 6;
 }
 
 message GetWorkflowsResponse {
@@ -1155,6 +1258,7 @@ message MoveTablesCreateRequest {
   bool no_routing_rules = 18;
   // Run a single copy phase for the entire database.
   bool atomic_copy = 19;
+  WorkflowOptions workflow_options = 20;
 }
 
 message MoveTablesCreateResponse {
@@ -1174,6 +1278,7 @@ message MoveTablesCompleteRequest {
   bool keep_routing_rules = 5;
   bool rename_tables = 6;
   bool dry_run = 7;
+  repeated string shards = 8;
 }
 
 message MoveTablesCompleteResponse {
@@ -1211,6 +1316,10 @@ message PlannedReparentShardRequest {
   // WaitReplicasTimeout time to catch up before the reparent, and an additional
   // WaitReplicasTimeout time to catch up after the reparent.
   vttime.Duration wait_replicas_timeout = 5;
+  // TolerableReplicationLag is the amount of replication lag that is considered
+  // acceptable for a tablet to be eligible for promotion when Vitess makes the choice of a new primary.
+  // A value of 0 indicates that Vitess shouldn't consider the replication lag at all.
+  vttime.Duration tolerable_replication_lag = 6;
 }
 
 message PlannedReparentShardResponse {
@@ -1279,7 +1388,7 @@ message ReloadSchemaKeyspaceRequest {
   // Concurrency is the global concurrency across all shards in the keyspace
   // (so, at most this many tablets will be reloaded across the keyspace at any
   // given point).
-  uint32 concurrency = 4;
+  int32 concurrency = 4;
 }
 
 message ReloadSchemaKeyspaceResponse {
@@ -1292,7 +1401,7 @@ message ReloadSchemaShardRequest {
   string wait_position = 3;
   bool include_primary = 4;
   // Concurrency is the maximum number of tablets to reload at one time.
-  uint32 concurrency = 5;
+  int32 concurrency = 5;
 }
 
 message ReloadSchemaShardResponse {
@@ -1425,19 +1534,6 @@ message SetKeyspaceDurabilityPolicyRequest {
 }
 
 message SetKeyspaceDurabilityPolicyResponse {
-  // Keyspace is the updated keyspace record.
-  topodata.Keyspace keyspace = 1;
-}
-
-message SetKeyspaceServedFromRequest {
-  string keyspace = 1;
-  topodata.TabletType tablet_type = 2;
-  repeated string cells = 3;
-  bool remove = 4;
-  string source_keyspace = 5;
-}
-
-message SetKeyspaceServedFromResponse {
   // Keyspace is the updated keyspace record.
   topodata.Keyspace keyspace = 1;
 }
@@ -1725,6 +1821,8 @@ message VDiffCreateRequest {
   vttime.Duration wait_update_interval = 16;
   bool auto_retry = 17;
   bool verbose = 18;
+  int64 max_report_sample_rows = 19;
+  vttime.Duration max_diff_duration = 20;
 }
 
 message VDiffCreateResponse {
@@ -1778,6 +1876,7 @@ message WorkflowDeleteRequest {
   string workflow = 2;
   bool keep_data = 3;
   bool keep_routing_rules = 4;
+  repeated string shards = 5;
 }
 
 message WorkflowDeleteResponse {
@@ -1793,6 +1892,7 @@ message WorkflowDeleteResponse {
 message WorkflowStatusRequest {
   string keyspace = 1;
   string workflow = 2;
+  repeated string shards = 3;
 }
 
 message WorkflowStatusResponse {
@@ -1832,6 +1932,7 @@ message WorkflowSwitchTrafficRequest {
   vttime.Duration timeout = 8;
   bool dry_run = 9;
   bool initialize_target_sequences = 10;
+  repeated string shards = 11;
 }
 
 message WorkflowSwitchTrafficResponse {

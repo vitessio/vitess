@@ -24,7 +24,8 @@ import (
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/maps2"
+	"golang.org/x/exp/maps"
+
 	"vitess.io/vitess/go/mysql/replication"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -55,6 +56,23 @@ func (dr *switcherDryRun) deleteShardRoutingRules(ctx context.Context) error {
 	return nil
 }
 
+func (dr *switcherDryRun) deleteKeyspaceRoutingRules(ctx context.Context) error {
+	if dr.ts.IsMultiTenantMigration() {
+		dr.drLog.Log("Keyspace routing rules will be deleted")
+	}
+	return nil
+}
+
+func (dr *switcherDryRun) switchKeyspaceReads(ctx context.Context, types []topodatapb.TabletType) error {
+	var tabletTypes []string
+	for _, servedType := range types {
+		tabletTypes = append(tabletTypes, servedType.String())
+	}
+	dr.drLog.Logf("Switch reads from keyspace %s to keyspace %s for tablet types [%s]",
+		dr.ts.SourceKeyspaceName(), dr.ts.TargetKeyspaceName(), strings.Join(tabletTypes, ","))
+	return nil
+}
+
 func (dr *switcherDryRun) switchShardReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection) error {
 	sourceShards := make([]string, 0)
 	targetShards := make([]string, 0)
@@ -76,7 +94,7 @@ func (dr *switcherDryRun) switchShardReads(ctx context.Context, cells []string, 
 	return nil
 }
 
-func (dr *switcherDryRun) switchTableReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection) error {
+func (dr *switcherDryRun) switchTableReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, rebuildSrvVSchema bool, direction TrafficSwitchDirection) error {
 	ks := dr.ts.TargetKeyspaceName()
 	if direction == DirectionBackward {
 		ks = dr.ts.SourceKeyspaceName()
@@ -88,6 +106,9 @@ func (dr *switcherDryRun) switchTableReads(ctx context.Context, cells []string, 
 	tables := strings.Join(dr.ts.Tables(), ",")
 	dr.drLog.Logf("Switch reads for tables [%s] to keyspace %s for tablet types [%s]", tables, ks, strings.Join(tabletTypes, ","))
 	dr.drLog.Logf("Routing rules for tables [%s] will be updated", tables)
+	if rebuildSrvVSchema {
+		dr.drLog.Logf("Serving VSchema will be rebuilt for the %s keyspace", ks)
+	}
 	return nil
 }
 
@@ -214,7 +235,7 @@ func (dr *switcherDryRun) stopStreams(ctx context.Context, sm *StreamMigrator) (
 }
 
 func (dr *switcherDryRun) cancelMigration(ctx context.Context, sm *StreamMigrator) {
-	dr.drLog.Log("Cancel stream migrations as requested")
+	dr.drLog.Log("Cancel migration as requested")
 }
 
 func (dr *switcherDryRun) lockKeyspace(ctx context.Context, keyspace, _ string) (context.Context, func(*error), error) {
@@ -380,7 +401,7 @@ func (dr *switcherDryRun) resetSequences(ctx context.Context) error {
 }
 
 func (dr *switcherDryRun) initializeTargetSequences(ctx context.Context, sequencesByBackingTable map[string]*sequenceMetadata) error {
-	sortedBackingTableNames := maps2.Keys(sequencesByBackingTable)
+	sortedBackingTableNames := maps.Keys(sequencesByBackingTable)
 	slices.Sort(sortedBackingTableNames)
 	dr.drLog.Log(fmt.Sprintf("The following sequence backing tables used by tables being moved will be initialized: %s",
 		strings.Join(sortedBackingTableNames, ",")))

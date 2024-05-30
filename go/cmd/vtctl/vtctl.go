@@ -19,7 +19,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"log/syslog"
 	"os"
 	"os/signal"
 	"strings"
@@ -40,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/vtctl"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
 	"vitess.io/vitess/go/vt/vtctl/localvtctldclient"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/wrangler"
 )
@@ -118,11 +118,7 @@ func main() {
 
 	startMsg := fmt.Sprintf("USER=%v SUDO_USER=%v %v", os.Getenv("USER"), os.Getenv("SUDO_USER"), strings.Join(os.Args, " "))
 
-	if syslogger, err := syslog.New(syslog.LOG_INFO, "vtctl "); err == nil {
-		syslogger.Info(startMsg) // nolint:errcheck
-	} else {
-		log.Warningf("cannot connect to syslog: %v", err)
-	}
+	logSyslog(startMsg)
 
 	closer := trace.StartTracing("vtctl")
 	defer trace.LogErrorsWhenClosing(closer)
@@ -131,9 +127,17 @@ func main() {
 
 	ts := topo.Open()
 	defer ts.Close()
-
 	ctx, cancel := context.WithTimeout(context.Background(), waitTime)
 	installSignalHandlers(cancel)
+
+	env, err := vtenv.New(vtenv.Options{
+		MySQLServerVersion: servenv.MySQLServerVersion(),
+		TruncateUILen:      servenv.TruncateUILen,
+		TruncateErrLen:     servenv.TruncateErrLen,
+	})
+	if err != nil {
+		log.Fatalf("cannot initialize sql parser: %v", err)
+	}
 
 	// (TODO:ajm188) <Begin backwards compatibility support>.
 	//
@@ -159,7 +163,7 @@ func main() {
 		// New behavior. Strip off the prefix, and set things up to run through
 		// the vtctldclient command tree, using the localvtctldclient (in-process)
 		// client.
-		vtctld := grpcvtctldserver.NewVtctldServer(ts)
+		vtctld := grpcvtctldserver.NewVtctldServer(env, ts)
 		localvtctldclient.SetServer(vtctld)
 		command.VtctldClientProtocol = "local"
 
@@ -175,8 +179,7 @@ func main() {
 		fallthrough
 	default:
 		log.Warningf("WARNING: vtctl should only be used for VDiff v1 workflows. Please use VDiff v2 and consider using vtctldclient for all other commands.")
-
-		wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
+		wr := wrangler.New(env, logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 		if args[0] == "--" {
 			vtctl.PrintDoubleDashDeprecationNotice(wr)
@@ -184,7 +187,7 @@ func main() {
 		}
 
 		action = args[0]
-		err := vtctl.RunCommand(ctx, wr, args)
+		err = vtctl.RunCommand(ctx, wr, args)
 		cancel()
 		switch err {
 		case vtctl.ErrUnknownCommand:

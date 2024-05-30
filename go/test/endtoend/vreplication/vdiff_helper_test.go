@@ -17,6 +17,7 @@ limitations under the License.
 package vreplication
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -27,11 +28,15 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	vdiff2 "vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
 )
 
 const (
-	vdiffTimeout = time.Second * 90 // we can leverage auto retry on error with this longer-than-usual timeout
+	vdiffTimeout             = 120 * time.Second // We can leverage auto retry on error with this longer-than-usual timeout
+	vdiffRetryTimeout        = 30 * time.Second
+	vdiffStatusCheckInterval = 5 * time.Second
+	vdiffRetryInterval       = 5 * time.Second
 )
 
 var (
@@ -66,6 +71,7 @@ func doVtctlclientVDiff(t *testing.T, keyspace, workflow, cells string, want *ex
 		// update-table-stats is needed in order to test progress reports.
 		uuid, _ := performVDiff2Action(t, true, ksWorkflow, cells, "create", "", false, "--auto-retry", "--update-table-stats")
 		info := waitForVDiff2ToComplete(t, true, ksWorkflow, cells, uuid, time.Time{})
+		require.NotNil(t, info)
 		require.Equal(t, workflow, info.Workflow)
 		require.Equal(t, keyspace, info.Keyspace)
 		if want != nil {
@@ -75,6 +81,7 @@ func doVtctlclientVDiff(t *testing.T, keyspace, workflow, cells string, want *ex
 		} else {
 			require.Equal(t, "completed", info.State, "vdiff results: %+v", info)
 			require.False(t, info.HasMismatch, "vdiff results: %+v", info)
+			require.NotZero(t, info.RowsCompared)
 		}
 		if strings.Contains(t.Name(), "AcrossDBVersions") {
 			log.Errorf("VDiff resume cannot be guaranteed between major MySQL versions due to implied collation differences, skipping resume test...")
@@ -85,14 +92,16 @@ func doVtctlclientVDiff(t *testing.T, keyspace, workflow, cells string, want *ex
 
 func waitForVDiff2ToComplete(t *testing.T, useVtctlclient bool, ksWorkflow, cells, uuid string, completedAtMin time.Time) *vdiffInfo {
 	var info *vdiffInfo
+	var jsonStr string
 	first := true
 	previousProgress := vdiff2.ProgressReport{}
 	ch := make(chan bool)
 	go func() {
 		for {
-			time.Sleep(1 * time.Second)
-			_, jsonStr := performVDiff2Action(t, useVtctlclient, ksWorkflow, cells, "show", uuid, false)
+			time.Sleep(vdiffStatusCheckInterval)
+			_, jsonStr = performVDiff2Action(t, useVtctlclient, ksWorkflow, cells, "show", uuid, false)
 			info = getVDiffInfo(jsonStr)
+			require.NotNil(t, info)
 			if info.State == "completed" {
 				if !completedAtMin.IsZero() {
 					ca := info.CompletedAt
@@ -103,7 +112,7 @@ func waitForVDiff2ToComplete(t *testing.T, useVtctlclient bool, ksWorkflow, cell
 				}
 				ch <- true
 				return
-			} else if info.State == "started" { // test the progress report
+			} else if info.State == "started" { // Test the progress report
 				// The ETA should always be in the future -- when we're able to estimate
 				// it -- and the progress percentage should only increase.
 				// The timestamp format allows us to compare them lexicographically.
@@ -136,30 +145,38 @@ func waitForVDiff2ToComplete(t *testing.T, useVtctlclient bool, ksWorkflow, cell
 	case <-ch:
 		return info
 	case <-time.After(vdiffTimeout):
+		log.Errorf("VDiff never completed for UUID %s. Latest output: %s", uuid, jsonStr)
 		require.FailNow(t, fmt.Sprintf("VDiff never completed for UUID %s", uuid))
 		return nil
 	}
 }
 
 type expectedVDiff2Result struct {
-	state       string
-	shards      []string
-	hasMismatch bool
+	state               string
+	shards              []string
+	hasMismatch         bool
+	minimumRowsCompared int64
 }
 
-func doVtctldclientVDiff(t *testing.T, keyspace, workflow, cells string, want *expectedVDiff2Result) {
+func doVtctldclientVDiff(t *testing.T, keyspace, workflow, cells string, want *expectedVDiff2Result, extraFlags ...string) {
 	ksWorkflow := fmt.Sprintf("%s.%s", keyspace, workflow)
 	t.Run(fmt.Sprintf("vtctldclient vdiff %s", ksWorkflow), func(t *testing.T) {
 		// update-table-stats is needed in order to test progress reports.
-		uuid, _ := performVDiff2Action(t, false, ksWorkflow, cells, "create", "", false, "--auto-retry", "--update-table-stats")
+		flags := []string{"--auto-retry", "--update-table-stats"}
+		if len(extraFlags) > 0 {
+			flags = append(flags, extraFlags...)
+		}
+		uuid, _ := performVDiff2Action(t, false, ksWorkflow, cells, "create", "", false, flags...)
 		info := waitForVDiff2ToComplete(t, false, ksWorkflow, cells, uuid, time.Time{})
-
+		require.NotNil(t, info)
 		require.Equal(t, workflow, info.Workflow)
 		require.Equal(t, keyspace, info.Keyspace)
 		if want != nil {
 			require.Equal(t, want.state, info.State)
 			require.Equal(t, strings.Join(want.shards, ","), info.Shards)
 			require.Equal(t, want.hasMismatch, info.HasMismatch)
+			require.GreaterOrEqual(t, info.RowsCompared, want.minimumRowsCompared,
+				"not enough rows compared: want at least %d, got %d", want.minimumRowsCompared, info.RowsCompared)
 		} else {
 			require.Equal(t, "completed", info.State, "vdiff results: %+v", info)
 			require.False(t, info.HasMismatch, "vdiff results: %+v", info)
@@ -175,7 +192,7 @@ func performVDiff2Action(t *testing.T, useVtctlclient bool, ksWorkflow, cells, a
 	var err error
 	targetKeyspace, workflowName, ok := strings.Cut(ksWorkflow, ".")
 	require.True(t, ok, "invalid keyspace.workflow value: %s", ksWorkflow)
-
+	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
 	if useVtctlclient {
 		// This will always result in us using a PRIMARY tablet, which is all
 		// we start in many e2e tests, but it avoids the tablet picker logic
@@ -186,7 +203,7 @@ func performVDiff2Action(t *testing.T, useVtctlclient bool, ksWorkflow, cells, a
 			args = append(args, extraFlags...)
 		}
 		args = append(args, ksWorkflow, action, actionArg)
-		output, err = vc.VtctlClient.ExecuteCommandWithOutput(args...)
+		output, err = execVDiffWithRetry(t, expectError, false, args)
 		log.Infof("vdiff output: %+v (err: %+v)", output, err)
 		if !expectError {
 			require.Nil(t, err)
@@ -211,7 +228,8 @@ func performVDiff2Action(t *testing.T, useVtctlclient bool, ksWorkflow, cells, a
 		if actionArg != "" {
 			args = append(args, actionArg)
 		}
-		output, err = vc.VtctldClient.ExecuteCommandWithOutput(args...)
+
+		output, err = execVDiffWithRetry(t, expectError, true, args)
 		log.Infof("vdiff output: %+v (err: %+v)", output, err)
 		if !expectError {
 			require.NoError(t, err)
@@ -224,6 +242,79 @@ func performVDiff2Action(t *testing.T, useVtctlclient bool, ksWorkflow, cells, a
 	}
 
 	return uuid, output
+}
+
+// During SwitchTraffic, due to changes in the cluster, vdiff can return transient errors. isVDiffRetryable() is used to
+// ignore such errors and retry vdiff expecting the condition to be resolved.
+func isVDiffRetryable(str string) bool {
+	for _, s := range []string{"Error while dialing", "failed to connect"} {
+		if strings.Contains(str, s) {
+			return true
+		}
+	}
+	return false
+}
+
+type vdiffResult struct {
+	output string
+	err    error
+}
+
+// execVDiffWithRetry will ignore transient errors that can occur during workflow state changes.
+func execVDiffWithRetry(t *testing.T, expectError bool, useVtctldClient bool, args []string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), vdiffRetryTimeout)
+	defer cancel()
+	vdiffResultCh := make(chan vdiffResult)
+	go func() {
+		var output string
+		var err error
+		retry := false
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+			if retry {
+				time.Sleep(vdiffRetryInterval)
+			}
+			retry = false
+			if useVtctldClient {
+				output, err = vc.VtctldClient.ExecuteCommandWithOutput(args...)
+			} else {
+				output, err = vc.VtctlClient.ExecuteCommandWithOutput(args...)
+			}
+			if err != nil {
+				if expectError {
+					result := vdiffResult{output: output, err: err}
+					vdiffResultCh <- result
+					return
+				}
+				log.Infof("vdiff error: %s", err)
+				if isVDiffRetryable(err.Error()) {
+					retry = true
+				} else {
+					result := vdiffResult{output: output, err: err}
+					vdiffResultCh <- result
+					return
+				}
+			}
+			if isVDiffRetryable(output) {
+				retry = true
+			}
+			if !retry {
+				result := vdiffResult{output: output, err: nil}
+				vdiffResultCh <- result
+				return
+			}
+		}
+	}()
+	select {
+	case <-ctx.Done():
+		return "", fmt.Errorf("timed out waiting for vdiff to complete")
+	case result := <-vdiffResultCh:
+		return result.output, result.err
+	}
 }
 
 type vdiffInfo struct {
@@ -260,6 +351,8 @@ func encodeString(in string) string {
 // generateMoreCustomers creates additional test data for better tests
 // when needed.
 func generateMoreCustomers(t *testing.T, keyspace string, numCustomers int64) {
+	vtgateConn, closeConn := getVTGateConn()
+	defer closeConn()
 	log.Infof("Generating more test data with an additional %d customers", numCustomers)
 	res := execVtgateQuery(t, vtgateConn, keyspace, "select max(cid) from customer")
 	startingID, _ := res.Rows[0][0].ToInt64()

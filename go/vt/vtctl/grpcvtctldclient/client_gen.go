@@ -47,6 +47,15 @@ func (client *gRPCVtctldClient) AddCellsAlias(ctx context.Context, in *vtctldata
 	return client.c.AddCellsAlias(ctx, in, opts...)
 }
 
+// ApplyKeyspaceRoutingRules is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) ApplyKeyspaceRoutingRules(ctx context.Context, in *vtctldatapb.ApplyKeyspaceRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldatapb.ApplyKeyspaceRoutingRulesResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.ApplyKeyspaceRoutingRules(ctx, in, opts...)
+}
+
 // ApplyRoutingRules is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) ApplyRoutingRules(ctx context.Context, in *vtctldatapb.ApplyRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldatapb.ApplyRoutingRulesResponse, error) {
 	if client.c == nil {
@@ -245,6 +254,15 @@ func (client *gRPCVtctldClient) ExecuteHook(ctx context.Context, in *vtctldatapb
 	return client.c.ExecuteHook(ctx, in, opts...)
 }
 
+// ExecuteMultiFetchAsDBA is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) ExecuteMultiFetchAsDBA(ctx context.Context, in *vtctldatapb.ExecuteMultiFetchAsDBARequest, opts ...grpc.CallOption) (*vtctldatapb.ExecuteMultiFetchAsDBAResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.ExecuteMultiFetchAsDBA(ctx, in, opts...)
+}
+
 // FindAllShardsInKeyspace is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) FindAllShardsInKeyspace(ctx context.Context, in *vtctldatapb.FindAllShardsInKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.FindAllShardsInKeyspaceResponse, error) {
 	if client.c == nil {
@@ -252,6 +270,15 @@ func (client *gRPCVtctldClient) FindAllShardsInKeyspace(ctx context.Context, in 
 	}
 
 	return client.c.FindAllShardsInKeyspace(ctx, in, opts...)
+}
+
+// ForceCutOverSchemaMigration is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) ForceCutOverSchemaMigration(ctx context.Context, in *vtctldatapb.ForceCutOverSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldatapb.ForceCutOverSchemaMigrationResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.ForceCutOverSchemaMigration(ctx, in, opts...)
 }
 
 // GetBackups is part of the vtctlservicepb.VtctldClient interface.
@@ -308,6 +335,15 @@ func (client *gRPCVtctldClient) GetKeyspace(ctx context.Context, in *vtctldatapb
 	return client.c.GetKeyspace(ctx, in, opts...)
 }
 
+// GetKeyspaceRoutingRules is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) GetKeyspaceRoutingRules(ctx context.Context, in *vtctldatapb.GetKeyspaceRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldatapb.GetKeyspaceRoutingRulesResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.GetKeyspaceRoutingRules(ctx, in, opts...)
+}
+
 // GetKeyspaces is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) GetKeyspaces(ctx context.Context, in *vtctldatapb.GetKeyspacesRequest, opts ...grpc.CallOption) (*vtctldatapb.GetKeyspacesResponse, error) {
 	if client.c == nil {
@@ -360,6 +396,15 @@ func (client *gRPCVtctldClient) GetShard(ctx context.Context, in *vtctldatapb.Ge
 	}
 
 	return client.c.GetShard(ctx, in, opts...)
+}
+
+// GetShardReplication is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) GetShardReplication(ctx context.Context, in *vtctldatapb.GetShardReplicationRequest, opts ...grpc.CallOption) (*vtctldatapb.GetShardReplicationResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.GetShardReplication(ctx, in, opts...)
 }
 
 // GetShardRoutingRules is part of the vtctlservicepb.VtctldClient interface.

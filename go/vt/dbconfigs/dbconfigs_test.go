@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/yaml2"
 )
 
@@ -36,10 +37,10 @@ func TestInit(t *testing.T) {
 		dbaParams: mysql.ConnParams{Host: "host"},
 		Charset:   "utf8",
 	}
-	dbConfigs.InitWithSocket("default")
-	assert.Equal(t, mysql.ConnParams{UnixSocket: "socket", Charset: "utf8"}, dbConfigs.appParams)
-	assert.Equal(t, mysql.ConnParams{Host: "host", Charset: "utf8"}, dbConfigs.dbaParams)
-	assert.Equal(t, mysql.ConnParams{UnixSocket: "default", Charset: "utf8"}, dbConfigs.appdebugParams)
+	dbConfigs.InitWithSocket("default", collations.MySQL8())
+	assert.Equal(t, mysql.ConnParams{UnixSocket: "socket", Charset: collations.CollationUtf8mb3ID}, dbConfigs.appParams)
+	assert.Equal(t, mysql.ConnParams{Host: "host", Charset: collations.CollationUtf8mb3ID}, dbConfigs.dbaParams)
+	assert.Equal(t, mysql.ConnParams{UnixSocket: "default", Charset: collations.CollationUtf8mb3ID}, dbConfigs.appdebugParams)
 
 	dbConfigs = DBConfigs{
 		Host:                       "a",
@@ -72,7 +73,7 @@ func TestInit(t *testing.T) {
 			Host: "host",
 		},
 	}
-	dbConfigs.InitWithSocket("default")
+	dbConfigs.InitWithSocket("default", collations.MySQL8())
 
 	want := mysql.ConnParams{
 		Host:             "a",
@@ -80,7 +81,7 @@ func TestInit(t *testing.T) {
 		Uname:            "app",
 		Pass:             "apppass",
 		UnixSocket:       "b",
-		Charset:          "utf8mb4",
+		Charset:          collations.CollationUtf8mb4ID,
 		Flags:            2,
 		Flavor:           "flavor",
 		ConnectTimeoutMs: 250,
@@ -91,7 +92,7 @@ func TestInit(t *testing.T) {
 		Host:             "a",
 		Port:             1,
 		UnixSocket:       "b",
-		Charset:          "utf8mb4",
+		Charset:          collations.CollationUtf8mb4ID,
 		Flags:            2,
 		Flavor:           "flavor",
 		SslCa:            "d",
@@ -107,7 +108,7 @@ func TestInit(t *testing.T) {
 		Uname:            "dba",
 		Pass:             "dbapass",
 		UnixSocket:       "b",
-		Charset:          "utf8mb4",
+		Charset:          collations.CollationUtf8mb4ID,
 		Flags:            2,
 		Flavor:           "flavor",
 		SslCa:            "d",
@@ -143,21 +144,21 @@ func TestInit(t *testing.T) {
 		},
 		appParams: mysql.ConnParams{
 			UnixSocket: "socket",
-			Charset:    "utf8mb4",
+			Charset:    collations.CollationUtf8mb4ID,
 		},
 		dbaParams: mysql.ConnParams{
 			Host:  "host",
 			Flags: 2,
 		},
 	}
-	dbConfigs.InitWithSocket("default")
+	dbConfigs.InitWithSocket("default", collations.MySQL8())
 	want = mysql.ConnParams{
 		Host:       "a",
 		Port:       1,
 		Uname:      "app",
 		Pass:       "apppass",
 		UnixSocket: "b",
-		Charset:    "utf8mb4",
+		Charset:    collations.CollationUtf8mb4ID,
 	}
 	assert.Equal(t, want, dbConfigs.appParams)
 	want = mysql.ConnParams{
@@ -168,7 +169,7 @@ func TestInit(t *testing.T) {
 		SslCaPath:  "e",
 		SslCert:    "f",
 		SslKey:     "g",
-		Charset:    "utf8",
+		Charset:    collations.CollationUtf8mb3ID,
 	}
 	assert.Equal(t, want, dbConfigs.appdebugParams)
 	want = mysql.ConnParams{
@@ -182,7 +183,7 @@ func TestInit(t *testing.T) {
 		SslCaPath:  "e",
 		SslCert:    "f",
 		SslKey:     "g",
-		Charset:    "utf8",
+		Charset:    collations.CollationUtf8mb3ID,
 	}
 	assert.Equal(t, want, dbConfigs.dbaParams)
 }
@@ -201,13 +202,13 @@ func TestUseTCP(t *testing.T) {
 		},
 		Charset: "utf8",
 	}
-	dbConfigs.InitWithSocket("default")
+	dbConfigs.InitWithSocket("default", collations.MySQL8())
 
 	want := mysql.ConnParams{
 		Host:    "a",
 		Port:    1,
 		Uname:   "app",
-		Charset: "utf8",
+		Charset: collations.CollationUtf8mb3ID,
 	}
 	assert.Equal(t, want, dbConfigs.appParams)
 
@@ -216,7 +217,7 @@ func TestUseTCP(t *testing.T) {
 		Port:       1,
 		Uname:      "dba",
 		UnixSocket: "b",
-		Charset:    "utf8",
+		Charset:    collations.CollationUtf8mb3ID,
 	}
 	assert.Equal(t, want, dbConfigs.dbaParams)
 }

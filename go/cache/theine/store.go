@@ -44,17 +44,17 @@ const (
 )
 
 type Shard[K cachekey, V any] struct {
-	hashmap   map[K]*Entry[K, V]
-	dookeeper *bf.Bloomfilter
-	deque     *deque.Deque[*Entry[K, V]]
-	group     *Group[K, V]
-	qsize     uint
-	qlen      int
-	counter   uint
-	mu        sync.RWMutex
+	hashmap    map[K]*Entry[K, V]
+	doorkeeper *bf.Bloomfilter
+	deque      *deque.Deque[*Entry[K, V]]
+	group      *Group[K, V]
+	qsize      uint
+	qlen       int
+	counter    uint
+	mu         sync.RWMutex
 }
 
-func NewShard[K cachekey, V any](size uint, qsize uint, doorkeeper bool) *Shard[K, V] {
+func NewShard[K cachekey, V any](qsize uint, doorkeeper bool) *Shard[K, V] {
 	s := &Shard[K, V]{
 		hashmap: make(map[K]*Entry[K, V]),
 		qsize:   qsize,
@@ -62,17 +62,17 @@ func NewShard[K cachekey, V any](size uint, qsize uint, doorkeeper bool) *Shard[
 		group:   NewGroup[K, V](),
 	}
 	if doorkeeper {
-		s.dookeeper = bf.New(0.01)
+		s.doorkeeper = bf.New(0.01)
 	}
 	return s
 }
 
 func (s *Shard[K, V]) set(key K, entry *Entry[K, V]) {
 	s.hashmap[key] = entry
-	if s.dookeeper != nil {
+	if s.doorkeeper != nil {
 		ds := 20 * len(s.hashmap)
-		if ds > s.dookeeper.Capacity {
-			s.dookeeper.EnsureCapacity(ds)
+		if ds > s.doorkeeper.Capacity {
+			s.doorkeeper.EnsureCapacity(ds)
 		}
 	}
 }
@@ -195,10 +195,6 @@ func NewStore[K cachekey, V cacheval](maxsize int64, doorkeeper bool) *Store[K, 
 		shardCount = 128
 	}
 	dequeSize := int(maxsize) / 100 / shardCount
-	shardSize := int(maxsize) / shardCount
-	if shardSize < 50 {
-		shardSize = 50
-	}
 	policySize := int(maxsize) - (dequeSize * shardCount)
 
 	s := &Store[K, V]{
@@ -212,8 +208,8 @@ func NewStore[K cachekey, V cacheval](maxsize int64, doorkeeper bool) *Store[K, 
 		writebufsize: writeBufSize,
 	}
 	s.shards = make([]*Shard[K, V], 0, s.shardCount)
-	for i := 0; i < int(s.shardCount); i++ {
-		s.shards = append(s.shards, NewShard[K, V](uint(shardSize), uint(dequeSize), doorkeeper))
+	for range s.shardCount {
+		s.shards = append(s.shards, NewShard[K, V](uint(dequeSize), doorkeeper))
 	}
 
 	go s.maintenance()
@@ -329,11 +325,11 @@ func (s *Store[K, V]) setInternal(key K, value V, cost int64, epoch uint32) (*Sh
 		return shard, exist, true
 	}
 	if s.doorkeeper {
-		if shard.counter > uint(shard.dookeeper.Capacity) {
-			shard.dookeeper.Reset()
+		if shard.counter > uint(shard.doorkeeper.Capacity) {
+			shard.doorkeeper.Reset()
 			shard.counter = 0
 		}
-		hit := shard.dookeeper.Insert(h)
+		hit := shard.doorkeeper.Insert(h)
 		if !hit {
 			shard.counter += 1
 			shard.mu.Unlock()
@@ -373,7 +369,6 @@ func (s *Store[K, V]) processDeque(shard *Shard[K, V], epoch uint32) {
 		return
 	}
 	var evictedkv []dequeKV[K, V]
-	var expiredkv []dequeKV[K, V]
 
 	// send to slru
 	send := make([]*Entry[K, V], 0, 2)
@@ -421,9 +416,6 @@ func (s *Store[K, V]) processDeque(shard *Shard[K, V], epoch uint32) {
 	if s.OnRemoval != nil {
 		for _, kv := range evictedkv {
 			s.OnRemoval(kv.k, kv.v, EVICTED)
-		}
-		for _, kv := range expiredkv {
-			s.OnRemoval(kv.k, kv.v, EXPIRED)
 		}
 	}
 }

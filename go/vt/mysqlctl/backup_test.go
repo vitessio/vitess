@@ -29,8 +29,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 
 	"vitess.io/vitess/go/mysql/replication"
@@ -41,6 +43,8 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 )
+
+const mysqlShutdownTimeout = 1 * time.Minute
 
 // TestBackupExecutesBackupWithScopedParams tests that Backup passes
 // a Scope()-ed stats to backupengine ExecuteBackup.
@@ -146,9 +150,8 @@ func TestFindFilesToBackupWithoutRedoLog(t *testing.T) {
 	rocksdbDir := path.Join(dataDir, ".rocksdb")
 	sdiOnlyDir := path.Join(dataDir, "sdi_dir")
 	for _, s := range []string{innodbDataDir, innodbLogDir, dataDbDir, extraDir, outsideDbDir, rocksdbDir, sdiOnlyDir} {
-		if err := os.MkdirAll(s, os.ModePerm); err != nil {
-			t.Fatalf("failed to create directory %v: %v", s, err)
-		}
+		err := os.MkdirAll(s, os.ModePerm)
+		require.NoErrorf(t, err, "failed to create directory %v: %v", s, err)
 	}
 
 	innodbLogFile := "innodb_log_1"
@@ -421,18 +424,6 @@ func TestRestoreManifestMySQLVersionValidation(t *testing.T) {
 		wantErr                bool
 	}{
 		{
-			fromVersion: "mysqld  Ver 5.6.42",
-			toVersion:   "mysqld  Ver 5.7.40",
-			upgradeSafe: false,
-			wantErr:     true,
-		},
-		{
-			fromVersion: "mysqld  Ver 5.6.42",
-			toVersion:   "mysqld  Ver 5.7.40",
-			upgradeSafe: true,
-			wantErr:     false,
-		},
-		{
 			fromVersion: "mysqld  Ver 5.7.42",
 			toVersion:   "mysqld  Ver 8.0.32",
 			upgradeSafe: true,
@@ -563,7 +554,7 @@ func createFakeBackupRestoreEnv(t *testing.T) *fakeBackupRestoreEnv {
 	sqldb := fakesqldb.New(t)
 	sqldb.SetNeverFail(true)
 	mysqld := NewFakeMysqlDaemon(sqldb)
-	require.Nil(t, mysqld.Shutdown(ctx, nil, false))
+	require.Nil(t, mysqld.Shutdown(ctx, nil, false, mysqlShutdownTimeout))
 
 	dirName, err := os.MkdirTemp("", "vt_backup_test")
 	require.Nil(t, err)
@@ -575,33 +566,35 @@ func createFakeBackupRestoreEnv(t *testing.T) *fakeBackupRestoreEnv {
 	stats := backupstats.NewFakeStats()
 
 	backupParams := BackupParams{
-		Cnf:                cnf,
-		Logger:             logger,
-		Mysqld:             mysqld,
-		Concurrency:        1,
-		HookExtraEnv:       map[string]string{},
-		TopoServer:         nil,
-		Keyspace:           "test",
-		Shard:              "-",
-		BackupTime:         time.Now(),
-		IncrementalFromPos: "",
-		Stats:              stats,
+		Cnf:                  cnf,
+		Logger:               logger,
+		Mysqld:               mysqld,
+		Concurrency:          1,
+		HookExtraEnv:         map[string]string{},
+		TopoServer:           nil,
+		Keyspace:             "test",
+		Shard:                "-",
+		BackupTime:           time.Now(),
+		IncrementalFromPos:   "",
+		Stats:                stats,
+		MysqlShutdownTimeout: mysqlShutdownTimeout,
 	}
 
 	restoreParams := RestoreParams{
-		Cnf:                 cnf,
-		Logger:              logger,
-		Mysqld:              mysqld,
-		Concurrency:         1,
-		HookExtraEnv:        map[string]string{},
-		DeleteBeforeRestore: false,
-		DbName:              "test",
-		Keyspace:            "test",
-		Shard:               "-",
-		StartTime:           time.Now(),
-		RestoreToPos:        replication.Position{},
-		DryRun:              false,
-		Stats:               stats,
+		Cnf:                  cnf,
+		Logger:               logger,
+		Mysqld:               mysqld,
+		Concurrency:          1,
+		HookExtraEnv:         map[string]string{},
+		DeleteBeforeRestore:  false,
+		DbName:               "test",
+		Keyspace:             "test",
+		Shard:                "-",
+		StartTime:            time.Now(),
+		RestoreToPos:         replication.Position{},
+		DryRun:               false,
+		Stats:                stats,
+		MysqlShutdownTimeout: mysqlShutdownTimeout,
 	}
 
 	manifest := BackupManifest{
@@ -673,4 +666,51 @@ func (fbe *fakeBackupRestoreEnv) setStats(stats *backupstats.FakeStats) {
 	fbe.backupParams.Stats = nil
 	fbe.restoreParams.Stats = nil
 	fbe.stats = nil
+}
+
+func TestParseBackupName(t *testing.T) {
+	// backup name doesn't contain 3 parts
+	_, _, err := ParseBackupName("dir", "asd.saddsa")
+	assert.ErrorContains(t, err, "cannot backup name")
+
+	// Invalid time
+	bt, al, err := ParseBackupName("dir", "2024-03-18.123.tablet_id")
+	assert.Nil(t, bt)
+	assert.Nil(t, al)
+	assert.NoError(t, err)
+
+	// Valid case
+	bt, al, err = ParseBackupName("dir", "2024-03-18.180911.cell1-42")
+	assert.NotNil(t, *bt, time.Date(2024, 03, 18, 18, 9, 11, 0, time.UTC))
+	assert.Equal(t, "cell1", al.Cell)
+	assert.Equal(t, uint32(42), al.Uid)
+	assert.NoError(t, err)
+}
+
+func TestShouldRestore(t *testing.T) {
+	env := createFakeBackupRestoreEnv(t)
+
+	b, err := ShouldRestore(env.ctx, env.restoreParams)
+	assert.False(t, b)
+	assert.Error(t, err)
+
+	env.restoreParams.DeleteBeforeRestore = true
+	b, err = ShouldRestore(env.ctx, env.restoreParams)
+	assert.True(t, b)
+	assert.NoError(t, err)
+	env.restoreParams.DeleteBeforeRestore = false
+
+	env.mysqld.FetchSuperQueryMap = map[string]*sqltypes.Result{
+		"SHOW DATABASES": {Rows: [][]sqltypes.Value{{sqltypes.NewVarBinary("any_db")}}},
+	}
+	b, err = ShouldRestore(env.ctx, env.restoreParams)
+	assert.NoError(t, err)
+	assert.True(t, b)
+
+	env.mysqld.FetchSuperQueryMap = map[string]*sqltypes.Result{
+		"SHOW DATABASES": {Rows: [][]sqltypes.Value{{sqltypes.NewVarBinary("test")}}},
+	}
+	b, err = ShouldRestore(env.ctx, env.restoreParams)
+	assert.False(t, b)
+	assert.NoError(t, err)
 }

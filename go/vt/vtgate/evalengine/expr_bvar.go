@@ -65,12 +65,12 @@ func (bv *BindVariable) eval(env *ExpressionEnv) (eval, error) {
 	switch bvar.Type {
 	case sqltypes.Tuple:
 		if bv.Type != sqltypes.Tuple {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "query argument '%s' cannot be a tuple", bv.Key)
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "query argument '%s' must be a tuple (is %s)", bv.Key, bvar.Type)
 		}
 
 		tuple := make([]eval, 0, len(bvar.Values))
 		for _, value := range bvar.Values {
-			e, err := valueToEval(sqltypes.MakeTrusted(value.Type, value.Value), typedCoercionCollation(value.Type, collations.CollationForType(value.Type, bv.Collation)))
+			e, err := valueToEval(sqltypes.MakeTrusted(value.Type, value.Value), typedCoercionCollation(value.Type, collations.CollationForType(value.Type, bv.Collation)), nil)
 			if err != nil {
 				return nil, err
 			}
@@ -80,13 +80,13 @@ func (bv *BindVariable) eval(env *ExpressionEnv) (eval, error) {
 
 	default:
 		if bv.Type == sqltypes.Tuple {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "query argument '%s' must be a tuple (is %s)", bv.Key, bvar.Type)
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "query argument '%s' cannot be a tuple", bv.Key)
 		}
 		typ := bvar.Type
 		if bv.typed() {
 			typ = bv.Type
 		}
-		return valueToEval(sqltypes.MakeTrusted(typ, bvar.Value), typedCoercionCollation(typ, collations.CollationForType(typ, bv.Collation)))
+		return valueToEval(sqltypes.MakeTrusted(typ, bvar.Value), typedCoercionCollation(typ, collations.CollationForType(typ, bv.Collation)), nil)
 	}
 }
 
@@ -106,11 +106,11 @@ func (bv *BindVariable) typeof(env *ExpressionEnv) (ctype, error) {
 	case sqltypes.Null:
 		return ctype{Type: sqltypes.Null, Flag: flagNull | flagNullable, Col: collationNull}, nil
 	case sqltypes.HexNum, sqltypes.HexVal:
-		return ctype{Type: sqltypes.VarBinary, Flag: flagHex, Col: collationNumeric}, nil
+		return ctype{Type: sqltypes.VarBinary, Flag: flagHex | flagNullable, Col: collationNumeric}, nil
 	case sqltypes.BitNum:
-		return ctype{Type: sqltypes.VarBinary, Flag: flagBit, Col: collationNumeric}, nil
+		return ctype{Type: sqltypes.VarBinary, Flag: flagBit | flagNullable, Col: collationNumeric}, nil
 	default:
-		return ctype{Type: tt, Flag: 0, Col: typedCoercionCollation(tt, collations.CollationForType(tt, bv.Collation))}, nil
+		return ctype{Type: tt, Flag: flagNullable, Col: typedCoercionCollation(tt, collations.CollationForType(tt, bv.Collation))}, nil
 	}
 }
 

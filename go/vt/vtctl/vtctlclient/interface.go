@@ -56,7 +56,7 @@ type VtctlClient interface {
 }
 
 // Factory functions are registered by client implementations
-type Factory func(addr string) (VtctlClient, error)
+type Factory func(ctx context.Context, addr string) (VtctlClient, error)
 
 var factories = make(map[string]Factory)
 
@@ -68,22 +68,11 @@ func RegisterFactory(name string, factory Factory) {
 	factories[name] = factory
 }
 
-// UnregisterFactoryForTest allows to unregister a client implementation from the static map.
-// This function is used by unit tests to cleanly unregister any fake implementations.
-// This way, a test package can use the same name for different fakes and no dangling fakes are
-// left behind in the static factories map after the test.
-func UnregisterFactoryForTest(name string) {
-	if _, ok := factories[name]; !ok {
-		log.Fatalf("UnregisterFactoryForTest: %s is not registered", name)
-	}
-	delete(factories, name)
-}
-
 // New allows a user of the client library to get its implementation.
-func New(addr string) (VtctlClient, error) {
+func New(ctx context.Context, addr string) (VtctlClient, error) {
 	factory, ok := factories[vtctlClientProtocol]
 	if !ok {
 		return nil, fmt.Errorf("unknown vtctl client protocol: %v", vtctlClientProtocol)
 	}
-	return factory(addr)
+	return factory(ctx, addr)
 }

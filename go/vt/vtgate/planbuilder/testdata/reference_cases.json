@@ -162,6 +162,50 @@
     }
   },
   {
+    "comment": "Reference tables using left join with a derived table having a limit clause",
+    "query": "SELECT u.id FROM ( SELECT a.id, a.u_id FROM user.ref_with_source AS a WHERE a.id IN (3) ORDER BY a.d_at LIMIT 1) as u LEFT JOIN user.ref_with_source AS u0 ON u.u_id = u0.u_uid ORDER BY u.id",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT u.id FROM ( SELECT a.id, a.u_id FROM user.ref_with_source AS a WHERE a.id IN (3) ORDER BY a.d_at LIMIT 1) as u LEFT JOIN user.ref_with_source AS u0 ON u.u_id = u0.u_uid ORDER BY u.id",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "LeftJoin",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "u_u_id": 1
+        },
+        "TableName": "ref_with_source_ref_with_source",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select u.id, u.u_id from (select a.id, a.u_id from ref_with_source as a where 1 != 1) as u where 1 != 1",
+            "Query": "select u.id, u.u_id from (select a.id, a.u_id from ref_with_source as a where a.id in (3) order by a.d_at asc limit 1) as u order by u.id asc",
+            "Table": "ref_with_source"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from ref_with_source as u0 where 1 != 1",
+            "Query": "select 1 from ref_with_source as u0 where u0.u_uid = :u_u_id",
+            "Table": "ref_with_source"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.ref_with_source"
+      ]
+    }
+  },
+  {
     "comment": "insert into qualified ambiguous reference table routes to source",
     "query": "insert into user.ambiguous_ref_with_source(col) values(1)",
     "plan": {
@@ -382,6 +426,324 @@
       },
       "TablesUsed": [
         "main.global_ref"
+      ]
+    }
+  },
+  {
+    "comment": "delete from reference table with another name - query send to source table",
+    "query": "delete from user.ref_with_source where col = 1",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from user.ref_with_source where col = 1",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "delete from source_of_ref where col = 1",
+        "Table": "source_of_ref"
+      },
+      "TablesUsed": [
+        "main.source_of_ref"
+      ]
+    }
+  },
+  {
+    "comment": "update from reference table with another name - query send to source table",
+    "query": "update user.ref_with_source set x = 4 where col = 1",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user.ref_with_source set x = 4 where col = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "update source_of_ref set x = 4 where col = 1",
+        "Table": "source_of_ref"
+      },
+      "TablesUsed": [
+        "main.source_of_ref"
+      ]
+    }
+  },
+  {
+    "comment": "insert from reference table with another name - query send to source table",
+    "query": "insert into user.ref_with_source(x) values(4)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into user.ref_with_source(x) values(4)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "insert into source_of_ref(x) values (4)",
+        "TableName": "source_of_ref"
+      },
+      "TablesUsed": [
+        "main.source_of_ref"
+      ]
+    }
+  },
+  {
+    "comment": "delete from reference table - query send to source table",
+    "query": "delete from source_of_ref where col = 1",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from source_of_ref where col = 1",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "delete from source_of_ref where col = 1",
+        "Table": "source_of_ref"
+      },
+      "TablesUsed": [
+        "main.source_of_ref"
+      ]
+    }
+  },
+  {
+    "comment": "update from reference table - query send to source table",
+    "query": "update source_of_ref set x = 4 where col = 1",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update source_of_ref set x = 4 where col = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "update source_of_ref set x = 4 where col = 1",
+        "Table": "source_of_ref"
+      },
+      "TablesUsed": [
+        "main.source_of_ref"
+      ]
+    }
+  },
+  {
+    "comment": "insert from reference table - query send to source table",
+    "query": "insert into source_of_ref(x) values(4)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into source_of_ref(x) values(4)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "insert into source_of_ref(x) values (4)",
+        "TableName": "source_of_ref"
+      },
+      "TablesUsed": [
+        "main.source_of_ref"
+      ]
+    }
+  },
+  {
+    "comment": "delete from reference table qualified with unsharded - query send to source table",
+    "query": "delete from main.source_of_ref where col = 1",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from main.source_of_ref where col = 1",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "delete from source_of_ref where col = 1",
+        "Table": "source_of_ref"
+      },
+      "TablesUsed": [
+        "main.source_of_ref"
+      ]
+    }
+  },
+  {
+    "comment": "update from reference table qualified with unsharded - query send to source table",
+    "query": "update main.source_of_ref set x = 4 where col = 1",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update main.source_of_ref set x = 4 where col = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "update source_of_ref set x = 4 where col = 1",
+        "Table": "source_of_ref"
+      },
+      "TablesUsed": [
+        "main.source_of_ref"
+      ]
+    }
+  },
+  {
+    "comment": "insert from reference table qualified with unsharded - query send to source table",
+    "query": "insert into main.source_of_ref(x) values(4)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into main.source_of_ref(x) values(4)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "insert into source_of_ref(x) values (4)",
+        "TableName": "source_of_ref"
+      },
+      "TablesUsed": [
+        "main.source_of_ref"
+      ]
+    }
+  },
+  {
+    "comment": "delete from reference table with another name - query send to source table",
+    "query": "delete from user.ref_with_source where col = 1",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from user.ref_with_source where col = 1",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "delete from source_of_ref where col = 1",
+        "Table": "source_of_ref"
+      },
+      "TablesUsed": [
+        "main.source_of_ref"
+      ]
+    }
+  },
+  {
+    "comment": "update from reference table with another name - query send to source table",
+    "query": "update user.ref_with_source set x = 4 where col = 1",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user.ref_with_source set x = 4 where col = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "update source_of_ref set x = 4 where col = 1",
+        "Table": "source_of_ref"
+      },
+      "TablesUsed": [
+        "main.source_of_ref"
+      ]
+    }
+  },
+  {
+    "comment": "insert from reference table with another name - query send to source table",
+    "query": "insert into user.ref_with_source(x) values(4)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into user.ref_with_source(x) values(4)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "insert into source_of_ref(x) values (4)",
+        "TableName": "source_of_ref"
+      },
+      "TablesUsed": [
+        "main.source_of_ref"
+      ]
+    }
+  },
+  {
+    "comment": "select with join to reference table in sharded keyspace: should route shard-scoped",
+    "query": "select * from user.ref_with_source ref, `user`.`user` u where ref.id = u.ref_id and u.id = 2",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select * from user.ref_with_source ref, `user`.`user` u where ref.id = u.ref_id and u.id = 2",
+      "Instructions": {
+        "FieldQuery": "select * from ref_with_source as ref, `user` as u where 1 != 1",
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Vindex": "user_index",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select * from ref_with_source as ref, `user` as u where u.id = 2 and ref.id = u.ref_id",
+        "Table": "`user`, ref_with_source",
+        "Values": [
+          "2"
+        ]
+      },
+      "TablesUsed": [
+        "user.ref_with_source",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "select with join to reference table in unsharded keyspace: should route shard-scoped",
+    "query": "select * from source_of_ref ref, `user`.`user` u where ref.id = u.ref_id and u.id = 2",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select * from source_of_ref ref, `user`.`user` u where ref.id = u.ref_id and u.id = 2",
+      "Instructions": {
+        "FieldQuery": "select * from ref_with_source as ref, `user` as u where 1 != 1",
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Vindex": "user_index",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select * from ref_with_source as ref, `user` as u where u.id = 2 and ref.id = u.ref_id",
+        "Table": "`user`, ref_with_source",
+        "Values": [
+          "2"
+        ]
+      },
+      "TablesUsed": [
+        "user.ref_with_source",
+        "user.user"
       ]
     }
   }

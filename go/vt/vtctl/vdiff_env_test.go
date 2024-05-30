@@ -19,7 +19,7 @@ package vtctl
 import (
 	"context"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"sync"
 	"testing"
 
@@ -43,7 +43,7 @@ import (
 
 const (
 	// vdiffStopPosition is the default stop position for the target vreplication.
-	// It can be overridden with the positons argument to newTestVDiffEnv.
+	// It can be overridden with the positions argument to newTestVDiffEnv.
 	vdiffStopPosition = "MySQL56/d834e6b8-7cbf-11ed-a1eb-0242ac120002:1-892"
 	// vdiffSourceGtid should be the position reported by the source side VStreamResults.
 	// It's expected to be higher the vdiffStopPosition.
@@ -82,8 +82,8 @@ func newTestVDiffEnv(t testing.TB, ctx context.Context, sourceShards, targetShar
 	env.wr = wrangler.NewTestWrangler(env.cmdlog, env.topoServ, env.tmc)
 
 	// Generate a unique dialer name.
-	dialerName := fmt.Sprintf("VDiffTest-%s-%d", t.Name(), rand.Intn(1000000000))
-	tabletconn.RegisterDialer(dialerName, func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
+	dialerName := fmt.Sprintf("VDiffTest-%s-%d", t.Name(), rand.IntN(1000000000))
+	tabletconn.RegisterDialer(dialerName, func(ctx context.Context, tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
 		env.mu.Lock()
 		defer env.mu.Unlock()
 		if qs, ok := env.tablets[int(tablet.Alias.Uid)]; ok {

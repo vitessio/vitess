@@ -19,8 +19,10 @@ package vtgate
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/dtids"
 	"vitess.io/vitess/go/vt/log"
@@ -33,6 +35,10 @@ import (
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
+
+// nonAtomicCommitWarnMaxShards limits the number of shard names reported in
+// non-atomic commit warnings.
+const nonAtomicCommitWarnMaxShards = 16
 
 // TxConn is used for executing transactional requests.
 type TxConn struct {
@@ -98,11 +104,11 @@ func (txc *TxConn) Commit(ctx context.Context, session *SafeSession) error {
 	return txc.commitNormal(ctx, session)
 }
 
-func (txc *TxConn) queryService(alias *topodatapb.TabletAlias) (queryservice.QueryService, error) {
+func (txc *TxConn) queryService(ctx context.Context, alias *topodatapb.TabletAlias) (queryservice.QueryService, error) {
 	if alias == nil {
 		return txc.tabletGateway, nil
 	}
-	return txc.tabletGateway.QueryServiceByAlias(alias, nil)
+	return txc.tabletGateway.QueryServiceByAlias(ctx, alias, nil)
 }
 
 func (txc *TxConn) commitShard(ctx context.Context, s *vtgatepb.Session_ShardSession, logging *executeLogger) error {
@@ -111,7 +117,7 @@ func (txc *TxConn) commitShard(ctx context.Context, s *vtgatepb.Session_ShardSes
 	}
 	var qs queryservice.QueryService
 	var err error
-	qs, err = txc.queryService(s.TabletAlias)
+	qs, err = txc.queryService(ctx, s.TabletAlias)
 	if err != nil {
 		return err
 	}
@@ -132,8 +138,28 @@ func (txc *TxConn) commitNormal(ctx context.Context, session *SafeSession) error
 	}
 
 	// Retain backward compatibility on commit order for the normal session.
-	for _, shardSession := range session.ShardSessions {
+	for i, shardSession := range session.ShardSessions {
 		if err := txc.commitShard(ctx, shardSession, session.logging); err != nil {
+			if i > 0 {
+				nShards := i
+				elipsis := false
+				if i > nonAtomicCommitWarnMaxShards {
+					nShards = nonAtomicCommitWarnMaxShards
+					elipsis = true
+				}
+				sNames := make([]string, nShards, nShards+1 /*...*/)
+				for j := 0; j < nShards; j++ {
+					sNames[j] = session.ShardSessions[j].Target.Shard
+				}
+				if elipsis {
+					sNames = append(sNames, "...")
+				}
+				session.RecordWarning(&querypb.QueryWarning{
+					Code:    uint32(sqlerror.ERNonAtomicCommit),
+					Message: fmt.Sprintf("multi-db commit failed after committing to %d shards: %s", i, strings.Join(sNames, ", ")),
+				})
+				warnings.Add("NonAtomicCommit", 1)
+			}
 			_ = txc.Release(ctx, session)
 			return err
 		}
@@ -217,7 +243,7 @@ func (txc *TxConn) Rollback(ctx context.Context, session *SafeSession) error {
 		if s.TransactionId == 0 {
 			return nil
 		}
-		qs, err := txc.queryService(s.TabletAlias)
+		qs, err := txc.queryService(ctx, s.TabletAlias)
 		if err != nil {
 			return err
 		}
@@ -253,7 +279,7 @@ func (txc *TxConn) Release(ctx context.Context, session *SafeSession) error {
 		if s.ReservedId == 0 && s.TransactionId == 0 {
 			return nil
 		}
-		qs, err := txc.queryService(s.TabletAlias)
+		qs, err := txc.queryService(ctx, s.TabletAlias)
 		if err != nil {
 			return err
 		}
@@ -279,7 +305,7 @@ func (txc *TxConn) ReleaseLock(ctx context.Context, session *SafeSession) error 
 	if ls.ReservedId == 0 {
 		return nil
 	}
-	qs, err := txc.queryService(ls.TabletAlias)
+	qs, err := txc.queryService(ctx, ls.TabletAlias)
 	if err != nil {
 		return err
 	}
@@ -303,7 +329,7 @@ func (txc *TxConn) ReleaseAll(ctx context.Context, session *SafeSession) error {
 		if s.ReservedId == 0 && s.TransactionId == 0 {
 			return nil
 		}
-		qs, err := txc.queryService(s.TabletAlias)
+		qs, err := txc.queryService(ctx, s.TabletAlias)
 		if err != nil {
 			return err
 		}
@@ -336,7 +362,7 @@ func (txc *TxConn) Resolve(ctx context.Context, dtid string) error {
 	case querypb.TransactionState_PREPARE:
 		// If state is PREPARE, make a decision to rollback and
 		// fallthrough to the rollback workflow.
-		qs, err := txc.queryService(mmShard.TabletAlias)
+		qs, err := txc.queryService(ctx, mmShard.TabletAlias)
 		if err != nil {
 			return err
 		}

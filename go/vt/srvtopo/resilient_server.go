@@ -70,7 +70,6 @@ const (
 // - return the last known value of the data if there is an error
 type ResilientServer struct {
 	topoServer *topo.Server
-	counts     *stats.CountersWithSingleLabel
 
 	*SrvKeyspaceWatcher
 	*SrvVSchemaWatcher
@@ -79,22 +78,13 @@ type ResilientServer struct {
 
 // NewResilientServer creates a new ResilientServer
 // based on the provided topo.Server.
-func NewResilientServer(ctx context.Context, base *topo.Server, counterPrefix string) *ResilientServer {
+func NewResilientServer(ctx context.Context, base *topo.Server, counts *stats.CountersWithSingleLabel) *ResilientServer {
 	if srvTopoCacheRefresh > srvTopoCacheTTL {
 		log.Fatalf("srv_topo_cache_refresh must be less than or equal to srv_topo_cache_ttl")
 	}
 
-	var metric string
-	if counterPrefix == "" {
-		metric = counterPrefix + "Counts"
-	} else {
-		metric = ""
-	}
-	counts := stats.NewCountersWithSingleLabel(metric, "Resilient srvtopo server operations", "type")
-
 	return &ResilientServer{
 		topoServer:            base,
-		counts:                counts,
 		SrvKeyspaceWatcher:    NewSrvKeyspaceWatcher(ctx, base, counts, srvTopoCacheRefresh, srvTopoCacheTTL),
 		SrvVSchemaWatcher:     NewSrvVSchemaWatcher(ctx, base, counts, srvTopoCacheRefresh, srvTopoCacheTTL),
 		SrvKeyspaceNamesQuery: NewSrvKeyspaceNamesQuery(base, counts, srvTopoCacheRefresh, srvTopoCacheTTL),

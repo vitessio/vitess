@@ -138,7 +138,7 @@ func checkTryLockTimeout(ctx context.Context, t *testing.T, conn topo.Conn) {
 
 	// test we can't unlock again
 	if err := lockDescriptor.Unlock(ctx); err == nil {
-		require.Fail(t, "Unlock failed", err.Error())
+		require.Fail(t, "Unlock succeeded but should not have")
 	}
 }
 

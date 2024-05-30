@@ -19,9 +19,8 @@ package colldata
 import (
 	"encoding/json"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"os"
-	"reflect"
 	"sort"
 	"testing"
 	"unicode/utf8"
@@ -36,7 +35,6 @@ type CollationWithContractions struct {
 	Collation    Collation
 	Contractions []uca.Contraction
 	ContractFast uca.Contractor
-	ContractTrie uca.Contractor
 }
 
 func findContractedCollations(t testing.TB, unique bool) (result []CollationWithContractions) {
@@ -58,7 +56,7 @@ func findContractedCollations(t testing.TB, unique bool) (result []CollationWith
 			continue
 		}
 
-		rf, err := os.Open(fmt.Sprintf("testdata/mysqldata/%s.json", collation.Name()))
+		rf, err := os.Open(fmt.Sprintf("../testdata/mysqldata/%s.json", collation.Name()))
 		if err != nil {
 			t.Skipf("failed to open JSON metadata (%v). did you run colldump?", err)
 		}
@@ -91,14 +89,13 @@ func findContractedCollations(t testing.TB, unique bool) (result []CollationWith
 			Collation:    collation,
 			Contractions: meta.Contractions,
 			ContractFast: contract,
-			ContractTrie: uca.NewTrieContractor(meta.Contractions),
 		})
 	}
 	return
 }
 
 func testMatch(t *testing.T, name string, cnt uca.Contraction, result []uint16, remainder []byte, skip int) {
-	assert.True(t, reflect.DeepEqual(cnt.Weights, result), "%s didn't match: expected %#v, got %#v", name, cnt.Weights, result)
+	assert.Equal(t, result, cnt.Weights, "%s didn't match: expected %#v, got %#v", name, cnt.Weights, result)
 	assert.Equal(t, 0, len(remainder), "%s bad remainder: %#v", name, remainder)
 	assert.Equal(t, len(cnt.Path), skip, "%s bad skipped length %d for %#v", name, skip, cnt.Path)
 
@@ -112,10 +109,7 @@ func TestUCAContractions(t *testing.T) {
 					head := cnt.Path[0]
 					tail := cnt.Path[1]
 
-					result := cwc.ContractTrie.FindContextual(head, tail)
-					testMatch(t, "ContractTrie", cnt, result, nil, 2)
-
-					result = cwc.ContractFast.FindContextual(head, tail)
+					result := cwc.ContractFast.FindContextual(head, tail)
 					testMatch(t, "ContractFast", cnt, result, nil, 2)
 					continue
 				}
@@ -123,10 +117,7 @@ func TestUCAContractions(t *testing.T) {
 				head := cnt.Path[0]
 				tail := string(cnt.Path[1:])
 
-				result, remainder, skip := cwc.ContractTrie.Find(charset.Charset_utf8mb4{}, head, []byte(tail))
-				testMatch(t, "ContractTrie", cnt, result, remainder, skip)
-
-				result, remainder, skip = cwc.ContractFast.Find(charset.Charset_utf8mb4{}, head, []byte(tail))
+				result, remainder, skip := cwc.ContractFast.Find(charset.Charset_utf8mb4{}, head, []byte(tail))
 				testMatch(t, "ContractFast", cnt, result, remainder, skip)
 			}
 		})
@@ -212,14 +203,13 @@ func (s *strgen) generate(length int, freq float64) (out []byte) {
 		return flat[i] < flat[j]
 	})
 
-	gen := rand.New(rand.NewSource(0xDEADBEEF))
 	out = make([]byte, 0, length)
 	for len(out) < length {
-		if gen.Float64() < freq {
-			cnt := s.contractions[rand.Intn(len(s.contractions))]
+		if rand.Float64() < freq {
+			cnt := s.contractions[rand.IntN(len(s.contractions))]
 			out = append(out, cnt...)
 		} else {
-			cp := flat[rand.Intn(len(flat))]
+			cp := flat[rand.IntN(len(flat))]
 			out = append(out, string(cp)...)
 		}
 	}
@@ -239,10 +229,6 @@ func BenchmarkUCAContractions(b *testing.B) {
 		b.Run(fmt.Sprintf("%s-%.02f-fast", cwc.Collation.Name(), frequency), func(b *testing.B) {
 			benchmarkFind(b, input, cwc.ContractFast)
 		})
-
-		b.Run(fmt.Sprintf("%s-%.02f-trie", cwc.Collation.Name(), frequency), func(b *testing.B) {
-			benchmarkFind(b, input, cwc.ContractTrie)
-		})
 	}
 }
 
@@ -258,10 +244,6 @@ func BenchmarkUCAContractionsJA(b *testing.B) {
 
 		b.Run(fmt.Sprintf("%s-%.02f-fast", cwc.Collation.Name(), frequency), func(b *testing.B) {
 			benchmarkFindJA(b, input, cwc.ContractFast)
-		})
-
-		b.Run(fmt.Sprintf("%s-%.02f-trie", cwc.Collation.Name(), frequency), func(b *testing.B) {
-			benchmarkFindJA(b, input, cwc.ContractTrie)
 		})
 	}
 }

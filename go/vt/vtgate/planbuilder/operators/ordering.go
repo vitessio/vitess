@@ -22,20 +22,19 @@ import (
 
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 type Ordering struct {
-	Source  ops.Operator
+	Source  Operator
 	Offset  []int
 	WOffset []int
 
-	Order         []ops.OrderBy
+	Order         []OrderBy
 	ResultColumns int
 }
 
-func (o *Ordering) Clone(inputs []ops.Operator) ops.Operator {
+func (o *Ordering) Clone(inputs []Operator) Operator {
 	return &Ordering{
 		Source:        inputs[0],
 		Offset:        slices.Clone(o.Offset),
@@ -45,21 +44,25 @@ func (o *Ordering) Clone(inputs []ops.Operator) ops.Operator {
 	}
 }
 
-func (o *Ordering) Inputs() []ops.Operator {
-	return []ops.Operator{o.Source}
+func (o *Ordering) Inputs() []Operator {
+	return []Operator{o.Source}
 }
 
-func (o *Ordering) SetInputs(operators []ops.Operator) {
+func (o *Ordering) SetInputs(operators []Operator) {
 	o.Source = operators[0]
 }
 
-func (o *Ordering) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
+func (o *Ordering) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
 	o.Source = o.Source.AddPredicate(ctx, expr)
 	return o
 }
 
 func (o *Ordering) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) int {
 	return o.Source.AddColumn(ctx, reuse, gb, expr)
+}
+
+func (o *Ordering) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
+	return o.Source.AddWSColumn(ctx, offset, underRoute)
 }
 
 func (o *Ordering) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
@@ -74,11 +77,11 @@ func (o *Ordering) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.Se
 	return o.Source.GetSelectExprs(ctx)
 }
 
-func (o *Ordering) GetOrdering(*plancontext.PlanningContext) []ops.OrderBy {
+func (o *Ordering) GetOrdering(*plancontext.PlanningContext) []OrderBy {
 	return o.Order
 }
 
-func (o *Ordering) planOffsets(ctx *plancontext.PlanningContext) {
+func (o *Ordering) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	for _, order := range o.Order {
 		offset := o.Source.AddColumn(ctx, true, false, aeWrap(order.SimplifiedExpr))
 		o.Offset = append(o.Offset, offset)
@@ -92,10 +95,11 @@ func (o *Ordering) planOffsets(ctx *plancontext.PlanningContext) {
 		offset = o.Source.AddColumn(ctx, true, false, aeWrap(wsExpr))
 		o.WOffset = append(o.WOffset, offset)
 	}
+	return nil
 }
 
 func (o *Ordering) ShortDescription() string {
-	ordering := slice.Map(o.Order, func(o ops.OrderBy) string {
+	ordering := slice.Map(o.Order, func(o OrderBy) string {
 		return sqlparser.String(o.SimplifiedExpr)
 	})
 	return strings.Join(ordering, ", ")

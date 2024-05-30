@@ -23,8 +23,9 @@ import (
 )
 
 func TestRedactSQLStatements(t *testing.T) {
+	parser := NewTestParser()
 	sql := "select a,b,c from t where x = 1234 and y = 1234 and z = 'apple'"
-	redactedSQL, err := RedactSQLQuery(sql)
+	redactedSQL, err := parser.RedactSQLQuery(sql)
 	if err != nil {
 		t.Fatalf("redacting sql failed: %v", err)
 	}

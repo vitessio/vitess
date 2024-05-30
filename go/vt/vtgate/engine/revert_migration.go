@@ -34,14 +34,13 @@ var _ Primitive = (*RevertMigration)(nil)
 
 // RevertMigration represents the instructions to perform an online schema change via vtctld
 type RevertMigration struct {
+	noTxNeeded
+	noInputs
+
 	Keyspace          *vindexes.Keyspace
 	Stmt              *sqlparser.RevertMigration
 	Query             string
 	TargetDestination key.Destination
-
-	noTxNeeded
-
-	noInputs
 }
 
 func (v *RevertMigration) description() PrimitiveDescription {
@@ -88,7 +87,7 @@ func (v *RevertMigration) TryExecute(ctx context.Context, vcursor VCursor, bindV
 		return nil, err
 	}
 	ddlStrategySetting.Strategy = schema.DDLStrategyOnline // and we keep the options as they were
-	onlineDDL, err := schema.NewOnlineDDL(v.GetKeyspaceName(), "", sql, ddlStrategySetting, fmt.Sprintf("vtgate:%s", vcursor.Session().GetSessionUUID()), "")
+	onlineDDL, err := schema.NewOnlineDDL(v.GetKeyspaceName(), "", sql, ddlStrategySetting, fmt.Sprintf("vtgate:%s", vcursor.Session().GetSessionUUID()), "", vcursor.Environment().Parser())
 	if err != nil {
 		return result, err
 	}

@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
+	"vitess.io/vitess/go/vt/vtenv"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -41,10 +42,10 @@ func TestFindAllShardsInKeyspace(t *testing.T) {
 	ts := memorytopo.NewServer(ctx, "cell1")
 	defer ts.Close()
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return grpcvtctldserver.NewVtctldServer(ts)
+		return grpcvtctldserver.NewVtctldServer(vtenv.NewTestEnv(), ts)
 	})
 
-	testutil.WithTestServer(t, vtctld, func(t *testing.T, client vtctldclient.VtctldClient) {
+	testutil.WithTestServer(ctx, t, vtctld, func(t *testing.T, client vtctldclient.VtctldClient) {
 		ks := &vtctldatapb.Keyspace{
 			Name:     "testkeyspace",
 			Keyspace: &topodatapb.Keyspace{},
@@ -88,10 +89,10 @@ func TestGetKeyspace(t *testing.T) {
 	ts := memorytopo.NewServer(ctx, "cell1")
 	defer ts.Close()
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return grpcvtctldserver.NewVtctldServer(ts)
+		return grpcvtctldserver.NewVtctldServer(vtenv.NewTestEnv(), ts)
 	})
 
-	testutil.WithTestServer(t, vtctld, func(t *testing.T, client vtctldclient.VtctldClient) {
+	testutil.WithTestServer(ctx, t, vtctld, func(t *testing.T, client vtctldclient.VtctldClient) {
 		expected := &vtctldatapb.GetKeyspaceResponse{
 			Keyspace: &vtctldatapb.Keyspace{
 				Name:     "testkeyspace",
@@ -117,10 +118,10 @@ func TestGetKeyspaces(t *testing.T) {
 	ts := memorytopo.NewServer(ctx, "cell1")
 	defer ts.Close()
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return grpcvtctldserver.NewVtctldServer(ts)
+		return grpcvtctldserver.NewVtctldServer(vtenv.NewTestEnv(), ts)
 	})
 
-	testutil.WithTestServer(t, vtctld, func(t *testing.T, client vtctldclient.VtctldClient) {
+	testutil.WithTestServer(ctx, t, vtctld, func(t *testing.T, client vtctldclient.VtctldClient) {
 		resp, err := client.GetKeyspaces(ctx, &vtctldatapb.GetKeyspacesRequest{})
 		assert.NoError(t, err)
 		assert.Empty(t, resp.Keyspaces)

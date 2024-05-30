@@ -11,6 +11,7 @@ linters-settings:
     disable: # not supported when using Generics in 1.18
       - nilness
       - unusedwrite
+      - loopclosure # fixed in go1.22
 
 linters:
   disable-all: true
@@ -26,7 +27,6 @@ linters:
     # Extras
     - gofmt
     - goimports
-    - exportloopref
     - bodyclose
 
     # revive is a replacement for golint, but we do not run it in CI for now.

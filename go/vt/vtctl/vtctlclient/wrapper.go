@@ -17,12 +17,11 @@ limitations under the License.
 package vtctlclient
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"time"
-
-	"context"
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 )
@@ -39,7 +38,7 @@ func RunCommandAndWait(ctx context.Context, server string, args []string, recv f
 		return errors.New("no function closure for Event stream specified")
 	}
 	// create the client
-	client, err := New(server)
+	client, err := New(ctx, server)
 	if err != nil {
 		return fmt.Errorf("cannot dial to server %v: %v", server, err)
 	}

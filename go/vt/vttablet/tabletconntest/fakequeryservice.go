@@ -173,7 +173,7 @@ func (f *FakeQueryService) Commit(ctx context.Context, target *querypb.Target, t
 	return 0, nil
 }
 
-// rollbackTransactionID is a test transactin id for Rollback.
+// rollbackTransactionID is a test transaction id for Rollback.
 const rollbackTransactionID int64 = 999044
 
 // Rollback is part of the queryservice.QueryService interface
@@ -709,7 +709,7 @@ func (f *FakeQueryService) VStreamResults(ctx context.Context, target *querypb.T
 }
 
 // QueryServiceByAlias satisfies the Gateway interface
-func (f *FakeQueryService) QueryServiceByAlias(_ *topodatapb.TabletAlias, _ *querypb.Target) (queryservice.QueryService, error) {
+func (f *FakeQueryService) QueryServiceByAlias(_ context.Context, _ *topodatapb.TabletAlias, _ *querypb.Target) (queryservice.QueryService, error) {
 	panic("not implemented")
 }
 

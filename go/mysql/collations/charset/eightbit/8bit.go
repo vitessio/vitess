@@ -81,3 +81,17 @@ func (Charset_8bit) Length(src []byte) int {
 func (Charset_8bit) MaxWidth() int {
 	return 1
 }
+
+func (Charset_8bit) Slice(src []byte, from, to int) []byte {
+	if from >= len(src) {
+		return nil
+	}
+	if to > len(src) {
+		to = len(src)
+	}
+	return src[from:to]
+}
+
+func (Charset_8bit) Validate(src []byte) bool {
+	return true
+}

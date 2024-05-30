@@ -65,8 +65,6 @@ func TestVReplicationQueryPlanner_PlanQuery(t *testing.T) {
 	planner := NewVReplicationQueryPlanner(nil, "", "")
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -115,8 +113,6 @@ func TestVReplicationQueryPlanner_planSelect(t *testing.T) {
 	planner := NewVReplicationQueryPlanner(nil, "testworkflow", "vt_testkeyspace")
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -169,8 +165,6 @@ func TestVReplicationQueryPlanner_planUpdate(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -230,8 +224,6 @@ func TestVReplicationQueryPlanner_planDelete(t *testing.T) {
 	planner := NewVReplicationQueryPlanner(nil, "", "vt_testkeyspace")
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -351,13 +343,11 @@ func TestVReplicationLogQueryPlanner(t *testing.T) {
 		}
 
 		for _, tt := range tests {
-			tt := tt
-
 			t.Run(tt.name, func(t *testing.T) {
 				t.Parallel()
 
 				planner := NewVReplicationLogQueryPlanner(nil, tt.targetStreamIDs)
-				stmt, err := sqlparser.Parse(tt.query)
+				stmt, err := sqlparser.NewTestParser().Parse(tt.query)
 				require.NoError(t, err, "could not parse query %q", tt.query)
 				qp, err := planner.planSelect(stmt.(*sqlparser.Select))
 				if tt.shouldErr {

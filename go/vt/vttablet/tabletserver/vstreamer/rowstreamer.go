@@ -19,42 +19,32 @@ package vstreamer
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"sync"
 	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var (
 	rowStreamertHeartbeatInterval = 10 * time.Second
 )
-
-// RowStreamer exposes an externally usable interface to rowStreamer.
-type RowStreamer interface {
-	Stream() error
-	Cancel()
-}
-
-// NewRowStreamer returns a RowStreamer
-func NewRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, query string, lastpk []sqltypes.Value, send func(*binlogdatapb.VStreamRowsResponse) error, vse *Engine, mode RowStreamerMode) RowStreamer {
-	return newRowStreamer(ctx, cp, se, query, lastpk, &localVSchema{vschema: &vindexes.VSchema{}}, send, vse, mode, nil)
-}
 
 type RowStreamerMode int32
 
@@ -151,27 +141,12 @@ func (rs *rowStreamer) Stream() error {
 func (rs *rowStreamer) buildPlan() error {
 	// This pre-parsing is required to extract the table name
 	// and create its metadata.
-	sel, fromTable, err := analyzeSelect(rs.query)
+	sel, fromTable, err := analyzeSelect(rs.query, rs.se.Environment().Parser())
 	if err != nil {
 		return err
 	}
 
-	st, err := rs.se.GetTableForPos(fromTable, "")
-	if err != nil {
-		// There is a scenario where vstreamer's table state can be out-of-date, and this happens
-		// with vitess migrations, based on vreplication.
-		// Vitess migrations use an elaborate cut-over flow where tables are swapped away while traffic is
-		// being blocked. The RENAME flow is such that at some point the table is renamed away, leaving a
-		// "puncture"; this is an event that is captured by vstreamer. The completion of the flow fixes the
-		// puncture, and places a new table under the original table's name, but the way it is done does not
-		// cause vstreamer to refresh schema state.
-		// There is therefore a reproducable valid sequence of events where vstreamer thinks a table does not
-		// exist, where it in fact does exist.
-		// For this reason we give vstreamer a "second chance" to review the up-to-date state of the schema.
-		// In the future, we will reduce this operation to reading a single table rather than the entire schema.
-		rs.se.ReloadAt(context.Background(), replication.Position{})
-		st, err = rs.se.GetTableForPos(fromTable, "")
-	}
+	st, err := rs.se.GetTableForPos(rs.ctx, fromTable, "")
 	if err != nil {
 		return err
 	}
@@ -179,7 +154,7 @@ func (rs *rowStreamer) buildPlan() error {
 		Name: st.Name,
 	}
 
-	ti.Fields, err = getFields(rs.ctx, rs.cp, st.Name, rs.cp.DBName(), st.Fields)
+	ti.Fields, err = getFields(rs.ctx, rs.cp, rs.vse.se, st.Name, rs.cp.DBName(), st.Fields)
 	if err != nil {
 		return err
 	}
@@ -188,7 +163,7 @@ func (rs *rowStreamer) buildPlan() error {
 	// This is because the row format of a read is identical
 	// to the row format of a binlog event. So, the same
 	// filtering will work.
-	rs.plan, err = buildTablePlan(ti, rs.vschema, rs.query)
+	rs.plan, err = buildTablePlan(rs.se.Environment(), ti, rs.vschema, rs.query)
 	if err != nil {
 		log.Errorf("%s", err.Error())
 		return err
@@ -201,7 +176,12 @@ func (rs *rowStreamer) buildPlan() error {
 			return err
 		}
 	}
-
+	if s, found := directives.GetString("ukForce", ""); found {
+		st.PKIndexName, err = url.QueryUnescape(s)
+		if err != nil {
+			return err
+		}
+	}
 	rs.pkColumns, err = rs.buildPKColumns(st)
 	if err != nil {
 		return err
@@ -235,7 +215,7 @@ func (rs *rowStreamer) buildPKColumns(st *binlogdatapb.MinimalTable) ([]int, err
 	var pkColumns = make([]int, 0)
 	if len(st.PKColumns) == 0 {
 		// Use a PK equivalent if one exists.
-		pkColumns, err := rs.vse.mapPKEquivalentCols(rs.ctx, st)
+		pkColumns, err := rs.vse.mapPKEquivalentCols(rs.ctx, rs.cp, st)
 		if err == nil && len(pkColumns) != 0 {
 			return pkColumns, nil
 		}
@@ -279,8 +259,11 @@ func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error
 	// of the PK columns which are used in the ORDER BY clause below.
 	var indexHint string
 	if st.PKIndexName != "" {
-		indexHint = fmt.Sprintf(" force index (%s)",
-			sqlescape.EscapeID(sqlescape.UnescapeID(st.PKIndexName)))
+		escapedPKIndexName, err := sqlescape.EnsureEscaped(st.PKIndexName)
+		if err != nil {
+			return "", err
+		}
+		indexHint = fmt.Sprintf(" force index (%s)", escapedPKIndexName)
 	}
 	buf.Myprintf(" from %v%s", sqlparser.NewIdentifierCS(rs.plan.Table.Name), indexHint)
 	if len(rs.lastpk) != 0 {
@@ -397,6 +380,7 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 	filtered := make([]sqltypes.Value, len(rs.plan.ColExprs))
 	lastpk := make([]sqltypes.Value, len(rs.pkColumns))
 	byteCount := 0
+	logger := logutil.NewThrottledLogger(rs.vse.GetTabletInfo(), throttledLoggerInterval)
 	for {
 		if rs.ctx.Err() != nil {
 			log.Infof("Stream ended because of ctx.Done")
@@ -408,6 +392,7 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 			throttleResponseRateLimiter.Do(func() error {
 				return safeSend(&binlogdatapb.VStreamRowsResponse{Throttled: true})
 			})
+			logger.Infof("throttled.")
 			continue
 		}
 

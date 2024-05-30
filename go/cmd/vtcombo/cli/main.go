@@ -31,7 +31,9 @@ import (
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -40,9 +42,11 @@ import (
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtcombo"
 	"vitess.io/vitess/go/vt/vtctld"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -76,9 +80,14 @@ In particular, it contains:
 	plannerName           string
 	vschemaPersistenceDir string
 
-	tpb             vttestpb.VTTestTopology
-	ts              *topo.Server
-	resilientServer *srvtopo.ResilientServer
+	tpb               vttestpb.VTTestTopology
+	ts                *topo.Server
+	resilientServer   *srvtopo.ResilientServer
+	tabletTypesToWait []topodatapb.TabletType
+
+	env *vtenv.Environment
+
+	srvTopoCounts *stats.CountersWithSingleLabel
 )
 
 func init() {
@@ -111,19 +120,32 @@ func init() {
 	Main.Flags().Var(vttest.TextTopoData(&tpb), "proto_topo", "vttest proto definition of the topology, encoded in compact text format. See vttest.proto for more information.")
 	Main.Flags().Var(vttest.JSONTopoData(&tpb), "json_topo", "vttest proto definition of the topology, encoded in json format. See vttest.proto for more information.")
 
+	Main.Flags().Var((*topoproto.TabletTypeListFlag)(&tabletTypesToWait), "tablet_types_to_wait", "Wait till connected for specified tablet types during Gateway initialization. Should be provided as a comma-separated set of tablet types.")
+
 	// We're going to force the value later, so don't even bother letting the
 	// user know about this flag.
 	Main.Flags().MarkHidden("tablet_protocol")
+
+	var err error
+	env, err = vtenv.New(vtenv.Options{
+		MySQLServerVersion: servenv.MySQLServerVersion(),
+		TruncateUILen:      servenv.TruncateUILen,
+		TruncateErrLen:     servenv.TruncateErrLen,
+	})
+	if err != nil {
+		log.Fatalf("unable to initialize env: %v", err)
+	}
+	srvTopoCounts = stats.NewCountersWithSingleLabel("ResilientSrvTopoServer", "Resilient srvtopo server operations", "type")
 }
 
-func startMysqld(uid uint32) (mysqld *mysqlctl.Mysqld, cnf *mysqlctl.Mycnf, err error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+func startMysqld(ctx context.Context, uid uint32) (mysqld *mysqlctl.Mysqld, cnf *mysqlctl.Mycnf, err error) {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
 	mycnfFile := mysqlctl.MycnfFile(uid)
 
 	if _, statErr := os.Stat(mycnfFile); os.IsNotExist(statErr) {
-		mysqld, cnf, err = mysqlctl.CreateMysqldAndMycnf(uid, "", mysqlPort)
+		mysqld, cnf, err = mysqlctl.CreateMysqldAndMycnf(uid, "", mysqlPort, env.CollationEnv())
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to initialize mysql config :%w", err)
 		}
@@ -131,7 +153,7 @@ func startMysqld(uid uint32) (mysqld *mysqlctl.Mysqld, cnf *mysqlctl.Mycnf, err 
 			return nil, nil, fmt.Errorf("failed to initialize mysql :%w", err)
 		}
 	} else {
-		mysqld, cnf, err = mysqlctl.OpenMysqldAndMycnf(uid)
+		mysqld, cnf, err = mysqlctl.OpenMysqldAndMycnf(uid, env.CollationEnv())
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to find mysql config: %w", err)
 		}
@@ -163,21 +185,24 @@ func run(cmd *cobra.Command, args []string) (err error) {
 
 	// vtctld UI requires the cell flag
 	cmd.Flags().Set("cell", tpb.Cells[0])
-	if cmd.Flags().Lookup("log_dir") == nil {
+	if f := cmd.Flags().Lookup("log_dir"); f != nil && !f.Changed {
 		cmd.Flags().Set("log_dir", "$VTDATAROOT/tmp")
 	}
 
+	ctx, cancel := context.WithCancel(cmd.Context())
+	defer cancel()
 	if externalTopoServer {
 		// Open topo server based on the command line flags defined at topo/server.go
 		// do not create cell info as it should be done by whoever sets up the external topo server
 		ts = topo.Open()
 	} else {
 		// Create topo server. We use a 'memorytopo' implementation.
-		ts = memorytopo.NewServer(context.Background(), tpb.Cells...)
+		ts = memorytopo.NewServer(ctx, tpb.Cells...)
 	}
+	defer ts.Close()
 
 	// attempt to load any routing rules specified by tpb
-	if err := vtcombo.InitRoutingRules(context.Background(), ts, tpb.GetRoutingRules()); err != nil {
+	if err := vtcombo.InitRoutingRules(ctx, ts, tpb.GetRoutingRules()); err != nil {
 		return fmt.Errorf("Failed to load routing rules: %w", err)
 	}
 
@@ -190,18 +215,20 @@ func run(cmd *cobra.Command, args []string) (err error) {
 	)
 
 	if startMysql {
-		mysqld.Mysqld, cnf, err = startMysqld(1)
+		mysqld.Mysqld, cnf, err = startMysqld(ctx, 1)
 		if err != nil {
 			return err
 		}
 		servenv.OnClose(func() {
-			mysqld.Shutdown(context.TODO(), cnf, true)
+			shutdownCtx, shutdownCancel := context.WithTimeout(cmd.Context(), mysqlctl.DefaultShutdownTimeout+10*time.Second)
+			defer shutdownCancel()
+			mysqld.Shutdown(shutdownCtx, cnf, true, mysqlctl.DefaultShutdownTimeout)
 		})
 		// We want to ensure we can write to this database
-		mysqld.SetReadOnly(false)
+		mysqld.SetReadOnly(ctx, false)
 
 	} else {
-		dbconfigs.GlobalDBConfigs.InitWithSocket("")
+		dbconfigs.GlobalDBConfigs.InitWithSocket("", env.CollationEnv())
 		mysqld.Mysqld = mysqlctl.NewMysqld(&dbconfigs.GlobalDBConfigs)
 		servenv.OnClose(mysqld.Close)
 	}
@@ -213,11 +240,13 @@ func run(cmd *cobra.Command, args []string) (err error) {
 	// to be the "internal" protocol that InitTabletMap registers.
 	cmd.Flags().Set("tablet_manager_protocol", "internal")
 	cmd.Flags().Set("tablet_protocol", "internal")
-	uid, err := vtcombo.InitTabletMap(ts, &tpb, mysqld, &dbconfigs.GlobalDBConfigs, schemaDir, startMysql)
+	uid, err := vtcombo.InitTabletMap(env, ts, &tpb, mysqld, &dbconfigs.GlobalDBConfigs, schemaDir, startMysql, srvTopoCounts)
 	if err != nil {
 		// ensure we start mysql in the event we fail here
 		if startMysql {
-			mysqld.Shutdown(context.TODO(), cnf, true)
+			startCtx, startCancel := context.WithTimeout(ctx, mysqlctl.DefaultShutdownTimeout+10*time.Second)
+			defer startCancel()
+			mysqld.Shutdown(startCtx, cnf, true, mysqlctl.DefaultShutdownTimeout)
 		}
 
 		return fmt.Errorf("initTabletMapProto failed: %w", err)
@@ -236,8 +265,8 @@ func run(cmd *cobra.Command, args []string) (err error) {
 			}
 		}
 
-		wr := wrangler.New(logutil.NewConsoleLogger(), ts, nil)
-		newUID, err := vtcombo.CreateKs(ctx, ts, &tpb, mysqld, &dbconfigs.GlobalDBConfigs, schemaDir, ks, true, uid, wr)
+		wr := wrangler.New(env, logutil.NewConsoleLogger(), ts, nil)
+		newUID, err := vtcombo.CreateKs(ctx, env, ts, &tpb, mysqld, &dbconfigs.GlobalDBConfigs, schemaDir, ks, true, uid, wr, srvTopoCounts)
 		if err != nil {
 			return err
 		}
@@ -261,10 +290,12 @@ func run(cmd *cobra.Command, args []string) (err error) {
 
 	// Now that we have fully initialized the tablets, rebuild the keyspace graph.
 	for _, ks := range tpb.Keyspaces {
-		err := topotools.RebuildKeyspace(context.Background(), logutil.NewConsoleLogger(), ts, ks.GetName(), tpb.Cells, false)
+		err := topotools.RebuildKeyspace(cmd.Context(), logutil.NewConsoleLogger(), ts, ks.GetName(), tpb.Cells, false)
 		if err != nil {
 			if startMysql {
-				mysqld.Shutdown(context.TODO(), cnf, true)
+				shutdownCtx, shutdownCancel := context.WithTimeout(cmd.Context(), mysqlctl.DefaultShutdownTimeout+10*time.Second)
+				defer shutdownCancel()
+				mysqld.Shutdown(shutdownCtx, cnf, true, mysqlctl.DefaultShutdownTimeout)
 			}
 
 			return fmt.Errorf("Couldn't build srv keyspace for (%v: %v). Got error: %w", ks, tpb.Cells, err)
@@ -272,43 +303,47 @@ func run(cmd *cobra.Command, args []string) (err error) {
 	}
 
 	// vtgate configuration and init
-	resilientServer = srvtopo.NewResilientServer(context.Background(), ts, "ResilientSrvTopoServer")
-	tabletTypesToWait := []topodatapb.TabletType{
-		topodatapb.TabletType_PRIMARY,
-		topodatapb.TabletType_REPLICA,
-		topodatapb.TabletType_RDONLY,
+
+	resilientServer = srvtopo.NewResilientServer(ctx, ts, srvTopoCounts)
+
+	tabletTypes := make([]topodatapb.TabletType, 0, 1)
+	if len(tabletTypesToWait) != 0 {
+		for _, tt := range tabletTypesToWait {
+			if topoproto.IsServingType(tt) {
+				tabletTypes = append(tabletTypes, tt)
+			}
+		}
+
+		if len(tabletTypes) == 0 {
+			log.Exitf("tablet_types_to_wait should contain at least one serving tablet type")
+		}
+	} else {
+		tabletTypes = append(tabletTypes, topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY)
 	}
+
 	plannerVersion, _ := plancontext.PlannerNameToVersion(plannerName)
 
 	vtgate.QueryLogHandler = "/debug/vtgate/querylog"
 	vtgate.QueryLogzHandler = "/debug/vtgate/querylogz"
 	vtgate.QueryzHandler = "/debug/vtgate/queryz"
+
 	// pass nil for healthcheck, it will get created
-	vtg := vtgate.Init(context.Background(), nil, resilientServer, tpb.Cells[0], tabletTypesToWait, plannerVersion)
+	vtg := vtgate.Init(ctx, env, nil, resilientServer, tpb.Cells[0], tabletTypes, plannerVersion)
 
 	// vtctld configuration and init
-	err = vtctld.InitVtctld(ts)
+	err = vtctld.InitVtctld(env, ts)
 	if err != nil {
 		return err
 	}
 
 	if vschemaPersistenceDir != "" && !externalTopoServer {
-		startVschemaWatcher(vschemaPersistenceDir, tpb.Keyspaces, ts)
+		startVschemaWatcher(ctx, vschemaPersistenceDir, ts)
 	}
 
 	servenv.OnRun(func() {
 		addStatusParts(vtg)
 	})
 
-	servenv.OnTerm(func() {
-		log.Error("Terminating")
-		// FIXME(alainjobart): stop vtgate
-	})
-	servenv.OnClose(func() {
-		// We will still use the topo server during lameduck period
-		// to update our state, so closing it in OnClose()
-		ts.Close()
-	})
 	servenv.RunDefault()
 
 	return nil
@@ -323,17 +358,17 @@ type vtcomboMysqld struct {
 }
 
 // SetReplicationSource implements the MysqlDaemon interface
-func (mysqld *vtcomboMysqld) SetReplicationSource(ctx context.Context, host string, port int32, stopReplicationBefore bool, startReplicationAfter bool) error {
+func (mysqld *vtcomboMysqld) SetReplicationSource(ctx context.Context, host string, port int32, heartbeatInterval float64, stopReplicationBefore bool, startReplicationAfter bool) error {
 	return nil
 }
 
 // StartReplication implements the MysqlDaemon interface
-func (mysqld *vtcomboMysqld) StartReplication(hookExtraEnv map[string]string) error {
+func (mysqld *vtcomboMysqld) StartReplication(ctx context.Context, hookExtraEnv map[string]string) error {
 	return nil
 }
 
 // RestartReplication implements the MysqlDaemon interface
-func (mysqld *vtcomboMysqld) RestartReplication(hookExtraEnv map[string]string) error {
+func (mysqld *vtcomboMysqld) RestartReplication(ctx context.Context, hookExtraEnv map[string]string) error {
 	return nil
 }
 
@@ -343,16 +378,16 @@ func (mysqld *vtcomboMysqld) StartReplicationUntilAfter(ctx context.Context, pos
 }
 
 // StopReplication implements the MysqlDaemon interface
-func (mysqld *vtcomboMysqld) StopReplication(hookExtraEnv map[string]string) error {
+func (mysqld *vtcomboMysqld) StopReplication(ctx context.Context, hookExtraEnv map[string]string) error {
 	return nil
 }
 
 // SetSemiSyncEnabled implements the MysqlDaemon interface
-func (mysqld *vtcomboMysqld) SetSemiSyncEnabled(source, replica bool) error {
+func (mysqld *vtcomboMysqld) SetSemiSyncEnabled(ctx context.Context, source, replica bool) error {
 	return nil
 }
 
 // SemiSyncExtensionLoaded implements the MysqlDaemon interface
-func (mysqld *vtcomboMysqld) SemiSyncExtensionLoaded() (bool, error) {
-	return true, nil
+func (mysqld *vtcomboMysqld) SemiSyncExtensionLoaded(ctx context.Context) (mysql.SemiSyncType, error) {
+	return mysql.SemiSyncTypeSource, nil
 }

@@ -23,6 +23,7 @@ import (
 	"math"
 	"math/big"
 	"math/bits"
+	"strings"
 
 	"vitess.io/vitess/go/mysql/fastparse"
 )
@@ -69,6 +70,20 @@ func parseDecimal64(s []byte) (Decimal, error) {
 		value: new(big.Int).SetUint64(n),
 		exp:   exp,
 	}, nil
+}
+
+// SizeAndScaleFromString gets the size and scale for the decimal value without needing to parse it.
+func SizeAndScaleFromString(s string) (int32, int32) {
+	switch s[0] {
+	case '+', '-':
+		s = s[1:]
+	}
+	totalLen := len(s)
+	idx := strings.Index(s, ".")
+	if idx == -1 {
+		return int32(totalLen), 0
+	}
+	return int32(totalLen - 1), int32(totalLen - 1 - idx)
 }
 
 func NewFromMySQL(s []byte) (Decimal, error) {
@@ -311,17 +326,12 @@ func pow(x big.Word, n int) (p big.Word) {
 }
 
 func parseLargeDecimal(integral, fractional []byte) (*big.Int, error) {
-	const (
-		b1 = big.Word(10)
-		bn = big.Word(1e19)
-		n  = 19
-	)
 	var (
 		di = big.Word(0) // 0 <= di < b1**i < bn
 		i  = 0           // 0 <= i < n
-		// 5 is the largest possible size for a MySQL decimal; anything
-		// that doesn't fit in 5 words won't make it to this func
-		z = make([]big.Word, 0, 5)
+		// s is the largest possible size for a MySQL decimal; anything
+		// that doesn't fit in s words won't make it to this func
+		z = make([]big.Word, 0, s)
 	)
 
 	parseChunk := func(partial []byte) error {

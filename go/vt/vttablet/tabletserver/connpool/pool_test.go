@@ -28,6 +28,8 @@ import (
 	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
@@ -35,7 +37,8 @@ func TestConnPoolGet(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	connPool := newPool()
-	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	params := dbconfigs.New(db.ConnParams())
+	connPool.Open(params, params, params)
 	defer connPool.Close()
 	dbConn, err := connPool.Get(context.Background(), nil)
 	if err != nil {
@@ -54,24 +57,26 @@ func TestConnPoolTimeout(t *testing.T) {
 	cfg := tabletenv.ConnPoolConfig{
 		Size: 1,
 	}
-	_ = cfg.TimeoutSeconds.Set("1s")
-	_ = cfg.IdleTimeoutSeconds.Set("10s")
-	connPool := NewPool(tabletenv.NewEnv(nil, "PoolTest"), "TestPool", cfg)
-	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	cfg.Timeout = time.Second
+	cfg.IdleTimeout = 10 * time.Second
+	connPool := NewPool(tabletenv.NewEnv(vtenv.NewTestEnv(), nil, "PoolTest"), "TestPool", cfg)
+	params := dbconfigs.New(db.ConnParams())
+	connPool.Open(params, params, params)
 	defer connPool.Close()
 	dbConn, err := connPool.Get(context.Background(), nil)
 	require.NoError(t, err)
 	defer dbConn.Recycle()
 	_, err = connPool.Get(context.Background(), nil)
-	assert.EqualError(t, err, "resource pool timed out")
+	assert.EqualError(t, err, "connection pool timed out")
 }
 
 func TestConnPoolGetEmptyDebugConfig(t *testing.T) {
 	db := fakesqldb.New(t)
-	debugConn := db.ConnParamsWithUname("")
+	debugConn := dbconfigs.New(db.ConnParamsWithUname(""))
 	defer db.Close()
 	connPool := newPool()
-	connPool.Open(db.ConnParams(), db.ConnParams(), debugConn)
+	params := dbconfigs.New(db.ConnParams())
+	connPool.Open(params, params, debugConn)
 	im := callerid.NewImmediateCallerID("")
 	ecid := callerid.NewEffectiveCallerID("p", "c", "sc")
 	ctx := context.Background()
@@ -89,14 +94,15 @@ func TestConnPoolGetEmptyDebugConfig(t *testing.T) {
 
 func TestConnPoolGetAppDebug(t *testing.T) {
 	db := fakesqldb.New(t)
-	debugConn := db.ConnParamsWithUname("debugUsername")
+	debugConn := dbconfigs.New(db.ConnParamsWithUname("debugUsername"))
 	ctx := context.Background()
 	im := callerid.NewImmediateCallerID("debugUsername")
 	ecid := callerid.NewEffectiveCallerID("p", "c", "sc")
 	ctx = callerid.NewContext(ctx, ecid, im)
 	defer db.Close()
 	connPool := newPool()
-	connPool.Open(db.ConnParams(), db.ConnParams(), debugConn)
+	params := dbconfigs.New(db.ConnParams())
+	connPool.Open(params, params, debugConn)
 	defer connPool.Close()
 	dbConn, err := connPool.Get(ctx, nil)
 	if err != nil {
@@ -115,13 +121,15 @@ func TestConnPoolSetCapacity(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	connPool := newPool()
-	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	params := dbconfigs.New(db.ConnParams())
+	connPool.Open(params, params, params)
 	defer connPool.Close()
 
 	assert.Panics(t, func() {
-		connPool.SetCapacity(-10)
+		_ = connPool.SetCapacity(context.Background(), -10)
 	})
-	connPool.SetCapacity(10)
+	err := connPool.SetCapacity(context.Background(), 10)
+	assert.NoError(t, err)
 	if connPool.Capacity() != 10 {
 		t.Fatalf("capacity should be 10")
 	}
@@ -134,7 +142,8 @@ func TestConnPoolStatJSON(t *testing.T) {
 	if connPool.StatsJSON() != "{}" {
 		t.Fatalf("pool is closed, stats json should be empty; was: %q", connPool.StatsJSON())
 	}
-	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	params := dbconfigs.New(db.ConnParams())
+	connPool.Open(params, params, params)
 	defer connPool.Close()
 	statsJSON := connPool.StatsJSON()
 	if statsJSON == "" || statsJSON == "{}" {
@@ -153,7 +162,8 @@ func TestConnPoolStateWhilePoolIsOpen(t *testing.T) {
 	defer db.Close()
 	idleTimeout := 10 * time.Second
 	connPool := newPool()
-	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	params := dbconfigs.New(db.ConnParams())
+	connPool.Open(params, params, params)
 	defer connPool.Close()
 	assert.EqualValues(t, 100, connPool.Capacity(), "pool capacity should be 100")
 	assert.EqualValues(t, 0, connPool.Metrics.WaitTime(), "pool wait time should be 0")
@@ -179,7 +189,8 @@ func TestConnPoolStateWithSettings(t *testing.T) {
 	defer db.Close()
 	capacity := 5
 	connPool := newPoolWithCapacity(capacity)
-	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	params := dbconfigs.New(db.ConnParams())
+	connPool.Open(params, params, params)
 	defer connPool.Close()
 	assert.EqualValues(t, 5, connPool.Available(), "pool available connections should be 5")
 	assert.EqualValues(t, 0, connPool.Active(), "pool active connections should be 0")
@@ -294,7 +305,8 @@ func TestPoolGetConnTime(t *testing.T) {
 	defer db.Close()
 
 	connPool := newPool()
-	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	params := dbconfigs.New(db.ConnParams())
+	connPool.Open(params, params, params)
 	defer connPool.Close()
 	connPool.getConnTime.Reset()
 
@@ -325,9 +337,8 @@ func newPool() *Pool {
 }
 
 func newPoolWithCapacity(capacity int) *Pool {
-	cfg := tabletenv.ConnPoolConfig{
-		Size: capacity,
-	}
-	_ = cfg.IdleTimeoutSeconds.Set("10s")
-	return NewPool(tabletenv.NewEnv(nil, "PoolTest"), "TestPool", cfg)
+	return NewPool(tabletenv.NewEnv(vtenv.NewTestEnv(), nil, "PoolTest"), "TestPool", tabletenv.ConnPoolConfig{
+		Size:        capacity,
+		IdleTimeout: 10 * time.Second,
+	})
 }

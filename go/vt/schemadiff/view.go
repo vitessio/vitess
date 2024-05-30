@@ -45,6 +45,10 @@ func (d *AlterViewEntityDiff) Entities() (from Entity, to Entity) {
 	return d.from, d.to
 }
 
+func (d *AlterViewEntityDiff) Annotated() (from *TextualAnnotations, to *TextualAnnotations, unified *TextualAnnotations) {
+	return annotatedDiff(d, nil)
+}
+
 // Statement implements EntityDiff
 func (d *AlterViewEntityDiff) Statement() sqlparser.Statement {
 	if d == nil {
@@ -91,6 +95,28 @@ func (d *AlterViewEntityDiff) SubsequentDiff() EntityDiff {
 func (d *AlterViewEntityDiff) SetSubsequentDiff(EntityDiff) {
 }
 
+// InstantDDLCapability implements EntityDiff
+func (d *AlterViewEntityDiff) InstantDDLCapability() InstantDDLCapability {
+	return InstantDDLCapabilityIrrelevant
+}
+
+// Clone implements EntityDiff
+func (d *AlterViewEntityDiff) Clone() EntityDiff {
+	if d == nil {
+		return nil
+	}
+	clone := &AlterViewEntityDiff{
+		alterView: sqlparser.CloneRefOfAlterView(d.alterView),
+	}
+	if d.from != nil {
+		clone.from = d.from.Clone().(*CreateViewEntity)
+	}
+	if d.to != nil {
+		clone.to = d.to.Clone().(*CreateViewEntity)
+	}
+	return clone
+}
+
 type CreateViewEntityDiff struct {
 	createView *sqlparser.CreateView
 
@@ -111,6 +137,10 @@ func (d *CreateViewEntityDiff) EntityName() string {
 // Entities implements EntityDiff
 func (d *CreateViewEntityDiff) Entities() (from Entity, to Entity) {
 	return nil, &CreateViewEntity{CreateView: d.createView}
+}
+
+func (d *CreateViewEntityDiff) Annotated() (from *TextualAnnotations, to *TextualAnnotations, unified *TextualAnnotations) {
+	return annotatedDiff(d, nil)
 }
 
 // Statement implements EntityDiff
@@ -159,6 +189,21 @@ func (d *CreateViewEntityDiff) SubsequentDiff() EntityDiff {
 func (d *CreateViewEntityDiff) SetSubsequentDiff(EntityDiff) {
 }
 
+// InstantDDLCapability implements EntityDiff
+func (d *CreateViewEntityDiff) InstantDDLCapability() InstantDDLCapability {
+	return InstantDDLCapabilityIrrelevant
+}
+
+// Clone implements EntityDiff
+func (d *CreateViewEntityDiff) Clone() EntityDiff {
+	if d == nil {
+		return nil
+	}
+	return &CreateViewEntityDiff{
+		createView: sqlparser.CloneRefOfCreateView(d.createView),
+	}
+}
+
 type DropViewEntityDiff struct {
 	from     *CreateViewEntity
 	dropView *sqlparser.DropView
@@ -179,6 +224,10 @@ func (d *DropViewEntityDiff) EntityName() string {
 // Entities implements EntityDiff
 func (d *DropViewEntityDiff) Entities() (from Entity, to Entity) {
 	return d.from, nil
+}
+
+func (d *DropViewEntityDiff) Annotated() (from *TextualAnnotations, to *TextualAnnotations, unified *TextualAnnotations) {
+	return annotatedDiff(d, nil)
 }
 
 // Statement implements EntityDiff
@@ -227,16 +276,36 @@ func (d *DropViewEntityDiff) SubsequentDiff() EntityDiff {
 func (d *DropViewEntityDiff) SetSubsequentDiff(EntityDiff) {
 }
 
+// InstantDDLCapability implements EntityDiff
+func (d *DropViewEntityDiff) InstantDDLCapability() InstantDDLCapability {
+	return InstantDDLCapabilityIrrelevant
+}
+
+// Clone implements EntityDiff
+func (d *DropViewEntityDiff) Clone() EntityDiff {
+	if d == nil {
+		return nil
+	}
+	clone := &DropViewEntityDiff{
+		dropView: sqlparser.CloneRefOfDropView(d.dropView),
+	}
+	if d.from != nil {
+		clone.from = d.from.Clone().(*CreateViewEntity)
+	}
+	return clone
+}
+
 // CreateViewEntity stands for a VIEW construct. It contains the view's CREATE statement.
 type CreateViewEntity struct {
 	*sqlparser.CreateView
+	env *Environment
 }
 
-func NewCreateViewEntity(c *sqlparser.CreateView) (*CreateViewEntity, error) {
+func NewCreateViewEntity(env *Environment, c *sqlparser.CreateView) (*CreateViewEntity, error) {
 	if !c.IsFullyParsed() {
 		return nil, &NotFullyParsedError{Entity: c.ViewName.Name.String(), Statement: sqlparser.CanonicalString(c)}
 	}
-	entity := &CreateViewEntity{CreateView: c}
+	entity := &CreateViewEntity{CreateView: c, env: env}
 	entity.normalize()
 	return entity, nil
 }
@@ -296,6 +365,9 @@ func (c *CreateViewEntity) ViewDiff(other *CreateViewEntity, _ *DiffHints) (*Alt
 
 // Create implements Entity interface
 func (c *CreateViewEntity) Create() EntityDiff {
+	if c == nil {
+		return nil
+	}
 	return &CreateViewEntityDiff{createView: c.CreateView}
 }
 

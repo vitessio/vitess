@@ -20,7 +20,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"path"
 	"runtime"
@@ -29,16 +29,16 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/schema"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/onlineddl"
 	"vitess.io/vitess/go/test/endtoend/throttler"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/vttablet"
 )
 
 type WriteMetrics struct {
@@ -184,6 +184,9 @@ func TestMain(m *testing.M) {
 			"--heartbeat_on_demand_duration", "5s",
 			"--migration_check_interval", "5s",
 			"--watch_replication_stream",
+			// Test VPlayer batching mode.
+			fmt.Sprintf("--vreplication_experimental_flags=%d",
+				vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage|vttablet.VReplicationExperimentalFlagOptimizeInserts|vttablet.VReplicationExperimentalFlagVPlayerBatching),
 		}
 		clusterInstance.VtGateExtraArgs = []string{
 			"--ddl_strategy", "online",
@@ -326,11 +329,11 @@ func TestSchemaChange(t *testing.T) {
 
 func testWithInitialSchema(t *testing.T) {
 	for _, statement := range cleanupStatements {
-		err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, statement)
+		err := clusterInstance.VtctldClientProcess.ApplySchema(keyspaceName, statement)
 		require.Nil(t, err)
 	}
 	// Create the stress table
-	err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, createStatement)
+	err := clusterInstance.VtctldClientProcess.ApplySchema(keyspaceName, createStatement)
 	require.Nil(t, err)
 
 	// Check if table is created
@@ -346,7 +349,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 		}
 	} else {
 		var err error
-		uuid, err = clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, alterStatement, cluster.VtctlClientParams{DDLStrategy: ddlStrategy})
+		uuid, err = clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, alterStatement, cluster.ApplySchemaParams{DDLStrategy: ddlStrategy})
 		assert.NoError(t, err)
 	}
 	uuid = strings.TrimSpace(uuid)
@@ -425,7 +428,7 @@ func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName s
 }
 
 func generateInsert(t *testing.T, conn *mysql.Conn) error {
-	id := rand.Int31n(int32(maxTableRows))
+	id := rand.Int32N(int32(maxTableRows))
 	query := fmt.Sprintf(insertRowStatement, id, nextOpOrder())
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 
@@ -449,7 +452,7 @@ func generateInsert(t *testing.T, conn *mysql.Conn) error {
 }
 
 func generateUpdate(t *testing.T, conn *mysql.Conn) error {
-	id := rand.Int31n(int32(maxTableRows))
+	id := rand.Int32N(int32(maxTableRows))
 	query := fmt.Sprintf(updateRowStatement, nextOpOrder(), id)
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 
@@ -473,7 +476,7 @@ func generateUpdate(t *testing.T, conn *mysql.Conn) error {
 }
 
 func generateDelete(t *testing.T, conn *mysql.Conn) error {
-	id := rand.Int31n(int32(maxTableRows))
+	id := rand.Int32N(int32(maxTableRows))
 	query := fmt.Sprintf(deleteRowStatement, id)
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 
@@ -511,7 +514,7 @@ func runSingleConnection(ctx context.Context, t *testing.T, sleepInterval time.D
 	defer ticker.Stop()
 
 	for {
-		switch rand.Int31n(3) {
+		switch rand.Int32N(3) {
 		case 0:
 			err = generateInsert(t, conn)
 		case 1:

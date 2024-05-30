@@ -20,7 +20,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"path"
 	"strings"
@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
 
@@ -157,14 +158,6 @@ func TestMain(m *testing.M) {
 			"--heartbeat_on_demand_duration", "5s",
 			"--migration_check_interval", "5s",
 			"--watch_replication_stream",
-			// The next flags are deprecated, and we incldue them to verify that they are nonetheless still allowed.
-			// The values are irrelevant. Just the fact that the flags are allowed in what's important.
-			// These should be included in v18, and removed in v19.
-			"--throttle_threshold", "1m",
-			"--throttle_metrics_query", "select 1 from dual",
-			"--throttle_metrics_threshold", "1.5",
-			"--throttle_check_as_check_self=false",
-			"--throttler-config-via-topo=true",
 		}
 		clusterInstance.VtGateExtraArgs = []string{
 			"--ddl_strategy", "online",
@@ -223,8 +216,10 @@ func testRevertible(t *testing.T) {
 	fkOnlineDDLPossible := false
 	t.Run("check 'rename_table_preserve_foreign_key' variable", func(t *testing.T) {
 		// Online DDL is not possible on vanilla MySQL 8.0 for reasons described in https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/.
-		// However, Online DDL is made possible in via these changes: https://github.com/planetscale/mysql-server/commit/bb777e3e86387571c044fb4a2beb4f8c60462ced
-		// as part of https://github.com/planetscale/mysql-server/releases/tag/8.0.34-ps1.
+		// However, Online DDL is made possible in via these changes:
+		// - https://github.com/planetscale/mysql-server/commit/bb777e3e86387571c044fb4a2beb4f8c60462ced
+		// - https://github.com/planetscale/mysql-server/commit/c2f1344a6863518d749f2eb01a4c74ca08a5b889
+		// as part of https://github.com/planetscale/mysql-server/releases/tag/8.0.34-ps3.
 		// Said changes introduce a new global/session boolean variable named 'rename_table_preserve_foreign_key'. It defaults 'false'/0 for backwards compatibility.
 		// When enabled, a `RENAME TABLE` to a FK parent "pins" the children's foreign keys to the table name rather than the table pointer. Which means after the RENAME,
 		// the children will point to the newly instated table rather than the original, renamed table.
@@ -362,8 +357,8 @@ func testRevertible(t *testing.T) {
 		},
 		{
 			name:                "expanded: enum",
-			fromSchema:          `id int primary key, e1 enum('a', 'b'), e2 enum('a', 'b'), e3 enum('a', 'b'), e4 enum('a', 'b'), e5 enum('a', 'b'), e6 enum('a', 'b'), e7 enum('a', 'b'), e8 enum('a', 'b')`,
-			toSchema:            `id int primary key, e1 enum('a', 'b'), e2 enum('a'), e3 enum('a', 'b', 'c'), e4 enum('a', 'x'), e5 enum('a', 'x', 'b'), e6 enum('b'), e7 varchar(1), e8 tinyint`,
+			fromSchema:          `id int primary key, e1 enum('a', 'b'), e2 enum('a', 'b'), e3 enum('a', 'b'),      e4 enum('a', 'b'), e5 enum('a', 'b'),      e6 enum('a', 'b'), e7 enum('a', 'b'), e8 enum('a', 'b')`,
+			toSchema:            `id int primary key, e1 enum('a', 'b'), e2 enum('a'),      e3 enum('a', 'b', 'c'), e4 enum('a', 'x'), e5 enum('a', 'x', 'b'), e6 enum('b'),      e7 varchar(1), e8 tinyint`,
 			expandedColumnNames: `e3,e4,e5,e6,e7,e8`,
 		},
 		{
@@ -428,7 +423,20 @@ func testRevertible(t *testing.T) {
 					droppedNoDefaultColumnNames := row.AsString("dropped_no_default_column_names", "")
 					expandedColumnNames := row.AsString("expanded_column_names", "")
 
-					assert.Equal(t, testcase.removedForeignKeyNames, removeBackticks(removedForeignKeyNames))
+					// Online DDL renames constraint names, and keeps the original name as a prefix.
+					// The name of e.g. "some_fk_2_" might turn into "some_fk_2_518ubnm034rel35l1m0u1dc7m"
+					expectRemovedForeignKeyNames := strings.Split(testcase.removedForeignKeyNames, ",")
+					actualRemovedForeignKeyNames := strings.Split(removeBackticks(removedForeignKeyNames), ",")
+					assert.Equal(t, len(expectRemovedForeignKeyNames), len(actualRemovedForeignKeyNames))
+					for _, actualRemovedForeignKeyName := range actualRemovedForeignKeyNames {
+						found := false
+						for _, expectRemovedForeignKeyName := range expectRemovedForeignKeyNames {
+							if strings.HasPrefix(actualRemovedForeignKeyName, expectRemovedForeignKeyName) {
+								found = true
+							}
+						}
+						assert.Truef(t, found, "unexpected FK name", "%s", actualRemovedForeignKeyName)
+					}
 					assert.Equal(t, testcase.removedUniqueKeyNames, removeBackticks(removedUniqueKeyNames))
 					assert.Equal(t, testcase.droppedNoDefaultColumnNames, removeBackticks(droppedNoDefaultColumnNames))
 					assert.Equal(t, testcase.expandedColumnNames, removeBackticks(expandedColumnNames))
@@ -466,7 +474,8 @@ func testRevertible(t *testing.T) {
 				droppedNoDefaultColumnNames := row.AsString("dropped_no_default_column_names", "")
 				expandedColumnNames := row.AsString("expanded_column_names", "")
 
-				assert.Equal(t, "some_fk_2", removeBackticks(removedForeignKeyNames))
+				// Online DDL renames constraint names, and keeps the original name as a prefix. The name will be e.g. some_fk_2_518ubnm034rel35l1m0u1dc7m
+				assert.Contains(t, removeBackticks(removedForeignKeyNames), "some_fk_2")
 				assert.Equal(t, "", removeBackticks(removedUniqueKeyNames))
 				assert.Equal(t, "", removeBackticks(droppedNoDefaultColumnNames))
 				assert.Equal(t, "", removeBackticks(expandedColumnNames))
@@ -551,7 +560,7 @@ func testRevert(t *testing.T) {
 	mysqlVersion = onlineddl.GetMySQLVersion(t, clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet())
 	require.NotEmpty(t, mysqlVersion)
 
-	_, capableOf, _ := mysql.GetFlavor(mysqlVersion, nil)
+	capableOf := mysql.ServerVersionCapableOf(mysqlVersion)
 
 	var uuids []string
 	ddlStrategy := "online"
@@ -1033,7 +1042,7 @@ func testRevert(t *testing.T) {
 		require.NotNil(t, row)
 		specialPlan := row.AsString("special_plan", "")
 		artifacts := row.AsString("artifacts", "")
-		instantDDLCapable, err := capableOf(mysql.InstantDDLFlavorCapability)
+		instantDDLCapable, err := capableOf(capabilities.InstantDDLFlavorCapability)
 		assert.NoError(t, err)
 		if instantDDLCapable {
 			// instant DDL expected to apply in 8.0
@@ -1050,7 +1059,7 @@ func testRevert(t *testing.T) {
 	t.Run("INSTANT DDL: fail revert", func(t *testing.T) {
 		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
 		uuids = append(uuids, uuid)
-		instantDDLCapable, err := capableOf(mysql.InstantDDLFlavorCapability)
+		instantDDLCapable, err := capableOf(capabilities.InstantDDLFlavorCapability)
 		assert.NoError(t, err)
 		if instantDDLCapable {
 			// instant DDL expected to apply in 8.0, therefore revert is impossible
@@ -1133,7 +1142,7 @@ func testRevert(t *testing.T) {
 		checkPartitionedTableCountRows(t, 6)
 	})
 	t.Run("partitions: drop first partition", func(t *testing.T) {
-		uuid := testOnlineDDLStatementForTable(t, "alter table part_test drop partition `p1`", ddlStrategy+" --fast-range-rotation", "vtgate", "")
+		uuid := testOnlineDDLStatementForTable(t, "alter table part_test drop partition `p1`", ddlStrategy, "vtgate", "")
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		checkTable(t, partitionedTableName, true)
@@ -1148,7 +1157,7 @@ func testRevert(t *testing.T) {
 		checkPartitionedTableCountRows(t, 5)
 	})
 	t.Run("partitions: add new partition", func(t *testing.T) {
-		uuid := testOnlineDDLStatementForTable(t, "alter table part_test add partition (PARTITION p7 VALUES LESS THAN (70))", ddlStrategy+" --fast-range-rotation", "vtgate", "")
+		uuid := testOnlineDDLStatementForTable(t, "alter table part_test add partition (PARTITION p7 VALUES LESS THAN (70))", ddlStrategy, "vtgate", "")
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		checkTable(t, partitionedTableName, true)
@@ -1185,7 +1194,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 		}
 	} else {
 		var err error
-		uuid, err = clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, alterStatement, cluster.VtctlClientParams{DDLStrategy: ddlStrategy})
+		uuid, err = clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, alterStatement, cluster.ApplySchemaParams{DDLStrategy: ddlStrategy})
 		assert.NoError(t, err)
 	}
 	uuid = strings.TrimSpace(uuid)
@@ -1273,7 +1282,7 @@ func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName s
 }
 
 func generateInsert(t *testing.T, conn *mysql.Conn) error {
-	id := rand.Int31n(int32(maxTableRows))
+	id := rand.Int32N(int32(maxTableRows))
 	query := fmt.Sprintf(insertRowStatement, id)
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 
@@ -1297,7 +1306,7 @@ func generateInsert(t *testing.T, conn *mysql.Conn) error {
 }
 
 func generateUpdate(t *testing.T, conn *mysql.Conn) error {
-	id := rand.Int31n(int32(maxTableRows))
+	id := rand.Int32N(int32(maxTableRows))
 	query := fmt.Sprintf(updateRowStatement, id)
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 
@@ -1321,7 +1330,7 @@ func generateUpdate(t *testing.T, conn *mysql.Conn) error {
 }
 
 func generateDelete(t *testing.T, conn *mysql.Conn) error {
-	id := rand.Int31n(int32(maxTableRows))
+	id := rand.Int32N(int32(maxTableRows))
 	query := fmt.Sprintf(deleteRowStatement, id)
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 
@@ -1360,7 +1369,7 @@ func runSingleConnection(ctx context.Context, t *testing.T, done *int64) {
 			log.Infof("Terminating single connection")
 			return
 		}
-		switch rand.Int31n(3) {
+		switch rand.Int32N(3) {
 		case 0:
 			err = generateInsert(t, conn)
 		case 1:

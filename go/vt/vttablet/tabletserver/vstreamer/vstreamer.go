@@ -21,13 +21,13 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql"
-	mysqlbinlog "vitess.io/vitess/go/mysql/binlog"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
@@ -35,20 +35,24 @@ import (
 	"vitess.io/vitess/go/vt/binlog"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/logutil"
 	vtschema "vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
+
+	mysqlbinlog "vitess.io/vitess/go/mysql/binlog"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const (
 	trxHistoryLenQuery = `select count as history_len from information_schema.INNODB_METRICS where name = 'trx_rseg_history_len'`
-	replicaLagQuery    = `show slave status`
+	replicaLagQuery    = `show replica status`
+	legacyLagQuery     = `show slave status`
 	hostQuery          = `select @@hostname as hostname, @@port as port`
 )
 
@@ -211,7 +215,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	// GTID->DDL
 	// GTID->OTHER
 	// HEARTBEAT is issued if there's inactivity, which is likely
-	// to heppend between one group of events and another.
+	// to happen between one group of events and another.
 	//
 	// Buffering only takes row or statement lengths into consideration.
 	// Length of other events is considered negligible.
@@ -299,6 +303,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		}
 	}
 
+	logger := logutil.NewThrottledLogger(vs.vse.GetTabletInfo(), throttledLoggerInterval)
 	throttleEvents := func(throttledEvents chan mysql.BinlogEvent) {
 		throttledHeartbeatsRateLimiter := timer.NewRateLimiter(HeartbeatTime)
 		defer throttledHeartbeatsRateLimiter.Stop()
@@ -316,6 +321,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 					return injectHeartbeat(true)
 				})
 				// we won't process events, until we're no longer throttling
+				logger.Infof("throttled.")
 				continue
 			}
 			select {
@@ -503,7 +509,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 				Type: binlogdatapb.VEventType_COMMIT,
 			})
 		case sqlparser.StmtDDL:
-			if mustSendDDL(q, vs.cp.DBName(), vs.filter) {
+			if mustSendDDL(q, vs.cp.DBName(), vs.filter, vs.vse.env.Environment().Parser()) {
 				vevents = append(vevents, &binlogdatapb.VEvent{
 					Type: binlogdatapb.VEventType_GTID,
 					Gtid: replication.EncodePosition(vs.pos),
@@ -520,7 +526,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 					Type: binlogdatapb.VEventType_OTHER,
 				})
 			}
-			if schema.MustReloadSchemaOnDDL(q.SQL, vs.cp.DBName()) {
+			if schema.MustReloadSchemaOnDDL(q.SQL, vs.cp.DBName(), vs.vse.env.Environment().Parser()) {
 				vs.se.ReloadAt(context.Background(), vs.pos)
 			}
 		case sqlparser.StmtSavepoint:
@@ -682,7 +688,7 @@ func (vs *vstreamer) buildJournalPlan(id uint64, tm *mysql.TableMap) error {
 	// Build a normal table plan, which means, return all rows
 	// and columns as is. Special handling is done when we actually
 	// receive the row event. We'll build a JOURNAL event instead.
-	plan, err := buildREPlan(table, nil, "")
+	plan, err := buildREPlan(vs.se.Environment(), table, nil, "")
 	if err != nil {
 		return err
 	}
@@ -716,7 +722,7 @@ func (vs *vstreamer) buildVersionPlan(id uint64, tm *mysql.TableMap) error {
 	// Build a normal table plan, which means, return all rows
 	// and columns as is. Special handling is done when we actually
 	// receive the row event. We'll build a JOURNAL event instead.
-	plan, err := buildREPlan(table, nil, "")
+	plan, err := buildREPlan(vs.se.Environment(), table, nil, "")
 	if err != nil {
 		return err
 	}
@@ -733,18 +739,20 @@ func (vs *vstreamer) buildTablePlan(id uint64, tm *mysql.TableMap) (*binlogdatap
 	if err != nil {
 		return nil, err
 	}
-
 	table := &Table{
 		Name:   tm.Name,
 		Fields: cols,
 	}
-	plan, err := buildPlan(table, vs.vschema, vs.filter)
+	plan, err := buildPlan(vs.se.Environment(), table, vs.vschema, vs.filter)
 	if err != nil {
 		return nil, err
 	}
 	if plan == nil {
 		vs.plans[id] = nil
 		return nil, nil
+	}
+	if err := addEnumAndSetMappingstoPlan(plan, cols, tm.Metadata); err != nil {
+		return nil, vterrors.Wrapf(err, "failed to build ENUM and SET column integer to string mappings")
 	}
 	vs.plans[id] = &streamerPlan{
 		Plan:     plan,
@@ -757,25 +765,47 @@ func (vs *vstreamer) buildTablePlan(id uint64, tm *mysql.TableMap) (*binlogdatap
 			Fields:    plan.fields(),
 			Keyspace:  vs.vse.keyspace,
 			Shard:     vs.vse.shard,
+			// This mapping will be done, if needed, in the vstreamer when we process
+			// and build ROW events.
+			EnumSetStringValues: len(plan.EnumSetValuesMap) > 0,
 		},
 	}, nil
 }
 
 func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, error) {
 	var fields []*querypb.Field
+	var txtFieldIdx int
 	for i, typ := range tm.Types {
-		t, err := sqltypes.MySQLToType(int64(typ), 0)
+		t, err := sqltypes.MySQLToType(typ, 0)
 		if err != nil {
 			return nil, fmt.Errorf("unsupported type: %d, position: %d", typ, i)
+		}
+		// Use the collation inherited or the one specified explicitly for the
+		// column if one was provided in the event's optional metadata (MySQL only
+		// provides this for text based columns).
+		var coll collations.ID
+		switch {
+		case sqltypes.IsText(t) && len(tm.ColumnCollationIDs) > txtFieldIdx:
+			coll = tm.ColumnCollationIDs[txtFieldIdx]
+			txtFieldIdx++
+		case t == sqltypes.TypeJSON:
+			// JSON is a blob at this (storage) layer -- vs the connection/query serving
+			// layer which CollationForType seems primarily concerned about and JSON at
+			// the response layer should be using utf-8 as that's the standard -- so we
+			// should NOT use utf8mb4 as the collation in MySQL for a JSON column is
+			// NULL, meaning there is not one (same as for int) and we should use binary.
+			coll = collations.CollationBinaryID
+		default: // Use the server defined default for the column's type
+			coll = collations.CollationForType(t, vs.se.Environment().CollationEnv().DefaultConnectionCharset())
 		}
 		fields = append(fields, &querypb.Field{
 			Name:    fmt.Sprintf("@%d", i+1),
 			Type:    t,
-			Charset: uint32(collations.DefaultCollationForType(t)),
-			Flags:   mysql.FlagsForColumn(t, collations.DefaultCollationForType(t)),
+			Charset: uint32(coll),
+			Flags:   mysql.FlagsForColumn(t, coll),
 		})
 	}
-	st, err := vs.se.GetTableForPos(sqlparser.NewIdentifierCS(tm.Name), replication.EncodePosition(vs.pos))
+	st, err := vs.se.GetTableForPos(vs.ctx, sqlparser.NewIdentifierCS(tm.Name), replication.EncodePosition(vs.pos))
 	if err != nil {
 		if vs.filter.FieldEventMode == binlogdatapb.Filter_ERR_ON_MISMATCH {
 			log.Infof("No schema found for table %s", tm.Name)
@@ -792,7 +822,7 @@ func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, er
 		return fields, nil
 	}
 
-	// check if the schema returned by schema.Engine matches with row.
+	// Check if the schema returned by schema.Engine matches with row.
 	for i := range tm.Types {
 		if !sqltypes.AreTypesEquivalent(fields[i].Type, st.Fields[i].Type) {
 			return fields, nil
@@ -800,21 +830,30 @@ func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, er
 	}
 
 	// Columns should be truncated to match those in tm.
-	fieldsCopy, err := getFields(vs.ctx, vs.cp, tm.Name, tm.Database, st.Fields[:len(tm.Types)])
+	// This uses the historian which queries the columns in the table and uses the
+	// generated fields metadata. This means that the fields for text types are
+	// initially using collations for the column types based on the *connection
+	// collation* and not the actual *column collation*.
+	// But because we now get the correct collation for the actual column from
+	// mysqld in getExtColInfos we know this is the correct one for the vstream
+	// target and we use that rather than any that were in the binlog events,
+	// which were for the source and which can be using a different collation
+	// than the target.
+	fieldsCopy, err := getFields(vs.ctx, vs.cp, vs.se, tm.Name, tm.Database, st.Fields[:len(tm.Types)])
 	if err != nil {
 		return nil, err
 	}
 	return fieldsCopy, nil
 }
 
-func getExtColInfos(ctx context.Context, cp dbconfigs.Connector, table, database string) (map[string]*extColInfo, error) {
+func getExtColInfos(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, table, database string) (map[string]*extColInfo, error) {
 	extColInfos := make(map[string]*extColInfo)
 	conn, err := cp.Connect(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Close()
-	queryTemplate := "select column_name, column_type from information_schema.columns where table_schema=%s and table_name=%s;"
+	queryTemplate := "select column_name, column_type, collation_name from information_schema.columns where table_schema=%s and table_name=%s;"
 	query := fmt.Sprintf(queryTemplate, encodeString(database), encodeString(table))
 	qr, err := conn.ExecuteFetch(query, 10000, false)
 	if err != nil {
@@ -824,34 +863,43 @@ func getExtColInfos(ctx context.Context, cp dbconfigs.Connector, table, database
 		extColInfo := &extColInfo{
 			columnType: row[1].ToString(),
 		}
+		collationName := row[2].ToString()
+		var coll collations.ID
+		if row[2].IsNull() || collationName == "" {
+			coll = collations.CollationBinaryID
+		} else {
+			coll = se.Environment().CollationEnv().LookupByName(collationName)
+		}
+		extColInfo.collationID = coll
 		extColInfos[row[0].ToString()] = extColInfo
 	}
 	return extColInfos, nil
 }
 
-func getFields(ctx context.Context, cp dbconfigs.Connector, table, database string, fields []*querypb.Field) ([]*querypb.Field, error) {
+func getFields(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, table, database string, fields []*querypb.Field) ([]*querypb.Field, error) {
 	// Make a deep copy of the schema.Engine fields as they are pointers and
 	// will be modified by adding ColumnType below
 	fieldsCopy := make([]*querypb.Field, len(fields))
 	for i, field := range fields {
 		fieldsCopy[i] = field.CloneVT()
 	}
-	extColInfos, err := getExtColInfos(ctx, cp, table, database)
+	extColInfos, err := getExtColInfos(ctx, cp, se, table, database)
 	if err != nil {
 		return nil, err
 	}
 	for _, field := range fieldsCopy {
 		if colInfo, ok := extColInfos[field.Name]; ok {
 			field.ColumnType = colInfo.columnType
+			field.Charset = uint32(colInfo.collationID)
 		}
 	}
 	return fieldsCopy, nil
 }
 
-// additional column attributes from information_schema.columns. Currently only column_type is used, but
-// we expect to add more in the future
+// Additional column attributes to get from information_schema.columns.
 type extColInfo struct {
-	columnType string
+	columnType  string
+	collationID collations.ID
 }
 
 func encodeString(in string) string {
@@ -956,7 +1004,7 @@ func (vs *vstreamer) rebuildPlans() error {
 			// cause that to change.
 			continue
 		}
-		newPlan, err := buildPlan(plan.Table, vs.vschema, vs.filter)
+		newPlan, err := buildPlan(vs.se.Environment(), plan.Table, vs.vschema, vs.filter)
 		if err != nil {
 			return err
 		}
@@ -1005,6 +1053,30 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 		}
 		pos += l
 
+		if !value.IsNull() { // ENUMs and SETs require no special handling if they are NULL
+			// If the column is a CHAR based type with a binary collation (e.g. utf8mb4_bin) then the
+			// actual column type is included in the second byte of the event metadata while the
+			// event's type for the field is BINARY. This is true for ENUM and SET types.
+			var mysqlType uint16
+			if sqltypes.IsQuoted(plan.Table.Fields[colNum].Type) {
+				mysqlType = plan.TableMap.Metadata[colNum] >> 8
+			}
+			// Convert the integer values in the binlog event for any SET and ENUM fields into their
+			// string representations.
+			if plan.Table.Fields[colNum].Type == querypb.Type_ENUM || mysqlType == mysqlbinlog.TypeEnum {
+				value, err = buildEnumStringValue(plan, colNum, value)
+				if err != nil {
+					return false, nil, false, vterrors.Wrapf(err, "failed to perform ENUM column integer to string value mapping")
+				}
+			}
+			if plan.Table.Fields[colNum].Type == querypb.Type_SET || mysqlType == mysqlbinlog.TypeSet {
+				value, err = buildSetStringValue(plan, colNum, value)
+				if err != nil {
+					return false, nil, false, vterrors.Wrapf(err, "failed to perform SET column integer to string value mapping")
+				}
+			}
+		}
+
 		charsets[colNum] = collations.ID(plan.Table.Fields[colNum].Charset)
 		values[colNum] = value
 		valueIndex++
@@ -1012,6 +1084,109 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 	filtered := make([]sqltypes.Value, len(plan.ColExprs))
 	ok, err := plan.filter(values, filtered, charsets)
 	return ok, filtered, partial, err
+}
+
+// addEnumAndSetMappingstoPlan sets up any necessary ENUM and SET integer to string mappings.
+func addEnumAndSetMappingstoPlan(plan *Plan, cols []*querypb.Field, metadata []uint16) error {
+	plan.EnumSetValuesMap = make(map[int]map[int]string)
+	for i, col := range cols {
+		// If the column is a CHAR based type with a binary collation (e.g. utf8mb4_bin) then
+		// the actual column type is included in the second byte of the event metadata while
+		// the event's type for the field is BINARY. This is true for ENUM and SET types.
+		var mysqlType uint16
+		if sqltypes.IsQuoted(col.Type) {
+			mysqlType = metadata[i] >> 8
+		}
+		if col.Type == querypb.Type_ENUM || mysqlType == mysqlbinlog.TypeEnum ||
+			col.Type == querypb.Type_SET || mysqlType == mysqlbinlog.TypeSet {
+			// Strip the enum() / set() parts out.
+			begin := strings.Index(col.ColumnType, "(")
+			end := strings.LastIndex(col.ColumnType, ")")
+			if begin == -1 || end == -1 {
+				return fmt.Errorf("enum or set column %s does not have valid string values: %s",
+					col.Name, col.ColumnType)
+			}
+			plan.EnumSetValuesMap[i] = vtschema.ParseEnumOrSetTokensMap(col.ColumnType[begin+1 : end])
+		}
+	}
+	return nil
+}
+
+// buildEnumStringValue takes the integer value of an ENUM column and returns the string value.
+func buildEnumStringValue(plan *streamerPlan, colNum int, value sqltypes.Value) (sqltypes.Value, error) {
+	if value.IsNull() { // No work is needed
+		return value, nil
+	}
+	// Add the mappings just-in-time in case we haven't properly received and processed a
+	// table map event to initialize it.
+	if plan.EnumSetValuesMap == nil {
+		if err := addEnumAndSetMappingstoPlan(plan.Plan, plan.Table.Fields, plan.TableMap.Metadata); err != nil {
+			return sqltypes.Value{}, err
+		}
+	}
+	// ENUM columns are stored as an unsigned 16-bit integer as they can contain a maximum
+	// of 65,535 elements (https://dev.mysql.com/doc/refman/en/enum.html) with the 0 element
+	// reserved for any integer value that has no string mapping.
+	iv, err := value.ToUint16()
+	if err != nil {
+		return sqltypes.Value{}, fmt.Errorf("no valid integer value found for column %s in table %s, bytes: %b",
+			plan.Table.Fields[colNum].Name, plan.Table.Name, iv)
+	}
+	var strVal string
+	// Match the MySQL behavior of returning an empty string for invalid ENUM values.
+	// This is what the 0 position in an ENUM is reserved for.
+	if iv != 0 {
+		var ok bool
+		strVal, ok = plan.EnumSetValuesMap[colNum][int(iv)]
+		if !ok {
+			// The integer value was NOT 0 yet we found no mapping. This should never happen.
+			return sqltypes.Value{}, fmt.Errorf("no string value found for ENUM column %s in table %s -- with available values being: %v -- using the found integer value: %d",
+				plan.Table.Fields[colNum].Name, plan.Table.Name, plan.EnumSetValuesMap[colNum], iv)
+		}
+	}
+	return sqltypes.MakeTrusted(plan.Table.Fields[colNum].Type, []byte(strVal)), nil
+}
+
+// buildSetStringValue takes the integer value of a SET column and returns the string value.
+func buildSetStringValue(plan *streamerPlan, colNum int, value sqltypes.Value) (sqltypes.Value, error) {
+	if value.IsNull() { // No work is needed
+		return value, nil
+	}
+	// Add the mappings just-in-time in case we haven't properly received and processed a
+	// table map event to initialize it.
+	if plan.EnumSetValuesMap == nil {
+		if err := addEnumAndSetMappingstoPlan(plan.Plan, plan.Table.Fields, plan.TableMap.Metadata); err != nil {
+			return sqltypes.Value{}, err
+		}
+	}
+	// A SET column can have 64 unique values: https://dev.mysql.com/doc/refman/en/set.html
+	// For this reason the binlog event contains the values encoded as an unsigned 64-bit
+	// integer which is really a bitmap.
+	val := bytes.Buffer{}
+	iv, err := value.ToUint64()
+	if err != nil {
+		return value, fmt.Errorf("no valid integer value found for column %s in table %s, bytes: %b",
+			plan.Table.Fields[colNum].Name, plan.Table.Name, iv)
+	}
+	idx := 1
+	// See what bits are set in the bitmap using bitmasks.
+	for b := uint64(1); b < 1<<63; b <<= 1 {
+		if iv&b > 0 { // This bit is set and the SET's string value needs to be provided.
+			strVal, ok := plan.EnumSetValuesMap[colNum][idx]
+			// When you insert values not found in the SET (which requires disabling STRICT mode) then
+			// they are effectively pruned and ignored (not actually saved). So this should never happen.
+			if !ok {
+				return sqltypes.Value{}, fmt.Errorf("no valid integer value found for SET column %s in table %s, bytes: %b",
+					plan.Table.Fields[colNum].Name, plan.Table.Name, iv)
+			}
+			if val.Len() > 0 {
+				val.WriteByte(',')
+			}
+			val.WriteString(strVal)
+		}
+		idx++
+	}
+	return sqltypes.MakeTrusted(plan.Table.Fields[colNum].Type, val.Bytes()), nil
 }
 
 func wrapError(err error, stopPos replication.Position, vse *Engine) error {

@@ -17,6 +17,8 @@ limitations under the License.
 package mysql
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -138,12 +140,66 @@ func (c *Conn) WriteBinlogEvent(ev BinlogEvent, semiSyncEnabled bool) error {
 	return nil
 }
 
+type SemiSyncType int8
+
+const (
+	SemiSyncTypeUnknown SemiSyncType = iota
+	SemiSyncTypeOff
+	SemiSyncTypeSource
+	SemiSyncTypeMaster
+)
+
 // SemiSyncExtensionLoaded checks if the semisync extension has been loaded.
 // It should work for both MariaDB and MySQL.
-func (c *Conn) SemiSyncExtensionLoaded() bool {
-	qr, err := c.ExecuteFetch("SHOW GLOBAL VARIABLES LIKE 'rpl_semi_sync%'", 10, false)
+func (c *Conn) SemiSyncExtensionLoaded() (SemiSyncType, error) {
+	qr, err := c.ExecuteFetch("SHOW VARIABLES LIKE 'rpl_semi_sync_%_enabled'", 10, false)
 	if err != nil {
-		return false
+		return SemiSyncTypeUnknown, err
 	}
-	return len(qr.Rows) >= 1
+	for _, row := range qr.Rows {
+		if row[0].ToString() == "rpl_semi_sync_source_enabled" {
+			return SemiSyncTypeSource, nil
+		}
+		if row[0].ToString() == "rpl_semi_sync_master_enabled" {
+			return SemiSyncTypeMaster, nil
+		}
+	}
+	return SemiSyncTypeOff, nil
+}
+
+func (c *Conn) BinlogInformation() (string, bool, bool, string, error) {
+	replicaField := c.flavor.binlogReplicatedUpdates()
+
+	query := fmt.Sprintf("select @@global.binlog_format, @@global.log_bin, %s, @@global.binlog_row_image", replicaField)
+	qr, err := c.ExecuteFetch(query, 1, true)
+	if err != nil {
+		return "", false, false, "", err
+	}
+	if len(qr.Rows) != 1 {
+		return "", false, false, "", fmt.Errorf("unable to read global variables binlog_format, log_bin, %s, binlog_row_image", replicaField)
+	}
+	res := qr.Named().Row()
+	binlogFormat, err := res.ToString("@@global.binlog_format")
+	if err != nil {
+		return "", false, false, "", err
+	}
+	logBin, err := res.ToInt64("@@global.log_bin")
+	if err != nil {
+		return "", false, false, "", err
+	}
+	logReplicaUpdates, err := res.ToInt64(replicaField)
+	if err != nil {
+		return "", false, false, "", err
+	}
+	binlogRowImage, err := res.ToString("@@global.binlog_row_image")
+	if err != nil {
+		return "", false, false, "", err
+	}
+	return binlogFormat, logBin == 1, logReplicaUpdates == 1, binlogRowImage, nil
+}
+
+// ResetBinaryLogsCommand returns the command used to reset the
+// binary logs on the server.
+func (c *Conn) ResetBinaryLogsCommand() string {
+	return c.flavor.resetBinaryLogsCommand()
 }

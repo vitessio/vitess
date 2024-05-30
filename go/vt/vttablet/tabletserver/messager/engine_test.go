@@ -21,10 +21,10 @@ import (
 	"reflect"
 	"testing"
 
-	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -67,33 +67,31 @@ var (
 )
 
 func TestEngineSchemaChanged(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	engine := newTestEngine(db)
+	engine := newTestEngine()
 	defer engine.Close()
 
-	engine.schemaChanged(nil, []*schema.Table{meTableT1, tableT2}, nil, nil)
+	engine.schemaChanged(nil, []*schema.Table{meTableT1, tableT2}, nil, nil, true)
 	got := extractManagerNames(engine.managers)
 	want := map[string]bool{"t1": true}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got: %+v, want %+v", got, want)
 	}
 
-	engine.schemaChanged(nil, []*schema.Table{meTableT3}, nil, nil)
+	engine.schemaChanged(nil, []*schema.Table{meTableT3}, nil, nil, true)
 	got = extractManagerNames(engine.managers)
 	want = map[string]bool{"t1": true, "t3": true}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got: %+v, want %+v", got, want)
 	}
 
-	engine.schemaChanged(nil, []*schema.Table{meTableT4}, nil, []*schema.Table{meTableT3, tableT5})
+	engine.schemaChanged(nil, []*schema.Table{meTableT4}, nil, []*schema.Table{meTableT3, tableT5}, true)
 	got = extractManagerNames(engine.managers)
 	want = map[string]bool{"t1": true, "t4": true}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got: %+v, want %+v", got, want)
 	}
 	// Test update
-	engine.schemaChanged(nil, nil, []*schema.Table{meTableT2, tableT4}, nil)
+	engine.schemaChanged(nil, nil, []*schema.Table{meTableT2, tableT4}, nil, true)
 	got = extractManagerNames(engine.managers)
 	want = map[string]bool{"t1": true, "t2": true}
 	if !reflect.DeepEqual(got, want) {
@@ -110,10 +108,8 @@ func extractManagerNames(in map[string]*messageManager) map[string]bool {
 }
 
 func TestSubscribe(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	engine := newTestEngine(db)
-	engine.schemaChanged(nil, []*schema.Table{meTableT1, meTableT2}, nil, nil)
+	engine := newTestEngine()
+	engine.schemaChanged(nil, []*schema.Table{meTableT1, meTableT2}, nil, nil, true)
 	f1, ch1 := newEngineReceiver()
 	f2, ch2 := newEngineReceiver()
 	// Each receiver is subscribed to different managers.
@@ -142,11 +138,9 @@ func TestSubscribe(t *testing.T) {
 }
 
 func TestEngineGenerate(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	engine := newTestEngine(db)
+	engine := newTestEngine()
 	defer engine.Close()
-	engine.schemaChanged(nil, []*schema.Table{meTableT1}, nil, nil)
+	engine.schemaChanged(nil, []*schema.Table{meTableT1}, nil, nil, true)
 
 	if _, err := engine.GetGenerator("t1"); err != nil {
 		t.Error(err)
@@ -157,10 +151,10 @@ func TestEngineGenerate(t *testing.T) {
 	}
 }
 
-func newTestEngine(db *fakesqldb.DB) *Engine {
-	config := tabletenv.NewDefaultConfig()
+func newTestEngine() *Engine {
+	cfg := tabletenv.NewDefaultConfig()
 	tsv := &fakeTabletServer{
-		Env: tabletenv.NewEnv(config, "MessagerTest"),
+		Env: tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "MessagerTest"),
 	}
 	se := schema.NewEngine(tsv)
 	te := NewEngine(tsv, se, newFakeVStreamer())

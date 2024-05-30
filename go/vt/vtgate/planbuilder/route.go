@@ -22,87 +22,54 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-var _ logicalPlan = (*route)(nil)
-
-// route is used to build a Route primitive.
-// It's used to build one of the Select routes like
-// SelectScatter, etc. Portions of the original Select AST
-// are moved into this node, which will be used to build
-// the final SQL for this route.
-type route struct {
-
-	// Select is the AST for the query fragment that will be
-	// executed by this route.
-	Select sqlparser.SelectStatement
-
-	// eroute is the primitive being built.
-	eroute *engine.Route
-
-	// is the engine primitive we will return from the Primitive() method. Note that it could be different than eroute
-	enginePrimitive engine.Primitive
-
-	// tables keeps track of which tables this route is covering
-	tables semantics.TableSet
-}
-
-// Primitive implements the logicalPlan interface
-func (rb *route) Primitive() engine.Primitive {
-	return rb.enginePrimitive
-}
-
-// Wireup implements the logicalPlan interface
-func (rb *route) Wireup(ctx *plancontext.PlanningContext) error {
-	rb.prepareTheAST()
-
+// WireupRoute returns an engine primitive for the given route.
+func WireupRoute(ctx *plancontext.PlanningContext, eroute *engine.Route, sel sqlparser.SelectStatement) (engine.Primitive, error) {
 	// prepare the queries we will pass down
-	rb.eroute.Query = sqlparser.String(rb.Select)
+	eroute.Query = sqlparser.String(sel)
 	buffer := sqlparser.NewTrackedBuffer(sqlparser.FormatImpossibleQuery)
-	node := buffer.WriteNode(rb.Select)
-	parsedQuery := node.ParsedQuery()
-	rb.eroute.FieldQuery = parsedQuery.Query
+	node := buffer.WriteNode(sel)
+	eroute.FieldQuery = node.ParsedQuery().Query
 
 	// if we have a planable vindex lookup, let's extract it into its own primitive
-	planableVindex, ok := rb.eroute.RoutingParameters.Vindex.(vindexes.LookupPlanable)
+	planableVindex, ok := eroute.RoutingParameters.Vindex.(vindexes.LookupPlanable)
 	if !ok {
-		rb.enginePrimitive = rb.eroute
-		return nil
+		return eroute, nil
 	}
 
 	query, args := planableVindex.Query()
-	stmt, reserved, err := sqlparser.Parse2(query)
+	stmt, reserved, err := ctx.VSchema.Environment().Parser().Parse2(query)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
 
 	lookupPrimitive, err := gen4SelectStmtPlanner(query, querypb.ExecuteOptions_Gen4, stmt.(sqlparser.SelectStatement), reservedVars, ctx.VSchema)
 	if err != nil {
-		return vterrors.Wrapf(err, "failed to plan the lookup query: [%s]", query)
+		return nil, vterrors.Wrapf(err, "failed to plan the lookup query: [%s]", query)
 	}
 
-	rb.enginePrimitive = &engine.VindexLookup{
-		Opcode:    rb.eroute.Opcode,
+	vdxLookup := &engine.VindexLookup{
+		Opcode:    eroute.Opcode,
 		Vindex:    planableVindex,
-		Keyspace:  rb.eroute.Keyspace,
-		Values:    rb.eroute.Values,
-		SendTo:    rb.eroute,
+		Keyspace:  eroute.Keyspace,
+		Values:    eroute.Values,
+		SendTo:    eroute,
 		Arguments: args,
 		Lookup:    lookupPrimitive.primitive,
 	}
 
-	rb.eroute.RoutingParameters.Opcode = engine.ByDestination
-	rb.eroute.RoutingParameters.Values = nil
-	rb.eroute.RoutingParameters.Vindex = nil
+	eroute.RoutingParameters.Opcode = engine.ByDestination
+	eroute.RoutingParameters.Values = nil
+	eroute.RoutingParameters.Vindex = nil
 
-	return nil
+	return vdxLookup, nil
 }
 
 // prepareTheAST does minor fixups of the SELECT struct before producing the query string
-func (rb *route) prepareTheAST() {
+func prepareTheAST(sel sqlparser.SelectStatement) {
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
 		switch node := node.(type) {
 		case *sqlparser.Select:
@@ -115,19 +82,12 @@ func (rb *route) prepareTheAST() {
 			}
 		case *sqlparser.ComparisonExpr:
 			// 42 = colName -> colName = 42
-			b := node.Operator == sqlparser.EqualOp
-			value := sqlparser.IsValue(node.Left)
-			name := sqlparser.IsColName(node.Right)
-			if b &&
-				value &&
-				name {
+			if node.Operator.IsCommutative() &&
+				!sqlparser.IsColName(node.Left) &&
+				sqlparser.IsColName(node.Right) {
 				node.Left, node.Right = node.Right, node.Left
 			}
 		}
 		return true, nil
-	}, rb.Select)
-}
-
-func (rb *route) isSingleShard() bool {
-	return rb.eroute.Opcode.IsSingleShard()
+	}, sel)
 }

@@ -66,19 +66,6 @@ func (b *ArithmeticExpr) eval(env *ExpressionEnv) (eval, error) {
 	return b.Op.eval(left, right)
 }
 
-func makeNumericalType(t sqltypes.Type, f typeFlag) (sqltypes.Type, typeFlag) {
-	if sqltypes.IsNumber(t) {
-		return t, f
-	}
-	if t == sqltypes.VarBinary && (f&flagHex) != 0 {
-		return sqltypes.Uint64, f
-	}
-	if sqltypes.IsDateOrTime(t) {
-		return sqltypes.Int64, f | flagAmbiguousType
-	}
-	return sqltypes.Float64, f
-}
-
 func (b *ArithmeticExpr) compile(c *compiler) (ctype, error) {
 	return b.Op.compile(c, b.Left, b.Right)
 }
@@ -107,12 +94,12 @@ func (op *opArithAdd) compile(c *compiler, left, right IR) (ctype, error) {
 	rt = c.compileToNumeric(rt, 1, sqltypes.Float64, true)
 	lt, rt, swap = c.compileNumericPriority(lt, rt)
 
-	var sumtype sqltypes.Type
+	ct := ctype{Flag: nullableFlags(lt.Flag | rt.Flag), Col: collationNumeric}
 
 	switch lt.Type {
 	case sqltypes.Int64:
 		c.asm.Add_ii()
-		sumtype = sqltypes.Int64
+		ct.Type = sqltypes.Int64
 	case sqltypes.Uint64:
 		switch rt.Type {
 		case sqltypes.Int64:
@@ -120,7 +107,7 @@ func (op *opArithAdd) compile(c *compiler, left, right IR) (ctype, error) {
 		case sqltypes.Uint64:
 			c.asm.Add_uu()
 		}
-		sumtype = sqltypes.Uint64
+		ct.Type = sqltypes.Uint64
 	case sqltypes.Decimal:
 		if swap {
 			c.compileToDecimal(rt, 2)
@@ -128,7 +115,9 @@ func (op *opArithAdd) compile(c *compiler, left, right IR) (ctype, error) {
 			c.compileToDecimal(rt, 1)
 		}
 		c.asm.Add_dd()
-		sumtype = sqltypes.Decimal
+		ct.Type = sqltypes.Decimal
+		ct.Size = max(lt.Size, rt.Size)
+		ct.Scale = max(lt.Scale, rt.Scale)
 	case sqltypes.Float64:
 		if swap {
 			c.compileToFloat(rt, 2)
@@ -136,11 +125,11 @@ func (op *opArithAdd) compile(c *compiler, left, right IR) (ctype, error) {
 			c.compileToFloat(rt, 1)
 		}
 		c.asm.Add_ff()
-		sumtype = sqltypes.Float64
+		ct.Type = sqltypes.Float64
 	}
 
 	c.asm.jumpDestination(skip1, skip2)
-	return ctype{Type: sumtype, Col: collationNumeric}, nil
+	return ct, nil
 }
 
 func (op *opArithSub) eval(left, right eval) (eval, error) {
@@ -164,66 +153,71 @@ func (op *opArithSub) compile(c *compiler, left, right IR) (ctype, error) {
 	lt = c.compileToNumeric(lt, 2, sqltypes.Float64, true)
 	rt = c.compileToNumeric(rt, 1, sqltypes.Float64, true)
 
-	var subtype sqltypes.Type
-
+	ct := ctype{Flag: nullableFlags(lt.Flag | rt.Flag), Col: collationNumeric}
 	switch lt.Type {
 	case sqltypes.Int64:
 		switch rt.Type {
 		case sqltypes.Int64:
 			c.asm.Sub_ii()
-			subtype = sqltypes.Int64
+			ct.Type = sqltypes.Int64
 		case sqltypes.Uint64:
 			c.asm.Sub_iu()
-			subtype = sqltypes.Uint64
+			ct.Type = sqltypes.Uint64
 		case sqltypes.Float64:
 			c.compileToFloat(lt, 2)
 			c.asm.Sub_ff()
-			subtype = sqltypes.Float64
+			ct.Type = sqltypes.Float64
 		case sqltypes.Decimal:
 			c.compileToDecimal(lt, 2)
 			c.asm.Sub_dd()
-			subtype = sqltypes.Decimal
+			ct.Type = sqltypes.Decimal
+			ct.Size = max(lt.Size, rt.Size)
+			ct.Scale = max(lt.Scale, rt.Scale)
 		}
 	case sqltypes.Uint64:
 		switch rt.Type {
 		case sqltypes.Int64:
 			c.asm.Sub_ui()
-			subtype = sqltypes.Uint64
+			ct.Type = sqltypes.Uint64
 		case sqltypes.Uint64:
 			c.asm.Sub_uu()
-			subtype = sqltypes.Uint64
+			ct.Type = sqltypes.Uint64
 		case sqltypes.Float64:
 			c.compileToFloat(lt, 2)
 			c.asm.Sub_ff()
-			subtype = sqltypes.Float64
+			ct.Type = sqltypes.Float64
 		case sqltypes.Decimal:
 			c.compileToDecimal(lt, 2)
 			c.asm.Sub_dd()
-			subtype = sqltypes.Decimal
+			ct.Type = sqltypes.Decimal
+			ct.Size = max(lt.Size, rt.Size)
+			ct.Scale = max(lt.Scale, rt.Scale)
 		}
 	case sqltypes.Float64:
 		c.compileToFloat(rt, 1)
 		c.asm.Sub_ff()
-		subtype = sqltypes.Float64
+		ct.Type = sqltypes.Float64
 	case sqltypes.Decimal:
 		switch rt.Type {
 		case sqltypes.Float64:
 			c.compileToFloat(lt, 2)
 			c.asm.Sub_ff()
-			subtype = sqltypes.Float64
+			ct.Type = sqltypes.Float64
 		default:
 			c.compileToDecimal(rt, 1)
 			c.asm.Sub_dd()
-			subtype = sqltypes.Decimal
+			ct.Type = sqltypes.Decimal
+			ct.Size = max(lt.Size, rt.Size)
+			ct.Scale = max(lt.Scale, rt.Scale)
 		}
 	}
 
-	if subtype == 0 {
+	if ct.Type == 0 {
 		panic("did not compile?")
 	}
 
 	c.asm.jumpDestination(skip1, skip2)
-	return ctype{Type: subtype, Col: collationNumeric}, nil
+	return ct, nil
 }
 
 func (op *opArithMul) eval(left, right eval) (eval, error) {
@@ -250,12 +244,11 @@ func (op *opArithMul) compile(c *compiler, left, right IR) (ctype, error) {
 	rt = c.compileToNumeric(rt, 1, sqltypes.Float64, true)
 	lt, rt, swap = c.compileNumericPriority(lt, rt)
 
-	var multype sqltypes.Type
-
+	ct := ctype{Flag: nullableFlags(lt.Flag | rt.Flag), Col: collationNumeric}
 	switch lt.Type {
 	case sqltypes.Int64:
 		c.asm.Mul_ii()
-		multype = sqltypes.Int64
+		ct.Type = sqltypes.Int64
 	case sqltypes.Uint64:
 		switch rt.Type {
 		case sqltypes.Int64:
@@ -263,7 +256,7 @@ func (op *opArithMul) compile(c *compiler, left, right IR) (ctype, error) {
 		case sqltypes.Uint64:
 			c.asm.Mul_uu()
 		}
-		multype = sqltypes.Uint64
+		ct.Type = sqltypes.Uint64
 	case sqltypes.Float64:
 		if swap {
 			c.compileToFloat(rt, 2)
@@ -271,7 +264,7 @@ func (op *opArithMul) compile(c *compiler, left, right IR) (ctype, error) {
 			c.compileToFloat(rt, 1)
 		}
 		c.asm.Mul_ff()
-		multype = sqltypes.Float64
+		ct.Type = sqltypes.Float64
 	case sqltypes.Decimal:
 		if swap {
 			c.compileToDecimal(rt, 2)
@@ -279,11 +272,13 @@ func (op *opArithMul) compile(c *compiler, left, right IR) (ctype, error) {
 			c.compileToDecimal(rt, 1)
 		}
 		c.asm.Mul_dd()
-		multype = sqltypes.Decimal
+		ct.Type = sqltypes.Decimal
+		ct.Size = lt.Size + rt.Size
+		ct.Scale = lt.Scale + rt.Scale
 	}
 
 	c.asm.jumpDestination(skip1, skip2)
-	return ctype{Type: multype, Col: collationNumeric}, nil
+	return ct, nil
 }
 
 func (op *opArithDiv) eval(left, right eval) (eval, error) {
@@ -319,6 +314,8 @@ func (op *opArithDiv) compile(c *compiler, left, right IR) (ctype, error) {
 		c.compileToDecimal(lt, 2)
 		c.compileToDecimal(rt, 1)
 		c.asm.Div_dd()
+		ct.Size = lt.Size + divPrecisionIncrement
+		ct.Scale = lt.Scale + divPrecisionIncrement
 	}
 	c.asm.jumpDestination(skip1, skip2)
 	return ct, nil
@@ -432,7 +429,7 @@ func (op *opArithMod) compile(c *compiler, left, right IR) (ctype, error) {
 	lt = c.compileToNumeric(lt, 2, sqltypes.Float64, true)
 	rt = c.compileToNumeric(rt, 1, sqltypes.Float64, true)
 
-	ct := ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagNullable}
+	ct := ctype{Col: collationNumeric, Flag: flagNullable}
 	switch lt.Type {
 	case sqltypes.Int64:
 		ct.Type = sqltypes.Int64
@@ -447,6 +444,8 @@ func (op *opArithMod) compile(c *compiler, left, right IR) (ctype, error) {
 			c.asm.Mod_ff()
 		case sqltypes.Decimal:
 			ct.Type = sqltypes.Decimal
+			ct.Size = max(lt.Size, rt.Size)
+			ct.Scale = max(lt.Scale, rt.Scale)
 			c.asm.Convert_xd(2, 0, 0)
 			c.asm.Mod_dd()
 		}
@@ -463,6 +462,8 @@ func (op *opArithMod) compile(c *compiler, left, right IR) (ctype, error) {
 			c.asm.Mod_ff()
 		case sqltypes.Decimal:
 			ct.Type = sqltypes.Decimal
+			ct.Size = max(lt.Size, rt.Size)
+			ct.Scale = max(lt.Scale, rt.Scale)
 			c.asm.Convert_xd(2, 0, 0)
 			c.asm.Mod_dd()
 		}
@@ -536,5 +537,15 @@ func (expr *NegateExpr) compile(c *compiler) (ctype, error) {
 	}
 
 	c.asm.jumpDestination(skip)
-	return ctype{Type: neg, Col: collationNumeric}, nil
+	return ctype{
+		Type:  neg,
+		Flag:  nullableFlags(arg.Flag),
+		Size:  arg.Size,
+		Scale: arg.Scale,
+		Col:   collationNumeric,
+	}, nil
+}
+
+func nullableFlags(flag typeFlag) typeFlag {
+	return flag & (flagNull | flagNullable)
 }

@@ -32,11 +32,15 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/patrickmn/go-cache"
 
+	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/vtenv"
+
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/dynamic"
@@ -77,6 +81,8 @@ type API struct {
 	// vtexplain is now global again due to stat exporters in the tablet layer
 	// we're not super concerned because we will be deleting vtexplain Soon(TM).
 	vtexplainLock sync.Mutex
+
+	env *vtenv.Environment
 }
 
 // Options wraps the configuration options for different components of the
@@ -92,7 +98,7 @@ type Options struct {
 
 // NewAPI returns a new API, configured to service the given set of clusters,
 // and configured with the given options.
-func NewAPI(clusters []*cluster.Cluster, opts Options) *API {
+func NewAPI(env *vtenv.Environment, clusters []*cluster.Cluster, opts Options) *API {
 	clusterMap := make(map[string]*cluster.Cluster, len(clusters))
 	for _, cluster := range clusters {
 		clusterMap[cluster.ID] = cluster
@@ -138,6 +144,7 @@ func NewAPI(clusters []*cluster.Cluster, opts Options) *API {
 		clusters:   clusters,
 		clusterMap: clusterMap,
 		authz:      authz,
+		env:        env,
 	}
 
 	if opts.EnableDynamicClusters {
@@ -296,6 +303,7 @@ func (api *API) WithCluster(c *cluster.Cluster, id string) dynamic.API {
 		serv:    api.serv,
 		authz:   api.authz,
 		options: api.options,
+		env:     api.env,
 	}
 
 	if c != nil {
@@ -366,6 +374,13 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/keyspace/{cluster_id}/{name}/validate/schema", httpAPI.Adapt(vtadminhttp.ValidateSchemaKeyspace)).Name("API.ValidateSchemaKeyspace").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/keyspace/{cluster_id}/{name}/validate/version", httpAPI.Adapt(vtadminhttp.ValidateVersionKeyspace)).Name("API.ValidateVersionKeyspace").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/keyspaces", httpAPI.Adapt(vtadminhttp.GetKeyspaces)).Name("API.GetKeyspaces")
+	router.HandleFunc("/migration/{cluster_id}/{keyspace}", httpAPI.Adapt(vtadminhttp.ApplySchema)).Name("API.ApplySchema").Methods("POST")
+	router.HandleFunc("/migration/{cluster_id}/{keyspace}/cancel", httpAPI.Adapt(vtadminhttp.CancelSchemaMigration)).Name("API.CancelSchemaMigration").Methods("PUT", "OPTIONS")
+	router.HandleFunc("/migration/{cluster_id}/{keyspace}/cleanup", httpAPI.Adapt(vtadminhttp.CleanupSchemaMigration)).Name("API.CleanupSchemaMigration").Methods("PUT", "OPTIONS")
+	router.HandleFunc("/migration/{cluster_id}/{keyspace}/complete", httpAPI.Adapt(vtadminhttp.CompleteSchemaMigration)).Name("API.CompleteSchemaMigration").Methods("PUT", "OPTIONS")
+	router.HandleFunc("/migration/{cluster_id}/{keyspace}/launch", httpAPI.Adapt(vtadminhttp.LaunchSchemaMigration)).Name("API.LaunchSchemaMigration").Methods("PUT", "OPTIONS")
+	router.HandleFunc("/migration/{cluster_id}/{keyspace}/retry", httpAPI.Adapt(vtadminhttp.RetrySchemaMigration)).Name("API.RetrySchemaMigration").Methods("PUT", "OPTIONS")
+	router.HandleFunc("/migrations/", httpAPI.Adapt(vtadminhttp.GetSchemaMigrations)).Name("API.GetSchemaMigrations")
 	router.HandleFunc("/schema/{table}", httpAPI.Adapt(vtadminhttp.FindSchema)).Name("API.FindSchema")
 	router.HandleFunc("/schema/{cluster_id}/{keyspace}/{table}", httpAPI.Adapt(vtadminhttp.GetSchema)).Name("API.GetSchema")
 	router.HandleFunc("/schemas", httpAPI.Adapt(vtadminhttp.GetSchemas)).Name("API.GetSchemas")
@@ -430,6 +445,82 @@ func (api *API) EjectDynamicCluster(key string, value any) {
 	}
 
 	api.clusters = append(api.clusters[:clusterIndex], api.clusters[clusterIndex+1:]...)
+}
+
+// ApplySchema is part of the vtadminpb.VTAdminServer interface.
+func (api *API) ApplySchema(ctx context.Context, req *vtadminpb.ApplySchemaRequest) (*vtctldatapb.ApplySchemaResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.ApplySchema")
+	defer span.Finish()
+
+	span.Annotate("cluster_id", req.ClusterId)
+
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.SchemaMigrationResource, rbac.CreateAction) {
+		return nil, fmt.Errorf("%w: cannot create schema migration in %s", errors.ErrUnauthorized, req.ClusterId)
+	}
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.ApplySchema(ctx, req.Request)
+}
+
+// CancelSchemaMigration is part of the vtadminpb.VTAdminServer interface.
+func (api *API) CancelSchemaMigration(ctx context.Context, req *vtadminpb.CancelSchemaMigrationRequest) (*vtctldatapb.CancelSchemaMigrationResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.CancelSchemaMigration")
+	defer span.Finish()
+
+	span.Annotate("cluster_id", req.ClusterId)
+
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.SchemaMigrationResource, rbac.CancelAction) {
+		return nil, fmt.Errorf("%w: cannot cancel schema migration in %s", errors.ErrUnauthorized, req.ClusterId)
+	}
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.CancelSchemaMigration(ctx, req.Request)
+}
+
+// CleanupSchemaMigration is part of the vtadminpb.VTAdminServer interface.
+func (api *API) CleanupSchemaMigration(ctx context.Context, req *vtadminpb.CleanupSchemaMigrationRequest) (*vtctldatapb.CleanupSchemaMigrationResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.CleanupSchemaMigration")
+	defer span.Finish()
+
+	span.Annotate("cluster_id", req.ClusterId)
+
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.SchemaMigrationResource, rbac.CleanupSchemaMigrationAction) {
+		return nil, fmt.Errorf("%w: cannot cleanup schema migration in %s", errors.ErrUnauthorized, req.ClusterId)
+	}
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.CleanupSchemaMigration(ctx, req.Request)
+}
+
+// CompleteSchemaMigration is part of the vtadminpb.VTAdminServer interface.
+func (api *API) CompleteSchemaMigration(ctx context.Context, req *vtadminpb.CompleteSchemaMigrationRequest) (*vtctldatapb.CompleteSchemaMigrationResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.CompleteSchemaMigration")
+	defer span.Finish()
+
+	span.Annotate("cluster_id", req.ClusterId)
+
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.SchemaMigrationResource, rbac.CompleteSchemaMigrationAction) {
+		return nil, fmt.Errorf("%w: cannot complete schema migration in %s", errors.ErrUnauthorized, req.ClusterId)
+	}
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.CompleteSchemaMigration(ctx, req.Request)
 }
 
 // CreateKeyspace is part of the vtadminpb.VTAdminServer interface.
@@ -1015,6 +1106,113 @@ func (api *API) GetSchemas(ctx context.Context, req *vtadminpb.GetSchemasRequest
 	}, nil
 }
 
+// GetSchemaMigrations is part of the vtadminpb.VTAdminServer interface.
+func (api *API) GetSchemaMigrations(ctx context.Context, req *vtadminpb.GetSchemaMigrationsRequest) (*vtadminpb.GetSchemaMigrationsResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.GetSchemaMigrations")
+	defer span.Finish()
+
+	clusterIDs := make([]string, 0, len(req.ClusterRequests))
+	requestsByCluster := make(map[string][]*vtctldatapb.GetSchemaMigrationsRequest, len(req.ClusterRequests))
+
+	for _, r := range req.ClusterRequests {
+		clusterIDs = append(clusterIDs, r.ClusterId)
+		requestsByCluster[r.ClusterId] = append(requestsByCluster[r.ClusterId], r.Request)
+	}
+
+	clusters, _ := api.getClustersForRequest(clusterIDs)
+
+	var (
+		m       sync.Mutex
+		wg      sync.WaitGroup
+		rec     concurrency.AllErrorRecorder
+		results = make([]*vtadminpb.SchemaMigration, 0, len(req.ClusterRequests))
+	)
+
+	m.Lock()
+	for _, c := range clusters {
+		if len(requestsByCluster[c.ID]) == 0 {
+			wg.Add(1)
+			go func(ctx context.Context, c *cluster.Cluster) {
+				defer wg.Done()
+
+				span, ctx := trace.NewSpan(ctx, "API.getClusterKeyspaces")
+				defer span.Finish()
+
+				span.Annotate("cluster_id", c.ID)
+
+				if !api.authz.IsAuthorized(ctx, c.ID, rbac.SchemaMigrationResource, rbac.GetAction) {
+					return
+				}
+
+				keyspaces, err := c.GetKeyspaces(ctx)
+				if err != nil {
+					rec.RecordError(err)
+					return
+				}
+
+				m.Lock()
+				defer m.Unlock()
+
+				for _, ks := range keyspaces {
+					requestsByCluster[c.ID] = append(requestsByCluster[c.ID], &vtctldatapb.GetSchemaMigrationsRequest{
+						Keyspace: ks.Keyspace.Name,
+					})
+				}
+			}(ctx, c)
+		}
+	}
+	m.Unlock()
+
+	wg.Wait()
+	if rec.HasErrors() {
+		return nil, rec.Error()
+	}
+
+	for _, c := range clusters {
+		if requestsByCluster[c.ID] == nil {
+			continue
+		}
+
+		for _, r := range requestsByCluster[c.ID] {
+			wg.Add(1)
+
+			go func(ctx context.Context, c *cluster.Cluster, r *vtctldatapb.GetSchemaMigrationsRequest) {
+				defer wg.Done()
+
+				span, ctx := trace.NewSpan(ctx, "API.getClusterSchemaMigrations")
+				defer span.Finish()
+
+				span.Annotate("cluster_id", c.ID)
+
+				if !api.authz.IsAuthorized(ctx, c.ID, rbac.SchemaMigrationResource, rbac.GetAction) {
+					return
+				}
+
+				migrations, err := c.GetSchemaMigrations(ctx, r)
+				if err != nil {
+					rec.RecordError(err)
+					return
+				}
+
+				m.Lock()
+				defer m.Unlock()
+
+				results = append(results, migrations...)
+			}(ctx, c, r)
+		}
+	}
+
+	wg.Wait()
+
+	if rec.HasErrors() {
+		return nil, rec.Error()
+	}
+
+	return &vtadminpb.GetSchemaMigrationsResponse{
+		SchemaMigrations: results,
+	}, nil
+}
+
 // GetShardReplicationPositions is part of the vtadminpb.VTAdminServer interface.
 func (api *API) GetShardReplicationPositions(ctx context.Context, req *vtadminpb.GetShardReplicationPositionsRequest) (*vtadminpb.GetShardReplicationPositionsResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "API.GetShardReplicationPositions")
@@ -1515,6 +1713,25 @@ func (api *API) GetWorkflows(ctx context.Context, req *vtadminpb.GetWorkflowsReq
 	}, nil
 }
 
+// LaunchSchemaMigration is part of the vtadminpb.VTAdminServer interface.
+func (api *API) LaunchSchemaMigration(ctx context.Context, req *vtadminpb.LaunchSchemaMigrationRequest) (*vtctldatapb.LaunchSchemaMigrationResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.LaunchSchemaMigration")
+	defer span.Finish()
+
+	span.Annotate("cluster_id", req.ClusterId)
+
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.SchemaMigrationResource, rbac.LaunchSchemaMigrationAction) {
+		return nil, fmt.Errorf("%w: cannot launch schema migration in %s", errors.ErrUnauthorized, req.ClusterId)
+	}
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.LaunchSchemaMigration(ctx, req.Request)
+}
+
 // PingTablet is part of the vtadminpb.VTAdminServer interface.
 func (api *API) PingTablet(ctx context.Context, req *vtadminpb.PingTabletRequest) (*vtadminpb.PingTabletResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "API.PingTablet")
@@ -1720,6 +1937,25 @@ func (api *API) ReloadSchemaShard(ctx context.Context, req *vtadminpb.ReloadSche
 	return &vtadminpb.ReloadSchemaShardResponse{
 		Events: res.Events,
 	}, nil
+}
+
+// RetrySchemaMigration is part of the vtadminpb.VTAdminServer interface.
+func (api *API) RetrySchemaMigration(ctx context.Context, req *vtadminpb.RetrySchemaMigrationRequest) (*vtctldatapb.RetrySchemaMigrationResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.RetrySchemaMigration")
+	defer span.Finish()
+
+	span.Annotate("cluster_id", req.ClusterId)
+
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.SchemaMigrationResource, rbac.RetryAction) {
+		return nil, fmt.Errorf("%w: cannot retry schema migration in %s", errors.ErrUnauthorized, req.ClusterId)
+	}
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.RetrySchemaMigration(ctx, req.Request)
 }
 
 // RunHealthCheck is part of the vtadminpb.VTAdminServer interface.
@@ -2148,7 +2384,9 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 		return nil, er.Error()
 	}
 
-	vte, err := vtexplain.Init(ctx, srvVSchema, schema, shardMap, &vtexplain.Options{ReplicationMode: "ROW"})
+	ts := memorytopo.NewServer(ctx, vtexplain.Cell)
+	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+	vte, err := vtexplain.Init(ctx, api.env, ts, srvVSchema, schema, shardMap, &vtexplain.Options{ReplicationMode: "ROW"}, srvTopoCounts)
 	if err != nil {
 		return nil, fmt.Errorf("error initilaizing vtexplain: %w", err)
 	}

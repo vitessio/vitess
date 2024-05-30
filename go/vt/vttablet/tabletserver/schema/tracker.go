@@ -25,18 +25,18 @@ import (
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql/replication"
-	"vitess.io/vitess/go/vt/schema"
-	"vitess.io/vitess/go/vt/sqlparser"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-// VStreamer defines  the functions of VStreamer
+// VStreamer defines the functions of VStreamer
 // that the replicationWatcher needs.
 type VStreamer interface {
 	Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, throttlerApp throttlerapp.Name, send func([]*binlogdatapb.VEvent) error) error
@@ -134,12 +134,12 @@ func (tr *Tracker) process(ctx context.Context) {
 					gtid = event.Gtid
 				}
 				if event.Type == binlogdatapb.VEventType_DDL &&
-					MustReloadSchemaOnDDL(event.Statement, tr.engine.cp.DBName()) {
+					MustReloadSchemaOnDDL(event.Statement, tr.engine.cp.DBName(), tr.env.Environment().Parser()) {
 
 					if err := tr.schemaUpdated(gtid, event.Statement, event.Timestamp); err != nil {
 						tr.env.Stats().ErrorCounters.Add(vtrpcpb.Code_INTERNAL.String(), 1)
 						log.Errorf("Error updating schema: %s for ddl %s, gtid %s",
-							sqlparser.TruncateForLog(err.Error()), event.Statement, gtid)
+							tr.env.Environment().Parser().TruncateForLog(err.Error()), event.Statement, gtid)
 					}
 				}
 			}
@@ -248,8 +248,8 @@ func encodeString(in string) string {
 }
 
 // MustReloadSchemaOnDDL returns true if the ddl is for the db which is part of the workflow and is not an online ddl artifact
-func MustReloadSchemaOnDDL(sql string, dbname string) bool {
-	ast, err := sqlparser.Parse(sql)
+func MustReloadSchemaOnDDL(sql string, dbname string, parser *sqlparser.Parser) bool {
+	ast, err := parser.Parse(sql)
 	if err != nil {
 		return false
 	}
@@ -263,7 +263,7 @@ func MustReloadSchemaOnDDL(sql string, dbname string) bool {
 			if table.IsEmpty() {
 				continue
 			}
-			if !table.Qualifier.IsEmpty() && table.Qualifier.String() != dbname {
+			if table.Qualifier.NotEmpty() && table.Qualifier.String() != dbname {
 				continue
 			}
 			tableName := table.Name.String()

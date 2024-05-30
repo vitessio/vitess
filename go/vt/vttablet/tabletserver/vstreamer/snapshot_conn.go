@@ -19,18 +19,21 @@ package vstreamer
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync/atomic"
 	"time"
 
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // If the current binary log is greater than this byte size, we
@@ -77,7 +80,7 @@ func (conn *snapshotConn) streamWithSnapshot(ctx context.Context, table, query s
 	// Rotating the log when it's above a certain size ensures that we are processing
 	// a relatively small binary log that will be minimal in size and GTID events.
 	// We only attempt to rotate it if the current log is of any significant size to
-	// avoid too many unecessary rotations.
+	// avoid too many unnecessary rotations.
 	if rotatedLog, err = conn.limitOpenBinlogSize(); err != nil {
 		// This is a best effort operation meant to lower overhead and improve performance.
 		// Thus it should not be required, nor cause the operation to fail.
@@ -112,18 +115,15 @@ func (conn *snapshotConn) startSnapshot(ctx context.Context, table string) (gtid
 	defer func() {
 		_, err := lockConn.ExecuteFetch("unlock tables", 0, false)
 		if err != nil {
-			log.Warning("Unlock tables failed: %v", err)
-		} else {
-			log.Infof("Tables unlocked: %v", table)
+			log.Warning("Unlock tables (%s) failed: %v", table, err)
 		}
 		lockConn.Close()
 	}()
 
 	tableName := sqlparser.String(sqlparser.NewIdentifierCS(table))
 
-	log.Infof("Locking table %s for copying", table)
 	if _, err := lockConn.ExecuteFetch(fmt.Sprintf("lock tables %s read", tableName), 1, false); err != nil {
-		log.Infof("Error locking table %s to read", tableName)
+		log.Warningf("Error locking table %s to read: %v", tableName, err)
 		return "", err
 	}
 	mpos, err := lockConn.PrimaryPosition()
@@ -136,7 +136,7 @@ func (conn *snapshotConn) startSnapshot(ctx context.Context, table string) (gtid
 	if _, err := conn.ExecuteFetch("set transaction isolation level repeatable read", 1, false); err != nil {
 		return "", err
 	}
-	if _, err := conn.ExecuteFetch("start transaction with consistent snapshot", 1, false); err != nil {
+	if _, err := conn.ExecuteFetch("start transaction with consistent snapshot, read only", 1, false); err != nil {
 		return "", err
 	}
 	if _, err := conn.ExecuteFetch("set @@session.time_zone = '+00:00'", 1, false); err != nil {
@@ -152,7 +152,7 @@ func (conn *snapshotConn) startSnapshotWithConsistentGTID(ctx context.Context) (
 	if _, err := conn.ExecuteFetch("set transaction isolation level repeatable read", 1, false); err != nil {
 		return "", err
 	}
-	result, err := conn.ExecuteFetch("start transaction with consistent snapshot", 1, false)
+	result, err := conn.ExecuteFetch("start transaction with consistent snapshot, read only", 1, false)
 	if err != nil {
 		return "", err
 	}
@@ -168,7 +168,7 @@ func (conn *snapshotConn) startSnapshotWithConsistentGTID(ctx context.Context) (
 	return replication.EncodePosition(mpos), nil
 }
 
-// Close rollsback any open transactions and closes the connection.
+// Close rolls back any open transactions and closes the connection.
 func (conn *snapshotConn) Close() {
 	_, _ = conn.ExecuteFetch("rollback", 1, false)
 	conn.Conn.Close()
@@ -241,8 +241,44 @@ func (conn *snapshotConn) startSnapshotAllTables(ctx context.Context) (gtid stri
 
 	log.Infof("Locking all tables")
 	if _, err := lockConn.ExecuteFetch("FLUSH TABLES WITH READ LOCK", 1, false); err != nil {
+		attemptExplicitTablesLocks := false
+		if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERAccessDeniedError {
+			// Access denied. On some systems this is either because the user doesn't have SUPER or RELOAD privileges.
+			// On some other systems, namely RDS, the command is just unsupported.
+			// There is an alternative way: run a `LOCK TABLES tbl1 READ, tbl2 READ, ...` for all tables. It not as
+			// efficient, and make a huge query, but still better than nothing.
+			attemptExplicitTablesLocks = true
+		}
 		log.Infof("Error locking all tables")
-		return "", err
+		if !attemptExplicitTablesLocks {
+			return "", err
+		}
+		// get list of all tables
+		rs, err := conn.ExecuteFetch("show full tables", -1, true)
+		if err != nil {
+			return "", err
+		}
+
+		var lockClauses []string
+		for _, row := range rs.Rows {
+			tableName := row[0].ToString()
+			tableType := row[1].ToString()
+			if tableType != "BASE TABLE" {
+				continue
+			}
+			tableName = sqlparser.String(sqlparser.NewIdentifierCS(tableName))
+			lockClause := fmt.Sprintf("%s read", tableName)
+			lockClauses = append(lockClauses, lockClause)
+		}
+		if len(lockClauses) > 0 {
+			query := fmt.Sprintf("lock tables %s", strings.Join(lockClauses, ","))
+			if _, err := lockConn.ExecuteFetch(query, 1, false); err != nil {
+				log.Error(vterrors.Wrapf(err, "explicitly locking all %v tables", len(lockClauses)))
+				return "", err
+			}
+		} else {
+			log.Infof("explicit lock tables: no tables found")
+		}
 	}
 	mpos, err := lockConn.PrimaryPosition()
 	if err != nil {
@@ -254,7 +290,7 @@ func (conn *snapshotConn) startSnapshotAllTables(ctx context.Context) (gtid stri
 	if _, err := conn.ExecuteFetch("set transaction isolation level repeatable read", 1, false); err != nil {
 		return "", err
 	}
-	if _, err := conn.ExecuteFetch("start transaction with consistent snapshot", 1, false); err != nil {
+	if _, err := conn.ExecuteFetch("start transaction with consistent snapshot, read only", 1, false); err != nil {
 		return "", err
 	}
 	if _, err := conn.ExecuteFetch("set @@session.time_zone = '+00:00'", 1, false); err != nil {

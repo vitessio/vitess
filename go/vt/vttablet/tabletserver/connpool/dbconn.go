@@ -18,6 +18,7 @@ package connpool
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -40,6 +41,8 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
+const defaultKillTimeout = 5 * time.Second
+
 // Conn is a db connection for tabletserver.
 // It performs automatic reconnects as needed.
 // Its Execute function has a timeout that can kill
@@ -52,11 +55,13 @@ type Conn struct {
 	env     tabletenv.Env
 	dbaPool *dbconnpool.ConnectionPool
 	stats   *tabletenv.Stats
-	current atomic.Value
+	current atomic.Pointer[string]
 
 	// err will be set if a query is killed through a Kill.
 	errmu sync.Mutex
 	err   error
+
+	killTimeout time.Duration
 }
 
 // NewConnection creates a new DBConn. It triggers a CheckMySQL if creation fails.
@@ -71,27 +76,28 @@ func newPooledConn(ctx context.Context, pool *Pool, appParams dbconfigs.Connecto
 		return nil, err
 	}
 	db := &Conn{
-		conn:    c,
-		env:     pool.env,
-		stats:   pool.env.Stats(),
-		dbaPool: pool.dbaPool,
+		conn:        c,
+		env:         pool.env,
+		stats:       pool.env.Stats(),
+		dbaPool:     pool.dbaPool,
+		killTimeout: defaultKillTimeout,
 	}
-	db.current.Store("")
 	return db, nil
 }
 
 // NewConn creates a new Conn without a pool.
-func NewConn(ctx context.Context, params dbconfigs.Connector, dbaPool *dbconnpool.ConnectionPool, setting *smartconnpool.Setting) (*Conn, error) {
+func NewConn(ctx context.Context, params dbconfigs.Connector, dbaPool *dbconnpool.ConnectionPool, setting *smartconnpool.Setting, env tabletenv.Env) (*Conn, error) {
 	c, err := dbconnpool.NewDBConnection(ctx, params)
 	if err != nil {
 		return nil, err
 	}
 	dbconn := &Conn{
-		conn:    c,
-		dbaPool: dbaPool,
-		stats:   tabletenv.NewStats(servenv.NewExporter("Temp", "Tablet")),
+		conn:        c,
+		dbaPool:     dbaPool,
+		stats:       tabletenv.NewStats(servenv.NewExporter("Temp", "Tablet")),
+		env:         env,
+		killTimeout: defaultKillTimeout,
 	}
-	dbconn.current.Store("")
 	if setting == nil {
 		return dbconn, nil
 	}
@@ -103,11 +109,13 @@ func NewConn(ctx context.Context, params dbconfigs.Connector, dbaPool *dbconnpoo
 }
 
 // Err returns an error if there was a client initiated error
-// like a query kill.
+// like a query kill and resets the error message on the connection.
 func (dbc *Conn) Err() error {
 	dbc.errmu.Lock()
 	defer dbc.errmu.Unlock()
-	return dbc.err
+	err := dbc.err
+	dbc.err = nil
+	return err
 }
 
 // Exec executes the specified query. If there is a connection error, it will reconnect
@@ -117,7 +125,7 @@ func (dbc *Conn) Exec(ctx context.Context, query string, maxrows int, wantfields
 	defer span.Finish()
 
 	for attempt := 1; attempt <= 2; attempt++ {
-		r, err := dbc.execOnce(ctx, query, maxrows, wantfields)
+		r, err := dbc.execOnce(ctx, query, maxrows, wantfields, false)
 		switch {
 		case err == nil:
 			// Success.
@@ -151,9 +159,9 @@ func (dbc *Conn) Exec(ctx context.Context, query string, maxrows int, wantfields
 	panic("unreachable")
 }
 
-func (dbc *Conn) execOnce(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
-	dbc.current.Store(query)
-	defer dbc.current.Store("")
+func (dbc *Conn) execOnce(ctx context.Context, query string, maxrows int, wantfields bool, insideTxn bool) (*sqltypes.Result, error) {
+	dbc.current.Store(&query)
+	defer dbc.current.Store(nil)
 
 	// Check if the context is already past its deadline before
 	// trying to execute the query.
@@ -161,24 +169,59 @@ func (dbc *Conn) execOnce(ctx context.Context, query string, maxrows int, wantfi
 		return nil, fmt.Errorf("%v before execution started", err)
 	}
 
-	defer dbc.stats.MySQLTimings.Record("Exec", time.Now())
+	now := time.Now()
+	defer dbc.stats.MySQLTimings.Record("Exec", now)
 
-	done, wg := dbc.setDeadline(ctx)
-	qr, err := dbc.conn.ExecuteFetch(query, maxrows, wantfields)
+	type execResult struct {
+		result *sqltypes.Result
+		err    error
+	}
 
-	if done != nil {
-		close(done)
-		wg.Wait()
+	ch := make(chan execResult)
+	go func() {
+		result, err := dbc.conn.ExecuteFetch(query, maxrows, wantfields)
+		ch <- execResult{result, err}
+		close(ch)
+	}()
+
+	select {
+	case <-ctx.Done():
+		dbc.terminate(ctx, insideTxn, now)
+		if !insideTxn {
+			// wait for the execute method to finish to make connection reusable.
+			<-ch
+		}
+		return nil, dbc.Err()
+	case r := <-ch:
+		if dbcErr := dbc.Err(); dbcErr != nil {
+			return nil, dbcErr
+		}
+		return r.result, r.err
 	}
-	if dbcerr := dbc.Err(); dbcerr != nil {
-		return nil, dbcerr
+}
+
+// terminate kills the query or connection based on the transaction status
+func (dbc *Conn) terminate(ctx context.Context, insideTxn bool, now time.Time) {
+	var errMsg string
+	switch {
+	case errors.Is(ctx.Err(), context.DeadlineExceeded):
+		errMsg = "(errno 3024) (sqlstate HY000): Query execution was interrupted, maximum statement execution time exceeded"
+	case errors.Is(ctx.Err(), context.Canceled):
+		errMsg = "(errno 1317) (sqlstate 70100): Query execution was interrupted"
+	default:
+		errMsg = ctx.Err().Error()
 	}
-	return qr, err
+	if insideTxn {
+		// we can't safely kill a query in a transaction, we need to kill the connection
+		_ = dbc.Kill(errMsg, time.Since(now))
+	} else {
+		_ = dbc.KillQuery(errMsg, time.Since(now))
+	}
 }
 
 // ExecOnce executes the specified query, but does not retry on connection errors.
 func (dbc *Conn) ExecOnce(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
-	return dbc.execOnce(ctx, query, maxrows, wantfields)
+	return dbc.execOnce(ctx, query, maxrows, wantfields, true /* Once means we are in a txn*/)
 }
 
 // FetchNext returns the next result set.
@@ -216,6 +259,7 @@ func (dbc *Conn) Stream(ctx context.Context, query string, callback func(*sqltyp
 			},
 			alloc,
 			streamBufferSize,
+			false,
 		)
 		switch {
 		case err == nil:
@@ -248,27 +292,51 @@ func (dbc *Conn) Stream(ctx context.Context, query string, callback func(*sqltyp
 	panic("unreachable")
 }
 
-func (dbc *Conn) streamOnce(ctx context.Context, query string, callback func(*sqltypes.Result) error, alloc func() *sqltypes.Result, streamBufferSize int) error {
-	defer dbc.stats.MySQLTimings.Record("ExecStream", time.Now())
+func (dbc *Conn) streamOnce(
+	ctx context.Context,
+	query string,
+	callback func(*sqltypes.Result) error,
+	alloc func() *sqltypes.Result,
+	streamBufferSize int,
+	insideTxn bool,
+) error {
+	dbc.current.Store(&query)
+	defer dbc.current.Store(nil)
 
-	dbc.current.Store(query)
-	defer dbc.current.Store("")
+	now := time.Now()
+	defer dbc.stats.MySQLTimings.Record("ExecStream", now)
 
-	done, wg := dbc.setDeadline(ctx)
-	err := dbc.conn.ExecuteStreamFetch(query, callback, alloc, streamBufferSize)
+	ch := make(chan error)
+	go func() {
+		ch <- dbc.conn.ExecuteStreamFetch(query, callback, alloc, streamBufferSize)
+		close(ch)
+	}()
 
-	if done != nil {
-		close(done)
-		wg.Wait()
+	select {
+	case <-ctx.Done():
+		dbc.terminate(ctx, insideTxn, now)
+		if !insideTxn {
+			// wait for the execute method to finish to make connection reusable.
+			<-ch
+		}
+		return dbc.Err()
+	case err := <-ch:
+		if dbcErr := dbc.Err(); dbcErr != nil {
+			return dbcErr
+		}
+		return err
 	}
-	if dbcerr := dbc.Err(); dbcerr != nil {
-		return dbcerr
-	}
-	return err
 }
 
 // StreamOnce executes the query and streams the results. But, does not retry on connection errors.
-func (dbc *Conn) StreamOnce(ctx context.Context, query string, callback func(*sqltypes.Result) error, alloc func() *sqltypes.Result, streamBufferSize int, includedFields querypb.ExecuteOptions_IncludedFields) error {
+func (dbc *Conn) StreamOnce(
+	ctx context.Context,
+	query string,
+	callback func(*sqltypes.Result) error,
+	alloc func() *sqltypes.Result,
+	streamBufferSize int,
+	includedFields querypb.ExecuteOptions_IncludedFields,
+) error {
 	resultSent := false
 	return dbc.streamOnce(
 		ctx,
@@ -282,6 +350,7 @@ func (dbc *Conn) StreamOnce(ctx context.Context, query string, callback func(*sq
 		},
 		alloc,
 		streamBufferSize,
+		true, // Once means we are in a txn
 	)
 }
 
@@ -337,7 +406,7 @@ func (dbc *Conn) Close() {
 
 // ApplySetting implements the pools.Resource interface.
 func (dbc *Conn) ApplySetting(ctx context.Context, setting *smartconnpool.Setting) error {
-	if _, err := dbc.execOnce(ctx, setting.ApplyQuery(), 1, false); err != nil {
+	if _, err := dbc.execOnce(ctx, setting.ApplyQuery(), 1, false, false); err != nil {
 		return err
 	}
 	dbc.setting = setting
@@ -346,7 +415,7 @@ func (dbc *Conn) ApplySetting(ctx context.Context, setting *smartconnpool.Settin
 
 // ResetSetting implements the pools.Resource interface.
 func (dbc *Conn) ResetSetting(ctx context.Context) error {
-	if _, err := dbc.execOnce(ctx, dbc.setting.ResetQuery(), 1, false); err != nil {
+	if _, err := dbc.execOnce(ctx, dbc.setting.ResetQuery(), 1, false, false); err != nil {
 		return err
 	}
 	dbc.setting = nil
@@ -362,39 +431,115 @@ func (dbc *Conn) IsClosed() bool {
 	return dbc.conn.IsClosed()
 }
 
-// Kill kills the currently executing query both on MySQL side
-// and on the connection side. If no query is executing, it's a no-op.
-// Kill will also not kill a query more than once.
+// Kill executes a kill statement to terminate the connection.
 func (dbc *Conn) Kill(reason string, elapsed time.Duration) error {
-	dbc.stats.KillCounters.Add("Queries", 1)
-	log.Infof("Due to %s, elapsed time: %v, killing query ID %v %s", reason, elapsed, dbc.conn.ID(), dbc.CurrentForLogging())
+	ctx, cancel := context.WithTimeout(context.Background(), dbc.killTimeout)
+	defer cancel()
+
+	return dbc.kill(ctx, reason, elapsed)
+}
+
+// KillQuery executes a kill query statement to terminate the running query on the connection.
+func (dbc *Conn) KillQuery(reason string, elapsed time.Duration) error {
+	ctx, cancel := context.WithTimeout(context.Background(), dbc.killTimeout)
+	defer cancel()
+
+	return dbc.killQuery(ctx, reason, elapsed)
+}
+
+// kill closes the connection and stops any executing query both on MySQL and
+// vttablet.
+func (dbc *Conn) kill(ctx context.Context, reason string, elapsed time.Duration) error {
+	dbc.stats.KillCounters.Add("Connections", 1)
+	log.Infof("Due to %s, elapsed time: %v, killing connection ID %v %s", reason, elapsed, dbc.conn.ID(), dbc.CurrentForLogging())
 
 	// Client side action. Set error and close connection.
 	dbc.errmu.Lock()
-	dbc.err = vterrors.Errorf(vtrpcpb.Code_CANCELED, "(errno 2013) due to %s, elapsed time: %v, killing query ID %v", reason, elapsed, dbc.conn.ID())
+	dbc.err = vterrors.Errorf(vtrpcpb.Code_CANCELED, "%s, elapsed time: %v, killing connection ID %v", reason, elapsed, dbc.conn.ID())
 	dbc.errmu.Unlock()
 	dbc.conn.Close()
 
 	// Server side action. Kill the session.
-	killConn, err := dbc.dbaPool.Get(context.TODO())
+	killConn, err := dbc.dbaPool.Get(ctx)
 	if err != nil {
 		log.Warningf("Failed to get conn from dba pool: %v", err)
 		return err
 	}
 	defer killConn.Recycle()
+
+	ch := make(chan error)
 	sql := fmt.Sprintf("kill %d", dbc.conn.ID())
-	_, err = killConn.Conn.ExecuteFetch(sql, 10000, false)
+	go func() {
+		_, err := killConn.Conn.ExecuteFetch(sql, -1, false)
+		ch <- err
+		close(ch)
+	}()
+
+	select {
+	case <-ctx.Done():
+		killConn.Close()
+
+		dbc.stats.InternalErrors.Add("HungConnection", 1)
+		log.Warningf("Failed to kill MySQL connection ID %d which was executing the following query, it may be hung: %s", dbc.conn.ID(), dbc.CurrentForLogging())
+		return context.Cause(ctx)
+	case err := <-ch:
+		if err != nil {
+			log.Errorf("Could not kill connection ID %v %s: %v", dbc.conn.ID(), dbc.CurrentForLogging(), err)
+			return err
+		}
+		return nil
+	}
+}
+
+// killQuery kills the currently executing query both on MySQL side
+// and on the connection side.
+func (dbc *Conn) killQuery(ctx context.Context, reason string, elapsed time.Duration) error {
+	dbc.stats.KillCounters.Add("Queries", 1)
+	log.Infof("Due to %s, elapsed time: %v, killing query ID %v %s", reason, elapsed, dbc.conn.ID(), dbc.CurrentForLogging())
+
+	// Client side action. Set error for killing the query on timeout.
+	dbc.errmu.Lock()
+	dbc.err = vterrors.Errorf(vtrpcpb.Code_CANCELED, "%s, elapsed time: %v, killing query ID %v", reason, elapsed, dbc.conn.ID())
+	dbc.errmu.Unlock()
+
+	// Server side action. Kill the executing query.
+	killConn, err := dbc.dbaPool.Get(ctx)
 	if err != nil {
-		log.Errorf("Could not kill query ID %v %s: %v", dbc.conn.ID(),
-			dbc.CurrentForLogging(), err)
+		log.Warningf("Failed to get conn from dba pool: %v", err)
 		return err
 	}
-	return nil
+	defer killConn.Recycle()
+
+	ch := make(chan error)
+	sql := fmt.Sprintf("kill query %d", dbc.conn.ID())
+	go func() {
+		_, err := killConn.Conn.ExecuteFetch(sql, -1, false)
+		ch <- err
+		close(ch)
+	}()
+
+	select {
+	case <-ctx.Done():
+		killConn.Close()
+
+		dbc.stats.InternalErrors.Add("HungQuery", 1)
+		log.Warningf("Failed to kill MySQL query ID %d which was executing the following query, it may be hung: %s", dbc.conn.ID(), dbc.CurrentForLogging())
+		return context.Cause(ctx)
+	case err := <-ch:
+		if err != nil {
+			log.Errorf("Could not kill query ID %v %s: %v", dbc.conn.ID(), dbc.CurrentForLogging(), err)
+			return err
+		}
+		return nil
+	}
 }
 
 // Current returns the currently executing query.
 func (dbc *Conn) Current() string {
-	return dbc.current.Load().(string)
+	if q := dbc.current.Load(); q != nil {
+		return *q
+	}
+	return ""
 }
 
 // ID returns the connection id.
@@ -436,45 +581,6 @@ func (dbc *Conn) Reconnect(ctx context.Context) error {
 	return nil
 }
 
-// setDeadline starts a goroutine that will kill the currently executing query
-// if the deadline is exceeded. It returns a channel and a waitgroup. After the
-// query is done executing, the caller is required to close the done channel
-// and wait for the waitgroup to make sure that the necessary cleanup is done.
-func (dbc *Conn) setDeadline(ctx context.Context) (chan bool, *sync.WaitGroup) {
-	if ctx.Done() == nil {
-		return nil, nil
-	}
-	done := make(chan bool)
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		startTime := time.Now()
-		select {
-		case <-ctx.Done():
-			dbc.Kill(ctx.Err().Error(), time.Since(startTime))
-		case <-done:
-			return
-		}
-		elapsed := time.Since(startTime)
-
-		// Give 2x the elapsed time and some buffer as grace period
-		// for the query to get killed.
-		tmr2 := time.NewTimer(2*elapsed + 5*time.Second)
-		defer tmr2.Stop()
-		select {
-		case <-tmr2.C:
-			dbc.stats.InternalErrors.Add("HungQuery", 1)
-			log.Warningf("Query may be hung: %s", dbc.CurrentForLogging())
-		case <-done:
-			return
-		}
-		<-done
-		log.Warningf("Hung query returned")
-	}()
-	return done, &wg
-}
-
 // CurrentForLogging applies transformations to the query making it suitable to log.
 // It applies sanitization rules based on tablet settings and limits the max length of
 // queries.
@@ -483,12 +589,12 @@ func (dbc *Conn) CurrentForLogging() string {
 	if dbc.env != nil && dbc.env.Config() != nil && !dbc.env.Config().SanitizeLogMessages {
 		queryToLog = dbc.Current()
 	} else {
-		queryToLog, _ = sqlparser.RedactSQLQuery(dbc.Current())
+		queryToLog, _ = dbc.env.Environment().Parser().RedactSQLQuery(dbc.Current())
 	}
-	return sqlparser.TruncateForLog(queryToLog)
+	return dbc.env.Environment().Parser().TruncateForLog(queryToLog)
 }
 
-func (dbc *Conn) applySameSetting(ctx context.Context) (err error) {
-	_, err = dbc.execOnce(ctx, dbc.setting.ApplyQuery(), 1, false)
-	return
+func (dbc *Conn) applySameSetting(ctx context.Context) error {
+	_, err := dbc.execOnce(ctx, dbc.setting.ApplyQuery(), 1, false, false)
+	return err
 }

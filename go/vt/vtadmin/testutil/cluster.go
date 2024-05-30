@@ -41,6 +41,7 @@ import (
 	grpcvtctldtestutil "vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 	"vitess.io/vitess/go/vt/vtctl/localvtctldclient"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
+	"vitess.io/vitess/go/vt/vtenv"
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
@@ -119,7 +120,7 @@ func BuildCluster(t testing.TB, cfg TestClusterConfig) *cluster.Cluster {
 	clusterConf.Name = cfg.Cluster.Name
 	clusterConf.DiscoveryImpl = discoveryTestImplName
 
-	clusterConf = clusterConf.WithVtctldTestConfigOptions(vtadminvtctldclient.WithDialFunc(func(addr string, ff grpcclient.FailFast, opts ...grpc.DialOption) (vtctldclient.VtctldClient, error) {
+	clusterConf = clusterConf.WithVtctldTestConfigOptions(vtadminvtctldclient.WithDialFunc(func(ctx context.Context, addr string, ff grpcclient.FailFast, opts ...grpc.DialOption) (vtctldclient.VtctldClient, error) {
 		return cfg.VtctldClient, nil
 	})).WithVtSQLTestConfigOptions(vtsql.WithDialFunc(func(c vitessdriver.Configuration) (*sql.DB, error) {
 		return sql.OpenDB(&fakevtsql.Connector{Tablets: tablets, ShouldErr: cfg.DBConfig.ShouldErr}), nil
@@ -169,7 +170,7 @@ func BuildIntegrationTestCluster(t testing.TB, ctx context.Context, c *vtadminpb
 
 	ts, factory := memorytopo.NewServerAndFactory(ctx, cells...)
 	vtctld := grpcvtctldtestutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return grpcvtctldserver.NewVtctldServer(ts)
+		return grpcvtctldserver.NewVtctldServer(vtenv.NewTestEnv(), ts)
 	})
 
 	localclient := localvtctldclient.New(vtctld)

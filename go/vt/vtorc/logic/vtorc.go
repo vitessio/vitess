@@ -25,9 +25,9 @@ import (
 	"time"
 
 	"github.com/patrickmn/go-cache"
-	"github.com/rcrowley/go-metrics"
 	"github.com/sjmudd/stopwatch"
 
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtorc/collection"
@@ -35,7 +35,6 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/discovery"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 	ometrics "vitess.io/vitess/go/vt/vtorc/metrics"
-	"vitess.io/vitess/go/vt/vtorc/process"
 	"vitess.io/vitess/go/vt/vtorc/util"
 )
 
@@ -51,53 +50,28 @@ var snapshotDiscoveryKeys chan string
 var snapshotDiscoveryKeysMutex sync.Mutex
 var hasReceivedSIGTERM int32
 
-var discoveriesCounter = metrics.NewCounter()
-var failedDiscoveriesCounter = metrics.NewCounter()
-var instancePollSecondsExceededCounter = metrics.NewCounter()
-var discoveryQueueLengthGauge = metrics.NewGauge()
-var discoveryRecentCountGauge = metrics.NewGauge()
-var isElectedGauge = metrics.NewGauge()
-var isHealthyGauge = metrics.NewGauge()
+// The metrics are registered with deprecated names. The old metric names can be removed in v21.
+var discoveriesCounter = stats.NewCounterWithDeprecatedName("DiscoveriesAttempt", "discoveries.attempt", "Number of discoveries attempted")
+var failedDiscoveriesCounter = stats.NewCounterWithDeprecatedName("DiscoveriesFail", "discoveries.fail", "Number of failed discoveries")
+var instancePollSecondsExceededCounter = stats.NewCounterWithDeprecatedName("DiscoveriesInstancePollSecondsExceeded", "discoveries.instance_poll_seconds_exceeded", "Number of instances that took longer than InstancePollSeconds to poll")
+var discoveryQueueLengthGauge = stats.NewGaugeWithDeprecatedName("DiscoveriesQueueLength", "discoveries.queue_length", "Length of the discovery queue")
+var discoveryRecentCountGauge = stats.NewGaugeWithDeprecatedName("DiscoveriesRecentCount", "discoveries.recent_count", "Number of recent discoveries")
 var discoveryMetrics = collection.CreateOrReturnCollection(DiscoveryMetricsName)
-
-var isElectedNode int64
 
 var recentDiscoveryOperationKeys *cache.Cache
 
 func init() {
 	snapshotDiscoveryKeys = make(chan string, 10)
 
-	_ = metrics.Register("discoveries.attempt", discoveriesCounter)
-	_ = metrics.Register("discoveries.fail", failedDiscoveriesCounter)
-	_ = metrics.Register("discoveries.instance_poll_seconds_exceeded", instancePollSecondsExceededCounter)
-	_ = metrics.Register("discoveries.queue_length", discoveryQueueLengthGauge)
-	_ = metrics.Register("discoveries.recent_count", discoveryRecentCountGauge)
-	_ = metrics.Register("elect.is_elected", isElectedGauge)
-	_ = metrics.Register("health.is_healthy", isHealthyGauge)
-
 	ometrics.OnMetricsTick(func() {
-		discoveryQueueLengthGauge.Update(int64(discoveryQueue.QueueLen()))
+		discoveryQueueLengthGauge.Set(int64(discoveryQueue.QueueLen()))
 	})
 	ometrics.OnMetricsTick(func() {
 		if recentDiscoveryOperationKeys == nil {
 			return
 		}
-		discoveryRecentCountGauge.Update(int64(recentDiscoveryOperationKeys.ItemCount()))
+		discoveryRecentCountGauge.Set(int64(recentDiscoveryOperationKeys.ItemCount()))
 	})
-	ometrics.OnMetricsTick(func() {
-		isElectedGauge.Update(atomic.LoadInt64(&isElectedNode))
-	})
-	ometrics.OnMetricsTick(func() {
-		isHealthyGauge.Update(atomic.LoadInt64(&process.LastContinousCheckHealthy))
-	})
-}
-
-func IsLeader() bool {
-	return atomic.LoadInt64(&isElectedNode) == 1
-}
-
-func IsLeaderOrActive() bool {
-	return atomic.LoadInt64(&isElectedNode) == 1
 }
 
 // used in several places
@@ -129,6 +103,7 @@ func closeVTOrc() {
 	_ = inst.AuditOperation("shutdown", "", "Triggered via SIGTERM")
 	// wait for the locks to be released
 	waitForLocksRelease()
+	ts.Close()
 	log.Infof("VTOrc closed")
 }
 
@@ -160,15 +135,6 @@ func handleDiscoveryRequests() {
 		go func() {
 			for {
 				tabletAlias := discoveryQueue.Consume()
-				// Possibly this used to be the elected node, but has
-				// been demoted, while still the queue is full.
-				if !IsLeaderOrActive() {
-					log.Infof("Node apparently demoted. Skipping discovery of %+v. "+
-						"Remaining queue size: %+v", tabletAlias, discoveryQueue.QueueLen())
-					discoveryQueue.Release(tabletAlias)
-					continue
-				}
-
 				DiscoverInstance(tabletAlias, false /* forceDiscovery */)
 				discoveryQueue.Release(tabletAlias)
 			}
@@ -197,7 +163,7 @@ func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
 		latency.Stop("total")
 		discoveryTime := latency.Elapsed("total")
 		if discoveryTime > instancePollSecondsDuration() {
-			instancePollSecondsExceededCounter.Inc(1)
+			instancePollSecondsExceededCounter.Add(1)
 			log.Warningf("discoverInstance exceeded InstancePollSeconds for %+v, took %.4fs", tabletAlias, discoveryTime.Seconds())
 			if metric != nil {
 				metric.InstancePollSecondsDurationCount = 1
@@ -225,7 +191,7 @@ func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
 		return
 	}
 
-	discoveriesCounter.Inc(1)
+	discoveriesCounter.Add(1)
 
 	// First we've ever heard of this instance. Continue investigation:
 	instance, err := inst.ReadTopologyInstanceBufferable(tabletAlias, latency)
@@ -240,7 +206,7 @@ func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
 	}
 
 	if instance == nil {
-		failedDiscoveriesCounter.Inc(1)
+		failedDiscoveriesCounter.Add(1)
 		metric = &discovery.Metric{
 			Timestamp:       time.Now(),
 			TabletAlias:     tabletAlias,
@@ -274,38 +240,9 @@ func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
 
 // onHealthTick handles the actions to take to discover/poll instances
 func onHealthTick() {
-	wasAlreadyElected := IsLeader()
-	{
-		myIsElectedNode, err := process.AttemptElection()
-		if err != nil {
-			log.Error(err)
-		}
-		if myIsElectedNode {
-			atomic.StoreInt64(&isElectedNode, 1)
-		} else {
-			atomic.StoreInt64(&isElectedNode, 0)
-		}
-		if !myIsElectedNode {
-			if electedNode, _, err := process.ElectedNode(); err == nil {
-				log.Infof("Not elected as active node; active node: %v; polling", electedNode.Hostname)
-			} else {
-				log.Infof("Not elected as active node; active node: Unable to determine: %v; polling", err)
-			}
-		}
-	}
-	if !IsLeaderOrActive() {
-		return
-	}
 	tabletAliases, err := inst.ReadOutdatedInstanceKeys()
 	if err != nil {
 		log.Error(err)
-	}
-
-	if !wasAlreadyElected {
-		// Just turned to be leader!
-		go func() {
-			_, _ = process.RegisterNode(process.ThisNodeHealth)
-		}()
 	}
 
 	func() {
@@ -329,14 +266,12 @@ func onHealthTick() {
 	}
 }
 
-// ContinuousDiscovery starts an asynchronuous infinite discovery process where instances are
+// ContinuousDiscovery starts an asynchronous infinite discovery process where instances are
 // periodically investigated and their status captured, and long since unseen instances are
 // purged and forgotten.
 // nolint SA1015: using time.Tick leaks the underlying ticker
 func ContinuousDiscovery() {
 	log.Infof("continuous discovery: setting up")
-	continuousDiscoveryStartTime := time.Now()
-	checkAndRecoverWaitPeriod := 3 * instancePollSecondsDuration()
 	recentDiscoveryOperationKeys = cache.New(instancePollSecondsDuration(), time.Second)
 
 	go handleDiscoveryRequests()
@@ -349,10 +284,6 @@ func ContinuousDiscovery() {
 	var snapshotTopologiesTick <-chan time.Time
 	if config.Config.SnapshotTopologiesIntervalHours > 0 {
 		snapshotTopologiesTick = time.Tick(time.Duration(config.Config.SnapshotTopologiesIntervalHours) * time.Hour)
-	}
-
-	runCheckAndRecoverOperationsTimeRipe := func() bool {
-		return time.Since(continuousDiscoveryStartTime) >= checkAndRecoverWaitPeriod
 	}
 
 	go func() {
@@ -372,70 +303,56 @@ func ContinuousDiscovery() {
 		case <-caretakingTick:
 			// Various periodic internal maintenance tasks
 			go func() {
-				if IsLeaderOrActive() {
-
-					go inst.ForgetLongUnseenInstances()
-					go inst.ExpireAudit()
-					go inst.ExpireStaleInstanceBinlogCoordinates()
-					go process.ExpireNodesHistory()
-					go process.ExpireAvailableNodes()
-					go ExpireFailureDetectionHistory()
-					go ExpireTopologyRecoveryHistory()
-					go ExpireTopologyRecoveryStepsHistory()
-				}
+				go inst.ForgetLongUnseenInstances()
+				go inst.ExpireAudit()
+				go inst.ExpireStaleInstanceBinlogCoordinates()
+				go ExpireRecoveryDetectionHistory()
+				go ExpireTopologyRecoveryHistory()
+				go ExpireTopologyRecoveryStepsHistory()
 			}()
 		case <-recoveryTick:
 			go func() {
-				if IsLeaderOrActive() {
-					go ClearActiveFailureDetections()
-					go ClearActiveRecoveries()
-					go ExpireBlockedRecoveries()
-					go AcknowledgeCrashedRecoveries()
-					go inst.ExpireInstanceAnalysisChangelog()
+				go inst.ExpireInstanceAnalysisChangelog()
 
-					go func() {
-						// This function is non re-entrant (it can only be running once at any point in time)
-						if atomic.CompareAndSwapInt64(&recoveryEntrance, 0, 1) {
-							defer atomic.StoreInt64(&recoveryEntrance, 0)
-						} else {
-							return
-						}
-						if runCheckAndRecoverOperationsTimeRipe() {
-							CheckAndRecover()
-						} else {
-							log.Infof("Waiting for %+v seconds to pass before running failure detection/recovery", checkAndRecoverWaitPeriod.Seconds())
-						}
-					}()
-				}
+				go func() {
+					// This function is non re-entrant (it can only be running once at any point in time)
+					if atomic.CompareAndSwapInt64(&recoveryEntrance, 0, 1) {
+						defer atomic.StoreInt64(&recoveryEntrance, 0)
+					} else {
+						return
+					}
+					CheckAndRecover()
+				}()
 			}()
 		case <-snapshotTopologiesTick:
 			go func() {
-				if IsLeaderOrActive() {
-					go inst.SnapshotTopologies()
-				}
+				go inst.SnapshotTopologies()
 			}()
 		case <-tabletTopoTick:
-			// Create a wait group
-			var wg sync.WaitGroup
-
-			// Refresh all keyspace information.
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				RefreshAllKeyspacesAndShards()
-			}()
-
-			// Refresh all tablets.
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				refreshAllTablets()
-			}()
-
-			// Wait for both the refreshes to complete
-			wg.Wait()
-			// We have completed one discovery cycle in the entirety of it. We should update the process health.
-			process.FirstDiscoveryCycleComplete.Store(true)
+			refreshAllInformation()
 		}
 	}
+}
+
+// refreshAllInformation refreshes both shard and tablet information. This is meant to be run on tablet topo ticks.
+func refreshAllInformation() {
+	// Create a wait group
+	var wg sync.WaitGroup
+
+	// Refresh all keyspace information.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		RefreshAllKeyspacesAndShards()
+	}()
+
+	// Refresh all tablets.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		refreshAllTablets()
+	}()
+
+	// Wait for both the refreshes to complete
+	wg.Wait()
 }

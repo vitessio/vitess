@@ -66,7 +66,7 @@ func GenerateMarkdownTree(cmd *cobra.Command, dir string) error {
 	switch fi, err := os.Stat(dir); {
 	case errors.Is(err, fs.ErrNotExist):
 		if err := os.MkdirAll(dir, 0755); err != nil {
-			return err
+			return fmt.Errorf("failed to create \"%s\" directory: %w", dir, err)
 		}
 	case err != nil:
 		return err
@@ -194,7 +194,7 @@ func anonymizeHomedir(file string) (err error) {
 	// We're replacing the stuff inside the square brackets in the example sed
 	// below:
 	// 	's:Paths to search for config files in. (default \[.*\])$:Paths to search for config files in. (default \[<WORKDIR>\]):'
-	sed := exec.Command("sed", "-i", "", "-e", fmt.Sprintf("s:%s:<WORKDIR>:i", wd), file)
+	sed := exec.Command("sed", "-i", "-e", fmt.Sprintf("s:%s:<WORKDIR>:i", wd), file)
 	if out, err := sed.CombinedOutput(); err != nil {
 		return fmt.Errorf("%w: %s", err, out)
 	}
@@ -215,7 +215,7 @@ func getCommitID(ref string) (string, error) {
 	gitShow := exec.Command("git", "show", "--pretty=format:%H", "--no-patch", ref)
 	out, err := gitShow.Output()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to get the commit id for reference \"%s\": %w", ref, err)
 	}
 
 	return string(out), nil

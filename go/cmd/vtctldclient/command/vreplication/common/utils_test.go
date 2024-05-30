@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
 	"vitess.io/vitess/go/vt/vtctl/localvtctldclient"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
@@ -144,10 +145,10 @@ func SetupLocalVtctldClient(t *testing.T, ctx context.Context, cells ...string) 
 	tmclient.RegisterTabletManagerClientFactory("grpc", func() tmclient.TabletManagerClient {
 		return nil
 	})
-	vtctld := grpcvtctldserver.NewVtctldServer(ts)
+	vtctld := grpcvtctldserver.NewVtctldServer(vtenv.NewTestEnv(), ts)
 	localvtctldclient.SetServer(vtctld)
 	command.VtctldClientProtocol = "local"
-	client, err := vtctldclient.New(command.VtctldClientProtocol, "")
+	client, err := vtctldclient.New(ctx, command.VtctldClientProtocol, "")
 	require.NoError(t, err, "failed to create local vtctld client which uses an internal vtctld server")
 	common.SetClient(client)
 }

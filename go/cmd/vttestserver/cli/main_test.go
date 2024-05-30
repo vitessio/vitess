@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"os/exec"
 	"path"
 	"strings"
@@ -34,6 +34,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/tlstest"
@@ -185,20 +186,80 @@ func TestForeignKeysAndDDLModes(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestNoScatter(t *testing.T) {
+	conf := config
+	defer resetConfig(conf)
+
+	cluster, err := startCluster("--no_scatter")
+	assert.NoError(t, err)
+	defer cluster.TearDown()
+
+	_ = execOnCluster(cluster, "app_customer", func(conn *mysql.Conn) error {
+		_, err = conn.ExecuteFetch("SELECT * FROM customers", 100, false)
+		require.ErrorContains(t, err, "plan includes scatter, which is disallowed")
+		return nil
+	})
+}
+
+// TestCreateDbaTCPUser tests that the vt_dba_tcp user is created and can connect through TCP/IP connection
+// when --initialize-with-vt-dba-tcp is set to true.
+func TestCreateDbaTCPUser(t *testing.T) {
+	conf := config
+	defer resetConfig(conf)
+
+	clusterInstance, err := startCluster("--initialize-with-vt-dba-tcp=true")
+	assert.NoError(t, err)
+	defer clusterInstance.TearDown()
+
+	defer func() {
+		if t.Failed() {
+			cluster.PrintFiles(t, clusterInstance.Env.Directory(), "init_db_with_vt_dba_tcp.sql")
+		}
+	}()
+
+	// Ensure that the vt_dba_tcp user was created and can connect through TCP/IP connection.
+	ctx := context.Background()
+	vtParams := mysql.ConnParams{
+		Host:  "127.0.0.1",
+		Uname: "vt_dba_tcp",
+		Port:  clusterInstance.Env.PortForProtocol("mysql", ""),
+	}
+	conn, err := mysql.Connect(ctx, &vtParams)
+	assert.NoError(t, err)
+	defer conn.Close()
+
+	// Ensure that the existing vt_dba user remains unaffected, meaning it cannot connect through TCP/IP connection.
+	vtParams.Uname = "vt_dba"
+	_, err = mysql.Connect(ctx, &vtParams)
+	assert.Error(t, err)
+}
+
 func TestCanGetKeyspaces(t *testing.T) {
 	conf := config
 	defer resetConfig(conf)
 
-	cluster, err := startCluster()
-	assert.NoError(t, err)
-	defer cluster.TearDown()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
-	assertGetKeyspaces(t, cluster)
+	clusterInstance, err := startCluster()
+	assert.NoError(t, err)
+	defer clusterInstance.TearDown()
+
+	defer func() {
+		if t.Failed() {
+			cluster.PrintFiles(t, clusterInstance.Env.Directory(), "vtcombo.INFO", "error.log")
+		}
+	}()
+
+	assertGetKeyspaces(ctx, t, clusterInstance)
 }
 
 func TestExternalTopoServerConsul(t *testing.T) {
 	conf := config
 	defer resetConfig(conf)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
 	// Start a single consul in the background.
 	cmd, serverAddr := startConsul(t)
@@ -218,7 +279,7 @@ func TestExternalTopoServerConsul(t *testing.T) {
 	assert.NoError(t, err)
 	defer cluster.TearDown()
 
-	assertGetKeyspaces(t, cluster)
+	assertGetKeyspaces(ctx, t, cluster)
 }
 
 func TestMtlsAuth(t *testing.T) {
@@ -386,16 +447,16 @@ func resetConfig(conf vttest.Config) {
 }
 
 func randomPort() int {
-	v := rand.Int31n(20000)
+	v := rand.Int32N(20000)
 	return int(v + 10000)
 }
 
-func assertGetKeyspaces(t *testing.T, cluster vttest.LocalCluster) {
-	client, err := vtctlclient.New(fmt.Sprintf("localhost:%v", cluster.GrpcPort()))
+func assertGetKeyspaces(ctx context.Context, t *testing.T, cluster vttest.LocalCluster) {
+	client, err := vtctlclient.New(ctx, fmt.Sprintf("localhost:%v", cluster.GrpcPort()))
 	assert.NoError(t, err)
 	defer client.Close()
 	stream, err := client.ExecuteVtctlCommand(
-		context.Background(),
+		ctx,
 		[]string{
 			"GetKeyspaces",
 			"--server",

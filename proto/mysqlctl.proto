@@ -33,6 +33,7 @@ message StartResponse{}
 
 message ShutdownRequest{
   bool wait_for_mysqld = 1;
+  vttime.Duration mysql_shutdown_timeout = 2;
 }
 
 message ShutdownResponse{}

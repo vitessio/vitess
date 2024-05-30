@@ -32,13 +32,12 @@ sleep 5
 
 # And also add the CellInfo description for the cell.
 # If the node already exists, it's fine, means we used existing data.
-echo "add $cell CellInfo"
+echo "add ${cell} CellInfo"
 set +e
-# shellcheck disable=SC2086
-vtctl $TOPOLOGY_FLAGS VtctldCommand AddCellInfo \
-  --root /vitess/$cell \
+command vtctldclient --server internal AddCellInfo \
+  --root "/vitess/${cell}" \
   --server-address "${ETCD_SERVER}" \
-  $cell
+  "${cell}"
 set -e
 
 echo "etcd is running!"

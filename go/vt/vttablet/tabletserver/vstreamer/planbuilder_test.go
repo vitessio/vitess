@@ -20,18 +20,17 @@ import (
 	"fmt"
 	"testing"
 
-	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/vt/proto/topodata"
-
-	"github.com/stretchr/testify/require"
-
-	"vitess.io/vitess/go/test/utils"
-
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -86,7 +85,7 @@ func init() {
 			"ks": &kspb,
 		},
 	}
-	vschema := vindexes.BuildVSchema(srvVSchema)
+	vschema := vindexes.BuildVSchema(srvVSchema, sqlparser.NewTestParser())
 	testLocalVSchema = &localVSchema{
 		keyspace: "ks",
 		vschema:  vschema,
@@ -167,7 +166,7 @@ func TestMustSendDDL(t *testing.T) {
 	}}
 	for _, tcase := range testcases {
 		q := mysql.Query{SQL: tcase.sql, Database: tcase.db}
-		got := mustSendDDL(q, "mydb", filter)
+		got := mustSendDDL(q, "mydb", filter, sqlparser.NewTestParser())
 		if got != tcase.output {
 			t.Errorf("%v: %v, want %v", q, got, tcase.output)
 		}
@@ -259,6 +258,7 @@ func TestPlanBuilder(t *testing.T) {
 					Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
 				},
 			}},
+			env: vtenv.NewTestEnv(),
 		},
 	}, {
 		inTable: t1,
@@ -289,6 +289,7 @@ func TestPlanBuilder(t *testing.T) {
 				VindexColumns: []int{0},
 				KeyRange:      nil,
 			}},
+			env: vtenv.NewTestEnv(),
 		},
 	}, {
 		inTable: t1,
@@ -311,6 +312,7 @@ func TestPlanBuilder(t *testing.T) {
 					Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
 				},
 			}},
+			env: vtenv.NewTestEnv(),
 		},
 	}, {
 		inTable: t1,
@@ -333,6 +335,7 @@ func TestPlanBuilder(t *testing.T) {
 					Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
 				},
 			}},
+			env: vtenv.NewTestEnv(),
 		},
 	}, {
 		inTable: t1,
@@ -355,6 +358,7 @@ func TestPlanBuilder(t *testing.T) {
 					Flags:   uint32(querypb.MySqlFlag_NUM_FLAG),
 				},
 			}},
+			env: vtenv.NewTestEnv(),
 		},
 	}, {
 		inTable: t1,
@@ -385,6 +389,7 @@ func TestPlanBuilder(t *testing.T) {
 				VindexColumns: []int{0},
 				KeyRange:      nil,
 			}},
+			env: vtenv.NewTestEnv(),
 		},
 	}, {
 		inTable: t1,
@@ -415,6 +420,7 @@ func TestPlanBuilder(t *testing.T) {
 				VindexColumns: []int{0},
 				KeyRange:      nil,
 			}},
+			env: vtenv.NewTestEnv(),
 		},
 	}, {
 		inTable: t1,
@@ -445,6 +451,7 @@ func TestPlanBuilder(t *testing.T) {
 				VindexColumns: nil,
 				KeyRange:      nil,
 			}},
+			env: vtenv.NewTestEnv(),
 		},
 	}, {
 		inTable: t2,
@@ -478,6 +485,7 @@ func TestPlanBuilder(t *testing.T) {
 				VindexColumns: []int{0, 1},
 				KeyRange:      nil,
 			}},
+			env: vtenv.NewTestEnv(),
 		},
 	}, {
 		inTable: t1,
@@ -501,6 +509,7 @@ func TestPlanBuilder(t *testing.T) {
 				},
 			}},
 			convertUsingUTF8Columns: map[string]bool{"val": true},
+			env:                     vtenv.NewTestEnv(),
 		},
 	}, {
 		inTable: regional,
@@ -524,6 +533,7 @@ func TestPlanBuilder(t *testing.T) {
 				Vindex:        testLocalVSchema.vschema.Keyspaces["ks"].Vindexes["region_vdx"],
 				VindexColumns: []int{0, 1},
 			}},
+			env: vtenv.NewTestEnv(),
 		},
 	}, {
 		inTable: t1,
@@ -583,10 +593,6 @@ func TestPlanBuilder(t *testing.T) {
 		outErr:  `unsupported: id`,
 	}, {
 		inTable: t1,
-		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, val from t1 where in_keyrange(*, 'hash', '-80')"},
-		outErr:  `[BUG] unexpected: *sqlparser.StarExpr *`,
-	}, {
-		inTable: t1,
 		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, val from t1 where in_keyrange(1, 'hash', '-80')"},
 		outErr:  `[BUG] unexpected: *sqlparser.Literal 1`,
 	}, {
@@ -623,18 +629,13 @@ func TestPlanBuilder(t *testing.T) {
 		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select t1.id, val from t1"},
 		outErr:  `unsupported qualifier for column: t1.id`,
 	}, {
-		// selString
-		inTable: t1,
-		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, val from t1 where in_keyrange(id, *, '-80')"},
-		outErr:  `unsupported: *`,
-	}, {
 		inTable: t1,
 		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, val from t1 where in_keyrange(id, 1+1, '-80')"},
 		outErr:  `unsupported: 1 + 1`,
 	}}
 	for _, tcase := range testcases {
 		t.Run(tcase.inRule.String(), func(t *testing.T) {
-			plan, err := buildPlan(tcase.inTable, testLocalVSchema, &binlogdatapb.Filter{
+			plan, err := buildPlan(vtenv.NewTestEnv(), tcase.inTable, testLocalVSchema, &binlogdatapb.Filter{
 				Rules: []*binlogdatapb.Rule{tcase.inRule},
 			})
 
@@ -731,7 +732,7 @@ func TestPlanBuilderFilterComparison(t *testing.T) {
 
 	for _, tcase := range testcases {
 		t.Run(tcase.name, func(t *testing.T) {
-			plan, err := buildPlan(t1, testLocalVSchema, &binlogdatapb.Filter{
+			plan, err := buildPlan(vtenv.NewTestEnv(), t1, testLocalVSchema, &binlogdatapb.Filter{
 				Rules: []*binlogdatapb.Rule{{Match: "t1", Filter: tcase.inFilter}},
 			})
 
@@ -775,7 +776,7 @@ func TestCompare(t *testing.T) {
 	}
 	for _, tc := range testcases {
 		t.Run("", func(t *testing.T) {
-			got, err := compare(tc.opcode, tc.columnValue, tc.filterValue, collations.CollationUtf8mb4ID)
+			got, err := compare(tc.opcode, tc.columnValue, tc.filterValue, collations.MySQL8(), collations.CollationUtf8mb4ID)
 			require.NoError(t, err)
 			require.Equal(t, tc.want, got)
 		})

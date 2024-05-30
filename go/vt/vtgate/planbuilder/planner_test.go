@@ -19,6 +19,8 @@ package planbuilder
 import (
 	"testing"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -58,7 +60,7 @@ func TestBindingSubquery(t *testing.T) {
 	}
 	for _, testcase := range testcases {
 		t.Run(testcase.query, func(t *testing.T) {
-			parse, err := sqlparser.Parse(testcase.query)
+			parse, err := sqlparser.NewTestParser().Parse(testcase.query)
 			require.NoError(t, err)
 			selStmt := parse.(*sqlparser.Select)
 			semTable, err := semantics.Analyze(selStmt, "d", &semantics.FakeSI{
@@ -67,9 +69,13 @@ func TestBindingSubquery(t *testing.T) {
 					"foo":  {Name: sqlparser.NewIdentifierCS("foo")},
 				},
 			})
+			ctx := &plancontext.PlanningContext{
+				ReservedVars: sqlparser.NewReservedVars("vt", make(sqlparser.BindVars)),
+				SemTable:     semTable,
+			}
 			require.NoError(t, err)
 			if testcase.rewrite {
-				err = queryRewrite(semTable, sqlparser.NewReservedVars("vt", make(sqlparser.BindVars)), selStmt)
+				err = queryRewrite(ctx, selStmt)
 				require.NoError(t, err)
 			}
 			expr := testcase.extractor(selStmt)

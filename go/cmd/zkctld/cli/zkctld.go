@@ -41,6 +41,7 @@ var (
 		Use:               "zkctld",
 		Short:             "zkctld is a daemon that starts or initializes ZooKeeper with Vitess-specific configuration. It will stay running as long as the underlying ZooKeeper server, and will pass along SIGTERM.",
 		Args:              cobra.NoArgs,
+		Version:           servenv.AppVersion.String(),
 		PersistentPreRunE: servenv.CobraPreRunE,
 		PostRun: func(cmd *cobra.Command, args []string) {
 			logutil.Flush()

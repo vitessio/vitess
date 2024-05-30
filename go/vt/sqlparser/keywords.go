@@ -285,6 +285,7 @@ var keywords = []keyword{
 	{"following", FOLLOWING},
 	{"for", FOR},
 	{"force", FORCE},
+	{"force_cutover", FORCE_CUTOVER},
 	{"foreign", FOREIGN},
 	{"format", FORMAT},
 	{"format_bytes", FORMAT_BYTES},
@@ -413,6 +414,7 @@ var keywords = []keyword{
 	{"localtimestamp", LOCALTIMESTAMP},
 	{"locate", LOCATE},
 	{"lock", LOCK},
+	{"locked", LOCKED},
 	{"logs", LOGS},
 	{"long", UNUSED},
 	{"longblob", LONGBLOB},
@@ -420,6 +422,7 @@ var keywords = []keyword{
 	{"loop", UNUSED},
 	{"low_priority", LOW_PRIORITY},
 	{"ltrim", LTRIM},
+	{"mid", MID},
 	{"min", MIN},
 	{"manifest", MANIFEST},
 	{"master_bind", UNUSED},
@@ -457,6 +460,7 @@ var keywords = []keyword{
 	{"none", NONE},
 	{"not", NOT},
 	{"now", NOW},
+	{"nowait", NOWAIT},
 	{"no_write_to_binlog", NO_WRITE_TO_BINLOG},
 	{"nth_value", NTH_VALUE},
 	{"ntile", NTILE},
@@ -549,6 +553,7 @@ var keywords = []keyword{
 	{"right", RIGHT},
 	{"rlike", RLIKE},
 	{"rollback", ROLLBACK},
+	{"rollup", ROLLUP},
 	{"row", ROW},
 	{"row_format", ROW_FORMAT},
 	{"row_number", ROW_NUMBER},
@@ -575,6 +580,7 @@ var keywords = []keyword{
 	{"signal", UNUSED},
 	{"signed", SIGNED},
 	{"simple", SIMPLE},
+	{"skip", SKIP},
 	{"slow", SLOW},
 	{"smallint", SMALLINT},
 	{"snapshot", SNAPSHOT},
@@ -716,6 +722,7 @@ var keywords = []keyword{
 	{"unicode", UNICODE},
 	{"union", UNION},
 	{"unique", UNIQUE},
+	{"unknown", UNKNOWN},
 	{"unlock", UNLOCK},
 	{"unsigned", UNSIGNED},
 	{"unthrottle", UNTHROTTLE},
@@ -814,14 +821,6 @@ func (cit *caseInsensitiveTable) LookupString(name string) (int, bool) {
 	return 0, false
 }
 
-func (cit *caseInsensitiveTable) Lookup(name []byte) (int, bool) {
-	hash := fnv1aI(offset64, name)
-	if candidate, ok := cit.h[hash]; ok {
-		return candidate.id, candidate.match(name)
-	}
-	return 0, false
-}
-
 func init() {
 	for _, kw := range keywords {
 		if kw.id == UNUSED {
@@ -848,16 +847,6 @@ func KeywordString(id int) string {
 
 const offset64 = uint64(14695981039346656037)
 const prime64 = uint64(1099511628211)
-
-func fnv1aI(h uint64, s []byte) uint64 {
-	for _, c := range s {
-		if 'A' <= c && c <= 'Z' {
-			c += 'a' - 'A'
-		}
-		h = (h ^ uint64(c)) * prime64
-	}
-	return h
-}
 
 func fnv1aIstr(h uint64, s string) uint64 {
 	for i := 0; i < len(s); i++ {

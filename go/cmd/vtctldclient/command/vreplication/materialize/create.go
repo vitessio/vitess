@@ -93,6 +93,7 @@ func commandCreate(cmd *cobra.Command, args []string) error {
 
 	ms := &vtctldatapb.MaterializeSettings{
 		Workflow:                  common.BaseOptions.Workflow,
+		MaterializationIntent:     vtctldatapb.MaterializationIntent_CUSTOM,
 		TargetKeyspace:            common.BaseOptions.TargetKeyspace,
 		SourceKeyspace:            createOptions.SourceKeyspace,
 		TableSettings:             createOptions.TableSettings.val,
@@ -100,6 +101,15 @@ func commandCreate(cmd *cobra.Command, args []string) error {
 		Cell:                      strings.Join(common.CreateOptions.Cells, ","),
 		TabletTypes:               topoproto.MakeStringTypeCSV(common.CreateOptions.TabletTypes),
 		TabletSelectionPreference: tsp,
+	}
+
+	createOptions.TableSettings.parser, err = sqlparser.New(sqlparser.Options{
+		MySQLServerVersion: common.CreateOptions.MySQLServerVersion,
+		TruncateUILen:      common.CreateOptions.TruncateUILen,
+		TruncateErrLen:     common.CreateOptions.TruncateErrLen,
+	})
+	if err != nil {
+		return err
 	}
 
 	req := &vtctldatapb.MaterializeCreateRequest{
@@ -132,7 +142,8 @@ func commandCreate(cmd *cobra.Command, args []string) error {
 // tableSettings is a wrapper around a slice of TableMaterializeSettings
 // proto messages that implements the pflag.Value interface.
 type tableSettings struct {
-	val []*vtctldatapb.TableMaterializeSettings
+	val    []*vtctldatapb.TableMaterializeSettings
+	parser *sqlparser.Parser
 }
 
 func (ts *tableSettings) String() string {
@@ -157,7 +168,7 @@ func (ts *tableSettings) Set(v string) error {
 			return fmt.Errorf("missing target_table or source_expression")
 		}
 		// Validate that the query is valid.
-		stmt, err := sqlparser.Parse(tms.SourceExpression)
+		stmt, err := ts.parser.Parse(tms.SourceExpression)
 		if err != nil {
 			return fmt.Errorf("invalid source_expression: %q", tms.SourceExpression)
 		}
@@ -167,7 +178,7 @@ func (ts *tableSettings) Set(v string) error {
 		err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 			switch node := node.(type) {
 			case sqlparser.TableName:
-				if !node.Name.IsEmpty() {
+				if node.Name.NotEmpty() {
 					if seenSourceTables[node.Name.String()] {
 						return false, fmt.Errorf("multiple source_expression queries use the same table: %q", node.Name.String())
 					}

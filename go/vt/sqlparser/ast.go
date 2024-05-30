@@ -53,16 +53,17 @@ type (
 		Commented
 	}
 
+	OrderAndLimit interface {
+		AddOrder(*Order)
+		SetLimit(*Limit)
+	}
+
 	// SelectStatement any SELECT statement.
 	SelectStatement interface {
 		Statement
 		InsertRows
+		OrderAndLimit
 		iSelectStatement()
-		AddOrder(*Order)
-		SetOrderBy(OrderBy)
-		GetOrderBy() OrderBy
-		GetLimit() *Limit
-		SetLimit(*Limit)
 		GetLock() Lock
 		SetLock(lock Lock)
 		SetInto(into *SelectInto)
@@ -72,6 +73,9 @@ type (
 		GetColumns() SelectExprs
 		Commented
 		IsDistinct() bool
+		GetOrderBy() OrderBy
+		SetOrderBy(OrderBy)
+		GetLimit() *Limit
 	}
 
 	// DDLStatement represents any DDL Statement
@@ -265,7 +269,7 @@ type (
 		Comments    *ParsedComments
 		SelectExprs SelectExprs
 		Where       *Where
-		GroupBy     GroupBy
+		GroupBy     *GroupBy
 		Having      *Where
 		Windows     NamedWindows
 		OrderBy     OrderBy
@@ -337,6 +341,7 @@ type (
 		Partitions Partitions
 		Columns    Columns
 		Rows       InsertRows
+		RowAlias   *RowAlias
 		OnDup      OnDup
 	}
 
@@ -352,7 +357,7 @@ type (
 		With       *With
 		Comments   *ParsedComments
 		Ignore     Ignore
-		TableExprs TableExprs
+		TableExprs []TableExpr
 		Exprs      UpdateExprs
 		Where      *Where
 		OrderBy    OrderBy
@@ -365,8 +370,8 @@ type (
 		With       *With
 		Ignore     Ignore
 		Comments   *ParsedComments
+		TableExprs []TableExpr
 		Targets    TableNames
-		TableExprs TableExprs
 		Partitions Partitions
 		Where      *Where
 		OrderBy    OrderBy
@@ -711,6 +716,10 @@ type (
 	// IndexType is the type of index in a DDL statement
 	IndexType int8
 )
+
+var _ OrderAndLimit = (*Select)(nil)
+var _ OrderAndLimit = (*Update)(nil)
+var _ OrderAndLimit = (*Delete)(nil)
 
 func (*Union) iStatement()               {}
 func (*Select) iStatement()              {}
@@ -1807,15 +1816,15 @@ type ColumnType struct {
 	Options *ColumnTypeOptions
 
 	// Numeric field options
-	Length   *Literal
+	Length   *int
 	Unsigned bool
 	Zerofill bool
-	Scale    *Literal
+	Scale    *int
 
 	// Text field options
 	Charset ColumnCharset
 
-	// Enum values
+	// Enum and Set column definition values
 	EnumValues []string
 }
 
@@ -2308,8 +2317,9 @@ type (
 
 	// Argument represents bindvariable expression
 	Argument struct {
-		Name string
-		Type sqltypes.Type
+		Name        string
+		Type        sqltypes.Type
+		Size, Scale int32
 	}
 
 	// NullVal represents a NULL value.
@@ -2398,7 +2408,7 @@ type (
 	FuncExpr struct {
 		Qualifier IdentifierCS
 		Name      IdentifierCI
-		Exprs     SelectExprs
+		Exprs     Exprs
 	}
 
 	// ValuesFuncExpr represents a function call.
@@ -2874,8 +2884,9 @@ type (
 	}
 
 	Count struct {
-		Args     Exprs
-		Distinct bool
+		Args       Exprs
+		Distinct   bool
+		OverClause *OverClause
 	}
 
 	CountStar struct {
@@ -2906,66 +2917,81 @@ type (
 		// The solution we employed was to add a dummy field `_ bool` to the otherwise empty struct `CountStar`.
 		// This ensures that each instance of `CountStar` is treated as a separate object,
 		// even in the context of out semantic state which uses these objects as map keys.
+		OverClause *OverClause
 	}
 
 	Avg struct {
-		Arg      Expr
-		Distinct bool
+		Arg        Expr
+		Distinct   bool
+		OverClause *OverClause
 	}
 
 	Max struct {
-		Arg      Expr
-		Distinct bool
+		Arg        Expr
+		Distinct   bool
+		OverClause *OverClause
 	}
 
 	Min struct {
-		Arg      Expr
-		Distinct bool
+		Arg        Expr
+		Distinct   bool
+		OverClause *OverClause
 	}
 
 	Sum struct {
-		Arg      Expr
-		Distinct bool
+		Arg        Expr
+		Distinct   bool
+		OverClause *OverClause
 	}
 
 	BitAnd struct {
-		Arg Expr
+		Arg        Expr
+		OverClause *OverClause
 	}
 
 	BitOr struct {
-		Arg Expr
+		Arg        Expr
+		OverClause *OverClause
 	}
 
 	BitXor struct {
-		Arg Expr
+		Arg        Expr
+		OverClause *OverClause
 	}
 
 	Std struct {
-		Arg Expr
+		Arg        Expr
+		OverClause *OverClause
 	}
 
 	StdDev struct {
-		Arg Expr
+		Arg        Expr
+		OverClause *OverClause
 	}
 
 	StdPop struct {
-		Arg Expr
+		Arg        Expr
+		OverClause *OverClause
 	}
 
 	StdSamp struct {
-		Arg Expr
+		Arg        Expr
+		OverClause *OverClause
 	}
 
 	VarPop struct {
-		Arg Expr
+		Arg        Expr
+		OverClause *OverClause
 	}
 
 	VarSamp struct {
-		Arg Expr
+		Arg        Expr
+		OverClause *OverClause
 	}
 
 	Variance struct {
-		Arg Expr
+		Arg        Expr
+		OverClause *OverClause
 	}
 
 	// GroupConcatExpr represents a call to GROUP_CONCAT
@@ -3419,13 +3445,16 @@ func (ListArg) iColTuple()   {}
 // ConvertType represents the type in call to CONVERT(expr, type)
 type ConvertType struct {
 	Type    string
-	Length  *Literal
-	Scale   *Literal
+	Length  *int
+	Scale   *int
 	Charset ColumnCharset
 }
 
 // GroupBy represents a GROUP BY clause.
-type GroupBy []Expr
+type GroupBy struct {
+	Exprs      []Expr
+	WithRollup bool
+}
 
 // OrderBy represents an ORDER By clause.
 type OrderBy []*Order
@@ -3467,6 +3496,11 @@ type SetExpr struct {
 
 // OnDup represents an ON DUPLICATE KEY clause.
 type OnDup UpdateExprs
+
+type RowAlias struct {
+	TableName IdentifierCS
+	Columns   Columns
+}
 
 // IdentifierCI is a case insensitive SQL identifier. It will be escaped with
 // backquotes if necessary.

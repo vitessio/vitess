@@ -66,5 +66,5 @@ func (tuple TupleExpr) FormatFast(buf *sqlparser.TrackedBuffer) {
 }
 
 func (tuple TupleExpr) typeof(*ExpressionEnv) (ctype, error) {
-	return ctype{Type: sqltypes.Tuple}, nil
+	return ctype{Type: sqltypes.Tuple, Col: collationBinary}, nil
 }

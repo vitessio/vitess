@@ -3,14 +3,20 @@ on:
   pull_request:
     types: [opened, reopened]
 
+permissions:
+  contents: read
+
 jobs:
   auto_approve:
     name: Auto Approve Pull Request
     runs-on: ubuntu-latest
+
+    permissions:
+      pull-requests: write  # only given on local PRs, forks run with `read` access
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
-
+        uses: actions/checkout@v4
       - name: Auto Approve Pull Request
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

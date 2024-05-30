@@ -30,18 +30,19 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/cache/theine"
-	"vitess.io/vitess/go/streamlog"
-	"vitess.io/vitess/go/vt/vthash"
-
 	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/cache/theine"
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -52,6 +53,7 @@ import (
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -61,6 +63,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
+	"vitess.io/vitess/go/vt/vthash"
 )
 
 var (
@@ -73,6 +76,10 @@ var (
 
 	queriesProcessedByTable = stats.NewCountersWithMultiLabels("QueriesProcessedByTable", "Queries processed at vtgate by plan type, keyspace and table", []string{"Plan", "Keyspace", "Table"})
 	queriesRoutedByTable    = stats.NewCountersWithMultiLabels("QueriesRoutedByTable", "Queries routed from vtgate to vttablet by plan type, keyspace and table", []string{"Plan", "Keyspace", "Table"})
+
+	exceedMemoryRowsLogger = logutil.NewThrottledLogger("ExceedMemoryRows", 1*time.Minute)
+
+	errorTransform errorTransformer = nullErrorTransformer{}
 )
 
 const (
@@ -93,6 +100,7 @@ func init() {
 // Executor is the engine that executes queries by utilizing
 // the abilities of the underlying vttablets.
 type Executor struct {
+	env         *vtenv.Environment
 	serv        srvtopo.Server
 	cell        string
 	resolver    *Resolver
@@ -142,6 +150,7 @@ func DefaultPlanCache() *PlanCache {
 // NewExecutor creates a new Executor.
 func NewExecutor(
 	ctx context.Context,
+	env *vtenv.Environment,
 	serv srvtopo.Server,
 	cell string,
 	resolver *Resolver,
@@ -154,6 +163,7 @@ func NewExecutor(
 	warmingReadsPercent int,
 ) *Executor {
 	e := &Executor{
+		env:                 env,
 		serv:                serv,
 		cell:                cell,
 		resolver:            resolver,
@@ -177,6 +187,7 @@ func NewExecutor(
 		serv:       serv,
 		cell:       cell,
 		schema:     e.schemaTracker,
+		parser:     env.Parser(),
 	}
 	serv.WatchSrvVSchema(ctx, cell, e.vm.VSchemaUpdate)
 
@@ -223,16 +234,24 @@ func (e *Executor) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConn
 	}
 	if result != nil && len(result.Rows) > warnMemoryRows {
 		warnings.Add("ResultsExceeded", 1)
-		piiSafeSQL, err := sqlparser.RedactSQLQuery(sql)
+		piiSafeSQL, err := e.env.Parser().RedactSQLQuery(sql)
 		if err != nil {
 			piiSafeSQL = logStats.StmtType
 		}
-		log.Warningf("%q exceeds warning threshold of max memory rows: %v. Actual memory rows: %v", piiSafeSQL, warnMemoryRows, len(result.Rows))
+		warningMsg := fmt.Sprintf("%q exceeds warning threshold of max memory rows: %v. Actual memory rows: %v", piiSafeSQL, warnMemoryRows, len(result.Rows))
+		exceedMemoryRowsLogger.Warningf(warningMsg)
+		safeSession.RecordWarning(&querypb.QueryWarning{
+			Code:    uint32(sqlerror.EROutOfMemory),
+			Message: warningMsg,
+		})
 	}
 
 	logStats.SaveEndTime()
 	e.queryLogger.Send(logStats)
+
+	err = errorTransform.TransformError(err)
 	err = vterrors.TruncateError(err, truncateErrorLen)
+
 	return result, err
 }
 
@@ -357,17 +376,25 @@ func (e *Executor) StreamExecute(
 	saveSessionStats(safeSession, srr.stmtType, srr.rowsAffected, srr.insertID, srr.rowsReturned, err)
 	if srr.rowsReturned > warnMemoryRows {
 		warnings.Add("ResultsExceeded", 1)
-		piiSafeSQL, err := sqlparser.RedactSQLQuery(sql)
+		piiSafeSQL, err := e.env.Parser().RedactSQLQuery(sql)
 		if err != nil {
 			piiSafeSQL = logStats.StmtType
 		}
-		log.Warningf("%q exceeds warning threshold of max memory rows: %v. Actual memory rows: %v", piiSafeSQL, warnMemoryRows, srr.rowsReturned)
+		warningMsg := fmt.Sprintf("%q exceeds warning threshold of max memory rows: %v. Actual memory rows: %v", piiSafeSQL, warnMemoryRows, srr.rowsReturned)
+		exceedMemoryRowsLogger.Warningf(warningMsg)
+		safeSession.RecordWarning(&querypb.QueryWarning{
+			Code:    uint32(sqlerror.EROutOfMemory),
+			Message: warningMsg,
+		})
 	}
 
 	logStats.SaveEndTime()
 	e.queryLogger.Send(logStats)
-	return vterrors.TruncateError(err, truncateErrorLen)
 
+	err = errorTransform.TransformError(err)
+	err = vterrors.TruncateError(err, truncateErrorLen)
+
+	return err
 }
 
 func canReturnRows(stmtType sqlparser.StatementType) bool {
@@ -456,7 +483,11 @@ func (e *Executor) addNeededBindVars(vcursor *vcursorImpl, bindVarNeeds *sqlpars
 			})
 			bindVars[key] = sqltypes.Int64BindVariable(v)
 		case sysvars.TransactionMode.Name:
-			bindVars[key] = sqltypes.StringBindVariable(session.TransactionMode.String())
+			txMode := session.TransactionMode
+			if txMode == vtgatepb.TransactionMode_UNSPECIFIED {
+				txMode = getTxMode()
+			}
+			bindVars[key] = sqltypes.StringBindVariable(txMode.String())
 		case sysvars.Workload.Name:
 			var v string
 			ifOptionsExist(session, func(options *querypb.ExecuteOptions) {
@@ -499,16 +530,20 @@ func (e *Executor) addNeededBindVars(vcursor *vcursorImpl, bindVarNeeds *sqlpars
 			bindVars[key] = sqltypes.StringBindVariable(mysqlSocketPath())
 		default:
 			if value, hasSysVar := session.SystemVariables[sysVar]; hasSysVar {
-				expr, err := sqlparser.ParseExpr(value)
+				expr, err := e.env.Parser().ParseExpr(value)
 				if err != nil {
 					return err
 				}
 
-				evalExpr, err := evalengine.Translate(expr, nil)
+				evalExpr, err := evalengine.Translate(expr, &evalengine.Config{
+					Collation:   vcursor.collation,
+					Environment: e.env,
+					SQLMode:     evalengine.ParseSQLMode(vcursor.SQLMode()),
+				})
 				if err != nil {
 					return err
 				}
-				evaluated, err := evalengine.EmptyExpressionEnv().Evaluate(evalExpr)
+				evaluated, err := evalengine.NewExpressionEnv(context.Background(), nil, vcursor).Evaluate(evalExpr)
 				if err != nil {
 					return err
 				}
@@ -917,7 +952,7 @@ func (e *Executor) showVitessReplicationStatus(ctx context.Context, filter *sqlp
 			tabletHostPort := ts.GetTabletHostPort()
 			throttlerStatus, err := getTabletThrottlerStatus(tabletHostPort)
 			if err != nil {
-				log.Warningf("Could not get throttler status from %s: %v", tabletHostPort, err)
+				log.Warningf("Could not get throttler status from %s: %v", topoproto.TabletAliasString(ts.Tablet.Alias), err)
 			}
 
 			replSourceHost := ""
@@ -925,19 +960,50 @@ func (e *Executor) showVitessReplicationStatus(ctx context.Context, filter *sqlp
 			replIOThreadHealth := ""
 			replSQLThreadHealth := ""
 			replLastError := ""
-			replLag := int64(-1)
-			sql := "show slave status"
+			replLag := "-1" // A string to support NULL as a value
+			replicaQueries, _ := capabilities.MySQLVersionHasCapability(e.env.MySQLVersion(), capabilities.ReplicaTerminologyCapability)
+			sql := "show replica status"
+			sourceHostField := "Source_Host"
+			sourcePortField := "Source_Port"
+			replicaIORunningField := "Replica_IO_Running"
+			replicaSQLRunningField := "Replica_SQL_Running"
+			secondsBehindSourceField := "Seconds_Behind_Source"
+			if !replicaQueries {
+				sql = "show slave status"
+				sourceHostField = "Master_Host"
+				sourcePortField = "Master_Port"
+				replicaIORunningField = "Slave_IO_Running"
+				replicaSQLRunningField = "Slave_SQL_Running"
+				secondsBehindSourceField = "Seconds_Behind_Master"
+			}
 			results, err := e.txConn.tabletGateway.Execute(ctx, ts.Target, sql, nil, 0, 0, nil)
 			if err != nil || results == nil {
 				log.Warningf("Could not get replication status from %s: %v", tabletHostPort, err)
 			} else if row := results.Named().Row(); row != nil {
-				replSourceHost = row["Master_Host"].ToString()
-				replSourcePort, _ = row["Master_Port"].ToInt64()
-				replIOThreadHealth = row["Slave_IO_Running"].ToString()
-				replSQLThreadHealth = row["Slave_SQL_Running"].ToString()
+				replSourceHost = row[sourceHostField].ToString()
+				replSourcePort, _ = row[sourcePortField].ToInt64()
+				replIOThreadHealth = row[replicaIORunningField].ToString()
+				replSQLThreadHealth = row[replicaSQLRunningField].ToString()
 				replLastError = row["Last_Error"].ToString()
-				if ts.Stats != nil {
-					replLag = int64(ts.Stats.ReplicationLagSeconds)
+				// We cannot check the tablet's tabletenv config from here so
+				// we only use the tablet's stat -- which is managed by the
+				// ReplicationTracker -- if we can tell that it's enabled,
+				// meaning that it has a non-zero value. If it's actually
+				// enabled AND zero (rather than the zeroval), then mysqld
+				// should also return 0 so in this case the value is correct
+				// and equivalent either way. The only reason that we would
+				// want to use the ReplicationTracker based value, when we
+				// can, is because the polling method allows us to get the
+				// estimated lag value when replication is not running (based
+				// on how long we've seen that it's not been running).
+				if ts.Stats != nil && ts.Stats.ReplicationLagSeconds > 0 { // Use the value we get from the ReplicationTracker
+					replLag = fmt.Sprintf("%d", ts.Stats.ReplicationLagSeconds)
+				} else { // Use the value from mysqld
+					if row[secondsBehindSourceField].IsNull() {
+						replLag = strings.ToUpper(sqltypes.NullStr) // Uppercase to match mysqld's output in SHOW REPLICA STATUS
+					} else {
+						replLag = row[secondsBehindSourceField].ToString()
+					}
 				}
 			}
 			replicationHealth := fmt.Sprintf("{\"EventStreamRunning\":\"%s\",\"EventApplierRunning\":\"%s\",\"LastError\":\"%s\"}", replIOThreadHealth, replSQLThreadHealth, replLastError)
@@ -950,7 +1016,7 @@ func (e *Executor) showVitessReplicationStatus(ctx context.Context, filter *sqlp
 				ts.Tablet.Hostname,
 				fmt.Sprintf("%s:%d", replSourceHost, replSourcePort),
 				replicationHealth,
-				fmt.Sprintf("%d", replLag),
+				replLag,
 				throttlerStatus,
 			))
 		}
@@ -1042,6 +1108,7 @@ func (e *Executor) getPlan(
 	vcursor.SetIgnoreMaxMemoryRows(sqlparser.IgnoreMaxMaxMemoryRowsDirective(stmt))
 	vcursor.SetConsolidator(sqlparser.Consolidator(stmt))
 	vcursor.SetWorkloadName(sqlparser.GetWorkloadNameFromStatement(stmt))
+	vcursor.UpdateForeignKeyChecksState(sqlparser.ForeignKeyChecksState(stmt))
 	priority, err := sqlparser.GetPriorityFromStatement(stmt)
 	if err != nil {
 		return nil, err
@@ -1066,6 +1133,7 @@ func (e *Executor) getPlan(
 		vcursor.safeSession.getSelectLimit(),
 		setVarComment,
 		vcursor.safeSession.SystemVariables,
+		vcursor.GetForeignKeyChecksState(),
 		vcursor,
 	)
 	if err != nil {
@@ -1292,7 +1360,11 @@ func (e *Executor) Prepare(ctx context.Context, method string, safeSession *Safe
 		logStats.SaveEndTime()
 		e.queryLogger.Send(logStats)
 	}
-	return fld, vterrors.TruncateError(err, truncateErrorLen)
+
+	err = errorTransform.TransformError(err)
+	err = vterrors.TruncateError(err, truncateErrorLen)
+
+	return fld, err
 }
 
 func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *logstats.LogStats) ([]*querypb.Field, error) {
@@ -1335,7 +1407,7 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, 
 	query, comments := sqlparser.SplitMarginComments(sql)
 	vcursor, _ := newVCursorImpl(safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, e.warnShardedOnly, e.pv)
 
-	stmt, reservedVars, err := parseAndValidateQuery(query)
+	stmt, reservedVars, err := parseAndValidateQuery(query, e.env.Parser())
 	if err != nil {
 		return nil, err
 	}
@@ -1370,8 +1442,8 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, 
 	return qr.Fields, err
 }
 
-func parseAndValidateQuery(query string) (sqlparser.Statement, *sqlparser.ReservedVars, error) {
-	stmt, reserved, err := sqlparser.Parse2(query)
+func parseAndValidateQuery(query string, parser *sqlparser.Parser) (sqlparser.Statement, *sqlparser.ReservedVars, error) {
+	stmt, reserved, err := parser.Parse2(query)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1463,11 +1535,14 @@ func (e *Executor) checkThatPlanIsValid(stmt sqlparser.Statement, plan *engine.P
 	return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "plan includes scatter, which is disallowed using the `no_scatter` command line argument")
 }
 
+// getTabletThrottlerStatus uses HTTP to get the throttler status
+// on a tablet. It uses HTTP because the CheckThrottler RPC is a
+// tmclient RPC and you cannot use tmclient outside of a tablet.
 func getTabletThrottlerStatus(tabletHostPort string) (string, error) {
 	client := http.Client{
 		Timeout: 100 * time.Millisecond,
 	}
-	resp, err := client.Get(fmt.Sprintf("http://%s/throttler/check?app=vtgate", tabletHostPort))
+	resp, err := client.Get(fmt.Sprintf("http://%s/throttler/check-self", tabletHostPort))
 	if err != nil {
 		return "", err
 	}
@@ -1506,7 +1581,7 @@ func (e *Executor) ReleaseLock(ctx context.Context, session *SafeSession) error 
 
 // planPrepareStmt implements the IExecutor interface
 func (e *Executor) planPrepareStmt(ctx context.Context, vcursor *vcursorImpl, query string) (*engine.Plan, sqlparser.Statement, error) {
-	stmt, reservedVars, err := parseAndValidateQuery(query)
+	stmt, reservedVars, err := parseAndValidateQuery(query, e.env.Parser())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1538,4 +1613,19 @@ func (e *Executor) Close() {
 	}
 	topo.Close()
 	e.plans.Close()
+}
+
+func (e *Executor) environment() *vtenv.Environment {
+	return e.env
+}
+
+type (
+	errorTransformer interface {
+		TransformError(err error) error
+	}
+	nullErrorTransformer struct{}
+)
+
+func (nullErrorTransformer) TransformError(err error) error {
+	return err
 }

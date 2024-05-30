@@ -27,43 +27,26 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
 func TestMultipleConcurrentVDiffs(t *testing.T) {
-	cellName := "zone"
-	cells := []string{cellName}
-	vc = NewVitessCluster(t, t.Name(), cells, mainClusterConfig)
+	cellName := "zone1"
+	vc = NewVitessCluster(t, nil)
+	defer vc.TearDown()
 
-	require.NotNil(t, vc)
-	allCellNames = cellName
-	defaultCellName := cellName
-	defaultCell = vc.Cells[defaultCellName]
 	sourceKeyspace := "product"
 	shardName := "0"
-
-	defer vc.TearDown(t)
 
 	cell := vc.Cells[cellName]
 	vc.AddKeyspace(t, []*Cell{cell}, sourceKeyspace, shardName, initialProductVSchema, initialProductSchema, 0, 0, 100, sourceKsOpts)
 
-	vtgate = cell.Vtgates[0]
-	require.NotNil(t, vtgate)
-	err := cluster.WaitForHealthyShard(vc.VtctldClient, sourceKeyspace, shardName)
-	require.NoError(t, err)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", sourceKeyspace, shardName), 1, 30*time.Second)
-
-	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
-	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
-
 	insertInitialData(t)
 	targetTabletId := 200
 	targetKeyspace := "customer"
 	vc.AddKeyspace(t, []*Cell{cell}, targetKeyspace, shardName, initialProductVSchema, initialProductSchema, 0, 0, targetTabletId, sourceKsOpts)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", targetKeyspace, shardName), 1, 30*time.Second)
 
 	index := 1000
 	var loadCtx context.Context
@@ -93,12 +76,16 @@ func TestMultipleConcurrentVDiffs(t *testing.T) {
 	time.Sleep(15 * time.Second) // wait for some rows to be inserted.
 
 	createWorkflow := func(workflowName, tables string) {
-		mt := newMoveTables(vc, &moveTables{
-			workflowName:   workflowName,
-			targetKeyspace: targetKeyspace,
+		mt := newMoveTables(vc, &moveTablesWorkflow{
+			workflowInfo: &workflowInfo{
+				vc:             vc,
+				workflowName:   workflowName,
+				targetKeyspace: targetKeyspace,
+				tabletTypes:    "primary",
+			},
 			sourceKeyspace: sourceKeyspace,
 			tables:         tables,
-		}, moveTablesFlavorVtctld)
+		}, workflowFlavorVtctld)
 		mt.Create()
 		waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKeyspace, workflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
 		catchup(t, targetTab, workflowName, "MoveTables")

@@ -23,6 +23,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/reparent/utils"
 )
@@ -40,7 +41,7 @@ func TestRecoverWithMultipleVttabletFailures(t *testing.T) {
 	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
 
 	// make tablets[1] a rdonly tablet.
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", tablets[1].Alias, "rdonly")
+	err := clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", tablets[1].Alias, "rdonly")
 	require.NoError(t, err)
 
 	// Confirm that replication is still working as intended
@@ -131,18 +132,48 @@ func TestChangeTypeWithoutSemiSync(t *testing.T) {
 			utils.RunSQL(ctx, t, "set global super_read_only = 0", tablet)
 		}
 
-		utils.RunSQL(ctx, t, "UNINSTALL PLUGIN rpl_semi_sync_slave;", tablet)
-		utils.RunSQL(ctx, t, "UNINSTALL PLUGIN rpl_semi_sync_master;", tablet)
+		semisyncType, err := utils.SemiSyncExtensionLoaded(ctx, tablet)
+		require.NoError(t, err)
+		switch semisyncType {
+		case mysql.SemiSyncTypeSource:
+			utils.RunSQL(ctx, t, "UNINSTALL PLUGIN rpl_semi_sync_replica", tablet)
+			utils.RunSQL(ctx, t, "UNINSTALL PLUGIN rpl_semi_sync_source", tablet)
+		case mysql.SemiSyncTypeMaster:
+			utils.RunSQL(ctx, t, "UNINSTALL PLUGIN rpl_semi_sync_slave", tablet)
+			utils.RunSQL(ctx, t, "UNINSTALL PLUGIN rpl_semi_sync_master", tablet)
+		default:
+			require.Fail(t, "Unknown semi sync type")
+		}
 	}
 
 	utils.ValidateTopology(t, clusterInstance, true)
 	utils.CheckPrimaryTablet(t, clusterInstance, primary)
 
 	// Change replica's type to rdonly
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", replica.Alias, "rdonly")
+	err := clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", replica.Alias, "rdonly")
 	require.NoError(t, err)
 
 	// Change tablets type from rdonly back to replica
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", replica.Alias, "replica")
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", replica.Alias, "replica")
 	require.NoError(t, err)
+}
+
+// TestERSWithWriteInPromoteReplica tests that ERS doesn't fail even if there is a
+// write that happens when PromoteReplica is called.
+func TestERSWithWriteInPromoteReplica(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
+	defer utils.TeardownCluster(clusterInstance)
+	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
+
+	// Drop a table so that when sidecardb changes are checked, we run a DML query.
+	utils.RunSQLs(context.Background(), t, []string{
+		"set sql_log_bin=0",
+		`SET @@global.super_read_only=0`,
+		`DROP TABLE _vt.heartbeat`,
+		"set sql_log_bin=1",
+	}, tablets[3])
+	_, err := utils.Ers(clusterInstance, tablets[3], "60s", "30s")
+	require.NoError(t, err, "ERS should not fail even if there is a sidecardb change")
 }

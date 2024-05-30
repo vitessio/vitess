@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctlserver"
 	"vitess.io/vitess/go/vt/vtctl/vtctlclient"
+	"vitess.io/vitess/go/vt/vtenv"
 
 	// we need to import the grpcvtctlclient library so the gRPC
 	// vtctl client is registered and can be used.
@@ -52,7 +53,7 @@ type VtctlPipe struct {
 }
 
 // NewVtctlPipe creates a new VtctlPipe based on the given topo server.
-func NewVtctlPipe(t *testing.T, ts *topo.Server) *VtctlPipe {
+func NewVtctlPipe(ctx context.Context, t *testing.T, ts *topo.Server) *VtctlPipe {
 	// Register all vtctl commands
 	servenvInitialized.Do(func() {
 		// make sure we use the right protocol
@@ -76,11 +77,11 @@ func NewVtctlPipe(t *testing.T, ts *topo.Server) *VtctlPipe {
 
 	// Create a gRPC server and listen on the port
 	server := grpc.NewServer()
-	grpcvtctlserver.StartServer(server, ts)
+	grpcvtctlserver.StartServer(server, vtenv.NewTestEnv(), ts)
 	go server.Serve(listener)
 
 	// Create a VtctlClient gRPC client to talk to the fake server
-	client, err := vtctlclient.New(listener.Addr().String())
+	client, err := vtctlclient.New(ctx, listener.Addr().String())
 	if err != nil {
 		t.Fatalf("Cannot create client: %v", err)
 	}
@@ -138,7 +139,7 @@ func (vp *VtctlPipe) run(args []string, outputFunc func(string)) error {
 }
 
 // RunAndStreamOutput returns the output of the vtctl command as a channel.
-// When the channcel is closed, the command did finish.
+// When the channel is closed, the command did finish.
 func (vp *VtctlPipe) RunAndStreamOutput(args []string) (logutil.EventStream, error) {
 	actionTimeout := 30 * time.Second
 	ctx := context.Background()

@@ -6,6 +6,11 @@ concurrency:
 
 permissions: read-all
 
+env:
+  LAUNCHABLE_ORGANIZATION: "vitess"
+  LAUNCHABLE_WORKSPACE: "vitess-app"
+  GITHUB_PR_HEAD_SHA: "${{ github.event.pull_request.head.sha }}"
+
 jobs:
 
   build:
@@ -28,14 +33,21 @@ jobs:
         fi
         echo Skip ${skip}
         echo "skip-workflow=${skip}" >> $GITHUB_OUTPUT
+        
+        PR_DATA=$(curl \
+          -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          -H "Accept: application/vnd.github.v3+json" \
+          "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}")
+        draft=$(echo "$PR_DATA" | jq .draft -r)
+        echo "is_draft=${draft}" >> $GITHUB_OUTPUT
 
     - name: Check out code
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Check for changes in relevant files
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
-      uses: frouioui/paths-filter@main
+      uses: dorny/paths-filter@v3.0.1
       id: changes
       with:
         token: ''
@@ -55,9 +67,13 @@ jobs:
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v5
       with:
-        go-version: 1.21.3
+        go-version: 1.22.3
+
+    - name: Set up python
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
+      uses: actions/setup-python@v5
 
     - name: Tune the OS
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
@@ -68,28 +84,43 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
       run: |
         export DEBIAN_FRONTEND="noninteractive"
-        sudo apt-get update
+        sudo apt-get -qq update
 
         # mysql80
-        sudo apt-get install -y mysql-server mysql-client
+        sudo apt-get -qq install -y mysql-server mysql-client
 
-        sudo apt-get install -y make unzip g++ curl git wget ant openjdk-11-jdk eatmydata
+        sudo apt-get -qq install -y make unzip g++ curl git wget ant openjdk-11-jdk eatmydata
         sudo service mysql stop
         sudo bash -c "echo '/usr/sbin/mysqld { }' > /etc/apparmor.d/usr.sbin.mysqld" # https://bugs.launchpad.net/ubuntu/+source/mariadb-10.1/+bug/1806263
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
         sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld || echo "could not remove mysqld profile"
 
         mkdir -p dist bin
-        curl -L https://github.com/coreos/etcd/releases/download/v3.3.10/etcd-v3.3.10-linux-amd64.tar.gz | tar -zxC dist
+        curl -s -L https://github.com/coreos/etcd/releases/download/v3.3.10/etcd-v3.3.10-linux-amd64.tar.gz | tar -zxC dist
         mv dist/etcd-v3.3.10-linux-amd64/{etcd,etcdctl} bin/
 
         go mod download
         go install golang.org/x/tools/cmd/goimports@latest
+        
+        # install JUnit report formatter
+        go install github.com/vitessio/go-junit-report@HEAD
 
     - name: Run make tools
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
       run: |
         make tools
+
+    - name: Setup launchable dependencies
+      if: steps.skip-workflow.outputs.is_draft == 'false' && steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true' && github.base_ref == 'main'
+      run: |
+        # Get Launchable CLI installed. If you can, make it a part of the builder image to speed things up
+        pip3 install --user launchable~=1.0 > /dev/null
+
+        # verify that launchable setup is all correct.
+        launchable verify || true
+
+        # Tell Launchable about the build you are producing and testing
+        launchable record build --name "$GITHUB_RUN_ID" --no-commit-collection --source .
 
     - name: unit_race
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
@@ -99,5 +130,17 @@ jobs:
         # which musn't be more than 107 characters long.
         export VTDATAROOT="/tmp/"
         export NOVTADMINBUILD=1
+        export VTEVALENGINETEST="0"
 
-        eatmydata -- make unit_test_race
+        eatmydata -- make unit_test_race | tee -a output.txt | go-junit-report -set-exit-code > report.xml
+
+    - name: Print test output and Record test result in launchable if PR is not a draft
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true' && always()
+      run: |
+        if [[ "${{steps.skip-workflow.outputs.is_draft}}" ==  "false" ]]; then
+          # send recorded tests to launchable
+          launchable record tests --build "$GITHUB_RUN_ID" go-test . || true
+        fi
+
+        # print test output
+        cat output.txt

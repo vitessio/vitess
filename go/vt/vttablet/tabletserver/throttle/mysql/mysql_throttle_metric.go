@@ -1,7 +1,42 @@
 /*
- Copyright 2017 GitHub Inc.
+Copyright 2023 The Vitess Authors.
 
- Licensed under MIT License. See https://github.com/github/freno/blob/master/LICENSE
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+// This codebase originates from https://github.com/github/freno, See https://github.com/github/freno/blob/master/LICENSE
+/*
+	MIT License
+
+	Copyright (c) 2017 GitHub
+
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
 */
 
 package mysql
@@ -20,9 +55,9 @@ import (
 type MetricsQueryType int
 
 const (
-	// MetricsQueryTypeDefault indictes the default, internal implementation. Specifically, our throttler runs a replication lag query
+	// MetricsQueryTypeDefault indicates the default, internal implementation. Specifically, our throttler runs a replication lag query
 	MetricsQueryTypeDefault MetricsQueryType = iota
-	// MetricsQueryTypeShowGlobal indicatesa SHOW GLOBAL (STATUS|VARIABLES) query
+	// MetricsQueryTypeShowGlobal indicates SHOW GLOBAL (STATUS|VARIABLES) query
 	MetricsQueryTypeShowGlobal
 	// MetricsQueryTypeSelect indicates a custom SELECT query
 	MetricsQueryTypeSelect
@@ -33,7 +68,7 @@ const (
 var mysqlMetricCache = cache.New(cache.NoExpiration, 10*time.Second)
 
 func getMySQLMetricCacheKey(probe *Probe) string {
-	return fmt.Sprintf("%s:%s", probe.Key, probe.MetricQuery)
+	return fmt.Sprintf("%s:%s", probe.Alias, probe.MetricQuery)
 }
 
 func cacheMySQLThrottleMetric(probe *Probe, mySQLThrottleMetric *MySQLThrottleMetric) *MySQLThrottleMetric {
@@ -71,10 +106,10 @@ func GetMetricsQueryType(query string) MetricsQueryType {
 	return MetricsQueryTypeUnknown
 }
 
-// MySQLThrottleMetric has the probed metric for a mysql instance
+// MySQLThrottleMetric has the probed metric for a tablet
 type MySQLThrottleMetric struct { // nolint:revive
 	ClusterName string
-	Key         InstanceKey
+	Alias       string
 	Value       float64
 	Err         error
 }
@@ -84,9 +119,9 @@ func NewMySQLThrottleMetric() *MySQLThrottleMetric {
 	return &MySQLThrottleMetric{Value: 0}
 }
 
-// GetClusterInstanceKey returns the ClusterInstanceKey part of the metric
-func (metric *MySQLThrottleMetric) GetClusterInstanceKey() ClusterInstanceKey {
-	return GetClusterInstanceKey(metric.ClusterName, &metric.Key)
+// GetClusterTablet returns the ClusterTablet part of the metric
+func (metric *MySQLThrottleMetric) GetClusterTablet() ClusterTablet {
+	return GetClusterTablet(metric.ClusterName, metric.Alias)
 }
 
 // Get implements MetricResult
@@ -105,7 +140,7 @@ func ReadThrottleMetric(probe *Probe, clusterName string, overrideGetMetricFunc 
 	started := time.Now()
 	mySQLThrottleMetric = NewMySQLThrottleMetric()
 	mySQLThrottleMetric.ClusterName = clusterName
-	mySQLThrottleMetric.Key = probe.Key
+	mySQLThrottleMetric.Alias = probe.Alias
 
 	defer func(metric *MySQLThrottleMetric, started time.Time) {
 		go func() {

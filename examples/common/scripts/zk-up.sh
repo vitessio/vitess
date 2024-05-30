@@ -52,10 +52,10 @@ echo "Started zk servers."
 # If the node already exists, it's fine, means we used existing data.
 set +e
 # shellcheck disable=SC2086
-vtctl $TOPOLOGY_FLAGS VtctldCommand AddCellInfo \
-  --root /vitess/$cell \
-  --server-address $ZK_SERVER \
-  $cell
+command vtctldclient --server internal --topo-implementation zk2 --topo-global-server "${ZK_SERVER}"  AddCellInfo \
+  --root "/vitess/${cell}" \
+  --server-address "${ZK_SERVER}" \
+  "${cell}"
 set -e
 
 echo "Configured zk servers."

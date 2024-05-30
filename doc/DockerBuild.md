@@ -24,45 +24,22 @@ Then you can run our build script for the `lite` image which extracts the Vitess
     or [vendor.json](https://github.com/vitessio/vitess/blob/main/vendor/vendor.json),
     for example to add new dependencies. If you do need it then build the
     bootstrap image, otherwise pull the image using one of the following
-    commands depending on the MySQL flavor you want:
+    command.
 
     ```sh
-    vitess$ docker pull vitess/bootstrap:mysql57   # MySQL Community Edition 5.7
-    vitess$ docker pull vitess/bootstrap:mysql56   # MySQL Community Edition 5.6
-    vitess$ docker pull vitess/bootstrap:percona57 # Percona Server 5.7
-    vitess$ docker pull vitess/bootstrap:percona   # Percona Server
+    vitess$ docker pull vitess/bootstrap:latest
     ```
 
     **Note:** If you have already downloaded the `vitess/bootstrap:<flavor>`
     image on your machine before then it could be old, which may cause build
     failures. So it would be a good idea to always execute this step.
 
-1.  Build the `vitess/base[:<flavor>]` image.
-    It will include the compiled the Vitess binaries.
-    (`vitess/base` also contains the source code and tests i.e. everything needed for development work.)
-
-    Choose one of the following commands (the command without suffix builds
-    the default image containing MySQL 5.7):
-
-    ```sh
-    vitess$ make docker_base
-    vitess$ make docker_base_mysql56
-    vitess$ make docker_base_percona57
-    vitess$ make docker_base_percona
-    ```
-
 1.  Build the `vitess/lite[:<flavor>]` image.
-    This will run a script that extracts from `vitess/base` only the files
+    This will run a script that extracts from `vitess/bootstrap` only the files
     needed to run Vitess.
-
-    Choose one of the following commands (the command without suffix builds
-    the default image containing MySQL 5.7):
 
     ```sh
     vitess$ make docker_lite
-    vitess$ make docker_lite_mysql56
-    vitess$ make docker_lite_percona57
-    vitess$ make docker_lite_percona
     ```
 
 1.  Re-tag the image under your personal repository, then upload it.

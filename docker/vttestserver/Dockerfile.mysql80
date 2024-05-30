@@ -17,7 +17,7 @@
 #       ensure images contain the right binaries.
 
 # Use a temporary layer for the build stage.
-ARG bootstrap_version=24
+ARG bootstrap_version=32
 ARG image="vitess/bootstrap:${bootstrap_version}-mysql80"
 
 FROM "${image}" AS builder
@@ -36,7 +36,7 @@ RUN make install-testing PREFIX=/vt/install
 FROM debian:bullseye-slim
 
 # Install dependencies
-COPY docker/lite/install_dependencies.sh /vt/dist/install_dependencies.sh
+COPY docker/utils/install_dependencies.sh /vt/dist/install_dependencies.sh
 RUN /vt/dist/install_dependencies.sh mysql80
 
 # Set up Vitess user and directory tree.
@@ -58,4 +58,4 @@ USER vitess
 COPY docker/vttestserver/setup_vschema_folder.sh /vt/setup_vschema_folder.sh
 COPY docker/vttestserver/run.sh /vt/run.sh
 
-CMD /vt/run.sh "8.0.21-vitess"
+CMD /vt/run.sh "8.0.30-Vitess"

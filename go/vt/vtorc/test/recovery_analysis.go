@@ -48,21 +48,19 @@ type InfoForRecoveryAnalysis struct {
 	LogPos                                    uint32
 	IsStaleBinlogCoordinates                  int
 	GTIDMode                                  string
+	ReplicaNetTimeout                         int32
+	HeartbeatInterval                         float64
 	ErrantGTID                                string
 	LastCheckValid                            int
 	LastCheckPartialSuccess                   int
 	CountReplicas                             uint
 	CountValidReplicas                        uint
 	CountValidReplicatingReplicas             uint
-	CountReplicasFailingToConnectToPrimary    uint
 	CountDowntimedReplicas                    uint
-	ReplicationDepth                          uint
-	IsFailingToConnectToPrimary               int
 	ReplicationStopped                        int
 	IsDowntimed                               int
 	DowntimeEndTimestamp                      string
 	DowntimeRemainingSeconds                  int
-	IsBinlogServer                            int
 	CountValidOracleGTIDReplicas              uint
 	CountValidMariaDBGTIDReplicas             uint
 	CountValidBinlogServerReplicas            uint
@@ -100,7 +98,6 @@ func (info *InfoForRecoveryAnalysis) ConvertToRowMap() sqlutils.RowMap {
 	rowMap["count_mixed_based_logging_replicas"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.CountMixedBasedLoggingReplicas), Valid: true}
 	rowMap["count_oracle_gtid_replicas"] = sqlutils.CellData{Valid: false}
 	rowMap["count_replicas"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.CountReplicas), Valid: true}
-	rowMap["count_replicas_failing_to_connect_to_primary"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.CountReplicasFailingToConnectToPrimary), Valid: true}
 	rowMap["count_row_based_logging_replicas"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.CountRowBasedLoggingReplicas), Valid: true}
 	rowMap["count_semi_sync_replicas"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.CountSemiSyncReplicasEnabled), Valid: true}
 	rowMap["count_statement_based_logging_replicas"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.CountStatementBasedLoggingReplicas), Valid: true}
@@ -116,10 +113,8 @@ func (info *InfoForRecoveryAnalysis) ConvertToRowMap() sqlutils.RowMap {
 	rowMap["gtid_errant"] = sqlutils.CellData{String: info.ErrantGTID, Valid: true}
 	rowMap["gtid_mode"] = sqlutils.CellData{String: info.GTIDMode, Valid: true}
 	rowMap["hostname"] = sqlutils.CellData{String: info.Hostname, Valid: true}
-	rowMap["is_binlog_server"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.IsBinlogServer), Valid: true}
 	rowMap["is_co_primary"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.IsCoPrimary), Valid: true}
 	rowMap["is_downtimed"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.IsDowntimed), Valid: true}
-	rowMap["is_failing_to_connect_to_primary"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.IsFailingToConnectToPrimary), Valid: true}
 	rowMap["is_invalid"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.IsInvalid), Valid: true}
 	rowMap["is_last_check_valid"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.LastCheckValid), Valid: true}
 	rowMap["is_primary"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.IsPrimary), Valid: true}
@@ -129,6 +124,8 @@ func (info *InfoForRecoveryAnalysis) ConvertToRowMap() sqlutils.RowMap {
 	rowMap["shard"] = sqlutils.CellData{String: info.Shard, Valid: true}
 	rowMap["shard_primary_term_timestamp"] = sqlutils.CellData{String: info.ShardPrimaryTermTimestamp, Valid: true}
 	rowMap["last_check_partial_success"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.LastCheckPartialSuccess), Valid: true}
+	rowMap["replica_net_timeout"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.ReplicaNetTimeout), Valid: true}
+	rowMap["heartbeat_interval"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.HeartbeatInterval), Valid: true}
 	rowMap["max_replica_gtid_errant"] = sqlutils.CellData{String: info.MaxReplicaGTIDErrant, Valid: true}
 	rowMap["max_replica_gtid_mode"] = sqlutils.CellData{String: info.MaxReplicaGTIDMode, Valid: true}
 	rowMap["min_replica_gtid_mode"] = sqlutils.CellData{String: info.MinReplicaGTIDMode, Valid: true}
@@ -143,7 +140,6 @@ func (info *InfoForRecoveryAnalysis) ConvertToRowMap() sqlutils.RowMap {
 	rowMap["primary_timestamp"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.PrimaryTimestamp), Valid: true}
 	rowMap["read_only"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.ReadOnly), Valid: true}
 	rowMap["region"] = sqlutils.CellData{String: info.Region, Valid: true}
-	rowMap["replication_depth"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.ReplicationDepth), Valid: true}
 	rowMap["replication_stopped"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.ReplicationStopped), Valid: true}
 	rowMap["semi_sync_primary_clients"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.SemiSyncPrimaryClients), Valid: true}
 	rowMap["semi_sync_primary_enabled"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.SemiSyncPrimaryEnabled), Valid: true}

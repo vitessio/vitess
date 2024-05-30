@@ -42,13 +42,13 @@ type VindexValues struct {
 
 // Update represents the instructions to perform an update.
 type Update struct {
+	// Update does not take inputs
+	noInputs
+
 	*DML
 
 	// ChangedVindexValues contains values for updated Vindexes during an update statement.
 	ChangedVindexValues map[string]*VindexValues
-
-	// Update does not take inputs
-	noInputs
 }
 
 // TryExecute performs a non-streaming exec.
@@ -56,7 +56,7 @@ func (upd *Update) TryExecute(ctx context.Context, vcursor VCursor, bindVars map
 	ctx, cancelFunc := addQueryTimeout(ctx, vcursor, upd.QueryTimeout)
 	defer cancelFunc()
 
-	rss, _, err := upd.findRoute(ctx, vcursor, bindVars)
+	rss, bvs, err := upd.findRoute(ctx, vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +69,7 @@ func (upd *Update) TryExecute(ctx context.Context, vcursor VCursor, bindVars map
 	case Unsharded:
 		return upd.execUnsharded(ctx, upd, vcursor, bindVars, rss)
 	case Equal, EqualUnique, IN, Scatter, ByDestination, SubShard, MultiEqual:
-		return upd.execMultiDestination(ctx, upd, vcursor, bindVars, rss, upd.updateVindexEntries)
+		return upd.execMultiDestination(ctx, upd, vcursor, bindVars, rss, upd.updateVindexEntries, bvs)
 	default:
 		// Unreachable.
 		return nil, fmt.Errorf("unsupported opcode: %v", upd.Opcode)
@@ -204,6 +204,7 @@ func (upd *Update) description() PrimitiveDescription {
 		"OwnedVindexQuery":     upd.OwnedVindexQuery,
 		"MultiShardAutocommit": upd.MultiShardAutocommit,
 		"QueryTimeout":         upd.QueryTimeout,
+		"NoAutoCommit":         upd.PreventAutoCommit,
 	}
 
 	addFieldsIfNotEmpty(upd.DML, other)

@@ -14,22 +14,10 @@
         "TargetDestination": "AnyShard()",
         "Query": "explain select * from `user`",
         "SingleShardOnly": true
-      }
-    }
-  },
-  {
-    "comment": "Explain Vitess statement",
-    "query": "explain format=vitess select * from user",
-    "plan": {
-      "QueryType": "EXPLAIN",
-      "Original": "explain format=vitess select * from user",
-      "Instructions": {
-        "OperatorType": "Rows",
-        "Fields": {
-          "JSON": "VARCHAR"
-        },
-        "RowCount": 1
-      }
+      },
+      "TablesUsed": [
+        "main.user"
+      ]
     }
   },
   {
@@ -67,7 +55,10 @@
         "TargetDestination": "AnyShard()",
         "Query": "explain select * from t",
         "SingleShardOnly": true
-      }
+      },
+      "TablesUsed": [
+        "main.t"
+      ]
     }
   },
   {
@@ -85,7 +76,96 @@
         "TargetDestination": "AnyShard()",
         "Query": "explain select * from t",
         "SingleShardOnly": true
-      }
+      },
+      "TablesUsed": [
+        "main.t"
+      ]
+    }
+  },
+  {
+    "comment": "explain - routed table with same name",
+    "query": "explain select 1, second_user.user.id from second_user.user",
+    "plan": {
+      "QueryType": "EXPLAIN",
+      "Original": "explain select 1, second_user.user.id from second_user.user",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetDestination": "AnyShard()",
+        "Query": "explain select 1, `user`.id from `user`",
+        "SingleShardOnly": true
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "explain - routed table with different name",
+    "query": "explain select 1, second_user.foo.id, foo.col from second_user.foo",
+    "plan": {
+      "QueryType": "EXPLAIN",
+      "Original": "explain select 1, second_user.foo.id, foo.col from second_user.foo",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetDestination": "AnyShard()",
+        "Query": "explain select 1, foo.id, foo.col from `user` as foo",
+        "SingleShardOnly": true
+      },
+      "TablesUsed": [
+        "user.foo"
+      ]
+    }
+  },
+  {
+    "comment": "explain - routed table with join on different table on routed keyspace",
+    "query": "explain select 1, second_user.foo.id, foo.col from second_user.foo join user.user join user.music",
+    "plan": {
+      "QueryType": "EXPLAIN",
+      "Original": "explain select 1, second_user.foo.id, foo.col from second_user.foo join user.user join user.music",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetDestination": "AnyShard()",
+        "Query": "explain select 1, foo.id, foo.col from `user` as foo join `user` join music",
+        "SingleShardOnly": true
+      },
+      "TablesUsed": [
+        "user.foo",
+        "user.user",
+        "user.music"
+      ]
+    }
+  },
+  {
+    "comment": "describe info_schema table",
+    "query": "describe information_schema.administrable_role_authorizations",
+    "plan": {
+      "QueryType": "EXPLAIN",
+      "Original": "describe information_schema.administrable_role_authorizations",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AnyShard()",
+        "Query": "explain information_schema.administrable_role_authorizations",
+        "SingleShardOnly": true
+      },
+      "TablesUsed": [
+        "main.administrable_role_authorizations"
+      ]
     }
   }
 ]

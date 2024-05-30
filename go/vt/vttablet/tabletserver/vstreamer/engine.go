@@ -28,17 +28,16 @@ import (
 	"sync/atomic"
 	"time"
 
-	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/mysqlctl"
-	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -105,6 +104,8 @@ type Engine struct {
 	throttlerClient *throttle.Client
 }
 
+const throttledLoggerInterval = 5 * time.Minute
+
 // NewEngine creates a new Engine.
 // Initialization sequence is: NewEngine->InitDBConfig->Open.
 // Open and Close can be called multiple times and are idempotent.
@@ -147,6 +148,10 @@ func NewEngine(env tabletenv.Env, ts srvtopo.Server, se *schema.Engine, lagThrot
 	env.Exporter().NewGaugeFunc("RowStreamerMaxMySQLReplLagSecs", "", func() int64 { return env.Config().RowStreamer.MaxMySQLReplLagSecs })
 	env.Exporter().HandleFunc("/debug/tablet_vschema", vse.ServeHTTP)
 	return vse
+}
+
+func (vse *Engine) GetTabletInfo() string {
+	return fmt.Sprintf("%s/%s/%s", vse.cell, vse.keyspace, vse.shard)
 }
 
 // InitDBConfig initializes the target parameters for the Engine.
@@ -228,7 +233,6 @@ func (vse *Engine) validateBinlogRowImage(ctx context.Context, db dbconfigs.Conn
 // Stream starts a new stream.
 // This streams events from the binary logs
 func (vse *Engine) Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, throttlerApp throttlerapp.Name, send func([]*binlogdatapb.VEvent) error) error {
-
 	if err := vse.validateBinlogRowImage(ctx, vse.se.GetDBConnector()); err != nil {
 		return err
 	}
@@ -432,7 +436,7 @@ func (vse *Engine) setWatch() {
 		}
 		var vschema *vindexes.VSchema
 		if v != nil {
-			vschema = vindexes.BuildVSchema(v)
+			vschema = vindexes.BuildVSchema(v, vse.env.Environment().Parser())
 			if err != nil {
 				log.Errorf("Error building vschema: %v", err)
 				vse.vschemaErrors.Add(1)
@@ -552,7 +556,7 @@ func (vse *Engine) getInnoDBTrxHistoryLen(ctx context.Context, db dbconfigs.Conn
 	return histLen
 }
 
-// getMySQLReplicationLag attempts to get the seconds_behind_master value.
+// getMySQLReplicationLag attempts to get the seconds_behind_source value.
 // If the value cannot be determined for any reason then -1 is returned, which
 // means "unknown" or "irrelevant" (meaning it's not actively replicating).
 func (vse *Engine) getMySQLReplicationLag(ctx context.Context, db dbconfigs.Connector) int64 {
@@ -563,12 +567,11 @@ func (vse *Engine) getMySQLReplicationLag(ctx context.Context, db dbconfigs.Conn
 	}
 	defer conn.Close()
 
-	res, err := conn.ExecuteFetch(replicaLagQuery, 1, true)
-	if err != nil || len(res.Rows) != 1 || res.Rows[0] == nil {
+	status, err := conn.ShowReplicationStatus()
+	if err != nil {
 		return lagSecs
 	}
-	row := res.Named().Row()
-	return row.AsInt64("Seconds_Behind_Master", -1)
+	return int64(status.ReplicationLagSeconds)
 }
 
 // getMySQLEndpoint returns the host:port value for the vstreamer (MySQL) instance
@@ -590,9 +593,13 @@ func (vse *Engine) getMySQLEndpoint(ctx context.Context, db dbconfigs.Connector)
 
 // mapPKEquivalentCols gets a PK equivalent from mysqld for the table
 // and maps the column names to field indexes in the MinimalTable struct.
-func (vse *Engine) mapPKEquivalentCols(ctx context.Context, table *binlogdatapb.MinimalTable) ([]int, error) {
-	mysqld := mysqlctl.NewMysqld(vse.env.Config().DB)
-	pkeColNames, indexName, err := mysqld.GetPrimaryKeyEquivalentColumns(ctx, vse.env.Config().DB.DBName, table.Name)
+func (vse *Engine) mapPKEquivalentCols(ctx context.Context, db dbconfigs.Connector, table *binlogdatapb.MinimalTable) ([]int, error) {
+	conn, err := db.Connect(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	pkeColNames, indexName, err := mysqlctl.GetPrimaryKeyEquivalentColumns(ctx, conn.ExecuteFetch, vse.env.Config().DB.DBName, table.Name)
 	if err != nil {
 		return nil, err
 	}

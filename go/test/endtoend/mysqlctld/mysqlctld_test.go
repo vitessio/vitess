@@ -28,6 +28,7 @@ import (
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/vt/mysqlctl/mysqlctlclient"
+	"vitess.io/vitess/go/vt/proto/mysqlctl"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
@@ -158,14 +159,21 @@ func TestAutoDetect(t *testing.T) {
 	require.Nil(t, err, "error should be nil")
 
 	// Reparent tablets, which requires flavor detection
-	err = clusterInstance.VtctlclientProcess.InitializeShard(keyspaceName, shardName, cell, primaryTablet.TabletUID)
+	err = clusterInstance.VtctldClientProcess.InitializeShard(keyspaceName, shardName, cell, primaryTablet.TabletUID)
 	require.Nil(t, err, "error should be nil")
 }
 
 func TestVersionString(t *testing.T) {
-	client, err := mysqlctlclient.New("unix", primaryTablet.MysqlctldProcess.SocketFile)
+	client, err := mysqlctlclient.New(context.Background(), "unix", primaryTablet.MysqlctldProcess.SocketFile)
 	require.NoError(t, err)
 	version, err := client.VersionString(context.Background())
 	require.NoError(t, err)
 	require.NotEmpty(t, version)
+}
+
+func TestReadBinlogFilesTimestamps(t *testing.T) {
+	client, err := mysqlctlclient.New(context.Background(), "unix", primaryTablet.MysqlctldProcess.SocketFile)
+	require.NoError(t, err)
+	_, err = client.ReadBinlogFilesTimestamps(context.Background(), &mysqlctl.ReadBinlogFilesTimestampsRequest{})
+	require.ErrorContains(t, err, "empty binlog list in ReadBinlogFilesTimestampsRequest")
 }

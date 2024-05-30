@@ -34,9 +34,10 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/schemadiff"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	"vitess.io/vitess/go/vt/schemadiff"
 )
 
 func TestRecalculatePKColsInfoByColumnNames(t *testing.T) {
@@ -182,11 +183,11 @@ func TestPrimaryKeyEquivalentColumns(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			require.NoError(t, env.Mysqld.ExecuteSuperQuery(ctx, tt.ddl))
-			cols, indexName, err := env.Mysqld.GetPrimaryKeyEquivalentColumns(ctx, env.Dbcfgs.DBName, tt.table)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Mysqld.GetPrimaryKeyEquivalentColumns() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
+			conn, err := env.Mysqld.GetDbaConnection(ctx)
+			require.NoError(t, err, "could not connect to mysqld: %v", err)
+			defer conn.Close()
+			cols, indexName, err := mysqlctl.GetPrimaryKeyEquivalentColumns(ctx, conn.ExecuteFetch, env.Dbcfgs.DBName, tt.table)
+			assert.NoError(t, err)
 			require.Equalf(t, cols, tt.wantCols, "Mysqld.GetPrimaryKeyEquivalentColumns() columns = %v, want %v", cols, tt.wantCols)
 			require.Equalf(t, indexName, tt.wantIndex, "Mysqld.GetPrimaryKeyEquivalentColumns() index = %v, want %v", indexName, tt.wantIndex)
 		})
@@ -223,7 +224,7 @@ func TestDeferSecondaryKeys(t *testing.T) {
 	defer dbClient.Close()
 	dbName := dbClient.DBName()
 	// Ensure there's a dummy vreplication workflow record
-	_, err = dbClient.ExecuteFetch(fmt.Sprintf("insert into _vt.vreplication (id, workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name) values (%d, 'test', '', '', 99999, 99999, 0, 0, 'Running', '%s') on duplicate key update workflow='test', source='', pos='', max_tps=99999, max_replication_lag=99999, time_updated=0, transaction_timestamp=0, state='Running', db_name='%s'",
+	_, err = dbClient.ExecuteFetch(fmt.Sprintf("insert into _vt.vreplication (id, workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, options) values (%d, 'test', '', '', 99999, 99999, 0, 0, 'Running', '%s', '{}') on duplicate key update workflow='test', source='', pos='', max_tps=99999, max_replication_lag=99999, time_updated=0, transaction_timestamp=0, state='Running', db_name='%s'",
 		id, dbName, dbName), 1)
 	require.NoError(t, err)
 	defer func() {
@@ -256,6 +257,7 @@ func TestDeferSecondaryKeys(t *testing.T) {
 		wantStashErr          string
 		wantExecErr           string
 		expectFinalSchemaDiff bool
+		preStashHook          func() error
 		postStashHook         func() error
 	}{
 		{
@@ -298,6 +300,54 @@ func TestDeferSecondaryKeys(t *testing.T) {
 			WorkflowType: int32(binlogdatapb.VReplicationWorkflowType_MoveTables),
 		},
 		{
+			name:       "2SK:1FK",
+			tableName:  "t1",
+			initialDDL: "create table t1 (id int not null, c1 int default null, c2 int default null, t2_id int not null, primary key (id), key c1 (c1), key c2 (c2), foreign key (t2_id) references t2 (id))",
+			// Secondary key t2_id is needed to enforce the FK constraint so we do not drop it.
+			strippedDDL:  "create table t1 (id int not null, c1 int default null, c2 int default null, t2_id int not null, primary key (id), key t2_id (t2_id), constraint t1_ibfk_1 foreign key (t2_id) references t2 (id))",
+			actionDDL:    "alter table %s.t1 add key c1 (c1), add key c2 (c2)",
+			WorkflowType: int32(binlogdatapb.VReplicationWorkflowType_MoveTables),
+			preStashHook: func() error {
+				if _, err := dbClient.ExecuteFetch("drop table if exists t2", 1); err != nil {
+					return err
+				}
+				_, err = dbClient.ExecuteFetch("create table t2 (id int not null, c1 int not null, primary key (id))", 1)
+				return err
+			},
+		},
+		{
+			name:       "3SK:2FK",
+			tableName:  "t1",
+			initialDDL: "create table t1 (id int not null, id2 int default null, c1 int default null, c2 int default null, c3 int default null, t2_id int not null, t2_id2 int not null, primary key (id), key c1 (c1), key c2 (c2), foreign key (t2_id) references t2 (id), key c3 (c3), foreign key (t2_id2) references t2 (id2))",
+			// Secondary keys t2_id and t2_id2 are needed to enforce the FK constraint so we do not drop them.
+			strippedDDL:  "create table t1 (id int not null, id2 int default null, c1 int default null, c2 int default null, c3 int default null, t2_id int not null, t2_id2 int not null, primary key (id), key t2_id (t2_id), key t2_id2 (t2_id2), constraint t1_ibfk_1 foreign key (t2_id) references t2 (id), constraint t1_ibfk_2 foreign key (t2_id2) references t2 (id2))",
+			actionDDL:    "alter table %s.t1 add key c1 (c1), add key c2 (c2), add key c3 (c3)",
+			WorkflowType: int32(binlogdatapb.VReplicationWorkflowType_MoveTables),
+			preStashHook: func() error {
+				if _, err := dbClient.ExecuteFetch("drop table if exists t2", 1); err != nil {
+					return err
+				}
+				_, err = dbClient.ExecuteFetch("create table t2 (id int not null, id2 int default null, c1 int not null, primary key (id), key (id2))", 1)
+				return err
+			},
+		},
+		{
+			name:       "5SK:2FK_multi-column",
+			tableName:  "t1",
+			initialDDL: "create table t1 (id int not null, id2 int default null, c1 int default null, c2 int default null, c3 int default null, t2_id int not null, t2_id2 int not null, primary key (id), key c1 (c1), key c2 (c2), key t2_cs (c1,c2), key t2_ids (t2_id,t2_id2), foreign key (t2_id,t2_id2) references t2 (id, id2), key c3 (c3), foreign key (c1, c2) references t2 (c1, c2))",
+			// Secondary keys t2_ids and t2_cs are needed to enforce the FK constraint so we do not drop them.
+			strippedDDL:  "create table t1 (id int not null, id2 int default null, c1 int default null, c2 int default null, c3 int default null, t2_id int not null, t2_id2 int not null, primary key (id), key t2_cs (c1,c2), key t2_ids (t2_id,t2_id2), constraint t1_ibfk_1 foreign key (t2_id, t2_id2) references t2 (id, id2), constraint t1_ibfk_2 foreign key (c1, c2) references t2 (c1, c2))",
+			actionDDL:    "alter table %s.t1 add key c1 (c1), add key c2 (c2), add key c3 (c3)",
+			WorkflowType: int32(binlogdatapb.VReplicationWorkflowType_MoveTables),
+			preStashHook: func() error {
+				if _, err := dbClient.ExecuteFetch("drop table if exists t2", 1); err != nil {
+					return err
+				}
+				_, err = dbClient.ExecuteFetch("create table t2 (id int not null, id2 int not null, c1 int not null, c2 int not null, primary key (id,id2), key (c1,c2))", 1)
+				return err
+			},
+		},
+		{
 			name:         "2tSK",
 			tableName:    "t1",
 			initialDDL:   "create table t1 (id int not null, c1 varchar(10) default null, c2 varchar(10) default null, primary key (id), key c1_c2 (c1,c2), key c2 (c2))",
@@ -330,7 +380,7 @@ func TestDeferSecondaryKeys(t *testing.T) {
 			postStashHook: func() error {
 				myid := id + 1000
 				// Insert second vreplication record to simulate a second controller/vreplicator
-				_, err = dbClient.ExecuteFetch(fmt.Sprintf("insert into _vt.vreplication (id, workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name) values (%d, 'test', '', '', 99999, 99999, 0, 0, 'Running', '%s')",
+				_, err = dbClient.ExecuteFetch(fmt.Sprintf("insert into _vt.vreplication (id, workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, options) values (%d, 'test', '', '', 99999, 99999, 0, 0, 'Running', '%s', '{}')",
 					myid, dbName), 1)
 				if err != nil {
 					return err
@@ -339,7 +389,7 @@ func TestDeferSecondaryKeys(t *testing.T) {
 				myvr.WorkflowType = int32(binlogdatapb.VReplicationWorkflowType_Reshard)
 				// Insert second post copy action record to simulate a shard merge where you
 				// have N controllers/replicators running for the same table on the tablet.
-				// This forces a second row, which would otherwise not get created beacause
+				// This forces a second row, which would otherwise not get created because
 				// when this is called there's no secondary keys to stash anymore.
 				addlAction, err := json.Marshal(PostCopyAction{
 					Type: PostCopyActionSQL,
@@ -425,6 +475,11 @@ func TestDeferSecondaryKeys(t *testing.T) {
 			// MoveTables and Reshard workflows.
 			vr.WorkflowType = tcase.WorkflowType
 
+			if tcase.preStashHook != nil {
+				err = tcase.preStashHook()
+				require.NoError(t, err, "error executing pre stash hook: %v", err)
+			}
+
 			// Create the table.
 			_, err := dbClient.ExecuteFetch(tcase.initialDDL, 1)
 			require.NoError(t, err)
@@ -456,7 +511,7 @@ func TestDeferSecondaryKeys(t *testing.T) {
 
 			if tcase.postStashHook != nil {
 				err = tcase.postStashHook()
-				require.NoError(t, err)
+				require.NoError(t, err, "error executing post stash hook: %v", err)
 
 				// We should still NOT have any secondary keys because there's still
 				// a running controller/vreplicator in the copy phase.
@@ -494,7 +549,7 @@ func TestDeferSecondaryKeys(t *testing.T) {
 				// order in the table schema.
 				if !tcase.expectFinalSchemaDiff {
 					currentDDL := getCurrentDDL(tcase.tableName)
-					sdiff, err := schemadiff.DiffCreateTablesQueries(currentDDL, tcase.initialDDL, diffHints)
+					sdiff, err := schemadiff.DiffCreateTablesQueries(schemadiff.NewTestEnv(), currentDDL, tcase.initialDDL, diffHints)
 					require.NoError(t, err)
 					require.Nil(t, sdiff, "Expected no schema difference but got: %s", sdiff.CanonicalStatementString())
 				}
@@ -559,7 +614,7 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 	defer dbClient.Close()
 	dbName := dbClient.DBName()
 	// Ensure there's a dummy vreplication workflow record
-	_, err = dbClient.ExecuteFetch(fmt.Sprintf("insert into _vt.vreplication (id, workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name) values (%d, 'test', '', '', 99999, 99999, 0, 0, 'Running', '%s') on duplicate key update workflow='test', source='', pos='', max_tps=99999, max_replication_lag=99999, time_updated=0, transaction_timestamp=0, state='Running', db_name='%s'",
+	_, err = dbClient.ExecuteFetch(fmt.Sprintf("insert into _vt.vreplication (id, workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, options) values (%d, 'test', '', '', 99999, 99999, 0, 0, 'Running', '%s', '{}') on duplicate key update workflow='test', source='', pos='', max_tps=99999, max_replication_lag=99999, time_updated=0, transaction_timestamp=0, state='Running', db_name='%s'",
 		id, dbName, dbName), 1)
 	require.NoError(t, err)
 	defer func() {
@@ -678,7 +733,7 @@ func TestResumingFromPreviousWorkflowKeepingRowsCopied(t *testing.T) {
 	dbName := dbClient.DBName()
 	rowsCopied := int64(500000)
 	// Ensure there's an existing vreplication workflow
-	_, err = dbClient.ExecuteFetch(fmt.Sprintf("insert into _vt.vreplication (id, workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, rows_copied) values (%d, 'test', '', '', 99999, 99999, 0, 0, 'Running', '%s', %v) on duplicate key update workflow='test', source='', pos='', max_tps=99999, max_replication_lag=99999, time_updated=0, transaction_timestamp=0, state='Running', db_name='%s', rows_copied=%v",
+	_, err = dbClient.ExecuteFetch(fmt.Sprintf("insert into _vt.vreplication (id, workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, rows_copied, options) values (%d, 'test', '', '', 99999, 99999, 0, 0, 'Running', '%s', %v, '{}') on duplicate key update workflow='test', source='', pos='', max_tps=99999, max_replication_lag=99999, time_updated=0, transaction_timestamp=0, state='Running', db_name='%s', rows_copied=%v",
 		id, dbName, rowsCopied, dbName, rowsCopied), 1)
 	require.NoError(t, err)
 	defer func() {

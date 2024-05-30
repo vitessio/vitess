@@ -28,6 +28,10 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vtenv"
+
 	"vitess.io/vitess/go/test/utils"
 
 	"vitess.io/vitess/go/vt/key"
@@ -49,7 +53,7 @@ type testopts struct {
 	shardmap map[string]map[string]*topo.ShardInfo
 }
 
-func initTest(ctx context.Context, mode string, opts *Options, topts *testopts, t *testing.T) *VTExplain {
+func initTest(ctx context.Context, ts *topo.Server, mode string, opts *Options, topts *testopts, t *testing.T) *VTExplain {
 	schema, err := os.ReadFile("testdata/test-schema.sql")
 	require.NoError(t, err)
 
@@ -65,7 +69,8 @@ func initTest(ctx context.Context, mode string, opts *Options, topts *testopts, 
 	}
 
 	opts.ExecutionMode = mode
-	vte, err := Init(ctx, string(vSchema), string(schema), shardmap, opts)
+	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+	vte, err := Init(ctx, vtenv.NewTestEnv(), ts, string(vSchema), string(schema), shardmap, opts, srvTopoCounts)
 	require.NoError(t, err, "vtexplain Init error\n%s", string(schema))
 	return vte
 }
@@ -88,7 +93,8 @@ func runTestCase(testcase, mode string, opts *Options, topts *testopts, t *testi
 	t.Run(testcase, func(t *testing.T) {
 		ctx := utils.LeakCheckContext(t)
 
-		vte := initTest(ctx, mode, opts, topts, t)
+		ts := memorytopo.NewServer(ctx, Cell)
+		vte := initTest(ctx, ts, mode, opts, topts, t)
 		defer vte.Stop()
 
 		sqlFile := fmt.Sprintf("testdata/%s-queries.sql", testcase)
@@ -154,8 +160,8 @@ func TestExplain(t *testing.T) {
 
 func TestErrors(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
-
-	vte := initTest(ctx, ModeMulti, defaultTestOpts(), &testopts{}, t)
+	ts := memorytopo.NewServer(ctx, Cell)
+	vte := initTest(ctx, ts, ModeMulti, defaultTestOpts(), &testopts{}, t)
 	defer vte.Stop()
 
 	tests := []struct {
@@ -194,8 +200,8 @@ func TestErrors(t *testing.T) {
 
 func TestJSONOutput(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
-
-	vte := initTest(ctx, ModeMulti, defaultTestOpts(), &testopts{}, t)
+	ts := memorytopo.NewServer(ctx, Cell)
+	vte := initTest(ctx, ts, ModeMulti, defaultTestOpts(), &testopts{}, t)
 	defer vte.Stop()
 	sql := "select 1 from user where id = 1"
 	explains, err := vte.Run(sql)
@@ -344,7 +350,9 @@ func TestInit(t *testing.T) {
   }
 }`
 	schema := "create table table_missing_primary_vindex (id int primary key)"
-	_, err := Init(ctx, vschema, schema, "", defaultTestOpts())
+	ts := memorytopo.NewServer(ctx, Cell)
+	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+	_, err := Init(ctx, vtenv.NewTestEnv(), ts, vschema, schema, "", defaultTestOpts(), srvTopoCounts)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "missing primary col vindex")
 }

@@ -2,6 +2,7 @@ package planbuilder
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"vitess.io/vitess/go/vt/key"
@@ -111,9 +112,9 @@ func buildDDLPlans(ctx context.Context, sql string, ddlStatement sqlparser.DDLSt
 		}
 		err = checkFKError(vschema, ddlStatement, keyspace)
 	case *sqlparser.CreateView:
-		destination, keyspace, err = buildCreateView(ctx, vschema, ddl, reservedVars, enableOnlineDDL, enableDirectDDL)
+		destination, keyspace, err = buildCreateViewCommon(ctx, vschema, reservedVars, enableOnlineDDL, enableDirectDDL, ddl.Select, ddl)
 	case *sqlparser.AlterView:
-		destination, keyspace, err = buildAlterView(ctx, vschema, ddl, reservedVars, enableOnlineDDL, enableDirectDDL)
+		destination, keyspace, err = buildCreateViewCommon(ctx, vschema, reservedVars, enableOnlineDDL, enableDirectDDL, ddl.Select, ddl)
 	case *sqlparser.DropView:
 		destination, keyspace, err = buildDropView(vschema, ddlStatement)
 	case *sqlparser.DropTable:
@@ -172,7 +173,8 @@ func findTableDestinationAndKeyspace(vschema plancontext.VSchema, ddlStatement s
 	var err error
 	table, _, _, _, destination, err = vschema.FindTableOrVindex(ddlStatement.GetTable())
 	if err != nil {
-		_, isNotFound := err.(vindexes.NotFoundError)
+		var notFoundError vindexes.NotFoundError
+		isNotFound := errors.As(err, &notFoundError)
 		if !isNotFound {
 			return nil, nil, err
 		}
@@ -190,15 +192,28 @@ func findTableDestinationAndKeyspace(vschema plancontext.VSchema, ddlStatement s
 	return destination, keyspace, nil
 }
 
-func buildAlterView(ctx context.Context, vschema plancontext.VSchema, ddl *sqlparser.AlterView, reservedVars *sqlparser.ReservedVars, enableOnlineDDL, enableDirectDDL bool) (key.Destination, *vindexes.Keyspace, error) {
-	// For Alter View, we require that the view exist and the select query can be satisfied within the keyspace itself
+func buildCreateViewCommon(
+	ctx context.Context,
+	vschema plancontext.VSchema,
+	reservedVars *sqlparser.ReservedVars,
+	enableOnlineDDL, enableDirectDDL bool,
+	ddlSelect sqlparser.SelectStatement,
+	ddl sqlparser.DDLStatement,
+) (key.Destination, *vindexes.Keyspace, error) {
+	// For Create View, we require that the keyspace exist and the select query can be satisfied within the keyspace itself
 	// We should remove the keyspace name from the table name, as the database name in MySQL might be different than the keyspace name
 	destination, keyspace, err := findTableDestinationAndKeyspace(vschema, ddl)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	selectPlan, err := createInstructionFor(ctx, sqlparser.String(ddl.Select), ddl.Select, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+	// because we don't trust the schema tracker to have up-to-date info, we don't want to expand any SELECT * here
+	var expressions []sqlparser.SelectExprs
+	_ = sqlparser.VisitAllSelects(ddlSelect, func(p *sqlparser.Select, idx int) error {
+		expressions = append(expressions, sqlparser.CloneSelectExprs(p.SelectExprs))
+		return nil
+	})
+	selectPlan, err := createInstructionFor(ctx, sqlparser.String(ddlSelect), ddlSelect, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -206,10 +221,15 @@ func buildAlterView(ctx context.Context, vschema plancontext.VSchema, ddl *sqlpa
 	if keyspace.Name != selPlanKs {
 		return nil, nil, vterrors.VT12001(ViewDifferentKeyspace)
 	}
+
+	_ = sqlparser.VisitAllSelects(ddlSelect, func(p *sqlparser.Select, idx int) error {
+		p.SelectExprs = expressions[idx]
+		return nil
+	})
+
+	sqlparser.RemoveKeyspace(ddl)
+
 	if vschema.IsViewsEnabled() {
-		if keyspace == nil {
-			return nil, nil, vterrors.VT09005()
-		}
 		return destination, keyspace, nil
 	}
 	isRoutePlan, opCode := tryToGetRoutePlan(selectPlan.primitive)
@@ -219,57 +239,6 @@ func buildAlterView(ctx context.Context, vschema plancontext.VSchema, ddl *sqlpa
 	if opCode != engine.Unsharded && opCode != engine.EqualUnique && opCode != engine.Scatter {
 		return nil, nil, vterrors.VT12001(ViewComplex)
 	}
-	_ = sqlparser.SafeRewrite(ddl.Select, nil, func(cursor *sqlparser.Cursor) bool {
-		switch tableName := cursor.Node().(type) {
-		case sqlparser.TableName:
-			cursor.Replace(sqlparser.TableName{
-				Name: tableName.Name,
-			})
-		}
-		return true
-	})
-	return destination, keyspace, nil
-}
-
-func buildCreateView(ctx context.Context, vschema plancontext.VSchema, ddl *sqlparser.CreateView, reservedVars *sqlparser.ReservedVars, enableOnlineDDL, enableDirectDDL bool) (key.Destination, *vindexes.Keyspace, error) {
-	// For Create View, we require that the keyspace exist and the select query can be satisfied within the keyspace itself
-	// We should remove the keyspace name from the table name, as the database name in MySQL might be different than the keyspace name
-	destination, keyspace, _, err := vschema.TargetDestination(ddl.ViewName.Qualifier.String())
-	if err != nil {
-		return nil, nil, err
-	}
-	ddl.ViewName.Qualifier = sqlparser.NewIdentifierCS("")
-
-	selectPlan, err := createInstructionFor(ctx, sqlparser.String(ddl.Select), ddl.Select, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
-	if err != nil {
-		return nil, nil, err
-	}
-	selPlanKs := selectPlan.primitive.GetKeyspaceName()
-	if keyspace.Name != selPlanKs {
-		return nil, nil, vterrors.VT12001(ViewDifferentKeyspace)
-	}
-	if vschema.IsViewsEnabled() {
-		if keyspace == nil {
-			return nil, nil, vterrors.VT09005()
-		}
-		return destination, keyspace, nil
-	}
-	isRoutePlan, opCode := tryToGetRoutePlan(selectPlan.primitive)
-	if !isRoutePlan {
-		return nil, nil, vterrors.VT12001(ViewComplex)
-	}
-	if opCode != engine.Unsharded && opCode != engine.EqualUnique && opCode != engine.Scatter {
-		return nil, nil, vterrors.VT12001(ViewComplex)
-	}
-	_ = sqlparser.SafeRewrite(ddl.Select, nil, func(cursor *sqlparser.Cursor) bool {
-		switch tableName := cursor.Node().(type) {
-		case sqlparser.TableName:
-			cursor.Replace(sqlparser.TableName{
-				Name: tableName.Name,
-			})
-		}
-		return true
-	})
 	return destination, keyspace, nil
 }
 
@@ -312,7 +281,8 @@ func buildDropTable(vschema plancontext.VSchema, ddlStatement sqlparser.DDLState
 		table, _, _, _, destinationTab, err = vschema.FindTableOrVindex(tab)
 
 		if err != nil {
-			_, isNotFound := err.(vindexes.NotFoundError)
+			var notFoundError vindexes.NotFoundError
+			isNotFound := errors.As(err, &notFoundError)
 			if !isNotFound {
 				return nil, nil, err
 			}
@@ -355,7 +325,8 @@ func buildRenameTable(vschema plancontext.VSchema, renameTable *sqlparser.Rename
 		table, _, _, _, destinationFrom, err = vschema.FindTableOrVindex(tabPair.FromTable)
 
 		if err != nil {
-			_, isNotFound := err.(vindexes.NotFoundError)
+			var notFoundError vindexes.NotFoundError
+			isNotFound := errors.As(err, &notFoundError)
 			if !isNotFound {
 				return nil, nil, err
 			}

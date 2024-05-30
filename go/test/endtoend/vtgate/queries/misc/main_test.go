@@ -73,6 +73,9 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
+		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--enable-views")
+		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver-enable-views")
+
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
 			Name:      keyspaceName,

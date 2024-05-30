@@ -74,9 +74,9 @@ message Keyspace {
   // OBSOLETE string sharding_column_type = 4;
   reserved 4;
 
-  // redirects all traffic to another keyspace. If set, shards is ignored.
-  string served_from = 5;
-
+  // OBSOLETE string served_from = 5;
+  reserved 5;
+  
   // number of replica tablets to instantiate. This includes the primary tablet.
   int32 replica_count = 6;
 

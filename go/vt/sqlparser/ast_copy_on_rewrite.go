@@ -204,8 +204,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfGeomFromWKBExpr(n, parent)
 	case *GeomPropertyFuncExpr:
 		return c.copyOnRewriteRefOfGeomPropertyFuncExpr(n, parent)
-	case GroupBy:
-		return c.copyOnRewriteGroupBy(n, parent)
+	case *GroupBy:
+		return c.copyOnRewriteRefOfGroupBy(n, parent)
 	case *GroupConcatExpr:
 		return c.copyOnRewriteRefOfGroupConcatExpr(n, parent)
 	case IdentifierCI:
@@ -422,6 +422,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfRollback(n, parent)
 	case RootNode:
 		return c.copyOnRewriteRootNode(n, parent)
+	case *RowAlias:
+		return c.copyOnRewriteRefOfRowAlias(n, parent)
 	case *SRollback:
 		return c.copyOnRewriteRefOfSRollback(n, parent)
 	case *Savepoint:
@@ -1074,9 +1076,11 @@ func (c *cow) copyOnRewriteRefOfAvg(n *Avg, parent SQLNode) (out SQLNode, change
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_Arg, changedArg := c.copyOnRewriteExpr(n.Arg, n)
-		if changedArg {
+		_OverClause, changedOverClause := c.copyOnRewriteRefOfOverClause(n.OverClause, n)
+		if changedArg || changedOverClause {
 			res := *n
 			res.Arg, _ = _Arg.(Expr)
+			res.OverClause, _ = _OverClause.(*OverClause)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -1158,9 +1162,11 @@ func (c *cow) copyOnRewriteRefOfBitAnd(n *BitAnd, parent SQLNode) (out SQLNode, 
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_Arg, changedArg := c.copyOnRewriteExpr(n.Arg, n)
-		if changedArg {
+		_OverClause, changedOverClause := c.copyOnRewriteRefOfOverClause(n.OverClause, n)
+		if changedArg || changedOverClause {
 			res := *n
 			res.Arg, _ = _Arg.(Expr)
+			res.OverClause, _ = _OverClause.(*OverClause)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -1180,9 +1186,11 @@ func (c *cow) copyOnRewriteRefOfBitOr(n *BitOr, parent SQLNode) (out SQLNode, ch
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_Arg, changedArg := c.copyOnRewriteExpr(n.Arg, n)
-		if changedArg {
+		_OverClause, changedOverClause := c.copyOnRewriteRefOfOverClause(n.OverClause, n)
+		if changedArg || changedOverClause {
 			res := *n
 			res.Arg, _ = _Arg.(Expr)
+			res.OverClause, _ = _OverClause.(*OverClause)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -1202,9 +1210,11 @@ func (c *cow) copyOnRewriteRefOfBitXor(n *BitXor, parent SQLNode) (out SQLNode, 
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_Arg, changedArg := c.copyOnRewriteExpr(n.Arg, n)
-		if changedArg {
+		_OverClause, changedOverClause := c.copyOnRewriteRefOfOverClause(n.OverClause, n)
+		if changedArg || changedOverClause {
 			res := *n
 			res.Arg, _ = _Arg.(Expr)
+			res.OverClause, _ = _OverClause.(*OverClause)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -1445,18 +1455,6 @@ func (c *cow) copyOnRewriteRefOfColumnType(n *ColumnType, parent SQLNode) (out S
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
-		_Length, changedLength := c.copyOnRewriteRefOfLiteral(n.Length, n)
-		_Scale, changedScale := c.copyOnRewriteRefOfLiteral(n.Scale, n)
-		if changedLength || changedScale {
-			res := *n
-			res.Length, _ = _Length.(*Literal)
-			res.Scale, _ = _Scale.(*Literal)
-			out = &res
-			if c.cloned != nil {
-				c.cloned(n, out)
-			}
-			changed = true
-		}
 	}
 	if c.post != nil {
 		out, changed = c.postVisit(out, parent, changed)
@@ -1616,18 +1614,6 @@ func (c *cow) copyOnRewriteRefOfConvertType(n *ConvertType, parent SQLNode) (out
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
-		_Length, changedLength := c.copyOnRewriteRefOfLiteral(n.Length, n)
-		_Scale, changedScale := c.copyOnRewriteRefOfLiteral(n.Scale, n)
-		if changedLength || changedScale {
-			res := *n
-			res.Length, _ = _Length.(*Literal)
-			res.Scale, _ = _Scale.(*Literal)
-			out = &res
-			if c.cloned != nil {
-				c.cloned(n, out)
-			}
-			changed = true
-		}
 	}
 	if c.post != nil {
 		out, changed = c.postVisit(out, parent, changed)
@@ -1663,9 +1649,11 @@ func (c *cow) copyOnRewriteRefOfCount(n *Count, parent SQLNode) (out SQLNode, ch
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_Args, changedArgs := c.copyOnRewriteExprs(n.Args, n)
-		if changedArgs {
+		_OverClause, changedOverClause := c.copyOnRewriteRefOfOverClause(n.OverClause, n)
+		if changedArgs || changedOverClause {
 			res := *n
 			res.Args, _ = _Args.(Exprs)
+			res.OverClause, _ = _OverClause.(*OverClause)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -1684,6 +1672,16 @@ func (c *cow) copyOnRewriteRefOfCountStar(n *CountStar, parent SQLNode) (out SQL
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
+		_OverClause, changedOverClause := c.copyOnRewriteRefOfOverClause(n.OverClause, n)
+		if changedOverClause {
+			res := *n
+			res.OverClause, _ = _OverClause.(*OverClause)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
 	}
 	if c.post != nil {
 		out, changed = c.postVisit(out, parent, changed)
@@ -1850,18 +1848,26 @@ func (c *cow) copyOnRewriteRefOfDelete(n *Delete, parent SQLNode) (out SQLNode, 
 	if c.pre == nil || c.pre(n, parent) {
 		_With, changedWith := c.copyOnRewriteRefOfWith(n.With, n)
 		_Comments, changedComments := c.copyOnRewriteRefOfParsedComments(n.Comments, n)
+		var changedTableExprs bool
+		_TableExprs := make([]TableExpr, len(n.TableExprs))
+		for x, el := range n.TableExprs {
+			this, changed := c.copyOnRewriteTableExpr(el, n)
+			_TableExprs[x] = this.(TableExpr)
+			if changed {
+				changedTableExprs = true
+			}
+		}
 		_Targets, changedTargets := c.copyOnRewriteTableNames(n.Targets, n)
-		_TableExprs, changedTableExprs := c.copyOnRewriteTableExprs(n.TableExprs, n)
 		_Partitions, changedPartitions := c.copyOnRewritePartitions(n.Partitions, n)
 		_Where, changedWhere := c.copyOnRewriteRefOfWhere(n.Where, n)
 		_OrderBy, changedOrderBy := c.copyOnRewriteOrderBy(n.OrderBy, n)
 		_Limit, changedLimit := c.copyOnRewriteRefOfLimit(n.Limit, n)
-		if changedWith || changedComments || changedTargets || changedTableExprs || changedPartitions || changedWhere || changedOrderBy || changedLimit {
+		if changedWith || changedComments || changedTableExprs || changedTargets || changedPartitions || changedWhere || changedOrderBy || changedLimit {
 			res := *n
 			res.With, _ = _With.(*With)
 			res.Comments, _ = _Comments.(*ParsedComments)
+			res.TableExprs = _TableExprs
 			res.Targets, _ = _Targets.(TableNames)
-			res.TableExprs, _ = _TableExprs.(TableExprs)
 			res.Partitions, _ = _Partitions.(Partitions)
 			res.Where, _ = _Where.(*Where)
 			res.OrderBy, _ = _OrderBy.(OrderBy)
@@ -2339,12 +2345,12 @@ func (c *cow) copyOnRewriteRefOfFuncExpr(n *FuncExpr, parent SQLNode) (out SQLNo
 	if c.pre == nil || c.pre(n, parent) {
 		_Qualifier, changedQualifier := c.copyOnRewriteIdentifierCS(n.Qualifier, n)
 		_Name, changedName := c.copyOnRewriteIdentifierCI(n.Name, n)
-		_Exprs, changedExprs := c.copyOnRewriteSelectExprs(n.Exprs, n)
+		_Exprs, changedExprs := c.copyOnRewriteExprs(n.Exprs, n)
 		if changedQualifier || changedName || changedExprs {
 			res := *n
 			res.Qualifier, _ = _Qualifier.(IdentifierCS)
 			res.Name, _ = _Name.(IdentifierCI)
-			res.Exprs, _ = _Exprs.(SelectExprs)
+			res.Exprs, _ = _Exprs.(Exprs)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -2633,22 +2639,29 @@ func (c *cow) copyOnRewriteRefOfGeomPropertyFuncExpr(n *GeomPropertyFuncExpr, pa
 	}
 	return
 }
-func (c *cow) copyOnRewriteGroupBy(n GroupBy, parent SQLNode) (out SQLNode, changed bool) {
+func (c *cow) copyOnRewriteRefOfGroupBy(n *GroupBy, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
-		res := make(GroupBy, len(n))
-		for x, el := range n {
-			this, change := c.copyOnRewriteExpr(el, n)
-			res[x] = this.(Expr)
-			if change {
-				changed = true
+		var changedExprs bool
+		_Exprs := make([]Expr, len(n.Exprs))
+		for x, el := range n.Exprs {
+			this, changed := c.copyOnRewriteExpr(el, n)
+			_Exprs[x] = this.(Expr)
+			if changed {
+				changedExprs = true
 			}
 		}
-		if changed {
-			out = res
+		if changedExprs {
+			res := *n
+			res.Exprs = _Exprs
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
 		}
 	}
 	if c.post != nil {
@@ -2810,14 +2823,16 @@ func (c *cow) copyOnRewriteRefOfInsert(n *Insert, parent SQLNode) (out SQLNode, 
 		_Partitions, changedPartitions := c.copyOnRewritePartitions(n.Partitions, n)
 		_Columns, changedColumns := c.copyOnRewriteColumns(n.Columns, n)
 		_Rows, changedRows := c.copyOnRewriteInsertRows(n.Rows, n)
+		_RowAlias, changedRowAlias := c.copyOnRewriteRefOfRowAlias(n.RowAlias, n)
 		_OnDup, changedOnDup := c.copyOnRewriteOnDup(n.OnDup, n)
-		if changedComments || changedTable || changedPartitions || changedColumns || changedRows || changedOnDup {
+		if changedComments || changedTable || changedPartitions || changedColumns || changedRows || changedRowAlias || changedOnDup {
 			res := *n
 			res.Comments, _ = _Comments.(*ParsedComments)
 			res.Table, _ = _Table.(*AliasedTableExpr)
 			res.Partitions, _ = _Partitions.(Partitions)
 			res.Columns, _ = _Columns.(Columns)
 			res.Rows, _ = _Rows.(InsertRows)
+			res.RowAlias, _ = _RowAlias.(*RowAlias)
 			res.OnDup, _ = _OnDup.(OnDup)
 			out = &res
 			if c.cloned != nil {
@@ -3886,9 +3901,11 @@ func (c *cow) copyOnRewriteRefOfMax(n *Max, parent SQLNode) (out SQLNode, change
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_Arg, changedArg := c.copyOnRewriteExpr(n.Arg, n)
-		if changedArg {
+		_OverClause, changedOverClause := c.copyOnRewriteRefOfOverClause(n.OverClause, n)
+		if changedArg || changedOverClause {
 			res := *n
 			res.Arg, _ = _Arg.(Expr)
+			res.OverClause, _ = _OverClause.(*OverClause)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -3932,9 +3949,11 @@ func (c *cow) copyOnRewriteRefOfMin(n *Min, parent SQLNode) (out SQLNode, change
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_Arg, changedArg := c.copyOnRewriteExpr(n.Arg, n)
-		if changedArg {
+		_OverClause, changedOverClause := c.copyOnRewriteRefOfOverClause(n.OverClause, n)
+		if changedArg || changedOverClause {
 			res := *n
 			res.Arg, _ = _Arg.(Expr)
+			res.OverClause, _ = _OverClause.(*OverClause)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -5078,6 +5097,30 @@ func (c *cow) copyOnRewriteRootNode(n RootNode, parent SQLNode) (out SQLNode, ch
 	}
 	return
 }
+func (c *cow) copyOnRewriteRefOfRowAlias(n *RowAlias, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_TableName, changedTableName := c.copyOnRewriteIdentifierCS(n.TableName, n)
+		_Columns, changedColumns := c.copyOnRewriteColumns(n.Columns, n)
+		if changedTableName || changedColumns {
+			res := *n
+			res.TableName, _ = _TableName.(IdentifierCS)
+			res.Columns, _ = _Columns.(Columns)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
 func (c *cow) copyOnRewriteRefOfSRollback(n *SRollback, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -5141,7 +5184,7 @@ func (c *cow) copyOnRewriteRefOfSelect(n *Select, parent SQLNode) (out SQLNode, 
 		_Comments, changedComments := c.copyOnRewriteRefOfParsedComments(n.Comments, n)
 		_SelectExprs, changedSelectExprs := c.copyOnRewriteSelectExprs(n.SelectExprs, n)
 		_Where, changedWhere := c.copyOnRewriteRefOfWhere(n.Where, n)
-		_GroupBy, changedGroupBy := c.copyOnRewriteGroupBy(n.GroupBy, n)
+		_GroupBy, changedGroupBy := c.copyOnRewriteRefOfGroupBy(n.GroupBy, n)
 		_Having, changedHaving := c.copyOnRewriteRefOfWhere(n.Having, n)
 		_Windows, changedWindows := c.copyOnRewriteNamedWindows(n.Windows, n)
 		_OrderBy, changedOrderBy := c.copyOnRewriteOrderBy(n.OrderBy, n)
@@ -5154,7 +5197,7 @@ func (c *cow) copyOnRewriteRefOfSelect(n *Select, parent SQLNode) (out SQLNode, 
 			res.Comments, _ = _Comments.(*ParsedComments)
 			res.SelectExprs, _ = _SelectExprs.(SelectExprs)
 			res.Where, _ = _Where.(*Where)
-			res.GroupBy, _ = _GroupBy.(GroupBy)
+			res.GroupBy, _ = _GroupBy.(*GroupBy)
 			res.Having, _ = _Having.(*Where)
 			res.Windows, _ = _Windows.(NamedWindows)
 			res.OrderBy, _ = _OrderBy.(OrderBy)
@@ -5457,9 +5500,11 @@ func (c *cow) copyOnRewriteRefOfStd(n *Std, parent SQLNode) (out SQLNode, change
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_Arg, changedArg := c.copyOnRewriteExpr(n.Arg, n)
-		if changedArg {
+		_OverClause, changedOverClause := c.copyOnRewriteRefOfOverClause(n.OverClause, n)
+		if changedArg || changedOverClause {
 			res := *n
 			res.Arg, _ = _Arg.(Expr)
+			res.OverClause, _ = _OverClause.(*OverClause)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -5479,9 +5524,11 @@ func (c *cow) copyOnRewriteRefOfStdDev(n *StdDev, parent SQLNode) (out SQLNode, 
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_Arg, changedArg := c.copyOnRewriteExpr(n.Arg, n)
-		if changedArg {
+		_OverClause, changedOverClause := c.copyOnRewriteRefOfOverClause(n.OverClause, n)
+		if changedArg || changedOverClause {
 			res := *n
 			res.Arg, _ = _Arg.(Expr)
+			res.OverClause, _ = _OverClause.(*OverClause)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -5501,9 +5548,11 @@ func (c *cow) copyOnRewriteRefOfStdPop(n *StdPop, parent SQLNode) (out SQLNode, 
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_Arg, changedArg := c.copyOnRewriteExpr(n.Arg, n)
-		if changedArg {
+		_OverClause, changedOverClause := c.copyOnRewriteRefOfOverClause(n.OverClause, n)
+		if changedArg || changedOverClause {
 			res := *n
 			res.Arg, _ = _Arg.(Expr)
+			res.OverClause, _ = _OverClause.(*OverClause)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -5523,9 +5572,11 @@ func (c *cow) copyOnRewriteRefOfStdSamp(n *StdSamp, parent SQLNode) (out SQLNode
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_Arg, changedArg := c.copyOnRewriteExpr(n.Arg, n)
-		if changedArg {
+		_OverClause, changedOverClause := c.copyOnRewriteRefOfOverClause(n.OverClause, n)
+		if changedArg || changedOverClause {
 			res := *n
 			res.Arg, _ = _Arg.(Expr)
+			res.OverClause, _ = _OverClause.(*OverClause)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -5718,9 +5769,11 @@ func (c *cow) copyOnRewriteRefOfSum(n *Sum, parent SQLNode) (out SQLNode, change
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_Arg, changedArg := c.copyOnRewriteExpr(n.Arg, n)
-		if changedArg {
+		_OverClause, changedOverClause := c.copyOnRewriteRefOfOverClause(n.OverClause, n)
+		if changedArg || changedOverClause {
 			res := *n
 			res.Arg, _ = _Arg.(Expr)
+			res.OverClause, _ = _OverClause.(*OverClause)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -6023,7 +6076,15 @@ func (c *cow) copyOnRewriteRefOfUpdate(n *Update, parent SQLNode) (out SQLNode, 
 	if c.pre == nil || c.pre(n, parent) {
 		_With, changedWith := c.copyOnRewriteRefOfWith(n.With, n)
 		_Comments, changedComments := c.copyOnRewriteRefOfParsedComments(n.Comments, n)
-		_TableExprs, changedTableExprs := c.copyOnRewriteTableExprs(n.TableExprs, n)
+		var changedTableExprs bool
+		_TableExprs := make([]TableExpr, len(n.TableExprs))
+		for x, el := range n.TableExprs {
+			this, changed := c.copyOnRewriteTableExpr(el, n)
+			_TableExprs[x] = this.(TableExpr)
+			if changed {
+				changedTableExprs = true
+			}
+		}
 		_Exprs, changedExprs := c.copyOnRewriteUpdateExprs(n.Exprs, n)
 		_Where, changedWhere := c.copyOnRewriteRefOfWhere(n.Where, n)
 		_OrderBy, changedOrderBy := c.copyOnRewriteOrderBy(n.OrderBy, n)
@@ -6032,7 +6093,7 @@ func (c *cow) copyOnRewriteRefOfUpdate(n *Update, parent SQLNode) (out SQLNode, 
 			res := *n
 			res.With, _ = _With.(*With)
 			res.Comments, _ = _Comments.(*ParsedComments)
-			res.TableExprs, _ = _TableExprs.(TableExprs)
+			res.TableExprs = _TableExprs
 			res.Exprs, _ = _Exprs.(UpdateExprs)
 			res.Where, _ = _Where.(*Where)
 			res.OrderBy, _ = _OrderBy.(OrderBy)
@@ -6285,9 +6346,11 @@ func (c *cow) copyOnRewriteRefOfVarPop(n *VarPop, parent SQLNode) (out SQLNode, 
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_Arg, changedArg := c.copyOnRewriteExpr(n.Arg, n)
-		if changedArg {
+		_OverClause, changedOverClause := c.copyOnRewriteRefOfOverClause(n.OverClause, n)
+		if changedArg || changedOverClause {
 			res := *n
 			res.Arg, _ = _Arg.(Expr)
+			res.OverClause, _ = _OverClause.(*OverClause)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -6307,9 +6370,11 @@ func (c *cow) copyOnRewriteRefOfVarSamp(n *VarSamp, parent SQLNode) (out SQLNode
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_Arg, changedArg := c.copyOnRewriteExpr(n.Arg, n)
-		if changedArg {
+		_OverClause, changedOverClause := c.copyOnRewriteRefOfOverClause(n.OverClause, n)
+		if changedArg || changedOverClause {
 			res := *n
 			res.Arg, _ = _Arg.(Expr)
+			res.OverClause, _ = _OverClause.(*OverClause)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -6351,9 +6416,11 @@ func (c *cow) copyOnRewriteRefOfVariance(n *Variance, parent SQLNode) (out SQLNo
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_Arg, changedArg := c.copyOnRewriteExpr(n.Arg, n)
-		if changedArg {
+		_OverClause, changedOverClause := c.copyOnRewriteRefOfOverClause(n.OverClause, n)
+		if changedArg || changedOverClause {
 			res := *n
 			res.Arg, _ = _Arg.(Expr)
+			res.OverClause, _ = _OverClause.(*OverClause)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)

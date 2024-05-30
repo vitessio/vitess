@@ -51,6 +51,7 @@ func PrepareAST(
 	selectLimit int,
 	setVarComment string,
 	sysVars map[string]string,
+	fkChecksState *bool,
 	views VSchemaViews,
 ) (*RewriteASTResult, error) {
 	if parameterize {
@@ -59,7 +60,7 @@ func PrepareAST(
 			return nil, err
 		}
 	}
-	return RewriteAST(in, keyspace, selectLimit, setVarComment, sysVars, views)
+	return RewriteAST(in, keyspace, selectLimit, setVarComment, sysVars, fkChecksState, views)
 }
 
 // RewriteAST rewrites the whole AST, replacing function calls and adding column aliases to queries.
@@ -70,9 +71,10 @@ func RewriteAST(
 	selectLimit int,
 	setVarComment string,
 	sysVars map[string]string,
+	fkChecksState *bool,
 	views VSchemaViews,
 ) (*RewriteASTResult, error) {
-	er := newASTRewriter(keyspace, selectLimit, setVarComment, sysVars, views)
+	er := newASTRewriter(keyspace, selectLimit, setVarComment, sysVars, fkChecksState, views)
 	er.shouldRewriteDatabaseFunc = shouldRewriteDatabaseFunc(in)
 	result := SafeRewrite(in, er.rewriteDown, er.rewriteUp)
 	if er.err != nil {
@@ -121,16 +123,18 @@ type astRewriter struct {
 	keyspace      string
 	selectLimit   int
 	setVarComment string
+	fkChecksState *bool
 	sysVars       map[string]string
 	views         VSchemaViews
 }
 
-func newASTRewriter(keyspace string, selectLimit int, setVarComment string, sysVars map[string]string, views VSchemaViews) *astRewriter {
+func newASTRewriter(keyspace string, selectLimit int, setVarComment string, sysVars map[string]string, fkChecksState *bool, views VSchemaViews) *astRewriter {
 	return &astRewriter{
 		bindVars:      &BindVarNeeds{},
 		keyspace:      keyspace,
 		selectLimit:   selectLimit,
 		setVarComment: setVarComment,
+		fkChecksState: fkChecksState,
 		sysVars:       sysVars,
 		views:         views,
 	}
@@ -154,7 +158,7 @@ const (
 )
 
 func (er *astRewriter) rewriteAliasedExpr(node *AliasedExpr) (*BindVarNeeds, error) {
-	inner := newASTRewriter(er.keyspace, er.selectLimit, er.setVarComment, er.sysVars, er.views)
+	inner := newASTRewriter(er.keyspace, er.selectLimit, er.setVarComment, er.sysVars, nil, er.views)
 	inner.shouldRewriteDatabaseFunc = er.shouldRewriteDatabaseFunc
 	tmp := SafeRewrite(node.Expr, inner.rewriteDown, inner.rewriteUp)
 	newExpr, ok := tmp.(Expr)
@@ -177,13 +181,19 @@ func (er *astRewriter) rewriteDown(node SQLNode, _ SQLNode) bool {
 
 func (er *astRewriter) rewriteUp(cursor *Cursor) bool {
 	// Add SET_VAR comment to this node if it supports it and is needed
-	if supportOptimizerHint, supportsOptimizerHint := cursor.Node().(SupportOptimizerHint); supportsOptimizerHint && er.setVarComment != "" {
-		newComments, err := supportOptimizerHint.GetParsedComments().AddQueryHint(er.setVarComment)
-		if err != nil {
-			er.err = err
-			return false
+	if supportOptimizerHint, supportsOptimizerHint := cursor.Node().(SupportOptimizerHint); supportsOptimizerHint {
+		if er.setVarComment != "" {
+			newComments, err := supportOptimizerHint.GetParsedComments().AddQueryHint(er.setVarComment)
+			if err != nil {
+				er.err = err
+				return false
+			}
+			supportOptimizerHint.SetComments(newComments)
 		}
-		supportOptimizerHint.SetComments(newComments)
+		if er.fkChecksState != nil {
+			newComments := supportOptimizerHint.GetParsedComments().SetMySQLSetVarValue(sysvars.ForeignKeyChecks, FkChecksStateString(er.fkChecksState))
+			supportOptimizerHint.SetComments(newComments)
+		}
 	}
 
 	switch node := cursor.Node().(type) {
@@ -307,7 +317,7 @@ func (er *astRewriter) visitSelect(node *Select) {
 		}
 
 		aliasedExpr, ok := col.(*AliasedExpr)
-		if !ok || !aliasedExpr.As.IsEmpty() {
+		if !ok || aliasedExpr.As.NotEmpty() {
 			continue
 		}
 		buf := NewTrackedBuffer(nil)
@@ -443,7 +453,7 @@ func (er *astRewriter) unnestSubQueries(cursor *Cursor, subquery *Subquery) {
 
 	if len(sel.SelectExprs) != 1 ||
 		len(sel.OrderBy) != 0 ||
-		len(sel.GroupBy) != 0 ||
+		sel.GroupBy != nil ||
 		len(sel.From) != 1 ||
 		sel.Where != nil ||
 		sel.Having != nil ||
@@ -506,7 +516,7 @@ func (er *astRewriter) existsRewrite(cursor *Cursor, node *ExistsExpr) {
 		return
 	}
 
-	if len(sel.GroupBy) == 0 && sel.SelectExprs.AllAggregation() {
+	if sel.GroupBy == nil && sel.SelectExprs.AllAggregation() {
 		// in these situations, we are guaranteed to always get a non-empty result,
 		// so we can replace the EXISTS with a literal true
 		cursor.Replace(BoolVal(true))

@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"math/rand"
+	"math/rand/v2"
 	"slices"
 	"strings"
 	"testing"
@@ -30,14 +30,13 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 
-	"vitess.io/vitess/go/sqltypes"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 type testCase struct {
@@ -51,17 +50,10 @@ type testCase struct {
 }
 
 var (
-	T            = true
-	F            = false
-	collationEnv *collations.Environment
+	T                                    = true
+	F                                    = false
+	collationEnv *collations.Environment = collations.MySQL8()
 )
-
-func init() {
-	// We require MySQL 8.0 collations for the comparisons in the tests
-	mySQLVersion := "8.0.0"
-	servenv.SetMySQLServerVersionForTest(mySQLVersion)
-	collationEnv = collations.NewEnvironment(mySQLVersion)
-}
 
 func defaultCollation() collations.TypedCollation {
 	return collations.TypedCollation{
@@ -78,11 +70,13 @@ func (tc testCase) run(t *testing.T) {
 	for i, value := range tc.row {
 		fields[i] = &querypb.Field{Type: value.Type()}
 	}
-	env := NewExpressionEnv(context.Background(), tc.bv, nil)
+	venv := vtenv.NewTestEnv()
+	env := NewExpressionEnv(context.Background(), tc.bv, NewEmptyVCursor(venv, time.UTC))
 	env.Row = tc.row
 	ast := &astCompiler{
 		cfg: &Config{
-			Collation: collations.CollationUtf8mb4ID,
+			Collation:   collations.CollationUtf8mb4ID,
+			Environment: venv,
 		},
 	}
 	cmp, err := ast.translateComparisonExpr2(tc.op, tc.v1, tc.v2)
@@ -110,7 +104,7 @@ func TestCompareIntegers(t *testing.T) {
 	tests := []testCase{
 		{
 			name: "integers are equal (1)",
-			v1:   newColumn(0, Type{Type: sqltypes.Int64, Coll: collations.CollationBinaryID}), v2: newColumn(0, Type{Type: sqltypes.Int64, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Int64, collations.CollationBinaryID)), v2: newColumn(0, NewType(sqltypes.Int64, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.EqualOp,
 			row: []sqltypes.Value{sqltypes.NewInt64(18)},
 		},
@@ -131,25 +125,25 @@ func TestCompareIntegers(t *testing.T) {
 		},
 		{
 			name: "integers are not equal (3)",
-			v1:   newColumn(0, Type{Type: sqltypes.Int64, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Int64, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Int64, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Int64, collations.CollationBinaryID)),
 			out: &F, op: sqlparser.EqualOp,
 			row: []sqltypes.Value{sqltypes.NewInt64(18), sqltypes.NewInt64(98)},
 		},
 		{
 			name: "unsigned integers are equal",
-			v1:   newColumn(0, Type{Type: sqltypes.Uint64, Coll: collations.CollationBinaryID}), v2: newColumn(0, Type{Type: sqltypes.Uint64, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Uint64, collations.CollationBinaryID)), v2: newColumn(0, NewType(sqltypes.Uint64, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.EqualOp,
 			row: []sqltypes.Value{sqltypes.NewUint64(18)},
 		},
 		{
 			name: "unsigned integer and integer are equal",
-			v1:   newColumn(0, Type{Type: sqltypes.Uint64, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Int64, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Uint64, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Int64, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.EqualOp,
 			row: []sqltypes.Value{sqltypes.NewUint64(18), sqltypes.NewInt64(18)},
 		},
 		{
 			name: "unsigned integer and integer are not equal",
-			v1:   newColumn(0, Type{Type: sqltypes.Uint64, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Int64, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Uint64, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Int64, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.NotEqualOp,
 			row: []sqltypes.Value{sqltypes.NewUint64(18), sqltypes.NewInt64(42)},
 		},
@@ -207,7 +201,7 @@ func TestCompareFloats(t *testing.T) {
 	tests := []testCase{
 		{
 			name: "floats are equal (1)",
-			v1:   newColumn(0, Type{Type: sqltypes.Float64, Coll: collations.CollationBinaryID}), v2: newColumn(0, Type{Type: sqltypes.Float64, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Float64, collations.CollationBinaryID)), v2: newColumn(0, NewType(sqltypes.Float64, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.EqualOp,
 			row: []sqltypes.Value{sqltypes.NewFloat64(18)},
 		},
@@ -228,7 +222,7 @@ func TestCompareFloats(t *testing.T) {
 		},
 		{
 			name: "floats are not equal (3)",
-			v1:   newColumn(0, Type{Type: sqltypes.Float64, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Float64, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Float64, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Float64, collations.CollationBinaryID)),
 			out: &F, op: sqlparser.EqualOp,
 			row: []sqltypes.Value{sqltypes.NewFloat64(16516.84), sqltypes.NewFloat64(219541.01)},
 		},
@@ -286,37 +280,37 @@ func TestCompareDecimals(t *testing.T) {
 	tests := []testCase{
 		{
 			name: "decimals are equal",
-			v1:   newColumn(0, Type{Type: sqltypes.Decimal, Coll: collations.CollationBinaryID}), v2: newColumn(0, Type{Type: sqltypes.Decimal, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Decimal, collations.CollationBinaryID)), v2: newColumn(0, NewType(sqltypes.Decimal, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.EqualOp,
 			row: []sqltypes.Value{sqltypes.NewDecimal("12.9019")},
 		},
 		{
 			name: "decimals are not equal",
-			v1:   newColumn(0, Type{Type: sqltypes.Decimal, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Decimal, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Decimal, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Decimal, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.NotEqualOp,
 			row: []sqltypes.Value{sqltypes.NewDecimal("12.9019"), sqltypes.NewDecimal("489.156849")},
 		},
 		{
 			name: "decimal is greater than decimal",
-			v1:   newColumn(0, Type{Type: sqltypes.Decimal, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Decimal, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Decimal, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Decimal, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.GreaterThanOp,
 			row: []sqltypes.Value{sqltypes.NewDecimal("192.129"), sqltypes.NewDecimal("192.128")},
 		},
 		{
 			name: "decimal is not greater than decimal",
-			v1:   newColumn(0, Type{Type: sqltypes.Decimal, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Decimal, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Decimal, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Decimal, collations.CollationBinaryID)),
 			out: &F, op: sqlparser.GreaterThanOp,
 			row: []sqltypes.Value{sqltypes.NewDecimal("192.128"), sqltypes.NewDecimal("192.129")},
 		},
 		{
 			name: "decimal is less than decimal",
-			v1:   newColumn(0, Type{Type: sqltypes.Decimal, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Decimal, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Decimal, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Decimal, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.LessThanOp,
 			row: []sqltypes.Value{sqltypes.NewDecimal("192.128"), sqltypes.NewDecimal("192.129")},
 		},
 		{
 			name: "decimal is not less than decimal",
-			v1:   newColumn(0, Type{Type: sqltypes.Decimal, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Decimal, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Decimal, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Decimal, collations.CollationBinaryID)),
 			out: &F, op: sqlparser.LessThanOp,
 			row: []sqltypes.Value{sqltypes.NewDecimal("192.129"), sqltypes.NewDecimal("192.128")},
 		},
@@ -334,151 +328,151 @@ func TestCompareNumerics(t *testing.T) {
 	tests := []testCase{
 		{
 			name: "decimal and float are equal",
-			v1:   newColumn(0, Type{Type: sqltypes.Float64, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Decimal, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Float64, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Decimal, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.EqualOp,
 			row: []sqltypes.Value{sqltypes.NewFloat64(189.6), sqltypes.NewDecimal("189.6")},
 		},
 		{
 			name: "decimal and float with negative values are equal",
-			v1:   newColumn(0, Type{Type: sqltypes.Float64, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Decimal, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Float64, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Decimal, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.EqualOp,
 			row: []sqltypes.Value{sqltypes.NewFloat64(-98.1839), sqltypes.NewDecimal("-98.1839")},
 		},
 		{
 			name: "decimal and float with negative values are not equal (1)",
-			v1:   newColumn(0, Type{Type: sqltypes.Float64, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Decimal, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Float64, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Decimal, collations.CollationBinaryID)),
 			out: &F, op: sqlparser.EqualOp,
 			row: []sqltypes.Value{sqltypes.NewFloat64(-98.9381), sqltypes.NewDecimal("-98.1839")},
 		},
 		{
 			name: "decimal and float with negative values are not equal (2)",
-			v1:   newColumn(0, Type{Type: sqltypes.Float64, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Decimal, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Float64, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Decimal, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.NotEqualOp,
 			row: []sqltypes.Value{sqltypes.NewFloat64(-98.9381), sqltypes.NewDecimal("-98.1839")},
 		},
 		{
 			name: "decimal and integer are equal (1)",
-			v1:   newColumn(0, Type{Type: sqltypes.Int64, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Decimal, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Int64, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Decimal, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.EqualOp,
 			row: []sqltypes.Value{sqltypes.NewInt64(8979), sqltypes.NewDecimal("8979")},
 		},
 		{
 			name: "decimal and integer are equal (2)",
-			v1:   newColumn(0, Type{Type: sqltypes.Decimal, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Int64, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Decimal, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Int64, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.EqualOp,
 			row: []sqltypes.Value{sqltypes.NewDecimal("8979.0000"), sqltypes.NewInt64(8979)},
 		},
 		{
 			name: "decimal and unsigned integer are equal (1)",
-			v1:   newColumn(0, Type{Type: sqltypes.Uint64, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Decimal, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Uint64, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Decimal, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.EqualOp,
 			row: []sqltypes.Value{sqltypes.NewUint64(901), sqltypes.NewDecimal("901")},
 		},
 		{
 			name: "decimal and unsigned integer are equal (2)",
-			v1:   newColumn(0, Type{Type: sqltypes.Decimal, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Uint64, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Decimal, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Uint64, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.EqualOp,
 			row: []sqltypes.Value{sqltypes.NewDecimal("901.00"), sqltypes.NewUint64(901)},
 		},
 		{
 			name: "decimal and unsigned integer are not equal (1)",
-			v1:   newColumn(0, Type{Type: sqltypes.Decimal, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Uint64, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Decimal, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Uint64, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.NotEqualOp,
 			row: []sqltypes.Value{sqltypes.NewDecimal("192.129"), sqltypes.NewUint64(192)},
 		},
 		{
 			name: "decimal and unsigned integer are not equal (2)",
-			v1:   newColumn(0, Type{Type: sqltypes.Decimal, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Uint64, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Decimal, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Uint64, collations.CollationBinaryID)),
 			out: &F, op: sqlparser.EqualOp,
 			row: []sqltypes.Value{sqltypes.NewDecimal("192.129"), sqltypes.NewUint64(192)},
 		},
 		{
 			name: "decimal is greater than integer",
-			v1:   newColumn(0, Type{Type: sqltypes.Decimal, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Int64, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Decimal, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Int64, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.GreaterThanOp,
 			row: []sqltypes.Value{sqltypes.NewDecimal("1.01"), sqltypes.NewInt64(1)},
 		},
 		{
 			name: "decimal is greater-equal to integer",
-			v1:   newColumn(0, Type{Type: sqltypes.Decimal, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Int64, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Decimal, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Int64, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.GreaterEqualOp,
 			row: []sqltypes.Value{sqltypes.NewDecimal("1.00"), sqltypes.NewInt64(1)},
 		},
 		{
 			name: "decimal is less than integer",
-			v1:   newColumn(0, Type{Type: sqltypes.Decimal, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Int64, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Decimal, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Int64, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.LessThanOp,
 			row: []sqltypes.Value{sqltypes.NewDecimal(".99"), sqltypes.NewInt64(1)},
 		},
 		{
 			name: "decimal is less-equal to integer",
-			v1:   newColumn(0, Type{Type: sqltypes.Decimal, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Int64, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Decimal, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Int64, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.LessEqualOp,
 			row: []sqltypes.Value{sqltypes.NewDecimal("1.00"), sqltypes.NewInt64(1)},
 		},
 		{
 			name: "decimal is greater than float",
-			v1:   newColumn(0, Type{Type: sqltypes.Decimal, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Float64, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Decimal, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Float64, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.GreaterThanOp,
 			row: []sqltypes.Value{sqltypes.NewDecimal("849.896"), sqltypes.NewFloat64(86.568)},
 		},
 		{
 			name: "decimal is not greater than float",
-			v1:   newColumn(0, Type{Type: sqltypes.Decimal, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Float64, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Decimal, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Float64, collations.CollationBinaryID)),
 			out: &F, op: sqlparser.GreaterThanOp,
 			row: []sqltypes.Value{sqltypes.NewDecimal("15.23"), sqltypes.NewFloat64(8689.5)},
 		},
 		{
 			name: "decimal is greater-equal to float (1)",
-			v1:   newColumn(0, Type{Type: sqltypes.Decimal, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Float64, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Decimal, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Float64, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.GreaterEqualOp,
 			row: []sqltypes.Value{sqltypes.NewDecimal("65"), sqltypes.NewFloat64(65)},
 		},
 		{
 			name: "decimal is greater-equal to float (2)",
-			v1:   newColumn(0, Type{Type: sqltypes.Decimal, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Float64, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Decimal, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Float64, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.GreaterEqualOp,
 			row: []sqltypes.Value{sqltypes.NewDecimal("65"), sqltypes.NewFloat64(60)},
 		},
 		{
 			name: "decimal is less than float",
-			v1:   newColumn(0, Type{Type: sqltypes.Decimal, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Float64, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Decimal, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Float64, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.LessThanOp,
 			row: []sqltypes.Value{sqltypes.NewDecimal("0.998"), sqltypes.NewFloat64(0.999)},
 		},
 		{
 			name: "decimal is less-equal to float",
-			v1:   newColumn(0, Type{Type: sqltypes.Decimal, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Float64, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Decimal, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Float64, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.LessEqualOp,
 			row: []sqltypes.Value{sqltypes.NewDecimal("1.000101"), sqltypes.NewFloat64(1.00101)},
 		},
 		{
 			name: "different int types are equal for 8 bit",
-			v1:   newColumn(0, Type{Type: sqltypes.Int8, Coll: collations.CollationBinaryID}), v2: NewLiteralInt(0),
+			v1:   newColumn(0, NewType(sqltypes.Int8, collations.CollationBinaryID)), v2: NewLiteralInt(0),
 			out: &T, op: sqlparser.EqualOp,
 			row: []sqltypes.Value{sqltypes.NewInt8(0)},
 		},
 		{
 			name: "different int types are equal for 32 bit",
-			v1:   newColumn(0, Type{Type: sqltypes.Int32, Coll: collations.CollationBinaryID}), v2: NewLiteralInt(0),
+			v1:   newColumn(0, NewType(sqltypes.Int32, collations.CollationBinaryID)), v2: NewLiteralInt(0),
 			out: &T, op: sqlparser.EqualOp,
 			row: []sqltypes.Value{sqltypes.NewInt32(0)},
 		},
 		{
 			name: "different int types are equal for float32 bit",
-			v1:   newColumn(0, Type{Type: sqltypes.Float32, Coll: collations.CollationBinaryID}), v2: NewLiteralFloat(1.0),
+			v1:   newColumn(0, NewType(sqltypes.Float32, collations.CollationBinaryID)), v2: NewLiteralFloat(1.0),
 			out: &T, op: sqlparser.EqualOp,
 			row: []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Float32, []byte("1.0"))},
 		},
 		{
 			name: "different unsigned int types are equal for 8 bit",
-			v1:   newColumn(0, Type{Type: sqltypes.Uint8, Coll: collations.CollationBinaryID}), v2: NewLiteralInt(0),
+			v1:   newColumn(0, NewType(sqltypes.Uint8, collations.CollationBinaryID)), v2: NewLiteralInt(0),
 			out: &T, op: sqlparser.EqualOp,
 			row: []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Uint8, []byte("0"))},
 		},
 		{
 			name: "different unsigned int types are equal for 32 bit",
-			v1:   newColumn(0, Type{Type: sqltypes.Uint32, Coll: collations.CollationBinaryID}), v2: NewLiteralInt(0),
+			v1:   newColumn(0, NewType(sqltypes.Uint32, collations.CollationBinaryID)), v2: NewLiteralInt(0),
 			out: &T, op: sqlparser.EqualOp,
 			row: []sqltypes.Value{sqltypes.NewUint32(0)},
 		},
@@ -496,73 +490,73 @@ func TestCompareDatetime(t *testing.T) {
 	tests := []testCase{
 		{
 			name: "datetimes are equal",
-			v1:   newColumn(0, Type{Type: sqltypes.Datetime, Coll: collations.CollationBinaryID}), v2: newColumn(0, Type{Type: sqltypes.Datetime, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Datetime, collations.CollationBinaryID)), v2: newColumn(0, NewType(sqltypes.Datetime, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.EqualOp,
 			row: []sqltypes.Value{sqltypes.NewDatetime("2021-10-22 12:00:00")},
 		},
 		{
 			name: "datetimes are not equal (1)",
-			v1:   newColumn(0, Type{Type: sqltypes.Datetime, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Datetime, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Datetime, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Datetime, collations.CollationBinaryID)),
 			out: &F, op: sqlparser.EqualOp,
 			row: []sqltypes.Value{sqltypes.NewDatetime("2021-10-22 12:00:00"), sqltypes.NewDatetime("2020-10-22 12:00:00")},
 		},
 		{
 			name: "datetimes are not equal (2)",
-			v1:   newColumn(0, Type{Type: sqltypes.Datetime, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Datetime, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Datetime, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Datetime, collations.CollationBinaryID)),
 			out: &F, op: sqlparser.EqualOp,
 			row: []sqltypes.Value{sqltypes.NewDatetime("2021-10-22 12:00:00"), sqltypes.NewDatetime("2021-10-22 10:23:56")},
 		},
 		{
 			name: "datetimes are not equal (3)",
-			v1:   newColumn(0, Type{Type: sqltypes.Datetime, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Datetime, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Datetime, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Datetime, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.NotEqualOp,
 			row: []sqltypes.Value{sqltypes.NewDatetime("2021-10-01 00:00:00"), sqltypes.NewDatetime("2021-02-01 00:00:00")},
 		},
 		{
 			name: "datetime is greater than datetime",
-			v1:   newColumn(0, Type{Type: sqltypes.Datetime, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Datetime, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Datetime, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Datetime, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.GreaterThanOp,
 			row: []sqltypes.Value{sqltypes.NewDatetime("2021-10-30 10:42:50"), sqltypes.NewDatetime("2021-10-01 13:10:02")},
 		},
 		{
 			name: "datetime is not greater than datetime",
-			v1:   newColumn(0, Type{Type: sqltypes.Datetime, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Datetime, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Datetime, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Datetime, collations.CollationBinaryID)),
 			out: &F, op: sqlparser.GreaterThanOp,
 			row: []sqltypes.Value{sqltypes.NewDatetime("2021-10-01 13:10:02"), sqltypes.NewDatetime("2021-10-30 10:42:50")},
 		},
 		{
 			name: "datetime is less than datetime",
-			v1:   newColumn(0, Type{Type: sqltypes.Datetime, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Datetime, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Datetime, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Datetime, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.LessThanOp,
 			row: []sqltypes.Value{sqltypes.NewDatetime("2021-10-01 13:10:02"), sqltypes.NewDatetime("2021-10-30 10:42:50")},
 		},
 		{
 			name: "datetime is not less than datetime",
-			v1:   newColumn(0, Type{Type: sqltypes.Datetime, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Datetime, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Datetime, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Datetime, collations.CollationBinaryID)),
 			out: &F, op: sqlparser.LessThanOp,
 			row: []sqltypes.Value{sqltypes.NewDatetime("2021-10-30 10:42:50"), sqltypes.NewDatetime("2021-10-01 13:10:02")},
 		},
 		{
 			name: "datetime is greater-equal to datetime (1)",
-			v1:   newColumn(0, Type{Type: sqltypes.Datetime, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Datetime, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Datetime, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Datetime, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.GreaterEqualOp,
 			row: []sqltypes.Value{sqltypes.NewDatetime("2021-10-30 10:42:50"), sqltypes.NewDatetime("2021-10-30 10:42:50")},
 		},
 		{
 			name: "datetime is greater-equal to datetime (2)",
-			v1:   newColumn(0, Type{Type: sqltypes.Datetime, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Datetime, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Datetime, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Datetime, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.GreaterEqualOp,
 			row: []sqltypes.Value{sqltypes.NewDatetime("2021-10-30 10:42:50"), sqltypes.NewDatetime("2021-10-01 13:10:02")},
 		},
 		{
 			name: "datetime is less-equal to datetime (1)",
-			v1:   newColumn(0, Type{Type: sqltypes.Datetime, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Datetime, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Datetime, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Datetime, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.LessEqualOp,
 			row: []sqltypes.Value{sqltypes.NewDatetime("2021-10-30 10:42:50"), sqltypes.NewDatetime("2021-10-30 10:42:50")},
 		},
 		{
 			name: "datetime is less-equal to datetime (2)",
-			v1:   newColumn(0, Type{Type: sqltypes.Datetime, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Datetime, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Datetime, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Datetime, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.LessEqualOp,
 			row: []sqltypes.Value{sqltypes.NewDatetime("2021-10-01 13:10:02"), sqltypes.NewDatetime("2021-10-30 10:42:50")},
 		},
@@ -580,73 +574,73 @@ func TestCompareTimestamp(t *testing.T) {
 	tests := []testCase{
 		{
 			name: "timestamps are equal",
-			v1:   newColumn(0, Type{Type: sqltypes.Timestamp, Coll: collations.CollationBinaryID}), v2: newColumn(0, Type{Type: sqltypes.Timestamp, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Timestamp, collations.CollationBinaryID)), v2: newColumn(0, NewType(sqltypes.Timestamp, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.EqualOp,
 			row: []sqltypes.Value{sqltypes.NewTimestamp("2021-10-22 12:00:00")},
 		},
 		{
 			name: "timestamps are not equal (1)",
-			v1:   newColumn(0, Type{Type: sqltypes.Timestamp, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Timestamp, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Timestamp, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Timestamp, collations.CollationBinaryID)),
 			out: &F, op: sqlparser.EqualOp,
 			row: []sqltypes.Value{sqltypes.NewTimestamp("2021-10-22 12:00:00"), sqltypes.NewTimestamp("2020-10-22 12:00:00")},
 		},
 		{
 			name: "timestamps are not equal (2)",
-			v1:   newColumn(0, Type{Type: sqltypes.Timestamp, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Timestamp, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Timestamp, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Timestamp, collations.CollationBinaryID)),
 			out: &F, op: sqlparser.EqualOp,
 			row: []sqltypes.Value{sqltypes.NewTimestamp("2021-10-22 12:00:00"), sqltypes.NewTimestamp("2021-10-22 10:23:56")},
 		},
 		{
 			name: "timestamps are not equal (3)",
-			v1:   newColumn(0, Type{Type: sqltypes.Timestamp, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Timestamp, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Timestamp, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Timestamp, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.NotEqualOp,
 			row: []sqltypes.Value{sqltypes.NewTimestamp("2021-10-01 00:00:00"), sqltypes.NewTimestamp("2021-02-01 00:00:00")},
 		},
 		{
 			name: "timestamp is greater than timestamp",
-			v1:   newColumn(0, Type{Type: sqltypes.Timestamp, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Timestamp, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Timestamp, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Timestamp, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.GreaterThanOp,
 			row: []sqltypes.Value{sqltypes.NewTimestamp("2021-10-30 10:42:50"), sqltypes.NewTimestamp("2021-10-01 13:10:02")},
 		},
 		{
 			name: "timestamp is not greater than timestamp",
-			v1:   newColumn(0, Type{Type: sqltypes.Timestamp, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Timestamp, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Timestamp, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Timestamp, collations.CollationBinaryID)),
 			out: &F, op: sqlparser.GreaterThanOp,
 			row: []sqltypes.Value{sqltypes.NewTimestamp("2021-10-01 13:10:02"), sqltypes.NewTimestamp("2021-10-30 10:42:50")},
 		},
 		{
 			name: "timestamp is less than timestamp",
-			v1:   newColumn(0, Type{Type: sqltypes.Timestamp, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Timestamp, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Timestamp, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Timestamp, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.LessThanOp,
 			row: []sqltypes.Value{sqltypes.NewTimestamp("2021-10-01 13:10:02"), sqltypes.NewTimestamp("2021-10-30 10:42:50")},
 		},
 		{
 			name: "timestamp is not less than timestamp",
-			v1:   newColumn(0, Type{Type: sqltypes.Timestamp, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Timestamp, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Timestamp, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Timestamp, collations.CollationBinaryID)),
 			out: &F, op: sqlparser.LessThanOp,
 			row: []sqltypes.Value{sqltypes.NewTimestamp("2021-10-30 10:42:50"), sqltypes.NewTimestamp("2021-10-01 13:10:02")},
 		},
 		{
 			name: "timestamp is greater-equal to timestamp (1)",
-			v1:   newColumn(0, Type{Type: sqltypes.Timestamp, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Timestamp, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Timestamp, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Timestamp, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.GreaterEqualOp,
 			row: []sqltypes.Value{sqltypes.NewTimestamp("2021-10-30 10:42:50"), sqltypes.NewTimestamp("2021-10-30 10:42:50")},
 		},
 		{
 			name: "timestamp is greater-equal to timestamp (2)",
-			v1:   newColumn(0, Type{Type: sqltypes.Timestamp, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Timestamp, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Timestamp, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Timestamp, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.GreaterEqualOp,
 			row: []sqltypes.Value{sqltypes.NewTimestamp("2021-10-30 10:42:50"), sqltypes.NewTimestamp("2021-10-01 13:10:02")},
 		},
 		{
 			name: "timestamp is less-equal to timestamp (1)",
-			v1:   newColumn(0, Type{Type: sqltypes.Timestamp, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Timestamp, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Timestamp, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Timestamp, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.LessEqualOp,
 			row: []sqltypes.Value{sqltypes.NewTimestamp("2021-10-30 10:42:50"), sqltypes.NewTimestamp("2021-10-30 10:42:50")},
 		},
 		{
 			name: "timestamp is less-equal to timestamp (2)",
-			v1:   newColumn(0, Type{Type: sqltypes.Timestamp, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Timestamp, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Timestamp, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Timestamp, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.LessEqualOp,
 			row: []sqltypes.Value{sqltypes.NewTimestamp("2021-10-01 13:10:02"), sqltypes.NewTimestamp("2021-10-30 10:42:50")},
 		},
@@ -668,67 +662,67 @@ func TestCompareDate(t *testing.T) {
 	tests := []testCase{
 		{
 			name: "dates are equal",
-			v1:   newColumn(0, Type{Type: sqltypes.Date, Coll: collations.CollationBinaryID}), v2: newColumn(0, Type{Type: sqltypes.Date, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Date, collations.CollationBinaryID)), v2: newColumn(0, NewType(sqltypes.Date, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.EqualOp,
 			row: []sqltypes.Value{sqltypes.NewDate("2021-10-22")},
 		},
 		{
 			name: "dates are not equal (1)",
-			v1:   newColumn(0, Type{Type: sqltypes.Date, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Date, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Date, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Date, collations.CollationBinaryID)),
 			out: &F, op: sqlparser.EqualOp,
 			row: []sqltypes.Value{sqltypes.NewDate("2021-10-22"), sqltypes.NewDate("2020-10-21")},
 		},
 		{
 			name: "dates are not equal (2)",
-			v1:   newColumn(0, Type{Type: sqltypes.Date, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Date, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Date, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Date, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.NotEqualOp,
 			row: []sqltypes.Value{sqltypes.NewDate("2021-10-01"), sqltypes.NewDate("2021-02-01")},
 		},
 		{
 			name: "date is greater than date",
-			v1:   newColumn(0, Type{Type: sqltypes.Date, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Date, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Date, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Date, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.GreaterThanOp,
 			row: []sqltypes.Value{sqltypes.NewDate("2021-10-30"), sqltypes.NewDate("2021-10-01")},
 		},
 		{
 			name: "date is not greater than date",
-			v1:   newColumn(0, Type{Type: sqltypes.Date, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Date, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Date, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Date, collations.CollationBinaryID)),
 			out: &F, op: sqlparser.GreaterThanOp,
 			row: []sqltypes.Value{sqltypes.NewDate("2021-10-01"), sqltypes.NewDate("2021-10-30")},
 		},
 		{
 			name: "date is less than date",
-			v1:   newColumn(0, Type{Type: sqltypes.Date, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Date, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Date, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Date, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.LessThanOp,
 			row: []sqltypes.Value{sqltypes.NewDate("2021-10-01"), sqltypes.NewDate("2021-10-30")},
 		},
 		{
 			name: "date is not less than date",
-			v1:   newColumn(0, Type{Type: sqltypes.Date, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Date, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Date, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Date, collations.CollationBinaryID)),
 			out: &F, op: sqlparser.LessThanOp,
 			row: []sqltypes.Value{sqltypes.NewDate("2021-10-30"), sqltypes.NewDate("2021-10-01")},
 		},
 		{
 			name: "date is greater-equal to date (1)",
-			v1:   newColumn(0, Type{Type: sqltypes.Date, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Date, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Date, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Date, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.GreaterEqualOp,
 			row: []sqltypes.Value{sqltypes.NewDate("2021-10-30"), sqltypes.NewDate("2021-10-30")},
 		},
 		{
 			name: "date is greater-equal to date (2)",
-			v1:   newColumn(0, Type{Type: sqltypes.Date, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Date, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Date, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Date, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.GreaterEqualOp,
 			row: []sqltypes.Value{sqltypes.NewDate("2021-10-30"), sqltypes.NewDate("2021-10-01")},
 		},
 		{
 			name: "date is less-equal to date (1)",
-			v1:   newColumn(0, Type{Type: sqltypes.Date, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Date, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Date, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Date, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.LessEqualOp,
 			row: []sqltypes.Value{sqltypes.NewDate("2021-10-30"), sqltypes.NewDate("2021-10-30")},
 		},
 		{
 			name: "date is less-equal to date (2)",
-			v1:   newColumn(0, Type{Type: sqltypes.Date, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Date, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Date, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Date, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.LessEqualOp,
 			row: []sqltypes.Value{sqltypes.NewDate("2021-10-01"), sqltypes.NewDate("2021-10-30")},
 		},
@@ -746,79 +740,79 @@ func TestCompareTime(t *testing.T) {
 	tests := []testCase{
 		{
 			name: "times are equal",
-			v1:   newColumn(0, Type{Type: sqltypes.Time, Coll: collations.CollationBinaryID}), v2: newColumn(0, Type{Type: sqltypes.Time, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Time, collations.CollationBinaryID)), v2: newColumn(0, NewType(sqltypes.Time, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.EqualOp,
 			row: []sqltypes.Value{sqltypes.NewTime("12:00:00")},
 		},
 		{
 			name: "times are not equal (1)",
-			v1:   newColumn(0, Type{Type: sqltypes.Time, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Time, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Time, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Time, collations.CollationBinaryID)),
 			out: &F, op: sqlparser.EqualOp,
 			row: []sqltypes.Value{sqltypes.NewTime("12:00:00"), sqltypes.NewTime("10:23:56")},
 		},
 		{
 			name: "times are not equal (2)",
-			v1:   newColumn(0, Type{Type: sqltypes.Time, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Time, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Time, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Time, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.NotEqualOp,
 			row: []sqltypes.Value{sqltypes.NewTime("00:00:00"), sqltypes.NewTime("10:15:00")},
 		},
 		{
 			name: "time is greater than time",
-			v1:   newColumn(0, Type{Type: sqltypes.Time, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Time, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Time, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Time, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.GreaterThanOp,
 			row: []sqltypes.Value{sqltypes.NewTime("18:14:35"), sqltypes.NewTime("13:01:38")},
 		},
 		{
 			name: "time is not greater than time",
-			v1:   newColumn(0, Type{Type: sqltypes.Time, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Time, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Time, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Time, collations.CollationBinaryID)),
 			out: &F, op: sqlparser.GreaterThanOp,
 			row: []sqltypes.Value{sqltypes.NewTime("02:46:02"), sqltypes.NewTime("10:42:50")},
 		},
 		{
 			name: "time is greater than time",
-			v1:   newColumn(0, Type{Type: sqltypes.Time, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Time, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Time, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Time, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.GreaterThanOp,
 			row: []sqltypes.Value{sqltypes.NewTime("101:14:35"), sqltypes.NewTime("13:01:38")},
 		},
 		{
 			name: "time is not greater than time",
-			v1:   newColumn(0, Type{Type: sqltypes.Time, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Time, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Time, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Time, collations.CollationBinaryID)),
 			out: &F, op: sqlparser.GreaterThanOp,
 			row: []sqltypes.Value{sqltypes.NewTime("24:46:02"), sqltypes.NewTime("101:42:50")},
 		},
 		{
 			name: "time is less than time",
-			v1:   newColumn(0, Type{Type: sqltypes.Time, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Time, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Time, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Time, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.LessThanOp,
 			row: []sqltypes.Value{sqltypes.NewTime("04:30:00"), sqltypes.NewTime("09:23:48")},
 		},
 		{
 			name: "time is not less than time",
-			v1:   newColumn(0, Type{Type: sqltypes.Time, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Time, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Time, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Time, collations.CollationBinaryID)),
 			out: &F, op: sqlparser.LessThanOp,
 			row: []sqltypes.Value{sqltypes.NewTime("15:21:00"), sqltypes.NewTime("10:00:00")},
 		},
 		{
 			name: "time is greater-equal to time (1)",
-			v1:   newColumn(0, Type{Type: sqltypes.Time, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Time, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Time, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Time, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.GreaterEqualOp,
 			row: []sqltypes.Value{sqltypes.NewTime("10:42:50"), sqltypes.NewTime("10:42:50")},
 		},
 		{
 			name: "time is greater-equal to time (2)",
-			v1:   newColumn(0, Type{Type: sqltypes.Time, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Time, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Time, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Time, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.GreaterEqualOp,
 			row: []sqltypes.Value{sqltypes.NewTime("19:42:50"), sqltypes.NewTime("13:10:02")},
 		},
 		{
 			name: "time is less-equal to time (1)",
-			v1:   newColumn(0, Type{Type: sqltypes.Time, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Time, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Time, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Time, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.LessEqualOp,
 			row: []sqltypes.Value{sqltypes.NewTime("10:42:50"), sqltypes.NewTime("10:42:50")},
 		},
 		{
 			name: "time is less-equal to time (2)",
-			v1:   newColumn(0, Type{Type: sqltypes.Time, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Time, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Time, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Time, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.LessEqualOp,
 			row: []sqltypes.Value{sqltypes.NewTime("10:10:02"), sqltypes.NewTime("10:42:50")},
 		},
@@ -836,13 +830,13 @@ func TestCompareDates(t *testing.T) {
 	tests := []testCase{
 		{
 			name: "date equal datetime",
-			v1:   newColumn(0, Type{Type: sqltypes.Date, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Datetime, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Date, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Datetime, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.EqualOp,
 			row: []sqltypes.Value{sqltypes.NewDate("2021-10-22"), sqltypes.NewDatetime("2021-10-22 00:00:00")},
 		},
 		{
 			name: "date equal datetime through bind variables",
-			v1:   NewBindVar("k1", Type{Type: sqltypes.Date, Coll: collations.CollationBinaryID}), v2: NewBindVar("k2", Type{Type: sqltypes.Datetime, Coll: collations.CollationBinaryID}),
+			v1:   NewBindVar("k1", NewType(sqltypes.Date, collations.CollationBinaryID)), v2: NewBindVar("k2", NewType(sqltypes.Datetime, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.EqualOp,
 			bv: map[string]*querypb.BindVariable{
 				"k1": {Type: sqltypes.Date, Value: []byte("2021-10-22")},
@@ -851,7 +845,7 @@ func TestCompareDates(t *testing.T) {
 		},
 		{
 			name: "date not equal datetime through bind variables",
-			v1:   NewBindVar("k1", Type{Type: sqltypes.Date, Coll: collations.CollationBinaryID}), v2: NewBindVar("k2", Type{Type: sqltypes.Datetime, Coll: collations.CollationBinaryID}),
+			v1:   NewBindVar("k1", NewType(sqltypes.Date, collations.CollationBinaryID)), v2: NewBindVar("k2", NewType(sqltypes.Datetime, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.NotEqualOp,
 			bv: map[string]*querypb.BindVariable{
 				"k1": {Type: sqltypes.Date, Value: []byte("2021-02-20")},
@@ -860,73 +854,73 @@ func TestCompareDates(t *testing.T) {
 		},
 		{
 			name: "date not equal datetime",
-			v1:   newColumn(0, Type{Type: sqltypes.Date, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Datetime, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Date, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Datetime, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.NotEqualOp,
 			row: []sqltypes.Value{sqltypes.NewDate("2021-10-22"), sqltypes.NewDatetime("2021-10-20 00:06:00")},
 		},
 		{
 			name: "date equal timestamp",
-			v1:   newColumn(0, Type{Type: sqltypes.Date, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Timestamp, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Date, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Timestamp, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.EqualOp,
 			row: []sqltypes.Value{sqltypes.NewDate("2021-10-22"), sqltypes.NewTimestamp("2021-10-22 00:00:00")},
 		},
 		{
 			name: "date not equal timestamp",
-			v1:   newColumn(0, Type{Type: sqltypes.Date, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Timestamp, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Date, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Timestamp, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.NotEqualOp,
 			row: []sqltypes.Value{sqltypes.NewDate("2021-10-22"), sqltypes.NewTimestamp("2021-10-22 16:00:00")},
 		},
 		{
 			name: "date equal time",
-			v1:   newColumn(0, Type{Type: sqltypes.Date, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Time, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Date, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Time, collations.CollationBinaryID)),
 			out: &F, op: sqlparser.EqualOp,
 			row: []sqltypes.Value{sqltypes.NewDate(time.Now().Format("2006-01-02")), sqltypes.NewTime("00:00:00")},
 		},
 		{
 			name: "date not equal time",
-			v1:   newColumn(0, Type{Type: sqltypes.Date, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.Time, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.Date, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Time, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.NotEqualOp,
 			row: []sqltypes.Value{sqltypes.NewDate(time.Now().Format("2006-01-02")), sqltypes.NewTime("12:00:00")},
 		},
 		{
 			name: "string equal datetime",
-			v1:   newColumn(0, Type{Type: sqltypes.VarChar, Coll: collations.CollationUtf8mb4ID}), v2: newColumn(1, Type{Type: sqltypes.Datetime, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.VarChar, collations.CollationUtf8mb4ID)), v2: newColumn(1, NewType(sqltypes.Datetime, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.EqualOp,
 			row: []sqltypes.Value{sqltypes.NewVarChar("2021-10-22"), sqltypes.NewDatetime("2021-10-22 00:00:00")},
 		},
 		{
 			name: "string equal timestamp",
-			v1:   newColumn(0, Type{Type: sqltypes.VarChar, Coll: collations.CollationUtf8mb4ID}), v2: newColumn(1, Type{Type: sqltypes.Timestamp, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.VarChar, collations.CollationUtf8mb4ID)), v2: newColumn(1, NewType(sqltypes.Timestamp, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.EqualOp,
 			row: []sqltypes.Value{sqltypes.NewVarChar("2021-10-22 00:00:00"), sqltypes.NewTimestamp("2021-10-22 00:00:00")},
 		},
 		{
 			name: "string not equal timestamp",
-			v1:   newColumn(0, Type{Type: sqltypes.VarChar, Coll: collations.CollationUtf8mb4ID}), v2: newColumn(1, Type{Type: sqltypes.Timestamp, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.VarChar, collations.CollationUtf8mb4ID)), v2: newColumn(1, NewType(sqltypes.Timestamp, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.NotEqualOp,
 			row: []sqltypes.Value{sqltypes.NewVarChar("2021-10-22 06:00:30"), sqltypes.NewTimestamp("2021-10-20 15:02:10")},
 		},
 		{
 			name: "string equal time",
-			v1:   newColumn(0, Type{Type: sqltypes.VarChar, Coll: collations.CollationUtf8mb4ID}), v2: newColumn(1, Type{Type: sqltypes.Time, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.VarChar, collations.CollationUtf8mb4ID)), v2: newColumn(1, NewType(sqltypes.Time, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.EqualOp,
 			row: []sqltypes.Value{sqltypes.NewVarChar("00:05:12"), sqltypes.NewTime("00:05:12")},
 		},
 		{
 			name: "string equal date",
-			v1:   newColumn(0, Type{Type: sqltypes.VarChar, Coll: collations.CollationUtf8mb4ID}), v2: newColumn(1, Type{Type: sqltypes.Date, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.VarChar, collations.CollationUtf8mb4ID)), v2: newColumn(1, NewType(sqltypes.Date, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.EqualOp,
 			row: []sqltypes.Value{sqltypes.NewVarChar("2021-02-22"), sqltypes.NewDate("2021-02-22")},
 		},
 		{
 			name: "string not equal date (1, date on the RHS)",
-			v1:   newColumn(0, Type{Type: sqltypes.VarChar, Coll: collations.CollationUtf8mb4ID}), v2: newColumn(1, Type{Type: sqltypes.Date, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.VarChar, collations.CollationUtf8mb4ID)), v2: newColumn(1, NewType(sqltypes.Date, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.NotEqualOp,
 			row: []sqltypes.Value{sqltypes.NewVarChar("2021-02-20"), sqltypes.NewDate("2021-03-30")},
 		},
 		{
 			name: "string not equal date (2, date on the LHS)",
-			v1:   newColumn(0, Type{Type: sqltypes.Date, Coll: collations.CollationBinaryID}), v2: newColumn(1, Type{Type: sqltypes.VarChar, Coll: collations.CollationUtf8mb4ID}),
+			v1:   newColumn(0, NewType(sqltypes.Date, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.VarChar, collations.CollationUtf8mb4ID)),
 			out: &T, op: sqlparser.NotEqualOp,
 			row: []sqltypes.Value{sqltypes.NewDate("2021-03-30"), sqltypes.NewVarChar("2021-02-20")},
 		},
@@ -944,13 +938,13 @@ func TestCompareStrings(t *testing.T) {
 	tests := []testCase{
 		{
 			name: "string equal string",
-			v1:   newColumn(0, Type{Type: sqltypes.VarChar, Coll: collations.Default()}), v2: newColumn(1, Type{Type: sqltypes.VarChar, Coll: collations.Default()}),
+			v1:   newColumn(0, NewType(sqltypes.VarChar, collations.MySQL8().DefaultConnectionCharset())), v2: newColumn(1, NewType(sqltypes.VarChar, collations.MySQL8().DefaultConnectionCharset())),
 			out: &T, op: sqlparser.EqualOp,
 			row: []sqltypes.Value{sqltypes.NewVarChar("toto"), sqltypes.NewVarChar("toto")},
 		},
 		{
 			name: "string equal number",
-			v1:   newColumn(0, Type{Type: sqltypes.VarChar, Coll: collations.Default()}), v2: newColumn(1, Type{Type: sqltypes.Int64, Coll: collations.CollationBinaryID}),
+			v1:   newColumn(0, NewType(sqltypes.VarChar, collations.MySQL8().DefaultConnectionCharset())), v2: newColumn(1, NewType(sqltypes.Int64, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.EqualOp,
 			row: []sqltypes.Value{sqltypes.NewVarChar("1"), sqltypes.NewInt64(1)},
 		},
@@ -1114,11 +1108,12 @@ func TestNullComparisons(t *testing.T) {
 }
 
 func TestNullsafeCompare(t *testing.T) {
-	collation := collationEnv.LookupByName("utf8mb4_general_ci")
+	collation := collations.ID(collations.CollationUtf8mb4ID)
 	tcases := []struct {
 		v1, v2 sqltypes.Value
 		out    int
 		err    error
+		values *EnumSetValues
 	}{
 		{
 			v1:  NULL,
@@ -1146,22 +1141,59 @@ func TestNullsafeCompare(t *testing.T) {
 			out: -1,
 		},
 		{
+			v1:     TestValue(sqltypes.Enum, "foo"),
+			v2:     TestValue(sqltypes.Enum, "bar"),
+			out:    -1,
+			values: &EnumSetValues{"'foo'", "'bar'"},
+		},
+		{
 			v1:  TestValue(sqltypes.Enum, "foo"),
 			v2:  TestValue(sqltypes.Enum, "bar"),
 			out: 1,
 		},
+		{
+			v1:     TestValue(sqltypes.Enum, "foo"),
+			v2:     TestValue(sqltypes.VarChar, "bar"),
+			out:    1,
+			values: &EnumSetValues{"'foo'", "'bar'"},
+		},
+		{
+			v1:  TestValue(sqltypes.VarChar, "foo"),
+			v2:  TestValue(sqltypes.Enum, "bar"),
+			out: 1,
+		},
+		{
+			v1:     TestValue(sqltypes.Set, "bar"),
+			v2:     TestValue(sqltypes.Set, "foo,bar"),
+			out:    -1,
+			values: &EnumSetValues{"'foo'", "'bar'"},
+		},
+		{
+			v1:  TestValue(sqltypes.Set, "bar"),
+			v2:  TestValue(sqltypes.Set, "foo,bar"),
+			out: -1,
+		},
+		{
+			v1:     TestValue(sqltypes.VarChar, "bar"),
+			v2:     TestValue(sqltypes.Set, "foo,bar"),
+			out:    -1,
+			values: &EnumSetValues{"'foo'", "'bar'"},
+		},
+		{
+			v1:  TestValue(sqltypes.Set, "bar"),
+			v2:  TestValue(sqltypes.VarChar, "foo,bar"),
+			out: -1,
+		},
 	}
 	for _, tcase := range tcases {
 		t.Run(fmt.Sprintf("%v/%v", tcase.v1, tcase.v2), func(t *testing.T) {
-			got, err := NullsafeCompare(tcase.v1, tcase.v2, collation)
+			got, err := NullsafeCompare(tcase.v1, tcase.v2, collations.MySQL8(), collation, tcase.values)
 			if tcase.err != nil {
 				require.EqualError(t, err, tcase.err.Error())
 				return
 			}
 			require.NoError(t, err)
-			if got != tcase.out {
-				t.Errorf("NullsafeCompare(%v, %v): %v, want %v", printValue(tcase.v1), printValue(tcase.v2), got, tcase.out)
-			}
+			assert.Equal(t, tcase.out, got)
 		})
 	}
 }
@@ -1242,7 +1274,7 @@ func TestNullsafeCompareCollate(t *testing.T) {
 	}
 	for _, tcase := range tcases {
 		t.Run(fmt.Sprintf("%v/%v", tcase.v1, tcase.v2), func(t *testing.T) {
-			got, err := NullsafeCompare(TestValue(sqltypes.VarChar, tcase.v1), TestValue(sqltypes.VarChar, tcase.v2), tcase.collation)
+			got, err := NullsafeCompare(TestValue(sqltypes.VarChar, tcase.v1), TestValue(sqltypes.VarChar, tcase.v2), collations.MySQL8(), tcase.collation, nil)
 			if tcase.err == nil {
 				require.NoError(t, err)
 			} else {
@@ -1293,7 +1325,7 @@ func BenchmarkNullSafeComparison(b *testing.B) {
 				for i := 0; i < b.N; i++ {
 					for _, lhs := range inputs {
 						for _, rhs := range inputs {
-							_, _ = NullsafeCompare(lhs, rhs, collid)
+							_, _ = NullsafeCompare(lhs, rhs, collations.MySQL8(), collid, nil)
 						}
 					}
 				}
@@ -1323,7 +1355,7 @@ func BenchmarkNullSafeComparison(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			for _, lhs := range inputs {
 				for _, rhs := range inputs {
-					_, _ = NullsafeCompare(lhs, rhs, collations.CollationUtf8mb4ID)
+					_, _ = NullsafeCompare(lhs, rhs, collations.MySQL8(), collations.CollationUtf8mb4ID, nil)
 				}
 			}
 		}
@@ -1341,30 +1373,30 @@ func TestCompareSorter(t *testing.T) {
 			Count:  100,
 			Limit:  10,
 			Random: sqltypes.RandomGenerators[sqltypes.Int64],
-			Cmp:    Comparison{{Col: 0, Desc: false, Type: Type{Type: sqltypes.Int64}}},
+			Cmp:    Comparison{{Col: 0, Desc: false, Type: NewType(sqltypes.Int64, collations.Unknown)}},
 		},
 		{
 			Count:  100,
 			Limit:  10,
 			Random: sqltypes.RandomGenerators[sqltypes.Int64],
-			Cmp:    Comparison{{Col: 0, Desc: true, Type: Type{Type: sqltypes.Int64}}},
+			Cmp:    Comparison{{Col: 0, Desc: true, Type: NewType(sqltypes.Int64, collations.Unknown)}},
 		},
 		{
 			Count:  100,
 			Limit:  math.MaxInt,
 			Random: sqltypes.RandomGenerators[sqltypes.Int64],
-			Cmp:    Comparison{{Col: 0, Desc: false, Type: Type{Type: sqltypes.Int64}}},
+			Cmp:    Comparison{{Col: 0, Desc: false, Type: NewType(sqltypes.Int64, collations.Unknown)}},
 		},
 		{
 			Count:  100,
 			Limit:  math.MaxInt,
 			Random: sqltypes.RandomGenerators[sqltypes.Int64],
-			Cmp:    Comparison{{Col: 0, Desc: true, Type: Type{Type: sqltypes.Int64}}},
+			Cmp:    Comparison{{Col: 0, Desc: true, Type: NewType(sqltypes.Int64, collations.Unknown)}},
 		},
 	}
 
 	for _, tc := range cases {
-		t.Run(fmt.Sprintf("%s-%d-%d", tc.Cmp[0].Type.Type, tc.Count, tc.Limit), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s-%d-%d", tc.Cmp[0].Type.Type(), tc.Count, tc.Limit), func(t *testing.T) {
 			unsorted := make([]sqltypes.Row, 0, tc.Count)
 			for i := 0; i < tc.Count; i++ {
 				unsorted = append(unsorted, []sqltypes.Value{tc.Random()})

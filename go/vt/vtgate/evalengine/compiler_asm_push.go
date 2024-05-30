@@ -105,6 +105,18 @@ func push_d(env *ExpressionEnv, raw []byte) int {
 	return 1
 }
 
+func push_enum(env *ExpressionEnv, raw []byte, values *EnumSetValues) int {
+	env.vm.stack[env.vm.sp] = env.vm.arena.newEvalEnum(raw, values)
+	env.vm.sp++
+	return 1
+}
+
+func push_set(env *ExpressionEnv, raw []byte, values *EnumSetValues) int {
+	env.vm.stack[env.vm.sp] = env.vm.arena.newEvalSet(raw, values)
+	env.vm.sp++
+	return 1
+}
+
 func (asm *assembler) PushColumn_d(offset int) {
 	asm.adjustStack(1)
 
@@ -115,6 +127,30 @@ func (asm *assembler) PushColumn_d(offset int) {
 		}
 		return push_d(env, col.Raw())
 	}, "PUSH DECIMAL(:%d)", offset)
+}
+
+func (asm *assembler) PushColumn_enum(offset int, values *EnumSetValues) {
+	asm.adjustStack(1)
+
+	asm.emit(func(env *ExpressionEnv) int {
+		col := env.Row[offset]
+		if col.IsNull() {
+			return push_null(env)
+		}
+		return push_enum(env, col.Raw(), values)
+	}, "PUSH ENUM(:%d)", offset)
+}
+
+func (asm *assembler) PushColumn_set(offset int, values *EnumSetValues) {
+	asm.adjustStack(1)
+
+	asm.emit(func(env *ExpressionEnv) int {
+		col := env.Row[offset]
+		if col.IsNull() {
+			return push_null(env)
+		}
+		return push_set(env, col.Raw(), values)
+	}, "PUSH SET(:%d)", offset)
 }
 
 func (asm *assembler) PushBVar_d(key string) {

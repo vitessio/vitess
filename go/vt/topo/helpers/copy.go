@@ -25,6 +25,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -33,7 +34,7 @@ import (
 )
 
 // CopyKeyspaces will create the keyspaces in the destination topo.
-func CopyKeyspaces(ctx context.Context, fromTS, toTS *topo.Server) error {
+func CopyKeyspaces(ctx context.Context, fromTS, toTS *topo.Server, parser *sqlparser.Parser) error {
 	keyspaces, err := fromTS.GetKeyspaces(ctx)
 	if err != nil {
 		return fmt.Errorf("GetKeyspaces: %w", err)
@@ -57,7 +58,7 @@ func CopyKeyspaces(ctx context.Context, fromTS, toTS *topo.Server) error {
 		vs, err := fromTS.GetVSchema(ctx, keyspace)
 		switch {
 		case err == nil:
-			_, err = vindexes.BuildKeyspace(vs)
+			_, err = vindexes.BuildKeyspace(vs, parser)
 			if err != nil {
 				log.Errorf("BuildKeyspace(%v): %v", keyspace, err)
 				break

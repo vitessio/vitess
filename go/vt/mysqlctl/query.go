@@ -249,6 +249,8 @@ func (mysqld *Mysqld) fetchStatuses(ctx context.Context, pattern string) (map[st
 }
 
 const (
+	sourcePasswordStart = "  SOURCE_PASSWORD = '"
+	sourcePasswordEnd   = "',\n"
 	masterPasswordStart = "  MASTER_PASSWORD = '"
 	masterPasswordEnd   = "',\n"
 	passwordStart       = " PASSWORD = '"
@@ -256,7 +258,17 @@ const (
 )
 
 func redactPassword(input string) string {
-	i := strings.Index(input, masterPasswordStart)
+	i := strings.Index(input, sourcePasswordStart)
+	// We have primary password in the query, try to redact it
+	if i != -1 {
+		j := strings.Index(input[i+len(sourcePasswordStart):], sourcePasswordEnd)
+		if j == -1 {
+			return input
+		}
+		input = input[:i+len(sourcePasswordStart)] + strings.Repeat("*", 4) + input[i+len(masterPasswordStart)+j:]
+	}
+
+	i = strings.Index(input, masterPasswordStart)
 	// We have primary password in the query, try to redact it
 	if i != -1 {
 		j := strings.Index(input[i+len(masterPasswordStart):], masterPasswordEnd)

@@ -86,7 +86,16 @@ func (orc *VTOrcProcess) Setup() (err error) {
 
 	// create the configuration file
 	timeNow := time.Now().UnixNano()
-	configFile, _ := os.Create(path.Join(orc.LogDir, fmt.Sprintf("orc-config-%d.json", timeNow)))
+	err = os.MkdirAll(orc.LogDir, 0755)
+	if err != nil {
+		log.Errorf("cannot create log directory for vtorc: %v", err)
+		return err
+	}
+	configFile, err := os.Create(path.Join(orc.LogDir, fmt.Sprintf("orc-config-%d.json", timeNow)))
+	if err != nil {
+		log.Errorf("cannot create config file for vtorc: %v", err)
+		return err
+	}
 	orc.ConfigPath = configFile.Name()
 
 	// Add the default configurations and print them out
@@ -135,7 +144,11 @@ func (orc *VTOrcProcess) Setup() (err error) {
 	if orc.LogFileName == "" {
 		orc.LogFileName = fmt.Sprintf("orc-stderr-%d.txt", timeNow)
 	}
-	errFile, _ := os.Create(path.Join(orc.LogDir, orc.LogFileName))
+	errFile, err := os.Create(path.Join(orc.LogDir, orc.LogFileName))
+	if err != nil {
+		log.Errorf("cannot create error log file for vtorc: %v", err)
+		return err
+	}
 	orc.proc.Stderr = errFile
 
 	orc.proc.Env = append(orc.proc.Env, os.Environ()...)
@@ -199,6 +212,22 @@ func (orc *VTOrcProcess) GetVars() map[string]any {
 		return resultMap
 	}
 	return nil
+}
+
+// GetMetrics gets the metrics exported on the /metrics page of VTOrc
+func (orc *VTOrcProcess) GetMetrics() string {
+	varsURL := fmt.Sprintf("http://localhost:%d/metrics", orc.Port)
+	resp, err := http.Get(varsURL)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 200 {
+		respByte, _ := io.ReadAll(resp.Body)
+		return string(respByte)
+	}
+	return ""
 }
 
 // MakeAPICall makes an API call on the given endpoint of VTOrc

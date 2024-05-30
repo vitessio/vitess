@@ -17,7 +17,6 @@ limitations under the License.
 package evalengine
 
 import (
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -379,7 +378,7 @@ func (expr *NotExpr) compile(c *compiler) (ctype, error) {
 		c.asm.Not_i()
 	}
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Int64, Flag: flagNullable | flagIsBoolean, Col: collationNumeric}, nil
+	return ctype{Type: sqltypes.Int64, Flag: nullableFlags(arg.Flag) | flagIsBoolean, Col: collationNumeric}, nil
 }
 
 func (l *LogicalExpr) eval(env *ExpressionEnv) (eval, error) {
@@ -450,7 +449,7 @@ func (expr *LogicalExpr) compile(c *compiler) (ctype, error) {
 
 	expr.op.compileRight(c)
 	c.asm.jumpDestination(jump)
-	return ctype{Type: sqltypes.Int64, Flag: flagNullable | flagIsBoolean, Col: collationNumeric}, nil
+	return ctype{Type: sqltypes.Int64, Flag: ((lt.Flag | rt.Flag) & flagNullable) | flagIsBoolean, Col: collationNumeric}, nil
 }
 
 func intervalCompare(n, val eval) (int, bool, error) {
@@ -586,7 +585,6 @@ func (is *IsExpr) compile(c *compiler) (ctype, error) {
 func (c *CaseExpr) eval(env *ExpressionEnv) (eval, error) {
 	var ta typeAggregation
 	var ca collationAggregation
-	var local = collations.Local()
 	var result eval
 	var matched = false
 
@@ -606,7 +604,7 @@ func (c *CaseExpr) eval(env *ExpressionEnv) (eval, error) {
 			return nil, err
 		}
 		ta.addEval(then)
-		if err := ca.add(local, evalCollation(then)); err != nil {
+		if err := ca.add(evalCollation(then), env.collationEnv); err != nil {
 			return nil, err
 		}
 
@@ -621,7 +619,7 @@ func (c *CaseExpr) eval(env *ExpressionEnv) (eval, error) {
 			return nil, err
 		}
 		ta.addEval(e)
-		if err := ca.add(local, evalCollation(e)); err != nil {
+		if err := ca.add(evalCollation(e), env.collationEnv); err != nil {
 			return nil, err
 		}
 		if !matched {
@@ -633,7 +631,7 @@ func (c *CaseExpr) eval(env *ExpressionEnv) (eval, error) {
 	if !matched {
 		return nil, nil
 	}
-	return evalCoerce(result, ta.result(), ca.result().Collation, env.now)
+	return evalCoerce(result, ta.result(), ta.size, ta.scale, ca.result().Collation, env.now, env.sqlmode.AllowZeroDate())
 }
 
 func (c *CaseExpr) constant() bool {
@@ -676,7 +674,6 @@ func (c *CaseExpr) simplify(env *ExpressionEnv) error {
 func (cs *CaseExpr) compile(c *compiler) (ctype, error) {
 	var ca collationAggregation
 	var ta typeAggregation
-	var local = collations.Local()
 
 	for _, wt := range cs.cases {
 		when, err := wt.when.compile(c)
@@ -693,8 +690,8 @@ func (cs *CaseExpr) compile(c *compiler) (ctype, error) {
 			return ctype{}, err
 		}
 
-		ta.add(then.Type, then.Flag)
-		if err := ca.add(local, then.Col); err != nil {
+		ta.add(then.Type, then.Flag, then.Size, then.Scale)
+		if err := ca.add(then.Col, c.env.CollationEnv()); err != nil {
 			return ctype{}, err
 		}
 	}
@@ -705,14 +702,18 @@ func (cs *CaseExpr) compile(c *compiler) (ctype, error) {
 			return ctype{}, err
 		}
 
-		ta.add(els.Type, els.Flag)
-		if err := ca.add(local, els.Col); err != nil {
+		ta.add(els.Type, els.Flag, els.Size, els.Scale)
+		if err := ca.add(els.Col, c.env.CollationEnv()); err != nil {
 			return ctype{}, err
 		}
 	}
 
-	ct := ctype{Type: ta.result(), Col: ca.result()}
-	c.asm.CmpCase(len(cs.cases), cs.Else != nil, ct.Type, ct.Col)
+	var f typeFlag
+	if ta.nullable {
+		f |= flagNullable
+	}
+	ct := ctype{Type: ta.result(), Flag: f, Col: ca.result(), Scale: ta.scale, Size: ta.size}
+	c.asm.CmpCase(len(cs.cases), cs.Else != nil, ct.Type, ct.Size, ct.Scale, ct.Col, c.sqlmode.AllowZeroDate())
 	return ct, nil
 }
 

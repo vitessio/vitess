@@ -125,9 +125,21 @@ type SandboxConn struct {
 	// this error will only happen once
 	EphemeralShardErr error
 
+	// if this is not nil, any calls will panic the tablet
+	panicThis interface{}
+
 	NotServing bool
 
-	getSchemaResult []map[string]string
+	getSchemaResult []SchemaResult
+
+	parser *sqlparser.Parser
+
+	streamHealthResponse *querypb.StreamHealthResponse
+}
+
+type SchemaResult struct {
+	TablesAndViews map[string]string
+	UDFs           []*querypb.UDFInfo
 }
 
 var _ queryservice.QueryService = (*SandboxConn)(nil) // compile-time interface check
@@ -139,6 +151,7 @@ func NewSandboxConn(t *topodatapb.Tablet) *SandboxConn {
 		MustFailCodes:   make(map[vtrpcpb.Code]int),
 		MustFailExecute: make(map[sqlparser.StatementType]int),
 		txIDToRID:       make(map[int64]int64),
+		parser:          sqlparser.NewTestParser(),
 	}
 }
 
@@ -197,12 +210,13 @@ func (sbc *SandboxConn) SetResults(r []*sqltypes.Result) {
 }
 
 // SetSchemaResult sets what GetSchema should return on each call.
-func (sbc *SandboxConn) SetSchemaResult(r []map[string]string) {
+func (sbc *SandboxConn) SetSchemaResult(r []SchemaResult) {
 	sbc.getSchemaResult = r
 }
 
 // Execute is part of the QueryService interface.
 func (sbc *SandboxConn) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+	sbc.panicIfNeeded()
 	sbc.execMu.Lock()
 	defer sbc.execMu.Unlock()
 	sbc.ExecCount.Add(1)
@@ -225,7 +239,7 @@ func (sbc *SandboxConn) Execute(ctx context.Context, target *querypb.Target, que
 		return nil, err
 	}
 
-	stmt, _ := sqlparser.Parse(query) // knowingly ignoring the error
+	stmt, _ := sbc.parser.Parse(query) // knowingly ignoring the error
 	if sbc.MustFailExecute[sqlparser.ASTToStatementType(stmt)] > 0 {
 		sbc.MustFailExecute[sqlparser.ASTToStatementType(stmt)] = sbc.MustFailExecute[sqlparser.ASTToStatementType(stmt)] - 1
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "failed query: %v", query)
@@ -235,6 +249,7 @@ func (sbc *SandboxConn) Execute(ctx context.Context, target *querypb.Target, que
 
 // StreamExecute is part of the QueryService interface.
 func (sbc *SandboxConn) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
+	sbc.panicIfNeeded()
 	sbc.sExecMu.Lock()
 	sbc.ExecCount.Add(1)
 	bv := make(map[string]*querypb.BindVariable)
@@ -251,7 +266,7 @@ func (sbc *SandboxConn) StreamExecute(ctx context.Context, target *querypb.Targe
 		sbc.sExecMu.Unlock()
 		return err
 	}
-	parse, _ := sqlparser.Parse(query)
+	parse, _ := sbc.parser.Parse(query)
 
 	if sbc.results == nil {
 		nextRs := sbc.getNextResult(parse)
@@ -275,6 +290,7 @@ func (sbc *SandboxConn) StreamExecute(ctx context.Context, target *querypb.Targe
 
 // Begin is part of the QueryService interface.
 func (sbc *SandboxConn) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (queryservice.TransactionState, error) {
+	sbc.panicIfNeeded()
 	return sbc.begin(ctx, target, nil, 0, options)
 }
 
@@ -300,6 +316,7 @@ func (sbc *SandboxConn) begin(ctx context.Context, target *querypb.Target, preQu
 
 // Commit is part of the QueryService interface.
 func (sbc *SandboxConn) Commit(ctx context.Context, target *querypb.Target, transactionID int64) (int64, error) {
+	sbc.panicIfNeeded()
 	sbc.CommitCount.Add(1)
 	reservedID := sbc.getTxReservedID(transactionID)
 	if reservedID != 0 {
@@ -320,6 +337,7 @@ func (sbc *SandboxConn) Rollback(ctx context.Context, target *querypb.Target, tr
 
 // Prepare prepares the specified transaction.
 func (sbc *SandboxConn) Prepare(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error) {
+	sbc.panicIfNeeded()
 	sbc.PrepareCount.Add(1)
 	if sbc.MustFailPrepare > 0 {
 		sbc.MustFailPrepare--
@@ -330,6 +348,7 @@ func (sbc *SandboxConn) Prepare(ctx context.Context, target *querypb.Target, tra
 
 // CommitPrepared commits the prepared transaction.
 func (sbc *SandboxConn) CommitPrepared(ctx context.Context, target *querypb.Target, dtid string) (err error) {
+	sbc.panicIfNeeded()
 	sbc.CommitPreparedCount.Add(1)
 	if sbc.MustFailCommitPrepared > 0 {
 		sbc.MustFailCommitPrepared--
@@ -340,6 +359,7 @@ func (sbc *SandboxConn) CommitPrepared(ctx context.Context, target *querypb.Targ
 
 // RollbackPrepared rolls back the prepared transaction.
 func (sbc *SandboxConn) RollbackPrepared(ctx context.Context, target *querypb.Target, dtid string, originalID int64) (err error) {
+	sbc.panicIfNeeded()
 	sbc.RollbackPreparedCount.Add(1)
 	if sbc.MustFailRollbackPrepared > 0 {
 		sbc.MustFailRollbackPrepared--
@@ -361,6 +381,7 @@ func (sbc *SandboxConn) CreateTransaction(ctx context.Context, target *querypb.T
 // StartCommit atomically commits the transaction along with the
 // decision to commit the associated 2pc transaction.
 func (sbc *SandboxConn) StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error) {
+	sbc.panicIfNeeded()
 	sbc.StartCommitCount.Add(1)
 	if sbc.MustFailStartCommit > 0 {
 		sbc.MustFailStartCommit--
@@ -372,6 +393,7 @@ func (sbc *SandboxConn) StartCommit(ctx context.Context, target *querypb.Target,
 // SetRollback transitions the 2pc transaction to the Rollback state.
 // If a transaction id is provided, that transaction is also rolled back.
 func (sbc *SandboxConn) SetRollback(ctx context.Context, target *querypb.Target, dtid string, transactionID int64) (err error) {
+	sbc.panicIfNeeded()
 	sbc.SetRollbackCount.Add(1)
 	if sbc.MustFailSetRollback > 0 {
 		sbc.MustFailSetRollback--
@@ -391,7 +413,7 @@ func (sbc *SandboxConn) ConcludeTransaction(ctx context.Context, target *querypb
 	return sbc.getError()
 }
 
-// ReadTransaction returns the metadata for the sepcified dtid.
+// ReadTransaction returns the metadata for the specified dtid.
 func (sbc *SandboxConn) ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (metadata *querypb.TransactionMetadata, err error) {
 	sbc.ReadTransactionCount.Add(1)
 	if err := sbc.getError(); err != nil {
@@ -407,6 +429,7 @@ func (sbc *SandboxConn) ReadTransaction(ctx context.Context, target *querypb.Tar
 
 // BeginExecute is part of the QueryService interface.
 func (sbc *SandboxConn) BeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, query string, bindVars map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (queryservice.TransactionState, *sqltypes.Result, error) {
+	sbc.panicIfNeeded()
 	state, err := sbc.begin(ctx, target, preQueries, reservedID, options)
 	if state.TransactionID != 0 {
 		sbc.setTxReservedID(state.TransactionID, reservedID)
@@ -420,6 +443,7 @@ func (sbc *SandboxConn) BeginExecute(ctx context.Context, target *querypb.Target
 
 // BeginStreamExecute is part of the QueryService interface.
 func (sbc *SandboxConn) BeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (queryservice.TransactionState, error) {
+	sbc.panicIfNeeded()
 	state, err := sbc.begin(ctx, target, preQueries, reservedID, options)
 	if state.TransactionID != 0 {
 		sbc.setTxReservedID(state.TransactionID, reservedID)
@@ -453,8 +477,21 @@ func (sbc *SandboxConn) MessageAck(ctx context.Context, target *querypb.Target, 
 // SandboxSQRowCount is the default number of fake splits returned.
 var SandboxSQRowCount = int64(10)
 
-// StreamHealth always mocks a "healthy" result.
+// SetStreamHealthResponse sets the StreamHealthResponse to be returned in StreamHealth.
+func (sbc *SandboxConn) SetStreamHealthResponse(res *querypb.StreamHealthResponse) {
+	sbc.mapMu.Lock()
+	defer sbc.mapMu.Unlock()
+	sbc.streamHealthResponse = res
+}
+
+// StreamHealth always mocks a "healthy" result by default. If you want to override this behavior you
+// can call SetStreamHealthResponse.
 func (sbc *SandboxConn) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
+	sbc.mapMu.Lock()
+	defer sbc.mapMu.Unlock()
+	if sbc.streamHealthResponse != nil {
+		return callback(sbc.streamHealthResponse)
+	}
 	return nil
 }
 
@@ -549,7 +586,7 @@ func (sbc *SandboxConn) VStreamResults(ctx context.Context, target *querypb.Targ
 }
 
 // QueryServiceByAlias is part of the Gateway interface.
-func (sbc *SandboxConn) QueryServiceByAlias(_ *topodatapb.TabletAlias, _ *querypb.Target) (queryservice.QueryService, error) {
+func (sbc *SandboxConn) QueryServiceByAlias(_ context.Context, _ *topodatapb.TabletAlias, _ *querypb.Target) (queryservice.QueryService, error) {
 	return sbc, nil
 }
 
@@ -564,6 +601,7 @@ func (sbc *SandboxConn) HandlePanic(err *error) {
 
 // ReserveBeginExecute implements the QueryService interface
 func (sbc *SandboxConn) ReserveBeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (queryservice.ReservedTransactionState, *sqltypes.Result, error) {
+	sbc.panicIfNeeded()
 	reservedID := sbc.reserve(ctx, target, preQueries, bindVariables, 0, options)
 	state, result, err := sbc.BeginExecute(ctx, target, postBeginQueries, sql, bindVariables, reservedID, options)
 	if state.TransactionID != 0 {
@@ -578,6 +616,7 @@ func (sbc *SandboxConn) ReserveBeginExecute(ctx context.Context, target *querypb
 
 // ReserveBeginStreamExecute is part of the QueryService interface.
 func (sbc *SandboxConn) ReserveBeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (queryservice.ReservedTransactionState, error) {
+	sbc.panicIfNeeded()
 	reservedID := sbc.reserve(ctx, target, preQueries, bindVariables, 0, options)
 	state, err := sbc.BeginStreamExecute(ctx, target, postBeginQueries, sql, bindVariables, reservedID, options, callback)
 	if state.TransactionID != 0 {
@@ -592,6 +631,7 @@ func (sbc *SandboxConn) ReserveBeginStreamExecute(ctx context.Context, target *q
 
 // ReserveExecute implements the QueryService interface
 func (sbc *SandboxConn) ReserveExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (queryservice.ReservedState, *sqltypes.Result, error) {
+	sbc.panicIfNeeded()
 	reservedID := sbc.reserve(ctx, target, preQueries, bindVariables, transactionID, options)
 	result, err := sbc.Execute(ctx, target, sql, bindVariables, transactionID, reservedID, options)
 	if transactionID != 0 {
@@ -605,6 +645,7 @@ func (sbc *SandboxConn) ReserveExecute(ctx context.Context, target *querypb.Targ
 
 // ReserveStreamExecute is part of the QueryService interface.
 func (sbc *SandboxConn) ReserveStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (queryservice.ReservedState, error) {
+	sbc.panicIfNeeded()
 	reservedID := sbc.reserve(ctx, target, preQueries, bindVariables, transactionID, options)
 	err := sbc.StreamExecute(ctx, target, sql, bindVariables, transactionID, reservedID, options, callback)
 	if transactionID != 0 {
@@ -641,7 +682,12 @@ func (sbc *SandboxConn) GetSchema(ctx context.Context, target *querypb.Target, t
 	}
 	resp := sbc.getSchemaResult[0]
 	sbc.getSchemaResult = sbc.getSchemaResult[1:]
-	return callback(&querypb.GetSchemaResponse{TableDefinition: resp})
+
+	response := &querypb.GetSchemaResponse{
+		TableDefinition: resp.TablesAndViews,
+		Udfs:            resp.UDFs,
+	}
+	return callback(response)
 }
 
 // Close does not change ExecCount
@@ -765,4 +811,14 @@ var StreamRowResult = &sqltypes.Result{
 		sqltypes.NewInt32(1),
 		sqltypes.NewVarChar("foo"),
 	}},
+}
+
+func (sbc *SandboxConn) SetPanic(i interface{}) {
+	sbc.panicThis = i
+}
+
+func (sbc *SandboxConn) panicIfNeeded() {
+	if sbc.panicThis != nil {
+		panic(sbc.panicThis)
+	}
 }

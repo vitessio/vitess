@@ -35,14 +35,14 @@ jobs:
           echo Skip ${skip}
           echo "skip-workflow=${skip}" >> $GITHUB_OUTPUT
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         if: steps.skip-workflow.outputs.skip-workflow == 'false'
 
-      - uses: actions/setup-node@v3
+      - uses: actions/setup-node@v4
         if: steps.skip-workflow.outputs.skip-workflow == 'false'
         with:
           # node-version should match package.json
-          node-version: '18.16.0'
+          node-version: '20.12.2'
 
       - name: Install dependencies
         if: steps.skip-workflow.outputs.skip-workflow == 'false'

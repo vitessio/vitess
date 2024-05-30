@@ -17,13 +17,17 @@ limitations under the License.
 package evalengine
 
 import (
+	"slices"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -33,6 +37,8 @@ type compiler struct {
 	collation    collations.ID
 	dynamicTypes []ctype
 	asm          assembler
+	sqlmode      SQLMode
+	env          *vtenv.Environment
 }
 
 type CompilerLog interface {
@@ -46,31 +52,145 @@ type compiledCoercion struct {
 	right colldata.Coercion
 }
 
+type EnumSetValues []string
+
 type ctype struct {
-	Type sqltypes.Type
-	Flag typeFlag
-	Col  collations.TypedCollation
+	Type        sqltypes.Type
+	Flag        typeFlag
+	Size, Scale int32
+	Col         collations.TypedCollation
+	Values      *EnumSetValues
 }
 
 type Type struct {
-	Type     sqltypes.Type
-	Coll     collations.ID
-	Nullable bool
+	typ         sqltypes.Type
+	collation   collations.ID
+	nullable    bool
+	init        bool
+	size, scale int32
+	values      *EnumSetValues
 }
 
-func UnknownType() Type {
-	return Type{Type: sqltypes.Unknown, Coll: collations.Unknown}
+func (v *EnumSetValues) Equal(other *EnumSetValues) bool {
+	if v == nil && other == nil {
+		return true
+	}
+	if v == nil || other == nil {
+		return false
+	}
+	return slices.Equal(*v, *other)
 }
 
-func (ct ctype) nullable() bool {
+func NewType(t sqltypes.Type, collation collations.ID) Type {
+	// New types default to being nullable
+	return NewTypeEx(t, collation, true, 0, 0, nil)
+}
+
+func NewTypeEx(t sqltypes.Type, collation collations.ID, nullable bool, size, scale int32, values *EnumSetValues) Type {
+	return Type{
+		typ:       t,
+		collation: collation,
+		nullable:  nullable,
+		init:      true,
+		size:      size,
+		scale:     scale,
+		values:    values,
+	}
+}
+
+func NewTypeFromField(f *querypb.Field) Type {
+	return Type{
+		typ:       f.Type,
+		collation: collations.ID(f.Charset),
+		nullable:  f.Flags&uint32(querypb.MySqlFlag_NOT_NULL_FLAG) == 0,
+		init:      true,
+		size:      int32(f.ColumnLength),
+		scale:     int32(f.Decimals),
+	}
+}
+
+func (t *Type) ToField(name string) *querypb.Field {
+	// need to get the proper flags for the type; usually leaving flags
+	// to 0 is OK, because Vitess' MySQL client will generate the right
+	// ones for the column's type, but here we're also setting the NotNull
+	// flag, so it needs to be set with the full flags for the column
+	_, flags := sqltypes.TypeToMySQL(t.typ)
+	if !t.nullable {
+		flags |= int64(querypb.MySqlFlag_NOT_NULL_FLAG)
+	}
+
+	f := &querypb.Field{
+		Name:         name,
+		Type:         t.typ,
+		Charset:      uint32(t.collation),
+		ColumnLength: uint32(t.size),
+		Decimals:     uint32(t.scale),
+		Flags:        uint32(flags),
+	}
+	return f
+}
+
+func (t *Type) Type() sqltypes.Type {
+	if t.init {
+		return t.typ
+	}
+	return sqltypes.Unknown
+}
+
+func (t *Type) Collation() collations.ID {
+	return t.collation
+}
+
+func (t *Type) Size() int32 {
+	return t.size
+}
+
+func (t *Type) Scale() int32 {
+	return t.scale
+}
+
+func (t *Type) Nullable() bool {
+	if t.init {
+		return t.nullable
+	}
+	return true // nullable by default for unknown types
+}
+
+func (t *Type) Values() *EnumSetValues {
+	return t.values
+}
+
+func (t *Type) Valid() bool {
+	return t.init
+}
+
+func (t *Type) Equal(other *Type) bool {
+	return t.typ == other.typ &&
+		t.collation == other.collation &&
+		t.nullable == other.nullable &&
+		t.size == other.size &&
+		t.scale == other.scale &&
+		t.values.Equal(other.values)
+}
+
+func (ct *ctype) equal(other ctype) bool {
+	return ct.Type == other.Type &&
+		ct.Flag == other.Flag &&
+		ct.Size == other.Size &&
+		ct.Scale == other.Scale &&
+		ct.Col == other.Col &&
+		ct.Values.Equal(other.Values)
+}
+
+func (ct *ctype) nullable() bool {
 	return ct.Flag&flagNullable != 0
 }
 
-func (ct ctype) isTextual() bool {
-	return sqltypes.IsText(ct.Type) || sqltypes.IsBinary(ct.Type)
+func (ct *ctype) isTextual() bool {
+	return sqltypes.IsTextOrBinary(ct.Type)
 }
 
-func (ct ctype) isHexOrBitLiteral() bool {
+func (ct *ctype) isHexOrBitLiteral() bool {
 	return ct.Flag&flagBit != 0 || ct.Flag&flagHex != 0
 }
 
@@ -102,36 +222,40 @@ func (c *compiler) compileToNumeric(ct ctype, offset int, fallback sqltypes.Type
 	if ct.Type == sqltypes.VarBinary {
 		if (ct.Flag & flagHex) != 0 {
 			c.asm.Convert_hex(offset)
-			return ctype{sqltypes.Uint64, ct.Flag, collationNumeric}
+			return ctype{Type: sqltypes.Uint64, Flag: ct.Flag, Col: collationNumeric}
 		}
 		if (ct.Flag & flagBit) != 0 {
 			c.asm.Convert_bit(offset)
-			return ctype{sqltypes.Int64, ct.Flag, collationNumeric}
+			return ctype{Type: sqltypes.Int64, Flag: ct.Flag, Col: collationNumeric}
 		}
 	}
 
 	if sqltypes.IsDateOrTime(ct.Type) {
 		if preciseDatetime {
-			c.asm.Convert_Ti(offset)
-			return ctype{sqltypes.Int64, ct.Flag, collationNumeric}
+			if ct.Size == 0 {
+				c.asm.Convert_Ti(offset)
+				return ctype{Type: sqltypes.Int64, Flag: ct.Flag, Col: collationNumeric}
+			}
+			c.asm.Convert_Td(offset)
+			return ctype{Type: sqltypes.Decimal, Flag: ct.Flag, Col: collationNumeric, Size: ct.Size + decimalSizeBase, Scale: ct.Size}
 		}
 		c.asm.Convert_Tf(offset)
-		return ctype{sqltypes.Float64, ct.Flag, collationNumeric}
+		return ctype{Type: sqltypes.Float64, Flag: ct.Flag, Col: collationNumeric}
 	}
 
 	switch fallback {
 	case sqltypes.Int64:
 		c.asm.Convert_xi(offset)
-		return ctype{sqltypes.Int64, ct.Flag, collationNumeric}
+		return ctype{Type: sqltypes.Int64, Flag: ct.Flag, Col: collationNumeric}
 	case sqltypes.Uint64:
 		c.asm.Convert_xu(offset)
-		return ctype{sqltypes.Uint64, ct.Flag, collationNumeric}
+		return ctype{Type: sqltypes.Uint64, Flag: ct.Flag, Col: collationNumeric}
 	case sqltypes.Decimal:
 		c.asm.Convert_xd(offset, 0, 0)
-		return ctype{sqltypes.Decimal, ct.Flag, collationNumeric}
+		return ctype{Type: sqltypes.Decimal, Flag: ct.Flag, Col: collationNumeric}
 	}
 	c.asm.Convert_xf(offset)
-	return ctype{sqltypes.Float64, ct.Flag, collationNumeric}
+	return ctype{Type: sqltypes.Float64, Flag: ct.Flag, Col: collationNumeric}
 }
 
 func (c *compiler) compileToInt64(ct ctype, offset int) ctype {
@@ -144,7 +268,7 @@ func (c *compiler) compileToInt64(ct ctype, offset int) ctype {
 	default:
 		c.asm.Convert_xi(offset)
 	}
-	return ctype{sqltypes.Int64, ct.Flag, collationNumeric}
+	return ctype{Type: sqltypes.Int64, Flag: ct.Flag, Col: collationNumeric}
 }
 
 func (c *compiler) compileToUint64(ct ctype, offset int) ctype {
@@ -157,7 +281,7 @@ func (c *compiler) compileToUint64(ct ctype, offset int) ctype {
 	default:
 		c.asm.Convert_xu(offset)
 	}
-	return ctype{sqltypes.Uint64, ct.Flag, collationNumeric}
+	return ctype{Type: sqltypes.Uint64, Flag: ct.Flag, Col: collationNumeric}
 }
 
 func (c *compiler) compileToBitwiseUint64(ct ctype, offset int) ctype {
@@ -172,7 +296,7 @@ func (c *compiler) compileToBitwiseUint64(ct ctype, offset int) ctype {
 	default:
 		c.asm.Convert_xu(offset)
 	}
-	return ctype{sqltypes.Uint64, ct.Flag, collationNumeric}
+	return ctype{Type: sqltypes.Uint64, Flag: ct.Flag, Col: collationNumeric}
 }
 
 func (c *compiler) compileToFloat(ct ctype, offset int) ctype {
@@ -189,22 +313,28 @@ func (c *compiler) compileToFloat(ct ctype, offset int) ctype {
 	default:
 		c.asm.Convert_xf(offset)
 	}
-	return ctype{sqltypes.Float64, ct.Flag, collationNumeric}
+	return ctype{Type: sqltypes.Float64, Flag: ct.Flag, Col: collationNumeric}
 }
 
 func (c *compiler) compileToDecimal(ct ctype, offset int) ctype {
 	if sqltypes.IsDecimal(ct.Type) {
 		return ct
 	}
+	var scale int32
+	var size int32
 	switch ct.Type {
 	case sqltypes.Int64:
 		c.asm.Convert_id(offset)
 	case sqltypes.Uint64:
 		c.asm.Convert_ud(offset)
+	case sqltypes.Datetime, sqltypes.Time:
+		scale = ct.Size
+		size = ct.Size + decimalSizeBase
+		fallthrough
 	default:
 		c.asm.Convert_xd(offset, 0, 0)
 	}
-	return ctype{sqltypes.Decimal, ct.Flag, collationNumeric}
+	return ctype{Type: sqltypes.Decimal, Flag: ct.Flag, Col: collationNumeric, Scale: scale, Size: size}
 }
 
 func (c *compiler) compileToDate(doct ctype, offset int) ctype {
@@ -212,7 +342,7 @@ func (c *compiler) compileToDate(doct ctype, offset int) ctype {
 	case sqltypes.Date:
 		return doct
 	default:
-		c.asm.Convert_xD(offset)
+		c.asm.Convert_xD(offset, c.sqlmode.AllowZeroDate())
 	}
 	return ctype{Type: sqltypes.Date, Col: collationBinary, Flag: flagNullable}
 }
@@ -223,9 +353,9 @@ func (c *compiler) compileToDateTime(doct ctype, offset, prec int) ctype {
 		c.asm.Convert_tp(offset, prec)
 		return doct
 	default:
-		c.asm.Convert_xDT(offset, prec)
+		c.asm.Convert_xDT(offset, prec, c.sqlmode.AllowZeroDate())
 	}
-	return ctype{Type: sqltypes.Datetime, Col: collationBinary, Flag: flagNullable}
+	return ctype{Type: sqltypes.Datetime, Size: int32(prec), Col: collationBinary, Flag: flagNullable}
 }
 
 func (c *compiler) compileToTime(doct ctype, offset, prec int) ctype {
@@ -236,7 +366,7 @@ func (c *compiler) compileToTime(doct ctype, offset, prec int) ctype {
 	default:
 		c.asm.Convert_xT(offset, prec)
 	}
-	return ctype{Type: sqltypes.Time, Col: collationBinary, Flag: flagNullable}
+	return ctype{Type: sqltypes.Time, Size: int32(prec), Col: collationBinary, Flag: flagNullable}
 }
 
 func (c *compiler) compileNullCheck1(ct ctype) *jump {
@@ -270,6 +400,15 @@ func (c *compiler) compileNullCheck3(arg1, arg2, arg3 ctype) *jump {
 	if arg1.nullable() || arg2.nullable() || arg3.nullable() {
 		j := c.asm.jumpFrom()
 		c.asm.NullCheck3(j)
+		return j
+	}
+	return nil
+}
+
+func (c *compiler) compileNullCheck4(arg1, arg2, arg3, arg4 ctype) *jump {
+	if arg1.nullable() || arg2.nullable() || arg3.nullable() || arg4.nullable() {
+		j := c.asm.jumpFrom()
+		c.asm.NullCheck4(j)
 		return j
 	}
 	return nil
@@ -369,7 +508,7 @@ func (c *compiler) compareNumericTypes(lt ctype, rt ctype) (swapped bool) {
 }
 
 func (c *compiler) compareAsStrings(lt ctype, rt ctype) error {
-	merged, coerceLeft, coerceRight, err := mergeCollations(lt.Col, rt.Col, lt.Type, rt.Type)
+	merged, coerceLeft, coerceRight, err := mergeCollations(lt.Col, rt.Col, lt.Type, rt.Type, c.env.CollationEnv())
 	if err != nil {
 		return err
 	}
@@ -473,7 +612,7 @@ func (c *compiler) compileToJSONKey(key ctype) error {
 	if key.Type == sqltypes.VarBinary {
 		return nil
 	}
-	c.asm.Convert_xc(1, sqltypes.VarChar, c.collation, 0, false)
+	c.asm.Convert_xc(1, sqltypes.VarChar, c.collation, nil)
 	return nil
 }
 

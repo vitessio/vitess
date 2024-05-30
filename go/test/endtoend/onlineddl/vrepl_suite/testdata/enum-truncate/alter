@@ -1,0 +1,1 @@
+modify e enum('red', 'green') not null

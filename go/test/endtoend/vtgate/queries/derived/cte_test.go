@@ -18,9 +18,12 @@ package misc
 
 import (
 	"testing"
+
+	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
 func TestCTEWithOrderByLimit(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -28,6 +31,7 @@ func TestCTEWithOrderByLimit(t *testing.T) {
 }
 
 func TestCTEAggregationOnRHS(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -36,6 +40,7 @@ func TestCTEAggregationOnRHS(t *testing.T) {
 }
 
 func TestCTERemoveInnerOrderBy(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -43,6 +48,7 @@ func TestCTERemoveInnerOrderBy(t *testing.T) {
 }
 
 func TestCTEWithHaving(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -53,9 +59,34 @@ func TestCTEWithHaving(t *testing.T) {
 }
 
 func TestCTEColumns(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 
 	mcmp.AssertMatches(`with t(id) as (SELECT id FROM user) SELECT t.id FROM t ORDER BY t.id DESC`,
 		`[[INT64(5)] [INT64(4)] [INT64(3)] [INT64(2)] [INT64(1)]]`)
+}
+
+func TestCTEAggregationsInUnion(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 20, "vtgate")
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.AssertMatches(`WITH toto AS (SELECT COUNT(*) as num
+                FROM (SELECT user.id
+                      FROM user
+                      WHERE user.name = 'toto'
+						LIMIT 1000) t LIMIT 1 ),
+    tata AS (SELECT COUNT(*) as num
+                FROM (SELECT user.id
+                        FROM user
+                        WHERE user.name = 'tata'
+						LIMIT 1000) t LIMIT 1),
+    total AS (SELECT LEAST(1000, SUM(num)) AS num
+                FROM (SELECT num
+                        FROM toto
+                        UNION ALL SELECT num
+                                    FROM tata) t LIMIT 1)
+SELECT 'total' AS tab, num
+FROM total`, `[[VARCHAR("total") DECIMAL(2)]]`)
 }

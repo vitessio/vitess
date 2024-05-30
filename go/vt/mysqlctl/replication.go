@@ -29,37 +29,40 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/proto/replicationdata"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 type ResetSuperReadOnlyFunc func() error
 
 // WaitForReplicationStart waits until the deadline for replication to start.
 // This validates the current primary is correct and can be connected to.
-func WaitForReplicationStart(mysqld MysqlDaemon, replicaStartDeadline int) error {
-	var rowMap map[string]string
+func WaitForReplicationStart(ctx context.Context, mysqld MysqlDaemon, replicaStartDeadline int) (err error) {
+	var replicaStatus replication.ReplicationStatus
 	for replicaWait := 0; replicaWait < replicaStartDeadline; replicaWait++ {
-		status, err := mysqld.ReplicationStatus()
+		replicaStatus, err = mysqld.ReplicationStatus(ctx)
 		if err != nil {
 			return err
 		}
 
-		if status.Running() {
+		if replicaStatus.Running() {
 			return nil
 		}
 		time.Sleep(time.Second)
 	}
-
-	errorKeys := []string{"Last_Error", "Last_IO_Error", "Last_SQL_Error"}
-	errs := make([]string, 0, len(errorKeys))
-	for _, key := range errorKeys {
-		if rowMap[key] != "" {
-			errs = append(errs, key+": "+rowMap[key])
-		}
+	errs := make([]string, 0, 2)
+	if replicaStatus.LastSQLError != "" {
+		errs = append(errs, "Last_SQL_Error: "+replicaStatus.LastSQLError)
 	}
+	if replicaStatus.LastIOError != "" {
+		errs = append(errs, "Last_IO_Error: "+replicaStatus.LastIOError)
+	}
+
 	if len(errs) != 0 {
 		return errors.New(strings.Join(errs, ", "))
 	}
@@ -67,8 +70,7 @@ func WaitForReplicationStart(mysqld MysqlDaemon, replicaStartDeadline int) error
 }
 
 // StartReplication starts replication.
-func (mysqld *Mysqld) StartReplication(hookExtraEnv map[string]string) error {
-	ctx := context.TODO()
+func (mysqld *Mysqld) StartReplication(ctx context.Context, hookExtraEnv map[string]string) error {
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
 		return err
@@ -111,13 +113,12 @@ func (mysqld *Mysqld) StartSQLThreadUntilAfter(ctx context.Context, targetPos re
 }
 
 // StopReplication stops replication.
-func (mysqld *Mysqld) StopReplication(hookExtraEnv map[string]string) error {
+func (mysqld *Mysqld) StopReplication(ctx context.Context, hookExtraEnv map[string]string) error {
 	h := hook.NewSimpleHook("preflight_stop_slave")
 	h.ExtraEnv = hookExtraEnv
 	if err := h.ExecuteOptional(); err != nil {
 		return err
 	}
-	ctx := context.TODO()
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
 		return err
@@ -150,13 +151,12 @@ func (mysqld *Mysqld) StopSQLThread(ctx context.Context) error {
 }
 
 // RestartReplication stops, resets and starts replication.
-func (mysqld *Mysqld) RestartReplication(hookExtraEnv map[string]string) error {
+func (mysqld *Mysqld) RestartReplication(ctx context.Context, hookExtraEnv map[string]string) error {
 	h := hook.NewSimpleHook("preflight_stop_slave")
 	h.ExtraEnv = hookExtraEnv
 	if err := h.ExecuteOptional(); err != nil {
 		return err
 	}
-	ctx := context.TODO()
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
 		return err
@@ -173,8 +173,21 @@ func (mysqld *Mysqld) RestartReplication(hookExtraEnv map[string]string) error {
 }
 
 // GetMysqlPort returns mysql port
-func (mysqld *Mysqld) GetMysqlPort() (int32, error) {
-	qr, err := mysqld.FetchSuperQuery(context.TODO(), "SHOW VARIABLES LIKE 'port'")
+func (mysqld *Mysqld) GetMysqlPort(ctx context.Context) (int32, error) {
+	// We can not use the connection pool here. This check runs very early
+	// during MySQL startup when we still might be loading things like grants.
+	// This means we need to use an isolated connection to avoid poisoning the
+	// DBA connection pool for further queries.
+	params, err := mysqld.dbcfgs.DbaConnector().MysqlParams()
+	if err != nil {
+		return 0, err
+	}
+	conn, err := mysql.Connect(ctx, params)
+	if err != nil {
+		return 0, err
+	}
+	defer conn.Close()
+	qr, err := conn.ExecuteFetch("SHOW VARIABLES LIKE 'port'", 1, false)
 	if err != nil {
 		return 0, err
 	}
@@ -216,8 +229,8 @@ func (mysqld *Mysqld) GetServerUUID(ctx context.Context) (string, error) {
 }
 
 // IsReadOnly return true if the instance is read only
-func (mysqld *Mysqld) IsReadOnly() (bool, error) {
-	qr, err := mysqld.FetchSuperQuery(context.TODO(), "SHOW VARIABLES LIKE 'read_only'")
+func (mysqld *Mysqld) IsReadOnly(ctx context.Context) (bool, error) {
+	qr, err := mysqld.FetchSuperQuery(ctx, "SHOW VARIABLES LIKE 'read_only'")
 	if err != nil {
 		return true, err
 	}
@@ -231,12 +244,13 @@ func (mysqld *Mysqld) IsReadOnly() (bool, error) {
 }
 
 // IsSuperReadOnly return true if the instance is super read only
-func (mysqld *Mysqld) IsSuperReadOnly() (bool, error) {
-	qr, err := mysqld.FetchSuperQuery(context.TODO(), "SELECT @@global.super_read_only")
+func (mysqld *Mysqld) IsSuperReadOnly(ctx context.Context) (bool, error) {
+	qr, err := mysqld.FetchSuperQuery(ctx, "SELECT @@global.super_read_only")
 	if err != nil {
 		return false, err
 	}
-	if err == nil && len(qr.Rows) == 1 {
+
+	if len(qr.Rows) == 1 {
 		sro := qr.Rows[0][0].ToString()
 		if sro == "1" || sro == "ON" {
 			return true, nil
@@ -247,29 +261,19 @@ func (mysqld *Mysqld) IsSuperReadOnly() (bool, error) {
 }
 
 // SetReadOnly set/unset the read_only flag
-func (mysqld *Mysqld) SetReadOnly(on bool) error {
-	// temp logging, to be removed in v17
-	var newState string
-	switch on {
-	case false:
-		newState = "ReadWrite"
-	case true:
-		newState = "ReadOnly"
-	}
-	log.Infof("SetReadOnly setting to : %s", newState)
-
+func (mysqld *Mysqld) SetReadOnly(ctx context.Context, on bool) error {
 	query := "SET GLOBAL read_only = "
 	if on {
 		query += "ON"
 	} else {
 		query += "OFF"
 	}
-	return mysqld.ExecuteSuperQuery(context.TODO(), query)
+	return mysqld.ExecuteSuperQuery(ctx, query)
 }
 
 // SetSuperReadOnly set/unset the super_read_only flag.
 // Returns a function which is called to set super_read_only back to its original value.
-func (mysqld *Mysqld) SetSuperReadOnly(on bool) (ResetSuperReadOnlyFunc, error) {
+func (mysqld *Mysqld) SetSuperReadOnly(ctx context.Context, on bool) (ResetSuperReadOnlyFunc, error) {
 	//  return function for switching `OFF` super_read_only
 	var resetFunc ResetSuperReadOnlyFunc
 	var disableFunc = func() error {
@@ -285,7 +289,7 @@ func (mysqld *Mysqld) SetSuperReadOnly(on bool) (ResetSuperReadOnlyFunc, error) 
 		return err
 	}
 
-	superReadOnlyEnabled, err := mysqld.IsSuperReadOnly()
+	superReadOnlyEnabled, err := mysqld.IsSuperReadOnly(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -315,7 +319,8 @@ func (mysqld *Mysqld) SetSuperReadOnly(on bool) (ResetSuperReadOnlyFunc, error) 
 	return resetFunc, nil
 }
 
-// WaitSourcePos lets replicas wait to given replication position
+// WaitSourcePos lets replicas wait for the given replication position to
+// be reached.
 func (mysqld *Mysqld) WaitSourcePos(ctx context.Context, targetPos replication.Position) error {
 	// Get a connection.
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
@@ -324,71 +329,54 @@ func (mysqld *Mysqld) WaitSourcePos(ctx context.Context, targetPos replication.P
 	}
 	defer conn.Recycle()
 
-	// First check if filePos flavored Position was passed in. If so, we can't defer to the flavor in the connection,
-	// unless that flavor is also filePos.
-	waitCommandName := "WaitUntilPositionCommand"
-	var query string
+	// First check if filePos flavored Position was passed in. If so, we
+	// can't defer to the flavor in the connection, unless that flavor is
+	// also filePos.
 	if targetPos.MatchesFlavor(replication.FilePosFlavorID) {
-		// If we are the primary, WaitUntilFilePositionCommand will fail.
-		// But position is most likely reached. So, check the position
-		// first.
+		// If we are the primary, WaitUntilFilePosition will fail. But
+		// position is most likely reached. So, check the position first.
 		mpos, err := conn.Conn.PrimaryFilePosition()
 		if err != nil {
-			return fmt.Errorf("WaitSourcePos: PrimaryFilePosition failed: %v", err)
+			return vterrors.Wrapf(err, "WaitSourcePos: PrimaryFilePosition failed")
 		}
 		if mpos.AtLeast(targetPos) {
 			return nil
 		}
-
-		// Find the query to run, run it.
-		query, err = conn.Conn.WaitUntilFilePositionCommand(ctx, targetPos)
-		if err != nil {
-			return err
-		}
-		waitCommandName = "WaitUntilFilePositionCommand"
 	} else {
-		// If we are the primary, WaitUntilPositionCommand will fail.
-		// But position is most likely reached. So, check the position
-		// first.
+		// If we are the primary, WaitUntilPosition will fail. But
+		// position is most likely reached. So, check the position first.
 		mpos, err := conn.Conn.PrimaryPosition()
 		if err != nil {
-			return fmt.Errorf("WaitSourcePos: PrimaryPosition failed: %v", err)
+			return vterrors.Wrapf(err, "WaitSourcePos: PrimaryPosition failed")
 		}
 		if mpos.AtLeast(targetPos) {
 			return nil
 		}
-
-		// Find the query to run, run it.
-		query, err = conn.Conn.WaitUntilPositionCommand(ctx, targetPos)
-		if err != nil {
-			return err
-		}
 	}
 
-	qr, err := mysqld.FetchSuperQuery(ctx, query)
-	if err != nil {
-		return fmt.Errorf("%v(%v) failed: %v", waitCommandName, query, err)
-	}
-
-	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
-		return fmt.Errorf("unexpected result format from %v(%v): %#v", waitCommandName, query, qr)
-	}
-	result := qr.Rows[0][0]
-	if result.IsNull() {
-		return fmt.Errorf("%v(%v) failed: replication is probably stopped", waitCommandName, query)
-	}
-	if result.ToString() == "-1" {
-		return fmt.Errorf("timed out waiting for position %v", targetPos)
+	if err := conn.Conn.WaitUntilPosition(ctx, targetPos); err != nil {
+		return vterrors.Wrapf(err, "WaitSourcePos failed")
 	}
 	return nil
 }
 
-// ReplicationStatus returns the server replication status
-func (mysqld *Mysqld) ReplicationStatus() (replication.ReplicationStatus, error) {
-	return mysqld.ReplicationStatusWithContext(context.TODO())
+func (mysqld *Mysqld) CatchupToGTID(ctx context.Context, targetPos replication.Position) error {
+	params, err := mysqld.dbcfgs.ReplConnector().MysqlParams()
+	if err != nil {
+		return err
+	}
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return err
+	}
+	defer conn.Recycle()
+
+	cmds := conn.Conn.CatchupToGTIDCommands(params, targetPos)
+	return mysqld.executeSuperQueryListConn(ctx, conn, cmds)
 }
 
-func (mysqld *Mysqld) ReplicationStatusWithContext(ctx context.Context) (replication.ReplicationStatus, error) {
+// ReplicationStatus returns the server replication status
+func (mysqld *Mysqld) ReplicationStatus(ctx context.Context) (replication.ReplicationStatus, error) {
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
 		return replication.ReplicationStatus{}, err
@@ -409,6 +397,16 @@ func (mysqld *Mysqld) PrimaryStatus(ctx context.Context) (replication.PrimarySta
 	return conn.Conn.ShowPrimaryStatus()
 }
 
+func (mysqld *Mysqld) ReplicationConfiguration(ctx context.Context) (*replicationdata.Configuration, error) {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Recycle()
+
+	return conn.Conn.ReplicationConfiguration()
+}
+
 // GetGTIDPurged returns the gtid purged statuses
 func (mysqld *Mysqld) GetGTIDPurged(ctx context.Context) (replication.Position, error) {
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
@@ -421,8 +419,8 @@ func (mysqld *Mysqld) GetGTIDPurged(ctx context.Context) (replication.Position, 
 }
 
 // PrimaryPosition returns the primary replication position.
-func (mysqld *Mysqld) PrimaryPosition() (replication.Position, error) {
-	conn, err := getPoolReconnect(context.TODO(), mysqld.dbaPool)
+func (mysqld *Mysqld) PrimaryPosition(ctx context.Context) (replication.Position, error) {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
 		return replication.Position{}, err
 	}
@@ -447,7 +445,7 @@ func (mysqld *Mysqld) SetReplicationPosition(ctx context.Context, pos replicatio
 
 // SetReplicationSource makes the provided host / port the primary. It optionally
 // stops replication before, and starts it after.
-func (mysqld *Mysqld) SetReplicationSource(ctx context.Context, host string, port int32, stopReplicationBefore bool, startReplicationAfter bool) error {
+func (mysqld *Mysqld) SetReplicationSource(ctx context.Context, host string, port int32, heartbeatInterval float64, stopReplicationBefore bool, startReplicationAfter bool) error {
 	params, err := mysqld.dbcfgs.ReplConnector().MysqlParams()
 	if err != nil {
 		return err
@@ -462,7 +460,7 @@ func (mysqld *Mysqld) SetReplicationSource(ctx context.Context, host string, por
 	if stopReplicationBefore {
 		cmds = append(cmds, conn.Conn.StopReplicationCommand())
 	}
-	smc := conn.Conn.SetReplicationSourceCommand(params, host, port, int(replicationConnectRetry.Seconds()))
+	smc := conn.Conn.SetReplicationSourceCommand(params, host, port, heartbeatInterval, int(replicationConnectRetry.Seconds()))
 	cmds = append(cmds, smc)
 	if startReplicationAfter {
 		cmds = append(cmds, conn.Conn.StartReplicationCommand())
@@ -494,12 +492,12 @@ func (mysqld *Mysqld) ResetReplicationParameters(ctx context.Context) error {
 	return mysqld.executeSuperQueryListConn(ctx, conn, cmds)
 }
 
-// +------+---------+---------------------+------+-------------+------+----------------------------------------------------------------+------------------+
-// | Id   | User    | Host                | db   | Command     | Time | State                                                          | Info             |
-// +------+---------+---------------------+------+-------------+------+----------------------------------------------------------------+------------------+
-// | 9792 | vt_repl | host:port           | NULL | Binlog Dump |   54 | Has sent all binlog to slave; waiting for binlog to be updated | NULL             |
-// | 9797 | vt_dba  | localhost           | NULL | Query       |    0 | NULL                                                           | show processlist |
-// +------+---------+---------------------+------+-------------+------+----------------------------------------------------------------+------------------+
+// +------+---------+---------------------+------+-------------+------+------------------------------------------------------------------+------------------+
+// | Id   | User    | Host                | db   | Command     | Time | State                                                            | Info             |
+// +------+---------+---------------------+------+-------------+------+------------------------------------------------------------------+------------------+
+// | 9792 | vt_repl | host:port           | NULL | Binlog Dump |   54 | Has sent all binlog to replica; waiting for binlog to be updated | NULL             |
+// | 9797 | vt_dba  | localhost           | NULL | Query       |    0 | NULL                                                             | show processlist |
+// +------+---------+---------------------+------+-------------+------+------------------------------------------------------------------+------------------+
 //
 // Array indices for the results of SHOW PROCESSLIST.
 const (
@@ -516,8 +514,8 @@ const (
 )
 
 // FindReplicas gets IP addresses for all currently connected replicas.
-func FindReplicas(mysqld MysqlDaemon) ([]string, error) {
-	qr, err := mysqld.FetchSuperQuery(context.TODO(), "SHOW PROCESSLIST")
+func FindReplicas(ctx context.Context, mysqld MysqlDaemon) ([]string, error) {
+	qr, err := mysqld.FetchSuperQuery(ctx, "SHOW PROCESSLIST")
 	if err != nil {
 		return nil, err
 	}
@@ -551,31 +549,13 @@ func FindReplicas(mysqld MysqlDaemon) ([]string, error) {
 
 // GetBinlogInformation gets the binlog format, whether binlog is enabled and if updates on replica logging is enabled.
 func (mysqld *Mysqld) GetBinlogInformation(ctx context.Context) (string, bool, bool, string, error) {
-	qr, err := mysqld.FetchSuperQuery(ctx, "select @@global.binlog_format, @@global.log_bin, @@global.log_slave_updates, @@global.binlog_row_image")
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
 		return "", false, false, "", err
 	}
-	if len(qr.Rows) != 1 {
-		return "", false, false, "", errors.New("unable to read global variables binlog_format, log_bin, log_slave_updates, gtid_mode, binlog_rowge")
-	}
-	res := qr.Named().Row()
-	binlogFormat, err := res.ToString("@@global.binlog_format")
-	if err != nil {
-		return "", false, false, "", err
-	}
-	logBin, err := res.ToInt64("@@global.log_bin")
-	if err != nil {
-		return "", false, false, "", err
-	}
-	logReplicaUpdates, err := res.ToInt64("@@global.log_slave_updates")
-	if err != nil {
-		return "", false, false, "", err
-	}
-	binlogRowImage, err := res.ToString("@@global.binlog_row_image")
-	if err != nil {
-		return "", false, false, "", err
-	}
-	return binlogFormat, logBin == 1, logReplicaUpdates == 1, binlogRowImage, nil
+	defer conn.Recycle()
+
+	return conn.Conn.BinlogInformation()
 }
 
 // GetGTIDMode gets the GTID mode for the server
@@ -627,9 +607,48 @@ func (mysqld *Mysqld) GetPreviousGTIDs(ctx context.Context, binlog string) (prev
 	return previousGtids, nil
 }
 
+var ErrNoSemiSync = errors.New("semi-sync plugin not loaded")
+
+func (mysqld *Mysqld) SemiSyncType(ctx context.Context) mysql.SemiSyncType {
+	if mysqld.semiSyncType == mysql.SemiSyncTypeUnknown {
+		mysqld.semiSyncType, _ = mysqld.SemiSyncExtensionLoaded(ctx)
+	}
+	return mysqld.semiSyncType
+}
+
+func (mysqld *Mysqld) enableSemiSyncQuery(ctx context.Context) (string, error) {
+	switch mysqld.SemiSyncType(ctx) {
+	case mysql.SemiSyncTypeSource:
+		return "SET GLOBAL rpl_semi_sync_source_enabled = %v, GLOBAL rpl_semi_sync_replica_enabled = %v", nil
+	case mysql.SemiSyncTypeMaster:
+		return "SET GLOBAL rpl_semi_sync_master_enabled = %v, GLOBAL rpl_semi_sync_slave_enabled = %v", nil
+	}
+	return "", ErrNoSemiSync
+}
+
+func (mysqld *Mysqld) semiSyncClientsQuery(ctx context.Context) (string, error) {
+	switch mysqld.SemiSyncType(ctx) {
+	case mysql.SemiSyncTypeSource:
+		return "SHOW STATUS LIKE 'Rpl_semi_sync_source_clients'", nil
+	case mysql.SemiSyncTypeMaster:
+		return "SHOW STATUS LIKE 'Rpl_semi_sync_master_clients'", nil
+	}
+	return "", ErrNoSemiSync
+}
+
+func (mysqld *Mysqld) semiSyncReplicationStatusQuery(ctx context.Context) (string, error) {
+	switch mysqld.SemiSyncType(ctx) {
+	case mysql.SemiSyncTypeSource:
+		return "SHOW STATUS LIKE 'rpl_semi_sync_replica_status'", nil
+	case mysql.SemiSyncTypeMaster:
+		return "SHOW STATUS LIKE 'rpl_semi_sync_slave_status'", nil
+	}
+	return "", ErrNoSemiSync
+}
+
 // SetSemiSyncEnabled enables or disables semi-sync replication for
 // primary and/or replica mode.
-func (mysqld *Mysqld) SetSemiSyncEnabled(primary, replica bool) error {
+func (mysqld *Mysqld) SetSemiSyncEnabled(ctx context.Context, primary, replica bool) error {
 	log.Infof("Setting semi-sync mode: primary=%v, replica=%v", primary, replica)
 
 	// Convert bool to int.
@@ -641,9 +660,11 @@ func (mysqld *Mysqld) SetSemiSyncEnabled(primary, replica bool) error {
 		s = 1
 	}
 
-	err := mysqld.ExecuteSuperQuery(context.TODO(), fmt.Sprintf(
-		"SET GLOBAL rpl_semi_sync_master_enabled = %v, GLOBAL rpl_semi_sync_slave_enabled = %v",
-		p, s))
+	query, err := mysqld.enableSemiSyncQuery(ctx)
+	if err != nil {
+		return err
+	}
+	err = mysqld.ExecuteSuperQuery(ctx, fmt.Sprintf(query, p, s))
 	if err != nil {
 		return fmt.Errorf("can't set semi-sync mode: %v; make sure plugins are loaded in my.cnf", err)
 	}
@@ -652,30 +673,46 @@ func (mysqld *Mysqld) SetSemiSyncEnabled(primary, replica bool) error {
 
 // SemiSyncEnabled returns whether semi-sync is enabled for primary or replica.
 // If the semi-sync plugin is not loaded, we assume semi-sync is disabled.
-func (mysqld *Mysqld) SemiSyncEnabled() (primary, replica bool) {
-	vars, err := mysqld.fetchVariables(context.TODO(), "rpl_semi_sync_%_enabled")
+func (mysqld *Mysqld) SemiSyncEnabled(ctx context.Context) (primary, replica bool) {
+	vars, err := mysqld.fetchVariables(ctx, "rpl_semi_sync_%_enabled")
 	if err != nil {
 		return false, false
 	}
-	primary = vars["rpl_semi_sync_master_enabled"] == "ON"
-	replica = vars["rpl_semi_sync_slave_enabled"] == "ON"
+	switch mysqld.SemiSyncType(ctx) {
+	case mysql.SemiSyncTypeSource:
+		primary = vars["rpl_semi_sync_source_enabled"] == "ON"
+		replica = vars["rpl_semi_sync_replica_enabled"] == "ON"
+	case mysql.SemiSyncTypeMaster:
+		primary = vars["rpl_semi_sync_master_enabled"] == "ON"
+		replica = vars["rpl_semi_sync_slave_enabled"] == "ON"
+	}
 	return primary, replica
 }
 
 // SemiSyncStatus returns the current status of semi-sync for primary and replica.
-func (mysqld *Mysqld) SemiSyncStatus() (primary, replica bool) {
-	vars, err := mysqld.fetchStatuses(context.TODO(), "Rpl_semi_sync_%_status")
+func (mysqld *Mysqld) SemiSyncStatus(ctx context.Context) (primary, replica bool) {
+	vars, err := mysqld.fetchStatuses(ctx, "Rpl_semi_sync_%_status")
 	if err != nil {
 		return false, false
 	}
-	primary = vars["Rpl_semi_sync_master_status"] == "ON"
-	replica = vars["Rpl_semi_sync_slave_status"] == "ON"
+	switch mysqld.SemiSyncType(ctx) {
+	case mysql.SemiSyncTypeSource:
+		primary = vars["Rpl_semi_sync_source_status"] == "ON"
+		replica = vars["Rpl_semi_sync_replica_status"] == "ON"
+	case mysql.SemiSyncTypeMaster:
+		primary = vars["Rpl_semi_sync_master_status"] == "ON"
+		replica = vars["Rpl_semi_sync_slave_status"] == "ON"
+	}
 	return primary, replica
 }
 
 // SemiSyncClients returns the number of semi-sync clients for the primary.
-func (mysqld *Mysqld) SemiSyncClients() uint32 {
-	qr, err := mysqld.FetchSuperQuery(context.TODO(), "SHOW STATUS LIKE 'Rpl_semi_sync_master_clients'")
+func (mysqld *Mysqld) SemiSyncClients(ctx context.Context) uint32 {
+	query, err := mysqld.semiSyncClientsQuery(ctx)
+	if err != nil {
+		return 0
+	}
+	qr, err := mysqld.FetchSuperQuery(ctx, query)
 	if err != nil {
 		return 0
 	}
@@ -688,24 +725,35 @@ func (mysqld *Mysqld) SemiSyncClients() uint32 {
 }
 
 // SemiSyncSettings returns the settings of semi-sync which includes the timeout and the number of replicas to wait for.
-func (mysqld *Mysqld) SemiSyncSettings() (timeout uint64, numReplicas uint32) {
-	vars, err := mysqld.fetchVariables(context.TODO(), "rpl_semi_sync_%")
+func (mysqld *Mysqld) SemiSyncSettings(ctx context.Context) (timeout uint64, numReplicas uint32) {
+	vars, err := mysqld.fetchVariables(ctx, "rpl_semi_sync_%")
 	if err != nil {
 		return 0, 0
 	}
-	timeout, _ = strconv.ParseUint(vars["rpl_semi_sync_master_timeout"], 10, 64)
-	numReplicasUint, _ := strconv.ParseUint(vars["rpl_semi_sync_master_wait_for_slave_count"], 10, 32)
+	var numReplicasUint uint64
+	switch mysqld.SemiSyncType(ctx) {
+	case mysql.SemiSyncTypeSource:
+		timeout, _ = strconv.ParseUint(vars["rpl_semi_sync_source_timeout"], 10, 64)
+		numReplicasUint, _ = strconv.ParseUint(vars["rpl_semi_sync_source_wait_for_replica_count"], 10, 32)
+	case mysql.SemiSyncTypeMaster:
+		timeout, _ = strconv.ParseUint(vars["rpl_semi_sync_master_timeout"], 10, 64)
+		numReplicasUint, _ = strconv.ParseUint(vars["rpl_semi_sync_master_wait_for_slave_count"], 10, 32)
+	}
 	return timeout, uint32(numReplicasUint)
 }
 
 // SemiSyncReplicationStatus returns whether semi-sync is currently used by replication.
-func (mysqld *Mysqld) SemiSyncReplicationStatus() (bool, error) {
-	qr, err := mysqld.FetchSuperQuery(context.TODO(), "SHOW STATUS LIKE 'rpl_semi_sync_slave_status'")
+func (mysqld *Mysqld) SemiSyncReplicationStatus(ctx context.Context) (bool, error) {
+	query, err := mysqld.semiSyncReplicationStatusQuery(ctx)
+	if err != nil {
+		return false, err
+	}
+	qr, err := mysqld.FetchSuperQuery(ctx, query)
 	if err != nil {
 		return false, err
 	}
 	if len(qr.Rows) != 1 {
-		return false, errors.New("no rpl_semi_sync_slave_status variable in mysql")
+		return false, errors.New("no rpl_semi_sync_replica_status variable in mysql")
 	}
 	if qr.Rows[0][1].ToString() == "ON" {
 		return true, nil
@@ -714,14 +762,12 @@ func (mysqld *Mysqld) SemiSyncReplicationStatus() (bool, error) {
 }
 
 // SemiSyncExtensionLoaded returns whether semi-sync plugins are loaded.
-func (mysqld *Mysqld) SemiSyncExtensionLoaded() (bool, error) {
-	qr, err := mysqld.FetchSuperQuery(context.Background(), "SELECT COUNT(*) > 0 AS plugin_loaded FROM information_schema.plugins WHERE plugin_name LIKE 'rpl_semi_sync%'")
-	if err != nil {
-		return false, err
+func (mysqld *Mysqld) SemiSyncExtensionLoaded(ctx context.Context) (mysql.SemiSyncType, error) {
+	conn, connErr := getPoolReconnect(ctx, mysqld.dbaPool)
+	if connErr != nil {
+		return mysql.SemiSyncTypeUnknown, connErr
 	}
-	pluginPresent, err := qr.Rows[0][0].ToBool()
-	if err != nil {
-		return false, err
-	}
-	return pluginPresent, nil
+	defer conn.Recycle()
+
+	return conn.Conn.SemiSyncExtensionLoaded()
 }

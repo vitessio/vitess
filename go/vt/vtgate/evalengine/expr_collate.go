@@ -18,6 +18,8 @@ package evalengine
 
 import (
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -63,11 +65,13 @@ type (
 	CollateExpr struct {
 		UnaryExpr
 		TypedCollation collations.TypedCollation
+		CollationEnv   *collations.Environment
 	}
 
 	IntroducerExpr struct {
 		UnaryExpr
 		TypedCollation collations.TypedCollation
+		CollationEnv   *collations.Environment
 	}
 )
 
@@ -84,7 +88,7 @@ func (c *CollateExpr) eval(env *ExpressionEnv) (eval, error) {
 	case nil:
 		return nil, nil
 	case *evalBytes:
-		if err := collations.Local().EnsureCollate(e.col.Collation, c.TypedCollation.Collation); err != nil {
+		if err := env.collationEnv.EnsureCollate(e.col.Collation, c.TypedCollation.Collation); err != nil {
 			return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, err.Error())
 		}
 		b = e.withCollation(c.TypedCollation)
@@ -109,18 +113,19 @@ func (expr *CollateExpr) compile(c *compiler) (ctype, error) {
 
 	switch ct.Type {
 	case sqltypes.VarChar:
-		if err := collations.Local().EnsureCollate(ct.Col.Collation, expr.TypedCollation.Collation); err != nil {
+		if err := c.env.CollationEnv().EnsureCollate(ct.Col.Collation, expr.TypedCollation.Collation); err != nil {
 			return ctype{}, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, err.Error())
 		}
 		fallthrough
 	case sqltypes.VarBinary:
 		c.asm.Collate(expr.TypedCollation.Collation)
 	default:
-		return ctype{}, c.unsupported(expr)
+		c.asm.Convert_xc(1, sqltypes.VarChar, expr.TypedCollation.Collation, nil)
 	}
 
 	c.asm.jumpDestination(skip)
 
+	ct.Type = sqltypes.VarChar
 	ct.Col = expr.TypedCollation
 	ct.Flag |= flagExplicitCollation | flagNullable
 	return ct, nil
@@ -128,20 +133,48 @@ func (expr *CollateExpr) compile(c *compiler) (ctype, error) {
 
 var _ IR = (*IntroducerExpr)(nil)
 
+func introducerCast(e eval, col collations.ID) (*evalBytes, error) {
+	if col == collations.CollationBinaryID {
+		return evalToBinary(e), nil
+	}
+
+	var bytes []byte
+	if b, ok := e.(*evalBytes); !ok {
+		bytes = b.ToRawBytes()
+	} else {
+		cs := colldata.Lookup(col).Charset()
+		bytes = b.bytes
+		// We only need to pad here for encodings that have a minimum
+		// character byte width larger than 1, which is all UTF-16
+		// variations and UTF-32.
+		switch cs.(type) {
+		case charset.Charset_utf16, charset.Charset_utf16le, charset.Charset_ucs2:
+			if len(bytes)%2 != 0 {
+				bytes = append([]byte{0}, bytes...)
+			}
+		case charset.Charset_utf32:
+			if mod := len(bytes) % 4; mod != 0 {
+				bytes = append(make([]byte, 4-mod), bytes...)
+			}
+		}
+	}
+	typedcol := collations.TypedCollation{
+		Collation:    col,
+		Coercibility: collations.CoerceCoercible,
+		Repertoire:   collations.RepertoireASCII,
+	}
+	return newEvalText(bytes, typedcol), nil
+}
+
 func (expr *IntroducerExpr) eval(env *ExpressionEnv) (eval, error) {
 	e, err := expr.Inner.eval(env)
 	if err != nil {
 		return nil, err
 	}
 
-	var b *evalBytes
-	if expr.TypedCollation.Collation == collations.CollationBinaryID {
-		b = evalToBinary(e)
-	} else {
-		b, err = evalToVarchar(e, expr.TypedCollation.Collation, false)
-		if err != nil {
-			return nil, err
-		}
+	b, err := introducerCast(e, expr.TypedCollation.Collation)
+	if err != nil {
+		return nil, err
 	}
 	b.flag |= flagExplicitCollation
 	return b, nil

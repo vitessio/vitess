@@ -24,13 +24,13 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/datetime"
+	"vitess.io/vitess/go/mysql/decimal"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-
-	"vitess.io/vitess/go/vt/log"
-
-	"vitess.io/vitess/go/sqltypes"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 // Walk calls postVisit on every node.
@@ -71,7 +71,7 @@ type IndexColumn struct {
 	// Only one of Column or Expression can be specified
 	// Length is an optional field which is only applicable when Column is used
 	Column     IdentifierCI
-	Length     *Literal
+	Length     *int
 	Expression Expr
 	Direction  OrderDirection
 }
@@ -79,8 +79,8 @@ type IndexColumn struct {
 // LengthScaleOption is used for types that have an optional length
 // and scale
 type LengthScaleOption struct {
-	Length *Literal
-	Scale  *Literal
+	Length *int
+	Scale  *int
 }
 
 // IndexOption is used for trailing options for indexes: COMMENT, KEY_BLOCK_SIZE, USING, WITH PARSER
@@ -357,6 +357,20 @@ func (node *ParsedComments) AddQueryHint(queryHint string) (Comments, error) {
 	return newComments, nil
 }
 
+// FkChecksStateString prints the foreign key checks state.
+func FkChecksStateString(state *bool) string {
+	if state == nil {
+		return ""
+	}
+	switch *state {
+	case false:
+		return "Off"
+	case true:
+		return "On"
+	}
+	return ""
+}
+
 // ParseParams parses the vindex parameter list, pulling out the special-case
 // "owner" parameter
 func (node *VindexSpec) ParseParams() (string, map[string]string) {
@@ -400,7 +414,7 @@ func (node *AliasedTableExpr) RemoveHints() *AliasedTableExpr {
 
 // TableName returns a TableName pointing to this table expr
 func (node *AliasedTableExpr) TableName() (TableName, error) {
-	if !node.As.IsEmpty() {
+	if node.As.NotEmpty() {
 		return TableName{Name: node.As}, nil
 	}
 
@@ -417,6 +431,7 @@ func (node TableName) IsEmpty() bool {
 	// If Name is empty, Qualifier is also empty.
 	return node.Name.IsEmpty()
 }
+func (node TableName) NonEmpty() bool { return !node.Name.IsEmpty() }
 
 // NewWhere creates a WHERE or HAVING clause out
 // of a Expr. If the expression is nil, it returns nil.
@@ -547,6 +562,20 @@ func parseBindVariable(yylex yyLexer, bvar string) *Argument {
 
 func NewTypedArgument(in string, t sqltypes.Type) *Argument {
 	return &Argument{Name: in, Type: t}
+}
+
+func NewTypedArgumentFromLiteral(in string, lit *Literal) (*Argument, error) {
+	arg := &Argument{Name: in, Type: lit.SQLType()}
+	switch arg.Type {
+	case sqltypes.Decimal:
+		siz, scale := decimal.SizeAndScaleFromString(lit.Val)
+		arg.Scale = scale
+		arg.Size = siz
+	case sqltypes.Datetime, sqltypes.Time:
+		siz := datetime.SizeFromString(lit.Val)
+		arg.Size = siz
+	}
+	return arg, nil
 }
 
 // NewListArg builds a new ListArg.
@@ -759,10 +788,19 @@ func NewLimitWithoutOffset(rowCount int) *Limit {
 }
 
 // NewSelect is used to create a select statement
-func NewSelect(comments Comments, exprs SelectExprs, selectOptions []string, into *SelectInto, from TableExprs, where *Where, groupBy GroupBy, having *Where, windows NamedWindows) *Select {
+func NewSelect(
+	comments Comments,
+	exprs SelectExprs,
+	selectOptions []string,
+	into *SelectInto,
+	from TableExprs,
+	where *Where,
+	groupBy *GroupBy,
+	having *Where,
+	windows NamedWindows,
+) *Select {
 	var cache *bool
 	var distinct, straightJoinHint, sqlFoundRows bool
-
 	for _, option := range selectOptions {
 		switch strings.ToLower(option) {
 		case DistinctStr:
@@ -868,6 +906,11 @@ func (node IdentifierCI) IsEmpty() bool {
 	return node.val == ""
 }
 
+// NonEmpty returns true if the name is not empty.
+func (node IdentifierCI) NotEmpty() bool {
+	return !node.IsEmpty()
+}
+
 // String returns the unescaped column name. It must
 // not be used for SQL generation. Use sqlparser.String
 // instead. The Stringer conformance is for usage
@@ -905,6 +948,16 @@ func (node IdentifierCI) EqualString(str string) bool {
 	return node.Lowered() == strings.ToLower(str)
 }
 
+// EqualsAnyString returns true if any of these strings match
+func (node IdentifierCI) EqualsAnyString(str []string) bool {
+	for _, s := range str {
+		if node.EqualString(s) {
+			return true
+		}
+	}
+	return false
+}
+
 // MarshalJSON marshals into JSON.
 func (node IdentifierCI) MarshalJSON() ([]byte, error) {
 	return json.Marshal(node.val)
@@ -933,6 +986,11 @@ func NewIdentifierCS(str string) IdentifierCS {
 // IsEmpty returns true if TabIdent is empty.
 func (node IdentifierCS) IsEmpty() bool {
 	return node.v == ""
+}
+
+// NonEmpty returns true if TabIdent is not empty.
+func (node IdentifierCS) NotEmpty() bool {
+	return !node.IsEmpty()
 }
 
 // String returns the unescaped table name. It must
@@ -1119,13 +1177,25 @@ func (node *Select) AddHaving(expr Expr) {
 
 // AddGroupBy adds a grouping expression, unless it's already present
 func (node *Select) AddGroupBy(expr Expr) {
-	for _, gb := range node.GroupBy {
+	if node.GroupBy == nil {
+		node.GroupBy = &GroupBy{Exprs: []Expr{expr}}
+		return
+	}
+	for _, gb := range node.GroupBy.Exprs {
 		if Equals.Expr(gb, expr) {
 			// group by columns are sets - duplicates don't add anything, so we can just skip these
 			return
 		}
 	}
-	node.GroupBy = append(node.GroupBy, expr)
+	node.GroupBy.Exprs = append(node.GroupBy.Exprs, expr)
+}
+
+// GroupByExprs returns the group by expressions
+func (node *Select) GroupByExprs() []Expr {
+	if node.GroupBy == nil {
+		return nil
+	}
+	return node.GroupBy.Exprs
 }
 
 // AddWhere adds the boolean expression to the
@@ -1315,6 +1385,16 @@ func (lock Lock) ToString() string {
 		return NoLockStr
 	case ForUpdateLock:
 		return ForUpdateStr
+	case ForUpdateLockNoWait:
+		return ForUpdateNoWaitStr
+	case ForUpdateLockSkipLocked:
+		return ForUpdateSkipLockedStr
+	case ForShareLock:
+		return ForShareStr
+	case ForShareLockNoWait:
+		return ForShareNoWaitStr
+	case ForShareLockSkipLocked:
+		return ForShareSkipLockedStr
 	case ShareModeLock:
 		return ShareModeStr
 	default:
@@ -1526,11 +1606,25 @@ func (ty IndexHintType) ToString() string {
 	case UseOp:
 		return UseStr
 	case IgnoreOp:
-		return IgnoreStr
+		return IgnoreIndexStr
 	case ForceOp:
 		return ForceStr
+	case UseVindexOp:
+		return UseVindexStr
+	case IgnoreVindexOp:
+		return IgnoreVindexStr
 	default:
 		return "Unknown IndexHintType"
+	}
+}
+
+// IsVindexHint returns if the given hint is a Vindex hint or not.
+func (ty IndexHintType) IsVindexHint() bool {
+	switch ty {
+	case UseVindexOp, IgnoreVindexOp:
+		return true
+	default:
+		return false
 	}
 }
 
@@ -1783,10 +1877,6 @@ func (ty ExplainType) ToString() string {
 		return TreeStr
 	case JSONType:
 		return JSONStr
-	case VitessType:
-		return VitessStr
-	case VTExplainType:
-		return VTExplainStr
 	case TraditionalType:
 		return TraditionalStr
 	case AnalyzeType:
@@ -1835,6 +1925,26 @@ func (node DatabaseOptionType) ToString() string {
 		return EncryptionStr
 	default:
 		return "Unknown DatabaseOptionType Type"
+	}
+}
+
+// IsCommutative returns whether the join type supports rearranging or not.
+func (joinType JoinType) IsCommutative() bool {
+	switch joinType {
+	case StraightJoinType, LeftJoinType, RightJoinType, NaturalLeftJoinType, NaturalRightJoinType:
+		return false
+	default:
+		return true
+	}
+}
+
+// IsInner returns whether the join type is an inner join or not.
+func (joinType JoinType) IsInner() bool {
+	switch joinType {
+	case StraightJoinType, NaturalJoinType, NormalJoinType:
+		return true
+	default:
+		return false
 	}
 }
 
@@ -1929,6 +2039,8 @@ func (ty ShowCommandType) ToString() string {
 		return VitessVariablesStr
 	case VschemaTables:
 		return VschemaTablesStr
+	case VschemaKeyspaces:
+		return VschemaKeyspacesStr
 	case VschemaVindexes:
 		return VschemaVindexesStr
 	case Warnings:
@@ -2099,12 +2211,17 @@ func GetAllSelects(selStmt SelectStatement) []*Select {
 
 // ColumnName returns the alias if one was provided, otherwise prints the AST
 func (ae *AliasedExpr) ColumnName() string {
-	if !ae.As.IsEmpty() {
+	if ae.As.NotEmpty() {
 		return ae.As.String()
 	}
 
-	if col, ok := ae.Expr.(*ColName); ok {
-		return col.Name.String()
+	switch node := ae.Expr.(type) {
+	case *ColName:
+		return node.Name.String()
+	case *Literal:
+		if node.Type == StrVal {
+			return node.Val
+		}
 	}
 
 	return String(ae.Expr)
@@ -2120,23 +2237,47 @@ func (s SelectExprs) AllAggregation() bool {
 	return true
 }
 
-// RemoveKeyspaceFromColName removes the Qualifier.Qualifier on all ColNames in the expression tree
-func RemoveKeyspaceFromColName(expr Expr) {
-	RemoveKeyspace(expr)
-}
-
-// RemoveKeyspace removes the Qualifier.Qualifier on all ColNames in the AST
-func RemoveKeyspace(in SQLNode) {
+// RemoveKeyspaceInCol removes the Qualifier.Qualifier on all ColNames in the AST
+func RemoveKeyspaceInCol(in SQLNode) {
 	// Walk will only return an error if we return an error from the inner func. safe to ignore here
 	_ = Walk(func(node SQLNode) (kontinue bool, err error) {
-		switch col := node.(type) {
-		case *ColName:
-			if !col.Qualifier.Qualifier.IsEmpty() {
-				col.Qualifier.Qualifier = NewIdentifierCS("")
-			}
+		if col, ok := node.(*ColName); ok && col.Qualifier.Qualifier.NotEmpty() {
+			col.Qualifier.Qualifier = NewIdentifierCS("")
 		}
+
 		return true, nil
 	}, in)
+}
+
+// RemoveKeyspaceInTables removes the Qualifier on all TableNames in the AST
+func RemoveKeyspaceInTables(in SQLNode) {
+	// Walk will only return an error if we return an error from the inner func. safe to ignore here
+	Rewrite(in, nil, func(cursor *Cursor) bool {
+		if tbl, ok := cursor.Node().(TableName); ok && tbl.Qualifier.NotEmpty() {
+			tbl.Qualifier = NewIdentifierCS("")
+			cursor.Replace(tbl)
+		}
+
+		return true
+	})
+}
+
+// RemoveKeyspace removes the Qualifier.Qualifier on all ColNames and Qualifier on all TableNames in the AST
+func RemoveKeyspace(in SQLNode) {
+	Rewrite(in, nil, func(cursor *Cursor) bool {
+		switch expr := cursor.Node().(type) {
+		case *ColName:
+			if expr.Qualifier.Qualifier.NotEmpty() {
+				expr.Qualifier.Qualifier = NewIdentifierCS("")
+			}
+		case TableName:
+			if expr.Qualifier.NotEmpty() {
+				expr.Qualifier = NewIdentifierCS("")
+				cursor.Replace(expr)
+			}
+		}
+		return true
+	})
 }
 
 func convertStringToInt(integer string) int {
@@ -2487,6 +2628,16 @@ func (ra ReferenceAction) IsRestrict() bool {
 	}
 }
 
+// IsCascade returns true if the reference action is of cascade type.
+func (ra ReferenceAction) IsCascade() bool {
+	switch ra {
+	case Cascade:
+		return true
+	default:
+		return false
+	}
+}
+
 // IsLiteral returns true if the expression is of a literal type.
 func IsLiteral(expr Expr) bool {
 	switch expr.(type) {
@@ -2497,6 +2648,131 @@ func IsLiteral(expr Expr) bool {
 	}
 }
 
+// AppendString appends a string to the expression provided.
+// This is intended to be used in the parser only for concatenating multiple strings together.
+func AppendString(expr Expr, in string) Expr {
+	switch node := expr.(type) {
+	case *Literal:
+		node.Val = node.Val + in
+		return node
+	case *UnaryExpr:
+		node.Expr = AppendString(node.Expr, in)
+		return node
+	case *IntroducerExpr:
+		node.Expr = AppendString(node.Expr, in)
+		return node
+	}
+	return nil
+}
+
 func (ct *ColumnType) Invisible() bool {
 	return ct.Options.Invisible != nil && *ct.Options.Invisible
+}
+
+func (node *Delete) IsSingleAliasExpr() bool {
+	if len(node.Targets) > 1 {
+		return false
+	}
+	if len(node.TableExprs) != 1 {
+		return false
+	}
+	_, isAliasExpr := node.TableExprs[0].(*AliasedTableExpr)
+	return isAliasExpr
+}
+
+func MultiTable(node []TableExpr) bool {
+	if len(node) > 1 {
+		return true
+	}
+	_, singleTbl := node[0].(*AliasedTableExpr)
+	return !singleTbl
+}
+
+func (node *Update) AddOrder(order *Order) {
+	node.OrderBy = append(node.OrderBy, order)
+}
+
+func (node *Update) SetLimit(limit *Limit) {
+	node.Limit = limit
+}
+
+func (node *Delete) AddOrder(order *Order) {
+	node.OrderBy = append(node.OrderBy, order)
+}
+
+func (node *Delete) SetLimit(limit *Limit) {
+	node.Limit = limit
+}
+
+func (node *Select) GetFrom() []TableExpr {
+	return node.From
+}
+
+func (node *Select) SetFrom(exprs []TableExpr) {
+	node.From = exprs
+}
+
+func (node *Select) GetWherePredicate() Expr {
+	if node.Where == nil {
+		return nil
+	}
+	return node.Where.Expr
+}
+
+func (node *Select) SetWherePredicate(expr Expr) {
+	node.Where = &Where{
+		Type: WhereClause,
+		Expr: expr,
+	}
+}
+func (node *Delete) GetFrom() []TableExpr {
+	return node.TableExprs
+}
+
+func (node *Delete) SetFrom(exprs []TableExpr) {
+	node.TableExprs = exprs
+}
+
+func (node *Delete) GetWherePredicate() Expr {
+	if node.Where == nil {
+		return nil
+	}
+	return node.Where.Expr
+}
+
+func (node *Delete) SetWherePredicate(expr Expr) {
+	node.Where = &Where{
+		Type: WhereClause,
+		Expr: expr,
+	}
+}
+
+func (node *Update) GetFrom() []TableExpr {
+	return node.TableExprs
+}
+
+func (node *Update) SetFrom(exprs []TableExpr) {
+	node.TableExprs = exprs
+}
+
+func (node *Update) GetWherePredicate() Expr {
+	if node.Where == nil {
+		return nil
+	}
+	return node.Where.Expr
+}
+
+func (node *Update) SetWherePredicate(expr Expr) {
+	node.Where = &Where{
+		Type: WhereClause,
+		Expr: expr,
+	}
+}
+
+// GetHighestOrderLock returns the higher level lock between the current lock and the new lock
+func (lock Lock) GetHighestOrderLock(newLock Lock) Lock {
+	if newLock > lock {
+		return newLock
+	}
+	return lock
 }

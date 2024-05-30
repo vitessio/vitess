@@ -29,11 +29,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"vitess.io/vitess/go/mysql/replication"
-
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cmd"
 	"vitess.io/vitess/go/exit"
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
@@ -84,13 +84,16 @@ var (
 	incrementalFromPos string
 
 	// mysqlctld-like flags
-	mysqlPort        = 3306
-	mysqlSocket      string
-	mysqlTimeout     = 5 * time.Minute
-	initDBSQLFile    string
-	detachedMode     bool
-	keepAliveTimeout time.Duration
-	disableRedoLog   bool
+	mysqlPort            = 3306
+	mysqlSocket          string
+	mysqlTimeout         = 5 * time.Minute
+	mysqlShutdownTimeout = mysqlctl.DefaultShutdownTimeout
+	initDBSQLFile        string
+	detachedMode         bool
+	keepAliveTimeout     time.Duration
+	disableRedoLog       bool
+
+	collationEnv *collations.Environment
 
 	// Deprecated, use "Phase" instead.
 	deprecatedDurationByPhase = stats.NewGaugesWithSingleLabel(
@@ -201,24 +204,27 @@ func init() {
 	Main.Flags().StringVar(&initKeyspace, "init_keyspace", initKeyspace, "(init parameter) keyspace to use for this tablet")
 	Main.Flags().StringVar(&initShard, "init_shard", initShard, "(init parameter) shard to use for this tablet")
 	Main.Flags().IntVar(&concurrency, "concurrency", concurrency, "(init restore parameter) how many concurrent files to restore at once")
-	Main.Flags().StringVar(&incrementalFromPos, "incremental_from_pos", incrementalFromPos, "Position of previous backup. Default: empty. If given, then this backup becomes an incremental backup from given position. If value is 'auto', backup taken from last successful backup position")
+	Main.Flags().StringVar(&incrementalFromPos, "incremental_from_pos", incrementalFromPos, "Position, or name of backup from which to create an incremental backup. Default: empty. If given, then this backup becomes an incremental backup from given position or given backup. If value is 'auto', this backup will be taken from the last successful backup position.")
 
 	// mysqlctld-like flags
 	Main.Flags().IntVar(&mysqlPort, "mysql_port", mysqlPort, "mysql port")
 	Main.Flags().StringVar(&mysqlSocket, "mysql_socket", mysqlSocket, "path to the mysql socket")
 	Main.Flags().DurationVar(&mysqlTimeout, "mysql_timeout", mysqlTimeout, "how long to wait for mysqld startup")
+	Main.Flags().DurationVar(&mysqlShutdownTimeout, "mysql-shutdown-timeout", mysqlShutdownTimeout, "how long to wait for mysqld shutdown")
 	Main.Flags().StringVar(&initDBSQLFile, "init_db_sql_file", initDBSQLFile, "path to .sql file to run after mysql_install_db")
 	Main.Flags().BoolVar(&detachedMode, "detach", detachedMode, "detached mode - run backups detached from the terminal")
 	Main.Flags().DurationVar(&keepAliveTimeout, "keep-alive-timeout", keepAliveTimeout, "Wait until timeout elapses after a successful backup before shutting down.")
 	Main.Flags().BoolVar(&disableRedoLog, "disable-redo-log", disableRedoLog, "Disable InnoDB redo log during replication-from-primary phase of backup.")
 
 	acl.RegisterFlags(Main.Flags())
+
+	collationEnv = collations.NewEnvironment(servenv.MySQLServerVersion())
 }
 
-func run(_ *cobra.Command, args []string) error {
+func run(cc *cobra.Command, args []string) error {
 	servenv.Init()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(cc.Context())
 	servenv.OnClose(func() {
 		cancel()
 	})
@@ -276,7 +282,7 @@ func run(_ *cobra.Command, args []string) error {
 		return fmt.Errorf("Can't take backup: %w", err)
 	}
 	if doBackup {
-		if err := takeBackup(ctx, topoServer, backupStorage); err != nil {
+		if err := takeBackup(ctx, cc.Context(), topoServer, backupStorage); err != nil {
 			return fmt.Errorf("Failed to take backup: %w", err)
 		}
 	}
@@ -298,7 +304,7 @@ func run(_ *cobra.Command, args []string) error {
 	return nil
 }
 
-func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage backupstorage.BackupStorage) error {
+func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, backupStorage backupstorage.BackupStorage) error {
 	// This is an imaginary tablet alias. The value doesn't matter for anything,
 	// except that we generate a random UID to ensure the target backup
 	// directory is unique if multiple vtbackup instances are launched for the
@@ -325,7 +331,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	}()
 
 	// Start up mysqld as if we are mysqlctld provisioning a fresh tablet.
-	mysqld, mycnf, err := mysqlctl.CreateMysqldAndMycnf(tabletAlias.Uid, mysqlSocket, mysqlPort)
+	mysqld, mycnf, err := mysqlctl.CreateMysqldAndMycnf(tabletAlias.Uid, mysqlSocket, mysqlPort, collationEnv)
 	if err != nil {
 		return fmt.Errorf("failed to initialize mysql config: %v", err)
 	}
@@ -338,11 +344,11 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	deprecatedDurationByPhase.Set("InitMySQLd", int64(time.Since(initMysqldAt).Seconds()))
 	// Shut down mysqld when we're done.
 	defer func() {
-		// Be careful not to use the original context, because we don't want to
-		// skip shutdown just because we timed out waiting for other things.
-		mysqlShutdownCtx, mysqlShutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		// Be careful use the background context, not the init one, because we don't want to
+		// skip shutdown just because we timed out waiting for init.
+		mysqlShutdownCtx, mysqlShutdownCancel := context.WithTimeout(backgroundCtx, mysqlShutdownTimeout+10*time.Second)
 		defer mysqlShutdownCancel()
-		if err := mysqld.Shutdown(mysqlShutdownCtx, mycnf, false); err != nil {
+		if err := mysqld.Shutdown(mysqlShutdownCtx, mycnf, false, mysqlShutdownTimeout); err != nil {
 			log.Errorf("failed to shutdown mysqld: %v", err)
 		}
 	}()
@@ -356,18 +362,19 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	}
 
 	backupParams := mysqlctl.BackupParams{
-		Cnf:                mycnf,
-		Mysqld:             mysqld,
-		Logger:             logutil.NewConsoleLogger(),
-		Concurrency:        concurrency,
-		IncrementalFromPos: incrementalFromPos,
-		HookExtraEnv:       extraEnv,
-		TopoServer:         topoServer,
-		Keyspace:           initKeyspace,
-		Shard:              initShard,
-		TabletAlias:        topoproto.TabletAliasString(tabletAlias),
-		Stats:              backupstats.BackupStats(),
-		UpgradeSafe:        upgradeSafe,
+		Cnf:                  mycnf,
+		Mysqld:               mysqld,
+		Logger:               logutil.NewConsoleLogger(),
+		Concurrency:          concurrency,
+		IncrementalFromPos:   incrementalFromPos,
+		HookExtraEnv:         extraEnv,
+		TopoServer:           topoServer,
+		Keyspace:             initKeyspace,
+		Shard:                initShard,
+		TabletAlias:          topoproto.TabletAliasString(tabletAlias),
+		Stats:                backupstats.BackupStats(),
+		UpgradeSafe:          upgradeSafe,
+		MysqlShutdownTimeout: mysqlShutdownTimeout,
 	}
 	// In initial_backup mode, just take a backup of this empty database.
 	if initialBackup {
@@ -380,7 +387,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 			return fmt.Errorf("can't reset replication: %v", err)
 		}
 		// We need to switch off super_read_only before we create the database.
-		resetFunc, err := mysqld.SetSuperReadOnly(false)
+		resetFunc, err := mysqld.SetSuperReadOnly(ctx, false)
 		if err != nil {
 			return fmt.Errorf("failed to disable super_read_only during backup: %v", err)
 		}
@@ -416,16 +423,17 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	log.Infof("Restoring latest backup from directory %v", backupDir)
 	restoreAt := time.Now()
 	params := mysqlctl.RestoreParams{
-		Cnf:                 mycnf,
-		Mysqld:              mysqld,
-		Logger:              logutil.NewConsoleLogger(),
-		Concurrency:         concurrency,
-		HookExtraEnv:        extraEnv,
-		DeleteBeforeRestore: true,
-		DbName:              dbName,
-		Keyspace:            initKeyspace,
-		Shard:               initShard,
-		Stats:               backupstats.RestoreStats(),
+		Cnf:                  mycnf,
+		Mysqld:               mysqld,
+		Logger:               logutil.NewConsoleLogger(),
+		Concurrency:          concurrency,
+		HookExtraEnv:         extraEnv,
+		DeleteBeforeRestore:  true,
+		DbName:               dbName,
+		Keyspace:             initKeyspace,
+		Shard:                initShard,
+		Stats:                backupstats.RestoreStats(),
+		MysqlShutdownTimeout: mysqlShutdownTimeout,
 	}
 	backupManifest, err := mysqlctl.Restore(ctx, params)
 	var restorePos replication.Position
@@ -520,7 +528,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		}
 
 		lastStatus = status
-		status, statusErr = mysqld.ReplicationStatusWithContext(ctx)
+		status, statusErr = mysqld.ReplicationStatus(ctx)
 		if statusErr != nil {
 			log.Warningf("Error getting replication status: %v", statusErr)
 			continue
@@ -552,12 +560,12 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	phase.Set(phaseNameCatchupReplication, int64(0))
 
 	// Stop replication and see where we are.
-	if err := mysqld.StopReplication(nil); err != nil {
+	if err := mysqld.StopReplication(ctx, nil); err != nil {
 		return fmt.Errorf("can't stop replication: %v", err)
 	}
 
 	// Did we make any progress?
-	status, statusErr = mysqld.ReplicationStatusWithContext(ctx)
+	status, statusErr = mysqld.ReplicationStatus(ctx)
 	if statusErr != nil {
 		return fmt.Errorf("can't get replication status: %v", err)
 	}
@@ -583,7 +591,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 			return fmt.Errorf("Could not prep for full shutdown: %v", err)
 		}
 		// Shutdown, waiting for it to finish
-		if err := mysqld.Shutdown(ctx, mycnf, true); err != nil {
+		if err := mysqld.Shutdown(ctx, mycnf, true, mysqlShutdownTimeout); err != nil {
 			return fmt.Errorf("Something went wrong during full MySQL shutdown: %v", err)
 		}
 		// Start MySQL, waiting for it to come up
@@ -613,11 +621,10 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 }
 
 func resetReplication(ctx context.Context, pos replication.Position, mysqld mysqlctl.MysqlDaemon) error {
-	cmds := []string{
-		"STOP SLAVE",
-		"RESET SLAVE ALL", // "ALL" makes it forget replication source host:port.
+	if err := mysqld.StopReplication(ctx, nil); err != nil {
+		return vterrors.Wrap(err, "failed to stop replication")
 	}
-	if err := mysqld.ExecuteSuperQueryList(ctx, cmds); err != nil {
+	if err := mysqld.ResetReplicationParameters(ctx); err != nil {
 		return vterrors.Wrap(err, "failed to reset replication")
 	}
 
@@ -653,7 +660,7 @@ func startReplication(ctx context.Context, mysqld mysqlctl.MysqlDaemon, topoServ
 	}
 
 	// Stop replication (in case we're restarting), set replication source, and start replication.
-	if err := mysqld.SetReplicationSource(ctx, ti.Tablet.MysqlHostname, ti.Tablet.MysqlPort, true /* stopReplicationBefore */, true /* startReplicationAfter */); err != nil {
+	if err := mysqld.SetReplicationSource(ctx, ti.Tablet.MysqlHostname, ti.Tablet.MysqlPort, 0, true, true); err != nil {
 		return vterrors.Wrap(err, "MysqlDaemon.SetReplicationSource failed")
 	}
 	return nil

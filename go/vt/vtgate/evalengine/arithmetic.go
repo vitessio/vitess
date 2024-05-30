@@ -25,7 +25,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-func dataOutOfRangeError[N1, N2 int | int64 | uint64 | float64](v1 N1, v2 N2, typ, sign string) error {
+func dataOutOfRangeError[N1, N2 int64 | uint64 | float64](v1 N1, v2 N2, typ, sign string) error {
 	return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "%s value is out of range in '(%v %s %v)'", typ, v1, sign, v2)
 }
 

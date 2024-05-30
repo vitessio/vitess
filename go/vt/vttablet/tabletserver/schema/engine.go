@@ -26,13 +26,13 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/constants/sidecar"
-	"vitess.io/vitess/go/maps2"
-	"vitess.io/vitess/go/mysql/replication"
-	"vitess.io/vitess/go/mysql/sqlerror"
+	"golang.org/x/exp/maps"
 
 	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/timer"
@@ -45,6 +45,7 @@ import (
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -56,7 +57,7 @@ import (
 
 const maxTableCount = 10000
 
-type notifier func(full map[string]*Table, created, altered, dropped []*Table)
+type notifier func(full map[string]*Table, created, altered, dropped []*Table, udfsChanged bool)
 
 // Engine stores the schema info and performs operations that
 // keep itself up-to-date.
@@ -99,14 +100,14 @@ type Engine struct {
 
 // NewEngine creates a new Engine.
 func NewEngine(env tabletenv.Env) *Engine {
-	reloadTime := env.Config().SchemaReloadIntervalSeconds.Get()
+	reloadTime := env.Config().SchemaReloadInterval
 	se := &Engine{
 		env: env,
 		// We need three connections: one for the reloader, one for
 		// the historian, and one for the tracker.
 		conns: connpool.NewPool(env, "", tabletenv.ConnPoolConfig{
-			Size:               3,
-			IdleTimeoutSeconds: env.Config().OltpReadPool.IdleTimeoutSeconds,
+			Size:        3,
+			IdleTimeout: env.Config().OltpReadPool.IdleTimeout,
 		}),
 		ticks: timer.NewTimer(reloadTime),
 	}
@@ -160,7 +161,7 @@ func (se *Engine) syncSidecarDB(ctx context.Context, conn *dbconnpool.DBConnecti
 		}
 		return conn.ExecuteFetch(query, maxRows, true)
 	}
-	if err := sidecardb.Init(ctx, exec); err != nil {
+	if err := sidecardb.Init(ctx, se.env.Environment(), exec); err != nil {
 		log.Errorf("Error in sidecardb.Init: %+v", err)
 		if se.env.Config().DB.HasGlobalSettings() {
 			log.Warning("Ignoring sidecardb.Init error for unmanaged tablets")
@@ -445,6 +446,11 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 		return err
 	}
 
+	udfsChanged, err := getChangedUserDefinedFunctions(ctx, conn.Conn, shouldUseDatabase)
+	if err != nil {
+		return err
+	}
+
 	rec := concurrency.AllErrorRecorder{}
 	// curTables keeps track of tables in the new snapshot so we can detect what was dropped.
 	curTables := map[string]bool{"dual": true}
@@ -497,7 +503,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 
 		log.V(2).Infof("Reading schema for table: %s", tableName)
 		tableType := row[1].String()
-		table, err := LoadTable(conn, se.cp.DBName(), tableName, tableType, row[3].ToString())
+		table, err := LoadTable(conn, se.cp.DBName(), tableName, tableType, row[3].ToString(), se.env.Environment().CollationEnv())
 		if err != nil {
 			if isView := strings.Contains(tableType, tmutils.TableView); isView {
 				log.Warningf("Failed reading schema for the view: %s, error: %v", tableName, err)
@@ -525,7 +531,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 
 	dropped := se.getDroppedTables(curTables, changedViews, mismatchTables)
 
-	// Populate PKColumns for changed tables.
+	// Populate PK Columns for changed tables.
 	if err := se.populatePrimaryKeys(ctx, conn.Conn, changedTables); err != nil {
 		return err
 	}
@@ -534,7 +540,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 	if shouldUseDatabase {
 		// If reloadDataInDB succeeds, then we don't want to prevent sending the broadcast notification.
 		// So, we do this step in the end when we can receive no more errors that fail the reload operation.
-		err = reloadDataInDB(ctx, conn.Conn, altered, created, dropped)
+		err = reloadDataInDB(ctx, conn.Conn, altered, created, dropped, udfsChanged, se.env.Environment().Parser())
 		if err != nil {
 			log.Errorf("error in updating schema information in Engine.reload() - %v", err)
 		}
@@ -548,7 +554,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 	if len(created) > 0 || len(altered) > 0 || len(dropped) > 0 {
 		log.Infof("schema engine created %v, altered %v, dropped %v", extractNamesFromTablesList(created), extractNamesFromTablesList(altered), extractNamesFromTablesList(dropped))
 	}
-	se.broadcast(created, altered, dropped)
+	se.broadcast(created, altered, dropped, udfsChanged)
 	return nil
 }
 
@@ -586,7 +592,7 @@ func (se *Engine) getDroppedTables(curTables map[string]bool, changedViews map[s
 		}
 	}
 
-	return maps2.Values(dropped)
+	return maps.Values(dropped)
 }
 
 func getTableData(ctx context.Context, conn *connpool.Conn, includeStats bool) (*sqltypes.Result, error) {
@@ -663,8 +669,14 @@ func (se *Engine) RegisterVersionEvent() error {
 	return se.historian.RegisterVersionEvent()
 }
 
-// GetTableForPos returns a best-effort schema for a specific gtid
-func (se *Engine) GetTableForPos(tableName sqlparser.IdentifierCS, gtid string) (*binlogdatapb.MinimalTable, error) {
+// GetTableForPos makes a best-effort attempt to return a table's schema at a specific
+// GTID/position. If it cannot get the table schema for the given GTID/position then it
+// returns the latest table schema that is available in the database -- the table schema
+// for the "current" GTID/position (updating the cache entry). If the table is not found
+// in the cache, it will reload the cache from the database in case the table was created
+// after the last schema reload or the cache has not yet been initialized. This function
+// makes the schema cache a read-through cache for VReplication purposes.
+func (se *Engine) GetTableForPos(ctx context.Context, tableName sqlparser.IdentifierCS, gtid string) (*binlogdatapb.MinimalTable, error) {
 	mt, err := se.historian.GetTableForPos(tableName, gtid)
 	if err != nil {
 		log.Infof("GetTableForPos returned error: %s", err.Error())
@@ -673,19 +685,66 @@ func (se *Engine) GetTableForPos(tableName sqlparser.IdentifierCS, gtid string) 
 	if mt != nil {
 		return mt, nil
 	}
+	// We got nothing from the historian, which typically means that it's not enabled.
 	se.mu.Lock()
 	defer se.mu.Unlock()
 	tableNameStr := tableName.String()
-	st, ok := se.tables[tableNameStr]
-	if !ok {
-		if schema.IsInternalOperationTableName(tableNameStr) {
-			log.Infof("internal table %v found in vttablet schema: skipping for GTID search", tableNameStr)
-		} else {
-			log.Infof("table %v not found in vttablet schema, current tables: %v", tableNameStr, se.tables)
-			return nil, fmt.Errorf("table %v not found in vttablet schema", tableNameStr)
+	if st, ok := se.tables[tableNameStr]; ok && tableNameStr != "dual" { // No need to refresh dual
+		// Test Engines (NewEngineForTests()) don't have a conns pool and are not
+		// supposed to talk to the database, so don't update the cache entry in that
+		// case.
+		if se.conns == nil {
+			return newMinimalTable(st), nil
+		}
+		// We have the table in our cache. Let's be sure that our table definition is
+		// up-to-date for the "current" position.
+		conn, err := se.conns.Get(ctx, nil)
+		if err != nil {
+			return nil, err
+		}
+		defer conn.Recycle()
+		cst := *st       // Make a copy
+		cst.Fields = nil // We're going to refresh the columns/fields
+		if err := fetchColumns(&cst, conn, se.cp.DBName(), tableNameStr); err != nil {
+			return nil, err
+		}
+		// Update the PK columns for the table as well as they may have changed.
+		cst.PKColumns = nil // We're going to repopulate the PK columns
+		if err := se.populatePrimaryKeys(ctx, conn.Conn, map[string]*Table{tableNameStr: &cst}); err != nil {
+			return nil, err
+		}
+		se.tables[tableNameStr] = &cst
+		return newMinimalTable(&cst), nil
+	}
+	// It's expected that internal tables are not found within VReplication workflows.
+	// No need to refresh the cache for internal tables.
+	if schema.IsInternalOperationTableName(tableNameStr) {
+		log.Infof("internal table %v found in vttablet schema: skipping for GTID search", tableNameStr)
+		return nil, nil
+	}
+	// We don't currently have the non-internal table in the cache. This can happen when
+	// a table was created after the last schema reload (which happens at least every
+	// --queryserver-config-schema-reload-time).
+	// Whatever the reason, we should ensure that our cache is able to get the latest
+	// table schema for the "current" position IF the table exists in the database.
+	// In order to ensure this, we need to reload the latest schema so that our cache
+	// is up to date. This effectively turns our in-memory cache into a read-through
+	// cache for VReplication related needs (this function is only used by vstreamers).
+	// This adds an additional cost, but for VReplication it should be rare that we are
+	// trying to replicate a table that doesn't actually exist.
+	// This also allows us to perform a just-in-time initialization of the cache if
+	// a vstreamer is the first one to access it.
+	if se.conns != nil { // Test Engines (NewEngineForTests()) don't have a conns pool
+		if err := se.reload(ctx, true); err != nil {
+			return nil, err
+		}
+		if st, ok := se.tables[tableNameStr]; ok {
+			return newMinimalTable(st), nil
 		}
 	}
-	return newMinimalTable(st), nil
+
+	log.Infof("table %v not found in vttablet schema, current tables: %v", tableNameStr, se.tables)
+	return nil, fmt.Errorf("table %v not found in vttablet schema", tableNameStr)
 }
 
 // RegisterNotifier registers the function for schema change notification.
@@ -706,7 +765,8 @@ func (se *Engine) RegisterNotifier(name string, f notifier, runNotifier bool) {
 		created = append(created, table)
 	}
 	if runNotifier {
-		f(se.tables, created, nil, nil)
+		s := maps.Clone(se.tables)
+		f(s, created, nil, nil, true)
 	}
 }
 
@@ -727,19 +787,16 @@ func (se *Engine) UnregisterNotifier(name string) {
 }
 
 // broadcast must be called while holding a lock on se.mu.
-func (se *Engine) broadcast(created, altered, dropped []*Table) {
+func (se *Engine) broadcast(created, altered, dropped []*Table, udfsChanged bool) {
 	if !se.isOpen {
 		return
 	}
 
 	se.notifierMu.Lock()
 	defer se.notifierMu.Unlock()
-	s := make(map[string]*Table, len(se.tables))
-	for k, v := range se.tables {
-		s[k] = v
-	}
+	s := maps.Clone(se.tables)
 	for _, f := range se.notifiers {
-		f(s, created, altered, dropped)
+		f(s, created, altered, dropped, udfsChanged)
 	}
 }
 
@@ -755,10 +812,7 @@ func (se *Engine) GetTable(tableName sqlparser.IdentifierCS) *Table {
 func (se *Engine) GetSchema() map[string]*Table {
 	se.mu.Lock()
 	defer se.mu.Unlock()
-	tables := make(map[string]*Table, len(se.tables))
-	for k, v := range se.tables {
-		tables[k] = v
-	}
+	tables := maps.Clone(se.tables)
 	return tables
 }
 
@@ -831,6 +885,7 @@ func NewEngineForTests() *Engine {
 		isOpen:    true,
 		tables:    make(map[string]*Table),
 		historian: newHistorian(false, 0, nil),
+		env:       tabletenv.NewEnv(vtenv.NewTestEnv(), tabletenv.NewDefaultConfig(), "SchemaEngineForTests"),
 	}
 	return se
 }
@@ -844,6 +899,10 @@ func (se *Engine) SetTableForTests(table *Table) {
 
 func (se *Engine) GetDBConnector() dbconfigs.Connector {
 	return se.cp
+}
+
+func (se *Engine) Environment() *vtenv.Environment {
+	return se.env.Environment()
 }
 
 func extractNamesFromTablesList(tables []*Table) []string {

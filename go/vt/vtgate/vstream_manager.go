@@ -25,12 +25,16 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/exp/maps"
+
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -497,31 +501,47 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 		var err error
 		cells := vs.getCells()
 
-		tp, err := discovery.NewTabletPicker(ctx, vs.ts, cells, vs.vsm.cell, sgtid.Keyspace, sgtid.Shard, vs.tabletType.String(), vs.tabletPickerOptions, ignoreTablets...)
+		tpo := vs.tabletPickerOptions
+		resharded, err := vs.keyspaceHasBeenResharded(ctx, sgtid.Keyspace)
 		if err != nil {
-			log.Errorf(err.Error())
-			return err
+			return vterrors.Wrapf(err, "failed to determine if keyspace %s has been resharded", sgtid.Keyspace)
+		}
+		if resharded {
+			// The non-serving tablet in the old / non-serving shard will contain all of
+			// the GTIDs that we need before transitioning to the new shards along with
+			// the journal event that will then allow us to automatically transition to
+			// the new shards (provided the stop_on_reshard option is not set).
+			tpo.IncludeNonServingTablets = true
 		}
 
+		tabletPickerErr := func(err error) error {
+			tperr := vterrors.Wrapf(err, "failed to find a %s tablet for VStream in %s/%s within the %s cell(s)",
+				vs.tabletType.String(), sgtid.GetKeyspace(), sgtid.GetShard(), strings.Join(cells, ","))
+			log.Errorf("%v", tperr)
+			return tperr
+		}
+		tp, err := discovery.NewTabletPicker(ctx, vs.ts, cells, vs.vsm.cell, sgtid.GetKeyspace(), sgtid.GetShard(), vs.tabletType.String(), tpo, ignoreTablets...)
+		if err != nil {
+			return tabletPickerErr(err)
+		}
 		// Create a child context with a stricter timeout when picking a tablet.
 		// This will prevent hanging in the case no tablets are found.
 		tpCtx, tpCancel := context.WithTimeout(ctx, tabletPickerContextTimeout)
 		defer tpCancel()
-
 		tablet, err := tp.PickForStreaming(tpCtx)
 		if err != nil {
-			log.Errorf(err.Error())
-			return err
+			return tabletPickerErr(err)
 		}
-		log.Infof("Picked tablet %s for for %s/%s/%s/%s", tablet.Alias.String(), strings.Join(cells, ","),
-			sgtid.Keyspace, sgtid.Shard, vs.tabletType.String())
+		log.Infof("Picked a %s tablet for VStream in %s/%s within the %s cell(s)",
+			vs.tabletType.String(), sgtid.GetKeyspace(), sgtid.GetShard(), strings.Join(cells, ","))
+
 		target := &querypb.Target{
 			Keyspace:   sgtid.Keyspace,
 			Shard:      sgtid.Shard,
 			TabletType: vs.tabletType,
 			Cell:       vs.vsm.cell,
 		}
-		tabletConn, err := vs.vsm.resolver.GetGateway().QueryServiceByAlias(tablet.Alias, target)
+		tabletConn, err := vs.vsm.resolver.GetGateway().QueryServiceByAlias(ctx, tablet.Alias, target)
 		if err != nil {
 			log.Errorf(err.Error())
 			return err
@@ -531,18 +551,23 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 		go func() {
 			_ = tabletConn.StreamHealth(ctx, func(shr *querypb.StreamHealthResponse) error {
 				var err error
-				if ctx.Err() != nil {
+				switch {
+				case ctx.Err() != nil:
 					err = fmt.Errorf("context has ended")
-				} else if shr == nil || shr.RealtimeStats == nil || shr.Target == nil {
-					err = fmt.Errorf("health check failed")
-				} else if vs.tabletType != shr.Target.TabletType {
-					err = fmt.Errorf("tablet type has changed from %s to %s, restarting vstream",
-						vs.tabletType, shr.Target.TabletType)
-				} else if shr.RealtimeStats.HealthError != "" {
+				case shr == nil || shr.RealtimeStats == nil || shr.Target == nil:
+					err = fmt.Errorf("health check failed on %s", topoproto.TabletAliasString(tablet.Alias))
+				case vs.tabletType != shr.Target.TabletType:
+					err = fmt.Errorf("tablet %s type has changed from %s to %s, restarting vstream",
+						topoproto.TabletAliasString(tablet.Alias), vs.tabletType, shr.Target.TabletType)
+				case shr.RealtimeStats.HealthError != "":
 					err = fmt.Errorf("tablet %s is no longer healthy: %s, restarting vstream",
-						tablet.Alias, shr.RealtimeStats.HealthError)
+						topoproto.TabletAliasString(tablet.Alias), shr.RealtimeStats.HealthError)
+				case shr.RealtimeStats.ReplicationLagSeconds > uint32(discovery.GetLowReplicationLag().Seconds()):
+					err = fmt.Errorf("tablet %s has a replication lag of %d seconds which is beyond the value provided in --discovery_low_replication_lag of %s so the tablet is no longer considered healthy, restarting vstream",
+						topoproto.TabletAliasString(tablet.Alias), shr.RealtimeStats.ReplicationLagSeconds, discovery.GetLowReplicationLag())
 				}
 				if err != nil {
+					log.Warningf("Tablet state changed: %s, attempting to restart", err)
 					errCh <- err
 					return err
 				}
@@ -573,7 +598,6 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 			case <-ctx.Done():
 				return ctx.Err()
 			case streamErr := <-errCh:
-				log.Warningf("Tablet state changed: %s, attempting to restart", streamErr)
 				return vterrors.New(vtrpcpb.Code_UNAVAILABLE, streamErr.Error())
 			case <-journalDone:
 				// Unreachable.
@@ -705,7 +729,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 
 // shouldRetry determines whether we should exit immediately or retry the vstream.
 // The first return value determines if the error can be retried, while the second
-// indicates whether the tablet with which the error occurred should be ommitted
+// indicates whether the tablet with which the error occurred should be omitted
 // from the candidate list of tablets to choose from on the retry.
 //
 // An error should be retried if it is expected to be transient.
@@ -737,7 +761,7 @@ func (vs *vstream) sendAll(ctx context.Context, sgtid *binlogdatapb.ShardGtid, e
 		if err := vs.getError(); err != nil {
 			return err
 		}
-		// convert all gtids to vgtids. This should be done here while holding the lock.
+		// Convert all gtids to vgtids. This should be done here while holding the lock.
 		for j, event := range events {
 			if event.Type == binlogdatapb.VEventType_GTID {
 				// Update the VGtid and send that instead.
@@ -920,4 +944,57 @@ func (vs *vstream) getJournalEvent(ctx context.Context, sgtid *binlogdatapb.Shar
 	}
 	close(je.done)
 	return je, nil
+}
+
+// keyspaceHasBeenResharded returns true if the keyspace's serving shard set has changed
+// since the last VStream as indicated by the shard definitions provided in the VGTID.
+func (vs *vstream) keyspaceHasBeenResharded(ctx context.Context, keyspace string) (bool, error) {
+	shards, err := vs.ts.FindAllShardsInKeyspace(ctx, keyspace, nil)
+	if err != nil || len(shards) == 0 {
+		return false, err
+	}
+
+	// First check the typical case, where the VGTID shards match the serving shards.
+	// In that case it's NOT possible that an applicable reshard has happened because
+	// the VGTID contains shards that are all serving.
+	reshardPossible := false
+	ksShardGTIDs := make([]*binlogdatapb.ShardGtid, 0, len(vs.vgtid.ShardGtids))
+	for _, s := range vs.vgtid.ShardGtids {
+		if s.GetKeyspace() == keyspace {
+			ksShardGTIDs = append(ksShardGTIDs, s)
+		}
+	}
+	for _, s := range ksShardGTIDs {
+		shard := shards[s.GetShard()]
+		if shard == nil {
+			return false, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "shard provided in VGTID, %s, not found in the %s keyspace", s.GetShard(), keyspace)
+		}
+		if !shard.GetIsPrimaryServing() {
+			reshardPossible = true
+			break
+		}
+	}
+	if !reshardPossible {
+		return false, nil
+	}
+
+	// Now that we know there MAY have been an applicable reshard, let's make a
+	// definitive determination by looking at the shard keyranges.
+	// All we care about are the shard info records now.
+	sis := maps.Values(shards)
+	for i := range sis {
+		for j := range sis {
+			if sis[i].ShardName() == sis[j].ShardName() && key.KeyRangeEqual(sis[i].GetKeyRange(), sis[j].GetKeyRange()) {
+				// It's the same shard so skip it.
+				continue
+			}
+			if key.KeyRangeIntersect(sis[i].GetKeyRange(), sis[j].GetKeyRange()) {
+				// We have different shards with overlapping keyranges so we know
+				// that a reshard has happened.
+				return true, nil
+			}
+		}
+	}
+
+	return false, nil
 }

@@ -74,7 +74,6 @@ func TestSemiJoinExecute(t *testing.T) {
 		Vars: map[string]int{
 			"bv": 1,
 		},
-		Cols: []int{-1, -2, -3},
 	}
 	r, err := jn.TryExecute(context.Background(), &noopVCursor{}, bv, true)
 	require.NoError(t, err)
@@ -139,7 +138,6 @@ func TestSemiJoinStreamExecute(t *testing.T) {
 		Vars: map[string]int{
 			"bv": 1,
 		},
-		Cols: []int{-1, -2, -3},
 	}
 	r, err := wrapStreamExecute(jn, &noopVCursor{}, map[string]*querypb.BindVariable{}, true)
 	require.NoError(t, err)
@@ -152,7 +150,7 @@ func TestSemiJoinStreamExecute(t *testing.T) {
 		`StreamExecute bv: type:VARCHAR value:"c" false`,
 		`StreamExecute bv: type:VARCHAR value:"d" false`,
 	})
-	expectResult(t, "jn.Execute", r, sqltypes.MakeTestResult(
+	expectResult(t, r, sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"col1|col2|col3",
 			"int64|varchar|varchar",

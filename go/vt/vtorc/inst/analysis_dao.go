@@ -18,33 +18,30 @@ package inst
 
 import (
 	"fmt"
+	"math"
 	"time"
 
-	"vitess.io/vitess/go/vt/external/golib/sqlutils"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/topo/topoproto"
-
+	"github.com/patrickmn/go-cache"
 	"google.golang.org/protobuf/encoding/prototext"
 
+	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/external/golib/sqlutils"
+	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
-	"vitess.io/vitess/go/vt/vtorc/process"
 	"vitess.io/vitess/go/vt/vtorc/util"
-
-	"github.com/patrickmn/go-cache"
-	"github.com/rcrowley/go-metrics"
 )
 
-var analysisChangeWriteCounter = metrics.NewCounter()
+// The metric is registered with a deprecated name. The old metric name can be removed in v21.
+var analysisChangeWriteCounter = stats.NewCounterWithDeprecatedName("AnalysisChangeWrite", "analysis.change.write", "Number of times analysis has changed")
 
 var recentInstantAnalysis *cache.Cache
 
 func init() {
-	_ = metrics.Register("analysis.change.write", analysisChangeWriteCounter)
-
 	go initializeAnalysisDaoPostConfiguration()
 }
 
@@ -76,8 +73,6 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 	query := `
 	SELECT
 		vitess_tablet.info AS tablet_info,
-		vitess_tablet.hostname,
-		vitess_tablet.port,
 		vitess_tablet.tablet_type,
 		vitess_tablet.primary_timestamp,
 		vitess_tablet.shard AS shard,
@@ -88,11 +83,10 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		primary_instance.read_only AS read_only,
 		MIN(primary_instance.gtid_errant) AS gtid_errant, 
 		MIN(primary_instance.alias) IS NULL AS is_invalid,
-		MIN(primary_instance.data_center) AS data_center,
-		MIN(primary_instance.region) AS region,
-		MIN(primary_instance.physical_environment) AS physical_environment,
 		MIN(primary_instance.binary_log_file) AS binary_log_file,
 		MIN(primary_instance.binary_log_pos) AS binary_log_pos,
+		MIN(primary_instance.replica_net_timeout) AS replica_net_timeout,
+		MIN(primary_instance.heartbeat_interval) AS heartbeat_interval,
 		MIN(primary_tablet.info) AS primary_tablet_info,
 		MIN(
 			IFNULL(
@@ -116,7 +110,6 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 				OR substr(primary_instance.source_host, 1, 2) = '//'
 			)
 		) AS is_primary,
-		MIN(primary_instance.is_co_primary) AS is_co_primary,
 		MIN(primary_instance.gtid_mode) AS gtid_mode,
 		COUNT(replica_instance.server_id) AS count_replicas,
 		IFNULL(
@@ -142,19 +135,10 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			),
 			0
 		) AS count_replicas_failing_to_connect_to_primary,
-		MIN(primary_instance.replication_depth) AS replication_depth,
-		MIN(
-			primary_instance.replica_sql_running = 1
-			AND primary_instance.replica_io_running = 0
-			AND primary_instance.last_io_error like '%%error %%connecting to master%%'
-		) AS is_failing_to_connect_to_primary,
 		MIN(
 			primary_instance.replica_sql_running = 0
 			OR primary_instance.replica_io_running = 0
 		) AS replication_stopped,
-		MIN(
-			primary_instance.binlog_server
-		) AS is_binlog_server,
 		MIN(
 			primary_instance.supports_oracle_gtid
 		) AS supports_oracle_gtid,
@@ -173,7 +157,6 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		MIN(
 			primary_instance.semi_sync_replica_enabled
 		) AS semi_sync_replica_enabled,
-		SUM(replica_instance.is_co_primary) AS count_co_primary_replicas,
 		SUM(replica_instance.oracle_gtid) AS count_oracle_gtid_replicas,
 		IFNULL(
 			SUM(
@@ -302,9 +285,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 	clusters := make(map[string]*clusterAnalysis)
 	err := db.Db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
 		a := &ReplicationAnalysis{
-			Analysis:               NoProblem,
-			ProcessingNodeHostname: process.ThisHostname,
-			ProcessingNodeToken:    util.ProcessToken.Hash,
+			Analysis: NoProblem,
 		}
 
 		tablet := &topodatapb.Tablet{}
@@ -334,15 +315,8 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 
 		a.ShardPrimaryTermTimestamp = m.GetString("shard_primary_term_timestamp")
 		a.IsPrimary = m.GetBool("is_primary")
-		countCoPrimaryReplicas := m.GetUint("count_co_primary_replicas")
-		a.IsCoPrimary = m.GetBool("is_co_primary") || (countCoPrimaryReplicas > 0)
-		a.AnalyzedInstanceHostname = m.GetString("hostname")
-		a.AnalyzedInstancePort = m.GetInt("port")
 		a.AnalyzedInstanceAlias = topoproto.TabletAliasString(tablet.Alias)
 		a.AnalyzedInstancePrimaryAlias = topoproto.TabletAliasString(primaryTablet.Alias)
-		a.AnalyzedInstanceDataCenter = m.GetString("data_center")
-		a.AnalyzedInstanceRegion = m.GetString("region")
-		a.AnalyzedInstancePhysicalEnvironment = m.GetString("physical_environment")
 		a.AnalyzedInstanceBinlogCoordinates = BinlogCoordinates{
 			LogFile: m.GetString("binary_log_file"),
 			LogPos:  m.GetUint32("binary_log_pos"),
@@ -357,12 +331,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		a.CountReplicas = m.GetUint("count_replicas")
 		a.CountValidReplicas = m.GetUint("count_valid_replicas")
 		a.CountValidReplicatingReplicas = m.GetUint("count_valid_replicating_replicas")
-		a.CountReplicasFailingToConnectToPrimary = m.GetUint("count_replicas_failing_to_connect_to_primary")
-		a.ReplicationDepth = m.GetUint("replication_depth")
-		a.IsFailingToConnectToPrimary = m.GetBool("is_failing_to_connect_to_primary")
 		a.ReplicationStopped = m.GetBool("replication_stopped")
-		a.IsBinlogServer = m.GetBool("is_binlog_server")
-		a.ClusterDetails.ReadRecoveryInfo()
 		a.ErrantGTID = m.GetString("gtid_errant")
 
 		countValidOracleGTIDReplicas := m.GetUint("count_valid_oracle_gtid_replicas")
@@ -391,12 +360,14 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 
 		a.CountDelayedReplicas = m.GetUint("count_delayed_replicas")
 		a.CountLaggingReplicas = m.GetUint("count_lagging_replicas")
+		a.ReplicaNetTimeout = m.GetInt32("replica_net_timeout")
+		a.HeartbeatInterval = m.GetFloat64("heartbeat_interval")
 
 		a.IsReadOnly = m.GetUint("read_only") == 1
 
 		if !a.LastCheckValid {
-			analysisMessage := fmt.Sprintf("analysis: Alias: %+v, Keyspace: %+v, Shard: %+v, IsPrimary: %+v, LastCheckValid: %+v, LastCheckPartialSuccess: %+v, CountReplicas: %+v, CountValidReplicas: %+v, CountValidReplicatingReplicas: %+v, CountLaggingReplicas: %+v, CountDelayedReplicas: %+v, CountReplicasFailingToConnectToPrimary: %+v",
-				a.AnalyzedInstanceAlias, a.ClusterDetails.Keyspace, a.ClusterDetails.Shard, a.IsPrimary, a.LastCheckValid, a.LastCheckPartialSuccess, a.CountReplicas, a.CountValidReplicas, a.CountValidReplicatingReplicas, a.CountLaggingReplicas, a.CountDelayedReplicas, a.CountReplicasFailingToConnectToPrimary,
+			analysisMessage := fmt.Sprintf("analysis: Alias: %+v, Keyspace: %+v, Shard: %+v, IsPrimary: %+v, LastCheckValid: %+v, LastCheckPartialSuccess: %+v, CountReplicas: %+v, CountValidReplicas: %+v, CountValidReplicatingReplicas: %+v, CountLaggingReplicas: %+v, CountDelayedReplicas: %+v",
+				a.AnalyzedInstanceAlias, a.ClusterDetails.Keyspace, a.ClusterDetails.Shard, a.IsPrimary, a.LastCheckValid, a.LastCheckPartialSuccess, a.CountReplicas, a.CountValidReplicas, a.CountValidReplicatingReplicas, a.CountLaggingReplicas, a.CountDelayedReplicas,
 			)
 			if util.ClearToLog("analysis_dao", analysisMessage) {
 				log.Infof(analysisMessage)
@@ -499,6 +470,10 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			a.Analysis = NotConnectedToPrimary
 			a.Description = "Not connected to the primary"
 			//
+		} else if topo.IsReplicaType(a.TabletType) && !a.IsPrimary && math.Round(a.HeartbeatInterval*2) != float64(a.ReplicaNetTimeout) {
+			a.Analysis = ReplicaMisconfigured
+			a.Description = "Replica has been misconfigured"
+			//
 		} else if topo.IsReplicaType(a.TabletType) && !a.IsPrimary && ca.primaryAlias != "" && a.AnalyzedInstancePrimaryAlias != ca.primaryAlias {
 			a.Analysis = ConnectedToWrongPrimary
 			a.Description = "Connected to wrong primary"
@@ -521,12 +496,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			a.Description = "Primary cannot be reached by vtorc and all of its replicas are lagging"
 			//
 		} else if a.IsPrimary && !a.LastCheckValid && !a.LastCheckPartialSuccess && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas > 0 {
-			// partial success is here to redice noise
-			a.Analysis = UnreachablePrimary
-			a.Description = "Primary cannot be reached by vtorc but it has replicating replicas; possibly a network/host issue"
-			//
-		} else if a.IsPrimary && !a.LastCheckValid && a.LastCheckPartialSuccess && a.CountReplicasFailingToConnectToPrimary > 0 && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas > 0 {
-			// there's partial success, but also at least one replica is failing to connect to primary
+			// partial success is here to reduce noise
 			a.Analysis = UnreachablePrimary
 			a.Description = "Primary cannot be reached by vtorc but it has replicating replicas; possibly a network/host issue"
 			//
@@ -553,10 +523,6 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		} else if a.IsPrimary && a.LastCheckValid && a.CountReplicas > 1 && a.CountValidReplicas < a.CountReplicas && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas == 0 {
 			a.Analysis = AllPrimaryReplicasNotReplicatingOrDead
 			a.Description = "Primary is reachable but none of its replicas is replicating"
-			//
-		} else if a.IsBinlogServer && a.IsFailingToConnectToPrimary {
-			a.Analysis = BinlogServerFailingToConnectToPrimary
-			a.Description = "Binlog server is unable to connect to its primary"
 			//
 		}
 		//		 else if a.IsPrimary && a.CountReplicas == 0 {
@@ -748,7 +714,7 @@ func auditInstanceAnalysisInChangelog(tabletAlias string, analysisCode AnalysisC
 		tabletAlias, string(analysisCode),
 	)
 	if err == nil {
-		analysisChangeWriteCounter.Inc(1)
+		analysisChangeWriteCounter.Add(1)
 	} else {
 		log.Error(err)
 	}

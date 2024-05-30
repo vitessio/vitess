@@ -24,42 +24,45 @@ import (
 	"vitess.io/vitess/go/mysql/fastparse"
 )
 
-func parsetimeHours(tp *timeparts, in string) (out string, ok bool) {
+func parsetimeHours(tp *timeparts, in string) (string, TimeState) {
+	var ok bool
 	if tp.hour, in, ok = getnumn(in); ok {
 		tp.day = tp.day + tp.hour/24
 		tp.hour = tp.hour % 24
 
 		switch {
 		case len(in) == 0:
-			return "", true
+			return "", TimeOK
 		case in[0] == ':':
 			return parsetimeMinutes(tp, in[1:])
 		}
 	}
-	return "", false
+	return "", TimePartial
 }
 
-func parsetimeMinutes(tp *timeparts, in string) (out string, ok bool) {
+func parsetimeMinutes(tp *timeparts, in string) (string, TimeState) {
+	var ok bool
 	if tp.min, in, ok = getnum(in, false); ok {
 		switch {
 		case tp.min > 59:
-			return "", false
+			return "", TimeInvalid
 		case len(in) == 0:
-			return "", true
+			return "", TimeOK
 		case in[0] == ':':
 			return parsetimeSeconds(tp, in[1:])
 		}
 	}
-	return "", false
+	return "", TimePartial
 }
 
-func parsetimeSeconds(tp *timeparts, in string) (out string, ok bool) {
+func parsetimeSeconds(tp *timeparts, in string) (string, TimeState) {
+	var ok bool
 	if tp.sec, in, ok = getnum(in, false); ok {
 		switch {
 		case tp.sec > 59:
-			return "", false
+			return "", TimeInvalid
 		case len(in) == 0:
-			return "", true
+			return "", TimeOK
 		case len(in) > 1 && in[0] == '.':
 			n := 1
 			for ; n < len(in) && isDigit(in, n); n++ {
@@ -67,14 +70,18 @@ func parsetimeSeconds(tp *timeparts, in string) (out string, ok bool) {
 			var l int
 			tp.nsec, l, ok = parseNanoseconds(in, n)
 			tp.prec = uint8(l)
-			return "", ok && len(in) == n
+			if ok && len(in) == n {
+				return "", TimeOK
+			}
+			return "", TimePartial
 		}
 	}
-	return "", false
+	return "", TimePartial
 }
 
-func parsetimeAny(tp *timeparts, in string) (out string, ok bool) {
+func parsetimeAny(tp *timeparts, in string) (out string, state TimeState) {
 	orig := in
+	var ok bool
 	for i := 0; i < len(in); i++ {
 		switch r := in[i]; {
 		case isSpace(r):
@@ -91,7 +98,7 @@ func parsetimeAny(tp *timeparts, in string) (out string, ok bool) {
 				return parsetimeNoDelimiters(tp, orig)
 			}
 			if tp.day > 34 {
-				return "", clampTimeparts(tp)
+				return "", clampTimeparts(tp, state)
 			}
 			return parsetimeHours(tp, in)
 		case r == ':':
@@ -101,8 +108,9 @@ func parsetimeAny(tp *timeparts, in string) (out string, ok bool) {
 	return parsetimeNoDelimiters(tp, in)
 }
 
-func parsetimeNoDelimiters(tp *timeparts, in string) (out string, ok bool) {
+func parsetimeNoDelimiters(tp *timeparts, in string) (out string, state TimeState) {
 	var integral int
+	var ok bool
 	for ; integral < len(in); integral++ {
 		if in[integral] == '.' || !isDigit(in, integral) {
 			break
@@ -112,12 +120,9 @@ func parsetimeNoDelimiters(tp *timeparts, in string) (out string, ok bool) {
 	switch integral {
 	default:
 		// MySQL limits this to a numeric value that fits in a 32-bit unsigned integer.
-		i, _ := fastparse.ParseInt64(in[:integral], 10)
+		i, _ := fastparse.ParseUint64(in[:integral], 10)
 		if i > math.MaxUint32 {
-			return "", false
-		}
-		if i < -math.MaxUint32 {
-			return "", false
+			return "", TimeInvalid
 		}
 
 		tp.hour, in, ok = getnuml(in, integral-4)
@@ -132,7 +137,7 @@ func parsetimeNoDelimiters(tp *timeparts, in string) (out string, ok bool) {
 	case 3, 4:
 		tp.min, in, ok = getnuml(in, integral-2)
 		if !ok || tp.min > 59 {
-			return "", false
+			return "", TimeInvalid
 		}
 		integral = 2
 		fallthrough
@@ -140,10 +145,10 @@ func parsetimeNoDelimiters(tp *timeparts, in string) (out string, ok bool) {
 	case 1, 2:
 		tp.sec, in, ok = getnuml(in, integral)
 		if !ok || tp.sec > 59 {
-			return "", false
+			return "", TimeInvalid
 		}
 	case 0:
-		return "", false
+		return "", TimeInvalid
 	}
 
 	if len(in) > 1 && in[0] == '.' && isDigit(in, 1) {
@@ -152,14 +157,18 @@ func parsetimeNoDelimiters(tp *timeparts, in string) (out string, ok bool) {
 		}
 		var l int
 		tp.nsec, l, ok = parseNanoseconds(in, n)
+		if !ok {
+			state = TimeInvalid
+		}
 		tp.prec = uint8(l)
 		in = in[n:]
 	}
 
-	return in, clampTimeparts(tp) && ok
+	state = clampTimeparts(tp, state)
+	return in, state
 }
 
-func clampTimeparts(tp *timeparts) bool {
+func clampTimeparts(tp *timeparts, state TimeState) TimeState {
 	// Maximum time is 838:59:59, so we have to clamp
 	// it to that value here if we otherwise successfully
 	// parser the time.
@@ -168,15 +177,31 @@ func clampTimeparts(tp *timeparts) bool {
 		tp.hour = 22
 		tp.min = 59
 		tp.sec = 59
-		return false
+		if state == TimeOK {
+			return TimePartial
+		}
 	}
-	return true
+	return state
 }
 
-func ParseTime(in string, prec int) (t Time, l int, ok bool) {
+type TimeState uint8
+
+const (
+	// TimeOK indicates that the parsed value is valid and complete.
+	TimeOK TimeState = iota
+	// TimePartial indicates that the parsed value has a partially parsed value
+	// but it is not fully complete and valid. There could be additional stray
+	// data in the input, or it has an overflow.
+	TimePartial
+	// TimeInvalid indicates that the parsed value is invalid and no partial
+	// TIME value could be extracted from the input.
+	TimeInvalid
+)
+
+func ParseTime(in string, prec int) (t Time, l int, state TimeState) {
 	in = strings.Trim(in, " \t\r\n")
 	if len(in) == 0 {
-		return Time{}, 0, false
+		return Time{}, 0, TimeInvalid
 	}
 	var neg bool
 	if in[0] == '-' {
@@ -185,11 +210,15 @@ func ParseTime(in string, prec int) (t Time, l int, ok bool) {
 	}
 
 	var tp timeparts
-	in, ok = parsetimeAny(&tp, in)
-	ok = clampTimeparts(&tp) && ok
+	in, state = parsetimeAny(&tp, in)
+	if state == TimeInvalid {
+		return Time{}, 0, state
+	}
+
+	state = clampTimeparts(&tp, state)
 
 	hours := uint16(24*tp.day + tp.hour)
-	if !tp.isZero() && neg {
+	if neg {
 		hours |= negMask
 	}
 
@@ -206,7 +235,13 @@ func ParseTime(in string, prec int) (t Time, l int, ok bool) {
 		t = t.Round(prec)
 	}
 
-	return t, prec, ok && len(in) == 0
+	switch {
+	case state == TimeOK && len(in) == 0:
+		state = TimeOK
+	case state == TimeOK && len(in) > 0:
+		state = TimePartial
+	}
+	return t, prec, state
 }
 
 func ParseDate(s string) (Date, bool) {
@@ -304,7 +339,7 @@ func ParseTimeInt64(i int64) (t Time, ok bool) {
 		return t, false
 	}
 
-	if i > 838 {
+	if i > MaxHours {
 		return t, false
 	}
 	t.hour = uint16(i)

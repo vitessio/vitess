@@ -32,7 +32,6 @@ var Teardown = &cobra.Command{
 	Long: "{{< warning >}}\n" +
 		"This is a destructive operation.\n" +
 		"{{</ warning >}}\n\n" +
-
 		"Shuts down a `mysqld` instance and removes its data directory.",
 	Example: `mysqlctl --tablet_uid 101 --alsologtostderr teardown`,
 	Args:    cobra.NoArgs,
@@ -48,15 +47,15 @@ var teardownArgs = struct {
 
 func commandTeardown(cmd *cobra.Command, args []string) error {
 	// There ought to be an existing my.cnf, so use it to find mysqld.
-	mysqld, cnf, err := mysqlctl.OpenMysqldAndMycnf(tabletUID)
+	mysqld, cnf, err := mysqlctl.OpenMysqldAndMycnf(tabletUID, collationEnv)
 	if err != nil {
 		return fmt.Errorf("failed to find mysql config: %v", err)
 	}
 	defer mysqld.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), teardownArgs.WaitTime)
+	ctx, cancel := context.WithTimeout(cmd.Context(), teardownArgs.WaitTime+10*time.Second)
 	defer cancel()
-	if err := mysqld.Teardown(ctx, cnf, teardownArgs.Force); err != nil {
+	if err := mysqld.Teardown(ctx, cnf, teardownArgs.Force, teardownArgs.WaitTime); err != nil {
 		return fmt.Errorf("failed teardown mysql (forced? %v): %v", teardownArgs.Force, err)
 	}
 	return nil

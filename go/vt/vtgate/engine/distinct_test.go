@@ -88,14 +88,10 @@ func TestDistinct(t *testing.T) {
 				if sqltypes.IsNumber(tc.inputs.Fields[i].Type) {
 					collID = collations.CollationBinaryID
 				}
-				t := evalengine.Type{
-					Type:     tc.inputs.Fields[i].Type,
-					Coll:     collID,
-					Nullable: false,
-				}
 				checkCols = append(checkCols, CheckCol{
-					Col:  i,
-					Type: t,
+					Col:          i,
+					Type:         evalengine.NewTypeEx(tc.inputs.Fields[i].Type, collID, false, 0, 0, nil),
+					CollationEnv: collations.MySQL8(),
 				})
 			}
 		}
@@ -135,12 +131,65 @@ func TestDistinct(t *testing.T) {
 	}
 }
 
+func TestDistinctStreamAsync(t *testing.T) {
+	distinct := &Distinct{
+		Source: &fakePrimitive{
+			results: sqltypes.MakeTestStreamingResults(sqltypes.MakeTestFields("myid|id|num|name", "varchar|int64|int64|varchar"),
+				"a|1|1|a",
+				"a|1|1|a",
+				"a|1|1|a",
+				"a|1|1|a",
+				"---",
+				"c|1|1|a",
+				"a|1|1|a",
+				"z|1|1|a",
+				"a|1|1|t",
+				"a|1|1|a",
+				"a|1|1|a",
+				"a|1|1|a",
+				"---",
+				"c|1|1|a",
+				"a|1|1|a",
+				"---",
+				"c|1|1|a",
+				"a|1|1|a",
+				"a|1|1|a",
+				"c|1|1|a",
+				"a|1|1|a",
+				"a|1|1|a",
+				"---",
+				"c|1|1|a",
+				"a|1|1|a",
+			),
+			async: true,
+		},
+		CheckCols: []CheckCol{
+			{Col: 0, Type: evalengine.NewType(sqltypes.VarChar, collations.CollationUtf8mb4ID)},
+			{Col: 1, Type: evalengine.NewType(sqltypes.Int64, collations.CollationBinaryID)},
+			{Col: 2, Type: evalengine.NewType(sqltypes.Int64, collations.CollationBinaryID)},
+			{Col: 3, Type: evalengine.NewType(sqltypes.VarChar, collations.CollationUtf8mb4ID)},
+		},
+	}
+
+	qr := &sqltypes.Result{}
+	err := distinct.TryStreamExecute(context.Background(), &noopVCursor{}, nil, true, func(result *sqltypes.Result) error {
+		qr.Rows = append(qr.Rows, result.Rows...)
+		return nil
+	})
+	require.NoError(t, err)
+	require.NoError(t, sqltypes.RowsEqualsStr(`
+[[VARCHAR("c") INT64(1) INT64(1) VARCHAR("a")] 
+[VARCHAR("a") INT64(1) INT64(1) VARCHAR("a")] 
+[VARCHAR("z") INT64(1) INT64(1) VARCHAR("a")] 
+[VARCHAR("a") INT64(1) INT64(1) VARCHAR("t")]]`, qr.Rows))
+}
+
 func TestWeightStringFallBack(t *testing.T) {
 	offsetOne := 1
 	checkCols := []CheckCol{{
 		Col:   0,
 		WsCol: &offsetOne,
-		Type:  evalengine.UnknownType(),
+		Type:  evalengine.NewType(sqltypes.VarBinary, collations.CollationBinaryID),
 	}}
 	input := r("myid|weightstring(myid)",
 		"varchar|varbinary",
@@ -165,6 +214,6 @@ func TestWeightStringFallBack(t *testing.T) {
 	utils.MustMatch(t, []CheckCol{{
 		Col:   0,
 		WsCol: &offsetOne,
-		Type:  evalengine.UnknownType(),
+		Type:  evalengine.NewType(sqltypes.VarBinary, collations.CollationBinaryID),
 	}}, distinct.CheckCols, "checkCols should not be updated")
 }

@@ -19,8 +19,10 @@ package opcode
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 // PulloutOpcode is a number representing the opcode
@@ -74,19 +76,9 @@ const (
 	AggregateAnyValue
 	AggregateCountStar
 	AggregateGroupConcat
+	AggregateAvg
+	AggregateUDF  // This is an opcode used to represent UDFs
 	_NumOfOpCodes // This line must be last of the opcodes!
-)
-
-var (
-	// OpcodeType keeps track of the known output types for different aggregate functions
-	OpcodeType = map[AggregateOpcode]querypb.Type{
-		AggregateCountDistinct: sqltypes.Int64,
-		AggregateCount:         sqltypes.Int64,
-		AggregateCountStar:     sqltypes.Int64,
-		AggregateSumDistinct:   sqltypes.Decimal,
-		AggregateSum:           sqltypes.Decimal,
-		AggregateGtid:          sqltypes.VarChar,
-	}
 )
 
 // SupportedAggregates maps the list of supported aggregate
@@ -96,6 +88,7 @@ var SupportedAggregates = map[string]AggregateOpcode{
 	"sum":   AggregateSum,
 	"min":   AggregateMin,
 	"max":   AggregateMax,
+	"avg":   AggregateAvg,
 	// These functions don't exist in mysql, but are used
 	// to display the plan.
 	"count_distinct": AggregateCountDistinct,
@@ -117,6 +110,7 @@ var AggregateName = map[AggregateOpcode]string{
 	AggregateCountStar:     "count_star",
 	AggregateGroupConcat:   "group_concat",
 	AggregateAnyValue:      "any_value",
+	AggregateAvg:           "avg",
 }
 
 func (code AggregateOpcode) String() string {
@@ -134,7 +128,7 @@ func (code AggregateOpcode) MarshalJSON() ([]byte, error) {
 }
 
 // Type returns the opcode return sql type, and a bool telling is we are sure about this type or not
-func (code AggregateOpcode) Type(typ querypb.Type) querypb.Type {
+func (code AggregateOpcode) SQLType(typ querypb.Type) querypb.Type {
 	switch code {
 	case AggregateUnassigned:
 		return sqltypes.Null
@@ -148,7 +142,7 @@ func (code AggregateOpcode) Type(typ querypb.Type) querypb.Type {
 		return sqltypes.Text
 	case AggregateMax, AggregateMin, AggregateAnyValue:
 		return typ
-	case AggregateSumDistinct, AggregateSum:
+	case AggregateSumDistinct, AggregateSum, AggregateAvg:
 		if typ == sqltypes.Unknown {
 			return sqltypes.Unknown
 		}
@@ -160,9 +154,33 @@ func (code AggregateOpcode) Type(typ querypb.Type) querypb.Type {
 		return sqltypes.Int64
 	case AggregateGtid:
 		return sqltypes.VarChar
+	case AggregateUDF:
+		return sqltypes.Unknown
 	default:
 		panic(code.String()) // we have a unit test checking we never reach here
 	}
+}
+
+func (code AggregateOpcode) Nullable() bool {
+	switch code {
+	case AggregateCount, AggregateCountStar:
+		return false
+	default:
+		return true
+	}
+}
+
+func (code AggregateOpcode) ResolveType(t evalengine.Type, env *collations.Environment) evalengine.Type {
+	sqltype := code.SQLType(t.Type())
+	collation := collations.CollationForType(sqltype, env.DefaultConnectionCharset())
+	nullable := code.Nullable()
+	size := t.Size()
+
+	scale := t.Scale()
+	if code == AggregateAvg {
+		scale += 4
+	}
+	return evalengine.NewTypeEx(sqltype, collation, nullable, size, scale, t.Values())
 }
 
 func (code AggregateOpcode) NeedsComparableValues() bool {

@@ -16,13 +16,20 @@ limitations under the License.
 
 package vreplication
 
+import (
+	"fmt"
+	"strings"
+)
+
 // The product, customer, Lead, Lead-1 tables are used to exercise and test most Workflow variants.
 // We violate the NO_ZERO_DATES and NO_ZERO_IN_DATE sql_modes that are enabled by default in
 // MySQL 5.7+ and MariaDB 10.2+ to ensure that vreplication still works everywhere and the
 // permissive sql_mode now used in vreplication causes no unwanted side effects.
-// The customer table also tests two important things:
+// The customer table also tests several important things:
 //  1. Composite or multi-column primary keys
 //  2. PKs that contain an ENUM column
+//  3. That we properly handle tables with auto_increment columns (which are stripped by default when
+//     moving the table to a sharded keyspace with vtctldclient and left in place when using vtctlclient)
 //
 // The Lead and Lead-1 tables also allows us to test several things:
 //  1. Mixed case identifiers
@@ -38,9 +45,10 @@ package vreplication
 // default collation as it has to work across versions and the 8.0 default does not exist in 5.7.
 var (
 	// All standard user tables should have a primary key and at least one secondary key.
-	initialProductSchema = `
+	customerTypes        = []string{"'individual'", "'soho'", "'enterprise'"}
+	initialProductSchema = fmt.Sprintf(`
 create table product(pid int, description varbinary(128), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key(pid), key(date1,date2)) CHARSET=utf8mb4;
-create table customer(cid int, name varchar(128) collate utf8mb4_bin, meta json default null, typ enum('individual','soho','enterprise'), sport set('football','cricket','baseball'),
+create table customer(cid int auto_increment, name varchar(128) collate utf8mb4_bin, meta json default null, typ enum(%s), sport set('football','cricket','baseball'),
 	ts timestamp not null default current_timestamp, bits bit(2) default b'11', date1 datetime not null default '0000-00-00 00:00:00', 
 	date2 datetime not null default '2021-00-01 00:00:00', dec80 decimal(8,0), blb blob, primary key(cid,typ), key(name)) CHARSET=utf8mb4;
 create table customer_seq(id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence';
@@ -49,18 +57,19 @@ create table orders(oid int, cid int, pid int, mname varchar(128), price int, qt
 create table order_seq(id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence';
 create table customer2(cid int, name varchar(128), typ enum('individual','soho','enterprise'), sport set('football','cricket','baseball'),ts timestamp not null default current_timestamp, primary key(cid), key(ts)) CHARSET=utf8;
 create table customer_seq2(id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence';
-create table ` + "`Lead`(`Lead-id`" + ` binary(16), name varbinary(16), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key (` + "`Lead-id`" + `), key (date1));
-create table ` + "`Lead-1`(`Lead`" + ` binary(16), name varbinary(16), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key (` + "`Lead`" + `), key (date2));
+create table `+"`Lead`(`Lead-id`"+` binary(16), name varbinary(16), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key (`+"`Lead-id`"+`), key (date1));
+create table `+"`Lead-1`(`Lead`"+` binary(16), name varbinary(16), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key (`+"`Lead`"+`), key (date2));
 create table _vt_PURGE_4f9194b43b2011eb8a0104ed332e05c2_20221210194431(id int, val varbinary(128), primary key(id), key(val));
 create table db_order_test (c_uuid varchar(64) not null default '', created_at datetime not null, dstuff varchar(128), dtstuff text, dbstuff blob, cstuff char(32), primary key (c_uuid,created_at), key (dstuff)) CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 create table vdiff_order (order_id varchar(50) collate utf8mb4_unicode_ci not null, primary key (order_id), key (order_id)) charset=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 create table datze (id int, dt1 datetime not null default current_timestamp, dt2 datetime not null, ts1 timestamp default current_timestamp, primary key (id), key (dt1));
 create table json_tbl (id int, j1 json, j2 json, j3 json not null, primary key(id));
 create table geom_tbl (id int, g geometry, p point, ls linestring, pg polygon, mp multipoint, mls multilinestring, mpg multipolygon, gc geometrycollection, primary key(id));
-create table  ` + "`blüb_tbl`" + ` (id int, val1 varchar(20), ` + "`blöb1`" + ` blob, val2 varbinary(20), ` + "`bl@b2`" + ` longblob, txt1 text, blb3 tinyblob, txt2 longtext, blb4 mediumblob, primary key(id));
+create table  `+"`blüb_tbl`"+` (id int, val1 varchar(20), `+"`blöb1`"+` blob, val2 varbinary(20), `+"`bl@b2`"+` longblob, txt1 text, blb3 tinyblob, txt2 longtext, blb4 mediumblob, primary key(id));
 create table reftable (id int, val1 varchar(20), primary key(id), key(val1));
 create table loadtest (id int, name varchar(256), primary key(id), key(name));
-`
+create table nopk (name varchar(128), age int unsigned);
+`, strings.Join(customerTypes, ","))
 	// These should always be ignored in vreplication
 	internalSchema = `
  create table _1e275eef_3b20_11eb_a38f_04ed332e05c2_20201210204529_gho(id int, val varbinary(128), primary key(id));
@@ -94,6 +103,7 @@ create table loadtest (id int, name varchar(256), primary key(id), key(name));
     "db_order_test": {},
     "vdiff_order": {},
     "datze": {},
+    "nopk": {},
     "reftable": {
       "type": "reference"
     }
@@ -139,6 +149,22 @@ create table loadtest (id int, name varchar(256), primary key(id), key(name));
         "column": "cid",
         "sequence": "customer_seq"
       }
+    },
+    "customer_name": {
+      "column_vindexes": [
+        {
+          "column": "cid",
+          "name": "xxhash"
+        }
+      ]
+    },
+    "enterprise_customer": {
+      "column_vindexes": [
+        {
+          "column": "cid",
+          "name": "xxhash"
+        }
+      ]
     },
     "customer2": {
       "column_vindexes": [
@@ -213,6 +239,14 @@ create table loadtest (id int, name varchar(256), primary key(id), key(name));
         {
           "column": "id",
           "name": "reverse_bits"
+        }
+      ]
+    },
+    "nopk": {
+      "column_vindexes": [
+        {
+          "columns": ["name"],
+          "name": "unicode_loose_md5"
         }
       ]
     },
@@ -388,6 +422,32 @@ create table loadtest (id int, name varchar(256), primary key(id), key(name));
 		"source_expression": "select * from product",
 		"create_ddl": "create table cproduct(pid bigint, description varchar(128), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key(pid)) CHARSET=utf8mb4"
 	}]
+}
+`
+
+	materializeCustomerNameSpec = `
+{
+  "workflow": "customer_name",
+  "source_keyspace": "customer",
+  "target_keyspace": "customer",
+  "table_settings": [{
+    "target_table": "customer_name",
+    "source_expression": "select cid, name from customer",
+    "create_ddl": "create table if not exists customer_name (cid bigint not null, name varchar(128), primary key(cid), key(name))"
+  }]
+}
+`
+
+	materializeCustomerTypeSpec = `
+{
+  "workflow": "enterprise_customer",
+  "source_keyspace": "customer",
+  "target_keyspace": "customer",
+  "table_settings": [{
+    "target_table": "enterprise_customer",
+    "source_expression": "select cid, name, typ from customer where typ = 'enterprise'",
+    "create_ddl": "create table if not exists enterprise_customer (cid bigint not null, name varchar(128), typ varchar(64), primary key(cid), key(typ))"
+  }]
 }
 `
 

@@ -25,12 +25,11 @@ import (
 
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/vtctl/schematools"
 
-	"vitess.io/vitess/go/test/utils"
-
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
-	"vitess.io/vitess/go/vt/proto/vttime"
+	vttimepb "vitess.io/vitess/go/vt/proto/vttime"
 )
 
 var now = time.Now()
@@ -86,7 +85,6 @@ func TestRowToSchemaMigration(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			out, err := rowToSchemaMigration(test.row)
 			if test.shouldErr {
@@ -110,7 +108,7 @@ func TestValueToVTTime(t *testing.T) {
 	tests := []struct {
 		name      string
 		value     string
-		expected  *vttime.Time
+		expected  *vttimepb.Time
 		shouldErr bool
 	}{
 		{
@@ -130,7 +128,6 @@ func TestValueToVTTime(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -153,7 +150,7 @@ func TestValueToVTDuration(t *testing.T) {
 		name        string
 		value       string
 		defaultUnit string
-		expected    *vttime.Duration
+		expected    *vttimepb.Duration
 		shouldErr   bool
 	}{
 		{
@@ -182,7 +179,6 @@ func TestValueToVTDuration(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			out, err := valueToVTDuration(test.value, test.defaultUnit)
 			if test.shouldErr {
@@ -197,6 +193,8 @@ func TestValueToVTDuration(t *testing.T) {
 }
 
 func TestAlterSchemaMigrationQuery(t *testing.T) {
+	t.Parallel()
+
 	uuid := "4e5dcf80_354b_11eb_82cd_f875a4d24e90"
 
 	tcases := []struct {
@@ -228,6 +226,8 @@ func TestAlterSchemaMigrationQuery(t *testing.T) {
 	for _, tcase := range tcases {
 		testName := fmt.Sprintf("%s %s", tcase.command, tcase.uuid)
 		t.Run(testName, func(t *testing.T) {
+			t.Parallel()
+
 			query, err := alterSchemaMigrationQuery(tcase.command, tcase.uuid)
 			assert.NoError(t, err)
 			assert.Equal(t, tcase.expect, query)

@@ -21,17 +21,67 @@ import (
 	"fmt"
 	"regexp"
 	"testing"
-	"time"
-
-	"vitess.io/vitess/go/vt/log"
 
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
+
+// TestRowStreamerQuery validates that the correct force index hint and order by is added to the rowstreamer query.
+func TestRowStreamerQuery(t *testing.T) {
+	execStatements(t, []string{
+		"create table t1(id int, uk1 int, val varbinary(128), primary key(id), unique key uk2 (uk1))",
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+	})
+	// We need to StreamRows, to get an initialized RowStreamer.
+	// Note that the query passed into StreamRows is overwritten while running the test.
+	err := engine.StreamRows(context.Background(), "select * from t1", nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
+		type testCase struct {
+			directives      string
+			sendQuerySuffix string
+		}
+		queryTemplate := "select %s id, uk1, val from t1"
+		getQuery := func(directives string) string {
+			return fmt.Sprintf(queryTemplate, directives)
+		}
+		sendQueryPrefix := "select /*+ MAX_EXECUTION_TIME(3600000) */ id, uk1, val from t1"
+		testCases := []testCase{
+			{"", "force index (`PRIMARY`) order by id"},
+			{"/*vt+ ukColumns=\"uk1\" ukForce=\"uk2\" */", "force index (`uk2`) order by uk1"},
+			{"/*vt+ ukForce=\"uk2\" */", "force index (`uk2`) order by uk1"},
+			{"/*vt+ ukColumns=\"uk1\" */", "order by uk1"},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.directives, func(t *testing.T) {
+				var err error
+				var rs *rowStreamer
+				// Depending on the order of the test cases, the index of the engine.rowStreamers slice may change.
+				for _, rs2 := range engine.rowStreamers {
+					if rs2 != nil {
+						rs = rs2
+						break
+					}
+				}
+				require.NotNil(t, rs)
+				rs.query = getQuery(tc.directives)
+				err = rs.buildPlan()
+				require.NoError(t, err)
+				want := fmt.Sprintf("%s %s", sendQueryPrefix, tc.sendQuerySuffix)
+				require.Equal(t, want, rs.sendQuery)
+			})
+		}
+		return nil
+	})
+	require.NoError(t, err)
+}
 
 func TestStreamRowsScan(t *testing.T) {
 	if testing.Short() {
@@ -63,8 +113,6 @@ func TestStreamRowsScan(t *testing.T) {
 		"drop table t4",
 		"drop table t5",
 	})
-
-	engine.se.Reload(context.Background())
 
 	// t1: simulates rollup
 	wantStream := []string{
@@ -178,13 +226,13 @@ func TestStreamRowsScan(t *testing.T) {
 	wantQuery = "select /*+ MAX_EXECUTION_TIME(3600000) */ id1, id2, id3, val from t5 force index (`id1_id2_id3`) where (id1 = 1 and id2 = 2 and id3 > 3) or (id1 = 1 and id2 > 2) or (id1 > 1) order by id1, id2, id3"
 	checkStream(t, "select * from t5", []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2), sqltypes.NewInt64(3)}, wantQuery, wantStream)
 
-	// t1: test for unsupported integer literal
+	// t5: test for unsupported integer literal
 	wantError := "only the integer literal 1 is supported"
-	expectStreamError(t, "select 2 from t1", wantError)
+	expectStreamError(t, "select 2 from t5", wantError)
 
-	// t1: test for unsupported literal type
+	// t5: test for unsupported literal type
 	wantError = "only integer literals are supported"
-	expectStreamError(t, "select 'a' from t1", wantError)
+	expectStreamError(t, "select 'a' from t5", wantError)
 }
 
 func TestStreamRowsUnicode(t *testing.T) {
@@ -206,11 +254,10 @@ func TestStreamRowsUnicode(t *testing.T) {
 		engine = savedEngine
 	}()
 	engine = customEngine(t, func(in mysql.ConnParams) mysql.ConnParams {
-		in.Charset = "latin1"
+		in.Charset = collations.CollationLatin1Swedish
 		return in
 	})
 	defer engine.Close()
-	engine.se.Reload(context.Background())
 	// We need a latin1 connection.
 	conn, err := env.Mysqld.GetDbaConnection(context.Background())
 	if err != nil {
@@ -246,7 +293,6 @@ func TestStreamRowsKeyRange(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-	engine.se.Reload(context.Background())
 
 	if err := env.SetVSchema(shardedVSchema); err != nil {
 		t.Fatal(err)
@@ -261,9 +307,6 @@ func TestStreamRowsKeyRange(t *testing.T) {
 	defer execStatements(t, []string{
 		"drop table t1",
 	})
-	engine.se.Reload(context.Background())
-
-	time.Sleep(1 * time.Second)
 
 	// Only the first row should be returned, but lastpk should be 6.
 	wantStream := []string{
@@ -294,9 +337,6 @@ func TestStreamRowsFilterInt(t *testing.T) {
 	defer execStatements(t, []string{
 		"drop table t1",
 	})
-	engine.se.Reload(context.Background())
-
-	time.Sleep(1 * time.Second)
 
 	wantStream := []string{
 		`fields:{name:"id1" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id1" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63 column_type:"varbinary(128)"} pkfields:{name:"id1" type:INT32 charset:63}`,
@@ -327,9 +367,6 @@ func TestStreamRowsFilterVarBinary(t *testing.T) {
 	defer execStatements(t, []string{
 		"drop table t1",
 	})
-	engine.se.Reload(context.Background())
-
-	time.Sleep(1 * time.Second)
 
 	wantStream := []string{
 		`fields:{name:"id1" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id1" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63 column_type:"varbinary(128)"} pkfields:{name:"id1" type:INT32 charset:63}`,
@@ -355,7 +392,6 @@ func TestStreamRowsMultiPacket(t *testing.T) {
 	defer execStatements(t, []string{
 		"drop table t1",
 	})
-	engine.se.Reload(context.Background())
 
 	wantStream := []string{
 		`fields:{name:"id" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63 column_type:"varbinary(128)"} pkfields:{name:"id" type:INT32 charset:63}`,
@@ -383,7 +419,6 @@ func TestStreamRowsCancel(t *testing.T) {
 	defer execStatements(t, []string{
 		"drop table t1",
 	})
-	engine.se.Reload(context.Background())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

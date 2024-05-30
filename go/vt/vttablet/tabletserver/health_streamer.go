@@ -20,25 +20,19 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/constants/sidecar"
-
 	vtschema "vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
-	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/sqlparser"
-
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/servenv"
 
 	"vitess.io/vitess/go/history"
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -50,8 +44,8 @@ import (
 )
 
 var (
-	// blpFunc is a legaacy feature.
-	// TODO(sougou): remove after legacy resharding worflows are removed.
+	// blpFunc is a legacy feature.
+	// TODO(sougou): remove after legacy resharding workflows are removed.
 	blpFunc = vreplication.StatusSummary
 
 	errUnintialized = "tabletserver uninitialized"
@@ -98,13 +92,13 @@ func newHealthStreamer(env tabletenv.Env, alias *topodatapb.TabletAlias, engine 
 	if env.Config().SignalWhenSchemaChange {
 		// We need one connection for the reloader.
 		pool = connpool.NewPool(env, "", tabletenv.ConnPoolConfig{
-			Size:               1,
-			IdleTimeoutSeconds: env.Config().OltpReadPool.IdleTimeoutSeconds,
+			Size:        1,
+			IdleTimeout: env.Config().OltpReadPool.IdleTimeout,
 		})
 	}
 	hs := &healthStreamer{
 		stats:             env.Stats(),
-		degradedThreshold: env.Config().Healthcheck.DegradedThresholdSeconds.Get(),
+		degradedThreshold: env.Config().Healthcheck.DegradedThreshold,
 		clients:           make(map[chan *querypb.StreamHealthResponse]struct{}),
 
 		state: &querypb.StreamHealthResponse{
@@ -122,7 +116,7 @@ func newHealthStreamer(env tabletenv.Env, alias *topodatapb.TabletAlias, engine 
 		viewsEnabled:           env.Config().EnableViews,
 		se:                     engine,
 	}
-	hs.unhealthyThreshold.Store(env.Config().Healthcheck.UnhealthyThresholdSeconds.Get().Nanoseconds())
+	hs.unhealthyThreshold.Store(env.Config().Healthcheck.UnhealthyThreshold.Nanoseconds())
 	return hs
 }
 
@@ -318,8 +312,8 @@ func (hs *healthStreamer) MakePrimary(serving bool) {
 	// We register for notifications from the schema Engine only when schema tracking is enabled,
 	// and we are going to a serving primary state.
 	if serving && hs.signalWhenSchemaChange {
-		hs.se.RegisterNotifier("healthStreamer", func(full map[string]*schema.Table, created, altered, dropped []*schema.Table) {
-			if err := hs.reload(full, created, altered, dropped); err != nil {
+		hs.se.RegisterNotifier("healthStreamer", func(full map[string]*schema.Table, created, altered, dropped []*schema.Table, udfsChanged bool) {
+			if err := hs.reload(created, altered, dropped, udfsChanged); err != nil {
 				log.Errorf("periodic schema reload failed in health stream: %v", err)
 			}
 		}, false)
@@ -334,7 +328,7 @@ func (hs *healthStreamer) MakeNonPrimary() {
 }
 
 // reload reloads the schema from the underlying mysql for the tables that we get the alert on.
-func (hs *healthStreamer) reload(full map[string]*schema.Table, created, altered, dropped []*schema.Table) error {
+func (hs *healthStreamer) reload(created, altered, dropped []*schema.Table, udfsChanged bool) error {
 	hs.mu.Lock()
 	defer hs.mu.Unlock()
 	// Schema Reload to happen only on primary when it is serving.
@@ -371,63 +365,18 @@ func (hs *healthStreamer) reload(full map[string]*schema.Table, created, altered
 		}
 	}
 
-	// Reload the tables and views.
-	// This stores the data that is used by VTGates upto v17. So, we can remove this reload of
-	// tables and views in v19.
-	err = hs.reloadTables(ctx, conn.Conn, tables)
-	if err != nil {
-		return err
-	}
-
 	// no change detected
-	if len(tables) == 0 && len(views) == 0 {
+	if len(tables) == 0 && len(views) == 0 && !udfsChanged {
 		return nil
 	}
 
 	hs.state.RealtimeStats.TableSchemaChanged = tables
 	hs.state.RealtimeStats.ViewSchemaChanged = views
+	hs.state.RealtimeStats.UdfsChanged = udfsChanged
 	shr := hs.state.CloneVT()
 	hs.broadCastToClients(shr)
 	hs.state.RealtimeStats.TableSchemaChanged = nil
 	hs.state.RealtimeStats.ViewSchemaChanged = nil
-
-	return nil
-}
-
-func (hs *healthStreamer) reloadTables(ctx context.Context, conn *connpool.Conn, tableNames []string) error {
-	if len(tableNames) == 0 {
-		return nil
-	}
-	var escapedTableNames []string
-	for _, tableName := range tableNames {
-		escapedTblName := sqlparser.String(sqlparser.NewStrLiteral(tableName))
-		escapedTableNames = append(escapedTableNames, escapedTblName)
-	}
-
-	tableNamePredicate := fmt.Sprintf("table_name IN (%s)", strings.Join(escapedTableNames, ", "))
-	del := fmt.Sprintf("%s AND %s", sqlparser.BuildParsedQuery(mysql.ClearSchemaCopy, sidecar.GetIdentifier()).Query, tableNamePredicate)
-	upd := fmt.Sprintf("%s AND %s", sqlparser.BuildParsedQuery(mysql.InsertIntoSchemaCopy, sidecar.GetIdentifier()).Query, tableNamePredicate)
-
-	// Reload the schema in a transaction.
-	_, err := conn.Exec(ctx, "begin", 1, false)
-	if err != nil {
-		return err
-	}
-	defer conn.Exec(ctx, "rollback", 1, false)
-
-	_, err = conn.Exec(ctx, del, 1, false)
-	if err != nil {
-		return err
-	}
-
-	_, err = conn.Exec(ctx, upd, 1, false)
-	if err != nil {
-		return err
-	}
-
-	_, err = conn.Exec(ctx, "commit", 1, false)
-	if err != nil {
-		return err
-	}
+	hs.state.RealtimeStats.UdfsChanged = false
 	return nil
 }

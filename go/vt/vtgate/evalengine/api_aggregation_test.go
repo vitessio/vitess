@@ -73,6 +73,12 @@ func TestMinMax(t *testing.T) {
 			max:    sqltypes.NewVarBinary("b"),
 		},
 		{
+			type_:  sqltypes.Decimal,
+			values: []sqltypes.Value{sqltypes.NewDecimal("1.001"), sqltypes.NewDecimal("2.1")},
+			min:    sqltypes.NewDecimal("1.001"),
+			max:    sqltypes.NewDecimal("2.1"),
+		},
+		{
 			// accent insensitive
 			type_: sqltypes.VarChar,
 			coll:  getCollationID("utf8mb4_0900_as_ci"),
@@ -131,7 +137,7 @@ func TestMinMax(t *testing.T) {
 	for i, tcase := range tcases {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			t.Run("Min", func(t *testing.T) {
-				agg := NewAggregationMinMax(tcase.type_, tcase.coll)
+				agg := NewAggregationMinMax(tcase.type_, collations.MySQL8(), tcase.coll, nil)
 
 				for _, v := range tcase.values {
 					err := agg.Min(v)
@@ -147,7 +153,7 @@ func TestMinMax(t *testing.T) {
 			})
 
 			t.Run("Max", func(t *testing.T) {
-				agg := NewAggregationMinMax(tcase.type_, tcase.coll)
+				agg := NewAggregationMinMax(tcase.type_, collations.MySQL8(), tcase.coll, nil)
 
 				for _, v := range tcase.values {
 					err := agg.Max(v)

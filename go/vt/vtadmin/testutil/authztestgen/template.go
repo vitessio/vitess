@@ -51,6 +51,7 @@ import (
 	"vitess.io/vitess/go/vt/vtadmin/rbac"
 	"vitess.io/vitess/go/vt/vtadmin/testutil"
 	"vitess.io/vitess/go/vt/vtadmin/vtctldclient/fakevtctldclient"
+	"vitess.io/vitess/go/vt/vtenv"
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
@@ -88,7 +89,7 @@ func Test{{ .Method }}(t *testing.T) {
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
 	{{ if not .SerializeCases }}
-	api := vtadmin.NewAPI(testClusters(t), opts)
+	api := vtadmin.NewAPI(vtenv.NewTestEnv(), testClusters(t), opts)
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -101,7 +102,7 @@ func Test{{ .Method }}(t *testing.T) {
 	t.Run("{{ .Name }}", func(t *testing.T) {
 		t.Parallel()
 		{{ if $test.SerializeCases }}
-		api := vtadmin.NewAPI(testClusters(t), opts)
+		api := vtadmin.NewAPI(vtenv.NewTestEnv(), testClusters(t), opts)
 		t.Cleanup(func() {
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())
@@ -111,9 +112,8 @@ func Test{{ .Method }}(t *testing.T) {
 
 		{{ getActor .Actor }}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
+
 		{{ if .IncludeErrorVar }}
 		resp, err := api.{{ $test.Method }}(ctx, {{ $test.Request }})
 		{{ else }}
@@ -165,7 +165,7 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 			Config: &cluster.Config{
 				TopoReadPoolConfig: &cluster.RPCPoolConfig{
 					Size: 100,
-					WaitTimeout: time.Millisecond * 50,
+					WaitTimeout: time.Millisecond * 500,
 				},
 			},
 		},

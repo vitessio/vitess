@@ -145,22 +145,23 @@ func TestCreateViewDiff(t *testing.T) {
 			cdiff: "ALTER ALGORITHM = TEMPTABLE VIEW `v1` AS SELECT `a` FROM `t`",
 		},
 	}
-	hints := &DiffHints{}
+	hints := EmptyDiffHints()
+	env := NewTestEnv()
 	for _, ts := range tt {
 		t.Run(ts.name, func(t *testing.T) {
-			fromStmt, err := sqlparser.ParseStrictDDL(ts.from)
+			fromStmt, err := env.Parser().ParseStrictDDL(ts.from)
 			assert.NoError(t, err)
 			fromCreateView, ok := fromStmt.(*sqlparser.CreateView)
 			assert.True(t, ok)
 
-			toStmt, err := sqlparser.ParseStrictDDL(ts.to)
+			toStmt, err := env.Parser().ParseStrictDDL(ts.to)
 			assert.NoError(t, err)
 			toCreateView, ok := toStmt.(*sqlparser.CreateView)
 			assert.True(t, ok)
 
-			c, err := NewCreateViewEntity(fromCreateView)
+			c, err := NewCreateViewEntity(env, fromCreateView)
 			require.NoError(t, err)
-			other, err := NewCreateViewEntity(toCreateView)
+			other, err := NewCreateViewEntity(env, toCreateView)
 			require.NoError(t, err)
 			alter, err := c.Diff(other, hints)
 			switch {
@@ -177,7 +178,7 @@ func TestCreateViewDiff(t *testing.T) {
 					diff := alter.StatementString()
 					assert.Equal(t, ts.diff, diff)
 					// validate we can parse back the statement
-					_, err := sqlparser.ParseStrictDDL(diff)
+					_, err := env.Parser().ParseStrictDDL(diff)
 					assert.NoError(t, err)
 
 					eFrom, eTo := alter.Entities()
@@ -195,11 +196,20 @@ func TestCreateViewDiff(t *testing.T) {
 						require.NoError(t, err)
 						assert.True(t, appliedDiff.IsEmpty(), "expected empty diff, found changes: %v", appliedDiff.CanonicalStatementString())
 					}
+					// Validate Clone() works
+					{
+						clone := alter.Clone()
+						alterClone, ok := clone.(*AlterViewEntityDiff)
+						require.True(t, ok)
+						assert.Equal(t, eFrom.Create().CanonicalStatementString(), alterClone.from.Create().CanonicalStatementString())
+						alterClone.from.CreateView.ViewName.Name = sqlparser.NewIdentifierCS("something_else")
+						assert.NotEqual(t, eFrom.Create().CanonicalStatementString(), alterClone.from.Create().CanonicalStatementString())
+					}
 				}
 				{
 					cdiff := alter.CanonicalStatementString()
 					assert.Equal(t, ts.cdiff, cdiff)
-					_, err := sqlparser.ParseStrictDDL(cdiff)
+					_, err := env.Parser().ParseStrictDDL(cdiff)
 					assert.NoError(t, err)
 				}
 			}
@@ -239,14 +249,15 @@ func TestNormalizeView(t *testing.T) {
 			to:   "CREATE SQL SECURITY INVOKER VIEW `v1` AS SELECT `a`, `b`, `c` FROM `t`",
 		},
 	}
+	env := NewTestEnv()
 	for _, ts := range tt {
 		t.Run(ts.name, func(t *testing.T) {
-			stmt, err := sqlparser.ParseStrictDDL(ts.from)
+			stmt, err := env.Parser().ParseStrictDDL(ts.from)
 			require.NoError(t, err)
 			fromCreateView, ok := stmt.(*sqlparser.CreateView)
 			require.True(t, ok)
 
-			from, err := NewCreateViewEntity(fromCreateView)
+			from, err := NewCreateViewEntity(env, fromCreateView)
 			require.NoError(t, err)
 			assert.Equal(t, ts.to, sqlparser.CanonicalString(from))
 		})

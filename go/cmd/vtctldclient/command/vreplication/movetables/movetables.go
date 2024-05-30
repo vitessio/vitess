@@ -47,24 +47,34 @@ func registerCommands(root *cobra.Command) {
 	create.Flags().StringSliceVar(&createOptions.ExcludeTables, "exclude-tables", nil, "Source tables to exclude from copying.")
 	create.Flags().BoolVar(&createOptions.NoRoutingRules, "no-routing-rules", false, "(Advanced) Do not create routing rules while creating the workflow. See the reference documentation for limitations if you use this flag.")
 	create.Flags().BoolVar(&createOptions.AtomicCopy, "atomic-copy", false, "(EXPERIMENTAL) A single copy phase is run for all tables from the source. Use this, for example, if your source keyspace has tables which use foreign key constraints.")
+	create.Flags().StringVar(&createOptions.WorkflowOptions.TenantId, "tenant-id", "", "(EXPERIMENTAL: Multi-tenant migrations only) The tenant ID to use for the MoveTables workflow into a multi-tenant keyspace.")
+	create.Flags().BoolVar(&createOptions.WorkflowOptions.StripShardedAutoIncrement, "remove-sharded-auto-increment", true, "If moving the table(s) to a sharded keyspace, remove any auto_increment clauses when copying the schema to the target as sharded keyspaces should rely on either user/application generated values or Vitess sequences to ensure uniqueness.")
+	create.Flags().StringSliceVar(&createOptions.WorkflowOptions.Shards, "shards", nil, "(EXPERIMENTAL: Multi-tenant migrations only) Specify that vreplication streams should only be created on this subset of target shards. Warning: you should first ensure that all rows on the source route to the specified subset of target shards using your VIndex of choice or you could lose data during the migration.")
 	base.AddCommand(create)
 
 	opts := &common.SubCommandsOpts{
 		SubCommand: "MoveTables",
 		Workflow:   "commerce2customer",
 	}
-	base.AddCommand(common.GetShowCommand(opts))
-	base.AddCommand(common.GetStatusCommand(opts))
+	showCommand := common.GetShowCommand(opts)
+	common.AddShardSubsetFlag(showCommand, &common.ShowOptions.Shards)
+	base.AddCommand(showCommand)
+
+	statusCommand := common.GetStatusCommand(opts)
+	common.AddShardSubsetFlag(statusCommand, &common.StatusOptions.Shards)
+	base.AddCommand(statusCommand)
 
 	base.AddCommand(common.GetStartCommand(opts))
 	base.AddCommand(common.GetStopCommand(opts))
 
 	switchTrafficCommand := common.GetSwitchTrafficCommand(opts)
 	common.AddCommonSwitchTrafficFlags(switchTrafficCommand, true)
+	common.AddShardSubsetFlag(switchTrafficCommand, &common.SwitchTrafficOptions.Shards)
 	base.AddCommand(switchTrafficCommand)
 
 	reverseTrafficCommand := common.GetReverseTrafficCommand(opts)
 	common.AddCommonSwitchTrafficFlags(reverseTrafficCommand, false)
+	common.AddShardSubsetFlag(reverseTrafficCommand, &common.SwitchTrafficOptions.Shards)
 	base.AddCommand(reverseTrafficCommand)
 
 	complete := common.GetCompleteCommand(opts)
@@ -72,11 +82,13 @@ func registerCommands(root *cobra.Command) {
 	complete.Flags().BoolVar(&common.CompleteOptions.KeepRoutingRules, "keep-routing-rules", false, "Keep the routing rules in place that direct table traffic from the source keyspace to the target keyspace of the MoveTables workflow.")
 	complete.Flags().BoolVar(&common.CompleteOptions.RenameTables, "rename-tables", false, "Keep the original source table data that was copied by the MoveTables workflow, but rename each table to '_<tablename>_old'.")
 	complete.Flags().BoolVar(&common.CompleteOptions.DryRun, "dry-run", false, "Print the actions that would be taken and report any known errors that would have occurred.")
+	common.AddShardSubsetFlag(complete, &common.CompleteOptions.Shards)
 	base.AddCommand(complete)
 
 	cancel := common.GetCancelCommand(opts)
 	cancel.Flags().BoolVar(&common.CancelOptions.KeepData, "keep-data", false, "Keep the partially copied table data from the MoveTables workflow in the target keyspace.")
 	cancel.Flags().BoolVar(&common.CancelOptions.KeepRoutingRules, "keep-routing-rules", false, "Keep the routing rules created for the MoveTables workflow.")
+	common.AddShardSubsetFlag(cancel, &common.CancelOptions.Shards)
 	base.AddCommand(cancel)
 }
 

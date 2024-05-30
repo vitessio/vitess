@@ -17,11 +17,19 @@ limitations under the License.
 package mysqlctl
 
 import (
+	"context"
+	"os"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/dbconfigs"
 )
 
 type testcase struct {
@@ -171,4 +179,131 @@ func TestParseBinlogEntryTimestamp(t *testing.T) {
 			assert.Equal(t, tcase.tm, tm)
 		})
 	}
+}
+
+func TestCleanupLockfile(t *testing.T) {
+	t.Cleanup(func() {
+		os.Remove("mysql.sock.lock")
+	})
+	ts := "prefix"
+	// All good if no lockfile exists
+	assert.NoError(t, cleanupLockfile("mysql.sock", ts))
+
+	// If lockfile exists, but the process is not found, we clean it up.
+	os.WriteFile("mysql.sock.lock", []byte("123456789"), 0o600)
+	assert.NoError(t, cleanupLockfile("mysql.sock", ts))
+	assert.NoFileExists(t, "mysql.sock.lock")
+
+	// If lockfile exists, but the process is not found, we clean it up.
+	os.WriteFile("mysql.sock.lock", []byte("123456789\n"), 0o600)
+	assert.NoError(t, cleanupLockfile("mysql.sock", ts))
+	assert.NoFileExists(t, "mysql.sock.lock")
+
+	// If the lockfile exists, and the process is found, but it's for ourselves,
+	// we clean it up.
+	os.WriteFile("mysql.sock.lock", []byte(strconv.Itoa(os.Getpid())), 0o600)
+	assert.NoError(t, cleanupLockfile("mysql.sock", ts))
+	assert.NoFileExists(t, "mysql.sock.lock")
+
+	// If the lockfile exists, and the process is found, we don't clean it up.
+	os.WriteFile("mysql.sock.lock", []byte(strconv.Itoa(os.Getppid())), 0o600)
+	assert.Error(t, cleanupLockfile("mysql.sock", ts))
+	assert.FileExists(t, "mysql.sock.lock")
+}
+
+func TestRunMysqlUpgrade(t *testing.T) {
+	ver, err := GetVersionString()
+	require.NoError(t, err)
+	if strings.Contains(ver, "5.7") {
+		t.Skipf("Run the test only for 8.0")
+	}
+
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+
+	testMysqld := NewMysqld(dbc)
+	defer testMysqld.Close()
+
+	ctx := context.Background()
+	err = testMysqld.RunMysqlUpgrade(ctx)
+	assert.NoError(t, err)
+
+	// Should not fail for older versions
+	testMysqld.capabilities = newCapabilitySet(FlavorMySQL, ServerVersion{Major: 8, Minor: 0, Patch: 15})
+	err = testMysqld.RunMysqlUpgrade(ctx)
+	assert.NoError(t, err)
+}
+
+func TestGetDbaConnection(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+
+	testMysqld := NewMysqld(dbc)
+	defer testMysqld.Close()
+
+	ctx := context.Background()
+
+	conn, err := testMysqld.GetDbaConnection(ctx)
+	assert.NoError(t, err)
+	assert.NoError(t, conn.Ping())
+	defer conn.Close()
+}
+
+func TestGetVersionString(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+
+	testMysqld := NewMysqld(dbc)
+	defer testMysqld.Close()
+
+	ctx := context.Background()
+	str, err := testMysqld.GetVersionString(ctx)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, str)
+
+	ver := "test_version"
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+	db.AddQuery(versionSQLQuery, sqltypes.MakeTestResult(sqltypes.MakeTestFields("test_field", "varchar"), ver))
+
+	str, err = testMysqld.GetVersionString(ctx)
+	assert.Equal(t, ver, str)
+	assert.NoError(t, err)
+}
+
+func TestGetVersionComment(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+	db.AddQuery("select @@global.version_comment", sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global.version_comment", "varchar"), "test_version1", "test_version2"))
+
+	testMysqld := NewMysqld(dbc)
+	defer testMysqld.Close()
+
+	ctx := context.Background()
+	_, err := testMysqld.GetVersionComment(ctx)
+	assert.ErrorContains(t, err, "unexpected result length")
+
+	ver := "test_version"
+	db.AddQuery("select @@global.version_comment", sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global.version_comment", "varchar"), ver))
+
+	str, err := testMysqld.GetVersionComment(ctx)
+	assert.NoError(t, err)
+	assert.Equal(t, ver, str)
 }

@@ -24,12 +24,12 @@ import (
 
 func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
-	case *sqlparser.Update:
-		return checkUpdate(node)
 	case *sqlparser.Select:
 		return a.checkSelect(cursor, node)
 	case *sqlparser.Nextval:
 		return a.checkNextVal()
+	case *sqlparser.AliasedTableExpr:
+		return checkAliasedTableExpr(node)
 	case *sqlparser.JoinTableExpr:
 		return a.checkJoin(node)
 	case *sqlparser.LockingFunc:
@@ -52,6 +52,8 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 		if node.Action == sqlparser.ReplaceAct {
 			return ShardedError{Inner: &UnsupportedConstruct{errString: "REPLACE INTO with sharded keyspace"}}
 		}
+	case *sqlparser.OverClause:
+		return ShardedError{Inner: &UnsupportedConstruct{errString: "OVER CLAUSE with sharded keyspace"}}
 	}
 
 	return nil
@@ -177,17 +179,25 @@ func (a *analyzer) checkSelect(cursor *sqlparser.Cursor, node *sqlparser.Select)
 	return nil
 }
 
-func checkUpdate(node *sqlparser.Update) error {
-	if len(node.TableExprs) != 1 {
-		return ShardedError{Inner: &UnsupportedMultiTablesInUpdateError{ExprCount: len(node.TableExprs)}}
+// checkAliasedTableExpr checks the validity of AliasedTableExpr.
+func checkAliasedTableExpr(node *sqlparser.AliasedTableExpr) error {
+	if len(node.Hints) == 0 {
+		return nil
 	}
-	alias, isAlias := node.TableExprs[0].(*sqlparser.AliasedTableExpr)
-	if !isAlias {
-		return ShardedError{Inner: &UnsupportedMultiTablesInUpdateError{NotAlias: true}}
-	}
-	_, isDerived := alias.Expr.(*sqlparser.DerivedTable)
-	if isDerived {
-		return &TableNotUpdatableError{Table: alias.As.String()}
+	alreadySeenVindexHint := false
+	for _, hint := range node.Hints {
+		if hint.Type.IsVindexHint() {
+			if alreadySeenVindexHint {
+				// TableName is safe to call, because only TableExpr can have hints.
+				// And we already checked for hints being empty.
+				tableName, err := node.TableName()
+				if err != nil {
+					return err
+				}
+				return &CantUseMultipleVindexHints{Table: sqlparser.String(tableName)}
+			}
+			alreadySeenVindexHint = true
+		}
 	}
 	return nil
 }

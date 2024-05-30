@@ -1,4 +1,4 @@
-ARG bootstrap_version=24
+ARG bootstrap_version=32
 ARG image="vitess/bootstrap:${bootstrap_version}-common"
 
 FROM "${image}"
@@ -7,8 +7,8 @@ RUN apt-get update
 RUN apt-get install -y sudo curl vim jq
 
 # Install dependencies
-COPY docker/lite/install_dependencies.sh /vt/dist/install_dependencies.sh
-RUN /vt/dist/install_dependencies.sh mysql57
+COPY docker/utils/install_dependencies.sh /vt/dist/install_dependencies.sh
+RUN /vt/dist/install_dependencies.sh mysql80
 
 COPY docker/local/install_local_dependencies.sh /vt/dist/install_local_dependencies.sh
 RUN /vt/dist/install_local_dependencies.sh

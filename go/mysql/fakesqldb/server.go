@@ -29,19 +29,20 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/mysql/replication"
-	"vitess.io/vitess/go/vt/sqlparser"
-
-	"vitess.io/vitess/go/vt/log"
-
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 
-	"vitess.io/vitess/go/vt/dbconfigs"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-const appendEntry = -1
+const (
+	appendEntry = -1
+	useQuery    = "use `fakesqldb`"
+)
 
 // DB is a fake database and all its methods are thread safe.  It
 // creates a mysql.Listener and implements the mysql.Handler
@@ -129,6 +130,8 @@ type DB struct {
 	// lastError stores the last error in returning a query result.
 	lastErrorMu sync.Mutex
 	lastError   error
+
+	env *vtenv.Environment
 }
 
 // QueryHandler is the interface used by the DB to simulate executed queries
@@ -182,6 +185,7 @@ func New(t testing.TB) *DB {
 		queryPatternUserCallback: make(map[*regexp.Regexp]func(string)),
 		patternData:              make(map[string]exprResult),
 		lastErrorMu:              sync.Mutex{},
+		env:                      vtenv.NewTestEnv(),
 	}
 
 	db.Handler = db
@@ -189,7 +193,7 @@ func New(t testing.TB) *DB {
 	authServer := mysql.NewAuthServerNone()
 
 	// Start listening.
-	db.listener, err = mysql.NewListener("unix", socketFile, authServer, db, 0, 0, false, false, 0)
+	db.listener, err = mysql.NewListener("unix", socketFile, authServer, db, 0, 0, false, false, 0, 0)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
@@ -200,7 +204,7 @@ func New(t testing.TB) *DB {
 		db.listener.Accept()
 	}()
 
-	db.AddQuery("use `fakesqldb`", &sqltypes.Result{})
+	db.AddQuery(useQuery, &sqltypes.Result{})
 	// Return the db.
 	return db
 }
@@ -291,23 +295,23 @@ func (db *DB) WaitForClose(timeout time.Duration) error {
 }
 
 // ConnParams returns the ConnParams to connect to the DB.
-func (db *DB) ConnParams() dbconfigs.Connector {
-	return dbconfigs.New(&mysql.ConnParams{
+func (db *DB) ConnParams() *mysql.ConnParams {
+	return &mysql.ConnParams{
 		UnixSocket: db.socketFile,
 		Uname:      "user1",
 		Pass:       "password1",
 		DbName:     "fakesqldb",
-	})
+	}
 }
 
 // ConnParamsWithUname returns  ConnParams to connect to the DB with the Uname set to the provided value.
-func (db *DB) ConnParamsWithUname(uname string) dbconfigs.Connector {
-	return dbconfigs.New(&mysql.ConnParams{
+func (db *DB) ConnParamsWithUname(uname string) *mysql.ConnParams {
+	return &mysql.ConnParams{
 		UnixSocket: db.socketFile,
 		Uname:      uname,
 		Pass:       "password1",
 		DbName:     "fakesqldb",
-	})
+	}
 }
 
 //
@@ -376,11 +380,11 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 	}
 	key := strings.ToLower(query)
 	db.mu.Lock()
-	defer db.mu.Unlock()
 	db.queryCalled[key]++
 	db.querylog = append(db.querylog, key)
 	// Check if we should close the connection and provoke errno 2013.
 	if db.shouldClose.Load() {
+		defer db.mu.Unlock()
 		c.Close()
 
 		// log error
@@ -394,6 +398,8 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 	// The driver may send this at connection time, and we don't want it to
 	// interfere.
 	if key == "set names utf8" || strings.HasPrefix(key, "set collation_connection = ") {
+		defer db.mu.Unlock()
+
 		// log error
 		if err := callback(&sqltypes.Result{}); err != nil {
 			log.Errorf("callback failed : %v", err)
@@ -403,12 +409,14 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 
 	// check if we should reject it.
 	if err, ok := db.rejectedData[key]; ok {
+		db.mu.Unlock()
 		return err
 	}
 
 	// Check explicit queries from AddQuery().
 	result, ok := db.data[key]
 	if ok {
+		db.mu.Unlock()
 		if f := result.BeforeFunc; f != nil {
 			f()
 		}
@@ -419,6 +427,7 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 	for _, pat := range db.patternData {
 		if pat.expr.MatchString(query) {
 			userCallback, ok := db.queryPatternUserCallback[pat.expr]
+			db.mu.Unlock()
 			if ok {
 				userCallback(query)
 			}
@@ -429,13 +438,16 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 		}
 	}
 
+	defer db.mu.Unlock()
+
 	if db.neverFail.Load() {
 		return callback(&sqltypes.Result{})
 	}
 	// Nothing matched.
+	parser := sqlparser.NewTestParser()
 	err = fmt.Errorf("fakesqldb:: query: '%s' is not supported on %v",
-		sqlparser.TruncateForUI(query), db.name)
-	log.Errorf("Query not found: %s", sqlparser.TruncateForUI(query))
+		parser.TruncateForUI(query), db.name)
+	log.Errorf("Query not found: %s", parser.TruncateForUI(query))
 
 	return err
 }
@@ -590,6 +602,8 @@ func (db *DB) RejectQueryPattern(queryPattern, error string) {
 
 // ClearQueryPattern removes all query patterns set up
 func (db *DB) ClearQueryPattern() {
+	db.mu.Lock()
+	defer db.mu.Unlock()
 	db.patternData = make(map[string]exprResult)
 }
 
@@ -607,6 +621,17 @@ func (db *DB) DeleteQuery(query string) {
 	key := strings.ToLower(query)
 	delete(db.data, key)
 	delete(db.queryCalled, key)
+}
+
+// DeleteAllQueries deletes all expected queries from the fake DB.
+func (db *DB) DeleteAllQueries() {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	clear(db.data)
+	clear(db.patternData)
+	clear(db.queryCalled)
+	// Use is always expected to be present.
+	db.data[useQuery] = &ExpectedResult{&sqltypes.Result{}, nil}
 }
 
 // AddRejectedQuery adds a query which will be rejected at execution time.
@@ -838,4 +863,8 @@ func (db *DB) GetQueryPatternResult(key string) (func(string), ExpectedResult, b
 	}
 
 	return nil, ExpectedResult{nil, nil}, false, nil
+}
+
+func (db *DB) Env() *vtenv.Environment {
+	return db.env
 }

@@ -24,19 +24,18 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	"vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
-	"vitess.io/vitess/go/vt/vttablet/tmclient"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	"vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
 type Engine struct {
@@ -69,14 +68,19 @@ type Engine struct {
 	// modified behavior for that env, e.g. not starting the retry goroutine. This should
 	// NOT be set in production.
 	fortests bool
+
+	collationEnv *collations.Environment
+	parser       *sqlparser.Parser
 }
 
-func NewEngine(config *tabletenv.TabletConfig, ts *topo.Server, tablet *topodata.Tablet) *Engine {
+func NewEngine(ts *topo.Server, tablet *topodata.Tablet, collationEnv *collations.Environment, parser *sqlparser.Parser) *Engine {
 	vde := &Engine{
 		controllers:     make(map[int64]*controller),
 		ts:              ts,
 		thisTablet:      tablet,
 		tmClientFactory: func() tmclient.TabletManagerClient { return tmclient.NewTabletManagerClient() },
+		collationEnv:    collationEnv,
+		parser:          parser,
 	}
 	return vde
 }
@@ -94,20 +98,22 @@ func NewTestEngine(ts *topo.Server, tablet *topodata.Tablet, dbn string, dbcf fu
 		dbClientFactoryDba:      dbcf,
 		tmClientFactory:         tmcf,
 		fortests:                true,
+		collationEnv:            collations.MySQL8(),
+		parser:                  sqlparser.NewTestParser(),
 	}
 	return vde
 }
 
 func (vde *Engine) InitDBConfig(dbcfgs *dbconfigs.DBConfigs) {
-	// If it's a test engine and we're already initilized then do nothing.
+	// If it's a test engine and we're already initialized then do nothing.
 	if vde.fortests && vde.dbClientFactoryFiltered != nil && vde.dbClientFactoryDba != nil {
 		return
 	}
 	vde.dbClientFactoryFiltered = func() binlogplayer.DBClient {
-		return binlogplayer.NewDBClient(dbcfgs.FilteredWithDB())
+		return binlogplayer.NewDBClient(dbcfgs.FilteredWithDB(), vde.parser)
 	}
 	vde.dbClientFactoryDba = func() binlogplayer.DBClient {
-		return binlogplayer.NewDBClient(dbcfgs.DbaWithDB())
+		return binlogplayer.NewDBClient(dbcfgs.DbaWithDB(), vde.parser)
 	}
 	vde.dbName = dbcfgs.DBName
 }
@@ -152,8 +158,9 @@ func (vde *Engine) openLocked(ctx context.Context) error {
 	if err := vde.initControllers(rows); err != nil {
 		return err
 	}
+	vde.updateStats()
 
-	// At this point we've fully and succesfully opened so begin
+	// At this point we've fully and successfully opened so begin
 	// retrying error'd VDiffs until the engine is closed.
 	vde.wg.Add(1)
 	go func() {
@@ -193,7 +200,7 @@ func (vde *Engine) retry(ctx context.Context, err error) {
 		if err := vde.openLocked(ctx); err == nil {
 			log.Infof("VDiff engine: opened successfully")
 			// Don't invoke cancelRetry because openLocked
-			// will hold on to this context for later cancelation.
+			// will hold on to this context for later cancellation.
 			vde.cancelRetry = nil
 			vde.mu.Unlock()
 			return
@@ -211,6 +218,9 @@ func (vde *Engine) addController(row sqltypes.RowNamedValues, options *tabletman
 			row, vde.thisTablet.Alias)
 	}
 	vde.controllers[ct.id] = ct
+	globalStats.mu.Lock()
+	defer globalStats.mu.Unlock()
+	globalStats.controllers[ct.id] = ct
 	return nil
 }
 
@@ -385,4 +395,16 @@ func (vde *Engine) resetControllers() {
 		ct.Stop()
 	}
 	vde.controllers = make(map[int64]*controller)
+	vde.updateStats()
+}
+
+// updateStats must only be called while holding the engine lock.
+func (vre *Engine) updateStats() {
+	globalStats.mu.Lock()
+	defer globalStats.mu.Unlock()
+
+	globalStats.controllers = make(map[int64]*controller, len(vre.controllers))
+	for id, ct := range vre.controllers {
+		globalStats.controllers[id] = ct
+	}
 }

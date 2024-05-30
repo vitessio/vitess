@@ -19,7 +19,6 @@ package onlineddl
 import (
 	"context"
 	"fmt"
-	"math"
 	"os"
 	"testing"
 	"time"
@@ -57,7 +56,7 @@ func VtgateExecQuery(t *testing.T, vtParams *mysql.ConnParams, query string, exp
 	require.Nil(t, err)
 	defer conn.Close()
 
-	qr, err := conn.ExecuteFetch(query, math.MaxInt64, true)
+	qr, err := conn.ExecuteFetch(query, -1, true)
 	if expectError == "" {
 		require.NoError(t, err)
 	} else {
@@ -203,6 +202,21 @@ func CheckLaunchAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expectCo
 
 	if expectCount >= 0 {
 		assert.Equal(t, expectCount, int(r.RowsAffected))
+	}
+}
+
+// CheckForceMigrationCutOver marks a migration for forced cut-over, and expects success by counting affected rows.
+func CheckForceMigrationCutOver(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, expectPossible bool) {
+	query, err := sqlparser.ParseAndBind("alter vitess_migration %a force_cutover",
+		sqltypes.StringBindVariable(uuid),
+	)
+	require.NoError(t, err)
+	r := VtgateExecQuery(t, vtParams, query, "")
+
+	if expectPossible {
+		assert.Equal(t, len(shards), int(r.RowsAffected))
+	} else {
+		assert.Equal(t, int(0), int(r.RowsAffected))
 	}
 }
 

@@ -38,7 +38,6 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/remote"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -46,9 +45,7 @@ var collationEnv *collations.Environment
 
 func init() {
 	// We require MySQL 8.0 collations for the comparisons in the tests
-	mySQLVersion := "8.0.0"
-	servenv.SetMySQLServerVersionForTest(mySQLVersion)
-	collationEnv = collations.NewEnvironment(mySQLVersion)
+	collationEnv = collations.NewEnvironment("8.0.30")
 }
 
 func getSQLQueries(t *testing.T, testfile string) []string {
@@ -59,11 +56,11 @@ func getSQLQueries(t *testing.T, testfile string) []string {
 	defer tf.Close()
 
 	var chunks []string
-	var curchunk bytes.Buffer
+	var curchunk strings.Builder
 
 	addchunk := func() {
 		if curchunk.Len() > 0 {
-			stmts, err := sqlparser.SplitStatementToPieces(curchunk.String())
+			stmts, err := sqlparser.NewTestParser().SplitStatementToPieces(curchunk.String())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -219,8 +216,8 @@ func TestCollationsOnMysqld(t *testing.T) {
 }
 
 func TestRemoteKanaSensitivity(t *testing.T) {
-	var Kana1 = []byte("の東京ノ")
-	var Kana2 = []byte("ノ東京の")
+	Kana1 := []byte("の東京ノ")
+	Kana2 := []byte("ノ東京の")
 
 	testRemoteComparison(t, nil, []testcmp{
 		{"utf8mb4_0900_as_cs", Kana1, Kana2},

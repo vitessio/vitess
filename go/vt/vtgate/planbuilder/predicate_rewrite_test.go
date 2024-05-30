@@ -18,7 +18,7 @@ package planbuilder
 
 import (
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"strconv"
 	"testing"
 	"time"
@@ -30,6 +30,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
@@ -52,12 +53,12 @@ const (
 func (tc testCase) createPredicate(lvl int) sqlparser.Expr {
 	if lvl >= tc.depth {
 		// we're at max depth, so we just return one of the nodes
-		n := rand.Intn(tc.nodes)
+		n := rand.IntN(tc.nodes)
 		return sqlparser.NewColName(fmt.Sprintf("n%d", n))
 	}
-	switch nodeType(rand.Intn(int(SIZE))) {
+	switch nodeType(rand.IntN(int(SIZE))) {
 	case NODE:
-		n := rand.Intn(tc.nodes)
+		n := rand.IntN(tc.nodes)
 		return sqlparser.NewColName(fmt.Sprintf("n%d", n))
 	case NOT:
 		return &sqlparser.NotExpr{
@@ -90,11 +91,12 @@ func TestFuzzRewriting(t *testing.T) {
 	// values - trying TRUE, FALSE and NULL. If the two expressions do not return the same value,
 	// this is considered a test failure.
 
+	venv := vtenv.NewTestEnv()
 	start := time.Now()
 	for time.Since(start) < 1*time.Second {
 		tc := testCase{
-			nodes: rand.Intn(4) + 1,
-			depth: rand.Intn(4) + 1,
+			nodes: rand.IntN(4) + 1,
+			depth: rand.IntN(4) + 1,
 		}
 
 		predicate := tc.createPredicate(0)
@@ -103,17 +105,19 @@ func TestFuzzRewriting(t *testing.T) {
 			simplified := sqlparser.RewritePredicate(predicate)
 
 			original, err := evalengine.Translate(predicate, &evalengine.Config{
-				Collation:     collations.Default(),
+				Environment:   venv,
+				Collation:     collations.MySQL8().DefaultConnectionCharset(),
 				ResolveColumn: resolveForFuzz,
 			})
 			require.NoError(t, err)
 			simpler, err := evalengine.Translate(simplified.(sqlparser.Expr), &evalengine.Config{
-				Collation:     collations.Default(),
+				Environment:   venv,
+				Collation:     collations.MySQL8().DefaultConnectionCharset(),
 				ResolveColumn: resolveForFuzz,
 			})
 			require.NoError(t, err)
 
-			env := evalengine.EmptyExpressionEnv()
+			env := evalengine.EmptyExpressionEnv(venv)
 			env.Row = make([]sqltypes.Value, tc.nodes)
 			for i := range env.Row {
 				env.Row[i] = sqltypes.NewInt32(1)
@@ -139,7 +143,7 @@ func testValues(t *testing.T, env *evalengine.ExpressionEnv, i int, original, si
 		require.NoError(t, err)
 		v2, err := env.Evaluate(simpler)
 		require.NoError(t, err)
-		assert.Equal(t, v1.Value(collations.Default()), v2.Value(collations.Default()))
+		assert.Equal(t, v1.Value(collations.MySQL8().DefaultConnectionCharset()), v2.Value(collations.MySQL8().DefaultConnectionCharset()))
 		if len(env.Row) > i+1 {
 			testValues(t, env, i+1, original, simpler)
 		}

@@ -36,10 +36,10 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
-	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/inst"
+	"vitess.io/vitess/go/vt/vtorc/process"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -64,14 +64,22 @@ func RegisterFlags(fs *pflag.FlagSet) {
 // OpenTabletDiscovery opens the vitess topo if enables and returns a ticker
 // channel for polling.
 func OpenTabletDiscovery() <-chan time.Time {
-	// TODO(sougou): If there's a shutdown signal, we have to close the topo.
 	ts = topo.Open()
-	tmc = tmclient.NewTabletManagerClient()
+	tmc = inst.InitializeTMC()
 	// Clear existing cache and perform a new refresh.
 	if _, err := db.ExecVTOrc("delete from vitess_tablet"); err != nil {
 		log.Error(err)
 	}
+	// We refresh all information from the topo once before we start the ticks to do it on a timer.
+	populateAllInformation()
 	return time.Tick(time.Second * time.Duration(config.Config.TopoInformationRefreshSeconds)) //nolint SA1015: using time.Tick leaks the underlying ticker
+}
+
+// populateAllInformation initializes all the information for VTOrc to function.
+func populateAllInformation() {
+	refreshAllInformation()
+	// We have completed one full discovery cycle. We should update the process health.
+	process.FirstDiscoveryCycleComplete.Store(true)
 }
 
 // refreshAllTablets reloads the tablets from topo and discovers the ones which haven't been refreshed in a while
@@ -82,9 +90,6 @@ func refreshAllTablets() {
 }
 
 func refreshTabletsUsing(loader func(tabletAlias string), forceRefresh bool) {
-	if !IsLeaderOrActive() {
-		return
-	}
 	if len(clustersToWatch) == 0 { // all known clusters
 		ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 		defer cancel()
@@ -280,22 +285,37 @@ func LockShard(ctx context.Context, tabletAlias string, lockAction string) (cont
 
 // tabletUndoDemotePrimary calls the said RPC for the given tablet.
 func tabletUndoDemotePrimary(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) error {
-	return tmc.UndoDemotePrimary(ctx, tablet, semiSync)
+	tmcCtx, tmcCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer tmcCancel()
+	return tmc.UndoDemotePrimary(tmcCtx, tablet, semiSync)
 }
 
 // setReadOnly calls the said RPC for the given tablet
 func setReadOnly(ctx context.Context, tablet *topodatapb.Tablet) error {
-	return tmc.SetReadOnly(ctx, tablet)
+	tmcCtx, tmcCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer tmcCancel()
+	return tmc.SetReadOnly(tmcCtx, tablet)
 }
 
 // changeTabletType calls the said RPC for the given tablet with the given parameters.
 func changeTabletType(ctx context.Context, tablet *topodatapb.Tablet, tabletType topodatapb.TabletType, semiSync bool) error {
-	return tmc.ChangeType(ctx, tablet, tabletType, semiSync)
+	tmcCtx, tmcCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer tmcCancel()
+	return tmc.ChangeType(tmcCtx, tablet, tabletType, semiSync)
+}
+
+// resetReplicationParameters resets the replication parameters on the given tablet.
+func resetReplicationParameters(ctx context.Context, tablet *topodatapb.Tablet) error {
+	tmcCtx, tmcCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer tmcCancel()
+	return tmc.ResetReplicationParameters(tmcCtx, tablet)
 }
 
 // setReplicationSource calls the said RPC with the parameters provided
-func setReplicationSource(ctx context.Context, replica *topodatapb.Tablet, primary *topodatapb.Tablet, semiSync bool) error {
-	return tmc.SetReplicationSource(ctx, replica, primary.Alias, 0, "", true, semiSync)
+func setReplicationSource(ctx context.Context, replica *topodatapb.Tablet, primary *topodatapb.Tablet, semiSync bool, heartbeatInterval float64) error {
+	tmcCtx, tmcCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer tmcCancel()
+	return tmc.SetReplicationSource(tmcCtx, replica, primary.Alias, 0, "", true, semiSync, heartbeatInterval)
 }
 
 // shardPrimary finds the primary of the given keyspace-shard by reading the vtorc backend
@@ -323,39 +343,4 @@ func shardPrimary(keyspace string, shard string) (primary *topodatapb.Tablet, er
 		err = ErrNoPrimaryTablet
 	}
 	return primary, err
-}
-
-// restartsReplication restarts the replication on the provided replicaKey. It also sets the correct semi-sync settings when it starts replication
-func restartReplication(replicaAlias string) error {
-	replicaTablet, err := inst.ReadTablet(replicaAlias)
-	if err != nil {
-		log.Info("Could not read tablet - %+v", replicaAlias)
-		return err
-	}
-
-	primaryTablet, err := shardPrimary(replicaTablet.Keyspace, replicaTablet.Shard)
-	if err != nil {
-		log.Info("Could not compute primary for %v/%v", replicaTablet.Keyspace, replicaTablet.Shard)
-		return err
-	}
-
-	durabilityPolicy, err := inst.GetDurabilityPolicy(replicaTablet.Keyspace)
-	if err != nil {
-		log.Info("Could not read the durability policy for %v/%v", replicaTablet.Keyspace, replicaTablet.Shard)
-		return err
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(config.Config.WaitReplicasTimeoutSeconds)*time.Second)
-	defer cancel()
-	err = tmc.StopReplication(ctx, replicaTablet)
-	if err != nil {
-		log.Info("Could not stop replication on %v", replicaAlias)
-		return err
-	}
-	err = tmc.StartReplication(ctx, replicaTablet, reparentutil.IsReplicaSemiSync(durabilityPolicy, primaryTablet, replicaTablet))
-	if err != nil {
-		log.Info("Could not start replication on %v", replicaAlias)
-		return err
-	}
-	return nil
 }

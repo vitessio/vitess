@@ -18,21 +18,16 @@ package logstats
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"io"
 	"net/url"
 	"time"
 
 	"github.com/google/safehtml"
 
-	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/logstats"
 	"vitess.io/vitess/go/streamlog"
-	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"
-	"vitess.io/vitess/go/vt/log"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -128,69 +123,60 @@ func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
 		return nil
 	}
 
-	// FormatBindVariables call might panic so we're going to catch it here
-	// and print out the stack trace for debugging.
-	defer func() {
-		if x := recover(); x != nil {
-			log.Errorf("Uncaught panic:\n%v\n%s", x, tb.Stack(4))
-		}
-	}()
-
-	formattedBindVars := "\"[REDACTED]\""
-	if !streamlog.GetRedactDebugUIQueries() {
-		_, fullBindParams := params["full"]
-		formattedBindVars = sqltypes.FormatBindVariables(
-			stats.BindVariables,
-			fullBindParams,
-			streamlog.GetQueryLogFormat() == streamlog.QueryLogFormatJSON,
-		)
-	}
-
-	// TODO: remove username here we fully enforce immediate caller id
+	redacted := streamlog.GetRedactDebugUIQueries()
+	_, fullBindParams := params["full"]
 	remoteAddr, username := stats.RemoteAddrUsername()
 
-	var fmtString string
-	switch streamlog.GetQueryLogFormat() {
-	case streamlog.QueryLogFormatText:
-		fmtString = "%v\t%v\t%v\t'%v'\t'%v'\t%v\t%v\t%.6f\t%.6f\t%.6f\t%.6f\t%v\t%q\t%v\t%v\t%v\t%q\t%q\t%q\t%v\t%v\t%q\n"
-	case streamlog.QueryLogFormatJSON:
-		fmtString = "{\"Method\": %q, \"RemoteAddr\": %q, \"Username\": %q, \"ImmediateCaller\": %q, \"Effective Caller\": %q, \"Start\": \"%v\", \"End\": \"%v\", \"TotalTime\": %.6f, \"PlanTime\": %v, \"ExecuteTime\": %v, \"CommitTime\": %v, \"StmtType\": %q, \"SQL\": %q, \"BindVars\": %v, \"ShardQueries\": %v, \"RowsAffected\": %v, \"Error\": %q, \"TabletType\": %q, \"SessionUUID\": %q, \"Cached Plan\": %v, \"TablesUsed\": %v, \"ActiveKeyspace\": %q}\n"
+	log := logstats.NewLogger()
+	log.Init(streamlog.GetQueryLogFormat() == streamlog.QueryLogFormatJSON)
+	log.Key("Method")
+	log.StringUnquoted(stats.Method)
+	log.Key("RemoteAddr")
+	log.StringUnquoted(remoteAddr)
+	log.Key("Username")
+	log.StringUnquoted(username)
+	log.Key("ImmediateCaller")
+	log.StringSingleQuoted(stats.ImmediateCaller())
+	log.Key("Effective Caller")
+	log.StringSingleQuoted(stats.EffectiveCaller())
+	log.Key("Start")
+	log.Time(stats.StartTime)
+	log.Key("End")
+	log.Time(stats.EndTime)
+	log.Key("TotalTime")
+	log.Duration(stats.TotalTime())
+	log.Key("PlanTime")
+	log.Duration(stats.PlanTime)
+	log.Key("ExecuteTime")
+	log.Duration(stats.ExecuteTime)
+	log.Key("CommitTime")
+	log.Duration(stats.CommitTime)
+	log.Key("StmtType")
+	log.StringUnquoted(stats.StmtType)
+	log.Key("SQL")
+	log.String(stats.SQL)
+	log.Key("BindVars")
+	if redacted {
+		log.Redacted()
+	} else {
+		log.BindVariables(stats.BindVariables, fullBindParams)
 	}
+	log.Key("ShardQueries")
+	log.Uint(stats.ShardQueries)
+	log.Key("RowsAffected")
+	log.Uint(stats.RowsAffected)
+	log.Key("Error")
+	log.String(stats.ErrorStr())
+	log.Key("TabletType")
+	log.String(stats.TabletType)
+	log.Key("SessionUUID")
+	log.String(stats.SessionUUID)
+	log.Key("Cached Plan")
+	log.Bool(stats.CachedPlan)
+	log.Key("TablesUsed")
+	log.Strings(stats.TablesUsed)
+	log.Key("ActiveKeyspace")
+	log.String(stats.ActiveKeyspace)
 
-	tables := stats.TablesUsed
-	if tables == nil {
-		tables = []string{}
-	}
-	tablesUsed, marshalErr := json.Marshal(tables)
-	if marshalErr != nil {
-		return marshalErr
-	}
-	_, err := fmt.Fprintf(
-		w,
-		fmtString,
-		stats.Method,
-		remoteAddr,
-		username,
-		stats.ImmediateCaller(),
-		stats.EffectiveCaller(),
-		stats.StartTime.Format("2006-01-02 15:04:05.000000"),
-		stats.EndTime.Format("2006-01-02 15:04:05.000000"),
-		stats.TotalTime().Seconds(),
-		stats.PlanTime.Seconds(),
-		stats.ExecuteTime.Seconds(),
-		stats.CommitTime.Seconds(),
-		stats.StmtType,
-		stats.SQL,
-		formattedBindVars,
-		stats.ShardQueries,
-		stats.RowsAffected,
-		stats.ErrorStr(),
-		stats.TabletType,
-		stats.SessionUUID,
-		stats.CachedPlan,
-		string(tablesUsed),
-		stats.ActiveKeyspace,
-	)
-
-	return err
+	return log.Flush(w)
 }

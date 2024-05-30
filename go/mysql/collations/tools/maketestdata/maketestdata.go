@@ -167,7 +167,7 @@ func main() {
 	fs := pflag.NewFlagSet("maketestdata", pflag.ExitOnError)
 	flag.Parse(fs)
 
-	var defaults = collations.Local()
+	var defaults = collations.MySQL8()
 	var collationsForLanguage = make(map[testutil.Lang][]collations.ID)
 	var allcollations = colldata.All(defaults)
 	for lang := range testutil.KnownLanguages {

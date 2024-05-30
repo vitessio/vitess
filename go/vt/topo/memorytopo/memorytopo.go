@@ -22,10 +22,13 @@ package memorytopo
 import (
 	"context"
 	"errors"
-	"math/rand"
+	"math/rand/v2"
+	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 
@@ -46,6 +49,25 @@ const (
 	// context finishes, and return ctx.Err(), in order to simulate an
 	// unreachable local cell for testing.
 	UnreachableServerAddr = "unreachable"
+)
+
+// Operation is one of the operations defined by topo.Conn
+type Operation int
+
+// The following is the list of topo.Conn operations
+const (
+	ListDir = Operation(iota)
+	Create
+	Update
+	Get
+	List
+	Delete
+	Lock
+	TryLock
+	Watch
+	WatchRecursive
+	NewLeaderParticipation
+	Close
 )
 
 // Factory is a memory-based implementation of topo.Factory.  It
@@ -70,6 +92,18 @@ type Factory struct {
 	// err is used for testing purposes to force queries / watches
 	// to return the given error
 	err error
+	// operationErrors is used for testing purposes to fake errors from
+	// operations and paths matching the spec
+	operationErrors map[Operation][]errorSpec
+	// callstats allows us to keep track of how many topo.Conn calls
+	// we make (Create, Get, Update, Delete, List, ListDir, etc).
+	callstats *stats.CountersWithMultiLabels
+}
+
+type errorSpec struct {
+	op          Operation
+	pathPattern *regexp.Regexp
+	err         error
 }
 
 // HasGlobalReadOnlyCell is part of the topo.Factory interface.
@@ -105,6 +139,10 @@ func (f *Factory) SetError(err error) {
 	}
 }
 
+func (f *Factory) GetCallStats() *stats.CountersWithMultiLabels {
+	return f.callstats
+}
+
 // Lock blocks all requests to the topo and is exposed to allow tests to
 // simulate an unresponsive topo server
 func (f *Factory) Lock() {
@@ -123,13 +161,13 @@ type Conn struct {
 	factory    *Factory
 	cell       string
 	serverAddr string
-	closed     bool
+	closed     atomic.Bool
 }
 
 // dial returns immediately, unless the Conn points to the sentinel
 // UnreachableServerAddr, in which case it will block until the context expires.
 func (c *Conn) dial(ctx context.Context) error {
-	if c.closed {
+	if c.closed.Load() {
 		return ErrConnectionClosed
 	}
 	if c.serverAddr == UnreachableServerAddr {
@@ -141,7 +179,8 @@ func (c *Conn) dial(ctx context.Context) error {
 
 // Close is part of the topo.Conn interface.
 func (c *Conn) Close() {
-	c.closed = true
+	c.factory.callstats.Add([]string{"Close"}, 1)
+	c.closed.Store(true)
 }
 
 type watch struct {
@@ -235,8 +274,10 @@ func (n *node) PropagateWatchError(err error) {
 // in case of a problem.
 func NewServerAndFactory(ctx context.Context, cells ...string) (*topo.Server, *Factory) {
 	f := &Factory{
-		cells:      make(map[string]*node),
-		generation: uint64(rand.Int63n(1 << 60)),
+		cells:           make(map[string]*node),
+		generation:      uint64(rand.Int64N(1 << 60)),
+		callstats:       stats.NewCountersWithMultiLabels("", "", []string{"Call"}),
+		operationErrors: make(map[Operation][]errorSpec),
 	}
 	f.cells[topo.GlobalCell] = f.newDirectory(topo.GlobalCell, nil)
 
@@ -347,4 +388,25 @@ func (f *Factory) recursiveDelete(n *node) {
 	if len(parent.children) == 0 {
 		f.recursiveDelete(parent)
 	}
+}
+
+func (f *Factory) AddOperationError(op Operation, pathPattern string, err error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	f.operationErrors[op] = append(f.operationErrors[op], errorSpec{
+		op:          op,
+		pathPattern: regexp.MustCompile(pathPattern),
+		err:         err,
+	})
+}
+
+func (f *Factory) getOperationError(op Operation, path string) error {
+	specs := f.operationErrors[op]
+	for _, spec := range specs {
+		if spec.pathPattern.MatchString(path) {
+			return spec.err
+		}
+	}
+	return nil
 }

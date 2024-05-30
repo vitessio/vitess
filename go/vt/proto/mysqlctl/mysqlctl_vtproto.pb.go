@@ -63,7 +63,8 @@ func (m *ShutdownRequest) CloneVT() *ShutdownRequest {
 		return (*ShutdownRequest)(nil)
 	}
 	r := &ShutdownRequest{
-		WaitForMysqld: m.WaitForMysqld,
+		WaitForMysqld:        m.WaitForMysqld,
+		MysqlShutdownTimeout: m.MysqlShutdownTimeout.CloneVT(),
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -429,6 +430,16 @@ func (m *ShutdownRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.MysqlShutdownTimeout != nil {
+		size, err := m.MysqlShutdownTimeout.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
+		i--
+		dAtA[i] = 0x12
 	}
 	if m.WaitForMysqld {
 		i--
@@ -1085,6 +1096,10 @@ func (m *ShutdownRequest) SizeVT() (n int) {
 	if m.WaitForMysqld {
 		n += 2
 	}
+	if m.MysqlShutdownTimeout != nil {
+		l = m.MysqlShutdownTimeout.SizeVT()
+		n += 1 + l + sov(uint64(l))
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -1487,6 +1502,42 @@ func (m *ShutdownRequest) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.WaitForMysqld = bool(v != 0)
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field MysqlShutdownTimeout", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.MysqlShutdownTimeout == nil {
+				m.MysqlShutdownTimeout = &vttime.Duration{}
+			}
+			if err := m.MysqlShutdownTimeout.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])

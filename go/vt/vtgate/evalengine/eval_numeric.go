@@ -81,10 +81,14 @@ func newEvalFloat(f float64) *evalFloat {
 }
 
 func newEvalDecimal(dec decimal.Decimal, m, d int32) *evalDecimal {
-	if m == 0 && d == 0 {
+	switch {
+	case m == 0 && d == 0:
 		return newEvalDecimalWithPrec(dec, -dec.Exponent())
+	case m == 0:
+		return newEvalDecimalWithPrec(dec, d)
+	default:
+		return newEvalDecimalWithPrec(dec.Clamp(m-d, d), d)
 	}
-	return newEvalDecimalWithPrec(dec.Clamp(m-d, d), d)
 }
 
 func newEvalDecimalWithPrec(dec decimal.Decimal, prec int32) *evalDecimal {
@@ -145,6 +149,10 @@ func evalToNumeric(e eval, preciseDatetime bool) evalNumeric {
 			return newEvalDecimalWithPrec(e.toDecimal(), int32(e.prec))
 		}
 		return &evalFloat{f: e.toFloat()}
+	case *evalEnum:
+		return &evalFloat{f: float64(e.value)}
+	case *evalSet:
+		return &evalFloat{f: float64(e.set)}
 	default:
 		panic("unsupported")
 	}
@@ -201,6 +209,10 @@ func evalToFloat(e eval) (*evalFloat, bool) {
 		}
 	case *evalTemporal:
 		return &evalFloat{f: e.toFloat()}, true
+	case *evalEnum:
+		return &evalFloat{f: float64(e.value)}, e.value != -1
+	case *evalSet:
+		return &evalFloat{f: float64(e.set)}, true
 	default:
 		panic(fmt.Sprintf("unsupported type %T", e))
 	}
@@ -265,6 +277,10 @@ func evalToDecimal(e eval, m, d int32) *evalDecimal {
 		}
 	case *evalTemporal:
 		return newEvalDecimal(e.toDecimal(), m, d)
+	case *evalEnum:
+		return newEvalDecimal(decimal.NewFromInt(int64(e.value)), m, d)
+	case *evalSet:
+		return newEvalDecimal(decimal.NewFromUint(e.set), m, d)
 	default:
 		panic("unsupported")
 	}
@@ -328,6 +344,10 @@ func evalToInt64(e eval) *evalInt64 {
 		}
 	case *evalTemporal:
 		return newEvalInt64(e.toInt64())
+	case *evalEnum:
+		return newEvalInt64(int64(e.value))
+	case *evalSet:
+		return newEvalInt64(int64(e.set))
 	default:
 		panic(fmt.Sprintf("unsupported type: %T", e))
 	}
@@ -344,6 +364,14 @@ func (e *evalInt64) Hash(h *vthash.Hasher) {
 
 func (e *evalInt64) SQLType() sqltypes.Type {
 	return sqltypes.Int64
+}
+
+func (e *evalInt64) Size() int32 {
+	return 0
+}
+
+func (e *evalInt64) Scale() int32 {
+	return 0
 }
 
 func (e *evalInt64) ToRawBytes() []byte {
@@ -389,6 +417,14 @@ func (e *evalUint64) SQLType() sqltypes.Type {
 	return sqltypes.Uint64
 }
 
+func (e *evalUint64) Size() int32 {
+	return 0
+}
+
+func (e *evalUint64) Scale() int32 {
+	return 0
+}
+
 func (e *evalUint64) ToRawBytes() []byte {
 	return strconv.AppendUint(nil, e.u, 10)
 }
@@ -430,6 +466,14 @@ func (e *evalFloat) Hash(h *vthash.Hasher) {
 
 func (e *evalFloat) SQLType() sqltypes.Type {
 	return sqltypes.Float64
+}
+
+func (e *evalFloat) Size() int32 {
+	return 0
+}
+
+func (e *evalFloat) Scale() int32 {
+	return 0
 }
 
 func (e *evalFloat) ToRawBytes() []byte {
@@ -506,6 +550,14 @@ func (e *evalDecimal) Hash(h *vthash.Hasher) {
 
 func (e *evalDecimal) SQLType() sqltypes.Type {
 	return sqltypes.Decimal
+}
+
+func (e *evalDecimal) Size() int32 {
+	return e.length
+}
+
+func (e *evalDecimal) Scale() int32 {
+	return -e.dec.Exponent()
 }
 
 func (e *evalDecimal) ToRawBytes() []byte {

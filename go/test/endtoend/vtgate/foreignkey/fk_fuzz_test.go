@@ -19,7 +19,7 @@ package foreignkey
 import (
 	"database/sql"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -28,17 +28,17 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 type QueryFormat string
 
 const (
 	SQLQueries              QueryFormat = "SQLQueries"
+	OlapSQLQueries          QueryFormat = "OlapSQLQueries"
 	PreparedStatmentQueries QueryFormat = "PreparedStatmentQueries"
 	PreparedStatementPacket QueryFormat = "PreparedStatementPacket"
 )
@@ -53,6 +53,8 @@ type fuzzer struct {
 	updateShare  int
 	concurrency  int
 	queryFormat  QueryFormat
+	noFkSetVar   bool
+	fkState      *bool
 
 	// shouldStop is an internal state variable, that tells the fuzzer
 	// whether it should stop or not.
@@ -72,7 +74,7 @@ type debugInfo struct {
 }
 
 // newFuzzer creates a new fuzzer struct.
-func newFuzzer(concurrency int, maxValForId int, maxValForCol int, insertShare int, deleteShare int, updateShare int, queryFormat QueryFormat) *fuzzer {
+func newFuzzer(concurrency int, maxValForId int, maxValForCol int, insertShare int, deleteShare int, updateShare int, queryFormat QueryFormat, fkState *bool) *fuzzer {
 	fz := &fuzzer{
 		concurrency:  concurrency,
 		maxValForId:  maxValForId,
@@ -81,6 +83,8 @@ func newFuzzer(concurrency int, maxValForId int, maxValForCol int, insertShare i
 		deleteShare:  deleteShare,
 		updateShare:  updateShare,
 		queryFormat:  queryFormat,
+		fkState:      fkState,
+		noFkSetVar:   false,
 		wg:           sync.WaitGroup{},
 	}
 	// Initially the fuzzer thread is stopped.
@@ -92,20 +96,20 @@ func newFuzzer(concurrency int, maxValForId int, maxValForCol int, insertShare i
 // The returned set is a list of strings, because for prepared statements, we have to run
 // set queries first and then the final query eventually.
 func (fz *fuzzer) generateQuery() []string {
-	val := rand.Intn(fz.insertShare + fz.updateShare + fz.deleteShare)
+	val := rand.IntN(fz.insertShare + fz.updateShare + fz.deleteShare)
 	if val < fz.insertShare {
 		switch fz.queryFormat {
-		case SQLQueries:
-			return []string{fz.generateInsertDMLQuery()}
+		case OlapSQLQueries, SQLQueries:
+			return []string{fz.generateInsertDMLQuery(getInsertType())}
 		case PreparedStatmentQueries:
-			return fz.getPreparedInsertQueries()
+			return fz.getPreparedInsertQueries(getInsertType())
 		default:
 			panic("Unknown query type")
 		}
 	}
 	if val < fz.insertShare+fz.updateShare {
 		switch fz.queryFormat {
-		case SQLQueries:
+		case OlapSQLQueries, SQLQueries:
 			return []string{fz.generateUpdateDMLQuery()}
 		case PreparedStatmentQueries:
 			return fz.getPreparedUpdateQueries()
@@ -114,7 +118,7 @@ func (fz *fuzzer) generateQuery() []string {
 		}
 	}
 	switch fz.queryFormat {
-	case SQLQueries:
+	case OlapSQLQueries, SQLQueries:
 		return []string{fz.generateDeleteDMLQuery()}
 	case PreparedStatmentQueries:
 		return fz.getPreparedDeleteQueries()
@@ -123,75 +127,150 @@ func (fz *fuzzer) generateQuery() []string {
 	}
 }
 
+func getInsertType() string {
+	return []string{"insert", "replace"}[rand.IntN(2)]
+}
+
 // generateInsertDMLQuery generates an INSERT query from the parameters for the fuzzer.
-func (fz *fuzzer) generateInsertDMLQuery() string {
-	tableId := rand.Intn(len(fkTables))
-	idValue := 1 + rand.Intn(fz.maxValForId)
+func (fz *fuzzer) generateInsertDMLQuery(insertType string) string {
+	tableId := rand.IntN(len(fkTables))
+	idValue := 1 + rand.IntN(fz.maxValForId)
 	tableName := fkTables[tableId]
+	setVarFkChecksVal := fz.getSetVarFkChecksVal()
 	if tableName == "fk_t20" {
-		colValue := rand.Intn(1 + fz.maxValForCol)
-		col2Value := rand.Intn(1 + fz.maxValForCol)
-		return fmt.Sprintf("insert into %v (id, col, col2) values (%v, %v, %v)", tableName, idValue, convertColValueToString(colValue), convertColValueToString(col2Value))
+		colValue := rand.IntN(1 + fz.maxValForCol)
+		col2Value := rand.IntN(1 + fz.maxValForCol)
+		return fmt.Sprintf("%s %vinto %v (id, col, col2) values (%v, %v, %v)", insertType, setVarFkChecksVal, tableName, idValue, convertIntValueToString(colValue), convertIntValueToString(col2Value))
 	} else if isMultiColFkTable(tableName) {
-		colaValue := rand.Intn(1 + fz.maxValForCol)
-		colbValue := rand.Intn(1 + fz.maxValForCol)
-		return fmt.Sprintf("insert into %v (id, cola, colb) values (%v, %v, %v)", tableName, idValue, convertColValueToString(colaValue), convertColValueToString(colbValue))
+		colaValue := rand.IntN(1 + fz.maxValForCol)
+		colbValue := rand.IntN(1 + fz.maxValForCol)
+		return fmt.Sprintf("%s %vinto %v (id, cola, colb) values (%v, %v, %v)", insertType, setVarFkChecksVal, tableName, idValue, convertIntValueToString(colaValue), convertIntValueToString(colbValue))
 	} else {
-		colValue := rand.Intn(1 + fz.maxValForCol)
-		return fmt.Sprintf("insert into %v (id, col) values (%v, %v)", tableName, idValue, convertColValueToString(colValue))
+		colValue := rand.IntN(1 + fz.maxValForCol)
+		return fmt.Sprintf("%s %vinto %v (id, col) values (%v, %v)", insertType, setVarFkChecksVal, tableName, idValue, convertIntValueToString(colValue))
 	}
 }
 
-// convertColValueToString converts the given value to a string
-func convertColValueToString(value int) string {
-	if value == 0 {
-		return "NULL"
-	}
-	return fmt.Sprintf("%d", value)
-}
-
-// generateUpdateDMLQuery generates an UPDATE query from the parameters for the fuzzer.
+// generateUpdateDMLQuery generates a UPDATE query from the parameters for the fuzzer.
 func (fz *fuzzer) generateUpdateDMLQuery() string {
-	tableId := rand.Intn(len(fkTables))
-	idValue := 1 + rand.Intn(fz.maxValForId)
-	tableName := fkTables[tableId]
-	if tableName == "fk_t20" {
-		colValue := rand.Intn(1 + fz.maxValForCol)
-		col2Value := rand.Intn(1 + fz.maxValForCol)
-		return fmt.Sprintf("update %v set col = %v, col2 = %v where id = %v", tableName, convertColValueToString(colValue), convertColValueToString(col2Value), idValue)
-	} else if isMultiColFkTable(tableName) {
-		colaValue := rand.Intn(1 + fz.maxValForCol)
-		colbValue := rand.Intn(1 + fz.maxValForCol)
-		return fmt.Sprintf("update %v set cola = %v, colb = %v where id = %v", tableName, convertColValueToString(colaValue), convertColValueToString(colbValue), idValue)
-	} else {
-		colValue := rand.Intn(1 + fz.maxValForCol)
-		return fmt.Sprintf("update %v set col = %v where id = %v", tableName, convertColValueToString(colValue), idValue)
+	multiTableUpdate := rand.IntN(2) + 1
+	if multiTableUpdate == 1 {
+		return fz.generateSingleUpdateDMLQuery()
 	}
+	return fz.generateMultiUpdateDMLQuery()
+}
+
+// generateSingleUpdateDMLQuery generates an UPDATE query from the parameters for the fuzzer.
+func (fz *fuzzer) generateSingleUpdateDMLQuery() string {
+	tableId := rand.IntN(len(fkTables))
+	idValue := 1 + rand.IntN(fz.maxValForId)
+	tableName := fkTables[tableId]
+	setVarFkChecksVal := fz.getSetVarFkChecksVal()
+	updWithLimit := rand.IntN(2)
+	limitCount := rand.IntN(3)
+	if tableName == "fk_t20" {
+		colValue := convertIntValueToString(rand.IntN(1 + fz.maxValForCol))
+		col2Value := convertIntValueToString(rand.IntN(1 + fz.maxValForCol))
+		if updWithLimit == 0 {
+			return fmt.Sprintf("update %v%v set col = %v, col2 = %v where id = %v", setVarFkChecksVal, tableName, colValue, col2Value, idValue)
+		}
+		return fmt.Sprintf("update %v%v set col = %v, col2 = %v order by id limit %v", setVarFkChecksVal, tableName, colValue, col2Value, limitCount)
+	} else if isMultiColFkTable(tableName) {
+		if rand.IntN(2) == 0 {
+			colaValue := convertIntValueToString(rand.IntN(1 + fz.maxValForCol))
+			colbValue := convertIntValueToString(rand.IntN(1 + fz.maxValForCol))
+			if fz.concurrency > 1 {
+				colaValue = fz.generateExpression(rand.IntN(4)+1, "cola", "colb", "id")
+				colbValue = fz.generateExpression(rand.IntN(4)+1, "cola", "colb", "id")
+			}
+			if updWithLimit == 0 {
+				return fmt.Sprintf("update %v%v set cola = %v, colb = %v where id = %v", setVarFkChecksVal, tableName, colaValue, colbValue, idValue)
+			}
+			return fmt.Sprintf("update %v%v set cola = %v, colb = %v order by id limit %v", setVarFkChecksVal, tableName, colaValue, colbValue, limitCount)
+		} else {
+			colValue := fz.generateExpression(rand.IntN(4)+1, "cola", "colb", "id")
+			colToUpdate := []string{"cola", "colb"}[rand.IntN(2)]
+			if updWithLimit == 0 {
+				return fmt.Sprintf("update %v set %v = %v where id = %v", tableName, colToUpdate, colValue, idValue)
+			}
+			return fmt.Sprintf("update %v set %v = %v order by id limit %v", tableName, colToUpdate, colValue, limitCount)
+		}
+	} else {
+		colValue := fz.generateExpression(rand.IntN(4)+1, "col", "id")
+		if updWithLimit == 0 {
+			return fmt.Sprintf("update %v%v set col = %v where id = %v", setVarFkChecksVal, tableName, colValue, idValue)
+		}
+		return fmt.Sprintf("update %v%v set col = %v order by id limit %v", setVarFkChecksVal, tableName, colValue, limitCount)
+	}
+}
+
+// generateMultiUpdateDMLQuery generates a UPDATE query using 2 tables from the parameters for the fuzzer.
+func (fz *fuzzer) generateMultiUpdateDMLQuery() string {
+	tableId := rand.IntN(len(fkTables))
+	tableId2 := rand.IntN(len(fkTables))
+	idValue := 1 + rand.IntN(fz.maxValForId)
+	colValue := convertIntValueToString(rand.IntN(1 + fz.maxValForCol))
+	col2Value := convertIntValueToString(rand.IntN(1 + fz.maxValForCol))
+	setVarFkChecksVal := fz.getSetVarFkChecksVal()
+	setExprs := fmt.Sprintf("%v.col = %v", fkTables[tableId], colValue)
+	if rand.IntN(2)%2 == 0 {
+		setExprs += ", " + fmt.Sprintf("%v.col = %v", fkTables[tableId2], col2Value)
+	}
+	query := fmt.Sprintf("update %v%v join %v using (id) set %s where %v.id = %v", setVarFkChecksVal, fkTables[tableId], fkTables[tableId2], setExprs, fkTables[tableId], idValue)
+	return query
+}
+
+// generateDeleteDMLQuery generates a DELETE query using 1 table from the parameters for the fuzzer.
+func (fz *fuzzer) generateSingleDeleteDMLQuery() string {
+	tableId := rand.IntN(len(fkTables))
+	idValue := 1 + rand.IntN(fz.maxValForId)
+	setVarFkChecksVal := fz.getSetVarFkChecksVal()
+	delWithLimit := rand.IntN(2)
+	if delWithLimit == 0 {
+		return fmt.Sprintf("delete %vfrom %v where id = %v", setVarFkChecksVal, fkTables[tableId], idValue)
+	}
+	limitCount := rand.IntN(3)
+	return fmt.Sprintf("delete %vfrom %v order by id limit %v", setVarFkChecksVal, fkTables[tableId], limitCount)
+}
+
+// generateMultiDeleteDMLQuery generates a DELETE query using 2 tables from the parameters for the fuzzer.
+func (fz *fuzzer) generateMultiDeleteDMLQuery() string {
+	tableId := rand.IntN(len(fkTables))
+	tableId2 := rand.IntN(len(fkTables))
+	idValue := 1 + rand.IntN(fz.maxValForId)
+	setVarFkChecksVal := fz.getSetVarFkChecksVal()
+	target := fkTables[tableId]
+	if rand.IntN(2)%2 == 0 {
+		target += ", " + fkTables[tableId2]
+	}
+	query := fmt.Sprintf("delete %v%v from %v join %v using (id) where %v.id = %v", setVarFkChecksVal, target, fkTables[tableId], fkTables[tableId2], fkTables[tableId], idValue)
+	return query
 }
 
 // generateDeleteDMLQuery generates a DELETE query from the parameters for the fuzzer.
 func (fz *fuzzer) generateDeleteDMLQuery() string {
-	tableId := rand.Intn(len(fkTables))
-	idValue := 1 + rand.Intn(fz.maxValForId)
-	query := fmt.Sprintf("delete from %v where id = %v", fkTables[tableId], idValue)
-	return query
+	multiTableDelete := rand.IntN(2) + 1
+	if multiTableDelete == 1 {
+		return fz.generateSingleDeleteDMLQuery()
+	}
+	return fz.generateMultiDeleteDMLQuery()
 }
 
 // start starts running the fuzzer.
-func (fz *fuzzer) start(t *testing.T, sharded bool) {
+func (fz *fuzzer) start(t *testing.T, keyspace string) {
 	// We mark the fuzzer thread to be running now.
 	fz.shouldStop.Store(false)
 	fz.wg.Add(fz.concurrency)
 	for i := 0; i < fz.concurrency; i++ {
 		fuzzerThreadId := i
 		go func() {
-			fz.runFuzzerThread(t, sharded, fuzzerThreadId)
+			fz.runFuzzerThread(t, keyspace, fuzzerThreadId)
 		}()
 	}
 }
 
 // runFuzzerThread is used to run a thread of the fuzzer.
-func (fz *fuzzer) runFuzzerThread(t *testing.T, sharded bool, fuzzerThreadId int) {
+func (fz *fuzzer) runFuzzerThread(t *testing.T, keyspace string, fuzzerThreadId int) {
 	// Whenever we finish running this thread, we should mark the thread has stopped.
 	defer func() {
 		fz.wg.Done()
@@ -199,6 +278,9 @@ func (fz *fuzzer) runFuzzerThread(t *testing.T, sharded bool, fuzzerThreadId int
 	// Create a MySQL Compare that connects to both Vitess and MySQL and runs the queries against both.
 	mcmp, err := utils.NewMySQLCompare(t, vtParams, mysqlParams)
 	require.NoError(t, err)
+	if fz.fkState != nil {
+		mcmp.Exec(fmt.Sprintf("SET FOREIGN_KEY_CHECKS=%v", sqlparser.FkChecksStateString(fz.fkState)))
+	}
 	var vitessDb, mysqlDb *sql.DB
 	if fz.queryFormat == PreparedStatementPacket {
 		// Open another connection to Vitess using the go-sql-driver so that we can send prepared statements as COM_STMT_PREPARE packets.
@@ -211,16 +293,12 @@ func (fz *fuzzer) runFuzzerThread(t *testing.T, sharded bool, fuzzerThreadId int
 		defer mysqlDb.Close()
 	}
 	// Set the correct keyspace to use from VtGates.
-	if sharded {
-		_ = utils.Exec(t, mcmp.VtConn, "use `ks`")
-		if vitessDb != nil {
-			_, _ = vitessDb.Exec("use `ks`")
-		}
-	} else {
-		_ = utils.Exec(t, mcmp.VtConn, "use `uks`")
-		if vitessDb != nil {
-			_, _ = vitessDb.Exec("use `uks`")
-		}
+	_ = utils.Exec(t, mcmp.VtConn, fmt.Sprintf("use `%v`", keyspace))
+	if vitessDb != nil {
+		_, _ = vitessDb.Exec(fmt.Sprintf("use `%v`", keyspace))
+	}
+	if fz.queryFormat == OlapSQLQueries {
+		_ = utils.Exec(t, mcmp.VtConn, "set workload = olap")
 	}
 	for {
 		// If fuzzer thread is marked to be stopped, then we should exit this go routine.
@@ -228,7 +306,7 @@ func (fz *fuzzer) runFuzzerThread(t *testing.T, sharded bool, fuzzerThreadId int
 			return
 		}
 		switch fz.queryFormat {
-		case SQLQueries, PreparedStatmentQueries:
+		case OlapSQLQueries, SQLQueries, PreparedStatmentQueries:
 			if fz.generateAndExecuteStatementQuery(t, mcmp) {
 				return
 			}
@@ -255,7 +333,7 @@ func (fz *fuzzer) generateAndExecuteStatementQuery(t *testing.T, mcmp utils.MySQ
 	for _, query := range queries {
 		// When the concurrency is 1, then we run the query both on MySQL and Vitess.
 		if fz.concurrency == 1 {
-			_, _ = mcmp.ExecAllowAndCompareError(query)
+			_, _ = mcmp.ExecAllowAndCompareError(query, utils.CompareOptions{IgnoreRowsAffected: true})
 			// If t is marked failed, we have encountered our first failure.
 			// Let's collect the required information and finish execution.
 			if t.Failed() {
@@ -318,8 +396,8 @@ func (fz *fuzzer) stop() {
 
 // getPreparedDeleteQueries gets the list of queries to run for executing an DELETE using prepared statements.
 func (fz *fuzzer) getPreparedDeleteQueries() []string {
-	tableId := rand.Intn(len(fkTables))
-	idValue := 1 + rand.Intn(fz.maxValForId)
+	tableId := rand.IntN(len(fkTables))
+	idValue := 1 + rand.IntN(fz.maxValForId)
 	return []string{
 		fmt.Sprintf("prepare stmt_del from 'delete from %v where id = ?'", fkTables[tableId]),
 		fmt.Sprintf("SET @id = %v", idValue),
@@ -328,36 +406,36 @@ func (fz *fuzzer) getPreparedDeleteQueries() []string {
 }
 
 // getPreparedInsertQueries gets the list of queries to run for executing an INSERT using prepared statements.
-func (fz *fuzzer) getPreparedInsertQueries() []string {
-	tableId := rand.Intn(len(fkTables))
-	idValue := 1 + rand.Intn(fz.maxValForId)
+func (fz *fuzzer) getPreparedInsertQueries(insertType string) []string {
+	tableId := rand.IntN(len(fkTables))
+	idValue := 1 + rand.IntN(fz.maxValForId)
 	tableName := fkTables[tableId]
 	if tableName == "fk_t20" {
-		colValue := rand.Intn(1 + fz.maxValForCol)
-		col2Value := rand.Intn(1 + fz.maxValForCol)
+		colValue := rand.IntN(1 + fz.maxValForCol)
+		col2Value := rand.IntN(1 + fz.maxValForCol)
 		return []string{
-			"prepare stmt_insert from 'insert into fk_t20 (id, col, col2) values (?, ?, ?)'",
+			fmt.Sprintf("prepare stmt_insert from '%s into fk_t20 (id, col, col2) values (?, ?, ?)'", insertType),
 			fmt.Sprintf("SET @id = %v", idValue),
-			fmt.Sprintf("SET @col = %v", convertColValueToString(colValue)),
-			fmt.Sprintf("SET @col2 = %v", convertColValueToString(col2Value)),
+			fmt.Sprintf("SET @col = %v", convertIntValueToString(colValue)),
+			fmt.Sprintf("SET @col2 = %v", convertIntValueToString(col2Value)),
 			"execute stmt_insert using @id, @col, @col2",
 		}
 	} else if isMultiColFkTable(tableName) {
-		colaValue := rand.Intn(1 + fz.maxValForCol)
-		colbValue := rand.Intn(1 + fz.maxValForCol)
+		colaValue := rand.IntN(1 + fz.maxValForCol)
+		colbValue := rand.IntN(1 + fz.maxValForCol)
 		return []string{
-			fmt.Sprintf("prepare stmt_insert from 'insert into %v (id, cola, colb) values (?, ?, ?)'", tableName),
+			fmt.Sprintf("prepare stmt_insert from '%s into %v (id, cola, colb) values (?, ?, ?)'", insertType, tableName),
 			fmt.Sprintf("SET @id = %v", idValue),
-			fmt.Sprintf("SET @cola = %v", convertColValueToString(colaValue)),
-			fmt.Sprintf("SET @colb = %v", convertColValueToString(colbValue)),
+			fmt.Sprintf("SET @cola = %v", convertIntValueToString(colaValue)),
+			fmt.Sprintf("SET @colb = %v", convertIntValueToString(colbValue)),
 			"execute stmt_insert using @id, @cola, @colb",
 		}
 	} else {
-		colValue := rand.Intn(1 + fz.maxValForCol)
+		colValue := rand.IntN(1 + fz.maxValForCol)
 		return []string{
-			fmt.Sprintf("prepare stmt_insert from 'insert into %v (id, col) values (?, ?)'", tableName),
+			fmt.Sprintf("prepare stmt_insert from '%s into %v (id, col) values (?, ?)'", insertType, tableName),
 			fmt.Sprintf("SET @id = %v", idValue),
-			fmt.Sprintf("SET @col = %v", convertColValueToString(colValue)),
+			fmt.Sprintf("SET @col = %v", convertIntValueToString(colValue)),
 			"execute stmt_insert using @id, @col",
 		}
 	}
@@ -365,35 +443,35 @@ func (fz *fuzzer) getPreparedInsertQueries() []string {
 
 // getPreparedUpdateQueries gets the list of queries to run for executing an UPDATE using prepared statements.
 func (fz *fuzzer) getPreparedUpdateQueries() []string {
-	tableId := rand.Intn(len(fkTables))
-	idValue := 1 + rand.Intn(fz.maxValForId)
+	tableId := rand.IntN(len(fkTables))
+	idValue := 1 + rand.IntN(fz.maxValForId)
 	tableName := fkTables[tableId]
 	if tableName == "fk_t20" {
-		colValue := rand.Intn(1 + fz.maxValForCol)
-		col2Value := rand.Intn(1 + fz.maxValForCol)
+		colValue := rand.IntN(1 + fz.maxValForCol)
+		col2Value := rand.IntN(1 + fz.maxValForCol)
 		return []string{
 			"prepare stmt_update from 'update fk_t20 set col = ?, col2 = ? where id = ?'",
 			fmt.Sprintf("SET @id = %v", idValue),
-			fmt.Sprintf("SET @col = %v", convertColValueToString(colValue)),
-			fmt.Sprintf("SET @col2 = %v", convertColValueToString(col2Value)),
+			fmt.Sprintf("SET @col = %v", convertIntValueToString(colValue)),
+			fmt.Sprintf("SET @col2 = %v", convertIntValueToString(col2Value)),
 			"execute stmt_update using @col, @col2, @id",
 		}
 	} else if isMultiColFkTable(tableName) {
-		colaValue := rand.Intn(1 + fz.maxValForCol)
-		colbValue := rand.Intn(1 + fz.maxValForCol)
+		colaValue := rand.IntN(1 + fz.maxValForCol)
+		colbValue := rand.IntN(1 + fz.maxValForCol)
 		return []string{
 			fmt.Sprintf("prepare stmt_update from 'update %v set cola = ?, colb = ? where id = ?'", tableName),
 			fmt.Sprintf("SET @id = %v", idValue),
-			fmt.Sprintf("SET @cola = %v", convertColValueToString(colaValue)),
-			fmt.Sprintf("SET @colb = %v", convertColValueToString(colbValue)),
+			fmt.Sprintf("SET @cola = %v", convertIntValueToString(colaValue)),
+			fmt.Sprintf("SET @colb = %v", convertIntValueToString(colbValue)),
 			"execute stmt_update using @cola, @colb, @id",
 		}
 	} else {
-		colValue := rand.Intn(1 + fz.maxValForCol)
+		colValue := rand.IntN(1 + fz.maxValForCol)
 		return []string{
 			fmt.Sprintf("prepare stmt_update from 'update %v set col = ? where id = ?'", tableName),
 			fmt.Sprintf("SET @id = %v", idValue),
-			fmt.Sprintf("SET @col = %v", convertColValueToString(colValue)),
+			fmt.Sprintf("SET @col = %v", convertIntValueToString(colValue)),
 			"execute stmt_update using @col, @id",
 		}
 	}
@@ -401,9 +479,9 @@ func (fz *fuzzer) getPreparedUpdateQueries() []string {
 
 // generateParameterizedQuery generates a parameterized query for the query format PreparedStatementPacket.
 func (fz *fuzzer) generateParameterizedQuery() (query string, params []any) {
-	val := rand.Intn(fz.insertShare + fz.updateShare + fz.deleteShare)
+	val := rand.IntN(fz.insertShare + fz.updateShare + fz.deleteShare)
 	if val < fz.insertShare {
-		return fz.generateParameterizedInsertQuery()
+		return fz.generateParameterizedInsertQuery(getInsertType())
 	}
 	if val < fz.insertShare+fz.updateShare {
 		return fz.generateParameterizedUpdateQuery()
@@ -412,48 +490,63 @@ func (fz *fuzzer) generateParameterizedQuery() (query string, params []any) {
 }
 
 // generateParameterizedInsertQuery generates a parameterized INSERT query for the query format PreparedStatementPacket.
-func (fz *fuzzer) generateParameterizedInsertQuery() (query string, params []any) {
-	tableId := rand.Intn(len(fkTables))
-	idValue := 1 + rand.Intn(fz.maxValForId)
+func (fz *fuzzer) generateParameterizedInsertQuery(insertType string) (query string, params []any) {
+	tableId := rand.IntN(len(fkTables))
+	idValue := 1 + rand.IntN(fz.maxValForId)
 	tableName := fkTables[tableId]
 	if tableName == "fk_t20" {
-		colValue := rand.Intn(1 + fz.maxValForCol)
-		col2Value := rand.Intn(1 + fz.maxValForCol)
-		return fmt.Sprintf("insert into %v (id, col, col2) values (?, ?, ?)", tableName), []any{idValue, convertColValueToString(colValue), convertColValueToString(col2Value)}
+		colValue := rand.IntN(1 + fz.maxValForCol)
+		col2Value := rand.IntN(1 + fz.maxValForCol)
+		return fmt.Sprintf("%s into %v (id, col, col2) values (?, ?, ?)", insertType, tableName), []any{idValue, convertIntValueToString(colValue), convertIntValueToString(col2Value)}
 	} else if isMultiColFkTable(tableName) {
-		colaValue := rand.Intn(1 + fz.maxValForCol)
-		colbValue := rand.Intn(1 + fz.maxValForCol)
-		return fmt.Sprintf("insert into %v (id, cola, colb) values (?, ?, ?)", tableName), []any{idValue, convertColValueToString(colaValue), convertColValueToString(colbValue)}
+		colaValue := rand.IntN(1 + fz.maxValForCol)
+		colbValue := rand.IntN(1 + fz.maxValForCol)
+		return fmt.Sprintf("%s into %v (id, cola, colb) values (?, ?, ?)", insertType, tableName), []any{idValue, convertIntValueToString(colaValue), convertIntValueToString(colbValue)}
 	} else {
-		colValue := rand.Intn(1 + fz.maxValForCol)
-		return fmt.Sprintf("insert into %v (id, col) values (?, ?)", tableName), []any{idValue, convertColValueToString(colValue)}
+		colValue := rand.IntN(1 + fz.maxValForCol)
+		return fmt.Sprintf("%s into %v (id, col) values (?, ?)", insertType, tableName), []any{idValue, convertIntValueToString(colValue)}
 	}
 }
 
 // generateParameterizedUpdateQuery generates a parameterized UPDATE query for the query format PreparedStatementPacket.
 func (fz *fuzzer) generateParameterizedUpdateQuery() (query string, params []any) {
-	tableId := rand.Intn(len(fkTables))
-	idValue := 1 + rand.Intn(fz.maxValForId)
+	tableId := rand.IntN(len(fkTables))
+	idValue := 1 + rand.IntN(fz.maxValForId)
 	tableName := fkTables[tableId]
 	if tableName == "fk_t20" {
-		colValue := rand.Intn(1 + fz.maxValForCol)
-		col2Value := rand.Intn(1 + fz.maxValForCol)
-		return fmt.Sprintf("update %v set col = ?, col2 = ? where id = ?", tableName), []any{convertColValueToString(colValue), convertColValueToString(col2Value), idValue}
+		colValue := rand.IntN(1 + fz.maxValForCol)
+		col2Value := rand.IntN(1 + fz.maxValForCol)
+		return fmt.Sprintf("update %v set col = ?, col2 = ? where id = ?", tableName), []any{convertIntValueToString(colValue), convertIntValueToString(col2Value), idValue}
 	} else if isMultiColFkTable(tableName) {
-		colaValue := rand.Intn(1 + fz.maxValForCol)
-		colbValue := rand.Intn(1 + fz.maxValForCol)
-		return fmt.Sprintf("update %v set cola = ?, colb = ? where id = ?", tableName), []any{convertColValueToString(colaValue), convertColValueToString(colbValue), idValue}
+		colaValue := rand.IntN(1 + fz.maxValForCol)
+		colbValue := rand.IntN(1 + fz.maxValForCol)
+		return fmt.Sprintf("update %v set cola = ?, colb = ? where id = ?", tableName), []any{convertIntValueToString(colaValue), convertIntValueToString(colbValue), idValue}
 	} else {
-		colValue := rand.Intn(1 + fz.maxValForCol)
-		return fmt.Sprintf("update %v set col = ? where id = ?", tableName), []any{convertColValueToString(colValue), idValue}
+		colValue := rand.IntN(1 + fz.maxValForCol)
+		return fmt.Sprintf("update %v set col = ? where id = ?", tableName), []any{convertIntValueToString(colValue), idValue}
 	}
 }
 
 // generateParameterizedDeleteQuery generates a parameterized DELETE query for the query format PreparedStatementPacket.
 func (fz *fuzzer) generateParameterizedDeleteQuery() (query string, params []any) {
-	tableId := rand.Intn(len(fkTables))
-	idValue := 1 + rand.Intn(fz.maxValForId)
+	tableId := rand.IntN(len(fkTables))
+	idValue := 1 + rand.IntN(fz.maxValForId)
 	return fmt.Sprintf("delete from %v where id = ?", fkTables[tableId]), []any{idValue}
+}
+
+// getSetVarFkChecksVal generates an optimizer hint to randomly set the foreign key checks to on or off or leave them unaltered.
+func (fz *fuzzer) getSetVarFkChecksVal() string {
+	if fz.concurrency != 1 || fz.noFkSetVar {
+		return ""
+	}
+	val := rand.IntN(3)
+	if val == 0 {
+		return ""
+	}
+	if val == 1 {
+		return "/*+ SET_VAR(foreign_key_checks=On) */ "
+	}
+	return "/*+ SET_VAR(foreign_key_checks=Off) */ "
 }
 
 // TestFkFuzzTest is a fuzzer test that works by querying the database concurrently.
@@ -561,8 +654,7 @@ func TestFkFuzzTest(t *testing.T) {
 			insertShare:    100,
 			deleteShare:    0,
 			updateShare:    0,
-		},
-		{
+		}, {
 			name:           "Single Thread - Balanced Inserts and Deletes",
 			concurrency:    1,
 			timeForTesting: 5 * time.Second,
@@ -571,8 +663,7 @@ func TestFkFuzzTest(t *testing.T) {
 			insertShare:    50,
 			deleteShare:    50,
 			updateShare:    0,
-		},
-		{
+		}, {
 			name:           "Single Thread - Balanced Inserts and Updates",
 			concurrency:    1,
 			timeForTesting: 5 * time.Second,
@@ -593,6 +684,15 @@ func TestFkFuzzTest(t *testing.T) {
 			updateShare:    50,
 		},
 		{
+			name:           "Multi Thread - Only Inserts",
+			concurrency:    30,
+			timeForTesting: 5 * time.Second,
+			maxValForCol:   5,
+			maxValForId:    30,
+			insertShare:    100,
+			deleteShare:    0,
+			updateShare:    0,
+		}, {
 			name:           "Multi Thread - Balanced Inserts, Updates and Deletes",
 			concurrency:    30,
 			timeForTesting: 5 * time.Second,
@@ -604,131 +704,95 @@ func TestFkFuzzTest(t *testing.T) {
 		},
 	}
 
-	for _, tt := range testcases {
-		for _, testSharded := range []bool{false, true} {
-			for _, queryFormat := range []QueryFormat{SQLQueries, PreparedStatmentQueries, PreparedStatementPacket} {
-				t.Run(getTestName(tt.name, testSharded)+fmt.Sprintf(" QueryFormat - %v", queryFormat), func(t *testing.T) {
-					mcmp, closer := start(t)
-					defer closer()
-					// Set the correct keyspace to use from VtGates.
-					if testSharded {
-						t.Skip("Skip test since we don't have sharded foreign key support yet")
-						_ = utils.Exec(t, mcmp.VtConn, "use `ks`")
-					} else {
-						_ = utils.Exec(t, mcmp.VtConn, "use `uks`")
+	valTrue := true
+	valFalse := false
+	for _, fkState := range []*bool{nil, &valTrue, &valFalse} {
+		for _, tt := range testcases {
+			for _, keyspace := range []string{unshardedKs, shardedKs} {
+				for _, queryFormat := range []QueryFormat{OlapSQLQueries, SQLQueries, PreparedStatmentQueries, PreparedStatementPacket} {
+					if fkState != nil && (queryFormat != SQLQueries || tt.concurrency != 1) {
+						continue
 					}
-					// Ensure that the Vitess database is originally empty
-					ensureDatabaseState(t, mcmp.VtConn, true)
-					ensureDatabaseState(t, mcmp.MySQLConn, true)
-
-					// Create the fuzzer.
-					fz := newFuzzer(tt.concurrency, tt.maxValForId, tt.maxValForCol, tt.insertShare, tt.deleteShare, tt.updateShare, queryFormat)
-
-					// Start the fuzzer.
-					fz.start(t, testSharded)
-
-					// Wait for the timeForTesting so that the threads continue to run.
-					time.Sleep(tt.timeForTesting)
-
-					fz.stop()
-
-					// We encountered an error while running the fuzzer. Let's print out the information!
-					if fz.firstFailureInfo != nil {
-						log.Errorf("Failing query - %v", fz.firstFailureInfo.queryToFail)
-						for idx, table := range fkTables {
-							log.Errorf("MySQL data for %v -\n%v", table, fz.firstFailureInfo.mysqlState[idx].Rows)
-							log.Errorf("Vitess data for %v -\n%v", table, fz.firstFailureInfo.vitessState[idx].Rows)
+					t.Run(getTestName(tt.name, keyspace)+fmt.Sprintf(" FkState - %v QueryFormat - %v", sqlparser.FkChecksStateString(fkState), queryFormat), func(t *testing.T) {
+						mcmp, closer := start(t)
+						defer closer()
+						if keyspace == shardedKs {
+							t.Skip("Skip test since we don't have sharded foreign key support yet")
 						}
-					}
+						// Set the correct keyspace to use from VtGates.
+						_ = utils.Exec(t, mcmp.VtConn, fmt.Sprintf("use `%v`", keyspace))
 
-					// ensure Vitess database has some data. This ensures not all the commands failed.
-					ensureDatabaseState(t, mcmp.VtConn, false)
-					// Verify the consistency of the data.
-					verifyDataIsCorrect(t, mcmp, tt.concurrency)
-				})
-			}
-		}
-	}
-}
+						// Ensure that the Vitess database is originally empty
+						ensureDatabaseState(t, mcmp.VtConn, true)
+						ensureDatabaseState(t, mcmp.MySQLConn, true)
 
-// ensureDatabaseState ensures that the database is either empty or not.
-func ensureDatabaseState(t *testing.T, vtconn *mysql.Conn, empty bool) {
-	results := collectFkTablesState(vtconn)
-	isEmpty := true
-	for _, res := range results {
-		if len(res.Rows) > 0 {
-			isEmpty = false
-		}
-	}
-	require.Equal(t, isEmpty, empty)
-}
+						// Create the fuzzer.
+						fz := newFuzzer(tt.concurrency, tt.maxValForId, tt.maxValForCol, tt.insertShare, tt.deleteShare, tt.updateShare, queryFormat, fkState)
 
-// verifyDataIsCorrect verifies that the data in MySQL database matches the data in the Vitess database.
-func verifyDataIsCorrect(t *testing.T, mcmp utils.MySQLCompare, concurrency int) {
-	// For single concurrent thread, we run all the queries on both MySQL and Vitess, so we can verify correctness
-	// by just checking if the data in MySQL and Vitess match.
-	if concurrency == 1 {
-		for _, table := range fkTables {
-			query := fmt.Sprintf("SELECT * FROM %v ORDER BY id", table)
-			mcmp.Exec(query)
-		}
-	} else {
-		// For higher concurrency, we don't have MySQL data to verify everything is fine,
-		// so we'll have to do something different.
-		// We run LEFT JOIN queries on all the parent and child tables linked by foreign keys
-		// to make sure that nothing is broken in the database.
-		for _, reference := range fkReferences {
-			query := fmt.Sprintf("select %v.id from %v left join %v on (%v.col = %v.col) where %v.col is null and %v.col is not null", reference.childTable, reference.childTable, reference.parentTable, reference.parentTable, reference.childTable, reference.parentTable, reference.childTable)
-			if isMultiColFkTable(reference.childTable) {
-				query = fmt.Sprintf("select %v.id from %v left join %v on (%v.cola = %v.cola and %v.colb = %v.colb) where %v.cola is null and %v.cola is not null and %v.colb is not null", reference.childTable, reference.childTable, reference.parentTable, reference.parentTable, reference.childTable, reference.parentTable, reference.childTable, reference.parentTable, reference.childTable, reference.childTable)
-			}
-			res, err := mcmp.VtConn.ExecuteFetch(query, 1000, false)
-			require.NoError(t, err)
-			require.Zerof(t, len(res.Rows), "Query %v gave non-empty results", query)
-		}
-	}
-	// We also verify that the results in Primary and Replica table match as is.
-	for _, keyspace := range clusterInstance.Keyspaces {
-		for _, shard := range keyspace.Shards {
-			var primaryTab, replicaTab *cluster.Vttablet
-			for _, vttablet := range shard.Vttablets {
-				if vttablet.Type == "primary" {
-					primaryTab = vttablet
-				} else {
-					replicaTab = vttablet
+						// Start the fuzzer.
+						fz.start(t, keyspace)
+
+						// Wait for the timeForTesting so that the threads continue to run.
+						totalTime := time.After(tt.timeForTesting)
+						done := false
+						for !done {
+							select {
+							case <-totalTime:
+								done = true
+							case <-time.After(10 * time.Millisecond):
+								validateReplication(t)
+							}
+						}
+
+						fz.stop()
+
+						// We encountered an error while running the fuzzer. Let's print out the information!
+						if fz.firstFailureInfo != nil {
+							log.Errorf("Failing query - %v", fz.firstFailureInfo.queryToFail)
+							for idx, table := range fkTables {
+								log.Errorf("MySQL data for %v -\n%v", table, fz.firstFailureInfo.mysqlState[idx].Rows)
+								log.Errorf("Vitess data for %v -\n%v", table, fz.firstFailureInfo.vitessState[idx].Rows)
+							}
+						}
+
+						// ensure Vitess database has some data. This ensures not all the commands failed.
+						ensureDatabaseState(t, mcmp.VtConn, false)
+						// Verify the consistency of the data.
+						verifyDataIsCorrect(t, mcmp, tt.concurrency)
+					})
 				}
 			}
-			require.NotNil(t, primaryTab)
-			require.NotNil(t, replicaTab)
-			checkReplicationHealthy(t, replicaTab)
-			cluster.WaitForReplicationPos(t, primaryTab, replicaTab, true, 60.0)
-			primaryConn, err := utils.GetMySQLConn(primaryTab, fmt.Sprintf("vt_%v", keyspace.Name))
-			require.NoError(t, err)
-			replicaConn, err := utils.GetMySQLConn(replicaTab, fmt.Sprintf("vt_%v", keyspace.Name))
-			require.NoError(t, err)
-			primaryRes := collectFkTablesState(primaryConn)
-			replicaRes := collectFkTablesState(replicaConn)
-			verifyDataMatches(t, primaryRes, replicaRes)
 		}
 	}
 }
 
-// verifyDataMatches verifies that the two list of results are the same.
-func verifyDataMatches(t *testing.T, resOne []*sqltypes.Result, resTwo []*sqltypes.Result) {
-	require.EqualValues(t, len(resTwo), len(resOne), "Res 1 - %v, Res 2 - %v", resOne, resTwo)
-	for idx, resultOne := range resOne {
-		resultTwo := resTwo[idx]
-		require.True(t, resultOne.Equal(resultTwo), "Data for %v doesn't match\nRows 1\n%v\nRows 2\n%v", fkTables[idx], resultOne.Rows, resultTwo.Rows)
-	}
-}
+// BenchmarkFkFuzz benchmarks the performance of Vitess unmanaged, Vitess managed and vanilla MySQL performance on a given set of queries generated by the fuzzer.
+func BenchmarkFkFuzz(b *testing.B) {
+	maxValForCol := 10
+	maxValForId := 10
+	insertShare := 50
+	deleteShare := 50
+	updateShare := 50
+	numQueries := 1000
+	// Wait for schema-tracking to be complete.
+	waitForSchemaTrackingForFkTables(b)
+	for i := 0; i < b.N; i++ {
+		queries, mysqlConn, vtConn, vtUnmanagedConn := setupBenchmark(b, maxValForId, maxValForCol, insertShare, deleteShare, updateShare, numQueries)
 
-// collectFkTablesState collects the data stored in the foreign key tables for the given connection.
-func collectFkTablesState(conn *mysql.Conn) []*sqltypes.Result {
-	var tablesData []*sqltypes.Result
-	for _, table := range fkTables {
-		query := fmt.Sprintf("SELECT * FROM %v ORDER BY id", table)
-		res, _ := conn.ExecuteFetch(query, 10000, true)
-		tablesData = append(tablesData, res)
+		// Now we run the benchmarks!
+		b.Run("MySQL", func(b *testing.B) {
+			startBenchmark(b)
+			runQueries(b, mysqlConn, queries)
+		})
+
+		b.Run("Vitess Managed Foreign Keys", func(b *testing.B) {
+			startBenchmark(b)
+			runQueries(b, vtConn, queries)
+		})
+
+		b.Run("Vitess Unmanaged Foreign Keys", func(b *testing.B) {
+			startBenchmark(b)
+			runQueries(b, vtUnmanagedConn, queries)
+		})
 	}
-	return tablesData
 }

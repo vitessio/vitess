@@ -79,7 +79,16 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 	}
 	vtctld.proc.Args = append(vtctld.proc.Args, extraArgs...)
 
-	errFile, _ := os.Create(path.Join(vtctld.LogDir, "vtctld-stderr.txt"))
+	err = os.MkdirAll(vtctld.LogDir, 0755)
+	if err != nil {
+		log.Errorf("cannot create log directory for vtctld: %v", err)
+		return err
+	}
+	errFile, err := os.Create(path.Join(vtctld.LogDir, "vtctld-stderr.txt"))
+	if err != nil {
+		log.Errorf("cannot create error log file for vtctld: %v", err)
+		return err
+	}
 	vtctld.proc.Stderr = errFile
 	vtctld.ErrorLog = errFile.Name()
 

@@ -57,6 +57,19 @@ func NewClient() *QueryClient {
 	}
 }
 
+// NewClientWithServer creates a new client for a given server.
+func NewClientWithServer(server *tabletserver.TabletServer) *QueryClient {
+	return &QueryClient{
+		ctx: callerid.NewContext(
+			context.Background(),
+			&vtrpcpb.CallerID{},
+			&querypb.VTGateCallerID{Username: "dev"},
+		),
+		target: Target,
+		server: server,
+	}
+}
+
 // NewClientWithTabletType creates a new client for Server with the provided tablet type.
 func NewClientWithTabletType(tabletType topodatapb.TabletType) *QueryClient {
 	targetCopy := Target.CloneVT()
@@ -134,7 +147,7 @@ func (client *QueryClient) CommitPrepared(dtid string) error {
 	return client.server.CommitPrepared(client.ctx, client.target, dtid)
 }
 
-// RollbackPrepared rollsback a prepared transaction.
+// RollbackPrepared rolls back a prepared transaction.
 func (client *QueryClient) RollbackPrepared(dtid string, originalID int64) error {
 	return client.server.RollbackPrepared(client.ctx, client.target, dtid, originalID)
 }
@@ -418,16 +431,17 @@ func (client *QueryClient) UpdateContext(ctx context.Context) {
 	client.ctx = ctx
 }
 
-func (client *QueryClient) GetSchema(tableType querypb.SchemaTableType, tableNames ...string) (map[string]string, error) {
-	schemaDef := make(map[string]string)
-	err := client.server.GetSchema(client.ctx, client.target, tableType, tableNames, func(schemaRes *querypb.GetSchemaResponse) error {
+func (client *QueryClient) GetSchema(
+	tableType querypb.SchemaTableType,
+	tableNames ...string,
+) (schemaDef map[string]string, udfs []*querypb.UDFInfo, err error) {
+	schemaDef = make(map[string]string)
+	err = client.server.GetSchema(client.ctx, client.target, tableType, tableNames, func(schemaRes *querypb.GetSchemaResponse) error {
 		for tableName, schemaDefinition := range schemaRes.TableDefinition {
 			schemaDef[tableName] = schemaDefinition
 		}
+		udfs = append(udfs, schemaRes.Udfs...)
 		return nil
 	})
-	if err != nil {
-		return nil, err
-	}
-	return schemaDef, nil
+	return
 }

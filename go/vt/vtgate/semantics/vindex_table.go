@@ -67,8 +67,8 @@ func (v *VindexTable) Name() (sqlparser.TableName, error) {
 }
 
 // GetExpr implements the TableInfo interface
-func (v *VindexTable) getAliasedTableExpr() *sqlparser.AliasedTableExpr {
-	return v.Table.getAliasedTableExpr()
+func (v *VindexTable) GetAliasedTableExpr() *sqlparser.AliasedTableExpr {
+	return v.Table.GetAliasedTableExpr()
 }
 
 func (v *VindexTable) canShortCut() shortCut {
@@ -76,8 +76,8 @@ func (v *VindexTable) canShortCut() shortCut {
 }
 
 // GetColumns implements the TableInfo interface
-func (v *VindexTable) getColumns() []ColumnInfo {
-	return v.Table.getColumns()
+func (v *VindexTable) getColumns(ignoreInvisbleCol bool) []ColumnInfo {
+	return v.Table.getColumns(ignoreInvisbleCol)
 }
 
 // IsInfSchema implements the TableInfo interface

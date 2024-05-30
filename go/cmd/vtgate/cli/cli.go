@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -25,11 +25,13 @@ import (
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/exit"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -72,7 +74,13 @@ var (
 		PreRunE: servenv.CobraPreRunE,
 		RunE:    run,
 	}
+
+	srvTopoCounts *stats.CountersWithSingleLabel
 )
+
+func init() {
+	srvTopoCounts = stats.NewCountersWithSingleLabel("ResilientSrvTopoServer", "Resilient srvtopo server operations", "type")
+}
 
 // CheckCellFlags will check validation of cell and cells_to_watch flag
 // it will help to avoid strange behaviors when vtgate runs but actually does not work
@@ -135,10 +143,16 @@ func run(cmd *cobra.Command, args []string) error {
 
 	servenv.Init()
 
+	// Ensure we open the topo before we start the context, so that the
+	// defer that closes the topo runs after cancelling the context.
+	// This ensures that we've properly closed things like the watchers
+	// at that point.
 	ts := topo.Open()
 	defer ts.Close()
 
-	resilientServer = srvtopo.NewResilientServer(context.Background(), ts, "ResilientSrvTopoServer")
+	ctx, cancel := context.WithCancel(cmd.Context())
+	defer cancel()
+	resilientServer = srvtopo.NewResilientServer(ctx, ts, srvTopoCounts)
 
 	tabletTypes := make([]topodatapb.TabletType, 0, 1)
 	for _, tt := range tabletTypesToWait {
@@ -151,15 +165,24 @@ func run(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("tablet_types_to_wait must contain at least one serving tablet type")
 	}
 
-	err := CheckCellFlags(context.Background(), resilientServer, cell, vtgate.CellsToWatch)
+	err := CheckCellFlags(ctx, resilientServer, cell, vtgate.CellsToWatch)
 	if err != nil {
 		return fmt.Errorf("cells_to_watch validation failed: %v", err)
 	}
 
 	plannerVersion, _ := plancontext.PlannerNameToVersion(plannerName)
 
+	env, err := vtenv.New(vtenv.Options{
+		MySQLServerVersion: servenv.MySQLServerVersion(),
+		TruncateUILen:      servenv.TruncateUILen,
+		TruncateErrLen:     servenv.TruncateErrLen,
+	})
+	if err != nil {
+		return fmt.Errorf("unable to initialize env: %v", err)
+	}
+
 	// pass nil for HealthCheck and it will be created
-	vtg := vtgate.Init(context.Background(), nil, resilientServer, cell, tabletTypes, plannerVersion)
+	vtg := vtgate.Init(ctx, env, nil, resilientServer, cell, tabletTypes, plannerVersion)
 
 	servenv.OnRun(func() {
 		// Flags are parsed now. Parse the template using the actual flag value and overwrite the current template.
@@ -167,7 +190,7 @@ func run(cmd *cobra.Command, args []string) error {
 		addStatusParts(vtg)
 	})
 	servenv.OnClose(func() {
-		_ = vtg.Gateway().Close(context.Background())
+		_ = vtg.Gateway().Close(ctx)
 	})
 	servenv.RunDefault()
 

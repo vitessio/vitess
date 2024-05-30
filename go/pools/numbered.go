@@ -30,7 +30,7 @@ type Numbered struct {
 	mu                   sync.Mutex
 	empty                *sync.Cond // Broadcast when pool becomes empty
 	resources            map[int64]*numberedWrapper
-	recentlyUnregistered *cache.LRUCache
+	recentlyUnregistered *cache.LRUCache[*unregistered]
 }
 
 type numberedWrapper struct {
@@ -47,10 +47,8 @@ type unregistered struct {
 // NewNumbered creates a new numbered
 func NewNumbered() *Numbered {
 	n := &Numbered{
-		resources: make(map[int64]*numberedWrapper),
-		recentlyUnregistered: cache.NewLRUCache(1000, func(_ any) int64 {
-			return 1
-		}),
+		resources:            make(map[int64]*numberedWrapper),
+		recentlyUnregistered: cache.NewLRUCache[*unregistered](1000),
 	}
 	n.empty = sync.NewCond(&n.mu)
 	return n
@@ -107,11 +105,10 @@ func (nu *Numbered) Get(id int64, purpose string) (val any, err error) {
 	defer nu.mu.Unlock()
 	nw, ok := nu.resources[id]
 	if !ok {
-		if val, ok := nu.recentlyUnregistered.Get(fmt.Sprintf("%v", id)); ok {
-			unreg := val.(*unregistered)
+		if unreg, ok := nu.recentlyUnregistered.Get(fmt.Sprintf("%v", id)); ok {
 			return nil, fmt.Errorf("ended at %v (%v)", unreg.timeUnregistered.Format("2006-01-02 15:04:05.000 MST"), unreg.reason)
 		}
-		return nil, fmt.Errorf("not found")
+		return nil, fmt.Errorf("not found (potential transaction timeout)")
 	}
 	if nw.inUse {
 		return nil, fmt.Errorf("in use: %s", nw.purpose)

@@ -19,17 +19,17 @@ package wrangler
 import (
 	"context"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"sync"
 	"testing"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/queryservice/fakes"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
@@ -78,11 +78,11 @@ func newTestVDiffEnv(t testing.TB, ctx context.Context, sourceShards, targetShar
 		tabletType: topodatapb.TabletType_REPLICA,
 		tmc:        newTestVDiffTMClient(),
 	}
-	env.wr = New(logutil.NewConsoleLogger(), env.topoServ, env.tmc)
+	env.wr = New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), env.topoServ, env.tmc)
 
 	// Generate a unique dialer name.
-	dialerName := fmt.Sprintf("VDiffTest-%s-%d", t.Name(), rand.Intn(1000000000))
-	tabletconn.RegisterDialer(dialerName, func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
+	dialerName := fmt.Sprintf("VDiffTest-%s-%d", t.Name(), rand.IntN(1000000000))
+	tabletconn.RegisterDialer(dialerName, func(ctx context.Context, tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
 		env.mu.Lock()
 		defer env.mu.Unlock()
 		if qs, ok := env.tablets[int(tablet.Alias.Uid)]; ok {

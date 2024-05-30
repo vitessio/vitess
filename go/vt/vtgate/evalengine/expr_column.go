@@ -29,8 +29,12 @@ type (
 	Column struct {
 		Offset    int
 		Type      sqltypes.Type
+		Size      int32
+		Scale     int32
 		Collation collations.TypedCollation
 		Original  sqlparser.Expr
+		Nullable  bool
+		Values    *EnumSetValues // For ENUM and SET types
 
 		// dynamicTypeOffset is set when the type of this column cannot be calculated
 		// at translation time. Since expressions with dynamic types cannot be compiled ahead of time,
@@ -51,12 +55,16 @@ func (c *Column) IsExpr() {}
 
 // eval implements the expression interface
 func (c *Column) eval(env *ExpressionEnv) (eval, error) {
-	return valueToEval(env.Row[c.Offset], c.Collation)
+	return valueToEval(env.Row[c.Offset], c.Collation, c.Values)
 }
 
 func (c *Column) typeof(env *ExpressionEnv) (ctype, error) {
 	if c.typed() {
-		return ctype{Type: c.Type, Flag: flagNullable, Col: c.Collation}, nil
+		var nullable typeFlag
+		if c.Nullable {
+			nullable = flagNullable
+		}
+		return ctype{Type: c.Type, Size: c.Size, Scale: c.Scale, Flag: nullable, Col: c.Collation, Values: c.Values}, nil
 	}
 	if c.Offset < len(env.Fields) {
 		field := env.Fields[c.Offset]
@@ -67,14 +75,16 @@ func (c *Column) typeof(env *ExpressionEnv) (ctype, error) {
 		}
 
 		return ctype{
-			Type: field.Type,
-			Col:  typedCoercionCollation(field.Type, collations.ID(field.Charset)),
-			Flag: f,
+			Type:  field.Type,
+			Col:   typedCoercionCollation(field.Type, collations.ID(field.Charset)),
+			Flag:  f,
+			Size:  int32(field.ColumnLength),
+			Scale: int32(field.Decimals),
 		}, nil
 	}
 	if c.Offset < len(env.Row) {
 		value := env.Row[c.Offset]
-		return ctype{Type: value.Type(), Flag: 0, Col: c.Collation}, nil
+		return ctype{Type: value.Type(), Flag: 0, Col: c.Collation, Values: c.Values}, nil
 	}
 	return ctype{}, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "no column at offset %d", c.Offset)
 }
@@ -85,7 +95,12 @@ func (column *Column) compile(c *compiler) (ctype, error) {
 	if column.typed() {
 		typ.Type = column.Type
 		typ.Col = column.Collation
-		typ.Flag = flagNullable
+		if column.Nullable {
+			typ.Flag = flagNullable
+		}
+		typ.Size = column.Size
+		typ.Scale = column.Scale
+		typ.Values = column.Values
 	} else if c.dynamicTypes != nil {
 		typ = c.dynamicTypes[column.dynamicTypeOffset]
 	} else {
@@ -108,6 +123,10 @@ func (column *Column) compile(c *compiler) (ctype, error) {
 		typ.Type = sqltypes.Float64
 	case sqltypes.IsDecimal(tt):
 		c.asm.PushColumn_d(column.Offset)
+	case tt == sqltypes.Enum:
+		c.asm.PushColumn_enum(column.Offset, column.Values)
+	case tt == sqltypes.Set:
+		c.asm.PushColumn_set(column.Offset, column.Values)
 	case sqltypes.IsText(tt):
 		if tt == sqltypes.HexNum {
 			c.asm.PushColumn_hexnum(column.Offset)

@@ -186,6 +186,7 @@ type TabletManagerClient struct {
 	}
 	// keyed by tablet alias.
 	ChangeTabletTypeResult map[string]error
+	ChangeTabletTypeDelays map[string]time.Duration
 	// keyed by tablet alias.
 	DemotePrimaryDelays map[string]time.Duration
 	// keyed by tablet alias.
@@ -205,6 +206,13 @@ type TabletManagerClient struct {
 	// keyed by tablet alias.
 	ExecuteFetchAsDbaResults map[string]struct {
 		Response *querypb.QueryResult
+		Error    error
+	}
+	// keyed by tablet alias.
+	ExecuteMultiFetchAsDbaDelays map[string]time.Duration
+	// keyed by tablet alias.
+	ExecuteMultiFetchAsDbaResults map[string]struct {
+		Response []*querypb.QueryResult
 		Error    error
 	}
 	// keyed by tablet alias.
@@ -461,7 +469,20 @@ func (fake *TabletManagerClient) Backup(ctx context.Context, tablet *topodatapb.
 
 // ChangeType is part of the tmclient.TabletManagerClient interface.
 func (fake *TabletManagerClient) ChangeType(ctx context.Context, tablet *topodatapb.Tablet, newType topodatapb.TabletType, semiSync bool) error {
-	if result, ok := fake.ChangeTabletTypeResult[topoproto.TabletAliasString(tablet.Alias)]; ok {
+	key := topoproto.TabletAliasString(tablet.Alias)
+
+	if fake.ChangeTabletTypeDelays != nil {
+		if delay, ok := fake.ChangeTabletTypeDelays[key]; ok {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(delay):
+				// proceed to results
+			}
+		}
+	}
+
+	if result, ok := fake.ChangeTabletTypeResult[key]; ok {
 		return result
 	}
 
@@ -549,6 +570,30 @@ func (fake *TabletManagerClient) ExecuteFetchAsDba(ctx context.Context, tablet *
 	}
 
 	return nil, fmt.Errorf("%w: no ExecuteFetchAsDba result set for tablet %s", assert.AnError, key)
+}
+
+// ExecuteMultiFetchAsDba is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) ExecuteMultiFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest) ([]*querypb.QueryResult, error) {
+	if fake.ExecuteMultiFetchAsDbaResults == nil {
+		return nil, fmt.Errorf("%w: no ExecuteMultiFetchAsDba results on fake TabletManagerClient", assert.AnError)
+	}
+
+	key := topoproto.TabletAliasString(tablet.Alias)
+	if fake.ExecuteMultiFetchAsDbaDelays != nil {
+		if delay, ok := fake.ExecuteMultiFetchAsDbaDelays[key]; ok {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(delay):
+				// proceed to results
+			}
+		}
+	}
+	if result, ok := fake.ExecuteMultiFetchAsDbaResults[key]; ok {
+		return result.Response, result.Error
+	}
+
+	return nil, fmt.Errorf("%w: no ExecuteMultiFetchAsDba result set for tablet %s", assert.AnError, key)
 }
 
 // ExecuteHook is part of the tmclient.TabletManagerClient interface.
@@ -1061,7 +1106,7 @@ func (fake *TabletManagerClient) RunHealthCheck(ctx context.Context, tablet *top
 }
 
 // SetReplicationSource is part of the tmclient.TabletManagerClient interface.
-func (fake *TabletManagerClient) SetReplicationSource(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync bool) error {
+func (fake *TabletManagerClient) SetReplicationSource(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync bool, heartbeatInterval float64) error {
 	if fake.SetReplicationSourceResults == nil {
 		return assert.AnError
 	}
@@ -1348,7 +1393,7 @@ func (fake *TabletManagerClient) UndoDemotePrimary(ctx context.Context, tablet *
 	return assert.AnError
 }
 
-// VReplicationExec is part of the tmclient.TabletManagerCLient interface.
+// VReplicationExec is part of the tmclient.TabletManagerClient interface.
 func (fake *TabletManagerClient) VReplicationExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error) {
 	if fake.VReplicationExecResults == nil {
 		return nil, assert.AnError
@@ -1374,7 +1419,7 @@ func (fake *TabletManagerClient) VReplicationExec(ctx context.Context, tablet *t
 	if resultsForTablet, ok := fake.VReplicationExecResults[key]; ok {
 		// Round trip the expected query both to ensure it's valid and to
 		// standardize on capitalization and formatting.
-		stmt, err := sqlparser.Parse(query)
+		stmt, err := sqlparser.NewTestParser().Parse(query)
 		if err != nil {
 			return nil, err
 		}
@@ -1393,7 +1438,7 @@ func (fake *TabletManagerClient) VReplicationExec(ctx context.Context, tablet *t
 	return nil, assert.AnError
 }
 
-// CheckThrottler is part of the tmclient.TabletManagerCLient interface.
+// CheckThrottler is part of the tmclient.TabletManagerClient interface.
 func (fake *TabletManagerClient) CheckThrottler(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.CheckThrottlerRequest) (*tabletmanagerdatapb.CheckThrottlerResponse, error) {
 	if fake.CheckThrottlerResults == nil {
 		return nil, assert.AnError

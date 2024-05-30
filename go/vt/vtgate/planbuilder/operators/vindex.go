@@ -21,7 +21,6 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -57,7 +56,7 @@ func (v *Vindex) introducesTableID() semantics.TableSet {
 }
 
 // Clone implements the Operator interface
-func (v *Vindex) Clone([]ops.Operator) ops.Operator {
+func (v *Vindex) Clone([]Operator) Operator {
 	clone := *v
 	return &clone
 }
@@ -74,6 +73,10 @@ func (v *Vindex) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool
 	}
 
 	return addColumn(ctx, v, ae.Expr)
+}
+
+func (*Vindex) AddWSColumn(*plancontext.PlanningContext, int, bool) int {
+	panic(vterrors.VT13001("did not expect this method to be called"))
 }
 
 func colNameToExpr(c *sqlparser.ColName) *sqlparser.AliasedExpr {
@@ -101,7 +104,7 @@ func (v *Vindex) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.Sele
 	return transformColumnsToSelectExprs(ctx, v)
 }
 
-func (v *Vindex) GetOrdering(*plancontext.PlanningContext) []ops.OrderBy {
+func (v *Vindex) GetOrdering(*plancontext.PlanningContext) []OrderBy {
 	return nil
 }
 
@@ -113,15 +116,13 @@ func (v *Vindex) AddCol(col *sqlparser.ColName) {
 	v.Columns = append(v.Columns, col)
 }
 
-func (v *Vindex) CheckValid() error {
+func (v *Vindex) CheckValid() {
 	if len(v.Table.Predicates) == 0 {
-		return vterrors.VT09018(wrongWhereCond + " (where clause missing)")
+		panic(vterrors.VT09018(wrongWhereCond + " (where clause missing)"))
 	}
-
-	return nil
 }
 
-func (v *Vindex) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
+func (v *Vindex) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
 	for _, e := range sqlparser.SplitAndExpression(nil, expr) {
 		deps := ctx.SemTable.RecursiveDeps(e)
 		if deps.NumberOfTables() > 1 {
@@ -149,15 +150,12 @@ func (v *Vindex) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.E
 		}
 
 		// check RHS
-		var err error
 		if sqlparser.IsValue(comparison.Right) || sqlparser.IsSimpleTuple(comparison.Right) {
 			v.Value = comparison.Right
 		} else {
 			panic(vterrors.VT09018(wrongWhereCond + " (rhs is not a value)"))
 		}
-		if err != nil {
-			panic(vterrors.VT09018(wrongWhereCond+": %v", err))
-		}
+
 		v.OpCode = engine.VindexMap
 		v.Table.Predicates = append(v.Table.Predicates, e)
 	}

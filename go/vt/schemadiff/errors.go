@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/sqlescape"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 var (
@@ -282,8 +283,28 @@ type ForeignKeyDependencyUnresolvedError struct {
 }
 
 func (e *ForeignKeyDependencyUnresolvedError) Error() string {
-	return fmt.Sprintf("table %s has unresolved/loop foreign key dependencies",
+	return fmt.Sprintf("table %s has unresolved foreign key dependencies",
 		sqlescape.EscapeID(e.Table))
+}
+
+type ForeignKeyNonexistentReferencedTableError struct {
+	Table           string
+	ReferencedTable string
+}
+
+func (e *ForeignKeyNonexistentReferencedTableError) Error() string {
+	return fmt.Sprintf("table %s foreign key references nonexistent table %s",
+		sqlescape.EscapeID(e.Table), sqlescape.EscapeID(e.ReferencedTable))
+}
+
+type ForeignKeyReferencesViewError struct {
+	Table          string
+	ReferencedView string
+}
+
+func (e *ForeignKeyReferencesViewError) Error() string {
+	return fmt.Sprintf("table %s foreign key references view %s",
+		sqlescape.EscapeID(e.Table), sqlescape.EscapeID(e.ReferencedView))
 }
 
 type InvalidColumnInForeignKeyConstraintError struct {
@@ -402,4 +423,67 @@ type EntityNotFoundError struct {
 
 func (e *EntityNotFoundError) Error() string {
 	return fmt.Sprintf("entity %s not found", sqlescape.EscapeID(e.Name))
+}
+
+type EnumValueOrdinalChangedError struct {
+	Table      string
+	Column     string
+	Value      string
+	Ordinal    int
+	NewOrdinal int
+}
+
+func (e *EnumValueOrdinalChangedError) Error() string {
+	return fmt.Sprintf("ordinal of %s changed in enum or set column %s.%s, from %d to %d", e.Value, sqlescape.EscapeID(e.Table), sqlescape.EscapeID(e.Column), e.Ordinal, e.NewOrdinal)
+}
+
+type UnknownColumnCharsetCollationError struct {
+	Column  string
+	Charset string
+}
+
+func (e *UnknownColumnCharsetCollationError) Error() string {
+	return fmt.Sprintf("unable to determine collation for column %s with charset %q", sqlescape.EscapeID(e.Column), e.Charset)
+}
+
+type UnknownColumnCollationCharsetError struct {
+	Column    string
+	Collation string
+}
+
+func (e *UnknownColumnCollationCharsetError) Error() string {
+	return fmt.Sprintf("unable to determine charset for column %s with collation %q", sqlescape.EscapeID(e.Column), e.Collation)
+}
+
+type SubsequentDiffRejectedError struct {
+	Table string
+	Diffs []EntityDiff
+}
+
+func (e *SubsequentDiffRejectedError) Error() string {
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("multiple changes not allowed on table %s. Found:", sqlescape.EscapeID(e.Table)))
+	for _, d := range e.Diffs {
+		b.WriteString("\n")
+		b.WriteString(d.CanonicalStatementString())
+	}
+	return b.String()
+}
+
+// PartitionSpecNonExclusiveError is returned when a partition spec change is found alongside other changes.
+// for example, in MySQL it is invalid to both DROP PARTITION (a partition spec change) and ADD COLUMN
+// in the same ALTER TABLE statement. In fact, even two partition spec changes in the same ALTER TABLE
+// statement are not allowed.
+// This error should never be encountered in normal circumstances, because:
+// - `sqlparser` should not allow such statements to be parsed.
+// - schemadiff's `Diff()` function will never generate a single `ALTER TABLE` statement with such multiple changes.
+// The error is used for integrity checks only, and should be considered a bug if encountered.
+type PartitionSpecNonExclusiveError struct {
+	Table                string
+	PartitionSpec        *sqlparser.PartitionSpec
+	ConflictingStatement string
+}
+
+func (e *PartitionSpecNonExclusiveError) Error() string {
+	return fmt.Sprintf("ALTER TABLE on %s, may only have a single partition spec change, and other changes are not allowed. Found spec: %s; and change: %s", sqlescape.EscapeID(e.Table), sqlparser.CanonicalString(e.PartitionSpec), e.ConflictingStatement)
 }

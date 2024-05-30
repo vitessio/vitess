@@ -23,12 +23,21 @@ package onlineddl
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
+)
+
+var (
+	testMySQLVersion = "8.0.34"
 )
 
 func TestGetConstraintType(t *testing.T) {
@@ -43,7 +52,9 @@ func TestGetConstraintType(t *testing.T) {
 }
 
 func TestValidateAndEditCreateTableStatement(t *testing.T) {
-	e := Executor{}
+	e := Executor{
+		env: tabletenv.NewEnv(vtenv.NewTestEnv(), nil, "ValidateAndEditCreateTableStatementTest"),
+	}
 	tt := []struct {
 		name                string
 		query               string
@@ -155,13 +166,13 @@ func TestValidateAndEditCreateTableStatement(t *testing.T) {
 	}
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
-			stmt, err := sqlparser.ParseStrictDDL(tc.query)
+			stmt, err := e.env.Environment().Parser().ParseStrictDDL(tc.query)
 			require.NoError(t, err)
 			createTable, ok := stmt.(*sqlparser.CreateTable)
 			require.True(t, ok)
 
 			onlineDDL := &schema.OnlineDDL{UUID: "a5a563da_dc1a_11ec_a416_0a43f95f28a3", Table: "onlineddl_test", Options: tc.strategyOptions}
-			constraintMap, err := e.validateAndEditCreateTableStatement(context.Background(), onlineDDL, createTable)
+			constraintMap, err := e.validateAndEditCreateTableStatement(onlineDDL, createTable)
 			if tc.expectError != "" {
 				assert.ErrorContains(t, err, tc.expectError)
 				return
@@ -185,77 +196,87 @@ func TestValidateAndEditCreateTableStatement(t *testing.T) {
 }
 
 func TestValidateAndEditAlterTableStatement(t *testing.T) {
-	e := Executor{}
+	e := Executor{
+		env: tabletenv.NewEnv(vtenv.NewTestEnv(), nil, "TestValidateAndEditAlterTableStatementTest"),
+	}
 	tt := []struct {
-		alter  string
-		m      map[string]string
-		expect []string
+		alter        string
+		mySQLVersion string
+		m            map[string]string
+		expect       []string
 	}{
 		{
-			alter:  "alter table t add column i int",
-			expect: []string{"alter table t add column i int, algorithm = copy"},
+			alter:        "alter table t add column i int",
+			mySQLVersion: "8.0.29",
+			expect:       []string{"alter table t add column i int, algorithm = copy"},
+		},
+		{
+			alter:        "alter table t add column i int",
+			mySQLVersion: "8.0.32",
+			expect:       []string{"alter table t add column i int"},
 		},
 		{
 			alter:  "alter table t add column i int, add fulltext key name1_ft (name1)",
-			expect: []string{"alter table t add column i int, add fulltext key name1_ft (name1), algorithm = copy"},
+			expect: []string{"alter table t add column i int, add fulltext key name1_ft (name1)"},
 		},
 		{
 			alter:  "alter table t add column i int, add fulltext key name1_ft (name1), add fulltext key name2_ft (name2)",
-			expect: []string{"alter table t add column i int, add fulltext key name1_ft (name1), algorithm = copy", "alter table t add fulltext key name2_ft (name2), algorithm = copy"},
+			expect: []string{"alter table t add column i int, add fulltext key name1_ft (name1)", "alter table t add fulltext key name2_ft (name2)"},
 		},
 		{
 			alter:  "alter table t add fulltext key name0_ft (name0), add column i int, add fulltext key name1_ft (name1), add fulltext key name2_ft (name2)",
-			expect: []string{"alter table t add fulltext key name0_ft (name0), add column i int, algorithm = copy", "alter table t add fulltext key name1_ft (name1), algorithm = copy", "alter table t add fulltext key name2_ft (name2), algorithm = copy"},
+			expect: []string{"alter table t add fulltext key name0_ft (name0), add column i int", "alter table t add fulltext key name1_ft (name1)", "alter table t add fulltext key name2_ft (name2)"},
 		},
 		{
 			alter:  "alter table t add constraint check (id != 1)",
-			expect: []string{"alter table t add constraint chk_aulpn7bjeortljhguy86phdn9 check (id != 1), algorithm = copy"},
+			expect: []string{"alter table t add constraint chk_aulpn7bjeortljhguy86phdn9 check (id != 1)"},
 		},
 		{
 			alter:  "alter table t add constraint t_chk_1 check (id != 1)",
-			expect: []string{"alter table t add constraint chk_1_aulpn7bjeortljhguy86phdn9 check (id != 1), algorithm = copy"},
+			expect: []string{"alter table t add constraint chk_1_aulpn7bjeortljhguy86phdn9 check (id != 1)"},
 		},
 		{
 			alter:  "alter table t add constraint some_check check (id != 1)",
-			expect: []string{"alter table t add constraint some_check_aulpn7bjeortljhguy86phdn9 check (id != 1), algorithm = copy"},
+			expect: []string{"alter table t add constraint some_check_aulpn7bjeortljhguy86phdn9 check (id != 1)"},
 		},
 		{
 			alter:  "alter table t add constraint some_check check (id != 1), add constraint another_check check (id != 2)",
-			expect: []string{"alter table t add constraint some_check_aulpn7bjeortljhguy86phdn9 check (id != 1), add constraint another_check_4fa197273p3w96267pzm3gfi3 check (id != 2), algorithm = copy"},
+			expect: []string{"alter table t add constraint some_check_aulpn7bjeortljhguy86phdn9 check (id != 1), add constraint another_check_4fa197273p3w96267pzm3gfi3 check (id != 2)"},
 		},
 		{
 			alter:  "alter table t add foreign key (parent_id) references onlineddl_test_parent (id) on delete no action",
-			expect: []string{"alter table t add constraint fk_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references onlineddl_test_parent (id) on delete no action, algorithm = copy"},
+			expect: []string{"alter table t add constraint fk_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references onlineddl_test_parent (id) on delete no action"},
 		},
 		{
 			alter:  "alter table t add constraint myfk foreign key (parent_id) references onlineddl_test_parent (id) on delete no action",
-			expect: []string{"alter table t add constraint myfk_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references onlineddl_test_parent (id) on delete no action, algorithm = copy"},
+			expect: []string{"alter table t add constraint myfk_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references onlineddl_test_parent (id) on delete no action"},
 		},
 		{
 			// strip out table name
 			alter:  "alter table t add constraint t_ibfk_1 foreign key (parent_id) references onlineddl_test_parent (id) on delete no action",
-			expect: []string{"alter table t add constraint ibfk_1_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references onlineddl_test_parent (id) on delete no action, algorithm = copy"},
+			expect: []string{"alter table t add constraint ibfk_1_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references onlineddl_test_parent (id) on delete no action"},
 		},
 		{
 			// stript out table name
 			alter:  "alter table t add constraint t_ibfk_1 foreign key (parent_id) references onlineddl_test_parent (id) on delete no action",
-			expect: []string{"alter table t add constraint ibfk_1_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references onlineddl_test_parent (id) on delete no action, algorithm = copy"},
+			expect: []string{"alter table t add constraint ibfk_1_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references onlineddl_test_parent (id) on delete no action"},
 		},
 		{
 			alter:  "alter table t add constraint t_ibfk_1 foreign key (parent_id) references onlineddl_test_parent (id) on delete no action, add constraint some_check check (id != 1)",
-			expect: []string{"alter table t add constraint ibfk_1_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references onlineddl_test_parent (id) on delete no action, add constraint some_check_aulpn7bjeortljhguy86phdn9 check (id != 1), algorithm = copy"},
+			expect: []string{"alter table t add constraint ibfk_1_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references onlineddl_test_parent (id) on delete no action, add constraint some_check_aulpn7bjeortljhguy86phdn9 check (id != 1)"},
 		},
 		{
 			alter: "alter table t drop foreign key t_ibfk_1",
 			m: map[string]string{
 				"t_ibfk_1": "ibfk_1_aaaaaaaaaaaaaa",
 			},
-			expect: []string{"alter table t drop foreign key ibfk_1_aaaaaaaaaaaaaa, algorithm = copy"},
+			expect: []string{"alter table t drop foreign key ibfk_1_aaaaaaaaaaaaaa"},
 		},
 	}
+
 	for _, tc := range tt {
 		t.Run(tc.alter, func(t *testing.T) {
-			stmt, err := sqlparser.ParseStrictDDL(tc.alter)
+			stmt, err := e.env.Environment().Parser().ParseStrictDDL(tc.alter)
 			require.NoError(t, err)
 			alterTable, ok := stmt.(*sqlparser.AlterTable)
 			require.True(t, ok)
@@ -264,10 +285,14 @@ func TestValidateAndEditAlterTableStatement(t *testing.T) {
 			for k, v := range tc.m {
 				m[k] = v
 			}
+			if tc.mySQLVersion == "" {
+				tc.mySQLVersion = testMySQLVersion
+			}
+			capableOf := mysql.ServerVersionCapableOf(tc.mySQLVersion)
 			onlineDDL := &schema.OnlineDDL{UUID: "a5a563da_dc1a_11ec_a416_0a43f95f28a3", Table: "t", Options: "--unsafe-allow-foreign-keys"}
-			alters, err := e.validateAndEditAlterTableStatement(context.Background(), onlineDDL, alterTable, m)
+			alters, err := e.validateAndEditAlterTableStatement(capableOf, onlineDDL, alterTable, m)
 			assert.NoError(t, err)
-			altersStrings := []string{}
+			var altersStrings []string
 			for _, alter := range alters {
 				altersStrings = append(altersStrings, sqlparser.String(alter))
 			}
@@ -277,7 +302,9 @@ func TestValidateAndEditAlterTableStatement(t *testing.T) {
 }
 
 func TestAddInstantAlgorithm(t *testing.T) {
-	e := Executor{}
+	e := Executor{
+		env: tabletenv.NewEnv(vtenv.NewTestEnv(), nil, "AddInstantAlgorithmTest"),
+	}
 	tt := []struct {
 		alter  string
 		expect string
@@ -301,7 +328,7 @@ func TestAddInstantAlgorithm(t *testing.T) {
 	}
 	for _, tc := range tt {
 		t.Run(tc.alter, func(t *testing.T) {
-			stmt, err := sqlparser.ParseStrictDDL(tc.alter)
+			stmt, err := e.env.Environment().Parser().ParseStrictDDL(tc.alter)
 			require.NoError(t, err)
 			alterTable, ok := stmt.(*sqlparser.AlterTable)
 			require.True(t, ok)
@@ -311,7 +338,7 @@ func TestAddInstantAlgorithm(t *testing.T) {
 
 			assert.Equal(t, tc.expect, alterInstant)
 
-			stmt, err = sqlparser.ParseStrictDDL(alterInstant)
+			stmt, err = e.env.Environment().Parser().ParseStrictDDL(alterInstant)
 			require.NoError(t, err)
 			_, ok = stmt.(*sqlparser.AlterTable)
 			require.True(t, ok)
@@ -320,7 +347,9 @@ func TestAddInstantAlgorithm(t *testing.T) {
 }
 
 func TestDuplicateCreateTable(t *testing.T) {
-	e := Executor{}
+	e := Executor{
+		env: tabletenv.NewEnv(vtenv.NewTestEnv(), nil, "DuplicateCreateTableTest"),
+	}
 	ctx := context.Background()
 	onlineDDL := &schema.OnlineDDL{UUID: "a5a563da_dc1a_11ec_a416_0a43f95f28a3", Table: "something", Strategy: "vitess", Options: "--unsafe-allow-foreign-keys"}
 
@@ -353,6 +382,112 @@ func TestDuplicateCreateTable(t *testing.T) {
 			newSQL := sqlparser.String(newCreateTable)
 			assert.Equal(t, tcase.expectSQL, newSQL)
 			assert.Equal(t, tcase.expectMapSize, len(constraintMap))
+		})
+	}
+}
+
+func TestShouldCutOverAccordingToBackoff(t *testing.T) {
+	tcases := []struct {
+		name string
+
+		shouldForceCutOverIndicator bool
+		forceCutOverAfter           time.Duration
+		sinceReadyToComplete        time.Duration
+		sinceLastCutoverAttempt     time.Duration
+		cutoverAttempts             int64
+
+		expectShouldCutOver      bool
+		expectShouldForceCutOver bool
+	}{
+		{
+			name:                "no reason why not, normal cutover",
+			expectShouldCutOver: true,
+		},
+		{
+			name:                "backoff",
+			cutoverAttempts:     1,
+			expectShouldCutOver: false,
+		},
+		{
+			name:                "more backoff",
+			cutoverAttempts:     3,
+			expectShouldCutOver: false,
+		},
+		{
+			name:                    "more backoff, since last cutover",
+			cutoverAttempts:         3,
+			sinceLastCutoverAttempt: time.Second,
+			expectShouldCutOver:     false,
+		},
+		{
+			name:                    "no backoff, long since last cutover",
+			cutoverAttempts:         3,
+			sinceLastCutoverAttempt: time.Hour,
+			expectShouldCutOver:     true,
+		},
+		{
+			name:                    "many attempts, long since last cutover",
+			cutoverAttempts:         3000,
+			sinceLastCutoverAttempt: time.Hour,
+			expectShouldCutOver:     true,
+		},
+		{
+			name:                        "force cutover",
+			shouldForceCutOverIndicator: true,
+			expectShouldCutOver:         true,
+			expectShouldForceCutOver:    true,
+		},
+		{
+			name:                        "force cutover overrides backoff",
+			cutoverAttempts:             3,
+			shouldForceCutOverIndicator: true,
+			expectShouldCutOver:         true,
+			expectShouldForceCutOver:    true,
+		},
+		{
+			name:                     "backoff; cutover-after not in effect yet",
+			cutoverAttempts:          3,
+			forceCutOverAfter:        time.Second,
+			expectShouldCutOver:      false,
+			expectShouldForceCutOver: false,
+		},
+		{
+			name:                     "backoff; cutover-after still not in effect yet",
+			cutoverAttempts:          3,
+			forceCutOverAfter:        time.Second,
+			sinceReadyToComplete:     time.Millisecond,
+			expectShouldCutOver:      false,
+			expectShouldForceCutOver: false,
+		},
+		{
+			name:                     "cutover-after overrides backoff",
+			cutoverAttempts:          3,
+			forceCutOverAfter:        time.Second,
+			sinceReadyToComplete:     time.Second * 2,
+			expectShouldCutOver:      true,
+			expectShouldForceCutOver: true,
+		},
+		{
+			name:                     "cutover-after overrides backoff, realistic value",
+			cutoverAttempts:          300,
+			sinceLastCutoverAttempt:  time.Minute,
+			forceCutOverAfter:        time.Hour,
+			sinceReadyToComplete:     time.Hour * 2,
+			expectShouldCutOver:      true,
+			expectShouldForceCutOver: true,
+		},
+	}
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			shouldCutOver, shouldForceCutOver := shouldCutOverAccordingToBackoff(
+				tcase.shouldForceCutOverIndicator,
+				tcase.forceCutOverAfter,
+				tcase.sinceReadyToComplete,
+				tcase.sinceLastCutoverAttempt,
+				tcase.cutoverAttempts,
+			)
+			assert.Equal(t, tcase.expectShouldCutOver, shouldCutOver)
+			assert.Equal(t, tcase.expectShouldForceCutOver, shouldForceCutOver)
 		})
 	}
 }

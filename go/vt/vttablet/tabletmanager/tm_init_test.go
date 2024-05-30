@@ -34,11 +34,14 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
+	"vitess.io/vitess/go/vt/vttest"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -71,16 +74,16 @@ func TestStartBuildTabletFromInput(t *testing.T) {
 		Type:                 topodatapb.TabletType_REPLICA,
 		Tags:                 map[string]string{},
 		DbNameOverride:       "aa",
-		DefaultConnCollation: uint32(collations.Default()),
+		DefaultConnCollation: uint32(collations.MySQL8().DefaultConnectionCharset()),
 	}
 
-	gotTablet, err := BuildTabletFromInput(alias, port, grpcport, nil)
+	gotTablet, err := BuildTabletFromInput(alias, port, grpcport, nil, collations.MySQL8())
 	require.NoError(t, err)
 
 	// Hostname should be resolved.
 	assert.Equal(t, wantTablet, gotTablet)
 	tabletHostname = ""
-	gotTablet, err = BuildTabletFromInput(alias, port, grpcport, nil)
+	gotTablet, err = BuildTabletFromInput(alias, port, grpcport, nil, collations.MySQL8())
 	require.NoError(t, err)
 	assert.NotEqual(t, "", gotTablet.Hostname)
 
@@ -92,7 +95,7 @@ func TestStartBuildTabletFromInput(t *testing.T) {
 		Start: []byte(""),
 		End:   []byte("\xc0"),
 	}
-	gotTablet, err = BuildTabletFromInput(alias, port, grpcport, nil)
+	gotTablet, err = BuildTabletFromInput(alias, port, grpcport, nil, collations.MySQL8())
 	require.NoError(t, err)
 	// KeyRange check is explicit because the next comparison doesn't
 	// show the diff well enough.
@@ -102,25 +105,25 @@ func TestStartBuildTabletFromInput(t *testing.T) {
 	// Invalid inputs.
 	initKeyspace = ""
 	initShard = "0"
-	_, err = BuildTabletFromInput(alias, port, grpcport, nil)
+	_, err = BuildTabletFromInput(alias, port, grpcport, nil, collations.MySQL8())
 	assert.Contains(t, err.Error(), "init_keyspace and init_shard must be specified")
 
 	initKeyspace = "test_keyspace"
 	initShard = ""
-	_, err = BuildTabletFromInput(alias, port, grpcport, nil)
+	_, err = BuildTabletFromInput(alias, port, grpcport, nil, collations.MySQL8())
 	assert.Contains(t, err.Error(), "init_keyspace and init_shard must be specified")
 
 	initShard = "x-y"
-	_, err = BuildTabletFromInput(alias, port, grpcport, nil)
+	_, err = BuildTabletFromInput(alias, port, grpcport, nil, collations.MySQL8())
 	assert.Contains(t, err.Error(), "cannot validate shard name")
 
 	initShard = "0"
 	initTabletType = "bad"
-	_, err = BuildTabletFromInput(alias, port, grpcport, nil)
+	_, err = BuildTabletFromInput(alias, port, grpcport, nil, collations.MySQL8())
 	assert.Contains(t, err.Error(), "unknown TabletType bad")
 
 	initTabletType = "primary"
-	_, err = BuildTabletFromInput(alias, port, grpcport, nil)
+	_, err = BuildTabletFromInput(alias, port, grpcport, nil, collations.MySQL8())
 	assert.Contains(t, err.Error(), "invalid init_tablet_type PRIMARY")
 }
 
@@ -153,10 +156,10 @@ func TestBuildTabletFromInputWithBuildTags(t *testing.T) {
 		Type:                 topodatapb.TabletType_REPLICA,
 		Tags:                 servenv.AppVersion.ToStringMap(),
 		DbNameOverride:       "aa",
-		DefaultConnCollation: uint32(collations.Default()),
+		DefaultConnCollation: uint32(collations.MySQL8().DefaultConnectionCharset()),
 	}
 
-	gotTablet, err := BuildTabletFromInput(alias, port, grpcport, nil)
+	gotTablet, err := BuildTabletFromInput(alias, port, grpcport, nil, collations.MySQL8())
 	require.NoError(t, err)
 	assert.Equal(t, wantTablet, gotTablet)
 }
@@ -282,7 +285,7 @@ func TestCheckPrimaryShip(t *testing.T) {
 		return nil
 	})
 	require.NoError(t, err)
-	err = tm.Start(tablet, 0)
+	err = tm.Start(tablet, nil)
 	require.NoError(t, err)
 	ti, err = ts.GetTablet(ctx, alias)
 	require.NoError(t, err)
@@ -297,7 +300,7 @@ func TestCheckPrimaryShip(t *testing.T) {
 	// correct and start as PRIMARY.
 	err = ts.DeleteTablet(ctx, alias)
 	require.NoError(t, err)
-	err = tm.Start(tablet, 0)
+	err = tm.Start(tablet, nil)
 	require.NoError(t, err)
 	ti, err = ts.GetTablet(ctx, alias)
 	require.NoError(t, err)
@@ -311,7 +314,7 @@ func TestCheckPrimaryShip(t *testing.T) {
 	ti.Type = topodatapb.TabletType_PRIMARY
 	err = ts.UpdateTablet(ctx, ti)
 	require.NoError(t, err)
-	err = tm.Start(tablet, 0)
+	err = tm.Start(tablet, nil)
 	require.NoError(t, err)
 	ti, err = ts.GetTablet(ctx, alias)
 	require.NoError(t, err)
@@ -321,7 +324,7 @@ func TestCheckPrimaryShip(t *testing.T) {
 	tm.Stop()
 
 	// 5. Subsequent inits will still start the vttablet as PRIMARY.
-	err = tm.Start(tablet, 0)
+	err = tm.Start(tablet, nil)
 	require.NoError(t, err)
 	ti, err = ts.GetTablet(ctx, alias)
 	require.NoError(t, err)
@@ -353,7 +356,7 @@ func TestCheckPrimaryShip(t *testing.T) {
 		return nil
 	})
 	require.NoError(t, err)
-	err = tm.Start(tablet, 0)
+	err = tm.Start(tablet, nil)
 	require.NoError(t, err)
 	ti, err = ts.GetTablet(ctx, alias)
 	require.NoError(t, err)
@@ -376,11 +379,11 @@ func TestCheckPrimaryShip(t *testing.T) {
 	fakeMysql := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
 	fakeMysql.SetReplicationSourceInputs = append(fakeMysql.SetReplicationSourceInputs, fmt.Sprintf("%v:%v", otherTablet.MysqlHostname, otherTablet.MysqlPort))
 	fakeMysql.ExpectedExecuteSuperQueryList = []string{
-		"STOP SLAVE",
-		"FAKE SET MASTER",
-		"START SLAVE",
+		"STOP REPLICA",
+		"FAKE SET SOURCE",
+		"START REPLICA",
 	}
-	err = tm.Start(tablet, 0)
+	err = tm.Start(tablet, nil)
 	require.NoError(t, err)
 	ti, err = ts.GetTablet(ctx, alias)
 	require.NoError(t, err)
@@ -407,7 +410,7 @@ func TestStartCheckMysql(t *testing.T) {
 		DBConfigs:           dbconfigs.NewTestDBConfigs(cp, cp, ""),
 		QueryServiceControl: tabletservermock.NewController(),
 	}
-	err := tm.Start(tablet, 0)
+	err := tm.Start(tablet, nil)
 	require.NoError(t, err)
 	defer tm.Stop()
 
@@ -435,7 +438,7 @@ func TestStartFindMysqlPort(t *testing.T) {
 		DBConfigs:           &dbconfigs.DBConfigs{},
 		QueryServiceControl: tabletservermock.NewController(),
 	}
-	err := tm.Start(tablet, 0)
+	err := tm.Start(tablet, nil)
 	require.NoError(t, err)
 	defer tm.Stop()
 
@@ -511,7 +514,7 @@ func TestStartDoesNotUpdateReplicationDataForTabletInWrongShard(t *testing.T) {
 
 	tablet := newTestTablet(t, 1, "ks", "-d0")
 	require.NoError(t, err)
-	err = tm.Start(tablet, 0)
+	err = tm.Start(tablet, nil)
 	assert.Contains(t, err.Error(), "existing tablet keyspace and shard ks/0 differ")
 
 	tablets, err := ts.FindAllTabletAliasesInShard(ctx, "ks", "-d0")
@@ -548,7 +551,7 @@ func TestCheckTabletTypeResets(t *testing.T) {
 		return nil
 	})
 	require.NoError(t, err)
-	err = tm.Start(tablet, 0)
+	err = tm.Start(tablet, nil)
 	require.NoError(t, err)
 	assert.Equal(t, tm.tmState.tablet.Type, tm.tmState.displayState.tablet.Type)
 	ti, err = ts.GetTablet(ctx, alias)
@@ -630,7 +633,6 @@ func TestGetBuildTags(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.skipCSV, func(t *testing.T) {
 			t.Parallel()
 
@@ -671,7 +673,7 @@ func newTestTM(t *testing.T, ts *topo.Server, uid int, keyspace, shard string) *
 		DBConfigs:           &dbconfigs.DBConfigs{},
 		QueryServiceControl: tabletservermock.NewController(),
 	}
-	err := tm.Start(tablet, 0)
+	err := tm.Start(tablet, nil)
 	require.NoError(t, err)
 
 	// Wait for SrvKeyspace to be rebuilt. We know that it has been built
@@ -732,4 +734,197 @@ func ensureSrvKeyspace(t *testing.T, ctx context.Context, ts *topo.Server, cell,
 		time.Sleep(rebuildKeyspaceRetryInterval)
 	}
 	assert.True(t, found)
+}
+
+func TestWaitForDBAGrants(t *testing.T) {
+	tests := []struct {
+		name      string
+		waitTime  time.Duration
+		errWanted string
+		setupFunc func(t *testing.T) (*tabletenv.TabletConfig, func())
+	}{
+		{
+			name:      "Success without any wait",
+			waitTime:  1 * time.Second,
+			errWanted: "",
+			setupFunc: func(t *testing.T) (*tabletenv.TabletConfig, func()) {
+				// Create a new mysql instance, and the dba user with required grants.
+				// Since all the grants already exist, this should pass without any waiting to be needed.
+				testUser := "vt_test_dba"
+				cluster, err := startMySQLAndCreateUser(t, testUser)
+				require.NoError(t, err)
+				grantAllPrivilegesToUser(t, cluster.MySQLConnParams(), testUser)
+				tc := &tabletenv.TabletConfig{
+					DB: &dbconfigs.DBConfigs{},
+				}
+				connParams := cluster.MySQLConnParams()
+				connParams.Uname = testUser
+				tc.DB.SetDbParams(connParams, mysql.ConnParams{}, mysql.ConnParams{})
+				return tc, func() {
+					cluster.TearDown()
+				}
+			},
+		},
+		{
+			name:      "Success with wait",
+			waitTime:  1 * time.Second,
+			errWanted: "",
+			setupFunc: func(t *testing.T) (*tabletenv.TabletConfig, func()) {
+				// Create a new mysql instance, but delay granting the privileges to the dba user.
+				// This makes the waitForDBAGrants function retry the grant check.
+				testUser := "vt_test_dba"
+				cluster, err := startMySQLAndCreateUser(t, testUser)
+				require.NoError(t, err)
+
+				go func() {
+					time.Sleep(500 * time.Millisecond)
+					grantAllPrivilegesToUser(t, cluster.MySQLConnParams(), testUser)
+				}()
+
+				tc := &tabletenv.TabletConfig{
+					DB: &dbconfigs.DBConfigs{},
+				}
+				connParams := cluster.MySQLConnParams()
+				connParams.Uname = testUser
+				tc.DB.SetDbParams(connParams, mysql.ConnParams{}, mysql.ConnParams{})
+				return tc, func() {
+					cluster.TearDown()
+				}
+			},
+		}, {
+			name:      "Failure due to timeout",
+			waitTime:  300 * time.Millisecond,
+			errWanted: "timed out after 300ms waiting for the dba user to have the required permissions",
+			setupFunc: func(t *testing.T) (*tabletenv.TabletConfig, func()) {
+				// Create a new mysql but don't give the grants to the vt_dba user at all.
+				// This should cause a timeout after waiting, since the privileges are never granted.
+				testUser := "vt_test_dba"
+				cluster, err := startMySQLAndCreateUser(t, testUser)
+				require.NoError(t, err)
+
+				tc := &tabletenv.TabletConfig{
+					DB: &dbconfigs.DBConfigs{},
+				}
+				connParams := cluster.MySQLConnParams()
+				connParams.Uname = testUser
+				tc.DB.SetDbParams(connParams, mysql.ConnParams{}, mysql.ConnParams{})
+				return tc, func() {
+					cluster.TearDown()
+				}
+			},
+		}, {
+			name:      "Success for externally managed tablet",
+			waitTime:  300 * time.Millisecond,
+			errWanted: "",
+			setupFunc: func(t *testing.T) (*tabletenv.TabletConfig, func()) {
+				// Create a new mysql but don't give the grants to the vt_dba user at all.
+				// This should cause a timeout after waiting, since the privileges are never granted.
+				testUser := "vt_test_dba"
+				cluster, err := startMySQLAndCreateUser(t, testUser)
+				require.NoError(t, err)
+
+				tc := &tabletenv.TabletConfig{
+					DB: &dbconfigs.DBConfigs{
+						Host: "some.unknown.host",
+					},
+				}
+				connParams := cluster.MySQLConnParams()
+				connParams.Uname = testUser
+				tc.DB.SetDbParams(connParams, mysql.ConnParams{}, mysql.ConnParams{})
+				return tc, func() {
+					cluster.TearDown()
+				}
+			},
+		}, {
+			name:      "Empty timeout",
+			waitTime:  0,
+			errWanted: "",
+			setupFunc: func(t *testing.T) (*tabletenv.TabletConfig, func()) {
+				tc := &tabletenv.TabletConfig{
+					DB: &dbconfigs.DBConfigs{},
+				}
+				return tc, func() {}
+			},
+		}, {
+			name:      "Empty config",
+			waitTime:  300 * time.Millisecond,
+			errWanted: "",
+			setupFunc: func(t *testing.T) (*tabletenv.TabletConfig, func()) {
+				return nil, func() {}
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config, cleanup := tt.setupFunc(t)
+			defer cleanup()
+			var dm mysqlctl.MysqlDaemon
+			if config != nil {
+				dm = mysqlctl.NewMysqld(config.DB)
+			}
+			tm := TabletManager{
+				_waitForGrantsComplete: make(chan struct{}),
+				MysqlDaemon:            dm,
+			}
+			err := tm.waitForDBAGrants(config, tt.waitTime)
+			if tt.errWanted == "" {
+				require.NoError(t, err)
+				// Verify the channel has been closed.
+				_, isOpen := <-tm._waitForGrantsComplete
+				require.False(t, isOpen)
+			} else {
+				require.EqualError(t, err, tt.errWanted)
+			}
+		})
+	}
+}
+
+// startMySQLAndCreateUser starts a MySQL instance and creates the given user
+func startMySQLAndCreateUser(t *testing.T, testUser string) (vttest.LocalCluster, error) {
+	// Launch MySQL.
+	// We need a Keyspace in the topology, so the DbName is set.
+	// We need a Shard too, so the database 'vttest' is created.
+	cfg := vttest.Config{
+		Topology: &vttestpb.VTTestTopology{
+			Keyspaces: []*vttestpb.Keyspace{
+				{
+					Name: "vttest",
+					Shards: []*vttestpb.Shard{
+						{
+							Name:           "0",
+							DbNameOverride: "vttest",
+						},
+					},
+				},
+			},
+		},
+		OnlyMySQL: true,
+		Charset:   "utf8mb4",
+	}
+	cluster := vttest.LocalCluster{
+		Config: cfg,
+	}
+	err := cluster.Setup()
+	if err != nil {
+		return cluster, nil
+	}
+
+	connParams := cluster.MySQLConnParams()
+	conn, err := mysql.Connect(context.Background(), &connParams)
+	require.NoError(t, err)
+	_, err = conn.ExecuteFetch(fmt.Sprintf(`CREATE USER '%v'@'localhost'`, testUser), 1000, false)
+	conn.Close()
+
+	return cluster, err
+}
+
+// grantAllPrivilegesToUser grants all the privileges to the user specified.
+func grantAllPrivilegesToUser(t *testing.T, connParams mysql.ConnParams, testUser string) {
+	conn, err := mysql.Connect(context.Background(), &connParams)
+	require.NoError(t, err)
+	_, err = conn.ExecuteFetch(fmt.Sprintf(`GRANT ALL ON *.* TO '%v'@'localhost'`, testUser), 1000, false)
+	require.NoError(t, err)
+	_, err = conn.ExecuteFetch(fmt.Sprintf(`GRANT GRANT OPTION ON *.* TO '%v'@'localhost'`, testUser), 1000, false)
+	require.NoError(t, err)
+	conn.Close()
 }

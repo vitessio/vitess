@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/DataDog/datadog-go/statsd"
+	"github.com/DataDog/datadog-go/v5/statsd"
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/stats"
@@ -81,14 +81,17 @@ func InitWithoutServenv(namespace string) {
 		log.Info("statsdAddress is empty")
 		return
 	}
-	statsdC, err := statsd.NewBuffered(statsdAddress, 100)
+	opts := []statsd.Option{
+		statsd.WithMaxMessagesPerPayload(100),
+		statsd.WithNamespace(namespace),
+	}
+	if tags := stats.ParseCommonTags(stats.CommonTags); len(tags) > 0 {
+		opts = append(opts, statsd.WithTags(makeCommonTags(tags)))
+	}
+	statsdC, err := statsd.New(statsdAddress, opts...)
 	if err != nil {
 		log.Errorf("Failed to create statsd client %v", err)
 		return
-	}
-	statsdC.Namespace = namespace + "."
-	if tags := stats.ParseCommonTags(stats.CommonTags); len(tags) > 0 {
-		statsdC.Tags = makeCommonTags(tags)
 	}
 	sb.namespace = namespace
 	sb.statsdClient = statsdC

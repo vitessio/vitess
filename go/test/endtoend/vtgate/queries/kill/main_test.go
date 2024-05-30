@@ -21,7 +21,7 @@ import (
 	_ "embed"
 	"flag"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"strconv"
 	"strings"
@@ -134,7 +134,8 @@ func dropData(t *testing.T) {
 	defer conn.Close()
 
 	utils.Exec(t, conn, "drop table if exists test")
-	utils.Exec(t, conn, schema)
+	utils.Exec(t, conn, "drop table if exists test_idx")
+	utils.ExecMulti(t, conn, schema)
 }
 
 func getRandomString(size int) string {

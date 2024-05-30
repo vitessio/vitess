@@ -108,19 +108,19 @@ func expectCanSwitchQueries(t *testing.T, tme *testMigraterEnv, keyspace, state 
 		"id|source|pos|stop_pos|max_replication_lag|state|db_name|time_updated|transaction_timestamp|time_heartbeat|time_throttled|component_throttled|message|tags",
 		"int64|varchar|int64|int64|int64|varchar|varchar|int64|int64|int64|int64|varchar|varchar|varchar"),
 		row)
-	copyStateResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"table|lastpk",
-		"varchar|varchar"),
-		"t1|pk1",
+	copyStateResult := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("vrepl_id|table|lastpk", "int64|varchar|varchar"),
+		"1|t1|pk1",
+		"1|t2|pk2",
 	)
 
 	for _, db := range tme.dbTargetClients {
 		db.addInvariant(streamExtInfoKs2, replicationResult)
 
 		if state == "Copying" {
-			db.addInvariant(fmt.Sprintf(copyStateQuery, 1, 1), copyStateResult)
+			db.addInvariant(fmt.Sprintf(copyStateQuery, "1", "1"), copyStateResult)
 		} else {
-			db.addInvariant(fmt.Sprintf(copyStateQuery, 1, 1), noResult)
+			db.addInvariant(fmt.Sprintf(copyStateQuery, "1", "1"), noResult)
 		}
 	}
 }
@@ -370,6 +370,85 @@ func TestPartialMoveTables(t *testing.T) {
 	tme.expectNoPreviousJournals()
 	require.NoError(t, testSwitchForward(t, wf))
 	require.Equal(t, "Reads partially switched, for shards: -80. Writes partially switched, for shards: -80", wf.CurrentState())
+	require.NoError(t, err)
+
+	tme.expectNoPreviousJournals()
+	tme.expectNoPreviousReverseJournals()
+	require.NoError(t, testReverse(t, wf))
+	require.Equal(t, WorkflowStateNotSwitched, wf.CurrentState())
+}
+
+// TestPartialMoveTablesShardSubset is a version of TestPartialMoveTables which uses the --shards option.
+func TestPartialMoveTablesShardSubset(t *testing.T) {
+	ctx := context.Background()
+	shards := []string{"-40", "40-80", "80-c0", "c0-"}
+	shardsToMove := shards[0:2]
+	otherShards := shards[2:]
+	p := &VReplicationWorkflowParams{
+		Workflow:                        "test",
+		WorkflowType:                    MoveTablesWorkflow,
+		SourceKeyspace:                  "ks1",
+		SourceShards:                    shardsToMove, // shard by shard
+		TargetShards:                    shardsToMove, // shard by shard
+		TargetKeyspace:                  "ks2",
+		Tables:                          "t1,t2",
+		Cells:                           "cell1,cell2",
+		TabletTypes:                     "REPLICA,RDONLY,PRIMARY",
+		Timeout:                         DefaultActionTimeout,
+		MaxAllowedTransactionLagSeconds: defaultMaxAllowedTransactionLagSeconds,
+		OnDDL:                           binlogdatapb.OnDDLAction_STOP.String(),
+	}
+	tme := newTestTablePartialMigrater(ctx, t, shards, shardsToMove, "select * %s")
+	defer tme.stopTablets(t)
+
+	// Save some unrelated shard routing rules to be sure that
+	// they don't interfere in any way.
+	srr, err := tme.ts.GetShardRoutingRules(ctx)
+	require.NoError(t, err)
+	srr.Rules = append(srr.Rules, []*vschema.ShardRoutingRule{
+		{
+			FromKeyspace: "wut",
+			Shard:        "40-80",
+			ToKeyspace:   "bloop",
+		},
+		{
+			FromKeyspace: "haylo",
+			Shard:        "-80",
+			ToKeyspace:   "blarg",
+		},
+	}...)
+	err = tme.ts.SaveShardRoutingRules(ctx, srr)
+	require.NoError(t, err)
+
+	// Providing an incorrect shard should result in the workflow not being found.
+	p.ShardSubset = otherShards
+	wf, err := tme.wr.NewVReplicationWorkflow(ctx, MoveTablesWorkflow, p)
+	require.NoError(t, err)
+	require.Nil(t, wf.ts)
+
+	p.ShardSubset = shardsToMove
+	wf, err = tme.wr.NewVReplicationWorkflow(ctx, MoveTablesWorkflow, p)
+	require.NoError(t, err)
+	require.NotNil(t, wf)
+	require.Equal(t, WorkflowStateNotSwitched, wf.CurrentState())
+	require.True(t, wf.ts.isPartialMigration, "expected partial shard migration")
+
+	srr, err = tme.ts.GetShardRoutingRules(ctx)
+	require.NoError(t, err)
+	srr.Rules = append(srr.Rules, &vschema.ShardRoutingRule{
+		FromKeyspace: "ks2",
+		Shard:        "80-",
+		ToKeyspace:   "ks1",
+	})
+	err = tme.ts.SaveShardRoutingRules(ctx, srr)
+	require.NoError(t, err)
+
+	tme.expectNoPreviousJournals()
+	expectMoveTablesQueries(t, tme, p)
+	tme.expectNoPreviousJournals()
+	wf.params.ShardSubset = shardsToMove
+	require.NoError(t, testSwitchForward(t, wf))
+	require.Equal(t, "Reads partially switched, for shards: -40,40-80. Writes partially switched, for shards: -40,40-80", wf.CurrentState())
 	require.NoError(t, err)
 
 	tme.expectNoPreviousJournals()
@@ -671,7 +750,7 @@ func expectReshardQueries(t *testing.T, tme *testShardMigraterEnv, params *VRepl
 		dbclient.addInvariant("delete from _vt.vreplication where id in (1)", noResult)
 		dbclient.addInvariant("delete from _vt.copy_state where vrepl_id in (1)", noResult)
 		dbclient.addInvariant("delete from _vt.post_copy_action where vrepl_id in (1)", noResult)
-		dbclient.addInvariant("insert into _vt.vreplication (workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type)", &sqltypes.Result{InsertID: uint64(1)})
+		dbclient.addInvariant("insert into _vt.vreplication (workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, options)", &sqltypes.Result{InsertID: uint64(1)})
 		dbclient.addInvariant("select id from _vt.vreplication where id = 1", resultid1)
 		dbclient.addInvariant("select id from _vt.vreplication where id = 2", resultid2)
 		dbclient.addInvariant("select * from _vt.vreplication where id = 1", runningResult(1))
@@ -739,7 +818,7 @@ func expectMoveTablesQueries(t *testing.T, tme *testMigraterEnv, params *VReplic
 		dbclient.addInvariant("select id from _vt.vreplication where id = 2", resultid2)
 		dbclient.addInvariant("update _vt.vreplication set state = 'Stopped', message = 'stopped for cutover' where id in (1)", noResult)
 		dbclient.addInvariant("update _vt.vreplication set state = 'Stopped', message = 'stopped for cutover' where id in (2)", noResult)
-		dbclient.addInvariant("insert into _vt.vreplication (workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type)", &sqltypes.Result{InsertID: uint64(1)})
+		dbclient.addInvariant("insert into _vt.vreplication (workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, options)", &sqltypes.Result{InsertID: uint64(1)})
 		dbclient.addInvariant("update _vt.vreplication set message = 'FROZEN'", noResult)
 		dbclient.addInvariant("select 1 from _vt.vreplication where db_name='vt_ks2' and workflow='test' and message!='FROZEN'", noResult)
 		dbclient.addInvariant("delete from _vt.vreplication where id in (1)", noResult)
@@ -758,7 +837,7 @@ func expectMoveTablesQueries(t *testing.T, tme *testMigraterEnv, params *VReplic
 	for _, dbclient := range tme.dbSourceClients {
 		dbclient.addInvariant("select val from _vt.resharding_journal", noResult)
 		dbclient.addInvariant("update _vt.vreplication set message = 'FROZEN'", noResult)
-		dbclient.addInvariant("insert into _vt.vreplication (workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type)", &sqltypes.Result{InsertID: uint64(1)})
+		dbclient.addInvariant("insert into _vt.vreplication (workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, options)", &sqltypes.Result{InsertID: uint64(1)})
 		dbclient.addInvariant("update _vt.vreplication set state = 'Stopped', message = 'stopped for cutover' where id in (1)", noResult)
 		dbclient.addInvariant("update _vt.vreplication set state = 'Stopped', message = 'stopped for cutover' where id in (2)", noResult)
 		dbclient.addInvariant("select id from _vt.vreplication where id = 1", resultid1)
@@ -767,7 +846,7 @@ func expectMoveTablesQueries(t *testing.T, tme *testMigraterEnv, params *VReplic
 		dbclient.addInvariant("delete from _vt.vreplication where id in (1)", noResult)
 		dbclient.addInvariant("delete from _vt.copy_state where vrepl_id in (1)", noResult)
 		dbclient.addInvariant("delete from _vt.post_copy_action where vrepl_id in (1)", noResult)
-		dbclient.addInvariant("insert into _vt.vreplication (workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type)", &sqltypes.Result{InsertID: uint64(1)})
+		dbclient.addInvariant("insert into _vt.vreplication (workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, options)", &sqltypes.Result{InsertID: uint64(1)})
 		dbclient.addInvariant("select * from _vt.vreplication where id = 1", runningResult(1))
 		dbclient.addInvariant("select * from _vt.vreplication where id = 2", runningResult(2))
 		dbclient.addInvariant("insert into _vt.resharding_journal", noResult)
@@ -792,12 +871,14 @@ func expectMoveTablesQueries(t *testing.T, tme *testMigraterEnv, params *VReplic
 	tme.dbSourceClients[0].addInvariant("select pos, state, message from _vt.vreplication where id=2", state)
 	tme.dbSourceClients[1].addInvariant("select pos, state, message from _vt.vreplication where id=1", state)
 	tme.dbSourceClients[1].addInvariant("select pos, state, message from _vt.vreplication where id=2", state)
+	tme.tmeDB.AddQuery("SET SESSION foreign_key_checks = OFF", &sqltypes.Result{})
 	tme.tmeDB.AddQuery("USE `vt_ks1`", noResult)
 	tme.tmeDB.AddQuery("USE `vt_ks2`", noResult)
 	tme.tmeDB.AddQuery("drop table `vt_ks1`.`t1`", noResult)
 	tme.tmeDB.AddQuery("drop table `vt_ks1`.`t2`", noResult)
 	tme.tmeDB.AddQuery("drop table `vt_ks2`.`t1`", noResult)
 	tme.tmeDB.AddQuery("drop table `vt_ks2`.`t2`", noResult)
+	tme.tmeDB.AddQuery("SET SESSION foreign_key_checks = ON", &sqltypes.Result{})
 	tme.tmeDB.AddQuery("update _vt.vreplication set message='Picked source tablet: cell:\"cell1\" uid:10 ' where id=1", noResult)
 	tme.tmeDB.AddQuery("lock tables `t1` read,`t2` read", &sqltypes.Result{})
 	tme.tmeDB.AddQuery("select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = 1", noResult)

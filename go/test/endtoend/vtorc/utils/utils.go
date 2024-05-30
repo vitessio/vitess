@@ -33,7 +33,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -206,7 +205,7 @@ func shutdownVttablets(clusterInfo *VTOrcClusterInfo) error {
 			// Remove the tablet record for this tablet
 		}
 		// Ignoring error here because some tests delete tablets themselves.
-		_ = clusterInfo.ClusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", vttablet.Alias)
+		_ = clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommand("DeleteTablets", vttablet.Alias)
 	}
 	clusterInfo.ClusterInstance.Keyspaces[0].Shards[0].Vttablets = nil
 	return nil
@@ -328,10 +327,12 @@ func cleanAndStartVttablet(t *testing.T, clusterInfo *VTOrcClusterInfo, vttablet
 	_, err = RunSQL(t, "DROP DATABASE IF EXISTS _vt", vttablet, "")
 	require.NoError(t, err)
 	// stop the replication
-	_, err = RunSQL(t, "STOP SLAVE", vttablet, "")
+	_, err = RunSQL(t, "STOP REPLICA", vttablet, "")
 	require.NoError(t, err)
 	// reset the binlog
-	_, err = RunSQL(t, "RESET MASTER", vttablet, "")
+	resetCmd, err := vttablet.VttabletProcess.ResetBinaryLogsCommand()
+	require.NoError(t, err)
+	_, err = RunSQL(t, resetCmd, vttablet, "")
 	require.NoError(t, err)
 	// set read-only to true
 	_, err = RunSQL(t, "SET GLOBAL read_only = ON", vttablet, "")
@@ -352,19 +353,16 @@ func ShardPrimaryTablet(t *testing.T, clusterInfo *VTOrcClusterInfo, keyspace *c
 		if now.Sub(start) > time.Second*60 {
 			assert.FailNow(t, "failed to elect primary before timeout")
 		}
-		result, err := clusterInfo.ClusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetShard", fmt.Sprintf("%s/%s", keyspace.Name, shard.Name))
-		assert.Nil(t, err)
+		si, err := clusterInfo.ClusterInstance.VtctldClientProcess.GetShard(keyspace.Name, shard.Name)
+		require.NoError(t, err)
 
-		var shardInfo topodatapb.Shard
-		err = json2.Unmarshal([]byte(result), &shardInfo)
-		assert.Nil(t, err)
-		if shardInfo.PrimaryAlias == nil {
+		if si.Shard.PrimaryAlias == nil {
 			log.Warningf("Shard %v/%v has no primary yet, sleep for 1 second\n", keyspace.Name, shard.Name)
 			time.Sleep(time.Second)
 			continue
 		}
 		for _, tablet := range shard.Vttablets {
-			if tablet.Alias == topoproto.TabletAliasString(shardInfo.PrimaryAlias) {
+			if tablet.Alias == topoproto.TabletAliasString(si.Shard.PrimaryAlias) {
 				return tablet
 			}
 		}
@@ -381,12 +379,8 @@ func CheckPrimaryTablet(t *testing.T, clusterInfo *VTOrcClusterInfo, tablet *clu
 			//log.Exitf("error")
 			assert.FailNow(t, "failed to elect primary before timeout")
 		}
-		result, err := clusterInfo.ClusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetTablet", tablet.Alias)
+		tabletInfo, err := clusterInfo.ClusterInstance.VtctldClientProcess.GetTablet(tablet.Alias)
 		require.NoError(t, err)
-		var tabletInfo topodatapb.Tablet
-		err = json2.Unmarshal([]byte(result), &tabletInfo)
-		require.NoError(t, err)
-
 		if topodatapb.TabletType_PRIMARY != tabletInfo.GetType() {
 			log.Warningf("Tablet %v is not primary yet, sleep for 1 second\n", tablet.Alias)
 			time.Sleep(time.Second)
@@ -510,7 +504,7 @@ func WaitForReplicationToStop(t *testing.T, vttablet *cluster.Vttablet) error {
 		case <-timeout:
 			return fmt.Errorf("timedout: waiting for primary to stop replication")
 		default:
-			res, err := RunSQL(t, "SHOW SLAVE STATUS", vttablet, "")
+			res, err := RunSQL(t, "SHOW REPLICA STATUS", vttablet, "")
 			if err != nil {
 				return err
 			}
@@ -535,9 +529,9 @@ func validateTopology(t *testing.T, clusterInfo *VTOrcClusterInfo, pingTablets b
 				var err error
 				var output string
 				if pingTablets {
-					output, err = clusterInfo.ClusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("Validate", "--", "--ping-tablets=true")
+					output, err = clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("Validate", "--ping-tablets")
 				} else {
-					output, err = clusterInfo.ClusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("Validate")
+					output, err = clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("Validate")
 				}
 				if err != nil {
 					log.Warningf("Validate failed, retrying, output - %s", output)
@@ -683,21 +677,6 @@ func PermanentlyRemoveVttablet(clusterInfo *VTOrcClusterInfo, tablet *cluster.Vt
 	}
 }
 
-// ChangePrivileges is used to change the privileges of the given user. These commands are executed such that they are not replicated
-func ChangePrivileges(t *testing.T, sql string, tablet *cluster.Vttablet, user string) {
-	_, err := RunSQL(t, "SET sql_log_bin = OFF;"+sql+";SET sql_log_bin = ON;", tablet, "")
-	require.NoError(t, err)
-
-	res, err := RunSQL(t, fmt.Sprintf("SELECT id FROM INFORMATION_SCHEMA.PROCESSLIST WHERE user = '%s'", user), tablet, "")
-	require.NoError(t, err)
-	for _, row := range res.Rows {
-		id, err := row[0].ToInt64()
-		require.NoError(t, err)
-		_, err = RunSQL(t, fmt.Sprintf("kill %d", id), tablet, "")
-		require.NoError(t, err)
-	}
-}
-
 // ResetPrimaryLogs is used reset the binary logs
 func ResetPrimaryLogs(t *testing.T, curPrimary *cluster.Vttablet) {
 	_, err := RunSQL(t, "FLUSH BINARY LOGS", curPrimary, "")
@@ -715,14 +694,15 @@ func ResetPrimaryLogs(t *testing.T, curPrimary *cluster.Vttablet) {
 
 // CheckSourcePort is used to check that the replica has the given source port set in its MySQL instance
 func CheckSourcePort(t *testing.T, replica *cluster.Vttablet, source *cluster.Vttablet, timeToWait time.Duration) {
-	timeout := time.After(timeToWait)
+	ctx, cancel := context.WithTimeout(context.Background(), timeToWait)
+	defer cancel()
 	for {
 		select {
-		case <-timeout:
+		case <-ctx.Done():
 			t.Fatal("timedout waiting for correct primary to be setup")
 			return
 		default:
-			res, err := RunSQL(t, "SHOW SLAVE STATUS", replica, "")
+			res, err := RunSQL(t, "SHOW REPLICA STATUS", replica, "")
 			require.NoError(t, err)
 
 			if len(res.Rows) != 1 {
@@ -731,7 +711,7 @@ func CheckSourcePort(t *testing.T, replica *cluster.Vttablet, source *cluster.Vt
 			}
 
 			for idx, field := range res.Fields {
-				if strings.EqualFold(field.Name, "MASTER_PORT") || strings.EqualFold(field.Name, "SOURCE_PORT") {
+				if strings.EqualFold(field.Name, "SOURCE_PORT") {
 					port, err := res.Rows[0][idx].ToInt64()
 					require.NoError(t, err)
 					if port == int64(source.MySQLPort) {
@@ -740,6 +720,41 @@ func CheckSourcePort(t *testing.T, replica *cluster.Vttablet, source *cluster.Vt
 				}
 			}
 			log.Warningf("source port not set correctly yet, will retry")
+		}
+		time.Sleep(300 * time.Millisecond)
+	}
+}
+
+// CheckHeartbeatInterval is used to check that the replica has the given heartbeat interval set in its MySQL instance
+func CheckHeartbeatInterval(t *testing.T, replica *cluster.Vttablet, heartbeatInterval float64, timeToWait time.Duration) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeToWait)
+	defer cancel()
+	for {
+		select {
+		case <-ctx.Done():
+			t.Fatal("timed out waiting for correct heartbeat interval to be setup")
+			return
+		default:
+			res, err := RunSQL(t, "select * from performance_schema.replication_connection_configuration", replica, "")
+			require.NoError(t, err)
+
+			if len(res.Rows) != 1 {
+				log.Warningf("no replication configuration yet, will retry")
+				break
+			}
+
+			for idx, field := range res.Fields {
+				if strings.EqualFold(field.Name, "HEARTBEAT_INTERVAL") {
+					readVal, err := res.Rows[0][idx].ToFloat64()
+					require.NoError(t, err)
+					if readVal == heartbeatInterval {
+						return
+					} else {
+						log.Warningf("heartbeat interval set to - %v", readVal)
+					}
+				}
+			}
+			log.Warningf("heartbeat interval not set correctly yet, will retry")
 		}
 		time.Sleep(300 * time.Millisecond)
 	}
@@ -756,7 +771,7 @@ func MakeAPICall(t *testing.T, vtorc *cluster.VTOrcProcess, url string) (status 
 // The function provided takes in the status and response and returns if we should continue to retry or not
 func MakeAPICallRetry(t *testing.T, vtorc *cluster.VTOrcProcess, url string, retry func(int, string) bool) (status int, response string) {
 	t.Helper()
-	timeout := time.After(10 * time.Second)
+	timeout := time.After(30 * time.Second)
 	for {
 		select {
 		case <-timeout:
@@ -919,16 +934,40 @@ func AddSemiSyncKeyspace(t *testing.T, clusterInfo *VTOrcClusterInfo) {
 
 // IsSemiSyncSetupCorrectly checks that the semi-sync is setup correctly on the given vttablet
 func IsSemiSyncSetupCorrectly(t *testing.T, tablet *cluster.Vttablet, semiSyncVal string) bool {
-	dbVar, err := tablet.VttabletProcess.GetDBVar("rpl_semi_sync_slave_enabled", "")
+	semisyncType, err := tablet.VttabletProcess.SemiSyncExtensionLoaded()
 	require.NoError(t, err)
-	return semiSyncVal == dbVar
+	switch semisyncType {
+	case mysql.SemiSyncTypeSource:
+		dbVar, err := tablet.VttabletProcess.GetDBVar("rpl_semi_sync_replica_enabled", "")
+		require.NoError(t, err)
+		return semiSyncVal == dbVar
+	case mysql.SemiSyncTypeMaster:
+		dbVar, err := tablet.VttabletProcess.GetDBVar("rpl_semi_sync_slave_enabled", "")
+		require.NoError(t, err)
+		return semiSyncVal == dbVar
+	default:
+		assert.Fail(t, "semisync extension not loaded")
+		return false
+	}
 }
 
 // IsPrimarySemiSyncSetupCorrectly checks that the priamry side semi-sync is setup correctly on the given vttablet
 func IsPrimarySemiSyncSetupCorrectly(t *testing.T, tablet *cluster.Vttablet, semiSyncVal string) bool {
-	dbVar, err := tablet.VttabletProcess.GetDBVar("rpl_semi_sync_master_enabled", "")
+	semisyncType, err := tablet.VttabletProcess.SemiSyncExtensionLoaded()
 	require.NoError(t, err)
-	return semiSyncVal == dbVar
+	switch semisyncType {
+	case mysql.SemiSyncTypeSource:
+		dbVar, err := tablet.VttabletProcess.GetDBVar("rpl_semi_sync_source_enabled", "")
+		require.NoError(t, err)
+		return semiSyncVal == dbVar
+	case mysql.SemiSyncTypeMaster:
+		dbVar, err := tablet.VttabletProcess.GetDBVar("rpl_semi_sync_master_enabled", "")
+		require.NoError(t, err)
+		return semiSyncVal == dbVar
+	default:
+		assert.Fail(t, "semisync extension not loaded")
+		return false
+	}
 }
 
 // WaitForReadOnlyValue waits for the read_only global variable to reach the provided value
@@ -1011,6 +1050,21 @@ func WaitForSuccessfulERSCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess
 	ersCountsMap := vars["emergency_reparent_counts"].(map[string]interface{})
 	successCount := getIntFromValue(ersCountsMap[mapKey])
 	assert.EqualValues(t, countExpected, successCount)
+}
+
+// CheckVarExists checks whether the given metric exists or not in /debug/vars.
+func CheckVarExists(t *testing.T, vtorcInstance *cluster.VTOrcProcess, metricName string) {
+	t.Helper()
+	vars := vtorcInstance.GetVars()
+	_, exists := vars[metricName]
+	assert.True(t, exists)
+}
+
+// CheckMetricExists checks whether the given metric exists or not in /metrics.
+func CheckMetricExists(t *testing.T, vtorcInstance *cluster.VTOrcProcess, metricName string) {
+	t.Helper()
+	metrics := vtorcInstance.GetMetrics()
+	assert.Contains(t, metrics, metricName)
 }
 
 // getIntFromValue is a helper function to get an integer from the given value.
@@ -1120,4 +1174,33 @@ func PrintVTOrcLogsOnFailure(t *testing.T, clusterInstance *cluster.LocalProcess
 		}
 		log.Errorf("%s", string(content))
 	}
+}
+
+// EnableGlobalRecoveries enables global recoveries for the given VTOrc.
+func EnableGlobalRecoveries(t *testing.T, vtorc *cluster.VTOrcProcess) {
+	status, resp, err := MakeAPICall(t, vtorc, "/api/enable-global-recoveries")
+	require.NoError(t, err)
+	assert.Equal(t, 200, status)
+	assert.Equal(t, "Global recoveries enabled\n", resp)
+}
+
+// DisableGlobalRecoveries disables global recoveries for the given VTOrc.
+func DisableGlobalRecoveries(t *testing.T, vtorc *cluster.VTOrcProcess) {
+	status, resp, err := MakeAPICall(t, vtorc, "/api/disable-global-recoveries")
+	require.NoError(t, err)
+	assert.Equal(t, 200, status)
+	assert.Equal(t, "Global recoveries disabled\n", resp)
+}
+
+// SemiSyncExtensionLoaded is used to check which semisync extension is loaded.
+func SemiSyncExtensionLoaded(t *testing.T, tablet *cluster.Vttablet) (mysql.SemiSyncType, error) {
+	// Get Connection
+	tabletParams := getMysqlConnParam(tablet, "")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	conn, err := mysql.Connect(ctx, &tabletParams)
+	require.Nil(t, err)
+	defer conn.Close()
+
+	return conn.SemiSyncExtensionLoaded()
 }

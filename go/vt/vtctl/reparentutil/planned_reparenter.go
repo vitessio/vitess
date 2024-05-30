@@ -60,6 +60,7 @@ type PlannedReparentOptions struct {
 	NewPrimaryAlias     *topodatapb.TabletAlias
 	AvoidPrimaryAlias   *topodatapb.TabletAlias
 	WaitReplicasTimeout time.Duration
+	TolerableReplLag    time.Duration
 
 	// Private options managed internally. We use value-passing semantics to
 	// set these options inside a PlannedReparent without leaking these details
@@ -151,7 +152,7 @@ func (pr *PlannedReparenter) getLockAction(opts PlannedReparentOptions) string {
 // primary), as well as an error.
 //
 // It will also set the NewPrimaryAlias option if the caller did not specify
-// one, provided it can choose a new primary candidate. See ChooseNewPrimary()
+// one, provided it can choose a new primary candidate. See ElectNewPrimary()
 // for details on primary candidate selection.
 func (pr *PlannedReparenter) preflightChecks(
 	ctx context.Context,
@@ -176,21 +177,16 @@ func (pr *PlannedReparenter) preflightChecks(
 			event.DispatchUpdate(ev, "current primary is different than tablet to avoid, nothing to do")
 			return true, nil
 		}
-
-		event.DispatchUpdate(ev, "searching for primary candidate")
-
-		opts.NewPrimaryAlias, err = ChooseNewPrimary(ctx, pr.tmc, &ev.ShardInfo, tabletMap, opts.AvoidPrimaryAlias, opts.WaitReplicasTimeout, opts.durability, pr.logger)
-		if err != nil {
-			return true, err
-		}
-
-		if opts.NewPrimaryAlias == nil {
-			return true, vterrors.Errorf(vtrpc.Code_INTERNAL, "cannot find a tablet to reparent to in the same cell as the current primary")
-		}
-
-		pr.logger.Infof("elected new primary candidate %v", topoproto.TabletAliasString(opts.NewPrimaryAlias))
-		event.DispatchUpdate(ev, "elected new primary candidate")
 	}
+
+	event.DispatchUpdate(ev, "electing a primary candidate")
+	opts.NewPrimaryAlias, err = ElectNewPrimary(ctx, pr.tmc, &ev.ShardInfo, tabletMap, opts.NewPrimaryAlias, opts.AvoidPrimaryAlias, opts.WaitReplicasTimeout, opts.TolerableReplLag, opts.durability, pr.logger)
+	if err != nil {
+		return true, err
+	}
+
+	pr.logger.Infof("elected new primary candidate %v", topoproto.TabletAliasString(opts.NewPrimaryAlias))
+	event.DispatchUpdate(ev, "elected new primary candidate")
 
 	primaryElectAliasStr := topoproto.TabletAliasString(opts.NewPrimaryAlias)
 
@@ -258,7 +254,7 @@ func (pr *PlannedReparenter) performGracefulPromotion(
 	setSourceCtx, setSourceCancel := context.WithTimeout(ctx, opts.WaitReplicasTimeout)
 	defer setSourceCancel()
 
-	if err := pr.tmc.SetReplicationSource(setSourceCtx, primaryElect, currentPrimary.Alias, 0, snapshotPos, true, IsReplicaSemiSync(opts.durability, currentPrimary.Tablet, primaryElect)); err != nil {
+	if err := pr.tmc.SetReplicationSource(setSourceCtx, primaryElect, currentPrimary.Alias, 0, snapshotPos, true, IsReplicaSemiSync(opts.durability, currentPrimary.Tablet, primaryElect), 0); err != nil {
 		return vterrors.Wrapf(err, "replication on primary-elect %v did not catch up in time; replication must be healthy to perform PlannedReparent", primaryElectAliasStr)
 	}
 
@@ -684,7 +680,7 @@ func (pr *PlannedReparenter) reparentTablets(
 			// that it needs to start replication after transitioning from
 			// PRIMARY => REPLICA.
 			forceStartReplication := false
-			if err := pr.tmc.SetReplicationSource(replCtx, tablet, ev.NewPrimary.Alias, reparentJournalTimestamp, "", forceStartReplication, IsReplicaSemiSync(opts.durability, ev.NewPrimary, tablet)); err != nil {
+			if err := pr.tmc.SetReplicationSource(replCtx, tablet, ev.NewPrimary.Alias, reparentJournalTimestamp, "", forceStartReplication, IsReplicaSemiSync(opts.durability, ev.NewPrimary, tablet), 0); err != nil {
 				rec.RecordError(vterrors.Wrapf(err, "tablet %v failed to SetReplicationSource(%v): %v", alias, primaryElectAliasStr, err))
 			}
 		}(alias, tabletInfo.Tablet)

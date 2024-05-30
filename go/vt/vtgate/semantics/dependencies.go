@@ -18,8 +18,7 @@ package semantics
 
 import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
@@ -28,10 +27,11 @@ type (
 	// tables and figure out bindings and/or errors by merging dependencies together
 	dependencies interface {
 		empty() bool
-		get() (dependency, error)
+		get(col *sqlparser.ColName) (dependency, error)
 		merge(other dependencies, allowMulti bool) dependencies
 	}
 	dependency struct {
+		certain   bool
 		direct    TableSet
 		recursive TableSet
 		typ       evalengine.Type
@@ -39,7 +39,7 @@ type (
 	nothing struct{}
 	certain struct {
 		dependency
-		err error
+		err bool
 	}
 	uncertain struct {
 		dependency
@@ -47,17 +47,15 @@ type (
 	}
 )
 
-var ambigousErr = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "ambiguous")
-
 func createCertain(direct TableSet, recursive TableSet, qt evalengine.Type) *certain {
 	c := &certain{
 		dependency: dependency{
+			certain:   true,
 			direct:    direct,
 			recursive: recursive,
-			typ:       evalengine.UnknownType(),
 		},
 	}
-	if qt.Type != querypb.Type_NULL_TYPE {
+	if qt.Valid() && qt.Type() != querypb.Type_NULL_TYPE {
 		c.typ = qt
 	}
 	return c
@@ -66,9 +64,9 @@ func createCertain(direct TableSet, recursive TableSet, qt evalengine.Type) *cer
 func createUncertain(direct TableSet, recursive TableSet) *uncertain {
 	return &uncertain{
 		dependency: dependency{
+			certain:   false,
 			direct:    direct,
 			recursive: recursive,
-			typ:       evalengine.UnknownType(),
 		},
 	}
 }
@@ -81,9 +79,9 @@ func (u *uncertain) empty() bool {
 	return false
 }
 
-func (u *uncertain) get() (dependency, error) {
+func (u *uncertain) get(col *sqlparser.ColName) (dependency, error) {
 	if u.fail {
-		return dependency{}, ambigousErr
+		return dependency{}, newAmbiguousColumnError(col)
 	}
 	return u.dependency, nil
 }
@@ -106,8 +104,11 @@ func (c *certain) empty() bool {
 	return false
 }
 
-func (c *certain) get() (dependency, error) {
-	return c.dependency, c.err
+func (c *certain) get(col *sqlparser.ColName) (dependency, error) {
+	if c.err {
+		return c.dependency, newAmbiguousColumnError(col)
+	}
+	return c.dependency, nil
 }
 
 func (c *certain) merge(d dependencies, allowMulti bool) dependencies {
@@ -119,7 +120,7 @@ func (c *certain) merge(d dependencies, allowMulti bool) dependencies {
 		c.direct = c.direct.Merge(d.direct)
 		c.recursive = c.recursive.Merge(d.recursive)
 		if !allowMulti {
-			c.err = ambigousErr
+			c.err = true
 		}
 
 		return c
@@ -132,8 +133,8 @@ func (n *nothing) empty() bool {
 	return true
 }
 
-func (n *nothing) get() (dependency, error) {
-	return dependency{}, nil
+func (n *nothing) get(*sqlparser.ColName) (dependency, error) {
+	return dependency{certain: true}, nil
 }
 
 func (n *nothing) merge(d dependencies, _ bool) dependencies {

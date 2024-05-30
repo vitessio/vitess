@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/replication"
 
 	"vitess.io/vitess/go/mysql/binlog"
@@ -222,6 +223,7 @@ func TestTableMapEvent(t *testing.T) {
 			0,
 			384, // Length of the varchar field.
 		},
+		ColumnCollationIDs: []collations.ID{},
 	}
 	tm.CanBeNull.Set(1, true)
 	tm.CanBeNull.Set(2, true)
@@ -258,12 +260,13 @@ func TestLargeTableMapEvent(t *testing.T) {
 	}
 
 	tm := &TableMap{
-		Flags:     0x8090,
-		Database:  "my_database",
-		Name:      "my_table",
-		Types:     types,
-		CanBeNull: NewServerBitmap(colLen),
-		Metadata:  metadata,
+		Flags:              0x8090,
+		Database:           "my_database",
+		Name:               "my_table",
+		Types:              types,
+		CanBeNull:          NewServerBitmap(colLen),
+		Metadata:           metadata,
+		ColumnCollationIDs: []collations.ID{},
 	}
 	tm.CanBeNull.Set(1, true)
 	tm.CanBeNull.Set(2, true)

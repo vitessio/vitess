@@ -239,8 +239,9 @@ func (bh *AZBlobBackupHandle) AddFile(ctx context.Context, filename string, file
 		return nil, fmt.Errorf("AddFile cannot be called on read-only backup")
 	}
 	// Error out if the file size it too large ( ~4.75 TB)
-	if filesize > azblob.BlockBlobMaxStageBlockBytes*azblob.BlockBlobMaxBlocks {
-		return nil, fmt.Errorf("filesize (%v) is too large to upload to az blob (max size %v)", filesize, azblob.BlockBlobMaxStageBlockBytes*azblob.BlockBlobMaxBlocks)
+	maxSize := int64(azblob.BlockBlobMaxStageBlockBytes * azblob.BlockBlobMaxBlocks)
+	if filesize > maxSize {
+		return nil, fmt.Errorf("filesize (%v) is too large to upload to az blob (max size %v)", filesize, maxSize)
 	}
 
 	obj := objName(bh.dir, bh.name, filename)

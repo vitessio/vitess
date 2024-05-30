@@ -179,10 +179,10 @@ func TestMergeSortCollation(t *testing.T) {
 		),
 	}}
 
-	collationID, _ := collations.Local().LookupID("utf8mb4_hu_0900_ai_ci")
+	collationID, _ := collations.MySQL8().LookupID("utf8mb4_hu_0900_ai_ci")
 	orderBy := []evalengine.OrderByParams{{
 		Col:  0,
-		Type: evalengine.Type{Type: sqltypes.VarChar, Coll: collationID},
+		Type: evalengine.NewType(sqltypes.VarChar, collationID),
 	}}
 
 	var results []*sqltypes.Result

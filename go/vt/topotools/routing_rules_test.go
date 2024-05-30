@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 )
 
@@ -89,4 +90,78 @@ func TestShardRoutingRulesRoundTrip(t *testing.T) {
 	require.NoError(t, err, "could not fetch shard routing rules from topo: %v", err)
 
 	assert.Equal(t, srr, roundtripRules)
+}
+
+func TestKeyspaceRoutingRulesRoundTrip(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "zone1")
+	defer ts.Close()
+
+	rulesMap := map[string]string{
+		"ks1": "ks2",
+		"ks4": "ks5",
+	}
+
+	err := UpdateKeyspaceRoutingRules(ctx, ts, "test", func(ctx context.Context, rules *map[string]string) error {
+		for k, v := range rulesMap {
+			(*rules)[k] = v
+		}
+		return nil
+	})
+	require.NoError(t, err, "could not save keyspace routing rules to topo %v", rulesMap)
+
+	roundtripRulesMap, err := GetKeyspaceRoutingRules(ctx, ts)
+	require.NoError(t, err, "could not fetch keyspace routing rules from topo")
+	assert.EqualValues(t, rulesMap, roundtripRulesMap)
+}
+
+// TestSaveKeyspaceRoutingRulesLocked confirms that saveKeyspaceRoutingRulesLocked() can only be called
+// with a locked routing_rules lock.
+func TestSaveKeyspaceRoutingRulesLocked(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "zone1")
+	defer ts.Close()
+
+	rulesMap := map[string]string{
+		"ks1": "ks2",
+		"ks4": "ks5",
+	}
+
+	t.Run("unlocked, doesn't exist", func(t *testing.T) {
+		err := saveKeyspaceRoutingRulesLocked(ctx, ts, rulesMap)
+		require.Errorf(t, err, "node doesn't exist: routing_rules")
+	})
+
+	t.Run("create", func(t *testing.T) {
+		err := ts.CreateKeyspaceRoutingRules(ctx, buildKeyspaceRoutingRules(&rulesMap))
+		require.NoError(t, err)
+	})
+
+	t.Run("create again", func(t *testing.T) {
+		err := ts.CreateKeyspaceRoutingRules(ctx, buildKeyspaceRoutingRules(&rulesMap))
+		require.True(t, topo.IsErrType(err, topo.NodeExists))
+	})
+
+	t.Run("unlocked", func(t *testing.T) {
+		err := saveKeyspaceRoutingRulesLocked(ctx, ts, rulesMap)
+		require.Errorf(t, err, "routing_rules is not locked (no locksInfo)")
+	})
+
+	// declare and acquire lock
+	lock, err := topo.NewRoutingRulesLock(ctx, ts, "test")
+	require.NoError(t, err)
+	lockCtx, unlock, err := lock.Lock(ctx)
+	require.NoError(t, err)
+	defer unlock(&err)
+
+	t.Run("locked, locked ctx", func(t *testing.T) {
+		err = saveKeyspaceRoutingRulesLocked(lockCtx, ts, rulesMap)
+		require.NoError(t, err)
+	})
+	t.Run("locked, unlocked ctx", func(t *testing.T) {
+		err = saveKeyspaceRoutingRulesLocked(ctx, ts, rulesMap)
+		require.Errorf(t, err, "routing_rules is not locked (no locksInfo)")
+	})
 }

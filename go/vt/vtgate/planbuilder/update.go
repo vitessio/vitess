@@ -41,9 +41,15 @@ func gen4UpdateStmtPlanner(
 		return nil, err
 	}
 
-	err = rewriteRoutedTables(updStmt, vschema)
+	err = queryRewrite(ctx, updStmt)
 	if err != nil {
 		return nil, err
+	}
+
+	// If there are non-literal foreign key updates, we have to run the query with foreign key checks off.
+	if ctx.SemTable.HasNonLiteralForeignKeyUpdate(updStmt.Exprs) {
+		// Since we are running the query with foreign key checks off, we have to verify all the foreign keys validity on vtgate.
+		ctx.VerifyAllFKs = true
 	}
 
 	// Remove all the foreign keys that don't require any handling.
@@ -55,7 +61,7 @@ func gen4UpdateStmtPlanner(
 		if !ctx.SemTable.ForeignKeysPresent() {
 			plan := updateUnshardedShortcut(updStmt, ks, tables)
 			setCommentDirectivesOnPlan(plan, updStmt)
-			return newPlanResult(plan.Primitive(), operators.QualifiedTables(ks, tables)...), nil
+			return newPlanResult(plan, operators.QualifiedTables(ks, tables)...), nil
 		}
 	}
 
@@ -63,25 +69,20 @@ func gen4UpdateStmtPlanner(
 		return nil, ctx.SemTable.NotUnshardedErr
 	}
 
-	err = queryRewrite(ctx.SemTable, reservedVars, updStmt)
-	if err != nil {
-		return nil, err
-	}
-
 	op, err := operators.PlanQuery(ctx, updStmt)
 	if err != nil {
 		return nil, err
 	}
 
-	plan, err := transformToLogicalPlan(ctx, op)
+	plan, err := transformToPrimitive(ctx, op)
 	if err != nil {
 		return nil, err
 	}
 
-	return newPlanResult(plan.Primitive(), operators.TablesUsed(op)...), nil
+	return newPlanResult(plan, operators.TablesUsed(op)...), nil
 }
 
-func updateUnshardedShortcut(stmt *sqlparser.Update, ks *vindexes.Keyspace, tables []*vindexes.Table) logicalPlan {
+func updateUnshardedShortcut(stmt *sqlparser.Update, ks *vindexes.Keyspace, tables []*vindexes.Table) engine.Primitive {
 	edml := engine.NewDML()
 	edml.Keyspace = ks
 	edml.Opcode = engine.Unsharded
@@ -89,5 +90,5 @@ func updateUnshardedShortcut(stmt *sqlparser.Update, ks *vindexes.Keyspace, tabl
 	for _, tbl := range tables {
 		edml.TableNames = append(edml.TableNames, tbl.Name.String())
 	}
-	return &primitiveWrapper{prim: &engine.Update{DML: edml}}
+	return &engine.Update{DML: edml}
 }

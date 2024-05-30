@@ -17,8 +17,7 @@ limitations under the License.
 package sqltypes
 
 import (
-	"bytes"
-	"reflect"
+	"math"
 	"strings"
 	"testing"
 
@@ -26,6 +25,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/bytes2"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -190,18 +190,12 @@ func TestNewValue(t *testing.T) {
 	for _, tcase := range testcases {
 		v, err := NewValue(tcase.inType, []byte(tcase.inVal))
 		if tcase.outErr != "" {
-			if err == nil || !strings.Contains(err.Error(), tcase.outErr) {
-				t.Errorf("ValueFromBytes(%v, %v) error: %v, must contain %v", tcase.inType, tcase.inVal, err, tcase.outErr)
-			}
+			assert.ErrorContains(t, err, tcase.outErr)
 			continue
 		}
-		if err != nil {
-			t.Errorf("ValueFromBytes(%v, %v) error: %v", tcase.inType, tcase.inVal, err)
-			continue
-		}
-		if !reflect.DeepEqual(v, tcase.outVal) {
-			t.Errorf("ValueFromBytes(%v, %v) = %v, want %v", tcase.inType, tcase.inVal, v, tcase.outVal)
-		}
+
+		assert.NoError(t, err)
+		assert.Equal(t, tcase.outVal, v)
 	}
 }
 
@@ -210,27 +204,24 @@ func TestNewValue(t *testing.T) {
 func TestNew(t *testing.T) {
 	got := NewInt32(1)
 	want := MakeTrusted(Int32, []byte("1"))
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("NewInt32(aa): %v, want %v", got, want)
-	}
+	assert.Equal(t, want, got)
 
 	got = NewVarBinary("aa")
 	want = MakeTrusted(VarBinary, []byte("aa"))
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("NewVarBinary(aa): %v, want %v", got, want)
-	}
+	assert.Equal(t, want, got)
+
+	got, err := NewJSON("invalid-json")
+	assert.Empty(t, got)
+	assert.ErrorContains(t, err, "invalid JSON value")
 }
 
 func TestMakeTrusted(t *testing.T) {
 	v := MakeTrusted(Null, []byte("abcd"))
-	if !reflect.DeepEqual(v, NULL) {
-		t.Errorf("MakeTrusted(Null...) = %v, want null", v)
-	}
+	assert.Equal(t, NULL, v)
+
 	v = MakeTrusted(Int64, []byte("1"))
 	want := TestValue(Int64, "1")
-	if !reflect.DeepEqual(v, want) {
-		t.Errorf("MakeTrusted(Int64, \"1\") = %v, want %v", v, want)
-	}
+	assert.Equal(t, want, v)
 }
 
 func TestIntegralValue(t *testing.T) {
@@ -254,18 +245,12 @@ func TestIntegralValue(t *testing.T) {
 	for _, tcase := range testcases {
 		v, err := NewIntegral(tcase.in)
 		if tcase.outErr != "" {
-			if err == nil || !strings.Contains(err.Error(), tcase.outErr) {
-				t.Errorf("BuildIntegral(%v) error: %v, must contain %v", tcase.in, err, tcase.outErr)
-			}
+			assert.ErrorContains(t, err, tcase.outErr)
 			continue
 		}
-		if err != nil {
-			t.Errorf("BuildIntegral(%v) error: %v", tcase.in, err)
-			continue
-		}
-		if !reflect.DeepEqual(v, tcase.outVal) {
-			t.Errorf("BuildIntegral(%v) = %v, want %v", tcase.in, v, tcase.outVal)
-		}
+
+		assert.NoError(t, err)
+		assert.Equal(t, tcase.outVal, v)
 	}
 }
 
@@ -294,118 +279,66 @@ func TestInterfaceValue(t *testing.T) {
 	}}
 	for _, tcase := range testcases {
 		v, err := InterfaceToValue(tcase.in)
-		if err != nil {
-			t.Errorf("BuildValue(%#v) error: %v", tcase.in, err)
-			continue
-		}
-		if !reflect.DeepEqual(v, tcase.out) {
-			t.Errorf("BuildValue(%#v) = %v, want %v", tcase.in, v, tcase.out)
-		}
+
+		assert.NoError(t, err)
+		assert.Equal(t, tcase.out, v)
 	}
 
 	_, err := InterfaceToValue(make(chan bool))
 	want := "unexpected"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("BuildValue(chan): %v, want %v", err, want)
-	}
+	assert.ErrorContains(t, err, want)
 }
 
 func TestAccessors(t *testing.T) {
 	v := TestValue(Int64, "1")
-	if v.Type() != Int64 {
-		t.Errorf("v.Type=%v, want Int64", v.Type())
-	}
-	if !bytes.Equal(v.Raw(), []byte("1")) {
-		t.Errorf("v.Raw=%s, want 1", v.Raw())
-	}
-	if v.Len() != 1 {
-		t.Errorf("v.Len=%d, want 1", v.Len())
-	}
-	if v.ToString() != "1" {
-		t.Errorf("v.String=%s, want 1", v.ToString())
-	}
-	if v.IsNull() {
-		t.Error("v.IsNull: true, want false")
-	}
-	if !v.IsIntegral() {
-		t.Error("v.IsIntegral: false, want true")
-	}
-	if !v.IsSigned() {
-		t.Error("v.IsSigned: false, want true")
-	}
-	if v.IsUnsigned() {
-		t.Error("v.IsUnsigned: true, want false")
-	}
-	if v.IsFloat() {
-		t.Error("v.IsFloat: true, want false")
-	}
-	if v.IsQuoted() {
-		t.Error("v.IsQuoted: true, want false")
-	}
-	if v.IsText() {
-		t.Error("v.IsText: true, want false")
-	}
-	if v.IsBinary() {
-		t.Error("v.IsBinary: true, want false")
-	}
+	assert.Equal(t, Int64, v.Type())
+	assert.Equal(t, []byte("1"), v.Raw())
+	assert.Equal(t, 1, v.Len())
+	assert.Equal(t, "1", v.ToString())
+	assert.False(t, v.IsNull())
+	assert.True(t, v.IsIntegral())
+	assert.True(t, v.IsSigned())
+	assert.False(t, v.IsUnsigned())
+	assert.False(t, v.IsFloat())
+	assert.False(t, v.IsQuoted())
+	assert.False(t, v.IsText())
+	assert.False(t, v.IsBinary())
+
 	{
 		i, err := v.ToInt64()
-		if err != nil {
-			t.Errorf("v.ToInt64: got error: %+v, want no error", err)
-		}
-		if i != 1 {
-			t.Errorf("v.ToInt64=%+v, want 1", i)
-		}
+		assert.NoError(t, err)
+		assert.Equal(t, int64(1), i)
 	}
 	{
 		i, err := v.ToUint64()
-		if err != nil {
-			t.Errorf("v.ToUint64: got error: %+v, want no error", err)
-		}
-		if i != 1 {
-			t.Errorf("v.ToUint64=%+v, want 1", i)
-		}
+		assert.NoError(t, err)
+		assert.Equal(t, uint64(1), i)
 	}
 	{
 		b, err := v.ToBool()
-		if err != nil {
-			t.Errorf("v.ToBool: got error: %+v, want no error", err)
-		}
-		if !b {
-			t.Errorf("v.ToBool=%+v, want true", b)
-		}
+		assert.NoError(t, err)
+		assert.True(t, b)
 	}
 }
 
 func TestAccessorsNegative(t *testing.T) {
 	v := TestValue(Int64, "-1")
-	if v.ToString() != "-1" {
-		t.Errorf("v.String=%s, want -1", v.ToString())
-	}
-	if v.IsNull() {
-		t.Error("v.IsNull: true, want false")
-	}
-	if !v.IsIntegral() {
-		t.Error("v.IsIntegral: false, want true")
-	}
+	assert.Equal(t, "-1", v.ToString())
+	assert.False(t, v.IsNull())
+	assert.True(t, v.IsIntegral())
+
 	{
 		i, err := v.ToInt64()
-		if err != nil {
-			t.Errorf("v.ToInt64: got error: %+v, want no error", err)
-		}
-		if i != -1 {
-			t.Errorf("v.ToInt64=%+v, want -1", i)
-		}
+		assert.NoError(t, err)
+		assert.Equal(t, int64(-1), i)
 	}
 	{
-		if _, err := v.ToUint64(); err == nil {
-			t.Error("v.ToUint64: got no error, want error")
-		}
+		_, err := v.ToUint64()
+		assert.Error(t, err)
 	}
 	{
-		if _, err := v.ToBool(); err == nil {
-			t.Error("v.ToUint64: got no error, want error")
-		}
+		_, err := v.ToBool()
+		assert.Error(t, err)
 	}
 }
 
@@ -417,23 +350,15 @@ func TestToBytesAndString(t *testing.T) {
 	} {
 		vBytes, err := v.ToBytes()
 		require.NoError(t, err)
-		if b := vBytes; !bytes.Equal(b, v.Raw()) {
-			t.Errorf("%v.ToBytes: %s, want %s", v, b, v.Raw())
-		}
-		if s := v.ToString(); s != string(v.Raw()) {
-			t.Errorf("%v.ToString: %s, want %s", v, s, v.Raw())
-		}
+		assert.Equal(t, v.Raw(), vBytes)
+		assert.Equal(t, string(v.Raw()), v.ToString())
 	}
 
 	tv := TestValue(Expression, "aa")
 	tvBytes, err := tv.ToBytes()
 	require.EqualError(t, err, "expression cannot be converted to bytes")
-	if b := tvBytes; b != nil {
-		t.Errorf("%v.ToBytes: %s, want nil", tv, b)
-	}
-	if s := tv.ToString(); s != "" {
-		t.Errorf("%v.ToString: %s, want \"\"", tv, s)
-	}
+	assert.Nil(t, tvBytes)
+	assert.Empty(t, tv.ToString())
 }
 
 func TestEncode(t *testing.T) {
@@ -463,27 +388,20 @@ func TestEncode(t *testing.T) {
 		outASCII: "'YQ=='",
 	}}
 	for _, tcase := range testcases {
-		buf := &bytes.Buffer{}
-		tcase.in.EncodeSQL(buf)
-		if tcase.outSQL != buf.String() {
-			t.Errorf("%v.EncodeSQL = %q, want %q", tcase.in, buf.String(), tcase.outSQL)
-		}
-		buf = &bytes.Buffer{}
-		tcase.in.EncodeASCII(buf)
-		if tcase.outASCII != buf.String() {
-			t.Errorf("%v.EncodeASCII = %q, want %q", tcase.in, buf.String(), tcase.outASCII)
-		}
+		var buf strings.Builder
+		tcase.in.EncodeSQL(&buf)
+		assert.Equal(t, tcase.outSQL, buf.String())
+
+		buf.Reset()
+		tcase.in.EncodeASCII(&buf)
+		assert.Equal(t, tcase.outASCII, buf.String())
 	}
 }
 
 // TestEncodeMap ensures DontEscape is not escaped
 func TestEncodeMap(t *testing.T) {
-	if SQLEncodeMap[DontEscape] != DontEscape {
-		t.Errorf("SQLEncodeMap[DontEscape] = %v, want %v", SQLEncodeMap[DontEscape], DontEscape)
-	}
-	if SQLDecodeMap[DontEscape] != DontEscape {
-		t.Errorf("SQLDecodeMap[DontEscape] = %v, want %v", SQLEncodeMap[DontEscape], DontEscape)
-	}
+	assert.Equal(t, DontEscape, SQLEncodeMap[DontEscape])
+	assert.Equal(t, DontEscape, SQLDecodeMap[DontEscape])
 }
 
 func TestHexAndBitToBytes(t *testing.T) {
@@ -510,5 +428,282 @@ func TestHexAndBitToBytes(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, tcase.out, out)
 		})
+	}
+}
+
+func TestEncodeStringSQL(t *testing.T) {
+	testcases := []struct {
+		in  string
+		out string
+	}{
+		{
+			in:  "",
+			out: "''",
+		},
+		{
+			in:  "\x00'\"\b\n\r\t\x1A\\",
+			out: "'\\0\\'\\\"\\b\\n\\r\\t\\Z\\\\'",
+		},
+	}
+	for _, tcase := range testcases {
+		out := EncodeStringSQL(tcase.in)
+		assert.Equal(t, tcase.out, out)
+	}
+}
+
+func TestDecodeStringSQL(t *testing.T) {
+	testcases := []struct {
+		in  string
+		out string
+		err string
+	}{
+		{
+			in:  "",
+			err: ": invalid SQL encoded string",
+		}, {
+			in:  "''",
+			err: "",
+		},
+		{
+			in:  "'\\0\\'\\\"\\b\\n\\r\\t\\Z\\\\'",
+			out: "\x00'\"\b\n\r\t\x1A\\",
+		},
+		{
+			in:  "'light ''green\\r\\n, \\nfoo'",
+			out: "light 'green\r\n, \nfoo",
+		},
+		{
+			in:  "'foo \\\\ % _bar'",
+			out: "foo \\ % _bar",
+		},
+	}
+	for _, tcase := range testcases {
+		out, err := DecodeStringSQL(tcase.in)
+		if tcase.err != "" {
+			assert.EqualError(t, err, tcase.err)
+		} else {
+			require.NoError(t, err)
+			assert.Equal(t, tcase.out, out)
+		}
+	}
+}
+
+func TestTinyWeightCmp(t *testing.T) {
+	val1 := TestValue(Int64, "12")
+	val2 := TestValue(VarChar, "aa")
+
+	val1.SetTinyWeight(10)
+
+	// Test TinyWeight
+	assert.Equal(t, uint32(10), val1.TinyWeight())
+
+	cmp := val1.TinyWeightCmp(val2)
+	assert.Equal(t, 0, cmp)
+
+	val2.SetTinyWeight(10)
+	cmp = val1.TinyWeightCmp(val2)
+	assert.Equal(t, 0, cmp)
+
+	val2.SetTinyWeight(20)
+	cmp = val1.TinyWeightCmp(val2)
+	assert.Equal(t, -1, cmp)
+
+	val2.SetTinyWeight(5)
+	cmp = val1.TinyWeightCmp(val2)
+	assert.Equal(t, 1, cmp)
+}
+
+func TestToCastInt64(t *testing.T) {
+	tcases := []struct {
+		in   Value
+		want int64
+		err  string
+	}{
+		{TestValue(Int64, "213"), 213, ""},
+		{TestValue(Int64, "-213"), -213, ""},
+		{TestValue(VarChar, "9223372036854775808a"), math.MaxInt64, `cannot parse int64 from "9223372036854775808a": overflow`},
+		{TestValue(Time, "12:23:59"), 12, `unparsed tail left after parsing int64 from "12:23:59": ":23:59"`},
+	}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.in.String(), func(t *testing.T) {
+			got, err := tcase.in.ToCastInt64()
+			assert.Equal(t, tcase.want, got)
+
+			if tcase.err != "" {
+				assert.ErrorContains(t, err, tcase.err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestToCastUint64(t *testing.T) {
+	tcases := []struct {
+		in   Value
+		want uint64
+		err  string
+	}{
+		{TestValue(Int64, "213"), 213, ""},
+		{TestValue(Int64, "-213"), 0, `cannot parse uint64 from "-213"`},
+		{TestValue(VarChar, "9223372036854775808a"), 9223372036854775808, `unparsed tail left after parsing uint64 from "9223372036854775808a": "a"`},
+		{TestValue(Time, "12:23:59"), 12, `unparsed tail left after parsing uint64 from "12:23:59": ":23:59"`},
+	}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.in.String(), func(t *testing.T) {
+			got, err := tcase.in.ToCastUint64()
+			assert.Equal(t, tcase.want, got)
+
+			if tcase.err != "" {
+				assert.ErrorContains(t, err, tcase.err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestToUint16(t *testing.T) {
+	tcases := []struct {
+		in   Value
+		want uint16
+		err  string
+	}{
+		{TestValue(Int64, "213"), 213, ""},
+		{TestValue(Int64, "-213"), 0, `parsing "-213": invalid syntax`},
+		{TestValue(VarChar, "9223372036854775808a"), 0, ErrIncompatibleTypeCast.Error()},
+		{TestValue(Time, "12:23:59"), 0, ErrIncompatibleTypeCast.Error()},
+	}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.in.String(), func(t *testing.T) {
+			got, err := tcase.in.ToUint16()
+			assert.Equal(t, tcase.want, got)
+
+			if tcase.err != "" {
+				assert.ErrorContains(t, err, tcase.err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestToUint32(t *testing.T) {
+	tcases := []struct {
+		in   Value
+		want uint32
+		err  string
+	}{
+		{TestValue(Int64, "213"), 213, ""},
+		{TestValue(Int64, "-213"), 0, `parsing "-213": invalid syntax`},
+		{TestValue(VarChar, "9223372036854775808a"), 0, ErrIncompatibleTypeCast.Error()},
+		{TestValue(Time, "12:23:59"), 0, ErrIncompatibleTypeCast.Error()},
+	}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.in.String(), func(t *testing.T) {
+			got, err := tcase.in.ToUint32()
+			assert.Equal(t, tcase.want, got)
+
+			if tcase.err != "" {
+				assert.ErrorContains(t, err, tcase.err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestEncodeSQLStringBuilder(t *testing.T) {
+	testcases := []struct {
+		in     Value
+		outSQL string
+	}{{
+		in:     NULL,
+		outSQL: "null",
+	}, {
+		in:     TestValue(Int64, "1"),
+		outSQL: "1",
+	}, {
+		in:     TestValue(VarChar, "foo"),
+		outSQL: "'foo'",
+	}, {
+		in:     TestValue(VarChar, "\x00'\"\b\n\r\t\x1A\\"),
+		outSQL: "'\\0\\'\\\"\\b\\n\\r\\t\\Z\\\\'",
+	}, {
+		in:     TestValue(Bit, "a"),
+		outSQL: "b'01100001'",
+	}, {
+		in:     TestTuple(TestValue(Int64, "1"), TestValue(VarChar, "foo")),
+		outSQL: "(1, 'foo')",
+	}}
+	for _, tcase := range testcases {
+		var buf strings.Builder
+
+		tcase.in.EncodeSQLStringBuilder(&buf)
+		assert.Equal(t, tcase.outSQL, buf.String())
+	}
+}
+
+func TestEncodeSQLBytes2(t *testing.T) {
+	testcases := []struct {
+		in     Value
+		outSQL string
+	}{{
+		in:     NULL,
+		outSQL: "null",
+	}, {
+		in:     TestValue(Int64, "1"),
+		outSQL: "1",
+	}, {
+		in:     TestValue(VarChar, "foo"),
+		outSQL: "'foo'",
+	}, {
+		in:     TestValue(VarChar, "\x00'\"\b\n\r\t\x1A\\"),
+		outSQL: "'\\0\\'\\\"\\b\\n\\r\\t\\Z\\\\'",
+	}, {
+		in:     TestValue(Bit, "a"),
+		outSQL: "b'01100001'",
+	}, {
+		in:     TestTuple(TestValue(Int64, "1"), TestValue(VarChar, "foo")),
+		outSQL: "\x89\x02\x011\x950\x03foo",
+	}}
+	for _, tcase := range testcases {
+		buf := bytes2.NewBuffer([]byte{})
+
+		tcase.in.EncodeSQLBytes2(buf)
+		assert.Equal(t, tcase.outSQL, buf.String())
+	}
+}
+
+func TestIsComparable(t *testing.T) {
+	testcases := []struct {
+		in    Value
+		isCmp bool
+	}{{
+		in:    NULL,
+		isCmp: true,
+	}, {
+		in:    TestValue(Int64, "1"),
+		isCmp: true,
+	}, {
+		in: TestValue(VarChar, "foo"),
+	}, {
+		in: TestValue(VarChar, "\x00'\"\b\n\r\t\x1A\\"),
+	}, {
+		in:    TestValue(Bit, "a"),
+		isCmp: true,
+	}, {
+		in:    TestValue(Time, "12:21:11"),
+		isCmp: true,
+	}, {
+		in: TestTuple(TestValue(Int64, "1"), TestValue(VarChar, "foo")),
+	}}
+	for _, tcase := range testcases {
+		isCmp := tcase.in.IsComparable()
+		assert.Equal(t, tcase.isCmp, isCmp)
 	}
 }

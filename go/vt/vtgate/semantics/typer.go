@@ -18,7 +18,6 @@ package semantics
 
 import (
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -27,45 +26,41 @@ import (
 // typer is responsible for setting the type for expressions
 // it does it's work after visiting the children (up), since the children types is often needed to type a node.
 type typer struct {
-	m map[sqlparser.Expr]evalengine.Type
+	m            map[sqlparser.Expr]evalengine.Type
+	collationEnv *collations.Environment
 }
 
-func newTyper() *typer {
+func newTyper(collationEnv *collations.Environment) *typer {
 	return &typer{
-		m: map[sqlparser.Expr]evalengine.Type{},
+		m:            map[sqlparser.Expr]evalengine.Type{},
+		collationEnv: collationEnv,
 	}
 }
 
 func (t *typer) exprType(expr sqlparser.Expr) evalengine.Type {
-	res, ok := t.m[expr]
-	if ok {
-		return res
-	}
-
-	return evalengine.UnknownType()
+	return t.m[expr]
 }
 
 func (t *typer) up(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.Literal:
-		t.m[node] = evalengine.Type{Type: node.SQLType(), Coll: collations.DefaultCollationForType(node.SQLType())}
+		t.m[node] = evalengine.NewType(node.SQLType(), collations.CollationForType(node.SQLType(), t.collationEnv.DefaultConnectionCharset()))
 	case *sqlparser.Argument:
 		if node.Type >= 0 {
-			t.m[node] = evalengine.Type{Type: node.Type, Coll: collations.DefaultCollationForType(node.Type)}
+			t.m[node] = evalengine.NewTypeEx(node.Type, collations.CollationForType(node.Type, t.collationEnv.DefaultConnectionCharset()), true, node.Size, node.Scale, nil)
 		}
 	case sqlparser.AggrFunc:
 		code, ok := opcode.SupportedAggregates[node.AggrName()]
 		if !ok {
 			return nil
 		}
-		inputType := sqltypes.Unknown
+		var inputType evalengine.Type
 		if arg := node.GetArg(); arg != nil {
 			if tt, ok := t.m[arg]; ok {
-				inputType = tt.Type
+				inputType = tt
 			}
 		}
-		type_ := code.Type(inputType)
-		t.m[node] = evalengine.Type{Type: type_, Coll: collations.DefaultCollationForType(type_)}
+		t.m[node] = code.ResolveType(inputType, t.collationEnv)
 	}
 	return nil
 }

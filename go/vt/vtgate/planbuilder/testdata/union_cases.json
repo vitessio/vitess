@@ -42,8 +42,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select id, weight_string(id) from (select id from `user` where 1 != 1 union select id from music where 1 != 1) as dt where 1 != 1",
-            "Query": "select id, weight_string(id) from (select id from `user` union select id from music) as dt",
+            "FieldQuery": "select dt.c0 as id, weight_string(dt.c0) from (select id from `user` where 1 != 1 union select id from music where 1 != 1) as dt(c0) where 1 != 1",
+            "Query": "select dt.c0 as id, weight_string(dt.c0) from (select id from `user` union select id from music) as dt(c0)",
             "Table": "`user`, music"
           }
         ]
@@ -108,9 +108,10 @@
       "Original": "(SELECT id FROM user ORDER BY id DESC LIMIT 1) UNION ALL (SELECT id FROM music ORDER BY id DESC LIMIT 1)",
       "Instructions": {
         "OperatorType": "SimpleProjection",
-        "Columns": [
-          0
+        "ColumnNames": [
+          "0:id"
         ],
+        "Columns": "0",
         "Inputs": [
           {
             "OperatorType": "Concatenate",
@@ -128,7 +129,7 @@
                     },
                     "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
                     "OrderBy": "(0|1) DESC",
-                    "Query": "select id, weight_string(id) from `user` order by id desc limit :__upper_limit",
+                    "Query": "select id, weight_string(id) from `user` order by `user`.id desc limit 1",
                     "Table": "`user`"
                   }
                 ]
@@ -146,7 +147,7 @@
                     },
                     "FieldQuery": "select id, weight_string(id) from music where 1 != 1",
                     "OrderBy": "(0|1) DESC",
-                    "Query": "select id, weight_string(id) from music order by id desc limit :__upper_limit",
+                    "Query": "select id, weight_string(id) from music order by music.id desc limit 1",
                     "Table": "music"
                   }
                 ]
@@ -238,9 +239,10 @@
       "Original": "(select id from user order by id limit 5) union all (select id from music order by id desc limit 5)",
       "Instructions": {
         "OperatorType": "SimpleProjection",
-        "Columns": [
-          0
+        "ColumnNames": [
+          "0:id"
         ],
+        "Columns": "0",
         "Inputs": [
           {
             "OperatorType": "Concatenate",
@@ -258,7 +260,7 @@
                     },
                     "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
                     "OrderBy": "(0|1) ASC",
-                    "Query": "select id, weight_string(id) from `user` order by id asc limit :__upper_limit",
+                    "Query": "select id, weight_string(id) from `user` order by `user`.id asc limit 5",
                     "Table": "`user`"
                   }
                 ]
@@ -276,7 +278,7 @@
                     },
                     "FieldQuery": "select id, weight_string(id) from music where 1 != 1",
                     "OrderBy": "(0|1) DESC",
-                    "Query": "select id, weight_string(id) from music order by id desc limit :__upper_limit",
+                    "Query": "select id, weight_string(id) from music order by music.id desc limit 5",
                     "Table": "music"
                   }
                 ]
@@ -322,8 +324,9 @@
       "Instructions": {
         "OperatorType": "Distinct",
         "Collations": [
-          "0: utf8mb4_0900_ai_ci"
+          "(0:1)"
         ],
+        "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Concatenate",
@@ -335,8 +338,8 @@
                   "Name": "main",
                   "Sharded": false
                 },
-                "FieldQuery": "select CHARACTER_SET_NAME from information_schema.CHARACTER_SETS where 1 != 1",
-                "Query": "select distinct CHARACTER_SET_NAME from information_schema.CHARACTER_SETS",
+                "FieldQuery": "select dt.c0 as CHARACTER_SET_NAME, weight_string(dt.c0) from (select CHARACTER_SET_NAME from information_schema.CHARACTER_SETS where 1 != 1) as dt(c0) where 1 != 1",
+                "Query": "select dt.c0 as CHARACTER_SET_NAME, weight_string(dt.c0) from (select distinct CHARACTER_SET_NAME from information_schema.CHARACTER_SETS) as dt(c0)",
                 "Table": "information_schema.CHARACTER_SETS"
               },
               {
@@ -346,8 +349,8 @@
                   "Name": "main",
                   "Sharded": false
                 },
-                "FieldQuery": "select user_name from unsharded where 1 != 1",
-                "Query": "select distinct user_name from unsharded",
+                "FieldQuery": "select dt.c0 as user_name, weight_string(dt.c0) from (select user_name from unsharded where 1 != 1) as dt(c0) where 1 != 1",
+                "Query": "select dt.c0 as user_name, weight_string(dt.c0) from (select distinct user_name from unsharded) as dt(c0)",
                 "Table": "unsharded"
               }
             ]
@@ -384,8 +387,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select id, weight_string(id) from (select id from `user` where 1 != 1 union select id from music where 1 != 1 union select 1 from dual where 1 != 1) as dt where 1 != 1",
-            "Query": "select id, weight_string(id) from (select id from `user` union select id from music union select 1 from dual) as dt",
+            "FieldQuery": "select dt.c0 as id, weight_string(dt.c0) from (select id from `user` where 1 != 1 union select id from music where 1 != 1 union select 1 from dual where 1 != 1) as dt(c0) where 1 != 1",
+            "Query": "select dt.c0 as id, weight_string(dt.c0) from (select id from `user` union select id from music union select 1 from dual) as dt(c0)",
             "Table": "`user`, dual, music"
           }
         ]
@@ -503,8 +506,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select id, weight_string(id) from ((select id from `user` where 1 != 1) union (select id from `user` where 1 != 1)) as dt where 1 != 1",
-            "Query": "select id, weight_string(id) from ((select id from `user` order by id desc) union (select id from `user` order by id asc)) as dt",
+            "FieldQuery": "select dt.c0 as id, weight_string(dt.c0) from ((select id from `user` where 1 != 1) union (select id from `user` where 1 != 1)) as dt(c0) where 1 != 1",
+            "Query": "select dt.c0 as id, weight_string(dt.c0) from ((select id from `user` order by id desc) union (select id from `user` order by id asc)) as dt(c0)",
             "Table": "`user`"
           }
         ]
@@ -534,8 +537,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select `1`, weight_string(`1`) from (select 1 from dual where 1 != 1 union select null from dual where 1 != 1 union select 1.0 from dual where 1 != 1 union select '1' from dual where 1 != 1 union select 2 from dual where 1 != 1 union select 2.0 from `user` where 1 != 1) as dt where 1 != 1",
-            "Query": "select `1`, weight_string(`1`) from (select 1 from dual union select null from dual union select 1.0 from dual union select '1' from dual union select 2 from dual union select 2.0 from `user`) as dt",
+            "FieldQuery": "select dt.c0 as `1`, weight_string(dt.c0) from (select 1 from dual where 1 != 1 union select null from dual where 1 != 1 union select 1.0 from dual where 1 != 1 union select '1' from dual where 1 != 1 union select 2 from dual where 1 != 1 union select 2.0 from `user` where 1 != 1) as dt(c0) where 1 != 1",
+            "Query": "select dt.c0 as `1`, weight_string(dt.c0) from (select 1 from dual union select null from dual union select 1.0 from dual union select '1' from dual union select 2 from dual union select 2.0 from `user`) as dt(c0)",
             "Table": "`user`, dual"
           }
         ]
@@ -600,8 +603,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select 'b', 'c', weight_string('b'), weight_string('c') from `user` where 1 != 1",
-                "Query": "select distinct 'b', 'c', weight_string('b'), weight_string('c') from `user`",
+                "FieldQuery": "select dt.c0 as b, dt.c1 as c, weight_string(dt.c0), weight_string(dt.c1) from (select 'b', 'c' from `user` where 1 != 1) as dt(c0, c1) where 1 != 1",
+                "Query": "select dt.c0 as b, dt.c1 as c, weight_string(dt.c0), weight_string(dt.c1) from (select distinct 'b', 'c' from `user`) as dt(c0, c1)",
                 "Table": "`user`"
               }
             ]
@@ -623,9 +626,10 @@
       "Instructions": {
         "OperatorType": "Distinct",
         "Collations": [
-          "0: utf8mb4_0900_ai_ci",
-          "1: utf8mb4_0900_ai_ci"
+          "(0:2)",
+          "(1:3)"
         ],
+        "ResultColumns": 2,
         "Inputs": [
           {
             "OperatorType": "Concatenate",
@@ -637,14 +641,14 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select 'b', 'c' from `user` where 1 != 1",
-                "Query": "select distinct 'b', 'c' from `user`",
+                "FieldQuery": "select dt.c0 as b, dt.c1 as c, weight_string(dt.c0), weight_string(dt.c1) from (select 'b', 'c' from `user` where 1 != 1) as dt(c0, c1) where 1 != 1",
+                "Query": "select dt.c0 as b, dt.c1 as c, weight_string(dt.c0), weight_string(dt.c1) from (select distinct 'b', 'c' from `user`) as dt(c0, c1)",
                 "Table": "`user`"
               },
               {
                 "OperatorType": "Join",
                 "Variant": "Join",
-                "JoinColumnIndexes": "L:0,L:1",
+                "JoinColumnIndexes": "L:0,L:1,L:2,L:3",
                 "TableName": "`user`_user_extra",
                 "Inputs": [
                   {
@@ -654,8 +658,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select `user`.id, `user`.`name` from `user` where 1 != 1",
-                    "Query": "select distinct `user`.id, `user`.`name` from `user`",
+                    "FieldQuery": "select `user`.id, `user`.`name`, weight_string(`user`.id), weight_string(`user`.`name`) from `user` where 1 != 1",
+                    "Query": "select distinct `user`.id, `user`.`name`, weight_string(`user`.id), weight_string(`user`.`name`) from `user`",
                     "Table": "`user`"
                   },
                   {
@@ -762,8 +766,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select id, weight_string(id) from (select id from `user` where 1 != 1 union select id + 1 from `user` where 1 != 1 union select user_id from user_extra where 1 != 1) as dt where 1 != 1",
-            "Query": "select id, weight_string(id) from (select id from `user` union select id + 1 from `user` union select user_id from user_extra) as dt",
+            "FieldQuery": "select dt.c0 as id, weight_string(dt.c0) from (select id from `user` where 1 != 1 union select id + 1 from `user` where 1 != 1 union select user_id from user_extra where 1 != 1) as dt(c0) where 1 != 1",
+            "Query": "select dt.c0 as id, weight_string(dt.c0) from (select id from `user` union select id + 1 from `user` union select user_id from user_extra) as dt(c0)",
             "Table": "`user`, user_extra"
           }
         ]
@@ -797,8 +801,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select id, weight_string(id) from (select id from `user` where 1 != 1 union select id from music where 1 != 1) as dt where 1 != 1",
-                "Query": "select id, weight_string(id) from (select id from `user` union select id from music) as dt",
+                "FieldQuery": "select dt.c0 as id, weight_string(dt.c0) from (select id from `user` where 1 != 1 union select id from music where 1 != 1) as dt(c0) where 1 != 1",
+                "Query": "select dt.c0 as id, weight_string(dt.c0) from (select id from `user` union select id from music) as dt(c0)",
                 "Table": "`user`, music"
               },
               {
@@ -808,8 +812,8 @@
                   "Name": "main",
                   "Sharded": false
                 },
-                "FieldQuery": "select 1, weight_string(1) from unsharded where 1 != 1",
-                "Query": "select distinct 1, weight_string(1) from unsharded",
+                "FieldQuery": "select dt.c0 as `1`, weight_string(dt.c0) from (select 1 from unsharded where 1 != 1) as dt(c0) where 1 != 1",
+                "Query": "select dt.c0 as `1`, weight_string(dt.c0) from (select distinct 1 from unsharded) as dt(c0)",
                 "Table": "unsharded"
               }
             ]
@@ -847,8 +851,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select id, weight_string(id) from (select id from `user` where 1 != 1 union select 3 from dual where 1 != 1) as dt where 1 != 1",
-                "Query": "select id, weight_string(id) from (select id from `user` union select 3 from dual limit :__upper_limit) as dt",
+                "FieldQuery": "select dt.c0 as id, weight_string(dt.c0) from (select id from `user` where 1 != 1 union select 3 from dual where 1 != 1) as dt(c0) where 1 != 1",
+                "Query": "select dt.c0 as id, weight_string(dt.c0) from (select id from `user` union select 3 from dual limit :__upper_limit) as dt(c0)",
                 "Table": "`user`, dual"
               }
             ]
@@ -884,6 +888,49 @@
     }
   },
   {
+    "comment": "test handling of TEXT column type handling",
+    "query": "select table_comment from information_schema.tables union select table_comment from information_schema.tables",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select table_comment from information_schema.tables union select table_comment from information_schema.tables",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "0"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "DBA",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select table_comment from information_schema.`tables` where 1 != 1",
+                "Query": "select distinct table_comment from information_schema.`tables`",
+                "Table": "information_schema.`tables`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "DBA",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select table_comment from information_schema.`tables` where 1 != 1",
+                "Query": "select distinct table_comment from information_schema.`tables`",
+                "Table": "information_schema.`tables`"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
     "comment": "UNION that needs to be reordered to be merged more aggressively. Gen4 is able to get it down to 2 routes",
     "query": "select col from unsharded union select id from user union select col2 from unsharded union select col from user_extra",
     "plan": {
@@ -906,8 +953,8 @@
                   "Name": "main",
                   "Sharded": false
                 },
-                "FieldQuery": "select col, weight_string(col) from (select col from unsharded where 1 != 1 union select col2 from unsharded where 1 != 1) as dt where 1 != 1",
-                "Query": "select col, weight_string(col) from (select col from unsharded union select col2 from unsharded) as dt",
+                "FieldQuery": "select dt.c0 as col, weight_string(dt.c0) from (select col from unsharded where 1 != 1 union select col2 from unsharded where 1 != 1) as dt(c0) where 1 != 1",
+                "Query": "select dt.c0 as col, weight_string(dt.c0) from (select col from unsharded union select col2 from unsharded) as dt(c0)",
                 "Table": "unsharded"
               },
               {
@@ -917,8 +964,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select id, weight_string(id) from (select id from `user` where 1 != 1 union select col from user_extra where 1 != 1) as dt where 1 != 1",
-                "Query": "select id, weight_string(id) from (select id from `user` union select col from user_extra) as dt",
+                "FieldQuery": "select dt.c0 as id, weight_string(dt.c0) from (select id from `user` where 1 != 1 union select col from user_extra where 1 != 1) as dt(c0) where 1 != 1",
+                "Query": "select dt.c0 as id, weight_string(dt.c0) from (select id from `user` union select col from user_extra) as dt(c0)",
                 "Table": "`user`, user_extra"
               }
             ]
@@ -963,7 +1010,7 @@
                     },
                     "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
                     "OrderBy": "(0|1) ASC",
-                    "Query": "select id, weight_string(id) from `user` order by id asc limit :__upper_limit",
+                    "Query": "select id, weight_string(id) from `user` order by `user`.id asc limit 5",
                     "Table": "`user`"
                   }
                 ]
@@ -981,7 +1028,7 @@
                     },
                     "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
                     "OrderBy": "(0|1) DESC",
-                    "Query": "select id, weight_string(id) from `user` order by id desc limit :__upper_limit",
+                    "Query": "select id, weight_string(id) from `user` order by `user`.id desc limit 5",
                     "Table": "`user`"
                   }
                 ]
@@ -1056,8 +1103,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select id, weight_string(id) from (select id from `user` where 1 != 1 union select 3 from dual where 1 != 1) as dt where 1 != 1",
-                "Query": "select id, weight_string(id) from (select id from `user` union select 3 from dual) as dt",
+                "FieldQuery": "select dt.c0 as id, weight_string(dt.c0) from (select id from `user` where 1 != 1 union select 3 from dual where 1 != 1) as dt(c0) where 1 != 1",
+                "Query": "select dt.c0 as id, weight_string(dt.c0) from (select id from `user` union select 3 from dual) as dt(c0)",
                 "Table": "`user`, dual"
               }
             ]
@@ -1067,6 +1114,47 @@
       "TablesUsed": [
         "main.dual",
         "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Conflicting column names in union",
+    "query": "select id, id from user union select id, bar from user_extra order by 1",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select id, id from user union select id, bar from user_extra order by 1",
+      "Instructions": {
+        "OperatorType": "Sort",
+        "Variant": "Memory",
+        "OrderBy": "(0|2) ASC",
+        "ResultColumns": 2,
+        "Inputs": [
+          {
+            "OperatorType": "Distinct",
+            "Collations": [
+              "(0:2)",
+              "(1:3)",
+              "2"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select dt.c0 as id, dt.c1 as id, weight_string(dt.c0), weight_string(dt.c1) from (select id, id from `user` where 1 != 1 union select id, bar from user_extra where 1 != 1) as dt(c0, c1) where 1 != 1",
+                "Query": "select dt.c0 as id, dt.c1 as id, weight_string(dt.c0), weight_string(dt.c1) from (select id, id from `user` union select id, bar from user_extra) as dt(c0, c1)",
+                "Table": "`user`, user_extra"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
       ]
     }
   },
@@ -1098,8 +1186,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select id + 42 as foo, weight_string(id + 42) from `user` where 1 != 1",
-                    "Query": "select distinct id + 42 as foo, weight_string(id + 42) from `user`",
+                    "FieldQuery": "select dt.c0 as foo, weight_string(dt.c0) from (select id + 42 as foo from `user` where 1 != 1) as dt(c0) where 1 != 1",
+                    "Query": "select dt.c0 as foo, weight_string(dt.c0) from (select distinct id + 42 as foo from `user`) as dt(c0)",
                     "Table": "`user`"
                   },
                   {
@@ -1109,8 +1197,8 @@
                       "Name": "main",
                       "Sharded": false
                     },
-                    "FieldQuery": "select 1 + id as foo, weight_string(1 + id) from unsharded where 1 != 1",
-                    "Query": "select distinct 1 + id as foo, weight_string(1 + id) from unsharded",
+                    "FieldQuery": "select dt.c0 as foo, weight_string(dt.c0) from (select 1 + id as foo from unsharded where 1 != 1) as dt(c0) where 1 != 1",
+                    "Query": "select dt.c0 as foo, weight_string(dt.c0) from (select distinct 1 + id as foo from unsharded) as dt(c0)",
                     "Table": "unsharded"
                   }
                 ]
@@ -1138,7 +1226,7 @@
           {
             "OperatorType": "Distinct",
             "Collations": [
-              "0: utf8mb4_0900_ai_ci"
+              "0: utf8mb3_general_ci"
             ],
             "Inputs": [
               {
@@ -1218,18 +1306,18 @@
           {
             "OperatorType": "Distinct",
             "Collations": [
-              "0: utf8mb4_0900_ai_ci",
-              "1: utf8mb4_0900_ai_ci",
-              "2: utf8mb4_0900_ai_ci",
-              "3: utf8mb4_0900_ai_ci",
-              "4: utf8mb4_0900_ai_ci",
-              "5: utf8mb4_0900_ai_ci",
-              "6: utf8mb4_0900_ai_ci",
+              "0: utf8mb3_general_ci",
+              "1: utf8mb3_general_ci",
+              "2: utf8mb3_general_ci",
+              "3: utf8mb3_general_ci",
+              "4: utf8mb3_general_ci",
+              "5: utf8mb3_general_ci",
+              "6: utf8mb3_general_ci",
               "7",
               "8",
-              "9: utf8mb4_0900_ai_ci",
-              "10: utf8mb4_0900_ai_ci",
-              "11: utf8mb4_0900_ai_ci"
+              "9: utf8mb3_general_ci",
+              "10: utf8mb3_general_ci",
+              "11: utf8mb3_general_ci"
             ],
             "Inputs": [
               {
@@ -1316,8 +1404,8 @@
                   "Name": "main",
                   "Sharded": false
                 },
-                "FieldQuery": "select id, foo, bar, weight_string(id), weight_string(foo), weight_string(bar) from unsharded where 1 != 1",
-                "Query": "select distinct id, foo, bar, weight_string(id), weight_string(foo), weight_string(bar) from unsharded",
+                "FieldQuery": "select dt.c0 as id, dt.c1 as foo, dt.c2 as bar, weight_string(dt.c0), weight_string(dt.c1), weight_string(dt.c2) from (select id, foo, bar from unsharded where 1 != 1) as dt(c0, c1, c2) where 1 != 1",
+                "Query": "select dt.c0 as id, dt.c1 as foo, dt.c2 as bar, weight_string(dt.c0), weight_string(dt.c1), weight_string(dt.c2) from (select distinct id, foo, bar from unsharded) as dt(c0, c1, c2)",
                 "Table": "unsharded"
               },
               {
@@ -1429,8 +1517,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select bar, baz, toto, weight_string(bar), weight_string(baz), weight_string(toto) from (select bar, baz, toto from music where 1 != 1 union select foo, foo, foo from `user` where 1 != 1) as dt where 1 != 1",
-            "Query": "select bar, baz, toto, weight_string(bar), weight_string(baz), weight_string(toto) from (select bar, baz, toto from music union select foo, foo, foo from `user`) as dt",
+            "FieldQuery": "select dt.c0 as bar, dt.c1 as baz, dt.c2 as toto, weight_string(dt.c0), weight_string(dt.c1), weight_string(dt.c2) from (select bar, baz, toto from music where 1 != 1 union select foo, foo, foo from `user` where 1 != 1) as dt(c0, c1, c2) where 1 != 1",
+            "Query": "select dt.c0 as bar, dt.c1 as baz, dt.c2 as toto, weight_string(dt.c0), weight_string(dt.c1), weight_string(dt.c2) from (select bar, baz, toto from music union select foo, foo, foo from `user`) as dt(c0, c1, c2)",
             "Table": "`user`, music"
           }
         ]
@@ -1451,8 +1539,8 @@
         "OperatorType": "Distinct",
         "Collations": [
           "(0:3)",
-          "(1:3)",
-          "(2:3)"
+          "(1:4)",
+          "(2:5)"
         ],
         "ResultColumns": 3,
         "Inputs": [
@@ -1463,8 +1551,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select foo, foo, foo, weight_string(foo) from (select foo, foo, foo from `user` where 1 != 1 union select bar, baz, toto from music where 1 != 1) as dt where 1 != 1",
-            "Query": "select foo, foo, foo, weight_string(foo) from (select foo, foo, foo from `user` union select bar, baz, toto from music) as dt",
+            "FieldQuery": "select dt.c0 as foo, dt.c1 as foo, dt.c2 as foo, weight_string(dt.c0), weight_string(dt.c1), weight_string(dt.c2) from (select foo, foo, foo from `user` where 1 != 1 union select bar, baz, toto from music where 1 != 1) as dt(c0, c1, c2) where 1 != 1",
+            "Query": "select dt.c0 as foo, dt.c1 as foo, dt.c2 as foo, weight_string(dt.c0), weight_string(dt.c1), weight_string(dt.c2) from (select foo, foo, foo from `user` union select bar, baz, toto from music) as dt(c0, c1, c2)",
             "Table": "`user`, music"
           }
         ]
@@ -1503,8 +1591,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select foo, weight_string(foo) from (select foo from `user` where 1 != 1 union select foo from `user` where 1 != 1) as dt where 1 != 1",
-                "Query": "select foo, weight_string(foo) from (select foo from `user` where bar = 12 union select foo from `user` where bar = 134) as dt",
+                "FieldQuery": "select dt.c0 as foo, weight_string(dt.c0) from (select foo from `user` where 1 != 1 union select foo from `user` where 1 != 1) as dt(c0) where 1 != 1",
+                "Query": "select dt.c0 as foo, weight_string(dt.c0) from (select foo from `user` where bar = 12 union select foo from `user` where bar = 134) as dt(c0)",
                 "Table": "`user`"
               }
             ]
@@ -1522,8 +1610,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select bar, weight_string(bar) from (select bar from music where 1 != 1 union select bar from music where 1 != 1) as dt where 1 != 1",
-                "Query": "select bar, weight_string(bar) from (select bar from music where foo = 12 and bar = :t1_foo union select bar from music where foo = 1234 and bar = :t1_foo) as dt",
+                "FieldQuery": "select dt.c0 as bar, weight_string(dt.c0) from (select bar from music where 1 != 1 union select bar from music where 1 != 1) as dt(c0) where 1 != 1",
+                "Query": "select dt.c0 as bar, weight_string(dt.c0) from (select bar from music where foo = 12 and bar = :t1_foo union select bar from music where foo = 1234 and bar = :t1_foo) as dt(c0)",
                 "Table": "music"
               }
             ]
@@ -1532,6 +1620,191 @@
       },
       "TablesUsed": [
         "user.music",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Select literals from table union Select literals from table",
+    "query": "SELECT 1 from user UNION SELECT 2 from user",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT 1 from user UNION SELECT 2 from user",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "0"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from `user` where 1 != 1 union select 2 from `user` where 1 != 1",
+            "Query": "select 1 from `user` union select 2 from `user`",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Select column from table union Select literals from table",
+    "query": "select col1 from user union select 3 from user",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select col1 from user union select 3 from user",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:1)"
+        ],
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select dt.c0 as col1, weight_string(dt.c0) from (select col1 from `user` where 1 != 1 union select 3 from `user` where 1 != 1) as dt(c0) where 1 != 1",
+            "Query": "select dt.c0 as col1, weight_string(dt.c0) from (select col1 from `user` union select 3 from `user`) as dt(c0)",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Select literals from table union Select column from table",
+    "query": "select 3 from user union select col1 from user",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 3 from user union select col1 from user",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:1)"
+        ],
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select dt.c0 as `3`, weight_string(dt.c0) from (select 3 from `user` where 1 != 1 union select col1 from `user` where 1 != 1) as dt(c0) where 1 != 1",
+            "Query": "select dt.c0 as `3`, weight_string(dt.c0) from (select 3 from `user` union select col1 from `user`) as dt(c0)",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Select literals from table union Select now() from table",
+    "query": "select 3 from user union select now() from user",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 3 from user union select now() from user",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:1)"
+        ],
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select dt.c0 as `3`, weight_string(dt.c0) from (select 3 from `user` where 1 != 1 union select now() from `user` where 1 != 1) as dt(c0) where 1 != 1",
+            "Query": "select dt.c0 as `3`, weight_string(dt.c0) from (select 3 from `user` union select now() from `user`) as dt(c0)",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Select now() from table union Select literals from table",
+    "query": "select now() from user union select 3 from user",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select now() from user union select 3 from user",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:1)"
+        ],
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select dt.c0 as `now()`, weight_string(dt.c0) from (select now() from `user` where 1 != 1 union select 3 from `user` where 1 != 1) as dt(c0) where 1 != 1",
+            "Query": "select dt.c0 as `now()`, weight_string(dt.c0) from (select now() from `user` union select 3 from `user`) as dt(c0)",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Select now() from table union Select column from table",
+    "query": "select now() from user union select id from user",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select now() from user union select id from user",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:1)"
+        ],
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select dt.c0 as `now()`, weight_string(dt.c0) from (select now() from `user` where 1 != 1 union select id from `user` where 1 != 1) as dt(c0) where 1 != 1",
+            "Query": "select dt.c0 as `now()`, weight_string(dt.c0) from (select now() from `user` union select id from `user`) as dt(c0)",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
         "user.user"
       ]
     }

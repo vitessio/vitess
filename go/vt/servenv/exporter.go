@@ -19,6 +19,7 @@ package servenv
 import (
 	"expvar"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 
@@ -150,9 +151,10 @@ func (e *Exporter) URLPrefix() string {
 	// There are two other places where this logic is duplicated:
 	// status.go and go/vt/vtgate/discovery/healthcheck.go.
 	if e.name == "" {
-		return e.name
+		return ""
 	}
-	return "/" + e.name
+	prefix, _ := url.JoinPath("/", e.name)
+	return prefix
 }
 
 // HandleFunc sets or overwrites the handler for url. If Exporter has a name,

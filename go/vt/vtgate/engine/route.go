@@ -19,7 +19,7 @@ package engine
 import (
 	"context"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"sort"
 	"strings"
 	"time"
@@ -52,6 +52,12 @@ var (
 // Route represents the instructions to route a read query to
 // one or many vttablets.
 type Route struct {
+	// Route does not take inputs
+	noInputs
+
+	// Route does not need transaction handling
+	noTxNeeded
+
 	// TargetTabletType specifies an explicit target destination tablet type
 	// this is only used in conjunction with TargetDestination
 	TargetTabletType topodatapb.TabletType
@@ -89,12 +95,6 @@ type Route struct {
 	// select count(*) from tbl where lookupColumn = 'not there'
 	// select exists(<subq>)
 	NoRoutesSpecialHandling bool
-
-	// Route does not take inputs
-	noInputs
-
-	// Route does not need transaction handling
-	noTxNeeded
 }
 
 // NewRoute creates a Route.
@@ -126,11 +126,6 @@ func (route *Route) GetKeyspaceName() string {
 // GetTableName specifies the table that this primitive routes to.
 func (route *Route) GetTableName() string {
 	return route.TableName
-}
-
-// SetTruncateColumnCount sets the truncate column count.
-func (route *Route) SetTruncateColumnCount(count int) {
-	route.TruncateColumnCount = count
 }
 
 // TryExecute performs a non-streaming exec.
@@ -542,7 +537,7 @@ func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCurs
 		return
 	}
 
-	if vcursor.GetWarmingReadsPercent() == 0 || rand.Intn(100) > vcursor.GetWarmingReadsPercent() {
+	if vcursor.GetWarmingReadsPercent() == 0 || rand.IntN(100) > vcursor.GetWarmingReadsPercent() {
 		return
 	}
 

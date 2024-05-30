@@ -23,6 +23,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -56,11 +57,6 @@ func (ms *MemorySort) GetKeyspaceName() string {
 // GetTableName specifies the table that this primitive routes to.
 func (ms *MemorySort) GetTableName() string {
 	return ms.Input.GetTableName()
-}
-
-// SetTruncateColumnCount sets the truncate column count.
-func (ms *MemorySort) SetTruncateColumnCount(count int) {
-	ms.TruncateColumnCount = count
 }
 
 // TryExecute satisfies the Primitive interface.
@@ -101,7 +97,11 @@ func (ms *MemorySort) TryStreamExecute(ctx context.Context, vcursor VCursor, bin
 		Compare: ms.OrderBy,
 		Limit:   count,
 	}
+
+	var mu sync.Mutex
 	err = vcursor.StreamExecutePrimitive(ctx, ms.Input, bindVars, wantfields, func(qr *sqltypes.Result) error {
+		mu.Lock()
+		defer mu.Unlock()
 		if len(qr.Fields) != 0 {
 			if err := cb(&sqltypes.Result{Fields: qr.Fields}); err != nil {
 				return err
@@ -138,7 +138,7 @@ func (ms *MemorySort) NeedsTransaction() bool {
 
 func (ms *MemorySort) fetchCount(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (int, error) {
 	if ms.UpperLimit == nil {
-		return math.MaxInt64, nil
+		return math.MaxInt, nil
 	}
 	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
 	resolved, err := env.Evaluate(ms.UpperLimit)

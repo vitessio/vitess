@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -47,7 +47,7 @@ func init() {
 	Main.Flags().DurationVar(&schemaChangeReplicasTimeout, "schema_change_replicas_timeout", schemaChangeReplicasTimeout, "How long to wait for replicas to receive a schema change.")
 }
 
-func initSchema() {
+func initSchema(ctx context.Context) {
 	// Start schema manager service if needed.
 	if schemaChangeDir != "" {
 		interval := schemaChangeCheckInterval
@@ -70,12 +70,11 @@ func initSchema() {
 				log.Errorf("failed to get controller, error: %v", err)
 				return
 			}
-			ctx := context.Background()
-			wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
+			wr := wrangler.New(env, logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 			_, err = schemamanager.Run(
 				ctx,
 				controller,
-				schemamanager.NewTabletExecutor("vtctld/schema", wr.TopoServer(), wr.TabletManagerClient(), wr.Logger(), schemaChangeReplicasTimeout, 0),
+				schemamanager.NewTabletExecutor("vtctld/schema", wr.TopoServer(), wr.TabletManagerClient(), wr.Logger(), schemaChangeReplicasTimeout, 0, env.Parser()),
 			)
 			if err != nil {
 				log.Errorf("Schema change failed, error: %v", err)

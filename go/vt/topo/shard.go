@@ -77,39 +77,6 @@ func removeCellsFromList(toRemove, fullList []string) []string {
 	return leftoverCells
 }
 
-// removeCells will remove the cells from the provided list. It returns
-// the new list, and a boolean that indicates the returned list is empty.
-func removeCells(cells, toRemove, fullList []string) ([]string, bool) {
-	// The assumption here is we already migrated something,
-	// and we're reverting that part. So we're gonna remove
-	// records only.
-	leftoverCells := make([]string, 0, len(cells))
-	if len(cells) == 0 {
-		// we migrated all the cells already, take the full list
-		// and remove all the ones we're not reverting
-		for _, cell := range fullList {
-			if !InCellList(cell, toRemove) {
-				leftoverCells = append(leftoverCells, cell)
-			}
-		}
-	} else {
-		// we migrated a subset of the cells,
-		// remove the ones we're reverting
-		for _, cell := range cells {
-			if !InCellList(cell, toRemove) {
-				leftoverCells = append(leftoverCells, cell)
-			}
-		}
-	}
-
-	if len(leftoverCells) == 0 {
-		// we don't have any cell left, we need to clear this record
-		return nil, true
-	}
-
-	return leftoverCells, false
-}
-
 // IsShardUsingRangeBasedSharding returns true if the shard name
 // implies it is using range based sharding.
 func IsShardUsingRangeBasedSharding(shard string) bool {
@@ -223,12 +190,7 @@ func (ts *Server) GetShard(ctx context.Context, keyspace, shard string) (*ShardI
 	if err = value.UnmarshalVT(data); err != nil {
 		return nil, vterrors.Wrapf(err, "GetShard(%v,%v): bad shard data", keyspace, shard)
 	}
-	return &ShardInfo{
-		keyspace:  keyspace,
-		shardName: shard,
-		version:   version,
-		Shard:     value,
-	}, nil
+	return NewShardInfo(keyspace, shard, value, version), nil
 }
 
 // updateShard updates the shard data, with the right version.
@@ -314,7 +276,14 @@ func (ts *Server) CreateShard(ctx context.Context, keyspace, shard string) (err 
 	// Set primary as serving only if its keyrange doesn't overlap
 	// with other shards. This applies to unsharded keyspaces also
 	value.IsPrimaryServing = true
-	sis, err := ts.FindAllShardsInKeyspace(ctx, keyspace)
+	sis, err := ts.FindAllShardsInKeyspace(ctx, keyspace, &FindAllShardsInKeyspaceOptions{
+		// Assume that CreateShard may be called by many vttablets concurrently
+		// in a large, sharded keyspace. Do not apply concurrency to avoid
+		// overwhelming the toposerver.
+		//
+		// See: https://github.com/vitessio/vitess/pull/5436.
+		Concurrency: 1,
+	})
 	if err != nil && !IsErrType(err, NoNode) {
 		return err
 	}
@@ -659,7 +628,7 @@ func (ts *Server) GetTabletMapForShardByCell(ctx context.Context, keyspace, shar
 
 	// get the tablets for the cells we were able to reach, forward
 	// ErrPartialResult from FindAllTabletAliasesInShard
-	result, gerr := ts.GetTabletMap(ctx, aliases)
+	result, gerr := ts.GetTabletMap(ctx, aliases, nil)
 	if gerr == nil && err != nil {
 		gerr = err
 	}

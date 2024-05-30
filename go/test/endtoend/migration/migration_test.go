@@ -145,7 +145,7 @@ func TestMigration(t *testing.T) {
 		vt.ExtraArgs = append(vt.ExtraArgs, "--tablet_config", yamlFile)
 	}
 	createKeyspace(t, commerce, []string{"0"}, tabletConfig)
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("RebuildKeyspaceGraph", "commerce")
+	err := clusterInstance.VtctldClientProcess.ExecuteCommand("RebuildKeyspaceGraph", "commerce")
 	require.NoError(t, err)
 
 	err = clusterInstance.StartVtgate()
@@ -221,7 +221,7 @@ func migrate(t *testing.T, fromdb, toks string, tables []string) {
 		"('%s', '%s', %s, '', 9999, 9999, 'primary', 0, 0, 'Running')", tables[0], "vt_"+toks, sqlEscaped.String())
 	fmt.Printf("VReplicationExec: %s\n", query)
 	vttablet := keyspaces[toks].Shards[0].Vttablets[0].VttabletProcess
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("VReplicationExec", vttablet.TabletPath, query)
+	err := clusterInstance.VtctldClientProcess.ExecuteCommand("VReplicationExec", vttablet.TabletPath, query)
 	require.NoError(t, err)
 }
 

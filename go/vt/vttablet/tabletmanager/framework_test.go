@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -33,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
@@ -54,7 +56,7 @@ const (
 )
 
 func init() {
-	tabletconn.RegisterDialer("grpc", func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
+	tabletconn.RegisterDialer("grpc", func(ctx context.Context, tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
 		return &tabletconntest.FakeQueryService{
 			StreamHealthResponse: &querypb.StreamHealthResponse{
 				Serving: true,
@@ -96,7 +98,7 @@ func newTestEnv(t *testing.T, ctx context.Context, sourceKeyspace string, source
 	tenv.tmc.sourceShards = sourceShards
 	tenv.tmc.schema = defaultSchema
 
-	tabletconn.RegisterDialer(t.Name(), func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
+	tabletconn.RegisterDialer(t.Name(), func(ctx context.Context, tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
 		tenv.mu.Lock()
 		defer tenv.mu.Unlock()
 		if qs, ok := tenv.tmc.tablets[int(tablet.Alias.Uid)]; ok {
@@ -376,18 +378,70 @@ type fakeTMClient struct {
 	sourceShards   []string
 	tablets        map[int]*fakeTabletConn
 	schema         *tabletmanagerdatapb.SchemaDefinition
+	tabletSchemas  map[int]*tabletmanagerdatapb.SchemaDefinition
 	vreQueries     map[int]map[string]*querypb.QueryResult
+
+	mu sync.Mutex
+	// Keep track of how many times GetSchema is called per tablet.
+	getSchemaCounts map[string]int
+	// Used to confirm the number of times WorkflowDelete was called.
+	workflowDeleteCalls int
 }
 
 func newFakeTMClient() *fakeTMClient {
 	return &fakeTMClient{
-		tablets:    make(map[int]*fakeTabletConn),
-		vreQueries: make(map[int]map[string]*querypb.QueryResult),
-		schema:     &tabletmanagerdatapb.SchemaDefinition{},
+		tablets:         make(map[int]*fakeTabletConn),
+		vreQueries:      make(map[int]map[string]*querypb.QueryResult),
+		schema:          &tabletmanagerdatapb.SchemaDefinition{},
+		tabletSchemas:   make(map[int]*tabletmanagerdatapb.SchemaDefinition), // If we need to override the global schema for a tablet
+		getSchemaCounts: make(map[string]int),
 	}
 }
 
+// Note: ONLY breaks up change.SQL into individual statements and executes it. Does NOT fully implement ApplySchema.
+func (tmc *fakeTMClient) ApplySchema(ctx context.Context, tablet *topodatapb.Tablet, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error) {
+	stmts := strings.Split(change.SQL, ";")
+
+	for _, stmt := range stmts {
+		_, err := tmc.ExecuteFetchAsDba(ctx, tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+			Query:        []byte(stmt),
+			MaxRows:      0,
+			ReloadSchema: true,
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return nil, nil
+}
+
+func (tmc *fakeTMClient) schemaRequested(uid int) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+	key := strconv.Itoa(int(uid))
+	n, ok := tmc.getSchemaCounts[key]
+	if !ok {
+		tmc.getSchemaCounts[key] = 1
+	} else {
+		tmc.getSchemaCounts[key] = n + 1
+	}
+}
+
+func (tmc *fakeTMClient) getSchemaRequestCount(uid int) int {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+	key := strconv.Itoa(int(uid))
+	return tmc.getSchemaCounts[key]
+}
+
 func (tmc *fakeTMClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error) {
+	tmc.schemaRequested(int(tablet.Alias.Uid))
+	// Return the schema for the tablet if it exists.
+	if schema, ok := tmc.tabletSchemas[int(tablet.Alias.Uid)]; ok {
+		return schema, nil
+	}
+	// Otherwise use the global one.
 	return tmc.schema, nil
 }
 
@@ -432,41 +486,6 @@ func (tmc *fakeTMClient) VReplicationExec(ctx context.Context, tablet *topodatap
 	return nil, fmt.Errorf("query %q not found for tablet %d", query, tablet.Alias.Uid)
 }
 
-func (tmc *fakeTMClient) CreateVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.CreateVReplicationWorkflowRequest) (*tabletmanagerdatapb.CreateVReplicationWorkflowResponse, error) {
-	return tmc.tablets[int(tablet.Alias.Uid)].tm.CreateVReplicationWorkflow(ctx, req)
-}
-
-func (tmc *fakeTMClient) ReadVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ReadVReplicationWorkflowRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowResponse, error) {
-	resp := &tabletmanagerdatapb.ReadVReplicationWorkflowResponse{
-		Workflow:        req.Workflow,
-		WorkflowSubType: binlogdatapb.VReplicationWorkflowSubType_None,
-		WorkflowType:    binlogdatapb.VReplicationWorkflowType_MoveTables,
-		TabletTypes:     []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
-		Streams:         make([]*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream, len(tmc.sourceShards)),
-	}
-	rules := make([]*binlogdatapb.Rule, len(defaultSchema.TableDefinitions))
-	for i, table := range defaultSchema.TableDefinitions {
-		rules[i] = &binlogdatapb.Rule{
-			Match:  table.Name,
-			Filter: tablet.Shard,
-		}
-	}
-	for i, shard := range tmc.sourceShards {
-		resp.Streams[i] = &tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{
-			Id: int32(i + 1),
-			Bls: &binlogdatapb.BinlogSource{
-				Keyspace: tmc.sourceKeyspace,
-				Shard:    shard,
-				Filter: &binlogdatapb.Filter{
-					Rules: rules,
-				},
-			},
-		}
-	}
-
-	return resp, nil
-}
-
 func (tmc *fakeTMClient) PrimaryPosition(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
 	return fmt.Sprintf("%s/%s", gtidFlavor, gtidPosition), nil
 }
@@ -489,4 +508,35 @@ func (tmc *fakeTMClient) VDiff(ctx context.Context, tablet *topodatapb.Tablet, r
 			RowsAffected: 1,
 		},
 	}, nil
+}
+
+func (tmc *fakeTMClient) CreateVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.CreateVReplicationWorkflowRequest) (*tabletmanagerdatapb.CreateVReplicationWorkflowResponse, error) {
+	return tmc.tablets[int(tablet.Alias.Uid)].tm.CreateVReplicationWorkflow(ctx, req)
+}
+
+func (tmc *fakeTMClient) DeleteVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.DeleteVReplicationWorkflowRequest) (response *tabletmanagerdatapb.DeleteVReplicationWorkflowResponse, err error) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+	tmc.workflowDeleteCalls++
+	return &tabletmanagerdatapb.DeleteVReplicationWorkflowResponse{
+		Result: &querypb.QueryResult{
+			RowsAffected: 1,
+		},
+	}, nil
+}
+
+func (tmc *fakeTMClient) HasVReplicationWorkflows(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.HasVReplicationWorkflowsRequest) (*tabletmanagerdatapb.HasVReplicationWorkflowsResponse, error) {
+	return tmc.tablets[int(tablet.Alias.Uid)].tm.HasVReplicationWorkflows(ctx, req)
+}
+
+func (tmc *fakeTMClient) ReadVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ReadVReplicationWorkflowRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowResponse, error) {
+	return tmc.tablets[int(tablet.Alias.Uid)].tm.ReadVReplicationWorkflow(ctx, req)
+}
+
+func (tmc *fakeTMClient) ReadVReplicationWorkflows(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ReadVReplicationWorkflowsRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse, error) {
+	return tmc.tablets[int(tablet.Alias.Uid)].tm.ReadVReplicationWorkflows(ctx, req)
+}
+
+func (tmc *fakeTMClient) UpdateVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.UpdateVReplicationWorkflowRequest) (*tabletmanagerdatapb.UpdateVReplicationWorkflowResponse, error) {
+	return tmc.tablets[int(tablet.Alias.Uid)].tm.UpdateVReplicationWorkflow(ctx, req)
 }

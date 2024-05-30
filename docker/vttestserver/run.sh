@@ -35,6 +35,7 @@ rm -vf "$VTDATAROOT"/"$tablet_dir"/{mysql.sock,mysql.sock.lock}
 	--keyspaces "$KEYSPACES" \
 	--num_shards "$NUM_SHARDS" \
 	--mysql_bind_host "${MYSQL_BIND_HOST:-127.0.0.1}" \
+	--vtcombo-bind-host "${VTCOMBO_BIND_HOST:-127.0.0.1}" \
 	--mysql_server_version "${MYSQL_SERVER_VERSION:-$1}" \
 	--charset "${CHARSET:-utf8mb4}" \
 	--foreign_key_mode "${FOREIGN_KEY_MODE:-allow}" \

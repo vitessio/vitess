@@ -18,7 +18,6 @@ package evalengine
 
 import (
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/servenv"
 )
 
 type builtinUser struct {
@@ -47,12 +46,12 @@ type builtinVersion struct {
 var _ IR = (*builtinVersion)(nil)
 
 func (call *builtinVersion) eval(env *ExpressionEnv) (eval, error) {
-	return newEvalText([]byte(servenv.MySQLServerVersion()), collationUtf8mb3), nil
+	return newEvalText([]byte(env.currentVersion()), collationUtf8mb3), nil
 }
 
 func (*builtinVersion) compile(c *compiler) (ctype, error) {
 	c.asm.Fn_Version()
-	return ctype{Type: sqltypes.Datetime, Col: collationUtf8mb3}, nil
+	return ctype{Type: sqltypes.VarChar, Col: collationUtf8mb3}, nil
 }
 
 type builtinDatabase struct {
@@ -71,7 +70,7 @@ func (call *builtinDatabase) eval(env *ExpressionEnv) (eval, error) {
 
 func (*builtinDatabase) compile(c *compiler) (ctype, error) {
 	c.asm.Fn_Database()
-	return ctype{Type: sqltypes.Datetime, Col: collationUtf8mb3}, nil
+	return ctype{Type: sqltypes.VarChar, Col: collationUtf8mb3}, nil
 }
 
 func (call *builtinDatabase) constant() bool {

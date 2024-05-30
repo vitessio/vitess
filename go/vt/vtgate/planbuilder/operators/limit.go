@@ -18,42 +18,49 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 type Limit struct {
-	Source ops.Operator
+	Source Operator
 	AST    *sqlparser.Limit
 
-	// Pushed marks whether the limit has been pushed down to the inputs but still need to keep the operator around.
-	// For example, `select * from user order by id limit 10`. Even after we push the limit to the route, we need a limit on top
-	// since it is a scatter.
+	// Top is true if the limit is a top level limit. To optimise, we push LIMIT to the RHS of joins,
+	// but we need to still LIMIT the total result set to the top level limit.
+	Top bool
+
+	// Once we have pushed the top level Limit down, we mark it as pushed so that we don't push it down again.
 	Pushed bool
 }
 
-func (l *Limit) Clone(inputs []ops.Operator) ops.Operator {
+func (l *Limit) Clone(inputs []Operator) Operator {
 	return &Limit{
 		Source: inputs[0],
 		AST:    sqlparser.CloneRefOfLimit(l.AST),
+		Top:    l.Top,
+		Pushed: l.Pushed,
 	}
 }
 
-func (l *Limit) Inputs() []ops.Operator {
-	return []ops.Operator{l.Source}
+func (l *Limit) Inputs() []Operator {
+	return []Operator{l.Source}
 }
 
-func (l *Limit) SetInputs(operators []ops.Operator) {
+func (l *Limit) SetInputs(operators []Operator) {
 	l.Source = operators[0]
 }
 
-func (l *Limit) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
+func (l *Limit) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
 	l.Source = l.Source.AddPredicate(ctx, expr)
 	return l
 }
 
 func (l *Limit) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) int {
 	return l.Source.AddColumn(ctx, reuse, gb, expr)
+}
+
+func (l *Limit) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
+	return l.Source.AddWSColumn(ctx, offset, underRoute)
 }
 
 func (l *Limit) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
@@ -68,10 +75,17 @@ func (l *Limit) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.Selec
 	return l.Source.GetSelectExprs(ctx)
 }
 
-func (l *Limit) GetOrdering(ctx *plancontext.PlanningContext) []ops.OrderBy {
+func (l *Limit) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
 	return l.Source.GetOrdering(ctx)
 }
 
 func (l *Limit) ShortDescription() string {
-	return sqlparser.String(l.AST)
+	r := sqlparser.String(l.AST)
+	if l.Top {
+		r += " Top"
+	}
+	if l.Pushed {
+		r += " Pushed"
+	}
+	return r
 }

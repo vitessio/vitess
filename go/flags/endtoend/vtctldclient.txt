@@ -1,4 +1,8 @@
 Executes a cluster management command on the remote vtctld server.
+If there are no running vtctld servers -- for example when bootstrapping
+a new Vitess cluster -- you can specify a --server value of 'internal'.
+When doing so, you would use the --topo* flags so that the client can
+connect directly to the topo server(s).
 
 Usage:
   vtctldclient [flags]
@@ -7,6 +11,7 @@ Usage:
 Available Commands:
   AddCellInfo                 Registers a local topology service in a new cell by creating the CellInfo.
   AddCellsAlias               Defines a group of cells that can be referenced by a single name (the alias).
+  ApplyKeyspaceRoutingRules   Applies the provided keyspace routing rules.
   ApplyRoutingRules           Applies the VSchema routing rules.
   ApplySchema                 Applies the schema change to the specified keyspace on every primary, running in parallel on all shards. The changes are then propagated to replicas via replication.
   ApplyShardRoutingRules      Applies the provided shard routing rules.
@@ -26,6 +31,7 @@ Available Commands:
   ExecuteFetchAsApp           Executes the given query as the App user on the remote tablet.
   ExecuteFetchAsDBA           Executes the given query as the DBA user on the remote tablet.
   ExecuteHook                 Runs the specified hook on the given tablet.
+  ExecuteMultiFetchAsDBA      Executes given multiple queries as the DBA user on the remote tablet.
   FindAllShardsInKeyspace     Returns a map of shard names to shard references for a given keyspace.
   GenerateShardRanges         Print a set of shard ranges assuming a keyspace with N shards.
   GetBackups                  Lists backups for the given shard.
@@ -34,11 +40,13 @@ Available Commands:
   GetCellsAliases             Gets all CellsAlias objects in the cluster.
   GetFullStatus               Outputs a JSON structure that contains full status of MySQL including the replication information, semi-sync information, GTID information among others.
   GetKeyspace                 Returns information about the given keyspace from the topology.
+  GetKeyspaceRoutingRules     Displays the currently active keyspace routing rules.
   GetKeyspaces                Returns information about every keyspace in the topology.
   GetPermissions              Displays the permissions for a tablet.
   GetRoutingRules             Displays the VSchema routing rules.
   GetSchema                   Displays the full schema for a tablet, optionally restricted to the specified tables/views.
   GetShard                    Returns information about a shard in the topology.
+  GetShardReplication         Returns information about the replication relationships for a shard in the given cell(s).
   GetShardRoutingRules        Displays the currently active shard routing rules as a JSON document.
   GetSrvKeyspaceNames         Outputs a JSON mapping of cell=>keyspace names served in that cell. Omit to query all cells.
   GetSrvKeyspaces             Returns the SrvKeyspaces for the given keyspace in one or more cells.
@@ -115,18 +123,23 @@ Flags:
   -h, --help                                   help for vtctldclient
       --keep_logs duration                     keep logs for this long (using ctime) (zero to keep forever)
       --keep_logs_by_mtime duration            keep logs for this long (using mtime) (zero to keep forever)
-      --log_backtrace_at traceLocation         when logging hits line file:N, emit a stack trace (default :0)
+      --log_backtrace_at traceLocations        when logging hits line file:N, emit a stack trace
       --log_dir string                         If non-empty, write log files in this directory
+      --log_link string                        If non-empty, add symbolic links in this directory to the log files
       --log_rotate_max_size uint               size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
+      --logbuflevel int                        Buffer log messages logged at this level or lower (-1 means don't buffer; 0 means buffer INFO only; ...). Has limited applicability on non-prod platforms.
       --logtostderr                            log to standard error instead of files
       --mysql_server_version string            MySQL server version to advertise. (default "8.0.30-Vitess")
       --purge_logs_interval duration           how often try to remove old logs (default 1h0m0s)
       --security_policy string                 the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
       --server string                          server to use for the connection (required)
-      --stderrthreshold severity               logs at or above this threshold go to stderr (default 1)
+      --stderrthreshold severityFlag           logs at or above this threshold go to stderr (default 1)
+      --topo-global-root string                the path of the global topology data in the global topology server (default "/vitess/global")
+      --topo-global-server-address strings     the address of the global topology server(s) (default [localhost:2379])
+      --topo-implementation string             the topology implementation to use (default "etcd2")
   -v, --v Level                                log level for V logs
       --version                                version for vtctldclient
-      --vmodule moduleSpec                     comma-separated list of pattern=N settings for file-filtered logging
+      --vmodule vModuleFlag                    comma-separated list of pattern=N settings for file-filtered logging
       --vtctl_client_protocol string           Protocol to use to talk to the vtctl server. (default "grpc")
       --vtctld_grpc_ca string                  the server ca to use to validate servers when connecting
       --vtctld_grpc_cert string                the cert to use to connect

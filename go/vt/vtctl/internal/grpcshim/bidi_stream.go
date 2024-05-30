@@ -101,7 +101,7 @@ type BidiStream struct {
 
 // NewBidiStream returns a BidiStream ready for embedded use. The provided ctx
 // will be used for the stream context, and types embedding BidiStream should
-// check context cancellation/expiriation in their respective Recv and Send
+// check context cancellation/expiration in their respective Recv and Send
 // methods.
 //
 // See the documentation on BidiStream for example usage.
@@ -123,7 +123,7 @@ func (bs *BidiStream) Closed() <-chan struct{} {
 
 // IsClosed returns true if the stream has been closed for sending.
 //
-// It is a conveince function for attempting to select on the channel returned
+// It is a convenience function for attempting to select on the channel returned
 // by bs.Closed().
 func (bs *BidiStream) IsClosed() bool {
 	select {

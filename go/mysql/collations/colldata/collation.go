@@ -17,6 +17,7 @@ limitations under the License.
 package colldata
 
 import (
+	"bytes"
 	"fmt"
 	"math"
 
@@ -379,4 +380,47 @@ coerceToRight:
 		func(dst, in []byte) ([]byte, error) {
 			return charset.Convert(dst, rightCS, in, leftCS)
 		}, nil, nil
+}
+
+func Index(col Collation, str, sub []byte, offset int) int {
+	cs := col.Charset()
+	if offset > 0 {
+		l := charset.Length(cs, str)
+		if offset > l {
+			return -1
+		}
+		str = charset.Slice(cs, str, offset, len(str))
+	}
+
+	pos := instr(col, str, sub)
+	if pos < 0 {
+		return -1
+	}
+	return offset + pos
+}
+
+func instr(col Collation, str, sub []byte) int {
+	if len(sub) == 0 {
+		return 0
+	}
+
+	if len(str) == 0 {
+		return -1
+	}
+
+	if col.IsBinary() && col.Charset().MaxWidth() == 1 {
+		return bytes.Index(str, sub)
+	}
+
+	var pos int
+	cs := col.Charset()
+	for len(str) > 0 {
+		if col.Collate(str, sub, true) == 0 {
+			return pos
+		}
+		_, size := cs.DecodeRune(str)
+		str = str[size:]
+		pos++
+	}
+	return -1
 }

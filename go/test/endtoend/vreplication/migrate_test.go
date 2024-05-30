@@ -25,8 +25,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
-
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
@@ -48,43 +46,36 @@ func insertInitialDataIntoExternalCluster(t *testing.T, conn *mysql.Conn) {
 // hence the VTDATAROOT env variable gets overwritten.
 // Each time we need to create vt processes in the "other" cluster we need to set the appropriate VTDATAROOT
 func TestVtctlMigrate(t *testing.T) {
-	defaultCellName := "zone1"
-	cells := []string{"zone1"}
-	allCellNames = "zone1"
-	vc = NewVitessCluster(t, "TestMigrate", cells, mainClusterConfig)
+	vc = NewVitessCluster(t, nil)
 
-	require.NotNil(t, vc, "failed to create VitessCluster")
 	defaultReplicas = 0
 	defaultRdonly = 0
-	defer vc.TearDown(t)
+	defer vc.TearDown()
 
-	defaultCell = vc.Cells[defaultCellName]
+	defaultCell := vc.Cells[vc.CellNames[0]]
 	_, err := vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, nil)
 	require.NoError(t, err, "failed to create product keyspace")
-	err = cluster.WaitForHealthyShard(vc.VtctldClient, "product", "0")
-	require.NoError(t, err, "product shard did not become healthy")
-	vtgate = defaultCell.Vtgates[0]
+	vtgate := defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate, "failed to get vtgate")
 
-	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 	insertInitialData(t)
+	t.Run("VStreamFrom", func(t *testing.T) {
+		testVStreamFrom(t, vtgate, "product", 2)
+	})
 
 	// create external cluster
 	extCell := "extcell1"
-	extCells := []string{extCell}
-	extVc := NewVitessCluster(t, "TestMigrateExternal", extCells, externalClusterConfig)
-	require.NotNil(t, extVc)
-	defer extVc.TearDown(t)
+	extVc := NewVitessCluster(t, &clusterOptions{cells: []string{"extcell1"}, clusterConfig: externalClusterConfig})
+	defer extVc.TearDown()
 
 	extCell2 := extVc.Cells[extCell]
 	extVc.AddKeyspace(t, []*Cell{extCell2}, "rating", "0", initialExternalVSchema, initialExternalSchema, 0, 0, 1000, nil)
 	extVtgate := extCell2.Vtgates[0]
 	require.NotNil(t, extVtgate)
 
-	err = cluster.WaitForHealthyShard(extVc.VtctldClient, "rating", "0")
-	require.NoError(t, err)
 	verifyClusterHealth(t, extVc)
 	extVtgateConn := getConnection(t, extVc.ClusterConfig.hostname, extVc.ClusterConfig.vtgateMySQLPort)
 	insertInitialDataIntoExternalCluster(t, extVtgateConn)
@@ -137,7 +128,7 @@ func TestVtctlMigrate(t *testing.T) {
 			"--source=ext1.rating", "create", ksWorkflow); err != nil {
 			t.Fatalf("Migrate command failed with %+v : %s\n", err, output)
 		}
-		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", "product:0", 1)
+		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", "product:0", 1, binlogdatapb.VReplicationWorkflowState_Stopped.String())
 		waitForRowCount(t, vtgateConn, "product:0", "rating", 0)
 		waitForRowCount(t, vtgateConn, "product:0", "review", 0)
 		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("Migrate", "cancel", ksWorkflow); err != nil {
@@ -175,26 +166,18 @@ func TestVtctlMigrate(t *testing.T) {
 // hence the VTDATAROOT env variable gets overwritten.
 // Each time we need to create vt processes in the "other" cluster we need to set the appropriate VTDATAROOT
 func TestVtctldMigrate(t *testing.T) {
-	defaultCellName := "zone1"
-	cells := []string{"zone1"}
-	allCellNames = "zone1"
-	vc = NewVitessCluster(t, "TestMigrateVtctld", cells, mainClusterConfig)
+	vc = NewVitessCluster(t, nil)
 
-	require.NotNil(t, vc, "failed to create VitessCluster")
 	defaultReplicas = 0
 	defaultRdonly = 0
-	defer vc.TearDown(t)
+	defer vc.TearDown()
 
-	defaultCell = vc.Cells[defaultCellName]
+	defaultCell := vc.Cells[vc.CellNames[0]]
 	_, err := vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0",
 		initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, nil)
 	require.NoError(t, err, "failed to create product keyspace")
-	err = cluster.WaitForHealthyShard(vc.VtctldClient, "product", "0")
-	require.NoError(t, err, "product shard did not become healthy")
-	vtgate = defaultCell.Vtgates[0]
-	require.NotNil(t, vtgate, "failed to get vtgate")
 
-	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 	insertInitialData(t)
@@ -202,9 +185,11 @@ func TestVtctldMigrate(t *testing.T) {
 	// create external cluster
 	extCell := "extcell1"
 	extCells := []string{extCell}
-	extVc := NewVitessCluster(t, t.Name(), extCells, externalClusterConfig)
-	require.NotNil(t, extVc)
-	defer extVc.TearDown(t)
+	extVc := NewVitessCluster(t, &clusterOptions{
+		cells:         extCells,
+		clusterConfig: externalClusterConfig,
+	})
+	defer extVc.TearDown()
 
 	extCell2 := extVc.Cells[extCell]
 	extVc.AddKeyspace(t, []*Cell{extCell2}, "rating", "0",
@@ -212,8 +197,6 @@ func TestVtctldMigrate(t *testing.T) {
 	extVtgate := extCell2.Vtgates[0]
 	require.NotNil(t, extVtgate)
 
-	err = cluster.WaitForHealthyShard(extVc.VtctldClient, "rating", "0")
-	require.NoError(t, err)
 	verifyClusterHealth(t, extVc)
 	extVtgateConn := getConnection(t, extVc.ClusterConfig.hostname, extVc.ClusterConfig.vtgateMySQLPort)
 	insertInitialDataIntoExternalCluster(t, extVtgateConn)
@@ -284,7 +267,7 @@ func TestVtctldMigrate(t *testing.T) {
 			"--mount-name", "ext1", "--all-tables", "--auto-start=false", "--cells=extcell1")
 		require.NoError(t, err, "Migrate command failed with %s", output)
 
-		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", "product:0", 1)
+		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", "product:0", 1, binlogdatapb.VReplicationWorkflowState_Stopped.String())
 		waitForRowCount(t, vtgateConn, "product:0", "rating", 0)
 		waitForRowCount(t, vtgateConn, "product:0", "review", 0)
 		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Migrate",

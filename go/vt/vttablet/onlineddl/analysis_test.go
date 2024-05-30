@@ -81,7 +81,7 @@ func TestAnalyzeInstantDDL(t *testing.T) {
 			version: "8.0.21",
 			create:  "create table t(id int, i1 int not null, i2 int generated always as (i1 + 1) stored, primary key(id))",
 			alter:   "alter table t drop column i2",
-			instant: false,
+			instant: true,
 		},
 		{
 			// add mid column
@@ -208,21 +208,22 @@ func TestAnalyzeInstantDDL(t *testing.T) {
 			instant: false,
 		},
 	}
+	parser := sqlparser.NewTestParser()
 	for _, tc := range tt {
 		name := tc.version + " " + tc.create
 		t.Run(name, func(t *testing.T) {
-			stmt, err := sqlparser.ParseStrictDDL(tc.create)
+			stmt, err := parser.ParseStrictDDL(tc.create)
 			require.NoError(t, err)
 			createTable, ok := stmt.(*sqlparser.CreateTable)
 			require.True(t, ok)
 
-			stmt, err = sqlparser.ParseStrictDDL(tc.alter)
+			stmt, err = parser.ParseStrictDDL(tc.alter)
 			require.NoError(t, err)
 			alterTable, ok := stmt.(*sqlparser.AlterTable)
 			require.True(t, ok)
 
-			_, capableOf, _ := mysql.GetFlavor(tc.version, nil)
-			plan, err := AnalyzeInstantDDL(alterTable, createTable, capableOf)
+			capableOf := mysql.ServerVersionCapableOf(tc.version)
+			plan, err := analyzeInstantDDL(alterTable, createTable, capableOf)
 			if tc.expectError {
 				assert.Error(t, err)
 			} else {

@@ -3,9 +3,8 @@ This page lists all active maintainers and their areas of expertise. This can be
 The following is the full list, alphabetically ordered.
 
 * Andres Taylor ([systay](https://github.com/systay)) andres@planetscale.com
-* Andrew Mason ([amason](https://github.com/ajm188)) andrew@planetscale.com
+* Andrew Mason ([amason](https://github.com/ajm188)) amason@hey.com
 * Arthur Schreiber ([arthurschreiber](https://github.com/arthurschreiber)) arthurschreiber@github.com
-* Dan Kozlowski ([dkhenry](https://github.com/dkhenry)) dan.kozlowski@gmail.com
 * Deepthi Sigireddi ([deepthi](https://github.com/deepthi)) deepthi@planetscale.com
 * Derek Perkins ([derekperkins](https://github.com/derekperkins)) derek@nozzle.io
 * Dirkjan Bussink ([dbussink](https://github.com/dbussink)) dbussink@planetscale.com
@@ -16,6 +15,7 @@ The following is the full list, alphabetically ordered.
 * Matt Lord ([mattlord](https://github.com/mattlord)) mlord@planetscale.com
 * Rohit Nayak ([rohit-nayak-ps](https://github.com/rohit-nayak-ps)) rohit@planetscale.com
 * Shlomi Noach ([shlomi-noach](https://github.com/shlomi-noach)) shlomi@planetscale.com
+* Tim Vaillancourt ([timvaillancourt](https://github.com/timvaillancourt)) tim@timvaillancourt.com
 * Vicent Marti ([vmg](https://github.com/vmg)) vmg@planetscale.com
 
 ## Areas of expertise
@@ -68,6 +68,7 @@ We thank the following past maintainers for their contributions.
 * Alain Jobart ([alainjobart](https://github.com/alainjobart))
 * Alkin Tezuysal ([askdba](https://github.com/askdba))
 * Anthony Yeh ([enisoc](https://github.com/enisoc))
+* Dan Kozlowski ([dkhenry](https://github.com/dkhenry))
 * David Weitzman ([dweitzman](https://github.com/dweitzman))
 * Jon Tirsen ([tirsen](https://github.com/tirsen))
 * Leo X. Lin ([leoxlin](https://github.com/leoxlin))

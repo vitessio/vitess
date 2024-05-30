@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+//go:build darwin || dragonfly || freebsd || illumos || linux || netbsd || openbsd
+
 package filelock
 
 import (
@@ -35,8 +37,4 @@ func lock(f File, lt lockType) (err error) {
 
 func unlock(f File) error {
 	return lock(f, syscall.LOCK_UN)
-}
-
-func isNotSupported(err error) bool {
-	return err == syscall.ENOSYS || err == syscall.ENOTSUP || err == syscall.EOPNOTSUPP || err == ErrNotSupported
 }

@@ -129,6 +129,8 @@ func TestVSchemaTrackerInit(t *testing.T) {
 		100*time.Millisecond,
 		60*time.Second,
 		"initial table list not complete")
+
+	utils.AssertMatches(t, conn, "SHOW VSCHEMA KEYSPACES", `[[VARCHAR("ks") VARCHAR("false") VARCHAR("unmanaged") VARCHAR("")]]`)
 }
 
 // TestVSchemaTrackerKeyspaceReInit tests that the vschema tracker

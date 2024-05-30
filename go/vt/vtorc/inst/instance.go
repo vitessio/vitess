@@ -45,6 +45,8 @@ type Instance struct {
 	SourceUUID                   string
 	AncestryUUID                 string
 
+	ReplicaNetTimeout          int32
+	HeartbeatInterval          float64
 	ReplicationSQLThreadRuning bool
 	ReplicationIOThreadRuning  bool
 	ReplicationSQLThreadState  ReplicationThreadState
@@ -63,7 +65,7 @@ type Instance struct {
 	LastSQLError          string
 	LastIOError           string
 	SecondsBehindPrimary  sql.NullInt64
-	SQLDelay              uint
+	SQLDelay              uint32
 	ExecutedGtidSet       string
 	GtidPurged            string
 	GtidErrant            string

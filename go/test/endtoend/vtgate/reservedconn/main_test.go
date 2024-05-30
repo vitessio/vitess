@@ -133,7 +133,7 @@ func runAllTests(m *testing.M) int {
 		SchemaSQL: sqlSchema,
 		VSchema:   vSchema,
 	}
-	clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-transaction-timeout", "5"}
+	clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-transaction-timeout", "5s"}
 	if enableSettingsPool {
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver-enable-settings-pool")
 	}

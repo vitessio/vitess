@@ -64,6 +64,9 @@ var (
 		DeferSecondaryKeys           bool
 		AutoStart                    bool
 		StopAfterCopy                bool
+		MySQLServerVersion           string
+		TruncateUILen                int
+		TruncateErrLen               int
 	}{}
 )
 
@@ -230,6 +233,7 @@ var SwitchTrafficOptions = struct {
 	DryRun                    bool
 	Direction                 workflow.TrafficSwitchDirection
 	InitializeTargetSequences bool
+	Shards                    []string
 }{}
 
 func AddCommonSwitchTrafficFlags(cmd *cobra.Command, initializeTargetSequences bool) {
@@ -242,4 +246,8 @@ func AddCommonSwitchTrafficFlags(cmd *cobra.Command, initializeTargetSequences b
 	if initializeTargetSequences {
 		cmd.Flags().BoolVar(&SwitchTrafficOptions.InitializeTargetSequences, "initialize-target-sequences", false, "When moving tables from an unsharded keyspace to a sharded keyspace, initialize any sequences that are being used on the target when switching writes.")
 	}
+}
+
+func AddShardSubsetFlag(cmd *cobra.Command, shardsOption *[]string) {
+	cmd.Flags().StringSliceVar(shardsOption, "shards", nil, "(Optional) Specifies a comma-separated list of shards to operate on.")
 }

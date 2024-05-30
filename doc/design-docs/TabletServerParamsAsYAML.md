@@ -95,21 +95,18 @@ oltpReadPool:
   timeoutSeconds: 0        # queryserver-config-query-pool-timeout
   idleTimeoutSeconds: 1800 # queryserver-config-idle-timeout
   prefillParallelism: 0    # queryserver-config-pool-prefill-parallelism
-  maxWaiters: 50000        # queryserver-config-query-pool-waiter-cap
 
 olapReadPool:
   size: 200                # queryserver-config-stream-pool-size
   timeoutSeconds: 0        # queryserver-config-query-pool-timeout
   idleTimeoutSeconds: 1800 # queryserver-config-idle-timeout
   prefillParallelism: 0    # queryserver-config-stream-pool-prefill-parallelism
-  maxWaiters: 0
 
 txPool:
   size: 20                 # queryserver-config-transaction-cap
   timeoutSeconds: 1        # queryserver-config-txpool-timeout
   idleTimeoutSeconds: 1800 # queryserver-config-idle-timeout
   prefillParallelism: 0    # queryserver-config-transaction-prefill-parallelism
-  maxWaiters: 50000        # queryserver-config-txpool-waiter-cap
 
 oltp:
   queryTimeoutSeconds: 30 # queryserver-config-query-timeout

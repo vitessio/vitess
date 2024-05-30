@@ -29,7 +29,10 @@ import (
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/history"
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/vt/vtenv"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
 
@@ -45,8 +48,9 @@ import (
 )
 
 const (
-	sidecarDBExistsQuery = "select 'true' as 'dbexists' from information_schema.SCHEMATA where SCHEMA_NAME = %a"
-	showCreateTableQuery = "show create table %s.%s"
+	sidecarDBExistsQuery  = "select 'true' as 'dbexists' from information_schema.SCHEMATA where SCHEMA_NAME = %a"
+	showCreateTableQuery  = "show create table %s.%s"
+	sidecarCollationQuery = "select @@global.collation_server"
 
 	maxDDLErrorHistoryLength = 100
 
@@ -113,8 +117,8 @@ func init() {
 	}))
 }
 
-func validateSchemaDefinition(name, schema string) (string, error) {
-	stmt, err := sqlparser.ParseStrictDDL(schema)
+func validateSchemaDefinition(name, schema string, parser *sqlparser.Parser) (string, error) {
+	stmt, err := parser.ParseStrictDDL(schema)
 
 	if err != nil {
 		return "", err
@@ -142,7 +146,7 @@ func validateSchemaDefinition(name, schema string) (string, error) {
 
 // loadSchemaDefinitions loads the embedded schema definitions
 // into a slice of sidecarTables for processing.
-func loadSchemaDefinitions() {
+func loadSchemaDefinitions(parser *sqlparser.Parser) {
 	sqlFileExtension := ".sql"
 	err := fs.WalkDir(schemaLocation, ".", func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
@@ -171,7 +175,7 @@ func loadSchemaDefinitions() {
 				panic(err)
 			}
 			var normalizedSchema string
-			if normalizedSchema, err = validateSchemaDefinition(name, string(schema)); err != nil {
+			if normalizedSchema, err = validateSchemaDefinition(name, string(schema), parser); err != nil {
 				return err
 			}
 			sidecarTables = append(sidecarTables, &sidecarTable{name: name, module: module, path: path, schema: normalizedSchema})
@@ -194,8 +198,10 @@ func printCallerDetails() {
 
 type schemaInit struct {
 	ctx       context.Context
+	env       *vtenv.Environment
 	exec      Exec
 	dbCreated bool // The first upgrade/create query will also create the sidecar database if required.
+	coll      collations.ID
 }
 
 // Exec is a callback that has to be passed to Init() to
@@ -227,15 +233,18 @@ func getDDLErrorHistory() []*ddlError {
 
 // Init creates or upgrades the sidecar database based on
 // the declarative schema defined for all tables.
-func Init(ctx context.Context, exec Exec) error {
+func Init(ctx context.Context, env *vtenv.Environment, exec Exec) error {
 	printCallerDetails() // for debug purposes only, remove in v17
 	log.Infof("Starting sidecardb.Init()")
 
-	once.Do(loadSchemaDefinitions)
+	once.Do(func() {
+		loadSchemaDefinitions(env.Parser())
+	})
 
 	si := &schemaInit{
 		ctx:  ctx,
 		exec: exec,
+		env:  env,
 	}
 
 	// There are paths in the tablet initialization where we
@@ -263,6 +272,10 @@ func Init(ctx context.Context, exec Exec) error {
 		return err
 	}
 	defer resetSQLMode()
+
+	if si.coll, err = si.collation(); err != nil {
+		return err
+	}
 
 	for _, table := range sidecarTables {
 		if err := si.ensureSchema(table); err != nil {
@@ -337,6 +350,22 @@ func (si *schemaInit) setCurrentDatabase(dbName string) error {
 	return err
 }
 
+func (si *schemaInit) collation() (collations.ID, error) {
+	rs, err := si.exec(si.ctx, sidecarCollationQuery, 2, false)
+	if err != nil {
+		log.Error(err)
+		return collations.Unknown, err
+	}
+
+	switch len(rs.Rows) {
+	case 1:
+		return si.env.CollationEnv().LookupByName(rs.Rows[0][0].ToString()), nil
+	default:
+		// This should never happen.
+		return collations.Unknown, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid results for SidecarDB query %q as it produced %d rows", sidecarCollationQuery, len(rs.Rows))
+	}
+}
+
 // Gets existing schema of a table in the sidecar database.
 func (si *schemaInit) getCurrentSchema(tableName string) (string, error) {
 	var currentTableSchema string
@@ -361,7 +390,7 @@ func (si *schemaInit) getCurrentSchema(tableName string) (string, error) {
 }
 
 // findTableSchemaDiff gets the diff which needs to be applied
-// to the current table schema in order toreach the desired one.
+// to the current table schema in order to reach the desired one.
 // The result will be an empty string if they match.
 // This will be a CREATE statement if the table does not exist
 // or an ALTER if the table exists but has a different schema.
@@ -370,7 +399,8 @@ func (si *schemaInit) findTableSchemaDiff(tableName, current, desired string) (s
 		TableCharsetCollateStrategy: schemadiff.TableCharsetCollateIgnoreAlways,
 		AlterTableAlgorithmStrategy: schemadiff.AlterTableAlgorithmStrategyCopy,
 	}
-	diff, err := schemadiff.DiffCreateTablesQueries(current, desired, hints)
+	env := schemadiff.NewEnv(si.env, si.coll)
+	diff, err := schemadiff.DiffCreateTablesQueries(env, current, desired, hints)
 	if err != nil {
 		return "", err
 	}
@@ -458,8 +488,10 @@ func (t *sidecarTable) String() string {
 // AddSchemaInitQueries adds sidecar database schema related
 // queries to a mock db.
 // This is for unit tests only!
-func AddSchemaInitQueries(db *fakesqldb.DB, populateTables bool) {
-	once.Do(loadSchemaDefinitions)
+func AddSchemaInitQueries(db *fakesqldb.DB, populateTables bool, parser *sqlparser.Parser) {
+	once.Do(func() {
+		loadSchemaDefinitions(parser)
+	})
 	result := &sqltypes.Result{}
 	for _, q := range sidecar.DBInitQueryPatterns {
 		db.AddQueryPattern(q, result)
@@ -485,10 +517,15 @@ func AddSchemaInitQueries(db *fakesqldb.DB, populateTables bool) {
 	sqlModeResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"sql_mode",
 		"varchar"),
-		"ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION",
+		config.DefaultSQLMode,
 	)
 	db.AddQuery("select @@session.sql_mode as sql_mode", sqlModeResult)
-
+	collationResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"@@global.collation_server ",
+		"varchar"),
+		"utf8mb4_0900_ai_ci",
+	)
+	db.AddQuery("select @@global.collation_server", collationResult)
 	db.AddQuery("set @@session.sql_mode=''", &sqltypes.Result{})
 }
 

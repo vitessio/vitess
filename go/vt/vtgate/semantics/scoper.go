@@ -37,25 +37,30 @@ type (
 		// These scopes are only used for rewriting ORDER BY 1 and GROUP BY 1
 		specialExprScopes map[*sqlparser.Literal]*scope
 		statementIDs      map[sqlparser.Statement]TableSet
+		si                SchemaInformation
 	}
 
 	scope struct {
-		parent    *scope
-		stmt      sqlparser.Statement
-		tables    []TableInfo
-		isUnion   bool
-		joinUsing map[string]TableSet
-		stmtScope bool
-		ctes      map[string]*sqlparser.CommonTableExpr
+		parent       *scope
+		stmt         sqlparser.Statement
+		tables       []TableInfo
+		isUnion      bool
+		joinUsing    map[string]TableSet
+		stmtScope    bool
+		ctes         map[string]*sqlparser.CommonTableExpr
+		inGroupBy    bool
+		inHaving     bool
+		inHavingAggr bool
 	}
 )
 
-func newScoper() *scoper {
+func newScoper(si SchemaInformation) *scoper {
 	return &scoper{
 		rScope:            map[*sqlparser.Select]*scope{},
 		wScope:            map[*sqlparser.Select]*scope{},
 		specialExprScopes: map[*sqlparser.Literal]*scope{},
 		statementIDs:      map[sqlparser.Statement]TableSet{},
+		si:                si,
 	}
 }
 
@@ -74,11 +79,31 @@ func (s *scoper) down(cursor *sqlparser.Cursor) error {
 		s.copySelectExprs(cursor, node)
 	case sqlparser.OrderBy:
 		return s.addColumnInfoForOrderBy(cursor, node)
-	case sqlparser.GroupBy:
+	case *sqlparser.GroupBy:
+		if node == nil {
+			break
+		}
 		return s.addColumnInfoForGroupBy(cursor, node)
+	case sqlparser.AggrFunc:
+		if !s.currentScope().inHaving {
+			break
+		}
+		s.currentScope().inHavingAggr = true
+	case *sqlparser.FuncExpr:
+		if !s.currentScope().inHaving {
+			break
+		}
+		if node.Name.EqualsAnyString(s.si.GetAggregateUDFs()) {
+			s.currentScope().inHavingAggr = true
+		}
 	case *sqlparser.Where:
 		if node.Type == sqlparser.HavingClause {
-			return s.createSpecialScopePostProjection(cursor.Parent())
+			err := s.createSpecialScopePostProjection(cursor.Parent())
+			if err != nil {
+				return err
+			}
+			s.currentScope().inHaving = true
+			return nil
 		}
 	}
 	return nil
@@ -92,15 +117,17 @@ func (s *scoper) pushUnionScope(union *sqlparser.Union) {
 	s.push(currScope)
 }
 
-func (s *scoper) addColumnInfoForGroupBy(cursor *sqlparser.Cursor, node sqlparser.GroupBy) error {
+func (s *scoper) addColumnInfoForGroupBy(cursor *sqlparser.Cursor, node *sqlparser.GroupBy) error {
 	err := s.createSpecialScopePostProjection(cursor.Parent())
 	if err != nil {
 		return err
 	}
-	for _, expr := range node {
+	currentScope := s.currentScope()
+	currentScope.inGroupBy = true
+	for _, expr := range node.Exprs {
 		lit := keepIntLiteral(expr)
 		if lit != nil {
-			s.specialExprScopes[lit] = s.currentScope()
+			s.specialExprScopes[lit] = currentScope
 		}
 	}
 	return nil
@@ -197,7 +224,7 @@ func (s *scoper) up(cursor *sqlparser.Cursor) error {
 		if isParentSelectStatement(cursor) {
 			s.popScope()
 		}
-	case *sqlparser.Select, sqlparser.GroupBy, *sqlparser.Update, *sqlparser.Delete, *sqlparser.Insert, *sqlparser.Union:
+	case *sqlparser.Select, *sqlparser.GroupBy, *sqlparser.Update, *sqlparser.Insert, *sqlparser.Union, *sqlparser.Delete:
 		id := EmptyTableSet()
 		for _, tableInfo := range s.currentScope().tables {
 			set := tableInfo.getTableSet(s.org)
@@ -210,6 +237,8 @@ func (s *scoper) up(cursor *sqlparser.Cursor) error {
 			break
 		}
 		s.popScope()
+	case sqlparser.AggrFunc:
+		s.currentScope().inHavingAggr = false
 	case sqlparser.TableExpr:
 		if isParentSelect(cursor) {
 			curScope := s.currentScope()
@@ -221,6 +250,12 @@ func (s *scoper) up(cursor *sqlparser.Cursor) error {
 				if err != nil {
 					return err
 				}
+			}
+		}
+		if isParentDeleteOrUpdate(cursor) {
+			usingMap := s.currentScope().prepareUsingMap()
+			for ts, m := range usingMap {
+				s.binder.usingJoinInfo[ts] = m
 			}
 		}
 	}
@@ -256,6 +291,7 @@ func (s *scoper) createSpecialScopePostProjection(parent sqlparser.SQLNode) erro
 				nScope.stmt = sel
 				tableInfo = createVTableInfoForExpressions(sel.SelectExprs, nil /*needed for star expressions*/, s.org)
 				nScope.tables = append(nScope.tables, tableInfo)
+				continue
 			}
 			thisTableInfo := createVTableInfoForExpressions(sel.SelectExprs, nil /*needed for star expressions*/, s.org)
 			if len(tableInfo.cols) != len(thisTableInfo.cols) {
@@ -265,7 +301,10 @@ func (s *scoper) createSpecialScopePostProjection(parent sqlparser.SQLNode) erro
 				// at this stage, we don't store the actual dependencies, we only store the expressions.
 				// only later will we walk the expression tree and figure out the deps. so, we need to create a
 				// composite expression that contains all the expressions in the SELECTs that this UNION consists of
-				tableInfo.cols[i] = sqlparser.AndExpressions(col, thisTableInfo.cols[i])
+				tableInfo.cols[i] = &sqlparser.AndExpr{
+					Left:  col,
+					Right: thisTableInfo.cols[i],
+				}
 			}
 		}
 
@@ -320,7 +359,7 @@ func checkForInvalidAliasUse(cte *sqlparser.CommonTableExpr, name string) (err e
 	// TODO I'm sure there is a better. way, but we need to do this to stop infinite loops from occurring
 	down := func(node sqlparser.SQLNode, parent sqlparser.SQLNode) bool {
 		tbl, ok := node.(sqlparser.TableName)
-		if !ok || !tbl.Qualifier.IsEmpty() {
+		if !ok || tbl.Qualifier.NotEmpty() {
 			return err == nil
 		}
 		if tbl.Name.String() == name {

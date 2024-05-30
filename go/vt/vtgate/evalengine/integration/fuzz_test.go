@@ -19,10 +19,9 @@ limitations under the License.
 package integration
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"regexp"
 	"strings"
@@ -35,6 +34,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine/testcases"
 	"vitess.io/vitess/go/vt/vtgate/simplifier"
@@ -42,7 +42,6 @@ import (
 
 type (
 	gencase struct {
-		rand         *rand.Rand
 		ratioTuple   int
 		ratioSubexpr int
 		tupleLen     int
@@ -62,24 +61,24 @@ var rhsOfIs = []string{
 }
 
 func (g *gencase) arg(tuple bool) string {
-	if tuple || g.rand.Intn(g.ratioTuple) == 0 {
+	if tuple || rand.IntN(g.ratioTuple) == 0 {
 		var exprs []string
 		for i := 0; i < g.tupleLen; i++ {
 			exprs = append(exprs, g.arg(false))
 		}
 		return fmt.Sprintf("(%s)", strings.Join(exprs, ", "))
 	}
-	if g.rand.Intn(g.ratioSubexpr) == 0 {
+	if rand.IntN(g.ratioSubexpr) == 0 {
 		return fmt.Sprintf("(%s)", g.expr())
 	}
-	return g.primitives[g.rand.Intn(len(g.primitives))]
+	return g.primitives[rand.IntN(len(g.primitives))]
 }
 
 func (g *gencase) expr() string {
-	op := g.operators[g.rand.Intn(len(g.operators))]
+	op := g.operators[rand.IntN(len(g.operators))]
 	rhs := g.arg(op == "IN" || op == "NOT IN")
 	if op == "IS" {
-		rhs = rhsOfIs[g.rand.Intn(len(rhsOfIs))]
+		rhs = rhsOfIs[rand.IntN(len(rhsOfIs))]
 	}
 	return fmt.Sprintf("%s %s %s", g.arg(false), op, rhs)
 }
@@ -132,7 +131,7 @@ func errorsMatch(remote, local error) bool {
 }
 
 func evaluateLocalEvalengine(env *evalengine.ExpressionEnv, query string, fields []*querypb.Field) (evalengine.EvalResult, error) {
-	stmt, err := sqlparser.Parse(query)
+	stmt, err := sqlparser.NewTestParser().Parse(query)
 	if err != nil {
 		return evalengine.EvalResult{}, err
 	}
@@ -147,6 +146,7 @@ func evaluateLocalEvalengine(env *evalengine.ExpressionEnv, query string, fields
 		cfg := &evalengine.Config{
 			ResolveColumn:     evalengine.FieldResolver(fields).Column,
 			Collation:         collations.CollationUtf8mb4ID,
+			Environment:       env.VCursor().Environment(),
 			NoConstantFolding: !debugSimplify,
 		}
 		expr, err = evalengine.Translate(astExpr, cfg)
@@ -182,7 +182,6 @@ func TestGenerateFuzzCases(t *testing.T) {
 		t.Skipf("skipping fuzz test generation")
 	}
 	var gen = gencase{
-		rand:         rand.New(rand.NewSource(fuzzSeed)),
 		ratioTuple:   8,
 		ratioSubexpr: 8,
 		tupleLen:     4,
@@ -197,10 +196,11 @@ func TestGenerateFuzzCases(t *testing.T) {
 	var conn = mysqlconn(t)
 	defer conn.Close()
 
+	venv := vtenv.NewTestEnv()
 	compareWithMySQL := func(expr sqlparser.Expr) *mismatch {
 		query := "SELECT " + sqlparser.String(expr)
 
-		env := evalengine.NewExpressionEnv(context.Background(), nil, nil)
+		env := evalengine.EmptyExpressionEnv(venv)
 		eval, localErr := evaluateLocalEvalengine(env, query, nil)
 		remote, remoteErr := conn.ExecuteFetch(query, 1, false)
 
@@ -218,7 +218,7 @@ func TestGenerateFuzzCases(t *testing.T) {
 			remoteErr: remoteErr,
 		}
 		if localErr == nil {
-			res.localVal = eval.Value(collations.Default())
+			res.localVal = eval.Value(collations.MySQL8().DefaultConnectionCharset())
 		}
 		if remoteErr == nil {
 			res.remoteVal = remote.Rows[0][0]
@@ -233,7 +233,7 @@ func TestGenerateFuzzCases(t *testing.T) {
 	var start = time.Now()
 	for len(failures) < fuzzMaxFailures {
 		query := "SELECT " + gen.expr()
-		stmt, err := sqlparser.Parse(query)
+		stmt, err := sqlparser.NewTestParser().Parse(query)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -333,7 +333,7 @@ func compareResult(local, remote Result, cmp *testcases.Comparison) error {
 
 	var localCollationName string
 	var remoteCollationName string
-	env := collations.Local()
+	env := collations.MySQL8()
 	if coll := local.Collation; coll != collations.Unknown {
 		localCollationName = env.LookupName(coll)
 	}

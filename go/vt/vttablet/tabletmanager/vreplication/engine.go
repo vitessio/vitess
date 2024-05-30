@@ -28,22 +28,23 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/constants/sidecar"
-
 	"vitess.io/vitess/go/mysql/sqlerror"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const (
@@ -72,7 +73,7 @@ var waitRetryTime = 1 * time.Second
 // How frequently vcopier will update _vt.vreplication rows_copied
 var rowsCopiedUpdateInterval = 30 * time.Second
 
-// How frequntly vcopier will garbage collect old copy_state rows.
+// How frequently vcopier will garbage collect old copy_state rows.
 // By default, do it in between every 2nd and 3rd rows copied update.
 var copyStateGCInterval = (rowsCopiedUpdateInterval * 3) - (rowsCopiedUpdateInterval / 2)
 
@@ -107,10 +108,12 @@ type Engine struct {
 	throttlerClient *throttle.Client
 
 	// This should only be set in Test Engines in order to short
-	// curcuit functions as needed in unit tests. It's automatically
+	// circuit functions as needed in unit tests. It's automatically
 	// enabled in NewSimpleTestEngine. This should NOT be used in
 	// production.
 	shortcircuit bool
+
+	env *vtenv.Environment
 }
 
 type journalEvent struct {
@@ -127,14 +130,15 @@ type PostCopyAction struct {
 
 // NewEngine creates a new Engine.
 // A nil ts means that the Engine is disabled.
-func NewEngine(config *tabletenv.TabletConfig, ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, lagThrottler *throttle.Throttler) *Engine {
+func NewEngine(env *vtenv.Environment, config *tabletenv.TabletConfig, ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, lagThrottler *throttle.Throttler) *Engine {
 	vre := &Engine{
+		env:             env,
 		controllers:     make(map[int32]*controller),
 		ts:              ts,
 		cell:            cell,
 		mysqld:          mysqld,
 		journaler:       make(map[string]*journalEvent),
-		ec:              newExternalConnector(config.ExternalConnections),
+		ec:              newExternalConnector(env, config.ExternalConnections),
 		throttlerClient: throttle.NewBackgroundClient(lagThrottler, throttlerapp.VReplicationName, throttle.ThrottleCheckPrimaryWrite),
 	}
 
@@ -143,22 +147,24 @@ func NewEngine(config *tabletenv.TabletConfig, ts *topo.Server, cell string, mys
 
 // InitDBConfig should be invoked after the db name is computed.
 func (vre *Engine) InitDBConfig(dbcfgs *dbconfigs.DBConfigs) {
-	// If we're already initilized, it's a test engine. Ignore the call.
+	// If we're already initialized, it's a test engine. Ignore the call.
 	if vre.dbClientFactoryFiltered != nil && vre.dbClientFactoryDba != nil {
 		return
 	}
 	vre.dbClientFactoryFiltered = func() binlogplayer.DBClient {
-		return binlogplayer.NewDBClient(dbcfgs.FilteredWithDB())
+		return binlogplayer.NewDBClient(dbcfgs.FilteredWithDB(), vre.env.Parser())
 	}
 	vre.dbClientFactoryDba = func() binlogplayer.DBClient {
-		return binlogplayer.NewDBClient(dbcfgs.DbaWithDB())
+		return binlogplayer.NewDBClient(dbcfgs.DbaWithDB(), vre.env.Parser())
 	}
 	vre.dbName = dbcfgs.DBName
 }
 
 // NewTestEngine creates a new Engine for testing.
 func NewTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, dbClientFactoryFiltered func() binlogplayer.DBClient, dbClientFactoryDba func() binlogplayer.DBClient, dbname string, externalConfig map[string]*dbconfigs.DBConfigs) *Engine {
+	env := vtenv.NewTestEnv()
 	vre := &Engine{
+		env:                     env,
 		controllers:             make(map[int32]*controller),
 		ts:                      ts,
 		cell:                    cell,
@@ -167,15 +173,17 @@ func NewTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, db
 		dbClientFactoryDba:      dbClientFactoryDba,
 		dbName:                  dbname,
 		journaler:               make(map[string]*journalEvent),
-		ec:                      newExternalConnector(externalConfig),
+		ec:                      newExternalConnector(env, externalConfig),
 	}
 	return vre
 }
 
 // NewSimpleTestEngine creates a new Engine for testing that can
-// also short curcuit functions as needed.
+// also short circuit functions as needed.
 func NewSimpleTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, dbClientFactoryFiltered func() binlogplayer.DBClient, dbClientFactoryDba func() binlogplayer.DBClient, dbname string, externalConfig map[string]*dbconfigs.DBConfigs) *Engine {
+	env := vtenv.NewTestEnv()
 	vre := &Engine{
+		env:                     env,
 		controllers:             make(map[int32]*controller),
 		ts:                      ts,
 		cell:                    cell,
@@ -184,7 +192,7 @@ func NewSimpleTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaem
 		dbClientFactoryDba:      dbClientFactoryDba,
 		dbName:                  dbname,
 		journaler:               make(map[string]*journalEvent),
-		ec:                      newExternalConnector(externalConfig),
+		ec:                      newExternalConnector(env, externalConfig),
 		shortcircuit:            true,
 	}
 	return vre
@@ -262,7 +270,7 @@ func (vre *Engine) retry(ctx context.Context, err error) {
 		}
 		if err := vre.openLocked(ctx); err == nil {
 			// Don't invoke cancelRetry because openLocked
-			// will hold on to this context for later cancelation.
+			// will hold on to this context for later cancellation.
 			vre.cancelRetry = nil
 			vre.mu.Unlock()
 			return
@@ -273,7 +281,7 @@ func (vre *Engine) retry(ctx context.Context, err error) {
 
 func (vre *Engine) initControllers(rows []map[string]string) {
 	for _, row := range rows {
-		ct, err := newController(vre.ctx, row, vre.dbClientFactoryFiltered, vre.mysqld, vre.ts, vre.cell, tabletTypesStr, nil, vre)
+		ct, err := newController(vre.ctx, row, vre.dbClientFactoryFiltered, vre.mysqld, vre.ts, vre.cell, tabletTypesStr, nil, vre, discovery.TabletPickerOptions{})
 		if err != nil {
 			log.Errorf("Controller could not be initialized for stream: %v", row)
 			continue
@@ -330,12 +338,12 @@ func (vre *Engine) getDBClient(isAdmin bool) binlogplayer.DBClient {
 	return vre.dbClientFactoryFiltered()
 }
 
-// ExecWithDBA runs the specified query as the DBA user
+// ExecWithDBA runs the specified query as the DBA user.
 func (vre *Engine) ExecWithDBA(query string) (*sqltypes.Result, error) {
 	return vre.exec(query, true /*runAsAdmin*/)
 }
 
-// Exec runs the specified query as the Filtered user
+// Exec runs the specified query as the Filtered user.
 func (vre *Engine) Exec(query string) (*sqltypes.Result, error) {
 	return vre.exec(query, false /*runAsAdmin*/)
 }
@@ -362,7 +370,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 	}
 	defer vre.updateStats()
 
-	plan, err := buildControllerPlan(query)
+	plan, err := buildControllerPlan(query, vre.env.Parser())
 	if err != nil {
 		return nil, err
 	}
@@ -421,14 +429,12 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 			if err != nil {
 				return nil, err
 			}
-			ct, err := newController(vre.ctx, params, vre.dbClientFactoryFiltered, vre.mysqld, vre.ts, vre.cell, tabletTypesStr, nil, vre)
+			ct, err := newController(vre.ctx, params, vre.dbClientFactoryFiltered, vre.mysqld, vre.ts, vre.cell, tabletTypesStr, nil, vre, plan.tabletPickerOptions)
 			if err != nil {
 				return nil, err
 			}
 			vre.controllers[id] = ct
-			if err := insertLogWithParams(vdbc, LogStreamCreate, id, params); err != nil {
-				return nil, err
-			}
+			insertLogWithParams(vdbc, LogStreamCreate, id, params)
 		}
 		return qr, nil
 	case updateQuery:
@@ -463,14 +469,12 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 			}
 			// Create a new controller in place of the old one.
 			// For continuity, the new controller inherits the previous stats.
-			ct, err := newController(vre.ctx, params, vre.dbClientFactoryFiltered, vre.mysqld, vre.ts, vre.cell, tabletTypesStr, blpStats[id], vre)
+			ct, err := newController(vre.ctx, params, vre.dbClientFactoryFiltered, vre.mysqld, vre.ts, vre.cell, tabletTypesStr, blpStats[id], vre, plan.tabletPickerOptions)
 			if err != nil {
 				return nil, err
 			}
 			vre.controllers[id] = ct
-			if err := insertLog(vdbc, LogStateChange, id, params["state"], ""); err != nil {
-				return nil, err
-			}
+			insertLog(vdbc, LogStateChange, id, params["state"], "")
 		}
 		return qr, nil
 	case deleteQuery:
@@ -488,9 +492,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 				ct.Stop()
 				delete(vre.controllers, id)
 			}
-			if err := insertLogWithParams(vdbc, LogStreamDelete, id, nil); err != nil {
-				return nil, err
-			}
+			insertLogWithParams(vdbc, LogStreamDelete, id, nil)
 		}
 		if err := dbClient.Begin(); err != nil {
 			return nil, err
@@ -524,7 +526,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 		}
 		return qr, nil
 	case selectQuery, reshardingJournalQuery:
-		// select and resharding journal queries are passed through.
+		// Selects and resharding journal queries are passed through.
 		return dbClient.ExecuteFetch(plan.query, maxRows)
 	}
 	panic("unreachable")
@@ -727,7 +729,7 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 			log.Errorf("transitionJournal: %v", err)
 			return
 		}
-		ct, err := newController(vre.ctx, params, vre.dbClientFactoryFiltered, vre.mysqld, vre.ts, vre.cell, tabletTypesStr, nil, vre)
+		ct, err := newController(vre.ctx, params, vre.dbClientFactoryFiltered, vre.mysqld, vre.ts, vre.cell, tabletTypesStr, nil, vre, discovery.TabletPickerOptions{})
 		if err != nil {
 			log.Errorf("transitionJournal: %v", err)
 			return
@@ -788,8 +790,10 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int32, pos string) error {
 			}
 		case len(qr.Rows) == 0:
 			return fmt.Errorf("vreplication stream %d not found", id)
-		case len(qr.Rows) > 1 || len(qr.Rows[0]) != 3:
-			return fmt.Errorf("unexpected result: %v", qr)
+		case len(qr.Rows) > 1:
+			return fmt.Errorf("vreplication stream received more rows than expected, got %d instead of 1", len(qr.Rows))
+		case len(qr.Rows[0]) != 3:
+			return fmt.Errorf("vreplication stream received an unexpected number of columns, got %d instead of 3", len(qr.Rows[0]))
 		}
 
 		// When err is not nil then we got a retryable error and will loop again.
@@ -847,7 +851,7 @@ func (vre *Engine) readAllRows(ctx context.Context) ([]map[string]string, error)
 		return nil, err
 	}
 	defer dbClient.Close()
-	qr, err := dbClient.ExecuteFetch(fmt.Sprintf("select * from _vt.vreplication where db_name=%v", encodeString(vre.dbName)), maxRows)
+	qr, err := dbClient.ExecuteFetch(fmt.Sprintf("select * from _vt.vreplication where db_name=%s", encodeString(vre.dbName)), maxRows)
 	if err != nil {
 		return nil, err
 	}

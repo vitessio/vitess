@@ -17,6 +17,7 @@ limitations under the License.
 package schema
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -25,11 +26,11 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
-
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 func getTable(name string, fieldNames []string, fieldTypes []querypb.Type, pks []int64) *binlogdatapb.MinimalTable {
@@ -39,7 +40,7 @@ func getTable(name string, fieldNames []string, fieldTypes []querypb.Type, pks [
 	fields := []*querypb.Field{}
 	for i := range fieldNames {
 		typ := fieldTypes[i]
-		cs := collations.DefaultCollationForType(typ)
+		cs := collations.CollationForType(typ, collations.MySQL8().DefaultConnectionCharset())
 		fields = append(fields, &querypb.Field{
 			Name:    fieldNames[i],
 			Type:    typ,
@@ -78,6 +79,7 @@ func getDbSchemaBlob(t *testing.T, tables map[string]*binlogdatapb.MinimalTable)
 }
 
 func TestHistorian(t *testing.T) {
+	ctx := context.Background()
 	se, db, cancel := getTestSchemaEngine(t, 0)
 	defer cancel()
 
@@ -88,13 +90,13 @@ func TestHistorian(t *testing.T) {
 	ddl1 := "create table tracker_test (id int)"
 	ts1 := int64(1427325876)
 	_, _, _ = ddl1, ts1, db
-	_, err := se.GetTableForPos(sqlparser.NewIdentifierCS("t1"), gtid1)
+	_, err := se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid1)
 	require.Equal(t, "table t1 not found in vttablet schema", err.Error())
-	tab, err := se.GetTableForPos(sqlparser.NewIdentifierCS("dual"), gtid1)
+	tab, err := se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("dual"), gtid1)
 	require.NoError(t, err)
 	require.Equal(t, `name:"dual"`, fmt.Sprintf("%v", tab))
 	se.EnableHistorian(true)
-	_, err = se.GetTableForPos(sqlparser.NewIdentifierCS("t1"), gtid1)
+	_, err = se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid1)
 	require.Equal(t, "table t1 not found in vttablet schema", err.Error())
 	var blob1 string
 
@@ -127,11 +129,11 @@ func TestHistorian(t *testing.T) {
 	})
 	require.Nil(t, se.RegisterVersionEvent())
 	exp1 := `name:"t1" fields:{name:"id1" type:INT32 table:"t1" charset:63 flags:32768} fields:{name:"id2" type:INT32 table:"t1" charset:63 flags:32768} p_k_columns:0`
-	tab, err = se.GetTableForPos(sqlparser.NewIdentifierCS("t1"), gtid1)
+	tab, err = se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid1)
 	require.NoError(t, err)
 	require.Equal(t, exp1, fmt.Sprintf("%v", tab))
 	gtid2 := gtidPrefix + "1-20"
-	_, err = se.GetTableForPos(sqlparser.NewIdentifierCS("t1"), gtid2)
+	_, err = se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid2)
 	require.Equal(t, "table t1 not found in vttablet schema", err.Error())
 
 	table = getTable("t1", []string{"id1", "id2"}, []querypb.Type{querypb.Type_INT32, querypb.Type_VARBINARY}, []int64{0})
@@ -147,11 +149,11 @@ func TestHistorian(t *testing.T) {
 	})
 	require.Nil(t, se.RegisterVersionEvent())
 	exp2 := `name:"t1" fields:{name:"id1" type:INT32 table:"t1" charset:63 flags:32768} fields:{name:"id2" type:VARBINARY table:"t1" charset:63 flags:128} p_k_columns:0`
-	tab, err = se.GetTableForPos(sqlparser.NewIdentifierCS("t1"), gtid2)
+	tab, err = se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid2)
 	require.NoError(t, err)
 	require.Equal(t, exp2, fmt.Sprintf("%v", tab))
 	gtid3 := gtidPrefix + "1-30"
-	_, err = se.GetTableForPos(sqlparser.NewIdentifierCS("t1"), gtid3)
+	_, err = se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid3)
 	require.Equal(t, "table t1 not found in vttablet schema", err.Error())
 
 	table = getTable("t1", []string{"id1", "id2", "id3"}, []querypb.Type{querypb.Type_INT32, querypb.Type_VARBINARY, querypb.Type_INT32}, []int64{0})
@@ -167,22 +169,23 @@ func TestHistorian(t *testing.T) {
 	})
 	require.Nil(t, se.RegisterVersionEvent())
 	exp3 := `name:"t1" fields:{name:"id1" type:INT32 table:"t1" charset:63 flags:32768} fields:{name:"id2" type:VARBINARY table:"t1" charset:63 flags:128} fields:{name:"id3" type:INT32 table:"t1" charset:63 flags:32768} p_k_columns:0`
-	tab, err = se.GetTableForPos(sqlparser.NewIdentifierCS("t1"), gtid3)
+	tab, err = se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid3)
 	require.NoError(t, err)
 	require.Equal(t, exp3, fmt.Sprintf("%v", tab))
 
-	tab, err = se.GetTableForPos(sqlparser.NewIdentifierCS("t1"), gtid1)
+	tab, err = se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid1)
 	require.NoError(t, err)
 	require.Equal(t, exp1, fmt.Sprintf("%v", tab))
-	tab, err = se.GetTableForPos(sqlparser.NewIdentifierCS("t1"), gtid2)
+	tab, err = se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid2)
 	require.NoError(t, err)
 	require.Equal(t, exp2, fmt.Sprintf("%v", tab))
-	tab, err = se.GetTableForPos(sqlparser.NewIdentifierCS("t1"), gtid3)
+	tab, err = se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid3)
 	require.NoError(t, err)
 	require.Equal(t, exp3, fmt.Sprintf("%v", tab))
 }
 
 func TestHistorianPurgeOldSchemas(t *testing.T) {
+	ctx := context.Background()
 	schemaVersionMaxAgeSeconds := 3600 // 1 hour
 	se, db, cancel := getTestSchemaEngine(t, int64(schemaVersionMaxAgeSeconds))
 	defer cancel()
@@ -194,7 +197,7 @@ func TestHistorianPurgeOldSchemas(t *testing.T) {
 	ts1 := time.Now().Add(time.Duration(-24) * time.Hour)
 	_, _, _ = ddl1, ts1, db
 	se.EnableHistorian(true)
-	_, err := se.GetTableForPos(sqlparser.NewIdentifierCS("t1"), gtid1)
+	_, err := se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid1)
 	require.Equal(t, "table t1 not found in vttablet schema", err.Error())
 	var blob1 string
 
@@ -226,14 +229,14 @@ func TestHistorianPurgeOldSchemas(t *testing.T) {
 		},
 	})
 	require.Nil(t, se.RegisterVersionEvent())
-	_, err = se.GetTableForPos(sqlparser.NewIdentifierCS("t1"), gtid1)
+	_, err = se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid1)
 	// validate the old schema has been purged
 	require.Equal(t, "table t1 not found in vttablet schema", err.Error())
 	require.Equal(t, 0, len(se.historian.schemas))
 
 	// add a second schema record row with a time_updated that won't be purged
 	gtid2 := gtidPrefix + "1-20"
-	_, err = se.GetTableForPos(sqlparser.NewIdentifierCS("t1"), gtid2)
+	_, err = se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid2)
 	require.Equal(t, "table t1 not found in vttablet schema", err.Error())
 
 	table = getTable("t1", []string{"id1", "id2"}, []querypb.Type{querypb.Type_INT32, querypb.Type_VARBINARY}, []int64{0})
@@ -250,7 +253,7 @@ func TestHistorianPurgeOldSchemas(t *testing.T) {
 	})
 	require.Nil(t, se.RegisterVersionEvent())
 	exp2 := `name:"t1" fields:{name:"id1" type:INT32 table:"t1" charset:63 flags:32768} fields:{name:"id2" type:VARBINARY table:"t1" charset:63 flags:128} p_k_columns:0`
-	tab, err := se.GetTableForPos(sqlparser.NewIdentifierCS("t1"), gtid2)
+	tab, err := se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid2)
 	require.NoError(t, err)
 	require.Equal(t, exp2, fmt.Sprintf("%v", tab))
 	require.Equal(t, 1, len(se.historian.schemas))

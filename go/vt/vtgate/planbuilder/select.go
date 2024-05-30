@@ -26,7 +26,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -63,7 +62,7 @@ func gen4SelectStmtPlanner(
 		sel.SQLCalcFoundRows = false
 	}
 
-	getPlan := func(selStatement sqlparser.SelectStatement) (logicalPlan, []string, error) {
+	getPlan := func(selStatement sqlparser.SelectStatement) (engine.Primitive, []string, error) {
 		return newBuildSelectPlan(selStatement, reservedVars, vschema, plannerVersion)
 	}
 
@@ -75,30 +74,29 @@ func gen4SelectStmtPlanner(
 	if shouldRetryAfterPredicateRewriting(plan) {
 		// by transforming the predicates to CNF, the planner will sometimes find better plans
 		// TODO: this should move to the operator side of planning
-		plan2, tablesUsed := gen4PredicateRewrite(stmt, getPlan)
-		if plan2 != nil {
-			return newPlanResult(plan2.Primitive(), tablesUsed...), nil
+		prim2, tablesUsed := gen4PredicateRewrite(stmt, getPlan)
+		if prim2 != nil {
+			return newPlanResult(prim2, tablesUsed...), nil
 		}
 	}
 
-	primitive := plan.Primitive()
 	if !isSel {
-		return newPlanResult(primitive, tablesUsed...), nil
+		return newPlanResult(plan, tablesUsed...), nil
 	}
 
 	// this is done because engine.Route doesn't handle the empty result well
 	// if it doesn't find a shard to send the query to.
 	// All other engine primitives can handle this, so we only need it when
 	// Route is the last (and only) instruction before the user sees a result
-	if isOnlyDual(sel) || (len(sel.GroupBy) == 0 && sel.SelectExprs.AllAggregation()) {
-		switch prim := primitive.(type) {
+	if isOnlyDual(sel) || (sel.GroupBy == nil && sel.SelectExprs.AllAggregation()) {
+		switch prim := plan.(type) {
 		case *engine.Route:
 			prim.NoRoutesSpecialHandling = true
 		case *engine.VindexLookup:
 			prim.SendTo.NoRoutesSpecialHandling = true
 		}
 	}
-	return newPlanResult(primitive, tablesUsed...), nil
+	return newPlanResult(plan, tablesUsed...), nil
 }
 
 func gen4planSQLCalcFoundRows(vschema plancontext.VSchema, sel *sqlparser.Select, query string, reservedVars *sqlparser.ReservedVars) (*planResult, error) {
@@ -117,7 +115,7 @@ func gen4planSQLCalcFoundRows(vschema plancontext.VSchema, sel *sqlparser.Select
 	if err != nil {
 		return nil, err
 	}
-	return newPlanResult(plan.Primitive(), tablesUsed...), nil
+	return newPlanResult(plan, tablesUsed...), nil
 }
 
 func buildSQLCalcFoundRowsPlan(
@@ -125,13 +123,13 @@ func buildSQLCalcFoundRowsPlan(
 	sel *sqlparser.Select,
 	reservedVars *sqlparser.ReservedVars,
 	vschema plancontext.VSchema,
-) (logicalPlan, []string, error) {
+) (engine.Primitive, []string, error) {
 	limitPlan, _, err := newBuildSelectPlan(sel, reservedVars, vschema, Gen4)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	statement2, reserved2, err := sqlparser.Parse2(originalQuery)
+	statement2, reserved2, err := vschema.Environment().Parser().Parse2(originalQuery)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -170,10 +168,19 @@ func buildSQLCalcFoundRowsPlan(
 	if err != nil {
 		return nil, nil, err
 	}
-	return &sqlCalcFoundRows{LimitQuery: limitPlan, CountQuery: countPlan}, tablesUsed, nil
+
+	rb, ok := countPlan.(*engine.Route)
+	if ok {
+		// if our count query is an aggregation, we want the no-match result to still return a zero
+		rb.NoRoutesSpecialHandling = true
+	}
+	return &engine.SQLCalcFoundRows{
+		LimitPrimitive: limitPlan,
+		CountPrimitive: countPlan,
+	}, tablesUsed, nil
 }
 
-func gen4PredicateRewrite(stmt sqlparser.Statement, getPlan func(selStatement sqlparser.SelectStatement) (logicalPlan, []string, error)) (logicalPlan, []string) {
+func gen4PredicateRewrite(stmt sqlparser.Statement, getPlan func(selStatement sqlparser.SelectStatement) (engine.Primitive, []string, error)) (engine.Primitive, []string) {
 	rewritten, isSel := sqlparser.RewritePredicate(stmt).(sqlparser.SelectStatement)
 	if !isSel {
 		// Fail-safe code, should never happen
@@ -192,7 +199,7 @@ func newBuildSelectPlan(
 	reservedVars *sqlparser.ReservedVars,
 	vschema plancontext.VSchema,
 	version querypb.ExecuteOptions_PlannerVersion,
-) (plan logicalPlan, tablesUsed []string, err error) {
+) (plan engine.Primitive, tablesUsed []string, err error) {
 	ctx, err := plancontext.CreatePlanningContext(selStmt, reservedVars, vschema, version)
 	if err != nil {
 		return nil, nil, err
@@ -217,7 +224,7 @@ func newBuildSelectPlan(
 		return nil, nil, err
 	}
 
-	plan, err = transformToLogicalPlan(ctx, op)
+	plan, err = transformToPrimitive(ctx, op)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -225,8 +232,8 @@ func newBuildSelectPlan(
 	return plan, operators.TablesUsed(op), nil
 }
 
-func createSelectOperator(ctx *plancontext.PlanningContext, selStmt sqlparser.SelectStatement, reservedVars *sqlparser.ReservedVars) (ops.Operator, error) {
-	err := queryRewrite(ctx.SemTable, reservedVars, selStmt)
+func createSelectOperator(ctx *plancontext.PlanningContext, selStmt sqlparser.SelectStatement, reservedVars *sqlparser.ReservedVars) (operators.Operator, error) {
+	err := queryRewrite(ctx, selStmt)
 	if err != nil {
 		return nil, err
 	}
@@ -252,24 +259,16 @@ func isOnlyDual(sel *sqlparser.Select) bool {
 	return ok && tableName.Name.String() == "dual" && tableName.Qualifier.IsEmpty()
 }
 
-func shouldRetryAfterPredicateRewriting(plan logicalPlan) bool {
+func shouldRetryAfterPredicateRewriting(plan engine.Primitive) bool {
 	// if we have a I_S query, but have not found table_schema or table_name, let's try CNF
-	var opcode engine.Opcode
-	var sysTableTableName map[string]evalengine.Expr
-	var sysTableTableSchema []evalengine.Expr
-
-	switch routePlan := plan.(type) {
-	case *route:
-		opcode = routePlan.eroute.Opcode
-		sysTableTableName = routePlan.eroute.SysTableTableName
-		sysTableTableSchema = routePlan.eroute.SysTableTableSchema
+	switch eroute := plan.(type) {
+	case *engine.Route:
+		return eroute.Opcode == engine.DBA &&
+			len(eroute.SysTableTableName) == 0 &&
+			len(eroute.SysTableTableSchema) == 0
 	default:
 		return false
 	}
-
-	return opcode == engine.DBA &&
-		len(sysTableTableName) == 0 &&
-		len(sysTableTableSchema) == 0
 }
 
 func handleDualSelects(sel *sqlparser.Select, vschema plancontext.VSchema) (engine.Primitive, error) {
@@ -290,7 +289,10 @@ func handleDualSelects(sel *sqlparser.Select, vschema plancontext.VSchema) (engi
 		if isLFunc {
 			elem := &engine.LockFunc{Typ: expr.Expr.(*sqlparser.LockingFunc)}
 			if lFunc.Name != nil {
-				n, err := evalengine.Translate(lFunc.Name, nil)
+				n, err := evalengine.Translate(lFunc.Name, &evalengine.Config{
+					Collation:   vschema.ConnCollation(),
+					Environment: vschema.Environment(),
+				})
 				if err != nil {
 					return nil, err
 				}
@@ -302,7 +304,10 @@ func handleDualSelects(sel *sqlparser.Select, vschema plancontext.VSchema) (engi
 		if len(lockFunctions) > 0 {
 			return nil, vterrors.VT12001(fmt.Sprintf("LOCK function and other expression: [%s] in same select query", sqlparser.String(expr)))
 		}
-		exprs[i], err = evalengine.Translate(expr.Expr, &evalengine.Config{Collation: vschema.ConnCollation()})
+		exprs[i], err = evalengine.Translate(expr.Expr, &evalengine.Config{
+			Collation:   vschema.ConnCollation(),
+			Environment: vschema.Environment(),
+		})
 		if err != nil {
 			return nil, nil
 		}

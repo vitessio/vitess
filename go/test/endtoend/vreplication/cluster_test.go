@@ -19,7 +19,7 @@ package vreplication
 import (
 	"fmt"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"net/http"
 	"os"
 	"os/exec"
@@ -29,6 +29,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"vitess.io/vitess/go/vt/vttablet"
 
 	"vitess.io/vitess/go/mysql"
 
@@ -54,8 +56,9 @@ var (
 	sidecarDBIdentifier   = sqlparser.String(sqlparser.NewIdentifierCS(sidecarDBName))
 	mainClusterConfig     *ClusterConfig
 	externalClusterConfig *ClusterConfig
-	extraVTGateArgs       = []string{"--tablet_refresh_interval", "10ms", "--enable_buffer", "--buffer_window", loadTestBufferingWindowDurationStr,
-		"--buffer_size", "100000", "--buffer_min_time_between_failovers", "0s", "--buffer_max_failover_duration", loadTestBufferingWindowDurationStr}
+	extraVTGateArgs       = []string{"--tablet_refresh_interval", "10ms", "--enable_buffer", "--buffer_window", loadTestBufferingWindowDuration.String(),
+		"--buffer_size", "250000", "--buffer_min_time_between_failovers", "1s", "--buffer_max_failover_duration", loadTestBufferingWindowDuration.String(),
+		"--buffer_drain_concurrency", "10"}
 	extraVtctldArgs = []string{"--remote_operation_timeout", "600s", "--topo_etcd_lease_ttl", "120"}
 	// This variable can be used within specific tests to alter vttablet behavior
 	extraVTTabletArgs = []string{}
@@ -87,11 +90,33 @@ type ClusterConfig struct {
 	vreplicationCompressGTID bool
 }
 
+// enableGTIDCompression enables GTID compression for the cluster and returns a function
+// that can be used to disable it in a defer.
+func (cc *ClusterConfig) enableGTIDCompression() func() {
+	cc.vreplicationCompressGTID = true
+	return func() {
+		cc.vreplicationCompressGTID = false
+	}
+}
+
+// setAllVTTabletExperimentalFlags sets all the experimental flags for vttablet and returns a function
+// that can be used to reset them in a defer.
+func setAllVTTabletExperimentalFlags() func() {
+	experimentalArgs := fmt.Sprintf("--vreplication_experimental_flags=%d",
+		vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage|vttablet.VReplicationExperimentalFlagOptimizeInserts|vttablet.VReplicationExperimentalFlagVPlayerBatching)
+	oldArgs := extraVTTabletArgs
+	extraVTTabletArgs = append(extraVTTabletArgs, experimentalArgs)
+	return func() {
+		extraVTTabletArgs = oldArgs
+	}
+}
+
 // VitessCluster represents all components within the test cluster
 type VitessCluster struct {
 	t             *testing.T
 	ClusterConfig *ClusterConfig
 	Name          string
+	CellNames     []string
 	Cells         map[string]*Cell
 	Topo          *cluster.TopoProcess
 	Vtctld        *cluster.VtctldProcess
@@ -132,7 +157,7 @@ type Tablet struct {
 }
 
 func setTempVtDataRoot() string {
-	dirSuffix := 100000 + rand.Intn(999999-100000) // 6 digits
+	dirSuffix := 100000 + rand.IntN(999999-100000) // 6 digits
 	if debugMode {
 		vtdataroot = originalVtdataroot
 	} else {
@@ -332,9 +357,28 @@ func init() {
 	externalClusterConfig = getClusterConfig(1, mainVtDataRoot+"/ext")
 }
 
+type clusterOptions struct {
+	cells         []string
+	clusterConfig *ClusterConfig
+}
+
+func getClusterOptions(opts *clusterOptions) *clusterOptions {
+	if opts == nil {
+		opts = &clusterOptions{}
+	}
+	if opts.cells == nil {
+		opts.cells = []string{"zone1"}
+	}
+	if opts.clusterConfig == nil {
+		opts.clusterConfig = mainClusterConfig
+	}
+	return opts
+}
+
 // NewVitessCluster starts a basic cluster with vtgate, vtctld and the topo
-func NewVitessCluster(t *testing.T, name string, cellNames []string, clusterConfig *ClusterConfig) *VitessCluster {
-	vc := &VitessCluster{t: t, Name: name, Cells: make(map[string]*Cell), ClusterConfig: clusterConfig}
+func NewVitessCluster(t *testing.T, opts *clusterOptions) *VitessCluster {
+	opts = getClusterOptions(opts)
+	vc := &VitessCluster{t: t, Name: t.Name(), CellNames: opts.cells, Cells: make(map[string]*Cell), ClusterConfig: opts.clusterConfig}
 	require.NotNil(t, vc)
 
 	vc.CleanupDataroot(t, true)
@@ -346,32 +390,46 @@ func NewVitessCluster(t *testing.T, name string, cellNames []string, clusterConf
 	err := topo.ManageTopoDir("mkdir", "/vitess/global")
 	require.NoError(t, err)
 	vc.Topo = topo
-	for _, cellName := range cellNames {
+	for _, cellName := range opts.cells {
 		err := topo.ManageTopoDir("mkdir", "/vitess/"+cellName)
 		require.NoError(t, err)
 	}
 
-	vtctld := cluster.VtctldProcessInstance(vc.ClusterConfig.vtctldPort, vc.ClusterConfig.vtctldGrpcPort,
-		vc.ClusterConfig.topoPort, vc.ClusterConfig.hostname, vc.ClusterConfig.tmpDir)
-	vc.Vtctld = vtctld
-	require.NotNil(t, vc.Vtctld)
-	// use first cell as `-cell`
-	vc.Vtctld.Setup(cellNames[0], extraVtctldArgs...)
+	vc.setupVtctld()
+	vc.setupVtctl()
+	vc.setupVtctlClient()
+	vc.setupVtctldClient()
 
-	vc.Vtctl = cluster.VtctlProcessInstance(vc.ClusterConfig.topoPort, vc.ClusterConfig.hostname)
-	require.NotNil(t, vc.Vtctl)
-	for _, cellName := range cellNames {
-		vc.Vtctl.AddCellInfo(cellName)
-		cell, err := vc.AddCell(t, cellName)
-		require.NoError(t, err)
-		require.NotNil(t, cell)
-	}
-
-	vc.VtctlClient = cluster.VtctlClientProcessInstance(vc.ClusterConfig.hostname, vc.Vtctld.GrpcPort, vc.ClusterConfig.tmpDir)
-	require.NotNil(t, vc.VtctlClient)
-	vc.VtctldClient = cluster.VtctldClientProcessInstance(vc.ClusterConfig.hostname, vc.Vtctld.GrpcPort, vc.ClusterConfig.tmpDir)
-	require.NotNil(t, vc.VtctldClient)
 	return vc
+}
+
+func (vc *VitessCluster) setupVtctld() {
+	vc.Vtctld = cluster.VtctldProcessInstance(vc.ClusterConfig.vtctldPort, vc.ClusterConfig.vtctldGrpcPort,
+		vc.ClusterConfig.topoPort, vc.ClusterConfig.hostname, vc.ClusterConfig.tmpDir)
+	require.NotNil(vc.t, vc.Vtctld)
+	// use first cell as `-cell`
+	vc.Vtctld.Setup(vc.CellNames[0], extraVtctldArgs...)
+}
+
+func (vc *VitessCluster) setupVtctl() {
+	vc.Vtctl = cluster.VtctlProcessInstance(vc.ClusterConfig.topoPort, vc.ClusterConfig.hostname)
+	require.NotNil(vc.t, vc.Vtctl)
+	for _, cellName := range vc.CellNames {
+		vc.Vtctl.AddCellInfo(cellName)
+		cell, err := vc.AddCell(vc.t, cellName)
+		require.NoError(vc.t, err)
+		require.NotNil(vc.t, cell)
+	}
+}
+
+func (vc *VitessCluster) setupVtctlClient() {
+	vc.VtctlClient = cluster.VtctlClientProcessInstance(vc.ClusterConfig.hostname, vc.Vtctld.GrpcPort, vc.ClusterConfig.tmpDir)
+	require.NotNil(vc.t, vc.VtctlClient)
+}
+
+func (vc *VitessCluster) setupVtctldClient() {
+	vc.VtctldClient = cluster.VtctldClientProcessInstance(vc.ClusterConfig.hostname, vc.Vtctld.GrpcPort, vc.ClusterConfig.tmpDir)
+	require.NotNil(vc.t, vc.VtctldClient)
 }
 
 // CleanupDataroot deletes the vtdataroot directory. Since we run multiple tests sequentially in a single CI test shard,
@@ -385,8 +443,19 @@ func (vc *VitessCluster) CleanupDataroot(t *testing.T, recreate bool) {
 		return
 	}
 	dir := vc.ClusterConfig.vtdataroot
-	log.Infof("Deleting vtdataroot %s", dir)
-	err := os.RemoveAll(dir)
+	// The directory cleanup sometimes fails with a "directory not empty" error as
+	// everything in the test is shutting down and cleaning up. So we retry a few
+	// times to deal with that non-problematic and ephemeral issue.
+	var err error
+	retries := 3
+	for i := 1; i <= retries; i++ {
+		if err = os.RemoveAll(dir); err == nil {
+			log.Infof("Deleted vtdataroot %q", dir)
+			break
+		}
+		log.Errorf("Failed to delete vtdataroot (attempt %d of %d) %q: %v", i, retries, dir, err)
+		time.Sleep(1 * time.Second)
+	}
 	require.NoError(t, err)
 	if recreate {
 		err = os.Mkdir(dir, 0700)
@@ -419,8 +488,14 @@ func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string,
 		cell.Keyspaces[ksName] = keyspace
 		cellsToWatch = cellsToWatch + cell.Name
 	}
-	require.NoError(t, vc.AddShards(t, cells, keyspace, shards, numReplicas, numRdonly, tabletIDBase, opts))
+	for _, cell := range cells {
+		if len(cell.Vtgates) == 0 {
+			log.Infof("Starting vtgate")
+			vc.StartVtgate(t, cell, cellsToWatch)
+		}
+	}
 
+	require.NoError(t, vc.AddShards(t, cells, keyspace, shards, numReplicas, numRdonly, tabletIDBase, opts))
 	if schema != "" {
 		if err := vc.VtctlClient.ApplySchema(ksName, schema); err != nil {
 			t.Fatalf(err.Error())
@@ -433,12 +508,6 @@ func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string,
 		}
 	}
 	keyspace.VSchema = vschema
-	for _, cell := range cells {
-		if len(cell.Vtgates) == 0 {
-			log.Infof("Starting vtgate")
-			vc.StartVtgate(t, cell, cellsToWatch)
-		}
-	}
 
 	err = vc.VtctlClient.ExecuteCommand("RebuildKeyspaceGraph", ksName)
 	require.NoError(t, err)
@@ -450,10 +519,9 @@ func (vc *VitessCluster) AddTablet(t testing.TB, cell *Cell, keyspace *Keyspace,
 	tablet := &Tablet{}
 
 	options := []string{
-		"--queryserver-config-schema-reload-time", "5",
 		"--heartbeat_on_demand_duration", "5s",
 		"--heartbeat_interval", "250ms",
-	} // FIXME: for multi-cell initial schema doesn't seem to load without "--queryserver-config-schema-reload-time"
+	}
 	options = append(options, extraVTTabletArgs...)
 
 	if mainClusterConfig.vreplicationCompressGTID {
@@ -514,11 +582,11 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 		}
 	}
 
-	arrNames := strings.Split(names, ",")
-	log.Infof("Addshards got %d shards with %+v", len(arrNames), arrNames)
-	isSharded := len(arrNames) > 1
+	shardNames := strings.Split(names, ",")
+	log.Infof("Addshards got %d shards with %+v", len(shardNames), shardNames)
+	isSharded := len(shardNames) > 1
 	primaryTabletUID := 0
-	for ind, shardName := range arrNames {
+	for ind, shardName := range shardNames {
 		tabletID := tabletIDBase + ind*100
 		tabletIndex := 0
 		shard := &Shard{Name: shardName, IsSharded: isSharded, Tablets: make(map[string]*Tablet, 1)}
@@ -541,10 +609,10 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 				require.NoError(t, err)
 				require.NotNil(t, primary)
 				tabletIndex++
-				primary.Vttablet.VreplicationTabletType = "PRIMARY"
 				tablets = append(tablets, primary)
 				dbProcesses = append(dbProcesses, proc)
 				primaryTabletUID = primary.Vttablet.TabletUID
+				primary.Vttablet.IsPrimary = true
 			}
 
 			for i := 0; i < numReplicas; i++ {
@@ -616,6 +684,12 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 				if err := tablet.Vttablet.Setup(); err != nil {
 					t.Fatalf(err.Error())
 				}
+				// Set time_zone to UTC for all tablets. Without this it fails locally on some MacOS setups.
+				query := "SET GLOBAL time_zone = '+00:00';"
+				qr, err := tablet.Vttablet.QueryTablet(query, tablet.Vttablet.Keyspace, false)
+				if err != nil {
+					t.Fatalf("failed to set time_zone: %v, output: %v", err, qr)
+				}
 			}
 		}
 		require.NotEqual(t, 0, primaryTabletUID, "Should have created a primary tablet")
@@ -624,12 +698,45 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 
 		log.Infof("Finished creating shard %s", shard.Name)
 	}
+	for _, shard := range shardNames {
+		require.NoError(t, cluster.WaitForHealthyShard(vc.VtctldClient, keyspace.Name, shard))
+	}
+
+	waitTimeout := 30 * time.Second
+	vtgate := cells[0].Vtgates[0]
+	for _, shardName := range shardNames {
+		shard := keyspace.Shards[shardName]
+		numReplicas, numRDOnly := 0, 0
+		for _, tablet := range shard.Tablets {
+			switch strings.ToLower(tablet.Vttablet.TabletType) {
+			case "replica":
+				numReplicas++
+			case "rdonly":
+				numRDOnly++
+			}
+		}
+		numReplicas-- // account for primary, which also has replica type
+		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", keyspace.Name, shard.Name), 1, waitTimeout); err != nil {
+			return err
+		}
+		if numReplicas > 0 {
+			if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspace.Name, shard.Name), numReplicas, waitTimeout); err != nil {
+				return err
+			}
+		}
+		if numRDOnly > 0 {
+			if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", keyspace.Name, shard.Name), numRDOnly, waitTimeout); err != nil {
+				return err
+			}
+		}
+	}
 
 	err := vc.VtctlClient.ExecuteCommand("RebuildKeyspaceGraph", keyspace.Name)
 	require.NoError(t, err)
 
 	log.Infof("Waiting for throttler config to be applied on all shards")
-	for _, shard := range keyspace.Shards {
+	for _, shardName := range shardNames {
+		shard := keyspace.Shards[shardName]
 		for _, tablet := range shard.Tablets {
 			clusterTablet := &cluster.Vttablet{
 				Alias:    tablet.Name,
@@ -640,7 +747,6 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 		}
 	}
 	log.Infof("Throttler config applied on all shards")
-
 	return nil
 }
 
@@ -751,7 +857,7 @@ func (vc *VitessCluster) teardown() {
 }
 
 // TearDown brings down a cluster, deleting processes, removing topo keys
-func (vc *VitessCluster) TearDown(t *testing.T) {
+func (vc *VitessCluster) TearDown() {
 	if debugMode {
 		return
 	}
@@ -768,7 +874,7 @@ func (vc *VitessCluster) TearDown(t *testing.T) {
 	}
 	// some processes seem to hang around for a bit
 	time.Sleep(5 * time.Second)
-	vc.CleanupDataroot(t, false)
+	vc.CleanupDataroot(vc.t, false)
 }
 
 func (vc *VitessCluster) getVttabletsInKeyspace(t *testing.T, cell *Cell, ksName string, tabletType string) map[string]*cluster.VttabletProcess {
@@ -776,7 +882,7 @@ func (vc *VitessCluster) getVttabletsInKeyspace(t *testing.T, cell *Cell, ksName
 	tablets := make(map[string]*cluster.VttabletProcess)
 	for _, shard := range keyspace.Shards {
 		for _, tablet := range shard.Tablets {
-			if tablet.Vttablet.GetTabletStatus() == "SERVING" && strings.EqualFold(tablet.Vttablet.VreplicationTabletType, tabletType) {
+			if tablet.Vttablet.GetTabletStatus() == "SERVING" {
 				log.Infof("Serving status of tablet %s is %s, %s", tablet.Name, tablet.Vttablet.ServingStatus, tablet.Vttablet.GetTabletStatus())
 				tablets[tablet.Name] = tablet.Vttablet
 			}
@@ -796,18 +902,25 @@ func (vc *VitessCluster) getPrimaryTablet(t *testing.T, ksName, shardName string
 				continue
 			}
 			for _, tablet := range shard.Tablets {
-				if tablet.Vttablet.GetTabletStatus() == "SERVING" && strings.EqualFold(tablet.Vttablet.VreplicationTabletType, "primary") {
+				if tablet.Vttablet.IsPrimary {
 					return tablet.Vttablet
 				}
 			}
 		}
 	}
-	require.FailNow(t, "no primary found for %s:%s", ksName, shardName)
+	require.FailNow(t, "no primary found", "keyspace %s, shard %s", ksName, shardName)
 	return nil
 }
 
 func (vc *VitessCluster) GetVTGateConn(t *testing.T) *mysql.Conn {
 	return getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+}
+
+func getVTGateConn() (*mysql.Conn, func()) {
+	vtgateConn := vc.GetVTGateConn(vc.t)
+	return vtgateConn, func() {
+		vtgateConn.Close()
+	}
 }
 
 func (vc *VitessCluster) startQuery(t *testing.T, query string) (func(t *testing.T), func(t *testing.T)) {

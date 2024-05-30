@@ -47,3 +47,8 @@ func TestVersionString(t *testing.T) {
 
 	assert.Equal(t, "8.0.30-Vitess", v.MySQLVersion())
 }
+
+func TestBuildVersionStats(t *testing.T) {
+	buildVersion := statsBuildVersion.Get()
+	assert.Equal(t, buildVersion, versionName)
+}

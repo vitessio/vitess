@@ -31,7 +31,6 @@ import (
 	"vitess.io/vitess/go/vt/logz"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
@@ -71,10 +70,6 @@ var (
 			</td>
 		</tr>`))
 )
-
-func init() {
-	servenv.HTTPHandleFunc("/txlogz", txlogzHandler)
-}
 
 // txlogzHandler serves a human readable snapshot of the
 // current transaction log.

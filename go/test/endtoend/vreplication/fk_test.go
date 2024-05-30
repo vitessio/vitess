@@ -19,7 +19,7 @@ package vreplication
 import (
 	"context"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"strconv"
 	"testing"
 	"time"
@@ -28,49 +28,43 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vttablet"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
+
+const testWorkflowFlavor = workflowFlavorRandom
 
 // TestFKWorkflow runs a MoveTables workflow with atomic copy for a db with foreign key constraints.
 // It inserts initial data, then simulates load. We insert both child rows with foreign keys and those without,
 // i.e. with foreign_key_checks=0.
 func TestFKWorkflow(t *testing.T) {
-	// ensure that there are multiple copy phase cycles per table
-	extraVTTabletArgs = []string{"--vstream_packet_size=256"}
+	extraVTTabletArgs = []string{
+		// Ensure that there are multiple copy phase cycles per table.
+		"--vstream_packet_size=256",
+		// Test VPlayer batching mode.
+		fmt.Sprintf("--vreplication_experimental_flags=%d",
+			vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage|vttablet.VReplicationExperimentalFlagOptimizeInserts|vttablet.VReplicationExperimentalFlagVPlayerBatching),
+	}
 	defer func() { extraVTTabletArgs = nil }()
 
-	cellName := "zone"
-	cells := []string{cellName}
-	vc = NewVitessCluster(t, "TestFKWorkflow", cells, mainClusterConfig)
+	cellName := "zone1"
+	vc = NewVitessCluster(t, nil)
 
-	require.NotNil(t, vc)
-	allCellNames = cellName
-	defaultCellName := cellName
-	defaultCell = vc.Cells[defaultCellName]
 	sourceKeyspace := "fksource"
 	shardName := "0"
+	currentWorkflowType = binlogdatapb.VReplicationWorkflowType_MoveTables
 
-	defer vc.TearDown(t)
+	defer vc.TearDown()
 
 	cell := vc.Cells[cellName]
 	vc.AddKeyspace(t, []*Cell{cell}, sourceKeyspace, shardName, initialFKSourceVSchema, initialFKSchema, 0, 0, 100, sourceKsOpts)
 
-	vtgate = cell.Vtgates[0]
-	require.NotNil(t, vtgate)
-	err := cluster.WaitForHealthyShard(vc.VtctldClient, sourceKeyspace, shardName)
-	require.NoError(t, err)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", sourceKeyspace, shardName), 1, 30*time.Second)
-
-	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
-	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
+	insertInitialFKData(t)
 
 	var ls *fkLoadSimulator
-
-	insertInitialFKData(t)
 	withLoad := true // Set it to false to skip load simulation, while debugging
 	var cancel context.CancelFunc
 	var ctx context.Context
@@ -86,20 +80,25 @@ func TestFKWorkflow(t *testing.T) {
 		}()
 		go ls.simulateLoad()
 	}
+
 	targetKeyspace := "fktarget"
 	targetTabletId := 200
-	vc.AddKeyspace(t, []*Cell{cell}, targetKeyspace, shardName, initialFKTargetVSchema, initialFKSchema, 0, 0, targetTabletId, sourceKsOpts)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", targetKeyspace, shardName), 1, 30*time.Second)
+	vc.AddKeyspace(t, []*Cell{cell}, targetKeyspace, shardName, initialFKTargetVSchema, "", 0, 0, targetTabletId, sourceKsOpts)
+
+	testFKCancel(t, vc)
 
 	workflowName := "fk"
 	ksWorkflow := fmt.Sprintf("%s.%s", targetKeyspace, workflowName)
 
-	mt := newMoveTables(vc, &moveTables{
-		workflowName:   workflowName,
-		targetKeyspace: targetKeyspace,
+	mt := newMoveTables(vc, &moveTablesWorkflow{
+		workflowInfo: &workflowInfo{
+			vc:             vc,
+			workflowName:   workflowName,
+			targetKeyspace: targetKeyspace,
+		},
 		sourceKeyspace: sourceKeyspace,
 		atomicCopy:     true,
-	}, moveTablesFlavorRandom)
+	}, testWorkflowFlavor)
 	mt.Create()
 
 	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
@@ -108,7 +107,9 @@ func TestFKWorkflow(t *testing.T) {
 	require.NotNil(t, targetTab)
 	catchup(t, targetTab, workflowName, "MoveTables")
 	vdiff(t, targetKeyspace, workflowName, cellName, true, false, nil)
-	ls.waitForAdditionalRows(200)
+	if withLoad {
+		ls.waitForAdditionalRows(200)
+	}
 	vdiff(t, targetKeyspace, workflowName, cellName, true, false, nil)
 	if withLoad {
 		cancel()
@@ -123,24 +124,43 @@ func TestFKWorkflow(t *testing.T) {
 		ls = newFKLoadSimulator(t, ctx)
 		defer cancel()
 		go ls.simulateLoad()
-	}
-	ls.waitForAdditionalRows(200)
-	if withLoad {
+		ls.waitForAdditionalRows(200)
 		cancel()
 		<-ch
 	}
+	mt.Complete()
+	vtgateConn, closeConn := getVTGateConn()
+	defer closeConn()
+
+	t11Count := getRowCount(t, vtgateConn, "t11")
+	t12Count := getRowCount(t, vtgateConn, "t12")
+	require.Greater(t, t11Count, 1)
+	require.Greater(t, t12Count, 1)
+	require.Equal(t, t11Count, t12Count)
 }
 
 func insertInitialFKData(t *testing.T) {
 	t.Run("insertInitialFKData", func(t *testing.T) {
+		vtgateConn, closeConn := getVTGateConn()
+		defer closeConn()
 		sourceKeyspace := "fksource"
 		shard := "0"
 		db := fmt.Sprintf("%s:%s", sourceKeyspace, shard)
 		log.Infof("Inserting initial FK data")
 		execMultipleQueries(t, vtgateConn, db, initialFKData)
 		log.Infof("Done inserting initial FK data")
-		waitForRowCount(t, vtgateConn, db, "parent", 2)
-		waitForRowCount(t, vtgateConn, db, "child", 3)
+
+		type tableCounts struct {
+			name  string
+			count int
+		}
+		for _, table := range []tableCounts{
+			{"parent", 2}, {"child", 3},
+			{"t1", 2}, {"t2", 3},
+			{"t11", 1}, {"t12", 1},
+		} {
+			waitForRowCount(t, vtgateConn, db, table.name, table.count)
+		}
 	})
 }
 
@@ -166,6 +186,7 @@ func newFKLoadSimulator(t *testing.T, ctx context.Context) *fkLoadSimulator {
 	}
 }
 
+var indexCounter int = 100 // used to insert into t11 and t12
 func (ls *fkLoadSimulator) simulateLoad() {
 	t := ls.t
 	var err error
@@ -180,7 +201,7 @@ func (ls *fkLoadSimulator) simulateLoad() {
 		default:
 		}
 		// Decide operation based on random number
-		op := rand.Intn(100)
+		op := rand.IntN(100)
 		switch {
 		case op < 50: // 50% chance to insert
 			ls.insert()
@@ -189,8 +210,13 @@ func (ls *fkLoadSimulator) simulateLoad() {
 		default: // 20% chance to delete
 			ls.delete()
 		}
+		for _, table := range []string{"t11", "t12"} {
+			query := fmt.Sprintf("insert /*+ SET_VAR(foreign_key_checks=0) */ into fksource.%s values(%d, %d)", table, indexCounter, indexCounter)
+			ls.exec(query)
+			indexCounter++
+		}
 		require.NoError(t, err)
-		time.Sleep(1 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 
@@ -231,7 +257,7 @@ func (ls *fkLoadSimulator) insert() {
 	qr := ls.exec(insertQuery)
 	require.NotNil(t, qr)
 	// insert one or more children, some with valid foreign keys, some without.
-	for i := 0; i < rand.Intn(4)+1; i++ {
+	for i := 0; i < rand.IntN(4)+1; i++ {
 		currentChildId++
 		if i == 3 {
 			insertQuery = fmt.Sprintf("INSERT /*+ SET_VAR(foreign_key_checks=0) */ INTO child (id, parent_id) VALUES (%d, %d)", currentChildId, currentParentId+1000000)
@@ -257,7 +283,7 @@ func (ls *fkLoadSimulator) getRandomId() int64 {
 }
 
 func (ls *fkLoadSimulator) update() {
-	updateQuery := fmt.Sprintf("UPDATE parent SET name = 'parent%d' WHERE id = %d", rand.Intn(1000)+1, ls.getRandomId())
+	updateQuery := fmt.Sprintf("UPDATE parent SET name = 'parent%d' WHERE id = %d", rand.IntN(1000)+1, ls.getRandomId())
 	ls.exec(updateQuery)
 }
 
@@ -268,7 +294,31 @@ func (ls *fkLoadSimulator) delete() {
 
 func (ls *fkLoadSimulator) exec(query string) *sqltypes.Result {
 	t := ls.t
+	vtgateConn, closeConn := getVTGateConn()
+	defer closeConn()
 	qr := execVtgateQuery(t, vtgateConn, "fksource", query)
 	require.NotNil(t, qr)
 	return qr
+}
+
+// testFKCancel confirms that a MoveTables workflow which includes tables with foreign key
+// constraints, where the parent table is lexicographically sorted before the child table and
+// thus may be dropped first, can be successfully cancelled.
+func testFKCancel(t *testing.T, vc *VitessCluster) {
+	targetKeyspace := "fktarget"
+	sourceKeyspace := "fksource"
+	workflowName := "wf2"
+	ksWorkflow := fmt.Sprintf("%s.%s", targetKeyspace, workflowName)
+	mt := newMoveTables(vc, &moveTablesWorkflow{
+		workflowInfo: &workflowInfo{
+			vc:             vc,
+			workflowName:   workflowName,
+			targetKeyspace: targetKeyspace,
+		},
+		sourceKeyspace: sourceKeyspace,
+		atomicCopy:     true,
+	}, testWorkflowFlavor)
+	mt.Create()
+	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+	mt.Cancel()
 }

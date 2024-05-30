@@ -17,11 +17,13 @@ limitations under the License.
 package logic
 
 import (
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
+	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 )
@@ -59,7 +61,7 @@ func TestTopologyRecovery(t *testing.T) {
 	})
 
 	t.Run("read recoveries", func(t *testing.T) {
-		recoveries, err := ReadRecentRecoveries(false, 0)
+		recoveries, err := ReadRecentRecoveries(0)
 		require.NoError(t, err)
 		require.Len(t, recoveries, 1)
 		// Assert that the ID field matches the one that we just wrote
@@ -67,35 +69,102 @@ func TestTopologyRecovery(t *testing.T) {
 	})
 }
 
-// TestBlockedRecoveryInsertion tests that we are able to insert into the blocked_recovery table.
-func TestBlockedRecoveryInsertion(t *testing.T) {
-	orcDb, err := db.OpenVTOrc()
-	require.NoError(t, err)
+func TestExpireTableData(t *testing.T) {
+	oldVal := config.Config.AuditPurgeDays
+	config.Config.AuditPurgeDays = 10
 	defer func() {
-		_, err = orcDb.Exec("delete from blocked_topology_recovery")
-		require.NoError(t, err)
+		config.Config.AuditPurgeDays = oldVal
 	}()
 
-	analysisEntry := &inst.ReplicationAnalysis{
-		AnalyzedInstanceAlias: "zone1-0000000100",
-		ClusterDetails: inst.ClusterInfo{
-			Keyspace: "ks",
-			Shard:    "0",
+	tests := []struct {
+		name             string
+		tableName        string
+		insertQuery      string
+		expectedRowCount int
+		expireFunc       func() error
+	}{
+		{
+			name:             "ExpireRecoveryDetectionHistory",
+			tableName:        "recovery_detection",
+			expectedRowCount: 2,
+			insertQuery: `insert into recovery_detection (detection_id, detection_timestamp, alias, analysis, keyspace, shard) values
+(1, NOW() - INTERVAL 3 DAY,'a','a','a','a'),
+(2, NOW() - INTERVAL 5 DAY,'a','a','a','a'),
+(3, NOW() - INTERVAL 15 DAY,'a','a','a','a')`,
+			expireFunc: ExpireRecoveryDetectionHistory,
 		},
-		Analysis: inst.DeadPrimaryAndSomeReplicas,
+		{
+			name:             "ExpireTopologyRecoveryHistory",
+			tableName:        "topology_recovery",
+			expectedRowCount: 1,
+			insertQuery: `insert into topology_recovery (recovery_id, start_recovery, alias, analysis, keyspace, shard) values
+(1, NOW() - INTERVAL 13 DAY,'a','a','a','a'),
+(2, NOW() - INTERVAL 5 DAY,'a','a','a','a'),
+(3, NOW() - INTERVAL 15 DAY,'a','a','a','a')`,
+			expireFunc: ExpireTopologyRecoveryHistory,
+		},
+		{
+			name:             "ExpireTopologyRecoveryStepsHistory",
+			tableName:        "topology_recovery_steps",
+			expectedRowCount: 1,
+			insertQuery: `insert into topology_recovery_steps (recovery_step_id, audit_at, recovery_id, message) values
+(1, NOW() - INTERVAL 13 DAY, 1, 'a'),
+(2, NOW() - INTERVAL 5 DAY, 2, 'a'),
+(3, NOW() - INTERVAL 15 DAY, 3, 'a')`,
+			expireFunc: ExpireTopologyRecoveryStepsHistory,
+		},
 	}
-	blockedRecovery := &TopologyRecovery{
-		ID: 1,
-	}
-	err = RegisterBlockedRecoveries(analysisEntry, []*TopologyRecovery{blockedRecovery})
-	require.NoError(t, err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
+			defer func() {
+				db.ClearVTOrcDatabase()
+			}()
+			_, err := db.ExecVTOrc(tt.insertQuery)
+			require.NoError(t, err)
 
-	totalBlockedRecoveries := 0
-	err = db.QueryVTOrc("select count(*) as blocked_recoveries from blocked_topology_recovery", nil, func(rowMap sqlutils.RowMap) error {
-		totalBlockedRecoveries = rowMap.GetInt("blocked_recoveries")
+			err = tt.expireFunc()
+			require.NoError(t, err)
+
+			rowsCount := 0
+			err = db.QueryVTOrc(`select * from `+tt.tableName, nil, func(rowMap sqlutils.RowMap) error {
+				rowsCount++
+				return nil
+			})
+			require.NoError(t, err)
+			require.EqualValues(t, tt.expectedRowCount, rowsCount)
+		})
+	}
+}
+
+func TestInsertRecoveryDetection(t *testing.T) {
+	// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
+	defer func() {
+		db.ClearVTOrcDatabase()
+	}()
+	ra := &inst.ReplicationAnalysis{
+		AnalyzedInstanceAlias: "alias-1",
+		Analysis:              inst.ClusterHasNoPrimary,
+		ClusterDetails: inst.ClusterInfo{
+			Keyspace: keyspace,
+			Shard:    shard,
+		},
+	}
+	err := InsertRecoveryDetection(ra)
+	require.NoError(t, err)
+	require.NotEqual(t, 0, ra.RecoveryId)
+
+	var rows []map[string]sqlutils.CellData
+	err = db.QueryVTOrc("select * from recovery_detection", nil, func(rowMap sqlutils.RowMap) error {
+		rows = append(rows, rowMap)
 		return nil
 	})
 	require.NoError(t, err)
-	// There should be 1 blocked recovery after insertion
-	require.Equal(t, 1, totalBlockedRecoveries)
+	require.Len(t, rows, 1)
+	require.EqualValues(t, ra.AnalyzedInstanceAlias, rows[0]["alias"].String)
+	require.EqualValues(t, ra.Analysis, rows[0]["analysis"].String)
+	require.EqualValues(t, keyspace, rows[0]["keyspace"].String)
+	require.EqualValues(t, shard, rows[0]["shard"].String)
+	require.EqualValues(t, strconv.Itoa(int(ra.RecoveryId)), rows[0]["detection_id"].String)
+	require.NotEqual(t, "", rows[0]["detection_timestamp"].String)
 }

@@ -203,8 +203,8 @@ func NewLiteralBinaryFromBit(val []byte) (*Literal, error) {
 func NewBindVar(key string, typ Type) *BindVariable {
 	return &BindVariable{
 		Key:               key,
-		Type:              typ.Type,
-		Collation:         typ.Coll,
+		Type:              typ.Type(),
+		Collation:         typ.Collation(),
 		dynamicTypeOffset: -1,
 	}
 }
@@ -222,9 +222,13 @@ func NewBindVarTuple(key string, coll collations.ID) *BindVariable {
 func NewColumn(offset int, typ Type, original sqlparser.Expr) *Column {
 	return &Column{
 		Offset:            offset,
-		Type:              typ.Type,
-		Collation:         typedCoercionCollation(typ.Type, typ.Coll),
+		Type:              typ.Type(),
+		Size:              typ.size,
+		Scale:             typ.scale,
+		Collation:         typedCoercionCollation(typ.Type(), typ.Collation()),
 		Original:          original,
+		Nullable:          typ.nullable,
+		Values:            typ.values,
 		dynamicTypeOffset: -1,
 	}
 }

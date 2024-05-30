@@ -57,15 +57,17 @@ var (
 		TargetCells                 []string
 		TabletTypes                 []topodatapb.TabletType
 		Tables                      []string
-		Limit                       uint32 // We only accept positive values but pass on an int64
+		Limit                       int64
 		FilteredReplicationWaitTime time.Duration
 		DebugQuery                  bool
+		MaxReportSampleRows         int64
 		OnlyPKs                     bool
 		UpdateTableStats            bool
-		MaxExtraRowsToCompare       uint32 // We only accept positive values but pass on an int64
+		MaxExtraRowsToCompare       int64
 		Wait                        bool
 		WaitUpdateInterval          time.Duration
 		AutoRetry                   bool
+		MaxDiffDuration             time.Duration
 	}{}
 
 	deleteOptions = struct {
@@ -112,6 +114,16 @@ var (
 				createOptions.Tables[i] = strings.TrimSpace(table)
 			}
 		}
+		// Enforce non-negative values for limits and max options.
+		if createOptions.Limit < 1 {
+			return fmt.Errorf("--limit must be a positive value")
+		}
+		if createOptions.MaxReportSampleRows < 0 {
+			return fmt.Errorf("--max-report-sample-rows must not be a negative value")
+		}
+		if createOptions.MaxExtraRowsToCompare < 0 {
+			return fmt.Errorf("--max-extra-rows-to-compare must not be a negative value")
+		}
 		return nil
 	}
 
@@ -142,7 +154,7 @@ vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --targe
 	delete = &cobra.Command{
 		Use:   "delete",
 		Short: "Delete VDiffs.",
-		Example: `vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace delete a037a9e2-5628-11ee-8c99-0242ac120002
+		Example: `vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace customer delete a037a9e2-5628-11ee-8c99-0242ac120002
 vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace delete all`,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Delete"},
@@ -167,7 +179,7 @@ vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --targe
 	resume = &cobra.Command{
 		Use:                   "resume",
 		Short:                 "Resume a VDiff.",
-		Example:               `vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace resume a037a9e2-5628-11ee-8c99-0242ac120002`,
+		Example:               `vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace customer resume a037a9e2-5628-11ee-8c99-0242ac120002`,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Resume"},
 		Args:                  cobra.ExactArgs(1),
@@ -186,9 +198,9 @@ vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --targe
 	show = &cobra.Command{
 		Use:   "show",
 		Short: "Show the status of a VDiff.",
-		Example: `vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace show last
-vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace show a037a9e2-5628-11ee-8c99-0242ac120002
-vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace show all`,
+		Example: `vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace customer show last
+vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace customer show a037a9e2-5628-11ee-8c99-0242ac120002
+vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace customer show all`,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Show"},
 		Args:                  cobra.ExactArgs(1),
@@ -212,7 +224,7 @@ vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --targe
 	stop = &cobra.Command{
 		Use:                   "stop",
 		Short:                 "Stop a running VDiff.",
-		Example:               `vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace stop a037a9e2-5628-11ee-8c99-0242ac120002`,
+		Example:               `vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace customer stop a037a9e2-5628-11ee-8c99-0242ac120002`,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Stop"},
 		Args:                  cobra.ExactArgs(1),
@@ -270,15 +282,17 @@ func commandCreate(cmd *cobra.Command, args []string) error {
 		TabletTypes:                 createOptions.TabletTypes,
 		TabletSelectionPreference:   tsp,
 		Tables:                      createOptions.Tables,
-		Limit:                       int64(createOptions.Limit),
+		Limit:                       createOptions.Limit,
 		FilteredReplicationWaitTime: protoutil.DurationToProto(createOptions.FilteredReplicationWaitTime),
 		DebugQuery:                  createOptions.DebugQuery,
 		OnlyPKs:                     createOptions.OnlyPKs,
 		UpdateTableStats:            createOptions.UpdateTableStats,
-		MaxExtraRowsToCompare:       int64(createOptions.MaxExtraRowsToCompare),
+		MaxExtraRowsToCompare:       createOptions.MaxExtraRowsToCompare,
 		Wait:                        createOptions.Wait,
 		WaitUpdateInterval:          protoutil.DurationToProto(createOptions.WaitUpdateInterval),
 		AutoRetry:                   createOptions.AutoRetry,
+		MaxReportSampleRows:         createOptions.MaxReportSampleRows,
+		MaxDiffDuration:             protoutil.DurationToProto(createOptions.MaxDiffDuration),
 	})
 
 	if err != nil {
@@ -861,15 +875,17 @@ func registerCommands(root *cobra.Command) {
 	create.Flags().Var((*topoprotopb.TabletTypeListFlag)(&createOptions.TabletTypes), "tablet-types", "Tablet types to use on the source and target.")
 	create.Flags().BoolVar(&common.CreateOptions.TabletTypesInPreferenceOrder, "tablet-types-in-preference-order", true, "When performing source tablet selection, look for candidates in the type order as they are listed in the tablet-types flag.")
 	create.Flags().DurationVar(&createOptions.FilteredReplicationWaitTime, "filtered-replication-wait-time", 30*time.Second, "Specifies the maximum time to wait, in seconds, for replication to catch up when syncing tablet streams.")
-	create.Flags().Uint32Var(&createOptions.Limit, "limit", math.MaxUint32, "Max rows to stop comparing after.")
+	create.Flags().Int64Var(&createOptions.Limit, "limit", math.MaxInt64, "Max rows to stop comparing after.")
 	create.Flags().BoolVar(&createOptions.DebugQuery, "debug-query", false, "Adds a mysql query to the report that can be used for further debugging.")
+	create.Flags().Int64Var(&createOptions.MaxReportSampleRows, "max-report-sample-rows", 10, "Maximum number of row differences to report (0 for all differences). NOTE: when increasing this value it is highly recommended to also specify --only-pks")
 	create.Flags().BoolVar(&createOptions.OnlyPKs, "only-pks", false, "When reporting missing rows, only show primary keys in the report.")
 	create.Flags().StringSliceVar(&createOptions.Tables, "tables", nil, "Only run vdiff for these tables in the workflow.")
-	create.Flags().Uint32Var(&createOptions.MaxExtraRowsToCompare, "max-extra-rows-to-compare", 1000, "If there are collation differences between the source and target, you can have rows that are identical but simply returned in a different order from MySQL. We will do a second pass to compare the rows for any actual differences in this case and this flag allows you to control the resources used for this operation.")
+	create.Flags().Int64Var(&createOptions.MaxExtraRowsToCompare, "max-extra-rows-to-compare", 1000, "If there are collation differences between the source and target, you can have rows that are identical but simply returned in a different order from MySQL. We will do a second pass to compare the rows for any actual differences in this case and this flag allows you to control the resources used for this operation.")
 	create.Flags().BoolVar(&createOptions.Wait, "wait", false, "When creating or resuming a vdiff, wait for it to finish before exiting.")
 	create.Flags().DurationVar(&createOptions.WaitUpdateInterval, "wait-update-interval", time.Duration(1*time.Minute), "When waiting on a vdiff to finish, check and display the current status this often.")
 	create.Flags().BoolVar(&createOptions.AutoRetry, "auto-retry", true, "Should this vdiff automatically retry and continue in case of recoverable errors.")
 	create.Flags().BoolVar(&createOptions.UpdateTableStats, "update-table-stats", false, "Update the table statistics, using ANALYZE TABLE, on each table involved in the VDiff during initialization. This will ensure that progress estimates are as accurate as possible -- but it does involve locks and can potentially impact query processing on the target keyspace.")
+	create.Flags().DurationVar(&createOptions.MaxDiffDuration, "max-diff-duration", 0, "How long should an individual table diff run before being stopped and restarted in order to lessen the impact on tablets due to holding open database snapshots for long periods of time (0 is the default and means no time limit).")
 	base.AddCommand(create)
 
 	base.AddCommand(delete)

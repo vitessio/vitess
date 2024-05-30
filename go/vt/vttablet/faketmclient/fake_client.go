@@ -70,6 +70,14 @@ func (client *FakeTabletManagerClient) DeleteVReplicationWorkflow(ctx context.Co
 	return nil, nil
 }
 
+func (client *FakeTabletManagerClient) HasVReplicationWorkflows(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.HasVReplicationWorkflowsRequest) (*tabletmanagerdatapb.HasVReplicationWorkflowsResponse, error) {
+	return nil, nil
+}
+
+func (client *FakeTabletManagerClient) ReadVReplicationWorkflows(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ReadVReplicationWorkflowsRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse, error) {
+	return nil, nil
+}
+
 func (client *FakeTabletManagerClient) ReadVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ReadVReplicationWorkflowRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowResponse, error) {
 	return nil, nil
 }
@@ -79,6 +87,10 @@ func (client *FakeTabletManagerClient) ResetSequences(ctx context.Context, table
 }
 
 func (client *FakeTabletManagerClient) UpdateVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.UpdateVReplicationWorkflowRequest) (*tabletmanagerdatapb.UpdateVReplicationWorkflowResponse, error) {
+	return nil, nil
+}
+
+func (client *FakeTabletManagerClient) UpdateVReplicationWorkflows(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest) (*tabletmanagerdatapb.UpdateVReplicationWorkflowsResponse, error) {
 	return nil, nil
 }
 
@@ -178,6 +190,11 @@ func (client *FakeTabletManagerClient) ExecuteQuery(ctx context.Context, tablet 
 // ExecuteFetchAsDba is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsDbaRequest) (*querypb.QueryResult, error) {
 	return &querypb.QueryResult{}, nil
+}
+
+// FakeTabletManagerClient is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) ExecuteMultiFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest) ([]*querypb.QueryResult, error) {
+	return []*querypb.QueryResult{}, nil
 }
 
 // ExecuteFetchAsAllPrivs is part of the tmclient.TabletManagerClient interface.
@@ -309,7 +326,7 @@ func (client *FakeTabletManagerClient) UndoDemotePrimary(ctx context.Context, ta
 }
 
 // SetReplicationSource is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) SetReplicationSource(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync bool) error {
+func (client *FakeTabletManagerClient) SetReplicationSource(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync bool, heartbeatInterval float64) error {
 	return nil
 }
 

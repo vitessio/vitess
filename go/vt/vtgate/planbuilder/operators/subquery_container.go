@@ -18,7 +18,6 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
@@ -27,15 +26,15 @@ type (
 	// The inner subqueries can be executed in any order, so we store them like this so we can see more opportunities
 	// for merging
 	SubQueryContainer struct {
-		Outer ops.Operator
+		Outer Operator
 		Inner []*SubQuery
 	}
 )
 
-var _ ops.Operator = (*SubQueryContainer)(nil)
+var _ Operator = (*SubQueryContainer)(nil)
 
 // Clone implements the Operator interface
-func (sqc *SubQueryContainer) Clone(inputs []ops.Operator) ops.Operator {
+func (sqc *SubQueryContainer) Clone(inputs []Operator) Operator {
 	result := &SubQueryContainer{
 		Outer: inputs[0],
 	}
@@ -49,13 +48,13 @@ func (sqc *SubQueryContainer) Clone(inputs []ops.Operator) ops.Operator {
 	return result
 }
 
-func (sqc *SubQueryContainer) GetOrdering(ctx *plancontext.PlanningContext) []ops.OrderBy {
+func (sqc *SubQueryContainer) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
 	return sqc.Outer.GetOrdering(ctx)
 }
 
 // Inputs implements the Operator interface
-func (sqc *SubQueryContainer) Inputs() []ops.Operator {
-	operators := []ops.Operator{sqc.Outer}
+func (sqc *SubQueryContainer) Inputs() []Operator {
+	operators := []Operator{sqc.Outer}
 	for _, inner := range sqc.Inner {
 		operators = append(operators, inner)
 	}
@@ -63,7 +62,7 @@ func (sqc *SubQueryContainer) Inputs() []ops.Operator {
 }
 
 // SetInputs implements the Operator interface
-func (sqc *SubQueryContainer) SetInputs(ops []ops.Operator) {
+func (sqc *SubQueryContainer) SetInputs(ops []Operator) {
 	sqc.Outer = ops[0]
 }
 
@@ -71,13 +70,17 @@ func (sqc *SubQueryContainer) ShortDescription() string {
 	return ""
 }
 
-func (sqc *SubQueryContainer) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
+func (sqc *SubQueryContainer) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
 	sqc.Outer = sqc.Outer.AddPredicate(ctx, expr)
 	return sqc
 }
 
 func (sqc *SubQueryContainer) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, exprs *sqlparser.AliasedExpr) int {
 	return sqc.Outer.AddColumn(ctx, reuseExisting, addToGroupBy, exprs)
+}
+
+func (sqc *SubQueryContainer) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
+	return sqc.Outer.AddWSColumn(ctx, offset, underRoute)
 }
 
 func (sqc *SubQueryContainer) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {

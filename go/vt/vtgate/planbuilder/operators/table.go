@@ -22,7 +22,6 @@ import (
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -43,7 +42,7 @@ type (
 )
 
 // Clone implements the Operator interface
-func (to *Table) Clone([]ops.Operator) ops.Operator {
+func (to *Table) Clone([]Operator) Operator {
 	var columns []*sqlparser.ColName
 	for _, name := range to.Columns {
 		columns = append(columns, sqlparser.CloneRefOfColName(name))
@@ -61,11 +60,15 @@ func (to *Table) introducesTableID() semantics.TableSet {
 }
 
 // AddPredicate implements the PhysicalOperator interface
-func (to *Table) AddPredicate(_ *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
+func (to *Table) AddPredicate(_ *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
 	return newFilter(to, expr)
 }
 
 func (to *Table) AddColumn(*plancontext.PlanningContext, bool, bool, *sqlparser.AliasedExpr) int {
+	panic(vterrors.VT13001("did not expect this method to be called"))
+}
+
+func (*Table) AddWSColumn(*plancontext.PlanningContext, int, bool) int {
 	panic(vterrors.VT13001("did not expect this method to be called"))
 }
 
@@ -92,7 +95,7 @@ func (to *Table) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.Sele
 	return transformColumnsToSelectExprs(ctx, to)
 }
 
-func (to *Table) GetOrdering(*plancontext.PlanningContext) []ops.OrderBy {
+func (to *Table) GetOrdering(*plancontext.PlanningContext) []OrderBy {
 	return nil
 }
 
@@ -116,7 +119,7 @@ func addColumn(ctx *plancontext.PlanningContext, op ColNameColumns, e sqlparser.
 	if !ok {
 		panic(vterrors.VT09018(fmt.Sprintf("cannot add '%s' expression to a table/vindex", sqlparser.String(e))))
 	}
-	sqlparser.RemoveKeyspaceFromColName(col)
+	sqlparser.RemoveKeyspaceInCol(col)
 	cols := op.GetColNames()
 	colAsExpr := func(c *sqlparser.ColName) sqlparser.Expr { return c }
 	if offset, found := canReuseColumn(ctx, cols, e, colAsExpr); found {
@@ -130,7 +133,7 @@ func addColumn(ctx *plancontext.PlanningContext, op ColNameColumns, e sqlparser.
 func (to *Table) ShortDescription() string {
 	tbl := to.VTable.String()
 	var alias, where string
-	if !to.QTable.Alias.As.IsEmpty() {
+	if to.QTable.Alias.As.NotEmpty() {
 		alias = " AS " + to.QTable.Alias.As.String()
 	}
 

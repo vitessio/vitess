@@ -21,13 +21,12 @@ import (
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 type (
 	Distinct struct {
-		Source ops.Operator
+		Source Operator
 		QP     *QueryProjection
 
 		// When we go from AST to operator, we place DISTINCT ops in the required places in the op tree
@@ -46,31 +45,27 @@ type (
 	}
 )
 
-func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) {
+func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	columns := d.GetColumns(ctx)
 	for idx, col := range columns {
-		e, err := d.QP.GetSimplifiedExpr(ctx, col.Expr)
-		if err != nil {
-			// ambiguous columns are not a problem for DISTINCT
-			e = col.Expr
-		}
+		e := col.Expr
 		var wsCol *int
-		typ, _ := ctx.SemTable.TypeForExpr(e)
-
 		if ctx.SemTable.NeedsWeightString(e) {
-			offset := d.Source.AddColumn(ctx, true, false, aeWrap(weightStringFor(e)))
+			offset := d.Source.AddWSColumn(ctx, idx, false)
 			wsCol = &offset
 		}
-
+		typ, _ := ctx.SemTable.TypeForExpr(e)
 		d.Columns = append(d.Columns, engine.CheckCol{
-			Col:   idx,
-			WsCol: wsCol,
-			Type:  typ,
+			Col:          idx,
+			WsCol:        wsCol,
+			Type:         typ,
+			CollationEnv: ctx.VSchema.Environment().CollationEnv(),
 		})
 	}
+	return nil
 }
 
-func (d *Distinct) Clone(inputs []ops.Operator) ops.Operator {
+func (d *Distinct) Clone(inputs []Operator) Operator {
 	return &Distinct{
 		Required:          d.Required,
 		Source:            inputs[0],
@@ -81,21 +76,24 @@ func (d *Distinct) Clone(inputs []ops.Operator) ops.Operator {
 	}
 }
 
-func (d *Distinct) Inputs() []ops.Operator {
-	return []ops.Operator{d.Source}
+func (d *Distinct) Inputs() []Operator {
+	return []Operator{d.Source}
 }
 
-func (d *Distinct) SetInputs(operators []ops.Operator) {
+func (d *Distinct) SetInputs(operators []Operator) {
 	d.Source = operators[0]
 }
 
-func (d *Distinct) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
+func (d *Distinct) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
 	d.Source = d.Source.AddPredicate(ctx, expr)
 	return d
 }
 
 func (d *Distinct) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) int {
 	return d.Source.AddColumn(ctx, reuse, gb, expr)
+}
+func (d *Distinct) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
+	return d.Source.AddWSColumn(ctx, offset, underRoute)
 }
 
 func (d *Distinct) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
@@ -117,7 +115,7 @@ func (d *Distinct) ShortDescription() string {
 	return "Performance"
 }
 
-func (d *Distinct) GetOrdering(ctx *plancontext.PlanningContext) []ops.OrderBy {
+func (d *Distinct) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
 	return d.Source.GetOrdering(ctx)
 }
 

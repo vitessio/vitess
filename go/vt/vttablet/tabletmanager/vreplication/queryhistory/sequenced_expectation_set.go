@@ -12,7 +12,7 @@ type sequencedExpectationSet map[SequencedExpectation]any
 
 func (ses *sequencedExpectationSet) Add(expectation SequencedExpectation) {
 	if ses == nil {
-		*ses = make(sequencedExpectationSet)
+		ses = new(sequencedExpectationSet)
 	}
 	(*ses)[expectation] = true
 }
@@ -27,7 +27,7 @@ func (ses *sequencedExpectationSet) Contains(expectation SequencedExpectation) b
 
 func (ses *sequencedExpectationSet) Slice() []SequencedExpectation {
 	s := make([]SequencedExpectation, 0)
-	if len(*ses) == 0 {
+	if ses == nil || len(*ses) == 0 {
 		return s
 	}
 	for se := range *ses {

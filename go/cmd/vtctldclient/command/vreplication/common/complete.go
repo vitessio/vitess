@@ -16,6 +16,7 @@ var CompleteOptions = struct {
 	KeepRoutingRules bool
 	RenameTables     bool
 	DryRun           bool
+	Shards           []string
 }{}
 
 func GetCompleteCommand(opts *SubCommandsOpts) *cobra.Command {

@@ -21,25 +21,23 @@ import (
 	"fmt"
 	"os"
 	"regexp"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
-	"go.uber.org/goleak"
+	_flag "vitess.io/vitess/go/internal/flag"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
-	_flag "vitess.io/vitess/go/internal/flag"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -60,66 +58,9 @@ type testMaterializerEnv struct {
 //----------------------------------------------
 // testMaterializerEnv
 
-// EnsureNoLeaks is a helper function to fail tests if there are goroutine leaks.
-// At this moment we still have a lot of goroutine leaks in the unit tests in this package.
-// So we only use this while debugging and fixing the leaks. Once fixed we will use this
-// in TestMain instead of just logging the number of leaked goroutines.
-func EnsureNoLeaks(t testing.TB) {
-	if t.Failed() {
-		return
-	}
-	err := ensureNoGoroutines()
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-func ensureNoGoroutines() error {
-	// These goroutines have been found to stay around.
-	// Need to investigate and fix the Vitess ones at some point, if we indeed find out that they are unintended leaks.
-	var leaksToIgnore = []goleak.Option{
-		goleak.IgnoreTopFunction("github.com/golang/glog.(*fileSink).flushDaemon"),
-		goleak.IgnoreTopFunction("github.com/golang/glog.(*loggingT).flushDaemon"),
-		goleak.IgnoreTopFunction("vitess.io/vitess/go/vt/dbconfigs.init.0.func1"),
-		goleak.IgnoreTopFunction("vitess.io/vitess/go/vt/vtgate.resetAggregators"),
-		goleak.IgnoreTopFunction("vitess.io/vitess/go/vt/vtgate.processQueryInfo"),
-		goleak.IgnoreTopFunction("github.com/patrickmn/go-cache.(*janitor).Run"),
-	}
-
-	const (
-		// give ample time for the goroutines to exit in CI.
-		waitTime      = 100 * time.Millisecond
-		numIterations = 50 // 5 seconds
-	)
-	var err error
-	for i := 0; i < numIterations; i++ {
-		err = goleak.Find(leaksToIgnore...)
-		if err == nil {
-			return nil
-		}
-		time.Sleep(waitTime)
-	}
-	return err
-}
-
-func testMainWrapper(m *testing.M) int {
-	startingNumGoRoutines := runtime.NumGoroutine()
-	defer func() {
-		numGoroutines := runtime.NumGoroutine()
-		if numGoroutines > startingNumGoRoutines {
-			log.Infof("!!!!!!!!!!!! Wrangler unit tests Leaked %d goroutines", numGoroutines-startingNumGoRoutines)
-		}
-	}()
-	_flag.ParseFlagsForTest()
-	return m.Run()
-}
-
-func TestMain(m *testing.M) {
-	os.Exit(testMainWrapper(m))
-}
-
-func newTestMaterializerEnv(t *testing.T, ctx context.Context, ms *vtctldatapb.MaterializeSettings, sources, targets []string) *testMaterializerEnv {
+func newTestMaterializerEnv(t *testing.T, ms *vtctldatapb.MaterializeSettings, sources, targets []string) (*testMaterializerEnv, context.Context) {
 	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
 	env := &testMaterializerEnv{
 		ms:       ms,
 		sources:  sources,
@@ -129,7 +70,8 @@ func newTestMaterializerEnv(t *testing.T, ctx context.Context, ms *vtctldatapb.M
 		cell:     "cell",
 		tmc:      newTestMaterializerTMClient(),
 	}
-	env.wr = New(logutil.NewConsoleLogger(), env.topoServ, env.tmc)
+	parser := sqlparser.NewTestParser()
+	env.wr = New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), env.topoServ, env.tmc)
 	tabletID := 100
 	for _, shard := range sources {
 		_ = env.addTablet(tabletID, env.ms.SourceKeyspace, shard, topodatapb.TabletType_PRIMARY)
@@ -145,7 +87,7 @@ func newTestMaterializerEnv(t *testing.T, ctx context.Context, ms *vtctldatapb.M
 
 	for _, ts := range ms.TableSettings {
 		tableName := ts.TargetTable
-		table, err := sqlparser.TableFromStatement(ts.SourceExpression)
+		table, err := parser.TableFromStatement(ts.SourceExpression)
 		if err == nil {
 			tableName = table.Name.String()
 		}
@@ -165,7 +107,12 @@ func newTestMaterializerEnv(t *testing.T, ctx context.Context, ms *vtctldatapb.M
 	if ms.Workflow != "" {
 		env.expectValidation()
 	}
-	return env
+	t.Cleanup(func() {
+		defer utils.EnsureNoLeaks(t)
+		env.close()
+		cancel()
+	})
+	return env, ctx
 }
 
 func (env *testMaterializerEnv) expectValidation() {
@@ -354,4 +301,9 @@ func (tmc *testMaterializerTMClient) ApplySchema(ctx context.Context, tablet *to
 	}
 
 	return nil, nil
+}
+
+func TestMain(m *testing.M) {
+	_flag.ParseFlagsForTest()
+	os.Exit(m.Run())
 }

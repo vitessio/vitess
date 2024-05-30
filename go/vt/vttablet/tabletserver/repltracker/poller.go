@@ -22,10 +22,10 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/stats"
-
 	"vitess.io/vitess/go/vt/mysqlctl"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var replicationLagSeconds = stats.NewGauge("replicationLagSec", "replication lag in seconds")
@@ -46,17 +46,16 @@ func (p *poller) Status() (time.Duration, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-
-	status, err := p.mysqld.ReplicationStatusWithContext(ctx)
+	status, err := p.mysqld.ReplicationStatus(ctx)
 	if err != nil {
 		return 0, err
 	}
 
 	// If replication is not currently running or we don't know what the lag is -- most commonly
 	// because the replica mysqld is in the process of trying to start replicating from its source
-	// but it hasn't yet reached the point where it can calculate the seconds_behind_master
+	// but it hasn't yet reached the point where it can calculate the seconds_behind_source
 	// value and it's thus NULL -- then we will estimate the lag ourselves using the last seen
 	// value + the time elapsed since.
 	if !status.Healthy() || status.ReplicationLagUnknown {

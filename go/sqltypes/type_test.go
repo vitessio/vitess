@@ -20,6 +20,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -285,7 +287,7 @@ func TestTypeToMySQL(t *testing.T) {
 
 func TestMySQLToType(t *testing.T) {
 	testcases := []struct {
-		intype  int64
+		intype  byte
 		inflags int64
 		outtype querypb.Type
 	}{{
@@ -510,5 +512,90 @@ func TestPrintTypeChecks(t *testing.T) {
 			}
 		}
 		t.Logf("%s(): %s", f.name, strings.Join(match, ", "))
+	}
+}
+
+func TestIsTextOrBinary(t *testing.T) {
+	tests := []struct {
+		name           string
+		ty             querypb.Type
+		isTextorBinary bool
+	}{
+		{
+			name:           "null type",
+			ty:             querypb.Type_NULL_TYPE,
+			isTextorBinary: false,
+		},
+		{
+			name:           "blob type",
+			ty:             querypb.Type_BLOB,
+			isTextorBinary: true,
+		},
+		{
+			name:           "text type",
+			ty:             querypb.Type_TEXT,
+			isTextorBinary: true,
+		},
+		{
+			name:           "binary type",
+			ty:             querypb.Type_BINARY,
+			isTextorBinary: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.isTextorBinary, IsTextOrBinary(tt.ty))
+		})
+	}
+}
+
+func TestIsDateOrTime(t *testing.T) {
+	tests := []struct {
+		name         string
+		ty           querypb.Type
+		isDateOrTime bool
+	}{
+		{
+			name:         "null type",
+			ty:           querypb.Type_NULL_TYPE,
+			isDateOrTime: false,
+		},
+		{
+			name:         "blob type",
+			ty:           querypb.Type_BLOB,
+			isDateOrTime: false,
+		},
+		{
+			name:         "timestamp type",
+			ty:           querypb.Type_TIMESTAMP,
+			isDateOrTime: true,
+		},
+		{
+			name:         "date type",
+			ty:           querypb.Type_DATE,
+			isDateOrTime: true,
+		},
+		{
+			name:         "time type",
+			ty:           querypb.Type_TIME,
+			isDateOrTime: true,
+		},
+		{
+			name:         "date time type",
+			ty:           querypb.Type_DATETIME,
+			isDateOrTime: true,
+		},
+		{
+			name:         "year type",
+			ty:           querypb.Type_YEAR,
+			isDateOrTime: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.isDateOrTime, IsDateOrTime(tt.ty))
+		})
 	}
 }

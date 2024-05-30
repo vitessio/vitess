@@ -18,35 +18,17 @@ package inst
 
 import (
 	"fmt"
-	"log/syslog"
 	"os"
 	"time"
 
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
-
-	"github.com/rcrowley/go-metrics"
-
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 )
 
-// syslogWriter is optional, and defaults to nil (disabled)
-var syslogWriter *syslog.Writer
-
-var auditOperationCounter = metrics.NewCounter()
-
-func init() {
-	_ = metrics.Register("audit.write", auditOperationCounter)
-}
-
-// EnableSyslogWriter enables, if possible, writes to syslog. These will execute _in addition_ to normal logging
-func EnableAuditSyslog() (err error) {
-	syslogWriter, err = syslog.New(syslog.LOG_ERR, "vtorc")
-	if err != nil {
-		syslogWriter = nil
-	}
-	return err
-}
+// The metric is registered with a deprecated name. The old metric name can be removed in v21.
+var auditOperationCounter = stats.NewCounterWithDeprecatedName("AuditWrite", "audit.write", "Number of audit operations performed")
 
 // AuditOperation creates and writes a new audit entry by given params
 func AuditOperation(auditType string, tabletAlias string, message string) error {
@@ -94,16 +76,13 @@ func AuditOperation(auditType string, tabletAlias string, message string) error 
 		}
 	}
 	logMessage := fmt.Sprintf("auditType:%s alias:%s keyspace:%s shard:%s message:%s", auditType, tabletAlias, keyspace, shard, message)
-	if syslogWriter != nil {
+	if syslogMessage(logMessage) {
 		auditWrittenToFile = true
-		go func() {
-			_ = syslogWriter.Info(logMessage)
-		}()
 	}
 	if !auditWrittenToFile {
 		log.Infof(logMessage)
 	}
-	auditOperationCounter.Inc(1)
+	auditOperationCounter.Add(1)
 
 	return nil
 }

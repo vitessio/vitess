@@ -407,7 +407,7 @@
           "Sharded": false
         },
         "TargetDestination": "AnyShard()",
-        "Query": "show create table unknown",
+        "Query": "show create table `unknown`",
         "SingleShardOnly": true
       }
     }
@@ -717,6 +717,24 @@
           "Tables": "VARCHAR"
         },
         "RowCount": 11
+      }
+    }
+  },
+  {
+    "comment": "show vschema keyspaces",
+    "query": "show vschema keyspaces",
+    "plan": {
+      "QueryType": "SHOW",
+      "Original": "show vschema keyspaces",
+      "Instructions": {
+        "OperatorType": "Rows",
+        "Fields": {
+          "Comment": "VARCHAR",
+          "Foreign Key": "VARCHAR",
+          "Keyspace": "VARCHAR",
+          "Sharded": "VARCHAR"
+        },
+        "RowCount": 8
       }
     }
   },

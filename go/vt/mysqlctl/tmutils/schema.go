@@ -40,31 +40,6 @@ const (
 	TableView = "VIEW"
 )
 
-// TableDefinitionGetColumn returns the index of a column inside a
-// TableDefinition.
-func TableDefinitionGetColumn(td *tabletmanagerdatapb.TableDefinition, name string) (index int, ok bool) {
-	lowered := strings.ToLower(name)
-	for i, n := range td.Columns {
-		if lowered == strings.ToLower(n) {
-			return i, true
-		}
-	}
-	return -1, false
-}
-
-// TableDefinitions is a list of TableDefinition, for sorting
-type TableDefinitions []*tabletmanagerdatapb.TableDefinition
-
-// Len returns TableDefinitions length.
-func (tds TableDefinitions) Len() int {
-	return len(tds)
-}
-
-// Swap used for sorting TableDefinitions.
-func (tds TableDefinitions) Swap(i, j int) {
-	tds[i], tds[j] = tds[j], tds[i]
-}
-
 // TableFilter is a filter for table names and types.
 type TableFilter struct {
 	includeViews bool
@@ -325,12 +300,13 @@ func DiffSchemaToArray(leftName string, left *tabletmanagerdatapb.SchemaDefiniti
 // SchemaChange contains all necessary information to apply a schema change.
 // It should not be sent over the wire, it's just a set of parameters.
 type SchemaChange struct {
-	SQL              string
-	Force            bool
-	AllowReplication bool
-	BeforeSchema     *tabletmanagerdatapb.SchemaDefinition
-	AfterSchema      *tabletmanagerdatapb.SchemaDefinition
-	SQLMode          string
+	SQL                     string
+	Force                   bool
+	AllowReplication        bool
+	BeforeSchema            *tabletmanagerdatapb.SchemaDefinition
+	AfterSchema             *tabletmanagerdatapb.SchemaDefinition
+	SQLMode                 string
+	DisableForeignKeyChecks bool
 }
 
 // Equal compares two SchemaChange objects.

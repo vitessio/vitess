@@ -642,13 +642,14 @@ func (m *ApplySchemaRequest) CloneVT() *ApplySchemaRequest {
 		return (*ApplySchemaRequest)(nil)
 	}
 	r := &ApplySchemaRequest{
-		Sql:              m.Sql,
-		Force:            m.Force,
-		AllowReplication: m.AllowReplication,
-		BeforeSchema:     m.BeforeSchema.CloneVT(),
-		AfterSchema:      m.AfterSchema.CloneVT(),
-		SqlMode:          m.SqlMode,
-		BatchSize:        m.BatchSize,
+		Sql:                     m.Sql,
+		Force:                   m.Force,
+		AllowReplication:        m.AllowReplication,
+		BeforeSchema:            m.BeforeSchema.CloneVT(),
+		AfterSchema:             m.AfterSchema.CloneVT(),
+		SqlMode:                 m.SqlMode,
+		BatchSize:               m.BatchSize,
+		DisableForeignKeyChecks: m.DisableForeignKeyChecks,
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -792,10 +793,11 @@ func (m *ExecuteFetchAsDbaRequest) CloneVT() *ExecuteFetchAsDbaRequest {
 		return (*ExecuteFetchAsDbaRequest)(nil)
 	}
 	r := &ExecuteFetchAsDbaRequest{
-		DbName:         m.DbName,
-		MaxRows:        m.MaxRows,
-		DisableBinlogs: m.DisableBinlogs,
-		ReloadSchema:   m.ReloadSchema,
+		DbName:                  m.DbName,
+		MaxRows:                 m.MaxRows,
+		DisableBinlogs:          m.DisableBinlogs,
+		ReloadSchema:            m.ReloadSchema,
+		DisableForeignKeyChecks: m.DisableForeignKeyChecks,
 	}
 	if rhs := m.Query; rhs != nil {
 		tmpBytes := make([]byte, len(rhs))
@@ -828,6 +830,56 @@ func (m *ExecuteFetchAsDbaResponse) CloneVT() *ExecuteFetchAsDbaResponse {
 }
 
 func (m *ExecuteFetchAsDbaResponse) CloneMessageVT() proto.Message {
+	return m.CloneVT()
+}
+
+func (m *ExecuteMultiFetchAsDbaRequest) CloneVT() *ExecuteMultiFetchAsDbaRequest {
+	if m == nil {
+		return (*ExecuteMultiFetchAsDbaRequest)(nil)
+	}
+	r := &ExecuteMultiFetchAsDbaRequest{
+		DbName:                  m.DbName,
+		MaxRows:                 m.MaxRows,
+		DisableBinlogs:          m.DisableBinlogs,
+		ReloadSchema:            m.ReloadSchema,
+		DisableForeignKeyChecks: m.DisableForeignKeyChecks,
+	}
+	if rhs := m.Sql; rhs != nil {
+		tmpBytes := make([]byte, len(rhs))
+		copy(tmpBytes, rhs)
+		r.Sql = tmpBytes
+	}
+	if len(m.unknownFields) > 0 {
+		r.unknownFields = make([]byte, len(m.unknownFields))
+		copy(r.unknownFields, m.unknownFields)
+	}
+	return r
+}
+
+func (m *ExecuteMultiFetchAsDbaRequest) CloneMessageVT() proto.Message {
+	return m.CloneVT()
+}
+
+func (m *ExecuteMultiFetchAsDbaResponse) CloneVT() *ExecuteMultiFetchAsDbaResponse {
+	if m == nil {
+		return (*ExecuteMultiFetchAsDbaResponse)(nil)
+	}
+	r := &ExecuteMultiFetchAsDbaResponse{}
+	if rhs := m.Results; rhs != nil {
+		tmpContainer := make([]*query.QueryResult, len(rhs))
+		for k, v := range rhs {
+			tmpContainer[k] = v.CloneVT()
+		}
+		r.Results = tmpContainer
+	}
+	if len(m.unknownFields) > 0 {
+		r.unknownFields = make([]byte, len(m.unknownFields))
+		copy(r.unknownFields, m.unknownFields)
+	}
+	return r
+}
+
+func (m *ExecuteMultiFetchAsDbaResponse) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
@@ -1615,6 +1667,7 @@ func (m *SetReplicationSourceRequest) CloneVT() *SetReplicationSourceRequest {
 		ForceStartReplication: m.ForceStartReplication,
 		WaitPosition:          m.WaitPosition,
 		SemiSync:              m.SemiSync,
+		HeartbeatInterval:     m.HeartbeatInterval,
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -1839,6 +1892,7 @@ func (m *CreateVReplicationWorkflowRequest) CloneVT() *CreateVReplicationWorkflo
 		DeferSecondaryKeys:        m.DeferSecondaryKeys,
 		AutoStart:                 m.AutoStart,
 		StopAfterCopy:             m.StopAfterCopy,
+		Options:                   m.Options,
 	}
 	if rhs := m.BinlogSource; rhs != nil {
 		tmpContainer := make([]*binlogdata.BinlogSource, len(rhs))
@@ -1922,6 +1976,106 @@ func (m *DeleteVReplicationWorkflowResponse) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
+func (m *HasVReplicationWorkflowsRequest) CloneVT() *HasVReplicationWorkflowsRequest {
+	if m == nil {
+		return (*HasVReplicationWorkflowsRequest)(nil)
+	}
+	r := &HasVReplicationWorkflowsRequest{}
+	if len(m.unknownFields) > 0 {
+		r.unknownFields = make([]byte, len(m.unknownFields))
+		copy(r.unknownFields, m.unknownFields)
+	}
+	return r
+}
+
+func (m *HasVReplicationWorkflowsRequest) CloneMessageVT() proto.Message {
+	return m.CloneVT()
+}
+
+func (m *HasVReplicationWorkflowsResponse) CloneVT() *HasVReplicationWorkflowsResponse {
+	if m == nil {
+		return (*HasVReplicationWorkflowsResponse)(nil)
+	}
+	r := &HasVReplicationWorkflowsResponse{
+		Has: m.Has,
+	}
+	if len(m.unknownFields) > 0 {
+		r.unknownFields = make([]byte, len(m.unknownFields))
+		copy(r.unknownFields, m.unknownFields)
+	}
+	return r
+}
+
+func (m *HasVReplicationWorkflowsResponse) CloneMessageVT() proto.Message {
+	return m.CloneVT()
+}
+
+func (m *ReadVReplicationWorkflowsRequest) CloneVT() *ReadVReplicationWorkflowsRequest {
+	if m == nil {
+		return (*ReadVReplicationWorkflowsRequest)(nil)
+	}
+	r := &ReadVReplicationWorkflowsRequest{
+		ExcludeFrozen: m.ExcludeFrozen,
+	}
+	if rhs := m.IncludeIds; rhs != nil {
+		tmpContainer := make([]int32, len(rhs))
+		copy(tmpContainer, rhs)
+		r.IncludeIds = tmpContainer
+	}
+	if rhs := m.IncludeWorkflows; rhs != nil {
+		tmpContainer := make([]string, len(rhs))
+		copy(tmpContainer, rhs)
+		r.IncludeWorkflows = tmpContainer
+	}
+	if rhs := m.IncludeStates; rhs != nil {
+		tmpContainer := make([]binlogdata.VReplicationWorkflowState, len(rhs))
+		copy(tmpContainer, rhs)
+		r.IncludeStates = tmpContainer
+	}
+	if rhs := m.ExcludeWorkflows; rhs != nil {
+		tmpContainer := make([]string, len(rhs))
+		copy(tmpContainer, rhs)
+		r.ExcludeWorkflows = tmpContainer
+	}
+	if rhs := m.ExcludeStates; rhs != nil {
+		tmpContainer := make([]binlogdata.VReplicationWorkflowState, len(rhs))
+		copy(tmpContainer, rhs)
+		r.ExcludeStates = tmpContainer
+	}
+	if len(m.unknownFields) > 0 {
+		r.unknownFields = make([]byte, len(m.unknownFields))
+		copy(r.unknownFields, m.unknownFields)
+	}
+	return r
+}
+
+func (m *ReadVReplicationWorkflowsRequest) CloneMessageVT() proto.Message {
+	return m.CloneVT()
+}
+
+func (m *ReadVReplicationWorkflowsResponse) CloneVT() *ReadVReplicationWorkflowsResponse {
+	if m == nil {
+		return (*ReadVReplicationWorkflowsResponse)(nil)
+	}
+	r := &ReadVReplicationWorkflowsResponse{}
+	if rhs := m.Workflows; rhs != nil {
+		tmpContainer := make([]*ReadVReplicationWorkflowResponse, len(rhs))
+		for k, v := range rhs {
+			tmpContainer[k] = v.CloneVT()
+		}
+		r.Workflows = tmpContainer
+	}
+	if len(m.unknownFields) > 0 {
+		r.unknownFields = make([]byte, len(m.unknownFields))
+		copy(r.unknownFields, m.unknownFields)
+	}
+	return r
+}
+
+func (m *ReadVReplicationWorkflowsResponse) CloneMessageVT() proto.Message {
+	return m.CloneVT()
+}
+
 func (m *ReadVReplicationWorkflowRequest) CloneVT() *ReadVReplicationWorkflowRequest {
 	if m == nil {
 		return (*ReadVReplicationWorkflowRequest)(nil)
@@ -1984,6 +2138,7 @@ func (m *ReadVReplicationWorkflowResponse) CloneVT() *ReadVReplicationWorkflowRe
 		WorkflowType:              m.WorkflowType,
 		WorkflowSubType:           m.WorkflowSubType,
 		DeferSecondaryKeys:        m.DeferSecondaryKeys,
+		Options:                   m.Options,
 	}
 	if rhs := m.TabletTypes; rhs != nil {
 		tmpContainer := make([]topodata.TabletType, len(rhs))
@@ -2076,9 +2231,10 @@ func (m *VDiffReportOptions) CloneVT() *VDiffReportOptions {
 		return (*VDiffReportOptions)(nil)
 	}
 	r := &VDiffReportOptions{
-		OnlyPks:    m.OnlyPks,
-		DebugQuery: m.DebugQuery,
-		Format:     m.Format,
+		OnlyPks:       m.OnlyPks,
+		DebugQuery:    m.DebugQuery,
+		Format:        m.Format,
+		MaxSampleRows: m.MaxSampleRows,
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -2104,6 +2260,7 @@ func (m *VDiffCoreOptions) CloneVT() *VDiffCoreOptions {
 		TimeoutSeconds:        m.TimeoutSeconds,
 		MaxExtraRowsToCompare: m.MaxExtraRowsToCompare,
 		UpdateTableStats:      m.UpdateTableStats,
+		MaxDiffSeconds:        m.MaxDiffSeconds,
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -2182,6 +2339,55 @@ func (m *UpdateVReplicationWorkflowResponse) CloneVT() *UpdateVReplicationWorkfl
 }
 
 func (m *UpdateVReplicationWorkflowResponse) CloneMessageVT() proto.Message {
+	return m.CloneVT()
+}
+
+func (m *UpdateVReplicationWorkflowsRequest) CloneVT() *UpdateVReplicationWorkflowsRequest {
+	if m == nil {
+		return (*UpdateVReplicationWorkflowsRequest)(nil)
+	}
+	r := &UpdateVReplicationWorkflowsRequest{
+		AllWorkflows: m.AllWorkflows,
+		State:        m.State,
+		Message:      m.Message,
+		StopPosition: m.StopPosition,
+	}
+	if rhs := m.IncludeWorkflows; rhs != nil {
+		tmpContainer := make([]string, len(rhs))
+		copy(tmpContainer, rhs)
+		r.IncludeWorkflows = tmpContainer
+	}
+	if rhs := m.ExcludeWorkflows; rhs != nil {
+		tmpContainer := make([]string, len(rhs))
+		copy(tmpContainer, rhs)
+		r.ExcludeWorkflows = tmpContainer
+	}
+	if len(m.unknownFields) > 0 {
+		r.unknownFields = make([]byte, len(m.unknownFields))
+		copy(r.unknownFields, m.unknownFields)
+	}
+	return r
+}
+
+func (m *UpdateVReplicationWorkflowsRequest) CloneMessageVT() proto.Message {
+	return m.CloneVT()
+}
+
+func (m *UpdateVReplicationWorkflowsResponse) CloneVT() *UpdateVReplicationWorkflowsResponse {
+	if m == nil {
+		return (*UpdateVReplicationWorkflowsResponse)(nil)
+	}
+	r := &UpdateVReplicationWorkflowsResponse{
+		Result: m.Result.CloneVT(),
+	}
+	if len(m.unknownFields) > 0 {
+		r.unknownFields = make([]byte, len(m.unknownFields))
+		copy(r.unknownFields, m.unknownFields)
+	}
+	return r
+}
+
+func (m *UpdateVReplicationWorkflowsResponse) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
@@ -3659,6 +3865,16 @@ func (m *ApplySchemaRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.DisableForeignKeyChecks {
+		i--
+		if m.DisableForeignKeyChecks {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x40
+	}
 	if m.BatchSize != 0 {
 		i = encodeVarint(dAtA, i, uint64(m.BatchSize))
 		i--
@@ -4041,6 +4257,16 @@ func (m *ExecuteFetchAsDbaRequest) MarshalToSizedBufferVT(dAtA []byte) (int, err
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.DisableForeignKeyChecks {
+		i--
+		if m.DisableForeignKeyChecks {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x30
+	}
 	if m.ReloadSchema {
 		i--
 		if m.ReloadSchema {
@@ -4122,6 +4348,133 @@ func (m *ExecuteFetchAsDbaResponse) MarshalToSizedBufferVT(dAtA []byte) (int, er
 		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *ExecuteMultiFetchAsDbaRequest) MarshalVT() (dAtA []byte, err error) {
+	if m == nil {
+		return nil, nil
+	}
+	size := m.SizeVT()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBufferVT(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *ExecuteMultiFetchAsDbaRequest) MarshalToVT(dAtA []byte) (int, error) {
+	size := m.SizeVT()
+	return m.MarshalToSizedBufferVT(dAtA[:size])
+}
+
+func (m *ExecuteMultiFetchAsDbaRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+	if m == nil {
+		return 0, nil
+	}
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.unknownFields != nil {
+		i -= len(m.unknownFields)
+		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.DisableForeignKeyChecks {
+		i--
+		if m.DisableForeignKeyChecks {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x30
+	}
+	if m.ReloadSchema {
+		i--
+		if m.ReloadSchema {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x28
+	}
+	if m.DisableBinlogs {
+		i--
+		if m.DisableBinlogs {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x20
+	}
+	if m.MaxRows != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.MaxRows))
+		i--
+		dAtA[i] = 0x18
+	}
+	if len(m.DbName) > 0 {
+		i -= len(m.DbName)
+		copy(dAtA[i:], m.DbName)
+		i = encodeVarint(dAtA, i, uint64(len(m.DbName)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.Sql) > 0 {
+		i -= len(m.Sql)
+		copy(dAtA[i:], m.Sql)
+		i = encodeVarint(dAtA, i, uint64(len(m.Sql)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *ExecuteMultiFetchAsDbaResponse) MarshalVT() (dAtA []byte, err error) {
+	if m == nil {
+		return nil, nil
+	}
+	size := m.SizeVT()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBufferVT(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *ExecuteMultiFetchAsDbaResponse) MarshalToVT(dAtA []byte) (int, error) {
+	size := m.SizeVT()
+	return m.MarshalToSizedBufferVT(dAtA[:size])
+}
+
+func (m *ExecuteMultiFetchAsDbaResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+	if m == nil {
+		return 0, nil
+	}
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.unknownFields != nil {
+		i -= len(m.unknownFields)
+		copy(dAtA[i:], m.unknownFields)
+	}
+	if len(m.Results) > 0 {
+		for iNdEx := len(m.Results) - 1; iNdEx >= 0; iNdEx-- {
+			size, err := m.Results[iNdEx].MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarint(dAtA, i, uint64(size))
+			i--
+			dAtA[i] = 0xa
+		}
 	}
 	return len(dAtA) - i, nil
 }
@@ -5890,6 +6243,12 @@ func (m *SetReplicationSourceRequest) MarshalToSizedBufferVT(dAtA []byte) (int, 
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.HeartbeatInterval != 0 {
+		i -= 8
+		binary.LittleEndian.PutUint64(dAtA[i:], uint64(math.Float64bits(float64(m.HeartbeatInterval))))
+		i--
+		dAtA[i] = 0x31
+	}
 	if m.SemiSync {
 		i--
 		if m.SemiSync {
@@ -6459,6 +6818,13 @@ func (m *CreateVReplicationWorkflowRequest) MarshalToSizedBufferVT(dAtA []byte) 
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if len(m.Options) > 0 {
+		i -= len(m.Options)
+		copy(dAtA[i:], m.Options)
+		i = encodeVarint(dAtA, i, uint64(len(m.Options)))
+		i--
+		dAtA[i] = 0x5a
+	}
 	if m.StopAfterCopy {
 		i--
 		if m.StopAfterCopy {
@@ -6682,6 +7048,251 @@ func (m *DeleteVReplicationWorkflowResponse) MarshalToSizedBufferVT(dAtA []byte)
 	return len(dAtA) - i, nil
 }
 
+func (m *HasVReplicationWorkflowsRequest) MarshalVT() (dAtA []byte, err error) {
+	if m == nil {
+		return nil, nil
+	}
+	size := m.SizeVT()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBufferVT(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *HasVReplicationWorkflowsRequest) MarshalToVT(dAtA []byte) (int, error) {
+	size := m.SizeVT()
+	return m.MarshalToSizedBufferVT(dAtA[:size])
+}
+
+func (m *HasVReplicationWorkflowsRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+	if m == nil {
+		return 0, nil
+	}
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.unknownFields != nil {
+		i -= len(m.unknownFields)
+		copy(dAtA[i:], m.unknownFields)
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *HasVReplicationWorkflowsResponse) MarshalVT() (dAtA []byte, err error) {
+	if m == nil {
+		return nil, nil
+	}
+	size := m.SizeVT()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBufferVT(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *HasVReplicationWorkflowsResponse) MarshalToVT(dAtA []byte) (int, error) {
+	size := m.SizeVT()
+	return m.MarshalToSizedBufferVT(dAtA[:size])
+}
+
+func (m *HasVReplicationWorkflowsResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+	if m == nil {
+		return 0, nil
+	}
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.unknownFields != nil {
+		i -= len(m.unknownFields)
+		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.Has {
+		i--
+		if m.Has {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x8
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *ReadVReplicationWorkflowsRequest) MarshalVT() (dAtA []byte, err error) {
+	if m == nil {
+		return nil, nil
+	}
+	size := m.SizeVT()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBufferVT(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *ReadVReplicationWorkflowsRequest) MarshalToVT(dAtA []byte) (int, error) {
+	size := m.SizeVT()
+	return m.MarshalToSizedBufferVT(dAtA[:size])
+}
+
+func (m *ReadVReplicationWorkflowsRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+	if m == nil {
+		return 0, nil
+	}
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.unknownFields != nil {
+		i -= len(m.unknownFields)
+		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.ExcludeFrozen {
+		i--
+		if m.ExcludeFrozen {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x30
+	}
+	if len(m.ExcludeStates) > 0 {
+		var pksize2 int
+		for _, num := range m.ExcludeStates {
+			pksize2 += sov(uint64(num))
+		}
+		i -= pksize2
+		j1 := i
+		for _, num1 := range m.ExcludeStates {
+			num := uint64(num1)
+			for num >= 1<<7 {
+				dAtA[j1] = uint8(uint64(num)&0x7f | 0x80)
+				num >>= 7
+				j1++
+			}
+			dAtA[j1] = uint8(num)
+			j1++
+		}
+		i = encodeVarint(dAtA, i, uint64(pksize2))
+		i--
+		dAtA[i] = 0x2a
+	}
+	if len(m.ExcludeWorkflows) > 0 {
+		for iNdEx := len(m.ExcludeWorkflows) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.ExcludeWorkflows[iNdEx])
+			copy(dAtA[i:], m.ExcludeWorkflows[iNdEx])
+			i = encodeVarint(dAtA, i, uint64(len(m.ExcludeWorkflows[iNdEx])))
+			i--
+			dAtA[i] = 0x22
+		}
+	}
+	if len(m.IncludeStates) > 0 {
+		var pksize4 int
+		for _, num := range m.IncludeStates {
+			pksize4 += sov(uint64(num))
+		}
+		i -= pksize4
+		j3 := i
+		for _, num1 := range m.IncludeStates {
+			num := uint64(num1)
+			for num >= 1<<7 {
+				dAtA[j3] = uint8(uint64(num)&0x7f | 0x80)
+				num >>= 7
+				j3++
+			}
+			dAtA[j3] = uint8(num)
+			j3++
+		}
+		i = encodeVarint(dAtA, i, uint64(pksize4))
+		i--
+		dAtA[i] = 0x1a
+	}
+	if len(m.IncludeWorkflows) > 0 {
+		for iNdEx := len(m.IncludeWorkflows) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.IncludeWorkflows[iNdEx])
+			copy(dAtA[i:], m.IncludeWorkflows[iNdEx])
+			i = encodeVarint(dAtA, i, uint64(len(m.IncludeWorkflows[iNdEx])))
+			i--
+			dAtA[i] = 0x12
+		}
+	}
+	if len(m.IncludeIds) > 0 {
+		var pksize6 int
+		for _, num := range m.IncludeIds {
+			pksize6 += sov(uint64(num))
+		}
+		i -= pksize6
+		j5 := i
+		for _, num1 := range m.IncludeIds {
+			num := uint64(num1)
+			for num >= 1<<7 {
+				dAtA[j5] = uint8(uint64(num)&0x7f | 0x80)
+				num >>= 7
+				j5++
+			}
+			dAtA[j5] = uint8(num)
+			j5++
+		}
+		i = encodeVarint(dAtA, i, uint64(pksize6))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *ReadVReplicationWorkflowsResponse) MarshalVT() (dAtA []byte, err error) {
+	if m == nil {
+		return nil, nil
+	}
+	size := m.SizeVT()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBufferVT(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *ReadVReplicationWorkflowsResponse) MarshalToVT(dAtA []byte) (int, error) {
+	size := m.SizeVT()
+	return m.MarshalToSizedBufferVT(dAtA[:size])
+}
+
+func (m *ReadVReplicationWorkflowsResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+	if m == nil {
+		return 0, nil
+	}
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.unknownFields != nil {
+		i -= len(m.unknownFields)
+		copy(dAtA[i:], m.unknownFields)
+	}
+	if len(m.Workflows) > 0 {
+		for iNdEx := len(m.Workflows) - 1; iNdEx >= 0; iNdEx-- {
+			size, err := m.Workflows[iNdEx].MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarint(dAtA, i, uint64(size))
+			i--
+			dAtA[i] = 0xa
+		}
+	}
+	return len(dAtA) - i, nil
+}
+
 func (m *ReadVReplicationWorkflowRequest) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
@@ -6887,6 +7498,13 @@ func (m *ReadVReplicationWorkflowResponse) MarshalToSizedBufferVT(dAtA []byte) (
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if len(m.Options) > 0 {
+		i -= len(m.Options)
+		copy(dAtA[i:], m.Options)
+		i = encodeVarint(dAtA, i, uint64(len(m.Options)))
+		i--
+		dAtA[i] = 0x62
 	}
 	if len(m.Streams) > 0 {
 		for iNdEx := len(m.Streams) - 1; iNdEx >= 0; iNdEx-- {
@@ -7194,6 +7812,11 @@ func (m *VDiffReportOptions) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.MaxSampleRows != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.MaxSampleRows))
+		i--
+		dAtA[i] = 0x20
+	}
 	if len(m.Format) > 0 {
 		i -= len(m.Format)
 		copy(dAtA[i:], m.Format)
@@ -7253,6 +7876,11 @@ func (m *VDiffCoreOptions) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.MaxDiffSeconds != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.MaxDiffSeconds))
+		i--
+		dAtA[i] = 0x48
 	}
 	if m.UpdateTableStats {
 		i--
@@ -7481,6 +8109,129 @@ func (m *UpdateVReplicationWorkflowResponse) MarshalToVT(dAtA []byte) (int, erro
 }
 
 func (m *UpdateVReplicationWorkflowResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+	if m == nil {
+		return 0, nil
+	}
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.unknownFields != nil {
+		i -= len(m.unknownFields)
+		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.Result != nil {
+		size, err := m.Result.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *UpdateVReplicationWorkflowsRequest) MarshalVT() (dAtA []byte, err error) {
+	if m == nil {
+		return nil, nil
+	}
+	size := m.SizeVT()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBufferVT(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *UpdateVReplicationWorkflowsRequest) MarshalToVT(dAtA []byte) (int, error) {
+	size := m.SizeVT()
+	return m.MarshalToSizedBufferVT(dAtA[:size])
+}
+
+func (m *UpdateVReplicationWorkflowsRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+	if m == nil {
+		return 0, nil
+	}
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.unknownFields != nil {
+		i -= len(m.unknownFields)
+		copy(dAtA[i:], m.unknownFields)
+	}
+	if len(m.StopPosition) > 0 {
+		i -= len(m.StopPosition)
+		copy(dAtA[i:], m.StopPosition)
+		i = encodeVarint(dAtA, i, uint64(len(m.StopPosition)))
+		i--
+		dAtA[i] = 0x32
+	}
+	if len(m.Message) > 0 {
+		i -= len(m.Message)
+		copy(dAtA[i:], m.Message)
+		i = encodeVarint(dAtA, i, uint64(len(m.Message)))
+		i--
+		dAtA[i] = 0x2a
+	}
+	if m.State != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.State))
+		i--
+		dAtA[i] = 0x20
+	}
+	if len(m.ExcludeWorkflows) > 0 {
+		for iNdEx := len(m.ExcludeWorkflows) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.ExcludeWorkflows[iNdEx])
+			copy(dAtA[i:], m.ExcludeWorkflows[iNdEx])
+			i = encodeVarint(dAtA, i, uint64(len(m.ExcludeWorkflows[iNdEx])))
+			i--
+			dAtA[i] = 0x1a
+		}
+	}
+	if len(m.IncludeWorkflows) > 0 {
+		for iNdEx := len(m.IncludeWorkflows) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.IncludeWorkflows[iNdEx])
+			copy(dAtA[i:], m.IncludeWorkflows[iNdEx])
+			i = encodeVarint(dAtA, i, uint64(len(m.IncludeWorkflows[iNdEx])))
+			i--
+			dAtA[i] = 0x12
+		}
+	}
+	if m.AllWorkflows {
+		i--
+		if m.AllWorkflows {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x8
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *UpdateVReplicationWorkflowsResponse) MarshalVT() (dAtA []byte, err error) {
+	if m == nil {
+		return nil, nil
+	}
+	size := m.SizeVT()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBufferVT(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *UpdateVReplicationWorkflowsResponse) MarshalToVT(dAtA []byte) (int, error) {
+	size := m.SizeVT()
+	return m.MarshalToSizedBufferVT(dAtA[:size])
+}
+
+func (m *UpdateVReplicationWorkflowsResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -8229,6 +8980,9 @@ func (m *ApplySchemaRequest) SizeVT() (n int) {
 	if m.BatchSize != 0 {
 		n += 1 + sov(uint64(m.BatchSize))
 	}
+	if m.DisableForeignKeyChecks {
+		n += 2
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -8353,6 +9107,9 @@ func (m *ExecuteFetchAsDbaRequest) SizeVT() (n int) {
 	if m.ReloadSchema {
 		n += 2
 	}
+	if m.DisableForeignKeyChecks {
+		n += 2
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -8366,6 +9123,52 @@ func (m *ExecuteFetchAsDbaResponse) SizeVT() (n int) {
 	if m.Result != nil {
 		l = m.Result.SizeVT()
 		n += 1 + l + sov(uint64(l))
+	}
+	n += len(m.unknownFields)
+	return n
+}
+
+func (m *ExecuteMultiFetchAsDbaRequest) SizeVT() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Sql)
+	if l > 0 {
+		n += 1 + l + sov(uint64(l))
+	}
+	l = len(m.DbName)
+	if l > 0 {
+		n += 1 + l + sov(uint64(l))
+	}
+	if m.MaxRows != 0 {
+		n += 1 + sov(uint64(m.MaxRows))
+	}
+	if m.DisableBinlogs {
+		n += 2
+	}
+	if m.ReloadSchema {
+		n += 2
+	}
+	if m.DisableForeignKeyChecks {
+		n += 2
+	}
+	n += len(m.unknownFields)
+	return n
+}
+
+func (m *ExecuteMultiFetchAsDbaResponse) SizeVT() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if len(m.Results) > 0 {
+		for _, e := range m.Results {
+			l = e.SizeVT()
+			n += 1 + l + sov(uint64(l))
+		}
 	}
 	n += len(m.unknownFields)
 	return n
@@ -8968,6 +9771,9 @@ func (m *SetReplicationSourceRequest) SizeVT() (n int) {
 	if m.SemiSync {
 		n += 2
 	}
+	if m.HeartbeatInterval != 0 {
+		n += 9
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -9183,6 +9989,10 @@ func (m *CreateVReplicationWorkflowRequest) SizeVT() (n int) {
 	if m.StopAfterCopy {
 		n += 2
 	}
+	l = len(m.Options)
+	if l > 0 {
+		n += 1 + l + sov(uint64(l))
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -9224,6 +10034,91 @@ func (m *DeleteVReplicationWorkflowResponse) SizeVT() (n int) {
 	if m.Result != nil {
 		l = m.Result.SizeVT()
 		n += 1 + l + sov(uint64(l))
+	}
+	n += len(m.unknownFields)
+	return n
+}
+
+func (m *HasVReplicationWorkflowsRequest) SizeVT() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	n += len(m.unknownFields)
+	return n
+}
+
+func (m *HasVReplicationWorkflowsResponse) SizeVT() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.Has {
+		n += 2
+	}
+	n += len(m.unknownFields)
+	return n
+}
+
+func (m *ReadVReplicationWorkflowsRequest) SizeVT() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if len(m.IncludeIds) > 0 {
+		l = 0
+		for _, e := range m.IncludeIds {
+			l += sov(uint64(e))
+		}
+		n += 1 + sov(uint64(l)) + l
+	}
+	if len(m.IncludeWorkflows) > 0 {
+		for _, s := range m.IncludeWorkflows {
+			l = len(s)
+			n += 1 + l + sov(uint64(l))
+		}
+	}
+	if len(m.IncludeStates) > 0 {
+		l = 0
+		for _, e := range m.IncludeStates {
+			l += sov(uint64(e))
+		}
+		n += 1 + sov(uint64(l)) + l
+	}
+	if len(m.ExcludeWorkflows) > 0 {
+		for _, s := range m.ExcludeWorkflows {
+			l = len(s)
+			n += 1 + l + sov(uint64(l))
+		}
+	}
+	if len(m.ExcludeStates) > 0 {
+		l = 0
+		for _, e := range m.ExcludeStates {
+			l += sov(uint64(e))
+		}
+		n += 1 + sov(uint64(l)) + l
+	}
+	if m.ExcludeFrozen {
+		n += 2
+	}
+	n += len(m.unknownFields)
+	return n
+}
+
+func (m *ReadVReplicationWorkflowsResponse) SizeVT() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if len(m.Workflows) > 0 {
+		for _, e := range m.Workflows {
+			l = e.SizeVT()
+			n += 1 + l + sov(uint64(l))
+		}
 	}
 	n += len(m.unknownFields)
 	return n
@@ -9351,6 +10246,10 @@ func (m *ReadVReplicationWorkflowResponse) SizeVT() (n int) {
 			n += 1 + l + sov(uint64(l))
 		}
 	}
+	l = len(m.Options)
+	if l > 0 {
+		n += 1 + l + sov(uint64(l))
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -9448,6 +10347,9 @@ func (m *VDiffReportOptions) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
+	if m.MaxSampleRows != 0 {
+		n += 1 + sov(uint64(m.MaxSampleRows))
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -9482,6 +10384,9 @@ func (m *VDiffCoreOptions) SizeVT() (n int) {
 	}
 	if m.UpdateTableStats {
 		n += 2
+	}
+	if m.MaxDiffSeconds != 0 {
+		n += 1 + sov(uint64(m.MaxDiffSeconds))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -9546,6 +10451,56 @@ func (m *UpdateVReplicationWorkflowRequest) SizeVT() (n int) {
 }
 
 func (m *UpdateVReplicationWorkflowResponse) SizeVT() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.Result != nil {
+		l = m.Result.SizeVT()
+		n += 1 + l + sov(uint64(l))
+	}
+	n += len(m.unknownFields)
+	return n
+}
+
+func (m *UpdateVReplicationWorkflowsRequest) SizeVT() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.AllWorkflows {
+		n += 2
+	}
+	if len(m.IncludeWorkflows) > 0 {
+		for _, s := range m.IncludeWorkflows {
+			l = len(s)
+			n += 1 + l + sov(uint64(l))
+		}
+	}
+	if len(m.ExcludeWorkflows) > 0 {
+		for _, s := range m.ExcludeWorkflows {
+			l = len(s)
+			n += 1 + l + sov(uint64(l))
+		}
+	}
+	if m.State != 0 {
+		n += 1 + sov(uint64(m.State))
+	}
+	l = len(m.Message)
+	if l > 0 {
+		n += 1 + l + sov(uint64(l))
+	}
+	l = len(m.StopPosition)
+	if l > 0 {
+		n += 1 + l + sov(uint64(l))
+	}
+	n += len(m.unknownFields)
+	return n
+}
+
+func (m *UpdateVReplicationWorkflowsResponse) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -12930,6 +13885,26 @@ func (m *ApplySchemaRequest) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
+		case 8:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field DisableForeignKeyChecks", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.DisableForeignKeyChecks = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
@@ -13692,6 +14667,26 @@ func (m *ExecuteFetchAsDbaRequest) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.ReloadSchema = bool(v != 0)
+		case 6:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field DisableForeignKeyChecks", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.DisableForeignKeyChecks = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
@@ -13776,6 +14771,287 @@ func (m *ExecuteFetchAsDbaResponse) UnmarshalVT(dAtA []byte) error {
 				m.Result = &query.QueryResult{}
 			}
 			if err := m.Result.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skip(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLength
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.unknownFields = append(m.unknownFields, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *ExecuteMultiFetchAsDbaRequest) UnmarshalVT(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflow
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: ExecuteMultiFetchAsDbaRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: ExecuteMultiFetchAsDbaRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Sql", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Sql = append(m.Sql[:0], dAtA[iNdEx:postIndex]...)
+			if m.Sql == nil {
+				m.Sql = []byte{}
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field DbName", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.DbName = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field MaxRows", wireType)
+			}
+			m.MaxRows = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.MaxRows |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 4:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field DisableBinlogs", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.DisableBinlogs = bool(v != 0)
+		case 5:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ReloadSchema", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.ReloadSchema = bool(v != 0)
+		case 6:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field DisableForeignKeyChecks", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.DisableForeignKeyChecks = bool(v != 0)
+		default:
+			iNdEx = preIndex
+			skippy, err := skip(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLength
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.unknownFields = append(m.unknownFields, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *ExecuteMultiFetchAsDbaResponse) UnmarshalVT(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflow
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: ExecuteMultiFetchAsDbaResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: ExecuteMultiFetchAsDbaResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Results", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Results = append(m.Results, &query.QueryResult{})
+			if err := m.Results[len(m.Results)-1].UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex
@@ -17242,6 +18518,17 @@ func (m *SetReplicationSourceRequest) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.SemiSync = bool(v != 0)
+		case 6:
+			if wireType != 1 {
+				return fmt.Errorf("proto: wrong wireType = %d for field HeartbeatInterval", wireType)
+			}
+			var v uint64
+			if (iNdEx + 8) > l {
+				return io.ErrUnexpectedEOF
+			}
+			v = uint64(binary.LittleEndian.Uint64(dAtA[iNdEx:]))
+			iNdEx += 8
+			m.HeartbeatInterval = float64(math.Float64frombits(v))
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
@@ -17807,7 +19094,7 @@ func (m *BackupRequest) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Concurrency |= int64(b&0x7F) << shift
+				m.Concurrency |= int32(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -18568,6 +19855,38 @@ func (m *CreateVReplicationWorkflowRequest) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.StopAfterCopy = bool(v != 0)
+		case 11:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Options", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Options = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
@@ -18822,6 +20141,562 @@ func (m *DeleteVReplicationWorkflowResponse) UnmarshalVT(dAtA []byte) error {
 				m.Result = &query.QueryResult{}
 			}
 			if err := m.Result.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skip(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLength
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.unknownFields = append(m.unknownFields, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *HasVReplicationWorkflowsRequest) UnmarshalVT(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflow
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: HasVReplicationWorkflowsRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: HasVReplicationWorkflowsRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		default:
+			iNdEx = preIndex
+			skippy, err := skip(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLength
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.unknownFields = append(m.unknownFields, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *HasVReplicationWorkflowsResponse) UnmarshalVT(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflow
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: HasVReplicationWorkflowsResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: HasVReplicationWorkflowsResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Has", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.Has = bool(v != 0)
+		default:
+			iNdEx = preIndex
+			skippy, err := skip(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLength
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.unknownFields = append(m.unknownFields, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *ReadVReplicationWorkflowsRequest) UnmarshalVT(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflow
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: ReadVReplicationWorkflowsRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: ReadVReplicationWorkflowsRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType == 0 {
+				var v int32
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflow
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					v |= int32(b&0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				m.IncludeIds = append(m.IncludeIds, v)
+			} else if wireType == 2 {
+				var packedLen int
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflow
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					packedLen |= int(b&0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				if packedLen < 0 {
+					return ErrInvalidLength
+				}
+				postIndex := iNdEx + packedLen
+				if postIndex < 0 {
+					return ErrInvalidLength
+				}
+				if postIndex > l {
+					return io.ErrUnexpectedEOF
+				}
+				var elementCount int
+				var count int
+				for _, integer := range dAtA[iNdEx:postIndex] {
+					if integer < 128 {
+						count++
+					}
+				}
+				elementCount = count
+				if elementCount != 0 && len(m.IncludeIds) == 0 {
+					m.IncludeIds = make([]int32, 0, elementCount)
+				}
+				for iNdEx < postIndex {
+					var v int32
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflow
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						v |= int32(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					m.IncludeIds = append(m.IncludeIds, v)
+				}
+			} else {
+				return fmt.Errorf("proto: wrong wireType = %d for field IncludeIds", wireType)
+			}
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field IncludeWorkflows", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.IncludeWorkflows = append(m.IncludeWorkflows, string(dAtA[iNdEx:postIndex]))
+			iNdEx = postIndex
+		case 3:
+			if wireType == 0 {
+				var v binlogdata.VReplicationWorkflowState
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflow
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					v |= binlogdata.VReplicationWorkflowState(b&0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				m.IncludeStates = append(m.IncludeStates, v)
+			} else if wireType == 2 {
+				var packedLen int
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflow
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					packedLen |= int(b&0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				if packedLen < 0 {
+					return ErrInvalidLength
+				}
+				postIndex := iNdEx + packedLen
+				if postIndex < 0 {
+					return ErrInvalidLength
+				}
+				if postIndex > l {
+					return io.ErrUnexpectedEOF
+				}
+				var elementCount int
+				if elementCount != 0 && len(m.IncludeStates) == 0 {
+					m.IncludeStates = make([]binlogdata.VReplicationWorkflowState, 0, elementCount)
+				}
+				for iNdEx < postIndex {
+					var v binlogdata.VReplicationWorkflowState
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflow
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						v |= binlogdata.VReplicationWorkflowState(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					m.IncludeStates = append(m.IncludeStates, v)
+				}
+			} else {
+				return fmt.Errorf("proto: wrong wireType = %d for field IncludeStates", wireType)
+			}
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ExcludeWorkflows", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ExcludeWorkflows = append(m.ExcludeWorkflows, string(dAtA[iNdEx:postIndex]))
+			iNdEx = postIndex
+		case 5:
+			if wireType == 0 {
+				var v binlogdata.VReplicationWorkflowState
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflow
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					v |= binlogdata.VReplicationWorkflowState(b&0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				m.ExcludeStates = append(m.ExcludeStates, v)
+			} else if wireType == 2 {
+				var packedLen int
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflow
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					packedLen |= int(b&0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				if packedLen < 0 {
+					return ErrInvalidLength
+				}
+				postIndex := iNdEx + packedLen
+				if postIndex < 0 {
+					return ErrInvalidLength
+				}
+				if postIndex > l {
+					return io.ErrUnexpectedEOF
+				}
+				var elementCount int
+				if elementCount != 0 && len(m.ExcludeStates) == 0 {
+					m.ExcludeStates = make([]binlogdata.VReplicationWorkflowState, 0, elementCount)
+				}
+				for iNdEx < postIndex {
+					var v binlogdata.VReplicationWorkflowState
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflow
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						v |= binlogdata.VReplicationWorkflowState(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					m.ExcludeStates = append(m.ExcludeStates, v)
+				}
+			} else {
+				return fmt.Errorf("proto: wrong wireType = %d for field ExcludeStates", wireType)
+			}
+		case 6:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ExcludeFrozen", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.ExcludeFrozen = bool(v != 0)
+		default:
+			iNdEx = preIndex
+			skippy, err := skip(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLength
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.unknownFields = append(m.unknownFields, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *ReadVReplicationWorkflowsResponse) UnmarshalVT(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflow
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: ReadVReplicationWorkflowsResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: ReadVReplicationWorkflowsResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Workflows", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Workflows = append(m.Workflows, &ReadVReplicationWorkflowResponse{})
+			if err := m.Workflows[len(m.Workflows)-1].UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex
@@ -19721,6 +21596,38 @@ func (m *ReadVReplicationWorkflowResponse) UnmarshalVT(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
+		case 12:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Options", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Options = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
@@ -20376,6 +22283,25 @@ func (m *VDiffReportOptions) UnmarshalVT(dAtA []byte) error {
 			}
 			m.Format = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
+		case 4:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field MaxSampleRows", wireType)
+			}
+			m.MaxSampleRows = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.MaxSampleRows |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
@@ -20595,6 +22521,25 @@ func (m *VDiffCoreOptions) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.UpdateTableStats = bool(v != 0)
+		case 9:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field MaxDiffSeconds", wireType)
+			}
+			m.MaxDiffSeconds = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.MaxDiffSeconds |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
@@ -21044,6 +22989,311 @@ func (m *UpdateVReplicationWorkflowResponse) UnmarshalVT(dAtA []byte) error {
 		}
 		if fieldNum <= 0 {
 			return fmt.Errorf("proto: UpdateVReplicationWorkflowResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Result", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Result == nil {
+				m.Result = &query.QueryResult{}
+			}
+			if err := m.Result.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skip(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLength
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.unknownFields = append(m.unknownFields, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *UpdateVReplicationWorkflowsRequest) UnmarshalVT(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflow
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: UpdateVReplicationWorkflowsRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: UpdateVReplicationWorkflowsRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AllWorkflows", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.AllWorkflows = bool(v != 0)
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field IncludeWorkflows", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.IncludeWorkflows = append(m.IncludeWorkflows, string(dAtA[iNdEx:postIndex]))
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ExcludeWorkflows", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ExcludeWorkflows = append(m.ExcludeWorkflows, string(dAtA[iNdEx:postIndex]))
+			iNdEx = postIndex
+		case 4:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field State", wireType)
+			}
+			m.State = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.State |= binlogdata.VReplicationWorkflowState(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 5:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Message", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Message = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 6:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field StopPosition", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.StopPosition = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skip(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLength
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.unknownFields = append(m.unknownFields, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *UpdateVReplicationWorkflowsResponse) UnmarshalVT(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflow
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: UpdateVReplicationWorkflowsResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: UpdateVReplicationWorkflowsResponse: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:

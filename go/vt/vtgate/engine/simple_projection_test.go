@@ -44,8 +44,9 @@ func TestSubqueryExecute(t *testing.T) {
 	}
 
 	sq := &SimpleProjection{
-		Cols:  []int{0, 2},
-		Input: prim,
+		Cols:     []int{0, 2},
+		ColNames: []string{"", ""},
+		Input:    prim,
 	}
 
 	bv := map[string]*querypb.BindVariable{
@@ -59,7 +60,7 @@ func TestSubqueryExecute(t *testing.T) {
 	prim.ExpectLog(t, []string{
 		`Execute a: type:INT64 value:"1" true`,
 	})
-	expectResult(t, "sq.Execute", r, sqltypes.MakeTestResult(
+	expectResult(t, r, sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"col1|col3",
 			"int64|varchar",
@@ -93,8 +94,9 @@ func TestSubqueryStreamExecute(t *testing.T) {
 	}
 
 	sq := &SimpleProjection{
-		Cols:  []int{0, 2},
-		Input: prim,
+		Cols:     []int{0, 2},
+		ColNames: []string{"", ""},
+		Input:    prim,
 	}
 
 	bv := map[string]*querypb.BindVariable{
@@ -108,7 +110,7 @@ func TestSubqueryStreamExecute(t *testing.T) {
 	prim.ExpectLog(t, []string{
 		`StreamExecute a: type:INT64 value:"1" true`,
 	})
-	expectResult(t, "sq.Execute", r, sqltypes.MakeTestResult(
+	expectResult(t, r, sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"col1|col3",
 			"int64|varchar",
@@ -142,8 +144,9 @@ func TestSubqueryGetFields(t *testing.T) {
 	}
 
 	sq := &SimpleProjection{
-		Cols:  []int{0, 2},
-		Input: prim,
+		Cols:     []int{0, 2},
+		ColNames: []string{"", ""},
+		Input:    prim,
 	}
 
 	bv := map[string]*querypb.BindVariable{
@@ -158,7 +161,7 @@ func TestSubqueryGetFields(t *testing.T) {
 		`GetFields a: type:INT64 value:"1"`,
 		`Execute a: type:INT64 value:"1" true`,
 	})
-	expectResult(t, "sq.Execute", r, sqltypes.MakeTestResult(
+	expectResult(t, r, sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"col1|col3",
 			"int64|varchar",

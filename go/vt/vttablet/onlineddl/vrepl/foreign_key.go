@@ -23,18 +23,23 @@ package vrepl
 import (
 	"vitess.io/vitess/go/vt/schemadiff"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 )
 
 // RemovedForeignKeyNames returns the names of removed foreign keys, ignoring mere name changes
 func RemovedForeignKeyNames(
+	venv *vtenv.Environment,
 	originalCreateTable string,
 	vreplCreateTable string,
 ) (names []string, err error) {
 	if originalCreateTable == "" || vreplCreateTable == "" {
 		return nil, nil
 	}
-	diffHints := schemadiff.DiffHints{ConstraintNamesStrategy: schemadiff.ConstraintNamesIgnoreAll}
-	diff, err := schemadiff.DiffCreateTablesQueries(originalCreateTable, vreplCreateTable, &diffHints)
+	env := schemadiff.NewEnv(venv, venv.CollationEnv().DefaultConnectionCharset())
+	diffHints := schemadiff.DiffHints{
+		ConstraintNamesStrategy: schemadiff.ConstraintNamesIgnoreAll,
+	}
+	diff, err := schemadiff.DiffCreateTablesQueries(env, originalCreateTable, vreplCreateTable, &diffHints)
 	if err != nil {
 		return nil, err
 	}

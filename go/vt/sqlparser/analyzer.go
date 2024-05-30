@@ -344,8 +344,8 @@ func IsDMLStatement(stmt Statement) bool {
 
 // TableFromStatement returns the qualified table name for the query.
 // This works only for select statements.
-func TableFromStatement(sql string) (TableName, error) {
-	stmt, err := Parse(sql)
+func (p *Parser) TableFromStatement(sql string) (TableName, error) {
+	stmt, err := p.Parse(sql)
 	if err != nil {
 		return TableName{}, err
 	}

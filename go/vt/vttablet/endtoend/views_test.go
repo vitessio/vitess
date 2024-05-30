@@ -70,7 +70,7 @@ func TestCreateViewDDL(t *testing.T) {
 	qr, err := client.Execute(qSelAllRows, nil)
 	require.NoError(t, err)
 	require.Equal(t,
-		"[[VARCHAR(\"vttest\") VARCHAR(\"vitess_view\") TEXT(\"CREATE ALGORITHM=UNDEFINED DEFINER=`vt_dba`@`localhost` SQL SECURITY DEFINER VIEW `vitess_view` AS select `vitess_a`.`eid` AS `eid`,`vitess_a`.`id` AS `id`,`vitess_a`.`name` AS `name`,`vitess_a`.`foo` AS `foo` from `vitess_a`\")]]",
+		"[[VARBINARY(\"vttest\") VARBINARY(\"vitess_view\") TEXT(\"CREATE ALGORITHM=UNDEFINED DEFINER=`vt_dba`@`localhost` SQL SECURITY DEFINER VIEW `vitess_view` AS select `vitess_a`.`eid` AS `eid`,`vitess_a`.`id` AS `id`,`vitess_a`.`name` AS `name`,`vitess_a`.`foo` AS `foo` from `vitess_a`\")]]",
 		fmt.Sprintf("%v", qr.Rows))
 
 	// view already exists. This should fail.
@@ -86,7 +86,7 @@ func TestCreateViewDDL(t *testing.T) {
 	qr, err = client.Execute(qSelAllRows, nil)
 	require.NoError(t, err)
 	require.Equal(t,
-		"[[VARCHAR(\"vttest\") VARCHAR(\"vitess_view\") TEXT(\"CREATE ALGORITHM=UNDEFINED DEFINER=`vt_dba`@`localhost` SQL SECURITY DEFINER VIEW `vitess_view` AS select `vitess_a`.`id` AS `id`,`vitess_a`.`foo` AS `foo` from `vitess_a`\")]]",
+		"[[VARBINARY(\"vttest\") VARBINARY(\"vitess_view\") TEXT(\"CREATE ALGORITHM=UNDEFINED DEFINER=`vt_dba`@`localhost` SQL SECURITY DEFINER VIEW `vitess_view` AS select `vitess_a`.`id` AS `id`,`vitess_a`.`foo` AS `foo` from `vitess_a`\")]]",
 		fmt.Sprintf("%v", qr.Rows))
 }
 
@@ -132,7 +132,7 @@ func TestAlterViewDDL(t *testing.T) {
 	qr, err := client.Execute(qSelAllRows, nil)
 	require.NoError(t, err)
 	require.Equal(t,
-		"[[VARCHAR(\"vttest\") VARCHAR(\"vitess_view\") TEXT(\"CREATE ALGORITHM=UNDEFINED DEFINER=`vt_dba`@`localhost` SQL SECURITY DEFINER VIEW `vitess_view` AS select `vitess_a`.`eid` AS `eid`,`vitess_a`.`id` AS `id`,`vitess_a`.`name` AS `name`,`vitess_a`.`foo` AS `foo` from `vitess_a`\")]]",
+		"[[VARBINARY(\"vttest\") VARBINARY(\"vitess_view\") TEXT(\"CREATE ALGORITHM=UNDEFINED DEFINER=`vt_dba`@`localhost` SQL SECURITY DEFINER VIEW `vitess_view` AS select `vitess_a`.`eid` AS `eid`,`vitess_a`.`id` AS `id`,`vitess_a`.`name` AS `name`,`vitess_a`.`foo` AS `foo` from `vitess_a`\")]]",
 		fmt.Sprintf("%v", qr.Rows))
 
 	// view exists, should PASS
@@ -144,7 +144,7 @@ func TestAlterViewDDL(t *testing.T) {
 	qr, err = client.Execute(qSelAllRows, nil)
 	require.NoError(t, err)
 	require.Equal(t,
-		"[[VARCHAR(\"vttest\") VARCHAR(\"vitess_view\") TEXT(\"CREATE ALGORITHM=UNDEFINED DEFINER=`vt_dba`@`localhost` SQL SECURITY DEFINER VIEW `vitess_view` AS select `vitess_a`.`id` AS `id`,`vitess_a`.`foo` AS `foo` from `vitess_a`\")]]",
+		"[[VARBINARY(\"vttest\") VARBINARY(\"vitess_view\") TEXT(\"CREATE ALGORITHM=UNDEFINED DEFINER=`vt_dba`@`localhost` SQL SECURITY DEFINER VIEW `vitess_view` AS select `vitess_a`.`id` AS `id`,`vitess_a`.`foo` AS `foo` from `vitess_a`\")]]",
 		fmt.Sprintf("%v", qr.Rows))
 }
 

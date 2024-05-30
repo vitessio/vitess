@@ -32,11 +32,12 @@ func TestTinyWeightStrings(t *testing.T) {
 	const Length = 10000
 
 	var cases = []struct {
-		typ  sqltypes.Type
-		gen  func() sqltypes.Value
-		col  collations.ID
-		len  int
-		prec int
+		typ    sqltypes.Type
+		gen    func() sqltypes.Value
+		col    collations.ID
+		len    int
+		prec   int
+		values *EnumSetValues
 	}{
 		{typ: sqltypes.Int32, gen: sqltypes.RandomGenerators[sqltypes.Int32], col: collations.CollationBinaryID},
 		{typ: sqltypes.Int64, gen: sqltypes.RandomGenerators[sqltypes.Int64], col: collations.CollationBinaryID},
@@ -47,6 +48,8 @@ func TestTinyWeightStrings(t *testing.T) {
 		{typ: sqltypes.VarBinary, gen: sqltypes.RandomGenerators[sqltypes.VarBinary], col: collations.CollationBinaryID},
 		{typ: sqltypes.Decimal, gen: sqltypes.RandomGenerators[sqltypes.Decimal], col: collations.CollationBinaryID, len: 20, prec: 10},
 		{typ: sqltypes.TypeJSON, gen: sqltypes.RandomGenerators[sqltypes.TypeJSON], col: collations.CollationBinaryID},
+		{typ: sqltypes.Enum, gen: sqltypes.RandomGenerators[sqltypes.Enum], col: collations.CollationBinaryID, values: &EnumSetValues{"'xxsmall'", "'xsmall'", "'small'", "'medium'", "'large'", "'xlarge'", "'xxlarge'"}},
+		{typ: sqltypes.Set, gen: sqltypes.RandomGenerators[sqltypes.Set], col: collations.CollationBinaryID, values: &EnumSetValues{"'a'", "'b'", "'c'", "'d'", "'e'", "'f'", "'g'"}},
 	}
 
 	for _, tc := range cases {
@@ -77,7 +80,7 @@ func TestTinyWeightStrings(t *testing.T) {
 					return cmp
 				}
 
-				cmp, err := NullsafeCompare(a, b, tc.col)
+				cmp, err := NullsafeCompare(a, b, collations.MySQL8(), tc.col, tc.values)
 				require.NoError(t, err)
 
 				fullComparisons++
@@ -88,7 +91,7 @@ func TestTinyWeightStrings(t *testing.T) {
 				a := items[i]
 				b := items[i+1]
 
-				cmp, err := NullsafeCompare(a, b, tc.col)
+				cmp, err := NullsafeCompare(a, b, collations.MySQL8(), tc.col, tc.values)
 				require.NoError(t, err)
 
 				if cmp > 0 {
@@ -110,12 +113,13 @@ func TestWeightStrings(t *testing.T) {
 	}
 
 	var cases = []struct {
-		name  string
-		gen   func() sqltypes.Value
-		types []sqltypes.Type
-		col   collations.ID
-		len   int
-		prec  int
+		name   string
+		gen    func() sqltypes.Value
+		types  []sqltypes.Type
+		col    collations.ID
+		len    int
+		prec   int
+		values *EnumSetValues
 	}{
 		{name: "int64", gen: sqltypes.RandomGenerators[sqltypes.Int64], types: []sqltypes.Type{sqltypes.Int64, sqltypes.VarChar, sqltypes.TypeJSON}, col: collations.CollationBinaryID},
 		{name: "uint64", gen: sqltypes.RandomGenerators[sqltypes.Uint64], types: []sqltypes.Type{sqltypes.Uint64, sqltypes.VarChar, sqltypes.TypeJSON}, col: collations.CollationBinaryID},
@@ -128,6 +132,8 @@ func TestWeightStrings(t *testing.T) {
 		{name: "datetime", gen: sqltypes.RandomGenerators[sqltypes.Datetime], types: []sqltypes.Type{sqltypes.Datetime, sqltypes.VarChar, sqltypes.TypeJSON}, col: collations.CollationBinaryID},
 		{name: "timestamp", gen: sqltypes.RandomGenerators[sqltypes.Timestamp], types: []sqltypes.Type{sqltypes.Timestamp, sqltypes.VarChar, sqltypes.TypeJSON}, col: collations.CollationBinaryID},
 		{name: "time", gen: sqltypes.RandomGenerators[sqltypes.Time], types: []sqltypes.Type{sqltypes.Time, sqltypes.VarChar, sqltypes.TypeJSON}, col: collations.CollationBinaryID},
+		{name: "enum", gen: sqltypes.RandomGenerators[sqltypes.Enum], types: []sqltypes.Type{sqltypes.Enum, sqltypes.VarChar, sqltypes.TypeJSON}, col: collations.CollationBinaryID, values: &EnumSetValues{"'xxsmall'", "'xsmall'", "'small'", "'medium'", "'large'", "'xlarge'", "'xxlarge'"}},
+		{name: "set", gen: sqltypes.RandomGenerators[sqltypes.Set], types: []sqltypes.Type{sqltypes.Set, sqltypes.VarChar, sqltypes.TypeJSON}, col: collations.CollationBinaryID, values: &EnumSetValues{"'a'", "'b'", "'c'", "'d'", "'e'", "'f'", "'g'"}},
 	}
 
 	for _, tc := range cases {
@@ -136,7 +142,7 @@ func TestWeightStrings(t *testing.T) {
 				items := make([]item, 0, Length)
 				for i := 0; i < Length; i++ {
 					v := tc.gen()
-					w, _, err := WeightString(nil, v, typ, tc.col, tc.len, tc.prec)
+					w, _, err := WeightString(nil, v, typ, tc.col, tc.len, tc.prec, tc.values, 0)
 					require.NoError(t, err)
 
 					items = append(items, item{value: v, weight: string(w)})
@@ -156,12 +162,12 @@ func TestWeightStrings(t *testing.T) {
 					a := items[i]
 					b := items[i+1]
 
-					v1, err := valueToEvalCast(a.value, typ, tc.col)
+					v1, err := valueToEvalCast(a.value, typ, tc.col, tc.values, 0)
 					require.NoError(t, err)
-					v2, err := valueToEvalCast(b.value, typ, tc.col)
+					v2, err := valueToEvalCast(b.value, typ, tc.col, tc.values, 0)
 					require.NoError(t, err)
 
-					cmp, err := evalCompareNullSafe(v1, v2)
+					cmp, err := evalCompareNullSafe(v1, v2, collations.MySQL8())
 					require.NoError(t, err)
 
 					if cmp > 0 {

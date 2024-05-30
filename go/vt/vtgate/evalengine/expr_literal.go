@@ -70,6 +70,10 @@ func (l *Literal) typeof(*ExpressionEnv) (ctype, error) {
 		if e.u > math.MaxInt64+1 {
 			f |= flagIntegerOvf
 		}
+	case *evalTemporal:
+		return ctype{Type: e.t, Col: collationNumeric, Size: int32(e.prec)}, nil
+	case *evalDecimal:
+		return ctype{Type: sqltypes.Decimal, Col: collationNumeric, Size: e.length, Scale: -e.dec.Exponent()}, nil
 	}
 	return ctype{Type: l.inner.SQLType(), Flag: f, Col: evalCollation(l.inner)}, nil
 }

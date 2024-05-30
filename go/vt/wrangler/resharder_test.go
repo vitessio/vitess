@@ -22,19 +22,19 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/stretchr/testify/assert"
-
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 const rsSelectFrozenQuery = "select 1 from _vt.vreplication where db_name='vt_ks' and message='FROZEN' and workflow_sub_type != 1"
-const insertPrefix = `/insert into _vt.vreplication\(workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys\) values `
+const insertPrefix = `/insert into _vt.vreplication\(workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys, options\) values `
 const eol = "$"
 
 func TestResharderOneToMany(t *testing.T) {
@@ -94,18 +94,18 @@ func TestResharderOneToMany(t *testing.T) {
 				200,
 				insertPrefix+
 					`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:{rules:{match:\\"/.*\\" filter:\\"-80\\"}}', '', [0-9]*, [0-9]*, '`+
-					tc.cells+`', '`+tc.tabletTypes+`', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0, false\)`+eol,
+					tc.cells+`', '`+tc.tabletTypes+`', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0, false, '{}'\)`+eol,
 				&sqltypes.Result{},
 			)
 			env.tmc.expectVRQuery(
 				210,
 				insertPrefix+
 					`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:{rules:{match:\\"/.*\\" filter:\\"80-\\"}}', '', [0-9]*, [0-9]*, '`+
-					tc.cells+`', '`+tc.tabletTypes+`', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0, false\)`+eol,
+					tc.cells+`', '`+tc.tabletTypes+`', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0, false, '{}'\)`+eol,
 				&sqltypes.Result{},
 			)
-			env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
-			env.tmc.expectVRQuery(210, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
+			env.tmc.expectVRQuery(200, "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
+			env.tmc.expectVRQuery(210, "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 
 			err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, tc.cells, tc.tabletTypes, defaultOnDDL, true, false, false)
 			require.NoError(t, err)
@@ -137,13 +137,13 @@ func TestResharderManyToOne(t *testing.T) {
 	env.tmc.expectVRQuery(
 		200,
 		insertPrefix+
-			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"-80\\" filter:{rules:{match:\\"/.*\\" filter:\\"-\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0, false\).*`+
-			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"80-\\" filter:{rules:{match:\\"/.*\\" filter:\\"-\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0, false\)`+
+			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"-80\\" filter:{rules:{match:\\"/.*\\" filter:\\"-\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0, false, '{}'\).*`+
+			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"80-\\" filter:{rules:{match:\\"/.*\\" filter:\\"-\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0, false, '{}'\)`+
 			eol,
 		&sqltypes.Result{},
 	)
 
-	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 
 	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", defaultOnDDL, true, false, false)
 	assert.NoError(t, err)
@@ -172,21 +172,21 @@ func TestResharderManyToMany(t *testing.T) {
 	env.tmc.expectVRQuery(
 		200,
 		insertPrefix+
-			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"-40\\" filter:{rules:{match:\\"/.*\\" filter:\\"-80\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0, false\).*`+
-			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"40-\\" filter:{rules:{match:\\"/.*\\" filter:\\"-80\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0, false\)`+
+			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"-40\\" filter:{rules:{match:\\"/.*\\" filter:\\"-80\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0, false, '{}'\).*`+
+			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"40-\\" filter:{rules:{match:\\"/.*\\" filter:\\"-80\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0, false, '{}'\)`+
 			eol,
 		&sqltypes.Result{},
 	)
 	env.tmc.expectVRQuery(
 		210,
 		insertPrefix+
-			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"40-\\" filter:{rules:{match:\\"/.*\\" filter:\\"80-\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0, false\)`+
+			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"40-\\" filter:{rules:{match:\\"/.*\\" filter:\\"80-\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0, false, '{}'\)`+
 			eol,
 		&sqltypes.Result{},
 	)
 
-	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
-	env.tmc.expectVRQuery(210, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
+	env.tmc.expectVRQuery(210, "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 
 	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", defaultOnDDL, true, false, false)
 	assert.NoError(t, err)
@@ -228,20 +228,20 @@ func TestResharderOneRefTable(t *testing.T) {
 	env.tmc.expectVRQuery(
 		200,
 		insertPrefix+
-			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"exclude\\"} rules:{match:\\"/.*\\" filter:\\"-80\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0, false\)`+
+			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"exclude\\"} rules:{match:\\"/.*\\" filter:\\"-80\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0, false, '{}'\)`+
 			eol,
 		&sqltypes.Result{},
 	)
 	env.tmc.expectVRQuery(
 		210,
 		insertPrefix+
-			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"exclude\\"} rules:{match:\\"/.*\\" filter:\\"80-\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0, false\)`+
+			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"exclude\\"} rules:{match:\\"/.*\\" filter:\\"80-\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0, false, '{}'\)`+
 			eol,
 		&sqltypes.Result{},
 	)
 
-	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
-	env.tmc.expectVRQuery(210, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
+	env.tmc.expectVRQuery(210, "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 
 	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", defaultOnDDL, true, false, false)
 	assert.NoError(t, err)
@@ -283,14 +283,14 @@ func TestReshardStopFlags(t *testing.T) {
 	env.tmc.expectVRQuery(
 		200,
 		insertPrefix+
-			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"exclude\\"} rules:{match:\\"/.*\\" filter:\\"-80\\"}} stop_after_copy:true', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0, false\)`+
+			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"exclude\\"} rules:{match:\\"/.*\\" filter:\\"-80\\"}} stop_after_copy:true', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0, false, '{}'\)`+
 			eol,
 		&sqltypes.Result{},
 	)
 	env.tmc.expectVRQuery(
 		210,
 		insertPrefix+
-			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"exclude\\"} rules:{match:\\"/.*\\" filter:\\"80-\\"}} stop_after_copy:true', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0, false\)`+
+			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"exclude\\"} rules:{match:\\"/.*\\" filter:\\"80-\\"}} stop_after_copy:true', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0, false, '{}'\)`+
 			eol,
 		&sqltypes.Result{},
 	)
@@ -347,24 +347,24 @@ func TestResharderOneRefStream(t *testing.T) {
 	)
 	env.tmc.expectVRQuery(100, fmt.Sprintf("select workflow, source, cell, tablet_types from _vt.vreplication where db_name='vt_%s' and message != 'FROZEN'", env.keyspace), result)
 
-	refRow := `\('t1', 'keyspace:\\"ks1\\" shard:\\"0\\" filter:{rules:{match:\\"t1\\"}}', '', [0-9]*, [0-9]*, 'cell1', 'primary,replica', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0, false\)`
+	refRow := `\('t1', 'keyspace:\\"ks1\\" shard:\\"0\\" filter:{rules:{match:\\"t1\\"}}', '', [0-9]*, [0-9]*, 'cell1', 'primary,replica', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0, false, '{}'\)`
 	env.tmc.expectVRQuery(
 		200,
 		insertPrefix+
-			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"exclude\\"} rules:{match:\\"/.*\\" filter:\\"-80\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0, false\).*`+
+			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"exclude\\"} rules:{match:\\"/.*\\" filter:\\"-80\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0, false, '{}'\).*`+
 			refRow+eol,
 		&sqltypes.Result{},
 	)
 	env.tmc.expectVRQuery(
 		210,
 		insertPrefix+
-			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"exclude\\"} rules:{match:\\"/.*\\" filter:\\"80-\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0, false\).*`+
+			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"exclude\\"} rules:{match:\\"/.*\\" filter:\\"80-\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0, false, '{}'\).*`+
 			refRow+eol,
 		&sqltypes.Result{},
 	)
 
-	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
-	env.tmc.expectVRQuery(210, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
+	env.tmc.expectVRQuery(210, "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 
 	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", defaultOnDDL, true, false, false)
 	assert.NoError(t, err)
@@ -430,20 +430,20 @@ func TestResharderNoRefStream(t *testing.T) {
 	env.tmc.expectVRQuery(
 		200,
 		insertPrefix+
-			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:{rules:{match:\\"/.*\\" filter:\\"-80\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0, false\)`+
+			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:{rules:{match:\\"/.*\\" filter:\\"-80\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0, false, '{}'\)`+
 			eol,
 		&sqltypes.Result{},
 	)
 	env.tmc.expectVRQuery(
 		210,
 		insertPrefix+
-			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:{rules:{match:\\"/.*\\" filter:\\"80-\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0, false\)`+
+			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:{rules:{match:\\"/.*\\" filter:\\"80-\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0, false, '{}'\)`+
 			eol,
 		&sqltypes.Result{},
 	)
 
-	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
-	env.tmc.expectVRQuery(210, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
+	env.tmc.expectVRQuery(210, "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 
 	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", defaultOnDDL, true, false, false)
 	assert.NoError(t, err)
@@ -472,20 +472,20 @@ func TestResharderCopySchema(t *testing.T) {
 	env.tmc.expectVRQuery(
 		200,
 		insertPrefix+
-			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:{rules:{match:\\"/.*\\" filter:\\"-80\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0, false\)`+
+			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:{rules:{match:\\"/.*\\" filter:\\"-80\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0, false, '{}'\)`+
 			eol,
 		&sqltypes.Result{},
 	)
 	env.tmc.expectVRQuery(
 		210,
 		insertPrefix+
-			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:{rules:{match:\\"/.*\\" filter:\\"80-\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0, false\)`+
+			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:{rules:{match:\\"/.*\\" filter:\\"80-\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0, false, '{}'\)`+
 			eol,
 		&sqltypes.Result{},
 	)
 
-	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
-	env.tmc.expectVRQuery(210, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
+	env.tmc.expectVRQuery(210, "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 
 	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, false, "", "", defaultOnDDL, true, false, false)
 	assert.NoError(t, err)

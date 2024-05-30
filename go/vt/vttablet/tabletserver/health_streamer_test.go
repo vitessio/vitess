@@ -29,14 +29,13 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/constants/sidecar"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
@@ -44,8 +43,8 @@ import (
 func TestHealthStreamerClosed(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	config := newConfig(db)
-	env := tabletenv.NewEnv(config, "ReplTrackerTest")
+	cfg := newConfig(db)
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "ReplTrackerTest")
 	alias := &topodatapb.TabletAlias{
 		Cell: "cell",
 		Uid:  1,
@@ -69,10 +68,10 @@ func newConfig(db *fakesqldb.DB) *tabletenv.TabletConfig {
 func TestNotServingPrimaryNoWrite(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	config := newConfig(db)
-	config.SignalWhenSchemaChange = true
+	cfg := newConfig(db)
+	cfg.SignalWhenSchemaChange = true
 
-	env := tabletenv.NewEnv(config, "TestNotServingPrimary")
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TestNotServingPrimary")
 	alias := &topodatapb.TabletAlias{
 		Cell: "cell",
 		Uid:  1,
@@ -80,11 +79,11 @@ func TestNotServingPrimaryNoWrite(t *testing.T) {
 	// Create a new health streamer and set it to a serving primary state
 	hs := newHealthStreamer(env, alias, &schema.Engine{})
 	hs.isServingPrimary = true
-	hs.InitDBConfig(&querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}, config.DB.DbaWithDB())
+	hs.InitDBConfig(&querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}, cfg.DB.DbaWithDB())
 	hs.Open()
 	defer hs.Close()
 	target := &querypb.Target{}
-	hs.InitDBConfig(target, db.ConnParams())
+	hs.InitDBConfig(target, dbconfigs.New(db.ConnParams()))
 
 	// Let's say the tablet goes to a non-serving primary state.
 	hs.MakePrimary(false)
@@ -92,7 +91,7 @@ func TestNotServingPrimaryNoWrite(t *testing.T) {
 	// A reload now should not write anything to the database. If any write happens it will error out since we have not
 	// added any query to the database to expect.
 	t1 := schema.NewTable("t1", schema.NoType)
-	err := hs.reload(map[string]*schema.Table{"t1": t1}, []*schema.Table{t1}, nil, nil)
+	err := hs.reload([]*schema.Table{t1}, nil, nil, false)
 	require.NoError(t, err)
 	require.NoError(t, db.LastError())
 }
@@ -100,21 +99,21 @@ func TestNotServingPrimaryNoWrite(t *testing.T) {
 func TestHealthStreamerBroadcast(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	config := newConfig(db)
-	config.SignalWhenSchemaChange = false
+	cfg := newConfig(db)
+	cfg.SignalWhenSchemaChange = false
 
-	env := tabletenv.NewEnv(config, "ReplTrackerTest")
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "ReplTrackerTest")
 	alias := &topodatapb.TabletAlias{
 		Cell: "cell",
 		Uid:  1,
 	}
 	blpFunc = testBlpFunc
 	hs := newHealthStreamer(env, alias, &schema.Engine{})
-	hs.InitDBConfig(&querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}, config.DB.DbaWithDB())
+	hs.InitDBConfig(&querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}, cfg.DB.DbaWithDB())
 	hs.Open()
 	defer hs.Close()
 	target := &querypb.Target{}
-	hs.InitDBConfig(target, db.ConnParams())
+	hs.InitDBConfig(target, dbconfigs.New(db.ConnParams()))
 
 	ch, cancel := testStream(hs)
 	defer cancel()
@@ -214,11 +213,11 @@ func TestReloadSchema(t *testing.T) {
 			defer cancel()
 			db := fakesqldb.New(t)
 			defer db.Close()
-			config := newConfig(db)
-			config.SignalWhenSchemaChange = testcase.enableSchemaChange
-			_ = config.SchemaReloadIntervalSeconds.Set("100ms")
+			cfg := newConfig(db)
+			cfg.SignalWhenSchemaChange = testcase.enableSchemaChange
+			cfg.SchemaReloadInterval = 100 * time.Millisecond
 
-			env := tabletenv.NewEnv(config, "ReplTrackerTest")
+			env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "ReplTrackerTest")
 			alias := &topodatapb.TabletAlias{
 				Cell: "cell",
 				Uid:  1,
@@ -228,10 +227,8 @@ func TestReloadSchema(t *testing.T) {
 			hs := newHealthStreamer(env, alias, se)
 
 			target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
-			configs := config.DB
+			configs := cfg.DB
 
-			db.AddQueryPattern(sqlparser.BuildParsedQuery(mysql.ClearSchemaCopy, sidecar.GetIdentifier()).Query+".*", &sqltypes.Result{})
-			db.AddQueryPattern(sqlparser.BuildParsedQuery(mysql.InsertIntoSchemaCopy, sidecar.GetIdentifier()).Query+".*", &sqltypes.Result{})
 			db.AddQueryPattern("SELECT UNIX_TIMESTAMP()"+".*", sqltypes.MakeTestResult(
 				sqltypes.MakeTestFields(
 					"UNIX_TIMESTAMP(now())",
@@ -331,21 +328,19 @@ func TestReloadView(t *testing.T) {
 	defer cancel()
 	db := fakesqldb.New(t)
 	defer db.Close()
-	config := newConfig(db)
-	config.SignalWhenSchemaChange = true
-	_ = config.SchemaReloadIntervalSeconds.Set("100ms")
-	config.EnableViews = true
+	cfg := newConfig(db)
+	cfg.SignalWhenSchemaChange = true
+	cfg.SchemaReloadInterval = 100 * time.Millisecond
+	cfg.EnableViews = true
 
-	env := tabletenv.NewEnv(config, "TestReloadView")
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TestReloadView")
 	alias := &topodatapb.TabletAlias{Cell: "cell", Uid: 1}
 	se := schema.NewEngine(env)
 	hs := newHealthStreamer(env, alias, se)
 
 	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
-	configs := config.DB
+	configs := cfg.DB
 
-	db.AddQueryPattern(sqlparser.BuildParsedQuery(mysql.ClearSchemaCopy, sidecar.GetIdentifier()).Query+".*", &sqltypes.Result{})
-	db.AddQueryPattern(sqlparser.BuildParsedQuery(mysql.InsertIntoSchemaCopy, sidecar.GetIdentifier()).Query+".*", &sqltypes.Result{})
 	db.AddQueryPattern("SELECT UNIX_TIMESTAMP()"+".*", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"UNIX_TIMESTAMP(now())",
@@ -385,6 +380,8 @@ func TestReloadView(t *testing.T) {
 	))
 	db.AddQueryPattern(".*SELECT table_name, view_definition.*views.*", &sqltypes.Result{})
 	db.AddQuery("SELECT TABLE_NAME, CREATE_TIME FROM _vt.`tables`", &sqltypes.Result{})
+	// adding query pattern for udfs
+	db.AddQueryPattern("SELECT name.*", &sqltypes.Result{})
 
 	hs.InitDBConfig(target, configs.DbaWithDB())
 	se.InitDBConfig(configs.DbaWithDB())

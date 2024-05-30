@@ -18,7 +18,13 @@ package engine
 
 import (
 	"context"
+	"fmt"
+	"strconv"
+	"strings"
 
+	"google.golang.org/protobuf/proto"
+
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -29,8 +35,10 @@ var _ Primitive = (*SimpleProjection)(nil)
 type SimpleProjection struct {
 	// Cols defines the column numbers from the underlying primitive
 	// to be returned.
-	Cols  []int
-	Input Primitive
+	Cols []int
+	// ColNames are the column names to use for the columns.
+	ColNames []string
+	Input    Primitive
 }
 
 // NeedsTransaction implements the Primitive interface
@@ -86,6 +94,10 @@ func (sc *SimpleProjection) Inputs() ([]Primitive, []map[string]any) {
 // buildResult builds a new result by pulling the necessary columns from
 // the input in the requested order.
 func (sc *SimpleProjection) buildResult(inner *sqltypes.Result) *sqltypes.Result {
+	if sc.namesOnly() {
+		sc.renameFields(inner.Fields)
+		return inner
+	}
 	result := &sqltypes.Result{Fields: sc.buildFields(inner)}
 	result.Rows = make([][]sqltypes.Value, 0, len(inner.Rows))
 	for _, innerRow := range inner.Rows {
@@ -99,21 +111,53 @@ func (sc *SimpleProjection) buildResult(inner *sqltypes.Result) *sqltypes.Result
 	return result
 }
 
+func (sc *SimpleProjection) namesOnly() bool {
+	return sc.Cols == nil
+}
+
 func (sc *SimpleProjection) buildFields(inner *sqltypes.Result) []*querypb.Field {
 	if len(inner.Fields) == 0 {
 		return nil
 	}
 	fields := make([]*querypb.Field, 0, len(sc.Cols))
-	for _, col := range sc.Cols {
-		fields = append(fields, inner.Fields[col])
+	for idx, col := range sc.Cols {
+		field := inner.Fields[col]
+		if sc.ColNames[idx] != "" {
+			field = proto.Clone(field).(*querypb.Field)
+			field.Name = sc.ColNames[idx]
+		}
+		fields = append(fields, field)
 	}
 	return fields
 }
 
-func (sc *SimpleProjection) description() PrimitiveDescription {
-	other := map[string]any{
-		"Columns": sc.Cols,
+func (sc *SimpleProjection) renameFields(fields []*querypb.Field) {
+	if len(fields) == 0 {
+		return
 	}
+	for idx, name := range sc.ColNames {
+		if sc.ColNames[idx] != "" {
+			fields[idx].Name = name
+		}
+	}
+}
+
+func (sc *SimpleProjection) description() PrimitiveDescription {
+	other := map[string]any{}
+	if !sc.namesOnly() {
+		other["Columns"] = strings.Join(slice.Map(sc.Cols, strconv.Itoa), ",")
+	}
+
+	var colNames []string
+	for idx, cName := range sc.ColNames {
+		if cName != "" {
+			colNames = append(colNames, fmt.Sprintf("%d:%s", idx, cName))
+		}
+	}
+	if colNames != nil {
+		other["ColumnNames"] = colNames
+	}
+
 	return PrimitiveDescription{
 		OperatorType: "SimpleProjection",
 		Other:        other,

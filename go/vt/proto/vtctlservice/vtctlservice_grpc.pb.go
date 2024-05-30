@@ -150,6 +150,8 @@ type VtctldClient interface {
 	ApplyRoutingRules(ctx context.Context, in *vtctldata.ApplyRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldata.ApplyRoutingRulesResponse, error)
 	// ApplySchema applies a schema to a keyspace.
 	ApplySchema(ctx context.Context, in *vtctldata.ApplySchemaRequest, opts ...grpc.CallOption) (*vtctldata.ApplySchemaResponse, error)
+	// ApplyKeyspaceRoutingRules applies the VSchema keyspace routing rules.
+	ApplyKeyspaceRoutingRules(ctx context.Context, in *vtctldata.ApplyKeyspaceRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldata.ApplyKeyspaceRoutingRulesResponse, error)
 	// ApplyShardRoutingRules applies the VSchema shard routing rules.
 	ApplyShardRoutingRules(ctx context.Context, in *vtctldata.ApplyShardRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldata.ApplyShardRoutingRulesResponse, error)
 	// ApplyVSchema applies a vschema to a keyspace.
@@ -159,7 +161,7 @@ type VtctldClient interface {
 	Backup(ctx context.Context, in *vtctldata.BackupRequest, opts ...grpc.CallOption) (Vtctld_BackupClient, error)
 	// BackupShard chooses a tablet in the shard and uses it to create a backup.
 	BackupShard(ctx context.Context, in *vtctldata.BackupShardRequest, opts ...grpc.CallOption) (Vtctld_BackupShardClient, error)
-	// CancelSchemaMigration cancels one or all migrations, terminating any runnign ones as needed.
+	// CancelSchemaMigration cancels one or all migrations, terminating any running ones as needed.
 	CancelSchemaMigration(ctx context.Context, in *vtctldata.CancelSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.CancelSchemaMigrationResponse, error)
 	// ChangeTabletType changes the db type for the specified tablet, if possible.
 	// This is used primarily to arrange replicas, and it will not convert a
@@ -205,9 +207,13 @@ type VtctldClient interface {
 	ExecuteFetchAsDBA(ctx context.Context, in *vtctldata.ExecuteFetchAsDBARequest, opts ...grpc.CallOption) (*vtctldata.ExecuteFetchAsDBAResponse, error)
 	// ExecuteHook runs the hook on the tablet.
 	ExecuteHook(ctx context.Context, in *vtctldata.ExecuteHookRequest, opts ...grpc.CallOption) (*vtctldata.ExecuteHookResponse, error)
+	// ExecuteMultiFetchAsDBA executes one or more SQL queries on the remote tablet as the DBA user.
+	ExecuteMultiFetchAsDBA(ctx context.Context, in *vtctldata.ExecuteMultiFetchAsDBARequest, opts ...grpc.CallOption) (*vtctldata.ExecuteMultiFetchAsDBAResponse, error)
 	// FindAllShardsInKeyspace returns a map of shard names to shard references
 	// for a given keyspace.
 	FindAllShardsInKeyspace(ctx context.Context, in *vtctldata.FindAllShardsInKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.FindAllShardsInKeyspaceResponse, error)
+	// ForceCutOverSchemaMigration marks a schema migration for forced cut-over.
+	ForceCutOverSchemaMigration(ctx context.Context, in *vtctldata.ForceCutOverSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.ForceCutOverSchemaMigrationResponse, error)
 	// GetBackups returns all the backups for a shard.
 	GetBackups(ctx context.Context, in *vtctldata.GetBackupsRequest, opts ...grpc.CallOption) (*vtctldata.GetBackupsResponse, error)
 	// GetCellInfo returns the information for a cell.
@@ -224,6 +230,8 @@ type VtctldClient interface {
 	GetKeyspace(ctx context.Context, in *vtctldata.GetKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.GetKeyspaceResponse, error)
 	// GetKeyspaces returns the keyspace struct of all keyspaces in the topo.
 	GetKeyspaces(ctx context.Context, in *vtctldata.GetKeyspacesRequest, opts ...grpc.CallOption) (*vtctldata.GetKeyspacesResponse, error)
+	// GetKeyspaceRoutingRules returns the VSchema keyspace routing rules.
+	GetKeyspaceRoutingRules(ctx context.Context, in *vtctldata.GetKeyspaceRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldata.GetKeyspaceRoutingRulesResponse, error)
 	// GetPermissions returns the permissions set on the remote tablet.
 	GetPermissions(ctx context.Context, in *vtctldata.GetPermissionsRequest, opts ...grpc.CallOption) (*vtctldata.GetPermissionsResponse, error)
 	// GetRoutingRules returns the VSchema routing rules.
@@ -237,6 +245,8 @@ type VtctldClient interface {
 	// Different fields in the request message result in different filtering
 	// behaviors. See the documentation on GetSchemaMigrationsRequest for details.
 	GetSchemaMigrations(ctx context.Context, in *vtctldata.GetSchemaMigrationsRequest, opts ...grpc.CallOption) (*vtctldata.GetSchemaMigrationsResponse, error)
+	// GetShardReplication returns the replication graph for a shard in a cell.
+	GetShardReplication(ctx context.Context, in *vtctldata.GetShardReplicationRequest, opts ...grpc.CallOption) (*vtctldata.GetShardReplicationResponse, error)
 	// GetShard returns information about a shard in the topology.
 	GetShard(ctx context.Context, in *vtctldata.GetShardRequest, opts ...grpc.CallOption) (*vtctldata.GetShardResponse, error)
 	// GetShardRoutingRules returns the VSchema shard routing rules.
@@ -496,6 +506,15 @@ func (c *vtctldClient) ApplySchema(ctx context.Context, in *vtctldata.ApplySchem
 	return out, nil
 }
 
+func (c *vtctldClient) ApplyKeyspaceRoutingRules(ctx context.Context, in *vtctldata.ApplyKeyspaceRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldata.ApplyKeyspaceRoutingRulesResponse, error) {
+	out := new(vtctldata.ApplyKeyspaceRoutingRulesResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ApplyKeyspaceRoutingRules", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) ApplyShardRoutingRules(ctx context.Context, in *vtctldata.ApplyShardRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldata.ApplyShardRoutingRulesResponse, error) {
 	out := new(vtctldata.ApplyShardRoutingRulesResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ApplyShardRoutingRules", in, out, opts...)
@@ -722,9 +741,27 @@ func (c *vtctldClient) ExecuteHook(ctx context.Context, in *vtctldata.ExecuteHoo
 	return out, nil
 }
 
+func (c *vtctldClient) ExecuteMultiFetchAsDBA(ctx context.Context, in *vtctldata.ExecuteMultiFetchAsDBARequest, opts ...grpc.CallOption) (*vtctldata.ExecuteMultiFetchAsDBAResponse, error) {
+	out := new(vtctldata.ExecuteMultiFetchAsDBAResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ExecuteMultiFetchAsDBA", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) FindAllShardsInKeyspace(ctx context.Context, in *vtctldata.FindAllShardsInKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.FindAllShardsInKeyspaceResponse, error) {
 	out := new(vtctldata.FindAllShardsInKeyspaceResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/FindAllShardsInKeyspace", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) ForceCutOverSchemaMigration(ctx context.Context, in *vtctldata.ForceCutOverSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.ForceCutOverSchemaMigrationResponse, error) {
+	out := new(vtctldata.ForceCutOverSchemaMigrationResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ForceCutOverSchemaMigration", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -794,6 +831,15 @@ func (c *vtctldClient) GetKeyspaces(ctx context.Context, in *vtctldata.GetKeyspa
 	return out, nil
 }
 
+func (c *vtctldClient) GetKeyspaceRoutingRules(ctx context.Context, in *vtctldata.GetKeyspaceRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldata.GetKeyspaceRoutingRulesResponse, error) {
+	out := new(vtctldata.GetKeyspaceRoutingRulesResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetKeyspaceRoutingRules", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) GetPermissions(ctx context.Context, in *vtctldata.GetPermissionsRequest, opts ...grpc.CallOption) (*vtctldata.GetPermissionsResponse, error) {
 	out := new(vtctldata.GetPermissionsResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetPermissions", in, out, opts...)
@@ -824,6 +870,15 @@ func (c *vtctldClient) GetSchema(ctx context.Context, in *vtctldata.GetSchemaReq
 func (c *vtctldClient) GetSchemaMigrations(ctx context.Context, in *vtctldata.GetSchemaMigrationsRequest, opts ...grpc.CallOption) (*vtctldata.GetSchemaMigrationsResponse, error) {
 	out := new(vtctldata.GetSchemaMigrationsResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetSchemaMigrations", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) GetShardReplication(ctx context.Context, in *vtctldata.GetShardReplicationRequest, opts ...grpc.CallOption) (*vtctldata.GetShardReplicationResponse, error) {
+	out := new(vtctldata.GetShardReplicationResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetShardReplication", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1537,6 +1592,8 @@ type VtctldServer interface {
 	ApplyRoutingRules(context.Context, *vtctldata.ApplyRoutingRulesRequest) (*vtctldata.ApplyRoutingRulesResponse, error)
 	// ApplySchema applies a schema to a keyspace.
 	ApplySchema(context.Context, *vtctldata.ApplySchemaRequest) (*vtctldata.ApplySchemaResponse, error)
+	// ApplyKeyspaceRoutingRules applies the VSchema keyspace routing rules.
+	ApplyKeyspaceRoutingRules(context.Context, *vtctldata.ApplyKeyspaceRoutingRulesRequest) (*vtctldata.ApplyKeyspaceRoutingRulesResponse, error)
 	// ApplyShardRoutingRules applies the VSchema shard routing rules.
 	ApplyShardRoutingRules(context.Context, *vtctldata.ApplyShardRoutingRulesRequest) (*vtctldata.ApplyShardRoutingRulesResponse, error)
 	// ApplyVSchema applies a vschema to a keyspace.
@@ -1546,7 +1603,7 @@ type VtctldServer interface {
 	Backup(*vtctldata.BackupRequest, Vtctld_BackupServer) error
 	// BackupShard chooses a tablet in the shard and uses it to create a backup.
 	BackupShard(*vtctldata.BackupShardRequest, Vtctld_BackupShardServer) error
-	// CancelSchemaMigration cancels one or all migrations, terminating any runnign ones as needed.
+	// CancelSchemaMigration cancels one or all migrations, terminating any running ones as needed.
 	CancelSchemaMigration(context.Context, *vtctldata.CancelSchemaMigrationRequest) (*vtctldata.CancelSchemaMigrationResponse, error)
 	// ChangeTabletType changes the db type for the specified tablet, if possible.
 	// This is used primarily to arrange replicas, and it will not convert a
@@ -1592,9 +1649,13 @@ type VtctldServer interface {
 	ExecuteFetchAsDBA(context.Context, *vtctldata.ExecuteFetchAsDBARequest) (*vtctldata.ExecuteFetchAsDBAResponse, error)
 	// ExecuteHook runs the hook on the tablet.
 	ExecuteHook(context.Context, *vtctldata.ExecuteHookRequest) (*vtctldata.ExecuteHookResponse, error)
+	// ExecuteMultiFetchAsDBA executes one or more SQL queries on the remote tablet as the DBA user.
+	ExecuteMultiFetchAsDBA(context.Context, *vtctldata.ExecuteMultiFetchAsDBARequest) (*vtctldata.ExecuteMultiFetchAsDBAResponse, error)
 	// FindAllShardsInKeyspace returns a map of shard names to shard references
 	// for a given keyspace.
 	FindAllShardsInKeyspace(context.Context, *vtctldata.FindAllShardsInKeyspaceRequest) (*vtctldata.FindAllShardsInKeyspaceResponse, error)
+	// ForceCutOverSchemaMigration marks a schema migration for forced cut-over.
+	ForceCutOverSchemaMigration(context.Context, *vtctldata.ForceCutOverSchemaMigrationRequest) (*vtctldata.ForceCutOverSchemaMigrationResponse, error)
 	// GetBackups returns all the backups for a shard.
 	GetBackups(context.Context, *vtctldata.GetBackupsRequest) (*vtctldata.GetBackupsResponse, error)
 	// GetCellInfo returns the information for a cell.
@@ -1611,6 +1672,8 @@ type VtctldServer interface {
 	GetKeyspace(context.Context, *vtctldata.GetKeyspaceRequest) (*vtctldata.GetKeyspaceResponse, error)
 	// GetKeyspaces returns the keyspace struct of all keyspaces in the topo.
 	GetKeyspaces(context.Context, *vtctldata.GetKeyspacesRequest) (*vtctldata.GetKeyspacesResponse, error)
+	// GetKeyspaceRoutingRules returns the VSchema keyspace routing rules.
+	GetKeyspaceRoutingRules(context.Context, *vtctldata.GetKeyspaceRoutingRulesRequest) (*vtctldata.GetKeyspaceRoutingRulesResponse, error)
 	// GetPermissions returns the permissions set on the remote tablet.
 	GetPermissions(context.Context, *vtctldata.GetPermissionsRequest) (*vtctldata.GetPermissionsResponse, error)
 	// GetRoutingRules returns the VSchema routing rules.
@@ -1624,6 +1687,8 @@ type VtctldServer interface {
 	// Different fields in the request message result in different filtering
 	// behaviors. See the documentation on GetSchemaMigrationsRequest for details.
 	GetSchemaMigrations(context.Context, *vtctldata.GetSchemaMigrationsRequest) (*vtctldata.GetSchemaMigrationsResponse, error)
+	// GetShardReplication returns the replication graph for a shard in a cell.
+	GetShardReplication(context.Context, *vtctldata.GetShardReplicationRequest) (*vtctldata.GetShardReplicationResponse, error)
 	// GetShard returns information about a shard in the topology.
 	GetShard(context.Context, *vtctldata.GetShardRequest) (*vtctldata.GetShardResponse, error)
 	// GetShardRoutingRules returns the VSchema shard routing rules.
@@ -1856,6 +1921,9 @@ func (UnimplementedVtctldServer) ApplyRoutingRules(context.Context, *vtctldata.A
 func (UnimplementedVtctldServer) ApplySchema(context.Context, *vtctldata.ApplySchemaRequest) (*vtctldata.ApplySchemaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ApplySchema not implemented")
 }
+func (UnimplementedVtctldServer) ApplyKeyspaceRoutingRules(context.Context, *vtctldata.ApplyKeyspaceRoutingRulesRequest) (*vtctldata.ApplyKeyspaceRoutingRulesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ApplyKeyspaceRoutingRules not implemented")
+}
 func (UnimplementedVtctldServer) ApplyShardRoutingRules(context.Context, *vtctldata.ApplyShardRoutingRulesRequest) (*vtctldata.ApplyShardRoutingRulesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ApplyShardRoutingRules not implemented")
 }
@@ -1916,8 +1984,14 @@ func (UnimplementedVtctldServer) ExecuteFetchAsDBA(context.Context, *vtctldata.E
 func (UnimplementedVtctldServer) ExecuteHook(context.Context, *vtctldata.ExecuteHookRequest) (*vtctldata.ExecuteHookResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ExecuteHook not implemented")
 }
+func (UnimplementedVtctldServer) ExecuteMultiFetchAsDBA(context.Context, *vtctldata.ExecuteMultiFetchAsDBARequest) (*vtctldata.ExecuteMultiFetchAsDBAResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ExecuteMultiFetchAsDBA not implemented")
+}
 func (UnimplementedVtctldServer) FindAllShardsInKeyspace(context.Context, *vtctldata.FindAllShardsInKeyspaceRequest) (*vtctldata.FindAllShardsInKeyspaceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method FindAllShardsInKeyspace not implemented")
+}
+func (UnimplementedVtctldServer) ForceCutOverSchemaMigration(context.Context, *vtctldata.ForceCutOverSchemaMigrationRequest) (*vtctldata.ForceCutOverSchemaMigrationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ForceCutOverSchemaMigration not implemented")
 }
 func (UnimplementedVtctldServer) GetBackups(context.Context, *vtctldata.GetBackupsRequest) (*vtctldata.GetBackupsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetBackups not implemented")
@@ -1940,6 +2014,9 @@ func (UnimplementedVtctldServer) GetKeyspace(context.Context, *vtctldata.GetKeys
 func (UnimplementedVtctldServer) GetKeyspaces(context.Context, *vtctldata.GetKeyspacesRequest) (*vtctldata.GetKeyspacesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetKeyspaces not implemented")
 }
+func (UnimplementedVtctldServer) GetKeyspaceRoutingRules(context.Context, *vtctldata.GetKeyspaceRoutingRulesRequest) (*vtctldata.GetKeyspaceRoutingRulesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetKeyspaceRoutingRules not implemented")
+}
 func (UnimplementedVtctldServer) GetPermissions(context.Context, *vtctldata.GetPermissionsRequest) (*vtctldata.GetPermissionsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetPermissions not implemented")
 }
@@ -1951,6 +2028,9 @@ func (UnimplementedVtctldServer) GetSchema(context.Context, *vtctldata.GetSchema
 }
 func (UnimplementedVtctldServer) GetSchemaMigrations(context.Context, *vtctldata.GetSchemaMigrationsRequest) (*vtctldata.GetSchemaMigrationsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetSchemaMigrations not implemented")
+}
+func (UnimplementedVtctldServer) GetShardReplication(context.Context, *vtctldata.GetShardReplicationRequest) (*vtctldata.GetShardReplicationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetShardReplication not implemented")
 }
 func (UnimplementedVtctldServer) GetShard(context.Context, *vtctldata.GetShardRequest) (*vtctldata.GetShardResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetShard not implemented")
@@ -2255,6 +2335,24 @@ func _Vtctld_ApplySchema_Handler(srv interface{}, ctx context.Context, dec func(
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).ApplySchema(ctx, req.(*vtctldata.ApplySchemaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_ApplyKeyspaceRoutingRules_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.ApplyKeyspaceRoutingRulesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).ApplyKeyspaceRoutingRules(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/ApplyKeyspaceRoutingRules",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).ApplyKeyspaceRoutingRules(ctx, req.(*vtctldata.ApplyKeyspaceRoutingRulesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2625,6 +2723,24 @@ func _Vtctld_ExecuteHook_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_ExecuteMultiFetchAsDBA_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.ExecuteMultiFetchAsDBARequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).ExecuteMultiFetchAsDBA(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/ExecuteMultiFetchAsDBA",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).ExecuteMultiFetchAsDBA(ctx, req.(*vtctldata.ExecuteMultiFetchAsDBARequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_FindAllShardsInKeyspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.FindAllShardsInKeyspaceRequest)
 	if err := dec(in); err != nil {
@@ -2639,6 +2755,24 @@ func _Vtctld_FindAllShardsInKeyspace_Handler(srv interface{}, ctx context.Contex
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).FindAllShardsInKeyspace(ctx, req.(*vtctldata.FindAllShardsInKeyspaceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_ForceCutOverSchemaMigration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.ForceCutOverSchemaMigrationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).ForceCutOverSchemaMigration(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/ForceCutOverSchemaMigration",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).ForceCutOverSchemaMigration(ctx, req.(*vtctldata.ForceCutOverSchemaMigrationRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2769,6 +2903,24 @@ func _Vtctld_GetKeyspaces_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_GetKeyspaceRoutingRules_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.GetKeyspaceRoutingRulesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).GetKeyspaceRoutingRules(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/GetKeyspaceRoutingRules",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).GetKeyspaceRoutingRules(ctx, req.(*vtctldata.GetKeyspaceRoutingRulesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_GetPermissions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.GetPermissionsRequest)
 	if err := dec(in); err != nil {
@@ -2837,6 +2989,24 @@ func _Vtctld_GetSchemaMigrations_Handler(srv interface{}, ctx context.Context, d
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).GetSchemaMigrations(ctx, req.(*vtctldata.GetSchemaMigrationsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_GetShardReplication_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.GetShardReplicationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).GetShardReplication(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/GetShardReplication",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).GetShardReplication(ctx, req.(*vtctldata.GetShardReplicationRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -4200,6 +4370,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Vtctld_ApplySchema_Handler,
 		},
 		{
+			MethodName: "ApplyKeyspaceRoutingRules",
+			Handler:    _Vtctld_ApplyKeyspaceRoutingRules_Handler,
+		},
+		{
 			MethodName: "ApplyShardRoutingRules",
 			Handler:    _Vtctld_ApplyShardRoutingRules_Handler,
 		},
@@ -4272,8 +4446,16 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Vtctld_ExecuteHook_Handler,
 		},
 		{
+			MethodName: "ExecuteMultiFetchAsDBA",
+			Handler:    _Vtctld_ExecuteMultiFetchAsDBA_Handler,
+		},
+		{
 			MethodName: "FindAllShardsInKeyspace",
 			Handler:    _Vtctld_FindAllShardsInKeyspace_Handler,
+		},
+		{
+			MethodName: "ForceCutOverSchemaMigration",
+			Handler:    _Vtctld_ForceCutOverSchemaMigration_Handler,
 		},
 		{
 			MethodName: "GetBackups",
@@ -4304,6 +4486,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Vtctld_GetKeyspaces_Handler,
 		},
 		{
+			MethodName: "GetKeyspaceRoutingRules",
+			Handler:    _Vtctld_GetKeyspaceRoutingRules_Handler,
+		},
+		{
 			MethodName: "GetPermissions",
 			Handler:    _Vtctld_GetPermissions_Handler,
 		},
@@ -4318,6 +4504,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetSchemaMigrations",
 			Handler:    _Vtctld_GetSchemaMigrations_Handler,
+		},
+		{
+			MethodName: "GetShardReplication",
+			Handler:    _Vtctld_GetShardReplication_Handler,
 		},
 		{
 			MethodName: "GetShard",

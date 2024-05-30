@@ -23,6 +23,7 @@ import (
 
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/vtenv"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -46,7 +47,7 @@ func TestInitShardPrimary(t *testing.T) {
 	ts := memorytopo.NewServer(ctx, "cell1")
 	tmc := tmclient.NewTabletManagerClient()
 	defer tmc.Close()
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmc)
+	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmc)
 
 	primaryDb := fakesqldb.New(t)
 	defer primaryDb.Close()
@@ -64,25 +65,27 @@ func TestInitShardPrimary(t *testing.T) {
 
 	tablet2.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		// These come from tablet startup
-		"STOP SLAVE",
-		"FAKE SET MASTER",
-		"START SLAVE",
+		"STOP REPLICA",
+		"FAKE SET SOURCE",
+		"START REPLICA",
 		// These come from InitShardPrimary
 		"FAKE RESET ALL REPLICATION",
-		"FAKE SET SLAVE POSITION",
-		"FAKE SET MASTER",
-		"START SLAVE",
+		"FAKE RESET BINARY LOGS AND GTIDS",
+		"FAKE SET GLOBAL gtid_purged",
+		"FAKE SET SOURCE",
+		"START REPLICA",
 	}
 	tablet2.FakeMysqlDaemon.SetReplicationSourceInputs = append(tablet2.FakeMysqlDaemon.SetReplicationSourceInputs, fmt.Sprintf("%v:%v", tablet1.Tablet.Hostname, tablet1.Tablet.MysqlPort))
 
 	tablet3.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		"STOP SLAVE",
-		"FAKE SET MASTER",
-		"START SLAVE",
+		"STOP REPLICA",
+		"FAKE SET SOURCE",
+		"START REPLICA",
 		"FAKE RESET ALL REPLICATION",
-		"FAKE SET SLAVE POSITION",
-		"FAKE SET MASTER",
-		"START SLAVE",
+		"FAKE RESET BINARY LOGS AND GTIDS",
+		"FAKE SET GLOBAL gtid_purged",
+		"FAKE SET SOURCE",
+		"START REPLICA",
 	}
 	tablet3.FakeMysqlDaemon.SetReplicationSourceInputs = append(tablet3.FakeMysqlDaemon.SetReplicationSourceInputs, fmt.Sprintf("%v:%v", tablet1.Tablet.Hostname, tablet1.Tablet.MysqlPort))
 
@@ -93,7 +96,7 @@ func TestInitShardPrimary(t *testing.T) {
 		tablet.TM.QueryServiceControl.(*tabletservermock.Controller).SetQueryServiceEnabledForTests(true)
 	}
 
-	vtctld := grpcvtctldserver.NewVtctldServer(ts)
+	vtctld := grpcvtctldserver.NewVtctldServer(vtenv.NewTestEnv(), ts)
 	resp, err := vtctld.InitShardPrimary(context.Background(), &vtctldatapb.InitShardPrimaryRequest{
 		Keyspace:                tablet1.Tablet.Keyspace,
 		Shard:                   tablet1.Tablet.Shard,
@@ -109,7 +112,7 @@ func TestInitShardPrimaryNoFormerPrimary(t *testing.T) {
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	tmc := tmclient.NewTabletManagerClient()
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmc)
+	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmc)
 
 	primaryDb := fakesqldb.New(t)
 	defer primaryDb.Close()
@@ -127,17 +130,19 @@ func TestInitShardPrimaryNoFormerPrimary(t *testing.T) {
 
 	tablet2.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"FAKE RESET ALL REPLICATION",
-		"FAKE SET SLAVE POSITION",
-		"FAKE SET MASTER",
-		"START SLAVE",
+		"FAKE RESET BINARY LOGS AND GTIDS",
+		"FAKE SET GLOBAL gtid_purged",
+		"FAKE SET SOURCE",
+		"START REPLICA",
 	}
 	tablet2.FakeMysqlDaemon.SetReplicationSourceInputs = append(tablet2.FakeMysqlDaemon.SetReplicationSourceInputs, fmt.Sprintf("%v:%v", tablet1.Tablet.Hostname, tablet1.Tablet.MysqlPort))
 
 	tablet3.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"FAKE RESET ALL REPLICATION",
-		"FAKE SET SLAVE POSITION",
-		"FAKE SET MASTER",
-		"START SLAVE",
+		"FAKE RESET BINARY LOGS AND GTIDS",
+		"FAKE SET GLOBAL gtid_purged",
+		"FAKE SET SOURCE",
+		"START REPLICA",
 	}
 	tablet3.FakeMysqlDaemon.SetReplicationSourceInputs = append(tablet3.FakeMysqlDaemon.SetReplicationSourceInputs, fmt.Sprintf("%v:%v", tablet1.Tablet.Hostname, tablet1.Tablet.MysqlPort))
 
@@ -148,7 +153,7 @@ func TestInitShardPrimaryNoFormerPrimary(t *testing.T) {
 		tablet.TM.QueryServiceControl.(*tabletservermock.Controller).SetQueryServiceEnabledForTests(true)
 	}
 
-	vtctld := grpcvtctldserver.NewVtctldServer(ts)
+	vtctld := grpcvtctldserver.NewVtctldServer(vtenv.NewTestEnv(), ts)
 	_, err := vtctld.InitShardPrimary(context.Background(), &vtctldatapb.InitShardPrimaryRequest{
 		Keyspace:                tablet1.Tablet.Keyspace,
 		Shard:                   tablet1.Tablet.Shard,

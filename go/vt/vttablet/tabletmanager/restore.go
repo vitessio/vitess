@@ -131,7 +131,8 @@ func (tm *TabletManager) RestoreData(
 	deleteBeforeRestore bool,
 	backupTime time.Time,
 	restoreToTimetamp time.Time,
-	restoreToPos string) error {
+	restoreToPos string,
+	mysqlShutdownTimeout time.Duration) error {
 	if err := tm.lock(ctx); err != nil {
 		return err
 	}
@@ -180,14 +181,14 @@ func (tm *TabletManager) RestoreData(
 		RestoreToPos:       restoreToPos,
 		RestoreToTimestamp: protoutil.TimeToProto(restoreToTimetamp),
 	}
-	err = tm.restoreDataLocked(ctx, logger, waitForBackupInterval, deleteBeforeRestore, req)
+	err = tm.restoreDataLocked(ctx, logger, waitForBackupInterval, deleteBeforeRestore, req, mysqlShutdownTimeout)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.Logger, waitForBackupInterval time.Duration, deleteBeforeRestore bool, request *tabletmanagerdatapb.RestoreFromBackupRequest) error {
+func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.Logger, waitForBackupInterval time.Duration, deleteBeforeRestore bool, request *tabletmanagerdatapb.RestoreFromBackupRequest, mysqlShutdownTimeout time.Duration) error {
 
 	tablet := tm.Tablet()
 	originalType := tablet.Type
@@ -217,25 +218,26 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 	}
 
 	params := mysqlctl.RestoreParams{
-		Cnf:                 tm.Cnf,
-		Mysqld:              tm.MysqlDaemon,
-		Logger:              logger,
-		Concurrency:         restoreConcurrency,
-		HookExtraEnv:        tm.hookExtraEnv(),
-		DeleteBeforeRestore: deleteBeforeRestore,
-		DbName:              topoproto.TabletDbName(tablet),
-		Keyspace:            keyspace,
-		Shard:               tablet.Shard,
-		StartTime:           startTime,
-		DryRun:              request.DryRun,
-		Stats:               backupstats.RestoreStats(),
+		Cnf:                  tm.Cnf,
+		Mysqld:               tm.MysqlDaemon,
+		Logger:               logger,
+		Concurrency:          restoreConcurrency,
+		HookExtraEnv:         tm.hookExtraEnv(),
+		DeleteBeforeRestore:  deleteBeforeRestore,
+		DbName:               topoproto.TabletDbName(tablet),
+		Keyspace:             keyspace,
+		Shard:                tablet.Shard,
+		StartTime:            startTime,
+		DryRun:               request.DryRun,
+		Stats:                backupstats.RestoreStats(),
+		MysqlShutdownTimeout: mysqlShutdownTimeout,
 	}
 	restoreToTimestamp := protoutil.TimeFromProto(request.RestoreToTimestamp).UTC()
 	if request.RestoreToPos != "" && !restoreToTimestamp.IsZero() {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "--restore-to-pos and --restore-to-timestamp are mutually exclusive")
 	}
 	if request.RestoreToPos != "" {
-		pos, err := replication.DecodePosition(request.RestoreToPos)
+		pos, _, err := replication.DecodePositionMySQL56(request.RestoreToPos)
 		if err != nil {
 			return vterrors.Wrapf(err, "restore failed: unable to decode --restore-to-pos: %s", request.RestoreToPos)
 		}
@@ -424,7 +426,7 @@ func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos replicati
 		Port: connParams.Port,
 	}
 	dbCfgs.SetDbParams(*connParams, *connParams, *connParams)
-	vsClient := vreplication.NewReplicaConnector(connParams)
+	vsClient := vreplication.NewReplicaConnector(tm.Env, connParams)
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -475,7 +477,7 @@ func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos replicati
 			gtidsChan <- []string{"", ""}
 		}
 	}()
-	defer vsClient.Close(ctx)
+	defer vsClient.Close()
 	select {
 	case val := <-gtidsChan:
 		return val[0], val[1], nil
@@ -491,13 +493,13 @@ func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos replicati
 // waits till all events to GTID replicated
 // once done, it will reset the replication
 func (tm *TabletManager) catchupToGTID(ctx context.Context, afterGTIDPos string, beforeGTIDPos string) error {
-	var afterGTIDStr string
+	var afterGTID replication.Position
 	if afterGTIDPos != "" {
-		afterGTIDParsed, err := replication.DecodePosition(afterGTIDPos)
+		var err error
+		afterGTID, err = replication.DecodePosition(afterGTIDPos)
 		if err != nil {
 			return err
 		}
-		afterGTIDStr = afterGTIDParsed.GTIDSet.Last()
 	}
 
 	beforeGTIDPosParsed, err := replication.DecodePosition(beforeGTIDPos)
@@ -505,48 +507,18 @@ func (tm *TabletManager) catchupToGTID(ctx context.Context, afterGTIDPos string,
 		return err
 	}
 
-	// it uses mysql specific queries here
-	cmds := []string{
-		"STOP SLAVE FOR CHANNEL '' ",
-		"STOP SLAVE IO_THREAD FOR CHANNEL ''",
-	}
-
-	if binlogSslCa != "" || binlogSslCert != "" {
-		// We need to use TLS
-		cmd := fmt.Sprintf("CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='%s', MASTER_PASSWORD='%s', MASTER_AUTO_POSITION=1, MASTER_SSL=1", binlogHost, binlogPort, binlogUser, binlogPwd)
-		if binlogSslCa != "" {
-			cmd += fmt.Sprintf(", MASTER_SSL_CA='%s'", binlogSslCa)
-		}
-		if binlogSslCert != "" {
-			cmd += fmt.Sprintf(", MASTER_SSL_CERT='%s'", binlogSslCert)
-		}
-		if binlogSslKey != "" {
-			cmd += fmt.Sprintf(", MASTER_SSL_KEY='%s'", binlogSslKey)
-		}
-		cmds = append(cmds, cmd+";")
-	} else {
-		// No TLS
-		cmds = append(cmds, fmt.Sprintf("CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='%s', MASTER_PASSWORD='%s', MASTER_AUTO_POSITION=1;", binlogHost, binlogPort, binlogUser, binlogPwd))
-	}
-
-	if afterGTIDPos == "" { // when the there is no afterPos, that means need to replicate completely
-		cmds = append(cmds, "START SLAVE")
-	} else {
-		cmds = append(cmds, fmt.Sprintf("START SLAVE UNTIL SQL_BEFORE_GTIDS = '%s'", afterGTIDStr))
-	}
-
-	if err := tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
-		return vterrors.Wrap(err, fmt.Sprintf("failed to restart the replication until %s GTID", afterGTIDStr))
+	if err := tm.MysqlDaemon.CatchupToGTID(ctx, afterGTID); err != nil {
+		return vterrors.Wrap(err, fmt.Sprintf("failed to restart the replication until %s GTID", afterGTID.GTIDSet.Last()))
 	}
 	log.Infof("Waiting for position to reach", beforeGTIDPosParsed.GTIDSet.Last())
-	// Could not use `agent.MysqlDaemon.WaitSourcePos` as replication is stopped with `START SLAVE UNTIL SQL_BEFORE_GTIDS`
-	// this is as per https://dev.mysql.com/doc/refman/5.6/en/start-slave.html
+	// Could not use `agent.MysqlDaemon.WaitSourcePos` as replication is stopped with `START REPLICA UNTIL SQL_BEFORE_GTIDS`
+	// this is as per https://dev.mysql.com/doc/refman/8.0/en/start-replica.html
 	// We need to wait until replication catches upto the specified afterGTIDPos
 	chGTIDCaughtup := make(chan bool)
 	go func() {
 		timeToWait := time.Now().Add(timeoutForGTIDLookup)
 		for time.Now().Before(timeToWait) {
-			pos, err := tm.MysqlDaemon.PrimaryPosition()
+			pos, err := tm.MysqlDaemon.PrimaryPosition(ctx)
 			if err != nil {
 				chGTIDCaughtup <- false
 			}
@@ -565,13 +537,13 @@ func (tm *TabletManager) catchupToGTID(ctx context.Context, afterGTIDPos string,
 	select {
 	case resp := <-chGTIDCaughtup:
 		if resp {
-			cmds := []string{
-				"STOP SLAVE",
-				"RESET SLAVE ALL",
-			}
-			if err := tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
+			if err := tm.MysqlDaemon.StopReplication(ctx, nil); err != nil {
 				return vterrors.Wrap(err, "failed to stop replication")
 			}
+			if err := tm.MysqlDaemon.ResetReplicationParameters(ctx); err != nil {
+				return vterrors.Wrap(err, "failed to reset replication")
+			}
+
 			return nil
 		}
 		return vterrors.Wrap(err, "error while fetching the current GTID position")
@@ -581,18 +553,18 @@ func (tm *TabletManager) catchupToGTID(ctx context.Context, afterGTIDPos string,
 	}
 }
 
-// disableReplication stopes and resets replication on the mysql server. It moreover sets impossible replication
+// disableReplication stops and resets replication on the mysql server. It moreover sets impossible replication
 // source params, so that the replica can't possibly reconnect. It would take a `CHANGE [MASTER|REPLICATION SOURCE] TO ...` to
 // make the mysql server replicate again (available via tm.MysqlDaemon.SetReplicationPosition)
 func (tm *TabletManager) disableReplication(ctx context.Context) error {
-	cmds := []string{
-		"STOP SLAVE",
-		"RESET SLAVE ALL", // "ALL" makes it forget primary host:port.
+	if err := tm.MysqlDaemon.StopReplication(ctx, nil); err != nil {
+		return vterrors.Wrap(err, "failed to stop replication")
 	}
-	if err := tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
+	if err := tm.MysqlDaemon.ResetReplicationParameters(ctx); err != nil {
 		return vterrors.Wrap(err, "failed to reset replication")
 	}
-	if err := tm.MysqlDaemon.SetReplicationSource(ctx, "//", 0, false /* stopReplicationBefore */, true /* startReplicationAfter */); err != nil {
+
+	if err := tm.MysqlDaemon.SetReplicationSource(ctx, "//", 0, 0, false, true); err != nil {
 		return vterrors.Wrap(err, "failed to disable replication")
 	}
 
@@ -600,11 +572,10 @@ func (tm *TabletManager) disableReplication(ctx context.Context) error {
 }
 
 func (tm *TabletManager) startReplication(ctx context.Context, pos replication.Position, tabletType topodatapb.TabletType) error {
-	cmds := []string{
-		"STOP SLAVE",
-		"RESET SLAVE ALL", // "ALL" makes it forget primary host:port.
+	if err := tm.MysqlDaemon.StopReplication(ctx, nil); err != nil {
+		return vterrors.Wrap(err, "failed to stop replication")
 	}
-	if err := tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
+	if err := tm.MysqlDaemon.ResetReplicationParameters(ctx); err != nil {
 		return vterrors.Wrap(err, "failed to reset replication")
 	}
 
@@ -649,7 +620,7 @@ func (tm *TabletManager) startReplication(ctx context.Context, pos replication.P
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			status, err := tm.MysqlDaemon.ReplicationStatusWithContext(ctx)
+			status, err := tm.MysqlDaemon.ReplicationStatus(ctx)
 			if err != nil {
 				return vterrors.Wrap(err, "can't get replication status")
 			}

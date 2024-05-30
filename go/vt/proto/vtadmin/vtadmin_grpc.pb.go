@@ -23,6 +23,17 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type VTAdminClient interface {
+	// ApplySchema applies a schema to a keyspace in the given cluster.
+	ApplySchema(ctx context.Context, in *ApplySchemaRequest, opts ...grpc.CallOption) (*vtctldata.ApplySchemaResponse, error)
+	// CancelSchemaMigration cancels one or all schema migrations in the given
+	// cluster, terminating any running ones as needed.
+	CancelSchemaMigration(ctx context.Context, in *CancelSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.CancelSchemaMigrationResponse, error)
+	// CleanupSchemaMigration marks a schema migration in the given cluster as
+	// ready for artifact cleanup.
+	CleanupSchemaMigration(ctx context.Context, in *CleanupSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.CleanupSchemaMigrationResponse, error)
+	// CompleteSchemaMigration completes one or all migrations in the given
+	// cluster executed with --postpone-completion.
+	CompleteSchemaMigration(ctx context.Context, in *CompleteSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.CompleteSchemaMigrationResponse, error)
 	// CreateKeyspace creates a new keyspace in the given cluster.
 	CreateKeyspace(ctx context.Context, in *CreateKeyspaceRequest, opts ...grpc.CallOption) (*CreateKeyspaceResponse, error)
 	// CreateShard creates a new shard in the given cluster and keyspace.
@@ -67,6 +78,13 @@ type VTAdminClient interface {
 	GetSchema(ctx context.Context, in *GetSchemaRequest, opts ...grpc.CallOption) (*Schema, error)
 	// GetSchemas returns all schemas across the specified clusters.
 	GetSchemas(ctx context.Context, in *GetSchemasRequest, opts ...grpc.CallOption) (*GetSchemasResponse, error)
+	// GetSchemaMigrations returns one or more online schema migrations for the
+	// set of keyspaces (or all keyspaces) in the given clusters, analagous to
+	// repeated executions of `SHOW VITESS_MIGRATIONS`.
+	//
+	// Different fields in the request message result in different behaviors.
+	// See the documentation on vtctldata.GetSchemaMigrationsRequest for details.
+	GetSchemaMigrations(ctx context.Context, in *GetSchemaMigrationsRequest, opts ...grpc.CallOption) (*GetSchemaMigrationsResponse, error)
 	// GetShardReplicationPositions returns shard replication positions grouped
 	// by cluster.
 	GetShardReplicationPositions(ctx context.Context, in *GetShardReplicationPositionsRequest, opts ...grpc.CallOption) (*GetShardReplicationPositionsResponse, error)
@@ -98,6 +116,9 @@ type VTAdminClient interface {
 	GetWorkflow(ctx context.Context, in *GetWorkflowRequest, opts ...grpc.CallOption) (*Workflow, error)
 	// GetWorkflows returns the Workflows for all specified clusters.
 	GetWorkflows(ctx context.Context, in *GetWorkflowsRequest, opts ...grpc.CallOption) (*GetWorkflowsResponse, error)
+	// LaunchSchemaMigration launches one or all migrations in the given
+	// cluster executed with --postpone-launch.
+	LaunchSchemaMigration(ctx context.Context, in *LaunchSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.LaunchSchemaMigrationResponse, error)
 	// PingTablet checks that the specified tablet is awake and responding to
 	// RPCs. This command can be blocked by other in-flight operations.
 	PingTablet(ctx context.Context, in *PingTabletRequest, opts ...grpc.CallOption) (*PingTabletResponse, error)
@@ -124,6 +145,9 @@ type VTAdminClient interface {
 	ReloadSchemaShard(ctx context.Context, in *ReloadSchemaShardRequest, opts ...grpc.CallOption) (*ReloadSchemaShardResponse, error)
 	// RemoveKeyspaceCell removes the cell from the Cells list for all shards in the keyspace, and the SrvKeyspace for that keyspace in that cell.
 	RemoveKeyspaceCell(ctx context.Context, in *RemoveKeyspaceCellRequest, opts ...grpc.CallOption) (*RemoveKeyspaceCellResponse, error)
+	// RetrySchemaMigration marks a given schema migration in the given cluster
+	// for retry.
+	RetrySchemaMigration(ctx context.Context, in *RetrySchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.RetrySchemaMigrationResponse, error)
 	// RunHealthCheck runs a healthcheck on the tablet.
 	RunHealthCheck(ctx context.Context, in *RunHealthCheckRequest, opts ...grpc.CallOption) (*RunHealthCheckResponse, error)
 	// SetReadOnly sets the tablet to read-only mode.
@@ -174,6 +198,42 @@ type vTAdminClient struct {
 
 func NewVTAdminClient(cc grpc.ClientConnInterface) VTAdminClient {
 	return &vTAdminClient{cc}
+}
+
+func (c *vTAdminClient) ApplySchema(ctx context.Context, in *ApplySchemaRequest, opts ...grpc.CallOption) (*vtctldata.ApplySchemaResponse, error) {
+	out := new(vtctldata.ApplySchemaResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/ApplySchema", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) CancelSchemaMigration(ctx context.Context, in *CancelSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.CancelSchemaMigrationResponse, error) {
+	out := new(vtctldata.CancelSchemaMigrationResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/CancelSchemaMigration", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) CleanupSchemaMigration(ctx context.Context, in *CleanupSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.CleanupSchemaMigrationResponse, error) {
+	out := new(vtctldata.CleanupSchemaMigrationResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/CleanupSchemaMigration", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) CompleteSchemaMigration(ctx context.Context, in *CompleteSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.CompleteSchemaMigrationResponse, error) {
+	out := new(vtctldata.CompleteSchemaMigrationResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/CompleteSchemaMigration", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *vTAdminClient) CreateKeyspace(ctx context.Context, in *CreateKeyspaceRequest, opts ...grpc.CallOption) (*CreateKeyspaceResponse, error) {
@@ -329,6 +389,15 @@ func (c *vTAdminClient) GetSchemas(ctx context.Context, in *GetSchemasRequest, o
 	return out, nil
 }
 
+func (c *vTAdminClient) GetSchemaMigrations(ctx context.Context, in *GetSchemaMigrationsRequest, opts ...grpc.CallOption) (*GetSchemaMigrationsResponse, error) {
+	out := new(GetSchemaMigrationsResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetSchemaMigrations", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vTAdminClient) GetShardReplicationPositions(ctx context.Context, in *GetShardReplicationPositionsRequest, opts ...grpc.CallOption) (*GetShardReplicationPositionsResponse, error) {
 	out := new(GetShardReplicationPositionsResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetShardReplicationPositions", in, out, opts...)
@@ -446,6 +515,15 @@ func (c *vTAdminClient) GetWorkflows(ctx context.Context, in *GetWorkflowsReques
 	return out, nil
 }
 
+func (c *vTAdminClient) LaunchSchemaMigration(ctx context.Context, in *LaunchSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.LaunchSchemaMigrationResponse, error) {
+	out := new(vtctldata.LaunchSchemaMigrationResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/LaunchSchemaMigration", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vTAdminClient) PingTablet(ctx context.Context, in *PingTabletRequest, opts ...grpc.CallOption) (*PingTabletResponse, error) {
 	out := new(PingTabletResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/PingTablet", in, out, opts...)
@@ -512,6 +590,15 @@ func (c *vTAdminClient) ReloadSchemaShard(ctx context.Context, in *ReloadSchemaS
 func (c *vTAdminClient) RemoveKeyspaceCell(ctx context.Context, in *RemoveKeyspaceCellRequest, opts ...grpc.CallOption) (*RemoveKeyspaceCellResponse, error) {
 	out := new(RemoveKeyspaceCellResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/RemoveKeyspaceCell", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) RetrySchemaMigration(ctx context.Context, in *RetrySchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.RetrySchemaMigrationResponse, error) {
+	out := new(vtctldata.RetrySchemaMigrationResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/RetrySchemaMigration", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -639,6 +726,17 @@ func (c *vTAdminClient) VTExplain(ctx context.Context, in *VTExplainRequest, opt
 // All implementations must embed UnimplementedVTAdminServer
 // for forward compatibility
 type VTAdminServer interface {
+	// ApplySchema applies a schema to a keyspace in the given cluster.
+	ApplySchema(context.Context, *ApplySchemaRequest) (*vtctldata.ApplySchemaResponse, error)
+	// CancelSchemaMigration cancels one or all schema migrations in the given
+	// cluster, terminating any running ones as needed.
+	CancelSchemaMigration(context.Context, *CancelSchemaMigrationRequest) (*vtctldata.CancelSchemaMigrationResponse, error)
+	// CleanupSchemaMigration marks a schema migration in the given cluster as
+	// ready for artifact cleanup.
+	CleanupSchemaMigration(context.Context, *CleanupSchemaMigrationRequest) (*vtctldata.CleanupSchemaMigrationResponse, error)
+	// CompleteSchemaMigration completes one or all migrations in the given
+	// cluster executed with --postpone-completion.
+	CompleteSchemaMigration(context.Context, *CompleteSchemaMigrationRequest) (*vtctldata.CompleteSchemaMigrationResponse, error)
 	// CreateKeyspace creates a new keyspace in the given cluster.
 	CreateKeyspace(context.Context, *CreateKeyspaceRequest) (*CreateKeyspaceResponse, error)
 	// CreateShard creates a new shard in the given cluster and keyspace.
@@ -683,6 +781,13 @@ type VTAdminServer interface {
 	GetSchema(context.Context, *GetSchemaRequest) (*Schema, error)
 	// GetSchemas returns all schemas across the specified clusters.
 	GetSchemas(context.Context, *GetSchemasRequest) (*GetSchemasResponse, error)
+	// GetSchemaMigrations returns one or more online schema migrations for the
+	// set of keyspaces (or all keyspaces) in the given clusters, analagous to
+	// repeated executions of `SHOW VITESS_MIGRATIONS`.
+	//
+	// Different fields in the request message result in different behaviors.
+	// See the documentation on vtctldata.GetSchemaMigrationsRequest for details.
+	GetSchemaMigrations(context.Context, *GetSchemaMigrationsRequest) (*GetSchemaMigrationsResponse, error)
 	// GetShardReplicationPositions returns shard replication positions grouped
 	// by cluster.
 	GetShardReplicationPositions(context.Context, *GetShardReplicationPositionsRequest) (*GetShardReplicationPositionsResponse, error)
@@ -714,6 +819,9 @@ type VTAdminServer interface {
 	GetWorkflow(context.Context, *GetWorkflowRequest) (*Workflow, error)
 	// GetWorkflows returns the Workflows for all specified clusters.
 	GetWorkflows(context.Context, *GetWorkflowsRequest) (*GetWorkflowsResponse, error)
+	// LaunchSchemaMigration launches one or all migrations in the given
+	// cluster executed with --postpone-launch.
+	LaunchSchemaMigration(context.Context, *LaunchSchemaMigrationRequest) (*vtctldata.LaunchSchemaMigrationResponse, error)
 	// PingTablet checks that the specified tablet is awake and responding to
 	// RPCs. This command can be blocked by other in-flight operations.
 	PingTablet(context.Context, *PingTabletRequest) (*PingTabletResponse, error)
@@ -740,6 +848,9 @@ type VTAdminServer interface {
 	ReloadSchemaShard(context.Context, *ReloadSchemaShardRequest) (*ReloadSchemaShardResponse, error)
 	// RemoveKeyspaceCell removes the cell from the Cells list for all shards in the keyspace, and the SrvKeyspace for that keyspace in that cell.
 	RemoveKeyspaceCell(context.Context, *RemoveKeyspaceCellRequest) (*RemoveKeyspaceCellResponse, error)
+	// RetrySchemaMigration marks a given schema migration in the given cluster
+	// for retry.
+	RetrySchemaMigration(context.Context, *RetrySchemaMigrationRequest) (*vtctldata.RetrySchemaMigrationResponse, error)
 	// RunHealthCheck runs a healthcheck on the tablet.
 	RunHealthCheck(context.Context, *RunHealthCheckRequest) (*RunHealthCheckResponse, error)
 	// SetReadOnly sets the tablet to read-only mode.
@@ -789,6 +900,18 @@ type VTAdminServer interface {
 type UnimplementedVTAdminServer struct {
 }
 
+func (UnimplementedVTAdminServer) ApplySchema(context.Context, *ApplySchemaRequest) (*vtctldata.ApplySchemaResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ApplySchema not implemented")
+}
+func (UnimplementedVTAdminServer) CancelSchemaMigration(context.Context, *CancelSchemaMigrationRequest) (*vtctldata.CancelSchemaMigrationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CancelSchemaMigration not implemented")
+}
+func (UnimplementedVTAdminServer) CleanupSchemaMigration(context.Context, *CleanupSchemaMigrationRequest) (*vtctldata.CleanupSchemaMigrationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CleanupSchemaMigration not implemented")
+}
+func (UnimplementedVTAdminServer) CompleteSchemaMigration(context.Context, *CompleteSchemaMigrationRequest) (*vtctldata.CompleteSchemaMigrationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CompleteSchemaMigration not implemented")
+}
 func (UnimplementedVTAdminServer) CreateKeyspace(context.Context, *CreateKeyspaceRequest) (*CreateKeyspaceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateKeyspace not implemented")
 }
@@ -840,6 +963,9 @@ func (UnimplementedVTAdminServer) GetSchema(context.Context, *GetSchemaRequest) 
 func (UnimplementedVTAdminServer) GetSchemas(context.Context, *GetSchemasRequest) (*GetSchemasResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetSchemas not implemented")
 }
+func (UnimplementedVTAdminServer) GetSchemaMigrations(context.Context, *GetSchemaMigrationsRequest) (*GetSchemaMigrationsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetSchemaMigrations not implemented")
+}
 func (UnimplementedVTAdminServer) GetShardReplicationPositions(context.Context, *GetShardReplicationPositionsRequest) (*GetShardReplicationPositionsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetShardReplicationPositions not implemented")
 }
@@ -879,6 +1005,9 @@ func (UnimplementedVTAdminServer) GetWorkflow(context.Context, *GetWorkflowReque
 func (UnimplementedVTAdminServer) GetWorkflows(context.Context, *GetWorkflowsRequest) (*GetWorkflowsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetWorkflows not implemented")
 }
+func (UnimplementedVTAdminServer) LaunchSchemaMigration(context.Context, *LaunchSchemaMigrationRequest) (*vtctldata.LaunchSchemaMigrationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method LaunchSchemaMigration not implemented")
+}
 func (UnimplementedVTAdminServer) PingTablet(context.Context, *PingTabletRequest) (*PingTabletResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PingTablet not implemented")
 }
@@ -902,6 +1031,9 @@ func (UnimplementedVTAdminServer) ReloadSchemaShard(context.Context, *ReloadSche
 }
 func (UnimplementedVTAdminServer) RemoveKeyspaceCell(context.Context, *RemoveKeyspaceCellRequest) (*RemoveKeyspaceCellResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RemoveKeyspaceCell not implemented")
+}
+func (UnimplementedVTAdminServer) RetrySchemaMigration(context.Context, *RetrySchemaMigrationRequest) (*vtctldata.RetrySchemaMigrationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RetrySchemaMigration not implemented")
 }
 func (UnimplementedVTAdminServer) RunHealthCheck(context.Context, *RunHealthCheckRequest) (*RunHealthCheckResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RunHealthCheck not implemented")
@@ -953,6 +1085,78 @@ type UnsafeVTAdminServer interface {
 
 func RegisterVTAdminServer(s grpc.ServiceRegistrar, srv VTAdminServer) {
 	s.RegisterService(&VTAdmin_ServiceDesc, srv)
+}
+
+func _VTAdmin_ApplySchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ApplySchemaRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).ApplySchema(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/ApplySchema",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).ApplySchema(ctx, req.(*ApplySchemaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_CancelSchemaMigration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CancelSchemaMigrationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).CancelSchemaMigration(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/CancelSchemaMigration",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).CancelSchemaMigration(ctx, req.(*CancelSchemaMigrationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_CleanupSchemaMigration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CleanupSchemaMigrationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).CleanupSchemaMigration(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/CleanupSchemaMigration",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).CleanupSchemaMigration(ctx, req.(*CleanupSchemaMigrationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_CompleteSchemaMigration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CompleteSchemaMigrationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).CompleteSchemaMigration(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/CompleteSchemaMigration",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).CompleteSchemaMigration(ctx, req.(*CompleteSchemaMigrationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _VTAdmin_CreateKeyspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -1261,6 +1465,24 @@ func _VTAdmin_GetSchemas_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VTAdmin_GetSchemaMigrations_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSchemaMigrationsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).GetSchemaMigrations(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/GetSchemaMigrations",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).GetSchemaMigrations(ctx, req.(*GetSchemaMigrationsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VTAdmin_GetShardReplicationPositions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetShardReplicationPositionsRequest)
 	if err := dec(in); err != nil {
@@ -1495,6 +1717,24 @@ func _VTAdmin_GetWorkflows_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VTAdmin_LaunchSchemaMigration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LaunchSchemaMigrationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).LaunchSchemaMigration(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/LaunchSchemaMigration",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).LaunchSchemaMigration(ctx, req.(*LaunchSchemaMigrationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VTAdmin_PingTablet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(PingTabletRequest)
 	if err := dec(in); err != nil {
@@ -1635,6 +1875,24 @@ func _VTAdmin_RemoveKeyspaceCell_Handler(srv interface{}, ctx context.Context, d
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VTAdminServer).RemoveKeyspaceCell(ctx, req.(*RemoveKeyspaceCellRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_RetrySchemaMigration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RetrySchemaMigrationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).RetrySchemaMigration(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/RetrySchemaMigration",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).RetrySchemaMigration(ctx, req.(*RetrySchemaMigrationRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1881,6 +2139,22 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*VTAdminServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
+			MethodName: "ApplySchema",
+			Handler:    _VTAdmin_ApplySchema_Handler,
+		},
+		{
+			MethodName: "CancelSchemaMigration",
+			Handler:    _VTAdmin_CancelSchemaMigration_Handler,
+		},
+		{
+			MethodName: "CleanupSchemaMigration",
+			Handler:    _VTAdmin_CleanupSchemaMigration_Handler,
+		},
+		{
+			MethodName: "CompleteSchemaMigration",
+			Handler:    _VTAdmin_CompleteSchemaMigration_Handler,
+		},
+		{
 			MethodName: "CreateKeyspace",
 			Handler:    _VTAdmin_CreateKeyspace_Handler,
 		},
@@ -1949,6 +2223,10 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _VTAdmin_GetSchemas_Handler,
 		},
 		{
+			MethodName: "GetSchemaMigrations",
+			Handler:    _VTAdmin_GetSchemaMigrations_Handler,
+		},
+		{
 			MethodName: "GetShardReplicationPositions",
 			Handler:    _VTAdmin_GetShardReplicationPositions_Handler,
 		},
@@ -2001,6 +2279,10 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _VTAdmin_GetWorkflows_Handler,
 		},
 		{
+			MethodName: "LaunchSchemaMigration",
+			Handler:    _VTAdmin_LaunchSchemaMigration_Handler,
+		},
+		{
 			MethodName: "PingTablet",
 			Handler:    _VTAdmin_PingTablet_Handler,
 		},
@@ -2031,6 +2313,10 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RemoveKeyspaceCell",
 			Handler:    _VTAdmin_RemoveKeyspaceCell_Handler,
+		},
+		{
+			MethodName: "RetrySchemaMigration",
+			Handler:    _VTAdmin_RetrySchemaMigration_Handler,
 		},
 		{
 			MethodName: "RunHealthCheck",

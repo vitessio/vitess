@@ -17,6 +17,7 @@ limitations under the License.
 package tabletserver
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -82,6 +83,17 @@ func debugEnvHandler(tsv *TabletServer, w http.ResponseWriter, r *http.Request) 
 			f(ival)
 			msg = fmt.Sprintf("Setting %v to: %v", varname, value)
 		}
+		setIntValCtx := func(f func(context.Context, int) error) {
+			ival, err := strconv.Atoi(value)
+			if err == nil {
+				err = f(r.Context(), ival)
+				if err == nil {
+					msg = fmt.Sprintf("Setting %v to: %v", varname, value)
+					return
+				}
+			}
+			msg = fmt.Sprintf("Failed setting value for %v: %v", varname, err)
+		}
 		setInt64Val := func(f func(int64)) {
 			ival, err := strconv.ParseInt(value, 10, 64)
 			if err != nil {
@@ -111,11 +123,11 @@ func debugEnvHandler(tsv *TabletServer, w http.ResponseWriter, r *http.Request) 
 		}
 		switch varname {
 		case "PoolSize":
-			setIntVal(tsv.SetPoolSize)
+			setIntValCtx(tsv.SetPoolSize)
 		case "StreamPoolSize":
-			setIntVal(tsv.SetStreamPoolSize)
+			setIntValCtx(tsv.SetStreamPoolSize)
 		case "TxPoolSize":
-			setIntVal(tsv.SetTxPoolSize)
+			setIntValCtx(tsv.SetTxPoolSize)
 		case "MaxResultSize":
 			setIntVal(tsv.SetMaxResultSize)
 		case "WarnResultSize":
@@ -125,7 +137,7 @@ func debugEnvHandler(tsv *TabletServer, w http.ResponseWriter, r *http.Request) 
 		case "RowStreamerMaxMySQLReplLagSecs":
 			setInt64Val(func(val int64) { tsv.Config().RowStreamer.MaxMySQLReplLagSecs = val })
 		case "UnhealthyThreshold":
-			setDurationVal(func(d time.Duration) { _ = tsv.Config().Healthcheck.UnhealthyThresholdSeconds.Set(d.String()) })
+			setDurationVal(func(d time.Duration) { tsv.Config().Healthcheck.UnhealthyThreshold = d })
 			setDurationVal(tsv.hs.SetUnhealthyThreshold)
 			setDurationVal(tsv.sm.SetUnhealthyThreshold)
 		case "ThrottleMetricThreshold":
@@ -145,7 +157,7 @@ func debugEnvHandler(tsv *TabletServer, w http.ResponseWriter, r *http.Request) 
 	vars = addVar(vars, "WarnResultSize", tsv.WarnResultSize)
 	vars = addVar(vars, "RowStreamerMaxInnoDBTrxHistLen", func() int64 { return tsv.Config().RowStreamer.MaxInnoDBTrxHistLen })
 	vars = addVar(vars, "RowStreamerMaxMySQLReplLagSecs", func() int64 { return tsv.Config().RowStreamer.MaxMySQLReplLagSecs })
-	vars = addVar(vars, "UnhealthyThreshold", tsv.Config().Healthcheck.UnhealthyThresholdSeconds.Get)
+	vars = addVar(vars, "UnhealthyThreshold", func() time.Duration { return tsv.Config().Healthcheck.UnhealthyThreshold })
 	vars = addVar(vars, "ThrottleMetricThreshold", tsv.ThrottleMetricThreshold)
 	vars = append(vars, envValue{
 		Name:  "Consolidator",

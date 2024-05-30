@@ -24,8 +24,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/throttler"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -47,18 +49,16 @@ func TestConfigParse(t *testing.T) {
 			},
 		},
 		OltpReadPool: ConnPoolConfig{
-			Size:       16,
-			MaxWaiters: 40,
+			Size:        16,
+			Timeout:     10 * time.Second,
+			IdleTimeout: 20 * time.Second,
+			MaxLifetime: 50 * time.Second,
 		},
 		RowStreamer: RowStreamerConfig{
 			MaxInnoDBTrxHistLen: 1000,
 			MaxMySQLReplLagSecs: 400,
 		},
 	}
-
-	_ = cfg.OltpReadPool.TimeoutSeconds.Set("10s")
-	_ = cfg.OltpReadPool.IdleTimeoutSeconds.Set("20s")
-	_ = cfg.OltpReadPool.MaxLifetimeSeconds.Set("50s")
 
 	gotBytes, err := yaml2.Marshal(&cfg)
 	require.NoError(t, err)
@@ -87,7 +87,6 @@ oltp: {}
 oltpReadPool:
   idleTimeoutSeconds: 20s
   maxLifetimeSeconds: 50s
-  maxWaiters: 40
   size: 16
   timeoutSeconds: 10s
 replicationTracker: {}
@@ -109,9 +108,8 @@ txPool: {}
     user: c
 oltpReadPool:
   size: 16
-  idleTimeoutSeconds: 20
-  maxWaiters: 40
-  maxLifetimeSeconds: 50
+  idleTimeoutSeconds: 20s
+  maxLifetimeSeconds: 50s
 `)
 	gotCfg := cfg
 	gotCfg.DB = cfg.DB.Clone()
@@ -127,7 +125,8 @@ func TestDefaultConfig(t *testing.T) {
 	want := `consolidator: enable
 consolidatorStreamQuerySize: 2097152
 consolidatorStreamTotalSize: 134217728
-gracePeriods: {}
+gracePeriods:
+  shutdownSeconds: 3s
 healthcheck:
   degradedThresholdSeconds: 30s
   intervalSeconds: 20s
@@ -149,7 +148,6 @@ oltp:
   txTimeoutSeconds: 30s
 oltpReadPool:
   idleTimeoutSeconds: 30m0s
-  maxWaiters: 5000
   size: 16
 queryCacheDoorkeeper: true
 queryCacheMemory: 33554432
@@ -165,7 +163,6 @@ signalWhenSchemaChange: true
 streamBufferSize: 32768
 txPool:
   idleTimeoutSeconds: 30m0s
-  maxWaiters: 5000
   size: 20
   timeoutSeconds: 1s
 `
@@ -178,17 +175,16 @@ func TestClone(t *testing.T) {
 
 	cfg1 := &TabletConfig{
 		OltpReadPool: ConnPoolConfig{
-			Size:       16,
-			MaxWaiters: 40,
+			Size:        16,
+			Timeout:     10 * time.Second,
+			IdleTimeout: 20 * time.Second,
+			MaxLifetime: 50 * time.Second,
 		},
 		RowStreamer: RowStreamerConfig{
 			MaxInnoDBTrxHistLen: 1000000,
 			MaxMySQLReplLagSecs: 43200,
 		},
 	}
-	_ = cfg1.OltpReadPool.TimeoutSeconds.Set("10s")
-	_ = cfg1.OltpReadPool.IdleTimeoutSeconds.Set("20s")
-	_ = cfg1.OltpReadPool.MaxLifetimeSeconds.Set("50s")
 
 	cfg2 := cfg1.Clone()
 	assert.Equal(t, cfg1, cfg2)
@@ -206,14 +202,14 @@ func TestFlags(t *testing.T) {
 
 	// Simple Init.
 	Init()
-	_ = want.OlapReadPool.IdleTimeoutSeconds.Set("30m")
-	_ = want.TxPool.IdleTimeoutSeconds.Set("30m")
+	want.OlapReadPool.IdleTimeout = 30 * time.Minute
+	want.TxPool.IdleTimeout = 30 * time.Minute
 	want.HotRowProtection.Mode = Disable
 	want.Consolidator = Enable
-	_ = want.Healthcheck.IntervalSeconds.Set("20s")
-	_ = want.Healthcheck.DegradedThresholdSeconds.Set("30s")
-	_ = want.Healthcheck.UnhealthyThresholdSeconds.Set("2h")
-	_ = want.ReplicationTracker.HeartbeatIntervalSeconds.Set("1s")
+	want.Healthcheck.Interval = 20 * time.Second
+	want.Healthcheck.DegradedThreshold = 30 * time.Second
+	want.Healthcheck.UnhealthyThreshold = 2 * time.Hour
+	want.ReplicationTracker.HeartbeatInterval = time.Second
 	want.ReplicationTracker.Mode = Disable
 	assert.Equal(t, want.DB, currentConfig.DB)
 	assert.Equal(t, want, currentConfig)
@@ -269,52 +265,52 @@ func TestFlags(t *testing.T) {
 	enableHeartbeat = true
 	heartbeatInterval = 1 * time.Second
 	currentConfig.ReplicationTracker.Mode = ""
-	currentConfig.ReplicationTracker.HeartbeatIntervalSeconds.Set("0s")
+	currentConfig.ReplicationTracker.HeartbeatInterval = 0
 	Init()
 	want.ReplicationTracker.Mode = Heartbeat
-	want.ReplicationTracker.HeartbeatIntervalSeconds.Set("1s")
+	want.ReplicationTracker.HeartbeatInterval = time.Second
 	assert.Equal(t, want, currentConfig)
 
 	enableHeartbeat = false
 	heartbeatInterval = 1 * time.Second
 	currentConfig.ReplicationTracker.Mode = ""
-	currentConfig.ReplicationTracker.HeartbeatIntervalSeconds.Set("0s")
+	currentConfig.ReplicationTracker.HeartbeatInterval = 0
 	Init()
 	want.ReplicationTracker.Mode = Disable
-	want.ReplicationTracker.HeartbeatIntervalSeconds.Set("1s")
+	want.ReplicationTracker.HeartbeatInterval = time.Second
 	assert.Equal(t, want, currentConfig)
 
 	enableReplicationReporter = true
 	heartbeatInterval = 1 * time.Second
 	currentConfig.ReplicationTracker.Mode = ""
-	currentConfig.ReplicationTracker.HeartbeatIntervalSeconds.Set("0s")
+	currentConfig.ReplicationTracker.HeartbeatInterval = 0
 	Init()
 	want.ReplicationTracker.Mode = Polling
-	want.ReplicationTracker.HeartbeatIntervalSeconds.Set("1s")
+	want.ReplicationTracker.HeartbeatInterval = time.Second
 	assert.Equal(t, want, currentConfig)
 
-	healthCheckInterval = 1 * time.Second
-	currentConfig.Healthcheck.IntervalSeconds.Set("0s")
+	healthCheckInterval = time.Second
+	currentConfig.Healthcheck.Interval = 0
 	Init()
-	want.Healthcheck.IntervalSeconds.Set("1s")
+	want.Healthcheck.Interval = time.Second
 	assert.Equal(t, want, currentConfig)
 
 	degradedThreshold = 2 * time.Second
-	currentConfig.Healthcheck.DegradedThresholdSeconds.Set("0s")
+	currentConfig.Healthcheck.DegradedThreshold = 0
 	Init()
-	want.Healthcheck.DegradedThresholdSeconds.Set("2s")
+	want.Healthcheck.DegradedThreshold = 2 * time.Second
 	assert.Equal(t, want, currentConfig)
 
 	unhealthyThreshold = 3 * time.Second
-	currentConfig.Healthcheck.UnhealthyThresholdSeconds.Set("0s")
+	currentConfig.Healthcheck.UnhealthyThreshold = 0
 	Init()
-	want.Healthcheck.UnhealthyThresholdSeconds.Set("3s")
+	want.Healthcheck.UnhealthyThreshold = 3 * time.Second
 	assert.Equal(t, want, currentConfig)
 
 	transitionGracePeriod = 4 * time.Second
-	currentConfig.GracePeriods.TransitionSeconds.Set("0s")
+	currentConfig.GracePeriods.Transition = 0
 	Init()
-	want.GracePeriods.TransitionSeconds.Set("4s")
+	want.GracePeriods.Transition = 4 * time.Second
 	assert.Equal(t, want, currentConfig)
 
 	currentConfig.SanitizeLogMessages = false
@@ -425,7 +421,6 @@ func TestVerifyTxThrottlerConfig(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.Name, func(t *testing.T) {
 			t.Parallel()
 
@@ -450,4 +445,39 @@ func TestVerifyTxThrottlerConfig(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestVerifyUnmanagedTabletConfig(t *testing.T) {
+	oldDisableActiveReparents := mysqlctl.DisableActiveReparents
+	defer func() {
+		mysqlctl.DisableActiveReparents = oldDisableActiveReparents
+	}()
+
+	config := defaultConfig
+
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	params := db.ConnParams()
+	config.DB = dbconfigs.NewTestDBConfigs(*params, *params, "")
+
+	// By default, unmanaged mode should be false
+	err := config.verifyUnmanagedTabletConfig()
+	assert.Nil(t, err)
+
+	config.Unmanaged = true
+	err = config.verifyUnmanagedTabletConfig()
+	assert.EqualError(t, err, "no connection parameters specified but unmanaged mode specified")
+
+	config.DB.Socket = db.ConnParams().UnixSocket
+	err = config.verifyUnmanagedTabletConfig()
+	assert.EqualError(t, err, "database app user not specified")
+
+	config.DB.App.User = "testUser"
+	err = config.verifyUnmanagedTabletConfig()
+	assert.EqualError(t, err, "database app user password not specified")
+
+	config.DB.App.Password = "testPassword"
+	err = config.verifyUnmanagedTabletConfig()
+	assert.Nil(t, err)
 }

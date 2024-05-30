@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"os"
 	"os/exec"
 	"path"
@@ -33,9 +34,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql/replication"
-
 	"vitess.io/vitess/go/json2"
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
@@ -74,8 +75,6 @@ var (
 	dbCredentialFile string
 	shardName        = "0"
 	commonTabletArg  = []string{
-		"--vreplication_healthcheck_topology_refresh", "1s",
-		"--vreplication_healthcheck_retry_delay", "1s",
 		"--vreplication_retry_delay", "1s",
 		"--degraded_threshold", "5s",
 		"--lock_tables_timeout", "5s",
@@ -230,13 +229,13 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 	replica2 = shard.Vttablets[2]
 	replica3 = shard.Vttablets[3]
 
-	if err := localCluster.VtctlclientProcess.InitTablet(primary, cell, keyspaceName, hostname, shard.Name); err != nil {
+	if err := localCluster.InitTablet(primary, keyspaceName, shard.Name); err != nil {
 		return 1, err
 	}
-	if err := localCluster.VtctlclientProcess.InitTablet(replica1, cell, keyspaceName, hostname, shard.Name); err != nil {
+	if err := localCluster.InitTablet(replica1, keyspaceName, shard.Name); err != nil {
 		return 1, err
 	}
-	if err := localCluster.VtctlclientProcess.InitTablet(replica2, cell, keyspaceName, hostname, shard.Name); err != nil {
+	if err := localCluster.InitTablet(replica2, keyspaceName, shard.Name); err != nil {
 		return 1, err
 	}
 	vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", localCluster.VtctldProcess.GrpcPort, localCluster.TmpDirectory)
@@ -259,7 +258,7 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 		return replica3, nil
 	}
 
-	if err := localCluster.VtctlclientProcess.InitShardPrimary(keyspaceName, shard.Name, cell, primary.TabletUID); err != nil {
+	if err := localCluster.VtctldClientProcess.InitShardPrimary(keyspaceName, shard.Name, cell, primary.TabletUID); err != nil {
 		return 1, err
 	}
 
@@ -451,14 +450,14 @@ func primaryBackup(t *testing.T) {
 	}()
 	verifyInitialReplication(t)
 
-	output, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput("Backup", primary.Alias)
+	output, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("Backup", primary.Alias)
 	require.Error(t, err)
 	assert.Contains(t, output, "type PRIMARY cannot take backup. if you really need to do this, rerun the backup command with --allow_primary")
 
 	localCluster.VerifyBackupCount(t, shardKsName, 0)
 
-	err = localCluster.VtctlclientProcess.ExecuteCommand("Backup", "--", "--allow_primary=true", primary.Alias)
-	require.Nil(t, err)
+	err = localCluster.VtctldClientProcess.ExecuteCommand("Backup", "--allow-primary", primary.Alias)
+	require.NoError(t, err)
 
 	// We'll restore this on the primary later to test restores using a backup timestamp
 	firstBackupTimestamp := time.Now().UTC().Format(mysqlctl.BackupTimestampFormat)
@@ -467,18 +466,18 @@ func primaryBackup(t *testing.T) {
 	assert.Contains(t, backups[0], primary.Alias)
 
 	_, err = primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	restoreWaitForBackup(t, "replica", nil, true)
 	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, timeout)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// Verify that we have all the new data -- we should have 2 records now...
 	// And only 1 record after we restore using the first backup timestamp
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
 
-	err = localCluster.VtctlclientProcess.ExecuteCommand("Backup", "--", "--allow_primary=true", primary.Alias)
-	require.Nil(t, err)
+	err = localCluster.VtctldClientProcess.ExecuteCommand("Backup", "--allow-primary", primary.Alias)
+	require.NoError(t, err)
 
 	backups = localCluster.VerifyBackupCount(t, shardKsName, 2)
 	assert.Contains(t, backups[1], primary.Alias)
@@ -487,36 +486,35 @@ func primaryBackup(t *testing.T) {
 
 	// Perform PRS to demote the primary tablet (primary) so that we can do a restore there and verify we don't have the
 	// data from after the older/first backup
-	err = localCluster.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "--",
-		"--keyspace_shard", shardKsName,
-		"--new_primary", replica2.Alias)
-	require.Nil(t, err)
+	err = localCluster.VtctldClientProcess.ExecuteCommand("PlannedReparentShard",
+		"--new-primary", replica2.Alias, shardKsName)
+	require.NoError(t, err)
 
 	// Delete the current primary tablet (replica2) so that the original primary tablet (primary) can be restored from the
 	// older/first backup w/o it replicating the subsequent insert done after the first backup was taken
-	err = localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "--", "--allow_primary=true", replica2.Alias)
-	require.Nil(t, err)
+	err = localCluster.VtctldClientProcess.ExecuteCommand("DeleteTablets", "--allow-primary", replica2.Alias)
+	require.NoError(t, err)
 	err = replica2.VttabletProcess.TearDown()
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// Restore the older/first backup -- using the timestamp we saved -- on the original primary tablet (primary)
-	err = localCluster.VtctlclientProcess.ExecuteCommand("RestoreFromBackup", "--", "--backup_timestamp", firstBackupTimestamp, primary.Alias)
-	require.Nil(t, err)
+	err = localCluster.VtctldClientProcess.ExecuteCommand("RestoreFromBackup", "--backup-timestamp", firstBackupTimestamp, primary.Alias)
+	require.NoError(t, err)
 
 	verifyTabletRestoreStats(t, primary.VttabletProcess.GetVars())
 
 	// Re-init the shard -- making the original primary tablet (primary) primary again -- for subsequent tests
-	err = localCluster.VtctlclientProcess.InitShardPrimary(keyspaceName, shardName, cell, primary.TabletUID)
-	require.Nil(t, err)
+	err = localCluster.VtctldClientProcess.InitShardPrimary(keyspaceName, shardName, cell, primary.TabletUID)
+	require.NoError(t, err)
 
 	// Verify that we don't have the record created after the older/first backup
 	cluster.VerifyRowsInTablet(t, primary, keyspaceName, 1)
 
 	verifyAfterRemovingBackupNoBackupShouldBePresent(t, backups)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	_, err = primary.VttabletProcess.QueryTablet("DROP TABLE vt_insert_test", keyspaceName, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 }
 
 // Test a primary and replica from the same backup.
@@ -528,32 +526,31 @@ func primaryReplicaSameBackup(t *testing.T) {
 	verifyInitialReplication(t)
 
 	// backup the replica
-	err := localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
-	require.Nil(t, err)
+	err := localCluster.VtctldClientProcess.ExecuteCommand("Backup", replica1.Alias)
+	require.NoError(t, err)
 
 	verifyTabletBackupStats(t, replica1.VttabletProcess.GetVars())
 
 	//  insert more data on the primary
 	_, err = primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// now bring up the other replica, letting it restore from backup.
 	restoreWaitForBackup(t, "replica", nil, true)
 	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, timeout)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// check the new replica has the data
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
 
 	// Promote replica2 to primary
-	err = localCluster.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "--",
-		"--keyspace_shard", shardKsName,
-		"--new_primary", replica2.Alias)
-	require.Nil(t, err)
+	err = localCluster.VtctldClientProcess.ExecuteCommand("PlannedReparentShard",
+		"--new-primary", replica2.Alias, shardKsName)
+	require.NoError(t, err)
 
 	// insert more data on replica2 (current primary)
 	_, err = replica2.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test3')", keyspaceName, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// Force replica1 to restore from backup.
 	verifyRestoreTablet(t, replica1, "SERVING")
@@ -566,19 +563,19 @@ func primaryReplicaSameBackup(t *testing.T) {
 	// It is written into the MANIFEST and read back from the MANIFEST.
 	//
 	// Take another backup on the replica.
-	err = localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
-	require.Nil(t, err)
+	err = localCluster.VtctldClientProcess.ExecuteCommand("Backup", replica1.Alias)
+	require.NoError(t, err)
 
 	// Insert more data on replica2 (current primary).
 	_, err = replica2.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test4')", keyspaceName, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// Force replica1 to restore from backup.
 	verifyRestoreTablet(t, replica1, "SERVING")
 
 	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 4)
 	err = replica2.VttabletProcess.TearDown()
-	require.Nil(t, err)
+	require.NoError(t, err)
 	restartPrimaryAndReplica(t)
 }
 
@@ -596,14 +593,14 @@ func primaryReplicaSameBackupModifiedCompressionEngine(t *testing.T) {
 	time.Sleep(5 * time.Second)
 
 	// backup the replica
-	err := localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
-	require.Nil(t, err)
+	err := localCluster.VtctldClientProcess.ExecuteCommand("Backup", replica1.Alias)
+	require.NoError(t, err)
 
 	verifyTabletBackupStats(t, replica1.VttabletProcess.GetVars())
 
 	//  insert more data on the primary
 	_, err = primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// now bring up the other replica, with change in compression engine
 	// this is to verify that restore will read engine name from manifest instead of reading the new values
@@ -615,20 +612,19 @@ func primaryReplicaSameBackupModifiedCompressionEngine(t *testing.T) {
 	}
 	restoreWaitForBackup(t, "replica", cDetails, false)
 	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, timeout)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// check the new replica has the data
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
 
 	// Promote replica2 to primary
-	err = localCluster.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "--",
-		"--keyspace_shard", shardKsName,
-		"--new_primary", replica2.Alias)
-	require.Nil(t, err)
+	err = localCluster.VtctldClientProcess.ExecuteCommand("PlannedReparentShard",
+		"--new-primary", replica2.Alias, shardKsName)
+	require.NoError(t, err)
 
 	// insert more data on replica2 (current primary)
 	_, err = replica2.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test3')", keyspaceName, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// Force replica1 to restore from backup.
 	verifyRestoreTablet(t, replica1, "SERVING")
@@ -637,21 +633,20 @@ func primaryReplicaSameBackupModifiedCompressionEngine(t *testing.T) {
 	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 3)
 
 	// Promote replica1 to primary
-	err = localCluster.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "--",
-		"--keyspace_shard", shardKsName,
-		"--new_primary", replica1.Alias)
-	require.Nil(t, err)
+	err = localCluster.VtctldClientProcess.ExecuteCommand("PlannedReparentShard",
+		"--new-primary", replica1.Alias, shardKsName)
+	require.NoError(t, err)
 
 	// Insert more data on replica1 (current primary).
 	_, err = replica1.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test4')", keyspaceName, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// wait for replica2 to catch up.
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 4)
 
 	// Now take replica2 backup with gzip (new compressor)
-	err = localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica2.Alias)
-	require.Nil(t, err)
+	err = localCluster.VtctldClientProcess.ExecuteCommand("Backup", replica2.Alias)
+	require.NoError(t, err)
 
 	verifyTabletBackupStats(t, replica2.VttabletProcess.GetVars())
 
@@ -659,7 +654,7 @@ func primaryReplicaSameBackupModifiedCompressionEngine(t *testing.T) {
 	verifyRestoreTablet(t, replica2, "SERVING")
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 4)
 	err = replica2.VttabletProcess.TearDown()
-	require.Nil(t, err)
+	require.NoError(t, err)
 	restartPrimaryAndReplica(t)
 }
 
@@ -690,24 +685,23 @@ func testRestoreOldPrimary(t *testing.T, method restoreMethod) {
 	time.Sleep(5 * time.Second)
 
 	// backup the replica
-	err := localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
-	require.Nil(t, err)
+	err := localCluster.VtctldClientProcess.ExecuteCommand("Backup", replica1.Alias)
+	require.NoError(t, err)
 
 	verifyTabletBackupStats(t, replica1.VttabletProcess.GetVars())
 
 	//  insert more data on the primary
 	_, err = primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// reparent to replica1
-	err = localCluster.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "--",
-		"--keyspace_shard", shardKsName,
-		"--new_primary", replica1.Alias)
-	require.Nil(t, err)
+	err = localCluster.VtctldClientProcess.ExecuteCommand("PlannedReparentShard",
+		"--new-primary", replica1.Alias, shardKsName)
+	require.NoError(t, err)
 
 	// insert more data to new primary
 	_, err = replica1.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test3')", keyspaceName, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// force the old primary to restore at the latest backup.
 	method(t, primary)
@@ -723,13 +717,13 @@ func testRestoreOldPrimary(t *testing.T, method restoreMethod) {
 
 func restoreUsingRestart(t *testing.T, tablet *cluster.Vttablet) {
 	err := tablet.VttabletProcess.TearDown()
-	require.Nil(t, err)
+	require.NoError(t, err)
 	verifyRestoreTablet(t, tablet, "SERVING")
 }
 
 func restoreInPlace(t *testing.T, tablet *cluster.Vttablet) {
-	err := localCluster.VtctlclientProcess.ExecuteCommand("RestoreFromBackup", tablet.Alias)
-	require.Nil(t, err)
+	err := localCluster.VtctldClientProcess.ExecuteCommand("RestoreFromBackup", tablet.Alias)
+	require.NoError(t, err)
 }
 
 func restartPrimaryAndReplica(t *testing.T) {
@@ -753,13 +747,13 @@ func restartPrimaryAndReplica(t *testing.T) {
 		proc.Wait()
 	}
 	for _, tablet := range []*cluster.Vttablet{primary, replica1} {
-		err := localCluster.VtctlclientProcess.InitTablet(tablet, cell, keyspaceName, hostname, shardName)
-		require.Nil(t, err)
+		err := localCluster.InitTablet(tablet, keyspaceName, shardName)
+		require.NoError(t, err)
 		err = tablet.VttabletProcess.Setup()
-		require.Nil(t, err)
+		require.NoError(t, err)
 	}
-	err := localCluster.VtctlclientProcess.InitShardPrimary(keyspaceName, shardName, cell, primary.TabletUID)
-	require.Nil(t, err)
+	err := localCluster.VtctldClientProcess.InitShardPrimary(keyspaceName, shardName, cell, primary.TabletUID)
+	require.NoError(t, err)
 }
 
 func stopAllTablets() {
@@ -768,12 +762,12 @@ func stopAllTablets() {
 		tablet.VttabletProcess.TearDown()
 		if tablet.MysqlctldProcess.TabletUID > 0 {
 			tablet.MysqlctldProcess.Stop()
-			localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "--", "--allow_primary", tablet.Alias)
+			localCluster.VtctldClientProcess.ExecuteCommand("DeleteTablets", "--allow-primary", tablet.Alias)
 			continue
 		}
 		proc, _ := tablet.MysqlctlProcess.StopProcess()
 		mysqlProcs = append(mysqlProcs, proc)
-		localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "--", "--allow_primary", tablet.Alias)
+		localCluster.VtctldClientProcess.ExecuteCommand("DeleteTablets", "--allow-primary", tablet.Alias)
 	}
 	for _, proc := range mysqlProcs {
 		proc.Wait()
@@ -798,33 +792,32 @@ func terminatedRestore(t *testing.T) {
 	checkTabletType(t, replica1.Alias, topodata.TabletType_REPLICA)
 
 	// backup the replica
-	err := localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
-	require.Nil(t, err)
+	err := localCluster.VtctldClientProcess.ExecuteCommand("Backup", replica1.Alias)
+	require.NoError(t, err)
 	checkTabletType(t, replica1.Alias, topodata.TabletType_REPLICA)
 
 	verifyTabletBackupStats(t, replica1.VttabletProcess.GetVars())
 
 	//  insert more data on the primary
 	_, err = primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// reparent to replica1
-	err = localCluster.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "--",
-		"--keyspace_shard", shardKsName,
-		"--new_primary", replica1.Alias)
-	require.Nil(t, err)
+	err = localCluster.VtctldClientProcess.ExecuteCommand("PlannedReparentShard",
+		"--new-primary", replica1.Alias, shardKsName)
+	require.NoError(t, err)
 
 	// insert more data to new primary
 	_, err = replica1.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test3')", keyspaceName, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	checkTabletType(t, primary.Alias, topodata.TabletType_REPLICA)
 	terminateRestore(t)
 	// If restore fails then the tablet type goes back to original type.
 	checkTabletType(t, primary.Alias, topodata.TabletType_REPLICA)
 
-	err = localCluster.VtctlclientProcess.ExecuteCommand("RestoreFromBackup", primary.Alias)
-	require.Nil(t, err)
+	err = localCluster.VtctldClientProcess.ExecuteCommand("RestoreFromBackup", primary.Alias)
+	require.NoError(t, err)
 	checkTabletType(t, primary.Alias, topodata.TabletType_REPLICA)
 
 	_, err = os.Stat(path.Join(primary.VttabletProcess.Directory, "restore_in_progress"))
@@ -842,7 +835,7 @@ func checkTabletType(t *testing.T, alias string, tabletType topodata.TabletType)
 	// for loop for 15 seconds to check if tablet type is correct
 	for i := 0; i < 15; i++ {
 		output, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("GetTablet", alias)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		var tabletPB topodata.Tablet
 		err = json2.Unmarshal([]byte(output), &tabletPB)
 		require.NoError(t, err)
@@ -865,8 +858,8 @@ func doNotDemoteNewlyPromotedPrimaryIfReparentingDuringBackup(t *testing.T) {
 		checkTabletType(t, primary.Alias, topodata.TabletType_PRIMARY)
 
 		// now backup
-		err := localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
-		require.Nil(t, err)
+		err := localCluster.VtctldClientProcess.ExecuteCommand("Backup", replica1.Alias)
+		require.NoError(t, err)
 	}()
 
 	// Perform a graceful reparent operation
@@ -876,11 +869,12 @@ func doNotDemoteNewlyPromotedPrimaryIfReparentingDuringBackup(t *testing.T) {
 		checkTabletType(t, primary.Alias, topodata.TabletType_PRIMARY)
 
 		// now reparent
-		_, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput(
-			"PlannedReparentShard", "--",
-			"--keyspace_shard", fmt.Sprintf("%s/%s", keyspaceName, shardName),
-			"--new_primary", replica1.Alias)
-		require.Nil(t, err)
+		_, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput(
+			"PlannedReparentShard",
+			"--new-primary", replica1.Alias,
+			fmt.Sprintf("%s/%s", keyspaceName, shardName),
+		)
+		require.NoError(t, err)
 
 		// check that we reparented
 		checkTabletType(t, replica1.Alias, topodata.TabletType_PRIMARY)
@@ -908,48 +902,48 @@ func doNotDemoteNewlyPromotedPrimaryIfReparentingDuringBackup(t *testing.T) {
 func vtctlBackup(t *testing.T, tabletType string) {
 	// StopReplication on replica1. We verify that the replication works fine later in
 	// verifyInitialReplication. So this will also check that VTOrc is running.
-	err := localCluster.VtctlclientProcess.ExecuteCommand("StopReplication", replica1.Alias)
-	require.Nil(t, err)
+	err := localCluster.VtctldClientProcess.ExecuteCommand("StopReplication", replica1.Alias)
+	require.NoError(t, err)
 
 	verifyInitialReplication(t)
 	restoreWaitForBackup(t, tabletType, nil, true)
 
-	err = localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
-	require.Nil(t, err)
+	err = localCluster.VtctldClientProcess.ExecuteCommand("Backup", replica1.Alias)
+	require.NoError(t, err)
 
 	backups := localCluster.VerifyBackupCount(t, shardKsName, 1)
 
 	verifyTabletBackupStats(t, replica1.VttabletProcess.GetVars())
 
 	_, err = primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, 25*time.Second)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
 
 	verifyAfterRemovingBackupNoBackupShouldBePresent(t, backups)
 	err = replica2.VttabletProcess.TearDown()
-	require.Nil(t, err)
+	require.NoError(t, err)
 
-	err = localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", replica2.Alias)
-	require.Nil(t, err)
+	err = localCluster.VtctldClientProcess.ExecuteCommand("DeleteTablets", replica2.Alias)
+	require.NoError(t, err)
 	_, err = primary.VttabletProcess.QueryTablet("DROP TABLE vt_insert_test", keyspaceName, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 }
 
 func InitTestTable(t *testing.T) {
 	_, err := primary.VttabletProcess.QueryTablet("DROP TABLE IF EXISTS vt_insert_test", keyspaceName, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	_, err = primary.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 }
 
 // This will create schema in primary, insert some data to primary and verify the same data in replica
 func verifyInitialReplication(t *testing.T) {
 	InitTestTable(t)
 	_, err := primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test1')", keyspaceName, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 1)
 }
 
@@ -974,12 +968,12 @@ func restoreWaitForBackup(t *testing.T, tabletType string, cDetails *Compression
 	replica2.VttabletProcess.ExtraArgs = replicaTabletArgs
 	replica2.VttabletProcess.ServingStatus = ""
 	err := replica2.VttabletProcess.Setup()
-	require.Nil(t, err)
+	require.NoError(t, err)
 }
 
 func RemoveBackup(t *testing.T, backupName string) {
-	err := localCluster.VtctlclientProcess.ExecuteCommand("RemoveBackup", shardKsName, backupName)
-	require.Nil(t, err)
+	err := localCluster.VtctldClientProcess.ExecuteCommand("RemoveBackup", shardKsName, backupName)
+	require.NoError(t, err)
 }
 
 func verifyAfterRemovingBackupNoBackupShouldBePresent(t *testing.T, backups []string) {
@@ -996,17 +990,17 @@ func verifyRestoreTablet(t *testing.T, tablet *cluster.Vttablet, status string) 
 	tablet.ValidateTabletRestart(t)
 	tablet.VttabletProcess.ServingStatus = ""
 	err := tablet.VttabletProcess.Setup()
-	require.Nil(t, err)
+	require.NoError(t, err)
 	if status != "" {
 		err = tablet.VttabletProcess.WaitForTabletStatusesForTimeout([]string{status}, 25*time.Second)
-		require.Nil(t, err)
+		require.NoError(t, err)
 	}
 	// We restart replication here because semi-sync will not be set correctly on tablet startup since
 	// we deprecated enable_semi_sync. StartReplication RPC fixes the semi-sync settings by consulting the
 	// durability policies set.
-	err = localCluster.VtctlclientProcess.ExecuteCommand("StopReplication", tablet.Alias)
+	err = localCluster.VtctldClientProcess.ExecuteCommand("StopReplication", tablet.Alias)
 	require.NoError(t, err)
-	err = localCluster.VtctlclientProcess.ExecuteCommand("StartReplication", tablet.Alias)
+	err = localCluster.VtctldClientProcess.ExecuteCommand("StartReplication", tablet.Alias)
 	require.NoError(t, err)
 
 	if tablet.Type == "replica" {
@@ -1017,12 +1011,24 @@ func verifyRestoreTablet(t *testing.T, tablet *cluster.Vttablet, status string) 
 }
 
 func verifySemiSyncStatus(t *testing.T, vttablet *cluster.Vttablet, expectedStatus string) {
-	status, err := vttablet.VttabletProcess.GetDBVar("rpl_semi_sync_slave_enabled", keyspaceName)
-	require.Nil(t, err)
-	assert.Equal(t, status, expectedStatus)
-	status, err = vttablet.VttabletProcess.GetDBStatus("rpl_semi_sync_slave_status", keyspaceName)
-	require.Nil(t, err)
-	assert.Equal(t, status, expectedStatus)
+	semisyncType, err := vttablet.VttabletProcess.SemiSyncExtensionLoaded()
+	require.NoError(t, err)
+	switch semisyncType {
+	case mysql.SemiSyncTypeSource:
+		status, err := vttablet.VttabletProcess.GetDBVar("rpl_semi_sync_replica_enabled", keyspaceName)
+		require.NoError(t, err)
+		assert.Equal(t, status, expectedStatus)
+		status, err = vttablet.VttabletProcess.GetDBStatus("rpl_semi_sync_replica_status", keyspaceName)
+		require.NoError(t, err)
+		assert.Equal(t, status, expectedStatus)
+	case mysql.SemiSyncTypeMaster:
+		status, err := vttablet.VttabletProcess.GetDBVar("rpl_semi_sync_slave_enabled", keyspaceName)
+		require.NoError(t, err)
+		assert.Equal(t, status, expectedStatus)
+		status, err = vttablet.VttabletProcess.GetDBStatus("rpl_semi_sync_slave_status", keyspaceName)
+		require.NoError(t, err)
+		assert.Equal(t, status, expectedStatus)
+	}
 }
 
 func terminateBackup(t *testing.T, alias string) {
@@ -1035,15 +1041,15 @@ func terminateBackup(t *testing.T, alias string) {
 		}()
 	}
 
-	args := append([]string{"--server", localCluster.VtctlclientProcess.Server, "--alsologtostderr"}, "Backup", "--", alias)
+	args := append([]string{"--server", localCluster.VtctldClientProcess.Server, "--alsologtostderr"}, "Backup", alias)
 	tmpProcess := exec.Command(
-		"vtctlclient",
+		"vtctldclient",
 		args...,
 	)
 
-	reader, _ := tmpProcess.StderrPipe()
+	reader, _ := tmpProcess.StdoutPipe()
 	err := tmpProcess.Start()
-	require.Nil(t, err)
+	require.NoError(t, err)
 	found := false
 
 	scanner := bufio.NewScanner(reader)
@@ -1069,15 +1075,15 @@ func terminateRestore(t *testing.T) {
 		}()
 	}
 
-	args := append([]string{"--server", localCluster.VtctlclientProcess.Server, "--alsologtostderr"}, "RestoreFromBackup", "--", primary.Alias)
+	args := append([]string{"--server", localCluster.VtctldClientProcess.Server, "--alsologtostderr"}, "RestoreFromBackup", primary.Alias)
 	tmpProcess := exec.Command(
-		"vtctlclient",
+		"vtctldclient",
 		args...,
 	)
 
-	reader, _ := tmpProcess.StderrPipe()
+	reader, _ := tmpProcess.StdoutPipe()
 	err := tmpProcess.Start()
-	require.Nil(t, err)
+	require.NoError(t, err)
 	found := false
 
 	scanner := bufio.NewScanner(reader)
@@ -1101,7 +1107,7 @@ func vtctlBackupReplicaNoDestroyNoWrites(t *testing.T, replicaIndex int) (backup
 	numBackups := len(waitForNumBackups(t, -1))
 
 	err := localCluster.VtctldClientProcess.ExecuteCommand("Backup", replica.Alias)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	backups = waitForNumBackups(t, numBackups+1)
 	require.NotEmpty(t, backups)
@@ -1257,13 +1263,10 @@ func waitForNumBackups(t *testing.T, expectNumBackups int) []string {
 	}
 }
 
-func testReplicaIncrementalBackup(t *testing.T, replica *cluster.Vttablet, incrementalFromPos replication.Position, expectError string) (manifest *mysqlctl.BackupManifest, backupName string) {
+func testReplicaIncrementalBackup(t *testing.T, replica *cluster.Vttablet, incrementalFromPos string, expectEmpty bool, expectError string) (manifest *mysqlctl.BackupManifest, backupName string) {
 	numBackups := len(waitForNumBackups(t, -1))
-	incrementalFromPosArg := "auto"
-	if !incrementalFromPos.IsZero() {
-		incrementalFromPosArg = replication.EncodePosition(incrementalFromPos)
-	}
-	output, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("Backup", "--incremental-from-pos", incrementalFromPosArg, replica.Alias)
+
+	output, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("Backup", "--incremental-from-pos", incrementalFromPos, replica.Alias)
 	if expectError != "" {
 		require.Errorf(t, err, "expected: %v", expectError)
 		require.Contains(t, output, expectError)
@@ -1271,24 +1274,30 @@ func testReplicaIncrementalBackup(t *testing.T, replica *cluster.Vttablet, incre
 	}
 	require.NoErrorf(t, err, "output: %v", output)
 
+	if expectEmpty {
+		require.Contains(t, output, mysqlctl.EmptyBackupMessage)
+		return nil, ""
+	}
+
 	backups := waitForNumBackups(t, numBackups+1)
 	require.NotEmptyf(t, backups, "output: %v", output)
 
 	verifyTabletBackupStats(t, replica.VttabletProcess.GetVars())
 	backupName = backups[len(backups)-1]
+
 	backupLocation := localCluster.CurrentVTDATAROOT + "/backups/" + shardKsName + "/" + backupName
 	return readManifestFile(t, backupLocation), backupName
 }
 
-func TestReplicaIncrementalBackup(t *testing.T, replicaIndex int, incrementalFromPos replication.Position, expectError string) (manifest *mysqlctl.BackupManifest, backupName string) {
+func TestReplicaIncrementalBackup(t *testing.T, replicaIndex int, incrementalFromPos string, expectEmpty bool, expectError string) (manifest *mysqlctl.BackupManifest, backupName string) {
 	replica := getReplica(t, replicaIndex)
-	return testReplicaIncrementalBackup(t, replica, incrementalFromPos, expectError)
+	return testReplicaIncrementalBackup(t, replica, incrementalFromPos, expectEmpty, expectError)
 }
 
 func TestReplicaFullRestore(t *testing.T, replicaIndex int, expectError string) {
 	replica := getReplica(t, replicaIndex)
 
-	output, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput("RestoreFromBackup", replica.Alias)
+	output, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("RestoreFromBackup", replica.Alias)
 	if expectError != "" {
 		require.Errorf(t, err, "expected: %v", expectError)
 		require.Contains(t, output, expectError)
@@ -1303,7 +1312,14 @@ func TestReplicaRestoreToPos(t *testing.T, replicaIndex int, restoreToPos replic
 
 	require.False(t, restoreToPos.IsZero())
 	restoreToPosArg := replication.EncodePosition(restoreToPos)
-	output, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput("RestoreFromBackup", "--", "--restore_to_pos", restoreToPosArg, replica.Alias)
+	assert.Contains(t, restoreToPosArg, "MySQL56/")
+	if rand.Intn(2) == 0 {
+		// Verify that restore works whether or not the MySQL56/ prefix is present.
+		restoreToPosArg = strings.Replace(restoreToPosArg, "MySQL56/", "", 1)
+		assert.NotContains(t, restoreToPosArg, "MySQL56/")
+	}
+
+	output, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("RestoreFromBackup", "--restore-to-pos", restoreToPosArg, replica.Alias)
 	if expectError != "" {
 		require.Errorf(t, err, "expected: %v", expectError)
 		require.Contains(t, output, expectError)

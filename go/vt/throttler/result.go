@@ -17,8 +17,8 @@ limitations under the License.
 package throttler
 
 import (
-	"bytes"
 	"fmt"
+	"strings"
 	"sync"
 	"text/template"
 	"time"
@@ -81,7 +81,7 @@ type result struct {
 }
 
 func (r result) String() string {
-	var b bytes.Buffer
+	var b strings.Builder
 	if err := resultStringTemplate.Execute(&b, r); err != nil {
 		panic(fmt.Sprintf("failed to Execute() template: %v", err))
 	}

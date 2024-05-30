@@ -235,7 +235,7 @@ func init() {
 }
 
 func buildVSchema(source *vschemapb.SrvVSchema) (vschema *VSchema) {
-	vs := BuildVSchema(source)
+	vs := BuildVSchema(source, sqlparser.NewTestParser())
 	if vs != nil {
 		vs.ResetCreated()
 	}
@@ -247,8 +247,56 @@ func TestUnshardedVSchemaValid(t *testing.T) {
 		Sharded:  false,
 		Vindexes: make(map[string]*vschemapb.Vindex),
 		Tables:   make(map[string]*vschemapb.Table),
-	})
+	}, sqlparser.NewTestParser())
 	require.NoError(t, err)
+}
+
+// TestMultiTenantAttribute verifies that the MultiTenantSpec attribute is updated in KeyspaceSchema.
+func TestMultiTenantAttribute(t *testing.T) {
+	tests := []struct {
+		name            string
+		multiTenantSpec *vschemapb.MultiTenantSpec
+		wanted          *vschemapb.MultiTenantSpec
+	}{
+		{
+			name: "Not Set",
+		}, {
+			name: "Empty MultiTenantSpec",
+			multiTenantSpec: &vschemapb.MultiTenantSpec{
+				TenantIdColumnName: "",
+			},
+			wanted: &vschemapb.MultiTenantSpec{},
+		}, {
+			name: "String",
+			multiTenantSpec: &vschemapb.MultiTenantSpec{
+				TenantIdColumnName: "tenant_id",
+				TenantIdColumnType: querypb.Type_VARCHAR,
+			},
+			wanted: &vschemapb.MultiTenantSpec{
+				TenantIdColumnName: "tenant_id",
+				TenantIdColumnType: querypb.Type_VARCHAR,
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ksSchema, err := BuildKeyspace(&vschemapb.Keyspace{
+				Sharded:         false,
+				MultiTenantSpec: test.multiTenantSpec,
+				Vindexes:        make(map[string]*vschemapb.Vindex),
+				Tables:          make(map[string]*vschemapb.Table),
+			}, sqlparser.NewTestParser())
+			require.NoError(t, err)
+			if test.multiTenantSpec == nil {
+				require.Empty(t, test.wanted)
+			} else {
+				require.NotNil(t, test.wanted)
+				require.Equal(t, test.wanted.TenantIdColumnName, ksSchema.MultiTenantSpec.TenantIdColumnName)
+				require.Equal(t, test.wanted.TenantIdColumnType, ksSchema.MultiTenantSpec.TenantIdColumnType)
+			}
+
+		})
+	}
 }
 
 func TestForeignKeyMode(t *testing.T) {
@@ -282,7 +330,7 @@ func TestForeignKeyMode(t *testing.T) {
 				ForeignKeyMode: test.fkMode,
 				Vindexes:       make(map[string]*vschemapb.Vindex),
 				Tables:         make(map[string]*vschemapb.Table),
-			})
+			}, sqlparser.NewTestParser())
 			require.NoError(t, err)
 			require.Equal(t, test.wantedFkMode, ksSchema.ForeignKeyMode)
 		})
@@ -297,7 +345,7 @@ func TestUnshardedVSchema(t *testing.T) {
 				Tables: map[string]*vschemapb.Table{
 					"t1": {}}}}}
 
-	got := BuildVSchema(&good)
+	got := BuildVSchema(&good, sqlparser.NewTestParser())
 	require.NoError(t, got.Keyspaces["unsharded"].Error)
 
 	table, err := got.FindTable("unsharded", "t1")
@@ -315,18 +363,22 @@ func TestVSchemaColumns(t *testing.T) {
 			"unsharded": {
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
-						Columns: []*vschemapb.Column{{
-							Name: "c1"}, {
-							Name: "c2",
-							Type: sqltypes.VarChar}}}}}}}
+						Columns: []*vschemapb.Column{
+							{Name: "c1"},
+							{Name: "c2", Type: sqltypes.VarChar},
+							{Name: "c3", Type: sqltypes.VarChar, Default: "''"},
+							{Name: "c4", Type: sqltypes.TypeJSON, Default: "json_array()"},
+						}}}}}}
 
-	got := BuildVSchema(&good)
+	got := BuildVSchema(&good, sqlparser.NewTestParser())
 	require.NoError(t, got.Keyspaces["unsharded"].Error)
 
 	t1, err := got.FindTable("unsharded", "t1")
 	require.NoError(t, err)
 	assertColumn(t, t1.Columns[0], "c1", sqltypes.Null)
 	assertColumn(t, t1.Columns[1], "c2", sqltypes.VarChar)
+	assertColumnWithDefault(t, t1.Columns[2], "c3", sqltypes.VarChar, sqlparser.NewStrLiteral(""))
+	assertColumnWithDefault(t, t1.Columns[3], "c4", sqltypes.TypeJSON, &sqlparser.JSONArrayExpr{})
 }
 
 func TestVSchemaViews(t *testing.T) {
@@ -348,11 +400,11 @@ func TestVSchemaViews(t *testing.T) {
 						}, {
 							Name: "c2",
 							Type: sqltypes.VarChar}}}}}}}
-	vschema := BuildVSchema(&good)
+	vschema := BuildVSchema(&good, sqlparser.NewTestParser())
 	require.NoError(t, vschema.Keyspaces["unsharded"].Error)
 
 	// add view to unsharded keyspace.
-	vschema.AddView("unsharded", "v1", "SELECT c1+c2 AS added FROM t1")
+	vschema.AddView("unsharded", "v1", "SELECT c1+c2 AS added FROM t1", sqlparser.NewTestParser())
 
 	view := vschema.FindView("unsharded", "v1")
 	assert.Equal(t, "select c1 + c2 as added from t1", sqlparser.String(view))
@@ -372,10 +424,12 @@ func TestVSchemaViews(t *testing.T) {
       "columns": [
         {
           "name": "c1",
+          "nullable": true,
           "type": "NULL_TYPE"
         },
         {
           "name": "c2",
+          "nullable": true,
           "type": "VARCHAR"
         }
       ]
@@ -386,6 +440,51 @@ func TestVSchemaViews(t *testing.T) {
   }
 }`
 	require.JSONEq(t, want, got)
+}
+
+func TestColumnMarshal(t *testing.T) {
+	tests := []struct {
+		name   string
+		col    Column
+		wanted string
+	}{
+		{
+			name: "Decimal column",
+			col: Column{
+				Name:  sqlparser.NewIdentifierCI("col1"),
+				Type:  sqltypes.Decimal,
+				Size:  15,
+				Scale: 2,
+			},
+			wanted: `{"name":"col1", "scale":2, "size":15, "type":"DECIMAL"}`,
+		},
+		{
+			name: "Decimal column with no scale",
+			col: Column{
+				Name:  sqlparser.NewIdentifierCI("col1"),
+				Type:  sqltypes.Decimal,
+				Size:  15,
+				Scale: 0,
+			},
+			wanted: `{"name":"col1", "size":15, "type":"DECIMAL"}`,
+		},
+		{
+			name: "enum with values column",
+			col: Column{
+				Name:   sqlparser.NewIdentifierCI("col1"),
+				Type:   sqltypes.Enum,
+				Values: []string{"{A", "B\"", "C"},
+			},
+			wanted: `{"name":"col1","type":"ENUM","values":["{A","B\"","C"]}`,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			res, err := test.col.MarshalJSON()
+			require.NoError(t, err)
+			require.JSONEq(t, test.wanted, string(res), string(res))
+		})
+	}
 }
 
 func TestVSchemaForeignKeys(t *testing.T) {
@@ -407,10 +506,10 @@ func TestVSchemaForeignKeys(t *testing.T) {
 						}, {
 							Name: "c2",
 							Type: sqltypes.VarChar}}}}}}}
-	vschema := BuildVSchema(&good)
+	vschema := BuildVSchema(&good, sqlparser.NewTestParser())
 	require.NoError(t, vschema.Keyspaces["main"].Error)
 
-	// add fk containst a keyspace.
+	// add fk constraints to a keyspace.
 	vschema.AddForeignKey("main", "t1", &sqlparser.ForeignKeyDefinition{
 		Source: sqlparser.Columns{sqlparser.NewIdentifierCI("c2")},
 		ReferenceDefinition: &sqlparser.ReferenceDefinition{
@@ -430,10 +529,12 @@ func TestVSchemaForeignKeys(t *testing.T) {
       "columns": [
         {
           "name": "c1",
+		  "nullable": true,
           "type": "NULL_TYPE"
         },
         {
           "name": "c2",
+		  "nullable": true,
           "type": "VARCHAR"
         }
       ],
@@ -470,7 +571,7 @@ func TestVSchemaColumnListAuthoritative(t *testing.T) {
 							Type: sqltypes.VarChar}},
 						ColumnListAuthoritative: true}}}}}
 
-	got := BuildVSchema(&good)
+	got := BuildVSchema(&good, sqlparser.NewTestParser())
 
 	t1, err := got.FindTable("unsharded", "t1")
 	require.NoError(t, err)
@@ -489,7 +590,7 @@ func TestVSchemaColumnsFail(t *testing.T) {
 							Name: "c1"}, {
 							Name: "c1"}}}}}}}
 
-	got := BuildVSchema(&good)
+	got := BuildVSchema(&good, sqlparser.NewTestParser())
 	require.EqualError(t, got.Keyspaces["unsharded"].Error, "duplicate column name 'c1' for table: t1")
 }
 
@@ -502,7 +603,7 @@ func TestVSchemaPinned(t *testing.T) {
 					"t1": {
 						Pinned: "80"}}}}}
 
-	got := BuildVSchema(&good)
+	got := BuildVSchema(&good, sqlparser.NewTestParser())
 
 	err := got.Keyspaces["sharded"].Error
 	require.NoError(t, err)
@@ -534,7 +635,7 @@ func TestShardedVSchemaOwned(t *testing.T) {
 								Column: "c2",
 								Name:   "stln1"}}}}}}}
 
-	got := BuildVSchema(&good)
+	got := BuildVSchema(&good, sqlparser.NewTestParser())
 	err := got.Keyspaces["sharded"].Error
 	require.NoError(t, err)
 
@@ -604,7 +705,7 @@ func TestShardedVSchemaOwnerInfo(t *testing.T) {
 			},
 		},
 	}
-	got := BuildVSchema(&good)
+	got := BuildVSchema(&good, sqlparser.NewTestParser())
 	err := got.Keyspaces["sharded"].Error
 	require.NoError(t, err)
 	results := []struct {
@@ -706,7 +807,7 @@ func TestVSchemaRoutingRules(t *testing.T) {
 			},
 		},
 	}
-	got := BuildVSchema(&input)
+	got := BuildVSchema(&input, sqlparser.NewTestParser())
 	ks1 := &Keyspace{
 		Name:    "ks1",
 		Sharded: true,
@@ -954,7 +1055,7 @@ func TestFindBestColVindex(t *testing.T) {
 				Tables: map[string]*vschemapb.Table{
 					"t2": {}}}}}
 
-	vs := BuildVSchema(testSrvVSchema)
+	vs := BuildVSchema(testSrvVSchema, sqlparser.NewTestParser())
 
 	testcases := []struct {
 		tablename  string
@@ -1270,7 +1371,7 @@ func TestBuildVSchemaVindexNotFoundFail(t *testing.T) {
 			},
 		},
 	}
-	got := BuildVSchema(&bad)
+	got := BuildVSchema(&bad, sqlparser.NewTestParser())
 	err := got.Keyspaces["sharded"].Error
 	want := `vindexType "noexist" not found`
 	if err == nil || err.Error() != want {
@@ -1294,7 +1395,7 @@ func TestBuildVSchemaNoColumnVindexFail(t *testing.T) {
 			},
 		},
 	}
-	got := BuildVSchema(&bad)
+	got := BuildVSchema(&bad, sqlparser.NewTestParser())
 	err := got.Keyspaces["sharded"].Error
 	want := "missing primary col vindex for table: t1"
 	if err == nil || err.Error() != want {
@@ -1579,7 +1680,7 @@ func TestBuildVSchemaNoindexFail(t *testing.T) {
 			},
 		},
 	}
-	got := BuildVSchema(&bad)
+	got := BuildVSchema(&bad, sqlparser.NewTestParser())
 	err := got.Keyspaces["sharded"].Error
 	want := "vindex notexist not found for table t1"
 	if err == nil || err.Error() != want {
@@ -1611,7 +1712,7 @@ func TestBuildVSchemaColumnAndColumnsFail(t *testing.T) {
 			},
 		},
 	}
-	got := BuildVSchema(&bad)
+	got := BuildVSchema(&bad, sqlparser.NewTestParser())
 	err := got.Keyspaces["sharded"].Error
 	want := `can't use column and columns at the same time in vindex (stfu) and table (t1)`
 	if err == nil || err.Error() != want {
@@ -1641,7 +1742,7 @@ func TestBuildVSchemaNoColumnsFail(t *testing.T) {
 			},
 		},
 	}
-	got := BuildVSchema(&bad)
+	got := BuildVSchema(&bad, sqlparser.NewTestParser())
 	err := got.Keyspaces["sharded"].Error
 	want := `must specify at least one column for vindex (stfu) and table (t1)`
 	if err == nil || err.Error() != want {
@@ -1672,7 +1773,7 @@ func TestBuildVSchemaNotUniqueFail(t *testing.T) {
 			},
 		},
 	}
-	got := BuildVSchema(&bad)
+	got := BuildVSchema(&bad, sqlparser.NewTestParser())
 	err := got.Keyspaces["sharded"].Error
 	want := "primary vindex stln is not Unique for table t1"
 	if err == nil || err.Error() != want {
@@ -1704,7 +1805,7 @@ func TestBuildVSchemaPrimaryCannotBeOwned(t *testing.T) {
 			},
 		},
 	}
-	got := BuildVSchema(&bad)
+	got := BuildVSchema(&bad, sqlparser.NewTestParser())
 	err := got.Keyspaces["sharded"].Error
 	want := "primary vindex stlu cannot be owned for table t1"
 	if err == nil || err.Error() != want {
@@ -1732,7 +1833,7 @@ func TestBuildVSchemaReferenceTableSourceMayBeUnqualified(t *testing.T) {
 			},
 		},
 	}
-	vschema := BuildVSchema(&input)
+	vschema := BuildVSchema(&input, sqlparser.NewTestParser())
 	require.NoError(t, vschema.Keyspaces["unsharded"].Error)
 	require.NoError(t, vschema.Keyspaces["sharded"].Error)
 }
@@ -1764,7 +1865,7 @@ func TestBuildVSchemaReferenceTableSourceMustBeInDifferentKeyspace(t *testing.T)
 			},
 		},
 	}
-	vschema := BuildVSchema(&input)
+	vschema := BuildVSchema(&input, sqlparser.NewTestParser())
 	require.Error(t, vschema.Keyspaces["sharded"].Error)
 	require.EqualError(t, vschema.Keyspaces["sharded"].Error,
 		"source \"sharded.src\" may not reference a table in the same keyspace as table: ref")
@@ -1784,7 +1885,7 @@ func TestBuildVSchemaReferenceTableSourceKeyspaceMustExist(t *testing.T) {
 			},
 		},
 	}
-	vschema := BuildVSchema(&input)
+	vschema := BuildVSchema(&input, sqlparser.NewTestParser())
 	require.Error(t, vschema.Keyspaces["sharded"].Error)
 	require.EqualError(t, vschema.Keyspaces["sharded"].Error,
 		"source \"unsharded.src\" references a non-existent keyspace \"unsharded\"")
@@ -1810,7 +1911,7 @@ func TestBuildVSchemaReferenceTableSourceTableMustExist(t *testing.T) {
 			},
 		},
 	}
-	vschema := BuildVSchema(&input)
+	vschema := BuildVSchema(&input, sqlparser.NewTestParser())
 	require.Error(t, vschema.Keyspaces["sharded"].Error)
 	require.EqualError(t, vschema.Keyspaces["sharded"].Error,
 		"source \"unsharded.src\" references a table \"src\" that is not present in the VSchema of keyspace \"unsharded\"")
@@ -1848,7 +1949,7 @@ func TestBuildVSchemaReferenceTableSourceMayUseShardedKeyspace(t *testing.T) {
 			},
 		},
 	}
-	vschema := BuildVSchema(&input)
+	vschema := BuildVSchema(&input, sqlparser.NewTestParser())
 	require.NoError(t, vschema.Keyspaces["sharded1"].Error)
 	require.NoError(t, vschema.Keyspaces["sharded2"].Error)
 }
@@ -1915,7 +2016,7 @@ func TestBuildVSchemaReferenceTableSourceTableMustBeBasicOrReferenceWithoutSourc
 		},
 	}
 
-	vschema := BuildVSchema(&input)
+	vschema := BuildVSchema(&input, sqlparser.NewTestParser())
 	require.Error(t, vschema.Keyspaces["sharded1"].Error)
 	require.EqualError(t, vschema.Keyspaces["sharded1"].Error,
 		"source \"unsharded1.src1\" may not reference a table of type \"sequence\": ref1")
@@ -1949,7 +2050,7 @@ func TestBuildVSchemaSourceMayBeReferencedAtMostOncePerKeyspace(t *testing.T) {
 			},
 		},
 	}
-	vschema := BuildVSchema(&input)
+	vschema := BuildVSchema(&input, sqlparser.NewTestParser())
 	require.Error(t, vschema.Keyspaces["sharded"].Error)
 	require.EqualError(t, vschema.Keyspaces["sharded"].Error,
 		"source \"unsharded.src\" may not be referenced more than once per keyspace: ref1, ref2")
@@ -1987,7 +2088,7 @@ func TestBuildVSchemaMayNotChainReferences(t *testing.T) {
 			},
 		},
 	}
-	vschema := BuildVSchema(&input)
+	vschema := BuildVSchema(&input, sqlparser.NewTestParser())
 	require.Error(t, vschema.Keyspaces["unsharded1"].Error)
 	require.EqualError(t, vschema.Keyspaces["unsharded1"].Error,
 		"reference chaining is not allowed ref => unsharded2.ref => unsharded3.ref: ref")
@@ -2189,7 +2290,7 @@ func TestBadSequence(t *testing.T) {
 			},
 		},
 	}
-	got := BuildVSchema(&bad)
+	got := BuildVSchema(&bad, sqlparser.NewTestParser())
 	err := got.Keyspaces["sharded"].Error
 	want := "cannot resolve sequence invalid_seq: table invalid_seq not found"
 	if err == nil || err.Error() != want {
@@ -2237,7 +2338,7 @@ func TestBadSequenceName(t *testing.T) {
 			},
 		},
 	}
-	got := BuildVSchema(&bad)
+	got := BuildVSchema(&bad, sqlparser.NewTestParser())
 	err := got.Keyspaces["sharded"].Error
 	want := "invalid table name: a.b.seq"
 	if err == nil || !strings.Contains(err.Error(), want) {
@@ -2261,7 +2362,7 @@ func TestBadShardedSequence(t *testing.T) {
 			},
 		},
 	}
-	got := BuildVSchema(&bad)
+	got := BuildVSchema(&bad, sqlparser.NewTestParser())
 	err := got.Keyspaces["sharded"].Error
 	want := "sequence table has to be in an unsharded keyspace or must be pinned: t1"
 	if err == nil || err.Error() != want {
@@ -2312,7 +2413,7 @@ func TestFindTable(t *testing.T) {
 			},
 		},
 	}
-	vschema := BuildVSchema(&input)
+	vschema := BuildVSchema(&input, sqlparser.NewTestParser())
 	_, err := vschema.FindTable("", "t1")
 	require.EqualError(t, err, "ambiguous table reference: t1")
 
@@ -2436,7 +2537,7 @@ func TestFindTableOrVindex(t *testing.T) {
 			},
 		},
 	}
-	vschema := BuildVSchema(&input)
+	vschema := BuildVSchema(&input, sqlparser.NewTestParser())
 	ta := vschema.Keyspaces["ksa"].Tables["ta"]
 	t1 := vschema.Keyspaces["ksb"].Tables["t1"]
 
@@ -2539,7 +2640,7 @@ func TestBuildKeyspaceSchema(t *testing.T) {
 			"t2": {},
 		},
 	}
-	got, _ := BuildKeyspaceSchema(good, "ks")
+	got, _ := BuildKeyspaceSchema(good, "ks", sqlparser.NewTestParser())
 	err := got.Error
 	require.NoError(t, err)
 	ks := &Keyspace{
@@ -2581,7 +2682,7 @@ func TestValidate(t *testing.T) {
 			"t2": {},
 		},
 	}
-	_, err := BuildKeyspace(good)
+	_, err := BuildKeyspace(good, sqlparser.NewTestParser())
 	require.NoError(t, err)
 	bad := &vschemapb.Keyspace{
 		Sharded: true,
@@ -2594,7 +2695,7 @@ func TestValidate(t *testing.T) {
 			"t2": {},
 		},
 	}
-	_, err = BuildKeyspace(bad)
+	_, err = BuildKeyspace(bad, sqlparser.NewTestParser())
 	want := `vindexType "absent" not found`
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("Validate: %v, must start with %s", err, want)
@@ -2605,6 +2706,11 @@ func TestVSchemaPBJSON(t *testing.T) {
 	in := `
 	{
 		"sharded": true,
+		"foreignKeyMode": "unmanaged",
+        "multi_tenant_spec": {
+			"tenant_id_column_name": "tenant_id",
+			"tenant_id_column_type": 265
+		},
 		"tables": {
 			"t1": {
 				"column_vindexes":[{
@@ -2633,7 +2739,12 @@ func TestVSchemaPBJSON(t *testing.T) {
 		t.Error(err)
 	}
 	want := vschemapb.Keyspace{
-		Sharded: true,
+		Sharded:        true,
+		ForeignKeyMode: vschemapb.Keyspace_unmanaged,
+		MultiTenantSpec: &vschemapb.MultiTenantSpec{
+			TenantIdColumnName: "tenant_id",
+			TenantIdColumnType: querypb.Type_INT64,
+		},
 		Tables: map[string]*vschemapb.Table{
 			"t1": {
 				ColumnVindexes: []*vschemapb.ColumnVindex{
@@ -2678,6 +2789,10 @@ func TestVSchemaJSON(t *testing.T) {
 	in := map[string]*KeyspaceSchema{
 		"unsharded": {
 			ForeignKeyMode: vschemapb.Keyspace_managed,
+			MultiTenantSpec: &vschemapb.MultiTenantSpec{
+				TenantIdColumnName: "tenant_id",
+				TenantIdColumnType: querypb.Type_INT64,
+			},
 			Keyspace: &Keyspace{
 				Name: "k1",
 			},
@@ -2687,8 +2802,9 @@ func TestVSchemaJSON(t *testing.T) {
 					Columns: []Column{{
 						Name: sqlparser.NewIdentifierCI("c1"),
 					}, {
-						Name: sqlparser.NewIdentifierCI("c2"),
-						Type: sqltypes.VarChar,
+						Name:      sqlparser.NewIdentifierCI("c2"),
+						Type:      sqltypes.VarChar,
+						Invisible: true,
 					}},
 				},
 				"t2": {
@@ -2761,7 +2877,8 @@ func TestVSchemaJSON(t *testing.T) {
           },
           {
             "name": "c2",
-            "type": "VARCHAR"
+            "type": "VARCHAR",
+            "invisible": true
           }
         ]
       },
@@ -2769,6 +2886,10 @@ func TestVSchemaJSON(t *testing.T) {
         "type": "sequence",
         "name": "n2"
       }
+    },
+    "multi_tenant_spec": {
+      "tenant_id_column_name": "tenant_id",
+      "tenant_id_column_type": 265
     }
   }
 }`
@@ -2788,7 +2909,7 @@ func TestFindSingleKeyspace(t *testing.T) {
 			},
 		},
 	}
-	vschema := BuildVSchema(&input)
+	vschema := BuildVSchema(&input, sqlparser.NewTestParser())
 	none := &Table{
 		Name: sqlparser.NewIdentifierCS("none"),
 		Keyspace: &Keyspace{
@@ -2829,7 +2950,7 @@ func TestFindSingleKeyspace(t *testing.T) {
 			},
 		},
 	}
-	vschema = BuildVSchema(&input)
+	vschema = BuildVSchema(&input, sqlparser.NewTestParser())
 	_, err := vschema.FindTable("", "none")
 	wantErr := "table none not found"
 	if err == nil || err.Error() != wantErr {
@@ -2863,7 +2984,7 @@ func TestMultiColVindexPartialAllowed(t *testing.T) {
 			},
 		},
 	}
-	vschema := BuildVSchema(&input)
+	vschema := BuildVSchema(&input, sqlparser.NewTestParser())
 	table, err := vschema.FindTable("ksa", "user_region")
 	require.NoError(t, err)
 	require.Len(t, table.ColumnVindexes, 2)
@@ -2896,7 +3017,7 @@ func TestMultiColVindexPartialNotAllowed(t *testing.T) {
 			},
 		},
 	}
-	vschema := BuildVSchema(&input)
+	vschema := BuildVSchema(&input, sqlparser.NewTestParser())
 	table, err := vschema.FindTable("ksa", "multiColTbl")
 	require.NoError(t, err)
 	require.Len(t, table.ColumnVindexes, 1)
@@ -2933,7 +3054,7 @@ func TestSourceTableHasReferencedBy(t *testing.T) {
 			},
 		},
 	}
-	vs := BuildVSchema(&input)
+	vs := BuildVSchema(&input, sqlparser.NewTestParser())
 	ref1, err := vs.FindTable("sharded1", "ref")
 	require.NoError(t, err)
 	ref2, err := vs.FindTable("sharded2", "ref")
@@ -2967,7 +3088,7 @@ func TestReferenceTableAndSourceAreGloballyRoutable(t *testing.T) {
 		},
 	}
 
-	vs := BuildVSchema(&input)
+	vs := BuildVSchema(&input, sqlparser.NewTestParser())
 	t1, err := vs.FindTable("unsharded", "t1")
 	require.NoError(t, err)
 	// If the source of a reference table does not require explicit routing,
@@ -2977,11 +3098,11 @@ func TestReferenceTableAndSourceAreGloballyRoutable(t *testing.T) {
 	require.Equal(t, t1, globalT1)
 
 	input.Keyspaces["unsharded"].RequireExplicitRouting = true
-	vs = BuildVSchema(&input)
+	vs = BuildVSchema(&input, sqlparser.NewTestParser())
 	_, err = vs.FindTable("sharded", "t1")
 	require.NoError(t, err)
 	// If the source of a reference table requires explicit routing, then
-	// neither the reference table nor its souce can be globally routed.
+	// neither the reference table nor its source can be globally routed.
 	_, err = vs.FindTable("", "t1")
 	require.Error(t, err)
 	require.EqualError(t, err, "table t1 not found")
@@ -3013,7 +3134,7 @@ func TestOtherTablesMakeReferenceTableAndSourceAmbiguous(t *testing.T) {
 			},
 		},
 	}
-	vs := BuildVSchema(&input)
+	vs := BuildVSchema(&input, sqlparser.NewTestParser())
 	_, err := vs.FindTable("", "t1")
 	require.Error(t, err)
 }
@@ -3114,7 +3235,7 @@ func TestFindTableWithSequences(t *testing.T) {
 			},
 		},
 	}
-	vschema := BuildVSchema(&input)
+	vschema := BuildVSchema(&input, sqlparser.NewTestParser())
 
 	notFoundError := func(table string) string {
 		return fmt.Sprintf("table %s not found", table)
@@ -3165,5 +3286,11 @@ func assertVindexMatches(t *testing.T, cv *ColumnVindex, v Vindex, name string, 
 func assertColumn(t *testing.T, col Column, expectedName string, expectedType querypb.Type) {
 	assert.True(t, col.Name.EqualString(expectedName), "column name does not match")
 	assert.Equal(t, expectedType, col.Type, "column type does not match")
+}
 
+func assertColumnWithDefault(t *testing.T, col Column, expectedName string, expectedType querypb.Type, expDefault sqlparser.Expr) {
+	assertColumn(t, col, expectedName, expectedType)
+	if expDefault != nil {
+		assert.Equal(t, expDefault, col.Default, "column default does not match")
+	}
 }

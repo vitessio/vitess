@@ -51,6 +51,8 @@ var (
 
 	// ErrIncompatibleTypeCast indicates a casting problem
 	ErrIncompatibleTypeCast = errors.New("Cannot convert value to desired type")
+
+	ErrInvalidEncodedString = errors.New("invalid SQL encoded string")
 )
 
 const (
@@ -566,6 +568,16 @@ func (v Value) IsDecimal() bool {
 	return IsDecimal(v.Type())
 }
 
+// IsEnum returns true if Value is enum.
+func (v Value) IsEnum() bool {
+	return v.Type() == querypb.Type_ENUM
+}
+
+// IsSet returns true if Value is set.
+func (v Value) IsSet() bool {
+	return v.Type() == querypb.Type_SET
+}
+
 // IsComparable returns true if the Value is null safe comparable without collation information.
 func (v *Value) IsComparable() bool {
 	if v.Type() == Null || IsNumber(v.Type()) || IsBinary(v.Type()) {
@@ -733,7 +745,13 @@ func (v Value) TinyWeightCmp(other Value) int {
 	if v.flags&other.flags&flagTinyWeight == 0 {
 		return 0
 	}
-	return int(int64(v.tinyweight) - int64(other.tinyweight))
+	if v.tinyweight == other.tinyweight {
+		return 0
+	}
+	if v.tinyweight < other.tinyweight {
+		return -1
+	}
+	return 1
 }
 
 func (v Value) TinyWeight() uint32 {
@@ -853,6 +871,56 @@ var encodeRef = map[byte]byte{
 	'\t':   't',
 	26:     'Z', // ctl-Z
 	'\\':   '\\',
+}
+
+// BufDecodeStringSQL decodes the string into a strings.Builder
+func BufDecodeStringSQL(buf *strings.Builder, val string) error {
+	if len(val) < 2 || val[0] != '\'' || val[len(val)-1] != '\'' {
+		return fmt.Errorf("%s: %w", val, ErrInvalidEncodedString)
+	}
+	in := hack.StringBytes(val[1 : len(val)-1])
+	idx := 0
+	for {
+		if idx >= len(in) {
+			return nil
+		}
+		ch := in[idx]
+		if ch == '\'' {
+			idx++
+			if idx >= len(in) {
+				return fmt.Errorf("%s: %w", val, ErrInvalidEncodedString)
+			}
+			if in[idx] != '\'' {
+				return fmt.Errorf("%s: %w", val, ErrInvalidEncodedString)
+			}
+			buf.WriteByte(ch)
+			idx++
+			continue
+		}
+		if ch == '\\' {
+			idx++
+			if idx >= len(in) {
+				return fmt.Errorf("%s: %w", val, ErrInvalidEncodedString)
+			}
+			decoded := SQLDecodeMap[in[idx]]
+			if decoded == DontEscape {
+				return fmt.Errorf("%s: %w", val, ErrInvalidEncodedString)
+			}
+			buf.WriteByte(decoded)
+			idx++
+			continue
+		}
+
+		buf.WriteByte(ch)
+		idx++
+	}
+}
+
+// DecodeStringSQL encodes the string as a SQL string.
+func DecodeStringSQL(val string) (string, error) {
+	var buf strings.Builder
+	err := BufDecodeStringSQL(&buf, val)
+	return buf.String(), err
 }
 
 func init() {

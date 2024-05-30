@@ -22,7 +22,14 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+
+	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vterrors"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 // VtctldClientProcess is a generic handle for a running vtctldclient command .
@@ -64,7 +71,8 @@ func (vtctldclient *VtctldClientProcess) ExecuteCommandWithOutput(args ...string
 			vtctldclient.Binary,
 			filterDoubleDashArgs(pArgs, vtctldclient.VtctldClientMajorVersion)...,
 		)
-		log.Infof("Executing vtctldclient with command: %v (attempt %d of %d)", strings.Join(tmpProcess.Args, " "), i, retries)
+		msg := binlogplayer.LimitString(strings.Join(tmpProcess.Args, " "), 256) // limit log line length
+		log.Infof("Executing vtctldclient with command: %v (attempt %d of %d)", msg, i, retries)
 		resultByte, err = tmpProcess.CombinedOutput()
 		resultStr = string(resultByte)
 		if err == nil || !shouldRetry(resultStr) {
@@ -93,6 +101,95 @@ func VtctldClientProcessInstance(hostname string, grpcPort int, tmpDirectory str
 	return vtctldclient
 }
 
+// ApplyRoutingRules applies the given routing rules.
+func (vtctldclient *VtctldClientProcess) ApplyRoutingRules(json string) error {
+	return vtctldclient.ExecuteCommand("ApplyRoutingRules", "--rules", json)
+}
+
+type ApplySchemaParams struct {
+	DDLStrategy      string
+	MigrationContext string
+	UUIDs            string
+	CallerID         string
+	BatchSize        int
+}
+
+// ApplySchemaWithOutput applies SQL schema to the keyspace
+func (vtctldclient *VtctldClientProcess) ApplySchemaWithOutput(keyspace string, sql string, params ApplySchemaParams) (result string, err error) {
+	args := []string{
+		"ApplySchema",
+		"--sql", sql,
+	}
+	if params.MigrationContext != "" {
+		args = append(args, "--migration-context", params.MigrationContext)
+	}
+	if params.DDLStrategy != "" {
+		args = append(args, "--ddl-strategy", params.DDLStrategy)
+	}
+	if params.UUIDs != "" {
+		args = append(args, "--uuid", params.UUIDs)
+	}
+	if params.BatchSize > 0 {
+		args = append(args, "--batch-size", fmt.Sprintf("%d", params.BatchSize))
+	}
+	if params.CallerID != "" {
+		args = append(args, "--caller-id", params.CallerID)
+	}
+	args = append(args, keyspace)
+	return vtctldclient.ExecuteCommandWithOutput(args...)
+}
+
+// ApplySchema applies SQL schema to the keyspace
+func (vtctldclient *VtctldClientProcess) ApplySchema(keyspace string, sql string) error {
+	message, err := vtctldclient.ApplySchemaWithOutput(keyspace, sql, ApplySchemaParams{DDLStrategy: "direct -allow-zero-in-date"})
+
+	return vterrors.Wrap(err, message)
+}
+
+// ApplyVSchema applies vitess schema (JSON format) to the keyspace
+func (vtctldclient *VtctldClientProcess) ApplyVSchema(keyspace string, json string) (err error) {
+	return vtctldclient.ExecuteCommand(
+		"ApplyVSchema",
+		"--vschema", json,
+		keyspace,
+	)
+}
+
+// ChangeTabletType changes the type of the given tablet.
+func (vtctldclient *VtctldClientProcess) ChangeTabletType(tablet *Vttablet, tabletType topodatapb.TabletType) error {
+	return vtctldclient.ExecuteCommand(
+		"ChangeTabletType",
+		tablet.Alias,
+		tabletType.String(),
+	)
+}
+
+// GetShardReplication returns a mapping of cell to shard replication for the given keyspace and shard.
+func (vtctldclient *VtctldClientProcess) GetShardReplication(keyspace string, shard string, cells ...string) (map[string]*topodatapb.ShardReplication, error) {
+	args := append([]string{"GetShardReplication", keyspace + "/" + shard}, cells...)
+	out, err := vtctldclient.ExecuteCommandWithOutput(args...)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp vtctldatapb.GetShardReplicationResponse
+	err = json2.Unmarshal([]byte(out), &resp)
+	return resp.ShardReplicationByCell, err
+}
+
+// GetSrvKeyspaces returns a mapping of cell to srv keyspace for the given keyspace.
+func (vtctldclient *VtctldClientProcess) GetSrvKeyspaces(keyspace string, cells ...string) (ksMap map[string]*topodatapb.SrvKeyspace, err error) {
+	args := append([]string{"GetSrvKeyspaces", keyspace}, cells...)
+	out, err := vtctldclient.ExecuteCommandWithOutput(args...)
+	if err != nil {
+		return nil, err
+	}
+
+	ksMap = map[string]*topodatapb.SrvKeyspace{}
+	err = json2.Unmarshal([]byte(out), &ksMap)
+	return ksMap, err
+}
+
 // PlannedReparentShard executes vtctlclient command to make specified tablet the primary for the shard.
 func (vtctldclient *VtctldClientProcess) PlannedReparentShard(Keyspace string, Shard string, alias string) (err error) {
 	output, err := vtctldclient.ExecuteCommandWithOutput(
@@ -101,6 +198,32 @@ func (vtctldclient *VtctldClientProcess) PlannedReparentShard(Keyspace string, S
 		"--new-primary", alias)
 	if err != nil {
 		log.Errorf("error in PlannedReparentShard output %s, err %s", output, err.Error())
+	}
+	return err
+}
+
+// InitializeShard executes vtctldclient command to make specified tablet the primary for the shard.
+func (vtctldclient *VtctldClientProcess) InitializeShard(keyspace string, shard string, cell string, uid int) error {
+	output, err := vtctldclient.ExecuteCommandWithOutput(
+		"PlannedReparentShard",
+		fmt.Sprintf("%s/%s", keyspace, shard),
+		"--wait-replicas-timeout", "31s",
+		"--new-primary", fmt.Sprintf("%s-%d", cell, uid))
+	if err != nil {
+		log.Errorf("error in PlannedReparentShard output %s, err %s", output, err.Error())
+	}
+	return err
+}
+
+// InitShardPrimary executes vtctldclient command to make specified tablet the primary for the shard.
+func (vtctldclient *VtctldClientProcess) InitShardPrimary(keyspace string, shard string, cell string, uid int) error {
+	output, err := vtctldclient.ExecuteCommandWithOutput(
+		"InitShardPrimary",
+		"--force", "--wait-replicas-timeout", "31s",
+		fmt.Sprintf("%s/%s", keyspace, shard),
+		fmt.Sprintf("%s-%d", cell, uid))
+	if err != nil {
+		log.Errorf("error in InitShardPrimary output %s, err %s", output, err.Error())
 	}
 	return err
 }
@@ -121,6 +244,51 @@ func (vtctldclient *VtctldClientProcess) CreateKeyspace(keyspaceName string, sid
 	return err
 }
 
+// GetKeyspace executes the vtctldclient command to get a shard, and parses the response.
+func (vtctldclient *VtctldClientProcess) GetKeyspace(keyspace string) (*vtctldatapb.Keyspace, error) {
+	data, err := vtctldclient.ExecuteCommandWithOutput("GetKeyspace", keyspace)
+	if err != nil {
+		return nil, err
+	}
+
+	var ks vtctldatapb.Keyspace
+	err = json2.Unmarshal([]byte(data), &ks)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "failed to parse keyspace output: %s", data)
+	}
+	return &ks, nil
+}
+
+// GetShard executes the vtctldclient command to get a shard, and parses the response.
+func (vtctldclient *VtctldClientProcess) GetShard(keyspace string, shard string) (*vtctldatapb.Shard, error) {
+	data, err := vtctldclient.ExecuteCommandWithOutput("GetShard", fmt.Sprintf("%s/%s", keyspace, shard))
+	if err != nil {
+		return nil, err
+	}
+
+	var si vtctldatapb.Shard
+	err = json2.Unmarshal([]byte(data), &si)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "failed to parse shard output: %s", data)
+	}
+	return &si, nil
+}
+
+// GetTablet executes vtctldclient command to get a tablet, and parses the response.
+func (vtctldclient *VtctldClientProcess) GetTablet(alias string) (*topodatapb.Tablet, error) {
+	data, err := vtctldclient.ExecuteCommandWithOutput("GetTablet", alias)
+	if err != nil {
+		return nil, err
+	}
+
+	var tablet topodatapb.Tablet
+	err = json2.Unmarshal([]byte(data), &tablet)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "failed to parse tablet output: %s", data)
+	}
+	return &tablet, nil
+}
+
 // OnlineDDLShowRecent responds with recent schema migration list
 func (vtctldclient *VtctldClientProcess) OnlineDDLShowRecent(Keyspace string) (result string, err error) {
 	return vtctldclient.ExecuteCommandWithOutput(
@@ -128,5 +296,16 @@ func (vtctldclient *VtctldClientProcess) OnlineDDLShowRecent(Keyspace string) (r
 		"show",
 		Keyspace,
 		"recent",
+	)
+}
+
+// OnlineDDLShow responds with recent schema migration list
+func (vtctldclient *VtctldClientProcess) OnlineDDLShow(keyspace, workflow string) (result string, err error) {
+	return vtctldclient.ExecuteCommandWithOutput(
+		"OnlineDDL",
+		"show",
+		"--json",
+		keyspace,
+		workflow,
 	)
 }

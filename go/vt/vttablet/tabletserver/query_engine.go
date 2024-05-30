@@ -109,7 +109,7 @@ func (ep *TabletPlan) IsValid(hasReservedCon, hasSysSettings bool) error {
 
 func isValid(planType planbuilder.PlanType, hasReservedCon bool, hasSysSettings bool) error {
 	switch planType {
-	case planbuilder.PlanSelectLockFunc, planbuilder.PlanDDL:
+	case planbuilder.PlanSelectLockFunc, planbuilder.PlanDDL, planbuilder.PlanFlush:
 		if hasReservedCon {
 			return nil
 		}
@@ -188,6 +188,7 @@ type QueryEngine struct {
 	// stats
 	// Note: queryErrorCountsWithCode is similar to queryErrorCounts except it contains error code as an additional dimension
 	queryCounts, queryCountsWithTabletType, queryTimes, queryErrorCounts, queryErrorCountsWithCode, queryRowsAffected, queryRowsReturned *stats.CountersWithMultiLabels
+	queryCacheHits, queryCacheMisses                                                                                                     *stats.CounterFunc
 
 	// stats flags
 	enablePerWorkloadTableMetrics bool
@@ -280,6 +281,12 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 	env.Exporter().NewCounterFunc("QueryCacheEvictions", "Query engine query cache evictions", func() int64 {
 		return qe.plans.Metrics.Evicted()
 	})
+	qe.queryCacheHits = env.Exporter().NewCounterFunc("QueryCacheHits", "Query engine query cache hits", func() int64 {
+		return qe.plans.Metrics.Hits()
+	})
+	qe.queryCacheMisses = env.Exporter().NewCounterFunc("QueryCacheMisses", "Query engine query cache misses", func() int64 {
+		return qe.plans.Metrics.Misses()
+	})
 
 	labels := []string{"Table", "Plan"}
 	if config.EnablePerWorkloadTableMetrics {
@@ -359,11 +366,11 @@ func (qe *QueryEngine) Close() {
 var errNoCache = errors.New("plan should not be cached")
 
 func (qe *QueryEngine) getPlan(curSchema *currentSchema, sql string) (*TabletPlan, error) {
-	statement, err := sqlparser.Parse(sql)
+	statement, err := qe.env.Environment().Parser().Parse(sql)
 	if err != nil {
 		return nil, err
 	}
-	splan, err := planbuilder.Build(statement, curSchema.tables, qe.env.Config().DB.DBName, qe.env.Config().EnableViews)
+	splan, err := planbuilder.Build(qe.env.Environment(), statement, curSchema.tables, qe.env.Config().DB.DBName, qe.env.Config().EnableViews)
 	if err != nil {
 		return nil, err
 	}
@@ -377,7 +384,7 @@ func (qe *QueryEngine) getPlan(curSchema *currentSchema, sql string) (*TabletPla
 	return plan, errNoCache
 }
 
-// GetPlan returns the TabletPlan that for the query. Plans are cached in a theine LRU cache.
+// GetPlan returns the TabletPlan that for the query. Plans are cached in an LRU cache.
 func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats, sql string, skipQueryPlanCache bool) (*TabletPlan, error) {
 	span, _ := trace.NewSpan(ctx, "QueryEngine.GetPlan")
 	defer span.Finish()
@@ -402,7 +409,7 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 }
 
 func (qe *QueryEngine) getStreamPlan(curSchema *currentSchema, sql string) (*TabletPlan, error) {
-	statement, err := sqlparser.Parse(sql)
+	statement, err := qe.env.Environment().Parser().Parse(sql)
 	if err != nil {
 		return nil, err
 	}
@@ -424,7 +431,7 @@ func (qe *QueryEngine) getStreamPlan(curSchema *currentSchema, sql string) (*Tab
 	return plan, errNoCache
 }
 
-// GetStreamPlan returns the TabletPlan that for the query. Plans are cached in a theine LRU cache.
+// GetStreamPlan returns the TabletPlan that for the query. Plans are cached in an LRU cache.
 func (qe *QueryEngine) GetStreamPlan(ctx context.Context, logStats *tabletenv.LogStats, sql string, skipQueryPlanCache bool) (*TabletPlan, error) {
 	span, _ := trace.NewSpan(ctx, "QueryEngine.GetStreamPlan")
 	defer span.Finish()
@@ -479,7 +486,7 @@ func (qe *QueryEngine) GetConnSetting(ctx context.Context, settings []string) (*
 	cacheKey := SettingsCacheKey(buf.String())
 	connSetting, _, err := qe.settings.GetOrLoad(cacheKey, 0, func() (*smartconnpool.Setting, error) {
 		// build the setting queries
-		query, resetQuery, err := planbuilder.BuildSettingQuery(settings)
+		query, resetQuery, err := planbuilder.BuildSettingQuery(settings, qe.env.Environment().Parser())
 		if err != nil {
 			return nil, err
 		}
@@ -523,7 +530,7 @@ func (qe *QueryEngine) IsMySQLReachable() error {
 	return nil
 }
 
-func (qe *QueryEngine) schemaChanged(tables map[string]*schema.Table, created, altered, dropped []*schema.Table) {
+func (qe *QueryEngine) schemaChanged(tables map[string]*schema.Table, created, altered, dropped []*schema.Table, _ bool) {
 	qe.schemaMu.Lock()
 	defer qe.schemaMu.Unlock()
 
@@ -609,7 +616,7 @@ func (qe *QueryEngine) handleHTTPQueryPlans(response http.ResponseWriter, reques
 
 	response.Header().Set("Content-Type", "text/plain")
 	qe.ForEachPlan(func(plan *TabletPlan) bool {
-		response.Write([]byte(fmt.Sprintf("%#v\n", sqlparser.TruncateForUI(plan.Original))))
+		response.Write([]byte(fmt.Sprintf("%#v\n", qe.env.Environment().Parser().TruncateForUI(plan.Original))))
 		if b, err := json.MarshalIndent(plan.Plan, "", "  "); err != nil {
 			response.Write([]byte(err.Error()))
 		} else {
@@ -629,7 +636,7 @@ func (qe *QueryEngine) handleHTTPQueryStats(response http.ResponseWriter, reques
 	var qstats []perQueryStats
 	qe.ForEachPlan(func(plan *TabletPlan) bool {
 		var pqstats perQueryStats
-		pqstats.Query = unicoded(sqlparser.TruncateForUI(plan.Original))
+		pqstats.Query = unicoded(qe.env.Environment().Parser().TruncateForUI(plan.Original))
 		pqstats.Table = plan.TableName().String()
 		pqstats.Plan = plan.PlanID
 		pqstats.QueryCount, pqstats.Time, pqstats.MysqlTime, pqstats.RowsAffected, pqstats.RowsReturned, pqstats.ErrorCount = plan.Stats()
@@ -697,7 +704,7 @@ func (qe *QueryEngine) handleHTTPConsolidations(response http.ResponseWriter, re
 	for _, v := range items {
 		var query string
 		if streamlog.GetRedactDebugUIQueries() {
-			query, _ = sqlparser.RedactSQLQuery(v.Query)
+			query, _ = qe.env.Environment().Parser().RedactSQLQuery(v.Query)
 		} else {
 			query = v.Query
 		}

@@ -27,7 +27,7 @@ import (
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
-//region routing rules
+// region routing rules
 
 func GetRoutingRulesMap(rules *vschemapb.RoutingRules) map[string][]string {
 	if rules == nil {
@@ -69,9 +69,9 @@ func SaveRoutingRules(ctx context.Context, ts *topo.Server, rules map[string][]s
 	return ts.SaveRoutingRules(ctx, rrs)
 }
 
-//endregion
+// endregion
 
-//region shard routing rules
+// region shard routing rules
 
 func GetShardRoutingRuleKey(fromKeyspace, shard string) string {
 	return fmt.Sprintf("%s.%s", fromKeyspace, shard)
@@ -122,3 +122,99 @@ func SaveShardRoutingRules(ctx context.Context, ts *topo.Server, srr map[string]
 
 	return ts.SaveShardRoutingRules(ctx, srs)
 }
+
+// endregion
+
+// region keyspace routing rules
+
+// GetKeyspaceRoutingRulesMap returns a map of fromKeyspace=>toKeyspace from a vschemapb.KeyspaceRoutingRules
+func GetKeyspaceRoutingRulesMap(rules *vschemapb.KeyspaceRoutingRules) map[string]string {
+	if rules == nil {
+		return make(map[string]string)
+	}
+	rulesMap := make(map[string]string, len(rules.Rules))
+	for _, rr := range rules.Rules {
+		rulesMap[rr.FromKeyspace] = rr.ToKeyspace
+	}
+	return rulesMap
+}
+
+// GetKeyspaceRoutingRules fetches keyspace routing rules from the topology server and returns a
+// map of fromKeyspace=>toKeyspace.
+func GetKeyspaceRoutingRules(ctx context.Context, ts *topo.Server) (map[string]string, error) {
+	keyspaceRoutingRules, err := ts.GetKeyspaceRoutingRules(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rules := GetKeyspaceRoutingRulesMap(keyspaceRoutingRules)
+	return rules, nil
+}
+
+// buildKeyspaceRoutingRules builds a vschemapb.KeyspaceRoutingRules struct from a map of
+// fromKeyspace=>toKeyspace values.
+func buildKeyspaceRoutingRules(rules *map[string]string) *vschemapb.KeyspaceRoutingRules {
+	keyspaceRoutingRules := &vschemapb.KeyspaceRoutingRules{Rules: make([]*vschemapb.KeyspaceRoutingRule, 0, len(*rules))}
+	for from, to := range *rules {
+		keyspaceRoutingRules.Rules = append(keyspaceRoutingRules.Rules, &vschemapb.KeyspaceRoutingRule{
+			FromKeyspace: from,
+			ToKeyspace:   to,
+		})
+	}
+	return keyspaceRoutingRules
+}
+
+// saveKeyspaceRoutingRulesLocked saves the keyspace routing rules in the topo server. It expects the caller to
+// have acquired a RoutingRulesLock.
+func saveKeyspaceRoutingRulesLocked(ctx context.Context, ts *topo.Server, rules map[string]string) error {
+	if err := topo.CheckLocked(ctx, topo.RoutingRulesPath); err != nil {
+		return err
+	}
+	return ts.SaveKeyspaceRoutingRules(ctx, buildKeyspaceRoutingRules(&rules))
+}
+
+// UpdateKeyspaceRoutingRules updates the keyspace routing rules in the topo server.
+// If the keyspace routing rules do not yet exist, it will create them. If multiple callers
+// are racing to create the initial keyspace routing rules then the first writer will win
+// and the other callers can immediately retry when getting the resulting topo.NodeExists
+// error. When the routing rules already exist, it will acquire a RoutingRulesLock and
+// then modify the keyspace routing rules in-place.
+func UpdateKeyspaceRoutingRules(ctx context.Context, ts *topo.Server, reason string,
+	update func(ctx context.Context, rules *map[string]string) error) (err error) {
+	var lock *topo.RoutingRulesLock
+	lock, err = topo.NewRoutingRulesLock(ctx, ts, reason)
+	if err != nil {
+		return err
+	}
+	lockCtx, unlock, lockErr := lock.Lock(ctx)
+	if lockErr != nil {
+		// If the key does not yet exist then let's create it.
+		if !topo.IsErrType(lockErr, topo.NoNode) {
+			return lockErr
+		}
+		rules := make(map[string]string)
+		if err := update(ctx, &rules); err != nil {
+			return err
+		}
+		// This will fail if the key already exists and thus avoids any races here. The first
+		// writer will win and the others will have to retry. This situation should be very
+		// rare as we are typically only updating the rules from here on out.
+		if err := ts.CreateKeyspaceRoutingRules(ctx, buildKeyspaceRoutingRules(&rules)); err != nil {
+			return err
+		}
+		return nil
+	}
+	defer unlock(&err)
+	rules, err := GetKeyspaceRoutingRules(lockCtx, ts)
+	if err != nil {
+		return err
+	}
+	if err := update(lockCtx, &rules); err != nil {
+		return err
+	}
+	if err := saveKeyspaceRoutingRulesLocked(lockCtx, ts, rules); err != nil {
+		return err
+	}
+	return nil
+}
+
+// endregion

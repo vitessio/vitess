@@ -57,7 +57,7 @@ func (ts TableSet) NumberOfTables() int {
 }
 
 // NonEmpty returns true if there are tables in the tableset
-func (ts TableSet) NonEmpty() bool {
+func (ts TableSet) NotEmpty() bool {
 	return !ts.IsEmpty()
 }
 
