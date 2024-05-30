@@ -14,6 +14,28 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// This test is designed to test the flow of a single online DDL migration, with tablet throttler
+// enabled. IT tests the following:
+// - A primary + replica setup
+// - Creating and populating a table
+// - Enabling tablet (lag) throttler
+// - Running a workload that generates DMLs, and which checks the throttler
+// - Running an online DDL migration:
+//   - Using `online --postpone-completion` to use vreplication
+//   - vreplication configured (by default) to read from replica
+//   - vreplication by nature also checks the throttler
+//   - meanwhile, the workload generates DMLs, give migration some run time
+//   - proactively throttle and then unthrottle the migration
+//   - complete the migration
+//
+// - Validate sufficient DML has been applied
+// - Validate the migration completed, and validate new schema is instated
+//
+// The test is designed with upgrade/downgrade in mind. In particular, we wish to test
+// different vitess versions for `primary` and `replica` tablets. Thus, we validate:
+// - Cross tablet and cross version throttler communication
+// - Cross version vreplication
+
 package flow
 
 import (
