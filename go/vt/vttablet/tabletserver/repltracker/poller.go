@@ -17,6 +17,7 @@ limitations under the License.
 package repltracker
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -45,7 +46,10 @@ func (p *poller) Status() (time.Duration, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	status, err := p.mysqld.ReplicationStatus()
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	status, err := p.mysqld.ReplicationStatusWithContext(ctx)
 	if err != nil {
 		return 0, err
 	}

@@ -142,7 +142,7 @@ func (r *heartbeatReader) Status() (time.Duration, error) {
 func (r *heartbeatReader) readHeartbeat() {
 	defer r.env.LogError()
 
-	ctx, cancel := context.WithDeadline(context.Background(), r.now().Add(r.interval))
+	ctx, cancel := context.WithTimeout(context.Background(), r.interval)
 	defer cancel()
 
 	res, err := r.fetchMostRecentHeartbeat(ctx)
@@ -150,6 +150,7 @@ func (r *heartbeatReader) readHeartbeat() {
 		r.recordError(vterrors.Wrap(err, "failed to read most recent heartbeat"))
 		return
 	}
+
 	ts, err := parseHeartbeatResult(res)
 	if err != nil {
 		r.recordError(vterrors.Wrap(err, "failed to parse heartbeat result"))

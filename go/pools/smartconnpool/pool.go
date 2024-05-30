@@ -337,7 +337,10 @@ func (pool *ConnPool[C]) put(conn *Pooled[C]) {
 
 	if conn == nil {
 		var err error
-		conn, err = pool.connNew(context.Background())
+		// TODO: Do we really want to wait for up to a second here?
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		defer cancel()
+		conn, err = pool.connNew(ctx)
 		if err != nil {
 			pool.closedConn()
 			return
