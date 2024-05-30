@@ -68,7 +68,6 @@ func TestBindingSingleTablePositive(t *testing.T) {
 			recursiveDeps := semTable.RecursiveDeps(extract(sel, 0))
 			assert.Equal(t, TS0, recursiveDeps, query)
 			assert.Equal(t, TS0, semTable.DirectDeps(extract(sel, 0)), query)
-			assert.Equal(t, 1, recursiveDeps.NumberOfTables(), "number of tables is wrong")
 		})
 	}
 }
@@ -104,7 +103,6 @@ func TestBindingSingleAliasedTablePositive(t *testing.T) {
 
 			recursiveDeps := semTable.RecursiveDeps(extract(sel, 0))
 			require.Equal(t, TS0, recursiveDeps, query)
-			assert.Equal(t, 1, recursiveDeps.NumberOfTables(), "number of tables is wrong")
 		})
 	}
 }
@@ -155,34 +153,27 @@ func TestBindingSingleAliasedTableNegative(t *testing.T) {
 
 func TestBindingMultiTablePositive(t *testing.T) {
 	type testCase struct {
-		query          string
-		deps           TableSet
-		numberOfTables int
+		query string
+		deps  TableSet
 	}
 	queries := []testCase{{
-		query:          "select t.col from t, s",
-		deps:           TS0,
-		numberOfTables: 1,
+		query: "select t.col from t, s",
+		deps:  TS0,
 	}, {
-		query:          "select s.col from t join s",
-		deps:           TS1,
-		numberOfTables: 1,
+		query: "select s.col from t join s",
+		deps:  TS1,
 	}, {
-		query:          "select max(t.col+s.col) from t, s",
-		deps:           MergeTableSets(TS0, TS1),
-		numberOfTables: 2,
+		query: "select max(t.col+s.col) from t, s",
+		deps:  MergeTableSets(TS0, TS1),
 	}, {
-		query:          "select max(t.col+s.col) from t join s",
-		deps:           MergeTableSets(TS0, TS1),
-		numberOfTables: 2,
+		query: "select max(t.col+s.col) from t join s",
+		deps:  MergeTableSets(TS0, TS1),
 	}, {
-		query:          "select case t.col when s.col then r.col else u.col end from t, s, r, w, u",
-		deps:           MergeTableSets(TS0, TS1, TS2, TS4),
-		numberOfTables: 4,
+		query: "select case t.col when s.col then r.col else u.col end from t, s, r, w, u",
+		deps:  MergeTableSets(TS0, TS1, TS2, TS4),
 	}, {
-		query:          "select u1.a + u2.a from u1, u2",
-		deps:           MergeTableSets(TS0, TS1),
-		numberOfTables: 2,
+		query: "select u1.a + u2.a from u1, u2",
+		deps:  MergeTableSets(TS0, TS1),
 	}}
 	for _, query := range queries {
 		t.Run(query.query, func(t *testing.T) {
@@ -190,33 +181,27 @@ func TestBindingMultiTablePositive(t *testing.T) {
 			sel, _ := stmt.(*sqlparser.Select)
 			recursiveDeps := semTable.RecursiveDeps(extract(sel, 0))
 			assert.Equal(t, query.deps, recursiveDeps, query.query)
-			assert.Equal(t, query.numberOfTables, recursiveDeps.NumberOfTables(), "number of tables is wrong")
 		})
 	}
 }
 
 func TestBindingMultiAliasedTablePositive(t *testing.T) {
 	type testCase struct {
-		query          string
-		deps           TableSet
-		numberOfTables int
+		query string
+		deps  TableSet
 	}
 	queries := []testCase{{
-		query:          "select X.col from t as X, s as S",
-		deps:           TS0,
-		numberOfTables: 1,
+		query: "select X.col from t as X, s as S",
+		deps:  TS0,
 	}, {
-		query:          "select X.col+S.col from t as X, s as S",
-		deps:           MergeTableSets(TS0, TS1),
-		numberOfTables: 2,
+		query: "select X.col+S.col from t as X, s as S",
+		deps:  MergeTableSets(TS0, TS1),
 	}, {
-		query:          "select max(X.col+S.col) from t as X, s as S",
-		deps:           MergeTableSets(TS0, TS1),
-		numberOfTables: 2,
+		query: "select max(X.col+S.col) from t as X, s as S",
+		deps:  MergeTableSets(TS0, TS1),
 	}, {
-		query:          "select max(X.col+s.col) from t as X, s",
-		deps:           MergeTableSets(TS0, TS1),
-		numberOfTables: 2,
+		query: "select max(X.col+s.col) from t as X, s",
+		deps:  MergeTableSets(TS0, TS1),
 	}}
 	for _, query := range queries {
 		t.Run(query.query, func(t *testing.T) {
@@ -224,7 +209,6 @@ func TestBindingMultiAliasedTablePositive(t *testing.T) {
 			sel, _ := stmt.(*sqlparser.Select)
 			recursiveDeps := semTable.RecursiveDeps(extract(sel, 0))
 			assert.Equal(t, query.deps, recursiveDeps, query.query)
-			assert.Equal(t, query.numberOfTables, recursiveDeps.NumberOfTables(), "number of tables is wrong")
 		})
 	}
 }
@@ -1378,7 +1362,6 @@ func TestScopingSubQueryJoinClause(t *testing.T) {
 
 	tb := st.DirectDeps(parse.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr.(*sqlparser.Subquery).Select.(*sqlparser.Select).From[0].(*sqlparser.JoinTableExpr).Condition.On)
 	require.Equal(t, 3, tb.NumberOfTables())
-
 }
 
 var unsharded = &vindexes.Keyspace{
