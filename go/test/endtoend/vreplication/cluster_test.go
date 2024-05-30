@@ -61,7 +61,9 @@ var (
 		"--buffer_drain_concurrency", "10"}
 	extraVtctldArgs = []string{"--remote_operation_timeout", "600s", "--topo_etcd_lease_ttl", "120"}
 	// This variable can be used within specific tests to alter vttablet behavior
-	extraVTTabletArgs = []string{}
+	extraVTTabletArgs = []string{
+		"--vplayer-progress-deadline", "15s",
+	}
 
 	parallelInsertWorkers = "--vreplication-parallel-insert-workers=4"
 

@@ -37,9 +37,14 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
+const failedToRecordHeartbeatMsg = "failed to record heartbeat"
+
 var (
+	// At what point should we consider the vplayer to be stalled and return an error.
+	vplayerProgressDeadline = time.Duration(5 * time.Minute)
+
 	// The error to return when we have detected a stall in the vplayer.
-	ErrVPlayerStalled = fmt.Errorf("progress stalled; vplayer was unable to replicate the transaction in a timely manner; examine the target mysqld instance health and the replicated queries' EXPLAIN output to see why queries are taking unusually long")
+	errVPlayerStalled = errors.New("progress stalled; vplayer was unable to replicate the transaction in a timely manner; examine the target mysqld instance health and the replicated queries' EXPLAIN output to see why queries are taking unusually long")
 )
 
 // vplayer replays binlog events by pulling them from a vstreamer.
@@ -407,7 +412,7 @@ func (vp *vplayer) recordHeartbeat() error {
 		return nil
 	}
 	if err := vp.vr.updateHeartbeatTime(tm); err != nil {
-		return vterrors.Wrapf(ErrVPlayerStalled, "failed to record heartbeat: %v", err)
+		return vterrors.Wrapf(errVPlayerStalled, fmt.Sprintf("%s: %v", failedToRecordHeartbeatMsg, err))
 	}
 	// Only reset the pending heartbeat count if the update was successful.
 	// Otherwise the vplayer may not actually be making progress and nobody

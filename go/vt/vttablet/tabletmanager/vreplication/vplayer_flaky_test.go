@@ -3330,15 +3330,19 @@ func TestPlayerStalls(t *testing.T) {
 	log.Errorf = logger.Errorf
 
 	ovmhu := vreplicationMinimumHeartbeatUpdateInterval
+	ogvpt := vplayerProgressDeadline
 	orlmi := relayLogMaxItems
 	ord := retryDelay
 	defer func() {
 		log.Errorf = ole
 		vreplicationMinimumHeartbeatUpdateInterval = ovmhu
+		vplayerProgressDeadline = ogvpt
 		relayLogMaxItems = orlmi
 		retryDelay = ord
 	}()
 
+	// Shorten the deadline for the test.
+	vplayerProgressDeadline = 5 * time.Second
 	// Shorten the time for a required heartbeat recording for the test.
 	vreplicationMinimumHeartbeatUpdateInterval = 5
 	// So each relay log batch will be a single statement transaction.
@@ -3351,7 +3355,7 @@ func TestPlayerStalls(t *testing.T) {
 	// A channel to communicate across goroutines.
 	done := make(chan struct{})
 
-	testTimeout := time.Duration(int64(vreplicationMinimumHeartbeatUpdateInterval) * int64(10*time.Second))
+	testTimeout := vplayerProgressDeadline * 10
 
 	execStatements(t, []string{
 		"create table t1(id bigint, val1 varchar(1000), primary key(id))",
@@ -3379,9 +3383,33 @@ func TestPlayerStalls(t *testing.T) {
 		expectQueries bool
 	}{
 		{
-			name: "stall in vplayer with rows",
+			name: "stall in relay log IO",
 			input: []string{
-				fmt.Sprintf("set @@session.innodb_lock_wait_timeout=%d", vreplicationMinimumHeartbeatUpdateInterval+5),
+				"set @@session.binlog_format='STATEMENT'",                            // As we are using the sleep function in the query to simulate a stall
+				"insert into t1(id, val1) values (1, 'aaa'), (2, 'bbb'), (3, 'ccc')", // This should be the only query that gets replicated
+				// This will cause a stall in the vplayer.
+				fmt.Sprintf("update t1 set val1 = concat(sleep (%d), val1)", int64(vplayerProgressDeadline.Seconds()+5)),
+			},
+			expectQueries: true,
+			output: qh.Expect(
+				"insert into t1(id, val1) values (1, 'aaa'), (2, 'bbb'), (3, 'ccc')",
+				// This will cause a stall to be detected in the vplayer. This is
+				// what we want in the end, our improved error message (which also
+				// gets logged).
+				fmt.Sprintf("update t1 set val1 = concat(sleep (%d), val1)", int64(vplayerProgressDeadline.Seconds()+5)),
+				"/update _vt.vreplication set message=.*progress stalled.*",
+			),
+			postFunc: func() {
+				time.Sleep(vplayerProgressDeadline)
+				log.Flush()
+				require.Contains(t, logger.String(), relayLogIOStalledMsg, "expected log message not found")
+				execStatements(t, []string{"set @@session.binlog_format='ROW'"})
+			},
+		},
+		{
+			name: "stall in heartbeat recording",
+			input: []string{
+				fmt.Sprintf("set @@session.innodb_lock_wait_timeout=%d", int64(vplayerProgressDeadline.Seconds()+5)),
 				"insert into t1(id, val1) values (10, 'mmm'), (11, 'nnn'), (12, 'ooo')",
 				"update t1 set val1 = 'yyy' where id = 10",
 			},
@@ -3410,7 +3438,7 @@ func TestPlayerStalls(t *testing.T) {
 				// Signal the preFunc goroutine to close the connection holding the row locks.
 				done <- struct{}{}
 				log.Flush()
-				require.Contains(t, logger.String(), "failed to record heartbeat", "expected log message not found")
+				require.Contains(t, logger.String(), failedToRecordHeartbeatMsg, "expected log message not found")
 			},
 			// Nothing should get replicated because of the exclusing row locks
 			// held in the other connection from our preFunc.
