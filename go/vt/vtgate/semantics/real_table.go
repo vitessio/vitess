@@ -40,18 +40,17 @@ type RealTable struct {
 var _ TableInfo = (*RealTable)(nil)
 
 // dependencies implements the TableInfo interface
-func (r *RealTable) dependencies(colName string, org originable) (dependencies, error) {
-	ts := org.tableSetFor(r.ASTNode)
+func (r *RealTable) dependencies(colName string, _ *analyzer) (dependencies, error) {
 	for _, info := range r.getColumns(false /* ignoreInvisbleCol */) {
 		if strings.EqualFold(info.Name, colName) {
-			return createCertain(ts, ts, info.Type), nil
+			return createCertain(r.id, r.id, info.Type), nil
 		}
 	}
 
 	if r.authoritative() {
 		return &nothing{}, nil
 	}
-	return createUncertain(ts, ts), nil
+	return createUncertain(r.id, r.id), nil
 }
 
 // setTableId implements the TableInfo interface

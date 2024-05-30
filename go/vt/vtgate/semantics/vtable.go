@@ -36,13 +36,13 @@ type vTableInfo struct {
 var _ TableInfo = (*vTableInfo)(nil)
 
 // dependencies implements the TableInfo interface
-func (v *vTableInfo) dependencies(colName string, org originable) (dependencies, error) {
+func (v *vTableInfo) dependencies(colName string, a *analyzer) (dependencies, error) {
 	var deps dependencies = &nothing{}
 	for i, name := range v.columnNames {
 		if name != colName {
 			continue
 		}
-		deps = deps.merge(v.createCertainForCol(org, i), false)
+		deps = deps.merge(v.createCertainForCol(a, i), false)
 	}
 	if deps.empty() && v.hasStar() {
 		return createUncertain(v.tables, v.tables), nil
@@ -50,7 +50,7 @@ func (v *vTableInfo) dependencies(colName string, org originable) (dependencies,
 	return deps, nil
 }
 
-func (v *vTableInfo) dependenciesInGroupBy(colName string, org originable) (dependencies, error) {
+func (v *vTableInfo) dependenciesInGroupBy(colName string, a *analyzer) (dependencies, error) {
 	// this method is consciously very similar to vTableInfo.dependencies and should remain so
 	var deps dependencies = &nothing{}
 	for i, name := range v.columnNames {
@@ -60,7 +60,7 @@ func (v *vTableInfo) dependenciesInGroupBy(colName string, org originable) (depe
 		if sqlparser.ContainsAggregation(v.cols[i]) {
 			return nil, &CantGroupOn{name}
 		}
-		deps = deps.merge(v.createCertainForCol(org, i), false)
+		deps = deps.merge(v.createCertainForCol(a, i), false)
 	}
 	if deps.empty() && v.hasStar() {
 		return createUncertain(v.tables, v.tables), nil
@@ -68,8 +68,8 @@ func (v *vTableInfo) dependenciesInGroupBy(colName string, org originable) (depe
 	return deps, nil
 }
 
-func (v *vTableInfo) createCertainForCol(org originable, i int) *certain {
-	directDeps, recursiveDeps, qt := org.depsForExpr(v.cols[i])
+func (v *vTableInfo) createCertainForCol(a *analyzer, i int) *certain {
+	directDeps, recursiveDeps, qt := a.depsForExpr(v.cols[i])
 	newDeps := createCertain(directDeps, recursiveDeps, qt)
 	return newDeps
 }
@@ -138,8 +138,8 @@ func (v *vTableInfo) getExprFor(s string) (sqlparser.Expr, error) {
 	return nil, vterrors.VT03022(s, "field list")
 }
 
-func createVTableInfoForExpressions(expressions sqlparser.SelectExprs, tables []TableInfo, org originable) *vTableInfo {
-	cols, colNames, ts, isAuthoritative := selectExprsToInfos(expressions, tables, org)
+func createVTableInfoForExpressions(expressions sqlparser.SelectExprs, tables []TableInfo) *vTableInfo {
+	cols, colNames, ts, isAuthoritative := selectExprsToInfos(expressions, tables)
 	return &vTableInfo{
 		columnNames:     colNames,
 		cols:            cols,
@@ -151,7 +151,6 @@ func createVTableInfoForExpressions(expressions sqlparser.SelectExprs, tables []
 func selectExprsToInfos(
 	expressions sqlparser.SelectExprs,
 	tables []TableInfo,
-	org originable,
 ) (cols []sqlparser.Expr, colNames []string, ts TableSet, isAuthoritative bool) {
 	isAuthoritative = true
 	for _, selectExpr := range expressions {

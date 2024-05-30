@@ -37,7 +37,7 @@ type tableCollector struct {
 	scoper    *scoper
 	si        SchemaInformation
 	currentDb string
-	org       originable
+	a         *analyzer
 	unionInfo map[*sqlparser.Union]unionInfo
 	done      map[*sqlparser.AliasedTableExpr]TableInfo
 }
@@ -80,7 +80,7 @@ func (etc *earlyTableCollector) visitAliasedTableExpr(aet *sqlparser.AliasedTabl
 	etc.handleTableName(tbl, aet)
 }
 
-func (etc *earlyTableCollector) newTableCollector(scoper *scoper, org originable) *tableCollector {
+func (etc *earlyTableCollector) newTableCollector(scoper *scoper, a *analyzer) *tableCollector {
 	return &tableCollector{
 		Tables:    etc.Tables,
 		scoper:    scoper,
@@ -88,7 +88,7 @@ func (etc *earlyTableCollector) newTableCollector(scoper *scoper, org originable
 		currentDb: etc.currentDb,
 		unionInfo: map[*sqlparser.Union]unionInfo{},
 		done:      etc.done,
-		org:       org,
+		a:         a,
 	}
 }
 
@@ -162,7 +162,7 @@ func (tc *tableCollector) visitUnion(union *sqlparser.Union) error {
 	size := len(firstSelect.SelectExprs)
 	info.recursive = make([]TableSet, size)
 	typers := make([]evalengine.TypeAggregator, size)
-	collations := tc.org.collationEnv()
+	collations := tc.a.collationEnv()
 
 	err := sqlparser.VisitAllSelects(union, func(s *sqlparser.Select, idx int) error {
 		for i, expr := range s.SelectExprs {
@@ -170,7 +170,7 @@ func (tc *tableCollector) visitUnion(union *sqlparser.Union) error {
 			if !ok {
 				continue
 			}
-			_, recursiveDeps, qt := tc.org.depsForExpr(ae.Expr)
+			_, recursiveDeps, qt := tc.a.depsForExpr(ae.Expr)
 			info.recursive[i] = info.recursive[i].Merge(recursiveDeps)
 			if err := typers[i].Add(qt, collations); err != nil {
 				return err
@@ -377,10 +377,10 @@ func (tc *tableCollector) addSelectDerivedTable(
 			expanded = false
 			continue
 		}
-		_, deps[i], types[i] = tc.org.depsForExpr(ae.Expr)
+		_, deps[i], types[i] = tc.a.depsForExpr(ae.Expr)
 	}
 
-	tableInfo := createDerivedTableForExpressions(sel.SelectExprs, columns, tables.tables, tc.org, expanded, deps, types)
+	tableInfo := createDerivedTableForExpressions(sel.SelectExprs, columns, tables.tables, expanded, deps, types)
 	if err := tableInfo.checkForDuplicates(); err != nil {
 		return err
 	}
@@ -401,7 +401,7 @@ func (tc *tableCollector) addUnionDerivedTable(union *sqlparser.Union, node *sql
 		return vterrors.VT13001("information about union is not available")
 	}
 
-	tableInfo := createDerivedTableForExpressions(info.exprs, columns, tables.tables, tc.org, info.isAuthoritative, info.recursive, info.types)
+	tableInfo := createDerivedTableForExpressions(info.exprs, columns, tables.tables, info.isAuthoritative, info.recursive, info.types)
 	if err := tableInfo.checkForDuplicates(); err != nil {
 		return err
 	}
@@ -430,12 +430,11 @@ func newVindexTable(t sqlparser.IdentifierCS) *vindexes.Table {
 	}
 }
 
-// tabletSetFor implements the originable interface, and that is why it lives on the analyser struct.
-// The code lives in this file since it is only touching tableCollector data
-func (tc *tableCollector) tableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
-	for i, t2 := range tc.Tables {
-		if t == t2.GetAliasedTableExpr() {
-			return SingleTableSet(i)
+// tableInfoForAliasedTableExpr gets the table set for the given aliased table expression
+func (tc *tableCollector) tableInfoForAliasedTableExpr(t *sqlparser.AliasedTableExpr) TableInfo {
+	for _, ti := range tc.Tables {
+		if t == ti.GetAliasedTableExpr() {
+			return ti
 		}
 	}
 	panic("unknown table")

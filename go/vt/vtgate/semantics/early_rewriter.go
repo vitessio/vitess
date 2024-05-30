@@ -788,7 +788,7 @@ func (r *earlyRewriter) rewriteOrderByLiteral(node *sqlparser.Literal) (expr sql
 
 		// since column names can be ambiguous here, we want to do the binding by offset and not by column name
 		allColExprs := vtabl.cols[colOffset]
-		direct, recursive, typ := r.binder.org.depsForExpr(allColExprs)
+		direct, recursive, typ := r.binder.a.depsForExpr(allColExprs)
 		r.binder.direct[colName] = direct
 		r.binder.recursive[colName] = recursive
 		r.binder.typer.m[colName] = typ
@@ -920,7 +920,7 @@ func (r *earlyRewriter) expandStar(cursor *sqlparser.Cursor, node sqlparser.Sele
 			selExprs = append(selExprs, selectExpr)
 			continue
 		}
-		starExpanded, colNames, err := r.expandTableColumns(starExpr, currentScope.tables, r.binder.usingJoinInfo, r.scoper.org)
+		starExpanded, colNames, err := r.expandTableColumns(starExpr, currentScope.tables, r.binder.usingJoinInfo, r.scoper.a)
 		if err != nil {
 			return err
 		}
@@ -1037,8 +1037,7 @@ func buildJoinPredicates(b *binder, join *sqlparser.JoinTableExpr) ([]sqlparser.
 func findOnlyOneTableInfoThatHasColumn(b *binder, tbl sqlparser.TableExpr, column sqlparser.IdentifierCI) ([]TableInfo, error) {
 	switch tbl := tbl.(type) {
 	case *sqlparser.AliasedTableExpr:
-		ts := b.tc.tableSetFor(tbl)
-		tblInfo := b.tc.Tables[ts.TableOffset()]
+		tblInfo := b.tc.tableInfoForAliasedTableExpr(tbl)
 		for _, info := range tblInfo.getColumns(false /* ignoreInvisibleCol */) {
 			if column.EqualString(info.Name) {
 				return []TableInfo{tblInfo}, nil
@@ -1133,7 +1132,7 @@ func (r *earlyRewriter) expandTableColumns(
 	starExpr *sqlparser.StarExpr,
 	tables []TableInfo,
 	joinUsing map[TableSet]map[string]TableSet,
-	org originable,
+	a *analyzer,
 ) (bool, sqlparser.SelectExprs, error) {
 	unknownTbl := true
 	starExpanded := true
@@ -1141,7 +1140,7 @@ func (r *earlyRewriter) expandTableColumns(
 		colNames:        []sqlparser.SelectExpr{},
 		needsQualifier:  len(tables) > 1,
 		joinUsing:       joinUsing,
-		org:             org,
+		a:               a,
 		expandedColumns: map[sqlparser.TableName][]*sqlparser.ColName{},
 	}
 
@@ -1226,7 +1225,7 @@ type expanderState struct {
 	needsQualifier  bool
 	colNames        sqlparser.SelectExprs
 	joinUsing       map[TableSet]map[string]TableSet
-	org             originable
+	a               *analyzer
 	expandedColumns map[sqlparser.TableName][]*sqlparser.ColName
 }
 

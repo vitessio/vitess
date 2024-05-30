@@ -32,8 +32,8 @@ type VindexTable struct {
 var _ TableInfo = (*VindexTable)(nil)
 
 // dependencies implements the TableInfo interface
-func (v *VindexTable) dependencies(colName string, org originable) (dependencies, error) {
-	return v.Table.dependencies(colName, org)
+func (v *VindexTable) dependencies(colName string, a *analyzer) (dependencies, error) {
+	return v.Table.dependencies(colName, a)
 }
 
 // setTableId implements the TableInfo interface

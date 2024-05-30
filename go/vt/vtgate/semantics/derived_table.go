@@ -54,7 +54,6 @@ func createDerivedTableForExpressions(
 	expressions sqlparser.SelectExprs,
 	cols sqlparser.Columns,
 	tables []TableInfo,
-	org originable,
 	expanded bool,
 	recursiveDeps []TableSet,
 	types []evalengine.Type,
@@ -65,7 +64,7 @@ func createDerivedTableForExpressions(
 		case *sqlparser.AliasedExpr:
 			handleAliasedExpr(vTbl, expr, cols, i)
 		case *sqlparser.StarExpr:
-			handleUnexpandedStarExpression(tables, vTbl, org)
+			handleUnexpandedStarExpression(tables, vTbl)
 		}
 	}
 	return vTbl
@@ -93,7 +92,7 @@ func handleAliasedExpr(vTbl *DerivedTable, expr *sqlparser.AliasedExpr, cols sql
 	}
 }
 
-func handleUnexpandedStarExpression(tables []TableInfo, dt *DerivedTable, org originable) {
+func handleUnexpandedStarExpression(tables []TableInfo, dt *DerivedTable) {
 	for _, table := range tables {
 		_, rec := table.getTableSets()
 		dt.recursive = dt.recursive.Merge(rec)
@@ -104,8 +103,7 @@ func handleUnexpandedStarExpression(tables []TableInfo, dt *DerivedTable, org or
 }
 
 // dependencies implements the TableInfo interface
-func (dt *DerivedTable) dependencies(colName string, org originable) (dependencies, error) {
-	directDeps := dt.id
+func (dt *DerivedTable) dependencies(colName string, _ *analyzer) (dependencies, error) {
 	for i, name := range dt.columnNames {
 		if !strings.EqualFold(name, colName) {
 			continue
@@ -116,14 +114,14 @@ func (dt *DerivedTable) dependencies(colName string, org originable) (dependenci
 		}
 		recursiveDeps, qt := dt.recursiveCol[i], dt.types[i]
 
-		return createCertain(directDeps, recursiveDeps, qt), nil
+		return createCertain(dt.id, recursiveDeps, qt), nil
 	}
 
 	if dt.authoritative() {
 		return &nothing{}, nil
 	}
 
-	return createUncertain(directDeps, dt.recursive), nil
+	return createUncertain(dt.id, dt.recursive), nil
 }
 
 // IsInfSchema implements the TableInfo interface

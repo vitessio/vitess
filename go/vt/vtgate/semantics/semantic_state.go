@@ -60,7 +60,7 @@ type (
 		// getColumns returns the known column information for this table
 		getColumns(ignoreInvisibleCol bool) []ColumnInfo
 
-		dependencies(colName string, org originable) (dependencies, error)
+		dependencies(colName string, a *analyzer) (dependencies, error)
 		getExprFor(s string) (sqlparser.Expr, error)
 		setTableId(set TableSet)
 		getTableSets() (direct, recursive TableSet)

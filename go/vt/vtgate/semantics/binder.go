@@ -17,7 +17,6 @@ limitations under the License.
 package semantics
 
 import (
-	"fmt"
 	"strings"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -35,7 +34,7 @@ type binder struct {
 	targets   TableSet
 	scoper    *scoper
 	tc        *tableCollector
-	org       originable
+	a         *analyzer
 	typer     *typer
 
 	// every table will have an entry in the outer map. it will point to a map with all the columns
@@ -44,12 +43,12 @@ type binder struct {
 	usingJoinInfo map[TableSet]map[string]TableSet
 }
 
-func newBinder(scoper *scoper, org originable, tc *tableCollector, typer *typer) *binder {
+func newBinder(scoper *scoper, a *analyzer, tc *tableCollector, typer *typer) *binder {
 	return &binder{
 		recursive:     map[sqlparser.Expr]TableSet{},
 		direct:        map[sqlparser.Expr]TableSet{},
 		scoper:        scoper,
-		org:           org,
+		a:             a,
 		tc:            tc,
 		typer:         typer,
 		usingJoinInfo: map[TableSet]map[string]TableSet{},
@@ -140,7 +139,6 @@ func (b *binder) bindColName(col *sqlparser.ColName) error {
 	}
 	b.recursive[col] = deps.recursive
 	b.direct[col] = deps.direct
-	fmt.Printf("%v, %v, %v\n", sqlparser.String(col), deps.direct, deps.recursive)
 	if deps.typ.Valid() {
 		b.typer.setTypeFor(col, deps.typ)
 	}
@@ -170,7 +168,7 @@ func (b *binder) findDependentTableSet(current *scope, target sqlparser.TableNam
 		if tblName.Name.String() != target.Name.String() {
 			continue
 		}
-		ts := b.org.tableSetFor(table.GetAliasedTableExpr())
+		ts, _ := table.getTableSets()
 		c := createCertain(ts, ts, evalengine.Type{})
 		deps = deps.merge(c, false)
 	}
@@ -382,10 +380,10 @@ func (b *binder) searchInSelectExpressions(colName *sqlparser.ColName, deps depe
 			continue
 		}
 
-		_, direct, _ := b.org.depsForExpr(selectCol)
+		_, direct, _ := b.a.depsForExpr(selectCol)
 		if deps.direct == direct {
 			// we have found the ColName in the SELECT expressions, so it's safe to use here
-			direct, recursive, typ := b.org.depsForExpr(ae.Expr)
+			direct, recursive, typ := b.a.depsForExpr(ae.Expr)
 			return dependency{certain: true, direct: direct, recursive: recursive, typ: typ}
 		}
 	}
@@ -395,10 +393,10 @@ func (b *binder) searchInSelectExpressions(colName *sqlparser.ColName, deps depe
 			continue
 		}
 
-		_, direct, _ := b.org.depsForExpr(selectCol)
+		_, direct, _ := b.a.depsForExpr(selectCol)
 		if deps.direct == direct {
 			// we have found the ColName in the GROUP BY expressions, so it's safe to use here
-			direct, recursive, typ := b.org.depsForExpr(gb)
+			direct, recursive, typ := b.a.depsForExpr(gb)
 			return dependency{certain: true, direct: direct, recursive: recursive, typ: typ}
 		}
 	}
@@ -431,7 +429,7 @@ func (b *binder) resolveColInGroupBy(
 		return dependency{}, vterrors.VT13001("expected the table info to be a *vTableInfo")
 	}
 
-	dependencies, err := vtbl.dependenciesInGroupBy(colName.Name.String(), b.org)
+	dependencies, err := vtbl.dependenciesInGroupBy(colName.Name.String(), b.a)
 	if err != nil {
 		return dependency{}, err
 	}
@@ -450,7 +448,7 @@ func (b *binder) resolveColumnInScope(current *scope, expr *sqlparser.ColName, a
 		if !expr.Qualifier.IsEmpty() && !table.matches(expr.Qualifier) && !current.isUnion {
 			continue
 		}
-		thisDeps, err := table.dependencies(expr.Name.String(), b.org)
+		thisDeps, err := table.dependencies(expr.Name.String(), b.a)
 		if err != nil {
 			return nil, err
 		}

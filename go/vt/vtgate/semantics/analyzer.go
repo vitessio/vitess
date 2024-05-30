@@ -62,7 +62,7 @@ func newAnalyzer(dbName string, si SchemaInformation, fullAnalysis bool, tables 
 		currentDb:    dbName,
 		fullAnalysis: fullAnalysis,
 	}
-	s.org = a
+	s.a = a
 	return a
 }
 
@@ -338,12 +338,6 @@ func isParentSelectStatement(cursor *sqlparser.Cursor) bool {
 	return isSelect
 }
 
-type originable interface {
-	tableSetFor(t *sqlparser.AliasedTableExpr) TableSet
-	depsForExpr(expr sqlparser.Expr) (direct, recursive TableSet, typ evalengine.Type)
-	collationEnv() *collations.Environment
-}
-
 func (a *analyzer) depsForExpr(expr sqlparser.Expr) (direct, recursive TableSet, typ evalengine.Type) {
 	recursive = a.binder.recursive.dependencies(expr)
 	direct = a.binder.direct.dependencies(expr)
@@ -430,10 +424,6 @@ func (a *analyzer) earlyUp(cursor *sqlparser.Cursor) bool {
 
 func (a *analyzer) shouldContinue() bool {
 	return a.err == nil
-}
-
-func (a *analyzer) tableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
-	return a.tables.tableSetFor(t)
 }
 
 func (a *analyzer) noteQuerySignature(node sqlparser.SQLNode) {

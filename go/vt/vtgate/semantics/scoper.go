@@ -31,7 +31,7 @@ type (
 		rScope map[*sqlparser.Select]*scope
 		wScope map[*sqlparser.Select]*scope
 		scopes []*scope
-		org    originable
+		a      *analyzer
 		binder *binder
 
 		// These scopes are only used for rewriting ORDER BY 1 and GROUP BY 1
@@ -161,7 +161,7 @@ func (s *scoper) copySelectExprs(cursor *sqlparser.Cursor, node sqlparser.Select
 	if !exists {
 		return
 	}
-	wScope.tables = []TableInfo{createVTableInfoForExpressions(node, s.currentScope().tables, s.org)}
+	wScope.tables = []TableInfo{createVTableInfoForExpressions(node, s.currentScope().tables)}
 }
 
 func (s *scoper) enterJoinScope(cursor *sqlparser.Cursor) {
@@ -289,11 +289,11 @@ func (s *scoper) createSpecialScopePostProjection(parent sqlparser.SQLNode) erro
 		for i, sel := range sqlparser.GetAllSelects(parent) {
 			if i == 0 {
 				nScope.stmt = sel
-				tableInfo = createVTableInfoForExpressions(sel.SelectExprs, nil /*needed for star expressions*/, s.org)
+				tableInfo = createVTableInfoForExpressions(sel.SelectExprs, nil)
 				nScope.tables = append(nScope.tables, tableInfo)
 				continue
 			}
-			thisTableInfo := createVTableInfoForExpressions(sel.SelectExprs, nil /*needed for star expressions*/, s.org)
+			thisTableInfo := createVTableInfoForExpressions(sel.SelectExprs, nil)
 			if len(tableInfo.cols) != len(thisTableInfo.cols) {
 				return vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.WrongNumberOfColumnsInSelect, "The used SELECT statements have a different number of columns")
 			}
