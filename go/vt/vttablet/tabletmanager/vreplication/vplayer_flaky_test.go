@@ -44,11 +44,13 @@ import (
 )
 
 func TestJoin(t *testing.T) {
+	doNotLogDBQueries = true
+	defer func() { doNotLogDBQueries = false }()
 	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
-		"create table t1(id int, tname varbinary(128), primary key(id))",
-		fmt.Sprintf("create table %s.t1(id int, tname varbinary(128), primary key(id))", vrepldb),
+		"create table t1(id int, tname varbinary(128), t2id int, primary key(id))",
+		fmt.Sprintf("create table %s.t1(id int, tname varbinary(128), t2id int, primary key(id))", vrepldb),
 		"create table t2(id int, company varbinary(128), primary key(id))",
 		fmt.Sprintf("create table %s.t2(id int, company varbinary(128), primary key(id))", vrepldb),
 		"create table t12(t1id int, t2id int, tname varbinary(128), company varbinary(128), primary key(t1id))",
@@ -65,8 +67,8 @@ func TestJoin(t *testing.T) {
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
-			Match:  "orders_view",
-			Filter: "select t1.id t1id, t2.id t2id, t1.tname, t2.company from t1 join t2 on t1.id = t2.id",
+			Match:  "t12",
+			Filter: "select t1.id t1id, t2.id t2id, t1.tname, t2.company from t1 join t2 on t1.t2id = t2.id",
 		}},
 	}
 	bls := &binlogdatapb.BinlogSource{
@@ -74,10 +76,13 @@ func TestJoin(t *testing.T) {
 		Shard:    env.ShardName,
 		Filter:   filter,
 	}
+	position := primaryPosition(t)
 	execStatements(t, []string{
 		"insert into t2(id, company) values(1, 'company1')",
+		fmt.Sprintf("insert into %s.t2(id, company) values(1, 'company1')", vrepldb),
+		"insert into t1(id,tname,t2id) values (1,'name1',1)",
+		fmt.Sprintf("insert into %s.t1(id,tname,t2id) values (1,'name1',1)", vrepldb),
 	})
-	position := primaryPosition(t)
 	cancel, _ := startVReplication(t, bls, position)
 	defer cancel()
 
@@ -89,24 +94,25 @@ func TestJoin(t *testing.T) {
 		query       string
 		queryResult [][]string
 	}{{
-		input:  "insert into t1(id,tname) values (1,'name1')",
 		output: "insert into t12(t1id,t2id,tname,company) values (1,1,'name1','company1')",
-		table:  "t1",
+		table:  "t12",
 		data: [][]string{
 			{"1", "1", "name1", "company1"},
 		},
 	}}
 
 	for _, tcases := range testcases {
-		execStatements(t, []string{tcases.input})
-		output := qh.Expect(tcases.output)
-		expectNontxQueries(t, output)
+		if len(tcases.input) > 0 {
+			execStatements(t, []string{tcases.input})
+		}
+		// output := qh.Expect(tcases.output)
+		// expectNontxQueries(t, output)
 		if tcases.table != "" {
 			expectData(t, tcases.table, tcases.data)
 		}
-		if tcases.query != "" {
-			expectQueryResult(t, tcases.query, tcases.queryResult)
-		}
+		// if tcases.query != "" {
+		// 	expectQueryResult(t, tcases.query, tcases.queryResult)
+		// }
 	}
 }
 

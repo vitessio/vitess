@@ -68,13 +68,17 @@ type ReplicatorPlan struct {
 }
 
 type ReplicatorJoinPlan struct {
-	Tables []string
+	Tables        []string
+	TableName     string
+	MainTableName any
 }
 
 type TableJoinPlan struct {
-	Insert  *sqlparser.ParsedQuery
-	Updates map[string]*sqlparser.ParsedQuery
-	Deletes map[string]*sqlparser.ParsedQuery
+	Insert       *sqlparser.ParsedQuery
+	Updates      map[string]*sqlparser.ParsedQuery
+	Deletes      map[string]*sqlparser.ParsedQuery
+	TableColumns *map[string][]*ViewColumn
+	MainTable    string
 }
 
 // buildExecution plan uses the field info as input and the partially built
@@ -372,6 +376,67 @@ func (tp *TablePlan) bindFieldVal(field *querypb.Field, val *sqltypes.Value) (*q
 		return sqltypes.StringBindVariable(val.ToString()), nil
 	}
 	return sqltypes.ValueBindVariable(*val), nil
+}
+
+func (tp *TablePlan) applyChangeForJoin(eventTableName string, eventTablePlan *TablePlan, rowChange *binlogdatapb.RowChange, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
+	log.Infof("applyChangeForJoin called for %v", rowChange)
+	var before, after bool
+	bindvars := make(map[string]*querypb.BindVariable, len(eventTablePlan.Fields))
+	log.Infof("Fields: %q", tp.Fields)
+	tc := (*tp.JoinPlan.TableColumns)[eventTableName]
+	log.Infof("TableColumns: %q", tc)
+	_, _, _ = before, after, bindvars
+	isColPresent := func(colName string) bool {
+		for _, col := range tc {
+			if col.SourceColumnName == colName {
+				return true
+			}
+		}
+		return false
+	}
+
+	if rowChange.Before != nil {
+		before = true
+		vals := sqltypes.MakeRowTrusted(eventTablePlan.Fields, rowChange.Before)
+		for i, field := range eventTablePlan.Fields {
+			if !isColPresent(field.Name) {
+				continue
+			}
+			bindVar, err := tp.bindFieldVal(field, &vals[i])
+			if err != nil {
+				return nil, err
+			}
+			bindvars["b_"+field.Name] = bindVar
+		}
+	}
+	if rowChange.After != nil {
+		after = true
+		vals := sqltypes.MakeRowTrusted(eventTablePlan.Fields, rowChange.After)
+		log.Infof("RowChange %d", len(rowChange.After.Values), "Fields: %q", eventTablePlan.Fields, "Vals: %q", vals)
+		for i, field := range eventTablePlan.Fields {
+			if !isColPresent(field.Name) {
+				continue
+			}
+			bindVar, err := tp.bindFieldVal(field, &vals[i])
+			if err != nil {
+				return nil, err
+			}
+			bindvars["a_"+field.Name] = bindVar
+		}
+	}
+	switch {
+	case !before && after:
+		if eventTableName != tp.JoinPlan.MainTable {
+			log.Infof("Ignoring non-main table insert for %v", eventTableName)
+			return nil, nil
+		}
+		clear(bindvars)
+		log.Infof("Inserting into main table %v: %s", tp.JoinPlan.MainTable, tp.JoinPlan.Insert.Query)
+		return execParsedQuery(tp.JoinPlan.Insert, bindvars, executor)
+	default:
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "applyChangeForJoin called with before or without after")
+	}
+	return nil, nil
 }
 
 func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
