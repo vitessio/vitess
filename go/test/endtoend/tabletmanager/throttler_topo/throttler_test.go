@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/test/endtoend/throttler"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -355,6 +356,36 @@ func TestInitialThrottler(t *testing.T) {
 	t.Run("validating pushback response from throttler on low threshold once heartbeats go stale", func(t *testing.T) {
 		time.Sleep(2 * onDemandHeartbeatDuration) // just... really wait long enough, make sure on-demand stops
 		waitForThrottleCheckStatus(t, primaryTablet, http.StatusTooManyRequests)
+	})
+}
+
+func TestThrottleViaApplySchema(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	t.Run("throttling via ApplySchema", func(t *testing.T) {
+		vtctlParams := &cluster.ApplySchemaParams{DDLStrategy: "online"}
+		_, err := clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(
+			keyspaceName, "alter vitess_migration throttle all", *vtctlParams,
+		)
+		assert.NoError(t, err)
+	})
+	t.Run("validate keyspace configuration", func(t *testing.T) {
+		keyspace, err := clusterInstance.VtctldClientProcess.GetKeyspace(keyspaceName)
+		require.NoError(t, err)
+		require.NotNil(t, keyspace)
+		require.NotNil(t, keyspace.Keyspace.ThrottlerConfig)
+		require.NotEmpty(t, keyspace.Keyspace.ThrottlerConfig.ThrottledApps, "throttler config: %+v", keyspace.Keyspace.ThrottlerConfig)
+		appRule, ok := keyspace.Keyspace.ThrottlerConfig.ThrottledApps[throttlerapp.OnlineDDLName.String()]
+		require.True(t, ok, "throttled apps: %v", keyspace.Keyspace.ThrottlerConfig.ThrottledApps)
+		require.NotNil(t, appRule)
+		assert.Equal(t, throttlerapp.OnlineDDLName.String(), appRule.Name)
+		assert.EqualValues(t, 1.0, appRule.Ratio)
+	})
+	t.Run("unthrottling via ApplySchema", func(t *testing.T) {
+		vtctlParams := &cluster.ApplySchemaParams{DDLStrategy: "online"}
+		_, err := clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(
+			keyspaceName, "alter vitess_migration unthrottle all", *vtctlParams,
+		)
+		assert.NoError(t, err)
 	})
 }
 
