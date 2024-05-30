@@ -70,7 +70,7 @@ func init() {
 
 func registerTopoLockFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&RemoteOperationTimeout, "remote_operation_timeout", RemoteOperationTimeout, "time to wait for a remote operation")
-	fs.DurationVar(&LockTimeout, "lock-timeout", LockTimeout, "Maximum time to wait for while acquiring a lock from the topo server")
+	fs.DurationVar(&LockTimeout, "lock-timeout", LockTimeout, "Maximum time to wait when attempting to acquire a lock from the topo server")
 }
 
 // newLock creates a new Lock.
