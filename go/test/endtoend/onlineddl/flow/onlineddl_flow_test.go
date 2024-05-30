@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package vreplstress
+package flow
 
 import (
 	"context"
@@ -55,6 +55,7 @@ var (
 	tablets          []*cluster.Vttablet
 	httpClient       = throttlebase.SetupHTTPClient(time.Second)
 	throttleWorkload atomic.Bool
+	totalAppliedDML  atomic.Int64
 
 	hostname              = "localhost"
 	keyspaceName          = "ks"
@@ -189,13 +190,14 @@ func TestSchemaChange(t *testing.T) {
 	shards = clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
 
-	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance, time.Second)
+	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance, 2*time.Second)
 
 	t.Run("flow", func(t *testing.T) {
 		t.Run("create schema", func(t *testing.T) {
 			testWithInitialSchema(t)
 		})
 		t.Run("init table", func(t *testing.T) {
+			// Populates table. Makes work for vcopier.
 			initTable(t)
 		})
 		t.Run("migrate", func(t *testing.T) {
@@ -224,6 +226,8 @@ func TestSchemaChange(t *testing.T) {
 
 			var wg sync.WaitGroup
 			t.Run("generate workload", func(t *testing.T) {
+				// Create work for vplayer.
+				// This workload will consider throttling state and avoid generating DMLs if throttled.
 				wg.Add(1)
 				go func() {
 					defer t.Logf("Terminating workload")
@@ -231,6 +235,8 @@ func TestSchemaChange(t *testing.T) {
 					runMultipleConnections(ctx, t)
 				}()
 			})
+			appliedDMLStart := totalAppliedDML.Load()
+
 			hint := "post_completion_hint"
 			var uuid string
 			t.Run("submit migration", func(t *testing.T) {
@@ -263,6 +269,21 @@ func TestSchemaChange(t *testing.T) {
 					assert.Contains(t, body, throttlerapp.OnlineDDLName)
 				}
 				waitForThrottleCheckStatus(t, throttlerapp.OnlineDDLName, primaryTablet, http.StatusOK)
+			})
+			t.Run("additional wait", func(t *testing.T) {
+				select {
+				case <-time.After(3 * time.Second):
+				case <-ctx.Done():
+					require.Fail(t, "context cancelled")
+				}
+			})
+			t.Run("validate applied DML", func(t *testing.T) {
+				// Validate that during Online DDL, and even with throttling, we were
+				// able to produce meaningful traffic.
+				appliedDMLEnd := totalAppliedDML.Load()
+				assert.Greater(t, appliedDMLEnd, appliedDMLStart)
+				assert.GreaterOrEqual(t, appliedDMLEnd-appliedDMLStart, int64(maxTableRows))
+				t.Logf("Applied DML: %d", appliedDMLEnd-appliedDMLStart)
 			})
 			t.Run("attempt to complete", func(t *testing.T) {
 				onlineddl.CheckCompleteMigration(t, &vtParams, shards, uuid, true)
@@ -403,7 +424,10 @@ func waitForReadyToComplete(t *testing.T, uuid string, expected bool) bool {
 func generateInsert(t *testing.T, conn *mysql.Conn) error {
 	id := rand.Int32N(int32(maxTableRows))
 	query := fmt.Sprintf(insertRowStatement, id)
-	_, err := conn.ExecuteFetch(query, 1000, true)
+	_, err := conn.ExecuteFetch(query, 1, false)
+	if err == nil {
+		totalAppliedDML.Add(1)
+	}
 
 	return err
 }
@@ -411,7 +435,10 @@ func generateInsert(t *testing.T, conn *mysql.Conn) error {
 func generateUpdate(t *testing.T, conn *mysql.Conn) error {
 	id := rand.Int32N(int32(maxTableRows))
 	query := fmt.Sprintf(updateRowStatement, id)
-	_, err := conn.ExecuteFetch(query, 1000, true)
+	_, err := conn.ExecuteFetch(query, 1, false)
+	if err == nil {
+		totalAppliedDML.Add(1)
+	}
 
 	return err
 }
@@ -419,7 +446,10 @@ func generateUpdate(t *testing.T, conn *mysql.Conn) error {
 func generateDelete(t *testing.T, conn *mysql.Conn) error {
 	id := rand.Int32N(int32(maxTableRows))
 	query := fmt.Sprintf(deleteRowStatement, id)
-	_, err := conn.ExecuteFetch(query, 1000, true)
+	_, err := conn.ExecuteFetch(query, 1, false)
+	if err == nil {
+		totalAppliedDML.Add(1)
+	}
 
 	return err
 }
@@ -493,6 +523,8 @@ func initTable(t *testing.T) {
 	require.Nil(t, err)
 	defer conn.Close()
 
+	appliedDMLStart := totalAppliedDML.Load()
+
 	for i := 0; i < maxTableRows/2; i++ {
 		generateInsert(t, conn)
 	}
@@ -502,6 +534,9 @@ func initTable(t *testing.T) {
 	for i := 0; i < maxTableRows/4; i++ {
 		generateDelete(t, conn)
 	}
+	appliedDMLEnd := totalAppliedDML.Load()
+	assert.Greater(t, appliedDMLEnd, appliedDMLStart)
+	assert.GreaterOrEqual(t, appliedDMLEnd-appliedDMLStart, int64(maxTableRows))
 }
 
 func throttleResponse(tablet *cluster.VttabletProcess, path string) (respBody string, err error) {
