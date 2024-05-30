@@ -43,9 +43,11 @@ type DerivedTable struct {
 
 type unionInfo struct {
 	isAuthoritative bool
-	recursive       []TableSet
-	types           []evalengine.Type
-	exprs           sqlparser.SelectExprs
+
+	// column information
+	recursiveCol []TableSet
+	types        []evalengine.Type
+	exprs        sqlparser.SelectExprs
 }
 
 var _ TableInfo = (*DerivedTable)(nil)

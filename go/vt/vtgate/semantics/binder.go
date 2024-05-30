@@ -110,7 +110,7 @@ func (b *binder) bindUnion(union *sqlparser.Union) error {
 
 	for i, expr := range info.exprs {
 		ae := expr.(*sqlparser.AliasedExpr)
-		b.recursive[ae.Expr] = info.recursive[i]
+		b.recursive[ae.Expr] = info.recursiveCol[i]
 		if t := info.types[i]; t.Valid() {
 			b.typer.m[ae.Expr] = t
 		}

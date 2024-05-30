@@ -160,7 +160,7 @@ func (tc *tableCollector) visitUnion(union *sqlparser.Union) error {
 	}
 
 	size := len(firstSelect.SelectExprs)
-	info.recursive = make([]TableSet, size)
+	info.recursiveCol = make([]TableSet, size)
 	typers := make([]evalengine.TypeAggregator, size)
 	collations := tc.a.collationEnv()
 
@@ -171,7 +171,7 @@ func (tc *tableCollector) visitUnion(union *sqlparser.Union) error {
 				continue
 			}
 			_, recursiveDeps, qt := tc.a.depsForExpr(ae.Expr)
-			info.recursive[i] = info.recursive[i].Merge(recursiveDeps)
+			info.recursiveCol[i] = info.recursiveCol[i].Merge(recursiveDeps)
 			if err := typers[i].Add(qt, collations); err != nil {
 				return err
 			}
@@ -401,7 +401,7 @@ func (tc *tableCollector) addUnionDerivedTable(union *sqlparser.Union, node *sql
 		return vterrors.VT13001("information about union is not available")
 	}
 
-	tableInfo := createDerivedTableForExpressions(info.exprs, columns, tables.tables, info.isAuthoritative, info.recursive, info.types)
+	tableInfo := createDerivedTableForExpressions(info.exprs, columns, tables.tables, info.isAuthoritative, info.recursiveCol, info.types)
 	if err := tableInfo.checkForDuplicates(); err != nil {
 		return err
 	}
