@@ -128,6 +128,7 @@ func FixedPointBottomUp(
 	// will loop while the rewriting changes anything
 	for ok := true; ok; ok = id != NoRewrite {
 		if DebugOperatorTree {
+			fmt.Println("Full tree:")
 			fmt.Println(ToTree(op))
 		}
 		// Continue the top-down rewriting process as long as changes were made during the last traversal
@@ -218,6 +219,9 @@ func bottomUp(
 			childID = childID.Merge(resolveID(oldInputs[0]))
 		}
 		in, changed := bottomUp(operator, childID, resolveID, rewriter, shouldVisit, false)
+		if DebugOperatorTree && changed.Changed() {
+			fmt.Println(ToTree(in))
+		}
 		anythingChanged = anythingChanged.Merge(changed)
 		newInputs[i] = in
 	}

@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/ptr"
-	"vitess.io/vitess/go/vt/topotools"
 
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql/collations"
@@ -1015,10 +1014,14 @@ func buildShardRoutingRule(source *vschemapb.SrvVSchema, vschema *VSchema) {
 
 func buildKeyspaceRoutingRule(source *vschemapb.SrvVSchema, vschema *VSchema) {
 	vschema.KeyspaceRoutingRules = nil
-	if len(source.GetKeyspaceRoutingRules().GetRules()) == 0 {
+	sourceRules := source.GetKeyspaceRoutingRules().GetRules()
+	if len(sourceRules) == 0 {
 		return
 	}
-	rulesMap := topotools.GetKeyspaceRoutingRulesMap(source.KeyspaceRoutingRules)
+	rulesMap := make(map[string]string, len(sourceRules))
+	for _, rr := range sourceRules {
+		rulesMap[rr.FromKeyspace] = rr.ToKeyspace
+	}
 	vschema.KeyspaceRoutingRules = rulesMap
 }
 

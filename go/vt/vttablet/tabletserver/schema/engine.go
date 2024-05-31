@@ -28,13 +28,11 @@ import (
 
 	"golang.org/x/exp/maps"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/constants/sidecar"
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/vt/vtenv"
-
-	"vitess.io/vitess/go/acl"
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/timer"
@@ -47,6 +45,7 @@ import (
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -532,7 +531,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 
 	dropped := se.getDroppedTables(curTables, changedViews, mismatchTables)
 
-	// Populate PKColumns for changed tables.
+	// Populate PK Columns for changed tables.
 	if err := se.populatePrimaryKeys(ctx, conn.Conn, changedTables); err != nil {
 		return err
 	}
@@ -670,8 +669,14 @@ func (se *Engine) RegisterVersionEvent() error {
 	return se.historian.RegisterVersionEvent()
 }
 
-// GetTableForPos returns a best-effort schema for a specific gtid
-func (se *Engine) GetTableForPos(tableName sqlparser.IdentifierCS, gtid string) (*binlogdatapb.MinimalTable, error) {
+// GetTableForPos makes a best-effort attempt to return a table's schema at a specific
+// GTID/position. If it cannot get the table schema for the given GTID/position then it
+// returns the latest table schema that is available in the database -- the table schema
+// for the "current" GTID/position (updating the cache entry). If the table is not found
+// in the cache, it will reload the cache from the database in case the table was created
+// after the last schema reload or the cache has not yet been initialized. This function
+// makes the schema cache a read-through cache for VReplication purposes.
+func (se *Engine) GetTableForPos(ctx context.Context, tableName sqlparser.IdentifierCS, gtid string) (*binlogdatapb.MinimalTable, error) {
 	mt, err := se.historian.GetTableForPos(tableName, gtid)
 	if err != nil {
 		log.Infof("GetTableForPos returned error: %s", err.Error())
@@ -680,19 +685,66 @@ func (se *Engine) GetTableForPos(tableName sqlparser.IdentifierCS, gtid string) 
 	if mt != nil {
 		return mt, nil
 	}
+	// We got nothing from the historian, which typically means that it's not enabled.
 	se.mu.Lock()
 	defer se.mu.Unlock()
 	tableNameStr := tableName.String()
-	st, ok := se.tables[tableNameStr]
-	if !ok {
-		if schema.IsInternalOperationTableName(tableNameStr) {
-			log.Infof("internal table %v found in vttablet schema: skipping for GTID search", tableNameStr)
-		} else {
-			log.Infof("table %v not found in vttablet schema, current tables: %v", tableNameStr, se.tables)
-			return nil, fmt.Errorf("table %v not found in vttablet schema", tableNameStr)
+	if st, ok := se.tables[tableNameStr]; ok && tableNameStr != "dual" { // No need to refresh dual
+		// Test Engines (NewEngineForTests()) don't have a conns pool and are not
+		// supposed to talk to the database, so don't update the cache entry in that
+		// case.
+		if se.conns == nil {
+			return newMinimalTable(st), nil
+		}
+		// We have the table in our cache. Let's be sure that our table definition is
+		// up-to-date for the "current" position.
+		conn, err := se.conns.Get(ctx, nil)
+		if err != nil {
+			return nil, err
+		}
+		defer conn.Recycle()
+		cst := *st       // Make a copy
+		cst.Fields = nil // We're going to refresh the columns/fields
+		if err := fetchColumns(&cst, conn, se.cp.DBName(), tableNameStr); err != nil {
+			return nil, err
+		}
+		// Update the PK columns for the table as well as they may have changed.
+		cst.PKColumns = nil // We're going to repopulate the PK columns
+		if err := se.populatePrimaryKeys(ctx, conn.Conn, map[string]*Table{tableNameStr: &cst}); err != nil {
+			return nil, err
+		}
+		se.tables[tableNameStr] = &cst
+		return newMinimalTable(&cst), nil
+	}
+	// It's expected that internal tables are not found within VReplication workflows.
+	// No need to refresh the cache for internal tables.
+	if schema.IsInternalOperationTableName(tableNameStr) {
+		log.Infof("internal table %v found in vttablet schema: skipping for GTID search", tableNameStr)
+		return nil, nil
+	}
+	// We don't currently have the non-internal table in the cache. This can happen when
+	// a table was created after the last schema reload (which happens at least every
+	// --queryserver-config-schema-reload-time).
+	// Whatever the reason, we should ensure that our cache is able to get the latest
+	// table schema for the "current" position IF the table exists in the database.
+	// In order to ensure this, we need to reload the latest schema so that our cache
+	// is up to date. This effectively turns our in-memory cache into a read-through
+	// cache for VReplication related needs (this function is only used by vstreamers).
+	// This adds an additional cost, but for VReplication it should be rare that we are
+	// trying to replicate a table that doesn't actually exist.
+	// This also allows us to perform a just-in-time initialization of the cache if
+	// a vstreamer is the first one to access it.
+	if se.conns != nil { // Test Engines (NewEngineForTests()) don't have a conns pool
+		if err := se.reload(ctx, true); err != nil {
+			return nil, err
+		}
+		if st, ok := se.tables[tableNameStr]; ok {
+			return newMinimalTable(st), nil
 		}
 	}
-	return newMinimalTable(st), nil
+
+	log.Infof("table %v not found in vttablet schema, current tables: %v", tableNameStr, se.tables)
+	return nil, fmt.Errorf("table %v not found in vttablet schema", tableNameStr)
 }
 
 // RegisterNotifier registers the function for schema change notification.

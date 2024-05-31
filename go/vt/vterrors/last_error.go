@@ -38,7 +38,6 @@ type LastError struct {
 }
 
 func NewLastError(name string, maxTimeInError time.Duration) *LastError {
-	log.Infof("Created last error: %s, with maxTimeInError: %s", name, maxTimeInError)
 	return &LastError{
 		name:           name,
 		maxTimeInError: maxTimeInError,
@@ -49,20 +48,17 @@ func (le *LastError) Record(err error) {
 	le.mu.Lock()
 	defer le.mu.Unlock()
 	if err == nil {
-		log.Infof("Resetting last error: %s", le.name)
 		le.err = nil
 		le.firstSeen = time.Time{}
 		le.lastSeen = time.Time{}
 		return
 	}
 	if !Equals(err, le.err) {
-		log.Infof("Got new last error %+v for %s, was %+v", err, le.name, le.err)
 		le.firstSeen = time.Now()
 		le.lastSeen = time.Now()
 		le.err = err
 	} else {
 		// same error seen
-		log.Infof("Got the same last error for %q: %+v ; first seen at %s and last seen %dms ago", le.name, le.err, le.firstSeen, int(time.Since(le.lastSeen).Milliseconds()))
 		if time.Since(le.lastSeen) > le.maxTimeInError {
 			// reset firstSeen, since it has been long enough since the last time we saw this error
 			log.Infof("Resetting firstSeen for %s, since it is too long since the last one", le.name)

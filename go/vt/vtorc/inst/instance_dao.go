@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"github.com/patrickmn/go-cache"
-	"github.com/rcrowley/go-metrics"
 	"github.com/sjmudd/stopwatch"
 
 	"vitess.io/vitess/go/mysql/replication"
@@ -60,10 +59,9 @@ var (
 var forgetAliases *cache.Cache
 
 var (
-	accessDeniedCounter         = metrics.NewCounter()
-	readTopologyInstanceCounter = metrics.NewCounter()
-	readInstanceCounter         = metrics.NewCounter()
-	writeInstanceCounter        = metrics.NewCounter()
+	// The metrics are registered with deprecated names. The old metric names can be removed in v21.
+	readTopologyInstanceCounter = stats.NewCounterWithDeprecatedName("InstanceReadTopology", "instance.read_topology", "Number of times an instance was read from the topology")
+	readInstanceCounter         = stats.NewCounterWithDeprecatedName("InstanceRead", "instance.read", "Number of times an instance was read")
 	backendWrites               = collection.CreateOrReturnCollection("BACKEND_WRITES")
 	writeBufferLatency          = stopwatch.NewNamedStopwatch()
 )
@@ -74,10 +72,6 @@ var (
 )
 
 func init() {
-	_ = metrics.Register("instance.access_denied", accessDeniedCounter)
-	_ = metrics.Register("instance.read_topology", readTopologyInstanceCounter)
-	_ = metrics.Register("instance.read", readInstanceCounter)
-	_ = metrics.Register("instance.write", writeInstanceCounter)
 	_ = writeBufferLatency.AddMany([]string{"wait", "write"})
 	writeBufferLatency.Start("wait")
 
@@ -390,7 +384,7 @@ Cleanup:
 	}
 
 	latency.Stop("instance")
-	readTopologyInstanceCounter.Inc(1)
+	readTopologyInstanceCounter.Add(1)
 
 	if instanceFound {
 		instance.LastDiscoveryLatency = time.Since(readingStartTime)
@@ -621,7 +615,7 @@ func ReadInstance(tabletAlias string) (*Instance, bool, error) {
 	instances, err := readInstancesByCondition(condition, sqlutils.Args(tabletAlias), "")
 	// We know there will be at most one (alias is the PK).
 	// And we expect to find one.
-	readInstanceCounter.Inc(1)
+	readInstanceCounter.Add(1)
 	if len(instances) == 0 {
 		return nil, false, err
 	}

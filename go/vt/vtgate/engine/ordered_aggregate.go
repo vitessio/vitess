@@ -51,8 +51,6 @@ type OrderedAggregate struct {
 
 	// Input is the primitive that will feed into this Primitive.
 	Input Primitive
-
-	CollationEnv *collations.Environment
 }
 
 // GroupByParams specify the grouping key to be used.
@@ -94,11 +92,6 @@ func (oa *OrderedAggregate) GetKeyspaceName() string {
 // GetTableName specifies the table that this primitive routes to.
 func (oa *OrderedAggregate) GetTableName() string {
 	return oa.Input.GetTableName()
-}
-
-// SetTruncateColumnCount sets the truncate column count.
-func (oa *OrderedAggregate) SetTruncateColumnCount(count int) {
-	oa.TruncateColumnCount = count
 }
 
 // TryExecute is a Primitive function.
@@ -344,14 +337,14 @@ func (oa *OrderedAggregate) nextGroupBy(currentKey, nextRow []sqltypes.Value) (n
 			return nextRow, true, nil
 		}
 
-		cmp, err := evalengine.NullsafeCompare(v1, v2, oa.CollationEnv, gb.Type.Collation(), gb.Type.Values())
+		cmp, err := evalengine.NullsafeCompare(v1, v2, gb.CollationEnv, gb.Type.Collation(), gb.Type.Values())
 		if err != nil {
 			_, isCollationErr := err.(evalengine.UnsupportedCollationError)
 			if !isCollationErr || gb.WeightStringCol == -1 {
 				return nil, false, err
 			}
 			gb.KeyCol = gb.WeightStringCol
-			cmp, err = evalengine.NullsafeCompare(currentKey[gb.WeightStringCol], nextRow[gb.WeightStringCol], oa.CollationEnv, gb.Type.Collation(), gb.Type.Values())
+			cmp, err = evalengine.NullsafeCompare(currentKey[gb.WeightStringCol], nextRow[gb.WeightStringCol], gb.CollationEnv, gb.Type.Collation(), gb.Type.Values())
 			if err != nil {
 				return nil, false, err
 			}

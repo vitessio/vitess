@@ -773,10 +773,9 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 	// the results, which engine.OrderedAggregate can do.
 	if len(aggregates) != 0 {
 		td.sourcePrimitive = &engine.OrderedAggregate{
-			Aggregates:   aggregates,
-			GroupByKeys:  pkColsToGroupByParams(td.pkCols, td.collationEnv),
-			Input:        td.sourcePrimitive,
-			CollationEnv: df.env.CollationEnv(),
+			Aggregates:  aggregates,
+			GroupByKeys: pkColsToGroupByParams(td.pkCols, td.collationEnv),
+			Input:       td.sourcePrimitive,
 		}
 	}
 

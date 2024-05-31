@@ -478,10 +478,9 @@ func (td *tableDiffer) setupRowSorters() {
 	// the results, which engine.OrderedAggregate can do.
 	if len(td.tablePlan.aggregates) != 0 {
 		td.sourcePrimitive = &engine.OrderedAggregate{
-			Aggregates:   td.tablePlan.aggregates,
-			GroupByKeys:  pkColsToGroupByParams(td.tablePlan.pkCols, td.wd.collationEnv),
-			Input:        td.sourcePrimitive,
-			CollationEnv: td.wd.collationEnv,
+			Aggregates:  td.tablePlan.aggregates,
+			GroupByKeys: pkColsToGroupByParams(td.tablePlan.pkCols, td.wd.collationEnv),
+			Input:       td.sourcePrimitive,
 		}
 	}
 }

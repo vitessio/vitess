@@ -1,3 +1,4 @@
+
 ## Summary
 
 ### Table of Contents
@@ -9,7 +10,9 @@
     - [MySQL binaries in the vitess/lite Docker images](#vitess-lite)
     - [vitess/base and vitess/k8s Docker images](#base-k8s-images)
     - [`gh-ost` binary and endtoend tests](#gh-ost-binary-tests-removal)
+    - [Legacy `EmergencyReparentShard` stats](#legacy-emergencyshardreparent-stats)
   - **[Breaking changes](#breaking-changes)**
+    - [Metric Name Changes in VTOrc](#metric-change-vtorc)
     - [ENUM and SET column handling in VTGate VStream API](#enum-set-vstream)
     - [`shutdown_grace_period` Default Change](#shutdown-grace-period-default)
     - [New `unmanaged` Flag and `disable_active_reparents` deprecation](#unmanaged-flag)
@@ -32,6 +35,7 @@
     - [New `healthcheck-dial-concurrency` flag](#healthcheck-dial-concurrency-flag)
     - [New minimum for `--buffer_min_time_between_failovers`](#buffer_min_time_between_failovers-flag)
     - [New `track-udfs` vtgate flag](#vtgate-track-udfs-flag)
+    - [Help text fix for `--lock-timeout`](#documentation-lock-timeout)
 - **[Minor Changes](#minor-changes)**
   - **[New Stats](#new-stats)**
     - [VTTablet Query Cache Hits and Misses](#vttablet-query-cache-hits-and-misses)
@@ -106,7 +110,38 @@ Vitess 20.0 drops support for `gh-ost` DDL strategy.
 
 Vitess' endtoend tests no longer use nor test `gh-ost` migrations.
 
+#### <a id="legacy-emergencyshardreparent-stats"/>Legacy `EmergencyReparentShard` stats
+
+The following `EmergencyReparentShard` stats were deprecated in Vitess 18.0 and are removed in Vitess 20.0:
+- `ers_counter`
+- `ers_success_counter`
+- `ers_failure_counter`
+
+These counters are replaced by the following stats _(introduced in Vitess 18.0)_:
+- `emergency_reparent_counts` - Number of times `EmergencyReparentShard` has been run. It is further subdivided by the keyspace, shard and the result of the operation.
+- `planned_reparent_counts` - Number of times `PlannedReparentShard` has been run. It is further subdivided by the keyspace, shard and the result of the operation.
+
+Also, the `reparent_shard_operation_timings` stat was added to provide per-operation timings of reparent operations.
+
 ### <a id="breaking-changes"/>Breaking Changes
+
+#### <a id="metric-change-vtorc"/>Metric Name Changes in VTOrc
+
+The following metric names have been changed in VTOrc. The old metrics are still available in `/debug/vars` for this release, but will be removed in later releases. The new metric names and the deprecated metric names resolve to the same metric name on prometheus, so there is no change there.
+
+|               Old Metric Name                |             New Metric Name              |                 Name in Prometheus                 |
+|:--------------------------------------------:|:----------------------------------------:|:--------------------------------------------------:|
+|           `analysis.change.write`            |          `AnalysisChangeWrite`           |           `vtorc_analysis_change_write`            |  
+|                `audit.write`                 |               `AuditWrite`               |                `vtorc_audit_write`                 |  
+|            `discoveries.attempt`             |           `DiscoveriesAttempt`           |            `vtorc_discoveries_attempt`             |  
+|              `discoveries.fail`              |            `DiscoveriesFail`             |              `vtorc_discoveries_fail`              |  
+| `discoveries.instance_poll_seconds_exceeded` | `DiscoveriesInstancePollSecondsExceeded` | `vtorc_discoveries_instance_poll_seconds_exceeded` |  
+|          `discoveries.queue_length`          |         `DiscoveriesQueueLength`         |          `vtorc_discoveries_queue_length`          |  
+|          `discoveries.recent_count`          |         `DiscoveriesRecentCount`         |          `vtorc_discoveries_recent_count`          |  
+|               `instance.read`                |              `InstanceRead`              |               `vtorc_instance_read`                |  
+|           `instance.read_topology`           |          `InstanceReadTopology`          |           `vtorc_instance_read_topology`           |
+		
+		
 
 #### <a id="enum-set-vstream"/>ENUM and SET column handling in VTGate VStream API
 
@@ -313,6 +348,10 @@ The `--buffer_min_time_between_failovers` `vttablet` flag now has a minimum valu
 #### <a id="vtgate-track-udfs-flag"/>New `--track-udfs` vtgate flag
 
 The new `--track-udfs` flag enables VTGate to track user defined functions for better planning.
+
+#### <a id="documentation-lock-timeout"/>Help text fix for `--lock-timeout`
+
+The help text for the flag `--lock-timeout` was incorrect. We were documenting it as a flag that controlled the duration for which the shard lock was acquired. It is actually the maximum duration for which we wait while attempting to acquire a lock from the topology server.
 
 ## <a id="minor-changes"/>Minor Changes
 
