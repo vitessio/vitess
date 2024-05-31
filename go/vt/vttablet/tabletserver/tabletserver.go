@@ -1896,7 +1896,6 @@ func (tsv *TabletServer) registerThrottlerCheckHandlers() {
 				appName = throttlerapp.DefaultName.String()
 			}
 			flags := &throttle.CheckFlags{
-				LowPriority:           (r.URL.Query().Get("p") == "low"),
 				SkipRequestHeartbeats: (r.URL.Query().Get("s") == "true"),
 			}
 			checkResult := tsv.lagThrottler.CheckByType(ctx, appName, remoteAddr, flags, checkType)
