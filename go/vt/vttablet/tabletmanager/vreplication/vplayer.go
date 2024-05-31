@@ -159,7 +159,7 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 			return nil, vr.dbClient.AddQueryToTrxBatch(sql) // Should become part of the trx batch
 		}
 		commitFunc = func() error {
-			return vr.dbClient.CommitTrxQueryBatch()
+			return vr.dbClient.CommitTrxQueryBatch() // Commit the current trx batch
 		}
 		vr.dbClient.maxBatchSize = maxAllowedPacket
 	}
