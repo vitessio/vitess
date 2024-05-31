@@ -68,7 +68,7 @@ type EmergencyReparentOptions struct {
 }
 
 // counters for Emergency Reparent Shard
-var ersCounter = stats.NewCountersWithMultiLabels("emergency_reparent_counts", "Number of times Emergency Reparent Shard has been run",
+var ersCounter = stats.NewCountersWithMultiLabelsWithDeprecatedName("EmergencyReparentCounts", "emergency_reparent_counts", "Number of times Emergency Reparent Shard has been run",
 	[]string{"Keyspace", "Shard", "Result"},
 )
 
