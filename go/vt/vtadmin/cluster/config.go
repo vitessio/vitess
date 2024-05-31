@@ -22,6 +22,7 @@ import (
 	stderrors "errors"
 	"fmt"
 	"io"
+	"regexp"
 	"strconv"
 	"time"
 
@@ -49,6 +50,8 @@ var (
 	// read-only RPC pools if a config has no wait timeout set.
 	DefaultReadPoolWaitTimeout = time.Millisecond * 100
 )
+
+var ClusterIDPattern = regexp.MustCompile("^[a-zA-Z0-9+.-]*$")
 
 // Config represents the options to configure a vtadmin cluster.
 type Config struct {
@@ -147,6 +150,10 @@ func LoadConfig(r io.Reader, configType string) (cfg *Config, id string, err err
 	id = v.GetString("id")
 	if id == "" {
 		return nil, "", ErrNoConfigID
+	}
+
+	if !ClusterIDPattern.MatchString(id) {
+		log.Warning("cluster id must only contain alphanumeric characters, +, ., or -")
 	}
 
 	tmp := map[string]string{}
