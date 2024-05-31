@@ -37,7 +37,6 @@
     "local": "VITE_VTADMIN_API_ADDRESS=\"http://localhost:14200\" VITE_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS=\"true\" PORT=14201 vite",
     "start": "vite",
     "build": "vite build",
-    "build-local": "VITE_VTADMIN_API_ADDRESS=\"http://francess-macbook-pro.local:14200\" VITE_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS=\"true\" vite build",
     "test": "vitest",
     "preview": "vite preview",
     "lint": "npm run lint:eslint && npm run lint:prettier && npm run lint:stylelint",
