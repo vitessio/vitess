@@ -87,7 +87,7 @@ func TestBuildPlayerJoinPlan(t *testing.T) {
 					SendRule:     "select t1.id t1id, t1.name, t2.id t2id, t2.company from t1 join t2 on t1.id = t2.id",
 					PKReferences: []string{"t1id"},
 					TableJoinPlan: &TestTableJoinPlan{
-						Insert: "insert into t12(t1id,`name`,t2id,company) values (:a_t1id,:a_name,:a_t2id,:a_company)",
+						Insert: "insert into t12 (t1id,`name`,t2id,company) select t1.id t1id, t1.name, t2.id t2id, t2.company from t1 join t2 on t1.id = t2.id",
 						Updates: map[string]string{
 							"t1": "update t12 set name = :a_name where t1id = :a_t1id",
 							"t2": "update t12 set company = :a_company where t2id = :a_t2id",
@@ -131,7 +131,7 @@ func TestBuildPlayerJoinPlan(t *testing.T) {
 
 	for _, tcase := range testcases {
 		plan, err := buildReplicatorPlanForJoin(getSource(tcase.input), PrimaryKeyInfos, nil,
-			binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser(), vdbClient2, tcase.tables)
+			binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser(), vdbClient2, false)
 		gotErr := ""
 		if err != nil {
 			gotErr = err.Error()
@@ -147,6 +147,10 @@ func TestBuildPlayerJoinPlan(t *testing.T) {
 		for k, v := range wantTablePlan.TableJoinPlan.Updates {
 			require.NotNil(t, gotTablePlan.JoinPlan.Updates[k])
 			assert.Equal(t, v, gotTablePlan.JoinPlan.Updates[k].Query)
+		}
+		for k, v := range wantTablePlan.TableJoinPlan.Deletes {
+			require.NotNil(t, gotTablePlan.JoinPlan.Deletes[k])
+			assert.Equal(t, v, gotTablePlan.JoinPlan.Deletes[k].Query)
 		}
 	}
 }
