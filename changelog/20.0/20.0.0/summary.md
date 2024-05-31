@@ -38,6 +38,7 @@
   - **[`SIGHUP` reload of gRPC client static auth creds](#sighup-reload-of-grpc-client-auth-creds)**
   - **[VTAdmin](#vtadmin)**
     - [Updated to node v20.12.2](#updated-node)
+    - [Replaced highcharts with d3](#replaced-highcharts)
 
 ## <a id="major-changes"/>Major Changes
 
@@ -335,3 +336,7 @@ The internal gRPC client now caches the static auth credentials and supports rel
 
 Building `vtadmin-web` now requires node >= v20.12.0 (LTS). Breaking changes from v18 to v20 can be found at https://nodejs.org/en/blog/release/v20.12.0 -- with no known issues that apply to VTAdmin.
 Full details on the node v20.12.2 release can be found at https://nodejs.org/en/blog/release/v20.12.2.
+
+#### <a id="replaced-highcharts"/>Replaced highcharts with d3
+
+The vtadmin-web UI no longer has a dependency on highcharts for licensing reasons. The tablet QPS, tablet VReplication QPS, and workflow streams lag charts have all been replaced by d3. We'll be iteratively improving the d3 charts until they reach feature parity with the original highcharts charts. 
