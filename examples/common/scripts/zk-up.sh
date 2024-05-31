@@ -51,8 +51,7 @@ echo "Started zk servers."
 # Add the CellInfo description for the $CELL cell.
 # If the node already exists, it's fine, means we used existing data.
 set +e
-# shellcheck disable=SC2086
-command vtctldclient --server internal --topo-implementation zk2 --topo-global-server "${ZK_SERVER}"  AddCellInfo \
+command vtctldclient --server internal --topo-implementation zk2 --topo-global-server-address "${ZK_SERVER}" AddCellInfo \
   --root "/vitess/${cell}" \
   --server-address "${ZK_SERVER}" \
   "${cell}"

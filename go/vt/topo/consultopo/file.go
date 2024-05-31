@@ -98,6 +98,11 @@ func (s *Server) Get(ctx context.Context, filePath string) ([]byte, topo.Version
 	return pair.Value, ConsulVersion(pair.ModifyIndex), nil
 }
 
+// GetVersion is part of topo.Conn interface.
+func (s *Server) GetVersion(ctx context.Context, filePath string, version int64) ([]byte, error) {
+	return nil, topo.NewError(topo.NoImplementation, "GetVersion not supported in consul topo")
+}
+
 // List is part of the topo.Conn interface.
 func (s *Server) List(ctx context.Context, filePathPrefix string) ([]topo.KVInfo, error) {
 	nodePathPrefix := path.Join(s.root, filePathPrefix)
