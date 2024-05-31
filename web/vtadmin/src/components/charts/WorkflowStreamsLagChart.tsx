@@ -50,7 +50,7 @@ export const WorkflowStreamsLagChart = ({ clusterID, keyspace, workflowName }: P
 
     const timeseries = useMemo(() => {
         return getWorkflowTimeseries(workflow, tabletQueries);
-    }, [[tabletQueries, workflow]]);
+    }, [tabletQueries, workflow]);
 
     return <D3Timeseries isLoading={anyLoading} timeseriesMap={timeseries} />;
 };
