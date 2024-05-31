@@ -69,7 +69,6 @@ export const D3Timeseries = ({ isLoading, timeseriesMap }: LineChartProps) => {
             .attr('class', 'fill-gray-500 font-mono text-medium');
         svgElement.selectAll('path').attr('class', '!stroke-gray-200');
         svgElement.selectAll('line').attr('class', '!stroke-gray-200 z-10');
-
     }, [xScale, yScale, boundsHeight]);
 
     // Build the line
