@@ -99,6 +99,13 @@ func TestJoin(t *testing.T) {
 		data: [][]string{
 			{"1", "1", "name1", "company1"},
 		},
+	}, {
+		input:  "update t1 set tname='name2' where id=1",
+		output: "update t12 set tname='name2' where t1id=1",
+		table:  fmt.Sprintf("%s.t12", vrepldb),
+		data: [][]string{
+			{"1", "1", "name2", "company1"},
+		},
 	}}
 
 	for _, tcases := range testcases {
@@ -114,6 +121,7 @@ func TestJoin(t *testing.T) {
 		// 	expectQueryResult(t, tcases.query, tcases.queryResult)
 		// }
 	}
+
 }
 
 // TestPlayerGeneratedInvisiblePrimaryKey confirms that the gipk column is replicated by vplayer, both for target

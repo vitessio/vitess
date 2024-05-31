@@ -192,19 +192,10 @@ func (vp *vplayer) play(ctx context.Context) error {
 		}
 		return nil
 	}
-
-	joinTables, err := vttablet.GetJoinTables(vp.vr.vre.env.Parser(), vp.vr.source.Filter.Rules[0].Filter)
-	if err != nil {
-		return err
-	}
-	var plan *ReplicatorPlan
-	if len(joinTables) == 0 {
-		plan, err = buildReplicatorPlan(vp.vr.source, vp.vr.colInfoMap, vp.copyState, vp.vr.stats, vp.vr.vre.env.CollationEnv(), vp.vr.vre.env.Parser())
-	} else {
-		plan, err = buildReplicatorPlanForJoin(vp.vr.source, vp.vr.colInfoMap, vp.copyState, vp.vr.stats, vp.vr.vre.env.CollationEnv(), vp.vr.vre.env.Parser(), vp.vr.dbClient, joinTables)
-		for tableName, tablePlan := range plan.TablePlans {
-			vp.tablePlans[tableName] = tablePlan
-		}
+	log.Infof("Starting VReplication player id: %v, startPos: %v, stop: %v, filter: %v", vp.vr.id, vp.startPos, vp.stopPos, vp.vr.source)
+	plan, err := buildReplicatorPlanForJoin(vp.vr.source, vp.vr.colInfoMap, vp.copyState, vp.vr.stats, vp.vr.vre.env.CollationEnv(), vp.vr.vre.env.Parser(), vp.vr.dbClient, false)
+	for tableName, tablePlan := range plan.TablePlans {
+		vp.tablePlans[tableName] = tablePlan
 	}
 	if err != nil {
 		vp.vr.stats.ErrorCounts.Add([]string{"Plan"}, 1)
@@ -359,8 +350,8 @@ func (vp *vplayer) applyRowEventForJoin(ctx context.Context, rowEvent *binlogdat
 		stats := NewVrLogStats("ROWCHANGE")
 		start := time.Now()
 		qr, err := vp.query(ctx, sql)
-		log.Infof("Applying row change for table %s, sql is %s, result is %q, error %v",
-			rowEvent.TableName, sql, qr, err)
+		log.Infof("Applying row change for table %s, sql is %s, updated %d rows, error %v",
+			rowEvent.TableName, sql, len(qr.Rows), err)
 		vp.vr.stats.QueryCount.Add(vp.phase, 1)
 		vp.vr.stats.QueryTimings.Record(vp.phase, start)
 		stats.Send(sql)

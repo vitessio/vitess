@@ -379,49 +379,38 @@ func (tp *TablePlan) bindFieldVal(field *querypb.Field, val *sqltypes.Value) (*q
 }
 
 func (tp *TablePlan) applyChangeForJoin(eventTableName string, eventTablePlan *TablePlan, rowChange *binlogdatapb.RowChange, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
-	log.Infof("applyChangeForJoin called for %v", rowChange)
 	var before, after bool
 	bindvars := make(map[string]*querypb.BindVariable, len(eventTablePlan.Fields))
-	log.Infof("Fields: %q", tp.Fields)
 	tc := (*tp.JoinPlan.TableColumns)[eventTableName]
-	log.Infof("TableColumns: %q", tc)
-	_, _, _ = before, after, bindvars
-	isColPresent := func(colName string) bool {
+	mapFieldName := func(fieldName string) string {
 		for _, col := range tc {
-			if col.SourceColumnName == colName {
-				return true
+			if col.SourceColumnName == fieldName {
+				return col.ViewColumnName
 			}
 		}
-		return false
+		return fieldName
 	}
 
 	if rowChange.Before != nil {
 		before = true
 		vals := sqltypes.MakeRowTrusted(eventTablePlan.Fields, rowChange.Before)
 		for i, field := range eventTablePlan.Fields {
-			if !isColPresent(field.Name) {
-				continue
-			}
 			bindVar, err := tp.bindFieldVal(field, &vals[i])
 			if err != nil {
 				return nil, err
 			}
-			bindvars["b_"+field.Name] = bindVar
+			bindvars["b_"+mapFieldName(field.Name)] = bindVar
 		}
 	}
 	if rowChange.After != nil {
 		after = true
 		vals := sqltypes.MakeRowTrusted(eventTablePlan.Fields, rowChange.After)
-		log.Infof("RowChange %d", len(rowChange.After.Values), "Fields: %q", eventTablePlan.Fields, "Vals: %q", vals)
 		for i, field := range eventTablePlan.Fields {
-			if !isColPresent(field.Name) {
-				continue
-			}
 			bindVar, err := tp.bindFieldVal(field, &vals[i])
 			if err != nil {
 				return nil, err
 			}
-			bindvars["a_"+field.Name] = bindVar
+			bindvars["a_"+mapFieldName(field.Name)] = bindVar
 		}
 	}
 	switch {
@@ -433,15 +422,20 @@ func (tp *TablePlan) applyChangeForJoin(eventTableName string, eventTablePlan *T
 		clear(bindvars)
 		log.Infof("Inserting into main table %v: %s", tp.JoinPlan.MainTable, tp.JoinPlan.Insert.Query)
 		return execParsedQuery(tp.JoinPlan.Insert, bindvars, executor)
+	case before && after:
+		update := tp.JoinPlan.Updates[eventTableName]
+		if update == nil {
+			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "update query not found for %v", eventTableName)
+		}
+		log.Infof("Updating %v: %s with bindvars %+q", eventTableName, update.Query, bindvars)
+		return execParsedQuery(update, bindvars, executor)
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "applyChangeForJoin called with before or without after")
 	}
-	return nil, nil
 }
 
 func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
 	// MakeRowTrusted is needed here because Proto3ToResult is not convenient.
-	log.Infof("applyChange called for %v", rowChange)
 	var before, after bool
 	bindvars := make(map[string]*querypb.BindVariable, len(tp.Fields))
 	if rowChange.Before != nil {

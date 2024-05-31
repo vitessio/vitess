@@ -32,6 +32,7 @@ func IsJoin(parser *sqlparser.Parser, query string) (bool, error) {
 }
 
 func GetJoinTables(parser *sqlparser.Parser, query string) ([]string, error) {
+	log.Infof("GetJoinTables: %s", query)
 	statement, err := parser.Parse(query)
 	if err != nil {
 		return nil, err

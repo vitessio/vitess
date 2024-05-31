@@ -172,7 +172,7 @@ func (rs *rowStreamer) buildPlanForJoin() error {
 	}
 	log.Infof("Building plan for join query: %v, tables: %v, directives %v,  view: %v\n", rs.query, tables, directives, view)
 	if view == "" {
-		return fmt.Errorf("unsupported: %v", sqlparser.String(statement))
+		return fmt.Errorf("no view specified for : %v", sqlparser.String(statement))
 	}
 
 	conn, err := rs.cp.Connect(rs.ctx)
