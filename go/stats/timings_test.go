@@ -18,11 +18,14 @@ package stats
 
 import (
 	"expvar"
+	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestTimings(t *testing.T) {
@@ -98,4 +101,50 @@ func TestTimingsCombineDimension(t *testing.T) {
 	t3.Add([]string{"c1", "c2", "c3"}, 1)
 	want = `{"TotalCount":1,"TotalTime":1,"Histograms":{"all.c2.all":{"500000":1,"1000000":0,"5000000":0,"10000000":0,"50000000":0,"100000000":0,"500000000":0,"1000000000":0,"5000000000":0,"10000000000":0,"inf":0,"Count":1,"Time":1}}}`
 	assert.Equal(t, want, t3.String())
+}
+
+func TestNewTimingsWithDeprecatedName(t *testing.T) {
+	clearStats()
+	Register(func(name string, v expvar.Var) {})
+
+	testcases := []struct {
+		name           string
+		deprecatedName string
+		shouldPanic    bool
+	}{
+		{
+			name:           "timings_new_name",
+			deprecatedName: "timings_deprecatedName",
+			shouldPanic:    true,
+		},
+		{
+			name:           "timings-metricName_test",
+			deprecatedName: "timings_metric.name-test",
+			shouldPanic:    false,
+		},
+		{
+			name:           "TimingsMetricNameTesting",
+			deprecatedName: "timings.metric.name.testing",
+			shouldPanic:    false,
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(fmt.Sprintf("%v-%v", testcase.name, testcase.deprecatedName), func(t *testing.T) {
+			wg := sync.WaitGroup{}
+			wg.Add(1)
+			panicReceived := false
+			go func() {
+				defer func() {
+					if x := recover(); x != nil {
+						panicReceived = true
+					}
+					wg.Done()
+				}()
+				NewTimingsWithDeprecatedName(testcase.name, testcase.deprecatedName, "help", "label", []string{"1", "2", "3"}...)
+			}()
+			wg.Wait()
+			require.EqualValues(t, testcase.shouldPanic, panicReceived)
+		})
+	}
 }

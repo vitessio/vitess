@@ -140,6 +140,9 @@ The following metric names have been changed in VTOrc. The old metrics are still
 |          `discoveries.recent_count`          |         `DiscoveriesRecentCount`         |          `vtorc_discoveries_recent_count`          |  
 |               `instance.read`                |              `InstanceRead`              |               `vtorc_instance_read`                |  
 |           `instance.read_topology`           |          `InstanceReadTopology`          |           `vtorc_instance_read_topology`           |
+|         `emergency_reparent_counts`          |        `EmergencyReparentCounts`         |         `vtorc_emergency_reparent_counts`          |
+|          `planned_reparent_counts`           |         `PlannedReparentCounts`          |          `vtorc_planned_reparent_counts`           |
+|      `reparent_shard_operation_timings`      |     `ReparentShardOperationTimings`      |  `vtorc_reparent_shard_operation_timings_bucket`   |
 		
 		
 
