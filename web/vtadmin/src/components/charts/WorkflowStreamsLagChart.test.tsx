@@ -83,7 +83,6 @@ describe('WorkflowStreamsLagChart', () => {
             // ...but! Add additional validation so that failing tests are easier to debug.
             // (And because it can be tempting to not examine snapshot changes in detail...) :)
             expect(Object.keys(result).length).toEqual(3);
-
         });
 
         it('should handle empty input', () => {
