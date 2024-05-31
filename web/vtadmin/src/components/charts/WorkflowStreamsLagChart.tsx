@@ -28,10 +28,6 @@ interface Props {
     workflowName: string;
 }
 
-// Default min/max values (in seconds) for the y-axis when there is no data to show.
-const DEFAULT_Y_MAX = 5;
-const DEFAULT_Y_MIN = 0;
-
 export const WorkflowStreamsLagChart = ({ clusterID, keyspace, workflowName }: Props) => {
     const { data: workflow, ...wq } = useWorkflow({ clusterID, keyspace, name: workflowName });
 
