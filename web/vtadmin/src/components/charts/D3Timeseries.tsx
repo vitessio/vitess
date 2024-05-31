@@ -70,7 +70,6 @@ export const D3Timeseries = ({ isLoading, timeseriesMap }: LineChartProps) => {
         svgElement.selectAll('path').attr('class', '!stroke-gray-200');
         svgElement.selectAll('line').attr('class', '!stroke-gray-200 z-10');
 
-        // Tooltip
     }, [xScale, yScale, boundsHeight]);
 
     // Build the line
