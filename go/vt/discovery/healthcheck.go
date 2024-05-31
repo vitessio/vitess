@@ -342,13 +342,13 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 		loadTabletsTrigger: make(chan struct{}),
 	}
 	var topoWatchers []*TopologyWatcher
-	var filters TabletFilters
 	cells := strings.Split(cellsToWatch, ",")
 	if cellsToWatch == "" {
 		cells = append(cells, localCell)
 	}
 
 	for _, c := range cells {
+		var filters TabletFilters
 		log.Infof("Setting up healthcheck for cell: %v", c)
 		if c == "" {
 			continue
