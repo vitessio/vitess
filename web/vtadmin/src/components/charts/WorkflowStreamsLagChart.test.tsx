@@ -85,10 +85,6 @@ describe('WorkflowStreamsLagChart', () => {
             // (And because it can be tempting to not examine snapshot changes in detail...) :)
             expect(Object.keys(result).length).toEqual(3);
 
-            // expect(result['us_east_1a-123456/1']).toEqual([1, 1, 1])
-            // expect(result[0].name).toEqual('us_east_1a-123456/1');
-            // expect(result[1].name).toEqual('us_east_1a-123456/2');
-            // expect(result[2].name).toEqual('us_east_1a-789012/1');
         });
 
         it('should handle empty input', () => {
