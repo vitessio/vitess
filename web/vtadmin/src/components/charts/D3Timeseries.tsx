@@ -27,7 +27,6 @@ type LineChartProps = {
   timeseriesMap: TimeseriesMap;
 };
 
-const timeFormat = d3.timeParse("%H:%M");
 
 export const D3Timeseries = ({ isLoading, timeseriesMap }: LineChartProps) => {
   // bounds = area inside the graph axis = calculated by substracting the margins
