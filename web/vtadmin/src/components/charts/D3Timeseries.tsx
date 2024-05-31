@@ -34,7 +34,7 @@ export const D3Timeseries = ({ isLoading, timeseriesMap }: LineChartProps) => {
     const boundsHeight = height - MARGIN.top - MARGIN.bottom;
 
     const [xRanges, yRanges] = axisMinsAndMaxes(timeseriesMap, boundsWidth);
-    const yMax = yRanges[1]
+    const yMax = yRanges[1];
     const yScale = useMemo(() => {
         return d3
             .scaleLinear()
