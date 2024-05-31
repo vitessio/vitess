@@ -39,11 +39,12 @@ type TargetTable struct {
 	Name   sqlparser.TableName
 }
 
-// dmlOp stores intermediary value for Update/Delete Operator with the vindexes.Table for ordering.
+// dmlOp stores intermediary value for Update/Delete Operator with the vindexes. Table for ordering.
 type dmlOp struct {
-	op   Operator
-	vTbl *vindexes.Table
-	cols []*sqlparser.ColName
+	op      Operator
+	vTbl    *vindexes.Table
+	cols    []*sqlparser.ColName
+	updList updList
 }
 
 // sortDmlOps sort the operator based on sharding vindex type.

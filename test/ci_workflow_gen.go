@@ -55,11 +55,7 @@ const (
 	// to be used.
 	clusterTestTemplate = "templates/cluster_endtoend_test%s.tpl"
 
-	unitTestSelfHostedTemplate    = "templates/unit_test_self_hosted.tpl"
-	unitTestSelfHostedDatabases   = ""
-	dockerFileTemplate            = "templates/dockerfile.tpl"
-	clusterTestSelfHostedTemplate = "templates/cluster_endtoend_test_self_hosted.tpl"
-	clusterTestDockerTemplate     = "templates/cluster_endtoend_test_docker.tpl"
+	clusterTestDockerTemplate = "templates/cluster_endtoend_test_docker.tpl"
 )
 
 var (
@@ -126,7 +122,6 @@ var (
 		"vttablet_prscomplex",
 	}
 
-	clusterSelfHostedList       = []string{}
 	clusterDockerList           = []string{}
 	clustersRequiringXtraBackup = []string{
 		"xb_backup",
@@ -168,12 +163,6 @@ type clusterTest struct {
 	Cores16                            bool
 }
 
-type selfHostedTest struct {
-	Name, Platform, Dockerfile, Shard, ImageName, directoryName string
-	FileName                                                    string
-	MakeTools, InstallXtraBackup, Docker                        bool
-}
-
 // clusterMySQLVersions return list of mysql versions (one or more) that this cluster needs to test against
 func clusterMySQLVersions(clusterName string) mysqlVersions {
 	switch {
@@ -211,16 +200,6 @@ func main() {
 	generateUnitTestWorkflows()
 	generateClusterWorkflows(clusterList, clusterTestTemplate)
 	generateClusterWorkflows(clusterDockerList, clusterTestDockerTemplate)
-
-	// tests that will use self-hosted runners
-	err := generateSelfHostedUnitTestWorkflows()
-	if err != nil {
-		log.Fatal(err)
-	}
-	err = generateSelfHostedClusterWorkflows()
-	if err != nil {
-		log.Fatal(err)
-	}
 }
 
 func canonnizeList(list []string) []string {
@@ -231,98 +210,6 @@ func canonnizeList(list []string) []string {
 		}
 	}
 	return output
-}
-
-func parseList(csvList string) []string {
-	var list []string
-	for _, item := range strings.Split(csvList, ",") {
-		if item != "" {
-			list = append(list, strings.TrimSpace(item))
-		}
-	}
-	return list
-}
-
-func generateSelfHostedUnitTestWorkflows() error {
-	platforms := parseList(unitTestSelfHostedDatabases)
-	for _, platform := range platforms {
-		directoryName := fmt.Sprintf("unit_test_%s", platform)
-		test := &selfHostedTest{
-			Name:              fmt.Sprintf("Unit Test (%s)", platform),
-			ImageName:         fmt.Sprintf("unit_test_%s", platform),
-			Platform:          platform,
-			directoryName:     directoryName,
-			Dockerfile:        fmt.Sprintf("./.github/docker/%s/Dockerfile", directoryName),
-			MakeTools:         true,
-			InstallXtraBackup: false,
-		}
-		err := setupTestDockerFile(test)
-		if err != nil {
-			return err
-		}
-		test.FileName = fmt.Sprintf("unit_test_%s.yml", platform)
-		filePath := fmt.Sprintf("%s/%s", workflowConfigDir, test.FileName)
-		err = writeFileFromTemplate(unitTestSelfHostedTemplate, filePath, test)
-		if err != nil {
-			log.Print(err)
-		}
-	}
-	return nil
-}
-
-func generateSelfHostedClusterWorkflows() error {
-	clusters := canonnizeList(clusterSelfHostedList)
-	for _, cluster := range clusters {
-		for _, mysqlVersion := range clusterMySQLVersions(cluster) {
-			// check mysqlversion
-			mysqlVersionIndicator := ""
-			if mysqlVersion != defaultMySQLVersion && len(clusterMySQLVersions(cluster)) > 1 {
-				mysqlVersionIndicator = "_" + string(mysqlVersion)
-			}
-
-			directoryName := fmt.Sprintf("cluster_test_%s%s", cluster, mysqlVersionIndicator)
-			test := &selfHostedTest{
-				Name:              fmt.Sprintf("Cluster (%s)(%s)", cluster, mysqlVersion),
-				ImageName:         fmt.Sprintf("cluster_test_%s%s", cluster, mysqlVersionIndicator),
-				Platform:          "mysql80",
-				directoryName:     directoryName,
-				Dockerfile:        fmt.Sprintf("./.github/docker/%s/Dockerfile", directoryName),
-				Shard:             cluster,
-				MakeTools:         false,
-				InstallXtraBackup: false,
-			}
-			makeToolClusters := canonnizeList(clustersRequiringMakeTools)
-			for _, makeToolCluster := range makeToolClusters {
-				if makeToolCluster == cluster {
-					test.MakeTools = true
-					break
-				}
-			}
-			xtraBackupClusters := canonnizeList(clustersRequiringXtraBackup)
-			for _, xtraBackupCluster := range xtraBackupClusters {
-				if xtraBackupCluster == cluster {
-					test.InstallXtraBackup = true
-					break
-				}
-			}
-			if mysqlVersion == mysql57 {
-				test.Platform = string(mysql57)
-			}
-
-			err := setupTestDockerFile(test)
-			if err != nil {
-				return err
-			}
-
-			test.FileName = fmt.Sprintf("cluster_endtoend_%s%s.yml", cluster, mysqlVersionIndicator)
-			filePath := fmt.Sprintf("%s/%s", workflowConfigDir, test.FileName)
-			err = writeFileFromTemplate(clusterTestSelfHostedTemplate, filePath, test)
-			if err != nil {
-				log.Print(err)
-			}
-		}
-	}
-	return nil
 }
 
 func generateClusterWorkflows(list []string, tpl string) {
@@ -418,29 +305,6 @@ func evalengineToString(evalengine string) string {
 		return "evalengine_"
 	}
 	return ""
-}
-
-func setupTestDockerFile(test *selfHostedTest) error {
-	// remove the directory
-	relDirectoryName := fmt.Sprintf("../.github/docker/%s", test.directoryName)
-	err := os.RemoveAll(relDirectoryName)
-	if err != nil {
-		return err
-	}
-	// create the directory
-	err = os.MkdirAll(relDirectoryName, 0755)
-	if err != nil {
-		return err
-	}
-
-	// generate the docker file
-	dockerFilePath := path.Join(relDirectoryName, "Dockerfile")
-	err = writeFileFromTemplate(dockerFileTemplate, dockerFilePath, test)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func writeFileFromTemplate(templateFile, filePath string, test any) error {

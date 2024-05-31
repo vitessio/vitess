@@ -108,9 +108,10 @@
       "Original": "(SELECT id FROM user ORDER BY id DESC LIMIT 1) UNION ALL (SELECT id FROM music ORDER BY id DESC LIMIT 1)",
       "Instructions": {
         "OperatorType": "SimpleProjection",
-        "Columns": [
-          0
+        "ColumnNames": [
+          "0:id"
         ],
+        "Columns": "0",
         "Inputs": [
           {
             "OperatorType": "Concatenate",
@@ -128,7 +129,7 @@
                     },
                     "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
                     "OrderBy": "(0|1) DESC",
-                    "Query": "select id, weight_string(id) from `user` order by `user`.id desc limit :__upper_limit",
+                    "Query": "select id, weight_string(id) from `user` order by `user`.id desc limit 1",
                     "Table": "`user`"
                   }
                 ]
@@ -146,7 +147,7 @@
                     },
                     "FieldQuery": "select id, weight_string(id) from music where 1 != 1",
                     "OrderBy": "(0|1) DESC",
-                    "Query": "select id, weight_string(id) from music order by music.id desc limit :__upper_limit",
+                    "Query": "select id, weight_string(id) from music order by music.id desc limit 1",
                     "Table": "music"
                   }
                 ]
@@ -238,9 +239,10 @@
       "Original": "(select id from user order by id limit 5) union all (select id from music order by id desc limit 5)",
       "Instructions": {
         "OperatorType": "SimpleProjection",
-        "Columns": [
-          0
+        "ColumnNames": [
+          "0:id"
         ],
+        "Columns": "0",
         "Inputs": [
           {
             "OperatorType": "Concatenate",
@@ -258,7 +260,7 @@
                     },
                     "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
                     "OrderBy": "(0|1) ASC",
-                    "Query": "select id, weight_string(id) from `user` order by `user`.id asc limit :__upper_limit",
+                    "Query": "select id, weight_string(id) from `user` order by `user`.id asc limit 5",
                     "Table": "`user`"
                   }
                 ]
@@ -276,7 +278,7 @@
                     },
                     "FieldQuery": "select id, weight_string(id) from music where 1 != 1",
                     "OrderBy": "(0|1) DESC",
-                    "Query": "select id, weight_string(id) from music order by music.id desc limit :__upper_limit",
+                    "Query": "select id, weight_string(id) from music order by music.id desc limit 5",
                     "Table": "music"
                   }
                 ]
@@ -1008,7 +1010,7 @@
                     },
                     "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
                     "OrderBy": "(0|1) ASC",
-                    "Query": "select id, weight_string(id) from `user` order by `user`.id asc limit :__upper_limit",
+                    "Query": "select id, weight_string(id) from `user` order by `user`.id asc limit 5",
                     "Table": "`user`"
                   }
                 ]
@@ -1026,7 +1028,7 @@
                     },
                     "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
                     "OrderBy": "(0|1) DESC",
-                    "Query": "select id, weight_string(id) from `user` order by `user`.id desc limit :__upper_limit",
+                    "Query": "select id, weight_string(id) from `user` order by `user`.id desc limit 5",
                     "Table": "`user`"
                   }
                 ]

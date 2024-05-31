@@ -180,14 +180,17 @@ func (c *Conn) Get(ctx context.Context, filePath string) ([]byte, topo.Version, 
 
 	// Get the node.
 	n := c.factory.nodeByPath(c.cell, filePath)
-	if n == nil {
+	// This matches the other topo implementations of returning topo.NoNode when calling
+	// Get() with a key prefix or "directory".
+	if n == nil || n.contents == nil {
 		return nil, nil, topo.NewError(topo.NoNode, filePath)
 	}
-	if n.contents == nil {
-		// it's a directory
-		return nil, nil, fmt.Errorf("cannot Get() directory %v in cell %v", filePath, c.cell)
-	}
 	return n.contents, NodeVersion(n.version), nil
+}
+
+// GetVersion is part of topo.Conn interface.
+func (c *Conn) GetVersion(ctx context.Context, filePath string, version int64) ([]byte, error) {
+	return nil, topo.NewError(topo.NoImplementation, "GetVersion not supported in memory topo")
 }
 
 // List is part of the topo.Conn interface.

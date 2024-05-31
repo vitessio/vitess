@@ -101,6 +101,22 @@ func TestDownPrimary(t *testing.T) {
 	utils.VerifyWritesSucceed(t, clusterInfo, replica, []*cluster.Vttablet{crossCellReplica}, 10*time.Second)
 	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverDeadPrimaryRecoveryName, 1)
 	utils.WaitForSuccessfulERSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 1)
+	t.Run("Check ERS and PRS Vars and Metrics", func(t *testing.T) {
+		// These are vars that will be deprecated in v21.
+		utils.CheckVarExists(t, vtOrcProcess, "emergency_reparent_counts")
+		utils.CheckVarExists(t, vtOrcProcess, "planned_reparent_counts")
+		utils.CheckVarExists(t, vtOrcProcess, "reparent_shard_operation_timings")
+
+		// Newly added vars
+		utils.CheckVarExists(t, vtOrcProcess, "EmergencyReparentCounts")
+		utils.CheckVarExists(t, vtOrcProcess, "PlannedReparentCounts")
+		utils.CheckVarExists(t, vtOrcProcess, "ReparentShardOperationTimings")
+
+		// Metrics registered in prometheus
+		utils.CheckMetricExists(t, vtOrcProcess, "vtorc_emergency_reparent_counts")
+		utils.CheckMetricExists(t, vtOrcProcess, "vtorc_planned_reparent_counts")
+		utils.CheckMetricExists(t, vtOrcProcess, "vtorc_reparent_shard_operation_timings_bucket")
+	})
 }
 
 // bring down primary before VTOrc has started, let vtorc repair.
