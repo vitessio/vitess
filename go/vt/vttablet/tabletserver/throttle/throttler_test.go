@@ -171,6 +171,7 @@ func newTestThrottler() *Throttler {
 	throttler.throttledAppsSnapshotInterval = 10 * time.Millisecond
 	throttler.dormantPeriod = 5 * time.Second
 	throttler.recentCheckDormantDiff = int64(throttler.dormantPeriod / recentCheckRateLimiterInterval)
+	throttler.recentCheckDiff = int64(3 * time.Second / recentCheckRateLimiterInterval)
 
 	throttler.readSelfThrottleMetric = func(ctx context.Context, p *mysql.Probe) *mysql.MySQLThrottleMetric {
 		return &mysql.MySQLThrottleMetric{
@@ -182,6 +183,13 @@ func newTestThrottler() *Throttler {
 	}
 
 	return throttler
+}
+
+func TestInitThrottler(t *testing.T) {
+	throttler := newTestThrottler()
+	assert.Equal(t, 5*time.Second, throttler.dormantPeriod)
+	assert.EqualValues(t, 5, throttler.recentCheckDormantDiff)
+	assert.EqualValues(t, 3, throttler.recentCheckDiff)
 }
 
 func TestIsAppThrottled(t *testing.T) {
@@ -555,7 +563,11 @@ func TestReplica(t *testing.T) {
 	runThrottler(t, ctx, throttler, time.Minute, func(t *testing.T, ctx context.Context) {
 		assert.Empty(t, tmClient.AppNames())
 		flags := &CheckFlags{}
-		throttler.CheckByType(ctx, throttlerapp.VitessName.String(), "", flags, ThrottleCheckSelf)
+		{
+			checkResult := throttler.CheckByType(ctx, throttlerapp.VitessName.String(), "", flags, ThrottleCheckSelf)
+			assert.False(t, checkResult.RecentlyChecked) // "vitess" app does not mark the throttler as recently checked
+			assert.False(t, throttler.recentlyChecked()) // "vitess" app does not mark the throttler as recently checked
+		}
 		go func() {
 			select {
 			case <-ctx.Done():
@@ -573,7 +585,17 @@ func TestReplica(t *testing.T) {
 				assert.Containsf(t, appNames, throttlerapp.ThrottlerStimulatorName.String(), "%+v", appNames)
 				assert.Equalf(t, 1, len(appNames), "%+v", appNames)
 			}
-			throttler.CheckByType(ctx, throttlerapp.OnlineDDLName.String(), "", flags, ThrottleCheckSelf)
+			{
+				checkResult := throttler.CheckByType(ctx, throttlerapp.OnlineDDLName.String(), "", flags, ThrottleCheckSelf)
+				assert.True(t, checkResult.RecentlyChecked)
+				assert.True(t, throttler.recentlyChecked())
+			}
+			{
+				checkResult := throttler.CheckByType(ctx, throttlerapp.VitessName.String(), "", flags, ThrottleCheckSelf)
+				assert.True(t, checkResult.RecentlyChecked) // due to previous "online-ddl" check
+				assert.True(t, throttler.recentlyChecked()) // due to previous "online-ddl" check
+			}
+
 			select {
 			case <-ctx.Done():
 				require.FailNow(t, "context expired before testing completed")
