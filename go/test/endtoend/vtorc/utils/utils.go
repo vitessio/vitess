@@ -1057,7 +1057,7 @@ func CheckVarExists(t *testing.T, vtorcInstance *cluster.VTOrcProcess, metricNam
 	t.Helper()
 	vars := vtorcInstance.GetVars()
 	_, exists := vars[metricName]
-	assert.True(t, exists)
+	assert.True(t, exists, vars)
 }
 
 // CheckMetricExists checks whether the given metric exists or not in /metrics.
