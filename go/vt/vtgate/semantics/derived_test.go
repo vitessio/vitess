@@ -23,7 +23,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 func TestScopingWDerivedTables(t *testing.T) {
@@ -83,7 +82,7 @@ func TestScopingWDerivedTables(t *testing.T) {
 			directDeps:    TS2,
 			recursiveDeps: TS0,
 		}, {
-			query:         "select t.col1 from t3 ua join (select t1.id, t1.col1 from t1 join t2) as t",
+			query:         "select t.textcol from t3 ua join (select t3.uid, t3.textcol from t3 join t2) as t",
 			directDeps:    TS3,
 			recursiveDeps: TS1,
 		}, {
@@ -110,126 +109,99 @@ func TestScopingWDerivedTables(t *testing.T) {
 		}}
 	for _, query := range queries {
 		t.Run(query.query, func(t *testing.T) {
-			parse, err := sqlparser.NewTestParser().Parse(query.query)
-			require.NoError(t, err)
-			st, err := Analyze(parse, "user", &FakeSI{
-				Tables: map[string]*vindexes.Table{
-					"t": {Name: sqlparser.NewIdentifierCS("t"), Keyspace: ks2},
-				},
-			}, nil)
-
-			switch {
-			case query.errorMessage != "" && err != nil:
+			stmt, st, err := parseAndAnalyzeStrictAllowErr(t, query.query, "d")
+			sel := stmt.(*sqlparser.Select)
+			if query.errorMessage != "" {
 				require.EqualError(t, err, query.errorMessage)
-			case query.errorMessage != "":
-				require.EqualError(t, st.NotUnshardedErr, query.errorMessage)
-			default:
-				require.NoError(t, err)
-				sel := parse.(*sqlparser.Select)
-				assert.Equal(t, query.recursiveDeps, st.RecursiveDeps(extract(sel, 0)), "RecursiveDeps")
-				assert.Equal(t, query.directDeps, st.DirectDeps(extract(sel, 0)), "DirectDeps")
+				return
 			}
+
+			require.NoError(t, err)
+			assert.Equal(t, query.recursiveDeps, st.RecursiveDeps(extract(sel, 0)), "RecursiveDeps")
+			assert.Equal(t, query.directDeps, st.DirectDeps(extract(sel, 0)), "DirectDeps")
 		})
 	}
 }
 
 func TestDerivedTablesOrderClause(t *testing.T) {
 	queries := []struct {
-		query                string
-		recursiveExpectation TableSet
-		expectation          TableSet
+		query         string
+		recursiveDeps TableSet
+		directDeps    TableSet
 	}{{
-		query:                "select 1 from (select id from user) as t order by id",
-		recursiveExpectation: TS0,
-		expectation:          TS1,
+		query:         "select 1 from (select id from user) as t order by id",
+		recursiveDeps: TS0,
+		directDeps:    TS1,
 	}, {
-		query:                "select id from (select id from user) as t order by id",
-		recursiveExpectation: TS0,
-		expectation:          TS1,
+		query:         "select id from (select id from user) as t order by id",
+		recursiveDeps: TS0,
+		directDeps:    TS1,
 	}, {
-		query:                "select id from (select id from user) as t order by t.id",
-		recursiveExpectation: TS0,
-		expectation:          TS1,
+		query:         "select id from (select id from user) as t order by t.id",
+		recursiveDeps: TS0,
+		directDeps:    TS1,
 	}, {
-		query:                "select id as foo from (select id from user) as t order by foo",
-		recursiveExpectation: TS0,
-		expectation:          TS1,
+		query:         "select id as foo from (select id from user) as t order by foo",
+		recursiveDeps: TS0,
+		directDeps:    TS1,
 	}, {
-		query:                "select bar from (select id as bar from user) as t order by bar",
-		recursiveExpectation: TS0,
-		expectation:          TS1,
+		query:         "select bar from (select id as bar from user) as t order by bar",
+		recursiveDeps: TS0,
+		directDeps:    TS1,
 	}, {
-		query:                "select bar as foo from (select id as bar from user) as t order by bar",
-		recursiveExpectation: TS0,
-		expectation:          TS1,
+		query:         "select bar as foo from (select id as bar from user) as t order by bar",
+		recursiveDeps: TS0,
+		directDeps:    TS1,
 	}, {
-		query:                "select bar as foo from (select id as bar from user) as t order by foo",
-		recursiveExpectation: TS0,
-		expectation:          TS1,
+		query:         "select bar as foo from (select id as bar from user) as t order by foo",
+		recursiveDeps: TS0,
+		directDeps:    TS1,
 	}, {
-		query:                "select bar as foo from (select id as bar, oo from user) as t order by oo",
-		recursiveExpectation: TS0,
-		expectation:          TS1,
+		query:         "select bar as foo from (select id as bar, oo from user) as t order by oo",
+		recursiveDeps: TS0,
+		directDeps:    TS1,
 	}, {
-		query:                "select bar as foo from (select id, oo from user) as t(bar,oo) order by bar",
-		recursiveExpectation: TS0,
-		expectation:          TS1,
+		query:         "select bar as foo from (select id, oo from user) as t(bar,oo) order by bar",
+		recursiveDeps: TS0,
+		directDeps:    TS1,
 	}}
-	si := &FakeSI{Tables: map[string]*vindexes.Table{"t": {Name: sqlparser.NewIdentifierCS("t")}}}
 	for _, query := range queries {
 		t.Run(query.query, func(t *testing.T) {
-			parse, err := sqlparser.NewTestParser().Parse(query.query)
-			require.NoError(t, err)
+			stmt, st := parseAndAnalyzeStrict(t, query.query, "d")
 
-			st, err := Analyze(parse, "user", si, nil)
-			require.NoError(t, err)
-
-			sel := parse.(*sqlparser.Select)
-			assert.Equal(t, query.recursiveExpectation, st.RecursiveDeps(sel.OrderBy[0].Expr), "RecursiveDeps")
-			assert.Equal(t, query.expectation, st.DirectDeps(sel.OrderBy[0].Expr), "DirectDeps")
-
+			sel := stmt.(*sqlparser.Select)
+			assert.Equal(t, query.recursiveDeps, st.RecursiveDeps(sel.OrderBy[0].Expr), "RecursiveDeps")
+			assert.Equal(t, query.directDeps, st.DirectDeps(sel.OrderBy[0].Expr), "DirectDeps")
 		})
 	}
 }
 
 func TestScopingWComplexDerivedTables(t *testing.T) {
 	queries := []struct {
-		query            string
-		errorMessage     string
-		rightExpectation TableSet
-		leftExpectation  TableSet
+		query     string
+		rightDeps TableSet
+		leftDeps  TableSet
 	}{
 		{
-			query:            "select 1 from user uu where exists (select 1 from user where exists (select 1 from (select 1 from t1) uu where uu.user_id = uu.id))",
-			rightExpectation: TS0,
-			leftExpectation:  TS0,
+			query:     "select 1 from user uu where exists (select 1 from user where exists (select 1 from (select 1 from t1) uu where uu.user_id = uu.id))",
+			rightDeps: TS0,
+			leftDeps:  TS0,
 		},
 		{
-			query:            "select 1 from user.user uu where exists (select 1 from user.user as uu where exists (select 1 from (select 1 from user.t1) uu where uu.user_id = uu.id))",
-			rightExpectation: TS1,
-			leftExpectation:  TS1,
+			query:     "select 1 from user.user uu where exists (select 1 from user.user as uu where exists (select 1 from (select 1 from user.t1) uu where uu.user_id = uu.id))",
+			rightDeps: TS1,
+			leftDeps:  TS1,
 		},
 	}
 	for _, query := range queries {
 		t.Run(query.query, func(t *testing.T) {
-			parse, err := sqlparser.NewTestParser().Parse(query.query)
-			require.NoError(t, err)
-			st, err := Analyze(parse, "user", &FakeSI{
-				Tables: map[string]*vindexes.Table{
-					"t": {Name: sqlparser.NewIdentifierCS("t")},
-				},
-			}, nil)
-			if query.errorMessage != "" {
-				require.EqualError(t, err, query.errorMessage)
-			} else {
-				require.NoError(t, err)
-				sel := parse.(*sqlparser.Select)
-				comparisonExpr := sel.Where.Expr.(*sqlparser.ExistsExpr).Subquery.Select.(*sqlparser.Select).Where.Expr.(*sqlparser.ExistsExpr).Subquery.Select.(*sqlparser.Select).Where.Expr.(*sqlparser.ComparisonExpr)
-				left := comparisonExpr.Left
-				right := comparisonExpr.Right
-				assert.Equal(t, query.leftExpectation, st.RecursiveDeps(left), "Left RecursiveDeps")
-				assert.Equal(t, query.rightExpectation, st.RecursiveDeps(right), "Right RecursiveDeps")
-			}
+			parse, st := parseAndAnalyzeStrict(t, query.query, "d")
+			sel := parse.(*sqlparser.Select)
+			comparisonExpr := sel.Where.Expr.(*sqlparser.ExistsExpr).Subquery.Select.(*sqlparser.Select).Where.Expr.(*sqlparser.ExistsExpr).Subquery.Select.(*sqlparser.Select).Where.Expr.(*sqlparser.ComparisonExpr)
+			left := comparisonExpr.Left
+			right := comparisonExpr.Right
+			assert.Equal(t, query.leftDeps, st.RecursiveDeps(left), "Left RecursiveDeps")
+			assert.Equal(t, query.rightDeps, st.RecursiveDeps(right), "Right RecursiveDeps")
 		})
 	}
 }

@@ -40,10 +40,6 @@ var (
 	TS4  = SingleTableSet(4)
 )
 
-func extract(in *sqlparser.Select, idx int) sqlparser.Expr {
-	return in.SelectExprs[idx].(*sqlparser.AliasedExpr).Expr
-}
-
 func TestBindingSingleTablePositive(t *testing.T) {
 	queries := []string{
 		"select col from tabl",
@@ -59,7 +55,7 @@ func TestBindingSingleTablePositive(t *testing.T) {
 	}
 	for _, query := range queries {
 		t.Run(query, func(t *testing.T) {
-			stmt, semTable := parseAndAnalyze(t, query, "d")
+			stmt, semTable := parseAndAnalyzeStrict(t, query, "d")
 			sel, _ := stmt.(*sqlparser.Select)
 			t1 := sel.From[0].(*sqlparser.AliasedTableExpr)
 			ts := semTable.TableSetFor(t1)
@@ -73,7 +69,11 @@ func TestBindingSingleTablePositive(t *testing.T) {
 }
 
 func TestInformationSchemaColumnInfo(t *testing.T) {
-	stmt, semTable := parseAndAnalyze(t, "select table_comment, file_name from information_schema.`TABLES`, information_schema.`FILES`", "d")
+	stmt, semTable := parseAndAnalyzeStrict(
+		t,
+		"select table_comment, file_name from information_schema.`TABLES`, information_schema.`FILES`",
+		"d",
+	)
 
 	sel, _ := stmt.(*sqlparser.Select)
 	tables := SingleTableSet(0)
@@ -95,7 +95,7 @@ func TestBindingSingleAliasedTablePositive(t *testing.T) {
 	}
 	for _, query := range queries {
 		t.Run(query, func(t *testing.T) {
-			stmt, semTable := parseAndAnalyze(t, query, "")
+			stmt, semTable := parseAndAnalyzeStrict(t, query, "")
 			sel, _ := stmt.(*sqlparser.Select)
 			t1 := sel.From[0].(*sqlparser.AliasedTableExpr)
 			ts := semTable.TableSetFor(t1)
@@ -518,40 +518,36 @@ func TestScopeForSubqueries(t *testing.T) {
 
 func TestSubqueryOrderByBinding(t *testing.T) {
 	queries := []struct {
-		query    string
-		expected TableSet
+		query string
+		deps  TableSet
 	}{{
-		query:    "select * from user u where exists (select * from user order by col)",
-		expected: TS1,
+		query: "select * from user u where exists (select * from user order by col)",
+		deps:  TS1,
 	}, {
-		query:    "select * from user u where exists (select * from user order by user.col)",
-		expected: TS1,
+		query: "select * from user u where exists (select * from user order by user.col)",
+		deps:  TS1,
 	}, {
-		query:    "select * from user u where exists (select * from user order by u.col)",
-		expected: TS0,
+		query: "select * from user u where exists (select * from user order by u.col)",
+		deps:  TS0,
 	}, {
-		query:    "select * from dbName.user as u where exists (select * from dbName.user order by u.col)",
-		expected: TS0,
+		query: "select * from dbName.user as u where exists (select * from dbName.user order by u.col)",
+		deps:  TS0,
 	}, {
-		query:    "select * from dbName.user where exists (select * from otherDb.user order by dbName.user.col)",
-		expected: TS0,
+		query: "select * from dbName.user where exists (select * from otherDb.user order by dbName.user.col)",
+		deps:  TS0,
 	}, {
-		query:    "select id from dbName.t1 where exists (select * from dbName.t2 order by dbName.t1.id)",
-		expected: TS0,
+		query: "select id from dbName.t1 where exists (select * from dbName.t2 order by dbName.t1.id)",
+		deps:  TS0,
 	}}
 
 	for _, tc := range queries {
 		t.Run(tc.query, func(t *testing.T) {
-			ast, err := sqlparser.NewTestParser().Parse(tc.query)
-			require.NoError(t, err)
-
+			ast, st := parseAndAnalyzeStrict(t, tc.query, "dbName")
 			sel := ast.(*sqlparser.Select)
-			st, err := Analyze(sel, "dbName", fakeSchemaInfo(), nil)
-			require.NoError(t, err)
 			exists := sel.Where.Expr.(*sqlparser.ExistsExpr)
 			expr := exists.Subquery.Select.(*sqlparser.Select).OrderBy[0].Expr
-			require.Equal(t, tc.expected, st.DirectDeps(expr))
-			require.Equal(t, tc.expected, st.RecursiveDeps(expr))
+			require.Equal(t, tc.deps, st.DirectDeps(expr))
+			require.Equal(t, tc.deps, st.RecursiveDeps(expr))
 		})
 	}
 }
@@ -614,7 +610,7 @@ func TestOrderByBindingTable(t *testing.T) {
 	}}
 	for _, tc := range tcases {
 		t.Run(tc.sql, func(t *testing.T) {
-			stmt, semTable := parseAndAnalyze(t, tc.sql, "d")
+			stmt, semTable := parseAndAnalyzeStrict(t, tc.sql, "d")
 
 			var order sqlparser.Expr
 			switch stmt := stmt.(type) {
@@ -649,10 +645,7 @@ func TestVindexHints(t *testing.T) {
 	}}
 	for _, tc := range tcases {
 		t.Run(tc.sql, func(t *testing.T) {
-			parse, err := sqlparser.NewTestParser().Parse(tc.sql)
-			require.NoError(t, err)
-
-			_, err = AnalyzeStrict(parse, "d", fakeSchemaInfo())
+			_, _, err := parseAndAnalyzeStrictAllowErr(t, tc.sql, "ks2")
 			if tc.expectedErr == "" {
 				require.NoError(t, err)
 			} else {
@@ -717,7 +710,7 @@ func TestGroupByBinding(t *testing.T) {
 	}}
 	for _, tc := range tcases {
 		t.Run(tc.sql, func(t *testing.T) {
-			stmt, semTable := parseAndAnalyze(t, tc.sql, "d")
+			stmt, semTable := parseAndAnalyzeStrict(t, tc.sql, "d")
 			sel, _ := stmt.(*sqlparser.Select)
 			grp := sel.GroupBy.Exprs[0]
 			d := semTable.RecursiveDeps(grp)
@@ -775,7 +768,7 @@ func TestHavingBinding(t *testing.T) {
 	}}
 	for _, tc := range tcases {
 		t.Run(tc.sql, func(t *testing.T) {
-			stmt, semTable := parseAndAnalyze(t, tc.sql, "d")
+			stmt, semTable := parseAndAnalyzeStrict(t, tc.sql, "d")
 			sel, _ := stmt.(*sqlparser.Select)
 			hvng := sel.Having.Expr
 			d := semTable.RecursiveDeps(hvng)
@@ -787,7 +780,7 @@ func TestHavingBinding(t *testing.T) {
 func TestUnionCheckFirstAndLastSelectsDeps(t *testing.T) {
 	query := "select col1 from tabl1 union select col2 from tabl2"
 
-	stmt, semTable := parseAndAnalyze(t, query, "")
+	stmt, semTable := parseAndAnalyzeStrict(t, query, "")
 	union, _ := stmt.(*sqlparser.Union)
 	sel1 := union.Left.(*sqlparser.Select)
 	sel2 := union.Right.(*sqlparser.Select)
@@ -808,7 +801,7 @@ func TestUnionCheckFirstAndLastSelectsDeps(t *testing.T) {
 func TestUnionOrderByRewrite(t *testing.T) {
 	query := "select tabl1.id from tabl1 union select 1 order by 1"
 
-	stmt, _ := parseAndAnalyze(t, query, "")
+	stmt, _ := parseAndAnalyzeStrict(t, query, "")
 	assert.Equal(t, "select tabl1.id from tabl1 union select 1 from dual order by id asc", sqlparser.String(stmt))
 }
 
@@ -884,10 +877,7 @@ func TestInvalidQueries(t *testing.T) {
 
 	for _, tc := range tcases {
 		t.Run(tc.sql, func(t *testing.T) {
-			parse, err := sqlparser.NewTestParser().Parse(tc.sql)
-			require.NoError(t, err)
-
-			st, err := Analyze(parse, "dbName", fakeSchemaInfo(), nil)
+			_, st, err := parseAndAnalyzeAllowErr(t, tc.sql, "dbName")
 
 			switch {
 			case tc.err != nil:
@@ -1264,26 +1254,6 @@ func BenchmarkAnalyzeOrderByQueries(b *testing.B) {
 	}
 }
 
-func parseAndAnalyze(t *testing.T, query, dbName string) (sqlparser.Statement, *SemTable) {
-	t.Helper()
-	parse, err := sqlparser.NewTestParser().Parse(query)
-	require.NoError(t, err)
-
-	semTable, err := Analyze(parse, dbName, fakeSchemaInfo(), nil)
-	require.NoError(t, err)
-	return parse, semTable
-}
-
-func parseAndAnalyzeStrict(t *testing.T, query, dbName string) (sqlparser.Statement, *SemTable) {
-	t.Helper()
-	parse, err := sqlparser.NewTestParser().Parse(query)
-	require.NoError(t, err)
-
-	semTable, err := AnalyzeStrict(parse, dbName, fakeSchemaInfo())
-	require.NoError(t, err)
-	return parse, semTable
-}
-
 func TestSingleUnshardedKeyspace(t *testing.T) {
 	tests := []struct {
 		query     string
@@ -1334,10 +1304,8 @@ func TestNextErrors(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
-			parse, err := sqlparser.NewTestParser().Parse(test.query)
-			require.NoError(t, err)
 
-			_, err = Analyze(parse, "d", fakeSchemaInfo(), nil)
+			_, _, err := parseAndAnalyzeAllowErr(t, test.query, "d")
 			assert.EqualError(t, err, test.expectedError)
 		})
 	}
@@ -1362,97 +1330,4 @@ func TestScopingSubQueryJoinClause(t *testing.T) {
 
 	tb := st.DirectDeps(parse.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr.(*sqlparser.Subquery).Select.(*sqlparser.Select).From[0].(*sqlparser.JoinTableExpr).Condition.On)
 	require.Equal(t, 3, tb.NumberOfTables())
-}
-
-var unsharded = &vindexes.Keyspace{
-	Name:    "unsharded",
-	Sharded: false,
-}
-var ks2 = &vindexes.Keyspace{
-	Name:    "ks2",
-	Sharded: true,
-}
-var ks3 = &vindexes.Keyspace{
-	Name:    "ks3",
-	Sharded: true,
-}
-
-// create table t(<no column info>)
-// create table t1(id bigint)
-// create table t2(uid bigint, name varchar(255))
-func fakeSchemaInfo() *FakeSI {
-	si := &FakeSI{
-		Tables: map[string]*vindexes.Table{
-			"t":  tableT(),
-			"t1": tableT1(),
-			"t2": tableT2(),
-			"t3": tableT3(),
-		},
-	}
-	return si
-}
-
-func tableT() *vindexes.Table {
-	return &vindexes.Table{
-		Name:     sqlparser.NewIdentifierCS("t"),
-		Keyspace: unsharded,
-	}
-}
-func tableT1() *vindexes.Table {
-	return &vindexes.Table{
-		Name: sqlparser.NewIdentifierCS("t1"),
-		Columns: []vindexes.Column{{
-			Name: sqlparser.NewIdentifierCI("id"),
-			Type: querypb.Type_INT64,
-		}},
-		ColumnListAuthoritative: true,
-		ColumnVindexes: []*vindexes.ColumnVindex{
-			{Name: "id_vindex"},
-		},
-		Keyspace: ks2,
-	}
-}
-func tableT2() *vindexes.Table {
-	return &vindexes.Table{
-		Name: sqlparser.NewIdentifierCS("t2"),
-		Columns: []vindexes.Column{{
-			Name: sqlparser.NewIdentifierCI("uid"),
-			Type: querypb.Type_INT64,
-		}, {
-			Name:          sqlparser.NewIdentifierCI("name"),
-			Type:          querypb.Type_VARCHAR,
-			CollationName: "utf8_bin",
-		}, {
-			Name:          sqlparser.NewIdentifierCI("textcol"),
-			Type:          querypb.Type_VARCHAR,
-			CollationName: "big5_bin",
-		}},
-		ColumnListAuthoritative: true,
-		Keyspace:                ks3,
-	}
-}
-
-func tableT3() *vindexes.Table {
-	return &vindexes.Table{
-		Name: sqlparser.NewIdentifierCS("t3"),
-		Columns: []vindexes.Column{{
-			Name: sqlparser.NewIdentifierCI("uid"),
-			Type: querypb.Type_INT64,
-		}, {
-			Name:          sqlparser.NewIdentifierCI("name"),
-			Type:          querypb.Type_VARCHAR,
-			CollationName: "utf8_bin",
-		}, {
-			Name:          sqlparser.NewIdentifierCI("textcol"),
-			Type:          querypb.Type_VARCHAR,
-			CollationName: "big5_bin",
-		}, {
-			Name:          sqlparser.NewIdentifierCI("invcol"),
-			Type:          querypb.Type_VARCHAR,
-			CollationName: "big5_bin",
-			Invisible:     true,
-		}},
-		ColumnListAuthoritative: true,
-		Keyspace:                ks3,
-	}
 }
