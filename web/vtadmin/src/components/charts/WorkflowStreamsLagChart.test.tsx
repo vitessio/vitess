@@ -77,7 +77,6 @@ describe('WorkflowStreamsLagChart', () => {
             // UseQueryResult (most of which we don't use) is pointlessly verbose.
             const result = getWorkflowTimeseries(workflow, queries as UseQueryResult<TabletDebugVarsResponse, Error>[]);
 
-            console.log(result);
             // Use snapshot matching since defining expected values for arrays of 180 data points is... annoying.
             expect(result).toMatchSnapshot();
 
