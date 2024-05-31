@@ -36,6 +36,6 @@ export const TabletQPSChart = ({ alias, clusterID }: Props) => {
 
     const tsdata = useMemo(() => {
         return getQPSTimeseries(debugVars?.data, query.dataUpdatedAt);
-    }, [debugVars, query.dataUpdatedAt])
-    return <D3Timeseries isLoading={query.isLoading} timeseriesMap={tsdata}/>
+    }, [debugVars, query.dataUpdatedAt]);
+    return <D3Timeseries isLoading={query.isLoading} timeseriesMap={tsdata} />;
 };

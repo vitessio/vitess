@@ -37,5 +37,5 @@ export const TabletVReplicationQPSChart = ({ alias, clusterID }: Props) => {
     const tsdata = useMemo(() => {
         return getVReplicationQPSTimeseries(debugVars?.data, query.dataUpdatedAt);
     }, [debugVars, query.dataUpdatedAt]);
-    return <D3Timeseries isLoading={query.isLoading} timeseriesMap={tsdata}/>
+    return <D3Timeseries isLoading={query.isLoading} timeseriesMap={tsdata} />;
 };

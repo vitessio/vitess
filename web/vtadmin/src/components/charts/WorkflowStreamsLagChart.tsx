@@ -49,10 +49,10 @@ export const WorkflowStreamsLagChart = ({ clusterID, keyspace, workflowName }: P
     const anyLoading = wq.isLoading || tabletQueries.some((q) => q.isLoading);
 
     const timeseries = useMemo(() => {
-        return getWorkflowTimeseries(workflow, tabletQueries)
-    }, [[tabletQueries, workflow]])
+        return getWorkflowTimeseries(workflow, tabletQueries);
+    }, [[tabletQueries, workflow]]);
 
-    return <D3Timeseries isLoading={anyLoading} timeseriesMap={timeseries} />
+    return <D3Timeseries isLoading={anyLoading} timeseriesMap={timeseries} />;
 };
 
 export const getWorkflowTimeseries = (
@@ -60,7 +60,7 @@ export const getWorkflowTimeseries = (
     tabletQueries: ReturnType<typeof useManyExperimentalTabletDebugVars>
 ): TimeseriesMap => {
     if (!workflow) {
-        return {} as TimeseriesMap
+        return {} as TimeseriesMap;
     }
 
     // Get streamKeys for streams in this workflow.
@@ -102,5 +102,5 @@ export const getWorkflowTimeseries = (
         });
     });
 
-    return seriesByStreamKey
-}
+    return seriesByStreamKey;
+};
