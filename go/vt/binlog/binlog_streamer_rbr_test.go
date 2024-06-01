@@ -21,6 +21,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/binlog"
 	"vitess.io/vitess/go/mysql/collations"
@@ -519,17 +521,12 @@ func TestStreamerParseRBRNameEscapes(t *testing.T) {
 
 	go sendTestEvents(events, input)
 	_, err := bls.parseEvents(context.Background(), events, errs)
-	if err != ErrServerEOF {
-		t.Errorf("unexpected error: %v", err)
+	require.Equal(t, ErrServerEOF, err, "unexpected error: %v", err)
+
+	assert.True(t, reflect.DeepEqual(got, want), "binlogConnStreamer.parseEvents(): got:\n%+v\nwant:\n%+v", got, want)
+
+	for i, fbt := range got {
+		assert.Equal(t, fbt.statements, want[i].statements, "Got (%v)=%v, want (%v)=%v", i, fbt.statements, i, want[i].statements)
 	}
 
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("binlogConnStreamer.parseEvents(): got:\n%+v\nwant:\n%+v", got, want)
-		for i, fbt := range got {
-			t.Errorf("Got (%v)=%v", i, fbt.statements)
-		}
-		for i, fbt := range want {
-			t.Errorf("Want(%v)=%v", i, fbt.statements)
-		}
-	}
 }
