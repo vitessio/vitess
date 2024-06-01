@@ -573,9 +573,21 @@ func TestPlanCachePollution(t *testing.T) {
 }
 
 func TestAddQueryStats(t *testing.T) {
+	fakeSelectPlan := &TabletPlan{
+		Plan: &planbuilder.Plan{
+			PlanID:    planbuilder.PlanSelect,
+			FullQuery: &sqlparser.ParsedQuery{Query: `select * from something where something=123`}, // 43 length
+		},
+	}
+	fakeInsertPlan := &TabletPlan{
+		Plan: &planbuilder.Plan{
+			PlanID:    planbuilder.PlanInsert,
+			FullQuery: &sqlparser.ParsedQuery{Query: `insert into something (id, msg) values(123, 'hello world!')`}, // 59 length
+		},
+	}
 	testcases := []struct {
 		name                          string
-		planType                      planbuilder.PlanType
+		plan                          *TabletPlan
 		tableName                     string
 		queryCount                    int64
 		duration                      time.Duration
@@ -590,12 +602,13 @@ func TestAddQueryStats(t *testing.T) {
 		expectedQueryTimes            string
 		expectedQueryRowsAffected     string
 		expectedQueryRowsReturned     string
+		expectedQuerySQLTextCounts    string
 		expectedQueryErrorCounts      string
 		expectedQueryRowCounts        string
 	}{
 		{
 			name:                          "select query",
-			planType:                      planbuilder.PlanSelect,
+			plan:                          fakeSelectPlan,
 			tableName:                     "A",
 			queryCount:                    1,
 			duration:                      10,
@@ -609,11 +622,12 @@ func TestAddQueryStats(t *testing.T) {
 			expectedQueryTimes:            `{"A.Select": 10}`,
 			expectedQueryRowsAffected:     `{}`,
 			expectedQueryRowsReturned:     `{"A.Select": 15}`,
+			expectedQuerySQLTextCounts:    `{"A.Select": 43}`,
 			expectedQueryRowCounts:        `{"A.Select": 0}`,
 			expectedQueryErrorCounts:      `{"A.Select": 0}`,
 		}, {
 			name:                          "select into query",
-			planType:                      planbuilder.PlanSelect,
+			plan:                          fakeSelectPlan,
 			tableName:                     "A",
 			queryCount:                    1,
 			duration:                      10,
@@ -627,11 +641,12 @@ func TestAddQueryStats(t *testing.T) {
 			expectedQueryTimes:            `{"A.Select": 10}`,
 			expectedQueryRowsAffected:     `{"A.Select": 15}`,
 			expectedQueryRowsReturned:     `{"A.Select": 0}`,
+			expectedQuerySQLTextCounts:    `{"A.Select": 43}`,
 			expectedQueryRowCounts:        `{"A.Select": 15}`,
 			expectedQueryErrorCounts:      `{"A.Select": 0}`,
 		}, {
 			name:                          "error",
-			planType:                      planbuilder.PlanSelect,
+			plan:                          fakeSelectPlan,
 			tableName:                     "A",
 			queryCount:                    1,
 			duration:                      10,
@@ -645,11 +660,12 @@ func TestAddQueryStats(t *testing.T) {
 			expectedQueryTimes:            `{"A.Select": 10}`,
 			expectedQueryRowsAffected:     `{}`,
 			expectedQueryRowsReturned:     `{"A.Select": 0}`,
+			expectedQuerySQLTextCounts:    `{"A.Select": 43}`,
 			expectedQueryRowCounts:        `{"A.Select": 0}`,
 			expectedQueryErrorCounts:      `{"A.Select": 1}`,
 		}, {
 			name:                          "insert query",
-			planType:                      planbuilder.PlanInsert,
+			plan:                          fakeInsertPlan,
 			tableName:                     "A",
 			queryCount:                    1,
 			duration:                      10,
@@ -663,11 +679,12 @@ func TestAddQueryStats(t *testing.T) {
 			expectedQueryTimes:            `{"A.Insert": 10}`,
 			expectedQueryRowsAffected:     `{"A.Insert": 15}`,
 			expectedQueryRowsReturned:     `{}`,
+			expectedQuerySQLTextCounts:    `{"A.Insert": 59}`,
 			expectedQueryRowCounts:        `{"A.Insert": 15}`,
 			expectedQueryErrorCounts:      `{"A.Insert": 0}`,
 		}, {
 			name:                          "select query with per workload metrics",
-			planType:                      planbuilder.PlanSelect,
+			plan:                          fakeSelectPlan,
 			tableName:                     "A",
 			queryCount:                    1,
 			duration:                      10,
@@ -681,11 +698,12 @@ func TestAddQueryStats(t *testing.T) {
 			expectedQueryTimes:            `{"A.Select.some-workload": 10}`,
 			expectedQueryRowsAffected:     `{}`,
 			expectedQueryRowsReturned:     `{"A.Select.some-workload": 15}`,
+			expectedQuerySQLTextCounts:    `{"A.Select.some-workload": 43}`,
 			expectedQueryRowCounts:        `{"A.Select.some-workload": 0}`,
 			expectedQueryErrorCounts:      `{"A.Select.some-workload": 0}`,
 		}, {
 			name:                          "select into query with per workload metrics",
-			planType:                      planbuilder.PlanSelect,
+			plan:                          fakeSelectPlan,
 			tableName:                     "A",
 			queryCount:                    1,
 			duration:                      10,
@@ -699,11 +717,12 @@ func TestAddQueryStats(t *testing.T) {
 			expectedQueryTimes:            `{"A.Select.some-workload": 10}`,
 			expectedQueryRowsAffected:     `{"A.Select.some-workload": 15}`,
 			expectedQueryRowsReturned:     `{"A.Select.some-workload": 0}`,
+			expectedQuerySQLTextCounts:    `{"A.Select.some-workload": 43}`,
 			expectedQueryRowCounts:        `{"A.Select.some-workload": 15}`,
 			expectedQueryErrorCounts:      `{"A.Select.some-workload": 0}`,
 		}, {
 			name:                          "error with per workload metrics",
-			planType:                      planbuilder.PlanSelect,
+			plan:                          fakeSelectPlan,
 			tableName:                     "A",
 			queryCount:                    1,
 			duration:                      10,
@@ -717,11 +736,12 @@ func TestAddQueryStats(t *testing.T) {
 			expectedQueryTimes:            `{"A.Select.some-workload": 10}`,
 			expectedQueryRowsAffected:     `{}`,
 			expectedQueryRowsReturned:     `{"A.Select.some-workload": 0}`,
+			expectedQuerySQLTextCounts:    `{"A.Select.some-workload": 43}`,
 			expectedQueryRowCounts:        `{"A.Select.some-workload": 0}`,
 			expectedQueryErrorCounts:      `{"A.Select.some-workload": 1}`,
 		}, {
 			name:                          "insert query with per workload metrics",
-			planType:                      planbuilder.PlanInsert,
+			plan:                          fakeInsertPlan,
 			tableName:                     "A",
 			queryCount:                    1,
 			duration:                      10,
@@ -735,6 +755,7 @@ func TestAddQueryStats(t *testing.T) {
 			expectedQueryTimes:            `{"A.Insert.some-workload": 10}`,
 			expectedQueryRowsAffected:     `{"A.Insert.some-workload": 15}`,
 			expectedQueryRowsReturned:     `{}`,
+			expectedQuerySQLTextCounts:    `{"A.Insert.some-workload": 59}`,
 			expectedQueryRowCounts:        `{"A.Insert.some-workload": 15}`,
 			expectedQueryErrorCounts:      `{"A.Insert.some-workload": 0}`,
 		},
@@ -749,12 +770,13 @@ func TestAddQueryStats(t *testing.T) {
 			env := tabletenv.NewEnv(config, "TestAddQueryStats_"+testcase.name)
 			se := schema.NewEngine(env)
 			qe := NewQueryEngine(env, se)
-			qe.AddStats(testcase.planType, testcase.tableName, testcase.workload, testcase.queryCount, testcase.duration, testcase.mysqlTime, testcase.rowsAffected, testcase.rowsReturned, testcase.errorCount)
+			qe.AddStats(testcase.plan, testcase.tableName, testcase.workload, testcase.queryCount, testcase.duration, testcase.mysqlTime, testcase.rowsAffected, testcase.rowsReturned, testcase.errorCount)
 			assert.Equal(t, testcase.expectedQueryCounts, qe.queryCounts.String())
 			assert.Equal(t, testcase.expectedQueryTimes, qe.queryTimes.String())
 			assert.Equal(t, testcase.expectedQueryRowsAffected, qe.queryRowsAffected.String())
 			assert.Equal(t, testcase.expectedQueryRowsReturned, qe.queryRowsReturned.String())
 			assert.Equal(t, testcase.expectedQueryRowCounts, qe.queryRowCounts.String())
+			assert.Equal(t, testcase.expectedQuerySQLTextCounts, qe.querySQLTextCounts.String())
 			assert.Equal(t, testcase.expectedQueryErrorCounts, qe.queryErrorCounts.String())
 		})
 	}

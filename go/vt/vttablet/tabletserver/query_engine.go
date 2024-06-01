@@ -171,7 +171,7 @@ type QueryEngine struct {
 	consolidatorMode sync2.AtomicString
 
 	// stats
-	queryCounts, queryTimes, queryRowCounts, queryErrorCounts, queryRowsAffected, queryRowsReturned *stats.CountersWithMultiLabels
+	queryCounts, queryTimes, queryRowCounts, queryErrorCounts, queryRowsAffected, queryRowsReturned, querySQLTextCounts *stats.CountersWithMultiLabels
 
 	// stats flags
 	enablePerWorkloadTableMetrics bool
@@ -261,6 +261,7 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 	qe.queryRowCounts = env.Exporter().NewCountersWithMultiLabels("QueryRowCounts", "(DEPRECATED - use QueryRowsAffected and QueryRowsReturned instead) query row counts", labels)
 	qe.queryRowsAffected = env.Exporter().NewCountersWithMultiLabels("QueryRowsAffected", "query rows affected", labels)
 	qe.queryRowsReturned = env.Exporter().NewCountersWithMultiLabels("QueryRowsReturned", "query rows returned", labels)
+	qe.querySQLTextCounts = env.Exporter().NewCountersWithMultiLabels("QuerySQLTextCounts", "query sql text counts", labels)
 	qe.queryErrorCounts = env.Exporter().NewCountersWithMultiLabels("QueryErrorCounts", "query error counts", labels)
 
 	env.Exporter().HandleFunc("/debug/hotrows", qe.txSerializer.ServeHTTP)
@@ -489,9 +490,9 @@ func (qe *QueryEngine) QueryPlanCacheLen() int {
 }
 
 // AddStats adds the given stats for the planName.tableName
-func (qe *QueryEngine) AddStats(planType planbuilder.PlanType, tableName, workload string, queryCount int64, duration, mysqlTime time.Duration, rowsAffected, rowsReturned, errorCount int64) {
+func (qe *QueryEngine) AddStats(plan *TabletPlan, tableName, workload string, queryCount int64, duration, mysqlTime time.Duration, rowsAffected, rowsReturned, errorCount int64) {
 	// table names can contain "." characters, replace them!
-	keys := []string{tableName, planType.String()}
+	keys := []string{tableName, plan.PlanID.String()}
 	// Only use the workload as a label if that's enabled in the configuration.
 	if qe.enablePerWorkloadTableMetrics {
 		keys = append(keys, workload)
@@ -500,11 +501,14 @@ func (qe *QueryEngine) AddStats(planType planbuilder.PlanType, tableName, worklo
 	qe.queryTimes.Add(keys, int64(duration))
 	qe.queryRowCounts.Add(keys, rowsAffected)
 	qe.queryErrorCounts.Add(keys, errorCount)
+	if plan.FullQuery != nil {
+		qe.querySQLTextCounts.Add(keys, int64(len(plan.FullQuery.Query)))
+	}
 
 	// For certain plan types like select, we only want to add their metrics to rows returned
 	// But there are special cases like `SELECT ... INTO OUTFILE ''` which return positive rows affected
 	// So we check if it is positive and add that too.
-	switch planType {
+	switch plan.PlanID {
 	case planbuilder.PlanSelect, planbuilder.PlanSelectStream, planbuilder.PlanSelectImpossible, planbuilder.PlanShow, planbuilder.PlanOtherRead:
 		qe.queryRowsReturned.Add(keys, rowsReturned)
 		if rowsAffected > 0 {
