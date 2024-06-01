@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -60,9 +61,7 @@ func TestTablesFilterPass(t *testing.T) {
 	})
 	_ = f(eventToken, statements)
 	want := `statement: <6, "set1"> statement: <7, "dml1 /* _stream included1 (id ) (500 ); */"> statement: <7, "dml2 /* _stream included2 (id ) (500 ); */"> position: "MariaDB/0-41983-1" `
-	if want != got {
-		t.Errorf("want\n%s, got\n%s", want, got)
-	}
+	assert.Equal(t, want, got, "binlogConnStreamer.tablesFilterFunc(): got:\n%+v\nwant:\n%+v", got, want)
 }
 
 func TestTablesFilterSkip(t *testing.T) {
@@ -90,9 +89,7 @@ func TestTablesFilterSkip(t *testing.T) {
 	})
 	_ = f(eventToken, statements)
 	want := `position: "MariaDB/0-41983-1" `
-	if want != got {
-		t.Errorf("want %s, got %s", want, got)
-	}
+	assert.Equal(t, want, got, "binlogConnStreamer.tablesFilterFunc(): got:\n%+v\nwant:\n%+v", got, want)
 }
 
 func TestTablesFilterDDL(t *testing.T) {
@@ -120,9 +117,7 @@ func TestTablesFilterDDL(t *testing.T) {
 	})
 	_ = f(eventToken, statements)
 	want := `position: "MariaDB/0-41983-1" `
-	if want != got {
-		t.Errorf("want %s, got %s", want, got)
-	}
+	assert.Equal(t, want, got, "binlogConnStreamer.tablesFilterFunc(): got:\n%+v\nwant:\n%+v", got, want)
 }
 
 func TestTablesFilterMalformed(t *testing.T) {
@@ -156,9 +151,7 @@ func TestTablesFilterMalformed(t *testing.T) {
 	})
 	_ = f(eventToken, statements)
 	want := `position: "MariaDB/0-41983-1" `
-	if want != got {
-		t.Errorf("want %s, got %s", want, got)
-	}
+	assert.Equal(t, want, got, "binlogConnStreamer.tablesFilterFunc(): got:\n%+v\nwant:\n%+v", got, want)
 }
 
 func bltToString(tx *binlogdatapb.BinlogTransaction) string {
