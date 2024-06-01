@@ -727,6 +727,12 @@ func (tm *TabletManager) setReplicationSourceSemiSyncNoAction(ctx context.Contex
 }
 
 func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync SemiSyncAction) (err error) {
+	tm._isSetReplicationSourceLockedRunning = true
+
+	defer func() {
+		tm._isSetReplicationSourceLockedRunning = false
+	}()
+
 	// End orchestrator maintenance at the end of fixing replication.
 	// This is a best effort operation, so it should happen in a goroutine
 	defer func() {
@@ -1079,7 +1085,7 @@ func (tm *TabletManager) fixSemiSyncAndReplication(tabletType topodatapb.TabletT
 		return nil
 	}
 
-	//shouldAck := semiSync == SemiSyncActionSet
+	// shouldAck := semiSync == SemiSyncActionSet
 	shouldAck := isPrimaryEligible(tabletType)
 	acking, err := tm.MysqlDaemon.SemiSyncReplicationStatus()
 	if err != nil {
@@ -1123,6 +1129,15 @@ func (tm *TabletManager) handleRelayLogError(err error) error {
 // repairReplication tries to connect this server to whoever is
 // the current primary of the shard, and start replicating.
 func (tm *TabletManager) repairReplication(ctx context.Context) error {
+	if tm._isSetReplicationSourceLockedRunning {
+		// we are actively setting replication source,
+		// repairReplication will block due to higher
+		// authority holding a shard lock (PRS on vtctld)
+		log.Infof("slack-debug: we are actively setting replication source, exiting")
+
+		return nil
+	}
+
 	tablet := tm.Tablet()
 
 	si, err := tm.TopoServer.GetShard(ctx, tablet.Keyspace, tablet.Shard)
