@@ -28,9 +28,9 @@ import (
 func TestFormatDescriptionEvent(t *testing.T) {
 	// MySQL 5.6
 	f := NewMySQL56BinlogFormat()
-	s := NewFakeBinlogStream()
+	m := NewTestBinlogMetadata()
 
-	event := NewFormatDescriptionEvent(f, s)
+	event := NewFormatDescriptionEvent(f, m)
 	if !event.IsValid() {
 		t.Fatalf("IsValid() returned false")
 	}
@@ -47,9 +47,9 @@ func TestFormatDescriptionEvent(t *testing.T) {
 
 	// MariaDB
 	f = NewMariaDBBinlogFormat()
-	s = NewFakeBinlogStream()
+	m = NewTestBinlogMetadata()
 
-	event = NewFormatDescriptionEvent(f, s)
+	event = NewFormatDescriptionEvent(f, m)
 	if !event.IsValid() {
 		t.Fatalf("IsValid() returned false")
 	}
@@ -67,7 +67,7 @@ func TestFormatDescriptionEvent(t *testing.T) {
 
 func TestQueryEvent(t *testing.T) {
 	f := NewMySQL56BinlogFormat()
-	s := NewFakeBinlogStream()
+	m := NewTestBinlogMetadata()
 
 	q := Query{
 		Database: "my database",
@@ -78,7 +78,7 @@ func TestQueryEvent(t *testing.T) {
 			Server: 0x9abc,
 		},
 	}
-	event := NewQueryEvent(f, s, q)
+	event := NewQueryEvent(f, m, q)
 	if !event.IsValid() {
 		t.Fatalf("NewQueryEvent returned an invalid event")
 	}
@@ -101,9 +101,9 @@ func TestQueryEvent(t *testing.T) {
 
 func TestXIDEvent(t *testing.T) {
 	f := NewMySQL56BinlogFormat()
-	s := NewFakeBinlogStream()
+	m := NewTestBinlogMetadata()
 
-	event := NewXIDEvent(f, s)
+	event := NewXIDEvent(f, m)
 	if !event.IsValid() {
 		t.Fatalf("NewXIDEvent().IsValid() is false")
 	}
@@ -114,9 +114,9 @@ func TestXIDEvent(t *testing.T) {
 
 func TestIntVarEvent(t *testing.T) {
 	f := NewMySQL56BinlogFormat()
-	s := NewFakeBinlogStream()
+	m := NewTestBinlogMetadata()
 
-	event := NewIntVarEvent(f, s, IntVarLastInsertID, 0x123456789abcdef0)
+	event := NewIntVarEvent(f, m, IntVarLastInsertID, 0x123456789abcdef0)
 	if !event.IsValid() {
 		t.Fatalf("NewIntVarEvent().IsValid() is false")
 	}
@@ -128,7 +128,7 @@ func TestIntVarEvent(t *testing.T) {
 		t.Fatalf("IntVar() returned %v/%v/%v", name, value, err)
 	}
 
-	event = NewIntVarEvent(f, s, IntVarInvalidInt, 0x123456789abcdef0)
+	event = NewIntVarEvent(f, m, IntVarInvalidInt, 0x123456789abcdef0)
 	if !event.IsValid() {
 		t.Fatalf("NewIntVarEvent().IsValid() is false")
 	}
@@ -143,7 +143,7 @@ func TestIntVarEvent(t *testing.T) {
 
 func TestInvalidEvents(t *testing.T) {
 	f := NewMySQL56BinlogFormat()
-	s := NewFakeBinlogStream()
+	m := NewTestBinlogMetadata()
 
 	// InvalidEvent
 	event := NewInvalidEvent()
@@ -152,7 +152,7 @@ func TestInvalidEvents(t *testing.T) {
 	}
 
 	// InvalidFormatDescriptionEvent
-	event = NewInvalidFormatDescriptionEvent(f, s)
+	event = NewInvalidFormatDescriptionEvent(f, m)
 	if !event.IsValid() {
 		t.Fatalf("NewInvalidFormatDescriptionEvent().IsValid() is false")
 	}
@@ -164,7 +164,7 @@ func TestInvalidEvents(t *testing.T) {
 	}
 
 	// InvalidQueryEvent
-	event = NewInvalidQueryEvent(f, s)
+	event = NewInvalidQueryEvent(f, m)
 	if !event.IsValid() {
 		t.Fatalf("NewInvalidQueryEvent().IsValid() is false")
 	}
@@ -178,11 +178,11 @@ func TestInvalidEvents(t *testing.T) {
 
 func TestMariadDBGTIDEVent(t *testing.T) {
 	f := NewMySQL56BinlogFormat()
-	s := NewFakeBinlogStream()
-	s.ServerID = 0x87654321
+	m := NewTestBinlogMetadata()
+	m.ServerID = 0x87654321
 
 	// With built-in begin.
-	event := NewMariaDBGTIDEvent(f, s, MariadbGTID{Domain: 0, Sequence: 0x123456789abcdef0}, true)
+	event := NewMariaDBGTIDEvent(f, m, MariadbGTID{Domain: 0, Sequence: 0x123456789abcdef0}, true)
 	if !event.IsValid() {
 		t.Fatalf("NewMariaDBGTIDEvent().IsValid() is false")
 	}
@@ -210,7 +210,7 @@ func TestMariadDBGTIDEVent(t *testing.T) {
 	}
 
 	// Without built-in begin.
-	event = NewMariaDBGTIDEvent(f, s, MariadbGTID{Domain: 0, Sequence: 0x123456789abcdef0}, false)
+	event = NewMariaDBGTIDEvent(f, m, MariadbGTID{Domain: 0, Sequence: 0x123456789abcdef0}, false)
 	if !event.IsValid() {
 		t.Fatalf("NewMariaDBGTIDEvent().IsValid() is false")
 	}
@@ -240,7 +240,7 @@ func TestMariadDBGTIDEVent(t *testing.T) {
 
 func TestTableMapEvent(t *testing.T) {
 	f := NewMySQL56BinlogFormat()
-	s := NewFakeBinlogStream()
+	m := NewTestBinlogMetadata()
 
 	tm := &TableMap{
 		Flags:    0x8090,
@@ -277,7 +277,7 @@ func TestTableMapEvent(t *testing.T) {
 	tm.CanBeNull.Set(5, true)
 	tm.CanBeNull.Set(9, true)
 
-	event := NewTableMapEvent(f, s, 0x102030405060, tm)
+	event := NewTableMapEvent(f, m, 0x102030405060, tm)
 	if !event.IsValid() {
 		t.Fatalf("NewTableMapEvent().IsValid() is false")
 	}
@@ -305,7 +305,7 @@ func TestTableMapEvent(t *testing.T) {
 
 func TestRowsEvent(t *testing.T) {
 	f := NewMySQL56BinlogFormat()
-	s := NewFakeBinlogStream()
+	m := NewTestBinlogMetadata()
 
 	tableID := uint64(0x102030405060)
 
@@ -365,7 +365,7 @@ func TestRowsEvent(t *testing.T) {
 		t.Fatalf("bad Rows data, got %v expected %v", values, expected)
 	}
 
-	event := NewUpdateRowsEvent(f, s, 0x102030405060, rows)
+	event := NewUpdateRowsEvent(f, m, 0x102030405060, rows)
 	if !event.IsValid() {
 		t.Fatalf("NewRowsEvent().IsValid() is false")
 	}
@@ -388,5 +388,14 @@ func TestRowsEvent(t *testing.T) {
 	}
 	if !reflect.DeepEqual(gotRows, rows) {
 		t.Fatalf("NewRowsEvent().Rows() got Rows:\n%v\nexpected:\n%v", gotRows, rows)
+	}
+}
+
+// NewTestBinlogMetadata returns a simple BinlogStream with hardcoded values for testing.
+func NewTestBinlogMetadata() BinlogEventMetadata {
+	return BinlogEventMetadata{
+		ServerID:        1,
+		NextLogPosition: 4,
+		Timestamp:       1407805592,
 	}
 }
