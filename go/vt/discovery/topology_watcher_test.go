@@ -595,7 +595,7 @@ func TestNewFilterByTabletTags(t *testing.T) {
 	assert.False(t, filter.IsIncluded(&topodatapb.Tablet{
 		Tags: map[string]string{},
 	}))
-	assert.True(t, filter.IsIncluded(&topodatapb.Tablet{
+	assert.False(t, filter.IsIncluded(&topodatapb.Tablet{
 		Tags: map[string]string{
 			"instance_type": "i3.xlarge",
 		},
