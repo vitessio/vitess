@@ -21,6 +21,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -42,8 +43,6 @@ func TestFullGeneration(t *testing.T) {
 		require.Contains(t, contents, "http://www.apache.org/licenses/LICENSE-2.0")
 		applyIdx := strings.Index(contents, "func (a *application) apply(parent, node AST, replacer replacerFunc)")
 		cloneIdx := strings.Index(contents, "CloneAST(in AST) AST")
-		if applyIdx == 0 && cloneIdx == 0 {
-			t.Fatalf("file doesn't contain expected contents")
-		}
+		assert.False(t, applyIdx == 0 && cloneIdx == 0, "file doesn't contain expected contents")
 	}
 }
