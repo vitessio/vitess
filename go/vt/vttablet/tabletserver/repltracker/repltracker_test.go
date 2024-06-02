@@ -57,7 +57,6 @@ func TestReplTracker(t *testing.T) {
 		assert.Equal(t, tabletenv.Heartbeat, rt.mode)
 		assert.Equal(t, HeartbeatConfigTypeAlways, rt.hw.configType)
 		assert.Zero(t, rt.hw.onDemandDuration)
-		assert.Zero(t, rt.hw.onDemandDuration)
 		assert.True(t, rt.hr.enabled)
 
 		rt.MakePrimary()
