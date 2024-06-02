@@ -79,13 +79,13 @@ func TestWriteHeartbeatOpen(t *testing.T) {
 	})
 
 	{
-		rateLimiter := tw.safeOnDemandRequestsRateLimiter()
+		rateLimiter := tw.onDemandRequestsRateLimiter.Load()
 		assert.Nil(t, rateLimiter)
 	}
 	tw.Open()
 	defer tw.Close()
 	{
-		rateLimiter := tw.safeOnDemandRequestsRateLimiter()
+		rateLimiter := tw.onDemandRequestsRateLimiter.Load()
 		assert.Nil(t, rateLimiter)
 	}
 	t.Run("open, heartbeats", func(t *testing.T) {
@@ -135,13 +135,13 @@ func TestWriteHeartbeatDisabled(t *testing.T) {
 		assert.EqualValues(t, 1, writes.Get())
 	})
 	{
-		rateLimiter := tw.safeOnDemandRequestsRateLimiter()
+		rateLimiter := tw.onDemandRequestsRateLimiter.Load()
 		assert.Nil(t, rateLimiter)
 	}
 	tw.Open()
 	defer tw.Close()
 	{
-		rateLimiter := tw.safeOnDemandRequestsRateLimiter()
+		rateLimiter := tw.onDemandRequestsRateLimiter.Load()
 		assert.NotNil(t, rateLimiter)
 	}
 	t.Run("open, no heartbeats", func(t *testing.T) {
@@ -174,7 +174,7 @@ func TestWriteHeartbeatDisabled(t *testing.T) {
 	})
 	tw.Close()
 	{
-		rateLimiter := tw.safeOnDemandRequestsRateLimiter()
+		rateLimiter := tw.onDemandRequestsRateLimiter.Load()
 		assert.Nil(t, rateLimiter)
 	}
 }
@@ -207,13 +207,13 @@ func TestWriteHeartbeatOnDemand(t *testing.T) {
 		assert.EqualValues(t, 1, writes.Get())
 	})
 	{
-		rateLimiter := tw.safeOnDemandRequestsRateLimiter()
+		rateLimiter := tw.onDemandRequestsRateLimiter.Load()
 		assert.Nil(t, rateLimiter)
 	}
 	tw.Open()
 	defer tw.Close()
 	{
-		rateLimiter := tw.safeOnDemandRequestsRateLimiter()
+		rateLimiter := tw.onDemandRequestsRateLimiter.Load()
 		assert.NotNil(t, rateLimiter)
 	}
 	t.Run("open, initial heartbeats", func(t *testing.T) {
@@ -253,7 +253,7 @@ func TestWriteHeartbeatOnDemand(t *testing.T) {
 	})
 	tw.Close()
 	{
-		rateLimiter := tw.safeOnDemandRequestsRateLimiter()
+		rateLimiter := tw.onDemandRequestsRateLimiter.Load()
 		assert.Nil(t, rateLimiter)
 	}
 }

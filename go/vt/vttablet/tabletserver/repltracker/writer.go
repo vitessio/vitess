@@ -22,7 +22,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"unsafe"
 
 	"vitess.io/vitess/go/constants/sidecar"
 
@@ -87,7 +86,7 @@ type heartbeatWriter struct {
 	appPool                     *dbconnpool.ConnectionPool
 	allPrivsPool                *dbconnpool.ConnectionPool
 	ticks                       *timer.Timer
-	onDemandRequestsRateLimiter *timer.RateLimiter
+	onDemandRequestsRateLimiter atomic.Pointer[timer.RateLimiter]
 	writeConnID                 atomic.Int64
 
 	onDemandDuration            time.Duration
@@ -132,15 +131,6 @@ func newHeartbeatWriter(env tabletenv.Env, alias *topodatapb.TabletAlias) *heart
 	return w
 }
 
-func (w *heartbeatWriter) unsafeOnDemandRequestsRateLimiter() *unsafe.Pointer {
-	return (*unsafe.Pointer)(unsafe.Pointer(&w.onDemandRequestsRateLimiter))
-}
-
-func (w *heartbeatWriter) safeOnDemandRequestsRateLimiter() *timer.RateLimiter {
-	result := (*timer.RateLimiter)(atomic.LoadPointer(w.unsafeOnDemandRequestsRateLimiter()))
-	return result
-}
-
 // InitDBConfig initializes the target name for the heartbeatWriter.
 func (w *heartbeatWriter) InitDBConfig(target *querypb.Target) {
 	w.keyspaceShard = fmt.Sprintf("%s:%s", target.Keyspace, target.Shard)
@@ -175,7 +165,7 @@ func (w *heartbeatWriter) Open() {
 		// Clients are given access to RequestHeartbeats(). But such clients can also abuse
 		// the system by initiating heartbeats too frequently. We rate-limit these requests.
 		rateLimiter := timer.NewRateLimiter(w.onDemandDuration / 4)
-		atomic.StorePointer(w.unsafeOnDemandRequestsRateLimiter(), unsafe.Pointer(rateLimiter))
+		w.onDemandRequestsRateLimiter.Store(rateLimiter)
 	}
 
 	switch w.configType {
@@ -204,10 +194,10 @@ func (w *heartbeatWriter) Close() {
 	w.appPool.Close()
 	w.allPrivsPool.Close()
 
-	if rateLimiter := w.safeOnDemandRequestsRateLimiter(); rateLimiter != nil {
+	if rateLimiter := w.onDemandRequestsRateLimiter.Load(); rateLimiter != nil {
 		rateLimiter.Stop()
 	}
-	atomic.StorePointer(w.unsafeOnDemandRequestsRateLimiter(), nil)
+	w.onDemandRequestsRateLimiter.Store(nil)
 
 	log.Info("Heartbeat Writer: closed")
 }
@@ -346,7 +336,7 @@ func (w *heartbeatWriter) killWrite() error {
 func (w *heartbeatWriter) allowNextHeartbeatRequest() {
 	// The writer could be close()d while this function is running and thus the value of the rate limiter could be nil.
 	// We thus use golang atomic here to avoid locking mutexes.
-	if rateLimiter := w.safeOnDemandRequestsRateLimiter(); rateLimiter != nil {
+	if rateLimiter := w.onDemandRequestsRateLimiter.Load(); rateLimiter != nil {
 		rateLimiter.AllowOne()
 	}
 }
@@ -369,7 +359,7 @@ func (w *heartbeatWriter) RequestHeartbeats() {
 
 	// The writer could be close()d while this function is running and thus the value of the rate limiter could be nil.
 	// We thus use golang atomic here to avoid locking mutexes.
-	rateLimiter := w.safeOnDemandRequestsRateLimiter()
+	rateLimiter := w.onDemandRequestsRateLimiter.Load()
 	if rateLimiter == nil {
 		return
 	}
