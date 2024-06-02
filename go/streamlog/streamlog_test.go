@@ -369,6 +369,30 @@ func TestShouldEmitLog(t *testing.T) {
 	}
 }
 
+func BenchmarkShouldEmitLog(b *testing.B) {
+	b.Run("default", func(b *testing.B) {
+		SetQueryLogSampleRate(0.0)
+		for i := 0; i < b.N; i++ {
+			ShouldEmitLog("select * from test where user='someone'", 0, 123)
+		}
+	})
+	b.Run("filter_tag", func(b *testing.B) {
+		SetQueryLogSampleRate(0.0)
+		SetQueryLogFilterTag("LOG_QUERY")
+		defer SetQueryLogFilterTag("")
+		for i := 0; i < b.N; i++ {
+			ShouldEmitLog("select /* LOG_QUERY=1 */ * from test where user='someone'", 0, 123)
+		}
+	})
+	b.Run("50%_sample_rate", func(b *testing.B) {
+		SetQueryLogSampleRate(0.5)
+		defer SetQueryLogSampleRate(0.0)
+		for i := 0; i < b.N; i++ {
+			ShouldEmitLog("select * from test where user='someone'", 0, 123)
+		}
+	})
+}
+
 func TestGetFormatter(t *testing.T) {
 	tests := []struct {
 		name           string
