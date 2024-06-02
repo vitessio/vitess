@@ -406,7 +406,8 @@ func NewFilterByTabletTags(tabletTags map[string]string) *FilterByTabletTags {
 func (fbtg *FilterByTabletTags) IsIncluded(tablet *topodata.Tablet) bool {
 	if fbtg.tags == nil {
 		return true
-	} else if tablet.Tags == nil {
+	}
+	if tablet.Tags == nil {
 		return false
 	}
 	for key, val := range fbtg.tags {
