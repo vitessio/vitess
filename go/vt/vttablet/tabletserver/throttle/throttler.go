@@ -845,6 +845,7 @@ func (throttler *Throttler) isDormant() bool {
 	return throttler.recentCheckRateLimiter.Diff() > throttler.recentCheckDormantDiff
 }
 
+// recentlyChecked returns true when this throttler was checked "just now" (whereabouts of once second or two)
 func (throttler *Throttler) recentlyChecked() bool {
 	if throttler.recentCheckRateLimiter == nil {
 		return false

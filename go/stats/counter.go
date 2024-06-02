@@ -55,10 +55,10 @@ func NewCounterWithDeprecatedName(name string, deprecatedName string, help strin
 	if deprecatedName == "" || GetSnakeName(name) != GetSnakeName(deprecatedName) {
 		panic(fmt.Sprintf("New name for deprecated metric doesn't have the same snake case - %v", deprecatedName))
 	}
-	v := &Counter{help: help}
-	// We want to publish the deprecated name for backward compatibility.
+
+	v := NewCounter(deprecatedName, help)
+	// We have already published the deprecated name for backward compatibility.
 	// At the same time we want the new metric to be visible on the `/debug/vars` page, so we publish the new name in expvar.
-	publish(deprecatedName, v)
 	expvar.Publish(name, v)
 	return v
 }
@@ -161,11 +161,10 @@ func NewGaugeWithDeprecatedName(name string, deprecatedName string, help string)
 	if deprecatedName == "" || GetSnakeName(name) != GetSnakeName(deprecatedName) {
 		panic(fmt.Sprintf("New name for deprecated metric doesn't have the same snake case - %v", deprecatedName))
 	}
-	v := &Gauge{Counter: Counter{help: help}}
 
-	// We want to publish the deprecated name for backward compatibility.
+	v := NewGauge(deprecatedName, help)
+	// We have already published the deprecated name for backward compatibility.
 	// At the same time we want the new metric to be visible on the `/debug/vars` page, so we publish the new name in expvar.
-	publish(deprecatedName, v)
 	expvar.Publish(name, v)
 	return v
 }
