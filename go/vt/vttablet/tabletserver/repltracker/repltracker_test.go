@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -89,8 +90,8 @@ func TestReplTracker(t *testing.T) {
 		assert.Equal(t, tabletenv.Polling, rt.mode)
 		assert.Equal(t, mysqld, rt.poller.mysqld)
 		assert.Equal(t, HeartbeatConfigTypeNone, rt.hw.configType)
+		require.NotZero(t, defaultOnDemandDuration)
 		assert.Equal(t, defaultOnDemandDuration, rt.hw.onDemandDuration)
-		assert.NotZero(t, rt.hw.onDemandDuration)
 		assert.False(t, rt.hr.enabled)
 
 		rt.MakeNonPrimary()
@@ -111,7 +112,6 @@ func TestReplTracker(t *testing.T) {
 		assert.Equal(t, tabletenv.Heartbeat, rt.mode)
 		assert.Equal(t, HeartbeatConfigTypeOnDemand, rt.hw.configType)
 		assert.Equal(t, time.Second, rt.hw.onDemandDuration)
-		assert.NotZero(t, rt.hw.onDemandDuration)
 		assert.True(t, rt.hr.enabled)
 
 		rt.MakePrimary()
