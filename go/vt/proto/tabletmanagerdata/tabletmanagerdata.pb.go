@@ -6445,7 +6445,6 @@ type CheckThrottlerRequest struct {
 
 	AppName string `protobuf:"bytes,1,opt,name=app_name,json=appName,proto3" json:"app_name,omitempty"`
 	Scope   string `protobuf:"bytes,2,opt,name=scope,proto3" json:"scope,omitempty"`
-	// LowPriority gives precendence to other checks
 	// SkipRequestHeartbeats ensures this check does not renew heartbeat lease
 	SkipRequestHeartbeats bool `protobuf:"varint,3,opt,name=skip_request_heartbeats,json=skipRequestHeartbeats,proto3" json:"skip_request_heartbeats,omitempty"`
 	// OKIfNotExists asks the throttler to return OK even if the metric does not exist
