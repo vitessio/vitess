@@ -368,7 +368,7 @@ func TestThrottleViaApplySchema(t *testing.T) {
 		)
 		assert.NoError(t, err)
 	})
-	t.Run("validate keyspace configuration", func(t *testing.T) {
+	t.Run("validate keyspace configuration after throttle", func(t *testing.T) {
 		keyspace, err := clusterInstance.VtctldClientProcess.GetKeyspace(keyspaceName)
 		require.NoError(t, err)
 		require.NotNil(t, keyspace)
@@ -379,6 +379,8 @@ func TestThrottleViaApplySchema(t *testing.T) {
 		require.NotNil(t, appRule)
 		assert.Equal(t, throttlerapp.OnlineDDLName.String(), appRule.Name)
 		assert.EqualValues(t, 1.0, appRule.Ratio)
+		expireAt := time.Unix(appRule.ExpiresAt.Seconds, int64(appRule.ExpiresAt.Nanoseconds))
+		assert.True(t, expireAt.After(time.Now()), "expected rule to expire in the future: %v", expireAt)
 	})
 	t.Run("unthrottling via ApplySchema", func(t *testing.T) {
 		vtctlParams := &cluster.ApplySchemaParams{DDLStrategy: "online"}
@@ -386,6 +388,20 @@ func TestThrottleViaApplySchema(t *testing.T) {
 			keyspaceName, "alter vitess_migration unthrottle all", *vtctlParams,
 		)
 		assert.NoError(t, err)
+	})
+	t.Run("validate keyspace configuration after unthrottle", func(t *testing.T) {
+		keyspace, err := clusterInstance.VtctldClientProcess.GetKeyspace(keyspaceName)
+		require.NoError(t, err)
+		require.NotNil(t, keyspace)
+		require.NotNil(t, keyspace.Keyspace.ThrottlerConfig)
+		require.NotEmpty(t, keyspace.Keyspace.ThrottlerConfig.ThrottledApps, "throttler config: %+v", keyspace.Keyspace.ThrottlerConfig)
+		appRule, ok := keyspace.Keyspace.ThrottlerConfig.ThrottledApps[throttlerapp.OnlineDDLName.String()]
+		require.True(t, ok, "throttled apps: %v", keyspace.Keyspace.ThrottlerConfig.ThrottledApps)
+		require.NotNil(t, appRule)
+		assert.Equal(t, throttlerapp.OnlineDDLName.String(), appRule.Name)
+		assert.EqualValues(t, 1.0, appRule.Ratio)
+		expireAt := time.Unix(appRule.ExpiresAt.Seconds, int64(appRule.ExpiresAt.Nanoseconds))
+		assert.True(t, expireAt.Before(time.Now()), "expected rule to have expired, but it has not: %v", expireAt)
 	})
 }
 
