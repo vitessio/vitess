@@ -52,8 +52,6 @@ const (
 
 const (
 	sqlUpsertHeartbeat = "INSERT INTO %s.heartbeat (ts, tabletUid, keyspaceShard) VALUES (%a, %a, %a) ON DUPLICATE KEY UPDATE ts=VALUES(ts), tabletUid=VALUES(tabletUid)"
-
-	testKeyspaceShard = "test:0"
 )
 
 var (
@@ -156,10 +154,12 @@ func (w *heartbeatWriter) Open() {
 	// Instead, we try creating the database and table in each tick which runs in a go routine
 	// keeping us safe from hanging the main thread.
 
-	if w.keyspaceShard != testKeyspaceShard {
-		// testKeyspaceShard indicates we're running in a unit test, in which case mock
-		// pools will have been opened.
+	// This function could be running from within a unit test scope, in which case we use
+	// mock pools that are already open. This is why we test for the pool being open.
+	if !w.appPool.IsOpen() {
 		w.appPool.Open(w.env.Config().DB.AppWithDB())
+	}
+	if !w.allPrivsPool.IsOpen() {
 		w.allPrivsPool.Open(w.env.Config().DB.AllPrivsWithDB())
 	}
 
