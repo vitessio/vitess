@@ -144,7 +144,9 @@ func (w *heartbeatWriter) Open() {
 	if w.isOpen {
 		return
 	}
-	w.isOpen = true
+	defer func() {
+		w.isOpen = true
+	}()
 	log.Info("Heartbeat Writer: opening")
 
 	// We cannot create the database and tables in this Open function
@@ -188,7 +190,9 @@ func (w *heartbeatWriter) Close() {
 	if !w.isOpen {
 		return
 	}
-	w.isOpen = false
+	defer func() {
+		w.isOpen = false
+	}()
 
 	w.disableWrites()
 	w.appPool.Close()
