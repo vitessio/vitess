@@ -389,6 +389,7 @@ func TestThrottleViaApplySchema(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, keyspace)
 		require.NotNil(t, keyspace.Keyspace.ThrottlerConfig)
+		require.NotNil(t, keyspace.Keyspace.ThrottlerConfig.ThrottledApps)
 		require.NotEmpty(t, keyspace.Keyspace.ThrottlerConfig.ThrottledApps, "throttler config: %+v", keyspace.Keyspace.ThrottlerConfig)
 		appRule, ok := keyspace.Keyspace.ThrottlerConfig.ThrottledApps[throttlerapp.OnlineDDLName.String()]
 		require.True(t, ok, "throttled apps: %v", keyspace.Keyspace.ThrottlerConfig.ThrottledApps)
@@ -410,14 +411,10 @@ func TestThrottleViaApplySchema(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, keyspace)
 		require.NotNil(t, keyspace.Keyspace.ThrottlerConfig)
-		require.NotEmpty(t, keyspace.Keyspace.ThrottlerConfig.ThrottledApps, "throttler config: %+v", keyspace.Keyspace.ThrottlerConfig)
+		require.NotNil(t, keyspace.Keyspace.ThrottlerConfig.ThrottledApps)
+		// ThrottledApps will actually be empty at this point, but more specifically we want to see that "online-ddl" is not there.
 		appRule, ok := keyspace.Keyspace.ThrottlerConfig.ThrottledApps[throttlerapp.OnlineDDLName.String()]
-		require.True(t, ok, "throttled apps: %v", keyspace.Keyspace.ThrottlerConfig.ThrottledApps)
-		require.NotNil(t, appRule)
-		assert.Equal(t, throttlerapp.OnlineDDLName.String(), appRule.Name)
-		assert.EqualValues(t, 1.0, appRule.Ratio)
-		expireAt := time.Unix(appRule.ExpiresAt.Seconds, int64(appRule.ExpiresAt.Nanoseconds))
-		assert.True(t, expireAt.Before(time.Now()), "expected rule to have expired, but it has not: %v", expireAt)
+		assert.False(t, ok, "app rule: %v", appRule)
 	})
 }
 

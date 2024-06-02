@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/discovery"
@@ -1225,7 +1226,14 @@ func (vc *vcursorImpl) ThrottleApp(ctx context.Context, throttledAppRule *topoda
 		if throttlerConfig.ThrottledApps == nil {
 			throttlerConfig.ThrottledApps = make(map[string]*topodatapb.ThrottledAppRule)
 		}
-		throttlerConfig.ThrottledApps[req.ThrottledApp.Name] = req.ThrottledApp
+		if req.ThrottledApp != nil && req.ThrottledApp.Name != "" {
+			timeNow := time.Now()
+			if protoutil.TimeFromProto(req.ThrottledApp.ExpiresAt).After(timeNow) {
+				throttlerConfig.ThrottledApps[req.ThrottledApp.Name] = req.ThrottledApp
+			} else {
+				delete(throttlerConfig.ThrottledApps, req.ThrottledApp.Name)
+			}
+		}
 		return throttlerConfig
 	}
 

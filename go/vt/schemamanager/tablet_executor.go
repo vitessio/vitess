@@ -248,7 +248,15 @@ func (exec *TabletExecutor) executeAlterMigrationThrottle(ctx context.Context, a
 		if throttlerConfig.ThrottledApps == nil {
 			throttlerConfig.ThrottledApps = make(map[string]*topodatapb.ThrottledAppRule)
 		}
-		throttlerConfig.ThrottledApps[req.ThrottledApp.Name] = req.ThrottledApp
+		if req.ThrottledApp != nil && req.ThrottledApp.Name != "" {
+			timeNow := time.Now()
+			if protoutil.TimeFromProto(req.ThrottledApp.ExpiresAt).After(timeNow) {
+				throttlerConfig.ThrottledApps[req.ThrottledApp.Name] = req.ThrottledApp
+			} else {
+				delete(throttlerConfig.ThrottledApps, req.ThrottledApp.Name)
+			}
+		}
+
 		return throttlerConfig
 	}
 	// We have already locked the keyspace
