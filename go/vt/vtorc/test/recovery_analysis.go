@@ -81,6 +81,7 @@ type InfoForRecoveryAnalysis struct {
 	MaxReplicaGTIDMode                        string
 	MaxReplicaGTIDErrant                      string
 	ReadOnly                                  uint
+	IsStalledDisk                             uint
 }
 
 func (info *InfoForRecoveryAnalysis) ConvertToRowMap() sqlutils.RowMap {
@@ -148,6 +149,7 @@ func (info *InfoForRecoveryAnalysis) ConvertToRowMap() sqlutils.RowMap {
 	rowMap["semi_sync_replica_enabled"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.SemiSyncReplicaEnabled), Valid: true}
 	res, _ := prototext.Marshal(info.TabletInfo)
 	rowMap["tablet_info"] = sqlutils.CellData{String: string(res), Valid: true}
+	rowMap["is_stalled_disk"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.IsStalledDisk), Valid: true}
 	return rowMap
 }
 

@@ -170,6 +170,7 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 	var tablet *topodatapb.Tablet
 	var fs *replicationdatapb.FullStatus
 	readingStartTime := time.Now()
+	stalledDisk := false
 	instance := NewInstance()
 	instanceFound := false
 	partialSuccess := false
@@ -200,6 +201,9 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 
 	fs, err = fullStatus(tabletAlias)
 	if err != nil {
+		if config.Config.EnableStalledDiskPrimaryAnalysis && strings.Contains(err.Error(), "stalled disk") {
+			stalledDisk = true
+		}
 		goto Cleanup
 	}
 	partialSuccess = true // We at least managed to read something from the server.
@@ -400,9 +404,10 @@ Cleanup:
 
 	// Something is wrong, could be network-wise. Record that we
 	// tried to check the instance. last_attempted_check is also
-	// updated on success by writeInstance.
+	// updated on success by writeInstance. If the reason is a
+	// stalled disk, we can record that as well.
 	latency.Start("backend")
-	_ = UpdateInstanceLastChecked(tabletAlias, partialSuccess)
+	_ = UpdateInstanceLastChecked(tabletAlias, partialSuccess, stalledDisk)
 	latency.Stop("backend")
 	return nil, err
 }
@@ -847,6 +852,7 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		"semi_sync_primary_clients",
 		"semi_sync_replica_status",
 		"last_discovery_latency",
+		"stalled_disk",
 	}
 
 	values := make([]string, len(columns))
@@ -928,6 +934,7 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		args = append(args, instance.SemiSyncPrimaryClients)
 		args = append(args, instance.SemiSyncReplicaStatus)
 		args = append(args, instance.LastDiscoveryLatency.Nanoseconds())
+		args = append(args, instance.StalledDisk)
 	}
 
 	sql, err := mkInsertOdku("database_instance", columns, values, len(instances), insertIgnore)
@@ -973,17 +980,19 @@ func WriteInstance(instance *Instance, instanceWasActuallyFound bool, lastError 
 
 // UpdateInstanceLastChecked updates the last_check timestamp in the vtorc backed database
 // for a given instance
-func UpdateInstanceLastChecked(tabletAlias string, partialSuccess bool) error {
+func UpdateInstanceLastChecked(tabletAlias string, partialSuccess bool, stalledDisk bool) error {
 	writeFunc := func() error {
 		_, err := db.ExecVTOrc(`
         	update
         		database_instance
         	set
 						last_checked = NOW(),
-						last_check_partial_success = ?
+						last_check_partial_success = ?,
+						stalled_disk = ?
 			where
 				alias = ?`,
 			partialSuccess,
+			stalledDisk,
 			tabletAlias,
 		)
 		if err != nil {
@@ -1110,8 +1119,8 @@ func SnapshotTopologies() error {
         			alias, hostname, port, source_host, source_port, keyspace, shard, version)
         	select
         		UNIX_TIMESTAMP(NOW()),
-				vitess_tablet.alias, vitess_tablet.hostname, vitess_tablet.port, 
-				database_instance.source_host, database_instance.source_port, 
+				vitess_tablet.alias, vitess_tablet.hostname, vitess_tablet.port,
+				database_instance.source_host, database_instance.source_port,
 				vitess_tablet.keyspace, vitess_tablet.shard, database_instance.version
 			from
 				vitess_tablet left join database_instance using (alias, hostname, port)

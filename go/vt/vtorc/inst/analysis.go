@@ -56,6 +56,7 @@ const (
 	LockedSemiSyncPrimaryHypothesis        AnalysisCode = "LockedSemiSyncPrimaryHypothesis"
 	LockedSemiSyncPrimary                  AnalysisCode = "LockedSemiSyncPrimary"
 	ErrantGTIDDetected                     AnalysisCode = "ErrantGTIDDetected"
+	StalledDiskPrimary                     AnalysisCode = "StalledDiskPrimary"
 )
 
 type StructureAnalysisCode string
@@ -130,6 +131,7 @@ type ReplicationAnalysis struct {
 	MaxReplicaGTIDMode                        string
 	MaxReplicaGTIDErrant                      string
 	IsReadOnly                                bool
+	IsStalledDisk                             bool
 }
 
 func (replicationAnalysis *ReplicationAnalysis) MarshalJSON() ([]byte, error) {
