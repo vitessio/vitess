@@ -81,7 +81,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		vitess_keyspace.durability_policy AS durability_policy,
 		vitess_shard.primary_timestamp AS shard_primary_term_timestamp,
 		primary_instance.read_only AS read_only,
-		MIN(primary_instance.gtid_errant) AS gtid_errant, 
+		MIN(primary_instance.gtid_errant) AS gtid_errant,
 		MIN(primary_instance.alias) IS NULL AS is_invalid,
 		MIN(primary_instance.binary_log_file) AS binary_log_file,
 		MIN(primary_instance.binary_log_pos) AS binary_log_pos,
@@ -246,7 +246,8 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		COUNT(
 			DISTINCT case when replica_instance.log_bin
 			AND replica_instance.log_replica_updates then replica_instance.major_version else NULL end
-		) AS count_distinct_logging_major_versions
+		) AS count_distinct_logging_major_versions,
+		primary_instance.stalled_disk != 0 AS is_stalled_disk
 	FROM
 		vitess_tablet
 		JOIN vitess_keyspace ON (
@@ -364,6 +365,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		a.HeartbeatInterval = m.GetFloat64("heartbeat_interval")
 
 		a.IsReadOnly = m.GetUint("read_only") == 1
+		a.IsStalledDisk = m.GetBool("is_stalled_disk")
 
 		if !a.LastCheckValid {
 			analysisMessage := fmt.Sprintf("analysis: Alias: %+v, Keyspace: %+v, Shard: %+v, IsPrimary: %+v, LastCheckValid: %+v, LastCheckPartialSuccess: %+v, CountReplicas: %+v, CountValidReplicas: %+v, CountValidReplicatingReplicas: %+v, CountLaggingReplicas: %+v, CountDelayedReplicas: %+v",
@@ -411,6 +413,11 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		} else if isInvalid {
 			a.Analysis = InvalidReplica
 			a.Description = "VTOrc hasn't been able to reach the replica even once since restart/shutdown"
+		} else if a.IsClusterPrimary && !a.LastCheckValid && a.IsStalledDisk {
+			a.Analysis = StalledDiskPrimary
+			a.Description = "Primary has a stalled disk"
+			ca.hasClusterwideAction = true
+			//
 		} else if a.IsClusterPrimary && !a.LastCheckValid && a.CountReplicas == 0 {
 			a.Analysis = DeadPrimaryWithoutReplicas
 			a.Description = "Primary cannot be reached by vtorc and has no replica"

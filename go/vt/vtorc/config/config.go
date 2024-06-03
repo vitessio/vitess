@@ -42,22 +42,23 @@ const (
 )
 
 var (
-	sqliteDataFile                 = "file::memory:?mode=memory&cache=shared"
-	instancePollTime               = 5 * time.Second
-	snapshotTopologyInterval       = 0 * time.Hour
-	reasonableReplicationLag       = 10 * time.Second
-	auditFileLocation              = ""
-	auditToBackend                 = false
-	auditToSyslog                  = false
-	auditPurgeDuration             = 7 * 24 * time.Hour // Equivalent of 7 days
-	recoveryPeriodBlockDuration    = 30 * time.Second
-	preventCrossCellFailover       = false
-	waitReplicasTimeout            = 30 * time.Second
-	tolerableReplicationLag        = 0 * time.Second
-	topoInformationRefreshDuration = 15 * time.Second
-	recoveryPollDuration           = 1 * time.Second
-	ersEnabled                     = true
-	convertTabletsWithErrantGTIDs  = false
+	sqliteDataFile                   = "file::memory:?mode=memory&cache=shared"
+	instancePollTime                 = 5 * time.Second
+	snapshotTopologyInterval         = 0 * time.Hour
+	reasonableReplicationLag         = 10 * time.Second
+	auditFileLocation                = ""
+	auditToBackend                   = false
+	auditToSyslog                    = false
+	auditPurgeDuration               = 7 * 24 * time.Hour // Equivalent of 7 days
+	recoveryPeriodBlockDuration      = 30 * time.Second
+	preventCrossCellFailover         = false
+	waitReplicasTimeout              = 30 * time.Second
+	tolerableReplicationLag          = 0 * time.Second
+	topoInformationRefreshDuration   = 15 * time.Second
+	recoveryPollDuration             = 1 * time.Second
+	ersEnabled                       = true
+	convertTabletsWithErrantGTIDs    = false
+	enableStalledDiskPrimaryAnalysis = false
 )
 
 // RegisterFlags registers the flags required by VTOrc
@@ -79,6 +80,7 @@ func RegisterFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&recoveryPollDuration, "recovery-poll-duration", recoveryPollDuration, "Timer duration on which VTOrc polls its database to run a recovery")
 	fs.BoolVar(&ersEnabled, "allow-emergency-reparent", ersEnabled, "Whether VTOrc should be allowed to run emergency reparent operation when it detects a dead primary")
 	fs.BoolVar(&convertTabletsWithErrantGTIDs, "change-tablets-with-errant-gtid-to-drained", convertTabletsWithErrantGTIDs, "Whether VTOrc should be changing the type of tablets with errant GTIDs to DRAINED")
+	fs.BoolVar(&enableStalledDiskPrimaryAnalysis, "enable-stalled-disk-primary-analysis", enableStalledDiskPrimaryAnalysis, "Whether VTOrc should be analyzing and recovering stalled disk primary failures")
 }
 
 // Configuration makes for vtorc configuration input, which can be provided by user via JSON formatted file.
@@ -100,6 +102,7 @@ type Configuration struct {
 	TolerableReplicationLagSeconds        int    // Amount of replication lag that is considered acceptable for a tablet to be eligible for promotion when Vitess makes the choice of a new primary in PRS.
 	TopoInformationRefreshSeconds         int    // Timer duration on which VTOrc refreshes the keyspace and vttablet records from the topo-server.
 	RecoveryPollSeconds                   int    // Timer duration on which VTOrc recovery analysis runs
+	EnableStalledDiskPrimaryAnalysis      bool   // Whether the enable the analysis and recovery of stalled disk primary failures
 }
 
 // ToJSONString will marshal this configuration as JSON
@@ -130,6 +133,7 @@ func UpdateConfigValuesFromFlags() {
 	Config.TolerableReplicationLagSeconds = int(tolerableReplicationLag / time.Second)
 	Config.TopoInformationRefreshSeconds = int(topoInformationRefreshDuration / time.Second)
 	Config.RecoveryPollSeconds = int(recoveryPollDuration / time.Second)
+	Config.EnableStalledDiskPrimaryAnalysis = enableStalledDiskPrimaryAnalysis
 }
 
 // ERSEnabled reports whether VTOrc is allowed to run ERS or not.
@@ -173,6 +177,7 @@ func newConfiguration() *Configuration {
 		WaitReplicasTimeoutSeconds:            30,
 		TopoInformationRefreshSeconds:         15,
 		RecoveryPollSeconds:                   1,
+		EnableStalledDiskPrimaryAnalysis:      false,
 	}
 }
 

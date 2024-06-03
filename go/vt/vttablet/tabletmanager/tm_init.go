@@ -91,8 +91,9 @@ var (
 	skipBuildInfoTags  = "/.*/"
 	initTags           flagutil.StringMapValue
 
-	initTimeout          = 1 * time.Minute
-	mysqlShutdownTimeout = mysqlctl.DefaultShutdownTimeout
+	initTimeout            = 1 * time.Minute
+	mysqlShutdownTimeout   = mysqlctl.DefaultShutdownTimeout
+	enableStalledDiskCheck = false
 )
 
 func registerInitFlags(fs *pflag.FlagSet) {
@@ -105,6 +106,7 @@ func registerInitFlags(fs *pflag.FlagSet) {
 	fs.Var(&initTags, "init_tags", "(init parameter) comma separated list of key:value pairs used to tag the tablet")
 	fs.DurationVar(&initTimeout, "init_timeout", initTimeout, "(init parameter) timeout to use for the init phase.")
 	fs.DurationVar(&mysqlShutdownTimeout, "mysql-shutdown-timeout", mysqlShutdownTimeout, "timeout to use when MySQL is being shut down.")
+	fs.Bool("enable_stalled_disk_check", false, "if true, tablet will check if disk is stalled or rejecting writes")
 }
 
 var (
@@ -156,6 +158,7 @@ type TabletManager struct {
 	VREngine            *vreplication.Engine
 	VDiffEngine         *vdiff.Engine
 	Env                 *vtenv.Environment
+	fsManager           FileSystemManager
 
 	// tmState manages the TabletManager state.
 	tmState *tmState
@@ -353,6 +356,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 	tm.tabletAlias = tablet.Alias
 	tm.tmState = newTMState(tm, tablet)
 	tm.actionSema = semaphore.NewWeighted(1)
+	tm.fsManager = newFileSystemManager(tm.BatchCtx)
 	tm._waitForGrantsComplete = make(chan struct{})
 
 	tm.baseTabletType = tablet.Type
