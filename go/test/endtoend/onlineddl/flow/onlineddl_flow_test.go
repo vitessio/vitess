@@ -209,6 +209,13 @@ func TestSchemaChange(t *testing.T) {
 	require.NotNil(t, replicaTablet)
 	require.Equal(t, 2, len(tablets))
 
+	if binarySuffix := os.Getenv("PRIMARY_TABLET_BINARY_SUFFIX"); binarySuffix != "" {
+		t.Logf("Using PRIMARY_TABLET_BINARY_SUFFIX: %s", binarySuffix)
+	}
+	if binarySuffix := os.Getenv("REPLICA_TABLET_BINARY_SUFFIX"); binarySuffix != "" {
+		t.Logf("Using REPLICA_TABLET_BINARY_SUFFIX: %s", binarySuffix)
+	}
+
 	shards = clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
 

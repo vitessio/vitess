@@ -215,4 +215,6 @@ jobs:
         mkdir -p /tmp/vtdataroot
 
         source build.env
+        export PRIMARY_TABLET_BINARY_SUFFIX=""
+        export REPLICA_TABLET_BINARY_SUFFIX="-last"
         eatmydata -- go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_onlineddl_flow
