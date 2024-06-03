@@ -766,7 +766,7 @@ func (itmc *internalTabletManagerClient) GetPermissions(ctx context.Context, tab
 func (itmc *internalTabletManagerClient) GetGlobalStatusVars(ctx context.Context, tablet *topodatapb.Tablet, statuses []string) (map[string]string, error) {
 	t, ok := tabletMap[tablet.Alias.Uid]
 	if !ok {
-		return nil, fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
+		return nil, fmt.Errorf("tmclient: cannot find tablet %v", topoproto.TabletAliasString(tablet.Alias))
 	}
 	return t.tm.GetGlobalStatusVars(ctx, statuses)
 }

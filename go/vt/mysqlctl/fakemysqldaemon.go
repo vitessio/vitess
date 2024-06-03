@@ -420,7 +420,7 @@ func (fmd *FakeMysqlDaemon) SetSuperReadOnly(ctx context.Context, on bool) (Rese
 // GetGlobalStatusVars is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) GetGlobalStatusVars(ctx context.Context, statuses []string) (map[string]string, error) {
 	return make(map[string]string), fmd.ExecuteSuperQueryList(ctx, []string{
-		"FAKE SELECT variable_value FROM performance_schema.global_status",
+		"FAKE " + getGlobalStatusQuery,
 	})
 }
 
