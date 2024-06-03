@@ -89,7 +89,7 @@ func TestTablesFilterSkip(t *testing.T) {
 	})
 	_ = f(eventToken, statements)
 	want := `position: "MariaDB/0-41983-1" `
-	assert.Equal(t, want, got, "binlogConnStreamer.tablesFilterFunc(): got:\n%+v\nwant:\n%+v", got, want)
+	assert.Equal(t, want, got, "binlogConnStreamer.tablesFilterFunc()")
 }
 
 func TestTablesFilterDDL(t *testing.T) {
@@ -117,7 +117,7 @@ func TestTablesFilterDDL(t *testing.T) {
 	})
 	_ = f(eventToken, statements)
 	want := `position: "MariaDB/0-41983-1" `
-	assert.Equal(t, want, got, "binlogConnStreamer.tablesFilterFunc(): got:\n%+v\nwant:\n%+v", got, want)
+	assert.Equal(t, want, got, "binlogConnStreamer.tablesFilterFunc()")
 }
 
 func TestTablesFilterMalformed(t *testing.T) {
@@ -151,7 +151,7 @@ func TestTablesFilterMalformed(t *testing.T) {
 	})
 	_ = f(eventToken, statements)
 	want := `position: "MariaDB/0-41983-1" `
-	assert.Equal(t, want, got, "binlogConnStreamer.tablesFilterFunc(): got:\n%+v\nwant:\n%+v", got, want)
+	assert.Equal(t, want, got, "binlogConnStreamer.tablesFilterFunc()")
 }
 
 func bltToString(tx *binlogdatapb.BinlogTransaction) string {

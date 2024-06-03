@@ -152,11 +152,11 @@ func TestVExec(t *testing.T) {
 			if testCase.errorString == "" {
 				require.NoError(t, err)
 				for _, result := range results {
-					assert.True(t, testCase.result.Equal(result), "mismatched result:\nwant: %v\ngot:  %v", testCase.result, result)
+					assert.True(t, testCase.result.Equal(result), "mismatched result")
 				}
 			} else {
-				require.Error(t, err)
-				assert.Contains(t, err.Error(), testCase.errorString, "Wrong error, want %s, got %s", testCase.errorString, err.Error())
+				require.ErrorContains(t, err, testCase.errorString, "Wrong error, want %s, got %s", testCase.errorString, err.Error())
+
 			}
 		})
 	}

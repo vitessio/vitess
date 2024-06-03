@@ -122,8 +122,7 @@ func TestDeleteTabletTruePrimary(t *testing.T) {
 
 	err = wr.DeleteTablet(context.Background(), tablet.Alias, false)
 	wantError := "as it is a primary, use allow_primary flag"
-	require.Error(t, err, "DeleteTablet on primary: want error")
-	require.Contains(t, err.Error(), wantError, "DeleteTablet on primary: want specific error message")
+	require.ErrorContains(t, err, wantError, "DeleteTablet on primary: want specific error message")
 
 	err = wr.DeleteTablet(context.Background(), tablet.Alias, true)
 	require.NoError(t, err, "DeleteTablet failed")
