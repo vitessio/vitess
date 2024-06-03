@@ -42,22 +42,6 @@ jobs:
       with:
         fetch-depth: 0
 
-    - name: Set output with latest release branch
-      id: output-previous-release-ref
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
-      run: |
-        previous_release_ref=$(./tools/get_previous_release.sh ${{github.base_ref}} ${{github.ref}})
-        echo $previous_release_ref
-        echo "previous_release_ref=${previous_release_ref}" >> $GITHUB_OUTPUT
-
-    - name: Set output with next release branch
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
-      id: output-next-release-ref
-      run: |
-        next_release_ref=$(./tools/get_next_release.sh ${{github.base_ref}} ${{github.ref}})
-        echo $next_release_ref
-        echo "next_release_ref=${next_release_ref}" >> $GITHUB_OUTPUT
-
     - name: Check for changes in relevant files
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
       uses: dorny/paths-filter@v3.0.1
@@ -78,6 +62,22 @@ jobs:
             - 'config/**'
             - 'bootstrap.sh'
             - '.github/workflows/upgrade_downgrade_test_onlineddl_flow.yml'
+
+    - name: Set output with latest release branch
+      id: output-previous-release-ref
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      run: |
+        previous_release_ref=$(./tools/get_previous_release.sh ${{github.base_ref}} ${{github.ref}})
+        echo $previous_release_ref
+        echo "previous_release_ref=${previous_release_ref}" >> $GITHUB_OUTPUT
+
+    - name: Set output with next release branch
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      id: output-next-release-ref
+      run: |
+        next_release_ref=$(./tools/get_next_release.sh ${{github.base_ref}} ${{github.ref}})
+        echo $next_release_ref
+        echo "next_release_ref=${next_release_ref}" >> $GITHUB_OUTPUT
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
