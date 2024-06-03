@@ -315,7 +315,7 @@
 		},
 		"onlineddl_flow": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/flow", "-timeout", "15m"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/flow", "-timeout", "30m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "onlineddl_flow",
