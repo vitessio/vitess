@@ -250,8 +250,8 @@ type TabletManagerClient struct {
 		Schema *tabletmanagerdatapb.SchemaDefinition
 		Error  error
 	}
-	GetServerStatusResults map[string]struct {
-		Statuses []string
+	GetGlobalStatusVarsResults map[string]struct {
+		Statuses map[string]string
 		Error    error
 	}
 	// keyed by tablet alias.
@@ -735,14 +735,14 @@ func (fake *TabletManagerClient) GetSchema(ctx context.Context, tablet *topodata
 	return nil, fmt.Errorf("%w: no schemas for %s", assert.AnError, key)
 }
 
-// GetServerStatus is part of the tmclient.TabletManagerClient interface.
-func (fake *TabletManagerClient) GetServerStatus(ctx context.Context, tablet *topodatapb.Tablet, statuses []string) ([]string, error) {
-	if fake.GetServerStatusResults == nil {
+// GetGlobalStatusVars is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) GetGlobalStatusVars(ctx context.Context, tablet *topodatapb.Tablet, statuses []string) (map[string]string, error) {
+	if fake.GetGlobalStatusVarsResults == nil {
 		return nil, assert.AnError
 	}
 
 	key := topoproto.TabletAliasString(tablet.Alias)
-	if result, ok := fake.GetServerStatusResults[key]; ok {
+	if result, ok := fake.GetGlobalStatusVarsResults[key]; ok {
 		return result.Statuses, result.Error
 	}
 

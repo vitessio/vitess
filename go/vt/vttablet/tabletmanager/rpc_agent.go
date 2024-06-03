@@ -43,8 +43,9 @@ type RPCTM interface {
 
 	GetPermissions(ctx context.Context) (*tabletmanagerdatapb.Permissions, error)
 
-	// GetServerStatus gets server statuses that are requested.
-	GetServerStatus(ctx context.Context, statuses []string) ([]string, error)
+	// GetGlobalStatusVars returns the server's global status variables asked for.
+	// An empty/nil variable name parameter slice means you want all of them.
+	GetGlobalStatusVars(ctx context.Context, statuses []string) (map[string]string, error)
 
 	// Various read-write methods
 

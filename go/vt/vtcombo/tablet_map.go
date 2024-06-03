@@ -762,13 +762,13 @@ func (itmc *internalTabletManagerClient) GetPermissions(ctx context.Context, tab
 	return t.tm.GetPermissions(ctx)
 }
 
-// GetServerStatus is part of the tmclient.TabletManagerClient interface.
-func (itmc *internalTabletManagerClient) GetServerStatus(ctx context.Context, tablet *topodatapb.Tablet, statuses []string) ([]string, error) {
+// GetGlobalStatusVars is part of the tmclient.TabletManagerClient interface.
+func (itmc *internalTabletManagerClient) GetGlobalStatusVars(ctx context.Context, tablet *topodatapb.Tablet, statuses []string) (map[string]string, error) {
 	t, ok := tabletMap[tablet.Alias.Uid]
 	if !ok {
 		return nil, fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
-	return t.tm.GetServerStatus(ctx, statuses)
+	return t.tm.GetGlobalStatusVars(ctx, statuses)
 }
 
 func (itmc *internalTabletManagerClient) SetReadOnly(ctx context.Context, tablet *topodatapb.Tablet) error {

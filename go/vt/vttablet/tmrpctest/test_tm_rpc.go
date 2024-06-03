@@ -382,26 +382,26 @@ func tmRPCTestGetPermissionsPanic(ctx context.Context, t *testing.T, client tmcl
 	expectHandleRPCPanic(t, "GetPermissions", false /*verbose*/, err)
 }
 
-var testGetServerStatusReply = []string{
-	"x",
-	"0",
+var testGetGlobalStatusVarsReply = map[string]string{
+	"a": "x",
+	"b": "0",
 }
 
-func (fra *fakeRPCTM) GetServerStatus(ctx context.Context, statuses []string) ([]string, error) {
+func (fra *fakeRPCTM) GetGlobalStatusVars(ctx context.Context, statuses []string) (map[string]string, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	return testGetServerStatusReply, nil
+	return testGetGlobalStatusVarsReply, nil
 }
 
-func tmRPCTestGetServerStatus(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	result, err := client.GetServerStatus(ctx, tablet, nil)
-	compareError(t, "GetServerStatus", err, result, testGetServerStatusReply)
+func tmRPCTestGetGlobalStatusVars(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	result, err := client.GetGlobalStatusVars(ctx, tablet, nil)
+	compareError(t, "GetGlobalStatusVars", err, result, testGetGlobalStatusVarsReply)
 }
 
-func tmRPCTestGetServerStatusPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	_, err := client.GetServerStatus(ctx, tablet, nil)
-	expectHandleRPCPanic(t, "GetServerStatus", false /*verbose*/, err)
+func tmRPCTestGetGlobalStatusVarsPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	_, err := client.GetGlobalStatusVars(ctx, tablet, nil)
+	expectHandleRPCPanic(t, "GetGlobalStatusVars", false /*verbose*/, err)
 }
 
 //
@@ -1414,7 +1414,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	tmRPCTestPing(ctx, t, client, tablet)
 	tmRPCTestGetSchema(ctx, t, client, tablet)
 	tmRPCTestGetPermissions(ctx, t, client, tablet)
-	tmRPCTestGetServerStatus(ctx, t, client, tablet)
+	tmRPCTestGetGlobalStatusVars(ctx, t, client, tablet)
 
 	// Various read-write methods
 	tmRPCTestSetReadOnly(ctx, t, client, tablet)
@@ -1475,7 +1475,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	tmRPCTestPingPanic(ctx, t, client, tablet)
 	tmRPCTestGetSchemaPanic(ctx, t, client, tablet)
 	tmRPCTestGetPermissionsPanic(ctx, t, client, tablet)
-	tmRPCTestGetServerStatusPanic(ctx, t, client, tablet)
+	tmRPCTestGetGlobalStatusVarsPanic(ctx, t, client, tablet)
 
 	// Various read-write methods
 	tmRPCTestSetReadOnlyPanic(ctx, t, client, tablet)

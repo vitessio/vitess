@@ -396,11 +396,11 @@ func (m *GetPermissionsResponse) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
-func (m *GetServerStatusRequest) CloneVT() *GetServerStatusRequest {
+func (m *GetGlobalStatusVarsRequest) CloneVT() *GetGlobalStatusVarsRequest {
 	if m == nil {
-		return (*GetServerStatusRequest)(nil)
+		return (*GetGlobalStatusVarsRequest)(nil)
 	}
-	r := &GetServerStatusRequest{}
+	r := &GetGlobalStatusVarsRequest{}
 	if rhs := m.Statuses; rhs != nil {
 		tmpContainer := make([]string, len(rhs))
 		copy(tmpContainer, rhs)
@@ -413,18 +413,20 @@ func (m *GetServerStatusRequest) CloneVT() *GetServerStatusRequest {
 	return r
 }
 
-func (m *GetServerStatusRequest) CloneMessageVT() proto.Message {
+func (m *GetGlobalStatusVarsRequest) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
-func (m *GetServerStatusResponse) CloneVT() *GetServerStatusResponse {
+func (m *GetGlobalStatusVarsResponse) CloneVT() *GetGlobalStatusVarsResponse {
 	if m == nil {
-		return (*GetServerStatusResponse)(nil)
+		return (*GetGlobalStatusVarsResponse)(nil)
 	}
-	r := &GetServerStatusResponse{}
+	r := &GetGlobalStatusVarsResponse{}
 	if rhs := m.StatusValues; rhs != nil {
-		tmpContainer := make([]string, len(rhs))
-		copy(tmpContainer, rhs)
+		tmpContainer := make(map[string]string, len(rhs))
+		for k, v := range rhs {
+			tmpContainer[k] = v
+		}
 		r.StatusValues = tmpContainer
 	}
 	if len(m.unknownFields) > 0 {
@@ -434,7 +436,7 @@ func (m *GetServerStatusResponse) CloneVT() *GetServerStatusResponse {
 	return r
 }
 
-func (m *GetServerStatusResponse) CloneMessageVT() proto.Message {
+func (m *GetGlobalStatusVarsResponse) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
@@ -3372,7 +3374,7 @@ func (m *GetPermissionsResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error
 	return len(dAtA) - i, nil
 }
 
-func (m *GetServerStatusRequest) MarshalVT() (dAtA []byte, err error) {
+func (m *GetGlobalStatusVarsRequest) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -3385,12 +3387,12 @@ func (m *GetServerStatusRequest) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *GetServerStatusRequest) MarshalToVT(dAtA []byte) (int, error) {
+func (m *GetGlobalStatusVarsRequest) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *GetServerStatusRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *GetGlobalStatusVarsRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -3414,7 +3416,7 @@ func (m *GetServerStatusRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error
 	return len(dAtA) - i, nil
 }
 
-func (m *GetServerStatusResponse) MarshalVT() (dAtA []byte, err error) {
+func (m *GetGlobalStatusVarsResponse) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -3427,12 +3429,12 @@ func (m *GetServerStatusResponse) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *GetServerStatusResponse) MarshalToVT(dAtA []byte) (int, error) {
+func (m *GetGlobalStatusVarsResponse) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *GetServerStatusResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *GetGlobalStatusVarsResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -3445,10 +3447,20 @@ func (m *GetServerStatusResponse) MarshalToSizedBufferVT(dAtA []byte) (int, erro
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if len(m.StatusValues) > 0 {
-		for iNdEx := len(m.StatusValues) - 1; iNdEx >= 0; iNdEx-- {
-			i -= len(m.StatusValues[iNdEx])
-			copy(dAtA[i:], m.StatusValues[iNdEx])
-			i = encodeVarint(dAtA, i, uint64(len(m.StatusValues[iNdEx])))
+		for k := range m.StatusValues {
+			v := m.StatusValues[k]
+			baseI := i
+			i -= len(v)
+			copy(dAtA[i:], v)
+			i = encodeVarint(dAtA, i, uint64(len(v)))
+			i--
+			dAtA[i] = 0x12
+			i -= len(k)
+			copy(dAtA[i:], k)
+			i = encodeVarint(dAtA, i, uint64(len(k)))
+			i--
+			dAtA[i] = 0xa
+			i = encodeVarint(dAtA, i, uint64(baseI-i))
 			i--
 			dAtA[i] = 0xa
 		}
@@ -8913,7 +8925,7 @@ func (m *GetPermissionsResponse) SizeVT() (n int) {
 	return n
 }
 
-func (m *GetServerStatusRequest) SizeVT() (n int) {
+func (m *GetGlobalStatusVarsRequest) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -8929,16 +8941,18 @@ func (m *GetServerStatusRequest) SizeVT() (n int) {
 	return n
 }
 
-func (m *GetServerStatusResponse) SizeVT() (n int) {
+func (m *GetGlobalStatusVarsResponse) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
 	var l int
 	_ = l
 	if len(m.StatusValues) > 0 {
-		for _, s := range m.StatusValues {
-			l = len(s)
-			n += 1 + l + sov(uint64(l))
+		for k, v := range m.StatusValues {
+			_ = k
+			_ = v
+			mapEntrySize := 1 + len(k) + sov(uint64(len(k))) + 1 + len(v) + sov(uint64(len(v)))
+			n += mapEntrySize + 1 + sov(uint64(mapEntrySize))
 		}
 	}
 	n += len(m.unknownFields)
@@ -12968,7 +12982,7 @@ func (m *GetPermissionsResponse) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *GetServerStatusRequest) UnmarshalVT(dAtA []byte) error {
+func (m *GetGlobalStatusVarsRequest) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -12991,10 +13005,10 @@ func (m *GetServerStatusRequest) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: GetServerStatusRequest: wiretype end group for non-group")
+			return fmt.Errorf("proto: GetGlobalStatusVarsRequest: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: GetServerStatusRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: GetGlobalStatusVarsRequest: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -13051,7 +13065,7 @@ func (m *GetServerStatusRequest) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *GetServerStatusResponse) UnmarshalVT(dAtA []byte) error {
+func (m *GetGlobalStatusVarsResponse) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -13074,17 +13088,17 @@ func (m *GetServerStatusResponse) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: GetServerStatusResponse: wiretype end group for non-group")
+			return fmt.Errorf("proto: GetGlobalStatusVarsResponse: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: GetServerStatusResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: GetGlobalStatusVarsResponse: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field StatusValues", wireType)
 			}
-			var stringLen uint64
+			var msglen int
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflow
@@ -13094,23 +13108,118 @@ func (m *GetServerStatusResponse) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
+			if msglen < 0 {
 				return ErrInvalidLength
 			}
-			postIndex := iNdEx + intStringLen
+			postIndex := iNdEx + msglen
 			if postIndex < 0 {
 				return ErrInvalidLength
 			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.StatusValues = append(m.StatusValues, string(dAtA[iNdEx:postIndex]))
+			if m.StatusValues == nil {
+				m.StatusValues = make(map[string]string)
+			}
+			var mapkey string
+			var mapvalue string
+			for iNdEx < postIndex {
+				entryPreIndex := iNdEx
+				var wire uint64
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflow
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					wire |= uint64(b&0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				fieldNum := int32(wire >> 3)
+				if fieldNum == 1 {
+					var stringLenmapkey uint64
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflow
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						stringLenmapkey |= uint64(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					intStringLenmapkey := int(stringLenmapkey)
+					if intStringLenmapkey < 0 {
+						return ErrInvalidLength
+					}
+					postStringIndexmapkey := iNdEx + intStringLenmapkey
+					if postStringIndexmapkey < 0 {
+						return ErrInvalidLength
+					}
+					if postStringIndexmapkey > l {
+						return io.ErrUnexpectedEOF
+					}
+					mapkey = string(dAtA[iNdEx:postStringIndexmapkey])
+					iNdEx = postStringIndexmapkey
+				} else if fieldNum == 2 {
+					var stringLenmapvalue uint64
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflow
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						stringLenmapvalue |= uint64(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					intStringLenmapvalue := int(stringLenmapvalue)
+					if intStringLenmapvalue < 0 {
+						return ErrInvalidLength
+					}
+					postStringIndexmapvalue := iNdEx + intStringLenmapvalue
+					if postStringIndexmapvalue < 0 {
+						return ErrInvalidLength
+					}
+					if postStringIndexmapvalue > l {
+						return io.ErrUnexpectedEOF
+					}
+					mapvalue = string(dAtA[iNdEx:postStringIndexmapvalue])
+					iNdEx = postStringIndexmapvalue
+				} else {
+					iNdEx = entryPreIndex
+					skippy, err := skip(dAtA[iNdEx:])
+					if err != nil {
+						return err
+					}
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
+						return ErrInvalidLength
+					}
+					if (iNdEx + skippy) > postIndex {
+						return io.ErrUnexpectedEOF
+					}
+					iNdEx += skippy
+				}
+			}
+			m.StatusValues[mapkey] = mapvalue
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

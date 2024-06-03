@@ -33,8 +33,9 @@ type TabletManagerClient interface {
 	GetSchema(ctx context.Context, in *tabletmanagerdata.GetSchemaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.GetSchemaResponse, error)
 	// GetPermissions asks the tablet for its permissions
 	GetPermissions(ctx context.Context, in *tabletmanagerdata.GetPermissionsRequest, opts ...grpc.CallOption) (*tabletmanagerdata.GetPermissionsResponse, error)
-	// GetServerStatus gets server statuses that are requested.
-	GetServerStatus(ctx context.Context, in *tabletmanagerdata.GetServerStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.GetServerStatusResponse, error)
+	// GetGlobalStatusVars returns the server's global status variables asked for.
+	// An empty/nil variable name parameter slice means you want all of them.
+	GetGlobalStatusVars(ctx context.Context, in *tabletmanagerdata.GetGlobalStatusVarsRequest, opts ...grpc.CallOption) (*tabletmanagerdata.GetGlobalStatusVarsResponse, error)
 	SetReadOnly(ctx context.Context, in *tabletmanagerdata.SetReadOnlyRequest, opts ...grpc.CallOption) (*tabletmanagerdata.SetReadOnlyResponse, error)
 	SetReadWrite(ctx context.Context, in *tabletmanagerdata.SetReadWriteRequest, opts ...grpc.CallOption) (*tabletmanagerdata.SetReadWriteResponse, error)
 	// ChangeType asks the remote tablet to change its type
@@ -172,9 +173,9 @@ func (c *tabletManagerClient) GetPermissions(ctx context.Context, in *tabletmana
 	return out, nil
 }
 
-func (c *tabletManagerClient) GetServerStatus(ctx context.Context, in *tabletmanagerdata.GetServerStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.GetServerStatusResponse, error) {
-	out := new(tabletmanagerdata.GetServerStatusResponse)
-	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/GetServerStatus", in, out, opts...)
+func (c *tabletManagerClient) GetGlobalStatusVars(ctx context.Context, in *tabletmanagerdata.GetGlobalStatusVarsRequest, opts ...grpc.CallOption) (*tabletmanagerdata.GetGlobalStatusVarsResponse, error) {
+	out := new(tabletmanagerdata.GetGlobalStatusVarsResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/GetGlobalStatusVars", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -700,8 +701,9 @@ type TabletManagerServer interface {
 	GetSchema(context.Context, *tabletmanagerdata.GetSchemaRequest) (*tabletmanagerdata.GetSchemaResponse, error)
 	// GetPermissions asks the tablet for its permissions
 	GetPermissions(context.Context, *tabletmanagerdata.GetPermissionsRequest) (*tabletmanagerdata.GetPermissionsResponse, error)
-	// GetServerStatus gets server statuses that are requested.
-	GetServerStatus(context.Context, *tabletmanagerdata.GetServerStatusRequest) (*tabletmanagerdata.GetServerStatusResponse, error)
+	// GetGlobalStatusVars returns the server's global status variables asked for.
+	// An empty/nil variable name parameter slice means you want all of them.
+	GetGlobalStatusVars(context.Context, *tabletmanagerdata.GetGlobalStatusVarsRequest) (*tabletmanagerdata.GetGlobalStatusVarsResponse, error)
 	SetReadOnly(context.Context, *tabletmanagerdata.SetReadOnlyRequest) (*tabletmanagerdata.SetReadOnlyResponse, error)
 	SetReadWrite(context.Context, *tabletmanagerdata.SetReadWriteRequest) (*tabletmanagerdata.SetReadWriteResponse, error)
 	// ChangeType asks the remote tablet to change its type
@@ -806,8 +808,8 @@ func (UnimplementedTabletManagerServer) GetSchema(context.Context, *tabletmanage
 func (UnimplementedTabletManagerServer) GetPermissions(context.Context, *tabletmanagerdata.GetPermissionsRequest) (*tabletmanagerdata.GetPermissionsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetPermissions not implemented")
 }
-func (UnimplementedTabletManagerServer) GetServerStatus(context.Context, *tabletmanagerdata.GetServerStatusRequest) (*tabletmanagerdata.GetServerStatusResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetServerStatus not implemented")
+func (UnimplementedTabletManagerServer) GetGlobalStatusVars(context.Context, *tabletmanagerdata.GetGlobalStatusVarsRequest) (*tabletmanagerdata.GetGlobalStatusVarsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetGlobalStatusVars not implemented")
 }
 func (UnimplementedTabletManagerServer) SetReadOnly(context.Context, *tabletmanagerdata.SetReadOnlyRequest) (*tabletmanagerdata.SetReadOnlyResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetReadOnly not implemented")
@@ -1065,20 +1067,20 @@ func _TabletManager_GetPermissions_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_GetServerStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(tabletmanagerdata.GetServerStatusRequest)
+func _TabletManager_GetGlobalStatusVars_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.GetGlobalStatusVarsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(TabletManagerServer).GetServerStatus(ctx, in)
+		return srv.(TabletManagerServer).GetGlobalStatusVars(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/tabletmanagerservice.TabletManager/GetServerStatus",
+		FullMethod: "/tabletmanagerservice.TabletManager/GetGlobalStatusVars",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TabletManagerServer).GetServerStatus(ctx, req.(*tabletmanagerdata.GetServerStatusRequest))
+		return srv.(TabletManagerServer).GetGlobalStatusVars(ctx, req.(*tabletmanagerdata.GetGlobalStatusVarsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2035,8 +2037,8 @@ var TabletManager_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _TabletManager_GetPermissions_Handler,
 		},
 		{
-			MethodName: "GetServerStatus",
-			Handler:    _TabletManager_GetServerStatus_Handler,
+			MethodName: "GetGlobalStatusVars",
+			Handler:    _TabletManager_GetGlobalStatusVars_Handler,
 		},
 		{
 			MethodName: "SetReadOnly",

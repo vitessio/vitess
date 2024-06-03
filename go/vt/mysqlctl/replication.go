@@ -32,9 +32,11 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/netutil"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/replicationdata"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -228,23 +230,34 @@ func (mysqld *Mysqld) GetServerUUID(ctx context.Context) (string, error) {
 	return conn.Conn.GetServerUUID()
 }
 
-// GetServerStatus returns the server statuses asked for.
-func (mysqld *Mysqld) GetServerStatus(ctx context.Context, statuses []string) ([]string, error) {
-	query := `SELECT variable_value FROM performance_schema.global_status WHERE variable_name IN (`
-	for _, status := range statuses {
-		query += `"` + status + `"`
+// GetGlobalStatusVars returns the server's global status variables asked for.
+// An empty/nil variable name parameter slice means you want all of them.
+func (mysqld *Mysqld) GetGlobalStatusVars(ctx context.Context, statuses []string) (map[string]string, error) {
+	query := "SELECT variable_name, variable_value FROM performance_schema.global_status"
+	if len(statuses) != 0 {
+		// The format specifier is for any optional predicates.
+		statusBv, err := sqltypes.BuildBindVariable(statuses)
+		if err != nil {
+			return nil, err
+		}
+		query, err = sqlparser.ParseAndBind("SELECT variable_name, variable_value FROM performance_schema.global_status WHERE variable_name IN %a",
+			statusBv,
+		)
+		if err != nil {
+			return nil, err
+		}
 	}
-	query += ");"
 	qr, err := mysqld.FetchSuperQuery(ctx, query)
 	if err != nil {
 		return nil, err
 	}
-	if len(qr.Rows) != len(statuses) {
-		return nil, errors.New("unknown variables asked for")
-	}
-	var finalRes []string
+
+	finalRes := make(map[string]string)
 	for _, row := range qr.Rows {
-		finalRes = append(finalRes, row[0].ToString())
+		if len(row) != 2 {
+			return nil, errors.New("incorrect number of fields in the row")
+		}
+		finalRes[row[0].ToString()] = row[1].ToString()
 	}
 	return finalRes, nil
 }

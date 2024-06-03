@@ -98,11 +98,11 @@ func (s *server) GetPermissions(ctx context.Context, request *tabletmanagerdatap
 	return response, err
 }
 
-func (s *server) GetServerStatus(ctx context.Context, request *tabletmanagerdatapb.GetServerStatusRequest) (response *tabletmanagerdatapb.GetServerStatusResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "GetServerStatus", request, response, false /*verbose*/, &err)
+func (s *server) GetGlobalStatusVars(ctx context.Context, request *tabletmanagerdatapb.GetGlobalStatusVarsRequest) (response *tabletmanagerdatapb.GetGlobalStatusVarsResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "GetGlobalStatusVars", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.GetServerStatusResponse{}
-	serverStatuses, err := s.tm.GetServerStatus(ctx, request.Statuses)
+	response = &tabletmanagerdatapb.GetGlobalStatusVarsResponse{}
+	serverStatuses, err := s.tm.GetGlobalStatusVars(ctx, request.Statuses)
 	if err == nil {
 		response.StatusValues = serverStatuses
 	}

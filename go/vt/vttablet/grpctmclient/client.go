@@ -342,14 +342,14 @@ func (client *Client) GetPermissions(ctx context.Context, tablet *topodatapb.Tab
 	return response.Permissions, nil
 }
 
-// GetServerStatus is part of the tmclient.TabletManagerClient interface.
-func (client *Client) GetServerStatus(ctx context.Context, tablet *topodatapb.Tablet, statuses []string) ([]string, error) {
+// GetGlobalStatusVars is part of the tmclient.TabletManagerClient interface.
+func (client *Client) GetGlobalStatusVars(ctx context.Context, tablet *topodatapb.Tablet, statuses []string) (map[string]string, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
 	}
 	defer closer.Close()
-	response, err := c.GetServerStatus(ctx, &tabletmanagerdatapb.GetServerStatusRequest{
+	response, err := c.GetGlobalStatusVars(ctx, &tabletmanagerdatapb.GetGlobalStatusVarsRequest{
 		Statuses: statuses,
 	})
 	if err != nil {

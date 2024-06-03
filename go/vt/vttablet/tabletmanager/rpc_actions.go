@@ -66,9 +66,10 @@ func (tm *TabletManager) GetPermissions(ctx context.Context) (*tabletmanagerdata
 	return mysqlctl.GetPermissions(tm.MysqlDaemon)
 }
 
-// GetServerStatus returns the server statuses asked for.
-func (tm *TabletManager) GetServerStatus(ctx context.Context, statuses []string) ([]string, error) {
-	return tm.MysqlDaemon.GetServerStatus(ctx, statuses)
+// GetGlobalStatusVars returns the server's global status variables asked for.
+// An empty/nil variable name parameter slice means you want all of them.
+func (tm *TabletManager) GetGlobalStatusVars(ctx context.Context, statuses []string) (map[string]string, error) {
+	return tm.MysqlDaemon.GetGlobalStatusVars(ctx, statuses)
 }
 
 // SetReadOnly makes the mysql instance read-only or read-write.
