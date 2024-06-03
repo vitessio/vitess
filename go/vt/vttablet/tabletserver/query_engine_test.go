@@ -877,7 +877,7 @@ func TestAddQueryStats(t *testing.T) {
 			assert.Equal(t, testcase.expectedQueryTimes, qe.queryTimes.String())
 			assert.Equal(t, testcase.expectedQueryRowsAffected, qe.queryRowsAffected.String())
 			assert.Equal(t, testcase.expectedQueryRowsReturned, qe.queryRowsReturned.String())
-			assert.Equal(t, testcase.expectedQueryTextCharsProcessed, qe.querySQLTextCounts.String())
+			assert.Equal(t, testcase.expectedQueryTextCharsProcessed, qe.queryTextCharsProcessed.String())
 			assert.Equal(t, testcase.expectedQueryErrorCounts, qe.queryErrorCounts.String())
 			assert.Equal(t, testcase.expectedQueryErrorCountsWithCode, qe.queryErrorCountsWithCode.String())
 		})
