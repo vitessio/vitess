@@ -61,7 +61,7 @@ func TestTablesFilterPass(t *testing.T) {
 	})
 	_ = f(eventToken, statements)
 	want := `statement: <6, "set1"> statement: <7, "dml1 /* _stream included1 (id ) (500 ); */"> statement: <7, "dml2 /* _stream included2 (id ) (500 ); */"> position: "MariaDB/0-41983-1" `
-	assert.Equal(t, want, got, "binlogConnStreamer.tablesFilterFunc(): got:\n%+v\nwant:\n%+v", got, want)
+	assert.Equal(t, want, got, "binlogConnStreamer.tablesFilterFunc()")
 }
 
 func TestTablesFilterSkip(t *testing.T) {
