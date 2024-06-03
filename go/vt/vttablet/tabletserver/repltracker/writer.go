@@ -87,9 +87,7 @@ type heartbeatWriter struct {
 	onDemandRequestsRateLimiter atomic.Pointer[timer.RateLimiter]
 	writeConnID                 atomic.Int64
 
-	onDemandDuration            time.Duration
-	onDemandMu                  sync.Mutex
-	concurrentHeartbeatRequests int64
+	onDemandDuration time.Duration
 }
 
 // newHeartbeatWriter creates a new heartbeatWriter.
@@ -166,7 +164,7 @@ func (w *heartbeatWriter) Open() {
 	if w.onDemandDuration > 0 {
 		// Clients are given access to RequestHeartbeats(). But such clients can also abuse
 		// the system by initiating heartbeats too frequently. We rate-limit these requests.
-		rateLimiter := timer.NewRateLimiter(w.onDemandDuration / 4)
+		rateLimiter := timer.NewRateLimiter(time.Second)
 		w.onDemandRequestsRateLimiter.Store(rateLimiter)
 	}
 
@@ -225,6 +223,17 @@ func (w *heartbeatWriter) bindHeartbeatVars(query string) (string, error) {
 
 // writeHeartbeat updates the heartbeat row for this tablet with the current time in nanoseconds.
 func (w *heartbeatWriter) writeHeartbeat() {
+	if w.onDemandDuration > 0 {
+		// See if we need to expire the heartbeats
+		go func() {
+			if rateLimiter := w.onDemandRequestsRateLimiter.Load(); rateLimiter != nil {
+				if rateLimiter.Diff() > int64(w.onDemandDuration.Seconds()) {
+					w.disableWrites()
+				}
+			}
+		}()
+	}
+
 	if err := w.write(); err != nil {
 		w.recordError(err)
 		return
@@ -351,45 +360,12 @@ func (w *heartbeatWriter) allowNextHeartbeatRequest() {
 // This function will selectively and silently drop some such requests, depending on arrival rate.
 // This function is safe to call concurrently from goroutines
 func (w *heartbeatWriter) RequestHeartbeats() {
-	switch w.configType {
-	case HeartbeatConfigTypeAlways:
-		// heartbeats are not by demand. Therefore they are just coming in on their own. No need to lease
-		// heartbeats.
-		return
-	}
-	// In this function we're going to create a timer to activate heartbeats by-demand. Creating a timer has a cost.
-	// Now, this function can be spammed by clients (the lag throttler). We therefore only allow this function to
-	// actually operate once per X seconds (1/4 of onDemandDuration as a reasonable oversampling value):
-
 	// The writer could be close()d while this function is running and thus the value of the rate limiter could be nil.
 	// We thus use golang atomic here to avoid locking mutexes.
-	rateLimiter := w.onDemandRequestsRateLimiter.Load()
-	if rateLimiter == nil {
-		return
-	}
-	rateLimiter.Do(func() error {
-		w.onDemandMu.Lock()
-		defer w.onDemandMu.Unlock()
-
-		// Now for the actual logic. A client requests heartbeats. If it were only this client, we would
-		// activate heartbeats for the duration of onDemandDuration, and then turn heartbeats off.
-		// However, there may be multiple clients interested in heartbeats, or maybe the same single client
-		// requesting heartbeats again and again. So we keep track of how many _concurrent_ requests we have.
-		// We enable heartbeats as soon as we have a request; we turn heartbeats off once
-		// we have zero concurrent requests
-		w.enableWrites()
-		w.concurrentHeartbeatRequests++
-
-		time.AfterFunc(w.onDemandDuration, func() {
-			w.onDemandMu.Lock()
-			defer w.onDemandMu.Unlock()
-			w.concurrentHeartbeatRequests--
-			if w.concurrentHeartbeatRequests == 0 {
-				// means there are currently no more clients interested in heartbeats
-				w.disableWrites()
-			}
-			w.allowNextHeartbeatRequest()
+	if rateLimiter := w.onDemandRequestsRateLimiter.Load(); rateLimiter != nil {
+		rateLimiter.Do(func() error {
+			w.enableWrites()
+			return nil
 		})
-		return nil
-	})
+	}
 }
