@@ -1,10 +1,10 @@
-name: Online DDL old parent with new replicas - Upgrade Downgrade Testing
+name: Online DDL flow - Upgrade Downgrade Testing
 on:
   push:
   pull_request:
 
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Upgrade Downgrade Testing Online DDL')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Upgrade Downgrade Testing Online DDL flow')
   cancel-in-progress: true
 
 permissions: read-all
@@ -15,7 +15,7 @@ permissions: read-all
 jobs:
 
   upgrade_downgrade_test:
-    name: Run Upgrade Downgrade Test - Online DDL
+    name: Run Upgrade Downgrade Test - Online DDL flow
     runs-on: gh-hosted-runners-16cores-1
 
     steps:
