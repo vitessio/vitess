@@ -1,0 +1,190 @@
+apiVersion: planetscale.com/v2
+kind: VitessCluster
+metadata:
+  name: example
+spec:
+  backup:
+    engine: xtrabackup
+    locations:
+      - volume:
+          hostPath:
+            path: /tmp
+            type: Directory
+    schedules:
+      - name: "every-minute-customer"
+        schedule: "* * * * *"
+        resources:
+          requests:
+            cpu: 100m
+            memory: 1024Mi
+          limits:
+            memory: 1024Mi
+        successfulJobsHistoryLimit: 2
+        failedJobsHistoryLimit: 3
+        jobTimeoutMinute: 5
+        strategies:
+          - name: BackupShard
+            keyspace: "customer"
+            shard: "-80"
+          - name: BackupShard
+            keyspace: "customer"
+            shard: "80-"
+      - name: "every-minute-commerce"
+        schedule: "* * * * *"
+        resources:
+          requests:
+            cpu: 100m
+            memory: 1024Mi
+          limits:
+            memory: 1024Mi
+        successfulJobsHistoryLimit: 2
+        failedJobsHistoryLimit: 3
+        jobTimeoutMinute: 5
+        strategies:
+          - name: BackupShard
+            keyspace: "customer"
+            shard: "-"
+  images:
+    vtctld: vitess/lite:latest
+    vtadmin: vitess/vtadmin:latest
+    vtgate: vitess/lite:latest
+    vttablet: vitess/lite:latest
+    vtbackup: vitess/lite:latest
+    vtorc: vitess/lite:latest
+    mysqld:
+      mysql80Compatible: mysql:8.0.30
+    mysqldExporter: prom/mysqld-exporter:v0.11.0
+  cells:
+  - name: zone1
+    gateway:
+      authentication:
+        static:
+          secret:
+            name: example-cluster-config
+            key: users.json
+      replicas: 1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 256Mi
+        limits:
+          memory: 256Mi
+  vitessDashboard:
+    cells:
+    - zone1
+    extraFlags:
+      security_policy: read-only
+    replicas: 1
+    resources:
+      limits:
+        memory: 128Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
+  vtadmin:
+    rbac:
+      name: example-cluster-config
+      key: rbac.yaml
+    cells:
+      - zone1
+    apiAddresses:
+      - http://localhost:14001
+    replicas: 1
+    readOnly: false
+    apiResources:
+      limits:
+        memory: 128Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
+    webResources:
+      limits:
+        memory: 128Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
+
+  keyspaces:
+  - name: commerce
+    durabilityPolicy: none
+    turndownPolicy: Immediate
+    vitessOrchestrator:
+      resources:
+        limits:
+          memory: 128Mi
+        requests:
+          cpu: 100m
+          memory: 128Mi
+      extraFlags:
+        recovery-period-block-duration: 5s
+    partitionings:
+    - equal:
+        parts: 1
+        shardTemplate:
+          databaseInitScriptSecret:
+            name: example-cluster-config
+            key: init_db.sql
+          tabletPools:
+          - cell: zone1
+            type: replica
+            replicas: 2
+            vttablet:
+              extraFlags:
+                db_charset: utf8mb4
+                wait_for_backup_interval: "0"
+              resources:
+                limits:
+                  memory: 1024Mi
+                requests:
+                  cpu: 100m
+                  memory: 1024Mi
+            mysqld:
+              resources:
+                limits:
+                  memory: 1024Mi
+                requests:
+                  cpu: 100m
+                  memory: 512Mi
+            dataVolumeClaimTemplate:
+              accessModes: ["ReadWriteOnce"]
+              resources:
+                requests:
+                  storage: 10Gi
+  - name: customer
+    durabilityPolicy: none
+    turndownPolicy: Immediate
+    partitionings:
+    - equal:
+        parts: 2
+        shardTemplate:
+          databaseInitScriptSecret:
+            name: example-cluster-config
+            key: init_db.sql
+          tabletPools:
+          - cell: zone1
+            type: replica
+            replicas: 2
+            vttablet:
+              extraFlags:
+                db_charset: utf8mb4
+                wait_for_backup_interval: "0"
+              resources:
+                limits:
+                  memory: 1024Mi
+                requests:
+                  cpu: 100m
+                  memory: 1024Mi
+            mysqld:
+              resources:
+                limits:
+                  memory: 1024Mi
+                requests:
+                  cpu: 100m
+                  memory: 512Mi
+            dataVolumeClaimTemplate:
+              accessModes: ["ReadWriteOnce"]
+              resources:
+                requests:
+                  storage: 10Gi
+  updateStrategy:
+    type: Immediate
