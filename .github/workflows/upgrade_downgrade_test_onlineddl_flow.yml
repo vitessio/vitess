@@ -51,6 +51,7 @@ jobs:
         echo "previous_release_ref=${previous_release_ref}" >> $GITHUB_OUTPUT
 
     - name: Set output with next release branch
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
       id: output-next-release-ref
       run: |
         next_release_ref=$(./tools/get_next_release.sh ${{github.base_ref}} ${{github.ref}})
