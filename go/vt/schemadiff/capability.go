@@ -120,6 +120,10 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 					return false, nil
 				}
 			}
+			if column.Type.Options.Default != nil && !column.Type.Options.DefaultLiteral {
+				// Expression default values are not supported
+				return false, nil
+			}
 		}
 		if opt.First || opt.After != nil {
 			// not a "last" column. Only supported as of 8.0.29

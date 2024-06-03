@@ -34,7 +34,6 @@ func (tm *TabletManager) CheckThrottler(ctx context.Context, req *tabletmanagerd
 		req.AppName = throttlerapp.VitessName.String()
 	}
 	flags := &throttle.CheckFlags{
-		LowPriority:           false,
 		SkipRequestHeartbeats: true,
 	}
 	checkResult := tm.QueryServiceControl.CheckThrottler(ctx, req.AppName, flags)
