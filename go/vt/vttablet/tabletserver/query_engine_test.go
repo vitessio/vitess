@@ -666,7 +666,7 @@ func TestAddQueryStats(t *testing.T) {
 		expectedQueryTimes               string
 		expectedQueryRowsAffected        string
 		expectedQueryRowsReturned        string
-		expectedQuerySQLTextCounts       string
+		expectedQueryTextCharsProcessed  string
 		expectedQueryErrorCounts         string
 		expectedQueryErrorCountsWithCode string
 	}{
@@ -687,7 +687,7 @@ func TestAddQueryStats(t *testing.T) {
 			expectedQueryTimes:               `{"A.Select": 10}`,
 			expectedQueryRowsAffected:        `{}`,
 			expectedQueryRowsReturned:        `{"A.Select": 15}`,
-			expectedQuerySQLTextCounts:       `{"A.Select": 43}`,
+			expectedQueryTextCharsProcessed:  `{"A.Select": 43}`,
 			expectedQueryErrorCounts:         `{"A.Select": 0}`,
 			expectedQueryErrorCountsWithCode: `{}`,
 			expectedQueryCountsWithTableType: `{"A.Select.PRIMARY": 1}`,
@@ -708,7 +708,7 @@ func TestAddQueryStats(t *testing.T) {
 			expectedQueryTimes:               `{"A.Select": 10}`,
 			expectedQueryRowsAffected:        `{}`,
 			expectedQueryRowsReturned:        `{"A.Select": 15}`,
-			expectedQuerySQLTextCounts:       `{"A.Select": 43}`,
+			expectedQueryTextCharsProcessed:  `{"A.Select": 43}`,
 			expectedQueryErrorCounts:         `{"A.Select": 0}`,
 			expectedQueryErrorCountsWithCode: `{}`,
 			expectedQueryCountsWithTableType: `{"A.Select.REPLICA": 1}`,
@@ -729,7 +729,7 @@ func TestAddQueryStats(t *testing.T) {
 			expectedQueryTimes:               `{"A.Select": 10}`,
 			expectedQueryRowsAffected:        `{"A.Select": 15}`,
 			expectedQueryRowsReturned:        `{"A.Select": 0}`,
-			expectedQuerySQLTextCounts:       `{"A.Select": 43}`,
+			expectedQueryTextCharsProcessed:  `{"A.Select": 43}`,
 			expectedQueryErrorCounts:         `{"A.Select": 0}`,
 			expectedQueryErrorCountsWithCode: `{}`,
 			expectedQueryCountsWithTableType: `{"A.Select.PRIMARY": 1}`,
@@ -750,7 +750,7 @@ func TestAddQueryStats(t *testing.T) {
 			expectedQueryTimes:               `{"A.Select": 10}`,
 			expectedQueryRowsAffected:        `{}`,
 			expectedQueryRowsReturned:        `{"A.Select": 0}`,
-			expectedQuerySQLTextCounts:       `{"A.Select": 43}`,
+			expectedQueryTextCharsProcessed:  `{"A.Select": 43}`,
 			expectedQueryErrorCounts:         `{"A.Select": 1}`,
 			expectedQueryErrorCountsWithCode: `{"A.Select.RESOURCE_EXHAUSTED": 1}`,
 			expectedQueryCountsWithTableType: `{"A.Select.PRIMARY": 1}`,
@@ -771,7 +771,7 @@ func TestAddQueryStats(t *testing.T) {
 			expectedQueryTimes:               `{"A.Insert": 10}`,
 			expectedQueryRowsAffected:        `{"A.Insert": 15}`,
 			expectedQueryRowsReturned:        `{}`,
-			expectedQuerySQLTextCounts:       `{"A.Insert": 59}`,
+			expectedQueryTextCharsProcessed:  `{"A.Insert": 59}`,
 			expectedQueryErrorCounts:         `{"A.Insert": 0}`,
 			expectedQueryErrorCountsWithCode: `{}`,
 			expectedQueryCountsWithTableType: `{"A.Insert.PRIMARY": 1}`,
@@ -792,7 +792,7 @@ func TestAddQueryStats(t *testing.T) {
 			expectedQueryTimes:               `{"A.Select.some-workload": 10}`,
 			expectedQueryRowsAffected:        `{}`,
 			expectedQueryRowsReturned:        `{"A.Select.some-workload": 15}`,
-			expectedQuerySQLTextCounts:       `{"A.Select.some-workload": 43}`,
+			expectedQueryTextCharsProcessed:  `{"A.Select.some-workload": 43}`,
 			expectedQueryErrorCounts:         `{"A.Select.some-workload": 0}`,
 			expectedQueryErrorCountsWithCode: `{}`,
 			expectedQueryCountsWithTableType: `{"A.Select.PRIMARY": 1}`,
@@ -813,7 +813,7 @@ func TestAddQueryStats(t *testing.T) {
 			expectedQueryTimes:               `{"A.Select.some-workload": 10}`,
 			expectedQueryRowsAffected:        `{"A.Select.some-workload": 15}`,
 			expectedQueryRowsReturned:        `{"A.Select.some-workload": 0}`,
-			expectedQuerySQLTextCounts:       `{"A.Select.some-workload": 43}`,
+			expectedQueryTextCharsProcessed:  `{"A.Select.some-workload": 43}`,
 			expectedQueryErrorCounts:         `{"A.Select.some-workload": 0}`,
 			expectedQueryErrorCountsWithCode: `{}`,
 			expectedQueryCountsWithTableType: `{"A.Select.PRIMARY": 1}`,
@@ -834,7 +834,7 @@ func TestAddQueryStats(t *testing.T) {
 			expectedQueryTimes:               `{"A.Select.some-workload": 10}`,
 			expectedQueryRowsAffected:        `{}`,
 			expectedQueryRowsReturned:        `{"A.Select.some-workload": 0}`,
-			expectedQuerySQLTextCounts:       `{"A.Select.some-workload": 43}`,
+			expectedQueryTextCharsProcessed:  `{"A.Select.some-workload": 43}`,
 			expectedQueryErrorCounts:         `{"A.Select.some-workload": 1}`,
 			expectedQueryErrorCountsWithCode: `{"A.Select.RESOURCE_EXHAUSTED": 1}`,
 			expectedQueryCountsWithTableType: `{"A.Select.PRIMARY": 1}`,
@@ -855,7 +855,7 @@ func TestAddQueryStats(t *testing.T) {
 			expectedQueryTimes:               `{"A.Insert.some-workload": 10}`,
 			expectedQueryRowsAffected:        `{"A.Insert.some-workload": 15}`,
 			expectedQueryRowsReturned:        `{}`,
-			expectedQuerySQLTextCounts:       `{"A.Insert.some-workload": 59}`,
+			expectedQueryTextCharsProcessed:  `{"A.Insert.some-workload": 59}`,
 			expectedQueryErrorCounts:         `{"A.Insert.some-workload": 0}`,
 			expectedQueryErrorCountsWithCode: `{}`,
 			expectedQueryCountsWithTableType: `{"A.Insert.PRIMARY": 1}`,
@@ -877,7 +877,7 @@ func TestAddQueryStats(t *testing.T) {
 			assert.Equal(t, testcase.expectedQueryTimes, qe.queryTimes.String())
 			assert.Equal(t, testcase.expectedQueryRowsAffected, qe.queryRowsAffected.String())
 			assert.Equal(t, testcase.expectedQueryRowsReturned, qe.queryRowsReturned.String())
-			assert.Equal(t, testcase.expectedQuerySQLTextCounts, qe.querySQLTextCounts.String())
+			assert.Equal(t, testcase.expectedQueryTextCharsProcessed, qe.querySQLTextCounts.String())
 			assert.Equal(t, testcase.expectedQueryErrorCounts, qe.queryErrorCounts.String())
 			assert.Equal(t, testcase.expectedQueryErrorCountsWithCode, qe.queryErrorCountsWithCode.String())
 		})

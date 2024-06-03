@@ -187,8 +187,8 @@ type QueryEngine struct {
 
 	// stats
 	// Note: queryErrorCountsWithCode is similar to queryErrorCounts except it contains error code as an additional dimension
-	queryCounts, queryCountsWithTabletType, queryTimes, queryErrorCounts, queryErrorCountsWithCode, queryRowsAffected, queryRowsReturned, querySQLTextCounts *stats.CountersWithMultiLabels
-	queryCacheHits, queryCacheMisses                                                                                                                         *stats.CounterFunc
+	queryCounts, queryCountsWithTabletType, queryTimes, queryErrorCounts, queryErrorCountsWithCode, queryRowsAffected, queryRowsReturned, queryTextCharsProcessed *stats.CountersWithMultiLabels
+	queryCacheHits, queryCacheMisses                                                                                                                              *stats.CounterFunc
 
 	// stats flags
 	enablePerWorkloadTableMetrics bool
@@ -298,7 +298,7 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 	qe.queryTimes = env.Exporter().NewCountersWithMultiLabels("QueryTimesNs", "query times in ns", labels)
 	qe.queryRowsAffected = env.Exporter().NewCountersWithMultiLabels("QueryRowsAffected", "query rows affected", labels)
 	qe.queryRowsReturned = env.Exporter().NewCountersWithMultiLabels("QueryRowsReturned", "query rows returned", labels)
-	qe.querySQLTextCounts = env.Exporter().NewCountersWithMultiLabels("QuerySQLTextCounts", "query sql text counts", labels)
+	qe.queryTextCharsProcessed = env.Exporter().NewCountersWithMultiLabels("QueryTextCharactersProcessed", "query text characters processed", labels)
 	qe.queryErrorCounts = env.Exporter().NewCountersWithMultiLabels("QueryErrorCounts", "query error counts", labels)
 	qe.queryErrorCountsWithCode = env.Exporter().NewCountersWithMultiLabels("QueryErrorCountsWithCode", "query error counts with error code", []string{"Table", "Plan", "Code"})
 
@@ -571,7 +571,7 @@ func (qe *QueryEngine) AddStats(plan *TabletPlan, tableName, workload string, ta
 	qe.queryTimes.Add(keys, int64(duration))
 	qe.queryErrorCounts.Add(keys, errorCount)
 	if plan.FullQuery != nil {
-		qe.querySQLTextCounts.Add(keys, int64(len(plan.FullQuery.Query)))
+		qe.queryTextCharsProcessed.Add(keys, int64(len(plan.FullQuery.Query)))
 	}
 
 	qe.queryCountsWithTabletType.Add([]string{tableName, plan.PlanID.String(), tabletType.String()}, queryCount)
