@@ -51,7 +51,8 @@ const (
 )
 
 const (
-	sqlUpsertHeartbeat = "INSERT INTO %s.heartbeat (ts, tabletUid, keyspaceShard) VALUES (%a, %a, %a) ON DUPLICATE KEY UPDATE ts=VALUES(ts), tabletUid=VALUES(tabletUid)"
+	sqlUpsertHeartbeat      = "INSERT INTO %s.heartbeat (ts, tabletUid, keyspaceShard) VALUES (%a, %a, %a) ON DUPLICATE KEY UPDATE ts=VALUES(ts), tabletUid=VALUES(tabletUid)"
+	minimalOnDemandDuration = 4 * time.Second
 )
 
 var (
@@ -100,6 +101,9 @@ func newHeartbeatWriter(env tabletenv.Env, alias *topodatapb.TabletAlias) *heart
 	case config.ReplicationTracker.HeartbeatOnDemand > 0:
 		configType = HeartbeatConfigTypeOnDemand
 		onDemandDuration = config.ReplicationTracker.HeartbeatOnDemand
+		if onDemandDuration < minimalOnDemandDuration {
+			onDemandDuration = minimalOnDemandDuration
+		}
 	case config.ReplicationTracker.Mode == tabletenv.Heartbeat:
 		configType = HeartbeatConfigTypeAlways
 		onDemandDuration = 0

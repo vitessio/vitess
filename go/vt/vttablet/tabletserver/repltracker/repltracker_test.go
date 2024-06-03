@@ -110,7 +110,7 @@ func TestReplTracker(t *testing.T) {
 		rt.InitDBConfig(target, mysqld)
 		assert.Equal(t, tabletenv.Heartbeat, rt.mode)
 		assert.Equal(t, HeartbeatConfigTypeOnDemand, rt.hw.configType)
-		assert.Equal(t, time.Second, rt.hw.onDemandDuration)
+		assert.Equal(t, minimalOnDemandDuration, rt.hw.onDemandDuration)
 		assert.True(t, rt.hr.enabled)
 
 		rt.MakePrimary()

@@ -187,7 +187,7 @@ func TestWriteHeartbeatDisabled(t *testing.T) {
 // and then upon RequestHeartbeats().
 func TestWriteHeartbeatOnDemand(t *testing.T) {
 	defaultOnDemandDuration = 7 * time.Second
-	onDemandDuration := 3 * time.Second
+	onDemandDuration := minimalOnDemandDuration
 
 	db := fakesqldb.New(t)
 	defer db.Close()
