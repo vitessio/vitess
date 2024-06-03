@@ -330,7 +330,7 @@ VTTablet exposes two new counter stats:
 
 VTGate and VTTablet exposes a new counter stat `QueryTextCharactersProcessed` to reflect the number of query text characters processed.
 
-VTGate groups this metric by Operation, Keyspace and DbType. On VTTablet it is grouped by Table, Plan and optionally Workload.
+VTGate groups this metric by Operation, Keyspace and TabletType. On VTTablet it is grouped by Table, Plan and optionally Workload.
 
 ### <a id="sighup-reload-of-grpc-client-auth-creds"/>`SIGHUP` reload of gRPC client static auth creds
 
