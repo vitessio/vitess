@@ -219,8 +219,20 @@ jobs:
         export REPLICA_TABLET_BINARY_SUFFIX="-last"
         eatmydata -- go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_onlineddl_flow
 
+    # Running a test with primary tablet at version n-1  and replica vttablet at version n (current SHA)
+    - name: Run Online DDL tests (primary=N-1, replica=N)
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      run: |
+        rm -rf /tmp/vtdataroot
+        mkdir -p /tmp/vtdataroot
+
+        source build.env
+        export PRIMARY_TABLET_BINARY_SUFFIX="-last"
+        export REPLICA_TABLET_BINARY_SUFFIX=""
+        eatmydata -- go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_onlineddl_flow
+
     # Running a test with primary tablet at version n+1 and replica vttablet at version n (current SHA)
-    - name: Run Online DDL tests (primary=N, replica=N-1)
+    - name: Run Online DDL tests (primary=N+1, replica=N)
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
         rm -rf /tmp/vtdataroot
@@ -229,4 +241,16 @@ jobs:
         source build.env
         export PRIMARY_TABLET_BINARY_SUFFIX="-next"
         export REPLICA_TABLET_BINARY_SUFFIX=""
+        eatmydata -- go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_onlineddl_flow
+
+    # Running a test with primary tablet at version n (current SHA) and replica vttablet at version n+1
+    - name: Run Online DDL tests (primary=N, replica=N+1)
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      run: |
+        rm -rf /tmp/vtdataroot
+        mkdir -p /tmp/vtdataroot
+
+        source build.env
+        export PRIMARY_TABLET_BINARY_SUFFIX=""
+        export REPLICA_TABLET_BINARY_SUFFIX="-next"
         eatmydata -- go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_onlineddl_flow
