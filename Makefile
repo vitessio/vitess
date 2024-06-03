@@ -318,12 +318,18 @@ define build_docker_image
 	fi
 endef
 
-docker_lite:
-	${call build_docker_image,docker/lite/Dockerfile,vitess/lite}
+DOCKER_LITE_SUFFIX = percona80
+DOCKER_LITE_TARGETS = $(addprefix docker_lite_,$(DOCKER_LITE_SUFFIX))
+$(DOCKER_LITE_TARGETS): docker_lite_%:
+	${call build_docker_image,docker/lite/Dockerfile.$*,vitess/lite:$*}
 
 docker_lite_push:
-	echo "pushing lite image: latest"
-	docker push vitess/lite:latest
+	for i in $(DOCKER_LITE_SUFFIX); do echo "pushing lite image: $$i"; docker push vitess/lite:$$i || exit 1; done
+
+docker_lite_all: docker_lite $(DOCKER_LITE_TARGETS)
+
+docker_lite:
+	${call build_docker_image,docker/lite/Dockerfile,vitess/lite}
 
 docker_local:
 	${call build_docker_image,docker/local/Dockerfile,vitess/local}
