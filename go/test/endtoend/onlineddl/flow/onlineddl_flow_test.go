@@ -209,6 +209,8 @@ func TestSchemaChange(t *testing.T) {
 	require.NotNil(t, replicaTablet)
 	require.Equal(t, 2, len(tablets))
 
+	// This test is designed with upgrade/downgrade in mind. Do some logging to show what's
+	// the configuration for this test.
 	if binarySuffix := os.Getenv("PRIMARY_TABLET_BINARY_SUFFIX"); binarySuffix != "" {
 		t.Logf("Using PRIMARY_TABLET_BINARY_SUFFIX: %s", binarySuffix)
 	}
