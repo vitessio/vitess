@@ -328,7 +328,7 @@ VTTablet exposes two new counter stats:
 
 ### <a id="#vttablet-query-text-characters-processed"/>VTTablet Query Text Characters Processed
 
-VTGate and VTTablet exposes a new counter stat `QueryTextCharactersProcessed` to reflect the number of query text characters processed.
+VTGate and VTTablet expose a new counter stat `QueryTextCharactersProcessed` to reflect the number of query text characters processed.
 
 VTGate groups this metric by Operation, Keyspace and TabletType. On VTTablet it is grouped by Table, Plan and optionally Workload.
 
