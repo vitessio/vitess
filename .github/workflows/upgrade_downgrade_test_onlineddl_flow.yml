@@ -207,7 +207,7 @@ jobs:
         vtctl --version
         vttablet --version
 
-    # Running a test with vtctl at version n and vttablet at version n-1
+    # Running a test with primary tablet at version n and replica vttablet at version n-1
     - name: Run Online DDL tests (primary=N, replica=N-1)
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
