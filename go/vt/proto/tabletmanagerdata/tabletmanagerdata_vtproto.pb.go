@@ -401,10 +401,10 @@ func (m *GetGlobalStatusVarsRequest) CloneVT() *GetGlobalStatusVarsRequest {
 		return (*GetGlobalStatusVarsRequest)(nil)
 	}
 	r := &GetGlobalStatusVarsRequest{}
-	if rhs := m.Statuses; rhs != nil {
+	if rhs := m.Variables; rhs != nil {
 		tmpContainer := make([]string, len(rhs))
 		copy(tmpContainer, rhs)
-		r.Statuses = tmpContainer
+		r.Variables = tmpContainer
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -3404,11 +3404,11 @@ func (m *GetGlobalStatusVarsRequest) MarshalToSizedBufferVT(dAtA []byte) (int, e
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if len(m.Statuses) > 0 {
-		for iNdEx := len(m.Statuses) - 1; iNdEx >= 0; iNdEx-- {
-			i -= len(m.Statuses[iNdEx])
-			copy(dAtA[i:], m.Statuses[iNdEx])
-			i = encodeVarint(dAtA, i, uint64(len(m.Statuses[iNdEx])))
+	if len(m.Variables) > 0 {
+		for iNdEx := len(m.Variables) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.Variables[iNdEx])
+			copy(dAtA[i:], m.Variables[iNdEx])
+			i = encodeVarint(dAtA, i, uint64(len(m.Variables[iNdEx])))
 			i--
 			dAtA[i] = 0xa
 		}
@@ -8931,8 +8931,8 @@ func (m *GetGlobalStatusVarsRequest) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
-	if len(m.Statuses) > 0 {
-		for _, s := range m.Statuses {
+	if len(m.Variables) > 0 {
+		for _, s := range m.Variables {
 			l = len(s)
 			n += 1 + l + sov(uint64(l))
 		}
@@ -13013,7 +13013,7 @@ func (m *GetGlobalStatusVarsRequest) UnmarshalVT(dAtA []byte) error {
 		switch fieldNum {
 		case 1:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Statuses", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Variables", wireType)
 			}
 			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
@@ -13041,7 +13041,7 @@ func (m *GetGlobalStatusVarsRequest) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Statuses = append(m.Statuses, string(dAtA[iNdEx:postIndex]))
+			m.Variables = append(m.Variables, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

@@ -238,11 +238,11 @@ func (mysqld *Mysqld) GetServerUUID(ctx context.Context) (string, error) {
 
 // GetGlobalStatusVars returns the server's global status variables asked for.
 // An empty/nil variable name parameter slice means you want all of them.
-func (mysqld *Mysqld) GetGlobalStatusVars(ctx context.Context, statuses []string) (map[string]string, error) {
+func (mysqld *Mysqld) GetGlobalStatusVars(ctx context.Context, variables []string) (map[string]string, error) {
 	query := getGlobalStatusQuery
-	if len(statuses) != 0 {
+	if len(variables) != 0 {
 		// The format specifier is for any optional predicates.
-		statusBv, err := sqltypes.BuildBindVariable(statuses)
+		statusBv, err := sqltypes.BuildBindVariable(variables)
 		if err != nil {
 			return nil, err
 		}

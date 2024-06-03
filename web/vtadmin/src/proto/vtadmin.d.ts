@@ -19556,8 +19556,8 @@ export namespace tabletmanagerdata {
     /** Properties of a GetGlobalStatusVarsRequest. */
     interface IGetGlobalStatusVarsRequest {
 
-        /** GetGlobalStatusVarsRequest statuses */
-        statuses?: (string[]|null);
+        /** GetGlobalStatusVarsRequest variables */
+        variables?: (string[]|null);
     }
 
     /** Represents a GetGlobalStatusVarsRequest. */
@@ -19569,8 +19569,8 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.IGetGlobalStatusVarsRequest);
 
-        /** GetGlobalStatusVarsRequest statuses. */
-        public statuses: string[];
+        /** GetGlobalStatusVarsRequest variables. */
+        public variables: string[];
 
         /**
          * Creates a new GetGlobalStatusVarsRequest instance using the specified properties.

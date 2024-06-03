@@ -736,7 +736,7 @@ func (fake *TabletManagerClient) GetSchema(ctx context.Context, tablet *topodata
 }
 
 // GetGlobalStatusVars is part of the tmclient.TabletManagerClient interface.
-func (fake *TabletManagerClient) GetGlobalStatusVars(ctx context.Context, tablet *topodatapb.Tablet, statuses []string) (map[string]string, error) {
+func (fake *TabletManagerClient) GetGlobalStatusVars(ctx context.Context, tablet *topodatapb.Tablet, variables []string) (map[string]string, error) {
 	if fake.GetGlobalStatusVarsResults == nil {
 		return nil, assert.AnError
 	}

@@ -161,7 +161,7 @@ message GetPermissionsResponse {
 }
 
 message GetGlobalStatusVarsRequest {
-  repeated string statuses = 1;
+  repeated string variables = 1;
 }
 
 message GetGlobalStatusVarsResponse {

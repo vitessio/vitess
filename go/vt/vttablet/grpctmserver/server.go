@@ -102,7 +102,7 @@ func (s *server) GetGlobalStatusVars(ctx context.Context, request *tabletmanager
 	defer s.tm.HandleRPCPanic(ctx, "GetGlobalStatusVars", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.GetGlobalStatusVarsResponse{}
-	serverStatuses, err := s.tm.GetGlobalStatusVars(ctx, request.Statuses)
+	serverStatuses, err := s.tm.GetGlobalStatusVars(ctx, request.Variables)
 	if err == nil {
 		response.StatusValues = serverStatuses
 	}

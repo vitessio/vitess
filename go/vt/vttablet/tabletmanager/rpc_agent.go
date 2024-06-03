@@ -45,7 +45,7 @@ type RPCTM interface {
 
 	// GetGlobalStatusVars returns the server's global status variables asked for.
 	// An empty/nil variable name parameter slice means you want all of them.
-	GetGlobalStatusVars(ctx context.Context, statuses []string) (map[string]string, error)
+	GetGlobalStatusVars(ctx context.Context, variables []string) (map[string]string, error)
 
 	// Various read-write methods
 

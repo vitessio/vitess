@@ -129,7 +129,7 @@ func (client *FakeTabletManagerClient) GetPermissions(ctx context.Context, table
 }
 
 // GetGlobalStatusVars is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) GetGlobalStatusVars(ctx context.Context, tablet *topodatapb.Tablet, statuses []string) (map[string]string, error) {
+func (client *FakeTabletManagerClient) GetGlobalStatusVars(ctx context.Context, tablet *topodatapb.Tablet, variables []string) (map[string]string, error) {
 	return make(map[string]string), nil
 }
 

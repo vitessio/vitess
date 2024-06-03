@@ -387,7 +387,7 @@ var testGetGlobalStatusVarsReply = map[string]string{
 	"b": "0",
 }
 
-func (fra *fakeRPCTM) GetGlobalStatusVars(ctx context.Context, statuses []string) (map[string]string, error) {
+func (fra *fakeRPCTM) GetGlobalStatusVars(ctx context.Context, variables []string) (map[string]string, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
