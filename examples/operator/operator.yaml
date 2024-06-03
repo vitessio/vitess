@@ -407,14 +407,21 @@ spec:
               type: object
             spec:
               properties:
+                affinity:
+                  x-kubernetes-preserve-unknown-fields: true
                 allowedMissedRun:
                   minimum: 0
                   type: integer
+                annotations:
+                  additionalProperties:
+                    type: string
+                  type: object
+                cluster:
+                  type: string
                 concurrencyPolicy:
                   enum:
                     - Allow
                     - Forbid
-                    - Replace
                   example: Forbid
                   type: string
                 failedJobsHistoryLimit:
@@ -431,7 +438,7 @@ spec:
                   minimum: 0
                   type: integer
                 name:
-                  example: every-minute
+                  example: every-day
                   minLength: 1
                   pattern: ^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?$
                   type: string
@@ -467,7 +474,7 @@ spec:
                       type: object
                   type: object
                 schedule:
-                  example: '* * * * *'
+                  example: 0 0 * * *
                   minLength: 0
                   type: string
                 startingDeadlineSeconds:
@@ -481,19 +488,20 @@ spec:
                         additionalProperties:
                           type: string
                         type: object
-                      keyspaceShard:
-                        example: commerce/-
+                      keyspace:
+                        example: commerce
                         type: string
                       name:
                         enum:
-                          - BackupTablet
                           - BackupShard
                         type: string
-                      tabletAlias:
-                        example: zone1-0000000102
+                      shard:
+                        example: '-'
                         type: string
                     required:
+                      - keyspace
                       - name
+                      - shard
                     type: object
                   minItems: 1
                   type: array
@@ -504,6 +512,7 @@ spec:
                 suspend:
                   type: boolean
               required:
+                - cluster
                 - name
                 - resources
                 - schedule
@@ -1634,14 +1643,19 @@ spec:
                     schedules:
                       items:
                         properties:
+                          affinity:
+                            x-kubernetes-preserve-unknown-fields: true
                           allowedMissedRun:
                             minimum: 0
                             type: integer
+                          annotations:
+                            additionalProperties:
+                              type: string
+                            type: object
                           concurrencyPolicy:
                             enum:
                               - Allow
                               - Forbid
-                              - Replace
                             example: Forbid
                             type: string
                           failedJobsHistoryLimit:
@@ -1654,7 +1668,7 @@ spec:
                             minimum: 0
                             type: integer
                           name:
-                            example: every-minute
+                            example: every-day
                             minLength: 1
                             pattern: ^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?$
                             type: string
@@ -1690,7 +1704,7 @@ spec:
                                 type: object
                             type: object
                           schedule:
-                            example: '* * * * *'
+                            example: 0 0 * * *
                             minLength: 0
                             type: string
                           startingDeadlineSeconds:
@@ -1704,19 +1718,20 @@ spec:
                                   additionalProperties:
                                     type: string
                                   type: object
-                                keyspaceShard:
-                                  example: commerce/-
+                                keyspace:
+                                  example: commerce
                                   type: string
                                 name:
                                   enum:
-                                    - BackupTablet
                                     - BackupShard
                                   type: string
-                                tabletAlias:
-                                  example: zone1-0000000102
+                                shard:
+                                  example: '-'
                                   type: string
                               required:
+                                - keyspace
                                 - name
+                                - shard
                               type: object
                             minItems: 1
                             type: array
