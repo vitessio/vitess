@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/binlog"
 	"vitess.io/vitess/go/mysql/collations"
@@ -271,7 +272,7 @@ func TestStreamerParseRBREvents(t *testing.T) {
 	go sendTestEvents(events, input)
 	_, err := bls.parseEvents(context.Background(), events, errs)
 	assert.EqualError(t, err, ErrServerEOF.Error(), "unexpected error")
-	assert.Equal(t, want, got, "binlogConnStreamer.parseEvents(): got:\n%+v\nwant:\n%+v", got, want)
+	assert.Equal(t, want, got, "binlogConnStreamer.parseEvents()")
 }
 
 func TestStreamerParseRBRNameEscapes(t *testing.T) {
@@ -509,5 +510,5 @@ func TestStreamerParseRBRNameEscapes(t *testing.T) {
 	go sendTestEvents(events, input)
 	_, err := bls.parseEvents(context.Background(), events, errs)
 	assert.EqualError(t, err, ErrServerEOF.Error(), "unexpected error")
-	assert.Equal(t, want, got, "binlogConnStreamer.parseEvents(): got:\n%+v\nwant:\n%+v", got, want)
+	assert.Equal(t, want, got, "binlogConnStreamer.parseEvents()")
 }
