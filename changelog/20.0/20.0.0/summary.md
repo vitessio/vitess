@@ -38,6 +38,7 @@
 - **[Minor Changes](#minor-changes)**
   - **[New Stats](#new-stats)**
     - [VTTablet Query Cache Hits and Misses](#vttablet-query-cache-hits-and-misses)
+    - [VTGate and VTTablet Query Text Characters Processed](#vttablet-query-text-characters-processed)
   - **[`SIGHUP` reload of gRPC client static auth creds](#sighup-reload-of-grpc-client-auth-creds)**
   - **[VTAdmin](#vtadmin)**
     - [Updated to node v20.12.2](#updated-node)
@@ -325,6 +326,12 @@ VTTablet exposes two new counter stats:
 
  * `QueryCacheHits`: Query engine query cache hits
  * `QueryCacheMisses`: Query engine query cache misses
+
+### <a id="#vttablet-query-text-characters-processed"/>VTTablet Query Text Characters Processed
+
+VTGate and VTTablet expose a new counter stat `QueryTextCharactersProcessed` to reflect the number of query text characters processed.
+
+VTGate groups this metric by Operation, Keyspace and TabletType. On VTTablet it is grouped by Table, Plan and optionally Workload.
 
 ### <a id="sighup-reload-of-grpc-client-auth-creds"/>`SIGHUP` reload of gRPC client static auth creds
 
