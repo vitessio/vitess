@@ -377,10 +377,10 @@ func testWithInitialSchema(t *testing.T) {
 // testOnlineDDLStatement runs an online DDL, ALTER statement
 func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy string, expectHint string, skipWait bool) (uuid string) {
 	row := onlineddl.VtgateExecDDL(t, &vtParams, ddlStrategy, alterStatement, "").Named().Row()
-	if row != nil {
-		uuid = row.AsString("uuid", "")
-	}
+	require.NotNil(t, row)
+	uuid = row.AsString("uuid", "")
 	uuid = strings.TrimSpace(uuid)
+	require.NotEmpty(t, uuid)
 	fmt.Println("# Generated UUID (for debug purposes):")
 	fmt.Printf("<%s>\n", uuid)
 
