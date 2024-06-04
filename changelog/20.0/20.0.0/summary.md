@@ -35,6 +35,9 @@
     - [New minimum for `--buffer_min_time_between_failovers`](#buffer_min_time_between_failovers-flag)
     - [New `track-udfs` vtgate flag](#vtgate-track-udfs-flag)
     - [Help text fix for `--lock-timeout`](#documentation-lock-timeout)
+    - [New `--querylog-sample-rate` flag](#querylog-sample-rate-flag)
+    - [New `--tablet-filter-tags` flag](#tablet-filter-tags-flag)
+
 - **[Minor Changes](#minor-changes)**
   - **[New Stats](#new-stats)**
     - [VTTablet Query Cache Hits and Misses](#vttablet-query-cache-hits-and-misses)
@@ -315,6 +318,14 @@ The new `--track-udfs` flag enables VTGate to track user defined functions for b
 #### <a id="documentation-lock-timeout"/>Help text fix for `--lock-timeout`
 
 The help text for the flag `--lock-timeout` was incorrect. We were documenting it as a flag that controlled the duration for which the shard lock was acquired. It is actually the maximum duration for which we wait while attempting to acquire a lock from the topology server.
+
+#### <a id="querylog-sample-rate-flag"/>New `--querylog-sample-rate` flag
+
+The new flag `--querylog-sample-rate float` adds support for sampling queries based on a float value between 0.0 _(no logging)_ and 1.0 _(all queries logged)_. If configured, this filtering is applied after the existing `--querylog-filter-tag` filter.
+
+#### <a id="tablet-filter-tags-flag"/>New `--tablet-filter-tags` flag
+
+The new flag `--tablet-filter-tags StringMap` adds support to VTGate for filtering tablets by tablet tag key/values, specified as comma-separated list of key:values. The tags of a tablet are defined by the VTTablet flag `--init_tags`, which is also defined as a comma-separated list of key:values.
 
 ## <a id="minor-changes"/>Minor Changes
 
