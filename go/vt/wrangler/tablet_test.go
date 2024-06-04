@@ -50,7 +50,7 @@ func TestInitTabletShardConversion(t *testing.T) {
 	}
 
 	err := wr.TopoServer().InitTablet(context.Background(), tablet, false /*allowPrimaryOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/)
-	require.NoError(t, err, "InitTablet failed")
+	require.NoError(t, err)
 
 	ti, err := ts.GetTablet(context.Background(), tablet.Alias)
 	require.NoError(t, err, "GetTablet failed")
