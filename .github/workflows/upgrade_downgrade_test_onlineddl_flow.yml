@@ -205,8 +205,9 @@ jobs:
         cp /tmp/vitess-build-next/bin/vttablet $PWD/bin/vttablet-next
         cp /tmp/vitess-build-next/bin/mysqlctl $PWD/bin/mysqlctl-next
         cp /tmp/vitess-build-next/bin/mysqlctld $PWD/bin/mysqlctld-next
-        vtctl --version
-        vttablet --version
+        $PWD/bin/vttablet-last --version
+        $PWD/bin/vttablet --version
+        $PWD/bin/vttablet-next --version
 
     # Running a test with primary tablet at version n (current SHA) and replica vttablet at version n-1
     - name: Run Online DDL tests (primary=N, replica=N-1)
