@@ -28,6 +28,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtenv"
@@ -224,11 +225,13 @@ func TestWorkflowDelete(t *testing.T) {
 	testcases := []struct {
 		name                           string
 		sourceKeyspace, targetKeyspace *testKeyspace
+		preFunc                        func(t *testing.T, env *testEnv)
 		req                            *vtctldatapb.WorkflowDeleteRequest
 		expectedSourceQueries          []*queryResult
 		expectedTargetQueries          []*queryResult
 		want                           *vtctldatapb.WorkflowDeleteResponse
 		wantErr                        bool
+		postFunc                       func(t *testing.T, env *testEnv)
 	}{
 		{
 			name: "basic",
@@ -262,14 +265,80 @@ func TestWorkflowDelete(t *testing.T) {
 					workflowName, targetKeyspaceName),
 				Details: []*vtctldatapb.WorkflowDeleteResponse_TabletInfo{
 					{
-						Tablet:  &topodatapb.TabletAlias{Cell: defaultCellName, Uid: 200},
+						Tablet:  &topodatapb.TabletAlias{Cell: defaultCellName, Uid: startingTargetTabletUID},
 						Deleted: true,
 					},
 					{
-						Tablet:  &topodatapb.TabletAlias{Cell: defaultCellName, Uid: 210},
+						Tablet:  &topodatapb.TabletAlias{Cell: defaultCellName, Uid: startingTargetTabletUID + tabletUIDStep},
 						Deleted: true,
 					},
 				},
+			},
+		},
+		{
+			name: "basic with existing denied table entries",
+			sourceKeyspace: &testKeyspace{
+				KeyspaceName: sourceKeyspaceName,
+				ShardNames:   []string{"0"},
+			},
+			targetKeyspace: &testKeyspace{
+				KeyspaceName: targetKeyspaceName,
+				ShardNames:   []string{"-80", "80-"},
+			},
+			preFunc: func(t *testing.T, env *testEnv) {
+				lockCtx, targetUnlock, lockErr := env.ts.LockKeyspace(ctx, targetKeyspaceName, "test")
+				require.NoError(t, lockErr)
+				var err error
+				defer require.NoError(t, err)
+				defer targetUnlock(&err)
+				for _, shard := range env.targetKeyspace.ShardNames {
+					_, err := env.ts.UpdateShardFields(lockCtx, targetKeyspaceName, shard, func(si *topo.ShardInfo) error {
+						err := si.UpdateDeniedTables(lockCtx, topodatapb.TabletType_PRIMARY, nil, false, []string{tableName, "t2", "t3"})
+						return err
+					})
+					require.NoError(t, err)
+				}
+			},
+			req: &vtctldatapb.WorkflowDeleteRequest{
+				Keyspace: targetKeyspaceName,
+				Workflow: workflowName,
+			},
+			expectedSourceQueries: []*queryResult{
+				{
+					query: fmt.Sprintf("delete from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'",
+						sourceKeyspaceName, ReverseWorkflowName(workflowName)),
+					result: &querypb.QueryResult{},
+				},
+			},
+			expectedTargetQueries: []*queryResult{
+				{
+					query:  fmt.Sprintf("drop table `vt_%s`.`%s`", targetKeyspaceName, tableName),
+					result: &querypb.QueryResult{},
+				},
+			},
+			want: &vtctldatapb.WorkflowDeleteResponse{
+				Summary: fmt.Sprintf("Successfully cancelled the %s workflow in the %s keyspace",
+					workflowName, targetKeyspaceName),
+				Details: []*vtctldatapb.WorkflowDeleteResponse_TabletInfo{
+					{
+						Tablet:  &topodatapb.TabletAlias{Cell: defaultCellName, Uid: startingTargetTabletUID},
+						Deleted: true,
+					},
+					{
+						Tablet:  &topodatapb.TabletAlias{Cell: defaultCellName, Uid: startingTargetTabletUID + tabletUIDStep},
+						Deleted: true,
+					},
+				},
+			},
+			postFunc: func(t *testing.T, env *testEnv) {
+				for _, shard := range env.targetKeyspace.ShardNames {
+					si, err := env.ts.GetShard(ctx, targetKeyspaceName, shard)
+					require.NoError(t, err)
+					require.NotNil(t, si)
+					tc := si.GetTabletControl(topodatapb.TabletType_PRIMARY)
+					require.NotNil(t, tc)
+					require.EqualValues(t, []string{"t2", "t3"}, tc.DeniedTables)
+				}
 			},
 		},
 	}
@@ -293,12 +362,33 @@ func TestWorkflowDelete(t *testing.T) {
 					env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, eq)
 				}
 			}
+			if tc.preFunc != nil {
+				tc.preFunc(t, env)
+			}
 			got, err := env.ws.WorkflowDelete(ctx, tc.req)
 			if (err != nil) != tc.wantErr {
 				require.Fail(t, "unexpected error value", "Server.WorkflowDelete() error = %v, wantErr %v", err, tc.wantErr)
 				return
 			}
 			require.EqualValues(t, got, tc.want, "Server.WorkflowDelete() = %v, want %v", got, tc.want)
+			if tc.postFunc != nil {
+				tc.postFunc(t, env)
+			} else { // Default post checks
+				// Confirm that we have no routing rules.
+				rr, err := env.ts.GetRoutingRules(ctx)
+				require.NoError(t, err)
+				require.Zero(t, rr.Rules)
+
+				// Confirm that we have no shard tablet controls, which is where
+				// DeniedTables live.
+				for _, keyspace := range []*testKeyspace{tc.sourceKeyspace, tc.targetKeyspace} {
+					for _, shardName := range keyspace.ShardNames {
+						si, err := env.ts.GetShard(ctx, keyspace.KeyspaceName, shardName)
+						require.NoError(t, err)
+						require.Zero(t, si.Shard.TabletControls)
+					}
+				}
+			}
 		})
 	}
 }

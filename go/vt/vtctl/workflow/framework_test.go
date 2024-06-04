@@ -47,7 +47,12 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-const defaultCellName = "cell"
+const (
+	defaultCellName         = "cell"
+	startingSourceTabletUID = 100
+	startingTargetTabletUID = 200
+	tabletUIDStep           = 10
+)
 
 type testKeyspace struct {
 	KeyspaceName string
@@ -90,16 +95,16 @@ func newTestEnv(t *testing.T, ctx context.Context, cell string, sourceKeyspace, 
 	env.tmc = newTestTMClient(env)
 	env.ws = NewServer(venv, env.ts, env.tmc)
 
-	tabletID := 100
+	tabletID := startingSourceTabletUID
 	for _, shardName := range sourceKeyspace.ShardNames {
 		_ = env.addTablet(tabletID, sourceKeyspace.KeyspaceName, shardName, topodatapb.TabletType_PRIMARY)
-		tabletID += 10
+		tabletID += tabletUIDStep
 	}
 	if sourceKeyspace.KeyspaceName != targetKeyspace.KeyspaceName {
-		tabletID = 200
+		tabletID = startingTargetTabletUID
 		for _, shardName := range targetKeyspace.ShardNames {
 			_ = env.addTablet(tabletID, targetKeyspace.KeyspaceName, shardName, topodatapb.TabletType_PRIMARY)
-			tabletID += 10
+			tabletID += tabletUIDStep
 		}
 	}
 	err := env.ts.RebuildSrvVSchema(ctx, nil)
