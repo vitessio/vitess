@@ -84,7 +84,7 @@ var vtgateConns = map[string]*vtgateconn.VTGateConn{}
 func (c *grpcVtgateConn) connect(ctx context.Context, cp ConnParams) error {
 	withBlockOnce.Do(func() {
 		grpcclient.RegisterGRPCDialOptions(func(opts []grpc.DialOption) ([]grpc.DialOption, error) {
-			return append(opts, grpc.WithBlock()), nil
+			return append(opts, grpc.WithBlock()), nil // nolint:staticcheck
 		})
 	})
 
@@ -119,7 +119,7 @@ var vttabletConns = map[string]queryservice.QueryService{}
 func (c *grpcVttabletConn) connect(ctx context.Context, cp ConnParams) error {
 	withBlockOnce.Do(func() {
 		grpcclient.RegisterGRPCDialOptions(func(opts []grpc.DialOption) ([]grpc.DialOption, error) {
-			return append(opts, grpc.WithBlock()), nil
+			return append(opts, grpc.WithBlock()), nil // nolint:staticcheck
 		})
 	})
 

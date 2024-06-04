@@ -67,7 +67,6 @@ var (
 type CheckFlags struct {
 	ReadCheck             bool
 	OverrideThreshold     float64
-	LowPriority           bool
 	OKIfNotExists         bool
 	SkipRequestHeartbeats bool
 }
@@ -91,14 +90,6 @@ func NewThrottlerCheck(throttler *Throttler) *ThrottlerCheck {
 func (check *ThrottlerCheck) checkAppMetricResult(ctx context.Context, appName string, storeType string, storeName string, metricResultFunc base.MetricResultFunc, flags *CheckFlags) (checkResult *CheckResult) {
 	// Handle deprioritized app logic
 	denyApp := false
-	metricName := fmt.Sprintf("%s/%s", storeType, storeName)
-	if flags.LowPriority {
-		if _, exists := check.throttler.nonLowPriorityAppRequestsThrottled.Get(metricName); exists {
-			// a non-deprioritized app, ie a "normal" app, has recently been throttled.
-			// This is now a deprioritized app. Deny access to this request.
-			denyApp = true
-		}
-	}
 	//
 	metricResult, threshold := check.throttler.AppRequestMetricResult(ctx, appName, metricResultFunc, denyApp)
 	if flags.OverrideThreshold > 0 {
@@ -125,11 +116,6 @@ func (check *ThrottlerCheck) checkAppMetricResult(ctx context.Context, appName s
 		// casual throttling
 		statusCode = http.StatusTooManyRequests // 429
 		err = base.ErrThresholdExceeded
-
-		if !flags.LowPriority && !flags.ReadCheck && throttlerapp.VitessName.Equals(appName) {
-			// low priority requests will henceforth be denied
-			go check.throttler.nonLowPriorityAppRequestsThrottled.SetDefault(metricName, true)
-		}
 	default:
 		// all good!
 		statusCode = http.StatusOK // 200

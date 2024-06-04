@@ -142,7 +142,7 @@ func DialContext(ctx context.Context, target string, failFast FailFast, opts ...
 
 	newopts = append(newopts, interceptors()...)
 
-	return grpc.DialContext(ctx, target, newopts...)
+	return grpc.DialContext(ctx, target, newopts...) // nolint:staticcheck
 }
 
 func interceptors() []grpc.DialOption {

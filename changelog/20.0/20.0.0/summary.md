@@ -1,3 +1,4 @@
+
 ## Summary
 
 ### Table of Contents
@@ -6,10 +7,11 @@
   - **[Deletions](#deletions)** 
     - [`--vreplication_tablet_type` flag](#vreplication-tablet-type-deletion)
     - [Pool Capacity Flags](#pool-flags-deletion)
-    - [MySQL binaries in the vitess/lite Docker images](#vitess-lite)
     - [vitess/base and vitess/k8s Docker images](#base-k8s-images)
     - [`gh-ost` binary and endtoend tests](#gh-ost-binary-tests-removal)
+    - [Legacy `EmergencyReparentShard` stats](#legacy-emergencyshardreparent-stats)
   - **[Breaking changes](#breaking-changes)**
+    - [Metric Name Changes in VTOrc](#metric-change-vtorc)
     - [ENUM and SET column handling in VTGate VStream API](#enum-set-vstream)
     - [`shutdown_grace_period` Default Change](#shutdown-grace-period-default)
     - [New `unmanaged` Flag and `disable_active_reparents` deprecation](#unmanaged-flag)
@@ -32,12 +34,18 @@
     - [New `healthcheck-dial-concurrency` flag](#healthcheck-dial-concurrency-flag)
     - [New minimum for `--buffer_min_time_between_failovers`](#buffer_min_time_between_failovers-flag)
     - [New `track-udfs` vtgate flag](#vtgate-track-udfs-flag)
+    - [Help text fix for `--lock-timeout`](#documentation-lock-timeout)
+    - [New `--querylog-sample-rate` flag](#querylog-sample-rate-flag)
+    - [New `--tablet-filter-tags` flag](#tablet-filter-tags-flag)
+
 - **[Minor Changes](#minor-changes)**
   - **[New Stats](#new-stats)**
     - [VTTablet Query Cache Hits and Misses](#vttablet-query-cache-hits-and-misses)
+    - [VTGate and VTTablet Query Text Characters Processed](#vttablet-query-text-characters-processed)
   - **[`SIGHUP` reload of gRPC client static auth creds](#sighup-reload-of-grpc-client-auth-creds)**
   - **[VTAdmin](#vtadmin)**
     - [Updated to node v20.12.2](#updated-node)
+    - [Replaced highcharts with d3](#replaced-highcharts)
 
 ## <a id="major-changes"/>Major Changes
 
@@ -50,47 +58,6 @@ The previously deprecated flag `--vreplication_tablet_type` has been deleted.
 #### <a id="pool-flags-deletion"/>Pool Capacity Flags
 
 The previously deprecated flags `--queryserver-config-query-pool-waiter-cap`, `--queryserver-config-stream-pool-waiter-cap` and `--queryserver-config-txpool-waiter-cap` have been deleted.
-
-#### <a id="vitess-lite"/>MySQL binaries in the `vitess/lite` Docker images
-
-In `v19.0.0` we had deprecated the `mysqld` binary in the `vitess/lite` Docker image.
-Making MySQL/Percona version specific image tags also deprecated.
-
-Starting in `v20.0.0` we no longer build the MySQL/Percona version specific image tags.
-Moreover, the `mysqld` binary is no longer present on the `vitess/lite` image.
-
-Here are the images we will no longer build and push:
-
-| Image                           | Available | 
-|---------------------------------|-----------|
-| `vitess/lite:v20.0.0`           | YES       |
-| `vitess/lite:v20.0.0-mysql57`   | NO        |
-| `vitess/lite:v20.0.0-mysql80`   | NO        |
-| `vitess/lite:v20.0.0-percona57` | NO        |
-| `vitess/lite:v20.0.0-percona80` | NO        |
-
-
-If you have not done it yet, you can use an official MySQL Docker image for your `mysqld` container now such as: `mysql:8.0.30`.
-Below is an example of a kubernetes yaml file before and after upgrading to an official MySQL image:
-
-```yaml
-# before:
-
-# you are still on v19 and are looking to upgrade to v20
-# the image used here includes MySQL 8.0.30 and its binaries
-
-    mysqld:
-      mysql80Compatible: vitess/lite:v19.0.0-mysql80
-```
-```yaml
-# after:
-
-# if we still want to use MySQL 8.0.30, we now have to use the
-# official MySQL image with the 8.0.30 tag as shown below 
-
-    mysqld:
-      mysql80Compatible: mysql:8.0.30 # or even mysql:8.0.34 for instance
-```
 
 #### <a id="base-k8s-images"/>`vitess/base` and `vitess/k8s` Docker images
 
@@ -106,7 +73,41 @@ Vitess 20.0 drops support for `gh-ost` DDL strategy.
 
 Vitess' endtoend tests no longer use nor test `gh-ost` migrations.
 
+#### <a id="legacy-emergencyshardreparent-stats"/>Legacy `EmergencyReparentShard` stats
+
+The following `EmergencyReparentShard` stats were deprecated in Vitess 18.0 and are removed in Vitess 20.0:
+- `ers_counter`
+- `ers_success_counter`
+- `ers_failure_counter`
+
+These counters are replaced by the following stats _(introduced in Vitess 18.0)_:
+- `emergency_reparent_counts` - Number of times `EmergencyReparentShard` has been run. It is further subdivided by the keyspace, shard and the result of the operation.
+- `planned_reparent_counts` - Number of times `PlannedReparentShard` has been run. It is further subdivided by the keyspace, shard and the result of the operation.
+
+Also, the `reparent_shard_operation_timings` stat was added to provide per-operation timings of reparent operations.
+
 ### <a id="breaking-changes"/>Breaking Changes
+
+#### <a id="metric-change-vtorc"/>Metric Name Changes in VTOrc
+
+The following metric names have been changed in VTOrc. The old metrics are still available in `/debug/vars` for this release, but will be removed in later releases. The new metric names and the deprecated metric names resolve to the same metric name on prometheus, so there is no change there.
+
+|               Old Metric Name                |             New Metric Name              |                 Name in Prometheus                 |
+|:--------------------------------------------:|:----------------------------------------:|:--------------------------------------------------:|
+|           `analysis.change.write`            |          `AnalysisChangeWrite`           |           `vtorc_analysis_change_write`            |  
+|                `audit.write`                 |               `AuditWrite`               |                `vtorc_audit_write`                 |  
+|            `discoveries.attempt`             |           `DiscoveriesAttempt`           |            `vtorc_discoveries_attempt`             |  
+|              `discoveries.fail`              |            `DiscoveriesFail`             |              `vtorc_discoveries_fail`              |  
+| `discoveries.instance_poll_seconds_exceeded` | `DiscoveriesInstancePollSecondsExceeded` | `vtorc_discoveries_instance_poll_seconds_exceeded` |  
+|          `discoveries.queue_length`          |         `DiscoveriesQueueLength`         |          `vtorc_discoveries_queue_length`          |  
+|          `discoveries.recent_count`          |         `DiscoveriesRecentCount`         |          `vtorc_discoveries_recent_count`          |  
+|               `instance.read`                |              `InstanceRead`              |               `vtorc_instance_read`                |  
+|           `instance.read_topology`           |          `InstanceReadTopology`          |           `vtorc_instance_read_topology`           |
+|         `emergency_reparent_counts`          |        `EmergencyReparentCounts`         |         `vtorc_emergency_reparent_counts`          |
+|          `planned_reparent_counts`           |         `PlannedReparentCounts`          |          `vtorc_planned_reparent_counts`           |
+|      `reparent_shard_operation_timings`      |     `ReparentShardOperationTimings`      |  `vtorc_reparent_shard_operation_timings_bucket`   |
+		
+		
 
 #### <a id="enum-set-vstream"/>ENUM and SET column handling in VTGate VStream API
 
@@ -314,6 +315,18 @@ The `--buffer_min_time_between_failovers` `vttablet` flag now has a minimum valu
 
 The new `--track-udfs` flag enables VTGate to track user defined functions for better planning.
 
+#### <a id="documentation-lock-timeout"/>Help text fix for `--lock-timeout`
+
+The help text for the flag `--lock-timeout` was incorrect. We were documenting it as a flag that controlled the duration for which the shard lock was acquired. It is actually the maximum duration for which we wait while attempting to acquire a lock from the topology server.
+
+#### <a id="querylog-sample-rate-flag"/>New `--querylog-sample-rate` flag
+
+The new flag `--querylog-sample-rate float` adds support for sampling queries based on a float value between 0.0 _(no logging)_ and 1.0 _(all queries logged)_. If configured, this filtering is applied after the existing `--querylog-filter-tag` filter.
+
+#### <a id="tablet-filter-tags-flag"/>New `--tablet-filter-tags` flag
+
+The new flag `--tablet-filter-tags StringMap` adds support to VTGate for filtering tablets by tablet tag key/values, specified as comma-separated list of key:values. The tags of a tablet are defined by the VTTablet flag `--init_tags`, which is also defined as a comma-separated list of key:values.
+
 ## <a id="minor-changes"/>Minor Changes
 
 ### <a id="new-stats"/>New Stats
@@ -325,6 +338,12 @@ VTTablet exposes two new counter stats:
  * `QueryCacheHits`: Query engine query cache hits
  * `QueryCacheMisses`: Query engine query cache misses
 
+### <a id="#vttablet-query-text-characters-processed"/>VTTablet Query Text Characters Processed
+
+VTGate and VTTablet expose a new counter stat `QueryTextCharactersProcessed` to reflect the number of query text characters processed.
+
+VTGate groups this metric by Operation, Keyspace and TabletType. On VTTablet it is grouped by Table, Plan and optionally Workload.
+
 ### <a id="sighup-reload-of-grpc-client-auth-creds"/>`SIGHUP` reload of gRPC client static auth creds
 
 The internal gRPC client now caches the static auth credentials and supports reloading via the `SIGHUP` signal. Previous to v20 the credentials were not cached. They were re-loaded from disk on every use.
@@ -335,3 +354,7 @@ The internal gRPC client now caches the static auth credentials and supports rel
 
 Building `vtadmin-web` now requires node >= v20.12.0 (LTS). Breaking changes from v18 to v20 can be found at https://nodejs.org/en/blog/release/v20.12.0 -- with no known issues that apply to VTAdmin.
 Full details on the node v20.12.2 release can be found at https://nodejs.org/en/blog/release/v20.12.2.
+
+#### <a id="replaced-highcharts"/>Replaced highcharts with d3
+
+The vtadmin-web UI no longer has a dependency on highcharts for licensing reasons. The tablet QPS, tablet VReplication QPS, and workflow streams lag charts have all been replaced by d3. We'll be iteratively improving the d3 charts until they reach feature parity with the original highcharts charts. 

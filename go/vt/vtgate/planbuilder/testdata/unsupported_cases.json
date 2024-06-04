@@ -45,6 +45,11 @@
     "plan": "VT12001: unsupported: Vindex update should have ORDER BY clause when using LIMIT"
   },
   {
+    "comment": "multi table update with dependent column getting updated",
+    "query": "update user u, user_extra ue set u.name = 'test' + ue.col, ue.col = 5 where u.id = ue.id and u.id = 1;",
+    "plan": "VT12001: unsupported: 'ue.col' column referenced in update expression ''test' + ue.col' is itself updated"
+  },
+  {
     "comment": "unsharded insert, col list does not match values",
     "query": "insert into unsharded_auto(id, val) values(1)",
     "plan": "VT03006: column count does not match value count with the row"

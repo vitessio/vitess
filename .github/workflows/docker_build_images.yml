@@ -21,7 +21,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        branch: [ latest ]
+        branch: [ latest, percona80 ]
 
     steps:
       - name: Check out code

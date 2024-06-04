@@ -44,7 +44,7 @@ import (
 )
 
 var (
-	reparentShardOpTimings = stats.NewTimings("reparent_shard_operation_timings", "Timings of reparent shard operations", "Operation")
+	reparentShardOpTimings = stats.NewTimingsWithDeprecatedName("ReparentShardOperationTimings", "reparent_shard_operation_timings", "Timings of reparent shard operations", "Operation")
 	failureResult          = "failure"
 	successResult          = "success"
 )

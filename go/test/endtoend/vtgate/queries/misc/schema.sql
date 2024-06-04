@@ -1,7 +1,8 @@
-create table if not exists t1(
-                   id1 bigint,
-                   id2 bigint,
-                   primary key(id1)
+create table t1
+(
+    id1 bigint,
+    id2 bigint,
+    primary key (id1)
 ) Engine=InnoDB;
 
 create table unq_idx
@@ -30,8 +31,8 @@ create table tbl
 
 create table tbl_enum_set
 (
-    id         bigint,
-    enum_col   enum('xsmall', 'small', 'medium', 'large', 'xlarge'),
-    set_col    set('a', 'b', 'c', 'd', 'e', 'f', 'g'),
+    id       bigint,
+    enum_col enum('xsmall', 'small', 'medium', 'large', 'xlarge'),
+    set_col set('a', 'b', 'c', 'd', 'e', 'f', 'g'),
     primary key (id)
 ) Engine = InnoDB;

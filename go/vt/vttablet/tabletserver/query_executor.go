@@ -139,12 +139,12 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		errCode = vtErrorCode.String()
 
 		if reply == nil {
-			qre.tsv.qe.AddStats(qre.plan.PlanID, tableName, qre.options.GetWorkloadName(), qre.targetTabletType, 1, duration, mysqlTime, 0, 0, 1, errCode)
+			qre.tsv.qe.AddStats(qre.plan, tableName, qre.options.GetWorkloadName(), qre.targetTabletType, 1, duration, mysqlTime, 0, 0, 1, errCode)
 			qre.plan.AddStats(1, duration, mysqlTime, 0, 0, 1)
 			return
 		}
 
-		qre.tsv.qe.AddStats(qre.plan.PlanID, tableName, qre.options.GetWorkloadName(), qre.targetTabletType, 1, duration, mysqlTime, int64(reply.RowsAffected), int64(len(reply.Rows)), 0, errCode)
+		qre.tsv.qe.AddStats(qre.plan, tableName, qre.options.GetWorkloadName(), qre.targetTabletType, 1, duration, mysqlTime, int64(reply.RowsAffected), int64(len(reply.Rows)), 0, errCode)
 		qre.plan.AddStats(1, duration, mysqlTime, reply.RowsAffected, uint64(len(reply.Rows)), 0)
 		qre.logStats.RowsAffected = int(reply.RowsAffected)
 		qre.logStats.Rows = reply.Rows
@@ -780,15 +780,7 @@ func (qre *QueryExecutor) getConn() (*connpool.PooledConn, error) {
 	defer func(start time.Time) {
 		qre.logStats.WaitingForConnection += time.Since(start)
 	}(time.Now())
-	conn, err := qre.tsv.qe.conns.Get(ctx, qre.setting)
-
-	switch err {
-	case nil:
-		return conn, nil
-	case connpool.ErrConnPoolClosed:
-		return nil, err
-	}
-	return nil, err
+	return qre.tsv.qe.conns.Get(ctx, qre.setting)
 }
 
 func (qre *QueryExecutor) getStreamConn() (*connpool.PooledConn, error) {
@@ -798,15 +790,7 @@ func (qre *QueryExecutor) getStreamConn() (*connpool.PooledConn, error) {
 	defer func(start time.Time) {
 		qre.logStats.WaitingForConnection += time.Since(start)
 	}(time.Now())
-	conn, err := qre.tsv.qe.streamConns.Get(ctx, qre.setting)
-
-	switch err {
-	case nil:
-		return conn, nil
-	case connpool.ErrConnPoolClosed:
-		return nil, err
-	}
-	return nil, err
+	return qre.tsv.qe.streamConns.Get(ctx, qre.setting)
 }
 
 // txFetch fetches from a TxConnection.

@@ -263,7 +263,7 @@ func extractLHSExpr(
 	lhs semantics.TableSet,
 ) func(expr sqlparser.Expr) sqlparser.Expr {
 	return func(expr sqlparser.Expr) sqlparser.Expr {
-		col := breakExpressionInLHSandRHSForApplyJoin(ctx, expr, lhs)
+		col := breakExpressionInLHSandRHS(ctx, expr, lhs)
 		if col.IsPureLeft() {
 			panic(vterrors.VT13001("did not expect to find any predicates that do not need data from the inner here"))
 		}
@@ -467,6 +467,7 @@ func tryMergeSubqueryWithOuter(ctx *plancontext.PlanningContext, subQuery *SubQu
 		return outer, NoRewrite
 	}
 	exprs := subQuery.GetMergePredicates()
+	sqlparser.RemoveKeyspace(subQuery.Original)
 	merger := &subqueryRouteMerger{
 		outer:    outer,
 		original: subQuery.Original,

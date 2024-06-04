@@ -160,7 +160,7 @@ func (aj *ApplyJoin) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sql
 	rhs := aj.RHS
 	predicates := sqlparser.SplitAndExpression(nil, expr)
 	for _, pred := range predicates {
-		col := breakExpressionInLHSandRHSForApplyJoin(ctx, pred, TableID(aj.LHS))
+		col := breakExpressionInLHSandRHS(ctx, pred, TableID(aj.LHS))
 		aj.JoinPredicates.add(col)
 		ctx.AddJoinPredicates(pred, col.RHSExpr)
 		rhs = rhs.AddPredicate(ctx, col.RHSExpr)
@@ -168,10 +168,30 @@ func (aj *ApplyJoin) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sql
 	aj.RHS = rhs
 }
 
-func (aj *ApplyJoin) GetColumns(*plancontext.PlanningContext) []*sqlparser.AliasedExpr {
-	return slice.Map(aj.JoinColumns.columns, func(from applyJoinColumn) *sqlparser.AliasedExpr {
-		return aeWrap(from.Original)
-	})
+func (aj *ApplyJoin) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
+	colSize := len(aj.Columns)
+	if colSize == 0 {
+		// we've yet to do offset planning - let's return what we have for now
+		return slice.Map(aj.JoinColumns.columns, func(from applyJoinColumn) *sqlparser.AliasedExpr {
+			return aeWrap(from.Original)
+		})
+	}
+	cols := make([]*sqlparser.AliasedExpr, colSize)
+	var lhsCols, rhsCols []*sqlparser.AliasedExpr
+	for idx, column := range aj.Columns {
+		if column < 0 {
+			if lhsCols == nil {
+				lhsCols = aj.LHS.GetColumns(ctx)
+			}
+			cols[idx] = lhsCols[FromLeftOffset(column)]
+		} else {
+			if rhsCols == nil {
+				rhsCols = aj.RHS.GetColumns(ctx)
+			}
+			cols[idx] = rhsCols[FromRightOffset(column)]
+		}
+	}
+	return cols
 }
 
 func (aj *ApplyJoin) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
@@ -202,7 +222,7 @@ func (aj *ApplyJoin) getJoinColumnFor(ctx *plancontext.PlanningContext, orig *sq
 	case deps.IsSolvedBy(rhs):
 		col.RHSExpr = e
 	case deps.IsSolvedBy(both):
-		col = breakExpressionInLHSandRHSForApplyJoin(ctx, e, TableID(aj.LHS))
+		col = breakExpressionInLHSandRHS(ctx, e, TableID(aj.LHS))
 	default:
 		panic(vterrors.VT13002(sqlparser.String(e)))
 	}
