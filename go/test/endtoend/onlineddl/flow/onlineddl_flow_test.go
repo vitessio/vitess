@@ -326,12 +326,6 @@ func TestSchemaChange(t *testing.T) {
 			})
 			isComplete := false
 			t.Run("optimistic wait for migration completion", func(t *testing.T) {
-				select {
-				case <-time.After(10 * time.Second):
-				case <-ctx.Done():
-					require.Fail(t, "context cancelled")
-				}
-
 				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusRunning, schema.OnlineDDLStatusComplete)
 				isComplete = (status == schema.OnlineDDLStatusComplete)
 				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
