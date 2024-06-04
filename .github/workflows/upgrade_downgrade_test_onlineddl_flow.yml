@@ -193,7 +193,7 @@ jobs:
         mkdir -p /tmp/vitess-build-current/
         cp -R bin /tmp/vitess-build-current/
 
-    # Swap the binaries. Use vtctl version n and keep vttablet at version n-1
+    # Copy vttablet and related binaries under new names
     - name: Use current version Vtctl, and other version VTTablet
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
