@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -34,6 +35,7 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
@@ -200,61 +202,103 @@ func TestVDiffCreate(t *testing.T) {
 	}
 }
 
-/* TODO: get the framework in place for this and then get the test working
 func TestWorkflowDelete(t *testing.T) {
-	ctx := context.Background()
-	ksName := "ks1"
-	wfName := "wf1"
-	cellName := "cell1"
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
 
-	ts := memorytopo.NewServer(ctx, cellName)
-	tmc := &fakeTMC{}
-	s := NewServer(vtenv.NewTestEnv(), ts, tmc)
-	err := s.ts.CreateKeyspace(ctx, ksName, &topodatapb.Keyspace{})
-	require.NoError(t, err)
-	err = s.ts.CreateShard(ctx, ksName, "0")
-	require.NoError(t, err)
-	err = s.ts.CreateTablet(ctx, &topodatapb.Tablet{
-		Hostname: "host1",
-		Keyspace: ksName,
-		Shard:    "0",
-		Alias: &topodatapb.TabletAlias{
-			Cell: cellName,
-			Uid:  100,
+	workflowName := "wf1"
+	tableName := "t1"
+	sourceKeyspaceName := "sourceks"
+	targetKeyspaceName := "targetks"
+	schema := map[string]*tabletmanagerdatapb.SchemaDefinition{
+		"t1": {
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+				{
+					Name:   tableName,
+					Schema: fmt.Sprintf("CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))", tableName),
+				},
+			},
 		},
-	})
-	require.NoError(t, err)
+	}
 
 	testcases := []struct {
-		name    string
-		req     *vtctldatapb.WorkflowDeleteRequest
-		want    *vtctldatapb.WorkflowDeleteResponse
-		wantErr bool
+		name                           string
+		sourceKeyspace, targetKeyspace *testKeyspace
+		req                            *vtctldatapb.WorkflowDeleteRequest
+		expectedSourceQueries          []*queryResult
+		expectedTargetQueries          []*queryResult
+		want                           *vtctldatapb.WorkflowDeleteResponse
+		wantErr                        bool
 	}{
 		{
-			name: "no values",
+			name: "basic",
+			sourceKeyspace: &testKeyspace{
+				KeyspaceName: sourceKeyspaceName,
+				ShardNames:   []string{"0"},
+			},
+			targetKeyspace: &testKeyspace{
+				KeyspaceName: targetKeyspaceName,
+				ShardNames:   []string{"-80", "80-"},
+			},
 			req: &vtctldatapb.WorkflowDeleteRequest{
-				Keyspace: ksName,
-				Workflow: wfName,
+				Keyspace: targetKeyspaceName,
+				Workflow: workflowName,
+			},
+			expectedSourceQueries: []*queryResult{
+				{
+					query: fmt.Sprintf("delete from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'",
+						sourceKeyspaceName, ReverseWorkflowName(workflowName)),
+					result: &querypb.QueryResult{},
+				},
+			},
+			expectedTargetQueries: []*queryResult{
+				{
+					query:  fmt.Sprintf("drop table `vt_%s`.`%s`", targetKeyspaceName, tableName),
+					result: &querypb.QueryResult{},
+				},
+			},
+			want: &vtctldatapb.WorkflowDeleteResponse{
+				Summary: fmt.Sprintf("Successfully cancelled the %s workflow in the %s keyspace",
+					workflowName, targetKeyspaceName),
+				Details: []*vtctldatapb.WorkflowDeleteResponse_TabletInfo{
+					{
+						Tablet:  &topodatapb.TabletAlias{Cell: defaultCellName, Uid: 200},
+						Deleted: true,
+					},
+					{
+						Tablet:  &topodatapb.TabletAlias{Cell: defaultCellName, Uid: 210},
+						Deleted: true,
+					},
+				},
 			},
 		},
 	}
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			res, err := s.MoveTablesCreate(ctx, &vtctldatapb.MoveTablesCreateRequest{
-				TargetKeyspace: ksName,
-				Workflow:       wfName,
-				AllTables:      true,
-			})
-			require.NoError(t, err)
-			require.NotNil(t, res)
-			got, err := s.WorkflowDelete(ctx, tc.req)
+			require.NotNil(t, tc.sourceKeyspace)
+			require.NotNil(t, tc.targetKeyspace)
+			require.NotNil(t, tc.req)
+			env := newTestEnv(t, ctx, defaultCellName, tc.sourceKeyspace, tc.targetKeyspace)
+			defer env.close()
+			env.tmc.schema = schema
+			if tc.expectedSourceQueries != nil {
+				require.NotNil(t, env.tablets[tc.sourceKeyspace.KeyspaceName])
+				for _, eq := range tc.expectedSourceQueries {
+					env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.sourceKeyspace.KeyspaceName, eq)
+				}
+			}
+			if tc.expectedTargetQueries != nil {
+				require.NotNil(t, env.tablets[tc.targetKeyspace.KeyspaceName])
+				for _, eq := range tc.expectedTargetQueries {
+					env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, eq)
+				}
+			}
+			got, err := env.ws.WorkflowDelete(ctx, tc.req)
 			if (err != nil) != tc.wantErr {
-				t.Errorf("Server.WorkflowDelete() error = %v, wantErr %v", err, tc.wantErr)
+				require.Fail(t, "unexpected error value", "Server.WorkflowDelete() error = %v, wantErr %v", err, tc.wantErr)
 				return
 			}
-			require.Equal(t, got, tc.want, "Server.WorkflowDelete() = %v, want %v", got, tc.want)
+			require.EqualValues(t, got, tc.want, "Server.WorkflowDelete() = %v, want %v", got, tc.want)
 		})
 	}
 }
-*/

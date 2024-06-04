@@ -19,12 +19,15 @@ package workflow
 import (
 	"context"
 	"fmt"
+	"os"
 	"regexp"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/maps"
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/protoutil"
@@ -36,83 +39,84 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
+	_flag "vitess.io/vitess/go/internal/flag"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-type testMaterializerEnv struct {
-	ws       *Server
-	ms       *vtctldatapb.MaterializeSettings
-	sources  []string
-	targets  []string
-	tablets  map[int]*topodatapb.Tablet
-	topoServ *topo.Server
-	cell     string
-	tmc      *testMaterializerTMClient
+const defaultCellName = "cell"
+
+type testKeyspace struct {
+	KeyspaceName string
+	ShardNames   []string
+}
+
+type queryResult struct {
+	query  string
+	result *querypb.QueryResult
+}
+
+type testEnv struct {
+	ws                             *Server
+	ts                             *topo.Server
+	tmc                            *testTMClient
+	sourceKeyspace, targetKeyspace *testKeyspace
+	// Keyed first by keyspace name, then tablet UID.
+	tablets map[string]map[int]*topodatapb.Tablet
+	cell    string
 }
 
 //----------------------------------------------
-// testMaterializerEnv
+// testEnv
 
-func newTestMaterializerEnv(t *testing.T, ctx context.Context, ms *vtctldatapb.MaterializeSettings, sources, targets []string) *testMaterializerEnv {
+func TestMain(m *testing.M) {
+	_flag.ParseFlagsForTest()
+	os.Exit(m.Run())
+}
+
+func newTestEnv(t *testing.T, ctx context.Context, cell string, sourceKeyspace, targetKeyspace *testKeyspace) *testEnv {
 	t.Helper()
-	env := &testMaterializerEnv{
-		ms:       ms,
-		sources:  sources,
-		targets:  targets,
-		tablets:  make(map[int]*topodatapb.Tablet),
-		topoServ: memorytopo.NewServer(ctx, defaultCellName),
-		cell:     defaultCellName,
-		tmc:      newTestMaterializerTMClient(),
+	env := &testEnv{
+		ts:             memorytopo.NewServer(ctx, defaultCellName),
+		sourceKeyspace: sourceKeyspace,
+		targetKeyspace: targetKeyspace,
+		tablets:        make(map[string]map[int]*topodatapb.Tablet),
+		cell:           cell,
 	}
 	venv := vtenv.NewTestEnv()
-	env.ws = NewServer(venv, env.topoServ, env.tmc)
+	env.tmc = newTestTMClient(env)
+	env.ws = NewServer(venv, env.ts, env.tmc)
+
 	tabletID := 100
-	for _, shard := range sources {
-		_ = env.addTablet(tabletID, env.ms.SourceKeyspace, shard, topodatapb.TabletType_PRIMARY)
+	for _, shardName := range sourceKeyspace.ShardNames {
+		_ = env.addTablet(tabletID, sourceKeyspace.KeyspaceName, shardName, topodatapb.TabletType_PRIMARY)
 		tabletID += 10
 	}
-	if ms.SourceKeyspace != ms.TargetKeyspace {
+	if sourceKeyspace.KeyspaceName != targetKeyspace.KeyspaceName {
 		tabletID = 200
-		for _, shard := range targets {
-			_ = env.addTablet(tabletID, env.ms.TargetKeyspace, shard, topodatapb.TabletType_PRIMARY)
+		for _, shardName := range targetKeyspace.ShardNames {
+			_ = env.addTablet(tabletID, targetKeyspace.KeyspaceName, shardName, topodatapb.TabletType_PRIMARY)
 			tabletID += 10
 		}
 	}
+	err := env.ts.RebuildSrvVSchema(ctx, nil)
+	require.NoError(t, err)
 
-	for _, ts := range ms.TableSettings {
-		tableName := ts.TargetTable
-		table, err := venv.Parser().TableFromStatement(ts.SourceExpression)
-		if err == nil {
-			tableName = table.Name.String()
-		}
-		env.tmc.schema[ms.SourceKeyspace+"."+tableName] = &tabletmanagerdatapb.SchemaDefinition{
-			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
-				Name:   tableName,
-				Schema: fmt.Sprintf("%s_schema", tableName),
-			}},
-		}
-		env.tmc.schema[ms.TargetKeyspace+"."+ts.TargetTable] = &tabletmanagerdatapb.SchemaDefinition{
-			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
-				Name:   ts.TargetTable,
-				Schema: fmt.Sprintf("%s_schema", ts.TargetTable),
-			}},
-		}
-	}
 	return env
 }
 
-func (env *testMaterializerEnv) close() {
-	for _, t := range env.tablets {
-		env.deleteTablet(t)
+func (env *testEnv) close() {
+	for _, k := range maps.Values(env.tablets) {
+		for _, t := range maps.Values(k) {
+			env.deleteTablet(t)
+		}
 	}
 }
 
-func (env *testMaterializerEnv) addTablet(id int, keyspace, shard string, tabletType topodatapb.TabletType) *topodatapb.Tablet {
+func (env *testEnv) addTablet(id int, keyspace, shard string, tabletType topodatapb.TabletType) *topodatapb.Tablet {
 	tablet := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
 			Cell: env.cell,
@@ -126,7 +130,10 @@ func (env *testMaterializerEnv) addTablet(id int, keyspace, shard string, tablet
 			"test": int32(id),
 		},
 	}
-	env.tablets[id] = tablet
+	if env.tablets[keyspace] == nil {
+		env.tablets[keyspace] = make(map[int]*topodatapb.Tablet)
+	}
+	env.tablets[keyspace][id] = tablet
 	if err := env.ws.ts.InitTablet(context.Background(), tablet, false /* allowPrimaryOverride */, true /* createShardAndKeyspace */, false /* allowUpdate */); err != nil {
 		panic(err)
 	}
@@ -143,15 +150,15 @@ func (env *testMaterializerEnv) addTablet(id int, keyspace, shard string, tablet
 	return tablet
 }
 
-func (env *testMaterializerEnv) deleteTablet(tablet *topodatapb.Tablet) {
-	_ = env.topoServ.DeleteTablet(context.Background(), tablet.Alias)
-	delete(env.tablets, int(tablet.Alias.Uid))
+func (env *testEnv) deleteTablet(tablet *topodatapb.Tablet) {
+	_ = env.ts.DeleteTablet(context.Background(), tablet.Alias)
+	delete(env.tablets[tablet.Keyspace], int(tablet.Alias.Uid))
 }
 
 //----------------------------------------------
-// testMaterializerTMClient
+// testTMClient
 
-type testMaterializerTMClient struct {
+type testTMClient struct {
 	tmclient.TabletManagerClient
 	schema map[string]*tabletmanagerdatapb.SchemaDefinition
 
@@ -161,17 +168,20 @@ type testMaterializerTMClient struct {
 
 	// Used to confirm the number of times WorkflowDelete was called.
 	workflowDeleteCalls int
+
+	env *testEnv
 }
 
-func newTestMaterializerTMClient() *testMaterializerTMClient {
-	return &testMaterializerTMClient{
+func newTestTMClient(env *testEnv) *testTMClient {
+	return &testTMClient{
 		schema:                             make(map[string]*tabletmanagerdatapb.SchemaDefinition),
 		vrQueries:                          make(map[int][]*queryResult),
 		createVReplicationWorkflowRequests: make(map[uint32]*tabletmanagerdatapb.CreateVReplicationWorkflowRequest),
+		env:                                env,
 	}
 }
 
-func (tmc *testMaterializerTMClient) CreateVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.CreateVReplicationWorkflowRequest) (*tabletmanagerdatapb.CreateVReplicationWorkflowResponse, error) {
+func (tmc *testTMClient) CreateVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.CreateVReplicationWorkflowRequest) (*tabletmanagerdatapb.CreateVReplicationWorkflowResponse, error) {
 	if expect := tmc.createVReplicationWorkflowRequests[tablet.Alias.Uid]; expect != nil {
 		if !proto.Equal(expect, request) {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected CreateVReplicationWorkflow request: got %+v, want %+v", request, expect)
@@ -181,34 +191,41 @@ func (tmc *testMaterializerTMClient) CreateVReplicationWorkflow(ctx context.Cont
 	return &tabletmanagerdatapb.CreateVReplicationWorkflowResponse{Result: sqltypes.ResultToProto3(res)}, nil
 }
 
-func (tmc *testMaterializerTMClient) ReadVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.ReadVReplicationWorkflowRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowResponse, error) {
+func (tmc *testTMClient) ReadVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.ReadVReplicationWorkflowRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowResponse, error) {
 	workflowType := binlogdatapb.VReplicationWorkflowType_MoveTables
 	if strings.Contains(request.Workflow, "lookup") {
 		workflowType = binlogdatapb.VReplicationWorkflowType_CreateLookupIndex
 	}
-	return &tabletmanagerdatapb.ReadVReplicationWorkflowResponse{
+	res := &tabletmanagerdatapb.ReadVReplicationWorkflowResponse{
 		Workflow:     request.Workflow,
 		WorkflowType: workflowType,
-		Streams: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{
-			{
-				Id: 1,
-				Bls: &binlogdatapb.BinlogSource{
-					Keyspace: "sourceks",
-					Shard:    "0",
-					Filter: &binlogdatapb.Filter{
-						Rules: []*binlogdatapb.Rule{
-							{
-								Match: ".*",
-							},
-						},
-					},
+		Streams:      make([]*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream, len(tmc.env.sourceKeyspace.ShardNames)),
+	}
+	rules := make([]*binlogdatapb.Rule, len(tmc.schema))
+	for i, table := range maps.Keys(tmc.schema) {
+		rules[i] = &binlogdatapb.Rule{
+			Match:  table,
+			Filter: fmt.Sprintf("select * from %s", table),
+		}
+	}
+	for i, shard := range tmc.env.sourceKeyspace.ShardNames {
+		res.Streams[i] = &tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{
+			Id: int32(i + 1),
+			Bls: &binlogdatapb.BinlogSource{
+				Keyspace: tmc.env.sourceKeyspace.KeyspaceName,
+				Shard:    shard,
+				Tables:   maps.Keys(tmc.schema),
+				Filter: &binlogdatapb.Filter{
+					Rules: rules,
 				},
 			},
-		},
-	}, nil
+		}
+	}
+
+	return res, nil
 }
 
-func (tmc *testMaterializerTMClient) DeleteVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.DeleteVReplicationWorkflowRequest) (response *tabletmanagerdatapb.DeleteVReplicationWorkflowResponse, err error) {
+func (tmc *testTMClient) DeleteVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.DeleteVReplicationWorkflowRequest) (response *tabletmanagerdatapb.DeleteVReplicationWorkflowResponse, err error) {
 	tmc.mu.Lock()
 	defer tmc.mu.Unlock()
 	tmc.workflowDeleteCalls++
@@ -219,7 +236,7 @@ func (tmc *testMaterializerTMClient) DeleteVReplicationWorkflow(ctx context.Cont
 	}, nil
 }
 
-func (tmc *testMaterializerTMClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error) {
+func (tmc *testTMClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	schemaDefn := &tabletmanagerdatapb.SchemaDefinition{}
 	for _, table := range request.Tables {
 		if table == "/.*/" {
@@ -242,7 +259,7 @@ func (tmc *testMaterializerTMClient) GetSchema(ctx context.Context, tablet *topo
 	return schemaDefn, nil
 }
 
-func (tmc *testMaterializerTMClient) expectVRQuery(tabletID int, query string, result *sqltypes.Result) {
+func (tmc *testTMClient) expectVRQuery(tabletID int, query string, result *sqltypes.Result) {
 	tmc.mu.Lock()
 	defer tmc.mu.Unlock()
 
@@ -252,14 +269,23 @@ func (tmc *testMaterializerTMClient) expectVRQuery(tabletID int, query string, r
 	})
 }
 
-func (tmc *testMaterializerTMClient) expectCreateVReplicationWorkflowRequest(tabletID uint32, req *tabletmanagerdatapb.CreateVReplicationWorkflowRequest) {
+func (tmc *testTMClient) expectVRQueryResultOnKeyspaceTablets(keyspace string, queryResult *queryResult) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+
+	for uid := range tmc.env.tablets[keyspace] {
+		tmc.vrQueries[uid] = append(tmc.vrQueries[uid], queryResult)
+	}
+}
+
+func (tmc *testTMClient) expectCreateVReplicationWorkflowRequest(tabletID uint32, req *tabletmanagerdatapb.CreateVReplicationWorkflowRequest) {
 	tmc.mu.Lock()
 	defer tmc.mu.Unlock()
 
 	tmc.createVReplicationWorkflowRequests[tabletID] = req
 }
 
-func (tmc *testMaterializerTMClient) verifyQueries(t *testing.T) {
+func (tmc *testTMClient) verifyQueries(t *testing.T) {
 	t.Helper()
 	tmc.mu.Lock()
 	defer tmc.mu.Unlock()
@@ -275,7 +301,7 @@ func (tmc *testMaterializerTMClient) verifyQueries(t *testing.T) {
 	}
 }
 
-func (tmc *testMaterializerTMClient) VReplicationExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error) {
+func (tmc *testTMClient) VReplicationExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error) {
 	tmc.mu.Lock()
 	defer tmc.mu.Unlock()
 
@@ -296,17 +322,17 @@ func (tmc *testMaterializerTMClient) VReplicationExec(ctx context.Context, table
 	return qrs[0].result, nil
 }
 
-func (tmc *testMaterializerTMClient) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsDbaRequest) (*querypb.QueryResult, error) {
+func (tmc *testTMClient) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsDbaRequest) (*querypb.QueryResult, error) {
 	// Reuse VReplicationExec
 	return tmc.VReplicationExec(ctx, tablet, string(req.Query))
 }
 
-func (tmc *testMaterializerTMClient) ExecuteFetchAsAllPrivs(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest) (*querypb.QueryResult, error) {
+func (tmc *testTMClient) ExecuteFetchAsAllPrivs(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest) (*querypb.QueryResult, error) {
 	return nil, nil
 }
 
 // Note: ONLY breaks up change.SQL into individual statements and executes it. Does NOT fully implement ApplySchema.
-func (tmc *testMaterializerTMClient) ApplySchema(ctx context.Context, tablet *topodatapb.Tablet, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error) {
+func (tmc *testTMClient) ApplySchema(ctx context.Context, tablet *topodatapb.Tablet, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error) {
 	stmts := strings.Split(change.SQL, ";")
 
 	for _, stmt := range stmts {
@@ -323,7 +349,7 @@ func (tmc *testMaterializerTMClient) ApplySchema(ctx context.Context, tablet *to
 	return nil, nil
 }
 
-func (tmc *testMaterializerTMClient) VDiff(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.VDiffRequest) (*tabletmanagerdatapb.VDiffResponse, error) {
+func (tmc *testTMClient) VDiff(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.VDiffRequest) (*tabletmanagerdatapb.VDiffResponse, error) {
 	return &tabletmanagerdatapb.VDiffResponse{
 		Id:        1,
 		VdiffUuid: req.VdiffUuid,
@@ -333,13 +359,13 @@ func (tmc *testMaterializerTMClient) VDiff(ctx context.Context, tablet *topodata
 	}, nil
 }
 
-func (tmc *testMaterializerTMClient) HasVReplicationWorkflows(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.HasVReplicationWorkflowsRequest) (*tabletmanagerdatapb.HasVReplicationWorkflowsResponse, error) {
+func (tmc *testTMClient) HasVReplicationWorkflows(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.HasVReplicationWorkflowsRequest) (*tabletmanagerdatapb.HasVReplicationWorkflowsResponse, error) {
 	return &tabletmanagerdatapb.HasVReplicationWorkflowsResponse{
 		Has: false,
 	}, nil
 }
 
-func (tmc *testMaterializerTMClient) ReadVReplicationWorkflows(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ReadVReplicationWorkflowsRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse, error) {
+func (tmc *testTMClient) ReadVReplicationWorkflows(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ReadVReplicationWorkflowsRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse, error) {
 	workflowType := binlogdatapb.VReplicationWorkflowType_MoveTables
 	if len(req.IncludeWorkflows) > 0 {
 		for _, wf := range req.IncludeWorkflows {
@@ -357,12 +383,12 @@ func (tmc *testMaterializerTMClient) ReadVReplicationWorkflows(ctx context.Conte
 							Id:    1,
 							State: binlogdatapb.VReplicationWorkflowState_Running,
 							Bls: &binlogdatapb.BinlogSource{
-								Keyspace: "sourceks",
-								Shard:    "0",
+								Keyspace: tmc.env.sourceKeyspace.KeyspaceName,
+								Shard:    tmc.env.sourceKeyspace.ShardNames[0],
 								Filter: &binlogdatapb.Filter{
 									Rules: []*binlogdatapb.Rule{
 										{
-											Match: ".*",
+											Match: "/.*/",
 										},
 									},
 								},
@@ -380,7 +406,7 @@ func (tmc *testMaterializerTMClient) ReadVReplicationWorkflows(ctx context.Conte
 	}
 }
 
-func (tmc *testMaterializerTMClient) UpdateVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.UpdateVReplicationWorkflowRequest) (*tabletmanagerdatapb.UpdateVReplicationWorkflowResponse, error) {
+func (tmc *testTMClient) UpdateVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.UpdateVReplicationWorkflowRequest) (*tabletmanagerdatapb.UpdateVReplicationWorkflowResponse, error) {
 	return &tabletmanagerdatapb.UpdateVReplicationWorkflowResponse{
 		Result: &querypb.QueryResult{
 			RowsAffected: 1,

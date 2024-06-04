@@ -2072,6 +2072,9 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 		}
 		details = append(details, result)
 	}
+	sort.Slice(details, func(i, j int) bool { // Ensure deterministic output
+		return topoproto.TabletAliasString(details[i].Tablet) < topoproto.TabletAliasString(details[j].Tablet)
+	})
 	response.Details = details
 	return response, nil
 }
