@@ -1052,6 +1052,21 @@ func WaitForSuccessfulERSCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess
 	assert.EqualValues(t, countExpected, successCount)
 }
 
+// CheckVarExists checks whether the given metric exists or not in /debug/vars.
+func CheckVarExists(t *testing.T, vtorcInstance *cluster.VTOrcProcess, metricName string) {
+	t.Helper()
+	vars := vtorcInstance.GetVars()
+	_, exists := vars[metricName]
+	assert.True(t, exists, vars)
+}
+
+// CheckMetricExists checks whether the given metric exists or not in /metrics.
+func CheckMetricExists(t *testing.T, vtorcInstance *cluster.VTOrcProcess, metricName string) {
+	t.Helper()
+	metrics := vtorcInstance.GetMetrics()
+	assert.Contains(t, metrics, metricName)
+}
+
 // getIntFromValue is a helper function to get an integer from the given value.
 // If it is convertible to a float, then we round the number to the nearest integer.
 // If the value is not numeric at all, we return 0.

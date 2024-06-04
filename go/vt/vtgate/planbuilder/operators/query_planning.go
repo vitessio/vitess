@@ -20,6 +20,11 @@ import (
 	"fmt"
 	"io"
 
+	"vitess.io/vitess/go/vt/vtgate/engine"
+
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -77,7 +82,7 @@ func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 		case *Projection:
 			return tryPushProjection(ctx, in)
 		case *Limit:
-			return tryPushLimit(in)
+			return tryPushLimit(ctx, in)
 		case *Ordering:
 			return tryPushOrdering(ctx, in)
 		case *Aggregator:
@@ -215,23 +220,99 @@ func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in *Horizon) (Operato
 	return expandHorizon(ctx, in)
 }
 
-func tryPushLimit(in *Limit) (Operator, *ApplyResult) {
+func tryPushLimit(ctx *plancontext.PlanningContext, in *Limit) (Operator, *ApplyResult) {
 	switch src := in.Source.(type) {
 	case *Route:
-		return tryPushingDownLimitInRoute(in, src)
+		return tryPushingDownLimitInRoute(ctx, in, src)
 	case *Aggregator:
 		return in, NoRewrite
+	case *ApplyJoin:
+		if in.Pushed {
+			// This is the Top limit, and it's already pushed down
+			return in, NoRewrite
+		}
+		side := "RHS"
+		src.RHS = createPushedLimit(ctx, src.RHS, in)
+		if IsOuter(src) {
+			// for outer joins, we are guaranteed that all rows from the LHS will be returned,
+			// so we can push down the LIMIT to the LHS
+			src.LHS = createPushedLimit(ctx, src.LHS, in)
+			side = "RHS and LHS"
+		}
+
+		if in.Top {
+			in.Pushed = true
+			return in, Rewrote(fmt.Sprintf("add limit to %s of apply join", side))
+		}
+
+		return src, Rewrote(fmt.Sprintf("push limit to %s of apply join", side))
 	default:
 		return setUpperLimit(in)
 	}
 }
 
-func tryPushingDownLimitInRoute(in *Limit, src *Route) (Operator, *ApplyResult) {
+func createPushedLimit(ctx *plancontext.PlanningContext, src Operator, orig *Limit) Operator {
+	pushedLimit := sqlparser.CloneRefOfLimit(orig.AST)
+	if pushedLimit.Offset != nil {
+		// we can't push down an offset, so we need to convert it to a rowcount
+		// by adding it to the already existing rowcount, and then let the LIMIT running on the vtgate do the rest
+		// this way we can still limit the number of rows that are returned
+		plus := &sqlparser.BinaryExpr{
+			Operator: sqlparser.PlusOp,
+			Left:     pushedLimit.Rowcount,
+			Right:    pushedLimit.Offset,
+		}
+		pushedLimit.Rowcount = getLimitExpression(ctx, plus)
+		pushedLimit.Offset = nil
+	}
+	return &Limit{
+		Source: src,
+		AST:    pushedLimit,
+	}
+}
+
+// getLimitExpression is a helper function to simplify an expression using the evalengine
+// if it's not able to simplify the expression to a literal, it will return an argument expression for :__upper_limit
+func getLimitExpression(ctx *plancontext.PlanningContext, expr sqlparser.Expr) sqlparser.Expr {
+	cfg := evalengine.Config{
+		Environment: ctx.VSchema.Environment(),
+	}
+	translated, err := evalengine.Translate(expr, &cfg)
+	if err != nil {
+		panic(vterrors.VT13001("failed to translate expression: " + err.Error()))
+	}
+	_, isLit := translated.(*evalengine.Literal)
+	if isLit {
+		return translated
+	}
+
+	// we were not able to calculate the expression, so we can't push it down
+	// the LIMIT above us will set an argument for us that we can use here
+	return sqlparser.NewArgument(engine.UpperLimitStr)
+}
+
+func tryPushingDownLimitInRoute(ctx *plancontext.PlanningContext, in *Limit, src *Route) (Operator, *ApplyResult) {
 	if src.IsSingleShardOrByDestination() {
 		return Swap(in, src, "push limit under route")
 	}
 
-	return setUpperLimit(in)
+	if sqlparser.IsDMLStatement(ctx.Statement) {
+		return setUpperLimit(in)
+	}
+
+	// this limit has already been pushed down, nothing to do here
+	if in.Pushed {
+		return in, NoRewrite
+	}
+
+	// when pushing a LIMIT into a Route that is not single sharded,
+	// we leave a LIMIT on top of the Route, and push a LIMIT under the Route
+	// This way we can still limit the number of rows that are returned
+	// from the Route and that way minimize unneeded processing
+	src.Source = createPushedLimit(ctx, src.Source, in)
+	in.Pushed = true
+
+	return in, Rewrote("pushed limit under route")
 }
 
 func setUpperLimit(in *Limit) (Operator, *ApplyResult) {
@@ -251,8 +332,7 @@ func setUpperLimit(in *Limit) (Operator, *ApplyResult) {
 		case *Route:
 			newSrc := &Limit{
 				Source: op.Source,
-				AST:    &sqlparser.Limit{Rowcount: sqlparser.NewArgument("__upper_limit")},
-				Pushed: false,
+				AST:    &sqlparser.Limit{Rowcount: sqlparser.NewArgument(engine.UpperLimitStr)},
 			}
 			op.Source = newSrc
 			result = result.Merge(Rewrote("push upper limit under route"))
@@ -583,16 +663,45 @@ func addTruncationOrProjectionToReturnOutput(ctx *plancontext.PlanningContext, s
 	}
 
 	cols := output.GetSelectExprs(ctx)
-	if len(selExprs) == len(cols) {
+	sizeCorrect := len(selExprs) == len(cols) || tryTruncateColumnsAt(output, len(selExprs))
+	if sizeCorrect && colNamesAlign(selExprs, cols) {
 		return output
 	}
 
-	if tryTruncateColumnsAt(output, len(selExprs)) {
-		return output
-	}
+	return createSimpleProjection(ctx, selExprs, output)
+}
 
-	proj := createSimpleProjection(ctx, selExprs, output)
-	return proj
+func colNamesAlign(expected, actual sqlparser.SelectExprs) bool {
+	for i, seE := range expected {
+		switch se := seE.(type) {
+		case *sqlparser.AliasedExpr:
+			if !areColumnNamesAligned(se, actual[i]) {
+				return false
+			}
+		case *sqlparser.StarExpr:
+			actualStar, isStar := actual[i].(*sqlparser.StarExpr)
+			if !isStar {
+				panic("I DONT THINK THIS CAN HAPPEN")
+			}
+			if !sqlparser.Equals.RefOfStarExpr(se, actualStar) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func areColumnNamesAligned(expectation *sqlparser.AliasedExpr, actual sqlparser.SelectExpr) bool {
+	_, isCol := expectation.Expr.(*sqlparser.ColName)
+	if expectation.As.IsEmpty() && !isCol {
+		// is the user didn't specify a name, we don't care
+		return true
+	}
+	actualAE, isAe := actual.(*sqlparser.AliasedExpr)
+	if !isAe {
+		panic(vterrors.VT13001("used star expression when user did not"))
+	}
+	return expectation.ColumnName() == actualAE.ColumnName()
 }
 
 func stopAtRoute(operator Operator) VisitRule {

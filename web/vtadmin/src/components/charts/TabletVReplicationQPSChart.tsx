@@ -1,5 +1,5 @@
 /**
- * Copyright 2021 The Vitess Authors.
+ * Copyright 2024 The Vitess Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,13 +14,11 @@
  * limitations under the License.
  */
 
-import Highcharts from 'highcharts';
 import { useMemo } from 'react';
 
 import { useExperimentalTabletDebugVars } from '../../hooks/api';
 import { getVReplicationQPSTimeseries, QPS_REFETCH_INTERVAL } from '../../util/tabletDebugVars';
-import { mergeOptions } from './chartOptions';
-import { Timeseries } from './Timeseries';
+import { D3Timeseries } from './D3Timeseries';
 
 interface Props {
     alias: string;
@@ -36,17 +34,8 @@ export const TabletVReplicationQPSChart = ({ alias, clusterID }: Props) => {
         }
     );
 
-    const options = useMemo(() => {
-        const tsdata = getVReplicationQPSTimeseries(debugVars?.data, query.dataUpdatedAt);
-
-        const series: Highcharts.SeriesOptionsType[] = Object.entries(tsdata).map(([name, data]) => ({
-            data,
-            name,
-            type: 'line',
-        }));
-
-        return mergeOptions({ series });
+    const tsdata = useMemo(() => {
+        return getVReplicationQPSTimeseries(debugVars?.data, query.dataUpdatedAt);
     }, [debugVars, query.dataUpdatedAt]);
-
-    return <Timeseries isLoading={query.isLoading} options={options} />;
+    return <D3Timeseries isLoading={query.isLoading} timeseriesMap={tsdata} />;
 };

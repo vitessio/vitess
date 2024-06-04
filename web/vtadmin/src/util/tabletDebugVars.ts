@@ -91,7 +91,7 @@ export const formatTimeseriesMap = (rates: { [k: string]: number[] }, endAt?: nu
     //      (a) be empty, or
     //      (b) contain a minimum of two series, one of them named "All".
     // In the first case, inserting an empty "All" series renders more nicely
-    // on a Highcharts graph since it will include the axes, etc. So, we add it here.
+    // on a graph since it will include the axes, etc. So, we add it here.
     const _rates = !!Object.keys(rates).length ? rates : { All: [] };
 
     const planTypes = Object.keys(_rates);

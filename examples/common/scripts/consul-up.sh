@@ -43,7 +43,7 @@ sleep 5
 echo "add ${cell} CellInfo"
 set +e
 # shellcheck disable=SC2086
-command vtctldclient --server internal --topo-implementation consul --topo-global-server "${CONSUL_SERVER}:${consul_http_port}"  AddCellInfo \
+command vtctldclient --server internal --topo-implementation consul --topo-global-server-address "${CONSUL_SERVER}:${consul_http_port}"  AddCellInfo \
   --root "/vitess/${cell}" \
   --server-address "${CONSUL_SERVER}:${consul_http_port}" \
   "${cell}"
