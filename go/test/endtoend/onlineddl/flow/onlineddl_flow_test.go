@@ -218,6 +218,7 @@ func TestSchemaChange(t *testing.T) {
 		t.Logf("Using REPLICA_TABLET_BINARY_SUFFIX: %s", binarySuffix)
 	}
 
+	require.NotEmpty(t, clusterInstance.Keyspaces)
 	shards = clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
 
