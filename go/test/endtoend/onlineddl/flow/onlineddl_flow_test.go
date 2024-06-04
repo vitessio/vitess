@@ -305,6 +305,8 @@ func TestSchemaChange(t *testing.T) {
 				waitForThrottleCheckStatus(t, throttlerapp.OnlineDDLName, primaryTablet, http.StatusOK)
 			})
 			t.Run("additional wait", func(t *testing.T) {
+				// Waiting just so that we generate more DMLs, and give migration/vreplication
+				// more "opportunities" to throttle or to make progress.
 				select {
 				case <-time.After(3 * time.Second):
 				case <-ctx.Done():
