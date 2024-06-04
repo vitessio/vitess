@@ -78,7 +78,7 @@ func TestDeleteTabletBasic(t *testing.T) {
 	}
 
 	err := wr.TopoServer().InitTablet(context.Background(), tablet, false /*allowPrimaryOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/)
-	require.NoError(t, err, "InitTablet failed")
+	require.NoError(t, err)
 
 	_, err = ts.GetTablet(context.Background(), tablet.Alias)
 	require.NoError(t, err, "GetTablet failed")
@@ -108,7 +108,7 @@ func TestDeleteTabletTruePrimary(t *testing.T) {
 	}
 
 	err := wr.TopoServer().InitTablet(context.Background(), tablet, false /*allowPrimaryOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/)
-	require.NoError(t, err, "InitTablet failed")
+	require.NoError(t, err)
 
 	_, err = ts.GetTablet(context.Background(), tablet.Alias)
 	require.NoError(t, err, "GetTablet failed")
@@ -150,7 +150,7 @@ func TestDeleteTabletFalsePrimary(t *testing.T) {
 	}
 
 	err := wr.TopoServer().InitTablet(context.Background(), tablet1, false /*allowPrimaryOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/)
-	require.NoError(t, err, "InitTablet failed")
+	require.NoError(t, err)
 
 	tablet2 := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
@@ -162,7 +162,7 @@ func TestDeleteTabletFalsePrimary(t *testing.T) {
 		Type:     topodatapb.TabletType_PRIMARY,
 	}
 	err = wr.TopoServer().InitTablet(context.Background(), tablet2, true /*allowPrimaryOverride*/, false /*createShardAndKeyspace*/, false /*allowUpdate*/)
-	require.NoError(t, err, "InitTablet failed")
+	require.NoError(t, err)
 
 	// set PrimaryAlias and PrimaryTermStartTime on shard to match chosen primary tablet
 	_, err = ts.UpdateShardFields(context.Background(), "test", "0", func(si *topo.ShardInfo) error {
@@ -198,7 +198,7 @@ func TestDeleteTabletShardNonExisting(t *testing.T) {
 	}
 
 	err := wr.TopoServer().InitTablet(context.Background(), tablet, false /*allowPrimaryOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/)
-	require.NoError(t, err, "InitTablet failed")
+	require.NoError(t, err)
 
 	_, err = ts.GetTablet(context.Background(), tablet.Alias)
 	require.NoError(t, err, "GetTablet failed")
