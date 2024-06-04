@@ -614,3 +614,30 @@ func TestFilterByKeypsaceSkipsIgnoredTablets(t *testing.T) {
 
 	tw.Stop()
 }
+
+func TestNewFilterByTabletTags(t *testing.T) {
+	// no required tags == true
+	filter := NewFilterByTabletTags(nil)
+	assert.True(t, filter.IsIncluded(&topodatapb.Tablet{}))
+
+	tags := map[string]string{
+		"instance_type": "i3.xlarge",
+		"some_key":      "some_value",
+	}
+	filter = NewFilterByTabletTags(tags)
+
+	assert.False(t, filter.IsIncluded(&topodatapb.Tablet{
+		Tags: nil,
+	}))
+	assert.False(t, filter.IsIncluded(&topodatapb.Tablet{
+		Tags: map[string]string{},
+	}))
+	assert.False(t, filter.IsIncluded(&topodatapb.Tablet{
+		Tags: map[string]string{
+			"instance_type": "i3.xlarge",
+		},
+	}))
+	assert.True(t, filter.IsIncluded(&topodatapb.Tablet{
+		Tags: tags,
+	}))
+}

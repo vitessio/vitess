@@ -137,6 +137,7 @@ Usage of vtgate:
       --querylog-filter-tag string                                       string that must be present in the query for it to be logged; if using a value as the tag, you need to disable query normalization
       --querylog-format string                                           format for query logs ("text" or "json") (default "text")
       --querylog-row-threshold uint                                      Number of rows a query has to return or affect before being logged; not useful for streaming queries. 0 means all queries will be logged.
+      --querylog-sample-rate float                                       Sample rate for logging queries. Value must be between 0.0 (no logging) and 1.0 (all queries)
       --redact-debug-ui-queries                                          redact full queries and bind variables from debug UI
       --remote_operation_timeout duration                                time to wait for a remote operation (default 15s)
       --retry-count int                                                  retry count (default 2)
@@ -159,6 +160,7 @@ Usage of vtgate:
       --stderrthreshold severityFlag                                     logs at or above this threshold go to stderr (default 1)
       --stream_buffer_size int                                           the number of bytes sent from vtgate for each stream call. It's recommended to keep this value in sync with vttablet's query-server-config-stream-buffer-size. (default 32768)
       --structured-logging                                               whether to use structured logging (PlanetScale Log) logger or the original (glog) logger
+      --tablet-filter-tags StringMap                                     Specifies a comma-separated list of tablet tags (as key:value pairs) to filter the tablets to watch.
       --tablet_filters strings                                           Specifies a comma-separated list of 'keyspace|shard_name or keyrange' values to filter the tablets to watch.
       --tablet_grpc_ca string                                            the server ca to use to validate servers when connecting
       --tablet_grpc_cert string                                          the cert to use to connect

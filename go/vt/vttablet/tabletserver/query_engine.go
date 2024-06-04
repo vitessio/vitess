@@ -171,7 +171,7 @@ type QueryEngine struct {
 	consolidatorMode sync2.AtomicString
 
 	// stats
-	queryCounts, queryTimes, queryRowCounts, queryErrorCounts, queryRowsAffected, queryRowsReturned, querySQLTextCounts *stats.CountersWithMultiLabels
+	queryCounts, queryTimes, queryRowCounts, queryErrorCounts, queryRowsAffected, queryRowsReturned, queryTextCharsProcessed *stats.CountersWithMultiLabels
 
 	// stats flags
 	enablePerWorkloadTableMetrics bool
@@ -261,7 +261,7 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 	qe.queryRowCounts = env.Exporter().NewCountersWithMultiLabels("QueryRowCounts", "(DEPRECATED - use QueryRowsAffected and QueryRowsReturned instead) query row counts", labels)
 	qe.queryRowsAffected = env.Exporter().NewCountersWithMultiLabels("QueryRowsAffected", "query rows affected", labels)
 	qe.queryRowsReturned = env.Exporter().NewCountersWithMultiLabels("QueryRowsReturned", "query rows returned", labels)
-	qe.querySQLTextCounts = env.Exporter().NewCountersWithMultiLabels("QuerySQLTextCounts", "query sql text counts", labels)
+	qe.queryTextCharsProcessed = env.Exporter().NewCountersWithMultiLabels("QueryTextCharactersProcessed", "query text characters processed", labels)
 	qe.queryErrorCounts = env.Exporter().NewCountersWithMultiLabels("QueryErrorCounts", "query error counts", labels)
 
 	env.Exporter().HandleFunc("/debug/hotrows", qe.txSerializer.ServeHTTP)
@@ -502,7 +502,7 @@ func (qe *QueryEngine) AddStats(plan *TabletPlan, tableName, workload string, qu
 	qe.queryRowCounts.Add(keys, rowsAffected)
 	qe.queryErrorCounts.Add(keys, errorCount)
 	if plan.FullQuery != nil {
-		qe.querySQLTextCounts.Add(keys, int64(len(plan.FullQuery.Query)))
+		qe.queryTextCharsProcessed.Add(keys, int64(len(plan.FullQuery.Query)))
 	}
 
 	// For certain plan types like select, we only want to add their metrics to rows returned
