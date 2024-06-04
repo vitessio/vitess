@@ -7,7 +7,6 @@
   - **[Deletions](#deletions)** 
     - [`--vreplication_tablet_type` flag](#vreplication-tablet-type-deletion)
     - [Pool Capacity Flags](#pool-flags-deletion)
-    - [MySQL binaries in the vitess/lite Docker images](#vitess-lite)
     - [vitess/base and vitess/k8s Docker images](#base-k8s-images)
     - [`gh-ost` binary and endtoend tests](#gh-ost-binary-tests-removal)
     - [Legacy `EmergencyReparentShard` stats](#legacy-emergencyshardreparent-stats)
@@ -55,47 +54,6 @@ The previously deprecated flag `--vreplication_tablet_type` has been deleted.
 #### <a id="pool-flags-deletion"/>Pool Capacity Flags
 
 The previously deprecated flags `--queryserver-config-query-pool-waiter-cap`, `--queryserver-config-stream-pool-waiter-cap` and `--queryserver-config-txpool-waiter-cap` have been deleted.
-
-#### <a id="vitess-lite"/>MySQL binaries in the `vitess/lite` Docker images
-
-In `v19.0.0` we had deprecated the `mysqld` binary in the `vitess/lite` Docker image.
-Making MySQL/Percona version specific image tags also deprecated.
-
-Starting in `v20.0.0` we no longer build the MySQL/Percona version specific image tags.
-Moreover, the `mysqld` binary is no longer present on the `vitess/lite` image.
-
-Here are the images we will no longer build and push:
-
-| Image                           | Available | 
-|---------------------------------|-----------|
-| `vitess/lite:v20.0.0`           | YES       |
-| `vitess/lite:v20.0.0-mysql57`   | NO        |
-| `vitess/lite:v20.0.0-mysql80`   | NO        |
-| `vitess/lite:v20.0.0-percona57` | NO        |
-| `vitess/lite:v20.0.0-percona80` | NO        |
-
-
-If you have not done it yet, you can use an official MySQL Docker image for your `mysqld` container now such as: `mysql:8.0.30`.
-Below is an example of a kubernetes yaml file before and after upgrading to an official MySQL image:
-
-```yaml
-# before:
-
-# you are still on v19 and are looking to upgrade to v20
-# the image used here includes MySQL 8.0.30 and its binaries
-
-    mysqld:
-      mysql80Compatible: vitess/lite:v19.0.0-mysql80
-```
-```yaml
-# after:
-
-# if we still want to use MySQL 8.0.30, we now have to use the
-# official MySQL image with the 8.0.30 tag as shown below 
-
-    mysqld:
-      mysql80Compatible: mysql:8.0.30 # or even mysql:8.0.34 for instance
-```
 
 #### <a id="base-k8s-images"/>`vitess/base` and `vitess/k8s` Docker images
 

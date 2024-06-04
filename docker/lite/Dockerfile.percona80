@@ -1,4 +1,4 @@
-# Copyright 2019 The Vitess Authors.
+# Copyright 2024 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@
 
 # Use a temporary layer for the build stage.
 ARG bootstrap_version=32
-ARG image="vitess/bootstrap:${bootstrap_version}-mysql80"
+ARG image="vitess/bootstrap:${bootstrap_version}-percona80"
 
 FROM "${image}" AS builder
 
@@ -30,7 +30,6 @@ COPY --chown=vitess:vitess . /vt/src/vitess.io/vitess
 
 # Build and install Vitess in a temporary output directory.
 USER vitess
-
 RUN make install PREFIX=/vt/install
 
 # Start over and build the final image.
@@ -38,7 +37,7 @@ FROM debian:bullseye-slim
 
 # Install dependencies
 COPY docker/utils/install_dependencies.sh /vt/dist/install_dependencies.sh
-RUN /vt/dist/install_dependencies.sh mysql80
+RUN /vt/dist/install_dependencies.sh percona80
 
 # Set up Vitess user and directory tree.
 RUN groupadd -r vitess && useradd -r -g vitess vitess
@@ -50,11 +49,8 @@ ENV VTDATAROOT /vt/vtdataroot
 ENV PATH $VTROOT/bin:$PATH
 
 # Copy artifacts from builder layer.
-COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=builder --chown=vitess:vitess /vt/install /vt
 COPY --from=builder --chown=vitess:vitess /vt/src/vitess.io/vitess/web/vtadmin /vt/web/vtadmin
-COPY --from=builder --chown=vitess:vitess /vt/src/vitess.io/vitess/config/init_db.sql /vt/config/
-COPY --from=builder --chown=vitess:vitess /vt/src/vitess.io/vitess/config/mycnf /vt/config/
 
 # Create mount point for actual data (e.g. MySQL data dir)
 VOLUME /vt/vtdataroot
