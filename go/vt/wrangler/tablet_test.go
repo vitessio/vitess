@@ -53,7 +53,7 @@ func TestInitTabletShardConversion(t *testing.T) {
 	require.NoError(t, err)
 
 	ti, err := ts.GetTablet(context.Background(), tablet.Alias)
-	require.NoError(t, err, "GetTablet failed")
+	require.NoError(t, err)
 	require.Equal(t, "80-c0", ti.Shard, "Got wrong tablet.Shard")
 	require.Equal(t, "\x80", string(ti.KeyRange.Start), "Got wrong tablet.KeyRange start")
 	require.Equal(t, "\xc0", string(ti.KeyRange.End), "Got wrong tablet.KeyRange end")
@@ -81,7 +81,7 @@ func TestDeleteTabletBasic(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = ts.GetTablet(context.Background(), tablet.Alias)
-	require.NoError(t, err, "GetTablet failed")
+	require.NoError(t, err)
 
 	err = wr.DeleteTablet(context.Background(), tablet.Alias, false)
 	require.NoError(t, err, "DeleteTablet failed")
@@ -111,7 +111,7 @@ func TestDeleteTabletTruePrimary(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = ts.GetTablet(context.Background(), tablet.Alias)
-	require.NoError(t, err, "GetTablet failed")
+	require.NoError(t, err)
 
 	// set PrimaryAlias and PrimaryTermStartTime on shard to match chosen primary tablet
 	_, err = ts.UpdateShardFields(context.Background(), "test", "0", func(si *topo.ShardInfo) error {
@@ -217,5 +217,5 @@ func TestDeleteTabletShardNonExisting(t *testing.T) {
 
 	// DeleteTablet should not fail if a shard no longer exist
 	err = wr.DeleteTablet(context.Background(), tablet.Alias, true)
-	require.NoError(t, err, "DeleteTablet failed")
+	require.NoError(t, err)
 }
