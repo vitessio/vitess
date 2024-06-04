@@ -1,0 +1,85 @@
+[
+  {
+    "comment": "Add your test case here for debugging and run go test -run=One.",
+    "query": "select (select count(*) from user_extra) x from user order by x",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select (select count(*) from user_extra) x from user order by x",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "sum_count_star(0) AS count(*)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select count(*) from user_extra where 1 != 1",
+                "Query": "select count(*) from user_extra",
+                "Table": "user_extra"
+              }
+            ]
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutValue",
+            "PulloutVars": [
+              "__sq1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Aggregate",
+                "Variant": "Scalar",
+                "Aggregates": "sum_count_star(0) AS count(*)",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select count(*) from user_extra where 1 != 1",
+                    "Query": "select count(*) from user_extra",
+                    "Table": "user_extra"
+                  }
+                ]
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select :__sq1 as x, __sq1, weight_string(__sq1) from `user` where 1 != 1",
+                "OrderBy": "(1|2) ASC",
+                "Query": "select :__sq1 as x, __sq1, weight_string(__sq1) from `user` order by __sq1 asc",
+                "ResultColumns": 1,
+                "Table": "`user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  }
+]

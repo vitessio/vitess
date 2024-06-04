@@ -885,6 +885,26 @@
     }
   },
   {
+    "comment": "Check that we don't remove information_schema qualifier",
+    "query": "select 1 from information_schema.tables where exists(select 1 from information_schema.tables where table_name = 'tables')",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 1 from information_schema.tables where exists(select 1 from information_schema.tables where table_name = 'tables')",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select 1 from information_schema.`tables` where 1 != 1",
+        "Query": "select 1 from information_schema.`tables` where exists (select 1 from information_schema.`tables` where table_name = :table_name /* VARCHAR */ limit 1)",
+        "SysTableTableName": "[table_name:VARCHAR(\"tables\")]",
+        "Table": "information_schema.`tables`"
+      }
+    }},
+
+  {
     "comment": "Composite IN: tuple inside tuple",
     "query": "select id from user where ((col1, name), col2) in ((('aa', 'bb'), 'cc'), (('dd', 'ee'), 'ff'))",
     "v3-plan": {
