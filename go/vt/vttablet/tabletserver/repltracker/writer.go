@@ -227,6 +227,12 @@ func (w *heartbeatWriter) bindHeartbeatVars(query string) (string, error) {
 
 // writeHeartbeat updates the heartbeat row for this tablet with the current time in nanoseconds.
 func (w *heartbeatWriter) writeHeartbeat() {
+	if err := w.write(); err != nil {
+		w.recordError(err)
+	} else {
+		writes.Add(1)
+	}
+
 	if w.onDemandDuration > 0 {
 		// See if we need to expire the heartbeats
 		go func() {
@@ -237,12 +243,6 @@ func (w *heartbeatWriter) writeHeartbeat() {
 			}
 		}()
 	}
-
-	if err := w.write(); err != nil {
-		w.recordError(err)
-		return
-	}
-	writes.Add(1)
 }
 
 // write writes a single heartbeat update.
@@ -350,6 +350,8 @@ func (w *heartbeatWriter) killWrite() error {
 
 // allowNextHeartbeatRequest ensures that the next call to RequestHeartbeats() passes through and
 // is not rate-limited.
+// Use case: just as the on-demand lease expires, a new request for heartbeat comes, and it's in the same timeslot
+// as the one before the expiration. We want to allow the new request to re-lease on demand heartbeats.
 func (w *heartbeatWriter) allowNextHeartbeatRequest() {
 	// The writer could be close()d while this function is running and thus the value of the rate limiter could be nil.
 	// We thus use golang atomic here to avoid locking mutexes.
