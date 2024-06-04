@@ -419,16 +419,22 @@ func (tp *TablePlan) applyChangeForJoin(eventTableName string, eventTablePlan *T
 			log.Infof("Ignoring non-main table insert for %v", eventTableName)
 			return nil, nil
 		}
-		clear(bindvars)
-		log.Infof("Inserting into main table %v: %s", tp.JoinPlan.MainTable, tp.JoinPlan.Insert.Query)
+		log.Infof("Inserting into main table %v: %s, bindvars %+q", tp.JoinPlan.MainTable, tp.JoinPlan.Insert.Query, bindvars)
 		return execParsedQuery(tp.JoinPlan.Insert, bindvars, executor)
 	case before && after:
-		update := tp.JoinPlan.Updates[eventTableName]
-		if update == nil {
+		upd := tp.JoinPlan.Updates[eventTableName]
+		if upd == nil {
 			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "update query not found for %v", eventTableName)
 		}
-		log.Infof("Updating %v: %s with bindvars %+q", eventTableName, update.Query, bindvars)
-		return execParsedQuery(update, bindvars, executor)
+		log.Infof("Updating %v: %s with bindvars %+q", eventTableName, upd.Query, bindvars)
+		return execParsedQuery(upd, bindvars, executor)
+	case before && !after:
+		del := tp.JoinPlan.Deletes[eventTableName]
+		if del == nil {
+			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "delete query not found for %v", eventTableName)
+		}
+		log.Infof("Deleting from %v: %s with bindvars %+q", eventTableName, del.Query, bindvars)
+		return execParsedQuery(del, bindvars, executor)
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "applyChangeForJoin called with before or without after")
 	}

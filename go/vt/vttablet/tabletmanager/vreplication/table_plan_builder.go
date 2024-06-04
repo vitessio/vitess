@@ -203,7 +203,7 @@ func buildReplicatorPlanForJoin(source *binlogdatapb.BinlogSource, colInfoMap ma
 	joinPlan.TableName = view
 	joinPlan.MainTableName = joinTables[0]
 	query := source.Filter.Rules[0].Filter
-	log.Infof("View, query %s %s", view, query)
+	log.Infof("View %s, query %s", view, query)
 	tablePlan := &TablePlan{
 		TargetName: view,
 		SendRule:   source.Filter.Rules[0],
@@ -270,7 +270,14 @@ func buildReplicatorPlanForJoin(source *binlogdatapb.BinlogSource, colInfoMap ma
 		log.Infof("table %s, column %v", table, cols)
 	}
 
-	qr, err := dbClient.ExecuteFetch("select * from "+view, 1)
+	if view == "" {
+		return nil, fmt.Errorf("view name is empty")
+	}
+	qr, err := dbClient.ExecuteFetch(fmt.Sprintf("select * from %s limit 1", view), 1)
+	if err != nil {
+		return nil, err
+
+	}
 	tablePlan.Fields = qr.Fields
 	insert := generateInsertForJoin(view, query, tablePlan.Fields)
 	log.Infof("Insert for Join is %+q", insert)
@@ -310,7 +317,9 @@ type ViewColumn struct {
 }
 
 func generateInsertForJoin(view string, viewQuery string, fields []*querypb.Field) *sqlparser.ParsedQuery {
-	buf := sqlparser.NewTrackedBuffer(nil)
+	bvf := &bindvarFormatter{}
+	buf := sqlparser.NewTrackedBuffer(bvf.formatter)
+	bvf.mode = bvAfter
 	buf.Myprintf("insert into %v (", sqlparser.NewIdentifierCS(view))
 	separator := ""
 	for _, field := range fields {
@@ -319,8 +328,9 @@ func generateInsertForJoin(view string, viewQuery string, fields []*querypb.Fiel
 	}
 	buf.Myprintf(") ")
 	buf.Myprintf("%s", viewQuery)
+	buf.Myprintf(" where oid = ")
+	buf.Myprintf("%v", sqlparser.NewColName("oid"))
 	return buf.ParsedQuery()
-
 }
 
 func generateUpdatesForJoin(view string, viewColumns map[string][]*ViewColumn) map[string]*sqlparser.ParsedQuery {
@@ -340,6 +350,7 @@ func generateUpdatesForJoin(view string, viewColumns map[string][]*ViewColumn) m
 			separator = ", "
 		}
 		col := cols[0]
+		bvf.mode = bvBefore
 		buf.Myprintf(" where %s = ", sqlparser.NewIdentifierCI(col.ViewColumnName).String())
 		buf.Myprintf("%v", sqlparser.NewColName(col.ViewColumnName))
 		updates[table] = buf.ParsedQuery()
@@ -353,7 +364,7 @@ func generateDeletesForJoin(view string, viewColumns map[string][]*ViewColumn) m
 	for table, cols := range viewColumns {
 		bvf := &bindvarFormatter{}
 		buf := sqlparser.NewTrackedBuffer(bvf.formatter)
-		bvf.mode = bvAfter
+		bvf.mode = bvBefore
 		buf.Myprintf("delete from %v where ", sqlparser.NewIdentifierCS(view))
 		separator := ""
 		for i, col := range cols {
@@ -362,7 +373,7 @@ func generateDeletesForJoin(view string, viewColumns map[string][]*ViewColumn) m
 			}
 			buf.Myprintf("%s%s = ", separator, sqlparser.NewIdentifierCI(col.ViewColumnName).CompliantName())
 			buf.Myprintf("%v", sqlparser.NewColName(col.ViewColumnName))
-			separator = ", "
+			separator = " and "
 		}
 		deletes[table] = buf.ParsedQuery()
 		log.Infof("Delete for table %s is %s, bindLocations %d", table, buf.String(), len(deletes[table].BindLocations()))
