@@ -45,6 +45,10 @@ service TabletManager {
   // GetPermissions asks the tablet for its permissions
   rpc GetPermissions(tabletmanagerdata.GetPermissionsRequest) returns (tabletmanagerdata.GetPermissionsResponse) {};
 
+  // GetGlobalStatusVars returns the server's global status variables asked for.
+  // An empty/nil variable name parameter slice means you want all of them.
+  rpc GetGlobalStatusVars(tabletmanagerdata.GetGlobalStatusVarsRequest) returns (tabletmanagerdata.GetGlobalStatusVarsResponse) {};
+
   //
   // Various read-write methods
   //
