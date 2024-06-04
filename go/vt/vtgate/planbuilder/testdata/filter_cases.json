@@ -847,6 +847,44 @@
     }
   },
   {
+    "comment": "Merging subqueries should remove keyspace from query",
+    "query": "select u.id from user.user as u where not exists (select 1 from user.user_extra as ue where u.id = ue.user_id)",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "select u.id from user.user as u where not exists (select 1 from user.user_extra as ue where u.id = ue.user_id)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.id from `user` as u where 1 != 1",
+        "Query": "select u.id from `user` as u where not exists (select 1 from user_extra as ue where u.id = ue.user_id limit 1)",
+        "Table": "`user`"
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select u.id from user.user as u where not exists (select 1 from user.user_extra as ue where u.id = ue.user_id)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.id from `user` as u where 1 != 1",
+        "Query": "select u.id from `user` as u where not exists (select 1 from user_extra as ue where u.id = ue.user_id limit 1)",
+        "Table": "`user`"
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
     "comment": "Composite IN: tuple inside tuple",
     "query": "select id from user where ((col1, name), col2) in ((('aa', 'bb'), 'cc'), (('dd', 'ee'), 'ff'))",
     "v3-plan": {

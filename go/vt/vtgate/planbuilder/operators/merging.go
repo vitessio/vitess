@@ -274,6 +274,8 @@ func (s *subQueryMerger) markPredicateInOuterRouting(outer *ShardedRouting, inne
 
 func (s *subQueryMerger) mergeTables(outer, inner *ShardedRouting, op1, op2 *Route) (*Route, error) {
 	s.subq.ExtractedSubquery.Merged = true
+	// we need to make sure that table qualifiers are removed before sending the query to MySQL
+	sqlparser.RemoveKeyspaceInTables(s.subq.ExtractedSubquery)
 
 	routing, err := s.markPredicateInOuterRouting(outer, inner)
 	if err != nil {
