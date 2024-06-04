@@ -1502,7 +1502,7 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		}
 	}
 	if isStandardMoveTables() { // Non-standard ones do not use shard scoped mechanisms
-		if err := s.setupInitialDeniedTables(ctx, req, ts); err != nil {
+		if err := s.setupInitialDeniedTables(ctx, ts); err != nil {
 			return nil, vterrors.Wrapf(err, "failed to put initial denied tables entries in place on the target shards")
 		}
 	}
@@ -1569,8 +1569,11 @@ func (s *Server) validateRoutingRuleFlags(req *vtctldatapb.MoveTablesCreateReque
 	return nil
 }
 
-func (s *Server) setupInitialDeniedTables(ctx context.Context, req *vtctldatapb.MoveTablesCreateRequest, ts *trafficSwitcher) error {
-	err := ts.ForAllTargets(func(target *MigrationTarget) error {
+func (s *Server) setupInitialDeniedTables(ctx context.Context, ts *trafficSwitcher) error {
+	if ts.MigrationType() != binlogdatapb.MigrationType_TABLES {
+		return nil
+	}
+	return ts.ForAllTargets(func(target *MigrationTarget) error {
 		if _, err := ts.TopoServer().UpdateShardFields(ctx, ts.TargetKeyspaceName(), target.GetShard().ShardName(), func(si *topo.ShardInfo) error {
 			return si.UpdateDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, false, ts.Tables())
 		}); err != nil {
@@ -1581,7 +1584,6 @@ func (s *Server) setupInitialDeniedTables(ctx context.Context, req *vtctldatapb.
 		_, _, err := topotools.RefreshTabletsByShard(strCtx, ts.TopoServer(), ts.TabletManagerClient(), target.GetShard(), nil, ts.Logger())
 		return err
 	})
-	return err
 }
 
 func (s *Server) setupInitialRoutingRules(ctx context.Context, req *vtctldatapb.MoveTablesCreateRequest, mz *materializer, tables []string) error {

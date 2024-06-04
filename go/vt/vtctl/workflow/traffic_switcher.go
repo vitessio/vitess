@@ -712,23 +712,9 @@ func (ts *trafficSwitcher) changeShardsAccess(ctx context.Context, keyspace stri
 
 func (ts *trafficSwitcher) allowTargetWrites(ctx context.Context) error {
 	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
-		return ts.allowTableTargetWrites(ctx)
+		return ts.switchDeniedTables(ctx)
 	}
 	return ts.changeShardsAccess(ctx, ts.TargetKeyspaceName(), ts.TargetShards(), allowWrites)
-}
-
-func (ts *trafficSwitcher) allowTableTargetWrites(ctx context.Context) error {
-	return ts.ForAllTargets(func(target *MigrationTarget) error {
-		if _, err := ts.TopoServer().UpdateShardFields(ctx, ts.TargetKeyspaceName(), target.GetShard().ShardName(), func(si *topo.ShardInfo) error {
-			return si.UpdateDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, true, ts.Tables())
-		}); err != nil {
-			return err
-		}
-		rtbsCtx, cancel := context.WithTimeout(ctx, shardTabletRefreshTimeout)
-		defer cancel()
-		_, _, err := topotools.RefreshTabletsByShard(rtbsCtx, ts.TopoServer(), ts.TabletManagerClient(), target.GetShard(), nil, ts.Logger())
-		return err
-	})
 }
 
 func (ts *trafficSwitcher) changeRouting(ctx context.Context) error {
@@ -1025,7 +1011,7 @@ func (ts *trafficSwitcher) waitForCatchup(ctx context.Context, filteredReplicati
 func (ts *trafficSwitcher) stopSourceWrites(ctx context.Context) error {
 	var err error
 	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
-		err = ts.changeTableSourceWrites(ctx, disallowWrites)
+		err = ts.switchDeniedTables(ctx)
 	} else {
 		err = ts.changeShardsAccess(ctx, ts.SourceKeyspaceName(), ts.SourceShards(), disallowWrites)
 	}
@@ -1045,36 +1031,60 @@ func (ts *trafficSwitcher) stopSourceWrites(ctx context.Context) error {
 	})
 }
 
-func (ts *trafficSwitcher) changeTableSourceWrites(ctx context.Context, access accessType) error {
-	err := ts.ForAllSources(func(source *MigrationSource) error {
-		if _, err := ts.TopoServer().UpdateShardFields(ctx, ts.SourceKeyspaceName(), source.GetShard().ShardName(), func(si *topo.ShardInfo) error {
-			return si.UpdateDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, access == allowWrites /* remove */, ts.Tables())
-		}); err != nil {
+// switchDeniedTables switches the denied tables rules for the traffic switch.
+// They are removed on the source side and added on the target side.
+func (ts *trafficSwitcher) switchDeniedTables(ctx context.Context) error {
+	if ts.MigrationType() != binlogdatapb.MigrationType_TABLES {
+		return nil
+	}
+
+	egrp, ectx := errgroup.WithContext(ctx)
+	egrp.Go(func() error {
+		return ts.ForAllSources(func(source *MigrationSource) error {
+			if _, err := ts.TopoServer().UpdateShardFields(ctx, ts.SourceKeyspaceName(), source.GetShard().ShardName(), func(si *topo.ShardInfo) error {
+				return si.UpdateDeniedTables(ectx, topodatapb.TabletType_PRIMARY, nil, false, ts.Tables())
+			}); err != nil {
+				return err
+			}
+			rtbsCtx, cancel := context.WithTimeout(ectx, shardTabletRefreshTimeout)
+			defer cancel()
+			isPartial, partialDetails, err := topotools.RefreshTabletsByShard(rtbsCtx, ts.TopoServer(), ts.TabletManagerClient(), source.GetShard(), nil, ts.Logger())
+			if isPartial {
+				err = fmt.Errorf("failed to successfully refresh all tablets in the %s/%s source shard (%v):\n  %v",
+					source.GetShard().Keyspace(), source.GetShard().ShardName(), err, partialDetails)
+			}
 			return err
-		}
-		rtbsCtx, cancel := context.WithTimeout(ctx, shardTabletRefreshTimeout)
-		defer cancel()
-		isPartial, partialDetails, err := topotools.RefreshTabletsByShard(rtbsCtx, ts.TopoServer(), ts.TabletManagerClient(), source.GetShard(), nil, ts.Logger())
-		if isPartial {
-			err = fmt.Errorf("failed to successfully refresh all tablets in the %s/%s source shard (%v):\n  %v",
-				source.GetShard().Keyspace(), source.GetShard().ShardName(), err, partialDetails)
-		}
-		return err
+		})
 	})
-	if err != nil {
-		log.Warningf("Error in changeTableSourceWrites: %s", err)
+	egrp.Go(func() error {
+		return ts.ForAllTargets(func(target *MigrationTarget) error {
+			if _, err := ts.TopoServer().UpdateShardFields(ectx, ts.TargetKeyspaceName(), target.GetShard().ShardName(), func(si *topo.ShardInfo) error {
+				return si.UpdateDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, true, ts.Tables())
+			}); err != nil {
+				return err
+			}
+			rtbsCtx, cancel := context.WithTimeout(ectx, shardTabletRefreshTimeout)
+			defer cancel()
+			isPartial, partialDetails, err := topotools.RefreshTabletsByShard(rtbsCtx, ts.TopoServer(), ts.TabletManagerClient(), target.GetShard(), nil, ts.Logger())
+			if isPartial {
+				err = fmt.Errorf("failed to successfully refresh all tablets in the %s/%s target shard (%v):\n  %v",
+					target.GetShard().Keyspace(), target.GetShard().ShardName(), err, partialDetails)
+			}
+			return err
+		})
+	})
+	if err := egrp.Wait(); err != nil {
+		log.Warningf("Error in switchDeniedTables: %s", err)
 		return err
 	}
-	// Note that the denied tables, which are being updated in this method, are not part of the SrvVSchema in the topo.
-	// However, we are using the notification of a SrvVSchema change in VTGate to recompute the state of a
-	// MoveTables workflow (which also looks up denied tables from the topo). So we need to trigger a SrvVSchema change here.
-	return ts.TopoServer().RebuildSrvVSchema(ctx, nil)
+
+	return nil
 }
 
 func (ts *trafficSwitcher) cancelMigration(ctx context.Context, sm *StreamMigrator) {
 	var err error
 	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
-		err = ts.changeTableSourceWrites(ctx, allowWrites)
+		err = ts.switchDeniedTables(ctx)
 	} else {
 		err = ts.changeShardsAccess(ctx, ts.SourceKeyspaceName(), ts.SourceShards(), allowWrites)
 	}
