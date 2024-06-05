@@ -72,7 +72,7 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-go@v5
       with:
-        go-version: 1.21.10
+        go-version: 1.21.11
 
     - name: Set up python
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'

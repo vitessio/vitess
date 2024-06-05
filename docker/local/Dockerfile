@@ -1,4 +1,4 @@
-ARG bootstrap_version=18.9
+ARG bootstrap_version=18.10
 ARG image="vitess/bootstrap:${bootstrap_version}-common"
 
 FROM "${image}"
