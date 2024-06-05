@@ -336,14 +336,15 @@ const (
 			AND liveness_timestamp < NOW() - INTERVAL %a MINUTE
 		ORDER BY id
 	`
-	sqlSelectMigrationsByContext = `SELECT
-			migration_uuid,
-			migration_context,
-			mysql_table,
-			migration_status
+	sqlSelectFailedCancelledMigrationsInContextBeforeMigration = `SELECT
+			migration_uuid
 		FROM _vt.schema_migrations
 		WHERE
 			migration_context=%a
+			AND migration_status IN ('failed', 'cancelled')
+			AND id < (
+				SELECT id FROM _vt.schema_migrations WHERE migration_uuid=%a
+			)
 		ORDER BY id
 	`
 	sqlSelectPendingMigrations = `SELECT
