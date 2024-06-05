@@ -31,7 +31,7 @@ import (
 
 // SubQuery represents a subquery used for filtering rows in an
 // outer query through a join.
-type /**/ SubQuery struct {
+type SubQuery struct {
 	// Fields filled in at the time of construction:
 	Outer             Operator             // Outer query operator.
 	Subquery          Operator             // Subquery operator.
@@ -53,7 +53,8 @@ type /**/ SubQuery struct {
 	// We use this information to fail the planning if we are unable to merge the subquery with a route.
 	correlated bool
 
-	IsProjection bool
+	// IsArgument is set to true if the subquery puts the
+	IsArgument bool
 }
 
 func (sq *SubQuery) planOffsets(ctx *plancontext.PlanningContext) Operator {
@@ -156,8 +157,8 @@ func (sq *SubQuery) SetInputs(inputs []Operator) {
 
 func (sq *SubQuery) ShortDescription() string {
 	var typ string
-	if sq.IsProjection {
-		typ = "PROJ"
+	if sq.IsArgument {
+		typ = "ARGUMENT"
 	} else {
 		typ = "FILTER"
 	}
@@ -210,7 +211,7 @@ func (sq *SubQuery) settle(ctx *plancontext.PlanningContext, outer Operator) Ope
 	if sq.correlated && sq.FilterType != opcode.PulloutExists {
 		panic(correlatedSubqueryErr)
 	}
-	if sq.IsProjection {
+	if sq.IsArgument {
 		if len(sq.GetMergePredicates()) > 0 {
 			// this means that we have a correlated subquery on our hands
 			panic(correlatedSubqueryErr)
