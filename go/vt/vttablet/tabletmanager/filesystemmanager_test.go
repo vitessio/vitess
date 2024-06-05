@@ -8,25 +8,21 @@ import (
 )
 
 type mockWriter struct {
-	ctx                   context.Context
-	totalCreateCalls      int
-	blockAfterCreateCalls int
+	ctx             context.Context
+	totalCalls      int
+	blockAfterCalls int
 }
 
 func (mfc *mockWriter) mockWriteFunction() error {
-	mfc.totalCreateCalls += 1
-	if mfc.blockAfterCreateCalls > 0 && mfc.totalCreateCalls >= mfc.blockAfterCreateCalls {
-		for {
-			select {
-			case <-mfc.ctx.Done():
-				return errors.New("context cancelled")
-			}
-		}
+	mfc.totalCalls += 1
+	if mfc.blockAfterCalls > 0 && mfc.totalCalls >= mfc.blockAfterCalls {
+		<-mfc.ctx.Done()
+		return errors.New("context cancelled")
 	}
 	return nil
 }
 
-func TestFileSystemManager_noStall(t *testing.T) {
+func TestFileSystemManager_IsDiskStalled_noStall(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	mockFileCreator := &mockWriter{ctx: ctx}
@@ -34,8 +30,8 @@ func TestFileSystemManager_noStall(t *testing.T) {
 	go filesystemManager.poll(ctx)
 
 	time.Sleep(300 * time.Millisecond)
-	if mockFileCreator.totalCreateCalls < 2 {
-		t.Fatalf("expected at least 2 calls to createFile, got %d", mockFileCreator.totalCreateCalls)
+	if mockFileCreator.totalCalls < 2 {
+		t.Fatalf("expected at least 2 calls to createFile, got %d", mockFileCreator.totalCalls)
 	}
 	if isStalled := filesystemManager.IsDiskStalled(); isStalled {
 		t.Fatalf("expected IsDiskStalled to be false")
@@ -43,15 +39,15 @@ func TestFileSystemManager_noStall(t *testing.T) {
 	cancel()
 }
 
-func TestFileSystemManager_stall(t *testing.T) {
+func TestFileSystemManager_IsDiskStalled_stall(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	mockFileCreator := &mockWriter{ctx: ctx, blockAfterCreateCalls: 2}
+	mockFileCreator := &mockWriter{ctx: ctx, blockAfterCalls: 2}
 	filesystemManager := newPollingFileSystemManager(context.Background(), mockFileCreator.mockWriteFunction, 50*time.Millisecond, 25*time.Millisecond)
 
 	time.Sleep(300 * time.Millisecond)
-	if mockFileCreator.totalCreateCalls < 2 {
-		t.Fatalf("expected at least 2 calls to createFile, got %d", mockFileCreator.totalCreateCalls)
+	if mockFileCreator.totalCalls < 2 {
+		t.Fatalf("expected at least 2 calls to createFile, got %d", mockFileCreator.totalCalls)
 	}
 	if isStalled := filesystemManager.IsDiskStalled(); !isStalled {
 		t.Fatalf("expected IsDiskStalled to be true")
