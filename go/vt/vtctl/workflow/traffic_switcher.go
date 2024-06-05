@@ -104,6 +104,13 @@ const (
 // TrafficSwitchDirection specifies the switching direction.
 type TrafficSwitchDirection int
 
+func (tsd TrafficSwitchDirection) String() string {
+	if tsd == DirectionForward {
+		return "forward"
+	}
+	return "backward"
+}
+
 // TableRemovalType specifies the way the a table will be removed during a
 // DropSource for a MoveTables workflow.
 type TableRemovalType int
@@ -606,7 +613,7 @@ func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string,
 }
 
 func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, rebuildSrvVSchema bool, direction TrafficSwitchDirection) error {
-	log.Infof("switchTableReads: cells: %s, tablet types: %+v, direction %d", strings.Join(cells, ","), servedTypes, direction)
+	log.Infof("switchTableReads: cells: %s, tablet types: %+v, direction: %s", strings.Join(cells, ","), servedTypes, direction)
 	rules, err := topotools.GetRoutingRules(ctx, ts.TopoServer())
 	if err != nil {
 		return err
@@ -623,11 +630,6 @@ func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string,
 
 		tt := strings.ToLower(servedType.String())
 		for _, table := range ts.Tables() {
-			if direction == DirectionForward {
-				log.Infof("Route direction forward")
-			} else {
-				log.Infof("Route direction backwards")
-			}
 			toTarget := []string{ts.TargetKeyspaceName() + "." + table}
 			rules[table+"@"+tt] = toTarget
 			rules[ts.TargetKeyspaceName()+"."+table+"@"+tt] = toTarget
@@ -1106,7 +1108,7 @@ func (ts *trafficSwitcher) cancelMigration(ctx context.Context, sm *StreamMigrat
 
 	err = ts.deleteReverseVReplication(ctx)
 	if err != nil {
-		ts.Logger().Errorf("Cancel migration failed: could not delete revers vreplication entries: %v", err)
+		ts.Logger().Errorf("Cancel migration failed: could not delete reverse vreplication streams: %v", err)
 	}
 }
 

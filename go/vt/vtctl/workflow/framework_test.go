@@ -1,5 +1,5 @@
 /*
-Copyright 2023 The Vitess Authors.
+Copyright 2024 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -64,6 +65,11 @@ type queryResult struct {
 	result *querypb.QueryResult
 }
 
+func TestMain(m *testing.M) {
+	_flag.ParseFlagsForTest()
+	os.Exit(m.Run())
+}
+
 type testEnv struct {
 	ws                             *Server
 	ts                             *topo.Server
@@ -72,14 +78,6 @@ type testEnv struct {
 	// Keyed first by keyspace name, then tablet UID.
 	tablets map[string]map[int]*topodatapb.Tablet
 	cell    string
-}
-
-//----------------------------------------------
-// testEnv
-
-func TestMain(m *testing.M) {
-	_flag.ParseFlagsForTest()
-	os.Exit(m.Run())
 }
 
 func newTestEnv(t *testing.T, ctx context.Context, cell string, sourceKeyspace, targetKeyspace *testKeyspace) *testEnv {
@@ -160,9 +158,6 @@ func (env *testEnv) deleteTablet(tablet *topodatapb.Tablet) {
 	delete(env.tablets[tablet.Keyspace], int(tablet.Alias.Uid))
 }
 
-//----------------------------------------------
-// testTMClient
-
 type testTMClient struct {
 	tmclient.TabletManagerClient
 	schema map[string]*tabletmanagerdatapb.SchemaDefinition
@@ -176,6 +171,8 @@ type testTMClient struct {
 	workflowDeleteCalls int
 
 	env *testEnv
+
+	reverse atomic.Bool // Are we reversing traffic?
 }
 
 func newTestTMClient(env *testEnv) *testTMClient {
@@ -211,7 +208,7 @@ func (tmc *testTMClient) ReadVReplicationWorkflow(ctx context.Context, tablet *t
 	res := &tabletmanagerdatapb.ReadVReplicationWorkflowResponse{
 		Workflow:     request.Workflow,
 		WorkflowType: workflowType,
-		Streams:      make([]*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream, len(tmc.env.sourceKeyspace.ShardNames)),
+		Streams:      make([]*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream, 0, 2),
 	}
 	rules := make([]*binlogdatapb.Rule, len(tmc.schema))
 	for i, table := range maps.Keys(tmc.schema) {
@@ -220,11 +217,15 @@ func (tmc *testTMClient) ReadVReplicationWorkflow(ctx context.Context, tablet *t
 			Filter: fmt.Sprintf("select * from %s", table),
 		}
 	}
-	for i, shard := range tmc.env.sourceKeyspace.ShardNames {
-		res.Streams[i] = &tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{
+	blsKs := tmc.env.sourceKeyspace
+	if tmc.reverse.Load() && tablet.Keyspace == tmc.env.sourceKeyspace.KeyspaceName {
+		blsKs = tmc.env.targetKeyspace
+	}
+	for i, shard := range blsKs.ShardNames {
+		stream := &tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{
 			Id: int32(i + 1),
 			Bls: &binlogdatapb.BinlogSource{
-				Keyspace: tmc.env.sourceKeyspace.KeyspaceName,
+				Keyspace: blsKs.KeyspaceName,
 				Shard:    shard,
 				Tables:   maps.Keys(tmc.schema),
 				Filter: &binlogdatapb.Filter{
@@ -232,6 +233,7 @@ func (tmc *testTMClient) ReadVReplicationWorkflow(ctx context.Context, tablet *t
 				},
 			},
 		}
+		res.Streams = append(res.Streams, stream)
 	}
 
 	return res, nil
@@ -308,7 +310,7 @@ func (tmc *testTMClient) verifyQueries(t *testing.T) {
 			for _, qr := range qrs {
 				list = append(list, qr.query)
 			}
-			t.Errorf("tablet %v: found queries that were expected but never got executed by the test: %v", tabletID, list)
+			require.Failf(t, "missing query", "tablet %v: found queries that were expected but never got executed by the test: %v", tabletID, list)
 		}
 	}
 }
@@ -385,6 +387,10 @@ func (tmc *testTMClient) ReadVReplicationWorkflows(ctx context.Context, tablet *
 				workflowType = binlogdatapb.VReplicationWorkflowType_CreateLookupIndex
 			}
 		}
+		ks := tmc.env.sourceKeyspace
+		if tmc.reverse.Load() {
+			ks = tmc.env.targetKeyspace
+		}
 		return &tabletmanagerdatapb.ReadVReplicationWorkflowsResponse{
 			Workflows: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse{
 				{
@@ -395,8 +401,8 @@ func (tmc *testTMClient) ReadVReplicationWorkflows(ctx context.Context, tablet *
 							Id:    1,
 							State: binlogdatapb.VReplicationWorkflowState_Running,
 							Bls: &binlogdatapb.BinlogSource{
-								Keyspace: tmc.env.sourceKeyspace.KeyspaceName,
-								Shard:    tmc.env.sourceKeyspace.ShardNames[0],
+								Keyspace: ks.KeyspaceName,
+								Shard:    ks.ShardNames[0],
 								Filter: &binlogdatapb.Filter{
 									Rules: []*binlogdatapb.Rule{
 										{
@@ -424,4 +430,16 @@ func (tmc *testTMClient) UpdateVReplicationWorkflow(ctx context.Context, tablet 
 			RowsAffected: 1,
 		},
 	}, nil
+}
+
+func (tmc *testTMClient) PrimaryPosition(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
+	return position, nil
+}
+
+func (tmc *testTMClient) WaitForPosition(ctx context.Context, tablet *topodatapb.Tablet, pos string) error {
+	return nil
+}
+
+func (tmc *testTMClient) VReplicationWaitForPos(ctx context.Context, tablet *topodatapb.Tablet, id int32, pos string) error {
+	return nil
 }
