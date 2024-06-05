@@ -229,11 +229,14 @@ func (p *Projection) canPush(ctx *plancontext.PlanningContext) bool {
 }
 
 func (p *Projection) GetAliasedProjections() (AliasedProjections, error) {
-	ap, ok := p.Columns.(AliasedProjections)
-	if !ok {
+	switch cols := p.Columns.(type) {
+	case AliasedProjections:
+		return cols, nil
+	case nil:
+		return nil, nil
+	default:
 		return nil, vterrors.VT09015()
 	}
-	return ap, nil
 }
 
 func (p *Projection) isDerived() bool {
@@ -274,8 +277,7 @@ func (p *Projection) addProjExpr(pe ...*ProjExpr) int {
 	}
 
 	offset := len(ap)
-	ap = append(ap, pe...)
-	p.Columns = ap
+	p.Columns = append(ap, pe...)
 
 	return offset
 }
