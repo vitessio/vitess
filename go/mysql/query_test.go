@@ -85,7 +85,7 @@ func TestComInitDB(t *testing.T) {
 	if err := cConn.writeComInitDB("my_db"); err != nil {
 		t.Fatalf("writeComInitDB failed: %v", err)
 	}
-	data, err := sConn.ReadPacket(ctx)
+	data, err := sConn.ReadPacket(context.Background())
 	if err != nil || len(data) == 0 || data[0] != ComInitDB {
 		t.Fatalf("sConn.ReadPacket - ComInitDB failed: %v %v", data, err)
 	}
@@ -107,7 +107,7 @@ func TestComSetOption(t *testing.T) {
 	if err := cConn.writeComSetOption(1); err != nil {
 		t.Fatalf("writeComSetOption failed: %v", err)
 	}
-	data, err := sConn.ReadPacket(ctx)
+	data, err := sConn.ReadPacket(context.Background())
 	if err != nil || len(data) == 0 || data[0] != ComSetOption {
 		t.Fatalf("sConn.ReadPacket - ComSetOption failed: %v %v", data, err)
 	}
@@ -135,7 +135,7 @@ func TestComStmtPrepare(t *testing.T) {
 		t.Fatalf("writePacket failed: %v", err)
 	}
 
-	data, err := sConn.ReadPacket(ctx)
+	data, err := sConn.ReadPacket(context.Background())
 	if err != nil {
 		t.Fatalf("sConn.ReadPacket - ComPrepare failed: %v", err)
 	}
@@ -150,11 +150,11 @@ func TestComStmtPrepare(t *testing.T) {
 	sConn.PrepareData[prepare.StatementID] = prepare
 
 	// write the response to the client
-	if err := sConn.writePrepare(result.Fields, prepare); err != nil {
+	if err := sConn.writePrepare(context.Background(), result.Fields, prepare); err != nil {
 		t.Fatalf("sConn.writePrepare failed: %v", err)
 	}
 
-	resp, err := cConn.ReadPacket(ctx)
+	resp, err := cConn.ReadPacket(context.Background())
 	if err != nil {
 		t.Fatalf("cConn.ReadPacket failed: %v", err)
 	}
@@ -174,12 +174,12 @@ func TestComStmtSendLongData(t *testing.T) {
 	prepare, result := MockPrepareData(t)
 	cConn.PrepareData = make(map[uint32]*PrepareData)
 	cConn.PrepareData[prepare.StatementID] = prepare
-	if err := cConn.writePrepare(result.Fields, prepare); err != nil {
+	if err := cConn.writePrepare(context.Background(), result.Fields, prepare); err != nil {
 		t.Fatalf("writePrepare failed: %v", err)
 	}
 
 	// Since there's no writeComStmtSendLongData, we'll write a prepareStmt and check if we can read the StatementID
-	data, err := sConn.ReadPacket(ctx)
+	data, err := sConn.ReadPacket(context.Background())
 	if err != nil || len(data) == 0 {
 		t.Fatalf("sConn.ReadPacket - ComStmtClose failed: %v %v", data, err)
 	}
@@ -485,12 +485,12 @@ func TestComStmtClose(t *testing.T) {
 	prepare, result := MockPrepareData(t)
 	cConn.PrepareData = make(map[uint32]*PrepareData)
 	cConn.PrepareData[prepare.StatementID] = prepare
-	if err := cConn.writePrepare(result.Fields, prepare); err != nil {
+	if err := cConn.writePrepare(context.Background(), result.Fields, prepare); err != nil {
 		t.Fatalf("writePrepare failed: %v", err)
 	}
 
 	// Since there's no writeComStmtClose, we'll write a prepareStmt and check if we can read the StatementID
-	data, err := sConn.ReadPacket(ctx)
+	data, err := sConn.ReadPacket(context.Background())
 	if err != nil || len(data) == 0 {
 		t.Fatalf("sConn.ReadPacket - ComStmtClose failed: %v %v", data, err)
 	}
@@ -945,7 +945,7 @@ func clientExecute(t *testing.T, cConn *Conn, useCursor byte, maxRows int) (*sql
 		t.Fatalf("WriteMockExecuteToConn failed with error: %v", err)
 	}
 
-	qr, status, _, err := cConn.ReadQueryResult(maxRows, true)
+	qr, status, _, err := cConn.ReadQueryResult(context.Background(), maxRows, true)
 	if err != nil {
 		t.Fatalf("ReadQueryResult failed with error: %v", err)
 	}
