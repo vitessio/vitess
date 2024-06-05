@@ -422,6 +422,14 @@ func testScheduler(t *testing.T) {
 			assert.GreaterOrEqual(t, endTime2, endTime1)
 		})
 	}
+	testTableCompletionAndStartTimes := func(t *testing.T, uuid1, uuid2 string) {
+		// expect uuid1 to complete before uuid2
+		t.Run("Compare t1, t2 completion times", func(t *testing.T) {
+			endTime1 := testReadTimestamp(t, uuid1, "completed_timestamp")
+			startedTime2 := testReadTimestamp(t, uuid2, "started_timestamp")
+			assert.GreaterOrEqual(t, startedTime2, endTime1)
+		})
+	}
 	testAllowConcurrent := func(t *testing.T, name string, uuid string, expect int64) {
 		t.Run("verify allow_concurrent: "+name, func(t *testing.T) {
 			rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
@@ -1183,6 +1191,36 @@ func testScheduler(t *testing.T) {
 		})
 	})
 	// in-order-completion
+	t.Run("in-order-completion: multiple drops for nonexistent tables and views, sequential", func(t *testing.T) {
+		u, err := schema.CreateOnlineDDLUUID()
+		require.NoError(t, err)
+
+		sqls := []string{
+			fmt.Sprintf("drop table if exists t4_%s", u),
+			fmt.Sprintf("drop view  if exists t1_%s", u),
+			fmt.Sprintf("drop table if exists t2_%s", u),
+			fmt.Sprintf("drop view  if exists t3_%s", u),
+		}
+		sql := strings.Join(sqls, ";")
+		var vuuids []string
+		t.Run("drop multiple tables and views, in-order-completion", func(t *testing.T) {
+			uuidList := testOnlineDDLStatement(t, createParams(sql, ddlStrategy+" --in-order-completion", "vtctl", "", "", true)) // skip wait
+			vuuids = strings.Split(uuidList, "\n")
+			assert.Equal(t, 4, len(vuuids))
+			for _, uuid := range vuuids {
+				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+			}
+		})
+		require.Equal(t, 4, len(vuuids))
+		for i := range vuuids {
+			if i > 0 {
+				testTableCompletionTimes(t, vuuids[i-1], vuuids[i])
+				testTableCompletionAndStartTimes(t, vuuids[i-1], vuuids[i])
+			}
+		}
+	})
 	t.Run("in-order-completion: multiple drops for nonexistent tables and views", func(t *testing.T) {
 		u, err := schema.CreateOnlineDDLUUID()
 		require.NoError(t, err)
@@ -1211,6 +1249,46 @@ func testScheduler(t *testing.T) {
 				testTableCompletionTimes(t, vuuids[i-1], vuuids[i])
 			}
 		}
+	})
+	t.Run("in-order-completion: bail out on first error", func(t *testing.T) {
+		u, err := schema.CreateOnlineDDLUUID()
+		require.NoError(t, err)
+
+		sqls := []string{
+			fmt.Sprintf("drop table if exists t4_%s", u),
+			fmt.Sprintf("drop view  if exists t1_%s", u),
+			fmt.Sprintf("drop table t2_%s", u), // non existent
+			fmt.Sprintf("drop view  if exists t3_%s", u),
+		}
+		sql := strings.Join(sqls, ";")
+		var vuuids []string
+		t.Run("apply schema", func(t *testing.T) {
+			uuidList := testOnlineDDLStatement(t, createParams(sql, ddlStrategy+" --in-order-completion", "vtctl", "", "", true)) // skip wait
+			vuuids = strings.Split(uuidList, "\n")
+			assert.Equal(t, 4, len(vuuids))
+			for _, uuid := range vuuids[0:2] {
+				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+			}
+			{
+				uuid := vuuids[2] // the failed one
+				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
+			}
+			{
+				uuid := vuuids[3] // should not run
+				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady)
+				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady)
+				<-time.After(4 * time.Second) // wait for a while to ensure it doesn't change
+				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady)
+			}
+		})
+		testTableCompletionTimes(t, vuuids[0], vuuids[1])
+		testTableCompletionAndStartTimes(t, vuuids[0], vuuids[1])
+		testTableCompletionAndStartTimes(t, vuuids[1], vuuids[2])
 	})
 	t.Run("in-order-completion: two new views, one depends on the other", func(t *testing.T) {
 		u, err := schema.CreateOnlineDDLUUID()
