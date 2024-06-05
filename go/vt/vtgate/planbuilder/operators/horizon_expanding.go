@@ -115,15 +115,18 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 }
 
 func expandOrderBy(ctx *plancontext.PlanningContext, op Operator, qp *QueryProjection) Operator {
-	proj := newAliasedProjection(op)
 	var newOrder []OrderBy
 	sqc := &SubQueryBuilder{}
+	proj, ok := op.(*Projection)
 	for _, expr := range qp.OrderExprs {
 		newExpr, subqs := sqc.pullOutValueSubqueries(ctx, expr.SimplifiedExpr, TableID(op), false)
 		if newExpr == nil {
 			// no subqueries found, let's move on
 			newOrder = append(newOrder, expr)
 			continue
+		}
+		if !ok {
+			panic(vterrors.VT12001("subquery with aggregation in order by"))
 		}
 		proj.addSubqueryExpr(aeWrap(newExpr), newExpr, subqs...)
 		newOrder = append(newOrder, OrderBy{
@@ -135,13 +138,9 @@ func expandOrderBy(ctx *plancontext.PlanningContext, op Operator, qp *QueryProje
 		})
 
 	}
-
-	if len(proj.Columns.GetColumns()) > 0 {
-		// if we had to project columns for the ordering,
-		// we need the projection as source
-		op = proj
+	if proj != nil {
+		proj.Source = sqc.getRootOperator(proj.Source, nil)
 	}
-
 	return &Ordering{
 		Source: op,
 		Order:  newOrder,

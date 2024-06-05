@@ -31,7 +31,7 @@ import (
 
 // SubQuery represents a subquery used for filtering rows in an
 // outer query through a join.
-type SubQuery struct {
+type /**/ SubQuery struct {
 	// Fields filled in at the time of construction:
 	Outer             Operator             // Outer query operator.
 	Subquery          Operator             // Subquery operator.
@@ -292,4 +292,19 @@ func (sq *SubQuery) mapExpr(f func(expr sqlparser.Expr) sqlparser.Expr) {
 	sq.Predicates = slice.Map(sq.Predicates, f)
 	sq.Original = f(sq.Original)
 	sq.originalSubquery = f(sq.originalSubquery).(*sqlparser.Subquery)
+}
+
+func (sq *SubQuery) rewriteColNameToArgument(expr sqlparser.Expr) sqlparser.Expr {
+	pre := func(cursor *sqlparser.Cursor) bool {
+		colName, ok := cursor.Node().(*sqlparser.ColName)
+		if !ok || colName.Qualifier.NonEmpty() || !colName.Name.EqualString(sq.ArgName) {
+			// we only want to rewrite the column name to an argument if it's the right column
+			return true
+		}
+
+		cursor.Replace(sqlparser.NewArgument(sq.ArgName))
+		return true
+	}
+
+	return sqlparser.Rewrite(expr, pre, nil).(sqlparser.Expr)
 }

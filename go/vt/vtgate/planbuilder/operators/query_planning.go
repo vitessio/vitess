@@ -371,6 +371,15 @@ func tryPushOrdering(ctx *plancontext.PlanningContext, in *Ordering) (Operator, 
 				return in, NoRewrite
 			}
 		}
+		ap, ok := src.Columns.(AliasedProjections)
+		if !ok {
+			return in, NoRewrite
+		}
+		for _, projExpr := range ap {
+			if projExpr.Info != nil {
+				return in, NoRewrite
+			}
+		}
 		return Swap(in, src, "push ordering under projection")
 	case *Aggregator:
 		if !src.QP.AlignGroupByAndOrderBy(ctx) && !overlaps(ctx, in.Order, src.Grouping) {
@@ -390,11 +399,12 @@ func tryPushOrdering(ctx *plancontext.PlanningContext, in *Ordering) (Operator, 
 		return src, Rewrote("push ordering into outer side of subquery")
 	case *SubQuery:
 		outerTableID := TableID(src.Outer)
-		for _, order := range in.Order {
+		for idx, order := range in.Order {
 			deps := ctx.SemTable.RecursiveDeps(order.Inner.Expr)
 			if !deps.IsSolvedBy(outerTableID) {
 				return in, NoRewrite
 			}
+			in.Order[idx].SimplifiedExpr = src.rewriteColNameToArgument(order.SimplifiedExpr)
 		}
 		src.Outer, in.Source = in, src.Outer
 		return src, Rewrote("push ordering into outer side of subquery")
