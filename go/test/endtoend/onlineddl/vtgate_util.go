@@ -366,7 +366,7 @@ func CheckThrottledApps(t *testing.T, vtParams *mysql.ConnParams, throttlerApp t
 
 		select {
 		case <-ctx.Done():
-			assert.Failf(t, "CheckThrottledApps timed out waiting for %v to be in throttled status '%v'", throttlerApp.String(), expectFind)
+			assert.Fail(t, "CheckThrottledApps timed out", "waiting for %v to be in throttled status '%v'", throttlerApp.String(), expectFind)
 			return
 		case <-ticker.C:
 		}
