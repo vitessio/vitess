@@ -682,6 +682,11 @@ func addTruncationOrProjectionToReturnOutput(ctx *plancontext.PlanningContext, s
 }
 
 func colNamesAlign(expected, actual sqlparser.SelectExprs) bool {
+	if len(expected) > len(actual) {
+		// if we expect more columns than we have, we can't align
+		return false
+	}
+
 	for i, seE := range expected {
 		switch se := seE.(type) {
 		case *sqlparser.AliasedExpr:
@@ -691,7 +696,7 @@ func colNamesAlign(expected, actual sqlparser.SelectExprs) bool {
 		case *sqlparser.StarExpr:
 			actualStar, isStar := actual[i].(*sqlparser.StarExpr)
 			if !isStar {
-				panic("I DONT THINK THIS CAN HAPPEN")
+				panic(vterrors.VT13001("this should not happen"))
 			}
 			if !sqlparser.Equals.RefOfStarExpr(se, actualStar) {
 				return false
