@@ -84,7 +84,7 @@ func TestDeleteTabletBasic(t *testing.T) {
 	require.NoError(t, err)
 
 	err = wr.DeleteTablet(context.Background(), tablet.Alias, false)
-	require.NoError(t, err, "DeleteTablet failed")
+	require.NoError(t, err)
 }
 
 // TestDeleteTabletTruePrimary tests that you can delete a true primary tablet
@@ -119,14 +119,14 @@ func TestDeleteTabletTruePrimary(t *testing.T) {
 		si.PrimaryTermStartTime = tablet.PrimaryTermStartTime
 		return nil
 	})
-	require.NoError(t, err, "UpdateShardFields failed")
+	require.NoError(t, err)
 
 	err = wr.DeleteTablet(context.Background(), tablet.Alias, false)
 	wantError := "as it is a primary, use allow_primary flag"
 	require.ErrorContains(t, err, wantError, "DeleteTablet on primary: want specific error message")
 
 	err = wr.DeleteTablet(context.Background(), tablet.Alias, true)
-	require.NoError(t, err, "DeleteTablet failed")
+	require.NoError(t, err)
 }
 
 // TestDeleteTabletFalsePrimary tests that you can delete a false primary tablet
@@ -170,11 +170,11 @@ func TestDeleteTabletFalsePrimary(t *testing.T) {
 		si.PrimaryTermStartTime = tablet2.PrimaryTermStartTime
 		return nil
 	})
-	require.NoError(t, err, "UpdateShardFields failed")
+	require.NoError(t, err)
 
 	// Should be able to delete old (false) primary with allowPrimary = false
 	err = wr.DeleteTablet(context.Background(), tablet1.Alias, false)
-	require.NoError(t, err, "DeleteTablet failed")
+	require.NoError(t, err)
 }
 
 // TestDeleteTabletShardNonExisting tests that you can delete a true primary
@@ -201,7 +201,7 @@ func TestDeleteTabletShardNonExisting(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = ts.GetTablet(context.Background(), tablet.Alias)
-	require.NoError(t, err, "GetTablet failed")
+	require.NoError(t, err)
 
 	// set PrimaryAlias and PrimaryTermStartTime on shard to match chosen primary tablet
 	_, err = ts.UpdateShardFields(context.Background(), "test", "0", func(si *topo.ShardInfo) error {
@@ -209,11 +209,11 @@ func TestDeleteTabletShardNonExisting(t *testing.T) {
 		si.PrimaryTermStartTime = tablet.PrimaryTermStartTime
 		return nil
 	})
-	require.NoError(t, err, "UpdateShardFields failed")
+	require.NoError(t, err)
 
 	// trigger a shard deletion
 	err = ts.DeleteShard(context.Background(), "test", "0")
-	require.NoError(t, err, "DeleteShard failed")
+	require.NoError(t, err)
 
 	// DeleteTablet should not fail if a shard no longer exist
 	err = wr.DeleteTablet(context.Background(), tablet.Alias, true)

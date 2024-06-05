@@ -41,20 +41,20 @@ func TestLifeCycle(t *testing.T) {
 	zkConf.Extra = []string{tpcKeepAliveCfg, adminServerCfg}
 
 	zkObservedConf, err := MakeZooCfg([]string{zkConf.ConfigFile()}, zkConf, "header")
-	require.NoError(t, err, "MakeZooCfg err: %v", err)
+	require.NoError(t, err)
 	require.Contains(t, zkObservedConf, fmt.Sprintf("\n%s\n", tpcKeepAliveCfg), "Expected tpcKeepAliveCfg in zkObservedConf")
 	require.Contains(t, zkObservedConf, fmt.Sprintf("\n%s\n", adminServerCfg), "Expected adminServerCfg in zkObservedConf")
 
 	zkd := NewZkd(zkConf)
 	err = zkd.Init()
-	require.NoError(t, err, "Init() err: %v", err)
+	require.NoError(t, err)
 
 	err = zkd.Shutdown()
-	require.NoError(t, err, "Shutdown() err: %v", err)
+	require.NoError(t, err)
 
 	err = zkd.Start()
-	require.NoError(t, err, "Start() err: %v", err)
+	require.NoError(t, err)
 
 	err = zkd.Teardown()
-	require.NoError(t, err, "Teardown() err: %v", err)
+	require.NoError(t, err)
 }
