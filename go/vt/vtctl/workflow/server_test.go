@@ -392,3 +392,98 @@ func TestWorkflowDelete(t *testing.T) {
 		})
 	}
 }
+
+func TestMoveTablesTrafficSwitching(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	workflowName := "wf1"
+	tableName := "t1"
+	sourceKeyspaceName := "sourceks"
+	targetKeyspaceName := "targetks"
+	vrID := 1
+	schema := map[string]*tabletmanagerdatapb.SchemaDefinition{
+		"t1": {
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+				{
+					Name:   tableName,
+					Schema: fmt.Sprintf("CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))", tableName),
+				},
+			},
+		},
+	}
+	copyTableQR := &queryResult{
+		query: fmt.Sprintf("select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (%d) and id in (select max(id) from _vt.copy_state where vrepl_id in (%d) group by vrepl_id, table_name)",
+			vrID, vrID),
+		result: &querypb.QueryResult{},
+	}
+
+	testcases := []struct {
+		name                           string
+		sourceKeyspace, targetKeyspace *testKeyspace
+		preFunc                        func(t *testing.T, env *testEnv)
+		req                            *vtctldatapb.WorkflowSwitchTrafficRequest
+		expectedSourceQueries          []*queryResult
+		expectedTargetQueries          []*queryResult
+		want                           *vtctldatapb.WorkflowSwitchTrafficResponse
+		wantErr                        bool
+		postFunc                       func(t *testing.T, env *testEnv)
+	}{
+		{
+			name: "basic",
+			sourceKeyspace: &testKeyspace{
+				KeyspaceName: sourceKeyspaceName,
+				ShardNames:   []string{"0"},
+			},
+			targetKeyspace: &testKeyspace{
+				KeyspaceName: targetKeyspaceName,
+				ShardNames:   []string{"-80", "80-"},
+			},
+			req: &vtctldatapb.WorkflowSwitchTrafficRequest{
+				Keyspace:  targetKeyspaceName,
+				Workflow:  workflowName,
+				Direction: int32(DirectionForward),
+			},
+			want: &vtctldatapb.WorkflowSwitchTrafficResponse{
+				Summary:      fmt.Sprintf("SwitchTraffic was successful for workflow %s.%s", targetKeyspaceName, workflowName),
+				StartState:   "Reads Not Switched. Writes Not Switched",
+				CurrentState: "Reads Not Switched. Writes Not Switched", // Obviously not right yet...
+			},
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.NotNil(t, tc.sourceKeyspace)
+			require.NotNil(t, tc.targetKeyspace)
+			require.NotNil(t, tc.req)
+			env := newTestEnv(t, ctx, defaultCellName, tc.sourceKeyspace, tc.targetKeyspace)
+			defer env.close()
+			env.tmc.schema = schema
+			if tc.expectedSourceQueries != nil {
+				require.NotNil(t, env.tablets[tc.sourceKeyspace.KeyspaceName])
+				for _, eq := range tc.expectedSourceQueries {
+					env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.sourceKeyspace.KeyspaceName, eq)
+				}
+			}
+			env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, copyTableQR)
+			if tc.expectedTargetQueries != nil {
+				require.NotNil(t, env.tablets[tc.targetKeyspace.KeyspaceName])
+				for _, eq := range tc.expectedTargetQueries {
+					env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, eq)
+				}
+			}
+			if tc.preFunc != nil {
+				tc.preFunc(t, env)
+			}
+			got, err := env.ws.WorkflowSwitchTraffic(ctx, tc.req)
+			if (err != nil) != tc.wantErr {
+				require.Fail(t, "unexpected error value", "Server.WorkflowSwitchTraffic() error = %v, wantErr %v", err, tc.wantErr)
+				return
+			}
+			require.Equal(t, got.String(), tc.want.String(), "Server.WorkflowSwitchTraffic() = %v, want %v", got, tc.want)
+			if tc.postFunc != nil {
+				tc.postFunc(t, env)
+			}
+		})
+	}
+}

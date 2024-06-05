@@ -170,6 +170,7 @@ type testTMClient struct {
 	mu                                 sync.Mutex
 	vrQueries                          map[int][]*queryResult
 	createVReplicationWorkflowRequests map[uint32]*tabletmanagerdatapb.CreateVReplicationWorkflowRequest
+	readVReplicationWorkflowRequests   map[uint32]*tabletmanagerdatapb.ReadVReplicationWorkflowRequest
 
 	// Used to confirm the number of times WorkflowDelete was called.
 	workflowDeleteCalls int
@@ -182,6 +183,7 @@ func newTestTMClient(env *testEnv) *testTMClient {
 		schema:                             make(map[string]*tabletmanagerdatapb.SchemaDefinition),
 		vrQueries:                          make(map[int][]*queryResult),
 		createVReplicationWorkflowRequests: make(map[uint32]*tabletmanagerdatapb.CreateVReplicationWorkflowRequest),
+		readVReplicationWorkflowRequests:   make(map[uint32]*tabletmanagerdatapb.ReadVReplicationWorkflowRequest),
 		env:                                env,
 	}
 }
@@ -197,6 +199,11 @@ func (tmc *testTMClient) CreateVReplicationWorkflow(ctx context.Context, tablet 
 }
 
 func (tmc *testTMClient) ReadVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.ReadVReplicationWorkflowRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowResponse, error) {
+	if expect := tmc.readVReplicationWorkflowRequests[tablet.Alias.Uid]; expect != nil {
+		if !proto.Equal(expect, request) {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected ReadVReplicationWorkflow request: got %+v, want %+v", request, expect)
+		}
+	}
 	workflowType := binlogdatapb.VReplicationWorkflowType_MoveTables
 	if strings.Contains(request.Workflow, "lookup") {
 		workflowType = binlogdatapb.VReplicationWorkflowType_CreateLookupIndex
