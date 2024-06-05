@@ -415,6 +415,16 @@ func TestSchemaDiff(t *testing.T) {
 			instantCapability: InstantDDLCapabilityIrrelevant,
 		},
 		{
+			name: "add view with over",
+			toQueries: append(
+				createQueries,
+				"create view v2 as SELECT *, ROW_NUMBER() OVER(PARTITION BY info) AS row_num1, ROW_NUMBER() OVER(PARTITION BY info ORDER BY id) AS row_num2 FROM t1;\n",
+			),
+			expectDiffs:       1,
+			entityOrder:       []string{"v2"},
+			instantCapability: InstantDDLCapabilityIrrelevant,
+		},
+		{
 			name: "add view, alter table",
 			toQueries: []string{
 				"create table t1 (id int primary key, info int not null);",
@@ -1050,7 +1060,7 @@ func TestSchemaDiff(t *testing.T) {
 				return
 			}
 			if tc.conflictingDiffs > 0 {
-				assert.Error(t, err)
+				require.Error(t, err)
 				impossibleOrderErr, ok := err.(*ImpossibleApplyDiffOrderError)
 				assert.True(t, ok)
 				conflictingDiffsStatements := []string{}
