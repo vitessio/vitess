@@ -382,6 +382,18 @@ var (
 			input: "select a from (select 1 as a from tbl1 union select 2 from tbl2) as t (a, b)",
 		},
 		{
+			input:  "select a from (values (1, 2), ('a', 'b')) as t (a, b)",
+			output: "select a from (values row(1, 2), row('a', 'b')) as t (a, b)",
+		},
+		{
+			input:  "select a from (values (1, 2), row('a', 'b')) as t (a, b)",
+			output: "select a from (values row(1, 2), row('a', 'b')) as t (a, b)",
+		},
+		{
+			input:  "select a from (values row(1, 2), ('a', 'b')) as t (a, b)",
+			output: "select a from (values row(1, 2), row('a', 'b')) as t (a, b)",
+		},
+		{
 			input: "select a from (values row(1, 2), row('a', 'b')) as t (a, b)",
 		},
 		{
@@ -1206,10 +1218,36 @@ var (
 		}, {
 			input:  "insert into a(a, b) value (1, ifnull(null, default(b)))",
 			output: "insert into a(a, b) values (1, ifnull(null, default(b)))",
-		}, {
+		},
+		{
 			input:  "insert into a value (1, ifnull(null, default(b)))",
 			output: "insert into a values (1, ifnull(null, default(b)))",
-		}, {
+		},
+		{
+			input:  "insert into xy values row (1, 1)",
+			output: "insert into xy values (1, 1)",
+		},
+		{
+			input:  "insert into xy values row (1, 1), row (2, 2)",
+			output: "insert into xy values (1, 1), (2, 2)",
+		},
+		{
+			input:  "insert into xy values (1, 1), row (2, 2)",
+			output: "insert into xy values (1, 1), (2, 2)",
+		},
+		{
+			input:  "insert into xy values row (1, 1), (2, 2)",
+			output: "insert into xy values (1, 1), (2, 2)",
+		},
+		{
+			input:  "insert into xy ((( values row (1, 1), row (2, 2) )))",
+			output: "insert into xy values (1, 1), (2, 2)",
+		},
+		{
+			input:  "insert into xy values row()",
+			output: "insert into xy values ()",
+		},
+		{
 			input: "insert /* qualified column list */ into a(a, b) values (1, 2)",
 		}, {
 			input:  "insert /* qualified columns */ into t (t.a, t.b) values (1, 2)",
@@ -1577,10 +1615,76 @@ var (
 		}, {
 			input:  "alter table a rename key foo to bar",
 			output: "alter table a rename index foo to bar",
-		}, {
+		},
+		{
+			input:  "alter table a add partition (partition p values less than (val))",
+		},
+		{
+			input:  "alter table a drop partition p",
+		},
+		{
+			input:  "alter table a discard partition p tablespace",
+		},
+		{
+			input:  "alter table a discard partition all tablespace",
+		},
+		{
+			input:  "alter table a import partition p tablespace",
+		},
+		{
+			input:  "alter table a import partition all tablespace",
+		},
+		{
+			input:  "alter table a truncate partition p tablespace",
+		},
+		{
+			input:  "alter table a truncate partition all tablespace",
+		},
+		{
+			input:  "alter table a coalesce partition 5",
+		},
+		{
 			input:  "alter table a reorganize partition b into (partition c values less than (?), partition d values less than (maxvalue))",
 			output: "alter table a reorganize partition b into (partition c values less than (:v1), partition d values less than (maxvalue))",
-		}, {
+		},
+		{
+			input:  "alter table a exchange partition p with table t",
+			output: "alter table a exchange partition p with table t without validation",
+		},
+		{
+			input:  "alter table a exchange partition p with table t with validation",
+		},
+		{
+			input:  "alter table a exchange partition p with table t without validation",
+		},
+		{
+			input:  "alter table a analyze partition p",
+		},
+		{
+			input:  "alter table a analyze partition all",
+		},
+		{
+			input:  "alter table a optimize partition p",
+		},
+		{
+			input:  "alter table a optimize partition all",
+		},
+		{
+			input:  "alter table a rebuild partition p",
+		},
+		{
+			input:  "alter table a rebuild partition all",
+		},
+		{
+			input:  "alter table a repair partition p",
+		},
+		{
+			input:  "alter table a repair partition all",
+		},
+		{
+			input:  "alter table a remove partitioning",
+		},
+		{
 			input:  "alter table a add column id int",
 			output: "alter table a add column (\n\tid int\n)",
 		}, {
@@ -2574,10 +2678,8 @@ var (
 			input: "create database test_db",
 		}, {
 			input:  "create schema test_db",
-			output: "create database test_db",
 		}, {
 			input:  "create database if not exists test_db",
-			output: "create database if not exists test_db",
 		}, {
 			input: "alter database test_db character set utf8mb3",
 		}, {
@@ -2594,10 +2696,8 @@ var (
 			input: "drop database test_db",
 		}, {
 			input:  "drop schema test_db",
-			output: "drop database test_db",
 		}, {
 			input:  "drop database if exists test_db",
-			output: "drop database if exists test_db",
 		}, {
 			input: "drop trigger trigger1",
 		}, {
@@ -2668,16 +2768,6 @@ var (
 		}, {
 			input:  "alter table a modify foo int unique comment 'a comment here' auto_increment on update current_timestamp() default 0 not null after bar",
 			output: "alter table a modify column foo (\n\tfoo int not null default 0 on update current_timestamp(0) auto_increment comment 'a comment here' unique\n) after bar",
-		}, {
-			input: "alter table t add column c int unique comment 'a comment here' auto_increment on update current_timestamp() default 0 not null," +
-				" change foo bar int not null auto_increment first," +
-				" reorganize partition b into (partition c values less than (:v1), partition d values less than (maxvalue))," +
-				" add spatial index idx (id)",
-			output: `alter table t add column (
-	c int not null default 0 on update current_timestamp(0) auto_increment comment 'a comment here' unique
-), change column foo (
-	bar int not null auto_increment
-) first, reorganize partition b into (partition c values less than (:v1), partition d values less than (maxvalue)), add spatial index idx (id)`,
 		}, {
 			input:  "alter table t alter foo set default 5",
 			output: "alter table t alter column foo set default 5",
@@ -2800,6 +2890,9 @@ var (
 		}, {
 			input:  "CREATE USER UserName@localhost ATTRIBUTE '{\"attr\": \"attr_text\"}'",
 			output: "create user `UserName`@`localhost` attribute '{\"attr\": \"attr_text\"}'",
+		}, {
+			input:  "CREATE USER 'UserName'@'%' IDENTIFIED WITH 'caching_sha2_password' AS 'xyz0123'",
+			output: "create user `UserName`@`%` identified with caching_sha2_password as 'xyz0123'",
 		}, {
 			input:  "ALTER USER IF EXISTS foo@bar IDENTIFIED BY 'password1';",
 			output: "alter user if exists `foo`@`bar` identified by 'password1'",
@@ -3189,28 +3282,48 @@ var (
 		}, {
 			input:  "create table t (pk int not null, constraint `mykey` primary key `pk_id` (`pk`))",
 			output: "create table t (\n\tpk int not null,\n\tprimary key (pk)\n)",
-		}, {
+		},
+		{
 			input:  "alter table t default character set utf8mb4",
 			output: "alter table t character set utf8mb4",
-		}, {
+		},
+		{
 			input:  "alter table t character set = utf8mb4",
 			output: "alter table t character set utf8mb4",
-		}, {
+		},
+		{
 			input:  "alter table t character set := utf8mb4",
 			output: "alter table t character set utf8mb4",
-		}, {
+		},
+		{
 			input:  "alter table t character set utf8mb4 collate utf8mb4_0900_bin",
 			output: "alter table t character set utf8mb4 collate utf8mb4_0900_bin",
-		}, {
+		},
+		{
 			input:  "alter table t character set 'utf8mb4' collate = 'utf8mb4_0900_bin'",
 			output: "alter table t character set utf8mb4 collate utf8mb4_0900_bin",
-		}, {
+		},
+		{
 			input:  "alter table t collate utf8mb4_0900_bin",
 			output: "alter table t collate utf8mb4_0900_bin",
-		}, {
+		},
+		{
 			input:  "alter table t collate = 'utf8mb4_0900_bin'",
 			output: "alter table t collate utf8mb4_0900_bin",
-		}, {
+		},
+		{
+			input:  "alter table t collate = 'utf8mb4_0900_bin'",
+			output: "alter table t collate utf8mb4_0900_bin",
+		},
+		{
+			input:  "alter table t convert to character set utf8mb4",
+			output: "alter table t character set utf8mb4",
+		},
+		{
+			input:  "alter table t convert to character set utf8mb4 collate utf8mb4_0900_bin",
+			output: "alter table t character set utf8mb4 collate utf8mb4_0900_bin",
+		},
+		{
 			input:  "SELECT _utf8mb4'abc'",
 			output: "select _utf8mb4 'abc'",
 		}, {
@@ -3248,13 +3361,28 @@ var (
 		}, {
 			input:  "SELECT now() WHERE now() > '2019-04-04 13:25:44' INTO @late",
 			output: "select now() where now() > '2019-04-04 13:25:44' into @late",
-		}, {
+		},
+		{
 			input:  "SELECT * FROM (VALUES ROW(2,4,8)) AS t INTO @x,@y,@z",
 			output: "select * from (values row(2, 4, 8)) as t into @x, @y, @z",
-		}, {
+		},
+		{
 			input:  "SELECT * FROM (VALUES ROW(2,4,8)) AS t(a,b,c) INTO @x,@y,@z",
 			output: "select * from (values row(2, 4, 8)) as t (a, b, c) into @x, @y, @z",
-		}, {
+		},
+		{
+			input:  "SELECT * FROM (VALUES (2,4,8)) AS t INTO @x,@y,@z",
+			output: "select * from (values row(2, 4, 8)) as t into @x, @y, @z",
+		},
+		{
+			input:  "SELECT * FROM (VALUES (2,4,8)) AS t(a,b,c) INTO @x,@y,@z",
+			output: "select * from (values row(2, 4, 8)) as t (a, b, c) into @x, @y, @z",
+		},
+		{
+			input:  "SELECT * FROM (VALUES (1, 2, 3), (4, 5, 6), (7, 8, 9)) t",
+			output: "select * from (values row(1, 2, 3), row(4, 5, 6), row(7, 8, 9)) as t",
+		},
+		{
 			input:  "SELECT id FROM mytable ORDER BY id DESC LIMIT 1 INTO @myvar",
 			output: "select id from mytable order by id desc limit 1 into @myvar",
 		}, {
@@ -3376,19 +3504,24 @@ var (
 		}, {
 			input:  "CREATE TABLE t (id INT PRIMARY KEY, col1 GEOMETRYCOLLECTION NOT NULL SRID 0)",
 			output: "create table t (\n\tid INT primary key,\n\tcol1 GEOMETRYCOLLECTION not null srid 0\n)",
-		}, {
+		},
+		{
 			input:  "ALTER TABLE t ADD COLUMN col1 POINT NOT NULL SRID 0 DEFAULT (POINT(1, 2))",
 			output: "alter table t add column (\n\tcol1 POINT not null srid 0 default (POINT(1, 2))\n)",
-		}, {
+		},
+		{
 			input:  "ALTER TABLE t MODIFY COLUMN col1 POINT NOT NULL DEFAULT (POINT(1, 2)) SRID 1234",
 			output: "alter table t modify column col1 (\n\tcol1 POINT not null srid 1234 default (POINT(1, 2))\n)",
-		}, {
+		},
+		{
 			input:  "ALTER TABLE t modify col1 varchar(255) NOT NULL COLLATE 'utf8mb4_0900_ai_ci'",
 			output: "alter table t modify column col1 (\n\tcol1 varchar(255) collate utf8mb4_0900_ai_ci not null\n)",
-		}, {
+		},
+		{
 			input:  "ALTER TABLE t modify col1 varchar(255) COLLATE 'utf8mb4_0900_ai_ci' NOT NULL",
 			output: "alter table t modify column col1 (\n\tcol1 varchar(255) collate utf8mb4_0900_ai_ci not null\n)",
-		}, {
+		},
+		{
 			input:  "CREATE TABLE t (col1 BIGINT PRIMARY KEY, col2 DOUBLE DEFAULT -1.1)",
 			output: "create table t (\n\tcol1 BIGINT primary key,\n\tcol2 DOUBLE default -1.1\n)",
 		}, {
@@ -3568,6 +3701,203 @@ var (
 				"\ti int\n" +
 				") secondary_engine NULL",
 		},
+		// No-op alter statements
+		{
+			input: "alter table t alter constraint name enforced",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t alter check name enforced",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t alter constraint name not enforced",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t alter check name not enforced",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t algorithm default",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t algorithm instant",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t algorithm inplace",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t algorithm copy",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t algorithm = default",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t algorithm = instant",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t algorithm = inplace",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t algorithm = copy",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t alter index name visible",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t alter index name invisible",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t discard tablespace",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t import tablespace",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t force",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t lock default",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t lock none",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t lock shared",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t lock exclusive",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t lock = default",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t lock = none",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t lock = shared",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t lock = exclusive",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t autoextend_size='asdf'",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t auto_increment=1",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t avg_row_length=1",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t checksum 1",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t checksum = 1",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t table_checksum 1",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t table_checksum = 1",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t comment='asdf'",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t compression='asdf'",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t connection='asdf'",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t data directory = 'asdf'",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t index directory = 'asdf'",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t delay_key_write = 123",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t encryption='asdf'",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t engine=eng",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t engine_attribute='asdf'",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t insert_method last",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t insert_method=last",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t key_block_size='asdf'",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t max_rows='asdf'",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t min_rows='asdf'",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t pack_keys=123",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t password='asdf'",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t row_format=dynamic",
+			output: "alter table t",
+		},
 		{
 			input:  "alter table t secondary_engine=rapid",
 			output: "alter table t",
@@ -3605,6 +3935,41 @@ var (
 			output: "alter table t",
 		},
 		{
+			input:  "alter table t stats_auto_recalc = default",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t stats_persistent = default",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t stats_sample_pages = 'asdf'",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t tablespace asdf",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t tablespace asdf storage disk",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t tablespace asdf storage memory",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t union = (a, b, c)",
+			output: "alter table t",
+		},
+
+		{
+			input:  "alter table t modify col varchar(20) not null, algorithm = inplace, lock = none;",
+			output: "alter table t modify column col (\n" +
+				"\tcol varchar(20) not null\n" +
+				"),,",
+		},
+		{
 			input:  "table t",
 			output: "select * from t",
 		},
@@ -3621,14 +3986,6 @@ var (
 				") checksum 100",
 		},
 		{
-			input:  "alter table t checksum 1",
-			output: "alter table t",
-		},
-		{
-			input:  "alter table t checksum = 1",
-			output: "alter table t",
-		},
-		{
 			input: "create table t (i int) table_checksum=0",
 			output: "create table t (\n" +
 				"\ti int\n" +
@@ -3639,14 +3996,6 @@ var (
 			output: "create table t (\n" +
 				"\ti int\n" +
 				") CHECKSUM 100",
-		},
-		{
-			input:  "alter table t table_checksum 1",
-			output: "alter table t",
-		},
-		{
-			input:  "alter table t table_checksum = 1",
-			output: "alter table t",
 		},
 		{
 			input: "create table t (i int) union (a, b, c)",
@@ -3676,13 +4025,54 @@ var (
 				"\ti int\n" +
 				") insert_method last",
 		},
+
+		// Date, Time, and Timestamp literals
 		{
-			input:  "alter table t insert_method last",
-			output: "alter table t",
+			input:  "select date '2020-10-01'",
+			output: "select '2020-10-01'",
 		},
 		{
-			input:  "alter table t insert_method=last",
-			output: "alter table t",
+			input:  "select time '2020-10-01'",
+			output: "select '2020-10-01'",
+		},
+		{
+			input:  "select timestamp '2020-10-01'",
+			output: "select '2020-10-01'",
+		},
+
+		{
+			input:  "select date'2020-10-01'",
+			output: "select '2020-10-01'",
+		},
+		{
+			input:  "select time'2020-10-01'",
+			output: "select '2020-10-01'",
+		},
+		{
+			input:  "select timestamp'2020-10-01'",
+			output: "select '2020-10-01'",
+		},
+
+		{
+			input:  "select (date '2020-10-01')",
+			output: "select ('2020-10-01')",
+		},
+		{
+			input:  "select (time '2020-10-01')",
+			output: "select ('2020-10-01')",
+		},
+		{
+			input:  "select (timestamp '2020-10-01')",
+			output: "select ('2020-10-01')",
+		},
+
+		{
+			input:  "insert into t values (date '2020-10-01'), (time '2020-10-01'), (timestamp '2020-10-01')",
+			output: "insert into t values ('2020-10-01'), ('2020-10-01'), ('2020-10-01')",
+		},
+		{
+			input:  "select * from (values row(date '2020-10-01', time '12:34:56', timestamp '2001-02-03 12:34:56')) t;",
+			output: "select * from (values row('2020-10-01', '12:34:56', '2001-02-03 12:34:56')) as t",
 		},
 	}
 
@@ -4674,6 +5064,7 @@ func TestInvalid(t *testing.T) {
 	invalidSQL := []struct {
 		input string
 		err   string
+		skip  bool
 	}{
 		{
 			input: "SET @foo = `o` `ne`;",
@@ -4843,6 +5234,15 @@ func TestInvalid(t *testing.T) {
 		{
 			// TODO: should work
 			input: "select * from tbl into outfile 'outfile.txt' lines starting by 'd' terminated by 'e' starting by 'd' terminated by 'e'",
+			err:   "syntax error",
+		},
+
+		{
+			input: "select date 20010203",
+			err:   "syntax error",
+		},
+		{
+			input: "select date concat('2001-', '02-', '03')",
 			err:   "syntax error",
 		},
 	}
@@ -5633,8 +6033,24 @@ func TestFunctionCalls(t *testing.T) {
 			output: "select CAST(foo as DOUBLE)",
 		},
 		{
+			input:  "SELECT CAST(foo AS DOUBLE PRECISION)",
+			output: "select CAST(foo as DOUBLE)",
+		},
+		{
+			input:  "SELECT CAST(foo AS REAL)",
+			output: "select CAST(foo as REAL)",
+		},
+		{
 			input:  "SELECT CAST(foo AS FLOAT)",
 			output: "select CAST(foo as FLOAT)",
+		},
+		{
+			input:  "SELECT CAST(foo AS CHARACTER)",
+			output: "select CAST(foo as CHAR)",
+		},
+		{
+			input:  "SELECT CAST(foo AS CHARACTER(100))",
+			output: "select CAST(foo as CHAR(100))",
 		},
 		{
 			input:  "SELECT POSITION('abc' in 'xyz')",
@@ -5657,8 +6073,10 @@ func TestFunctionCalls(t *testing.T) {
 			input: `select SELECT 17 MEMBER OF('[23, "abc", 17, "ab", 10]'); from dual`,
 		},
 		{
-			// not implemented
-			input: "select JSON_TABLE('') from dual",
+			input:  "alter table a check partition p",
+		},
+		{
+			input:  "alter table a check partition all",
 		},
 	}
 
@@ -6508,112 +6926,109 @@ func TestCreateTable(t *testing.T) {
 		// partition options
 		{
 			input: "create table t (\n" +
-				"\ti int\n)" +
-				"PARTITION BY RANGE (store_id) (\n" +
-				"PARTITION p0 VALUES LESS THAN (6),\n" +
-				"PARTITION p1 VALUES LESS THAN (11),\n" +
-				"PARTITION p2 VALUES LESS THAN (16),\n" +
-				"PARTITION p3 VALUES LESS THAN (21)\n" +
+				"\ti int\n" +
+				") partition by range (store_id) (\n" +
+				"partition p0 values less than (6),\n" +
+				"partition p1 values less than (11),\n" +
+				"partition p2 values less than (16),\n" +
+				"partition p3 values less than (21)\n" +
 				")",
-			output: "create table t (\n" +
-				"\ti int\n)" +
-				" PARTITION BY RANGE (store_id)(partition_definitions)",
 		},
 		{
 			input: "create table t (\n" +
-				"\ti int\n)" +
-				"PARTITION BY HASH ('values')",
-			output: "create table t (\n" +
-				"\ti int\n)" +
-				" PARTITION BY HASH (value)",
+				"\ti int\n" +
+				") partition by hash ('values')",
 		},
 		{
 			input: "create table t (\n" +
-				"\ti int\n)" +
-				"PARTITION BY HASH (col)",
-			output: "create table t (\n" +
-				"\ti int\n)" +
-				" PARTITION BY HASH (col)",
+				"\ti int\n" +
+				") partition by hash (col)",
 		},
 		{
 			input: "create table t (\n" +
-				"\ti int\n)" +
-				"PARTITION BY LINEAR HASH (col)",
-			output: "create table t (\n" +
-				"\ti int\n)" +
-				" PARTITION BY LINEAR HASH (col)",
+				"\ti int\n" +
+				") partition by linear hash (col)",
 		},
 		{
 			input: "create table t (\n" +
-				"\ti int\n)" +
-				"PARTITION BY KEY (col)",
-			output: "create table t (\n" +
-				"\ti int\n)" +
-				" PARTITION BY KEY (column_list)",
+				"\ti int\n" +
+				") partition by KEY (col)",
 		},
 		{
 			input: "create table t (\n" +
-				"\ti int\n)" +
-				"PARTITION BY KEY ALGORITHM = 7 (col)",
-			output: "create table t (\n" +
-				"\ti int\n)" +
-				" PARTITION BY KEY ALGORITHM 7 (column_list)",
+				"\ti int\n" +
+				") partition by KEY ALGORITHM = 7 (col)",
 		},
 		{
 			input: "create table t (\n" +
-				"\ti int\n)" +
-				"PARTITION BY LINEAR KEY ALGORITHM = 7 (col)",
-			output: "create table t (\n" +
-				"\ti int\n)" +
-				" PARTITION BY LINEAR KEY ALGORITHM 7 (column_list)",
+				"\ti int\n" +
+				") partition by linear KEY ALGORITHM = 7 (col)",
 		},
 		{
 			input: "create table t (\n" +
-				"\ti int\n)" +
-				"PARTITION BY RANGE (column)",
-			output: "create table t (\n" +
-				"\ti int\n)" +
-				" PARTITION BY RANGE (column)",
+				"\ti int\n" +
+				") partition by RANGE (col)",
 		},
 		{
 			input: "create table t (\n" +
-				"\ti int\n)" +
-				"PARTITION BY RANGE COLUMNS (c1, c2, c3)",
-			output: "create table t (\n" +
-				"\ti int\n)" +
-				" PARTITION BY RANGE COLUMNS (column_list)",
+				"\ti int\n" +
+				") partition by RANGE (i + j)",
 		},
 		{
 			input: "create table t (\n" +
-				"\ti int\n)" +
-				"PARTITION BY LIST (column)",
-			output: "create table t (\n" +
-				"\ti int\n)" +
-				" PARTITION BY LIST (column)",
+				"\ti int\n" +
+				") partition by RANGE (month(i))",
 		},
 		{
 			input: "create table t (\n" +
-				"\ti int\n)" +
-				"PARTITION BY LIST COLUMNS (c1, c2, c3)",
-			output: "create table t (\n" +
-				"\ti int\n)" +
-				" PARTITION BY LIST COLUMNS (column_list)",
+				"\ti int\n" +
+				") partition by RANGE (concat(i))",
 		},
 		{
 			input: "create table t (\n" +
-				"\ti int\n)" +
-				"PARTITION BY LINEAR HASH (a) PARTITIONS 20",
-			output: "create table t (\n" +
-				"\ti int\n)" +
-				" PARTITION BY LINEAR HASH (a)PARTITIONS 20 ",
-		},
-		{
-			input: "create table t (\n" +
-				"\ti int\n)" +
-				"PARTITION BY LINEAR HASH (a) PARTITIONS 10 SUBPARTITION BY LINEAR HASH (b) SUBPARTITIONS 20",
+				"\ti int\n" +
+				") partition by RANGE COLUMNS (c1, c2, c3)",
 			output: "create table t (\n" +
 				"\ti int\n" +
-				") PARTITION BY LINEAR HASH (a)PARTITIONS 10 SUBPARTITION BY LINEAR HASH (b) SUBPARTITIONS 20 ",
+				") partition by RANGE (c1, c2, c3)",
+		},
+		{
+			input: "create table t (\n" +
+				"\ti int\n" +
+				") partition by LIST (col)",
+		},
+		{
+			input: "create table t (\n" +
+				"\ti int\n" +
+				") partition by LIST (i + j)",
+		},
+		{
+			input: "create table t (\n" +
+				"\ti int\n" +
+				") partition by LIST (month(i))",
+		},
+		{
+			input: "create table t (\n" +
+				"\ti int\n" +
+				") partition by LIST (concat(i))",
+		},
+		{
+			input: "create table t (\n" +
+				"\ti int\n" +
+				") partition by LIST COLUMNS (c1, c2, c3)",
+			output: "create table t (\n" +
+				"\ti int\n" +
+				") partition by LIST (c1, c2, c3)",
+		},
+		{
+			input: "create table t (\n" +
+				"\ti int\n" +
+				") partition by linear hash (a) partitions 20",
+		},
+		{
+			input: "create table t (\n" +
+				"\ti int\n" +
+				") partition by linear hash (a) partitions 10 subpartition by linear hash (b) subpartitions 20",
 		},
 		{
 			input: "create table t (\n" +
@@ -6625,20 +7040,13 @@ func TestCreateTable(t *testing.T) {
 		},
 		{
 			input: "create table t (\n" +
-				"\ti int\n)" +
-				"engine = innodb\n" +
-				"auto_increment 123,\n" +
-				"avg_row_length 1,\n" +
-				"default character set utf8mb4\n" +
-				"PARTITION BY LINEAR HASH (a) " +
-				"PARTITIONS 10 SUBPARTITION BY LINEAR HASH (b) SUBPARTITIONS 20",
-			output: "create table t (\n\t" +
-				"i int\n" +
-				") engine innodb" +
-				" auto_increment 123" +
-				" avg_row_length 1" +
-				" character set utf8mb4" +
-				" PARTITION BY LINEAR HASH (a)PARTITIONS 10 SUBPARTITION BY LINEAR HASH (b) SUBPARTITIONS 20 ",
+				"\ti int\n" +
+				") engine innodb " +
+				"auto_increment 123 " +
+				"avg_row_length 1 " +
+				"character set utf8mb4 " +
+				"partition by linear hash (a) partitions 10 " +
+				"subpartition by linear hash (b) subpartitions 20",
 		},
 		{
 			input: "create table t (\n" +

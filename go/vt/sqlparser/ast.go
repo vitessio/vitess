@@ -166,22 +166,37 @@ func parseTokenizer(sql string, tokenizer *Tokenizer) (Statement, error) {
 	return tokenizer.ParseTree, nil
 }
 
-// For select statements, capture the verbatim select expressions from the original query text
+// For select statements, capture the verbatim select expressions from the original query text.
+// It searches select expressions in walkable nodes.
 func captureSelectExpressions(sql string, tokenizer *Tokenizer) {
-	if s, ok := tokenizer.ParseTree.(SelectStatement); ok {
-		s.walkSubtree(func(node SQLNode) (bool, error) {
-			if node, ok := node.(*AliasedExpr); ok && node.EndParsePos > node.StartParsePos {
-				_, ok := node.Expr.(*ColName)
-				if ok {
-					// column names don't need any special handling to capture the input expression
-					return false, nil
-				} else {
-					node.InputExpression = trimQuotes(strings.Trim(sql[node.StartParsePos:node.EndParsePos], " \n\t"))
-				}
+	if s, isSelect := tokenizer.ParseTree.(SelectStatement); isSelect {
+		walkSelectExpressions(s, sql)
+	} else if w, ok := tokenizer.ParseTree.(WalkableSQLNode); ok {
+		w.walkSubtree(func(node SQLNode) (bool, error) {
+			if s, isSelect = node.(SelectStatement); isSelect {
+				walkSelectExpressions(s, sql)
 			}
 			return true, nil
 		})
 	}
+}
+
+// walkSelectExpressions fills in `InputExpression` of `AliasedExpr` if it's not a column name.
+// This is used to display the result as defined original query text. This function gets called
+// by captureSelectExpressions.
+func walkSelectExpressions(s SelectStatement, sql string) {
+	s.walkSubtree(func(node SQLNode) (bool, error) {
+		if node, ok := node.(*AliasedExpr); ok && node.EndParsePos > node.StartParsePos {
+			_, ok := node.Expr.(*ColName)
+			if ok {
+				// column names don't need any special handling to capture the input expression
+				return false, nil
+			} else {
+				node.InputExpression = trimQuotes(strings.Trim(sql[node.StartParsePos:node.EndParsePos], " \n\t"))
+			}
+		}
+		return true, nil
+	})
 }
 
 // For DDL statements that capture the position of a sub-statement (create view and others), we need to adjust these
@@ -878,8 +893,11 @@ func (node *Load) Format(buf *TrackedBuffer) {
 		ignoreOrReplace += " "
 	}
 
-	buf.Myprintf("load data %sinfile '%s' %sinto table %s%v%s%v%v%s%v", local, node.Infile, ignoreOrReplace, node.Table.String(),
-		node.Partition, charset, node.Fields, node.Lines, ignoreNum, node.Columns)
+	buf.Myprintf("load data %sinfile '%s' %sinto table %s", local, node.Infile, ignoreOrReplace, node.Table.String())
+	if len(node.Partition) > 0 {
+		buf.Myprintf(" partition (%v)", node.Partition)
+	}
+	buf.Myprintf("%s%v%v%s%v", charset, node.Fields, node.Lines, ignoreNum, node.Columns)
 }
 
 func (node *Load) walkSubtree(visit Visit) error {
@@ -1604,11 +1622,15 @@ const (
 
 // Format formats the node.
 func (node *Insert) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%v%s %v%sinto %v%v%v %v%v",
+	buf.Myprintf("%v%s %v%sinto %v",
 		node.With,
 		node.Action,
 		node.Comments, node.Ignore,
-		node.Table, node.Partitions, node.Columns, node.Rows, node.OnDup)
+		node.Table)
+	if len(node.Partitions) > 0 {
+		buf.Myprintf(" partition (%v)", node.Partitions)
+	}
+	buf.Myprintf("%v %v%v", node.Columns, node.Rows, node.OnDup)
 }
 
 func (node *Insert) walkSubtree(visit Visit) error {
@@ -1693,7 +1715,11 @@ func (node *Delete) Format(buf *TrackedBuffer) {
 	if node.Targets != nil {
 		buf.Myprintf("%v ", node.Targets)
 	}
-	buf.Myprintf("from %v%v%v%v%v", node.TableExprs, node.Partitions, node.Where, node.OrderBy, node.Limit)
+	buf.Myprintf("from %v", node.TableExprs)
+	if len(node.Partitions) > 0 {
+		buf.Myprintf(" partition (%v)", node.Partitions)
+	}
+	buf.Myprintf("%v%v%v", node.Where, node.OrderBy, node.Limit)
 }
 
 func (node *Delete) walkSubtree(visit Visit) error {
@@ -1766,11 +1792,12 @@ type CharsetAndCollate struct {
 
 // DBDDL represents a CREATE, DROP database statement.
 type DBDDL struct {
-	Action         string
-	DBName         string
-	IfNotExists    bool
-	IfExists       bool
-	CharsetCollate []*CharsetAndCollate
+	Action           string
+	SchemaOrDatabase string
+	DBName           string
+	IfNotExists      bool
+	IfExists         bool
+	CharsetCollate   []*CharsetAndCollate
 }
 
 // Format formats the node.
@@ -1795,13 +1822,13 @@ func (node *DBDDL) Format(buf *TrackedBuffer) {
 			charsetCollateStr += fmt.Sprintf("%s %s %s", charsetDef, typeStr, obj.Value)
 		}
 
-		buf.WriteString(fmt.Sprintf("%s database%s%s%s", node.Action, exists, dbname, charsetCollateStr))
+		buf.WriteString(fmt.Sprintf("%s %s%s%s%s", node.Action, node.SchemaOrDatabase, exists, dbname, charsetCollateStr))
 	case DropStr:
 		exists := ""
 		if node.IfExists {
 			exists = " if exists"
 		}
-		buf.WriteString(fmt.Sprintf("%s database%s %v", node.Action, exists, node.DBName))
+		buf.WriteString(fmt.Sprintf("%s %s%s %v", node.Action, node.SchemaOrDatabase, exists, node.DBName))
 	}
 }
 
@@ -1963,8 +1990,9 @@ func (c Characteristic) String() string {
 
 // AlterTable represents an ALTER table statement, which can include multiple DDL clauses.
 type AlterTable struct {
-	Table      TableName
-	Statements []*DDL
+	Table          TableName
+	Statements     []*DDL
+	PartitionSpecs []*PartitionSpec
 }
 
 var _ SQLNode = (*AlterTable)(nil)
@@ -1977,6 +2005,12 @@ func (m *AlterTable) Format(buf *TrackedBuffer) {
 			buf.Myprintf(",")
 		}
 		ddl.alterFormat(buf)
+	}
+	for i, partitionSpec := range m.PartitionSpecs {
+		if i > 0 {
+			buf.Myprintf(" ")
+		}
+		buf.Myprintf("%v", partitionSpec)
 	}
 }
 
@@ -2342,6 +2376,12 @@ func (node *DDL) walkSubtree(visit Visit) error {
 			return err
 		}
 	}
+
+	if node.ViewSpec != nil {
+		err := Walk(visit, node.ViewSpec.ViewExpr)
+		return err
+	}
+	// TODO: add missing nodes that are walkable
 	return nil
 }
 
@@ -2430,6 +2470,16 @@ func (node *DDL) AffectedTables() TableNames {
 // Partition strings
 const (
 	ReorganizeStr = "reorganize partition"
+	DiscardStr    = "discard"
+	ImportStr     = "import"
+	CoalesceStr   = "coalesce"
+	ExchangeStr   = "exchange"
+	AnalyzeStr    = "analyze"
+	CheckStr      = "check"
+	OptimizeStr   = "optimize"
+	RebuildStr    = "rebuild"
+	RepairStr     = "repair"
+	RemoveStr     = "remove"
 )
 
 // OptLike works for create table xxx like xxx
@@ -2467,24 +2517,58 @@ func (node *OptSelect) walkSubtree(visit Visit) error {
 
 // PartitionSpec describe partition actions (for alter and create)
 type PartitionSpec struct {
-	Action      string
-	Name        ColIdent
-	Definitions []*PartitionDefinition
+	Action         string
+	IsAll          bool
+	Names          Partitions
+	Definitions    []*PartitionDefinition
+	WithValidation bool
+	TableName      TableName
+	Number         *SQLVal
 }
 
 // Format formats the node.
 func (node *PartitionSpec) Format(buf *TrackedBuffer) {
 	switch node.Action {
-	case ReorganizeStr:
-		buf.Myprintf("%s %v into (", node.Action, node.Name)
-		var prefix string
+	case AddStr:
+		buf.Myprintf(" %s partition (", node.Action)
 		for _, pd := range node.Definitions {
-			buf.Myprintf("%s%v", prefix, pd)
-			prefix = ", "
+			buf.Myprintf("%v", pd)
 		}
 		buf.Myprintf(")")
+	case DropStr, AnalyzeStr, OptimizeStr, RebuildStr, RepairStr:
+		if node.IsAll {
+			buf.Myprintf(" %s partition all", node.Action)
+		} else {
+			buf.Myprintf(" %s partition %v", node.Action, node.Names)
+		}
+	case DiscardStr, ImportStr, TruncateStr:
+		if node.IsAll {
+			buf.Myprintf(" %s partition all tablespace", node.Action)
+		} else {
+			buf.Myprintf(" %s partition %v tablespace", node.Action, node.Names)
+		}
+	case ReorganizeStr:
+		buf.Myprintf(" %s %v into (", node.Action, node.Names)
+		for i, pd := range node.Definitions {
+			if i > 0 {
+				buf.Myprintf(", ")
+			}
+			buf.Myprintf("%v", pd)
+		}
+		buf.Myprintf(")")
+	case CoalesceStr:
+		buf.Myprintf(" %s partition %v", node.Action, node.Number)
+	case ExchangeStr:
+		buf.Myprintf(" %s partition %v with table %v", node.Action, node.Names, node.TableName)
+		if node.WithValidation {
+			buf.Myprintf(" with validation")
+		} else {
+			buf.Myprintf(" without validation")
+		}
+	case RemoveStr:
+		buf.Myprintf(" %s partitioning", node.Action)
 	default:
-		panic("unimplemented")
+		//panic("unimplemented")
 	}
 }
 
@@ -2492,7 +2576,7 @@ func (node *PartitionSpec) walkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
 	}
-	if err := Walk(visit, node.Name); err != nil {
+	if err := Walk(visit, node.Names); err != nil {
 		return err
 	}
 	for _, def := range node.Definitions {
@@ -2532,13 +2616,11 @@ func (node *PartitionDefinition) walkSubtree(visit Visit) error {
 
 // TableSpec describes the structure of a table from a CREATE TABLE statement
 type TableSpec struct {
-	Columns     []*ColumnDefinition
-	Indexes     []*IndexDefinition
-	Constraints []*ConstraintDefinition
-	TableOpts   []*TableOption
-
-	// TODO: should be some sort of struct
-	PartitionOpts string
+	Columns      []*ColumnDefinition
+	Indexes      []*IndexDefinition
+	Constraints  []*ConstraintDefinition
+	TableOpts    []*TableOption
+	PartitionOpt *PartitionOption
 }
 
 // Format formats the node.
@@ -2561,8 +2643,8 @@ func (ts *TableSpec) Format(buf *TrackedBuffer) {
 	for _, tblOpt := range ts.TableOpts {
 		buf.Myprintf(" %s %s", tblOpt.Name, tblOpt.Value)
 	}
-	if len(ts.PartitionOpts) > 0 {
-		buf.Myprintf(" %s", ts.PartitionOpts)
+	if ts.PartitionOpt != nil {
+		buf.Myprintf(" %v", ts.PartitionOpt)
 	}
 
 	//buf.Myprintf("\n)%s", strings.Replace(ts.TableOpts, ", ", ",\n  ", -1))
@@ -3353,6 +3435,83 @@ type IndexOption struct {
 type TableOption struct {
 	Name  string
 	Value string
+}
+
+// PartitionOption describes a partition option in a CREATE TABLE statement
+type PartitionOption struct {
+	PartitionType string // HASH, KEY, RANGE, LIST
+	IsLinear      bool
+	KeyAlgorithm  string
+	ColList       Columns
+	Expr          Expr
+	Partitions    *SQLVal
+	SubPartition  *SubPartition
+	Definitions   []*PartitionDefinition
+}
+
+// Format formats the node.
+func (node *PartitionOption) Format(buf *TrackedBuffer) {
+	buf.Myprintf("partition by")
+	if node.IsLinear {
+		buf.Myprintf(" linear")
+	}
+	buf.Myprintf(" %s", node.PartitionType)
+	if node.KeyAlgorithm != "" {
+		buf.Myprintf(" %s", node.KeyAlgorithm)
+	}
+	if node.ColList != nil {
+		buf.Myprintf(" %v", node.ColList)
+	}
+	if node.Expr != nil {
+		buf.Myprintf(" (%v)", node.Expr)
+	}
+	if node.Partitions != nil {
+		buf.Myprintf(" partitions %v", node.Partitions)
+	}
+	if node.SubPartition != nil {
+		buf.Myprintf("%v", node.SubPartition)
+	}
+	if len(node.Definitions) > 0 {
+		buf.Myprintf(" (\n")
+		for i, def := range node.Definitions {
+			if i != 0 {
+				buf.Myprintf(",\n")
+			}
+			buf.Myprintf("%v", def)
+		}
+		buf.Myprintf("\n)")
+	}
+}
+
+// SubPartition describes subpartitions control
+type SubPartition struct {
+	PartitionType string
+	IsLinear      bool
+	KeyAlgorithm  string
+	ColList       Columns
+	Expr          Expr
+	SubPartitions *SQLVal
+}
+
+// Format formats the node.
+func (node *SubPartition) Format(buf *TrackedBuffer) {
+	buf.Myprintf(" subpartition by")
+	if node.IsLinear {
+		buf.Myprintf(" linear")
+	}
+	buf.Myprintf(" %s", node.PartitionType)
+	if node.KeyAlgorithm != "" {
+		buf.Myprintf(" %s", node.KeyAlgorithm)
+	}
+	if node.ColList != nil {
+		buf.Myprintf(" %v", node.ColList)
+	}
+	if node.Expr != nil {
+		buf.Myprintf(" (%v)", node.Expr)
+	}
+	if node.SubPartitions != nil {
+		buf.Myprintf(" subpartitions %v", node.SubPartitions)
+	}
 }
 
 // ColumnKeyOption indicates whether or not the given column is defined as an
@@ -4157,12 +4316,12 @@ func (node Partitions) Format(buf *TrackedBuffer) {
 	if node == nil {
 		return
 	}
-	prefix := " partition ("
-	for _, n := range node {
-		buf.Myprintf("%s%v", prefix, n)
-		prefix = ", "
+	for i, n := range node {
+		if i > 0 {
+			buf.Myprintf(", ")
+		}
+		buf.Myprintf("%v", n)
 	}
-	buf.WriteString(")")
 }
 
 func (node Partitions) walkSubtree(visit Visit) error {
@@ -4287,7 +4446,10 @@ func (node *AliasedTableExpr) Format(buf *TrackedBuffer) {
 	case *ValuesStatement:
 		buf.Myprintf("(%v)", node.Expr)
 	default:
-		buf.Myprintf("%v%v", node.Expr, node.Partitions)
+		buf.Myprintf("%v", node.Expr)
+		if len(node.Partitions) > 0 {
+			buf.Myprintf(" partition (%v)", node.Partitions)
+		}
 	}
 
 	if node.AsOf != nil {
@@ -4563,12 +4725,15 @@ func (node EventName) IsEmpty() bool {
 }
 
 // TableName represents a table  name.
-// Qualifier, if specified, represents a database or keyspace.
+// DbQualifier, if specified, represents a database or keyspace.
 // TableName is a value struct whose fields are case sensitive.
 // This means two TableName vars can be compared for equality
 // and a TableName can also be used as key in a map.
+// SchemaQualifier, if specified, represents a schema name, which is an additional level of namespace supported in
+// other dialects. Supported here so that this AST can act as a translation layer for those dialects, but is unused in 
+// MySQL.
 type TableName struct {
-	Name, Qualifier TableIdent
+	Name, DbQualifier, SchemaQualifier TableIdent
 }
 
 // Format formats the node.
@@ -4576,8 +4741,8 @@ func (node TableName) Format(buf *TrackedBuffer) {
 	if node.IsEmpty() {
 		return
 	}
-	if !node.Qualifier.IsEmpty() {
-		buf.Myprintf("%v.", node.Qualifier)
+	if !node.DbQualifier.IsEmpty() {
+		buf.Myprintf("%v.", node.DbQualifier)
 	}
 	buf.Myprintf("%v", node.Name)
 }
@@ -4587,8 +4752,8 @@ func (node TableName) String() string {
 	if node.IsEmpty() {
 		return ""
 	}
-	if !node.Qualifier.IsEmpty() {
-		return fmt.Sprintf("%s.%s", node.Qualifier.String(), node.Name)
+	if !node.DbQualifier.IsEmpty() {
+		return fmt.Sprintf("%s.%s", node.DbQualifier.String(), node.Name)
 	}
 	return node.Name.String()
 }
@@ -4597,7 +4762,7 @@ func (node TableName) walkSubtree(visit Visit) error {
 	return Walk(
 		visit,
 		node.Name,
-		node.Qualifier,
+		node.DbQualifier,
 	)
 }
 
@@ -4609,11 +4774,11 @@ func (node TableName) IsEmpty() bool {
 
 // ToViewName returns a TableName acceptable for use as a VIEW. VIEW names are
 // always lowercase, so ToViewName lowercasese the name. Databases are case-sensitive
-// so Qualifier is left untouched.
+// so DbQualifier is left untouched.
 func (node TableName) ToViewName() TableName {
 	return TableName{
-		Qualifier: node.Qualifier,
-		Name:      NewTableIdent(strings.ToLower(node.Name.v)),
+		DbQualifier: node.DbQualifier,
+		Name:        NewTableIdent(strings.ToLower(node.Name.v)),
 	}
 }
 
@@ -5286,6 +5451,10 @@ func NewHexVal(in []byte) *SQLVal {
 func NewBitVal(in []byte) *SQLVal {
 	return &SQLVal{Type: BitVal, Val: in}
 }
+
+// TODO: implement a NewDateVal()
+// TODO: implement a NewTimeVal()
+// TODO: implement a NewTimestampVal()
 
 // NewValArg builds a new ValArg.
 func NewValArg(in []byte) *SQLVal {
@@ -6641,7 +6810,7 @@ func VarScopeForColName(colName *ColName) (*ColName, SetScope, string, error) {
 			}
 			return &ColName{Name: ColIdent{val: varName}}, scope, specifiedScope, nil
 		}
-	} else if colName.Qualifier.Qualifier.IsEmpty() { // Forms are like `@@GLOBAL.x` and `@@SESSION.x`
+	} else if colName.Qualifier.DbQualifier.IsEmpty() { // Forms are like `@@GLOBAL.x` and `@@SESSION.x`
 		varName, scope, specifiedScope, err := VarScope(colName.Qualifier.Name.v, colName.Name.val)
 		if err != nil {
 			return nil, SetScope_None, "", err
@@ -6651,7 +6820,7 @@ func VarScopeForColName(colName *ColName) (*ColName, SetScope, string, error) {
 		}
 		return &ColName{Name: ColIdent{val: varName}}, scope, specifiedScope, nil
 	} else { // Forms are like `@@GLOBAL.validate_password.length`, which is currently unsupported
-		_, _, _, err := VarScope(colName.Qualifier.Qualifier.v, colName.Qualifier.Name.v, colName.Name.val)
+		_, _, _, err := VarScope(colName.Qualifier.DbQualifier.v, colName.Qualifier.Name.v, colName.Name.val)
 		return colName, SetScope_None, "", err
 	}
 }
@@ -7325,16 +7494,16 @@ func (node *SrsAttribute) Format(buf *TrackedBuffer) {
 	buf.Myprintf("description '%s'", node.Description)
 }
 
-// InjectableExpression is an expression that can accept a set of analyzed/resolved children. Used within InjectedExpr.
-type InjectableExpression interface {
+// Injectable is an expression that can accept a set of analyzed/resolved children. Used within InjectedExpr.
+type Injectable interface {
 	WithResolvedChildren(children []any) (any, error)
 }
 
 // InjectedExpr allows bypassing AST analysis. This is used by projects that rely on Vitess, but may not implement
 // MySQL's dialect.
 type InjectedExpr struct {
-	Expression InjectableExpression
-	Children   []Expr
+	Expression Injectable
+	Children   Exprs
 }
 
 var _ Expr = InjectedExpr{}
@@ -7353,5 +7522,26 @@ func (d InjectedExpr) Format(buf *TrackedBuffer) {
 		buf.WriteString(stringer.String())
 	} else {
 		buf.WriteString("InjectedExpr")
+	}
+}
+
+// InjectedStatement allows bypassing AST analysis. This is used by projects that rely on Vitess, but may not implement
+// MySQL's dialect.
+type InjectedStatement struct {
+	Statement  Injectable
+	Children   Exprs
+}
+
+var _ Statement = InjectedStatement{}
+
+// iStatement implements the Statement interface.
+func (d InjectedStatement) iStatement() {}
+
+// Format implements the Statement interface.
+func (d InjectedStatement) Format(buf *TrackedBuffer) {
+	if stringer, ok := d.Statement.(fmt.Stringer); ok {
+		buf.WriteString(stringer.String())
+	} else {
+		buf.WriteString("InjectedStatement")
 	}
 }

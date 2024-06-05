@@ -50,6 +50,20 @@ const (
 	jsonFalseLiteral = '\x02'
 )
 
+// ConvertBinaryJSONToSQL converts the specified |data| in MySQL's internal binary encoding
+// to a SQL expression that can be evaluated.
+func ConvertBinaryJSONToSQL(data []byte) (string, error) {
+	bytes, err := printJSONData(data)
+	if err != nil {
+		return "", err
+	}
+
+	if bytes == nil {
+		return "", nil
+	}
+	return string(bytes), nil
+}
+
 // printJSONData parses the MySQL binary format for JSON data, and prints
 // the result as a string.
 func printJSONData(data []byte) ([]byte, error) {

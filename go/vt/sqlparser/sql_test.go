@@ -300,8 +300,8 @@ func TestDropIndex(t *testing.T) {
 		{
 			"DROP INDEX idx_v ON tbl_abc",
 			TableName{
-				Name:      TableIdent{"tbl_abc"},
-				Qualifier: TableIdent{},
+				Name:        TableIdent{"tbl_abc"},
+				DbQualifier: TableIdent{},
 			},
 			&IndexSpec{
 				Action: DropStr,
@@ -311,8 +311,8 @@ func TestDropIndex(t *testing.T) {
 		{
 			"DROP INDEX otherName ON tableYeah",
 			TableName{
-				Name:      TableIdent{"tableYeah"},
-				Qualifier: TableIdent{},
+				Name:        TableIdent{"tableYeah"},
+				DbQualifier: TableIdent{},
 			},
 			&IndexSpec{
 				Action: DropStr,
