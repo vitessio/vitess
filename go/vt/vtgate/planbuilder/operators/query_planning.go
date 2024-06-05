@@ -405,6 +405,7 @@ func tryPushOrdering(ctx *plancontext.PlanningContext, in *Ordering) (Operator, 
 				return in, NoRewrite
 			}
 			in.Order[idx].SimplifiedExpr = src.rewriteColNameToArgument(order.SimplifiedExpr)
+			in.Order[idx].Inner.Expr = src.rewriteColNameToArgument(order.Inner.Expr)
 		}
 		src.Outer, in.Source = in, src.Outer
 		return src, Rewrote("push ordering into outer side of subquery")

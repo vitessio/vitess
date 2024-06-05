@@ -286,7 +286,18 @@ func (p *Projection) addUnexploredExpr(ae *sqlparser.AliasedExpr, e sqlparser.Ex
 	return p.addProjExpr(newProjExprWithInner(ae, e))
 }
 
-func (p *Projection) addSubqueryExpr(ae *sqlparser.AliasedExpr, expr sqlparser.Expr, sqs ...*SubQuery) {
+func (p *Projection) addSubqueryExpr(ctx *plancontext.PlanningContext, ae *sqlparser.AliasedExpr, expr sqlparser.Expr, sqs ...*SubQuery) {
+	ap, err := p.GetAliasedProjections()
+	if err != nil {
+		panic(err)
+	}
+	for _, projExpr := range ap {
+		if ctx.SemTable.EqualsExprWithDeps(projExpr.EvalExpr, expr) {
+			// if we already have this column, we can just return the offset
+			return
+		}
+	}
+
 	pe := newProjExprWithInner(ae, expr)
 	pe.Info = SubQueryExpression(sqs)
 

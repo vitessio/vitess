@@ -128,7 +128,8 @@ func expandOrderBy(ctx *plancontext.PlanningContext, op Operator, qp *QueryProje
 		if !ok {
 			panic(vterrors.VT12001("subquery with aggregation in order by"))
 		}
-		proj.addSubqueryExpr(aeWrap(newExpr), newExpr, subqs...)
+
+		proj.addSubqueryExpr(ctx, aeWrap(newExpr), newExpr, subqs...)
 		newOrder = append(newOrder, OrderBy{
 			Inner: &sqlparser.Order{
 				Expr:      newExpr,
@@ -284,7 +285,7 @@ func createProjectionWithoutAggr(ctx *plancontext.PlanningContext, qp *QueryProj
 			// there was no subquery in this expression
 			proj.addUnexploredExpr(org, expr)
 		} else {
-			proj.addSubqueryExpr(org, newExpr, subqs...)
+			proj.addSubqueryExpr(ctx, org, newExpr, subqs...)
 		}
 	}
 	proj.Source = sqc.getRootOperator(src, nil)
