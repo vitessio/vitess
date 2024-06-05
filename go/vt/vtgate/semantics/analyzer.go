@@ -46,6 +46,7 @@ type analyzer struct {
 	projErr                 error
 	unshardedErr            error
 	warning                 string
+	canShortcut             bool
 	singleUnshardedKeyspace bool
 	fullAnalysis            bool
 }
@@ -135,7 +136,7 @@ func (a *analyzer) newSemTable(
 		comments = commentedStmt.GetParsedComments()
 	}
 
-	if a.singleUnshardedKeyspace {
+	if a.canShortcut {
 		return &SemTable{
 			Tables:                    a.earlyTables.Tables,
 			Comments:                  comments,
@@ -386,16 +387,18 @@ func (a *analyzer) reAnalyze(statement sqlparser.SQLNode) error {
 // canShortCut checks if we are dealing with a single unsharded keyspace and no tables that have managed foreign keys
 // if so, we can stop the analyzer early
 func (a *analyzer) canShortCut(statement sqlparser.Statement) (canShortCut bool) {
-	if a.fullAnalysis {
+	ks, _ := singleUnshardedKeyspace(a.earlyTables.Tables)
+	a.singleUnshardedKeyspace = ks != nil
+	if !a.singleUnshardedKeyspace {
 		return false
 	}
-	ks, _ := singleUnshardedKeyspace(a.earlyTables.Tables)
-	if ks == nil {
+
+	if a.fullAnalysis {
 		return false
 	}
 
 	defer func() {
-		a.singleUnshardedKeyspace = canShortCut
+		a.canShortcut = canShortCut
 	}()
 
 	if !sqlparser.IsDMLStatement(statement) {
