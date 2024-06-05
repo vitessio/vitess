@@ -988,7 +988,7 @@ func TestSchemaDiff(t *testing.T) {
 				"create table t3 (id int primary key, p int, key p_idx (p));",
 			},
 			expectDiffs:       3,
-			expectDeps:        2,
+			expectDeps:        2, // [alter t2]/[drop t1], [alter t2]/[create t3]
 			sequential:        true,
 			entityOrder:       []string{"t3", "t2", "t1"},
 			instantCapability: InstantDDLCapabilityImpossible,
