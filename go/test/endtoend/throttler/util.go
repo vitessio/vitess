@@ -182,6 +182,29 @@ func CheckThrottler(clusterInstance *cluster.LocalProcessCluster, tablet *cluste
 // GetThrottlerStatus runs vtctldclient CheckThrottler.
 func GetThrottlerStatus(vtctldProcess *cluster.VtctldClientProcess, tablet *cluster.Vttablet) (*vtctldatapb.GetThrottlerStatusResponse, error) {
 	output, err := GetThrottlerStatusRaw(vtctldProcess, tablet)
+	if err != nil && strings.HasSuffix(tablet.VttabletProcess.Binary, "-last") {
+		// TODO(shlomi): Remove in v22!
+		// GetThrottlerStatus gRPC was added in v21. Upgrade-downgrade tests which run a
+		// v20 tablet for cross-version compatibility check will fail this command because the
+		// tablet server will not serve this gRPC call.
+		// We therefore resort to checking the /throttler/status endpoint
+		throttlerURL := fmt.Sprintf("http://localhost:%d/throttler/status", tablet.HTTPPort)
+		throttlerBody := getHTTPBody(throttlerURL)
+		if throttlerBody == "" {
+			return nil, fmt.Errorf("failed to get throttler status from %s. Empty result via /status endpoint, and GetThrottlerStatus error: %v", tablet.Alias, err)
+		}
+		resp := vtctldatapb.GetThrottlerStatusResponse{}
+		resp.IsEnabled = gjson.Get(throttlerBody, "IsEnabled").Bool()
+		resp.LagMetricQuery = gjson.Get(throttlerBody, "Query").String()
+		resp.DefaultThreshold = gjson.Get(throttlerBody, "Threshold").Float()
+		resp.MetricsHealth = make(map[string]*vtctldatapb.GetThrottlerStatusResponse_MetricHealth)
+		gjson.Get(throttlerBody, "MetricsHealth").ForEach(func(key, value gjson.Result) bool {
+			// We just need to know that metrics health is non-empty. We don't need to parse the actual values.
+			resp.MetricsHealth[key.String()] = &vtctldatapb.GetThrottlerStatusResponse_MetricHealth{}
+			return true
+		})
+		return &resp, nil
+	}
 	if err != nil {
 		return nil, err
 	}
