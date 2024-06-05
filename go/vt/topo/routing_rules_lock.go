@@ -1,5 +1,5 @@
 /*
-Copyright 2022 The Vitess Authors.
+Copyright 2024 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,19 +14,24 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package planbuilder
+package topo
 
 import (
-	"vitess.io/vitess/go/vt/vtgate/engine"
+	"context"
+	"fmt"
 )
 
-// primitiveWrapper is used when only need a logical plan that supports plan.Primitive() and nothing else
-type primitiveWrapper struct {
-	prim engine.Primitive
+// RoutingRulesLock is a wrapper over TopoLock, to serialize updates to routing rules.
+type RoutingRulesLock struct {
+	*TopoLock
 }
 
-func (p *primitiveWrapper) Primitive() engine.Primitive {
-	return p.prim
+func NewRoutingRulesLock(ctx context.Context, ts *Server, name string) (*RoutingRulesLock, error) {
+	return &RoutingRulesLock{
+		TopoLock: &TopoLock{
+			Path: RoutingRulesPath,
+			Name: fmt.Sprintf("RoutingRules::%s", name),
+			ts:   ts,
+		},
+	}, nil
 }
-
-var _ logicalPlan = (*primitiveWrapper)(nil)

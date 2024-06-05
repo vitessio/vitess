@@ -186,6 +186,7 @@ type TabletManagerClient struct {
 	}
 	// keyed by tablet alias.
 	ChangeTabletTypeResult map[string]error
+	ChangeTabletTypeDelays map[string]time.Duration
 	// keyed by tablet alias.
 	DemotePrimaryDelays map[string]time.Duration
 	// keyed by tablet alias.
@@ -248,6 +249,10 @@ type TabletManagerClient struct {
 	GetSchemaResults map[string]struct {
 		Schema *tabletmanagerdatapb.SchemaDefinition
 		Error  error
+	}
+	GetGlobalStatusVarsResults map[string]struct {
+		Statuses map[string]string
+		Error    error
 	}
 	// keyed by tablet alias.
 	InitPrimaryDelays map[string]time.Duration
@@ -468,7 +473,20 @@ func (fake *TabletManagerClient) Backup(ctx context.Context, tablet *topodatapb.
 
 // ChangeType is part of the tmclient.TabletManagerClient interface.
 func (fake *TabletManagerClient) ChangeType(ctx context.Context, tablet *topodatapb.Tablet, newType topodatapb.TabletType, semiSync bool) error {
-	if result, ok := fake.ChangeTabletTypeResult[topoproto.TabletAliasString(tablet.Alias)]; ok {
+	key := topoproto.TabletAliasString(tablet.Alias)
+
+	if fake.ChangeTabletTypeDelays != nil {
+		if delay, ok := fake.ChangeTabletTypeDelays[key]; ok {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(delay):
+				// proceed to results
+			}
+		}
+	}
+
+	if result, ok := fake.ChangeTabletTypeResult[key]; ok {
 		return result
 	}
 
@@ -715,6 +733,20 @@ func (fake *TabletManagerClient) GetSchema(ctx context.Context, tablet *topodata
 	}
 
 	return nil, fmt.Errorf("%w: no schemas for %s", assert.AnError, key)
+}
+
+// GetGlobalStatusVars is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) GetGlobalStatusVars(ctx context.Context, tablet *topodatapb.Tablet, variables []string) (map[string]string, error) {
+	if fake.GetGlobalStatusVarsResults == nil {
+		return nil, assert.AnError
+	}
+
+	key := topoproto.TabletAliasString(tablet.Alias)
+	if result, ok := fake.GetGlobalStatusVarsResults[key]; ok {
+		return result.Statuses, result.Error
+	}
+
+	return nil, assert.AnError
 }
 
 // InitPrimary is part of the tmclient.TabletManagerClient interface.
@@ -1092,7 +1124,7 @@ func (fake *TabletManagerClient) RunHealthCheck(ctx context.Context, tablet *top
 }
 
 // SetReplicationSource is part of the tmclient.TabletManagerClient interface.
-func (fake *TabletManagerClient) SetReplicationSource(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync bool) error {
+func (fake *TabletManagerClient) SetReplicationSource(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync bool, heartbeatInterval float64) error {
 	if fake.SetReplicationSourceResults == nil {
 		return assert.AnError
 	}

@@ -193,9 +193,26 @@ func (u *Union) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool,
 		}
 
 		return u.addWeightStringToOffset(ctx, argIdx)
+	case *sqlparser.Literal, *sqlparser.Argument:
+		return u.addConstantToUnion(ctx, expr)
 	default:
 		panic(vterrors.VT13001(fmt.Sprintf("only weight_string function is expected - got %s", sqlparser.String(expr))))
 	}
+}
+
+func (u *Union) addConstantToUnion(ctx *plancontext.PlanningContext, aexpr *sqlparser.AliasedExpr) (outputOffset int) {
+	for i, src := range u.Sources {
+		thisOffset := src.AddColumn(ctx, true, false, aexpr)
+		// all offsets for the newly added ws need to line up
+		if i == 0 {
+			outputOffset = thisOffset
+		} else {
+			if thisOffset != outputOffset {
+				panic(vterrors.VT12001("argument offsets did not line up for UNION"))
+			}
+		}
+	}
+	return
 }
 
 func (u *Union) addWeightStringToOffset(ctx *plancontext.PlanningContext, argIdx int) (outputOffset int) {

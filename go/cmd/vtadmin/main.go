@@ -17,7 +17,6 @@ limitations under the License.
 package main
 
 import (
-	"context"
 	"flag"
 	"io"
 	"time"
@@ -97,7 +96,7 @@ func startTracing(cmd *cobra.Command) {
 }
 
 func run(cmd *cobra.Command, args []string) {
-	bootSpan, ctx := trace.NewSpan(context.Background(), "vtadmin.boot")
+	bootSpan, ctx := trace.NewSpan(cmd.Context(), "vtadmin.boot")
 	defer bootSpan.Finish()
 
 	configs := clusterFileConfig.Combine(defaultClusterConfig, clusterConfigs)

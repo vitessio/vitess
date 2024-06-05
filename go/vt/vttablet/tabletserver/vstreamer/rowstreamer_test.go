@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"regexp"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -41,7 +40,6 @@ func TestRowStreamerQuery(t *testing.T) {
 	defer execStatements(t, []string{
 		"drop table t1",
 	})
-	engine.se.Reload(context.Background())
 	// We need to StreamRows, to get an initialized RowStreamer.
 	// Note that the query passed into StreamRows is overwritten while running the test.
 	err := engine.StreamRows(context.Background(), "select * from t1", nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
@@ -115,8 +113,6 @@ func TestStreamRowsScan(t *testing.T) {
 		"drop table t4",
 		"drop table t5",
 	})
-
-	engine.se.Reload(context.Background())
 
 	// t1: simulates rollup
 	wantStream := []string{
@@ -230,13 +226,13 @@ func TestStreamRowsScan(t *testing.T) {
 	wantQuery = "select /*+ MAX_EXECUTION_TIME(3600000) */ id1, id2, id3, val from t5 force index (`id1_id2_id3`) where (id1 = 1 and id2 = 2 and id3 > 3) or (id1 = 1 and id2 > 2) or (id1 > 1) order by id1, id2, id3"
 	checkStream(t, "select * from t5", []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2), sqltypes.NewInt64(3)}, wantQuery, wantStream)
 
-	// t1: test for unsupported integer literal
+	// t5: test for unsupported integer literal
 	wantError := "only the integer literal 1 is supported"
-	expectStreamError(t, "select 2 from t1", wantError)
+	expectStreamError(t, "select 2 from t5", wantError)
 
-	// t1: test for unsupported literal type
+	// t5: test for unsupported literal type
 	wantError = "only integer literals are supported"
-	expectStreamError(t, "select 'a' from t1", wantError)
+	expectStreamError(t, "select 'a' from t5", wantError)
 }
 
 func TestStreamRowsUnicode(t *testing.T) {
@@ -262,7 +258,6 @@ func TestStreamRowsUnicode(t *testing.T) {
 		return in
 	})
 	defer engine.Close()
-	engine.se.Reload(context.Background())
 	// We need a latin1 connection.
 	conn, err := env.Mysqld.GetDbaConnection(context.Background())
 	if err != nil {
@@ -298,7 +293,6 @@ func TestStreamRowsKeyRange(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-	engine.se.Reload(context.Background())
 
 	if err := env.SetVSchema(shardedVSchema); err != nil {
 		t.Fatal(err)
@@ -313,9 +307,6 @@ func TestStreamRowsKeyRange(t *testing.T) {
 	defer execStatements(t, []string{
 		"drop table t1",
 	})
-	engine.se.Reload(context.Background())
-
-	time.Sleep(1 * time.Second)
 
 	// Only the first row should be returned, but lastpk should be 6.
 	wantStream := []string{
@@ -346,9 +337,6 @@ func TestStreamRowsFilterInt(t *testing.T) {
 	defer execStatements(t, []string{
 		"drop table t1",
 	})
-	engine.se.Reload(context.Background())
-
-	time.Sleep(1 * time.Second)
 
 	wantStream := []string{
 		`fields:{name:"id1" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id1" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63 column_type:"varbinary(128)"} pkfields:{name:"id1" type:INT32 charset:63}`,
@@ -379,9 +367,6 @@ func TestStreamRowsFilterVarBinary(t *testing.T) {
 	defer execStatements(t, []string{
 		"drop table t1",
 	})
-	engine.se.Reload(context.Background())
-
-	time.Sleep(1 * time.Second)
 
 	wantStream := []string{
 		`fields:{name:"id1" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id1" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63 column_type:"varbinary(128)"} pkfields:{name:"id1" type:INT32 charset:63}`,
@@ -407,7 +392,6 @@ func TestStreamRowsMultiPacket(t *testing.T) {
 	defer execStatements(t, []string{
 		"drop table t1",
 	})
-	engine.se.Reload(context.Background())
 
 	wantStream := []string{
 		`fields:{name:"id" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63 column_type:"varbinary(128)"} pkfields:{name:"id" type:INT32 charset:63}`,
@@ -435,7 +419,6 @@ func TestStreamRowsCancel(t *testing.T) {
 	defer execStatements(t, []string{
 		"drop table t1",
 	})
-	engine.se.Reload(context.Background())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

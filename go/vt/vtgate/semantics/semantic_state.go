@@ -821,7 +821,7 @@ func singleUnshardedKeyspace(tableInfos []TableInfo) (ks *vindexes.Keyspace, tab
 	return ks, tables
 }
 
-// SingleUnshardedKeyspace returns the single keyspace if all tables in the query are in the same keyspace
+// SingleKeyspace returns the single keyspace if all tables in the query are in the same keyspace
 func (st *SemTable) SingleKeyspace() (ks *vindexes.Keyspace) {
 	validKS := func(this *vindexes.Keyspace) bool {
 		if this == nil {

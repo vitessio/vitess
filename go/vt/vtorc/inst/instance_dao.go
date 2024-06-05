@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"github.com/patrickmn/go-cache"
-	"github.com/rcrowley/go-metrics"
 	"github.com/sjmudd/stopwatch"
 
 	"vitess.io/vitess/go/mysql/replication"
@@ -60,10 +59,9 @@ var (
 var forgetAliases *cache.Cache
 
 var (
-	accessDeniedCounter         = metrics.NewCounter()
-	readTopologyInstanceCounter = metrics.NewCounter()
-	readInstanceCounter         = metrics.NewCounter()
-	writeInstanceCounter        = metrics.NewCounter()
+	// The metrics are registered with deprecated names. The old metric names can be removed in v21.
+	readTopologyInstanceCounter = stats.NewCounterWithDeprecatedName("InstanceReadTopology", "instance.read_topology", "Number of times an instance was read from the topology")
+	readInstanceCounter         = stats.NewCounterWithDeprecatedName("InstanceRead", "instance.read", "Number of times an instance was read")
 	backendWrites               = collection.CreateOrReturnCollection("BACKEND_WRITES")
 	writeBufferLatency          = stopwatch.NewNamedStopwatch()
 )
@@ -74,10 +72,6 @@ var (
 )
 
 func init() {
-	_ = metrics.Register("instance.access_denied", accessDeniedCounter)
-	_ = metrics.Register("instance.read_topology", readTopologyInstanceCounter)
-	_ = metrics.Register("instance.read", readInstanceCounter)
-	_ = metrics.Register("instance.write", writeInstanceCounter)
 	_ = writeBufferLatency.AddMany([]string{"wait", "write"})
 	writeBufferLatency.Start("wait")
 
@@ -315,6 +309,11 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 		instance.AllowTLS = fs.ReplicationStatus.SslAllowed
 	}
 
+	if fs.ReplicationConfiguration != nil {
+		instance.ReplicaNetTimeout = fs.ReplicationConfiguration.ReplicaNetTimeout
+		instance.HeartbeatInterval = fs.ReplicationConfiguration.HeartbeatInterval
+	}
+
 	instanceFound = true
 
 	// -------------------------------------------------------------------------
@@ -385,7 +384,7 @@ Cleanup:
 	}
 
 	latency.Stop("instance")
-	readTopologyInstanceCounter.Inc(1)
+	readTopologyInstanceCounter.Add(1)
 
 	if instanceFound {
 		instance.LastDiscoveryLatency = time.Since(readingStartTime)
@@ -495,6 +494,8 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.LogReplicationUpdatesEnabled = m.GetBool("log_replica_updates")
 	instance.SourceHost = m.GetString("source_host")
 	instance.SourcePort = m.GetInt("source_port")
+	instance.ReplicaNetTimeout = m.GetInt32("replica_net_timeout")
+	instance.HeartbeatInterval = m.GetFloat64("heartbeat_interval")
 	instance.ReplicationSQLThreadRuning = m.GetBool("replica_sql_running")
 	instance.ReplicationIOThreadRuning = m.GetBool("replica_io_running")
 	instance.ReplicationSQLThreadState = ReplicationThreadState(m.GetInt("replication_sql_thread_state"))
@@ -614,7 +615,7 @@ func ReadInstance(tabletAlias string) (*Instance, bool, error) {
 	instances, err := readInstancesByCondition(condition, sqlutils.Args(tabletAlias), "")
 	// We know there will be at most one (alias is the PK).
 	// And we expect to find one.
-	readInstanceCounter.Inc(1)
+	readInstanceCounter.Add(1)
 	if len(instances) == 0 {
 		return nil, false, err
 	}
@@ -802,6 +803,8 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		"binary_log_pos",
 		"source_host",
 		"source_port",
+		"replica_net_timeout",
+		"heartbeat_interval",
 		"replica_sql_running",
 		"replica_io_running",
 		"replication_sql_thread_state",
@@ -881,6 +884,8 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		args = append(args, instance.SelfBinlogCoordinates.LogPos)
 		args = append(args, instance.SourceHost)
 		args = append(args, instance.SourcePort)
+		args = append(args, instance.ReplicaNetTimeout)
+		args = append(args, instance.HeartbeatInterval)
 		args = append(args, instance.ReplicationSQLThreadRuning)
 		args = append(args, instance.ReplicationIOThreadRuning)
 		args = append(args, instance.ReplicationSQLThreadState)

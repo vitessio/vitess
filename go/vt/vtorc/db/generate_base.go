@@ -55,6 +55,8 @@ CREATE TABLE database_instance (
 	binary_log_pos bigint NOT NULL,
 	source_host varchar(128) NOT NULL,
 	source_port smallint NOT NULL,
+	replica_net_timeout int NOT NULL,
+	heartbeat_interval decimal(11,4) NOT NULL,
 	replica_sql_running tinyint NOT NULL,
 	replica_io_running tinyint NOT NULL,
 	source_log_file varchar(128) NOT NULL,

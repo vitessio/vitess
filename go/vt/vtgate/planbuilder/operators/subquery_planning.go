@@ -42,11 +42,11 @@ func isMergeable(ctx *plancontext.PlanningContext, query sqlparser.SelectStateme
 
 	switch node := query.(type) {
 	case *sqlparser.Select:
-		if len(node.GroupBy) > 0 {
+		if node.GroupBy != nil && len(node.GroupBy.Exprs) > 0 {
 			// iff we are grouping, we need to check that we can perform the grouping inside a single shard, and we check that
 			// by checking that one of the grouping expressions used is a unique single column vindex.
 			// TODO: we could also support the case where all the columns of a multi-column vindex are used in the grouping
-			for _, gb := range node.GroupBy {
+			for _, gb := range node.GroupBy.Exprs {
 				if validVindex(gb) {
 					return true
 				}
@@ -263,7 +263,7 @@ func extractLHSExpr(
 	lhs semantics.TableSet,
 ) func(expr sqlparser.Expr) sqlparser.Expr {
 	return func(expr sqlparser.Expr) sqlparser.Expr {
-		col := breakExpressionInLHSandRHSForApplyJoin(ctx, expr, lhs)
+		col := breakExpressionInLHSandRHS(ctx, expr, lhs)
 		if col.IsPureLeft() {
 			panic(vterrors.VT13001("did not expect to find any predicates that do not need data from the inner here"))
 		}
@@ -467,6 +467,7 @@ func tryMergeSubqueryWithOuter(ctx *plancontext.PlanningContext, subQuery *SubQu
 		return outer, NoRewrite
 	}
 	exprs := subQuery.GetMergePredicates()
+	sqlparser.RemoveKeyspace(subQuery.Original)
 	merger := &subqueryRouteMerger{
 		outer:    outer,
 		original: subQuery.Original,

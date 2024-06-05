@@ -313,6 +313,15 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"onlineddl_flow": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/flow", "-timeout", "30m"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "onlineddl_flow",
+			"RetryMax": 1,
+			"Tags": ["upgrade_downgrade_onlineddl_flow"]
+		},
 		"schemadiff_vrepl": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/schemadiff/vrepl", "-timeout", "30m"],
@@ -1108,7 +1117,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVreplicationCopyParallel", "-timeout", "20m"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vreplication_basic",
+			"Shard": "vreplication_copy_parallel",
 			"RetryMax": 1,
 			"Tags": []
 		},
@@ -1256,24 +1265,24 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
-                "vreplication_mariadb_to_mysql": {
-                        "File": "unused.go",
-                        "Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestMoveTablesMariaDBToMySQL", "-timeout", "20m"],
-                        "Command": [],
-                        "Manual": false,
-                        "Shard": "vreplication_across_db_versions",
-                        "RetryMax": 1,
-                        "Tags": []
-                },
-                "vreplication_vtctldclient_cli": {
-                        "File": "unused.go",
-                        "Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVtctldclientCLI", "-timeout", "20m"],
-                        "Command": [],
-                        "Manual": false,
-			"Shard": "vreplication_cli_migrate_vdiff2_convert_tz",
-                        "RetryMax": 1,
-                        "Tags": []
-                },
+		"vreplication_mariadb_to_mysql": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestMoveTablesMariaDBToMySQL", "-timeout", "20m"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_mariadb_to_mysql",
+			"RetryMax": 1,
+			"Tags": []
+		},
+		"vreplication_vtctldclient_cli": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVtctldclientCLI", "-timeout", "20m"],
+			"Command": [],
+			"Manual": false,
+"Shard": "vreplication_cli_migrate_vdiff2_convert_tz",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"vreplication_vtctl_migrate": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVtctlMigrate", "-timeout", "30m"],

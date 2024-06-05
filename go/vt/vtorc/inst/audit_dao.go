@@ -21,18 +21,14 @@ import (
 	"os"
 	"time"
 
-	"github.com/rcrowley/go-metrics"
-
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 )
 
-var auditOperationCounter = metrics.NewCounter()
-
-func init() {
-	_ = metrics.Register("audit.write", auditOperationCounter)
-}
+// The metric is registered with a deprecated name. The old metric name can be removed in v21.
+var auditOperationCounter = stats.NewCounterWithDeprecatedName("AuditWrite", "audit.write", "Number of audit operations performed")
 
 // AuditOperation creates and writes a new audit entry by given params
 func AuditOperation(auditType string, tabletAlias string, message string) error {
@@ -86,7 +82,7 @@ func AuditOperation(auditType string, tabletAlias string, message string) error 
 	if !auditWrittenToFile {
 		log.Infof(logMessage)
 	}
-	auditOperationCounter.Inc(1)
+	auditOperationCounter.Add(1)
 
 	return nil
 }

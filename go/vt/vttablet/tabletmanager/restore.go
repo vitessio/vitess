@@ -564,7 +564,7 @@ func (tm *TabletManager) disableReplication(ctx context.Context) error {
 		return vterrors.Wrap(err, "failed to reset replication")
 	}
 
-	if err := tm.MysqlDaemon.SetReplicationSource(ctx, "//", 0, false /* stopReplicationBefore */, true /* startReplicationAfter */); err != nil {
+	if err := tm.MysqlDaemon.SetReplicationSource(ctx, "//", 0, 0, false, true); err != nil {
 		return vterrors.Wrap(err, "failed to disable replication")
 	}
 

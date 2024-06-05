@@ -43,6 +43,10 @@ type RPCTM interface {
 
 	GetPermissions(ctx context.Context) (*tabletmanagerdatapb.Permissions, error)
 
+	// GetGlobalStatusVars returns the server's global status variables asked for.
+	// An empty/nil variable name parameter slice means you want all of them.
+	GetGlobalStatusVars(ctx context.Context, variables []string) (map[string]string, error)
+
 	// Various read-write methods
 
 	SetReadOnly(ctx context.Context, rdonly bool) error
@@ -132,7 +136,7 @@ type RPCTM interface {
 
 	ResetReplicationParameters(ctx context.Context) error
 
-	SetReplicationSource(ctx context.Context, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync bool) error
+	SetReplicationSource(ctx context.Context, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync bool, heartbeatInterval float64) error
 
 	StopReplicationAndGetStatus(ctx context.Context, stopReplicationMode replicationdatapb.StopReplicationMode) (StopReplicationAndGetStatusResponse, error)
 

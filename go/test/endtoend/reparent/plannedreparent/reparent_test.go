@@ -96,7 +96,7 @@ func TestPRSWithDrainedLaggingTablet(t *testing.T) {
 	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
 
 	// make tablets[1 lag from the other tablets by setting the delay to a large number
-	utils.RunSQLs(context.Background(), t, []string{`stop slave`, `CHANGE MASTER TO MASTER_DELAY = 1999`, `start slave;`}, tablets[1])
+	utils.RunSQLs(context.Background(), t, []string{`stop replica`, `CHANGE REPLICATION SOURCE TO SOURCE_DELAY = 1999`, `start replica;`}, tablets[1])
 
 	// insert another row in tablets[1
 	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[2], tablets[3]})
@@ -224,18 +224,20 @@ func reparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProcessClus
 	}
 
 	// commands to convert a replica to be writable
-	promoteReplicaCommands := []string{"STOP SLAVE", "RESET SLAVE ALL", "SET GLOBAL read_only = OFF"}
+	promoteReplicaCommands := []string{"STOP REPLICA", "RESET REPLICA ALL", "SET GLOBAL read_only = OFF"}
 	utils.RunSQLs(ctx, t, promoteReplicaCommands, tablets[1])
 
 	// Get primary position
 	_, gtID := cluster.GetPrimaryPosition(t, *tablets[1], utils.Hostname)
 
 	// tablets[0] will now be a replica of tablets[1
+	resetCmd, err := tablets[0].VttabletProcess.ResetBinaryLogsCommand()
+	require.NoError(t, err)
 	changeReplicationSourceCommands := []string{
-		"RESET MASTER",
-		"RESET SLAVE",
+		resetCmd,
+		"RESET REPLICA",
 		fmt.Sprintf("SET GLOBAL gtid_purged = '%s'", gtID),
-		fmt.Sprintf("CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='vt_repl', MASTER_AUTO_POSITION = 1", utils.Hostname, tablets[1].MySQLPort),
+		fmt.Sprintf("CHANGE REPLICATION SOURCE TO SOURCE_HOST='%s', SOURCE_PORT=%d, SOURCE_USER='vt_repl', SOURCE_AUTO_POSITION = 1", utils.Hostname, tablets[1].MySQLPort),
 	}
 	utils.RunSQLs(ctx, t, changeReplicationSourceCommands, tablets[0])
 
@@ -243,12 +245,14 @@ func reparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProcessClus
 	baseTime := time.Now().UnixNano() / 1000000000
 
 	// tablets[2 will be a replica of tablets[1
+	resetCmd, err = tablets[2].VttabletProcess.ResetBinaryLogsCommand()
+	require.NoError(t, err)
 	changeReplicationSourceCommands = []string{
-		"STOP SLAVE",
-		"RESET MASTER",
+		"STOP REPLICA",
+		resetCmd,
 		fmt.Sprintf("SET GLOBAL gtid_purged = '%s'", gtID),
-		fmt.Sprintf("CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='vt_repl', MASTER_AUTO_POSITION = 1", utils.Hostname, tablets[1].MySQLPort),
-		"START SLAVE",
+		fmt.Sprintf("CHANGE REPLICATION SOURCE TO SOURCE_HOST='%s', SOURCE_PORT=%d, SOURCE_USER='vt_repl', SOURCE_AUTO_POSITION = 1", utils.Hostname, tablets[1].MySQLPort),
+		"START REPLICA",
 	}
 	utils.RunSQLs(ctx, t, changeReplicationSourceCommands, tablets[2])
 
@@ -262,7 +266,7 @@ func reparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProcessClus
 	}
 
 	// update topology with the new server
-	err := clusterInstance.VtctldClientProcess.ExecuteCommand("TabletExternallyReparented",
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("TabletExternallyReparented",
 		tablets[1].Alias)
 	require.NoError(t, err)
 

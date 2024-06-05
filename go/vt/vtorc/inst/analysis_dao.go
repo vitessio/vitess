@@ -18,32 +18,30 @@ package inst
 
 import (
 	"fmt"
+	"math"
 	"time"
 
-	"vitess.io/vitess/go/vt/external/golib/sqlutils"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/topo/topoproto"
-
+	"github.com/patrickmn/go-cache"
 	"google.golang.org/protobuf/encoding/prototext"
 
+	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/external/golib/sqlutils"
+	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/util"
-
-	"github.com/patrickmn/go-cache"
-	"github.com/rcrowley/go-metrics"
 )
 
-var analysisChangeWriteCounter = metrics.NewCounter()
+// The metric is registered with a deprecated name. The old metric name can be removed in v21.
+var analysisChangeWriteCounter = stats.NewCounterWithDeprecatedName("AnalysisChangeWrite", "analysis.change.write", "Number of times analysis has changed")
 
 var recentInstantAnalysis *cache.Cache
 
 func init() {
-	_ = metrics.Register("analysis.change.write", analysisChangeWriteCounter)
-
 	go initializeAnalysisDaoPostConfiguration()
 }
 
@@ -87,6 +85,8 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		MIN(primary_instance.alias) IS NULL AS is_invalid,
 		MIN(primary_instance.binary_log_file) AS binary_log_file,
 		MIN(primary_instance.binary_log_pos) AS binary_log_pos,
+		MIN(primary_instance.replica_net_timeout) AS replica_net_timeout,
+		MIN(primary_instance.heartbeat_interval) AS heartbeat_interval,
 		MIN(primary_tablet.info) AS primary_tablet_info,
 		MIN(
 			IFNULL(
@@ -360,6 +360,8 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 
 		a.CountDelayedReplicas = m.GetUint("count_delayed_replicas")
 		a.CountLaggingReplicas = m.GetUint("count_lagging_replicas")
+		a.ReplicaNetTimeout = m.GetInt32("replica_net_timeout")
+		a.HeartbeatInterval = m.GetFloat64("heartbeat_interval")
 
 		a.IsReadOnly = m.GetUint("read_only") == 1
 
@@ -467,6 +469,10 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		} else if topo.IsReplicaType(a.TabletType) && a.IsPrimary {
 			a.Analysis = NotConnectedToPrimary
 			a.Description = "Not connected to the primary"
+			//
+		} else if topo.IsReplicaType(a.TabletType) && !a.IsPrimary && math.Round(a.HeartbeatInterval*2) != float64(a.ReplicaNetTimeout) {
+			a.Analysis = ReplicaMisconfigured
+			a.Description = "Replica has been misconfigured"
 			//
 		} else if topo.IsReplicaType(a.TabletType) && !a.IsPrimary && ca.primaryAlias != "" && a.AnalyzedInstancePrimaryAlias != ca.primaryAlias {
 			a.Analysis = ConnectedToWrongPrimary
@@ -708,7 +714,7 @@ func auditInstanceAnalysisInChangelog(tabletAlias string, analysisCode AnalysisC
 		tabletAlias, string(analysisCode),
 	)
 	if err == nil {
-		analysisChangeWriteCounter.Inc(1)
+		analysisChangeWriteCounter.Add(1)
 	} else {
 		log.Error(err)
 	}

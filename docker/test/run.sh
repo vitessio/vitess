@@ -30,16 +30,16 @@
 #
 # Examples:
 #  a) Start an interactive shell within the Docker image.
-#  $ docker/test/run.sh mysql57 bash
+#  $ docker/test/run.sh mysql80 bash
 #
 #  b) Build the code and run a test.
-#  $ docker/test/run.sh mysql57 "make build && ./test/keyrange_test.py -v"
+#  $ docker/test/run.sh mysql80 "make build && ./test/keyrange_test.py -v"
 #
-#  c) Cache the output of the command e.g. cache "make build" as we do for Travis CI.
-#  $ docker/test/run.sh --create_docker_cache vitess/bootstrap:rm_mysql57_test_cache_do_NOT_push mysql57 "make build"
+#  c) Cache the output of the command e.g. cache "make build" as we do for CI.
+#  $ docker/test/run.sh --create_docker_cache vitess/bootstrap:rm_mysql80_test_cache_do_NOT_push mysql80 "make build"
 #
 #  d) Run the test using a cache image.
-#  $ docker/test/run.sh --use_docker_cache vitess/bootstrap:rm_mysql57_test_cache_do_NOT_push mysql57 "./test/keyrange_test.py -v"
+#  $ docker/test/run.sh --use_docker_cache vitess/bootstrap:rm_mysql80_test_cache_do_NOT_push mysql80 "./test/keyrange_test.py -v"
 
 
 # Functions.

@@ -37,6 +37,7 @@ type (
 		Source  Operator
 		Columns []*sqlparser.AliasedExpr
 
+		WithRollup   bool
 		Grouping     []GroupBy
 		Aggregations []Aggr
 
@@ -323,8 +324,18 @@ func (a *Aggregator) ShortDescription() string {
 	for _, gb := range a.Grouping {
 		grouping = append(grouping, sqlparser.String(gb.Inner))
 	}
+	var rollUp string
+	if a.WithRollup {
+		rollUp = " with rollup"
+	}
 
-	return fmt.Sprintf("%s%s group by %s", org, strings.Join(columns, ", "), strings.Join(grouping, ","))
+	return fmt.Sprintf(
+		"%s%s group by %s%s",
+		org,
+		strings.Join(columns, ", "),
+		strings.Join(grouping, ","),
+		rollUp,
+	)
 }
 
 func (a *Aggregator) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
@@ -484,10 +495,10 @@ func (a *Aggregator) internalAddColumn(ctx *plancontext.PlanningContext, aliased
 	return offset
 }
 
-// SplitAggregatorBelowRoute returns the aggregator that will live under the Route.
+// SplitAggregatorBelowOperators returns the aggregator that will live under the Route.
 // This is used when we are splitting the aggregation so one part is done
 // at the mysql level and one part at the vtgate level
-func (a *Aggregator) SplitAggregatorBelowRoute(input []Operator) *Aggregator {
+func (a *Aggregator) SplitAggregatorBelowOperators(input []Operator) *Aggregator {
 	newOp := a.Clone(input).(*Aggregator)
 	newOp.Pushed = false
 	newOp.Original = false

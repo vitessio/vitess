@@ -116,7 +116,12 @@ func (qb *queryBuilder) addPredicate(expr sqlparser.Expr) {
 
 func (qb *queryBuilder) addGroupBy(original sqlparser.Expr) {
 	sel := qb.stmt.(*sqlparser.Select)
-	sel.GroupBy = append(sel.GroupBy, original)
+	sel.AddGroupBy(original)
+}
+
+func (qb *queryBuilder) setWithRollup() {
+	sel := qb.stmt.(*sqlparser.Select)
+	sel.GroupBy.WithRollup = true
 }
 
 func (qb *queryBuilder) addProjection(projection sqlparser.SelectExpr) {
@@ -457,6 +462,9 @@ func buildAggregation(op *Aggregator, qb *queryBuilder) {
 		if by.WSOffset != -1 {
 			qb.addGroupBy(weightStringFor(simplified))
 		}
+	}
+	if op.WithRollup {
+		qb.setWithRollup()
 	}
 }
 

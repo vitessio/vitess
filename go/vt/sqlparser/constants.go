@@ -677,8 +677,8 @@ const (
 	NotRegexpOp
 )
 
-func Inverse(in ComparisonExprOperator) ComparisonExprOperator {
-	switch in {
+func (op ComparisonExprOperator) Inverse() ComparisonExprOperator {
+	switch op {
 	case EqualOp:
 		return NotEqualOp
 	case LessThanOp:
@@ -707,6 +707,15 @@ func Inverse(in ComparisonExprOperator) ComparisonExprOperator {
 		return RegexpOp
 	}
 	panic("unreachable")
+}
+
+func (op ComparisonExprOperator) IsCommutative() bool {
+	switch op {
+	case EqualOp, NotEqualOp, NullSafeEqualOp:
+		return true
+	default:
+		return false
+	}
 }
 
 // Constant for Enum Type - IsExprOperator

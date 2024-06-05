@@ -295,6 +295,18 @@ func TestSchemaDiff(t *testing.T) {
 			instantCapability: InstantDDLCapabilityPossible,
 		},
 		{
+			name: "two identical tables, one with explicit charset, one without",
+			fromQueries: []string{
+				"create table foobar (id int primary key, foo varchar(64) character set utf8mb3 collate utf8mb3_bin)",
+			},
+			toQueries: []string{
+				"create table foobar (id int primary key, foo varchar(64) collate utf8mb3_bin)",
+			},
+			entityOrder:       []string{},
+			instantCapability: InstantDDLCapabilityIrrelevant,
+		},
+
+		{
 			name: "instant DDL possible on 8.0.32",
 			toQueries: []string{
 				"create table t1 (id int primary key, ts timestamp, info int not null);",
@@ -397,6 +409,16 @@ func TestSchemaDiff(t *testing.T) {
 			toQueries: append(
 				createQueries,
 				"create view v2 as select id from t2",
+			),
+			expectDiffs:       1,
+			entityOrder:       []string{"v2"},
+			instantCapability: InstantDDLCapabilityIrrelevant,
+		},
+		{
+			name: "add view with over",
+			toQueries: append(
+				createQueries,
+				"create view v2 as SELECT *, ROW_NUMBER() OVER(PARTITION BY info) AS row_num1, ROW_NUMBER() OVER(PARTITION BY info ORDER BY id) AS row_num2 FROM t1;\n",
 			),
 			expectDiffs:       1,
 			entityOrder:       []string{"v2"},
@@ -1038,7 +1060,7 @@ func TestSchemaDiff(t *testing.T) {
 				return
 			}
 			if tc.conflictingDiffs > 0 {
-				assert.Error(t, err)
+				require.Error(t, err)
 				impossibleOrderErr, ok := err.(*ImpossibleApplyDiffOrderError)
 				assert.True(t, ok)
 				conflictingDiffsStatements := []string{}

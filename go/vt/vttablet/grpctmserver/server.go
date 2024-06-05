@@ -98,6 +98,17 @@ func (s *server) GetPermissions(ctx context.Context, request *tabletmanagerdatap
 	return response, err
 }
 
+func (s *server) GetGlobalStatusVars(ctx context.Context, request *tabletmanagerdatapb.GetGlobalStatusVarsRequest) (response *tabletmanagerdatapb.GetGlobalStatusVarsResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "GetGlobalStatusVars", request, response, false /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.GetGlobalStatusVarsResponse{}
+	serverStatuses, err := s.tm.GetGlobalStatusVars(ctx, request.Variables)
+	if err == nil {
+		response.StatusValues = serverStatuses
+	}
+	return response, err
+}
+
 //
 // Various read-write methods
 //
@@ -510,7 +521,7 @@ func (s *server) SetReplicationSource(ctx context.Context, request *tabletmanage
 	defer s.tm.HandleRPCPanic(ctx, "SetReplicationSource", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.SetReplicationSourceResponse{}
-	return response, s.tm.SetReplicationSource(ctx, request.Parent, request.TimeCreatedNs, request.WaitPosition, request.ForceStartReplication, request.GetSemiSync())
+	return response, s.tm.SetReplicationSource(ctx, request.Parent, request.TimeCreatedNs, request.WaitPosition, request.ForceStartReplication, request.GetSemiSync(), request.HeartbeatInterval)
 }
 
 func (s *server) ReplicaWasRestarted(ctx context.Context, request *tabletmanagerdatapb.ReplicaWasRestartedRequest) (response *tabletmanagerdatapb.ReplicaWasRestartedResponse, err error) {

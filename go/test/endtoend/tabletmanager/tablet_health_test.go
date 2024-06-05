@@ -119,7 +119,7 @@ func TestHealthCheck(t *testing.T) {
 
 	// Make sure the primary is still primary
 	checkTabletType(t, primaryTablet.Alias, "PRIMARY")
-	utils.Exec(t, conn, "stop slave")
+	utils.Exec(t, conn, "stop replica")
 
 	// stop replication, make sure we don't go unhealthy.
 	err = clusterInstance.VtctldClientProcess.ExecuteCommand("StopReplication", rTablet.Alias)

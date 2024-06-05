@@ -382,6 +382,28 @@ func tmRPCTestGetPermissionsPanic(ctx context.Context, t *testing.T, client tmcl
 	expectHandleRPCPanic(t, "GetPermissions", false /*verbose*/, err)
 }
 
+var testGetGlobalStatusVarsReply = map[string]string{
+	"a": "x",
+	"b": "0",
+}
+
+func (fra *fakeRPCTM) GetGlobalStatusVars(ctx context.Context, variables []string) (map[string]string, error) {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	return testGetGlobalStatusVarsReply, nil
+}
+
+func tmRPCTestGetGlobalStatusVars(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	result, err := client.GetGlobalStatusVars(ctx, tablet, nil)
+	compareError(t, "GetGlobalStatusVars", err, result, testGetGlobalStatusVarsReply)
+}
+
+func tmRPCTestGetGlobalStatusVarsPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	_, err := client.GetGlobalStatusVars(ctx, tablet, nil)
+	expectHandleRPCPanic(t, "GetGlobalStatusVars", false /*verbose*/, err)
+}
+
 //
 // Various read-write methods
 //
@@ -1178,8 +1200,9 @@ func tmRPCTestResetReplicationParametersPanic(ctx context.Context, t *testing.T,
 
 var testSetReplicationSourceCalled = false
 var testForceStartReplica = true
+var testHeartbeatInterval float64 = 4.2
 
-func (fra *fakeRPCTM) SetReplicationSource(ctx context.Context, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplica bool, semiSync bool) error {
+func (fra *fakeRPCTM) SetReplicationSource(ctx context.Context, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplica bool, semiSync bool, heartbeatInterval float64) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -1187,17 +1210,18 @@ func (fra *fakeRPCTM) SetReplicationSource(ctx context.Context, parent *topodata
 	compare(fra.t, "SetReplicationSource timeCreatedNS", timeCreatedNS, testTimeCreatedNS)
 	compare(fra.t, "SetReplicationSource waitPosition", waitPosition, testWaitPosition)
 	compare(fra.t, "SetReplicationSource forceStartReplica", forceStartReplica, testForceStartReplica)
+	compare(fra.t, "SetReplicationSource heartbeatInterval", heartbeatInterval, testHeartbeatInterval)
 	testSetReplicationSourceCalled = true
 	return nil
 }
 
 func tmRPCTestSetReplicationSource(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	err := client.SetReplicationSource(ctx, tablet, testPrimaryAlias, testTimeCreatedNS, testWaitPosition, testForceStartReplica, false)
+	err := client.SetReplicationSource(ctx, tablet, testPrimaryAlias, testTimeCreatedNS, testWaitPosition, testForceStartReplica, false, testHeartbeatInterval)
 	compareError(t, "SetReplicationSource", err, true, testSetReplicationSourceCalled)
 }
 
 func tmRPCTestSetReplicationSourcePanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	err := client.SetReplicationSource(ctx, tablet, testPrimaryAlias, testTimeCreatedNS, testWaitPosition, testForceStartReplica, false)
+	err := client.SetReplicationSource(ctx, tablet, testPrimaryAlias, testTimeCreatedNS, testWaitPosition, testForceStartReplica, false, 0)
 	expectHandleRPCPanic(t, "SetReplicationSource", true /*verbose*/, err)
 }
 
@@ -1390,6 +1414,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	tmRPCTestPing(ctx, t, client, tablet)
 	tmRPCTestGetSchema(ctx, t, client, tablet)
 	tmRPCTestGetPermissions(ctx, t, client, tablet)
+	tmRPCTestGetGlobalStatusVars(ctx, t, client, tablet)
 
 	// Various read-write methods
 	tmRPCTestSetReadOnly(ctx, t, client, tablet)
@@ -1450,6 +1475,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	tmRPCTestPingPanic(ctx, t, client, tablet)
 	tmRPCTestGetSchemaPanic(ctx, t, client, tablet)
 	tmRPCTestGetPermissionsPanic(ctx, t, client, tablet)
+	tmRPCTestGetGlobalStatusVarsPanic(ctx, t, client, tablet)
 
 	// Various read-write methods
 	tmRPCTestSetReadOnlyPanic(ctx, t, client, tablet)

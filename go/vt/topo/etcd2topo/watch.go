@@ -51,7 +51,10 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 	}
 	wd := &topo.WatchData{
 		Contents: initial.Kvs[0].Value,
-		Version:  EtcdVersion(initial.Kvs[0].Version),
+		// ModRevision is used for the topo.Version value as we get the new Revision value back
+		// when updating the file/key within a transaction in file.go and so this is the opaque
+		// version that we can use to enforce serializabile writes for the file/key.
+		Version: EtcdVersion(initial.Kvs[0].ModRevision),
 	}
 
 	// Create an outer context that will be canceled on return and will cancel all inner watches.
@@ -133,7 +136,7 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 					case mvccpb.PUT:
 						notifications <- &topo.WatchData{
 							Contents: ev.Kv.Value,
-							Version:  EtcdVersion(ev.Kv.Version),
+							Version:  EtcdVersion(ev.Kv.ModRevision),
 						}
 					case mvccpb.DELETE:
 						// Node is gone, send a final notice.
@@ -174,7 +177,7 @@ func (s *Server) WatchRecursive(ctx context.Context, dirpath string) ([]*topo.Wa
 		var wd topo.WatchDataRecursive
 		wd.Path = string(kv.Key)
 		wd.Contents = kv.Value
-		wd.Version = EtcdVersion(initial.Kvs[0].Version)
+		wd.Version = EtcdVersion(initial.Kvs[0].ModRevision)
 		initialwd = append(initialwd, &wd)
 	}
 
@@ -256,7 +259,7 @@ func (s *Server) WatchRecursive(ctx context.Context, dirpath string) ([]*topo.Wa
 							Path: string(ev.Kv.Key),
 							WatchData: topo.WatchData{
 								Contents: ev.Kv.Value,
-								Version:  EtcdVersion(ev.Kv.Version),
+								Version:  EtcdVersion(ev.Kv.ModRevision),
 							},
 						}
 					case mvccpb.DELETE:

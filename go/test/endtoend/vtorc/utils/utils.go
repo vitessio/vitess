@@ -327,10 +327,12 @@ func cleanAndStartVttablet(t *testing.T, clusterInfo *VTOrcClusterInfo, vttablet
 	_, err = RunSQL(t, "DROP DATABASE IF EXISTS _vt", vttablet, "")
 	require.NoError(t, err)
 	// stop the replication
-	_, err = RunSQL(t, "STOP SLAVE", vttablet, "")
+	_, err = RunSQL(t, "STOP REPLICA", vttablet, "")
 	require.NoError(t, err)
 	// reset the binlog
-	_, err = RunSQL(t, "RESET MASTER", vttablet, "")
+	resetCmd, err := vttablet.VttabletProcess.ResetBinaryLogsCommand()
+	require.NoError(t, err)
+	_, err = RunSQL(t, resetCmd, vttablet, "")
 	require.NoError(t, err)
 	// set read-only to true
 	_, err = RunSQL(t, "SET GLOBAL read_only = ON", vttablet, "")
@@ -502,7 +504,7 @@ func WaitForReplicationToStop(t *testing.T, vttablet *cluster.Vttablet) error {
 		case <-timeout:
 			return fmt.Errorf("timedout: waiting for primary to stop replication")
 		default:
-			res, err := RunSQL(t, "SHOW SLAVE STATUS", vttablet, "")
+			res, err := RunSQL(t, "SHOW REPLICA STATUS", vttablet, "")
 			if err != nil {
 				return err
 			}
@@ -692,14 +694,15 @@ func ResetPrimaryLogs(t *testing.T, curPrimary *cluster.Vttablet) {
 
 // CheckSourcePort is used to check that the replica has the given source port set in its MySQL instance
 func CheckSourcePort(t *testing.T, replica *cluster.Vttablet, source *cluster.Vttablet, timeToWait time.Duration) {
-	timeout := time.After(timeToWait)
+	ctx, cancel := context.WithTimeout(context.Background(), timeToWait)
+	defer cancel()
 	for {
 		select {
-		case <-timeout:
+		case <-ctx.Done():
 			t.Fatal("timedout waiting for correct primary to be setup")
 			return
 		default:
-			res, err := RunSQL(t, "SHOW SLAVE STATUS", replica, "")
+			res, err := RunSQL(t, "SHOW REPLICA STATUS", replica, "")
 			require.NoError(t, err)
 
 			if len(res.Rows) != 1 {
@@ -708,7 +711,7 @@ func CheckSourcePort(t *testing.T, replica *cluster.Vttablet, source *cluster.Vt
 			}
 
 			for idx, field := range res.Fields {
-				if strings.EqualFold(field.Name, "MASTER_PORT") || strings.EqualFold(field.Name, "SOURCE_PORT") {
+				if strings.EqualFold(field.Name, "SOURCE_PORT") {
 					port, err := res.Rows[0][idx].ToInt64()
 					require.NoError(t, err)
 					if port == int64(source.MySQLPort) {
@@ -717,6 +720,41 @@ func CheckSourcePort(t *testing.T, replica *cluster.Vttablet, source *cluster.Vt
 				}
 			}
 			log.Warningf("source port not set correctly yet, will retry")
+		}
+		time.Sleep(300 * time.Millisecond)
+	}
+}
+
+// CheckHeartbeatInterval is used to check that the replica has the given heartbeat interval set in its MySQL instance
+func CheckHeartbeatInterval(t *testing.T, replica *cluster.Vttablet, heartbeatInterval float64, timeToWait time.Duration) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeToWait)
+	defer cancel()
+	for {
+		select {
+		case <-ctx.Done():
+			t.Fatal("timed out waiting for correct heartbeat interval to be setup")
+			return
+		default:
+			res, err := RunSQL(t, "select * from performance_schema.replication_connection_configuration", replica, "")
+			require.NoError(t, err)
+
+			if len(res.Rows) != 1 {
+				log.Warningf("no replication configuration yet, will retry")
+				break
+			}
+
+			for idx, field := range res.Fields {
+				if strings.EqualFold(field.Name, "HEARTBEAT_INTERVAL") {
+					readVal, err := res.Rows[0][idx].ToFloat64()
+					require.NoError(t, err)
+					if readVal == heartbeatInterval {
+						return
+					} else {
+						log.Warningf("heartbeat interval set to - %v", readVal)
+					}
+				}
+			}
+			log.Warningf("heartbeat interval not set correctly yet, will retry")
 		}
 		time.Sleep(300 * time.Millisecond)
 	}
@@ -1012,6 +1050,21 @@ func WaitForSuccessfulERSCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess
 	ersCountsMap := vars["emergency_reparent_counts"].(map[string]interface{})
 	successCount := getIntFromValue(ersCountsMap[mapKey])
 	assert.EqualValues(t, countExpected, successCount)
+}
+
+// CheckVarExists checks whether the given metric exists or not in /debug/vars.
+func CheckVarExists(t *testing.T, vtorcInstance *cluster.VTOrcProcess, metricName string) {
+	t.Helper()
+	vars := vtorcInstance.GetVars()
+	_, exists := vars[metricName]
+	assert.True(t, exists, vars)
+}
+
+// CheckMetricExists checks whether the given metric exists or not in /metrics.
+func CheckMetricExists(t *testing.T, vtorcInstance *cluster.VTOrcProcess, metricName string) {
+	t.Helper()
+	metrics := vtorcInstance.GetMetrics()
+	assert.Contains(t, metrics, metricName)
 }
 
 // getIntFromValue is a helper function to get an integer from the given value.

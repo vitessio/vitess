@@ -424,18 +424,6 @@ func TestRestoreManifestMySQLVersionValidation(t *testing.T) {
 		wantErr                bool
 	}{
 		{
-			fromVersion: "mysqld  Ver 5.6.42",
-			toVersion:   "mysqld  Ver 5.7.40",
-			upgradeSafe: false,
-			wantErr:     true,
-		},
-		{
-			fromVersion: "mysqld  Ver 5.6.42",
-			toVersion:   "mysqld  Ver 5.7.40",
-			upgradeSafe: true,
-			wantErr:     false,
-		},
-		{
 			fromVersion: "mysqld  Ver 5.7.42",
 			toVersion:   "mysqld  Ver 8.0.32",
 			upgradeSafe: true,

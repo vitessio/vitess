@@ -32,9 +32,18 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/netutil"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/proto/replicationdata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+)
+
+const (
+	// Queries used for RPCs
+	getGlobalStatusQuery = "SELECT variable_name, variable_value FROM performance_schema.global_status"
 )
 
 type ResetSuperReadOnlyFunc func() error
@@ -227,6 +236,38 @@ func (mysqld *Mysqld) GetServerUUID(ctx context.Context) (string, error) {
 	return conn.Conn.GetServerUUID()
 }
 
+// GetGlobalStatusVars returns the server's global status variables asked for.
+// An empty/nil variable name parameter slice means you want all of them.
+func (mysqld *Mysqld) GetGlobalStatusVars(ctx context.Context, variables []string) (map[string]string, error) {
+	query := getGlobalStatusQuery
+	if len(variables) != 0 {
+		// The format specifier is for any optional predicates.
+		statusBv, err := sqltypes.BuildBindVariable(variables)
+		if err != nil {
+			return nil, err
+		}
+		query, err = sqlparser.ParseAndBind(getGlobalStatusQuery+" WHERE variable_name IN %a",
+			statusBv,
+		)
+		if err != nil {
+			return nil, err
+		}
+	}
+	qr, err := mysqld.FetchSuperQuery(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+
+	finalRes := make(map[string]string, len(qr.Rows))
+	for _, row := range qr.Rows {
+		if len(row) != 2 {
+			return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "incorrect number of fields in the row")
+		}
+		finalRes[row[0].ToString()] = row[1].ToString()
+	}
+	return finalRes, nil
+}
+
 // IsReadOnly return true if the instance is read only
 func (mysqld *Mysqld) IsReadOnly(ctx context.Context) (bool, error) {
 	qr, err := mysqld.FetchSuperQuery(ctx, "SHOW VARIABLES LIKE 'read_only'")
@@ -396,6 +437,16 @@ func (mysqld *Mysqld) PrimaryStatus(ctx context.Context) (replication.PrimarySta
 	return conn.Conn.ShowPrimaryStatus()
 }
 
+func (mysqld *Mysqld) ReplicationConfiguration(ctx context.Context) (*replicationdata.Configuration, error) {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Recycle()
+
+	return conn.Conn.ReplicationConfiguration()
+}
+
 // GetGTIDPurged returns the gtid purged statuses
 func (mysqld *Mysqld) GetGTIDPurged(ctx context.Context) (replication.Position, error) {
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
@@ -434,7 +485,7 @@ func (mysqld *Mysqld) SetReplicationPosition(ctx context.Context, pos replicatio
 
 // SetReplicationSource makes the provided host / port the primary. It optionally
 // stops replication before, and starts it after.
-func (mysqld *Mysqld) SetReplicationSource(ctx context.Context, host string, port int32, stopReplicationBefore bool, startReplicationAfter bool) error {
+func (mysqld *Mysqld) SetReplicationSource(ctx context.Context, host string, port int32, heartbeatInterval float64, stopReplicationBefore bool, startReplicationAfter bool) error {
 	params, err := mysqld.dbcfgs.ReplConnector().MysqlParams()
 	if err != nil {
 		return err
@@ -449,7 +500,7 @@ func (mysqld *Mysqld) SetReplicationSource(ctx context.Context, host string, por
 	if stopReplicationBefore {
 		cmds = append(cmds, conn.Conn.StopReplicationCommand())
 	}
-	smc := conn.Conn.SetReplicationSourceCommand(params, host, port, int(replicationConnectRetry.Seconds()))
+	smc := conn.Conn.SetReplicationSourceCommand(params, host, port, heartbeatInterval, int(replicationConnectRetry.Seconds()))
 	cmds = append(cmds, smc)
 	if startReplicationAfter {
 		cmds = append(cmds, conn.Conn.StartReplicationCommand())

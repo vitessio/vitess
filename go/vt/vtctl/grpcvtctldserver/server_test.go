@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -7089,12 +7090,13 @@ func TestGetTablets(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name      string
-		cells     []string
-		tablets   []*topodatapb.Tablet
-		req       *vtctldatapb.GetTabletsRequest
-		expected  []*topodatapb.Tablet
-		shouldErr bool
+		name             string
+		cells            []string
+		unreachableCells []string // Cells that will return a ctx timeout error when trying to get tablets
+		tablets          []*topodatapb.Tablet
+		req              *vtctldatapb.GetTabletsRequest
+		expected         []*topodatapb.Tablet
+		shouldErr        bool
 	}{
 		{
 			name:      "no tablets",
@@ -7444,6 +7446,72 @@ func TestGetTablets(t *testing.T) {
 			shouldErr: true,
 		},
 		{
+			name:             "multiple cells with one timing out and strict false",
+			cells:            []string{"cell1", "cell2"},
+			unreachableCells: []string{"cell2"},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell1",
+						Uid:  100,
+					},
+					Keyspace: "ks1",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell2",
+						Uid:  200,
+					},
+					Keyspace: "ks1",
+					Shard:    "-",
+				},
+			},
+			req: &vtctldatapb.GetTabletsRequest{
+				Cells:  []string{"cell1", "cell2"},
+				Strict: false,
+			},
+			shouldErr: false,
+			expected: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell1",
+						Uid:  100,
+					},
+					Keyspace: "ks1",
+					Shard:    "-",
+				},
+			},
+		},
+		{
+			name:             "multiple cells with one timing out and strict true",
+			cells:            []string{"cell1", "cell2"},
+			unreachableCells: []string{"cell2"},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell1",
+						Uid:  100,
+					},
+					Keyspace: "ks1",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell2",
+						Uid:  200,
+					},
+					Keyspace: "ks1",
+					Shard:    "-",
+				},
+			},
+			req: &vtctldatapb.GetTabletsRequest{
+				Cells:  []string{"cell1", "cell2"},
+				Strict: true,
+			},
+			shouldErr: true,
+		},
+		{
 			name:  "in nonstrict mode if all cells fail the request fails",
 			cells: []string{"cell1"},
 			tablets: []*topodatapb.Tablet{
@@ -7676,7 +7744,27 @@ func TestGetTablets(t *testing.T) {
 
 			testutil.AddTablets(ctx, t, ts, nil, tt.tablets...)
 
-			resp, err := vtctld.GetTablets(ctx, tt.req)
+			for _, cell := range tt.cells {
+				if slices.Contains(tt.unreachableCells, cell) {
+					err := ts.UpdateCellInfoFields(ctx, cell, func(ci *topodatapb.CellInfo) error {
+						ci.ServerAddress = memorytopo.UnreachableServerAddr
+						return nil
+					})
+					require.NoError(t, err, "failed to update %s cell to point at unreachable address", cell)
+				}
+			}
+
+			var (
+				resp *vtctldatapb.GetTabletsResponse
+				err  error
+			)
+			if len(tt.unreachableCells) > 0 {
+				gtCtx, gtCancel := context.WithTimeout(context.Background(), 2*time.Second)
+				defer gtCancel()
+				resp, err = vtctld.GetTablets(gtCtx, tt.req)
+			} else {
+				resp, err = vtctld.GetTablets(ctx, tt.req)
+			}
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return
@@ -7712,13 +7800,15 @@ func TestGetTopologyPath(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		path      string
+		req       *vtctldatapb.GetTopologyPathRequest
 		shouldErr bool
 		expected  *vtctldatapb.GetTopologyPathResponse
 	}{
 		{
 			name: "root path",
-			path: "/",
+			req: &vtctldatapb.GetTopologyPathRequest{
+				Path: "/",
+			},
 			expected: &vtctldatapb.GetTopologyPathResponse{
 				Cell: &vtctldatapb.TopologyCell{
 					Path:     "/",
@@ -7727,13 +7817,17 @@ func TestGetTopologyPath(t *testing.T) {
 			},
 		},
 		{
-			name:      "invalid path",
-			path:      "",
+			name: "invalid path",
+			req: &vtctldatapb.GetTopologyPathRequest{
+				Path: "",
+			},
 			shouldErr: true,
 		},
 		{
 			name: "global path",
-			path: "/global",
+			req: &vtctldatapb.GetTopologyPathRequest{
+				Path: "/global",
+			},
 			expected: &vtctldatapb.GetTopologyPathResponse{
 				Cell: &vtctldatapb.TopologyCell{
 					Name:     "global",
@@ -7744,12 +7838,28 @@ func TestGetTopologyPath(t *testing.T) {
 		},
 		{
 			name: "terminal data path",
-			path: "/cell1/tablets/cell1-0000000100/Tablet",
+			req: &vtctldatapb.GetTopologyPathRequest{
+				Path: "/cell1/tablets/cell1-0000000100/Tablet",
+			},
 			expected: &vtctldatapb.GetTopologyPathResponse{
 				Cell: &vtctldatapb.TopologyCell{
 					Name: "Tablet",
 					Path: "/cell1/tablets/cell1-0000000100/Tablet",
 					Data: "alias:{cell:\"cell1\" uid:100} hostname:\"localhost\" keyspace:\"keyspace1\" mysql_hostname:\"localhost\" mysql_port:17100",
+				},
+			},
+		},
+		{
+			name: "terminal data path with data as json",
+			req: &vtctldatapb.GetTopologyPathRequest{
+				Path:   "/cell1/tablets/cell1-0000000100/Tablet",
+				AsJson: true,
+			},
+			expected: &vtctldatapb.GetTopologyPathResponse{
+				Cell: &vtctldatapb.TopologyCell{
+					Name: "Tablet",
+					Path: "/cell1/tablets/cell1-0000000100/Tablet",
+					Data: "{\n  \"alias\": {\n    \"cell\": \"cell1\",\n    \"uid\": 100\n  },\n  \"hostname\": \"localhost\",\n  \"keyspace\": \"keyspace1\",\n  \"mysql_hostname\": \"localhost\",\n  \"mysql_port\": 17100\n}",
 				},
 			},
 		},
@@ -7760,13 +7870,16 @@ func TestGetTopologyPath(t *testing.T) {
 			t.Parallel()
 
 			ctx := context.Background()
-			resp, err := vtctld.GetTopologyPath(ctx, &vtctldatapb.GetTopologyPathRequest{
-				Path: tt.path,
-			})
+			resp, err := vtctld.GetTopologyPath(ctx, tt.req)
 
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return
+			}
+
+			if resp.GetCell() != nil {
+				// We cannot compare versions as the value is non-deterministic.
+				resp.Cell.Version = 0
 			}
 
 			assert.NoError(t, err)

@@ -252,7 +252,7 @@ func TestDeleteWithSubquery(t *testing.T) {
 		`[[INT64(1) INT64(1) INT64(4)] [INT64(1) INT64(2) INT64(2)] [INT64(2) INT64(3) INT64(5)]]`)
 
 	// delete with subquery from same table (fails on mysql) - subquery get's merged so fails for vitess
-	_, err := mcmp.ExecAllowAndCompareError(`delete from s_tbl where id in (select id from s_tbl)`)
+	_, err := mcmp.ExecAllowAndCompareError(`delete from s_tbl where id in (select id from s_tbl)`, utils.CompareOptions{})
 	require.ErrorContains(t, err, "You can't specify target table 's_tbl' for update in FROM clause (errno 1093) (sqlstate HY000)")
 
 	// delete with subquery from same table (fails on mysql) - subquery not merged so passes for vitess
@@ -364,6 +364,37 @@ func TestMultiTargetUpdate(t *testing.T) {
 		`[[INT64(1) INT64(1) INT64(4)] [INT64(2) INT64(3) INT64(5)] [INT64(2) INT64(4) INT64(1)] [INT64(1) INT64(40) INT64(2)]]`)
 	mcmp.AssertMatches(`select oid, ename from oevent_tbl order by oid`,
 		`[[INT64(1) VARCHAR("a")] [INT64(2) VARCHAR("xyz")] [INT64(3) VARCHAR("a")] [INT64(4) VARCHAR("a")]]`)
+}
+
+// TestMultiTargetNonLiteralUpdate executed multi-target update queries with non-literal values.
+func TestMultiTargetNonLiteralUpdate(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 20, "vtgate")
+
+	mcmp, closer := start(t)
+	defer closer()
+
+	// initial rows
+	mcmp.Exec("insert into order_tbl(region_id, oid, cust_no) values (1,1,4), (1,2,2), (2,3,5), (2,4,55)")
+	mcmp.Exec("insert into oevent_tbl(oid, ename) values (1,'a'), (2,'b'), (3,'a'), (4,'c')")
+
+	// multi target update
+	qr := mcmp.Exec(`update order_tbl o join oevent_tbl ev on o.oid = ev.oid set ev.ename = o.cust_no where ev.oid > 3`)
+	assert.EqualValues(t, 1, qr.RowsAffected)
+
+	// check rows
+	mcmp.AssertMatches(`select region_id, oid, cust_no from order_tbl order by oid`,
+		`[[INT64(1) INT64(1) INT64(4)] [INT64(1) INT64(2) INT64(2)] [INT64(2) INT64(3) INT64(5)] [INT64(2) INT64(4) INT64(55)]]`)
+	mcmp.AssertMatches(`select oid, ename from oevent_tbl order by oid`,
+		`[[INT64(1) VARCHAR("a")] [INT64(2) VARCHAR("b")] [INT64(3) VARCHAR("a")] [INT64(4) VARCHAR("55")]]`)
+
+	qr = mcmp.Exec(`update order_tbl o, oevent_tbl ev set ev.ename = 'xyz', o.oid = ev.oid + 40 where o.cust_no = ev.oid and ev.ename = 'b'`)
+	assert.EqualValues(t, 2, qr.RowsAffected)
+
+	// check rows
+	mcmp.AssertMatches(`select region_id, oid, cust_no from order_tbl order by oid, region_id`,
+		`[[INT64(1) INT64(1) INT64(4)] [INT64(2) INT64(3) INT64(5)] [INT64(2) INT64(4) INT64(55)] [INT64(1) INT64(42) INT64(2)]]`)
+	mcmp.AssertMatches(`select oid, ename from oevent_tbl order by oid`,
+		`[[INT64(1) VARCHAR("a")] [INT64(2) VARCHAR("xyz")] [INT64(3) VARCHAR("a")] [INT64(4) VARCHAR("55")]]`)
 }
 
 // TestDMLInUnique for update/delete statement using an IN clause with the Vindexes,

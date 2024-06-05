@@ -53,7 +53,7 @@ func commandTeardown(cmd *cobra.Command, args []string) error {
 	}
 	defer mysqld.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), teardownArgs.WaitTime+10*time.Second)
+	ctx, cancel := context.WithTimeout(cmd.Context(), teardownArgs.WaitTime+10*time.Second)
 	defer cancel()
 	if err := mysqld.Teardown(ctx, cnf, teardownArgs.Force, teardownArgs.WaitTime); err != nil {
 		return fmt.Errorf("failed teardown mysql (forced? %v): %v", teardownArgs.Force, err)

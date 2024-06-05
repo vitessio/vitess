@@ -1147,8 +1147,8 @@ END
 INPUT
 select a, group_concat(b order by b) from t1 group by a with rollup;
 END
-ERROR
-syntax error at position 61 near 'with'
+OUTPUT
+select a, group_concat(b order by b asc) from t1 group by a with rollup
 END
 INPUT
 select t1.a, t2.a, t2.b, bit_count(t2.b) from t1 left join t2 on t1.a=t2.a;
@@ -7633,8 +7633,8 @@ END
 INPUT
 select a, group_concat(distinct b) from t1 group by a with rollup;
 END
-ERROR
-syntax error at position 59 near 'with'
+OUTPUT
+select a, group_concat(distinct b) from t1 group by a with rollup
 END
 INPUT
 select quote(trim(concat(' ', 'a')));
@@ -11107,8 +11107,8 @@ END
 INPUT
 select a, count(a) from t1 group by a with rollup;
 END
-ERROR
-syntax error at position 43 near 'with'
+OUTPUT
+select a, count(a) from t1 group by a with rollup
 END
 INPUT
 select * from t1,t2 left join t3 on (t2.i=t3.i) order by t1.i,t2.i,t3.i;
@@ -11191,8 +11191,8 @@ END
 INPUT
 select f1, group_concat(f1+1) from t1 group by f1 with rollup;
 END
-ERROR
-syntax error at position 55 near 'with'
+OUTPUT
+select f1, group_concat(f1 + 1) from t1 group by f1 with rollup
 END
 INPUT
 select substring('hello', -18446744073709551617, -18446744073709551617);
@@ -13039,8 +13039,8 @@ END
 INPUT
 select a, group_concat(b) from t1 group by a with rollup;
 END
-ERROR
-syntax error at position 50 near 'with'
+OUTPUT
+select a, group_concat(b) from t1 group by a with rollup
 END
 INPUT
 select insert('txs',2,1,'hi'),insert('is ',4,0,'a'),insert('txxxxt',2,4,'es');
@@ -13585,8 +13585,8 @@ END
 INPUT
 select a, group_concat(distinct b order by b) from t1 group by a with rollup;
 END
-ERROR
-syntax error at position 70 near 'with'
+OUTPUT
+select a, group_concat(distinct b order by b asc) from t1 group by a with rollup
 END
 INPUT
 select 4|||| delimiter 'abcd'|||| select 5;
@@ -22087,8 +22087,8 @@ END
 INPUT
 select count(distinct (f1+1)) from t1 group by f1 with rollup;
 END
-ERROR
-syntax error at position 55 near 'with'
+OUTPUT
+select count(distinct f1 + 1) from t1 group by f1 with rollup
 END
 INPUT
 select -9223372036854775808;

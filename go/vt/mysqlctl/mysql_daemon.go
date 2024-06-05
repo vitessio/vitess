@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
+	"vitess.io/vitess/go/vt/proto/replicationdata"
 
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -52,6 +53,10 @@ type MysqlDaemon interface {
 	// GetServerUUID returns the servers UUID
 	GetServerUUID(ctx context.Context) (string, error)
 
+	// GetGlobalStatusVars returns the server's global status variables asked for.
+	// An empty/nil variable name parameter slice means you want all of them.
+	GetGlobalStatusVars(ctx context.Context, variables []string) (map[string]string, error)
+
 	// replication related methods
 	StartReplication(ctx context.Context, hookExtraEnv map[string]string) error
 	RestartReplication(ctx context.Context, hookExtraEnv map[string]string) error
@@ -60,6 +65,7 @@ type MysqlDaemon interface {
 	StopIOThread(ctx context.Context) error
 	ReplicationStatus(ctx context.Context) (replication.ReplicationStatus, error)
 	PrimaryStatus(ctx context.Context) (replication.PrimaryStatus, error)
+	ReplicationConfiguration(ctx context.Context) (*replicationdata.Configuration, error)
 	GetGTIDPurged(ctx context.Context) (replication.Position, error)
 	SetSemiSyncEnabled(ctx context.Context, source, replica bool) error
 	SemiSyncEnabled(ctx context.Context) (source, replica bool)
@@ -83,7 +89,7 @@ type MysqlDaemon interface {
 	SetReadOnly(ctx context.Context, on bool) error
 	SetSuperReadOnly(ctx context.Context, on bool) (ResetSuperReadOnlyFunc, error)
 	SetReplicationPosition(ctx context.Context, pos replication.Position) error
-	SetReplicationSource(ctx context.Context, host string, port int32, stopReplicationBefore bool, startReplicationAfter bool) error
+	SetReplicationSource(ctx context.Context, host string, port int32, heartbeatInterval float64, stopReplicationBefore bool, startReplicationAfter bool) error
 	WaitForReparentJournal(ctx context.Context, timeCreatedNS int64) error
 
 	WaitSourcePos(context.Context, replication.Position) error

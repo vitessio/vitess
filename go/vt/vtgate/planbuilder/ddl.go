@@ -230,9 +230,6 @@ func buildCreateViewCommon(
 	sqlparser.RemoveKeyspace(ddl)
 
 	if vschema.IsViewsEnabled() {
-		if keyspace == nil {
-			return nil, nil, vterrors.VT09005()
-		}
 		return destination, keyspace, nil
 	}
 	isRoutePlan, opCode := tryToGetRoutePlan(selectPlan.primitive)

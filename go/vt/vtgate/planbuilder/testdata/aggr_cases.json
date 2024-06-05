@@ -540,6 +540,50 @@
     }
   },
   {
+    "comment": "WITH ROLLUP on unsharded keyspaces",
+    "query": "select a, b, count(*) from unsharded group by a, b with rollup",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select a, b, count(*) from unsharded group by a, b with rollup",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select a, b, count(*) from unsharded where 1 != 1 group by a, b with rollup",
+        "Query": "select a, b, count(*) from unsharded group by a, b with rollup",
+        "Table": "unsharded"
+      },
+      "TablesUsed": [
+        "main.unsharded"
+      ]
+    }
+  },
+  {
+    "comment": "WITH ROLLUP that is pushed to single shard",
+    "query": "select id, user_id, count(*) from music group by id, user_id with rollup",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select id, user_id, count(*) from music group by id, user_id with rollup",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id, user_id, count(*) from music where 1 != 1 group by id, user_id with rollup",
+        "Query": "select id, user_id, count(*) from music group by id, user_id with rollup",
+        "Table": "music"
+      },
+      "TablesUsed": [
+        "user.music"
+      ]
+    }
+  },
+  {
     "comment": "count with distinct no unique vindex, count expression aliased",
     "query": "select col1, count(distinct col2) c2 from user group by col1",
     "plan": {
@@ -1644,7 +1688,7 @@
             },
             "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
             "OrderBy": "(0|1) ASC",
-            "Query": "select id, weight_string(id) from `user` order by id asc limit :__upper_limit",
+            "Query": "select id, weight_string(id) from `user` order by id asc limit 2",
             "ResultColumns": 1,
             "Table": "`user`"
           }
@@ -3370,9 +3414,7 @@
         "Inputs": [
           {
             "OperatorType": "SimpleProjection",
-            "Columns": [
-              2
-            ],
+            "Columns": "2",
             "Inputs": [
               {
                 "OperatorType": "Limit",
@@ -3386,7 +3428,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select x.phone, x.id, x.city from (select phone, id, city from `user` where 1 != 1) as x where 1 != 1",
-                    "Query": "select x.phone, x.id, x.city from (select phone, id, city from `user` where id > 12) as x limit :__upper_limit",
+                    "Query": "select x.phone, x.id, x.city from (select phone, id, city from `user` where id > 12) as x limit 10",
                     "Table": "`user`"
                   }
                 ]
@@ -3413,9 +3455,7 @@
         "Inputs": [
           {
             "OperatorType": "SimpleProjection",
-            "Columns": [
-              3
-            ],
+            "Columns": "3",
             "Inputs": [
               {
                 "OperatorType": "Limit",
@@ -3429,7 +3469,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select x.phone, x.id, x.city, 1 from (select phone, id, city from `user` where 1 != 1) as x where 1 != 1",
-                    "Query": "select x.phone, x.id, x.city, 1 from (select phone, id, city from `user` where id > 12) as x limit :__upper_limit",
+                    "Query": "select x.phone, x.id, x.city, 1 from (select phone, id, city from `user` where id > 12) as x limit 10",
                     "Table": "`user`"
                   }
                 ]
@@ -3468,26 +3508,38 @@
                 "TableName": "`user`_user_extra",
                 "Inputs": [
                   {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select `user`.id from `user` where 1 != 1",
-                    "Query": "select `user`.id from `user`",
-                    "Table": "`user`"
+                    "OperatorType": "Limit",
+                    "Count": "10",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select x.`user.id` from (select `user`.id as `user.id` from `user` where 1 != 1) as x where 1 != 1",
+                        "Query": "select x.`user.id` from (select `user`.id as `user.id` from `user`) as x limit 10",
+                        "Table": "`user`"
+                      }
+                    ]
                   },
                   {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
-                    "Query": "select user_extra.col from user_extra where user_extra.id = :user_id",
-                    "Table": "user_extra"
+                    "OperatorType": "Limit",
+                    "Count": "10",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select x.col from (select user_extra.col as col from user_extra where 1 != 1) as x where 1 != 1",
+                        "Query": "select x.col from (select user_extra.col as col from user_extra where user_extra.id = :user_id) as x limit 10",
+                        "Table": "user_extra"
+                      }
+                    ]
                   }
                 ]
               }
@@ -3516,11 +3568,7 @@
         "Inputs": [
           {
             "OperatorType": "SimpleProjection",
-            "Columns": [
-              1,
-              2,
-              3
-            ],
+            "Columns": "1,2,3",
             "Inputs": [
               {
                 "OperatorType": "Limit",
@@ -3535,7 +3583,7 @@
                     },
                     "FieldQuery": "select x.id, x.val1, 1, weight_string(x.val1) from (select id, val1 from `user` where 1 != 1) as x where 1 != 1",
                     "OrderBy": "(1|3) ASC",
-                    "Query": "select x.id, x.val1, 1, weight_string(x.val1) from (select id, val1 from `user` where val2 < 4) as x order by `user`.val1 asc limit :__upper_limit",
+                    "Query": "select x.id, x.val1, 1, weight_string(x.val1) from (select id, val1 from `user` where val2 < 4) as x order by `user`.val1 asc limit 2",
                     "Table": "`user`"
                   }
                 ]
@@ -5467,11 +5515,7 @@
                 "Inputs": [
                   {
                     "OperatorType": "SimpleProjection",
-                    "Columns": [
-                      1,
-                      0,
-                      2
-                    ],
+                    "Columns": "1,0,2",
                     "Inputs": [
                       {
                         "OperatorType": "Aggregate",
@@ -5822,10 +5866,7 @@
         "Inputs": [
           {
             "OperatorType": "SimpleProjection",
-            "Columns": [
-              1,
-              1
-            ],
+            "Columns": "1,1",
             "Inputs": [
               {
                 "OperatorType": "Limit",
@@ -5839,7 +5880,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select x.id, x.val2 from (select id, val2 from `user` where 1 != 1) as x where 1 != 1",
-                    "Query": "select x.id, x.val2 from (select id, val2 from `user` where val2 is null) as x limit :__upper_limit",
+                    "Query": "select x.id, x.val2 from (select id, val2 from `user` where val2 is null) as x limit 2",
                     "Table": "`user`"
                   }
                 ]
@@ -5895,10 +5936,7 @@
                     "Inputs": [
                       {
                         "OperatorType": "SimpleProjection",
-                        "Columns": [
-                          2,
-                          1
-                        ],
+                        "Columns": "2,1",
                         "Inputs": [
                           {
                             "OperatorType": "Aggregate",
@@ -6476,12 +6514,7 @@
                         "Inputs": [
                           {
                             "OperatorType": "SimpleProjection",
-                            "Columns": [
-                              2,
-                              0,
-                              1,
-                              3
-                            ],
+                            "Columns": "2,0,1,3",
                             "Inputs": [
                               {
                                 "OperatorType": "Sort",
@@ -6500,7 +6533,7 @@
                                           "Sharded": true
                                         },
                                         "FieldQuery": "select ue.col, ue.bar, 1, weight_string(ue.bar) from (select col, bar from user_extra where 1 != 1) as ue where 1 != 1",
-                                        "Query": "select ue.col, ue.bar, 1, weight_string(ue.bar) from (select col, bar from user_extra) as ue limit :__upper_limit",
+                                        "Query": "select ue.col, ue.bar, 1, weight_string(ue.bar) from (select col, bar from user_extra) as ue limit 10",
                                         "Table": "user_extra"
                                       }
                                     ]

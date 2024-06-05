@@ -17,6 +17,7 @@ limitations under the License.
 package tabletserver
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -82,6 +83,17 @@ func debugEnvHandler(tsv *TabletServer, w http.ResponseWriter, r *http.Request) 
 			f(ival)
 			msg = fmt.Sprintf("Setting %v to: %v", varname, value)
 		}
+		setIntValCtx := func(f func(context.Context, int) error) {
+			ival, err := strconv.Atoi(value)
+			if err == nil {
+				err = f(r.Context(), ival)
+				if err == nil {
+					msg = fmt.Sprintf("Setting %v to: %v", varname, value)
+					return
+				}
+			}
+			msg = fmt.Sprintf("Failed setting value for %v: %v", varname, err)
+		}
 		setInt64Val := func(f func(int64)) {
 			ival, err := strconv.ParseInt(value, 10, 64)
 			if err != nil {
@@ -111,11 +123,11 @@ func debugEnvHandler(tsv *TabletServer, w http.ResponseWriter, r *http.Request) 
 		}
 		switch varname {
 		case "PoolSize":
-			setIntVal(tsv.SetPoolSize)
+			setIntValCtx(tsv.SetPoolSize)
 		case "StreamPoolSize":
-			setIntVal(tsv.SetStreamPoolSize)
+			setIntValCtx(tsv.SetStreamPoolSize)
 		case "TxPoolSize":
-			setIntVal(tsv.SetTxPoolSize)
+			setIntValCtx(tsv.SetTxPoolSize)
 		case "MaxResultSize":
 			setIntVal(tsv.SetMaxResultSize)
 		case "WarnResultSize":

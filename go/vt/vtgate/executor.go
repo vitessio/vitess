@@ -78,6 +78,8 @@ var (
 	queriesRoutedByTable    = stats.NewCountersWithMultiLabels("QueriesRoutedByTable", "Queries routed from vtgate to vttablet by plan type, keyspace and table", []string{"Plan", "Keyspace", "Table"})
 
 	exceedMemoryRowsLogger = logutil.NewThrottledLogger("ExceedMemoryRows", 1*time.Minute)
+
+	errorTransform errorTransformer = nullErrorTransformer{}
 )
 
 const (
@@ -246,7 +248,10 @@ func (e *Executor) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConn
 
 	logStats.SaveEndTime()
 	e.queryLogger.Send(logStats)
+
+	err = errorTransform.TransformError(err)
 	err = vterrors.TruncateError(err, truncateErrorLen)
+
 	return result, err
 }
 
@@ -385,8 +390,11 @@ func (e *Executor) StreamExecute(
 
 	logStats.SaveEndTime()
 	e.queryLogger.Send(logStats)
-	return vterrors.TruncateError(err, truncateErrorLen)
 
+	err = errorTransform.TransformError(err)
+	err = vterrors.TruncateError(err, truncateErrorLen)
+
+	return err
 }
 
 func canReturnRows(stmtType sqlparser.StatementType) bool {
@@ -1352,7 +1360,11 @@ func (e *Executor) Prepare(ctx context.Context, method string, safeSession *Safe
 		logStats.SaveEndTime()
 		e.queryLogger.Send(logStats)
 	}
-	return fld, vterrors.TruncateError(err, truncateErrorLen)
+
+	err = errorTransform.TransformError(err)
+	err = vterrors.TruncateError(err, truncateErrorLen)
+
+	return fld, err
 }
 
 func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *logstats.LogStats) ([]*querypb.Field, error) {
@@ -1605,4 +1617,15 @@ func (e *Executor) Close() {
 
 func (e *Executor) environment() *vtenv.Environment {
 	return e.env
+}
+
+type (
+	errorTransformer interface {
+		TransformError(err error) error
+	}
+	nullErrorTransformer struct{}
+)
+
+func (nullErrorTransformer) TransformError(err error) error {
+	return err
 }

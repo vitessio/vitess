@@ -80,16 +80,16 @@ func TestVtgateReplicationStatusCheck(t *testing.T) {
 		}
 	}()
 	// Stop replication on the non-PRIMARY tablets.
-	_, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ExecuteFetchAsDBA", clusterInstance.Keyspaces[0].Shards[0].Replica().Alias, "stop slave")
+	_, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ExecuteFetchAsDBA", clusterInstance.Keyspaces[0].Shards[0].Replica().Alias, "stop replica")
 	require.NoError(t, err)
-	_, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ExecuteMultiFetchAsDBA", clusterInstance.Keyspaces[0].Shards[0].Rdonly().Alias, "stop slave")
+	_, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ExecuteMultiFetchAsDBA", clusterInstance.Keyspaces[0].Shards[0].Rdonly().Alias, "stop replica")
 	require.NoError(t, err)
 	// Restart replication afterward as the cluster is re-used.
 	defer func() {
-		_, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ExecuteFetchAsDBA", clusterInstance.Keyspaces[0].Shards[0].Replica().Alias, "start slave")
+		_, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ExecuteFetchAsDBA", clusterInstance.Keyspaces[0].Shards[0].Replica().Alias, "start replica")
 		require.NoError(t, err)
 		// Testing ExecuteMultiFetchAsDBA by running multiple commands in a single call:
-		_, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ExecuteMultiFetchAsDBA", clusterInstance.Keyspaces[0].Shards[0].Rdonly().Alias, "start slave sql_thread; start slave io_thread;")
+		_, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ExecuteMultiFetchAsDBA", clusterInstance.Keyspaces[0].Shards[0].Rdonly().Alias, "start replica sql_thread; start replica io_thread;")
 		require.NoError(t, err)
 	}()
 	time.Sleep(2 * time.Second) // Build up some replication lag
