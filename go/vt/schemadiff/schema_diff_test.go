@@ -978,6 +978,22 @@ func TestSchemaDiff(t *testing.T) {
 			instantCapability: InstantDDLCapabilityImpossible,
 		},
 		{
+			name: "add and drop FK, add and drop respective tables",
+			fromQueries: []string{
+				"create table t1 (id int primary key, p int, key p_idx (p));",
+				"create table t2 (id int primary key, p int, key p_idx (p), foreign key (p) references t1 (p) on delete no action);",
+			},
+			toQueries: []string{
+				"create table t2 (id int primary key, p int, key p_idx (p), foreign key (p) references t3 (p) on delete no action);",
+				"create table t3 (id int primary key, p int, key p_idx (p));",
+			},
+			expectDiffs:       3,
+			expectDeps:        2,
+			sequential:        true,
+			entityOrder:       []string{"t3", "t2", "t1"},
+			instantCapability: InstantDDLCapabilityImpossible,
+		},
+		{
 			name: "two identical foreign keys in table, drop one",
 			fromQueries: []string{
 				"create table parent (id int primary key)",
@@ -1051,7 +1067,7 @@ func TestSchemaDiff(t *testing.T) {
 			for _, dep := range deps {
 				depsKeys = append(depsKeys, dep.hashKey())
 			}
-			assert.Equalf(t, tc.expectDeps, len(deps), "found deps: %v", depsKeys)
+			assert.Equalf(t, tc.expectDeps, len(deps), "found %v deps: %v", len(depsKeys), depsKeys)
 			assert.Equal(t, tc.sequential, schemaDiff.HasSequentialExecutionDependencies())
 
 			orderedDiffs, err := schemaDiff.OrderedDiffs(ctx)
