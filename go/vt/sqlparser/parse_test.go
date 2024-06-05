@@ -19,6 +19,7 @@ package sqlparser
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"math/rand"
 	"os"
@@ -1617,31 +1618,31 @@ var (
 			output: "alter table a rename index foo to bar",
 		},
 		{
-			input:  "alter table a add partition (partition p values less than (val))",
+			input: "alter table a add partition (partition p values less than (val))",
 		},
 		{
-			input:  "alter table a drop partition p",
+			input: "alter table a drop partition p",
 		},
 		{
-			input:  "alter table a discard partition p tablespace",
+			input: "alter table a discard partition p tablespace",
 		},
 		{
-			input:  "alter table a discard partition all tablespace",
+			input: "alter table a discard partition all tablespace",
 		},
 		{
-			input:  "alter table a import partition p tablespace",
+			input: "alter table a import partition p tablespace",
 		},
 		{
-			input:  "alter table a import partition all tablespace",
+			input: "alter table a import partition all tablespace",
 		},
 		{
-			input:  "alter table a truncate partition p tablespace",
+			input: "alter table a truncate partition p tablespace",
 		},
 		{
-			input:  "alter table a truncate partition all tablespace",
+			input: "alter table a truncate partition all tablespace",
 		},
 		{
-			input:  "alter table a coalesce partition 5",
+			input: "alter table a coalesce partition 5",
 		},
 		{
 			input:  "alter table a reorganize partition b into (partition c values less than (?), partition d values less than (maxvalue))",
@@ -1652,37 +1653,37 @@ var (
 			output: "alter table a exchange partition p with table t without validation",
 		},
 		{
-			input:  "alter table a exchange partition p with table t with validation",
+			input: "alter table a exchange partition p with table t with validation",
 		},
 		{
-			input:  "alter table a exchange partition p with table t without validation",
+			input: "alter table a exchange partition p with table t without validation",
 		},
 		{
-			input:  "alter table a analyze partition p",
+			input: "alter table a analyze partition p",
 		},
 		{
-			input:  "alter table a analyze partition all",
+			input: "alter table a analyze partition all",
 		},
 		{
-			input:  "alter table a optimize partition p",
+			input: "alter table a optimize partition p",
 		},
 		{
-			input:  "alter table a optimize partition all",
+			input: "alter table a optimize partition all",
 		},
 		{
-			input:  "alter table a rebuild partition p",
+			input: "alter table a rebuild partition p",
 		},
 		{
-			input:  "alter table a rebuild partition all",
+			input: "alter table a rebuild partition all",
 		},
 		{
-			input:  "alter table a repair partition p",
+			input: "alter table a repair partition p",
 		},
 		{
-			input:  "alter table a repair partition all",
+			input: "alter table a repair partition all",
 		},
 		{
-			input:  "alter table a remove partitioning",
+			input: "alter table a remove partitioning",
 		},
 		{
 			input:  "alter table a add column id int",
@@ -2677,9 +2678,9 @@ var (
 		}, {
 			input: "create database test_db",
 		}, {
-			input:  "create schema test_db",
+			input: "create schema test_db",
 		}, {
-			input:  "create database if not exists test_db",
+			input: "create database if not exists test_db",
 		}, {
 			input: "alter database test_db character set utf8mb3",
 		}, {
@@ -2695,9 +2696,9 @@ var (
 		}, {
 			input: "drop database test_db",
 		}, {
-			input:  "drop schema test_db",
+			input: "drop schema test_db",
 		}, {
-			input:  "drop database if exists test_db",
+			input: "drop database if exists test_db",
 		}, {
 			input: "drop trigger trigger1",
 		}, {
@@ -3703,103 +3704,103 @@ var (
 		},
 		// No-op alter statements
 		{
-			input: "alter table t alter constraint name enforced",
+			input:  "alter table t alter constraint name enforced",
 			output: "alter table t",
 		},
 		{
-			input: "alter table t alter check name enforced",
+			input:  "alter table t alter check name enforced",
 			output: "alter table t",
 		},
 		{
-			input: "alter table t alter constraint name not enforced",
+			input:  "alter table t alter constraint name not enforced",
 			output: "alter table t",
 		},
 		{
-			input: "alter table t alter check name not enforced",
+			input:  "alter table t alter check name not enforced",
 			output: "alter table t",
 		},
 		{
-			input: "alter table t algorithm default",
+			input:  "alter table t algorithm default",
 			output: "alter table t",
 		},
 		{
-			input: "alter table t algorithm instant",
+			input:  "alter table t algorithm instant",
 			output: "alter table t",
 		},
 		{
-			input: "alter table t algorithm inplace",
+			input:  "alter table t algorithm inplace",
 			output: "alter table t",
 		},
 		{
-			input: "alter table t algorithm copy",
+			input:  "alter table t algorithm copy",
 			output: "alter table t",
 		},
 		{
-			input: "alter table t algorithm = default",
+			input:  "alter table t algorithm = default",
 			output: "alter table t",
 		},
 		{
-			input: "alter table t algorithm = instant",
+			input:  "alter table t algorithm = instant",
 			output: "alter table t",
 		},
 		{
-			input: "alter table t algorithm = inplace",
+			input:  "alter table t algorithm = inplace",
 			output: "alter table t",
 		},
 		{
-			input: "alter table t algorithm = copy",
+			input:  "alter table t algorithm = copy",
 			output: "alter table t",
 		},
 		{
-			input: "alter table t alter index name visible",
+			input:  "alter table t alter index name visible",
 			output: "alter table t",
 		},
 		{
-			input: "alter table t alter index name invisible",
+			input:  "alter table t alter index name invisible",
 			output: "alter table t",
 		},
 		{
-			input: "alter table t discard tablespace",
+			input:  "alter table t discard tablespace",
 			output: "alter table t",
 		},
 		{
-			input: "alter table t import tablespace",
+			input:  "alter table t import tablespace",
 			output: "alter table t",
 		},
 		{
-			input: "alter table t force",
+			input:  "alter table t force",
 			output: "alter table t",
 		},
 		{
-			input: "alter table t lock default",
+			input:  "alter table t lock default",
 			output: "alter table t",
 		},
 		{
-			input: "alter table t lock none",
+			input:  "alter table t lock none",
 			output: "alter table t",
 		},
 		{
-			input: "alter table t lock shared",
+			input:  "alter table t lock shared",
 			output: "alter table t",
 		},
 		{
-			input: "alter table t lock exclusive",
+			input:  "alter table t lock exclusive",
 			output: "alter table t",
 		},
 		{
-			input: "alter table t lock = default",
+			input:  "alter table t lock = default",
 			output: "alter table t",
 		},
 		{
-			input: "alter table t lock = none",
+			input:  "alter table t lock = none",
 			output: "alter table t",
 		},
 		{
-			input: "alter table t lock = shared",
+			input:  "alter table t lock = shared",
 			output: "alter table t",
 		},
 		{
-			input: "alter table t lock = exclusive",
+			input:  "alter table t lock = exclusive",
 			output: "alter table t",
 		},
 		{
@@ -3964,7 +3965,7 @@ var (
 		},
 
 		{
-			input:  "alter table t modify col varchar(20) not null, algorithm = inplace, lock = none;",
+			input: "alter table t modify col varchar(20) not null, algorithm = inplace, lock = none;",
 			output: "alter table t modify column col (\n" +
 				"\tcol varchar(20) not null\n" +
 				"),,",
@@ -4415,7 +4416,7 @@ func TestAnsiQuotesMode(t *testing.T) {
 	}
 	for _, tcase := range invalidAnsiQuotesSQL {
 		t.Run(tcase.input, func(t *testing.T) {
-			_, err := ParseWithOptions(ctx, tcase.input, parserOptions)
+			_, err := ParseWithOptions(context.Background(), tcase.input, parserOptions)
 			require.NotNil(t, err)
 			assert.Equal(t, tcase.output, err.Error())
 		})
@@ -4592,7 +4593,7 @@ func TestParseOne(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.input, func(t *testing.T) {
-			stmt, resti, err := ParseOne(c.input)
+			stmt, resti, err := ParseOne(context.Background(), c.input)
 			require.NoError(t, err)
 			require.NotNil(t, stmt)
 			var rest string
@@ -5008,7 +5009,7 @@ end`,
 		// Also run all these test cases with the ParseOne function (used to execute multiple queries in a single request)
 		// to make sure they appropriately consume the correct amount of buffer
 		t.Run(tcase.query+" ParseOne", func(t *testing.T) {
-			tree, remainder, err := ParseOne(tcase.query)
+			tree, remainder, err := ParseOne(context.Background(), tcase.query)
 			require.Nil(t, err)
 			require.Equal(t, len(tcase.query)+1, remainder)
 
@@ -5584,7 +5585,7 @@ func runParseTestCaseWithParserOptions(t *testing.T, tcase parseTest, options Pa
 		if tcase.output == "" {
 			tcase.output = tcase.input
 		}
-		tree, err := ParseWithOptions(ctx, tcase.input, options)
+		tree, err := ParseWithOptions(context.Background(), tcase.input, options)
 		require.NoError(t, err)
 
 		assertTestcaseOutput(t, tcase, tree)
@@ -6073,10 +6074,10 @@ func TestFunctionCalls(t *testing.T) {
 			input: `select SELECT 17 MEMBER OF('[23, "abc", 17, "ab", 10]'); from dual`,
 		},
 		{
-			input:  "alter table a check partition p",
+			input: "alter table a check partition p",
 		},
 		{
-			input:  "alter table a check partition all",
+			input: "alter table a check partition all",
 		},
 	}
 
