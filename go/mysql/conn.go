@@ -1124,7 +1124,7 @@ func (c *Conn) handleNextCommand(ctx context.Context, handler Handler) error {
 
 		if !c.DisableClientMultiStatements && c.Capabilities&CapabilityClientMultiStatements != 0 {
 			var ri int
-			statement, ri, err = sqlparser.ParseOneWithOptions(query, parserOptions)
+			statement, ri, err = sqlparser.ParseOneWithOptions(ctx, query, parserOptions)
 			if ri < len(query) {
 				remainder = query[ri:]
 			}

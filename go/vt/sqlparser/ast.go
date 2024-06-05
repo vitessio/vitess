@@ -124,15 +124,17 @@ func ParseWithOptions(ctx context.Context, sql string, options ParserOptions) (S
 // ParseOne parses the first SQL statement in the given string and returns the
 // index of the start of the next statement in |sql|. If there was only one
 // statement in |sql|, the value of the returned index will be |len(sql)|.
-func ParseOne(sql string) (Statement, int, error) {
-	return ParseOneWithOptions(sql, ParserOptions{})
+func ParseOne(ctx context.Context, sql string) (Statement, int, error) {
+	return ParseOneWithOptions(ctx, sql, ParserOptions{})
 }
 
 // ParseOneWithOptions parses the first SQL statement in |sql|, using any parsing
 // options specified in |options|, and returns the parsed Statement, along with
 // the index of the start of the next statement in |sql|. If there was only one
 // statement in |sql|, the value of the returned index will be |len(sql)|.
-func ParseOneWithOptions(sql string, options ParserOptions) (Statement, int, error) {
+func ParseOneWithOptions(ctx context.Context, sql string, options ParserOptions) (Statement, int, error) {
+	defer trace.StartRegion(ctx, "ParseOneWithOptions").End()
+
 	tokenizer := NewStringTokenizer(sql)
 	if options.AnsiQuotes {
 		tokenizer = NewStringTokenizerForAnsiQuotes(sql)
