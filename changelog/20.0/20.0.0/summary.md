@@ -183,7 +183,7 @@ This makes reparenting in Vitess resilient to client errors, and prevents Planne
 
 In order to preserve the old behaviour, the users can set the flag back to `0 seconds` causing open transactions to never be shutdown, but in that case, they run the risk of PlannedReparentShard calls timing out.
 
-#### <a id="unmanaged-tablet"/> New `unmanaged` Flag and `disable_active_reparents` deprecation
+#### <a id="unmanaged-flag"/> New `unmanaged` Flag and `disable_active_reparents` deprecation
 
 New flag `--unmanaged` has been introduced in this release to make it easier to flag unmanaged tablets. It also runs validations to make sure the unmanaged tablets are configured properly. `--disable_active_reparents` flag has been deprecated for `vttablet`, `vtcombo` and `vttestserver` binaries and will be removed in future releases. Specifying the `--unmanaged` flag will also block replication commands and replication repairs.
 
@@ -338,7 +338,7 @@ VTTablet exposes two new counter stats:
  * `QueryCacheHits`: Query engine query cache hits
  * `QueryCacheMisses`: Query engine query cache misses
 
-### <a id="#vttablet-query-text-characters-processed"/>VTTablet Query Text Characters Processed
+### <a id="vttablet-query-text-characters-processed"/>VTTablet Query Text Characters Processed
 
 VTGate and VTTablet expose a new counter stat `QueryTextCharactersProcessed` to reflect the number of query text characters processed.
 

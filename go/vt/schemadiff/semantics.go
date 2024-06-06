@@ -51,7 +51,7 @@ func newDeclarativeSchemaInformation(env *Environment) *declarativeSchemaInforma
 
 // FindTableOrVindex implements the SchemaInformation interface
 func (si *declarativeSchemaInformation) FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {
-	table := si.Tables[sqlparser.String(tablename)]
+	table := si.Tables[tablename.Name.String()]
 	return table, nil, "", 0, nil, nil
 }
 

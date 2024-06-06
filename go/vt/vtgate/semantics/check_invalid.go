@@ -49,11 +49,13 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 			return vterrors.VT12001("recursive common table expression")
 		}
 	case *sqlparser.Insert:
-		if node.Action == sqlparser.ReplaceAct {
+		if !a.singleUnshardedKeyspace && node.Action == sqlparser.ReplaceAct {
 			return ShardedError{Inner: &UnsupportedConstruct{errString: "REPLACE INTO with sharded keyspace"}}
 		}
 	case *sqlparser.OverClause:
-		return ShardedError{Inner: &UnsupportedConstruct{errString: "OVER CLAUSE with sharded keyspace"}}
+		if !a.singleUnshardedKeyspace {
+			return ShardedError{Inner: &UnsupportedConstruct{errString: "OVER CLAUSE with sharded keyspace"}}
+		}
 	}
 
 	return nil

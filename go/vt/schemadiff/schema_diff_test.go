@@ -415,6 +415,18 @@ func TestSchemaDiff(t *testing.T) {
 			instantCapability: InstantDDLCapabilityIrrelevant,
 		},
 		{
+			name: "add view with over and keyword table",
+			toQueries: append(
+				createQueries,
+				"create table `order` (id int primary key, info int not null);",
+				"create view v2 as SELECT *, ROW_NUMBER() OVER(PARTITION BY info) AS row_num1, ROW_NUMBER() OVER(PARTITION BY info ORDER BY id) AS row_num2 FROM `order`;",
+			),
+			expectDiffs:       2,
+			expectDeps:        1,
+			entityOrder:       []string{"order", "v2"},
+			instantCapability: InstantDDLCapabilityIrrelevant,
+		},
+		{
 			name: "add view, alter table",
 			toQueries: []string{
 				"create table t1 (id int primary key, info int not null);",
@@ -968,6 +980,22 @@ func TestSchemaDiff(t *testing.T) {
 			instantCapability: InstantDDLCapabilityImpossible,
 		},
 		{
+			name: "add and drop FK, add and drop respective tables",
+			fromQueries: []string{
+				"create table t1 (id int primary key, p int, key p_idx (p));",
+				"create table t2 (id int primary key, p int, key p_idx (p), foreign key (p) references t1 (p) on delete no action);",
+			},
+			toQueries: []string{
+				"create table t2 (id int primary key, p int, key p_idx (p), foreign key (p) references t3 (p) on delete no action);",
+				"create table t3 (id int primary key, p int, key p_idx (p));",
+			},
+			expectDiffs:       3,
+			expectDeps:        2, // [alter t2]/[drop t1], [alter t2]/[create t3]
+			sequential:        true,
+			entityOrder:       []string{"t3", "t2", "t1"},
+			instantCapability: InstantDDLCapabilityImpossible,
+		},
+		{
 			name: "two identical foreign keys in table, drop one",
 			fromQueries: []string{
 				"create table parent (id int primary key)",
@@ -1041,7 +1069,7 @@ func TestSchemaDiff(t *testing.T) {
 			for _, dep := range deps {
 				depsKeys = append(depsKeys, dep.hashKey())
 			}
-			assert.Equalf(t, tc.expectDeps, len(deps), "found deps: %v", depsKeys)
+			assert.Equalf(t, tc.expectDeps, len(deps), "found %v deps: %v", len(depsKeys), depsKeys)
 			assert.Equal(t, tc.sequential, schemaDiff.HasSequentialExecutionDependencies())
 
 			orderedDiffs, err := schemaDiff.OrderedDiffs(ctx)
@@ -1050,7 +1078,7 @@ func TestSchemaDiff(t *testing.T) {
 				return
 			}
 			if tc.conflictingDiffs > 0 {
-				assert.Error(t, err)
+				require.Error(t, err)
 				impossibleOrderErr, ok := err.(*ImpossibleApplyDiffOrderError)
 				assert.True(t, ok)
 				conflictingDiffsStatements := []string{}
