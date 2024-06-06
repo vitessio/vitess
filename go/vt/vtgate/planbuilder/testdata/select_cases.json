@@ -2302,8 +2302,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select `user`.col from `user` where 1 != 1",
-                    "Query": "select `user`.col from `user` limit 1",
+                    "FieldQuery": "select col from `user` where 1 != 1",
+                    "Query": "select col from `user` limit 1",
                     "Table": "`user`"
                   }
                 ]
@@ -2316,9 +2316,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select :__sq1 as a, :__sq1, weight_string(:__sq1) from `user` where 1 != 1",
-                "OrderBy": "(1|2) ASC",
-                "Query": "select :__sq1 as a, :__sq1, weight_string(:__sq1) from `user` order by :__sq1 asc",
+                "FieldQuery": "select :__sq1 as a from `user` where 1 != 1",
+                "Query": "select :__sq1 as a from `user`",
                 "Table": "`user`"
               }
             ]

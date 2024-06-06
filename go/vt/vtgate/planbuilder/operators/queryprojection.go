@@ -269,8 +269,7 @@ func (qp *QueryProjection) addOrderBy(ctx *plancontext.PlanningContext, orderBy 
 	canPushSorting := true
 	es := &expressionSet{}
 	for _, order := range orderBy {
-		if sqlparser.IsNull(order.Expr) {
-			// ORDER BY null can safely be ignored
+		if notInterestingToOrderBy(ctx, order.Expr) {
 			continue
 		}
 		if !es.add(ctx, order.Expr) {
@@ -281,6 +280,17 @@ func (qp *QueryProjection) addOrderBy(ctx *plancontext.PlanningContext, orderBy 
 			SimplifiedExpr: order.Expr,
 		})
 		canPushSorting = canPushSorting && !ContainsAggr(ctx, order.Expr)
+	}
+}
+
+func notInterestingToOrderBy(ctx *plancontext.PlanningContext, expr sqlparser.Expr) bool {
+	switch expr.(type) {
+	case *sqlparser.NullVal, *sqlparser.Literal, *sqlparser.Argument:
+		return true
+	case *sqlparser.Subquery:
+		return ctx.SemTable.RecursiveDeps(expr).IsEmpty()
+	default:
+		return false
 	}
 }
 
