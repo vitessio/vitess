@@ -88,27 +88,27 @@ Modified to have an early break
 
 // permutateDiffs calls `callback` with each permutation of a. If the function returns `true`, that means
 // the callback has returned `true` for an early break, thus possibly not all permutations have been evaluated.
-func permutateDiffs(ctx context.Context, diffs []EntityDiff, callback func([]EntityDiff) (earlyBreak bool)) (earlyBreak bool, err error) {
+func permutateDiffs(ctx context.Context, diffs []EntityDiff, hints *DiffHints, callback func([]EntityDiff, *DiffHints) (earlyBreak bool)) (earlyBreak bool, err error) {
 	if len(diffs) == 0 {
 		return false, nil
 	}
 	// Sort by a heuristic (DROPs first, ALTERs next, CREATEs last). This ordering is then used first in the permutation
 	// search and serves as seed for the rest of permutations.
 
-	return permDiff(ctx, diffs, callback, 0)
+	return permDiff(ctx, diffs, hints, callback, 0)
 }
 
 // permDiff is a recursive function to permutate given `a` and call `callback` for each permutation.
 // If `callback` returns `true`, then so does this function, and this indicates a request for an early
 // break, in which case this function will not be called again.
-func permDiff(ctx context.Context, a []EntityDiff, callback func([]EntityDiff) (earlyBreak bool), i int) (earlyBreak bool, err error) {
+func permDiff(ctx context.Context, a []EntityDiff, hints *DiffHints, callback func([]EntityDiff, *DiffHints) (earlyBreak bool), i int) (earlyBreak bool, err error) {
 	if err := ctx.Err(); err != nil {
 		return true, err // early break
 	}
 	if i > len(a) {
-		return callback(a), nil
+		return callback(a, hints), nil
 	}
-	if brk, err := permDiff(ctx, a, callback, i+1); brk {
+	if brk, err := permDiff(ctx, a, hints, callback, i+1); brk {
 		return true, err
 	}
 	for j := i + 1; j < len(a); j++ {
@@ -150,7 +150,7 @@ func permDiff(ctx context.Context, a []EntityDiff, callback func([]EntityDiff) (
 		}
 		// End of optimization
 		a[i], a[j] = a[j], a[i]
-		if brk, err := permDiff(ctx, a, callback, i+1); brk {
+		if brk, err := permDiff(ctx, a, hints, callback, i+1); brk {
 			return true, err
 		}
 		a[i], a[j] = a[j], a[i]
@@ -315,24 +315,48 @@ func (d *SchemaDiff) OrderedDiffs(ctx context.Context) ([]EntityDiff, error) {
 
 		// We will now permutate the diffs in this equivalence class, and hopefully find
 		// a valid permutation (one where if we apply the diffs in-order, the schema remains valid throughout the process)
-		foundValidPathForClass, err := permutateDiffs(ctx, classDiffs, func(permutatedDiffs []EntityDiff) bool {
-			permutationSchema := lastGoodSchema.copy()
-			// We want to apply the changes one by one, and validate the schema after each change
-			for i := range permutatedDiffs {
-				// apply inline
-				if err := permutationSchema.apply(permutatedDiffs[i:i+1], d.hints); err != nil {
-					// permutation is invalid
-					return false // continue searching
+		tryPermutateDiffs := func(hints *DiffHints) (bool, error) {
+			return permutateDiffs(ctx, classDiffs, hints, func(permutatedDiffs []EntityDiff, hints *DiffHints) bool {
+				permutationSchema := lastGoodSchema.copy()
+				// We want to apply the changes one by one, and validate the schema after each change
+				for i := range permutatedDiffs {
+					// apply inline
+					if err := permutationSchema.apply(permutatedDiffs[i:i+1], hints); err != nil {
+						// permutation is invalid
+						return false // continue searching
+					}
+				}
+				// Good news, we managed to apply all of the permutations!
+				orderedDiffs = append(orderedDiffs, permutatedDiffs...)
+				lastGoodSchema = permutationSchema
+				return true // early break! No need to keep searching
+			})
+		}
+		tryPermutateDiffsAcrossHints := func() (found bool, err error) {
+			for _, fkStrategy := range []int{ForeignKeyCheckStrategyStrict, ForeignKeyCheckStrategyIgnore} {
+				hints := *d.hints
+				hints.ForeignKeyCheckStrategy = fkStrategy
+				found, err = tryPermutateDiffs(&hints)
+				if fkStrategy == d.hints.ForeignKeyCheckStrategy {
+					// end of the line.
+					return found, err
+				}
+				if err != nil {
+					continue
+				}
+				if found {
+					return true, nil
 				}
 			}
-			// Good news, we managed to apply all of the permutations!
-			orderedDiffs = append(orderedDiffs, permutatedDiffs...)
-			lastGoodSchema = permutationSchema
-			return true // early break! No need to keep searching
-		})
+			return found, err
+		}
+		foundValidPathForClass, err := tryPermutateDiffsAcrossHints()
 		if err != nil {
 			return nil, err
 		}
+		// We prefer stricter strategy, because that gives best chance of finding a valid path.
+		// So on best effort basis, we try to find a valid path starting with the strictest strategy, easing
+		// to more relaxed ones, but never below the preconfigured
 		if !foundValidPathForClass {
 			// In this equivalence class, there is no valid permutation. We cannot linearize the diffs.
 			return nil, &ImpossibleApplyDiffOrderError{
