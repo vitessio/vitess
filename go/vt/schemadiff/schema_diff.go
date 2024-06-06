@@ -321,19 +321,40 @@ func (d *SchemaDiff) OrderedDiffs(ctx context.Context) ([]EntityDiff, error) {
 				// We want to apply the changes one by one, and validate the schema after each change
 				for i := range permutatedDiffs {
 					// apply inline
-					if err := permutationSchema.apply(permutatedDiffs[i:i+1], hints); err != nil {
+					applyHints := hints
+					if hints.ForeignKeyCheckStrategy == ForeignKeyCheckStrategyCreateTableFirst {
+						// This is a strategy that handles foreign key loops in a heuristic way.
+						// It means: we allow for the very first change to be a CREATE TABLE, and ignore
+						// any dependencies that CREATE TABLE may have. But then, we require the rest of
+						// changes to have a strict order.
+						overrideHints := *hints
+						overrideHints.ForeignKeyCheckStrategy = ForeignKeyCheckStrategyStrict
+						if i == 0 {
+							if _, ok := permutatedDiffs[i].(*CreateTableEntityDiff); ok {
+								overrideHints.ForeignKeyCheckStrategy = ForeignKeyCheckStrategyIgnore
+							}
+						}
+						applyHints = &overrideHints
+					}
+					if err := permutationSchema.apply(permutatedDiffs[i:i+1], applyHints); err != nil {
 						// permutation is invalid
 						return false // continue searching
 					}
 				}
+
 				// Good news, we managed to apply all of the permutations!
 				orderedDiffs = append(orderedDiffs, permutatedDiffs...)
 				lastGoodSchema = permutationSchema
 				return true // early break! No need to keep searching
 			})
 		}
-		tryPermutateDiffsAcrossHints := func() (found bool, err error) {
-			for _, fkStrategy := range []int{ForeignKeyCheckStrategyStrict, ForeignKeyCheckStrategyIgnore} {
+		// We prefer stricter strategy, because that gives best chance of finding a valid path.
+		// So on best effort basis, we try to find a valid path starting with the strictest strategy, easing
+		// to more relaxed ones, but never below the preconfigured.
+		// For example, if the preconfigured strategy is "strict", we will try "strict" and then stop.
+		// If the preconfigured strategy is "create-table-first", we will try "strict", then "create-table-first", then stop.
+		tryPermutateDiffsAcrossStrategies := func() (found bool, err error) {
+			for _, fkStrategy := range []int{ForeignKeyCheckStrategyStrict, ForeignKeyCheckStrategyCreateTableFirst, ForeignKeyCheckStrategyIgnore} {
 				hints := *d.hints
 				hints.ForeignKeyCheckStrategy = fkStrategy
 				found, err = tryPermutateDiffs(&hints)
@@ -342,21 +363,20 @@ func (d *SchemaDiff) OrderedDiffs(ctx context.Context) ([]EntityDiff, error) {
 					return found, err
 				}
 				if err != nil {
+					// No luck with this strategy, let's try the next one.
 					continue
 				}
 				if found {
+					// Good news!
 					return true, nil
 				}
 			}
 			return found, err
 		}
-		foundValidPathForClass, err := tryPermutateDiffsAcrossHints()
+		foundValidPathForClass, err := tryPermutateDiffsAcrossStrategies()
 		if err != nil {
 			return nil, err
 		}
-		// We prefer stricter strategy, because that gives best chance of finding a valid path.
-		// So on best effort basis, we try to find a valid path starting with the strictest strategy, easing
-		// to more relaxed ones, but never below the preconfigured
 		if !foundValidPathForClass {
 			// In this equivalence class, there is no valid permutation. We cannot linearize the diffs.
 			return nil, &ImpossibleApplyDiffOrderError{
