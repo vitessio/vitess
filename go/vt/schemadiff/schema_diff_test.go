@@ -415,13 +415,15 @@ func TestSchemaDiff(t *testing.T) {
 			instantCapability: InstantDDLCapabilityIrrelevant,
 		},
 		{
-			name: "add view with over",
+			name: "add view with over and keyword table",
 			toQueries: append(
 				createQueries,
-				"create view v2 as SELECT *, ROW_NUMBER() OVER(PARTITION BY info) AS row_num1, ROW_NUMBER() OVER(PARTITION BY info ORDER BY id) AS row_num2 FROM t1;\n",
+				"create table `order` (id int primary key, info int not null);",
+				"create view v2 as SELECT *, ROW_NUMBER() OVER(PARTITION BY info) AS row_num1, ROW_NUMBER() OVER(PARTITION BY info ORDER BY id) AS row_num2 FROM `order`;",
 			),
-			expectDiffs:       1,
-			entityOrder:       []string{"v2"},
+			expectDiffs:       2,
+			expectDeps:        1,
+			entityOrder:       []string{"order", "v2"},
 			instantCapability: InstantDDLCapabilityIrrelevant,
 		},
 		{
