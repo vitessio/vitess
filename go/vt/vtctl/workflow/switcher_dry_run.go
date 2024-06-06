@@ -135,10 +135,20 @@ func (dr *switcherDryRun) changeRouting(ctx context.Context) error {
 	}
 	deleteLogs = nil
 	addLogs = nil
-	for _, source := range dr.ts.Sources() {
+	sources := maps.Values(dr.ts.Sources())
+	// Sort the slice for deterministic output.
+	sort.Slice(sources, func(i, j int) bool {
+		return sources[i].GetPrimary().Alias.Uid < sources[j].GetPrimary().Alias.Uid
+	})
+	for _, source := range sources {
 		deleteLogs = append(deleteLogs, fmt.Sprintf("shard:%s;tablet:%d", source.GetShard().ShardName(), source.GetShard().PrimaryAlias.Uid))
 	}
-	for _, target := range dr.ts.Targets() {
+	targets := maps.Values(dr.ts.Targets())
+	// Sort the slice for deterministic output.
+	sort.Slice(targets, func(i, j int) bool {
+		return targets[i].GetPrimary().Alias.Uid < targets[j].GetPrimary().Alias.Uid
+	})
+	for _, target := range targets {
 		addLogs = append(addLogs, fmt.Sprintf("shard:%s;tablet:%d", target.GetShard().ShardName(), target.GetShard().PrimaryAlias.Uid))
 	}
 	if len(deleteLogs) > 0 {
@@ -150,7 +160,12 @@ func (dr *switcherDryRun) changeRouting(ctx context.Context) error {
 
 func (dr *switcherDryRun) streamMigraterfinalize(ctx context.Context, ts *trafficSwitcher, workflows []string) error {
 	logs := make([]string, 0)
-	for _, t := range ts.Targets() {
+	targets := maps.Values(ts.Targets())
+	// Sort the slice for deterministic output.
+	sort.Slice(targets, func(i, j int) bool {
+		return targets[i].GetPrimary().Alias.Uid < targets[j].GetPrimary().Alias.Uid
+	})
+	for _, t := range targets {
 		logs = append(logs, fmt.Sprintf("tablet:%d", t.GetPrimary().Alias.Uid))
 	}
 	dr.drLog.Logf("Switch writes completed, freeze and delete vreplication streams on: [%s]", strings.Join(logs, ","))

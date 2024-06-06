@@ -504,20 +504,24 @@ func validateDryRunResults(t *testing.T, output string, want []string) {
 	require.NotEmpty(t, output)
 	gotDryRun := strings.Split(output, "\n")
 	require.True(t, len(gotDryRun) > 3)
-	startRow := 3
-	if strings.Contains(gotDryRun[0], "deprecated") {
+	var startRow int
+	if strings.HasPrefix(gotDryRun[1], "Parameters:") { // vtctlclient
+		startRow = 3
+	} else if strings.Contains(gotDryRun[0], "deprecated") {
 		startRow = 4
+	} else {
+		startRow = 2
 	}
 	gotDryRun = gotDryRun[startRow : len(gotDryRun)-1]
 	if len(want) != len(gotDryRun) {
-		t.Fatalf("want and got: lengths don't match, \nwant\n%s\n\ngot\n%s", strings.Join(want, "\n"), strings.Join(gotDryRun, "\n"))
+		require.Fail(t, "invalid dry run results", "want and got: lengths don't match, \nwant\n%s\n\ngot\n%s", strings.Join(want, "\n"), strings.Join(gotDryRun, "\n"))
 	}
 	var match, fail bool
 	fail = false
 	for i, w := range want {
 		w = strings.TrimSpace(w)
 		g := strings.TrimSpace(gotDryRun[i])
-		if w[0] == '/' {
+		if len(w) > 0 && w[0] == '/' {
 			w = strings.TrimSpace(w[1:])
 			result := strings.HasPrefix(g, w)
 			match = result
@@ -526,11 +530,11 @@ func validateDryRunResults(t *testing.T, output string, want []string) {
 		}
 		if !match {
 			fail = true
-			t.Fatalf("want %s, got %s\n", w, gotDryRun[i])
+			require.Fail(t, "invlaid dry run results", "want %s, got %s\n", w, gotDryRun[i])
 		}
 	}
 	if fail {
-		t.Fatalf("Dry run results don't match, want %s, got %s", want, gotDryRun)
+		require.Fail(t, "invalid dry run results", "Dry run results don't match, want %s, got %s", want, gotDryRun)
 	}
 }
 
@@ -566,7 +570,7 @@ func isTableInDenyList(t *testing.T, vc *VitessCluster, ksShard string, table st
 	var err error
 	found := false
 	if output, err = vc.VtctlClient.ExecuteCommandWithOutput("GetShard", ksShard); err != nil {
-		t.Fatalf("%v %v", err, output)
+		require.Fail(t, "GetShard error", "%v %v", err, output)
 		return false, err
 	}
 	jsonparser.ArrayEach([]byte(output), func(value []byte, dataType jsonparser.ValueType, offset int, err error) {

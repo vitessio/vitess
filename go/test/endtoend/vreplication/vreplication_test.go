@@ -605,7 +605,7 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	vc.AddKeyspace(t, []*Cell{cell1, cell2}, keyspace, shard, initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, sourceKsOpts)
 
 	// Add cell alias containing only zone2
-	result, err := vc.VtctlClient.ExecuteCommandWithOutput("AddCellsAlias", "--", "--cells", "zone2", "alias")
+	result, err := vc.VtctldClient.ExecuteCommandWithOutput("AddCellsAlias", "--cells", "zone2", "alias")
 	require.NoError(t, err, "command failed with output: %v", result)
 
 	verifyClusterHealth(t, vc)
@@ -836,7 +836,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			printShardPositions(vc, ksShards)
 			switchWrites(t, workflowType, ksWorkflow, true)
 
-			output, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", ksWorkflow, "show")
+			output, err := vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", targetKs, "show", "--workflow", workflow)
 			require.NoError(t, err)
 			require.Contains(t, output, "'customer.reverse_bits'")
 			require.Contains(t, output, "'customer.bmd5'")
@@ -945,7 +945,7 @@ func reshardMerchant2to3SplitMerge(t *testing.T) {
 		var err error
 
 		for _, shard := range strings.Split("-80,80-", ",") {
-			output, err = vc.VtctlClient.ExecuteCommandWithOutput("GetShard", "merchant:"+shard)
+			output, err = vc.VtctldClient.ExecuteCommandWithOutput("GetShard", "merchant:"+shard)
 			if err == nil {
 				t.Fatal("GetShard merchant:-80 failed")
 			}
@@ -954,7 +954,7 @@ func reshardMerchant2to3SplitMerge(t *testing.T) {
 
 		for _, shard := range strings.Split("-40,40-c0,c0-", ",") {
 			ksShard := fmt.Sprintf("%s:%s", merchantKeyspace, shard)
-			output, err = vc.VtctlClient.ExecuteCommandWithOutput("GetShard", ksShard)
+			output, err = vc.VtctldClient.ExecuteCommandWithOutput("GetShard", ksShard)
 			if err != nil {
 				t.Fatalf("GetShard merchant failed for: %s: %v", shard, err)
 			}
@@ -1403,7 +1403,7 @@ func waitForLowLag(t *testing.T, keyspace, workflow string) {
 	waitDuration := 500 * time.Millisecond
 	duration := maxWait
 	for duration > 0 {
-		output, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", fmt.Sprintf("%s.%s", keyspace, workflow), "Show")
+		output, err := vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", "show", "--workflow", workflow)
 		require.NoError(t, err)
 		lagSeconds, err = jsonparser.GetInt([]byte(output), "MaxVReplicationTransactionLag")
 
@@ -1486,7 +1486,7 @@ func reshardAction(t *testing.T, action, workflow, keyspaceName, sourceShards, t
 }
 
 func applyVSchema(t *testing.T, vschema, keyspace string) {
-	err := vc.VtctlClient.ExecuteCommand("ApplyVSchema", "--", "--vschema", vschema, keyspace)
+	err := vc.VtctldClient.ExecuteCommand("ApplyVSchema", "--vschema", vschema, keyspace)
 	require.NoError(t, err)
 }
 
@@ -1497,8 +1497,10 @@ func switchReadsDryRun(t *testing.T, workflowType, cells, ksWorkflow string, dry
 			"workflow type specified: %s", workflowType)
 	}
 	ensureCanSwitch(t, workflowType, cells, ksWorkflow)
-	output, err := vc.VtctlClient.ExecuteCommandWithOutput(workflowType, "--", "--cells="+cells, "--tablet_types=rdonly,replica",
-		"--dry_run", "SwitchTraffic", ksWorkflow)
+	ks, wf, ok := strings.Cut(ksWorkflow, ".")
+	require.True(t, ok)
+	output, err := vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--workflow", wf, "--target-keyspace", ks, "SwitchTraffic", "--cells="+cells, "--tablet-types=rdonly,replica",
+		"--dry-run")
 	require.NoError(t, err, fmt.Sprintf("Switching Reads DryRun Error: %s: %s", err, output))
 	if dryRunResults != nil {
 		validateDryRunResults(t, output, dryRunResults)
@@ -1506,10 +1508,12 @@ func switchReadsDryRun(t *testing.T, workflowType, cells, ksWorkflow string, dry
 }
 
 func ensureCanSwitch(t *testing.T, workflowType, cells, ksWorkflow string) {
+	ks, wf, ok := strings.Cut(ksWorkflow, ".")
+	require.True(t, ok)
 	timer := time.NewTimer(defaultTimeout)
 	defer timer.Stop()
 	for {
-		_, err := vc.VtctlClient.ExecuteCommandWithOutput(workflowType, "--", "--cells="+cells, "--dry_run", "SwitchTraffic", ksWorkflow)
+		_, err := vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--workflow", wf, "--target-keyspace", ks, "SwitchTraffic", "--cells="+cells, "--dry-run")
 		if err == nil {
 			return
 		}
@@ -1535,11 +1539,11 @@ func switchReads(t *testing.T, workflowType, cells, ksWorkflow string, reverse b
 		command = "ReverseTraffic"
 	}
 	ensureCanSwitch(t, workflowType, cells, ksWorkflow)
-	output, err = vc.VtctlClient.ExecuteCommandWithOutput(workflowType, "--", "--cells="+cells, "--tablet_types=rdonly",
-		command, ksWorkflow)
+	ks, wf, ok := strings.Cut(ksWorkflow, ".")
+	require.True(t, ok)
+	output, err = vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--workflow", wf, "--target-keyspace", ks, command, "--cells="+cells, "--tablet-types=rdonly")
 	require.NoError(t, err, fmt.Sprintf("%s Error: %s: %s", command, err, output))
-	output, err = vc.VtctlClient.ExecuteCommandWithOutput(workflowType, "--", "--cells="+cells, "--tablet_types=replica",
-		command, ksWorkflow)
+	output, err = vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--workflow", wf, "--target-keyspace", ks, command, "--cells="+cells, "--tablet-types=replica")
 	require.NoError(t, err, fmt.Sprintf("%s Error: %s: %s", command, err, output))
 }
 
@@ -1578,8 +1582,9 @@ func switchWritesDryRun(t *testing.T, workflowType, ksWorkflow string, dryRunRes
 		require.FailNowf(t, "Invalid workflow type for SwitchTraffic, must be MoveTables or Reshard",
 			"workflow type specified: %s", workflowType)
 	}
-	output, err := vc.VtctlClient.ExecuteCommandWithOutput(workflowType, "--", "--tablet_types=primary", "--dry_run",
-		"SwitchTraffic", ksWorkflow)
+	ks, wf, ok := strings.Cut(ksWorkflow, ".")
+	require.True(t, ok)
+	output, err := vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--workflow", wf, "--target-keyspace", ks, "SwitchTraffic", "--tablet-types=primary", "--dry-run")
 	require.NoError(t, err, fmt.Sprintf("Switch writes DryRun Error: %s: %s", err, output))
 	validateDryRunResults(t, output, dryRunResults)
 }
