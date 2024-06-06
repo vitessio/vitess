@@ -303,6 +303,7 @@ const (
 		FROM _vt.schema_migrations
 		WHERE
 			migration_status='running'
+		ORDER BY id
 	`
 	sqlSelectCompleteMigrationsOnTable = `SELECT
 			migration_uuid,
@@ -333,6 +334,18 @@ const (
 		WHERE
 			migration_status='running'
 			AND liveness_timestamp < NOW() - INTERVAL %a MINUTE
+		ORDER BY id
+	`
+	sqlSelectFailedCancelledMigrationsInContextBeforeMigration = `SELECT
+			migration_uuid
+		FROM _vt.schema_migrations
+		WHERE
+			migration_context=%a
+			AND migration_status IN ('failed', 'cancelled')
+			AND id < (
+				SELECT id FROM _vt.schema_migrations WHERE migration_uuid=%a
+			)
+		ORDER BY id
 	`
 	sqlSelectPendingMigrations = `SELECT
 			migration_uuid,
@@ -365,6 +378,7 @@ const (
 				NOW() - INTERVAL %a SECOND,
 				NOW() - INTERVAL retain_artifacts_seconds SECOND
 			)
+		ORDER BY id
 	`
 	sqlFixCompletedTimestamp = `UPDATE _vt.schema_migrations
 		SET
