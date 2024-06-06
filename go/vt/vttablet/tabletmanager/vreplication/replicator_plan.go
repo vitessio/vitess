@@ -22,6 +22,8 @@ import (
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
@@ -60,6 +62,22 @@ type ReplicatorPlan struct {
 	stats         *binlogplayer.Stats
 	Source        *binlogdatapb.BinlogSource
 	collationEnv  *collations.Environment
+
+	joinPlan *ReplicatorJoinPlan
+}
+
+type ReplicatorJoinPlan struct {
+	Tables        []string
+	TableName     string
+	MainTableName any
+}
+
+type TableJoinPlan struct {
+	Insert       *sqlparser.ParsedQuery
+	Updates      map[string]*sqlparser.ParsedQuery
+	Deletes      map[string]*sqlparser.ParsedQuery
+	TableColumns *map[string][]*ViewColumn
+	MainTable    string
 }
 
 // buildExecution plan uses the field info as input and the partially built
@@ -220,6 +238,8 @@ type TablePlan struct {
 	PartialUpdates map[string]*sqlparser.ParsedQuery
 
 	CollationEnv *collations.Environment
+
+	JoinPlan *TableJoinPlan
 }
 
 // MarshalJSON performs a custom JSON Marshalling.
@@ -296,7 +316,7 @@ func (tp *TablePlan) isOutsidePKRange(bindvars map[string]*querypb.BindVariable,
 		case !before && after:
 			bindvar = bindvars["a_"+tp.PKReferences[0]]
 		}
-		if bindvar == nil { //should never happen
+		if bindvar == nil { // should never happen
 			return false
 		}
 
@@ -335,6 +355,68 @@ func (tp *TablePlan) bindFieldVal(field *querypb.Field, val *sqltypes.Value) (*q
 		return sqltypes.StringBindVariable(val.ToString()), nil
 	}
 	return sqltypes.ValueBindVariable(*val), nil
+}
+
+func (tp *TablePlan) applyChangeForJoin(eventTableName string, eventTablePlan *TablePlan, rowChange *binlogdatapb.RowChange, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
+	var before, after bool
+	bindvars := make(map[string]*querypb.BindVariable, len(eventTablePlan.Fields))
+	tc := (*tp.JoinPlan.TableColumns)[eventTableName]
+	mapFieldName := func(fieldName string) string {
+		for _, col := range tc {
+			if col.SourceColumnName == fieldName {
+				return col.ViewColumnName
+			}
+		}
+		return fieldName
+	}
+
+	if rowChange.Before != nil {
+		before = true
+		vals := sqltypes.MakeRowTrusted(eventTablePlan.Fields, rowChange.Before)
+		for i, field := range eventTablePlan.Fields {
+			bindVar, err := tp.bindFieldVal(field, &vals[i])
+			if err != nil {
+				return nil, err
+			}
+			bindvars["b_"+mapFieldName(field.Name)] = bindVar
+		}
+	}
+	if rowChange.After != nil {
+		after = true
+		vals := sqltypes.MakeRowTrusted(eventTablePlan.Fields, rowChange.After)
+		for i, field := range eventTablePlan.Fields {
+			bindVar, err := tp.bindFieldVal(field, &vals[i])
+			if err != nil {
+				return nil, err
+			}
+			bindvars["a_"+mapFieldName(field.Name)] = bindVar
+		}
+	}
+	switch {
+	case !before && after:
+		if eventTableName != tp.JoinPlan.MainTable {
+			log.Infof("Ignoring non-main table insert for %v", eventTableName)
+			return nil, nil
+		}
+		log.Infof("Inserting into main table %v: %s, bindvars %+q", tp.JoinPlan.MainTable, tp.JoinPlan.Insert.Query, bindvars)
+		return execParsedQuery(tp.JoinPlan.Insert, bindvars, executor)
+	case before && after:
+		upd := tp.JoinPlan.Updates[eventTableName]
+		if upd == nil {
+			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "update query not found for %v", eventTableName)
+		}
+		log.Infof("Updating %v: %s with bindvars %+q", eventTableName, upd.Query, bindvars)
+		return execParsedQuery(upd, bindvars, executor)
+	case before && !after:
+		del := tp.JoinPlan.Deletes[eventTableName]
+		if del == nil {
+			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "delete query not found for %v", eventTableName)
+		}
+		log.Infof("Deleting from %v: %s with bindvars %+q", eventTableName, del.Query, bindvars)
+		return execParsedQuery(del, bindvars, executor)
+	default:
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "applyChangeForJoin called with before or without after")
+	}
 }
 
 func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
@@ -558,6 +640,7 @@ func execParsedQuery(pq *sqlparser.ParsedQuery, bindvars map[string]*querypb.Bin
 	if err != nil {
 		return nil, err
 	}
+	log.Infof("Will execute query: %v", query)
 	return executor(query)
 }
 
