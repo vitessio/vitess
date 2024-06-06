@@ -297,7 +297,7 @@ func (sqb *SubQueryBuilder) pullOutValueSubqueries(
 	outerID semantics.TableSet,
 	isDML bool,
 ) (sqlparser.Expr, []*SubQuery) {
-	original := sqlparser.CloneExpr(expr)
+	original := sqlparser.Clone(expr)
 	sqe := extractSubQueries(ctx, expr, isDML)
 	if sqe == nil {
 		return nil, nil

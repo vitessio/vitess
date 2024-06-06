@@ -45,7 +45,7 @@ type (
 func (to *Table) Clone([]Operator) Operator {
 	var columns []*sqlparser.ColName
 	for _, name := range to.Columns {
-		columns = append(columns, sqlparser.CloneRefOfColName(name))
+		columns = append(columns, sqlparser.Clone(name))
 	}
 	return &Table{
 		QTable:  to.QTable,
