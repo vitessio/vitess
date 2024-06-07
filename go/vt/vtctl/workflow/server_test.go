@@ -676,7 +676,7 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 			name: "basic forward",
 			sourceKeyspace: &testKeyspace{
 				KeyspaceName: sourceKeyspaceName,
-				ShardNames:   []string{"0"},
+				ShardNames:   []string{"-80", "80-"},
 			},
 			targetKeyspace: &testKeyspace{
 				KeyspaceName: targetKeyspaceName,
@@ -696,7 +696,8 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 				fmt.Sprintf("Unlock keyspace %s", sourceKeyspaceName),
 				fmt.Sprintf("Lock keyspace %s", sourceKeyspaceName),
 				fmt.Sprintf("Lock keyspace %s", targetKeyspaceName),
-				fmt.Sprintf("Stop writes on keyspace %s for tables [%s]: [keyspace:%s;shard:0;position:%s]", sourceKeyspaceName, tableName, sourceKeyspaceName, position),
+				fmt.Sprintf("Stop writes on keyspace %s for tables [%s]: [keyspace:%s;shard:-80;position:%s,keyspace:%s;shard:80-;position:%s]",
+					sourceKeyspaceName, tableName, sourceKeyspaceName, position, sourceKeyspaceName, position),
 				"Wait for vreplication on stopped streams to catchup for up to 30s",
 				fmt.Sprintf("Create reverse vreplication workflow %s", ReverseWorkflowName(workflowName)),
 				"Create journal entries on source databases",
@@ -714,7 +715,7 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 			name: "basic backward",
 			sourceKeyspace: &testKeyspace{
 				KeyspaceName: sourceKeyspaceName,
-				ShardNames:   []string{"0"},
+				ShardNames:   []string{"-80", "80-"},
 			},
 			targetKeyspace: &testKeyspace{
 				KeyspaceName: targetKeyspaceName,
@@ -742,9 +743,9 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 				fmt.Sprintf("Enable writes on keyspace %s for tables [%s]", sourceKeyspaceName, tableName),
 				fmt.Sprintf("Switch routing from keyspace %s to keyspace %s", targetKeyspaceName, sourceKeyspaceName),
 				fmt.Sprintf("Routing rules for tables [%s] will be updated", tableName),
-				fmt.Sprintf("Switch writes completed, freeze and delete vreplication streams on: [tablet:%d]", startingSourceTabletUID),
-				fmt.Sprintf("Mark vreplication streams frozen on: [keyspace:%s;shard:0;tablet:%d;workflow:%s;dbname:vt_%s]",
-					sourceKeyspaceName, startingSourceTabletUID, ReverseWorkflowName(workflowName), sourceKeyspaceName),
+				fmt.Sprintf("Switch writes completed, freeze and delete vreplication streams on: [tablet:%d,tablet:%d]", startingSourceTabletUID, startingSourceTabletUID+tabletUIDStep),
+				fmt.Sprintf("Mark vreplication streams frozen on: [keyspace:%s;shard:-80;tablet:%d;workflow:%s;dbname:vt_%s,keyspace:%s;shard:80-;tablet:%d;workflow:%s;dbname:vt_%s]",
+					sourceKeyspaceName, startingSourceTabletUID, ReverseWorkflowName(workflowName), sourceKeyspaceName, sourceKeyspaceName, startingSourceTabletUID+tabletUIDStep, ReverseWorkflowName(workflowName), sourceKeyspaceName),
 				fmt.Sprintf("Unlock keyspace %s", sourceKeyspaceName),
 				fmt.Sprintf("Unlock keyspace %s", targetKeyspaceName),
 			},
