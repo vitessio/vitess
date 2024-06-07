@@ -211,6 +211,8 @@ type TabletManager struct {
 	_lockTablesTimer      *time.Timer
 	// _isBackupRunning tells us whether there is a backup that is currently running
 	_isBackupRunning bool
+	// _isSetReplicationSourceLockedRunning indicates we are actively running setReplicationSourceLocked
+	_isSetReplicationSourceLockedRunning bool
 }
 
 // BuildTabletFromInput builds a tablet record from input parameters.
