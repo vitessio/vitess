@@ -242,7 +242,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token LEX_ERROR
 %left <str> UNION
 %token <str> SELECT STREAM VSTREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
-%token <str> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE DEFAULT SET LOCK UNLOCK KEYS DO CALL
+%token <str> ALL ANY SOME DISTINCT AS EXISTS ASC DESC INTO DUPLICATE DEFAULT SET LOCK UNLOCK KEYS DO CALL
 %token <str> DISTINCTROW PARSER GENERATED ALWAYS
 %token <str> OUTFILE S3 DATA LOAD LINES TERMINATED ESCAPED ENCLOSED
 %token <str> DUMPFILE CSV HEADER MANIFEST OVERWRITE STARTING OPTIONALLY
@@ -5291,6 +5291,18 @@ bool_pri IS null_or_unknown %prec IS
 | bool_pri compare predicate
   {
     $$ = &ComparisonExpr{Left: $1, Operator: $2, Right: $3}
+  }
+| bool_pri compare ANY subquery
+  {
+    $$ = &ComparisonExpr{Left: $1, Operator: $2, Modifier: Any, Right: $4 }
+  }
+| bool_pri compare SOME subquery
+  {
+    $$ = &ComparisonExpr{Left: $1, Operator: $2, Modifier: Any, Right: $4 }
+  }
+| bool_pri compare ALL subquery
+  {
+    $$ = &ComparisonExpr{Left: $1, Operator: $2, Modifier: All, Right: $4 }
   }
 | predicate %prec EXPRESSION_PREC_SETTER
   {

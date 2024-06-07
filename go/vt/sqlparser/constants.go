@@ -677,6 +677,12 @@ const (
 	NotRegexpOp
 )
 
+const (
+	Missing ComparisonModifier = iota
+	Any
+	All
+)
+
 func (op ComparisonExprOperator) Inverse() ComparisonExprOperator {
 	switch op {
 	case EqualOp:
