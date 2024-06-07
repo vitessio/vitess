@@ -3044,8 +3044,6 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 	if err != nil {
 		return nil, err
 	}
-	log.Errorf("req: %+v", req)
-	log.Errorf("ts: %+v", ts)
 
 	if startState.WorkflowType == TypeMigrate {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid action for Migrate workflow: SwitchTraffic")

@@ -89,7 +89,6 @@ func execQueryWithRetry(t *testing.T, conn *mysql.Conn, query string, timeout ti
 		if err == nil {
 			return qr
 		}
-		log.Infof("Error executing query (will retry): %s: %v", query, err)
 		select {
 		case <-ctx.Done():
 			require.FailNow(t, fmt.Sprintf("query %q did not succeed before the timeout of %s; last seen result: %v",
@@ -594,8 +593,8 @@ func expectNumberOfStreams(t *testing.T, vtgateConn *mysql.Conn, name string, wo
 	waitForQueryResult(t, vtgateConn, database, query, fmt.Sprintf(`[[INT64(%d)]]`, want))
 }
 
-// confirmAllStreamsRunning confirms that all of migrated streams are running
-// for a workflow.
+// confirmAllStreamsRunning confirms that all of the workflow's streams are
+// in the running state.
 func confirmAllStreamsRunning(t *testing.T, keyspace, shard string) {
 	query := sqlparser.BuildParsedQuery("select count(*) from %s.vreplication where state != '%s'",
 		sidecarDBIdentifier, binlogdatapb.VReplicationWorkflowState_Running.String()).Query

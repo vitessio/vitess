@@ -83,7 +83,7 @@ type testEnv struct {
 func newTestEnv(t *testing.T, ctx context.Context, cell string, sourceKeyspace, targetKeyspace *testKeyspace) *testEnv {
 	t.Helper()
 	env := &testEnv{
-		ts:             memorytopo.NewServer(ctx, defaultCellName),
+		ts:             memorytopo.NewServer(ctx, cell),
 		sourceKeyspace: sourceKeyspace,
 		targetKeyspace: targetKeyspace,
 		tablets:        make(map[string]map[int]*topodatapb.Tablet),
@@ -95,13 +95,13 @@ func newTestEnv(t *testing.T, ctx context.Context, cell string, sourceKeyspace, 
 
 	tabletID := startingSourceTabletUID
 	for _, shardName := range sourceKeyspace.ShardNames {
-		_ = env.addTablet(tabletID, sourceKeyspace.KeyspaceName, shardName, topodatapb.TabletType_PRIMARY)
+		_ = env.addTablet(t, ctx, tabletID, sourceKeyspace.KeyspaceName, shardName, topodatapb.TabletType_PRIMARY)
 		tabletID += tabletUIDStep
 	}
 	if sourceKeyspace.KeyspaceName != targetKeyspace.KeyspaceName {
 		tabletID = startingTargetTabletUID
 		for _, shardName := range targetKeyspace.ShardNames {
-			_ = env.addTablet(tabletID, targetKeyspace.KeyspaceName, shardName, topodatapb.TabletType_PRIMARY)
+			_ = env.addTablet(t, ctx, tabletID, targetKeyspace.KeyspaceName, shardName, topodatapb.TabletType_PRIMARY)
 			tabletID += tabletUIDStep
 		}
 	}
@@ -119,7 +119,7 @@ func (env *testEnv) close() {
 	}
 }
 
-func (env *testEnv) addTablet(id int, keyspace, shard string, tabletType topodatapb.TabletType) *topodatapb.Tablet {
+func (env *testEnv) addTablet(t *testing.T, ctx context.Context, id int, keyspace, shard string, tabletType topodatapb.TabletType) *topodatapb.Tablet {
 	tablet := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
 			Cell: env.cell,
@@ -137,18 +137,15 @@ func (env *testEnv) addTablet(id int, keyspace, shard string, tabletType topodat
 		env.tablets[keyspace] = make(map[int]*topodatapb.Tablet)
 	}
 	env.tablets[keyspace][id] = tablet
-	if err := env.ws.ts.InitTablet(context.Background(), tablet, false /* allowPrimaryOverride */, true /* createShardAndKeyspace */, false /* allowUpdate */); err != nil {
-		panic(err)
-	}
+	err := env.ws.ts.InitTablet(ctx, tablet, false /* allowPrimaryOverride */, true /* createShardAndKeyspace */, false /* allowUpdate */)
+	require.NoError(t, err)
 	if tabletType == topodatapb.TabletType_PRIMARY {
-		_, err := env.ws.ts.UpdateShardFields(context.Background(), keyspace, shard, func(si *topo.ShardInfo) error {
+		_, err = env.ws.ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
 			si.PrimaryAlias = tablet.Alias
 			si.IsPrimaryServing = true
 			return nil
 		})
-		if err != nil {
-			panic(err)
-		}
+		require.NoError(t, err)
 	}
 	return tablet
 }
@@ -167,11 +164,7 @@ type testTMClient struct {
 	createVReplicationWorkflowRequests map[uint32]*tabletmanagerdatapb.CreateVReplicationWorkflowRequest
 	readVReplicationWorkflowRequests   map[uint32]*tabletmanagerdatapb.ReadVReplicationWorkflowRequest
 
-	// Used to confirm the number of times WorkflowDelete was called.
-	workflowDeleteCalls int
-
-	env *testEnv
-
+	env     *testEnv    // For access to the env config from tmc methods.
 	reverse atomic.Bool // Are we reversing traffic?
 }
 
@@ -242,7 +235,6 @@ func (tmc *testTMClient) ReadVReplicationWorkflow(ctx context.Context, tablet *t
 func (tmc *testTMClient) DeleteVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.DeleteVReplicationWorkflowRequest) (response *tabletmanagerdatapb.DeleteVReplicationWorkflowResponse, err error) {
 	tmc.mu.Lock()
 	defer tmc.mu.Unlock()
-	tmc.workflowDeleteCalls++
 	return &tabletmanagerdatapb.DeleteVReplicationWorkflowResponse{
 		Result: &querypb.QueryResult{
 			RowsAffected: 1,
@@ -337,7 +329,7 @@ func (tmc *testTMClient) VReplicationExec(ctx context.Context, tablet *topodatap
 }
 
 func (tmc *testTMClient) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsDbaRequest) (*querypb.QueryResult, error) {
-	// Reuse VReplicationExec
+	// Reuse VReplicationExec.
 	return tmc.VReplicationExec(ctx, tablet, string(req.Query))
 }
 

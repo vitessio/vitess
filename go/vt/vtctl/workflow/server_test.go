@@ -450,7 +450,7 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 		result: &querypb.QueryResult{},
 	}
 	createReverseWFQR := &queryResult{
-		query:  "/insert into _vt.vreplication.*",
+		query:  "/insert into _vt.vreplication.*_reverse.*",
 		result: &querypb.QueryResult{},
 	}
 	createJournalQR := &queryResult{

@@ -44,8 +44,8 @@ import (
 )
 
 const (
-	dlTablesAlreadyPresent = "one or more tables are already present in the denylist"
-	dlTablesNotPresent     = "cannot remove tables since one or more do not exist in the denylist"
+	dlTablesAlreadyPresent = "one or more tables were already present in the denylist"
+	dlTablesNotPresent     = "one or more tables did not exist in the denylist"
 	dlNoCellsForPrimary    = "you cannot specify cells for a primary's tablet control"
 )
 
@@ -397,7 +397,7 @@ func (si *ShardInfo) UpdateDeniedTables(ctx context.Context, tabletType topodata
 	}
 	tc := si.GetTabletControl(tabletType)
 	if tc == nil {
-		// Handle the case where the TabletControl object is new
+		// Handle the case where the TabletControl object is new.
 		if remove {
 			// We tried to remove something that doesn't exist, log a warning.
 			// But we know that our work is done.
@@ -475,7 +475,8 @@ func (si *ShardInfo) updatePrimaryTabletControl(tc *topodatapb.Shard_TabletContr
 		return nil
 	}
 	if len(newTables) != len(tables) {
-		// Some of the tables already existed in the denied list so we don't need to add them.
+		// Some of the tables already existed in the DeniedTables list so we don't
+		// need to add them.
 		log.Warningf("%s:%s", dlTablesNotPresent, strings.Join(newTables, ","))
 		// We do need to merge the lists, however.
 		tables = append(tables, newTables...)

@@ -1499,8 +1499,8 @@ func switchReadsDryRun(t *testing.T, workflowType, cells, ksWorkflow string, dry
 	ensureCanSwitch(t, workflowType, cells, ksWorkflow)
 	ks, wf, ok := strings.Cut(ksWorkflow, ".")
 	require.True(t, ok)
-	output, err := vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--workflow", wf, "--target-keyspace", ks, "SwitchTraffic", "--cells="+cells, "--tablet-types=rdonly,replica",
-		"--dry-run")
+	output, err := vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--workflow", wf, "--target-keyspace", ks, "SwitchTraffic",
+		"--cells="+cells, "--tablet-types=rdonly,replica", "--dry-run")
 	require.NoError(t, err, fmt.Sprintf("Switching Reads DryRun Error: %s: %s", err, output))
 	if dryRunResults != nil {
 		validateDryRunResults(t, output, dryRunResults)
@@ -1513,7 +1513,8 @@ func ensureCanSwitch(t *testing.T, workflowType, cells, ksWorkflow string) {
 	timer := time.NewTimer(defaultTimeout)
 	defer timer.Stop()
 	for {
-		_, err := vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--workflow", wf, "--target-keyspace", ks, "SwitchTraffic", "--cells="+cells, "--dry-run")
+		_, err := vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--workflow", wf, "--target-keyspace", ks, "SwitchTraffic",
+			"--cells="+cells, "--dry-run")
 		if err == nil {
 			return
 		}
@@ -1541,9 +1542,11 @@ func switchReads(t *testing.T, workflowType, cells, ksWorkflow string, reverse b
 	ensureCanSwitch(t, workflowType, cells, ksWorkflow)
 	ks, wf, ok := strings.Cut(ksWorkflow, ".")
 	require.True(t, ok)
-	output, err = vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--workflow", wf, "--target-keyspace", ks, command, "--cells="+cells, "--tablet-types=rdonly")
+	output, err = vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--workflow", wf, "--target-keyspace", ks, command,
+		"--cells="+cells, "--tablet-types=rdonly")
 	require.NoError(t, err, fmt.Sprintf("%s Error: %s: %s", command, err, output))
-	output, err = vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--workflow", wf, "--target-keyspace", ks, command, "--cells="+cells, "--tablet-types=replica")
+	output, err = vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--workflow", wf, "--target-keyspace", ks, command,
+		"--cells="+cells, "--tablet-types=replica")
 	require.NoError(t, err, fmt.Sprintf("%s Error: %s: %s", command, err, output))
 }
 
@@ -1584,7 +1587,8 @@ func switchWritesDryRun(t *testing.T, workflowType, ksWorkflow string, dryRunRes
 	}
 	ks, wf, ok := strings.Cut(ksWorkflow, ".")
 	require.True(t, ok)
-	output, err := vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--workflow", wf, "--target-keyspace", ks, "SwitchTraffic", "--tablet-types=primary", "--dry-run")
+	output, err := vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--workflow", wf, "--target-keyspace", ks,
+		"SwitchTraffic", "--tablet-types=primary", "--dry-run")
 	require.NoError(t, err, fmt.Sprintf("Switch writes DryRun Error: %s: %s", err, output))
 	validateDryRunResults(t, output, dryRunResults)
 }
