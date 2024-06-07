@@ -358,5 +358,10 @@
     "comment": "WITH ROLLUP not supported on sharded queries",
     "query": "select a, b, c, sum(d) from user group by a, b, c with rollup",
     "plan": "VT12001: unsupported: GROUP BY WITH ROLLUP not supported for sharded queries"
+  },
+  {
+    "comment": "WITH ROLLUP not supported on sharded queries",
+    "query": "select 1 from user where foo = SOME (select 1 from user_extra where foo = 1)",
+    "plan": "VT12001: unsupported: ANY/ALL/SOME comparison operator"
   }
 ]

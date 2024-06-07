@@ -43,7 +43,7 @@ type analyzer struct {
 	err          error
 	inProjection int
 
-	projErr                 error
+	notSingleRouteErr       error
 	unshardedErr            error
 	warning                 string
 	canShortcut             bool
@@ -143,7 +143,7 @@ func (a *analyzer) newSemTable(
 			Warning:                   a.warning,
 			Collation:                 coll,
 			ExprTypes:                 map[sqlparser.Expr]evalengine.Type{},
-			NotSingleRouteErr:         a.projErr,
+			NotSingleRouteErr:         a.notSingleRouteErr,
 			NotUnshardedErr:           a.unshardedErr,
 			Recursive:                 ExprDependencies{},
 			Direct:                    ExprDependencies{},
@@ -175,7 +175,7 @@ func (a *analyzer) newSemTable(
 		ExprTypes:                 a.typer.m,
 		Tables:                    a.tables.Tables,
 		Targets:                   a.binder.targets,
-		NotSingleRouteErr:         a.projErr,
+		NotSingleRouteErr:         a.notSingleRouteErr,
 		NotUnshardedErr:           a.unshardedErr,
 		Warning:                   a.warning,
 		Comments:                  comments,
@@ -194,13 +194,13 @@ func (a *analyzer) newSemTable(
 
 func (a *analyzer) setError(err error) {
 	switch err := err.(type) {
-	case ProjError:
-		a.projErr = err.Inner
+	case NotSingleRouteErr:
+		a.notSingleRouteErr = err.Inner
 	case ShardedError:
 		a.unshardedErr = err.Inner
 	default:
 		if a.inProjection > 0 && vterrors.ErrState(err) == vterrors.NonUniqError {
-			a.projErr = err
+			a.notSingleRouteErr = err
 		} else {
 			a.err = err
 		}
@@ -464,8 +464,8 @@ func (a *analyzer) noteQuerySignature(node sqlparser.SQLNode) {
 
 // getError gets the error stored in the analyzer during previous phases.
 func (a *analyzer) getError() error {
-	if a.projErr != nil {
-		return a.projErr
+	if a.notSingleRouteErr != nil {
+		return a.notSingleRouteErr
 	}
 	if a.unshardedErr != nil {
 		return a.unshardedErr
@@ -473,13 +473,13 @@ func (a *analyzer) getError() error {
 	return a.err
 }
 
-// ProjError is used to mark an error as something that should only be returned
+// NotSingleRouteErr is used to mark an error as something that should only be returned
 // if the planner fails to merge everything down to a single route
-type ProjError struct {
+type NotSingleRouteErr struct {
 	Inner error
 }
 
-func (p ProjError) Error() string {
+func (p NotSingleRouteErr) Error() string {
 	return p.Inner.Error()
 }
 

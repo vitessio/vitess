@@ -4748,6 +4748,52 @@
     }
   },
   {
+    "comment": "SOME modifier on unsharded table works well",
+    "query": "select 1 from unsharded where foo = SOME (select 1 from unsharded_a where foo = 1)",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 1 from unsharded where foo = SOME (select 1 from unsharded_a where foo = 1)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select 1 from unsharded where 1 != 1",
+        "Query": "select 1 from unsharded where foo = any (select 1 from unsharded_a where foo = 1)",
+        "Table": "unsharded, unsharded_a"
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "main.unsharded_a"
+      ]
+    }
+  },
+  {
+    "comment": "ALL modifier on unsharded table works well",
+    "query": "select 1 from unsharded where foo = ALL (select 1 from unsharded_a where foo = 1)",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 1 from unsharded where foo = ALL (select 1 from unsharded_a where foo = 1)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select 1 from unsharded where 1 != 1",
+        "Query": "select 1 from unsharded where foo = all (select 1 from unsharded_a where foo = 1)",
+        "Table": "unsharded, unsharded_a"
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "main.unsharded_a"
+      ]
+    }
+  },
+  {
     "comment": "allow last_insert_id with argument",
     "query": "select last_insert_id(id) from user",
     "plan": {
