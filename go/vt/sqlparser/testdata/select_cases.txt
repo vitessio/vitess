@@ -17491,8 +17491,8 @@ END
 INPUT
 select 1 from t1 where 1 < some (select cast(a as datetime) from t1);
 END
-ERROR
-syntax error at position 40 near 'select'
+OUTPUT
+select 1 from t1 where 1 < any (select cast(a as datetime) from t1)
 END
 INPUT
 select hex(a) from t1 where a like 'A_' order by a;

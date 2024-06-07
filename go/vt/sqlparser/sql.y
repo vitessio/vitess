@@ -85,6 +85,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
   order         *Order
   limit         *Limit
   rowAlias      *RowAlias
+  anyAllSome	ComparisonModifier
 
   updateExpr    *UpdateExpr
   setExpr       *SetExpr
@@ -421,6 +422,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement do_statement
 %type <selStmt> select_statement select_stmt_with_into query_expression_parens query_expression query_expression_body query_primary
 %type <with> with_clause_opt with_clause
+%type <anyAllSome> any_some_all
 %type <cte> common_table_expr
 %type <ctes> with_list
 %type <renameTablePairs> rename_list
@@ -5279,10 +5281,24 @@ null_or_unknown:
   {
   }
 
+any_some_all:
+  ANY
+  {
+    $$ = Any
+  }
+| SOME
+  {
+    $$ = Any
+  }
+| ALL
+  {
+    $$ = All
+  }
+
 bool_pri:
 bool_pri IS null_or_unknown %prec IS
   {
-	 $$ = &IsExpr{Left: $1, Right: IsNullOp}
+    $$ = &IsExpr{Left: $1, Right: IsNullOp}
   }
 | bool_pri IS NOT null_or_unknown %prec IS
   {
@@ -5292,17 +5308,9 @@ bool_pri IS null_or_unknown %prec IS
   {
     $$ = &ComparisonExpr{Left: $1, Operator: $2, Right: $3}
   }
-| bool_pri compare ANY subquery
+| bool_pri compare any_some_all subquery
   {
-    $$ = &ComparisonExpr{Left: $1, Operator: $2, Modifier: Any, Right: $4 }
-  }
-| bool_pri compare SOME subquery
-  {
-    $$ = &ComparisonExpr{Left: $1, Operator: $2, Modifier: Any, Right: $4 }
-  }
-| bool_pri compare ALL subquery
-  {
-    $$ = &ComparisonExpr{Left: $1, Operator: $2, Modifier: All, Right: $4 }
+    $$ = &ComparisonExpr{Left: $1, Operator: $2, Modifier: $3, Right: $4 }
   }
 | predicate %prec EXPRESSION_PREC_SETTER
   {
@@ -8174,6 +8182,7 @@ non_reserved_keyword:
 | AFTER
 | ALGORITHM
 | ALWAYS
+| ANY
 | ANY_VALUE %prec FUNCTION_CALL_NON_KEYWORD
 | ARRAY
 | ASCII
@@ -8472,6 +8481,7 @@ non_reserved_keyword:
 | SLOW
 | SMALLINT
 | SNAPSHOT
+| SOME
 | SQL
 | SQL_TSI_DAY
 | SQL_TSI_HOUR
