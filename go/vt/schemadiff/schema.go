@@ -1079,8 +1079,8 @@ func (s *Schema) getViewColumnNames(v *CreateViewEntity, schemaInformation *decl
 		case *sqlparser.StarExpr:
 			if tableName := node.TableName.Name.String(); tableName != "" {
 				for _, col := range schemaInformation.Tables[tableName].Columns {
-					name := sqlparser.Clone(&col.Name)
-					columnNames = append(columnNames, name)
+					name := sqlparser.Clone(col.Name)
+					columnNames = append(columnNames, &name)
 				}
 			} else {
 				dependentNames := getViewDependentTableNames(v.CreateView)
@@ -1088,8 +1088,8 @@ func (s *Schema) getViewColumnNames(v *CreateViewEntity, schemaInformation *decl
 				for _, entityName := range dependentNames {
 					if schemaInformation.Tables[entityName] != nil { // is nil for dual/DUAL
 						for _, col := range schemaInformation.Tables[entityName].Columns {
-							name := sqlparser.Clone(&col.Name)
-							columnNames = append(columnNames, name)
+							name := sqlparser.Clone(col.Name)
+							columnNames = append(columnNames, &name)
 						}
 					}
 				}
