@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -411,7 +412,7 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 		topodatapb.TabletType_RDONLY,
 	}
 	schema := map[string]*tabletmanagerdatapb.SchemaDefinition{
-		"t1": {
+		tableName: {
 			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
 				{
 					Name:   tableName,
@@ -633,7 +634,11 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 	defer cancel()
 
 	workflowName := "wf1"
-	tableName := "t1"
+	table1Name := "t1"
+	table2Name := "a1"
+	tables := []string{table1Name, table2Name}
+	sort.Strings(tables)
+	tablesStr := strings.Join(tables, ",")
 	sourceKeyspaceName := "sourceks"
 	targetKeyspaceName := "targetks"
 	vrID := 1
@@ -643,11 +648,19 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 		topodatapb.TabletType_RDONLY,
 	}
 	schema := map[string]*tabletmanagerdatapb.SchemaDefinition{
-		"t1": {
+		table1Name: {
 			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
 				{
-					Name:   tableName,
-					Schema: fmt.Sprintf("CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))", tableName),
+					Name:   table1Name,
+					Schema: fmt.Sprintf("CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))", table1Name),
+				},
+			},
+		},
+		table2Name: {
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+				{
+					Name:   table2Name,
+					Schema: fmt.Sprintf("CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))", table2Name),
 				},
 			},
 		},
@@ -662,7 +675,7 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 		result: &querypb.QueryResult{},
 	}
 	lockTableQR := &queryResult{
-		query:  fmt.Sprintf("LOCK TABLES `%s` READ", tableName),
+		query:  fmt.Sprintf("LOCK TABLES `%s` READ,`%s` READ", table2Name, table1Name),
 		result: &querypb.QueryResult{},
 	}
 
@@ -691,19 +704,19 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 			},
 			want: []string{
 				fmt.Sprintf("Lock keyspace %s", sourceKeyspaceName),
-				fmt.Sprintf("Switch reads for tables [%s] to keyspace %s for tablet types [REPLICA,RDONLY]", tableName, targetKeyspaceName),
-				fmt.Sprintf("Routing rules for tables [%s] will be updated", tableName),
+				fmt.Sprintf("Switch reads for tables [%s] to keyspace %s for tablet types [REPLICA,RDONLY]", tablesStr, targetKeyspaceName),
+				fmt.Sprintf("Routing rules for tables [%s] will be updated", tablesStr),
 				fmt.Sprintf("Unlock keyspace %s", sourceKeyspaceName),
 				fmt.Sprintf("Lock keyspace %s", sourceKeyspaceName),
 				fmt.Sprintf("Lock keyspace %s", targetKeyspaceName),
 				fmt.Sprintf("Stop writes on keyspace %s for tables [%s]: [keyspace:%s;shard:-80;position:%s,keyspace:%s;shard:80-;position:%s]",
-					sourceKeyspaceName, tableName, sourceKeyspaceName, position, sourceKeyspaceName, position),
+					sourceKeyspaceName, tablesStr, sourceKeyspaceName, position, sourceKeyspaceName, position),
 				"Wait for vreplication on stopped streams to catchup for up to 30s",
 				fmt.Sprintf("Create reverse vreplication workflow %s", ReverseWorkflowName(workflowName)),
 				"Create journal entries on source databases",
-				fmt.Sprintf("Enable writes on keyspace %s for tables [%s]", targetKeyspaceName, tableName),
+				fmt.Sprintf("Enable writes on keyspace %s for tables [%s]", targetKeyspaceName, tablesStr),
 				fmt.Sprintf("Switch routing from keyspace %s to keyspace %s", sourceKeyspaceName, targetKeyspaceName),
-				fmt.Sprintf("Routing rules for tables [%s] will be updated", tableName),
+				fmt.Sprintf("Routing rules for tables [%s] will be updated", tablesStr),
 				fmt.Sprintf("Switch writes completed, freeze and delete vreplication streams on: [tablet:%d,tablet:%d]", startingTargetTabletUID, startingTargetTabletUID+tabletUIDStep),
 				fmt.Sprintf("Mark vreplication streams frozen on: [keyspace:%s;shard:-80;tablet:%d;workflow:%s;dbname:vt_%s,keyspace:%s;shard:80-;tablet:%d;workflow:%s;dbname:vt_%s]",
 					targetKeyspaceName, startingTargetTabletUID, workflowName, targetKeyspaceName, targetKeyspaceName, startingTargetTabletUID+tabletUIDStep, workflowName, targetKeyspaceName),
@@ -730,19 +743,19 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 			},
 			want: []string{
 				fmt.Sprintf("Lock keyspace %s", targetKeyspaceName),
-				fmt.Sprintf("Switch reads for tables [%s] to keyspace %s for tablet types [REPLICA,RDONLY]", tableName, targetKeyspaceName),
-				fmt.Sprintf("Routing rules for tables [%s] will be updated", tableName),
+				fmt.Sprintf("Switch reads for tables [%s] to keyspace %s for tablet types [REPLICA,RDONLY]", tablesStr, targetKeyspaceName),
+				fmt.Sprintf("Routing rules for tables [%s] will be updated", tablesStr),
 				fmt.Sprintf("Unlock keyspace %s", targetKeyspaceName),
 				fmt.Sprintf("Lock keyspace %s", targetKeyspaceName),
 				fmt.Sprintf("Lock keyspace %s", sourceKeyspaceName),
 				fmt.Sprintf("Stop writes on keyspace %s for tables [%s]: [keyspace:%s;shard:-80;position:%s,keyspace:%s;shard:80-;position:%s]",
-					targetKeyspaceName, tableName, targetKeyspaceName, position, targetKeyspaceName, position),
+					targetKeyspaceName, tablesStr, targetKeyspaceName, position, targetKeyspaceName, position),
 				"Wait for vreplication on stopped streams to catchup for up to 30s",
 				fmt.Sprintf("Create reverse vreplication workflow %s", workflowName),
 				"Create journal entries on source databases",
-				fmt.Sprintf("Enable writes on keyspace %s for tables [%s]", sourceKeyspaceName, tableName),
+				fmt.Sprintf("Enable writes on keyspace %s for tables [%s]", sourceKeyspaceName, tablesStr),
 				fmt.Sprintf("Switch routing from keyspace %s to keyspace %s", targetKeyspaceName, sourceKeyspaceName),
-				fmt.Sprintf("Routing rules for tables [%s] will be updated", tableName),
+				fmt.Sprintf("Routing rules for tables [%s] will be updated", tablesStr),
 				fmt.Sprintf("Switch writes completed, freeze and delete vreplication streams on: [tablet:%d,tablet:%d]", startingSourceTabletUID, startingSourceTabletUID+tabletUIDStep),
 				fmt.Sprintf("Mark vreplication streams frozen on: [keyspace:%s;shard:-80;tablet:%d;workflow:%s;dbname:vt_%s,keyspace:%s;shard:80-;tablet:%d;workflow:%s;dbname:vt_%s]",
 					sourceKeyspaceName, startingSourceTabletUID, ReverseWorkflowName(workflowName), sourceKeyspaceName, sourceKeyspaceName, startingSourceTabletUID+tabletUIDStep, ReverseWorkflowName(workflowName), sourceKeyspaceName),
@@ -771,18 +784,20 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 				env.tmc.reverse.Store(true)
 				// Setup the routing rules as they would be after having previously done SwitchTraffic.
 				ks := env.targetKeyspace.KeyspaceName
-				toTarget := []string{ks + "." + tableName}
+				toTarget := []string{ks + "." + table1Name}
 				rules := make(map[string][]string)
 				for _, tabletType := range tabletTypes {
-					tt := strings.ToLower(tabletType.String())
-					if tabletType == topodatapb.TabletType_PRIMARY {
-						rules[tableName] = toTarget
-						rules[ks+"."+tableName] = toTarget
-						rules[env.sourceKeyspace.KeyspaceName+"."+tableName] = toTarget
-					} else {
-						rules[tableName+"@"+tt] = toTarget
-						rules[ks+"."+tableName+"@"+tt] = toTarget
-						rules[env.sourceKeyspace.KeyspaceName+"."+tableName+"@"+tt] = toTarget
+					for _, tableName := range tables {
+						tt := strings.ToLower(tabletType.String())
+						if tabletType == topodatapb.TabletType_PRIMARY {
+							rules[tableName] = toTarget
+							rules[ks+"."+tableName] = toTarget
+							rules[env.sourceKeyspace.KeyspaceName+"."+tableName] = toTarget
+						} else {
+							rules[tableName+"@"+tt] = toTarget
+							rules[ks+"."+tableName+"@"+tt] = toTarget
+							rules[env.sourceKeyspace.KeyspaceName+"."+tableName+"@"+tt] = toTarget
+						}
 					}
 				}
 				err := topotools.SaveRoutingRules(ctx, env.ts, rules)
