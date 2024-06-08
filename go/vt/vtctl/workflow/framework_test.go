@@ -179,6 +179,9 @@ func newTestTMClient(env *testEnv) *testTMClient {
 }
 
 func (tmc *testTMClient) CreateVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.CreateVReplicationWorkflowRequest) (*tabletmanagerdatapb.CreateVReplicationWorkflowResponse, error) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+
 	if expect := tmc.createVReplicationWorkflowRequests[tablet.Alias.Uid]; expect != nil {
 		if !proto.Equal(expect, request) {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected CreateVReplicationWorkflow request: got %+v, want %+v", request, expect)
@@ -189,6 +192,9 @@ func (tmc *testTMClient) CreateVReplicationWorkflow(ctx context.Context, tablet 
 }
 
 func (tmc *testTMClient) ReadVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.ReadVReplicationWorkflowRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowResponse, error) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+
 	if expect := tmc.readVReplicationWorkflowRequests[tablet.Alias.Uid]; expect != nil {
 		if !proto.Equal(expect, request) {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected ReadVReplicationWorkflow request: got %+v, want %+v", request, expect)
@@ -233,8 +239,6 @@ func (tmc *testTMClient) ReadVReplicationWorkflow(ctx context.Context, tablet *t
 }
 
 func (tmc *testTMClient) DeleteVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.DeleteVReplicationWorkflowRequest) (response *tabletmanagerdatapb.DeleteVReplicationWorkflowResponse, err error) {
-	tmc.mu.Lock()
-	defer tmc.mu.Unlock()
 	return &tabletmanagerdatapb.DeleteVReplicationWorkflowResponse{
 		Result: &querypb.QueryResult{
 			RowsAffected: 1,
@@ -243,6 +247,9 @@ func (tmc *testTMClient) DeleteVReplicationWorkflow(ctx context.Context, tablet 
 }
 
 func (tmc *testTMClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+
 	schemaDefn := &tabletmanagerdatapb.SchemaDefinition{}
 	for _, table := range request.Tables {
 		if table == "/.*/" {
@@ -289,22 +296,6 @@ func (tmc *testTMClient) expectCreateVReplicationWorkflowRequest(tabletID uint32
 	defer tmc.mu.Unlock()
 
 	tmc.createVReplicationWorkflowRequests[tabletID] = req
-}
-
-func (tmc *testTMClient) verifyQueries(t *testing.T) {
-	t.Helper()
-	tmc.mu.Lock()
-	defer tmc.mu.Unlock()
-
-	for tabletID, qrs := range tmc.vrQueries {
-		if len(qrs) != 0 {
-			var list []string
-			for _, qr := range qrs {
-				list = append(list, qr.query)
-			}
-			require.Failf(t, "missing query", "tablet %v: found queries that were expected but never got executed by the test: %v", tabletID, list)
-		}
-	}
 }
 
 func (tmc *testTMClient) VReplicationExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error) {
@@ -372,6 +363,9 @@ func (tmc *testTMClient) HasVReplicationWorkflows(ctx context.Context, tablet *t
 }
 
 func (tmc *testTMClient) ReadVReplicationWorkflows(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ReadVReplicationWorkflowsRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse, error) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+
 	workflowType := binlogdatapb.VReplicationWorkflowType_MoveTables
 	if len(req.IncludeWorkflows) > 0 {
 		for _, wf := range req.IncludeWorkflows {
