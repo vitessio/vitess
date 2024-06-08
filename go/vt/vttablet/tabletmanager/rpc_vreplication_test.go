@@ -477,6 +477,7 @@ func TestMoveTables(t *testing.T) {
 		AutoStart:      true,
 	})
 	require.NoError(t, err)
+
 	for _, ftc := range targetShards {
 		ftc.vrdbClient.ExpectRequest(fmt.Sprintf(readWorkflowsLimited, tenv.dbName, wf), sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
@@ -503,7 +504,6 @@ func TestMoveTables(t *testing.T) {
 		InitializeTargetSequences: true,
 		Direction:                 int32(workflow.DirectionForward),
 	})
-
 	require.NoError(t, err)
 
 	for _, ftc := range targetShards {
