@@ -34,7 +34,6 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
@@ -555,25 +554,7 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 			} else {
 				env.tmc.reverse.Store(true)
 				// Setup the routing rules as they would be after having previously done SwitchTraffic.
-				ks := env.targetKeyspace.KeyspaceName
-				toTarget := []string{ks + "." + tableName}
-				rules := make(map[string][]string)
-				for _, tabletType := range tabletTypes {
-					tt := strings.ToLower(tabletType.String())
-					if tabletType == topodatapb.TabletType_PRIMARY {
-						rules[tableName] = toTarget
-						rules[ks+"."+tableName] = toTarget
-						rules[env.sourceKeyspace.KeyspaceName+"."+tableName] = toTarget
-					} else {
-						rules[tableName+"@"+tt] = toTarget
-						rules[ks+"."+tableName+"@"+tt] = toTarget
-						rules[env.sourceKeyspace.KeyspaceName+"."+tableName+"@"+tt] = toTarget
-					}
-				}
-				err := topotools.SaveRoutingRules(ctx, env.ts, rules)
-				require.NoError(t, err)
-				err = env.ts.RebuildSrvVSchema(ctx, nil)
-				require.NoError(t, err)
+				env.addTableRoutingRules(t, ctx, tabletTypes, []string{tableName})
 				env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.sourceKeyspace.KeyspaceName, copyTableQR)
 				for i := 0; i < len(tc.targetKeyspace.ShardNames); i++ { // Per stream
 					env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.sourceKeyspace.KeyspaceName, cutoverQR)
@@ -783,27 +764,7 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 			} else {
 				env.tmc.reverse.Store(true)
 				// Setup the routing rules as they would be after having previously done SwitchTraffic.
-				ks := env.targetKeyspace.KeyspaceName
-				toTarget := []string{ks + "." + table1Name}
-				rules := make(map[string][]string)
-				for _, tabletType := range tabletTypes {
-					for _, tableName := range tables {
-						tt := strings.ToLower(tabletType.String())
-						if tabletType == topodatapb.TabletType_PRIMARY {
-							rules[tableName] = toTarget
-							rules[ks+"."+tableName] = toTarget
-							rules[env.sourceKeyspace.KeyspaceName+"."+tableName] = toTarget
-						} else {
-							rules[tableName+"@"+tt] = toTarget
-							rules[ks+"."+tableName+"@"+tt] = toTarget
-							rules[env.sourceKeyspace.KeyspaceName+"."+tableName+"@"+tt] = toTarget
-						}
-					}
-				}
-				err := topotools.SaveRoutingRules(ctx, env.ts, rules)
-				require.NoError(t, err)
-				err = env.ts.RebuildSrvVSchema(ctx, nil)
-				require.NoError(t, err)
+				env.addTableRoutingRules(t, ctx, tabletTypes, tables)
 				env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.sourceKeyspace.KeyspaceName, copyTableQR)
 				for i := 0; i < len(tc.targetKeyspace.ShardNames); i++ { // Per stream
 					env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, journalQR)
