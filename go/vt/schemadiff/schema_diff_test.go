@@ -1117,6 +1117,40 @@ func TestSchemaDiff(t *testing.T) {
 			instantCapability: InstantDDLCapabilityImpossible,
 		},
 		{
+			name: "add and drop FK, add and drop column, impossible order even with create table first strategy",
+			fromQueries: []string{
+				"create table t1 (id int primary key, p int, key p_idx (p));",
+				"create table t2 (id int primary key, p int, key p_idx (p), foreign key (p) references t1 (p) on delete no action);",
+			},
+			toQueries: []string{
+				"create table t1 (id int primary key, q int, key q_idx (q));",
+				"create table t2 (id int primary key, q int, key q_idx (q), foreign key (q) references t1 (q) on delete no action);",
+			},
+			expectDiffs:       2,
+			expectDeps:        1,
+			sequential:        true,
+			conflictingDiffs:  2,
+			instantCapability: InstantDDLCapabilityImpossible,
+			fkStrategy:        ForeignKeyCheckStrategyCreateTableFirst,
+		},
+		{
+			name: "add and drop FK, add and drop column, impossible order even with ignore strategy",
+			fromQueries: []string{
+				"create table t1 (id int primary key, p int, key p_idx (p));",
+				"create table t2 (id int primary key, p int, key p_idx (p), foreign key (p) references t1 (p) on delete no action);",
+			},
+			toQueries: []string{
+				"create table t1 (id int primary key, q int, key q_idx (q));",
+				"create table t2 (id int primary key, q int, key q_idx (q), foreign key (q) references t1 (q) on delete no action);",
+			},
+			expectDiffs:       2,
+			expectDeps:        1,
+			sequential:        true,
+			conflictingDiffs:  2,
+			instantCapability: InstantDDLCapabilityImpossible,
+			fkStrategy:        ForeignKeyCheckStrategyIgnore,
+		},
+		{
 			name: "add and drop FK, add and drop respective tables, fk strict",
 			fromQueries: []string{
 				"create table t1 (id int primary key, p int, key p_idx (p));",
