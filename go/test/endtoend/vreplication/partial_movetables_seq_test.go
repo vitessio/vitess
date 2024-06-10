@@ -532,7 +532,7 @@ var lastCustomerId int64
 func getCustomerCount(t *testing.T, msg string) int64 {
 	vtgateConn, closeConn := getVTGateConn()
 	defer closeConn()
-	qr := execQueryWithDatabase(t, vtgateConn, "", "select count(*) from customer")
+	qr := execVtgateQuery(t, vtgateConn, "", "select count(*) from customer")
 	require.NotNil(t, qr)
 	count, err := qr.Rows[0][0].ToInt64()
 	require.NoError(t, err)
@@ -542,7 +542,7 @@ func getCustomerCount(t *testing.T, msg string) int64 {
 func confirmLastCustomerIdHasIncreased(t *testing.T) {
 	vtgateConn, closeConn := getVTGateConn()
 	defer closeConn()
-	qr := execQueryWithDatabase(t, vtgateConn, "", "select cid from customer order by cid desc limit 1")
+	qr := execVtgateQuery(t, vtgateConn, "", "select cid from customer order by cid desc limit 1")
 	require.NotNil(t, qr)
 	currentCustomerId, err := qr.Rows[0][0].ToInt64()
 	require.NoError(t, err)
@@ -554,7 +554,7 @@ func insertCustomers(t *testing.T) {
 	vtgateConn, closeConn := getVTGateConn()
 	defer closeConn()
 	for i := int64(1); i < newCustomerCount+1; i++ {
-		execQueryWithDatabase(t, vtgateConn, "customer@primary", fmt.Sprintf("insert into customer(name) values ('name-%d')", currentCustomerCount+i))
+		execVtgateQuery(t, vtgateConn, "customer@primary", fmt.Sprintf("insert into customer(name) values ('name-%d')", currentCustomerCount+i))
 	}
 	customerCount = getCustomerCount(t, "")
 	require.Equal(t, currentCustomerCount+newCustomerCount, customerCount)

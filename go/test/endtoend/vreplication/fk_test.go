@@ -222,7 +222,7 @@ func (ls *fkLoadSimulator) simulateLoad() {
 
 func (ls *fkLoadSimulator) getNumRowsParent(vtgateConn *mysql.Conn) int {
 	t := ls.t
-	qr := execQueryWithDatabase(t, vtgateConn, "fksource", "SELECT COUNT(*) FROM parent")
+	qr := execVtgateQuery(t, vtgateConn, "fksource", "SELECT COUNT(*) FROM parent")
 	require.NotNil(t, qr)
 	numRows, err := strconv.Atoi(qr.Rows[0][0].ToString())
 	require.NoError(t, err)
@@ -296,7 +296,7 @@ func (ls *fkLoadSimulator) exec(query string) *sqltypes.Result {
 	t := ls.t
 	vtgateConn, closeConn := getVTGateConn()
 	defer closeConn()
-	qr := execQueryWithDatabase(t, vtgateConn, "fksource", query)
+	qr := execVtgateQuery(t, vtgateConn, "fksource", query)
 	require.NotNil(t, qr)
 	return qr
 }

@@ -146,7 +146,7 @@ func TestReferenceTableMaterializationAndRouting(t *testing.T) {
 	execRefQuery(t, "update sks.mfg2 set name = concat(name, '-updated') where id = 4")
 
 	waitForRowCount(t, vtgateConn, uks, "mfg", 8)
-	qr := execQueryWithDatabase(t, vtgateConn, "uks", "select count(*) from uks.mfg where name like '%updated%'")
+	qr := execVtgateQuery(t, vtgateConn, "uks", "select count(*) from uks.mfg where name like '%updated%'")
 	require.NotNil(t, qr)
 	require.Equal(t, "4", qr.Rows[0][0].ToString())
 

@@ -72,7 +72,7 @@ func execMultipleQueries(t *testing.T, conn *mysql.Conn, database string, lines 
 		if strings.HasPrefix(query, "--") {
 			continue
 		}
-		execQueryWithDatabase(t, conn, database, string(query))
+		execVtgateQuery(t, conn, database, string(query))
 	}
 }
 
@@ -134,7 +134,7 @@ func getConnection(t *testing.T, hostname string, port int) *mysql.Conn {
 	return conn
 }
 
-func execQueryWithDatabase(t *testing.T, conn *mysql.Conn, database string, query string) *sqltypes.Result {
+func execVtgateQuery(t *testing.T, conn *mysql.Conn, database string, query string) *sqltypes.Result {
 	if strings.TrimSpace(query) == "" {
 		return nil
 	}
@@ -158,7 +158,7 @@ func waitForQueryResult(t *testing.T, conn *mysql.Conn, database string, query s
 	timer := time.NewTimer(defaultTimeout)
 	defer timer.Stop()
 	for {
-		qr := execQueryWithDatabase(t, conn, database, query)
+		qr := execVtgateQuery(t, conn, database, query)
 		require.NotNil(t, qr)
 		if want == fmt.Sprintf("%v", qr.Rows) {
 			return
@@ -232,7 +232,7 @@ func waitForNoWorkflowLag(t *testing.T, vc *VitessCluster, keyspace, worfklow st
 // verifyNoInternalTables can e.g. be used to confirm that no internal tables were
 // copied from a source to a target during a MoveTables or Reshard operation.
 func verifyNoInternalTables(t *testing.T, conn *mysql.Conn, keyspaceShard string) {
-	qr := execQueryWithDatabase(t, conn, keyspaceShard, "show tables")
+	qr := execVtgateQuery(t, conn, keyspaceShard, "show tables")
 	require.NotNil(t, qr)
 	require.NotNil(t, qr.Rows)
 	for _, row := range qr.Rows {
@@ -247,7 +247,7 @@ func waitForRowCount(t *testing.T, conn *mysql.Conn, database string, table stri
 	timer := time.NewTimer(defaultTimeout)
 	defer timer.Stop()
 	for {
-		qr := execQueryWithDatabase(t, conn, database, query)
+		qr := execVtgateQuery(t, conn, database, query)
 		require.NotNil(t, qr)
 		if wantRes == fmt.Sprintf("%v", qr.Rows) {
 			return
@@ -319,7 +319,7 @@ func executeOnTablet(t *testing.T, conn *mysql.Conn, tablet *cluster.VttabletPro
 
 	count0, body0 := getQueryCount(t, queryStatsURL, matchQuery)
 
-	qr := execQueryWithDatabase(t, conn, ksName, query)
+	qr := execVtgateQuery(t, conn, ksName, query)
 	require.NotNil(t, qr)
 
 	count1, body1 := getQueryCount(t, queryStatsURL, matchQuery)
@@ -595,15 +595,10 @@ func expectNumberOfStreams(t *testing.T, vtgateConn *mysql.Conn, name string, wo
 
 // confirmAllStreamsRunning confirms that all of the workflow's streams are
 // in the running state.
-func confirmAllStreamsRunning(t *testing.T, keyspace, shard string) {
+func confirmAllStreamsRunning(t *testing.T, vtgateConn *mysql.Conn, database string) {
 	query := sqlparser.BuildParsedQuery("select count(*) from %s.vreplication where state != '%s'",
 		sidecarDBIdentifier, binlogdatapb.VReplicationWorkflowState_Running.String()).Query
-	tablet := vc.getPrimaryTablet(t, keyspace, shard)
-	// Query the tablet's mysqld directly as the target may have denied table entries.
-	dbc, err := tablet.TabletConn(keyspace, true)
-	require.NoError(t, err)
-	defer dbc.Close()
-	waitForQueryResult(t, dbc, sidecarDBName, query, `[[INT64(0)]]`)
+	waitForQueryResult(t, vtgateConn, database, query, `[[INT64(0)]]`)
 }
 
 func printShardPositions(vc *VitessCluster, ksShards []string) {
@@ -1005,7 +1000,7 @@ func vexplain(t *testing.T, database, query string) *VExplainPlan {
 	vtgateConn := vc.GetVTGateConn(t)
 	defer vtgateConn.Close()
 
-	qr := execQueryWithDatabase(t, vtgateConn, database, fmt.Sprintf("vexplain %s", query))
+	qr := execVtgateQuery(t, vtgateConn, database, fmt.Sprintf("vexplain %s", query))
 	require.NotNil(t, qr)
 	require.Equal(t, 1, len(qr.Rows))
 	json := qr.Rows[0][0].ToString()

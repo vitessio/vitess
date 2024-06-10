@@ -32,9 +32,9 @@ func insertInitialData(t *testing.T) {
 		log.Infof("Inserting initial data")
 		lines, _ := os.ReadFile("unsharded_init_data.sql")
 		execMultipleQueries(t, vtgateConn, "product:0", string(lines))
-		execQueryWithDatabase(t, vtgateConn, "product:0", "insert into customer_seq(id, next_id, cache) values(0, 100, 100);")
-		execQueryWithDatabase(t, vtgateConn, "product:0", "insert into order_seq(id, next_id, cache) values(0, 100, 100);")
-		execQueryWithDatabase(t, vtgateConn, "product:0", "insert into customer_seq2(id, next_id, cache) values(0, 100, 100);")
+		execVtgateQuery(t, vtgateConn, "product:0", "insert into customer_seq(id, next_id, cache) values(0, 100, 100);")
+		execVtgateQuery(t, vtgateConn, "product:0", "insert into order_seq(id, next_id, cache) values(0, 100, 100);")
+		execVtgateQuery(t, vtgateConn, "product:0", "insert into customer_seq2(id, next_id, cache) values(0, 100, 100);")
 		log.Infof("Done inserting initial data")
 
 		waitForRowCount(t, vtgateConn, "product:0", "product", 2)
@@ -52,12 +52,12 @@ func insertJSONValues(t *testing.T) {
 	// insert null value combinations
 	vtgateConn, closeConn := getVTGateConn()
 	defer closeConn()
-	execQueryWithDatabase(t, vtgateConn, "product:0", "insert into json_tbl(id, j3) values(1, \"{}\")")
-	execQueryWithDatabase(t, vtgateConn, "product:0", "insert into json_tbl(id, j1, j3) values(2, \"{}\", \"{}\")")
-	execQueryWithDatabase(t, vtgateConn, "product:0", "insert into json_tbl(id, j2, j3) values(3, \"{}\", \"{}\")")
-	execQueryWithDatabase(t, vtgateConn, "product:0", "insert into json_tbl(id, j1, j2, j3) values(4, NULL, 'null', '\"null\"')")
-	execQueryWithDatabase(t, vtgateConn, "product:0", "insert into json_tbl(id, j3) values(5, JSON_QUOTE('null'))")
-	execQueryWithDatabase(t, vtgateConn, "product:0", "insert into json_tbl(id, j3) values(6, '{}')")
+	execVtgateQuery(t, vtgateConn, "product:0", "insert into json_tbl(id, j3) values(1, \"{}\")")
+	execVtgateQuery(t, vtgateConn, "product:0", "insert into json_tbl(id, j1, j3) values(2, \"{}\", \"{}\")")
+	execVtgateQuery(t, vtgateConn, "product:0", "insert into json_tbl(id, j2, j3) values(3, \"{}\", \"{}\")")
+	execVtgateQuery(t, vtgateConn, "product:0", "insert into json_tbl(id, j1, j2, j3) values(4, NULL, 'null', '\"null\"')")
+	execVtgateQuery(t, vtgateConn, "product:0", "insert into json_tbl(id, j3) values(5, JSON_QUOTE('null'))")
+	execVtgateQuery(t, vtgateConn, "product:0", "insert into json_tbl(id, j3) values(6, '{}')")
 
 	id := 8 // 6 inserted above and one after copy phase is done
 
@@ -68,7 +68,7 @@ func insertJSONValues(t *testing.T) {
 		j1 := rand.IntN(numJsonValues)
 		j2 := rand.IntN(numJsonValues)
 		query := fmt.Sprintf(q, id, jsonValues[j1], jsonValues[j2])
-		execQueryWithDatabase(t, vtgateConn, "product:0", query)
+		execVtgateQuery(t, vtgateConn, "product:0", query)
 	}
 }
 
@@ -97,28 +97,28 @@ func insertMoreCustomers(t *testing.T, numCustomers int) {
 		}
 		cid++
 	}
-	execQueryWithDatabase(t, vtgateConn, "customer", sql)
+	execVtgateQuery(t, vtgateConn, "customer", sql)
 }
 
 func insertMoreProducts(t *testing.T) {
 	vtgateConn, closeConn := getVTGateConn()
 	defer closeConn()
 	sql := "insert into product(pid, description) values(3, 'cpu'),(4, 'camera'),(5, 'mouse');"
-	execQueryWithDatabase(t, vtgateConn, "product", sql)
+	execVtgateQuery(t, vtgateConn, "product", sql)
 }
 
 func insertMoreProductsForSourceThrottler(t *testing.T) {
 	vtgateConn, closeConn := getVTGateConn()
 	defer closeConn()
 	sql := "insert into product(pid, description) values(103, 'new-cpu'),(104, 'new-camera'),(105, 'new-mouse');"
-	execQueryWithDatabase(t, vtgateConn, "product", sql)
+	execVtgateQuery(t, vtgateConn, "product", sql)
 }
 
 func insertMoreProductsForTargetThrottler(t *testing.T) {
 	vtgateConn, closeConn := getVTGateConn()
 	defer closeConn()
 	sql := "insert into product(pid, description) values(203, 'new-cpu'),(204, 'new-camera'),(205, 'new-mouse');"
-	execQueryWithDatabase(t, vtgateConn, "product", sql)
+	execVtgateQuery(t, vtgateConn, "product", sql)
 }
 
 var blobTableQueries = []string{
@@ -137,6 +137,6 @@ func insertIntoBlobTable(t *testing.T) {
 	vtgateConn, closeConn := getVTGateConn()
 	defer closeConn()
 	for _, query := range blobTableQueries {
-		execQueryWithDatabase(t, vtgateConn, "product:0", query)
+		execVtgateQuery(t, vtgateConn, "product:0", query)
 	}
 }

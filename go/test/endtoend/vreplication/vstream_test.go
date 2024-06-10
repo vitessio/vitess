@@ -95,7 +95,7 @@ func testVStreamWithFailover(t *testing.T, failover bool) {
 			}
 			insertMu.Lock()
 			id++
-			execQueryWithDatabase(t, vtgateConn, "product", fmt.Sprintf("insert into customer (cid, name) values (%d, 'customer%d')", id+100, id))
+			execVtgateQuery(t, vtgateConn, "product", fmt.Sprintf("insert into customer (cid, name) values (%d, 'customer%d')", id+100, id))
 			insertMu.Unlock()
 		}
 	}()
@@ -164,7 +164,7 @@ func testVStreamWithFailover(t *testing.T, failover bool) {
 		}
 	}
 
-	qr := execQueryWithDatabase(t, vtgateConn, "product", "select count(*) from customer")
+	qr := execVtgateQuery(t, vtgateConn, "product", "select count(*) from customer")
 	require.NotNil(t, qr)
 	// total number of row events found by the VStream API should match the rows inserted
 	insertedRows, err := qr.Rows[0][0].ToCastInt64()
@@ -507,7 +507,7 @@ func testVStreamCopyMultiKeyspaceReshard(t *testing.T, baseTabletID int) numEven
 	// because the keyspace remains unsharded and the number of rows in the customer_seq table is always 1.
 	// We believe that checking the number of row events for the unsharded keyspace, which should always be greater than 0 before and after resharding,
 	// is sufficient to confirm that the resharding of one keyspace does not affect another keyspace, while keeping the test straightforward.
-	customerResult := execQueryWithDatabase(t, vtgateConn, "sharded", "select count(*) from customer")
+	customerResult := execVtgateQuery(t, vtgateConn, "sharded", "select count(*) from customer")
 	insertedCustomerRows, err := customerResult.Rows[0][0].ToCastInt64()
 	require.NoError(t, err)
 	require.Equal(t, insertedCustomerRows, ne.numDash80Events+ne.num80DashEvents+ne.numDash40Events+ne.num40DashEvents)
@@ -698,7 +698,7 @@ func TestMultiVStreamsKeyspaceReshard(t *testing.T) {
 	require.NotZero(t, newShardRowEvents)
 
 	// The number of row events streamed by the VStream API should match the number of rows inserted.
-	customerResult := execQueryWithDatabase(t, vtgateConn, ks, "select count(*) from customer")
+	customerResult := execVtgateQuery(t, vtgateConn, ks, "select count(*) from customer")
 	customerCount, err := customerResult.Rows[0][0].ToInt64()
 	require.NoError(t, err)
 	require.Equal(t, customerCount, int64(oldShardRowEvents+newShardRowEvents))

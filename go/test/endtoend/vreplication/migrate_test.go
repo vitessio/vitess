@@ -31,11 +31,11 @@ import (
 func insertInitialDataIntoExternalCluster(t *testing.T, conn *mysql.Conn) {
 	t.Run("insertInitialData", func(t *testing.T) {
 		fmt.Printf("Inserting initial data\n")
-		execQueryWithDatabase(t, conn, "rating:0", "insert into review(rid, pid, review) values(1, 1, 'review1');")
-		execQueryWithDatabase(t, conn, "rating:0", "insert into review(rid, pid, review) values(2, 1, 'review2');")
-		execQueryWithDatabase(t, conn, "rating:0", "insert into review(rid, pid, review) values(3, 2, 'review3');")
-		execQueryWithDatabase(t, conn, "rating:0", "insert into rating(gid, pid, rating) values(1, 1, 4);")
-		execQueryWithDatabase(t, conn, "rating:0", "insert into rating(gid, pid, rating) values(2, 2, 5);")
+		execVtgateQuery(t, conn, "rating:0", "insert into review(rid, pid, review) values(1, 1, 'review1');")
+		execVtgateQuery(t, conn, "rating:0", "insert into review(rid, pid, review) values(2, 1, 'review2');")
+		execVtgateQuery(t, conn, "rating:0", "insert into review(rid, pid, review) values(3, 2, 'review3');")
+		execVtgateQuery(t, conn, "rating:0", "insert into rating(gid, pid, rating) values(1, 1, 4);")
+		execVtgateQuery(t, conn, "rating:0", "insert into rating(gid, pid, rating) values(2, 2, 5);")
 	})
 }
 
@@ -109,8 +109,8 @@ func TestVtctlMigrate(t *testing.T) {
 		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", "product:0", 1)
 		waitForRowCount(t, vtgateConn, "product:0", "rating", 2)
 		waitForRowCount(t, vtgateConn, "product:0", "review", 3)
-		execQueryWithDatabase(t, extVtgateConn, "rating", "insert into review(rid, pid, review) values(4, 1, 'review4');")
-		execQueryWithDatabase(t, extVtgateConn, "rating", "insert into rating(gid, pid, rating) values(3, 1, 3);")
+		execVtgateQuery(t, extVtgateConn, "rating", "insert into review(rid, pid, review) values(4, 1, 'review4');")
+		execVtgateQuery(t, extVtgateConn, "rating", "insert into rating(gid, pid, rating) values(3, 1, 3);")
 		waitForRowCount(t, vtgateConn, "product:0", "rating", 3)
 		waitForRowCount(t, vtgateConn, "product:0", "review", 4)
 		vdiffSideBySide(t, ksWorkflow, "extcell1")
@@ -122,7 +122,7 @@ func TestVtctlMigrate(t *testing.T) {
 		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", "product:0", 0)
 	})
 	t.Run("cancel migrate workflow", func(t *testing.T) {
-		execQueryWithDatabase(t, vtgateConn, "product", "drop table review,rating")
+		execVtgateQuery(t, vtgateConn, "product", "drop table review,rating")
 
 		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("Migrate", "--", "--all", "--auto_start=false", "--cells=extcell1",
 			"--source=ext1.rating", "create", ksWorkflow); err != nil {
@@ -234,8 +234,8 @@ func TestVtctldMigrate(t *testing.T) {
 		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", "product:0", 1)
 		waitForRowCount(t, vtgateConn, "product:0", "rating", 2)
 		waitForRowCount(t, vtgateConn, "product:0", "review", 3)
-		execQueryWithDatabase(t, extVtgateConn, "rating", "insert into review(rid, pid, review) values(4, 1, 'review4');")
-		execQueryWithDatabase(t, extVtgateConn, "rating", "insert into rating(gid, pid, rating) values(3, 1, 3);")
+		execVtgateQuery(t, extVtgateConn, "rating", "insert into review(rid, pid, review) values(4, 1, 'review4');")
+		execVtgateQuery(t, extVtgateConn, "rating", "insert into rating(gid, pid, rating) values(3, 1, 3);")
 		waitForRowCount(t, vtgateConn, "product:0", "rating", 3)
 		waitForRowCount(t, vtgateConn, "product:0", "review", 4)
 		vdiffSideBySide(t, ksWorkflow, "extcell1")
@@ -261,7 +261,7 @@ func TestVtctldMigrate(t *testing.T) {
 		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", "product:0", 0)
 	})
 	t.Run("cancel migrate workflow", func(t *testing.T) {
-		execQueryWithDatabase(t, vtgateConn, "product", "drop table review,rating")
+		execVtgateQuery(t, vtgateConn, "product", "drop table review,rating")
 		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Migrate",
 			"--target-keyspace", "product", "--workflow", "e1", "Create", "--source-keyspace", "rating",
 			"--mount-name", "ext1", "--all-tables", "--auto-start=false", "--cells=extcell1")

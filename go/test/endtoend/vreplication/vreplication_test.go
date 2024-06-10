@@ -340,7 +340,7 @@ func testVreplicationWorkflows(t *testing.T, limited bool, binlogRowImage string
 
 	// the Lead and Lead-1 tables tested a specific case with binary sharding keys. Drop it now so that we don't
 	// have to update the rest of the tests
-	execQueryWithDatabase(t, vtgateConn, "customer", "drop table `Lead`,`Lead-1`")
+	execVtgateQuery(t, vtgateConn, "customer", "drop table `Lead`,`Lead-1`")
 	validateRollupReplicates(t)
 	shardOrders(t)
 	shardMerchant(t)
@@ -360,13 +360,14 @@ func testVreplicationWorkflows(t *testing.T, limited bool, binlogRowImage string
 
 	insertMoreCustomers(t, 16)
 	reshardCustomer2to4Split(t, nil, "")
-	confirmAllStreamsRunning(t, "customer", "-40")
+	confirmAllStreamsRunning(t, vtgateConn, "customer:-40")
 	expectNumberOfStreams(t, vtgateConn, "Customer2to4", "sales", "product:0", 4)
 	reshardCustomer3to2SplitMerge(t)
-	confirmAllStreamsRunning(t, "customer", "-60")
+	confirmAllStreamsRunning(t, vtgateConn, "customer:-60")
 	expectNumberOfStreams(t, vtgateConn, "Customer3to2", "sales", "product:0", 3)
 	reshardCustomer3to1Merge(t)
-	confirmAllStreamsRunning(t, "customer", "0")
+	confirmAllStreamsRunning(t, vtgateConn, "customer:0")
+
 	expectNumberOfStreams(t, vtgateConn, "Customer3to1", "sales", "product:0", 1)
 
 	t.Run("Verify CopyState Is Optimized Afterwards", func(t *testing.T) {
@@ -717,10 +718,10 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		defer vtgateConn.Close()
 		// Confirm that the 0 scale decimal field, dec80, is replicated correctly
 		dec80Replicated := false
-		execQueryWithDatabase(t, vtgateConn, sourceKs, "update customer set dec80 = 0")
-		execQueryWithDatabase(t, vtgateConn, sourceKs, "update customer set blb = \"new blob data\" where cid=3")
-		execQueryWithDatabase(t, vtgateConn, sourceKs, "update json_tbl set j1 = null, j2 = 'null', j3 = '\"null\"'")
-		execQueryWithDatabase(t, vtgateConn, sourceKs, "insert into json_tbl(id, j1, j2, j3) values (7, null, 'null', '\"null\"')")
+		execVtgateQuery(t, vtgateConn, sourceKs, "update customer set dec80 = 0")
+		execVtgateQuery(t, vtgateConn, sourceKs, "update customer set blb = \"new blob data\" where cid=3")
+		execVtgateQuery(t, vtgateConn, sourceKs, "update json_tbl set j1 = null, j2 = 'null', j3 = '\"null\"'")
+		execVtgateQuery(t, vtgateConn, sourceKs, "insert into json_tbl(id, j1, j2, j3) values (7, null, 'null', '\"null\"')")
 		waitForNoWorkflowLag(t, vc, targetKs, workflow)
 		for _, tablet := range []*cluster.VttabletProcess{customerTab1, customerTab2} {
 			// Query the tablet's mysqld directly as the target may have denied table entries.
@@ -737,8 +738,8 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		// Insert multiple rows in the loadtest table and immediately delete them to confirm that bulk delete
 		// works the same way with the vplayer optimization enabled and disabled. Currently this optimization
 		// is disabled by default, but enabled in TestCellAliasVreplicationWorkflow.
-		execQueryWithDatabase(t, vtgateConn, sourceKs, "insert into loadtest(id, name) values(10001, 'tempCustomer'), (10002, 'tempCustomer2'), (10003, 'tempCustomer3'), (10004, 'tempCustomer4')")
-		execQueryWithDatabase(t, vtgateConn, sourceKs, "delete from loadtest where id > 10000")
+		execVtgateQuery(t, vtgateConn, sourceKs, "insert into loadtest(id, name) values(10001, 'tempCustomer'), (10002, 'tempCustomer2'), (10003, 'tempCustomer3'), (10004, 'tempCustomer4')")
+		execVtgateQuery(t, vtgateConn, sourceKs, "delete from loadtest where id > 10000")
 
 		// Confirm that all partial query metrics get updated when we are testing the noblob mode.
 		t.Run("validate partial query counts", func(t *testing.T) {
@@ -782,7 +783,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 				if err != nil {
 					require.FailNow(t, output)
 				}
-				execQueryWithDatabase(t, vtgateConn, "product", fmt.Sprintf("update `%s` set name='xyz'", tbl))
+				execVtgateQuery(t, vtgateConn, "product", fmt.Sprintf("update `%s` set name='xyz'", tbl))
 			}
 		}
 		vdiffSideBySide(t, ksWorkflow, "")
@@ -803,7 +804,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		// The original unsharded customer data included an insert with the
 		// vindex column (cid) of 999999, so the backing sequence table should
 		// now have a next_id of 1000000 after SwitchTraffic.
-		res := execQueryWithDatabase(t, vtgateConn, sourceKs, "select next_id from customer_seq where id = 0")
+		res := execVtgateQuery(t, vtgateConn, sourceKs, "select next_id from customer_seq where id = 0")
 		require.Equal(t, "1000000", res.Rows[0][0].ToString())
 
 		if withOpenTx && commit != nil {
@@ -814,7 +815,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 
 		vdiffSideBySide(t, "product.p2c_reverse", "")
 		if withOpenTx {
-			execQueryWithDatabase(t, vtgateConn, "", deleteOpenTxQuery)
+			execVtgateQuery(t, vtgateConn, "", deleteOpenTxQuery)
 		}
 
 		ksShards := []string{"product/0", "customer/-80", "customer/80-"}
@@ -829,7 +830,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		insertQuery2 = "insert into customer(name, cid) values('tempCustomer4', 102)" // ID 102, hence due to reverse_bits in shard -80
 		assertQueryExecutesOnTablet(t, vtgateConn, customerTab1, "customer", insertQuery2, matchInsertQuery2)
 
-		execQueryWithDatabase(t, vtgateConn, "customer", "update customer set meta = convert(x'7b7d' using utf8mb4) where cid = 1")
+		execVtgateQuery(t, vtgateConn, "customer", "update customer set meta = convert(x'7b7d' using utf8mb4) where cid = 1")
 		if testReverse {
 			// Reverse Replicate
 			switchReads(t, workflowType, cellNames, ksWorkflow, true)
@@ -888,13 +889,13 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			insertQuery2 = "insert into customer(name, cid) values('tempCustomer9', 105)" // ID 104, hence due to reverse_bits in shard 80-
 			assertQueryExecutesOnTablet(t, vtgateConn, customerTab2, "customer", insertQuery2, matchInsertQuery2)
 
-			execQueryWithDatabase(t, vtgateConn, "customer", "delete from customer where name like 'tempCustomer%'")
+			execVtgateQuery(t, vtgateConn, "customer", "delete from customer where name like 'tempCustomer%'")
 			waitForRowCountInTablet(t, customerTab1, "customer", "customer", 1)
 			waitForRowCountInTablet(t, customerTab2, "customer", "customer", 2)
 			waitForRowCount(t, vtgateConn, "customer", "customer.customer", 3)
 
 			query = "insert into customer (name, cid) values('george', 5)"
-			execQueryWithDatabase(t, vtgateConn, "customer", query)
+			execVtgateQuery(t, vtgateConn, "customer", query)
 			waitForRowCountInTablet(t, customerTab1, "customer", "customer", 1)
 			waitForRowCountInTablet(t, customerTab2, "customer", "customer", 3)
 			waitForRowCount(t, vtgateConn, "customer", "customer.customer", 4)
@@ -923,7 +924,7 @@ func reshardCustomer2to4Split(t *testing.T, cells []*Cell, sourceCellOrAlias str
 			600, counts, nil, nil, cells, sourceCellOrAlias, 1)
 		waitForRowCount(t, vtgateConn, ksName, "customer", 20)
 		query := "insert into customer (name) values('yoko')"
-		execQueryWithDatabase(t, vtgateConn, ksName, query)
+		execVtgateQuery(t, vtgateConn, ksName, query)
 		waitForRowCount(t, vtgateConn, ksName, "customer", 21)
 	})
 }
@@ -938,7 +939,7 @@ func reshardMerchant2to3SplitMerge(t *testing.T) {
 			1600, counts, dryRunResultsSwitchReadM2m3, dryRunResultsSwitchWritesM2m3, nil, "", 1)
 		waitForRowCount(t, vtgateConn, ksName, "merchant", 2)
 		query := "insert into merchant (mname, category) values('amazon', 'electronics')"
-		execQueryWithDatabase(t, vtgateConn, ksName, query)
+		execVtgateQuery(t, vtgateConn, ksName, query)
 		waitForRowCount(t, vtgateConn, ksName, "merchant", 3)
 
 		var output string
@@ -987,7 +988,7 @@ func reshardMerchant3to1Merge(t *testing.T) {
 			2000, counts, nil, nil, nil, "", 1)
 		waitForRowCount(t, vtgateConn, ksName, "merchant", 3)
 		query := "insert into merchant (mname, category) values('flipkart', 'electronics')"
-		execQueryWithDatabase(t, vtgateConn, ksName, query)
+		execVtgateQuery(t, vtgateConn, ksName, query)
 		waitForRowCount(t, vtgateConn, ksName, "merchant", 4)
 	})
 }

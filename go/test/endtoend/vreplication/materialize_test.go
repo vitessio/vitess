@@ -206,7 +206,7 @@ func testMaterialize(t *testing.T, useVtctldClient bool) {
 	waitForQueryResult(t, vtgateConn, targetKs, "select id, val, ts, day, month, x from mat2", want)
 
 	// insert data to test the replication phase
-	execQueryWithDatabase(t, vtgateConn, sourceKs, "insert into mat(id, val, ts) values (3, 'ghi', '2021-12-11 16:17:36')")
+	execVtgateQuery(t, vtgateConn, sourceKs, "insert into mat(id, val, ts) values (3, 'ghi', '2021-12-11 16:17:36')")
 
 	// validate data after the replication phase
 	waitForQueryResult(t, vtgateConn, targetKs, "select count(*) from mat2", "[[INT64(3)]]")
