@@ -569,7 +569,7 @@ func TestParseFloat64(t *testing.T) {
 		{
 			input:    "-",
 			expected: 0.0,
-			err:      `strconv.ParseFloat: parsing "-": invalid syntax`,
+			err:      strconv.ErrSyntax.Error(),
 		},
 		{
 			input:    " 10",
