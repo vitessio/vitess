@@ -18,8 +18,10 @@ package logic
 
 import (
 	"context"
+	"fmt"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
@@ -30,7 +32,9 @@ import (
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vttime"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 )
@@ -314,4 +318,132 @@ func verifyTabletCount(t *testing.T, countWanted int) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, countWanted, totalTablets)
+}
+
+func TestSetReadOnly(t *testing.T) {
+	tests := []struct {
+		name             string
+		tablet           *topodatapb.Tablet
+		tmc              *testutil.TabletManagerClient
+		remoteOpTimeout  time.Duration
+		errShouldContain string
+	}{
+		{
+			name:   "Success",
+			tablet: tab100,
+			tmc: &testutil.TabletManagerClient{
+				SetReadOnlyResults: map[string]error{
+					"zone-1-0000000100": nil,
+				},
+			},
+		}, {
+			name:   "Failure",
+			tablet: tab100,
+			tmc: &testutil.TabletManagerClient{
+				SetReadOnlyResults: map[string]error{
+					"zone-1-0000000100": fmt.Errorf("testing error"),
+				},
+			},
+			errShouldContain: "testing error",
+		}, {
+			name:            "Timeout",
+			tablet:          tab100,
+			remoteOpTimeout: 100 * time.Millisecond,
+			tmc: &testutil.TabletManagerClient{
+				SetReadOnlyResults: map[string]error{
+					"zone-1-0000000100": nil,
+				},
+				SetReadOnlyDelays: map[string]time.Duration{
+					"zone-1-0000000100": 200 * time.Millisecond,
+				},
+			},
+			errShouldContain: "context deadline exceeded",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			oldTmc := tmc
+			oldRemoteOpTimeout := topo.RemoteOperationTimeout
+			defer func() {
+				tmc = oldTmc
+				topo.RemoteOperationTimeout = oldRemoteOpTimeout
+			}()
+
+			tmc = tt.tmc
+			if tt.remoteOpTimeout != 0 {
+				topo.RemoteOperationTimeout = tt.remoteOpTimeout
+			}
+
+			err := setReadOnly(context.Background(), tt.tablet)
+			if tt.errShouldContain == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorContains(t, err, tt.errShouldContain)
+		})
+	}
+}
+
+func TestTabletUndoDemotePrimary(t *testing.T) {
+	tests := []struct {
+		name             string
+		tablet           *topodatapb.Tablet
+		tmc              *testutil.TabletManagerClient
+		remoteOpTimeout  time.Duration
+		errShouldContain string
+	}{
+		{
+			name:   "Success",
+			tablet: tab100,
+			tmc: &testutil.TabletManagerClient{
+				UndoDemotePrimaryResults: map[string]error{
+					"zone-1-0000000100": nil,
+				},
+			},
+		}, {
+			name:   "Failure",
+			tablet: tab100,
+			tmc: &testutil.TabletManagerClient{
+				UndoDemotePrimaryResults: map[string]error{
+					"zone-1-0000000100": fmt.Errorf("testing error"),
+				},
+			},
+			errShouldContain: "testing error",
+		}, {
+			name:            "Timeout",
+			tablet:          tab100,
+			remoteOpTimeout: 100 * time.Millisecond,
+			tmc: &testutil.TabletManagerClient{
+				UndoDemotePrimaryResults: map[string]error{
+					"zone-1-0000000100": nil,
+				},
+				UndoDemotePrimaryDelays: map[string]time.Duration{
+					"zone-1-0000000100": 200 * time.Millisecond,
+				},
+			},
+			errShouldContain: "context deadline exceeded",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			oldTmc := tmc
+			oldRemoteOpTimeout := topo.RemoteOperationTimeout
+			defer func() {
+				tmc = oldTmc
+				topo.RemoteOperationTimeout = oldRemoteOpTimeout
+			}()
+
+			tmc = tt.tmc
+			if tt.remoteOpTimeout != 0 {
+				topo.RemoteOperationTimeout = tt.remoteOpTimeout
+			}
+
+			err := tabletUndoDemotePrimary(context.Background(), tt.tablet, false)
+			if tt.errShouldContain == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorContains(t, err, tt.errShouldContain)
+		})
+	}
 }

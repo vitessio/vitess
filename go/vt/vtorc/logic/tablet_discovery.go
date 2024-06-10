@@ -303,17 +303,23 @@ func LockShard(ctx context.Context, instanceKey inst.InstanceKey) (context.Conte
 
 // tabletUndoDemotePrimary calls the said RPC for the given tablet.
 func tabletUndoDemotePrimary(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) error {
-	return tmc.UndoDemotePrimary(ctx, tablet, semiSync)
+	tmcCtx, tmcCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer tmcCancel()
+	return tmc.UndoDemotePrimary(tmcCtx, tablet, semiSync)
 }
 
 // setReadOnly calls the said RPC for the given tablet
 func setReadOnly(ctx context.Context, tablet *topodatapb.Tablet) error {
-	return tmc.SetReadOnly(ctx, tablet)
+	tmcCtx, tmcCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer tmcCancel()
+	return tmc.SetReadOnly(tmcCtx, tablet)
 }
 
 // setReplicationSource calls the said RPC with the parameters provided
 func setReplicationSource(ctx context.Context, replica *topodatapb.Tablet, primary *topodatapb.Tablet, semiSync bool) error {
-	return tmc.SetReplicationSource(ctx, replica, primary.Alias, 0, "", true, semiSync)
+	tmcCtx, tmcCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer tmcCancel()
+	return tmc.SetReplicationSource(tmcCtx, replica, primary.Alias, 0, "", true, semiSync)
 }
 
 // shardPrimary finds the primary of the given keyspace-shard by reading the vtorc backend
