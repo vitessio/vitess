@@ -36,8 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/util"
 )
 
-// The metric is registered with a deprecated name. The old metric name can be removed in v21.
-var analysisChangeWriteCounter = stats.NewCounterWithDeprecatedName("AnalysisChangeWrite", "analysis.change.write", "Number of times analysis has changed")
+var analysisChangeWriteCounter = stats.NewCounter("AnalysisChangeWrite", "Number of times analysis has changed")
 
 var recentInstantAnalysis *cache.Cache
 
