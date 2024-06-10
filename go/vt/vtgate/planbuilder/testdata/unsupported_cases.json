@@ -360,8 +360,18 @@
     "plan": "VT12001: unsupported: GROUP BY WITH ROLLUP not supported for sharded queries"
   },
   {
-    "comment": "WITH ROLLUP not supported on sharded queries",
+    "comment": "SOME/ANY/ALL comparison operator not supported for unsharded queries",
     "query": "select 1 from user where foo = SOME (select 1 from user_extra where foo = 1)",
+    "plan": "VT12001: unsupported: ANY/ALL/SOME comparison operator"
+  },
+  {
+    "comment": "SOME/ANY/ALL comparison operator not supported for unsharded queries",
+    "query": "select 1 from user where foo = ANY (select 1 from user_extra where foo = 1)",
+    "plan": "VT12001: unsupported: ANY/ALL/SOME comparison operator"
+  },
+  {
+    "comment": "SOME/ANY/ALL comparison operator not supported for unsharded queries",
+    "query": "select 1 from user where foo = ALL (select 1 from user_extra where foo = 1)",
     "plan": "VT12001: unsupported: ANY/ALL/SOME comparison operator"
   }
 ]
