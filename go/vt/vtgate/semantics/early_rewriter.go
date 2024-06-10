@@ -493,7 +493,7 @@ func (r *earlyRewriter) rewriteAliasesInGroupBy(node sqlparser.Expr, sel *sqlpar
 				return
 			}
 
-			cursor.Replace(sqlparser.CloneExpr(item.expr))
+			cursor.Replace(sqlparser.Clone(item.expr))
 		}
 	}, nil)
 

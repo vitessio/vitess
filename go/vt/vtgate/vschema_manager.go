@@ -213,7 +213,7 @@ func (vm *VSchemaManager) updateViewInfo(ks *vindexes.KeyspaceSchema, ksName str
 	if views != nil {
 		ks.Views = make(map[string]sqlparser.SelectStatement, len(views))
 		for name, def := range views {
-			ks.Views[name] = sqlparser.CloneSelectStatement(def)
+			ks.Views[name] = sqlparser.Clone(def)
 		}
 	}
 }

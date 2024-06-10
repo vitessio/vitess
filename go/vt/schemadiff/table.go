@@ -146,7 +146,7 @@ func (d *AlterTableEntityDiff) Clone() EntityDiff {
 	}
 	ann := *d.annotations
 	clone := &AlterTableEntityDiff{
-		alterTable:           sqlparser.CloneRefOfAlterTable(d.alterTable),
+		alterTable:           sqlparser.Clone(d.alterTable),
 		instantDDLCapability: d.instantDDLCapability,
 		annotations:          &ann,
 	}
@@ -245,7 +245,7 @@ func (d *CreateTableEntityDiff) Clone() EntityDiff {
 		return nil
 	}
 	clone := &CreateTableEntityDiff{
-		createTable: sqlparser.CloneRefOfCreateTable(d.createTable),
+		createTable: sqlparser.Clone(d.createTable),
 	}
 	if d.to != nil {
 		clone.to = d.to.Clone().(*CreateTableEntity)
@@ -336,7 +336,7 @@ func (d *DropTableEntityDiff) Clone() EntityDiff {
 		return nil
 	}
 	clone := &DropTableEntityDiff{
-		dropTable: sqlparser.CloneRefOfDropTable(d.dropTable),
+		dropTable: sqlparser.Clone(d.dropTable),
 	}
 	if d.from != nil {
 		clone.from = d.from.Clone().(*CreateTableEntity)
@@ -428,7 +428,7 @@ func (d *RenameTableEntityDiff) Clone() EntityDiff {
 		return nil
 	}
 	clone := &RenameTableEntityDiff{
-		renameTable: sqlparser.CloneRefOfRenameTable(d.renameTable),
+		renameTable: sqlparser.Clone(d.renameTable),
 	}
 	if d.from != nil {
 		clone.from = d.from.Clone().(*CreateTableEntity)
@@ -526,7 +526,7 @@ func (c *CreateTableEntity) GetCollation() string {
 }
 
 func (c *CreateTableEntity) Clone() Entity {
-	return &CreateTableEntity{CreateTable: sqlparser.CloneRefOfCreateTable(c.CreateTable), Env: c.Env}
+	return &CreateTableEntity{CreateTable: sqlparser.Clone(c.CreateTable), Env: c.Env}
 }
 
 func getTableCharsetCollate(env *Environment, tableOptions *sqlparser.TableOptions) *charsetCollate {
@@ -1601,8 +1601,8 @@ func (c *CreateTableEntity) diffKeys(alterTable *sqlparser.AlterTable,
 // Returns if this is a visibility only change and if true, whether
 // the new visibility is invisible or not.
 func indexOnlyVisibilityChange(t1Key, t2Key *sqlparser.IndexDefinition) (bool, bool) {
-	t1KeyCopy := sqlparser.CloneRefOfIndexDefinition(t1Key)
-	t2KeyCopy := sqlparser.CloneRefOfIndexDefinition(t2Key)
+	t1KeyCopy := sqlparser.Clone(t1Key)
+	t2KeyCopy := sqlparser.Clone(t2Key)
 	t1KeyKeptOptions := make([]*sqlparser.IndexOption, 0, len(t1KeyCopy.Options))
 	t2KeyInvisible := false
 	for _, opt := range t1KeyCopy.Options {

@@ -1592,7 +1592,7 @@ func (e *Executor) planPrepareStmt(ctx context.Context, vcursor *vcursorImpl, qu
 		ctx,
 		vcursor,
 		query,
-		sqlparser.CloneStatement(stmt),
+		sqlparser.Clone(stmt),
 		vcursor.marginComments,
 		map[string]*querypb.BindVariable{},
 		reservedVars, /* normalize */

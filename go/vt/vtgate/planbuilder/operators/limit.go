@@ -36,7 +36,7 @@ type Limit struct {
 func (l *Limit) Clone(inputs []Operator) Operator {
 	return &Limit{
 		Source: inputs[0],
-		AST:    sqlparser.CloneRefOfLimit(l.AST),
+		AST:    sqlparser.Clone(l.AST),
 		Top:    l.Top,
 		Pushed: l.Pushed,
 	}
