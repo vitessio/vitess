@@ -249,6 +249,17 @@ func TestReloadSchema(t *testing.T) {
 					"product|BASE TABLE|1684735966||114688|114688",
 					"users|BASE TABLE|1684735966||114688|114688",
 				))
+
+			db.AddQuery(mysql.BaseShowTables,
+				sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields(
+						"TABLE_NAME | TABLE_TYPE | UNIX_TIMESTAMP(t.create_time) | TABLE_COMMENT",
+						"varchar|varchar|int64|varchar",
+					),
+					"product|BASE TABLE|1684735966|",
+					"users|BASE TABLE|1684735966|",
+				))
+
 			db.AddQueryPattern("SELECT COLUMN_NAME as column_name.*", sqltypes.MakeTestResult(
 				sqltypes.MakeTestFields(
 					"column_name",
@@ -291,6 +302,16 @@ func TestReloadSchema(t *testing.T) {
 					),
 					"product|BASE TABLE|1684735967||114688|114688",
 					"users|BASE TABLE|1684735967||114688|114688",
+				))
+
+			db.AddQuery(mysql.BaseShowTables,
+				sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields(
+						"TABLE_NAME | TABLE_TYPE | UNIX_TIMESTAMP(t.create_time) | TABLE_COMMENT",
+						"varchar|varchar|int64|varchar",
+					),
+					"product|BASE TABLE|1684735967|",
+					"users|BASE TABLE|1684735967|",
 				))
 
 			var wg sync.WaitGroup
@@ -357,6 +378,13 @@ func TestReloadView(t *testing.T) {
 			sqltypes.MakeTestFields(
 				"TABLE_NAME | TABLE_TYPE | UNIX_TIMESTAMP(t.create_time) | TABLE_COMMENT | SUM(i.file_size) | SUM(i.allocated_size)",
 				"varchar|varchar|int64|varchar|int64|int64",
+			),
+		))
+	db.AddQuery(mysql.BaseShowTables,
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"TABLE_NAME | TABLE_TYPE | UNIX_TIMESTAMP(t.create_time) | TABLE_COMMENT",
+				"varchar|varchar|int64|varchar",
 			),
 		))
 	db.AddQueryPattern("SELECT COLUMN_NAME as column_name.*", sqltypes.MakeTestResult(
