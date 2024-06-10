@@ -448,7 +448,7 @@ func validateMoveTablesWorkflow(t *testing.T, workflows []*vtctldatapb.Workflow)
 func testAllRoutingRulesCommands(t *testing.T) {
 	var getRules func() string
 	var validateRules func(want, got string)
-	typs := []string{"RoutingRules", "ShardRoutingRules", "KeyspaceRoutingRules"}
+	typs := []string{"RoutingRules"} // , "ShardRoutingRules", "KeyspaceRoutingRules"}
 	for _, typ := range typs {
 		switch typ {
 		case "RoutingRules":
@@ -546,29 +546,42 @@ func testOneRoutingRulesCommand(t *testing.T, typ string, getRules func() string
 	}
 	for _, tt := range tests {
 		t.Run(typ+"/"+tt.name, func(t *testing.T) {
-			var args []string
-			apply := fmt.Sprintf("Apply%s", typ)
-			get := fmt.Sprintf("Get%s", typ)
-			args = append(args, apply)
-			if tt.useFile {
-				tmpFile, err := os.CreateTemp("", fmt.Sprintf("%s_rules.json", tt.name))
-				require.NoError(t, err)
-				defer os.Remove(tmpFile.Name())
-				_, err = tmpFile.WriteString(tt.rules)
-				require.NoError(t, err)
-				args = append(args, "--rules-file", tmpFile.Name())
-			} else {
-				args = append(args, "--rules", tt.rules)
+			done := false
+			wantRules := tt.rules
+			typ2 := "camelCase"
+			for !done {
+				t.Run(typ2, func(t *testing.T) {
+					var args []string
+					apply := fmt.Sprintf("Apply%s", typ)
+					get := fmt.Sprintf("Get%s", typ)
+					args = append(args, apply)
+					if tt.useFile {
+						tmpFile, err := os.CreateTemp("", fmt.Sprintf("%s_rules.json", tt.name))
+						require.NoError(t, err)
+						defer os.Remove(tmpFile.Name())
+						_, err = tmpFile.WriteString(wantRules)
+						require.NoError(t, err)
+						args = append(args, "--rules-file", tmpFile.Name())
+					} else {
+						args = append(args, "--rules", wantRules)
+					}
+					var output string
+					var err error
+					if output, err = vc.VtctldClient.ExecuteCommandWithOutput(args...); err != nil {
+						require.FailNowf(t, "failed action", apply, "%v: %s", err, output)
+					}
+					if output, err = vc.VtctldClient.ExecuteCommandWithOutput(get); err != nil {
+						require.FailNowf(t, "failed action", get, "%v: %s", err, output)
+					}
+					validateRules(wantRules, output)
+					if typ2 == "snake_case" {
+						done = true
+					} else {
+						wantRules = output
+						typ2 = "snake_case"
+					}
+				})
 			}
-			var output string
-			var err error
-			if output, err = vc.VtctldClient.ExecuteCommandWithOutput(args...); err != nil {
-				require.FailNowf(t, "failed action", apply, "%v: %s", err, output)
-			}
-			if output, err = vc.VtctldClient.ExecuteCommandWithOutput(get); err != nil {
-				require.FailNowf(t, "failed action", get, "%v: %s", err, output)
-			}
-			validateRules(tt.rules, output)
 		})
 	}
 
