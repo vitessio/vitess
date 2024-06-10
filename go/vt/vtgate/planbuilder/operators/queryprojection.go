@@ -32,7 +32,7 @@ import (
 )
 
 type (
-	// SelectExpr provides whether the column is aggregation expression or not.
+	// SelectExpr provides whether the column is aggregation exasdfasdfasdfasdfpression or not.
 	SelectExpr struct {
 		Col  sqlparser.SelectExpr
 		Aggr bool
@@ -46,7 +46,8 @@ type (
 		Distinct     bool
 		WithRollup   bool
 		groupByExprs []GroupBy
-		OrderExprs   []OrderBy
+
+		OrderExprs []OrderBy
 
 		// AddedColumn keeps a counter for expressions added to solve HAVING expressions the user is not selecting
 		AddedColumn int
