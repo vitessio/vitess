@@ -19,9 +19,12 @@ package vreplication
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"slices"
 	"strings"
 	"testing"
+
+	"vitess.io/vitess/go/json2"
 
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/maps"
@@ -61,6 +64,9 @@ func TestVtctldclientCLI(t *testing.T) {
 	workflowName := "wf1"
 	targetTabs := setupMinimalCustomerKeyspace(t)
 
+	t.Run("RoutingRulesCommands", func(t *testing.T) {
+		testRoutingRulesCommands(t)
+	})
 	t.Run("WorkflowList", func(t *testing.T) {
 		testWorkflowList(t, sourceKeyspaceName, targetKeyspaceName)
 	})
@@ -86,6 +92,76 @@ func TestVtctldclientCLI(t *testing.T) {
 		}
 		splitShard(t, targetKeyspaceName, reshardWorkflowName, sourceShard, newShards, tablets)
 	})
+}
+
+func testRoutingRulesCommands(t *testing.T) {
+	rr := &vschemapb.RoutingRules{
+		Rules: []*vschemapb.RoutingRule{
+			{
+				FromTable: "from1",
+				ToTables:  []string{"to1", "to2"},
+			},
+		},
+	}
+	rules, err := json2.MarshalPB(rr)
+	require.NoError(t, err)
+
+	type routingRulesTest struct {
+		name    string
+		typ     string
+		rules   string
+		useFile bool
+	}
+	tests := []routingRulesTest{
+		{
+			name:  "inline",
+			typ:   "RoutingRules",
+			rules: string(rules),
+		},
+		{
+			name:    "file",
+			typ:     "RoutingRules",
+			rules:   string(rules),
+			useFile: true,
+		},
+		{
+			name:  "empty",
+			typ:   "RoutingRules",
+			rules: "{}",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.typ+"/"+tt.name, func(t *testing.T) {
+			var args []string
+			apply := fmt.Sprintf("Apply%s", tt.typ)
+			get := fmt.Sprintf("Get%s", tt.typ)
+			args = append(args, apply)
+			if tt.useFile {
+				tmpFile, err := os.CreateTemp("", fmt.Sprintf("%s_rules.json", tt.name))
+				require.NoError(t, err)
+				defer os.Remove(tmpFile.Name())
+				_, err = tmpFile.WriteString(tt.rules)
+				require.NoError(t, err)
+				args = append(args, "--rules-file", tmpFile.Name())
+			} else {
+				args = append(args, "--rules", tt.rules)
+			}
+			var output string
+			var err error
+			if output, err = vc.VtctldClient.ExecuteCommandWithOutput(args...); err != nil {
+				require.FailNowf(t, "failed action", apply, "%v: %s", err, output)
+			}
+			if output, err = vc.VtctldClient.ExecuteCommandWithOutput(get); err != nil {
+				require.FailNowf(t, "failed action", get, "%v: %s", err, output)
+			}
+			var want = &vschemapb.RoutingRules{}
+			require.NoError(t, json2.Unmarshal([]byte(tt.rules), want))
+			var got = &vschemapb.RoutingRules{}
+			require.NoError(t, json2.Unmarshal([]byte(output), got))
+			require.EqualValues(t, want, got)
+		})
+	}
+
 }
 
 // Tests several create flags and some complete flags and validates that some of them are set correctly for the workflow.
