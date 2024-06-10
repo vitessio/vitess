@@ -65,7 +65,7 @@ func TestVtctldclientCLI(t *testing.T) {
 	targetTabs := setupMinimalCustomerKeyspace(t)
 
 	t.Run("RoutingRulesCommands", func(t *testing.T) {
-		testRoutingRulesCommands(t)
+		testAllRoutingRulesCommands(t)
 	})
 	t.Run("WorkflowList", func(t *testing.T) {
 		testWorkflowList(t, sourceKeyspaceName, targetKeyspaceName)
@@ -92,76 +92,6 @@ func TestVtctldclientCLI(t *testing.T) {
 		}
 		splitShard(t, targetKeyspaceName, reshardWorkflowName, sourceShard, newShards, tablets)
 	})
-}
-
-func testRoutingRulesCommands(t *testing.T) {
-	rr := &vschemapb.RoutingRules{
-		Rules: []*vschemapb.RoutingRule{
-			{
-				FromTable: "from1",
-				ToTables:  []string{"to1", "to2"},
-			},
-		},
-	}
-	rules, err := json2.MarshalPB(rr)
-	require.NoError(t, err)
-
-	type routingRulesTest struct {
-		name    string
-		typ     string
-		rules   string
-		useFile bool
-	}
-	tests := []routingRulesTest{
-		{
-			name:  "inline",
-			typ:   "RoutingRules",
-			rules: string(rules),
-		},
-		{
-			name:    "file",
-			typ:     "RoutingRules",
-			rules:   string(rules),
-			useFile: true,
-		},
-		{
-			name:  "empty",
-			typ:   "RoutingRules",
-			rules: "{}",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.typ+"/"+tt.name, func(t *testing.T) {
-			var args []string
-			apply := fmt.Sprintf("Apply%s", tt.typ)
-			get := fmt.Sprintf("Get%s", tt.typ)
-			args = append(args, apply)
-			if tt.useFile {
-				tmpFile, err := os.CreateTemp("", fmt.Sprintf("%s_rules.json", tt.name))
-				require.NoError(t, err)
-				defer os.Remove(tmpFile.Name())
-				_, err = tmpFile.WriteString(tt.rules)
-				require.NoError(t, err)
-				args = append(args, "--rules-file", tmpFile.Name())
-			} else {
-				args = append(args, "--rules", tt.rules)
-			}
-			var output string
-			var err error
-			if output, err = vc.VtctldClient.ExecuteCommandWithOutput(args...); err != nil {
-				require.FailNowf(t, "failed action", apply, "%v: %s", err, output)
-			}
-			if output, err = vc.VtctldClient.ExecuteCommandWithOutput(get); err != nil {
-				require.FailNowf(t, "failed action", get, "%v: %s", err, output)
-			}
-			var want = &vschemapb.RoutingRules{}
-			require.NoError(t, json2.Unmarshal([]byte(tt.rules), want))
-			var got = &vschemapb.RoutingRules{}
-			require.NoError(t, json2.Unmarshal([]byte(output), got))
-			require.EqualValues(t, want, got)
-		})
-	}
-
 }
 
 // Tests several create flags and some complete flags and validates that some of them are set correctly for the workflow.
@@ -513,4 +443,133 @@ func validateMoveTablesWorkflow(t *testing.T, workflows []*vtctldatapb.Workflow)
 	require.Equalf(t, 1, len(bls.Filter.Rules), "Rules are %+v", bls.Filter.Rules) // only customer, customer2 should be excluded
 	require.Equal(t, binlogdatapb.OnDDLAction_STOP, bls.OnDdl)
 	require.True(t, bls.StopAfterCopy)
+}
+
+func testAllRoutingRulesCommands(t *testing.T) {
+	var getRules func() string
+	var validateRules func(want, got string)
+	typs := []string{"RoutingRules", "ShardRoutingRules", "KeyspaceRoutingRules"}
+	for _, typ := range typs {
+		switch typ {
+		case "RoutingRules":
+			rr := &vschemapb.RoutingRules{
+				Rules: []*vschemapb.RoutingRule{
+					{
+						FromTable: "from1",
+						ToTables:  []string{"to1", "to2"},
+					},
+				},
+			}
+			rules, err := json2.MarshalPB(rr)
+			require.NoError(t, err)
+			getRules = func() string {
+				return string(rules)
+			}
+			validateRules = func(want, got string) {
+				var wantRules = &vschemapb.RoutingRules{}
+				require.NoError(t, json2.Unmarshal([]byte(want), wantRules))
+				var gotRules = &vschemapb.RoutingRules{}
+				require.NoError(t, json2.Unmarshal([]byte(got), gotRules))
+				require.EqualValues(t, wantRules, gotRules)
+			}
+		case "ShardRoutingRules":
+			srr := &vschemapb.ShardRoutingRules{
+				Rules: []*vschemapb.ShardRoutingRule{
+					{
+						FromKeyspace: "from1",
+						ToKeyspace:   "to1",
+						Shard:        "-80",
+					},
+				},
+			}
+			rules, err := json2.MarshalPB(srr)
+			require.NoError(t, err)
+			getRules = func() string {
+				return string(rules)
+			}
+			validateRules = func(want, got string) {
+				var wantRules = &vschemapb.ShardRoutingRules{}
+				require.NoError(t, json2.Unmarshal([]byte(want), wantRules))
+				var gotRules = &vschemapb.ShardRoutingRules{}
+				require.NoError(t, json2.Unmarshal([]byte(got), gotRules))
+				require.EqualValues(t, wantRules, gotRules)
+			}
+		case "KeyspaceRoutingRules":
+			krr := &vschemapb.KeyspaceRoutingRules{
+				Rules: []*vschemapb.KeyspaceRoutingRule{
+					{
+						FromKeyspace: "from1",
+						ToKeyspace:   "to1",
+					},
+				},
+			}
+			rules, err := json2.MarshalPB(krr)
+			require.NoError(t, err)
+			getRules = func() string {
+				return string(rules)
+			}
+			validateRules = func(want, got string) {
+				var wantRules = &vschemapb.KeyspaceRoutingRules{}
+				require.NoError(t, json2.Unmarshal([]byte(want), wantRules))
+				var gotRules = &vschemapb.KeyspaceRoutingRules{}
+				require.NoError(t, json2.Unmarshal([]byte(got), gotRules))
+				require.EqualValues(t, wantRules, gotRules)
+			}
+
+		}
+		testOneRoutingRulesCommand(t, typ, getRules, validateRules)
+	}
+
+}
+
+func testOneRoutingRulesCommand(t *testing.T, typ string, getRules func() string, validateRules func(want, got string)) {
+	type routingRulesTest struct {
+		name    string
+		rules   string
+		useFile bool
+	}
+	rules := getRules()
+	tests := []routingRulesTest{
+		{
+			name:  "inline",
+			rules: string(rules),
+		},
+		{
+			name:    "file",
+			rules:   string(rules),
+			useFile: true,
+		},
+		{
+			name:  "empty",
+			rules: "{}",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(typ+"/"+tt.name, func(t *testing.T) {
+			var args []string
+			apply := fmt.Sprintf("Apply%s", typ)
+			get := fmt.Sprintf("Get%s", typ)
+			args = append(args, apply)
+			if tt.useFile {
+				tmpFile, err := os.CreateTemp("", fmt.Sprintf("%s_rules.json", tt.name))
+				require.NoError(t, err)
+				defer os.Remove(tmpFile.Name())
+				_, err = tmpFile.WriteString(tt.rules)
+				require.NoError(t, err)
+				args = append(args, "--rules-file", tmpFile.Name())
+			} else {
+				args = append(args, "--rules", tt.rules)
+			}
+			var output string
+			var err error
+			if output, err = vc.VtctldClient.ExecuteCommandWithOutput(args...); err != nil {
+				require.FailNowf(t, "failed action", apply, "%v: %s", err, output)
+			}
+			if output, err = vc.VtctldClient.ExecuteCommandWithOutput(get); err != nil {
+				require.FailNowf(t, "failed action", get, "%v: %s", err, output)
+			}
+			validateRules(tt.rules, output)
+		})
+	}
+
 }
