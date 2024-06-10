@@ -966,7 +966,7 @@ func (st *SemTable) Clone(n sqlparser.SQLNode) sqlparser.SQLNode {
 		if !isExpr {
 			return
 		}
-		cursor.Replace(sqlparser.CloneExpr(expr))
+		cursor.Replace(sqlparser.Clone(expr))
 	}, st.CopySemanticInfo)
 }
 

@@ -106,7 +106,7 @@ func (d *AlterViewEntityDiff) Clone() EntityDiff {
 		return nil
 	}
 	clone := &AlterViewEntityDiff{
-		alterView: sqlparser.CloneRefOfAlterView(d.alterView),
+		alterView: sqlparser.Clone(d.alterView),
 	}
 	if d.from != nil {
 		clone.from = d.from.Clone().(*CreateViewEntity)
@@ -200,7 +200,7 @@ func (d *CreateViewEntityDiff) Clone() EntityDiff {
 		return nil
 	}
 	return &CreateViewEntityDiff{
-		createView: sqlparser.CloneRefOfCreateView(d.createView),
+		createView: sqlparser.Clone(d.createView),
 	}
 }
 
@@ -287,7 +287,7 @@ func (d *DropViewEntityDiff) Clone() EntityDiff {
 		return nil
 	}
 	clone := &DropViewEntityDiff{
-		dropView: sqlparser.CloneRefOfDropView(d.dropView),
+		dropView: sqlparser.Clone(d.dropView),
 	}
 	if d.from != nil {
 		clone.from = d.from.Clone().(*CreateViewEntity)
@@ -402,7 +402,7 @@ func (c *CreateViewEntity) Apply(diff EntityDiff) (Entity, error) {
 }
 
 func (c *CreateViewEntity) Clone() Entity {
-	return &CreateViewEntity{CreateView: sqlparser.CloneRefOfCreateView(c.CreateView)}
+	return &CreateViewEntity{CreateView: sqlparser.Clone(c.CreateView)}
 }
 
 func (c *CreateViewEntity) identicalOtherThanName(other *CreateViewEntity) bool {

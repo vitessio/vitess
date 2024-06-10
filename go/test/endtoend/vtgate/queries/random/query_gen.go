@@ -132,7 +132,7 @@ func (t *tableT) addColumns(col ...column) {
 
 func (t *tableT) clone() *tableT {
 	return &tableT{
-		tableExpr: sqlparser.CloneSimpleTableExpr(t.tableExpr),
+		tableExpr: sqlparser.Clone(t.tableExpr),
 		alias:     t.alias,
 		cols:      slices.Clone(t.cols),
 	}
