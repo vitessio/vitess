@@ -234,7 +234,7 @@ func (s *Schema) normalize(hints *DiffHints) error {
 				// already handled; skip
 				continue
 			}
-			// Not handled. Is this view dependent on already handled objects?
+			// Not handled. Does this table reference an already handled table?
 			referencedTableNames := getForeignKeyParentTableNames(t.CreateTable)
 			if len(referencedTableNames) > 0 {
 				s.foreignKeyChildren = append(s.foreignKeyChildren, t)

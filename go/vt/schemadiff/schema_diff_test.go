@@ -195,7 +195,7 @@ func TestPermutations(t *testing.T) {
 				allDiffs := schemaDiff.UnorderedDiffs()
 				originalSingleString := toSingleString(allDiffs)
 				numEquals := 0
-				earlyBreak, err := permutateDiffs(ctx, allDiffs, func(pdiffs []EntityDiff) (earlyBreak bool) {
+				earlyBreak, err := permutateDiffs(ctx, allDiffs, hints, func(pdiffs []EntityDiff, hints *DiffHints) (earlyBreak bool) {
 					defer func() { iteration++ }()
 					// cover all permutations
 					singleString := toSingleString(pdiffs)
@@ -218,7 +218,7 @@ func TestPermutations(t *testing.T) {
 				allPerms := map[string]bool{}
 				allDiffs := schemaDiff.UnorderedDiffs()
 				originalSingleString := toSingleString(allDiffs)
-				earlyBreak, err := permutateDiffs(ctx, allDiffs, func(pdiffs []EntityDiff) (earlyBreak bool) {
+				earlyBreak, err := permutateDiffs(ctx, allDiffs, hints, func(pdiffs []EntityDiff, hints *DiffHints) (earlyBreak bool) {
 					// Single visit
 					allPerms[toSingleString(pdiffs)] = true
 					// First permutation should be the same as original
@@ -244,8 +244,9 @@ func TestPermutationsContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
+	hints := &DiffHints{RangeRotationStrategy: RangeRotationDistinctStatements}
 	allDiffs := []EntityDiff{&DropViewEntityDiff{}}
-	earlyBreak, err := permutateDiffs(ctx, allDiffs, func(pdiffs []EntityDiff) (earlyBreak bool) {
+	earlyBreak, err := permutateDiffs(ctx, allDiffs, hints, func(pdiffs []EntityDiff, hints *DiffHints) (earlyBreak bool) {
 		return false
 	})
 	assert.True(t, earlyBreak) // proves that termination was due to context cancel
@@ -679,6 +680,142 @@ func TestSchemaDiff(t *testing.T) {
 			fkStrategy:        ForeignKeyCheckStrategyIgnore,
 		},
 		{
+			name: "two table cycle with create, strict",
+			fromQueries: append(createQueries,
+				"create table t11 (id int primary key, i0 int);",
+			),
+			toQueries: append(
+				createQueries,
+				"create table t12 (id int primary key, i int, constraint f1201 foreign key (i) references t11 (i) on delete set null);",
+				"create table t11 (id int primary key, i0 int, i int, key (i), constraint f1101 foreign key (i) references t12 (id) on delete restrict);",
+			),
+			expectDiffs:        2,
+			expectDeps:         2,
+			sequential:         true,
+			instantCapability:  InstantDDLCapabilityIrrelevant,
+			fkStrategy:         ForeignKeyCheckStrategyStrict,
+			expectOrderedError: "no valid applicable order for diffs",
+		},
+		{
+			name: "two table cycle with create, strict, changed lexicographic order",
+			fromQueries: append(createQueries,
+				"create table t12 (id int primary key, i0 int);",
+			),
+			toQueries: append(
+				createQueries,
+				"create table t11 (id int primary key, i int, constraint f1201 foreign key (i) references t12 (i) on delete set null);",
+				"create table t12 (id int primary key, i0 int, i int, key (i), constraint f1101 foreign key (i) references t11 (id) on delete restrict);",
+			),
+			expectDiffs:        2,
+			expectDeps:         2,
+			sequential:         true,
+			instantCapability:  InstantDDLCapabilityImpossible,
+			fkStrategy:         ForeignKeyCheckStrategyStrict,
+			expectOrderedError: "no valid applicable order for diffs",
+		},
+		{
+			name: "two table cycle with create, ignore",
+			fromQueries: append(createQueries,
+				"create table t11 (id int primary key, i0 int);",
+			),
+			toQueries: append(
+				createQueries,
+				"create table t12 (id int primary key, i int, constraint f1201 foreign key (i) references t11 (i) on delete set null);",
+				"create table t11 (id int primary key, i0 int, i int, key (i), constraint f1101 foreign key (i) references t12 (id) on delete restrict);",
+			),
+			expectDiffs:       2,
+			expectDeps:        2,
+			entityOrder:       []string{"t11", "t12"},
+			sequential:        true,
+			instantCapability: InstantDDLCapabilityImpossible,
+			fkStrategy:        ForeignKeyCheckStrategyIgnore,
+		},
+		{
+			name: "two table cycle with create, ignore, changed lexicographic order",
+			fromQueries: append(createQueries,
+				"create table t12 (id int primary key, i0 int);",
+			),
+			toQueries: append(
+				createQueries,
+				"create table t11 (id int primary key, i int, constraint f1201 foreign key (i) references t12 (i) on delete set null);",
+				"create table t12 (id int primary key, i0 int, i int, key (i), constraint f1101 foreign key (i) references t11 (id) on delete restrict);",
+			),
+			expectDiffs:       2,
+			expectDeps:        2,
+			entityOrder:       []string{"t12", "t11"},
+			sequential:        true,
+			instantCapability: InstantDDLCapabilityImpossible,
+			fkStrategy:        ForeignKeyCheckStrategyIgnore,
+		},
+		{
+			name: "two table cycle with create, existing column, ignore",
+			fromQueries: append(createQueries,
+				"create table t12 (id int primary key, i int, key (i));",
+			),
+			toQueries: append(
+				createQueries,
+				"create table t11 (id int primary key, i int, constraint f1201 foreign key (i) references t12 (i) on delete set null);",
+				"create table t12 (id int primary key, i int, key (i), constraint f1101 foreign key (i) references t11 (id) on delete restrict);",
+			),
+			expectDiffs:       2,
+			expectDeps:        2,
+			entityOrder:       []string{"t11", "t12"},
+			sequential:        true,
+			instantCapability: InstantDDLCapabilityImpossible,
+			fkStrategy:        ForeignKeyCheckStrategyIgnore,
+		},
+		{
+			name: "two table cycle with create, existing column, changed lexicographic order, ignore",
+			fromQueries: append(createQueries,
+				"create table t11 (id int primary key, i int, key (i));",
+			),
+			toQueries: append(
+				createQueries,
+				"create table t12 (id int primary key, i int, constraint f1201 foreign key (i) references t11 (i) on delete set null);",
+				"create table t11 (id int primary key, i int, key (i), constraint f1101 foreign key (i) references t12 (id) on delete restrict);",
+			),
+			expectDiffs:       2,
+			expectDeps:        2,
+			entityOrder:       []string{"t12", "t11"},
+			sequential:        true,
+			instantCapability: InstantDDLCapabilityImpossible,
+			fkStrategy:        ForeignKeyCheckStrategyIgnore,
+		},
+		{
+			name: "two table cycle with create, create table first",
+			fromQueries: append(createQueries,
+				"create table t12 (id int primary key, i int, key (i));",
+			),
+			toQueries: append(
+				createQueries,
+				"create table t11 (id int primary key, i int, constraint f1201 foreign key (i) references t12 (i) on delete set null);",
+				"create table t12 (id int primary key, i int, key (i), constraint f1101 foreign key (i) references t11 (id) on delete restrict);",
+			),
+			expectDiffs:       2,
+			expectDeps:        2,
+			entityOrder:       []string{"t11", "t12"},
+			sequential:        true,
+			instantCapability: InstantDDLCapabilityImpossible,
+			fkStrategy:        ForeignKeyCheckStrategyCreateTableFirst,
+		},
+		{
+			name: "two table cycle with create, changed lexicographic order, create table first",
+			fromQueries: append(createQueries,
+				"create table t11 (id int primary key, i int, key (i));",
+			),
+			toQueries: append(
+				createQueries,
+				"create table t12 (id int primary key, i int, constraint f1201 foreign key (i) references t11 (i) on delete set null);",
+				"create table t11 (id int primary key, i int, key (i), constraint f1101 foreign key (i) references t12 (id) on delete restrict);",
+			),
+			expectDiffs:       2,
+			expectDeps:        2,
+			entityOrder:       []string{"t12", "t11"},
+			sequential:        true,
+			instantCapability: InstantDDLCapabilityImpossible,
+			fkStrategy:        ForeignKeyCheckStrategyCreateTableFirst,
+		},
+		{
 			name: "add FK",
 			toQueries: []string{
 				"create table t1 (id int primary key, info int not null);",
@@ -980,7 +1117,41 @@ func TestSchemaDiff(t *testing.T) {
 			instantCapability: InstantDDLCapabilityImpossible,
 		},
 		{
-			name: "add and drop FK, add and drop respective tables",
+			name: "add and drop FK, add and drop column, impossible order even with create table first strategy",
+			fromQueries: []string{
+				"create table t1 (id int primary key, p int, key p_idx (p));",
+				"create table t2 (id int primary key, p int, key p_idx (p), foreign key (p) references t1 (p) on delete no action);",
+			},
+			toQueries: []string{
+				"create table t1 (id int primary key, q int, key q_idx (q));",
+				"create table t2 (id int primary key, q int, key q_idx (q), foreign key (q) references t1 (q) on delete no action);",
+			},
+			expectDiffs:       2,
+			expectDeps:        1,
+			sequential:        true,
+			conflictingDiffs:  2,
+			instantCapability: InstantDDLCapabilityImpossible,
+			fkStrategy:        ForeignKeyCheckStrategyCreateTableFirst,
+		},
+		{
+			name: "add and drop FK, add and drop column, impossible order even with ignore strategy",
+			fromQueries: []string{
+				"create table t1 (id int primary key, p int, key p_idx (p));",
+				"create table t2 (id int primary key, p int, key p_idx (p), foreign key (p) references t1 (p) on delete no action);",
+			},
+			toQueries: []string{
+				"create table t1 (id int primary key, q int, key q_idx (q));",
+				"create table t2 (id int primary key, q int, key q_idx (q), foreign key (q) references t1 (q) on delete no action);",
+			},
+			expectDiffs:       2,
+			expectDeps:        1,
+			sequential:        true,
+			conflictingDiffs:  2,
+			instantCapability: InstantDDLCapabilityImpossible,
+			fkStrategy:        ForeignKeyCheckStrategyIgnore,
+		},
+		{
+			name: "add and drop FK, add and drop respective tables, fk strict",
 			fromQueries: []string{
 				"create table t1 (id int primary key, p int, key p_idx (p));",
 				"create table t2 (id int primary key, p int, key p_idx (p), foreign key (p) references t1 (p) on delete no action);",
@@ -994,6 +1165,41 @@ func TestSchemaDiff(t *testing.T) {
 			sequential:        true,
 			entityOrder:       []string{"t3", "t2", "t1"},
 			instantCapability: InstantDDLCapabilityImpossible,
+			fkStrategy:        ForeignKeyCheckStrategyStrict,
+		},
+		{
+			name: "add and drop FK, add and drop respective tables, fk create table first",
+			fromQueries: []string{
+				"create table t1 (id int primary key, p int, key p_idx (p));",
+				"create table t2 (id int primary key, p int, key p_idx (p), foreign key (p) references t1 (p) on delete no action);",
+			},
+			toQueries: []string{
+				"create table t2 (id int primary key, p int, key p_idx (p), foreign key (p) references t3 (p) on delete no action);",
+				"create table t3 (id int primary key, p int, key p_idx (p));",
+			},
+			expectDiffs:       3,
+			expectDeps:        2, // [alter t2]/[drop t1], [alter t2]/[create t3]
+			sequential:        true,
+			entityOrder:       []string{"t3", "t2", "t1"},
+			instantCapability: InstantDDLCapabilityImpossible,
+			fkStrategy:        ForeignKeyCheckStrategyCreateTableFirst,
+		},
+		{
+			name: "add and drop FK, add and drop respective tables, fk ignore",
+			fromQueries: []string{
+				"create table t1 (id int primary key, p int, key p_idx (p));",
+				"create table t2 (id int primary key, p int, key p_idx (p), foreign key (p) references t1 (p) on delete no action);",
+			},
+			toQueries: []string{
+				"create table t2 (id int primary key, p int, key p_idx (p), foreign key (p) references t3 (p) on delete no action);",
+				"create table t3 (id int primary key, p int, key p_idx (p));",
+			},
+			expectDiffs:       3,
+			expectDeps:        2, // [alter t2]/[drop t1], [alter t2]/[create t3]
+			sequential:        true,
+			entityOrder:       []string{"t3", "t2", "t1"},
+			instantCapability: InstantDDLCapabilityImpossible,
+			fkStrategy:        ForeignKeyCheckStrategyIgnore,
 		},
 		{
 			name: "two identical foreign keys in table, drop one",
@@ -1111,7 +1317,7 @@ func TestSchemaDiff(t *testing.T) {
 				require.NoError(t, err)
 			}
 			instantCapability := schemaDiff.InstantDDLCapability()
-			assert.Equal(t, tc.instantCapability, instantCapability)
+			assert.Equal(t, tc.instantCapability, instantCapability, "for instant capability")
 		})
 
 	}
