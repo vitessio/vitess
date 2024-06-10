@@ -34,7 +34,7 @@ func planQuery(ctx *plancontext.PlanningContext, root Operator) Operator {
 	var selExpr sqlparser.SelectExprs
 	if horizon, isHorizon := root.(*Horizon); isHorizon {
 		sel := sqlparser.GetFirstSelect(horizon.Query)
-		selExpr = sqlparser.CloneSelectExprs(sel.SelectExprs)
+		selExpr = sqlparser.Clone(sel.SelectExprs)
 	}
 
 	output := runPhases(ctx, root)
@@ -252,7 +252,7 @@ func tryPushLimit(ctx *plancontext.PlanningContext, in *Limit) (Operator, *Apply
 }
 
 func createPushedLimit(ctx *plancontext.PlanningContext, src Operator, orig *Limit) Operator {
-	pushedLimit := sqlparser.CloneRefOfLimit(orig.AST)
+	pushedLimit := sqlparser.Clone(orig.AST)
 	if pushedLimit.Offset != nil {
 		// we can't push down an offset, so we need to convert it to a rowcount
 		// by adding it to the already existing rowcount, and then let the LIMIT running on the vtgate do the rest

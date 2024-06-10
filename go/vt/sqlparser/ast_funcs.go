@@ -2776,3 +2776,8 @@ func (lock Lock) GetHighestOrderLock(newLock Lock) Lock {
 	}
 	return lock
 }
+
+// Clone returns a deep copy of the SQLNode, typed as the original type
+func Clone[K SQLNode](x K) K {
+	return CloneSQLNode(x).(K)
+}
