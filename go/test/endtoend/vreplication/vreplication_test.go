@@ -724,7 +724,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		execVtgateQuery(t, vtgateConn, sourceKs, "insert into json_tbl(id, j1, j2, j3) values (7, null, 'null', '\"null\"')")
 		waitForNoWorkflowLag(t, vc, targetKs, workflow)
 		for _, tablet := range []*cluster.VttabletProcess{customerTab1, customerTab2} {
-			// Query the tablet's mysqld directly as the target may have denied table entries.
+			// Query the tablet's mysqld directly as the targets will have denied table entries.
 			dbc, err := tablet.TabletConn(targetKs, true)
 			require.NoError(t, err)
 			defer dbc.Close()
