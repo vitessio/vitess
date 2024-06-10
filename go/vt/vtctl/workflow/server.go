@@ -3768,7 +3768,7 @@ func (s *Server) prepareCreateLookup(ctx context.Context, workflow, keyspace str
 		targetVSchema.Tables = make(map[string]*vschemapb.Table)
 	}
 	if existing, ok := sourceVSchema.Vindexes[vindexName]; ok {
-		if !proto.Equal(existing, vindex) {
+		if !proto.Equal(existing, vindex) { // If the exact same vindex already exists then we can re-use it
 			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "a conflicting vindex named %s already exists in the %s keyspace", vindexName, keyspace)
 		}
 	}
@@ -3781,13 +3781,19 @@ func (s *Server) prepareCreateLookup(ctx context.Context, workflow, keyspace str
 		if colVindex.Name != vindexName {
 			continue
 		}
-		colName := colVindex.Column
-		if len(colVindex.Columns) != 0 {
-			colName = colVindex.Columns[0]
+		var colNames []string
+		if len(colVindex.Columns) == 0 {
+			colNames = []string{colVindex.Column}
+		} else {
+			colNames = colVindex.Columns
 		}
-		if colName == sourceVindexColumns[0] {
-			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "a conflicting ColumnVindex on column %s in table %s already exists in the %s keyspace",
-				colName, sourceTableName, keyspace)
+		// If this is the exact same definition then we can use the existing one. If they
+		// are not the same then they are two distinct conflicting vindexes and we should
+		// not proceed.
+		if !slices.Equal(colNames, sourceVindexColumns) {
+			log.Errorf("DEBUG: existing Vindex: %v, new Vindex: %v", colVindex, vindex)
+			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "a conflicting ColumnVindex on column(s) %s in table %s already exists in the %s keyspace",
+				strings.Join(colNames, ","), sourceTableName, keyspace)
 		}
 	}
 
