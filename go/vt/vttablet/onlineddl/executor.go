@@ -1402,7 +1402,7 @@ func (e *Executor) duplicateCreateTable(ctx context.Context, onlineDDL *schema.O
 	if !ok {
 		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected CreateTable statement, got: %v", sqlparser.CanonicalString(stmt))
 	}
-	newCreateTable = sqlparser.CloneRefOfCreateTable(originalCreateTable)
+	newCreateTable = sqlparser.Clone(originalCreateTable)
 	newCreateTable.SetTable(newCreateTable.GetTable().Qualifier.CompliantName(), newTableName)
 	// manipulate CreateTable statement: take care of constraints names which have to be
 	// unique across the schema
@@ -3033,7 +3033,7 @@ func (e *Executor) executeCreateDDLActionMigration(ctx context.Context, onlineDD
 		}
 	}
 	if originalCreateTable, ok := ddlStmt.(*sqlparser.CreateTable); ok {
-		newCreateTable := sqlparser.CloneRefOfCreateTable(originalCreateTable)
+		newCreateTable := sqlparser.Clone(originalCreateTable)
 		// Rewrite this CREATE TABLE statement such that CONSTRAINT names are edited,
 		// specifically removing any <tablename> prefix.
 		if _, err := e.validateAndEditCreateTableStatement(onlineDDL, newCreateTable); err != nil {
@@ -3117,7 +3117,7 @@ func (e *Executor) executeAlterViewOnline(ctx context.Context, onlineDDL *schema
 			Select:      viewStmt.Select,
 			CheckOption: viewStmt.CheckOption,
 			IsReplace:   true,
-			Comments:    sqlparser.CloneRefOfParsedComments(viewStmt.Comments),
+			Comments:    sqlparser.Clone(viewStmt.Comments),
 		}
 		stmt.SetTable("", artifactViewName)
 	default:

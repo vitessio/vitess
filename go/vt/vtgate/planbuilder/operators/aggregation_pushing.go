@@ -628,7 +628,7 @@ func splitAvgAggregations(ctx *plancontext.PlanningContext, aggr *Aggregator) (O
 
 		outputColumn := aeWrap(col.Expr)
 		outputColumn.As = sqlparser.NewIdentifierCI(col.ColumnName())
-		proj.addUnexploredExpr(sqlparser.CloneRefOfAliasedExpr(col), calcExpr)
+		proj.addUnexploredExpr(sqlparser.Clone(col), calcExpr)
 		col.Expr = sumExpr
 		found := false
 		for aggrOffset, aggregation := range aggr.Aggregations {

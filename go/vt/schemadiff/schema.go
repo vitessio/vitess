@@ -1014,7 +1014,7 @@ func (s *Schema) ValidateViewReferences() error {
 	schemaInformation.addTable("dual")
 
 	for _, view := range s.Views() {
-		sel := sqlparser.CloneSelectStatement(view.CreateView.Select) // Analyze(), below, rewrites the select; we don't want to actually modify the schema
+		sel := sqlparser.Clone(view.CreateView.Select) // Analyze(), below, rewrites the select; we don't want to actually modify the schema
 		_, err := semantics.AnalyzeStrict(sel, semanticKS.Name, schemaInformation)
 		formalizeErr := func(err error) error {
 			if err == nil {
@@ -1079,8 +1079,8 @@ func (s *Schema) getViewColumnNames(v *CreateViewEntity, schemaInformation *decl
 		case *sqlparser.StarExpr:
 			if tableName := node.TableName.Name.String(); tableName != "" {
 				for _, col := range schemaInformation.Tables[tableName].Columns {
-					name := sqlparser.CloneRefOfIdentifierCI(&col.Name)
-					columnNames = append(columnNames, name)
+					name := sqlparser.Clone(col.Name)
+					columnNames = append(columnNames, &name)
 				}
 			} else {
 				dependentNames := getViewDependentTableNames(v.CreateView)
@@ -1088,8 +1088,8 @@ func (s *Schema) getViewColumnNames(v *CreateViewEntity, schemaInformation *decl
 				for _, entityName := range dependentNames {
 					if schemaInformation.Tables[entityName] != nil { // is nil for dual/DUAL
 						for _, col := range schemaInformation.Tables[entityName].Columns {
-							name := sqlparser.CloneRefOfIdentifierCI(&col.Name)
-							columnNames = append(columnNames, name)
+							name := sqlparser.Clone(col.Name)
+							columnNames = append(columnNames, &name)
 						}
 					}
 				}

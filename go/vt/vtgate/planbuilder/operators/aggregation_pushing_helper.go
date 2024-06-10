@@ -266,7 +266,7 @@ func (p *joinPusher) countStar(ctx *plancontext.PlanningContext) (*sqlparser.Ali
 // It returns the expression of the aggregation as it should be used in the parent Aggregator.
 func (p *joinPusher) addAggr(ctx *plancontext.PlanningContext, aggr Aggr) sqlparser.Expr {
 	copyAggr := aggr
-	expr := sqlparser.CloneExpr(aggr.Original.Expr)
+	expr := sqlparser.Clone(aggr.Original.Expr)
 	copyAggr.Original = aeWrap(expr)
 	// copy dependencies so we can keep track of which side expressions need to be pushed to
 	ctx.SemTable.Direct[expr] = p.tableID
@@ -291,7 +291,7 @@ func (p *joinPusher) pushThroughAggr(aggr Aggr) {
 // It returns the expression of the GroupBy as it should be used in the parent Aggregator.
 func (p *joinPusher) addGrouping(ctx *plancontext.PlanningContext, gb GroupBy) sqlparser.Expr {
 	copyGB := gb
-	expr := sqlparser.CloneExpr(gb.Inner)
+	expr := sqlparser.Clone(gb.Inner)
 	// copy dependencies so we can keep track of which side expressions need to be pushed to
 	ctx.SemTable.CopyDependencies(gb.Inner, expr)
 	// if the column exists in the selection then copy it down to the pushed aggregator operator.

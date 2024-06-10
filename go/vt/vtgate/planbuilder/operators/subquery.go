@@ -124,7 +124,7 @@ func (sq *SubQuery) Clone(inputs []Operator) Operator {
 	}
 	klone.JoinColumns = slices.Clone(sq.JoinColumns)
 	klone.Vars = maps.Clone(sq.Vars)
-	klone.Predicates = sqlparser.CloneExprs(sq.Predicates)
+	klone.Predicates = sqlparser.Clone(sq.Predicates)
 	return &klone
 }
 
