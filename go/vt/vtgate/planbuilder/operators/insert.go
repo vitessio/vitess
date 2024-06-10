@@ -135,7 +135,7 @@ func createOperatorFromInsert(ctx *plancontext.PlanningContext, ins *sqlparser.I
 
 	delStmt := &sqlparser.Delete{
 		Comments:   ins.Comments,
-		TableExprs: sqlparser.TableExprs{sqlparser.CloneRefOfAliasedTableExpr(ins.Table)},
+		TableExprs: sqlparser.TableExprs{sqlparser.Clone(ins.Table)},
 		Where:      sqlparser.NewWhere(sqlparser.WhereClause, whereExpr),
 	}
 	delOp := createOpFromStmt(ctx, delStmt, false, "")

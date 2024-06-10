@@ -125,6 +125,15 @@ func TestNewSchemaFromQueriesUnresolved(t *testing.T) {
 	assert.Equal(t, "CREATE VIEW `v7` AS SELECT * FROM `v8`, `t2`", v.Create().CanonicalStatementString())
 }
 
+func TestNewSchemaFromQueriesWithSQLKeyword(t *testing.T) {
+	queries := []string{
+		"create table `order` (id int primary key, info int not null)",
+		"create view v2 as SELECT *, ROW_NUMBER() OVER(PARTITION BY info) AS row_num1, ROW_NUMBER() OVER(PARTITION BY info ORDER BY id) AS row_num2 FROM `order`;",
+	}
+	_, err := NewSchemaFromQueries(NewTestEnv(), queries)
+	assert.NoError(t, err)
+}
+
 func TestNewSchemaFromQueriesUnresolvedAlias(t *testing.T) {
 	// v8 does not exist
 	queries := append(schemaTestCreateQueries,

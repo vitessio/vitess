@@ -29,14 +29,14 @@ type CheckF = func(sqlparser.Expr) bool
 
 func SimplifyExpr(in sqlparser.Expr, test CheckF) sqlparser.Expr {
 	// since we can't rewrite the top level, wrap the expr in an Exprs object
-	smallestKnown := sqlparser.Exprs{sqlparser.CloneExpr(in)}
+	smallestKnown := sqlparser.Exprs{sqlparser.Clone(in)}
 
 	alwaysVisit := func(node, parent sqlparser.SQLNode) bool {
 		return true
 	}
 
 	up := func(cursor *sqlparser.Cursor) bool {
-		node := sqlparser.CloneSQLNode(cursor.Node())
+		node := sqlparser.Clone(cursor.Node())
 		s := &shrinker{orig: node}
 		expr := s.Next()
 		for expr != nil {
@@ -57,7 +57,7 @@ func SimplifyExpr(in sqlparser.Expr, test CheckF) sqlparser.Expr {
 
 	// loop until rewriting introduces no more changes
 	for {
-		prevSmallest := sqlparser.CloneExprs(smallestKnown)
+		prevSmallest := sqlparser.Clone(smallestKnown)
 		sqlparser.SafeRewrite(smallestKnown, alwaysVisit, up)
 		if sqlparser.Equals.Exprs(prevSmallest, smallestKnown) {
 			break
@@ -185,7 +185,7 @@ func (s *shrinker) fillQueue() bool {
 			s.queue = append(s.queue, ae)
 		}
 
-		clone := sqlparser.CloneAggrFunc(e)
+		clone := sqlparser.Clone(e)
 		if da, ok := clone.(sqlparser.DistinctableAggr); ok {
 			if da.IsDistinct() {
 				da.SetDistinct(false)

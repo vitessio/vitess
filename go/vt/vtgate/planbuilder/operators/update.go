@@ -338,7 +338,7 @@ func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.U
 	// updClone is used in foreign key planning to create the selection statements to be used for verification and selection.
 	// If we encounter subqueries, we want to fix the updClone to use the replaced expression, so that the pulled out subquery's
 	// result is used everywhere instead of running the subquery multiple times, which is wasteful.
-	updClone := sqlparser.CloneRefOfUpdate(updStmt)
+	updClone := sqlparser.Clone(updStmt)
 	var tblInfo semantics.TableInfo
 	var err error
 	for idx, updExpr := range updStmt.Exprs {
@@ -346,7 +346,7 @@ func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.U
 		if len(subqs) == 0 {
 			expr = updExpr.Expr
 		} else {
-			updClone.Exprs[idx].Expr = sqlparser.CloneExpr(expr)
+			updClone.Exprs[idx].Expr = sqlparser.Clone(expr)
 			ctx.SemTable.UpdateChildFKExpr(updExpr, expr)
 		}
 		proj := newProjExpr(aeWrap(expr))

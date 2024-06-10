@@ -111,7 +111,7 @@ type (
 
 func newProjExpr(ae *sqlparser.AliasedExpr) *ProjExpr {
 	return &ProjExpr{
-		Original: sqlparser.CloneRefOfAliasedExpr(ae),
+		Original: sqlparser.Clone(ae),
 		EvalExpr: ae.Expr,
 		ColExpr:  ae.Expr,
 	}

@@ -19553,6 +19553,200 @@ export namespace tabletmanagerdata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of a GetGlobalStatusVarsRequest. */
+    interface IGetGlobalStatusVarsRequest {
+
+        /** GetGlobalStatusVarsRequest variables */
+        variables?: (string[]|null);
+    }
+
+    /** Represents a GetGlobalStatusVarsRequest. */
+    class GetGlobalStatusVarsRequest implements IGetGlobalStatusVarsRequest {
+
+        /**
+         * Constructs a new GetGlobalStatusVarsRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IGetGlobalStatusVarsRequest);
+
+        /** GetGlobalStatusVarsRequest variables. */
+        public variables: string[];
+
+        /**
+         * Creates a new GetGlobalStatusVarsRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetGlobalStatusVarsRequest instance
+         */
+        public static create(properties?: tabletmanagerdata.IGetGlobalStatusVarsRequest): tabletmanagerdata.GetGlobalStatusVarsRequest;
+
+        /**
+         * Encodes the specified GetGlobalStatusVarsRequest message. Does not implicitly {@link tabletmanagerdata.GetGlobalStatusVarsRequest.verify|verify} messages.
+         * @param message GetGlobalStatusVarsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IGetGlobalStatusVarsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetGlobalStatusVarsRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.GetGlobalStatusVarsRequest.verify|verify} messages.
+         * @param message GetGlobalStatusVarsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IGetGlobalStatusVarsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetGlobalStatusVarsRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetGlobalStatusVarsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.GetGlobalStatusVarsRequest;
+
+        /**
+         * Decodes a GetGlobalStatusVarsRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetGlobalStatusVarsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.GetGlobalStatusVarsRequest;
+
+        /**
+         * Verifies a GetGlobalStatusVarsRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetGlobalStatusVarsRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetGlobalStatusVarsRequest
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.GetGlobalStatusVarsRequest;
+
+        /**
+         * Creates a plain object from a GetGlobalStatusVarsRequest message. Also converts values to other types if specified.
+         * @param message GetGlobalStatusVarsRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.GetGlobalStatusVarsRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetGlobalStatusVarsRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetGlobalStatusVarsRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a GetGlobalStatusVarsResponse. */
+    interface IGetGlobalStatusVarsResponse {
+
+        /** GetGlobalStatusVarsResponse status_values */
+        status_values?: ({ [k: string]: string }|null);
+    }
+
+    /** Represents a GetGlobalStatusVarsResponse. */
+    class GetGlobalStatusVarsResponse implements IGetGlobalStatusVarsResponse {
+
+        /**
+         * Constructs a new GetGlobalStatusVarsResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IGetGlobalStatusVarsResponse);
+
+        /** GetGlobalStatusVarsResponse status_values. */
+        public status_values: { [k: string]: string };
+
+        /**
+         * Creates a new GetGlobalStatusVarsResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetGlobalStatusVarsResponse instance
+         */
+        public static create(properties?: tabletmanagerdata.IGetGlobalStatusVarsResponse): tabletmanagerdata.GetGlobalStatusVarsResponse;
+
+        /**
+         * Encodes the specified GetGlobalStatusVarsResponse message. Does not implicitly {@link tabletmanagerdata.GetGlobalStatusVarsResponse.verify|verify} messages.
+         * @param message GetGlobalStatusVarsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IGetGlobalStatusVarsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetGlobalStatusVarsResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.GetGlobalStatusVarsResponse.verify|verify} messages.
+         * @param message GetGlobalStatusVarsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IGetGlobalStatusVarsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetGlobalStatusVarsResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetGlobalStatusVarsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.GetGlobalStatusVarsResponse;
+
+        /**
+         * Decodes a GetGlobalStatusVarsResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetGlobalStatusVarsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.GetGlobalStatusVarsResponse;
+
+        /**
+         * Verifies a GetGlobalStatusVarsResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetGlobalStatusVarsResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetGlobalStatusVarsResponse
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.GetGlobalStatusVarsResponse;
+
+        /**
+         * Creates a plain object from a GetGlobalStatusVarsResponse message. Also converts values to other types if specified.
+         * @param message GetGlobalStatusVarsResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.GetGlobalStatusVarsResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetGlobalStatusVarsResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetGlobalStatusVarsResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Properties of a SetReadOnlyRequest. */
     interface ISetReadOnlyRequest {
     }
