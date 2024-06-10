@@ -428,7 +428,9 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options, collatio
 		tEnv.addResult(query, result)
 	}
 
-	showTableRows := make([][]sqltypes.Value, 0, 4)
+	showTableRows := make([][]sqltypes.Value, 0, len(ddls))
+	showTableWithSizesRows := make([][]sqltypes.Value, 0, len(ddls))
+
 	for _, ddl := range ddls {
 		table := ddl.GetTable().Name.String()
 		options := ""
@@ -441,14 +443,21 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options, collatio
 			}
 		}
 		showTableRows = append(showTableRows, mysql.BaseShowTablesRow(table, false, options))
+		showTableWithSizesRows = append(showTableWithSizesRows, mysql.BaseShowTablesWithSizesRow(table, true, options))
 	}
-	tEnv.addResult(mysql.TablesWithSize57, &sqltypes.Result{
+
+	tEnv.addResult(mysql.BaseShowTables, &sqltypes.Result{
 		Fields: mysql.BaseShowTablesFields,
 		Rows:   showTableRows,
 	})
+
+	tEnv.addResult(mysql.TablesWithSize57, &sqltypes.Result{
+		Fields: mysql.BaseShowTablesWithSizesFields,
+		Rows:   showTableWithSizesRows,
+	})
 	tEnv.addResult(mysql.TablesWithSize80, &sqltypes.Result{
-		Fields: mysql.BaseShowTablesFields,
-		Rows:   showTableRows,
+		Fields: mysql.BaseShowTablesWithSizesFields,
+		Rows:   showTableWithSizesRows,
 	})
 
 	indexRows := make([][]sqltypes.Value, 0, 4)
