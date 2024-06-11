@@ -822,21 +822,18 @@ func TestCreateLookupVindexCreateDDL(t *testing.T) {
 			},
 		},
 	}
-	setStartingVschema := func() {
-		err := env.topoServ.SaveVSchema(ctx, ms.SourceKeyspace, vs)
-		require.NoError(t, err)
+	if err := env.topoServ.SaveVSchema(ctx, ms.SourceKeyspace, vs); err != nil {
+		t.Fatal(err)
 	}
-	setStartingVschema()
 
 	testcases := []struct {
 		description  string
 		specs        *vschemapb.Keyspace
 		sourceSchema string
-		preFunc      func()
 		out          string
 		err          string
 	}{{
-		description: "unique lookup re-use vschema",
+		description: "unique lookup",
 		specs: &vschemapb.Keyspace{
 			Vindexes: map[string]*vschemapb.Vindex{
 				"v": {
@@ -857,32 +854,6 @@ func TestCreateLookupVindexCreateDDL(t *testing.T) {
 					}},
 				},
 			},
-		},
-		preFunc: func() {
-			// The vschema entries will already exist and we will re-use them.
-			err := env.ws.ts.SaveVSchema(ctx, ms.SourceKeyspace, &vschemapb.Keyspace{
-				Vindexes: map[string]*vschemapb.Vindex{
-					"v": {
-						Type: "lookup_unique",
-						Params: map[string]string{
-							"table":      fmt.Sprintf("%s.lkp", ms.TargetKeyspace),
-							"from":       "c1",
-							"to":         "c2",
-							"write_only": "true", // It has not been externalized yet
-						},
-						Owner: "t1",
-					},
-				},
-				Tables: map[string]*vschemapb.Table{
-					"t1": {
-						ColumnVindexes: []*vschemapb.ColumnVindex{{
-							Name:   "v",
-							Column: "col2",
-						}},
-					},
-				},
-			})
-			require.NoError(t, err)
 		},
 		sourceSchema: "CREATE TABLE `t1` (\n" +
 			"  `col1` int(11) NOT NULL AUTO_INCREMENT,\n" +
@@ -896,8 +867,9 @@ func TestCreateLookupVindexCreateDDL(t *testing.T) {
 			"  PRIMARY KEY (`c1`)\n" +
 			")",
 	}, {
-		description: "unique lookup with conflicting vindex",
+		description: "unique lookup sharded using last column w/o primary key",
 		specs: &vschemapb.Keyspace{
+			Sharded: true,
 			Vindexes: map[string]*vschemapb.Vindex{
 				"v": {
 					Type: "lookup_unique",
@@ -918,35 +890,19 @@ func TestCreateLookupVindexCreateDDL(t *testing.T) {
 				},
 			},
 		},
-		preFunc: func() {
-			// The existing vindex vschema entry differs from what we want to
-			// create so we cannot re-use it.
-			err := env.ws.ts.SaveVSchema(ctx, ms.SourceKeyspace, &vschemapb.Keyspace{
-				Vindexes: map[string]*vschemapb.Vindex{
-					"v": {
-						Type: "lookup_unique",
-						Params: map[string]string{
-							"table":      fmt.Sprintf("%s.lkp", ms.TargetKeyspace),
-							"from":       "c1",
-							"to":         "c2",
-							"write_only": "false", // This vindex has been externalized
-						},
-						Owner: "t1",
-					},
-				},
-			})
-			require.NoError(t, err)
-		},
-		err: "a conflicting vindex named v already exists in the sourceks keyspace",
 		sourceSchema: "CREATE TABLE `t1` (\n" +
 			"  `col1` int(11) NOT NULL AUTO_INCREMENT,\n" +
-			"  `col2` int(11) DEFAULT NULL,\n" +
-			"  `col3` int(11) DEFAULT NULL,\n" +
-			"  PRIMARY KEY (`id`)\n" +
-			") ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=latin1",
+			"  `col2` int(11) DEFAULT NULL\n" +
+			") ENGINE=InnoDB",
+		out: "CREATE TABLE `lkp` (\n" +
+			"  `c1` int(11),\n" +
+			"  `c2` varbinary(128),\n" +
+			"  PRIMARY KEY (`c1`)\n" +
+			")",
 	}, {
-		description: "unique lookup with conflicting column vindexes",
+		description: "unique lookup sharded using last column w/o primary key",
 		specs: &vschemapb.Keyspace{
+			Sharded: true,
 			Vindexes: map[string]*vschemapb.Vindex{
 				"v": {
 					Type: "lookup_unique",
@@ -967,28 +923,15 @@ func TestCreateLookupVindexCreateDDL(t *testing.T) {
 				},
 			},
 		},
-		preFunc: func() {
-			// The existing ColumnVindexes vschema entry differs from what we
-			// want to create so we cannot re-use it.
-			err := env.ws.ts.SaveVSchema(ctx, ms.SourceKeyspace, &vschemapb.Keyspace{
-				Tables: map[string]*vschemapb.Table{
-					"t1": {
-						ColumnVindexes: []*vschemapb.ColumnVindex{{
-							Name:    "v",
-							Columns: []string{"col1", "col2"},
-						}},
-					},
-				},
-			})
-			require.NoError(t, err)
-		},
-		err: "a conflicting ColumnVindex on column(s) col1,col2 in table t1 already exists in the sourceks keyspace",
 		sourceSchema: "CREATE TABLE `t1` (\n" +
 			"  `col1` int(11) NOT NULL AUTO_INCREMENT,\n" +
-			"  `col2` int(11) DEFAULT NULL,\n" +
-			"  `col3` int(11) DEFAULT NULL,\n" +
-			"  PRIMARY KEY (`id`)\n" +
-			") ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=latin1",
+			"  `col2` int(11) DEFAULT NULL\n" + // Because it's the last entity in the definition it has no trailing comma
+			") ENGINE=InnoDB",
+		out: "CREATE TABLE `lkp` (\n" +
+			"  `c1` int(11),\n" +
+			"  `c2` varbinary(128),\n" +
+			"  PRIMARY KEY (`c1`)\n" +
+			")",
 	}, {
 		description: "unique lookup, also pk",
 		specs: &vschemapb.Keyspace{
@@ -1115,36 +1058,27 @@ func TestCreateLookupVindexCreateDDL(t *testing.T) {
 		err:          "unexpected number of tables (0) returned from sourceks schema",
 	}}
 	for _, tcase := range testcases {
-		t.Run(tcase.description, func(t *testing.T) {
-			if tcase.sourceSchema != "" {
-				env.tmc.schema[ms.SourceKeyspace+".t1"] = &tabletmanagerdatapb.SchemaDefinition{
-					TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
-						Schema: tcase.sourceSchema,
-					}},
-				}
-			} else {
-				delete(env.tmc.schema, ms.SourceKeyspace+".t1")
+		if tcase.sourceSchema != "" {
+			env.tmc.schema[ms.SourceKeyspace+".t1"] = &tabletmanagerdatapb.SchemaDefinition{
+				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+					Schema: tcase.sourceSchema,
+				}},
 			}
+		} else {
+			delete(env.tmc.schema, ms.SourceKeyspace+".t1")
+		}
 
-			if tcase.preFunc != nil {
-				tcase.preFunc()
-				defer func() {
-					// Reset the vschema as it may have been changed in the pre
-					// function.
-					setStartingVschema()
-				}()
+		outms, _, _, err := env.ws.prepareCreateLookup(ctx, "workflow", ms.SourceKeyspace, tcase.specs, false)
+		if tcase.err != "" {
+			if err == nil || !strings.Contains(err.Error(), tcase.err) {
+				t.Errorf("prepareCreateLookup(%s) err: %v, must contain %v", tcase.description, err, tcase.err)
 			}
-			outms, _, _, err := env.ws.prepareCreateLookup(ctx, "workflow", ms.SourceKeyspace, tcase.specs, false)
-			if tcase.err != "" {
-				require.Error(t, err)
-				require.Contains(t, err.Error(), tcase.err, "prepareCreateLookup(%s) err: %v, does not contain %v", tcase.description, err, tcase.err)
-				return
-			}
-			require.NoError(t, err)
-			want := strings.Split(tcase.out, "\n")
-			got := strings.Split(outms.TableSettings[0].CreateDdl, "\n")
-			require.Equal(t, want, got, tcase.description)
-		})
+			continue
+		}
+		require.NoError(t, err)
+		want := strings.Split(tcase.out, "\n")
+		got := strings.Split(outms.TableSettings[0].CreateDdl, "\n")
+		require.Equal(t, want, got, tcase.description)
 	}
 }
 

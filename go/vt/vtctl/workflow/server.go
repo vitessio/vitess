@@ -3961,6 +3961,13 @@ func generateColDef(lines []string, sourceVindexCol, vindexFromCol string) (stri
 			line = strings.Replace(line, source, target, 1)
 			line = strings.Replace(line, " AUTO_INCREMENT", "", 1)
 			line = strings.Replace(line, " DEFAULT NULL", "", 1)
+			// Ensure that the column definition ends with a comma as we will
+			// be appending the TO column and PRIMARY KEY definitions. If the
+			// souce column here was the last entity defined in the source
+			// table's definition then it will not already have the comma.
+			if !strings.HasSuffix(strings.TrimSpace(line), ",") {
+				line += ","
+			}
 			return line, nil
 		}
 	}
