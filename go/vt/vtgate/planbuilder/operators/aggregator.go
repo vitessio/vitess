@@ -524,11 +524,20 @@ func (a *Aggregator) internalAddColumn(ctx *plancontext.PlanningContext, aliased
 // SplitAggregatorBelowOperators returns the aggregator that will live under the Route.
 // This is used when we are splitting the aggregation so one part is done
 // at the mysql level and one part at the vtgate level
-func (a *Aggregator) SplitAggregatorBelowOperators(input []Operator) *Aggregator {
+func (a *Aggregator) SplitAggregatorBelowOperators(ctx *plancontext.PlanningContext, input []Operator) *Aggregator {
 	newOp := a.Clone(input).(*Aggregator)
 	newOp.Pushed = false
 	newOp.Original = false
 	newOp.DT = nil
+	newOp.Columns = slice.Map(a.Columns, func(from *sqlparser.AliasedExpr) *sqlparser.AliasedExpr {
+		return ctx.SemTable.Clone(from).(*sqlparser.AliasedExpr)
+	})
+	for idx, aggr := range newOp.Aggregations {
+		newOp.Aggregations[idx].Original = ctx.SemTable.Clone(aggr.Original).(*sqlparser.AliasedExpr)
+	}
+	for idx, gb := range newOp.Grouping {
+		newOp.Grouping[idx].Inner = ctx.SemTable.Clone(gb.Inner).(sqlparser.Expr)
+	}
 	return newOp
 }
 

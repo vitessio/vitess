@@ -100,6 +100,7 @@ func settleSubqueries(ctx *plancontext.PlanningContext, op Operator) Operator {
 				newExpr, rewritten := rewriteMergedSubqueryExpr(ctx, aggr.SubQueryExpression, aggr.Original.Expr)
 				if rewritten {
 					aggr.Original.Expr = newExpr
+					op.Columns[aggr.ColOffset].Expr = newExpr
 				}
 			}
 		case *Ordering:

@@ -176,8 +176,10 @@ func (sq *SubQuery) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparse
 	return sq
 }
 
-func (sq *SubQuery) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, exprs *sqlparser.AliasedExpr) int {
-	return sq.Outer.AddColumn(ctx, reuseExisting, addToGroupBy, exprs)
+func (sq *SubQuery) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, ae *sqlparser.AliasedExpr) int {
+	ae = sqlparser.Clone(ae)
+	ae.Expr = rewriteColNameToArgument(ctx, ae.Expr, []*SubQuery{sq}, sq)
+	return sq.Outer.AddColumn(ctx, reuseExisting, addToGroupBy, ae)
 }
 
 func (sq *SubQuery) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {

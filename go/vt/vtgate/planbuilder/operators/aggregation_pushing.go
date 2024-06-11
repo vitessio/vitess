@@ -95,7 +95,7 @@ func pushAggregationThroughSubquery(
 	rootAggr *Aggregator,
 	src *SubQueryContainer,
 ) (Operator, *ApplyResult) {
-	pushedAggr := rootAggr.SplitAggregatorBelowOperators([]Operator{src.Outer})
+	pushedAggr := rootAggr.SplitAggregatorBelowOperators(ctx, []Operator{src.Outer})
 	for _, subQuery := range src.Inner {
 		lhsCols := subQuery.OuterExpressionsNeeded(ctx, src.Outer)
 		for _, colName := range lhsCols {
@@ -111,8 +111,9 @@ func pushAggregationThroughSubquery(
 
 	src.Outer = pushedAggr
 
-	for _, aggregation := range pushedAggr.Aggregations {
-		aggregation.Original.Expr = rewriteColNameToArgument(ctx, aggregation.Original.Expr, aggregation.SubQueryExpression, src.Inner...)
+	for _, aggr := range pushedAggr.Aggregations {
+		aggr.Original.Expr = rewriteColNameToArgument(ctx, aggr.Original.Expr, aggr.SubQueryExpression, src.Inner...)
+		pushedAggr.Columns[aggr.ColOffset].Expr = rewriteColNameToArgument(ctx, pushedAggr.Columns[aggr.ColOffset].Expr, aggr.SubQueryExpression, src.Inner...)
 	}
 
 	if !rootAggr.Original {
@@ -147,7 +148,7 @@ func pushAggregationThroughRoute(
 	route *Route,
 ) (Operator, *ApplyResult) {
 	// Create a new aggregator to be placed below the route.
-	aggrBelowRoute := aggregator.SplitAggregatorBelowOperators(route.Inputs())
+	aggrBelowRoute := aggregator.SplitAggregatorBelowOperators(ctx, route.Inputs())
 	aggrBelowRoute.Aggregations = nil
 
 	pushAggregations(ctx, aggregator, aggrBelowRoute)
@@ -248,7 +249,7 @@ func pushAggregationThroughFilter(
 ) (Operator, *ApplyResult) {
 
 	columnsNeeded := collectColNamesNeeded(ctx, filter)
-	pushedAggr := aggregator.SplitAggregatorBelowOperators([]Operator{filter.Source})
+	pushedAggr := aggregator.SplitAggregatorBelowOperators(ctx, []Operator{filter.Source})
 withNextColumn:
 	for _, col := range columnsNeeded {
 		for _, gb := range pushedAggr.Grouping {
