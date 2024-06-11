@@ -95,10 +95,10 @@ func TestAnnotate(t *testing.T) {
 func TestUnmarshalPB(t *testing.T) {
 	want := &emptypb.Empty{}
 	json, err := protojson.Marshal(want)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	var got emptypb.Empty
 	err = UnmarshalPB(json, &got)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	require.Equal(t, want, &got)
 }
