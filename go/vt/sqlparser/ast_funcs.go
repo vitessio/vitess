@@ -2139,6 +2139,18 @@ func RemoveKeyspace(in SQLNode) {
 	}, in)
 }
 
+// RemoveKeyspaceInTables removes the database qualifier for all table names in the AST
+func RemoveKeyspaceInTables(in SQLNode) {
+	Rewrite(in, nil, func(cursor *Cursor) bool {
+		if tbl, ok := cursor.Node().(TableName); ok && !tbl.Qualifier.IsEmpty() {
+			tbl.Qualifier = NewIdentifierCS("")
+			cursor.Replace(tbl)
+		}
+
+		return true
+	})
+}
+
 func convertStringToInt(integer string) int {
 	val, _ := strconv.Atoi(integer)
 	return val

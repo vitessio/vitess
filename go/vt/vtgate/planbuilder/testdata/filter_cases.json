@@ -871,6 +871,29 @@
     }
   },
   {
+    "comment": "Merging subqueries should remove keyspace from query",
+    "query": "select u.id from user.user as u where not exists (select 1 from user.user_extra as ue where u.id = ue.user_id)",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select u.id from user.user as u where not exists (select 1 from user.user_extra as ue where u.id = ue.user_id)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.id from `user` as u where 1 != 1",
+        "Query": "select u.id from `user` as u where not exists (select 1 from user_extra as ue where u.id = ue.user_id)",
+        "Table": "`user`"
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
     "comment": "Single table equality route with unsigned value",
     "query": "select id from user where name = 18446744073709551615",
     "plan": {
