@@ -33,8 +33,7 @@ var carriageReturn = []byte("\n")
 // efficient and should not be used for high QPS operations.
 func Unmarshal(data []byte, v any) error {
 	if pb, ok := v.(proto.Message); ok {
-		opts := protojson.UnmarshalOptions{DiscardUnknown: true}
-		return annotate(data, opts.Unmarshal(data, pb))
+		return UnmarshalPB(data, pb)
 	}
 	return annotate(data, json.Unmarshal(data, v))
 }
