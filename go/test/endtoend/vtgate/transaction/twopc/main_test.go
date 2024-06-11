@@ -32,11 +32,13 @@ import (
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
-	vtParams        mysql.ConnParams
-	keyspaceName    = "ks"
-	cell            = "zone1"
-	hostname        = "localhost"
+	clusterInstance   *cluster.LocalProcessCluster
+	vtParams          mysql.ConnParams
+	vtgateGrpcAddress string
+	keyspaceName      = "ks"
+	cell              = "zone1"
+	hostname          = "localhost"
+	sidecarDBName     = "vt_ks"
 
 	//go:embed schema.sql
 	SchemaSQL string
@@ -73,9 +75,10 @@ func TestMain(m *testing.M) {
 
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
-			Name:      keyspaceName,
-			SchemaSQL: SchemaSQL,
-			VSchema:   VSchema,
+			Name:          keyspaceName,
+			SchemaSQL:     SchemaSQL,
+			VSchema:       VSchema,
+			SidecarDBName: sidecarDBName,
 		}
 		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, false); err != nil {
 			return 1
@@ -86,6 +89,7 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 		vtParams = clusterInstance.GetVTParams(keyspaceName)
+		vtgateGrpcAddress = fmt.Sprintf("%s:%d", clusterInstance.Hostname, clusterInstance.VtgateGrpcPort)
 
 		return m.Run()
 	}()
