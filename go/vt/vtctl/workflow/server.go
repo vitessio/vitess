@@ -3846,6 +3846,10 @@ func (s *Server) prepareCreateLookup(ctx context.Context, workflow, keyspace str
 	modified = append(modified, buf.String())
 	modified = append(modified, ")")
 	createDDL = strings.Join(modified, "\n")
+	// Confirm that our DDL is valid before we create anything.
+	if _, err = s.env.Parser().ParseStrictDDL(createDDL); err != nil {
+		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error: %v; invalid lookup table definition generated: %s", err, createDDL)
+	}
 
 	// Generate vreplication query.
 	buf = sqlparser.NewTrackedBuffer(nil)
