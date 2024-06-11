@@ -185,10 +185,19 @@ func createProjectionWithAggr(ctx *plancontext.PlanningContext, qp *QueryProject
 	sqc := &SubQueryBuilder{}
 	outerID := TableID(src)
 	for idx, aggr := range aggregations {
-		expr := aggr.Original.Expr
-		newExpr, subqs := sqc.pullOutValueSubqueries(ctx, expr, outerID, false)
-		if newExpr != nil {
-			aggregations[idx].SubQueryExpression = subqs
+		exprs := aggr.getPushColumnExprs()
+		var newExprs sqlparser.Exprs
+		for _, expr := range exprs {
+			newExpr, subqs := sqc.pullOutValueSubqueries(ctx, expr, outerID, false)
+			if newExpr != nil {
+				newExprs = append(newExprs, newExpr)
+				aggregations[idx].SubQueryExpression = append(aggregations[idx].SubQueryExpression, subqs...)
+			} else {
+				newExprs = append(newExprs, expr)
+			}
+		}
+		if len(aggregations[idx].SubQueryExpression) > 0 {
+			aggr.setPushColumn(newExprs)
 		}
 	}
 	aggrOp.Source = sqc.getRootOperator(src, nil)

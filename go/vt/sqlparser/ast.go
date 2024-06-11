@@ -2878,6 +2878,8 @@ type (
 		Expr
 		GetArg() Expr
 		GetArgs() Exprs
+		SetArg(expr Expr)
+		SetArgs(exprs Exprs) error
 		// AggrName returns the lower case string representing this aggregation function
 		AggrName() string
 	}
@@ -3404,6 +3406,25 @@ func (varP *VarPop) GetArgs() Exprs               { return Exprs{varP.Arg} }
 func (varS *VarSamp) GetArgs() Exprs              { return Exprs{varS.Arg} }
 func (variance *Variance) GetArgs() Exprs         { return Exprs{variance.Arg} }
 func (av *AnyValue) GetArgs() Exprs               { return Exprs{av.Arg} }
+
+func (min *Min) SetArg(expr Expr)                   { min.Arg = expr }
+func (sum *Sum) SetArg(expr Expr)                   { sum.Arg = expr }
+func (max *Max) SetArg(expr Expr)                   { max.Arg = expr }
+func (avg *Avg) SetArg(expr Expr)                   { avg.Arg = expr }
+func (*CountStar) SetArg(expr Expr)                 {}
+func (count *Count) SetArg(expr Expr)               { count.Args = Exprs{expr} }
+func (grpConcat *GroupConcatExpr) SetArg(expr Expr) { grpConcat.Exprs = Exprs{expr} }
+func (bAnd *BitAnd) SetArg(expr Expr)               { bAnd.Arg = expr }
+func (bOr *BitOr) SetArg(expr Expr)                 { bOr.Arg = expr }
+func (bXor *BitXor) SetArg(expr Expr)               { bXor.Arg = expr }
+func (std *Std) SetArg(expr Expr)                   { std.Arg = expr }
+func (stdD *StdDev) SetArg(expr Expr)               { stdD.Arg = expr }
+func (stdP *StdPop) SetArg(expr Expr)               { stdP.Arg = expr }
+func (stdS *StdSamp) SetArg(expr Expr)              { stdS.Arg = expr }
+func (varP *VarPop) SetArg(expr Expr)               { varP.Arg = expr }
+func (varS *VarSamp) SetArg(expr Expr)              { varS.Arg = expr }
+func (variance *Variance) SetArg(expr Expr)         { variance.Arg = expr }
+func (av *AnyValue) SetArg(expr Expr)               { av.Arg = expr }
 
 func (sum *Sum) IsDistinct() bool                   { return sum.Distinct }
 func (min *Min) IsDistinct() bool                   { return min.Distinct }

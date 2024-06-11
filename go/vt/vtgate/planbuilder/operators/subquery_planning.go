@@ -157,7 +157,7 @@ func rewriteMergedSubqueryExpr(ctx *plancontext.PlanningContext, se SubQueryExpr
 							return true
 						}
 					case *sqlparser.Argument:
-						if expr.Name != sq. /**/ ArgName {
+						if expr.Name != sq.ArgName {
 							return true
 						}
 					default:
