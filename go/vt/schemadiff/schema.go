@@ -359,30 +359,6 @@ func (s *Schema) normalize(hints *DiffHints) error {
 			return errors.Join(errs, err)
 		}
 	}
-	colTypeCompatibleForForeignKey := func(child, parent *sqlparser.ColumnType) bool {
-		if child.Type == parent.Type {
-			return true
-		}
-		if child.Type == "char" && parent.Type == "varchar" {
-			return true
-		}
-		if child.Type == "varchar" && parent.Type == "char" {
-			return true
-		}
-		return false
-	}
-	colTypeEqualForForeignKey := func(child, parent *sqlparser.ColumnType) bool {
-		if colTypeCompatibleForForeignKey(child, parent) &&
-			child.Unsigned == parent.Unsigned &&
-			child.Zerofill == parent.Zerofill &&
-			sqlparser.Equals.ColumnCharset(child.Charset, parent.Charset) &&
-			child.Options.Collate == parent.Options.Collate &&
-			sqlparser.Equals.SliceOfString(child.EnumValues, parent.EnumValues) {
-			// Complete identify (other than precision which is ignored)
-			return true
-		}
-		return false
-	}
 
 	// Now validate foreign key columns:
 	// - referenced table columns must exist
@@ -429,7 +405,7 @@ func (s *Schema) normalize(hints *DiffHints) error {
 				if !ok {
 					return errors.Join(errs, &InvalidReferencedColumnInForeignKeyConstraintError{Table: t.Name(), Constraint: cs.Name.String(), ReferencedTable: referencedTableName, ReferencedColumn: referencedColumnName})
 				}
-				if !colTypeEqualForForeignKey(coveredColumn.Type, referencedColumn.Type) {
+				if !colTypeEqualForForeignKey(s.env, t.TableSpec, referencedTable.CreateTable.TableSpec, coveredColumn.Type, referencedColumn.Type) {
 					return errors.Join(errs, &ForeignKeyColumnTypeMismatchError{Table: t.Name(), Constraint: cs.Name.String(), Column: coveredColumn.Name.String(), ReferencedTable: referencedTableName, ReferencedColumn: referencedColumnName})
 				}
 			}
@@ -440,6 +416,55 @@ func (s *Schema) normalize(hints *DiffHints) error {
 		}
 	}
 	return errs
+}
+
+func colTypeCompatibleForForeignKey(child, parent *sqlparser.ColumnType) bool {
+	if child.Type == parent.Type {
+		return true
+	}
+	if child.Type == "char" && parent.Type == "varchar" {
+		return true
+	}
+	if child.Type == "varchar" && parent.Type == "char" {
+		return true
+	}
+	return false
+}
+
+func colTypeEqualForForeignKey(env *Environment, ct, pt *sqlparser.TableSpec, child, parent *sqlparser.ColumnType) bool {
+	if colTypeCompatibleForForeignKey(child, parent) &&
+		child.Unsigned == parent.Unsigned &&
+		child.Zerofill == parent.Zerofill &&
+		colCollationEqualForForeignKey(env, ct, pt, child, parent) &&
+		sqlparser.Equals.SliceOfString(child.EnumValues, parent.EnumValues) {
+		// Complete identify (other than precision which is ignored)
+		return true
+	}
+	return false
+}
+
+func colCollationEqualForForeignKey(env *Environment, ct, pt *sqlparser.TableSpec, child, parent *sqlparser.ColumnType) bool {
+	return *colCollation(env, ct, child) == *colCollation(env, pt, parent)
+}
+
+func colCollation(env *Environment, t *sqlparser.TableSpec, col *sqlparser.ColumnType) *charsetCollate {
+	tc := getTableCharsetCollate(env, &t.Options)
+	cc := &charsetCollate{}
+	if col.Charset.Name != "" {
+		cc.charset = col.Charset.Name
+	} else if tc.charset != "" {
+		cc.charset = tc.charset
+	} else {
+		cc.charset = env.CollationEnv().LookupCharsetName(env.DefaultColl)
+	}
+	if col.Options != nil && col.Options.Collate != "" {
+		cc.collate = col.Options.Collate
+	} else if tc.collate != "" {
+		cc.collate = tc.collate
+	} else {
+		cc.collate = env.CollationEnv().LookupName(env.DefaultColl)
+	}
+	return cc
 }
 
 // Entities returns this schema's entities in good order (may be applied without error)
