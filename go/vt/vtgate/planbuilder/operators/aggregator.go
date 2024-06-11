@@ -380,16 +380,18 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) Operator {
 }
 
 func (aggr Aggr) setPushColumn(exprs sqlparser.Exprs) {
-	if aggr.Func != nil {
-		err := aggr.Func.SetArgs(exprs)
-		if err != nil {
-			panic(err)
+	if aggr.Func == nil {
+		if len(exprs) > 1 {
+			panic(vterrors.VT13001(fmt.Sprintf("unexpected number of expression in an random aggregation: %s", sqlparser.String(exprs))))
 		}
+		aggr.Original.Expr = exprs[0]
+		return
 	}
-	if len(exprs) > 1 {
-		panic(vterrors.VT13001(fmt.Sprintf("unexpected number of expression in an random aggregation: %s", sqlparser.String(exprs))))
+
+	err := aggr.Func.SetArgs(exprs)
+	if err != nil {
+		panic(err)
 	}
-	aggr.Original.Expr = exprs[0]
 }
 
 func (aggr Aggr) getPushColumn() sqlparser.Expr {
