@@ -110,18 +110,6 @@ func TestAPIEndpoints(t *testing.T) {
 	})
 
 	t.Run("Check Vars and Metrics", func(t *testing.T) {
-		// These are vars that will be deprecated in v21.
-		utils.CheckVarExists(t, vtorc, "analysis.change.write")
-		utils.CheckVarExists(t, vtorc, "audit.write")
-		utils.CheckVarExists(t, vtorc, "discoveries.attempt")
-		utils.CheckVarExists(t, vtorc, "discoveries.fail")
-		utils.CheckVarExists(t, vtorc, "discoveries.instance_poll_seconds_exceeded")
-		utils.CheckVarExists(t, vtorc, "discoveries.queue_length")
-		utils.CheckVarExists(t, vtorc, "discoveries.recent_count")
-		utils.CheckVarExists(t, vtorc, "instance.read")
-		utils.CheckVarExists(t, vtorc, "instance.read_topology")
-
-		// Newly added vars.
 		utils.CheckVarExists(t, vtorc, "AnalysisChangeWrite")
 		utils.CheckVarExists(t, vtorc, "AuditWrite")
 		utils.CheckVarExists(t, vtorc, "DiscoveriesAttempt")

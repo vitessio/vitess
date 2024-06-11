@@ -18,17 +18,14 @@ package stats
 
 import (
 	"expvar"
-	"fmt"
 	"math/rand/v2"
 	"reflect"
 	"sort"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestCounters(t *testing.T) {
@@ -271,50 +268,4 @@ func TestCountersCombineDimension(t *testing.T) {
 	c4.Add([]string{"c1", "c2", "c3"}, 1)
 	c4.Add([]string{"c4", "c2", "c5"}, 1)
 	assert.Equal(t, `{"all.c2.all": 2}`, c4.String())
-}
-
-func TestNewCountersWithMultiLabelsWithDeprecatedName(t *testing.T) {
-	clearStats()
-	Register(func(name string, v expvar.Var) {})
-
-	testcases := []struct {
-		name           string
-		deprecatedName string
-		shouldPanic    bool
-	}{
-		{
-			name:           "counterWithMultiLabels_new_name",
-			deprecatedName: "counterWithMultiLabels_deprecatedName",
-			shouldPanic:    true,
-		},
-		{
-			name:           "counterWithMultiLabels-metricName_test",
-			deprecatedName: "counterWithMultiLabels_metric.name-test",
-			shouldPanic:    false,
-		},
-		{
-			name:           "CounterWithMultiLabelsMetricNameTesting",
-			deprecatedName: "counterWithMultiLabels.metric.name.testing",
-			shouldPanic:    false,
-		},
-	}
-
-	for _, testcase := range testcases {
-		t.Run(fmt.Sprintf("%v-%v", testcase.name, testcase.deprecatedName), func(t *testing.T) {
-			wg := sync.WaitGroup{}
-			wg.Add(1)
-			panicReceived := false
-			go func() {
-				defer func() {
-					if x := recover(); x != nil {
-						panicReceived = true
-					}
-					wg.Done()
-				}()
-				NewCountersWithMultiLabelsWithDeprecatedName(testcase.name, testcase.deprecatedName, "help", []string{"1", "2", "3"})
-			}()
-			wg.Wait()
-			require.EqualValues(t, testcase.shouldPanic, panicReceived)
-		})
-	}
 }
