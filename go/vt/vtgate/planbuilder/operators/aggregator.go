@@ -529,6 +529,9 @@ func (a *Aggregator) SplitAggregatorBelowOperators(ctx *plancontext.PlanningCont
 	newOp.Pushed = false
 	newOp.Original = false
 	newOp.DT = nil
+
+	// We need to make sure that the columns are cloned so that the original operator is not affected
+	// by the changes we make to the new operator
 	newOp.Columns = slice.Map(a.Columns, func(from *sqlparser.AliasedExpr) *sqlparser.AliasedExpr {
 		return ctx.SemTable.Clone(from).(*sqlparser.AliasedExpr)
 	})

@@ -355,32 +355,14 @@ func tryPushOrdering(ctx *plancontext.PlanningContext, in *Ordering) (Operator, 
 		return Swap(in, src, "push ordering under filter")
 	case *ApplyJoin:
 		if canPushLeft(ctx, src, in.Order) {
-			// ApplyJoin is stable in regard to the columns coming from the LHS,
-			// so if all the ordering columns come from the LHS, we can push down the Ordering there
-			src.LHS, in.Source = in, src.LHS
-			return src, Rewrote("push down ordering on the LHS of a join")
+			return pushOrderLeftOfJoin(src, in)
 		}
 	case *Ordering:
 		// we'll just remove the order underneath. The top order replaces whatever was incoming
 		in.Source = src.Source
 		return in, Rewrote("remove double ordering")
 	case *Projection:
-		// we can move ordering under a projection if it's not introducing a column we're sorting by
-		for _, by := range in.Order {
-			if !mustFetchFromInput(ctx, by.SimplifiedExpr) {
-				return in, NoRewrite
-			}
-		}
-		ap, ok := src.Columns.(AliasedProjections)
-		if !ok {
-			return in, NoRewrite
-		}
-		for _, projExpr := range ap {
-			if projExpr.Info != nil {
-				return in, NoRewrite
-			}
-		}
-		return Swap(in, src, "push ordering under projection")
+		return pushOrderingUnderProjection(ctx, in, src)
 	case *Aggregator:
 		if !src.QP.AlignGroupByAndOrderBy(ctx) && !overlaps(ctx, in.Order, src.Grouping) {
 			return in, NoRewrite
@@ -388,29 +370,63 @@ func tryPushOrdering(ctx *plancontext.PlanningContext, in *Ordering) (Operator, 
 
 		return pushOrderingUnderAggr(ctx, in, src)
 	case *SubQueryContainer:
-		outerTableID := TableID(src.Outer)
-		for _, order := range in.Order {
-			deps := ctx.SemTable.RecursiveDeps(order.Inner.Expr)
-			if !deps.IsSolvedBy(outerTableID) {
-				return in, NoRewrite
-			}
-		}
-		src.Outer, in.Source = in, src.Outer
-		return src, Rewrote("push ordering into outer side of subquery")
+		return pushOrderingToOuterOfSubqueryContainer(ctx, in, src)
 	case *SubQuery:
-		outerTableID := TableID(src.Outer)
-		for idx, order := range in.Order {
-			deps := ctx.SemTable.RecursiveDeps(order.Inner.Expr)
-			if !deps.IsSolvedBy(outerTableID) {
-				return in, NoRewrite
-			}
-			in.Order[idx].SimplifiedExpr = src.rewriteColNameToArgument(order.SimplifiedExpr)
-			in.Order[idx].Inner.Expr = src.rewriteColNameToArgument(order.Inner.Expr)
-		}
-		src.Outer, in.Source = in, src.Outer
-		return src, Rewrote("push ordering into outer side of subquery")
+		return pushOrderingToOuterOfSubquery(ctx, in, src)
 	}
 	return in, NoRewrite
+}
+
+func pushOrderingToOuterOfSubquery(ctx *plancontext.PlanningContext, in *Ordering, sq *SubQuery) (Operator, *ApplyResult) {
+	outerTableID := TableID(sq.Outer)
+	for idx, order := range in.Order {
+		deps := ctx.SemTable.RecursiveDeps(order.Inner.Expr)
+		if !deps.IsSolvedBy(outerTableID) {
+			return in, NoRewrite
+		}
+		in.Order[idx].SimplifiedExpr = sq.rewriteColNameToArgument(order.SimplifiedExpr)
+		in.Order[idx].Inner.Expr = sq.rewriteColNameToArgument(order.Inner.Expr)
+	}
+	sq.Outer, in.Source = in, sq.Outer
+	return sq, Rewrote("push ordering into outer side of subquery")
+}
+
+func pushOrderingToOuterOfSubqueryContainer(ctx *plancontext.PlanningContext, in *Ordering, subq *SubQueryContainer) (Operator, *ApplyResult) {
+	outerTableID := TableID(subq.Outer)
+	for _, order := range in.Order {
+		deps := ctx.SemTable.RecursiveDeps(order.Inner.Expr)
+		if !deps.IsSolvedBy(outerTableID) {
+			return in, NoRewrite
+		}
+	}
+	subq.Outer, in.Source = in, subq.Outer
+	return subq, Rewrote("push ordering into outer side of subquery")
+}
+
+func pushOrderingUnderProjection(ctx *plancontext.PlanningContext, in *Ordering, proj *Projection) (Operator, *ApplyResult) {
+	// we can move ordering under a projection if it's not introducing a column we're sorting by
+	for _, by := range in.Order {
+		if !mustFetchFromInput(ctx, by.SimplifiedExpr) {
+			return in, NoRewrite
+		}
+	}
+	ap, ok := proj.Columns.(AliasedProjections)
+	if !ok {
+		return in, NoRewrite
+	}
+	for _, projExpr := range ap {
+		if projExpr.Info != nil {
+			return in, NoRewrite
+		}
+	}
+	return Swap(in, proj, "push ordering under projection")
+}
+
+func pushOrderLeftOfJoin(src *ApplyJoin, in *Ordering) (Operator, *ApplyResult) {
+	// ApplyJoin is stable in regard to the columns coming from the LHS,
+	// so if all the ordering columns come from the LHS, we can push down the Ordering there
+	src.LHS, in.Source = in, src.LHS
+	return src, Rewrote("push down ordering on the LHS of a join")
 }
 
 func overlaps(ctx *plancontext.PlanningContext, order []OrderBy, grouping []GroupBy) bool {

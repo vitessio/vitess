@@ -2241,6 +2241,7 @@ func (av *AnyValue) SetArgs(exprs Exprs) error {
 	return setFuncArgs(av, exprs, "ANY_VALUE")
 }
 
+// setFuncArgs sets the arguments for the aggregation function, while checking that there is only one argument
 func setFuncArgs(aggr AggrFunc, exprs Exprs, name string) error {
 	if len(exprs) != 1 {
 		return vterrors.VT03001(name)
