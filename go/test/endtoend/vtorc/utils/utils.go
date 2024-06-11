@@ -1018,7 +1018,7 @@ func WaitForSuccessfulPRSCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess
 	mapKey := fmt.Sprintf("%v.%v.success", keyspace, shard)
 	for time.Since(startTime) < timeout {
 		vars := vtorcInstance.GetVars()
-		prsCountsMap := vars["planned_reparent_counts"].(map[string]interface{})
+		prsCountsMap := vars["PlannedReparentCounts"].(map[string]interface{})
 		successCount := getIntFromValue(prsCountsMap[mapKey])
 		if successCount == countExpected {
 			return
@@ -1026,7 +1026,7 @@ func WaitForSuccessfulPRSCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess
 		time.Sleep(time.Second)
 	}
 	vars := vtorcInstance.GetVars()
-	prsCountsMap := vars["planned_reparent_counts"].(map[string]interface{})
+	prsCountsMap := vars["PlannedReparentCounts"].(map[string]interface{})
 	successCount := getIntFromValue(prsCountsMap[mapKey])
 	assert.EqualValues(t, countExpected, successCount)
 }
@@ -1039,7 +1039,7 @@ func WaitForSuccessfulERSCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess
 	mapKey := fmt.Sprintf("%v.%v.success", keyspace, shard)
 	for time.Since(startTime) < timeout {
 		vars := vtorcInstance.GetVars()
-		ersCountsMap := vars["emergency_reparent_counts"].(map[string]interface{})
+		ersCountsMap := vars["EmergencyReparentCounts"].(map[string]interface{})
 		successCount := getIntFromValue(ersCountsMap[mapKey])
 		if successCount == countExpected {
 			return
@@ -1047,7 +1047,7 @@ func WaitForSuccessfulERSCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess
 		time.Sleep(time.Second)
 	}
 	vars := vtorcInstance.GetVars()
-	ersCountsMap := vars["emergency_reparent_counts"].(map[string]interface{})
+	ersCountsMap := vars["EmergencyReparentCounts"].(map[string]interface{})
 	successCount := getIntFromValue(ersCountsMap[mapKey])
 	assert.EqualValues(t, countExpected, successCount)
 }
