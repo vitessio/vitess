@@ -41,7 +41,7 @@ import (
 
 // counters for Planned Reparent Shard
 var (
-	prsCounter = stats.NewCountersWithMultiLabelsWithDeprecatedName("PlannedReparentCounts", "planned_reparent_counts", "Number of times Planned Reparent Shard has been run",
+	prsCounter = stats.NewCountersWithMultiLabels("PlannedReparentCounts", "Number of times Planned Reparent Shard has been run",
 		[]string{"Keyspace", "Shard", "Result"},
 	)
 )
