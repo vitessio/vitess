@@ -280,27 +280,37 @@ func LockShard(ctx context.Context, tabletAlias string, lockAction string) (cont
 
 // tabletUndoDemotePrimary calls the said RPC for the given tablet.
 func tabletUndoDemotePrimary(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) error {
-	return tmc.UndoDemotePrimary(ctx, tablet, semiSync)
+	tmcCtx, tmcCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer tmcCancel()
+	return tmc.UndoDemotePrimary(tmcCtx, tablet, semiSync)
 }
 
 // setReadOnly calls the said RPC for the given tablet
 func setReadOnly(ctx context.Context, tablet *topodatapb.Tablet) error {
-	return tmc.SetReadOnly(ctx, tablet)
+	tmcCtx, tmcCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer tmcCancel()
+	return tmc.SetReadOnly(tmcCtx, tablet)
 }
 
 // changeTabletType calls the said RPC for the given tablet with the given parameters.
 func changeTabletType(ctx context.Context, tablet *topodatapb.Tablet, tabletType topodatapb.TabletType, semiSync bool) error {
-	return tmc.ChangeType(ctx, tablet, tabletType, semiSync)
+	tmcCtx, tmcCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer tmcCancel()
+	return tmc.ChangeType(tmcCtx, tablet, tabletType, semiSync)
 }
 
 // resetReplicationParameters resets the replication parameters on the given tablet.
 func resetReplicationParameters(ctx context.Context, tablet *topodatapb.Tablet) error {
-	return tmc.ResetReplicationParameters(ctx, tablet)
+	tmcCtx, tmcCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer tmcCancel()
+	return tmc.ResetReplicationParameters(tmcCtx, tablet)
 }
 
 // setReplicationSource calls the said RPC with the parameters provided
 func setReplicationSource(ctx context.Context, replica *topodatapb.Tablet, primary *topodatapb.Tablet, semiSync bool) error {
-	return tmc.SetReplicationSource(ctx, replica, primary.Alias, 0, "", true, semiSync)
+	tmcCtx, tmcCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer tmcCancel()
+	return tmc.SetReplicationSource(tmcCtx, replica, primary.Alias, 0, "", true, semiSync)
 }
 
 // shardPrimary finds the primary of the given keyspace-shard by reading the vtorc backend
