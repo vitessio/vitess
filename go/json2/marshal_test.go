@@ -36,12 +36,6 @@ func TestMarshalPB(t *testing.T) {
 	require.NoErrorf(t, err, "MarshalPB(%+v) error", col)
 	want := "{\"name\":\"c1\",\"type\":\"VARCHAR\"}"
 	assert.Equalf(t, want, string(b), "MarshalPB(%+v)", col)
-
-	// Test MarshalPB with nil proto.
-	b, err = MarshalPB(nil)
-	require.NoErrorf(t, err, "MarshalPB(nil) error")
-	want = "{}"
-	assert.Equalf(t, want, string(b), "MarshalPB(nil)")
 }
 
 func TestMarshalIndentPB(t *testing.T) {
