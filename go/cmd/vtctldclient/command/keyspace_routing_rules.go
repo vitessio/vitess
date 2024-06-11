@@ -82,7 +82,7 @@ func commandApplyKeyspaceRoutingRules(cmd *cobra.Command, args []string) error {
 	}
 
 	krr := &vschemapb.KeyspaceRoutingRules{}
-	if err := json2.Unmarshal(rulesBytes, krr); err != nil {
+	if err := json2.UnmarshalPB(rulesBytes, krr); err != nil {
 		return err
 	}
 

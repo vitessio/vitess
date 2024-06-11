@@ -53,3 +53,9 @@ func annotate(data []byte, err error) error {
 
 	return fmt.Errorf("line: %d, position %d: %v", line, pos, err)
 }
+
+// UnmarshalPB is similar to Unmarshal but specifically for proto.Message to add type safety.
+func UnmarshalPB(data []byte, pb proto.Message) error {
+	opts := protojson.UnmarshalOptions{DiscardUnknown: true}
+	return annotate(data, opts.Unmarshal(data, pb))
+}
