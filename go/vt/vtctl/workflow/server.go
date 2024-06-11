@@ -3791,7 +3791,6 @@ func (s *Server) prepareCreateLookup(ctx context.Context, workflow, keyspace str
 		// are not the same then they are two distinct conflicting vindexes and we should
 		// not proceed.
 		if !slices.Equal(colNames, sourceVindexColumns) {
-			log.Errorf("DEBUG: existing Vindex: %v, new Vindex: %v", colVindex, vindex)
 			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "a conflicting ColumnVindex on column(s) %s in table %s already exists in the %s keyspace",
 				strings.Join(colNames, ","), sourceTableName, keyspace)
 		}
