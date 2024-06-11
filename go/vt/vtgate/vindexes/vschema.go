@@ -1378,12 +1378,10 @@ func LoadFormalKeyspace(filename string) (*vschemapb.Keyspace, error) {
 // the given SQL data type.
 func ChooseVindexForType(typ querypb.Type) (string, error) {
 	switch {
-	case sqltypes.IsIntegral(typ):
+	case sqltypes.IsIntegral(typ) || sqltypes.IsBinary(typ):
 		return "xxhash", nil
 	case sqltypes.IsText(typ):
-		return "unicode_loose_md5", nil
-	case sqltypes.IsBinary(typ):
-		return "binary_md5", nil
+		return "unicode_loose_xxhash", nil
 	}
 	return "", vterrors.Errorf(
 		vtrpcpb.Code_INVALID_ARGUMENT,
