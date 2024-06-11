@@ -312,17 +312,3 @@ func (sq *SubQuery) rewriteColNameToArgument(expr sqlparser.Expr) sqlparser.Expr
 
 	return sqlparser.Rewrite(expr, pre, nil).(sqlparser.Expr)
 }
-
-func (sq *SubQuery) Compact(*plancontext.PlanningContext) (Operator, *ApplyResult) {
-	other, ok := sq.Outer.(*SubQuery)
-	if !ok {
-		return sq, NoRewrite
-	}
-	if other.ArgName == sq.ArgName {
-		// we can remove this subquery because it's a duplicate
-		sq.Outer = other.Outer
-		return sq, Rewrote("removed duplicate subquery")
-	}
-
-	return sq, NoRewrite
-}
