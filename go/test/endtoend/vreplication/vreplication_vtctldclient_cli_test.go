@@ -446,7 +446,8 @@ func validateMoveTablesWorkflow(t *testing.T, workflows []*vtctldatapb.Workflow)
 }
 
 func testAllRoutingRulesCommands(t *testing.T) {
-	var getRules func() string
+	var rulesBytes []byte
+	var err error
 	var validateRules func(want, got string)
 	typs := []string{"RoutingRules"} // , "ShardRoutingRules", "KeyspaceRoutingRules"}
 	for _, typ := range typs {
@@ -460,11 +461,8 @@ func testAllRoutingRulesCommands(t *testing.T) {
 					},
 				},
 			}
-			rules, err := json2.MarshalPB(rr)
+			rulesBytes, err = json2.MarshalPB(rr)
 			require.NoError(t, err)
-			getRules = func() string {
-				return string(rules)
-			}
 			validateRules = func(want, got string) {
 				var wantRules = &vschemapb.RoutingRules{}
 				require.NoError(t, json2.Unmarshal([]byte(want), wantRules))
@@ -482,11 +480,8 @@ func testAllRoutingRulesCommands(t *testing.T) {
 					},
 				},
 			}
-			rules, err := json2.MarshalPB(srr)
+			rulesBytes, err = json2.MarshalPB(srr)
 			require.NoError(t, err)
-			getRules = func() string {
-				return string(rules)
-			}
 			validateRules = func(want, got string) {
 				var wantRules = &vschemapb.ShardRoutingRules{}
 				require.NoError(t, json2.Unmarshal([]byte(want), wantRules))
@@ -503,11 +498,8 @@ func testAllRoutingRulesCommands(t *testing.T) {
 					},
 				},
 			}
-			rules, err := json2.MarshalPB(krr)
+			rulesBytes, err = json2.MarshalPB(krr)
 			require.NoError(t, err)
-			getRules = func() string {
-				return string(rules)
-			}
 			validateRules = func(want, got string) {
 				var wantRules = &vschemapb.KeyspaceRoutingRules{}
 				require.NoError(t, json2.Unmarshal([]byte(want), wantRules))
@@ -515,20 +507,20 @@ func testAllRoutingRulesCommands(t *testing.T) {
 				require.NoError(t, json2.Unmarshal([]byte(got), gotRules))
 				require.EqualValues(t, wantRules, gotRules)
 			}
-
+		default:
+			t.Fatalf("Unknown type %s", typ)
 		}
-		testOneRoutingRulesCommand(t, typ, getRules, validateRules)
+		testOneRoutingRulesCommand(t, typ, string(rulesBytes), validateRules)
 	}
 
 }
 
-func testOneRoutingRulesCommand(t *testing.T, typ string, getRules func() string, validateRules func(want, got string)) {
+func testOneRoutingRulesCommand(t *testing.T, typ string, rules string, validateRules func(want, got string)) {
 	type routingRulesTest struct {
 		name    string
 		rules   string
 		useFile bool
 	}
-	rules := getRules()
 	tests := []routingRulesTest{
 		{
 			name:  "inline",
