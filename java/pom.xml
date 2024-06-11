@@ -35,7 +35,7 @@
   <developers>
     <developer>
       <name>Placeholder entry representing all developers. Please reach out to our mailing list for questions.</name>
-      <email>vitess@googlegroups.com</email>
+      <email>cncf-vitess-maintainers@lists.cncf.io</email>
       <organization>Vitess</organization>
       <organizationUrl>http://vitess.io</organizationUrl>
     </developer>
