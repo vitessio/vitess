@@ -345,7 +345,7 @@ func addSubQuery(in Operator, inner *SubQuery) Operator {
 		}
 	}
 
-	sql.Inner = append(sql.Inner, inner)
+	sql.addInner(inner)
 	return sql
 }
 
