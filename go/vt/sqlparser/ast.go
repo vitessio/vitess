@@ -2273,12 +2273,16 @@ type (
 	// ComparisonExpr represents a two-value comparison expression.
 	ComparisonExpr struct {
 		Operator    ComparisonExprOperator
+		Modifier    ComparisonModifier
 		Left, Right Expr
 		Escape      Expr
 	}
 
 	// ComparisonExprOperator is an enum for ComparisonExpr.Operator
 	ComparisonExprOperator int8
+
+	// ComparisonModifier is an enum for ComparisonExpr.Modifier
+	ComparisonModifier int8
 
 	// BetweenExpr represents a BETWEEN or a NOT BETWEEN expression.
 	BetweenExpr struct {

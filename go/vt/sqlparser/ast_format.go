@@ -1301,7 +1301,13 @@ func (node *NotExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *ComparisonExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%l %s %r", node.Left, node.Operator.ToString(), node.Right)
+	buf.astPrintf(node, "%l %s", node.Left, node.Operator.ToString())
+	if node.Modifier == All {
+		buf.literal(" all")
+	} else if node.Modifier == Any {
+		buf.literal(" any")
+	}
+	buf.astPrintf(node, " %r", node.Right)
 	if node.Escape != nil {
 		buf.astPrintf(node, " escape %v", node.Escape)
 	}
