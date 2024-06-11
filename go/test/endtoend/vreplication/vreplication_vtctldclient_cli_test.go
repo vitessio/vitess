@@ -24,12 +24,11 @@ import (
 	"strings"
 	"testing"
 
-	"vitess.io/vitess/go/json2"
-
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/maps"
 	"google.golang.org/protobuf/encoding/protojson"
 
+	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -64,8 +63,8 @@ func TestVtctldclientCLI(t *testing.T) {
 	workflowName := "wf1"
 	targetTabs := setupMinimalCustomerKeyspace(t)
 
-	t.Run("RoutingRulesCommands", func(t *testing.T) {
-		testAllRoutingRulesCommands(t)
+	t.Run("RoutingRulesApply", func(t *testing.T) {
+		testRoutingRulesApplyCommands(t)
 	})
 	t.Run("WorkflowList", func(t *testing.T) {
 		testWorkflowList(t, sourceKeyspaceName, targetKeyspaceName)
@@ -445,12 +444,14 @@ func validateMoveTablesWorkflow(t *testing.T, workflows []*vtctldatapb.Workflow)
 	require.True(t, bls.StopAfterCopy)
 }
 
-func testAllRoutingRulesCommands(t *testing.T) {
+// Test that routing rules can be applied using the vtctldclient CLI for all types of routing rules.
+func testRoutingRulesApplyCommands(t *testing.T) {
 	var rulesBytes []byte
 	var err error
 	var validateRules func(want, got string)
-	typs := []string{"RoutingRules"} // , "ShardRoutingRules", "KeyspaceRoutingRules"}
-	for _, typ := range typs {
+
+	ruleTypes := []string{"RoutingRules", "ShardRoutingRules", "KeyspaceRoutingRules"}
+	for _, typ := range ruleTypes {
 		switch typ {
 		case "RoutingRules":
 			rr := &vschemapb.RoutingRules{
@@ -465,9 +466,9 @@ func testAllRoutingRulesCommands(t *testing.T) {
 			require.NoError(t, err)
 			validateRules = func(want, got string) {
 				var wantRules = &vschemapb.RoutingRules{}
-				require.NoError(t, json2.Unmarshal([]byte(want), wantRules))
+				require.NoError(t, json2.UnmarshalPB([]byte(want), wantRules))
 				var gotRules = &vschemapb.RoutingRules{}
-				require.NoError(t, json2.Unmarshal([]byte(got), gotRules))
+				require.NoError(t, json2.UnmarshalPB([]byte(got), gotRules))
 				require.EqualValues(t, wantRules, gotRules)
 			}
 		case "ShardRoutingRules":
@@ -484,9 +485,9 @@ func testAllRoutingRulesCommands(t *testing.T) {
 			require.NoError(t, err)
 			validateRules = func(want, got string) {
 				var wantRules = &vschemapb.ShardRoutingRules{}
-				require.NoError(t, json2.Unmarshal([]byte(want), wantRules))
+				require.NoError(t, json2.UnmarshalPB([]byte(want), wantRules))
 				var gotRules = &vschemapb.ShardRoutingRules{}
-				require.NoError(t, json2.Unmarshal([]byte(got), gotRules))
+				require.NoError(t, json2.UnmarshalPB([]byte(got), gotRules))
 				require.EqualValues(t, wantRules, gotRules)
 			}
 		case "KeyspaceRoutingRules":
@@ -502,9 +503,9 @@ func testAllRoutingRulesCommands(t *testing.T) {
 			require.NoError(t, err)
 			validateRules = func(want, got string) {
 				var wantRules = &vschemapb.KeyspaceRoutingRules{}
-				require.NoError(t, json2.Unmarshal([]byte(want), wantRules))
+				require.NoError(t, json2.UnmarshalPB([]byte(want), wantRules))
 				var gotRules = &vschemapb.KeyspaceRoutingRules{}
-				require.NoError(t, json2.Unmarshal([]byte(got), gotRules))
+				require.NoError(t, json2.UnmarshalPB([]byte(got), gotRules))
 				require.EqualValues(t, wantRules, gotRules)
 			}
 		default:
@@ -515,34 +516,37 @@ func testAllRoutingRulesCommands(t *testing.T) {
 
 }
 
+// For a given routing rules type, test that the rules can be applied using the vtctldclient CLI.
+// We test both inline and file-based rules.
+// The test also validates that both camelCase and snake_case key names work correctly.
 func testOneRoutingRulesCommand(t *testing.T, typ string, rules string, validateRules func(want, got string)) {
 	type routingRulesTest struct {
 		name    string
 		rules   string
-		useFile bool
+		useFile bool // if true, use a file to pass the rules
 	}
 	tests := []routingRulesTest{
 		{
 			name:  "inline",
-			rules: string(rules),
+			rules: rules,
 		},
 		{
 			name:    "file",
-			rules:   string(rules),
+			rules:   rules,
 			useFile: true,
 		},
 		{
-			name:  "empty",
+			name:  "empty", // finally, dcleanup rules
 			rules: "{}",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(typ+"/"+tt.name, func(t *testing.T) {
-			done := false
 			wantRules := tt.rules
-			typ2 := "camelCase"
-			for !done {
-				t.Run(typ2, func(t *testing.T) {
+			// The input rules are in camelCase, since they are the output of json2.MarshalPB
+			// The first iteration uses the output of routing rule Gets which are in snake_case.
+			for _, keyCase := range []string{"camelCase", "snake_case"} {
+				t.Run(keyCase, func(t *testing.T) {
 					var args []string
 					apply := fmt.Sprintf("Apply%s", typ)
 					get := fmt.Sprintf("Get%s", typ)
@@ -566,15 +570,11 @@ func testOneRoutingRulesCommand(t *testing.T, typ string, rules string, validate
 						require.FailNowf(t, "failed action", get, "%v: %s", err, output)
 					}
 					validateRules(wantRules, output)
-					if typ2 == "snake_case" {
-						done = true
-					} else {
-						wantRules = output
-						typ2 = "snake_case"
-					}
+					// output of GetRoutingRules is in snake_case and we use it for the next iteration which
+					// tests applying rules with snake_case keys.
+					wantRules = output
 				})
 			}
 		})
 	}
-
 }
