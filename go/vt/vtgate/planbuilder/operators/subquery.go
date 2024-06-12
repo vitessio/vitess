@@ -177,7 +177,7 @@ func (sq *SubQuery) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparse
 }
 
 func (sq *SubQuery) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, ae *sqlparser.AliasedExpr) int {
-	ae = sqlparser.Clone(ae)
+	ae = sqlparser.CloneRefOfAliasedExpr(ae)
 	// we need to rewrite the column name to an argument if it's the same as the subquery column name
 	ae.Expr = rewriteColNameToArgument(ctx, ae.Expr, []*SubQuery{sq}, sq)
 	return sq.Outer.AddColumn(ctx, reuseExisting, addToGroupBy, ae)
