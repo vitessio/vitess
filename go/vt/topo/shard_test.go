@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/utils"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -121,14 +122,14 @@ func TestUpdateSourcePrimaryDeniedTables(t *testing.T) {
 	require.NoError(t, addToDenyList(ctx, si, primary, nil, tables2))
 	validateDenyList(t, si, primary, nil, append(tables1, tables2...))
 
-	require.Error(t, addToDenyList(ctx, si, primary, nil, tables2), dlTablesAlreadyPresent)
-	require.Error(t, addToDenyList(ctx, si, primary, nil, []string{t1}), dlTablesAlreadyPresent)
+	require.NoError(t, addToDenyList(ctx, si, primary, nil, tables2))
+	require.NoError(t, addToDenyList(ctx, si, primary, nil, []string{t1}))
 
 	require.NoError(t, removeFromDenyList(ctx, si, primary, nil, tables2))
 	validateDenyList(t, si, primary, nil, tables1)
 
-	require.Error(t, removeFromDenyList(ctx, si, primary, nil, tables2), dlTablesNotPresent)
-	require.Error(t, removeFromDenyList(ctx, si, primary, nil, []string{t3}), dlTablesNotPresent)
+	require.NoError(t, removeFromDenyList(ctx, si, primary, nil, tables2))
+	require.NoError(t, removeFromDenyList(ctx, si, primary, nil, []string{t3}))
 	validateDenyList(t, si, primary, nil, tables1)
 
 	require.NoError(t, removeFromDenyList(ctx, si, primary, nil, []string{t1}))
