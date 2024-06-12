@@ -167,3 +167,11 @@ jobs:
 
         # print test output
         cat output.txt
+
+    - name: XML to HTML
+      uses: pl-strflt/junit-xml-to-html@v1
+      with:
+        mode: 'no-frames'
+        input: 'report.xml'
+        output: 'report.html'
+
