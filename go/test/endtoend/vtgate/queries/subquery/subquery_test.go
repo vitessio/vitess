@@ -194,7 +194,7 @@ func TestSubqueries(t *testing.T) {
 	// This method tests many types of subqueries. The queries should move to a vitess-tester test file once we have a way to run them.
 	// The commented out queries are failing because of wrong types being returned.
 	// The tests are commented out until the issue is fixed.
-	// utils.SkipIfBinaryIsBelowVersion(t, 21, "vtgate")
+	utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 	queries := []string{
