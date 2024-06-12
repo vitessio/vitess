@@ -19,16 +19,25 @@ package transaction
 import (
 	"context"
 	_ "embed"
+	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 )
 
 var (
@@ -115,4 +124,131 @@ func start(t *testing.T) (*mysql.Conn, func()) {
 		conn.Close()
 		cluster.PanicHandler(t)
 	}
+}
+
+type extractInterestingValues func(vals []sqltypes.Value) []sqltypes.Value
+
+var tables = map[string]extractInterestingValues{
+	"ks.dt_state": func(vals []sqltypes.Value) (out []sqltypes.Value) {
+		val, _ := vals[1].ToInt()
+		state := querypb.TransactionState(val)
+		out = append(out, sqltypes.NewVarChar(state.String()))
+		return
+	},
+	"ks.dt_participant": func(vals []sqltypes.Value) (out []sqltypes.Value) {
+		out = vals[1:]
+		return
+	},
+	"ks.redo_state": func(vals []sqltypes.Value) (out []sqltypes.Value) {
+		val, _ := vals[1].ToInt()
+		state := querypb.TransactionState(val)
+		out = append(out, sqltypes.NewVarChar(state.String()))
+		return
+	},
+	"ks.redo_statement": func(vals []sqltypes.Value) (out []sqltypes.Value) {
+		out = vals[1:]
+		return
+	},
+	"ks.twopc_user": func(vals []sqltypes.Value) []sqltypes.Value { return vals },
+}
+
+func runVStream(t *testing.T, ctx context.Context, ch chan *binlogdatapb.VEvent, vtgateConn *vtgateconn.VTGateConn) {
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{
+			{Keyspace: keyspaceName, Shard: "-80", Gtid: "current"},
+			{Keyspace: keyspaceName, Shard: "80-", Gtid: "current"},
+		}}
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match: "/.*/",
+		}},
+	}
+	vReader, err := vtgateConn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, nil)
+	require.NoError(t, err)
+
+	// Use a channel to signal that the first VGTID event has been processed
+	firstEventProcessed := make(chan struct{})
+	var once sync.Once
+
+	go func() {
+		for {
+			evs, err := vReader.Recv()
+			if err == io.EOF || ctx.Err() != nil {
+				return
+			}
+			require.NoError(t, err)
+
+			for _, ev := range evs {
+				// Signal the first event has been processed using sync.Once
+				if ev.Type == binlogdatapb.VEventType_VGTID {
+					once.Do(func() { close(firstEventProcessed) })
+				}
+				if ev.Type == binlogdatapb.VEventType_ROW || ev.Type == binlogdatapb.VEventType_FIELD {
+					ch <- ev
+				}
+			}
+		}
+	}()
+
+	// Wait for the first event to be processed
+	<-firstEventProcessed
+}
+
+func retrieveTransitions(t *testing.T, ch chan *binlogdatapb.VEvent, tableMap map[string][]*querypb.Field) map[string][]string {
+	logTable := make(map[string][]string)
+
+	keepWaiting := true
+	for keepWaiting {
+		select {
+		case re := <-ch:
+			if re.RowEvent != nil {
+				shard := re.RowEvent.Shard
+				tableName := re.RowEvent.TableName
+				fields, ok := tableMap[tableName]
+				require.Truef(t, ok, "table %s not found in fields map", tableName)
+				for _, rc := range re.RowEvent.RowChanges {
+					logEvent(logTable, shard, tableName, fields, rc)
+				}
+			}
+			if re.FieldEvent != nil {
+				tableMap[re.FieldEvent.TableName] = re.FieldEvent.Fields
+			}
+		case <-time.After(1 * time.Second):
+			keepWaiting = false
+		}
+	}
+	return logTable
+}
+
+func logEvent(logTable map[string][]string, shard string, tbl string, fields []*querypb.Field, rc *binlogdatapb.RowChange) {
+	key := fmt.Sprintf("%s:%s", tbl, shard)
+
+	var eventType string
+	var vals []sqltypes.Value
+	switch {
+	case rc.Before == nil && rc.After == nil:
+		panic("do not expect row event with both before and after nil")
+	case rc.Before == nil:
+		eventType = "insert"
+		vals = sqltypes.MakeRowTrusted(fields, rc.After)
+	case rc.After == nil:
+		eventType = "delete"
+		vals = sqltypes.MakeRowTrusted(fields, rc.Before)
+	default:
+		eventType = "update"
+		vals = sqltypes.MakeRowTrusted(fields, rc.After)
+	}
+	execFunc, exists := tables[tbl]
+	if exists {
+		vals = execFunc(vals)
+	}
+	logTable[key] = append(logTable[key], fmt.Sprintf("%s:%v", eventType, vals))
+}
+
+func prettyPrint(v interface{}) string {
+	b, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return fmt.Sprintf("got error marshalling: %v", err)
+	}
+	return string(b)
 }
