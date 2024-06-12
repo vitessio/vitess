@@ -509,7 +509,7 @@ func testRoutingRulesApplyCommands(t *testing.T) {
 				require.EqualValues(t, wantRules, gotRules)
 			}
 		default:
-			t.Fatalf("Unknown type %s", typ)
+			require.FailNow(t, "Unknown type %s", typ)
 		}
 		testOneRoutingRulesCommand(t, typ, string(rulesBytes), validateRules)
 	}
@@ -536,7 +536,7 @@ func testOneRoutingRulesCommand(t *testing.T, typ string, rules string, validate
 			useFile: true,
 		},
 		{
-			name:  "empty", // finally, dcleanup rules
+			name:  "empty", // finally, cleanup rules
 			rules: "{}",
 		},
 	}
