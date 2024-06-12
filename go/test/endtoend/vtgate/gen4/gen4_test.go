@@ -489,3 +489,23 @@ func TestPercentageAndUnderscore(t *testing.T) {
 	mcmp.Exec(`select a.tcol1 from t2 a join t2 b where a.tcol1 = b.tcol2 group by a.tcol1 having repeat(a.tcol1,min(a.id)) = "C_DC_D" order by a.tcol1`)
 	mcmp.Exec(`select a.tcol1 from t2 a join t2 b where a.tcol1 = b.tcol2 group by a.tcol1 having repeat(a.tcol1,min(a.id)) = "C\_DC\_D" order by a.tcol1`)
 }
+
+// TestDualJoinQueries tests that queries having a join between a dual query and another query work as intended.
+func TestDualJoinQueries(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec(`insert into t2(id, tcol1, tcol2) values (1, 'ABC', 'ABC'),(2, 'DEF', 'DEF')`)
+
+	// Left join with a dual table on left - merge-able
+	mcmp.AssertMatches("select t.title, t2.id from (select 'ABC' as title) as t left join t2 on t2.id=1 and t.title = t2.tcol1", `[[VARCHAR("ABC") INT64(1)]]`)
+	mcmp.AssertMatches("select t.title, t2.id from (select 'DEF' as title) as t left join t2 on t2.id=1 and t.title = t2.tcol1", `[[VARCHAR("DEF") NULL]]`)
+
+	// Left join with a dual table on left - non-merge-able
+	mcmp.AssertMatches("select t.title, t2.id from (select 'ABC' as title) as t left join t2 on t2.id < 2 and t.title = t2.tcol1", `[[VARCHAR("ABC") INT64(1)]]`)
+	mcmp.AssertMatches("select t.title, t2.id from (select 'DEF' as title) as t left join t2 on t2.id < 2 and t.title = t2.tcol1", `[[VARCHAR("DEF") NULL]]`)
+
+	// right join with a dual table on left
+	mcmp.AssertMatches("select t.title, t2.id from (select 'ABC' as title) as t right join t2 t.title = t2.tcol1", `[[VARCHAR("ABC") INT64(1)]]`)
+
+}

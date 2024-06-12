@@ -2080,14 +2080,18 @@
       "Original": "select t.title, user.col from (select 'hello' as title) as t left join user on user.id=1",
       "Instructions": {
         "OperatorType": "Route",
-        "Variant": "Scatter",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
         },
         "FieldQuery": "select t.title, `user`.col from (select 'hello' as title from dual where 1 != 1) as t left join `user` on `user`.id = 1 where 1 != 1",
         "Query": "select t.title, `user`.col from (select 'hello' as title from dual) as t left join `user` on `user`.id = 1",
-        "Table": "`user`, dual"
+        "Table": "`user`, dual",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
       },
       "TablesUsed": [
         "main.dual",
@@ -2168,14 +2172,18 @@
       "Original": "select t.title, user.col from user right join (select 'hello' as title) as t on user.id=1",
       "Instructions": {
         "OperatorType": "Route",
-        "Variant": "Scatter",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
         },
         "FieldQuery": "select t.title, `user`.col from (select 'hello' as title from dual where 1 != 1) as t left join `user` on `user`.id = 1 where 1 != 1",
         "Query": "select t.title, `user`.col from (select 'hello' as title from dual) as t left join `user` on `user`.id = 1",
-        "Table": "`user`, dual"
+        "Table": "`user`, dual",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
       },
       "TablesUsed": [
         "main.dual",

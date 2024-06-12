@@ -35,11 +35,18 @@ func mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPr
 
 	switch {
 	case a == dual:
+		// We clone the right hand side and try and push all the join predicates that are solved entirely by that side.
 		// If a dual is on the left side and it is a left join (all right joins are changed to left joins), then we can only merge if the right side is a single sharded routing.
-		if !m.joinType.IsInner() && !willBecomeSingleShardOnFilter(ctx, rhsRoute, joinPredicates) {
+		rhsClone := Clone(rhs).(*Route)
+		for _, predicate := range joinPredicates {
+			if ctx.SemTable.DirectDeps(predicate).IsSolvedBy(TableID(rhsClone)) {
+				rhsClone.AddPredicate(ctx, predicate)
+			}
+		}
+		if !m.joinType.IsInner() && !rhsClone.Routing.OpCode().IsSingleShard() {
 			return nil
 		}
-		return m.merge(ctx, lhsRoute, rhsRoute, routingB)
+		return m.merge(ctx, lhsRoute, rhsClone, rhsClone.Routing)
 	case b == dual:
 		// If a dual is on the right side.
 		return m.merge(ctx, lhsRoute, rhsRoute, routingA)
@@ -67,45 +74,6 @@ func mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPr
 	default:
 		return nil
 	}
-}
-
-// willBecomeSingleShardOnFilter returns whether the given route will become a single sharded route after pushing the join predicates.
-func willBecomeSingleShardOnFilter(ctx *plancontext.PlanningContext, a *Route, joinPredicates []sqlparser.Expr) bool {
-	// If the routing is already single sharded, it will remain so even after we push more predicates.
-	if a.Routing.OpCode().IsSingleShard() {
-		return true
-	}
-
-	// Go over all the join predicates.
-	for _, predicate := range joinPredicates {
-		comparison, ok := predicate.(*sqlparser.ComparisonExpr)
-		if !ok {
-			continue
-		}
-		if comparison.Operator != sqlparser.EqualOp {
-			continue
-		}
-		left := comparison.Left
-		right := comparison.Right
-
-		lVindex := findColumnVindex(ctx, a, left)
-		if lVindex == nil {
-			left, right = right, left
-			lVindex = findColumnVindex(ctx, a, left)
-		}
-
-		if lVindex == nil || !lVindex.IsUnique() {
-			continue
-		}
-		// If the predicate is an equal comparison with the left side having a unique column vindex,
-		// and the right side is a literal, then we know
-		// pushing this predicate will make the route a single sharded route.
-		if sqlparser.IsLiteral(right) {
-			return true
-		}
-	}
-
-	return false
 }
 
 func prepareInputRoutes(lhs Operator, rhs Operator) (*Route, *Route, Routing, Routing, routingType, routingType, bool) {
