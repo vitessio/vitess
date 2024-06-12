@@ -431,7 +431,7 @@ func TestInvalidSchema(t *testing.T) {
 					t1id int NOT NULL,
 					primary key (id),
 					CONSTRAINT fk1_en9z857fmvhhyrzb1p7lr751o FOREIGN KEY (t1id) REFERENCES t1 (id) ON DELETE CASCADE
-				) CHARSET utf8mb4, COLLATE utf8mb4_0900_ai_ci;;
+				) CHARSET utf8mb4, COLLATE utf8mb4_0900_ai_ci;
 			`,
 		},
 		{
