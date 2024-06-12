@@ -19,30 +19,20 @@ package topo_test
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
-
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
-// lower the lock timeout for testing
-const testLockTimeout = 3 * time.Second
-
-// TestTopoLockTimeout tests that the lock times out after the specified duration.
-func TestTopoLockTimeout(t *testing.T) {
+// TestTopoKeyspaceLock tests keyspace lock operations.
+func TestTopoKeyspaceLock(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "zone1")
 	defer ts.Close()
-
-	err := ts.CreateKeyspaceRoutingRules(ctx, &vschemapb.KeyspaceRoutingRules{})
-	require.NoError(t, err)
-	lock, err := topo.NewRoutingRulesLock(ctx, ts, "ks1")
-	require.NoError(t, err)
 
 	currentTopoLockTimeout := topo.LockTimeout
 	topo.LockTimeout = testLockTimeout
@@ -50,40 +40,45 @@ func TestTopoLockTimeout(t *testing.T) {
 		topo.LockTimeout = currentTopoLockTimeout
 	}()
 
-	// acquire the lock
-	origCtx := ctx
-	_, unlock, err := lock.Lock(origCtx)
+	ks1 := "ks1"
+	ks2 := "ks2"
+	err := ts.CreateKeyspace(ctx, ks1, &topodatapb.Keyspace{})
 	require.NoError(t, err)
-	defer unlock(&err)
-
-	// re-acquiring the lock should fail
-	_, _, err2 := lock.Lock(origCtx)
-	require.Errorf(t, err2, "deadline exceeded")
-}
-
-// TestTopoLockBasic tests basic lock operations.
-func TestTopoLockBasic(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	ts := memorytopo.NewServer(ctx, "zone1")
-	defer ts.Close()
-
-	err := ts.CreateKeyspaceRoutingRules(ctx, &vschemapb.KeyspaceRoutingRules{})
-	require.NoError(t, err)
-	lock, err := topo.NewRoutingRulesLock(ctx, ts, "ks1")
+	err = ts.CreateKeyspace(ctx, ks2, &topodatapb.Keyspace{})
 	require.NoError(t, err)
 
 	origCtx := ctx
-	ctx, unlock, err := lock.Lock(origCtx)
+	ctx, unlock, err := ts.LockKeyspace(origCtx, ks1, "ks1")
 	require.NoError(t, err)
 
 	// locking the same key again, without unlocking, should return an error
-	_, _, err2 := lock.Lock(ctx)
+	_, _, err2 := ts.LockKeyspace(ctx, ks1, "ks1")
 	require.ErrorContains(t, err2, "already held")
 
-	// confirm that the lock can be re-acquired after unlocking
+	// Check that we have the keyspace lock shouldn't return an error
+	err = topo.CheckKeyspaceLocked(ctx, ks1)
+	require.NoError(t, err)
+
+	// Check that we have the keyspace lock for the other keyspace should return an error
+	err = topo.CheckKeyspaceLocked(ctx, ks2)
+	require.ErrorContains(t, err, "keyspace ks2 is not locked")
+
+	// Check we can acquire a keyspace lock for the other keyspace
+	ctx2, unlock2, err := ts.LockKeyspace(ctx, ks2, "ks2")
+	require.NoError(t, err)
+	defer unlock2(&err)
+
+	// Unlock the first keyspace
 	unlock(&err)
-	_, unlock, err = lock.Lock(origCtx)
+
+	// Check keyspace locked output for both keyspaces
+	err = topo.CheckKeyspaceLocked(ctx2, ks1)
+	require.ErrorContains(t, err, "keyspace ks1 is not locked")
+	err = topo.CheckKeyspaceLocked(ctx2, ks2)
+	require.NoError(t, err)
+
+	// confirm that the lock can be re-acquired after unlocking
+	_, unlock, err = ts.LockKeyspace(origCtx, ks1, "ks1")
 	require.NoError(t, err)
 	defer unlock(&err)
 }
