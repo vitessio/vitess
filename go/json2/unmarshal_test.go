@@ -91,3 +91,14 @@ func TestAnnotate(t *testing.T) {
 		require.Equal(t, tcase.err, err, "annotate(%s, %v) error", string(tcase.data), tcase.err)
 	}
 }
+
+func TestUnmarshalPB(t *testing.T) {
+	want := &emptypb.Empty{}
+	json, err := protojson.Marshal(want)
+	require.NoError(t, err)
+
+	var got emptypb.Empty
+	err = UnmarshalPB(json, &got)
+	require.NoError(t, err)
+	require.Equal(t, want, &got)
+}
