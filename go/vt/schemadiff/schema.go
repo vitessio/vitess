@@ -444,6 +444,13 @@ func colTypeEqualForForeignKey(env *Environment, ct, pt *sqlparser.TableSpec, ch
 }
 
 func colCollationEqualForForeignKey(env *Environment, ct, pt *sqlparser.TableSpec, child, parent *sqlparser.ColumnType) bool {
+	isTextual := func(col *sqlparser.ColumnType) bool {
+		return charsetTypes[strings.ToLower(col.Type)]
+	}
+	if !isTextual(child) || !isTextual(parent) {
+		// irrelevant if columns are not textual
+		return true
+	}
 	return *colCollation(env, ct, child) == *colCollation(env, pt, parent)
 }
 
