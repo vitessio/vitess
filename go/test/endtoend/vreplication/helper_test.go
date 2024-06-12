@@ -92,7 +92,7 @@ func execQueryWithRetry(t *testing.T, conn *mysql.Conn, query string, timeout ti
 		select {
 		case <-ctx.Done():
 			require.FailNow(t, fmt.Sprintf("query %q did not succeed before the timeout of %s; last seen result: %v",
-				query, timeout, qr.Rows))
+				query, timeout, qr))
 		case <-ticker.C:
 			log.Infof("query %q failed with error %v, retrying in %ds", query, err, defaultTick)
 		}
@@ -143,19 +143,6 @@ func execVtgateQuery(t *testing.T, conn *mysql.Conn, database string, query stri
 	}
 	execQuery(t, conn, "begin")
 	qr := execQuery(t, conn, query)
-	execQuery(t, conn, "commit")
-	return qr
-}
-
-func execVtgateQueryWithRetry(t *testing.T, conn *mysql.Conn, database string, query string, timeout time.Duration) *sqltypes.Result {
-	if strings.TrimSpace(query) == "" {
-		return nil
-	}
-	if database != "" {
-		execQuery(t, conn, "use `"+database+"`;")
-	}
-	execQuery(t, conn, "begin")
-	qr := execQueryWithRetry(t, conn, query, timeout)
 	execQuery(t, conn, "commit")
 	return qr
 }
@@ -516,20 +503,24 @@ func validateDryRunResults(t *testing.T, output string, want []string) {
 	require.NotEmpty(t, output)
 	gotDryRun := strings.Split(output, "\n")
 	require.True(t, len(gotDryRun) > 3)
-	startRow := 3
-	if strings.Contains(gotDryRun[0], "deprecated") {
+	var startRow int
+	if strings.HasPrefix(gotDryRun[1], "Parameters:") { // vtctlclient
+		startRow = 3
+	} else if strings.Contains(gotDryRun[0], "deprecated") {
 		startRow = 4
+	} else {
+		startRow = 2
 	}
 	gotDryRun = gotDryRun[startRow : len(gotDryRun)-1]
 	if len(want) != len(gotDryRun) {
-		t.Fatalf("want and got: lengths don't match, \nwant\n%s\n\ngot\n%s", strings.Join(want, "\n"), strings.Join(gotDryRun, "\n"))
+		require.Fail(t, "invalid dry run results", "want and got: lengths don't match, \nwant\n%s\n\ngot\n%s", strings.Join(want, "\n"), strings.Join(gotDryRun, "\n"))
 	}
 	var match, fail bool
 	fail = false
 	for i, w := range want {
 		w = strings.TrimSpace(w)
 		g := strings.TrimSpace(gotDryRun[i])
-		if w[0] == '/' {
+		if len(w) > 0 && w[0] == '/' {
 			w = strings.TrimSpace(w[1:])
 			result := strings.HasPrefix(g, w)
 			match = result
@@ -538,11 +529,11 @@ func validateDryRunResults(t *testing.T, output string, want []string) {
 		}
 		if !match {
 			fail = true
-			t.Fatalf("want %s, got %s\n", w, gotDryRun[i])
+			require.Fail(t, "invlaid dry run results", "want %s, got %s\n", w, gotDryRun[i])
 		}
 	}
 	if fail {
-		t.Fatalf("Dry run results don't match, want %s, got %s", want, gotDryRun)
+		require.Fail(t, "invalid dry run results", "Dry run results don't match, want %s, got %s", want, gotDryRun)
 	}
 }
 
@@ -578,7 +569,7 @@ func isTableInDenyList(t *testing.T, vc *VitessCluster, ksShard string, table st
 	var err error
 	found := false
 	if output, err = vc.VtctlClient.ExecuteCommandWithOutput("GetShard", ksShard); err != nil {
-		t.Fatalf("%v %v", err, output)
+		require.Fail(t, "GetShard error", "%v %v", err, output)
 		return false, err
 	}
 	jsonparser.ArrayEach([]byte(output), func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
@@ -602,8 +593,8 @@ func expectNumberOfStreams(t *testing.T, vtgateConn *mysql.Conn, name string, wo
 	waitForQueryResult(t, vtgateConn, database, query, fmt.Sprintf(`[[INT64(%d)]]`, want))
 }
 
-// confirmAllStreamsRunning confirms that all of the migrated streams are running
-// after a Reshard.
+// confirmAllStreamsRunning confirms that all of the workflow's streams are
+// in the running state.
 func confirmAllStreamsRunning(t *testing.T, vtgateConn *mysql.Conn, database string) {
 	query := sqlparser.BuildParsedQuery("select count(*) from %s.vreplication where state != '%s'",
 		sidecarDBIdentifier, binlogdatapb.VReplicationWorkflowState_Running.String()).Query
@@ -801,7 +792,7 @@ func isBinlogRowImageNoBlob(t *testing.T, tablet *cluster.VttabletProcess) bool 
 
 func getRowCount(t *testing.T, vtgateConn *mysql.Conn, table string) int {
 	query := fmt.Sprintf("select count(*) from %s", table)
-	qr := execVtgateQuery(t, vtgateConn, "", query)
+	qr := execQuery(t, vtgateConn, query)
 	numRows, _ := qr.Rows[0][0].ToInt()
 	return numRows
 }
