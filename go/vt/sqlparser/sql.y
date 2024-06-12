@@ -4091,6 +4091,10 @@ foreign_key_definition:
   {
     $$ = &ConstraintDefinition{Name: string($2), Details: $3}
   }
+| CONSTRAINT foreign_key_details
+  {
+    $$ = &ConstraintDefinition{Details: $2}
+  }
 | foreign_key_details
   {
     $$ = &ConstraintDefinition{Details: $1}
