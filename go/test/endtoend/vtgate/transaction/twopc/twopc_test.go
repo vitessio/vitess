@@ -19,19 +19,20 @@ package transaction
 import (
 	"context"
 	_ "embed"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-// TestDTCommit tests transaction commit using twopc mode
-// It tests commit for insert, update and delete operations
+// TestDTCommit tests distributed transaction commit for insert, update and delete operations
 // It verifies the binlog events for the same with transaction state changes and redo statements.
 func TestDTCommit(t *testing.T) {
 	conn, closer := start(t)
@@ -152,8 +153,7 @@ func TestDTCommit(t *testing.T) {
 		"mismatch expected: \n got: %s, want: %s", prettyPrint(logTable), prettyPrint(expectations))
 }
 
-// TestDTRollback tests transaction rollback using twopc mode
-// It tests rollback for insert, update and delete operations
+// TestDTRollback tests distributed transaction rollback for insert, update and delete operations
 // There would not be any binlog events for rollback
 func TestDTRollback(t *testing.T) {
 	conn, closer := start(t)
@@ -205,8 +205,7 @@ func TestDTRollback(t *testing.T) {
 		"no change in binlog expected: got: %s", prettyPrint(logTable))
 }
 
-// TestDTCommitMultiShardTxSingleShardDML tests transaction commit using twopc mode
-// It tests commit for insert, update and delete operations
+// TestDTCommitMultiShardTxSingleShardDML tests distributed transaction commit for insert, update and delete operations
 // There is DML operation only on single shard but transaction open on multiple shards.
 // Metdata Manager is the one which executed the DML operation on the shard.
 func TestDTCommitDMLOnlyOnMM(t *testing.T) {
@@ -291,8 +290,7 @@ func TestDTCommitDMLOnlyOnMM(t *testing.T) {
 		"mismatch expected: \n got: %s, want: %s", prettyPrint(logTable), prettyPrint(expectations))
 }
 
-// TestDTCommitMultiShardTxSingleShardDML tests transaction commit using twopc mode
-// It tests commit for insert, update and delete operations
+// TestDTCommitMultiShardTxSingleShardDML tests distributed transaction commit for insert, update and delete operations
 // There is DML operation only on single shard but transaction open on multiple shards.
 // Resource Manager is the one which executed the DML operation on the shard.
 func TestDTCommitDMLOnlyOnRM(t *testing.T) {
@@ -396,6 +394,82 @@ func TestDTCommitDMLOnlyOnRM(t *testing.T) {
 			"delete:[INT64(1) BLOB(\"delete from twopc_user where id = 7 limit 10001 /* INT64 */\")]",
 		},
 		"ks.twopc_user:80-": {"delete:[INT64(7) VARCHAR(\"newfoo\")]"},
+	}
+	assert.Equal(t, len(expectations), len(logTable),
+		"mismatch expected: \n got: %s, want: %s", prettyPrint(logTable), prettyPrint(expectations))
+}
+
+// TestDTPrepareFail tests distributed transaction prepare failure
+func TestDTPrepareFail(t *testing.T) {
+	conn, closer := start(t)
+	defer closer()
+
+	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "fk_user", "")
+	require.NoError(t, err)
+	defer vtgateConn.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ch := make(chan *binlogdatapb.VEvent)
+	runVStream(t, ctx, ch, vtgateConn)
+
+	// Insert into multiple shards
+	utils.Exec(t, conn, "begin")
+	utils.Exec(t, conn, "insert into twopc_user(id, name) values(7,'foo')")
+	utils.Exec(t, conn, "insert into twopc_user(id, name) values(8,'bar')")
+
+	ctx2 := context.Background()
+	conn2, err := mysql.Connect(ctx2, &vtParams)
+	require.NoError(t, err)
+
+	utils.Exec(t, conn2, "begin")
+	utils.Exec(t, conn2, "insert into twopc_user(id, name) values(9,'baz')")
+	utils.Exec(t, conn2, "insert into twopc_user(id, name) values(10,'apa')")
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		utils.ExecAllowError(t, conn, "commit")
+		wg.Done()
+	}()
+	go func() {
+		utils.ExecAllowError(t, conn2, "commit")
+		wg.Done()
+	}()
+	wg.Wait()
+
+	tableMap := make(map[string][]*querypb.Field)
+	logTable := retrieveTransitions(t, ch, tableMap)
+	expectations := map[string][]string{
+		"ks.dt_participant:80-": {
+			"insert:[INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
+			"insert:[INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
+			"delete:[INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
+			"delete:[INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
+		},
+		"ks.dt_state:80-": {
+			"insert:[VARCHAR(\"PREPARE\")]",
+			"insert:[VARCHAR(\"PREPARE\")]",
+			"update:[VARCHAR(\"COMMIT\")]",
+			"update:[VARCHAR(\"ROLLBACK\")]",
+			"delete:[VARCHAR(\"COMMIT\")]",
+			"delete:[VARCHAR(\"ROLLBACK\")]",
+		},
+		"ks.redo_state:-80": {
+			"insert:[VARCHAR(\"PREPARE\")]",
+			"delete:[VARCHAR(\"PREPARE\")]",
+		},
+		"ks.redo_statement:-80": {
+			"insert:[INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
+			"delete:[INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
+		},
+		"ks.twopc_user:-80": {
+			"insert:[INT64(8) VARCHAR(\"bar\")]",
+		},
+		"ks.twopc_user:80-": {
+			"insert:[INT64(7) VARCHAR(\"foo\")]",
+		},
 	}
 	assert.Equal(t, len(expectations), len(logTable),
 		"mismatch expected: \n got: %s, want: %s", prettyPrint(logTable), prettyPrint(expectations))
