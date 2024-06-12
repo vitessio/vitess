@@ -89,7 +89,7 @@ func reachedPhase(ctx *plancontext.PlanningContext, p Phase) bool {
 // Any columns that are needed to evaluate the subquery needs to be added as
 // grouping columns to the aggregation being pushed down, and then after the
 // subquery evaluation we are free to reassemble the total aggregation values.
-// This is very similar to how we push aggregation through an apply	-join.
+// This is very similar to how we push aggregation through an apply-join.
 func pushAggregationThroughSubquery(
 	ctx *plancontext.PlanningContext,
 	rootAggr *Aggregator,

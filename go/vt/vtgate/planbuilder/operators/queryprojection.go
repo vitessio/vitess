@@ -269,7 +269,7 @@ func (qp *QueryProjection) addOrderBy(ctx *plancontext.PlanningContext, orderBy 
 	canPushSorting := true
 	es := &expressionSet{}
 	for _, order := range orderBy {
-		if notInterestingToOrderBy(ctx, order.Expr) {
+		if canIgnoreOrdering(ctx, order.Expr) {
 			continue
 		}
 		if !es.add(ctx, order.Expr) {
@@ -283,7 +283,8 @@ func (qp *QueryProjection) addOrderBy(ctx *plancontext.PlanningContext, orderBy 
 	}
 }
 
-func notInterestingToOrderBy(ctx *plancontext.PlanningContext, expr sqlparser.Expr) bool {
+// canIgnoreOrdering returns true if the ordering expression has no effect on the result.
+func canIgnoreOrdering(ctx *plancontext.PlanningContext, expr sqlparser.Expr) bool {
 	switch expr.(type) {
 	case *sqlparser.NullVal, *sqlparser.Literal, *sqlparser.Argument:
 		return true

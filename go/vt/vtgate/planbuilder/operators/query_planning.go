@@ -20,12 +20,10 @@ import (
 	"fmt"
 	"io"
 
-	"vitess.io/vitess/go/vt/vtgate/engine"
-
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -713,7 +711,7 @@ func colNamesAlign(expected, actual sqlparser.SelectExprs) bool {
 		case *sqlparser.StarExpr:
 			actualStar, isStar := actual[i].(*sqlparser.StarExpr)
 			if !isStar {
-				panic(vterrors.VT13001("this should not happen"))
+				panic(vterrors.VT13001(fmt.Sprintf("star expression is expected here, found: %T", actual[i])))
 			}
 			if !sqlparser.Equals.RefOfStarExpr(se, actualStar) {
 				return false
