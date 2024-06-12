@@ -413,6 +413,28 @@ func TestInvalidSchema(t *testing.T) {
 			`,
 		},
 		{
+			schema: `
+				CREATE TABLE t1 (id int NOT NULL AUTO_INCREMENT, primary key (id));
+				CREATE TABLE t2 (
+					id int NOT NULL AUTO_INCREMENT,
+					t1id int NOT NULL,
+					primary key (id),
+					CONSTRAINT fk1_en9z857fmvhhyrzb1p7lr751o FOREIGN KEY (t1id) REFERENCES t1 (id) ON DELETE CASCADE
+				);
+			`,
+		},
+		{
+			schema: `
+				CREATE TABLE t1 (id int NOT NULL AUTO_INCREMENT, primary key (id)) CHARSET utf8mb4, COLLATE utf8mb4_unicode_ci;
+				CREATE TABLE t2 (
+					id int NOT NULL AUTO_INCREMENT,
+					t1id int NOT NULL,
+					primary key (id),
+					CONSTRAINT fk1_en9z857fmvhhyrzb1p7lr751o FOREIGN KEY (t1id) REFERENCES t1 (id) ON DELETE CASCADE
+				) CHARSET utf8mb4, COLLATE utf8mb4_0900_ai_ci;
+			`,
+		},
+		{
 			schema:    "create table t11 (id int primary key, i int, key ix(i), constraint f11 foreign key (i) references t11(id2) on delete restrict)",
 			expectErr: &InvalidReferencedColumnInForeignKeyConstraintError{Table: "t11", Constraint: "f11", ReferencedTable: "t11", ReferencedColumn: "id2"},
 		},
