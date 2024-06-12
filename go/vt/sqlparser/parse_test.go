@@ -1697,6 +1697,9 @@ var (
 			input:  "alter table a add foreign key (x) references y(z)",
 			output: "alter table a add foreign key (x) references y (z)",
 		}, {
+			input:  "alter table a add constraint foreign key (x) references y(z)",
+			output: "alter table a add foreign key (x) references y (z)",
+		}, {
 			input:  "alter table a add constraint abc foreign key country_code (country_code) REFERENCES premium_country (country_code)",
 			output: "alter table a add constraint abc foreign key country_code (country_code) references premium_country (country_code)",
 		}, {
