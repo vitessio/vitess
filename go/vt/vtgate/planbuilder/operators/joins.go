@@ -44,7 +44,7 @@ func AddPredicate(
 	joinPredicates bool,
 	newFilter func(Operator, sqlparser.Expr) Operator,
 ) Operator {
-	deps := ctx.SemTable.RecursiveDeps(expr)
+	deps := ctx.SemTable.DirectDeps(expr)
 	switch {
 	case deps.IsSolvedBy(TableID(join.GetLHS())):
 		// predicates can always safely be pushed down to the lhs if that is all they depend on

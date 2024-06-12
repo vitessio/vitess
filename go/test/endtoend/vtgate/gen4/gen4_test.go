@@ -498,14 +498,25 @@ func TestDualJoinQueries(t *testing.T) {
 	mcmp.Exec(`insert into t2(id, tcol1, tcol2) values (1, 'ABC', 'ABC'),(2, 'DEF', 'DEF')`)
 
 	// Left join with a dual table on left - merge-able
-	mcmp.AssertMatches("select t.title, t2.id from (select 'ABC' as title) as t left join t2 on t2.id=1 and t.title = t2.tcol1", `[[VARCHAR("ABC") INT64(1)]]`)
-	mcmp.AssertMatches("select t.title, t2.id from (select 'DEF' as title) as t left join t2 on t2.id=1 and t.title = t2.tcol1", `[[VARCHAR("DEF") NULL]]`)
+	mcmp.Exec("select t.title, t2.id from (select 'ABC' as title) as t left join t2 on t2.id=1 and t.title = t2.tcol1")
+	mcmp.Exec("select t.title, t2.id from (select 'DEF' as title) as t left join t2 on t2.id=1 and t.title = t2.tcol1")
 
 	// Left join with a dual table on left - non-merge-able
-	mcmp.AssertMatches("select t.title, t2.id from (select 'ABC' as title) as t left join t2 on t2.id < 2 and t.title = t2.tcol1", `[[VARCHAR("ABC") INT64(1)]]`)
-	mcmp.AssertMatches("select t.title, t2.id from (select 'DEF' as title) as t left join t2 on t2.id < 2 and t.title = t2.tcol1", `[[VARCHAR("DEF") NULL]]`)
+	mcmp.Exec("select t.title, t2.id from (select 'ABC' as title) as t left join t2 on t2.id < 2 and t.title = t2.tcol1")
+	mcmp.Exec("select t.title, t2.id from (select 'DEF' as title) as t left join t2 on t2.id < 2 and t.title = t2.tcol1")
 
 	// right join with a dual table on left
-	mcmp.AssertMatches("select t.title, t2.id from (select 'ABC' as title) as t right join t2 t.title = t2.tcol1", `[[VARCHAR("ABC") INT64(1)]]`)
+	mcmp.Exec("select t.title, t2.id from (select 'ABC' as title) as t right join t2 on t.title = t2.tcol1")
+
+	// Right join with a dual table on right - merge-able
+	mcmp.Exec("select t.title, t2.id from t2 right join (select 'ABC' as title) as t on t2.id=1 and t.title = t2.tcol1")
+	mcmp.Exec("select t.title, t2.id from t2 right join (select 'DEF' as title) as t on t2.id=1 and t.title = t2.tcol1")
+
+	// Right join with a dual table on right - non-merge-able
+	mcmp.Exec("select t.title, t2.id from t2 right join (select 'ABC' as title) as t on t2.id < 2 and t.title = t2.tcol1")
+	mcmp.Exec("select t.title, t2.id from t2 right join (select 'DEF' as title) as t on t2.id < 2 and t.title = t2.tcol1")
+
+	// left join with a dual table on right
+	mcmp.Exec("select t.title, t2.id from t2 left join (select 'ABC' as title) as t on t.title = t2.tcol1")
 
 }

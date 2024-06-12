@@ -2142,6 +2142,51 @@
     }
   },
   {
+    "comment": "left join with dual non-merge-able with predicate with cross dependencies",
+    "query": "select t.title, user.col from (select 'hello' as title) as t left join user on user.id <= 4 and t.title = user.col",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select t.title, user.col from (select 'hello' as title) as t left join user on user.id <= 4 and t.title = user.col",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "LeftJoin",
+        "JoinColumnIndexes": "L:0,R:0",
+        "JoinVars": {
+          "t_title": 0
+        },
+        "TableName": "dual_`user`",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select t.title from (select 'hello' as title from dual where 1 != 1) as t where 1 != 1",
+            "Query": "select t.title from (select 'hello' as title from dual) as t",
+            "Table": "dual"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.col from `user` where 1 != 1",
+            "Query": "select `user`.col from `user` where `user`.col = :t_title and `user`.id <= 4",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.dual",
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "right join with a dual table on left",
     "query": "select t.title, user.col from (select 'hello' as title) as t right join user on user.id<=4",
     "plan": {
