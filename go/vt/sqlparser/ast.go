@@ -3426,6 +3426,32 @@ func (varS *VarSamp) SetArg(expr Expr)              { varS.Arg = expr }
 func (variance *Variance) SetArg(expr Expr)         { variance.Arg = expr }
 func (av *AnyValue) SetArg(expr Expr)               { av.Arg = expr }
 
+func (min *Min) SetArgs(exprs Exprs) error           { return setFuncArgs(min, exprs, "MIN") }
+func (sum *Sum) SetArgs(exprs Exprs) error           { return setFuncArgs(sum, exprs, "SUM") }
+func (max *Max) SetArgs(exprs Exprs) error           { return setFuncArgs(max, exprs, "MAX") }
+func (avg *Avg) SetArgs(exprs Exprs) error           { return setFuncArgs(avg, exprs, "AVG") }
+func (*CountStar) SetArgs(Exprs) error               { return nil }
+func (bAnd *BitAnd) SetArgs(exprs Exprs) error       { return setFuncArgs(bAnd, exprs, "BIT_AND") }
+func (bOr *BitOr) SetArgs(exprs Exprs) error         { return setFuncArgs(bOr, exprs, "BIT_OR") }
+func (bXor *BitXor) SetArgs(exprs Exprs) error       { return setFuncArgs(bXor, exprs, "BIT_XOR") }
+func (std *Std) SetArgs(exprs Exprs) error           { return setFuncArgs(std, exprs, "STD") }
+func (stdD *StdDev) SetArgs(exprs Exprs) error       { return setFuncArgs(stdD, exprs, "STDDEV") }
+func (stdP *StdPop) SetArgs(exprs Exprs) error       { return setFuncArgs(stdP, exprs, "STDDEV_POP") }
+func (stdS *StdSamp) SetArgs(exprs Exprs) error      { return setFuncArgs(stdS, exprs, "STDDEV_SAMP") }
+func (varP *VarPop) SetArgs(exprs Exprs) error       { return setFuncArgs(varP, exprs, "VAR_POP") }
+func (varS *VarSamp) SetArgs(exprs Exprs) error      { return setFuncArgs(varS, exprs, "VAR_SAMP") }
+func (variance *Variance) SetArgs(exprs Exprs) error { return setFuncArgs(variance, exprs, "VARIANCE") }
+func (av *AnyValue) SetArgs(exprs Exprs) error       { return setFuncArgs(av, exprs, "ANY_VALUE") }
+
+func (count *Count) SetArgs(exprs Exprs) error {
+	count.Args = exprs
+	return nil
+}
+func (grpConcat *GroupConcatExpr) SetArgs(exprs Exprs) error {
+	grpConcat.Exprs = exprs
+	return nil
+}
+
 func (sum *Sum) IsDistinct() bool                   { return sum.Distinct }
 func (min *Min) IsDistinct() bool                   { return min.Distinct }
 func (max *Max) IsDistinct() bool                   { return max.Distinct }
