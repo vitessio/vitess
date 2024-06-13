@@ -207,9 +207,9 @@ SELECT id FROM orders WHERE id IN (1, "1", 1)
 2 ks_sharded/40-80: select id from orders where id in (1, '1', 1) limit 10001
 
 ----------------------------------------------------------------------
-(SELECT user.id, user.name FROM user WHERE user.id = 1) UNION (SELECT user.id, user.name FROM user WHERE user.id = 2)
+(SELECT user.id, user.name FROM user WHERE user.id = 1) UNION (SELECT user.id, user.name FROM user WHERE user.id = 3)
 
-2 ks_sharded/-40: select dt.c0 as id, dt.c1 as `name`, weight_string(dt.c0), weight_string(dt.c1) from (select distinct `user`.id, `user`.`name` from `user` where `user`.id = 2) as dt(c0, c1) limit 10001
-2 ks_sharded/-40: select dt.c0 as id, dt.c1 as `name`, weight_string(dt.c0), weight_string(dt.c1) from (select distinct `user`.id, `user`.`name` from `user` where `user`.id = 1) as dt(c0, c1) limit 10001
+1 ks_sharded/-40: select dt.c0 as id, dt.c1 as `name`, weight_string(dt.c0), weight_string(dt.c1) from (select distinct `user`.id, `user`.`name` from `user` where `user`.id = 1) as dt(c0, c1) limit 10001
+1 ks_sharded/40-80: select dt.c0 as id, dt.c1 as `name`, weight_string(dt.c0), weight_string(dt.c1) from (select distinct `user`.id, `user`.`name` from `user` where `user`.id = 3) as dt(c0, c1) limit 10001
 
 ----------------------------------------------------------------------
