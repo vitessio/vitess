@@ -283,13 +283,29 @@ func TestSchemaChange(t *testing.T) {
 				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusRunning)
 			})
 			t.Run("throttle online-ddl", func(t *testing.T) {
-				onlineddl.CheckThrottledApps(t, &vtParams, throttlerapp.OnlineDDLName, false)
+				{
+					keyspace, err := clusterInstance.VtctldClientProcess.GetKeyspace(keyspaceName)
+					require.NoError(t, err)
+					require.NotNil(t, keyspace)
+					require.NotNil(t, keyspace.Keyspace.ThrottlerConfig)
+					require.NotNil(t, keyspace.Keyspace.ThrottlerConfig.ThrottledApps)
+					appRule, ok := keyspace.Keyspace.ThrottlerConfig.ThrottledApps[throttlerapp.OnlineDDLName.String()]
+					assert.False(t, ok, "app rule: %v", appRule)
+				}
 				vtctlParams := &cluster.ApplySchemaParams{DDLStrategy: "online"}
 				_, err := clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(
 					keyspaceName, "alter vitess_migration throttle all", *vtctlParams,
 				)
 				assert.NoError(t, err)
-				onlineddl.CheckThrottledApps(t, &vtParams, throttlerapp.OnlineDDLName, true)
+				{
+					keyspace, err := clusterInstance.VtctldClientProcess.GetKeyspace(keyspaceName)
+					require.NoError(t, err)
+					require.NotNil(t, keyspace)
+					require.NotNil(t, keyspace.Keyspace.ThrottlerConfig)
+					require.NotNil(t, keyspace.Keyspace.ThrottlerConfig.ThrottledApps)
+					appRule, ok := keyspace.Keyspace.ThrottlerConfig.ThrottledApps[throttlerapp.OnlineDDLName.String()]
+					assert.True(t, ok, "app rule: %v", appRule)
+				}
 				waitForThrottleCheckStatus(t, throttlerapp.OnlineDDLName, primaryTablet, http.StatusExpectationFailed)
 			})
 			t.Run("unthrottle online-ddl", func(t *testing.T) {
@@ -298,7 +314,15 @@ func TestSchemaChange(t *testing.T) {
 					keyspaceName, "alter vitess_migration unthrottle all", *vtctlParams,
 				)
 				assert.NoError(t, err)
-				onlineddl.CheckThrottledApps(t, &vtParams, throttlerapp.OnlineDDLName, false)
+				{
+					keyspace, err := clusterInstance.VtctldClientProcess.GetKeyspace(keyspaceName)
+					require.NoError(t, err)
+					require.NotNil(t, keyspace)
+					require.NotNil(t, keyspace.Keyspace.ThrottlerConfig)
+					require.NotNil(t, keyspace.Keyspace.ThrottlerConfig.ThrottledApps)
+					appRule, ok := keyspace.Keyspace.ThrottlerConfig.ThrottledApps[throttlerapp.OnlineDDLName.String()]
+					assert.False(t, ok, "app rule: %v", appRule)
+				}
 				waitForThrottleCheckStatus(t, throttlerapp.OnlineDDLName, primaryTablet, http.StatusOK)
 			})
 			t.Run("additional wait", func(t *testing.T) {
