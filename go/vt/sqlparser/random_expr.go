@@ -232,8 +232,10 @@ func (g *Generator) makeAggregateIfNecessary(genConfig ExprGeneratorConfig, expr
 	// tack on an extra "and count(*)" to make it aggregate
 	if genConfig.AggrRule == IsAggregate && !g.isAggregate && g.depth == 0 {
 		expr = &AndExpr{
-			Left:  expr,
-			Right: &CountStar{},
+			Left: expr,
+			Right: &CountStar{
+				Name: "count",
+			},
 		}
 		g.isAggregate = true
 	}
@@ -245,7 +247,7 @@ func (g *Generator) randomAggregate(genConfig ExprGeneratorConfig) Expr {
 	isDistinct := rand.IntN(10) < 1
 
 	options := []exprF{
-		func() Expr { return &CountStar{} },
+		func() Expr { return &CountStar{Name: "count"} },
 		func() Expr { return &Count{Args: Exprs{g.Expression(genConfig.anyTypeConfig())}, Distinct: isDistinct} },
 		func() Expr { return &Sum{Arg: g.Expression(genConfig), Distinct: isDistinct} },
 		func() Expr { return &Min{Arg: g.Expression(genConfig), Distinct: isDistinct} },

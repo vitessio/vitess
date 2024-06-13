@@ -964,8 +964,10 @@ func (cached *CountStar) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(16)
+		size += int64(32)
 	}
+	// field Name string
+	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
 	// field OverClause *vitess.io/vitess/go/vt/sqlparser.OverClause
 	size += cached.OverClause.CachedSize(true)
 	return size
