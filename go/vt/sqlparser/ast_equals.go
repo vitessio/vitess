@@ -2187,6 +2187,7 @@ func (cmp *Comparator) RefOfComparisonExpr(a, b *ComparisonExpr) bool {
 		return false
 	}
 	return a.Operator == b.Operator &&
+		a.Modifier == b.Modifier &&
 		cmp.Expr(a.Left, b.Left) &&
 		cmp.Expr(a.Right, b.Right) &&
 		cmp.Expr(a.Escape, b.Escape)

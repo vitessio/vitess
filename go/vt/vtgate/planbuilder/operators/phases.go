@@ -176,8 +176,8 @@ func createDMLWithInput(ctx *plancontext.PlanningContext, op, src Operator, in *
 	targetQT := targetTable.QTable
 	qt := &QueryTable{
 		ID:         targetQT.ID,
-		Alias:      sqlparser.CloneRefOfAliasedTableExpr(targetQT.Alias),
-		Table:      sqlparser.CloneTableName(targetQT.Table),
+		Alias:      sqlparser.Clone(targetQT.Alias),
+		Table:      sqlparser.Clone(targetQT.Table),
 		Predicates: []sqlparser.Expr{compExpr},
 	}
 

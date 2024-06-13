@@ -1698,6 +1698,11 @@ func (node *ComparisonExpr) FormatFast(buf *TrackedBuffer) {
 	buf.printExpr(node, node.Left, true)
 	buf.WriteByte(' ')
 	buf.WriteString(node.Operator.ToString())
+	if node.Modifier == All {
+		buf.WriteString(" all")
+	} else if node.Modifier == Any {
+		buf.WriteString(" any")
+	}
 	buf.WriteByte(' ')
 	buf.printExpr(node, node.Right, false)
 	if node.Escape != nil {

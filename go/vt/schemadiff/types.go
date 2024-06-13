@@ -132,6 +132,7 @@ const (
 
 const (
 	ForeignKeyCheckStrategyStrict int = iota
+	ForeignKeyCheckStrategyCreateTableFirst
 	ForeignKeyCheckStrategyIgnore
 )
 

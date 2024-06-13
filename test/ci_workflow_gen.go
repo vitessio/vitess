@@ -74,7 +74,6 @@ var (
 		"backup_pitr",
 		"backup_pitr_xtrabackup",
 		"21",
-		"22",
 		"mysql_server_vault",
 		"vstream",
 		"onlineddl_vrepl",
