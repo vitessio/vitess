@@ -1,0 +1,37 @@
+{
+  "sharded": true,
+  "foreignKeyMode": "unspecified",
+  "tables": {
+    "contacts_test": {
+      "name": "contacts_test",
+      "column_vindexes": [
+        {
+          "columns": [
+            "id"
+          ],
+          "type": "xxhash",
+          "name": "xxhash",
+          "vindex": null
+        }
+      ]
+    },
+    "promotion_coupons_test": {
+      "name": "promotion_coupons_test",
+      "column_vindexes": [
+        {
+          "columns": [
+            "id"
+          ],
+          "type": "xxhash",
+          "name": "xxhash",
+          "vindex": null
+        }
+      ]
+    }
+  },
+  "vindexes": {
+    "xxhash": {
+      "type": "xxhash"
+    }
+  }
+}
