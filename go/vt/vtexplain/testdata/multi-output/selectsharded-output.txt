@@ -207,3 +207,9 @@ SELECT id FROM orders WHERE id IN (1, "1", 1)
 2 ks_sharded/40-80: select id from orders where id in (1, '1', 1) limit 10001
 
 ----------------------------------------------------------------------
+(SELECT user.id, user.name FROM user WHERE user.id = 1) UNION (SELECT user.id, user.name FROM user WHERE user.id = 2)
+
+2 ks_sharded/-40: select distinct `user`.id, `user`.`name`, weight_string(`user`.id), weight_string(`user`.`name`) from `user` where `user`.id = 2 limit 10001 /* INT64 */
+2 ks_sharded/-40: select distinct `user`.id, `user`.`name`, weight_string(`user`.id), weight_string(`user`.`name`) from `user` where `user`.id = 1 limit 10001 /* INT64 */
+
+----------------------------------------------------------------------
