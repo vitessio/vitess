@@ -40,4 +40,4 @@ SELECT user.id, user.name, name_info.info FROM user INNER JOIN music ON (user.id
 
 SELECT id FROM orders WHERE id IN (1, "1", 1);
 
-(SELECT user.id, user.name FROM user WHERE user.id = 1) UNION (SELECT user.id, user.name FROM user WHERE user.id = 2);
+(SELECT user.id, user.name FROM user WHERE user.id = 1) UNION (SELECT user.id, user.name FROM user WHERE user.id = 3);
