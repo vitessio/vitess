@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/test/utils"
 
 	"vitess.io/vitess/go/vt/key"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv/tabletenvtest"
@@ -149,6 +150,28 @@ func TestExplain(t *testing.T) {
 	}
 	tests := []test{
 		{"unsharded", defaultTestOpts()},
+		{"selectsharded", defaultTestOpts()},
+		{"insertsharded", defaultTestOpts()},
+		{"updatesharded", defaultTestOpts()},
+		{"deletesharded", defaultTestOpts()},
+		{"comments", defaultTestOpts()},
+		{"options", &Options{
+			ReplicationMode: "STATEMENT",
+			NumShards:       4,
+			Normalize:       false,
+		}},
+		{"target", &Options{
+			ReplicationMode: "ROW",
+			NumShards:       4,
+			Normalize:       false,
+			Target:          "ks_sharded/40-80",
+		}},
+		{"gen4", &Options{
+			ReplicationMode: "ROW",
+			NumShards:       4,
+			Normalize:       true,
+			PlannerVersion:  querypb.ExecuteOptions_Gen4,
+		}},
 	}
 
 	for _, tst := range tests {

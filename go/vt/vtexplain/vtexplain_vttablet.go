@@ -863,9 +863,15 @@ func inferColTypeFromExpr(node sqlparser.Expr, tableColumnMap map[sqlparser.Iden
 			colTypes = append(colTypes, colType)
 		}
 	case sqlparser.Callable:
-		// As a shortcut, functions are integral types
-		colNames = append(colNames, sqlparser.String(node))
-		colTypes = append(colTypes, querypb.Type_INT32)
+		switch node := node.(type) {
+		case *sqlparser.WeightStringFuncExpr:
+			colNames = append(colNames, sqlparser.String(node))
+			colTypes = append(colTypes, querypb.Type_BINARY)
+		default:
+			// As a shortcut, functions are integral types
+			colNames = append(colNames, sqlparser.String(node))
+			colTypes = append(colTypes, querypb.Type_INT32)
+		}
 	case *sqlparser.Literal:
 		colNames = append(colNames, sqlparser.String(node))
 		switch node.Type {
