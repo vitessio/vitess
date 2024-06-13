@@ -283,46 +283,14 @@ func TestSchemaChange(t *testing.T) {
 				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusRunning)
 			})
 			t.Run("throttle online-ddl", func(t *testing.T) {
-				{
-					keyspace, err := clusterInstance.VtctldClientProcess.GetKeyspace(keyspaceName)
-					require.NoError(t, err)
-					require.NotNil(t, keyspace)
-					require.NotNil(t, keyspace.Keyspace.ThrottlerConfig)
-					require.NotNil(t, keyspace.Keyspace.ThrottlerConfig.ThrottledApps)
-					appRule, ok := keyspace.Keyspace.ThrottlerConfig.ThrottledApps[throttlerapp.OnlineDDLName.String()]
-					assert.False(t, ok, "app rule: %v", appRule)
-				}
-				vtctlParams := &cluster.ApplySchemaParams{DDLStrategy: "online"}
-				_, err := clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(
-					keyspaceName, "alter vitess_migration throttle all", *vtctlParams,
-				)
-				assert.NoError(t, err)
-				{
-					keyspace, err := clusterInstance.VtctldClientProcess.GetKeyspace(keyspaceName)
-					require.NoError(t, err)
-					require.NotNil(t, keyspace)
-					require.NotNil(t, keyspace.Keyspace.ThrottlerConfig)
-					require.NotNil(t, keyspace.Keyspace.ThrottlerConfig.ThrottledApps)
-					appRule, ok := keyspace.Keyspace.ThrottlerConfig.ThrottledApps[throttlerapp.OnlineDDLName.String()]
-					assert.True(t, ok, "app rule: %v", appRule)
-				}
+				onlineddl.CheckThrottledApps(t, &vtParams, throttlerapp.OnlineDDLName, false)
+				onlineddl.ThrottleAllMigrations(t, &vtParams)
+				onlineddl.CheckThrottledApps(t, &vtParams, throttlerapp.OnlineDDLName, true)
 				waitForThrottleCheckStatus(t, throttlerapp.OnlineDDLName, primaryTablet, http.StatusExpectationFailed)
 			})
 			t.Run("unthrottle online-ddl", func(t *testing.T) {
-				vtctlParams := &cluster.ApplySchemaParams{DDLStrategy: "online"}
-				_, err := clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(
-					keyspaceName, "alter vitess_migration unthrottle all", *vtctlParams,
-				)
-				assert.NoError(t, err)
-				{
-					keyspace, err := clusterInstance.VtctldClientProcess.GetKeyspace(keyspaceName)
-					require.NoError(t, err)
-					require.NotNil(t, keyspace)
-					require.NotNil(t, keyspace.Keyspace.ThrottlerConfig)
-					require.NotNil(t, keyspace.Keyspace.ThrottlerConfig.ThrottledApps)
-					appRule, ok := keyspace.Keyspace.ThrottlerConfig.ThrottledApps[throttlerapp.OnlineDDLName.String()]
-					assert.False(t, ok, "app rule: %v", appRule)
-				}
+				onlineddl.UnthrottleAllMigrations(t, &vtParams)
+				onlineddl.CheckThrottledApps(t, &vtParams, throttlerapp.OnlineDDLName, false)
 				waitForThrottleCheckStatus(t, throttlerapp.OnlineDDLName, primaryTablet, http.StatusOK)
 			})
 			t.Run("additional wait", func(t *testing.T) {
@@ -674,7 +642,10 @@ func waitForThrottleCheckStatus(t *testing.T, throttlerApp throttlerapp.Name, ta
 		}
 		select {
 		case <-ctx.Done():
-			assert.Equalf(t, wantCode, statusCode, "body: %s", respBody)
+			status, err := throttler.GetThrottlerStatus(&clusterInstance.VtctldClientProcess, primaryTablet)
+			assert.NoError(t, err)
+
+			assert.Equalf(t, wantCode, statusCode, "body: %s\nstatus: %+v", respBody, status)
 			return
 		case <-ticker.C:
 		}
