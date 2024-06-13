@@ -290,7 +290,12 @@ func TestSchemaChange(t *testing.T) {
 			})
 			t.Run("unthrottle online-ddl", func(t *testing.T) {
 				onlineddl.UnthrottleAllMigrations(t, &vtParams)
-				onlineddl.CheckThrottledApps(t, &vtParams, throttlerapp.OnlineDDLName, false)
+				if !onlineddl.CheckThrottledApps(t, &vtParams, throttlerapp.OnlineDDLName, false) {
+					status, err := throttler.GetThrottlerStatus(&clusterInstance.VtctldClientProcess, primaryTablet)
+					assert.NoError(t, err)
+
+					t.Logf("Throttler status: %+v", status)
+				}
 				waitForThrottleCheckStatus(t, throttlerapp.OnlineDDLName, primaryTablet, http.StatusOK)
 			})
 			t.Run("additional wait", func(t *testing.T) {
@@ -642,10 +647,7 @@ func waitForThrottleCheckStatus(t *testing.T, throttlerApp throttlerapp.Name, ta
 		}
 		select {
 		case <-ctx.Done():
-			status, err := throttler.GetThrottlerStatus(&clusterInstance.VtctldClientProcess, primaryTablet)
-			assert.NoError(t, err)
-
-			assert.Equalf(t, wantCode, statusCode, "body: %s\nstatus: %+v", respBody, status)
+			assert.Equalf(t, wantCode, statusCode, "body: %s", respBody)
 			return
 		case <-ticker.C:
 		}
