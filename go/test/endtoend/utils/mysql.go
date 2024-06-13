@@ -237,8 +237,8 @@ func checkFields(t *testing.T, columnName string, vtField, myField *querypb.Fiel
 		t.Errorf("for column %s field types do not match\nNot equal: \nMySQL: %v\nVitess: %v\n", columnName, myField.Type.String(), vtField.Type.String())
 	}
 
-	// starting in Vitess 20, decimal types are properly sized in their field information
-	if BinaryIsAtLeastAtVersion(20, "vtgate") && vtField.Type == sqltypes.Decimal {
+	// starting in Vitess 19, decimal types are properly sized in their field information
+	if BinaryIsAtLeastAtVersion(19, "vtgate") && vtField.Type == sqltypes.Decimal {
 		if vtField.Decimals != myField.Decimals {
 			t.Errorf("for column %s field decimals count do not match\nNot equal: \nMySQL: %v\nVitess: %v\n", columnName, myField.Decimals, vtField.Decimals)
 		}

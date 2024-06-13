@@ -573,7 +573,7 @@ func TestComplexAggregation(t *testing.T) {
 
 func TestJoinAggregation(t *testing.T) {
 	// This is new functionality in Vitess 20
-	utils.SkipIfBinaryIsBelowVersion(t, 20, "vtgate")
+	utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
 
 	mcmp, closer := start(t)
 	defer closer()

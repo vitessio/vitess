@@ -180,7 +180,7 @@ func TestSubqueryInAggregation(t *testing.T) {
 // TestSubqueryInDerivedTable tests that subqueries and derived tables
 // are handled correctly when there are joins inside the derived table
 func TestSubqueryInDerivedTable(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 20, "vtgate")
+	utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 
