@@ -184,3 +184,10 @@ jobs:
 
         # print test output
         cat output.txt
+
+    - name: Test Summary
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true' && always()
+      uses: test-summary/action@v2
+      with:
+        paths: "report.xml"
+        show: "fail, skip"
