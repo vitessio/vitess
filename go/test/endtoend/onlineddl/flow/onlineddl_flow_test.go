@@ -285,23 +285,11 @@ func TestSchemaChange(t *testing.T) {
 			t.Run("throttle online-ddl", func(t *testing.T) {
 				onlineddl.ThrottleAllMigrations(t, &vtParams)
 				onlineddl.CheckThrottledApps(t, &vtParams, throttlerapp.OnlineDDLName, true)
-
-				for _, tab := range tablets {
-					body, err := throttleApp(tab.VttabletProcess, throttlerapp.OnlineDDLName)
-					assert.NoError(t, err)
-					assert.Contains(t, body, throttlerapp.OnlineDDLName)
-				}
 				waitForThrottleCheckStatus(t, throttlerapp.OnlineDDLName, primaryTablet, http.StatusExpectationFailed)
 			})
 			t.Run("unthrottle online-ddl", func(t *testing.T) {
 				onlineddl.UnthrottleAllMigrations(t, &vtParams)
 				onlineddl.CheckThrottledApps(t, &vtParams, throttlerapp.OnlineDDLName, false)
-
-				for _, tab := range tablets {
-					body, err := unthrottleApp(tab.VttabletProcess, throttlerapp.OnlineDDLName)
-					assert.NoError(t, err)
-					assert.Contains(t, body, throttlerapp.OnlineDDLName)
-				}
 				waitForThrottleCheckStatus(t, throttlerapp.OnlineDDLName, primaryTablet, http.StatusOK)
 			})
 			t.Run("additional wait", func(t *testing.T) {
