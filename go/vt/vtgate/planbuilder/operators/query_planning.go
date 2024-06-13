@@ -19,6 +19,7 @@ package operators
 import (
 	"fmt"
 	"io"
+	"strconv"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -244,8 +245,108 @@ func tryPushLimit(ctx *plancontext.PlanningContext, in *Limit) (Operator, *Apply
 		}
 
 		return src, Rewrote(fmt.Sprintf("push limit to %s of apply join", side))
+	case *Limit:
+		combinedLimit := mergeLimits(in.AST, src.AST)
+		if combinedLimit == nil {
+			break
+		}
+		// we can remove the other LIMIT
+		in.AST = combinedLimit
+		in.Source = src.Source
+		return in, Rewrote("merged two limits")
+
+	}
+	return setUpperLimit(in)
+}
+
+func mergeLimits(l1, l2 *sqlparser.Limit) *sqlparser.Limit {
+	// To merge two relational LIMIT operators with LIMIT and OFFSET, we need to combine their
+	// LIMIT and OFFSET values appropriately.
+	// Let's denote the first LIMIT operator as LIMIT_1 with LIMIT_1 and OFFSET_1,
+	// and the second LIMIT operator as LIMIT_2 with LIMIT_2 and OFFSET_2.
+	// The second LIMIT operator receives the output of the first LIMIT operator, meaning the first LIMIT and
+	// OFFSET are applied first, and then the second LIMIT and OFFSET are applied to the resulting subset.
+	//
+	// The goal is to determine the effective combined LIMIT and OFFSET values when applying these two operators sequentially.
+	//
+	// Combined Offset:
+	// The combined offset (OFFSET_combined) is the sum of the two offsets because you need to skip OFFSET_1 rows first,
+	// and then apply the second offset OFFSET_2 to the result.
+	// OFFSET_combined = OFFSET_1 + OFFSET_2
+
+	// Combined Limit:
+	// The combined limit (LIMIT_combined) needs to account for both limits. The effective limit should not exceed the rows returned by the first limit,
+	// so it is the minimum of the remaining rows after the first offset and the second limit.
+	// LIMIT_combined = min(LIMIT_2, LIMIT_1 - OFFSET_2)
+
+	// Note: If LIMIT_1 - OFFSET_2 is negative or zero, it means there are no rows left to limit, so LIMIT_combined should be zero.
+
+	// Example:
+	// First LIMIT operator: LIMIT 10 OFFSET 5 (LIMIT_1 = 10, OFFSET_1 = 5)
+	// Second LIMIT operator: LIMIT 7 OFFSET 3 (LIMIT_2 = 7, OFFSET_2 = 3)
+
+	// Calculations:
+	// Combined OFFSET:
+	// OFFSET_combined = 5 + 3 = 8
+
+	// Combined LIMIT:
+	// remaining rows after OFFSET_2 = 10 - 3 = 7
+	// LIMIT_combined = min(7, 7) = 7
+
+	// So, the combined result would be:
+	// LIMIT 7 OFFSET 8
+
+	// This method ensures that the final combined LIMIT and OFFSET correctly reflect the sequential application of the two original operators.
+
+	offsetMerger := func(v1, v2 int) int {
+		return v1 + v2
+	}
+
+	failed := false
+	limitMerger := func(v1, v2 int) int {
+		if l2.Offset == nil {
+			return min(v1, v2)
+		}
+		off2, ok := l2.Offset.(*sqlparser.Literal)
+		if !ok {
+			failed = true
+			return 0
+		}
+		off2int, _ := strconv.Atoi(off2.Val)
+		return min(v2, v1-off2int)
+	}
+
+	limit := &sqlparser.Limit{
+		Offset:   mergeLimitExpressions(l1.Offset, l2.Offset, offsetMerger),
+		Rowcount: mergeLimitExpressions(l1.Rowcount, l2.Rowcount, limitMerger),
+	}
+	if failed {
+		return nil
+	}
+
+	return limit
+}
+
+func mergeLimitExpressions(e1, e2 sqlparser.Expr, merger func(v1, v2 int) int) sqlparser.Expr {
+	switch {
+	case e1 == nil && e2 == nil:
+		return nil
+	case e1 == nil:
+		return e2
+	case e2 == nil:
+		return e1
 	default:
-		return setUpperLimit(in)
+		v1str, ok := e1.(*sqlparser.Literal)
+		if !ok {
+			return nil
+		}
+		v2str, ok := e2.(*sqlparser.Literal)
+		if !ok {
+			return nil
+		}
+		v1, _ := strconv.Atoi(v1str.Val)
+		v2, _ := strconv.Atoi(v2str.Val)
+		return sqlparser.NewIntLiteral(strconv.Itoa(merger(v1, v2)))
 	}
 }
 
