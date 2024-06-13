@@ -489,3 +489,15 @@ func TestPercentageAndUnderscore(t *testing.T) {
 	mcmp.Exec(`select a.tcol1 from t2 a join t2 b where a.tcol1 = b.tcol2 group by a.tcol1 having repeat(a.tcol1,min(a.id)) = "C_DC_D" order by a.tcol1`)
 	mcmp.Exec(`select a.tcol1 from t2 a join t2 b where a.tcol1 = b.tcol2 group by a.tcol1 having repeat(a.tcol1,min(a.id)) = "C\_DC\_D" order by a.tcol1`)
 }
+
+func BenchmarkCountStar(b *testing.B) {
+	mcmp, closer := start(b)
+	defer closer()
+
+	// insert some data.
+	mcmp.Exec(`insert into t2(id, tcol1, tcol2) values (1, 'A%B', 'A%B'),(2, 'C_D', 'E'),(3, 'AB', 'C1D'),(4, 'E', 'A%B'),(5, 'A%B', 'AB'),(6, 'C1D', 'E'),(7, 'C_D', 'A%B'),(8, 'E', 'C_D')`)
+
+	for i := 0; i < b.N; i++ {
+		mcmp.Exec(`select Count(*) from t2`)
+	}
+}
