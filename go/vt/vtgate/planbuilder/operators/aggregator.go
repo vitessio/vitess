@@ -292,6 +292,21 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	return nil
 }
 
+func (aggr Aggr) setPushColumn(exprs sqlparser.Exprs) {
+	if aggr.Func == nil {
+		if len(exprs) > 1 {
+			panic(vterrors.VT13001(fmt.Sprintf("unexpected number of expression in an random aggregation: %s", sqlparser.String(exprs))))
+		}
+		aggr.Original.Expr = exprs[0]
+		return
+	}
+
+	err := aggr.Func.SetArgs(exprs)
+	if err != nil {
+		panic(err)
+	}
+}
+
 func (aggr Aggr) getPushColumn() sqlparser.Expr {
 	switch aggr.OpCode {
 	case opcode.AggregateAnyValue:
@@ -308,6 +323,17 @@ func (aggr Aggr) getPushColumn() sqlparser.Expr {
 			panic(vterrors.VT03001(sqlparser.String(aggr.Func)))
 		}
 		return aggr.Func.GetArg()
+	}
+}
+
+func (aggr Aggr) getPushColumnExprs() sqlparser.Exprs {
+	switch aggr.OpCode {
+	case opcode.AggregateAnyValue:
+		return sqlparser.Exprs{aggr.Original.Expr}
+	case opcode.AggregateCountStar:
+		return sqlparser.Exprs{sqlparser.NewIntLiteral("1")}
+	default:
+		return aggr.Func.GetArgs()
 	}
 }
 
@@ -408,14 +434,26 @@ func (a *Aggregator) internalAddColumn(ctx *plancontext.PlanningContext, aliased
 	return offset
 }
 
-// SplitAggregatorBelowRoute returns the aggregator that will live under the Route.
+// SplitAggregatorBelowOperators returns the aggregator that will live under the Route.
 // This is used when we are splitting the aggregation so one part is done
 // at the mysql level and one part at the vtgate level
-func (a *Aggregator) SplitAggregatorBelowRoute(input []Operator) *Aggregator {
+func (a *Aggregator) SplitAggregatorBelowOperators(ctx *plancontext.PlanningContext, input []Operator) *Aggregator {
 	newOp := a.Clone(input).(*Aggregator)
 	newOp.Pushed = false
 	newOp.Original = false
 	newOp.DT = nil
+
+	// We need to make sure that the columns are cloned so that the original operator is not affected
+	// by the changes we make to the new operator
+	newOp.Columns = slice.Map(a.Columns, func(from *sqlparser.AliasedExpr) *sqlparser.AliasedExpr {
+		return ctx.SemTable.Clone(from).(*sqlparser.AliasedExpr)
+	})
+	for idx, aggr := range newOp.Aggregations {
+		newOp.Aggregations[idx].Original = ctx.SemTable.Clone(aggr.Original).(*sqlparser.AliasedExpr)
+	}
+	for idx, gb := range newOp.Grouping {
+		newOp.Grouping[idx].Inner = ctx.SemTable.Clone(gb.Inner).(sqlparser.Expr)
+	}
 	return newOp
 }
 

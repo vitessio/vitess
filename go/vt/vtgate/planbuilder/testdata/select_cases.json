@@ -2113,7 +2113,7 @@
     }
   },
   {
-    "comment": "select (select col from user limit 1) as a from user join user_extra order by a",
+    "comment": "ORDER BY subquery",
     "query": "select (select col from user limit 1) as a from user join user_extra order by a",
     "plan": {
       "QueryType": "SELECT",
@@ -2157,9 +2157,9 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select :__sq1 as __sq1, weight_string(:__sq1) from `user` where 1 != 1",
-                "OrderBy": "(0|1) ASC",
-                "Query": "select :__sq1 as __sq1, weight_string(:__sq1) from `user` order by __sq1 asc",
+                "FieldQuery": "select :__sq1 as a from `user` where 1 != 1",
+
+                "Query": "select :__sq1 as a from `user`",
                 "Table": "`user`"
               }
             ]

@@ -69,7 +69,7 @@ type (
 	// Aggr encodes all information needed for aggregation functions
 	Aggr struct {
 		Original *sqlparser.AliasedExpr
-		Func     sqlparser.AggrFunc
+		Func     sqlparser.AggrFunc // if we are missing a Func, it means this is a AggregateAnyValue
 		OpCode   opcode.AggregateOpcode
 
 		// OriginalOpCode will contain opcode.AggregateUnassigned unless we are changing opcode while pushing them down
@@ -314,8 +314,7 @@ func (qp *QueryProjection) addOrderBy(ctx *plancontext.PlanningContext, orderBy 
 	canPushSorting := true
 	es := &expressionSet{}
 	for _, order := range orderBy {
-		if sqlparser.IsNull(order.Expr) {
-			// ORDER BY null can safely be ignored
+		if canIgnoreOrdering(ctx, order.Expr) {
 			continue
 		}
 		if !es.add(ctx, order.Expr) {
@@ -326,6 +325,18 @@ func (qp *QueryProjection) addOrderBy(ctx *plancontext.PlanningContext, orderBy 
 			SimplifiedExpr: order.Expr,
 		})
 		canPushSorting = canPushSorting && !containsAggr(order.Expr)
+	}
+}
+
+// canIgnoreOrdering returns true if the ordering expression has no effect on the result.
+func canIgnoreOrdering(ctx *plancontext.PlanningContext, expr sqlparser.Expr) bool {
+	switch expr.(type) {
+	case *sqlparser.NullVal, *sqlparser.Literal, *sqlparser.Argument:
+		return true
+	case *sqlparser.Subquery:
+		return ctx.SemTable.RecursiveDeps(expr).IsEmpty()
+	default:
+		return false
 	}
 }
 

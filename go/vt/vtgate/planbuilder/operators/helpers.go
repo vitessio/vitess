@@ -26,13 +26,13 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
+type compactable interface {
+	// Compact implement this interface for operators that have easy to see optimisations
+	Compact(ctx *plancontext.PlanningContext) (Operator, *ApplyResult)
+}
+
 // compact will optimise the operator tree into a smaller but equivalent version
 func compact(ctx *plancontext.PlanningContext, op Operator) Operator {
-	type compactable interface {
-		// Compact implement this interface for operators that have easy to see optimisations
-		Compact(ctx *plancontext.PlanningContext) (Operator, *ApplyResult)
-	}
-
 	newOp := BottomUp(op, TableID, func(op Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult) {
 		newOp, ok := op.(compactable)
 		if !ok {
