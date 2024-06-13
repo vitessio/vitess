@@ -174,4 +174,7 @@ jobs:
         mode: 'no-frames'
         input: 'report.xml'
         output: 'report.html'
-
+    - uses: actions/upload-artifact@v4
+      with:
+        name: test-results
+        path: report.html
