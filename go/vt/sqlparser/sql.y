@@ -546,6 +546,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <boolean> exists_opt not_exists_opt enforced enforced_opt temp_opt full_opt
 %type <empty> to_opt
 %type <str> reserved_keyword non_reserved_keyword
+%type <integer> current_pos prev_pos
 %type <identifierCI> sql_id sql_id_opt reserved_sql_id col_alias as_ci_opt
 %type <expr> charset_value
 %type <identifierCS> table_id reserved_table_id table_alias as_opt_id table_id_opt from_database_opt use_table_name
@@ -4843,13 +4844,25 @@ select_option:
   }
 
 select_expression_list:
-  select_expression
+  prev_pos select_expression prev_pos
   {
-    $$ = SelectExprs{$1}
+    createAliasForEmpty($2, yylex.(*Tokenizer).buf[$1:$3])
+    $$ = SelectExprs{$2}
   }
-| select_expression_list ',' select_expression
+| select_expression_list ',' current_pos select_expression prev_pos
   {
-    $$ = append($$, $3)
+    createAliasForEmpty($4, yylex.(*Tokenizer).buf[$3:$5])
+    $$ = append($$, $4)
+  }
+
+prev_pos:
+  {
+    $$ = yylex.(*Tokenizer).PrevPos
+  }
+
+current_pos:
+  {
+    $$ = yylex.(*Tokenizer).Pos
   }
 
 select_expression:
