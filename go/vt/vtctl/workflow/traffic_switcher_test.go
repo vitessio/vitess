@@ -142,8 +142,6 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 					},
 				},
 			},
-			// key: ```my-seq1```, value: &{```my-seq1``` ```source-ks``` vt_`source-ks` t1 vt_targetks 0x14000758640}
-			// column_vindexes:{column:"`my-col`" name:"xxhash"} auto_increment:{column:"`my-col`" sequence:"`source-ks`.`my-seq1`"}
 			want: map[string]*sequenceMetadata{
 				"my-seq1": {
 					backingTableName:     "my-seq1",
@@ -204,7 +202,6 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 				sources:        sources,
 				targets:        targets,
 			}
-			//t.Logf("DEBUG: ts: %+v", ts)
 			got, err := ts.getTargetSequenceMetadata(ctx)
 			if tc.err != "" {
 				require.EqualError(t, err, tc.err)

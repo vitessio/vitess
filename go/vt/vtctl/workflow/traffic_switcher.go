@@ -1387,6 +1387,7 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 		}
 		var err error
 		for tableName, tableDef := range kvs.Tables {
+			// The table name can be escaped in the vschema definition.
 			if tableName, err = sqlescape.UnescapeID(tableName); err != nil {
 				return err
 			}
@@ -1433,6 +1434,7 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 	searchGroup, gctx := errgroup.WithContext(ctx)
 	searchCompleted := make(chan struct{})
 	for _, keyspace := range keyspaces {
+		// The keyspace name can be escaped in the vschema definition.
 		keyspace, err := sqlescape.UnescapeID(keyspace)
 		if err != nil {
 			return nil, err
