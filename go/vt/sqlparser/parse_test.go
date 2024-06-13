@@ -1406,76 +1406,146 @@ var (
 			input: "set #simple\n b = 4",
 		}, {
 			input: "set character_set_results = utf8",
-		}, {
+		},
+		{
+			input:  "set @@`version` = true",
+			output: "set session version = true",
+		},
+		{
+			input:  "select @@`version` = true",
+			output: "select @@`version` = true",
+		},
+		{
 			input:  "set @@session.autocommit = true",
 			output: "set session autocommit = true",
-		}, {
+		},
+		{
 			input:  "set @@session.`autocommit` = true",
-			output: "set session `autocommit` = true",
-		}, {
+			output: "set session autocommit = true",
+		},
+		{
+			input:  "select @@session.`autocommit` = true",
+			output: "select @@session.`autocommit` = true",
+		},
+		{
 			input:  "set @@session.autocommit = ON",
 			output: "set session autocommit = 'ON'",
-		}, {
+		},
+		{
 			input:  "set @@session.autocommit= OFF",
 			output: "set session autocommit = 'OFF'",
-		}, {
+		},
+		{
 			input:  "set session autocommit = ON",
 			output: "set session autocommit = 'ON'",
-		}, {
+		},
+		{
 			input:  "set session autocommit := ON",
 			output: "set session autocommit = 'ON'",
-		}, {
+		},
+		{
 			input:  "set global autocommit = OFF",
 			output: "set global autocommit = 'OFF'",
-		}, {
+		},
+		{
 			input:  "set @@global.optimizer_prune_level = 1",
 			output: "set global optimizer_prune_level = 1",
-		}, {
+		},
+		{
 			input: "set global optimizer_prune_level = 1",
-		}, {
+		},
+		{
 			input:  "set @@persist.optimizer_prune_level = 1",
 			output: "set persist optimizer_prune_level = 1",
-		}, {
+		},
+		{
 			input: "set persist optimizer_prune_level = 1",
-		}, {
+		},
+		{
 			input:  "set @@persist_only.optimizer_prune_level = 1",
 			output: "set persist_only optimizer_prune_level = 1",
-		}, {
+		},
+		{
 			input: "set persist_only optimizer_prune_level = 1",
-		}, {
+		},
+		{
 			input:  "set @@local.optimizer_prune_level = 1",
 			output: "set session optimizer_prune_level = 1",
-		}, {
+		},
+		{
 			input:  "set local optimizer_prune_level = 1",
 			output: "set session optimizer_prune_level = 1",
-		}, {
+		},
+		{
 			input:  "set @@optimizer_prune_level = 1",
 			output: "set session optimizer_prune_level = 1",
-		}, {
+		},
+		{
 			input: "set session optimizer_prune_level = 1",
-		}, {
+		},
+		{
 			input:  "set @@optimizer_prune_level = 1, @@global.optimizer_search_depth = 62",
 			output: "set session optimizer_prune_level = 1, global optimizer_search_depth = 62",
-		}, {
+		},
+		{
 			input:  "set @@GlObAl.optimizer_prune_level = 1",
 			output: "set global optimizer_prune_level = 1",
-		}, {
+		},
+		{
 			input: "set @user.var = 1",
-		}, {
+		},
+		{
 			input: "set @user.var.name = 1",
-		}, {
+		},
+		{
 			input:  "set @user.var.name := 1",
 			output: "set @user.var.name = 1",
-		}, {
+		},
+		{
+			input:  "set @`user var` = 1",
+			output: "set @user var = 1",
+		},
+		{
+			input:  "select @`user var`",
+			output: "select @`user var`",
+		},
+		{
+			input:  "set @user.`var` = 1",
+			output: "set @user.var = 1",
+		},
+		{
+			input:  "select @user.`var`",
+			output: "select @user.var",
+		},
+		{
+			input:  "set @`user`.`var` = 1",
+			output: "set @`user`.var = 1",
+		},
+		{
+			input:  "select @`user`.`var`",
+			output: "select @`user`.var",
+		},
+		{
+			input:  "set @abc.def.`ghi` = 300",
+			output: "set @abc.def.ghi = 300",
+		},
+		{
+			input:  "select @abc.def.`ghi`",
+			output: "select @abc.def.ghi",
+		},
+		{
 			input:  "set autocommit = on",
 			output: "set autocommit = 'on'",
-		}, {
+		},
+		{
 			input:  "set autocommit = off",
 			output: "set autocommit = 'off'",
-		}, {
+		},
+		{
 			input:  "set autocommit = off, foo = 1",
 			output: "set autocommit = 'off', foo = 1",
-		}, {
+		},
+		{
 			input:  "set names utf8 collate foo",
 			output: "set names 'utf8'",
 		}, {
@@ -4403,6 +4473,20 @@ end`,
 		},
 	}
 )
+
+// TestSingleSQL is a helper function to test a single SQL statement.
+func TestSingleSQL(t *testing.T) {
+	t.Skip()
+	tests := []parseTest{
+		{
+			input:  "select @`user var`",
+			output: "select @`user var`",
+		},
+	}
+	for _, tcase := range tests {
+		runParseTestCase(t, tcase)
+	}
+}
 
 func TestValid(t *testing.T) {
 	validSQL = append(validSQL, validMultiStatementSql...)

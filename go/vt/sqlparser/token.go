@@ -432,6 +432,21 @@ func (tkn *Tokenizer) scanIdentifier(firstByte byte, isDbSystemVariable bool) (i
 		buffer.WriteByte(byte(tkn.lastChar))
 		tkn.next()
 	}
+
+	// special case for user variables with backticks
+	if firstByte == '@' && tkn.lastChar == '`' {
+		buffer.WriteByte(byte(tkn.lastChar))
+		tkn.next()
+		for isLetter(tkn.lastChar) || isDigit(tkn.lastChar) || isCarat(tkn.lastChar) || unicode.IsSpace(rune(tkn.lastChar)) {
+			buffer.WriteByte(byte(tkn.lastChar))
+			if tkn.lastChar == '`' {
+				tkn.next()
+				break
+			}
+			tkn.next()
+		}
+	}
+
 	if tkn.lastChar == '@' {
 		tkn.potentialAccountName = true
 	}
