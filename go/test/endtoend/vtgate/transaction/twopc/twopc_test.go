@@ -404,8 +404,8 @@ func TestDTCommitDMLOnlyOnRM(t *testing.T) {
 		"mismatch expected: \n got: %s, want: %s", prettyPrint(logTable), prettyPrint(expectations))
 }
 
-// TestDTPrepareFail tests distributed transaction prepare failure
-func TestDTPrepareFail(t *testing.T) {
+// TestDTPrepareFailOnRM tests distributed transaction prepare failure on resource manager
+func TestDTPrepareFailOnRM(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()
 
@@ -434,15 +434,23 @@ func TestDTPrepareFail(t *testing.T) {
 
 	var wg sync.WaitGroup
 	wg.Add(2)
+	var commitErr error
 	go func() {
-		utils.ExecAllowError(t, conn, "commit")
+		_, err := utils.ExecAllowError(t, conn, "commit")
+		if err != nil {
+			commitErr = err
+		}
 		wg.Done()
 	}()
 	go func() {
-		utils.ExecAllowError(t, conn2, "commit")
+		_, err := utils.ExecAllowError(t, conn2, "commit")
 		wg.Done()
+		if err != nil {
+			commitErr = err
+		}
 	}()
 	wg.Wait()
+	require.ErrorContains(t, commitErr, "ResourceExhausted desc = prepare failed")
 
 	tableMap := make(map[string][]*querypb.Field)
 	dtMap := make(map[string]string)
