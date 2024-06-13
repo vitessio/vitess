@@ -3615,7 +3615,8 @@ func (node *Count) FormatFast(buf *TrackedBuffer) {
 }
 
 func (node *CountStar) FormatFast(buf *TrackedBuffer) {
-	buf.WriteString("count(*)")
+	buf.WriteString(node.Name)
+	buf.WriteString("(*)")
 	if node.OverClause != nil {
 		buf.WriteByte(' ')
 		node.OverClause.FormatFast(buf)

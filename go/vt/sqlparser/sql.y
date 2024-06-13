@@ -5987,7 +5987,7 @@ UTC_DATE func_paren_opt
   }
 | COUNT openb '*' closeb over_clause_opt
   {
-    $$ = &CountStar{OverClause: $5}
+    $$ = &CountStar{Name: $1, OverClause: $5}
   }
 | COUNT openb distinct_opt expression_list closeb over_clause_opt
   {

@@ -2264,7 +2264,8 @@ func (cmp *Comparator) RefOfCountStar(a, b *CountStar) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.RefOfOverClause(a.OverClause, b.OverClause)
+	return a.Name == b.Name &&
+		cmp.RefOfOverClause(a.OverClause, b.OverClause)
 }
 
 // RefOfCreateDatabase does deep equals between the two objects.

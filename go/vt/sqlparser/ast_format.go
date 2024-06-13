@@ -2742,7 +2742,7 @@ func (node *Count) Format(buf *TrackedBuffer) {
 }
 
 func (node *CountStar) Format(buf *TrackedBuffer) {
-	buf.WriteString("count(*)")
+	buf.astPrintf(node, "%s(*)", node.Name)
 	if node.OverClause != nil {
 		buf.astPrintf(node, " %v", node.OverClause)
 	}
