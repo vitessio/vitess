@@ -284,12 +284,20 @@ func TestSchemaChange(t *testing.T) {
 			})
 			t.Run("throttle online-ddl", func(t *testing.T) {
 				onlineddl.CheckThrottledApps(t, &vtParams, throttlerapp.OnlineDDLName, false)
-				onlineddl.ThrottleAllMigrations(t, &vtParams)
+				vtctlParams := &cluster.ApplySchemaParams{DDLStrategy: "online"}
+				_, err := clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(
+					keyspaceName, "alter vitess_migration throttle all", *vtctlParams,
+				)
+				assert.NoError(t, err)
 				onlineddl.CheckThrottledApps(t, &vtParams, throttlerapp.OnlineDDLName, true)
 				waitForThrottleCheckStatus(t, throttlerapp.OnlineDDLName, primaryTablet, http.StatusExpectationFailed)
 			})
 			t.Run("unthrottle online-ddl", func(t *testing.T) {
-				onlineddl.UnthrottleAllMigrations(t, &vtParams)
+				vtctlParams := &cluster.ApplySchemaParams{DDLStrategy: "online"}
+				_, err := clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(
+					keyspaceName, "alter vitess_migration unthrottle all", *vtctlParams,
+				)
+				assert.NoError(t, err)
 				onlineddl.CheckThrottledApps(t, &vtParams, throttlerapp.OnlineDDLName, false)
 				waitForThrottleCheckStatus(t, throttlerapp.OnlineDDLName, primaryTablet, http.StatusOK)
 			})
