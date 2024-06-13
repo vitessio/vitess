@@ -19,6 +19,8 @@ package transaction
 import (
 	"context"
 	_ "embed"
+	"reflect"
+	"sort"
 	"sync"
 	"testing"
 
@@ -57,26 +59,27 @@ func TestDTCommit(t *testing.T) {
 	utils.Exec(t, conn, "commit")
 
 	tableMap := make(map[string][]*querypb.Field)
-	logTable := retrieveTransitions(t, ch, tableMap)
+	dtMap := make(map[string]string)
+	logTable := retrieveTransitions(t, ch, tableMap, dtMap)
 	expectations := map[string][]string{
 		"ks.dt_state:80-": {
-			`insert:[VARCHAR("PREPARE")]`,
-			`update:[VARCHAR("COMMIT")]`,
-			`delete:[VARCHAR("COMMIT")]`,
+			"insert:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
+			"update:[VARCHAR(\"dtid-1\") VARCHAR(\"COMMIT\")]",
+			"delete:[VARCHAR(\"dtid-1\") VARCHAR(\"COMMIT\")]",
 		},
 		"ks.dt_participant:80-": {
-			`insert:[INT64(1) VARCHAR("ks") VARCHAR("-80")]`,
-			`delete:[INT64(1) VARCHAR("ks") VARCHAR("-80")]`,
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
 		},
 		"ks.redo_state:-80": {
-			`insert:[VARCHAR("PREPARE")]`,
-			`delete:[VARCHAR("PREPARE")]`,
+			"insert:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
+			"delete:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
 		},
 		"ks.redo_statement:-80": {
-			"insert:[INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
-			"insert:[INT64(2) BLOB(\"insert into twopc_user(id, `name`) values (10, 'apa')\")]",
-			"delete:[INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
-			"delete:[INT64(2) BLOB(\"insert into twopc_user(id, `name`) values (10, 'apa')\")]",
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
+			"insert:[VARCHAR(\"dtid-1\") INT64(2) BLOB(\"insert into twopc_user(id, `name`) values (10, 'apa')\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(2) BLOB(\"insert into twopc_user(id, `name`) values (10, 'apa')\")]",
 		},
 		"ks.twopc_user:-80": {
 			`insert:[INT64(8) VARCHAR("bar")]`,
@@ -87,7 +90,7 @@ func TestDTCommit(t *testing.T) {
 			`insert:[INT64(9) VARCHAR("baz")]`,
 		},
 	}
-	assert.Equal(t, len(expectations), len(logTable),
+	assert.Equal(t, expectations, logTable,
 		"mismatch expected: \n got: %s, want: %s", prettyPrint(logTable), prettyPrint(expectations))
 
 	// Update from multiple shard
@@ -96,29 +99,29 @@ func TestDTCommit(t *testing.T) {
 	utils.Exec(t, conn, "update twopc_user set name='newfoo' where id = 8")
 	utils.Exec(t, conn, "commit")
 
-	logTable = retrieveTransitions(t, ch, tableMap)
+	logTable = retrieveTransitions(t, ch, tableMap, dtMap)
 	expectations = map[string][]string{
 		"ks.dt_state:80-": {
-			"insert:[VARCHAR(\"PREPARE\")]",
-			"update:[VARCHAR(\"COMMIT\")]",
-			"delete:[VARCHAR(\"COMMIT\")]",
+			"insert:[VARCHAR(\"dtid-2\") VARCHAR(\"PREPARE\")]",
+			"update:[VARCHAR(\"dtid-2\") VARCHAR(\"COMMIT\")]",
+			"delete:[VARCHAR(\"dtid-2\") VARCHAR(\"COMMIT\")]",
 		},
 		"ks.dt_participant:80-": {
-			"insert:[INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
-			"delete:[INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
+			"insert:[VARCHAR(\"dtid-2\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
+			"delete:[VARCHAR(\"dtid-2\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
 		},
 		"ks.redo_state:-80": {
-			"insert:[VARCHAR(\"PREPARE\")]",
-			"delete:[VARCHAR(\"PREPARE\")]",
+			"insert:[VARCHAR(\"dtid-2\") VARCHAR(\"PREPARE\")]",
+			"delete:[VARCHAR(\"dtid-2\") VARCHAR(\"PREPARE\")]",
 		},
 		"ks.redo_statement:-80": {
-			"insert:[INT64(1) BLOB(\"update twopc_user set `name` = 'newfoo' where id = 8 limit 10001 /* INT64 */\")]",
-			"delete:[INT64(1) BLOB(\"update twopc_user set `name` = 'newfoo' where id = 8 limit 10001 /* INT64 */\")]",
+			"insert:[VARCHAR(\"dtid-2\") INT64(1) BLOB(\"update twopc_user set `name` = 'newfoo' where id = 8 limit 10001 /* INT64 */\")]",
+			"delete:[VARCHAR(\"dtid-2\") INT64(1) BLOB(\"update twopc_user set `name` = 'newfoo' where id = 8 limit 10001 /* INT64 */\")]",
 		},
 		"ks.twopc_user:-80": {"update:[INT64(8) VARCHAR(\"newfoo\")]"},
 		"ks.twopc_user:80-": {"update:[INT64(7) VARCHAR(\"newfoo\")]"},
 	}
-	assert.Equal(t, len(expectations), len(logTable),
+	assert.Equal(t, expectations, logTable,
 		"mismatch expected: \n got: %s, want: %s", prettyPrint(logTable), prettyPrint(expectations))
 
 	// DELETE from multiple shard
@@ -127,29 +130,29 @@ func TestDTCommit(t *testing.T) {
 	utils.Exec(t, conn, "delete from twopc_user where id = 10")
 	utils.Exec(t, conn, "commit")
 
-	logTable = retrieveTransitions(t, ch, tableMap)
+	logTable = retrieveTransitions(t, ch, tableMap, dtMap)
 	expectations = map[string][]string{
 		"ks.dt_state:80-": {
-			"insert:[VARCHAR(\"PREPARE\")]",
-			"update:[VARCHAR(\"COMMIT\")]",
-			"delete:[VARCHAR(\"COMMIT\")]",
+			"insert:[VARCHAR(\"dtid-3\") VARCHAR(\"PREPARE\")]",
+			"update:[VARCHAR(\"dtid-3\") VARCHAR(\"COMMIT\")]",
+			"delete:[VARCHAR(\"dtid-3\") VARCHAR(\"COMMIT\")]",
 		},
 		"ks.dt_participant:80-": {
-			"insert:[INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
-			"delete:[INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
+			"insert:[VARCHAR(\"dtid-3\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
+			"delete:[VARCHAR(\"dtid-3\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
 		},
 		"ks.redo_state:-80": {
-			"insert:[VARCHAR(\"PREPARE\")]",
-			"delete:[VARCHAR(\"PREPARE\")]",
+			"insert:[VARCHAR(\"dtid-3\") VARCHAR(\"PREPARE\")]",
+			"delete:[VARCHAR(\"dtid-3\") VARCHAR(\"PREPARE\")]",
 		},
 		"ks.redo_statement:-80": {
-			"insert:[INT64(1) BLOB(\"delete from twopc_user where id = 10 limit 10001 /* INT64 */\")]",
-			"delete:[INT64(1) BLOB(\"delete from twopc_user where id = 10 limit 10001 /* INT64 */\")]",
+			"insert:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"delete from twopc_user where id = 10 limit 10001 /* INT64 */\")]",
+			"delete:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"delete from twopc_user where id = 10 limit 10001 /* INT64 */\")]",
 		},
 		"ks.twopc_user:-80": {"delete:[INT64(10) VARCHAR(\"apa\")]"},
 		"ks.twopc_user:80-": {"delete:[INT64(9) VARCHAR(\"baz\")]"},
 	}
-	assert.Equal(t, len(expectations), len(logTable),
+	assert.Equal(t, expectations, logTable,
 		"mismatch expected: \n got: %s, want: %s", prettyPrint(logTable), prettyPrint(expectations))
 }
 
@@ -180,7 +183,7 @@ func TestDTRollback(t *testing.T) {
 	utils.Exec(t, conn, "rollback")
 
 	tableMap := make(map[string][]*querypb.Field)
-	logTable := retrieveTransitions(t, ch, tableMap)
+	logTable := retrieveTransitions(t, ch, tableMap, nil)
 	assert.Zero(t, len(logTable),
 		"no change in binlog expected: got: %s", prettyPrint(logTable))
 
@@ -190,7 +193,7 @@ func TestDTRollback(t *testing.T) {
 	utils.Exec(t, conn, "update twopc_user set name='newfoo' where id = 8")
 	utils.Exec(t, conn, "rollback")
 
-	logTable = retrieveTransitions(t, ch, tableMap)
+	logTable = retrieveTransitions(t, ch, tableMap, nil)
 	assert.Zero(t, len(logTable),
 		"no change in binlog expected: got: %s", prettyPrint(logTable))
 
@@ -200,7 +203,7 @@ func TestDTRollback(t *testing.T) {
 	utils.Exec(t, conn, "delete from twopc_user where id = 8")
 	utils.Exec(t, conn, "rollback")
 
-	logTable = retrieveTransitions(t, ch, tableMap)
+	logTable = retrieveTransitions(t, ch, tableMap, nil)
 	assert.Zero(t, len(logTable),
 		"no change in binlog expected: got: %s", prettyPrint(logTable))
 }
@@ -229,20 +232,21 @@ func TestDTCommitDMLOnlyOnMM(t *testing.T) {
 	utils.Exec(t, conn, "commit")
 
 	tableMap := make(map[string][]*querypb.Field)
-	logTable := retrieveTransitions(t, ch, tableMap)
+	dtMap := make(map[string]string)
+	logTable := retrieveTransitions(t, ch, tableMap, dtMap)
 	expectations := map[string][]string{
-		"ks.dt_participant:80-": {
-			"insert:[INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
-			"delete:[INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
-		},
 		"ks.dt_state:80-": {
-			"insert:[VARCHAR(\"PREPARE\")]",
-			"update:[VARCHAR(\"COMMIT\")]",
-			"delete:[VARCHAR(\"COMMIT\")]",
+			"insert:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
+			"update:[VARCHAR(\"dtid-1\") VARCHAR(\"COMMIT\")]",
+			"delete:[VARCHAR(\"dtid-1\") VARCHAR(\"COMMIT\")]",
+		},
+		"ks.dt_participant:80-": {
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
 		},
 		"ks.twopc_user:80-": {"insert:[INT64(7) VARCHAR(\"foo\")]"},
 	}
-	assert.Equal(t, len(expectations), len(logTable),
+	assert.Equal(t, expectations, logTable,
 		"mismatch expected: \n got: %s, want: %s", prettyPrint(logTable), prettyPrint(expectations))
 
 	// Update from multiple shard
@@ -251,20 +255,20 @@ func TestDTCommitDMLOnlyOnMM(t *testing.T) {
 	utils.Exec(t, conn, "select * from twopc_user")
 	utils.Exec(t, conn, "commit")
 
-	logTable = retrieveTransitions(t, ch, tableMap)
+	logTable = retrieveTransitions(t, ch, tableMap, dtMap)
 	expectations = map[string][]string{
-		"ks.dt_participant:80-": {
-			"insert:[INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
-			"delete:[INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
-		},
 		"ks.dt_state:80-": {
-			"insert:[VARCHAR(\"PREPARE\")]",
-			"update:[VARCHAR(\"COMMIT\")]",
-			"delete:[VARCHAR(\"COMMIT\")]",
+			"insert:[VARCHAR(\"dtid-2\") VARCHAR(\"PREPARE\")]",
+			"update:[VARCHAR(\"dtid-2\") VARCHAR(\"COMMIT\")]",
+			"delete:[VARCHAR(\"dtid-2\") VARCHAR(\"COMMIT\")]",
+		},
+		"ks.dt_participant:80-": {
+			"insert:[VARCHAR(\"dtid-2\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
+			"delete:[VARCHAR(\"dtid-2\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
 		},
 		"ks.twopc_user:80-": {"update:[INT64(7) VARCHAR(\"newfoo\")]"},
 	}
-	assert.Equal(t, len(expectations), len(logTable),
+	assert.Equal(t, expectations, logTable,
 		"mismatch expected: \n got: %s, want: %s", prettyPrint(logTable), prettyPrint(expectations))
 
 	// DELETE from multiple shard
@@ -273,20 +277,20 @@ func TestDTCommitDMLOnlyOnMM(t *testing.T) {
 	utils.Exec(t, conn, "select * from twopc_user")
 	utils.Exec(t, conn, "commit")
 
-	logTable = retrieveTransitions(t, ch, tableMap)
+	logTable = retrieveTransitions(t, ch, tableMap, dtMap)
 	expectations = map[string][]string{
-		"ks.dt_participant:80-": {
-			"insert:[INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
-			"delete:[INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
-		},
 		"ks.dt_state:80-": {
-			"insert:[VARCHAR(\"PREPARE\")]",
-			"update:[VARCHAR(\"COMMIT\")]",
-			"delete:[VARCHAR(\"COMMIT\")]",
+			"insert:[VARCHAR(\"dtid-3\") VARCHAR(\"PREPARE\")]",
+			"update:[VARCHAR(\"dtid-3\") VARCHAR(\"COMMIT\")]",
+			"delete:[VARCHAR(\"dtid-3\") VARCHAR(\"COMMIT\")]",
+		},
+		"ks.dt_participant:80-": {
+			"insert:[VARCHAR(\"dtid-3\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
+			"delete:[VARCHAR(\"dtid-3\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
 		},
 		"ks.twopc_user:80-": {"delete:[INT64(7) VARCHAR(\"newfoo\")]"},
 	}
-	assert.Equal(t, len(expectations), len(logTable),
+	assert.Equal(t, expectations, logTable,
 		"mismatch expected: \n got: %s, want: %s", prettyPrint(logTable), prettyPrint(expectations))
 }
 
@@ -314,28 +318,29 @@ func TestDTCommitDMLOnlyOnRM(t *testing.T) {
 	utils.Exec(t, conn, "commit")
 
 	tableMap := make(map[string][]*querypb.Field)
-	logTable := retrieveTransitions(t, ch, tableMap)
+	dtMap := make(map[string]string)
+	logTable := retrieveTransitions(t, ch, tableMap, dtMap)
 	expectations := map[string][]string{
-		"ks.dt_participant:-80": {
-			"insert:[INT64(1) VARCHAR(\"ks\") VARCHAR(\"80-\")]",
-			"delete:[INT64(1) VARCHAR(\"ks\") VARCHAR(\"80-\")]",
-		},
 		"ks.dt_state:-80": {
-			"insert:[VARCHAR(\"PREPARE\")]",
-			"update:[VARCHAR(\"COMMIT\")]",
-			"delete:[VARCHAR(\"COMMIT\")]",
+			"insert:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
+			"update:[VARCHAR(\"dtid-1\") VARCHAR(\"COMMIT\")]",
+			"delete:[VARCHAR(\"dtid-1\") VARCHAR(\"COMMIT\")]",
+		},
+		"ks.dt_participant:-80": {
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"80-\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"80-\")]",
 		},
 		"ks.redo_state:80-": {
-			"insert:[VARCHAR(\"PREPARE\")]",
-			"delete:[VARCHAR(\"PREPARE\")]",
+			"insert:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
+			"delete:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
 		},
 		"ks.redo_statement:80-": {
-			"insert:[INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (7, 'foo')\")]",
-			"delete:[INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (7, 'foo')\")]",
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (7, 'foo')\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (7, 'foo')\")]",
 		},
 		"ks.twopc_user:80-": {"insert:[INT64(7) VARCHAR(\"foo\")]"},
 	}
-	assert.Equal(t, len(expectations), len(logTable),
+	assert.Equal(t, expectations, logTable,
 		"mismatch expected: \n got: %s, want: %s", prettyPrint(logTable), prettyPrint(expectations))
 
 	// Update from multiple shard
@@ -344,28 +349,28 @@ func TestDTCommitDMLOnlyOnRM(t *testing.T) {
 	utils.Exec(t, conn, "update twopc_user set name='newfoo' where id = 7")
 	utils.Exec(t, conn, "commit")
 
-	logTable = retrieveTransitions(t, ch, tableMap)
+	logTable = retrieveTransitions(t, ch, tableMap, dtMap)
 	expectations = map[string][]string{
-		"ks.dt_participant:-80": {
-			"insert:[INT64(1) VARCHAR(\"ks\") VARCHAR(\"80-\")]",
-			"delete:[INT64(1) VARCHAR(\"ks\") VARCHAR(\"80-\")]",
-		},
 		"ks.dt_state:-80": {
-			"insert:[VARCHAR(\"PREPARE\")]",
-			"update:[VARCHAR(\"COMMIT\")]",
-			"delete:[VARCHAR(\"COMMIT\")]",
+			"insert:[VARCHAR(\"dtid-2\") VARCHAR(\"PREPARE\")]",
+			"update:[VARCHAR(\"dtid-2\") VARCHAR(\"COMMIT\")]",
+			"delete:[VARCHAR(\"dtid-2\") VARCHAR(\"COMMIT\")]",
+		},
+		"ks.dt_participant:-80": {
+			"insert:[VARCHAR(\"dtid-2\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"80-\")]",
+			"delete:[VARCHAR(\"dtid-2\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"80-\")]",
 		},
 		"ks.redo_state:80-": {
-			"insert:[VARCHAR(\"PREPARE\")]",
-			"delete:[VARCHAR(\"PREPARE\")]",
+			"insert:[VARCHAR(\"dtid-2\") VARCHAR(\"PREPARE\")]",
+			"delete:[VARCHAR(\"dtid-2\") VARCHAR(\"PREPARE\")]",
 		},
 		"ks.redo_statement:80-": {
-			"insert:[INT64(1) BLOB(\"update twopc_user set `name` = 'newfoo' where id = 7 limit 10001 /* INT64 */\")]",
-			"delete:[INT64(1) BLOB(\"update twopc_user set `name` = 'newfoo' where id = 7 limit 10001 /* INT64 */\")]",
+			"insert:[VARCHAR(\"dtid-2\") INT64(1) BLOB(\"update twopc_user set `name` = 'newfoo' where id = 7 limit 10001 /* INT64 */\")]",
+			"delete:[VARCHAR(\"dtid-2\") INT64(1) BLOB(\"update twopc_user set `name` = 'newfoo' where id = 7 limit 10001 /* INT64 */\")]",
 		},
 		"ks.twopc_user:80-": {"update:[INT64(7) VARCHAR(\"newfoo\")]"},
 	}
-	assert.Equal(t, len(expectations), len(logTable),
+	assert.Equal(t, expectations, logTable,
 		"mismatch expected: \n got: %s, want: %s", prettyPrint(logTable), prettyPrint(expectations))
 
 	// DELETE from multiple shard
@@ -374,28 +379,28 @@ func TestDTCommitDMLOnlyOnRM(t *testing.T) {
 	utils.Exec(t, conn, "delete from twopc_user where id = 7")
 	utils.Exec(t, conn, "commit")
 
-	logTable = retrieveTransitions(t, ch, tableMap)
+	logTable = retrieveTransitions(t, ch, tableMap, dtMap)
 	expectations = map[string][]string{
-		"ks.dt_participant:-80": {
-			"insert:[INT64(1) VARCHAR(\"ks\") VARCHAR(\"80-\")]",
-			"delete:[INT64(1) VARCHAR(\"ks\") VARCHAR(\"80-\")]",
-		},
 		"ks.dt_state:-80": {
-			"insert:[VARCHAR(\"PREPARE\")]",
-			"update:[VARCHAR(\"COMMIT\")]",
-			"delete:[VARCHAR(\"COMMIT\")]",
+			"insert:[VARCHAR(\"dtid-3\") VARCHAR(\"PREPARE\")]",
+			"update:[VARCHAR(\"dtid-3\") VARCHAR(\"COMMIT\")]",
+			"delete:[VARCHAR(\"dtid-3\") VARCHAR(\"COMMIT\")]",
+		},
+		"ks.dt_participant:-80": {
+			"insert:[VARCHAR(\"dtid-3\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"80-\")]",
+			"delete:[VARCHAR(\"dtid-3\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"80-\")]",
 		},
 		"ks.redo_state:80-": {
-			"insert:[VARCHAR(\"PREPARE\")]",
-			"delete:[VARCHAR(\"PREPARE\")]",
+			"insert:[VARCHAR(\"dtid-3\") VARCHAR(\"PREPARE\")]",
+			"delete:[VARCHAR(\"dtid-3\") VARCHAR(\"PREPARE\")]",
 		},
 		"ks.redo_statement:80-": {
-			"insert:[INT64(1) BLOB(\"delete from twopc_user where id = 7 limit 10001 /* INT64 */\")]",
-			"delete:[INT64(1) BLOB(\"delete from twopc_user where id = 7 limit 10001 /* INT64 */\")]",
+			"insert:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"delete from twopc_user where id = 7 limit 10001 /* INT64 */\")]",
+			"delete:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"delete from twopc_user where id = 7 limit 10001 /* INT64 */\")]",
 		},
 		"ks.twopc_user:80-": {"delete:[INT64(7) VARCHAR(\"newfoo\")]"},
 	}
-	assert.Equal(t, len(expectations), len(logTable),
+	assert.Equal(t, expectations, logTable,
 		"mismatch expected: \n got: %s, want: %s", prettyPrint(logTable), prettyPrint(expectations))
 }
 
@@ -440,37 +445,71 @@ func TestDTPrepareFail(t *testing.T) {
 	wg.Wait()
 
 	tableMap := make(map[string][]*querypb.Field)
-	logTable := retrieveTransitions(t, ch, tableMap)
+	dtMap := make(map[string]string)
+	logTable := retrieveTransitions(t, ch, tableMap, dtMap)
 	expectations := map[string][]string{
-		"ks.dt_participant:80-": {
-			"insert:[INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
-			"insert:[INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
-			"delete:[INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
-			"delete:[INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
-		},
 		"ks.dt_state:80-": {
-			"insert:[VARCHAR(\"PREPARE\")]",
-			"insert:[VARCHAR(\"PREPARE\")]",
-			"update:[VARCHAR(\"COMMIT\")]",
-			"update:[VARCHAR(\"ROLLBACK\")]",
-			"delete:[VARCHAR(\"COMMIT\")]",
-			"delete:[VARCHAR(\"ROLLBACK\")]",
+			"insert:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
+			"insert:[VARCHAR(\"dtid-2\") VARCHAR(\"PREPARE\")]",
+			"update:[VARCHAR(\"dtid-1\") VARCHAR(\"COMMIT\")]",
+			"update:[VARCHAR(\"dtid-2\") VARCHAR(\"ROLLBACK\")]",
+			"delete:[VARCHAR(\"dtid-1\") VARCHAR(\"COMMIT\")]",
+			"delete:[VARCHAR(\"dtid-2\") VARCHAR(\"ROLLBACK\")]",
+		},
+		"ks.dt_participant:80-": {
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
+			"insert:[VARCHAR(\"dtid-2\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
+			"delete:[VARCHAR(\"dtid-2\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"-80\")]",
 		},
 		"ks.redo_state:-80": {
-			"insert:[VARCHAR(\"PREPARE\")]",
-			"delete:[VARCHAR(\"PREPARE\")]",
+			"insert:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
+			"delete:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
 		},
-		"ks.redo_statement:-80": {
-			"insert:[INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
-			"delete:[INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
-		},
-		"ks.twopc_user:-80": {
-			"insert:[INT64(8) VARCHAR(\"bar\")]",
-		},
-		"ks.twopc_user:80-": {
-			"insert:[INT64(7) VARCHAR(\"foo\")]",
-		},
+		"ks.redo_statement:-80": { /* flexi Expectation */ },
+		"ks.twopc_user:-80":     { /* flexi Expectation */ },
+		"ks.twopc_user:80-":     { /* flexi Expectation */ },
 	}
-	assert.Equal(t, len(expectations), len(logTable),
-		"mismatch expected: \n got: %s, want: %s", prettyPrint(logTable), prettyPrint(expectations))
+	flexiExpectations := map[string][2][]string{
+		"ks.redo_statement:-80": {{
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
+		}, {
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (10, 'apa')\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (10, 'apa')\")]",
+		}},
+		"ks.twopc_user:-80": {{
+			"insert:[INT64(8) VARCHAR(\"bar\")]",
+		}, {
+			"insert:[INT64(10) VARCHAR(\"apa\")]",
+		}},
+		"ks.twopc_user:80-": {{
+			"insert:[INT64(7) VARCHAR(\"foo\")]",
+		}, {
+			"insert:[INT64(9) VARCHAR(\"baz\")]",
+		}},
+	}
+
+	compareMaps(t, expectations, logTable, flexiExpectations)
+}
+
+func compareMaps(t *testing.T, expected, actual map[string][]string, flexibleExp map[string][2][]string) {
+	assert.Equal(t, len(expected), len(actual), "mismatch in number of keys: expected: %d, got: %d", len(expected), len(actual))
+
+	for key, expectedValue := range expected {
+		actualValue, ok := actual[key]
+		require.Truef(t, ok, "key %s not found in actual map", key)
+
+		if validValues, isFlexi := flexibleExp[key]; isFlexi {
+			// For the flexible key, check if the actual value matches one of the valid values
+			if !reflect.DeepEqual(actualValue, validValues[0]) && !reflect.DeepEqual(actualValue, validValues[1]) {
+				t.Fatalf("mismatch in values for key '%s': expected one of: %v, got: %v", key, validValues, actualValue)
+			}
+		} else {
+			// Sort the slices before comparison
+			sort.Strings(expectedValue)
+			sort.Strings(actualValue)
+			assert.Equal(t, expectedValue, actualValue, "mismatch in values for key %s: expected: %v, got: %v", key, expectedValue, actualValue)
+		}
+	}
 }

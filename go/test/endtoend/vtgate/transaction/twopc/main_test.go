@@ -127,30 +127,46 @@ func start(t *testing.T) (*mysql.Conn, func()) {
 	}
 }
 
-type extractInterestingValues func(vals []sqltypes.Value) []sqltypes.Value
+type extractInterestingValues func(dtidMap map[string]string, vals []sqltypes.Value) []sqltypes.Value
 
 var tables = map[string]extractInterestingValues{
-	"ks.dt_state": func(vals []sqltypes.Value) (out []sqltypes.Value) {
-		val, _ := vals[1].ToInt()
-		state := querypb.TransactionState(val)
-		out = append(out, sqltypes.NewVarChar(state.String()))
+	"ks.dt_state": func(dtidMap map[string]string, vals []sqltypes.Value) (out []sqltypes.Value) {
+		dtid := getDTID(dtidMap, vals[0].ToString())
+		dtState := getDTState(vals[1])
+		out = append(out, sqltypes.NewVarChar(dtid), sqltypes.NewVarChar(dtState.String()))
 		return
 	},
-	"ks.dt_participant": func(vals []sqltypes.Value) (out []sqltypes.Value) {
-		out = vals[1:]
+	"ks.dt_participant": func(dtidMap map[string]string, vals []sqltypes.Value) (out []sqltypes.Value) {
+		dtid := getDTID(dtidMap, vals[0].ToString())
+		out = append([]sqltypes.Value{sqltypes.NewVarChar(dtid)}, vals[1:]...)
 		return
 	},
-	"ks.redo_state": func(vals []sqltypes.Value) (out []sqltypes.Value) {
-		val, _ := vals[1].ToInt()
-		state := querypb.TransactionState(val)
-		out = append(out, sqltypes.NewVarChar(state.String()))
+	"ks.redo_state": func(dtidMap map[string]string, vals []sqltypes.Value) (out []sqltypes.Value) {
+		dtid := getDTID(dtidMap, vals[0].ToString())
+		dtState := getDTState(vals[1])
+		out = append(out, sqltypes.NewVarChar(dtid), sqltypes.NewVarChar(dtState.String()))
 		return
 	},
-	"ks.redo_statement": func(vals []sqltypes.Value) (out []sqltypes.Value) {
-		out = vals[1:]
+	"ks.redo_statement": func(dtidMap map[string]string, vals []sqltypes.Value) (out []sqltypes.Value) {
+		dtid := getDTID(dtidMap, vals[0].ToString())
+		out = append([]sqltypes.Value{sqltypes.NewVarChar(dtid)}, vals[1:]...)
 		return
 	},
-	"ks.twopc_user": func(vals []sqltypes.Value) []sqltypes.Value { return vals },
+	"ks.twopc_user": func(_ map[string]string, vals []sqltypes.Value) []sqltypes.Value { return vals },
+}
+
+func getDTState(val sqltypes.Value) querypb.TransactionState {
+	s, _ := val.ToInt()
+	return querypb.TransactionState(s)
+}
+
+func getDTID(dtidMap map[string]string, dtKey string) string {
+	dtid, exists := dtidMap[dtKey]
+	if !exists {
+		dtid = fmt.Sprintf("dtid-%d", len(dtidMap)+1)
+		dtidMap[dtKey] = dtid
+	}
+	return dtid
 }
 
 func runVStream(t *testing.T, ctx context.Context, ch chan *binlogdatapb.VEvent, vtgateConn *vtgateconn.VTGateConn) {
@@ -195,7 +211,7 @@ func runVStream(t *testing.T, ctx context.Context, ch chan *binlogdatapb.VEvent,
 	<-firstEventProcessed
 }
 
-func retrieveTransitions(t *testing.T, ch chan *binlogdatapb.VEvent, tableMap map[string][]*querypb.Field) map[string][]string {
+func retrieveTransitions(t *testing.T, ch chan *binlogdatapb.VEvent, tableMap map[string][]*querypb.Field, dtMap map[string]string) map[string][]string {
 	logTable := make(map[string][]string)
 
 	keepWaiting := true
@@ -208,7 +224,7 @@ func retrieveTransitions(t *testing.T, ch chan *binlogdatapb.VEvent, tableMap ma
 				fields, ok := tableMap[tableName]
 				require.Truef(t, ok, "table %s not found in fields map", tableName)
 				for _, rc := range re.RowEvent.RowChanges {
-					logEvent(logTable, shard, tableName, fields, rc)
+					logEvent(logTable, dtMap, shard, tableName, fields, rc)
 				}
 			}
 			if re.FieldEvent != nil {
@@ -221,7 +237,7 @@ func retrieveTransitions(t *testing.T, ch chan *binlogdatapb.VEvent, tableMap ma
 	return logTable
 }
 
-func logEvent(logTable map[string][]string, shard string, tbl string, fields []*querypb.Field, rc *binlogdatapb.RowChange) {
+func logEvent(logTable map[string][]string, dtMap map[string]string, shard string, tbl string, fields []*querypb.Field, rc *binlogdatapb.RowChange) {
 	key := fmt.Sprintf("%s:%s", tbl, shard)
 
 	var eventType string
@@ -241,7 +257,7 @@ func logEvent(logTable map[string][]string, shard string, tbl string, fields []*
 	}
 	execFunc, exists := tables[tbl]
 	if exists {
-		vals = execFunc(vals)
+		vals = execFunc(dtMap, vals)
 	}
 	logTable[key] = append(logTable[key], fmt.Sprintf("%s:%v", eventType, vals))
 }
