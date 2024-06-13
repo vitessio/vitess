@@ -91,10 +91,10 @@ select name, count(*) from user group by name /* scatter aggregate */
 ----------------------------------------------------------------------
 select 1, "hello", 3.14, null from user limit 10 /* select constant sql values */
 
-1 ks_sharded/-40: select 1, 'hello', 3.14, null from `user` limit 10 /* INT64 */ /* select constant sql values */
-1 ks_sharded/40-80: select 1, 'hello', 3.14, null from `user` limit 10 /* INT64 */ /* select constant sql values */
-1 ks_sharded/80-c0: select 1, 'hello', 3.14, null from `user` limit 10 /* INT64 */ /* select constant sql values */
-1 ks_sharded/c0-: select 1, 'hello', 3.14, null from `user` limit 10 /* INT64 */ /* select constant sql values */
+1 ks_sharded/-40: select 1, 'hello', 3.14, null from `user` limit 10 /* select constant sql values */
+1 ks_sharded/40-80: select 1, 'hello', 3.14, null from `user` limit 10 /* select constant sql values */
+1 ks_sharded/80-c0: select 1, 'hello', 3.14, null from `user` limit 10 /* select constant sql values */
+1 ks_sharded/c0-: select 1, 'hello', 3.14, null from `user` limit 10 /* select constant sql values */
 
 ----------------------------------------------------------------------
 select * from (select id from user) s /* scatter paren select */
@@ -209,7 +209,7 @@ SELECT id FROM orders WHERE id IN (1, "1", 1)
 ----------------------------------------------------------------------
 (SELECT user.id, user.name FROM user WHERE user.id = 1) UNION (SELECT user.id, user.name FROM user WHERE user.id = 2)
 
-2 ks_sharded/-40: select dt.c0 as id, dt.c1 as `name`, weight_string(dt.c0), weight_string(dt.c1) from (select distinct `user`.id, `user`.`name` from `user` where `user`.id = 2) as dt(c0, c1) limit 10001
-2 ks_sharded/-40: select dt.c0 as id, dt.c1 as `name`, weight_string(dt.c0), weight_string(dt.c1) from (select distinct `user`.id, `user`.`name` from `user` where `user`.id = 1) as dt(c0, c1) limit 10001
+2 ks_sharded/-40: select distinct `user`.id, `user`.`name`, weight_string(`user`.id), weight_string(`user`.`name`) from `user` where `user`.id = 2 limit 10001 /* INT64 */
+2 ks_sharded/-40: select distinct `user`.id, `user`.`name`, weight_string(`user`.id), weight_string(`user`.`name`) from `user` where `user`.id = 1 limit 10001 /* INT64 */
 
 ----------------------------------------------------------------------
