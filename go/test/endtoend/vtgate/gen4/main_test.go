@@ -135,7 +135,7 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
-func start(t *testing.T) (utils.MySQLCompare, func()) {
+func start(t testing.TB) (utils.MySQLCompare, func()) {
 	mcmp, err := utils.NewMySQLCompare(t, vtParams, mysqlParams)
 	require.NoError(t, err)
 	deleteAll := func() {
