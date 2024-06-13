@@ -1385,7 +1385,11 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 		if kvs == nil || kvs.Sharded || len(kvs.Tables) == 0 {
 			return nil
 		}
+		var err error
 		for tableName, tableDef := range kvs.Tables {
+			if tableName, err = sqlescape.UnescapeID(tableName); err != nil {
+				return err
+			}
 			select {
 			case <-sctx.Done():
 				return sctx.Err()
@@ -1429,7 +1433,10 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 	searchGroup, gctx := errgroup.WithContext(ctx)
 	searchCompleted := make(chan struct{})
 	for _, keyspace := range keyspaces {
-		keyspace := keyspace // https://golang.org/doc/faq#closures_and_goroutines
+		keyspace, err := sqlescape.UnescapeID(keyspace)
+		if err != nil {
+			return nil, err
+		}
 		searchGroup.Go(func() error {
 			return searchKeyspace(gctx, searchCompleted, keyspace)
 		})
@@ -1478,6 +1485,15 @@ func (ts *trafficSwitcher) findSequenceUsageInKeyspace(vschema *vschemapb.Keyspa
 			if !found {
 				return nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid sequence table name %s defined in the %s keyspace",
 					vs.AutoIncrement.Sequence, ts.targetKeyspace)
+			}
+			// Unescape the table name and keyspace name as they may be escaped in the
+			// vschema definition if they e.g. contain dashes.
+			var err error
+			if tableName, err = sqlescape.UnescapeID(tableName); err != nil {
+				return nil, false, err
+			}
+			if keyspace, err = sqlescape.UnescapeID(keyspace); err != nil {
+				return nil, false, err
 			}
 			sm.backingTableName = tableName
 			sm.backingTableKeyspace = keyspace
