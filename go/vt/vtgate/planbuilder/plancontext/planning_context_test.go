@@ -40,20 +40,26 @@ func TestOuterTableNullability(t *testing.T) {
 
 	// Check if the columns are correctly marked as nullable.
 	for _, col := range columns {
-		t.Run(sqlparser.String(col), func(t *testing.T) {
+		colName := "column: " + sqlparser.String(col)
+		t.Run(colName, func(t *testing.T) {
+			// Extract the column type from the context and the semantic state.
+			// The context should mark the column as nullable.
 			ctxType, found := ctx.TypeForExpr(col)
-			require.True(t, found, "column: %s", sqlparser.String(col))
+			require.True(t, found, colName)
 			stType, found := ctx.SemTable.TypeForExpr(col)
-			require.True(t, found, "column: %s", sqlparser.String(col))
+			require.True(t, found, colName)
+			ctxNullable := ctxType.Nullable()
+			stNullable := stType.Nullable()
+
 			switch col.Qualifier.Name.String() {
 			case "t1":
-				assert.False(t, ctxType.Nullable(), "column: %s", sqlparser.String(col))
-				assert.False(t, stType.Nullable(), "column: %s", sqlparser.String(col))
+				assert.False(t, ctxNullable, colName)
+				assert.False(t, stNullable, colName)
 			case "t2":
-				assert.True(t, ctxType.Nullable(), "column: %s", sqlparser.String(col))
+				assert.True(t, ctxNullable, colName)
 
 				// The semantic state says that the column is not nullable. Don't trust it.
-				assert.False(t, stType.Nullable(), "column: %s", sqlparser.String(col))
+				assert.False(t, stNullable, colName)
 			}
 		})
 	}
