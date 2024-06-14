@@ -146,7 +146,7 @@ func executeNonLiteralUpdate(ctx context.Context, vcursor VCursor, bindVars map[
 		if res == nil {
 			res = qr
 		} else {
-			res.RowsAffected += res.RowsAffected
+			res.RowsAffected += qr.RowsAffected
 		}
 	}
 	return res, nil

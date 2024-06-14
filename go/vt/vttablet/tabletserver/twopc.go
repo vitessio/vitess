@@ -86,6 +86,10 @@ type TwoPC struct {
 // NewTwoPC creates a TwoPC variable.
 func NewTwoPC(readPool *connpool.Pool) *TwoPC {
 	tpc := &TwoPC{readPool: readPool}
+	return tpc
+}
+
+func (tpc *TwoPC) initializeQueries() {
 	dbname := sidecar.GetIdentifier()
 	tpc.insertRedoTx = sqlparser.BuildParsedQuery(
 		"insert into %s.redo_state(dtid, state, time_created) values (%a, %a, %a)",
@@ -132,7 +136,6 @@ func NewTwoPC(readPool *connpool.Pool) *TwoPC {
 		"select dtid, time_created from %s.dt_state where time_created < %a",
 		dbname, ":time_created")
 	tpc.readAllTransactions = fmt.Sprintf(sqlReadAllTransactions, dbname, dbname)
-	return tpc
 }
 
 // Open starts the TwoPC service.
@@ -143,6 +146,7 @@ func (tpc *TwoPC) Open(dbconfigs *dbconfigs.DBConfigs) error {
 	}
 	defer conn.Close()
 	tpc.readPool.Open(dbconfigs.AppWithDB(), dbconfigs.DbaWithDB(), dbconfigs.DbaWithDB())
+	tpc.initializeQueries()
 	log.Infof("TwoPC: Engine open succeeded")
 	return nil
 }
