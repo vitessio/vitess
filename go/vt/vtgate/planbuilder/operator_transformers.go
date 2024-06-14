@@ -317,7 +317,7 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 	}
 
 	for _, groupBy := range op.Grouping {
-		typ, _ := ctx.SemTable.TypeForExpr(groupBy.Inner)
+		typ, _ := ctx.TypeForExpr(groupBy.Inner)
 		groupByKeys = append(groupByKeys, &engine.GroupByParams{
 			KeyCol:          groupBy.ColOffset,
 			WeightStringCol: groupBy.WSOffset,
@@ -372,7 +372,7 @@ func createMemorySort(ctx *plancontext.PlanningContext, src engine.Primitive, or
 	}
 
 	for idx, order := range ordering.Order {
-		typ, _ := ctx.SemTable.TypeForExpr(order.SimplifiedExpr)
+		typ, _ := ctx.TypeForExpr(order.SimplifiedExpr)
 		prim.OrderBy = append(prim.OrderBy, evalengine.OrderByParams{
 			Col:             ordering.Offset[idx],
 			WeightStringCol: ordering.WOffset[idx],
@@ -438,7 +438,7 @@ func getEvalEngineExpr(ctx *plancontext.PlanningContext, pe *operators.ProjExpr)
 	case *operators.EvalEngine:
 		return e.EExpr, nil
 	case operators.Offset:
-		typ, _ := ctx.SemTable.TypeForExpr(pe.EvalExpr)
+		typ, _ := ctx.TypeForExpr(pe.EvalExpr)
 		return evalengine.NewColumn(int(e), typ, pe.EvalExpr), nil
 	default:
 		return nil, vterrors.VT13001("project not planned for: %s", pe.String())
@@ -590,7 +590,7 @@ func buildRoutePrimitive(ctx *plancontext.PlanningContext, op *operators.Route, 
 	}
 
 	for _, order := range op.Ordering {
-		typ, _ := ctx.SemTable.TypeForExpr(order.AST)
+		typ, _ := ctx.TypeForExpr(order.AST)
 		eroute.OrderBy = append(eroute.OrderBy, evalengine.OrderByParams{
 			Col:             order.Offset,
 			WeightStringCol: order.WOffset,
@@ -907,11 +907,11 @@ func transformHashJoin(ctx *plancontext.PlanningContext, op *operators.HashJoin)
 
 	var missingTypes []string
 
-	ltyp, found := ctx.SemTable.TypeForExpr(op.JoinComparisons[0].LHS)
+	ltyp, found := ctx.TypeForExpr(op.JoinComparisons[0].LHS)
 	if !found {
 		missingTypes = append(missingTypes, sqlparser.String(op.JoinComparisons[0].LHS))
 	}
-	rtyp, found := ctx.SemTable.TypeForExpr(op.JoinComparisons[0].RHS)
+	rtyp, found := ctx.TypeForExpr(op.JoinComparisons[0].RHS)
 	if !found {
 		missingTypes = append(missingTypes, sqlparser.String(op.JoinComparisons[0].RHS))
 	}
@@ -949,7 +949,7 @@ func transformVindexPlan(ctx *plancontext.PlanningContext, op *operators.Vindex)
 
 	expr, err := evalengine.Translate(op.Value, &evalengine.Config{
 		Collation:   ctx.SemTable.Collation,
-		ResolveType: ctx.SemTable.TypeForExpr,
+		ResolveType: ctx.TypeForExpr,
 		Environment: ctx.VSchema.Environment(),
 	})
 	if err != nil {
