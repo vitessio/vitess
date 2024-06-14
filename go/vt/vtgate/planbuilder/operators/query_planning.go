@@ -297,56 +297,118 @@ func mergeLimits(l1, l2 *sqlparser.Limit) *sqlparser.Limit {
 	// LIMIT 7 OFFSET 8
 
 	// This method ensures that the final combined LIMIT and OFFSET correctly reflect the sequential application of the two original operators.
-
-	offsetMerger := func(v1, v2 int) int {
-		return v1 + v2
+	combinedLimit, failed := mergeLimitExpressions(l1.Rowcount, l2.Rowcount, l2.Offset)
+	if failed {
+		return nil
 	}
-
-	failed := false
-	limitMerger := func(v1, v2 int) int {
-		if l2.Offset == nil {
-			return min(v1, v2)
-		}
-		off2, ok := l2.Offset.(*sqlparser.Literal)
-		if !ok {
-			failed = true
-			return 0
-		}
-		off2int, _ := strconv.Atoi(off2.Val)
-		return min(v2, v1-off2int)
-	}
-
-	limit := &sqlparser.Limit{
-		Offset:   mergeLimitExpressions(l1.Offset, l2.Offset, offsetMerger),
-		Rowcount: mergeLimitExpressions(l1.Rowcount, l2.Rowcount, limitMerger),
-	}
+	combinedOffset, failed := mergeOffsetExpressions(l1.Offset, l2.Offset)
 	if failed {
 		return nil
 	}
 
-	return limit
+	return &sqlparser.Limit{
+		Offset:   combinedOffset,
+		Rowcount: combinedLimit,
+	}
 }
 
-func mergeLimitExpressions(e1, e2 sqlparser.Expr, merger func(v1, v2 int) int) sqlparser.Expr {
+func mergeOffsetExpressions(e1, e2 sqlparser.Expr) (expr sqlparser.Expr, failed bool) {
 	switch {
 	case e1 == nil && e2 == nil:
-		return nil
+		return nil, false
 	case e1 == nil:
-		return e2
+		return e2, false
 	case e2 == nil:
-		return e1
+		return e1, false
 	default:
 		v1str, ok := e1.(*sqlparser.Literal)
 		if !ok {
-			return nil
+			return nil, true
 		}
 		v2str, ok := e2.(*sqlparser.Literal)
 		if !ok {
-			return nil
+			return nil, true
 		}
 		v1, _ := strconv.Atoi(v1str.Val)
 		v2, _ := strconv.Atoi(v2str.Val)
-		return sqlparser.NewIntLiteral(strconv.Itoa(merger(v1, v2)))
+		return sqlparser.NewIntLiteral(strconv.Itoa(v1 + v2)), false
+	}
+}
+
+// mergeLimitExpressions merges two LIMIT expressions with an OFFSET expression.
+// l1: First LIMIT expression.
+// l2: Second LIMIT expression.
+// off2: Second OFFSET expression.
+// Returns the merged LIMIT expression and a boolean indicating if the merge failed.
+func mergeLimitExpressions(l1, l2, off2 sqlparser.Expr) (expr sqlparser.Expr, failed bool) {
+	switch {
+	// If both limits are nil, there's nothing to merge, return nil without failure.
+	case l1 == nil && l2 == nil:
+		return nil, false
+
+	// If the first limit is nil, the second limit determines the final limit.
+	case l1 == nil:
+		return l2, false
+
+	// If the second limit is nil, calculate the remaining limit after applying the offset to the first limit.
+	case l2 == nil:
+		if off2 == nil {
+			// No offset, so the first limit is used directly.
+			return l1, false
+		}
+		off2, ok := off2.(*sqlparser.Literal)
+		if !ok {
+			// If the offset is not a literal, fail the merge.
+			return nil, true
+		}
+		lim1str, ok := l1.(*sqlparser.Literal)
+		if !ok {
+			// If the first limit is not a literal, return the first limit without failing.
+			return nil, false
+		}
+		// Calculate the remaining limit after the offset.
+		off2int, _ := strconv.Atoi(off2.Val)
+		l1int, _ := strconv.Atoi(lim1str.Val)
+		lim := l1int - off2int
+		if lim < 0 {
+			lim = 0
+		}
+		return sqlparser.NewIntLiteral(strconv.Itoa(lim)), false
+
+	default:
+		v1str, ok1 := l1.(*sqlparser.Literal)
+		if ok1 && v1str.Val == "1" {
+			// If the first limit is "1", it dominates, so return it.
+			return l1, false
+		}
+		v2str, ok2 := l2.(*sqlparser.Literal)
+		if ok2 && v2str.Val == "1" {
+			// If the second limit is "1", it dominates, so return it.
+			return l2, false
+		}
+		if !ok1 || !ok2 {
+			// If either limit is not a literal, fail the merge.
+			return nil, true
+		}
+
+		var off2int int
+		if off2 != nil {
+			off2, ok := off2.(*sqlparser.Literal)
+			if !ok {
+				// If the offset is not a literal, fail the merge.
+				return nil, true
+			}
+			off2int, _ = strconv.Atoi(off2.Val)
+		}
+
+		v1, _ := strconv.Atoi(v1str.Val)
+		v2, _ := strconv.Atoi(v2str.Val)
+		lim := min(v2, v1-off2int)
+		if lim < 0 {
+			// If the combined limit is negative, set it to zero.
+			lim = 0
+		}
+		return sqlparser.NewIntLiteral(strconv.Itoa(lim)), false
 	}
 }
 
