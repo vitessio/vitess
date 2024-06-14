@@ -26,8 +26,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 
+	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	vdiff2 "vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
 )
@@ -329,16 +331,7 @@ type vdiffInfo struct {
 
 func getVDiffInfo(json string) *vdiffInfo {
 	var info vdiffInfo
-	info.Workflow = gjson.Get(json, "Workflow").String()
-	info.Keyspace = gjson.Get(json, "Keyspace").String()
-	info.State = gjson.Get(json, "State").String()
-	info.Shards = gjson.Get(json, "Shards").String()
-	info.RowsCompared = gjson.Get(json, "RowsCompared").Int()
-	info.StartedAt = gjson.Get(json, "StartedAt").String()
-	info.CompletedAt = gjson.Get(json, "CompletedAt").String()
-	info.HasMismatch = gjson.Get(json, "HasMismatch").Bool()
-	info.Progress.Percentage = gjson.Get(json, "Progress.Percentage").Float()
-	info.Progress.ETA = gjson.Get(json, "Progress.ETA").String()
+	_ = json2.Unmarshal([]byte(json), &info)
 	return &info
 }
 

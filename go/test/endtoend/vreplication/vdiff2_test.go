@@ -307,15 +307,10 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 
 	// These are done here so that we have a valid workflow to test the commands against.
 
-	// FIXME: this test is temporarily disabled because it's flaky. The issue is that the vdiff reaches the completed
-	// state before the stop command is issued, so the expectation is not matched. So that the rest of the tests
-	// can be run in CI immediately, commenting this out until we find a proper solution.
-	/*
-		if tc.stop {
-			testStop(t, ksWorkflow, allCellNames)
-			tc.vdiffCount++ // We did either vtctlclient OR vtctldclient vdiff create
-		}
-	*/
+	if tc.stop {
+		testStop(t, ksWorkflow, allCellNames)
+		tc.vdiffCount++ // We did either vtctlclient OR vtctldclient vdiff create
+	}
 
 	if tc.testCLICreateWait {
 		testCLICreateWait(t, ksWorkflow, allCellNames)
@@ -526,14 +521,16 @@ func testResume(t *testing.T, tc *testCase, cells string) {
 
 func testStop(t *testing.T, ksWorkflow, cells string) {
 	t.Run("Stop", func(t *testing.T) {
-		// create a new VDiff and immediately stop it
+		// Create a new VDiff and immediately stop it.
 		uuid, _ := performVDiff2Action(t, false, ksWorkflow, cells, "create", "", false)
 		_, _ = performVDiff2Action(t, false, ksWorkflow, cells, "stop", uuid, false)
-		// confirm the VDiff is in the expected stopped state
+		// Confirm the VDiff is in the expected state.
 		_, output := performVDiff2Action(t, false, ksWorkflow, cells, "show", uuid, false)
 		jsonOutput := getVDiffInfo(output)
-		require.Equal(t, "stopped", jsonOutput.State)
-		// confirm that the context cancelled error was also cleared
+		// It may have been able to complete before we could stop it (there's virtually no data
+		// to diff). There's no way to avoid this potential race so don't consider that a failure.
+		require.True(t, (jsonOutput.State == "stopped" || jsonOutput.State == "completed"), "expected vdiff state to be stopped or completed but it was %s", jsonOutput.State)
+		// Confirm that the context cancelled error was also cleared.
 		require.False(t, strings.Contains(output, `"Errors":`))
 	})
 }
