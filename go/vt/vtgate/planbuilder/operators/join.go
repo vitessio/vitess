@@ -83,7 +83,7 @@ func (j *Join) Compact(ctx *plancontext.PlanningContext) (Operator, *ApplyResult
 	return newOp, Rewrote("merge querygraphs into a single one")
 }
 
-func createOuterJoin(tableExpr *sqlparser.JoinTableExpr, lhs, rhs Operator) Operator {
+func createOuterJoin(ctx *plancontext.PlanningContext, tableExpr *sqlparser.JoinTableExpr, lhs, rhs Operator) Operator {
 	if tableExpr.Join == sqlparser.RightJoinType {
 		lhs, rhs = rhs, lhs
 	}
@@ -93,6 +93,8 @@ func createOuterJoin(tableExpr *sqlparser.JoinTableExpr, lhs, rhs Operator) Oper
 	}
 	predicate := tableExpr.Condition.On
 	sqlparser.RemoveKeyspaceInCol(predicate)
+	// mark the RHS as outer tables so we know which columns are nullable
+	ctx.OuterTables = ctx.OuterTables.Merge(TableID(rhs))
 	return &Join{LHS: lhs, RHS: rhs, LeftJoin: true, Predicate: predicate}
 }
 

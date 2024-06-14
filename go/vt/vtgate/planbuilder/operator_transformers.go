@@ -291,7 +291,7 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 		oa.aggregates = append(oa.aggregates, aggrParam)
 	}
 	for _, groupBy := range op.Grouping {
-		typ, _ := ctx.SemTable.TypeForExpr(groupBy.Inner)
+		typ, _ := ctx.TypeForExpr(groupBy.Inner)
 		oa.groupByKeys = append(oa.groupByKeys, &engine.GroupByParams{
 			KeyCol:          groupBy.ColOffset,
 			WeightStringCol: groupBy.WSOffset,
@@ -332,7 +332,7 @@ func createMemorySort(ctx *plancontext.PlanningContext, src logicalPlan, orderin
 	}
 
 	for idx, order := range ordering.Order {
-		typ, _ := ctx.SemTable.TypeForExpr(order.SimplifiedExpr)
+		typ, _ := ctx.TypeForExpr(order.SimplifiedExpr)
 		ms.eMemorySort.OrderBy = append(ms.eMemorySort.OrderBy, evalengine.OrderByParams{
 			Col:             ordering.Offset[idx],
 			WeightStringCol: ordering.WOffset[idx],
@@ -389,7 +389,7 @@ func getEvalEngingeExpr(ctx *plancontext.PlanningContext, pe *operators.ProjExpr
 	case *operators.EvalEngine:
 		return e.EExpr, nil
 	case operators.Offset:
-		typ, _ := ctx.SemTable.TypeForExpr(pe.EvalExpr)
+		typ, _ := ctx.TypeForExpr(pe.EvalExpr)
 		return evalengine.NewColumn(int(e), typ, pe.EvalExpr), nil
 	default:
 		return nil, vterrors.VT13001("project not planned for: %s", pe.String())
@@ -560,7 +560,7 @@ func buildRouteLogicalPlan(ctx *plancontext.PlanningContext, op *operators.Route
 
 	eroute, err := routeToEngineRoute(ctx, op, hints)
 	for _, order := range op.Ordering {
-		typ, _ := ctx.SemTable.TypeForExpr(order.AST)
+		typ, _ := ctx.TypeForExpr(order.AST)
 		eroute.OrderBy = append(eroute.OrderBy, evalengine.OrderByParams{
 			Col:             order.Offset,
 			WeightStringCol: order.WOffset,
@@ -877,11 +877,11 @@ func transformHashJoin(ctx *plancontext.PlanningContext, op *operators.HashJoin)
 
 	var missingTypes []string
 
-	ltyp, found := ctx.SemTable.TypeForExpr(op.JoinComparisons[0].LHS)
+	ltyp, found := ctx.TypeForExpr(op.JoinComparisons[0].LHS)
 	if !found {
 		missingTypes = append(missingTypes, sqlparser.String(op.JoinComparisons[0].LHS))
 	}
-	rtyp, found := ctx.SemTable.TypeForExpr(op.JoinComparisons[0].RHS)
+	rtyp, found := ctx.TypeForExpr(op.JoinComparisons[0].RHS)
 	if !found {
 		missingTypes = append(missingTypes, sqlparser.String(op.JoinComparisons[0].RHS))
 	}

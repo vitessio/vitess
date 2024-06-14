@@ -224,7 +224,7 @@ func getOperatorFromJoinTableExpr(ctx *plancontext.PlanningContext, tableExpr *s
 	case sqlparser.NormalJoinType:
 		return createInnerJoin(ctx, tableExpr, lhs, rhs)
 	case sqlparser.LeftJoinType, sqlparser.RightJoinType:
-		return createOuterJoin(tableExpr, lhs, rhs)
+		return createOuterJoin(ctx, tableExpr, lhs, rhs)
 	default:
 		panic(vterrors.VT13001("unsupported: %s", tableExpr.Join.ToString()))
 	}

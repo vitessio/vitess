@@ -371,3 +371,17 @@ func TestAlterTableWithView(t *testing.T) {
 
 	mcmp.AssertMatches("select * from v1", `[[INT64(1) INT64(1)]]`)
 }
+
+func TestHandleNullableColumn(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 21, "vtgate")
+	require.NoError(t,
+		utils.WaitForAuthoritative(t, keyspaceName, "tbl", clusterInstance.VtgateProcess.ReadVSchema))
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into t1(id1, id2) values (0,0), (1,1), (2,2)")
+	mcmp.Exec("insert into tbl(id, unq_col, nonunq_col) values (0,0,0), (1,1,6)")
+	// This query tests that we handle nullable columns correctly
+	// tbl.nonunq_col is not nullable according to the schema, but because of the left join, it can be NULL
+	mcmp.ExecWithColumnCompare(`select * from t1 left join tbl on t1.id2 = tbl.id where t1.id1 = 6 or tbl.nonunq_col = 6`)
+}

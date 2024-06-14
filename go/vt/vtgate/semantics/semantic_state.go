@@ -614,6 +614,7 @@ func (st *SemTable) AddExprs(tbl *sqlparser.AliasedTableExpr, cols sqlparser.Sel
 }
 
 // TypeForExpr returns the type of expressions in the query
+// Note that PlanningContext has the same method, and you should use that if you have a PlanningContext
 func (st *SemTable) TypeForExpr(e sqlparser.Expr) (evalengine.Type, bool) {
 	if typ, found := st.ExprTypes[e]; found {
 		return typ, true
