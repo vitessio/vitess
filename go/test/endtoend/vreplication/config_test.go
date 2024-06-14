@@ -88,7 +88,7 @@ create table nopk (name varchar(128), age int unsigned);
     "orders": {},
     "loadtest": {},
     "customer": {},
-    "customer_seq": {
+    "` + "`customer_seq`" + `": {
       "type": "sequence"
     },
     "customer2": {},

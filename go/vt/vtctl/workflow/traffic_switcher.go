@@ -1403,7 +1403,6 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 				smMu.Lock() // Prevent concurrent access to the map
 				defer smMu.Unlock()
 				sm := sequencesByBackingTable[escapedTableName]
-				log.Errorf("DEBUG: sequence table: %s", escapedTableName)
 				if tableDef != nil && tableDef.Type == vindexes.TypeSequence &&
 					sm != nil && escapedTableName == sm.backingTableName {
 					tablesFound++ // This is also protected by the mutex
@@ -1435,11 +1434,10 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 	}
 	searchGroup, gctx := errgroup.WithContext(ctx)
 	searchCompleted := make(chan struct{})
-	log.Errorf("DEBUG: sequences: %s", strings.Join(maps.Keys(sequencesByBackingTable), ","))
 	for _, keyspace := range keyspaces {
 		// The keyspace name could be escaped so we need to unescape it.
 		ks, err := sqlescape.UnescapeID(keyspace)
-		if err != nil {
+		if err != nil { // Should never happen
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid keyspace name %s: %v", keyspace, err)
 		}
 		searchGroup.Go(func() error {
@@ -1451,7 +1449,7 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 	}
 
 	if tablesFound != tableCount {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to locate all of the backing sequence tables being used; sequence tables: %s",
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to locate all of the backing sequence tables being used: %s",
 			strings.Join(maps.Keys(sequencesByBackingTable), ","))
 	}
 	return sequencesByBackingTable, nil
@@ -1517,7 +1515,8 @@ func (ts *trafficSwitcher) findSequenceUsageInKeyspace(vschema *vschemapb.Keyspa
 		} else {
 			sm.backingTableName, err = sqlescape.UnescapeID(seqTable.AutoIncrement.Sequence)
 			if err != nil {
-				return nil, false, err
+				return nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid sequence table name %s defined in sequence table %+v: %v",
+					seqTable.AutoIncrement.Sequence, seqTable, err)
 			}
 			seqTable.AutoIncrement.Sequence = sm.backingTableName
 			allFullyQualified = false
@@ -1568,17 +1567,17 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 			}
 			usingCol, err := sqlescape.EnsureEscaped(sequenceMetadata.usingTableDefinition.AutoIncrement.Column)
 			if err != nil {
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid column name %s specified for sequence table %s: %v",
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid column name %s specified for sequence in table %s: %v",
 					sequenceMetadata.usingTableDefinition.AutoIncrement.Column, sequenceMetadata.usingTableName, err)
 			}
 			usingDB, err := sqlescape.EnsureEscaped(sequenceMetadata.usingTableDBName)
 			if err != nil {
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid database name %s for sequence table %s: %v",
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid database name %s specified for sequence in table %s: %v",
 					sequenceMetadata.usingTableDBName, sequenceMetadata.usingTableName, err)
 			}
 			usingTable, err := sqlescape.EnsureEscaped(sequenceMetadata.usingTableName)
 			if err != nil {
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid sequence table name %s: %v",
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid sequence table name specified for sequence in table %s: %v",
 					sequenceMetadata.usingTableName, err)
 			}
 			query := sqlparser.BuildParsedQuery(sqlGetMaxSequenceVal,
