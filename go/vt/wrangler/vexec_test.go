@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -151,15 +152,11 @@ func TestVExec(t *testing.T) {
 			if testCase.errorString == "" {
 				require.NoError(t, err)
 				for _, result := range results {
-					if !testCase.result.Equal(result) {
-						t.Errorf("mismatched result:\nwant: %v\ngot:  %v", testCase.result, result)
-					}
+					assert.True(t, testCase.result.Equal(result), "mismatched result")
 				}
 			} else {
-				require.Error(t, err)
-				if !strings.Contains(err.Error(), testCase.errorString) {
-					t.Fatalf("Wrong error, want %s, got %s", testCase.errorString, err.Error())
-				}
+				require.ErrorContains(t, err, testCase.errorString, "Wrong error, want %s, got %s", testCase.errorString, err.Error())
+
 			}
 		})
 	}
