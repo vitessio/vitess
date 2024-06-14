@@ -214,6 +214,9 @@ func (ctx *PlanningContext) TypeForExpr(e sqlparser.Expr) (evalengine.Type, bool
 		return t, found
 	}
 	deps := ctx.SemTable.RecursiveDeps(e)
+	// If the expression is from an outer table, it should be nullable
+	// There are some exceptions to this, where an expression depending on the outer side
+	// will never return NULL, but it's better to be conservative here.
 	if deps.IsOverlapping(ctx.OuterTables) {
 		t.SetNullable()
 	}
