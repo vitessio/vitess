@@ -147,7 +147,7 @@ create table nopk (name varchar(128), age int unsigned);
       ],
       "auto_increment": {
         "column": "cid",
-         "sequence": "` + "`customer_seq`" + `"
+        "sequence": "` + "`customer_seq`" + `"
       }
     },
     "customer_name": {
@@ -295,7 +295,7 @@ create table nopk (name varchar(128), age int unsigned);
 	      ],
 	      "auto_increment": {
 	        "column": "cid",
-	        "sequence": "customer_seq"
+	        "sequence": "` + "`customer_seq`" + `"
 	      }
 	},
     "orders": {
@@ -345,7 +345,7 @@ create table nopk (name varchar(128), age int unsigned);
 	      ],
 	      "auto_increment": {
 	        "column": "cid",
-	        "sequence": "customer_seq"
+	        "sequence": "` + "`customer_seq`" + `"
 	      }
 	},
     "orders": {

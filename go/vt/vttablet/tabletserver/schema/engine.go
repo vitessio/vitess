@@ -919,7 +919,7 @@ func (se *Engine) ResetSequences(tables []string) error {
 	for _, tableName := range tables {
 		if table, ok := se.tables[tableName]; ok {
 			if table.SequenceInfo != nil {
-				log.Infof("Resetting sequence info for table %v: %s", tableName, table.SequenceInfo)
+				log.Infof("Resetting sequence info for table %s: %+v", tableName, table.SequenceInfo)
 				table.SequenceInfo.Reset()
 			}
 		} else {

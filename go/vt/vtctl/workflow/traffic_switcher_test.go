@@ -69,7 +69,8 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 	defer cancel()
 	cell := "cell1"
 	workflow := "wf1"
-	table := "t1"
+	table := "`t1`"
+	unescapedTable := "t1"
 	sourceKeyspace := &testKeyspace{
 		KeyspaceName: "source-ks",
 		ShardNames:   []string{"0"},
@@ -82,26 +83,9 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 		"xxhash": {
 			Type: "xxhash",
 		},
-		"unicode_loose_xxhash": {
-			Type: "unicode_loose_xxhash",
-		},
 	}
 	env := newTestEnv(t, ctx, cell, sourceKeyspace, targetKeyspace)
 	defer env.close()
-	/*
-		env.tmc.schema = map[string]*tabletmanagerdatapb.SchemaDefinition{
-			"t1": {
-				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
-					{
-						Name: "t1",
-						Columns: []string{
-							"my-col",
-						},
-					},
-				},
-			},
-		}
-	*/
 
 	type testCase struct {
 		name          string
@@ -116,7 +100,7 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 			want: nil,
 		},
 		{
-			name: "sequences with backticks all over",
+			name: "sequences with backticks and qualified table",
 			sourceVSchema: &vschema.Keyspace{
 				Vindexes: vindexes,
 				Tables: map[string]*vschema.Table{
@@ -147,18 +131,67 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 					backingTableName:     "my-seq1",
 					backingTableKeyspace: "source-ks",
 					backingTableDBName:   "vt_source-ks",
-					usingTableName:       table,
+					usingTableName:       unescapedTable,
 					usingTableDBName:     "vt_targetks",
 					usingTableDefinition: &vschema.Table{
 						ColumnVindexes: []*vschema.ColumnVindex{
 							{
-								Column: "`my-col`",
+								Column: "my-col",
 								Name:   "xxhash",
 							},
 						},
 						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: fmt.Sprintf("%s.my-seq1", sourceKeyspace.KeyspaceName),
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "sequences with backticks",
+			sourceVSchema: &vschema.Keyspace{
+				Vindexes: vindexes,
+				Tables: map[string]*vschema.Table{
+					"`my-seq1`": {
+						Type: "sequence",
+					},
+				},
+			},
+			targetVSchema: &vschema.Keyspace{
+				Vindexes: vindexes,
+				Tables: map[string]*vschema.Table{
+					table: {
+						ColumnVindexes: []*vschema.ColumnVindex{
+							{
+								Name:   "xxhash",
+								Column: "`my-col`",
+							},
+						},
+						AutoIncrement: &vschema.AutoIncrement{
 							Column:   "`my-col`",
-							Sequence: fmt.Sprintf("`%s`.`my-seq1`", sourceKeyspace.KeyspaceName),
+							Sequence: "`my-seq1`",
+						},
+					},
+				},
+			},
+			want: map[string]*sequenceMetadata{
+				"my-seq1": {
+					backingTableName:     "my-seq1",
+					backingTableKeyspace: "source-ks",
+					backingTableDBName:   "vt_source-ks",
+					usingTableName:       unescapedTable,
+					usingTableDBName:     "vt_targetks",
+					usingTableDefinition: &vschema.Table{
+						ColumnVindexes: []*vschema.ColumnVindex{
+							{
+								Column: "my-col",
+								Name:   "xxhash",
+							},
+						},
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: "my-seq1",
 						},
 					},
 				},

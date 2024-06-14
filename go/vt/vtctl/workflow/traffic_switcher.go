@@ -1389,7 +1389,8 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 		for tableName, tableDef := range kvs.Tables {
 			// The table name can be escaped in the vschema definition.
 			if tableName, err = sqlescape.UnescapeID(tableName); err != nil {
-				return err
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid table name in keyspace %s: %v",
+					keyspace, err)
 			}
 			select {
 			case <-sctx.Done():
@@ -1434,10 +1435,10 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 	searchGroup, gctx := errgroup.WithContext(ctx)
 	searchCompleted := make(chan struct{})
 	for _, keyspace := range keyspaces {
-		// The keyspace name can be escaped in the vschema definition.
+		// The keyspace name could be escaped so we need to unescape it.
 		keyspace, err := sqlescape.UnescapeID(keyspace)
 		if err != nil {
-			return nil, err
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid keyspace name %s: %v", keyspace, err)
 		}
 		searchGroup.Go(func() error {
 			return searchKeyspace(gctx, searchCompleted, keyspace)
@@ -1469,43 +1470,75 @@ func (ts *trafficSwitcher) findSequenceUsageInKeyspace(vschema *vschemapb.Keyspa
 	targetDBName := targets[0].GetPrimary().DbName()
 	sequencesByBackingTable := make(map[string]*sequenceMetadata)
 
-	for _, table := range ts.Tables() {
-		vs, ok := vschema.Tables[table]
-		if !ok || vs.GetAutoIncrement().GetSequence() == "" {
+	for _, table := range ts.tables {
+		seqTable, ok := vschema.Tables[table]
+		if !ok {
+			// Try the escaped table name as it can be escaped in the vschema.
+			seqTable, ok = vschema.Tables[sqlescape.EscapeID(table)]
+		}
+		if !ok || seqTable.GetAutoIncrement().GetSequence() == "" {
 			continue
 		}
+		var err error
+		// Be sure that the table and DB name is now unescaped.
+		table, err = sqlescape.UnescapeID(table)
+		if err != nil {
+			return nil, false, err
+		}
+		targetDBName, err = sqlescape.UnescapeID(targetDBName)
+		if err != nil {
+			return nil, false, err
+		}
 		sm := &sequenceMetadata{
-			backingTableName:     vs.AutoIncrement.Sequence,
-			usingTableName:       table,
-			usingTableDefinition: vs,
-			usingTableDBName:     targetDBName,
+			usingTableName:   table,
+			usingTableDBName: targetDBName,
 		}
 		// If the sequence table is fully qualified in the vschema then
 		// we don't need to find it later.
-		if strings.Contains(vs.AutoIncrement.Sequence, ".") {
-			keyspace, tableName, found := strings.Cut(vs.AutoIncrement.Sequence, ".")
+		if strings.Contains(seqTable.AutoIncrement.Sequence, ".") {
+			keyspace, tableName, found := strings.Cut(seqTable.AutoIncrement.Sequence, ".")
 			if !found {
 				return nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid sequence table name %s defined in the %s keyspace",
-					vs.AutoIncrement.Sequence, ts.targetKeyspace)
+					seqTable.AutoIncrement.Sequence, ts.targetKeyspace)
 			}
 			// Unescape the table name and keyspace name as they may be escaped in the
 			// vschema definition if they e.g. contain dashes.
-			var err error
-			if tableName, err = sqlescape.UnescapeID(tableName); err != nil {
-				return nil, false, err
-			}
 			if keyspace, err = sqlescape.UnescapeID(keyspace); err != nil {
-				return nil, false, err
+				return nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid keyspace in qualified sequence table name %s defined in the %s keyspace",
+					seqTable.AutoIncrement.Sequence, ts.targetKeyspace)
 			}
-			sm.backingTableName = tableName
+			if tableName, err = sqlescape.UnescapeID(tableName); err != nil {
+				return nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid qualified sequence table name %s defined in the %s keyspace",
+					seqTable.AutoIncrement.Sequence, ts.targetKeyspace)
+			}
 			sm.backingTableKeyspace = keyspace
+			sm.backingTableName = tableName
+			// Update the definition with the unescaped values.
+			seqTable.AutoIncrement.Sequence = fmt.Sprintf("%s.%s", keyspace, tableName)
 			// Set the default keyspace name. We will later check to
 			// see if the tablet we send requests to is using a dbname
 			// override and use that if it is.
 			sm.backingTableDBName = "vt_" + keyspace
 		} else {
+			sm.backingTableName, err = sqlescape.UnescapeID(seqTable.AutoIncrement.Sequence)
+			if err != nil {
+				return nil, false, err
+			}
+			seqTable.AutoIncrement.Sequence = sm.backingTableName
 			allFullyQualified = false
 		}
+		// The column names can be escaped in the vschema definition.
+		for i := range seqTable.ColumnVindexes {
+			seqTable.ColumnVindexes[i].Column, err = sqlescape.UnescapeID(seqTable.ColumnVindexes[i].Column)
+			if err != nil {
+				return nil, false, err
+			}
+		}
+		seqTable.AutoIncrement.Column, err = sqlescape.UnescapeID(seqTable.AutoIncrement.Column)
+		if err != nil {
+			return nil, false, err
+		}
+		sm.usingTableDefinition = seqTable
 		sequencesByBackingTable[sm.backingTableName] = sm
 	}
 
@@ -1534,10 +1567,25 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "no primary tablet found for target shard %s/%s",
 					ts.targetKeyspace, target.GetShard().ShardName())
 			}
+			usingCol, err := sqlescape.EnsureEscaped(sequenceMetadata.usingTableDefinition.AutoIncrement.Column)
+			if err != nil {
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid column name %s specified for sequence table %s: %v",
+					sequenceMetadata.usingTableDefinition.AutoIncrement.Column, sequenceMetadata.usingTableName, err)
+			}
+			usingDB, err := sqlescape.EnsureEscaped(sequenceMetadata.usingTableDBName)
+			if err != nil {
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid database name %s for sequence table %s: %v",
+					sequenceMetadata.usingTableDBName, sequenceMetadata.usingTableName, err)
+			}
+			usingTable, err := sqlescape.EnsureEscaped(sequenceMetadata.usingTableName)
+			if err != nil {
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid sequence table name %s: %v",
+					sequenceMetadata.usingTableName, err)
+			}
 			query := sqlparser.BuildParsedQuery(sqlGetMaxSequenceVal,
-				sqlescape.EscapeID(sequenceMetadata.usingTableDefinition.AutoIncrement.Column),
-				sqlescape.EscapeID(sequenceMetadata.usingTableDBName),
-				sqlescape.EscapeID(sequenceMetadata.usingTableName),
+				usingCol,
+				usingDB,
+				usingTable,
 			)
 			qr, terr := ts.ws.tmc.ExecuteFetchAsApp(ictx, primary.Tablet, true, &tabletmanagerdatapb.ExecuteFetchAsAppRequest{
 				Query:   []byte(query.Query),
@@ -1598,9 +1646,19 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 		if sequenceTablet.DbNameOverride != "" {
 			sequenceMetadata.backingTableDBName = sequenceTablet.DbNameOverride
 		}
+		backingDB, err := sqlescape.EnsureEscaped(sequenceMetadata.backingTableDBName)
+		if err != nil {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid database name %s in sequence backing table %s: %v",
+				sequenceMetadata.backingTableDBName, sequenceMetadata.backingTableName, err)
+		}
+		backingTable, err := sqlescape.EnsureEscaped(sequenceMetadata.backingTableName)
+		if err != nil {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid sequence backing table name %s: %v",
+				sequenceMetadata.backingTableName, err)
+		}
 		query := sqlparser.BuildParsedQuery(sqlInitSequenceTable,
-			sqlescape.EscapeID(sequenceMetadata.backingTableDBName),
-			sqlescape.EscapeID(sequenceMetadata.backingTableName),
+			backingDB,
+			backingTable,
 			nextVal,
 			nextVal,
 			nextVal,
@@ -1633,7 +1691,13 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get primary tablet for keyspace %s: %v",
 				sequenceMetadata.backingTableKeyspace, ierr)
 		}
-		ierr = ts.TabletManagerClient().ResetSequences(ictx, ti.Tablet, []string{sequenceMetadata.backingTableName})
+		// ResetSequences interfaces with the schema engine and the actual
+		// table identifiers DO NOT contain the backticks. So we have to
+		// ensure that the table name is unescaped.
+		if backingTable, err = sqlescape.UnescapeID(backingTable); err != nil {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid table name %s: %v", backingTable, err)
+		}
+		ierr = ts.TabletManagerClient().ResetSequences(ictx, ti.Tablet, []string{backingTable})
 		if ierr != nil {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to reset the sequence cache for backing table %s on shard %s/%s using tablet %s: %v",
 				sequenceMetadata.backingTableName, sequenceShard.Keyspace(), sequenceShard.ShardName(), sequenceShard.PrimaryAlias, ierr)
