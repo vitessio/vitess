@@ -78,19 +78,21 @@ var BaseShowTablesFields = []*querypb.Field{{
 	ColumnLength: 6144,
 	Charset:      uint32(collations.SystemCollation.Collation),
 	Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
-}, {
+}}
+
+var BaseShowTablesWithSizesFields = append(BaseShowTablesFields, &querypb.Field{
 	Name:         "i.file_size",
 	Type:         querypb.Type_INT64,
 	ColumnLength: 11,
 	Charset:      collations.CollationBinaryID,
 	Flags:        uint32(querypb.MySqlFlag_BINARY_FLAG | querypb.MySqlFlag_NUM_FLAG),
-}, {
+}, &querypb.Field{
 	Name:         "i.allocated_size",
 	Type:         querypb.Type_INT64,
 	ColumnLength: 11,
 	Charset:      collations.CollationBinaryID,
 	Flags:        uint32(querypb.MySqlFlag_BINARY_FLAG | querypb.MySqlFlag_NUM_FLAG),
-}}
+})
 
 // BaseShowTablesRow returns the fields from a BaseShowTables or
 // BaseShowTablesForTable command.
@@ -104,9 +106,14 @@ func BaseShowTablesRow(tableName string, isView bool, comment string) []sqltypes
 		sqltypes.MakeTrusted(sqltypes.VarChar, []byte(tableType)),
 		sqltypes.MakeTrusted(sqltypes.Int64, []byte("1427325875")), // unix_timestamp(create_time)
 		sqltypes.MakeTrusted(sqltypes.VarChar, []byte(comment)),
+	}
+}
+
+func BaseShowTablesWithSizesRow(tableName string, isView bool, comment string) []sqltypes.Value {
+	return append(BaseShowTablesRow(tableName, isView, comment),
 		sqltypes.MakeTrusted(sqltypes.Int64, []byte("100")), // file_size
 		sqltypes.MakeTrusted(sqltypes.Int64, []byte("150")), // allocated_size
-	}
+	)
 }
 
 // ShowPrimaryFields contains the fields for a BaseShowPrimary.

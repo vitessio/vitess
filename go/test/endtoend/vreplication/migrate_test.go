@@ -201,6 +201,8 @@ func TestVtctldMigrate(t *testing.T) {
 	extVtgateConn := getConnection(t, extVc.ClusterConfig.hostname, extVc.ClusterConfig.vtgateMySQLPort)
 	insertInitialDataIntoExternalCluster(t, extVtgateConn)
 
+	targetPrimary := vc.getPrimaryTablet(t, "product", "0")
+
 	var output, expected string
 
 	t.Run("mount external cluster", func(t *testing.T) {
@@ -232,12 +234,12 @@ func TestVtctldMigrate(t *testing.T) {
 		}
 		waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
 		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", "product:0", 1)
-		waitForRowCount(t, vtgateConn, "product:0", "rating", 2)
-		waitForRowCount(t, vtgateConn, "product:0", "review", 3)
+		waitForRowCountInTablet(t, targetPrimary, "product", "rating", 2)
+		waitForRowCountInTablet(t, targetPrimary, "product", "review", 3)
 		execVtgateQuery(t, extVtgateConn, "rating", "insert into review(rid, pid, review) values(4, 1, 'review4');")
 		execVtgateQuery(t, extVtgateConn, "rating", "insert into rating(gid, pid, rating) values(3, 1, 3);")
-		waitForRowCount(t, vtgateConn, "product:0", "rating", 3)
-		waitForRowCount(t, vtgateConn, "product:0", "review", 4)
+		waitForRowCountInTablet(t, targetPrimary, "product", "rating", 3)
+		waitForRowCountInTablet(t, targetPrimary, "product", "review", 4)
 		vdiffSideBySide(t, ksWorkflow, "extcell1")
 
 		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Migrate",
@@ -268,8 +270,8 @@ func TestVtctldMigrate(t *testing.T) {
 		require.NoError(t, err, "Migrate command failed with %s", output)
 
 		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", "product:0", 1, binlogdatapb.VReplicationWorkflowState_Stopped.String())
-		waitForRowCount(t, vtgateConn, "product:0", "rating", 0)
-		waitForRowCount(t, vtgateConn, "product:0", "review", 0)
+		waitForRowCountInTablet(t, targetPrimary, "product", "rating", 0)
+		waitForRowCountInTablet(t, targetPrimary, "product", "review", 0)
 		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Migrate",
 			"--target-keyspace", "product", "--workflow", "e1", "cancel")
 		require.NoError(t, err, "Migrate command failed with %s", output)

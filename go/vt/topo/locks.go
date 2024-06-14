@@ -21,13 +21,11 @@ import (
 	"encoding/json"
 	"os"
 	"os/user"
-	"path"
 	"sync"
 	"time"
 
 	"github.com/spf13/pflag"
 
-	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -35,8 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-// This file contains utility methods and definitions to lock
-// keyspaces and shards.
+// This file contains utility methods and definitions to lock resources using topology server.
 
 var (
 	// LockTimeout is the maximum duration for which a
@@ -123,131 +120,37 @@ type locksKeyType int
 
 var locksKey locksKeyType
 
-// LockKeyspace will lock the keyspace, and return:
-// - a context with a locksInfo structure for future reference.
-// - an unlock method
-// - an error if anything failed.
-func (ts *Server) LockKeyspace(ctx context.Context, keyspace, action string) (context.Context, func(*error), error) {
-	i, ok := ctx.Value(locksKey).(*locksInfo)
-	if !ok {
-		i = &locksInfo{
-			info: make(map[string]*lockInfo),
-		}
-		ctx = context.WithValue(ctx, locksKey, i)
-	}
-	i.mu.Lock()
-	defer i.mu.Unlock()
-
-	// check that we're not already locked
-	if _, ok = i.info[keyspace]; ok {
-		return nil, nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "lock for keyspace %v is already held", keyspace)
-	}
-
-	// lock
-	l := newLock(action)
-	lockDescriptor, err := l.lockKeyspace(ctx, ts, keyspace)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// and update our structure
-	i.info[keyspace] = &lockInfo{
-		lockDescriptor: lockDescriptor,
-		actionNode:     l,
-	}
-	return ctx, func(finalErr *error) {
-		i.mu.Lock()
-		defer i.mu.Unlock()
-
-		if _, ok := i.info[keyspace]; !ok {
-			if *finalErr != nil {
-				log.Errorf("trying to unlock keyspace %v multiple times", keyspace)
-			} else {
-				*finalErr = vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "trying to unlock keyspace %v multiple times", keyspace)
-			}
-			return
-		}
-
-		err := l.unlockKeyspace(ctx, ts, keyspace, lockDescriptor, *finalErr)
-		if *finalErr != nil {
-			if err != nil {
-				// both error are set, just log the unlock error
-				log.Errorf("unlockKeyspace(%v) failed: %v", keyspace, err)
-			}
-		} else {
-			*finalErr = err
-		}
-		delete(i.info, keyspace)
-	}, nil
+// iTopoLock is the interface for knowing the resource that is being locked.
+// It allows for better controlling nuances for different lock types and log messages.
+type iTopoLock interface {
+	Type() string
+	ResourceName() string
+	Path() string
 }
 
-// CheckKeyspaceLocked can be called on a context to make sure we have the lock
-// for a given keyspace.
-func CheckKeyspaceLocked(ctx context.Context, keyspace string) error {
-	// extract the locksInfo pointer
-	i, ok := ctx.Value(locksKey).(*locksInfo)
-	if !ok {
-		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "keyspace %v is not locked (no locksInfo)", keyspace)
-	}
-	i.mu.Lock()
-	defer i.mu.Unlock()
+// perform the topo lock operation
+func (l *Lock) lock(ctx context.Context, ts *Server, lt iTopoLock, isBlocking bool) (LockDescriptor, error) {
+	log.Infof("Locking %v %v for action %v", lt.Type(), lt.ResourceName(), l.Action)
 
-	// find the individual entry
-	_, ok = i.info[keyspace]
-	if !ok {
-		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "keyspace %v is not locked (no lockInfo in map)", keyspace)
-	}
-
-	// TODO(alainjobart): check the lock server implementation
-	// still holds the lock. Will need to look at the lockInfo struct.
-
-	// and we're good for now.
-	return nil
-}
-
-// CheckKeyspaceLockedAndRenew can be called on a context to make sure we have the lock
-// for a given keyspace. The function also attempts to renew the lock.
-func CheckKeyspaceLockedAndRenew(ctx context.Context, keyspace string) error {
-	// extract the locksInfo pointer
-	i, ok := ctx.Value(locksKey).(*locksInfo)
-	if !ok {
-		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "keyspace %v is not locked (no locksInfo)", keyspace)
-	}
-	i.mu.Lock()
-	defer i.mu.Unlock()
-
-	// find the individual entry
-	entry, ok := i.info[keyspace]
-	if !ok {
-		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "keyspace %v is not locked (no lockInfo in map)", keyspace)
-	}
-	// try renewing lease:
-	return entry.lockDescriptor.Check(ctx)
-}
-
-// lockKeyspace will lock the keyspace in the topology server.
-// unlockKeyspace should be called if this returns no error.
-func (l *Lock) lockKeyspace(ctx context.Context, ts *Server, keyspace string) (LockDescriptor, error) {
-	log.Infof("Locking keyspace %v for action %v", keyspace, l.Action)
-
-	ctx, cancel := context.WithTimeout(ctx, getLockTimeout())
+	ctx, cancel := context.WithTimeout(ctx, LockTimeout)
 	defer cancel()
-
-	span, ctx := trace.NewSpan(ctx, "TopoServer.LockKeyspaceForAction")
+	span, ctx := trace.NewSpan(ctx, "TopoServer.Lock")
 	span.Annotate("action", l.Action)
-	span.Annotate("keyspace", keyspace)
+	span.Annotate("path", lt.Path())
 	defer span.Finish()
 
-	keyspacePath := path.Join(KeyspacesPath, keyspace)
 	j, err := l.ToJSON()
 	if err != nil {
 		return nil, err
 	}
-	return ts.globalCell.Lock(ctx, keyspacePath, j)
+	if isBlocking {
+		return ts.globalCell.Lock(ctx, lt.Path(), j)
+	}
+	return ts.globalCell.TryLock(ctx, lt.Path(), j)
 }
 
-// unlockKeyspace unlocks a previously locked keyspace.
-func (l *Lock) unlockKeyspace(ctx context.Context, ts *Server, keyspace string, lockDescriptor LockDescriptor, actionError error) error {
+// unlock unlocks a previously locked key.
+func (l *Lock) unlock(ctx context.Context, lt iTopoLock, lockDescriptor LockDescriptor, actionError error) error {
 	// Detach from the parent timeout, but copy the trace span.
 	// We need to still release the lock even if the parent
 	// context timed out.
@@ -255,70 +158,23 @@ func (l *Lock) unlockKeyspace(ctx context.Context, ts *Server, keyspace string, 
 	ctx, cancel := context.WithTimeout(ctx, RemoteOperationTimeout)
 	defer cancel()
 
-	span, ctx := trace.NewSpan(ctx, "TopoServer.UnlockKeyspaceForAction")
+	span, ctx := trace.NewSpan(ctx, "TopoServer.Unlock")
 	span.Annotate("action", l.Action)
-	span.Annotate("keyspace", keyspace)
+	span.Annotate("path", lt.Path())
 	defer span.Finish()
 
 	// first update the actionNode
 	if actionError != nil {
-		log.Infof("Unlocking keyspace %v for action %v with error %v", keyspace, l.Action, actionError)
+		log.Infof("Unlocking %v %v for action %v with error %v", lt.Type(), lt.ResourceName(), l.Action, actionError)
 		l.Status = "Error: " + actionError.Error()
 	} else {
-		log.Infof("Unlocking keyspace %v for successful action %v", keyspace, l.Action)
+		log.Infof("Unlocking %v %v for successful action %v", lt.Type(), lt.ResourceName(), l.Action)
 		l.Status = "Done"
 	}
 	return lockDescriptor.Unlock(ctx)
 }
 
-// LockShard will lock the shard, and return:
-// - a context with a locksInfo structure for future reference.
-// - an unlock method
-// - an error if anything failed.
-//
-// We are currently only using this method to lock actions that would
-// impact each-other. Most changes of the Shard object are done by
-// UpdateShardFields, which is not locking the shard object. The
-// current list of actions that lock a shard are:
-// * all Vitess-controlled re-parenting operations:
-//   - InitShardPrimary
-//   - PlannedReparentShard
-//   - EmergencyReparentShard
-//
-// * any vtorc recovery e.g
-//   - RecoverDeadPrimary
-//   - ElectNewPrimary
-//   - FixPrimary
-//
-// * before any replication repair from replication manager
-//
-// * operations that we don't want to conflict with re-parenting:
-//   - DeleteTablet when it's the shard's current primary
-func (ts *Server) LockShard(ctx context.Context, keyspace, shard, action string) (context.Context, func(*error), error) {
-	return ts.internalLockShard(ctx, keyspace, shard, action, true)
-}
-
-// TryLockShard will lock the shard, and return:
-// - a context with a locksInfo structure for future reference.
-// - an unlock method
-// - an error if anything failed.
-//
-// `TryLockShard` is different from `LockShard`. If there is already a lock on given shard,
-// then unlike `LockShard` instead of waiting and blocking the client it returns with
-// `Lock already exists` error. With current implementation it may not be able to fail-fast
-// for some scenarios. For example there is a possibility that a thread checks for lock for
-// a given shard but by the time it acquires the lock, some other thread has already acquired it,
-// in this case the client will block until the other caller releases the lock or the
-// client call times out (just like standard `LockShard' implementation). In short the lock checking
-// and acquiring is not under the same mutex in current implementation of `TryLockShard`.
-//
-// We are currently using `TryLockShard` during tablet discovery in Vtorc recovery
-func (ts *Server) TryLockShard(ctx context.Context, keyspace, shard, action string) (context.Context, func(*error), error) {
-	return ts.internalLockShard(ctx, keyspace, shard, action, false)
-}
-
-// internalLockShard is used to indicate whether the call should fail-fast or not.
-func (ts *Server) internalLockShard(ctx context.Context, keyspace, shard, action string, isBlocking bool) (context.Context, func(*error), error) {
+func (ts *Server) internalLock(ctx context.Context, lt iTopoLock, action string, isBlocking bool) (context.Context, func(*error), error) {
 	i, ok := ctx.Value(locksKey).(*locksInfo)
 	if !ok {
 		i = &locksInfo{
@@ -328,28 +184,19 @@ func (ts *Server) internalLockShard(ctx context.Context, keyspace, shard, action
 	}
 	i.mu.Lock()
 	defer i.mu.Unlock()
-
-	// check that we're not already locked
-	mapKey := keyspace + "/" + shard
-	if _, ok = i.info[mapKey]; ok {
-		return nil, nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "lock for shard %v/%v is already held", keyspace, shard)
+	// check that we are not already locked
+	if _, ok := i.info[lt.ResourceName()]; ok {
+		return nil, nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "lock for %v %v is already held", lt.Type(), lt.ResourceName())
 	}
 
-	// lock
+	// lock it
 	l := newLock(action)
-	var lockDescriptor LockDescriptor
-	var err error
-	if isBlocking {
-		lockDescriptor, err = l.lockShard(ctx, ts, keyspace, shard)
-	} else {
-		lockDescriptor, err = l.tryLockShard(ctx, ts, keyspace, shard)
-	}
+	lockDescriptor, err := l.lock(ctx, ts, lt, isBlocking)
 	if err != nil {
 		return nil, nil, err
 	}
-
 	// and update our structure
-	i.info[mapKey] = &lockInfo{
+	i.info[lt.ResourceName()] = &lockInfo{
 		lockDescriptor: lockDescriptor,
 		actionNode:     l,
 	}
@@ -357,118 +204,45 @@ func (ts *Server) internalLockShard(ctx context.Context, keyspace, shard, action
 		i.mu.Lock()
 		defer i.mu.Unlock()
 
-		if _, ok := i.info[mapKey]; !ok {
+		if _, ok := i.info[lt.ResourceName()]; !ok {
 			if *finalErr != nil {
-				log.Errorf("trying to unlock shard %v/%v multiple times", keyspace, shard)
+				log.Errorf("trying to unlock %v %v multiple times", lt.Type(), lt.ResourceName())
 			} else {
-				*finalErr = vterrors.Errorf(vtrpc.Code_INTERNAL, "trying to unlock shard %v/%v multiple times", keyspace, shard)
+				*finalErr = vterrors.Errorf(vtrpc.Code_INTERNAL, "trying to unlock %v %v multiple times", lt.Type(), lt.ResourceName())
 			}
 			return
 		}
 
-		err := l.unlockShard(ctx, ts, keyspace, shard, lockDescriptor, *finalErr)
+		err := l.unlock(ctx, lt, lockDescriptor, *finalErr)
+		// if we have an error, we log it, but we still want to delete the lock
 		if *finalErr != nil {
 			if err != nil {
 				// both error are set, just log the unlock error
-				log.Warningf("unlockShard(%s/%s) failed: %v", keyspace, shard, err)
+				log.Warningf("unlock %v %v failed: %v", lt.Type(), lt.ResourceName(), err)
 			}
 		} else {
 			*finalErr = err
 		}
-		delete(i.info, mapKey)
+		delete(i.info, lt.ResourceName())
 	}, nil
 }
 
-// CheckShardLocked can be called on a context to make sure we have the lock
-// for a given shard.
-func CheckShardLocked(ctx context.Context, keyspace, shard string) error {
+// checkLocked checks that the given resource is locked.
+func checkLocked(ctx context.Context, lt iTopoLock) error {
 	// extract the locksInfo pointer
 	i, ok := ctx.Value(locksKey).(*locksInfo)
 	if !ok {
-		return vterrors.Errorf(vtrpc.Code_INTERNAL, "shard %v/%v is not locked (no locksInfo)", keyspace, shard)
+		return vterrors.Errorf(vtrpc.Code_INTERNAL, "%v %v is not locked (no locksInfo)", lt.Type(), lt.ResourceName())
 	}
 	i.mu.Lock()
 	defer i.mu.Unlock()
 
-	// func the individual entry
-	mapKey := keyspace + "/" + shard
-	li, ok := i.info[mapKey]
+	// find the individual entry
+	li, ok := i.info[lt.ResourceName()]
 	if !ok {
-		return vterrors.Errorf(vtrpc.Code_INTERNAL, "shard %v/%v is not locked (no lockInfo in map)", keyspace, shard)
+		return vterrors.Errorf(vtrpc.Code_INTERNAL, "%v %v is not locked (no lockInfo in map)", lt.Type(), lt.ResourceName())
 	}
 
 	// Check the lock server implementation still holds the lock.
 	return li.lockDescriptor.Check(ctx)
-}
-
-// lockShard will lock the shard in the topology server.
-// UnlockShard should be called if this returns no error.
-func (l *Lock) lockShard(ctx context.Context, ts *Server, keyspace, shard string) (LockDescriptor, error) {
-	return l.internalLockShard(ctx, ts, keyspace, shard, true)
-}
-
-// tryLockShard will lock the shard in the topology server but unlike `lockShard` it fail-fast if not able to get lock
-// UnlockShard should be called if this returns no error.
-func (l *Lock) tryLockShard(ctx context.Context, ts *Server, keyspace, shard string) (LockDescriptor, error) {
-	return l.internalLockShard(ctx, ts, keyspace, shard, false)
-}
-
-func (l *Lock) internalLockShard(ctx context.Context, ts *Server, keyspace, shard string, isBlocking bool) (LockDescriptor, error) {
-	log.Infof("Locking shard %v/%v for action %v", keyspace, shard, l.Action)
-
-	ctx, cancel := context.WithTimeout(ctx, getLockTimeout())
-	defer cancel()
-
-	span, ctx := trace.NewSpan(ctx, "TopoServer.LockShardForAction")
-	span.Annotate("action", l.Action)
-	span.Annotate("keyspace", keyspace)
-	span.Annotate("shard", shard)
-	defer span.Finish()
-
-	shardPath := path.Join(KeyspacesPath, keyspace, ShardsPath, shard)
-	j, err := l.ToJSON()
-	if err != nil {
-		return nil, err
-	}
-	if isBlocking {
-		return ts.globalCell.Lock(ctx, shardPath, j)
-	}
-	return ts.globalCell.TryLock(ctx, shardPath, j)
-}
-
-// unlockShard unlocks a previously locked shard.
-func (l *Lock) unlockShard(ctx context.Context, ts *Server, keyspace, shard string, lockDescriptor LockDescriptor, actionError error) error {
-	// Detach from the parent timeout, but copy the trace span.
-	// We need to still release the lock even if the parent context timed out.
-	ctx = trace.CopySpan(context.TODO(), ctx)
-	ctx, cancel := context.WithTimeout(ctx, RemoteOperationTimeout)
-	defer cancel()
-
-	span, ctx := trace.NewSpan(ctx, "TopoServer.UnlockShardForAction")
-	span.Annotate("action", l.Action)
-	span.Annotate("keyspace", keyspace)
-	span.Annotate("shard", shard)
-	defer span.Finish()
-
-	// first update the actionNode
-	if actionError != nil {
-		log.Infof("Unlocking shard %v/%v for action %v with error %v", keyspace, shard, l.Action, actionError)
-		l.Status = "Error: " + actionError.Error()
-	} else {
-		log.Infof("Unlocking shard %v/%v for successful action %v", keyspace, shard, l.Action)
-		l.Status = "Done"
-	}
-	return lockDescriptor.Unlock(ctx)
-}
-
-// getLockTimeout is shim code used for backward compatibility with v15
-// This code can be removed in v17+ and LockTimeout can be used directly
-func getLockTimeout() time.Duration {
-	if _flag.IsFlagProvided("lock-timeout") {
-		return LockTimeout
-	}
-	if _flag.IsFlagProvided("remote_operation_timeout") {
-		return RemoteOperationTimeout
-	}
-	return LockTimeout
 }

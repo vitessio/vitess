@@ -3798,7 +3798,15 @@ var (
 	}, {
 		input:  `select * from tbl where foo is unknown or bar is not unknown`,
 		output: `select * from tbl where foo is null or bar is not null`,
-	}}
+	}, {
+		input: `select * from tbl where foo = any (select foo from tbl2)`,
+	}, {
+		input:  `select * from tbl where foo = some (select foo from tbl2)`,
+		output: `select * from tbl where foo = any (select foo from tbl2)`,
+	}, {
+		input: `select * from tbl where foo > any (select foo from tbl2)`,
+	}, {
+		input: `select * from tbl where foo > all (select foo from tbl2)`}}
 )
 
 func TestValid(t *testing.T) {
@@ -4045,6 +4053,9 @@ func TestInvalid(t *testing.T) {
 	}, {
 		input: "SELECT 0b2 FROM user",
 		err:   "syntax error at position 11",
+	}, {
+		input: "select * from foo where b <=> any (select id from t1)",
+		err:   "syntax error at position 42",
 	},
 	}
 

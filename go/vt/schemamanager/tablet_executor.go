@@ -475,7 +475,7 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 	}
 	for index, sql := range sqls {
 		// Attempt to renew lease:
-		if err := rl.Do(func() error { return topo.CheckKeyspaceLockedAndRenew(ctx, exec.keyspace) }); err != nil {
+		if err := rl.Do(func() error { return topo.CheckKeyspaceLocked(ctx, exec.keyspace) }); err != nil {
 			return errorExecResult(vterrors.Wrapf(err, "CheckKeyspaceLocked in ApplySchemaKeyspace %v", exec.keyspace))
 		}
 		execResult.CurSQLIndex = index

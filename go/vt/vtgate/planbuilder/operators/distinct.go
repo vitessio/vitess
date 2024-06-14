@@ -54,7 +54,7 @@ func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) Operator {
 			offset := d.Source.AddWSColumn(ctx, idx, false)
 			wsCol = &offset
 		}
-		typ, _ := ctx.SemTable.TypeForExpr(e)
+		typ, _ := ctx.TypeForExpr(e)
 		d.Columns = append(d.Columns, engine.CheckCol{
 			Col:          idx,
 			WsCol:        wsCol,

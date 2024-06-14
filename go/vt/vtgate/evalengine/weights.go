@@ -20,11 +20,11 @@ import (
 	"encoding/binary"
 	"math"
 
-	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/mysql/decimal"
+	"vitess.io/vitess/go/mysql/fastparse"
 	"vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -282,14 +282,14 @@ func TinyWeighter(f *querypb.Field, collation collations.ID) func(v *sqltypes.Va
 			if v.IsNull() {
 				return
 			}
-			// To generate a 32-bit weight string of the decimal, we'll just attempt a fast 32bit atof parse
+			// To generate a 32-bit weight string of the decimal, we'll just attempt a fast atof parse
 			// of its contents. This can definitely fail for many corner cases, but that's OK: we'll just fall
 			// back to a full decimal comparison in those cases.
-			fl, _, err := hack.Atof32(v.RawStr())
+			fl, _, err := fastparse.Atof64(v.RawStr())
 			if err != nil {
 				return
 			}
-			raw := math.Float32bits(fl)
+			raw := math.Float32bits(float32(fl))
 			if raw&(1<<31) != 0 {
 				raw = ^raw
 			} else {

@@ -327,7 +327,7 @@ func splitUnexploredExpression(
 	alias string,
 	dt *DerivedTable,
 ) applyJoinColumn {
-	original := sqlparser.CloneRefOfAliasedExpr(pe.Original)
+	original := sqlparser.Clone(pe.Original)
 	expr := pe.ColExpr
 
 	var colName *sqlparser.ColName

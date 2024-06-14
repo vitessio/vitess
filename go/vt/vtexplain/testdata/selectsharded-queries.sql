@@ -38,4 +38,6 @@ select id from user where not id in (select col from music where music.user_id =
 
 SELECT user.id, user.name, name_info.info FROM user INNER JOIN music ON (user.id = music.user_id) LEFT OUTER JOIN name_info ON (user.name = name_info.name);
 
-SELECT id FROM orders WHERE id IN (1, "1", 1)
+SELECT id FROM orders WHERE id IN (1, "1", 1);
+
+(SELECT user.id, user.name FROM user WHERE user.id = 1) UNION (SELECT user.id, user.name FROM user WHERE user.id = 3);

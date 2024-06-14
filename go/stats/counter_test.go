@@ -18,12 +18,9 @@ package stats
 
 import (
 	"expvar"
-	"fmt"
-	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestCounter(t *testing.T) {
@@ -93,96 +90,4 @@ func TestGaugeFloat64(t *testing.T) {
 	assert.Equal(t, "3.14", v.String())
 	v.Reset()
 	assert.Equal(t, float64(0), v.Get())
-}
-
-func TestNewCounterWithDeprecatedName(t *testing.T) {
-	clearStats()
-	Register(func(name string, v expvar.Var) {})
-
-	testcases := []struct {
-		name           string
-		deprecatedName string
-		shouldPanic    bool
-	}{
-		{
-			name:           "new_name",
-			deprecatedName: "deprecatedName",
-			shouldPanic:    true,
-		},
-		{
-			name:           "metricName_test",
-			deprecatedName: "metric.name-test",
-			shouldPanic:    false,
-		},
-		{
-			name:           "MetricNameTesting",
-			deprecatedName: "metric.name.testing",
-			shouldPanic:    false,
-		},
-	}
-
-	for _, testcase := range testcases {
-		t.Run(fmt.Sprintf("%v-%v", testcase.name, testcase.deprecatedName), func(t *testing.T) {
-			wg := sync.WaitGroup{}
-			wg.Add(1)
-			panicReceived := false
-			go func() {
-				defer func() {
-					if x := recover(); x != nil {
-						panicReceived = true
-					}
-					wg.Done()
-				}()
-				NewCounterWithDeprecatedName(testcase.name, testcase.deprecatedName, "help")
-			}()
-			wg.Wait()
-			require.EqualValues(t, testcase.shouldPanic, panicReceived)
-		})
-	}
-}
-
-func TestNewGaugeWithDeprecatedName(t *testing.T) {
-	clearStats()
-	Register(func(name string, v expvar.Var) {})
-
-	testcases := []struct {
-		name           string
-		deprecatedName string
-		shouldPanic    bool
-	}{
-		{
-			name:           "gauge_new_name",
-			deprecatedName: "gauge_deprecatedName",
-			shouldPanic:    true,
-		},
-		{
-			name:           "gauge-metricName_test",
-			deprecatedName: "gauge_metric.name-test",
-			shouldPanic:    false,
-		},
-		{
-			name:           "GaugeMetricNameTesting",
-			deprecatedName: "gauge.metric.name.testing",
-			shouldPanic:    false,
-		},
-	}
-
-	for _, testcase := range testcases {
-		t.Run(fmt.Sprintf("%v-%v", testcase.name, testcase.deprecatedName), func(t *testing.T) {
-			wg := sync.WaitGroup{}
-			wg.Add(1)
-			panicReceived := false
-			go func() {
-				defer func() {
-					if x := recover(); x != nil {
-						panicReceived = true
-					}
-					wg.Done()
-				}()
-				NewGaugeWithDeprecatedName(testcase.name, testcase.deprecatedName, "help")
-			}()
-			wg.Wait()
-			require.EqualValues(t, testcase.shouldPanic, panicReceived)
-		})
-	}
 }

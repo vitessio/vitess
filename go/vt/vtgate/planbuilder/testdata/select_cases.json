@@ -2073,6 +2073,212 @@
     }
   },
   {
+    "comment": "left join with a dual table on left - merge-able",
+    "query": "select t.title, user.col from (select 'hello' as title) as t left join user on user.id=1",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select t.title, user.col from (select 'hello' as title) as t left join user on user.id=1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select t.title, `user`.col from (select 'hello' as title from dual where 1 != 1) as t left join `user` on `user`.id = 1 where 1 != 1",
+        "Query": "select t.title, `user`.col from (select 'hello' as title from dual) as t left join `user` on `user`.id = 1",
+        "Table": "`user`, dual",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "main.dual",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "left join with a dual table on left - non-merge-able",
+    "query": "select t.title, user.col from (select 'hello' as title) as t left join user on user.id <= 4",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select t.title, user.col from (select 'hello' as title) as t left join user on user.id <= 4",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "LeftJoin",
+        "JoinColumnIndexes": "L:0,R:0",
+        "TableName": "dual_`user`",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select t.title from (select 'hello' as title from dual where 1 != 1) as t where 1 != 1",
+            "Query": "select t.title from (select 'hello' as title from dual) as t",
+            "Table": "dual"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.col from `user` where 1 != 1",
+            "Query": "select `user`.col from `user` where `user`.id <= 4",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.dual",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "left join with dual non-merge-able with predicate with cross dependencies",
+    "query": "select t.title, user.col from (select 'hello' as title) as t left join user on user.id <= 4 and t.title = user.col",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select t.title, user.col from (select 'hello' as title) as t left join user on user.id <= 4 and t.title = user.col",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "LeftJoin",
+        "JoinColumnIndexes": "L:0,R:0",
+        "JoinVars": {
+          "t_title": 0
+        },
+        "TableName": "dual_`user`",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select t.title from (select 'hello' as title from dual where 1 != 1) as t where 1 != 1",
+            "Query": "select t.title from (select 'hello' as title from dual) as t",
+            "Table": "dual"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.col from `user` where 1 != 1",
+            "Query": "select `user`.col from `user` where `user`.col = :t_title and `user`.id <= 4",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.dual",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "right join with a dual table on left",
+    "query": "select t.title, user.col from (select 'hello' as title) as t right join user on user.id<=4",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select t.title, user.col from (select 'hello' as title) as t right join user on user.id<=4",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select t.title, `user`.col from `user` left join (select 'hello' as title from dual where 1 != 1) as t on `user`.id <= 4 where 1 != 1",
+        "Query": "select t.title, `user`.col from `user` left join (select 'hello' as title from dual) as t on `user`.id <= 4",
+        "Table": "`user`, dual"
+      },
+      "TablesUsed": [
+        "main.dual",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "right join with a dual table on right - merge-able",
+    "query": "select t.title, user.col from user right join (select 'hello' as title) as t on user.id=1",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select t.title, user.col from user right join (select 'hello' as title) as t on user.id=1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select t.title, `user`.col from (select 'hello' as title from dual where 1 != 1) as t left join `user` on `user`.id = 1 where 1 != 1",
+        "Query": "select t.title, `user`.col from (select 'hello' as title from dual) as t left join `user` on `user`.id = 1",
+        "Table": "`user`, dual",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "main.dual",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "right join with a dual table on right - non-merge-able",
+    "query": "select t.title, user.col from user right join (select 'hello' as title) as t on user.id>=4",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select t.title, user.col from user right join (select 'hello' as title) as t on user.id>=4",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "LeftJoin",
+        "JoinColumnIndexes": "L:0,R:0",
+        "TableName": "dual_`user`",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select t.title from (select 'hello' as title from dual where 1 != 1) as t where 1 != 1",
+            "Query": "select t.title from (select 'hello' as title from dual) as t",
+            "Table": "dual"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.col from `user` where 1 != 1",
+            "Query": "select `user`.col from `user` where `user`.id >= 4",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.dual",
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "Union after into outfile is incorrect",
     "query": "select id from user into outfile 'out_file_name' union all select id from music",
     "plan": "syntax error at position 55 near 'union'"
@@ -2272,76 +2478,66 @@
     }
   },
   {
-    "comment": "select (select col from user limit 1) as a from user join user_extra order by a",
+    "comment": "ORDER BY subquery",
     "query": "select (select col from user limit 1) as a from user join user_extra order by a",
     "plan": {
       "QueryType": "SELECT",
       "Original": "select (select col from user limit 1) as a from user join user_extra order by a",
       "Instructions": {
-        "OperatorType": "SimpleProjection",
-        "ColumnNames": [
-          "0:a"
-        ],
-        "Columns": "1",
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
+        "TableName": "`user`_user_extra",
         "Inputs": [
           {
-            "OperatorType": "Join",
-            "Variant": "Join",
-            "JoinColumnIndexes": "L:0",
-            "TableName": "`user`_user_extra",
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutValue",
+            "PulloutVars": [
+              "__sq1"
+            ],
             "Inputs": [
               {
-                "OperatorType": "UncorrelatedSubquery",
-                "Variant": "PulloutValue",
-                "PulloutVars": [
-                  "__sq1"
-                ],
+                "InputName": "SubQuery",
+                "OperatorType": "Limit",
+                "Count": "1",
                 "Inputs": [
                   {
-                    "InputName": "SubQuery",
-                    "OperatorType": "Limit",
-                    "Count": "1",
-                    "Inputs": [
-                      {
-                        "OperatorType": "Route",
-                        "Variant": "Scatter",
-                        "Keyspace": {
-                          "Name": "user",
-                          "Sharded": true
-                        },
-                        "FieldQuery": "select col from `user` where 1 != 1",
-                        "Query": "select col from `user` limit 1",
-                        "Table": "`user`"
-                      }
-                    ]
-                  },
-                  {
-                    "InputName": "Outer",
                     "OperatorType": "Route",
                     "Variant": "Scatter",
                     "Keyspace": {
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select :__sq1 as __sq1, weight_string(:__sq1) from `user` where 1 != 1",
-                    "OrderBy": "(0|1) ASC",
-                    "Query": "select :__sq1 as __sq1, weight_string(:__sq1) from `user` order by __sq1 asc",
+                    "FieldQuery": "select col from `user` where 1 != 1",
+                    "Query": "select col from `user` limit 1",
                     "Table": "`user`"
                   }
                 ]
               },
               {
+                "InputName": "Outer",
                 "OperatorType": "Route",
                 "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select 1 from user_extra where 1 != 1",
-                "Query": "select 1 from user_extra",
-                "Table": "user_extra"
+                "FieldQuery": "select :__sq1 as a from `user` where 1 != 1",
+                "Query": "select :__sq1 as a from `user`",
+                "Table": "`user`"
               }
             ]
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "Query": "select 1 from user_extra",
+            "Table": "user_extra"
           }
         ]
       },
@@ -4744,6 +4940,52 @@
       },
       "TablesUsed": [
         "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "SOME modifier on unsharded table works well",
+    "query": "select 1 from unsharded where foo = SOME (select 1 from unsharded_a where foo = 1)",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 1 from unsharded where foo = SOME (select 1 from unsharded_a where foo = 1)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select 1 from unsharded where 1 != 1",
+        "Query": "select 1 from unsharded where foo = any (select 1 from unsharded_a where foo = 1)",
+        "Table": "unsharded, unsharded_a"
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "main.unsharded_a"
+      ]
+    }
+  },
+  {
+    "comment": "ALL modifier on unsharded table works well",
+    "query": "select 1 from unsharded where foo = ALL (select 1 from unsharded_a where foo = 1)",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 1 from unsharded where foo = ALL (select 1 from unsharded_a where foo = 1)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select 1 from unsharded where 1 != 1",
+        "Query": "select 1 from unsharded where foo = all (select 1 from unsharded_a where foo = 1)",
+        "Table": "unsharded, unsharded_a"
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "main.unsharded_a"
       ]
     }
   },
