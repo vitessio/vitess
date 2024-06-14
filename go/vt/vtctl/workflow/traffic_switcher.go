@@ -1692,10 +1692,11 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 		// ResetSequences interfaces with the schema engine and the actual
 		// table identifiers DO NOT contain the backticks. So we have to
 		// ensure that the table name is unescaped.
-		if backingTable, err = sqlescape.UnescapeID(backingTable); err != nil {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid table name %s: %v", backingTable, err)
+		escapedBackingTable, err := sqlescape.UnescapeID(backingTable)
+		if err != nil {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid sequence backing table name %s: %v", backingTable, err)
 		}
-		ierr = ts.TabletManagerClient().ResetSequences(ictx, ti.Tablet, []string{backingTable})
+		ierr = ts.TabletManagerClient().ResetSequences(ictx, ti.Tablet, []string{escapedBackingTable})
 		if ierr != nil {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to reset the sequence cache for backing table %s on shard %s/%s using tablet %s: %v",
 				sequenceMetadata.backingTableName, sequenceShard.Keyspace(), sequenceShard.ShardName(), sequenceShard.PrimaryAlias, ierr)
