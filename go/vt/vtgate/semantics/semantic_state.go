@@ -325,7 +325,12 @@ func (st *SemTable) AddExprs(tbl *sqlparser.AliasedTableExpr, cols sqlparser.Sel
 }
 
 // TypeForExpr returns the type of expressions in the query
+<<<<<<< HEAD
 func (st *SemTable) TypeForExpr(e sqlparser.Expr) (sqltypes.Type, collations.ID, bool) {
+=======
+// Note that PlanningContext has the same method, and you should use that if you have a PlanningContext
+func (st *SemTable) TypeForExpr(e sqlparser.Expr) (evalengine.Type, bool) {
+>>>>>>> 5a6f3868c5 (Handle Nullability for Columns from Outer Tables (#16174))
 	if typ, found := st.ExprTypes[e]; found {
 		return typ.Type, typ.Collation, true
 	}

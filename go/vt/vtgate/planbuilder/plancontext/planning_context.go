@@ -19,6 +19,11 @@ package plancontext
 import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
+<<<<<<< HEAD
+=======
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+>>>>>>> 5a6f3868c5 (Handle Nullability for Columns from Outer Tables (#16174))
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -54,6 +59,16 @@ type PlanningContext struct {
 	// CurrentPhase keeps track of how far we've gone in the planning process
 	// The type should be operators.Phase, but depending on that would lead to circular dependencies
 	CurrentPhase int
+<<<<<<< HEAD
+=======
+
+	// Statement contains the originally parsed statement
+	Statement sqlparser.Statement
+
+	// OuterTables contains the tables that are outer to the current query
+	// Used to set the nullable flag on the columns
+	OuterTables semantics.TableSet
+>>>>>>> 5a6f3868c5 (Handle Nullability for Columns from Outer Tables (#16174))
 }
 
 func CreatePlanningContext(stmt sqlparser.Statement,
@@ -115,4 +130,20 @@ func (ctx *PlanningContext) GetArgumentFor(expr sqlparser.Expr, f func() string)
 	bvName := f()
 	ctx.ReservedArguments[expr] = bvName
 	return bvName
+}
+
+// TypeForExpr returns the type of the given expression, with nullable set if the expression is from an outer table.
+func (ctx *PlanningContext) TypeForExpr(e sqlparser.Expr) (evalengine.Type, bool) {
+	t, found := ctx.SemTable.TypeForExpr(e)
+	if !found {
+		return t, found
+	}
+	deps := ctx.SemTable.RecursiveDeps(e)
+	// If the expression is from an outer table, it should be nullable
+	// There are some exceptions to this, where an expression depending on the outer side
+	// will never return NULL, but it's better to be conservative here.
+	if deps.IsOverlapping(ctx.OuterTables) {
+		t.SetNullability(true)
+	}
+	return t, true
 }

@@ -125,7 +125,7 @@ func (f *Filter) Compact(*plancontext.PlanningContext) (ops.Operator, *rewrite.A
 
 func (f *Filter) planOffsets(ctx *plancontext.PlanningContext) error {
 	cfg := &evalengine.Config{
-		ResolveType: ctx.SemTable.TypeForExpr,
+		ResolveType: ctx.TypeForExpr,
 		Collation:   ctx.SemTable.Collation,
 	}
 

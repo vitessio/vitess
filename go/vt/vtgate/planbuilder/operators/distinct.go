@@ -62,7 +62,11 @@ func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) error {
 			}
 			wsCol = &offset
 		}
+<<<<<<< HEAD
 
+=======
+		typ, _ := ctx.TypeForExpr(e)
+>>>>>>> 5a6f3868c5 (Handle Nullability for Columns from Outer Tables (#16174))
 		d.Columns = append(d.Columns, engine.CheckCol{
 			Col:       idx,
 			WsCol:     wsCol,

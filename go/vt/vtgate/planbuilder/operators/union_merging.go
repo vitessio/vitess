@@ -207,11 +207,28 @@ func createMergedUnion(
 			continue
 		}
 		deps = deps.Merge(ctx.SemTable.RecursiveDeps(rae.Expr))
+<<<<<<< HEAD
 		rt, _, foundR := ctx.SemTable.TypeForExpr(rae.Expr)
 		lt, _, foundL := ctx.SemTable.TypeForExpr(lae.Expr)
 		if foundR && foundL && rt == lt {
 			ctx.SemTable.CopySemanticInfo(rae.Expr, col)
 			ctx.SemTable.CopySemanticInfo(lae.Expr, col)
+=======
+		rt, foundR := ctx.TypeForExpr(rae.Expr)
+		lt, foundL := ctx.TypeForExpr(lae.Expr)
+		if foundR && foundL {
+			collations := ctx.VSchema.Environment().CollationEnv()
+			var typer evalengine.TypeAggregator
+
+			if err := typer.Add(rt, collations); err != nil {
+				panic(err)
+			}
+			if err := typer.Add(lt, collations); err != nil {
+				panic(err)
+			}
+
+			ctx.SemTable.ExprTypes[col] = typer.Type()
+>>>>>>> 5a6f3868c5 (Handle Nullability for Columns from Outer Tables (#16174))
 		}
 		ctx.SemTable.Recursive[col] = deps
 	}

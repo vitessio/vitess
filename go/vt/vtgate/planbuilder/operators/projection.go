@@ -600,7 +600,15 @@ func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) error {
 		}
 
 		// for everything else, we'll turn to the evalengine
+<<<<<<< HEAD
 		eexpr, err := evalengine.Translate(rewritten, nil)
+=======
+		eexpr, err := evalengine.Translate(rewritten, &evalengine.Config{
+			ResolveType: ctx.TypeForExpr,
+			Collation:   ctx.SemTable.Collation,
+			Environment: ctx.VSchema.Environment(),
+		})
+>>>>>>> 5a6f3868c5 (Handle Nullability for Columns from Outer Tables (#16174))
 		if err != nil {
 			return err
 		}

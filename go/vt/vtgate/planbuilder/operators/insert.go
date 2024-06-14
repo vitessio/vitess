@@ -317,7 +317,15 @@ func insertRowsPlan(insOp *Insert, ins *sqlparser.Insert, rows sqlparser.Values)
 			routeValues[vIdx][colIdx] = make([]evalengine.Expr, len(rows))
 			colNum, _ := findOrAddColumn(ins, col)
 			for rowNum, row := range rows {
+<<<<<<< HEAD
 				innerpv, err := evalengine.Translate(row[colNum], nil)
+=======
+				innerpv, err := evalengine.Translate(row[colNum], &evalengine.Config{
+					ResolveType: ctx.TypeForExpr,
+					Collation:   ctx.SemTable.Collation,
+					Environment: ctx.VSchema.Environment(),
+				})
+>>>>>>> 5a6f3868c5 (Handle Nullability for Columns from Outer Tables (#16174))
 				if err != nil {
 					return nil, err
 				}
@@ -445,7 +453,19 @@ func modifyForAutoinc(ins *sqlparser.Insert, vTable *vindexes.Table) (*Generate,
 			autoIncValues = append(autoIncValues, expr)
 			row[colNum] = sqlparser.NewArgument(engine.SeqVarName + strconv.Itoa(rowNum))
 		}
+<<<<<<< HEAD
 		gen.Values = evalengine.NewTupleExpr(autoIncValues...)
+=======
+		var err error
+		gen.Values, err = evalengine.Translate(autoIncValues, &evalengine.Config{
+			ResolveType: ctx.TypeForExpr,
+			Collation:   ctx.SemTable.Collation,
+			Environment: ctx.VSchema.Environment(),
+		})
+		if err != nil {
+			panic(err)
+		}
+>>>>>>> 5a6f3868c5 (Handle Nullability for Columns from Outer Tables (#16174))
 	}
 	return gen, nil
 }

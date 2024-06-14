@@ -532,6 +532,43 @@ func (tr *ShardedRouting) planCompositeInOpRecursive(
 	return foundVindex
 }
 
+<<<<<<< HEAD
+=======
+func (tr *ShardedRouting) planCompositeInOpArg(
+	ctx *plancontext.PlanningContext,
+	cmp *sqlparser.ComparisonExpr,
+	left sqlparser.ValTuple,
+	right sqlparser.ListArg,
+) bool {
+	foundVindex := false
+	for idx, expr := range left {
+		col, ok := expr.(*sqlparser.ColName)
+		if !ok {
+			continue
+		}
+
+		// check if left col is a vindex
+		if !tr.hasVindex(col) {
+			continue
+		}
+
+		value := &evalengine.TupleBindVariable{
+			Key:   right.String(),
+			Index: idx,
+		}
+		if typ, found := ctx.TypeForExpr(col); found {
+			value.Type = typ.Type()
+			value.Collation = typ.Collation()
+		}
+
+		opcode := func(*vindexes.ColumnVindex) engine.Opcode { return engine.MultiEqual }
+		newVindex := tr.haveMatchingVindex(ctx, cmp, nil, col, value, opcode, justTheVindex)
+		foundVindex = newVindex || foundVindex
+	}
+	return foundVindex
+}
+
+>>>>>>> 5a6f3868c5 (Handle Nullability for Columns from Outer Tables (#16174))
 func (tr *ShardedRouting) hasVindex(column *sqlparser.ColName) bool {
 	for _, v := range tr.VindexPreds {
 		for _, col := range v.ColVindex.Columns {
@@ -626,7 +663,12 @@ func makeEvalEngineExpr(ctx *plancontext.PlanningContext, n sqlparser.Expr) eval
 	for _, expr := range ctx.SemTable.GetExprAndEqualities(n) {
 		ee, _ := evalengine.Translate(expr, &evalengine.Config{
 			Collation:   ctx.SemTable.Collation,
+<<<<<<< HEAD
 			ResolveType: ctx.SemTable.TypeForExpr,
+=======
+			ResolveType: ctx.TypeForExpr,
+			Environment: ctx.VSchema.Environment(),
+>>>>>>> 5a6f3868c5 (Handle Nullability for Columns from Outer Tables (#16174))
 		})
 		if ee != nil {
 			return ee

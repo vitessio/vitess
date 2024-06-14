@@ -121,8 +121,13 @@ func (aggr Aggr) GetTypeCollation(ctx *plancontext.PlanningContext) (sqltypes.Ty
 	}
 	switch aggr.OpCode {
 	case opcode.AggregateMin, opcode.AggregateMax, opcode.AggregateSumDistinct, opcode.AggregateCountDistinct:
+<<<<<<< HEAD
 		typ, col, _ := ctx.SemTable.TypeForExpr(aggr.Func.GetArg())
 		return typ, col
+=======
+		typ, _ := ctx.TypeForExpr(aggr.Func.GetArg())
+		return typ
+>>>>>>> 5a6f3868c5 (Handle Nullability for Columns from Outer Tables (#16174))
 
 	}
 	return sqltypes.Unknown, collations.Unknown

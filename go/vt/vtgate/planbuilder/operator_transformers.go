@@ -186,8 +186,13 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 		oa.aggregates = append(oa.aggregates, aggrParam)
 	}
 	for _, groupBy := range op.Grouping {
+<<<<<<< HEAD
 		typ, col, _ := ctx.SemTable.TypeForExpr(groupBy.SimplifiedExpr)
 		oa.groupByKeys = append(oa.groupByKeys, &engine.GroupByParams{
+=======
+		typ, _ := ctx.TypeForExpr(groupBy.Inner)
+		groupByKeys = append(groupByKeys, &engine.GroupByParams{
+>>>>>>> 5a6f3868c5 (Handle Nullability for Columns from Outer Tables (#16174))
 			KeyCol:          groupBy.ColOffset,
 			WeightStringCol: groupBy.WSOffset,
 			Expr:            groupBy.AsAliasedExpr().Expr,
@@ -230,6 +235,7 @@ func createMemorySort(ctx *plancontext.PlanningContext, src logicalPlan, orderin
 	}
 
 	for idx, order := range ordering.Order {
+<<<<<<< HEAD
 		typ, collationID, _ := ctx.SemTable.TypeForExpr(order.SimplifiedExpr)
 		ms.eMemorySort.OrderBy = append(ms.eMemorySort.OrderBy, engine.OrderByParams{
 			Col:               ordering.Offset[idx],
@@ -238,6 +244,15 @@ func createMemorySort(ctx *plancontext.PlanningContext, src logicalPlan, orderin
 			StarColFixedIndex: ordering.Offset[idx],
 			Type:              typ,
 			CollationID:       collationID,
+=======
+		typ, _ := ctx.TypeForExpr(order.SimplifiedExpr)
+		prim.OrderBy = append(prim.OrderBy, evalengine.OrderByParams{
+			Col:             ordering.Offset[idx],
+			WeightStringCol: ordering.WOffset[idx],
+			Desc:            order.Inner.Direction == sqlparser.DescOrder,
+			Type:            typ,
+			CollationEnv:    ctx.VSchema.Environment().CollationEnv(),
+>>>>>>> 5a6f3868c5 (Handle Nullability for Columns from Outer Tables (#16174))
 		})
 	}
 
@@ -292,8 +307,13 @@ func getEvalEngingeExpr(ctx *plancontext.PlanningContext, pe *operators.ProjExpr
 	case *operators.EvalEngine:
 		return e.EExpr, nil
 	case operators.Offset:
+<<<<<<< HEAD
 		typ, col, _ := ctx.SemTable.TypeForExpr(pe.EvalExpr)
 		return evalengine.NewColumn(int(e), typ, col), nil
+=======
+		typ, _ := ctx.TypeForExpr(pe.EvalExpr)
+		return evalengine.NewColumn(int(e), typ, pe.EvalExpr), nil
+>>>>>>> 5a6f3868c5 (Handle Nullability for Columns from Outer Tables (#16174))
 	default:
 		return nil, vterrors.VT13001("project not planned for: %s", pe.String())
 	}
@@ -440,8 +460,13 @@ func buildRouteLogicalPlan(ctx *plancontext.PlanningContext, op *operators.Route
 	condition := getVindexPredicate(op)
 	eroute, err := routeToEngineRoute(ctx, op)
 	for _, order := range op.Ordering {
+<<<<<<< HEAD
 		typ, collation, _ := ctx.SemTable.TypeForExpr(order.AST)
 		eroute.OrderBy = append(eroute.OrderBy, engine.OrderByParams{
+=======
+		typ, _ := ctx.TypeForExpr(order.AST)
+		eroute.OrderBy = append(eroute.OrderBy, evalengine.OrderByParams{
+>>>>>>> 5a6f3868c5 (Handle Nullability for Columns from Outer Tables (#16174))
 			Col:             order.Offset,
 			WeightStringCol: order.WOffset,
 			Desc:            order.Direction == sqlparser.DescOrder,
@@ -707,5 +732,89 @@ func transformLimit(ctx *plancontext.PlanningContext, op *operators.Limit) (logi
 		return nil, err
 	}
 
+<<<<<<< HEAD
 	return createLimit(plan, op.AST)
+=======
+	if len(op.LHSKeys) != 1 {
+		return nil, vterrors.VT12001("hash joins must have exactly one join predicate")
+	}
+
+	joinOp := engine.InnerJoin
+	if op.LeftJoin {
+		joinOp = engine.LeftJoin
+	}
+
+	var missingTypes []string
+
+	ltyp, found := ctx.TypeForExpr(op.JoinComparisons[0].LHS)
+	if !found {
+		missingTypes = append(missingTypes, sqlparser.String(op.JoinComparisons[0].LHS))
+	}
+	rtyp, found := ctx.TypeForExpr(op.JoinComparisons[0].RHS)
+	if !found {
+		missingTypes = append(missingTypes, sqlparser.String(op.JoinComparisons[0].RHS))
+	}
+
+	if len(missingTypes) > 0 {
+		return nil, vterrors.VT12001(
+			fmt.Sprintf("missing type information for [%s]", strings.Join(missingTypes, ", ")))
+	}
+
+	comparisonType, err := evalengine.CoerceTypes(ltyp, rtyp, ctx.VSchema.Environment().CollationEnv())
+	if err != nil {
+		return nil, err
+	}
+
+	return &engine.HashJoin{
+		Left:           lhs,
+		Right:          rhs,
+		Opcode:         joinOp,
+		Cols:           op.ColumnOffsets,
+		LHSKey:         op.LHSKeys[0],
+		RHSKey:         op.RHSKeys[0],
+		ASTPred:        op.JoinPredicate(),
+		Collation:      comparisonType.Collation(),
+		ComparisonType: comparisonType.Type(),
+		CollationEnv:   ctx.VSchema.Environment().CollationEnv(),
+		Values:         comparisonType.Values(),
+	}, nil
+}
+
+func transformVindexPlan(ctx *plancontext.PlanningContext, op *operators.Vindex) (engine.Primitive, error) {
+	single, ok := op.Vindex.(vindexes.SingleColumn)
+	if !ok {
+		return nil, vterrors.VT12001("multi-column vindexes not supported")
+	}
+
+	expr, err := evalengine.Translate(op.Value, &evalengine.Config{
+		Collation:   ctx.SemTable.Collation,
+		ResolveType: ctx.TypeForExpr,
+		Environment: ctx.VSchema.Environment(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	prim := &engine.VindexFunc{
+		Opcode: op.OpCode,
+		Vindex: single,
+		Value:  expr,
+	}
+
+	for _, col := range op.Columns {
+		err := SupplyProjection(prim, &sqlparser.AliasedExpr{
+			Expr: col,
+			As:   sqlparser.IdentifierCI{},
+		}, false)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return prim, nil
+}
+
+func generateQuery(statement sqlparser.Statement) string {
+	buf := sqlparser.NewTrackedBuffer(dmlFormatter)
+	statement.Format(buf)
+	return buf.String()
+>>>>>>> 5a6f3868c5 (Handle Nullability for Columns from Outer Tables (#16174))
 }

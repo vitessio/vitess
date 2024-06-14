@@ -89,7 +89,19 @@ func createOuterJoin(tableExpr *sqlparser.JoinTableExpr, lhs, rhs ops.Operator) 
 	if tableExpr.Join == sqlparser.RightJoinType {
 		lhs, rhs = rhs, lhs
 	}
+<<<<<<< HEAD
 	subq, _ := getSubQuery(tableExpr.Condition.On)
+=======
+
+	joinOp := &Join{LHS: lhs, RHS: rhs, JoinType: join.Join}
+
+	// mark the RHS as outer tables so we know which columns are nullable
+	ctx.OuterTables = ctx.OuterTables.Merge(TableID(rhs))
+
+	// for outer joins we have to be careful with the predicates we use
+	var op Operator
+	subq, _ := getSubQuery(join.Condition.On)
+>>>>>>> 5a6f3868c5 (Handle Nullability for Columns from Outer Tables (#16174))
 	if subq != nil {
 		return nil, vterrors.VT12001("subquery in outer join predicate")
 	}

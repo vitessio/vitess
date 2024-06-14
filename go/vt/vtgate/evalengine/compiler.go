@@ -50,7 +50,135 @@ type ctype struct {
 	Col  collations.TypedCollation
 }
 
+<<<<<<< HEAD
 func (ct ctype) nullable() bool {
+=======
+type Type struct {
+	typ         sqltypes.Type
+	collation   collations.ID
+	nullable    bool
+	init        bool
+	size, scale int32
+	values      *EnumSetValues
+}
+
+func (v *EnumSetValues) Equal(other *EnumSetValues) bool {
+	if v == nil && other == nil {
+		return true
+	}
+	if v == nil || other == nil {
+		return false
+	}
+	return slices.Equal(*v, *other)
+}
+
+func NewType(t sqltypes.Type, collation collations.ID) Type {
+	// New types default to being nullable
+	return NewTypeEx(t, collation, true, 0, 0, nil)
+}
+
+func NewTypeEx(t sqltypes.Type, collation collations.ID, nullable bool, size, scale int32, values *EnumSetValues) Type {
+	return Type{
+		typ:       t,
+		collation: collation,
+		nullable:  nullable,
+		init:      true,
+		size:      size,
+		scale:     scale,
+		values:    values,
+	}
+}
+
+func NewTypeFromField(f *querypb.Field) Type {
+	return Type{
+		typ:       f.Type,
+		collation: collations.ID(f.Charset),
+		nullable:  f.Flags&uint32(querypb.MySqlFlag_NOT_NULL_FLAG) == 0,
+		init:      true,
+		size:      int32(f.ColumnLength),
+		scale:     int32(f.Decimals),
+	}
+}
+
+func (t *Type) ToField(name string) *querypb.Field {
+	// need to get the proper flags for the type; usually leaving flags
+	// to 0 is OK, because Vitess' MySQL client will generate the right
+	// ones for the column's type, but here we're also setting the NotNull
+	// flag, so it needs to be set with the full flags for the column
+	_, flags := sqltypes.TypeToMySQL(t.typ)
+	if !t.nullable {
+		flags |= int64(querypb.MySqlFlag_NOT_NULL_FLAG)
+	}
+
+	f := &querypb.Field{
+		Name:         name,
+		Type:         t.typ,
+		Charset:      uint32(t.collation),
+		ColumnLength: uint32(t.size),
+		Decimals:     uint32(t.scale),
+		Flags:        uint32(flags),
+	}
+	return f
+}
+
+func (t *Type) Type() sqltypes.Type {
+	if t.init {
+		return t.typ
+	}
+	return sqltypes.Unknown
+}
+
+func (t *Type) Collation() collations.ID {
+	return t.collation
+}
+
+func (t *Type) Size() int32 {
+	return t.size
+}
+
+func (t *Type) Scale() int32 {
+	return t.scale
+}
+
+func (t *Type) Nullable() bool {
+	if t.init {
+		return t.nullable
+	}
+	return true // nullable by default for unknown types
+}
+
+func (t *Type) SetNullability(n bool) {
+	t.nullable = n
+}
+
+func (t *Type) Values() *EnumSetValues {
+	return t.values
+}
+
+func (t *Type) Valid() bool {
+	return t.init
+}
+
+func (t *Type) Equal(other *Type) bool {
+	return t.typ == other.typ &&
+		t.collation == other.collation &&
+		t.nullable == other.nullable &&
+		t.size == other.size &&
+		t.scale == other.scale &&
+		t.values.Equal(other.values)
+}
+
+func (ct *ctype) equal(other ctype) bool {
+	return ct.Type == other.Type &&
+		ct.Flag == other.Flag &&
+		ct.Size == other.Size &&
+		ct.Scale == other.Scale &&
+		ct.Col == other.Col &&
+		ct.Values.Equal(other.Values)
+}
+
+func (ct *ctype) nullable() bool {
+>>>>>>> 5a6f3868c5 (Handle Nullability for Columns from Outer Tables (#16174))
 	return ct.Flag&flagNullable != 0
 }
 
