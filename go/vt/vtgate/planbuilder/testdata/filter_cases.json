@@ -4311,7 +4311,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 from unsharded as u2 where 1 != 1",
-                "Query": "select 1 from unsharded as u2 where u2.baz = :u1_bar",
+                "Query": "select 1 from unsharded as u2 where u2.baz = :u1_bar limit 1",
                 "Table": "unsharded"
               }
             ]

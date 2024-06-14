@@ -1691,7 +1691,7 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from user_extra where 1 != 1",
-            "Query": "select 1 from user_extra where user_id = 3 and user_id < :user_id",
+            "Query": "select 1 from user_extra where user_id = 3 and user_id < :user_id limit 1",
             "Table": "user_extra",
             "Values": [
               "3"
@@ -2546,15 +2546,21 @@
               },
               {
                 "InputName": "SubQuery",
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select 1 from user_extra where 1 != 1",
-                "Query": "select 1 from user_extra where user_extra.bar = :user_apa",
-                "Table": "user_extra"
+                "OperatorType": "Limit",
+                "Count": "1",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1 from user_extra where 1 != 1",
+                    "Query": "select 1 from user_extra where user_extra.bar = :user_apa limit :__upper_limit",
+                    "Table": "user_extra"
+                  }
+                ]
               }
             ]
           }
