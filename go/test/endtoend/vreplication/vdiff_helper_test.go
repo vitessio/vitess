@@ -29,9 +29,9 @@ import (
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
+	vdiff2 "vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	vdiff2 "vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
 )
 
 const (
