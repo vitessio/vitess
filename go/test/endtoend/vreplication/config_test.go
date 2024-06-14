@@ -88,7 +88,7 @@ create table nopk (name varchar(128), age int unsigned);
     "orders": {},
     "loadtest": {},
     "customer": {},
-    "` + "`customer_seq`" + `": {
+    "customer_seq": {
       "type": "sequence"
     },
     "customer2": {},
@@ -295,7 +295,7 @@ create table nopk (name varchar(128), age int unsigned);
 	      ],
 	      "auto_increment": {
 	        "column": "cid",
-	        "sequence": "` + "`customer_seq`" + `"
+	        "sequence": "` + "`product`.`customer_seq`" + `"
 	      }
 	},
     "orders": {
