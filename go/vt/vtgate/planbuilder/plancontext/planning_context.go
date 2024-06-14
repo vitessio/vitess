@@ -218,7 +218,7 @@ func (ctx *PlanningContext) TypeForExpr(e sqlparser.Expr) (evalengine.Type, bool
 	// There are some exceptions to this, where an expression depending on the outer side
 	// will never return NULL, but it's better to be conservative here.
 	if deps.IsOverlapping(ctx.OuterTables) {
-		t.SetNullable()
+		t.SetNullability(true)
 	}
 	return t, true
 }
