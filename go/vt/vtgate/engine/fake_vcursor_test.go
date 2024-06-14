@@ -803,7 +803,7 @@ func (f *loggingVCursor) nextResult() (*sqltypes.Result, error) {
 	if r == nil {
 		return &sqltypes.Result{}, f.resultErr
 	}
-	return r, nil
+	return r.Copy(), nil
 }
 
 func (f *loggingVCursor) CanUseSetVar() bool {

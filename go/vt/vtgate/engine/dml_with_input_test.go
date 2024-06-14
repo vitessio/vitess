@@ -20,6 +20,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -179,4 +180,79 @@ func TestDeleteWithMultiTarget(t *testing.T) {
 		`ResolveDestinations ks [type:INT64 value:"1" type:INT64 value:"2" type:INT64 value:"3"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(4eb190c9a2fa169c)`,
 		`ExecuteMultiShard ks.-20: dummy_delete_2 {dml_vals: type:TUPLE values:{type:TUPLE value:"\x89\x02\x03100\x89\x02\x011"} values:{type:TUPLE value:"\x89\x02\x03100\x89\x02\x012"} values:{type:TUPLE value:"\x89\x02\x03200\x89\x02\x013"}} true true`,
 	})
+}
+
+// TestUpdateWithInputNonLiteral test the case where the column updated have non literal update.
+// Therefore, update query should be executed for each row in the input result.
+// This also validates the output rows affected.
+func TestUpdateWithInputNonLiteral(t *testing.T) {
+	input := &fakePrimitive{results: []*sqltypes.Result{
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col|val", "int64|varchar|int64"), "1|a|100", "2|b|200", "3|c|300"),
+	}}
+
+	dml := &DMLWithInput{
+		Input: input,
+		DMLs: []Primitive{&Update{
+			DML: &DML{
+				RoutingParameters: &RoutingParameters{
+					Opcode: Scatter,
+					Keyspace: &vindexes.Keyspace{
+						Name:    "ks",
+						Sharded: true,
+					},
+				},
+				Query: "dummy_update",
+			},
+		}},
+		OutputCols: [][]int{{1, 0}},
+		BVList: []map[string]int{
+			{"bv1": 2},
+		},
+	}
+
+	vc := newDMLTestVCursor("-20", "20-")
+	vc.results = []*sqltypes.Result{
+		{RowsAffected: 1}, {RowsAffected: 1}, {RowsAffected: 1},
+	}
+	qr, err := dml.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard ` +
+			`ks.-20: dummy_update {bv1: type:INT64 value:"100" dml_vals: type:TUPLE values:{type:TUPLE value:"\x950\x01a\x89\x02\x011"}} ` +
+			`ks.20-: dummy_update {bv1: type:INT64 value:"100" dml_vals: type:TUPLE values:{type:TUPLE value:"\x950\x01a\x89\x02\x011"}} true false`,
+		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard ` +
+			`ks.-20: dummy_update {bv1: type:INT64 value:"200" dml_vals: type:TUPLE values:{type:TUPLE value:"\x950\x01b\x89\x02\x012"}} ` +
+			`ks.20-: dummy_update {bv1: type:INT64 value:"200" dml_vals: type:TUPLE values:{type:TUPLE value:"\x950\x01b\x89\x02\x012"}} true false`,
+		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard ` +
+			`ks.-20: dummy_update {bv1: type:INT64 value:"300" dml_vals: type:TUPLE values:{type:TUPLE value:"\x950\x01c\x89\x02\x013"}} ` +
+			`ks.20-: dummy_update {bv1: type:INT64 value:"300" dml_vals: type:TUPLE values:{type:TUPLE value:"\x950\x01c\x89\x02\x013"}} true false`,
+	})
+	assert.EqualValues(t, 3, qr.RowsAffected)
+
+	vc.Rewind()
+	input.rewind()
+	err = dml.TryStreamExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false,
+		func(result *sqltypes.Result) error {
+			qr = result
+			return nil
+		})
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard ` +
+			`ks.-20: dummy_update {bv1: type:INT64 value:"100" dml_vals: type:TUPLE values:{type:TUPLE value:"\x950\x01a\x89\x02\x011"}} ` +
+			`ks.20-: dummy_update {bv1: type:INT64 value:"100" dml_vals: type:TUPLE values:{type:TUPLE value:"\x950\x01a\x89\x02\x011"}} true false`,
+		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard ` +
+			`ks.-20: dummy_update {bv1: type:INT64 value:"200" dml_vals: type:TUPLE values:{type:TUPLE value:"\x950\x01b\x89\x02\x012"}} ` +
+			`ks.20-: dummy_update {bv1: type:INT64 value:"200" dml_vals: type:TUPLE values:{type:TUPLE value:"\x950\x01b\x89\x02\x012"}} true false`,
+		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard ` +
+			`ks.-20: dummy_update {bv1: type:INT64 value:"300" dml_vals: type:TUPLE values:{type:TUPLE value:"\x950\x01c\x89\x02\x013"}} ` +
+			`ks.20-: dummy_update {bv1: type:INT64 value:"300" dml_vals: type:TUPLE values:{type:TUPLE value:"\x950\x01c\x89\x02\x013"}} true false`,
+	})
+	assert.EqualValues(t, 3, qr.RowsAffected)
 }
