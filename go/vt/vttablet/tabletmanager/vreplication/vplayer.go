@@ -41,6 +41,8 @@ const failedToRecordHeartbeatMsg = "failed to record heartbeat"
 
 var (
 	// At what point should we consider the vplayer to be stalled and return an error.
+	// 5 minutes is well beyond a reasonable amount of time for a transaction to be
+	// replicated.
 	vplayerProgressDeadline = time.Duration(5 * time.Minute)
 
 	// The error to return when we have detected a stall in the vplayer.

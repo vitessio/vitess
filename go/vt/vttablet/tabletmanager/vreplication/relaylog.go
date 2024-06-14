@@ -127,7 +127,7 @@ func (rl *relayLog) checkDone() error {
 }
 
 // startSendTimer starts a timer that will wake up the sender if we hit
-// the vplayer-progress-deadline timeout. This ensures that we don't
+// the vplayerProgressDeadline timeout. This ensures that we don't
 // block forever if the vplayer cannot process the previous relay log
 // contents in a timely manner; allowing us to provide the user with a
 // helpful error message.
