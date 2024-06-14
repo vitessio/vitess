@@ -85,6 +85,9 @@ jobs:
 
         go mod download
         go install golang.org/x/tools/cmd/goimports@latest
+        
+        # install JUnit report formatter
+        go install github.com/vitessio/go-junit-report@HEAD
 
     - name: Run make tools
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
@@ -100,4 +103,13 @@ jobs:
         export VTDATAROOT="/tmp/"
         export NOVTADMINBUILD=1
 
-        eatmydata -- make unit_test_race
+        eatmydata -- make unit_test_race | tee -a output.txt | go-junit-report -set-exit-code > report.xml
+        # print test output
+        cat output.txt
+
+    - name: Test Summary
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true' && always()
+      uses: test-summary/action@v2
+      with:
+        paths: "report.xml"
+        show: "fail, skip"
