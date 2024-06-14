@@ -20,6 +20,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -57,6 +58,10 @@ type PlanningContext struct {
 
 	// Statement contains the originally parsed statement
 	Statement sqlparser.Statement
+
+	// OuterTables contains the tables that are outer to the current query
+	// Used to set the nullable flag on the columns
+	OuterTables semantics.TableSet
 }
 
 // CreatePlanningContext initializes a new PlanningContext with the given parameters.
@@ -200,4 +205,17 @@ func (ctx *PlanningContext) RewriteDerivedTableExpression(expr sqlparser.Expr, t
 		}
 	}
 	return modifiedExpr
+}
+
+// TypeForExpr returns the type of the given expression, with nullable set if the expression is from an outer table.
+func (ctx *PlanningContext) TypeForExpr(e sqlparser.Expr) (evalengine.Type, bool) {
+	t, found := ctx.SemTable.TypeForExpr(e)
+	if !found {
+		return t, found
+	}
+	deps := ctx.SemTable.RecursiveDeps(e)
+	if deps.IsOverlapping(ctx.OuterTables) {
+		t.SetNullable()
+	}
+	return t, true
 }
