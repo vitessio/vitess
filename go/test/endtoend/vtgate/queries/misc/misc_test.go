@@ -463,7 +463,7 @@ func TestColumnAliases(t *testing.T) {
 }
 
 func TestHandleNullableColumn(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 21, "vtgate")
+	utils.SkipIfBinaryIsBelowVersion(t, 20, "vtgate")
 	require.NoError(t,
 		utils.WaitForAuthoritative(t, keyspaceName, "tbl", clusterInstance.VtgateProcess.ReadVSchema))
 	mcmp, closer := start(t)
