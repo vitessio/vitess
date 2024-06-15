@@ -228,11 +228,21 @@ func (sq *SubQuery) settle(ctx *plancontext.PlanningContext, outer Operator) Ope
 var correlatedSubqueryErr = vterrors.VT12001("correlated subquery is only supported for EXISTS")
 var subqueryNotAtTopErr = vterrors.VT12001("unmergable subquery can not be inside complex expression")
 
+func (sq *SubQuery) addLimit() {
+	// for a correlated subquery, we can add a limit 1 to the subquery
+	sq.Subquery = &Limit{
+		Source: sq.Subquery,
+		AST:    &sqlparser.Limit{Rowcount: sqlparser.NewIntLiteral("1")},
+		Top:    true,
+	}
+}
+
 func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer Operator) Operator {
 	if len(sq.Predicates) > 0 {
 		if sq.FilterType != opcode.PulloutExists {
 			panic(correlatedSubqueryErr)
 		}
+		sq.addLimit()
 		return outer
 	}
 
@@ -260,8 +270,10 @@ func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer Operato
 	var predicates []sqlparser.Expr
 	switch sq.FilterType {
 	case opcode.PulloutExists:
+		sq.addLimit()
 		predicates = append(predicates, sqlparser.NewArgument(hasValuesArg()))
 	case opcode.PulloutNotExists:
+		sq.addLimit()
 		sq.FilterType = opcode.PulloutExists // it's the same pullout as EXISTS, just with a NOT in front of the predicate
 		predicates = append(predicates, sqlparser.NewNotExpr(sqlparser.NewArgument(hasValuesArg())))
 	case opcode.PulloutIn:
