@@ -1123,7 +1123,7 @@ func createAssignmentExpressions(
 		}
 		found = true
 		pv, err := evalengine.Translate(assignment.Expr.EvalExpr, &evalengine.Config{
-			ResolveType: ctx.SemTable.TypeForExpr,
+			ResolveType: ctx.TypeForExpr,
 			Collation:   ctx.SemTable.Collation,
 			Environment: ctx.VSchema.Environment(),
 		})
