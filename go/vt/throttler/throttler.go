@@ -38,6 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/proto/topodata"
 
 	throttlerdatapb "vitess.io/vitess/go/vt/proto/throttlerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 const (
@@ -65,6 +66,20 @@ const (
 	// call. It should be used when returning maxReplicationlag in an error case.
 	InvalidMaxReplicationLag = -1
 )
+
+// Interface defines the throttler interface.
+type Interface interface {
+	Throttle(threadID int) time.Duration
+	ThreadFinished(threadID int)
+	Close()
+	MaxRate() int64
+	SetMaxRate(rate int64)
+	RecordReplicationLag(time time.Time, th *discovery.TabletHealth)
+	GetConfiguration() *throttlerdatapb.Configuration
+	UpdateConfiguration(configuration *throttlerdatapb.Configuration, copyZeroValues bool) error
+	ResetConfiguration()
+	MaxLag(tabletType topodatapb.TabletType) uint32
+}
 
 // Throttler provides a client-side, thread-aware throttler.
 // See the package doc for more information.
