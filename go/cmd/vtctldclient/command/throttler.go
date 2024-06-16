@@ -27,6 +27,7 @@ import (
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
@@ -95,7 +96,7 @@ func commandUpdateThrottlerConfig(cmd *cobra.Command, args []string) error {
 		throttledAppRule.ExpiresAt = protoutil.TimeToProto(time.Now().Add(throttledAppDuration))
 		updateThrottlerConfigOptions.ThrottledApp = &throttledAppRule
 	} else if unthrottledAppRule.Name != "" {
-		unthrottledAppRule.ExpiresAt = protoutil.TimeToProto(time.Now())
+		unthrottledAppRule.ExpiresAt = &vttime.Time{} // zero
 		updateThrottlerConfigOptions.ThrottledApp = &unthrottledAppRule
 	}
 

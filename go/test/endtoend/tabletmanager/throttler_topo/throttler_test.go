@@ -414,7 +414,7 @@ func TestThrottleViaApplySchema(t *testing.T) {
 		require.NotNil(t, keyspace.Keyspace.ThrottlerConfig.ThrottledApps)
 		// ThrottledApps will actually be empty at this point, but more specifically we want to see that "online-ddl" is not there.
 		appRule, ok := keyspace.Keyspace.ThrottlerConfig.ThrottledApps[throttlerapp.OnlineDDLName.String()]
-		assert.False(t, ok, "app rule: %v", appRule)
+		assert.True(t, ok, "app rule: %v", appRule)
 	})
 }
 
