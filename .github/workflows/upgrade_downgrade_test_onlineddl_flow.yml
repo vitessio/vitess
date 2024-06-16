@@ -146,6 +146,7 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 10
       run: |
+        echo "building last release: $(git rev-parse HEAD)"
         source build.env
         make build
         mkdir -p /tmp/vitess-build-last/
@@ -168,6 +169,7 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 10
       run: |
+        echo "building next release: $(git rev-parse HEAD)"
         source build.env
         NOVTADMINBUILD=1 make build
         mkdir -p /tmp/vitess-build-next/
@@ -221,17 +223,17 @@ jobs:
         export REPLICA_TABLET_BINARY_SUFFIX="-last"
         eatmydata -- go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_onlineddl_flow
 
-    # # Running a test with primary tablet at version n-1  and replica vttablet at version n (current SHA)
-    # - name: Run Online DDL tests (primary=N-1, replica=N)
-    #   if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-    #   run: |
-    #     rm -rf /tmp/vtdataroot
-    #     mkdir -p /tmp/vtdataroot
+    # Running a test with primary tablet at version n-1  and replica vttablet at version n (current SHA)
+    - name: Run Online DDL tests (primary=N-1, replica=N)
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      run: |
+        rm -rf /tmp/vtdataroot
+        mkdir -p /tmp/vtdataroot
 
-    #     source build.env
-    #     export PRIMARY_TABLET_BINARY_SUFFIX="-last"
-    #     export REPLICA_TABLET_BINARY_SUFFIX=""
-    #     eatmydata -- go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_onlineddl_flow
+        source build.env
+        export PRIMARY_TABLET_BINARY_SUFFIX="-last"
+        export REPLICA_TABLET_BINARY_SUFFIX=""
+        eatmydata -- go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_onlineddl_flow
 
     # Running a test with primary tablet at version n+1 and replica vttablet at version n (current SHA)
     - name: Run Online DDL tests (primary=N+1, replica=N)
