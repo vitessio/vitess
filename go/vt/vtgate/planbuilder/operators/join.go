@@ -105,6 +105,9 @@ func createLeftOuterJoin(ctx *plancontext.PlanningContext, join *sqlparser.JoinT
 
 	joinOp := &Join{LHS: lhs, RHS: rhs, JoinType: join.Join}
 
+	// mark the RHS as outer tables so we know which columns are nullable
+	ctx.OuterTables = ctx.OuterTables.Merge(TableID(rhs))
+
 	// for outer joins we have to be careful with the predicates we use
 	var op Operator
 	subq, _ := getSubQuery(join.Condition.On)

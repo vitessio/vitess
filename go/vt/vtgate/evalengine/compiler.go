@@ -156,6 +156,10 @@ func (t *Type) Nullable() bool {
 	return true // nullable by default for unknown types
 }
 
+func (t *Type) SetNullability(n bool) {
+	t.nullable = n
+}
+
 func (t *Type) Values() *EnumSetValues {
 	return t.values
 }
