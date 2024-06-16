@@ -197,6 +197,122 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "invalid table name",
+			sourceVSchema: &vschema.Keyspace{
+				Vindexes: vindexes,
+				Tables: map[string]*vschema.Table{
+					"`my-`seq1`": {
+						Type: "sequence",
+					},
+				},
+			},
+			targetVSchema: &vschema.Keyspace{
+				Vindexes: vindexes,
+				Tables: map[string]*vschema.Table{
+					table: {
+						ColumnVindexes: []*vschema.ColumnVindex{
+							{
+								Name:   "xxhash",
+								Column: "`my-col`",
+							},
+						},
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "`my-col`",
+							Sequence: "`my-seq1`",
+						},
+					},
+				},
+			},
+			err: "invalid table name `my-`seq1` in keyspace source-ks: UnescapeID err: unexpected single backtick at position 3 in 'my-`seq1'",
+		},
+		{
+			name: "invalid keyspace name",
+			sourceVSchema: &vschema.Keyspace{
+				Vindexes: vindexes,
+				Tables: map[string]*vschema.Table{
+					"`my-seq1`": {
+						Type: "sequence",
+					},
+				},
+			},
+			targetVSchema: &vschema.Keyspace{
+				Vindexes: vindexes,
+				Tables: map[string]*vschema.Table{
+					table: {
+						ColumnVindexes: []*vschema.ColumnVindex{
+							{
+								Name:   "xxhash",
+								Column: "`my-col`",
+							},
+						},
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "`my-col`",
+							Sequence: "`ks`1`.`my-seq1`",
+						},
+					},
+				},
+			},
+			err: "invalid keyspace in qualified sequence table name `ks`1`.`my-seq1` defined in sequence table column_vindexes:{column:\"`my-col`\" name:\"xxhash\"} auto_increment:{column:\"`my-col`\" sequence:\"`ks`1`.`my-seq1`\"}: UnescapeID err: unexpected single backtick at position 2 in 'ks`1'",
+		},
+		{
+			name: "invalid auto-inc column name",
+			sourceVSchema: &vschema.Keyspace{
+				Vindexes: vindexes,
+				Tables: map[string]*vschema.Table{
+					"`my-seq1`": {
+						Type: "sequence",
+					},
+				},
+			},
+			targetVSchema: &vschema.Keyspace{
+				Vindexes: vindexes,
+				Tables: map[string]*vschema.Table{
+					table: {
+						ColumnVindexes: []*vschema.ColumnVindex{
+							{
+								Name:   "xxhash",
+								Column: "`my-col`",
+							},
+						},
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "`my`-col`",
+							Sequence: "`my-seq1`",
+						},
+					},
+				},
+			},
+			err: "invalid auto-increment column name `my`-col` defined in sequence table column_vindexes:{column:\"my-col\" name:\"xxhash\"} auto_increment:{column:\"`my`-col`\" sequence:\"my-seq1\"}: UnescapeID err: unexpected single backtick at position 2 in 'my`-col'",
+		},
+		{
+			name: "invalid sequence name",
+			sourceVSchema: &vschema.Keyspace{
+				Vindexes: vindexes,
+				Tables: map[string]*vschema.Table{
+					"`my-seq1`": {
+						Type: "sequence",
+					},
+				},
+			},
+			targetVSchema: &vschema.Keyspace{
+				Vindexes: vindexes,
+				Tables: map[string]*vschema.Table{
+					table: {
+						ColumnVindexes: []*vschema.ColumnVindex{
+							{
+								Name:   "xxhash",
+								Column: "`my-col`",
+							},
+						},
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "`my-col`",
+							Sequence: "`my-`seq1`",
+						},
+					},
+				},
+			},
+			err: "invalid sequence table name `my-`seq1` defined in sequence table column_vindexes:{column:\"`my-col`\" name:\"xxhash\"} auto_increment:{column:\"`my-col`\" sequence:\"`my-`seq1`\"}: UnescapeID err: unexpected single backtick at position 3 in 'my-`seq1'",
+		},
 	}
 
 	for _, tc := range tests {

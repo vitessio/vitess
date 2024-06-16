@@ -1387,7 +1387,7 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 		}
 		for tableName, tableDef := range kvs.Tables {
 			// The table name can be escaped in the vschema definition.
-			escapedTableName, err := sqlescape.UnescapeID(tableName)
+			unescapedTableName, err := sqlescape.UnescapeID(tableName)
 			if err != nil {
 				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid table name %s in keyspace %s: %v",
 					tableName, keyspace, err)
@@ -1402,9 +1402,9 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 			if complete := func() bool {
 				smMu.Lock() // Prevent concurrent access to the map
 				defer smMu.Unlock()
-				sm := sequencesByBackingTable[escapedTableName]
+				sm := sequencesByBackingTable[unescapedTableName]
 				if tableDef != nil && tableDef.Type == vindexes.TypeSequence &&
-					sm != nil && escapedTableName == sm.backingTableName {
+					sm != nil && unescapedTableName == sm.backingTableName {
 					tablesFound++ // This is also protected by the mutex
 					sm.backingTableKeyspace = keyspace
 					// Set the default keyspace name. We will later check to
@@ -1477,13 +1477,13 @@ func (ts *trafficSwitcher) findSequenceUsageInKeyspace(vschema *vschemapb.Keyspa
 		}
 		// Be sure that the table name is unescaped as it can be escaped
 		// in the vschema.
-		escapedTable, err := sqlescape.UnescapeID(table)
+		unescapedTable, err := sqlescape.UnescapeID(table)
 		if err != nil {
 			return nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid table name %s defined in the sequence table %+v: %v",
 				table, seqTable, err)
 		}
 		sm := &sequenceMetadata{
-			usingTableName:   escapedTable,
+			usingTableName:   unescapedTable,
 			usingTableDBName: targetDBName,
 		}
 		// If the sequence table is fully qualified in the vschema then
@@ -1523,19 +1523,19 @@ func (ts *trafficSwitcher) findSequenceUsageInKeyspace(vschema *vschemapb.Keyspa
 		}
 		// The column names can be escaped in the vschema definition.
 		for i := range seqTable.ColumnVindexes {
-			escapedColumn, err := sqlescape.UnescapeID(seqTable.ColumnVindexes[i].Column)
+			unescapedColumn, err := sqlescape.UnescapeID(seqTable.ColumnVindexes[i].Column)
 			if err != nil {
 				return nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid sequence column vindex name %s defined in sequence table %+v: %v",
 					seqTable.ColumnVindexes[i].Column, seqTable, err)
 			}
-			seqTable.ColumnVindexes[i].Column = escapedColumn
+			seqTable.ColumnVindexes[i].Column = unescapedColumn
 		}
-		escapedAutoIncCol, err := sqlescape.UnescapeID(seqTable.AutoIncrement.Column)
+		unescapedAutoIncCol, err := sqlescape.UnescapeID(seqTable.AutoIncrement.Column)
 		if err != nil {
 			return nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid auto-increment column name %s defined in sequence table %+v: %v",
 				seqTable.AutoIncrement.Column, seqTable, err)
 		}
-		seqTable.AutoIncrement.Column = escapedAutoIncCol
+		seqTable.AutoIncrement.Column = unescapedAutoIncCol
 		sm.usingTableDefinition = seqTable
 		sequencesByBackingTable[sm.backingTableName] = sm
 	}
@@ -1692,11 +1692,11 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 		// ResetSequences interfaces with the schema engine and the actual
 		// table identifiers DO NOT contain the backticks. So we have to
 		// ensure that the table name is unescaped.
-		escapedBackingTable, err := sqlescape.UnescapeID(backingTable)
+		unescapedBackingTable, err := sqlescape.UnescapeID(backingTable)
 		if err != nil {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid sequence backing table name %s: %v", backingTable, err)
 		}
-		ierr = ts.TabletManagerClient().ResetSequences(ictx, ti.Tablet, []string{escapedBackingTable})
+		ierr = ts.TabletManagerClient().ResetSequences(ictx, ti.Tablet, []string{unescapedBackingTable})
 		if ierr != nil {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to reset the sequence cache for backing table %s on shard %s/%s using tablet %s: %v",
 				sequenceMetadata.backingTableName, sequenceShard.Keyspace(), sequenceShard.ShardName(), sequenceShard.PrimaryAlias, ierr)
