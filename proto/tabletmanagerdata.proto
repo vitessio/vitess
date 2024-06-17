@@ -727,10 +727,9 @@ message CheckThrottlerRequest {
   string app_name = 1;
 
   string scope = 2;
-  // LowPriority gives precendence to other checks
   // SkipRequestHeartbeats ensures this check does not renew heartbeat lease
   bool skip_request_heartbeats = 3;
-	// OKIfNotExists asks the throttler to return OK even if the metric does not exist
+  // OKIfNotExists asks the throttler to return OK even if the metric does not exist
   bool ok_if_not_exists = 4;
   // MultiMetricsEnabled is always set to "true" and is how a multi-metrics enabled replica
   // throttler knows its being probed by a multi-metrics enabled primary vttablet.
@@ -769,6 +768,8 @@ message CheckThrottlerResponse {
     // Scope used in this check
     string scope = 7;
   }
+  // Metrics is a map (metric name -> metric value/error) so that the client has as much
+  // information as possible about all the checked metrics.
   map<string, Metric> metrics = 7;
 }
 
