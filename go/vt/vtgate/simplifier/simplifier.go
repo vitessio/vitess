@@ -37,31 +37,31 @@ func SimplifyStatement(
 
 	test := func(s sqlparser.SelectStatement) bool {
 		// Since our semantic analysis changes the AST, we clone it first, so we have a pristine AST to play with
-		return testF(sqlparser.CloneSelectStatement(s))
+		return testF(sqlparser.Clone(s))
 	}
 
 	// first we try to simplify the query by removing any unions
-	if success := trySimplifyUnions(sqlparser.CloneSelectStatement(in), test); success != nil {
+	if success := trySimplifyUnions(sqlparser.Clone(in), test); success != nil {
 		return SimplifyStatement(success, currentDB, si, testF)
 	}
 
 	// then we try to remove a table and all uses of it
-	if success := tryRemoveTable(tables, sqlparser.CloneSelectStatement(in), currentDB, si, testF); success != nil {
+	if success := tryRemoveTable(tables, sqlparser.Clone(in), currentDB, si, testF); success != nil {
 		return SimplifyStatement(success, currentDB, si, testF)
 	}
 
 	// now let's try to simplify * expressions
-	if success := simplifyStarExpr(sqlparser.CloneSelectStatement(in), test); success != nil {
+	if success := simplifyStarExpr(sqlparser.Clone(in), test); success != nil {
 		return SimplifyStatement(success, currentDB, si, testF)
 	}
 
 	// we try to remove/replace any expressions next
-	if success := trySimplifyExpressions(sqlparser.CloneSelectStatement(in), test); success != nil {
+	if success := trySimplifyExpressions(sqlparser.Clone(in), test); success != nil {
 		return SimplifyStatement(success, currentDB, si, testF)
 	}
 
 	// we try to remove distinct last
-	if success := trySimplifyDistinct(sqlparser.CloneSelectStatement(in), test); success != nil {
+	if success := trySimplifyDistinct(sqlparser.Clone(in), test); success != nil {
 		return SimplifyStatement(success, currentDB, si, testF)
 	}
 
@@ -144,10 +144,10 @@ func trySimplifyExpressions(in sqlparser.SelectStatement, test func(sqlparser.Se
 func trySimplifyUnions(in sqlparser.SelectStatement, test func(sqlparser.SelectStatement) bool) (res sqlparser.SelectStatement) {
 	if union, ok := in.(*sqlparser.Union); ok {
 		// the root object is an UNION
-		if test(sqlparser.CloneSelectStatement(union.Left)) {
+		if test(sqlparser.Clone(union.Left)) {
 			return union.Left
 		}
-		if test(sqlparser.CloneSelectStatement(union.Right)) {
+		if test(sqlparser.Clone(union.Right)) {
 			return union.Right
 		}
 	}
@@ -165,14 +165,14 @@ func trySimplifyUnions(in sqlparser.SelectStatement, test func(sqlparser.SelectS
 				return true
 			}
 			cursor.Replace(node.Left)
-			clone := sqlparser.CloneSelectStatement(in)
+			clone := sqlparser.Clone(in)
 			if test(clone) {
 				log.Errorf("replaced UNION with its left child: %s -> %s", sqlparser.String(node), sqlparser.String(node.Left))
 				simplified = true
 				return true
 			}
 			cursor.Replace(node.Right)
-			clone = sqlparser.CloneSelectStatement(in)
+			clone = sqlparser.Clone(in)
 			if test(clone) {
 				log.Errorf("replaced UNION with its right child: %s -> %s", sqlparser.String(node), sqlparser.String(node.Right))
 				simplified = true
@@ -196,7 +196,7 @@ func trySimplifyUnions(in sqlparser.SelectStatement, test func(sqlparser.SelectS
 func tryRemoveTable(tables []semantics.TableInfo, in sqlparser.SelectStatement, currentDB string, si semantics.SchemaInformation, test func(sqlparser.SelectStatement) bool) sqlparser.SelectStatement {
 	// we start by removing one table at a time, and see if we still have an interesting plan
 	for idx, tbl := range tables {
-		clone := sqlparser.CloneSelectStatement(in)
+		clone := sqlparser.Clone(in)
 		searchedTS := semantics.SingleTableSet(idx)
 		simplified := removeTable(clone, searchedTS, currentDB, si)
 		name, _ := tbl.Name()
@@ -211,7 +211,7 @@ func tryRemoveTable(tables []semantics.TableInfo, in sqlparser.SelectStatement, 
 
 func getTables(in sqlparser.SelectStatement, currentDB string, si semantics.SchemaInformation) ([]semantics.TableInfo, error) {
 	// Since our semantic analysis changes the AST, we clone it first, so we have a pristine AST to play with
-	clone := sqlparser.CloneSelectStatement(in)
+	clone := sqlparser.Clone(in)
 	semTable, err := semantics.Analyze(clone, currentDB, si)
 	if err != nil {
 		return nil, err
@@ -467,7 +467,7 @@ func visitSelectExprs(node sqlparser.SelectExprs, cursor *sqlparser.Cursor, visi
 			continue
 		}
 		removed := false
-		original := sqlparser.CloneExpr(expr.Expr)
+		original := sqlparser.Clone(expr.Expr)
 		item := newExprCursor(
 			expr.Expr,
 			/*replace*/ func(replaceWith sqlparser.Expr) {
@@ -561,7 +561,7 @@ func visitOrderBy(node sqlparser.OrderBy, cursor *sqlparser.Cursor, visit func(e
 	for idx := 0; idx < len(node); idx++ {
 		order := node[idx]
 		removed := false
-		original := sqlparser.CloneExpr(order.Expr)
+		original := sqlparser.Clone(order.Expr)
 		item := newExprCursor(
 			order.Expr,
 			/*replace*/ func(replaceWith sqlparser.Expr) {

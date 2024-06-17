@@ -74,7 +74,7 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 		return true, col.Type.Options.Storage
 	}
 	colStringStrippedDown := func(col *sqlparser.ColumnDefinition, stripDefault bool, stripEnum bool) string {
-		strippedCol := sqlparser.CloneRefOfColumnDefinition(col)
+		strippedCol := sqlparser.Clone(col)
 		if stripDefault {
 			strippedCol.Type.Options.Default = nil
 			strippedCol.Type.Options.DefaultLiteral = false
@@ -119,6 +119,10 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 					// Adding a generated "STORED" column is unsupported
 					return false, nil
 				}
+			}
+			if column.Type.Options.Default != nil && !column.Type.Options.DefaultLiteral {
+				// Expression default values are not supported
+				return false, nil
 			}
 		}
 		if opt.First || opt.After != nil {

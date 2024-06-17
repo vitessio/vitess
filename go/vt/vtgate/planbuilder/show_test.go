@@ -21,15 +21,13 @@ import (
 	"fmt"
 	"testing"
 
-	"vitess.io/vitess/go/test/vschemawrapper"
-	"vitess.io/vitess/go/vt/vtenv"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
-
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/vschemawrapper"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 

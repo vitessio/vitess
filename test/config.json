@@ -313,6 +313,15 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"onlineddl_flow": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/flow", "-timeout", "30m"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "onlineddl_flow",
+			"RetryMax": 1,
+			"Tags": ["upgrade_downgrade_onlineddl_flow"]
+		},
 		"schemadiff_vrepl": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/schemadiff/vrepl", "-timeout", "30m"],
@@ -815,6 +824,15 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"vtgate_transaction_twopc": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/transaction/twopc"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_transaction",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"vtgate_transaction_partial_exec": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/partialfailure"],
@@ -1270,7 +1288,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVtctldclientCLI", "-timeout", "20m"],
 			"Command": [],
 			"Manual": false,
-"Shard": "vreplication_cli_migrate_vdiff2_convert_tz",
+			"Shard": "vreplication_migrate_vdiff2_convert_tz",
 			"RetryMax": 1,
 			"Tags": []
 		},
@@ -1279,7 +1297,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVtctlMigrate", "-timeout", "30m"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vreplication_cli_migrate_vdiff2_convert_tz",
+			"Shard": "vreplication_migrate_vdiff2_convert_tz",
 			"RetryMax": 1,
 			"Tags": []
 		},
@@ -1288,7 +1306,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVtctldMigrate", "-timeout", "30m"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vreplication_cli_migrate_vdiff2_convert_tz",
+			"Shard": "vreplication_migrate_vdiff2_convert_tz",
 			"RetryMax": 1,
 			"Tags": []
 		},
@@ -1297,7 +1315,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVDiff2", "-timeout", "30m"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vreplication_cli_migrate_vdiff2_convert_tz",
+			"Shard": "vreplication_migrate_vdiff2_convert_tz",
 			"RetryMax": 1,
 			"Tags": []
 		},
@@ -1306,7 +1324,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestMoveTablesTZ"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vreplication_cli_migrate_vdiff2_convert_tz",
+			"Shard": "vreplication_migrate_vdiff2_convert_tz",
 			"RetryMax": 1,
 			"Tags": []
 		},

@@ -100,13 +100,39 @@ func settleSubqueries(ctx *plancontext.PlanningContext, op Operator) Operator {
 				newExpr, rewritten := rewriteMergedSubqueryExpr(ctx, aggr.SubQueryExpression, aggr.Original.Expr)
 				if rewritten {
 					aggr.Original.Expr = newExpr
+					op.Columns[aggr.ColOffset].Expr = newExpr
 				}
 			}
+		case *Ordering:
+			op.settleOrderingExpressions(ctx)
 		}
 		return op, NoRewrite
 	}
 
 	return BottomUp(op, TableID, visit, nil)
+}
+
+func (o *Ordering) settleOrderingExpressions(ctx *plancontext.PlanningContext) {
+	for idx, order := range o.Order {
+		for _, sq := range ctx.MergedSubqueries {
+			arg := ctx.GetReservedArgumentFor(sq)
+			expr := sqlparser.Rewrite(order.SimplifiedExpr, nil, func(cursor *sqlparser.Cursor) bool {
+				switch expr := cursor.Node().(type) {
+				case *sqlparser.ColName:
+					if expr.Name.String() == arg {
+						cursor.Replace(sq)
+					}
+				case *sqlparser.Argument:
+					if expr.Name == arg {
+						cursor.Replace(sq)
+					}
+				}
+
+				return true
+			})
+			o.Order[idx].SimplifiedExpr = expr.(sqlparser.Expr)
+		}
+	}
 }
 
 func mergeSubqueryExpr(ctx *plancontext.PlanningContext, pe *ProjExpr) {
@@ -319,7 +345,7 @@ func addSubQuery(in Operator, inner *SubQuery) Operator {
 		}
 	}
 
-	sql.Inner = append(sql.Inner, inner)
+	sql.addInner(inner)
 	return sql
 }
 
@@ -467,6 +493,7 @@ func tryMergeSubqueryWithOuter(ctx *plancontext.PlanningContext, subQuery *SubQu
 		return outer, NoRewrite
 	}
 	exprs := subQuery.GetMergePredicates()
+	sqlparser.RemoveKeyspace(subQuery.Original)
 	merger := &subqueryRouteMerger{
 		outer:    outer,
 		original: subQuery.Original,
@@ -476,7 +503,7 @@ func tryMergeSubqueryWithOuter(ctx *plancontext.PlanningContext, subQuery *SubQu
 	if op == nil {
 		return outer, NoRewrite
 	}
-	if !subQuery.IsProjection {
+	if !subQuery.IsArgument {
 		op.Source = newFilter(outer.Source, subQuery.Original)
 	}
 	ctx.MergedSubqueries = append(ctx.MergedSubqueries, subQuery.originalSubquery)
@@ -581,7 +608,7 @@ func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, out
 	var src Operator
 	if isSharded {
 		src = s.outer.Source
-		if !s.subq.IsProjection {
+		if !s.subq.IsArgument {
 			src = newFilter(s.outer.Source, s.original)
 		}
 	} else {
@@ -642,7 +669,7 @@ func (s *subqueryRouteMerger) rewriteASTExpression(ctx *plancontext.PlanningCont
 		panic(err)
 	}
 
-	if s.subq.IsProjection {
+	if s.subq.IsArgument {
 		ctx.SemTable.CopySemanticInfo(s.subq.originalSubquery.Select, subqStmt)
 		s.subq.originalSubquery.Select = subqStmt
 	} else {

@@ -21,7 +21,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"path"
-	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -44,8 +44,8 @@ import (
 )
 
 const (
-	dlTablesAlreadyPresent = "one or more tables are already present in the denylist"
-	dlTablesNotPresent     = "cannot remove tables since one or more do not exist in the denylist"
+	dlTablesAlreadyPresent = "one or more tables were already present in the denylist"
+	dlTablesNotPresent     = "one or more tables did not exist in the denylist"
 	dlNoCellsForPrimary    = "you cannot specify cells for a primary's tablet control"
 )
 
@@ -397,16 +397,15 @@ func (si *ShardInfo) UpdateDeniedTables(ctx context.Context, tabletType topodata
 	}
 	tc := si.GetTabletControl(tabletType)
 	if tc == nil {
-
-		// handle the case where the TabletControl object is new
+		// Handle the case where the TabletControl object is new.
 		if remove {
-			// we try to remove from something that doesn't exist,
-			// log, but we're done.
+			// We tried to remove something that doesn't exist, log a warning.
+			// But we know that our work is done.
 			log.Warningf("Trying to remove TabletControl.DeniedTables for missing type %v in shard %v/%v", tabletType, si.keyspace, si.shardName)
 			return nil
 		}
 
-		// trying to add more constraints with no existing record
+		// Add constraints to the new record.
 		si.TabletControls = append(si.TabletControls, &topodatapb.Shard_TabletControl{
 			TabletType:   tabletType,
 			Cells:        cells,
@@ -422,16 +421,16 @@ func (si *ShardInfo) UpdateDeniedTables(ctx context.Context, tabletType topodata
 		return nil
 	}
 
-	// we have an existing record, check table lists matches and
+	// We have an existing record, update the table lists.
 	if remove {
 		si.removeCellsFromTabletControl(tc, tabletType, cells)
 	} else {
-		if !reflect.DeepEqual(tc.DeniedTables, tables) {
+		if !slices.Equal(tc.DeniedTables, tables) {
 			return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "trying to use two different sets of denied tables for shard %v/%v: %v and %v", si.keyspace, si.shardName, tc.DeniedTables, tables)
 		}
-
 		tc.Cells = addCells(tc.Cells, cells)
 	}
+
 	return nil
 }
 
@@ -451,7 +450,8 @@ func (si *ShardInfo) updatePrimaryTabletControl(tc *topodatapb.Shard_TabletContr
 	}
 	if remove {
 		if len(newTables) != 0 {
-			return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, dlTablesNotPresent)
+			// These tables did not exist in the denied list so we don't need to remove them.
+			log.Warningf("%s:%s", dlTablesNotPresent, strings.Join(newTables, ","))
 		}
 		var newDenyList []string
 		if len(tables) != 0 { // legacy uses
@@ -475,7 +475,16 @@ func (si *ShardInfo) updatePrimaryTabletControl(tc *topodatapb.Shard_TabletContr
 		return nil
 	}
 	if len(newTables) != len(tables) {
-		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, dlTablesAlreadyPresent)
+		// Some of the tables already existed in the DeniedTables list so we don't
+		// need to add them.
+		log.Warningf("%s:%s", dlTablesAlreadyPresent, strings.Join(tables, ","))
+		// We do need to merge the lists, however.
+		tables = append(tables, newTables...)
+		tc.DeniedTables = append(tc.DeniedTables, tables...)
+		// And be sure to remove any duplicates.
+		slices.Sort(tc.DeniedTables)
+		tc.DeniedTables = slices.Compact(tc.DeniedTables)
+		return nil
 	}
 	tc.DeniedTables = append(tc.DeniedTables, tables...)
 	return nil

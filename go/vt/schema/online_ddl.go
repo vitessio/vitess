@@ -288,7 +288,7 @@ func OnlineDDLFromCommentedStatement(stmt sqlparser.Statement) (onlineDDL *Onlin
 	// We clone the comments because they will end up being cached by the query planner. Then, the Directive() function actually modifies the comments.
 	// If comments are shared in cache, and Directive() modifies it, then we have a concurrency issue when someone else wants to read the comments.
 	// By cloning the comments we remove the concurrency problem.
-	comments = sqlparser.CloneRefOfParsedComments(comments)
+	comments = sqlparser.Clone(comments)
 	comments.ResetDirectives()
 
 	if comments.Length() == 0 {

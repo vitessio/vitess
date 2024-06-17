@@ -30,7 +30,7 @@ func String(b []byte) (s string) {
 	if len(b) == 0 {
 		return ""
 	}
-	return *(*string)(unsafe.Pointer(&b))
+	return unsafe.String(&b[0], len(b))
 }
 
 // StringBytes returns the underlying bytes for a string. Modifying this byte slice

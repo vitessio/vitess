@@ -17,7 +17,7 @@
 import { UseQueryResult } from 'react-query';
 import { TabletDebugVarsResponse } from '../../api/http';
 import { vtadmin as pb } from '../../proto/vtadmin';
-import { formatSeries } from './WorkflowStreamsLagChart';
+import { getWorkflowTimeseries } from './WorkflowStreamsLagChart';
 
 describe('WorkflowStreamsLagChart', () => {
     describe('formatSeries', () => {
@@ -75,23 +75,19 @@ describe('WorkflowStreamsLagChart', () => {
 
             // A sneaky cast to UseQueryResult since otherwise enumerating the many fields
             // UseQueryResult (most of which we don't use) is pointlessly verbose.
-            const result = formatSeries(workflow, queries as UseQueryResult<TabletDebugVarsResponse, Error>[]);
+            const result = getWorkflowTimeseries(workflow, queries as UseQueryResult<TabletDebugVarsResponse, Error>[]);
 
             // Use snapshot matching since defining expected values for arrays of 180 data points is... annoying.
             expect(result).toMatchSnapshot();
 
             // ...but! Add additional validation so that failing tests are easier to debug.
             // (And because it can be tempting to not examine snapshot changes in detail...) :)
-            expect(result.length).toEqual(3);
-
-            expect(result[0].name).toEqual('us_east_1a-123456/1');
-            expect(result[1].name).toEqual('us_east_1a-123456/2');
-            expect(result[2].name).toEqual('us_east_1a-789012/1');
+            expect(Object.keys(result).length).toEqual(3);
         });
 
         it('should handle empty input', () => {
-            const result = formatSeries(null, []);
-            expect(result).toEqual([]);
+            const result = getWorkflowTimeseries(null, []);
+            expect(result).toEqual({});
         });
     });
 });

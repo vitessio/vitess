@@ -60,7 +60,7 @@ var (
 		"--buffer_size", "250000", "--buffer_min_time_between_failovers", "1s", "--buffer_max_failover_duration", loadTestBufferingWindowDuration.String(),
 		"--buffer_drain_concurrency", "10"}
 	extraVtctldArgs = []string{"--remote_operation_timeout", "600s", "--topo_etcd_lease_ttl", "120"}
-	// This variable can be used within specific tests to alter vttablet behavior
+	// This variable can be used within specific tests to alter vttablet behavior.
 	extraVTTabletArgs = []string{}
 
 	parallelInsertWorkers = "--vreplication-parallel-insert-workers=4"

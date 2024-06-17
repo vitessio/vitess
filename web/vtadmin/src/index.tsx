@@ -18,7 +18,6 @@ import ReactDOM from 'react-dom';
 import { QueryClient, QueryClientProvider } from 'react-query';
 
 import './index.css';
-import './components/charts/charts.scss';
 
 import { App } from './components/App';
 import * as errorHandler from './errors/errorHandler';

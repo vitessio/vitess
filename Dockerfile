@@ -1,1 +1,1 @@
-docker/base/Dockerfile
+docker/lite/Dockerfile

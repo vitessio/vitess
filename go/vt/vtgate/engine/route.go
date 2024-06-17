@@ -128,11 +128,6 @@ func (route *Route) GetTableName() string {
 	return route.TableName
 }
 
-// SetTruncateColumnCount sets the truncate column count.
-func (route *Route) SetTruncateColumnCount(count int) {
-	route.TruncateColumnCount = count
-}
-
 // TryExecute performs a non-streaming exec.
 func (route *Route) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	ctx, cancelFunc := addQueryTimeout(ctx, vcursor, route.QueryTimeout)

@@ -349,7 +349,7 @@ func TestKillMethods(t *testing.T) {
 func TestGracefulShutdown(t *testing.T) {
 	executor, _, _, _, _ := createExecutorEnv(t)
 
-	vh := newVtgateHandler(&VTGate{executor: executor, timings: timings, rowsReturned: rowsReturned, rowsAffected: rowsAffected})
+	vh := newVtgateHandler(&VTGate{executor: executor, timings: timings, rowsReturned: rowsReturned, rowsAffected: rowsAffected, queryTextCharsProcessed: queryTextCharsProcessed})
 	th := &testHandler{}
 	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, false, 0, 0)
 	require.NoError(t, err)
@@ -379,7 +379,7 @@ func TestGracefulShutdown(t *testing.T) {
 func TestGracefulShutdownWithTransaction(t *testing.T) {
 	executor, _, _, _, _ := createExecutorEnv(t)
 
-	vh := newVtgateHandler(&VTGate{executor: executor, timings: timings, rowsReturned: rowsReturned, rowsAffected: rowsAffected})
+	vh := newVtgateHandler(&VTGate{executor: executor, timings: timings, rowsReturned: rowsReturned, rowsAffected: rowsAffected, queryTextCharsProcessed: queryTextCharsProcessed})
 	th := &testHandler{}
 	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, false, 0, 0)
 	require.NoError(t, err)

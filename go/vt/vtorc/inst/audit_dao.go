@@ -27,7 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/db"
 )
 
-var auditOperationCounter = stats.NewCounter("audit.write", "Number of audit operations performed")
+var auditOperationCounter = stats.NewCounter("AuditWrite", "Number of audit operations performed")
 
 // AuditOperation creates and writes a new audit entry by given params
 func AuditOperation(auditType string, tabletAlias string, message string) error {
