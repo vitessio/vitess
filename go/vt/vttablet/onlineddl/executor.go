@@ -876,7 +876,6 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		}
 	}()
 	renameQuery := sqlparser.BuildParsedQuery(sqlSwapTables, onlineDDL.Table, sentryTableName, vreplTable, onlineDDL.Table, sentryTableName, vreplTable)
-
 	waitForRenameProcess := func() error {
 		// This function waits until it finds the RENAME TABLE... query running in MySQL's PROCESSLIST, or until timeout
 		// The function assumes that one of the renamed tables is locked, thus causing the RENAME to block. If nothing
@@ -1262,7 +1261,31 @@ func (e *Executor) createTableLike(ctx context.Context, newTableName string, onl
 	if !ok {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected CreateTable statement, got: %v", sqlparser.CanonicalString(stmt))
 	}
+<<<<<<< HEAD
 	createTable.SetTable(createTable.GetTable().Qualifier.CompliantName(), newTableName)
+=======
+	newCreateTable = sqlparser.Clone(originalCreateTable)
+	newCreateTable.SetTable(newCreateTable.GetTable().Qualifier.CompliantName(), newTableName)
+
+	// If this table has a self-referencing foreign key constraint, ensure the referenced table gets renamed:
+	renameSelfFK := func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch node := node.(type) {
+		case *sqlparser.ConstraintDefinition:
+			fk, ok := node.Details.(*sqlparser.ForeignKeyDefinition)
+			if !ok {
+				return true, nil
+			}
+			if referencedTableName := fk.ReferenceDefinition.ReferencedTable.Name.String(); referencedTableName == originalCreateTable.Table.Name.String() {
+				// This is a self-referencing foreign key
+				// We need to rename the referenced table as well
+				fk.ReferenceDefinition.ReferencedTable.Name = sqlparser.NewIdentifierCS(newTableName)
+			}
+		}
+		return true, nil
+	}
+	_ = sqlparser.Walk(renameSelfFK, newCreateTable)
+
+>>>>>>> 6f850892b1 (Online DDL shadow table: rename referenced table name in self referencing FK (#16205))
 	// manipulate CreateTable statement: take care of constraints names which have to be
 	// unique across the schema
 	constraintMap, err = e.validateAndEditCreateTableStatement(ctx, onlineDDL, createTable)
