@@ -75,7 +75,7 @@ func TestEnabledThrottler(t *testing.T) {
 		return mockHealthCheck
 	}
 
-	mockThrottler := NewMockThrottlerInterface(mockCtrl)
+	mockThrottler := NewMockThrottler(mockCtrl)
 	throttlerFactory = func(name, unit string, threadCount int, maxRate int64, maxReplicationLagConfig throttler.MaxReplicationLagModuleConfig) (throttler.Throttler, error) {
 		assert.Equal(t, 1, threadCount)
 		return mockThrottler, nil
