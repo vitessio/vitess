@@ -304,13 +304,26 @@ func TestSchemaChange(t *testing.T) {
 				}
 				waitForThrottleCheckStatus(t, throttlerapp.OnlineDDLName, primaryTablet, http.StatusOK)
 			})
-			t.Run("additional wait", func(t *testing.T) {
-				// Waiting just so that we generate more DMLs, and give migration/vreplication
+			t.Run("apply more DML", func(t *testing.T) {
+				// Looking to run a substantial amount of DML, giving vreplication
 				// more "opportunities" to throttle or to make progress.
-				select {
-				case <-time.After(3 * time.Second):
-				case <-ctx.Done():
-					require.Fail(t, "context cancelled")
+				ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+				defer cancel()
+				ticker := time.NewTicker(time.Second)
+				defer ticker.Stop()
+
+				startDML := totalAppliedDML.Load()
+				for {
+					appliedDML := totalAppliedDML.Load()
+					if appliedDML-startDML >= int64(maxTableRows) {
+						// We have generated enough DMLs
+						return
+					}
+					select {
+					case <-ticker.C:
+					case <-ctx.Done():
+						require.Fail(t, "timeout waiting for applied DML")
+					}
 				}
 			})
 			t.Run("validate applied DML", func(t *testing.T) {
