@@ -142,7 +142,7 @@ var (
 	replicaFK       *cluster.Vttablet
 	vtParams        mysql.ConnParams
 
-	onlineDDLStrategy     = "vitess --unsafe-allow-foreign-keys --cut-over-threshold=15s"
+	onlineDDLStrategy     = "vitess --unsafe-allow-foreign-keys --cut-over-threshold=30s --force-cut-over-after=15s"
 	hostname              = "localhost"
 	keyspaceName          = "ks"
 	cell                  = "zone1"
@@ -332,7 +332,7 @@ func TestMain(m *testing.M) {
 			"--heartbeat_enable",
 			"--heartbeat_interval", "250ms",
 			"--heartbeat_on_demand_duration", "5s",
-			"--migration_check_interval", "5s",
+			"--migration_check_interval", "3s",
 			"--watch_replication_stream",
 		}
 		clusterInstance.VtGateExtraArgs = []string{}
