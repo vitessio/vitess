@@ -17,6 +17,7 @@ limitations under the License.
 package throttler
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"sync"
@@ -64,16 +65,16 @@ type managerImpl struct {
 	// mu guards all fields in this group.
 	mu sync.Mutex
 	// throttlers tracks all running throttlers (by their name).
-	throttlers map[string]*Throttler
+	throttlers map[string]Throttler
 }
 
 func newManager() *managerImpl {
 	return &managerImpl{
-		throttlers: make(map[string]*Throttler),
+		throttlers: make(map[string]Throttler),
 	}
 }
 
-func (m *managerImpl) registerThrottler(name string, throttler *Throttler) error {
+func (m *managerImpl) registerThrottler(name string, throttler Throttler) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -216,5 +217,9 @@ func (m *managerImpl) log(throttlerName string) ([]result, error) {
 		return nil, fmt.Errorf("throttler: %v does not exist", throttlerName)
 	}
 
-	return t.log(), nil
+	throttlerImpl, ok := t.(*ThrottlerImpl)
+	if !ok {
+		return nil, errors.New("unexpected throttler implementation")
+	}
+	return throttlerImpl.log(), nil
 }

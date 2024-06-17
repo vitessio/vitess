@@ -41,7 +41,7 @@ import (
 // and go/vt/throttler. These are provided here so that they can be overridden
 // in tests to generate mocks.
 type healthCheckFactoryFunc func(topoServer *topo.Server, cell string, cellsToWatch []string) discovery.HealthCheck
-type throttlerFactoryFunc func(name, unit string, threadCount int, maxRate int64, maxReplicationLagConfig throttler.MaxReplicationLagModuleConfig) (throttler.Interface, error)
+type throttlerFactoryFunc func(name, unit string, threadCount int, maxRate int64, maxReplicationLagConfig throttler.MaxReplicationLagModuleConfig) (throttler.Throttler, error)
 
 var (
 	healthCheckFactory healthCheckFactoryFunc
@@ -52,7 +52,7 @@ func resetTxThrottlerFactories() {
 	healthCheckFactory = func(topoServer *topo.Server, cell string, cellsToWatch []string) discovery.HealthCheck {
 		return discovery.NewHealthCheck(context.Background(), discovery.DefaultHealthCheckRetryDelay, discovery.DefaultHealthCheckTimeout, topoServer, cell, strings.Join(cellsToWatch, ","))
 	}
-	throttlerFactory = func(name, unit string, threadCount int, maxRate int64, maxReplicationLagConfig throttler.MaxReplicationLagModuleConfig) (throttler.Interface, error) {
+	throttlerFactory = func(name, unit string, threadCount int, maxRate int64, maxReplicationLagConfig throttler.MaxReplicationLagModuleConfig) (throttler.Throttler, error) {
 		return throttler.NewThrottlerFromConfig(name, unit, threadCount, maxRate, maxReplicationLagConfig, time.Now)
 	}
 }
@@ -143,7 +143,7 @@ type txThrottlerStateImpl struct {
 	// throttleMu serializes calls to throttler.Throttler.Throttle(threadId).
 	// That method is required to be called in serial for each threadId.
 	throttleMu      sync.Mutex
-	throttler       throttler.Interface
+	throttler       throttler.Throttler
 	stopHealthCheck context.CancelFunc
 
 	healthCheck      discovery.HealthCheck
