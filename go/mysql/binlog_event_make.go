@@ -119,6 +119,19 @@ func packetize(f BinlogFormat, typ byte, flags uint16, data []byte, m BinlogEven
 	return result
 }
 
+// UpdateChecksum updates the checksum for the specified |event|. The BinlogFormat, |f|, indicates
+// if checksums are enabled. If checksums are not enabled, then no change is made to |event|.
+func UpdateChecksum(f BinlogFormat, event BinlogEvent) {
+	result := event.Bytes()
+	length := len(result)
+
+	switch f.ChecksumAlgorithm {
+	case BinlogChecksumAlgCRC32:
+		checksum := crc32.ChecksumIEEE(result[0 : length-4])
+		binary.LittleEndian.PutUint32(result[length-4:], checksum)
+	}
+}
+
 // NewInvalidEvent returns an invalid event (its size is <19).
 func NewInvalidEvent() BinlogEvent {
 	return NewMysql56BinlogEvent([]byte{0})
@@ -143,6 +156,16 @@ func NewFormatDescriptionEvent(f BinlogFormat, m BinlogEventMetadata) BinlogEven
 	data[57+len(f.HeaderSizes)] = f.ChecksumAlgorithm
 
 	ev := packetize(f, eFormatDescriptionEvent, 0, data, m)
+	return NewMysql56BinlogEvent(ev)
+}
+
+// NewPreviousGtidsEvent creates a new Previous GTIDs BinlogEvent. The BinlogFormat, |f|, indicates if checksums are
+// enabled, the BinlogEventMeatadata, |m|, specifies the unique server ID, and |gtids| is the MySQL 5.6 GTID set
+// to include in the event, indicating the events that have been previously executed by the server.
+func NewPreviousGtidsEvent(f BinlogFormat, m BinlogEventMetadata, gtids Mysql56GTIDSet) BinlogEvent {
+	data := gtids.SIDBlock()
+
+	ev := packetize(f, ePreviousGTIDsEvent, 0, data, m)
 	return NewMysql56BinlogEvent(ev)
 }
 
