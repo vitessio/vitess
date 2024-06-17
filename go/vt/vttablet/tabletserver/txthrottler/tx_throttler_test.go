@@ -18,7 +18,7 @@ package txthrottler
 
 // Commands to generate the mocks for this test.
 //go:generate mockgen -destination mock_healthcheck_test.go -package txthrottler -mock_names "HealthCheck=MockHealthCheck" vitess.io/vitess/go/vt/discovery HealthCheck
-//go:generate mockgen -destination mock_throttler_test.go -package txthrottler vitess.io/vitess/go/vt/throttler Interface
+//go:generate mockgen -destination mock_throttler_test.go -package txthrottler vitess.io/vitess/go/vt/throttler Throttler
 
 import (
 	"context"
