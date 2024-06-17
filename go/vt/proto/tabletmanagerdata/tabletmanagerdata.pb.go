@@ -6538,8 +6538,10 @@ type CheckThrottlerResponse struct {
 	Message string `protobuf:"bytes,5,opt,name=message,proto3" json:"message,omitempty"`
 	// RecentlyChecked indicates that the tablet has been hit with a user-facing check, which can then imply
 	// that heartbeats lease should be renwed.
-	RecentlyChecked bool                                      `protobuf:"varint,6,opt,name=recently_checked,json=recentlyChecked,proto3" json:"recently_checked,omitempty"`
-	Metrics         map[string]*CheckThrottlerResponse_Metric `protobuf:"bytes,7,rep,name=metrics,proto3" json:"metrics,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+	RecentlyChecked bool `protobuf:"varint,6,opt,name=recently_checked,json=recentlyChecked,proto3" json:"recently_checked,omitempty"`
+	// Metrics is a map (metric name -> metric value/error) so that the client has as much
+	// information as possible about all the checked metrics.
+	Metrics map[string]*CheckThrottlerResponse_Metric `protobuf:"bytes,7,rep,name=metrics,proto3" json:"metrics,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 }
 
 func (x *CheckThrottlerResponse) Reset() {

@@ -760,6 +760,8 @@ message CheckThrottlerResponse {
     // Scope used in this check
     string scope = 7;
   }
+  // Metrics is a map (metric name -> metric value/error) so that the client has as much
+  // information as possible about all the checked metrics.
   map<string, Metric> metrics = 7;
 }
 
