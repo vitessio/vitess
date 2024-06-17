@@ -264,7 +264,8 @@ func TestThreadFinished(t *testing.T) {
 
 	// Max rate update to threadThrottlers happens asynchronously. Wait for it.
 	timer := time.NewTimer(2 * time.Second)
-	throttlerImpl := throttler.(*ThrottlerImpl)
+	throttlerImpl, ok := throttler.(*ThrottlerImpl)
+	require.True(t, ok)
 	for {
 		if throttlerImpl.threadThrottlers[0].getMaxRate() == 2 {
 			timer.Stop()
