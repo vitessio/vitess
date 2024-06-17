@@ -234,16 +234,23 @@ func tmpdir(dataroot string) (dir string, err error) {
 }
 
 // randomPort gets a random port that is available for a TCP connection.
-// After we generate a random port, we try to establish a tcp connection on it.
-// If it fails, then we try a different port.
+// After we generate a random port, we try to establish tcp connections on it and the next 5 values.
+// If any of them fail, then we try a different port.
 func randomPort() int {
 	for {
 		port := int(rand.Int32N(20000) + 10000)
-		ln, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
-		if err != nil {
+		portInUse := false
+		for i := 0; i < 6; i++ {
+			ln, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port+i)))
+			if err != nil {
+				portInUse = true
+				break
+			}
+			ln.Close()
+		}
+		if portInUse {
 			continue
 		}
-		ln.Close()
 		return port
 	}
 }
