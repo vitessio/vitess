@@ -79,6 +79,7 @@ type Throttler interface {
 	UpdateConfiguration(configuration *throttlerdatapb.Configuration, copyZeroValues bool) error
 	ResetConfiguration()
 	MaxLag(tabletType topodatapb.TabletType) uint32
+	Log() []Result
 }
 
 // ThrottlerImpl implements a client-side, thread-aware throttler.
@@ -366,7 +367,7 @@ func (t *ThrottlerImpl) ResetConfiguration() {
 	t.maxReplicationLagModule.resetConfiguration()
 }
 
-// log returns the most recent changes of the MaxReplicationLag module.
-func (t *ThrottlerImpl) log() []result {
+// Log returns the most recent changes of the MaxReplicationLag module.
+func (t *ThrottlerImpl) Log() []Result {
 	return t.maxReplicationLagModule.log()
 }

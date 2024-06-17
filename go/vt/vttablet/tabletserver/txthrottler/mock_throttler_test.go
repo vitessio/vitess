@@ -9,9 +9,11 @@ import (
 	time "time"
 
 	gomock "go.uber.org/mock/gomock"
+
 	discovery "vitess.io/vitess/go/vt/discovery"
 	throttlerdata "vitess.io/vitess/go/vt/proto/throttlerdata"
 	topodata "vitess.io/vitess/go/vt/proto/topodata"
+	throttler "vitess.io/vitess/go/vt/throttler"
 )
 
 // MockThrottler is a mock of Throttler interface.
@@ -61,6 +63,20 @@ func (m *MockThrottler) GetConfiguration() *throttlerdata.Configuration {
 func (mr *MockThrottlerMockRecorder) GetConfiguration() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetConfiguration", reflect.TypeOf((*MockThrottler)(nil).GetConfiguration))
+}
+
+// Log mocks base method.
+func (m *MockThrottler) Log() []throttler.Result {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Log")
+	ret0, _ := ret[0].([]throttler.Result)
+	return ret0
+}
+
+// Log indicates an expected call of Log.
+func (mr *MockThrottlerMockRecorder) Log() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Log", reflect.TypeOf((*MockThrottler)(nil).Log))
 }
 
 // MaxLag mocks base method.

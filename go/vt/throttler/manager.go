@@ -17,7 +17,6 @@ limitations under the License.
 package throttler
 
 import (
-	"errors"
 	"fmt"
 	"sort"
 	"sync"
@@ -208,7 +207,7 @@ func (m *managerImpl) throttlerNamesLocked() []string {
 
 // log returns the most recent changes of the MaxReplicationLag module.
 // There will be one result for each processed replication lag record.
-func (m *managerImpl) log(throttlerName string) ([]result, error) {
+func (m *managerImpl) log(throttlerName string) ([]Result, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -217,9 +216,5 @@ func (m *managerImpl) log(throttlerName string) ([]result, error) {
 		return nil, fmt.Errorf("throttler: %v does not exist", throttlerName)
 	}
 
-	throttlerImpl, ok := t.(*ThrottlerImpl)
-	if !ok {
-		return nil, errors.New("unexpected throttler implementation")
-	}
-	return throttlerImpl.log(), nil
+	return t.Log(), nil
 }
