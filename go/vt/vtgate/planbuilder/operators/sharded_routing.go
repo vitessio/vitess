@@ -540,7 +540,7 @@ func (tr *ShardedRouting) planCompositeInOpArg(
 			Key:   right.String(),
 			Index: idx,
 		}
-		if typ, found := ctx.SemTable.TypeForExpr(col); found {
+		if typ, found := ctx.TypeForExpr(col); found {
 			value.Type = typ.Type()
 			value.Collation = typ.Collation()
 		}
@@ -654,7 +654,7 @@ func makeEvalEngineExpr(ctx *plancontext.PlanningContext, n sqlparser.Expr) eval
 	for _, expr := range ctx.SemTable.GetExprAndEqualities(n) {
 		ee, _ := evalengine.Translate(expr, &evalengine.Config{
 			Collation:   ctx.SemTable.Collation,
-			ResolveType: ctx.SemTable.TypeForExpr,
+			ResolveType: ctx.TypeForExpr,
 			Environment: ctx.VSchema.Environment(),
 		})
 		if ee != nil {

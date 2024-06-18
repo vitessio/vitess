@@ -56,7 +56,6 @@ func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) Operator {
 			offset := d.Source.AddColumn(ctx, true, false, aeWrap(weightStringFor(e)))
 			wsCol = &offset
 		}
-
 		d.Columns = append(d.Columns, engine.CheckCol{
 			Col:          idx,
 			WsCol:        wsCol,
