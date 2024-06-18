@@ -176,6 +176,7 @@ func TestVDiff2(t *testing.T) {
 	// We ONLY add primary tablets in this test.
 	tks, err := vc.AddKeyspace(t, []*Cell{zone3, zone1, zone2}, targetKs, strings.Join(targetShards, ","), customerVSchema, customerSchema, 0, 0, 200, targetKsOpts)
 	require.NoError(t, err)
+	verifyClusterHealth(t, vc)
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
