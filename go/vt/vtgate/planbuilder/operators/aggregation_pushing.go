@@ -89,23 +89,21 @@ func reachedPhase(ctx *plancontext.PlanningContext, p Phase) bool {
 // Any columns that are needed to evaluate the subquery needs to be added as
 // grouping columns to the aggregation being pushed down, and then after the
 // subquery evaluation we are free to reassemble the total aggregation values.
-// This is very similar to how we push aggregation through an shouldRun-join.
+// This is very similar to how we push aggregation through an apply-join.
 func pushAggregationThroughSubquery(
 	ctx *plancontext.PlanningContext,
 	rootAggr *Aggregator,
 	src *SubQueryContainer,
 ) (Operator, *ApplyResult) {
-	pushedAggr := rootAggr.Clone([]Operator{src.Outer}).(*Aggregator)
-	pushedAggr.Original = false
-	pushedAggr.Pushed = false
-
+	pushedAggr := rootAggr.SplitAggregatorBelowOperators(ctx, []Operator{src.Outer})
 	for _, subQuery := range src.Inner {
 		lhsCols := subQuery.OuterExpressionsNeeded(ctx, src.Outer)
 		for _, colName := range lhsCols {
-			idx := slices.IndexFunc(pushedAggr.Columns, func(ae *sqlparser.AliasedExpr) bool {
+			findColName := func(ae *sqlparser.AliasedExpr) bool {
 				return ctx.SemTable.EqualsExpr(ae.Expr, colName)
-			})
-			if idx >= 0 {
+			}
+			if slices.IndexFunc(pushedAggr.Columns, findColName) >= 0 {
+				// we already have the column, no need to push it again
 				continue
 			}
 			pushedAggr.addColumnWithoutPushing(ctx, aeWrap(colName), true)
@@ -114,8 +112,10 @@ func pushAggregationThroughSubquery(
 
 	src.Outer = pushedAggr
 
-	for _, aggregation := range pushedAggr.Aggregations {
-		aggregation.Original.Expr = rewriteColNameToArgument(ctx, aggregation.Original.Expr, aggregation.SubQueryExpression, src.Inner...)
+	for _, aggr := range pushedAggr.Aggregations {
+		// we rewrite columns in the aggregation to use the argument form of the subquery
+		aggr.Original.Expr = rewriteColNameToArgument(ctx, aggr.Original.Expr, aggr.SubQueryExpression, src.Inner...)
+		pushedAggr.Columns[aggr.ColOffset].Expr = rewriteColNameToArgument(ctx, pushedAggr.Columns[aggr.ColOffset].Expr, aggr.SubQueryExpression, src.Inner...)
 	}
 
 	if !rootAggr.Original {
@@ -150,7 +150,7 @@ func pushAggregationThroughRoute(
 	route *Route,
 ) (Operator, *ApplyResult) {
 	// Create a new aggregator to be placed below the route.
-	aggrBelowRoute := aggregator.SplitAggregatorBelowRoute(route.Inputs())
+	aggrBelowRoute := aggregator.SplitAggregatorBelowOperators(ctx, route.Inputs())
 	aggrBelowRoute.Aggregations = nil
 
 	pushAggregations(ctx, aggregator, aggrBelowRoute)
@@ -251,12 +251,7 @@ func pushAggregationThroughFilter(
 ) (Operator, *ApplyResult) {
 
 	columnsNeeded := collectColNamesNeeded(ctx, filter)
-
-	// Create a new aggregator to be placed below the route.
-	pushedAggr := aggregator.Clone([]Operator{filter.Source}).(*Aggregator)
-	pushedAggr.Pushed = false
-	pushedAggr.Original = false
-
+	pushedAggr := aggregator.SplitAggregatorBelowOperators(ctx, []Operator{filter.Source})
 withNextColumn:
 	for _, col := range columnsNeeded {
 		for _, gb := range pushedAggr.Grouping {
@@ -513,7 +508,7 @@ func splitGroupingToLeftAndRight(
 			rhs.addGrouping(ctx, groupBy)
 			columns.addRight(groupBy.Inner)
 		case deps.IsSolvedBy(lhs.tableID.Merge(rhs.tableID)):
-			jc := breakExpressionInLHSandRHSForApplyJoin(ctx, groupBy.Inner, lhs.tableID)
+			jc := breakExpressionInLHSandRHS(ctx, groupBy.Inner, lhs.tableID)
 			for _, lhsExpr := range jc.LHSExprs {
 				e := lhsExpr.Expr
 				lhs.addGrouping(ctx, NewGroupBy(e))
@@ -636,7 +631,7 @@ func splitAvgAggregations(ctx *plancontext.PlanningContext, aggr *Aggregator) (O
 
 		outputColumn := aeWrap(col.Expr)
 		outputColumn.As = sqlparser.NewIdentifierCI(col.ColumnName())
-		proj.addUnexploredExpr(sqlparser.CloneRefOfAliasedExpr(col), calcExpr)
+		proj.addUnexploredExpr(sqlparser.Clone(col), calcExpr)
 		col.Expr = sumExpr
 		found := false
 		for aggrOffset, aggregation := range aggr.Aggregations {

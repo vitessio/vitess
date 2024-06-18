@@ -137,6 +137,15 @@ func (client *gRPCVtctldClient) ChangeTabletType(ctx context.Context, in *vtctld
 	return client.c.ChangeTabletType(ctx, in, opts...)
 }
 
+// CheckThrottler is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) CheckThrottler(ctx context.Context, in *vtctldatapb.CheckThrottlerRequest, opts ...grpc.CallOption) (*vtctldatapb.CheckThrottlerResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.CheckThrottler(ctx, in, opts...)
+}
+
 // CleanupSchemaMigration is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) CleanupSchemaMigration(ctx context.Context, in *vtctldatapb.CleanupSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldatapb.CleanupSchemaMigrationResponse, error) {
 	if client.c == nil {
@@ -486,6 +495,15 @@ func (client *gRPCVtctldClient) GetTablets(ctx context.Context, in *vtctldatapb.
 	}
 
 	return client.c.GetTablets(ctx, in, opts...)
+}
+
+// GetThrottlerStatus is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) GetThrottlerStatus(ctx context.Context, in *vtctldatapb.GetThrottlerStatusRequest, opts ...grpc.CallOption) (*vtctldatapb.GetThrottlerStatusResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.GetThrottlerStatus(ctx, in, opts...)
 }
 
 // GetTopologyPath is part of the vtctlservicepb.VtctldClient interface.

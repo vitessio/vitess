@@ -21,6 +21,7 @@ import (
 	"errors"
 	"expvar"
 	"fmt"
+	"math/rand/v2"
 	"net/http"
 	"net/http/httptest"
 	"sort"
@@ -41,15 +42,17 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/dbconfigs"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema/schematest"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-const baseShowTablesPattern = `SELECT t\.table_name.*`
+const baseShowTablesWithSizesPattern = `SELECT t\.table_name.*SUM\(i\.file_size\).*`
 
 var mustMatch = utils.MustMatchFn(".Mutex")
 
@@ -57,21 +60,23 @@ func TestOpenAndReload(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	schematest.AddDefaultQueries(db)
-	db.AddQueryPattern(baseShowTablesPattern,
-		&sqltypes.Result{
-			Fields:       mysql.BaseShowTablesFields,
-			RowsAffected: 0,
-			InsertID:     0,
-			Rows: [][]sqltypes.Value{
-				mysql.BaseShowTablesRow("test_table_01", false, ""),
-				mysql.BaseShowTablesRow("test_table_02", false, ""),
-				mysql.BaseShowTablesRow("test_table_03", false, ""),
-				mysql.BaseShowTablesRow("seq", false, "vitess_sequence"),
-				mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
-			},
-			SessionStateChanges: "",
-			StatusFlags:         0,
-		})
+
+	db.RejectQueryPattern(baseShowTablesWithSizesPattern, "Opening schema engine should query tables without size information")
+
+	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
+		Fields:       mysql.BaseShowTablesFields,
+		RowsAffected: 0,
+		InsertID:     0,
+		Rows: [][]sqltypes.Value{
+			mysql.BaseShowTablesRow("test_table_01", false, ""),
+			mysql.BaseShowTablesRow("test_table_02", false, ""),
+			mysql.BaseShowTablesRow("test_table_03", false, ""),
+			mysql.BaseShowTablesRow("seq", false, "vitess_sequence"),
+			mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
+		},
+		SessionStateChanges: "",
+		StatusFlags:         0,
+	})
 
 	// advance to one second after the default 1427325875.
 	db.AddQuery("select unix_timestamp()", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
@@ -87,8 +92,8 @@ func TestOpenAndReload(t *testing.T) {
 
 	want := initialSchema()
 	mustMatch(t, want, se.GetSchema())
-	assert.Equal(t, int64(100), se.tableFileSizeGauge.Counts()["msg"])
-	assert.Equal(t, int64(150), se.tableAllocatedSizeGauge.Counts()["msg"])
+	assert.Equal(t, int64(0), se.tableFileSizeGauge.Counts()["msg"])
+	assert.Equal(t, int64(0), se.tableAllocatedSizeGauge.Counts()["msg"])
 
 	// Advance time some more.
 	db.AddQuery("select unix_timestamp()", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
@@ -101,11 +106,11 @@ func TestOpenAndReload(t *testing.T) {
 	// Modify test_table_03
 	// Add test_table_04
 	// Drop msg
-	db.AddQueryPattern(baseShowTablesPattern, &sqltypes.Result{
-		Fields: mysql.BaseShowTablesFields,
+	db.AddQueryPattern(baseShowTablesWithSizesPattern, &sqltypes.Result{
+		Fields: mysql.BaseShowTablesWithSizesFields,
 		Rows: [][]sqltypes.Value{
-			mysql.BaseShowTablesRow("test_table_01", false, ""),
-			mysql.BaseShowTablesRow("test_table_02", false, ""),
+			mysql.BaseShowTablesWithSizesRow("test_table_01", false, ""),
+			mysql.BaseShowTablesWithSizesRow("test_table_02", false, ""),
 			{
 				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("test_table_03")), // table_name
 				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("BASE TABLE")),    // table_type
@@ -115,10 +120,13 @@ func TestOpenAndReload(t *testing.T) {
 				sqltypes.MakeTrusted(sqltypes.Int64, []byte("256")),             // allocated_size
 			},
 			// test_table_04 will in spite of older timestamp because it doesn't exist yet.
-			mysql.BaseShowTablesRow("test_table_04", false, ""),
-			mysql.BaseShowTablesRow("seq", false, "vitess_sequence"),
+			mysql.BaseShowTablesWithSizesRow("test_table_04", false, ""),
+			mysql.BaseShowTablesWithSizesRow("seq", false, "vitess_sequence"),
 		},
 	})
+
+	db.AddRejectedQuery(mysql.BaseShowTables, fmt.Errorf("Reloading schema engine should query tables with size information"))
+
 	db.MockQueriesForTable("test_table_03", &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name: "pk1",
@@ -174,6 +182,15 @@ func TestOpenAndReload(t *testing.T) {
 
 	assert.EqualValues(t, secondReadRowsValue, se.innoDbReadRowsCounter.Get())
 
+	want["seq"].FileSize = 100
+	want["seq"].AllocatedSize = 150
+
+	want["test_table_01"].FileSize = 100
+	want["test_table_01"].AllocatedSize = 150
+
+	want["test_table_02"].FileSize = 100
+	want["test_table_02"].AllocatedSize = 150
+
 	want["test_table_03"] = &Table{
 		Name: sqlparser.NewIdentifierCS("test_table_03"),
 		Fields: []*querypb.Field{{
@@ -222,7 +239,17 @@ func TestOpenAndReload(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, want, se.GetSchema())
 
-	db.AddQueryPattern(baseShowTablesPattern, &sqltypes.Result{
+	db.AddQueryPattern(baseShowTablesWithSizesPattern, &sqltypes.Result{
+		Fields: mysql.BaseShowTablesWithSizesFields,
+		Rows: [][]sqltypes.Value{
+			mysql.BaseShowTablesWithSizesRow("test_table_01", false, ""),
+			mysql.BaseShowTablesWithSizesRow("test_table_02", false, ""),
+			mysql.BaseShowTablesWithSizesRow("test_table_04", false, ""),
+			mysql.BaseShowTablesWithSizesRow("seq", false, "vitess_sequence"),
+		},
+	})
+
+	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
 		Fields: mysql.BaseShowTablesFields,
 		Rows: [][]sqltypes.Value{
 			mysql.BaseShowTablesRow("test_table_01", false, ""),
@@ -231,6 +258,7 @@ func TestOpenAndReload(t *testing.T) {
 			mysql.BaseShowTablesRow("seq", false, "vitess_sequence"),
 		},
 	})
+
 	db.AddQuery(mysql.BaseShowPrimary, &sqltypes.Result{
 		Fields: mysql.ShowPrimaryFields,
 		Rows: [][]sqltypes.Value{
@@ -254,21 +282,23 @@ func TestReloadWithSwappedTables(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	schematest.AddDefaultQueries(db)
-	db.AddQueryPattern(baseShowTablesPattern,
-		&sqltypes.Result{
-			Fields:       mysql.BaseShowTablesFields,
-			RowsAffected: 0,
-			InsertID:     0,
-			Rows: [][]sqltypes.Value{
-				mysql.BaseShowTablesRow("test_table_01", false, ""),
-				mysql.BaseShowTablesRow("test_table_02", false, ""),
-				mysql.BaseShowTablesRow("test_table_03", false, ""),
-				mysql.BaseShowTablesRow("seq", false, "vitess_sequence"),
-				mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
-			},
-			SessionStateChanges: "",
-			StatusFlags:         0,
-		})
+
+	db.RejectQueryPattern(baseShowTablesWithSizesPattern, "Opening schema engine should query tables without size information")
+
+	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
+		Fields:       mysql.BaseShowTablesFields,
+		RowsAffected: 0,
+		InsertID:     0,
+		Rows: [][]sqltypes.Value{
+			mysql.BaseShowTablesWithSizesRow("test_table_01", false, ""),
+			mysql.BaseShowTablesWithSizesRow("test_table_02", false, ""),
+			mysql.BaseShowTablesWithSizesRow("test_table_03", false, ""),
+			mysql.BaseShowTablesWithSizesRow("seq", false, "vitess_sequence"),
+			mysql.BaseShowTablesWithSizesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
+		},
+		SessionStateChanges: "",
+		StatusFlags:         0,
+	})
 	firstReadRowsValue := 12
 	AddFakeInnoDBReadRowsResult(db, firstReadRowsValue)
 
@@ -285,12 +315,12 @@ func TestReloadWithSwappedTables(t *testing.T) {
 		"int64"),
 		"1427325876",
 	))
-	db.AddQueryPattern(baseShowTablesPattern, &sqltypes.Result{
-		Fields: mysql.BaseShowTablesFields,
+	db.AddQueryPattern(baseShowTablesWithSizesPattern, &sqltypes.Result{
+		Fields: mysql.BaseShowTablesWithSizesFields,
 		Rows: [][]sqltypes.Value{
-			mysql.BaseShowTablesRow("test_table_01", false, ""),
-			mysql.BaseShowTablesRow("test_table_02", false, ""),
-			mysql.BaseShowTablesRow("test_table_03", false, ""),
+			mysql.BaseShowTablesWithSizesRow("test_table_01", false, ""),
+			mysql.BaseShowTablesWithSizesRow("test_table_02", false, ""),
+			mysql.BaseShowTablesWithSizesRow("test_table_03", false, ""),
 			{
 				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("test_table_04")),
 				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("BASE TABLE")),
@@ -299,8 +329,8 @@ func TestReloadWithSwappedTables(t *testing.T) {
 				sqltypes.MakeTrusted(sqltypes.Int64, []byte("128")), // file_size
 				sqltypes.MakeTrusted(sqltypes.Int64, []byte("256")), // allocated_size
 			},
-			mysql.BaseShowTablesRow("seq", false, "vitess_sequence"),
-			mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
+			mysql.BaseShowTablesWithSizesRow("seq", false, "vitess_sequence"),
+			mysql.BaseShowTablesWithSizesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
 		},
 	})
 	db.MockQueriesForTable("test_table_04", &sqltypes.Result{
@@ -322,6 +352,22 @@ func TestReloadWithSwappedTables(t *testing.T) {
 	})
 	err := se.Reload(context.Background())
 	require.NoError(t, err)
+
+	want["msg"].FileSize = 100
+	want["msg"].AllocatedSize = 150
+
+	want["seq"].FileSize = 100
+	want["seq"].AllocatedSize = 150
+
+	want["test_table_01"].FileSize = 100
+	want["test_table_01"].AllocatedSize = 150
+
+	want["test_table_02"].FileSize = 100
+	want["test_table_02"].AllocatedSize = 150
+
+	want["test_table_03"].FileSize = 100
+	want["test_table_03"].AllocatedSize = 150
+
 	want["test_table_04"] = &Table{
 		Name: sqlparser.NewIdentifierCS("test_table_04"),
 		Fields: []*querypb.Field{{
@@ -343,11 +389,11 @@ func TestReloadWithSwappedTables(t *testing.T) {
 		"int64"),
 		"1427325877",
 	))
-	db.AddQueryPattern(baseShowTablesPattern, &sqltypes.Result{
-		Fields: mysql.BaseShowTablesFields,
+	db.AddQueryPattern(baseShowTablesWithSizesPattern, &sqltypes.Result{
+		Fields: mysql.BaseShowTablesWithSizesFields,
 		Rows: [][]sqltypes.Value{
-			mysql.BaseShowTablesRow("test_table_01", false, ""),
-			mysql.BaseShowTablesRow("test_table_02", false, ""),
+			mysql.BaseShowTablesWithSizesRow("test_table_01", false, ""),
+			mysql.BaseShowTablesWithSizesRow("test_table_02", false, ""),
 			{
 				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("test_table_03")),
 				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("BASE TABLE")),
@@ -356,9 +402,9 @@ func TestReloadWithSwappedTables(t *testing.T) {
 				sqltypes.MakeTrusted(sqltypes.Int64, []byte("128")), // file_size
 				sqltypes.MakeTrusted(sqltypes.Int64, []byte("256")), // allocated_size
 			},
-			mysql.BaseShowTablesRow("test_table_04", false, ""),
-			mysql.BaseShowTablesRow("seq", false, "vitess_sequence"),
-			mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
+			mysql.BaseShowTablesWithSizesRow("test_table_04", false, ""),
+			mysql.BaseShowTablesWithSizesRow("seq", false, "vitess_sequence"),
+			mysql.BaseShowTablesWithSizesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
 		},
 	})
 	db.MockQueriesForTable("test_table_03", &sqltypes.Result{
@@ -421,7 +467,7 @@ func TestOpenFailedDueToExecErr(t *testing.T) {
 	defer db.Close()
 	schematest.AddDefaultQueries(db)
 	want := "injected error"
-	db.RejectQueryPattern(baseShowTablesPattern, want)
+	db.AddRejectedQuery(mysql.BaseShowTables, fmt.Errorf(want))
 	se := newEngine(1*time.Second, 1*time.Second, 0, db)
 	err := se.Open()
 	if err == nil || !strings.Contains(err.Error(), want) {
@@ -436,11 +482,11 @@ func TestOpenFailedDueToLoadTableErr(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	schematest.AddDefaultQueries(db)
-	db.AddQueryPattern(baseShowTablesPattern, &sqltypes.Result{
+	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
 		Fields: mysql.BaseShowTablesFields,
 		Rows: [][]sqltypes.Value{
-			mysql.BaseShowTablesRow("test_table", false, ""),
-			mysql.BaseShowTablesRow("test_view", true, "VIEW"),
+			mysql.BaseShowTablesWithSizesRow("test_table", false, ""),
+			mysql.BaseShowTablesWithSizesRow("test_view", true, "VIEW"),
 		},
 	})
 	// this will cause NewTable error, as it expects zero rows.
@@ -471,11 +517,11 @@ func TestOpenNoErrorDueToInvalidViews(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	schematest.AddDefaultQueries(db)
-	db.AddQueryPattern(baseShowTablesPattern, &sqltypes.Result{
+	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
 		Fields: mysql.BaseShowTablesFields,
 		Rows: [][]sqltypes.Value{
-			mysql.BaseShowTablesRow("foo_view", true, "VIEW"),
-			mysql.BaseShowTablesRow("bar_view", true, "VIEW"),
+			mysql.BaseShowTablesWithSizesRow("foo_view", true, "VIEW"),
+			mysql.BaseShowTablesWithSizesRow("bar_view", true, "VIEW"),
 		},
 	})
 
@@ -529,17 +575,17 @@ func TestSchemaEngineCloseTickRace(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	schematest.AddDefaultQueries(db)
-	db.AddQueryPattern(baseShowTablesPattern,
+	db.AddQuery(mysql.BaseShowTables,
 		&sqltypes.Result{
 			Fields:       mysql.BaseShowTablesFields,
 			RowsAffected: 0,
 			InsertID:     0,
 			Rows: [][]sqltypes.Value{
-				mysql.BaseShowTablesRow("test_table_01", false, ""),
-				mysql.BaseShowTablesRow("test_table_02", false, ""),
-				mysql.BaseShowTablesRow("test_table_03", false, ""),
-				mysql.BaseShowTablesRow("seq", false, "vitess_sequence"),
-				mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
+				mysql.BaseShowTablesWithSizesRow("test_table_01", false, ""),
+				mysql.BaseShowTablesWithSizesRow("test_table_02", false, ""),
+				mysql.BaseShowTablesWithSizesRow("test_table_03", false, ""),
+				mysql.BaseShowTablesWithSizesRow("seq", false, "vitess_sequence"),
+				mysql.BaseShowTablesWithSizesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
 			},
 			SessionStateChanges: "",
 			StatusFlags:         0,
@@ -604,8 +650,8 @@ func initialSchema() map[string]*Table {
 			}},
 			PKColumns:     []int{0},
 			CreateTime:    1427325875,
-			FileSize:      0x64,
-			AllocatedSize: 0x96,
+			FileSize:      0,
+			AllocatedSize: 0,
 		},
 		"test_table_02": {
 			Name: sqlparser.NewIdentifierCS("test_table_02"),
@@ -615,8 +661,8 @@ func initialSchema() map[string]*Table {
 			}},
 			PKColumns:     []int{0},
 			CreateTime:    1427325875,
-			FileSize:      0x64,
-			AllocatedSize: 0x96,
+			FileSize:      0,
+			AllocatedSize: 0,
 		},
 		"test_table_03": {
 			Name: sqlparser.NewIdentifierCS("test_table_03"),
@@ -626,8 +672,8 @@ func initialSchema() map[string]*Table {
 			}},
 			PKColumns:     []int{0},
 			CreateTime:    1427325875,
-			FileSize:      0x64,
-			AllocatedSize: 0x96,
+			FileSize:      0,
+			AllocatedSize: 0,
 		},
 		"seq": {
 			Name: sqlparser.NewIdentifierCS("seq"),
@@ -647,8 +693,8 @@ func initialSchema() map[string]*Table {
 			}},
 			PKColumns:     []int{0},
 			CreateTime:    1427325875,
-			FileSize:      0x64,
-			AllocatedSize: 0x96,
+			FileSize:      0,
+			AllocatedSize: 0,
 			SequenceInfo:  &SequenceInfo{},
 		},
 		"msg": {
@@ -675,8 +721,8 @@ func initialSchema() map[string]*Table {
 			}},
 			PKColumns:     []int{0},
 			CreateTime:    1427325875,
-			FileSize:      0x64,
-			AllocatedSize: 0x96,
+			FileSize:      0,
+			AllocatedSize: 0,
 			MessageInfo: &MessageInfo{
 				Fields: []*querypb.Field{{
 					Name: "id",
@@ -1298,4 +1344,193 @@ func TestEngineReload(t *testing.T) {
 	err = se.reload(context.Background(), false)
 	require.NoError(t, err)
 	require.NoError(t, db.LastError())
+}
+
+// TestEngineReload tests the vreplication specific GetTableForPos function to ensure
+// that it conforms to the intended/expected behavior in various scenarios.
+// This more specifically tests the behavior of the function when the historian is
+// disabled or otherwise unable to get a table schema for the given position. When it
+// CAN, that is tested indepenently in the historian tests.
+func TestGetTableForPos(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	fakedb := fakesqldb.New(t)
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.DB = newDBConfigs(fakedb)
+	table := sqlparser.NewIdentifierCS("t1")
+	column := "col1"
+	tableSchema := fmt.Sprintf("create table %s (%s varchar(50), primary key(col1))", table.String(), column)
+	tableMt := &binlogdatapb.MinimalTable{
+		Name: table.String(),
+		Fields: []*querypb.Field{
+			{
+				Name: column,
+				Type: sqltypes.VarChar,
+			},
+		},
+		PKColumns: []int64{0}, // First column: col1
+	}
+
+	// Don't do any automatic / TTL based cache refreshes.
+	se := newEngine(1*time.Hour, 1*time.Hour, 0, fakedb)
+	se.conns.Open(se.cp, se.cp, se.cp)
+	se.isOpen = true
+	se.notifiers = make(map[string]notifier)
+	se.MakePrimary(true)
+	se.historian.enabled = false
+
+	addExpectedReloadQueries := func(db *fakesqldb.DB) {
+		db.AddQuery("SELECT UNIX_TIMESTAMP()", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			"UNIX_TIMESTAMP()",
+			"int64"),
+			fmt.Sprintf("%d", time.Now().Unix()),
+		))
+		db.AddQuery(fmt.Sprintf(detectViewChange, sidecar.GetIdentifier()), sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name", "varchar")))
+		db.AddQuery(fmt.Sprintf(readTableCreateTimes, sidecar.GetIdentifier()),
+			sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name|create_time", "varchar|int64")))
+		db.AddQuery(fmt.Sprintf(detectUdfChange, sidecar.GetIdentifier()), &sqltypes.Result{})
+		db.AddQueryPattern(baseShowTablesWithSizesPattern,
+			&sqltypes.Result{
+				Fields:       mysql.BaseShowTablesWithSizesFields,
+				RowsAffected: 0,
+				InsertID:     0,
+				Rows: [][]sqltypes.Value{
+					{
+						sqltypes.MakeTrusted(sqltypes.VarChar, []byte(table.String())),                          // table_name
+						sqltypes.MakeTrusted(sqltypes.VarChar, []byte("BASE TABLE")),                            // table_type
+						sqltypes.MakeTrusted(sqltypes.Int64, []byte(fmt.Sprintf("%d", time.Now().Unix()-1000))), // unix_timestamp(t.create_time)
+						sqltypes.MakeTrusted(sqltypes.VarChar, []byte("")),                                      // table_comment
+						sqltypes.MakeTrusted(sqltypes.Int64, []byte("128")),                                     // file_size
+						sqltypes.MakeTrusted(sqltypes.Int64, []byte("256")),                                     // allocated_size
+					},
+				},
+				SessionStateChanges: "",
+				StatusFlags:         0,
+			},
+		)
+		db.AddQuery(mysql.BaseShowPrimary, &sqltypes.Result{
+			Fields: mysql.ShowPrimaryFields,
+			Rows: [][]sqltypes.Value{
+				mysql.ShowPrimaryRow(table.String(), column),
+			},
+		})
+		db.AddQueryPattern(fmt.Sprintf(mysql.GetColumnNamesQueryPatternForTable, table.String()),
+			sqltypes.MakeTestResult(sqltypes.MakeTestFields("column_name", "varchar"), column))
+		db.AddQuery(fmt.Sprintf("SELECT `%s` FROM `fakesqldb`.`%v` WHERE 1 != 1", column, table.String()),
+			sqltypes.MakeTestResult(sqltypes.MakeTestFields(column, "varchar")))
+		db.AddQuery(fmt.Sprintf(`show create table %s`, table.String()),
+			sqltypes.MakeTestResult(sqltypes.MakeTestFields("Table|Create Table", "varchar|varchar"), table.String(), tableSchema))
+		db.AddQuery("begin", &sqltypes.Result{})
+		db.AddQuery(fmt.Sprintf("delete from %s.`tables` where TABLE_SCHEMA = database() and TABLE_NAME in ('%s')",
+			sidecar.GetIdentifier(), table.String()), &sqltypes.Result{})
+		db.AddQuery(fmt.Sprintf("insert into %s.`tables`(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, CREATE_TIME) values (database(), '%s', '%s', %d)",
+			sidecar.GetIdentifier(), table.String(), tableSchema, time.Now().Unix()), &sqltypes.Result{RowsAffected: 1})
+		db.AddQuery("rollback", &sqltypes.Result{})
+	}
+
+	type testcase struct {
+		name                string
+		initialCacheState   map[string]*Table
+		expectedQueriesFunc func(db *fakesqldb.DB)
+		expectFunc          func()
+	}
+	tests := []testcase{
+		{
+			name:              "GetTableForPos with cache uninitialized",
+			initialCacheState: make(map[string]*Table), // empty
+			expectedQueriesFunc: func(db *fakesqldb.DB) {
+				// We do a reload to initialize the cache.
+				addExpectedReloadQueries(db)
+			},
+			expectFunc: func() {
+				tbl, err := se.GetTableForPos(ctx, table, "")
+				require.NoError(t, err)
+				require.Equal(t, tableMt, tbl)
+			},
+		},
+		{
+			name:              "GetTableForPos with cache uninitialized, table not found",
+			initialCacheState: make(map[string]*Table), // empty
+			expectedQueriesFunc: func(db *fakesqldb.DB) {
+				// We do a reload to initialize the cache and in doing so get the missing table.
+				addExpectedReloadQueries(db)
+			},
+			expectFunc: func() {
+				tbl, err := se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("nobueno"), "")
+				require.EqualError(t, err, "table nobueno not found in vttablet schema")
+				require.Nil(t, tbl)
+			},
+		},
+		{
+			name:              "GetTableForPos with cache initialized, table not found",
+			initialCacheState: map[string]*Table{"t2": {Name: sqlparser.NewIdentifierCS("t2")}},
+			expectedQueriesFunc: func(db *fakesqldb.DB) {
+				// We do a reload to try and get this missing table and any other recently created ones.
+				addExpectedReloadQueries(db)
+			},
+			expectFunc: func() {
+				tbl, err := se.GetTableForPos(ctx, table, "")
+				require.NoError(t, err)
+				require.Equal(t, tableMt, tbl)
+			},
+		},
+		{
+			name:              "GetTableForPos with cache initialized, table found",
+			initialCacheState: map[string]*Table{table.String(): {Name: table}},
+			expectedQueriesFunc: func(db *fakesqldb.DB) {
+				// We only reload the column and PK info for the table in our cache. A new column
+				// called col2 has been added to the table schema and it is the new PK.
+				newTableSchema := fmt.Sprintf("create table %s (%s varchar(50), col2 varchar(50), primary key(col2))", table.String(), column)
+				db.AddQuery(mysql.BaseShowPrimary, &sqltypes.Result{
+					Fields: mysql.ShowPrimaryFields,
+					Rows: [][]sqltypes.Value{
+						mysql.ShowPrimaryRow(table.String(), "col2"),
+					},
+				})
+				db.AddQueryPattern(fmt.Sprintf(mysql.GetColumnNamesQueryPatternForTable, table.String()),
+					sqltypes.MakeTestResult(sqltypes.MakeTestFields("column_name", "varchar"), column, "col2"))
+				db.AddQuery(fmt.Sprintf("SELECT `%s`, `%s` FROM `fakesqldb`.`%v` WHERE 1 != 1",
+					column, "col2", table.String()), sqltypes.MakeTestResult(sqltypes.MakeTestFields(fmt.Sprintf("%s|%s", column, "col2"), "varchar|varchar")))
+				db.AddQuery(fmt.Sprintf(`show create table %s`, table.String()),
+					sqltypes.MakeTestResult(sqltypes.MakeTestFields("Table|Create Table", "varchar|varchar"), table.String(), newTableSchema))
+				db.AddQuery("begin", &sqltypes.Result{})
+				db.AddQuery(fmt.Sprintf("delete from %s.`tables` where TABLE_SCHEMA = database() and TABLE_NAME in ('%s')",
+					sidecar.GetIdentifier(), table.String()), &sqltypes.Result{})
+				db.AddQuery(fmt.Sprintf("insert into %s.`tables`(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, CREATE_TIME) values (database(), '%s', '%s', %d)",
+					sidecar.GetIdentifier(), table.String(), newTableSchema, time.Now().Unix()), &sqltypes.Result{})
+				db.AddQuery("rollback", &sqltypes.Result{})
+			},
+			expectFunc: func() {
+				tbl, err := se.GetTableForPos(ctx, table, "MySQL56/1497ddb0-7cb9-11ed-a1eb-0242ac120002:1-891")
+				require.NoError(t, err)
+				require.NotNil(t, tbl)
+				require.Equal(t, &binlogdatapb.MinimalTable{
+					Name: table.String(),
+					Fields: []*querypb.Field{
+						{
+							Name: column,
+							Type: sqltypes.VarChar,
+						},
+						{
+							Name: "col2",
+							Type: sqltypes.VarChar,
+						},
+					},
+					PKColumns: []int64{1}, // Second column: col2
+				}, tbl)
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			fakedb.DeleteAllQueries()
+			AddFakeInnoDBReadRowsResult(fakedb, int(rand.Int32N(1000000)))
+			tc.expectedQueriesFunc(fakedb)
+			se.tables = tc.initialCacheState
+			tc.expectFunc()
+			fakedb.VerifyAllExecutedOrFail()
+			require.NoError(t, fakedb.LastError())
+		})
+	}
 }

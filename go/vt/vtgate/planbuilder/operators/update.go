@@ -151,17 +151,28 @@ func isMultiTargetUpdate(ctx *plancontext.PlanningContext, updateStmt *sqlparser
 	var targetTS semantics.TableSet
 	for _, ue := range updateStmt.Exprs {
 		targetTS = targetTS.Merge(ctx.SemTable.DirectDeps(ue.Name))
+		targetTS = targetTS.Merge(ctx.SemTable.RecursiveDeps(ue.Expr))
 	}
 	return targetTS.NumberOfTables() > 1
 }
+
+type updColumn struct {
+	updCol *sqlparser.ColName
+	jc     applyJoinColumn
+}
+
+type updList []updColumn
 
 func createUpdateWithInputOp(ctx *plancontext.PlanningContext, upd *sqlparser.Update) (op Operator) {
 	updClone := ctx.SemTable.Clone(upd).(*sqlparser.Update)
 	upd.Limit = nil
 
+	// Prepare the update expressions list
+	ueMap := prepareUpdateExpressionList(ctx, upd)
+
 	var updOps []dmlOp
 	for _, target := range ctx.SemTable.Targets.Constituents() {
-		op := createUpdateOpWithTarget(ctx, target, upd)
+		op := createUpdateOpWithTarget(ctx, upd, target, ueMap[target])
 		updOps = append(updOps, op)
 	}
 
@@ -175,10 +186,12 @@ func createUpdateWithInputOp(ctx *plancontext.PlanningContext, upd *sqlparser.Up
 		Lock:    sqlparser.ForUpdateLock,
 	}
 
-	// now map the operator and column list.
+	// now map the operator, column list and update list
 	var colsList [][]*sqlparser.ColName
+	var uList []updList
 	dmls := slice.Map(updOps, func(from dmlOp) Operator {
 		colsList = append(colsList, from.cols)
+		uList = append(uList, from.updList)
 		for _, col := range from.cols {
 			selectStmt.SelectExprs = append(selectStmt.SelectExprs, aeWrap(col))
 		}
@@ -186,9 +199,10 @@ func createUpdateWithInputOp(ctx *plancontext.PlanningContext, upd *sqlparser.Up
 	})
 
 	op = &DMLWithInput{
-		DML:    dmls,
-		Source: createOperatorFromSelect(ctx, selectStmt),
-		cols:   colsList,
+		DML:     dmls,
+		Source:  createOperatorFromSelect(ctx, selectStmt),
+		cols:    colsList,
+		updList: uList,
 	}
 
 	if upd.Comments != nil {
@@ -200,15 +214,43 @@ func createUpdateWithInputOp(ctx *plancontext.PlanningContext, upd *sqlparser.Up
 	return op
 }
 
-func createUpdateOpWithTarget(ctx *plancontext.PlanningContext, target semantics.TableSet, updStmt *sqlparser.Update) dmlOp {
-	var updExprs sqlparser.UpdateExprs
-	for _, ue := range updStmt.Exprs {
-		if ctx.SemTable.DirectDeps(ue.Name) == target {
-			updExprs = append(updExprs, ue)
-		}
+func prepareUpdateExpressionList(ctx *plancontext.PlanningContext, upd *sqlparser.Update) map[semantics.TableSet]updList {
+	// Any update expression requiring column value from any other table is rewritten to take it as bindvar column.
+	// E.g. UPDATE t1 join t2 on t1.col = t2.col SET t1.col = t2.col + 1 where t2.col = 10;
+	// SET t1.col = t2.col + 1 -> SET t1.col = :t2_col + 1 (t2_col is the bindvar column which will be provided from the input)
+	ueMap := make(map[semantics.TableSet]updList)
+	for _, ue := range upd.Exprs {
+		target := ctx.SemTable.DirectDeps(ue.Name)
+		exprDeps := ctx.SemTable.RecursiveDeps(ue.Expr)
+		jc := breakExpressionInLHSandRHS(ctx, ue.Expr, exprDeps.Remove(target))
+		ueMap[target] = append(ueMap[target], updColumn{ue.Name, jc})
 	}
 
-	if len(updExprs) == 0 {
+	// Check if any of the dependent columns are updated in the same query.
+	// This can result in a mismatch of rows on how MySQL interprets it and how Vitess would have updated those rows.
+	// It is safe to fail for those cases.
+	errIfDependentColumnUpdated(ctx, upd, ueMap)
+
+	return ueMap
+}
+
+func errIfDependentColumnUpdated(ctx *plancontext.PlanningContext, upd *sqlparser.Update, ueMap map[semantics.TableSet]updList) {
+	for _, ue := range upd.Exprs {
+		for _, list := range ueMap {
+			for _, dc := range list {
+				for _, bvExpr := range dc.jc.LHSExprs {
+					if ctx.SemTable.EqualsExprWithDeps(ue.Name, bvExpr.Expr) {
+						panic(vterrors.VT12001(
+							fmt.Sprintf("'%s' column referenced in update expression '%s' is itself updated", sqlparser.String(ue.Name), sqlparser.String(dc.jc.Original))))
+					}
+				}
+			}
+		}
+	}
+}
+
+func createUpdateOpWithTarget(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update, target semantics.TableSet, uList updList) dmlOp {
+	if len(uList) == 0 {
 		panic(vterrors.VT13001("no update expression for the target"))
 	}
 
@@ -237,6 +279,14 @@ func createUpdateOpWithTarget(ctx *plancontext.PlanningContext, target semantics
 	}
 	compExpr := sqlparser.NewComparisonExpr(sqlparser.InOp, lhs, sqlparser.ListArg(engine.DmlVals), nil)
 
+	var updExprs sqlparser.UpdateExprs
+	for _, expr := range uList {
+		ue := &sqlparser.UpdateExpr{
+			Name: expr.updCol,
+			Expr: expr.jc.RHSExpr,
+		}
+		updExprs = append(updExprs, ue)
+	}
 	upd := &sqlparser.Update{
 		Ignore:     updStmt.Ignore,
 		TableExprs: sqlparser.TableExprs{ti.GetAliasedTableExpr()},
@@ -245,9 +295,10 @@ func createUpdateOpWithTarget(ctx *plancontext.PlanningContext, target semantics
 		OrderBy:    updStmt.OrderBy,
 	}
 	return dmlOp{
-		createOperatorFromUpdate(ctx, upd),
-		vTbl,
-		cols,
+		op:      createOperatorFromUpdate(ctx, upd),
+		vTbl:    vTbl,
+		cols:    cols,
+		updList: uList,
 	}
 }
 
@@ -287,7 +338,7 @@ func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.U
 	// updClone is used in foreign key planning to create the selection statements to be used for verification and selection.
 	// If we encounter subqueries, we want to fix the updClone to use the replaced expression, so that the pulled out subquery's
 	// result is used everywhere instead of running the subquery multiple times, which is wasteful.
-	updClone := sqlparser.CloneRefOfUpdate(updStmt)
+	updClone := sqlparser.Clone(updStmt)
 	var tblInfo semantics.TableInfo
 	var err error
 	for idx, updExpr := range updStmt.Exprs {
@@ -295,7 +346,7 @@ func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.U
 		if len(subqs) == 0 {
 			expr = updExpr.Expr
 		} else {
-			updClone.Exprs[idx].Expr = sqlparser.CloneExpr(expr)
+			updClone.Exprs[idx].Expr = sqlparser.Clone(expr)
 			ctx.SemTable.UpdateChildFKExpr(updExpr, expr)
 		}
 		proj := newProjExpr(aeWrap(expr))
@@ -1072,7 +1123,7 @@ func createAssignmentExpressions(
 		}
 		found = true
 		pv, err := evalengine.Translate(assignment.Expr.EvalExpr, &evalengine.Config{
-			ResolveType: ctx.SemTable.TypeForExpr,
+			ResolveType: ctx.TypeForExpr,
 			Collation:   ctx.SemTable.Collation,
 			Environment: ctx.VSchema.Environment(),
 		})

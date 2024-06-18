@@ -23,7 +23,9 @@ import (
 	"testing"
 	"time"
 
+	topoutils "vitess.io/vitess/go/test/endtoend/topotest/utils"
 	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/vt/topo"
 
 	"vitess.io/vitess/go/vt/log"
 
@@ -111,8 +113,92 @@ func TestTopoDownServingQuery(t *testing.T) {
 	execMulti(t, conn, `insert into t1(c1, c2, c3, c4) values (300,100,300,'abc'); ;; insert into t1(c1, c2, c3, c4) values (301,101,301,'abcd');;`)
 	utils.AssertMatches(t, conn, `select c1,c2,c3 from t1`, `[[INT64(300) INT64(100) INT64(300)] [INT64(301) INT64(101) INT64(301)]]`)
 	clusterInstance.TopoProcess.TearDown(clusterInstance.Cell, clusterInstance.OriginalVTDATAROOT, clusterInstance.CurrentVTDATAROOT, true, *clusterInstance.TopoFlavorString())
+	defer func() {
+		_ = clusterInstance.TopoProcess.SetupEtcd()
+	}()
 	time.Sleep(3 * time.Second)
 	utils.AssertMatches(t, conn, `select c1,c2,c3 from t1`, `[[INT64(300) INT64(100) INT64(300)] [INT64(301) INT64(101) INT64(301)]]`)
+}
+
+// TestShardLocking tests that shard locking works as intended.
+func TestShardLocking(t *testing.T) {
+	// create topo server connection
+	ts, err := topo.OpenServer(*clusterInstance.TopoFlavorString(), clusterInstance.VtctlProcess.TopoGlobalAddress, clusterInstance.VtctlProcess.TopoGlobalRoot)
+	require.NoError(t, err)
+
+	// Acquire a shard lock.
+	ctx, unlock, err := ts.LockShard(context.Background(), KeyspaceName, "0", "TestShardLocking")
+	require.NoError(t, err)
+	// Check that we can't reacquire it from the same context.
+	_, _, err = ts.LockShard(ctx, KeyspaceName, "0", "TestShardLocking")
+	require.ErrorContains(t, err, "lock for shard customer/0 is already held")
+	// Also check that TryLockShard is non-blocking and returns an error.
+	_, _, err = ts.TryLockShard(context.Background(), KeyspaceName, "0", "TestShardLocking")
+	require.ErrorContains(t, err, "node already exists: lock already exists at path keyspaces/customer/shards/0")
+	// Check that CheckShardLocked doesn't return an error.
+	err = topo.CheckShardLocked(ctx, KeyspaceName, "0")
+	require.NoError(t, err)
+
+	// We'll now try to acquire the lock from a different thread.
+	secondThreadLockAcquired := false
+	go func() {
+		_, unlock, err := ts.LockShard(context.Background(), KeyspaceName, "0", "TestShardLocking")
+		defer unlock(&err)
+		require.NoError(t, err)
+		secondThreadLockAcquired = true
+	}()
+
+	// Wait for some time and ensure that the second acquiring of lock shard is blocked.
+	time.Sleep(100 * time.Millisecond)
+	require.False(t, secondThreadLockAcquired)
+
+	// Unlock the shard.
+	unlock(&err)
+	// Check that we no longer have shard lock acquired.
+	err = topo.CheckShardLocked(ctx, KeyspaceName, "0")
+	require.ErrorContains(t, err, "shard customer/0 is not locked (no lockInfo in map)")
+
+	// Wait to see that the second thread was able to acquire the shard lock.
+	topoutils.WaitForBoolValue(t, &secondThreadLockAcquired, true)
+}
+
+// TestKeyspaceLocking tests that keyspace locking works as intended.
+func TestKeyspaceLocking(t *testing.T) {
+	// create topo server connection
+	ts, err := topo.OpenServer(*clusterInstance.TopoFlavorString(), clusterInstance.VtctlProcess.TopoGlobalAddress, clusterInstance.VtctlProcess.TopoGlobalRoot)
+	require.NoError(t, err)
+
+	// Acquire a keyspace lock.
+	ctx, unlock, err := ts.LockKeyspace(context.Background(), KeyspaceName, "TestKeyspaceLocking")
+	require.NoError(t, err)
+	// Check that we can't reacquire it from the same context.
+	_, _, err = ts.LockKeyspace(ctx, KeyspaceName, "TestKeyspaceLocking")
+	require.ErrorContains(t, err, "lock for keyspace customer is already held")
+	// Check that CheckKeyspaceLocked doesn't return an error.
+	err = topo.CheckKeyspaceLocked(ctx, KeyspaceName)
+	require.NoError(t, err)
+
+	// We'll now try to acquire the lock from a different thread.
+	secondThreadLockAcquired := false
+	go func() {
+		_, unlock, err := ts.LockKeyspace(context.Background(), KeyspaceName, "TestKeyspaceLocking")
+		defer unlock(&err)
+		require.NoError(t, err)
+		secondThreadLockAcquired = true
+	}()
+
+	// Wait for some time and ensure that the second acquiring of lock shard is blocked.
+	time.Sleep(100 * time.Millisecond)
+	require.False(t, secondThreadLockAcquired)
+
+	// Unlock the keyspace.
+	unlock(&err)
+	// Check that we no longer have keyspace lock acquired.
+	err = topo.CheckKeyspaceLocked(ctx, KeyspaceName)
+	require.ErrorContains(t, err, "keyspace customer is not locked (no lockInfo in map)")
+
+	// Wait to see that the second thread was able to acquire the shard lock.
+	topoutils.WaitForBoolValue(t, &secondThreadLockAcquired, true)
 }
 
 func execMulti(t *testing.T, conn *mysql.Conn, query string) []*sqltypes.Result {

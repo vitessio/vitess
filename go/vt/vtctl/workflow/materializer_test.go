@@ -507,7 +507,7 @@ func TestMigrateVSchema(t *testing.T) {
 			SourceExpression: "select * from t1",
 		}},
 	}
-	env := newTestEnv(t, ctx, ms, []string{"0"}, []string{"0"})
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
 
 	env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
@@ -557,7 +557,7 @@ func TestMoveTablesDDLFlag(t *testing.T) {
 		t.Run(fmt.Sprintf("OnDDL Flag:%v", onDDLAction), func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			env := newTestEnv(t, ctx, ms, []string{"0"}, []string{"0"})
+			env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 			defer env.close()
 			// This is the default and go does not marshal defaults
 			// for prototext fields so we use the default insert stmt.
@@ -606,7 +606,7 @@ func TestMoveTablesNoRoutingRules(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	env := newTestEnv(t, ctx, ms, []string{"0"}, []string{"0"})
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
 	// This is the default and go does not marshal defaults
 	// for prototext fields so we use the default insert stmt.
@@ -669,7 +669,7 @@ func TestCreateLookupVindexFull(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	env := newTestEnv(t, ctx, ms, []string{"0"}, []string{"0"})
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
 
 	specs := &vschemapb.Keyspace{
@@ -804,7 +804,7 @@ func TestCreateLookupVindexCreateDDL(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	env := newTestEnv(t, ctx, ms, []string{"0"}, []string{"0"})
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
 	vs := &vschemapb.Keyspace{
 		Sharded: true,
@@ -1024,7 +1024,7 @@ func TestCreateLookupVindexSourceVSchema(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	env := newTestEnv(t, ctx, ms, []string{"0"}, []string{"0"})
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
 
 	specs := &vschemapb.Keyspace{
@@ -1263,7 +1263,7 @@ func TestCreateLookupVindexTargetVSchema(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	env := newTestEnv(t, ctx, ms, []string{"0"}, []string{"0"})
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
 	sourcevs := &vschemapb.Keyspace{
 		Sharded: true,
@@ -1502,7 +1502,7 @@ func TestCreateLookupVindexSameKeyspace(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	env := newTestEnv(t, ctx, ms, []string{"0"}, []string{"0"})
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
 
 	specs := &vschemapb.Keyspace{
@@ -1615,7 +1615,7 @@ func TestCreateCustomizedVindex(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	env := newTestEnv(t, ctx, ms, []string{"0"}, []string{"0"})
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
 
 	specs := &vschemapb.Keyspace{
@@ -1741,7 +1741,7 @@ func TestCreateLookupVindexIgnoreNulls(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	env := newTestEnv(t, ctx, ms, []string{"0"}, []string{"0"})
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
 
 	specs := &vschemapb.Keyspace{
@@ -1862,7 +1862,7 @@ func TestStopAfterCopyFlag(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	env := newTestEnv(t, ctx, ms, []string{"0"}, []string{"0"})
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
 	specs := &vschemapb.Keyspace{
 		Vindexes: map[string]*vschemapb.Vindex{
@@ -1943,7 +1943,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	env := newTestEnv(t, ctx, ms, []string{"0"}, []string{"-80", "80-"})
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"-80", "80-"})
 	defer env.close()
 
 	unique := map[string]*vschemapb.Vindex{
@@ -2507,7 +2507,7 @@ func TestKeyRangesEqualOptimization(t *testing.T) {
 				SourceShards:          tc.moveTablesReq.SourceShards,
 				TableSettings:         tableSettings,
 			}
-			env := newTestEnv(t, ctx, ms, tc.sourceShards, tc.targetShards)
+			env := newTestMaterializerEnv(t, ctx, ms, tc.sourceShards, tc.targetShards)
 			defer env.close()
 
 			// Target is always sharded.

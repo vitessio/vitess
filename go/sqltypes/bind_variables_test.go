@@ -18,7 +18,6 @@ package sqltypes
 
 import (
 	"fmt"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -92,15 +91,10 @@ func TestBuildBindVariables(t *testing.T) {
 	}}
 	for _, tcase := range tcases {
 		bindVars, err := BuildBindVariables(tcase.in)
-		if err != nil {
-			if err.Error() != tcase.err {
-				t.Errorf("MapToBindVars(%v) error: %v, want %s", tcase.in, err, tcase.err)
-			}
-			continue
-		}
-		if tcase.err != "" {
-			t.Errorf("MapToBindVars(%v) error: nil, want %s", tcase.in, tcase.err)
-			continue
+		if tcase.err == "" {
+			assert.NoError(t, err)
+		} else {
+			assert.ErrorContains(t, err, tcase.err)
 		}
 		if !BindVariablesEqual(bindVars, tcase.out) {
 			t.Errorf("MapToBindVars(%v): %v, want %s", tcase.in, bindVars, tcase.out)
@@ -371,14 +365,10 @@ func TestValidateBindVarables(t *testing.T) {
 	for _, tcase := range tcases {
 		err := ValidateBindVariables(tcase.in)
 		if tcase.err != "" {
-			if err == nil || err.Error() != tcase.err {
-				t.Errorf("ValidateBindVars(%v): %v, want %s", tcase.in, err, tcase.err)
-			}
+			assert.ErrorContains(t, err, tcase.err)
 			continue
 		}
-		if err != nil {
-			t.Errorf("ValidateBindVars(%v): %v, want nil", tcase.in, err)
-		}
+		assert.NoError(t, err)
 	}
 }
 
@@ -582,22 +572,16 @@ func TestValidateBindVariable(t *testing.T) {
 	for _, tcase := range testcases {
 		err := ValidateBindVariable(tcase.in)
 		if tcase.err != "" {
-			if err == nil || !strings.Contains(err.Error(), tcase.err) {
-				t.Errorf("ValidateBindVar(%v) error: %v, must contain %v", tcase.in, err, tcase.err)
-			}
+			assert.ErrorContains(t, err, tcase.err)
 			continue
 		}
-		if err != nil {
-			t.Errorf("ValidateBindVar(%v) error: %v", tcase.in, err)
-		}
+		assert.NoError(t, err)
 	}
 
 	// Special case: nil bind var.
 	err := ValidateBindVariable(nil)
 	want := "bind variable is nil"
-	if err == nil || err.Error() != want {
-		t.Errorf("ValidateBindVar(nil) error: %v, want %s", err, want)
-	}
+	assert.ErrorContains(t, err, want)
 }
 
 func TestBindVariableToValue(t *testing.T) {
@@ -633,19 +617,13 @@ func TestBindVariablesEqual(t *testing.T) {
 			Value: []byte("1"),
 		},
 	}
-	if !BindVariablesEqual(bv1, bv2) {
-		t.Errorf("%v != %v, want equal", bv1, bv2)
-	}
-	if !BindVariablesEqual(bv1, bv3) {
-		t.Errorf("%v = %v, want not equal", bv1, bv3)
-	}
+	assert.True(t, BindVariablesEqual(bv1, bv2))
+	assert.True(t, BindVariablesEqual(bv1, bv3))
 }
 
 func TestBindVariablesFormat(t *testing.T) {
 	tupleBindVar, err := BuildBindVariable([]int64{1, 2})
-	if err != nil {
-		t.Fatalf("failed to create a tuple bind var: %v", err)
-	}
+	require.NoError(t, err, "failed to create a tuple bind var")
 
 	bindVariables := map[string]*querypb.BindVariable{
 		"key_1": StringBindVariable("val_1"),
@@ -655,68 +633,38 @@ func TestBindVariablesFormat(t *testing.T) {
 	}
 
 	formattedStr := FormatBindVariables(bindVariables, true /* full */, false /* asJSON */)
-	if !strings.Contains(formattedStr, "key_1") ||
-		!strings.Contains(formattedStr, "val_1") {
-		t.Fatalf("bind variable 'key_1': 'val_1' is not formatted")
-	}
-	if !strings.Contains(formattedStr, "key_2") ||
-		!strings.Contains(formattedStr, "789") {
-		t.Fatalf("bind variable 'key_2': '789' is not formatted")
-	}
-	if !strings.Contains(formattedStr, "key_3") || !strings.Contains(formattedStr, "val_3") {
-		t.Fatalf("bind variable 'key_3': 'val_3' is not formatted")
-	}
-	if !strings.Contains(formattedStr, "key_4:type:TUPLE") {
-		t.Fatalf("bind variable 'key_4': (1, 2) is not formatted")
-	}
+	assert.Contains(t, formattedStr, "key_1")
+	assert.Contains(t, formattedStr, "val_1")
+
+	assert.Contains(t, formattedStr, "key_2")
+	assert.Contains(t, formattedStr, "789")
+
+	assert.Contains(t, formattedStr, "key_3")
+	assert.Contains(t, formattedStr, "val_3")
+
+	assert.Contains(t, formattedStr, "key_4:type:TUPLE")
 
 	formattedStr = FormatBindVariables(bindVariables, false /* full */, false /* asJSON */)
-	if !strings.Contains(formattedStr, "key_1") {
-		t.Fatalf("bind variable 'key_1' is not formatted")
-	}
-	if !strings.Contains(formattedStr, "key_2") ||
-		!strings.Contains(formattedStr, "789") {
-		t.Fatalf("bind variable 'key_2': '789' is not formatted")
-	}
-	if !strings.Contains(formattedStr, "key_3") || !strings.Contains(formattedStr, "5 bytes") {
-		t.Fatalf("bind variable 'key_3' is not formatted")
-	}
-	if !strings.Contains(formattedStr, "key_4") || !strings.Contains(formattedStr, "2 items") {
-		t.Fatalf("bind variable 'key_4' is not formatted")
-	}
+	assert.Contains(t, formattedStr, "key_1")
+
+	assert.Contains(t, formattedStr, "key_2")
+	assert.Contains(t, formattedStr, "789")
+
+	assert.Contains(t, formattedStr, "key_3")
+	assert.Contains(t, formattedStr, "5 bytes")
+
+	assert.Contains(t, formattedStr, "key_4")
+	assert.Contains(t, formattedStr, "2 items")
 
 	formattedStr = FormatBindVariables(bindVariables, true /* full */, true /* asJSON */)
-	t.Logf("%q", formattedStr)
-	if !strings.Contains(formattedStr, "\"key_1\": {\"type\": \"VARCHAR\", \"value\": \"val_1\"}") {
-		t.Fatalf("bind variable 'key_1' is not formatted")
-	}
-
-	if !strings.Contains(formattedStr, "\"key_2\": {\"type\": \"INT64\", \"value\": 789}") {
-		t.Fatalf("bind variable 'key_2' is not formatted")
-	}
-
-	if !strings.Contains(formattedStr, "\"key_3\": {\"type\": \"VARBINARY\", \"value\": \"val_3\"}") {
-		t.Fatalf("bind variable 'key_3' is not formatted")
-	}
-
-	if !strings.Contains(formattedStr, "\"key_4\": {\"type\": \"TUPLE\", \"value\": \"\"}") {
-		t.Fatalf("bind variable 'key_4' is not formatted")
-	}
+	assert.Contains(t, formattedStr, "\"key_1\": {\"type\": \"VARCHAR\", \"value\": \"val_1\"}")
+	assert.Contains(t, formattedStr, "\"key_2\": {\"type\": \"INT64\", \"value\": 789}")
+	assert.Contains(t, formattedStr, "\"key_3\": {\"type\": \"VARBINARY\", \"value\": \"val_3\"}")
+	assert.Contains(t, formattedStr, "\"key_4\": {\"type\": \"TUPLE\", \"value\": \"\"}")
 
 	formattedStr = FormatBindVariables(bindVariables, false /* full */, true /* asJSON */)
-	if !strings.Contains(formattedStr, "\"key_1\": {\"type\": \"VARCHAR\", \"value\": \"5 bytes\"}") {
-		t.Fatalf("bind variable 'key_1' is not formatted")
-	}
-
-	if !strings.Contains(formattedStr, "\"key_2\": {\"type\": \"INT64\", \"value\": 789}") {
-		t.Fatalf("bind variable 'key_2' is not formatted")
-	}
-
-	if !strings.Contains(formattedStr, "\"key_3\": {\"type\": \"VARCHAR\", \"value\": \"5 bytes\"}") {
-		t.Fatalf("bind variable 'key_3' is not formatted")
-	}
-
-	if !strings.Contains(formattedStr, "\"key_4\": {\"type\": \"VARCHAR\", \"value\": \"2 items\"}") {
-		t.Fatalf("bind variable 'key_4' is not formatted")
-	}
+	assert.Contains(t, formattedStr, "\"key_1\": {\"type\": \"VARCHAR\", \"value\": \"5 bytes\"}")
+	assert.Contains(t, formattedStr, "\"key_2\": {\"type\": \"INT64\", \"value\": 789}")
+	assert.Contains(t, formattedStr, "\"key_3\": {\"type\": \"VARCHAR\", \"value\": \"5 bytes\"}")
+	assert.Contains(t, formattedStr, "\"key_4\": {\"type\": \"VARCHAR\", \"value\": \"2 items\"}")
 }

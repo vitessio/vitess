@@ -20,12 +20,12 @@ import (
 	"sync"
 	"testing"
 
+	fuzz "github.com/AdaLogics/go-fuzz-headers"
+
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/sqltypes"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
-
-	fuzz "github.com/AdaLogics/go-fuzz-headers"
 )
 
 var initter sync.Once

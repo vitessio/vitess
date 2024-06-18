@@ -20,6 +20,7 @@ package streamlog
 import (
 	"fmt"
 	"io"
+	rand "math/rand/v2"
 	"net/http"
 	"net/url"
 	"os"
@@ -51,6 +52,7 @@ var (
 	queryLogFilterTag    string
 	queryLogRowThreshold uint64
 	queryLogFormat       = "text"
+	queryLogSampleRate   float64
 )
 
 func GetRedactDebugUIQueries() bool {
@@ -67,6 +69,10 @@ func SetQueryLogFilterTag(newQueryLogFilterTag string) {
 
 func SetQueryLogRowThreshold(newQueryLogRowThreshold uint64) {
 	queryLogRowThreshold = newQueryLogRowThreshold
+}
+
+func SetQueryLogSampleRate(sampleRate float64) {
+	queryLogSampleRate = sampleRate
 }
 
 func GetQueryLogFormat() string {
@@ -96,6 +102,8 @@ func registerStreamLogFlags(fs *pflag.FlagSet) {
 	// QueryLogRowThreshold only log queries returning or affecting this many rows
 	fs.Uint64Var(&queryLogRowThreshold, "querylog-row-threshold", queryLogRowThreshold, "Number of rows a query has to return or affect before being logged; not useful for streaming queries. 0 means all queries will be logged.")
 
+	// QueryLogSampleRate causes a sample of queries to be logged
+	fs.Float64Var(&queryLogSampleRate, "querylog-sample-rate", queryLogSampleRate, "Sample rate for logging queries. Value must be between 0.0 (no logging) and 1.0 (all queries)")
 }
 
 const (
@@ -249,9 +257,22 @@ func GetFormatter[T any](logger *StreamLogger[T]) LogFormatter {
 	}
 }
 
+// shouldSampleQuery returns true if a query should be sampled based on queryLogSampleRate
+func shouldSampleQuery() bool {
+	if queryLogSampleRate <= 0 {
+		return false
+	} else if queryLogSampleRate >= 1 {
+		return true
+	}
+	return rand.Float64() <= queryLogSampleRate
+}
+
 // ShouldEmitLog returns whether the log with the given SQL query
 // should be emitted or filtered
 func ShouldEmitLog(sql string, rowsAffected, rowsReturned uint64) bool {
+	if shouldSampleQuery() {
+		return true
+	}
 	if queryLogRowThreshold > max(rowsAffected, rowsReturned) && queryLogFilterTag == "" {
 		return false
 	}

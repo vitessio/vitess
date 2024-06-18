@@ -20,8 +20,6 @@ import (
 	"fmt"
 	"testing"
 
-	"context"
-
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	qh "vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication/queryhistory"
 )
@@ -38,7 +36,6 @@ func TestJournalOneToOne(t *testing.T) {
 		"drop table t",
 		fmt.Sprintf("drop table %s.t", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -98,7 +95,6 @@ func TestJournalOneToMany(t *testing.T) {
 		"drop table t",
 		fmt.Sprintf("drop table %s.t", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -164,7 +160,6 @@ func TestJournalTablePresent(t *testing.T) {
 		"drop table t",
 		fmt.Sprintf("drop table %s.t", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -223,7 +218,6 @@ func TestJournalTableNotPresent(t *testing.T) {
 		"drop table t",
 		fmt.Sprintf("drop table %s.t", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -278,7 +272,6 @@ func TestJournalTableMixed(t *testing.T) {
 		fmt.Sprintf("drop table %s.t", vrepldb),
 		fmt.Sprintf("drop table %s.t1", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{

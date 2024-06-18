@@ -74,3 +74,13 @@ func TestIndefinite(t *testing.T) {
 	time.Sleep(quarter)
 	assert.Equal(t, int64(1), numcalls.Load())
 }
+
+func TestInterval(t *testing.T) {
+	timer := NewTimer(100)
+	in := timer.Interval()
+	assert.Equal(t, 100*time.Nanosecond, in)
+
+	timer.interval.Store(200)
+	in = timer.Interval()
+	assert.Equal(t, 200*time.Nanosecond, in)
+}

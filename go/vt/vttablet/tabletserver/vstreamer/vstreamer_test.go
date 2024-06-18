@@ -224,7 +224,6 @@ func TestSetStatement(t *testing.T) {
 		log.Info("Cannot test SetStatement on this flavor")
 		return
 	}
-	engine.se.Reload(context.Background())
 
 	execStatements(t, []string{
 		"create table t1(id int, val varbinary(128), primary key(id))",
@@ -232,7 +231,6 @@ func TestSetStatement(t *testing.T) {
 	defer execStatements(t, []string{
 		"drop table t1",
 	})
-	engine.se.Reload(context.Background())
 	queries := []string{
 		"begin",
 		"insert into t1 values (1, 'aaa')",
@@ -312,6 +310,7 @@ func TestVersion(t *testing.T) {
 		engine = oldEngine
 	}()
 
+	ctx := context.Background()
 	err := env.SchemaEngine.EnableHistorian(true)
 	require.NoError(t, err)
 	defer env.SchemaEngine.EnableHistorian(false)
@@ -334,7 +333,6 @@ func TestVersion(t *testing.T) {
 		}},
 	}
 	blob, _ := dbSchema.MarshalVT()
-	engine.se.Reload(context.Background())
 	gtid := "MariaDB/0-41983-20"
 	testcases := []testcase{{
 		input: []string{
@@ -348,7 +346,7 @@ func TestVersion(t *testing.T) {
 			`commit`}},
 	}}
 	runCases(t, nil, testcases, "", nil)
-	mt, err := env.SchemaEngine.GetTableForPos(sqlparser.NewIdentifierCS("t1"), gtid)
+	mt, err := env.SchemaEngine.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid)
 	require.NoError(t, err)
 	assert.True(t, proto.Equal(mt, dbSchema.Tables[0]))
 }
@@ -373,7 +371,6 @@ func TestMissingTables(t *testing.T) {
 		"insert into shortlived values (1,1), (2,2)",
 		"alter table shortlived rename to _shortlived",
 	})
-	engine.se.Reload(context.Background())
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
 			Match:  "t1",
@@ -1059,7 +1056,6 @@ func TestREKeyRange(t *testing.T) {
   }
 }`
 	setVSchema(t, altVSchema)
-	engine.se.Reload(context.Background())
 	ts.Reset()
 	// Only the first insert should be sent.
 	ts.tests = [][]*TestQuery{{
@@ -1289,7 +1285,6 @@ func TestDDLAddColumn(t *testing.T) {
 }
 
 func TestDDLDropColumn(t *testing.T) {
-	env.SchemaEngine.Reload(context.Background())
 	execStatement(t, "create table ddl_test2(id int, val1 varbinary(128), val2 varbinary(128), primary key(id))")
 	defer execStatement(t, "drop table ddl_test2")
 
@@ -1301,8 +1296,6 @@ func TestDDLDropColumn(t *testing.T) {
 		"alter table ddl_test2 drop column val2",
 		"insert into ddl_test2 values(2, 'bbb')",
 	})
-	engine.se.Reload(context.Background())
-	env.SchemaEngine.Reload(context.Background())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -1439,7 +1432,6 @@ func TestBestEffortNameInFieldEvent(t *testing.T) {
 	defer execStatements(t, []string{
 		"drop table vitess_test_new",
 	})
-	engine.se.Reload(context.Background())
 	testcases := []testcase{{
 		input: []string{
 			"insert into vitess_test_new values(2, 'abc')",
@@ -1499,7 +1491,6 @@ func TestInternalTables(t *testing.T) {
 		"drop table _vt_PURGE_1f9194b43b2011eb8a0104ed332e05c2_20201210194431",
 		"drop table _product_old",
 	})
-	engine.se.Reload(context.Background())
 	testcases := []testcase{{
 		input: []string{
 			"insert into vitess_test values(2, 'abc')",
@@ -1541,7 +1532,6 @@ func TestTypes(t *testing.T) {
 		"drop table vitess_null",
 		"drop table vitess_decimal",
 	})
-	engine.se.Reload(context.Background())
 
 	testcases := []testcase{{
 		input: []string{
@@ -1676,7 +1666,6 @@ func TestExternalTable(t *testing.T) {
 	defer execStatements(t, []string{
 		"drop database external",
 	})
-	engine.se.Reload(context.Background())
 
 	testcases := []testcase{{
 		input: []string{
@@ -1701,7 +1690,6 @@ func TestJournal(t *testing.T) {
 	defer execStatements(t, []string{
 		"drop table _vt.resharding_journal",
 	})
-	engine.se.Reload(context.Background())
 
 	journal1 := &binlogdatapb.Journal{
 		Id:            1,
@@ -1758,8 +1746,6 @@ func TestStatementMode(t *testing.T) {
 		"create table stream2(id int, val varbinary(128), primary key(id))",
 	})
 
-	engine.se.Reload(context.Background())
-
 	defer execStatements(t, []string{
 		"drop table stream1",
 		"drop table stream2",
@@ -1807,7 +1793,6 @@ func TestNoFutureGTID(t *testing.T) {
 	defer execStatements(t, []string{
 		"drop table stream1",
 	})
-	engine.se.Reload(context.Background())
 
 	pos := primaryPosition(t)
 	t.Logf("current position: %v", pos)

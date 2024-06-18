@@ -1,10 +1,10 @@
-name: Docker Build Images (v20+)
+name: Docker Build Images
 on:
   push:
     branches:
       - main
     tags:
-      - 'v[2-9][0-9]*.*' # run only on tags greater or equal to v20.0.0
+      - 'v[2-9][0-9]*.*' # run only on tags greater or equal to v20.0.0 where this new way of building docker image was changed
 
 concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'Docker Build Images (v20+)')
@@ -21,7 +21,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        branch: [ latest ]
+        branch: [ latest, percona80 ]
 
     steps:
       - name: Check out code

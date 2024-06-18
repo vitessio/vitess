@@ -32,8 +32,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/vt/sqlparser"
-
 	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
@@ -46,6 +44,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
@@ -74,6 +73,7 @@ var (
 	testForeignKeyQueries    = false
 	testSetForeignKeyQueries = false
 	doNotLogDBQueries        = false
+	recvTimeout              = 5 * time.Second
 )
 
 type LogExpectation struct {
@@ -256,7 +256,6 @@ func addTablet(id int) *topodatapb.Tablet {
 	if err := env.TopoServ.CreateTablet(context.Background(), tablet); err != nil {
 		panic(err)
 	}
-	env.SchemaEngine.Reload(context.Background())
 	return tablet
 }
 
@@ -277,7 +276,6 @@ func addOtherTablet(id int, keyspace, shard string) *topodatapb.Tablet {
 	if err := env.TopoServ.CreateTablet(context.Background(), tablet); err != nil {
 		panic(err)
 	}
-	env.SchemaEngine.Reload(context.Background())
 	return tablet
 }
 
@@ -285,7 +283,6 @@ func deleteTablet(tablet *topodatapb.Tablet) {
 	env.TopoServ.DeleteTablet(context.Background(), tablet.Alias)
 	// This is not automatically removed from shard replication, which results in log spam.
 	topo.DeleteTabletReplicationData(context.Background(), env.TopoServ, tablet)
-	env.SchemaEngine.Reload(context.Background())
 }
 
 // fakeTabletConn implement TabletConn interface. We only care about the
@@ -495,14 +492,14 @@ func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Resu
 	return qr, err
 }
 
-func (dc *realDBClient) ExecuteFetchMulti(query string, maxrows int) ([]*sqltypes.Result, error) {
+func (dbc *realDBClient) ExecuteFetchMulti(query string, maxrows int) ([]*sqltypes.Result, error) {
 	queries, err := sqlparser.NewTestParser().SplitStatementToPieces(query)
 	if err != nil {
 		return nil, err
 	}
 	results := make([]*sqltypes.Result, 0, len(queries))
 	for _, query := range queries {
-		qr, err := dc.ExecuteFetch(query, maxrows)
+		qr, err := dbc.ExecuteFetch(query, maxrows)
 		if err != nil {
 			return nil, err
 		}
@@ -521,7 +518,7 @@ func expectDeleteQueries(t *testing.T) {
 		"/delete from _vt.vreplication",
 		"/delete from _vt.copy_state",
 		"/delete from _vt.post_copy_action",
-	))
+	), recvTimeout)
 }
 
 func deleteAllVReplicationStreams(t *testing.T) {
@@ -638,7 +635,7 @@ func expectDBClientQueries(t *testing.T, expectations qh.ExpectationSequence, sk
 				))
 			}
 		case <-time.After(5 * time.Second):
-			t.Fatalf("no query received")
+			require.FailNow(t, "no query received")
 			failed = true
 		}
 	}
@@ -659,7 +656,7 @@ func expectDBClientQueries(t *testing.T, expectations qh.ExpectationSequence, sk
 
 // expectNontxQueries disregards transactional statements like begin and commit.
 // It also disregards updates to _vt.vreplication.
-func expectNontxQueries(t *testing.T, expectations qh.ExpectationSequence) {
+func expectNontxQueries(t *testing.T, expectations qh.ExpectationSequence, recvTimeout time.Duration) {
 	t.Helper()
 	if doNotLogDBQueries {
 		return
@@ -687,8 +684,8 @@ func expectNontxQueries(t *testing.T, expectations qh.ExpectationSequence) {
 				"query:%q\nmessage:%s\nexpectation:%s\nmatched:%t\nerror:%v\nhistory:%s",
 				got, result.Message, result.Expectation, result.Matched, result.Error, validator.History(),
 			))
-		case <-time.After(5 * time.Second):
-			t.Fatalf("no query received")
+		case <-time.After(recvTimeout):
+			require.FailNow(t, "no query received")
 			failed = true
 		}
 	}

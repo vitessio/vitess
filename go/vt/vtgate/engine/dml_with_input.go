@@ -39,6 +39,7 @@ type DMLWithInput struct {
 
 	DMLs       []Primitive
 	OutputCols [][]int
+	BVList     []map[string]int
 }
 
 func (dml *DMLWithInput) RouteType() string {
@@ -69,15 +70,76 @@ func (dml *DMLWithInput) TryExecute(ctx context.Context, vcursor VCursor, bindVa
 
 	var res *sqltypes.Result
 	for idx, prim := range dml.DMLs {
-		var bv *querypb.BindVariable
-		if len(dml.OutputCols[idx]) == 1 {
-			bv = getBVSingle(inputRes, dml.OutputCols[idx][0])
+		var qr *sqltypes.Result
+		if len(dml.BVList) == 0 || len(dml.BVList[idx]) == 0 {
+			qr, err = executeLiteralUpdate(ctx, vcursor, bindVars, prim, inputRes, dml.OutputCols[idx])
 		} else {
-			bv = getBVMulti(inputRes, dml.OutputCols[idx])
+			qr, err = executeNonLiteralUpdate(ctx, vcursor, bindVars, prim, inputRes, dml.OutputCols[idx], dml.BVList[idx])
+		}
+		if err != nil {
+			return nil, err
 		}
 
+		if res == nil {
+			res = qr
+		} else {
+			res.RowsAffected += qr.RowsAffected
+		}
+	}
+	return res, nil
+}
+
+// executeLiteralUpdate executes the primitive that can be executed with a single bind variable from the input result.
+// The column updated have same value for all rows in the input result.
+func executeLiteralUpdate(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, prim Primitive, inputRes *sqltypes.Result, outputCols []int) (*sqltypes.Result, error) {
+	var bv *querypb.BindVariable
+	if len(outputCols) == 1 {
+		bv = getBVSingle(inputRes.Rows, outputCols[0])
+	} else {
+		bv = getBVMulti(inputRes.Rows, outputCols)
+	}
+
+	bindVars[DmlVals] = bv
+	return vcursor.ExecutePrimitive(ctx, prim, bindVars, false)
+}
+
+func getBVSingle(rows []sqltypes.Row, offset int) *querypb.BindVariable {
+	bv := &querypb.BindVariable{Type: querypb.Type_TUPLE}
+	for _, row := range rows {
+		bv.Values = append(bv.Values, sqltypes.ValueToProto(row[offset]))
+	}
+	return bv
+}
+
+func getBVMulti(rows []sqltypes.Row, offsets []int) *querypb.BindVariable {
+	bv := &querypb.BindVariable{Type: querypb.Type_TUPLE}
+	outputVals := make([]sqltypes.Value, 0, len(offsets))
+	for _, row := range rows {
+		for _, offset := range offsets {
+			outputVals = append(outputVals, row[offset])
+		}
+		bv.Values = append(bv.Values, sqltypes.TupleToProto(outputVals))
+		outputVals = outputVals[:0]
+	}
+	return bv
+}
+
+// executeNonLiteralUpdate executes the primitive that needs to be executed per row from the input result.
+// The column updated might have different value for each row in the input result.
+func executeNonLiteralUpdate(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, prim Primitive, inputRes *sqltypes.Result, outputCols []int, vars map[string]int) (qr *sqltypes.Result, err error) {
+	var res *sqltypes.Result
+	for _, row := range inputRes.Rows {
+		var bv *querypb.BindVariable
+		if len(outputCols) == 1 {
+			bv = getBVSingle([]sqltypes.Row{row}, outputCols[0])
+		} else {
+			bv = getBVMulti([]sqltypes.Row{row}, outputCols)
+		}
 		bindVars[DmlVals] = bv
-		qr, err := vcursor.ExecutePrimitive(ctx, prim, bindVars, false)
+		for k, v := range vars {
+			bindVars[k] = sqltypes.ValueBindVariable(row[v])
+		}
+		qr, err = vcursor.ExecutePrimitive(ctx, prim, bindVars, false)
 		if err != nil {
 			return nil, err
 		}
@@ -88,27 +150,6 @@ func (dml *DMLWithInput) TryExecute(ctx context.Context, vcursor VCursor, bindVa
 		}
 	}
 	return res, nil
-}
-
-func getBVSingle(res *sqltypes.Result, offset int) *querypb.BindVariable {
-	bv := &querypb.BindVariable{Type: querypb.Type_TUPLE}
-	for _, row := range res.Rows {
-		bv.Values = append(bv.Values, sqltypes.ValueToProto(row[offset]))
-	}
-	return bv
-}
-
-func getBVMulti(res *sqltypes.Result, offsets []int) *querypb.BindVariable {
-	bv := &querypb.BindVariable{Type: querypb.Type_TUPLE}
-	outputVals := make([]sqltypes.Value, 0, len(offsets))
-	for _, row := range res.Rows {
-		for _, offset := range offsets {
-			outputVals = append(outputVals, row[offset])
-		}
-		bv.Values = append(bv.Values, sqltypes.TupleToProto(outputVals))
-		outputVals = outputVals[:0]
-	}
-	return bv
 }
 
 // TryStreamExecute performs a streaming exec.
@@ -132,6 +173,16 @@ func (dml *DMLWithInput) description() PrimitiveDescription {
 	}
 	other := map[string]any{
 		"Offset": offsets,
+	}
+	var bvList []string
+	for idx, vars := range dml.BVList {
+		if len(vars) == 0 {
+			continue
+		}
+		bvList = append(bvList, fmt.Sprintf("%d:[%s]", idx, orderedStringIntMap(vars)))
+	}
+	if len(bvList) > 0 {
+		other["BindVars"] = bvList
 	}
 	return PrimitiveDescription{
 		OperatorType:     "DMLWithInput",

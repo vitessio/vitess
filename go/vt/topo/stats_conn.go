@@ -115,6 +115,19 @@ func (st *StatsConn) Get(ctx context.Context, filePath string) ([]byte, Version,
 	return bytes, version, err
 }
 
+// GetVersion is part of the Conn interface.
+func (st *StatsConn) GetVersion(ctx context.Context, filePath string, version int64) ([]byte, error) {
+	startTime := time.Now()
+	statsKey := []string{"GetVersion", st.cell}
+	defer topoStatsConnTimings.Record(statsKey, startTime)
+	bytes, err := st.conn.GetVersion(ctx, filePath, version)
+	if err != nil {
+		topoStatsConnErrors.Add(statsKey, int64(1))
+		return bytes, err
+	}
+	return bytes, err
+}
+
 // List is part of the Conn interface
 func (st *StatsConn) List(ctx context.Context, filePathPrefix string) ([]KVInfo, error) {
 	startTime := time.Now()

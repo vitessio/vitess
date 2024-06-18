@@ -17,8 +17,6 @@ limitations under the License.
 package operators
 
 import (
-	"strconv"
-
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
@@ -27,16 +25,19 @@ type Limit struct {
 	Source Operator
 	AST    *sqlparser.Limit
 
-	// Pushed marks whether the limit has been pushed down to the inputs but still need to keep the operator around.
-	// For example, `select * from user order by id limit 10`. Even after we push the limit to the route, we need a limit on top
-	// since it is a scatter.
+	// Top is true if the limit is a top level limit. To optimise, we push LIMIT to the RHS of joins,
+	// but we need to still LIMIT the total result set to the top level limit.
+	Top bool
+
+	// Once we have pushed the top level Limit down, we mark it as pushed so that we don't push it down again.
 	Pushed bool
 }
 
 func (l *Limit) Clone(inputs []Operator) Operator {
 	return &Limit{
 		Source: inputs[0],
-		AST:    sqlparser.CloneRefOfLimit(l.AST),
+		AST:    sqlparser.Clone(l.AST),
+		Top:    l.Top,
 		Pushed: l.Pushed,
 	}
 }
@@ -79,5 +80,12 @@ func (l *Limit) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
 }
 
 func (l *Limit) ShortDescription() string {
-	return sqlparser.String(l.AST) + " Pushed:" + strconv.FormatBool(l.Pushed)
+	r := sqlparser.String(l.AST)
+	if l.Top {
+		r += " Top"
+	}
+	if l.Pushed {
+		r += " Pushed"
+	}
+	return r
 }

@@ -169,6 +169,8 @@ type VtctldClient interface {
 	//
 	// NOTE: This command automatically updates the serving graph.
 	ChangeTabletType(ctx context.Context, in *vtctldata.ChangeTabletTypeRequest, opts ...grpc.CallOption) (*vtctldata.ChangeTabletTypeResponse, error)
+	// CheckThrottler issues a 'check' on a tablet's throttler
+	CheckThrottler(ctx context.Context, in *vtctldata.CheckThrottlerRequest, opts ...grpc.CallOption) (*vtctldata.CheckThrottlerResponse, error)
 	// CleanupSchemaMigration marks a schema migration as ready for artifact cleanup.
 	CleanupSchemaMigration(ctx context.Context, in *vtctldata.CleanupSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.CleanupSchemaMigrationResponse, error)
 	// CompleteSchemaMigration completes one or all migrations executed with --postpone-completion.
@@ -268,6 +270,8 @@ type VtctldClient interface {
 	GetTablet(ctx context.Context, in *vtctldata.GetTabletRequest, opts ...grpc.CallOption) (*vtctldata.GetTabletResponse, error)
 	// GetTablets returns tablets, optionally filtered by keyspace and shard.
 	GetTablets(ctx context.Context, in *vtctldata.GetTabletsRequest, opts ...grpc.CallOption) (*vtctldata.GetTabletsResponse, error)
+	// GetThrottlerStatus gets the status of a tablet throttler
+	GetThrottlerStatus(ctx context.Context, in *vtctldata.GetThrottlerStatusRequest, opts ...grpc.CallOption) (*vtctldata.GetThrottlerStatusResponse, error)
 	// GetTopologyPath returns the topology cell at a given path.
 	GetTopologyPath(ctx context.Context, in *vtctldata.GetTopologyPathRequest, opts ...grpc.CallOption) (*vtctldata.GetTopologyPathResponse, error)
 	// GetVersion returns the version of a tablet from its debug vars.
@@ -620,6 +624,15 @@ func (c *vtctldClient) ChangeTabletType(ctx context.Context, in *vtctldata.Chang
 	return out, nil
 }
 
+func (c *vtctldClient) CheckThrottler(ctx context.Context, in *vtctldata.CheckThrottlerRequest, opts ...grpc.CallOption) (*vtctldata.CheckThrottlerResponse, error) {
+	out := new(vtctldata.CheckThrottlerResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/CheckThrottler", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) CleanupSchemaMigration(ctx context.Context, in *vtctldata.CleanupSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.CleanupSchemaMigrationResponse, error) {
 	out := new(vtctldata.CleanupSchemaMigrationResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/CleanupSchemaMigration", in, out, opts...)
@@ -965,6 +978,15 @@ func (c *vtctldClient) GetTablet(ctx context.Context, in *vtctldata.GetTabletReq
 func (c *vtctldClient) GetTablets(ctx context.Context, in *vtctldata.GetTabletsRequest, opts ...grpc.CallOption) (*vtctldata.GetTabletsResponse, error) {
 	out := new(vtctldata.GetTabletsResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetTablets", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) GetThrottlerStatus(ctx context.Context, in *vtctldata.GetThrottlerStatusRequest, opts ...grpc.CallOption) (*vtctldata.GetThrottlerStatusResponse, error) {
+	out := new(vtctldata.GetThrottlerStatusResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetThrottlerStatus", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1643,6 +1665,8 @@ type VtctldServer interface {
 	//
 	// NOTE: This command automatically updates the serving graph.
 	ChangeTabletType(context.Context, *vtctldata.ChangeTabletTypeRequest) (*vtctldata.ChangeTabletTypeResponse, error)
+	// CheckThrottler issues a 'check' on a tablet's throttler
+	CheckThrottler(context.Context, *vtctldata.CheckThrottlerRequest) (*vtctldata.CheckThrottlerResponse, error)
 	// CleanupSchemaMigration marks a schema migration as ready for artifact cleanup.
 	CleanupSchemaMigration(context.Context, *vtctldata.CleanupSchemaMigrationRequest) (*vtctldata.CleanupSchemaMigrationResponse, error)
 	// CompleteSchemaMigration completes one or all migrations executed with --postpone-completion.
@@ -1742,6 +1766,8 @@ type VtctldServer interface {
 	GetTablet(context.Context, *vtctldata.GetTabletRequest) (*vtctldata.GetTabletResponse, error)
 	// GetTablets returns tablets, optionally filtered by keyspace and shard.
 	GetTablets(context.Context, *vtctldata.GetTabletsRequest) (*vtctldata.GetTabletsResponse, error)
+	// GetThrottlerStatus gets the status of a tablet throttler
+	GetThrottlerStatus(context.Context, *vtctldata.GetThrottlerStatusRequest) (*vtctldata.GetThrottlerStatusResponse, error)
 	// GetTopologyPath returns the topology cell at a given path.
 	GetTopologyPath(context.Context, *vtctldata.GetTopologyPathRequest) (*vtctldata.GetTopologyPathResponse, error)
 	// GetVersion returns the version of a tablet from its debug vars.
@@ -1979,6 +2005,9 @@ func (UnimplementedVtctldServer) CancelSchemaMigration(context.Context, *vtctlda
 func (UnimplementedVtctldServer) ChangeTabletType(context.Context, *vtctldata.ChangeTabletTypeRequest) (*vtctldata.ChangeTabletTypeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ChangeTabletType not implemented")
 }
+func (UnimplementedVtctldServer) CheckThrottler(context.Context, *vtctldata.CheckThrottlerRequest) (*vtctldata.CheckThrottlerResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CheckThrottler not implemented")
+}
 func (UnimplementedVtctldServer) CleanupSchemaMigration(context.Context, *vtctldata.CleanupSchemaMigrationRequest) (*vtctldata.CleanupSchemaMigrationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CleanupSchemaMigration not implemented")
 }
@@ -2095,6 +2124,9 @@ func (UnimplementedVtctldServer) GetTablet(context.Context, *vtctldata.GetTablet
 }
 func (UnimplementedVtctldServer) GetTablets(context.Context, *vtctldata.GetTabletsRequest) (*vtctldata.GetTabletsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetTablets not implemented")
+}
+func (UnimplementedVtctldServer) GetThrottlerStatus(context.Context, *vtctldata.GetThrottlerStatusRequest) (*vtctldata.GetThrottlerStatusResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetThrottlerStatus not implemented")
 }
 func (UnimplementedVtctldServer) GetTopologyPath(context.Context, *vtctldata.GetTopologyPathRequest) (*vtctldata.GetTopologyPathResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetTopologyPath not implemented")
@@ -2513,6 +2545,24 @@ func _Vtctld_ChangeTabletType_Handler(srv interface{}, ctx context.Context, dec 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).ChangeTabletType(ctx, req.(*vtctldata.ChangeTabletTypeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_CheckThrottler_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.CheckThrottlerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).CheckThrottler(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/CheckThrottler",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).CheckThrottler(ctx, req.(*vtctldata.CheckThrottlerRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3215,6 +3265,24 @@ func _Vtctld_GetTablets_Handler(srv interface{}, ctx context.Context, dec func(i
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).GetTablets(ctx, req.(*vtctldata.GetTabletsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_GetThrottlerStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.GetThrottlerStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).GetThrottlerStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/GetThrottlerStatus",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).GetThrottlerStatus(ctx, req.(*vtctldata.GetThrottlerStatusRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -4490,6 +4558,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Vtctld_ChangeTabletType_Handler,
 		},
 		{
+			MethodName: "CheckThrottler",
+			Handler:    _Vtctld_CheckThrottler_Handler,
+		},
+		{
 			MethodName: "CleanupSchemaMigration",
 			Handler:    _Vtctld_CleanupSchemaMigration_Handler,
 		},
@@ -4644,6 +4716,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetTablets",
 			Handler:    _Vtctld_GetTablets_Handler,
+		},
+		{
+			MethodName: "GetThrottlerStatus",
+			Handler:    _Vtctld_GetThrottlerStatus_Handler,
 		},
 		{
 			MethodName: "GetTopologyPath",

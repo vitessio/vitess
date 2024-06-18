@@ -403,6 +403,12 @@ func (cluster *LocalProcessCluster) startKeyspace(keyspace Keyspace, shardNames 
 			if err != nil {
 				return err
 			}
+			switch tablet.Type {
+			case "primary":
+				mysqlctlProcess.Binary += os.Getenv("PRIMARY_TABLET_BINARY_SUFFIX")
+			case "replica":
+				mysqlctlProcess.Binary += os.Getenv("REPLICA_TABLET_BINARY_SUFFIX")
+			}
 			tablet.MysqlctlProcess = *mysqlctlProcess
 			proc, err := tablet.MysqlctlProcess.StartProcess()
 			if err != nil {
@@ -426,6 +432,12 @@ func (cluster *LocalProcessCluster) startKeyspace(keyspace Keyspace, shardNames 
 				cluster.TmpDirectory,
 				cluster.VtTabletExtraArgs,
 				cluster.DefaultCharset)
+			switch tablet.Type {
+			case "primary":
+				tablet.VttabletProcess.Binary += os.Getenv("PRIMARY_TABLET_BINARY_SUFFIX")
+			case "replica":
+				tablet.VttabletProcess.Binary += os.Getenv("REPLICA_TABLET_BINARY_SUFFIX")
+			}
 			tablet.Alias = tablet.VttabletProcess.TabletPath
 			if cluster.ReusingVTDATAROOT {
 				tablet.VttabletProcess.ServingStatus = "SERVING"

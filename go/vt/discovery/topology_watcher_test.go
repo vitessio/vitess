@@ -393,7 +393,7 @@ func TestFilterByKeyspace(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 
 	hc := NewFakeHealthCheck(nil)
-	f := NewFilterByKeyspace(testKeyspacesToWatch)
+	f := TabletFilters{NewFilterByKeyspace(testKeyspacesToWatch)}
 	ts := memorytopo.NewServer(ctx, testCell)
 	defer ts.Close()
 	tw := NewTopologyWatcher(context.Background(), ts, hc, f, testCell, 10*time.Minute, true, 5)
@@ -476,7 +476,7 @@ func TestFilterByKeyspaceSkipsIgnoredTablets(t *testing.T) {
 	defer fhc.Close()
 	topologyWatcherOperations.ZeroAll()
 	counts := topologyWatcherOperations.Counts()
-	f := NewFilterByKeyspace(testKeyspacesToWatch)
+	f := TabletFilters{NewFilterByKeyspace(testKeyspacesToWatch)}
 	tw := NewTopologyWatcher(context.Background(), ts, fhc, f, "aa", 10*time.Minute, false /*refreshKnownTablets*/, 5)
 
 	counts = checkOpCounts(t, counts, map[string]int64{})
@@ -576,6 +576,33 @@ func TestFilterByKeyspaceSkipsIgnoredTablets(t *testing.T) {
 	assert.Empty(t, fhc.GetAllTablets())
 
 	tw.Stop()
+}
+
+func TestNewFilterByTabletTags(t *testing.T) {
+	// no required tags == true
+	filter := NewFilterByTabletTags(nil)
+	assert.True(t, filter.IsIncluded(&topodatapb.Tablet{}))
+
+	tags := map[string]string{
+		"instance_type": "i3.xlarge",
+		"some_key":      "some_value",
+	}
+	filter = NewFilterByTabletTags(tags)
+
+	assert.False(t, filter.IsIncluded(&topodatapb.Tablet{
+		Tags: nil,
+	}))
+	assert.False(t, filter.IsIncluded(&topodatapb.Tablet{
+		Tags: map[string]string{},
+	}))
+	assert.False(t, filter.IsIncluded(&topodatapb.Tablet{
+		Tags: map[string]string{
+			"instance_type": "i3.xlarge",
+		},
+	}))
+	assert.True(t, filter.IsIncluded(&topodatapb.Tablet{
+		Tags: tags,
+	}))
 }
 
 func TestGetTabletErrorDoesNotRemoveFromHealthcheck(t *testing.T) {

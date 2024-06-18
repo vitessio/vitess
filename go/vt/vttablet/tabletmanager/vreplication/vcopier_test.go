@@ -116,7 +116,6 @@ func testPlayerCopyCharPK(t *testing.T) {
 		"drop table src",
 		fmt.Sprintf("drop table %s.dst", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	count := 0
 	vstreamRowsSendHook = func(ctx context.Context) {
@@ -183,7 +182,7 @@ func testPlayerCopyCharPK(t *testing.T) {
 		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"idc\\" type:BINARY charset:63 flags:20611} rows:{lengths:2 values:\\"c\\\\x00\\"}'.*`,
 		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*dst",
 		"/update _vt.vreplication set state='Running",
-	))
+	), recvTimeout)
 
 	expectData(t, "dst", [][]string{
 		{"a\000", "3"},
@@ -223,7 +222,6 @@ func testPlayerCopyVarcharPKCaseInsensitive(t *testing.T) {
 		"drop table src",
 		fmt.Sprintf("drop table %s.dst", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	count := 0
 	vstreamRowsSendHook = func(ctx context.Context) {
@@ -306,7 +304,7 @@ func testPlayerCopyVarcharPKCaseInsensitive(t *testing.T) {
 	}).Then(qh.Immediately(
 		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*dst",
 		"/update _vt.vreplication set state='Running'",
-	)))
+	)), recvTimeout)
 
 	expectData(t, "dst", [][]string{
 		{"a", "1"},
@@ -417,7 +415,7 @@ func testPlayerCopyVarcharCompositePKCaseSensitiveCollation(t *testing.T) {
 		// Wrap-up.
 		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*dst",
 		"/update _vt.vreplication set state='Running'",
-	))
+	), recvTimeout)
 
 	expectData(t, "dst", [][]string{
 		{"1", "B", "B", "3"},
@@ -453,7 +451,6 @@ func testPlayerCopyTablesWithFK(t *testing.T) {
 		"drop table src2",
 		fmt.Sprintf("drop table %s.dst2", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -581,7 +578,6 @@ func testPlayerCopyTables(t *testing.T) {
 		fmt.Sprintf("drop table %s.yes", vrepldb),
 		"drop table no",
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -708,7 +704,6 @@ func testPlayerCopyBigTable(t *testing.T) {
 		"drop table src",
 		fmt.Sprintf("drop table %s.dst", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	count := 0
 	vstreamRowsSendHook = func(ctx context.Context) {
@@ -795,7 +790,7 @@ func testPlayerCopyBigTable(t *testing.T) {
 		// Copy is done. Go into running state.
 		// All tables copied. Final catch up followed by Running state.
 		"/update _vt.vreplication set state='Running'",
-	)))
+	)), recvTimeout)
 
 	expectData(t, "dst", [][]string{
 		{"1", "aaa"},
@@ -839,7 +834,6 @@ func testPlayerCopyWildcardRule(t *testing.T) {
 		"drop table src",
 		fmt.Sprintf("drop table %s.src", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	count := 0
 	vstreamRowsSendHook = func(ctx context.Context) {
@@ -924,7 +918,7 @@ func testPlayerCopyWildcardRule(t *testing.T) {
 		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*src",
 		// Copy is done. Go into running state.
 		"/update _vt.vreplication set state='Running'",
-	)))
+	)), recvTimeout)
 
 	expectData(t, "src", [][]string{
 		{"1", "aaa"},
@@ -968,7 +962,6 @@ func testPlayerCopyTableContinuation(t *testing.T) {
 		"drop table src1",
 		fmt.Sprintf("drop table %s.dst1", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -1085,7 +1078,7 @@ func testPlayerCopyTableContinuation(t *testing.T) {
 	)).Then(qh.Immediately(
 		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*not_copied",
 		"/update _vt.vreplication set state='Running'",
-	)))
+	)), recvTimeout)
 
 	expectData(t, "dst1", [][]string{
 		{"1", "insert in"},
@@ -1135,7 +1128,6 @@ func testPlayerCopyWildcardTableContinuation(t *testing.T) {
 		"drop table src",
 		fmt.Sprintf("drop table %s.dst", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -1196,7 +1188,7 @@ func testPlayerCopyWildcardTableContinuation(t *testing.T) {
 		`/insert into _vt.copy_state .*`,
 		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*dst",
 		"/update _vt.vreplication set state='Running'",
-	)))
+	)), recvTimeout)
 
 	expectData(t, "dst", [][]string{
 		{"2", "copied"},
@@ -1232,7 +1224,6 @@ func TestPlayerCopyWildcardTableContinuationWithOptimizeInserts(t *testing.T) {
 		"drop table src",
 		fmt.Sprintf("drop table %s.dst", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -1288,7 +1279,7 @@ func TestPlayerCopyWildcardTableContinuationWithOptimizeInserts(t *testing.T) {
 		`/insert into _vt.copy_state .*`,
 		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*dst",
 		"/update _vt.vreplication set state='Running'",
-	))
+	), recvTimeout)
 	expectData(t, "dst", [][]string{
 		{"2", "copied"},
 		{"3", "uncopied"},
@@ -1358,7 +1349,6 @@ func testPlayerCopyTablesStopAfterCopy(t *testing.T) {
 		"drop table src1",
 		fmt.Sprintf("drop table %s.dst1", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -1444,7 +1434,6 @@ func testPlayerCopyTablesGIPK(t *testing.T) {
 		"drop table src2",
 		fmt.Sprintf("drop table %s.dst2", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -1535,7 +1524,6 @@ func testPlayerCopyTableCancel(t *testing.T) {
 		"drop table src1",
 		fmt.Sprintf("drop table %s.dst1", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	saveTimeout := vttablet.CopyPhaseDuration
 	vttablet.CopyPhaseDuration = 1 * time.Millisecond
@@ -1626,7 +1614,6 @@ func testPlayerCopyTablesWithGeneratedColumn(t *testing.T) {
 		"drop table src2",
 		fmt.Sprintf("drop table %s.dst2", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -1672,7 +1659,7 @@ func testPlayerCopyTablesWithGeneratedColumn(t *testing.T) {
 		// copy of dst2 is done: delete from copy_state.
 		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*dst2",
 		"/update _vt.vreplication set state",
-	))
+	), recvTimeout)
 
 	expectData(t, "dst1", [][]string{
 		{"1", "aaa", "1aaa", "aaa1", "10"},
@@ -1714,7 +1701,6 @@ func testCopyTablesWithInvalidDates(t *testing.T) {
 		"drop table src1",
 		fmt.Sprintf("drop table %s.dst1", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -1840,7 +1826,7 @@ func testCopyInvisibleColumns(t *testing.T) {
 		// copy of dst1 is done: delete from copy_state.
 		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*dst1",
 		"/update _vt.vreplication set state='Running'",
-	))
+	), recvTimeout)
 
 	expectData(t, "dst1", [][]string{
 		{"1", "10"},
