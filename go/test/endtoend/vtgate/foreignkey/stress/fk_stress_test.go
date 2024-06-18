@@ -1064,6 +1064,7 @@ func generateInsert(t *testing.T, tableName string, conn *mysql.Conn) error {
 		if rand.IntN(2) == 0 {
 			parentId = id
 		}
+		// Also, we want to avoid loops. We ensure parentId <= id
 		if parentId > id {
 			parentId = id - 1
 		}
