@@ -462,7 +462,6 @@ func getStructFieldNames(s any) []string {
 }
 
 func buildListings(listings []*listing) string {
-	var values []string
 	var lines [][]string
 	var result string
 
@@ -474,6 +473,7 @@ func buildListings(listings []*listing) string {
 	// The header is the first row.
 	lines = append(lines, fields)
 	for _, listing := range listings {
+		var values []string
 		v := reflect.ValueOf(*listing)
 		for _, field := range fields {
 			values = append(values, v.FieldByName(field).String())
