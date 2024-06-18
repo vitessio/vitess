@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS warehouse (
 	PRIMARY KEY (w_id)
 );
 
-CREATE TABLE IF NOT EXISTS customer_tpcc (
+CREATE TABLE IF NOT EXISTS customer (
 	c_id INT NOT NULL,
 	c_d_id INT NOT NULL,
 	c_w_id INT NOT NULL,
@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS customer_tpcc (
 	c_delivery_cnt INT,
 	c_data VARCHAR(500),
 	PRIMARY KEY(c_w_id, c_d_id, c_id),
-	INDEX idx_customer_tpcc (c_w_id, c_d_id, c_last, c_first)
+	INDEX idx_customer (c_w_id, c_d_id, c_last, c_first)
 );
 
 CREATE TABLE IF NOT EXISTS district (
@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS new_orders (
 	PRIMARY KEY(no_w_id, no_d_id, no_o_id)
 );
 
-CREATE TABLE IF NOT EXISTS orders_tpcc (
+CREATE TABLE IF NOT EXISTS orders (
 	o_id INT NOT NULL,
 	o_d_id INT NOT NULL,
 	o_w_id INT NOT NULL,
@@ -135,7 +135,7 @@ INSERT INTO warehouse (w_id, w_name, w_street_1, w_street_2, w_city, w_state, w_
 (1, 'Main', '123 Elm St', 'Suite 100', 'Anytown', 'CA', '12345', 0.0750, 100000.00),
 (2, 'Side', '123 Storgatan', 'Suite 666', 'Uptown', 'SE', '87654', 0.0150, 200000.00);
 
-INSERT INTO customer_tpcc (c_id, c_d_id, c_w_id, c_first, c_middle, c_last, c_street_1, c_street_2, c_city, c_state, c_zip, c_phone, c_since, c_credit, c_credit_lim, c_discount, c_balance, c_ytd_payment, c_payment_cnt, c_delivery_cnt, c_data) VALUES
+INSERT INTO customer (c_id, c_d_id, c_w_id, c_first, c_middle, c_last, c_street_1, c_street_2, c_city, c_state, c_zip, c_phone, c_since, c_credit, c_credit_lim, c_discount, c_balance, c_ytd_payment, c_payment_cnt, c_delivery_cnt, c_data) VALUES
 (10, 15, 1, 'John', 'Q', 'Public', '456 Oak St', 'Apt 5', 'Othertown', 'NY', '54321', '555-1234-5678', '2023-01-01 12:00:00', 'Y', 50000.00, 0.0500, -100.00, 1500.00, 15, 2, 'Frequent shopper'),
 (1, 1, 5, 'Jane', 'R', 'last', '789 Pine St', 'Unit 7', 'Smalltown', 'TX', '98765', '555-8765-4321', '2023-02-02 14:30:00', 'N', 75000.00, 0.0250, 500.00, 250.00, 5, 1, 'Occasional shopper'),
 (2, 1, 5, 'Jake', 'S', 'last', '101 Birch St', 'Suite 21', 'Middletown', 'FL', '32145', '555-5678-1234', '2023-03-03 16:45:00', 'Y', 100000.00, 0.1000, 200.00, 300.00, 10, 3, 'Regular shopper'),
@@ -149,7 +149,7 @@ INSERT INTO district (d_id, d_w_id, d_name, d_street_1, d_street_2, d_city, d_st
 (9, 896, 'Eastside', '789 East St', 'Bldg 2', 'Eastville', 'NY', '10021', 0.0750, 15000.00, 20),
 (6, 21, 'Westend', '456 West Rd', 'Suite 8', 'Westtown', 'TX', '77019', 0.0650, 50000.00, 30);
 
-INSERT INTO orders_tpcc (o_id, o_d_id, o_w_id, o_c_id, o_entry_d, o_carrier_id, o_ol_cnt, o_all_local) VALUES
+INSERT INTO orders (o_id, o_d_id, o_w_id, o_c_id, o_entry_d, o_carrier_id, o_ol_cnt, o_all_local) VALUES
 (10, 3, 9894, 159, '2024-04-30 12:00:00', 12, 5, 1),
 (9, 3, 9894, 159, '2024-04-29 12:00:00', 15, 3, 1),
 (8, 3, 9894, 159, '2024-04-28 12:00:00', null, 4, 1),
@@ -184,21 +184,21 @@ INSERT INTO item (i_id, i_im_id, i_name, i_price, i_data) VALUES
 
 # Here follows the SELECT queries we are testing.
 # The TPCC benchmark also uses INSERT, UPDATE and DELETE queries, but we are not testing those here.
--- wait_authoritative customer_tpcc
+-- wait_authoritative customer
 -- wait_authoritative warehouse
-SELECT c_discount, c_last, c_credit, w_tax FROM customer_tpcc AS c JOIN warehouse AS w ON c_w_id=w_id WHERE w_id = 1 AND c_d_id = 15 AND c_id = 10;
-SELECT count(c_id) namecnt FROM customer_tpcc WHERE c_w_id = 5 AND c_d_id= 1 AND c_last='last';
-SELECT c_id FROM customer_tpcc WHERE c_w_id = 8 AND c_d_id = 5 AND c_last='item_last' ORDER BY c_first;
-SELECT c_first, c_middle, c_last, c_street_1, c_street_2, c_city, c_state, c_zip, c_phone, c_credit, c_credit_lim, c_discount, c_balance, c_ytd_payment, c_since FROM customer_tpcc WHERE c_w_id = 8965 AND c_d_id = 1 AND c_id = 9;
-SELECT c_data FROM customer_tpcc WHERE c_w_id = 32 AND c_d_id=68 AND c_id = 5;
-SELECT count(c_id) namecnt FROM customer_tpcc WHERE c_w_id = 870 AND c_d_id= 780 AND c_last='last';
-SELECT c_balance, c_first, c_middle, c_id FROM customer_tpcc WHERE c_w_id = 840 AND c_d_id= 1 AND c_last='test' ORDER BY c_first;
-SELECT c_balance, c_first, c_middle, c_last FROM customer_tpcc WHERE c_w_id = 15 AND c_d_id=5169 AND c_id=1;
+SELECT c_discount, c_last, c_credit, w_tax FROM customer AS c JOIN warehouse AS w ON c_w_id=w_id WHERE w_id = 1 AND c_d_id = 15 AND c_id = 10;
+SELECT count(c_id) namecnt FROM customer WHERE c_w_id = 5 AND c_d_id= 1 AND c_last='last';
+SELECT c_id FROM customer WHERE c_w_id = 8 AND c_d_id = 5 AND c_last='item_last' ORDER BY c_first;
+SELECT c_first, c_middle, c_last, c_street_1, c_street_2, c_city, c_state, c_zip, c_phone, c_credit, c_credit_lim, c_discount, c_balance, c_ytd_payment, c_since FROM customer WHERE c_w_id = 8965 AND c_d_id = 1 AND c_id = 9;
+SELECT c_data FROM customer WHERE c_w_id = 32 AND c_d_id=68 AND c_id = 5;
+SELECT count(c_id) namecnt FROM customer WHERE c_w_id = 870 AND c_d_id= 780 AND c_last='last';
+SELECT c_balance, c_first, c_middle, c_id FROM customer WHERE c_w_id = 840 AND c_d_id= 1 AND c_last='test' ORDER BY c_first;
+SELECT c_balance, c_first, c_middle, c_last FROM customer WHERE c_w_id = 15 AND c_d_id=5169 AND c_id=1;
 SELECT d_next_o_id, d_tax FROM district WHERE d_w_id = 15 AND d_id = 95;
 SELECT d_street_1, d_street_2, d_city, d_state, d_zip, d_name FROM district WHERE d_w_id = 896 AND d_id = 9;
 SELECT d_next_o_id FROM district WHERE d_id = 6 AND d_w_id= 21;
-SELECT o_id, o_carrier_id, o_entry_d FROM orders_tpcc WHERE o_w_id = 9894 AND o_d_id = 3 AND o_c_id = 159 ORDER BY o_id DESC;
-SELECT o_c_id FROM orders_tpcc WHERE o_id = 6 AND o_d_id = 1983 AND o_w_id = 894605;
+SELECT o_id, o_carrier_id, o_entry_d FROM orders WHERE o_w_id = 9894 AND o_d_id = 3 AND o_c_id = 159 ORDER BY o_id DESC;
+SELECT o_c_id FROM orders WHERE o_id = 6 AND o_d_id = 1983 AND o_w_id = 894605;
 SELECT ol_i_id, ol_supply_w_id, ol_quantity, ol_amount, ol_delivery_d FROM order_line WHERE ol_w_id = 92 AND ol_d_id = 5  AND ol_o_id = 1;
 SELECT SUM(ol_amount) sm FROM order_line WHERE ol_o_id = 680 AND ol_d_id = 201 AND ol_w_id = 87;
 SELECT DISTINCT ol_i_id FROM order_line WHERE ol_w_id = 1 AND ol_d_id = 156 AND ol_o_id < 500 AND ol_o_id >= 56;

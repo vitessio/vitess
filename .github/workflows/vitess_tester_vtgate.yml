@@ -138,7 +138,19 @@ jobs:
 
         set -exo pipefail
 
-        vitess-tester --sharded --xunit --test-dir ./go/test/endtoend/vtgate/vitess_tester --vschema ./go/test/endtoend/vtgate/vitess_tester/vschema.json
+        i=1
+        for dir in ./go/test/endtoend/vtgate/vitess_tester/*/; do 
+          # We go over all the directories in the given path.
+          # If there is a vschema file there, we use it, otherwise we let vitess-tester autogenerate it.
+          if [ -f $dir/vschema.json ]; then
+            vitess-tester --sharded --xunit --test-dir $dir --vschema "$dir"vschema.json
+          else 
+            vitess-tester --sharded --xunit --test-dir $dir
+          fi
+          # Number the reports by changing their file names.
+          mv report.xml report"$i".xml
+          i=$((i+1))
+        done
 
     - name: Print test output and Record test result in launchable if PR is not a draft
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true' && always()
@@ -155,5 +167,5 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true' && always()
       uses: test-summary/action@v2
       with:
-        paths: "report.xml"
+        paths: "report*.xml"
         show: "fail, skip"
