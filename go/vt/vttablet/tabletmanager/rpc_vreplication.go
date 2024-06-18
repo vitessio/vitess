@@ -60,7 +60,7 @@ const (
 	// used to optionally add any additional predicates to the query.
 	sqlUpdateVReplicationWorkflows = "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ %s.vreplication set%s where db_name = '%s'%s"
 	// Check if workflow is still copying.
-	sqlGetVReplicationCopyStatus = "select distinct vrepl_id from %s.copy_state where vrepl_id = %a"
+	sqlGetVReplicationCopyStatus = "select distinct vrepl_id from %s.copy_state where vrepl_id = %d"
 )
 
 var (
@@ -382,15 +382,8 @@ func (tm *TabletManager) ReadVReplicationWorkflow(ctx context.Context, req *tabl
 }
 
 func isStreamCopying(tm *TabletManager, id int64) (bool, error) {
-	bindVars := map[string]*querypb.BindVariable{
-		"id": sqltypes.Int64BindVariable(id),
-	}
-	parsed := sqlparser.BuildParsedQuery(sqlGetVReplicationCopyStatus, sidecar.GetIdentifier(), ":id")
-	stmt, err := parsed.GenerateQuery(bindVars, nil)
-	if err != nil {
-		return false, err
-	}
-	res, err := tm.VREngine.Exec(stmt)
+	query := fmt.Sprintf(sqlGetVReplicationCopyStatus, sidecar.GetIdentifier(), id)
+	res, err := tm.VREngine.Exec(query)
 	if err != nil {
 		return false, err
 	}

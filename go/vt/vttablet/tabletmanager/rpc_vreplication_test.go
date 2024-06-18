@@ -390,7 +390,8 @@ func TestMoveTables(t *testing.T) {
 
 	for _, ftc := range targetShards {
 		addInvariants(ftc.vrdbClient, vreplID, sourceTabletUID, position, wf, tenv.cells[0])
-
+		getCopyStateQuery := fmt.Sprintf(sqlGetVReplicationCopyStatus, sidecar.GetIdentifier(), vreplID)
+		ftc.vrdbClient.AddInvariant(getCopyStateQuery, &sqltypes.Result{})
 		tenv.tmc.setVReplicationExecResults(ftc.tablet, getCopyState, &sqltypes.Result{})
 		ftc.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
 		insert := fmt.Sprintf(`%s values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1 where in_keyrange(id, \'%s.hash\', \'%s\')\"}}', '', 0, 0, '%s', 'primary,replica,rdonly', now(), 0, 'Stopped', '%s', %d, 0, 0, '{}')`,
@@ -586,12 +587,7 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 		fmt.Sprintf("%d", vreplID),
 	)
 
-	bindVars = map[string]*querypb.BindVariable{
-		"id": sqltypes.Int64BindVariable(int64(vreplID)),
-	}
-	parsed = sqlparser.BuildParsedQuery(sqlGetVReplicationCopyStatus, sidecar.GetIdentifier(), ":id")
-	getCopyStateQuery, err := parsed.GenerateQuery(bindVars, nil)
-	require.NoError(t, err)
+	getCopyStateQuery := fmt.Sprintf(sqlGetVReplicationCopyStatus, sidecar.GetIdentifier(), int64(vreplID))
 	copyStatusFields := sqltypes.MakeTestFields(
 		"id",
 		"int64",
