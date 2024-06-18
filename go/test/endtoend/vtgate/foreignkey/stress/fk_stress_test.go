@@ -268,9 +268,6 @@ var (
 		`ALTER TABLE stress_grandchild DROP CONSTRAINT grandchild_child_fk`,
 		`ALTER TABLE stress_self DROP CONSTRAINT self_fk`,
 	}
-	selfTableDropConstraintsStatement = `
-		ALTER TABLE stress_self DROP CONSTRAINT self_fk
-	`
 	alterHintStatement = `
 		ALTER TABLE %s modify hint_col varchar(64) not null default '%s'
 	`
