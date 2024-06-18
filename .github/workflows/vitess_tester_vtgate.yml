@@ -161,7 +161,7 @@ jobs:
         fi
 
         # print test output
-        cat report.xml
+        cat report*.xml
 
     - name: Test Summary
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true' && always()
