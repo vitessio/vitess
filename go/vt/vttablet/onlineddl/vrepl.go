@@ -105,7 +105,7 @@ type VRepl struct {
 	sourceTable string
 	targetTable string
 	pos         string
-	alterQuery  string
+	alterQuery  *sqlparser.AlterTable
 	tableRows   int64
 
 	originalCreateTable *sqlparser.CreateTable
@@ -152,7 +152,7 @@ func NewVRepl(
 	targetTable string,
 	originalCreateTable *sqlparser.CreateTable,
 	vreplCreateTable *sqlparser.CreateTable,
-	alterQuery string,
+	alterQuery *sqlparser.AlterTable,
 	analyzeTable bool,
 ) *VRepl {
 	return &VRepl{
@@ -386,15 +386,13 @@ func (v *VRepl) applyColumnTypes(ctx context.Context, conn *dbconnpool.DBConnect
 }
 
 func (v *VRepl) analyzeAlter(ctx context.Context) error {
-	if v.alterQuery == "" {
+	if v.alterQuery == nil {
 		// Happens for REVERT
 		return nil
 	}
-	if err := v.parser.ParseAlterStatement(v.alterQuery, v.env.Parser()); err != nil {
-		return err
-	}
+	v.parser.AnalyzeAlter(v.alterQuery)
 	if v.parser.IsRenameTable() {
-		return fmt.Errorf("Renaming the table is not aupported in ALTER TABLE: %s", v.alterQuery)
+		return fmt.Errorf("Renaming the table is not supported in ALTER TABLE: %s", sqlparser.CanonicalString(v.alterQuery))
 	}
 	return nil
 }
