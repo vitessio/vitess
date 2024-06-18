@@ -238,9 +238,6 @@ func TestCanGetKeyspaces(t *testing.T) {
 	conf := config
 	defer resetConfig(conf)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
 	clusterInstance, err := startCluster()
 	require.NoError(t, err)
 	defer clusterInstance.TearDown()
@@ -251,15 +248,14 @@ func TestCanGetKeyspaces(t *testing.T) {
 		}
 	}()
 
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 	assertGetKeyspaces(ctx, t, clusterInstance)
 }
 
 func TestExternalTopoServerConsul(t *testing.T) {
 	conf := config
 	defer resetConfig(conf)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
 
 	// Start a single consul in the background.
 	cmd, serverAddr := startConsul(t)
@@ -279,6 +275,8 @@ func TestExternalTopoServerConsul(t *testing.T) {
 	require.NoError(t, err)
 	defer cluster.TearDown()
 
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 	assertGetKeyspaces(ctx, t, cluster)
 }
 
