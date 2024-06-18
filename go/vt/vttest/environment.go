@@ -19,8 +19,10 @@ package vttest
 import (
 	"fmt"
 	"math/rand"
+	"net"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 
 	"vitess.io/vitess/go/vt/proto/vttest"
@@ -230,9 +232,26 @@ func tmpdir(dataroot string) (dir string, err error) {
 	return
 }
 
+// randomPort gets a random port that is available for a TCP connection.
+// After we generate a random port, we try to establish tcp connections on it and the next 5 values.
+// If any of them fail, then we try a different port.
 func randomPort() int {
-	v := rand.Int31n(20000)
-	return int(v + 10000)
+	for {
+		port := int(rand.Int31n(20000) + 10000)
+		portInUse := false
+		for i := 0; i < 6; i++ {
+			ln, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port+i)))
+			if err != nil {
+				portInUse = true
+				break
+			}
+			ln.Close()
+		}
+		if portInUse {
+			continue
+		}
+		return port
+	}
 }
 
 // NewLocalTestEnv returns an instance of the default test environment used
