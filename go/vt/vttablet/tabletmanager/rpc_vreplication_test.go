@@ -574,6 +574,7 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 		),
 		fmt.Sprintf("%d|%s|%s|%s|Running|", vreplID, blsStr, cells[0], tabletTypes[0]),
 	)
+
 	idQuery, err := sqlparser.ParseAndBind("select id from _vt.vreplication where id = %a",
 		sqltypes.Int64BindVariable(int64(vreplID)))
 	require.NoError(t, err)
@@ -585,10 +586,24 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 		fmt.Sprintf("%d", vreplID),
 	)
 
+	bindVars = map[string]*querypb.BindVariable{
+		"id": sqltypes.Int64BindVariable(int64(vreplID)),
+	}
+	parsed = sqlparser.BuildParsedQuery(sqlGetVReplicationCopyStatus, sidecar.GetIdentifier(), ":id")
+	getCopyStateQuery, err := parsed.GenerateQuery(bindVars, nil)
+	require.NoError(t, err)
+	copyStatusFields := sqltypes.MakeTestFields(
+		"id",
+		"int64",
+	)
+	notCopying := sqltypes.MakeTestResult(copyStatusFields)
+	copying := sqltypes.MakeTestResult(copyStatusFields, "1")
+
 	tests := []struct {
-		name    string
-		request *tabletmanagerdatapb.UpdateVReplicationWorkflowRequest
-		query   string
+		name      string
+		request   *tabletmanagerdatapb.UpdateVReplicationWorkflowRequest
+		query     string
+		isCopying bool
 	}{
 		{
 			name: "update cells",
@@ -668,6 +683,19 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 			query: fmt.Sprintf(`update _vt.vreplication set state = '%s', source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"corder\" filter:\"select * from corder\"} rules:{match:\"customer\" filter:\"select * from customer\"}}', cell = '%s', tablet_types = '%s' where id in (%d)`,
 				binlogdatapb.VReplicationWorkflowState_Stopped.String(), keyspace, shard, cells[0], tabletTypes[0], vreplID),
 		},
+		{
+			name: "update to running while copying",
+			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
+				Workflow:    workflow,
+				State:       binlogdatapb.VReplicationWorkflowState_Running,
+				Cells:       textutil.SimulatedNullStringSlice,
+				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)},
+				OnDdl:       binlogdatapb.OnDDLAction(textutil.SimulatedNullInt),
+			},
+			isCopying: true,
+			query: fmt.Sprintf(`update _vt.vreplication set state = 'Copying', source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"corder\" filter:\"select * from corder\"} rules:{match:\"customer\" filter:\"select * from customer\"}}', cell = '%s', tablet_types = '%s' where id in (%d)`,
+				keyspace, shard, cells[0], tabletTypes[0], vreplID),
+		},
 	}
 
 	for _, tt := range tests {
@@ -686,12 +714,21 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 			// These are the same for each RPC call.
 			tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
 			tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(selectQuery, selectRes, nil)
-			tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
-			tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(idQuery, idRes, nil)
+			if tt.request.State == binlogdatapb.VReplicationWorkflowState_Running ||
+				tt.request.State == binlogdatapb.VReplicationWorkflowState(textutil.SimulatedNullInt) {
+				tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
+				if tt.isCopying {
+					tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(getCopyStateQuery, copying, nil)
+				} else {
+					tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(getCopyStateQuery, notCopying, nil)
 
+				}
+			}
 			// This is our expected query, which will also short circuit
 			// the test with an error as at this point we've tested what
 			// we wanted to test.
+			tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
+			tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(idQuery, idRes, nil)
 			tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(tt.query, &sqltypes.Result{RowsAffected: 1}, errShortCircuit)
 			_, err = tenv.tmc.tablets[tabletUID].tm.UpdateVReplicationWorkflow(ctx, tt.request)
 			tenv.tmc.tablets[tabletUID].vrdbClient.Wait()
