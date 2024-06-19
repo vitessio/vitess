@@ -184,7 +184,7 @@ func init() {
 
 	Root.AddCommand(UpdateThrottlerConfig)
 	// Check Throttler
-	CheckThrottler.Flags().StringVar(&checkThrottlerOptions.AppName, "app-name", throttlerapp.VitessName.String(), "app to identify as")
+	CheckThrottler.Flags().StringVar(&checkThrottlerOptions.AppName, "app-name", throttlerapp.VitessName.String(), "app name to check")
 	CheckThrottler.Flags().StringVar(&checkThrottlerOptions.Scope, "scope", base.UndefinedScope.String(), "check scope ('shard', 'self' or leave empty for per-metric defaults)")
 	CheckThrottler.Flags().BoolVar(&checkThrottlerOptions.SkipRequestHeartbeats, "skip-heartbeats", false, "skip renewing heartbeat lease")
 	CheckThrottler.Flags().BoolVar(&checkThrottlerOptions.OkIfNotExists, "ok-if-not-exists", false, "return OK even if metric does not exist")
