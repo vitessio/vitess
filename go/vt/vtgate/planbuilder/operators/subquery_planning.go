@@ -377,6 +377,12 @@ func rewriteColNameToArgument(ctx *plancontext.PlanningContext, in sqlparser.Exp
 			}
 
 			for _, sq2 := range subqueries {
+				sel := sqlparser.GetFirstSelect(sq2.originalSubquery.Select)
+				alias, ok := sel.SelectExprs[0].(*sqlparser.AliasedExpr)
+				if !ok {
+					panic(vterrors.VT09015())
+				}
+				typ, _ := ctx.TypeForExpr(alias.Expr)
 				if s == sq2.ArgName {
 					switch {
 					case sq1.FilterType.NeedsListArg():
@@ -388,7 +394,7 @@ func rewriteColNameToArgument(ctx *plancontext.PlanningContext, in sqlparser.Exp
 						}
 						return sqlparser.NewArgument(sq1.HasValuesName)
 					default:
-						return sqlparser.NewArgument(s)
+						return sqlparser.NewTypedArgument(s, typ.Type(), typ.Size(), typ.Scale())
 					}
 				}
 			}

@@ -312,7 +312,7 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 		aggrParam.Original = aggr.Original
 		aggrParam.OrigOpcode = aggr.OriginalOpCode
 		aggrParam.WCol = aggr.WSOffset
-		aggrParam.Type = aggr.GetTypeCollation(ctx)
+		aggrParam.Type = aggr.GetParameterType(ctx)
 		aggregates = append(aggregates, aggrParam)
 	}
 

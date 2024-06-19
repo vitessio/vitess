@@ -261,7 +261,7 @@ func (tr *ShardedRouting) planIsExpr(ctx *plancontext.PlanningContext, node *sql
 		return false
 	}
 	vdValue := &sqlparser.NullVal{}
-	val := makeEvalEngineExpr(ctx, vdValue)
+	val := ctx.MakeEvalEngineExpr(vdValue)
 	if val == nil {
 		return false
 	}
@@ -285,7 +285,7 @@ func (tr *ShardedRouting) planInOp(ctx *plancontext.PlanningContext, cmp *sqlpar
 			return tr.planEqualOp(ctx, &sqlparser.ComparisonExpr{Left: left, Right: valTuple[0], Operator: sqlparser.EqualOp})
 		}
 
-		value := makeEvalEngineExpr(ctx, vdValue)
+		value := ctx.MakeEvalEngineExpr(vdValue)
 		if value == nil {
 			return false
 		}
@@ -309,7 +309,7 @@ func (tr *ShardedRouting) planLikeOp(ctx *plancontext.PlanningContext, node *sql
 	}
 
 	vdValue := node.Right
-	val := makeEvalEngineExpr(ctx, vdValue)
+	val := ctx.MakeEvalEngineExpr(vdValue)
 	if val == nil {
 		return false
 	}
@@ -496,7 +496,7 @@ func (tr *ShardedRouting) planEqualOp(ctx *plancontext.PlanningContext, node *sq
 		}
 		vdValue = node.Left
 	}
-	val := makeEvalEngineExpr(ctx, vdValue)
+	val := ctx.MakeEvalEngineExpr(vdValue)
 	if val == nil {
 		return false
 	}
@@ -538,7 +538,7 @@ func (tr *ShardedRouting) planCompositeInOpRecursive(
 					return false
 				}
 			}
-			newPlanValues := makeEvalEngineExpr(ctx, rightVals)
+			newPlanValues := ctx.MakeEvalEngineExpr(rightVals)
 			if newPlanValues == nil {
 				return false
 			}
@@ -679,21 +679,5 @@ func tryMergeJoinShardedRouting(
 		}
 		return m.mergeShardedRouting(ctx, tblA, tblB, routeA, routeB)
 	}
-	return nil
-}
-
-// makeEvalEngineExpr transforms the given sqlparser.Expr into an evalengine expression
-func makeEvalEngineExpr(ctx *plancontext.PlanningContext, n sqlparser.Expr) evalengine.Expr {
-	for _, expr := range ctx.SemTable.GetExprAndEqualities(n) {
-		ee, _ := evalengine.Translate(expr, &evalengine.Config{
-			Collation:   ctx.SemTable.Collation,
-			ResolveType: ctx.TypeForExpr,
-			Environment: ctx.VSchema.Environment(),
-		})
-		if ee != nil {
-			return ee
-		}
-	}
-
 	return nil
 }

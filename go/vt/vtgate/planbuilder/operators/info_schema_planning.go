@@ -147,7 +147,7 @@ func extractInfoSchemaRoutingPredicate(ctx *plancontext.PlanningContext, in sqlp
 	} else {
 		name = ctx.GetReservedArgumentFor(col)
 	}
-	cmp.Right = sqlparser.NewTypedArgument(name, sqltypes.VarChar)
+	cmp.Right = sqlparser.NewTypedArgument(name, sqltypes.VarChar, 0, 0)
 	return isSchemaName, name, rhs
 }
 

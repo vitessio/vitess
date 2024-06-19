@@ -18,6 +18,7 @@ package semantics
 
 import (
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -60,7 +61,10 @@ func (t *typer) up(cursor *sqlparser.Cursor) error {
 				inputType = tt
 			}
 		}
-		t.m[node] = code.ResolveType(inputType, t.collationEnv)
+		typ := code.ResolveType(inputType, t.collationEnv)
+		if typ.Type() != sqltypes.Unknown {
+			t.m[node] = typ
+		}
 	}
 	return nil
 }

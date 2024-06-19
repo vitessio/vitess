@@ -1778,7 +1778,46 @@ func (node *Literal) FormatFast(buf *TrackedBuffer) {
 
 // FormatFast formats the node.
 func (node *Argument) FormatFast(buf *TrackedBuffer) {
-	buf.WriteArg(":", node.Name)
+	// We need to make sure that any value used still returns
+	// the right type when interpolated. For example, if we have a
+	// decimal type with 0 scale, we don't want it to be interpreted
+	// as an integer after interpolation as that would the default
+	// literal interpretation in MySQL.
+	switch {
+	case sqltypes.IsDecimal(node.Type):
+		buf.WriteString("CAST(:")
+		buf.WriteString(node.Name)
+		buf.WriteString(" AS DECIMAL(")
+		buf.WriteString(fmt.Sprintf("%d", node.Size))
+		buf.WriteString(", ")
+		buf.WriteString(fmt.Sprintf("%d", node.Scale))
+		buf.WriteString("))")
+	case sqltypes.IsUnsigned(node.Type):
+		buf.WriteString("CAST(:")
+		buf.WriteString(node.Name)
+		buf.WriteString(" AS UNSIGNED)")
+	case node.Type == sqltypes.Float64:
+		buf.WriteString("CAST(:")
+		buf.WriteString(node.Name)
+		buf.WriteString(" AS DOUBLE)")
+	case node.Type == sqltypes.Float32:
+		buf.WriteString("CAST(:")
+		buf.WriteString(node.Name)
+		buf.WriteString(" AS FLOAT)")
+	case sqltypes.IsDate(node.Type):
+		buf.WriteString("date :")
+		buf.WriteString(node.Name)
+	case node.Type == sqltypes.Time:
+		buf.WriteString("time :")
+		buf.WriteString(node.Name)
+	case node.Type == sqltypes.Timestamp, node.Type == sqltypes.Datetime:
+		buf.WriteString("timestamp :")
+		buf.WriteString(node.Name)
+	default:
+		// Nothing special to do, the default literal will be correct.
+		buf.WriteArg(":", node.Name)
+	}
+
 	if node.Type >= 0 {
 		// For bind variables that are statically typed, emit their type as an adjacent comment.
 		// This comment will be ignored by older versions of Vitess (and by MySQL) but will provide

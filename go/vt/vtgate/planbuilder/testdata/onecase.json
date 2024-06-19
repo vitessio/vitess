@@ -1,7 +1,7 @@
 [
   {
     "comment": "Add your test case here for debugging and run go test -run=One.",
-    "query": "",
+    "query": "SELECT (SELECT SUM(LENGTH(extra_info)) FROM user_extra) AS total_length_extra_info FROM user",
     "plan": {
 
     }

@@ -560,8 +560,8 @@ func parseBindVariable(yylex yyLexer, bvar string) *Argument {
 	return NewArgument(bvar)
 }
 
-func NewTypedArgument(in string, t sqltypes.Type) *Argument {
-	return &Argument{Name: in, Type: t}
+func NewTypedArgument(in string, t sqltypes.Type, size, scale int32) *Argument {
+	return &Argument{Name: in, Type: t, Size: size, Scale: scale}
 }
 
 func NewTypedArgumentFromLiteral(in string, lit *Literal) (*Argument, error) {

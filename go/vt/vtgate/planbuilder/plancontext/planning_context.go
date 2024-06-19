@@ -207,11 +207,39 @@ func (ctx *PlanningContext) RewriteDerivedTableExpression(expr sqlparser.Expr, t
 	return modifiedExpr
 }
 
+// MakeEvalEngineExpr transforms the given sqlparser.Expr into an evalengine expression
+func (ctx *PlanningContext) MakeEvalEngineExpr(n sqlparser.Expr) evalengine.Expr {
+	for _, expr := range ctx.SemTable.GetExprAndEqualities(n) {
+		ee, _ := evalengine.Translate(expr, &evalengine.Config{
+			Collation:   ctx.SemTable.Collation,
+			ResolveType: ctx.TypeForExpr,
+			Environment: ctx.VSchema.Environment(),
+		})
+		if ee != nil {
+			return ee
+		}
+	}
+
+	return nil
+}
+
 // TypeForExpr returns the type of the given expression, with nullable set if the expression is from an outer table.
 func (ctx *PlanningContext) TypeForExpr(e sqlparser.Expr) (evalengine.Type, bool) {
 	t, found := ctx.SemTable.TypeForExpr(e)
 	if !found {
-		return t, found
+		// Try if we can compile the expression to retrieve the type.
+		// This doesn't work atm for aggregate expressions since the
+		// evalengine doesn't know about this.
+		expr := ctx.MakeEvalEngineExpr(e)
+		if expr == nil {
+			return t, found
+		}
+		env := evalengine.EmptyExpressionEnv(ctx.VSchema.Environment())
+		typ, err := env.TypeOf(expr)
+		if err != nil {
+			return t, found
+		}
+		return typ, true
 	}
 	deps := ctx.SemTable.RecursiveDeps(e)
 	// If the expression is from an outer table, it should be nullable

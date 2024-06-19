@@ -95,17 +95,12 @@ func (aggr Aggr) NeedsWeightString(ctx *plancontext.PlanningContext) bool {
 	return aggr.OpCode.NeedsComparableValues() && ctx.SemTable.NeedsWeightString(aggr.Func.GetArg())
 }
 
-func (aggr Aggr) GetTypeCollation(ctx *plancontext.PlanningContext) evalengine.Type {
+func (aggr Aggr) GetParameterType(ctx *plancontext.PlanningContext) evalengine.Type {
 	if aggr.Func == nil {
 		return evalengine.Type{}
 	}
-	switch aggr.OpCode {
-	case opcode.AggregateMin, opcode.AggregateMax, opcode.AggregateSumDistinct, opcode.AggregateCountDistinct:
-		typ, _ := ctx.TypeForExpr(aggr.Func.GetArg())
-		return typ
-
-	}
-	return evalengine.Type{}
+	typ, _ := ctx.TypeForExpr(aggr.Func.GetArg())
+	return typ
 }
 
 // NewGroupBy creates a new group by from the given fields.
