@@ -213,7 +213,7 @@ func waitForMetricsToBeCollected(t *testing.T, ctx context.Context, throttler *T
 		}
 		select {
 		case <-ctx.Done():
-			t.Error("timed out waiting for metrics to be collected")
+			assert.Fail(t, "timed out waiting for metrics to be collected")
 			return
 		case <-ticker.C:
 		}
