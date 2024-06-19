@@ -873,12 +873,13 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 
 	wg.Add(1)
 	go func() {
+		defer wg.Done() // Called last, once all tickers are stopped.
+
 		defer func() {
 			throttler.recentCheckRateLimiter.Stop()
 			primaryStimulatorRateLimiter.Stop()
 			throttler.aggregatedMetrics.Flush()
 			throttler.recentApps.Flush()
-			wg.Done()
 		}()
 		// we do not flush throttler.throttledApps because this is data submitted by the user; the user expects the data to survive a disable+enable
 
