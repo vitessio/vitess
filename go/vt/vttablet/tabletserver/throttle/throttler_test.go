@@ -275,7 +275,12 @@ func newTestThrottler() *Throttler {
 
 	throttler.readSelfThrottleMetrics = func(ctx context.Context) mysql.MySQLThrottleMetrics {
 		for _, metric := range selfMetrics {
-			go func() { throttler.mysqlThrottleMetricChan <- metric }()
+			go func() {
+				select {
+				case <-ctx.Done():
+				case throttler.mysqlThrottleMetricChan <- metric:
+				}
+			}()
 		}
 		return selfMetrics
 	}
