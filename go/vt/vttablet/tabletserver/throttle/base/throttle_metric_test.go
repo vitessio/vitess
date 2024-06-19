@@ -143,3 +143,40 @@ func TestScopeFromString(t *testing.T) {
 		assert.ErrorContains(t, err, "unknown scope")
 	}
 }
+
+func TestUnique(t *testing.T) {
+	tcases := []struct {
+		names  MetricNames
+		expect MetricNames
+	}{
+		{
+			names:  nil,
+			expect: nil,
+		},
+		{
+			names:  MetricNames{},
+			expect: MetricNames{},
+		},
+		{
+			names:  MetricNames{LagMetricName},
+			expect: MetricNames{LagMetricName},
+		},
+		{
+			names:  MetricNames{LagMetricName, LagMetricName},
+			expect: MetricNames{LagMetricName},
+		},
+		{
+			names:  MetricNames{LagMetricName, ThreadsRunningMetricName, LagMetricName},
+			expect: MetricNames{LagMetricName, ThreadsRunningMetricName},
+		},
+		{
+			names:  MetricNames{LagMetricName, ThreadsRunningMetricName, LagMetricName, LoadAvgMetricName, LoadAvgMetricName, CustomMetricName},
+			expect: MetricNames{LagMetricName, ThreadsRunningMetricName, LoadAvgMetricName, CustomMetricName},
+		},
+	}
+	for _, tcase := range tcases {
+		t.Run(tcase.names.String(), func(t *testing.T) {
+			assert.Equal(t, tcase.expect, tcase.names.Unique())
+		})
+	}
+}

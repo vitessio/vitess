@@ -137,17 +137,7 @@ func (check *ThrottlerCheck) Check(ctx context.Context, appName string, scope ba
 	if len(metricNames) == 0 {
 		metricNames = base.MetricNames{check.throttler.metricNameUsedAsDefault()}
 	}
-	{
-		uniqueMetricNamesMap := map[base.MetricName]bool{}
-		uniqueMetricNames := base.MetricNames{}
-		for _, metricName := range metricNames {
-			if _, ok := uniqueMetricNamesMap[metricName]; !ok {
-				uniqueMetricNames = append(uniqueMetricNames, metricName)
-				uniqueMetricNamesMap[metricName] = true
-			}
-		}
-		metricNames = uniqueMetricNames
-	}
+	metricNames = metricNames.Unique()
 	applyMetricToCheckResult := func(metric *MetricResult) {
 		checkResult.StatusCode = metric.StatusCode
 		checkResult.Value = metric.Value

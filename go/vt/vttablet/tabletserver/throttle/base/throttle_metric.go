@@ -71,6 +71,22 @@ func (names MetricNames) String() string {
 	return strings.Join(s, ",")
 }
 
+// Unique returns a subset of unique metric names, in same order as the original names
+func (names MetricNames) Unique() MetricNames {
+	if names == nil {
+		return nil
+	}
+	uniqueMetricNamesMap := map[MetricName]bool{}
+	uniqueMetricNames := MetricNames{}
+	for _, metricName := range names {
+		if _, ok := uniqueMetricNamesMap[metricName]; !ok {
+			uniqueMetricNames = append(uniqueMetricNames, metricName)
+			uniqueMetricNamesMap[metricName] = true
+		}
+	}
+	return uniqueMetricNames
+}
+
 const (
 	DefaultMetricName        MetricName = "default"
 	LagMetricName            MetricName = "lag"
