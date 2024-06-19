@@ -220,3 +220,22 @@ func (c *ColumnDefinitionEntity) ColumnDiff(
 func (c *ColumnDefinitionEntity) IsTextual() bool {
 	return charsetTypes[strings.ToLower(c.columnDefinition.Type.Type)]
 }
+
+// IsGenerated returns true when this column is generated, and indicates the storage type (virtual/stored)
+func (c *ColumnDefinitionEntity) IsGenerated() (bool, sqlparser.ColumnStorage) {
+	return IsGeneratedColumn(c.columnDefinition)
+}
+
+// IsGeneratedColumn returns true when the column is a generated column, and indicates the storage type (virtual/stored)
+func IsGeneratedColumn(col *sqlparser.ColumnDefinition) (bool, sqlparser.ColumnStorage) {
+	if col == nil {
+		return false, 0
+	}
+	if col.Type.Options == nil {
+		return false, 0
+	}
+	if col.Type.Options.As == nil {
+		return false, 0
+	}
+	return true, col.Type.Options.Storage
+}
