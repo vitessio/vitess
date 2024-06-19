@@ -41,6 +41,7 @@ var (
 		Short:                 "Update the tablet throttler configuration for all tablets in the given keyspace (across all cells)",
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(1),
+		PreRunE:               validateUpdateThrottlerConfig,
 		RunE:                  commandUpdateThrottlerConfig,
 	}
 	CheckThrottler = &cobra.Command{
@@ -71,23 +72,23 @@ var (
 	checkThrottlerOptions vtctldatapb.CheckThrottlerRequest
 )
 
-func commandUpdateThrottlerConfig(cmd *cobra.Command, args []string) error {
-	keyspace := cmd.Flags().Arg(0)
-	cli.FinishedParsing(cmd)
-
+func validateUpdateThrottlerConfig(cmd *cobra.Command, args []string) error {
 	if throttledAppRule.Name != "" && unthrottledAppRule.Name != "" {
 		return fmt.Errorf("throttle-app and unthrottle-app are mutually exclusive")
 	}
-
 	if updateThrottlerConfigOptions.MetricName != "" && !cmd.Flags().Changed("threshold") {
 		return fmt.Errorf("--metric-name flag requires --threshold flag. Set threshold to 0 to disable the metric threshold configuration")
-	}
-	if cmd.Flags().Changed("app-name") != cmd.Flags().Changed("app-metrics") {
-		return fmt.Errorf("--app-name and --app-metrics must be set together")
 	}
 	if cmd.Flags().Changed("app-name") && updateThrottlerConfigOptions.AppName == "" {
 		return fmt.Errorf("--app-name must not be empty")
 	}
+
+	return nil
+}
+
+func commandUpdateThrottlerConfig(cmd *cobra.Command, args []string) error {
+	keyspace := cmd.Flags().Arg(0)
+	cli.FinishedParsing(cmd)
 
 	updateThrottlerConfigOptions.CustomQuerySet = cmd.Flags().Changed("custom-query")
 	updateThrottlerConfigOptions.Keyspace = keyspace
@@ -178,9 +179,10 @@ func init() {
 	UpdateThrottlerConfig.Flags().Float64Var(&throttledAppRule.Ratio, "throttle-app-ratio", throttle.DefaultThrottleRatio, "ratio to throttle app (app specififed in --throttled-app)")
 	UpdateThrottlerConfig.Flags().DurationVar(&throttledAppDuration, "throttle-app-duration", throttle.DefaultAppThrottleDuration, "duration after which throttled app rule expires (app specififed in --throttled-app)")
 	UpdateThrottlerConfig.Flags().BoolVar(&throttledAppRule.Exempt, "throttle-app-exempt", throttledAppRule.Exempt, "exempt this app from being at all throttled. WARNING: use with extreme care, as this is likely to push metrics beyond the throttler's threshold, and starve other apps")
-
 	UpdateThrottlerConfig.Flags().StringVar(&updateThrottlerConfigOptions.AppName, "app-name", "", "app name for which to assign metrics (requires --app-metrics)")
 	UpdateThrottlerConfig.Flags().StringSliceVar(&updateThrottlerConfigOptions.AppCheckedMetrics, "app-metrics", nil, "metrics to be used when checking the throttler for the app (requires --app-name). Empty to restore to default metrics")
+	UpdateThrottlerConfig.MarkFlagsMutuallyExclusive("unthrottle-app", "throttle-app")
+	UpdateThrottlerConfig.MarkFlagsRequiredTogether("app-name", "app-metrics")
 
 	Root.AddCommand(UpdateThrottlerConfig)
 	// Check Throttler
