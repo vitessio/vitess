@@ -24,6 +24,8 @@ import (
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
@@ -97,7 +99,7 @@ func (aggr Aggr) NeedsWeightString(ctx *plancontext.PlanningContext) bool {
 
 func (aggr Aggr) GetParameterType(ctx *plancontext.PlanningContext) evalengine.Type {
 	if aggr.Func == nil {
-		return evalengine.Type{}
+		return evalengine.NewType(sqltypes.Unknown, collations.Unknown)
 	}
 	typ, _ := ctx.TypeForExpr(aggr.Func.GetArg())
 	return typ

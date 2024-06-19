@@ -19,6 +19,8 @@ package semantics
 import (
 	"strings"
 
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -169,7 +171,7 @@ func (b *binder) findDependentTableSet(current *scope, target sqlparser.TableNam
 			continue
 		}
 		ts := b.org.tableSetFor(table.GetAliasedTableExpr())
-		c := createCertain(ts, ts, evalengine.Type{})
+		c := createCertain(ts, ts, evalengine.NewType(sqltypes.Unknown, collations.Unknown))
 		deps = deps.merge(c, false)
 	}
 	finalDep, err := deps.get(nil)
