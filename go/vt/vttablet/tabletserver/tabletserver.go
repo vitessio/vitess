@@ -1782,7 +1782,7 @@ func (tsv *TabletServer) CheckThrottler(ctx context.Context, appName string, fla
 	return r
 }
 
-// GetThrottlerStatus gets the status of the table throttler
+// GetThrottlerStatus gets the status of the tablet throttler
 func (tsv *TabletServer) GetThrottlerStatus(ctx context.Context) *throttle.ThrottlerStatus {
 	r := tsv.lagThrottler.Status()
 	return r
