@@ -335,7 +335,7 @@ func TestSchemaChange(t *testing.T) {
 			t.Run("optimistic wait for migration completion", func(t *testing.T) {
 				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusRunning, schema.OnlineDDLStatusComplete)
 				isComplete = (status == schema.OnlineDDLStatusComplete)
-				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+				t.Logf("# Migration status (for debug purposes): <%s>", status)
 			})
 			if !isComplete {
 				t.Run("force complete cut-over", func(t *testing.T) {
@@ -344,7 +344,7 @@ func TestSchemaChange(t *testing.T) {
 				t.Run("another optimistic wait for migration completion", func(t *testing.T) {
 					status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusRunning, schema.OnlineDDLStatusComplete)
 					isComplete = (status == schema.OnlineDDLStatusComplete)
-					fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+					t.Logf("# Migration status (for debug purposes): <%s>", status)
 				})
 			}
 			if !isComplete {
@@ -358,7 +358,7 @@ func TestSchemaChange(t *testing.T) {
 			}
 			t.Run("wait for migration completion", func(t *testing.T) {
 				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete)
-				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+				t.Logf("# Migration status (for debug purposes): <%s>", status)
 				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 			})
 			t.Run("validate table schema", func(t *testing.T) {
@@ -388,15 +388,15 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 	uuid = row.AsString("uuid", "")
 	uuid = strings.TrimSpace(uuid)
 	require.NotEmpty(t, uuid)
-	fmt.Println("# Generated UUID (for debug purposes):")
-	fmt.Printf("<%s>\n", uuid)
+	t.Logf("# Generated UUID (for debug purposes):")
+	t.Logf("<%s>", uuid)
 
 	strategySetting, err := schema.ParseDDLStrategy(ddlStrategy)
 	assert.NoError(t, err)
 
 	if !strategySetting.Strategy.IsDirect() && !skipWait && uuid != "" {
 		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
-		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+		t.Logf("# Migration status (for debug purposes): <%s>", status)
 	}
 
 	if expectHint != "" {
