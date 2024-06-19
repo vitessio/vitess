@@ -2078,11 +2078,9 @@ func (s *VtctldServer) UpdateThrottlerConfig(ctx context.Context, req *vtctldata
 				// custom query provided
 				throttlerConfig.CustomQuery = req.CustomQuery
 				throttlerConfig.Threshold = req.Threshold // allowed to be zero/negative because who knows what kind of custom query this is
-			} else {
+			} else if req.Threshold > 0 {
 				// no custom query, throttler works by querying replication lag. We only allow positive values
-				if req.Threshold > 0 {
-					throttlerConfig.Threshold = req.Threshold
-				}
+				throttlerConfig.Threshold = req.Threshold
 			}
 		} else {
 			// --metric-name specified. We apply the threshold to the metric
