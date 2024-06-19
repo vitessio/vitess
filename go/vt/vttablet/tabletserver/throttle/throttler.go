@@ -1054,7 +1054,7 @@ func (throttler *Throttler) generateTabletProbeFunction(scope base.Scope, tmClie
 			}
 		}
 		if len(resp.Metrics) == 0 {
-			// Backwards compatibility to v19. v19 does not report multi metrics.
+			// Backwards compatibility to v20. v20 does not report multi metrics.
 			mySQLThrottleMetric.Name = throttler.metricNameUsedAsDefault()
 			metrics[mySQLThrottleMetric.Name] = mySQLThrottleMetric
 		}
@@ -1177,7 +1177,7 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 	for metricName, metricConfig := range mysqlSettings.Metrics {
 		threshold := metricConfig.Threshold.Load()
 		if metricName == metricNameUsedAsDefault && metricsThreshold != 0 {
-			// backwards compatibility to v19:
+			// backwards compatibility to v20:
 			threshold = metricsThreshold
 		}
 
@@ -1264,7 +1264,7 @@ func (throttler *Throttler) aggregateMySQLMetrics(ctx context.Context) error {
 	}
 	for _, metricName := range base.KnownMetricNames {
 		if metricName == base.DefaultMetricName {
-			// "default metric" is for backwards compatibility with v19, which does not support multi-metrics.
+			// "default metric" is for backwards compatibility with v20, which does not support multi-metrics.
 			// We do not measure "default metric". Instead, we aggregate _actual_ metrics, and decide which one
 			// is to be stored as "default"
 			continue

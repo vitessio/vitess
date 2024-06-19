@@ -198,7 +198,7 @@ func (check *ThrottlerCheck) Check(ctx context.Context, appName string, scope ba
 		if flags.MultiMetricsEnabled && !metricCheckResult.IsOK() && metricName != base.DefaultMetricName {
 			// If we're checking multiple metrics, and one of them fails, we should return any of the failing metric.
 			// For backwards compatibility, if flags.MultiMetricsEnabled is not set, we do not report back failing
-			// metrics, because a v19 primary would not know how to deal with it, and is not expecting any of those
+			// metrics, because a v20 primary would not know how to deal with it, and is not expecting any of those
 			// metrics.
 			// The only metric we ever report back is the default metric, see below.
 			applyMetricToCheckResult(metric)
@@ -208,8 +208,8 @@ func (check *ThrottlerCheck) Check(ctx context.Context, appName string, scope ba
 		applyMetricToCheckResult(metric)
 	}
 	if metric, ok := checkResult.Metrics[base.DefaultMetricName.String()]; ok && checkResult.IsOK() {
-		// v19 compatibility: if this v20 server is a replica, reporting to a v19 primary,
-		// then we must supply the v19-flavor check result.
+		// v20 compatibility: if this v21 server is a replica, reporting to a v20 primary,
+		// then we must supply the v20-flavor check result.
 		// If checkResult is not OK, then we will have populated these fields already by the failing metric.
 		applyMetricToCheckResult(metric)
 	}

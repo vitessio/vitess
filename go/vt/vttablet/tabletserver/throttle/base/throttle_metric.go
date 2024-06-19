@@ -109,7 +109,7 @@ func (metric MetricName) String() string {
 // - "shard/lag"
 func (metric MetricName) AggregatedName(scope Scope) string {
 	if metric == DefaultMetricName {
-		// backwards (v19) compatibility
+		// backwards (v20) compatibility
 		return scope.String()
 	}
 	if scope == UndefinedScope {
