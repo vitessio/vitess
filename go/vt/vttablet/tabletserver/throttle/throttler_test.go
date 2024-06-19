@@ -32,6 +32,7 @@ import (
 	"golang.org/x/exp/maps"
 
 	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
@@ -308,7 +309,8 @@ func TestInitThrottler(t *testing.T) {
 }
 
 func TestApplyThrottlerConfig(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx := utils.LeakCheckContext(t)
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	timeNow := time.Now()
 	throttler := newTestThrottler()
@@ -394,7 +396,8 @@ func TestApplyThrottlerConfig(t *testing.T) {
 // TestApplyThrottlerConfigMetricThresholds applies a specific 'lag' metric threshold,
 // and validates that it overrides the default threshold.
 func TestApplyThrottlerConfigMetricThresholds(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx := utils.LeakCheckContext(t)
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	throttler := newTestThrottler()
 	runThrottler(t, ctx, throttler, 10*time.Second, func(t *testing.T, ctx context.Context) {
@@ -483,7 +486,8 @@ func TestApplyThrottlerConfigMetricThresholds(t *testing.T) {
 
 // TestApplyThrottlerConfigAppCheckedMetrics applies different metrics to the "test" app and checks the result
 func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx := utils.LeakCheckContext(t)
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	throttler := newTestThrottler()
 	runThrottler(t, ctx, throttler, 10*time.Second, func(t *testing.T, ctx context.Context) {
@@ -886,6 +890,10 @@ func TestIsAppExempted(t *testing.T) {
 // On a replica tablet, that list is expect to probe the tablet itself.
 // On the PRIMARY, the list includes all shard tablets, including the PRIMARY itself.
 func TestRefreshMySQLInventory(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	metricsQuery := "select 1"
 	configSettings := config.NewConfigurationSettings()
 
@@ -936,8 +944,6 @@ func TestRefreshMySQLInventory(t *testing.T) {
 			})
 		})
 	}
-	//
-	ctx := context.Background()
 
 	t.Run("initial, not leader", func(t *testing.T) {
 		throttler.isLeader.Store(false)
@@ -1000,18 +1006,27 @@ func runThrottler(t *testing.T, ctx context.Context, throttler *Throttler, timeo
 	assert.Error(t, ctx.Err())
 
 	throttler.Disable()
+	wg.Wait()
 	assert.False(t, throttler.IsEnabled())
 }
 
 // TestRace merely lets the throttler run with aggressive intervals for a few seconds, so as to detect race conditions.
 // This is relevant to `go test -race`
 func TestRace(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	throttler := newTestThrottler()
-	runThrottler(t, context.Background(), throttler, 5*time.Second, nil)
+	runThrottler(t, ctx, throttler, 5*time.Second, nil)
 }
 
 // TestProbes enables a throttler for a few seconds, and afterwards expects to find probes and metrics.
 func TestProbesWhileOperating(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	throttler := newTestThrottler()
 
 	tmClient, ok := throttler.overrideTmClient.(*fakeTMClient)
@@ -1021,8 +1036,6 @@ func TestProbesWhileOperating(t *testing.T) {
 	t.Run("aggregated initial", func(t *testing.T) {
 		assert.Equal(t, 0, throttler.aggregatedMetrics.ItemCount())
 	})
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	runThrottler(t, ctx, throttler, time.Minute, func(t *testing.T, ctx context.Context) {
 		defer cancel() // early termination
 		t.Run("aggregated", func(t *testing.T) {
@@ -1234,6 +1247,10 @@ func TestProbesWhileOperating(t *testing.T) {
 
 // TestProbesWithV20Replicas is similar to TestProbesWhileOperating, but assumes a v20 replica, which does not report any of the named metrics.
 func TestProbesWithV20Replicas(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	throttler := newTestThrottler()
 
 	tmClient, ok := throttler.overrideTmClient.(*fakeTMClient)
@@ -1244,8 +1261,7 @@ func TestProbesWithV20Replicas(t *testing.T) {
 	t.Run("aggregated initial", func(t *testing.T) {
 		assert.Equal(t, 0, throttler.aggregatedMetrics.ItemCount())
 	})
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+
 	runThrottler(t, ctx, throttler, time.Minute, func(t *testing.T, ctx context.Context) {
 		defer cancel() // early termination
 		t.Run("aggregated", func(t *testing.T) {
@@ -1314,8 +1330,12 @@ func TestProbesWithV20Replicas(t *testing.T) {
 
 // TestProbesPostDisable runs the throttler for some time, and then investigates the internal throttler maps and values.
 func TestProbesPostDisable(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	throttler := newTestThrottler()
-	runThrottler(t, context.Background(), throttler, 2*time.Second, nil)
+	runThrottler(t, ctx, throttler, 2*time.Second, nil)
 
 	probes := throttler.mysqlInventory.ClustersProbes
 
@@ -1348,7 +1368,8 @@ func TestProbesPostDisable(t *testing.T) {
 }
 
 func TestDormant(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx := utils.LeakCheckContext(t)
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	throttler := newTestThrottler()
@@ -1404,7 +1425,8 @@ func TestDormant(t *testing.T) {
 }
 
 func TestChecks(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx := utils.LeakCheckContext(t)
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	throttler := newTestThrottler()
@@ -1637,7 +1659,8 @@ func TestChecks(t *testing.T) {
 }
 
 func TestReplica(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx := utils.LeakCheckContext(t)
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	throttler := newTestThrottler()
