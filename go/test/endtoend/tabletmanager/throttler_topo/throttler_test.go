@@ -50,7 +50,7 @@ const (
 	onDemandHeartbeatDuration = 5 * time.Second
 	throttlerEnabledTimeout   = 60 * time.Second
 	useDefaultQuery           = ""
-	testAppName               = "test"
+	testAppName               = throttlerapp.TestingName
 )
 
 var (
@@ -494,7 +494,7 @@ func TestLag(t *testing.T) {
 	})
 	t.Run("exempting test app", func(t *testing.T) {
 		appRule := &topodatapb.ThrottledAppRule{
-			Name:      testAppName,
+			Name:      testAppName.String(),
 			ExpiresAt: protoutil.TimeToProto(time.Now().Add(time.Hour)),
 			Exempt:    true,
 		}
@@ -505,7 +505,7 @@ func TestLag(t *testing.T) {
 	})
 	t.Run("unexempting test app", func(t *testing.T) {
 		appRule := &topodatapb.ThrottledAppRule{
-			Name:      testAppName,
+			Name:      testAppName.String(),
 			ExpiresAt: protoutil.TimeToProto(time.Now()),
 		}
 		req := &vtctldatapb.UpdateThrottlerConfigRequest{Threshold: throttler.DefaultThreshold.Seconds()}
@@ -526,7 +526,7 @@ func TestLag(t *testing.T) {
 	})
 	t.Run("throttling test app", func(t *testing.T) {
 		appRule := &topodatapb.ThrottledAppRule{
-			Name:      testAppName,
+			Name:      testAppName.String(),
 			Ratio:     throttle.DefaultThrottleRatio,
 			ExpiresAt: protoutil.TimeToProto(time.Now().Add(time.Hour)),
 		}
@@ -537,7 +537,7 @@ func TestLag(t *testing.T) {
 	})
 	t.Run("unthrottling test app", func(t *testing.T) {
 		appRule := &topodatapb.ThrottledAppRule{
-			Name:      testAppName,
+			Name:      testAppName.String(),
 			ExpiresAt: protoutil.TimeToProto(time.Now()),
 		}
 		req := &vtctldatapb.UpdateThrottlerConfigRequest{Threshold: throttler.DefaultThreshold.Seconds()}
@@ -759,7 +759,7 @@ func TestUpdateAppCheckedMetrics(t *testing.T) {
 		{
 			req := &vtctldatapb.UpdateThrottlerConfigRequest{}
 			appCheckedMetrics := map[string]*topodatapb.ThrottlerConfig_MetricNames{
-				testAppName: {Names: []string{"loadavg"}},
+				testAppName.String(): {Names: []string{"loadavg"}},
 			}
 			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, appCheckedMetrics)
 			assert.NoError(t, err)
@@ -784,7 +784,7 @@ func TestUpdateAppCheckedMetrics(t *testing.T) {
 		{
 			req := &vtctldatapb.UpdateThrottlerConfigRequest{}
 			appCheckedMetrics := map[string]*topodatapb.ThrottlerConfig_MetricNames{
-				testAppName: {Names: []string{"loadavg,lag"}},
+				testAppName.String(): {Names: []string{"loadavg,lag"}},
 			}
 			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, appCheckedMetrics)
 			assert.NoError(t, err)
@@ -811,7 +811,7 @@ func TestUpdateAppCheckedMetrics(t *testing.T) {
 		{
 			req := &vtctldatapb.UpdateThrottlerConfigRequest{}
 			appCheckedMetrics := map[string]*topodatapb.ThrottlerConfig_MetricNames{
-				testAppName: {Names: []string{}},
+				testAppName.String(): {Names: []string{}},
 			}
 			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, appCheckedMetrics)
 			assert.NoError(t, err)

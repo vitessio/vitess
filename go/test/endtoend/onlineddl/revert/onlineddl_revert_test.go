@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/onlineddl"
@@ -208,7 +209,7 @@ func TestSchemaChange(t *testing.T) {
 	require.Equal(t, 1, len(shards))
 
 	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance)
-	throttler.WaitForCheckThrottlerResult(t, clusterInstance, primaryTablet, "test", nil, http.StatusOK, time.Minute)
+	throttler.WaitForCheckThrottlerResult(t, clusterInstance, primaryTablet, throttlerapp.TestingName, nil, http.StatusOK, time.Minute)
 
 	t.Run("revertible", testRevertible)
 	t.Run("revert", testRevert)
@@ -414,7 +415,7 @@ func testRevertible(t *testing.T) {
 				toStatement := fmt.Sprintf(createTableWrapper, testcase.toSchema)
 				uuid = testOnlineDDLStatement(t, toStatement, ddlStrategy, "vtgate", tableName, "")
 				if !onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete) {
-					resp, err := throttler.CheckThrottler(clusterInstance, primaryTablet, "test", nil)
+					resp, err := throttler.CheckThrottler(clusterInstance, primaryTablet, throttlerapp.TestingName, nil)
 					assert.NoError(t, err)
 					fmt.Println("Throttler check response: ", resp)
 

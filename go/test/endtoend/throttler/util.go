@@ -60,7 +60,7 @@ var DefaultConfig = &Config{
 }
 
 // CheckThrottlerRaw runs vtctldclient CheckThrottler
-func CheckThrottlerRaw(vtctldProcess *cluster.VtctldClientProcess, tablet *cluster.Vttablet, appName string, flags *throttle.CheckFlags) (result string, err error) {
+func CheckThrottlerRaw(vtctldProcess *cluster.VtctldClientProcess, tablet *cluster.Vttablet, appName throttlerapp.Name, flags *throttle.CheckFlags) (result string, err error) {
 	args := []string{}
 	args = append(args, "CheckThrottler")
 	if flags == nil {
@@ -70,7 +70,7 @@ func CheckThrottlerRaw(vtctldProcess *cluster.VtctldClientProcess, tablet *clust
 		}
 	}
 	if appName != "" {
-		args = append(args, "--app-name", appName)
+		args = append(args, "--app-name", appName.String())
 	}
 	if flags.Scope != base.UndefinedScope {
 		args = append(args, "--scope", flags.Scope.String())
@@ -167,7 +167,7 @@ func UpdateThrottlerTopoConfigRaw(
 }
 
 // CheckThrottler runs vtctldclient CheckThrottler.
-func CheckThrottler(clusterInstance *cluster.LocalProcessCluster, tablet *cluster.Vttablet, appName string, flags *throttle.CheckFlags) (*vtctldatapb.CheckThrottlerResponse, error) {
+func CheckThrottler(clusterInstance *cluster.LocalProcessCluster, tablet *cluster.Vttablet, appName throttlerapp.Name, flags *throttle.CheckFlags) (*vtctldatapb.CheckThrottlerResponse, error) {
 	output, err := CheckThrottlerRaw(&clusterInstance.VtctldClientProcess, tablet, appName, flags)
 	if err != nil {
 		return nil, err
@@ -482,7 +482,7 @@ func EnableLagThrottlerAndWaitForStatus(t *testing.T, clusterInstance *cluster.L
 	}
 }
 
-func WaitForCheckThrottlerResult(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tablet *cluster.Vttablet, appName string, flags *throttle.CheckFlags, expect int32, timeout time.Duration) (*vtctldatapb.CheckThrottlerResponse, error) {
+func WaitForCheckThrottlerResult(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tablet *cluster.Vttablet, appName throttlerapp.Name, flags *throttle.CheckFlags, expect int32, timeout time.Duration) (*vtctldatapb.CheckThrottlerResponse, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	ticker := time.NewTicker(time.Second)
