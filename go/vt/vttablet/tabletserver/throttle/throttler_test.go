@@ -101,7 +101,7 @@ const (
 type fakeTMClient struct {
 	tmclient.TabletManagerClient
 	appNames []string
-	v19      atomic.Bool // help validate v19 backwards compatibility
+	v20      atomic.Bool // help validate v20 backwards compatibility
 
 	mu sync.Mutex
 }
@@ -116,7 +116,7 @@ func (c *fakeTMClient) CheckThrottler(ctx context.Context, tablet *topodatapb.Ta
 		Threshold:       1,
 		RecentlyChecked: false,
 	}
-	if !c.v19.Load() {
+	if !c.v20.Load() {
 		resp.Metrics = make(map[string]*tabletmanagerdatapb.CheckThrottlerResponse_Metric)
 		for name, metric := range replicaMetrics {
 			resp.Metrics[name] = &tabletmanagerdatapb.CheckThrottlerResponse_Metric{
@@ -1232,14 +1232,14 @@ func TestProbesWhileOperating(t *testing.T) {
 	})
 }
 
-// TestProbesWithV19Replicas is similar to TestProbesWhileOperating, but assumes a v19 replica, which does not report any of the named metrics.
-func TestProbesWithV19Replicas(t *testing.T) {
+// TestProbesWithV20Replicas is similar to TestProbesWhileOperating, but assumes a v20 replica, which does not report any of the named metrics.
+func TestProbesWithV20Replicas(t *testing.T) {
 	throttler := newTestThrottler()
 
 	tmClient, ok := throttler.overrideTmClient.(*fakeTMClient)
 	require.True(t, ok)
 	assert.Empty(t, tmClient.AppNames())
-	tmClient.v19.Store(true)
+	tmClient.v20.Store(true)
 
 	t.Run("aggregated initial", func(t *testing.T) {
 		assert.Equal(t, 0, throttler.aggregatedMetrics.ItemCount())
@@ -1275,8 +1275,8 @@ func TestProbesWithV19Replicas(t *testing.T) {
 						assert.Equalf(t, float64(2.718), val, "scope=%v, metricName=%v", scope, metricName)
 					}
 				case base.ShardScope:
-					// Replicas will nto report named metrics, since they now assume v19 behavior. They will only
-					// produce the single v19 metric (which we call "default", though they don't advertise it under the name "base.DefaultMetricName")
+					// Replicas will nto report named metrics, since they now assume v20 behavior. They will only
+					// produce the single v20 metric (which we call "default", though they don't advertise it under the name "base.DefaultMetricName")
 					switch metricName {
 					case base.DefaultMetricName:
 						assert.Equalf(t, float64(0.339), val, "scope=%v, metricName=%v", scope, metricName) // same value as "lag"
@@ -1737,7 +1737,7 @@ func TestReplica(t *testing.T) {
 					assert.NotEqualValues(t, http.StatusOK, checkResult.StatusCode, "unexpected result: %+v", checkResult)
 					assert.Equal(t, len(base.KnownMetricNames), len(checkResult.Metrics))
 				})
-				t.Run("validate v19 non-multi-metric results", func(t *testing.T) {
+				t.Run("validate v20 non-multi-metric results", func(t *testing.T) {
 					flags := &CheckFlags{
 						Scope:               base.SelfScope,
 						MultiMetricsEnabled: false,
@@ -1745,7 +1745,7 @@ func TestReplica(t *testing.T) {
 					checkResult := throttler.Check(ctx, throttlerapp.VitessName.String(), nil, flags)
 					require.NotNil(t, checkResult)
 					// loadavg value exceeds threshold. But since "MultiMetricsEnabled: false", the
-					// throttler, acting as a replica, assumes it's being probed by a v19 primary, and
+					// throttler, acting as a replica, assumes it's being probed by a v20 primary, and
 					// therefore does not report any of the multi-metric errors back. It only ever
 					// reports the default metric.
 					assert.EqualValues(t, 0.3, checkResult.Value) // self lag value
@@ -1835,7 +1835,7 @@ func TestReplica(t *testing.T) {
 			})
 
 			t.Run("custom query, metrics", func(t *testing.T) {
-				// For v19 backwards compatibility, we also report the standard metric/value in CheckResult:
+				// For v20 backwards compatibility, we also report the standard metric/value in CheckResult:
 				checkResult := throttler.Check(ctx, testAppName.String(), nil, flags)
 				assert.NoError(t, checkResult.Error, "value=%v, threshold=%v", checkResult.Value, checkResult.Threshold)
 				assert.Equal(t, float64(0.3), checkResult.Value)
