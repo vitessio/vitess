@@ -193,7 +193,7 @@ type MetricResultFunc func() (metricResult MetricResult, threshold float64)
 type MetricResultMap map[MetricName]MetricResult
 
 func NewMetricResultMap() MetricResultMap {
-	result := make(MetricResultMap)
+	result := make(MetricResultMap, len(KnownMetricNames))
 	for _, metricName := range KnownMetricNames {
 		result[metricName] = nil
 	}
