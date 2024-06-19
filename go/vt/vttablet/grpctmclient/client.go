@@ -1216,7 +1216,7 @@ func (client *Client) GetThrottlerStatus(ctx context.Context, tablet *topodatapb
 		return nil, err
 	}
 	defer closer.Close()
-	response, err := c.GetThrottlerStatus(ctx, &tabletmanagerdatapb.GetThrottlerStatusRequest{})
+	response, err := c.GetThrottlerStatus(ctx, req)
 	if err != nil {
 		return nil, err
 	}
