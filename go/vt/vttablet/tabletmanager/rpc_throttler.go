@@ -31,9 +31,14 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
 
+var (
+	statsThrottlerCheckRequests  = stats.NewCounter("ThrottlerCheckRequest", "CheckThrottler requests")
+	statsThrottlerStatusRequests = stats.NewCounter("GetThrottlerStatusRequest", "GetThrottlerStatus requests")
+)
+
 // CheckThrottler executes a throttler check
 func (tm *TabletManager) CheckThrottler(ctx context.Context, req *tabletmanagerdatapb.CheckThrottlerRequest) (*tabletmanagerdatapb.CheckThrottlerResponse, error) {
-	go stats.GetOrNewCounter("ThrottlerCheckRequest", "CheckThrottler requests").Add(1)
+	statsThrottlerCheckRequests.Add(1)
 	if req.AppName == "" {
 		req.AppName = throttlerapp.VitessName.String()
 	}
@@ -83,7 +88,7 @@ func (tm *TabletManager) CheckThrottler(ctx context.Context, req *tabletmanagerd
 
 // CheckThrottler executes a throttler check
 func (tm *TabletManager) GetThrottlerStatus(ctx context.Context, req *tabletmanagerdatapb.GetThrottlerStatusRequest) (*tabletmanagerdatapb.GetThrottlerStatusResponse, error) {
-	go stats.GetOrNewCounter("GetThrottlerStatusRequest", "GetThrottlerStatus requests").Add(1)
+	statsThrottlerStatusRequests.Add(1)
 	status := tm.QueryServiceControl.GetThrottlerStatus(ctx)
 	if status == nil {
 		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "nil status")
