@@ -50,14 +50,10 @@ type TabletResultMap map[string]base.MetricResultMap
 
 func (m TabletResultMap) Split(alias string) (withAlias TabletResultMap, all TabletResultMap) {
 	withAlias = make(TabletResultMap)
-	all = make(TabletResultMap, len(m))
-	for key, value := range m {
-		if key == alias {
-			withAlias[key] = value
-		}
-		all[key] = value
+	if val, ok := m[alias]; ok {
+		withAlias[alias] = val
 	}
-	return
+	return withAlias, m
 }
 
 // Inventory has the operational data about probes, their metrics, and relevant configuration
