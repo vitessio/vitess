@@ -19,6 +19,7 @@ package base
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -55,12 +56,7 @@ type MetricName string
 type MetricNames []MetricName
 
 func (names MetricNames) Contains(name MetricName) bool {
-	for _, n := range names {
-		if n == name {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(names, name)
 }
 
 func (names MetricNames) String() string {

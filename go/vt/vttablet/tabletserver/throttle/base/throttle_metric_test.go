@@ -178,3 +178,55 @@ func TestUnique(t *testing.T) {
 		})
 	}
 }
+
+func TestContains(t *testing.T) {
+	tcases := []struct {
+		names  MetricNames
+		name   MetricName
+		expect bool
+	}{
+		{
+			names: nil,
+			name:  LagMetricName,
+		},
+		{
+			names: MetricNames{},
+			name:  LagMetricName,
+		},
+		{
+			names:  MetricNames{LagMetricName},
+			name:   LagMetricName,
+			expect: true,
+		},
+		{
+			names:  MetricNames{LagMetricName},
+			name:   ThreadsRunningMetricName,
+			expect: false,
+		},
+		{
+			names:  MetricNames{LagMetricName, LagMetricName},
+			name:   LagMetricName,
+			expect: true,
+		},
+		{
+			names:  MetricNames{LagMetricName, ThreadsRunningMetricName, LagMetricName},
+			name:   LagMetricName,
+			expect: true,
+		},
+		{
+			names:  MetricNames{LagMetricName, ThreadsRunningMetricName, LagMetricName, LoadAvgMetricName, LoadAvgMetricName, CustomMetricName},
+			name:   LoadAvgMetricName,
+			expect: true,
+		},
+		{
+			names:  MetricNames{LagMetricName, ThreadsRunningMetricName, LagMetricName, LoadAvgMetricName, LoadAvgMetricName},
+			name:   CustomMetricName,
+			expect: false,
+		},
+	}
+	for _, tcase := range tcases {
+		t.Run(tcase.names.String(), func(t *testing.T) {
+			assert.Equal(t, tcase.expect, tcase.names.Contains(tcase.name))
+		})
+	}
+}
