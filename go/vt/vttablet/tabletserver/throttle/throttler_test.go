@@ -94,8 +94,8 @@ var (
 )
 
 const (
-	waitForProbesTimeout                   = 30 * time.Second
-	testAppName          throttlerapp.Name = "test"
+	waitForProbesTimeout = 30 * time.Second
+	testAppName          = throttlerapp.TestingName
 )
 
 type fakeTMClient struct {
