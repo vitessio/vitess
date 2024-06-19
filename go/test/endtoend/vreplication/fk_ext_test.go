@@ -248,7 +248,7 @@ func doReshard(t *testing.T, keyspace, workflowName, sourceShards, targetShards 
 		sourceShards:   sourceShards,
 		targetShards:   targetShards,
 		skipSchemaCopy: true,
-	}, workflowFlavorVtctl)
+	}, workflowFlavorVtctld)
 	rs.Create()
 	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", keyspace, workflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
 	for _, targetTab := range targetTabs {
@@ -355,7 +355,7 @@ func doMoveTables(t *testing.T, sourceKeyspace, targetKeyspace, workflowName, ta
 		},
 		sourceKeyspace: sourceKeyspace,
 		atomicCopy:     atomicCopy,
-	}, workflowFlavorRandom)
+	}, workflowFlavorVtctld)
 	mt.Create()
 
 	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKeyspace, workflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
