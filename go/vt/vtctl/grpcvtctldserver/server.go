@@ -2073,7 +2073,7 @@ func (s *VtctldServer) UpdateThrottlerConfig(ctx context.Context, req *vtctldata
 			throttlerConfig.MetricThresholds = make(map[string]float64)
 		}
 		if req.MetricName == "" {
-			// v19 behavior
+			// v20 behavior
 			if req.CustomQuerySet {
 				// custom query provided
 				throttlerConfig.CustomQuery = req.CustomQuery
