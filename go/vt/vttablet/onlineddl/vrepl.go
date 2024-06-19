@@ -39,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/schemadiff"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -196,31 +197,34 @@ func (v *VRepl) readAutoIncrement(ctx context.Context, conn *dbconnpool.DBConnec
 }
 
 // readTableColumns reads column list from given table
-func (v *VRepl) readTableColumns(ctx context.Context, conn *dbconnpool.DBConnection, tableName string) (columns *vrepl.ColumnList, virtualColumns *vrepl.ColumnList, pkColumns *vrepl.ColumnList, err error) {
-	parsed := sqlparser.BuildParsedQuery(sqlShowColumnsFrom, tableName)
-	rs, err := conn.ExecuteFetch(parsed.Query, -1, true)
+func readTableColumns(ctx context.Context, env *vtenv.Environment, createTable *sqlparser.CreateTable) (columns *vrepl.ColumnList, virtualColumns *vrepl.ColumnList, pkColumns *vrepl.ColumnList, err error) {
+	// Formalize CreateTable to ensure we normalize the PRIMARY KEY definition.
+	senv := schemadiff.NewEnv(env, env.CollationEnv().DefaultConnectionCharset())
+	createTableEntity, err := schemadiff.NewCreateTableEntity(senv, createTable)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, vterrors.Wrapf(err, "formalizing table")
 	}
+	createTable = createTableEntity.CreateTable
 	columnNames := []string{}
 	virtualColumnNames := []string{}
 	pkColumnNames := []string{}
-	for _, row := range rs.Named().Rows {
-		columnName := row.AsString("Field", "")
+
+	for _, col := range createTable.TableSpec.Columns {
+		columnName := col.Name.String()
 		columnNames = append(columnNames, columnName)
-
-		extra := row.AsString("Extra", "")
-		if strings.Contains(extra, "STORED GENERATED") || strings.Contains(extra, "VIRTUAL GENERATED") {
+		if isGenerated, _ := schemadiff.IsGeneratedColumn(col); isGenerated {
 			virtualColumnNames = append(virtualColumnNames, columnName)
-		}
-
-		key := row.AsString("Key", "")
-		if key == "PRI" {
-			pkColumnNames = append(pkColumnNames, columnName)
 		}
 	}
 	if len(columnNames) == 0 {
-		return nil, nil, nil, fmt.Errorf("Found 0 columns on `%s`", tableName)
+		return nil, nil, nil, fmt.Errorf("Found 0 columns on `%s`", createTable.Table.Name.String())
+	}
+	for _, key := range createTable.TableSpec.Indexes {
+		if key.Info.Type == sqlparser.IndexTypePrimary {
+			for _, col := range key.Columns {
+				pkColumnNames = append(pkColumnNames, col.Column.String())
+			}
+		}
 	}
 	return vrepl.NewColumnList(columnNames), vrepl.NewColumnList(virtualColumnNames), vrepl.NewColumnList(pkColumnNames), nil
 }
@@ -408,11 +412,11 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 		return err
 	}
 	// columns:
-	sourceColumns, sourceVirtualColumns, sourcePKColumns, err := v.readTableColumns(ctx, conn, v.sourceTable)
+	sourceColumns, sourceVirtualColumns, sourcePKColumns, err := readTableColumns(ctx, v.env, v.originalCreateTable)
 	if err != nil {
 		return err
 	}
-	targetColumns, targetVirtualColumns, targetPKColumns, err := v.readTableColumns(ctx, conn, v.targetTable)
+	targetColumns, targetVirtualColumns, targetPKColumns, err := readTableColumns(ctx, v.env, v.vreplCreateTable)
 	if err != nil {
 		return err
 	}

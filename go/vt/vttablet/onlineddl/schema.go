@@ -547,7 +547,6 @@ const (
 	sqlShowTablesLike                      = "SHOW TABLES LIKE '%a'"
 	sqlDropTable                           = "DROP TABLE `%a`"
 	sqlDropTableIfExists                   = "DROP TABLE IF EXISTS `%a`"
-	sqlShowColumnsFrom                     = "SHOW COLUMNS FROM `%a`"
 	sqlShowTableStatus                     = "SHOW TABLE STATUS LIKE '%a'"
 	sqlAnalyzeTable                        = "ANALYZE NO_WRITE_TO_BINLOG TABLE `%a`"
 	sqlShowCreateTable                     = "SHOW CREATE TABLE `%a`"
