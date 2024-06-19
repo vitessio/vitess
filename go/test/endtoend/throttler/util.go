@@ -59,7 +59,7 @@ var DefaultConfig = &Config{
 	Threshold: DefaultThreshold.Seconds(),
 }
 
-// CheckThrottlerRaw runs vtctlclient CheckThrottler
+// CheckThrottlerRaw runs vtctldclient CheckThrottler
 func CheckThrottlerRaw(vtctldProcess *cluster.VtctldClientProcess, tablet *cluster.Vttablet, appName string, flags *throttle.CheckFlags) (result string, err error) {
 	args := []string{}
 	args = append(args, "CheckThrottler")
@@ -87,7 +87,7 @@ func CheckThrottlerRaw(vtctldProcess *cluster.VtctldClientProcess, tablet *clust
 	return result, err
 }
 
-// GetThrottlerStatusRaw runs vtctlclient GetThrottlerStatus
+// GetThrottlerStatusRaw runs vtctldclient GetThrottlerStatus
 func GetThrottlerStatusRaw(vtctldProcess *cluster.VtctldClientProcess, tablet *cluster.Vttablet) (result string, err error) {
 	args := []string{}
 	args = append(args, "GetThrottlerStatus")
@@ -411,7 +411,7 @@ func WaitForThrottlerStatusEnabled(t *testing.T, vtctldProcess *cluster.VtctldCl
 		}
 		select {
 		case <-ctx.Done():
-			t.Errorf("timed out waiting for the %s tablet's throttler status enabled to be %t with the correct config after %v; last seen status: %+v",
+			assert.Fail(t, "timeout", "waiting for the %s tablet's throttler status enabled to be %t with the correct config after %v; last seen status: %+v",
 				tablet.Alias, enabled, timeout, status)
 			return
 		case <-ticker.C:
@@ -457,7 +457,7 @@ func WaitForThrottledApp(t *testing.T, tablet *cluster.Vttablet, throttlerApp th
 		}
 		select {
 		case <-ctx.Done():
-			t.Errorf("timed out waiting for the %s tablet's throttled apps with the correct config (expecting %s to be %v) after %v; last seen value: %s",
+			assert.Fail(t, "timeout", "waiting for the %s tablet's throttled apps with the correct config (expecting %s to be %v) after %v; last seen value: %s",
 				tablet.Alias, throttlerApp.String(), expectThrottled, timeout, throttledAppsBody)
 			return
 		case <-ticker.C:
