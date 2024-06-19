@@ -67,13 +67,14 @@
             "OperatorType": "Sort",
             "Variant": "Memory",
             "OrderBy": "1 DESC COLLATE utf8mb4_0900_ai_ci, (2|5) ASC",
+            "ResultColumns": 4,
             "Inputs": [
               {
                 "OperatorType": "Aggregate",
                 "Variant": "Ordered",
                 "Aggregates": "sum(1) AS revenue",
                 "GroupBy": "(0|4), (2|5), (3|6)",
-                "ResultColumns": 4,
+                "ResultColumns": 6,
                 "Inputs": [
                   {
                     "OperatorType": "Projection",
@@ -1746,7 +1747,7 @@
                     "Variant": "Ordered",
                     "Aggregates": "sum_count(1) AS count(o_orderkey), any_value(3)",
                     "GroupBy": "(0|2)",
-                    "ResultColumns": 2,
+                    "ResultColumns": 4,
                     "Inputs": [
                       {
                         "OperatorType": "Projection",
@@ -1945,13 +1946,14 @@
         "OperatorType": "Sort",
         "Variant": "Memory",
         "OrderBy": "3 DESC, (0|4) ASC, (1|5) ASC, (2|6) ASC",
+        "ResultColumns": 4,
         "Inputs": [
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
             "Aggregates": "count_distinct(3|7) AS supplier_cnt",
             "GroupBy": "(0|4), (1|5), (2|6)",
-            "ResultColumns": 4,
+            "ResultColumns": 7,
             "Inputs": [
               {
                 "OperatorType": "Sort",
@@ -2084,7 +2086,7 @@
                         "Variant": "Ordered",
                         "Aggregates": "sum(5) AS sum(l_quantity)",
                         "GroupBy": "(4|6), (3|7), (0|8), (1|9), (2|10)",
-                        "ResultColumns": 6,
+                        "ResultColumns": 11,
                         "Inputs": [
                           {
                             "OperatorType": "Sort",
@@ -2255,13 +2257,14 @@
             "OperatorType": "Sort",
             "Variant": "Memory",
             "OrderBy": "1 DESC, (0|2) ASC",
+            "ResultColumns": 2,
             "Inputs": [
               {
                 "OperatorType": "Aggregate",
                 "Variant": "Ordered",
                 "Aggregates": "sum_count_star(1) AS numwait",
                 "GroupBy": "(0|2)",
-                "ResultColumns": 2,
+                "ResultColumns": 3,
                 "Inputs": [
                   {
                     "OperatorType": "Projection",

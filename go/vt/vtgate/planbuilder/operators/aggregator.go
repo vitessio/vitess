@@ -144,9 +144,16 @@ func (a *Aggregator) FindCol(ctx *plancontext.PlanningContext, in sqlparser.Expr
 
 	expr := a.DT.RewriteExpression(ctx, in)
 	if offset, found := canReuseColumn(ctx, a.Columns, expr, extractExpr); found {
+		a.checkOffset(offset)
 		return offset
 	}
 	return -1
+}
+
+func (a *Aggregator) checkOffset(offset int) {
+	if a.ResultColumns > 0 && a.ResultColumns <= offset {
+		a.ResultColumns = offset + 1
+	}
 }
 
 func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, reuse bool, groupBy bool, ae *sqlparser.AliasedExpr) int {
@@ -160,6 +167,7 @@ func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gro
 	if reuse {
 		offset := a.findColInternal(ctx, ae, groupBy)
 		if offset >= 0 {
+			a.checkOffset(offset)
 			return offset
 		}
 	}
@@ -191,6 +199,7 @@ func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gro
 		panic(errFailedToPlan(ae))
 	}
 
+	a.checkOffset(offset)
 	return offset
 }
 
@@ -249,6 +258,7 @@ func (a *Aggregator) AddWSColumn(ctx *plancontext.PlanningContext, offset int, u
 		// TODO: we could handle this case by adding a projection on under the aggregator to make the columns line up
 		panic(errFailedToPlan(wsAe))
 	}
+	a.checkOffset(wsOffset)
 	return wsOffset
 }
 
