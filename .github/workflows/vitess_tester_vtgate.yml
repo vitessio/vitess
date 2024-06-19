@@ -143,9 +143,9 @@ jobs:
           # We go over all the directories in the given path.
           # If there is a vschema file there, we use it, otherwise we let vitess-tester autogenerate it.
           if [ -f $dir/vschema.json ]; then
-            vitess-tester --sharded --xunit --test-dir $dir --vschema "$dir"vschema.json
+            vitess-tester --sharded --xunit --vschema "$dir"vschema.json "$dir"*.test
           else 
-            vitess-tester --sharded --xunit --test-dir $dir
+            vitess-tester --sharded --xunit "$dir"*.test
           fi
           # Number the reports by changing their file names.
           mv report.xml report"$i".xml
