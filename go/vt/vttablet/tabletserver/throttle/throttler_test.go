@@ -391,9 +391,9 @@ func TestApplyThrottlerConfig(t *testing.T) {
 	})
 }
 
+// TestApplyThrottlerConfigMetricThresholds applies a specific 'lag' metric threshold,
+// and validates that it overrides the default threshold.
 func TestApplyThrottlerConfigMetricThresholds(t *testing.T) {
-	// This test applies a specific 'lag' metric threshold, and validates that it overrides
-	// the default threshold.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	throttler := newTestThrottler()
@@ -481,8 +481,8 @@ func TestApplyThrottlerConfigMetricThresholds(t *testing.T) {
 	})
 }
 
+// TestApplyThrottlerConfigAppCheckedMetrics applies different metrics to the "test" app and checks the result
 func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
-	// This test applies different metrics to the "test" app and checks the result
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	throttler := newTestThrottler()
