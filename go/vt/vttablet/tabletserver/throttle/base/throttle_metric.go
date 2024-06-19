@@ -150,7 +150,7 @@ var (
 )
 
 func init() {
-	aggregatedMetricNames = make(map[string]AggregatedMetricName)
+	aggregatedMetricNames = make(map[string]AggregatedMetricName, 3*len(KnownMetricNames))
 	for _, metricName := range KnownMetricNames {
 		aggregatedMetricNames[metricName.String()] = AggregatedMetricName{
 			Scope:  metricName.DefaultScope(),
