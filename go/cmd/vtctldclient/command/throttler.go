@@ -73,9 +73,6 @@ var (
 )
 
 func validateUpdateThrottlerConfig(cmd *cobra.Command, args []string) error {
-	if throttledAppRule.Name != "" && unthrottledAppRule.Name != "" {
-		return fmt.Errorf("throttle-app and unthrottle-app are mutually exclusive")
-	}
 	if updateThrottlerConfigOptions.MetricName != "" && !cmd.Flags().Changed("threshold") {
 		return fmt.Errorf("--metric-name flag requires --threshold flag. Set threshold to 0 to disable the metric threshold configuration")
 	}
