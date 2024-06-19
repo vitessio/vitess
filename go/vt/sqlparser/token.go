@@ -44,9 +44,10 @@ type Tokenizer struct {
 	multi          bool
 	specialComment *Tokenizer
 
-	Pos    int
-	buf    string
-	parser *Parser
+	Pos     int
+	PrevPos int
+	buf     string
+	parser  *Parser
 }
 
 // NewStringTokenizer creates a new Tokenizer for the
@@ -65,6 +66,7 @@ func (tkn *Tokenizer) Lex(lval *yySymType) int {
 	if tkn.SkipToEnd {
 		return tkn.skipStatement()
 	}
+	tkn.PrevPos = tkn.Pos
 
 	typ, val := tkn.Scan()
 	for typ == COMMENT {

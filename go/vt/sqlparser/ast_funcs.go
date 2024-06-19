@@ -725,6 +725,24 @@ func (ae *AliasedExpr) SetAlias(alias string) {
 	ae.As = NewIdentifierCI(alias)
 }
 
+func createAliasForEmpty(selectExpr SelectExpr, alias string) {
+	switch node := selectExpr.(type) {
+	case *AliasedExpr:
+		// The check here to see if the select expression printed as a string matches the alias exactly
+		// is an optimization to remove the aliases that are not required.
+		// That being said, removing this optimization will actually fix a few more queries that give incorrect column names,
+		// like `SELECT 1`. With this optimization the parser doesn't add an alias, so vtgate runs this query after normalization
+		// as `SELECT :vtg1` and therefore produces the wrong column name. If the column name is required to be correct, then there are
+		// 2 possible fixes -
+		// 1. Remove this check, so that parser changes the query to `SELECT 1 as `1`` and even after normalizing, it will remain `SELECT :vtg1 as `1``
+		// so the alias would be correct.
+		// 2. The other fix is to prevent the normalization of literals in select expressions altogether, in which case this optimization can be kept.
+		if node.As.IsEmpty() && String(selectExpr) != strings.TrimSpace(alias) {
+			node.As = NewIdentifierCI(strings.TrimSpace(alias))
+		}
+	}
+}
+
 // NewOrder makes a new Order
 func NewOrder(expr Expr, direction OrderDirection) *Order {
 	return &Order{

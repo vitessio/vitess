@@ -5901,8 +5901,8 @@ func TestOne(t *testing.T) {
 	testOne := struct {
 		input, output string
 	}{
-		input:  "",
-		output: "",
+		input:  "select cOlUmN_NaME, 1+   2, 1, CoUnT ( *  ) from t1",
+		output: "select cOlUmN_NaME, 1 + 2 as `1+   2`, 1, count(*) as `CoUnT ( *  )` from t1",
 	}
 	if testOne.input == "" {
 		return
