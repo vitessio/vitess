@@ -70,6 +70,7 @@ var (
 	throttledAppDuration         time.Duration
 
 	checkThrottlerOptions vtctldatapb.CheckThrottlerRequest
+	requestHeartbeats     bool
 )
 
 func validateUpdateThrottlerConfig(cmd *cobra.Command, args []string) error {
@@ -119,7 +120,7 @@ func commandCheckThrottler(cmd *cobra.Command, args []string) error {
 		TabletAlias:           alias,
 		AppName:               checkThrottlerOptions.AppName,
 		Scope:                 checkThrottlerOptions.Scope,
-		SkipRequestHeartbeats: checkThrottlerOptions.SkipRequestHeartbeats,
+		SkipRequestHeartbeats: !requestHeartbeats,
 		OkIfNotExists:         checkThrottlerOptions.OkIfNotExists,
 	})
 	if err != nil {
@@ -185,7 +186,7 @@ func init() {
 	// Check Throttler
 	CheckThrottler.Flags().StringVar(&checkThrottlerOptions.AppName, "app-name", throttlerapp.VitessName.String(), "app name to check")
 	CheckThrottler.Flags().StringVar(&checkThrottlerOptions.Scope, "scope", base.UndefinedScope.String(), "check scope ('shard', 'self' or leave empty for per-metric defaults)")
-	CheckThrottler.Flags().BoolVar(&checkThrottlerOptions.SkipRequestHeartbeats, "skip-heartbeats", false, "skip renewing heartbeat lease")
+	CheckThrottler.Flags().BoolVar(&requestHeartbeats, "request-heartbeats", false, "request heartbeat lease")
 	CheckThrottler.Flags().BoolVar(&checkThrottlerOptions.OkIfNotExists, "ok-if-not-exists", false, "return OK even if metric does not exist")
 	Root.AddCommand(CheckThrottler)
 

@@ -78,8 +78,8 @@ func CheckThrottlerRaw(vtctldProcess *cluster.VtctldClientProcess, tablet *clust
 	if flags.OKIfNotExists {
 		args = append(args, "--ok-if-not-exists")
 	}
-	if flags.SkipRequestHeartbeats {
-		args = append(args, "--skip-heartbeats")
+	if !flags.SkipRequestHeartbeats {
+		args = append(args, "--request-heartbeats")
 	}
 	args = append(args, tablet.Alias)
 
