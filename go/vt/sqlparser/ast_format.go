@@ -1361,6 +1361,39 @@ func (node *Literal) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *Argument) Format(buf *TrackedBuffer) {
+	// We need to make sure that any value used still returns
+	// the right type when interpolated. For example, if we have a
+	// decimal type with 0 scale, we don't want it to be interpreted
+	// as an integer after interpolation as that would the default
+	// literal interpretation in MySQL.
+	switch {
+	case node.Type == sqltypes.Unknown:
+		// Ensure we handle unknown first as we don't want to treat
+		// the type as a bitmask for the further tests.
+		// do nothing, the default literal will be correct.
+	case sqltypes.IsDecimal(node.Type):
+		buf.astPrintf(node, "CAST(:%#s AS DECIMAL(%d, %d))", node.Name, node.Size, node.Scale)
+		return
+	case sqltypes.IsUnsigned(node.Type):
+		buf.astPrintf(node, "CAST(:%#s AS UNSIGNED)", node.Name)
+		return
+	case node.Type == sqltypes.Float64:
+		buf.astPrintf(node, "CAST(:%#s AS DOUBLE)", node.Name)
+		return
+	case node.Type == sqltypes.Float32:
+		buf.astPrintf(node, "CAST(:%#s AS FLOAT)", node.Name)
+		return
+	case sqltypes.IsDate(node.Type):
+		buf.astPrintf(node, "CAST(:%#s AS DATE)", node.Name)
+		return
+	case node.Type == sqltypes.Time:
+		buf.astPrintf(node, "CAST(:%#s AS TIME)", node.Name)
+		return
+	case node.Type == sqltypes.Timestamp, node.Type == sqltypes.Datetime:
+		buf.astPrintf(node, "CAST(:%#s AS TIMESTAMP)", node.Name)
+		return
+	}
+	// Nothing special to do, the default literal will be correct.
 	buf.WriteArg(":", node.Name)
 	if node.Type >= 0 {
 		// For bind variables that are statically typed, emit their type as an adjacent comment.

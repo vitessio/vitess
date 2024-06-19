@@ -75,28 +75,28 @@ func TestNormalize(t *testing.T) {
 	}, {
 		// float val
 		in:      "select * from t where foobar = 1.2",
-		outstmt: "select * from t where foobar = :foobar /* DECIMAL(2,1) */",
+		outstmt: "select * from t where foobar = CAST(:foobar AS DECIMAL(2, 1))",
 		outbv: map[string]*querypb.BindVariable{
 			"foobar": sqltypes.DecimalBindVariable("1.2"),
 		},
 	}, {
 		// datetime val
 		in:      "select * from t where foobar = timestamp'2012-02-29 12:34:56.123456'",
-		outstmt: "select * from t where foobar = :foobar /* DATETIME(6) */",
+		outstmt: "select * from t where foobar = CAST(:foobar AS DATE)",
 		outbv: map[string]*querypb.BindVariable{
 			"foobar": sqltypes.ValueBindVariable(sqltypes.NewDatetime("2012-02-29 12:34:56.123456")),
 		},
 	}, {
 		// time val
 		in:      "select * from t where foobar = time'12:34:56.123456'",
-		outstmt: "select * from t where foobar = :foobar /* TIME(6) */",
+		outstmt: "select * from t where foobar = CAST(:foobar AS TIME)",
 		outbv: map[string]*querypb.BindVariable{
 			"foobar": sqltypes.ValueBindVariable(sqltypes.NewTime("12:34:56.123456")),
 		},
 	}, {
 		// multiple vals
 		in:      "select * from t where foo = 1.2 and bar = 2",
-		outstmt: "select * from t where foo = :foo /* DECIMAL(2,1) */ and bar = :bar /* INT64 */",
+		outstmt: "select * from t where foo = CAST(:foo AS DECIMAL(2, 1)) and bar = :bar /* INT64 */",
 		outbv: map[string]*querypb.BindVariable{
 			"foo": sqltypes.DecimalBindVariable("1.2"),
 			"bar": sqltypes.Int64BindVariable(2),
@@ -334,21 +334,21 @@ func TestNormalize(t *testing.T) {
 	}, {
 		// DateVal should also be normalized
 		in:      `select date'2022-08-06'`,
-		outstmt: `select :bv1 /* DATE */ from dual`,
+		outstmt: `select CAST(:bv1 AS DATE) from dual`,
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.ValueBindVariable(sqltypes.MakeTrusted(sqltypes.Date, []byte("2022-08-06"))),
 		},
 	}, {
 		// TimeVal should also be normalized
 		in:      `select time'17:05:12'`,
-		outstmt: `select :bv1 /* TIME */ from dual`,
+		outstmt: `select CAST(:bv1 AS TIME) from dual`,
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.ValueBindVariable(sqltypes.MakeTrusted(sqltypes.Time, []byte("17:05:12"))),
 		},
 	}, {
 		// TimestampVal should also be normalized
 		in:      `select timestamp'2022-08-06 17:05:12'`,
-		outstmt: `select :bv1 /* DATETIME */ from dual`,
+		outstmt: `select CAST(:bv1 AS DATE) from dual`,
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.ValueBindVariable(sqltypes.MakeTrusted(sqltypes.Datetime, []byte("2022-08-06 17:05:12"))),
 		},
