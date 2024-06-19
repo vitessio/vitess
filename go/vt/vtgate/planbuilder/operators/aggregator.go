@@ -51,7 +51,10 @@ type (
 		offsetPlanned bool
 
 		// Original will only be true for the original aggregator created from the AST
-		Original      bool
+		Original bool
+
+		// ResultColumns signals how many columns will be produced by this operator
+		// This is used to truncate the columns in the final result
 		ResultColumns int
 
 		QP *QueryProjection
@@ -281,9 +284,9 @@ func isDerived(op Operator) bool {
 	}
 }
 
-func (a *Aggregator) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
+func (a *Aggregator) GetColumns(ctx *plancontext.PlanningContext) (res []*sqlparser.AliasedExpr) {
 	if isDerived(a.Source) {
-		return a.Columns
+		return truncate(a, a.Columns)
 	}
 
 	// we update the incoming columns, so we know about any new columns that have been added
@@ -296,7 +299,7 @@ func (a *Aggregator) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.A
 		a.Columns = append(a.Columns, columns[len(a.Columns):]...)
 	}
 
-	return a.Columns
+	return truncate(a, a.Columns)
 }
 
 func (a *Aggregator) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
@@ -314,6 +317,9 @@ func (a *Aggregator) ShortDescription() string {
 	org := ""
 	if a.Original {
 		org = "ORG "
+	}
+	if a.ResultColumns > 0 {
+		org += fmt.Sprintf(":%d ", a.ResultColumns)
 	}
 
 	if len(a.Grouping) == 0 {
@@ -511,7 +517,16 @@ func (a *Aggregator) setTruncateColumnCount(offset int) {
 	a.ResultColumns = offset
 }
 
+func (a *Aggregator) getTruncateColumnCount() int {
+	return a.ResultColumns
+}
+
 func (a *Aggregator) internalAddColumn(ctx *plancontext.PlanningContext, aliasedExpr *sqlparser.AliasedExpr, addToGroupBy bool) int {
+	if a.ResultColumns == 0 {
+		// if we need to use `internalAddColumn`, it means we are adding columns that are not part of the original list,
+		// so we need to set the ResultColumns to the current length of the columns list
+		a.ResultColumns = len(a.Columns)
+	}
 	offset := a.Source.AddColumn(ctx, true, addToGroupBy, aliasedExpr)
 
 	if offset == len(a.Columns) {
