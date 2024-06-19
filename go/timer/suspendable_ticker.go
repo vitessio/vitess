@@ -83,15 +83,20 @@ func (s *SuspendableTicker) TickAfter(d time.Duration) {
 }
 
 func (s *SuspendableTicker) loop(ctx context.Context) {
+	defer s.ticker.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
-			s.ticker.Stop()
 			return
 		case t := <-s.ticker.C:
 			if !s.suspended.Load() {
 				// not suspended
-				s.C <- t
+				select {
+				case <-ctx.Done():
+					return
+				case s.C <- t:
+				}
 			}
 		}
 	}
