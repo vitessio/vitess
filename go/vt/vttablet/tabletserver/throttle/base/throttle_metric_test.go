@@ -17,7 +17,6 @@ limitations under the License.
 package base
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 
@@ -88,7 +87,6 @@ func TestAggregateName(t *testing.T) {
 		},
 	}
 	assert.Equal(t, 3*len(KnownMetricNames), len(aggregatedMetricNames))
-	fmt.Println(aggregatedMetricNames)
 	for _, tcase := range tcases {
 		t.Run(tcase.aggregatedName, func(t *testing.T) {
 			scope, metricName, err := DisaggregateMetricName(tcase.aggregatedName)
