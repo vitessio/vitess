@@ -6,7 +6,6 @@
 package onlineddl
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -17,7 +16,6 @@ import (
 )
 
 func TestReadTableColumns(t *testing.T) {
-	ctx := context.Background()
 	env := vtenv.NewTestEnv()
 
 	tcases := []struct {
@@ -30,7 +28,8 @@ func TestReadTableColumns(t *testing.T) {
 		{
 			name: "simple",
 			create: `create table t(
-			id int primary key
+				id int,
+				primary key (id)
 			)`,
 			cols:      []string{"id"},
 			generated: []string{},
@@ -61,7 +60,7 @@ func TestReadTableColumns(t *testing.T) {
 			require.NoError(t, err)
 			createTable, ok := stmt.(*sqlparser.CreateTable)
 			require.True(t, ok)
-			cols, virtual, pk, err := readTableColumns(ctx, env, createTable)
+			cols, virtual, pk, err := readTableColumns(createTable)
 			assert.NoError(t, err)
 			assert.Equal(t, tcase.cols, cols.Names())
 			assert.Equal(t, tcase.generated, virtual.Names())

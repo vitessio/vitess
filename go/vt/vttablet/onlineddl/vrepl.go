@@ -197,14 +197,7 @@ func (v *VRepl) readAutoIncrement(ctx context.Context, conn *dbconnpool.DBConnec
 }
 
 // readTableColumns reads column list from given table
-func readTableColumns(ctx context.Context, env *vtenv.Environment, createTable *sqlparser.CreateTable) (columns *vrepl.ColumnList, virtualColumns *vrepl.ColumnList, pkColumns *vrepl.ColumnList, err error) {
-	// Formalize CreateTable to ensure we normalize the PRIMARY KEY definition.
-	senv := schemadiff.NewEnv(env, env.CollationEnv().DefaultConnectionCharset())
-	createTableEntity, err := schemadiff.NewCreateTableEntity(senv, createTable)
-	if err != nil {
-		return nil, nil, nil, vterrors.Wrapf(err, "formalizing table")
-	}
-	createTable = createTableEntity.CreateTable
+func readTableColumns(createTable *sqlparser.CreateTable) (columns *vrepl.ColumnList, virtualColumns *vrepl.ColumnList, pkColumns *vrepl.ColumnList, err error) {
 	columnNames := []string{}
 	virtualColumnNames := []string{}
 	pkColumnNames := []string{}
@@ -217,7 +210,7 @@ func readTableColumns(ctx context.Context, env *vtenv.Environment, createTable *
 		}
 	}
 	if len(columnNames) == 0 {
-		return nil, nil, nil, fmt.Errorf("Found 0 columns on `%s`", createTable.Table.Name.String())
+		return nil, nil, nil, fmt.Errorf("found 0 columns on `%s`", createTable.Table.Name.String())
 	}
 	for _, key := range createTable.TableSpec.Indexes {
 		if key.Info.Type == sqlparser.IndexTypePrimary {
@@ -412,11 +405,11 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 		return err
 	}
 	// columns:
-	sourceColumns, sourceVirtualColumns, sourcePKColumns, err := readTableColumns(ctx, v.env, v.originalCreateTable)
+	sourceColumns, sourceVirtualColumns, sourcePKColumns, err := readTableColumns(v.originalCreateTable)
 	if err != nil {
 		return err
 	}
-	targetColumns, targetVirtualColumns, targetPKColumns, err := readTableColumns(ctx, v.env, v.vreplCreateTable)
+	targetColumns, targetVirtualColumns, targetPKColumns, err := readTableColumns(v.vreplCreateTable)
 	if err != nil {
 		return err
 	}

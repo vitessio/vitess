@@ -616,7 +616,7 @@ func (e *Executor) getCreateTableStatement(ctx context.Context, tableName string
 	}
 	createTable, ok := stmt.(*sqlparser.CreateTable)
 	if !ok {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected CREATE TABLE. Got %v", sqlparser.CanonicalString(stmt))
+		return nil, schemadiff.ErrExpectedCreateTable
 	}
 	return createTable, nil
 }
