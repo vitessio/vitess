@@ -391,9 +391,13 @@ func TestDuplicateCreateTable(t *testing.T) {
 	}
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {
-			originalCreateTable, newCreateTable, constraintMap, err := e.duplicateCreateTable(ctx, onlineDDL, tcase.sql, tcase.newName)
+			stmt, err := e.env.Environment().Parser().ParseStrictDDL(tcase.sql)
+			require.NoError(t, err)
+			originalCreateTable, ok := stmt.(*sqlparser.CreateTable)
+			require.True(t, ok)
+			require.NotNil(t, originalCreateTable)
+			newCreateTable, constraintMap, err := e.duplicateCreateTable(ctx, onlineDDL, originalCreateTable, tcase.newName)
 			assert.NoError(t, err)
-			assert.NotNil(t, originalCreateTable)
 			assert.NotNil(t, newCreateTable)
 			assert.NotNil(t, constraintMap)
 
