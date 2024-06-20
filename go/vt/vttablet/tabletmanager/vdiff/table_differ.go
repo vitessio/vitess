@@ -119,15 +119,7 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 	// Ensure that we hold onto the lock.
 	// Ensure that the lease is renewed and we're able to hold the lock during the
 	// table diff initialization work.
-	done := make(chan struct{})
-	errCh := make(chan error, 1)
-	defer func() {
-		close(done)
-		for range errCh { // Drain the channel
-		}
-		close(errCh)
-	}()
-	ctx, unlock, lockErr := td.wd.ct.ts.LockKeyspaceWithLeaseRenewal(ctx, targetKeyspace, "vdiff", done, errCh)
+	ctx, unlock, leaseErrCh, lockErr := td.wd.ct.ts.LockKeyspaceWithLeaseRenewal(ctx, targetKeyspace, "vdiff")
 	if lockErr != nil {
 		log.Errorf("LockKeyspace failed: %v", lockErr)
 		return lockErr
@@ -147,7 +139,7 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case err := <-errCh:
+		case err := <-leaseErrCh:
 			return err
 		default:
 			return nil

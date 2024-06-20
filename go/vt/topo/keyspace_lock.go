@@ -69,12 +69,14 @@ func CheckKeyspaceLocked(ctx context.Context, keyspace string) error {
 // until the MaxKeyspaceLockLeaseTTL is reached -- exiting early if the context is
 // cancelled, the done channel is closed, or an error is encountered -- refreshing
 // the lock's lease every leaseRenewal until ends.
-func (ts *Server) LockKeyspaceWithLeaseRenewal(ctx context.Context, keyspace, action string, doneCh <-chan struct{}, errCh chan<- error) (context.Context, func(*error), error) {
+func (ts *Server) LockKeyspaceWithLeaseRenewal(ctx context.Context, keyspace, action string) (context.Context, func(*error), <-chan error, error) {
 	ksLock := &keyspaceLock{keyspace: keyspace}
 	lockCtx, unLockF, err := ts.internalLock(ctx, ksLock, action, true)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
+	doneCh := make(chan struct{})
+	errCh := make(chan error, 1)
 	go func() {
 		renewAttempts := int(MaxKeyspaceLockLeaseTTL.Seconds() / leaseRenewalInterval.Seconds())
 		for i := 0; i < renewAttempts; i++ {
@@ -93,5 +95,10 @@ func (ts *Server) LockKeyspaceWithLeaseRenewal(ctx context.Context, keyspace, ac
 			}
 		}
 	}()
-	return lockCtx, unLockF, err
+	f := func(err *error) {
+		close(doneCh)
+		close(errCh)
+		unLockF(err)
+	}
+	return lockCtx, f, errCh, err
 }

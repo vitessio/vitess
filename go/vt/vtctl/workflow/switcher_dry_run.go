@@ -293,11 +293,11 @@ func (dr *switcherDryRun) cancelMigration(ctx context.Context, sm *StreamMigrato
 	dr.drLog.Log("Cancel migration as requested")
 }
 
-func (dr *switcherDryRun) lockKeyspace(ctx context.Context, keyspace, _ string, _ <-chan struct{}, _ chan<- error) (context.Context, func(*error), error) {
+func (dr *switcherDryRun) lockKeyspace(ctx context.Context, keyspace, _ string) (context.Context, func(*error), <-chan error, error) {
 	dr.drLog.Logf("Lock keyspace %s", keyspace)
 	return ctx, func(e *error) {
 		dr.drLog.Logf("Unlock keyspace %s", keyspace)
-	}, nil
+	}, nil, nil
 }
 
 func (dr *switcherDryRun) removeSourceTables(ctx context.Context, removalType TableRemovalType) error {

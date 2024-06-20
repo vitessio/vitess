@@ -24,7 +24,7 @@ import (
 )
 
 type iswitcher interface {
-	lockKeyspace(ctx context.Context, keyspace, action string, doneCh <-chan struct{}, errCh chan<- error) (context.Context, func(*error), error)
+	lockKeyspace(ctx context.Context, keyspace, action string) (context.Context, func(*error), <-chan error, error)
 	cancelMigration(ctx context.Context, sm *StreamMigrator)
 	stopStreams(ctx context.Context, sm *StreamMigrator) ([]string, error)
 	stopSourceWrites(ctx context.Context) error

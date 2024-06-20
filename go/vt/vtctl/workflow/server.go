@@ -1465,21 +1465,14 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 
 	// Lock the target keyspace while we setup the workflow and ensure that we're able
 	// to hold the lock throughout.
-	leaseDoneCh := make(chan struct{})
-	leaseErrCh := make(chan error, 1)
-	defer func() {
-		close(leaseDoneCh)
-		for range leaseErrCh { // Drain the channel
-		}
-		close(leaseErrCh)
-	}()
-	lockCtx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "MoveTablesCreate", leaseDoneCh, leaseErrCh)
+	lockCtx, targetUnlock, leaseErrCh, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "MoveTablesCreate")
 	if lockErr != nil {
 		ts.Logger().Errorf("Locking target keyspace %s failed: %v", ts.TargetKeyspaceName(), lockErr)
 		return nil, lockErr
 	}
 	defer targetUnlock(&err)
 	ctx = lockCtx
+	// Check for errors with the lock lease renewal.
 	haveLeaseError := func() error {
 		select {
 		case err := <-leaseErrCh:
@@ -2621,38 +2614,42 @@ func (s *Server) DropTargets(ctx context.Context, ts *trafficSwitcher, keepData,
 	// Need to lock both source and target keyspaces.
 	// Ensure that the leases are renewed and we're able to hold the locks during the
 	// cleanup work.
-	leaseDoneCh := make(chan struct{})
-	leaseErrCh := make(chan error, 2)
-	defer func() {
-		close(leaseDoneCh)
-		for range leaseErrCh { // Drain the channel
-		}
-		close(leaseErrCh)
-	}()
-	tctx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "DropTargets", leaseDoneCh, leaseErrCh)
+	tctx, sourceUnlock, sourceLeaseErrCh, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "DropTargets")
 	if lockErr != nil {
 		ts.Logger().Errorf("Source LockKeyspace failed: %v", lockErr)
 		return nil, lockErr
 	}
 	defer sourceUnlock(&err)
 	ctx = tctx
+	// Check for errors with the lock lease renewal.
+	haveLeaseError := func() error {
+		select {
+		case err := <-sourceLeaseErrCh:
+			return err
+		default:
+			return nil
+		}
+	}
 	if ts.TargetKeyspaceName() != ts.SourceKeyspaceName() {
-		tctx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "DropTargets", leaseDoneCh, leaseErrCh)
+		tctx, targetUnlock, targetLeaseErrCh, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "DropTargets")
 		if lockErr != nil {
 			ts.Logger().Errorf("Target LockKeyspace failed: %v", lockErr)
 			return nil, lockErr
 		}
 		defer targetUnlock(&err)
 		ctx = tctx
-	}
-	// Check for errors in our diff goroutine and the lock lease renewal.
-	haveLeaseError := func() error {
-		select {
-		case err := <-leaseErrCh:
-			return err
-		default:
-			return nil
+		// Check for errors with the lock lease renewal in both keyspaces.
+		haveLeaseError = func() error {
+			select {
+			case err := <-sourceLeaseErrCh:
+				return err
+			case err := <-targetLeaseErrCh:
+				return err
+			default:
+				return nil
+			}
 		}
+
 	}
 
 	if !keepData {
@@ -2852,37 +2849,40 @@ func (s *Server) dropSources(ctx context.Context, ts *trafficSwitcher, removalTy
 	// Need to lock both source and target keyspaces.
 	// Ensure that the leases are renewed and we're able to hold the locks during the
 	// cleanup work.
-	leaseDoneCh := make(chan struct{})
-	leaseErrCh := make(chan error, 2)
-	defer func() {
-		close(leaseDoneCh)
-		for range leaseErrCh { // Drain the channel
-		}
-		close(leaseErrCh)
-	}()
-	tctx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "DropSources", leaseDoneCh, leaseErrCh)
+	tctx, sourceUnlock, sourceLeaseErrCh, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "DropSources")
 	if lockErr != nil {
 		ts.Logger().Errorf("Source LockKeyspace failed: %v", lockErr)
 		return nil, lockErr
 	}
 	defer sourceUnlock(&err)
 	ctx = tctx
+	// Check for errors with the lock lease renewal.
+	haveLeaseError := func() error {
+		select {
+		case err := <-sourceLeaseErrCh:
+			return err
+		default:
+			return nil
+		}
+	}
 	if ts.TargetKeyspaceName() != ts.SourceKeyspaceName() {
-		tctx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "DropSources", leaseDoneCh, leaseErrCh)
+		tctx, targetUnlock, targetLeaseErrCh, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "DropSources")
 		if lockErr != nil {
 			ts.Logger().Errorf("Target LockKeyspace failed: %v", lockErr)
 			return nil, lockErr
 		}
 		defer targetUnlock(&err)
 		ctx = tctx
-	}
-	// Check for errors in our diff goroutine and the lock lease renewal.
-	haveLeaseError := func() error {
-		select {
-		case err := <-leaseErrCh:
-			return err
-		default:
-			return nil
+		// Check for errors with the lock lease renewal in both keyspaces.
+		haveLeaseError = func() error {
+			select {
+			case err := <-sourceLeaseErrCh:
+				return err
+			case err := <-targetLeaseErrCh:
+				return err
+			default:
+				return nil
+			}
 		}
 	}
 
@@ -3128,22 +3128,14 @@ func (s *Server) finalizeMigrateWorkflow(ctx context.Context, ts *trafficSwitche
 
 	// Lock the target keyspace and ensure that the lease is renewed and we're able to hold
 	// the lock during the finalization.
-	leaseDoneCh := make(chan struct{})
-	leaseErrCh := make(chan error, 1)
-	defer func() {
-		close(leaseDoneCh)
-		for range leaseErrCh { // Drain the channel
-		}
-		close(leaseErrCh)
-	}()
-	tctx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "completeMigrateWorkflow", leaseDoneCh, leaseErrCh)
+	tctx, targetUnlock, leaseErrCh, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "completeMigrateWorkflow")
 	if lockErr != nil {
 		ts.Logger().Errorf("Target LockKeyspace failed: %v", lockErr)
 		return nil, lockErr
 	}
 	defer targetUnlock(&err)
 	ctx = tctx
-	// Check for errors in our diff goroutine and the lock lease renewal.
+	// Check for errors with the lock lease renewal.
 	haveLeaseError := func() error {
 		select {
 		case err := <-leaseErrCh:
@@ -3397,21 +3389,13 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 
 	// Ensure that the lease is renewed and we're able to hold the locks during the
 	// traffic switching.
-	leaseDoneCh := make(chan struct{})
-	leaseErrCh := make(chan error, 1)
-	defer func() {
-		close(leaseDoneCh)
-		for range leaseErrCh { // Drain the channel
-		}
-		close(leaseErrCh)
-	}()
 	// For reads, only locking the source keyspace is sufficient.
-	ctx, unlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "SwitchReads", leaseDoneCh, leaseErrCh)
+	ctx, unlock, leaseErrCh, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "SwitchReads")
 	if lockErr != nil {
 		return handleError(fmt.Sprintf("failed to lock the %s keyspace", ts.SourceKeyspaceName()), lockErr)
 	}
 	defer unlock(&err)
-	// Check for errors in our diff goroutine and the lock lease renewal.
+	// Check for errors with the lock lease renewal.
 	haveLeaseError := func() error {
 		select {
 		case err := <-leaseErrCh:
@@ -3492,34 +3476,38 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 	// We need to lock both source and target keyspaces.
 	// Ensure that the leases are renewed and we're able to hold the locks during the
 	// traffic switching.
-	leaseDoneCh := make(chan struct{})
-	leaseErrCh := make(chan error, 2)
-	defer func() {
-		close(leaseDoneCh)
-		for range leaseErrCh { // Drain the channel
-		}
-		close(leaseErrCh)
-	}()
-	tctx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "SwitchWrites", leaseDoneCh, leaseErrCh)
+	tctx, sourceUnlock, sourceLeaseErrCh, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "SwitchWrites")
 	if lockErr != nil {
 		return handleError(fmt.Sprintf("failed to lock the %s keyspace", ts.SourceKeyspaceName()), lockErr)
 	}
-	ctx = tctx
 	defer sourceUnlock(&err)
-	if ts.TargetKeyspaceName() != ts.SourceKeyspaceName() {
-		tctx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "SwitchWrites", leaseDoneCh, leaseErrCh)
-		if lockErr != nil {
-			return handleError(fmt.Sprintf("failed to lock the %s keyspace", ts.TargetKeyspaceName()), lockErr)
-		}
-		ctx = tctx
-		defer targetUnlock(&err)
-	}
+	ctx = tctx
+	// Check for errors with the lock lease renewal.
 	haveLeaseError := func() error {
 		select {
-		case err := <-leaseErrCh:
+		case err := <-sourceLeaseErrCh:
 			return err
 		default:
 			return nil
+		}
+	}
+	if ts.TargetKeyspaceName() != ts.SourceKeyspaceName() {
+		tctx, targetUnlock, targetLeaseErrCh, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "SwitchWrites")
+		if lockErr != nil {
+			return handleError(fmt.Sprintf("failed to lock the %s keyspace", ts.TargetKeyspaceName()), lockErr)
+		}
+		defer targetUnlock(&err)
+		ctx = tctx
+		// Check for errors with the lock lease renewal in both keyspaces.
+		haveLeaseError = func() error {
+			select {
+			case err := <-sourceLeaseErrCh:
+				return err
+			case err := <-targetLeaseErrCh:
+				return err
+			default:
+				return nil
+			}
 		}
 	}
 
