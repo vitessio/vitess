@@ -24,6 +24,11 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
+const (
+	MaxKeyspaceLockLeaseTTL = 10 * time.Minute
+	leaseRenewalInterval    = 5 * time.Second
+)
+
 type keyspaceLock struct {
 	keyspace string
 }
@@ -60,27 +65,33 @@ func CheckKeyspaceLocked(ctx context.Context, keyspace string) error {
 	})
 }
 
-// AutoRenewKeyspaceLockLease will renew the keyspace lock lease every renewTime
-// in a goroutine until the maxTime is reached -- exiting early if the context
-// is cancelled, the done channel is closed, or an error is encountered.
-func AutoRenewKeyspaceLockLease(ctx context.Context, keyspace string, renewTime, maxTime time.Duration, doneCh <-chan struct{}, errCh chan error) {
+// LockKeyspaceWithLeaseRenewal locks the keyspace and starts a goroutine which runs
+// until the MaxKeyspaceLockLeaseTTL is reached -- exiting early if the context is
+// cancelled, the done channel is closed, or an error is encountered -- refreshing
+// the lock's lease every leaseRenewal until ends.
+func (ts *Server) LockKeyspaceWithLeaseRenewal(ctx context.Context, keyspace, action string, doneCh <-chan struct{}, errCh chan<- error) (context.Context, func(*error), error) {
+	ksLock := &keyspaceLock{keyspace: keyspace}
+	lockCtx, unLockF, err := ts.internalLock(ctx, ksLock, action, true)
+	if err != nil {
+		return nil, nil, err
+	}
 	go func() {
-		ksLock := &keyspaceLock{keyspace: keyspace}
-		renewAttempts := int(maxTime.Seconds() / renewTime.Seconds())
+		renewAttempts := int(MaxKeyspaceLockLeaseTTL.Seconds() / leaseRenewalInterval.Seconds())
 		for i := 0; i < renewAttempts; i++ {
-			time.Sleep(renewTime)
+			time.Sleep(leaseRenewalInterval)
 			select {
-			case <-ctx.Done():
+			case <-lockCtx.Done():
 				return
 			case <-doneCh:
 				return
 			default:
-				// Attempt to renew lease.
-				if err := checkLocked(ctx, ksLock); err != nil {
+				// Attempt to renew the lease.
+				if err := checkLocked(lockCtx, ksLock); err != nil {
 					errCh <- vterrors.Wrapf(err, "failed to renew keyspace %s lock lease", keyspace)
 					return
 				}
 			}
 		}
 	}()
+	return lockCtx, unLockF, err
 }

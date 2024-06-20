@@ -126,8 +126,8 @@ func (r *switcher) cancelMigration(ctx context.Context, sm *StreamMigrator) {
 	r.ts.cancelMigration(ctx, sm)
 }
 
-func (r *switcher) lockKeyspace(ctx context.Context, keyspace, action string) (context.Context, func(*error), error) {
-	return r.s.ts.LockKeyspace(ctx, keyspace, action)
+func (r *switcher) lockKeyspace(ctx context.Context, keyspace, action string, doneCh <-chan struct{}, errCh chan<- error) (context.Context, func(*error), error) {
+	return r.s.ts.LockKeyspaceWithLeaseRenewal(ctx, keyspace, action, doneCh, errCh)
 }
 
 func (r *switcher) freezeTargetVReplication(ctx context.Context) error {

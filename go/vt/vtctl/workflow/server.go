@@ -1462,13 +1462,32 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		return nil, err
 	}
 	sw := &switcher{s: s, ts: ts}
-	lockCtx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "MoveTablesCreate")
+
+	// Lock the target keyspace while we setup the workflow and ensure that we're able
+	// to hold the lock throughout.
+	leaseDoneCh := make(chan struct{})
+	leaseErrCh := make(chan error, 1)
+	defer func() {
+		close(leaseDoneCh)
+		for range leaseErrCh { // Drain the channel
+		}
+		close(leaseErrCh)
+	}()
+	lockCtx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "MoveTablesCreate", leaseDoneCh, leaseErrCh)
 	if lockErr != nil {
 		ts.Logger().Errorf("Locking target keyspace %s failed: %v", ts.TargetKeyspaceName(), lockErr)
 		return nil, lockErr
 	}
 	defer targetUnlock(&err)
 	ctx = lockCtx
+	haveLeaseError := func() error {
+		select {
+		case err := <-leaseErrCh:
+			return err
+		default:
+			return nil
+		}
+	}
 
 	// If we get an error after this point, where the vreplication streams/records
 	// have been created, then we clean up the workflow's artifacts.
@@ -1488,25 +1507,40 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 			if cerr := s.ts.SaveVSchema(ctx, targetKeyspace, origVSchema); cerr != nil {
 				err = vterrors.Wrapf(err, "failed to restore original target vschema: %v", cerr)
 			}
+			if leaseErr := haveLeaseError(); leaseErr != nil { // We only check at the end as an FYI that we lost the lease
+				log.Warningf("keyspace lock lease was lost when cleaning up after a failed MoveTablesCreate: %v", leaseErr)
+			}
 		}
 	}()
 
 	// Now that the streams have been successfully created, let's put the associated
 	// routing rules and denied tables entries in place.
 	if externalTopo == nil {
+		if leaseErr := haveLeaseError(); leaseErr != nil {
+			return nil, leaseErr
+		}
 		if err := s.setupInitialRoutingRules(ctx, req, mz, tables); err != nil {
 			return nil, err
 		}
 
+		if leaseErr := haveLeaseError(); leaseErr != nil {
+			return nil, leaseErr
+		}
 		// We added to the vschema.
 		if err := s.ts.SaveVSchema(ctx, targetKeyspace, vschema); err != nil {
 			return nil, err
 		}
 	}
 	if isStandardMoveTables() { // Non-standard ones do not use shard scoped mechanisms
+		if leaseErr := haveLeaseError(); leaseErr != nil {
+			return nil, leaseErr
+		}
 		if err := s.setupInitialDeniedTables(ctx, ts); err != nil {
 			return nil, vterrors.Wrapf(err, "failed to put initial denied tables entries in place on the target shards")
 		}
+	}
+	if leaseErr := haveLeaseError(); leaseErr != nil {
+		return nil, leaseErr
 	}
 	if err := s.ts.RebuildSrvVSchema(ctx, nil); err != nil {
 		return nil, err
@@ -1518,6 +1552,9 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		}
 	}
 
+	if leaseErr := haveLeaseError(); leaseErr != nil {
+		return nil, leaseErr
+	}
 	tabletShards, err := s.collectTargetStreams(ctx, mz)
 	if err != nil {
 		return nil, err
@@ -1529,6 +1566,9 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	}
 
 	if mz.ms.ExternalCluster == "" {
+		if leaseErr := haveLeaseError(); leaseErr != nil {
+			err = leaseErr
+		}
 		exists, tablets, err := s.checkIfPreviousJournalExists(ctx, mz, migrationID)
 		if err != nil {
 			return nil, err
@@ -1544,6 +1584,9 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	}
 
 	if req.AutoStart {
+		if leaseErr := haveLeaseError(); leaseErr != nil {
+			err = leaseErr
+		}
 		if err := mz.startStreams(ctx); err != nil {
 			return nil, err
 		}
@@ -2574,16 +2617,27 @@ func (s *Server) DropTargets(ctx context.Context, ts *trafficSwitcher, keepData,
 		sw = &switcher{s: s, ts: ts}
 	}
 	var tctx context.Context
-	tctx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "DropTargets")
+
+	// Need to lock both source and target keyspaces.
+	// Ensure that the leases are renewed and we're able to hold the locks during the
+	// cleanup work.
+	leaseDoneCh := make(chan struct{})
+	leaseErrCh := make(chan error, 2)
+	defer func() {
+		close(leaseDoneCh)
+		for range leaseErrCh { // Drain the channel
+		}
+		close(leaseErrCh)
+	}()
+	tctx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "DropTargets", leaseDoneCh, leaseErrCh)
 	if lockErr != nil {
 		ts.Logger().Errorf("Source LockKeyspace failed: %v", lockErr)
 		return nil, lockErr
 	}
 	defer sourceUnlock(&err)
 	ctx = tctx
-
 	if ts.TargetKeyspaceName() != ts.SourceKeyspaceName() {
-		tctx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "DropTargets")
+		tctx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "DropTargets", leaseDoneCh, leaseErrCh)
 		if lockErr != nil {
 			ts.Logger().Errorf("Target LockKeyspace failed: %v", lockErr)
 			return nil, lockErr
@@ -2591,26 +2645,54 @@ func (s *Server) DropTargets(ctx context.Context, ts *trafficSwitcher, keepData,
 		defer targetUnlock(&err)
 		ctx = tctx
 	}
+	// Check for errors in our diff goroutine and the lock lease renewal.
+	haveLeaseError := func() error {
+		select {
+		case err := <-leaseErrCh:
+			return err
+		default:
+			return nil
+		}
+	}
+
 	if !keepData {
 		switch ts.MigrationType() {
 		case binlogdatapb.MigrationType_TABLES:
+			if leaseErr := haveLeaseError(); leaseErr != nil {
+				return nil, leaseErr
+			}
 			if err := sw.removeTargetTables(ctx); err != nil {
 				return nil, err
 			}
+			if leaseErr := haveLeaseError(); leaseErr != nil {
+				return nil, leaseErr
+			}
 			if err := sw.dropSourceDeniedTables(ctx); err != nil {
 				return nil, err
+			}
+			if leaseErr := haveLeaseError(); leaseErr != nil {
+				return nil, leaseErr
 			}
 			if err := sw.dropTargetDeniedTables(ctx); err != nil {
 				return nil, err
 			}
 		case binlogdatapb.MigrationType_SHARDS:
+			if leaseErr := haveLeaseError(); leaseErr != nil {
+				return nil, leaseErr
+			}
 			if err := sw.dropTargetShards(ctx); err != nil {
 				return nil, err
 			}
 		}
 	}
+	if leaseErr := haveLeaseError(); leaseErr != nil {
+		return nil, leaseErr
+	}
 	if err := s.dropRelatedArtifacts(ctx, keepRoutingRules, sw); err != nil {
 		return nil, err
+	}
+	if leaseErr := haveLeaseError(); leaseErr != nil {
+		return nil, leaseErr
 	}
 	if err := ts.TopoServer().RebuildSrvVSchema(ctx, nil); err != nil {
 		return nil, err
@@ -2766,7 +2848,19 @@ func (s *Server) dropSources(ctx context.Context, ts *trafficSwitcher, removalTy
 		sw = &switcher{ts: ts, s: s}
 	}
 	var tctx context.Context
-	tctx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "DropSources")
+
+	// Need to lock both source and target keyspaces.
+	// Ensure that the leases are renewed and we're able to hold the locks during the
+	// cleanup work.
+	leaseDoneCh := make(chan struct{})
+	leaseErrCh := make(chan error, 2)
+	defer func() {
+		close(leaseDoneCh)
+		for range leaseErrCh { // Drain the channel
+		}
+		close(leaseErrCh)
+	}()
+	tctx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "DropSources", leaseDoneCh, leaseErrCh)
 	if lockErr != nil {
 		ts.Logger().Errorf("Source LockKeyspace failed: %v", lockErr)
 		return nil, lockErr
@@ -2774,7 +2868,7 @@ func (s *Server) dropSources(ctx context.Context, ts *trafficSwitcher, removalTy
 	defer sourceUnlock(&err)
 	ctx = tctx
 	if ts.TargetKeyspaceName() != ts.SourceKeyspaceName() {
-		tctx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "DropSources")
+		tctx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "DropSources", leaseDoneCh, leaseErrCh)
 		if lockErr != nil {
 			ts.Logger().Errorf("Target LockKeyspace failed: %v", lockErr)
 			return nil, lockErr
@@ -2782,7 +2876,20 @@ func (s *Server) dropSources(ctx context.Context, ts *trafficSwitcher, removalTy
 		defer targetUnlock(&err)
 		ctx = tctx
 	}
+	// Check for errors in our diff goroutine and the lock lease renewal.
+	haveLeaseError := func() error {
+		select {
+		case err := <-leaseErrCh:
+			return err
+		default:
+			return nil
+		}
+	}
+
 	if !force {
+		if leaseErr := haveLeaseError(); leaseErr != nil {
+			return nil, leaseErr
+		}
 		if err := sw.validateWorkflowHasCompleted(ctx); err != nil {
 			ts.Logger().Errorf("Workflow has not completed, cannot DropSources: %v", err)
 			return nil, err
@@ -2792,11 +2899,20 @@ func (s *Server) dropSources(ctx context.Context, ts *trafficSwitcher, removalTy
 		switch ts.MigrationType() {
 		case binlogdatapb.MigrationType_TABLES:
 			log.Infof("Deleting tables")
+			if leaseErr := haveLeaseError(); leaseErr != nil {
+				return nil, leaseErr
+			}
 			if err := sw.removeSourceTables(ctx, removalType); err != nil {
 				return nil, err
 			}
+			if leaseErr := haveLeaseError(); leaseErr != nil {
+				return nil, leaseErr
+			}
 			if err := sw.dropSourceDeniedTables(ctx); err != nil {
 				return nil, err
+			}
+			if leaseErr := haveLeaseError(); leaseErr != nil {
+				return nil, leaseErr
 			}
 			if err := sw.dropTargetDeniedTables(ctx); err != nil {
 				return nil, err
@@ -2804,13 +2920,22 @@ func (s *Server) dropSources(ctx context.Context, ts *trafficSwitcher, removalTy
 
 		case binlogdatapb.MigrationType_SHARDS:
 			log.Infof("Removing shards")
+			if leaseErr := haveLeaseError(); leaseErr != nil {
+				return nil, leaseErr
+			}
 			if err := sw.dropSourceShards(ctx); err != nil {
 				return nil, err
 			}
 		}
 	}
+	if leaseErr := haveLeaseError(); leaseErr != nil {
+		return nil, leaseErr
+	}
 	if err := s.dropArtifacts(ctx, keepRoutingRules, sw); err != nil {
 		return nil, err
+	}
+	if leaseErr := haveLeaseError(); leaseErr != nil {
+		return nil, leaseErr
 	}
 	if err := ts.TopoServer().RebuildSrvVSchema(ctx, nil); err != nil {
 		return nil, err
@@ -3000,19 +3125,46 @@ func (s *Server) finalizeMigrateWorkflow(ctx context.Context, ts *trafficSwitche
 		sw = &switcher{s: s, ts: ts}
 	}
 	var tctx context.Context
-	tctx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "completeMigrateWorkflow")
+
+	// Lock the target keyspace and ensure that the lease is renewed and we're able to hold
+	// the lock during the finalization.
+	leaseDoneCh := make(chan struct{})
+	leaseErrCh := make(chan error, 1)
+	defer func() {
+		close(leaseDoneCh)
+		for range leaseErrCh { // Drain the channel
+		}
+		close(leaseErrCh)
+	}()
+	tctx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "completeMigrateWorkflow", leaseDoneCh, leaseErrCh)
 	if lockErr != nil {
 		ts.Logger().Errorf("Target LockKeyspace failed: %v", lockErr)
 		return nil, lockErr
 	}
 	defer targetUnlock(&err)
 	ctx = tctx
+	// Check for errors in our diff goroutine and the lock lease renewal.
+	haveLeaseError := func() error {
+		select {
+		case err := <-leaseErrCh:
+			return err
+		default:
+			return nil
+		}
+	}
+
 	if err := sw.dropTargetVReplicationStreams(ctx); err != nil {
 		return nil, err
 	}
 	if !cancel {
+		if leaseErr := haveLeaseError(); leaseErr != nil {
+			return nil, leaseErr
+		}
 		if err := sw.addParticipatingTablesToKeyspace(ctx, ts.targetKeyspace, tableSpecs); err != nil {
 			return nil, err
+		}
+		if leaseErr := haveLeaseError(); leaseErr != nil {
+			return nil, leaseErr
 		}
 		if err := ts.TopoServer().RebuildSrvVSchema(ctx, nil); err != nil {
 			return nil, err
@@ -3020,6 +3172,9 @@ func (s *Server) finalizeMigrateWorkflow(ctx context.Context, ts *trafficSwitche
 	}
 	log.Infof("cancel is %t, keepData %t", cancel, keepData)
 	if cancel && !keepData {
+		if leaseErr := haveLeaseError(); leaseErr != nil {
+			return nil, leaseErr
+		}
 		if err := sw.removeTargetTables(ctx); err != nil {
 			return nil, err
 		}
@@ -3240,14 +3395,7 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 		return handleError("workflow validation failed", err)
 	}
 
-	// For reads, locking the source keyspace is sufficient.
-	ctx, unlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "SwitchReads")
-	if lockErr != nil {
-		return handleError(fmt.Sprintf("failed to lock the %s keyspace", ts.SourceKeyspaceName()), lockErr)
-	}
-	defer unlock(&err)
-
-	// Ensure that the leases are renewed and we're able to hold the locks during the
+	// Ensure that the lease is renewed and we're able to hold the locks during the
 	// traffic switching.
 	leaseDoneCh := make(chan struct{})
 	leaseErrCh := make(chan error, 1)
@@ -3257,9 +3405,13 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 		}
 		close(leaseErrCh)
 	}()
-	// Renew it every 5 seconds.
-	topo.AutoRenewKeyspaceLockLease(ctx, ts.SourceKeyspaceName(), time.Second*5, maxKeyspaceLockLeaseTTL, leaseDoneCh, leaseErrCh)
-	// Check for errors in our diff goroutine and the lock lease renewal goroutine.
+	// For reads, only locking the source keyspace is sufficient.
+	ctx, unlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "SwitchReads", leaseDoneCh, leaseErrCh)
+	if lockErr != nil {
+		return handleError(fmt.Sprintf("failed to lock the %s keyspace", ts.SourceKeyspaceName()), lockErr)
+	}
+	defer unlock(&err)
+	// Check for errors in our diff goroutine and the lock lease renewal.
 	haveLeaseError := func() error {
 		select {
 		case err := <-leaseErrCh:
@@ -3287,8 +3439,8 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 		}
 		return sw.logs(), nil
 	}
-	if leaseError := haveLeaseError(); leaseError != nil {
-		return handleError("lost keyspace lock lease", err)
+	if leaseErr := haveLeaseError(); leaseErr != nil {
+		return handleError("lost keyspace lock lease", leaseErr)
 	}
 	ts.Logger().Infof("About to switchShardReads: cells: %s, tablet types: %s, direction: %d", cellsStr, roTypesToSwitchStr, direction)
 	if err := sw.switchShardReads(ctx, req.Cells, roTabletTypes, direction); err != nil {
@@ -3337,22 +3489,7 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 		}
 	}
 
-	// Need to lock both source and target keyspaces.
-	tctx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "SwitchWrites")
-	if lockErr != nil {
-		return handleError(fmt.Sprintf("failed to lock the %s keyspace", ts.SourceKeyspaceName()), lockErr)
-	}
-	ctx = tctx
-	defer sourceUnlock(&err)
-	if ts.TargetKeyspaceName() != ts.SourceKeyspaceName() {
-		tctx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "SwitchWrites")
-		if lockErr != nil {
-			return handleError(fmt.Sprintf("failed to lock the %s keyspace", ts.TargetKeyspaceName()), lockErr)
-		}
-		ctx = tctx
-		defer targetUnlock(&err)
-	}
-
+	// We need to lock both source and target keyspaces.
 	// Ensure that the leases are renewed and we're able to hold the locks during the
 	// traffic switching.
 	leaseDoneCh := make(chan struct{})
@@ -3363,10 +3500,20 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 		}
 		close(leaseErrCh)
 	}()
-	// Renew it every 5 seconds.
-	topo.AutoRenewKeyspaceLockLease(ctx, ts.SourceKeyspaceName(), time.Second*5, maxKeyspaceLockLeaseTTL, leaseDoneCh, leaseErrCh)
-	topo.AutoRenewKeyspaceLockLease(ctx, ts.TargetKeyspaceName(), time.Second*5, maxKeyspaceLockLeaseTTL, leaseDoneCh, leaseErrCh)
-	// Check for errors in our diff goroutine and the lock lease renewal goroutine.
+	tctx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "SwitchWrites", leaseDoneCh, leaseErrCh)
+	if lockErr != nil {
+		return handleError(fmt.Sprintf("failed to lock the %s keyspace", ts.SourceKeyspaceName()), lockErr)
+	}
+	ctx = tctx
+	defer sourceUnlock(&err)
+	if ts.TargetKeyspaceName() != ts.SourceKeyspaceName() {
+		tctx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "SwitchWrites", leaseDoneCh, leaseErrCh)
+		if lockErr != nil {
+			return handleError(fmt.Sprintf("failed to lock the %s keyspace", ts.TargetKeyspaceName()), lockErr)
+		}
+		ctx = tctx
+		defer targetUnlock(&err)
+	}
 	haveLeaseError := func() error {
 		select {
 		case err := <-leaseErrCh:
@@ -3385,8 +3532,8 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 	if req.InitializeTargetSequences && ts.workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables &&
 		ts.SourceKeyspaceSchema() != nil && ts.SourceKeyspaceSchema().Keyspace != nil &&
 		!ts.SourceKeyspaceSchema().Keyspace.Sharded {
-		if leaseError := haveLeaseError(); leaseError != nil {
-			return handleError("lost keyspace lock lease", err)
+		if leaseErr := haveLeaseError(); leaseErr != nil {
+			return handleError("lost keyspace lock lease", leaseErr)
 		}
 		sequenceMetadata, err = ts.getTargetSequenceMetadata(ctx)
 		if err != nil {
@@ -3394,8 +3541,8 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 		}
 	}
 
-	if leaseError := haveLeaseError(); leaseError != nil {
-		return handleError("lost keyspace lock lease", err)
+	if leaseErr := haveLeaseError(); leaseErr != nil {
+		return handleError("lost keyspace lock lease", leaseErr)
 	}
 	// If no journals exist, sourceWorkflows will be initialized by sm.MigrateStreams.
 	journalsExist, sourceWorkflows, err := ts.checkJournals(ctx)
@@ -3403,8 +3550,8 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 		return handleError(fmt.Sprintf("failed to read journal in the %s keyspace", ts.SourceKeyspaceName()), err)
 	}
 	if !journalsExist {
-		if leaseError := haveLeaseError(); leaseError != nil {
-			return handleError("lost keyspace lock lease", err)
+		if leaseErr := haveLeaseError(); leaseErr != nil {
+			return handleError("lost keyspace lock lease", leaseErr)
 		}
 		ts.Logger().Infof("No previous journals were found. Proceeding normally.")
 		sm, err := BuildStreamMigrator(ctx, ts, cancel, s.env.Parser())
@@ -3423,8 +3570,8 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 		// For intra-keyspace materialization streams that we migrate where the source and target are
 		// the keyspace being resharded, we wait for those to catchup in the stopStreams path before
 		// we actually stop them.
-		if leaseError := haveLeaseError(); leaseError != nil {
-			return handleError("lost keyspace lock lease", err)
+		if leaseErr := haveLeaseError(); leaseErr != nil {
+			return handleError("lost keyspace lock lease", leaseErr)
 		}
 		ts.Logger().Infof("Stopping source writes")
 		if err := sw.stopSourceWrites(ctx); err != nil {
@@ -3432,8 +3579,8 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 			return handleError(fmt.Sprintf("failed to stop writes in the %s keyspace", ts.SourceKeyspaceName()), err)
 		}
 
-		if leaseError := haveLeaseError(); leaseError != nil {
-			return handleError("lost keyspace lock lease", err)
+		if leaseErr := haveLeaseError(); leaseErr != nil {
+			return handleError("lost keyspace lock lease", leaseErr)
 		}
 		ts.Logger().Infof("Stopping streams")
 		// Use a shorter context for this since since when doing a Reshard, if there are intra-keyspace
@@ -3453,8 +3600,8 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 			return handleError(fmt.Sprintf("failed to stop the workflow streams in the %s keyspace", ts.SourceKeyspaceName()), err)
 		}
 
-		if leaseError := haveLeaseError(); leaseError != nil {
-			return handleError("lost keyspace lock lease", err)
+		if leaseErr := haveLeaseError(); leaseErr != nil {
+			return handleError("lost keyspace lock lease", leaseErr)
 		}
 		if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
 			ts.Logger().Infof("Executing LOCK TABLES on source tables %d times", lockTablesCycles)
@@ -3471,8 +3618,8 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 			}
 		}
 
-		if leaseError := haveLeaseError(); leaseError != nil {
-			return handleError("lost keyspace lock lease", err)
+		if leaseErr := haveLeaseError(); leaseErr != nil {
+			return handleError("lost keyspace lock lease", leaseErr)
 		}
 		ts.Logger().Infof("Waiting for streams to catchup")
 		if err := sw.waitForCatchup(ctx, timeout); err != nil {
@@ -3480,8 +3627,8 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 			return handleError("failed to sync up replication between the source and target", err)
 		}
 
-		if leaseError := haveLeaseError(); leaseError != nil {
-			return handleError("lost keyspace lock lease", err)
+		if leaseErr := haveLeaseError(); leaseErr != nil {
+			return handleError("lost keyspace lock lease", leaseErr)
 		}
 		ts.Logger().Infof("Migrating streams")
 		if err := sw.migrateStreams(ctx, sm); err != nil {
@@ -3489,8 +3636,8 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 			return handleError("failed to migrate the workflow streams", err)
 		}
 
-		if leaseError := haveLeaseError(); leaseError != nil {
-			return handleError("lost keyspace lock lease", err)
+		if leaseErr := haveLeaseError(); leaseErr != nil {
+			return handleError("lost keyspace lock lease", leaseErr)
 		}
 		ts.Logger().Infof("Resetting sequences")
 		if err := sw.resetSequences(ctx); err != nil {
@@ -3498,8 +3645,8 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 			return handleError("failed to reset the sequences", err)
 		}
 
-		if leaseError := haveLeaseError(); leaseError != nil {
-			return handleError("lost keyspace lock lease", err)
+		if leaseErr := haveLeaseError(); leaseErr != nil {
+			return handleError("lost keyspace lock lease", leaseErr)
 		}
 		ts.Logger().Infof("Creating reverse streams")
 		if err := sw.createReverseVReplication(ctx); err != nil {
@@ -3509,15 +3656,15 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 
 		// Initialize any target sequences, if there are any, before allowing new writes.
 		if req.InitializeTargetSequences && len(sequenceMetadata) > 0 {
-			if leaseError := haveLeaseError(); leaseError != nil {
-				return handleError("lost keyspace lock lease", err)
+			if leaseErr := haveLeaseError(); leaseErr != nil {
+				return handleError("lost keyspace lock lease", leaseErr)
 			}
 			ts.Logger().Infof("Initializing target sequences")
 			// Writes are blocked so we can safely initialize the sequence tables but
 			// we also want to use a shorter timeout than the parent context.
 			// We use at most half of the overall timeout.
-			if leaseError := haveLeaseError(); leaseError != nil {
-				return handleError("lost keyspace lock lease", err)
+			if leaseErr := haveLeaseError(); leaseErr != nil {
+				return handleError("lost keyspace lock lease", leaseErr)
 			}
 			initSeqCtx, cancel := context.WithTimeout(ctx, timeout/2)
 			defer cancel()
@@ -3530,8 +3677,8 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 		if cancel {
 			return handleError("invalid cancel", vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "traffic switching has reached the point of no return, cannot cancel"))
 		}
-		if leaseError := haveLeaseError(); leaseError != nil {
-			return handleError("lost keyspace lock lease", err)
+		if leaseErr := haveLeaseError(); leaseErr != nil {
+			return handleError("lost keyspace lock lease", leaseErr)
 		}
 		ts.Logger().Infof("Journals were found. Completing the left over steps.")
 		// Need to gather positions in case all journals were not created.
@@ -3540,8 +3687,8 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 		}
 	}
 
-	if leaseError := haveLeaseError(); leaseError != nil {
-		return handleError("lost keyspace lock lease", err)
+	if leaseErr := haveLeaseError(); leaseErr != nil {
+		return handleError("lost keyspace lock lease", leaseErr)
 	}
 	// This is the point of no return. Once a journal is created,
 	// traffic can be redirected to target shards.
@@ -3549,38 +3696,38 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 		return handleError("failed to create the journal", err)
 	}
 
-	if leaseError := haveLeaseError(); leaseError != nil {
-		return handleError("lost keyspace lock lease", err)
+	if leaseErr := haveLeaseError(); leaseErr != nil {
+		return handleError("lost keyspace lock lease", leaseErr)
 	}
 	if err := sw.allowTargetWrites(ctx); err != nil {
 		return handleError(fmt.Sprintf("failed to allow writes in the %s keyspace", ts.TargetKeyspaceName()), err)
 	}
 
-	if leaseError := haveLeaseError(); leaseError != nil {
-		return handleError("lost keyspace lock lease", err)
+	if leaseErr := haveLeaseError(); leaseErr != nil {
+		return handleError("lost keyspace lock lease", leaseErr)
 	}
 	if err := sw.changeRouting(ctx); err != nil {
 		return handleError("failed to update the routing rules", err)
 	}
 
-	if leaseError := haveLeaseError(); leaseError != nil {
-		return handleError("lost keyspace lock lease", err)
+	if leaseErr := haveLeaseError(); leaseErr != nil {
+		return handleError("lost keyspace lock lease", leaseErr)
 	}
 	if err := sw.streamMigraterfinalize(ctx, ts, sourceWorkflows); err != nil {
 		return handleError("failed to finalize the traffic switch", err)
 	}
 
 	if req.EnableReverseReplication {
-		if leaseError := haveLeaseError(); leaseError != nil {
-			return handleError("lost keyspace lock lease", err)
+		if leaseErr := haveLeaseError(); leaseErr != nil {
+			return handleError("lost keyspace lock lease", leaseErr)
 		}
 		if err := sw.startReverseVReplication(ctx); err != nil {
 			return handleError("failed to start the reverse workflow", err)
 		}
 	}
 
-	if leaseError := haveLeaseError(); leaseError != nil {
-		return handleError("lost keyspace lock lease", err)
+	if leaseErr := haveLeaseError(); leaseErr != nil {
+		return handleError("lost keyspace lock lease", leaseErr)
 	}
 	if err := sw.freezeTargetVReplication(ctx); err != nil {
 		return handleError(fmt.Sprintf("failed to freeze the workflow in the %s keyspace", ts.TargetKeyspaceName()), err)

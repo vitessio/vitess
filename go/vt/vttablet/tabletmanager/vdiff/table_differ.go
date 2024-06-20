@@ -52,15 +52,14 @@ import (
 type tableDiffPhase string
 
 const (
-	initializing            = tableDiffPhase("initializing")
-	pickingTablets          = tableDiffPhase("picking_streaming_tablets")
-	syncingSources          = tableDiffPhase("syncing_source_streams")
-	syncingTargets          = tableDiffPhase("syncing_target_streams")
-	startingSources         = tableDiffPhase("starting_source_data_streams")
-	startingTargets         = tableDiffPhase("starting_target_data_streams")
-	restartingVreplication  = tableDiffPhase("restarting_vreplication_streams")
-	diffingTable            = tableDiffPhase("diffing_table")
-	maxKeyspaceLockLeaseTTL = 10 * time.Minute
+	initializing           = tableDiffPhase("initializing")
+	pickingTablets         = tableDiffPhase("picking_streaming_tablets")
+	syncingSources         = tableDiffPhase("syncing_source_streams")
+	syncingTargets         = tableDiffPhase("syncing_target_streams")
+	startingSources        = tableDiffPhase("starting_source_data_streams")
+	startingTargets        = tableDiffPhase("starting_target_data_streams")
+	restartingVreplication = tableDiffPhase("restarting_vreplication_streams")
+	diffingTable           = tableDiffPhase("diffing_table")
 )
 
 // how long to wait for background operations to complete
@@ -117,20 +116,7 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 
 	targetKeyspace := td.wd.ct.vde.thisTablet.Keyspace
 	log.Infof("Locking target keyspace %s", targetKeyspace)
-	ctx, unlock, lockErr := td.wd.ct.ts.LockKeyspace(ctx, targetKeyspace, "vdiff")
-	if lockErr != nil {
-		log.Errorf("LockKeyspace failed: %v", lockErr)
-		return lockErr
-	}
-
-	var err error
-	defer func() {
-		unlock(&err)
-		if err != nil {
-			log.Errorf("UnlockKeyspace %s failed: %v", targetKeyspace, err)
-		}
-	}()
-
+	// Ensure that we hold onto the lock.
 	// Ensure that the lease is renewed and we're able to hold the lock during the
 	// table diff initialization work.
 	done := make(chan struct{})
@@ -141,9 +127,19 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 		}
 		close(errCh)
 	}()
-	// Renew it every 5 seconds.
-	topo.AutoRenewKeyspaceLockLease(ctx, targetKeyspace, time.Second*5, maxKeyspaceLockLeaseTTL, done, errCh)
-	// Check for errors in our diff goroutine and the lock lease renewal goroutine.
+	ctx, unlock, lockErr := td.wd.ct.ts.LockKeyspaceWithLeaseRenewal(ctx, targetKeyspace, "vdiff", done, errCh)
+	if lockErr != nil {
+		log.Errorf("LockKeyspace failed: %v", lockErr)
+		return lockErr
+	}
+	var err error
+	defer func() {
+		unlock(&err)
+		if err != nil {
+			log.Errorf("UnlockKeyspace %s failed: %v", targetKeyspace, err)
+		}
+	}()
+	// Check for errors in our diff goroutine and the lock lease renewal.
 	haveError := func(inerr error) error {
 		if inerr != nil {
 			return inerr
@@ -168,8 +164,9 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 			td.wd.ct.workflow, targetKeyspace)
 		restartCtx, restartCancel := context.WithTimeout(context.Background(), BackgroundOperationTimeout)
 		defer restartCancel()
-		if err := td.restartTargetVReplicationStreams(restartCtx); err != nil {
-			log.Errorf("error restarting target streams: %v", err)
+		err := td.restartTargetVReplicationStreams(restartCtx)
+		if rerr := haveError(err); rerr != nil {
+			log.Errorf("error restarting target streams: %v", rerr)
 		}
 	}()
 
@@ -177,27 +174,27 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 
 	err = td.selectTablets(ctx)
 	if rerr := haveError(err); rerr != nil {
-		return rerr
+		return vterrors.Wrap(rerr, "when selecting tablets")
 	}
 	err = td.syncSourceStreams(ctx)
 	if rerr := haveError(err); rerr != nil {
-		return rerr
+		return vterrors.Wrap(rerr, "when syncing source streams")
 	}
 	err = td.startSourceDataStreams(td.shardStreamsCtx)
 	if rerr := haveError(err); rerr != nil {
-		return rerr
+		return vterrors.Wrap(rerr, "when starting source data streams")
 	}
 	err = td.syncTargetStreams(ctx)
 	if rerr := haveError(err); rerr != nil {
-		return rerr
+		return vterrors.Wrap(rerr, "when syncing target streams")
 	}
 	err = td.startTargetDataStream(td.shardStreamsCtx)
 	if rerr := haveError(err); rerr != nil {
-		return rerr
+		return vterrors.Wrap(rerr, "when starting target data streams")
 	}
 	td.setupRowSorters()
 	if rerr := haveError(nil); rerr != nil {
-		return rerr
+		return vterrors.Wrap(rerr, "when setting up row sorters")
 	}
 	return nil
 }
