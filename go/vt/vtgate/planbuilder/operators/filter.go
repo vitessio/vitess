@@ -36,7 +36,7 @@ type Filter struct {
 	// It contains the ANDed predicates in Predicates, with ColName:s replaced by Offset:s
 	PredicateWithOffsets evalengine.Expr
 
-	Truncate int
+	ResultColumns int
 }
 
 func newFilterSinglePredicate(op Operator, expr sqlparser.Expr) Operator {
@@ -55,7 +55,7 @@ func (f *Filter) Clone(inputs []Operator) Operator {
 		Source:               inputs[0],
 		Predicates:           slices.Clone(f.Predicates),
 		PredicateWithOffsets: f.PredicateWithOffsets,
-		Truncate:             f.Truncate,
+		ResultColumns:        f.ResultColumns,
 	}
 }
 
@@ -100,11 +100,11 @@ func (f *Filter) AddWSColumn(ctx *plancontext.PlanningContext, offset int, under
 }
 
 func (f *Filter) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
-	return f.Source.GetColumns(ctx)
+	return truncate(f, f.Source.GetColumns(ctx))
 }
 
 func (f *Filter) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
-	return f.Source.GetSelectExprs(ctx)
+	return truncate(f, f.Source.GetSelectExprs(ctx))
 }
 
 func (f *Filter) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
@@ -151,5 +151,9 @@ func (f *Filter) ShortDescription() string {
 }
 
 func (f *Filter) setTruncateColumnCount(offset int) {
-	f.Truncate = offset
+	f.ResultColumns = offset
+}
+
+func (f *Filter) getTruncateColumnCount() int {
+	return f.ResultColumns
 }
