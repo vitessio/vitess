@@ -1731,11 +1731,11 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 		t2ColName := t2Col.Name.Lowered()
 		// we know that column exists in both tables
 		t1Col := t1ColumnsMap[t2ColName]
-		t1ColEntity := NewColumnDefinitionEntity(t1Col.col)
-		t2ColEntity := NewColumnDefinitionEntity(t2Col)
+		t1ColEntity := NewColumnDefinitionEntity(t1Col.col, t1cc)
+		t2ColEntity := NewColumnDefinitionEntity(t2Col, t2cc)
 
 		// check diff between before/after columns:
-		modifyColumnDiff, err := t1ColEntity.ColumnDiff(c.Env, c.Name(), t2ColEntity, t1cc, t2cc, hints)
+		modifyColumnDiff, err := t1ColEntity.ColumnDiff(c.Env, c.Name(), t2ColEntity, hints)
 		if err != nil {
 			return err
 		}
