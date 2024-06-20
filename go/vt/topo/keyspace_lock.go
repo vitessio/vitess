@@ -19,6 +19,9 @@ package topo
 import (
 	"context"
 	"path"
+	"time"
+
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 type keyspaceLock struct {
@@ -55,4 +58,29 @@ func CheckKeyspaceLocked(ctx context.Context, keyspace string) error {
 	return checkLocked(ctx, &keyspaceLock{
 		keyspace: keyspace,
 	})
+}
+
+// AutoRenewKeyspaceLockLease will renew the keyspace lock lease every renewTime
+// in a goroutine until the maxTime is reached -- exiting early if the context
+// is cancelled, the done channel is closed, or an error is encountered.
+func AutoRenewKeyspaceLockLease(ctx context.Context, keyspace string, renewTime, maxTime time.Duration, doneCh <-chan struct{}, errCh chan error) {
+	go func() {
+		ksLock := &keyspaceLock{keyspace: keyspace}
+		renewAttempts := int(maxTime.Seconds() / renewTime.Seconds())
+		for i := 0; i < renewAttempts; i++ {
+			time.Sleep(renewTime)
+			select {
+			case <-ctx.Done():
+				return
+			case <-doneCh:
+				return
+			default:
+				// Attempt to renew lease.
+				if err := checkLocked(ctx, ksLock); err != nil {
+					errCh <- vterrors.Wrapf(err, "failed to renew keyspace %s lock lease", keyspace)
+					return
+				}
+			}
+		}
+	}()
 }

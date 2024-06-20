@@ -52,14 +52,15 @@ import (
 type tableDiffPhase string
 
 const (
-	initializing           = tableDiffPhase("initializing")
-	pickingTablets         = tableDiffPhase("picking_streaming_tablets")
-	syncingSources         = tableDiffPhase("syncing_source_streams")
-	syncingTargets         = tableDiffPhase("syncing_target_streams")
-	startingSources        = tableDiffPhase("starting_source_data_streams")
-	startingTargets        = tableDiffPhase("starting_target_data_streams")
-	restartingVreplication = tableDiffPhase("restarting_vreplication_streams")
-	diffingTable           = tableDiffPhase("diffing_table")
+	initializing            = tableDiffPhase("initializing")
+	pickingTablets          = tableDiffPhase("picking_streaming_tablets")
+	syncingSources          = tableDiffPhase("syncing_source_streams")
+	syncingTargets          = tableDiffPhase("syncing_target_streams")
+	startingSources         = tableDiffPhase("starting_source_data_streams")
+	startingTargets         = tableDiffPhase("starting_target_data_streams")
+	restartingVreplication  = tableDiffPhase("restarting_vreplication_streams")
+	diffingTable            = tableDiffPhase("diffing_table")
+	maxKeyspaceLockLeaseTTL = 10 * time.Minute
 )
 
 // how long to wait for background operations to complete
@@ -130,6 +131,33 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 		}
 	}()
 
+	// Ensure that the lease is renewed and we're able to hold the lock during the
+	// table diff initialization work.
+	done := make(chan struct{})
+	errCh := make(chan error, 1)
+	defer func() {
+		close(done)
+		for range errCh { // Drain the channel
+		}
+		close(errCh)
+	}()
+	// Renew it every 5 seconds.
+	topo.AutoRenewKeyspaceLockLease(ctx, targetKeyspace, time.Second*5, maxKeyspaceLockLeaseTTL, done, errCh)
+	// Check for errors in our diff goroutine and the lock lease renewal goroutine.
+	haveError := func(inerr error) error {
+		if inerr != nil {
+			return inerr
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case err := <-errCh:
+			return err
+		default:
+			return nil
+		}
+	}
+
 	if err := td.stopTargetVReplicationStreams(ctx, dbClient); err != nil {
 		return err
 	}
@@ -147,22 +175,30 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 
 	td.shardStreamsCtx, td.shardStreamsCancel = context.WithCancel(ctx)
 
-	if err := td.selectTablets(ctx); err != nil {
-		return err
+	err = td.selectTablets(ctx)
+	if rerr := haveError(err); rerr != nil {
+		return rerr
 	}
-	if err := td.syncSourceStreams(ctx); err != nil {
-		return err
+	err = td.syncSourceStreams(ctx)
+	if rerr := haveError(err); rerr != nil {
+		return rerr
 	}
-	if err := td.startSourceDataStreams(td.shardStreamsCtx); err != nil {
-		return err
+	err = td.startSourceDataStreams(td.shardStreamsCtx)
+	if rerr := haveError(err); rerr != nil {
+		return rerr
 	}
-	if err := td.syncTargetStreams(ctx); err != nil {
-		return err
+	err = td.syncTargetStreams(ctx)
+	if rerr := haveError(err); rerr != nil {
+		return rerr
 	}
-	if err := td.startTargetDataStream(td.shardStreamsCtx); err != nil {
-		return err
+	err = td.startTargetDataStream(td.shardStreamsCtx)
+	if rerr := haveError(err); rerr != nil {
+		return rerr
 	}
 	td.setupRowSorters()
+	if rerr := haveError(nil); rerr != nil {
+		return rerr
+	}
 	return nil
 }
 
