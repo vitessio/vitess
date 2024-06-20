@@ -73,12 +73,14 @@ func NewModifyColumnDiffByDefinition(definition *sqlparser.ColumnDefinition) *Mo
 type ColumnDefinitionEntity struct {
 	columnDefinition    *sqlparser.ColumnDefinition
 	tableCharsetCollate *charsetCollate
+	Env                 *Environment
 }
 
-func NewColumnDefinitionEntity(c *sqlparser.ColumnDefinition, tableCharsetCollate *charsetCollate) *ColumnDefinitionEntity {
+func NewColumnDefinitionEntity(env *Environment, c *sqlparser.ColumnDefinition, tableCharsetCollate *charsetCollate) *ColumnDefinitionEntity {
 	return &ColumnDefinitionEntity{
 		columnDefinition:    c,
 		tableCharsetCollate: tableCharsetCollate,
+		Env:                 env,
 	}
 }
 
@@ -86,6 +88,7 @@ func (c *ColumnDefinitionEntity) Clone() *ColumnDefinitionEntity {
 	clone := &ColumnDefinitionEntity{
 		columnDefinition:    sqlparser.Clone(c.columnDefinition),
 		tableCharsetCollate: c.tableCharsetCollate,
+		Env:                 c.Env,
 	}
 	return clone
 }
@@ -93,7 +96,7 @@ func (c *ColumnDefinitionEntity) Clone() *ColumnDefinitionEntity {
 // SetExplicitCharsetCollate enriches this column definition with collation and charset. Those may be
 // already present, or perhaps just one of them is present (in which case we use the one to populate the other),
 // or both might be missing, in which case we use the table's charset/collation.
-func (c *ColumnDefinitionEntity) SetExplicitCharsetCollate(env *Environment) error {
+func (c *ColumnDefinitionEntity) SetExplicitCharsetCollate() error {
 	if !c.IsTextual() {
 		return nil
 	}
@@ -101,16 +104,16 @@ func (c *ColumnDefinitionEntity) SetExplicitCharsetCollate(env *Environment) err
 	// Normalizing _this_ column definition:
 	if c.columnDefinition.Type.Charset.Name != "" && c.columnDefinition.Type.Options.Collate == "" {
 		// Charset defined without collation. Assign the default collation for that charset.
-		collation := env.CollationEnv().DefaultCollationForCharset(c.columnDefinition.Type.Charset.Name)
+		collation := c.Env.CollationEnv().DefaultCollationForCharset(c.columnDefinition.Type.Charset.Name)
 		if collation == collations.Unknown {
 			return &UnknownColumnCharsetCollationError{Column: c.columnDefinition.Name.String(), Charset: c.tableCharsetCollate.charset}
 		}
-		c.columnDefinition.Type.Options.Collate = env.CollationEnv().LookupName(collation)
+		c.columnDefinition.Type.Options.Collate = c.Env.CollationEnv().LookupName(collation)
 	}
 	if c.columnDefinition.Type.Charset.Name == "" && c.columnDefinition.Type.Options.Collate != "" {
 		// Column has explicit collation but no charset. We can infer the charset from the collation.
-		collationID := env.CollationEnv().LookupByName(c.columnDefinition.Type.Options.Collate)
-		charset := env.CollationEnv().LookupCharsetName(collationID)
+		collationID := c.Env.CollationEnv().LookupByName(c.columnDefinition.Type.Options.Collate)
+		charset := c.Env.CollationEnv().LookupCharsetName(collationID)
 		if charset == "" {
 			return &UnknownColumnCollationCharsetError{Column: c.columnDefinition.Name.String(), Collation: c.columnDefinition.Type.Options.Collate}
 		}
@@ -123,11 +126,11 @@ func (c *ColumnDefinitionEntity) SetExplicitCharsetCollate(env *Environment) err
 			c.columnDefinition.Type.Options.Collate = c.tableCharsetCollate.collate
 		}
 		if c.columnDefinition.Type.Options.Collate = c.tableCharsetCollate.collate; c.columnDefinition.Type.Options.Collate == "" {
-			collation := env.CollationEnv().DefaultCollationForCharset(c.tableCharsetCollate.charset)
+			collation := c.Env.CollationEnv().DefaultCollationForCharset(c.tableCharsetCollate.charset)
 			if collation == collations.Unknown {
 				return &UnknownColumnCharsetCollationError{Column: c.columnDefinition.Name.String(), Charset: c.tableCharsetCollate.charset}
 			}
-			c.columnDefinition.Type.Options.Collate = env.CollationEnv().LookupName(collation)
+			c.columnDefinition.Type.Options.Collate = c.Env.CollationEnv().LookupName(collation)
 		}
 	}
 	return nil
@@ -159,11 +162,11 @@ func (c *ColumnDefinitionEntity) ColumnDiff(
 	otherClone := other // not real clone yet
 	if c.IsTextual() || other.IsTextual() {
 		cClone = c.Clone()
-		if err := cClone.SetExplicitCharsetCollate(env); err != nil {
+		if err := cClone.SetExplicitCharsetCollate(); err != nil {
 			return nil, err
 		}
 		otherClone = other.Clone()
-		if err := otherClone.SetExplicitCharsetCollate(env); err != nil {
+		if err := otherClone.SetExplicitCharsetCollate(); err != nil {
 			return nil, err
 		}
 	}
