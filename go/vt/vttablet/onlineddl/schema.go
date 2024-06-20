@@ -554,23 +554,14 @@ const (
 	sqlShowVariablesLikeFastAnalyzeTable   = "show global variables like 'fast_analyze_table'"
 	sqlEnableFastAnalyzeTable              = "set @@fast_analyze_table = 1"
 	sqlDisableFastAnalyzeTable             = "set @@fast_analyze_table = 0"
-	sqlGetAutoIncrement                    = `
-		SELECT
-			AUTO_INCREMENT
-		FROM INFORMATION_SCHEMA.TABLES
-		WHERE
-			TABLES.TABLE_SCHEMA=%a
-			AND TABLES.TABLE_NAME=%a
-			AND AUTO_INCREMENT IS NOT NULL
-		`
-	sqlAlterTableAutoIncrement      = "ALTER TABLE `%s` AUTO_INCREMENT=%a"
-	sqlAlterTableExchangePartition  = "ALTER TABLE `%a` EXCHANGE PARTITION `%a` WITH TABLE `%a`"
-	sqlAlterTableRemovePartitioning = "ALTER TABLE `%a` REMOVE PARTITIONING"
-	sqlAlterTableDropPartition      = "ALTER TABLE `%a` DROP PARTITION `%a`"
-	sqlStartVReplStream             = "UPDATE _vt.vreplication set state='Running' where db_name=%a and workflow=%a"
-	sqlStopVReplStream              = "UPDATE _vt.vreplication set state='Stopped' where db_name=%a and workflow=%a"
-	sqlDeleteVReplStream            = "DELETE FROM _vt.vreplication where db_name=%a and workflow=%a"
-	sqlReadVReplStream              = `SELECT
+	sqlAlterTableAutoIncrement             = "ALTER TABLE `%s` AUTO_INCREMENT=%a"
+	sqlAlterTableExchangePartition         = "ALTER TABLE `%a` EXCHANGE PARTITION `%a` WITH TABLE `%a`"
+	sqlAlterTableRemovePartitioning        = "ALTER TABLE `%a` REMOVE PARTITIONING"
+	sqlAlterTableDropPartition             = "ALTER TABLE `%a` DROP PARTITION `%a`"
+	sqlStartVReplStream                    = "UPDATE _vt.vreplication set state='Running' where db_name=%a and workflow=%a"
+	sqlStopVReplStream                     = "UPDATE _vt.vreplication set state='Stopped' where db_name=%a and workflow=%a"
+	sqlDeleteVReplStream                   = "DELETE FROM _vt.vreplication where db_name=%a and workflow=%a"
+	sqlReadVReplStream                     = `SELECT
 			id,
 			workflow,
 			source,

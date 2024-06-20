@@ -175,25 +175,19 @@ func NewVRepl(
 	}
 }
 
-// readAutoIncrement reads the AUTO_INCREMENT value, if any, for a give ntable
-func (v *VRepl) readAutoIncrement(ctx context.Context, conn *dbconnpool.DBConnection, tableName string) (autoIncrement uint64, err error) {
-	query, err := sqlparser.ParseAndBind(sqlGetAutoIncrement,
-		sqltypes.StringBindVariable(v.dbName),
-		sqltypes.StringBindVariable(tableName),
-	)
-	if err != nil {
-		return 0, err
+// readAutoIncrement reads the AUTO_INCREMENT value, if any, for a given table statement
+func readAutoIncrement(createTable *sqlparser.CreateTable) (autoIncrement uint64, err error) {
+	for _, option := range createTable.TableSpec.Options {
+		if strings.ToUpper(option.Name) == "AUTO_INCREMENT" {
+			autoIncrement, err := strconv.ParseInt(option.Value.Val, 10, 64)
+			if err != nil {
+				return 0, err
+			}
+			return uint64(autoIncrement), nil
+		}
 	}
-
-	rs, err := conn.ExecuteFetch(query, -1, true)
-	if err != nil {
-		return 0, err
-	}
-	for _, row := range rs.Named().Rows {
-		autoIncrement = row.AsUint64("AUTO_INCREMENT", 0)
-	}
-
-	return autoIncrement, nil
+	// Auto increment not found
+	return 0, nil
 }
 
 // readTableColumns reads column list from given table
@@ -515,7 +509,7 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 	var expandedDescriptions map[string]string
 	v.expandedColumnNames, expandedDescriptions = vrepl.GetExpandedColumnNames(v.sourceSharedColumns, v.targetSharedColumns)
 
-	v.sourceAutoIncrement, err = v.readAutoIncrement(ctx, conn, v.sourceTable)
+	v.sourceAutoIncrement, err = readAutoIncrement(v.originalCreateTable)
 
 	notes := []string{}
 	for _, uk := range v.removedUniqueKeys {

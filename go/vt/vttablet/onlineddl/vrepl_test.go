@@ -27,7 +27,7 @@ func TestReadTableColumns(t *testing.T) {
 	}{
 		{
 			name: "simple",
-			create: `create table t(
+			create: `create table t (
 				id int,
 				primary key (id)
 			)`,
@@ -37,7 +37,7 @@ func TestReadTableColumns(t *testing.T) {
 		},
 		{
 			name: "complex",
-			create: `create table t(
+			create: `create table t (
 				id int,
 				col1 int,
 				col2 int,
@@ -65,6 +65,52 @@ func TestReadTableColumns(t *testing.T) {
 			assert.Equal(t, tcase.cols, cols.Names())
 			assert.Equal(t, tcase.generated, virtual.Names())
 			assert.Equal(t, tcase.pk, pk.Names())
+		})
+	}
+}
+
+func TestReadAutoIncrement(t *testing.T) {
+	env := vtenv.NewTestEnv()
+
+	tcases := []struct {
+		name   string
+		create string
+		expect uint64
+	}{
+		{
+			name: "none",
+			create: `create table t (
+				id int,
+				primary key (id)
+			)`,
+			expect: 0,
+		},
+		{
+			name: "simple",
+			create: `create table t (
+				id int auto_increment,
+				primary key (id)
+			) auto_increment=123`,
+			expect: 123,
+		},
+		{
+			name: "multiple opts",
+			create: `create table t (
+				id int auto_increment,
+				primary key (id)
+			) engine=innodb, charset=utf8mb4 auto_increment=123 row_format=compressed`,
+			expect: 123,
+		},
+	}
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			stmt, err := env.Parser().ParseStrictDDL(tcase.create)
+			require.NoError(t, err)
+			createTable, ok := stmt.(*sqlparser.CreateTable)
+			require.True(t, ok)
+			autoIncrement, err := readAutoIncrement(createTable)
+			assert.NoError(t, err)
+			assert.EqualValues(t, tcase.expect, autoIncrement)
 		})
 	}
 }
