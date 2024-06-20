@@ -151,12 +151,17 @@ func (a *Aggregator) FindCol(ctx *plancontext.PlanningContext, in sqlparser.Expr
 }
 
 func (a *Aggregator) checkOffset(offset int) {
+	// if the offset is greater than the number of columns we expect to produce, we need to update the number of columns
+	// this is to make sure that the column is not truncated in the final result
 	if a.ResultColumns > 0 && a.ResultColumns <= offset {
 		a.ResultColumns = offset + 1
 	}
 }
 
-func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, reuse bool, groupBy bool, ae *sqlparser.AliasedExpr) int {
+func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, reuse bool, groupBy bool, ae *sqlparser.AliasedExpr) (offset int) {
+	defer func() {
+		a.checkOffset(offset)
+	}()
 	rewritten := a.DT.RewriteExpression(ctx, ae.Expr)
 
 	ae = &sqlparser.AliasedExpr{
@@ -167,7 +172,6 @@ func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gro
 	if reuse {
 		offset := a.findColInternal(ctx, ae, groupBy)
 		if offset >= 0 {
-			a.checkOffset(offset)
 			return offset
 		}
 	}
@@ -191,7 +195,7 @@ func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gro
 		a.Aggregations = append(a.Aggregations, aggr)
 	}
 
-	offset := len(a.Columns)
+	offset = len(a.Columns)
 	a.Columns = append(a.Columns, ae)
 	incomingOffset := a.Source.AddColumn(ctx, false, groupBy, ae)
 
@@ -199,7 +203,6 @@ func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gro
 		panic(errFailedToPlan(ae))
 	}
 
-	a.checkOffset(offset)
 	return offset
 }
 
