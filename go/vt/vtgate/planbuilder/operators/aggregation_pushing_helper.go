@@ -134,7 +134,7 @@ func (ab *aggBuilder) handleAggr(ctx *plancontext.PlanningContext, aggr Aggr) er
 		return ab.handlePushThroughAggregation(ctx, aggr)
 	case opcode.AggregateGroupConcat:
 		f := aggr.Func.(*sqlparser.GroupConcatExpr)
-		if f.Distinct || len(f.OrderBy) > 0 || f.Separator != "" {
+		if f.Distinct || len(f.OrderBy) > 0 {
 			panic("fail here")
 		}
 		// this needs special handling, currently aborting the push of function
