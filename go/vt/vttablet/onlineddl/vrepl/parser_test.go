@@ -24,24 +24,33 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
+func alterTableStatement(t *testing.T, sql string) *sqlparser.AlterTable {
+	stmt, err := sqlparser.NewTestParser().ParseStrictDDL(sql)
+	require.NoError(t, err)
+	alter, ok := stmt.(*sqlparser.AlterTable)
+	require.True(t, ok)
+	return alter
+}
+
 func TestParseAlterStatement(t *testing.T) {
 	statement := "alter table t add column t int, engine=innodb"
+	alterStatement := alterTableStatement(t, statement)
 	parser := NewAlterTableParser()
-	err := parser.ParseAlterStatement(statement, sqlparser.NewTestParser())
-	assert.NoError(t, err)
+	parser.AnalyzeAlter(alterStatement)
 	assert.False(t, parser.HasNonTrivialRenames())
 	assert.False(t, parser.IsAutoIncrementDefined())
 }
 
 func TestParseAlterStatementTrivialRename(t *testing.T) {
 	statement := "alter table t add column t int, change ts ts timestamp, engine=innodb"
+	alterStatement := alterTableStatement(t, statement)
 	parser := NewAlterTableParser()
-	err := parser.ParseAlterStatement(statement, sqlparser.NewTestParser())
-	assert.NoError(t, err)
+	parser.AnalyzeAlter(alterStatement)
 	assert.False(t, parser.HasNonTrivialRenames())
 	assert.False(t, parser.IsAutoIncrementDefined())
 	assert.Equal(t, len(parser.columnRenameMap), 1)
@@ -68,17 +77,17 @@ func TestParseAlterStatementWithAutoIncrement(t *testing.T) {
 	for _, statement := range statements {
 		parser := NewAlterTableParser()
 		statement := "alter table t " + statement
-		err := parser.ParseAlterStatement(statement, sqlparser.NewTestParser())
-		assert.NoError(t, err)
+		alterStatement := alterTableStatement(t, statement)
+		parser.AnalyzeAlter(alterStatement)
 		assert.True(t, parser.IsAutoIncrementDefined())
 	}
 }
 
 func TestParseAlterStatementTrivialRenames(t *testing.T) {
 	statement := "alter table t  add column t int, change ts ts timestamp, CHANGE f `f` float, engine=innodb"
+	alterStatement := alterTableStatement(t, statement)
 	parser := NewAlterTableParser()
-	err := parser.ParseAlterStatement(statement, sqlparser.NewTestParser())
-	assert.NoError(t, err)
+	parser.AnalyzeAlter(alterStatement)
 	assert.False(t, parser.HasNonTrivialRenames())
 	assert.False(t, parser.IsAutoIncrementDefined())
 	assert.Equal(t, len(parser.columnRenameMap), 2)
@@ -99,9 +108,9 @@ func TestParseAlterStatementNonTrivial(t *testing.T) {
 
 	for _, statement := range statements {
 		statement := "alter table t " + statement
+		alterStatement := alterTableStatement(t, statement)
 		parser := NewAlterTableParser()
-		err := parser.ParseAlterStatement(statement, sqlparser.NewTestParser())
-		assert.NoError(t, err)
+		parser.AnalyzeAlter(alterStatement)
 		assert.False(t, parser.IsAutoIncrementDefined())
 		renames := parser.GetNonTrivialRenames()
 		assert.Equal(t, len(renames), 2)
@@ -115,16 +124,16 @@ func TestParseAlterStatementDroppedColumns(t *testing.T) {
 	{
 		parser := NewAlterTableParser()
 		statement := "alter table t drop column b"
-		err := parser.ParseAlterStatement(statement, sqlparser.NewTestParser())
-		assert.NoError(t, err)
+		alterStatement := alterTableStatement(t, statement)
+		parser.AnalyzeAlter(alterStatement)
 		assert.Equal(t, len(parser.droppedColumns), 1)
 		assert.True(t, parser.droppedColumns["b"])
 	}
 	{
 		parser := NewAlterTableParser()
 		statement := "alter table t drop column b, drop key c_idx, drop column `d`"
-		err := parser.ParseAlterStatement(statement, sqlparser.NewTestParser())
-		assert.NoError(t, err)
+		alterStatement := alterTableStatement(t, statement)
+		parser.AnalyzeAlter(alterStatement)
 		assert.Equal(t, len(parser.droppedColumns), 2)
 		assert.True(t, parser.droppedColumns["b"])
 		assert.True(t, parser.droppedColumns["d"])
@@ -132,18 +141,12 @@ func TestParseAlterStatementDroppedColumns(t *testing.T) {
 	{
 		parser := NewAlterTableParser()
 		statement := "alter table t drop column b, drop key c_idx, drop column `d`, drop `e`, drop primary key, drop foreign key fk_1"
-		err := parser.ParseAlterStatement(statement, sqlparser.NewTestParser())
-		assert.NoError(t, err)
+		alterStatement := alterTableStatement(t, statement)
+		parser.AnalyzeAlter(alterStatement)
 		assert.Equal(t, len(parser.droppedColumns), 3)
 		assert.True(t, parser.droppedColumns["b"])
 		assert.True(t, parser.droppedColumns["d"])
 		assert.True(t, parser.droppedColumns["e"])
-	}
-	{
-		parser := NewAlterTableParser()
-		statement := "alter table t drop column b, drop bad statement, add column i int"
-		err := parser.ParseAlterStatement(statement, sqlparser.NewTestParser())
-		assert.Error(t, err)
 	}
 }
 
@@ -179,8 +182,8 @@ func TestParseAlterStatementRenameTable(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.alter, func(t *testing.T) {
 			parser := NewAlterTableParser()
-			err := parser.ParseAlterStatement(tc.alter, sqlparser.NewTestParser())
-			assert.NoError(t, err)
+			alterStatement := alterTableStatement(t, tc.alter)
+			parser.AnalyzeAlter(alterStatement)
 			assert.Equal(t, tc.isRename, parser.isRenameTable)
 		})
 	}

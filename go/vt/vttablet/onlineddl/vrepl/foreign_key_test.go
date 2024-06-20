@@ -24,7 +24,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
 )
 
@@ -68,7 +70,20 @@ func TestRemovedForeignKeyNames(t *testing.T) {
 	}
 	for _, tcase := range tcases {
 		t.Run(tcase.before, func(t *testing.T) {
-			names, err := RemovedForeignKeyNames(vtenv.NewTestEnv(), tcase.before, tcase.after)
+			env := vtenv.NewTestEnv()
+			beforeStmt, err := env.Parser().ParseStrictDDL(tcase.before)
+			require.NoError(t, err)
+			beforeCreateTable, ok := beforeStmt.(*sqlparser.CreateTable)
+			require.True(t, ok)
+			require.NotNil(t, beforeCreateTable)
+
+			afterStmt, err := env.Parser().ParseStrictDDL(tcase.after)
+			require.NoError(t, err)
+			afterCreateTable, ok := afterStmt.(*sqlparser.CreateTable)
+			require.True(t, ok)
+			require.NotNil(t, afterCreateTable)
+
+			names, err := RemovedForeignKeyNames(env, beforeCreateTable, afterCreateTable)
 			assert.NoError(t, err)
 			assert.Equal(t, tcase.names, names)
 		})
