@@ -66,9 +66,9 @@ func CheckKeyspaceLocked(ctx context.Context, keyspace string) error {
 }
 
 // LockKeyspaceWithLeaseRenewal locks the keyspace and starts a goroutine which runs
-// until the MaxKeyspaceLockLeaseTTL is reached -- exiting early if the context is
-// cancelled, the done channel is closed, or an error is encountered -- refreshing
-// the lock's lease every leaseRenewal until ends.
+// until the MaxKeyspaceLockLeaseTTL is reached -- exiting if the context is
+// cancelled, the unlock function is called, or an error is encountered -- refreshing
+// the lock's lease every leaseRenewal until it ends.
 func (ts *Server) LockKeyspaceWithLeaseRenewal(ctx context.Context, keyspace, action string) (context.Context, func(*error), <-chan error, error) {
 	ksLock := &keyspaceLock{keyspace: keyspace}
 	lockCtx, unLockF, err := ts.internalLock(ctx, ksLock, action, true)
@@ -95,6 +95,7 @@ func (ts *Server) LockKeyspaceWithLeaseRenewal(ctx context.Context, keyspace, ac
 			}
 		}
 	}()
+	// Add to the unlock function, closing our related channels first.
 	f := func(err *error) {
 		close(doneCh)
 		close(errCh)
