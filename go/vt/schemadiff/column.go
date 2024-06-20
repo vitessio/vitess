@@ -105,9 +105,6 @@ func (c *ColumnDefinitionEntity) SetExplicitCharsetCollate(env *Environment) err
 		if collation == collations.Unknown {
 			return &UnknownColumnCharsetCollationError{Column: c.columnDefinition.Name.String(), Charset: c.tableCharsetCollate.charset}
 		}
-		defer func() {
-			c.columnDefinition.Type.Options.Collate = ""
-		}()
 		c.columnDefinition.Type.Options.Collate = env.CollationEnv().LookupName(collation)
 	}
 	if c.columnDefinition.Type.Charset.Name == "" && c.columnDefinition.Type.Options.Collate != "" {
@@ -117,22 +114,12 @@ func (c *ColumnDefinitionEntity) SetExplicitCharsetCollate(env *Environment) err
 		if charset == "" {
 			return &UnknownColumnCollationCharsetError{Column: c.columnDefinition.Name.String(), Collation: c.columnDefinition.Type.Options.Collate}
 		}
-		defer func() {
-			c.columnDefinition.Type.Charset.Name = ""
-		}()
 		c.columnDefinition.Type.Charset.Name = charset
 	}
 	if c.columnDefinition.Type.Charset.Name == "" {
 		// Still nothing? Assign the table's charset/collation.
-		defer func() {
-			c.columnDefinition.Type.Charset.Name = ""
-			c.columnDefinition.Type.Options.Collate = ""
-		}()
 		c.columnDefinition.Type.Charset.Name = c.tableCharsetCollate.charset
 		if c.columnDefinition.Type.Options.Collate == "" {
-			defer func() {
-				c.columnDefinition.Type.Options.Collate = ""
-			}()
 			c.columnDefinition.Type.Options.Collate = c.tableCharsetCollate.collate
 		}
 		if c.columnDefinition.Type.Options.Collate = c.tableCharsetCollate.collate; c.columnDefinition.Type.Options.Collate == "" {
@@ -168,96 +155,20 @@ func (c *ColumnDefinitionEntity) ColumnDiff(
 	other *ColumnDefinitionEntity,
 	hints *DiffHints,
 ) (*ModifyColumnDiff, error) {
+	cClone := c         // not real clone yet
+	otherClone := other // not real clone yet
 	if c.IsTextual() || other.IsTextual() {
-		// We will now denormalize the columns charset & collate as needed (if empty, populate from table.)
-		// Normalizing _this_ column definition:
-		if c.columnDefinition.Type.Charset.Name != "" && c.columnDefinition.Type.Options.Collate == "" {
-			// Charset defined without collation. Assign the default collation for that charset.
-			collation := env.CollationEnv().DefaultCollationForCharset(c.columnDefinition.Type.Charset.Name)
-			if collation == collations.Unknown {
-				return nil, &UnknownColumnCharsetCollationError{Column: c.columnDefinition.Name.String(), Charset: c.tableCharsetCollate.charset}
-			}
-			defer func() {
-				c.columnDefinition.Type.Options.Collate = ""
-			}()
-			c.columnDefinition.Type.Options.Collate = env.CollationEnv().LookupName(collation)
+		cClone = c.Clone()
+		if err := cClone.SetExplicitCharsetCollate(env); err != nil {
+			return nil, err
 		}
-		if c.columnDefinition.Type.Charset.Name == "" && c.columnDefinition.Type.Options.Collate != "" {
-			// Column has explicit collation but no charset. We can infer the charset from the collation.
-			collationID := env.CollationEnv().LookupByName(c.columnDefinition.Type.Options.Collate)
-			charset := env.CollationEnv().LookupCharsetName(collationID)
-			if charset == "" {
-				return nil, &UnknownColumnCollationCharsetError{Column: c.columnDefinition.Name.String(), Collation: c.columnDefinition.Type.Options.Collate}
-			}
-			defer func() {
-				c.columnDefinition.Type.Charset.Name = ""
-			}()
-			c.columnDefinition.Type.Charset.Name = charset
-		}
-		if c.columnDefinition.Type.Charset.Name == "" {
-			// Still nothing? Assign the table's charset/collation.
-			defer func() {
-				c.columnDefinition.Type.Charset.Name = ""
-				c.columnDefinition.Type.Options.Collate = ""
-			}()
-			c.columnDefinition.Type.Charset.Name = c.tableCharsetCollate.charset
-			if c.columnDefinition.Type.Options.Collate == "" {
-				defer func() {
-					c.columnDefinition.Type.Options.Collate = ""
-				}()
-				c.columnDefinition.Type.Options.Collate = c.tableCharsetCollate.collate
-			}
-			if c.columnDefinition.Type.Options.Collate = c.tableCharsetCollate.collate; c.columnDefinition.Type.Options.Collate == "" {
-				collation := env.CollationEnv().DefaultCollationForCharset(c.tableCharsetCollate.charset)
-				if collation == collations.Unknown {
-					return nil, &UnknownColumnCharsetCollationError{Column: c.columnDefinition.Name.String(), Charset: c.tableCharsetCollate.charset}
-				}
-				c.columnDefinition.Type.Options.Collate = env.CollationEnv().LookupName(collation)
-			}
-		}
-		// Normalizing _the other_ column definition:
-		if other.columnDefinition.Type.Charset.Name != "" && other.columnDefinition.Type.Options.Collate == "" {
-			// Charset defined without collation. Assign the default collation for that charset.
-			collation := env.CollationEnv().DefaultCollationForCharset(other.columnDefinition.Type.Charset.Name)
-			if collation == collations.Unknown {
-				return nil, &UnknownColumnCharsetCollationError{Column: other.columnDefinition.Name.String(), Charset: other.tableCharsetCollate.charset}
-			}
-			defer func() {
-				other.columnDefinition.Type.Options.Collate = ""
-			}()
-			other.columnDefinition.Type.Options.Collate = env.CollationEnv().LookupName(collation)
-		}
-		if other.columnDefinition.Type.Charset.Name == "" && other.columnDefinition.Type.Options.Collate != "" {
-			// Column has explicit collation but no charset. We can infer the charset from the collation.
-			collationID := env.CollationEnv().LookupByName(other.columnDefinition.Type.Options.Collate)
-			charset := env.CollationEnv().LookupCharsetName(collationID)
-			if charset == "" {
-				return nil, &UnknownColumnCollationCharsetError{Column: other.columnDefinition.Name.String(), Collation: other.columnDefinition.Type.Options.Collate}
-			}
-			defer func() {
-				other.columnDefinition.Type.Charset.Name = ""
-			}()
-			other.columnDefinition.Type.Charset.Name = charset
-		}
-
-		if other.columnDefinition.Type.Charset.Name == "" {
-			// Still nothing? Assign the table's charset/collation.
-			defer func() {
-				other.columnDefinition.Type.Charset.Name = ""
-				other.columnDefinition.Type.Options.Collate = ""
-			}()
-			other.columnDefinition.Type.Charset.Name = other.tableCharsetCollate.charset
-			if other.columnDefinition.Type.Options.Collate = other.tableCharsetCollate.collate; other.columnDefinition.Type.Options.Collate == "" {
-				collation := env.CollationEnv().DefaultCollationForCharset(other.tableCharsetCollate.charset)
-				if collation == collations.Unknown {
-					return nil, &UnknownColumnCharsetCollationError{Column: other.columnDefinition.Name.String(), Charset: other.tableCharsetCollate.charset}
-				}
-				other.columnDefinition.Type.Options.Collate = env.CollationEnv().LookupName(collation)
-			}
+		otherClone = other.Clone()
+		if err := otherClone.SetExplicitCharsetCollate(env); err != nil {
+			return nil, err
 		}
 	}
 
-	if sqlparser.Equals.RefOfColumnDefinition(c.columnDefinition, other.columnDefinition) {
+	if sqlparser.Equals.RefOfColumnDefinition(cClone.columnDefinition, otherClone.columnDefinition) {
 		return nil, nil
 	}
 
@@ -270,11 +181,11 @@ func (c *ColumnDefinitionEntity) ColumnDiff(
 	}
 	switch hints.EnumReorderStrategy {
 	case EnumReorderStrategyReject:
-		otherEnumValuesMap := getEnumValuesMap(other.columnDefinition.Type.EnumValues)
-		for ordinal, enumValue := range c.columnDefinition.Type.EnumValues {
+		otherEnumValuesMap := getEnumValuesMap(otherClone.columnDefinition.Type.EnumValues)
+		for ordinal, enumValue := range cClone.columnDefinition.Type.EnumValues {
 			if otherOrdinal, ok := otherEnumValuesMap[enumValue]; ok {
 				if ordinal != otherOrdinal {
-					return nil, &EnumValueOrdinalChangedError{Table: tableName, Column: c.columnDefinition.Name.String(), Value: enumValue, Ordinal: ordinal, NewOrdinal: otherOrdinal}
+					return nil, &EnumValueOrdinalChangedError{Table: tableName, Column: cClone.columnDefinition.Name.String(), Value: enumValue, Ordinal: ordinal, NewOrdinal: otherOrdinal}
 				}
 			}
 		}
