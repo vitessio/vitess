@@ -1808,5 +1808,54 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "Literals in UNION can be problematic",
+    "query": "select 'a' as type, 0 as id from user group by 2 union all select 'c' as type, 0 as id from user_extra as t",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 'a' as type, 0 as id from user group by 2 union all select 'c' as type, 0 as id from user_extra as t",
+      "Instructions": {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Ordered",
+            "Aggregates": "any_value(0) AS type, any_value(1) AS id",
+            "GroupBy": "2 COLLATE utf8mb4_0900_ai_ci",
+            "ResultColumns": 2,
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 'a' as type, 0 as id, '' from `user` where 1 != 1 group by ''",
+                "OrderBy": "2 ASC COLLATE utf8mb4_0900_ai_ci",
+                "Query": "select 'a' as type, 0 as id, '' from `user` group by '' order by '' asc",
+                "Table": "`user`"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 'c' as type, 0 as id from user_extra as t where 1 != 1",
+            "Query": "select 'c' as type, 0 as id from user_extra as t",
+            "Table": "user_extra"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
   }
 ]
