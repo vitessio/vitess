@@ -22,6 +22,8 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/vterrors"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const (
@@ -78,16 +80,17 @@ func (ts *Server) LockKeyspaceWithLeaseRenewal(ctx context.Context, keyspace, ac
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	doneCh := make(chan struct{})
-	errCh := make(chan error, 1)
+	done := make(chan struct{})  // Our work is done and we should exit
+	errCh := make(chan error, 1) // Communicate any errors encountered during renewals
 	go func() {
-		renewAttempts := int(MaxKeyspaceLockLeaseTTL.Seconds() / leaseRenewalInterval.Seconds())
-		for i := 0; i < renewAttempts; i++ {
+		defer close(errCh)
+		maxRenewals := int((MaxKeyspaceLockLeaseTTL.Seconds() - leaseRenewalInterval.Seconds()) / leaseRenewalInterval.Seconds())
+		for i := 0; i < maxRenewals; i++ {
 			time.Sleep(leaseRenewalInterval)
 			select {
 			case <-lockCtx.Done():
 				return
-			case <-doneCh:
+			case <-done:
 				return
 			default:
 				// Attempt to renew the lease.
@@ -97,12 +100,18 @@ func (ts *Server) LockKeyspaceWithLeaseRenewal(ctx context.Context, keyspace, ac
 				}
 			}
 		}
+		time.Sleep(leaseRenewalInterval)
+		select {
+		case <-done:
+		default:
+			errCh <- vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "cannot renew keyspace %s lock lease as we've hit the time limit of %v",
+				keyspace, MaxKeyspaceLockLeaseTTL)
+		}
 	}()
-	// Add to the unlock function, closing our related channels first.
+	// Add to the unlock function to end the lease renewal work.
 	newUnlockF := func(err *error) {
-		close(doneCh)
-		close(errCh)
+		close(done)
 		unlockF(err)
 	}
-	return lockCtx, newUnlockF, errCh, err
+	return lockCtx, newUnlockF, errCh, nil
 }
