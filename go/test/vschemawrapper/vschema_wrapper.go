@@ -342,3 +342,17 @@ func (vw *VSchemaWrapper) FindRoutedShard(keyspace, shard string) (string, error
 func (vw *VSchemaWrapper) IsViewsEnabled() bool {
 	return vw.EnableViews
 }
+
+// FindMirrorRule finds the mirror rule for the requested keyspace, table
+// name, and the tablet type in the VSchema.
+func (vs *VSchemaWrapper) FindMirrorRule(tab sqlparser.TableName) (*vindexes.MirrorRule, string, topodatapb.TabletType, key.Destination, error) {
+	destKeyspace, destTabletType, dest, err := topoproto.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_PRIMARY)
+	if err != nil {
+		return nil, "", destTabletType, nil, err
+	}
+	mirrorRule, err := vs.V.FindMirrorRule(destKeyspace, tab.Name.String(), destTabletType)
+	if err != nil {
+		return nil, "", destTabletType, nil, err
+	}
+	return mirrorRule, destKeyspace, destTabletType, dest, err
+}

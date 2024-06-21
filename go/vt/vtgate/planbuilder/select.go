@@ -45,12 +45,12 @@ func gen4SelectStmtPlanner(
 			return nil, err
 		}
 		if p != nil {
-			used := "dual"
+			used := sqlparser.NewTableName("dual")
 			keyspace, ksErr := vschema.DefaultKeyspace()
 			if ksErr == nil {
 				// we are just getting the ks to log the correct table use.
 				// no need to fail this if we can't find the default keyspace
-				used = keyspace.Name + ".dual"
+				used = sqlparser.NewTableNameWithQualifier("dual", keyspace.Name)
 			}
 			return newPlanResult(p, used), nil
 		}
@@ -62,7 +62,7 @@ func gen4SelectStmtPlanner(
 		sel.SQLCalcFoundRows = false
 	}
 
-	getPlan := func(selStatement sqlparser.SelectStatement) (engine.Primitive, []string, error) {
+	getPlan := func(selStatement sqlparser.SelectStatement) (engine.Primitive, []sqlparser.TableName, error) {
 		return newBuildSelectPlan(selStatement, reservedVars, vschema, plannerVersion)
 	}
 
@@ -123,7 +123,7 @@ func buildSQLCalcFoundRowsPlan(
 	sel *sqlparser.Select,
 	reservedVars *sqlparser.ReservedVars,
 	vschema plancontext.VSchema,
-) (engine.Primitive, []string, error) {
+) (engine.Primitive, []sqlparser.TableName, error) {
 	limitPlan, _, err := newBuildSelectPlan(sel, reservedVars, vschema, Gen4)
 	if err != nil {
 		return nil, nil, err
@@ -180,7 +180,7 @@ func buildSQLCalcFoundRowsPlan(
 	}, tablesUsed, nil
 }
 
-func gen4PredicateRewrite(stmt sqlparser.Statement, getPlan func(selStatement sqlparser.SelectStatement) (engine.Primitive, []string, error)) (engine.Primitive, []string) {
+func gen4PredicateRewrite(stmt sqlparser.Statement, getPlan func(selStatement sqlparser.SelectStatement) (engine.Primitive, []sqlparser.TableName, error)) (engine.Primitive, []sqlparser.TableName) {
 	rewritten, isSel := sqlparser.RewritePredicate(stmt).(sqlparser.SelectStatement)
 	if !isSel {
 		// Fail-safe code, should never happen
@@ -199,7 +199,7 @@ func newBuildSelectPlan(
 	reservedVars *sqlparser.ReservedVars,
 	vschema plancontext.VSchema,
 	version querypb.ExecuteOptions_PlannerVersion,
-) (plan engine.Primitive, tablesUsed []string, err error) {
+) (plan engine.Primitive, tablesUsed []sqlparser.TableName, err error) {
 	ctx, err := plancontext.CreatePlanningContext(selStmt, reservedVars, vschema, version)
 	if err != nil {
 		return nil, nil, err

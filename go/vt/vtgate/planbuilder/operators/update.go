@@ -58,6 +58,11 @@ type (
 	}
 )
 
+var (
+	_ Operator  = (*Update)(nil)
+	_ TableUser = (*Update)(nil)
+)
+
 func (u *Update) Inputs() []Operator {
 	if u.Source == nil {
 		return nil
@@ -89,8 +94,8 @@ func (u *Update) GetOrdering(*plancontext.PlanningContext) []OrderBy {
 	return nil
 }
 
-func (u *Update) TablesUsed() []string {
-	return SingleQualifiedIdentifier(u.Target.VTable.Keyspace, u.Target.VTable.Name)
+func (u *Update) TablesUsed() []sqlparser.TableName {
+	return SingleTableName(u.Target.VTable.Keyspace, u.Target.VTable.Name)
 }
 
 func (u *Update) ShortDescription() string {

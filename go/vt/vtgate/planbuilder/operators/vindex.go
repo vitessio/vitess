@@ -50,6 +50,11 @@ type (
 
 const wrongWhereCond = "WHERE clause for vindex function must be of the form id = <val> or id in(<val>,...)"
 
+var (
+	_ Operator  = (*Vindex)(nil)
+	_ TableUser = (*Vindex)(nil)
+)
+
 // Introduces implements the Operator interface
 func (v *Vindex) introducesTableID() semantics.TableSet {
 	return v.Solved
@@ -164,8 +169,8 @@ func (v *Vindex) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.E
 
 // TablesUsed implements the Operator interface.
 // It is not keyspace-qualified.
-func (v *Vindex) TablesUsed() []string {
-	return []string{v.Table.Table.Name.String()}
+func (v *Vindex) TablesUsed() []sqlparser.TableName {
+	return []sqlparser.TableName{sqlparser.NewTableName(v.Table.Table.Name.String())}
 }
 
 func (v *Vindex) ShortDescription() string {

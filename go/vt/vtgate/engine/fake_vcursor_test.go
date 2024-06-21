@@ -112,6 +112,10 @@ func (t *noopVCursor) CloneForReplicaWarming(ctx context.Context) VCursor {
 	panic("implement me")
 }
 
+func (t *noopVCursor) CloneForMirroring(ctx context.Context) VCursor {
+	panic("implement me")
+}
+
 func (t *noopVCursor) SetExec(ctx context.Context, name string, value string) error {
 	panic("implement me")
 }
@@ -421,6 +425,10 @@ type loggingVCursor struct {
 	shardSession []*srvtopo.ResolvedShard
 
 	parser *sqlparser.Parser
+
+	handleMirrorClonesFn   func(context.Context) VCursor
+	onExecuteMultiShardFn  func(context.Context, Primitive, []*srvtopo.ResolvedShard, []*querypb.BoundQuery, bool, bool)
+	onStreamExecuteMultiFn func(context.Context, Primitive, string, []*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, bool, bool, func(*sqltypes.Result) error)
 }
 
 func (f *loggingVCursor) HasCreatedTempTable() {
@@ -536,6 +544,13 @@ func (f *loggingVCursor) CloneForReplicaWarming(ctx context.Context) VCursor {
 	return f
 }
 
+func (f *loggingVCursor) CloneForMirroring(ctx context.Context) VCursor {
+	if f.handleMirrorClonesFn != nil {
+		return f.handleMirrorClonesFn(ctx)
+	}
+	panic("no mirror clones available")
+}
+
 func (f *loggingVCursor) Execute(ctx context.Context, method string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
 	name := "Unknown"
 	switch co {
@@ -553,7 +568,12 @@ func (f *loggingVCursor) Execute(ctx context.Context, method string, query strin
 }
 
 func (f *loggingVCursor) ExecuteMultiShard(ctx context.Context, primitive Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit bool) (*sqltypes.Result, []error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.log = append(f.log, fmt.Sprintf("ExecuteMultiShard %v%v %v", printResolvedShardQueries(rss, queries), rollbackOnError, canAutocommit))
+	if f.onExecuteMultiShardFn != nil {
+		f.onExecuteMultiShardFn(ctx, primitive, rss, queries, rollbackOnError, canAutocommit)
+	}
 	res, err := f.nextResult()
 	if err != nil {
 		return nil, []error{err}
@@ -574,6 +594,9 @@ func (f *loggingVCursor) ExecuteStandalone(ctx context.Context, primitive Primit
 func (f *loggingVCursor) StreamExecuteMulti(ctx context.Context, primitive Primitive, query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, rollbackOnError bool, autocommit bool, callback func(reply *sqltypes.Result) error) []error {
 	f.mu.Lock()
 	f.log = append(f.log, fmt.Sprintf("StreamExecuteMulti %s %s", query, printResolvedShardsBindVars(rss, bindVars)))
+	if f.onStreamExecuteMultiFn != nil {
+		f.onStreamExecuteMultiFn(ctx, primitive, query, rss, bindVars, rollbackOnError, autocommit, callback)
+	}
 	r, err := f.nextResult()
 	f.mu.Unlock()
 	if err != nil {
@@ -725,6 +748,8 @@ func (f *loggingVCursor) ResolveDestinationsMultiCol(ctx context.Context, keyspa
 
 func (f *loggingVCursor) ExpectLog(t *testing.T, want []string) {
 	t.Helper()
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if len(f.log) == 0 && len(want) == 0 {
 		return
 	}
@@ -742,6 +767,8 @@ func (f *loggingVCursor) ExpectWarnings(t *testing.T, want []*querypb.QueryWarni
 }
 
 func (f *loggingVCursor) Rewind() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.curShardForKsid = 0
 	f.curResult = 0
 	f.log = nil

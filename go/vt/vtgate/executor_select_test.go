@@ -4335,3 +4335,60 @@ func TestStreamJoinQuery(t *testing.T) {
 		utils.MustMatch(t, wantResult.Rows[idx], result.Rows[idx], "mismatched on: ", strconv.Itoa(idx))
 	}
 }
+
+func BenchmarkSelectMirror(b *testing.B) {
+	ctx := context.Background()
+	cell := "aa"
+	sql := fmt.Sprintf("select id from %s.user where id = 1", KsTestUnsharded)
+
+	currentSandboxMirrorRules := sandboxMirrorRules
+	b.Cleanup(func() {
+		setSandboxMirrorRules(currentSandboxMirrorRules)
+	})
+
+	// Don't use createExecutorEnv. Doesn't work with benchmarks because of
+	// utils.EnsureNoLeak.
+	createBenchmarkExecutor := func(b *testing.B) (context.Context, *Executor) {
+		ctx, cancel := context.WithCancel(ctx)
+		b.Cleanup(cancel)
+		hc := discovery.NewFakeHealthCheck(nil)
+		u := createSandbox(KsTestUnsharded)
+		s := createSandbox(KsTestSharded)
+		s.VSchema = executorVSchema
+		u.VSchema = unshardedVSchema
+		serv := newSandboxForCells(ctx, []string{cell})
+		resolver := newTestResolver(ctx, hc, serv, cell)
+		shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
+		for _, shard := range shards {
+			hc.AddTestTablet(cell, shard, 1, KsTestSharded, shard, topodatapb.TabletType_PRIMARY, true, 1, nil)
+		}
+		hc.AddTestTablet(cell, "0", 1, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
+		return ctx, createExecutor(ctx, serv, cell, resolver)
+	}
+
+	for _, percent := range []float32{0, 1, 5, 10, 25, 50, 100} {
+		b.Run(fmt.Sprintf("mirror %.2f%%", percent), func(b *testing.B) {
+			setSandboxMirrorRules(fmt.Sprintf(`{
+				"rules": [
+					{
+						"from_table": "%s.user",
+						"to_table": "%s.user",
+						"percent": %.2f
+					}
+				]
+			}`, KsTestUnsharded, KsTestSharded, percent))
+
+			ctx, executor := createBenchmarkExecutor(b)
+			session := &vtgatepb.Session{
+				TargetString: "@primary",
+			}
+
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				executorExec(ctx, executor, session, sql, nil)
+			}
+			b.StopTimer()
+		})
+	}
+}

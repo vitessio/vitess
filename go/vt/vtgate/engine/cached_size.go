@@ -731,6 +731,24 @@ func (cached *MergeSort) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *Mirror) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field Primitive vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Primitive.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Target vitess.io/vitess/go/vt/vtgate/engine.MirrorTarget
+	if cc, ok := cached.Target.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 func (cached *NonLiteralUpdateInfo) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -795,6 +813,20 @@ func (cached *OrderedAggregate) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *PercentMirrorTarget) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field Primitive vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Primitive.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 func (cached *Plan) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -818,11 +850,11 @@ func (cached *Plan) CachedSize(alloc bool) int64 {
 			size += elem.CachedSize(true)
 		}
 	}
-	// field TablesUsed []string
+	// field TablesUsed vitess.io/vitess/go/vt/sqlparser.TableNames
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.TablesUsed)) * int64(16))
+		size += hack.RuntimeAllocSize(int64(cap(cached.TablesUsed)) * int64(32))
 		for _, elem := range cached.TablesUsed {
-			size += hack.RuntimeAllocSize(int64(len(elem)))
+			size += elem.CachedSize(false)
 		}
 	}
 	return size

@@ -28,6 +28,8 @@ import (
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -48,7 +50,7 @@ type LogStats struct {
 	ExecuteTime    time.Duration
 	CommitTime     time.Duration
 	Error          error
-	TablesUsed     []string
+	TablesUsed     []sqlparser.TableName
 	SessionUUID    string
 	CachedPlan     bool
 	ActiveKeyspace string // ActiveKeyspace is the selected keyspace `use ks`
@@ -174,9 +176,12 @@ func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
 	log.Key("Cached Plan")
 	log.Bool(stats.CachedPlan)
 	log.Key("TablesUsed")
-	log.Strings(stats.TablesUsed)
+	tablesUsed := make([]string, len(stats.TablesUsed))
+	for i, table := range stats.TablesUsed {
+		tablesUsed[i] = sqlparser.String(table)
+	}
+	log.Strings(tablesUsed)
 	log.Key("ActiveKeyspace")
 	log.String(stats.ActiveKeyspace)
-
 	return log.Flush(w)
 }
