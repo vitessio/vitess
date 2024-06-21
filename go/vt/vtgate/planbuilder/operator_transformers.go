@@ -352,7 +352,7 @@ func transformDistinct(ctx *plancontext.PlanningContext, op *operators.Distinct)
 	return &engine.Distinct{
 		Source:    src,
 		CheckCols: op.Columns,
-		Truncate:  op.Truncate,
+		Truncate:  op.ResultColumns,
 	}, nil
 }
 
@@ -470,7 +470,7 @@ func transformFilter(ctx *plancontext.PlanningContext, op *operators.Filter) (en
 		Input:        src,
 		Predicate:    predicate,
 		ASTPredicate: ctx.SemTable.AndExpressions(op.Predicates...),
-		Truncate:     op.Truncate,
+		Truncate:     op.ResultColumns,
 	}, nil
 }
 
