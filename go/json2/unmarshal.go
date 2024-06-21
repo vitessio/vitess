@@ -33,8 +33,7 @@ var carriageReturn = []byte("\n")
 // efficient and should not be used for high QPS operations.
 func Unmarshal(data []byte, v any) error {
 	if pb, ok := v.(proto.Message); ok {
-		opts := protojson.UnmarshalOptions{DiscardUnknown: true}
-		return annotate(data, opts.Unmarshal(data, pb))
+		return UnmarshalPB(data, pb)
 	}
 	return annotate(data, json.Unmarshal(data, v))
 }
@@ -52,4 +51,10 @@ func annotate(data []byte, err error) error {
 	line, pos := bytes.Count(data[:start], carriageReturn)+1, int(syntax.Offset)-start
 
 	return fmt.Errorf("line: %d, position %d: %v", line, pos, err)
+}
+
+// UnmarshalPB is similar to Unmarshal but specifically for proto.Message to add type safety.
+func UnmarshalPB(data []byte, pb proto.Message) error {
+	opts := protojson.UnmarshalOptions{DiscardUnknown: true}
+	return annotate(data, opts.Unmarshal(data, pb))
 }

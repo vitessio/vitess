@@ -18,6 +18,10 @@ package json2
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 func TestUnmarshal(t *testing.T) {
@@ -47,4 +51,15 @@ func TestUnmarshal(t *testing.T) {
 			t.Errorf("Unmarshal(%v) err: %v, want %v", tcase.in, got, tcase.err)
 		}
 	}
+}
+
+func TestUnmarshalPB(t *testing.T) {
+	want := &emptypb.Empty{}
+	json, err := protojson.Marshal(want)
+	require.NoError(t, err)
+
+	var got emptypb.Empty
+	err = UnmarshalPB(json, &got)
+	require.NoError(t, err)
+	require.Equal(t, want, &got)
 }
