@@ -21,15 +21,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/pools/smartconnpool"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
@@ -41,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	p "vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	eschema "vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
@@ -101,6 +101,15 @@ func returnStreamResult(result *sqltypes.Result) error {
 
 func allocStreamResult() *sqltypes.Result {
 	return streamResultPool.Get().(*sqltypes.Result)
+}
+
+func (qre *QueryExecutor) isSelect() bool {
+	switch qre.plan.PlanID {
+	case planbuilder.PlanSelect, planbuilder.PlanSelectImpossible:
+		return true
+	default:
+		return false
+	}
 }
 
 func (qre *QueryExecutor) shouldConsolidate() bool {
@@ -836,12 +845,46 @@ func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, b
 		return query, query, nil
 	}
 
+	var mysqlOptimizerHints string
+	if qre.isSelect() {
+		mysqlOptimizerHints = buildMysqlOptimizerHints(qre.tsv)
+	}
+
 	var buf strings.Builder
-	buf.Grow(len(qre.marginComments.Leading) + len(query) + len(qre.marginComments.Trailing))
-	buf.WriteString(qre.marginComments.Leading)
-	buf.WriteString(query)
-	buf.WriteString(qre.marginComments.Trailing)
+	if mysqlOptimizerHints != "" {
+		fields := strings.SplitN(query, " ", 2)
+		queryPrefix := fields[0] + " "
+		queryNonPrefix := " " + fields[1]
+
+		buf.Grow(len(qre.marginComments.Leading) + len(queryPrefix) + len(mysqlOptimizerHints) + len(queryNonPrefix) + len(qre.marginComments.Trailing))
+		buf.WriteString(qre.marginComments.Leading)
+		buf.WriteString(queryPrefix)
+		buf.WriteString(mysqlOptimizerHints)
+		buf.WriteString(queryNonPrefix)
+		buf.WriteString(qre.marginComments.Trailing)
+	} else {
+		buf.Grow(len(qre.marginComments.Leading) + len(query) + len(qre.marginComments.Trailing))
+		buf.WriteString(qre.marginComments.Leading)
+		buf.WriteString(query)
+		buf.WriteString(qre.marginComments.Trailing)
+	}
 	return buf.String(), query, nil
+}
+
+func buildMysqlOptimizerHints(tsv *TabletServer) string {
+	var buf strings.Builder
+	if tsv.config.Oltp.QueryTimeoutPushdown {
+		// The MAX_EXECUTION_TIME(N) hint sets a statement execution timeout of N milliseconds.
+		// https://dev.mysql.com/doc/refman/8.0/en/optimizer-hints.html#optimizer-hints-execution-time
+		queryTimeoutStr := strconv.FormatInt(tsv.loadQueryTimeout(), 64)
+		buf.Grow(len(queryTimeoutStr))
+		buf.WriteString(queryTimeoutStr)
+	}
+
+	if len(optimizerHints) == 0 {
+		return ""
+	}
+	return "/*+ " + strings.Join(optimizerHints, " ") + " */"
 }
 
 func rewriteOUTParamError(err error) error {

@@ -236,6 +236,13 @@ func (tsv *TabletServer) loadQueryTimeout() time.Duration {
 	return time.Duration(tsv.QueryTimeout.Load())
 }
 
+func (tsv *TabletServer) loadQueryTimeoutWithPushdownWait() time.Duration {
+	if tsv.config.Oltp.QueryTimeoutPushdown {
+		return tsv.loadQueryTimeout() + tsv.config.Oltp.QueryTimeoutPushdownWait
+	}
+	return tsv.loadQueryTimeout()
+}
+
 // onlineDDLExecutorToggleTableBuffer is called by onlineDDLExecutor as a callback function. onlineDDLExecutor
 // uses it to start/stop query buffering for a given table.
 // It is onlineDDLExecutor's responsibility to make sure buffering is stopped after some definite amount of time.
@@ -493,7 +500,7 @@ func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target, opti
 func (tsv *TabletServer) begin(ctx context.Context, target *querypb.Target, savepointQueries []string, reservedID int64, settings []string, options *querypb.ExecuteOptions) (state queryservice.TransactionState, err error) {
 	state.TabletAlias = tsv.alias
 	err = tsv.execRequest(
-		ctx, tsv.loadQueryTimeout(),
+		ctx, tsv.loadQueryTimeoutWithPushdownWait(),
 		"Begin", "begin", nil,
 		target, options, false, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
@@ -795,6 +802,9 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, settings []string, options *querypb.ExecuteOptions) (result *sqltypes.Result, err error) {
 	allowOnShutdown := false
 	timeout := tsv.loadQueryTimeout()
+	if tsv.config.Oltp.QueryTimeoutPushdown {
+		return timeout + tsv.config.Oltp.QueryTimeoutPushdownWait
+	}
 	if transactionID != 0 {
 		allowOnShutdown = true
 		// Execute calls happen for OLTP only, so we can directly fetch the

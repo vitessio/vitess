@@ -208,8 +208,9 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&currentConfig.EnableViews, "queryserver-enable-views", false, "Enable views support in vttablet.")
 
 	fs.BoolVar(&currentConfig.EnablePerWorkloadTableMetrics, "enable-per-workload-table-metrics", defaultConfig.EnablePerWorkloadTableMetrics, "If true, query counts and query error metrics include a label that identifies the workload")
-
 	fs.BoolVar(&currentConfig.Unmanaged, "unmanaged", false, "Indicates an unmanaged tablet, i.e. using an external mysql-compatible database")
+	fs.BoolVar(&currentConfig.Oltp.QueryTimeoutPushdown, "query-timeout-pushdown", false, "Attempt to push-down timing-out of queries to MySQL with a fallback to a MySQL KILL operation.")
+	fs.DurationVar(&currentConfig.Oltp.QueryTimeoutPushdownWait, "query-timeout-pushdown-wait", time.Second, "Max time to wait for MySQL to kill a query before sending a fallback KILL operation. Requires --query-timeout-pushdown")
 }
 
 var (
@@ -557,10 +558,12 @@ func (cfg *OlapConfig) UnmarshalJSON(data []byte) (err error) {
 
 // OltpConfig contains the config for oltp settings.
 type OltpConfig struct {
-	QueryTimeout time.Duration `json:"queryTimeoutSeconds,omitempty"`
-	TxTimeout    time.Duration `json:"txTimeoutSeconds,omitempty"`
-	MaxRows      int           `json:"maxRows,omitempty"`
-	WarnRows     int           `json:"warnRows,omitempty"`
+	QueryTimeout             time.Duration `json:"queryTimeoutSeconds,omitempty"`
+	TxTimeout                time.Duration `json:"txTimeoutSeconds,omitempty"`
+	QueryTimeoutPushdown     bool          `json:"queryTimeoutPushdown,omitempty"`
+	QueryTimeoutPushdownWait time.Duration `json:"queryTimeoutPushdownWait,omitempty"`
+	MaxRows                  int           `json:"maxRows,omitempty"`
+	WarnRows                 int           `json:"warnRows,omitempty"`
 }
 
 func (cfg *OltpConfig) MarshalJSON() ([]byte, error) {
