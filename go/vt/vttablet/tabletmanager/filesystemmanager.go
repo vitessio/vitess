@@ -21,7 +21,7 @@ func newFileSystemManager(ctx context.Context) FileSystemManager {
 		return newNoopFilesystemManager()
 	}
 
-	return newPollingFileSystemManager(ctx, attemptFileWrite, 5*time.Second, 2*time.Second)
+	return newPollingFileSystemManager(ctx, attemptFileWrite, stalledDiskWriteInterval, stalledDiskWriteTimeout)
 }
 
 type writeFunction func() error
@@ -47,7 +47,7 @@ type pollingFileSystemManager struct {
 	stalled         bool
 	writeFunc       writeFunction
 	pollingInterval time.Duration
-	waitPeriod      time.Duration
+	writeTimeout    time.Duration
 }
 
 var _ FileSystemManager = &pollingFileSystemManager{}
@@ -58,7 +58,7 @@ func newPollingFileSystemManager(ctx context.Context, writeFunc writeFunction, p
 		stalled:         false,
 		writeFunc:       writeFunc,
 		pollingInterval: pollingInterval,
-		waitPeriod:      waitPeriod,
+		writeTimeout:    waitPeriod,
 	}
 	go fs.poll(ctx)
 	return fs
@@ -85,7 +85,7 @@ func (f *pollingFileSystemManager) poll(ctx context.Context) {
 			}()
 
 			select {
-			case <-time.After(f.waitPeriod):
+			case <-time.After(f.writeTimeout):
 				f.mu.Lock()
 				f.stalled = true
 				checkInProgress = false
