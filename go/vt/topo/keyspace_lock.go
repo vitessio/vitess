@@ -26,7 +26,7 @@ import (
 
 const (
 	MaxKeyspaceLockLeaseTTL = 10 * time.Minute
-	leaseRenewalInterval    = 5 * time.Second
+	leaseRenewalInterval    = 10 * time.Second
 )
 
 type keyspaceLock struct {
@@ -69,9 +69,12 @@ func CheckKeyspaceLocked(ctx context.Context, keyspace string) error {
 // until the MaxKeyspaceLockLeaseTTL is reached -- exiting if the context is
 // cancelled, the unlock function is called, or an error is encountered -- refreshing
 // the lock's lease every leaseRenewal until it ends.
+// It returns a read-only error channel that you should regularly check to ensure that
+// you have not lost the lock or encountered any other non-recoverable errors related
+// to your lease.
 func (ts *Server) LockKeyspaceWithLeaseRenewal(ctx context.Context, keyspace, action string) (context.Context, func(*error), <-chan error, error) {
 	ksLock := &keyspaceLock{keyspace: keyspace}
-	lockCtx, unLockF, err := ts.internalLock(ctx, ksLock, action, true)
+	lockCtx, unlockF, err := ts.internalLock(ctx, ksLock, action, true)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -96,10 +99,10 @@ func (ts *Server) LockKeyspaceWithLeaseRenewal(ctx context.Context, keyspace, ac
 		}
 	}()
 	// Add to the unlock function, closing our related channels first.
-	f := func(err *error) {
+	newUnlockF := func(err *error) {
 		close(doneCh)
 		close(errCh)
-		unLockF(err)
+		unlockF(err)
 	}
-	return lockCtx, f, errCh, err
+	return lockCtx, newUnlockF, errCh, err
 }
