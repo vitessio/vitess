@@ -4091,8 +4091,20 @@ func (s *Server) WorkflowMirrorTraffic(ctx context.Context, req *vtctldatapb.Wor
 
 	// Don't allow traffic to be mirrored if any traffic has been switched over
 	// to the target keyspace.
-	if len(startState.RdonlyCellsSwitched) > 0 || len(startState.ReplicaCellsSwitched) > 0 || startState.WritesSwitched {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot mirror traffic for workflow %s at this time: traffic is switched", startState.Workflow)
+	var cannotSwitchTabletTypes []string
+	for _, tt := range req.TabletTypes {
+		if tt == topodatapb.TabletType_RDONLY && len(startState.RdonlyCellsSwitched) > 0 {
+			cannotSwitchTabletTypes = append(cannotSwitchTabletTypes, "rdonly")
+		}
+		if tt == topodatapb.TabletType_REPLICA && len(startState.ReplicaCellsSwitched) > 0 {
+			cannotSwitchTabletTypes = append(cannotSwitchTabletTypes, "replica")
+		}
+		if tt == topodatapb.TabletType_PRIMARY && startState.WritesSwitched {
+			cannotSwitchTabletTypes = append(cannotSwitchTabletTypes, "primary")
+		}
+	}
+	if len(cannotSwitchTabletTypes) > 0 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot mirror [%s] traffic for workflow %s at this time: traffic for those tablet types is switched", strings.Join(cannotSwitchTabletTypes, ","), startState.Workflow)
 	}
 
 	if err := s.mirrorTraffic(ctx, req, ts, startState); err != nil {

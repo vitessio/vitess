@@ -35,7 +35,7 @@ func testMoveTablesMirrorTraffic(t *testing.T, flavor workflowFlavor) {
 
 	_ = setupMinimalCustomerKeyspace(t)
 
-	mt := newMoveTables(vc, &moveTablesWorkflow{
+	mtwf := &moveTablesWorkflow{
 		workflowInfo: &workflowInfo{
 			vc:             vc,
 			workflowName:   workflowName,
@@ -44,21 +44,44 @@ func testMoveTablesMirrorTraffic(t *testing.T, flavor workflowFlavor) {
 		sourceKeyspace: sourceKeyspace,
 		tables:         "customer,loadtest,customer2",
 		mirrorFlags:    []string{"--percent", "25"},
-	}, flavor)
+	}
+	mt := newMoveTables(vc, mtwf, flavor)
 
+	// Mirror rules do not exist by default.
 	mt.Create()
 	confirmNoMirrorRules(t)
 
 	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
 
+	// Mirror rules can be created after a MoveTables workflow is created.
 	mt.MirrorTraffic()
 	confirmMirrorRulesExist(t)
-
 	expectMirrorRules(t, sourceKeyspace, targetKeyspace, tables, []topodatapb.TabletType{
 		topodatapb.TabletType_PRIMARY,
 		topodatapb.TabletType_REPLICA,
 		topodatapb.TabletType_RDONLY,
 	}, 25)
+
+	// Mirror rules can be adjusted after mirror rules are in place.
+	mtwf.mirrorFlags[1] = "50"
+	mt.MirrorTraffic()
+	confirmMirrorRulesExist(t)
+	expectMirrorRules(t, sourceKeyspace, targetKeyspace, tables, []topodatapb.TabletType{
+		topodatapb.TabletType_PRIMARY,
+		topodatapb.TabletType_REPLICA,
+		topodatapb.TabletType_RDONLY,
+	}, 50)
+
+	// Mirror rules can be adjusted multiple times after mirror rules are in
+	// place.
+	mtwf.mirrorFlags[1] = "75"
+	mt.MirrorTraffic()
+	confirmMirrorRulesExist(t)
+	expectMirrorRules(t, sourceKeyspace, targetKeyspace, tables, []topodatapb.TabletType{
+		topodatapb.TabletType_PRIMARY,
+		topodatapb.TabletType_REPLICA,
+		topodatapb.TabletType_RDONLY,
+	}, 75)
 
 	lg := newLoadGenerator(t, vc)
 	go func() {
@@ -69,10 +92,16 @@ func testMoveTablesMirrorTraffic(t *testing.T, flavor workflowFlavor) {
 	mt.SwitchReads()
 	confirmMirrorRulesExist(t)
 
+	// Mirror rules can be adjusted for writes after reads have been switched.
+	mtwf.mirrorFlags[1] = "100"
+	mtwf.mirrorFlags = append(mtwf.mirrorFlags, "--tablet-types", "primary")
+	mt.MirrorTraffic()
+	confirmMirrorRulesExist(t)
 	expectMirrorRules(t, sourceKeyspace, targetKeyspace, tables, []topodatapb.TabletType{
 		topodatapb.TabletType_PRIMARY,
-	}, 25)
+	}, 100)
 
+	// Mirror rules are removed after writes are switched.
 	mt.SwitchWrites()
 	confirmNoMirrorRules(t)
 }

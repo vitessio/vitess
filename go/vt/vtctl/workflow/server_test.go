@@ -689,12 +689,12 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 				DryRun:      true,
 			},
 			want: []string{
-				fmt.Sprintf("Mirroring 0.000000 percent of traffic from keyspace %s to keyspace %s for tablet types [REPLICA,RDONLY]", sourceKeyspaceName, targetKeyspaceName),
+				fmt.Sprintf("Mirroring 0.00 percent of traffic from keyspace %s to keyspace %s for tablet types [REPLICA,RDONLY]", sourceKeyspaceName, targetKeyspaceName),
 				fmt.Sprintf("Lock keyspace %s", sourceKeyspaceName),
 				fmt.Sprintf("Switch reads for tables [%s] to keyspace %s for tablet types [REPLICA,RDONLY]", tablesStr, targetKeyspaceName),
 				fmt.Sprintf("Routing rules for tables [%s] will be updated", tablesStr),
 				fmt.Sprintf("Unlock keyspace %s", sourceKeyspaceName),
-				fmt.Sprintf("Mirroring 0.000000 percent of traffic from keyspace %s to keyspace %s for tablet types [PRIMARY]", sourceKeyspaceName, targetKeyspaceName),
+				fmt.Sprintf("Mirroring 0.00 percent of traffic from keyspace %s to keyspace %s for tablet types [PRIMARY]", sourceKeyspaceName, targetKeyspaceName),
 				fmt.Sprintf("Lock keyspace %s", sourceKeyspaceName),
 				fmt.Sprintf("Lock keyspace %s", targetKeyspaceName),
 				fmt.Sprintf("Stop writes on keyspace %s for tables [%s]: [keyspace:%s;shard:-80;position:%s,keyspace:%s;shard:80-;position:%s]",
@@ -730,12 +730,12 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 				DryRun:      true,
 			},
 			want: []string{
-				fmt.Sprintf("Mirroring 0.000000 percent of traffic from keyspace %s to keyspace %s for tablet types [REPLICA,RDONLY]", targetKeyspaceName, sourceKeyspaceName),
+				fmt.Sprintf("Mirroring 0.00 percent of traffic from keyspace %s to keyspace %s for tablet types [REPLICA,RDONLY]", targetKeyspaceName, sourceKeyspaceName),
 				fmt.Sprintf("Lock keyspace %s", targetKeyspaceName),
 				fmt.Sprintf("Switch reads for tables [%s] to keyspace %s for tablet types [REPLICA,RDONLY]", tablesStr, targetKeyspaceName),
 				fmt.Sprintf("Routing rules for tables [%s] will be updated", tablesStr),
 				fmt.Sprintf("Unlock keyspace %s", targetKeyspaceName),
-				fmt.Sprintf("Mirroring 0.000000 percent of traffic from keyspace %s to keyspace %s for tablet types [PRIMARY]", targetKeyspaceName, sourceKeyspaceName),
+				fmt.Sprintf("Mirroring 0.00 percent of traffic from keyspace %s to keyspace %s for tablet types [PRIMARY]", targetKeyspaceName, sourceKeyspaceName),
 				fmt.Sprintf("Lock keyspace %s", targetKeyspaceName),
 				fmt.Sprintf("Lock keyspace %s", sourceKeyspaceName),
 				fmt.Sprintf("Stop writes on keyspace %s for tables [%s]: [keyspace:%s;shard:-80;position:%s,keyspace:%s;shard:80-;position:%s]",
@@ -891,7 +891,7 @@ func TestMirrorTraffic(t *testing.T) {
 			wantMirrorRules: make(map[string]map[string]float32),
 		},
 		{
-			name: "cannot mirror traffic after switch rdonly traffic",
+			name: "cannot mirror rdonly traffic after switch rdonly traffic",
 			req: &vtctldatapb.WorkflowMirrorTrafficRequest{
 				Keyspace:    targetKs,
 				Workflow:    workflow,
@@ -902,11 +902,11 @@ func TestMirrorTraffic(t *testing.T) {
 				fmt.Sprintf("%s.%s@rdonly", targetKs, table1): {fmt.Sprintf("%s.%s@rdonly", targetKs, table1)},
 				fmt.Sprintf("%s.%s@rdonly", targetKs, table2): {fmt.Sprintf("%s.%s@rdonly", targetKs, table2)},
 			},
-			wantErr:         "cannot mirror traffic for workflow src2target at this time: traffic is switched",
+			wantErr:         "cannot mirror [rdonly] traffic for workflow src2target at this time: traffic for those tablet types is switched",
 			wantMirrorRules: make(map[string]map[string]float32),
 		},
 		{
-			name: "cannot mirror traffic after switch replica traffic",
+			name: "cannot mirror replica traffic after switch replica traffic",
 			req: &vtctldatapb.WorkflowMirrorTrafficRequest{
 				Keyspace:    targetKs,
 				Workflow:    workflow,
@@ -917,11 +917,11 @@ func TestMirrorTraffic(t *testing.T) {
 				fmt.Sprintf("%s.%s@replica", targetKs, table1): {fmt.Sprintf("%s.%s@replica", targetKs, table1)},
 				fmt.Sprintf("%s.%s@replica", targetKs, table2): {fmt.Sprintf("%s.%s@replica", targetKs, table2)},
 			},
-			wantErr:         "cannot mirror traffic for workflow src2target at this time: traffic is switched",
+			wantErr:         "cannot mirror [replica] traffic for workflow src2target at this time: traffic for those tablet types is switched",
 			wantMirrorRules: make(map[string]map[string]float32),
 		},
 		{
-			name: "cannot mirror traffic after switch traffic",
+			name: "cannot mirror write traffic after switch traffic",
 			req: &vtctldatapb.WorkflowMirrorTrafficRequest{
 				Keyspace:    targetKs,
 				Workflow:    workflow,
@@ -932,7 +932,7 @@ func TestMirrorTraffic(t *testing.T) {
 				table1: {fmt.Sprintf("%s.%s", targetKs, table1)},
 				table2: {fmt.Sprintf("%s.%s", targetKs, table2)},
 			},
-			wantErr:         "cannot mirror traffic for workflow src2target at this time: traffic is switched",
+			wantErr:         "cannot mirror [primary] traffic for workflow src2target at this time: traffic for those tablet types is switched",
 			wantMirrorRules: make(map[string]map[string]float32),
 		},
 		{

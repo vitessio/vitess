@@ -68,7 +68,7 @@ func (dr *switcherDryRun) mirrorTableTraffic(ctx context.Context, types []topoda
 	for _, servedType := range types {
 		tabletTypes = append(tabletTypes, servedType.String())
 	}
-	dr.drLog.Logf("Mirroring %f percent of traffic from keyspace %s to keyspace %s for tablet types [%s]",
+	dr.drLog.Logf("Mirroring %.2f percent of traffic from keyspace %s to keyspace %s for tablet types [%s]",
 		percent, dr.ts.SourceKeyspaceName(), dr.ts.TargetKeyspaceName(), strings.Join(tabletTypes, ","))
 
 	return nil
