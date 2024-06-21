@@ -18,6 +18,7 @@ package tabletmanager
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -49,6 +50,8 @@ const (
 	sqlSelectVReplicationWorkflowConfig = "select id, source, cell, tablet_types, state, message from %s.vreplication where workflow = %a"
 	// Update the configuration values for a workflow's vreplication stream.
 	sqlUpdateVReplicationWorkflowStreamConfig = "update %s.vreplication set state = %a, source = %a, cell = %a, tablet_types = %a where id = %a"
+	// Check if workflow is still copying.
+	sqlGetVReplicationCopyStatus = "select distinct vrepl_id from %s.copy_state where vrepl_id = %d"
 )
 
 func (tm *TabletManager) CreateVReplicationWorkflow(ctx context.Context, req *tabletmanagerdatapb.CreateVReplicationWorkflowRequest) (*tabletmanagerdatapb.CreateVReplicationWorkflowResponse, error) {
@@ -227,6 +230,18 @@ func (tm *TabletManager) ReadVReplicationWorkflow(ctx context.Context, req *tabl
 	return resp, nil
 }
 
+func isStreamCopying(tm *TabletManager, id int64) (bool, error) {
+	query := fmt.Sprintf(sqlGetVReplicationCopyStatus, sidecar.GetIdentifier(), id)
+	res, err := tm.VREngine.Exec(query)
+	if err != nil {
+		return false, err
+	}
+	if res != nil && len(res.Rows) > 0 {
+		return true, nil
+	}
+	return false, nil
+}
+
 // UpdateVReplicationWorkflow updates the sidecar databases's vreplication
 // record(s) for this tablet's vreplication workflow stream(s). If there
 // are no streams for the given workflow on the tablet then a nil result
@@ -301,6 +316,17 @@ func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *ta
 		}
 		if !textutil.ValueIsSimulatedNull(req.State) {
 			state = binlogdatapb.VReplicationWorkflowState_name[int32(req.State)]
+		}
+		if state == binlogdatapb.VReplicationWorkflowState_Running.String() {
+			// `Workflow Start` sets the new state to Running. However, if stream is still copying tables, we should set
+			// the state as Copying.
+			isCopying, err := isStreamCopying(tm, id)
+			if err != nil {
+				return nil, err
+			}
+			if isCopying {
+				state = binlogdatapb.VReplicationWorkflowState_Copying.String()
+			}
 		}
 		bindVars = map[string]*querypb.BindVariable{
 			"st": sqltypes.StringBindVariable(state),
