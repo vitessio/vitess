@@ -32,7 +32,7 @@ func GetMirrorTrafficCommand(opts *SubCommandsOpts) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:                   "mirrortraffic",
 		Short:                 fmt.Sprintf("Mirror traffic for a %s MoveTables workflow.", opts.SubCommand),
-		Example:               fmt.Sprintf(`vtctldclient --server localhost:15999 %s --workflow %s --target-keyspace customer mirrortraffic --percent 50.0`, opts.SubCommand, opts.Workflow),
+		Example:               fmt.Sprintf(`vtctldclient --server localhost:15999 %s --workflow %s --target-keyspace customer mirrortraffic --percent 5.0`, opts.SubCommand, opts.Workflow),
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"MirrorTraffic"},
 		Args:                  cobra.NoArgs,
