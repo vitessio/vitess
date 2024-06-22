@@ -288,6 +288,7 @@ func newTxThrottlerState(txThrottler *txThrottler, config *tabletenv.TabletConfi
 	ctx, cancel := context.WithCancel(context.Background())
 	state.stopHealthCheck = cancel
 	state.initHealthCheckStream(txThrottler.topoServer, target)
+	state.healthCheck.RegisterStats()
 	go state.healthChecksProcessor(ctx, txThrottler.topoServer, target)
 	state.waitForTermination.Add(1)
 	go state.updateMaxLag()
@@ -298,7 +299,6 @@ func newTxThrottlerState(txThrottler *txThrottler, config *tabletenv.TabletConfi
 func (ts *txThrottlerStateImpl) initHealthCheckStream(topoServer *topo.Server, target *querypb.Target) {
 	ts.healthCheck = healthCheckFactory(topoServer, target.Cell, ts.healthCheckCells)
 	ts.healthCheckChan = ts.healthCheck.Subscribe()
-
 }
 
 func (ts *txThrottlerStateImpl) closeHealthCheckStream() {
