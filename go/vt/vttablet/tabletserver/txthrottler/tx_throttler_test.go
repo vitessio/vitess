@@ -69,8 +69,11 @@ func TestEnabledThrottler(t *testing.T) {
 	mockHealthCheck := NewMockHealthCheck(mockCtrl)
 	hcCall1 := mockHealthCheck.EXPECT().Subscribe()
 	hcCall1.Do(func() {})
-	hcCall2 := mockHealthCheck.EXPECT().Close()
+	hcCall2 := mockHealthCheck.EXPECT().RegisterStats()
+	hcCall2.Do(func() {})
 	hcCall2.After(hcCall1)
+	hcCall3 := mockHealthCheck.EXPECT().Close()
+	hcCall3.After(hcCall2)
 	healthCheckFactory = func(topoServer *topo.Server, cell string, cellsToWatch []string) discovery.HealthCheck {
 		return mockHealthCheck
 	}
