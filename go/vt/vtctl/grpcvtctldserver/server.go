@@ -751,42 +751,7 @@ func (s *VtctldServer) GetThrottlerStatus(ctx context.Context, req *vtctldatapb.
 		return nil, err
 	}
 	resp = &vtctldatapb.GetThrottlerStatusResponse{
-		TabletAlias:             topoproto.TabletAliasString(req.TabletAlias),
-		Keyspace:                ti.Keyspace,
-		Shard:                   ti.Shard,
-		IsLeader:                r.IsLeader,
-		IsOpen:                  r.IsOpen,
-		IsEnabled:               r.IsEnabled,
-		IsDormant:               r.IsDormant,
-		RecentlyChecked:         r.RecentlyChecked,
-		LagMetricQuery:          r.LagMetricQuery,
-		CustomMetricQuery:       r.CustomMetricQuery,
-		DefaultThreshold:        r.DefaultThreshold,
-		MetricNameUsedAsDefault: r.MetricNameUsedAsDefault,
-		AggregatedMetrics:       make(map[string]*vtctldatapb.GetThrottlerStatusResponse_MetricResult),
-		MetricThresholds:        r.MetricThresholds,
-		MetricsHealth:           make(map[string]*vtctldatapb.GetThrottlerStatusResponse_MetricHealth),
-		ThrottledApps:           r.ThrottledApps,
-		AppCheckedMetrics:       r.AppCheckedMetrics,
-		RecentApps:              make(map[string]*vtctldatapb.GetThrottlerStatusResponse_RecentApp),
-	}
-	for k, m := range r.AggregatedMetrics {
-		resp.AggregatedMetrics[k] = &vtctldatapb.GetThrottlerStatusResponse_MetricResult{
-			Value: m.Value,
-			Error: m.Error,
-		}
-	}
-	for k, m := range r.MetricsHealth {
-		resp.MetricsHealth[k] = &vtctldatapb.GetThrottlerStatusResponse_MetricHealth{
-			LastHealthyAt:           m.LastHealthyAt,
-			SecondsSinceLastHealthy: m.SecondsSinceLastHealthy,
-		}
-	}
-	for k, a := range r.RecentApps {
-		resp.RecentApps[k] = &vtctldatapb.GetThrottlerStatusResponse_RecentApp{
-			CheckedAt:  a.CheckedAt,
-			StatusCode: a.StatusCode,
-		}
+		Status: r,
 	}
 	return resp, nil
 }

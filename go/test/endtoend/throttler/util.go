@@ -39,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
@@ -180,7 +181,7 @@ func CheckThrottler(clusterInstance *cluster.LocalProcessCluster, tablet *cluste
 }
 
 // GetThrottlerStatus runs vtctldclient CheckThrottler.
-func GetThrottlerStatus(vtctldProcess *cluster.VtctldClientProcess, tablet *cluster.Vttablet) (*vtctldatapb.GetThrottlerStatusResponse, error) {
+func GetThrottlerStatus(vtctldProcess *cluster.VtctldClientProcess, tablet *cluster.Vttablet) (*tabletmanagerdatapb.GetThrottlerStatusResponse, error) {
 	output, err := GetThrottlerStatusRaw(vtctldProcess, tablet)
 	if err != nil && strings.HasSuffix(tablet.VttabletProcess.Binary, "-last") {
 		// TODO(shlomi): Remove in v22!
@@ -193,17 +194,19 @@ func GetThrottlerStatus(vtctldProcess *cluster.VtctldClientProcess, tablet *clus
 		if throttlerBody == "" {
 			return nil, fmt.Errorf("failed to get throttler status from %s. Empty result via /status endpoint, and GetThrottlerStatus error: %v", tablet.Alias, err)
 		}
-		resp := vtctldatapb.GetThrottlerStatusResponse{}
-		resp.IsEnabled = gjson.Get(throttlerBody, "IsEnabled").Bool()
-		resp.LagMetricQuery = gjson.Get(throttlerBody, "Query").String()
-		resp.DefaultThreshold = gjson.Get(throttlerBody, "Threshold").Float()
-		resp.MetricsHealth = make(map[string]*vtctldatapb.GetThrottlerStatusResponse_MetricHealth)
+		resp := vtctldatapb.GetThrottlerStatusResponse{
+			Status: &tabletmanagerdatapb.GetThrottlerStatusResponse{},
+		}
+		resp.Status.IsEnabled = gjson.Get(throttlerBody, "IsEnabled").Bool()
+		resp.Status.LagMetricQuery = gjson.Get(throttlerBody, "Query").String()
+		resp.Status.DefaultThreshold = gjson.Get(throttlerBody, "Threshold").Float()
+		resp.Status.MetricsHealth = make(map[string]*tabletmanagerdatapb.GetThrottlerStatusResponse_MetricHealth)
 		gjson.Get(throttlerBody, "MetricsHealth").ForEach(func(key, value gjson.Result) bool {
 			// We just need to know that metrics health is non-empty. We don't need to parse the actual values.
-			resp.MetricsHealth[key.String()] = &vtctldatapb.GetThrottlerStatusResponse_MetricHealth{}
+			resp.Status.MetricsHealth[key.String()] = &tabletmanagerdatapb.GetThrottlerStatusResponse_MetricHealth{}
 			return true
 		})
-		return &resp, nil
+		return resp.Status, nil
 	}
 	if err != nil {
 		return nil, err
@@ -212,7 +215,7 @@ func GetThrottlerStatus(vtctldProcess *cluster.VtctldClientProcess, tablet *clus
 	if err := protojson.Unmarshal([]byte(output), &resp); err != nil {
 		return nil, err
 	}
-	return &resp, err
+	return resp.Status, err
 }
 
 // UpdateThrottlerTopoConfig runs vtctlclient UpdateThrottlerConfig.
