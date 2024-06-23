@@ -493,7 +493,7 @@ func WaitForCheckThrottlerResult(t *testing.T, clusterInstance *cluster.LocalPro
 	for {
 		resp, err := CheckThrottler(clusterInstance, tablet, appName, flags)
 		require.NoError(t, err)
-		if resp.StatusCode == expect {
+		if resp.Check.StatusCode == expect {
 			return resp, nil
 		}
 		select {

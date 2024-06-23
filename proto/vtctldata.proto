@@ -506,39 +506,9 @@ message CheckThrottlerRequest {
 }
 
 message CheckThrottlerResponse {
-  // StatusCode is HTTP compliant response code (e.g. 200 for OK)
-  int32 status_code = 1;
-  // Value is the metric value collected by the tablet
-  double value = 2;
-  // Threshold is the throttling threshold the table was comparing the value with
-  double threshold = 3;
-  // Error indicates an error retrieving the value
-  string error = 4;
-  // Message
-  string message = 5;
-  // RecentlyChecked indicates that the tablet has been hit with a user-facing check, which can then imply
-  // that heartbeats lease should be renwed.
-  bool recently_checked = 6;
+  topodata.TabletAlias tablet_alias = 1;
 
-  message Metric {
-    // Name of the metric
-    string name = 1;
-    // StatusCode is HTTP compliant response code (e.g. 200 for OK)
-    int32 status_code = 2;
-    // Value is the metric value collected by the tablet
-    double value = 3;
-    // Threshold is the throttling threshold the table was comparing the value with
-    double threshold = 4;
-    // Error indicates an error retrieving the value
-    string error = 5;
-    // Message
-    string message = 6;
-    // Scope used in this check
-    string scope = 7;
-  }
-  // Metrics is a map (metric name -> metric value/error) so that the client has as much
-  // information as possible about all the checked metrics.
-  map<string, Metric> metrics = 7;
+  tabletmanagerdata.CheckThrottlerResponse Check = 2;
 }
 
 message CleanupSchemaMigrationRequest {
