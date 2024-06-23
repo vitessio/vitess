@@ -131,12 +131,21 @@ func (noPredicates) AddPredicate(*plancontext.PlanningContext, sqlparser.Expr) O
 	panic(vterrors.VT13001("the noColumns operator cannot accept predicates"))
 }
 
+// columnTruncator is an interface that allows an operator to truncate its columns to a certain length
+type columnTruncator interface {
+	setTruncateColumnCount(offset int)
+	getTruncateColumnCount() int
+}
+
+func truncate[K any](op columnTruncator, slice []K) []K {
+	if op.getTruncateColumnCount() == 0 {
+		return slice
+	}
+	return slice[:op.getTruncateColumnCount()]
+}
+
 // tryTruncateColumnsAt will see if we can truncate the columns by just asking the operator to do it for us
 func tryTruncateColumnsAt(op Operator, truncateAt int) bool {
-	type columnTruncator interface {
-		setTruncateColumnCount(offset int)
-	}
-
 	truncator, ok := op.(columnTruncator)
 	if ok {
 		truncator.setTruncateColumnCount(truncateAt)
@@ -160,6 +169,13 @@ func tryTruncateColumnsAt(op Operator, truncateAt int) bool {
 
 func transformColumnsToSelectExprs(ctx *plancontext.PlanningContext, op Operator) sqlparser.SelectExprs {
 	columns := op.GetColumns(ctx)
+	if trunc, ok := op.(columnTruncator); ok {
+		count := trunc.getTruncateColumnCount()
+		if count > 0 {
+			columns = columns[:count]
+		}
+	}
+
 	selExprs := slice.Map(columns, func(from *sqlparser.AliasedExpr) sqlparser.SelectExpr {
 		return from
 	})

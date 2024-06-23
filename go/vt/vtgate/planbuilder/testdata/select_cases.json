@@ -1752,6 +1752,7 @@
                 "Variant": "Ordered",
                 "Aggregates": "sum(0) AS avg_col, sum_count(3) AS count(intcol)",
                 "GroupBy": "1 COLLATE latin1_swedish_ci, (2|4) COLLATE ",
+                "ResultColumns": 4,
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -4065,6 +4066,7 @@
             "Variant": "Ordered",
             "Aggregates": "any_value(0) AS id",
             "GroupBy": "(1|2)",
+            "ResultColumns": 1,
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -4230,6 +4232,7 @@
             "OperatorType": "Aggregate",
             "Variant": "Scalar",
             "Aggregates": "max(0|1) AS max(music.id)",
+            "ResultColumns": 1,
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -4766,6 +4769,7 @@
                 "Variant": "Ordered",
                 "Aggregates": "sum_count_star(1) AS b",
                 "GroupBy": "(2|3), (0|4)",
+                "ResultColumns": 3,
                 "Inputs": [
                   {
                     "OperatorType": "Route",
