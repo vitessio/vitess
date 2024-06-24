@@ -453,16 +453,6 @@ const (
 			AND ACTION_TIMING='AFTER'
 			AND LEFT(TRIGGER_NAME, 7)='pt_osc_'
 		`
-	sqlSelectColumnTypes = `
-		select
-				*,
-				COLUMN_DEFAULT IS NULL AS is_default_null
-			from
-				information_schema.columns
-			where
-				table_schema=%a
-				and table_name=%a
-		`
 	selSelectCountFKParentConstraints = `
 		SELECT
 			COUNT(*) as num_fk_constraints

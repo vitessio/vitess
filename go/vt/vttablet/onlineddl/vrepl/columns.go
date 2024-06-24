@@ -21,10 +21,7 @@ limitations under the License.
 package vrepl
 
 import (
-	"fmt"
 	"strings"
-
-	"vitess.io/vitess/go/vt/schema"
 )
 
 // expandedDataTypes maps some known and difficult-to-compute by INFORMATION_SCHEMA data types which expand other data types.
@@ -107,67 +104,6 @@ func GetSharedColumns(
 	return NewColumnList(sharedColumnNames), NewColumnList(mappedSharedColumnNames), NewColumnList(droppedSourceNonGeneratedColumnsNames), sharedColumnsMap
 }
 
-// isExpandedColumn sees if target column has any value set/range that is impossible in source column. See GetExpandedColumns comment for examples
-func isExpandedColumn(sourceColumn *Column, targetColumn *Column) (bool, string) {
-	if targetColumn.IsNullable && !sourceColumn.IsNullable {
-		return true, "target is NULL-able, source is not"
-	}
-	if targetColumn.CharacterMaximumLength > sourceColumn.CharacterMaximumLength {
-		return true, "increased CHARACTER_MAXIMUM_LENGTH"
-	}
-	if targetColumn.NumericPrecision > sourceColumn.NumericPrecision {
-		return true, "increased NUMERIC_PRECISION"
-	}
-	if targetColumn.NumericScale > sourceColumn.NumericScale {
-		return true, "increased NUMERIC_SCALE"
-	}
-	if targetColumn.DateTimePrecision > sourceColumn.DateTimePrecision {
-		return true, "increased DATETIME_PRECISION"
-	}
-	if sourceColumn.IsNumeric() && targetColumn.IsNumeric() {
-		if sourceColumn.IsUnsigned && !targetColumn.IsUnsigned {
-			return true, "source is unsigned, target is signed"
-		}
-		if sourceColumn.NumericPrecision <= targetColumn.NumericPrecision && !sourceColumn.IsUnsigned && targetColumn.IsUnsigned {
-			// e.g. INT SIGNED => INT UNSIGNED, INT SIGNED => BIGINT UNSIGNED
-			return true, "target unsigned value exceeds source unsigned value"
-		}
-		if targetColumn.IsFloatingPoint() && !sourceColumn.IsFloatingPoint() {
-			return true, "target is floating point, source is not"
-		}
-	}
-	if expandedDataTypes[fmt.Sprintf("%s:%s", sourceColumn.DataType, targetColumn.DataType)] {
-		return true, "target is expanded data type of source"
-	}
-	if sourceColumn.Charset != targetColumn.Charset {
-		if targetColumn.Charset == "utf8mb4" {
-			return true, "expand character set to utf8mb4"
-		}
-		if strings.HasPrefix(targetColumn.Charset, "utf8") && !strings.HasPrefix(sourceColumn.Charset, "utf8") {
-			// not utf to utf
-			return true, "expand character set to utf8"
-		}
-	}
-	for _, colType := range []ColumnType{EnumColumnType, SetColumnType} {
-		// enums and sets have very similar properties, and are practically identical in our analysis
-		if sourceColumn.Type == colType {
-			// this is an enum or a set
-			if targetColumn.Type != colType {
-				return true, "conversion from enum/set to non-enum/set adds potential values"
-			}
-			// target is an enum or a set. See if all values on target exist in source
-			sourceEnumTokensMap := schema.ParseEnumOrSetTokensMap(sourceColumn.EnumValues)
-			targetEnumTokensMap := schema.ParseEnumOrSetTokensMap(targetColumn.EnumValues)
-			for k, v := range targetEnumTokensMap {
-				if sourceEnumTokensMap[k] != v {
-					return true, "target enum/set expands source enum/set"
-				}
-			}
-		}
-	}
-	return false, ""
-}
-
 // GetExpandedColumnNames is given source and target shared columns, and returns the list of columns whose data type is expanded.
 // An expanded data type is one where the target can have a value which the source does not. Examples:
 // - any NOT NULL to NULLable (a NULL in the target cannot appear on source)
@@ -188,7 +124,7 @@ func GetExpandedColumnNames(
 		sourceColumn := sourceSharedColumns.Columns()[i]
 		targetColumn := targetSharedColumns.Columns()[i]
 
-		if isExpanded, description := isExpandedColumn(&sourceColumn, &targetColumn); isExpanded {
+		if isExpanded, description := targetColumn.Entity.Expands(sourceColumn.Entity); isExpanded {
 			expandedColumnNames = append(expandedColumnNames, sourceColumn.Name)
 			expandedDescriptions[sourceColumn.Name] = description
 		}
@@ -200,7 +136,7 @@ func GetExpandedColumnNames(
 func GetNoDefaultColumnNames(columns *ColumnList) (names []string) {
 	names = []string{}
 	for _, col := range columns.Columns() {
-		if !col.HasDefault() {
+		if !col.Entity.HasDefault() {
 			names = append(names, col.Name)
 		}
 	}

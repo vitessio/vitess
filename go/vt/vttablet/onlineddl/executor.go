@@ -1518,7 +1518,7 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 		return v, err
 	}
 
-	v = NewVRepl(e.env.Environment(), onlineDDL.UUID, e.keyspace, e.shard, e.dbName, onlineDDL.Table, vreplTableName, originalCreateTable, vreplCreateTable, alterTable, onlineDDL.StrategySetting().IsAnalyzeTableFlag())
+	v = NewVRepl(e.env.Environment(), onlineDDL.UUID, e.keyspace, e.shard, e.dbName, originalCreateTable, vreplCreateTable, alterTable, onlineDDL.StrategySetting().IsAnalyzeTableFlag())
 	return v, nil
 }
 
@@ -1534,7 +1534,7 @@ func (e *Executor) postInitVreplicationOriginalMigration(ctx context.Context, on
 		}
 
 		// Apply ALTER TABLE AUTO_INCREMENT=?
-		parsed := sqlparser.BuildParsedQuery(sqlAlterTableAutoIncrement, v.targetTable, ":auto_increment")
+		parsed := sqlparser.BuildParsedQuery(sqlAlterTableAutoIncrement, v.targetTableName(), ":auto_increment")
 		bindVars := map[string]*querypb.BindVariable{
 			"auto_increment": sqltypes.Uint64BindVariable(v.sourceAutoIncrement),
 		}
@@ -1572,7 +1572,15 @@ func (e *Executor) initVreplicationRevertMigration(ctx context.Context, onlineDD
 	if err := e.updateArtifacts(ctx, onlineDDL.UUID, vreplTableName); err != nil {
 		return v, err
 	}
-	v = NewVRepl(e.env.Environment(), onlineDDL.UUID, e.keyspace, e.shard, e.dbName, onlineDDL.Table, vreplTableName, nil, nil, nil, false)
+	originalCreateTable, err := e.getCreateTableStatement(ctx, onlineDDL.Table)
+	if err != nil {
+		return v, err
+	}
+	vreplCreateTable, err := e.getCreateTableStatement(ctx, vreplTableName)
+	if err != nil {
+		return v, err
+	}
+	v = NewVRepl(e.env.Environment(), onlineDDL.UUID, e.keyspace, e.shard, e.dbName, originalCreateTable, vreplCreateTable, nil, false)
 	v.pos = revertStream.pos
 	return v, nil
 }

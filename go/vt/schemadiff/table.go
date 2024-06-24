@@ -445,6 +445,18 @@ type CreateTableEntity struct {
 	Env *Environment
 }
 
+func NewCreateTableEntityFromSQL(env *Environment, sql string) (*CreateTableEntity, error) {
+	stmt, err := env.Parser().ParseStrictDDL(sql)
+	if err != nil {
+		return nil, err
+	}
+	createTable, ok := stmt.(*sqlparser.CreateTable)
+	if !ok {
+		return nil, ErrExpectedCreateTable
+	}
+	return NewCreateTableEntity(env, createTable)
+}
+
 func NewCreateTableEntity(env *Environment, c *sqlparser.CreateTable) (*CreateTableEntity, error) {
 	if !c.IsFullyParsed() {
 		return nil, &NotFullyParsedError{Entity: c.Table.Name.String(), Statement: sqlparser.CanonicalString(c)}
@@ -456,9 +468,20 @@ func NewCreateTableEntity(env *Environment, c *sqlparser.CreateTable) (*CreateTa
 
 func (c *CreateTableEntity) ColumnDefinitionEntities() []*ColumnDefinitionEntity {
 	cc := getTableCharsetCollate(c.Env, &c.CreateTable.TableSpec.Options)
+	pkColumnsMaps := c.primaryKeyColumnsMap()
 	entities := make([]*ColumnDefinitionEntity, len(c.CreateTable.TableSpec.Columns))
 	for i := range c.CreateTable.TableSpec.Columns {
-		entities[i] = NewColumnDefinitionEntity(c.Env, c.CreateTable.TableSpec.Columns[i], cc)
+		col := c.CreateTable.TableSpec.Columns[i]
+		_, inPK := pkColumnsMaps[col.Name.String()]
+		entities[i] = NewColumnDefinitionEntity(c.Env, col, inPK, cc)
+	}
+	return entities
+}
+
+func (c *CreateTableEntity) ColumnDefinitionEntitiesMap() map[string]*ColumnDefinitionEntity {
+	entities := make(map[string]*ColumnDefinitionEntity, len(c.CreateTable.TableSpec.Columns))
+	for _, entity := range c.ColumnDefinitionEntities() {
+		entities[entity.Name()] = entity
 	}
 	return entities
 }
@@ -1740,8 +1763,8 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 		t2ColName := t2Col.Name.Lowered()
 		// we know that column exists in both tables
 		t1Col := t1ColumnsMap[t2ColName]
-		t1ColEntity := NewColumnDefinitionEntity(c.Env, t1Col.col, t1cc)
-		t2ColEntity := NewColumnDefinitionEntity(c.Env, t2Col, t2cc)
+		t1ColEntity := NewColumnDefinitionEntity(c.Env, t1Col.col, false, t1cc)
+		t2ColEntity := NewColumnDefinitionEntity(c.Env, t2Col, false, t2cc)
 
 		// check diff between before/after columns:
 		modifyColumnDiff, err := t1ColEntity.ColumnDiff(c.Env, c.Name(), t2ColEntity, hints)
@@ -1890,6 +1913,15 @@ func (c *CreateTableEntity) primaryKeyColumns() []*sqlparser.IndexColumn {
 		}
 	}
 	return nil
+}
+
+func (c *CreateTableEntity) primaryKeyColumnsMap() map[string]*sqlparser.IndexColumn {
+	columns := c.primaryKeyColumns()
+	m := make(map[string]*sqlparser.IndexColumn, len(columns))
+	for _, col := range columns {
+		m[col.Column.String()] = col
+	}
+	return m
 }
 
 // Create implements Entity interface
@@ -2647,4 +2679,19 @@ func (c *CreateTableEntity) identicalOtherThanName(other *CreateTableEntity) boo
 	}
 	return sqlparser.Equals.RefOfTableSpec(c.TableSpec, other.TableSpec) &&
 		sqlparser.Equals.RefOfParsedComments(c.Comments, other.Comments)
+}
+
+// AutoIncrementValue returns the value of the AUTO_INCREMENT option, or zero if not exists.
+func (c *CreateTableEntity) AutoIncrementValue() (autoIncrement uint64, err error) {
+	for _, option := range c.CreateTable.TableSpec.Options {
+		if strings.ToUpper(option.Name) == "AUTO_INCREMENT" {
+			autoIncrement, err := strconv.ParseUint(option.Value.Val, 10, 64)
+			if err != nil {
+				return 0, err
+			}
+			return autoIncrement, nil
+		}
+	}
+	// Auto increment not found
+	return 0, nil
 }

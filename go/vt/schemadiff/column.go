@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -72,30 +73,60 @@ func NewModifyColumnDiffByDefinition(definition *sqlparser.ColumnDefinition) *Mo
 
 type ColumnDefinitionEntity struct {
 	columnDefinition    *sqlparser.ColumnDefinition
+	inPK                bool // Does this column appear in the primary key?
 	tableCharsetCollate *charsetCollate
 	Env                 *Environment
 }
 
-func NewColumnDefinitionEntity(env *Environment, c *sqlparser.ColumnDefinition, tableCharsetCollate *charsetCollate) *ColumnDefinitionEntity {
+func NewColumnDefinitionEntity(env *Environment, c *sqlparser.ColumnDefinition, inPK bool, tableCharsetCollate *charsetCollate) *ColumnDefinitionEntity {
 	return &ColumnDefinitionEntity{
 		columnDefinition:    c,
+		inPK:                inPK,
 		tableCharsetCollate: tableCharsetCollate,
 		Env:                 env,
 	}
 }
 
+func (c *ColumnDefinitionEntity) Name() string {
+	return c.columnDefinition.Name.String()
+}
+
 func (c *ColumnDefinitionEntity) Clone() *ColumnDefinitionEntity {
 	clone := &ColumnDefinitionEntity{
 		columnDefinition:    sqlparser.Clone(c.columnDefinition),
+		inPK:                c.inPK,
 		tableCharsetCollate: c.tableCharsetCollate,
 		Env:                 c.Env,
 	}
 	return clone
 }
 
+// SetExplicitDefaultAndNull sets:
+// - NOT NULL, if the columns is part of the PRIMARY KEY
+// - DEFAULT NULL, if the columns is NULLable and no DEFAULT was mentioned
+// Normally in schemadiff we work the opposite way: we strive to have the minimal equivalent representation
+// of a definition. But this function can be used (often in conjunction with Clone()) to enrich a column definition
+// so as to have explicit and authoritative view on any particular column.
+func (c *ColumnDefinitionEntity) SetExplicitDefaultAndNull() {
+	if c.inPK {
+		// Any column in the primary key is implicitly NOT NULL.
+		c.columnDefinition.Type.Options.Null = ptr.Of(false)
+	}
+	if c.columnDefinition.Type.Options.Null == nil || *c.columnDefinition.Type.Options.Null {
+		// Nullable column, let'se see if there's already a DEFAULT.
+		if c.columnDefinition.Type.Options.Default == nil {
+			// nope, let's add a DEFAULT NULL
+			c.columnDefinition.Type.Options.Default = &sqlparser.NullVal{}
+		}
+	}
+}
+
 // SetExplicitCharsetCollate enriches this column definition with collation and charset. Those may be
 // already present, or perhaps just one of them is present (in which case we use the one to populate the other),
 // or both might be missing, in which case we use the table's charset/collation.
+// Normally in schemadiff we work the opposite way: we strive to have the minimal equivalent representation
+// of a definition. But this function can be used (often in conjunction with Clone()) to enrich a column definition
+// so as to have explicit and authoritative view on any particular column.
 func (c *ColumnDefinitionEntity) SetExplicitCharsetCollate() error {
 	if !c.IsTextual() {
 		return nil
@@ -196,17 +227,17 @@ func (c *ColumnDefinitionEntity) ColumnDiff(
 	return NewModifyColumnDiffByDefinition(other.columnDefinition), nil
 }
 
+// Type returns the column's type
+func (c *ColumnDefinitionEntity) Type() string {
+	return c.columnDefinition.Type.Type
+}
+
 // IsTextual returns true when this column is of textual type, and is capable of having a character set property
 func (c *ColumnDefinitionEntity) IsTextual() bool {
-	return charsetTypes[strings.ToLower(c.columnDefinition.Type.Type)]
+	return charsetTypes[strings.ToLower(c.Type())]
 }
 
 // IsGenerated returns true when this column is generated, and indicates the storage type (virtual/stored)
-func (c *ColumnDefinitionEntity) IsGenerated() (bool, sqlparser.ColumnStorage) {
-	return IsGeneratedColumn(c.columnDefinition)
-}
-
-// IsGeneratedColumn returns true when the column is a generated column, and indicates the storage type (virtual/stored)
 func IsGeneratedColumn(col *sqlparser.ColumnDefinition) (bool, sqlparser.ColumnStorage) {
 	if col == nil {
 		return false, 0
@@ -218,4 +249,172 @@ func IsGeneratedColumn(col *sqlparser.ColumnDefinition) (bool, sqlparser.ColumnS
 		return false, 0
 	}
 	return true, col.Type.Options.Storage
+}
+
+// IsGenerated returns true when this column is generated, and indicates the storage type (virtual/stored)
+func (c *ColumnDefinitionEntity) IsGenerated() (bool, sqlparser.ColumnStorage) {
+	return IsGeneratedColumn(c.columnDefinition)
+}
+
+// IsNullable returns true when this column is NULLable
+func (c *ColumnDefinitionEntity) IsNullable() bool {
+	return c.columnDefinition.Type.Options.Null == nil || *c.columnDefinition.Type.Options.Null
+}
+
+// IsDefaultNull returns true when this column has DEFAULT NULL
+func (c *ColumnDefinitionEntity) IsDefaultNull() bool {
+	if !c.IsNullable() {
+		return false
+	}
+	_, ok := c.columnDefinition.Type.Options.Default.(*sqlparser.NullVal)
+	return ok
+}
+
+// IsDefaultNull returns true when this column has DEFAULT NULL
+func (c *ColumnDefinitionEntity) HasDefault() bool {
+	if c.columnDefinition.Type.Options.Default == nil {
+		return false
+	}
+	if c.IsDefaultNull() {
+		return true
+	}
+	return true
+}
+
+// IsUnsigned returns true when this column is UNSIGNED
+func (c *ColumnDefinitionEntity) IsUnsigned() bool {
+	return c.columnDefinition.Type.Unsigned
+}
+
+// IsNumeric returns true when this column is a numeric type
+func (c *ColumnDefinitionEntity) IsIntegralType() bool {
+	return IsIntegralType(c.Type())
+}
+
+// IsFloatingPointType returns true when this column is a floating point type
+func (c *ColumnDefinitionEntity) IsFloatingPointType() bool {
+	return IsFloatingPointType(c.Type())
+}
+
+// IsDecimalType returns true when this column is a decimal type
+func (c *ColumnDefinitionEntity) IsDecimalType() bool {
+	return IsDecimalType(c.Type())
+}
+
+// Charset returns the column's charset
+func (c *ColumnDefinitionEntity) Charset() string {
+	return c.columnDefinition.Type.Charset.Name
+}
+
+// Collate returns the column's collation
+func (c *ColumnDefinitionEntity) Collate() string {
+	return c.columnDefinition.Type.Options.Collate
+}
+
+func (c *ColumnDefinitionEntity) EnumValues() []string {
+	return c.columnDefinition.Type.EnumValues
+}
+
+func (c *ColumnDefinitionEntity) EnumValuesOrdinals() map[string]int {
+	m := make(map[string]int, len(c.columnDefinition.Type.EnumValues))
+	for i, enumValue := range c.columnDefinition.Type.EnumValues {
+		m[enumValue] = i
+	}
+	return m
+}
+
+func (c *ColumnDefinitionEntity) EnumOrdinalValues() map[int]string {
+	m := make(map[int]string, len(c.columnDefinition.Type.EnumValues))
+	for i, enumValue := range c.columnDefinition.Type.EnumValues {
+		// SET and ENUM values are 1 indexed.
+		m[i+1] = enumValue
+	}
+	return m
+}
+
+// Length returns the type length (e.g. 17 for VARCHAR(17), 10 for DECIMAL(10,2), 6 for TIMESTAMP(6), etc.)
+func (c *ColumnDefinitionEntity) Length() int {
+	if c.columnDefinition.Type.Length == nil {
+		return 0
+	}
+	return *c.columnDefinition.Type.Length
+}
+
+// Scale returns the type scale (e.g. 2 for DECIMAL(10,2))
+func (c *ColumnDefinitionEntity) Scale() int {
+	if c.columnDefinition.Type.Scale == nil {
+		return 0
+	}
+	return *c.columnDefinition.Type.Scale
+}
+
+// isExpandedColumn sees if target column has any value set/range that is impossible in source column. See GetExpandedColumns comment for examples
+func (c *ColumnDefinitionEntity) Expands(source *ColumnDefinitionEntity) (bool, string) {
+	if c.IsNullable() && !source.IsNullable() {
+		return true, "target is NULL-able, source is not"
+	}
+	if c.Length() > source.Length() {
+		return true, "increased length"
+	}
+	if c.Scale() > source.Scale() {
+		return true, "increased scale"
+	}
+	if source.IsUnsigned() && !c.IsUnsigned() {
+		return true, "source is unsigned, target is signed"
+	}
+	if IntegralTypeStorage(c.Type()) > IntegralTypeStorage(source.Type()) && IntegralTypeStorage(source.Type()) != 0 {
+		return true, "increased integer range"
+	}
+	if IntegralTypeStorage(source.Type()) <= IntegralTypeStorage(c.Type()) &&
+		!source.IsUnsigned() && c.IsUnsigned() {
+		// e.g. INT SIGNED => INT UNSIGNED, INT SIGNED => BIGINT UNSIGNED
+		return true, "target unsigned value exceeds source unsigned value"
+	}
+	if FloatingPointTypeStorage(c.Type()) > FloatingPointTypeStorage(source.Type()) && FloatingPointTypeStorage(source.Type()) != 0 {
+		return true, "increased floating point range"
+	}
+	if c.IsFloatingPointType() && !source.IsFloatingPointType() {
+		return true, "target is floating point, source is not"
+	}
+	if c.IsDecimalType() && !source.IsDecimalType() {
+		return true, "target is decimal, source is not"
+	}
+	if c.IsDecimalType() && source.IsDecimalType() {
+		if c.Length()-c.Scale() > source.Length()-source.Scale() {
+			return true, "increased decimal range"
+		}
+	}
+	if IsExpandingDataType(source.Type(), c.Type()) {
+		return true, "target is expanded data type of source"
+	}
+	if BlobTypeStorage(c.Type()) > BlobTypeStorage(source.Type()) && BlobTypeStorage(source.Type()) != 0 {
+		return true, "increased blob range"
+	}
+	if source.Charset() != c.Charset() {
+		if c.Charset() == "utf8mb4" {
+			return true, "expand character set to utf8mb4"
+		}
+		if strings.HasPrefix(c.Charset(), "utf8") && !strings.HasPrefix(source.Charset(), "utf8") {
+			// not utf to utf
+			return true, "expand character set to utf8"
+		}
+	}
+	for _, colType := range []string{"enum", "set"} {
+		// enums and sets have very similar properties, and are practically identical in our analysis
+		if source.Type() == colType {
+			// this is an enum or a set
+			if c.Type() != colType {
+				return true, "conversion from enum/set to non-enum/set adds potential values"
+			}
+			// target is an enum or a set. See if all values on target exist in source
+			sourceEnumTokensMap := source.EnumOrdinalValues()
+			targetEnumTokensMap := c.EnumOrdinalValues()
+			for k, v := range targetEnumTokensMap {
+				if sourceEnumTokensMap[k] != v {
+					return true, "target enum/set expands or reorders source enum/set"
+				}
+			}
+		}
+	}
+	return false, ""
 }
