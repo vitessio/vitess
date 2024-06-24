@@ -1981,6 +1981,22 @@ func (cached *IsExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *JSONArrayAgg) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Expr.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field OverClause *vitess.io/vitess/go/vt/sqlparser.OverClause
+	size += cached.OverClause.CachedSize(true)
+	return size
+}
 func (cached *JSONArrayExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2111,6 +2127,22 @@ func (cached *JSONKeysExpr) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.Path.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
+	return size
+}
+func (cached *JSONObjectAgg) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field Key *vitess.io/vitess/go/vt/sqlparser.ColName
+	size += cached.Key.CachedSize(true)
+	// field Value *vitess.io/vitess/go/vt/sqlparser.ColName
+	size += cached.Value.CachedSize(true)
+	// field OverClause *vitess.io/vitess/go/vt/sqlparser.OverClause
+	size += cached.OverClause.CachedSize(true)
 	return size
 }
 func (cached *JSONObjectExpr) CachedSize(alloc bool) int64 {

@@ -2573,6 +2573,21 @@ type (
 		Columns []*JtColumnDefinition
 	}
 
+	// JSONArrayAgg is an aggregation expression that creates a JSON Array.
+	// For more information, visit https://dev.mysql.com/doc/refman/8.4/en/aggregate-functions.html#function_json-arrayagg
+	JSONArrayAgg struct {
+		Expr       Expr
+		OverClause *OverClause
+	}
+
+	// JSONObjectAgg is an aggregation expression that creates a JSON Object.
+	// For more information, visit https://dev.mysql.com/doc/refman/8.4/en/aggregate-functions.html#function_json-objectagg
+	JSONObjectAgg struct {
+		Key        *ColName
+		Value      *ColName
+		OverClause *OverClause
+	}
+
 	// JtOnResponseType describes the type of column: default, error or null
 	JtOnResponseType int
 
@@ -3225,7 +3240,9 @@ func (*JSONOverlapsExpr) IsExpr()                   {}
 func (*JSONSearchExpr) IsExpr()                     {}
 func (*JSONValueExpr) IsExpr()                      {}
 func (*JSONArrayExpr) IsExpr()                      {}
+func (*JSONArrayAgg) IsExpr()                       {}
 func (*JSONObjectExpr) IsExpr()                     {}
+func (*JSONObjectAgg) IsExpr()                      {}
 func (*JSONQuoteExpr) IsExpr()                      {}
 func (*JSONAttributesExpr) IsExpr()                 {}
 func (*JSONValueModifierExpr) IsExpr()              {}

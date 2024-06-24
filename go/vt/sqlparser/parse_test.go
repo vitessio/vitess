@@ -2927,6 +2927,18 @@ var (
 		input:  "DROP /* comment */ PREPARE stmt1",
 		output: "deallocate /* comment */ prepare stmt1",
 	}, {
+		input:  "select count(1) from user where x_id = 'abc' group by n_id having json_arrayagg(indexes) = '[]'",
+		output: "select count(1) from `user` where x_id = 'abc' group by n_id having json_arrayagg(`indexes`) = '[]'",
+	}, {
+		input:  "select count(1) from user where x_id = 'abc' group by n_id having json_arrayagg(x + 'abc') over w = '[]'",
+		output: "select count(1) from `user` where x_id = 'abc' group by n_id having json_arrayagg(x + 'abc') over w = '[]'",
+	}, {
+		input:  "select count(1) from user where x_id = 'abc' group by n_id having json_objectagg(a, b) over w = '[]'",
+		output: "select count(1) from `user` where x_id = 'abc' group by n_id having json_objectagg(a, b) over w = '[]'",
+	}, {
+		input:  "select count(1) from user where x_id = 'abc' group by n_id having json_objectagg(a, b) = '[]'",
+		output: "select count(1) from `user` where x_id = 'abc' group by n_id having json_objectagg(a, b) = '[]'",
+	}, {
 		input:  `SELECT JSON_PRETTY('{"a":"10","b":"15","x":"25"}')`,
 		output: `select json_pretty('{\"a\":\"10\",\"b\":\"15\",\"x\":\"25\"}') from dual`,
 	}, {
@@ -3787,7 +3799,7 @@ var (
 		output: "select `time`, subject, variance(val) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
 	}, {
 		input:  "SELECT id, coalesce( (SELECT Json_arrayagg(Json_array(id)) FROM (SELECT *, Row_number() over (ORDER BY users.order ASC) FROM unsharded as users WHERE users.purchaseorderid = orders.id) users), json_array()) AS users, coalesce( (SELECT json_arrayagg(json_array(id)) FROM (SELECT *, row_number() over (ORDER BY tests.order ASC) FROM unsharded as tests WHERE tests.purchaseorderid = orders.id) tests), json_array()) AS tests FROM unsharded as orders WHERE orders.id = 'xxx'",
-		output: "select id, coalesce((select Json_arrayagg(json_array(id)) from (select *, row_number() over ( order by users.`order` asc) from unsharded as users where users.purchaseorderid = orders.id) as users), json_array()) as users, coalesce((select json_arrayagg(json_array(id)) from (select *, row_number() over ( order by tests.`order` asc) from unsharded as tests where tests.purchaseorderid = orders.id) as tests), json_array()) as tests from unsharded as orders where orders.id = 'xxx'",
+		output: "select id, coalesce((select json_arrayagg(json_array(id)) from (select *, row_number() over ( order by users.`order` asc) from unsharded as users where users.purchaseorderid = orders.id) as users), json_array()) as users, coalesce((select json_arrayagg(json_array(id)) from (select *, row_number() over ( order by tests.`order` asc) from unsharded as tests where tests.purchaseorderid = orders.id) as tests), json_array()) as tests from unsharded as orders where orders.id = 'xxx'",
 	}, {
 		input: `kill connection 18446744073709551615`,
 	}, {
@@ -6046,6 +6058,12 @@ var (
 	}, {
 		input:  "select next id from a",
 		output: "expecting value after next at position 15 near 'id'",
+	}, {
+		input:  "select count(1) from user where x_id = 'abc' group by n_id having json_arrayagg(x, y) = '[]'",
+		output: "syntax error at position 83",
+	}, {
+		input:  "select count(1) from user where x_id = 'abc' group by n_id having json_objectagg(x + 1, y) = '[]'",
+		output: "syntax error at position 85",
 	}, {
 		input:  "select next 1+1 values from a",
 		output: "syntax error at position 15",

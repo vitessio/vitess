@@ -3380,6 +3380,30 @@ func (node *JSONArrayExpr) FormatFast(buf *TrackedBuffer) {
 }
 
 // FormatFast formats the node.
+func (node *JSONArrayAgg) FormatFast(buf *TrackedBuffer) {
+	buf.WriteString("json_arrayagg(")
+	buf.printExpr(node, node.Expr, true)
+	buf.WriteByte(')')
+	if node.OverClause != nil {
+		buf.WriteByte(' ')
+		node.OverClause.FormatFast(buf)
+	}
+}
+
+// FormatFast formats the node.
+func (node *JSONObjectAgg) FormatFast(buf *TrackedBuffer) {
+	buf.WriteString("json_objectagg(")
+	buf.printExpr(node, node.Key, true)
+	buf.WriteString(", ")
+	buf.printExpr(node, node.Value, true)
+	buf.WriteByte(')')
+	if node.OverClause != nil {
+		buf.WriteByte(' ')
+		node.OverClause.FormatFast(buf)
+	}
+}
+
+// FormatFast formats the node.
 func (node *JSONObjectExpr) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString("json_object(")
 	if len(node.Params) > 0 {
