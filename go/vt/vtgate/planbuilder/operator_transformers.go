@@ -310,7 +310,7 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 		aggrParam := engine.NewAggregateParam(aggr.OpCode, aggr.ColOffset, aggr.Alias, ctx.VSchema.Environment().CollationEnv())
 		aggrParam.Func = aggr.Func
 		if gcFunc, isGc := aggrParam.Func.(*sqlparser.GroupConcatExpr); isGc && gcFunc.Separator == "" {
-			gcFunc.Separator = ","
+			gcFunc.Separator = sqlparser.GroupConcatDefaultSeparator
 		}
 		aggrParam.Original = aggr.Original
 		aggrParam.OrigOpcode = aggr.OriginalOpCode
