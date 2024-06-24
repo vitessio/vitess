@@ -435,11 +435,8 @@ func newAggregation(fields []*querypb.Field, aggregates []*AggregateParams) (agg
 			ag = &aggregatorScalar{from: aggr.Col}
 
 		case AggregateGroupConcat:
-			separator := []byte{','}
 			gcFunc := aggr.Func.(*sqlparser.GroupConcatExpr)
-			if gcFunc.Separator != "" {
-				separator = []byte(gcFunc.Separator)
-			}
+			separator := []byte(gcFunc.Separator)
 			ag = &aggregatorGroupConcat{
 				from:      aggr.Col,
 				type_:     targetType,

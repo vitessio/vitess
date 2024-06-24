@@ -1060,7 +1060,7 @@ func TestGroupConcatWithAggrOnEngine(t *testing.T) {
 		t.Run(tcase.name, func(t *testing.T) {
 			fp := &fakePrimitive{results: []*sqltypes.Result{tcase.inputResult}}
 			agp := NewAggregateParam(AggregateGroupConcat, 1, "group_concat(c2)", collations.MySQL8())
-			agp.Func = &sqlparser.GroupConcatExpr{}
+			agp.Func = &sqlparser.GroupConcatExpr{Separator: ","}
 			oa := &OrderedAggregate{
 				Aggregates:  []*AggregateParams{agp},
 				GroupByKeys: []*GroupByParams{{KeyCol: 0}},
@@ -1141,7 +1141,7 @@ func TestGroupConcat(t *testing.T) {
 		t.Run(tcase.name, func(t *testing.T) {
 			fp := &fakePrimitive{results: []*sqltypes.Result{tcase.inputResult}}
 			agp := NewAggregateParam(AggregateGroupConcat, 1, "", collations.MySQL8())
-			agp.Func = &sqlparser.GroupConcatExpr{}
+			agp.Func = &sqlparser.GroupConcatExpr{Separator: ","}
 			oa := &OrderedAggregate{
 				Aggregates:  []*AggregateParams{agp},
 				GroupByKeys: []*GroupByParams{{KeyCol: 0}},

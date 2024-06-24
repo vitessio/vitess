@@ -234,7 +234,7 @@ func TestScalarGroupConcatWithAggrOnEngine(t *testing.T) {
 					Opcode: AggregateGroupConcat,
 					Col:    0,
 					Alias:  "group_concat(c2)",
-					Func:   &sqlparser.GroupConcatExpr{},
+					Func:   &sqlparser.GroupConcatExpr{Separator: ","},
 				}},
 				Input: fp,
 			}
@@ -396,7 +396,7 @@ func TestScalarGroupConcat(t *testing.T) {
 				Aggregates: []*AggregateParams{{
 					Opcode: AggregateGroupConcat,
 					Col:    0,
-					Func:   &sqlparser.GroupConcatExpr{},
+					Func:   &sqlparser.GroupConcatExpr{Separator: ","},
 				}},
 				Input: fp,
 			}
