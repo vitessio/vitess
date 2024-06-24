@@ -61,7 +61,8 @@ var (
 )
 
 const (
-	testDataPath = "testdata"
+	testDataPath     = "testdata"
+	testFilterEnvVar = "ONLINEDDL_SUITE_TEST_FILTER"
 )
 
 // Use $VREPL_SUITE_TEST_FILTER environment variable to filter tests by name.
@@ -69,7 +70,7 @@ func TestMain(m *testing.M) {
 	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
-	testsFilter = os.Getenv("ONLINEDDL_SUITE_TEST_FILTER")
+	testsFilter = os.Getenv(testFilterEnvVar)
 
 	exitcode, err := func() (int, error) {
 		clusterInstance = cluster.NewCluster(cell, hostname)
@@ -189,7 +190,7 @@ func readTestFile(t *testing.T, testName string, fileName string) (content strin
 // It prepares the grounds, creates the test data, runs a migration, expects results/error, cleans up.
 func testSingle(t *testing.T, testName string, fkOnlineDDLPossible bool) {
 	if !strings.Contains(testName, testsFilter) {
-		t.Skipf("Skipping test %s due to filter: %s", testName, testsFilter)
+		t.Skipf("Skipping test %s due to filter: %s=%s", testName, testFilterEnvVar, testsFilter)
 		return
 	}
 	if _, exists := readTestFile(t, testName, "require_rename_table_preserve_foreign_key"); exists {
