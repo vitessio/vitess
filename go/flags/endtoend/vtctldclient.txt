@@ -12,7 +12,6 @@ Available Commands:
   AddCellInfo                 Registers a local topology service in a new cell by creating the CellInfo.
   AddCellsAlias               Defines a group of cells that can be referenced by a single name (the alias).
   ApplyKeyspaceRoutingRules   Applies the provided keyspace routing rules.
-  ApplyMirrorRules            Applies the VSchema mirror rules.
   ApplyRoutingRules           Applies the VSchema routing rules.
   ApplySchema                 Applies the schema change to the specified keyspace on every primary, running in parallel on all shards. The changes are then propagated to replicas via replication.
   ApplyShardRoutingRules      Applies the provided shard routing rules.

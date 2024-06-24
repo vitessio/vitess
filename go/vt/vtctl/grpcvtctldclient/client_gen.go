@@ -56,15 +56,6 @@ func (client *gRPCVtctldClient) ApplyKeyspaceRoutingRules(ctx context.Context, i
 	return client.c.ApplyKeyspaceRoutingRules(ctx, in, opts...)
 }
 
-// ApplyMirrorRules is part of the vtctlservicepb.VtctldClient interface.
-func (client *gRPCVtctldClient) ApplyMirrorRules(ctx context.Context, in *vtctldatapb.ApplyMirrorRulesRequest, opts ...grpc.CallOption) (*vtctldatapb.ApplyMirrorRulesResponse, error) {
-	if client.c == nil {
-		return nil, status.Error(codes.Unavailable, connClosedMsg)
-	}
-
-	return client.c.ApplyMirrorRules(ctx, in, opts...)
-}
-
 // ApplyRoutingRules is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) ApplyRoutingRules(ctx context.Context, in *vtctldatapb.ApplyRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldatapb.ApplyRoutingRulesResponse, error) {
 	if client.c == nil {

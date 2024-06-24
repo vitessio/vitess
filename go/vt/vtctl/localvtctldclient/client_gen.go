@@ -44,11 +44,6 @@ func (client *localVtctldClient) ApplyKeyspaceRoutingRules(ctx context.Context, 
 	return client.s.ApplyKeyspaceRoutingRules(ctx, in)
 }
 
-// ApplyMirrorRules is part of the vtctlservicepb.VtctldClient interface.
-func (client *localVtctldClient) ApplyMirrorRules(ctx context.Context, in *vtctldatapb.ApplyMirrorRulesRequest, opts ...grpc.CallOption) (*vtctldatapb.ApplyMirrorRulesResponse, error) {
-	return client.s.ApplyMirrorRules(ctx, in)
-}
-
 // ApplyRoutingRules is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) ApplyRoutingRules(ctx context.Context, in *vtctldatapb.ApplyRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldatapb.ApplyRoutingRulesResponse, error) {
 	return client.s.ApplyRoutingRules(ctx, in)

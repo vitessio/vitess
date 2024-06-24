@@ -38,29 +38,7 @@ The following metrics that were deprecated in the previous release, have now bee
 
 Traffic mirroring is intended to help reduce some of the uncertainty inherent to `MoveTables SwitchTraffic`. When traffic mirroring is enabled, VTGate will mirror a percentage of traffic from one keyspace to another.
 
-Mirror rules may be enabled through `vtctldclient` in two ways:
-
-  * With `ApplyMirrorRules`.
-  * With `MoveTables MirrorTraffic`, which uses `ApplyMirrorRules` under the hood.
-
-Example with `ApplyMirrorRules`:
-
-```bash
-$ vtctldclient --server :15999 ApplyMirrorRules --rules "$(cat <<EOF
-{
-  "rules": [
-    {
-      "from_table": "commerce.corders",
-      "to_table": "customer.corders",
-      "percent": 5.0
-    }
-  ]
-}
-EOF
-)"
-```
-
-Example with `MoveTables MirrorTraffic`:
+Mirror rules may be enabled through `vtctldclient` with `MoveTables MirrorTraffic`. For example:
 
 ```bash
 $ vtctldclient --server :15999 MoveTables --target-keyspace customer --workflow commerce2customer MirrorTraffic --percent 5.0
