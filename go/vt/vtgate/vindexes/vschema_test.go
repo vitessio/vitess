@@ -960,22 +960,22 @@ func TestChooseVindexForType(t *testing.T) {
 		out: "",
 	}, {
 		in:  sqltypes.Text,
-		out: "unicode_loose_md5",
+		out: "unicode_loose_xxhash",
 	}, {
 		in:  sqltypes.Blob,
-		out: "binary_md5",
+		out: "xxhash",
 	}, {
 		in:  sqltypes.VarChar,
-		out: "unicode_loose_md5",
+		out: "unicode_loose_xxhash",
 	}, {
 		in:  sqltypes.VarBinary,
-		out: "binary_md5",
+		out: "xxhash",
 	}, {
 		in:  sqltypes.Char,
-		out: "unicode_loose_md5",
+		out: "unicode_loose_xxhash",
 	}, {
 		in:  sqltypes.Binary,
-		out: "binary_md5",
+		out: "xxhash",
 	}, {
 		in:  sqltypes.Bit,
 		out: "",
