@@ -478,6 +478,9 @@ const (
 	// KillType strings
 	ConnectionStr = "connection"
 	QueryStr      = "query"
+
+	// GroupConcatDefaultSeparator is the default separator for GroupConcatExpr.
+	GroupConcatDefaultSeparator = ","
 )
 
 // Constants for Enum Type - Insert.Action
