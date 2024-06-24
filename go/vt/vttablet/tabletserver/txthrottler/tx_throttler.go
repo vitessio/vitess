@@ -67,6 +67,8 @@ type TxThrottler interface {
 	InitDBConfig(target *querypb.Target)
 	Open() (err error)
 	Close()
+	MakePrimary()
+	MakeNonPrimary()
 	Throttle(priority int, workload string) (result bool)
 }
 
@@ -146,6 +148,8 @@ type txThrottler struct {
 }
 
 type txThrottlerState interface {
+	makePrimary()
+	makeNonPrimary()
 	deallocateResources()
 	StatsUpdate(tabletStats *discovery.TabletHealth)
 	throttle() bool
@@ -154,25 +158,24 @@ type txThrottlerState interface {
 // txThrottlerStateImpl holds the state of an open TxThrottler object.
 type txThrottlerStateImpl struct {
 	config      *tabletenv.TabletConfig
+	target      *querypb.Target
 	txThrottler *txThrottler
 
 	// throttleMu serializes calls to throttler.Throttler.Throttle(threadId).
 	// That method is required to be called in serial for each threadId.
-	throttleMu      sync.Mutex
-	throttler       ThrottlerInterface
-	stopHealthCheck context.CancelFunc
+	throttleMu sync.Mutex
+	throttler  ThrottlerInterface
 
-	healthCheck      discovery.HealthCheck
-	healthCheckChan  chan *discovery.TabletHealth
-	healthCheckCells []string
-	cellsFromTopo    bool
+	cellsFromTopo       bool
+	healthCheck         discovery.HealthCheck
+	healthCheckCells    []string
+	healthCheckChan     chan *discovery.TabletHealth
+	lagChecksCancelFunc context.CancelFunc
+	maxLag              int64
+	wg                  sync.WaitGroup
 
 	// tabletTypes stores the tablet types for throttling
 	tabletTypes map[topodatapb.TabletType]bool
-
-	maxLag             int64
-	done               chan bool
-	waitForTermination sync.WaitGroup
 }
 
 // NewTxThrottler tries to construct a txThrottler from the relevant
@@ -237,6 +240,18 @@ func (t *txThrottler) Close() {
 	log.Info("txThrottler: closed")
 }
 
+func (t *txThrottler) MakePrimary() {
+	if t.state != nil {
+		t.state.makePrimary()
+	}
+}
+
+func (t *txThrottler) MakeNonPrimary() {
+	if t.state != nil {
+		t.state.makeNonPrimary()
+	}
+}
+
 // Throttle should be called before a new transaction is started.
 // It returns true if the transaction should not proceed (the caller
 // should back off). Throttle requires that Open() was previously called
@@ -284,61 +299,57 @@ func newTxThrottlerState(txThrottler *txThrottler, config *tabletenv.TabletConfi
 		tabletTypes[tabletType] = true
 	}
 
-	state := &txThrottlerStateImpl{
-		config:           config,
-		healthCheckCells: config.TxThrottlerHealthCheckCells,
-		tabletTypes:      tabletTypes,
-		throttler:        t,
-		txThrottler:      txThrottler,
-		done:             make(chan bool, 1),
-	}
-
 	// get cells from topo if none defined in tabletenv config
-	if len(state.healthCheckCells) == 0 {
+	var cellsFromTopo bool
+	healthCheckCells := config.TxThrottlerHealthCheckCells
+	if len(healthCheckCells) == 0 {
 		ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 		defer cancel()
-		state.healthCheckCells = fetchKnownCells(ctx, txThrottler.topoServer, target)
-		state.cellsFromTopo = true
+		healthCheckCells = fetchKnownCells(ctx, txThrottler.topoServer, target)
+		cellsFromTopo = true
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	state.stopHealthCheck = cancel
-	state.initHealthCheckStream(txThrottler.topoServer, target)
-	go state.healthChecksProcessor(ctx, txThrottler.topoServer, target)
-	state.waitForTermination.Add(1)
-	go state.updateMaxLag()
-
-	return state, nil
+	return &txThrottlerStateImpl{
+		config:           config,
+		cellsFromTopo:    cellsFromTopo,
+		healthCheckCells: healthCheckCells,
+		tabletTypes:      tabletTypes,
+		target:           target,
+		throttler:        t,
+		txThrottler:      txThrottler,
+	}, nil
 }
 
-func (ts *txThrottlerStateImpl) initHealthCheckStream(topoServer *topo.Server, target *querypb.Target) {
-	ts.healthCheck = healthCheckFactory(topoServer, target.Cell, ts.healthCheckCells)
+func (ts *txThrottlerStateImpl) initHealthCheck() {
+	ts.healthCheck = healthCheckFactory(ts.txThrottler.topoServer, ts.target.Cell, ts.healthCheckCells)
 	ts.healthCheckChan = ts.healthCheck.Subscribe()
-
 }
 
-func (ts *txThrottlerStateImpl) closeHealthCheckStream() {
+func (ts *txThrottlerStateImpl) closeHealthCheck() {
 	if ts.healthCheck == nil {
 		return
 	}
-	ts.stopHealthCheck()
+	ts.lagChecksCancelFunc()
+	ts.wg.Wait()
 	ts.healthCheck.Close()
+	ts.healthCheck = nil
 }
 
-func (ts *txThrottlerStateImpl) updateHealthCheckCells(ctx context.Context, topoServer *topo.Server, target *querypb.Target) {
+func (ts *txThrottlerStateImpl) updateHealthCheckCells(ctx context.Context) {
 	fetchCtx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancel()
 
-	knownCells := fetchKnownCells(fetchCtx, topoServer, target)
+	knownCells := fetchKnownCells(fetchCtx, ts.txThrottler.topoServer, ts.target)
 	if !reflect.DeepEqual(knownCells, ts.healthCheckCells) {
 		log.Info("txThrottler: restarting healthcheck stream due to topology cells update")
 		ts.healthCheckCells = knownCells
-		ts.closeHealthCheckStream()
-		ts.initHealthCheckStream(topoServer, target)
+		ts.closeHealthCheck()
+		ts.initHealthCheck()
 	}
 }
 
-func (ts *txThrottlerStateImpl) healthChecksProcessor(ctx context.Context, topoServer *topo.Server, target *querypb.Target) {
+func (ts *txThrottlerStateImpl) healthCheckProcessor(ctx context.Context) {
+	defer ts.wg.Done()
 	var cellsUpdateTicks <-chan time.Time
 	if ts.cellsFromTopo {
 		ticker := time.NewTicker(ts.config.TxThrottlerTopoRefreshInterval)
@@ -350,11 +361,28 @@ func (ts *txThrottlerStateImpl) healthChecksProcessor(ctx context.Context, topoS
 		case <-ctx.Done():
 			return
 		case <-cellsUpdateTicks:
-			ts.updateHealthCheckCells(ctx, topoServer, target)
+			ts.updateHealthCheckCells(ctx)
 		case th := <-ts.healthCheckChan:
 			ts.StatsUpdate(th)
 		}
 	}
+}
+
+func (ts *txThrottlerStateImpl) makePrimary() {
+	ts.initHealthCheck()
+	var ctx context.Context
+	ctx, ts.lagChecksCancelFunc = context.WithCancel(context.Background())
+
+	ts.wg.Add(1)
+	go ts.healthCheckProcessor(ctx)
+
+	ts.wg.Add(1)
+	go ts.updateMaxLag(ctx)
+}
+
+func (ts *txThrottlerStateImpl) makeNonPrimary() {
+	ts.closeHealthCheck()
+	ts.maxLag = 0
 }
 
 func (ts *txThrottlerStateImpl) throttle() bool {
@@ -362,6 +390,11 @@ func (ts *txThrottlerStateImpl) throttle() bool {
 		log.Error("txThrottler: throttle called after deallocateResources was called")
 		return false
 	}
+	// return false if we are not watching lag
+	if ts.healthCheck == nil {
+		return false
+	}
+
 	// Serialize calls to ts.throttle.Throttle()
 	ts.throttleMu.Lock()
 	defer ts.throttleMu.Unlock()
@@ -372,17 +405,17 @@ func (ts *txThrottlerStateImpl) throttle() bool {
 		ts.throttler.Throttle(0 /* threadId */) > 0
 }
 
-func (ts *txThrottlerStateImpl) updateMaxLag() {
-	defer ts.waitForTermination.Done()
+func (ts *txThrottlerStateImpl) updateMaxLag(ctx context.Context) {
+	defer ts.wg.Done()
 	// We use half of the target lag to ensure we have enough resolution to see changes in lag below that value
 	ticker := time.NewTicker(time.Duration(ts.config.TxThrottlerConfig.TargetReplicationLagSec/2) * time.Second)
 	defer ticker.Stop()
-outerloop:
 	for {
 		select {
+		case <-ctx.Done():
+			return
 		case <-ticker.C:
 			var maxLag uint32
-
 			for tabletType := range ts.tabletTypes {
 				maxLagPerTabletType := ts.throttler.MaxLag(tabletType)
 				if maxLagPerTabletType > maxLag {
@@ -390,28 +423,23 @@ outerloop:
 				}
 			}
 			atomic.StoreInt64(&ts.maxLag, int64(maxLag))
-		case <-ts.done:
-			break outerloop
 		}
 	}
 }
 
 func (ts *txThrottlerStateImpl) deallocateResources() {
-	// Close healthcheck and topo watchers
-	ts.closeHealthCheckStream()
-	ts.healthCheck = nil
+	// Close healthcheck and max lag updater
+	ts.closeHealthCheck()
 
-	ts.done <- true
-	ts.waitForTermination.Wait()
 	// After ts.healthCheck is closed txThrottlerStateImpl.StatsUpdate() is guaranteed not
 	// to be executing, so we can safely close the throttler.
 	ts.throttler.Close()
 	ts.throttler = nil
 }
 
-// StatsUpdate updates the health of a tablet with the given healthcheck.
+// StatsUpdate updates the health of a tablet with the given healthcheck, when primary.
 func (ts *txThrottlerStateImpl) StatsUpdate(tabletStats *discovery.TabletHealth) {
-	if len(ts.tabletTypes) == 0 {
+	if ts.healthCheck == nil || len(ts.tabletTypes) == 0 {
 		return
 	}
 

@@ -51,6 +51,7 @@ func TestDisabledThrottler(t *testing.T) {
 		Shard:    "shard",
 	})
 	assert.Nil(t, throttler.Open())
+	throttler.MakePrimary()
 	assert.False(t, throttler.Throttle(0, "some-workload"))
 	throttlerImpl, _ := throttler.(*txThrottler)
 	assert.Zero(t, throttlerImpl.throttlerRunning.Get())
@@ -141,9 +142,17 @@ func TestEnabledThrottler(t *testing.T) {
 	assert.Equal(t, map[topodatapb.TabletType]bool{topodatapb.TabletType_REPLICA: true}, throttlerStateImpl.tabletTypes)
 	assert.Equal(t, int64(1), throttlerImpl.throttlerRunning.Get())
 
-	// Stop the go routine that keeps updating the cached  shard's max lag to prevent it from changing the value in a
+	// check .throttle() returns false when non-primary and healthCheck is nil (not watching for lag)
+	assert.False(t, throttlerStateImpl.throttle())
+	assert.Nil(t, throttlerStateImpl.healthCheck)
+
+	// makePrimary and confirm healthcheck starts
+	throttlerStateImpl.makePrimary()
+	assert.NotNil(t, throttlerStateImpl.healthCheck)
+
+	// Stop the lag/healthcheck go routines that keeps updating the cached  shard's max lag to prevent it from changing the value in a
 	// way that will interfere with how we manipulate that value in our tests to evaluate different cases:
-	throttlerStateImpl.done <- true
+	throttlerStateImpl.lagChecksCancelFunc()
 
 	// 1 should not throttle due to return value of underlying Throttle(), despite high lag
 	atomic.StoreInt64(&throttlerStateImpl.maxLag, 20)
@@ -240,12 +249,10 @@ type mockTxThrottlerState struct {
 	shouldThrottle bool
 }
 
-func (t *mockTxThrottlerState) deallocateResources() {
-
-}
-func (t *mockTxThrottlerState) StatsUpdate(tabletStats *discovery.TabletHealth) {
-
-}
+func (t *mockTxThrottlerState) makePrimary()                                    {}
+func (t *mockTxThrottlerState) makeNonPrimary()                                 {}
+func (t *mockTxThrottlerState) deallocateResources()                            {}
+func (t *mockTxThrottlerState) StatsUpdate(tabletStats *discovery.TabletHealth) {}
 
 func (t *mockTxThrottlerState) throttle() bool {
 	return t.shouldThrottle

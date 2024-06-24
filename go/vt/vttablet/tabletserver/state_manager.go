@@ -174,6 +174,8 @@ type (
 	txThrottler interface {
 		Open() error
 		Close()
+		MakePrimary()
+		MakeNonPrimary()
 	}
 
 	onlineDDLExecutor interface {
@@ -456,6 +458,7 @@ func (sm *stateManager) servePrimary() error {
 	sm.hs.MakePrimary(true)
 	sm.se.MakePrimary(true)
 	sm.rt.MakePrimary()
+	sm.txThrottler.MakePrimary()
 	sm.tracker.Open()
 	// We instantly kill all stateful queries to allow for
 	// te to quickly transition into RW, but olap and stateless
@@ -482,6 +485,7 @@ func (sm *stateManager) unservePrimary() error {
 	sm.se.MakePrimary(false)
 	sm.hs.MakePrimary(false)
 	sm.rt.MakePrimary()
+	sm.txThrottler.MakeNonPrimary()
 	sm.setState(topodatapb.TabletType_PRIMARY, StateNotServing)
 	return nil
 }
@@ -498,6 +502,7 @@ func (sm *stateManager) serveNonPrimary(wantTabletType topodatapb.TabletType) er
 	sm.tracker.Close()
 	sm.se.MakeNonPrimary()
 	sm.hs.MakeNonPrimary()
+	sm.txThrottler.MakeNonPrimary()
 
 	if err := sm.connect(wantTabletType); err != nil {
 		return err
@@ -516,6 +521,7 @@ func (sm *stateManager) unserveNonPrimary(wantTabletType topodatapb.TabletType) 
 
 	sm.se.MakeNonPrimary()
 	sm.hs.MakeNonPrimary()
+	sm.txThrottler.MakeNonPrimary()
 
 	if err := sm.connect(wantTabletType); err != nil {
 		return err
