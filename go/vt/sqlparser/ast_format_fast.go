@@ -1132,8 +1132,10 @@ func (idx *IndexDefinition) FormatFast(buf *TrackedBuffer) {
 	buf.WriteByte(')')
 
 	for _, opt := range idx.Options {
-		buf.WriteByte(' ')
-		buf.WriteString(opt.Name)
+		if opt.Name != "" {
+			buf.WriteByte(' ')
+			buf.WriteString(opt.Name)
+		}
 		if opt.String != "" {
 			buf.WriteByte(' ')
 			buf.WriteString(opt.String)
