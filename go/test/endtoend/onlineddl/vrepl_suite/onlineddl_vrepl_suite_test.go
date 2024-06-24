@@ -56,15 +56,20 @@ var (
 	beforeTableName       = `onlineddl_test_before`
 	afterTableName        = `onlineddl_test_after`
 	eventName             = `onlineddl_test`
+
+	testsFilter = ""
 )
 
 const (
 	testDataPath = "testdata"
 )
 
+// Use $VREPL_SUITE_TEST_FILTER environment variable to filter tests by name.
 func TestMain(m *testing.M) {
 	defer cluster.PanicHandler(nil)
 	flag.Parse()
+
+	testsFilter = os.Getenv("ONLINEDDL_SUITE_TEST_FILTER")
 
 	exitcode, err := func() (int, error) {
 		clusterInstance = cluster.NewCluster(cell, hostname)
@@ -183,6 +188,10 @@ func readTestFile(t *testing.T, testName string, fileName string) (content strin
 // testSingle is the main testing function for a single test in the suite.
 // It prepares the grounds, creates the test data, runs a migration, expects results/error, cleans up.
 func testSingle(t *testing.T, testName string, fkOnlineDDLPossible bool) {
+	if !strings.Contains(testName, testsFilter) {
+		t.Skipf("Skipping test %s due to filter: %s", testName, testsFilter)
+		return
+	}
 	if _, exists := readTestFile(t, testName, "require_rename_table_preserve_foreign_key"); exists {
 		if !fkOnlineDDLPossible {
 			t.Skipf("Skipping test due to require_rename_table_preserve_foreign_key")
